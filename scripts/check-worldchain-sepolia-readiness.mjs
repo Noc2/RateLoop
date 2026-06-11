@@ -8,6 +8,8 @@ const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
 const WORLDCHAIN_SEPOLIA_CHAIN_ID = 4801;
 const WORLDCHAIN_SEPOLIA_CHAIN_ID_HEX = "0x12c1";
 const WORLDCHAIN_SEPOLIA_USDC = "0x66145f38cBAC35Ca6F1Dfb4914dF98F1614aeA88";
+const EIP1967_IMPLEMENTATION_SLOT =
+  "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc";
 
 export const REQUIRED_DEPLOYED_CONTRACTS = [
   "AdvisoryVoteRecorder",
@@ -44,6 +46,33 @@ export const PONDER_INDEXED_CONTRACTS = [
   "RaterRegistry",
   "RoundRewardDistributor",
   "RoundVotingEngine",
+];
+
+const PROXY_CONTRACTS = new Set([
+  "ContentRegistry",
+  "FeedbackBonusEscrow",
+  "FrontendRegistry",
+  "ProfileRegistry",
+  "ProtocolConfig",
+  "QuestionRewardPoolEscrow",
+  "RoundRewardDistributor",
+  "RoundVotingEngine",
+]);
+
+const REQUIRED_SELECTOR_CHECKS = [
+  {
+    contractName: "X402QuestionSubmitter",
+    selectors: [
+      "0x1c2fa657", // computeX402QuestionPaymentNonce with confidentiality config
+      "0x61b030bc", // submitQuestionWithX402Payment with confidentiality config
+    ],
+  },
+  {
+    contractName: "ContentRegistry",
+    selectors: [
+      "0x774922ea", // submitQuestionWithRewardAndRoundConfig with confidentiality config
+    ],
+  },
 ];
 
 function isAddress(value) {
@@ -215,6 +244,37 @@ async function rpc(rpcUrl, method, params = []) {
   return body.result;
 }
 
+function parseStorageAddress(value) {
+  if (typeof value !== "string" || !/^0x[a-fA-F0-9]{64}$/.test(value)) {
+    return undefined;
+  }
+  const address = `0x${value.slice(-40)}`;
+  return address === "0x0000000000000000000000000000000000000000" ? undefined : address;
+}
+
+function bytecodeContainsSelector(code, selector) {
+  return typeof code === "string" && code.toLowerCase().includes(selector.toLowerCase().slice(2));
+}
+
+async function getSelectorProbeCode(rpcUrl, contractName, address) {
+  if (!PROXY_CONTRACTS.has(contractName)) {
+    return {
+      address,
+      code: await rpc(rpcUrl, "eth_getCode", [address, "latest"]),
+      target: contractName,
+    };
+  }
+
+  const implementation = parseStorageAddress(
+    await rpc(rpcUrl, "eth_getStorageAt", [address, EIP1967_IMPLEMENTATION_SLOT, "latest"]),
+  );
+  return {
+    address: implementation ?? address,
+    code: await rpc(rpcUrl, "eth_getCode", [implementation ?? address, "latest"]),
+    target: implementation ? `${contractName} implementation` : contractName,
+  };
+}
+
 export async function validateLiveReadiness({
   appUrl,
   deploymentJson,
@@ -241,6 +301,20 @@ export async function validateLiveReadiness({
         if (!address) continue;
         const code = await rpc(rpcUrl, "eth_getCode", [address, "latest"]);
         addCheck(checks, failures, typeof code === "string" && code !== "0x", `${contractName} has bytecode on RPC`);
+      }
+
+      for (const selectorCheck of REQUIRED_SELECTOR_CHECKS) {
+        const address = deploymentAddresses.get(selectorCheck.contractName);
+        if (!address) continue;
+        const { code, target } = await getSelectorProbeCode(rpcUrl, selectorCheck.contractName, address);
+        for (const selector of selectorCheck.selectors) {
+          addCheck(
+            checks,
+            failures,
+            bytecodeContainsSelector(code, selector),
+            `${target} bytecode contains selector ${selector}`,
+          );
+        }
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
