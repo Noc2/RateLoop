@@ -5,12 +5,7 @@ export type AgentCohortSummary = {
   note: string;
   selfReportedProfileCount: number;
   source: string;
-  topSignals: {
-    expertise: ProfileSelfReportBucket[];
-    languages: ProfileSelfReportBucket[];
-    residenceCountry: ProfileSelfReportBucket[];
-    roles: ProfileSelfReportBucket[];
-  };
+  topSignals: Record<keyof ProfileSelfReportAudienceContext["fields"], ProfileSelfReportBucket[]>;
   totalRevealedVotes: number;
 };
 
@@ -46,20 +41,15 @@ export function buildAgentCohortSummary(audienceContext: unknown): AgentCohortSu
 
   const selfReportedProfileCount = Number(context.selfReportedProfileCount ?? 0);
   const totalRevealedVotes = Number(context.totalRevealedVotes ?? 0);
-  const topSignals = {
-    expertise: topBuckets((fields as ProfileSelfReportAudienceContext["fields"]).expertise),
-    languages: topBuckets((fields as ProfileSelfReportAudienceContext["fields"]).languages),
-    residenceCountry: topBuckets((fields as ProfileSelfReportAudienceContext["fields"]).residenceCountry),
-    roles: topBuckets((fields as ProfileSelfReportAudienceContext["fields"]).roles),
-  };
+  const typedFields = fields as ProfileSelfReportAudienceContext["fields"];
+  const topSignals = Object.fromEntries(
+    (Object.keys(typedFields) as Array<keyof ProfileSelfReportAudienceContext["fields"]>).map(field => [
+      field,
+      topBuckets(typedFields[field]),
+    ]),
+  ) as AgentCohortSummary["topSignals"];
 
-  if (
-    selfReportedProfileCount <= 0 &&
-    topSignals.expertise.length === 0 &&
-    topSignals.languages.length === 0 &&
-    topSignals.residenceCountry.length === 0 &&
-    topSignals.roles.length === 0
-  ) {
+  if (selfReportedProfileCount <= 0 && Object.values(topSignals).every(buckets => buckets.length === 0)) {
     return null;
   }
 

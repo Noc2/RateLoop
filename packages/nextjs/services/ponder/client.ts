@@ -338,6 +338,7 @@ export interface PonderContentItem {
   questionMetadataHash?: string | null;
   resultSpecHash?: string | null;
   targetAudience?: TargetAudience | null;
+  audienceContext?: ProfileSelfReportAudienceContext | null;
   detailsUrl?: string | null;
   detailsHash?: string | null;
   url: string | null;

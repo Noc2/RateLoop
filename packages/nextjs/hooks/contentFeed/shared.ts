@@ -1,5 +1,6 @@
 "use client";
 
+import type { ProfileSelfReportAudienceContext } from "@rateloop/node-utils/profileSelfReport";
 import { parseTags } from "~~/constants/categories";
 import { type ContentMediaItem, buildFallbackMediaItems } from "~~/lib/contentMedia";
 import type { ContentMetadataResult } from "~~/lib/contentMetadata/types";
@@ -62,6 +63,7 @@ export interface ContentItem {
   contentHash: string;
   questionMetadataHash?: string | null;
   resultSpecHash?: string | null;
+  audienceContext?: ProfileSelfReportAudienceContext | null;
   detailsUrl?: string | null;
   detailsHash?: string | null;
   status: ContentStatus;
@@ -510,6 +512,7 @@ export function mapContentItem(
       nextFeedbackAwardDeadline?: string | number | bigint | null;
       nextFeedbackClosesAt?: string | number | bigint | null;
     } | null;
+    audienceContext?: ProfileSelfReportAudienceContext | null;
   },
   voterAddress?: string,
   ownSubmitterAddresses?: readonly string[],
@@ -585,6 +588,7 @@ export function mapContentItem(
     contentHash: item.contentHash,
     questionMetadataHash: item.questionMetadataHash ?? null,
     resultSpecHash: item.resultSpecHash ?? null,
+    audienceContext: item.audienceContext ?? null,
     detailsUrl: item.detailsUrl ?? null,
     detailsHash: item.detailsHash ?? null,
     status: normalizeContentStatus(item.status),

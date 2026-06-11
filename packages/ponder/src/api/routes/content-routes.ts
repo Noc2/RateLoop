@@ -871,7 +871,7 @@ async function getAudienceContextForContent(contentId: bigint) {
       round,
       and(eq(vote.contentId, round.contentId), eq(vote.roundId, round.roundId)),
     )
-    .leftJoin(profile, eq(vote.voter, profile.address))
+    .leftJoin(profile, sql<boolean>`${profile.address} = coalesce(${vote.identityHolder}, ${vote.voter})`)
     .where(
       and(
         eq(vote.contentId, contentId),
@@ -1072,8 +1072,17 @@ export function registerContentRoutes(app: ApiApp) {
           )[0]?.count ?? 0)
         : null;
 
+    const responseItems = itemsWithBundles.map((item) => formatContentTargetAudience(item));
+    if (contentIds.length === 1 && responseItems.length === 1) {
+      const sourceItem = itemsWithBundles[0];
+      const responseItem = responseItems[0] as Record<string, unknown> | undefined;
+      if (sourceItem && responseItem && Number(sourceItem.ratingSettledRounds ?? 0) > 0) {
+        responseItem.audienceContext = await getAudienceContextForContent(sourceItem.id);
+      }
+    }
+
     return jsonBig(c, {
-      items: itemsWithBundles.map((item) => formatContentTargetAudience(item)),
+      items: responseItems,
       total,
       limit,
       offset,

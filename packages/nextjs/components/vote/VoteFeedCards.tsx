@@ -91,6 +91,51 @@ function NoRewardChip() {
   );
 }
 
+function topAudienceBucketValues(
+  buckets: ContentItem["audienceContext"] extends { fields: infer Fields } ? Fields[keyof Fields] : unknown,
+) {
+  if (!Array.isArray(buckets)) return [];
+  return buckets
+    .filter((bucket): bucket is { total: number; value: string } =>
+      Boolean(
+        bucket && typeof bucket === "object" && typeof bucket.value === "string" && typeof bucket.total === "number",
+      ),
+    )
+    .slice()
+    .sort((a, b) => b.total - a.total || a.value.localeCompare(b.value))
+    .slice(0, 3)
+    .map(bucket => bucket.value);
+}
+
+function AudienceContextSummary({ compact, item }: { compact: boolean; item: ContentItem }) {
+  const context = item.audienceContext;
+  if (!context || !context.fields || Number(item.ratingSettledRounds ?? 0) <= 0) return null;
+  const rows = [
+    { label: "Languages", values: topAudienceBucketValues(context.fields.languages) },
+    { label: "Roles", values: topAudienceBucketValues(context.fields.roles) },
+    { label: "Countries", values: topAudienceBucketValues(context.fields.residenceCountry) },
+    { label: "Age", values: topAudienceBucketValues(context.fields.ageGroup) },
+    { label: "Nationalities", values: topAudienceBucketValues(context.fields.nationalities) },
+  ].filter(row => row.values.length > 0);
+  if (rows.length === 0) return null;
+
+  return (
+    <div
+      className={compact ? "mt-3 border-t border-base-content/10 pt-3" : "mt-4 border-t border-base-content/10 pt-4"}
+    >
+      <div className="text-xs font-semibold uppercase tracking-wide text-base-content/55">Revealed cohort</div>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {rows.map(row => (
+          <span key={row.label} className="rounded-full bg-base-300 px-2.5 py-1 text-xs text-base-content/75">
+            <span className="font-semibold text-base-content/85">{row.label}:</span> {row.values.join(", ")}
+          </span>
+        ))}
+      </div>
+      <div className="mt-2 text-xs leading-snug text-base-content/50">Self-reported and unverified.</div>
+    </div>
+  );
+}
+
 interface FeedVoteCardProps {
   item: ContentItem;
   submitterProfile?: SubmitterProfile;
@@ -504,6 +549,8 @@ function FeedContentMetaCard({
             />
           </div>
         ) : null}
+
+        <AudienceContextSummary item={item} compact={compact} />
 
         <div className={actionRowClassName}>
           <div className="min-w-0 flex-1">

@@ -1109,6 +1109,7 @@ export const resultPackageOutputSchema = {
     },
     answerScopes: { type: "object" },
     cohortSummary: { type: ["object", "null"] },
+    targetAudienceMatch: { type: ["object", "null"] },
     confidence: {
       additionalProperties: false,
       properties: {
@@ -1166,6 +1167,7 @@ export const resultPackageOutputSchema = {
     "answer",
     "answerScopes",
     "cohortSummary",
+    "targetAudienceMatch",
     "confidence",
     "distribution",
     "voteCount",

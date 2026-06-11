@@ -6,13 +6,14 @@ import test from "node:test";
 test("buildAgentCohortSummary keeps the strongest public self-reported buckets", () => {
   const summary = buildAgentCohortSummary({
     fields: {
-      ageGroup: [],
+      ageGroup: [{ down: 0, total: 2, up: 2, value: "25-34" }],
+      aiModelProvider: [{ down: 0, total: 2, up: 2, value: "openai" }],
       expertise: [
         { down: 1, total: 3, up: 2, value: "ai" },
         { down: 0, total: 2, up: 2, value: "crypto" },
       ],
       languages: [{ down: 0, total: 4, up: 4, value: "en" }],
-      nationalities: [],
+      nationalities: [{ down: 1, total: 1, up: 0, value: "DE" }],
       residenceCountry: [{ down: 1, total: 3, up: 2, value: "DE" }],
       roles: [
         { down: 0, total: 3, up: 3, value: "founder" },
@@ -33,11 +34,14 @@ test("buildAgentCohortSummary keeps the strongest public self-reported buckets",
     selfReportedProfileCount: 4,
     source: "self_reported_public_profiles",
     topSignals: {
+      ageGroup: [{ down: 0, total: 2, up: 2, value: "25-34" }],
+      aiModelProvider: [{ down: 0, total: 2, up: 2, value: "openai" }],
       expertise: [
         { down: 1, total: 3, up: 2, value: "ai" },
         { down: 0, total: 2, up: 2, value: "crypto" },
       ],
       languages: [{ down: 0, total: 4, up: 4, value: "en" }],
+      nationalities: [{ down: 1, total: 1, up: 0, value: "DE" }],
       residenceCountry: [{ down: 1, total: 3, up: 2, value: "DE" }],
       roles: [
         { down: 1, total: 5, up: 4, value: "engineer" },

@@ -242,6 +242,28 @@ export interface TargetAudience {
   hybrid?: TargetAudienceHybridCriteria;
 }
 
+export interface TargetAudienceDimensionMatch {
+  dimension: string;
+  matchShare: number | null;
+  matchedCount: number;
+  requested: string[];
+  totalCount: number;
+}
+
+export interface TargetAudienceMatchReport {
+  caveat: typeof TARGET_AUDIENCE_CAVEAT;
+  matchedDimensionCount: number;
+  note: string;
+  perDimension: TargetAudienceDimensionMatch[];
+  requestedAudience: TargetAudience;
+  revealedCohort: {
+    selfReportedProfileCount: number;
+    totalRevealedVotes: number;
+  };
+  source: typeof PROFILE_SELF_REPORT_SOURCE;
+  verified: false;
+}
+
 export type TargetAudienceValidationIssue = {
   field: string;
   message: string;
@@ -885,6 +907,100 @@ export function normalizeTargetAudience(
 export function serializeTargetAudience(value: unknown) {
   const normalized = normalizeTargetAudience(value);
   return normalized ? stableJson(normalized) : "null";
+}
+
+function roundMatchShare(value: number) {
+  return Math.round(value * 1000) / 1000;
+}
+
+function bucketMatchCount(
+  buckets: ProfileSelfReportBucket[] | undefined,
+  requested: readonly string[] | undefined,
+  denominator: number,
+) {
+  if (!requested?.length || denominator <= 0) return null;
+  const requestedSet = new Set(requested);
+  const matchedCount = Math.min(
+    denominator,
+    (buckets ?? []).reduce((sum, bucket) => sum + (requestedSet.has(bucket.value) ? bucket.total : 0), 0),
+  );
+  return {
+    matchShare: roundMatchShare(matchedCount / denominator),
+    matchedCount,
+    requested: [...requested],
+    totalCount: denominator,
+  };
+}
+
+export function buildTargetAudienceMatchReport(
+  targetAudienceInput: unknown,
+  audienceContextInput: unknown,
+): TargetAudienceMatchReport | null {
+  const requestedAudience = normalizeTargetAudience(targetAudienceInput);
+  if (!requestedAudience) return null;
+  if (!audienceContextInput || typeof audienceContextInput !== "object" || Array.isArray(audienceContextInput)) {
+    return null;
+  }
+
+  const audienceContext = audienceContextInput as Partial<ProfileSelfReportAudienceContext>;
+  const fields = audienceContext.fields;
+  if (!fields || typeof fields !== "object") return null;
+
+  const selfReportedProfileCount = Number(audienceContext.selfReportedProfileCount ?? 0);
+  const totalRevealedVotes = Number(audienceContext.totalRevealedVotes ?? 0);
+  const denominator = selfReportedProfileCount > 0 ? selfReportedProfileCount : totalRevealedVotes;
+  const typedFields = fields as ProfileSelfReportAudienceContext["fields"];
+  const matches: TargetAudienceDimensionMatch[] = [];
+  const addDimension = (
+    dimension: string,
+    buckets: ProfileSelfReportBucket[] | undefined,
+    requested: readonly string[] | undefined,
+  ) => {
+    const match = bucketMatchCount(buckets, requested, denominator);
+    if (!match) return;
+    matches.push({
+      dimension,
+      ...match,
+    });
+  };
+
+  addDimension("ageGroups", typedFields.ageGroup, requestedAudience.ageGroups);
+  addDimension("countries", typedFields.residenceCountry, requestedAudience.countries);
+  addDimension("expertise", typedFields.expertise, requestedAudience.expertise);
+  addDimension("languages", typedFields.languages, requestedAudience.languages);
+  addDimension("nationalities", typedFields.nationalities, requestedAudience.nationalities);
+  addDimension("roles", typedFields.roles, requestedAudience.roles);
+  addDimension("ai.agentFrameworks", typedFields.aiAgentFramework, requestedAudience.ai?.agentFrameworks);
+  addDimension("ai.autonomy", typedFields.aiAutonomy, requestedAudience.ai?.autonomy);
+  addDimension("ai.expertise", typedFields.aiExpertise, requestedAudience.ai?.expertise);
+  addDimension("ai.languages", typedFields.aiLanguages, requestedAudience.ai?.languages);
+  addDimension("ai.modelProviders", typedFields.aiModelProvider, requestedAudience.ai?.modelProviders);
+  addDimension("team.countries", typedFields.teamCountry, requestedAudience.team?.countries);
+  addDimension("team.expertise", typedFields.teamExpertise, requestedAudience.team?.expertise);
+  addDimension("team.languages", typedFields.teamLanguages, requestedAudience.team?.languages);
+  addDimension("team.sizes", typedFields.teamSize, requestedAudience.team?.sizes);
+  addDimension("team.types", typedFields.teamType, requestedAudience.team?.types);
+  addDimension("hybrid.expertise", typedFields.hybridExpertise, requestedAudience.hybrid?.expertise);
+  addDimension("hybrid.languages", typedFields.hybridLanguages, requestedAudience.hybrid?.languages);
+  addDimension("hybrid.modelProviders", typedFields.hybridModelProvider, requestedAudience.hybrid?.modelProviders);
+  addDimension("hybrid.oversight", typedFields.hybridOversight, requestedAudience.hybrid?.oversight);
+
+  if (matches.length === 0) return null;
+
+  return {
+    caveat: TARGET_AUDIENCE_CAVEAT,
+    matchedDimensionCount: matches.filter(match => match.matchedCount > 0).length,
+    note:
+      "Audience matching uses public self-reported profile fields from revealed voters. Values are unverified, and multi-value dimensions are cohort-bucket shares capped to the self-reported cohort size.",
+    perDimension: matches,
+    requestedAudience,
+    revealedCohort: {
+      selfReportedProfileCount,
+      totalRevealedVotes,
+    },
+    source: PROFILE_SELF_REPORT_SOURCE,
+    verified: false,
+  };
 }
 
 export function getProfileSelfReportTaxonomy() {

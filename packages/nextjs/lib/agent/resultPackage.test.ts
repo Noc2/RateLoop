@@ -81,7 +81,7 @@ test("buildAgentResultPackage turns a settled rating into an agent decision", ()
       fields: {
         ageGroup: [],
         expertise: [{ down: 0, total: 2, up: 2, value: "ai" }],
-        languages: [{ down: 0, total: 2, up: 2, value: "en" }],
+        languages: [{ down: 0, total: 2, up: 2, value: "de" }],
         nationalities: [],
         residenceCountry: [{ down: 0, total: 2, up: 2, value: "DE" }],
         roles: [
@@ -96,7 +96,13 @@ test("buildAgentResultPackage turns a settled rating into an agent decision", ()
       totalRevealedVotes: 8,
       verified: false,
     },
-    content: content(),
+    content: content({
+      targetAudience: {
+        countries: ["DE"],
+        languages: ["de"],
+        roles: ["engineer"],
+      },
+    }),
     feedback: [feedback()],
     latestRound: {
       downCount: 2,
@@ -121,6 +127,19 @@ test("buildAgentResultPackage turns a settled rating into an agent decision", ()
   assert.equal(result.answerScopes.bountyEligibleAnswers.distribution?.up.share, 0.7);
   assert.equal(result.cohortSummary?.coverageShare, 0.25);
   assert.equal(result.cohortSummary?.topSignals.roles[0]?.value, "engineer");
+  assert.equal(result.targetAudienceMatch?.caveat, "unverified_self_report");
+  assert.deepEqual(
+    result.targetAudienceMatch?.perDimension.map(match => ({
+      dimension: match.dimension,
+      matchedCount: match.matchedCount,
+      matchShare: match.matchShare,
+    })),
+    [
+      { dimension: "countries", matchedCount: 2, matchShare: 1 },
+      { dimension: "languages", matchedCount: 2, matchShare: 1 },
+      { dimension: "roles", matchedCount: 2, matchShare: 1 },
+    ],
+  );
   assert.equal(result.recommendedNextAction, "proceed_after_addressing_objections");
   assert.equal(result.distribution.up.share, 0.7);
   assert.equal(result.majorObjections[0]?.type, "concern");

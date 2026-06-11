@@ -2793,7 +2793,7 @@ async function buildQuestionResultForRecord(
     });
   }
 
-  const response = await dependencies.getContentById(contentId);
+  const response = await dependencies.getContentById(contentId, { includeTargetAudience: true });
   const latestRound = latestRoundFromContentResponse(response);
   const feedbackContext = buildContentFeedbackRoundContext(
     Array.isArray(response.rounds) ? response.rounds : [],

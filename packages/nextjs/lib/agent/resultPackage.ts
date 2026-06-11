@@ -1,6 +1,7 @@
 import { type AgentCohortSummary, buildAgentCohortSummary } from "./cohortSummary";
 import { type AgentLiveAskGuidance, buildAgentLiveAskGuidance } from "./liveAskGuidance";
 import { ROUND_STATE, ROUND_STATE_LABEL, SCORE_SPREAD_POLICY } from "@rateloop/contracts/protocol";
+import { type TargetAudienceMatchReport, buildTargetAudienceMatchReport } from "@rateloop/node-utils/profileSelfReport";
 import {
   type AgentDecisionAnswer,
   type AgentResultTemplate,
@@ -104,6 +105,7 @@ type AgentResultPackage = {
     };
   };
   cohortSummary: AgentCohortSummary | null;
+  targetAudienceMatch: TargetAudienceMatchReport | null;
   voteCount: number;
   stakeMass: {
     total: string;
@@ -512,6 +514,7 @@ export function buildAgentResultPackage(params: {
   const feedbackQuality = buildFeedbackQuality(params.feedback, majorObjections);
   const action = recommendedNextAction(answer, confidence.level, majorObjections.length);
   const cohortSummary = buildAgentCohortSummary(params.audienceContext);
+  const targetAudienceMatch = buildTargetAudienceMatchReport(params.content.targetAudience, params.audienceContext);
   const feedbackTypes = summarizeFeedbackTypes(params.feedback);
   const stateLabel = roundState === null ? null : ROUND_STATE_LABEL[roundState as keyof typeof ROUND_STATE_LABEL];
   const ratingText = ratingBps === null ? "no rating yet" : `${(ratingBps / 1000).toFixed(1)}/10`;
@@ -614,6 +617,7 @@ export function buildAgentResultPackage(params: {
     answer,
     answerScopes,
     cohortSummary,
+    targetAudienceMatch,
     confidence,
     distribution,
     dissentingView,

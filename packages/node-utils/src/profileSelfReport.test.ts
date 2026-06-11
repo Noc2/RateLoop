@@ -6,6 +6,7 @@ import {
   RATER_TYPE,
   TargetAudienceValidationError,
   aggregateProfileSelfReports,
+  buildTargetAudienceMatchReport,
   emptyProfileSelfReportAudienceContext,
   formatRaterTypeName,
   getProfileSelfReportTaxonomy,
@@ -206,6 +207,53 @@ test("getProfileSelfReportTaxonomy exposes target-audience vocabularies", () => 
   assert.ok(taxonomy.targetAudience.roles.includes("engineer"));
   assert.ok(taxonomy.targetAudience.languages.includes("de"));
   assert.ok(taxonomy.targetAudience.ai.modelProviders.includes("openai"));
+});
+
+test("buildTargetAudienceMatchReport compares requested audience to revealed cohort buckets", () => {
+  const audienceContext = aggregateProfileSelfReports([
+    {
+      isUp: true,
+      selfReport: serializeProfileSelfReport({
+        languages: ["de", "en"],
+        residenceCountry: "DE",
+        roles: ["engineer"],
+      }),
+    },
+    {
+      isUp: false,
+      selfReport: serializeProfileSelfReport({
+        languages: ["fr"],
+        residenceCountry: "FR",
+        roles: ["operator"],
+      }),
+    },
+    { isUp: true, selfReport: null },
+  ]);
+
+  const report = buildTargetAudienceMatchReport(
+    {
+      countries: ["DE"],
+      languages: ["de"],
+      roles: ["engineer"],
+    },
+    audienceContext,
+  );
+
+  assert.equal(report?.caveat, "unverified_self_report");
+  assert.equal(report?.verified, false);
+  assert.deepEqual(
+    report?.perDimension.map(match => ({
+      dimension: match.dimension,
+      matchShare: match.matchShare,
+      matchedCount: match.matchedCount,
+      requested: match.requested,
+    })),
+    [
+      { dimension: "countries", matchShare: 0.5, matchedCount: 1, requested: ["DE"] },
+      { dimension: "languages", matchShare: 0.5, matchedCount: 1, requested: ["de"] },
+      { dimension: "roles", matchShare: 0.5, matchedCount: 1, requested: ["engineer"] },
+    ],
+  );
 });
 
 test("emptyProfileSelfReportAudienceContext marks every revealed vote as missing", () => {
