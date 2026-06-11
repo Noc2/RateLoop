@@ -477,7 +477,11 @@ contract LaunchDistributionPoolTest is Test {
         assertEq(lrep.balanceOf(address(this)), treasuryBefore + expectedSweep);
         assertEq(pool.legacyContributorDistributed(), immediate);
         assertEq(pool.legacyContributorTreasuryRecovered(), expectedSweep);
-        assertEq(pool.LEGACY_CONTRIBUTOR_POOL_AMOUNT() - pool.legacyContributorDistributed(), 0);
+        assertEq(
+            pool.LEGACY_CONTRIBUTOR_POOL_AMOUNT() - pool.legacyContributorDistributed()
+                - pool.legacyContributorTreasuryRecovered(),
+            0
+        );
 
         vm.prank(alice);
         vm.expectRevert(LaunchDistributionPool.LegacyClaimWindowClosed.selector);
