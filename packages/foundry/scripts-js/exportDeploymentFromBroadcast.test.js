@@ -27,6 +27,7 @@ const proxyNames = [
   "RoundRewardDistributor",
   "RaterRegistry",
   "QuestionRewardPoolEscrow",
+  "ConfidentialityEscrow",
   "FeedbackRegistry",
   "FeedbackBonusEscrow",
 ];
@@ -751,11 +752,19 @@ test("reconstructDeploymentExportFromBroadcast maps proxies and proxy admins", (
     "FrontendRegistryProxyAdmin"
   );
   assert.equal(
-    deploymentAt(deploymentExport, address(27)),
+    deploymentAt(deploymentExport, address(25)),
+    "ConfidentialityEscrow"
+  );
+  assert.equal(
+    deploymentAt(deploymentExport, address(26)),
+    "ConfidentialityEscrowProxyAdmin"
+  );
+  assert.equal(
+    deploymentAt(deploymentExport, address(29)),
     "FeedbackBonusEscrow"
   );
   assert.equal(
-    deploymentAt(deploymentExport, address(28)),
+    deploymentAt(deploymentExport, address(30)),
     "FeedbackBonusEscrowProxyAdmin"
   );
 });
@@ -1490,6 +1499,6 @@ test("reconstructDeploymentExportFromBroadcast rejects partial proxy runs", () =
         },
         "worldchainSepolia"
       ),
-    /Expected 10 proxy deployments, found 1/
+    /Expected 11 proxy deployments, found 1/
   );
 });

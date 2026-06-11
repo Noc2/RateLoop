@@ -24,6 +24,7 @@ const PROXY_DEPLOYMENT_NAMES = [
   "RoundRewardDistributor",
   "RaterRegistry",
   "QuestionRewardPoolEscrow",
+  "ConfidentialityEscrow",
   "FeedbackRegistry",
   "FeedbackBonusEscrow",
 ];
@@ -713,6 +714,10 @@ function completionContext(transactions, deployments) {
     questionRewardPoolEscrow: requireDeploymentAddress(
       deployments,
       "QuestionRewardPoolEscrow"
+    ),
+    confidentialityEscrow: requireDeploymentAddress(
+      deployments,
+      "ConfidentialityEscrow"
     ),
     feedbackRegistry: requireDeploymentAddress(deployments, "FeedbackRegistry"),
     feedbackBonusEscrow: requireDeploymentAddress(

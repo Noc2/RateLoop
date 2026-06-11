@@ -7,7 +7,7 @@ import type { GenericContractsDeclaration } from "./types";
 const deployedContracts: GenericContractsDeclaration = {
   4801: {
     TimelockController: {
-      address: "0x9c846BAbcFD7bbaFd2B946d2a798d6e7A569406f",
+      address: "0xd42D3a15a3d154B95fBBb410644e2eC03ceE434e",
       abi: [
         {
           type: "constructor",
@@ -1028,10 +1028,10 @@ const deployedContracts: GenericContractsDeclaration = {
         onERC1155Received:
           "lib/openzeppelin-contracts/contracts/token/ERC1155/utils/ERC1155Holder.sol",
       },
-      deployedOnBlock: 30305072,
+      deployedOnBlock: 30320964,
     },
     LoopReputation: {
-      address: "0x4bCD631d50C1975cB4d6c1cC085Db88a4777c11b",
+      address: "0x885E17310a19249ca7470cb5AA064233759E5907",
       abi: [
         {
           type: "constructor",
@@ -2455,10 +2455,10 @@ const deployedContracts: GenericContractsDeclaration = {
         supportsInterface:
           "lib/openzeppelin-contracts/contracts/access/AccessControl.sol",
       },
-      deployedOnBlock: 30305073,
+      deployedOnBlock: 30320965,
     },
     RateLoopGovernor: {
-      address: "0x655643503BC74C162FdF706647354E7387aa2067",
+      address: "0x886DdE0BA122084c65Fc854C39C9A1d836949Be8",
       abi: [
         {
           type: "constructor",
@@ -4571,10 +4571,10 @@ const deployedContracts: GenericContractsDeclaration = {
         updateTimelock:
           "lib/openzeppelin-contracts/contracts/governance/extensions/GovernorTimelockControl.sol",
       },
-      deployedOnBlock: 30305155,
+      deployedOnBlock: 30321064,
     },
     ContentRegistry: {
-      address: "0x59B3a3a4A6945d227F0a3532dacd8FA2Abed6D4E",
+      address: "0x2c284BbbFE740acce0DdcD092a931Dab65751F0E",
       abi: [
         {
           type: "constructor",
@@ -7154,10 +7154,10 @@ const deployedContracts: GenericContractsDeclaration = {
         paused:
           "lib/openzeppelin-contracts-upgradeable/contracts/utils/PausableUpgradeable.sol",
       },
-      deployedOnBlock: 30305085,
+      deployedOnBlock: 30320978,
     },
     RoundVotingEngine: {
-      address: "0x79029424f5b6d9Dd892ef397635ceb279377d374",
+      address: "0x89a8BDcD44492EB10F1471a7dbc3FbcC72DCd6d5",
       abi: [
         {
           type: "constructor",
@@ -9368,10 +9368,10 @@ const deployedContracts: GenericContractsDeclaration = {
           "contracts/interfaces/IRoundVotingSettlement.sol",
         settleRound: "contracts/interfaces/IRoundVotingSettlement.sol",
       },
-      deployedOnBlock: 30305087,
+      deployedOnBlock: 30320980,
     },
     RoundRewardDistributor: {
-      address: "0x3690F0bD89d0126f98A08F6c800d2d6bF5Fbf05F",
+      address: "0xCBCAeD3c4c235D3CAc7178e5bd20d85D01e82Fa9",
       abi: [
         {
           type: "constructor",
@@ -10894,10 +10894,10 @@ const deployedContracts: GenericContractsDeclaration = {
         supportsInterface:
           "lib/openzeppelin-contracts-upgradeable/contracts/access/AccessControlUpgradeable.sol",
       },
-      deployedOnBlock: 30305088,
+      deployedOnBlock: 30320981,
     },
     FrontendRegistry: {
-      address: "0x8fB63e28f0dF0D19dcC290972420b1CE07f857FC",
+      address: "0xC3Ce66Bf36af1392e927a42B210459c0EFbb1457",
       abi: [
         {
           type: "constructor",
@@ -12326,10 +12326,10 @@ const deployedContracts: GenericContractsDeclaration = {
         supportsInterface:
           "lib/openzeppelin-contracts-upgradeable/contracts/access/AccessControlUpgradeable.sol",
       },
-      deployedOnBlock: 30305083,
+      deployedOnBlock: 30320976,
     },
     ProfileRegistry: {
-      address: "0x98C657E0717E7e65444976011595fEF9B63F9e08",
+      address: "0xf85d8948Ef2DF5ec67703313cc38dA216EcAECa7",
       abi: [
         {
           type: "constructor",
@@ -13059,10 +13059,10 @@ const deployedContracts: GenericContractsDeclaration = {
         supportsInterface:
           "lib/openzeppelin-contracts-upgradeable/contracts/access/AccessControlUpgradeable.sol",
       },
-      deployedOnBlock: 30305084,
+      deployedOnBlock: 30320977,
     },
     ProtocolConfig: {
-      address: "0x08811c42c60Cc0E803267cE7226b2739573Af10a",
+      address: "0x6f02e828803f51890906c8b016C444bC8Db15aB2",
       abi: [
         {
           type: "constructor",
@@ -15077,10 +15077,10 @@ const deployedContracts: GenericContractsDeclaration = {
         supportsInterface:
           "lib/openzeppelin-contracts-upgradeable/contracts/access/AccessControlUpgradeable.sol",
       },
-      deployedOnBlock: 30305086,
+      deployedOnBlock: 30320979,
     },
     QuestionRewardPoolEscrow: {
-      address: "0x6A8339245f4c3A78996d8716284AF7fB7d26D703",
+      address: "0x457fd5DAB6504A72588ca6DEec4134a9dB6D6a17",
       abi: [
         {
           type: "constructor",
@@ -17710,10 +17710,10 @@ const deployedContracts: GenericContractsDeclaration = {
         roundPayoutSnapshotSourceReadyAt:
           "contracts/interfaces/IRoundPayoutSnapshotConsumer.sol",
       },
-      deployedOnBlock: 30305092,
+      deployedOnBlock: 30320985,
     },
     FeedbackBonusEscrow: {
-      address: "0xB5d215FD95295F7d593119FAF2662e0A1ee8bFF9",
+      address: "0xe80C838fE8B8d01bFeB4C0af56F3d027E827E2eE",
       abi: [
         {
           type: "constructor",
@@ -19151,10 +19151,10 @@ const deployedContracts: GenericContractsDeclaration = {
         paused:
           "lib/openzeppelin-contracts-upgradeable/contracts/utils/PausableUpgradeable.sol",
       },
-      deployedOnBlock: 30305095,
+      deployedOnBlock: 30320989,
     },
     CategoryRegistry: {
-      address: "0xCDf6129d4fF81cAb1C83A5dD7898606E2BD03965",
+      address: "0x10A00524F0dAfE95Ee41438E696FfBC94ac6beA5",
       abi: [
         {
           type: "constructor",
@@ -19690,10 +19690,10 @@ const deployedContracts: GenericContractsDeclaration = {
         supportsInterface:
           "lib/openzeppelin-contracts/contracts/access/AccessControl.sol",
       },
-      deployedOnBlock: 30305089,
+      deployedOnBlock: 30320982,
     },
     ClusterPayoutOracle: {
-      address: "0x48f13b85F1Cc5C6b6EA8dF9cc3eA97159e83BaF4",
+      address: "0x8Ca704A4868391bB9bec09B9DfccDB6d0C7dfd83",
       abi: [
         {
           type: "constructor",
@@ -22281,10 +22281,10 @@ const deployedContracts: GenericContractsDeclaration = {
         supportsInterface:
           "lib/openzeppelin-contracts/contracts/access/AccessControl.sol",
       },
-      deployedOnBlock: 30305138,
+      deployedOnBlock: 30321047,
     },
     RaterRegistry: {
-      address: "0xD3652202a42B74AF2D1408DAF32750575a633c84",
+      address: "0x42BE1d4CEfa7793b8b402474fD30556bB581D292",
       abi: [
         {
           type: "constructor",
@@ -24940,10 +24940,10 @@ const deployedContracts: GenericContractsDeclaration = {
           "contracts/interfaces/IRaterIdentityRegistry.sol",
         resolveRater: "contracts/interfaces/IRaterIdentityRegistry.sol",
       },
-      deployedOnBlock: 30305091,
+      deployedOnBlock: 30320984,
     },
     X402QuestionSubmitter: {
-      address: "0x4D5d7b390AeDA4f5DC58409c1d876A1AE88F4Ff4",
+      address: "0x431a7a3C99BCDB153126f6A20a94501dc4414c9C",
       abi: [
         {
           type: "constructor",
@@ -26046,10 +26046,10 @@ const deployedContracts: GenericContractsDeclaration = {
         transferOwnership:
           "lib/openzeppelin-contracts/contracts/access/Ownable.sol",
       },
-      deployedOnBlock: 30305093,
+      deployedOnBlock: 30320987,
     },
     LaunchDistributionPool: {
-      address: "0x7A1395260FFfF7a3025ee68Fd477F274C3852AcE",
+      address: "0xB4a2039d94f343E77472feA68176d43dB37a3b5C",
       abi: [
         {
           type: "constructor",
@@ -29081,10 +29081,10 @@ const deployedContracts: GenericContractsDeclaration = {
         transferOwnership:
           "lib/openzeppelin-contracts/contracts/access/Ownable.sol",
       },
-      deployedOnBlock: 30305126,
+      deployedOnBlock: 30321026,
     },
     AdvisoryVoteRecorder: {
-      address: "0xeCD4A13D64f28DF5b522a7573aC131ff30D488A1",
+      address: "0xFCb072E4f7098C0eA9081f8E49247F23DffFCd2C",
       abi: [
         {
           type: "constructor",
@@ -30026,10 +30026,10 @@ const deployedContracts: GenericContractsDeclaration = {
         transferOwnership:
           "lib/openzeppelin-contracts/contracts/access/Ownable.sol",
       },
-      deployedOnBlock: 30305152,
+      deployedOnBlock: 30321061,
     },
     FeedbackRegistry: {
-      address: "0xA47bf736be57D3385661dFCb832a673Dca8D8215",
+      address: "0x8D5491609B5477A9715553207e422d6CfB8e6b28",
       abi: [
         {
           type: "constructor",
@@ -30701,7 +30701,1413 @@ const deployedContracts: GenericContractsDeclaration = {
         supportsInterface:
           "lib/openzeppelin-contracts-upgradeable/contracts/access/AccessControlUpgradeable.sol",
       },
-      deployedOnBlock: 30305094,
+      deployedOnBlock: 30320988,
+    },
+    ConfidentialityEscrow: {
+      address: "0xaE6728a6dD59bC5E98Cd8A7EeF2c1df2A389987A",
+      abi: [
+        {
+          type: "constructor",
+          inputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "ABSOLUTE_MAX_BOND",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "BOND_ASSET_LREP",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "BOND_ASSET_USDC",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "BPS_SCALE",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "CONFIG_ROLE",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "DEFAULT_ADMIN_ROLE",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "DEFAULT_EVIDENCE_WINDOW",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "DEFAULT_MAX_BOND",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "DEFAULT_MAX_BOND_LOCK_DURATION",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "GOVERNANCE_ROLE",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "MAX_EVIDENCE_WINDOW",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "MAX_MAX_BOND_LOCK_DURATION",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "MAX_SLASH_REASON_LENGTH",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "MIN_EVIDENCE_WINDOW",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "MIN_MAX_BOND_LOCK_DURATION",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "MIN_NONZERO_BOND",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "PAUSER_ROLE",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "REPORTER_BOUNTY_BPS",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "bonds",
+          inputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "poster",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "postedAt",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "amount",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "slashed",
+              type: "bool",
+              internalType: "bool",
+            },
+            {
+              name: "released",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "confidentialityConfig",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "config",
+              type: "tuple",
+              internalType:
+                "struct IConfidentialityEscrow.ConfidentialityConfig",
+              components: [
+                {
+                  name: "gated",
+                  type: "bool",
+                  internalType: "bool",
+                },
+                {
+                  name: "bondAsset",
+                  type: "uint8",
+                  internalType: "uint8",
+                },
+                {
+                  name: "bondAmount",
+                  type: "uint64",
+                  internalType: "uint64",
+                },
+                {
+                  name: "flags",
+                  type: "uint8",
+                  internalType: "uint8",
+                },
+              ],
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "configure",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "config",
+              type: "tuple",
+              internalType:
+                "struct IConfidentialityEscrow.ConfidentialityConfig",
+              components: [
+                {
+                  name: "gated",
+                  type: "bool",
+                  internalType: "bool",
+                },
+                {
+                  name: "bondAsset",
+                  type: "uint8",
+                  internalType: "uint8",
+                },
+                {
+                  name: "bondAmount",
+                  type: "uint64",
+                  internalType: "uint64",
+                },
+                {
+                  name: "flags",
+                  type: "uint8",
+                  internalType: "uint8",
+                },
+              ],
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "configured",
+          inputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "confiscationRecipient",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "evidenceWindow",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "getRoleAdmin",
+          inputs: [
+            {
+              name: "role",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "grantRole",
+          inputs: [
+            {
+              name: "role",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "account",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "hasActiveBond",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "identityKey",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "hasConfidentialityNexus",
+          inputs: [
+            {
+              name: "provider",
+              type: "uint8",
+              internalType: "uint8",
+            },
+            {
+              name: "nullifierHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "hasRole",
+          inputs: [
+            {
+              name: "role",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "account",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "initialize",
+          inputs: [
+            {
+              name: "admin",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "governance",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "lrepToken_",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "usdcToken_",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "registry_",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "protocolConfig_",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "confiscationRecipient_",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "lrepToken",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "contract IERC20",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "maxBond",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "maxBondLockDuration",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "nullifierHasBond",
+          inputs: [
+            {
+              name: "",
+              type: "uint8",
+              internalType: "uint8",
+            },
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "paused",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "postBond",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "identityKey",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "postBondWithAuthorization",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "authorization",
+              type: "tuple",
+              internalType: "struct Eip3009Authorization",
+              components: [
+                {
+                  name: "from",
+                  type: "address",
+                  internalType: "address",
+                },
+                {
+                  name: "to",
+                  type: "address",
+                  internalType: "address",
+                },
+                {
+                  name: "value",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "validAfter",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "validBefore",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "nonce",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+                {
+                  name: "v",
+                  type: "uint8",
+                  internalType: "uint8",
+                },
+                {
+                  name: "r",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+                {
+                  name: "s",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+              ],
+            },
+          ],
+          outputs: [
+            {
+              name: "identityKey",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "postBondWithPermit",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "permitDeadline",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "v",
+              type: "uint8",
+              internalType: "uint8",
+            },
+            {
+              name: "r",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "s",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "identityKey",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "protocolConfig",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "contract ProtocolConfig",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "registry",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "contract ContentRegistry",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "releaseBond",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "identityKey",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "amount",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "renounceRole",
+          inputs: [
+            {
+              name: "role",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "callerConfirmation",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "revokeRole",
+          inputs: [
+            {
+              name: "role",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "account",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "setBondBounds",
+          inputs: [
+            {
+              name: "maxBond_",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "evidenceWindow_",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "maxBondLockDuration_",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "setConfiscationRecipient",
+          inputs: [
+            {
+              name: "newRecipient",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "setPaused",
+          inputs: [
+            {
+              name: "value",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "slashBond",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "identityKey",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "reason",
+              type: "string",
+              internalType: "string",
+            },
+            {
+              name: "evidenceHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "reporterRecipient",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [
+            {
+              name: "reporterAmount",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "confiscatedAmount",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "supportsInterface",
+          inputs: [
+            {
+              name: "interfaceId",
+              type: "bytes4",
+              internalType: "bytes4",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "usdcToken",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "contract IERC20",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "event",
+          name: "BondBoundsUpdated",
+          inputs: [
+            {
+              name: "maxBond",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+            {
+              name: "evidenceWindow",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+            {
+              name: "maxBondLockDuration",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "BondPosted",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "identityKey",
+              type: "bytes32",
+              indexed: true,
+              internalType: "bytes32",
+            },
+            {
+              name: "poster",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "asset",
+              type: "uint8",
+              indexed: false,
+              internalType: "uint8",
+            },
+            {
+              name: "amount",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "BondReleased",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "identityKey",
+              type: "bytes32",
+              indexed: true,
+              internalType: "bytes32",
+            },
+            {
+              name: "poster",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "amount",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "BondSlashed",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "identityKey",
+              type: "bytes32",
+              indexed: true,
+              internalType: "bytes32",
+            },
+            {
+              name: "poster",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "reporterRecipient",
+              type: "address",
+              indexed: false,
+              internalType: "address",
+            },
+            {
+              name: "reporterAmount",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+            {
+              name: "confiscatedAmount",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+            {
+              name: "evidenceHash",
+              type: "bytes32",
+              indexed: false,
+              internalType: "bytes32",
+            },
+            {
+              name: "reason",
+              type: "string",
+              indexed: false,
+              internalType: "string",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "ConfidentialityConfigured",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "gated",
+              type: "bool",
+              indexed: false,
+              internalType: "bool",
+            },
+            {
+              name: "bondAsset",
+              type: "uint8",
+              indexed: true,
+              internalType: "uint8",
+            },
+            {
+              name: "bondAmount",
+              type: "uint64",
+              indexed: false,
+              internalType: "uint64",
+            },
+            {
+              name: "flags",
+              type: "uint8",
+              indexed: false,
+              internalType: "uint8",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "ConfiscationRecipientUpdated",
+          inputs: [
+            {
+              name: "previousRecipient",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "newRecipient",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "Initialized",
+          inputs: [
+            {
+              name: "version",
+              type: "uint64",
+              indexed: false,
+              internalType: "uint64",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "Paused",
+          inputs: [
+            {
+              name: "account",
+              type: "address",
+              indexed: false,
+              internalType: "address",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "RoleAdminChanged",
+          inputs: [
+            {
+              name: "role",
+              type: "bytes32",
+              indexed: true,
+              internalType: "bytes32",
+            },
+            {
+              name: "previousAdminRole",
+              type: "bytes32",
+              indexed: true,
+              internalType: "bytes32",
+            },
+            {
+              name: "newAdminRole",
+              type: "bytes32",
+              indexed: true,
+              internalType: "bytes32",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "RoleGranted",
+          inputs: [
+            {
+              name: "role",
+              type: "bytes32",
+              indexed: true,
+              internalType: "bytes32",
+            },
+            {
+              name: "account",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "sender",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "RoleRevoked",
+          inputs: [
+            {
+              name: "role",
+              type: "bytes32",
+              indexed: true,
+              internalType: "bytes32",
+            },
+            {
+              name: "account",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "sender",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "Unpaused",
+          inputs: [
+            {
+              name: "account",
+              type: "address",
+              indexed: false,
+              internalType: "address",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "error",
+          name: "AccessControlBadConfirmation",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "AccessControlUnauthorizedAccount",
+          inputs: [
+            {
+              name: "account",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "neededRole",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+        },
+        {
+          type: "error",
+          name: "EnforcedPause",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "ExpectedPause",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "InvalidInitialization",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "NotInitializing",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "ReentrancyGuardReentrantCall",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "SafeCastOverflowedUintDowncast",
+          inputs: [
+            {
+              name: "bits",
+              type: "uint8",
+              internalType: "uint8",
+            },
+            {
+              name: "value",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+        },
+        {
+          type: "error",
+          name: "SafeERC20FailedOperation",
+          inputs: [
+            {
+              name: "token",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+        },
+      ],
+      inheritedFunctions: {
+        confidentialityConfig:
+          "contracts/interfaces/IConfidentialityEscrow.sol",
+        configure: "contracts/interfaces/IConfidentialityEscrow.sol",
+        hasActiveBond: "contracts/interfaces/IConfidentialityEscrow.sol",
+        hasConfidentialityNexus:
+          "contracts/interfaces/IConfidentialityEscrow.sol",
+        postBond: "contracts/interfaces/IConfidentialityEscrow.sol",
+        postBondWithAuthorization:
+          "contracts/interfaces/IConfidentialityEscrow.sol",
+        postBondWithPermit: "contracts/interfaces/IConfidentialityEscrow.sol",
+        releaseBond: "contracts/interfaces/IConfidentialityEscrow.sol",
+        slashBond: "contracts/interfaces/IConfidentialityEscrow.sol",
+        DEFAULT_ADMIN_ROLE:
+          "lib/openzeppelin-contracts-upgradeable/contracts/access/AccessControlUpgradeable.sol",
+        getRoleAdmin:
+          "lib/openzeppelin-contracts-upgradeable/contracts/access/AccessControlUpgradeable.sol",
+        grantRole:
+          "lib/openzeppelin-contracts-upgradeable/contracts/access/AccessControlUpgradeable.sol",
+        hasRole:
+          "lib/openzeppelin-contracts-upgradeable/contracts/access/AccessControlUpgradeable.sol",
+        renounceRole:
+          "lib/openzeppelin-contracts-upgradeable/contracts/access/AccessControlUpgradeable.sol",
+        revokeRole:
+          "lib/openzeppelin-contracts-upgradeable/contracts/access/AccessControlUpgradeable.sol",
+        supportsInterface:
+          "lib/openzeppelin-contracts-upgradeable/contracts/access/AccessControlUpgradeable.sol",
+        paused:
+          "lib/openzeppelin-contracts-upgradeable/contracts/utils/PausableUpgradeable.sol",
+      },
+      deployedOnBlock: 30320986,
     },
   },
   31337: {
