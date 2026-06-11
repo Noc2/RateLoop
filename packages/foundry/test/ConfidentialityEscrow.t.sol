@@ -187,9 +187,9 @@ contract ConfidentialityEscrowTest is VotingTestBase {
     function testGatedCommitRequiresCredentialAndBond() public {
         uint256 contentId = _submitGatedQuestion("commit-gate", 1e6);
 
+        vm.expectRevert(VotePreflightLib.ConfidentialityBondRequired.selector);
         vm.prank(voter1);
         engine.openRound(contentId);
-        _expectCommitVoteRevert(voter1, contentId, true, VotePreflightLib.ConfidentialityBondRequired.selector);
 
         _postLrepBond(contentId, voter1);
         _commitVote(voter1, contentId, true);
@@ -304,9 +304,9 @@ contract ConfidentialityEscrowTest is VotingTestBase {
         );
 
         uint256 secondContentId = _submitGatedQuestion("zero-bond-blocked", 0);
+        vm.expectRevert(VotePreflightLib.IdentityBanned.selector);
         vm.prank(voter1);
         engine.openRound(secondContentId);
-        _expectCommitVoteRevert(voter1, secondContentId, true, VotePreflightLib.IdentityBanned.selector);
     }
 
     function testBanDerivesKeysAndBlocksGatedCommitButNotRelease() public {
@@ -331,9 +331,9 @@ contract ConfidentialityEscrowTest is VotingTestBase {
         assertTrue(raterRegistry.isIdentityKeyBanned(launchKey));
         assertTrue(raterRegistry.isIdentityKeyBanned(raterRegistry.addressIdentityKey(voter1)));
 
-        uint256 secondContentId = _submitGatedQuestion("ban-commit", 0);
-        vm.prank(voter1);
-        engine.openRound(secondContentId);
+        uint256 secondContentId = _submitGatedQuestion("ban-commit", 1e6);
+        _postLrepBond(secondContentId, voter2);
+        _commitVote(voter2, secondContentId, true);
         _expectCommitVoteRevert(voter1, secondContentId, true, VotePreflightLib.IdentityBanned.selector);
 
         vm.prank(submitter);
@@ -359,6 +359,27 @@ contract ConfidentialityEscrowTest is VotingTestBase {
             artifacts.commitHash,
             artifacts.ciphertext
         );
+    }
+
+    function testUnbondedOpenRoundCannotRelockReleasableBond() public {
+        uint256 contentId = _submitGatedQuestion("release-grief", 1e6);
+        bytes32 identityKey = _postLrepBond(contentId, voter1);
+
+        vm.prank(voter1);
+        engine.openRound(contentId);
+        uint256 roundId = engine.currentRoundId(contentId);
+
+        vm.warp(block.timestamp + 30 days);
+        engine.cancelExpiredRound(contentId, roundId);
+
+        vm.expectRevert(VotePreflightLib.ConfidentialityBondRequired.selector);
+        vm.prank(voter2);
+        engine.openRound(contentId);
+
+        uint256 beforeBalance = lrepToken.balanceOf(voter1);
+        confidentialityEscrow.releaseBond(contentId, identityKey);
+        assertEq(lrepToken.balanceOf(voter1), beforeBalance + 1e6);
+        assertFalse(confidentialityEscrow.hasActiveBond(contentId, identityKey));
     }
 
     function _submitGatedQuestion(string memory label, uint64 bondAmount) internal returns (uint256 contentId) {

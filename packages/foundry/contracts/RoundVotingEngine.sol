@@ -409,13 +409,18 @@ contract RoundVotingEngine is
     ///      snapshots so the caller can encrypt against deterministic commit timing.
     function openRound(uint256 contentId) external whenNotPaused nonReentrant {
         VotePreflightLib.validateRoundOpener(
-            IRaterIdentityRegistry(protocolConfig.raterRegistry()), registry, msg.sender, contentId
+            IRaterIdentityRegistry(protocolConfig.raterRegistry()),
+            registry,
+            msg.sender,
+            contentId,
+            protocolConfig.confidentialityEscrow()
         );
         uint256 roundId = _getOrCreateRound(contentId);
         RoundLib.Round storage round = rounds[contentId][roundId];
         RoundLib.RoundConfig memory roundCfg = _getRoundConfig(contentId, roundId);
-        if (!RoundLib.acceptsVotes(round, roundCfg.maxDuration)) revert RoundNotOpen();
-        if (round.thresholdReachedAt != 0) revert ThresholdReached();
+        if (!RoundLib.acceptsVotes(round, roundCfg.maxDuration) || round.thresholdReachedAt != 0) {
+            revert RoundNotOpen();
+        }
     }
 
     /// @notice Commit a blind vote on content. Direction is hidden via tlock encryption.

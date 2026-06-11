@@ -75,10 +75,12 @@ library VotePreflightLib {
         IRaterIdentityRegistry identityRegistry,
         ContentRegistry registry,
         address opener,
-        uint256 contentId
+        uint256 contentId,
+        address confidentialityEscrow
     ) external view {
         IRaterIdentityRegistry.ResolvedRater memory resolved = resolveRater(identityRegistry, opener);
         _validateContentAndNotSubmitter(registry, opener, contentId, resolved);
+        _validateConfidentialityGate(identityRegistry, confidentialityEscrow, contentId, resolved);
     }
 
     function validateConfidentialityGate(
