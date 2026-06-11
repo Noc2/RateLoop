@@ -1,0 +1,320 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { Abi, Address } from "viem";
+import { isAddress, zeroHash } from "viem";
+import { useAccount, usePublicClient, useWriteContract } from "wagmi";
+import { useTargetNetwork, useTransactor } from "~~/hooks/scaffold-eth";
+import { useLocalE2ETestWalletClient } from "~~/hooks/scaffold-eth/useLocalE2ETestWalletClient";
+import { useGasBalanceStatus } from "~~/hooks/useGasBalanceStatus";
+import { useRaterRegistryIdentity } from "~~/hooks/useRaterRegistryIdentity";
+import { ERC20_APPROVAL_ABI, getDefaultLrepAddress, getDefaultUsdcAddress } from "~~/lib/questionRewardPools";
+import { getGasBalanceErrorMessage } from "~~/lib/transactionErrors";
+import type { ConfidentialityBondRequirement } from "~~/lib/vote/confidentialContext";
+import { contracts } from "~~/utils/scaffold-eth/contract";
+
+export const CONFIDENTIALITY_ESCROW_ABI = [
+  {
+    type: "function",
+    name: "hasActiveBond",
+    inputs: [
+      { name: "contentId", type: "uint256" },
+      { name: "identityKey", type: "bytes32" },
+    ],
+    outputs: [{ name: "", type: "bool" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "postBond",
+    inputs: [{ name: "contentId", type: "uint256" }],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+] as const;
+
+const CONFIDENTIALITY_BOND_POSTED_EVENT = "rateloop:confidentiality-bond-posted";
+
+function normalizeAddress(value: string | undefined): Address | undefined {
+  const trimmed = value?.trim();
+  return trimmed && isAddress(trimmed) ? (trimmed as Address) : undefined;
+}
+
+function getPublicConfidentialityEscrowAddressOverride(): Address | undefined {
+  return normalizeAddress(process.env.NEXT_PUBLIC_CONFIDENTIALITY_ESCROW_ADDRESS);
+}
+
+export function getConfiguredConfidentialityEscrowAddress(chainId: number): Address | undefined {
+  return (
+    getPublicConfidentialityEscrowAddressOverride() ??
+    normalizeAddress((contracts?.[chainId]?.ConfidentialityEscrow as { address?: string } | undefined)?.address)
+  );
+}
+
+export function dispatchConfidentialityBondPosted(contentId: bigint, identityKey?: string | null) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(
+    new CustomEvent(CONFIDENTIALITY_BOND_POSTED_EVENT, {
+      detail: {
+        contentId: contentId.toString(),
+        identityKey,
+      },
+    }),
+  );
+}
+
+interface UseConfidentialityBondParams {
+  bondRequirement: ConfidentialityBondRequirement;
+  contentId: bigint;
+  enabled?: boolean;
+}
+
+export function useConfidentialityBond({ bondRequirement, contentId, enabled = true }: UseConfidentialityBondParams) {
+  const { address } = useAccount();
+  const identityReadAddress = enabled ? address : undefined;
+  const { targetNetwork } = useTargetNetwork();
+  const publicClient = usePublicClient({ chainId: targetNetwork.id });
+  const localE2ETestWalletClient = useLocalE2ETestWalletClient(identityReadAddress, targetNetwork.id);
+  const writeTx = useTransactor(localE2ETestWalletClient);
+  const contractWrite = useWriteContract();
+  const { canSponsorTransactions, isMissingGasBalance, nativeTokenSymbol } = useGasBalanceStatus({
+    includeExternalSendCalls: true,
+  });
+  const {
+    hasActiveHumanCredential,
+    identityKey,
+    isLoading: isIdentityLoading,
+    isResolved: isIdentityResolved,
+    refetch: refetchIdentity,
+  } = useRaterRegistryIdentity(identityReadAddress);
+  const [hasActiveBond, setHasActiveBond] = useState(false);
+  const [isCheckingBond, setIsCheckingBond] = useState(false);
+  const [isPostingBond, setIsPostingBond] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const escrowAddress = useMemo(() => getConfiguredConfidentialityEscrowAddress(targetNetwork.id), [targetNetwork.id]);
+  const tokenAddress = useMemo(
+    () =>
+      bondRequirement.asset === "USDC"
+        ? getDefaultUsdcAddress(targetNetwork.id)
+        : getDefaultLrepAddress(targetNetwork.id),
+    [bondRequirement.asset, targetNetwork.id],
+  );
+  const shouldCheckBond = Boolean(
+    enabled && bondRequirement.isRequired && publicClient && escrowAddress && identityKey && identityKey !== zeroHash,
+  );
+
+  const refreshBond = useCallback(async () => {
+    if (!bondRequirement.isRequired) {
+      setHasActiveBond(true);
+      return true;
+    }
+
+    if (!shouldCheckBond || !publicClient || !escrowAddress || !identityKey) {
+      setHasActiveBond(false);
+      return false;
+    }
+
+    setIsCheckingBond(true);
+    setError(null);
+    try {
+      const active = await publicClient.readContract({
+        address: escrowAddress,
+        abi: CONFIDENTIALITY_ESCROW_ABI,
+        functionName: "hasActiveBond",
+        args: [contentId, identityKey],
+      });
+      const normalizedActive = active === true;
+      setHasActiveBond(normalizedActive);
+      return normalizedActive;
+    } catch (bondError) {
+      console.warn("[confidentiality] failed to check active confidentiality bond.", {
+        contentId: contentId.toString(),
+        error: bondError,
+      });
+      setHasActiveBond(false);
+      setError("Could not check confidentiality bond status.");
+      return false;
+    } finally {
+      setIsCheckingBond(false);
+    }
+  }, [bondRequirement.isRequired, contentId, escrowAddress, identityKey, publicClient, shouldCheckBond]);
+
+  useEffect(() => {
+    void refreshBond();
+  }, [refreshBond]);
+
+  useEffect(() => {
+    if (!enabled || !bondRequirement.isRequired || typeof window === "undefined") return;
+
+    const handleBondPosted = (event: Event) => {
+      const detail = event instanceof CustomEvent ? event.detail : null;
+      if (detail?.contentId === contentId.toString()) {
+        void refreshBond();
+      }
+    };
+
+    window.addEventListener(CONFIDENTIALITY_BOND_POSTED_EVENT, handleBondPosted);
+    return () => {
+      window.removeEventListener(CONFIDENTIALITY_BOND_POSTED_EVENT, handleBondPosted);
+    };
+  }, [bondRequirement.isRequired, contentId, enabled, refreshBond]);
+
+  const writeContractCall = useCallback(
+    async (
+      request: {
+        abi: Abi;
+        address: Address;
+        args: readonly unknown[];
+        functionName: string;
+      },
+      action: string,
+    ) => {
+      if (!address || !publicClient) {
+        throw new Error("Please connect your wallet");
+      }
+
+      const estimatedGas = await publicClient.estimateContractGas({
+        account: address as Address,
+        address: request.address,
+        abi: request.abi,
+        args: request.args as never,
+        functionName: request.functionName as never,
+      } as any);
+      const requestWithGas = {
+        ...request,
+        account: address as Address,
+        chainId: targetNetwork.id,
+        gas: (estimatedGas * 120n) / 100n,
+      };
+
+      contractWrite.reset();
+      const hash = await writeTx(
+        () =>
+          localE2ETestWalletClient
+            ? localE2ETestWalletClient.writeContract(requestWithGas as any)
+            : contractWrite.writeContractAsync(requestWithGas as any),
+        { action, suppressSuccessToast: true },
+      );
+      if (!hash) {
+        throw new Error(`${action} transaction was not submitted.`);
+      }
+      return hash;
+    },
+    [address, contractWrite, localE2ETestWalletClient, publicClient, targetNetwork.id, writeTx],
+  );
+
+  const postBond = useCallback(async () => {
+    if (!bondRequirement.isRequired) return true;
+    if (!address) {
+      setError("Connect a wallet to post the confidentiality bond.");
+      return false;
+    }
+    if (isMissingGasBalance) {
+      const message = getGasBalanceErrorMessage(nativeTokenSymbol, { canSponsorTransactions });
+      setError(message);
+      return false;
+    }
+    if (isIdentityLoading) {
+      setError("Checking your private-context eligibility. Try again in a moment.");
+      return false;
+    }
+    if (!hasActiveHumanCredential || !identityKey) {
+      setError("Private-context questions require an active human credential before posting a bond.");
+      return false;
+    }
+    if (!publicClient) {
+      setError("Preparing wallet. Try again in a moment.");
+      return false;
+    }
+    if (!escrowAddress) {
+      setError("Confidentiality bond posting is not configured for this deployment yet.");
+      return false;
+    }
+    if (!tokenAddress) {
+      setError(`${bondRequirement.asset} bond token is not configured for this network.`);
+      return false;
+    }
+
+    setIsPostingBond(true);
+    setError(null);
+    try {
+      const allowance = (await publicClient.readContract({
+        address: tokenAddress,
+        abi: ERC20_APPROVAL_ABI,
+        functionName: "allowance",
+        args: [address as Address, escrowAddress],
+      })) as bigint;
+
+      if (allowance < bondRequirement.amount) {
+        await writeContractCall(
+          {
+            abi: ERC20_APPROVAL_ABI as Abi,
+            address: tokenAddress,
+            args: [escrowAddress, bondRequirement.amount] as const,
+            functionName: "approve",
+          },
+          `approve ${bondRequirement.asset} bond`,
+        );
+      }
+
+      await writeContractCall(
+        {
+          abi: CONFIDENTIALITY_ESCROW_ABI as Abi,
+          address: escrowAddress,
+          args: [contentId] as const,
+          functionName: "postBond",
+        },
+        "post confidentiality bond",
+      );
+
+      await refetchIdentity();
+      setHasActiveBond(true);
+      dispatchConfidentialityBondPosted(contentId, identityKey);
+      void refreshBond();
+      return true;
+    } catch (bondError) {
+      console.error("[confidentiality] failed to post confidentiality bond.", bondError);
+      const message =
+        bondError instanceof Error ? bondError.message : "Could not post the required confidentiality bond.";
+      setError(message);
+      return false;
+    } finally {
+      setIsPostingBond(false);
+    }
+  }, [
+    address,
+    bondRequirement.amount,
+    bondRequirement.asset,
+    bondRequirement.isRequired,
+    canSponsorTransactions,
+    contentId,
+    escrowAddress,
+    hasActiveHumanCredential,
+    identityKey,
+    isIdentityLoading,
+    isMissingGasBalance,
+    nativeTokenSymbol,
+    publicClient,
+    refetchIdentity,
+    refreshBond,
+    tokenAddress,
+    writeContractCall,
+  ]);
+
+  return {
+    error,
+    escrowAddress,
+    hasActiveBond: bondRequirement.isRequired ? hasActiveBond : true,
+    hasActiveHumanCredential,
+    identityKey,
+    isBondRequired: bondRequirement.isRequired,
+    isCheckingBond,
+    isIdentityLoading,
+    isIdentityResolved,
+    isPostingBond,
+    postBond,
+    refreshBond,
+    tokenAddress,
+  };
+}

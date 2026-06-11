@@ -721,6 +721,9 @@ const HomeInner = () => {
     categoryId: bigint;
     currentRating: number | null;
     bountyEligibility?: number | null;
+    confidentiality?: ContentItem["confidentiality"] | null;
+    contextAccess?: ContentItem["contextAccess"];
+    contextVisibility?: ContentItem["contextVisibility"];
     roundConfig?: ContentItem["roundConfig"] | null;
     openRound?: ContentItem["openRound"] | null;
     // Snapshot of the targeted item so a background feed refetch dropping the
@@ -734,6 +737,9 @@ const HomeInner = () => {
     categoryId: 0n,
     currentRating: null,
     bountyEligibility: null,
+    confidentiality: null,
+    contextAccess: "public",
+    contextVisibility: "public",
     roundConfig: null,
     openRound: null,
     voteItemSnapshot: null,
@@ -1280,6 +1286,9 @@ const HomeInner = () => {
         categoryId: item.categoryId,
         currentRating: getVisibleContentRating(item),
         bountyEligibility: item.rewardPoolSummary?.bountyEligibility ?? item.bundle?.bountyEligibility ?? null,
+        confidentiality: item.confidentiality ?? null,
+        contextAccess: item.contextAccess,
+        contextVisibility: item.contextVisibility,
         roundConfig: item.roundConfig,
         openRound: item.openRound,
         voteItemSnapshot: item,
@@ -1444,6 +1453,9 @@ const HomeInner = () => {
         contentId: stakeModal.contentId,
         isUp,
         predictedUpPercent,
+        confidentiality: item?.confidentiality ?? stakeModal.confidentiality ?? null,
+        contextAccess: item?.contextAccess ?? stakeModal.contextAccess,
+        contextVisibility: item?.contextVisibility ?? stakeModal.contextVisibility,
         isOwnContent: item?.isOwnContent,
         roundConfig: item?.roundConfig ?? stakeModal.roundConfig,
         stakeAmount,
@@ -2109,6 +2121,9 @@ const HomeInner = () => {
           roundConfig={stakeModal.roundConfig}
           cooldownSecondsRemaining={stakeModalCooldownSeconds}
           bountyEligibility={stakeModal.bountyEligibility}
+          confidentiality={stakeModal.confidentiality}
+          contextAccess={stakeModal.contextAccess}
+          contextVisibility={stakeModal.contextVisibility}
           isConfirming={isCommitting}
           confirmError={voteError}
           recheckRefreshKey={worldIdProofRefreshKey}

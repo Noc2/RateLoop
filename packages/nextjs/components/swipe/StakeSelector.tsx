@@ -7,8 +7,10 @@ import { useAccount } from "wagmi";
 import { HandThumbDownIcon, HandThumbUpIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { GradientActionButton, getGradientActionMotion } from "~~/components/shared/GradientAction";
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
+import type { ContentItem } from "~~/hooks/contentFeed/shared";
 import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 import { useContentLabel } from "~~/hooks/useCategoryRegistry";
+import { useConfidentialityBond } from "~~/hooks/useConfidentialityBond";
 import { useRaterIdentityStake, useRaterRegistryIdentity } from "~~/hooks/useRaterRegistryIdentity";
 import { useRoundSnapshot } from "~~/hooks/useRoundSnapshot";
 import { getBountyEligibilityBitForKind, getBountyEligibilityRequirement } from "~~/lib/bountyEligibility";
@@ -19,6 +21,11 @@ import {
   getRoundVoteUnavailableMessage,
   isRoundAcceptingVotes,
 } from "~~/lib/contracts/roundVotingEngine";
+import {
+  getConfidentialContextVoteBlocker,
+  getConfidentialityBondRequirement,
+  isPrivateContextMetadata,
+} from "~~/lib/vote/confidentialContext";
 import { estimateVoteReturn, formatLrepAmount } from "~~/lib/vote/voteIncentives";
 import {
   type WorldCredentialKind,
@@ -26,6 +33,7 @@ import {
   getWorldCredentialOption,
   isWorldCredentialEnabledForBountyUi,
 } from "~~/lib/world-id/credentials";
+import { notification } from "~~/utils/scaffold-eth";
 
 interface StakeSelectorProps {
   isOpen: boolean;
@@ -38,6 +46,9 @@ interface StakeSelectorProps {
   roundConfig?: VotingConfig | null;
   cooldownSecondsRemaining?: number;
   bountyEligibility?: number | null;
+  confidentiality?: ContentItem["confidentiality"] | null;
+  contextAccess?: ContentItem["contextAccess"];
+  contextVisibility?: ContentItem["contextVisibility"];
   isConfirming?: boolean;
   confirmError?: string | null;
   recheckRefreshKey?: number;
@@ -153,6 +164,9 @@ export function StakeSelector({
   roundConfig,
   cooldownSecondsRemaining = 0,
   bountyEligibility = null,
+  confidentiality = null,
+  contextAccess = "public",
+  contextVisibility = "public",
   isConfirming = false,
   confirmError = null,
   recheckRefreshKey = 0,
@@ -174,6 +188,18 @@ export function StakeSelector({
   const bountyRequirement = useMemo(() => getBountyEligibilityRequirement(bountyEligibility), [bountyEligibility]);
   const bountyEligibilityAddress = getStakeSelectorEligibilityAddress(address, holder, isIdentityResolved);
   const canRequestWorldIdProof = canStakeSelectorRequestWorldIdProof(address, bountyEligibilityAddress);
+  const privateContext = isPrivateContextMetadata({ confidentiality, contextAccess, contextVisibility });
+  const confidentialityBondRequirement = useMemo(
+    () => getConfidentialityBondRequirement(confidentiality),
+    [confidentiality],
+  );
+  const [hasAcceptedConfidentialTerms, setHasAcceptedConfidentialTerms] = useState(false);
+  const [isCheckingConfidentialTerms, setIsCheckingConfidentialTerms] = useState(false);
+  const confidentialityBond = useConfidentialityBond({
+    bondRequirement: confidentialityBondRequirement,
+    contentId,
+    enabled: isOpen && privateContext && hasAcceptedConfidentialTerms,
+  });
 
   const roundSnapshot = useRoundSnapshot(contentId, openRound ?? undefined, roundConfig ?? undefined);
   const { roundId: currentRoundId, phase, isEpoch1, upPool, downPool } = roundSnapshot;
@@ -245,6 +271,42 @@ export function StakeSelector({
     if (!isOpen) return;
     setAmount(currentAmount => getNextStakeSelectorAmount(currentAmount, maxStake, hasAdjustedStake));
   }, [hasAdjustedStake, isOpen, maxStake]);
+
+  useEffect(() => {
+    if (!isOpen || !privateContext) {
+      setHasAcceptedConfidentialTerms(false);
+      setIsCheckingConfidentialTerms(false);
+      return;
+    }
+
+    if (!address) {
+      setHasAcceptedConfidentialTerms(false);
+      setIsCheckingConfidentialTerms(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsCheckingConfidentialTerms(true);
+    const params = new URLSearchParams({
+      address,
+      contentId: contentId.toString(),
+    });
+    fetch(`/api/confidentiality/terms?${params.toString()}`, { credentials: "include" })
+      .then(response => (response.ok ? response.json() : null))
+      .then(body => {
+        if (!cancelled) setHasAcceptedConfidentialTerms(body?.accepted === true);
+      })
+      .catch(() => {
+        if (!cancelled) setHasAcceptedConfidentialTerms(false);
+      })
+      .finally(() => {
+        if (!cancelled) setIsCheckingConfidentialTerms(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [address, contentId, isOpen, privateContext]);
 
   useEffect(() => {
     if (!isOpen || !bountyRequirement) return;
@@ -319,7 +381,23 @@ export function StakeSelector({
           ? "The delegated holder must recheck before this vote can qualify for the bounty."
           : "The delegated holder must verify before this vote can qualify for the bounty.";
   const formDisabled = isConfirming || !roundAcceptsVotes;
-  const confirmDisabled = formDisabled || cooldownActive || amount < 0 || (amount > 0 && amount > maxStake);
+  const confidentialVoteBlocker = getConfidentialContextVoteBlocker({
+    bondRequirement: confidentialityBondRequirement,
+    escrowConfigured: Boolean(confidentialityBond.escrowAddress),
+    hasAcceptedTerms: hasAcceptedConfidentialTerms,
+    hasActiveBond: confidentialityBond.hasActiveBond,
+    hasActiveHumanCredential: confidentialityBond.hasActiveHumanCredential && Boolean(confidentialityBond.identityKey),
+    identityResolved: confidentialityBond.isIdentityResolved && !confidentialityBond.isIdentityLoading,
+    isBondChecking: confidentialityBond.isCheckingBond,
+    isGated: privateContext,
+    isTermsChecking: isCheckingConfidentialTerms,
+  });
+  const confirmDisabled =
+    formDisabled ||
+    cooldownActive ||
+    amount < 0 ||
+    (amount > 0 && amount > maxStake) ||
+    Boolean(confidentialVoteBlocker);
   const roundUnavailableMessage = getRoundVoteUnavailableMessage(roundSnapshot);
   const roundNotAcceptingMessage =
     !roundAcceptsVotes && !confirmError && !isConfirming ? roundUnavailableMessage : null;
@@ -333,6 +411,21 @@ export function StakeSelector({
   const launchRewardEstimateLabel = getLaunchRewardEstimateLabel(amount, symbol);
   const openPhaseGrossReturnMicro = voteEstimate.estimatedGrossReturnMicro;
   const openPhaseBelowMeanFloorMicro = voteEstimate.belowMeanFloorMicro;
+  const canPostConfidentialityBond =
+    privateContext &&
+    hasAcceptedConfidentialTerms &&
+    confidentialityBondRequirement.isRequired &&
+    confidentialityBond.hasActiveHumanCredential &&
+    !confidentialityBond.hasActiveBond;
+
+  const handlePostConfidentialityBond = async () => {
+    const posted = await confidentialityBond.postBond();
+    if (posted) {
+      notification.success("Confidentiality bond posted.");
+    } else if (confidentialityBond.error) {
+      notification.error(confidentialityBond.error);
+    }
+  };
 
   return (
     <AnimatePresence>
@@ -602,6 +695,43 @@ export function StakeSelector({
                 ) : null}
               </div>
             )}
+
+            {privateContext ? (
+              <div className="mb-4 rounded-lg border border-warning/20 bg-warning/10 p-3 text-sm text-base-content/75">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="space-y-1">
+                    <p className="font-semibold text-warning">Private context</p>
+                    <p>
+                      {confidentialVoteBlocker ??
+                        (confidentialityBondRequirement.isRequired
+                          ? `${confidentialityBondRequirement.label} confidentiality bond active.`
+                          : "Confidentiality terms accepted. No bond required.")}
+                    </p>
+                    {confidentialityBond.error ? (
+                      <p className="font-medium text-error">{confidentialityBond.error}</p>
+                    ) : null}
+                  </div>
+                  {canPostConfidentialityBond ? (
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-outline shrink-0"
+                      onClick={handlePostConfidentialityBond}
+                      disabled={
+                        isConfirming ||
+                        confidentialityBond.isPostingBond ||
+                        !confidentialityBond.escrowAddress ||
+                        !confidentialityBond.tokenAddress
+                      }
+                    >
+                      {confidentialityBond.isPostingBond ? (
+                        <span className="loading loading-spinner loading-xs" />
+                      ) : null}
+                      Post bond
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
 
             <div className="flex gap-3">
               <button

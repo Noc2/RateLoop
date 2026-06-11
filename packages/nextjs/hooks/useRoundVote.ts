@@ -18,6 +18,7 @@ import { useTermsAcceptance } from "~~/contexts/TermsAcceptanceContext";
 import { useDeployedContractInfo, useTransactor } from "~~/hooks/scaffold-eth";
 import { useLocalE2ETestWalletClient } from "~~/hooks/scaffold-eth/useLocalE2ETestWalletClient";
 import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
+import { CONFIDENTIALITY_ESCROW_ABI, getConfiguredConfidentialityEscrowAddress } from "~~/hooks/useConfidentialityBond";
 import { FREE_TRANSACTION_ALLOWANCE_QUERY_KEY } from "~~/hooks/useFreeTransactionAllowance";
 import { useGasBalanceStatus } from "~~/hooks/useGasBalanceStatus";
 import { useRaterRegistryIdentity } from "~~/hooks/useRaterRegistryIdentity";
@@ -37,6 +38,11 @@ import {
   getAdvisoryVoteUnavailableMessage,
   parseAdvisoryCommitAvailability,
 } from "~~/lib/vote/advisoryVoteAvailability";
+import {
+  getConfidentialContextVoteBlocker,
+  getConfidentialityBondRequirement,
+  isPrivateContextMetadata,
+} from "~~/lib/vote/confidentialContext";
 import { recordLocalVoteCooldown } from "~~/lib/vote/localCooldown";
 import { PREPARING_ROUND_VOTE_MESSAGE, ensureOpenStakedRoundRuntime } from "~~/lib/vote/openStakedRoundRuntime";
 import { normalizeRoundVoteError } from "~~/lib/vote/roundVoteErrors";
@@ -65,6 +71,13 @@ interface RoundVoteParams {
   isOwnContent?: boolean;
   roundConfig?: VotingConfig | null;
   submitter?: string; // Content submitter address (for self-vote prevention)
+  contextAccess?: "public" | "gated" | string;
+  contextVisibility?: "public" | "gated" | string;
+  confidentiality?: {
+    bondAmount?: string;
+    bondAsset?: "LREP" | "USDC" | string;
+    visibility?: "public" | "gated" | string;
+  } | null;
 }
 
 const COUNTED_VOTE_MIN_STAKE_WEI = 1_000_000n;
@@ -125,6 +138,20 @@ function withLocalE2ETlockRuntime(runtime: RoundVoteCommitRuntime): RoundVoteCom
   };
 }
 
+async function hasAcceptedConfidentialityTerms(address: string, contentId: bigint) {
+  const params = new URLSearchParams({
+    address,
+    contentId: contentId.toString(),
+  });
+  const response = await fetch(`/api/confidentiality/terms?${params.toString()}`, {
+    credentials: "include",
+  });
+  if (!response.ok) return false;
+
+  const body = await response.json().catch(() => null);
+  return body?.accepted === true;
+}
+
 /**
  * Hook for tlock commit-reveal RBTS vote commits using reputation approval + commit.
  * Handles: optional allowance approval followed by a vote commit.
@@ -135,7 +162,12 @@ export function useRoundVote() {
   const { address, chain } = useAccount();
   const { addOptimisticVote } = useOptimisticVote();
   const { targetNetwork } = useTargetNetwork();
-  const { hasActiveHumanCredential, identityKey } = useRaterRegistryIdentity(address);
+  const {
+    hasActiveHumanCredential,
+    identityKey,
+    isLoading: isIdentityLoading,
+    isResolved: isIdentityResolved,
+  } = useRaterRegistryIdentity(address);
   const [isCommitting, setIsCommitting] = useState(false);
   const commitLock = useRef(false);
   const [error, setError] = useState<string | null>(null);
@@ -181,6 +213,9 @@ export function useRoundVote() {
     isOwnContent,
     roundConfig,
     submitter,
+    contextAccess,
+    contextVisibility,
+    confidentiality,
   }: RoundVoteParams) => {
     const accepted = await requireAcceptance("vote");
     if (!accepted) return false;
@@ -203,6 +238,65 @@ export function useRoundVote() {
     if (isOwnContent || (submitter && address && submitter.toLowerCase() === address.toLowerCase())) {
       setError(normalizeRoundVoteError("SelfVote"));
       return false;
+    }
+
+    const isGatedContext = isPrivateContextMetadata({
+      confidentiality,
+      contextAccess,
+      contextVisibility,
+    });
+    if (isGatedContext) {
+      const bondRequirement = getConfidentialityBondRequirement(confidentiality);
+      let hasAcceptedTerms = false;
+      try {
+        hasAcceptedTerms = await hasAcceptedConfidentialityTerms(address, contentId);
+      } catch (termsError) {
+        console.warn("[round-vote] failed to check confidentiality terms before commit.", {
+          contentId: contentId.toString(),
+          error: termsError,
+        });
+        setError("Could not verify confidentiality terms acceptance. Try unlocking the private context again.");
+        return false;
+      }
+      let hasActiveBond = !bondRequirement.isRequired;
+      const escrowAddress = getConfiguredConfidentialityEscrowAddress(targetNetwork.id);
+
+      if (bondRequirement.isRequired && !publicClient) {
+        setError("Checking confidentiality bond status. Try again in a moment.");
+        return false;
+      }
+
+      if (bondRequirement.isRequired && escrowAddress && publicClient && identityKey) {
+        try {
+          hasActiveBond = (await publicClient.readContract({
+            address: escrowAddress,
+            abi: CONFIDENTIALITY_ESCROW_ABI,
+            functionName: "hasActiveBond",
+            args: [contentId, identityKey],
+          })) as boolean;
+        } catch (bondError) {
+          console.warn("[round-vote] failed to check confidentiality bond before commit.", {
+            contentId: contentId.toString(),
+            error: bondError,
+          });
+          setError(`Could not verify the required ${bondRequirement.label} confidentiality bond. Try again.`);
+          return false;
+        }
+      }
+
+      const privateContextBlocker = getConfidentialContextVoteBlocker({
+        bondRequirement,
+        escrowConfigured: Boolean(escrowAddress),
+        hasAcceptedTerms,
+        hasActiveBond,
+        hasActiveHumanCredential: hasActiveHumanCredential && Boolean(identityKey),
+        identityResolved: isIdentityResolved && !isIdentityLoading,
+        isGated: true,
+      });
+      if (privateContextBlocker) {
+        setError(privateContextBlocker);
+        return false;
+      }
     }
 
     if (isVotingEngineLoading || isContentRegistryLoading || isLrepLoading) {
