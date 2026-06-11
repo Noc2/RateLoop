@@ -6,7 +6,7 @@
   "scripts": {
     "studio": "remotion studio src/index.ts",
     "render": "remotion render src/index.ts RateLoopPromo out/rateloop-promo.mp4",
-    "poster": "remotion still src/index.ts RateLoopPromo out/rateloop-promo-poster.png --frame=150",
+    "poster": "remotion still src/index.ts RateLoopPromo out/rateloop-promo-poster.png --frame=800",
     "check-types": "tsc --noEmit"
   },
   "dependencies": {

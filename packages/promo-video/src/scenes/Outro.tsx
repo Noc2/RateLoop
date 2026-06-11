@@ -42,6 +42,7 @@ const CHIPS = ["Remote MCP", "World Chain USDC", "World ID Verified"];
 export const Outro = () => {
   const headline = useFadeInUp(22);
   const chips = useFadeInUp(70);
+  const url = useFadeInUp(110);
 
   return (
     <AbsoluteFill style={{ alignItems: "center", justifyContent: "center" }}>
@@ -86,6 +87,18 @@ export const Outro = () => {
               {chip}
             </span>
           ))}
+        </div>
+        <div
+          style={{
+            ...url,
+            fontFamily: headingFont,
+            fontWeight: 700,
+            fontSize: 40,
+            letterSpacing: 1,
+            color: colors.warmWhite,
+          }}
+        >
+          rateloop<GradientText>.ai</GradientText>
         </div>
       </div>
     </AbsoluteFill>
