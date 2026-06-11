@@ -86,7 +86,7 @@ test("sortRpcFeed orders bounty-backed items by available bounties", () => {
         activeRewardPoolCount: 1,
       },
     },
-    buildItem(3n, "Unfunded", "No bounty", ["markets"]),
+    buildItem(3n, "Unfunded", "No active bounty", ["markets"]),
   ];
 
   const sorted = sortRpcFeed(feed, "highest_rewards");
@@ -99,7 +99,7 @@ test("sortRpcFeed orders bounty-backed items by available bounties", () => {
 
 test("sortRpcFeed keeps unpaid content after bounty-backed items for bounty-first feeds", () => {
   const feed = [
-    buildItem(1n, "New unpaid", "No bounty", ["markets"]),
+    buildItem(1n, "New unpaid", "No active bounty", ["markets"]),
     {
       ...buildItem(2n, "Funded", "A funded question", ["markets"]),
       rewardPoolSummary: {
@@ -108,7 +108,7 @@ test("sortRpcFeed keeps unpaid content after bounty-backed items for bounty-firs
         activeRewardPoolCount: 1,
       },
     },
-    buildItem(3n, "Older unpaid", "No bounty", ["markets"]),
+    buildItem(3n, "Older unpaid", "No active bounty", ["markets"]),
   ];
 
   const sorted = sortRpcFeed(feed, "bounty_first");

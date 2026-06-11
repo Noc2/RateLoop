@@ -86,7 +86,7 @@ function NoRewardChip() {
       className="reward-chip reward-chip-label bg-error text-error-content"
       aria-label="No active bounty or Feedback Bonus"
     >
-      No bounty
+      No active bounty
     </div>
   );
 }
