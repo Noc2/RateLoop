@@ -339,6 +339,16 @@ export interface PonderContentItem {
   resultSpecHash?: string | null;
   targetAudience?: TargetAudience | null;
   audienceContext?: ProfileSelfReportAudienceContext | null;
+  contextAccess?: "public" | "gated" | string;
+  contextVisibility?: "public" | "gated" | string;
+  confidentiality?: {
+    bondAmount?: string;
+    bondAsset?: "LREP" | "USDC" | string;
+    disclosurePolicy?: "after_settlement" | "private_forever" | string;
+    publishedAt?: string | null;
+    visibility?: "public" | "gated" | string;
+    [key: string]: unknown;
+  } | null;
   detailsUrl?: string | null;
   detailsHash?: string | null;
   url: string | null;

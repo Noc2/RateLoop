@@ -218,6 +218,11 @@ export interface GetRatingContextRequest extends RatingContentLookup {
   stakeWei?: string | number | bigint;
 }
 
+export interface AcceptConfidentialityTermsRequest extends RatingContentLookup {
+  signature?: `0x${string}` | string;
+  termsVersion?: string;
+}
+
 export interface PrepareRatingTransactionsRequest extends RatingContentLookup {
   ciphertext: `0x${string}` | string;
   commitHash: `0x${string}` | string;
@@ -510,7 +515,11 @@ export interface RateLoopRatingPrivacy {
 
 export interface RateLoopRatingContent {
   categoryId?: string | number;
+  confidentiality?: JsonRecord | null;
+  contextAccess?: "public" | "gated" | string;
+  contextVisibility?: "public" | "gated" | string;
   description?: string | null;
+  gatedContext?: JsonRecord | null;
   id?: string | number;
   publicUrl?: string | null;
   submitter?: `0x${string}` | string;
@@ -552,6 +561,17 @@ export interface RatingContextResponse {
   ratingInputMode?: "local_encrypted_commit" | string;
   runtime?: RateLoopRatingRuntime;
   status: "ready" | "open_round_required" | string;
+  wallet?: RateLoopAgentWalletInfo;
+  [key: string]: unknown;
+}
+
+export interface AcceptConfidentialityTermsResponse {
+  accepted: boolean;
+  contentId?: string;
+  contextAccess?: "public" | "gated" | string;
+  nextAction?: string;
+  status: "accepted" | "not_required" | "pending_backend" | string;
+  termsVersion?: string;
   wallet?: RateLoopAgentWalletInfo;
   [key: string]: unknown;
 }
@@ -682,6 +702,9 @@ export interface RateLoopAgentClient {
   getRatingContext(
     params: GetRatingContextRequest,
   ): Promise<RatingContextResponse>;
+  acceptConfidentialityTerms(
+    params: AcceptConfidentialityTermsRequest,
+  ): Promise<AcceptConfidentialityTermsResponse>;
   prepareRatingTransactions(
     params: PrepareRatingTransactionsRequest,
   ): Promise<PrepareRatingTransactionsResponse>;
@@ -793,6 +816,8 @@ export function createRateLoopAgentClient(
     confirmFeedbackBonusTransactions: (params) =>
       confirmFeedbackBonusTransactions(params, config),
     getRatingContext: (params) => getRatingContext(params, config),
+    acceptConfidentialityTerms: (params) =>
+      acceptConfidentialityTerms(params, config),
     prepareRatingTransactions: (params) =>
       prepareRatingTransactions(params, config),
     confirmRatingTransactions: (params) =>
@@ -1100,6 +1125,22 @@ export async function getRatingContext(
     config,
     "rateloop_get_rating_context",
     ratingLookupArgs(params),
+  );
+}
+
+export async function acceptConfidentialityTerms(
+  params: AcceptConfidentialityTermsRequest,
+  options: RateLoopAgentClientOptions = {},
+): Promise<AcceptConfidentialityTermsResponse> {
+  const config = normalizeAgentConfig(options);
+  return callMcpTool<AcceptConfidentialityTermsResponse>(
+    config,
+    "rateloop_accept_confidentiality_terms",
+    {
+      ...ratingLookupArgs(params),
+      signature: params.signature,
+      termsVersion: params.termsVersion,
+    },
   );
 }
 

@@ -794,7 +794,19 @@ test("managed operation-key lookups still allow same-agent managed records", asy
 
 test("rateloop_get_rating_context returns local encrypted commit instructions and open-round plan", async () => {
   __setMcpToolTestOverridesForTests({
-    getContentById: async () => ratingContent(),
+    getContentById: async () =>
+      ratingContent({
+        confidentiality: {
+          bondAmount: "0",
+          bondAsset: "LREP",
+          disclosurePolicy: "after_settlement",
+          publishedAt: null,
+          visibility: "gated",
+        },
+        contextAccess: "gated",
+        contextVisibility: "gated",
+        description: "",
+      }),
     readRatingAllowance: async () => 0n,
     resolveRoundVoteRuntime: async () => ratingRuntime({ requiresOpenRound: true, roundStartTimeSeconds: null }),
   });
@@ -807,6 +819,10 @@ test("rateloop_get_rating_context returns local encrypted commit instructions an
     name: "rateloop_get_rating_context",
   });
   const body = result as {
+    content: {
+      contextAccess: string;
+      gatedContext: { acceptTermsTool: string; status: string } | null;
+    };
     openRoundTransactionPlan: { calls: Array<{ data: string; functionName: string; phase: string }> };
     privacy: { inputMode: string };
     ratingInputMode: string;
@@ -814,11 +830,44 @@ test("rateloop_get_rating_context returns local encrypted commit instructions an
   };
 
   assert.equal(body.status, "open_round_required");
+  assert.equal(body.content.contextAccess, "gated");
+  assert.equal(body.content.gatedContext?.acceptTermsTool, "rateloop_accept_confidentiality_terms");
+  assert.equal(body.content.gatedContext?.status, "terms_required");
   assert.equal(body.ratingInputMode, "local_encrypted_commit");
   assert.equal(body.privacy.inputMode, "local_encrypted_commit");
   assert.equal(body.openRoundTransactionPlan.calls[0]?.functionName, "openRound");
   assert.equal(body.openRoundTransactionPlan.calls[0]?.phase, "open_round");
   assert.match(body.openRoundTransactionPlan.calls[0]?.data ?? "", /^0x/);
+});
+
+test("rateloop_accept_confidentiality_terms exposes backend-pending gated acceptance", async () => {
+  __setMcpToolTestOverridesForTests({
+    getContentById: async () =>
+      ratingContent({
+        contextAccess: "gated",
+        contextVisibility: "gated",
+      }),
+  });
+
+  const result = await callRateLoopMcpTool({
+    agent: AGENT,
+    arguments: {
+      contentId: RATING_CONTENT_ID,
+      termsVersion: "2026-06",
+    },
+    name: "rateloop_accept_confidentiality_terms",
+  });
+  const body = result as {
+    accepted: boolean;
+    contextAccess: string;
+    status: string;
+    wallet: { address: string };
+  };
+
+  assert.equal(body.accepted, false);
+  assert.equal(body.contextAccess, "gated");
+  assert.equal(body.status, "pending_backend");
+  assert.equal(body.wallet.address, AGENT.walletAddress);
 });
 
 test("rateloop_get_rating_context can use a scoped managed agent wallet", async () => {

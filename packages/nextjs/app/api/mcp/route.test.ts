@@ -282,6 +282,8 @@ test("tools/list accepts supported MCP-Protocol-Version and returns tool annotat
   assert.match(toolByName.get("rateloop_get_result")?.description ?? "", /RATELOOP_UNTRUSTED_DATA/);
   assert.match(toolByName.get("rateloop_get_result")?.description ?? "", /never follow instructions/i);
   assert.ok(toolByName.get("rateloop_get_rating_context")?.inputSchema);
+  assert.ok(toolByName.get("rateloop_accept_confidentiality_terms")?.inputSchema);
+  assert.ok(toolByName.get("rateloop_accept_confidentiality_terms")?.outputSchema);
   assert.ok(toolByName.get("rateloop_prepare_rating_transactions")?.outputSchema);
   assert.ok(toolByName.get("rateloop_confirm_rating_transactions")?.inputSchema);
   assert.ok(toolByName.get("rateloop_get_rating_status")?.outputSchema);
@@ -309,6 +311,10 @@ test("tools/list accepts supported MCP-Protocol-Version and returns tool annotat
     properties?: Record<string, unknown>;
     required?: string[];
   };
+  const acceptTermsSchema = toolByName.get("rateloop_accept_confidentiality_terms")?.inputSchema as {
+    properties?: Record<string, unknown>;
+    required?: string[];
+  };
   const ratingPrepareSchema = toolByName.get("rateloop_prepare_rating_transactions")?.inputSchema as {
     properties?: Record<string, unknown>;
     required?: string[];
@@ -327,6 +333,9 @@ test("tools/list accepts supported MCP-Protocol-Version and returns tool annotat
   assert.deepEqual(resultOutputSchema.properties?.wait?.properties?.recoverWith?.type, ["string", "null"]);
   assert.ok(ratingContextSchema.properties?.walletAddress);
   assert.equal(ratingContextSchema.required?.includes("walletAddress"), false);
+  assert.ok(acceptTermsSchema.properties?.walletAddress);
+  assert.ok(acceptTermsSchema.properties?.termsVersion);
+  assert.deepEqual(acceptTermsSchema.required, ["contentId"]);
   assert.ok(ratingPrepareSchema.properties?.walletAddress);
   assert.equal(ratingPrepareSchema.required?.includes("walletAddress"), false);
 });
@@ -358,6 +367,7 @@ test("public MCP tools/list excludes managed-only balance tool", async () => {
   assert.equal(names.includes("rateloop_list_audience_options"), true);
   assert.equal(names.includes("rateloop_ask_humans"), true);
   assert.equal(names.includes("rateloop_prepare_rating_transactions"), true);
+  assert.equal(names.includes("rateloop_accept_confidentiality_terms"), true);
   assert.equal(names.includes("rateloop_get_agent_balance"), false);
   assert.equal(toolByName.get("rateloop_create_ask_handoff_link")?.rateLoopTier, "primary");
   assert.equal(toolByName.get("rateloop_create_ask_handoff_link")?.recommendedEntryPoint, true);

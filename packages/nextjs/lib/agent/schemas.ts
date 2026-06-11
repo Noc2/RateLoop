@@ -781,6 +781,48 @@ export const agentRatingContextInputSchema = {
   type: "object",
 } satisfies JsonSchema;
 
+export const agentAcceptConfidentialityTermsInputSchema = {
+  additionalProperties: false,
+  properties: {
+    chainId: chainIdSchema,
+    contentId: {
+      description: "RateLoop gated content id whose context terms are being accepted.",
+      type: ["integer", "string"],
+    },
+    signature: {
+      description:
+        "Wallet signature over the server-issued confidentiality terms challenge, once backend acceptance routes are enabled.",
+      type: "string",
+    },
+    termsVersion: {
+      default: "2026-06",
+      description: "Confidentiality terms version to acknowledge.",
+      type: "string",
+    },
+    walletAddress: agentWalletAddressSchema,
+  },
+  required: ["contentId"],
+  type: "object",
+} satisfies JsonSchema;
+
+export const agentAcceptConfidentialityTermsOutputSchema = {
+  additionalProperties: true,
+  properties: {
+    accepted: { type: "boolean" },
+    contentId: { type: "string" },
+    contextAccess: { enum: ["public", "gated"], type: "string" },
+    nextAction: { type: "string" },
+    status: {
+      enum: ["accepted", "not_required", "pending_backend"],
+      type: "string",
+    },
+    termsVersion: { type: "string" },
+    wallet: { type: "object" },
+  },
+  required: ["status", "accepted", "contentId", "contextAccess", "wallet"],
+  type: "object",
+} satisfies JsonSchema;
+
 export const agentPrepareRatingTransactionsInputSchema = {
   additionalProperties: false,
   properties: {

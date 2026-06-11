@@ -164,6 +164,8 @@ type AgentResultPackage = {
     audienceContext: unknown;
     categoryId: string;
     contentId: string;
+    contextAccess: "public" | "gated" | string;
+    contextVisibility: "public" | "gated" | string;
     currentRating: number | null;
     currentRatingBps: number | null;
     downEvidence: string | null;
@@ -456,6 +458,10 @@ function recommendedNextAction(
   return "proceed";
 }
 
+function hasGatedPrivateContext(content: PonderContentItem) {
+  return content.contextAccess === "gated" || content.contextVisibility === "gated";
+}
+
 export function buildAgentResultPackage(params: {
   audienceContext: unknown;
   content: PonderContentItem;
@@ -612,6 +618,11 @@ export function buildAgentResultPackage(params: {
       "The open result includes every revealed answer; bounty payouts may reflect a narrower eligible cohort.",
     );
   }
+  if (hasGatedPrivateContext(params.content)) {
+    limitations.push(
+      "This question used gated private context. Submitter-authored context is redacted from public result surfaces until disclosure; interpret the human signal with that context-access limitation.",
+    );
+  }
 
   return {
     answer,
@@ -639,6 +650,8 @@ export function buildAgentResultPackage(params: {
       audienceContext: params.audienceContext,
       categoryId: params.content.categoryId?.toString?.() ?? String(params.content.categoryId ?? ""),
       contentId: params.content.id,
+      contextAccess: params.content.contextAccess ?? "public",
+      contextVisibility: params.content.contextVisibility ?? params.content.contextAccess ?? "public",
       currentRating: rating,
       currentRatingBps: ratingBps,
       downEvidence: downEvidence > 0n ? downEvidence.toString() : null,

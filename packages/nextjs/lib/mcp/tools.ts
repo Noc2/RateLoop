@@ -49,6 +49,8 @@ import {
   resolveAgentBountyEligibilityScope,
 } from "~~/lib/agent/resultPackage";
 import {
+  agentAcceptConfidentialityTermsInputSchema,
+  agentAcceptConfidentialityTermsOutputSchema,
   agentAskHandoffOutputSchema,
   agentAskHumansInputSchema,
   agentAskHumansOutputSchema,
@@ -541,6 +543,23 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   },
   {
     annotations: {
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+      readOnlyHint: false,
+    },
+    description:
+      "Acknowledge confidentiality terms for gated RateLoop-hosted context before fetching private rating context. Until backend acceptance persistence is enabled, gated content returns a pending_backend status.",
+    inputSchema: agentAcceptConfidentialityTermsInputSchema,
+    name: "rateloop_accept_confidentiality_terms",
+    outputSchema: agentAcceptConfidentialityTermsOutputSchema,
+    rateLoopTier: "advanced",
+    rateLoopWorkflow: "rating",
+    requiredScope: MCP_SCOPES.rate,
+    title: "Accept Confidentiality Terms",
+  },
+  {
+    annotations: {
       destructiveHint: true,
       idempotentHint: false,
       openWorldHint: true,
@@ -623,6 +642,7 @@ const PUBLIC_MCP_TOOL_NAMES = new Set([
   "rateloop_get_question_status",
   "rateloop_get_result",
   "rateloop_get_rating_context",
+  "rateloop_accept_confidentiality_terms",
   "rateloop_prepare_rating_transactions",
   "rateloop_confirm_rating_transactions",
   "rateloop_get_rating_status",
@@ -1371,14 +1391,63 @@ function ratingPrivacyNotice() {
   };
 }
 
+function contentContextAccess(content: PonderContentItem): "public" | "gated" {
+  return content.contextAccess === "gated" || content.contextVisibility === "gated" ? "gated" : "public";
+}
+
 function formatRatingContent(content: PonderContentItem) {
+  const contextAccess = contentContextAccess(content);
   return {
     categoryId: content.categoryId,
+    confidentiality: content.confidentiality ?? null,
+    contextAccess,
+    contextVisibility: content.contextVisibility ?? contextAccess,
     description: content.description,
+    gatedContext:
+      contextAccess === "gated"
+        ? {
+            acceptTermsTool: "rateloop_accept_confidentiality_terms",
+            fetchDelivery: "authenticated_fetch_urls",
+            status: "terms_required",
+          }
+        : null,
     id: content.id,
     publicUrl: ratingPublicUrl(content.id),
     submitter: content.submitter,
     title: content.title,
+  };
+}
+
+async function acceptConfidentialityTerms(args: JsonObject, agent?: McpAgentAuth) {
+  const dependencies = getMcpToolDependencies();
+  const walletAddress = parseRatingWalletAddress(args, agent);
+  const contentId = parseRatingContentId(args.contentId);
+  const termsVersion =
+    typeof args.termsVersion === "string" && args.termsVersion.trim() ? args.termsVersion.trim() : "2026-06";
+  const contentResponse = await dependencies.getContentById(contentId.toString());
+  const contextAccess = contentContextAccess(contentResponse.content);
+
+  if (contextAccess !== "gated") {
+    return {
+      accepted: true,
+      contentId: contentId.toString(),
+      contextAccess: "public",
+      nextAction: "No confidentiality terms are required for public context.",
+      status: "not_required",
+      termsVersion,
+      wallet: { address: walletAddress },
+    };
+  }
+
+  return {
+    accepted: false,
+    contentId: contentId.toString(),
+    contextAccess: "gated",
+    nextAction:
+      "Backend persistence for wallet-signed confidentiality acceptance is not enabled yet; use the RateLoop app gate when available, then call rateloop_get_rating_context again.",
+    status: "pending_backend",
+    termsVersion,
+    wallet: { address: walletAddress },
   };
 }
 
@@ -3120,6 +3189,9 @@ export async function callPublicRateLoopMcpTool(params: {
     case "rateloop_get_rating_context":
       return buildRatingContext(args);
 
+    case "rateloop_accept_confidentiality_terms":
+      return acceptConfidentialityTerms(args);
+
     case "rateloop_prepare_rating_transactions":
       return prepareRatingTransactions(args);
 
@@ -3444,6 +3516,9 @@ export async function callRateLoopMcpTool(params: {
 
     case "rateloop_get_rating_context":
       return buildRatingContext(args, params.agent);
+
+    case "rateloop_accept_confidentiality_terms":
+      return acceptConfidentialityTerms(args, params.agent);
 
     case "rateloop_prepare_rating_transactions":
       return prepareRatingTransactions(args, params.agent);

@@ -314,9 +314,17 @@ test("rating SDK helpers call the MCP rating tools", async () => {
         name === "rateloop_get_rating_context"
           ? {
               contentId: "42",
+              content: { contextAccess: "gated" },
               ratingInputMode: "local_encrypted_commit",
               status: "ready",
             }
+          : name === "rateloop_accept_confidentiality_terms"
+            ? {
+                accepted: false,
+                contentId: "42",
+                contextAccess: "gated",
+                status: "pending_backend",
+              }
           : name === "rateloop_prepare_rating_transactions"
             ? {
                 status: "awaiting_wallet_signature",
@@ -348,6 +356,12 @@ test("rating SDK helpers call the MCP rating tools", async () => {
     contentId: 42n,
     walletAddress: "0x00000000000000000000000000000000000000aa",
   });
+  await agent.acceptConfidentialityTerms({
+    chainId: 31337,
+    contentId: 42n,
+    termsVersion: "2026-06",
+    walletAddress: "0x00000000000000000000000000000000000000aa",
+  });
   await agent.prepareRatingTransactions({
     chainId: 31337,
     ciphertext: `0x${"ab".repeat(4)}`,
@@ -377,16 +391,18 @@ test("rating SDK helpers call the MCP rating tools", async () => {
     calls.map((call) => call.name),
     [
       "rateloop_get_rating_context",
+      "rateloop_accept_confidentiality_terms",
       "rateloop_prepare_rating_transactions",
       "rateloop_confirm_rating_transactions",
       "rateloop_get_rating_status",
     ],
   );
   assert.equal(calls[0].arguments.contentId, "42");
-  assert.equal(calls[1].arguments.stakeWei, "1000000");
-  assert.equal(calls[1].arguments.commitHash, `0x${"11".repeat(32)}`);
-  assert.equal(calls[1].arguments.isUp, undefined);
-  assert.deepEqual(calls[2].arguments.transactionHashes, [
+  assert.equal(calls[1].arguments.termsVersion, "2026-06");
+  assert.equal(calls[2].arguments.stakeWei, "1000000");
+  assert.equal(calls[2].arguments.commitHash, `0x${"11".repeat(32)}`);
+  assert.equal(calls[2].arguments.isUp, undefined);
+  assert.deepEqual(calls[3].arguments.transactionHashes, [
     `0x${"33".repeat(32)}`,
   ]);
 });

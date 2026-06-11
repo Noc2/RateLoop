@@ -209,6 +209,35 @@ test("buildAgentResultPackage separates all answers from scoped bounty-eligible 
   assert.equal(result.answerScopes.bountyEligibleAnswers.distribution?.up.share, 0.5);
 });
 
+test("buildAgentResultPackage flags private context limitations", () => {
+  const result = buildAgentResultPackage({
+    audienceContext: null,
+    content: content({
+      contextAccess: "gated",
+      contextVisibility: "gated",
+      description: "",
+    }),
+    feedback: [],
+    latestRound: {
+      downCount: 1,
+      downPool: "100",
+      revealedCount: 3,
+      roundId: "2",
+      settledAt: "100",
+      state: ROUND_STATE.Settled,
+      totalStake: "300",
+      upCount: 2,
+      upPool: "200",
+      upWins: true,
+      voteCount: 3,
+    },
+    publicUrl: "https://rateloop.ai/rate?content=123",
+  });
+
+  assert.equal(result.protocolState.contextAccess, "gated");
+  assert.ok(result.limitations.some(limitation => limitation.includes("gated private context")));
+});
+
 test("buildAgentResultPackage uses bundle bounty scope when no single-question reward pool exists", () => {
   const result = buildAgentResultPackage({
     audienceContext: null,
