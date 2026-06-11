@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ContentRegistryAbi } from "@rateloop/contracts/abis";
 import { getSharedDeploymentAddress } from "@rateloop/contracts/deployments";
+import { type TargetAudience, normalizeTargetAudience } from "@rateloop/node-utils/profileSelfReport";
 import { type Address, type Hex, createPublicClient, decodeEventLog, http, isAddress } from "viem";
 import {
   attachQuestionDetailsToContent,
@@ -9,11 +10,13 @@ import {
 import { getServerRpcOverrides, getServerTargetNetworkById } from "~~/lib/env/server";
 import { isJsonObjectBody, jsonBodyErrorResponse, parseJsonBody } from "~~/lib/http/jsonBody";
 import { normalizeContentId, normalizeWalletAddress } from "~~/lib/watchlist/contentWatch";
+import { ponderApi } from "~~/services/ponder/client";
 import { checkRateLimit } from "~~/utils/rateLimit";
 
 type DetailsAttachRequest = {
   chainId?: unknown;
   details?: unknown;
+  metadata?: unknown;
   transactionHash?: unknown;
   transactionHashes?: unknown;
 };
@@ -28,11 +31,35 @@ type ContentDetailsProof = DetailsAttachmentInput & {
   submitter: Address;
 };
 
+type QuestionMetadataInput = {
+  contentId: string;
+  questionMetadataHash: Hex;
+  resultSpecHash: Hex;
+  targetAudience: TargetAudience | null;
+};
+
+type QuestionMetadataProof = {
+  contentId: string;
+  questionMetadataHash: Hex;
+  resultSpecHash: Hex;
+};
+
 const RATE_LIMIT = { limit: 30, windowMs: 60_000 };
 const ATTACH_JSON_BODY_MAX_BYTES = 32 * 1024;
 const MAX_ATTACH_DETAILS = 10;
+const MAX_ATTACH_METADATA = 25;
 const MAX_TRANSACTION_HASHES = 5;
 const BYTES32_PATTERN = /^0x[a-fA-F0-9]{64}$/;
+
+const CONTENT_REGISTRY_MEDIA_VALIDATOR_ABI = [
+  {
+    inputs: [],
+    name: "submissionMediaValidator",
+    outputs: [{ name: "", type: "address" }],
+    stateMutability: "view",
+    type: "function",
+  },
+] as const;
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -73,6 +100,27 @@ function readDetailsAttachments(value: unknown): DetailsAttachmentInput[] {
   return attachments;
 }
 
+function readQuestionMetadataAttachments(value: unknown): QuestionMetadataInput[] {
+  if (!Array.isArray(value)) return [];
+  const metadata: QuestionMetadataInput[] = [];
+  for (const entry of value.slice(0, MAX_ATTACH_METADATA)) {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
+    const record = entry as Record<string, unknown>;
+    const contentId = normalizeContentId(record.contentId);
+    const questionMetadataHash =
+      typeof record.questionMetadataHash === "string" ? record.questionMetadataHash.trim().toLowerCase() : "";
+    const resultSpecHash = typeof record.resultSpecHash === "string" ? record.resultSpecHash.trim().toLowerCase() : "";
+    if (!contentId || !BYTES32_PATTERN.test(questionMetadataHash) || !BYTES32_PATTERN.test(resultSpecHash)) continue;
+    metadata.push({
+      contentId,
+      questionMetadataHash: questionMetadataHash as Hex,
+      resultSpecHash: resultSpecHash as Hex,
+      targetAudience: normalizeTargetAudience(record.targetAudience),
+    });
+  }
+  return metadata;
+}
+
 function resolveDetailsAttachContext(chainId: number) {
   const targetNetwork = getServerTargetNetworkById(chainId);
   const contentRegistryAddress = getSharedDeploymentAddress(chainId, "ContentRegistry");
@@ -89,16 +137,20 @@ function resolveDetailsAttachContext(chainId: number) {
 
 function collectDetailsProofsFromReceiptLogs(params: {
   contentRegistryAddress: Address;
+  mediaValidatorAddress: Address | null;
   logs: readonly { address: Address; data: Hex; topics: readonly Hex[] }[];
 }) {
   const expectedEmitter = params.contentRegistryAddress.toLowerCase();
+  const expectedMediaValidatorEmitter = params.mediaValidatorAddress?.toLowerCase() ?? null;
   const submittersByContentId = new Map<string, Address>();
   const detailsByContentId = new Map<string, Pick<DetailsAttachmentInput, "detailsHash" | "detailsUrl">>();
+  const metadataByContentId = new Map<string, Omit<QuestionMetadataProof, "contentId">>();
 
   for (const log of params.logs) {
-    if (log.address.toLowerCase() !== expectedEmitter) continue;
     try {
       if (!log.topics[0]) continue;
+      const normalizedAddress = log.address.toLowerCase();
+      if (normalizedAddress !== expectedEmitter && normalizedAddress !== expectedMediaValidatorEmitter) continue;
       const decoded = decodeEventLog({
         abi: ContentRegistryAbi,
         data: log.data,
@@ -107,6 +159,7 @@ function collectDetailsProofsFromReceiptLogs(params: {
 
       if (
         decoded.eventName === "ContentSubmitted" &&
+        normalizedAddress === expectedEmitter &&
         typeof decoded.args.contentId === "bigint" &&
         typeof decoded.args.submitter === "string" &&
         isAddress(decoded.args.submitter)
@@ -114,6 +167,7 @@ function collectDetailsProofsFromReceiptLogs(params: {
         submittersByContentId.set(decoded.args.contentId.toString(), decoded.args.submitter);
       } else if (
         decoded.eventName === "ContentDetailsSubmitted" &&
+        normalizedAddress === expectedEmitter &&
         typeof decoded.args.contentId === "bigint" &&
         typeof decoded.args.detailsUrl === "string" &&
         typeof decoded.args.detailsHash === "string" &&
@@ -122,6 +176,19 @@ function collectDetailsProofsFromReceiptLogs(params: {
         detailsByContentId.set(decoded.args.contentId.toString(), {
           detailsHash: decoded.args.detailsHash.toLowerCase() as Hex,
           detailsUrl: decoded.args.detailsUrl,
+        });
+      } else if (
+        decoded.eventName === "QuestionContentAnchored" &&
+        normalizedAddress === expectedMediaValidatorEmitter &&
+        typeof decoded.args.contentId === "bigint" &&
+        typeof decoded.args.questionMetadataHash === "string" &&
+        BYTES32_PATTERN.test(decoded.args.questionMetadataHash) &&
+        typeof decoded.args.resultSpecHash === "string" &&
+        BYTES32_PATTERN.test(decoded.args.resultSpecHash)
+      ) {
+        metadataByContentId.set(decoded.args.contentId.toString(), {
+          questionMetadataHash: decoded.args.questionMetadataHash.toLowerCase() as Hex,
+          resultSpecHash: decoded.args.resultSpecHash.toLowerCase() as Hex,
         });
       }
     } catch {
@@ -140,7 +207,16 @@ function collectDetailsProofsFromReceiptLogs(params: {
       submitter,
     });
   }
-  return proofs;
+  const metadataProofs = new Map<string, QuestionMetadataProof>();
+  for (const [contentId, metadata] of metadataByContentId.entries()) {
+    if (!submittersByContentId.has(contentId)) continue;
+    metadataProofs.set(contentId, {
+      contentId,
+      questionMetadataHash: metadata.questionMetadataHash,
+      resultSpecHash: metadata.resultSpecHash,
+    });
+  }
+  return { detailsProofs: proofs, metadataProofs };
 }
 
 export async function POST(request: NextRequest) {
@@ -154,8 +230,20 @@ export async function POST(request: NextRequest) {
   const chainId = readChainId(payload.chainId);
   const transactionHashes = readTransactionHashes(payload);
   const details = readDetailsAttachments(payload.details);
-  if (!chainId || transactionHashes.length === 0 || details.length === 0) {
-    return NextResponse.json({ error: "chainId, transactionHashes, and details are required." }, { status: 400 });
+  let metadata: QuestionMetadataInput[];
+  try {
+    metadata = readQuestionMetadataAttachments(payload.metadata);
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Invalid question metadata." },
+      { status: 400 },
+    );
+  }
+  if (!chainId || transactionHashes.length === 0 || (details.length === 0 && metadata.length === 0)) {
+    return NextResponse.json(
+      { error: "chainId, transactionHashes, and details or metadata are required." },
+      { status: 400 },
+    );
   }
 
   const context = resolveDetailsAttachContext(chainId);
@@ -166,22 +254,35 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const proofs = new Map<string, ContentDetailsProof>();
+  const mediaValidatorAddress = await context.publicClient
+    .readContract({
+      abi: CONTENT_REGISTRY_MEDIA_VALIDATOR_ABI,
+      address: context.contentRegistryAddress,
+      functionName: "submissionMediaValidator",
+    })
+    .catch(() => null);
+
+  const detailsProofs = new Map<string, ContentDetailsProof>();
+  const metadataProofs = new Map<string, QuestionMetadataProof>();
   for (const transactionHash of transactionHashes) {
     const receipt = await context.publicClient.getTransactionReceipt({ hash: transactionHash }).catch(() => null);
     if (!receipt || receipt.status !== "success") continue;
     const receiptProofs = collectDetailsProofsFromReceiptLogs({
       contentRegistryAddress: context.contentRegistryAddress,
+      mediaValidatorAddress: mediaValidatorAddress && isAddress(mediaValidatorAddress) ? mediaValidatorAddress : null,
       logs: receipt.logs,
     });
-    for (const [contentId, proof] of receiptProofs.entries()) {
-      proofs.set(contentId, proof);
+    for (const [contentId, proof] of receiptProofs.detailsProofs.entries()) {
+      detailsProofs.set(contentId, proof);
+    }
+    for (const [contentId, proof] of receiptProofs.metadataProofs.entries()) {
+      metadataProofs.set(contentId, proof);
     }
   }
 
   let attached = 0;
   for (const detail of details) {
-    const proof = proofs.get(detail.contentId);
+    const proof = detailsProofs.get(detail.contentId);
     if (
       !proof ||
       proof.detailsUrl !== detail.detailsUrl ||
@@ -200,8 +301,37 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  const verifiedMetadata = metadata.filter(entry => {
+    const proof = metadataProofs.get(entry.contentId);
+    return (
+      proof &&
+      proof.questionMetadataHash.toLowerCase() === entry.questionMetadataHash.toLowerCase() &&
+      proof.resultSpecHash.toLowerCase() === entry.resultSpecHash.toLowerCase()
+    );
+  });
+  let metadataIndexed = 0;
+  let metadataSkipped = metadata.length - verifiedMetadata.length;
+  const warnings: string[] = [];
+  if (verifiedMetadata.length > 0) {
+    try {
+      const result = await ponderApi.syncQuestionMetadata(verifiedMetadata);
+      metadataIndexed = result.updated;
+      metadataSkipped += result.skipped;
+      if (result.errors.length > 0) {
+        warnings.push(...result.errors.map(error => `metadata_sync_error:${error}`));
+      }
+    } catch (error) {
+      console.warn("Unable to sync question metadata to Ponder.", error);
+      warnings.push("metadata_sync_unavailable");
+    }
+  }
+
   return NextResponse.json({
     attached,
     requested: details.length,
+    metadataIndexed,
+    metadataRequested: metadata.length,
+    metadataSkipped,
+    warnings,
   });
 }

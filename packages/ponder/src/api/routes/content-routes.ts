@@ -1,7 +1,15 @@
 import { ROUND_STATE } from "@rateloop/contracts/protocol";
-import { aggregateProfileSelfReports } from "@rateloop/node-utils/profileSelfReport";
+import {
+  aggregateProfileSelfReports,
+  normalizeTargetAudience,
+  serializeTargetAudience,
+  type TargetAudience,
+} from "@rateloop/node-utils/profileSelfReport";
+import type { Context } from "hono";
 import { and, asc, desc, eq, inArray, or, sql } from "ponder";
 import { db } from "ponder:api";
+import { Pool } from "pg";
+import type { Hex } from "viem";
 import {
   category,
   content,
@@ -43,8 +51,50 @@ import {
 } from "../utils.js";
 
 type SqlCondition = ReturnType<typeof sql>;
+type AudienceColumn = Parameters<typeof sql>[1];
 
 const CONTENT_STATUS_ACTIVE = 0;
+const MAX_TARGET_AUDIENCE_METADATA_ITEMS = 25;
+const BYTES32_PATTERN = /^0x[a-fA-F0-9]{64}$/;
+const SCHEMA_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const DEFAULT_PONDER_DATABASE_SCHEMA_BY_NETWORK: Record<string, string> = {
+  hardhat: "rateloop_ponder_hardhat",
+  worldchain: "rateloop_ponder_worldchain",
+  worldchainSepolia: "rateloop_ponder_worldchain_sepolia",
+};
+const DEFAULT_PONDER_DATABASE_SCHEMA = "rateloop_ponder";
+const LEGACY_PONDER_DATABASE_SCHEMA = "ponder";
+let metadataUpdatePool: Pool | null = null;
+
+type AudienceFilter = {
+  column: AudienceColumn;
+  normalize: (values: string[]) => string[];
+  queryNames: readonly string[];
+};
+
+const TARGET_AUDIENCE_RESPONSE_FIELDS = [
+  "targetAudience",
+  "targetAudienceAgeGroups",
+  "targetAudienceCountries",
+  "targetAudienceExpertise",
+  "targetAudienceLanguages",
+  "targetAudienceNationalities",
+  "targetAudienceRoles",
+  "targetAudienceAiAgentFrameworks",
+  "targetAudienceAiAutonomy",
+  "targetAudienceAiExpertise",
+  "targetAudienceAiLanguages",
+  "targetAudienceAiModelProviders",
+  "targetAudienceTeamCountries",
+  "targetAudienceTeamExpertise",
+  "targetAudienceTeamLanguages",
+  "targetAudienceTeamSizes",
+  "targetAudienceTeamTypes",
+  "targetAudienceHybridExpertise",
+  "targetAudienceHybridLanguages",
+  "targetAudienceHybridModelProviders",
+  "targetAudienceHybridOversight",
+] as const;
 
 function voteMatchesVoter(address: `0x${string}`) {
   return or(eq(vote.voter, address), eq(vote.identityHolder, address));
@@ -244,6 +294,360 @@ function parseOptionalBooleanFlag(value: string | undefined) {
   if (normalized === "1" || normalized === "true" || normalized === "yes") return true;
   if (normalized === "0" || normalized === "false" || normalized === "no") return false;
   return undefined;
+}
+
+function pipeList(values: readonly string[] | null | undefined) {
+  const items = [...new Set((values ?? []).map((value) => value.trim()).filter(Boolean))].sort();
+  return items.length > 0 ? `|${items.join("|")}|` : null;
+}
+
+function targetAudienceStorageFields(value: TargetAudience | null) {
+  return {
+    targetAudience: value ? serializeTargetAudience(value) : null,
+    targetAudienceAgeGroups: pipeList(value?.ageGroups),
+    targetAudienceCountries: pipeList(value?.countries),
+    targetAudienceExpertise: pipeList(value?.expertise),
+    targetAudienceLanguages: pipeList(value?.languages),
+    targetAudienceNationalities: pipeList(value?.nationalities),
+    targetAudienceRoles: pipeList(value?.roles),
+    targetAudienceAiAgentFrameworks: pipeList(value?.ai?.agentFrameworks),
+    targetAudienceAiAutonomy: pipeList(value?.ai?.autonomy),
+    targetAudienceAiExpertise: pipeList(value?.ai?.expertise),
+    targetAudienceAiLanguages: pipeList(value?.ai?.languages),
+    targetAudienceAiModelProviders: pipeList(value?.ai?.modelProviders),
+    targetAudienceTeamCountries: pipeList(value?.team?.countries),
+    targetAudienceTeamExpertise: pipeList(value?.team?.expertise),
+    targetAudienceTeamLanguages: pipeList(value?.team?.languages),
+    targetAudienceTeamSizes: pipeList(value?.team?.sizes),
+    targetAudienceTeamTypes: pipeList(value?.team?.types),
+    targetAudienceHybridExpertise: pipeList(value?.hybrid?.expertise),
+    targetAudienceHybridLanguages: pipeList(value?.hybrid?.languages),
+    targetAudienceHybridModelProviders: pipeList(value?.hybrid?.modelProviders),
+    targetAudienceHybridOversight: pipeList(value?.hybrid?.oversight),
+  };
+}
+
+function normalizeAudienceFilter(build: (values: string[]) => unknown, read: (value: TargetAudience | null) => string[]) {
+  return (values: string[]) => read(normalizeTargetAudience(build(values)));
+}
+
+const TARGET_AUDIENCE_FILTERS: AudienceFilter[] = [
+  {
+    column: content.targetAudienceAgeGroups,
+    normalize: normalizeAudienceFilter((ageGroups) => ({ ageGroups }), (value) => value?.ageGroups ?? []),
+    queryNames: ["targetAudienceAgeGroups", "targetAudience.ageGroups"],
+  },
+  {
+    column: content.targetAudienceCountries,
+    normalize: normalizeAudienceFilter((countries) => ({ countries }), (value) => value?.countries ?? []),
+    queryNames: ["targetAudienceCountries", "targetAudience.countries"],
+  },
+  {
+    column: content.targetAudienceExpertise,
+    normalize: normalizeAudienceFilter((expertise) => ({ expertise }), (value) => value?.expertise ?? []),
+    queryNames: ["targetAudienceExpertise", "targetAudience.expertise"],
+  },
+  {
+    column: content.targetAudienceLanguages,
+    normalize: normalizeAudienceFilter((languages) => ({ languages }), (value) => value?.languages ?? []),
+    queryNames: ["targetAudienceLanguages", "targetAudience.languages"],
+  },
+  {
+    column: content.targetAudienceNationalities,
+    normalize: normalizeAudienceFilter((nationalities) => ({ nationalities }), (value) => value?.nationalities ?? []),
+    queryNames: ["targetAudienceNationalities", "targetAudience.nationalities"],
+  },
+  {
+    column: content.targetAudienceRoles,
+    normalize: normalizeAudienceFilter((roles) => ({ roles }), (value) => value?.roles ?? []),
+    queryNames: ["targetAudienceRoles", "targetAudience.roles"],
+  },
+  {
+    column: content.targetAudienceAiAgentFrameworks,
+    normalize: normalizeAudienceFilter(
+      (agentFrameworks) => ({ ai: { agentFrameworks } }),
+      (value) => value?.ai?.agentFrameworks ?? [],
+    ),
+    queryNames: ["targetAudienceAiAgentFrameworks", "targetAudience.ai.agentFrameworks"],
+  },
+  {
+    column: content.targetAudienceAiAutonomy,
+    normalize: normalizeAudienceFilter((autonomy) => ({ ai: { autonomy } }), (value) => value?.ai?.autonomy ?? []),
+    queryNames: ["targetAudienceAiAutonomy", "targetAudience.ai.autonomy"],
+  },
+  {
+    column: content.targetAudienceAiExpertise,
+    normalize: normalizeAudienceFilter((expertise) => ({ ai: { expertise } }), (value) => value?.ai?.expertise ?? []),
+    queryNames: ["targetAudienceAiExpertise", "targetAudience.ai.expertise"],
+  },
+  {
+    column: content.targetAudienceAiLanguages,
+    normalize: normalizeAudienceFilter((languages) => ({ ai: { languages } }), (value) => value?.ai?.languages ?? []),
+    queryNames: ["targetAudienceAiLanguages", "targetAudience.ai.languages"],
+  },
+  {
+    column: content.targetAudienceAiModelProviders,
+    normalize: normalizeAudienceFilter(
+      (modelProviders) => ({ ai: { modelProviders } }),
+      (value) => value?.ai?.modelProviders ?? [],
+    ),
+    queryNames: ["targetAudienceAiModelProviders", "targetAudience.ai.modelProviders"],
+  },
+  {
+    column: content.targetAudienceTeamCountries,
+    normalize: normalizeAudienceFilter((countries) => ({ team: { countries } }), (value) => value?.team?.countries ?? []),
+    queryNames: ["targetAudienceTeamCountries", "targetAudience.team.countries"],
+  },
+  {
+    column: content.targetAudienceTeamExpertise,
+    normalize: normalizeAudienceFilter((expertise) => ({ team: { expertise } }), (value) => value?.team?.expertise ?? []),
+    queryNames: ["targetAudienceTeamExpertise", "targetAudience.team.expertise"],
+  },
+  {
+    column: content.targetAudienceTeamLanguages,
+    normalize: normalizeAudienceFilter((languages) => ({ team: { languages } }), (value) => value?.team?.languages ?? []),
+    queryNames: ["targetAudienceTeamLanguages", "targetAudience.team.languages"],
+  },
+  {
+    column: content.targetAudienceTeamSizes,
+    normalize: normalizeAudienceFilter((sizes) => ({ team: { sizes } }), (value) => value?.team?.sizes ?? []),
+    queryNames: ["targetAudienceTeamSizes", "targetAudience.team.sizes"],
+  },
+  {
+    column: content.targetAudienceTeamTypes,
+    normalize: normalizeAudienceFilter((types) => ({ team: { types } }), (value) => value?.team?.types ?? []),
+    queryNames: ["targetAudienceTeamTypes", "targetAudience.team.types"],
+  },
+  {
+    column: content.targetAudienceHybridExpertise,
+    normalize: normalizeAudienceFilter(
+      (expertise) => ({ hybrid: { expertise } }),
+      (value) => value?.hybrid?.expertise ?? [],
+    ),
+    queryNames: ["targetAudienceHybridExpertise", "targetAudience.hybrid.expertise"],
+  },
+  {
+    column: content.targetAudienceHybridLanguages,
+    normalize: normalizeAudienceFilter(
+      (languages) => ({ hybrid: { languages } }),
+      (value) => value?.hybrid?.languages ?? [],
+    ),
+    queryNames: ["targetAudienceHybridLanguages", "targetAudience.hybrid.languages"],
+  },
+  {
+    column: content.targetAudienceHybridModelProviders,
+    normalize: normalizeAudienceFilter(
+      (modelProviders) => ({ hybrid: { modelProviders } }),
+      (value) => value?.hybrid?.modelProviders ?? [],
+    ),
+    queryNames: ["targetAudienceHybridModelProviders", "targetAudience.hybrid.modelProviders"],
+  },
+  {
+    column: content.targetAudienceHybridOversight,
+    normalize: normalizeAudienceFilter(
+      (oversight) => ({ hybrid: { oversight } }),
+      (value) => value?.hybrid?.oversight ?? [],
+    ),
+    queryNames: ["targetAudienceHybridOversight", "targetAudience.hybrid.oversight"],
+  },
+];
+
+function parseAudienceQueryValues(value: string | undefined) {
+  return value
+    ?.split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean) ?? [];
+}
+
+function buildAudienceContainsCondition(column: AudienceColumn, values: readonly string[]): SqlCondition | null {
+  const clauses = values.map((value) => sql<boolean>`coalesce(${column}, '') like ${`%|${value}|%`}`);
+  return clauses.length === 1 ? clauses[0]! : (or(...clauses) ?? null);
+}
+
+function buildTargetAudienceFilterConditions(c: Context): { conditions: SqlCondition[]; error: string | null } {
+  const conditions: SqlCondition[] = [];
+  for (const filter of TARGET_AUDIENCE_FILTERS) {
+    const rawValues = filter.queryNames.flatMap((queryName) => parseAudienceQueryValues(c.req.query(queryName)));
+    if (rawValues.length === 0) continue;
+    let values: string[];
+    try {
+      values = filter.normalize(rawValues);
+    } catch (error) {
+      return {
+        conditions: [],
+        error: error instanceof Error ? error.message : "Invalid target audience filter.",
+      };
+    }
+    const condition = buildAudienceContainsCondition(filter.column, values);
+    if (condition) conditions.push(condition);
+  }
+  return { conditions, error: null };
+}
+
+function formatContentTargetAudience<T extends Record<string, unknown>>(item: T, includeTargetAudience = false): T {
+  const redacted = { ...item };
+  const record = redacted as Record<string, unknown>;
+  if (includeTargetAudience) {
+    const rawTargetAudience = record.targetAudience;
+    try {
+      record.targetAudience =
+        typeof rawTargetAudience === "string" && rawTargetAudience !== "null"
+          ? normalizeTargetAudience(JSON.parse(rawTargetAudience))
+          : null;
+    } catch {
+      record.targetAudience = null;
+    }
+  }
+  for (const field of TARGET_AUDIENCE_RESPONSE_FIELDS) {
+    if (includeTargetAudience && field === "targetAudience") continue;
+    delete record[field];
+  }
+  return redacted;
+}
+
+function metadataSyncToken() {
+  return process.env.PONDER_METADATA_SYNC_TOKEN?.trim() || null;
+}
+
+function readEnv(key: string) {
+  const value = process.env[key]?.trim();
+  return value ? value : undefined;
+}
+
+function resolveWritablePonderSchema() {
+  const rateloopSchema = readEnv("RATELOOP_PONDER_DATABASE_SCHEMA");
+  const databaseSchema = readEnv("DATABASE_SCHEMA");
+  const ponderNetwork = readEnv("PONDER_NETWORK");
+  const isLegacyDatabaseSchema = rateloopSchema === undefined && databaseSchema === LEGACY_PONDER_DATABASE_SCHEMA;
+  const schema =
+    rateloopSchema ??
+    (isLegacyDatabaseSchema ? undefined : databaseSchema) ??
+    (ponderNetwork ? DEFAULT_PONDER_DATABASE_SCHEMA_BY_NETWORK[ponderNetwork] : undefined) ??
+    DEFAULT_PONDER_DATABASE_SCHEMA;
+  if (!SCHEMA_NAME_PATTERN.test(schema)) {
+    throw new Error("Invalid Ponder database schema.");
+  }
+  return schema;
+}
+
+function quoteIdentifier(value: string) {
+  return `"${value.replace(/"/g, '""')}"`;
+}
+
+function getMetadataUpdatePool() {
+  const connectionString = readEnv("DATABASE_URL");
+  if (!connectionString) {
+    throw new Error("DATABASE_URL is required for metadata sync.");
+  }
+  metadataUpdatePool ??= new Pool({
+    connectionString,
+    max: 2,
+  });
+  return metadataUpdatePool;
+}
+
+async function updateQuestionMetadataRow(params: {
+  contentId: bigint;
+  questionMetadataHash: Hex;
+  resultSpecHash: Hex;
+  targetAudience: TargetAudience | null;
+}) {
+  const storage = targetAudienceStorageFields(params.targetAudience);
+  const schema = quoteIdentifier(resolveWritablePonderSchema());
+  const result = await getMetadataUpdatePool().query(
+    `
+      update ${schema}.${quoteIdentifier("content")}
+      set
+        ${quoteIdentifier("questionMetadataHash")} = $1,
+        ${quoteIdentifier("resultSpecHash")} = $2,
+        ${quoteIdentifier("targetAudience")} = $3,
+        ${quoteIdentifier("targetAudienceAgeGroups")} = $4,
+        ${quoteIdentifier("targetAudienceCountries")} = $5,
+        ${quoteIdentifier("targetAudienceExpertise")} = $6,
+        ${quoteIdentifier("targetAudienceLanguages")} = $7,
+        ${quoteIdentifier("targetAudienceNationalities")} = $8,
+        ${quoteIdentifier("targetAudienceRoles")} = $9,
+        ${quoteIdentifier("targetAudienceAiAgentFrameworks")} = $10,
+        ${quoteIdentifier("targetAudienceAiAutonomy")} = $11,
+        ${quoteIdentifier("targetAudienceAiExpertise")} = $12,
+        ${quoteIdentifier("targetAudienceAiLanguages")} = $13,
+        ${quoteIdentifier("targetAudienceAiModelProviders")} = $14,
+        ${quoteIdentifier("targetAudienceTeamCountries")} = $15,
+        ${quoteIdentifier("targetAudienceTeamExpertise")} = $16,
+        ${quoteIdentifier("targetAudienceTeamLanguages")} = $17,
+        ${quoteIdentifier("targetAudienceTeamSizes")} = $18,
+        ${quoteIdentifier("targetAudienceTeamTypes")} = $19,
+        ${quoteIdentifier("targetAudienceHybridExpertise")} = $20,
+        ${quoteIdentifier("targetAudienceHybridLanguages")} = $21,
+        ${quoteIdentifier("targetAudienceHybridModelProviders")} = $22,
+        ${quoteIdentifier("targetAudienceHybridOversight")} = $23
+      where ${quoteIdentifier("id")} = $24
+        and (${quoteIdentifier("questionMetadataHash")} is null or lower(${quoteIdentifier("questionMetadataHash")}) = $1)
+        and (${quoteIdentifier("resultSpecHash")} is null or lower(${quoteIdentifier("resultSpecHash")}) = $2)
+    `,
+    [
+      params.questionMetadataHash,
+      params.resultSpecHash,
+      storage.targetAudience,
+      storage.targetAudienceAgeGroups,
+      storage.targetAudienceCountries,
+      storage.targetAudienceExpertise,
+      storage.targetAudienceLanguages,
+      storage.targetAudienceNationalities,
+      storage.targetAudienceRoles,
+      storage.targetAudienceAiAgentFrameworks,
+      storage.targetAudienceAiAutonomy,
+      storage.targetAudienceAiExpertise,
+      storage.targetAudienceAiLanguages,
+      storage.targetAudienceAiModelProviders,
+      storage.targetAudienceTeamCountries,
+      storage.targetAudienceTeamExpertise,
+      storage.targetAudienceTeamLanguages,
+      storage.targetAudienceTeamSizes,
+      storage.targetAudienceTeamTypes,
+      storage.targetAudienceHybridExpertise,
+      storage.targetAudienceHybridLanguages,
+      storage.targetAudienceHybridModelProviders,
+      storage.targetAudienceHybridOversight,
+      params.contentId.toString(),
+    ],
+  );
+  return result.rowCount ?? 0;
+}
+
+function authorizeMetadataSync(c: Context) {
+  const token = metadataSyncToken();
+  if (!token) {
+    return process.env.NODE_ENV === "production"
+      ? "PONDER_METADATA_SYNC_TOKEN is required in production."
+      : null;
+  }
+  return c.req.header("authorization") === `Bearer ${token}` ? null : "Invalid metadata sync token.";
+}
+
+function readMetadataHash(value: unknown) {
+  const hash = typeof value === "string" ? value.trim().toLowerCase() : "";
+  return BYTES32_PATTERN.test(hash) ? (hash as `0x${string}`) : null;
+}
+
+function readQuestionMetadataItems(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, MAX_TARGET_AUDIENCE_METADATA_ITEMS).flatMap((entry) => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) return [];
+    const record = entry as Record<string, unknown>;
+    const contentId = safeBigInt(String(record.contentId ?? ""));
+    const questionMetadataHash = readMetadataHash(record.questionMetadataHash);
+    const resultSpecHash = readMetadataHash(record.resultSpecHash);
+    if (contentId === null || !questionMetadataHash || !resultSpecHash) return [];
+    return [
+      {
+        contentId,
+        questionMetadataHash,
+        resultSpecHash,
+        targetAudience: record.targetAudience,
+      },
+    ];
+  });
 }
 
 function getRoundAdvisoryCommitCount() {
@@ -480,6 +884,64 @@ async function getAudienceContextForContent(contentId: bigint) {
 }
 
 export function registerContentRoutes(app: ApiApp) {
+  app.post("/question-metadata", async (c) => {
+    const authError = authorizeMetadataSync(c);
+    if (authError) {
+      return c.json(
+        { error: authError },
+        authError.includes("required") ? 503 : 401,
+      );
+    }
+
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ error: "Invalid JSON body." }, 400);
+    }
+    const metadata = readQuestionMetadataItems(
+      body && typeof body === "object" && !Array.isArray(body)
+        ? (body as Record<string, unknown>).metadata
+        : null,
+    );
+    if (metadata.length === 0) {
+      return c.json({ error: "metadata is required." }, 400);
+    }
+
+    let updated = 0;
+    let skipped = 0;
+    const errors: string[] = [];
+    for (const item of metadata) {
+      let targetAudience: TargetAudience | null;
+      try {
+        targetAudience = normalizeTargetAudience(item.targetAudience);
+      } catch (error) {
+        errors.push(error instanceof Error ? error.message : "Invalid targetAudience.");
+        skipped += 1;
+        continue;
+      }
+
+      const rowCount = await updateQuestionMetadataRow({
+        contentId: item.contentId,
+        questionMetadataHash: item.questionMetadataHash,
+        resultSpecHash: item.resultSpecHash,
+        targetAudience,
+      });
+      if (rowCount > 0) {
+        updated += rowCount;
+      } else {
+        skipped += 1;
+      }
+    }
+
+    return c.json({
+      errors,
+      requested: metadata.length,
+      skipped,
+      updated,
+    });
+  });
+
   app.get("/content", async (c) => {
     const categoryId = c.req.query("categoryId");
     const contentIds = parseBigIntList(c.req.query("contentIds"), 500);
@@ -534,6 +996,11 @@ export function registerContentRoutes(app: ApiApp) {
     if (contentIds.length > 0) {
       conditions.push(inArray(content.id, contentIds));
     }
+    const audienceFilters = buildTargetAudienceFilterConditions(c);
+    if (audienceFilters.error) {
+      return c.json({ error: audienceFilters.error }, 400);
+    }
+    conditions.push(...audienceFilters.conditions);
     const submitterFilters = new Set<`0x${string}`>();
     if (submitterQuery) {
       if (!isValidAddress(submitterQuery))
@@ -606,7 +1073,7 @@ export function registerContentRoutes(app: ApiApp) {
         : null;
 
     return jsonBig(c, {
-      items: itemsWithBundles,
+      items: itemsWithBundles.map((item) => formatContentTargetAudience(item)),
       total,
       limit,
       offset,
@@ -616,6 +1083,12 @@ export function registerContentRoutes(app: ApiApp) {
 
   app.get("/content/by-url", async (c) => {
     const url = c.req.query("url");
+    const includeTargetAudience = parseOptionalBooleanFlag(
+      c.req.query("includeTargetAudience"),
+    );
+    if (includeTargetAudience === undefined) {
+      return c.json({ error: "Invalid includeTargetAudience filter" }, 400);
+    }
     if (!url) {
       return c.json({ error: "url parameter required" }, 400);
     }
@@ -694,7 +1167,10 @@ export function registerContentRoutes(app: ApiApp) {
     const audienceContext = await getAudienceContextForContent(item.id);
 
     return jsonBig(c, {
-      content: contentWithBundle,
+      content: formatContentTargetAudience(
+        contentWithBundle,
+        includeTargetAudience === true,
+      ),
       rounds,
       ratings,
       audienceContext,
@@ -705,6 +1181,12 @@ export function registerContentRoutes(app: ApiApp) {
   app.get("/content/:id", async (c) => {
     const id = safeBigInt(c.req.param("id"));
     if (id === null) return c.json({ error: "Invalid content id" }, 400);
+    const includeTargetAudience = parseOptionalBooleanFlag(
+      c.req.query("includeTargetAudience"),
+    );
+    if (includeTargetAudience === undefined) {
+      return c.json({ error: "Invalid includeTargetAudience filter" }, 400);
+    }
 
     const [item] = await db
       .select()
@@ -750,7 +1232,10 @@ export function registerContentRoutes(app: ApiApp) {
     const audienceContext = await getAudienceContextForContent(id);
 
     return jsonBig(c, {
-      content: contentWithBundle,
+      content: formatContentTargetAudience(
+        contentWithBundle,
+        includeTargetAudience === true,
+      ),
       rounds,
       ratings,
       audienceContext,

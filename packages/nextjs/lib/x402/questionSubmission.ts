@@ -5,6 +5,7 @@ import {
   RoundVotingEngineAbi,
 } from "@rateloop/contracts/abis";
 import { getSharedDeploymentAddress } from "@rateloop/contracts/deployments";
+import { type TargetAudience, normalizeTargetAudience } from "@rateloop/node-utils/profileSelfReport";
 import { createHash } from "crypto";
 import "server-only";
 import {
@@ -54,6 +55,7 @@ import {
   assertSupportedX402BundleBounty,
   buildX402QuestionOperation,
 } from "~~/lib/x402/questionPayload";
+import { ponderApi } from "~~/services/ponder/client";
 
 const RESERVED_SUBMISSION_WAIT_MS = 1_100;
 const TX_RECEIPT_TIMEOUT_MS = 180_000;
@@ -98,8 +100,15 @@ type StoredWalletSubmissionPlanReceipt = {
   mode?: WalletSubmissionReceiptMode;
   operationKey?: string;
   originalClientRequestId?: string;
+  questionMetadata?: StoredQuestionMetadata[];
   revealCommitment?: Hex;
   walletAddress?: Address;
+};
+
+type StoredQuestionMetadata = {
+  questionMetadataHash: Hex;
+  resultSpecHash: Hex;
+  targetAudience: TargetAudience | null;
 };
 
 export type StoredPendingAgentCallback = {
@@ -390,6 +399,37 @@ function serializeExpectedRewardTerms(payload: X402QuestionPayload): StoredQuest
   };
 }
 
+function serializeQuestionMetadata(payload: X402QuestionPayload): StoredQuestionMetadata[] {
+  return payload.questions.map(question => ({
+    questionMetadataHash: question.questionMetadataHash,
+    resultSpecHash: question.resultSpecHash,
+    targetAudience: normalizeTargetAudience(question.targetAudience),
+  }));
+}
+
+function parseStoredQuestionMetadata(value: unknown): StoredQuestionMetadata[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const items = value.flatMap(entry => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) return [];
+    const record = entry as Record<string, unknown>;
+    if (!isBytes32Hex(record.questionMetadataHash) || !isBytes32Hex(record.resultSpecHash)) return [];
+    let targetAudience: TargetAudience | null;
+    try {
+      targetAudience = normalizeTargetAudience(record.targetAudience);
+    } catch {
+      return [];
+    }
+    return [
+      {
+        questionMetadataHash: record.questionMetadataHash.toLowerCase() as Hex,
+        resultSpecHash: record.resultSpecHash.toLowerCase() as Hex,
+        targetAudience,
+      },
+    ];
+  });
+  return items.length > 0 ? items : undefined;
+}
+
 function serializeFeedbackBonusRequest(
   feedbackBonus: X402FeedbackBonusRequest | null | undefined,
 ): StoredFeedbackBonusRequest | undefined {
@@ -500,6 +540,7 @@ function parseStoredSubmissionPlanReceipt(value: string | null): StoredWalletSub
       operationKey: typeof parsed.operationKey === "string" ? parsed.operationKey : undefined,
       originalClientRequestId:
         typeof parsed.originalClientRequestId === "string" ? parsed.originalClientRequestId : undefined,
+      questionMetadata: parseStoredQuestionMetadata(parsed.questionMetadata),
       revealCommitment: isBytes32Hex(parsed.revealCommitment) ? parsed.revealCommitment : undefined,
       walletAddress:
         typeof parsed.walletAddress === "string" && isAddress(parsed.walletAddress)
@@ -1985,6 +2026,34 @@ async function attachSubmittedQuestionDetails(params: {
   }
 }
 
+async function syncSubmittedQuestionMetadata(params: {
+  contentIds: readonly bigint[];
+  receipt: StoredWalletSubmissionPlanReceipt | null;
+}) {
+  const metadata = params.receipt?.questionMetadata ?? [];
+  if (metadata.length === 0) return;
+  const entries = metadata.flatMap((item, index) => {
+    const contentId = params.contentIds[index];
+    if (contentId === undefined) return [];
+    return [
+      {
+        contentId: contentId.toString(),
+        questionMetadataHash: item.questionMetadataHash,
+        resultSpecHash: item.resultSpecHash,
+        targetAudience: item.targetAudience,
+      },
+    ];
+  });
+  if (entries.length === 0) return;
+  try {
+    await ponderApi.syncQuestionMetadata(entries);
+  } catch (error) {
+    if (process.env.NODE_ENV === "production") {
+      console.warn("Unable to sync x402 question metadata to Ponder.", error);
+    }
+  }
+}
+
 function x402QuestionSubmissionStatusBody(params: {
   config: X402QuestionSubmissionConfig;
   operation: X402QuestionOperation;
@@ -2045,6 +2114,7 @@ async function recordAgentWalletSubmissionPlan(params: {
     operationKey: params.operation.operationKey,
     ...(params.originalClientRequestId ? { originalClientRequestId: params.originalClientRequestId } : {}),
     preparedAt: now.toISOString(),
+    questionMetadata: serializeQuestionMetadata(params.payload),
     revealCommitment: params.plan.revealCommitment,
     walletAddress: params.plan.walletAddress,
   });
@@ -2145,6 +2215,7 @@ async function recordNativeX402SubmissionPlan(params: {
     operationKey: params.operation.operationKey,
     ...(params.originalClientRequestId ? { originalClientRequestId: params.originalClientRequestId } : {}),
     preparedAt: now.toISOString(),
+    questionMetadata: serializeQuestionMetadata(params.payload),
     revealCommitment: params.plan.revealCommitment,
     walletAddress: params.plan.walletAddress,
   });
@@ -2909,6 +2980,10 @@ export async function confirmAgentWalletQuestionSubmissionRequest(params: {
     contentIds,
     ownerWalletAddress: record.payerAddress as Address,
     submittedDetails,
+  });
+  await syncSubmittedQuestionMetadata({
+    contentIds,
+    receipt: planReceipt,
   });
 
   await updateSubmissionStatus({

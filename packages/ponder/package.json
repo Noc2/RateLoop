@@ -23,11 +23,13 @@
     "@rateloop/contracts": "workspace:*",
     "@rateloop/node-utils": "workspace:*",
     "hono": "~4.12.21",
+    "pg": "^8.11.3",
     "ponder": "^1.0.0",
     "viem": "2.39.0"
   },
   "devDependencies": {
     "@types/node": "^20.10.7",
+    "@types/pg": "^8.15.6",
     "typescript": "~5.8.2",
     "vitest": "^4.1.0"
   },

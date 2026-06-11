@@ -1423,7 +1423,15 @@ export function ContentSubmissionSection() {
 
   const attachQuestionDetailsAfterSubmission = async (params: {
     contentIds: readonly bigint[];
-    questions: ReadonlyArray<{ detailsHash: `0x${string}`; detailsUrl: string }>;
+    questions: ReadonlyArray<{
+      detailsHash: `0x${string}`;
+      detailsUrl: string;
+      spec: {
+        questionMetadataHash: `0x${string}`;
+        resultSpecHash: `0x${string}`;
+      };
+      targetAudience?: unknown;
+    }>;
     transactionHashes: readonly `0x${string}`[];
   }) => {
     const details = params.questions
@@ -1433,7 +1441,15 @@ export function ContentSubmissionSection() {
         detailsUrl: question.detailsUrl,
       }))
       .filter(detail => detail.contentId && detail.detailsUrl);
-    if (details.length === 0 || params.transactionHashes.length === 0) return;
+    const metadata = params.questions
+      .map((question, index) => ({
+        contentId: params.contentIds[index]?.toString() ?? "",
+        questionMetadataHash: question.spec.questionMetadataHash,
+        resultSpecHash: question.spec.resultSpecHash,
+        targetAudience: question.targetAudience ?? null,
+      }))
+      .filter(entry => entry.contentId);
+    if ((details.length === 0 && metadata.length === 0) || params.transactionHashes.length === 0) return;
 
     const response = await fetch("/api/attachments/details/attach", {
       method: "POST",
@@ -1441,6 +1457,7 @@ export function ContentSubmissionSection() {
       body: JSON.stringify({
         chainId: targetNetwork.id,
         details,
+        metadata,
         transactionHashes: params.transactionHashes,
       }),
     });

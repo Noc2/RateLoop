@@ -525,6 +525,27 @@ describe("registerContentRoutes", () => {
     expect(db.select).not.toHaveBeenCalled();
   });
 
+  it("rejects invalid target audience filters with canonical suggestions", async () => {
+    const { db } = mockPonderModules([]);
+    const { registerContentRoutes } = await import(
+      "../src/api/routes/content-routes.js"
+    );
+
+    const app = new Hono();
+    registerContentRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/content?targetAudience.roles=developer",
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.error).toContain("targetAudience.roles");
+    expect(body.error).toContain("developer");
+    expect(body.error).toContain("engineer");
+    expect(db.select).not.toHaveBeenCalled();
+  });
+
   it("returns empty results for short generic searches without querying the database", async () => {
     const { db } = mockPonderModules([]);
     mockSharedModule();

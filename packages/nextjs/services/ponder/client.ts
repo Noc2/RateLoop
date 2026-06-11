@@ -1,10 +1,11 @@
 import type { RoundState } from "@rateloop/contracts/protocol";
-import type { ProfileSelfReportAudienceContext } from "@rateloop/node-utils/profileSelfReport";
+import type { ProfileSelfReportAudienceContext, TargetAudience } from "@rateloop/node-utils/profileSelfReport";
 import { resolvePonderUrlValue } from "~~/utils/env/ponderUrl";
 
 const isProduction = process.env.NODE_ENV === "production";
 const allowLocalE2EProductionBuild = process.env.NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD === "true";
 const NEXT_PUBLIC_PONDER_URL = process.env.NEXT_PUBLIC_PONDER_URL?.trim() || undefined;
+const PONDER_METADATA_SYNC_TOKEN = process.env.PONDER_METADATA_SYNC_TOKEN?.trim() || undefined;
 
 export function resolvePonderUrl(
   rawValue: string | undefined,
@@ -306,6 +307,23 @@ export async function ponderGet<T>(path: string, params?: Record<string, string 
   return fetchPonderJson<T>(url);
 }
 
+async function ponderPost<T>(path: string, body: unknown): Promise<T> {
+  const url = new URL(`${getRequiredPonderUrl()}${path}`);
+  const response = await fetch(url, {
+    body: JSON.stringify(body),
+    headers: {
+      "Content-Type": "application/json",
+      ...(PONDER_METADATA_SYNC_TOKEN ? { Authorization: `Bearer ${PONDER_METADATA_SYNC_TOKEN}` } : {}),
+    },
+    method: "POST",
+    signal: AbortSignal.timeout(PONDER_REQUEST_TIMEOUT),
+  });
+  if (!response.ok) {
+    throw new PonderHttpError(response);
+  }
+  return response.json();
+}
+
 // ============================================================
 // Typed API methods
 // ============================================================
@@ -319,6 +337,7 @@ export interface PonderContentItem {
   contentHash: string;
   questionMetadataHash?: string | null;
   resultSpecHash?: string | null;
+  targetAudience?: TargetAudience | null;
   detailsUrl?: string | null;
   detailsHash?: string | null;
   url: string | null;
@@ -544,6 +563,20 @@ export interface PonderContentQuery {
   submitter?: string;
   submitters?: string;
   voteable?: string;
+}
+
+export interface PonderQuestionMetadataItem {
+  contentId: string;
+  questionMetadataHash: string;
+  resultSpecHash: string;
+  targetAudience?: TargetAudience | null;
+}
+
+export interface PonderQuestionMetadataSyncResponse {
+  errors: string[];
+  requested: number;
+  skipped: number;
+  updated: number;
 }
 
 export interface PonderContentOpenRoundSummary {
@@ -1244,13 +1277,21 @@ export const ponderApi = {
     return ponderGet<PonderContentResponse>("/content", params);
   },
 
-  getContentById(id: string) {
+  getContentById(id: string, options?: { includeTargetAudience?: boolean }) {
     return ponderGet<{
       audienceContext: ProfileSelfReportAudienceContext;
       content: PonderContentItem;
       rounds: any[];
       ratings: PonderRatingChange[];
-    }>(`/content/${id}`);
+    }>(`/content/${id}`, {
+      includeTargetAudience: options?.includeTargetAudience ? "1" : undefined,
+    });
+  },
+
+  syncQuestionMetadata(metadata: PonderQuestionMetadataItem[]) {
+    return ponderPost<PonderQuestionMetadataSyncResponse>("/question-metadata", {
+      metadata,
+    });
   },
 
   async getContentWindow(params?: PonderContentQuery) {
