@@ -5067,13 +5067,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "initializeSubmissionMediaValidator",
-          inputs: [],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
           name: "initializeWithTreasury",
           inputs: [
             {
@@ -7095,6 +7088,11 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "error",
+          name: "InvalidState",
+          inputs: [],
+        },
+        {
+          type: "error",
           name: "NotInitializing",
           inputs: [],
         },
@@ -8313,6 +8311,29 @@ const deployedContracts: GenericContractsDeclaration = {
             },
           ],
           stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "setRole",
+          inputs: [
+            {
+              name: "role",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "account",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "enabled",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
         },
         {
           type: "function",
@@ -30782,6 +30803,19 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "ACCESS_RECORDER_ROLE",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "BOND_ASSET_LREP",
           inputs: [],
           outputs: [
@@ -31545,6 +31579,24 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "recordAccessNexus",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "holder",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "recordConfidentialityNexus",
           inputs: [
             {
@@ -31946,6 +31998,31 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "event",
+          name: "ConfidentialityNexusRecorded",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "holder",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "recorder",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
           name: "ConfiscationRecipientUpdated",
           inputs: [
             {
@@ -32162,6 +32239,7 @@ const deployedContracts: GenericContractsDeclaration = {
         postBondWithAuthorization:
           "contracts/interfaces/IConfidentialityEscrow.sol",
         postBondWithPermit: "contracts/interfaces/IConfidentialityEscrow.sol",
+        recordAccessNexus: "contracts/interfaces/IConfidentialityEscrow.sol",
         recordConfidentialityNexus:
           "contracts/interfaces/IConfidentialityEscrow.sol",
         releaseBond: "contracts/interfaces/IConfidentialityEscrow.sol",
@@ -34105,13 +34183,6 @@ const deployedContracts: GenericContractsDeclaration = {
             },
           ],
           stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "initializeSubmissionMediaValidator",
-          inputs: [],
-          outputs: [],
-          stateMutability: "nonpayable",
         },
         {
           type: "function",
@@ -36136,6 +36207,11 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "error",
+          name: "InvalidState",
+          inputs: [],
+        },
+        {
+          type: "error",
           name: "NotInitializing",
           inputs: [],
         },
@@ -37354,6 +37430,29 @@ const deployedContracts: GenericContractsDeclaration = {
             },
           ],
           stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "setRole",
+          inputs: [
+            {
+              name: "role",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "account",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "enabled",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
         },
         {
           type: "function",
@@ -49590,6 +49689,19 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "setTransferShortfall",
+          inputs: [
+            {
+              name: "shortfall",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "symbol",
           inputs: [],
           outputs: [
@@ -49666,6 +49778,19 @@ const deployedContracts: GenericContractsDeclaration = {
             },
           ],
           stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "transferShortfall",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
         },
         {
           type: "event",

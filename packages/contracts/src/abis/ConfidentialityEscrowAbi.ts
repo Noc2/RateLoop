@@ -19,6 +19,19 @@ export const ConfidentialityEscrowAbi = [
   },
   {
     "type": "function",
+    "name": "ACCESS_RECORDER_ROLE",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "BOND_ASSET_LREP",
     "inputs": [],
     "outputs": [
@@ -780,6 +793,24 @@ export const ConfidentialityEscrowAbi = [
   },
   {
     "type": "function",
+    "name": "recordAccessNexus",
+    "inputs": [
+      {
+        "name": "contentId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "holder",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "recordConfidentialityNexus",
     "inputs": [
       {
@@ -1175,6 +1206,31 @@ export const ConfidentialityEscrowAbi = [
         "type": "uint8",
         "indexed": false,
         "internalType": "uint8"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ConfidentialityNexusRecorded",
+    "inputs": [
+      {
+        "name": "contentId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "holder",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "recorder",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
       }
     ],
     "anonymous": false
