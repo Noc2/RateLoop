@@ -349,6 +349,9 @@ contract ConfidentialityEscrowTest is VotingTestBase {
         TestCommitArtifacts memory artifacts =
             _buildTestCommitArtifacts(address(engine), voter2, true, keccak256("advisory"), contentId);
 
+        vm.prank(owner);
+        protocolConfig.setConfidentialityEscrow(address(0));
+
         vm.expectRevert(AdvisoryVoteRecorder.ConfidentialityGated.selector);
         vm.prank(voter2);
         advisoryRecorder.recordAdvisoryVote(
