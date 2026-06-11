@@ -38,7 +38,7 @@ by agents and indie builders, (3) LLM-judge calibration sets. The market timing 
 
 ## What RateLoop can actually deliver today (capability envelope)
 
-From the repo audit; full details in the protocol docs and `design-review-2026-06.md`.
+From the repo audit; full details in the protocol docs.
 
 | Dimension | Reality |
 | --- | --- |
@@ -237,7 +237,7 @@ three markets than three question templates sold to the same person.
   escrow) is so close to RateLoop's that becoming *the* judgment primitive in that ecosystem is a
   plausible position. Prolific's own MCP repo warns every publish "spends real money" with no
   sandbox — RateLoop's dry-run mode is already ahead there; the missing piece is a funded live
-  sandbox (known finding, `design-review-2026-06.md`).
+  sandbox.
 - **The "verified human" claim needs careful wording.** World ID gating scopes bounty
   eligibility, not the public score; the honest pitch is "paid, verified-human-gated cohort with
   a public all-answers scope," and the result package already exposes both scopes.

@@ -192,4 +192,3 @@ everything.
 - Gao, Wright, Leyton-Brown, *Incentivizing Evaluation via Limited Access to Ground Truth*
   (2016) — peer prediction alone cannot make truthfulness Pareto-dominant under cheap
   coordination signals; sparse ground-truth audits remain the long-term backstop.
-- `docs/design-review-2026-06.md`, finding 2.
