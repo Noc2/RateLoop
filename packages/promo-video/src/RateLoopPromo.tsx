@@ -62,24 +62,34 @@ const VO_WINDOWS = BEATS.map(
   beat => [beat.start + VO_OFFSET, beat.start + VO_OFFSET + beat.voDurationInFrames] as const,
 );
 
-/** Music bed: gentle base level, ducked under each VO window, faded at the edges. */
+/** Music bed: brighter when VO rests, tightly ducked under narration. */
 const musicVolume = (frame: number) => {
   let duck = 1;
   for (const [a, b] of VO_WINDOWS) {
-    if (frame < a - 12 || frame > b + 18) continue;
+    if (frame < a - 9 || frame > b + 21) continue;
     const v =
       frame < a
-        ? interpolate(frame, [a - 12, a], [1, 0.4])
+        ? interpolate(frame, [a - 9, a], [1, 0.34])
         : frame <= b
-          ? 0.4
-          : interpolate(frame, [b, b + 18], [0.4, 1]);
+          ? 0.34
+          : interpolate(frame, [b, b + 21], [0.34, 1]);
     duck = Math.min(duck, v);
   }
+  const base = interpolate(
+    frame,
+    [0, HOOK, starts[3], starts[4], PROMO_DURATION_IN_FRAMES - OUTRO, PROMO_DURATION_IN_FRAMES - 30],
+    [0.62, 0.48, 0.5, 0.56, 0.64, 0.7],
+    { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
+  );
+  const fadeIn = interpolate(frame, [0, 30], [0, 1], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
   const fadeOut = interpolate(frame, [PROMO_DURATION_IN_FRAMES - 60, PROMO_DURATION_IN_FRAMES], [1, 0], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
-  return 0.55 * duck * fadeOut;
+  return base * duck * fadeIn * fadeOut;
 };
 
 export const RateLoopPromo = () => (
