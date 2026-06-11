@@ -73,9 +73,9 @@ const Tokenomics = () => {
         Launch rewards are deliberately front-loaded for the cold-start phase. The first verified humans and useful
         raters carry more traction risk, so the first 100 and first 1,000 cohorts receive materially higher rewards.
         Verified referrers earn immediately when a referred user verifies, useful raters earn from qualifying
-        verified-human anchored rounds, and eligible legacy contributors can claim a prior-allocation-based grant until
-        the 27-month deadline. Amounts below are maximums; cluster-capped effective credit, vesting state, pool balance,
-        claim expiry, and governance updates can reduce or pause payouts.
+        verified-human anchored rounds, and eligible legacy contributors are seeded as verified humans at launch while
+        their prior-allocation-based grant vests until the 27-month deadline. Amounts below are maximums; cluster-capped
+        effective credit, vesting state, pool balance, claim expiry, and governance updates can reduce or pause payouts.
       </p>
       <div className="not-prose overflow-x-auto my-6 rounded-xl bg-base-200">
         <table className="table table-zebra [&_th]:text-base [&_td]:text-base [&_.badge]:text-base [&_th]:bg-base-300">
@@ -156,7 +156,8 @@ const Tokenomics = () => {
 
       <p>
         Eligible legacy contributors claim from the prior-allocation snapshot; 1% is immediate, 99% unlocks over 24
-        months, and unclaimed balances expire after 27 months.
+        months, and unclaimed balances expire after 27 months. Their addresses also receive standard-TTL seeded human
+        credentials, so active legacy credentials use the same verified-human gates and bonus paths.
       </p>
 
       <div className="not-prose overflow-x-auto my-6 rounded-xl bg-base-200">
