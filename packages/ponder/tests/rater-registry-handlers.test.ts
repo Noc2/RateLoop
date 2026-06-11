@@ -102,7 +102,7 @@ describe("RaterRegistry ponder handlers", () => {
     await bannedHandler!({
       event: {
         args: {
-          provider: 3,
+          provider: 2,
           nullifierHash,
           expiresAt: 2_000n,
           permanent: false,
@@ -117,7 +117,7 @@ describe("RaterRegistry ponder handlers", () => {
     await unbannedHandler!({
       event: {
         args: {
-          provider: 3,
+          provider: 2,
           nullifierHash,
         },
         block: { timestamp: 150n },
@@ -129,8 +129,8 @@ describe("RaterRegistry ponder handlers", () => {
       {
         table: "raterIdentityBan",
         values: {
-          id: `3-${nullifierHash}`,
-          provider: 3,
+          id: `2-${nullifierHash}`,
+          provider: 2,
           nullifierHash,
           active: true,
           permanent: false,
@@ -155,8 +155,8 @@ describe("RaterRegistry ponder handlers", () => {
       {
         table: "raterIdentityBan",
         values: {
-          id: `3-${nullifierHash}`,
-          provider: 3,
+          id: `2-${nullifierHash}`,
+          provider: 2,
           nullifierHash,
           active: false,
           permanent: false,
@@ -347,12 +347,12 @@ describe("RaterRegistry ponder handlers", () => {
           rater: "0x0000000000000000000000000000000000001234",
           verified: true,
           revoked: false,
-          provider: 3,
+          provider: 2,
         }),
         update: expect.objectContaining({
           verified: true,
           revoked: false,
-          provider: 3,
+          provider: 2,
           updatedAt: 100n,
         }),
       },

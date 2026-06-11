@@ -31,12 +31,15 @@ function createQueryBuilder<T>(result: T) {
 function mockPonderModules<T>(result: T, additionalResults: unknown[] = []) {
   const queryBuilders = [
     createQueryBuilder<unknown>(result),
-    ...additionalResults.map((additionalResult) => createQueryBuilder(additionalResult)),
+    ...additionalResults.map((additionalResult) =>
+      createQueryBuilder(additionalResult),
+    ),
   ];
   let selectCallCount = 0;
   const db = {
     select: vi.fn(() => {
-      const queryBuilder = queryBuilders[Math.min(selectCallCount, queryBuilders.length - 1)]!;
+      const queryBuilder =
+        queryBuilders[Math.min(selectCallCount, queryBuilders.length - 1)]!;
       selectCallCount += 1;
       return queryBuilder;
     }),
@@ -97,7 +100,8 @@ function mockPonderModules<T>(result: T, additionalResults: unknown[] = []) {
       gated: "content.gated",
       confidentialityBondAmount: "content.confidentialityBondAmount",
       confidentialityBondAsset: "content.confidentialityBondAsset",
-      confidentialityDisclosurePolicy: "content.confidentialityDisclosurePolicy",
+      confidentialityDisclosurePolicy:
+        "content.confidentialityDisclosurePolicy",
       confidentialityPublishedAt: "content.confidentialityPublishedAt",
       conservativeRatingBps: "content.conservativeRatingBps",
       ratingBps: "content.ratingBps",
@@ -715,7 +719,8 @@ describe("registerContentRoutes", () => {
           id: 42n,
           description: "Sensitive unreleased landing-page copy.",
           detailsHash: `0x${"4".repeat(64)}`,
-          detailsUrl: "https://www.rateloop.ai/api/attachments/details/det_abcdefghijklmnop",
+          detailsUrl:
+            "https://www.rateloop.ai/api/attachments/details/det_abcdefghijklmnop",
           gated: true,
           confidentialityBondAmount: 2500000n,
           confidentialityBondAsset: "USDC",
@@ -732,7 +737,8 @@ describe("registerContentRoutes", () => {
             mediaIndex: 0,
             mediaType: "image",
             url: "https://www.rateloop.ai/api/attachments/images/att_abcdefghijklmnop.webp",
-            canonicalUrl: "https://www.rateloop.ai/api/attachments/images/att_abcdefghijklmnop.webp",
+            canonicalUrl:
+              "https://www.rateloop.ai/api/attachments/images/att_abcdefghijklmnop.webp",
             urlHost: "www.rateloop.ai",
           },
         ],
@@ -775,7 +781,8 @@ describe("registerContentRoutes", () => {
           id: 43n,
           description: "Sensitive event-indexed prototype copy.",
           detailsHash: `0x${"5".repeat(64)}`,
-          detailsUrl: "https://www.rateloop.ai/api/attachments/details/det_eventindexed",
+          detailsUrl:
+            "https://www.rateloop.ai/api/attachments/details/det_eventindexed",
           gated: true,
           confidentialityBondAmount: 1_000_000n,
           confidentialityBondAsset: "LREP",
@@ -792,7 +799,8 @@ describe("registerContentRoutes", () => {
             mediaIndex: 0,
             mediaType: "image",
             url: "https://www.rateloop.ai/api/attachments/images/att_eventindexed.webp",
-            canonicalUrl: "https://www.rateloop.ai/api/attachments/images/att_eventindexed.webp",
+            canonicalUrl:
+              "https://www.rateloop.ai/api/attachments/images/att_eventindexed.webp",
             urlHost: "www.rateloop.ai",
           },
         ],
@@ -1055,7 +1063,9 @@ describe("registerContentRoutes", () => {
     const serializedWhere = serializeExpression(
       queryBuilder.where.mock.calls[0]?.[0],
     );
-    expect(serializedWhere).not.toContain("questionRewardPool.unallocatedAmount");
+    expect(serializedWhere).not.toContain(
+      "questionRewardPool.unallocatedAmount",
+    );
 
     const serializedOrderBy = serializeExpression(
       queryBuilder.orderBy.mock.calls[0] ?? [],
@@ -1109,7 +1119,9 @@ describe("registerContentRoutes", () => {
     const app = new Hono();
     registerContentRoutes(app);
 
-    const response = await app.request("http://localhost/content?voteable=maybe");
+    const response = await app.request(
+      "http://localhost/content?voteable=maybe",
+    );
 
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({ error: "Invalid voteable filter" });
@@ -1909,7 +1921,7 @@ describe("registerDataRoutes", () => {
         updatedAt: 6_000n,
         verified: true,
         revoked: false,
-        provider: 3,
+        provider: 2,
         nullifierHash,
         verifiedAt: 1_000n,
         expiresAt: 9_999_999_999n,
@@ -1959,7 +1971,7 @@ describe("registerDataRoutes", () => {
     expect(response.status).toBe(200);
     expect(body.confidentialitySanction).toMatchObject({
       active: true,
-      provider: 3,
+      provider: 2,
       permanent: false,
       expiresAt: "9999999999",
       evidenceHash,
@@ -2325,7 +2337,11 @@ describe("registerDataRoutes", () => {
     const joinExpressions = queryBuilder.leftJoin.mock.calls.map((call) =>
       serializeExpression(call),
     );
-    expect(joinExpressions.some((join) => join.includes("questionRewardPoolClaim.identityKey"))).toBe(true);
+    expect(
+      joinExpressions.some((join) =>
+        join.includes("questionRewardPoolClaim.identityKey"),
+      ),
+    ).toBe(true);
   });
 
   it("attaches payout proofs for finalized USDC bounty candidates", async () => {
@@ -2485,7 +2501,9 @@ describe("registerCorrelationRoutes", () => {
     expect(queryBuilder.limit).toHaveBeenCalledWith(25);
     const orderByArgs = queryBuilder.orderBy.mock.calls[0] ?? [];
     expect(serializeExpression(orderByArgs[0])).toContain("round.roundId");
-    expect(serializeExpression(orderByArgs[1])).toContain("questionRewardPool.id");
+    expect(serializeExpression(orderByArgs[1])).toContain(
+      "questionRewardPool.id",
+    );
     const body = await response.json();
     expect(body.items[0]).toMatchObject({
       rewardPoolId: "7",
@@ -2541,7 +2559,10 @@ describe("registerCorrelationRoutes", () => {
             questionMetadataUri: `https://rateloop.ai/question-metadata/0x${"2".repeat(64)}`,
             resultSpecHash: `0x${"3".repeat(64)}`,
             settledAt: 777n,
-            targetAudience: JSON.stringify({ languages: ["de"], roles: ["engineer"] }),
+            targetAudience: JSON.stringify({
+              languages: ["de"],
+              roles: ["engineer"],
+            }),
           },
         ],
         [],
@@ -2593,7 +2614,10 @@ describe("registerCorrelationRoutes", () => {
         questionMetadataHash: `0x${"2".repeat(64)}`,
         questionMetadataUri: `https://rateloop.ai/question-metadata/0x${"2".repeat(64)}`,
         resultSpecHash: `0x${"3".repeat(64)}`,
-        targetAudienceHash: canonicalJsonHash({ languages: ["de"], roles: ["engineer"] }),
+        targetAudienceHash: canonicalJsonHash({
+          languages: ["de"],
+          roles: ["engineer"],
+        }),
       },
       settledRoundsInWindow: 0,
     });
@@ -2615,10 +2639,14 @@ describe("registerCorrelationRoutes", () => {
     const serializedJoins = queryBuilder.leftJoin.mock.calls.map((call) =>
       serializeExpression(call),
     );
-    expect(serializedJoins.some((join) => join.includes("raterHumanCredential.expiresAt"))).toBe(
-      true,
-    );
-    expect(serializedJoins.some((join) => join.includes("round.settledAt"))).toBe(true);
+    expect(
+      serializedJoins.some((join) =>
+        join.includes("raterHumanCredential.expiresAt"),
+      ),
+    ).toBe(true);
+    expect(
+      serializedJoins.some((join) => join.includes("round.settledAt")),
+    ).toBe(true);
   });
 
   it("filters targeted correlation votes by self-report match and profile cooldown", async () => {
@@ -2881,10 +2909,7 @@ describe("registerCorrelationRoutes", () => {
   it("excludes rounds settled after the requested round from the base-rate window", async () => {
     const { queryBuilders } = mockPonderModules(
       [],
-      [
-        [{ settledAt: 777n }],
-        [{ upPool: 100n, downPool: 100n }],
-      ],
+      [[{ settledAt: 777n }], [{ upPool: 100n, downPool: 100n }]],
     );
     const { registerCorrelationRoutes } = await import(
       "../src/api/routes/correlation-routes.js"
@@ -2900,7 +2925,9 @@ describe("registerCorrelationRoutes", () => {
 
     // The requested round's own (settledAt, contentId, roundId) tuple is looked up first.
     const lookupBuilder = queryBuilders[1]!;
-    const lookupWhere = serializeExpression(lookupBuilder.where.mock.calls[0]?.[0]);
+    const lookupWhere = serializeExpression(
+      lookupBuilder.where.mock.calls[0]?.[0],
+    );
     expect(lookupWhere).toContain("round.contentId");
     expect(lookupWhere).toContain("round.roundId");
     expect(lookupWhere).toContain("round.state");
@@ -2908,7 +2935,9 @@ describe("registerCorrelationRoutes", () => {
     // The window only admits rounds with a strictly smaller (settledAt, contentId, roundId)
     // tuple, so rounds settled after the requested round (greater tuple) are excluded.
     const windowBuilder = queryBuilders[2]!;
-    const windowWhere = serializeExpression(windowBuilder.where.mock.calls[0]?.[0]);
+    const windowWhere = serializeExpression(
+      windowBuilder.where.mock.calls[0]?.[0],
+    );
     expect(windowWhere).toContain("round.state");
     expect(windowWhere).toContain("round.settledAt");
     expect(windowWhere).toContain(") < (");
@@ -2919,7 +2948,11 @@ describe("registerCorrelationRoutes", () => {
     expect(serializeExpression(orderByArgs[0])).toContain("round.settledAt");
     expect(serializeExpression(orderByArgs[1])).toContain("round.contentId");
     expect(serializeExpression(orderByArgs[2])).toContain("round.roundId");
-    expect(orderByArgs.map((arg: any) => arg?.kind)).toEqual(["desc", "desc", "desc"]);
+    expect(orderByArgs.map((arg: any) => arg?.kind)).toEqual([
+      "desc",
+      "desc",
+      "desc",
+    ]);
     expect(windowBuilder.limit).toHaveBeenCalledWith(100);
   });
 
@@ -2957,7 +2990,9 @@ describe("registerKeeperRoutes", () => {
     const app = new Hono();
     registerKeeperRoutes(app);
 
-    const response = await app.request("http://localhost/keeper/work?now=abc&dormancyPeriod=60");
+    const response = await app.request(
+      "http://localhost/keeper/work?now=abc&dormancyPeriod=60",
+    );
 
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toEqual({
@@ -2973,7 +3008,9 @@ describe("registerKeeperRoutes", () => {
     const app = new Hono();
     registerKeeperRoutes(app);
 
-    const response = await app.request("http://localhost/keeper/work?now=100&dormancyPeriod=60&limit=5");
+    const response = await app.request(
+      "http://localhost/keeper/work?now=100&dormancyPeriod=60&limit=5",
+    );
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
@@ -3047,8 +3084,7 @@ describe("registerDiscoveryRoutes", () => {
     expect(
       serializedWhereCalls.some(
         (value) =>
-          value.includes("vote.voter") &&
-          value.includes("vote.identityHolder"),
+          value.includes("vote.voter") && value.includes("vote.identityHolder"),
       ),
     ).toBe(true);
   });
