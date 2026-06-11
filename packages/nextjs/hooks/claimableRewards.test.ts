@@ -2,6 +2,7 @@ import {
   buildRoundClaimStateLookup,
   calculateLastClaimAwarePoolShare,
   getQuestionRewardClaimArgs,
+  hasIndexedRefundClaim,
   sortClaimableRewardItems,
 } from "./claimableRewards";
 import assert from "node:assert/strict";
@@ -65,6 +66,13 @@ test("buildRoundClaimStateLookup falls back to raw voter address when no commit 
     functionName: "rewardClaimed",
     args: [4n, 2n, "0x1000000000000000000000000000000000000000"],
   });
+});
+
+test("hasIndexedRefundClaim treats any indexed timestamp as an already claimed refund", () => {
+  assert.equal(hasIndexedRefundClaim({ refundClaimedAt: "1710000000" }), true);
+  assert.equal(hasIndexedRefundClaim({ refundClaimedAt: 1710000000n }), true);
+  assert.equal(hasIndexedRefundClaim({ refundClaimedAt: null }), false);
+  assert.equal(hasIndexedRefundClaim({}), false);
 });
 
 test("sortClaimableRewardItems keeps frontend round credits ahead of the final frontend withdrawal", () => {

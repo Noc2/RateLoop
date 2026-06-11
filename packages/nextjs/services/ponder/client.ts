@@ -1118,6 +1118,7 @@ export interface PonderVoteItem {
   roundRbtsMeanScoreBps?: number | null;
   roundRbtsForfeitedPool?: string | null;
   roundRbtsForfeitClaimants?: number | null;
+  refundClaimedAt?: string | null;
 }
 
 export interface PonderVotesResponse {

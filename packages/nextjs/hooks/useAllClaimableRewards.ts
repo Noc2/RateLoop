@@ -7,6 +7,7 @@ import {
   type ClaimableRewardItem,
   buildRoundClaimStateLookup,
   calculateLastClaimAwarePoolShare,
+  hasIndexedRefundClaim,
 } from "~~/hooks/claimableRewards";
 import { useDeployedContractInfo } from "~~/hooks/scaffold-eth";
 import { useClaimableFrontendRewards } from "~~/hooks/useClaimableFrontendRewards";
@@ -45,6 +46,11 @@ function isRbtsRewardRound(vote: PonderVoteItem) {
 
 function rbtsRewardWeight(vote: PonderVoteItem) {
   return safeBigInt(vote.rbtsRewardWeight);
+}
+
+function isRefundRound(vote: PonderVoteItem) {
+  const state = vote.roundState;
+  return state === ROUND_STATE.Cancelled || state === ROUND_STATE.Tied || state === ROUND_STATE.RevealFailed;
 }
 
 /**
@@ -118,11 +124,12 @@ export function useAllClaimableRewards() {
   // --- Step 4: Classify unclaimed votes into reward-path and refund-path claims ---
   const unclaimedVotes = useMemo(() => {
     if (terminalVotes.length === 0) return [];
-    if (claimedContracts.length === 0) return terminalVotes;
-    if (!claimedResults || claimedResults.length !== claimedContracts.length) return [];
     let claimedIndex = 0;
-    return terminalVotes.filter((_, i) => {
-      if (!claimLookups[i]) return true;
+    return terminalVotes.filter((vote, i) => {
+      if (isRefundRound(vote)) return !hasIndexedRefundClaim(vote);
+      const lookup = claimLookups[i];
+      if (!lookup) return true;
+      if (!claimedResults || claimedResults.length !== claimedContracts.length) return false;
       const r = claimedResults[claimedIndex++];
       return r?.status === "success" && r.result === false;
     });

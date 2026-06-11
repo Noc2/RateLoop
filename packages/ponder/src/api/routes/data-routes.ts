@@ -1112,6 +1112,7 @@ export function registerDataRoutes(app: ApiApp) {
         roundRbtsMeanScoreBps: round.rbtsMeanScoreBps,
         roundRbtsForfeitedPool: round.rbtsForfeitedPool,
         roundRbtsForfeitClaimants: round.rbtsForfeitClaimants,
+        refundClaimedAt: rewardClaim.claimedAt,
       })
       .from(vote)
       .leftJoin(
@@ -1119,6 +1120,15 @@ export function registerDataRoutes(app: ApiApp) {
         and(
           eq(vote.contentId, round.contentId),
           eq(vote.roundId, round.roundId),
+        ),
+      )
+      .leftJoin(
+        rewardClaim,
+        and(
+          eq(rewardClaim.source, "refund"),
+          eq(rewardClaim.contentId, vote.contentId),
+          eq(rewardClaim.roundId, vote.roundId),
+          or(eq(rewardClaim.voter, vote.voter), eq(rewardClaim.stakePayer, vote.voter)),
         ),
       )
       .where(where)

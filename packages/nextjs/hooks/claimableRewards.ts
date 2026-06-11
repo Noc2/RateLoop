@@ -129,6 +129,10 @@ export function buildRoundClaimStateLookup(
   return null;
 }
 
+export function hasIndexedRefundClaim(params: { refundClaimedAt?: unknown }) {
+  return params.refundClaimedAt !== null && params.refundClaimedAt !== undefined;
+}
+
 export function calculateLastClaimAwarePoolShare({
   claimantWeight,
   totalWeight,
