@@ -22,7 +22,7 @@ test("single question selector probe accepts the expected validation revert", as
     "single",
   );
 
-  assert.equal(probedData[0]?.slice(0, 10), "0x339aaa84");
+  assert.equal(probedData[0]?.slice(0, 10), "0x774922ea");
 });
 
 test("bundle selector probe accepts the expected validation revert", async () => {
@@ -48,7 +48,7 @@ test("selector probe accepts stripped revert strings when the selector is in reg
       call: async () => {
         throw { shortMessage: "execution reverted" };
       },
-      getBytecode: async () => "0x6000339aaa8455",
+      getBytecode: async () => "0x6000774922ea55",
     },
     REGISTRY_ADDRESS,
     "single",
