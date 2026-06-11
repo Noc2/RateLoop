@@ -995,6 +995,75 @@ test("confirmAgentWalletQuestionSubmissionRequest attaches approved question det
   assert.equal(imageResult.rows[0]?.content_id, "123");
 });
 
+test("confirmAgentWalletQuestionSubmissionRequest keeps image submissions retryable when media validator lookup fails", async () => {
+  const imageId = "att_x402retryimage01";
+  const imageUrl = `https://www.rateloop.ai/api/attachments/images/${imageId}.webp#sha256=0x${"a".repeat(64)}`;
+  const payload = buildPayloadWithImageUrl("wallet-confirm-media-validator-retry", imageUrl);
+  const walletAddress = "0x00000000000000000000000000000000000000aa" as const;
+  const transactionHash = `0x${"c".repeat(64)}` as const;
+
+  await insertQuestionImageAttachment({
+    agentId: "agent-wallet",
+    id: imageId,
+    ownerWalletAddress: walletAddress,
+    status: "approved",
+  });
+  await prepareAgentWalletQuestionSubmissionRequest({
+    agentId: "agent-wallet",
+    payload,
+    walletAddress,
+  });
+  const record = await getX402QuestionSubmissionByClientRequest({
+    chainId: payload.chainId,
+    clientRequestId: payload.clientRequestId,
+  });
+  assert.ok(record);
+
+  setDefaultTestOverrides({
+    createPublicQuestionClient: () =>
+      ({
+        readContract: async () => {
+          throw new Error("RPC unavailable");
+        },
+      }) as never,
+    waitForSuccessfulReceipt: async (_publicClient, hash) =>
+      buildReceipt(hash, [
+        ...buildSubmittedQuestionLogs({
+          address: TEST_CONFIG.contentRegistryAddress,
+          contentHash: getExpectedContentHash(record),
+          contentId: 123n,
+          payload,
+          submitter: walletAddress,
+        }),
+        buildQuestionContentAnchoredLog({
+          address: TEST_CONFIG.submissionMediaValidatorAddress,
+          contentId: 123n,
+          url: imageUrl,
+        }),
+      ]),
+  });
+
+  await assert.rejects(
+    () =>
+      confirmAgentWalletQuestionSubmissionRequest({
+        operationKey: record.operationKey,
+        transactionHashes: [transactionHash],
+      }),
+    /Could not confirm submitted question media attachments/,
+  );
+
+  const retryableRecord = await getX402QuestionSubmissionByClientRequest({
+    chainId: payload.chainId,
+    clientRequestId: payload.clientRequestId,
+  });
+  assert.equal(retryableRecord?.status, "awaiting_wallet_signature");
+  const imageResult = await dbClient.execute({
+    sql: "SELECT content_id FROM question_image_attachments WHERE id = ?",
+    args: [imageId],
+  });
+  assert.equal(imageResult.rows[0]?.content_id, null);
+});
+
 test("confirmFeedbackBonusQuestionSubmissionRequest verifies and stores the funded pool", async () => {
   const payload = buildPayload("wallet-feedback-bonus-confirm-usdc");
   const walletAddress = "0x00000000000000000000000000000000000000aa" as const;
@@ -1087,6 +1156,9 @@ test("prepareFeedbackBonusQuestionSubmissionRequest targets first round before a
       ({
         getBlock: async () => ({ timestamp: getFeedbackBonusClosesAt(payload) - 60n }),
         readContract: async ({ functionName }: { functionName: string }) => {
+          if (functionName === "submissionMediaValidator") {
+            return TEST_CONFIG.submissionMediaValidatorAddress;
+          }
           if (functionName === "votingEngine") {
             return "0x0000000000000000000000000000000000000020";
           }

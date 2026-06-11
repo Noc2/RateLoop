@@ -1078,14 +1078,20 @@ async function resolveSubmissionMediaValidator(
   publicClient: X402PublicClient,
   contentRegistryAddress: Address,
 ): Promise<Address | null> {
-  const address = await publicClient
-    .readContract({
+  let address: unknown;
+  try {
+    address = await publicClient.readContract({
       abi: ContentRegistryAbi,
       address: contentRegistryAddress,
       functionName: "submissionMediaValidator",
-    })
-    .catch(() => null);
-  return typeof address === "string" && isAddress(address) ? address : null;
+    });
+  } catch {
+    throw new X402QuestionConflictError("Could not confirm submitted question media attachments. Try again.");
+  }
+  if (typeof address !== "string" || !isAddress(address)) {
+    throw new X402QuestionConflictError("Content registry returned an invalid media validator address.");
+  }
+  return address;
 }
 
 async function waitForSuccessfulReceipt(publicClient: X402PublicClient, hash: Hex): Promise<TransactionReceipt> {
