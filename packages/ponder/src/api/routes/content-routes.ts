@@ -689,7 +689,23 @@ async function updateQuestionMetadataRow(params: {
         ${quoteIdentifier("gated")} = $26,
         ${quoteIdentifier("confidentialityDisclosurePolicy")} = $27,
         ${quoteIdentifier("confidentialityBondAsset")} = $28,
-        ${quoteIdentifier("confidentialityBondAmount")} = $29
+        ${quoteIdentifier("confidentialityBondAmount")} = $29,
+        ${quoteIdentifier("confidentialityPublishedAt")} = case
+          when $26 = true
+            and $27 = 'after_settlement'
+            and ${quoteIdentifier("confidentialityPublishedAt")} is null
+          then coalesce(
+            (
+              select min(${quoteIdentifier("settledAt")})
+              from ${schema}.${quoteIdentifier("round")}
+              where ${quoteIdentifier("contentId")} = $30
+                and ${quoteIdentifier("state")} in ($31, $32, $33)
+                and ${quoteIdentifier("settledAt")} is not null
+            ),
+            ${quoteIdentifier("confidentialityPublishedAt")}
+          )
+          else ${quoteIdentifier("confidentialityPublishedAt")}
+        end
       where ${quoteIdentifier("id")} = $30
         and (${quoteIdentifier("questionMetadataHash")} is null or lower(${quoteIdentifier("questionMetadataHash")}) = $1)
         and (${quoteIdentifier("resultSpecHash")} is null or lower(${quoteIdentifier("resultSpecHash")}) = $2)
@@ -727,6 +743,9 @@ async function updateQuestionMetadataRow(params: {
       params.confidentiality?.bondAsset ?? null,
       params.confidentiality?.bondAmount.toString() ?? "0",
       params.contentId.toString(),
+      ROUND_STATE.Settled,
+      ROUND_STATE.Tied,
+      ROUND_STATE.RevealFailed,
     ],
   );
   return result.rowCount ?? 0;

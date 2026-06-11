@@ -632,6 +632,84 @@ describe("registerContentRoutes", () => {
     ]);
   });
 
+  it("publishes late-synced after_settlement confidentiality when a terminal round already exists", async () => {
+    const originalDatabaseUrl = process.env.DATABASE_URL;
+    const originalNodeEnv = process.env.NODE_ENV;
+    const originalPonderNetwork = process.env.PONDER_NETWORK;
+    const query = vi.fn(async () => ({ rowCount: 1 }));
+    vi.doMock("pg", () => ({
+      Pool: vi.fn(function MockPool() {
+        return { query };
+      }),
+    }));
+    process.env.DATABASE_URL = "postgres://localhost/rateloop";
+    process.env.NODE_ENV = "test";
+    process.env.PONDER_NETWORK = "hardhat";
+
+    try {
+      mockPonderModules([]);
+      const { registerContentRoutes } = await import(
+        "../src/api/routes/content-routes.js"
+      );
+
+      const app = new Hono();
+      registerContentRoutes(app);
+      const questionMetadata = {
+        schemaVersion: "rateloop.question.v3",
+        confidentiality: {
+          bond: { amount: "0", asset: "LREP" },
+          disclosurePolicy: "after_settlement",
+          visibility: "gated",
+        },
+        title: "Public-safe prototype title",
+      };
+      const questionMetadataHash = canonicalJsonHash(questionMetadata);
+
+      const response = await app.request("http://localhost/question-metadata", {
+        body: JSON.stringify({
+          metadata: [
+            {
+              contentId: "42",
+              questionMetadata,
+              questionMetadataHash,
+              resultSpecHash: `0x${"3".repeat(64)}`,
+            },
+          ],
+        }),
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      });
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({ updated: 1, skipped: 0 });
+      expect(query).toHaveBeenCalledTimes(1);
+      const [sqlText, params] = query.mock.calls[0]!;
+      expect(sqlText).toContain('"confidentialityPublishedAt" = case');
+      expect(sqlText).toContain('from "rateloop_ponder_hardhat"."round"');
+      expect(sqlText).toContain('"state" in ($31, $32, $33)');
+      expect(params[25]).toBe(true);
+      expect(params[26]).toBe("after_settlement");
+      expect(params[29]).toBe("42");
+      expect(params.slice(30)).toHaveLength(3);
+    } finally {
+      if (originalDatabaseUrl === undefined) {
+        delete process.env.DATABASE_URL;
+      } else {
+        process.env.DATABASE_URL = originalDatabaseUrl;
+      }
+      if (originalNodeEnv === undefined) {
+        delete process.env.NODE_ENV;
+      } else {
+        process.env.NODE_ENV = originalNodeEnv;
+      }
+      if (originalPonderNetwork === undefined) {
+        delete process.env.PONDER_NETWORK;
+      } else {
+        process.env.PONDER_NETWORK = originalPonderNetwork;
+      }
+    }
+  });
+
   it("does not serve mismatched question metadata preimages", async () => {
     const questionMetadataHash = canonicalJsonHash({
       schemaVersion: "rateloop.question.v2",
@@ -2738,10 +2816,12 @@ describe("registerCorrelationRoutes", () => {
     expect(response.status).toBe(200);
     const body = await response.json();
     expect(body.items).toHaveLength(3);
-    expect(body.items.map((item: { account: string; payoutEligible: boolean }) => ({
-      account: item.account,
-      payoutEligible: item.payoutEligible,
-    }))).toEqual([
+    expect(
+      body.items.map((item: { account: string; payoutEligible: boolean }) => ({
+        account: item.account,
+        payoutEligible: item.payoutEligible,
+      })),
+    ).toEqual([
       {
         account: "0x0000000000000000000000000000000000000001",
         payoutEligible: true,
