@@ -48,6 +48,27 @@ export function shouldSkipThirdwebWagmiSync(params: {
   );
 }
 
+export function shouldReplaceActiveThirdwebWagmiConnection(params: {
+  connectorId: string;
+  currentAddress?: string;
+  currentChainId?: number;
+  currentConnectorId?: string;
+  forceReconnect?: boolean;
+  replaceActiveConnection?: boolean;
+  requestedAddress?: string;
+  requestedChainId: number;
+}) {
+  return Boolean(
+    params.replaceActiveConnection &&
+      params.forceReconnect &&
+      params.connectorId === "in-app-wallet" &&
+      params.currentConnectorId === params.connectorId &&
+      params.requestedAddress &&
+      (params.currentAddress?.toLowerCase() !== params.requestedAddress.toLowerCase() ||
+        params.currentChainId !== params.requestedChainId),
+  );
+}
+
 export function getThirdwebWagmiSyncOptions(
   wallet: Pick<Wallet, "id">,
   options: { source: "autoConnect" | "manualConnect" },
@@ -69,7 +90,11 @@ export function useThirdwebWagmiSync() {
   const { targetNetwork } = useTargetNetwork();
 
   const syncWalletToWagmi = useCallback(
-    async (wallet: Wallet, fallbackChainId: number = targetNetwork.id, options?: { reconnect?: boolean }) => {
+    async (
+      wallet: Wallet,
+      fallbackChainId: number = targetNetwork.id,
+      options?: { reconnect?: boolean; replaceActiveConnection?: boolean },
+    ) => {
       if (!thirdwebClient) {
         return;
       }
@@ -89,6 +114,16 @@ export function useThirdwebWagmiSync() {
 
       const requestedChainId = wallet.getChain()?.id ?? fallbackChainId;
       const requestedAddress = wallet.getAccount()?.address;
+      const shouldReplaceActiveConnection = shouldReplaceActiveThirdwebWagmiConnection({
+        connectorId: connector.id,
+        currentAddress: address,
+        currentChainId: chainId,
+        currentConnectorId: activeConnector?.id,
+        forceReconnect: options?.reconnect,
+        replaceActiveConnection: options?.replaceActiveConnection,
+        requestedAddress,
+        requestedChainId,
+      });
 
       if (
         shouldSkipThirdwebWagmiSync({
@@ -101,6 +136,19 @@ export function useThirdwebWagmiSync() {
           requestedChainId,
         })
       ) {
+        return;
+      }
+
+      if (shouldReplaceActiveConnection) {
+        const data = await connector.connect({
+          chainId: requestedChainId,
+          isReconnecting: true,
+          wallet,
+        } as any);
+        connector.emitter.emit("change", {
+          accounts: data.accounts,
+          chainId: data.chainId,
+        });
         return;
       }
 

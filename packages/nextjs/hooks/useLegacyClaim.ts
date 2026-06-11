@@ -164,7 +164,10 @@ export function useLegacyClaim() {
           throw new Error("Restored legacy wallet does not match the eligible admin account.");
         }
 
-        await syncWalletToWagmi(replacementWallet, targetNetwork.id, { reconnect: true });
+        await syncWalletToWagmi(replacementWallet, targetNetwork.id, {
+          reconnect: true,
+          replaceActiveConnection: true,
+        });
         await setActiveWallet(replacementWallet);
       } catch (error) {
         legacyWalletRestoreAttemptRef.current = null;

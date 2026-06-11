@@ -1,6 +1,7 @@
 import {
   getThirdwebWagmiSyncOptions,
   getWagmiConnectorIdForThirdwebWallet,
+  shouldReplaceActiveThirdwebWagmiConnection,
   shouldSkipThirdwebWagmiSync,
 } from "./useThirdwebWagmiSync";
 import assert from "node:assert/strict";
@@ -138,6 +139,51 @@ test("shouldSkipThirdwebWagmiSync returns false when the requested chain differs
       currentChainId: 480,
       currentConnectorId: "in-app-wallet",
       requestedAddress: "0xabcdef0000000000000000000000000000000000",
+      requestedChainId: 4801,
+    }),
+    false,
+  );
+});
+
+test("shouldReplaceActiveThirdwebWagmiConnection replaces active in-app connector when address changes", () => {
+  assert.equal(
+    shouldReplaceActiveThirdwebWagmiConnection({
+      connectorId: "in-app-wallet",
+      currentAddress: "0x6D12cC9Ee8392740306F87Fbd1ccB1cBC16FA593",
+      currentChainId: 4801,
+      currentConnectorId: "in-app-wallet",
+      forceReconnect: true,
+      replaceActiveConnection: true,
+      requestedAddress: "0x63cada40E8AcF7A1d47229af5Be35b78b16035fa",
+      requestedChainId: 4801,
+    }),
+    true,
+  );
+});
+
+test("shouldReplaceActiveThirdwebWagmiConnection does not replace unrelated or opt-out connections", () => {
+  assert.equal(
+    shouldReplaceActiveThirdwebWagmiConnection({
+      connectorId: "in-app-wallet",
+      currentAddress: "0x6D12cC9Ee8392740306F87Fbd1ccB1cBC16FA593",
+      currentChainId: 4801,
+      currentConnectorId: "in-app-wallet",
+      forceReconnect: true,
+      replaceActiveConnection: false,
+      requestedAddress: "0x63cada40E8AcF7A1d47229af5Be35b78b16035fa",
+      requestedChainId: 4801,
+    }),
+    false,
+  );
+  assert.equal(
+    shouldReplaceActiveThirdwebWagmiConnection({
+      connectorId: "io.metamask",
+      currentAddress: "0x6D12cC9Ee8392740306F87Fbd1ccB1cBC16FA593",
+      currentChainId: 4801,
+      currentConnectorId: "io.metamask",
+      forceReconnect: true,
+      replaceActiveConnection: true,
+      requestedAddress: "0x63cada40E8AcF7A1d47229af5Be35b78b16035fa",
       requestedChainId: 4801,
     }),
     false,
