@@ -423,7 +423,7 @@ describe("RoundVotingEngine ponder handlers", () => {
       existingRound: { id: "7-2" },
       contentRecord: {
         gated: true,
-        confidentialityDisclosurePolicy: null,
+        confidentialityDisclosurePolicy: "after_settlement",
         confidentialityPublishedAt: null,
       },
     });
@@ -437,6 +437,34 @@ describe("RoundVotingEngine ponder handlers", () => {
     });
 
     expect(updateCalls).toContainEqual({
+      table: "content",
+      key: { id: 7n },
+      values: {
+        confidentialityPublishedAt: 3_000n,
+      },
+    });
+  });
+
+  it("keeps unsynced confidential content undisclosed at settlement", async () => {
+    const registeredHandlers = await loadHandlers();
+    const { db, updateCalls } = createDb({
+      existingRound: { id: "7-2" },
+      contentRecord: {
+        gated: true,
+        confidentialityDisclosurePolicy: null,
+        confidentialityPublishedAt: null,
+      },
+    });
+
+    await registeredHandlers.get("RoundVotingEngine:RoundTied")!({
+      event: {
+        args: { contentId: 7n, roundId: 2n },
+        block: { number: 42n, timestamp: 3_000n },
+      },
+      context: { db },
+    });
+
+    expect(updateCalls).not.toContainEqual({
       table: "content",
       key: { id: 7n },
       values: {

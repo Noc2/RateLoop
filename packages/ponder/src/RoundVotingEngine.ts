@@ -208,7 +208,7 @@ function shouldPublishConfidentiality(contentRecord: Record<string, any> | null 
   return (
     contentRecord?.gated === true &&
     contentRecord.confidentialityPublishedAt == null &&
-    contentRecord.confidentialityDisclosurePolicy !== "private_forever"
+    contentRecord.confidentialityDisclosurePolicy === "after_settlement"
   );
 }
 
