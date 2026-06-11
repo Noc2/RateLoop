@@ -1,4 +1,9 @@
+import { getProfileSelfReportTaxonomy } from "@rateloop/node-utils/profileSelfReport";
+
 type JsonSchema = Record<string, unknown>;
+
+const profileSelfReportTaxonomy = getProfileSelfReportTaxonomy();
+const targetAudienceTaxonomy = profileSelfReportTaxonomy.targetAudience;
 
 const atomicAmountSchema = {
   description: "Atomic USDC amount as a base-10 integer string.",
@@ -55,6 +60,69 @@ const templateSelectorSchema = {
   type: "object",
 } satisfies JsonSchema;
 
+function enumArraySchema(values: readonly string[], description?: string) {
+  return {
+    description,
+    items: { enum: [...values], type: "string" },
+    type: "array",
+  };
+}
+
+function stringArraySchema(description: string) {
+  return {
+    description,
+    items: { type: "string" },
+    type: "array",
+  };
+}
+
+const targetAudienceInputSchema = {
+  additionalProperties: false,
+  description:
+    "Optional structured self-reported audience request. Use rateloop_list_audience_options for valid values. Raters do not see the target criteria.",
+  properties: {
+    ageGroups: enumArraySchema(targetAudienceTaxonomy.ageGroups),
+    countries: stringArraySchema(targetAudienceTaxonomy.countries),
+    expertise: enumArraySchema(targetAudienceTaxonomy.expertise),
+    languages: enumArraySchema(targetAudienceTaxonomy.languages),
+    nationalities: stringArraySchema(targetAudienceTaxonomy.nationalities),
+    roles: enumArraySchema(targetAudienceTaxonomy.roles),
+    ai: {
+      additionalProperties: false,
+      properties: {
+        agentFrameworks: enumArraySchema(targetAudienceTaxonomy.ai.agentFrameworks),
+        autonomy: enumArraySchema(targetAudienceTaxonomy.ai.autonomy),
+        expertise: enumArraySchema(targetAudienceTaxonomy.ai.expertise),
+        languages: enumArraySchema(targetAudienceTaxonomy.ai.languages),
+        modelProviders: enumArraySchema(targetAudienceTaxonomy.ai.modelProviders),
+      },
+      type: "object",
+    },
+    team: {
+      additionalProperties: false,
+      properties: {
+        countries: stringArraySchema(targetAudienceTaxonomy.team.countries),
+        expertise: enumArraySchema(targetAudienceTaxonomy.team.expertise),
+        languages: enumArraySchema(targetAudienceTaxonomy.team.languages),
+        sizes: enumArraySchema(targetAudienceTaxonomy.team.sizes),
+        types: enumArraySchema(targetAudienceTaxonomy.team.types),
+      },
+      type: "object",
+    },
+    hybrid: {
+      additionalProperties: false,
+      properties: {
+        expertise: enumArraySchema(targetAudienceTaxonomy.hybrid.expertise),
+        languages: enumArraySchema(targetAudienceTaxonomy.hybrid.languages),
+        modelProviders: enumArraySchema(targetAudienceTaxonomy.hybrid.modelProviders),
+        oversight: enumArraySchema(targetAudienceTaxonomy.hybrid.oversight),
+      },
+      type: "object",
+    },
+  },
+  type: "object",
+} satisfies JsonSchema;
+
 const agentQuestionInputSchema = {
   additionalProperties: true,
   properties: {
@@ -84,17 +152,7 @@ const agentQuestionInputSchema = {
       items: { type: "string" },
       type: ["array", "string"],
     },
-    targetAudience: {
-      additionalProperties: true,
-      description: "Optional public self-reported audience hints. Advisory only; it does not hard-gate voters.",
-      properties: {
-        countries: { items: { type: "string" }, type: "array" },
-        expertise: { items: { type: "string" }, type: "array" },
-        languages: { items: { type: "string" }, type: "array" },
-        roles: { items: { type: "string" }, type: "array" },
-      },
-      type: "object",
-    },
+    targetAudience: targetAudienceInputSchema,
     title: { description: "Question title shown to voters.", type: "string" },
     videoUrl: {
       description: "Optional YouTube URL. Required only when both contextUrl and imageUrls are empty.",
@@ -811,6 +869,23 @@ export const templateListOutputSchema = {
     },
   },
   required: ["templates"],
+  type: "object",
+} satisfies JsonSchema;
+
+export const audienceOptionsOutputSchema = {
+  additionalProperties: false,
+  properties: {
+    caveat: { const: profileSelfReportTaxonomy.caveat, type: "string" },
+    selfReportSchemaVersion: { type: "integer" },
+    source: { const: profileSelfReportTaxonomy.source, type: "string" },
+    targetAudience: {
+      additionalProperties: true,
+      description:
+        "Structured audience vocabulary. Array fields list exact allowed values; country-code fields describe ISO-3166 alpha-2 inputs.",
+      type: "object",
+    },
+  },
+  required: ["caveat", "selfReportSchemaVersion", "source", "targetAudience"],
   type: "object",
 } satisfies JsonSchema;
 

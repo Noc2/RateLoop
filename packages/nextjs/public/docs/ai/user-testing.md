@@ -70,6 +70,10 @@ Use this ask shape in `rateloop_quote_question`, then pass the same shape to `ra
     "categoryId": "5",
     "tags": ["agent", "website-generation", "market-interest"],
     "templateId": "generic_rating",
+    "targetAudience": {
+      "roles": ["founder", "product-design"],
+      "languages": ["en"]
+    },
     "templateInputs": {
       "audience": "people considering a new or redesigned website",
       "goal": "validate whether AI-generated website directions plus open rater feedback is a compelling service",
@@ -78,6 +82,8 @@ Use this ask shape in `rateloop_quote_question`, then pass the same shape to `ra
   }
 }
 ```
+
+`templateInputs.audience` is a free-text rubric note for interpreting the result. `targetAudience` is structured and must use values from `rateloop_list_audience_options`; raters do not see the targeting criteria.
 
 ## Result Handling
 

@@ -237,6 +237,8 @@ Good agent questions:
 - use a stable `clientRequestId` so retries do not duplicate spend
 - fund enough bounty for the expected voter count and timing
 - add a `feedbackBonus` when comments, objections, or reproducible details are worth rewarding separately from the rating
+- use `targetAudience` only with structured values from `rateloop_list_audience_options`; keep free-text audience notes in
+  `templateInputs.audience`
 
 For comparisons, do not ask raters to select "which answer" inside one question. Use `ranked_option_member` for generic
 option ranking or `pairwise_output_preference` for AI/model outputs, and submit one question per option in the same

@@ -66,6 +66,7 @@ Main MCP tools:
 
 - `rateloop_list_categories`
 - `rateloop_list_result_templates`
+- `rateloop_list_audience_options`
 - `rateloop_create_ask_handoff_link`
 - `rateloop_get_handoff_status`
 - `rateloop_quote_question`
@@ -87,7 +88,7 @@ Advanced low-level MCP tools:
 2. For rating, open the question, inspect public context, choose up/down, estimate crowd-up percent, and leave useful public feedback.
 3. For asking, collect or create public context, optional expected wallet address, USDC bounty terms, optional LREP or USDC Feedback Bonus, category, title, tags, and optional template. Generate public context yourself when the user has not supplied one and the artifact can be safely public.
 4. For generated/local image context, keep the image bytes and pass them as `generatedImages` to `rateloop_create_ask_handoff_link`.
-5. Call `rateloop_list_categories` or `rateloop_list_result_templates` only if needed.
+5. Call `rateloop_list_categories`, `rateloop_list_result_templates`, or `rateloop_list_audience_options` only if needed.
 6. Call `rateloop_quote_question` and show/log `legalNotice`.
 7. Prefer browser handoff for human-controlled wallets: call `rateloop_create_ask_handoff_link` with the same ask payload and share the returned `handoffUrl`.
 8. Use the local signer CLI when the agent controls a funded encrypted wallet.
@@ -95,3 +96,5 @@ Advanced low-level MCP tools:
 10. Poll `rateloop_get_handoff_status`, then `rateloop_get_question_status`, then call `rateloop_get_result` and persist the answer plus public result URL.
 
 Required ask fields include `bounty.amount`, `bounty.requiredVoters`, `bounty.requiredSettledRounds`, `bounty.bountyStartBy`, `bounty.bountyWindowSeconds`, `bounty.feedbackWindowSeconds`, `maxPaymentAmount`, and `clientRequestId`. Include `walletAddress` when you want the browser handoff to enforce a specific funding wallet. Each question needs a public `question.contextUrl`, YouTube `question.videoUrl`, or generated/local image bytes staged through `generatedImages` on a single-question handoff. USDC amounts are atomic units, so `2500000` means 2.5 USDC. Use at least 5 required voters for bounties at or above 1000 USDC and 8 required voters for bounties at or above 10000 USDC. Three-voter rounds can settle as feedback signals, but score-spread LREP forfeits are disabled below 8 score-eligible revealed voters and capped at 50% of stake once active. Settled scores are public feedback signals and must not settle external financial contracts. Default to `paymentMode: "wallet_calls"` unless the agent specifically needs native `x402_authorization`.
+
+Use `question.templateInputs.audience` for a free-text audience/rubric note that helps interpret the result. Use `question.targetAudience` only for structured self-reported targeting from `rateloop_list_audience_options`; invalid aliases such as `developer` are rejected with canonical suggestions such as `engineer`. Raters do not see the targeting criteria.

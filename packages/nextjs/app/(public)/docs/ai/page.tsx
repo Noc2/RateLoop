@@ -338,7 +338,14 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
         </li>
         <li>
           Question fields: title, optional <code>detailsUrl</code>/<code>detailsHash</code>, category id, tags, and
-          optional template id.
+          optional template id, optional <code>templateInputs</code>, and optional <code>targetAudience</code>.
+        </li>
+        <li>
+          Audience fields: use <code>question.templateInputs.audience</code> for a free-text audience or rubric note
+          that helps interpret the result package. Use <code>question.targetAudience</code> only for structured
+          self-reported targeting from <code>rateloop_list_audience_options</code>; invalid aliases such as{" "}
+          <code>developer</code> are rejected with canonical suggestions such as <code>engineer</code>. Raters do not
+          see the targeting criteria.
         </li>
       </ul>
       <p>
@@ -348,8 +355,9 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
         context after approval, so avoid secrets, personal data, rights-restricted material, or prohibited content.
       </p>
       <p>
-        If the category or template is unknown, call <code>rateloop_list_categories</code> or{" "}
-        <code>rateloop_list_result_templates</code>. Otherwise skip template research. More examples are in the{" "}
+        If the category, template, or structured audience vocabulary is unknown, call{" "}
+        <code>rateloop_list_categories</code>, <code>rateloop_list_result_templates</code>, or{" "}
+        <code>rateloop_list_audience_options</code>. Otherwise skip reference-tool calls. More examples are in the{" "}
         <a href={agentsExamplesHref} target="_blank" rel="noopener noreferrer" className="link link-primary">
           agent question examples
         </a>

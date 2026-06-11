@@ -305,6 +305,25 @@ afterEach(() => {
   __setMcpToolTestOverridesForTests(null);
 });
 
+test("public rateloop_list_audience_options returns the shared targeting taxonomy", async () => {
+  const result = await callPublicRateLoopMcpTool({
+    arguments: {},
+    name: "rateloop_list_audience_options",
+  });
+  const body = result as {
+    caveat: string;
+    targetAudience: {
+      languages: string[];
+      roles: string[];
+    };
+  };
+
+  assert.equal(body.caveat, "unverified_self_report");
+  assert.equal(body.targetAudience.roles.includes("engineer"), true);
+  assert.equal(body.targetAudience.roles.includes("developer"), false);
+  assert.equal(body.targetAudience.languages.includes("de"), true);
+});
+
 test("rateloop_ask_humans returns a wallet transaction plan without submitting from the server", async () => {
   mock.method(console, "error", () => {});
   const prepared: unknown[] = [];

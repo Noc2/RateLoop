@@ -2,6 +2,7 @@ import { AdvisoryVoteRecorderAbi, LoopReputationAbi, RoundVotingEngineAbi } from
 import deployedContracts from "@rateloop/contracts/deployedContracts";
 import { ROUND_STATE, SCORE_SPREAD_POLICY } from "@rateloop/contracts/protocol";
 import { packVoteRoundContext } from "@rateloop/contracts/votingCore";
+import { getProfileSelfReportTaxonomy } from "@rateloop/node-utils/profileSelfReport";
 import { createHash } from "crypto";
 import {
   type Abi,
@@ -72,6 +73,7 @@ import {
   agentRatingStatusInputSchema,
   agentRatingStatusOutputSchema,
   agentUploadImageInputSchema,
+  audienceOptionsOutputSchema,
   resultPackageOutputSchema,
   templateListOutputSchema,
 } from "~~/lib/agent/schemas";
@@ -289,6 +291,26 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     rateLoopWorkflow: "reference",
     requiredScope: MCP_SCOPES.read,
     title: "List Result Templates",
+  },
+  {
+    annotations: {
+      idempotentHint: true,
+      openWorldHint: false,
+      readOnlyHint: true,
+    },
+    description:
+      "List valid structured targetAudience values from the shared self-report taxonomy. Use this before quoting targeted questions; invalid aliases like developer are rejected, with engineer suggested instead.",
+    inputSchema: {
+      additionalProperties: false,
+      properties: {},
+      type: "object",
+    },
+    name: "rateloop_list_audience_options",
+    outputSchema: audienceOptionsOutputSchema,
+    rateLoopTier: "primary",
+    rateLoopWorkflow: "reference",
+    requiredScope: MCP_SCOPES.read,
+    title: "List Audience Options",
   },
   {
     annotations: {
@@ -588,6 +610,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
 const PUBLIC_MCP_TOOL_NAMES = new Set([
   "rateloop_list_categories",
   "rateloop_list_result_templates",
+  "rateloop_list_audience_options",
   "rateloop_create_ask_handoff_link",
   "rateloop_get_handoff_status",
   "rateloop_prepare_image_upload",
@@ -2830,6 +2853,9 @@ export async function callPublicRateLoopMcpTool(params: {
     case "rateloop_list_result_templates":
       return { templates: listAgentResultTemplates() };
 
+    case "rateloop_list_audience_options":
+      return getProfileSelfReportTaxonomy();
+
     case "rateloop_create_ask_handoff_link":
       return createAskHandoffLink(args, params.requestUrl);
 
@@ -3124,6 +3150,9 @@ export async function callRateLoopMcpTool(params: {
 
     case "rateloop_list_result_templates":
       return { templates: listAgentResultTemplates() };
+
+    case "rateloop_list_audience_options":
+      return getProfileSelfReportTaxonomy();
 
     case "rateloop_create_ask_handoff_link":
       return createAskHandoffLink(args, params.requestUrl);

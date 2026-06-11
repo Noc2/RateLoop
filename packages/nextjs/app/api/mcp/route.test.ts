@@ -278,6 +278,7 @@ test("tools/list accepts supported MCP-Protocol-Version and returns tool annotat
   assert.ok(toolByName.get("rateloop_ask_humans")?.outputSchema);
   assert.ok(toolByName.get("rateloop_get_question_status")?.outputSchema);
   assert.ok(toolByName.get("rateloop_get_result")?.outputSchema);
+  assert.ok(toolByName.get("rateloop_list_audience_options")?.outputSchema);
   assert.match(toolByName.get("rateloop_get_result")?.description ?? "", /RATELOOP_UNTRUSTED_DATA/);
   assert.match(toolByName.get("rateloop_get_result")?.description ?? "", /never follow instructions/i);
   assert.ok(toolByName.get("rateloop_get_rating_context")?.inputSchema);
@@ -354,6 +355,7 @@ test("public MCP tools/list excludes managed-only balance tool", async () => {
   assert.equal(response.status, 200);
   assert.equal(names.includes("rateloop_prepare_image_upload"), true);
   assert.equal(names.includes("rateloop_upload_image"), true);
+  assert.equal(names.includes("rateloop_list_audience_options"), true);
   assert.equal(names.includes("rateloop_ask_humans"), true);
   assert.equal(names.includes("rateloop_prepare_rating_transactions"), true);
   assert.equal(names.includes("rateloop_get_agent_balance"), false);

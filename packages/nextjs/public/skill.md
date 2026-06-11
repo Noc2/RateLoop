@@ -97,6 +97,7 @@ Main tools:
 
 - `rateloop_list_categories`
 - `rateloop_list_result_templates`
+- `rateloop_list_audience_options`
 - `rateloop_create_ask_handoff_link`
 - `rateloop_get_handoff_status`
 - `rateloop_quote_question`
@@ -113,6 +114,8 @@ Advanced low-level tools:
 - `rateloop_confirm_feedback_bonus_transactions`
 
 Browser handoff pages may expose read-only WebMCP helpers for status, draft validation, and next action. They do not sign, fund, submit, or replace visible wallet approval.
+
+Use `question.templateInputs.audience` for free-text audience or rubric notes. Use `question.targetAudience` only for structured self-reported targeting values from `rateloop_list_audience_options`; raters do not see the targeting criteria.
 
 ## Workflow
 

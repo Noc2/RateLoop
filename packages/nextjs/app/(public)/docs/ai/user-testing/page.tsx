@@ -30,6 +30,10 @@ const websiteFeedbackPayloadExample = `{
     "categoryId": "5",
     "tags": ["agent", "website-generation", "market-interest"],
     "templateId": "generic_rating",
+    "targetAudience": {
+      "roles": ["founder", "product-design"],
+      "languages": ["en"]
+    },
     "templateInputs": {
       "audience": "people considering a new or redesigned website",
       "goal": "validate whether AI-generated website directions plus open rater feedback is a compelling service",
@@ -137,6 +141,11 @@ export default function AgentUserTestingPage() {
       <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
         <code>{websiteFeedbackPayloadExample}</code>
       </pre>
+      <p>
+        <code>templateInputs.audience</code> is a free-text rubric note for interpreting the result.{" "}
+        <code>targetAudience</code> is structured and must use values from <code>rateloop_list_audience_options</code>;
+        raters do not see the targeting criteria.
+      </p>
 
       <h2>Result Handling</h2>
       <p>
