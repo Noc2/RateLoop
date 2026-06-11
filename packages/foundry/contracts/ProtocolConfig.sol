@@ -93,6 +93,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     event LaunchDistributionPoolUpdated(address launchDistributionPool);
     event ClusterPayoutOracleUpdated(address clusterPayoutOracle);
     event AdvisoryVoteRecorderUpdated(address advisoryVoteRecorder);
+    event AdvisoryVoteRecorderAuthorizationUpdated(address advisoryVoteRecorder, bool authorized);
     event ConfidentialityEscrowUpdated(address confidentialityEscrow);
     event AdvisoryCooldownRecorded(
         uint256 indexed contentId, address indexed voter, address indexed identityHolder, bytes32 identityKey
@@ -306,7 +307,10 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     function setAdvisoryVoteRecorder(address value) external onlyRole(CONFIG_ROLE) {
         address oldValue = advisoryVoteRecorder;
         if (oldValue != address(0)) {
-            advisoryVoteRecorderAuthorized[oldValue] = true;
+            advisoryVoteRecorderAuthorized[oldValue] = value != address(0);
+            if (value == address(0)) {
+                emit AdvisoryVoteRecorderAuthorizationUpdated(oldValue, false);
+            }
         }
         if (value != address(0)) {
             _validateAdvisoryVoteRecorder(value);
@@ -314,6 +318,13 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         }
         advisoryVoteRecorder = value;
         emit AdvisoryVoteRecorderUpdated(value);
+    }
+
+    function revokeAdvisoryVoteRecorder(address value) external onlyRole(CONFIG_ROLE) {
+        if (value == address(0)) revert InvalidAddress();
+        if (value == advisoryVoteRecorder) revert InvalidConfig();
+        advisoryVoteRecorderAuthorized[value] = false;
+        emit AdvisoryVoteRecorderAuthorizationUpdated(value, false);
     }
 
     function setConfidentialityEscrow(address value) external onlyRole(CONFIG_ROLE) {

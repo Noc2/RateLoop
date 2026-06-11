@@ -261,6 +261,7 @@ contract ProtocolConfigBranchesTest is Test {
     );
     event SubmissionRewardMinimumsUpdated(uint256 minLrepPool, uint256 minUsdcPool);
     event AdvisoryVoteRecorderUpdated(address advisoryVoteRecorder);
+    event AdvisoryVoteRecorderAuthorizationUpdated(address advisoryVoteRecorder, bool authorized);
     event RoundConfigBoundsUpdated(
         uint256 minEpochDuration,
         uint256 maxEpochDuration,
@@ -474,13 +475,61 @@ contract ProtocolConfigBranchesTest is Test {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
         address advisoryVoteRecorder = address(new MockAdvisoryVoteRecorderForConfig(address(config), false));
         config.setAdvisoryVoteRecorder(advisoryVoteRecorder);
+        assertTrue(config.advisoryVoteRecorderAuthorized(advisoryVoteRecorder));
 
+        vm.expectEmit(false, false, false, true);
+        emit AdvisoryVoteRecorderAuthorizationUpdated(advisoryVoteRecorder, false);
         vm.expectEmit(false, false, false, true);
         emit AdvisoryVoteRecorderUpdated(address(0));
 
         config.setAdvisoryVoteRecorder(address(0));
 
         assertEq(config.advisoryVoteRecorder(), address(0));
+        assertFalse(config.advisoryVoteRecorderAuthorized(advisoryVoteRecorder));
+
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        vm.prank(advisoryVoteRecorder);
+        config.recordAdvisoryCooldown(1, address(0xBEEF), address(0), bytes32("identity"));
+    }
+
+    function test_RevokeAdvisoryVoteRecorder_RemovesCooldownAuthorization() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+        address firstRecorder = address(new MockAdvisoryVoteRecorderForConfig(address(config), false));
+        address secondRecorder = address(new MockAdvisoryVoteRecorderForConfig(address(config), false));
+        address voter = address(0xBEEF);
+
+        config.setAdvisoryVoteRecorder(firstRecorder);
+        config.setAdvisoryVoteRecorder(secondRecorder);
+        assertTrue(config.advisoryVoteRecorderAuthorized(firstRecorder));
+
+        vm.prank(firstRecorder);
+        config.recordAdvisoryCooldown(1, voter, address(0), bytes32("identity"));
+        assertEq(config.advisoryCooldownTimestamp(1, voter), block.timestamp);
+
+        vm.expectEmit(false, false, false, true);
+        emit AdvisoryVoteRecorderAuthorizationUpdated(firstRecorder, false);
+        config.revokeAdvisoryVoteRecorder(firstRecorder);
+        assertFalse(config.advisoryVoteRecorderAuthorized(firstRecorder));
+
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        vm.prank(firstRecorder);
+        config.recordAdvisoryCooldown(2, voter, address(0), bytes32("identity"));
+
+        vm.prank(secondRecorder);
+        config.recordAdvisoryCooldown(2, voter, address(0), bytes32("identity"));
+        assertEq(config.advisoryCooldownTimestamp(2, voter), block.timestamp);
+    }
+
+    function test_RevokeAdvisoryVoteRecorder_RejectsZeroOrActiveRecorder() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+        address advisoryVoteRecorder = address(new MockAdvisoryVoteRecorderForConfig(address(config), false));
+        config.setAdvisoryVoteRecorder(advisoryVoteRecorder);
+
+        vm.expectRevert(ProtocolConfig.InvalidAddress.selector);
+        config.revokeAdvisoryVoteRecorder(address(0));
+
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.revokeAdvisoryVoteRecorder(advisoryVoteRecorder);
     }
 
     function test_SetAdvisoryVoteRecorder_RejectsNoCodeAddress() public {
