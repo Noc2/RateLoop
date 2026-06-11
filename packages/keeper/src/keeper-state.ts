@@ -91,12 +91,14 @@ async function releaseAdvisoryLock(params: {
   warningKey: string;
   warningMessage: string;
 }): Promise<void> {
+  let releaseError: Error | undefined;
   try {
     await params.client.query("select pg_advisory_unlock($1::bigint)", [params.lockKey]);
   } catch (error) {
+    releaseError = error instanceof Error ? error : new Error(String(error));
     warnPersistenceOnce(params.logger, params.warningKey, params.warningMessage, error);
   } finally {
-    params.client.release();
+    params.client.release(releaseError);
   }
 }
 

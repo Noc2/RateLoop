@@ -131,6 +131,24 @@ describe("keeper advisory lock wrappers", () => {
     );
   });
 
+  it("discards the main-loop lock client when unlock fails", async () => {
+    const unlockError = new Error("connection reset during unlock");
+    const { runWithKeeperMainLoopLock, client } = await importKeeperState({ unlockError });
+    const logger = createLogger();
+    const run = vi.fn(async () => "ran");
+
+    await expect(runWithKeeperMainLoopLock(logger, "fallback", run)).resolves.toBe("ran");
+
+    expect(client.query).toHaveBeenCalledWith(
+      "select pg_advisory_unlock($1::bigint)",
+      ["773526208283402194"],
+    );
+    expect(client.release).toHaveBeenCalledWith(unlockError);
+    expect(logger.warn).toHaveBeenCalledWith("Keeper main loop lock release failed", {
+      error: "connection reset during unlock",
+    });
+  });
+
   it("returns the main-loop fallback without running when another keeper holds the lock", async () => {
     const { runWithKeeperMainLoopLock, client } = await importKeeperState({ locked: false });
     const logger = createLogger();
@@ -186,6 +204,24 @@ describe("keeper advisory lock wrappers", () => {
       "Keeper persistence lock unavailable; running correlation snapshot publication without it",
       expect.anything(),
     );
+  });
+
+  it("discards the correlation lock client when unlock fails", async () => {
+    const unlockError = new Error("unlock timeout");
+    const { runWithCorrelationSnapshotPublishLock, client } = await importKeeperState({ unlockError });
+    const logger = createLogger();
+    const run = vi.fn(async () => "published");
+
+    await expect(runWithCorrelationSnapshotPublishLock(logger, "fallback", run)).resolves.toBe("published");
+
+    expect(client.query).toHaveBeenCalledWith(
+      "select pg_advisory_unlock($1::bigint)",
+      ["773526208283402193"],
+    );
+    expect(client.release).toHaveBeenCalledWith(unlockError);
+    expect(logger.warn).toHaveBeenCalledWith("Keeper persistence lock release failed", {
+      error: "unlock timeout",
+    });
   });
 
   it("runs correlation publication without persistence when lock acquisition fails", async () => {
