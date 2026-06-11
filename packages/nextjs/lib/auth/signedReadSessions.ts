@@ -7,6 +7,7 @@ export const NOTIFICATION_PREFERENCES_SIGNED_READ_SESSION_COOKIE_NAME =
   "rateloop_notification_preferences_read_session";
 export const NOTIFICATION_EMAIL_SIGNED_READ_SESSION_COOKIE_NAME = "rateloop_notification_email_read_session";
 export const AGENT_POLICIES_SIGNED_READ_SESSION_COOKIE_NAME = "rateloop_agent_policies_read_session";
+export const GATED_CONTEXT_SIGNED_READ_SESSION_COOKIE_NAME = "rateloop_gated_context_read_session";
 const SIGNED_READ_SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 export const SIGNED_READ_SESSION_SCOPES = [
@@ -14,6 +15,7 @@ export const SIGNED_READ_SESSION_SCOPES = [
   "notification_preferences",
   "notification_email",
   "agent_policies",
+  "gated_context",
 ] as const;
 
 export type SignedReadSessionScope = (typeof SIGNED_READ_SESSION_SCOPES)[number];
@@ -23,6 +25,7 @@ export const SIGNED_READ_SESSION_COOKIE_NAMES: Record<SignedReadSessionScope, st
   notification_preferences: NOTIFICATION_PREFERENCES_SIGNED_READ_SESSION_COOKIE_NAME,
   notification_email: NOTIFICATION_EMAIL_SIGNED_READ_SESSION_COOKIE_NAME,
   agent_policies: AGENT_POLICIES_SIGNED_READ_SESSION_COOKIE_NAME,
+  gated_context: GATED_CONTEXT_SIGNED_READ_SESSION_COOKIE_NAME,
 };
 
 const signedReadSessionStore = createSignedSessionStore<SignedReadSessionScope>({

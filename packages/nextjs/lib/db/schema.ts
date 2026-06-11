@@ -127,6 +127,9 @@ export const notificationPreferences = pgTable("notification_preferences", {
   settlingSoonDay: boolean("settling_soon_day").notNull(),
   followedSubmission: boolean("followed_submission").notNull(),
   followedResolution: boolean("followed_resolution").notNull(),
+  contextNowPublic: boolean("context_now_public").notNull().default(true),
+  breachReported: boolean("breach_reported").notNull().default(true),
+  cohortBreachAnnouncement: boolean("cohort_breach_announcement").notNull().default(true),
   updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }).notNull(),
 });
 
@@ -389,6 +392,125 @@ export const questionDetails = pgTable(
 
 export type QuestionDetails = typeof questionDetails.$inferSelect;
 export type NewQuestionDetails = typeof questionDetails.$inferInsert;
+
+export const questionConfidentiality = pgTable(
+  "question_confidentiality",
+  {
+    contentId: text("content_id").primaryKey(),
+    gated: boolean("gated").notNull().default(false),
+    bondAsset: text("bond_asset"),
+    bondAmount: text("bond_amount").notNull().default("0"),
+    disclosurePolicy: text("disclosure_policy").notNull().default("after_settlement"),
+    publishedAt: timestamp("published_at", { mode: "date", withTimezone: true }),
+    questionMetadataHash: text("question_metadata_hash"),
+    contentHash: text("content_hash"),
+    detailsHash: text("details_hash"),
+    mediaTupleHash: text("media_tuple_hash"),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull(),
+    updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }).notNull(),
+  },
+  table => ({
+    gatedPublishedIdx: index("question_confidentiality_gated_published_idx").on(table.gated, table.publishedAt),
+    disclosureIdx: index("question_confidentiality_disclosure_idx").on(table.disclosurePolicy, table.publishedAt),
+  }),
+);
+
+export type QuestionConfidentiality = typeof questionConfidentiality.$inferSelect;
+export type NewQuestionConfidentiality = typeof questionConfidentiality.$inferInsert;
+
+export const confidentialityTermsAcceptances = pgTable(
+  "confidentiality_terms_acceptances",
+  {
+    id: serial("id").primaryKey(),
+    walletAddress: text("wallet_address").notNull(),
+    identityKey: text("identity_key"),
+    contentId: text("content_id").notNull(),
+    termsVersion: text("terms_version").notNull(),
+    termsDocHash: text("terms_doc_hash").notNull(),
+    signature: text("signature").notNull(),
+    nonce: text("nonce").notNull(),
+    acceptedAt: timestamp("accepted_at", { mode: "date", withTimezone: true }).notNull(),
+  },
+  table => ({
+    walletContentTermsUnique: uniqueIndex("confidentiality_terms_wallet_content_terms_unique").on(
+      table.walletAddress,
+      table.contentId,
+      table.termsVersion,
+    ),
+    contentIdentityIdx: index("confidentiality_terms_content_identity_idx").on(table.contentId, table.identityKey),
+  }),
+);
+
+export type ConfidentialityTermsAcceptance = typeof confidentialityTermsAcceptances.$inferSelect;
+export type NewConfidentialityTermsAcceptance = typeof confidentialityTermsAcceptances.$inferInsert;
+
+export const confidentialContextAccessLogs = pgTable(
+  "confidential_context_access_logs",
+  {
+    id: serial("id").primaryKey(),
+    identityKey: text("identity_key"),
+    walletAddress: text("wallet_address").notNull(),
+    contentId: text("content_id").notNull(),
+    resourceId: text("resource_id").notNull(),
+    resourceKind: text("resource_kind").notNull(),
+    viewToken: text("view_token").notNull(),
+    ipHash: text("ip_hash"),
+    viewedAt: timestamp("viewed_at", { mode: "date", withTimezone: true }).notNull(),
+  },
+  table => ({
+    contentViewedIdx: index("confidential_access_content_viewed_idx").on(table.contentId, table.viewedAt),
+    identityContentIdx: index("confidential_access_identity_content_idx").on(table.identityKey, table.contentId),
+    viewTokenUnique: uniqueIndex("confidential_access_view_token_unique").on(table.viewToken),
+  }),
+);
+
+export type ConfidentialContextAccessLog = typeof confidentialContextAccessLogs.$inferSelect;
+export type NewConfidentialContextAccessLog = typeof confidentialContextAccessLogs.$inferInsert;
+
+export const confidentialityBreachReports = pgTable(
+  "confidentiality_breach_reports",
+  {
+    id: serial("id").primaryKey(),
+    reporter: text("reporter").notNull(),
+    accusedIdentityKey: text("accused_identity_key").notNull(),
+    contentId: text("content_id").notNull(),
+    evidenceUrl: text("evidence_url"),
+    evidenceHash: text("evidence_hash").notNull(),
+    accessLogId: integer("access_log_id"),
+    epoch: text("epoch"),
+    proof: text("proof"),
+    status: text("status").notNull().default("reported"),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull(),
+    updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }).notNull(),
+  },
+  table => ({
+    contentStatusIdx: index("confidentiality_breach_content_status_idx").on(table.contentId, table.status),
+    accusedStatusIdx: index("confidentiality_breach_accused_status_idx").on(table.accusedIdentityKey, table.status),
+  }),
+);
+
+export type ConfidentialityBreachReport = typeof confidentialityBreachReports.$inferSelect;
+export type NewConfidentialityBreachReport = typeof confidentialityBreachReports.$inferInsert;
+
+export const confidentialityLogRoots = pgTable(
+  "confidentiality_log_roots",
+  {
+    epoch: text("epoch").primaryKey(),
+    merkleRoot: text("merkle_root").notNull(),
+    acceptanceCount: integer("acceptance_count").notNull().default(0),
+    accessCount: integer("access_count").notNull().default(0),
+    artifactUrl: text("artifact_url"),
+    artifactHash: text("artifact_hash"),
+    publishedAt: timestamp("published_at", { mode: "date", withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull(),
+  },
+  table => ({
+    publishedIdx: index("confidentiality_log_roots_published_idx").on(table.publishedAt),
+  }),
+);
+
+export type ConfidentialityLogRoot = typeof confidentialityLogRoots.$inferSelect;
+export type NewConfidentialityLogRoot = typeof confidentialityLogRoots.$inferInsert;
 
 export const imageUploadDailyQuotas = pgTable(
   "image_upload_daily_quotas",
