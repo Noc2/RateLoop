@@ -57,6 +57,7 @@ contract DeployRateLoop is ScaffoldETHDeploy {
     uint64 internal constant DEFAULT_WORLD_ID_ISSUER_SCHEMA_ID = 1;
     string internal constant DEFAULT_WORLD_ID_ACTION = "rateloop-human-credential-v1";
     string internal constant DEFAULT_WORLD_ID_PRESENCE_ACTION = "rateloop-human-presence-v1";
+    uint64 public constant LEGACY_CONTRIBUTOR_HUMAN_TTL_SECONDS = WORLD_ID_CREDENTIAL_TTL_SECONDS;
 
     // DRAND-1 (2026-05-21 testnet-readiness audit): per-chain drand `(chainHash, genesisTime,
     // period)` triples. `quicknet` (mainnet) and `quicknet-t` (testnet) are independent drand
@@ -373,6 +374,7 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         if (block.chainid == 4801) {
             _fundWorldChainSepoliaTestingAccounts(lrepToken, raterRegistry);
         }
+        _seedLegacyContributorHumanCredentials(raterRegistry);
         if (!isLocalDev) {
             _renounceRaterRegistryDeployerRoles(raterRegistry, deployer);
         }
@@ -530,6 +532,40 @@ contract DeployRateLoop is ScaffoldETHDeploy {
 
     function _activateLegacyContributorRoot(LaunchDistributionPool launchDistributionPool) internal {
         launchDistributionPool.setLegacyContributorRoot(LEGACY_CONTRIBUTOR_ROOT, LEGACY_CONTRIBUTOR_ALLOCATION_TOTAL);
+    }
+
+    function _legacyContributorAccounts() internal pure returns (address[9] memory accounts) {
+        accounts = [
+            0x63cada40E8AcF7A1d47229af5Be35b78b16035fa,
+            0x7c6425827BB8d848808cbb8fe2bd55Fd2f2Fa41A,
+            0xc1CD80C7cD37b5499560C362b164cbA1CfF71b44,
+            0x455eE797cEa79A936bA8E8ed888E0B20ca1A1BA3,
+            0x5A5148e7963C732e4C0991726793A726ce28046A,
+            0x3ea207780415e2ab68b97eB3b02AdDD70020ac4c,
+            0xE6722D1FDcA78552eAE5EA12eA3A8B7D6EeC7AA8,
+            0x74cC77FDA426225470351f93c6ce4382b4b51Aa8,
+            0x4b98406f108D1A19dbbBe22216D432A5b1a5E22b
+        ];
+    }
+
+    function _legacyContributorHumanAnchor(address account) internal pure returns (bytes32) {
+        return keccak256(abi.encodePacked("rateloop:legacy-contributor-human-v1", account));
+    }
+
+    function _legacyContributorHumanEvidence(address account) internal pure returns (bytes32) {
+        return keccak256(abi.encodePacked("rateloop:legacy-contributor-snapshot-v1", LEGACY_CONTRIBUTOR_ROOT, account));
+    }
+
+    function _seedLegacyContributorHumanCredentials(RaterRegistry raterRegistry) internal {
+        address[9] memory accounts = _legacyContributorAccounts();
+        uint64 expiresAt = uint64(block.timestamp + LEGACY_CONTRIBUTOR_HUMAN_TTL_SECONDS);
+        for (uint256 i = 0; i < accounts.length; i++) {
+            address account = accounts[i];
+            raterRegistry.seedHumanCredential(
+                account, expiresAt, _legacyContributorHumanAnchor(account), _legacyContributorHumanEvidence(account)
+            );
+        }
+        console.log("Seeded legacy contributor human credentials:", accounts.length);
     }
 
     function _fundLaunchDistributionPool(LoopReputation lrepToken, LaunchDistributionPool launchDistributionPool)

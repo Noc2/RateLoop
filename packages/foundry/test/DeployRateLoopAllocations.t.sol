@@ -9,6 +9,7 @@ import { LoopReputation } from "../contracts/LoopReputation.sol";
 import { RaterRegistry } from "../contracts/RaterRegistry.sol";
 import { MockERC20 } from "../contracts/mocks/MockERC20.sol";
 import { MockWorldIDVerifier } from "../contracts/mocks/MockWorldIDVerifier.sol";
+import { IRaterIdentityRegistry } from "../contracts/interfaces/IRaterIdentityRegistry.sol";
 
 contract DeployRateLoopHarness is DeployRateLoop {
     function worldIdActionHash(string memory action) external pure returns (uint256) {
@@ -52,8 +53,24 @@ contract DeployRateLoopHarness is DeployRateLoop {
         return _worldChainSepoliaTestingLrepTotal();
     }
 
+    function legacyContributorAccounts() external pure returns (address[9] memory) {
+        return _legacyContributorAccounts();
+    }
+
+    function legacyContributorHumanAnchor(address account) external pure returns (bytes32) {
+        return _legacyContributorHumanAnchor(account);
+    }
+
+    function legacyContributorHumanEvidence(address account) external pure returns (bytes32) {
+        return _legacyContributorHumanEvidence(account);
+    }
+
     function fundWorldChainSepoliaTestingAccounts(LoopReputation lrepToken, RaterRegistry raterRegistry) external {
         _fundWorldChainSepoliaTestingAccounts(lrepToken, raterRegistry);
+    }
+
+    function seedLegacyContributorHumanCredentials(RaterRegistry raterRegistry) external {
+        _seedLegacyContributorHumanCredentials(raterRegistry);
     }
 
     function worldChainWorldIdV4Verifier() external pure returns (address) {
@@ -236,6 +253,40 @@ contract DeployRateLoopAllocationsTest is Test {
             assertTrue(raterRegistry.hasActiveHumanCredential(testAccounts[i]));
         }
         assertEq(lrepToken.totalSupply(), deployScript.worldChainSepoliaTestingLrepTotal());
+    }
+
+    function test_SeedLegacyContributorHumanCredentialsMarksManifestAddressesAsHumans() public {
+        DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
+        RaterRegistry raterRegistry =
+            new RaterRegistry(address(deployScript), address(this), address(0), 0, 0, 0, 0, 0, 0, 0);
+        raterRegistry.setMaxSeededCredentialTtl(deployScript.LEGACY_CONTRIBUTOR_HUMAN_TTL_SECONDS());
+
+        deployScript.seedLegacyContributorHumanCredentials(raterRegistry);
+
+        address[9] memory legacyAccounts = deployScript.legacyContributorAccounts();
+        for (uint256 i = 0; i < legacyAccounts.length; i++) {
+            address account = legacyAccounts[i];
+            RaterRegistry.HumanCredential memory credential = raterRegistry.getHumanCredential(account);
+            IRaterIdentityRegistry.ResolvedRater memory resolved = raterRegistry.resolveRater(account);
+
+            assertTrue(raterRegistry.hasActiveHumanCredential(account));
+            assertTrue(resolved.hasActiveHumanCredential);
+            assertEq(resolved.holder, account);
+            assertEq(credential.verified, true);
+            assertEq(credential.revoked, false);
+            assertEq(uint256(credential.provider), uint256(RaterRegistry.HumanCredentialProvider.SeededHuman));
+            assertEq(credential.nullifierHash, deployScript.legacyContributorHumanAnchor(account));
+            assertEq(credential.evidenceHash, deployScript.legacyContributorHumanEvidence(account));
+            assertEq(
+                credential.expiresAt, uint64(block.timestamp + deployScript.LEGACY_CONTRIBUTOR_HUMAN_TTL_SECONDS())
+            );
+            assertEq(
+                resolved.identityKey,
+                raterRegistry.credentialIdentityKey(
+                    RaterRegistry.HumanCredentialProvider.SeededHuman, credential.nullifierHash
+                )
+            );
+        }
     }
 
     function test_ActivateLegacyContributorRootConfiguresGeneratedManifestRoot() public {
