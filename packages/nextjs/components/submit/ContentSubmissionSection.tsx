@@ -12,7 +12,7 @@ import { useQuery } from "@tanstack/react-query";
 import { decodeEventLog, isAddress, toHex } from "viem";
 import { useAccount, useConfig, useReadContract } from "wagmi";
 import { getPublicClient, readContract, waitForTransactionReceipt, writeContract } from "wagmi/actions";
-import { ChevronDownIcon, MagnifyingGlassIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { ChevronDownIcon, LockClosedIcon, MagnifyingGlassIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { ContentEmbed } from "~~/components/content/ContentEmbed";
 import { BountyFundingWarning } from "~~/components/shared/BountyFundingWarning";
 import { GasBalanceWarning, shouldShowGasWarningTransactionCostsLink } from "~~/components/shared/GasBalanceWarning";
@@ -133,6 +133,8 @@ import { notification } from "~~/utils/scaffold-eth";
 const ShareModal = dynamic(() => import("~~/components/submit/ShareModal").then(m => m.ShareModal), { ssr: false });
 
 type MediaMode = "images" | "video";
+type ContextVisibility = "public" | "gated";
+type ConfidentialityDisclosurePolicy = "after_settlement" | "private_forever";
 
 const MEDIA_URL_CONFIG = {
   contextPlaceholder: "Paste a source link, or add media context below",
@@ -237,6 +239,8 @@ function normalizeAudienceCountryCodeInput(value: string) {
 
 type QuestionDraft = {
   mediaMode: MediaMode;
+  contextVisibility: ContextVisibility;
+  disclosurePolicy: ConfidentialityDisclosurePolicy;
   contextUrl: string;
   imageUrls: string[];
   videoUrl: string;
@@ -250,6 +254,8 @@ type QuestionDraft = {
 
 type ValidatedQuestionDraft = {
   blockedContentTags: string[];
+  contextVisibility: ContextVisibility;
+  disclosurePolicy: ConfidentialityDisclosurePolicy;
   hasMediaError: boolean;
   hasQuestionErrors: boolean;
   submittedContextUrl: string;
@@ -267,6 +273,8 @@ type QuestionTaxonomySelection = Pick<QuestionDraft, "selectedCategory" | "selec
 function createEmptyQuestionDraft(): QuestionDraft {
   return {
     mediaMode: "images",
+    contextVisibility: "public",
+    disclosurePolicy: "after_settlement",
     contextUrl: "",
     imageUrls: [""],
     videoUrl: "",
@@ -590,6 +598,8 @@ export function ContentSubmissionSection() {
   });
 
   const [mediaMode, setMediaMode] = useState<MediaMode>("images");
+  const [contextVisibility, setContextVisibility] = useState<ContextVisibility>("public");
+  const [disclosurePolicy, setDisclosurePolicy] = useState<ConfidentialityDisclosurePolicy>("after_settlement");
   const [contextUrl, setContextUrl] = useState("");
   const [contextUrlError, setContextUrlError] = useState<string | null>(null);
   const [imageUrls, setImageUrls] = useState<string[]>([""]);
@@ -614,6 +624,8 @@ export function ContentSubmissionSection() {
   const [rewardAsset, setRewardAsset] = useState<SubmissionRewardAsset>("usdc");
   const [rewardAmount, setRewardAmount] = useState(DEFAULT_SUBMISSION_BOUNTY_AMOUNT);
   const [rewardAmountTouched, setRewardAmountTouched] = useState(false);
+  const [confidentialityBondAsset, setConfidentialityBondAsset] = useState<"LREP" | "USDC">("LREP");
+  const [confidentialityBondAmount, setConfidentialityBondAmount] = useState("0");
   const [rewardRequiredVoters, setRewardRequiredVoters] = useState("3");
   const [rewardRequiredRounds, setRewardRequiredRounds] = useState("1");
   const [bountyEligibility, setBountyEligibility] = useState(BOUNTY_ELIGIBILITY_OPEN);
@@ -699,6 +711,8 @@ export function ContentSubmissionSection() {
 
   const getActiveQuestionDraft = (): QuestionDraft => ({
     mediaMode,
+    contextVisibility,
+    disclosurePolicy,
     contextUrl,
     imageUrls,
     videoUrl,
@@ -718,6 +732,8 @@ export function ContentSubmissionSection() {
 
   const loadQuestionDraft = (draft: QuestionDraft) => {
     setMediaMode(draft.mediaMode);
+    setContextVisibility(draft.contextVisibility);
+    setDisclosurePolicy(draft.disclosurePolicy);
     setContextUrl(draft.contextUrl);
     setContextUrlError(null);
     setImageUrls(draft.imageUrls.length > 0 ? draft.imageUrls : [""]);
@@ -815,6 +831,32 @@ export function ContentSubmissionSection() {
     setContextUrl(value);
     patchActiveQuestionDraft({ contextUrl: value });
     setContextUrlError(value.trim() ? getContextUrlValidationError(value) : null);
+  };
+
+  const handlePrivateContextToggle = (enabled: boolean) => {
+    const nextVisibility: ContextVisibility = enabled ? "gated" : "public";
+    setContextVisibility(nextVisibility);
+    if (enabled) {
+      setContextUrl("");
+      setContextUrlError(null);
+      setVideoUrl("");
+      setVideoUrlError(null);
+      setMediaMode("images");
+      patchActiveQuestionDraft({
+        contextUrl: "",
+        contextVisibility: nextVisibility,
+        disclosurePolicy,
+        mediaMode: "images",
+        videoUrl: "",
+      });
+      return;
+    }
+    patchActiveQuestionDraft({ contextVisibility: nextVisibility, disclosurePolicy });
+  };
+
+  const handleDisclosurePolicyChange = (value: ConfidentialityDisclosurePolicy) => {
+    setDisclosurePolicy(value);
+    patchActiveQuestionDraft({ disclosurePolicy: value });
   };
 
   const handleDetailsTextChange = (value: string) => {
@@ -1705,9 +1747,10 @@ export function ContentSubmissionSection() {
   };
 
   const validateQuestionSection = (draft = getActiveQuestionDraft(), applyErrors = true): ValidatedQuestionDraft => {
+    const isPrivateContext = draft.contextVisibility === "gated";
     const trimmedTitle = draft.title.trim();
-    const trimmedContextUrl = draft.contextUrl.trim();
-    const submittedContextUrl = normalizeSubmissionContextUrl(trimmedContextUrl) ?? "";
+    const trimmedContextUrl = isPrivateContext ? "" : draft.contextUrl.trim();
+    const submittedContextUrl = isPrivateContext ? "" : (normalizeSubmissionContextUrl(trimmedContextUrl) ?? "");
     let trimmedDetailsText = "";
     let nextDetailsError: string | null = null;
     if (draft.detailsText.trim()) {
@@ -1725,12 +1768,13 @@ export function ContentSubmissionSection() {
             .map(value => normalizeSubmissionMediaUrl(value))
             .filter((value): value is string => Boolean(value))
         : [];
-    const submittedVideoUrl = draft.mediaMode === "video" ? (normalizeSubmissionMediaUrl(draft.videoUrl) ?? "") : "";
+    const submittedVideoUrl =
+      !isPrivateContext && draft.mediaMode === "video" ? (normalizeSubmissionMediaUrl(draft.videoUrl) ?? "") : "";
     const nextImageUrlErrors = draft.imageUrls.map(value =>
       value.trim() ? getMediaUrlValidationError(value, "images") : null,
     );
-    const nextVideoUrlError = getMediaUrlValidationError(draft.videoUrl, "video");
-    const nextContextUrlError = getContextUrlValidationError(trimmedContextUrl);
+    const nextVideoUrlError = isPrivateContext ? null : getMediaUrlValidationError(draft.videoUrl, "video");
+    const nextContextUrlError = isPrivateContext ? null : getContextUrlValidationError(trimmedContextUrl);
     const nextTitleError = trimmedTitle ? getContentTitleValidationError(trimmedTitle) : null;
     const blockedContentTags = findBlockedContentTags(draft.selectedSubcategories);
     const submittedTags = serializeTags(draft.selectedSubcategories);
@@ -1742,9 +1786,12 @@ export function ContentSubmissionSection() {
     const hasMediaError =
       draft.mediaMode === "images"
         ? nextImageUrlErrors.some(Boolean)
-        : Boolean(nextVideoUrlError) || Boolean(draft.videoUrl.trim() && !submittedVideoUrl);
+        : !isPrivateContext && (Boolean(nextVideoUrlError) || Boolean(draft.videoUrl.trim() && !submittedVideoUrl));
     const hasContextOrMedia =
-      Boolean(submittedContextUrl) || submittedImageUrls.length > 0 || Boolean(submittedVideoUrl);
+      Boolean(submittedContextUrl) ||
+      submittedImageUrls.length > 0 ||
+      Boolean(submittedVideoUrl) ||
+      (isPrivateContext && Boolean(trimmedDetailsText));
     if (applyErrors) {
       setImageUrlErrors(nextImageUrlErrors);
       setVideoUrlError(nextVideoUrlError);
@@ -1769,6 +1816,8 @@ export function ContentSubmissionSection() {
 
     return {
       blockedContentTags,
+      contextVisibility: draft.contextVisibility,
+      disclosurePolicy: draft.disclosurePolicy,
       hasMediaError,
       hasQuestionErrors,
       selectedCategory: draft.selectedCategory,
@@ -2295,6 +2344,14 @@ export function ContentSubmissionSection() {
           uploadQuestionDetailsForSubmission(question.trimmedDetailsText, submitterAddress),
         ),
       );
+      const hasGatedQuestions = validatedQuestions.some(question => question.contextVisibility === "gated");
+      const confidentialityBondAtomic = parseSubmissionRewardAmount(confidentialityBondAmount);
+      if (hasGatedQuestions && confidentialityBondAtomic === null) {
+        setSubmissionStep("bounty");
+        notification.warning("Enter a valid confidentiality bond amount.");
+        return;
+      }
+      const resolvedConfidentialityBondAtomic = confidentialityBondAtomic ?? 0n;
 
       const bundleQuestions = validatedQuestions.map((question, index) => {
         if (!question.selectedCategory) {
@@ -2311,6 +2368,17 @@ export function ContentSubmissionSection() {
             requiredVoters: selectedRequiredVoters,
           },
           categoryId: question.selectedCategory.id,
+          confidentiality: {
+            bond:
+              question.contextVisibility === "gated"
+                ? {
+                    amount: resolvedConfidentialityBondAtomic.toString(),
+                    asset: confidentialityBondAsset,
+                  }
+                : null,
+            disclosurePolicy: question.contextVisibility === "gated" ? question.disclosurePolicy : undefined,
+            visibility: question.contextVisibility,
+          },
           contextUrl: question.submittedContextUrl,
           imageUrls: question.submittedImageUrls,
           roundConfig: selectedRoundConfig,
@@ -2755,6 +2823,8 @@ export function ContentSubmissionSection() {
       setTargetAudienceNationalityError(null);
       setRewardAmount(defaultBountyAmount);
       setRewardAmountTouched(false);
+      setConfidentialityBondAsset("LREP");
+      setConfidentialityBondAmount("0");
       setRewardRequiredVoters("3");
       setRewardRequiredRounds("1");
       setBountyEligibility(BOUNTY_ELIGIBILITY_OPEN);
@@ -2827,15 +2897,21 @@ export function ContentSubmissionSection() {
 
   const hasImageInput = imageUrls.some(url => url.trim());
   const hasVideoInput = Boolean(videoUrl.trim());
+  const privateContextEnabled = contextVisibility === "gated";
+  const hasPrivateContextDraft = questionDrafts.some((draft, index) =>
+    index === activeQuestionIndex ? privateContextEnabled : draft.contextVisibility === "gated",
+  );
+  const hasPrivateContextDetails = privateContextEnabled && Boolean(detailsText.trim());
   const contextOrMediaMissing =
     questionStepAttempted &&
+    !hasPrivateContextDetails &&
     !normalizedContextUrl &&
     normalizedImageUrls.length === 0 &&
     !hasImageInput &&
     !normalizedVideoUrl &&
     !hasVideoInput;
   const imageMediaMissing = contextOrMediaMissing && mediaMode === "images";
-  const videoMediaMissing = contextOrMediaMissing && mediaMode === "video";
+  const videoMediaMissing = !privateContextEnabled && contextOrMediaMissing && mediaMode === "video";
   const pageHeading =
     submissionStep === "question" ? "Submit Question" : submissionStep === "bounty" ? "Bounty" : "Feedback Bonus";
   const pageContext =
@@ -3120,6 +3196,45 @@ export function ContentSubmissionSection() {
         <InfoTooltip text={bountyAmountTooltipText} className="shrink-0" />
       </div>
       {bountyStepAttempted && rewardAmountError ? <p className="text-base text-error">{rewardAmountError}</p> : null}
+
+      {hasPrivateContextDraft ? (
+        <div className="rounded-lg border border-warning/30 bg-warning/10 p-4">
+          <div className="flex items-start gap-2">
+            <LockClosedIcon className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-base-content">Confidentiality bond</p>
+              <p className="mt-1 text-sm leading-relaxed text-base-content/65">
+                Optional extra bond expected from raters before private context is served. Use 0 to keep access
+                signature-only until escrow wiring is live.
+              </p>
+            </div>
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-[9rem_minmax(0,1fr)]">
+            <label className="form-control">
+              <span className="label-text text-sm font-medium">Asset</span>
+              <select
+                className="select select-bordered select-sm bg-base-100"
+                value={confidentialityBondAsset}
+                onChange={e => setConfidentialityBondAsset(e.target.value as "LREP" | "USDC")}
+              >
+                <option value="LREP">LREP</option>
+                <option value="USDC">USDC</option>
+              </select>
+            </label>
+            <label className="form-control">
+              <span className="label-text text-sm font-medium">Amount</span>
+              <input
+                type="text"
+                inputMode="decimal"
+                className="input input-bordered input-sm bg-base-100"
+                value={confidentialityBondAmount}
+                onChange={e => setConfidentialityBondAmount(e.target.value)}
+                aria-label="Confidentiality bond amount"
+              />
+            </label>
+          </div>
+        </div>
+      ) : null}
 
       <div className="space-y-2">
         <p className="flex items-center gap-1.5 text-sm font-medium text-base-content/80">
@@ -4098,6 +4213,48 @@ export function ContentSubmissionSection() {
                   </div>
                 </div>
 
+                <div className="rounded-lg border border-base-300 bg-base-100 p-4">
+                  <label className="flex items-start justify-between gap-4">
+                    <span className="min-w-0">
+                      <span className="flex items-center gap-2 text-base font-medium text-base-content">
+                        <LockClosedIcon className="h-4 w-4 text-warning" />
+                        Private context
+                      </span>
+                      <span className="mt-1 block text-sm leading-relaxed text-base-content/60">
+                        Hosted images and details require wallet-signed confidentiality acceptance before viewing. Keep
+                        the question title public-safe.
+                      </span>
+                    </span>
+                    <input
+                      type="checkbox"
+                      className="toggle toggle-warning"
+                      checked={privateContextEnabled}
+                      onChange={e => handlePrivateContextToggle(e.target.checked)}
+                    />
+                  </label>
+                  {privateContextEnabled ? (
+                    <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_14rem] sm:items-end">
+                      <div className="text-sm leading-relaxed text-base-content/65">
+                        External context links and YouTube are disabled for private asks. Use RateLoop-hosted uploads or
+                        the description field.
+                      </div>
+                      <label className="form-control">
+                        <span className="label-text text-sm font-medium">Disclosure</span>
+                        <select
+                          className="select select-bordered select-sm bg-base-100"
+                          value={disclosurePolicy}
+                          onChange={e =>
+                            handleDisclosurePolicyChange(e.target.value as ConfidentialityDisclosurePolicy)
+                          }
+                        >
+                          <option value="after_settlement">After settlement</option>
+                          <option value="private_forever">Private forever</option>
+                        </select>
+                      </label>
+                    </div>
+                  ) : null}
+                </div>
+
                 <div>
                   <label className="mb-2 block text-base font-medium">
                     Description <span className="text-base-content/60">(optional)</span>
@@ -4130,18 +4287,27 @@ export function ContentSubmissionSection() {
                   </label>
                   <input
                     type="url"
-                    placeholder={urlConfig.contextPlaceholder}
+                    placeholder={
+                      privateContextEnabled
+                        ? "Private context uses hosted images/details only"
+                        : urlConfig.contextPlaceholder
+                    }
                     className={`input input-bordered w-full bg-base-100 ${
                       contextOrMediaMissing || contextUrlError ? "input-error" : ""
                     }`}
                     value={contextUrl}
                     onChange={e => handleContextUrlChange(e.target.value)}
-                    onBlur={() => setContextUrlError(getContextUrlValidationError(contextUrl))}
+                    onBlur={() =>
+                      setContextUrlError(privateContextEnabled ? null : getContextUrlValidationError(contextUrl))
+                    }
                     maxLength={MAX_SUBMISSION_URL_LENGTH}
+                    disabled={privateContextEnabled}
                   />
                   {contextOrMediaMissing && !contextUrlError ? (
                     <p className="mt-1 text-base text-error">
-                      Add a website, image, or YouTube video before submitting.
+                      {privateContextEnabled
+                        ? "Add a hosted image or description before submitting."
+                        : "Add a website, image, or YouTube video before submitting."}
                     </p>
                   ) : null}
                   {contextUrlError ? <p className="mt-1 text-base text-error">{contextUrlError}</p> : null}
@@ -4174,6 +4340,7 @@ export function ContentSubmissionSection() {
                     <button
                       type="button"
                       aria-pressed={mediaMode === "video"}
+                      disabled={privateContextEnabled}
                       onClick={() => {
                         setMediaMode("video");
                         patchActiveQuestionDraft({ mediaMode: "video" });
@@ -4183,6 +4350,12 @@ export function ContentSubmissionSection() {
                       YouTube
                     </button>
                   </div>
+                  {privateContextEnabled ? (
+                    <p className="mb-3 text-sm leading-relaxed text-base-content/60">
+                      Private context can include uploaded images and description text. Public external media is not
+                      allowed.
+                    </p>
+                  ) : null}
 
                   {mediaMode === "images" ? (
                     <div className="space-y-2">
