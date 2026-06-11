@@ -203,18 +203,22 @@ describe("automatic correlation artifact builder", () => {
 
   it("builds non-flat surprise-weighted baseWeights for a non-uniform round", async () => {
     mockConfig();
-    const voteItem = (index: number, isUp: boolean) => ({
-      account: `0x000000000000000000000000000000000000000${index}`,
-      identityKey: `0x${String(index).repeat(64)}`,
-      commitKey: `0x${String(index + 3).repeat(64)}`,
-      isUp,
-      stake: "10000000",
-      epochIndex: 0,
-      revealWeight: "10000",
-      verifiedHuman: true,
-      historicalVoteCount: 12,
-      features: [`identity:0x${String(index).repeat(64)}`],
-    });
+    const voteItem = (index: number, isUp: boolean) => {
+      const identityNibble = index.toString(16);
+      const commitNibble = (index + 3).toString(16);
+      return {
+        account: `0x${index.toString(16).padStart(40, "0")}`,
+        identityKey: `0x${identityNibble.repeat(64)}`,
+        commitKey: `0x${commitNibble.repeat(64)}`,
+        isUp,
+        stake: "10000000",
+        epochIndex: 0,
+        revealWeight: "10000",
+        verifiedHuman: true,
+        historicalVoteCount: 12,
+        features: [`identity:0x${identityNibble.repeat(64)}`],
+      };
+    };
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(input.toString());
       if (url.pathname === "/correlation/round-candidates") {
@@ -229,7 +233,9 @@ describe("automatic correlation artifact builder", () => {
             baseRateWindowRounds: 100,
             settledRoundsInWindow: 40,
           },
-          items: [voteItem(1, true), voteItem(2, true), voteItem(3, false)],
+          items: Array.from({ length: 9 }, (_, index) =>
+            voteItem(index + 1, index < 5),
+          ),
         });
       }
       return new Response("not found", { status: 404 });
@@ -252,26 +258,27 @@ describe("automatic correlation artifact builder", () => {
 
     expect(publicArtifact.artifactVersion).toBe("rateloop-correlation-artifact-v2");
     expect(snapshot.trailingBaseRateUpBps).toBe(2_000);
-    // UP majority beats the 20% trailing base rate: agreement 5_000 bps,
-    // surprise 25_000 bps, baseWeight 5_000 + 5_000 * 25_000 / 10_000.
+    // Five UP votes clear the 8-reveal floor and beat the 20% trailing base
+    // rate: agreement 5_000 bps, surprise 25_000 bps, baseWeight
+    // 5_000 + 5_000 * 25_000 / 10_000.
     expect(
       snapshot.payoutWeights.map((payoutWeight: { surpriseBps: number }) => payoutWeight.surpriseBps),
-    ).toEqual([25_000, 25_000, 10_000]);
+    ).toEqual([25_000, 25_000, 25_000, 25_000, 25_000, 10_000, 10_000, 10_000, 10_000]);
     expect(
       snapshot.payoutWeights.map((payoutWeight: { baseWeight: string }) => payoutWeight.baseWeight),
-    ).toEqual(["17500", "17500", "10000"]);
+    ).toEqual(["17500", "17500", "17500", "17500", "17500", "10000", "10000", "10000", "10000"]);
     // Independent verified voters keep independenceBps = 10_000, so the
     // surprise-weighted baseWeights flow through to leaves and the total.
     expect(
       snapshot.payoutWeights.map(
         (payoutWeight: { effectiveWeight: string }) => payoutWeight.effectiveWeight,
       ),
-    ).toEqual(["17500", "17500", "10000"]);
-    expect(snapshot.totalClaimWeight).toBe("45000");
-    expect(artifact.roundPayoutSnapshots?.[0]?.totalClaimWeight).toBe("45000");
+    ).toEqual(["17500", "17500", "17500", "17500", "17500", "10000", "10000", "10000", "10000"]);
+    expect(snapshot.totalClaimWeight).toBe("127500");
+    expect(artifact.roundPayoutSnapshots?.[0]?.totalClaimWeight).toBe("127500");
     expect(
       new Set(snapshot.payoutWeights.map((payoutWeight: { leaf: string }) => payoutWeight.leaf)).size,
-    ).toBe(3);
+    ).toBe(9);
   });
 
   it("falls back to neutral surprise when Ponder omits the new vote fields", async () => {

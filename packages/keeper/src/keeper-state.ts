@@ -17,6 +17,11 @@ interface CachedCorrelationArtifact {
   canonicalJson: string;
 }
 
+type AdvisoryLockResult =
+  | { status: "acquired"; client: pg.PoolClient }
+  | { status: "busy" }
+  | { status: "unavailable" };
+
 let pool: pg.Pool | null | undefined;
 let schemaReady: Promise<void> | null = null;
 const persistenceWarnings = new Set<string>();
@@ -50,6 +55,49 @@ function warnPersistenceOnce(logger: Logger, key: string, msg: string, error: un
   logger.warn(msg, {
     error: error instanceof Error ? error.message : String(error),
   });
+}
+
+async function tryAcquireAdvisoryLock(params: {
+  activePool: pg.Pool;
+  lockKey: string;
+  logger: Logger;
+  warningKey: string;
+  warningMessage: string;
+}): Promise<AdvisoryLockResult> {
+  let client: pg.PoolClient | null = null;
+  try {
+    client = await params.activePool.connect();
+    const result = await client.query<{ locked: boolean }>(
+      "select pg_try_advisory_lock($1::bigint) as locked",
+      [params.lockKey],
+    );
+    const locked = result.rows[0]?.locked === true;
+    if (!locked) {
+      client.release();
+      return { status: "busy" };
+    }
+    return { status: "acquired", client };
+  } catch (error) {
+    client?.release();
+    warnPersistenceOnce(params.logger, params.warningKey, params.warningMessage, error);
+    return { status: "unavailable" };
+  }
+}
+
+async function releaseAdvisoryLock(params: {
+  client: pg.PoolClient;
+  lockKey: string;
+  logger: Logger;
+  warningKey: string;
+  warningMessage: string;
+}): Promise<void> {
+  try {
+    await params.client.query("select pg_advisory_unlock($1::bigint)", [params.lockKey]);
+  } catch (error) {
+    warnPersistenceOnce(params.logger, params.warningKey, params.warningMessage, error);
+  } finally {
+    params.client.release();
+  }
 }
 
 async function ensureSchema(logger: Logger): Promise<pg.Pool | null> {
@@ -103,42 +151,31 @@ export async function runWithCorrelationSnapshotPublishLock<T>(
     return run();
   }
 
-  let locked = false;
-  try {
-    const result = await activePool.query<{ locked: boolean }>(
-      "select pg_try_advisory_lock($1::bigint) as locked",
-      [CORRELATION_SNAPSHOT_LOCK_KEY],
-    );
-    locked = result.rows[0]?.locked === true;
-    if (!locked) {
-      logger.debug("Skipping correlation snapshot publication because another keeper holds the persistence lock");
-      return fallback;
-    }
-
-    return await run();
-  } catch (error) {
-    warnPersistenceOnce(
-      logger,
-      "lock",
-      "Keeper persistence lock unavailable; running correlation snapshot publication without it",
-      error,
-    );
+  const lock = await tryAcquireAdvisoryLock({
+    activePool,
+    lockKey: CORRELATION_SNAPSHOT_LOCK_KEY,
+    logger,
+    warningKey: "lock",
+    warningMessage: "Keeper persistence lock unavailable; running correlation snapshot publication without it",
+  });
+  if (lock.status === "unavailable") {
     return run();
+  }
+  if (lock.status === "busy") {
+    logger.debug("Skipping correlation snapshot publication because another keeper holds the persistence lock");
+    return fallback;
+  }
+
+  try {
+    return await run();
   } finally {
-    if (locked) {
-      await activePool
-        .query("select pg_advisory_unlock($1::bigint)", [
-          CORRELATION_SNAPSHOT_LOCK_KEY,
-        ])
-        .catch((error: unknown) => {
-          warnPersistenceOnce(
-            logger,
-            "unlock",
-            "Keeper persistence lock release failed",
-            error,
-          );
-        });
-    }
+    await releaseAdvisoryLock({
+      client: lock.client,
+      lockKey: CORRELATION_SNAPSHOT_LOCK_KEY,
+      logger,
+      warningKey: "unlock",
+      warningMessage: "Keeper persistence lock release failed",
+    });
   }
 }
 
@@ -151,49 +188,38 @@ export async function runWithKeeperMainLoopLock<T>(
   try {
     activePool = await ensureSchema(logger);
   } catch {
-    return fallback;
+    return run();
   }
 
   if (!activePool) {
     return run();
   }
 
-  let locked = false;
-  try {
-    const result = await activePool.query<{ locked: boolean }>(
-      "select pg_try_advisory_lock($1::bigint) as locked",
-      [MAIN_LOOP_LOCK_KEY],
-    );
-    locked = result.rows[0]?.locked === true;
-    if (!locked) {
-      logger.debug("Skipping keeper main loop because another keeper holds the persistence lock");
-      return fallback;
-    }
-
-    return await run();
-  } catch (error) {
-    warnPersistenceOnce(
-      logger,
-      "main-loop-lock",
-      "Keeper main loop lock unavailable; skipping this tick",
-      error,
-    );
+  const lock = await tryAcquireAdvisoryLock({
+    activePool,
+    lockKey: MAIN_LOOP_LOCK_KEY,
+    logger,
+    warningKey: "main-loop-lock",
+    warningMessage: "Keeper main loop lock unavailable; running this tick without it",
+  });
+  if (lock.status === "unavailable") {
+    return run();
+  }
+  if (lock.status === "busy") {
+    logger.debug("Skipping keeper main loop because another keeper holds the persistence lock");
     return fallback;
+  }
+
+  try {
+    return await run();
   } finally {
-    if (locked) {
-      await activePool
-        .query("select pg_advisory_unlock($1::bigint)", [
-          MAIN_LOOP_LOCK_KEY,
-        ])
-        .catch((error: unknown) => {
-          warnPersistenceOnce(
-            logger,
-            "main-loop-unlock",
-            "Keeper main loop lock release failed",
-            error,
-          );
-        });
-    }
+    await releaseAdvisoryLock({
+      client: lock.client,
+      lockKey: MAIN_LOOP_LOCK_KEY,
+      logger,
+      warningKey: "main-loop-unlock",
+      warningMessage: "Keeper main loop lock release failed",
+    });
   }
 }
 
