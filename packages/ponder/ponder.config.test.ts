@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import deployedContracts from "@rateloop/contracts/deployedContracts";
 
 type DeploymentChain = Record<string, { address: `0x${string}`; deployedOnBlock?: number }>;
+type AbiEntry = { type?: string; name?: string; anonymous?: boolean };
 
 const sharedDeployments = deployedContracts as Record<number, DeploymentChain | undefined>;
 const chain31337 = sharedDeployments[31337];
@@ -32,6 +33,20 @@ function getExpectedChainStartBlock(chain: DeploymentChain | undefined) {
     .filter((value): value is number => Number.isInteger(value) && value >= 0);
 
   return deployedBlocks.length > 0 ? Math.min(...deployedBlocks) : 0;
+}
+
+function getDuplicateEventNames(abi: readonly AbiEntry[]) {
+  const eventCounts = new Map<string, number>();
+
+  for (const item of abi) {
+    if (item.type !== "event" || item.anonymous === true || !item.name) continue;
+    eventCounts.set(item.name, (eventCounts.get(item.name) ?? 0) + 1);
+  }
+
+  return [...eventCounts.entries()]
+    .filter(([, count]) => count > 1)
+    .map(([name]) => name)
+    .sort();
 }
 
 const expectedChain480StartBlock = getExpectedChainStartBlock(chain480);
@@ -124,6 +139,23 @@ afterEach(() => {
 });
 
 describe("ponder config", () => {
+  itWithHardhatArtifacts("keeps RaterRegistry event names unambiguous for Ponder handlers", async () => {
+    const { default: config } = await loadPonderConfig({
+      PONDER_NETWORK: "hardhat",
+      PONDER_RPC_URL_31337: "http://127.0.0.1:8545",
+    });
+    const loadedConfig = config as any;
+    const raterRegistryAbi = loadedConfig.contracts.RaterRegistry.abi as readonly AbiEntry[];
+
+    expect(getDuplicateEventNames(raterRegistryAbi)).toEqual([]);
+    expect(raterRegistryAbi).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: "event", name: "IdentityBanned" }),
+        expect.objectContaining({ type: "event", name: "IdentityUnbanned" }),
+      ]),
+    );
+  }, PONDER_CONFIG_TEST_TIMEOUT_MS);
+
   itWithSepoliaPonderArtifacts("derives supported-chain addresses and start blocks from shared deployment artifacts", async () => {
     const { default: config } = await loadPonderConfig(
       {},

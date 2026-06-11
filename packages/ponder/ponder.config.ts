@@ -15,7 +15,6 @@ import {
   ProfileRegistryAbi,
   QuestionRewardPoolEscrowAbi,
   RaterRegistryAbi,
-  RaterRegistryConfidentialityAbi,
   RoundRewardDistributorAbi,
   RoundVotingEngineAbi,
 } from "@rateloop/contracts/abis";
@@ -93,10 +92,6 @@ const activeNetwork = getActiveNetwork();
 const activeChainId = NETWORKS[activeNetwork].chainId;
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as const;
 let warnedAboutHardhatStartBlocks = false;
-const RaterRegistryIndexerAbi = [
-  ...RaterRegistryAbi,
-  ...RaterRegistryConfidentialityAbi,
-] as const;
 
 function readEnv(key: string): string | undefined {
   const value = process.env[key]?.trim();
@@ -563,7 +558,7 @@ export default createConfig({
       ),
     },
     RaterRegistry: {
-      abi: RaterRegistryIndexerAbi,
+      abi: RaterRegistryAbi,
       network: contractOnActiveNetwork(
         addresses.raterRegistry,
         startBlocks.raterRegistry,
