@@ -5,6 +5,7 @@ import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import { ProtocolConfig } from "../ProtocolConfig.sol";
 import { RoundVotingEngine } from "../RoundVotingEngine.sol";
 import { IClusterPayoutOracle } from "../interfaces/IClusterPayoutOracle.sol";
+import { IRaterRegistryStatus } from "../interfaces/IRaterRegistryStatus.sol";
 import { RoundLib } from "./RoundLib.sol";
 import { RewardPool, RoundSnapshot } from "./QuestionRewardPoolEscrowTypes.sol";
 import { QuestionRewardPoolEscrowEligibilityLib } from "./QuestionRewardPoolEscrowEligibilityLib.sol";
@@ -641,6 +642,7 @@ library QuestionRewardPoolEscrowQualificationLib {
         (bytes32 identityKey, address holder) = QuestionRewardPoolEscrowVoterLib.commitIdentity(
             ctx.votingEngine, ctx.protocolConfig, ctx.contentId, ctx.roundId, commitKey, voter
         );
+        if (_isIdentityBannedForRound(ctx, identityKey)) return false;
         (,,, uint8 credentialMask, uint8 freshCredentialMask,) =
             ctx.votingEngine.commitIdentityState(ctx.contentId, ctx.roundId, commitKey);
         if (!QuestionRewardPoolEscrowEligibilityLib.isCommitEligibleForBounty(
@@ -658,6 +660,24 @@ library QuestionRewardPoolEscrowQualificationLib {
             ctx.submitterIdentity,
             ctx.submitterIdentityKey
         );
+    }
+
+    function _isIdentityBannedForRound(QualificationContext memory ctx, bytes32 identityKey)
+        private
+        view
+        returns (bool)
+    {
+        if (identityKey == bytes32(0)) return false;
+        address registryAddress = ctx.votingEngine.roundRaterRegistrySnapshot(ctx.contentId, ctx.roundId);
+        if (registryAddress == address(0)) {
+            registryAddress = ctx.protocolConfig.raterRegistry();
+        }
+        if (registryAddress == address(0)) return false;
+        try IRaterRegistryStatus(registryAddress).isIdentityKeyBanned(identityKey) returns (bool banned) {
+            return banned;
+        } catch {
+            return false;
+        }
     }
 
     function _readBountyEligibleRevealedCommit(QualificationContext memory ctx, bytes32 commitKey)
