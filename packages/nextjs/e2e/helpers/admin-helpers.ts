@@ -94,7 +94,6 @@ const MAX_SUBMISSION_IMAGE_URLS = 4;
 const DEFAULT_SUBMISSION_REWARD_ASSET_LREP = 0;
 export const SUBMISSION_REWARD_ASSET_USDC = 1;
 const DEFAULT_SUBMISSION_REWARD_AMOUNT = 1_000_000n;
-const DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS = 3n;
 const DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS = 1n;
 const DEFAULT_SUBMISSION_BOUNTY_START_BY = 4_700_000_000n;
 const DEFAULT_SUBMISSION_BOUNTY_WINDOW_SECONDS = 20n * 60n;
@@ -920,7 +919,7 @@ export async function submitContentDirect(
   const rewardTerms: SubmissionRewardTerms = {
     asset: rewardAsset,
     amount: rewardAmount,
-    requiredVoters: DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS,
+    requiredVoters: BigInt(resolvedRoundConfig.minVoters),
     requiredSettledRounds: DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
     bountyStartBy: DEFAULT_SUBMISSION_BOUNTY_START_BY,
     bountyWindowSeconds: DEFAULT_SUBMISSION_BOUNTY_WINDOW_SECONDS,
