@@ -38,6 +38,9 @@ type FreeTransactionAllowanceResponse = {
 
 type SponsorshipMode = "sponsored" | "self-funded";
 type SponsorshipSyncMode = SponsorshipMode | "eoa";
+type FreeTransactionAllowanceOptions = {
+  allowInAppSponsorshipSync?: boolean;
+};
 
 function getClientFreeTransactionEnvironmentScope() {
   if (typeof window === "undefined") {
@@ -171,7 +174,8 @@ function getFreeTransactionAllowanceQueryKey(address?: string, chainId?: number)
   return [...FREE_TRANSACTION_ALLOWANCE_QUERY_KEY, address?.toLowerCase() ?? null, chainId ?? null] as const;
 }
 
-export function useFreeTransactionAllowance() {
+export function useFreeTransactionAllowance(options: FreeTransactionAllowanceOptions = {}) {
+  const allowInAppSponsorshipSync = options.allowInAppSponsorshipSync ?? true;
   const { address, chain } = useAccount();
   const activeWallet = useActiveWallet();
   const activeWalletChain = useActiveWalletChain();
@@ -292,7 +296,7 @@ export function useFreeTransactionAllowance() {
   ]);
 
   useEffect(() => {
-    if (!resolvedChainId || shouldUseEoaWallet) {
+    if (!allowInAppSponsorshipSync || !resolvedChainId || shouldUseEoaWallet) {
       setStoredThirdwebSponsorshipMode(null);
       return;
     }
@@ -302,10 +306,11 @@ export function useFreeTransactionAllowance() {
     }
 
     setStoredThirdwebSponsorshipMode(desiredSponsorshipMode);
-  }, [desiredSponsorshipMode, resolvedChainId, shouldUseEoaWallet]);
+  }, [allowInAppSponsorshipSync, desiredSponsorshipMode, resolvedChainId, shouldUseEoaWallet]);
 
   useEffect(() => {
     if (
+      !allowInAppSponsorshipSync ||
       !thirdwebClient ||
       !address ||
       !resolvedChainId ||
@@ -353,10 +358,19 @@ export function useFreeTransactionAllowance() {
         console.error("Failed to sync thirdweb sponsorship mode:", error);
       }
     })();
-  }, [activeWallet, address, desiredSponsorshipMode, resolvedChainId, setActiveWallet, syncWalletToWagmi]);
+  }, [
+    activeWallet,
+    address,
+    allowInAppSponsorshipSync,
+    desiredSponsorshipMode,
+    resolvedChainId,
+    setActiveWallet,
+    syncWalletToWagmi,
+  ]);
 
   useEffect(() => {
     if (
+      !allowInAppSponsorshipSync ||
       !thirdwebClient ||
       !address ||
       !resolvedChainId ||
@@ -399,7 +413,15 @@ export function useFreeTransactionAllowance() {
         console.error("Failed to sync thirdweb EOA mode:", error);
       }
     })();
-  }, [activeWallet, address, resolvedChainId, setActiveWallet, shouldUseEoaWallet, syncWalletToWagmi]);
+  }, [
+    activeWallet,
+    address,
+    allowInAppSponsorshipSync,
+    resolvedChainId,
+    setActiveWallet,
+    shouldUseEoaWallet,
+    syncWalletToWagmi,
+  ]);
 
   useEffect(() => {
     if (!allowance.verified || !resolvedChainId || !allowance.raterIdentityKey) {

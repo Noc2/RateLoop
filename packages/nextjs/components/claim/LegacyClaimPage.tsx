@@ -51,6 +51,7 @@ export function LegacyClaimPage() {
     isClaiming,
     isConnected,
     isLoading,
+    isRestoringLegacyWallet,
     isWrongChain,
     vested,
     vestingDuration,
@@ -107,9 +108,18 @@ export function LegacyClaimPage() {
         </section>
       )}
 
-      {isConnected && !isWrongChain && isLoading && (
+      {isConnected && !isWrongChain && isLoading && !isRestoringLegacyWallet && (
         <section className="rounded-lg border border-base-content/10 bg-base-200 p-6">
           <span className="loading loading-spinner loading-md" />
+        </section>
+      )}
+
+      {isConnected && !isWrongChain && isRestoringLegacyWallet && (
+        <section className="rounded-lg border border-base-content/10 bg-base-200 p-6">
+          <h2 className="text-xl font-semibold text-base-content">Restoring Legacy Wallet</h2>
+          <p className="mt-2 text-base leading-7 text-base-content/65">
+            This thirdweb smart account is backed by an eligible legacy wallet. Reconnecting that wallet now.
+          </p>
         </section>
       )}
 
@@ -132,7 +142,7 @@ export function LegacyClaimPage() {
         </section>
       )}
 
-      {isConnected && claimData?.status === "not_eligible" && (
+      {isConnected && !isRestoringLegacyWallet && claimData?.status === "not_eligible" && (
         <section className="rounded-lg border border-base-content/10 bg-base-200 p-6">
           <h2 className="text-xl font-semibold text-base-content">No Legacy Allocation Found</h2>
           <p className="mt-2 text-base leading-7 text-base-content/65">

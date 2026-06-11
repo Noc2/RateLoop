@@ -1,7 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { defineChain } from "thirdweb";
+import { useActiveWallet, useSetActiveWallet } from "thirdweb/react";
 import { type Abi } from "viem";
 import { useAccount } from "wagmi";
 import {
@@ -13,8 +15,15 @@ import {
 import { useGasBalanceStatus } from "~~/hooks/useGasBalanceStatus";
 import { useRefreshWalletBalances } from "~~/hooks/useRefreshWalletBalances";
 import { useThirdwebSponsoredSubmitCalls } from "~~/hooks/useThirdwebSponsoredSubmitCalls";
+import { useThirdwebWagmiSync } from "~~/hooks/useThirdwebWagmiSync";
 import { getClaimPreflightErrorMessage } from "~~/lib/claimTransactionFeedback";
 import type { LegacyClaimLookupResult } from "~~/lib/legacy-claim/lookup";
+import {
+  createThirdwebInAppWallet,
+  isThirdwebInAppWalletId,
+  setStoredThirdwebSponsorshipMode,
+  thirdwebClient,
+} from "~~/services/thirdweb/client";
 import { notification } from "~~/utils/scaffold-eth";
 
 async function fetchLegacyClaim(address: `0x${string}`): Promise<LegacyClaimLookupResult> {
@@ -25,11 +34,59 @@ async function fetchLegacyClaim(address: `0x${string}`): Promise<LegacyClaimLook
   return response.json() as Promise<LegacyClaimLookupResult>;
 }
 
+function normalizeComparableAddress(address: string | null | undefined) {
+  return address?.toLowerCase() ?? null;
+}
+
+export function shouldInspectLegacyAdminClaim(params: {
+  adminAddress?: string | null;
+  connectedAddress?: string | null;
+  connectedClaimStatus?: LegacyClaimLookupResult["status"] | null;
+  isWrongChain: boolean;
+}) {
+  const connectedAddress = normalizeComparableAddress(params.connectedAddress);
+  const adminAddress = normalizeComparableAddress(params.adminAddress);
+
+  return Boolean(
+    !params.isWrongChain &&
+      connectedAddress &&
+      adminAddress &&
+      connectedAddress !== adminAddress &&
+      params.connectedClaimStatus === "not_eligible",
+  );
+}
+
+export function shouldSwitchToLegacyAdminWallet(params: {
+  activeWalletId?: string | null;
+  adminAddress?: string | null;
+  adminClaimStatus?: LegacyClaimLookupResult["status"] | null;
+  connectedAddress?: string | null;
+  isRestoring: boolean;
+}) {
+  const connectedAddress = normalizeComparableAddress(params.connectedAddress);
+  const adminAddress = normalizeComparableAddress(params.adminAddress);
+
+  return Boolean(
+    !params.isRestoring &&
+      isThirdwebInAppWalletId(params.activeWalletId) &&
+      connectedAddress &&
+      adminAddress &&
+      connectedAddress !== adminAddress &&
+      params.adminClaimStatus === "eligible",
+  );
+}
+
 export function useLegacyClaim() {
   const { address, chain, isConnected } = useAccount();
+  const activeWallet = useActiveWallet();
+  const setActiveWallet = useSetActiveWallet();
+  const { syncWalletToWagmi } = useThirdwebWagmiSync();
   const refreshWalletBalances = useRefreshWalletBalances();
   const [isSponsoredClaiming, setIsSponsoredClaiming] = useState(false);
+  const [isRestoringLegacyWallet, setIsRestoringLegacyWallet] = useState(false);
+  const legacyWalletRestoreAttemptRef = useRef<string | null>(null);
   const connectedAddress = address as `0x${string}` | undefined;
+  const legacyAdminAddress = activeWallet?.getAdminAccount?.()?.address as `0x${string}` | undefined;
   // CLAIM-3 (2026-05-21 testnet-readiness audit): if the wallet is on the wrong chain, the
   // scaffold-eth read calls below return undefined silently and the UI stalls on "Loading…"
   // with no actionable error. Detect the mismatch up-front and surface it as a typed flag so
@@ -48,6 +105,82 @@ export function useLegacyClaim() {
     enabled: !!connectedAddress && !isWrongChain,
     staleTime: 30_000,
   });
+  const shouldInspectAdminClaim = shouldInspectLegacyAdminClaim({
+    adminAddress: legacyAdminAddress,
+    connectedAddress,
+    connectedClaimStatus: claimQuery.data?.status,
+    isWrongChain,
+  });
+  const adminClaimQuery = useQuery({
+    queryKey: ["legacy-claim", "admin", legacyAdminAddress],
+    queryFn: () => fetchLegacyClaim(legacyAdminAddress as `0x${string}`),
+    enabled: shouldInspectAdminClaim,
+    staleTime: 30_000,
+  });
+  const shouldRestoreLegacyAdminWallet = shouldSwitchToLegacyAdminWallet({
+    activeWalletId: activeWallet?.id,
+    adminAddress: legacyAdminAddress,
+    adminClaimStatus: adminClaimQuery.data?.status,
+    connectedAddress,
+    isRestoring: isRestoringLegacyWallet,
+  });
+
+  useEffect(() => {
+    if (
+      !shouldRestoreLegacyAdminWallet ||
+      !thirdwebClient ||
+      !legacyAdminAddress ||
+      !activeWallet ||
+      !isThirdwebInAppWalletId(activeWallet.id)
+    ) {
+      if (!shouldRestoreLegacyAdminWallet) {
+        legacyWalletRestoreAttemptRef.current = null;
+      }
+      return;
+    }
+
+    const attemptKey = `${legacyAdminAddress.toLowerCase()}:${targetNetwork.id}`;
+    if (legacyWalletRestoreAttemptRef.current === attemptKey) {
+      return;
+    }
+
+    legacyWalletRestoreAttemptRef.current = attemptKey;
+    setIsRestoringLegacyWallet(true);
+
+    void (async () => {
+      try {
+        setStoredThirdwebSponsorshipMode(null);
+        const replacementWallet = createThirdwebInAppWallet(targetNetwork.id, {
+          forceEoa: true,
+        });
+
+        await replacementWallet.autoConnect({
+          chain: defineChain(targetNetwork.id),
+          client: thirdwebClient,
+        });
+
+        const replacementAddress = replacementWallet.getAccount()?.address;
+        if (replacementAddress?.toLowerCase() !== legacyAdminAddress.toLowerCase()) {
+          throw new Error("Restored legacy wallet does not match the eligible admin account.");
+        }
+
+        await syncWalletToWagmi(replacementWallet, targetNetwork.id, { reconnect: true });
+        await setActiveWallet(replacementWallet);
+      } catch (error) {
+        legacyWalletRestoreAttemptRef.current = null;
+        console.error("Failed to restore thirdweb legacy claim wallet:", error);
+      } finally {
+        setIsRestoringLegacyWallet(false);
+      }
+    })();
+  }, [
+    activeWallet,
+    legacyAdminAddress,
+    setActiveWallet,
+    shouldRestoreLegacyAdminWallet,
+    syncWalletToWagmi,
+    targetNetwork.id,
+  ]);
 
   const claimEntry = claimQuery.data?.status === "eligible" ? claimQuery.data : undefined;
   const allocation = useMemo(() => {
@@ -104,7 +237,9 @@ export function useLegacyClaim() {
   const { data: launchDistributionPoolInfo } = useDeployedContractInfo({
     contractName: "LaunchDistributionPool",
   });
-  const { canUseSponsoredSubmitCalls, executeSponsoredCalls } = useThirdwebSponsoredSubmitCalls();
+  const { canUseSponsoredSubmitCalls, executeSponsoredCalls } = useThirdwebSponsoredSubmitCalls({
+    allowInAppSponsorshipSync: false,
+  });
   const {
     canShowFreeTransactionAllowance,
     canSponsorTransactions,
@@ -117,6 +252,7 @@ export function useLegacyClaim() {
     nativeBalanceValue,
     nativeTokenSymbol,
   } = useGasBalanceStatus({
+    allowInAppSponsorshipSync: false,
     includeExternalSendCalls: true,
   });
 
@@ -209,13 +345,17 @@ export function useLegacyClaim() {
     error: claimQuery.error,
     isClaiming: isMining || isSponsoredClaiming,
     isConnected,
-    isLoading: claimQuery.isLoading,
+    isLoading: claimQuery.isLoading || (shouldInspectAdminClaim && adminClaimQuery.isLoading),
+    isRestoringLegacyWallet: isRestoringLegacyWallet || shouldRestoreLegacyAdminWallet,
     // CLAIM-3: callers can render a "switch network" prompt when this is true.
     isWrongChain,
     expectedChainId: targetNetwork.id,
     expectedChainName: targetNetwork.name,
     refetch: async () => {
       await claimQuery.refetch();
+      if (shouldInspectAdminClaim) {
+        await adminClaimQuery.refetch();
+      }
       await refetchOnChainState();
     },
     vested: (vestedRaw as bigint | undefined) ?? 0n,

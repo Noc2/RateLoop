@@ -51,6 +51,10 @@ type ExecuteContractCallBatchOptions = {
   suppressStatusToast?: boolean;
 };
 
+type ThirdwebSponsoredSubmitCallsOptions = {
+  allowInAppSponsorshipSync?: boolean;
+};
+
 export function shouldPreferSponsoredBatchCalls(params: {
   canUseFreeTransactions: boolean;
   chainId: number | undefined;
@@ -186,7 +190,8 @@ export function shouldIgnorePostTransactionFallbackWalletSyncError(callStatus: s
   return callStatus === "success";
 }
 
-export function useThirdwebSponsoredSubmitCalls() {
+export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmitCallsOptions = {}) {
+  const allowInAppSponsorshipSync = options.allowInAppSponsorshipSync ?? true;
   const queryClient = useQueryClient();
   const activeWallet = useActiveWallet();
   const activeWalletId = activeWallet?.id;
@@ -195,7 +200,7 @@ export function useThirdwebSponsoredSubmitCalls() {
   const { syncWalletToWagmi } = useThirdwebWagmiSync();
   const statusToast = useTransactionStatusToast();
   const { address, chainId: wagmiChainId, connector } = useAccount();
-  const freeTransactionAllowance = useFreeTransactionAllowance();
+  const freeTransactionAllowance = useFreeTransactionAllowance({ allowInAppSponsorshipSync });
   const { executionMode, hasSendCalls, isThirdwebInApp, supportsAtomicBatchCalls } = useWalletExecutionCapabilities();
   const chainId = resolveWalletExecutionChainId(wagmiChainId, activeWalletChain?.id);
   const publicClient = usePublicClient({ chainId });
