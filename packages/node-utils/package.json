@@ -10,6 +10,25 @@
     "./keystore": "./src/keystore.ts",
     "./profileSelfReport": "./src/profileSelfReport.ts"
   },
+  "typesVersions": {
+    "*": {
+      "contentModeration": [
+        "src/contentModeration.ts"
+      ],
+      "correlationScoring": [
+        "src/correlationScoring.ts"
+      ],
+      "json": [
+        "src/json.ts"
+      ],
+      "keystore": [
+        "src/keystore.ts"
+      ],
+      "profileSelfReport": [
+        "src/profileSelfReport.ts"
+      ]
+    }
+  },
   "scripts": {
     "test": "node ../../scripts/run-node-tests.mjs src",
     "check-types": "tsc --noEmit"
