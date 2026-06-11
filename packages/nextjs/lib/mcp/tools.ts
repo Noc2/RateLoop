@@ -4,6 +4,7 @@ import { ROUND_STATE, SCORE_SPREAD_POLICY } from "@rateloop/contracts/protocol";
 import { packVoteRoundContext } from "@rateloop/contracts/votingCore";
 import { getProfileSelfReportTaxonomy } from "@rateloop/node-utils/profileSelfReport";
 import { createHash } from "crypto";
+import { and, eq } from "drizzle-orm";
 import {
   type Abi,
   type Address,
@@ -97,7 +98,23 @@ import {
   normalizeImageUploadChallengeInput,
 } from "~~/lib/auth/imageUploadChallenge";
 import { getMaxImageUploadSizeBytes, isSupportedImageUploadMimeType } from "~~/lib/auth/imageUploadChallenge.shared";
-import { issueSignedActionChallenge } from "~~/lib/auth/signedActions";
+import {
+  CONFIDENTIALITY_TERMS_ACTION,
+  CONFIDENTIALITY_TERMS_CHALLENGE_TITLE,
+  CONFIDENTIALITY_TERMS_VERSION,
+  buildConfidentialityTermsChallengeMessage,
+  hasConfidentialityTermsAcceptance,
+  hashConfidentialityTermsPayload,
+  normalizeConfidentialityTermsInput,
+  recordConfidentialityTermsAcceptance,
+} from "~~/lib/confidentiality/context";
+import {
+  ensureSignedActionChallengeTable,
+  issueSignedActionChallenge,
+  mapSignedActionError,
+  verifyAndConsumeSignedActionChallenge,
+} from "~~/lib/auth/signedActions";
+import { getSignedReadSessionCookie, issueSignedReadSession } from "~~/lib/auth/signedReadSessions";
 import { verifySignedActionChallenge } from "~~/lib/auth/signedRouteHelpers";
 import {
   BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG,
@@ -105,6 +122,8 @@ import {
   getBountyEligibilityCredentialMask,
 } from "~~/lib/bountyEligibility";
 import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
+import { db } from "~~/lib/db";
+import { questionDetails, questionImageAttachments } from "~~/lib/db/schema";
 import { getPrimaryServerTargetNetwork, getServerRpcOverrides, getServerTargetNetworkById } from "~~/lib/env/server";
 import { buildContentFeedbackRoundContext, listContentFeedback } from "~~/lib/feedback/contentFeedback";
 import { MCP_SCOPES, type McpAgentAuth, type McpScope } from "~~/lib/mcp/auth";
@@ -549,7 +568,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       readOnlyHint: false,
     },
     description:
-      "Acknowledge confidentiality terms for gated RateLoop-hosted context before fetching private rating context. Until backend acceptance persistence is enabled, gated content returns a pending_backend status.",
+      "Acknowledge confidentiality terms for gated RateLoop-hosted context before fetching private rating context. First call returns a wallet-signing challenge; second call with challengeId and signature records acceptance and returns a signed read session.",
     inputSchema: agentAcceptConfidentialityTermsInputSchema,
     name: "rateloop_accept_confidentiality_terms",
     outputSchema: agentAcceptConfidentialityTermsOutputSchema,
@@ -1395,8 +1414,173 @@ function contentContextAccess(content: PonderContentItem): "public" | "gated" {
   return content.contextAccess === "gated" || content.contextVisibility === "gated" ? "gated" : "public";
 }
 
-function formatRatingContent(content: PonderContentItem) {
+function normalizeOptionalBytes32String(value: unknown): `0x${string}` | undefined {
+  if (typeof value === "string" && /^0x[0-9a-fA-F]{64}$/.test(value)) {
+    return value.toLowerCase() as `0x${string}`;
+  }
+  return undefined;
+}
+
+function buildConfidentialityTermsInput(params: {
+  content: PonderContentItem;
+  contentId: string;
+  termsVersion?: string;
+  walletAddress: Address;
+}) {
+  const normalized = normalizeConfidentialityTermsInput({
+    address: params.walletAddress,
+    contentHash: normalizeOptionalBytes32String(params.content.contentHash),
+    contentId: params.contentId,
+    detailsHash: normalizeOptionalBytes32String(params.content.detailsHash),
+    questionMetadataHash: normalizeOptionalBytes32String(params.content.questionMetadataHash),
+    termsVersion: params.termsVersion,
+  });
+
+  if (!normalized.ok) {
+    throw new McpToolError(normalized.error);
+  }
+
+  return normalized.payload;
+}
+
+function gatedContextFetchUrl(baseUrl: string, walletAddress: Address) {
+  const url = new URL(baseUrl);
+  url.searchParams.set("address", walletAddress);
+  return url.toString();
+}
+
+async function listAuthenticatedGatedContextUrls(params: {
+  contentId: string;
+  requestUrl?: string;
+  walletAddress: Address;
+}) {
+  const origin = toolOrigin(params.requestUrl);
+
+  try {
+    const [detailsRows, imageRows] = await Promise.all([
+      db
+        .select({ id: questionDetails.id, sha256: questionDetails.sha256 })
+        .from(questionDetails)
+        .where(and(eq(questionDetails.contentId, params.contentId), eq(questionDetails.status, "approved"))),
+      db
+        .select({ id: questionImageAttachments.id, sha256: questionImageAttachments.sha256 })
+        .from(questionImageAttachments)
+        .where(
+          and(eq(questionImageAttachments.contentId, params.contentId), eq(questionImageAttachments.status, "approved")),
+        ),
+    ]);
+
+    return [
+      ...detailsRows
+        .sort((left, right) => left.id.localeCompare(right.id))
+        .map(row => ({
+          kind: "details" as const,
+          resourceId: row.id,
+          sha256: row.sha256 ? `0x${row.sha256}` : null,
+          url: gatedContextFetchUrl(`${origin}/api/attachments/details/${row.id}`, params.walletAddress),
+        })),
+      ...imageRows
+        .sort((left, right) => left.id.localeCompare(right.id))
+        .map(row => {
+          const hash = row.sha256 ? `0x${row.sha256}` : null;
+          const url = gatedContextFetchUrl(`${origin}/api/attachments/images/${row.id}.webp`, params.walletAddress);
+          return {
+            kind: "image" as const,
+            resourceId: row.id,
+            sha256: hash,
+            url: hash ? `${url}#sha256=${hash}` : url,
+          };
+        }),
+    ];
+  } catch (error) {
+    console.warn("[mcp] gated context attachment lookup unavailable", error);
+    return [];
+  }
+}
+
+async function issueGatedContextReadSession(walletAddress: `0x${string}`) {
+  const session = await issueSignedReadSession(walletAddress, "gated_context");
+  const cookie = getSignedReadSessionCookie("gated_context", session);
+  const cookieHeader = `${cookie.name}=${cookie.value}`;
+
+  return {
+    cookieHeader,
+    cookieName: cookie.name,
+    cookieValue: cookie.value,
+    expiresAt: cookie.expires.toISOString(),
+    httpOnly: cookie.httpOnly,
+    path: cookie.path,
+    sameSite: cookie.sameSite,
+    scope: "gated_context",
+    secure: cookie.secure,
+  };
+}
+
+async function buildGatedContextFetchInfo(params: {
+  contentId: string;
+  requestUrl?: string;
+  signedReadSession?: Awaited<ReturnType<typeof issueGatedContextReadSession>> | null;
+  walletAddress: Address;
+}) {
+  const urls = await listAuthenticatedGatedContextUrls({
+    contentId: params.contentId,
+    requestUrl: params.requestUrl,
+    walletAddress: params.walletAddress,
+  });
+
+  return {
+    delivery: "authenticated_fetch_urls",
+    method: "GET",
+    request: {
+      cookieHeader: params.signedReadSession?.cookieHeader ?? null,
+      cookieHeaderFrom: params.signedReadSession ? null : "rateloop_accept_confidentiality_terms.signedReadSession",
+      query: { address: params.walletAddress },
+    },
+    signedReadSessionRequired: true,
+    urls,
+  };
+}
+
+async function buildRatingGatedContextInfo(params: {
+  content: PonderContentItem;
+  contentId: string;
+  requestUrl?: string;
+  walletAddress: Address;
+}) {
+  const termsPayload = buildConfidentialityTermsInput(params);
+  let termsAccepted = false;
+  try {
+    termsAccepted = await hasConfidentialityTermsAcceptance({
+      contentId: params.contentId,
+      termsVersion: termsPayload.termsVersion,
+      walletAddress: termsPayload.normalizedAddress,
+    });
+  } catch (error) {
+    console.warn("[mcp] confidentiality terms acceptance check unavailable", error);
+  }
+
+  return {
+    acceptTermsTool: "rateloop_accept_confidentiality_terms",
+    fetch: await buildGatedContextFetchInfo({
+      contentId: params.contentId,
+      requestUrl: params.requestUrl,
+      walletAddress: params.walletAddress,
+    }),
+    signatureRequired: true,
+    status: termsAccepted ? "terms_accepted" : "terms_required",
+    termsAccepted,
+    termsDocHash: termsPayload.termsDocHash,
+    termsUri: termsPayload.termsUri,
+    termsVersion: termsPayload.termsVersion,
+  };
+}
+
+async function formatRatingContent(
+  content: PonderContentItem,
+  params: { requestUrl?: string; walletAddress: Address },
+) {
   const contextAccess = contentContextAccess(content);
+  const contentId = content.id.toString();
   return {
     categoryId: content.categoryId,
     confidentiality: content.confidentiality ?? null,
@@ -1405,11 +1589,12 @@ function formatRatingContent(content: PonderContentItem) {
     description: content.description,
     gatedContext:
       contextAccess === "gated"
-        ? {
-            acceptTermsTool: "rateloop_accept_confidentiality_terms",
-            fetchDelivery: "authenticated_fetch_urls",
-            status: "terms_required",
-          }
+        ? await buildRatingGatedContextInfo({
+            content,
+            contentId,
+            requestUrl: params.requestUrl,
+            walletAddress: params.walletAddress,
+          })
         : null,
     id: content.id,
     publicUrl: ratingPublicUrl(content.id),
@@ -1418,14 +1603,17 @@ function formatRatingContent(content: PonderContentItem) {
   };
 }
 
-async function acceptConfidentialityTerms(args: JsonObject, agent?: McpAgentAuth) {
+async function acceptConfidentialityTerms(args: JsonObject, agent?: McpAgentAuth, requestUrl?: string) {
   const dependencies = getMcpToolDependencies();
   const walletAddress = parseRatingWalletAddress(args, agent);
   const contentId = parseRatingContentId(args.contentId);
   const termsVersion =
-    typeof args.termsVersion === "string" && args.termsVersion.trim() ? args.termsVersion.trim() : "2026-06";
+    typeof args.termsVersion === "string" && args.termsVersion.trim()
+      ? args.termsVersion.trim()
+      : CONFIDENTIALITY_TERMS_VERSION;
   const contentResponse = await dependencies.getContentById(contentId.toString());
-  const contextAccess = contentContextAccess(contentResponse.content);
+  const content = contentResponse.content;
+  const contextAccess = contentContextAccess(content);
 
   if (contextAccess !== "gated") {
     return {
@@ -1439,14 +1627,105 @@ async function acceptConfidentialityTerms(args: JsonObject, agent?: McpAgentAuth
     };
   }
 
-  return {
-    accepted: false,
+  const payload = buildConfidentialityTermsInput({
+    content,
     contentId: contentId.toString(),
-    contextAccess: "gated",
-    nextAction:
-      "Backend persistence for wallet-signed confidentiality acceptance is not enabled yet; use the RateLoop app gate when available, then call rateloop_get_rating_context again.",
-    status: "pending_backend",
     termsVersion,
+    walletAddress,
+  });
+  const payloadHash = hashConfidentialityTermsPayload(payload);
+  const existingAccepted = await hasConfidentialityTermsAcceptance({
+    contentId: payload.contentId,
+    termsVersion: payload.termsVersion,
+    walletAddress: payload.normalizedAddress,
+  });
+  const challengeId = readOptionalStringField(args, "challengeId");
+  const signature = readOptionalStringField(args, "signature") as `0x${string}`;
+  if (!challengeId || !signature) {
+    if (challengeId || signature) {
+      throw new McpToolError(
+        "challengeId and signature must be supplied together. Call rateloop_accept_confidentiality_terms without them to create a challenge.",
+      );
+    }
+    const challenge = await issueSignedActionChallenge({
+      action: CONFIDENTIALITY_TERMS_ACTION,
+      payloadHash,
+      title: CONFIDENTIALITY_TERMS_CHALLENGE_TITLE,
+      walletAddress: payload.normalizedAddress,
+    });
+    return {
+      accepted: existingAccepted,
+      challengeId: challenge.challengeId,
+      contentId: payload.contentId,
+      contextAccess: "gated",
+      expiresAt: challenge.expiresAt,
+      message: challenge.message,
+      nextAction:
+        "Sign message with the rating wallet, then call rateloop_accept_confidentiality_terms again with challengeId and signature to unlock authenticated gated context fetch URLs.",
+      signatureRequired: true,
+      status: "signature_required",
+      termsDocHash: payload.termsDocHash,
+      termsUri: payload.termsUri,
+      termsVersion: payload.termsVersion,
+      wallet: { address: walletAddress },
+    };
+  }
+
+  let nonce = "";
+  await ensureSignedActionChallengeTable();
+  try {
+    await db.transaction(async tx => {
+      const challenge = await verifyAndConsumeSignedActionChallenge(tx, {
+        action: CONFIDENTIALITY_TERMS_ACTION,
+        buildMessage: ({ nonce: challengeNonce, expiresAt }) =>
+          buildConfidentialityTermsChallengeMessage({
+            address: payload.normalizedAddress,
+            expiresAt,
+            nonce: challengeNonce,
+            payloadHash,
+          }),
+        challengeId,
+        payloadHash,
+        signature,
+        walletAddress: payload.normalizedAddress,
+      });
+      nonce = challenge.nonce;
+    });
+  } catch (error) {
+    const mapped = mapSignedActionError(error);
+    if (mapped) {
+      throw new McpToolError(mapped.error, mapped.status);
+    }
+    throw error;
+  }
+
+  await recordConfidentialityTermsAcceptance({
+    nonce,
+    payload,
+    signature,
+  });
+  const signedReadSession = await issueGatedContextReadSession(payload.normalizedAddress);
+
+  return {
+    accepted: true,
+    contentId: payload.contentId,
+    contextAccess: "gated",
+    gatedContext: {
+      ...(await buildGatedContextFetchInfo({
+        contentId: payload.contentId,
+        requestUrl,
+        signedReadSession,
+        walletAddress,
+      })),
+      status: "ready",
+    },
+    nextAction:
+      "Use signedReadSession.cookieHeader when fetching the returned gatedContext.urls, or call rateloop_get_rating_context for the latest rating runtime.",
+    signedReadSession,
+    status: "accepted",
+    termsDocHash: payload.termsDocHash,
+    termsUri: payload.termsUri,
+    termsVersion: payload.termsVersion,
     wallet: { address: walletAddress },
   };
 }
@@ -1505,7 +1784,7 @@ function buildOpenRoundTransactionPlan(context: RatingChainContext, contentId: b
   };
 }
 
-async function buildRatingContext(args: JsonObject, agent?: McpAgentAuth) {
+async function buildRatingContext(args: JsonObject, agent?: McpAgentAuth, requestUrl?: string) {
   const dependencies = getMcpToolDependencies();
   const walletAddress = parseRatingWalletAddress(args, agent);
   const contentId = parseRatingContentId(args.contentId);
@@ -1525,7 +1804,7 @@ async function buildRatingContext(args: JsonObject, agent?: McpAgentAuth) {
 
   return {
     chainId: context.chainId,
-    content: formatRatingContent(content),
+    content: await formatRatingContent(content, { requestUrl, walletAddress }),
     contracts: formatRatingContracts(context),
     currentAllowance: currentAllowance.toString(),
     localCommitInstructions: {
@@ -3187,10 +3466,10 @@ export async function callPublicRateLoopMcpTool(params: {
       return buildPublicQuestionResult(args);
 
     case "rateloop_get_rating_context":
-      return buildRatingContext(args);
+      return buildRatingContext(args, undefined, params.requestUrl);
 
     case "rateloop_accept_confidentiality_terms":
-      return acceptConfidentialityTerms(args);
+      return acceptConfidentialityTerms(args, undefined, params.requestUrl);
 
     case "rateloop_prepare_rating_transactions":
       return prepareRatingTransactions(args);
@@ -3515,10 +3794,10 @@ export async function callRateLoopMcpTool(params: {
       return buildQuestionResult(args, params.agent);
 
     case "rateloop_get_rating_context":
-      return buildRatingContext(args, params.agent);
+      return buildRatingContext(args, params.agent, params.requestUrl);
 
     case "rateloop_accept_confidentiality_terms":
-      return acceptConfidentialityTerms(args, params.agent);
+      return acceptConfidentialityTerms(args, params.agent, params.requestUrl);
 
     case "rateloop_prepare_rating_transactions":
       return prepareRatingTransactions(args, params.agent);

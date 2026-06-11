@@ -5,13 +5,14 @@ import deployedContracts from "@rateloop/contracts/deployedContracts";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { afterEach, beforeEach, mock, test } from "node:test";
-import { encodeAbiParameters, encodeEventTopics } from "viem";
+import { encodeAbiParameters, encodeEventTopics, verifyMessage } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import {
   enqueueAgentCallbackEvent,
   publicWebhookAgentId,
   upsertAgentCallbackSubscription,
 } from "~~/lib/agent-callbacks";
+import { __setSignedActionVerificationClientForTests } from "~~/lib/auth/signedActions";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testMemory";
 import { __setUrlSafetyDnsResolversForTests } from "~~/utils/urlSafety";
@@ -178,6 +179,82 @@ async function insertBudgetReservation(params: { agentId?: string; operationKey?
   });
 }
 
+async function insertGatedContextAttachments(contentId = RATING_CONTENT_ID) {
+  const now = new Date("2026-06-11T10:00:00.000Z");
+  await dbClient.execute({
+    sql: `
+      INSERT INTO question_details (
+        id,
+        uploader_kind,
+        owner_wallet_address,
+        agent_id,
+        client_request_id,
+        content_id,
+        size_bytes,
+        sha256,
+        normalized_text,
+        status,
+        moderation_status,
+        created_at,
+        updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `,
+    args: [
+      "det_mcpcontextdetail01",
+      "wallet",
+      AGENT.walletAddress,
+      null,
+      "mcp-gated-context",
+      contentId,
+      32,
+      "7".repeat(64),
+      "Private hosted details",
+      "approved",
+      "approved",
+      now,
+      now,
+    ],
+  });
+  await dbClient.execute({
+    sql: `
+      INSERT INTO question_image_attachments (
+        id,
+        uploader_kind,
+        owner_wallet_address,
+        agent_id,
+        client_request_id,
+        content_id,
+        original_filename,
+        mime_type,
+        size_bytes,
+        sha256,
+        status,
+        moderation_status,
+        created_at,
+        updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `,
+    args: [
+      "att_mcpcontextimage01",
+      "wallet",
+      AGENT.walletAddress,
+      null,
+      "mcp-gated-context",
+      contentId,
+      "mockup.webp",
+      "image/webp",
+      64,
+      "8".repeat(64),
+      "approved",
+      "approved",
+      now,
+      now,
+    ],
+  });
+}
+
 function quoteOverrides() {
   return {
     preflightX402QuestionSubmission: async () => ({
@@ -292,6 +369,7 @@ function ratingCommitReceiptLog(address = RATING_VOTING_ENGINE_ADDRESS) {
 
 beforeEach(() => {
   __setDatabaseResourcesForTests(createMemoryDatabaseResources());
+  __setSignedActionVerificationClientForTests({ verifyMessage });
   __setUrlSafetyDnsResolversForTests({
     resolve4: async () => ["93.184.216.34"],
     resolve6: async () => [],
@@ -301,6 +379,7 @@ beforeEach(() => {
 afterEach(() => {
   mock.reset();
   __setDatabaseResourcesForTests(null);
+  __setSignedActionVerificationClientForTests(null);
   __setUrlSafetyDnsResolversForTests(null);
   __setMcpToolTestOverridesForTests(null);
 });
@@ -793,6 +872,7 @@ test("managed operation-key lookups still allow same-agent managed records", asy
 });
 
 test("rateloop_get_rating_context returns local encrypted commit instructions and open-round plan", async () => {
+  await insertGatedContextAttachments();
   __setMcpToolTestOverridesForTests({
     getContentById: async () =>
       ratingContent({
@@ -821,7 +901,15 @@ test("rateloop_get_rating_context returns local encrypted commit instructions an
   const body = result as {
     content: {
       contextAccess: string;
-      gatedContext: { acceptTermsTool: string; status: string } | null;
+      gatedContext: {
+        acceptTermsTool: string;
+        fetch: {
+          request: { cookieHeader: string | null; cookieHeaderFrom: string | null; query: { address: string } };
+          urls: Array<{ kind: string; resourceId: string; url: string }>;
+        };
+        status: string;
+        termsAccepted: boolean;
+      } | null;
     };
     openRoundTransactionPlan: { calls: Array<{ data: string; functionName: string; phase: string }> };
     privacy: { inputMode: string };
@@ -833,6 +921,20 @@ test("rateloop_get_rating_context returns local encrypted commit instructions an
   assert.equal(body.content.contextAccess, "gated");
   assert.equal(body.content.gatedContext?.acceptTermsTool, "rateloop_accept_confidentiality_terms");
   assert.equal(body.content.gatedContext?.status, "terms_required");
+  assert.equal(body.content.gatedContext?.termsAccepted, false);
+  assert.equal(body.content.gatedContext?.fetch.request.cookieHeader, null);
+  assert.equal(
+    body.content.gatedContext?.fetch.request.cookieHeaderFrom,
+    "rateloop_accept_confidentiality_terms.signedReadSession",
+  );
+  assert.deepEqual(
+    body.content.gatedContext?.fetch.urls.map(url => `${url.kind}:${url.resourceId}`),
+    ["details:det_mcpcontextdetail01", "image:att_mcpcontextimage01"],
+  );
+  assert.match(
+    body.content.gatedContext?.fetch.urls[0]?.url ?? "",
+    /^https:\/\/www\.rateloop\.ai\/api\/attachments\/details\/det_mcpcontextdetail01\?address=0x00000000000000000000000000000000000000aa$/,
+  );
   assert.equal(body.ratingInputMode, "local_encrypted_commit");
   assert.equal(body.privacy.inputMode, "local_encrypted_commit");
   assert.equal(body.openRoundTransactionPlan.calls[0]?.functionName, "openRound");
@@ -840,34 +942,118 @@ test("rateloop_get_rating_context returns local encrypted commit instructions an
   assert.match(body.openRoundTransactionPlan.calls[0]?.data ?? "", /^0x/);
 });
 
-test("rateloop_accept_confidentiality_terms exposes backend-pending gated acceptance", async () => {
+test("rateloop_accept_confidentiality_terms records signed acceptance and returns gated fetch auth", async () => {
+  const account = privateKeyToAccount(`0x${"3".repeat(64)}`);
+  await insertGatedContextAttachments();
   __setMcpToolTestOverridesForTests({
     getContentById: async () =>
       ratingContent({
+        contentHash: `0x${"1".repeat(64)}`,
         contextAccess: "gated",
         contextVisibility: "gated",
+        detailsHash: `0x${"2".repeat(64)}`,
+        questionMetadataHash: `0x${"4".repeat(64)}`,
       }),
+    readRatingAllowance: async () => 0n,
+    resolveRoundVoteRuntime: async () => ratingRuntime(),
   });
 
-  const result = await callRateLoopMcpTool({
-    agent: AGENT,
+  const challenge = (await callPublicRateLoopMcpTool({
     arguments: {
       contentId: RATING_CONTENT_ID,
       termsVersion: "2026-06",
+      walletAddress: account.address,
     },
     name: "rateloop_accept_confidentiality_terms",
+  })) as {
+    accepted: boolean;
+    challengeId: string;
+    contextAccess: string;
+    message: string;
+    status: string;
+    wallet: { address: string };
+  };
+  const signature = await account.signMessage({ message: challenge.message });
+
+  assert.equal(challenge.accepted, false);
+  assert.equal(challenge.contextAccess, "gated");
+  assert.equal(challenge.status, "signature_required");
+  assert.equal(challenge.wallet.address, account.address);
+
+  const result = await callPublicRateLoopMcpTool({
+    arguments: {
+      challengeId: challenge.challengeId,
+      contentId: RATING_CONTENT_ID,
+      signature,
+      termsVersion: "2026-06",
+      walletAddress: account.address,
+    },
+    name: "rateloop_accept_confidentiality_terms",
+    requestUrl: "https://www.rateloop.ai/api/mcp/public",
   });
   const body = result as {
     accepted: boolean;
-    contextAccess: string;
+    gatedContext: {
+      request: { cookieHeader: string | null; query: { address: string } };
+      status: string;
+      urls: Array<{ kind: string; resourceId: string; url: string }>;
+    };
+    signedReadSession: { cookieHeader: string; cookieName: string; cookieValue: string; expiresAt: string };
     status: string;
     wallet: { address: string };
   };
 
-  assert.equal(body.accepted, false);
-  assert.equal(body.contextAccess, "gated");
-  assert.equal(body.status, "pending_backend");
-  assert.equal(body.wallet.address, AGENT.walletAddress);
+  assert.equal(body.accepted, true);
+  assert.equal(body.status, "accepted");
+  assert.equal(body.wallet.address, account.address);
+  assert.equal(body.signedReadSession.cookieName, "rateloop_gated_context_read_session");
+  assert.match(body.signedReadSession.cookieValue, /^[a-f0-9]{64}$/);
+  assert.equal(body.gatedContext.status, "ready");
+  assert.equal(body.gatedContext.request.cookieHeader, body.signedReadSession.cookieHeader);
+  assert.equal(body.gatedContext.request.query.address, account.address);
+  assert.deepEqual(
+    body.gatedContext.urls.map(url => `${url.kind}:${url.resourceId}`),
+    ["details:det_mcpcontextdetail01", "image:att_mcpcontextimage01"],
+  );
+  assert.match(
+    body.gatedContext.urls[1]?.url ?? "",
+    /^https:\/\/www\.rateloop\.ai\/api\/attachments\/images\/att_mcpcontextimage01\.webp\?address=0x[a-fA-F0-9]{40}#sha256=0x8888/,
+  );
+
+  const rows = await dbClient.execute(
+    "SELECT wallet_address, content_id, terms_version FROM confidentiality_terms_acceptances",
+  );
+  assert.deepEqual(rows.rows, [
+    {
+      content_id: RATING_CONTENT_ID,
+      terms_version: "2026-06",
+      wallet_address: account.address.toLowerCase(),
+    },
+  ]);
+
+  const context = (await callPublicRateLoopMcpTool({
+    arguments: {
+      contentId: RATING_CONTENT_ID,
+      walletAddress: account.address,
+    },
+    name: "rateloop_get_rating_context",
+    requestUrl: "https://www.rateloop.ai/api/mcp/public",
+  })) as {
+    content: {
+      gatedContext: {
+        fetch: { request: { cookieHeader: string | null; cookieHeaderFrom: string | null } };
+        status: string;
+        termsAccepted: boolean;
+      };
+    };
+  };
+  assert.equal(context.content.gatedContext.termsAccepted, true);
+  assert.equal(context.content.gatedContext.status, "terms_accepted");
+  assert.equal(context.content.gatedContext.fetch.request.cookieHeader, null);
+  assert.equal(
+    context.content.gatedContext.fetch.request.cookieHeaderFrom,
+    "rateloop_accept_confidentiality_terms.signedReadSession",
+  );
 });
 
 test("rateloop_get_result redacts submitter-authored text for gated private context", async () => {

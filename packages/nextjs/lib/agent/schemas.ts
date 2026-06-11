@@ -789,9 +789,14 @@ export const agentAcceptConfidentialityTermsInputSchema = {
       description: "RateLoop gated content id whose context terms are being accepted.",
       type: ["integer", "string"],
     },
+    challengeId: {
+      description:
+        "Server-issued confidentiality terms challenge id returned by the first rateloop_accept_confidentiality_terms call.",
+      type: "string",
+    },
     signature: {
       description:
-        "Wallet signature over the server-issued confidentiality terms challenge, once backend acceptance routes are enabled.",
+        "Wallet signature over the server-issued confidentiality terms challenge. Omit signature and challengeId on the first call to receive a challenge.",
       type: "string",
     },
     termsVersion: {
@@ -809,13 +814,21 @@ export const agentAcceptConfidentialityTermsOutputSchema = {
   additionalProperties: true,
   properties: {
     accepted: { type: "boolean" },
+    challengeId: { type: ["string", "null"] },
     contentId: { type: "string" },
     contextAccess: { enum: ["public", "gated"], type: "string" },
+    expiresAt: { type: ["string", "null"] },
+    gatedContext: { type: ["object", "null"] },
+    message: { type: ["string", "null"] },
     nextAction: { type: "string" },
+    signatureRequired: { type: "boolean" },
+    signedReadSession: { type: ["object", "null"] },
     status: {
-      enum: ["accepted", "not_required", "pending_backend"],
+      enum: ["accepted", "not_required", "signature_required"],
       type: "string",
     },
+    termsDocHash: { type: "string" },
+    termsUri: { type: "string" },
     termsVersion: { type: "string" },
     wallet: { type: "object" },
   },

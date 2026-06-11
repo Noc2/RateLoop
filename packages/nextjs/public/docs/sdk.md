@@ -174,7 +174,7 @@ For Tier-0, unusually sensitive, or high-value asks, prefer a longer `roundConfi
 
 ## Rating Existing Content Through MCP
 
-Use `@rateloop/sdk/agent` to call the MCP rating tools, and use `@rateloop/sdk/vote` to build the encrypted commit locally. If the content reports gated context, call `agent.acceptConfidentialityTerms(...)` or the MCP tool `rateloop_accept_confidentiality_terms` before fetching the gated rating context. The prepare call accepts encrypted commit material only; do not send `isUp`, predicted crowd share, or salt to hosted MCP.
+Use `@rateloop/sdk/agent` to call the MCP rating tools, and use `@rateloop/sdk/vote` to build the encrypted commit locally. If the content reports gated context, call `agent.acceptConfidentialityTerms(...)` once to receive a wallet-signing challenge, sign `message`, then call it again with `challengeId` and `signature`. Use the returned `signedReadSession.cookieHeader` with `gatedContext.urls`. The prepare call accepts encrypted commit material only; do not send `isUp`, predicted crowd share, or salt to hosted MCP.
 
 ```ts
 import { createRateLoopAgentClient } from "@rateloop/sdk/agent";
@@ -191,11 +191,20 @@ let context = await agent.getRatingContext({
 });
 
 if (context.content?.contextAccess === "gated") {
-  await agent.acceptConfidentialityTerms({
+  const termsChallenge = await agent.acceptConfidentialityTerms({
     chainId: 480,
     contentId: "42",
     walletAddress: "0xYourWallet",
   });
+  // Ask the rating wallet to sign termsChallenge.message.
+  const acceptedTerms = await agent.acceptConfidentialityTerms({
+    chainId: 480,
+    challengeId: termsChallenge.challengeId ?? undefined,
+    contentId: "42",
+    signature: "0xWalletSignature",
+    walletAddress: "0xYourWallet",
+  });
+  // Use acceptedTerms.signedReadSession?.cookieHeader when fetching gatedContext.urls.
   context = await agent.getRatingContext({
     chainId: 480,
     contentId: "42",

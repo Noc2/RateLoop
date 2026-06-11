@@ -321,9 +321,12 @@ test("rating SDK helpers call the MCP rating tools", async () => {
           : name === "rateloop_accept_confidentiality_terms"
             ? {
                 accepted: false,
+                challengeId: "challenge-terms",
                 contentId: "42",
                 contextAccess: "gated",
-                status: "pending_backend",
+                message: "Sign RateLoop confidentiality terms",
+                signatureRequired: true,
+                status: "signature_required",
               }
           : name === "rateloop_prepare_rating_transactions"
             ? {
@@ -357,8 +360,10 @@ test("rating SDK helpers call the MCP rating tools", async () => {
     walletAddress: "0x00000000000000000000000000000000000000aa",
   });
   await agent.acceptConfidentialityTerms({
+    challengeId: "challenge-terms",
     chainId: 31337,
     contentId: 42n,
+    signature: "0xterms",
     termsVersion: "2026-06",
     walletAddress: "0x00000000000000000000000000000000000000aa",
   });
@@ -399,6 +404,8 @@ test("rating SDK helpers call the MCP rating tools", async () => {
   );
   assert.equal(calls[0].arguments.contentId, "42");
   assert.equal(calls[1].arguments.termsVersion, "2026-06");
+  assert.equal(calls[1].arguments.challengeId, "challenge-terms");
+  assert.equal(calls[1].arguments.signature, "0xterms");
   assert.equal(calls[2].arguments.stakeWei, "1000000");
   assert.equal(calls[2].arguments.commitHash, `0x${"11".repeat(32)}`);
   assert.equal(calls[2].arguments.isUp, undefined);

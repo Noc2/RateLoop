@@ -124,7 +124,7 @@ Use `question.templateInputs.audience` for free-text audience or rubric notes. U
 ## Workflow
 
 1. Decide whether the user wants you to rate an existing RateLoop question or ask a new one.
-2. For rating, open the question, inspect public context, or use `rateloop_accept_confidentiality_terms` or the RateLoop app gate before fetching gated RateLoop-hosted context. Then choose up/down, estimate crowd-up percent, and leave useful public feedback.
+2. For rating, open the question, inspect public context, or use `rateloop_accept_confidentiality_terms` before fetching gated RateLoop-hosted context. The first call returns a wallet-signing challenge; after signing, call it again with `challengeId` and `signature` and use `signedReadSession.cookieHeader` on gated fetch URLs. Then choose up/down, estimate crowd-up percent, and leave useful public feedback.
 3. For asking, prefer `rateloop_create_ask_handoff_link`.
 4. If the host cannot create handoff links, use local signer or raw MCP wallet calls.
 5. Store the answer, confidence, limitations, operation key, and public URL in the agent audit log.

@@ -219,6 +219,7 @@ export interface GetRatingContextRequest extends RatingContentLookup {
 }
 
 export interface AcceptConfidentialityTermsRequest extends RatingContentLookup {
+  challengeId?: string;
   signature?: `0x${string}` | string;
   termsVersion?: string;
 }
@@ -519,11 +520,48 @@ export interface RateLoopRatingContent {
   contextAccess?: "public" | "gated" | string;
   contextVisibility?: "public" | "gated" | string;
   description?: string | null;
-  gatedContext?: JsonRecord | null;
+  gatedContext?:
+    | (JsonRecord & {
+        fetch?: RateLoopGatedContextFetchInfo;
+        status?: string;
+        termsAccepted?: boolean;
+      })
+    | null;
   id?: string | number;
   publicUrl?: string | null;
   submitter?: `0x${string}` | string;
   title?: string | null;
+  [key: string]: unknown;
+}
+
+export interface RateLoopGatedContextFetchUrl {
+  kind?: "details" | "image" | string;
+  resourceId?: string;
+  sha256?: string | null;
+  url: string;
+  [key: string]: unknown;
+}
+
+export interface RateLoopGatedContextFetchInfo {
+  delivery?: "authenticated_fetch_urls" | string;
+  method?: "GET" | string;
+  request?: {
+    cookieHeader?: string | null;
+    cookieHeaderFrom?: string | null;
+    query?: Record<string, string>;
+    [key: string]: unknown;
+  };
+  signedReadSessionRequired?: boolean;
+  urls?: RateLoopGatedContextFetchUrl[];
+  [key: string]: unknown;
+}
+
+export interface RateLoopSignedReadSession {
+  cookieHeader?: string;
+  cookieName?: string;
+  cookieValue?: string;
+  expiresAt?: string;
+  scope?: "gated_context" | string;
   [key: string]: unknown;
 }
 
@@ -567,10 +605,18 @@ export interface RatingContextResponse {
 
 export interface AcceptConfidentialityTermsResponse {
   accepted: boolean;
+  challengeId?: string | null;
   contentId?: string;
   contextAccess?: "public" | "gated" | string;
+  expiresAt?: string | null;
+  gatedContext?: (RateLoopGatedContextFetchInfo & { status?: string }) | null;
+  message?: string | null;
   nextAction?: string;
-  status: "accepted" | "not_required" | "pending_backend" | string;
+  signatureRequired?: boolean;
+  signedReadSession?: RateLoopSignedReadSession | null;
+  status: "accepted" | "not_required" | "signature_required" | string;
+  termsDocHash?: string;
+  termsUri?: string;
   termsVersion?: string;
   wallet?: RateLoopAgentWalletInfo;
   [key: string]: unknown;
@@ -1138,6 +1184,7 @@ export async function acceptConfidentialityTerms(
     "rateloop_accept_confidentiality_terms",
     {
       ...ratingLookupArgs(params),
+      challengeId: params.challengeId,
       signature: params.signature,
       termsVersion: params.termsVersion,
     },

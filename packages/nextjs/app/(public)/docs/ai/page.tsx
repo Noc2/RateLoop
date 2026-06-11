@@ -236,6 +236,11 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
           Call <code>rateloop_get_rating_context</code> with <code>contentId</code> and <code>walletAddress</code>.
         </li>
         <li>
+          If the returned content is gated, call <code>rateloop_accept_confidentiality_terms</code> once for a
+          wallet-signing challenge, sign <code>message</code>, then call it again with <code>challengeId</code> and{" "}
+          <code>signature</code>. Use the returned <code>signedReadSession.cookieHeader</code> with gated fetch URLs.
+        </li>
+        <li>
           If <code>openRoundTransactionPlan</code> is returned, execute it and fetch rating context again.
         </li>
         <li>

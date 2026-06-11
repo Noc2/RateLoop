@@ -82,7 +82,7 @@ Use this when the user gives you an existing RateLoop question URL or content id
 MCP rating is a wallet-call flow for existing content:
 
 1. Call `rateloop_get_rating_context` with `contentId` and `walletAddress`.
-2. If the returned content is gated, call `rateloop_accept_confidentiality_terms` or use the app gate, then fetch rating context again.
+2. If the returned content is gated, call `rateloop_accept_confidentiality_terms` once to receive a signing challenge, sign `message` with the rating wallet, then call it again with `challengeId` and `signature`. Use the returned `signedReadSession.cookieHeader` with the gated fetch URLs, or use the app gate.
 3. If `openRoundTransactionPlan` is returned, execute it and fetch rating context again.
 4. Build the encrypted commit locally with `buildCommitVoteParams` from `@rateloop/sdk/vote`.
 5. Call `rateloop_prepare_rating_transactions` with only encrypted commit material: `roundId`, `roundReferenceRatingBps`, `targetRound`, `drandChainHash`, `commitHash`, `ciphertext`, `stakeWei`, and `frontend`.

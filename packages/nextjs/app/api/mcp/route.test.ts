@@ -334,6 +334,8 @@ test("tools/list accepts supported MCP-Protocol-Version and returns tool annotat
   assert.ok(ratingContextSchema.properties?.walletAddress);
   assert.equal(ratingContextSchema.required?.includes("walletAddress"), false);
   assert.ok(acceptTermsSchema.properties?.walletAddress);
+  assert.ok(acceptTermsSchema.properties?.challengeId);
+  assert.ok(acceptTermsSchema.properties?.signature);
   assert.ok(acceptTermsSchema.properties?.termsVersion);
   assert.deepEqual(acceptTermsSchema.required, ["contentId"]);
   assert.ok(ratingPrepareSchema.properties?.walletAddress);
