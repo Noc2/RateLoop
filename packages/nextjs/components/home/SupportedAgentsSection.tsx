@@ -82,7 +82,7 @@ function AgentIcon({ name }: { name: string }) {
 function getSnippetKindLabel(kind: AgentInstallSnippetKind) {
   switch (kind) {
     case "prompt":
-      return "Try once";
+      return "Run demo";
     case "mcp":
       return "MCP tools";
     case "rule":

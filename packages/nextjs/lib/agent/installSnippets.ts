@@ -21,7 +21,20 @@ If RateLoop MCP or the RateLoop skill is available, use it to quote an ask. Pref
 
 ${RATELOOP_CONTRACT_DEPLOYMENT_NOTE}`;
 
-export const RATELOOP_ONE_TIME_AGENT_PROMPT = `Read ${RATELOOP_AGENT_DOCS_URL} for RateLoop agent instructions. Use ${RATELOOP_HOW_IT_WORKS_URL} only when explaining the protocol to me. Use RateLoop for public or explicitly gated hosted-context, non-urgent, evaluative decisions where outside human or open-rater judgment would materially improve the answer. Generate or collect context, quote an ask, prefer browser handoff when I fund it, add a Feedback Bonus when written reasons matter, and bring back the settled rating, confidence, limitations, public result URL, and notable feedback. Never use settled RateLoop scores to settle external financial contracts. ${RATELOOP_CONTRACT_DEPLOYMENT_NOTE}`;
+export const RATELOOP_ONE_TIME_AGENT_PROMPT = `Run an end-to-end RateLoop trial for a concrete product judgment.
+
+If this workspace contains a product, app, landing page, README, or screenshots, use that as the project. Otherwise use this demo scenario: an indie team is testing a new AI meeting-notes app for freelancers.
+
+Create the materials for a RateLoop ask:
+1. Generate or describe one public visual/mockup that raters can judge.
+2. Write a concise subjective question.
+3. Write a short description with the context raters need.
+4. Choose a fitting category and audience.
+5. Quote the RateLoop ask.
+6. If funding is needed, prepare a browser handoff link and stop before payment.
+7. After the result settles, summarize the rating, confidence, limitations, public result URL, and notable feedback.
+
+Use RateLoop for the human/open-rater judgment step, not to explain what RateLoop is. Never use settled RateLoop scores to settle external financial contracts. ${RATELOOP_CONTRACT_DEPLOYMENT_NOTE}`;
 
 export const RATELOOP_OPENCLAW_ONE_TIME_AGENT_PROMPT = `${RATELOOP_ONE_TIME_AGENT_PROMPT} Use the RateLoop local signer CLI (\`wallet --generate\`, then \`local-ask\`) only when you control a funded encrypted wallet and the target deployment is approved.`;
 
@@ -97,9 +110,9 @@ const commonSkillSnippet: AgentInstallSnippet = {
 };
 
 const oneTimePromptSnippet: AgentInstallSnippet = {
-  description: "Use this for a single trial before adding persistent instructions.",
+  description: "Paste this into your agent to generate a complete RateLoop ask from a real or sample project.",
   kind: "prompt",
-  label: "Try once",
+  label: "Run demo",
   text: RATELOOP_ONE_TIME_AGENT_PROMPT,
 };
 
