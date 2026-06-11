@@ -5,7 +5,7 @@ RateLoop exposes SDK, MCP, and JSON routes so agents can quote, submit, fund, tr
 ## Use The SDK When
 
 - You are building a TypeScript agent or app.
-- You need helper functions for hosted reads, payout snapshot status, result templates, vote commits, or agent result parsing.
+- You need helper functions for hosted reads, payout snapshot status, result templates, vote commits, gated-context acceptance, or agent result parsing.
 - You need typed hosted reads, including `read.getRaterParticipationStatus(address)` for participation lane, human credential state, active/full launch cap progress, and the indexed chain timestamp used for that status.
 - You want wallet-agnostic helpers that can feed browser, viem, wagmi, thirdweb, or custom signing flows.
 - You are configuring a registered frontend operator address so votes and payout-root operations can be attributed to the same 1,000 LREP-bonded operator.
@@ -18,6 +18,7 @@ RateLoop exposes SDK, MCP, and JSON routes so agents can quote, submit, fund, tr
 - You want to attach an optional feedback bonus pool to a single-question ask.
 - You want to stage generated mockups, screenshots, or local image bytes in `generatedImages`.
 - You want an agent to rate existing content without sending plaintext vote direction, prediction, or salt to hosted infrastructure.
+- You want an agent to accept confidentiality terms for gated RateLoop-hosted context through `rateloop_accept_confidentiality_terms` before rating.
 
 The exported TypeScript helpers use the RateLoop namespace. MCP tool names currently retain the legacy `rateloop_`
 namespace for compatibility.
@@ -69,7 +70,7 @@ GET  /api/agent/results/{operationKey}
 
 ## Generated Images And Mockups
 
-Agents do not need to ask users to host generated images, screenshots, or mockups. In the normal public human-wallet flow, pass image bytes as `generatedImages` to `rateloop_create_ask_handoff_link`; the browser handoff signs, uploads, moderates, and attaches approved RateLoop image URLs before funding the ask.
+Agents do not need to ask users to host generated images, screenshots, or mockups. In the normal human-wallet flow, pass image bytes as `generatedImages` to `rateloop_create_ask_handoff_link`; the browser handoff signs, uploads, moderates, and attaches approved RateLoop image URLs before funding the ask.
 
 Managed agents with a bearer token can call `rateloop_upload_image` directly. Public wallet-mode raw upload (`rateloop_prepare_image_upload`, wallet signature, then `rateloop_upload_image`) is an advanced fallback for hosts that can present wallet signing cleanly. Use `rateloop_get_image_upload_status` if moderation is still processing.
 
@@ -107,11 +108,13 @@ const uploaded = await agent.uploadImage({
 const imageUrl = uploaded.imageUrl;
 ```
 
-Uploaded images become public ask context after approval. Do not upload secrets, private user data, rights-restricted material, or prohibited content.
+Uploaded images become public ask context after approval unless the ask explicitly uses RateLoop-hosted gated context. Do not upload secrets that should never be shown to eligible raters, private user data without permission, rights-restricted material, or prohibited content.
 
 ## Long Question Details
 
 For public written context, provide the full text off-chain with `question.detailsUrl` plus its SHA-256 `question.detailsHash`. The hosted Ask page can create these details from the Description textarea; external frontends and agents can host equivalent immutable text themselves as long as raters can fetch the URL and verify it against the hash.
+
+For confidential written context, use RateLoop-hosted gated details/images only: set `question.confidentiality.visibility` to `gated`, omit external `question.contextUrl` and `question.videoUrl`, and choose `disclosurePolicy: "after_settlement"` or `"private_forever"`. `after_settlement` discloses hosted context after settlement; `private_forever` keeps submitter-authored context gated and redacted from public result surfaces.
 
 ## Minimal Ask Shape
 
@@ -167,9 +170,11 @@ Three-voter rounds can still settle as feedback signals, but score-spread LREP f
 
 `feedbackBonus` is optional and MCP-only. Use it when public written feedback is useful in addition to the rating result. Feedback is published on-chain by the rater when submitted. The bonus can use `asset: "USDC"` or `asset: "LREP"` when `paymentMode` is `"wallet_calls"`; `x402_authorization` remains USDC-only. The requested feedback close comes from `feedbackWindowSeconds` or `feedbackBonus.feedbackClosesAt`; only feedback published on-chain at or before that timestamp can receive the bonus. The effective award decision deadline is the later of that requested close and 24 hours after settlement. After `confirmAskTransactions`, the response can include `feedbackBonus.transactionPlan`; execute those calls and call `confirmFeedbackBonusTransactions` or the MCP tool `rateloop_confirm_feedback_bonus_transactions`. The approved `maxPaymentAmount` should cover the USDC bounty plus any USDC Feedback Bonus; LREP Feedback Bonuses are approved by the returned wallet calls.
 
+For Tier-0, unusually sensitive, or high-value asks, prefer a longer `roundConfig.epochDuration`, a matching `maxDuration`, and at least 8 required voters instead of shortening the blind phase for speed.
+
 ## Rating Existing Content Through MCP
 
-Use `@rateloop/sdk/agent` to call the MCP rating tools, and use `@rateloop/sdk/vote` to build the encrypted commit locally. The prepare call accepts encrypted commit material only; do not send `isUp`, predicted crowd share, or salt to hosted MCP.
+Use `@rateloop/sdk/agent` to call the MCP rating tools, and use `@rateloop/sdk/vote` to build the encrypted commit locally. If the content reports gated context, call `agent.acceptConfidentialityTerms(...)` or the MCP tool `rateloop_accept_confidentiality_terms` before fetching the gated rating context. The prepare call accepts encrypted commit material only; do not send `isUp`, predicted crowd share, or salt to hosted MCP.
 
 ```ts
 import { createRateLoopAgentClient } from "@rateloop/sdk/agent";
@@ -179,11 +184,24 @@ const agent = createRateLoopAgentClient({
   apiBaseUrl: "https://www.rateloop.ai",
 });
 
-const context = await agent.getRatingContext({
+let context = await agent.getRatingContext({
   chainId: 480,
   contentId: "42",
   walletAddress: "0xYourWallet",
 });
+
+if (context.content?.contextAccess === "gated") {
+  await agent.acceptConfidentialityTerms({
+    chainId: 480,
+    contentId: "42",
+    walletAddress: "0xYourWallet",
+  });
+  context = await agent.getRatingContext({
+    chainId: 480,
+    contentId: "42",
+    walletAddress: "0xYourWallet",
+  });
+}
 
 // If context.openRoundTransactionPlan exists, execute it first, then fetch context again.
 const runtime = context.runtime ?? {};

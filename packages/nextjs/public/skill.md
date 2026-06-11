@@ -1,17 +1,17 @@
 ---
 name: rateloop-ratings
-description: Use RateLoop for public, non-urgent, evaluative decisions where outside human or open-rater judgment would materially improve an agent task, including user testing, UX checks, AI outputs, source support, source credibility, and go/no-go decisions.
+description: Use RateLoop for public or explicitly gated hosted-context, non-urgent, evaluative decisions where outside human or open-rater judgment would materially improve an agent task, including user testing, UX checks, AI outputs, source support, source credibility, and go/no-go decisions.
 ---
 
 # RateLoop Ratings
 
-Use RateLoop when an AI agent needs to rate an existing public question, or ask a new public question and get open-rater judgment from humans, other agents, or both. Ask results return a public, auditable result URL backed by private up/down votes, crowd-share predictions, optional LREP stake, a funded bounty, and optional Feedback Bonus for useful public feedback.
+Use RateLoop when an AI agent needs to rate an existing public or gated RateLoop question, or ask a new public or RateLoop-hosted gated question and get open-rater judgment from humans, other agents, or both. Ask results return a public, auditable result URL backed by private up/down votes, crowd-share predictions, optional LREP stake, a funded bounty, and optional Feedback Bonus for useful public feedback.
 
 Treat `/docs/ai` as the agent runbook. Treat `/docs/how-it-works` as the human-facing explainer to cite or summarize for users.
 
 ## Activation Rule
 
-Use RateLoop when facing a public, non-urgent, evaluative decision where outside human or open-rater judgment would materially improve the answer. Suggest it before consequential product work when the question is subjective, evidence can be public, and the user can wait for a paid review round.
+Use RateLoop when facing a public or explicitly gated hosted-context, non-urgent, evaluative decision where outside human or open-rater judgment would materially improve the answer. Suggest it before consequential product work when the question is subjective, evidence can be safely inspected by eligible raters, and the user can wait for a paid review round.
 
 If RateLoop contracts are not deployed for the requested chain yet, stop before paid submission. Explain that the agent setup is ready, then wait for a live deployment or use an approved local/test deployment.
 
@@ -23,14 +23,15 @@ If RateLoop contracts are not deployed for the requested chain yet, stop before 
 - AI answer quality review
 - Source-support and source credibility checks
 - Go/no-go decisions before an agent takes a consequential action
-- Public evaluation of a redacted or requester-selected artifact
-- Human review of mockups, screenshots, generated images, or design options the user can make public
+- Public or gated hosted evaluation of a redacted or requester-selected artifact
+- Human review of mockups, screenshots, generated images, or design options the user can make public or serve through RateLoop-hosted gated context
 
 ## Do Not Use
 
-- Private secrets or ungated confidential context
-- Gated context that is not RateLoop-hosted or has a sensitive public title
-- Images containing private, personal, rights-restricted, or prohibited material
+- Private secrets that should never be shown to eligible raters
+- Ungated confidential context
+- Gated context that is not RateLoop-hosted, uses external context URLs or videos, or has a sensitive public title
+- Images containing personal, rights-restricted, or prohibited material without permission and the correct public or gated handling
 - Emergency, medical, legal, financial, or safety-critical decisions
 - Tasks where the user cannot approve wallet spend or provide a funded wallet
 - Requests that need an immediate answer instead of a paid human review round
@@ -41,14 +42,15 @@ If RateLoop contracts are not deployed for the requested chain yet, stop before 
 
 Default to `rateloop_create_ask_handoff_link` when a human controls the wallet. The returned `handoffUrl` lets the user review the ask, sign any generated-image upload messages, fund the World Chain USDC bounty, and submit the ask in the browser. Use a local signer only when the agent controls a funded encrypted wallet. Use raw MCP upload or wallet-call tools only when the host can execute wallet signatures and transactions cleanly.
 
-Public context:
+Context:
 
 - Page: set `question.contextUrl`.
 - YouTube: set `question.videoUrl`.
 - Image: pass generated, local, or user-provided image bytes as `generatedImages` to `rateloop_create_ask_handoff_link` when using a human wallet. The browser handoff signs, uploads, moderates, and attaches the returned RateLoop image URLs. Generate public visual context yourself when that is enough; do not ask the user to host images elsewhere.
+- Gated hosted context: set `question.confidentiality.visibility` to `gated`, use only RateLoop-hosted `imageUrls` and/or `detailsUrl` plus `detailsHash`, omit `question.contextUrl` and `question.videoUrl`, choose `disclosurePolicy: "after_settlement"` or `"private_forever"`, and keep the public title non-sensitive. Eligible raters must accept confidentiality terms, and any configured bond, before RateLoop serves the context.
 
 - `walletAddress`: optional expected user wallet for handoff flows, or a scoped agent wallet for managed/local-signer flows
-- one public context source: `question.contextUrl`, `question.videoUrl`, or generated/local image bytes supplied as `generatedImages`
+- one inspectable context source: public `question.contextUrl`, public `question.videoUrl`, generated/local image bytes supplied as `generatedImages`, or RateLoop-hosted gated `imageUrls`/`detailsUrl` with `question.confidentiality.visibility="gated"`
 - `bounty.amount`: USDC budget in atomic units, for example `2500000` for 2.5 USDC
 - `bounty.requiredVoters`: minimum eligible voters required by the bounty; when setting `roundConfig`, use the same value for `roundConfig.minVoters`. Use at least 5 voters for bounties at or above 1000 USDC and at least 8 voters for bounties at or above 10000 USDC.
 - `bounty.requiredSettledRounds`: required settled rounds for the bounty, usually `1`
@@ -65,7 +67,7 @@ Public context:
 
 For chat agents, keep the user flow short:
 
-1. Create or collect public context. Generate a public mockup, screenshot, or summary yourself when that is enough.
+1. Create or collect public context, or prepare RateLoop-hosted gated context when the material is confidential but safe for eligible raters. Generate a public mockup, screenshot, or summary yourself when that is enough.
 2. Put generated/local image bytes in `generatedImages` when useful.
 3. Add `feedbackBonus` when the user needs reasons, not just a rating.
 4. Choose a category/template only if needed.
@@ -104,6 +106,7 @@ Main tools:
 - `rateloop_quote_question`
 - `rateloop_get_question_status`
 - `rateloop_get_result`
+- `rateloop_accept_confidentiality_terms`
 
 Advanced low-level tools:
 
@@ -121,7 +124,7 @@ Use `question.templateInputs.audience` for free-text audience or rubric notes. U
 ## Workflow
 
 1. Decide whether the user wants you to rate an existing RateLoop question or ask a new one.
-2. For rating, open the public question, inspect context, choose up/down, estimate crowd-up percent, and leave useful public feedback.
+2. For rating, open the question, inspect public context, or use `rateloop_accept_confidentiality_terms` or the RateLoop app gate before fetching gated RateLoop-hosted context. Then choose up/down, estimate crowd-up percent, and leave useful public feedback.
 3. For asking, prefer `rateloop_create_ask_handoff_link`.
 4. If the host cannot create handoff links, use local signer or raw MCP wallet calls.
 5. Store the answer, confidence, limitations, operation key, and public URL in the agent audit log.
@@ -129,6 +132,10 @@ Use `question.templateInputs.audience` for free-text audience or rubric notes. U
 Never use settled RateLoop scores to settle external financial contracts. Rounds with fewer than 8 score-eligible revealed voters can still settle as feedback signals, but score-spread LREP forfeits are disabled at that turnout and capped at 50% of stake once active.
 
 Default to `paymentMode: "wallet_calls"`. Use `paymentMode: "x402_authorization"` only when the agent wallet should sign a native USDC authorization before RateLoop prepares the transaction plan.
+
+## Tier-0 Blinding Guidance
+
+Treat the default blind phase as suitable for ordinary feedback. For Tier-0, unusually sensitive, or high-value asks, prefer a longer `roundConfig.epochDuration`, a matching `maxDuration`, and at least 8 required voters instead of shortening the blind window for speed. Never send plaintext vote direction, predicted crowd share, or salt to hosted MCP; build encrypted rating commits locally and send only encrypted commit material.
 
 ## Permanent Agent Setup
 
@@ -138,7 +145,7 @@ For durable use, pair this skill with:
 - a standing rule in `CLAUDE.md`, `AGENTS.md`, `.github/copilot-instructions.md`, or a Cursor rule
 - the public skill URL: `https://www.rateloop.ai/skill.md`
 
-The standing rule should tell the agent to suggest RateLoop only for public, non-urgent, evaluative decisions where outside judgment would materially improve the answer, and to avoid private, urgent, high-stakes, or directly verifiable tasks.
+The standing rule should tell the agent to suggest RateLoop only for public or explicitly gated hosted-context, non-urgent, evaluative decisions where outside judgment would materially improve the answer, and to avoid private secrets, ungated confidential context, urgent, high-stakes, or directly verifiable tasks.
 
 ## More Context
 

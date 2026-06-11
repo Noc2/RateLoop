@@ -1,17 +1,17 @@
 # How RateLoop Works
 
-RateLoop turns one focused public question into a paid, auditable rating round.
+RateLoop turns one focused public or RateLoop-hosted gated question into a paid, auditable rating round.
 
 ## Flow
 
-1. An agent or person submits a bounded question with a public context URL, YouTube video, or image context uploaded to RateLoop. Agents can upload generated or local image bytes before asking.
+1. An agent or person submits a bounded question with a public context URL, YouTube video, image context uploaded to RateLoop, or RateLoop-hosted private context that unlocks only after wallet-signed confidentiality acceptance. Agents can upload generated or local image bytes before asking.
 2. The asker funds a non-refundable bounty in LREP or World Chain USDC.
 3. Open raters privately vote up/down, predict the crowd's up-vote share, and choose whether to add LREP stake during a blind voting phase.
 4. Votes are revealed after the blind commit-reveal window.
 5. The round settles publicly on-chain, making the result and public rating readable. Three-rater rounds can still settle as sparse feedback, but LREP score-spread forfeits need at least 8 score-eligible revealed voters before they turn on.
 6. Registered frontend operators propose correlation payout snapshots, then finalized roots set USDC and launch LREP claim weights; USDC weights are surprise-weighted, launch-credit weights stay flat.
 7. Feedback Bonus awarders have at least 24 hours after settlement to pay useful public feedback from revealed raters.
-8. Eligible voters claim rewards and agents read the public result package.
+8. Eligible voters claim rewards and agents read the public result package. Gated context is either disclosed after settlement or kept private forever according to the ask's disclosure policy.
 
 ## USDC Bounty Payout Timing
 
@@ -23,10 +23,17 @@ Feedback Bonuses use the later of the requested feedback close and 24 hours afte
 configured awarder can pay selected on-chain revealed feedback during that window; unawarded remainder can be forfeited
 only after the effective award deadline.
 
+## Hosted Private Context
+
+Public asks can use ordinary context URLs, YouTube links, uploaded images, or verified details text. Confidential asks must use RateLoop-hosted gated context: `confidentiality.visibility="gated"`, hosted images and/or `detailsUrl` plus `detailsHash`, no external `contextUrl` or `videoUrl`, and a public-safe title.
+
+Gated context supports two disclosure policies. `after_settlement` keeps hosted context private during the round and discloses it after settlement. `private_forever` keeps hosted submitter-authored context gated and redacted from public result surfaces after settlement. In both cases, raters need accepted confidentiality terms, and any configured confidentiality bond, before RateLoop serves the context.
+
 ## What Stays Public
 
-- Question metadata and public context URL when provided
-- Images uploaded to RateLoop and attached to the question
+- Question metadata, public-safe title, and public context URL when provided
+- Public images/details uploaded to RateLoop and attached to the question
+- Gated-context metadata, access policy, and hashes; hosted gated images/details stay private until `after_settlement` disclosure or remain private under `private_forever`
 - Vote commitments and any optional LREP stake
 - Revealed vote directions and predicted up-vote shares after the blind phase
 - Settlement result, rating movement, and reward state
@@ -59,6 +66,7 @@ The result package can include:
 - total stake
 - rationale summary
 - limitations
+- context access and disclosure limitations
 - major objections or feedback
 - source URLs
 - public RateLoop URL

@@ -26,7 +26,7 @@ Framework-specific hooks and UI components should live in a follow-up package ra
 - typed read client for hosted/indexed HTTP routes
 - `read.getRaterParticipationStatus(address)` for participation lane, human credential state, active/full launch cap progress, and the explicit reward policy flags
 - vote/frontend helpers in `@rateloop/sdk/vote`
-- wallet-agnostic agent helpers in `@rateloop/sdk/agent` for MCP-compatible asks, generated image uploads, MCP rating of existing content, non-custodial agent-wallet flows, result parsing, and webhook verification
+- wallet-agnostic agent helpers in `@rateloop/sdk/agent` for MCP-compatible asks, generated image uploads, gated-context acceptance, MCP rating of existing content, non-custodial agent-wallet flows, result parsing, and webhook verification
 
 ## Quick Example
 
@@ -170,11 +170,24 @@ const status = await agent.getQuestionStatus({
 });
 const result = await agent.getResult({ operationKey: status.operationKey });
 
-const ratingContext = await agent.getRatingContext({
+let ratingContext = await agent.getRatingContext({
   chainId: 480,
   contentId: "42",
   walletAddress,
 });
+
+if (ratingContext.content?.contextAccess === "gated") {
+  await agent.acceptConfidentialityTerms({
+    chainId: 480,
+    contentId: "42",
+    walletAddress,
+  });
+  ratingContext = await agent.getRatingContext({
+    chainId: 480,
+    contentId: "42",
+    walletAddress,
+  });
+}
 const ratingRuntime = ratingContext.runtime ?? {};
 
 // Build this locally with @rateloop/sdk/vote. Do not send plaintext
@@ -246,11 +259,12 @@ if (handled.status === "duplicate") {
 }
 ```
 
-Long question context should be provided through `question.detailsUrl` plus its SHA-256 `question.detailsHash`, or through media/context URLs. Written context is no longer submitted as a separate on-chain text field.
+Long public question context should be provided through `question.detailsUrl` plus its SHA-256 `question.detailsHash`, or through media/context URLs. Written context is no longer submitted as a separate on-chain text field. For confidential review material, use only RateLoop-hosted gated details/images with `question.confidentiality.visibility: "gated"`, omit external context URLs/videos, and choose `disclosurePolicy: "after_settlement"` or `"private_forever"`.
 
 For generated mockups, screenshots, or local image files, agents can upload bytes directly to RateLoop before quoting an
 ask. Public wallet-mode agents use `prepareImageUpload -> wallet signature -> uploadImage`; managed bearer-token agents
-can call `uploadImage` directly. Use the returned `imageUrl` in `question.imageUrls`.
+can call `uploadImage` directly. Use the returned `imageUrl` in `question.imageUrls`. Uploaded images are public ask
+context unless the ask explicitly uses RateLoop-hosted gated context.
 
 For ranked-option bundles, `requiredSettledRounds` is the number of completed bundle round sets to fund. Each round set requires every question in the bundle to settle once, and eligible voters claim each completed set separately.
 
@@ -263,11 +277,15 @@ submission. For live human-wallet asks, prefer `createAskHandoff({ request, gene
 `getResult`. That path collapses review, image signing, USDC funding, ordered wallet calls, and submission into the
 browser handoff. Use raw `askHumans -> execute wallet calls -> confirm` only for hosts that can execute wallet
 transactions directly. For rating existing content, use
-`getRatingContext -> local encrypted commit -> prepareRatingTransactions -> execute wallet calls -> confirmRatingTransactions`.
+`getRatingContext -> acceptConfidentialityTerms when contextAccess is gated -> local encrypted commit -> prepareRatingTransactions -> execute wallet calls -> confirmRatingTransactions`.
 A hosted direct HTTP client only needs `apiBaseUrl` plus a funded
 `walletAddress`; `mcpAccessToken` is optional and adds managed policy enforcement, balance tooling, and audit surfaces.
 Paid asks and prepared ratings return ordered wallet calls from a user-controlled smart wallet or scoped agent wallet.
 The SDK stays wallet-agnostic and does not import a signing implementation.
+
+For Tier-0, unusually sensitive, or high-value asks, prefer a longer `roundConfig.epochDuration`, a matching
+`maxDuration`, and at least 8 required voters instead of shortening the blind phase for speed. Hosted MCP must receive
+only encrypted commit material for ratings, never plaintext `isUp`, predicted crowd share, or salt.
 
 Ask confirmations can wait for on-chain receipts. The SDK uses a longer `confirmTimeoutMs` for
 `confirmAskTransactions`, `confirmFeedbackBonusTransactions`, and `confirmRatingTransactions` while ordinary reads and
