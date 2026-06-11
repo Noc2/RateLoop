@@ -515,7 +515,7 @@ contract RoundVotingEngine is
         if (round.thresholdReachedAt != 0) revert ThresholdReached();
 
         IRaterIdentityRegistry roundRaterRegistry = _getRoundRaterRegistry(contentId, roundId);
-        IRaterIdentityRegistry.ResolvedRater memory resolved = VotePreflightLib.validateVoterContentAndConfidentiality(
+        IRaterIdentityRegistry.ResolvedRater memory resolved = VotePreflightLib.validateVoterContentRecordNexus(
             roundRaterRegistry, registry, voter, contentId, roundConfidentialityEscrowSnapshot[contentId][roundId]
         );
         (uint8 credentialMask, uint8 freshCredentialMask) =

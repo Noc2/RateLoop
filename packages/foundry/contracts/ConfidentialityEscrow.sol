@@ -271,6 +271,12 @@ contract ConfidentialityEscrow is
         emit BondReleased(contentId, identityKey, position.poster, amount);
     }
 
+    function recordConfidentialityNexus(uint256 contentId, address holder) external {
+        if (msg.sender != registry.votingEngine()) revert("Not voting engine");
+        if (!_configs[contentId].gated) return;
+        _markNullifierBonded(holder);
+    }
+
     function slashBond(
         uint256 contentId,
         bytes32 identityKey,

@@ -57,6 +57,20 @@ library VotePreflightLib {
         _validateConfidentialityGate(identityRegistry, confidentialityEscrow, contentId, resolved);
     }
 
+    function validateVoterContentRecordNexus(
+        IRaterIdentityRegistry identityRegistry,
+        ContentRegistry registry,
+        address voter,
+        uint256 contentId,
+        address confidentialityEscrow
+    ) external returns (IRaterIdentityRegistry.ResolvedRater memory resolved) {
+        resolved = resolveRater(identityRegistry, voter);
+        _validateContentAndNotSubmitter(registry, voter, contentId, resolved);
+        if (_validateConfidentialityGate(identityRegistry, confidentialityEscrow, contentId, resolved)) {
+            IConfidentialityEscrow(confidentialityEscrow).recordConfidentialityNexus(contentId, resolved.holder);
+        }
+    }
+
     function validateRoundOpener(
         IRaterIdentityRegistry identityRegistry,
         ContentRegistry registry,
@@ -81,16 +95,17 @@ library VotePreflightLib {
         address confidentialityEscrow,
         uint256 contentId,
         IRaterIdentityRegistry.ResolvedRater memory resolved
-    ) private view {
-        if (confidentialityEscrow == address(0)) return;
+    ) private view returns (bool gated) {
+        if (confidentialityEscrow == address(0)) return false;
         IConfidentialityEscrow escrow = IConfidentialityEscrow(confidentialityEscrow);
         IConfidentialityEscrow.ConfidentialityConfig memory config = escrow.confidentialityConfig(contentId);
-        if (!config.gated) return;
+        if (!config.gated) return false;
         if (!resolved.hasActiveHumanCredential) revert ConfidentialityCredentialRequired();
         if (_isIdentityBanned(identityRegistry, resolved.identityKey)) revert IdentityBanned();
         if (config.bondAmount != 0 && !escrow.hasActiveBond(contentId, resolved.identityKey)) {
             revert ConfidentialityBondRequired();
         }
+        return true;
     }
 
     function _validateContentAndNotSubmitter(

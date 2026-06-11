@@ -286,6 +286,29 @@ contract ConfidentialityEscrowTest is VotingTestBase {
         assertEq(usdcToken.balanceOf(address(shortEscrow)), 0);
     }
 
+    function testZeroBondGatedCommitRecordsBanNexus() public {
+        uint256 contentId = _submitGatedQuestion("zero-bond-nexus", 0);
+        uint8 provider = uint8(RaterRegistry.HumanCredentialProvider.SeededHuman);
+
+        assertFalse(confidentialityEscrow.hasConfidentialityNexus(provider, VOTER1_ANCHOR));
+        _commitVote(voter1, contentId, true);
+        assertTrue(confidentialityEscrow.hasConfidentialityNexus(provider, VOTER1_ANCHOR));
+
+        vm.prank(owner);
+        raterRegistry.banIdentity(
+            RaterRegistry.HumanCredentialProvider.SeededHuman,
+            VOTER1_ANCHOR,
+            uint64(block.timestamp + 365 days),
+            "verified leak",
+            EVIDENCE_HASH
+        );
+
+        uint256 secondContentId = _submitGatedQuestion("zero-bond-blocked", 0);
+        vm.prank(voter1);
+        engine.openRound(secondContentId);
+        _expectCommitVoteRevert(voter1, secondContentId, true, VotePreflightLib.IdentityBanned.selector);
+    }
+
     function testBanDerivesKeysAndBlocksGatedCommitButNotRelease() public {
         uint256 contentId = _submitGatedQuestion("ban", 1e6);
         bytes32 identityKey = _postLrepBond(contentId, voter1);
