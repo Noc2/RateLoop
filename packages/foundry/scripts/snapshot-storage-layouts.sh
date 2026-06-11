@@ -13,6 +13,7 @@ CANONICALIZE_SCRIPT="$ROOT_DIR/scripts/storage-layout-canonicalize.py"
 mkdir -p "$EXPECTED_DIR"
 
 CONTRACTS=(
+  "ConfidentialityEscrow"
   "ContentRegistry"
   "FeedbackBonusEscrow"
   "FeedbackRegistry"

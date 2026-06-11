@@ -1,0 +1,263 @@
+{
+  "storage": [
+    {
+      "slot": 0,
+      "offset": 0,
+      "label": "lrepToken",
+      "type": "t_contract(IERC20)"
+    },
+    {
+      "slot": 1,
+      "offset": 0,
+      "label": "usdcToken",
+      "type": "t_contract(IERC20)"
+    },
+    {
+      "slot": 2,
+      "offset": 0,
+      "label": "registry",
+      "type": "t_contract(ContentRegistry)"
+    },
+    {
+      "slot": 3,
+      "offset": 0,
+      "label": "protocolConfig",
+      "type": "t_contract(ProtocolConfig)"
+    },
+    {
+      "slot": 4,
+      "offset": 0,
+      "label": "confiscationRecipient",
+      "type": "t_address"
+    },
+    {
+      "slot": 5,
+      "offset": 0,
+      "label": "maxBond",
+      "type": "t_uint256"
+    },
+    {
+      "slot": 6,
+      "offset": 0,
+      "label": "evidenceWindow",
+      "type": "t_uint256"
+    },
+    {
+      "slot": 7,
+      "offset": 0,
+      "label": "maxBondLockDuration",
+      "type": "t_uint256"
+    },
+    {
+      "slot": 8,
+      "offset": 0,
+      "label": "_configs",
+      "type": "t_mapping(t_uint256,t_struct(ConfidentialityConfig))"
+    },
+    {
+      "slot": 9,
+      "offset": 0,
+      "label": "configured",
+      "type": "t_mapping(t_uint256,t_bool)"
+    },
+    {
+      "slot": 10,
+      "offset": 0,
+      "label": "bonds",
+      "type": "t_mapping(t_uint256,t_mapping(t_bytes32,t_struct(BondPosition)))"
+    },
+    {
+      "slot": 11,
+      "offset": 0,
+      "label": "nullifierHasBond",
+      "type": "t_mapping(t_uint8,t_mapping(t_bytes32,t_bool))"
+    },
+    {
+      "slot": 12,
+      "offset": 0,
+      "label": "__gap",
+      "type": "t_array(t_uint256)"
+    }
+  ],
+  "types": [
+    {
+      "id": "t_address",
+      "encoding": "inplace",
+      "label": "address",
+      "numberOfBytes": "20"
+    },
+    {
+      "id": "t_array(t_uint256)",
+      "encoding": "inplace",
+      "label": "uint256[40]",
+      "numberOfBytes": "1280",
+      "base": "t_uint256"
+    },
+    {
+      "id": "t_bool",
+      "encoding": "inplace",
+      "label": "bool",
+      "numberOfBytes": "1"
+    },
+    {
+      "id": "t_bytes32",
+      "encoding": "inplace",
+      "label": "bytes32",
+      "numberOfBytes": "32"
+    },
+    {
+      "id": "t_contract(ContentRegistry)",
+      "encoding": "inplace",
+      "label": "contract ContentRegistry",
+      "numberOfBytes": "20"
+    },
+    {
+      "id": "t_contract(IERC20)",
+      "encoding": "inplace",
+      "label": "contract IERC20",
+      "numberOfBytes": "20"
+    },
+    {
+      "id": "t_contract(ProtocolConfig)",
+      "encoding": "inplace",
+      "label": "contract ProtocolConfig",
+      "numberOfBytes": "20"
+    },
+    {
+      "id": "t_mapping(t_bytes32,t_bool)",
+      "encoding": "mapping",
+      "label": "mapping(bytes32 => bool)",
+      "numberOfBytes": "32",
+      "key": "t_bytes32",
+      "value": "t_bool"
+    },
+    {
+      "id": "t_mapping(t_bytes32,t_struct(BondPosition))",
+      "encoding": "mapping",
+      "label": "mapping(bytes32 => struct ConfidentialityEscrow.BondPosition)",
+      "numberOfBytes": "32",
+      "key": "t_bytes32",
+      "value": "t_struct(BondPosition)"
+    },
+    {
+      "id": "t_mapping(t_uint256,t_bool)",
+      "encoding": "mapping",
+      "label": "mapping(uint256 => bool)",
+      "numberOfBytes": "32",
+      "key": "t_uint256",
+      "value": "t_bool"
+    },
+    {
+      "id": "t_mapping(t_uint256,t_mapping(t_bytes32,t_struct(BondPosition)))",
+      "encoding": "mapping",
+      "label": "mapping(uint256 => mapping(bytes32 => struct ConfidentialityEscrow.BondPosition))",
+      "numberOfBytes": "32",
+      "key": "t_uint256",
+      "value": "t_mapping(t_bytes32,t_struct(BondPosition))"
+    },
+    {
+      "id": "t_mapping(t_uint256,t_struct(ConfidentialityConfig))",
+      "encoding": "mapping",
+      "label": "mapping(uint256 => struct IConfidentialityEscrow.ConfidentialityConfig)",
+      "numberOfBytes": "32",
+      "key": "t_uint256",
+      "value": "t_struct(ConfidentialityConfig)"
+    },
+    {
+      "id": "t_mapping(t_uint8,t_mapping(t_bytes32,t_bool))",
+      "encoding": "mapping",
+      "label": "mapping(uint8 => mapping(bytes32 => bool))",
+      "numberOfBytes": "32",
+      "key": "t_uint8",
+      "value": "t_mapping(t_bytes32,t_bool)"
+    },
+    {
+      "id": "t_struct(BondPosition)",
+      "encoding": "inplace",
+      "label": "struct ConfidentialityEscrow.BondPosition",
+      "numberOfBytes": "64",
+      "members": [
+        {
+          "slot": 0,
+          "offset": 0,
+          "label": "poster",
+          "type": "t_address"
+        },
+        {
+          "slot": 0,
+          "offset": 20,
+          "label": "postedAt",
+          "type": "t_uint64"
+        },
+        {
+          "slot": 1,
+          "offset": 0,
+          "label": "amount",
+          "type": "t_uint64"
+        },
+        {
+          "slot": 1,
+          "offset": 8,
+          "label": "slashed",
+          "type": "t_bool"
+        },
+        {
+          "slot": 1,
+          "offset": 9,
+          "label": "released",
+          "type": "t_bool"
+        }
+      ]
+    },
+    {
+      "id": "t_struct(ConfidentialityConfig)",
+      "encoding": "inplace",
+      "label": "struct IConfidentialityEscrow.ConfidentialityConfig",
+      "numberOfBytes": "32",
+      "members": [
+        {
+          "slot": 0,
+          "offset": 0,
+          "label": "gated",
+          "type": "t_bool"
+        },
+        {
+          "slot": 0,
+          "offset": 1,
+          "label": "bondAsset",
+          "type": "t_uint8"
+        },
+        {
+          "slot": 0,
+          "offset": 2,
+          "label": "bondAmount",
+          "type": "t_uint64"
+        },
+        {
+          "slot": 0,
+          "offset": 10,
+          "label": "flags",
+          "type": "t_uint8"
+        }
+      ]
+    },
+    {
+      "id": "t_uint256",
+      "encoding": "inplace",
+      "label": "uint256",
+      "numberOfBytes": "32"
+    },
+    {
+      "id": "t_uint64",
+      "encoding": "inplace",
+      "label": "uint64",
+      "numberOfBytes": "8"
+    },
+    {
+      "id": "t_uint8",
+      "encoding": "inplace",
+      "label": "uint8",
+      "numberOfBytes": "1"
+    }
+  ]
+}
