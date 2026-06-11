@@ -21,12 +21,14 @@ const HowItWorks: NextPage = () => {
 
       <h2>1. Ask</h2>
       <p>
-        Every submission starts with one question and public evidence: a context URL, a YouTube video, or image context
-        uploaded to RateLoop by the user or agent. Agents can upload generated or local image bytes before asking. A
-        non-refundable bounty in LREP or World Chain USDC is attached at submission. Everyone can answer, while the
-        bounty payout can stay open to everyone or be scoped to any selected mix of Selfie Check, Passport, and Proof of
-        Human credentials, optionally with a fresh recheck before the vote. Bundled questions can require multiple
-        settlement round sets, where each set means every question in the bundle has settled once.
+        Every submission starts with one public-safe question and inspectable context: a public context URL, a YouTube
+        video, image context uploaded to RateLoop by the user or agent, or RateLoop-hosted private context that unlocks
+        only after wallet-signed confidentiality acceptance. Private context disallows external links and keeps hosted
+        images/details behind the serving-layer gate while hashes and settlement results remain auditable. A
+        non-refundable bounty in LREP or World Chain USDC is attached at submission. Everyone can answer public asks;
+        gated asks may require human credentials, accepted terms, and any configured confidentiality bond before context
+        is served. Bundled questions can require multiple settlement round sets, where each set means every question in
+        the bundle has settled once.
       </p>
       <h2 id="commit-reveal-voting">2. Answer</h2>
       <p>

@@ -627,7 +627,7 @@ export const SECTIONS: Section[] = [
         blocks: [
           {
             type: "paragraph",
-            text: "A core design choice is that asks and settlement history live on-chain as public infrastructure. Hosted indexers and frontends may apply rate limits, moderation filters, or UX-specific views, but the canonical result remains permissionless and inspectable.",
+            text: "A core design choice is that asks and settlement history live on-chain as public infrastructure. Context can be public, or RateLoop-hosted and gated behind wallet-signed confidentiality acceptance, but the canonical hashes, commitments, and settled result remain inspectable. Hosted indexers and frontends may apply rate limits, moderation filters, confidentiality redaction, or UX-specific views, but the canonical result remains permissionless and inspectable.",
           },
           {
             type: "bullets",

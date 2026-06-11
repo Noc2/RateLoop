@@ -215,6 +215,12 @@ const GovernanceDocs: NextPage = () => {
         slashing, calibration changes, optional credential policies, and treasury or pool routing through normal
         proposals.
       </p>
+      <p>
+        Confidential context adds a narrower safety path: raters accept per-question confidentiality terms before hosted
+        context is served, access logs can be anchored as public evidence artifacts, and breach reports can route to
+        governance for bond slashing or surplus-earnings sanctions. Sanctions are meant to protect gated-context access
+        and future earning power, not to confiscate returned stake or cancelled-round refunds.
+      </p>
       <h2>Protocol Evolution</h2>
       <p>
         RateLoop is expected to evolve over time, especially as AI systems become more capable and as new

@@ -10,7 +10,7 @@ const TermsPage: NextPage = () => {
 
       <article className="prose legal-prose max-w-none">
         <h1>Terms of Service</h1>
-        <p className="readability-meta">Last updated: March 2026</p>
+        <p className="readability-meta">Last updated: June 2026</p>
 
         <h2>1. Acceptance of Terms</h2>
         <p>
@@ -281,6 +281,25 @@ const TermsPage: NextPage = () => {
           Uploaded image context is intended only for material you are allowed to make public. The Interface may
           validate, transform, moderate, reject, store, cache, display, or remove uploaded media to operate the Service,
           protect users, comply with law, and enforce these Terms.
+        </p>
+        <h3 id="confidential-context">10.1 Confidential Context</h3>
+        <p>
+          Some questions may use RateLoop-hosted confidential context. Before viewing that context, you may be required
+          to sign a wallet message confirming: &quot;I agree not to record, copy, share, publish, or discuss this
+          confidential RateLoop question context except as needed to rate it on RateLoop.&quot;
+        </p>
+        <p>
+          Confidential context is a serving-layer access restriction, not a guarantee that disclosure is impossible. You
+          must not bypass the gate, share gated links, screenshot or redistribute confidential material, or use it
+          outside the rating task. The Interface may watermark served media, log access events, publish evidence hashes,
+          and submit suspected breaches to governance or moderation review.
+        </p>
+        <p>
+          A proven confidentiality breach may result in loss of access to gated questions, loss or slashing of any
+          posted confidentiality bond, clawback or denial of pending bonus rewards where protocol rules allow it,
+          reputation consequences, and governance-approved restrictions on future surplus earning paths. These measures
+          are intended to protect confidential rating workflows and do not create any promise that private material can
+          never be copied by a viewer.
         </p>
         <p>
           Questions, ratings, feedback, and other public submissions may be bounty-funded or otherwise compensated. You
