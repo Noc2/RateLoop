@@ -104,6 +104,9 @@ contract ClaimingBundleObserver {
 
 /// @title RoundRewardDistributor branch coverage tests (tlock commit-reveal)
 contract RoundRewardDistributorBranchesTest is VotingTestBase {
+    // ContentRegistry.questionBundleRoundObserverByContent storage slot.
+    uint256 internal constant QUESTION_BUNDLE_ROUND_OBSERVER_BY_CONTENT_SLOT = 26;
+
     LoopReputation public lrepToken;
     ContentRegistry public registry;
     RoundVotingEngine public votingEngine;
@@ -481,6 +484,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         _submitContentWithReservation(registry, "https://example.com/observer", "goal", "goal", "tags", 0);
         vm.stopPrank();
         uint256 contentId = 1;
+        _storeBundleRoundObserver(contentId, address(observer));
 
         address[8] memory voters = [address(observer), voter2, voter3, voter4, voter5, voter6, voter7, voter8];
         bool[8] memory directions = [true, true, false, true, true, true, false, false];
@@ -504,6 +508,14 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         assertGt(observer.observedVoterPool(), 0, "voter pool initialized before observer callback");
         assertTrue(observer.claimSucceeded(), "observer claim succeeds after pools are initialized");
         assertTrue(rewardDistributor.rewardClaimed(contentId, roundId, address(observer)), "observer claim recorded");
+    }
+
+    function _storeBundleRoundObserver(uint256 contentId, address observer) internal {
+        vm.store(
+            address(registry),
+            keccak256(abi.encode(contentId, QUESTION_BUNDLE_ROUND_OBSERVER_BY_CONTENT_SLOT)),
+            bytes32(uint256(uint160(observer)))
+        );
     }
 
     // =========================================================================

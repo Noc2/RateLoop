@@ -101,6 +101,9 @@ contract RevertingBundleObserver {
 // =========================================================================
 
 contract RoundVotingEngineBranchesTest is VotingTestBase {
+    // ContentRegistry.questionBundleRoundObserverByContent storage slot.
+    uint256 internal constant QUESTION_BUNDLE_ROUND_OBSERVER_BY_CONTENT_SLOT = 26;
+
     LoopReputation public lrepToken;
     ContentRegistry public registry;
     AdvisoryVoteRecorder public advisoryRecorder;
@@ -1100,6 +1103,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         registry.setQuestionRewardPoolEscrow(address(observer));
         vm.prank(owner);
         registry.unpause();
+        _storeBundleRoundObserver(contentId, address(observer));
 
         _settleRoundAfterRbtsSeed(contentId, roundId);
         assertEq(observer.notifyCount(), 0, "failed callback is retained for replay");
@@ -1117,6 +1121,14 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         vm.prank(owner);
         vm.expectRevert("no pending replay");
         engine.replayBundleObserverNotify(contentId, roundId);
+    }
+
+    function _storeBundleRoundObserver(uint256 contentId, address observer) internal {
+        vm.store(
+            address(registry),
+            keccak256(abi.encode(contentId, QUESTION_BUNDLE_ROUND_OBSERVER_BY_CONTENT_SLOT)),
+            bytes32(uint256(uint160(observer)))
+        );
     }
 
     function test_VerifiedHumanDoesNotBoostStakeWeight() public {
