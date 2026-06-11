@@ -15,7 +15,7 @@ The 9M pool distribution re-uses the methodology applied to the prior 4M RateLoo
 2. **Pro-rata floor with largest-fractional-remainder.** `floor(pool * weight / totalWeight)` per entry, then the leftover atomic units go to the entries with the largest fractional remainder, breaking ties by original-manifest index. This makes the allocation sum exactly to `pool` (atomic-unit conservation).
 3. **OZ StandardMerkleTree leaves.** Each leaf is `keccak256(bytes.concat(keccak256(abi.encode(account, allocation))))` — matches `LaunchDistributionPool._legacyContributorLeaf` exactly. Pairs are sibling-sorted before hashing.
 
-The methodology is intentionally separate from the on-chain `VERIFIED_REFERRAL_POOL` (42 M LREP) — that pool pays a fresh referral bonus to verified humans on the new WorldID-gated flow. A legacy contributor with a WorldID credential can claim from both: their legacy vesting via the merkle proof here, AND `claimVerifiedBonus(referrer)` for the base + referral bonus on the new pool. The two are independent.
+The merkle vesting allocation is intentionally separate from the on-chain `VERIFIED_REFERRAL_POOL` (42 M LREP). Deployments also seed the same legacy contributor addresses into `RaterRegistry` as `SeededHuman` credentials for the standard human-credential TTL, so active legacy credentials count as verified humans everywhere. That means a legacy contributor can claim both their legacy vesting via the merkle proof here and `claimVerifiedBonus(referrer)` for the base + referral bonus on the verified-human pool.
 
 ## To regenerate the manifest
 
