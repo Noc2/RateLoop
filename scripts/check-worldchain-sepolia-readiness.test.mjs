@@ -156,6 +156,21 @@ test("validateOfflineReadiness rejects missing x402 submitter deployment", () =>
   assert(result.failures.some(message => message.includes("X402QuestionSubmitter has an address")));
 });
 
+test("validateOfflineReadiness rejects missing confidentiality escrow deployment", () => {
+  const deploymentJson = makeDeploymentJson();
+  const escrowAddress = buildDeploymentAddressMap(deploymentJson).get("ConfidentialityEscrow");
+  delete deploymentJson[escrowAddress];
+
+  const result = validateOfflineReadiness({
+    deploymentJson,
+    deployedContractsSource: makeGeneratedContractsSource(),
+    questionRewardPoolsSource,
+  });
+
+  assert.equal(result.ok, false);
+  assert(result.failures.some(message => message.includes("ConfidentialityEscrow has an address")));
+});
+
 test("validateLiveReadiness can skip missing targets for ad-hoc local use", async () => {
   const result = await validateLiveReadiness({
     deploymentJson: makeDeploymentJson(),
