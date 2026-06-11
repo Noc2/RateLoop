@@ -39,6 +39,7 @@ test.describe("Tied round lifecycle", () => {
   test.describe.configure({ mode: "serial" });
 
   const VOTING_ENGINE = CONTRACT_ADDRESSES.RoundVotingEngine;
+  const CONTENT_REGISTRY = CONTRACT_ADDRESSES.ContentRegistry;
   const LREP_TOKEN = CONTRACT_ADDRESSES.LoopReputation;
   const EPOCH_DURATION = 60;
   const MIN_TIE_VOTERS = 4;
@@ -54,6 +55,9 @@ test.describe("Tied round lifecycle", () => {
     const submitter = ANVIL_ACCOUNTS.account10;
     const uniqueId = Date.now();
     const url = `https://www.youtube.com/watch?v=tie_test_${uniqueId}`;
+    const submitApproved = await approveLREP(CONTENT_REGISTRY, BigInt(10e6), submitter.address, LREP_TOKEN);
+    expect(submitApproved, "Content submission approval failed").toBe(true);
+
     const submitted = await submitContentDirect(
       url,
       `Tie Test Title ${uniqueId}`,
@@ -61,7 +65,7 @@ test.describe("Tied round lifecycle", () => {
       "test",
       1,
       submitter.address,
-      CONTRACT_ADDRESSES.ContentRegistry,
+      CONTENT_REGISTRY,
     );
     expect(submitted, "Content submission tx failed").toBe(true);
 

@@ -117,9 +117,14 @@ test.describe("Frontend fee claim lifecycle", () => {
     expect(contentId).toBeTruthy();
 
     const voters = [
+      { account: ANVIL_ACCOUNTS.account2, isUp: true },
       { account: ANVIL_ACCOUNTS.account3, isUp: true },
       { account: ANVIL_ACCOUNTS.account4, isUp: true },
+      { account: ANVIL_ACCOUNTS.account5, isUp: true },
+      { account: ANVIL_ACCOUNTS.account6, isUp: true },
       { account: ANVIL_ACCOUNTS.account7, isUp: false },
+      { account: ANVIL_ACCOUNTS.account8, isUp: false },
+      { account: ANVIL_ACCOUNTS.account9, isUp: false },
     ];
 
     const commits: { commitKey: `0x${string}`; isUp: boolean; salt: `0x${string}` }[] = [];
