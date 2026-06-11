@@ -61,6 +61,30 @@ function isPrivateContextItem(item: ContentItem) {
   return item.contextAccess === "gated" || item.contextVisibility === "gated";
 }
 
+type ConfidentialContextGateChildren = ReactNode | ((params: { walletAddress?: string }) => ReactNode);
+
+function renderConfidentialGateChildren(children: ConfidentialContextGateChildren, walletAddress?: string) {
+  return typeof children === "function" ? children({ walletAddress }) : children;
+}
+
+function appendGatedContextAddress(url: string, walletAddress?: string) {
+  if (!walletAddress || !url.startsWith("/")) return url;
+  try {
+    const parsed = new URL(url, "https://rateloop.local");
+    const isGatedAttachment =
+      parsed.pathname.startsWith("/api/attachments/images/") || parsed.pathname.startsWith("/api/attachments/details/");
+    if (!isGatedAttachment) return url;
+    parsed.searchParams.set("address", walletAddress);
+    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  } catch {
+    return url;
+  }
+}
+
+function appendOptionalGatedContextAddress(url: string | null | undefined, walletAddress?: string) {
+  return url ? appendGatedContextAddress(url, walletAddress) : url;
+}
+
 function PrivateContextBadge({ compact = false }: { compact?: boolean }) {
   return (
     <span
@@ -388,7 +412,15 @@ function FeedContentHeader({ item, titleId, compact }: FeedContentHeaderProps) {
   );
 }
 
-function ConfidentialContextGate({ children, item }: { children: ReactNode; item: ContentItem }) {
+function ConfidentialContextGate({
+  children,
+  item,
+  variant = "media",
+}: {
+  children: ConfidentialContextGateChildren;
+  item: ContentItem;
+  variant?: "media" | "inline";
+}) {
   const gated = isPrivateContextItem(item);
   const { address } = useAccount();
   const { isPending: isSigning, signMessageAsync } = useWalletMessageSigner({ address });
@@ -399,6 +431,18 @@ function ConfidentialContextGate({ children, item }: { children: ReactNode; item
   useEffect(() => {
     setAccepted(false);
   }, [item.id]);
+
+  useEffect(() => {
+    if (!gated || typeof window === "undefined") return;
+    const handleAccepted = (event: Event) => {
+      const detail = event instanceof CustomEvent ? event.detail : null;
+      if (detail?.contentId === item.id.toString()) setAccepted(true);
+    };
+    window.addEventListener("rateloop:confidentiality-accepted", handleAccepted);
+    return () => {
+      window.removeEventListener("rateloop:confidentiality-accepted", handleAccepted);
+    };
+  }, [gated, item.id]);
 
   useEffect(() => {
     if (!gated || !address) return;
@@ -465,6 +509,13 @@ function ConfidentialContextGate({ children, item }: { children: ReactNode; item
         throw new Error(acceptedBody.error || "Could not record confidentiality acceptance.");
       }
       setAccepted(true);
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("rateloop:confidentiality-accepted", {
+            detail: { contentId: item.id.toString() },
+          }),
+        );
+      }
     } catch (error) {
       notification.error(error instanceof Error ? error.message : "Could not unlock private context.");
     } finally {
@@ -472,12 +523,18 @@ function ConfidentialContextGate({ children, item }: { children: ReactNode; item
     }
   };
 
-  if (!gated || accepted) return <>{children}</>;
+  if (!gated || accepted) return <>{renderConfidentialGateChildren(children, address)}</>;
+
+  const lockedClassName =
+    variant === "inline"
+      ? "flex w-full flex-col items-start gap-3 rounded-md border border-warning/20 bg-warning/10 p-3 text-left"
+      : "flex h-full min-h-[16rem] w-full flex-col items-center justify-center gap-4 bg-base-300 p-6 text-center";
+  const copyClassName = variant === "inline" ? "max-w-2xl space-y-1" : "max-w-md space-y-2";
 
   return (
-    <div className="flex h-full min-h-[16rem] w-full flex-col items-center justify-center gap-4 bg-base-300 p-6 text-center">
+    <div className={lockedClassName}>
       <PrivateContextBadge />
-      <div className="max-w-md space-y-2">
+      <div className={copyClassName}>
         <p className="text-base font-semibold text-base-content">Confidential context is locked</p>
         <p className="text-sm leading-relaxed text-base-content/65">
           Accept the question confidentiality terms with your wallet to view hosted context for this rating.
@@ -534,20 +591,22 @@ function ContentMediaCarousel({
   return (
     <>
       <ConfidentialContextGate item={item}>
-        <ContentEmbed
-          url={embedUrl}
-          thumbnailUrl={item.thumbnailUrl}
-          title={item.title}
-          description={item.description}
-          compact={compact}
-          showTextHeading={false}
-          isActive={isActive}
-          interactionMode={interactionMode}
-          imageFit="contain"
-          enableImageLightbox={Boolean(activeMediaIsImage)}
-          imageLightboxTriggerLabel="Open question image"
-          imageLightboxModalLabel={item.title ? `Image for ${item.title}` : "Question image"}
-        />
+        {({ walletAddress }) => (
+          <ContentEmbed
+            url={appendGatedContextAddress(embedUrl, walletAddress)}
+            thumbnailUrl={appendOptionalGatedContextAddress(item.thumbnailUrl, walletAddress)}
+            title={item.title}
+            description={item.description}
+            compact={compact}
+            showTextHeading={false}
+            isActive={isActive}
+            interactionMode={interactionMode}
+            imageFit="contain"
+            enableImageLightbox={Boolean(activeMediaIsImage)}
+            imageLightboxTriggerLabel="Open question image"
+            imageLightboxModalLabel={item.title ? `Image for ${item.title}` : "Question image"}
+          />
+        )}
       </ConfidentialContextGate>
       {hasCarouselControls ? (
         <>
@@ -659,6 +718,15 @@ function FeedContentMetaCard({
       {!hasVisibleReward ? <NoRewardChip /> : null}
     </>
   );
+  const questionDescription = (walletAddress?: string) => (
+    <QuestionDescription
+      description={description}
+      detailsHash={item.detailsHash}
+      detailsUrl={privateContext ? appendOptionalGatedContextAddress(item.detailsUrl, walletAddress) : item.detailsUrl}
+      referencedContentById={referencedContentById}
+      className="text-base leading-relaxed text-base-content/85"
+    />
+  );
 
   return (
     <>
@@ -678,13 +746,13 @@ function FeedContentMetaCard({
 
         {hasDescription ? (
           <div className={compact ? "mt-3 space-y-2" : "mt-4 space-y-2"}>
-            <QuestionDescription
-              description={description}
-              detailsHash={item.detailsHash}
-              detailsUrl={item.detailsUrl}
-              referencedContentById={referencedContentById}
-              className="text-base leading-relaxed text-base-content/85"
-            />
+            {privateContext ? (
+              <ConfidentialContextGate item={item} variant="inline">
+                {({ walletAddress }) => questionDescription(walletAddress)}
+              </ConfidentialContextGate>
+            ) : (
+              questionDescription()
+            )}
           </div>
         ) : null}
 
