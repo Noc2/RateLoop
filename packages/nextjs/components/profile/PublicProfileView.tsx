@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ROUND_STATE } from "@rateloop/contracts/protocol";
 import {
@@ -87,6 +87,8 @@ interface PublicProfileViewProps {
 
 const NAME_REGEX = /^[a-zA-Z0-9_]{3,20}$/;
 const DEFAULT_AVATAR_ACCENT_HEX = "#359eee";
+const CONFIDENTIALITY_SANCTION_INDEXER_NOTICE =
+  "The public indexer has not reported an active confidentiality sanction for this profile.";
 
 function truncateAddress(address: string) {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
@@ -301,12 +303,28 @@ type CountryOption = (typeof PROFILE_COUNTRY_OPTIONS)[number];
 const COUNTRY_PICKER_RESULT_LIMIT = 8;
 const MAX_PROFILE_NATIONALITIES = 3;
 
-function AudienceContextHeading() {
+function AudienceContextHeading({ rightContent }: { rightContent?: ReactNode }) {
   return (
-    <div className="inline-flex items-center gap-1.5 text-sm font-semibold uppercase tracking-[0.18em] text-primary/90">
-      <span>Audience context</span>
-      <InfoTooltip text={PROFILE_SELF_REPORT_NOTICE} />
+    <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <div className="inline-flex items-center gap-1.5 text-sm font-semibold uppercase tracking-[0.18em] text-primary/90">
+        <span>Audience context</span>
+        <InfoTooltip text={PROFILE_SELF_REPORT_NOTICE} />
+      </div>
+      {rightContent ? <div className="shrink-0">{rightContent}</div> : null}
     </div>
+  );
+}
+
+function ConfidentialitySanctionStatusBadge({ active, tooltipText }: { active: boolean; tooltipText: string }) {
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${
+        active ? "bg-error/15 text-error" : "bg-success/10 text-success"
+      }`}
+    >
+      <span>{active ? "Active sanction" : "No active sanction indexed"}</span>
+      <InfoTooltip text={tooltipText} position="bottom" />
+    </span>
   );
 }
 
@@ -983,6 +1001,22 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
   const winRateLabel = stats && stats.totalSettledVotes > 0 ? `${(stats.winRate * 100).toFixed(1)}%` : "—";
   const dailyStreakLabel = (dailyStreak?.currentDailyStreak ?? 0).toLocaleString();
   const resolvedVotesLabel = (stats?.totalSettledVotes ?? 0).toLocaleString();
+  const confidentialitySanctionTooltip = confidentialitySanction?.active
+    ? [
+        confidentialitySanction.reason || "Governance-marked confidentiality breach.",
+        `Scope: ${confidentialitySanction.scope || "surplus earning and gated-context access checks"}.`,
+        `Expires: ${formatSanctionExpiry(confidentialitySanction.expiresAt)}.`,
+        confidentialitySanction.evidenceHash ? `Evidence ${confidentialitySanction.evidenceHash}.` : null,
+      ]
+        .filter(Boolean)
+        .join(" ")
+    : CONFIDENTIALITY_SANCTION_INDEXER_NOTICE;
+  const audienceContextSanctionStatus = !isEditing ? (
+    <ConfidentialitySanctionStatusBadge
+      active={Boolean(confidentialitySanction?.active)}
+      tooltipText={confidentialitySanctionTooltip}
+    />
+  ) : null;
 
   const streakLabel = useMemo(() => {
     if (!stats) return "0";
@@ -1336,43 +1370,6 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
             <div className="mt-4 surface-card-nested rounded-2xl px-4 py-3 text-base text-error">{profileError}</div>
           ) : null}
 
-          {!isEditing ? (
-            <div
-              className={`mt-4 rounded-2xl border px-4 py-3 text-sm ${
-                confidentialitySanction?.active
-                  ? "border-error/30 bg-error/10 text-error"
-                  : "border-base-300 bg-base-100 text-base-content/65"
-              }`}
-            >
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="font-semibold text-base-content">Confidentiality status</span>
-                <span
-                  className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                    confidentialitySanction?.active ? "bg-error/15 text-error" : "bg-success/10 text-success"
-                  }`}
-                >
-                  {confidentialitySanction?.active ? "Active sanction" : "No active sanction indexed"}
-                </span>
-              </div>
-              {confidentialitySanction?.active ? (
-                <div className="mt-2 space-y-1 text-sm leading-relaxed">
-                  <p>{confidentialitySanction.reason || "Governance-marked confidentiality breach."}</p>
-                  <p>Scope: {confidentialitySanction.scope || "surplus earning and gated-context access checks"}</p>
-                  <p>Expires: {formatSanctionExpiry(confidentialitySanction.expiresAt)}</p>
-                  {confidentialitySanction.evidenceHash ? (
-                    <p className="break-all font-mono text-xs text-base-content/60">
-                      Evidence {confidentialitySanction.evidenceHash}
-                    </p>
-                  ) : null}
-                </div>
-              ) : (
-                <p className="mt-2 leading-relaxed">
-                  The public indexer has not reported an active confidentiality sanction for this profile.
-                </p>
-              )}
-            </div>
-          ) : null}
-
           {ownProfile && isEditing ? (
             <div className="mt-6 surface-card-nested rounded-2xl px-5 py-4">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -1549,7 +1546,7 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
             </div>
           ) : hasCurrentSelfReport ? (
             <div className="mt-6 surface-card-nested rounded-2xl px-5 py-4">
-              <AudienceContextHeading />
+              <AudienceContextHeading rightContent={audienceContextSanctionStatus} />
               <dl className="mt-4 grid gap-x-8 divide-y divide-base-content/10 md:grid-cols-2 md:divide-y-0">
                 {currentSelfReportGroups.map(group => (
                   <div
@@ -1564,7 +1561,7 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
             </div>
           ) : ownProfile ? (
             <div className="mt-6 rounded-2xl border border-dashed border-base-content/15 px-5 py-4">
-              <AudienceContextHeading />
+              <AudienceContextHeading rightContent={audienceContextSanctionStatus} />
             </div>
           ) : null}
         </div>
