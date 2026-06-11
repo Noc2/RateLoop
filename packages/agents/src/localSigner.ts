@@ -451,8 +451,68 @@ function parseQuestionMetadataBaseUrl(
     }
     return normalizeQuestionMetadataBaseUrl(value);
   } catch {
-    throw new Error(`${name} must be a public HTTPS URL without query or hash.`);
+    throw new Error(
+      `${name} must be a public HTTPS URL without query or hash.`,
+    );
   }
+}
+
+function normalizeInheritedQuestionMetadataBaseUrl(
+  value: string | undefined,
+): string | undefined {
+  if (!value) return undefined;
+  return normalizeQuestionMetadataBaseUrl(value);
+}
+
+function resolveLocalSignerQuestionMetadataBaseUrl(
+  options: CliOptions,
+  env: NodeJS.ProcessEnv,
+) {
+  const optionValue = optionString(options, "question-metadata-base-url");
+  if (optionValue !== undefined) {
+    return parseQuestionMetadataBaseUrl(
+      optionValue,
+      "question-metadata-base-url",
+    );
+  }
+
+  const localSignerValue = envString(
+    env,
+    "RATELOOP_LOCAL_SIGNER_QUESTION_METADATA_BASE_URL",
+  );
+  if (localSignerValue !== undefined) {
+    return parseQuestionMetadataBaseUrl(
+      localSignerValue,
+      "RATELOOP_LOCAL_SIGNER_QUESTION_METADATA_BASE_URL",
+    );
+  }
+
+  const legacyValue = envString(env, "RATELOOP_QUESTION_METADATA_BASE_URL");
+  if (legacyValue !== undefined) {
+    return parseQuestionMetadataBaseUrl(
+      legacyValue,
+      "RATELOOP_QUESTION_METADATA_BASE_URL",
+    );
+  }
+
+  return normalizeInheritedQuestionMetadataBaseUrl(
+    envString(env, "NEXT_PUBLIC_PONDER_URL") ??
+      envString(env, "NEXT_PUBLIC_APP_URL"),
+  );
+}
+
+function resolveAskQuestionMetadataBaseUrl(params: {
+  ask: AskHumansResponse;
+  config: TransactionPlanValidationConfig;
+}) {
+  const serverBaseUrl = readAskQuestionMetadataBaseUrl(params.ask);
+  const localBaseUrl = params.config.questionMetadataBaseUrl;
+  if (serverBaseUrl && localBaseUrl && serverBaseUrl !== localBaseUrl) {
+    throw new Error(
+      `RateLoop ask response questionMetadataBaseUrl ${serverBaseUrl} does not match local signer questionMetadataBaseUrl ${localBaseUrl}.`,
+    );
+  }
+  return serverBaseUrl ?? localBaseUrl;
 }
 
 function assertRecord(value: unknown, name: string): JsonRecord {
@@ -3161,7 +3221,9 @@ function validatePaymentMetadata(params: {
   }
 }
 
-function readAskQuestionMetadataBaseUrl(ask: AskHumansResponse): string | undefined {
+function readAskQuestionMetadataBaseUrl(
+  ask: AskHumansResponse,
+): string | undefined {
   const value = ask.questionMetadataBaseUrl;
   return parseQuestionMetadataBaseUrl(
     typeof value === "string" ? value : undefined,
@@ -3213,9 +3275,10 @@ export function validateLocalSignerTransactionPlan(params: {
   const expectedPlan = buildExpectedLocalSignerQuestionPlan({
     expectedChainId: responseChainId,
     payload: params.expectedPayload,
-    questionMetadataBaseUrl:
-      readAskQuestionMetadataBaseUrl(params.ask) ??
-      params.config.questionMetadataBaseUrl,
+    questionMetadataBaseUrl: resolveAskQuestionMetadataBaseUrl({
+      ask: params.ask,
+      config: params.config,
+    }),
     walletAddress: params.accountAddress,
   });
   if (expectedPlan.rewardTerms.amount !== params.expectedBountyAmount) {
@@ -3516,13 +3579,9 @@ export function loadLocalSignerConfig(
         envString(env, "RATELOOP_LOCAL_SIGNER_PRIVATE_KEY"),
       "RATELOOP_LOCAL_SIGNER_PRIVATE_KEY",
     ),
-    questionMetadataBaseUrl: parseQuestionMetadataBaseUrl(
-      optionString(options, "question-metadata-base-url") ??
-        envString(env, "RATELOOP_LOCAL_SIGNER_QUESTION_METADATA_BASE_URL") ??
-        envString(env, "RATELOOP_QUESTION_METADATA_BASE_URL") ??
-        envString(env, "NEXT_PUBLIC_PONDER_URL") ??
-        envString(env, "NEXT_PUBLIC_APP_URL"),
-      "RATELOOP_LOCAL_SIGNER_QUESTION_METADATA_BASE_URL",
+    questionMetadataBaseUrl: resolveLocalSignerQuestionMetadataBaseUrl(
+      options,
+      env,
     ),
     questionRewardPoolEscrowAddress: parseOptionalAddress(
       optionString(options, "question-reward-pool-escrow-address") ??
@@ -3844,9 +3903,10 @@ export async function askHumansWithLocalSigner(params: {
     const expectedPlan = buildExpectedLocalSignerQuestionPlan({
       expectedChainId: baseAsk.chainId,
       payload: baseAsk,
-      questionMetadataBaseUrl:
-        readAskQuestionMetadataBaseUrl(initialAsk) ??
-        params.config.questionMetadataBaseUrl,
+      questionMetadataBaseUrl: resolveAskQuestionMetadataBaseUrl({
+        ask: initialAsk,
+        config: params.config,
+      }),
       walletAddress: params.account.address,
     });
     if (expectedPlan.isBundleSubmission) {

@@ -21,6 +21,7 @@ import { findAgentResultTemplate } from "../templates.js";
 import {
   askHumansWithLocalSigner,
   buildLocalQuestionCanonicalPayload,
+  loadLocalSignerConfig,
   signX402AuthorizationRequest,
   validateLocalSignerTransactionPlan,
   withLocalSignerWallet,
@@ -234,7 +235,11 @@ function expectedPayloadHash(questionMetadataBaseUrl?: string) {
 }
 
 function expectedOperationKey(questionMetadataBaseUrl?: string) {
-  return `0x${createHash("sha256").update(`rateloop:x402-question:${expectedPayloadHash(questionMetadataBaseUrl)}`).digest("hex")}` as const;
+  return `0x${createHash("sha256")
+    .update(
+      `rateloop:x402-question:${expectedPayloadHash(questionMetadataBaseUrl)}`,
+    )
+    .digest("hex")}` as const;
 }
 
 function expectedSubmissionKey() {
@@ -388,7 +393,10 @@ function x402StringArrayHash(values: readonly string[]) {
   );
 }
 
-function x402PaymentNonce(from = account.address, questionMetadataBaseUrl?: string) {
+function x402PaymentNonce(
+  from = account.address,
+  questionMetadataBaseUrl?: string,
+) {
   const spec = questionSpec(questionMetadataBaseUrl);
   const submissionPayloadHash = keccak256(
     encodeAbiParameters(
@@ -579,7 +587,10 @@ function walletCallsResponse(
           value: "0",
         },
         {
-          data: submitQuestionData(BigInt(X402_AMOUNT), questionMetadataBaseUrl),
+          data: submitQuestionData(
+            BigInt(X402_AMOUNT),
+            questionMetadataBaseUrl,
+          ),
           phase: "submit_question",
           to: CONTENT_REGISTRY_ADDRESS,
           value: "0",
@@ -620,7 +631,10 @@ function x402CallsResponse(
           value: "0",
         },
         {
-          data: submitX402QuestionData(BigInt(X402_AMOUNT), questionMetadataBaseUrl),
+          data: submitX402QuestionData(
+            BigInt(X402_AMOUNT),
+            questionMetadataBaseUrl,
+          ),
           phase: "submit_x402_question",
           to: X402_SUBMITTER_ADDRESS,
           value: "0",
@@ -849,6 +863,30 @@ describe("local signer", () => {
     });
 
     expect(calls).toHaveLength(3);
+  });
+
+  it("normalizes inherited public metadata base env values with server fallback semantics", () => {
+    const config = loadLocalSignerConfig({}, {
+      NEXT_PUBLIC_PONDER_URL: "http://localhost:42069",
+    } as NodeJS.ProcessEnv);
+
+    expect(config.questionMetadataBaseUrl).toBe("https://rateloop.ai");
+  });
+
+  it("rejects server metadata bases that differ from the local signer pin", () => {
+    expect(() =>
+      validateLocalSignerTransactionPlan({
+        accountAddress: account.address,
+        ask: walletCallsResponse({}, QUESTION_METADATA_BASE_URL),
+        config: {
+          ...validationConfig(),
+          questionMetadataBaseUrl: "https://operator.example",
+        },
+        expectedBountyAmount: BigInt(X402_AMOUNT),
+        expectedChainId: 480,
+        expectedPayload: askPayload(),
+      }),
+    ).toThrow(/does not match local signer questionMetadataBaseUrl/);
   });
 
   it("validates signed x402 transaction plans before execution", () => {
@@ -1107,6 +1145,46 @@ describe("local signer", () => {
       /^0x[0-9a-f]{130}$/i,
     );
     expect(result.transactions).toBeUndefined();
+  });
+
+  it("rejects x402 authorization asks whose server metadata base differs from the local signer pin", async () => {
+    const agent = {
+      askHumans: async (): Promise<AskHumansResponse> => ({
+        operationKey: expectedOperationKey(QUESTION_METADATA_BASE_URL),
+        payloadHash: expectedPayloadHash(QUESTION_METADATA_BASE_URL),
+        paymentMode: "x402_authorization",
+        questionMetadataBaseUrl: QUESTION_METADATA_BASE_URL,
+        x402AuthorizationRequest: x402AuthorizationRequest(),
+      }),
+      confirmAskTransactions: async () => {
+        throw new Error(
+          "confirmAskTransactions should not run before authorization signing.",
+        );
+      },
+    } satisfies Pick<
+      RateLoopAgentClient,
+      "askHumans" | "confirmAskTransactions"
+    >;
+
+    await expect(
+      askHumansWithLocalSigner({
+        account,
+        agent,
+        config: {
+          chainId: 480,
+          chainName: "test",
+          contentRegistryAddress: CONTENT_REGISTRY_ADDRESS,
+          pollingIntervalMs: 1,
+          questionMetadataBaseUrl: "https://operator.example",
+          questionRewardPoolEscrowAddress: QUESTION_REWARD_ESCROW_ADDRESS,
+          receiptTimeoutMs: 1,
+          usdcAddress: X402_USDC_ADDRESS,
+          x402QuestionSubmitterAddress: X402_SUBMITTER_ADDRESS,
+        },
+        payload: askPayload(),
+        paymentMode: "x402_authorization",
+      }),
+    ).rejects.toThrow(/does not match local signer questionMetadataBaseUrl/);
   });
 
   it("rejects ask payloads that target a different configured chain", async () => {
