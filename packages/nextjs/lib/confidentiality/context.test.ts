@@ -19,6 +19,7 @@ type SignedReadSessionsModule = typeof import("~~/lib/auth/signedReadSessions");
 
 const WALLET = "0x1234567890abcdef1234567890abcdef12345678" as const;
 const CONTENT_ID = "42";
+const IDENTITY_KEY = `0x${"a".repeat(64)}` as const;
 
 let dbModule: DbModule;
 let dbTestMemory: DbTestMemoryModule;
@@ -38,7 +39,7 @@ function termsPayload(): ConfidentialityTermsPayload {
     contentHash: `0x${"1".repeat(64)}`,
     contentId: CONTENT_ID,
     detailsHash: `0x${"2".repeat(64)}`,
-    identityKey: null,
+    identityKey: IDENTITY_KEY,
     mediaTupleHash: `0x${"3".repeat(64)}`,
     normalizedAddress: WALLET,
     questionMetadataHash: `0x${"4".repeat(64)}`,
@@ -56,6 +57,44 @@ async function clearTables() {
   await dbModule.dbClient.execute("DELETE FROM signed_read_sessions");
 }
 
+function installConfidentialityGate(
+  params: {
+    banned?: boolean;
+    hasActiveBond?: boolean;
+    hasActiveHumanCredential?: boolean;
+    identityKey?: `0x${string}` | null;
+  } = {},
+) {
+  confidentiality.__setConfidentialityOnchainGateForTests({
+    hasActiveBond: async () => params.hasActiveBond ?? true,
+    isIdentityKeyBanned: async () => params.banned ?? false,
+    resolveViewer: async () => ({
+      delegated: false,
+      hasActiveHumanCredential: params.hasActiveHumanCredential ?? true,
+      holder: WALLET,
+      humanNullifier: `0x${"b".repeat(64)}`,
+      identityKey: params.identityKey === undefined ? IDENTITY_KEY : params.identityKey,
+    }),
+  });
+}
+
+async function createAcceptedRequest() {
+  await confidentiality.recordConfidentialityTermsAcceptance({
+    acceptedAt: new Date("2026-06-11T10:00:00.000Z"),
+    nonce: "nonce-1",
+    payload: termsPayload(),
+    signature: "0xab",
+  });
+  const session = await signedReadSessions.issueSignedReadSession(WALLET, "gated_context");
+  const cookie = signedReadSessions.getSignedReadSessionCookie("gated_context", session);
+  return new NextRequest(`https://rateloop.ai/api/attachments/details/det_contextaccess001?address=${WALLET}`, {
+    headers: {
+      cookie: `${cookie.name}=${cookie.value}`,
+      "x-real-ip": "198.51.100.7",
+    },
+  });
+}
+
 before(async () => {
   dbModule = await import("~~/lib/db");
   dbTestMemory = await import("~~/lib/db/testMemory");
@@ -66,9 +105,11 @@ before(async () => {
 
 beforeEach(async () => {
   await clearTables();
+  confidentiality.__setConfidentialityOnchainGateForTests(null);
 });
 
 after(() => {
+  confidentiality.__setConfidentialityOnchainGateForTests(null);
   dbModule.__setDatabaseResourcesForTests(null);
   restoreEnv("DATABASE_URL", originalDatabaseUrl);
   restoreEnv("NODE_ENV", originalNodeEnv);
@@ -108,25 +149,14 @@ test("upserts gated metadata and flips disclosure after settlement", async () =>
 });
 
 test("authorizes accepted signed sessions and logs gated context access", async () => {
-  await confidentiality.recordConfidentialityTermsAcceptance({
-    acceptedAt: new Date("2026-06-11T10:00:00.000Z"),
-    nonce: "nonce-1",
-    payload: termsPayload(),
-    signature: "0xab",
-  });
-  const session = await signedReadSessions.issueSignedReadSession(WALLET, "gated_context");
-  const cookie = signedReadSessions.getSignedReadSessionCookie("gated_context", session);
+  installConfidentialityGate();
   const resourceId = "det_contextaccess001";
-  const request = new NextRequest(`https://rateloop.ai/api/attachments/details/${resourceId}?address=${WALLET}`, {
-    headers: {
-      cookie: `${cookie.name}=${cookie.value}`,
-      "x-real-ip": "198.51.100.7",
-    },
-  });
+  const request = await createAcceptedRequest();
 
   const authorization = await confidentiality.authorizeGatedContextRequest(request, CONTENT_ID);
   assert.equal(authorization.ok, true);
   if (!authorization.ok) return;
+  assert.equal(authorization.identityKey, IDENTITY_KEY);
 
   const viewToken = confidentiality.createConfidentialViewToken({
     contentId: CONTENT_ID,
@@ -145,10 +175,11 @@ test("authorizes accepted signed sessions and logs gated context access", async 
   });
 
   const accessRows = await dbModule.dbClient.execute(
-    "SELECT content_id, ip_hash, resource_kind FROM confidential_context_access_logs",
+    "SELECT content_id, identity_key, ip_hash, resource_kind FROM confidential_context_access_logs",
   );
   assert.equal(accessRows.rowCount, 1);
   assert.equal(accessRows.rows[0].content_id, CONTENT_ID);
+  assert.equal(accessRows.rows[0].identity_key, IDENTITY_KEY);
   assert.equal(accessRows.rows[0].resource_kind, "details");
   assert.ok(accessRows.rows[0].ip_hash);
 
@@ -159,4 +190,53 @@ test("authorizes accepted signed sessions and logs gated context access", async 
   assert.equal(root.accessCount, 1);
   assert.equal(root.acceptanceCount, 1);
   assert.match(root.merkleRoot, /^0x[0-9a-f]{64}$/);
+});
+
+test("rejects gated reads without an active human credential identity", async () => {
+  installConfidentialityGate({ hasActiveHumanCredential: false, identityKey: null });
+  const authorization = await confidentiality.authorizeGatedContextRequest(await createAcceptedRequest(), CONTENT_ID);
+
+  assert.deepEqual(authorization, {
+    ok: false,
+    status: 403,
+    error: "Active human credential required",
+  });
+});
+
+test("rejects gated reads for banned identities", async () => {
+  installConfidentialityGate({ banned: true });
+  const authorization = await confidentiality.authorizeGatedContextRequest(await createAcceptedRequest(), CONTENT_ID);
+
+  assert.deepEqual(authorization, {
+    ok: false,
+    status: 403,
+    error: "Confidentiality access revoked",
+  });
+});
+
+test("checks nonzero confidentiality bonds against the escrow gate", async () => {
+  await confidentiality.upsertQuestionConfidentialityFromMetadata({
+    contentId: CONTENT_ID,
+    metadata: {
+      confidentiality: {
+        bond: { amount: "5000000", asset: "USDC" },
+        disclosurePolicy: "after_settlement",
+        visibility: "gated",
+      },
+    },
+  });
+
+  installConfidentialityGate({ hasActiveBond: true });
+  const allowed = await confidentiality.authorizeGatedContextRequest(await createAcceptedRequest(), CONTENT_ID);
+  assert.equal(allowed.ok, true);
+  if (!allowed.ok) return;
+  assert.equal(allowed.identityKey, IDENTITY_KEY);
+
+  installConfidentialityGate({ hasActiveBond: false });
+  const denied = await confidentiality.authorizeGatedContextRequest(await createAcceptedRequest(), CONTENT_ID);
+  assert.deepEqual(denied, {
+    ok: false,
+    status: 403,
+    error: "Active confidentiality bond required",
+  });
 });

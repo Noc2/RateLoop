@@ -12,6 +12,7 @@ import {
   CONFIDENTIALITY_TERMS_DOC_HASH,
   CONFIDENTIALITY_TERMS_URI,
   CONFIDENTIALITY_TERMS_VERSION,
+  __setConfidentialityOnchainGateForTests,
   recordConfidentialityTermsAcceptance,
   upsertQuestionConfidentialityFromMetadata,
 } from "~~/lib/confidentiality/context";
@@ -35,6 +36,7 @@ const CONTENT_ID = "42";
 const DETAILS_ID = "det_routegatedetail01";
 const DETAILS_TEXT = "Sensitive unreleased positioning copy.";
 const WALLET = "0x1234567890abcdef1234567890abcdef12345678" as const;
+const IDENTITY_KEY = `0x${"a".repeat(64)}` as const;
 
 let tempDir: string | null = null;
 
@@ -107,7 +109,7 @@ async function acceptTermsAndBuildCookie(nonce: string) {
       contentHash: null,
       contentId: CONTENT_ID,
       detailsHash: null,
-      identityKey: null,
+      identityKey: IDENTITY_KEY,
       mediaTupleHash: null,
       normalizedAddress: WALLET,
       questionMetadataHash: null,
@@ -130,10 +132,22 @@ beforeEach(async () => {
   env.RATELOOP_CONFIDENTIALITY_SECRET = "test-confidentiality-route-secret";
   env.RATELOOP_LOCAL_IMAGE_ATTACHMENT_DIR = tempDir;
   __setDatabaseResourcesForTests(createMemoryDatabaseResources());
+  __setConfidentialityOnchainGateForTests({
+    hasActiveBond: async () => true,
+    isIdentityKeyBanned: async () => false,
+    resolveViewer: async () => ({
+      delegated: false,
+      hasActiveHumanCredential: true,
+      holder: WALLET,
+      humanNullifier: `0x${"b".repeat(64)}`,
+      identityKey: IDENTITY_KEY,
+    }),
+  });
   await seedGatedConfidentiality();
 });
 
 after(async () => {
+  __setConfidentialityOnchainGateForTests(null);
   __setDatabaseResourcesForTests(null);
   if (tempDir) await rm(tempDir, { recursive: true, force: true });
   restoreEnv("DATABASE_URL", originalDatabaseUrl);
@@ -173,11 +187,12 @@ test("gated details require a signed accepted wallet session and avoid public ca
   assert.match(allowed.headers.get("x-rateloop-details-hash") ?? "", /^0x[a-f0-9]{64}$/);
 
   const rows = await dbClient.execute(
-    "SELECT content_id, resource_id, resource_kind FROM confidential_context_access_logs",
+    "SELECT content_id, identity_key, resource_id, resource_kind FROM confidential_context_access_logs",
   );
   assert.deepEqual(rows.rows, [
     {
       content_id: CONTENT_ID,
+      identity_key: IDENTITY_KEY,
       resource_id: DETAILS_ID,
       resource_kind: "details",
     },
@@ -213,11 +228,12 @@ test("gated images require accepted wallet sessions and return watermarked no-st
   assert.ok((await allowed.arrayBuffer()).byteLength > 0);
 
   const rows = await dbClient.execute(
-    "SELECT content_id, resource_id, resource_kind FROM confidential_context_access_logs",
+    "SELECT content_id, identity_key, resource_id, resource_kind FROM confidential_context_access_logs",
   );
   assert.deepEqual(rows.rows, [
     {
       content_id: CONTENT_ID,
+      identity_key: IDENTITY_KEY,
       resource_id: ATTACHMENT_ID,
       resource_kind: "image",
     },

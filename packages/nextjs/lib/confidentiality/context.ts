@@ -1,7 +1,20 @@
 import type { NextRequest } from "next/server";
+import deployedContracts from "@rateloop/contracts/deployedContracts";
 import { createHash, createHmac, randomBytes } from "crypto";
 import { and, eq, gte, isNull, lt } from "drizzle-orm";
 import "server-only";
+import {
+  type Abi,
+  type Address,
+  type Chain,
+  type PublicClient,
+  createPublicClient,
+  getAddress,
+  http,
+  isAddress,
+  zeroAddress,
+  zeroHash,
+} from "viem";
 import { buildSignedActionMessage, hashSignedActionPayload } from "~~/lib/auth/signedActions";
 import { GATED_CONTEXT_SIGNED_READ_SESSION_COOKIE_NAME, verifySignedReadSession } from "~~/lib/auth/signedReadSessions";
 import { db } from "~~/lib/db";
@@ -11,6 +24,7 @@ import {
   confidentialityTermsAcceptances,
   questionConfidentiality,
 } from "~~/lib/db/schema";
+import { getPrimaryServerTargetNetwork, getServerRpcOverrides } from "~~/lib/env/server";
 import { isValidWalletAddress, normalizeWalletAddress } from "~~/lib/watchlist/contentWatch";
 
 export const CONFIDENTIALITY_TERMS_ACTION = "confidentiality_terms:accept";
@@ -52,6 +66,71 @@ type ConfidentialityMetadataInput = {
 };
 
 type StoredConfidentiality = typeof questionConfidentiality.$inferSelect;
+
+type DeployedContract = {
+  address: Address;
+  abi: Abi;
+};
+
+type DeployedContractsMap = Record<number, Record<string, DeployedContract | undefined> | undefined>;
+
+type ResolvedConfidentialityViewer = {
+  delegated: boolean;
+  hasActiveHumanCredential: boolean;
+  holder: Address | null;
+  humanNullifier: `0x${string}` | null;
+  identityKey: `0x${string}` | null;
+};
+
+type ConfidentialityOnchainGate = {
+  hasActiveBond: (params: { contentId: string; identityKey: `0x${string}` }) => Promise<boolean>;
+  isIdentityKeyBanned: (identityKey: `0x${string}`) => Promise<boolean>;
+  resolveViewer: (walletAddress: `0x${string}`) => Promise<ResolvedConfidentialityViewer>;
+};
+
+type GateReadResult<T> = { ok: true; value: T } | { ok: false; error: string };
+
+const PROTOCOL_CONFIG_CONFIDENTIALITY_ABI = [
+  {
+    type: "function",
+    name: "confidentialityEscrow",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+    stateMutability: "view",
+  },
+] as const satisfies Abi;
+
+const RATER_REGISTRY_CONFIDENTIALITY_ABI = [
+  {
+    type: "function",
+    name: "isIdentityKeyBanned",
+    inputs: [{ name: "identityKey", type: "bytes32" }],
+    outputs: [{ name: "", type: "bool" }],
+    stateMutability: "view",
+  },
+] as const satisfies Abi;
+
+const CONFIDENTIALITY_ESCROW_READ_ABI = [
+  {
+    type: "function",
+    name: "hasActiveBond",
+    inputs: [
+      { name: "contentId", type: "uint256" },
+      { name: "identityKey", type: "bytes32" },
+    ],
+    outputs: [{ name: "", type: "bool" }],
+    stateMutability: "view",
+  },
+] as const satisfies Abi;
+
+let confidentialityGateOverrideForTests: ConfidentialityOnchainGate | null = null;
+
+export function __setConfidentialityOnchainGateForTests(gate: ConfidentialityOnchainGate | null) {
+  if (process.env.NODE_ENV !== "test") {
+    throw new Error("__setConfidentialityOnchainGateForTests is only available in tests.");
+  }
+  confidentialityGateOverrideForTests = gate;
+}
 
 function isBytes32Hex(value: unknown): value is `0x${string}` {
   return typeof value === "string" && BYTES32_HEX_PATTERN.test(value);
@@ -286,6 +365,173 @@ export async function recordConfidentialityTermsAcceptance(params: {
     });
 }
 
+function isPositiveBondAmount(value: string | null | undefined) {
+  try {
+    return BigInt(value ?? "0") > 0n;
+  } catch {
+    return false;
+  }
+}
+
+function normalizeChainAddress(value: unknown): Address | null {
+  return typeof value === "string" && isAddress(value) ? getAddress(value) : null;
+}
+
+function normalizeBytes32OrNull(value: unknown): `0x${string}` | null {
+  return isBytes32Hex(value) && value !== zeroHash ? (value.toLowerCase() as `0x${string}`) : null;
+}
+
+function getContractsForPrimaryServerNetwork() {
+  const targetNetwork = getPrimaryServerTargetNetwork();
+  if (!targetNetwork) return null;
+  const contracts = (deployedContracts as unknown as DeployedContractsMap)[targetNetwork.id];
+  return { contracts, targetNetwork };
+}
+
+function getServerPublicClient(targetNetwork: Chain): PublicClient {
+  const rpcOverrides = getServerRpcOverrides();
+  const rpcUrl = rpcOverrides[targetNetwork.id] ?? targetNetwork.rpcUrls.default.http[0];
+  return createPublicClient({
+    chain: targetNetwork,
+    transport: http(rpcUrl),
+  });
+}
+
+function parseResolvedConfidentialityViewer(value: unknown): ResolvedConfidentialityViewer {
+  const tuple = Array.isArray(value) ? (value as readonly unknown[]) : null;
+  const object =
+    !tuple && value && typeof value === "object" ? (value as Record<string, unknown>) : ({} as Record<string, unknown>);
+
+  const holder = normalizeChainAddress(tuple ? tuple[0] : object.holder);
+  const identityKey = normalizeBytes32OrNull(tuple ? tuple[1] : object.identityKey);
+  const humanNullifier = normalizeBytes32OrNull(tuple ? tuple[2] : object.humanNullifier);
+  const hasActiveHumanCredential = Boolean(tuple ? tuple[3] : object.hasActiveHumanCredential);
+  const delegated = Boolean(tuple ? tuple[4] : object.delegated);
+
+  return {
+    delegated,
+    hasActiveHumanCredential,
+    holder: holder && holder !== zeroAddress ? holder : null,
+    humanNullifier,
+    identityKey,
+  };
+}
+
+async function defaultResolveViewer(
+  walletAddress: `0x${string}`,
+): Promise<GateReadResult<ResolvedConfidentialityViewer>> {
+  const context = getContractsForPrimaryServerNetwork();
+  const raterRegistry = context?.contracts?.RaterRegistry;
+  if (!context || !raterRegistry) {
+    return { ok: false, error: "Confidentiality identity registry is not configured" };
+  }
+
+  try {
+    const resolved = await getServerPublicClient(context.targetNetwork).readContract({
+      address: raterRegistry.address,
+      abi: raterRegistry.abi,
+      functionName: "resolveRater",
+      args: [walletAddress],
+    });
+    return { ok: true, value: parseResolvedConfidentialityViewer(resolved) };
+  } catch (error) {
+    console.error("Error resolving confidential context viewer identity:", error);
+    return { ok: false, error: "Confidentiality identity verification unavailable" };
+  }
+}
+
+async function defaultIsIdentityKeyBanned(identityKey: `0x${string}`): Promise<GateReadResult<boolean>> {
+  const context = getContractsForPrimaryServerNetwork();
+  const raterRegistry = context?.contracts?.RaterRegistry;
+  if (!context || !raterRegistry) {
+    return { ok: false, error: "Confidentiality identity registry is not configured" };
+  }
+
+  try {
+    const banned = await getServerPublicClient(context.targetNetwork).readContract({
+      address: raterRegistry.address,
+      abi: RATER_REGISTRY_CONFIDENTIALITY_ABI,
+      functionName: "isIdentityKeyBanned",
+      args: [identityKey],
+    });
+    return { ok: true, value: Boolean(banned) };
+  } catch (error) {
+    console.error("Error checking confidential context identity ban:", error);
+    return { ok: false, error: "Confidentiality sanction verification unavailable" };
+  }
+}
+
+async function resolveConfiguredConfidentialityEscrow(): Promise<GateReadResult<Address>> {
+  const context = getContractsForPrimaryServerNetwork();
+  const protocolConfig = context?.contracts?.ProtocolConfig;
+  if (!context || !protocolConfig) {
+    return { ok: false, error: "ProtocolConfig is not configured for confidentiality checks" };
+  }
+
+  try {
+    const escrowAddress = await getServerPublicClient(context.targetNetwork).readContract({
+      address: protocolConfig.address,
+      abi: PROTOCOL_CONFIG_CONFIDENTIALITY_ABI,
+      functionName: "confidentialityEscrow",
+    });
+    const normalized = normalizeChainAddress(escrowAddress);
+    if (!normalized || normalized === zeroAddress) {
+      return { ok: false, error: "Confidentiality escrow is not configured" };
+    }
+    return { ok: true, value: normalized };
+  } catch (error) {
+    console.error("Error resolving configured confidentiality escrow:", error);
+    return { ok: false, error: "Confidentiality escrow verification unavailable" };
+  }
+}
+
+async function defaultHasActiveBond(params: {
+  contentId: string;
+  identityKey: `0x${string}`;
+}): Promise<GateReadResult<boolean>> {
+  const context = getContractsForPrimaryServerNetwork();
+  if (!context) {
+    return { ok: false, error: "Confidentiality bond network is not configured" };
+  }
+
+  const escrow = await resolveConfiguredConfidentialityEscrow();
+  if (!escrow.ok) return escrow;
+
+  try {
+    const hasActiveBond = await getServerPublicClient(context.targetNetwork).readContract({
+      address: escrow.value,
+      abi: CONFIDENTIALITY_ESCROW_READ_ABI,
+      functionName: "hasActiveBond",
+      args: [BigInt(params.contentId), params.identityKey],
+    });
+    return { ok: true, value: Boolean(hasActiveBond) };
+  } catch (error) {
+    console.error("Error checking confidential context bond:", error);
+    return { ok: false, error: "Confidentiality bond verification unavailable" };
+  }
+}
+
+async function resolveViewerForGatedContext(walletAddress: `0x${string}`) {
+  if (confidentialityGateOverrideForTests) {
+    return { ok: true as const, value: await confidentialityGateOverrideForTests.resolveViewer(walletAddress) };
+  }
+  return defaultResolveViewer(walletAddress);
+}
+
+async function isIdentityKeyBannedForGatedContext(identityKey: `0x${string}`) {
+  if (confidentialityGateOverrideForTests) {
+    return { ok: true as const, value: await confidentialityGateOverrideForTests.isIdentityKeyBanned(identityKey) };
+  }
+  return defaultIsIdentityKeyBanned(identityKey);
+}
+
+async function hasActiveBondForGatedContext(params: { contentId: string; identityKey: `0x${string}` }) {
+  if (confidentialityGateOverrideForTests) {
+    return { ok: true as const, value: await confidentialityGateOverrideForTests.hasActiveBond(params) };
+  }
+  return defaultHasActiveBond(params);
+}
+
 export async function authorizeGatedContextRequest(request: NextRequest, contentId: string) {
   const address = request.nextUrl.searchParams.get("address");
   if (!address || !isValidWalletAddress(address)) {
@@ -307,13 +553,37 @@ export async function authorizeGatedContextRequest(request: NextRequest, content
   }
 
   const confidentiality = await getQuestionConfidentiality(contentId);
-  if (confidentiality && confidentiality.bondAmount !== "0") {
-    return { ok: false as const, status: 403, error: "Confidentiality bond verification required" };
+  const resolvedViewer = await resolveViewerForGatedContext(walletAddress);
+  if (!resolvedViewer.ok) {
+    return { ok: false as const, status: 503, error: resolvedViewer.error };
+  }
+
+  const viewer = resolvedViewer.value;
+  if (!viewer.hasActiveHumanCredential || !viewer.identityKey) {
+    return { ok: false as const, status: 403, error: "Active human credential required" };
+  }
+
+  const banned = await isIdentityKeyBannedForGatedContext(viewer.identityKey);
+  if (!banned.ok) {
+    return { ok: false as const, status: 503, error: banned.error };
+  }
+  if (banned.value) {
+    return { ok: false as const, status: 403, error: "Confidentiality access revoked" };
+  }
+
+  if (isPositiveBondAmount(confidentiality?.bondAmount)) {
+    const bond = await hasActiveBondForGatedContext({ contentId, identityKey: viewer.identityKey });
+    if (!bond.ok) {
+      return { ok: false as const, status: 503, error: bond.error };
+    }
+    if (!bond.value) {
+      return { ok: false as const, status: 403, error: "Active confidentiality bond required" };
+    }
   }
 
   return {
     ok: true as const,
-    identityKey: null as `0x${string}` | null,
+    identityKey: viewer.identityKey,
     walletAddress,
   };
 }
