@@ -61,6 +61,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     address public launchDistributionPool;
     address public clusterPayoutOracle;
     address public advisoryVoteRecorder;
+    address public confidentialityEscrow;
     mapping(address => bool) public advisoryVoteRecorderAuthorized;
     mapping(uint256 => mapping(address => uint256)) public advisoryCooldownTimestamp;
     mapping(uint256 => mapping(bytes32 => uint256)) public advisoryCooldownTimestampByIdentity;
@@ -77,7 +78,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     }
 
     /// @dev Reserved storage gap for future proxy-safe upgrades.
-    uint256[20] private __gap;
+    uint256[19] private __gap;
 
     event RewardDistributorUpdated(address rewardDistributor);
     event RewardDistributorAuthorizationUpdated(address rewardDistributor, bool authorized);
@@ -92,6 +93,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     event LaunchDistributionPoolUpdated(address launchDistributionPool);
     event ClusterPayoutOracleUpdated(address clusterPayoutOracle);
     event AdvisoryVoteRecorderUpdated(address advisoryVoteRecorder);
+    event ConfidentialityEscrowUpdated(address confidentialityEscrow);
     event AdvisoryCooldownRecorded(
         uint256 indexed contentId, address indexed voter, address indexed identityHolder, bytes32 identityKey
     );
@@ -312,6 +314,12 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         }
         advisoryVoteRecorder = value;
         emit AdvisoryVoteRecorderUpdated(value);
+    }
+
+    function setConfidentialityEscrow(address value) external onlyRole(CONFIG_ROLE) {
+        if (value != address(0) && value.code.length == 0) revert InvalidAddress();
+        confidentialityEscrow = value;
+        emit ConfidentialityEscrowUpdated(value);
     }
 
     function recordAdvisoryCooldown(uint256 contentId, address voter, address identityHolder, bytes32 identityKey)
