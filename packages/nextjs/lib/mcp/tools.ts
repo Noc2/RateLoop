@@ -466,7 +466,25 @@ export const MCP_TOOLS: McpToolDefinition[] = [
         chainId: { description: "Chain id used with clientRequestId lookup.", type: "integer" },
         clientRequestId: { description: "Client idempotency key returned by rateloop_ask_humans.", type: "string" },
         contentId: { description: "RateLoop content id.", type: "string" },
+        dryRun: {
+          description: "When true, resolve deterministic dry-run fixtures returned by rateloop_ask_humans.",
+          type: ["boolean", "string"],
+        },
+        executionMode: {
+          description: "Use dry_run to resolve deterministic dry-run fixtures.",
+          enum: ["dry_run"],
+          type: "string",
+        },
+        mode: {
+          description: "Use dry_run to resolve deterministic dry-run fixtures.",
+          enum: ["dry_run"],
+          type: "string",
+        },
         operationKey: { description: "RateLoop operation key returned by quote or ask.", type: "string" },
+        sandbox: {
+          description: "Alias for dryRun=true when resolving deterministic dry-run fixtures.",
+          type: ["boolean", "string"],
+        },
         walletAddress: {
           description:
             "Required for public wallet-mode lookup by chainId and clientRequestId. Not needed when operationKey is provided.",
@@ -1921,7 +1939,7 @@ function publicWebhookSignatureRequiredBody(params: {
     managedBudget: null,
     message: params.challenge.message,
     nextAction:
-      "Sign message, then call rateloop_ask_humans again with webhookChallengeId and webhookSignature plus the same ask and webhook fields.",
+      "Sign message, then call rateloop_ask_humans again with webhookChallengeId, webhookSignature, and the same ask fields. For EIP-3009 final submission, sign a fresh webhook challenge or omit webhookChallengeId/webhookSignature; the confirmed registration is kept with the pending payment plan.",
     paymentMode: params.paymentMode,
     pollAfterMs: null,
     publicUrl: null,
@@ -2280,7 +2298,11 @@ function dryRunResultPackage(params: {
         rewardPoolCount: 0,
       },
     },
-    cohortSummary: "Dry-run fixture with 3 simulated revealed answers.",
+    cohortSummary: {
+      kind: "dry_run_fixture",
+      simulatedRevealedAnswers: 3,
+      summary: "Dry-run fixture with 3 simulated revealed answers.",
+    },
     confidence: {
       level: "medium",
       score: 0.62,

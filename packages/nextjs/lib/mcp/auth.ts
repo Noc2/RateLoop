@@ -174,10 +174,8 @@ export async function authenticateMcpRequest(request: Request, requiredScope?: s
     try {
       policyAgent = await getMcpAgentFromPolicyTokenHash(tokenHash);
     } catch (error) {
-      if (agents.length === 0) {
-        console.warn("[mcp-auth] DB-backed agent lookup failed", error);
-        throw new McpAuthError("MCP agent authentication is unavailable.", 503, requiredScope);
-      }
+      console.warn("[mcp-auth] DB-backed agent lookup failed", error);
+      throw new McpAuthError("MCP agent authentication is unavailable.", 503, requiredScope);
     }
   }
   if (policyAgent) {

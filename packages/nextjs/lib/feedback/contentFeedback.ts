@@ -228,7 +228,7 @@ export function normalizeContentFeedbackInput(input: {
 
   const sourceUrl = normalizeFeedbackSourceUrl(input.sourceUrl);
   if (sourceUrl === undefined) {
-    return { ok: false, error: "Source URL must be a valid http(s) URL" };
+    return { ok: false, error: "Source URL must be a valid HTTPS URL" };
   }
   if (sourceUrl && isBlockedFeedbackSourceUrl(sourceUrl)) {
     return { ok: false, error: "Source URL is blocked by this frontend" };

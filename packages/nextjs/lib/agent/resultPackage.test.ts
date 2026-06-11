@@ -1,4 +1,4 @@
-import { RATELOOP_UNTRUSTED_DATA_WARNING, buildAgentResultPackage } from "./resultPackage";
+import { RATELOOP_SOURCE_URL_WARNING, RATELOOP_UNTRUSTED_DATA_WARNING, buildAgentResultPackage } from "./resultPackage";
 import { listAgentResultTemplates } from "./templates";
 import { ROUND_STATE } from "@rateloop/contracts/protocol";
 import { PROFILE_SELF_REPORT_NOTICE } from "@rateloop/node-utils/profileSelfReport";
@@ -12,6 +12,11 @@ const GENERIC_TEMPLATE = listAgentResultTemplates()[0];
 const FEATURE_ACCEPTANCE_TEMPLATE = listAgentResultTemplates().find(
   template => template.id === "feature_acceptance_test",
 )!;
+
+test("source URL warning describes HTTPS-only validation", () => {
+  assert.match(RATELOOP_SOURCE_URL_WARNING, /HTTPS URLs/);
+  assert.doesNotMatch(RATELOOP_SOURCE_URL_WARNING, /http\(s\)/);
+});
 
 function content(overrides: Partial<PonderContentItem> = {}): PonderContentItem {
   return {

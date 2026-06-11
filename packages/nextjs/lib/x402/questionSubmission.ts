@@ -2706,6 +2706,7 @@ async function prepareWalletQuestionSubmissionRequest(params: {
     payload: params.payload,
     walletAddress: params.walletAddress,
   });
+  const pendingCallback = params.pendingCallback ?? readPendingAgentCallbackFromSubmissionRecord(existingRecord);
   await recordAgentWalletSubmissionPlan({
     agentId: params.agentId,
     config,
@@ -2714,7 +2715,7 @@ async function prepareWalletQuestionSubmissionRequest(params: {
     operation,
     originalClientRequestId: params.originalClientRequestId,
     payload: params.payload,
-    pendingCallback: params.pendingCallback,
+    pendingCallback,
     plan,
   });
 
@@ -2813,6 +2814,7 @@ async function prepareNativeQuestionSubmissionRequest(params: {
     paymentAuthorization: params.paymentAuthorization ?? storedAuthorization,
     walletAddress: params.walletAddress,
   });
+  const pendingCallback = params.pendingCallback ?? readPendingAgentCallbackFromSubmissionRecord(existingRecord);
   await recordNativeX402SubmissionPlan({
     agentId: params.agentId,
     config,
@@ -2821,7 +2823,7 @@ async function prepareNativeQuestionSubmissionRequest(params: {
     operation,
     originalClientRequestId: params.originalClientRequestId,
     payload: params.payload,
-    pendingCallback: params.pendingCallback,
+    pendingCallback,
     plan,
   });
 

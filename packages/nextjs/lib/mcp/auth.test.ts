@@ -164,6 +164,34 @@ test("authenticateMcpRequest rejects invalid bearer tokens", async () => {
   );
 });
 
+test("authenticateMcpRequest reports DB policy lookup outages even with static agents configured", async () => {
+  const originalWarn = console.warn;
+  const warnings: unknown[][] = [];
+  console.warn = (...args: unknown[]) => {
+    warnings.push(args);
+  };
+  dbModule.__setDatabaseResourcesForTests({
+    client: {
+      execute: async () => {
+        throw new Error("policy database unavailable");
+      },
+    },
+    database: {} as never,
+    pool: {} as never,
+  });
+
+  try {
+    await assert.rejects(
+      () => authenticateMcpRequest(requestWithToken("db-backed-token"), MCP_SCOPES.ask),
+      (error: unknown) => error instanceof McpAuthError && error.status === 503,
+    );
+    assert.equal(warnings[0]?.[0], "[mcp-auth] DB-backed agent lookup failed");
+  } finally {
+    console.warn = originalWarn;
+    dbModule.__setDatabaseResourcesForTests(dbTestMemory.createMemoryDatabaseResources());
+  }
+});
+
 test("authenticateMcpRequest accepts active DB-backed policy tokens", async () => {
   delete env.RATELOOP_MCP_AGENTS;
   await dbModule.dbClient.execute({

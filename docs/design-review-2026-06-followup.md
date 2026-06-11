@@ -280,23 +280,11 @@ main doc. IDs are prefixed `F-` (followup) to avoid colliding with the main doc'
 - **Sources:** https://docs.drand.love/blog/fastnet-to-be-sunset/
 - **Confidence:** High.
 
-#### F-14 — MCP server advertises OAuth protected-resource metadata but performs no audience validation (agent surface / spec compliance)
+#### F-14 — Superseded MCP authorization-server metadata note
 
-- **File:** `packages/nextjs/lib/mcp/auth.ts:149-184`;
-  `packages/nextjs/app/.well-known/oauth-protected-resource/[[...resource]]/route.ts:46-55`
-- **What:** The MCP server avoids the confused-deputy class correctly — it never forwards the client
-  token downstream, it hash-matches an opaque self-issued secret. But if an operator sets
-  `RATELOOP_MCP_AUTHORIZATION_SERVER_URL`, the well-known route advertises an external authorization
-  server while `authenticateMcpRequest` ignores JWT `aud`/`resource` claims entirely (opaque-hash
-  match only). The MCP 2025 auth spec requires resource servers to reject tokens not audience-bound
-  to themselves (RFC 8707); here a real OAuth-issued JWT simply fails, so the advertised flow is
-  non-functional (misleading, not insecure). Spec-strict MCP clients relying on the published
-  metadata will attempt an OAuth dance that can't complete.
-- **Fix:** Either implement audience-bound JWT validation (`aud`/`resource` == this MCP resource
-  URL) when an AS is configured, or remove the `authorization_servers` advertisement and document
-  the server as opaque-bearer-only.
-- **Sources:** https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization
-- **Confidence:** Medium-high; low severity (the safe opaque path is the one exercised).
+**Superseded:** active MCP protected-resource metadata is opaque-bearer-only for
+pre-registered static or DB-backed RateLoop policy tokens. The older OAuth/OIDC
+authorization-server action item no longer applies.
 
 #### F-15 — E2E fee-claim helper + active spec still call the removed `claimFees` (release/test)
 

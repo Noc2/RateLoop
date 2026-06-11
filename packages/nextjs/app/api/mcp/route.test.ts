@@ -292,11 +292,17 @@ test("tools/list accepts supported MCP-Protocol-Version and returns tool annotat
   const askSchema = toolByName.get("rateloop_ask_humans")?.inputSchema as {
     properties?: { mode?: { enum?: string[] } };
   };
+  const askOutputSchema = toolByName.get("rateloop_ask_humans")?.outputSchema as {
+    properties?: { pollAfterMs?: { type?: unknown } };
+  };
   const statusSchema = toolByName.get("rateloop_get_question_status")?.inputSchema as {
-    properties?: Record<string, unknown>;
+    properties?: { mode?: { enum?: string[] } } & Record<string, unknown>;
   };
   const resultSchema = toolByName.get("rateloop_get_result")?.inputSchema as {
-    properties?: Record<string, unknown>;
+    properties?: { mode?: { enum?: string[] } } & Record<string, unknown>;
+  };
+  const resultOutputSchema = toolByName.get("rateloop_get_result")?.outputSchema as {
+    properties?: { wait?: { properties?: { recoverWith?: { type?: unknown } } } };
   };
   const ratingContextSchema = toolByName.get("rateloop_get_rating_context")?.inputSchema as {
     properties?: Record<string, unknown>;
@@ -308,8 +314,16 @@ test("tools/list accepts supported MCP-Protocol-Version and returns tool annotat
   };
   assert.ok(quoteSchema.properties?.walletAddress);
   assert.deepEqual(askSchema.properties?.mode?.enum, ["dry_run"]);
+  assert.deepEqual(askOutputSchema.properties?.pollAfterMs?.type, ["integer", "null"]);
   assert.ok(statusSchema.properties?.walletAddress);
+  assert.ok(statusSchema.properties?.dryRun);
+  assert.ok(statusSchema.properties?.sandbox);
+  assert.deepEqual(statusSchema.properties?.mode?.enum, ["dry_run"]);
   assert.ok(resultSchema.properties?.walletAddress);
+  assert.ok(resultSchema.properties?.dryRun);
+  assert.ok(resultSchema.properties?.sandbox);
+  assert.deepEqual(resultSchema.properties?.mode?.enum, ["dry_run"]);
+  assert.deepEqual(resultOutputSchema.properties?.wait?.properties?.recoverWith?.type, ["string", "null"]);
   assert.ok(ratingContextSchema.properties?.walletAddress);
   assert.equal(ratingContextSchema.required?.includes("walletAddress"), false);
   assert.ok(ratingPrepareSchema.properties?.walletAddress);

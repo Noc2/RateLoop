@@ -222,26 +222,28 @@ test("rejects invalid feedback fields", () => {
     }).ok,
     false,
   );
-  assert.equal(
-    contentFeedback.normalizeContentFeedbackInput({
-      address: WALLET,
-      contentId: "1",
-      feedbackType: "evidence",
-      body: "Valid body",
-      sourceUrl: "ipfs://example",
-    }).ok,
-    false,
-  );
-  assert.equal(
-    contentFeedback.normalizeContentFeedbackInput({
-      address: WALLET,
-      contentId: "1",
-      feedbackType: "evidence",
-      body: "Valid body",
-      sourceUrl: "http://example.com/source",
-    }).ok,
-    false,
-  );
+  const invalidSource = contentFeedback.normalizeContentFeedbackInput({
+    address: WALLET,
+    contentId: "1",
+    feedbackType: "evidence",
+    body: "Valid body",
+    sourceUrl: "ipfs://example",
+  });
+  assert.equal(invalidSource.ok, false);
+  if (!invalidSource.ok) {
+    assert.equal(invalidSource.error, "Source URL must be a valid HTTPS URL");
+  }
+  const httpSource = contentFeedback.normalizeContentFeedbackInput({
+    address: WALLET,
+    contentId: "1",
+    feedbackType: "evidence",
+    body: "Valid body",
+    sourceUrl: "http://example.com/source",
+  });
+  assert.equal(httpSource.ok, false);
+  if (!httpSource.ok) {
+    assert.equal(httpSource.error, "Source URL must be a valid HTTPS URL");
+  }
 });
 
 test("builds stable canonical feedback hash metadata", () => {

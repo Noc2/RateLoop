@@ -246,7 +246,25 @@ export const agentOperationLookupInputSchema = {
   properties: {
     chainId: { description: "Chain id used with clientRequestId lookup.", type: "integer" },
     clientRequestId: { description: "Client idempotency key returned by rateloop_ask_humans.", type: "string" },
+    dryRun: {
+      description: "When true, resolve deterministic dry-run fixtures returned by rateloop_ask_humans.",
+      type: ["boolean", "string"],
+    },
+    executionMode: {
+      description: "Use dry_run to resolve deterministic dry-run fixtures.",
+      enum: ["dry_run"],
+      type: "string",
+    },
+    mode: {
+      description: "Use dry_run to resolve deterministic dry-run fixtures.",
+      enum: ["dry_run"],
+      type: "string",
+    },
     operationKey: { description: "RateLoop operation key returned by quote or ask.", type: "string" },
+    sandbox: {
+      description: "Alias for dryRun=true when resolving deterministic dry-run fixtures.",
+      type: ["boolean", "string"],
+    },
     walletAddress: {
       ...agentWalletAddressSchema,
       description:
@@ -904,7 +922,7 @@ export const agentAskHumansOutputSchema = {
     feedbackBonus: { type: "object" },
     legalNotice: agentLegalNoticeOutputSchema,
     managedBudget: { type: ["object", "null"] },
-    pollAfterMs: { type: "integer" },
+    pollAfterMs: { type: ["integer", "null"] },
     statusTool: { type: "string" },
     transactionPlan: { type: ["object", "null"] },
     wallet: { type: "object" },
@@ -1060,7 +1078,7 @@ export const resultPackageOutputSchema = {
           enum: ["dry_run_complete", "failed_submission", "still_settling"],
           type: "string",
         },
-        recoverWith: { type: "string" },
+        recoverWith: { type: ["string", "null"] },
       },
       type: "object",
     },

@@ -1396,3 +1396,98 @@ test("prepareNativeX402QuestionSubmissionRequest returns an authorization reques
   assert.equal(reusedPermissionlessBody.nextAction, "submit_x402_transaction");
   assert.equal(reusedPermissionlessBody.transactionPlan.calls.length, 2);
 });
+
+test("preparePermissionlessNativeX402QuestionSubmissionRequest preserves pending callback on signed follow-up", async () => {
+  const payload = buildPayload("native-x402-webhook-followup");
+  const walletAddress = "0x00000000000000000000000000000000000000aa" as const;
+  const pendingCallback = {
+    agentId: "public-wallet:480:0x00000000000000000000000000000000000000aa",
+    callbackUrl: "https://agent.example/rateloop",
+    eventTypes: ["question.submitting"],
+    secret: "webhook-secret",
+  };
+
+  setDefaultTestOverrides({
+    buildNativeX402QuestionSubmissionPlan: async ({ paymentAuthorization, payload, walletAddress }) => {
+      const signature =
+        paymentAuthorization && typeof paymentAuthorization.signature === "string"
+          ? (paymentAuthorization.signature as `0x${string}`)
+          : undefined;
+      return {
+        authorization: {
+          from: walletAddress,
+          nonce: `0x${"4".repeat(64)}` as const,
+          signature,
+          to: TEST_CONFIG.x402QuestionSubmitterAddress,
+          validAfter: "0",
+          validBefore: "1762000000",
+          value: payload.bounty.amount.toString(),
+        },
+        calls: signature
+          ? [
+              {
+                data: `0x${"a".repeat(8)}` as const,
+                description: "Submit x402 question",
+                functionName: "submitQuestionWithX402Payment",
+                id: "submit-x402-question",
+                phase: "submit_x402_question",
+                to: TEST_CONFIG.x402QuestionSubmitterAddress,
+                value: "0",
+              },
+            ]
+          : [],
+        chainId: payload.chainId,
+        operationKey: `0x${payload.clientRequestId.padEnd(64, "0").slice(0, 64)}` as `0x${string}`,
+        payment: {
+          amount: payload.bounty.amount.toString(),
+          asset: "USDC",
+          bountyAmount: payload.bounty.amount.toString(),
+          decimals: 6,
+          spender: TEST_CONFIG.x402QuestionSubmitterAddress,
+          tokenAddress: TEST_CONFIG.usdcAddress,
+        },
+        payloadHash: `payload:${payload.clientRequestId}`,
+        questionCount: payload.questions.length,
+        requiresOrderedExecution: true,
+        revealCommitment: `0x${"9".repeat(64)}` as const,
+        roundConfig: {
+          epochDuration: payload.roundConfig.epochDuration.toString(),
+          maxDuration: payload.roundConfig.maxDuration.toString(),
+          maxVoters: payload.roundConfig.maxVoters.toString(),
+          minVoters: payload.roundConfig.minVoters.toString(),
+        },
+        submissionKey: `0x${"2".repeat(64)}` as const,
+        walletAddress,
+      };
+    },
+  });
+
+  await preparePermissionlessNativeX402QuestionSubmissionRequest({
+    payload,
+    pendingCallback,
+    walletAddress,
+  });
+
+  await preparePermissionlessNativeX402QuestionSubmissionRequest({
+    paymentAuthorization: { signature: `0x${"6".repeat(130)}` },
+    payload,
+    walletAddress,
+  });
+
+  const storedClientRequestId = buildPermissionlessWalletClientRequestId({
+    chainId: payload.chainId,
+    clientRequestId: payload.clientRequestId,
+    walletAddress,
+  });
+  const record = await getX402QuestionSubmissionByClientRequest({
+    chainId: payload.chainId,
+    clientRequestId: storedClientRequestId,
+  });
+  const receipt = JSON.parse(record?.paymentReceipt ?? "{}") as {
+    authorization?: { signature?: string };
+    pendingCallback?: typeof pendingCallback;
+  };
+
+  assert.deepEqual(receipt.pendingCallback, pendingCallback);
+  assert.equal(receipt.authorization?.signature, `0x${"6".repeat(130)}`);
+});
