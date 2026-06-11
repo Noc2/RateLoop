@@ -129,6 +129,24 @@
     {
       "slot": 31,
       "offset": 0,
+      "label": "advisoryVoteRecorderAuthorized",
+      "type": "t_mapping(t_address,t_bool)"
+    },
+    {
+      "slot": 32,
+      "offset": 0,
+      "label": "advisoryCooldownTimestamp",
+      "type": "t_mapping(t_uint256,t_mapping(t_address,t_uint256))"
+    },
+    {
+      "slot": 33,
+      "offset": 0,
+      "label": "advisoryCooldownTimestampByIdentity",
+      "type": "t_mapping(t_uint256,t_mapping(t_bytes32,t_uint256))"
+    },
+    {
+      "slot": 34,
+      "offset": 0,
       "label": "__gap",
       "type": "t_array(t_uint256)"
     }
@@ -143,8 +161,8 @@
     {
       "id": "t_array(t_uint256)",
       "encoding": "inplace",
-      "label": "uint256[23]",
-      "numberOfBytes": "736",
+      "label": "uint256[20]",
+      "numberOfBytes": "640",
       "base": "t_uint256"
     },
     {
@@ -174,6 +192,38 @@
       "numberOfBytes": "32",
       "key": "t_address",
       "value": "t_bool"
+    },
+    {
+      "id": "t_mapping(t_address,t_uint256)",
+      "encoding": "mapping",
+      "label": "mapping(address => uint256)",
+      "numberOfBytes": "32",
+      "key": "t_address",
+      "value": "t_uint256"
+    },
+    {
+      "id": "t_mapping(t_bytes32,t_uint256)",
+      "encoding": "mapping",
+      "label": "mapping(bytes32 => uint256)",
+      "numberOfBytes": "32",
+      "key": "t_bytes32",
+      "value": "t_uint256"
+    },
+    {
+      "id": "t_mapping(t_uint256,t_mapping(t_address,t_uint256))",
+      "encoding": "mapping",
+      "label": "mapping(uint256 => mapping(address => uint256))",
+      "numberOfBytes": "32",
+      "key": "t_uint256",
+      "value": "t_mapping(t_address,t_uint256)"
+    },
+    {
+      "id": "t_mapping(t_uint256,t_mapping(t_bytes32,t_uint256))",
+      "encoding": "mapping",
+      "label": "mapping(uint256 => mapping(bytes32 => uint256))",
+      "numberOfBytes": "32",
+      "key": "t_uint256",
+      "value": "t_mapping(t_bytes32,t_uint256)"
     },
     {
       "id": "t_struct(RatingConfig)",

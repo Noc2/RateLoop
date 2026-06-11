@@ -3565,6 +3565,57 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         vm.stopPrank();
     }
 
+    function test_AdvisoryCooldownSurvivesRecorderRotationFromOpenRoundSnapshot() public {
+        uint256 contentId = _submitContent();
+        uint64 openedTargetRound = _tlockCommitTargetRound(engine, contentId);
+        (bytes32 ck2, bytes32 s2) =
+            _commitWithTargetRound(voter2, contentId, true, STAKE, openedTargetRound, "rotated-cooldown-open");
+        uint256 roundId = _previewCommitRoundId(engine, contentId);
+        assertEq(_roundAdvisoryVoteRecorderSnapshot(engine, contentId, roundId), address(advisoryRecorder));
+
+        AdvisoryVoteRecorder replacementRecorder = new AdvisoryVoteRecorder(address(engine), address(registry), owner);
+        vm.prank(owner);
+        ProtocolConfig(protocolConfigAddress).setAdvisoryVoteRecorder(address(replacementRecorder));
+
+        _recordAdvisoryWithTargetRound(voter1, contentId, "rotated-cooldown-advisory", openedTargetRound);
+
+        (bytes32 ck3, bytes32 s3) =
+            _commitWithTargetRound(voter3, contentId, true, STAKE, openedTargetRound, "rotated-cooldown-third");
+        (bytes32 ck4, bytes32 s4) =
+            _commitWithTargetRound(voter4, contentId, false, STAKE, openedTargetRound, "rotated-cooldown-fourth");
+
+        RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        _warpPastTlockRevealTime(uint256(round.startTime) + EPOCH);
+        _reveal(contentId, roundId, ck2, true, s2);
+        _reveal(contentId, roundId, ck3, true, s3);
+        _reveal(contentId, roundId, ck4, false, s4);
+        _settleRoundAfterRbtsSeed(contentId, roundId);
+
+        _openStakedRound(voter5, contentId, "replacement-recorder-open");
+        uint256 nextRoundId = _previewCommitRoundId(engine, contentId);
+        uint16 referenceRatingBps = _previewCommitReferenceRatingBps(engine, contentId);
+        assertEq(_roundAdvisoryVoteRecorderSnapshot(engine, contentId, nextRoundId), address(replacementRecorder));
+
+        uint64 targetRound = _tlockCommitTargetRound(engine, contentId);
+        bytes32 drandChainHash = _tlockDrandChainHash();
+        bytes32 salt = keccak256(abi.encodePacked(voter1, block.timestamp, "replacement-recorder-advisory"));
+        bytes memory ciphertext = _testCiphertext(true, salt, contentId, targetRound, drandChainHash);
+        bytes32 commitHash = _commitHash(
+            true, salt, voter1, contentId, nextRoundId, referenceRatingBps, targetRound, drandChainHash, ciphertext
+        );
+
+        vm.prank(voter1);
+        vm.expectRevert(VotePreflightLib.CooldownActive.selector);
+        replacementRecorder.recordAdvisoryVote(
+            contentId,
+            _roundContext(nextRoundId, referenceRatingBps),
+            targetRound,
+            drandChainHash,
+            commitHash,
+            ciphertext
+        );
+    }
+
     function test_RealCommitAfterDelegateAdvisoryIdentityChurn_RevertsAlreadyCommitted() public {
         uint256 contentId = _submitContent();
         _openStakedRound(voter2, contentId, "delegate-advisory-open");

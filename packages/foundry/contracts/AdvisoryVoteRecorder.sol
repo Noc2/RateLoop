@@ -125,13 +125,19 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
         uint64 maxTargetRound;
     }
 
+    struct AdvisoryTlockData {
+        bytes32 usedChainHash;
+        uint48 revealableAfter;
+        bytes32 ciphertextHash;
+    }
+
     mapping(bytes32 => AdvisoryCommit) internal advisoryCommits;
     // Account aliases: delegated advisory commits write both the delegate and stable holder.
     mapping(uint256 => mapping(uint256 => mapping(address => bytes32))) public advisoryCommitKeyByRater;
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => bytes32))) public advisoryCommitKeyByIdentity;
     // Account aliases: delegated advisory commits refresh both the delegate and stable holder cooldowns.
-    mapping(uint256 => mapping(address => uint256)) public lastAdvisoryVoteTimestamp;
-    mapping(uint256 => mapping(bytes32 => uint256)) public lastAdvisoryVoteTimestampByIdentity;
+    mapping(uint256 => mapping(address => uint256)) internal _lastAdvisoryVoteTimestamp;
+    mapping(uint256 => mapping(bytes32 => uint256)) internal _lastAdvisoryVoteTimestampByIdentity;
     mapping(uint256 => mapping(uint256 => bytes32[])) internal roundAdvisoryCommitKeys;
     mapping(uint256 => mapping(uint256 => uint16)) public roundUnverifiedAdvisoryCommitCount;
 
@@ -299,51 +305,53 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
 
         AdvisoryIdentityContext memory identityContext = _validateAdvisoryCommitter(contentId, roundId);
 
-        (uint48 roundStartTime, uint32 epochDuration, uint16 maxVoters) =
-            _validateAdvisoryRoundForCommit(contentId, roundId, roundReferenceRatingBps);
-        if (roundAdvisoryCommitKeys[contentId][roundId].length >= maxVoters) {
-            revert MaxAdvisoryVotersReached();
-        }
-        if (!identityContext.hasActiveHumanCredential) {
-            (bool capLoaded, uint16 maxUnverifiedCommits) = _maxUnverifiedAdvisoryCommitsPerRound();
-            if (!capLoaded) revert InvalidLaunchRewardPolicy();
-            if (_unverifiedAdvisoryCommitCapReached(contentId, roundId, maxUnverifiedCommits)) {
-                revert UnverifiedAdvisoryCapReached();
+        AdvisoryTlockData memory tlockData;
+        {
+            (uint48 roundStartTime, uint32 epochDuration, uint16 maxVoters) =
+                _validateAdvisoryRoundForCommit(contentId, roundId, roundReferenceRatingBps);
+            if (roundAdvisoryCommitKeys[contentId][roundId].length >= maxVoters) {
+                revert MaxAdvisoryVotersReached();
             }
+            if (!identityContext.hasActiveHumanCredential) {
+                (bool capLoaded, uint16 maxUnverifiedCommits) = _maxUnverifiedAdvisoryCommitsPerRound();
+                if (!capLoaded) revert InvalidLaunchRewardPolicy();
+                if (_unverifiedAdvisoryCommitCapReached(contentId, roundId, maxUnverifiedCommits)) {
+                    revert UnverifiedAdvisoryCapReached();
+                }
+            }
+            tlockData = _validateAdvisoryCommitTlock(
+                contentId, roundId, ciphertext, targetRound, drandChainHash, roundStartTime, epochDuration
+            );
         }
 
         advisoryCommitKey = keccak256(abi.encodePacked(bytes1(0xa1), msg.sender, contentId, roundId, commitHash));
-
-        uint256 epochEnd = _computeEpochEnd(roundStartTime, epochDuration);
-        (bytes32 usedChainHash, uint256 targetRevealableAt) = _validateCommitTlockData(
-            contentId, roundId, ciphertext, targetRound, drandChainHash, epochEnd, epochDuration
-        );
-        uint256 effectiveRevealableAfter = targetRevealableAt > epochEnd ? targetRevealableAt : epochEnd;
-        bytes32 ciphertextHash = keccak256(ciphertext);
 
         AdvisoryCommit storage advisoryCommit = advisoryCommits[advisoryCommitKey];
         advisoryCommit.voter = msg.sender;
         advisoryCommit.contentId = contentId;
         advisoryCommit.roundId = roundId;
         advisoryCommit.commitHash = commitHash;
-        advisoryCommit.ciphertextHash = ciphertextHash;
+        advisoryCommit.ciphertextHash = tlockData.ciphertextHash;
         advisoryCommit.targetRound = targetRound;
         advisoryCommit.drandChainHash = drandChainHash;
-        advisoryCommit.revealableAfter = effectiveRevealableAfter.toUint48();
+        advisoryCommit.revealableAfter = tlockData.revealableAfter;
         advisoryCommit.roundReferenceRatingBps = roundReferenceRatingBps;
         advisoryCommit.identityKey = identityContext.identityKey;
         advisoryCommit.identityHolder = identityContext.holder;
-        advisoryCommit.usedChainHashAtCommit = usedChainHash;
+        advisoryCommit.usedChainHashAtCommit = tlockData.usedChainHash;
         advisoryCommitKeyByRater[contentId][roundId][msg.sender] = advisoryCommitKey;
         if (identityContext.holder != msg.sender) {
             advisoryCommitKeyByRater[contentId][roundId][identityContext.holder] = advisoryCommitKey;
         }
         advisoryCommitKeyByIdentity[contentId][roundId][identityContext.identityKey] = advisoryCommitKey;
-        lastAdvisoryVoteTimestamp[contentId][msg.sender] = block.timestamp;
+        _lastAdvisoryVoteTimestamp[contentId][msg.sender] = block.timestamp;
         if (identityContext.holder != msg.sender) {
-            lastAdvisoryVoteTimestamp[contentId][identityContext.holder] = block.timestamp;
+            _lastAdvisoryVoteTimestamp[contentId][identityContext.holder] = block.timestamp;
         }
-        lastAdvisoryVoteTimestampByIdentity[contentId][identityContext.identityKey] = block.timestamp;
+        _lastAdvisoryVoteTimestampByIdentity[contentId][identityContext.identityKey] = block.timestamp;
+        protocolConfig.recordAdvisoryCooldown(
+            contentId, msg.sender, identityContext.holder, identityContext.identityKey
+        );
         roundAdvisoryCommitKeys[contentId][roundId].push(advisoryCommitKey);
         if (!identityContext.hasActiveHumanCredential) {
             roundUnverifiedAdvisoryCommitCount[contentId][roundId] += 1;
@@ -358,7 +366,7 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
             roundReferenceRatingBps,
             targetRound,
             drandChainHash,
-            ciphertextHash,
+            tlockData.ciphertextHash,
             ciphertext
         );
     }
@@ -641,6 +649,22 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
         );
     }
 
+    function lastAdvisoryVoteTimestamp(uint256 contentId, address rater) public view returns (uint256 timestamp) {
+        timestamp = _lastAdvisoryVoteTimestamp[contentId][rater];
+        uint256 durableTimestamp = protocolConfig.advisoryCooldownTimestamp(contentId, rater);
+        if (durableTimestamp > timestamp) timestamp = durableTimestamp;
+    }
+
+    function lastAdvisoryVoteTimestampByIdentity(uint256 contentId, bytes32 identityKey)
+        public
+        view
+        returns (uint256 timestamp)
+    {
+        timestamp = _lastAdvisoryVoteTimestampByIdentity[contentId][identityKey];
+        uint256 durableTimestamp = protocolConfig.advisoryCooldownTimestampByIdentity(contentId, identityKey);
+        if (durableTimestamp > timestamp) timestamp = durableTimestamp;
+    }
+
     function getRoundAdvisoryCommitKey(uint256 contentId, uint256 roundId, uint256 index)
         external
         view
@@ -690,6 +714,27 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
         if (block.timestamp >= uint256(roundStartTime) + uint256(epochDuration)) revert RoundNotOpen();
         if (stakedVoteCount == 0 || stakedTotalStake == 0) revert RoundNotOpen();
         if (thresholdReachedAt != 0) revert ThresholdReached();
+    }
+
+    function _validateAdvisoryCommitTlock(
+        uint256 contentId,
+        uint256 roundId,
+        bytes calldata ciphertext,
+        uint64 targetRound,
+        bytes32 drandChainHash,
+        uint48 roundStartTime,
+        uint32 epochDuration
+    ) internal view returns (AdvisoryTlockData memory tlockData) {
+        uint256 epochEnd = _computeEpochEnd(roundStartTime, epochDuration);
+        (bytes32 usedChainHash, uint256 targetRevealableAt) = _validateCommitTlockData(
+            contentId, roundId, ciphertext, targetRound, drandChainHash, epochEnd, epochDuration
+        );
+        uint256 effectiveRevealableAfter = targetRevealableAt > epochEnd ? targetRevealableAt : epochEnd;
+        tlockData = AdvisoryTlockData({
+            usedChainHash: usedChainHash,
+            revealableAfter: effectiveRevealableAfter.toUint48(),
+            ciphertextHash: keccak256(ciphertext)
+        });
     }
 
     function _validateCommitTlockData(
@@ -866,16 +911,16 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
     {
         (uint256 lastVote, uint256 lastHolderVote, uint256 lastIdentityVote) =
             votingEngine.voteCooldownTimestamps(contentId, voter, identityHolder, identityKey);
-        uint256 lastAdvisory = lastAdvisoryVoteTimestamp[contentId][voter];
+        uint256 lastAdvisory = lastAdvisoryVoteTimestamp(contentId, voter);
         if (lastAdvisory > lastVote) lastVote = lastAdvisory;
         if (identityHolder != address(0) && identityHolder != voter) {
-            uint256 lastHolderAdvisory = lastAdvisoryVoteTimestamp[contentId][identityHolder];
+            uint256 lastHolderAdvisory = lastAdvisoryVoteTimestamp(contentId, identityHolder);
             if (lastHolderVote > lastVote) lastVote = lastHolderVote;
             if (lastHolderAdvisory > lastVote) lastVote = lastHolderAdvisory;
         }
 
         if (identityKey != bytes32(0)) {
-            uint256 lastIdentityAdvisory = lastAdvisoryVoteTimestampByIdentity[contentId][identityKey];
+            uint256 lastIdentityAdvisory = lastAdvisoryVoteTimestampByIdentity(contentId, identityKey);
             if (lastIdentityVote > lastVote) lastVote = lastIdentityVote;
             if (lastIdentityAdvisory > lastVote) lastVote = lastIdentityAdvisory;
         }

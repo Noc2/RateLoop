@@ -61,6 +61,9 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     address public launchDistributionPool;
     address public clusterPayoutOracle;
     address public advisoryVoteRecorder;
+    mapping(address => bool) public advisoryVoteRecorderAuthorized;
+    mapping(uint256 => mapping(address => uint256)) public advisoryCooldownTimestamp;
+    mapping(uint256 => mapping(bytes32 => uint256)) public advisoryCooldownTimestampByIdentity;
 
     struct RoundConfigBounds {
         uint32 minEpochDuration;
@@ -74,7 +77,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     }
 
     /// @dev Reserved storage gap for future proxy-safe upgrades.
-    uint256[23] private __gap;
+    uint256[20] private __gap;
 
     event RewardDistributorUpdated(address rewardDistributor);
     event RewardDistributorAuthorizationUpdated(address rewardDistributor, bool authorized);
@@ -89,6 +92,9 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     event LaunchDistributionPoolUpdated(address launchDistributionPool);
     event ClusterPayoutOracleUpdated(address clusterPayoutOracle);
     event AdvisoryVoteRecorderUpdated(address advisoryVoteRecorder);
+    event AdvisoryCooldownRecorded(
+        uint256 indexed contentId, address indexed voter, address indexed identityHolder, bytes32 identityKey
+    );
     event ConfigUpdated(uint256 epochDuration, uint256 maxDuration, uint256 minVoters, uint256 maxVoters);
     event DrandConfigUpdated(bytes32 drandChainHash, uint64 genesisTime, uint64 period);
     event RatingConfigUpdated(
@@ -296,11 +302,32 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     }
 
     function setAdvisoryVoteRecorder(address value) external onlyRole(CONFIG_ROLE) {
+        address oldValue = advisoryVoteRecorder;
+        if (oldValue != address(0)) {
+            advisoryVoteRecorderAuthorized[oldValue] = true;
+        }
         if (value != address(0)) {
             _validateAdvisoryVoteRecorder(value);
+            advisoryVoteRecorderAuthorized[value] = true;
         }
         advisoryVoteRecorder = value;
         emit AdvisoryVoteRecorderUpdated(value);
+    }
+
+    function recordAdvisoryCooldown(uint256 contentId, address voter, address identityHolder, bytes32 identityKey)
+        external
+    {
+        if (msg.sender != advisoryVoteRecorder && !advisoryVoteRecorderAuthorized[msg.sender]) {
+            revert InvalidConfig();
+        }
+
+        uint256 timestamp = block.timestamp;
+        advisoryCooldownTimestamp[contentId][voter] = timestamp;
+        if (identityHolder != address(0) && identityHolder != voter) {
+            advisoryCooldownTimestamp[contentId][identityHolder] = timestamp;
+        }
+        advisoryCooldownTimestampByIdentity[contentId][identityKey] = timestamp;
+        emit AdvisoryCooldownRecorded(contentId, voter, identityHolder, identityKey);
     }
 
     function setConfig(uint256 epochDuration, uint256 maxDuration, uint256 minVoters, uint256 maxVoters)
