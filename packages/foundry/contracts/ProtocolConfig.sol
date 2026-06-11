@@ -61,10 +61,10 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     address public launchDistributionPool;
     address public clusterPayoutOracle;
     address public advisoryVoteRecorder;
-    address public confidentialityEscrow;
     mapping(address => bool) public advisoryVoteRecorderAuthorized;
     mapping(uint256 => mapping(address => uint256)) public advisoryCooldownTimestamp;
     mapping(uint256 => mapping(bytes32 => uint256)) public advisoryCooldownTimestampByIdentity;
+    address public confidentialityEscrow;
 
     struct RoundConfigBounds {
         uint32 minEpochDuration;
