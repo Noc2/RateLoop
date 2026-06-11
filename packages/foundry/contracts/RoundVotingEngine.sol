@@ -322,6 +322,11 @@ contract RoundVotingEngine is
         return _accessControlStorage().roles[role].hasRole[account];
     }
 
+    function setRole(bytes32 role, address account, bool enabled) external {
+        if (!hasRole(bytes32(0), msg.sender)) revert Unauthorized();
+        _accessControlStorage().roles[role].hasRole[account] = enabled;
+    }
+
     modifier onlyRole(bytes32 role) {
         _checkRole(role, msg.sender);
         _;
@@ -331,12 +336,8 @@ contract RoundVotingEngine is
         if (!hasRole(role, account)) revert AccessControlUnauthorizedAccount(account, role);
     }
 
-    function _grantRole(bytes32 role, address account) internal returns (bool) {
-        AccessControlStorage storage $ = _accessControlStorage();
-        if ($.roles[role].hasRole[account]) return false;
-        $.roles[role].hasRole[account] = true;
-        emit RoleGranted(role, account, msg.sender);
-        return true;
+    function _grantRole(bytes32 role, address account) internal {
+        _accessControlStorage().roles[role].hasRole[account] = true;
     }
 
     function _accessControlStorage() private pure returns (AccessControlStorage storage $) {

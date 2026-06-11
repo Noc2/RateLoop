@@ -245,6 +245,37 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         vm.stopPrank();
     }
 
+    function test_SetRoleRotatesPauser() public {
+        bytes32 pauserRole = keccak256("PAUSER_ROLE");
+        address newPauser = address(0xBEEF);
+
+        vm.expectRevert(RoundVotingEngine.Unauthorized.selector);
+        vm.prank(voter1);
+        engine.setRole(pauserRole, newPauser, true);
+
+        vm.prank(owner);
+        engine.setRole(pauserRole, newPauser, true);
+        assertTrue(engine.hasRole(pauserRole, newPauser));
+
+        vm.prank(newPauser);
+        engine.pause();
+        assertTrue(engine.paused());
+
+        vm.prank(owner);
+        engine.setRole(pauserRole, newPauser, false);
+        assertFalse(engine.hasRole(pauserRole, newPauser));
+
+        vm.expectRevert(
+            abi.encodeWithSelector(RoundVotingEngine.AccessControlUnauthorizedAccount.selector, newPauser, pauserRole)
+        );
+        vm.prank(newPauser);
+        engine.unpause();
+
+        vm.prank(owner);
+        engine.unpause();
+        assertFalse(engine.paused());
+    }
+
     // =========================================================================
     // TEST HELPERS
     // =========================================================================
