@@ -271,12 +271,10 @@ function resolveOptionalAddress(
   }
 
   if (sharedAddress) return sharedAddress;
-  if (isProduction) {
-    throw new Error(
-      `Missing shared deployment artifact for ${contractName} on chain ${activeChainId}. Run \`yarn deploy --network <network>\` to refresh shared deployments before starting Ponder for ${activeNetwork}.`,
-    );
-  }
 
+  console.warn(
+    `[ponder config] Missing optional shared deployment artifact for ${contractName} on chain ${activeChainId}; using ${ZERO_ADDRESS} until the deployment artifact is refreshed.`,
+  );
   return ZERO_ADDRESS;
 }
 

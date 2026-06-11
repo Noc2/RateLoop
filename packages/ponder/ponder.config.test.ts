@@ -49,10 +49,13 @@ const missingHardhatPonderContracts = getMissingPonderContracts(chain31337);
 const itWithSepoliaPonderArtifacts = chain4801 && missingSepoliaPonderContracts.length === 0 ? it : it.skip;
 const itWithSepoliaContentRegistryArtifact = chain4801?.ContentRegistry ? it : it.skip;
 const itWithMissingSepoliaPonderArtifacts = chain4801 && missingSepoliaPonderContracts.length > 0 ? it : it.skip;
+const itWithMissingSepoliaConfidentialityEscrowArtifact =
+  chain4801 && missingSepoliaPonderContracts.length === 0 && !chain4801.ConfidentialityEscrow ? it : it.skip;
 const itWithWorldChainPonderArtifacts = chain480 && missingWorldChainPonderContracts.length === 0 ? it : it.skip;
 const itWithHardhatArtifacts = chain31337 && missingHardhatPonderContracts.length === 0 ? it : it.skip;
 const itWithHardhatClusterPayoutOracleArtifact = chain31337?.ClusterPayoutOracle ? it : it.skip;
 const PONDER_CONFIG_TEST_TIMEOUT_MS = 30_000;
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const ORIGINAL_ENV = { ...process.env };
 const VALID_ENV = {
   PONDER_NETWORK: "worldchainSepolia",
@@ -233,6 +236,37 @@ describe("ponder config", () => {
       `Missing shared deployment artifact for ${missingSepoliaPonderContracts[0]} on chain 4801`,
     );
   }, PONDER_CONFIG_TEST_TIMEOUT_MS);
+
+  itWithMissingSepoliaConfidentialityEscrowArtifact(
+    "uses zero address for missing optional live deployment artifacts",
+    async () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const { default: config } = await loadPonderConfig(
+        {
+          NODE_ENV: "production",
+        },
+        [
+          "PONDER_CONFIDENTIALITY_ESCROW_ADDRESS",
+          "PONDER_CONFIDENTIALITY_ESCROW_START_BLOCK",
+        ],
+      );
+
+      const loadedConfig = config as any;
+
+      expect(
+        loadedConfig.contracts.ConfidentialityEscrow.network.worldchainSepolia
+          .address,
+      ).toBe(ZERO_ADDRESS);
+      expect(
+        loadedConfig.contracts.ConfidentialityEscrow.network.worldchainSepolia
+          .startBlock,
+      ).toBe(0);
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining("Missing optional shared deployment artifact for ConfidentialityEscrow"),
+      );
+    },
+    PONDER_CONFIG_TEST_TIMEOUT_MS,
+  );
 
   itWithHardhatArtifacts("uses start block 0 for local hardhat even when artifacts contain deployment blocks", async () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});

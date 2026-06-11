@@ -42,8 +42,8 @@ Within the package directory, additional scripts are available:
 | `PONDER_RPC_URL_480`                       | RPC URL for World Chain mainnet                                                                                             |
 | `PONDER_CONTENT_REGISTRY_ADDRESS` etc.     | Local Hardhat address overrides; fallback addresses when the active chain has no shared deployment in `@rateloop/contracts` |
 | `PONDER_ADVISORY_VOTE_RECORDER_ADDRESS`    | Advisory zero-stake vote recorder address; local override only once deployments are refreshed                               |
-| `PONDER_CLUSTER_PAYOUT_ORACLE_ADDRESS`     | Correlation payout oracle address; local override only once deployments are refreshed                                       |
-| `PONDER_CONFIDENTIALITY_ESCROW_ADDRESS`    | Confidentiality escrow address; local Hardhat override only. Live chains require the shared artifact, and a provided value must match it |
+| `PONDER_CLUSTER_PAYOUT_ORACLE_ADDRESS`     | Correlation payout oracle address; optional env fallback until shared deployments are refreshed                            |
+| `PONDER_CONFIDENTIALITY_ESCROW_ADDRESS`    | Confidentiality escrow address; optional env fallback until shared deployments are refreshed                               |
 | `PONDER_CONTENT_REGISTRY_START_BLOCK` etc. | Optional fallback start blocks when the active chain has no shared deployment metadata                                      |
 | `RATELOOP_PONDER_DATABASE_SCHEMA`          | Optional production schema override for Ponder tables; `yarn ponder:start` defaults to a Railway deployment schema on Railway, otherwise a RateLoop-owned network schema |
 | `CORS_ORIGIN`                              | Allowed origins (comma-separated; required in production)                                                                   |
