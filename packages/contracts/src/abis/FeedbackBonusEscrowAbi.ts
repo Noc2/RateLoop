@@ -1342,19 +1342,6 @@ export const FeedbackBonusEscrowAbi = [
     "anonymous": false
   },
   {
-    "type": "event",
-    "name": "VotingEngineUpdated",
-    "inputs": [
-      {
-        "name": "votingEngine",
-        "type": "address",
-        "indexed": false,
-        "internalType": "address"
-      }
-    ],
-    "anonymous": false
-  },
-  {
     "type": "error",
     "name": "AccessControlBadConfirmation",
     "inputs": []

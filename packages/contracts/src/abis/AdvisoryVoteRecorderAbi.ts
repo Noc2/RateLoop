@@ -315,19 +315,19 @@ export const AdvisoryVoteRecorderAbi = [
     "name": "lastAdvisoryVoteTimestamp",
     "inputs": [
       {
-        "name": "",
+        "name": "contentId",
         "type": "uint256",
         "internalType": "uint256"
       },
       {
-        "name": "",
+        "name": "rater",
         "type": "address",
         "internalType": "address"
       }
     ],
     "outputs": [
       {
-        "name": "",
+        "name": "timestamp",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -339,19 +339,19 @@ export const AdvisoryVoteRecorderAbi = [
     "name": "lastAdvisoryVoteTimestampByIdentity",
     "inputs": [
       {
-        "name": "",
+        "name": "contentId",
         "type": "uint256",
         "internalType": "uint256"
       },
       {
-        "name": "",
+        "name": "identityKey",
         "type": "bytes32",
         "internalType": "bytes32"
       }
     ],
     "outputs": [
       {
-        "name": "",
+        "name": "timestamp",
         "type": "uint256",
         "internalType": "uint256"
       }
