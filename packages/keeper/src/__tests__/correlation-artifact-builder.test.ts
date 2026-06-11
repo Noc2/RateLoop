@@ -153,6 +153,7 @@ describe("automatic correlation artifact builder", () => {
     expect(publicArtifact.roundPayoutSnapshots[0].trailingBaseRateUpBps).toBe(2_000);
     expect(publicArtifact.roundPayoutSnapshots[0].payoutWeights).toHaveLength(2);
     expect(publicArtifact.roundPayoutSnapshots[0].eligibleVotes).toHaveLength(2);
+    expect(publicArtifact.roundPayoutSnapshots[0].excludedVotes).toHaveLength(0);
     expect(publicArtifact.roundPayoutSnapshots[0].payoutWeights[0]).toMatchObject({
       proof: expect.any(Array),
       effectiveWeight: expect.any(String),
@@ -199,6 +200,73 @@ describe("automatic correlation artifact builder", () => {
         artifactURI: expect.any(String),
       }),
     );
+  });
+
+  it("publishes targeted vote exclusions in the stored artifact", async () => {
+    mockConfig();
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(input.toString());
+      if (url.pathname === "/correlation/round-candidates") {
+        return jsonResponse({
+          items: [{ rewardPoolId: "7", contentId: "9", roundId: "2" }],
+        });
+      }
+      if (url.pathname === "/correlation/round-votes") {
+        return jsonResponse({
+          items: [
+            {
+              account: "0x0000000000000000000000000000000000000001",
+              identityKey: `0x${"a".repeat(64)}`,
+              commitKey: `0x${"b".repeat(64)}`,
+              verifiedHuman: true,
+              historicalVoteCount: 12,
+              features: [`identity:0x${"a".repeat(64)}`],
+            },
+          ],
+          excludedVotes: [
+            {
+              account: "0x0000000000000000000000000000000000000002",
+              identityKey: `0x${"c".repeat(64)}`,
+              commitKey: `0x${"d".repeat(64)}`,
+              cooldownSeconds: 604800,
+              profileUpdatedAt: "100",
+              reasons: ["profile_cooldown_active"],
+              roundOpenTime: "200",
+            },
+          ],
+        });
+      }
+      return new Response("not found", { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { buildConfiguredCorrelationSnapshotArtifact } = await import(
+      "../correlation-artifact-builder.js"
+    );
+    const logger = {
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    };
+
+    const artifact = await buildConfiguredCorrelationSnapshotArtifact(logger);
+    const publicArtifact = parseDataUri(artifact.roundPayoutSnapshots![0]!.artifactURI);
+    const snapshot = publicArtifact.roundPayoutSnapshots[0];
+
+    expect(snapshot.eligibleVotes).toHaveLength(1);
+    expect(snapshot.payoutWeights).toHaveLength(1);
+    expect(snapshot.excludedVotes).toEqual([
+      {
+        account: "0x0000000000000000000000000000000000000002",
+        identityKey: `0x${"c".repeat(64)}`,
+        commitKey: `0x${"d".repeat(64)}`,
+        cooldownSeconds: 604800,
+        profileUpdatedAt: "100",
+        reasons: ["profile_cooldown_active"],
+        roundOpenTime: "200",
+      },
+    ]);
   });
 
   it("builds non-flat surprise-weighted baseWeights for a non-uniform round", async () => {

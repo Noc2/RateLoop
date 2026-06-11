@@ -4,10 +4,12 @@ import {
   MAX_PROFILE_SELF_REPORT_LENGTH,
   PROFILE_SELF_REPORT_NOTICE,
   RATER_TYPE,
+  TARGET_AUDIENCE_PROFILE_COOLDOWN_SECONDS,
   TargetAudienceValidationError,
   aggregateProfileSelfReports,
   buildTargetAudienceMatchReport,
   emptyProfileSelfReportAudienceContext,
+  evaluateTargetAudienceEligibility,
   formatRaterTypeName,
   getProfileSelfReportTaxonomy,
   normalizeTargetAudience,
@@ -254,6 +256,82 @@ test("buildTargetAudienceMatchReport compares requested audience to revealed coh
       { dimension: "roles", matchShare: 0.5, matchedCount: 1, requested: ["engineer"] },
     ],
   );
+});
+
+test("evaluateTargetAudienceEligibility applies audience match and profile cooldown", () => {
+  const selfReport = serializeProfileSelfReport({
+    ageGroup: "25-34",
+    languages: ["de", "en"],
+    residenceCountry: "DE",
+    roles: ["engineer"],
+    team: {
+      country: "DE",
+      languages: ["de"],
+      teamSize: "2-10",
+      teamType: "company",
+    },
+  });
+  const targetAudience = {
+    ageGroups: ["25-34"],
+    countries: ["DE"],
+    languages: ["de"],
+    roles: ["engineer"],
+    team: {
+      countries: ["DE"],
+      languages: ["de"],
+      sizes: ["2-10"],
+      types: ["company"],
+    },
+  };
+
+  assert.deepEqual(
+    evaluateTargetAudienceEligibility({
+      profileUpdatedAtSeconds: 1_000,
+      roundOpenTimeSeconds: 1_000 + TARGET_AUDIENCE_PROFILE_COOLDOWN_SECONDS,
+      selfReport,
+      targetAudience,
+    }),
+    {
+      cooldownSeconds: TARGET_AUDIENCE_PROFILE_COOLDOWN_SECONDS,
+      eligible: true,
+      reasons: [],
+      targetAudience,
+    },
+  );
+
+  assert.deepEqual(
+    evaluateTargetAudienceEligibility({
+      profileUpdatedAtSeconds: 1_001,
+      roundOpenTimeSeconds: 1_000 + TARGET_AUDIENCE_PROFILE_COOLDOWN_SECONDS,
+      selfReport,
+      targetAudience,
+    }).reasons,
+    ["profile_cooldown_active"],
+  );
+});
+
+test("evaluateTargetAudienceEligibility reports self-report audience mismatches", () => {
+  const result = evaluateTargetAudienceEligibility({
+    profileUpdatedAtSeconds: 1,
+    roundOpenTimeSeconds: 1 + TARGET_AUDIENCE_PROFILE_COOLDOWN_SECONDS,
+    selfReport: serializeProfileSelfReport({
+      languages: ["en"],
+      residenceCountry: "US",
+      roles: ["operator"],
+    }),
+    targetAudience: {
+      countries: ["DE"],
+      languages: ["de"],
+      roles: ["engineer"],
+    },
+  });
+
+  assert.equal(result.eligible, false);
+  assert.deepEqual(result.reasons, [
+    "audience_mismatch:countries",
+    "audience_mismatch:languages",
+    "audience_mismatch:roles",
+  ]);
 });
 
 test("emptyProfileSelfReportAudienceContext marks every revealed vote as missing", () => {

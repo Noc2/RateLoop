@@ -4,6 +4,7 @@ export const PROFILE_SELF_REPORT_VERIFIED = false;
 export const PROFILE_SELF_REPORT_RESTRICTS_ELIGIBILITY = false;
 export const MAX_PROFILE_SELF_REPORT_LENGTH = 1600;
 export const TARGET_AUDIENCE_CAVEAT = "unverified_self_report" as const;
+export const TARGET_AUDIENCE_PROFILE_COOLDOWN_SECONDS = 7 * 24 * 60 * 60;
 
 export const PROFILE_SELF_REPORT_NOTICE =
   "Audience context is public, self-reported, unverified, and not used for vote eligibility. Governance may penalize clearly false context when public evidence supports it.";
@@ -262,6 +263,13 @@ export interface TargetAudienceMatchReport {
   };
   source: typeof PROFILE_SELF_REPORT_SOURCE;
   verified: false;
+}
+
+export interface TargetAudienceEligibilityResult {
+  cooldownSeconds: number;
+  eligible: boolean;
+  reasons: string[];
+  targetAudience: TargetAudience | null;
 }
 
 export type TargetAudienceValidationIssue = {
@@ -822,6 +830,138 @@ export function targetAudienceHasValues(value: TargetAudience | null | undefined
       value?.hybrid?.modelProviders?.length ||
       value?.hybrid?.oversight?.length,
   );
+}
+
+function coerceNonNegativeInteger(value: unknown) {
+  if (typeof value === "bigint") {
+    return value >= 0n && value <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(value) : null;
+  }
+  if (typeof value === "number") {
+    return Number.isSafeInteger(value) && value >= 0 ? value : null;
+  }
+  if (typeof value === "string" && /^\d+$/.test(value)) {
+    const parsed = Number(value);
+    return Number.isSafeInteger(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function parseEligibilitySelfReport(value: unknown) {
+  if (typeof value === "string") return parseProfileSelfReport(value);
+  const report = normalizeProfileSelfReport(value);
+  return profileSelfReportHasValues(report) ? report : null;
+}
+
+function hasAnyValue<T extends string>(actual: readonly T[] | undefined, requested: readonly T[] | undefined) {
+  if (!requested?.length) return true;
+  if (!actual?.length) return false;
+  const actualSet = new Set(actual);
+  return requested.some(value => actualSet.has(value));
+}
+
+function hasScalarValue<T extends string>(actual: T | undefined, requested: readonly T[] | undefined) {
+  if (!requested?.length) return true;
+  return Boolean(actual && requested.includes(actual));
+}
+
+function pushAudienceMismatch(reasons: string[], field: string) {
+  reasons.push(`audience_mismatch:${field}`);
+}
+
+function collectTargetAudienceMismatchReasons(report: ProfileSelfReport, targetAudience: TargetAudience) {
+  const reasons: string[] = [];
+
+  if (!hasScalarValue(report.ageGroup, targetAudience.ageGroups)) pushAudienceMismatch(reasons, "ageGroups");
+  if (!hasScalarValue(report.residenceCountry, targetAudience.countries)) pushAudienceMismatch(reasons, "countries");
+  if (!hasAnyValue(report.expertise, targetAudience.expertise)) pushAudienceMismatch(reasons, "expertise");
+  if (!hasAnyValue(report.languages, targetAudience.languages)) pushAudienceMismatch(reasons, "languages");
+  if (!hasAnyValue(report.nationalities, targetAudience.nationalities)) pushAudienceMismatch(reasons, "nationalities");
+  if (!hasAnyValue(report.roles, targetAudience.roles)) pushAudienceMismatch(reasons, "roles");
+
+  if (!hasScalarValue(report.ai?.agentFramework, targetAudience.ai?.agentFrameworks)) {
+    pushAudienceMismatch(reasons, "ai.agentFrameworks");
+  }
+  if (!hasScalarValue(report.ai?.autonomy, targetAudience.ai?.autonomy)) pushAudienceMismatch(reasons, "ai.autonomy");
+  if (!hasAnyValue(report.ai?.expertise, targetAudience.ai?.expertise)) pushAudienceMismatch(reasons, "ai.expertise");
+  if (!hasAnyValue(report.ai?.languages, targetAudience.ai?.languages)) pushAudienceMismatch(reasons, "ai.languages");
+  if (!hasScalarValue(report.ai?.modelProvider, targetAudience.ai?.modelProviders)) {
+    pushAudienceMismatch(reasons, "ai.modelProviders");
+  }
+
+  if (!hasScalarValue(report.team?.country, targetAudience.team?.countries)) {
+    pushAudienceMismatch(reasons, "team.countries");
+  }
+  if (!hasAnyValue(report.team?.expertise, targetAudience.team?.expertise)) {
+    pushAudienceMismatch(reasons, "team.expertise");
+  }
+  if (!hasAnyValue(report.team?.languages, targetAudience.team?.languages)) {
+    pushAudienceMismatch(reasons, "team.languages");
+  }
+  if (!hasScalarValue(report.team?.teamSize, targetAudience.team?.sizes)) {
+    pushAudienceMismatch(reasons, "team.sizes");
+  }
+  if (!hasScalarValue(report.team?.teamType, targetAudience.team?.types)) {
+    pushAudienceMismatch(reasons, "team.types");
+  }
+
+  if (!hasAnyValue(report.hybrid?.expertise, targetAudience.hybrid?.expertise)) {
+    pushAudienceMismatch(reasons, "hybrid.expertise");
+  }
+  if (!hasAnyValue(report.hybrid?.languages, targetAudience.hybrid?.languages)) {
+    pushAudienceMismatch(reasons, "hybrid.languages");
+  }
+  if (!hasScalarValue(report.hybrid?.modelProvider, targetAudience.hybrid?.modelProviders)) {
+    pushAudienceMismatch(reasons, "hybrid.modelProviders");
+  }
+  if (!hasScalarValue(report.hybrid?.oversight, targetAudience.hybrid?.oversight)) {
+    pushAudienceMismatch(reasons, "hybrid.oversight");
+  }
+
+  return reasons;
+}
+
+export function evaluateTargetAudienceEligibility(params: {
+  cooldownSeconds?: number;
+  profileUpdatedAtSeconds?: bigint | number | string | null;
+  roundOpenTimeSeconds?: bigint | number | string | null;
+  selfReport: unknown;
+  targetAudience: unknown;
+}): TargetAudienceEligibilityResult {
+  const cooldownSeconds = params.cooldownSeconds ?? TARGET_AUDIENCE_PROFILE_COOLDOWN_SECONDS;
+  const targetAudience = normalizeTargetAudience(params.targetAudience);
+  if (!targetAudience) {
+    return {
+      cooldownSeconds,
+      eligible: true,
+      reasons: [],
+      targetAudience: null,
+    };
+  }
+
+  const reasons: string[] = [];
+  const report = parseEligibilitySelfReport(params.selfReport);
+  if (!report) {
+    reasons.push("missing_self_report");
+  } else {
+    reasons.push(...collectTargetAudienceMismatchReasons(report, targetAudience));
+  }
+
+  const profileUpdatedAt = coerceNonNegativeInteger(params.profileUpdatedAtSeconds);
+  const roundOpenTime = coerceNonNegativeInteger(params.roundOpenTimeSeconds);
+  if (profileUpdatedAt === null) {
+    reasons.push("profile_updated_at_missing");
+  } else if (roundOpenTime === null) {
+    reasons.push("round_open_time_missing");
+  } else if (profileUpdatedAt + cooldownSeconds > roundOpenTime) {
+    reasons.push("profile_cooldown_active");
+  }
+
+  return {
+    cooldownSeconds,
+    eligible: reasons.length === 0,
+    reasons,
+    targetAudience,
+  };
 }
 
 export function normalizeTargetAudience(

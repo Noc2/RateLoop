@@ -34,11 +34,13 @@ interface CandidateResponse {
 }
 
 interface VoteResponse {
+  excludedVotes?: unknown[];
   items?: unknown[];
   roundContext?: unknown;
 }
 
 interface RoundVotesPage {
+  excludedVotes: PublicExcludedCorrelationVote[];
   votes: CorrelationVoteInput[];
   /** Null when Ponder omits or malforms the round context (neutral fallback). */
   trailingBaseRateUpBps: number | null;
@@ -74,6 +76,7 @@ interface PublicRoundPayoutSnapshot {
   reasonRoot: Hex;
   trailingBaseRateUpBps: number | null;
   eligibleVotes: PublicCorrelationVoteInput[];
+  excludedVotes: PublicExcludedCorrelationVote[];
   payoutWeights: PublicPayoutWeight[];
 }
 
@@ -86,6 +89,16 @@ interface PublicCorrelationVoteInput {
   features: readonly string[];
   isUp: boolean | null;
   revealWeight: string | null;
+}
+
+interface PublicExcludedCorrelationVote {
+  account: Address;
+  identityKey: Hex;
+  commitKey: Hex;
+  cooldownSeconds: number | null;
+  profileUpdatedAt: string | null;
+  reasons: readonly string[];
+  roundOpenTime: string | null;
 }
 
 interface PublicPayoutWeight {
@@ -167,7 +180,7 @@ export async function buildConfiguredCorrelationSnapshotArtifactForCandidates(
   const publicRounds: PublicRoundPayoutSnapshot[] = [];
 
   for (const candidate of candidates) {
-    const { votes, trailingBaseRateUpBps } = await fetchRoundVotes(
+    const { excludedVotes, votes, trailingBaseRateUpBps } = await fetchRoundVotes(
       config.ponderBaseUrl,
       candidate,
     );
@@ -209,6 +222,7 @@ export async function buildConfiguredCorrelationSnapshotArtifactForCandidates(
             ? vote.revealWeight.toString()
             : null,
       })),
+      excludedVotes,
       payoutWeights: scored.leaves.map((leaf): PublicPayoutWeight => ({
         domain: leaf.domain,
         rewardPoolId: leaf.rewardPoolId.toString(),
@@ -486,6 +500,8 @@ async function fetchRoundVotes(
   ponderBaseUrl: string,
   candidate: CorrelationRoundCandidate,
 ): Promise<RoundVotesPage> {
+  const excludedVotes: PublicExcludedCorrelationVote[] = [];
+  const excludedVoteKeys = new Set<string>();
   const votes: CorrelationVoteInput[] = [];
   let trailingBaseRateUpBps: number | null = null;
   for (let page = 0; page < MAX_VOTE_PAGES_PER_ROUND; page += 1) {
@@ -504,9 +520,15 @@ async function fetchRoundVotes(
     trailingBaseRateUpBps ??= parseRoundContextTrailingBaseRateUpBps(
       response.roundContext,
     );
+    for (const excludedVote of (response.excludedVotes ?? []).map(parseExcludedVote)) {
+      const key = `${excludedVote.commitKey.toLowerCase()}:${excludedVote.identityKey.toLowerCase()}`;
+      if (excludedVoteKeys.has(key)) continue;
+      excludedVoteKeys.add(key);
+      excludedVotes.push(excludedVote);
+    }
     votes.push(...items.map(parseVote));
     if (items.length < VOTE_PAGE_SIZE) {
-      return { votes, trailingBaseRateUpBps };
+      return { excludedVotes, votes, trailingBaseRateUpBps };
     }
   }
   throw new Error(
@@ -595,6 +617,21 @@ function parseVote(value: unknown): CorrelationVoteInput {
   };
 }
 
+function parseExcludedVote(value: unknown): PublicExcludedCorrelationVote {
+  const record = requireRecord(value, "excluded correlation vote");
+  return {
+    account: requireAddress(record.account, "excludedVotes.account"),
+    identityKey: requireHex(record.identityKey, "excludedVotes.identityKey"),
+    commitKey: requireHex(record.commitKey, "excludedVotes.commitKey"),
+    cooldownSeconds: parseNonNegativeNumber(record.cooldownSeconds),
+    profileUpdatedAt: parseOptionalString(record.profileUpdatedAt),
+    reasons: Array.isArray(record.reasons)
+      ? record.reasons.filter((reason): reason is string => typeof reason === "string").sort()
+      : [],
+    roundOpenTime: parseOptionalString(record.roundOpenTime),
+  };
+}
+
 function parseRoundContextTrailingBaseRateUpBps(value: unknown): number | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return null;
@@ -610,6 +647,20 @@ function parseRoundContextTrailingBaseRateUpBps(value: unknown): number | null {
     return null;
   }
   return parsed;
+}
+
+function parseOptionalString(value: unknown): string | null {
+  return typeof value === "string" ? value : null;
+}
+
+function parseNonNegativeNumber(value: unknown): number | null {
+  const parsed =
+    typeof value === "number"
+      ? value
+      : typeof value === "string" && /^\d+$/.test(value)
+        ? Number(value)
+        : Number.NaN;
+  return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
 }
 
 function requireRecord(value: unknown, label: string): Record<string, unknown> {

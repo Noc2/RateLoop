@@ -103,6 +103,7 @@ function mockPonderModules<T>(result: T, additionalResults: unknown[] = []) {
       status: "content.status",
       submitter: "content.submitter",
       tags: "content.tags",
+      targetAudience: "content.targetAudience",
       title: "content.title",
       totalVotes: "content.totalVotes",
       url: "content.url",
@@ -2242,6 +2243,117 @@ describe("registerCorrelationRoutes", () => {
       true,
     );
     expect(serializedJoins.some((join) => join.includes("round.settledAt"))).toBe(true);
+  });
+
+  it("filters targeted correlation votes by self-report match and profile cooldown", async () => {
+    const cooldown = 7 * 24 * 60 * 60;
+    mockPonderModules(
+      [
+        {
+          account: "0x0000000000000000000000000000000000000001",
+          voter: "0x0000000000000000000000000000000000000001",
+          identityKey: `0x${"a".repeat(64)}`,
+          commitKey: `0x${"b".repeat(64)}`,
+          isUp: true,
+          stake: 25000000n,
+          epochIndex: 0,
+          revealWeight: 25000000n,
+          baseWeight: 10000n,
+          verifiedHuman: true,
+          historicalVoteCount: 0,
+          profileSelfReport: JSON.stringify({
+            v: 2,
+            languages: ["de"],
+            roles: ["engineer"],
+          }),
+          profileUpdatedAt: 100n,
+          roundStartTime: BigInt(100 + cooldown),
+          targetAudience: JSON.stringify({
+            languages: ["de"],
+            roles: ["engineer"],
+          }),
+        },
+        {
+          account: "0x0000000000000000000000000000000000000002",
+          voter: "0x0000000000000000000000000000000000000002",
+          identityKey: `0x${"c".repeat(64)}`,
+          commitKey: `0x${"d".repeat(64)}`,
+          isUp: false,
+          stake: 15000000n,
+          epochIndex: 1,
+          revealWeight: null,
+          baseWeight: 10000n,
+          verifiedHuman: false,
+          historicalVoteCount: 3,
+          profileSelfReport: JSON.stringify({
+            v: 2,
+            languages: ["de"],
+            roles: ["engineer"],
+          }),
+          profileUpdatedAt: BigInt(100 + cooldown),
+          roundStartTime: BigInt(100 + cooldown),
+          targetAudience: JSON.stringify({
+            languages: ["de"],
+            roles: ["engineer"],
+          }),
+        },
+        {
+          account: "0x0000000000000000000000000000000000000003",
+          voter: "0x0000000000000000000000000000000000000003",
+          identityKey: `0x${"e".repeat(64)}`,
+          commitKey: `0x${"f".repeat(64)}`,
+          isUp: false,
+          stake: 15000000n,
+          epochIndex: 1,
+          revealWeight: null,
+          baseWeight: 10000n,
+          verifiedHuman: false,
+          historicalVoteCount: 3,
+          profileSelfReport: JSON.stringify({
+            v: 2,
+            languages: ["en"],
+            roles: ["operator"],
+          }),
+          profileUpdatedAt: 100n,
+          roundStartTime: BigInt(100 + cooldown),
+          targetAudience: JSON.stringify({
+            languages: ["de"],
+            roles: ["engineer"],
+          }),
+        },
+      ],
+      [[{ settledAt: 777n }], []],
+    );
+    const { registerCorrelationRoutes } = await import(
+      "../src/api/routes/correlation-routes.js"
+    );
+
+    const app = new Hono();
+    registerCorrelationRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/correlation/round-votes?rewardPoolId=7&contentId=9&roundId=2",
+    );
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.items).toHaveLength(1);
+    expect(body.items[0]).toMatchObject({
+      account: "0x0000000000000000000000000000000000000001",
+      payoutEligible: true,
+    });
+    expect(body.items[0]).not.toHaveProperty("targetAudience");
+    expect(body.items[0]).not.toHaveProperty("profileSelfReport");
+    expect(body.excludedVotes).toEqual([
+      expect.objectContaining({
+        account: "0x0000000000000000000000000000000000000002",
+        reasons: ["profile_cooldown_active"],
+      }),
+      expect.objectContaining({
+        account: "0x0000000000000000000000000000000000000003",
+        reasons: ["audience_mismatch:languages", "audience_mismatch:roles"],
+      }),
+    ]);
   });
 
   it("computes the trailing base rate from prior settled round pools", async () => {
