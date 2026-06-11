@@ -5,6 +5,7 @@ import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/I
 import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import { IWorldIDVerifier } from "./interfaces/IWorldIDVerifier.sol";
 import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol";
+import { IConfidentialityEscrow } from "./interfaces/IConfidentialityEscrow.sol";
 
 /// @title RaterRegistry
 /// @notice Optional rater metadata, human credentials, public follows, and delegation for RateLoop.
@@ -14,6 +15,7 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
     bytes32 public constant SEEDER_ROLE = keccak256("SEEDER_ROLE");
     bytes32 public constant LAUNCH_CONSUMER_ROLE = keccak256("LAUNCH_CONSUMER_ROLE");
+    bytes32 public constant GOVERNANCE_ROLE = keccak256("GOVERNANCE_ROLE");
 
     bytes32 public constant SEEDED_HUMAN_SCOPE = keccak256("rateloop-seeded-human-v1");
     uint8 public constant WORLD_CREDENTIAL_SELFIE = 1;
@@ -85,6 +87,13 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         bool frozen;
     }
 
+    struct IdentityBan {
+        uint64 bannedAt;
+        uint64 expiresAt;
+        bytes32 evidenceHash;
+        bool permanent;
+    }
+
     mapping(address => RaterProfile) private _profiles;
     mapping(address => HumanCredential) private _humanCredentials;
     mapping(address => mapping(uint8 => WorldCredential)) private _worldCredentials;
@@ -134,9 +143,12 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
     bool public worldIdV4PresenceConfigFrozen;
     mapping(uint8 => mapping(bytes32 => bool)) private _usedWorldCredentialProof;
     mapping(uint8 => mapping(bytes32 => bool)) private _usedWorldPresenceProof;
+    mapping(bytes32 => IdentityBan) private _identityBans;
+    mapping(HumanCredentialProvider => mapping(bytes32 => bool)) private _bannedHumanNullifierByProvider;
+    address public confidentialityEscrow;
 
     /// @dev Reserved storage gap for future proxy-safe upgrades.
-    uint256[29] private __gap;
+    uint256[25] private __gap;
 
     event RaterProfileUpdated(
         address indexed rater, RaterType indexed raterType, bytes32 indexed metadataHash, uint64 updatedAt
@@ -229,6 +241,16 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
     event DelegateSet(address indexed holder, address indexed delegate);
     event DelegateRemoved(address indexed holder, address indexed previousDelegate);
     event PendingDelegateRemoved(address indexed holder, address indexed previousPendingDelegate);
+    event ConfidentialityEscrowUpdated(address indexed previousEscrow, address indexed newEscrow);
+    event IdentityBanned(
+        HumanCredentialProvider indexed provider,
+        bytes32 indexed nullifierHash,
+        uint64 expiresAt,
+        bool permanent,
+        bytes32 evidenceHash,
+        string reason
+    );
+    event IdentityUnbanned(HumanCredentialProvider indexed provider, bytes32 indexed nullifierHash);
 
     error InvalidAddress();
     error InvalidCredential();
@@ -246,6 +268,7 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
     error UnsupportedCredentialKind();
     error WorldCredentialConfigFrozen();
     error WorldPresenceConfigFrozen();
+    error InvalidBan();
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor(
@@ -352,6 +375,7 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         _grantRole(DEFAULT_ADMIN_ROLE, governance);
         _grantRole(ADMIN_ROLE, governance);
         _grantRole(SEEDER_ROLE, governance);
+        _grantRole(GOVERNANCE_ROLE, governance);
 
         if (admin != governance) {
             _grantRole(ADMIN_ROLE, admin);
@@ -586,6 +610,58 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
             worldIdV4PresenceConfigFrozen = true;
         }
         emit WorldPresenceV4ConfigLocked(kind, msg.sender);
+    }
+
+    function setConfidentialityEscrow(address newEscrow) external onlyRole(ADMIN_ROLE) {
+        if (newEscrow != address(0) && newEscrow.code.length == 0) revert InvalidAddress();
+        address previous = confidentialityEscrow;
+        confidentialityEscrow = newEscrow;
+        emit ConfidentialityEscrowUpdated(previous, newEscrow);
+    }
+
+    function banIdentity(
+        HumanCredentialProvider provider,
+        bytes32 nullifierHash,
+        uint64 expiresAt,
+        string calldata reason,
+        bytes32 evidenceHash
+    ) external onlyRole(GOVERNANCE_ROLE) {
+        if (provider == HumanCredentialProvider.None || nullifierHash == bytes32(0)) {
+            revert InvalidCredential();
+        }
+        if (bytes(reason).length == 0 || bytes(reason).length > 280 || evidenceHash == bytes32(0)) revert InvalidBan();
+        bool permanent = expiresAt == type(uint64).max;
+        if (!permanent) {
+            if (expiresAt == 0) {
+                uint256 defaultExpiry = block.timestamp + 365 days;
+                if (defaultExpiry > type(uint64).max) revert InvalidBan();
+                expiresAt = uint64(defaultExpiry);
+            }
+            if (expiresAt <= block.timestamp) revert InvalidBan();
+        }
+        _requireConfidentialityNexus(provider, nullifierHash);
+
+        _bannedHumanNullifierByProvider[_humanNullifierSlotProvider(provider)][nullifierHash] = true;
+        _writeIdentityBan(credentialIdentityKey(provider, nullifierHash), expiresAt, permanent, evidenceHash);
+        _writeIdentityBan(launchHumanIdentityKey(provider, nullifierHash), expiresAt, permanent, evidenceHash);
+        address owner = _humanNullifierOwnerByProvider[_humanNullifierSlotProvider(provider)][nullifierHash];
+        if (owner != address(0)) {
+            _writeIdentityBan(addressIdentityKey(owner), expiresAt, permanent, evidenceHash);
+        }
+
+        emit IdentityBanned(provider, nullifierHash, expiresAt, permanent, evidenceHash, reason);
+    }
+
+    function unbanIdentity(HumanCredentialProvider provider, bytes32 nullifierHash) external onlyRole(GOVERNANCE_ROLE) {
+        if (provider == HumanCredentialProvider.None || nullifierHash == bytes32(0)) revert InvalidCredential();
+        delete _bannedHumanNullifierByProvider[_humanNullifierSlotProvider(provider)][nullifierHash];
+        delete _identityBans[credentialIdentityKey(provider, nullifierHash)];
+        delete _identityBans[launchHumanIdentityKey(provider, nullifierHash)];
+        address owner = _humanNullifierOwnerByProvider[_humanNullifierSlotProvider(provider)][nullifierHash];
+        if (owner != address(0)) {
+            delete _identityBans[addressIdentityKey(owner)];
+        }
+        emit IdentityUnbanned(provider, nullifierHash);
     }
 
     function _setCredentialV4Config(
@@ -1247,6 +1323,28 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         return _revokedHumanNullifierByProvider[_humanNullifierSlotProvider(provider)][nullifierHash];
     }
 
+    function bannedHumanNullifierByProvider(HumanCredentialProvider provider, bytes32 nullifierHash)
+        external
+        view
+        returns (bool)
+    {
+        return _isHumanNullifierBanned(provider, nullifierHash);
+    }
+
+    function identityBan(bytes32 identityKey)
+        external
+        view
+        returns (uint64 bannedAt, uint64 expiresAt, bytes32 evidenceHash, bool permanent, bool active)
+    {
+        IdentityBan storage ban = _identityBans[identityKey];
+        return (ban.bannedAt, ban.expiresAt, ban.evidenceHash, ban.permanent, _isBanActive(ban));
+    }
+
+    function isIdentityKeyBanned(bytes32 identityKey) public view returns (bool) {
+        if (identityKey == bytes32(0)) return false;
+        return _isBanActive(_identityBans[identityKey]);
+    }
+
     function resolveRater(address actor) public view returns (ResolvedRater memory resolved) {
         if (actor == address(0)) return resolved;
 
@@ -1351,6 +1449,10 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         if (hasRecentCredentialRecheck(rater, WORLD_CREDENTIAL_PROOF_OF_HUMAN)) {
             freshMask |= _credentialKindBit(WORLD_CREDENTIAL_PROOF_OF_HUMAN);
         }
+        (bytes32 identityKey,,) = _identityForHolder(rater);
+        if (isIdentityKeyBanned(identityKey)) {
+            activeMask |= 1 << 7;
+        }
     }
 
     function credentialKindBit(uint8 kind) external pure returns (uint8) {
@@ -1361,6 +1463,61 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         if (credential.revoked) return true;
         HumanCredentialProvider slotProvider = _humanNullifierSlotProvider(credential.provider);
         return _revokedHumanNullifierByProvider[slotProvider][credential.nullifierHash];
+    }
+
+    function _isHumanNullifierBanned(HumanCredentialProvider provider, bytes32 nullifierHash)
+        private
+        view
+        returns (bool)
+    {
+        if (provider == HumanCredentialProvider.None || nullifierHash == bytes32(0)) return false;
+        if (!_bannedHumanNullifierByProvider[_humanNullifierSlotProvider(provider)][nullifierHash]) return false;
+        return isIdentityKeyBanned(credentialIdentityKey(provider, nullifierHash))
+            || isIdentityKeyBanned(launchHumanIdentityKey(provider, nullifierHash));
+    }
+
+    function _writeIdentityBan(bytes32 identityKey, uint64 expiresAt, bool permanent, bytes32 evidenceHash) private {
+        if (identityKey == bytes32(0)) return;
+        _identityBans[identityKey] = IdentityBan({
+            bannedAt: uint64(block.timestamp), expiresAt: expiresAt, evidenceHash: evidenceHash, permanent: permanent
+        });
+    }
+
+    function _isBanActive(IdentityBan storage ban) private view returns (bool) {
+        if (ban.bannedAt == 0) return false;
+        return ban.permanent || ban.expiresAt > block.timestamp;
+    }
+
+    function _requireConfidentialityNexus(HumanCredentialProvider provider, bytes32 nullifierHash) private view {
+        address escrow = confidentialityEscrow;
+        if (escrow == address(0)) revert InvalidBan();
+        try IConfidentialityEscrow(escrow).hasConfidentialityNexus(uint8(provider), nullifierHash) returns (
+            bool hasNexus
+        ) {
+            if (!hasNexus) revert InvalidBan();
+        } catch {
+            revert InvalidBan();
+        }
+    }
+
+    function _propagateActiveBan(address rater, HumanCredentialProvider provider, bytes32 nullifierHash) private {
+        if (!_isHumanNullifierBanned(provider, nullifierHash)) return;
+        IdentityBan storage credentialBan = _identityBans[credentialIdentityKey(provider, nullifierHash)];
+        uint64 expiresAt = credentialBan.expiresAt;
+        bytes32 evidenceHash = credentialBan.evidenceHash;
+        bool permanent = credentialBan.permanent;
+        if (!_isBanActive(credentialBan)) {
+            IdentityBan storage launchBan = _identityBans[launchHumanIdentityKey(provider, nullifierHash)];
+            if (!_isBanActive(launchBan)) return;
+            expiresAt = launchBan.expiresAt;
+            evidenceHash = launchBan.evidenceHash;
+            permanent = launchBan.permanent;
+        }
+        _writeIdentityBan(addressIdentityKey(rater), expiresAt, permanent, evidenceHash);
+        bytes32 canonical = _canonicalHumanIdentityKey[rater];
+        if (canonical != bytes32(0)) {
+            _writeIdentityBan(canonical, expiresAt, permanent, evidenceHash);
+        }
     }
 
     function _humanNullifierSlotProvider(HumanCredentialProvider provider)
@@ -1460,6 +1617,7 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         if (_canonicalHumanIdentityKey[rater] == bytes32(0)) {
             _canonicalHumanIdentityKey[rater] = credentialIdentityKey(provider, nullifierHash);
         }
+        _propagateActiveBan(rater, provider, nullifierHash);
         _clearInboundDelegation(rater);
 
         _humanCredentials[rater] = HumanCredential({
