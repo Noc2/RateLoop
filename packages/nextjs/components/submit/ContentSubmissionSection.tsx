@@ -3095,9 +3095,9 @@ export function ContentSubmissionSection() {
   );
 
   const privateContextControl = (
-    <div className="rounded-lg border border-base-300 p-4">
-      <label className="flex items-center justify-between gap-4">
-        <span className="flex min-w-0 items-center gap-2 text-base font-medium text-base-content">
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 sm:justify-end">
+      <label className="flex items-center gap-3">
+        <span className="flex min-w-0 items-center gap-2 text-sm font-medium text-base-content">
           <LockClosedIcon className="h-4 w-4 shrink-0 text-warning" />
           <span>Private context</span>
           <InfoTooltip
@@ -3113,7 +3113,7 @@ export function ContentSubmissionSection() {
           onChange={e => handlePrivateContextToggle(e.target.checked)}
         />
       </label>
-      <Link href="/docs/how-it-works" className="link link-primary mt-3 inline-flex text-sm">
+      <Link href="/docs/how-it-works" className="link link-primary text-sm">
         Learn more
       </Link>
     </div>
@@ -4251,8 +4251,9 @@ export function ContentSubmissionSection() {
 
       <div className="surface-card rounded-2xl p-6" style={{ overflow: "visible" }}>
         <form onSubmit={handleFormSubmit} noValidate className="space-y-6">
-          <div>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm font-semibold uppercase tracking-wide text-base-content/50">{pageContext}</p>
+            {submissionStep === "question" ? privateContextControl : null}
           </div>
 
           {submissionStep === "question" ? (
@@ -4642,7 +4643,6 @@ export function ContentSubmissionSection() {
               </div>
 
               <div className="space-y-4 xl:sticky xl:top-24">
-                {privateContextControl}
                 {questionPreviewCard}
                 {prohibitedContentNotice}
                 {isMissingGasBalance ? (
