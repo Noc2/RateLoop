@@ -1,13 +1,15 @@
 "use client";
 
-import { type FormEvent, useMemo, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { ConfidentialityEscrowAbi, RaterRegistryConfidentialityAbi } from "@rateloop/contracts/abis";
 import { useQueryClient } from "@tanstack/react-query";
-import { Address, encodeFunctionData, formatUnits, isAddress, parseUnits } from "viem";
-import { useAccount, useConfig } from "wagmi";
+import { Abi, Address, encodeFunctionData, formatUnits, isAddress, parseUnits } from "viem";
+import { useAccount, useConfig, useReadContract } from "wagmi";
 import { waitForTransactionReceipt } from "wagmi/actions";
 import { ArrowsRightLeftIcon } from "@heroicons/react/24/outline";
 import { surfaceSectionHeadingClassName } from "~~/components/shared/sectionHeading";
-import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
+import { useDeployedContractInfo, useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 import {
   getProposalDescriptionHash,
   governorAbi,
@@ -17,7 +19,7 @@ import {
 } from "~~/hooks/useGovernance";
 import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
 
-type ComposerFieldType = "address" | "uint" | "lrep" | "string" | "textarea" | "csv" | "bytes32";
+type ComposerFieldType = "address" | "uint" | "lrep" | "string" | "textarea" | "csv" | "bytes32" | "credentialProvider";
 
 type ComposerField = {
   key: string;
@@ -33,6 +35,7 @@ type FieldParser = {
   uint: (key: string, label: string) => bigint;
   lrep: (key: string, label: string) => bigint;
   bytes32: (key: string, label: string) => `0x${string}`;
+  credentialProvider: (key: string, label: string) => number;
   string: (key: string, label: string) => string;
   csv: (key: string) => string[];
 };
@@ -48,7 +51,9 @@ type GovernanceActionTemplate = {
     | "ClusterPayoutOracle"
     | "FrontendRegistry"
     | "ContentRegistry"
-    | "ProtocolConfig";
+    | "ProtocolConfig"
+    | "ConfidentialityEscrow"
+    | "RaterRegistry";
   functionName: string;
   description: string;
   allowCustomDescription?: boolean;
@@ -64,6 +69,34 @@ type GovernanceActionTemplate = {
 };
 
 const TREASURY_GRANT_ACTION_ID = "treasury-grant";
+export const GOVERNANCE_ACTION_QUERY_PARAM = "governanceAction";
+export const CONFIDENTIALITY_SLASH_BOND_ACTION_ID = "confidentiality-slash-bond";
+export const RATER_REGISTRY_BAN_IDENTITY_ACTION_ID = "rater-registry-ban-identity";
+export const RATER_REGISTRY_UNBAN_IDENTITY_ACTION_ID = "rater-registry-unban-identity";
+
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+const ZERO_BYTES32 = `0x${"0".repeat(64)}` as const;
+const MAX_UINT64 = (1n << 64n) - 1n;
+
+const protocolConfigConfidentialityAbi = [
+  {
+    type: "function",
+    name: "confidentialityEscrow",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+    stateMutability: "view",
+  },
+] as const;
+
+function assertNonZeroBytes32(value: `0x${string}`, label: string) {
+  if (value === ZERO_BYTES32) throw new Error(`${label} must not be zero.`);
+  return value;
+}
+
+function validateUint64(value: bigint, label: string) {
+  if (value > MAX_UINT64) throw new Error(`${label} must fit in uint64.`);
+  return value;
+}
 
 function cleanDescriptionValue(value: string | undefined, fallback: string) {
   const cleaned = value?.trim();
@@ -313,6 +346,140 @@ const actionTemplates: readonly GovernanceActionTemplate[] = [
     fields: [{ key: "creditor", label: "Creditor address", type: "address", required: true }],
     buildArgs: (_, parser) => [parser.address("creditor", "Creditor address")],
     buildDescription: values => `Revoke FrontendRegistry fee-creditor role from ${values.creditor || "address"}`,
+  },
+  {
+    id: CONFIDENTIALITY_SLASH_BOND_ACTION_ID,
+    group: "Confidentiality Breach",
+    label: "Slash confidentiality bond",
+    mode: "proposal",
+    contractName: "ConfidentialityEscrow",
+    functionName: "slashBond",
+    description: "Create a proposal to slash an active confidentiality bond for a proven breach.",
+    fields: [
+      { key: "contentId", label: "Content ID", type: "uint", required: true },
+      {
+        key: "identityKey",
+        label: "Identity key",
+        type: "bytes32",
+        required: true,
+        helperText: "The identity key that posted the confidentiality bond for this content.",
+      },
+      {
+        key: "reason",
+        label: "Reason",
+        type: "textarea",
+        required: true,
+        helperText: "Short public reason stored with the slash event.",
+      },
+      {
+        key: "evidenceHash",
+        label: "Evidence hash",
+        type: "bytes32",
+        required: true,
+        helperText: "Hash of the public evidence packet voters used to arbitrate the breach.",
+      },
+      {
+        key: "reporterRecipient",
+        label: "Reporter recipient",
+        type: "address",
+        required: true,
+        helperText: "Receives the reporter share if the slash executes.",
+      },
+    ],
+    buildArgs: (_, parser) => [
+      parser.uint("contentId", "Content ID"),
+      parser.bytes32("identityKey", "Identity key"),
+      parser.string("reason", "Reason"),
+      assertNonZeroBytes32(parser.bytes32("evidenceHash", "Evidence hash"), "Evidence hash"),
+      parser.address("reporterRecipient", "Reporter recipient"),
+    ],
+    buildDescription: values =>
+      `Slash confidentiality bond for content ${values.contentId || "0"} identity ${values.identityKey || "identity"}`,
+  },
+  {
+    id: RATER_REGISTRY_BAN_IDENTITY_ACTION_ID,
+    group: "Confidentiality Breach",
+    label: "Ban breached identity",
+    mode: "proposal",
+    contractName: "RaterRegistry",
+    functionName: "banIdentity",
+    description: "Create a proposal to ban a confidentiality-linked human identity after breach arbitration.",
+    fields: [
+      {
+        key: "provider",
+        label: "Credential provider",
+        type: "credentialProvider",
+        required: true,
+        helperText: "The provider that produced the human nullifier.",
+      },
+      {
+        key: "nullifierHash",
+        label: "Nullifier hash",
+        type: "bytes32",
+        required: true,
+        helperText: "The raw human nullifier hash, not the derived identity key.",
+      },
+      {
+        key: "expiresAt",
+        label: "Expires at (Unix seconds)",
+        type: "uint",
+        required: true,
+        placeholder: "0",
+        helperText: "Use 0 for the registry default duration or 18446744073709551615 for a permanent ban.",
+      },
+      {
+        key: "reason",
+        label: "Reason",
+        type: "textarea",
+        required: true,
+        helperText: "Public reason stored with the identity ban event.",
+      },
+      {
+        key: "evidenceHash",
+        label: "Evidence hash",
+        type: "bytes32",
+        required: true,
+        helperText: "Hash of the public evidence packet voters used to arbitrate the breach.",
+      },
+    ],
+    buildArgs: (_, parser) => [
+      parser.credentialProvider("provider", "Credential provider"),
+      assertNonZeroBytes32(parser.bytes32("nullifierHash", "Nullifier hash"), "Nullifier hash"),
+      validateUint64(parser.uint("expiresAt", "Expires at"), "Expires at"),
+      parser.string("reason", "Reason"),
+      assertNonZeroBytes32(parser.bytes32("evidenceHash", "Evidence hash"), "Evidence hash"),
+    ],
+    buildDescription: values =>
+      `Ban confidentiality-linked ${values.provider || "provider"} identity ${values.nullifierHash || "nullifier"}`,
+  },
+  {
+    id: RATER_REGISTRY_UNBAN_IDENTITY_ACTION_ID,
+    group: "Confidentiality Breach",
+    label: "Unban identity",
+    mode: "proposal",
+    contractName: "RaterRegistry",
+    functionName: "unbanIdentity",
+    description: "Create a proposal to clear a confidentiality identity ban.",
+    fields: [
+      {
+        key: "provider",
+        label: "Credential provider",
+        type: "credentialProvider",
+        required: true,
+      },
+      {
+        key: "nullifierHash",
+        label: "Nullifier hash",
+        type: "bytes32",
+        required: true,
+      },
+    ],
+    buildArgs: (_, parser) => [
+      parser.credentialProvider("provider", "Credential provider"),
+      assertNonZeroBytes32(parser.bytes32("nullifierHash", "Nullifier hash"), "Nullifier hash"),
+    ],
+    buildDescription: values =>
+      `Unban confidentiality-linked ${values.provider || "provider"} identity ${values.nullifierHash || "nullifier"}`,
   },
   {
     id: "oracle-set-config",
@@ -710,19 +877,47 @@ const actionTemplates: readonly GovernanceActionTemplate[] = [
   },
 ];
 
+export function getGovernanceActionTemplateSummaries() {
+  return actionTemplates.map(template => ({
+    contractName: template.contractName,
+    fieldKeys: template.fields.map(field => field.key),
+    functionName: template.functionName,
+    group: template.group,
+    id: template.id,
+    label: template.label,
+    mode: template.mode,
+  }));
+}
+
 export function GovernanceActionComposer() {
   const queryClient = useQueryClient();
   const { address } = useAccount();
   const wagmiConfig = useConfig();
-  const { governorAddress, hasGovernorContract, isGovernorContractLoading, knownContractsByName, timelockAddress } =
-    useGovernanceContracts();
+  const searchParams = useSearchParams();
+  const {
+    governorAddress,
+    hasGovernorContract,
+    isGovernorContractLoading,
+    knownContractsByName,
+    targetNetwork,
+    timelockAddress,
+  } = useGovernanceContracts();
   const { currentQuorum, maxProposalThreshold, proposalThreshold } = useGovernanceStats();
   const { writeContractAsync, isPending } = useGovernanceWrite();
+  const raterRegistry = useDeployedContractInfo({ contractName: "RaterRegistry" as any });
   const [selectedActionId, setSelectedActionId] = useState("");
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [formValues, setFormValues] = useState<Record<string, string>>({});
   const [customDescription, setCustomDescription] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
+
+  const { data: configuredConfidentialityEscrow } = useReadContract({
+    address: knownContractsByName.ProtocolConfig?.address,
+    abi: protocolConfigConfidentialityAbi,
+    functionName: "confidentialityEscrow",
+    chainId: targetNetwork.id,
+    query: { enabled: !!knownContractsByName.ProtocolConfig?.address },
+  } as any);
 
   const { data: votingPowerRaw } = useScaffoldReadContract({
     contractName: REPUTATION_CONTRACT_NAME,
@@ -737,6 +932,31 @@ export function GovernanceActionComposer() {
     () => actionTemplates.filter(template => showAdvanced || !template.advanced),
     [showAdvanced],
   );
+  const actionContractsByName = useMemo(() => {
+    const contractsByName = {
+      ...knownContractsByName,
+    } as Partial<Record<GovernanceActionTemplate["contractName"], { address: Address; abi: Abi }>>;
+
+    if (raterRegistry.data) {
+      contractsByName.RaterRegistry = {
+        address: raterRegistry.data.address as Address,
+        abi: RaterRegistryConfidentialityAbi as Abi,
+      };
+    }
+
+    if (
+      typeof configuredConfidentialityEscrow === "string" &&
+      isAddress(configuredConfidentialityEscrow) &&
+      configuredConfidentialityEscrow !== ZERO_ADDRESS
+    ) {
+      contractsByName.ConfidentialityEscrow = {
+        address: configuredConfidentialityEscrow as Address,
+        abi: ConfidentialityEscrowAbi as Abi,
+      };
+    }
+
+    return contractsByName;
+  }, [configuredConfidentialityEscrow, knownContractsByName, raterRegistry.data]);
 
   const selectedTemplate = visibleTemplates.find(template => template.id === selectedActionId);
   const isTreasuryGrant = selectedTemplate?.id === TREASURY_GRANT_ACTION_ID;
@@ -823,6 +1043,13 @@ export function GovernanceActionComposer() {
       }
       return value as `0x${string}`;
     },
+    credentialProvider: (key, label) => {
+      const value = formValues[key]?.trim() ?? "";
+      if (value !== "1" && value !== "2") {
+        throw new Error(`${label} must be Seeded human or World ID v4.`);
+      }
+      return Number(value);
+    },
     string: (key, label) => {
       const value = formValues[key]?.trim() ?? "";
       if (!value) throw new Error(`${label} is required.`);
@@ -842,6 +1069,27 @@ export function GovernanceActionComposer() {
     setFormError(null);
   };
 
+  useEffect(() => {
+    const actionId = searchParams.get(GOVERNANCE_ACTION_QUERY_PARAM);
+    if (!actionId) return;
+
+    const template = actionTemplates.find(candidate => candidate.id === actionId);
+    if (!template) return;
+
+    const nextValues: Record<string, string> = {};
+    for (const field of template.fields) {
+      const value = searchParams.get(field.key);
+      if (value !== null) {
+        nextValues[field.key] = value;
+      }
+    }
+
+    setSelectedActionId(actionId);
+    setFormValues(nextValues);
+    setCustomDescription("");
+    setFormError(null);
+  }, [searchParams]);
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!selectedTemplate) return;
@@ -857,7 +1105,7 @@ export function GovernanceActionComposer() {
         }
       }
 
-      const targetContract = knownContractsByName[selectedTemplate.contractName];
+      const targetContract = actionContractsByName[selectedTemplate.contractName];
       if (!targetContract) {
         throw new Error("This action is unavailable on this network.");
       }
@@ -1008,6 +1256,16 @@ export function GovernanceActionComposer() {
                     placeholder={field.placeholder}
                     onChange={event => setFormValues(current => ({ ...current, [field.key]: event.target.value }))}
                   />
+                ) : field.type === "credentialProvider" ? (
+                  <select
+                    className="select select-bordered w-full"
+                    value={formValues[field.key] ?? ""}
+                    onChange={event => setFormValues(current => ({ ...current, [field.key]: event.target.value }))}
+                  >
+                    <option value="">Select a provider</option>
+                    <option value="1">Seeded human</option>
+                    <option value="2">World ID v4</option>
+                  </select>
                 ) : (
                   <input
                     className="input input-bordered w-full"

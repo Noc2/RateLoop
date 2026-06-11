@@ -1,6 +1,23 @@
 export const RaterRegistryConfidentialityAbi = [
   {
     type: "function",
+    name: "banIdentity",
+    inputs: [
+      {
+        name: "provider",
+        type: "uint8",
+        internalType: "enum RaterRegistry.HumanCredentialProvider",
+      },
+      { name: "nullifierHash", type: "bytes32", internalType: "bytes32" },
+      { name: "expiresAt", type: "uint64", internalType: "uint64" },
+      { name: "reason", type: "string", internalType: "string" },
+      { name: "evidenceHash", type: "bytes32", internalType: "bytes32" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
     name: "identityBan",
     inputs: [{ name: "identityKey", type: "bytes32", internalType: "bytes32" }],
     outputs: [
@@ -18,6 +35,20 @@ export const RaterRegistryConfidentialityAbi = [
     inputs: [{ name: "identityKey", type: "bytes32", internalType: "bytes32" }],
     outputs: [{ name: "", type: "bool", internalType: "bool" }],
     stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "unbanIdentity",
+    inputs: [
+      {
+        name: "provider",
+        type: "uint8",
+        internalType: "enum RaterRegistry.HumanCredentialProvider",
+      },
+      { name: "nullifierHash", type: "bytes32", internalType: "bytes32" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
   },
   {
     type: "event",

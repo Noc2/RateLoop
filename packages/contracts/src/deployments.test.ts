@@ -111,6 +111,16 @@ test("shared ABI exports include governance contracts present in shared deployme
 });
 
 test("confidentiality ABI snippets expose indexer event surface", () => {
+  const escrowFunctions = new Set(
+    generatedAbis.ConfidentialityEscrowAbi.filter(
+      (item) => item.type === "function",
+    ).map((item) => item.name),
+  );
+  const raterFunctions = new Set(
+    generatedAbis.RaterRegistryConfidentialityAbi.filter(
+      (item) => item.type === "function",
+    ).map((item) => item.name),
+  );
   const escrowEvents = new Set(
     generatedAbis.ConfidentialityEscrowAbi.filter(
       (item) => item.type === "event",
@@ -129,6 +139,13 @@ test("confidentiality ABI snippets expose indexer event surface", () => {
       "BondReleased",
       "BondSlashed",
     ].every((eventName) => escrowEvents.has(eventName)),
+    true,
+  );
+  assert.deepEqual(escrowFunctions.has("slashBond"), true);
+  assert.deepEqual(
+    ["banIdentity", "unbanIdentity"].every((functionName) =>
+      raterFunctions.has(functionName),
+    ),
     true,
   );
   assert.deepEqual(

@@ -29,6 +29,22 @@ export const ConfidentialityEscrowAbi = [
     stateMutability: "view",
   },
   {
+    type: "function",
+    name: "slashBond",
+    inputs: [
+      { name: "contentId", type: "uint256", internalType: "uint256" },
+      { name: "identityKey", type: "bytes32", internalType: "bytes32" },
+      { name: "reason", type: "string", internalType: "string" },
+      { name: "evidenceHash", type: "bytes32", internalType: "bytes32" },
+      { name: "reporterRecipient", type: "address", internalType: "address" },
+    ],
+    outputs: [
+      { name: "reporterAmount", type: "uint256", internalType: "uint256" },
+      { name: "confiscatedAmount", type: "uint256", internalType: "uint256" },
+    ],
+    stateMutability: "nonpayable",
+  },
+  {
     type: "event",
     name: "ConfidentialityConfigured",
     inputs: [

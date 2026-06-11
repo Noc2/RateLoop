@@ -2,6 +2,7 @@
 
 import { type FormEvent, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { useAccount } from "wagmi";
 import { AppPageShell } from "~~/components/shared/AppPageShell";
 import { ConnectWalletCard } from "~~/components/shared/ConnectWalletCard";
@@ -16,6 +17,10 @@ import { notification } from "~~/utils/scaffold-eth";
 type GovernanceTab = "profile" | "leaderboard" | "governance" | "breaches";
 
 const governanceTabs: GovernanceTab[] = ["profile", "leaderboard", "governance", "breaches"];
+const GOVERNANCE_ACTION_QUERY_PARAM = "governanceAction";
+const CONFIDENTIALITY_SLASH_BOND_ACTION_ID = "confidentiality-slash-bond";
+const RATER_REGISTRY_BAN_IDENTITY_ACTION_ID = "rater-registry-ban-identity";
+const RATER_REGISTRY_UNBAN_IDENTITY_ACTION_ID = "rater-registry-unban-identity";
 
 type BreachReport = {
   accusedIdentityKey: string;
@@ -92,6 +97,26 @@ function normalizeGovernanceHash(hash: string): GovernanceTab | null {
   return governanceTabs.includes(hash as GovernanceTab) ? (hash as GovernanceTab) : null;
 }
 
+function buildGovernanceActionHref(actionId: string, values: Record<string, string | null | undefined>) {
+  const params = new URLSearchParams({ [GOVERNANCE_ACTION_QUERY_PARAM]: actionId });
+  for (const [key, value] of Object.entries(values)) {
+    const trimmed = value?.trim();
+    if (trimmed) params.set(key, trimmed);
+  }
+  return `/governance?${params.toString()}#governance`;
+}
+
+function buildBreachActionReason(reportId: number | null, contentId: string) {
+  const trimmedContentId = contentId.trim();
+  if (reportId !== null && trimmedContentId) {
+    return `Confidentiality breach report #${reportId} for content ${trimmedContentId}`;
+  }
+  if (trimmedContentId) {
+    return `Confidentiality breach report for content ${trimmedContentId}`;
+  }
+  return "Confidentiality breach report";
+}
+
 function ConfidentialityBreachesPanel({ reporter }: { reporter: `0x${string}` }) {
   const [contentId, setContentId] = useState("");
   const [accusedIdentityKey, setAccusedIdentityKey] = useState("");
@@ -149,14 +174,20 @@ function ConfidentialityBreachesPanel({ reporter }: { reporter: `0x${string}` })
     }
   };
 
-  const proposalTemplate = [
-    "Confidentiality breach proposal",
-    `Content: ${contentId.trim() || "<content id>"}`,
-    `Accused identity: ${accusedIdentityKey.trim() || "<identity key>"}`,
-    `Evidence hash: ${evidenceHash.trim() || "<bytes32 evidence hash>"}`,
-    evidenceUrl.trim() ? `Evidence URL: ${evidenceUrl.trim()}` : "Evidence URL: <optional>",
-    "Requested action: verify terms acceptance + access-log proof, slash any posted confidentiality bond, and apply the governance-approved surplus-earnings confidentiality sanction if evidence is valid.",
-  ].join("\n");
+  const draftReason = buildBreachActionReason(null, contentId);
+  const draftSlashBondHref = buildGovernanceActionHref(CONFIDENTIALITY_SLASH_BOND_ACTION_ID, {
+    contentId,
+    evidenceHash,
+    identityKey: accusedIdentityKey,
+    reason: draftReason,
+    reporterRecipient: reporter,
+  });
+  const draftBanIdentityHref = buildGovernanceActionHref(RATER_REGISTRY_BAN_IDENTITY_ACTION_ID, {
+    evidenceHash,
+    expiresAt: "0",
+    reason: draftReason,
+  });
+  const draftUnbanIdentityHref = buildGovernanceActionHref(RATER_REGISTRY_UNBAN_IDENTITY_ACTION_ID, {});
 
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(18rem,0.9fr)]">
@@ -227,10 +258,22 @@ function ConfidentialityBreachesPanel({ reporter }: { reporter: `0x${string}` })
 
       <div className="space-y-6">
         <div className="surface-card rounded-2xl p-6">
-          <h2 className="text-xl font-semibold text-base-content">Proposal template</h2>
-          <pre className="mt-4 max-h-64 overflow-auto whitespace-pre-wrap rounded-xl bg-base-300 p-4 text-xs leading-relaxed text-base-content/75">
-            {proposalTemplate}
-          </pre>
+          <h2 className="text-xl font-semibold text-base-content">Governance actions</h2>
+          <p className="mt-2 text-sm leading-relaxed text-base-content/60">
+            Open a proposal with the current breach fields prefilled. Identity bans require the credential provider and
+            raw nullifier hash.
+          </p>
+          <div className="mt-4 grid gap-2">
+            <Link href={draftSlashBondHref} className="btn btn-primary btn-sm justify-start">
+              Slash bond proposal
+            </Link>
+            <Link href={draftBanIdentityHref} className="btn btn-outline btn-sm justify-start">
+              Ban identity proposal
+            </Link>
+            <Link href={draftUnbanIdentityHref} className="btn btn-outline btn-sm justify-start">
+              Unban identity proposal
+            </Link>
+          </div>
         </div>
 
         <div className="surface-card rounded-2xl p-6">
@@ -248,6 +291,36 @@ function ConfidentialityBreachesPanel({ reporter }: { reporter: `0x${string}` })
                   <div className="mt-2 space-y-1 font-mono text-xs text-base-content/60">
                     <p className="break-all">identity {report.accusedIdentityKey}</p>
                     <p className="break-all">evidence {report.evidenceHash}</p>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Link
+                      href={buildGovernanceActionHref(CONFIDENTIALITY_SLASH_BOND_ACTION_ID, {
+                        contentId: report.contentId,
+                        evidenceHash: report.evidenceHash,
+                        identityKey: report.accusedIdentityKey,
+                        reason: buildBreachActionReason(report.id, report.contentId),
+                        reporterRecipient: report.reporter,
+                      })}
+                      className="btn btn-primary btn-xs"
+                    >
+                      Slash bond
+                    </Link>
+                    <Link
+                      href={buildGovernanceActionHref(RATER_REGISTRY_BAN_IDENTITY_ACTION_ID, {
+                        evidenceHash: report.evidenceHash,
+                        expiresAt: "0",
+                        reason: buildBreachActionReason(report.id, report.contentId),
+                      })}
+                      className="btn btn-outline btn-xs"
+                    >
+                      Ban identity
+                    </Link>
+                    <Link
+                      href={buildGovernanceActionHref(RATER_REGISTRY_UNBAN_IDENTITY_ACTION_ID, {})}
+                      className="btn btn-outline btn-xs"
+                    >
+                      Unban identity
+                    </Link>
                   </div>
                 </div>
               ))
