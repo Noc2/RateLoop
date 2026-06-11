@@ -1,6 +1,7 @@
 export { AdvisoryVoteRecorderAbi } from "./AdvisoryVoteRecorderAbi";
 export { CategoryRegistryAbi } from "./CategoryRegistryAbi";
 export { ClusterPayoutOracleAbi } from "./ClusterPayoutOracleAbi";
+export { ConfidentialityEscrowAbi } from "./ConfidentialityEscrowAbi";
 export { ContentRegistryAbi } from "./ContentRegistryAbi";
 export { RateLoopGovernorAbi } from "./RateLoopGovernorAbi";
 export { LoopReputationAbi } from "./LoopReputationAbi";
@@ -12,6 +13,7 @@ export { ProfileRegistryAbi } from "./ProfileRegistryAbi";
 export { ProtocolConfigAbi } from "./ProtocolConfigAbi";
 export { QuestionRewardPoolEscrowAbi } from "./QuestionRewardPoolEscrowAbi";
 export { RaterRegistryAbi } from "./RaterRegistryAbi";
+export { RaterRegistryConfidentialityAbi } from "./RaterRegistryConfidentialityAbi";
 export { RoundRewardDistributorAbi } from "./RoundRewardDistributorAbi";
 export { RoundVotingEngineAbi } from "./RoundVotingEngineAbi";
 export { X402QuestionSubmitterAbi } from "./X402QuestionSubmitterAbi";

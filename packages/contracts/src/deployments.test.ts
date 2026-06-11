@@ -110,6 +110,37 @@ test("shared ABI exports include governance contracts present in shared deployme
   assert.ok(generatedAbis.RateLoopGovernorAbi.length > 0);
 });
 
+test("confidentiality ABI snippets expose indexer event surface", () => {
+  const escrowEvents = new Set(
+    generatedAbis.ConfidentialityEscrowAbi.filter(
+      (item) => item.type === "event",
+    ).map((item) => item.name),
+  );
+  const raterEvents = new Set(
+    generatedAbis.RaterRegistryConfidentialityAbi.filter(
+      (item) => item.type === "event",
+    ).map((item) => item.name),
+  );
+
+  assert.deepEqual(
+    [
+      "ConfidentialityConfigured",
+      "BondPosted",
+      "BondReleased",
+      "BondSlashed",
+    ].every((eventName) => escrowEvents.has(eventName)),
+    true,
+  );
+  assert.deepEqual(
+    [
+      "ConfidentialityEscrowUpdated",
+      "IdentityBanned",
+      "IdentityUnbanned",
+    ].every((eventName) => raterEvents.has(eventName)),
+    true,
+  );
+});
+
 test("standalone generated ABIs match shared deployment ABIs", () => {
   const comparedContracts = new Set<string>();
   const missingStandaloneAbiExports = new Set<string>();
