@@ -1,3 +1,9 @@
+-- Legacy rows intentionally keep deployment_key NULL because contract-local content IDs
+-- cannot be mapped safely across redeploys after the fact. If feedback was written
+-- against the current deployment between a contract redeploy and this migration,
+-- recover it manually by filtering those NULL-key rows by created_at and setting
+-- deployment_key/content_registry_address/feedback_registry_address to the known
+-- deployment values before relying on the scoped read/dedupe paths.
 ALTER TABLE "content_feedback" ADD COLUMN "deployment_key" text;--> statement-breakpoint
 ALTER TABLE "content_feedback" ADD COLUMN "content_registry_address" text;--> statement-breakpoint
 ALTER TABLE "content_feedback" ADD COLUMN "feedback_registry_address" text;--> statement-breakpoint
