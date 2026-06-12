@@ -306,14 +306,30 @@ contract RoundRewardDistributorBannedRewardTest is Test {
         assertTrue(distributor.rewardCommitClaimed(CONTENT_ID, ROUND_ID, COMMIT_1));
     }
 
-    function test_ConfiscateBannedRewardRejectsStakePayerOnlyBan() public {
+    function test_ConfiscateBannedRewardCanBeCalledForStakePayerAddressBan() public {
         banRegistry.setBanned(_addressIdentityKey(voter1), true);
 
-        vm.expectRevert(RoundRewardDistributor.RewardNotConfiscatable.selector);
+        uint256 blockedReward = RewardMath.calculateVoterReward(100, 600, 300_000);
+
+        vm.prank(address(0xBEEF));
         distributor.confiscateBannedReward(CONTENT_ID, ROUND_ID, COMMIT_1);
 
-        assertFalse(distributor.rewardCommitClaimed(CONTENT_ID, ROUND_ID, COMMIT_1));
-        assertFalse(distributor.rewardClaimed(CONTENT_ID, ROUND_ID, voter1));
+        assertEq(lrep.balanceOf(treasury), blockedReward, "stake-payer ban routed");
+        assertEq(lrep.balanceOf(voter1), 1_000_000, "stake returned");
+        assertTrue(distributor.rewardCommitClaimed(CONTENT_ID, ROUND_ID, COMMIT_1));
+    }
+
+    function test_ConfiscateBannedRewardCanBeCalledForCommitHolderAddressBan() public {
+        banRegistry.setBanned(_addressIdentityKey(_holderForIdentity(IDENTITY_1)), true);
+
+        uint256 blockedReward = RewardMath.calculateVoterReward(100, 600, 300_000);
+
+        vm.prank(address(0xBEEF));
+        distributor.confiscateBannedReward(CONTENT_ID, ROUND_ID, COMMIT_1);
+
+        assertEq(lrep.balanceOf(treasury), blockedReward, "holder ban routed");
+        assertEq(lrep.balanceOf(voter1), 1_000_000, "stake returned");
+        assertTrue(distributor.rewardCommitClaimed(CONTENT_ID, ROUND_ID, COMMIT_1));
     }
 
     function test_ConfiscateBannedRewardRejectsUnbannedCommit() public {
@@ -323,6 +339,10 @@ contract RoundRewardDistributorBannedRewardTest is Test {
 
     function _addressIdentityKey(address account) internal pure returns (bytes32) {
         return keccak256(abi.encodePacked("rateloop.address-identity-v1", account));
+    }
+
+    function _holderForIdentity(bytes32 identityKey) internal pure returns (address) {
+        return address(uint160(uint256(identityKey)));
     }
 
     function _commit(address voter) internal pure returns (RoundLib.Commit memory commit) {

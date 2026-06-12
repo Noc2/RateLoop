@@ -512,6 +512,7 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
 
         address launchPool = protocolConfig.launchDistributionPool();
         if (launchPool == address(0)) return (scoreBps, 0);
+        address rewardRecipient = _advisoryRewardRecipient(advisoryCommit);
         if (
             _isIdentityBanned(advisoryCommit.contentId, advisoryCommit.roundId, advisoryCommit.identityKey)
                 || _isIdentityBanned(
@@ -519,12 +520,15 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
                     advisoryCommit.roundId,
                     VotePreflightLib.addressIdentityKey(advisoryCommit.voter)
                 )
+                || _isIdentityBanned(
+                    advisoryCommit.contentId, advisoryCommit.roundId, VotePreflightLib.addressIdentityKey(rewardRecipient)
+                )
         ) {
             advisoryCommit.launchCreditClaimed = true;
             emit AdvisoryLaunchCreditClaimed(
                 advisoryCommit.contentId,
                 advisoryCommit.roundId,
-                _advisoryRewardRecipient(advisoryCommit),
+                rewardRecipient,
                 advisoryCommitKey,
                 scoreBps,
                 0
@@ -532,7 +536,6 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
             return (scoreBps, 0);
         }
 
-        address rewardRecipient = _advisoryRewardRecipient(advisoryCommit);
         ILaunchDistributionPool launchDistributionPool = ILaunchDistributionPool(launchPool);
         if (
             _hasCountedCommitForAdvisory(advisoryCommit)

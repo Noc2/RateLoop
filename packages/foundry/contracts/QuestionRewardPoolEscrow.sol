@@ -852,7 +852,9 @@ contract QuestionRewardPoolEscrow is
         returns (bool)
     {
         (address voter,,,,,,) = votingEngine.commitCore(contentId, roundId, commitKey);
-        return _isIdentityBannedForRound(contentId, roundId, _addressIdentityKey(voter));
+        (, address holder,,,,) = votingEngine.commitIdentityState(contentId, roundId, commitKey);
+        return _isIdentityBannedForRound(contentId, roundId, _addressIdentityKey(voter))
+            || _isIdentityBannedForRound(contentId, roundId, _addressIdentityKey(holder));
     }
 
     function _isIdentityBannedAt(address registryAddress, bytes32 identityKey) private view returns (bool) {

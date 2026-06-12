@@ -1135,12 +1135,22 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             if (_isIdentityBannedForRound(votingEngine, protocolConfig, contentId, roundId, identityKey)) return true;
             if (commitKey != bytes32(0)) {
                 (address voter,,,,,,) = votingEngine.commitCore(contentId, roundId, commitKey);
+                (, address holder,,,,) = votingEngine.commitIdentityState(contentId, roundId, commitKey);
                 if (_isIdentityBannedForRound(
                         votingEngine,
                         protocolConfig,
                         contentId,
                         roundId,
                         QuestionRewardPoolEscrowVoterLib.addressIdentityKey(voter)
+                )) {
+                    return true;
+                }
+                if (_isIdentityBannedForRound(
+                        votingEngine,
+                        protocolConfig,
+                        contentId,
+                        roundId,
+                        QuestionRewardPoolEscrowVoterLib.addressIdentityKey(holder)
                     )) {
                     return true;
                 }

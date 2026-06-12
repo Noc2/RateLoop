@@ -1477,6 +1477,24 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
     }
 
+    function testRewardPoolQualificationChecksCommitHolderAddressBan() public {
+        uint256 contentId = _submitQuestion("commit-holder-ban-before-qualification");
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+
+        vm.prank(owner);
+        lrepToken.mint(delegate1, 10_000e6);
+        vm.prank(voter1);
+        raterIdentityRegistry.setDelegate(delegate1);
+
+        uint256 roundId =
+            _settleRoundWith(_voters(delegate1, voter2, voter3), contentId, _directions(true, true, false));
+        raterIdentityRegistry.setBanned(raterIdentityRegistry.addressIdentityKey(voter1), true);
+
+        assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, delegate1), 0);
+        vm.expectRevert("Too few eligible voters");
+        rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
+    }
+
     function testQuestionRewardClaimableChecksRawCommitVoterBanAfterQualification() public {
         uint256 contentId = _submitQuestion("raw-commit-voter-ban-after-qualification");
         uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
@@ -1492,6 +1510,28 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertGt(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, delegate1), 0);
 
         raterIdentityRegistry.setBanned(raterIdentityRegistry.addressIdentityKey(delegate1), true);
+
+        assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, delegate1), 0);
+        vm.prank(delegate1);
+        vm.expectRevert("Identity banned");
+        rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
+    }
+
+    function testQuestionRewardClaimableChecksCommitHolderAddressBanAfterQualification() public {
+        uint256 contentId = _submitQuestion("commit-holder-ban-after-qualification");
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+
+        vm.prank(owner);
+        lrepToken.mint(delegate1, 10_000e6);
+        vm.prank(voter1);
+        raterIdentityRegistry.setDelegate(delegate1);
+
+        uint256 roundId =
+            _settleRoundWith(_voters(delegate1, voter2, voter3), contentId, _directions(true, true, false));
+        rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
+        assertGt(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, delegate1), 0);
+
+        raterIdentityRegistry.setBanned(raterIdentityRegistry.addressIdentityKey(voter1), true);
 
         assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, delegate1), 0);
         vm.prank(delegate1);
@@ -2573,6 +2613,37 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.prank(voter1);
         raterIdentityRegistry.setDelegate(newDelegate);
         raterIdentityRegistry.setBanned(raterIdentityRegistry.addressIdentityKey(delegate1), true);
+
+        assertEq(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, newDelegate), 0);
+
+        vm.prank(newDelegate);
+        vm.expectRevert("Identity banned");
+        rewardPoolEscrow.claimQuestionBundleReward(bundleId, 0);
+    }
+
+    function testBundleRewardRejectsCommitHolderAddressBanWhenNewDelegateClaims() public {
+        address newDelegate = address(0xD1E);
+        uint256[] memory contentIds = _submitBundleQuestions();
+        uint256 bundleId = _createSubmissionBundle(contentIds, funder, REWARD_ASSET_USDC, REWARD_POOL_AMOUNT, 3);
+        vm.prank(owner);
+        lrepToken.mint(delegate1, 10_000e6);
+
+        vm.prank(voter1);
+        raterIdentityRegistry.setDelegate(delegate1);
+
+        address[] memory voters = new address[](3);
+        voters[0] = delegate1;
+        voters[1] = voter2;
+        voters[2] = voter3;
+        bool[] memory directions = _directions(true, true, false);
+        _settleRoundWith(voters, contentIds[0], directions);
+        _settleRoundWith(voters, contentIds[1], directions);
+
+        vm.prank(voter1);
+        raterIdentityRegistry.removeDelegate();
+        vm.prank(voter1);
+        raterIdentityRegistry.setDelegate(newDelegate);
+        raterIdentityRegistry.setBanned(raterIdentityRegistry.addressIdentityKey(voter1), true);
 
         assertEq(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, newDelegate), 0);
 
@@ -4428,6 +4499,47 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         );
 
         raterIdentityRegistry.setBanned(raterIdentityRegistry.addressIdentityKey(delegate1), true);
+
+        assertEq(
+            rewardPoolEscrow.claimableQuestionRewardWithPayoutWeight(
+                rewardPoolId, roundId, delegate1, payoutWeight, new bytes32[](0)
+            ),
+            0
+        );
+    }
+
+    function testClusterClaimablePayoutWeightChecksCommitHolderAddressBan() public {
+        ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
+        uint256 contentId = _submitQuestion("cluster-commit-holder-ban-preview");
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+
+        vm.prank(owner);
+        lrepToken.mint(delegate1, 10_000e6);
+        vm.prank(voter1);
+        raterIdentityRegistry.setDelegate(delegate1);
+
+        uint256 roundId =
+            _settleRoundWith(_voters(delegate1, voter2, voter3), contentId, _directions(true, true, false));
+        IClusterPayoutOracle.PayoutWeight memory payoutWeight =
+            _clusterPayoutWeight(rewardPoolId, contentId, roundId, 0);
+        _finalizeClusterPayoutSnapshotWithRoot(
+            oracle,
+            rewardPoolId,
+            contentId,
+            roundId,
+            3,
+            30_000,
+            payoutWeight.effectiveWeight,
+            oracle.payoutWeightLeaf(payoutWeight)
+        );
+        assertGt(
+            rewardPoolEscrow.claimableQuestionRewardWithPayoutWeight(
+                rewardPoolId, roundId, delegate1, payoutWeight, new bytes32[](0)
+            ),
+            0
+        );
+
+        raterIdentityRegistry.setBanned(raterIdentityRegistry.addressIdentityKey(voter1), true);
 
         assertEq(
             rewardPoolEscrow.claimableQuestionRewardWithPayoutWeight(
