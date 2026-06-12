@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import deployedContracts from "@rateloop/contracts/deployedContracts";
+import type * as DeploymentsModule from "@rateloop/contracts/deployments";
 
 type DeploymentChain = Record<string, { address: `0x${string}`; deployedOnBlock?: number }>;
 type AbiEntry = { type?: string; name?: string; anonymous?: boolean };
@@ -64,8 +65,6 @@ const missingHardhatPonderContracts = getMissingPonderContracts(chain31337);
 const itWithSepoliaPonderArtifacts = chain4801 && missingSepoliaPonderContracts.length === 0 ? it : it.skip;
 const itWithSepoliaContentRegistryArtifact = chain4801?.ContentRegistry ? it : it.skip;
 const itWithMissingSepoliaPonderArtifacts = chain4801 && missingSepoliaPonderContracts.length > 0 ? it : it.skip;
-const itWithMissingSepoliaConfidentialityEscrowArtifact =
-  chain4801 && missingSepoliaPonderContracts.length === 0 && !chain4801.ConfidentialityEscrow ? it : it.skip;
 const itWithWorldChainPonderArtifacts = chain480 && missingWorldChainPonderContracts.length === 0 ? it : it.skip;
 const itWithHardhatArtifacts = chain31337 && missingHardhatPonderContracts.length === 0 ? it : it.skip;
 const itWithHardhatClusterPayoutOracleArtifact = chain31337?.ClusterPayoutOracle ? it : it.skip;
@@ -135,6 +134,7 @@ afterEach(() => {
   process.env = { ...ORIGINAL_ENV };
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  vi.doUnmock("@rateloop/contracts/deployments");
   vi.resetModules();
 });
 
@@ -268,9 +268,31 @@ describe("ponder config", () => {
     );
   }, PONDER_CONFIG_TEST_TIMEOUT_MS);
 
-  itWithMissingSepoliaConfidentialityEscrowArtifact(
+  it(
     "rejects missing optional live deployment artifacts",
     async () => {
+      vi.doMock("@rateloop/contracts/deployments", async importOriginal => {
+        const actual = await importOriginal<typeof DeploymentsModule>();
+
+        return {
+          ...actual,
+          getSharedDeploymentAddress: (
+            chainId: number,
+            contractName: string,
+          ) =>
+            chainId === 4801 && contractName === "ConfidentialityEscrow"
+              ? undefined
+              : actual.getSharedDeploymentAddress(chainId, contractName),
+          getSharedDeploymentStartBlock: (
+            chainId: number,
+            contractName: string,
+          ) =>
+            chainId === 4801 && contractName === "ConfidentialityEscrow"
+              ? undefined
+              : actual.getSharedDeploymentStartBlock(chainId, contractName),
+        };
+      });
+
       await expect(
         loadPonderConfig(
           {
