@@ -329,7 +329,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         snapshot.status = SnapshotStatus.Challenged;
         snapshot.challenger = msg.sender;
         snapshot.bond += bond;
-        if (bond > 0) challengeBondToken.safeTransferFrom(msg.sender, address(this), bond);
+        _pullExactChallengeBond(msg.sender, bond);
         emit CorrelationEpochChallenged(epochId, msg.sender, reasonHash);
     }
 
@@ -545,7 +545,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         proposal.snapshot.status = SnapshotStatus.Challenged;
         proposal.challenger = msg.sender;
         proposal.bond += bond;
-        if (bond > 0) challengeBondToken.safeTransferFrom(msg.sender, address(this), bond);
+        _pullExactChallengeBond(msg.sender, bond);
         emit RoundPayoutSnapshotChallenged(snapshotKey, msg.sender, reasonHash);
     }
 
@@ -746,6 +746,13 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         pendingBondWithdrawals[msg.sender] = 0;
         challengeBondToken.safeTransfer(recipient, amount);
         emit BondWithdrawn(msg.sender, recipient, amount);
+    }
+
+    function _pullExactChallengeBond(address challenger, uint256 bond) private {
+        if (bond == 0) return;
+        uint256 balanceBefore = challengeBondToken.balanceOf(address(this));
+        challengeBondToken.safeTransferFrom(challenger, address(this), bond);
+        if (challengeBondToken.balanceOf(address(this)) - balanceBefore != bond) revert InvalidBond();
     }
 
     function correlationEpochSnapshot(uint64 epochId) external view returns (CorrelationEpochSnapshot memory) {

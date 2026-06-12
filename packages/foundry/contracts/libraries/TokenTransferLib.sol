@@ -16,7 +16,10 @@ library TokenTransferLib {
 
     function tryTransfer(IERC20 token, address recipient, uint256 amount) external returns (bool) {
         if (address(token).code.length == 0) return false;
+        uint256 balanceBefore = token.balanceOf(recipient);
         (bool success, bytes memory data) = address(token).call(abi.encodeCall(IERC20.transfer, (recipient, amount)));
-        return success && (data.length == 0 || (data.length == 32 && abi.decode(data, (bool))));
+        if (!success || (data.length != 0 && (data.length != 32 || !abi.decode(data, (bool))))) return false;
+        require(token.balanceOf(recipient) - balanceBefore == amount, "Bad token");
+        return true;
     }
 }

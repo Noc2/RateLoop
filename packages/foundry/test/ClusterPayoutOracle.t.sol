@@ -1302,6 +1302,35 @@ contract ClusterPayoutOracleTest is Test {
         assertEq(usdc.balanceOf(address(oracle)), CHALLENGE_BOND);
     }
 
+    function test_ChallengeRejectsShortUsdcBondReceipt() public {
+        address challenger = address(0xCA11);
+        usdc.mint(challenger, CHALLENGE_BOND);
+
+        oracle.proposeCorrelationEpoch(
+            1,
+            1,
+            20,
+            keccak256("cluster-root"),
+            keccak256("params"),
+            keccak256("epoch-artifact"),
+            "ipfs://epoch",
+            _defaultEpochSources()
+        );
+
+        usdc.setTransferShortfall(1);
+
+        vm.startPrank(challenger);
+        usdc.approve(address(oracle), CHALLENGE_BOND);
+        vm.expectRevert(ClusterPayoutOracle.InvalidBond.selector);
+        oracle.challengeCorrelationEpoch(1, keccak256("bad-root"));
+        vm.stopPrank();
+
+        ClusterPayoutOracle.CorrelationEpochSnapshot memory snapshot = oracle.correlationEpochSnapshot(1);
+        assertEq(uint8(snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Proposed));
+        assertEq(snapshot.bond, 0);
+        assertEq(usdc.balanceOf(address(oracle)), 0);
+    }
+
     function test_ProposerCannotChallengeOwnCorrelationEpoch() public {
         oracle.proposeCorrelationEpoch(
             1,

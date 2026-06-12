@@ -43,6 +43,20 @@ contract TokenTransferBoolReturn {
     }
 }
 
+contract TokenTransferShortReturn {
+    mapping(address => uint256) public balanceOf;
+
+    function mint(address to, uint256 amount) external {
+        balanceOf[to] += amount;
+    }
+
+    function transfer(address to, uint256 amount) external returns (bool) {
+        balanceOf[msg.sender] -= amount;
+        balanceOf[to] += amount - 1;
+        return true;
+    }
+}
+
 contract TokenTransferLibTest is Test {
     address internal recipient = address(0xB0B);
 
@@ -62,6 +76,15 @@ contract TokenTransferLibTest is Test {
         TokenTransferBoolReturn revertingToken = new TokenTransferBoolReturn(true, true);
         revertingToken.mint(address(TokenTransferLib), 10);
         assertFalse(TokenTransferLib.tryTransfer(IERC20(address(revertingToken)), recipient, 10));
+    }
+
+    function test_TryTransferRevertsOnShortSuccessfulTransfer() public {
+        TokenTransferShortReturn token = new TokenTransferShortReturn();
+        token.mint(address(this), 10);
+
+        vm.expectRevert("Bad token");
+        TokenTransferLib.tryTransfer(IERC20(address(token)), recipient, 10);
+        assertEq(token.balanceOf(recipient), 0);
     }
 
     function test_TryTransferNoCodeTokenReturnsFalse() public {
