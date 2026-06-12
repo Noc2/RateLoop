@@ -57,7 +57,7 @@ interface IClusterPayoutOracle {
         bytes32 identityKey;
         address account;
         /// @dev Question-reward domain: surprise-weighted base claim weight in
-        ///      [10_000, 20_000] bps per docs/surprise-weighted-bounty-weights.md.
+        ///      [10_000, 20_000] bps.
         ///      Launch-credit domain: remains exactly 10_000 (flat).
         uint256 baseWeight;
         uint16 independenceBps;

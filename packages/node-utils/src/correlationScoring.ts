@@ -346,7 +346,7 @@ function buildClusters(votes: readonly CorrelationVoteInput[]): DisjointSet {
 }
 
 /**
- * Surprise-weighted bounty claim weights (docs/surprise-weighted-bounty-weights.md).
+ * Surprise-weighted bounty claim weights.
  *
  * Surprise applies only to the question-reward payout domain; the
  * launch-credit domain requires flat weights and stays neutral. All math is

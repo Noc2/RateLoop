@@ -48,8 +48,8 @@ struct WeightedShareInputs {
 library QuestionRewardPoolEscrowClaimLib {
     uint256 private constant BASE_CLAIM_WEIGHT_BPS = 10_000;
     // Upper bound for surprise-weighted leaf base weights in cluster snapshots
-    // (baseWeightFloorBps + baseWeightBonusBps * surpriseCapBps / 10_000 with the
-    // defaults in docs/surprise-weighted-bounty-weights.md).
+    // (baseWeightFloorBps + baseWeightBonusBps * surpriseCapBps / 10_000 with
+    // default scorer parameters).
     uint256 private constant MAX_CLAIM_WEIGHT_BPS = 20_000;
 
     function nextEqualShare(uint256 totalAmount, uint256 eligibleVoters, uint256 claimedCount)
@@ -484,8 +484,11 @@ library QuestionRewardPoolEscrowClaimLib {
         bytes32 commitKey
     ) private view returns (bool) {
         (address voter,,,,,,) = votingEngine.commitCore(contentId, roundId, commitKey);
+        (, address holder,,,,) = votingEngine.commitIdentityState(contentId, roundId, commitKey);
         return _isIdentityBannedForRound(
             votingEngine, protocolConfig, contentId, roundId, QuestionRewardPoolEscrowVoterLib.addressIdentityKey(voter)
+        ) || _isIdentityBannedForRound(
+            votingEngine, protocolConfig, contentId, roundId, QuestionRewardPoolEscrowVoterLib.addressIdentityKey(holder)
         );
     }
 
@@ -678,7 +681,7 @@ library QuestionRewardPoolEscrowClaimLib {
         uint256 expectedTotalClaimWeight
     ) private view returns (uint256) {
         // Cluster-snapshot leaves carry a surprise-weighted base weight in
-        // [10_000, 20_000] bps per docs/surprise-weighted-bounty-weights.md; non-snapshot
+        // [10_000, 20_000] bps; non-snapshot
         // rounds keep the flat equal-share path (`_roundClaimWeight` returning exactly
         // BASE_CLAIM_WEIGHT_BPS).
         require(

@@ -29,7 +29,7 @@ const HUMAN_CREDENTIAL_PROVIDER_NONE = 0;
 
 // Trailing base-rate window for surprise-weighted bounty claim weights: the most recent
 // settled rounds strictly preceding the requested round in lexicographic
-// (settledAt, contentId, roundId) order. See docs/surprise-weighted-bounty-weights.md.
+// (settledAt, contentId, roundId) order.
 const BASE_RATE_WINDOW_ROUNDS = 100;
 const BASE_RATE_MIN_BPS = 500;
 const BASE_RATE_MAX_BPS = 9500;

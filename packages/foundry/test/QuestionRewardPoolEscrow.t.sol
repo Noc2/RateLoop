@@ -4461,8 +4461,8 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         );
     }
 
-    // Surprise-weighted leaves (docs/surprise-weighted-bounty-weights.md) carry baseWeight in
-    // [10_000, 20_000]; each claim pays allocation * effectiveWeight / totalClaimWeight.
+    // Surprise-weighted leaves carry baseWeight in [10_000, 20_000]; each claim pays
+    // allocation * effectiveWeight / totalClaimWeight.
     function testClusterRewardPoolPaysSurpriseWeightedBaseClaimWeights() public {
         uint256[] memory baseWeights = new uint256[](3);
         baseWeights[0] = 10_000;
