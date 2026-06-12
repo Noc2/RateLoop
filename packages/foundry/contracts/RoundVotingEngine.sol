@@ -72,6 +72,7 @@ contract RoundVotingEngine is
     error RevealGraceActive();
     error EnforcedPause();
     error ExpectedPause();
+    error AccessControlUnauthorizedAccount(address account, bytes32 neededRole);
     error NotEnoughVotes();
     error AlreadyCommitted();
     error AlreadyRevealed();
@@ -348,7 +349,14 @@ contract RoundVotingEngine is
     }
 
     function _checkRole(bytes32 role, address account) internal view {
-        if (!hasRole(role, account)) revert Unauthorized();
+        if (!hasRole(role, account)) {
+            assembly ("memory-safe") {
+                mstore(0x00, 0xe2517d3f00000000000000000000000000000000000000000000000000000000)
+                mstore(0x04, account)
+                mstore(0x24, role)
+                revert(0x00, 0x44)
+            }
+        }
     }
 
     function _grantRole(bytes32 role, address account) internal {

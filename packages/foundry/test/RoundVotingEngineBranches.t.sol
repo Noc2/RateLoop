@@ -269,7 +269,9 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         bytes32 pauserRole = keccak256("PAUSER_ROLE");
         address newPauser = address(0xBEEF);
 
-        vm.expectRevert(RoundVotingEngine.Unauthorized.selector);
+        vm.expectRevert(
+            abi.encodeWithSelector(RoundVotingEngine.AccessControlUnauthorizedAccount.selector, voter1, bytes32(0))
+        );
         vm.prank(voter1);
         engine.setRole(pauserRole, newPauser, true);
 
@@ -294,7 +296,9 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         _assertRoleUpdatedLog(vm.getRecordedLogs(), pauserRole, newPauser, false);
         assertFalse(engine.hasRole(pauserRole, newPauser));
 
-        vm.expectRevert(RoundVotingEngine.Unauthorized.selector);
+        vm.expectRevert(
+            abi.encodeWithSelector(RoundVotingEngine.AccessControlUnauthorizedAccount.selector, newPauser, pauserRole)
+        );
         vm.prank(newPauser);
         engine.unpause();
 
