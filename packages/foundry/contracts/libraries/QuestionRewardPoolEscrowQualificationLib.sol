@@ -668,10 +668,14 @@ library QuestionRewardPoolEscrowQualificationLib {
         returns (bool)
     {
         if (identityKey == bytes32(0)) return false;
-        address registryAddress = ctx.votingEngine.roundRaterRegistrySnapshot(ctx.contentId, ctx.roundId);
-        if (registryAddress == address(0)) {
-            registryAddress = ctx.protocolConfig.raterRegistry();
-        }
+        address snapshot = ctx.votingEngine.roundRaterRegistrySnapshot(ctx.contentId, ctx.roundId);
+        if (_isIdentityBannedAt(snapshot, identityKey)) return true;
+        address current = ctx.protocolConfig.raterRegistry();
+        if (current == snapshot) return false;
+        return _isIdentityBannedAt(current, identityKey);
+    }
+
+    function _isIdentityBannedAt(address registryAddress, bytes32 identityKey) private view returns (bool) {
         if (registryAddress == address(0)) return false;
         try IRaterRegistryStatus(registryAddress).isIdentityKeyBanned(identityKey) returns (bool banned) {
             return banned;

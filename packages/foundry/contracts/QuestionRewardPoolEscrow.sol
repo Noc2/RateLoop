@@ -838,10 +838,14 @@ contract QuestionRewardPoolEscrow is
         returns (bool)
     {
         if (identityKey == bytes32(0)) return false;
-        address registryAddress = votingEngine.roundRaterRegistrySnapshot(contentId, roundId);
-        if (registryAddress == address(0)) {
-            registryAddress = ProtocolConfig(votingEngine.protocolConfig()).raterRegistry();
-        }
+        address snapshot = votingEngine.roundRaterRegistrySnapshot(contentId, roundId);
+        if (_isIdentityBannedAt(snapshot, identityKey)) return true;
+        address current = ProtocolConfig(votingEngine.protocolConfig()).raterRegistry();
+        if (current == snapshot) return false;
+        return _isIdentityBannedAt(current, identityKey);
+    }
+
+    function _isIdentityBannedAt(address registryAddress, bytes32 identityKey) private view returns (bool) {
         if (registryAddress == address(0)) return false;
         try IRaterRegistryStatus(registryAddress).isIdentityKeyBanned(identityKey) returns (bool banned) {
             return banned;

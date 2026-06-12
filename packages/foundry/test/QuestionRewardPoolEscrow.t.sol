@@ -1427,6 +1427,38 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         _claimQuestionRewardAndAssert(voter1, rewardPoolId, roundId);
     }
 
+    function testQuestionRewardClaimChecksCurrentRaterRegistryBanAfterMigration() public {
+        uint256 contentId = _submitQuestion("current-ban-after-qualification");
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
+        rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
+
+        MockRaterIdentityRegistry migratedRaterIdentityRegistry = _migrateRaterIdentitiesWithDifferentIds();
+        migratedRaterIdentityRegistry.setBanned(_identityKey(voter1), true);
+
+        assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter1), 0);
+        vm.prank(voter1);
+        vm.expectRevert("Identity banned");
+        rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
+    }
+
+    function testRewardPoolQualificationChecksCurrentRaterRegistryBanAfterMigration() public {
+        uint256 contentId = _submitQuestion("current-ban-before-qualification");
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 roundId = _settleRoundWith(_fourVoters(), contentId, _directions(true, true, false, true));
+
+        MockRaterIdentityRegistry migratedRaterIdentityRegistry = _migrateRaterIdentitiesWithDifferentIds();
+        migratedRaterIdentityRegistry.setBanned(_identityKey(voter1), true);
+
+        rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
+
+        RoundSnapshot memory snapshot = rewardPoolEscrow.getRoundSnapshot(rewardPoolId, roundId);
+        assertTrue(snapshot.qualified);
+        assertEq(snapshot.rawEligibleVoters, 3);
+        assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter1), 0);
+        assertGt(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter4), 0);
+    }
+
     function testBundleClaimUsesRoundSpecificRaterIdentitiesAfterMigration() public {
         uint256[] memory contentIds = _submitBundleQuestions();
         uint256 bundleId = _createSubmissionBundle(contentIds, funder, REWARD_ASSET_USDC, REWARD_POOL_AMOUNT, 3);
@@ -1459,6 +1491,25 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertEq(reward, REWARD_POOL_AMOUNT / 3);
         assertEq(usdc.balanceOf(voter2), 1_000e6 + reward);
         assertEq(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, voter2), 0);
+    }
+
+    function testBundleClaimChecksCurrentRaterRegistryBanAfterMigration() public {
+        uint256[] memory contentIds = _submitBundleQuestions();
+        uint256 bundleId = _createSubmissionBundle(contentIds, funder, REWARD_ASSET_USDC, REWARD_POOL_AMOUNT, 3);
+
+        address[] memory voters = _threeVoters();
+        bool[] memory directions = _directions(true, true, false);
+
+        _settleRoundWith(voters, contentIds[0], directions);
+        _settleRoundWith(voters, contentIds[1], directions);
+
+        MockRaterIdentityRegistry migratedRaterIdentityRegistry = _migrateRaterIdentitiesWithDifferentIds();
+        migratedRaterIdentityRegistry.setBanned(_identityKey(voter1), true);
+
+        assertEq(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, voter1), 0);
+        vm.prank(voter1);
+        vm.expectRevert("Identity banned");
+        rewardPoolEscrow.claimQuestionBundleReward(bundleId, 0);
     }
 
     function testBundleClaimQualifiesRecordedRoundSetBeforeClaim() public {
@@ -4244,6 +4295,36 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertEq(reward, expectedReward);
     }
 
+    function testClusterClaimablePayoutWeightChecksCurrentRaterRegistryBanAfterMigration() public {
+        ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
+        uint256 contentId = _submitQuestion("cluster-current-ban-preview");
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+
+        uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
+        IClusterPayoutOracle.PayoutWeight memory payoutWeight =
+            _clusterPayoutWeight(rewardPoolId, contentId, roundId, 0);
+        _finalizeClusterPayoutSnapshotWithRoot(
+            oracle,
+            rewardPoolId,
+            contentId,
+            roundId,
+            3,
+            30_000,
+            payoutWeight.effectiveWeight,
+            oracle.payoutWeightLeaf(payoutWeight)
+        );
+
+        MockRaterIdentityRegistry migratedRaterIdentityRegistry = _migrateRaterIdentitiesWithDifferentIds();
+        migratedRaterIdentityRegistry.setBanned(_identityKey(voter1), true);
+
+        assertEq(
+            rewardPoolEscrow.claimableQuestionRewardWithPayoutWeight(
+                rewardPoolId, roundId, voter1, payoutWeight, new bytes32[](0)
+            ),
+            0
+        );
+    }
+
     function testClusterRewardPoolPaysAllMerkleProofClaimantsWithEffectiveWeights() public {
         uint256[] memory baseWeights = new uint256[](4);
         baseWeights[0] = 10_000;
@@ -6476,6 +6557,10 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.startPrank(owner);
         protocolConfig.setRaterRegistry(address(migratedRaterIdentityRegistry));
         vm.stopPrank();
+    }
+
+    function _identityKey(address account) internal pure returns (bytes32) {
+        return bytes32(uint256(uint160(account)));
     }
 
     function _threeVoters() internal view returns (address[] memory voters) {

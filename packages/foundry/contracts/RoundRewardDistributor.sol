@@ -506,6 +506,7 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
     function retryLaunchRaterRewardCredit(uint256 contentId, uint256 roundId, bytes32 commitKey) external nonReentrant {
         PendingLaunchCredit memory pending = pendingLaunchCreditRetry[contentId][roundId][commitKey];
         require(pending.recipient != address(0), "Nothing to retry");
+        require(!_isCommitIdentityBanned(contentId, roundId, commitKey), "Identity banned");
         ProtocolConfig config = ProtocolConfig(votingEngine.protocolConfig());
         address launchPool = config.launchDistributionPool();
         require(launchPool != address(0), "Launch pool unset");
@@ -537,10 +538,14 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
     {
         (bytes32 identityKey,,,,,) = votingEngine.commitIdentityState(contentId, roundId, commitKey);
         if (identityKey == bytes32(0)) return false;
-        address registryAddress = votingEngine.roundRaterRegistrySnapshot(contentId, roundId);
-        if (registryAddress == address(0)) {
-            registryAddress = ProtocolConfig(votingEngine.protocolConfig()).raterRegistry();
-        }
+        address snapshot = votingEngine.roundRaterRegistrySnapshot(contentId, roundId);
+        if (_isIdentityBannedAt(snapshot, identityKey)) return true;
+        address current = ProtocolConfig(votingEngine.protocolConfig()).raterRegistry();
+        if (current == snapshot) return false;
+        return _isIdentityBannedAt(current, identityKey);
+    }
+
+    function _isIdentityBannedAt(address registryAddress, bytes32 identityKey) private view returns (bool) {
         if (registryAddress == address(0)) return false;
         try IRaterRegistryStatus(registryAddress).isIdentityKeyBanned(identityKey) returns (bool banned) {
             return banned;

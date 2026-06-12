@@ -16,6 +16,7 @@ contract MockRaterIdentityRegistry is IRaterIdentityRegistry {
     mapping(address => bool) public credentialStatusOverrideSet;
     mapping(address => uint8) public activeCredentialMaskOverride;
     mapping(address => uint8) public freshCredentialMaskOverride;
+    mapping(bytes32 => bool) public bannedIdentityKeys;
 
     uint256 public nextCredentialId = 1;
 
@@ -45,6 +46,14 @@ contract MockRaterIdentityRegistry is IRaterIdentityRegistry {
         delete credentialStatusOverrideSet[holder];
         delete activeCredentialMaskOverride[holder];
         delete freshCredentialMaskOverride[holder];
+    }
+
+    function setBanned(bytes32 identityKey, bool banned) external {
+        bannedIdentityKeys[identityKey] = banned;
+    }
+
+    function isIdentityKeyBanned(bytes32 identityKey) external view returns (bool) {
+        return bannedIdentityKeys[identityKey];
     }
 
     function resetNullifier(uint256 nullifier) external {

@@ -13,9 +13,15 @@ import { MockERC20 } from "../contracts/mocks/MockERC20.sol";
 contract BannedRewardProtocolConfig {
     address public treasury;
     address public launchDistributionPool;
+    address public raterRegistry;
 
-    constructor(address treasury_) {
+    constructor(address treasury_, address raterRegistry_) {
         treasury = treasury_;
+        raterRegistry = raterRegistry_;
+    }
+
+    function setRaterRegistry(address value) external {
+        raterRegistry = value;
     }
 }
 
@@ -206,6 +212,7 @@ contract RoundRewardDistributorBannedRewardTest is Test {
     MockERC20 internal lrep;
     BannedRewardProtocolConfig internal config;
     BannedRewardRegistry internal banRegistry;
+    BannedRewardRegistry internal currentBanRegistry;
     BannedRewardVotingEngine internal engine;
     RoundRewardDistributorHarness internal distributor;
 
@@ -224,8 +231,9 @@ contract RoundRewardDistributorBannedRewardTest is Test {
 
     function setUp() public {
         lrep = new MockERC20("Loop Reputation", "LREP", 6);
-        config = new BannedRewardProtocolConfig(treasury);
         banRegistry = new BannedRewardRegistry();
+        currentBanRegistry = new BannedRewardRegistry();
+        config = new BannedRewardProtocolConfig(treasury, address(currentBanRegistry));
         engine = new BannedRewardVotingEngine(lrep, config, banRegistry);
 
         distributor = RoundRewardDistributorHarness(
@@ -283,6 +291,19 @@ contract RoundRewardDistributorBannedRewardTest is Test {
         assertEq(distributor.roundVoterRewardClaimedCount(CONTENT_ID, ROUND_ID), 1);
         assertEq(distributor.roundVoterRewardClaimedAmount(CONTENT_ID, ROUND_ID), blockedReward);
         assertTrue(distributor.claimAccountingStarted());
+    }
+
+    function test_ConfiscateBannedRewardUsesCurrentRegistryAfterRotation() public {
+        currentBanRegistry.setBanned(IDENTITY_1, true);
+
+        uint256 blockedReward = RewardMath.calculateVoterReward(100, 600, 300_000);
+
+        vm.prank(address(0xBEEF));
+        distributor.confiscateBannedReward(CONTENT_ID, ROUND_ID, COMMIT_1);
+
+        assertEq(lrep.balanceOf(treasury), blockedReward, "current-registry ban routed");
+        assertEq(lrep.balanceOf(voter1), 1_000_000, "stake returned");
+        assertTrue(distributor.rewardCommitClaimed(CONTENT_ID, ROUND_ID, COMMIT_1));
     }
 
     function test_ConfiscateBannedRewardRejectsUnbannedCommit() public {
