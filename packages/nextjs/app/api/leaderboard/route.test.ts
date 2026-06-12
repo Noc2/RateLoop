@@ -8,6 +8,8 @@ const originalNodeEnv = env.NODE_ENV;
 const originalTrustedHeaders = env.RATE_LIMIT_TRUSTED_IP_HEADERS;
 const originalTargetNetworks = env.NEXT_PUBLIC_TARGET_NETWORKS;
 
+const TEST_CHAIN_ID = 4801;
+
 type RateLimitModule = typeof import("~~/utils/rateLimit");
 type RouteModule = typeof import("./route");
 
@@ -26,7 +28,7 @@ before(async () => {
   env.DATABASE_URL = "memory:";
   env.NODE_ENV = "production";
   env.RATE_LIMIT_TRUSTED_IP_HEADERS = "x-forwarded-for";
-  env.NEXT_PUBLIC_TARGET_NETWORKS = "480";
+  env.NEXT_PUBLIC_TARGET_NETWORKS = String(TEST_CHAIN_ID);
   rateLimit = await import("~~/utils/rateLimit");
   route = await import("./route");
 });
@@ -35,7 +37,7 @@ beforeEach(() => {
   env.DATABASE_URL = "memory:";
   env.NODE_ENV = "production";
   env.RATE_LIMIT_TRUSTED_IP_HEADERS = "x-forwarded-for";
-  env.NEXT_PUBLIC_TARGET_NETWORKS = "480";
+  env.NEXT_PUBLIC_TARGET_NETWORKS = String(TEST_CHAIN_ID);
 
   rateLimit.__setRateLimitStoreForTests({
     execute: async () =>

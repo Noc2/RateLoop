@@ -9,11 +9,12 @@ const originalTargetNetworks = env.NEXT_PUBLIC_TARGET_NETWORKS;
 const originalTrustedHeaders = env.RATE_LIMIT_TRUSTED_IP_HEADERS;
 
 const TEST_ADDRESS = "0x63cada40E8AcF7A1d47229af5Be35b78b16035fa";
+const TEST_CHAIN_ID = 4801;
 const TEST_IP = "203.0.113.77";
 
 env.DATABASE_URL = "memory:";
 env.NODE_ENV = "production";
-env.NEXT_PUBLIC_TARGET_NETWORKS = "480";
+env.NEXT_PUBLIC_TARGET_NETWORKS = String(TEST_CHAIN_ID);
 env.RATE_LIMIT_TRUSTED_IP_HEADERS = "x-forwarded-for";
 
 type RateLimitModule = typeof import("../../utils/rateLimit");
@@ -59,7 +60,7 @@ before(async () => {
 beforeEach(() => {
   env.DATABASE_URL = "memory:";
   env.NODE_ENV = "production";
-  env.NEXT_PUBLIC_TARGET_NETWORKS = "480";
+  env.NEXT_PUBLIC_TARGET_NETWORKS = String(TEST_CHAIN_ID);
   env.RATE_LIMIT_TRUSTED_IP_HEADERS = "x-forwarded-for";
 
   rateLimit.__setRateLimitStoreForTests({
@@ -136,12 +137,12 @@ test("free transaction session route keeps serving its fallback when the rate li
   });
 
   const response = await freeTransactionSessionRoute.GET(
-    makeRequest(`/api/transactions/free/session?address=${encodeURIComponent(TEST_ADDRESS)}&chainId=480`),
+    makeRequest(`/api/transactions/free/session?address=${encodeURIComponent(TEST_ADDRESS)}&chainId=${TEST_CHAIN_ID}`),
   );
   const body = await response.json();
 
   assert.equal(response.status, 200);
-  assert.equal(body.chainId, 480);
+  assert.equal(body.chainId, TEST_CHAIN_ID);
   assert.equal(body.environment, "production");
   assert.equal(body.verified, false);
   assert.equal(body.exhausted, false);

@@ -10,6 +10,7 @@ const originalPonderUrl = env.NEXT_PUBLIC_PONDER_URL;
 const originalTargetNetworks = env.NEXT_PUBLIC_TARGET_NETWORKS;
 
 const TEST_FRONTEND = "0x63cada40E8AcF7A1d47229af5Be35b78b16035fa";
+const TEST_CHAIN_ID = 4801;
 
 type RateLimitModule = typeof import("~~/utils/rateLimit");
 type RouteModule = typeof import("./route");
@@ -30,7 +31,7 @@ before(async () => {
   env.NODE_ENV = "production";
   env.RATE_LIMIT_TRUSTED_IP_HEADERS = "x-forwarded-for";
   env.NEXT_PUBLIC_PONDER_URL = "";
-  env.NEXT_PUBLIC_TARGET_NETWORKS = "480";
+  env.NEXT_PUBLIC_TARGET_NETWORKS = String(TEST_CHAIN_ID);
 
   rateLimit = await import("~~/utils/rateLimit");
   route = await import("./route");
@@ -41,7 +42,7 @@ beforeEach(() => {
   env.NODE_ENV = "production";
   env.RATE_LIMIT_TRUSTED_IP_HEADERS = "x-forwarded-for";
   env.NEXT_PUBLIC_PONDER_URL = "";
-  env.NEXT_PUBLIC_TARGET_NETWORKS = "480";
+  env.NEXT_PUBLIC_TARGET_NETWORKS = String(TEST_CHAIN_ID);
 
   rateLimit.__setRateLimitStoreForTests({
     execute: async () => {
@@ -102,7 +103,7 @@ test("frontend claimable fees route fails open when the rate limit store is unav
 test("frontend claimable fees route accepts an explicit supported chain id", async () => {
   const response = await route.GET(
     makeRequest(
-      `/api/frontend/claimable-fees?frontend=${encodeURIComponent(TEST_FRONTEND)}&chainId=480&limit=10&offset=0`,
+      `/api/frontend/claimable-fees?frontend=${encodeURIComponent(TEST_FRONTEND)}&chainId=${TEST_CHAIN_ID}&limit=10&offset=0`,
     ),
   );
 

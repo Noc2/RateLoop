@@ -80,7 +80,6 @@ function installConfidentialityGate(
 
 async function createAcceptedRequest() {
   await confidentiality.recordConfidentialityTermsAcceptance({
-    acceptedAt: new Date("2026-06-11T10:00:00.000Z"),
     nonce: "nonce-1",
     payload: termsPayload(),
     signature: "0xab",

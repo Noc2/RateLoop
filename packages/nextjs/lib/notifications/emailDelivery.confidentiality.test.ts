@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { after, before, beforeEach, test } from "node:test";
+import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 
 const env = process.env as Record<string, string | undefined>;
 const originalAppUrl = env.APP_URL;
@@ -21,13 +22,16 @@ type DbTestMemoryModule = typeof import("~~/lib/db/testMemory");
 type DbSchemaModule = typeof import("~~/lib/db/schema");
 type ConfidentialityContextModule = typeof import("~~/lib/confidentiality/context");
 type EmailDeliveryModule = typeof import("./emailDelivery");
+type PonderClientModule = typeof import("~~/services/ponder/client");
 
 let dbModule: DbModule;
 let dbTestMemory: DbTestMemoryModule;
 let dbSchema: DbSchemaModule;
 let confidentiality: ConfidentialityContextModule;
 let emailDelivery: EmailDeliveryModule;
+let ponderClient: PonderClientModule;
 let sentEmails: Array<{ subject: string; text: string; html: string }> = [];
+const TEST_PONDER_DEPLOYMENT = resolveProtocolDeploymentScope(31337);
 
 function restoreEnv(name: keyof NodeJS.ProcessEnv, value: string | undefined) {
   if (value === undefined) {
@@ -41,6 +45,24 @@ function installFetchMock() {
   sentEmails = [];
   globalThis.fetch = (async (input, init) => {
     const url = typeof input === "string" || input instanceof URL ? input.toString() : input.url;
+
+    if (url === "https://ponder.example/health") {
+      return new Response("ok", { status: 200 });
+    }
+
+    if (url === "https://ponder.example/deployment") {
+      assert.ok(TEST_PONDER_DEPLOYMENT);
+      return new Response(
+        JSON.stringify({
+          configured: true,
+          chainId: TEST_PONDER_DEPLOYMENT.chainId,
+          contentRegistryAddress: TEST_PONDER_DEPLOYMENT.contentRegistryAddress,
+          feedbackRegistryAddress: TEST_PONDER_DEPLOYMENT.feedbackRegistryAddress,
+          deploymentKey: TEST_PONDER_DEPLOYMENT.deploymentKey,
+        }),
+        { headers: { "content-type": "application/json" } },
+      );
+    }
 
     if (url.startsWith("https://ponder.example/notification-events/")) {
       const settlingAt = Math.floor(Date.now() / 1000) + 30 * 60;
@@ -114,11 +136,13 @@ before(async () => {
   dbTestMemory = await import("~~/lib/db/testMemory");
   dbSchema = await import("~~/lib/db/schema");
   confidentiality = await import("~~/lib/confidentiality/context");
+  ponderClient = await import("~~/services/ponder/client");
   emailDelivery = await import("./emailDelivery");
 });
 
 beforeEach(async () => {
   dbModule.__setDatabaseResourcesForTests(dbTestMemory.createMemoryDatabaseResources());
+  ponderClient.invalidatePonderCache({ clearLastKnownGood: true });
   installFetchMock();
   const now = new Date("2026-06-11T12:00:00.000Z");
   await dbModule.db.insert(dbSchema.notificationEmailSubscriptions).values({
@@ -153,6 +177,7 @@ beforeEach(async () => {
 
 after(() => {
   globalThis.fetch = originalFetch;
+  ponderClient.invalidatePonderCache({ clearLastKnownGood: true });
   dbModule.__setDatabaseResourcesForTests(null);
   restoreEnv("APP_URL", originalAppUrl);
   restoreEnv("DATABASE_URL", originalDatabaseUrl);
