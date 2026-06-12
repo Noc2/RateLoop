@@ -1,14 +1,18 @@
 "use client";
 
-import React, { type ReactNode, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import React, { type ReactNode, useEffect, useId, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { useAccount } from "wagmi";
-import { LockClosedIcon } from "@heroicons/react/24/outline";
+import { LockClosedIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { useConfidentialityBond } from "~~/hooks/useConfidentialityBond";
 import type { ContentItem } from "~~/hooks/useContentFeed";
 import { ensurePrivateAccountReadSession } from "~~/hooks/usePrivateAccountSession";
 import { useWalletMessageSigner } from "~~/hooks/useWalletMessageSigner";
-import { CONFIDENTIALITY_TERMS_URI } from "~~/lib/confidentiality/terms";
+import {
+  CONFIDENTIALITY_TERMS_TEXT,
+  CONFIDENTIALITY_TERMS_TITLE,
+  CONFIDENTIALITY_TERMS_VERSION,
+} from "~~/lib/confidentiality/terms";
 import {
   getConfidentialContextVoteBlocker,
   getConfidentialityBondRequirement,
@@ -22,11 +26,83 @@ export function renderConfidentialGateChildren(children: ConfidentialContextGate
   return typeof children === "function" ? children({ walletAddress }) : children;
 }
 
-export function ConfidentialContextTermsLink({ className = "link link-primary" }: { className?: string }) {
+export function ConfidentialContextTermsDialogPanel({
+  isBusy,
+  onAccept,
+  onClose,
+}: {
+  isBusy: boolean;
+  onAccept: () => void;
+  onClose: () => void;
+}) {
+  const titleId = useId();
+
   return (
-    <Link href={CONFIDENTIALITY_TERMS_URI} target="_blank" rel="noopener noreferrer" className={className}>
-      question confidentiality terms
-    </Link>
+    <div
+      className="fixed inset-0 z-[1000] flex items-end justify-center sm:items-center"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
+    >
+      <button
+        type="button"
+        className="absolute inset-0 cursor-default bg-black/45 backdrop-blur-sm"
+        aria-label="Close confidentiality terms dialog"
+        onClick={onClose}
+        disabled={isBusy}
+      />
+      <div className="relative z-10 max-h-[calc(100svh-1rem)] w-full max-w-lg overflow-hidden rounded-t-2xl bg-base-200 p-6 shadow-2xl sm:rounded-2xl">
+        <button
+          type="button"
+          onClick={onClose}
+          className="btn btn-sm btn-circle btn-ghost absolute right-3 top-3 text-base-content/70 hover:text-base-content"
+          aria-label="Close"
+          disabled={isBusy}
+        >
+          <XMarkIcon className="h-5 w-5" />
+        </button>
+
+        <h3 id={titleId} className="px-9 text-center text-lg font-semibold leading-tight text-base-content">
+          {CONFIDENTIALITY_TERMS_TITLE}
+        </h3>
+        <p className="mt-2 text-center text-sm leading-relaxed text-base-content/65">
+          Review these terms before unlocking hosted private context.
+        </p>
+
+        <div className="mt-5 max-h-[42svh] overflow-y-auto rounded-lg border border-base-content/10 bg-base-100 p-4 text-sm leading-relaxed text-base-content/78 [scrollbar-gutter:stable]">
+          <p className="whitespace-pre-wrap">{CONFIDENTIALITY_TERMS_TEXT}</p>
+        </div>
+        <p className="mt-3 text-xs text-base-content/48">Version: {CONFIDENTIALITY_TERMS_VERSION}</p>
+
+        <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <button type="button" className="btn btn-ghost btn-sm" onClick={onClose} disabled={isBusy}>
+            Cancel
+          </button>
+          <button type="button" className="btn btn-primary btn-sm" onClick={onAccept} disabled={isBusy}>
+            {isBusy ? <span className="loading loading-spinner loading-xs" /> : null}
+            Accept with wallet
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ConfidentialContextTermsDialog({
+  isBusy,
+  isOpen,
+  onAccept,
+  onClose,
+}: {
+  isBusy: boolean;
+  isOpen: boolean;
+  onAccept: () => void;
+  onClose: () => void;
+}) {
+  if (!isOpen || typeof document === "undefined") return null;
+  return createPortal(
+    <ConfidentialContextTermsDialogPanel isBusy={isBusy} onAccept={onAccept} onClose={onClose} />,
+    document.body,
   );
 }
 
@@ -115,6 +191,7 @@ export function ConfidentialContextGate({
   const [isCheckingOwnerSession, setIsCheckingOwnerSession] = useState(false);
   const [isAccepting, setIsAccepting] = useState(false);
   const [isConfirmingOwnerSession, setIsConfirmingOwnerSession] = useState(false);
+  const [isTermsDialogOpen, setIsTermsDialogOpen] = useState(false);
   const isOwnContent = Boolean(item.isOwnContent);
   const bondRequirement = useMemo(
     () => getConfidentialityBondRequirement(item.confidentiality),
@@ -229,6 +306,7 @@ export function ConfidentialContextGate({
         throw new Error(acceptedBody.error || "Could not record confidentiality acceptance.");
       }
       setAccepted(true);
+      setIsTermsDialogOpen(false);
       if (typeof window !== "undefined") {
         window.dispatchEvent(
           new CustomEvent("rateloop:confidentiality-accepted", {
@@ -324,7 +402,7 @@ export function ConfidentialContextGate({
         </div>
         <GateCopy title="Confidential context is locked" variant={variant}>
           <p>
-            Review and accept the <ConfidentialContextTermsLink /> with your wallet to view hosted context for this
+            Review and accept the question confidentiality terms with your wallet to view hosted context for this
             rating.
           </p>
           {bondRequirement.isRequired ? <p>Viewing and voting also require a {bondRequirement.label} bond.</p> : null}
@@ -332,12 +410,18 @@ export function ConfidentialContextGate({
         <button
           type="button"
           className="btn btn-primary btn-sm"
-          onClick={acceptTerms}
+          onClick={() => setIsTermsDialogOpen(true)}
           disabled={isCheckingTerms || isAccepting || isSigning}
         >
           {isCheckingTerms || isAccepting || isSigning ? <span className="loading loading-spinner loading-xs" /> : null}
           Accept terms
         </button>
+        <ConfidentialContextTermsDialog
+          isBusy={isAccepting || isSigning}
+          isOpen={isTermsDialogOpen}
+          onAccept={acceptTerms}
+          onClose={() => setIsTermsDialogOpen(false)}
+        />
       </GateShell>
     );
   }
