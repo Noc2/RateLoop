@@ -367,14 +367,7 @@ contract RoundVotingEngine is
             mstore(0x00, account)
             mstore(0x20, roleSlot)
             sstore(keccak256(0x00, 0x40), 1)
-            log4(
-                0x00,
-                0x00,
-                0x5f0ecfd1ea5555d5b4b6140b49c92365beaf40d0a057dc34a9746990cd4ce8d4,
-                role,
-                account,
-                1
-            )
+            log4(0x00, 0x00, 0x5f0ecfd1ea5555d5b4b6140b49c92365beaf40d0a057dc34a9746990cd4ce8d4, role, account, 1)
         }
     }
 
@@ -1563,19 +1556,27 @@ contract RoundVotingEngine is
             uint16 revealedCount,
             uint64 totalStake,
             uint48 thresholdReachedAt,
-            uint48 settledAt
+            uint48 settledAt,
+            uint8 upWins
         )
     {
-        RoundLib.Round storage round = rounds[contentId][roundId];
-        return (
-            round.startTime,
-            round.state,
-            round.voteCount,
-            round.revealedCount,
-            round.totalStake,
-            round.thresholdReachedAt,
-            round.settledAt
-        );
+        assembly ("memory-safe") {
+            mstore(0x00, contentId)
+            mstore(0x20, rounds.slot)
+            mstore(0x20, keccak256(0x00, 0x40))
+            mstore(0x00, roundId)
+            let slot := keccak256(0x00, 0x40)
+            let word0 := sload(slot)
+            let word1 := sload(add(slot, 1))
+            startTime := and(word0, 0xffffffffffff)
+            state := and(shr(48, word0), 0xff)
+            voteCount := and(shr(56, word0), 0xffff)
+            revealedCount := and(shr(72, word0), 0xffff)
+            totalStake := and(shr(88, word0), 0xffffffffffffffff)
+            settledAt := and(shr(104, word1), 0xffffffffffff)
+            thresholdReachedAt := and(shr(152, word1), 0xffffffffffff)
+            upWins := and(shr(96, word1), 0xff)
+        }
     }
 
     function advisoryRoundContext(uint256 contentId, uint256 roundId, uint64 targetRound)
@@ -1622,12 +1623,8 @@ contract RoundVotingEngine is
         returns (uint256 voterLastVote, uint256 identityHolderLastVote, uint256 identityLastVote)
     {
         voterLastVote = lastVoteTimestamp[contentId][voter];
-        if (identityHolder != address(0) && identityHolder != voter) {
-            identityHolderLastVote = lastVoteTimestamp[contentId][identityHolder];
-        }
-        if (identityKey != bytes32(0)) {
-            identityLastVote = lastVoteTimestampByIdentity[contentId][identityKey];
-        }
+        identityHolderLastVote = lastVoteTimestamp[contentId][identityHolder];
+        identityLastVote = lastVoteTimestampByIdentity[contentId][identityKey];
     }
 
     function rbtsRoundState(uint256 contentId, uint256 roundId)

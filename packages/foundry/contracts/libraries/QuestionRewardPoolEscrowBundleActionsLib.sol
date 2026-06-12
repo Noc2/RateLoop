@@ -297,7 +297,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         uint256 contentId,
         uint256 roundId
     ) external {
-        (, RoundLib.RoundState state,,,,, uint48 settledAt) = votingEngine.roundCore(contentId, roundId);
+        (, RoundLib.RoundState state,,,,, uint48 settledAt,) = votingEngine.roundCore(contentId, roundId);
         require(_isTerminalRound(state, settledAt), "Round not terminal");
         _recordBundleQuestionTerminal(
             bundleRewards,
@@ -794,7 +794,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
 
         while (cursor <= currentRoundId) {
             if (processedRounds >= maxRounds) return (processedRounds, false);
-            (uint48 startTime, RoundLib.RoundState state,,,,, uint48 settledAt) =
+            (uint48 startTime, RoundLib.RoundState state,,,,, uint48 settledAt,) =
                 votingEngine.roundCore(contentId, cursor);
             if (startTime == 0) {
                 bundleQuestionTerminalSyncCursor[bundleId][bundleIndex] = ++cursor;
@@ -970,7 +970,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
 
         uint256 firstContentId = questions[0].contentId;
         uint256 firstRoundId = bundleRoundIds[bundleId][0][roundSetIndex];
-        (,, uint16 commitCount,,,,) = votingEngine.roundCore(firstContentId, firstRoundId);
+        (,, uint16 commitCount,,,,,) = votingEngine.roundCore(firstContentId, firstRoundId);
         for (uint256 i = 0; i < commitCount;) {
             bytes32 commitKey = votingEngine.getRoundCommitKey(firstContentId, firstRoundId, i);
             if (_isEligibleBundleRoundSetCompleter(
@@ -1015,7 +1015,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
 
         uint256 firstContentId = questions[0].contentId;
         uint256 firstRoundId = bundleRoundIds[bundleId][0][roundSetIndex];
-        (,, uint16 commitCount,,,,) = votingEngine.roundCore(firstContentId, firstRoundId);
+        (,, uint16 commitCount,,,,,) = votingEngine.roundCore(firstContentId, firstRoundId);
         for (uint256 i = 0; i < commitCount;) {
             bytes32 commitKey = votingEngine.getRoundCommitKey(firstContentId, firstRoundId, i);
             if (_isEligibleBundleRoundSetCompleter(
@@ -1413,7 +1413,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
     {
         cursor = votingEngine.currentRoundId(contentId);
         if (cursor == 0) return 1;
-        (uint48 startTime, RoundLib.RoundState state,,,,,) = votingEngine.roundCore(contentId, cursor);
+        (uint48 startTime, RoundLib.RoundState state,,,,,,) = votingEngine.roundCore(contentId, cursor);
         if (startTime == 0 || state != RoundLib.RoundState.Open) return cursor + 1;
     }
 

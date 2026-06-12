@@ -50,6 +50,21 @@ interface IQuestionRewardPoolEscrow {
     ) external returns (uint256 rewardPoolId);
 }
 
+interface IRoundVotingEngineCoreView {
+    function roundCore(uint256 contentId, uint256 roundId)
+        external
+        view
+        returns (
+            uint48 startTime,
+            RoundLib.RoundState state,
+            uint16 voteCount,
+            uint16 revealedCount,
+            uint64 totalStake,
+            uint48 thresholdReachedAt,
+            uint48 settledAt
+        );
+}
+
 /// @title ContentRegistry
 /// @notice Manages content lifecycle: submission → active → dormant → revived / cancelled.
 /// @dev Stores only a metadata hash on-chain; full URL/question details are emitted in events.
@@ -1594,7 +1609,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         if (activeRoundId == 0) return false;
 
         (, RoundLib.RoundState roundState, uint16 voteCount,, uint64 totalStake,,) =
-            IRoundVotingEngine(engine).roundCore(contentId, activeRoundId);
+            IRoundVotingEngineCoreView(engine).roundCore(contentId, activeRoundId);
         return roundState == RoundLib.RoundState.Open && voteCount != 0 && totalStake != 0;
     }
 

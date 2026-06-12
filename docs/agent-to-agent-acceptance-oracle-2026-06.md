@@ -25,9 +25,10 @@ commit-reveal mechanism itself is the bound — and the right answer is not to
 shrink it further but to pair it with an optimistic-acceptance pattern (instant
 release, RateLoop round only on dispute).
 
-The two cheapest unlocks are not latency at all: **the binary verdict (`upWins`)
-is event-only — no view function exposes it on-chain**, so trustless escrow
-release can't be built against the contracts today; and the
+The cheapest remaining unlocks are not latency at all: **the binary verdict
+(`upWins`) is now exposed on-chain as the trailing `roundCore` verdict flag**,
+so trustless escrow adapters can read the settled direction without relying on
+events; and the
 "don't settle external financial contracts" disclaimer ships in every result
 package, so the product is advisory-only until a scoped carve-out exists.
 
@@ -138,25 +139,25 @@ the buyer cannot run the jury because the buyer is a counterparty.
 
 **What's missing (the build list):**
 
-1. **No on-chain verdict view.** `upWins`, up/down pools and counts live in an
-   `internal` mapping; `roundCore` omits them; the direction is only emitted in
-   the `RoundSettled(contentId, roundId, upWins, losingPool)` event
-   (`RoundVotingEngine.sol:249,1101`). An external escrow cannot trustlessly read
-   "who won" today. This is the single concrete contract gap for the whole use
-   case.
-2. **No verdict-keyed escrow.** `QuestionRewardPoolEscrow` is voter-bounty escrow
+1. **No verdict-keyed escrow.** `QuestionRewardPoolEscrow` is voter-bounty escrow
    only — qualification checks `Settled`, never the side; nothing releases
-   third-party funds on an outcome.
-3. **The disclaimer.** "Settled RateLoop scores must not be used to settle
+   third-party funds on an outcome. The engine now exposes the canonical
+   direction through `roundCore(contentId, roundId)`, whose trailing `uint8
+   upWins` flag is `1` for UP and `0` for DOWN. A future escrow can trustlessly
+   gate release/refund on `state == Settled` plus that flag instead of proving or
+   trusting `RoundSettled` logs. Pools/counts remain internal/event/indexer
+   surface, which is fine for this use case because the escrow only needs the
+   settled side.
+2. **The disclaimer.** "Settled RateLoop scores must not be used to settle
    external financial contracts" ships in every agent result package
    (`resultPackage.ts:543`), MCP outputs, install snippets, docs, and the
    whitepaper ("not a settlement oracle"). Until a scoped carve-out exists, the
    product is advisory-only — which is also the correct first posture (see §5).
-4. **No AI-only eligibility mask** — bounty eligibility bits are human-credential
+3. **No AI-only eligibility mask** — bounty eligibility bits are human-credential
    bits only (`QuestionRewardPoolEscrowTypes.sol:4-10`); pure-AI fast rounds are
    social convention, not enforced. Gated (confidential) rounds exclude AI raters
    entirely — relevant because A2A deliverables are usually confidential.
-5. **Small-round economics are deliberately soft**: 3-voter rounds settle as
+4. **Small-round economics are deliberately soft**: 3-voter rounds settle as
    "feedback signals" — score-spread LREP forfeits require ≥8 reveals
    (`RewardMath.sol:17,95`), and pools ≥1,000 USDC require ≥5 voters on-chain.
    A binding acceptance verdict with real money should not ride a 3-voter
@@ -261,11 +262,7 @@ self-finalize SDK path makes the keeper a fallback, not the critical path).
 
 ## 4. Integration architecture (what to build, in order)
 
-1. **`upWins` view function** (or a `roundVerdict(contentId, roundId)` returning
-   state, upWins, pools, settledAt). One small upgrade to RoundVotingEngine;
-   unblocks everything trustless. Interim alternative: an adapter that proves the
-   `RoundSettled` event — strictly worse, build the view.
-2. **ERC-8004 Validation Registry adapter.** A `RateLoopValidator` contract that
+1. **ERC-8004 Validation Registry adapter.** A `RateLoopValidator` contract that
    (a) accepts `validationRequest`s where `requestURI` carries the question spec
    + acceptance rubric and `requestHash` binds the deliverable hash, (b) opens a
    RateLoop question (or verifies one opened off-chain matches the requestHash),
@@ -275,17 +272,17 @@ self-finalize SDK path makes the keeper a fallback, not the critical path).
    credible market entry: the registry is live, indexed by reputation layers
    (RNWY etc.), and nobody staked-and-slashing occupies it. Caveat: the registry
    is still being revised — build behind a thin interface.
-3. **ERC-8183 evaluator contract.** The Job standard fixes a single evaluator
+2. **ERC-8183 evaluator contract.** The Job standard fixes a single evaluator
    address at creation; a RateLoop evaluator contract maps Job →
    question → settled verdict → `complete()`/`reject()`. Watch the draft's
    adoption before investing past a prototype; the same contract core serves
    both this and a Kustodia/PayCrow-style escrow partnership (those wrappers
    need exactly an independent arbiter API).
-4. **ACP evaluator agent.** Software-only (no contracts): register a RateLoop
+3. **ACP evaluator agent.** Software-only (no contracts): register a RateLoop
    evaluator agent on Virtuals ACP that accepts evaluation phases and answers
    them by buying a RateLoop round. Rides ACP's existing volume; also the
    fastest way to learn real acceptance-rubric shapes and price points.
-5. **Verdict-keyed escrow of our own** — only after 2-4 show demand. The
+4. **Verdict-keyed escrow of our own** — only after 1-3 show demand. The
    optimistic-acceptance contract (§3 Tier 3) is the version worth building.
 
 ## 5. Product decisions the use case forces
@@ -333,14 +330,13 @@ self-finalize SDK path makes the keeper a fallback, not the critical path).
 
 **Do:**
 1. SDK self-finalize (Tier 0) — ~80s rounds this quarter, no protocol risk.
-2. `upWins`/verdict view in the next contract upgrade window (it's one function).
-3. ERC-8004 validator adapter + ACP evaluator agent as the two market probes;
+2. ERC-8004 validator adapter + ACP evaluator agent as the two market probes;
    advisory-only, disclaimer intact.
-4. Standing fast-lane rater pool with push notifications (this is also the
+3. Standing fast-lane rater pool with push notifications (this is also the
    missing piece for use case 2's judgment gates — shared investment).
-5. Epoch floor 60s→15s in the same upgrade as (2), gated on the standing pool
+4. Epoch floor 60s→15s, gated on the standing pool
    existing.
-6. Design the binding-acceptance tier (carve-out terms, economics table,
+5. Design the binding-acceptance tier (carve-out terms, economics table,
    counterparty exclusion) but ship it only when a probe shows pull.
 
 **Don't:**

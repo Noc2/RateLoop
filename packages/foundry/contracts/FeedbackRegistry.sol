@@ -166,7 +166,7 @@ contract FeedbackRegistry is IFeedbackRegistry, Initializable, AccessControlUpgr
         view
         returns (RoundLib.RoundState state)
     {
-        (, state,,,,,) = engine.roundCore(contentId, roundId);
+        (, state,,,,,,) = engine.roundCore(contentId, roundId);
     }
 
     function _isAwardableFeedback(FeedbackRecord storage record, bytes32 feedbackHash) private view returns (bool) {

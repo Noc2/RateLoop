@@ -65,7 +65,7 @@ library FrontendFeeDustLib {
         uint256 roundId,
         uint256 staleDelay
     ) internal view {
-        (, RoundLib.RoundState state,,,,, uint48 settledAt) = votingEngine.roundCore(contentId, roundId);
+        (, RoundLib.RoundState state,,,,, uint48 settledAt,) = votingEngine.roundCore(contentId, roundId);
 
         if (state != RoundLib.RoundState.Settled) revert RoundNotSettled();
         if (settledAt == 0 || block.timestamp < uint256(settledAt) + staleDelay) revert RewardFinalizationTooEarly();

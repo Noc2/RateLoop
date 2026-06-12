@@ -796,6 +796,6 @@ library QuestionRewardPoolEscrowClaimLib {
         view
         returns (uint48 settledAt)
     {
-        (,,,,,, settledAt) = votingEngine.roundCore(contentId, roundId);
+        (,,,,,, settledAt,) = votingEngine.roundCore(contentId, roundId);
     }
 }

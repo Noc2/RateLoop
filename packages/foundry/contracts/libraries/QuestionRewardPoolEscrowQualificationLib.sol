@@ -79,7 +79,7 @@ library QuestionRewardPoolEscrowQualificationLib {
             uint48 settledAt
         )
     {
-        (, RoundLib.RoundState state,,,,, uint48 roundSettledAt) =
+        (, RoundLib.RoundState state,,,,, uint48 roundSettledAt,) =
             ctx.votingEngine.roundCore(ctx.contentId, ctx.roundId);
         if (state != RoundLib.RoundState.Settled || roundSettledAt == 0) return (false, false, 0, 0, 0, 0);
         settledAt = roundSettledAt;
@@ -100,7 +100,7 @@ library QuestionRewardPoolEscrowQualificationLib {
         uint64 bountyOpensAt,
         uint64 bountyClosesAt
     ) external view {
-        (uint48 startedAt, RoundLib.RoundState state,,,,,) = votingEngine.roundCore(contentId, nextRoundToEvaluate);
+        (uint48 startedAt, RoundLib.RoundState state,,,,,,) = votingEngine.roundCore(contentId, nextRoundToEvaluate);
         if (state == RoundLib.RoundState.Open) {
             // An Open cursor round is the latest round (rounds are sequential), so it cannot strand a
             // later qualifiable round. It is safe to refund unallocated funds when it has no live bounty
@@ -463,7 +463,7 @@ library QuestionRewardPoolEscrowQualificationLib {
         uint8 rewardAssetUsdc,
         uint8 payoutDomain
     ) private view returns (bool roundFinished, bool canQualify, uint256 eligibleVoters) {
-        (, RoundLib.RoundState state,,,,,) = votingEngine.roundCore(rewardPool.contentId, roundId);
+        (, RoundLib.RoundState state,,,,,,) = votingEngine.roundCore(rewardPool.contentId, roundId);
         if (state == RoundLib.RoundState.Open) return (false, false, 0);
         if (state != RoundLib.RoundState.Settled) return (true, false, 0);
         (bool windowActive, uint64 bountyOpensAt, uint64 bountyClosesAt) =
@@ -599,7 +599,7 @@ library QuestionRewardPoolEscrowQualificationLib {
         view
         returns (uint256 rawEligibleVoters, uint256 effectiveParticipantUnits, uint256 totalClaimWeight)
     {
-        (,, uint16 commitCount,,,,) = ctx.votingEngine.roundCore(ctx.contentId, ctx.roundId);
+        (,, uint16 commitCount,,,,,) = ctx.votingEngine.roundCore(ctx.contentId, ctx.roundId);
         for (uint256 i = 0; i < commitCount;) {
             bytes32 commitKey = ctx.votingEngine.getRoundCommitKey(ctx.contentId, ctx.roundId, i);
             if (_isEligibleRevealedCommit(ctx, commitKey)) {
@@ -624,7 +624,7 @@ library QuestionRewardPoolEscrowQualificationLib {
         uint256 rewardPoolId,
         bytes32 snapshotDigest
     ) private {
-        (,, uint16 commitCount,,,,) = ctx.votingEngine.roundCore(ctx.contentId, ctx.roundId);
+        (,, uint16 commitCount,,,,,) = ctx.votingEngine.roundCore(ctx.contentId, ctx.roundId);
         for (uint256 i = 0; i < commitCount;) {
             bytes32 commitKey = ctx.votingEngine.getRoundCommitKey(ctx.contentId, ctx.roundId, i);
             if (_isEligibleRevealedCommit(ctx, commitKey)) {

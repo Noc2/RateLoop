@@ -762,6 +762,7 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
     }
 
     function _readRound(uint256 contentId, uint256 roundId) internal view returns (RoundLib.Round memory round) {
+        uint8 upWins;
         (
             round.startTime,
             round.state,
@@ -769,8 +770,10 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
             round.revealedCount,
             round.totalStake,
             round.thresholdReachedAt,
-            round.settledAt
+            round.settledAt,
+            upWins
         ) = votingEngine.roundCore(contentId, roundId);
+        round.upWins = upWins != 0;
     }
 
     function _readCommit(uint256 contentId, uint256 roundId, bytes32 commitKey)

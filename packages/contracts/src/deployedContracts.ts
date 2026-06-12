@@ -8222,6 +8222,11 @@ const deployedContracts: GenericContractsDeclaration = {
               type: "uint48",
               internalType: "uint48",
             },
+            {
+              name: "upWins",
+              type: "uint8",
+              internalType: "uint8",
+            },
           ],
           stateMutability: "view",
         },
@@ -37315,6 +37320,11 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "settledAt",
               type: "uint48",
               internalType: "uint48",
+            },
+            {
+              name: "upWins",
+              type: "uint8",
+              internalType: "uint8",
             },
           ],
           stateMutability: "view",

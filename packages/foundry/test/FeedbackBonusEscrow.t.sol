@@ -745,7 +745,7 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         uint256 requestedDeadline = block.timestamp + 1;
         uint256 poolId = _createFeedbackBonusPoolWithDeadline(contentId, requestedDeadline);
         uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
-        (,,,,,, uint48 settledAt) = votingEngine.roundCore(contentId, roundId);
+        (,,,,,, uint48 settledAt,) = votingEngine.roundCore(contentId, roundId);
 
         assertGt(block.timestamp, requestedDeadline);
         assertEq(
@@ -784,7 +784,7 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         uint256 requestedDeadline = block.timestamp + 7 days;
         uint256 poolId = _createFeedbackBonusPoolWithDeadline(contentId, requestedDeadline);
         uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
-        (,,,,,, uint48 settledAt) = votingEngine.roundCore(contentId, roundId);
+        (,,,,,, uint48 settledAt,) = votingEngine.roundCore(contentId, roundId);
         uint256 minimumDecisionDeadline = uint256(settledAt) + feedbackBonusEscrow.MIN_FEEDBACK_AWARD_DECISION_SECONDS();
 
         assertGt(requestedDeadline, minimumDecisionDeadline);

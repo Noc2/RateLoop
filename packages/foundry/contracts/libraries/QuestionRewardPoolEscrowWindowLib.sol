@@ -184,7 +184,7 @@ library QuestionRewardPoolEscrowWindowLib {
         view
         returns (uint64 firstStakedAt)
     {
-        (uint48 startedAt,, uint16 commitCount,,,,) = votingEngine.roundCore(contentId, roundId);
+        (uint48 startedAt,, uint16 commitCount,,,,,) = votingEngine.roundCore(contentId, roundId);
         if (commitCount == 0) return 0;
         bytes32 firstCommitKey = votingEngine.getRoundCommitKey(contentId, roundId, 0);
         (,, uint48 committedAt,,,) = votingEngine.commitIdentityState(contentId, roundId, firstCommitKey);

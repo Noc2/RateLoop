@@ -27,7 +27,8 @@ interface IRoundVotingEngine {
             uint16 revealedCount,
             uint64 totalStake,
             uint48 thresholdReachedAt,
-            uint48 settledAt
+            uint48 settledAt,
+            uint8 upWins
         );
 
     /// @notice Transfer LREP reward tokens to a recipient. Only callable by RewardDistributor.

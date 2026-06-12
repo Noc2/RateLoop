@@ -44,8 +44,11 @@ library RoundEngineReadHelpers {
         view
         returns (RoundLib.Round memory r)
     {
-        (r.startTime, r.state, r.voteCount, r.revealedCount, r.totalStake, r.thresholdReachedAt, r.settledAt) =
-            engine.roundCore(contentId, roundId);
+        uint8 upWins;
+        (
+            r.startTime, r.state, r.voteCount, r.revealedCount, r.totalStake, r.thresholdReachedAt, r.settledAt, upWins
+        ) = engine.roundCore(contentId, roundId);
+        r.upWins = upWins != 0;
         _readRoundPools(engine, contentId, roundId, r);
     }
 

@@ -507,12 +507,12 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
         }
 
         require(roundId == currentRoundId, "Invalid target round");
-        (, RoundLib.RoundState state,,,,,) = votingEngine.roundCore(contentId, roundId);
+        (, RoundLib.RoundState state,,,,,,) = votingEngine.roundCore(contentId, roundId);
         require(state == RoundLib.RoundState.Open, "Round not open");
     }
 
     function _feedbackBonusAwardDeadline(FeedbackBonusPool storage pool) internal view returns (uint256) {
-        (uint48 startTime, RoundLib.RoundState state,,,,, uint48 settledAt) =
+        (uint48 startTime, RoundLib.RoundState state,,,,, uint48 settledAt,) =
             votingEngine.roundCore(pool.contentId, pool.roundId);
         uint256 requestedDeadline = pool.feedbackClosesAt;
 
@@ -538,7 +538,7 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
         returns (bytes32 identityKey, address rewardRecipient, bytes32 commitKey, address frontend)
     {
         require(recipient != address(0), "Invalid recipient");
-        (, RoundLib.RoundState state,,,,,) = votingEngine.roundCore(pool.contentId, pool.roundId);
+        (, RoundLib.RoundState state,,,,,,) = votingEngine.roundCore(pool.contentId, pool.roundId);
         require(
             state == RoundLib.RoundState.Settled || state == RoundLib.RoundState.Tied
                 || state == RoundLib.RoundState.RevealFailed,
@@ -629,7 +629,7 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
             }
             // Round-time eligibility gate: a frontend that re-registered after the round
             // settled cannot revive feedback-bonus fees. Subsumes slash/exit checks.
-            (,,,,,, uint48 roundSettledAt) = votingEngine.roundCore(contentId, roundId);
+            (,,,,,, uint48 roundSettledAt,) = votingEngine.roundCore(contentId, roundId);
             if (_canClaimFeesForRound(frontendRegistry, frontend, roundSettledAt)) {
                 frontendRecipient = operator;
             }

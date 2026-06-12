@@ -217,7 +217,7 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
             uint16 voteCount,,
             uint64 totalStake,
             uint48 thresholdReachedAt,
-            uint48 settledAt
+            uint48 settledAt,
         ) = votingEngine.roundCore(contentId, availability.roundId);
         (uint32 epochDuration, uint32 maxDuration,, uint16 maxVoters) =
             votingEngine.roundConfigSnapshot(contentId, availability.roundId);
@@ -445,7 +445,7 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
             uint16 revealedCount,
             uint64 totalStake,
             uint48 thresholdReachedAt,
-            uint48 settledAt
+            uint48 settledAt,
         ) = votingEngine.roundCore(advisoryCommit.contentId, advisoryCommit.roundId);
         totalStake;
         thresholdReachedAt;
@@ -521,17 +521,14 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
                     VotePreflightLib.addressIdentityKey(advisoryCommit.voter)
                 )
                 || _isIdentityBanned(
-                    advisoryCommit.contentId, advisoryCommit.roundId, VotePreflightLib.addressIdentityKey(rewardRecipient)
+                    advisoryCommit.contentId,
+                    advisoryCommit.roundId,
+                    VotePreflightLib.addressIdentityKey(rewardRecipient)
                 )
         ) {
             advisoryCommit.launchCreditClaimed = true;
             emit AdvisoryLaunchCreditClaimed(
-                advisoryCommit.contentId,
-                advisoryCommit.roundId,
-                rewardRecipient,
-                advisoryCommitKey,
-                scoreBps,
-                0
+                advisoryCommit.contentId, advisoryCommit.roundId, rewardRecipient, advisoryCommitKey, scoreBps, 0
             );
             return (scoreBps, 0);
         }
@@ -733,7 +730,7 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
         uint16 stakedVoteCount;
         uint64 stakedTotalStake;
         uint48 thresholdReachedAt;
-        (roundStartTime, state, stakedVoteCount,, stakedTotalStake, thresholdReachedAt,) =
+        (roundStartTime, state, stakedVoteCount,, stakedTotalStake, thresholdReachedAt,,) =
             votingEngine.roundCore(contentId, roundId);
 
         uint32 maxDuration;
@@ -995,7 +992,7 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
     }
 
     function _effectiveRevealableAfter(AdvisoryCommit storage advisoryCommit) internal view returns (uint256) {
-        (uint48 roundStart, RoundLib.RoundState state,,,,, uint48 settledAt) =
+        (uint48 roundStart, RoundLib.RoundState state,,,,, uint48 settledAt,) =
             votingEngine.roundCore(advisoryCommit.contentId, advisoryCommit.roundId);
         if (roundStart == 0) revert RoundNotOpen();
         // I-Vote-A: allow advisory reveals during a brief grace window after settledAt so a
@@ -1030,7 +1027,7 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
     }
 
     function _isTerminalRound(uint256 contentId, uint256 roundId) internal view returns (bool) {
-        (, RoundLib.RoundState state,,,,,) = votingEngine.roundCore(contentId, roundId);
+        (, RoundLib.RoundState state,,,,,,) = votingEngine.roundCore(contentId, roundId);
         return state == RoundLib.RoundState.Settled || state == RoundLib.RoundState.Tied;
     }
 

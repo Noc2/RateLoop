@@ -50,7 +50,7 @@ const votingEngineAbi = parseAbi([
   "function currentRoundId(uint256 contentId) view returns (uint256)",
   "function previewCommitContext(uint256 contentId) view returns (uint256 openRoundId, uint16 referenceRatingBps)",
   "function roundConfigSnapshot(uint256 contentId, uint256 roundId) view returns (uint32 epochDuration, uint32 maxDuration, uint16 minVoters, uint16 maxVoters)",
-  "function roundCore(uint256 contentId, uint256 roundId) view returns (uint48 startTime, uint8 state, uint16 voteCount, uint16 revealedCount, uint64 totalStake, uint48 thresholdReachedAt, uint48 settledAt)",
+  "function roundCore(uint256 contentId, uint256 roundId) view returns (uint48 startTime, uint8 state, uint16 voteCount, uint16 revealedCount, uint64 totalStake, uint48 thresholdReachedAt, uint48 settledAt, uint8 upWins)",
 ]);
 const contentRegistryAbi = parseAbi([
   "function getContentRoundConfig(uint256 contentId) view returns (uint32 epochDuration, uint32 maxDuration, uint16 minVoters, uint16 maxVoters)",

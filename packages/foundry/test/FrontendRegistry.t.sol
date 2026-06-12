@@ -35,9 +35,9 @@ contract MockVotingEngine is IRoundVotingEngine {
         external
         pure
         override
-        returns (uint48, RoundLib.RoundState, uint16, uint16, uint64, uint48, uint48)
+        returns (uint48, RoundLib.RoundState, uint16, uint16, uint64, uint48, uint48, uint8)
     {
-        return (0, RoundLib.RoundState.Open, 0, 0, 0, 0, 0);
+        return (0, RoundLib.RoundState.Open, 0, 0, 0, 0, 0, 0);
     }
 
     function transferReward(address, uint256) external override { }

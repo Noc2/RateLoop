@@ -771,6 +771,11 @@ contract RoundIntegrationTest is VotingTestBase {
         round = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
         assertEq(uint256(round.state), uint256(RoundLib.RoundState.Settled), "Round should be settled");
         assertTrue(round.upWins, "UP should win");
+        (, RoundLib.RoundState upVerdictState,,,,, uint48 upSettledAt, uint8 upVerdictWins) =
+            votingEngine.roundCore(contentId, roundId);
+        assertEq(uint256(upVerdictState), uint256(RoundLib.RoundState.Settled), "UP verdict state should be settled");
+        assertEq(upVerdictWins, 1, "verdict should report UP win");
+        assertEq(upSettledAt, round.settledAt, "UP verdict settledAt should match round");
 
         // Winner claims reward
         uint256 balBefore = lrepToken.balanceOf(voter1);
@@ -809,6 +814,12 @@ contract RoundIntegrationTest is VotingTestBase {
         RoundLib.Round memory round = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
         assertEq(uint256(round.state), uint256(RoundLib.RoundState.Settled), "Round should be settled");
         assertFalse(round.upWins, "DOWN should win");
+
+        (, RoundLib.RoundState verdictState,,,,, uint48 settledAt, uint8 verdictUpWins) =
+            votingEngine.roundCore(contentId, roundId);
+        assertEq(uint256(verdictState), uint256(RoundLib.RoundState.Settled), "verdict state should be settled");
+        assertEq(verdictUpWins, 0, "verdict should report DOWN win");
+        assertEq(settledAt, round.settledAt, "verdict settledAt should match round");
 
         // DOWN voter (winner) claims reward
         uint256 balBefore = lrepToken.balanceOf(voter2);

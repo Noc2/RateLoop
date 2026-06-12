@@ -893,13 +893,13 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         for (uint256 i = 0; i < 3; i++) {
             votingEngine.revealVoteByCommitKey(contentId, roundId, commitKeys[i], directions[i], 5_000, salts[i]);
         }
-        (,,,,, uint48 thresholdReachedMid,) = votingEngine.roundCore(contentId, roundId);
+        (,,,,, uint48 thresholdReachedMid,,) = votingEngine.roundCore(contentId, roundId);
         assertEq(thresholdReachedMid, 0, "threshold should not be hit at 3 reveals when minVoters=5");
 
         vm.warp(bountyClosesAt + 1);
         votingEngine.revealVoteByCommitKey(contentId, roundId, commitKeys[3], directions[3], 5_000, salts[3]);
         votingEngine.revealVoteByCommitKey(contentId, roundId, commitKeys[4], directions[4], 5_000, salts[4]);
-        (,,,,, uint48 thresholdReachedAfter,) = votingEngine.roundCore(contentId, roundId);
+        (,,,,, uint48 thresholdReachedAfter,,) = votingEngine.roundCore(contentId, roundId);
         assertGt(thresholdReachedAfter, bountyClosesAt, "thresholdReachedAt should be after bounty close");
 
         _settleAfterRbtsSeed(votingEngine, contentId, roundId);

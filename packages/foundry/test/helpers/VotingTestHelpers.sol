@@ -1135,7 +1135,7 @@ abstract contract VotingTestBase is Test, ContentSubmissionTestBase {
 
     function _commitEpochEnd(RoundVotingEngine engine, uint256 contentId) internal view returns (uint256) {
         uint256 roundId = _previewCommitRoundId(engine, contentId);
-        (uint48 startTime,,,,,,) = engine.roundCore(contentId, roundId);
+        (uint48 startTime,,,,,,,) = engine.roundCore(contentId, roundId);
         uint256 epochDuration = _tlockEpochDuration();
         if (startTime == 0) {
             return block.timestamp + epochDuration;
