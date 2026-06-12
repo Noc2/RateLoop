@@ -133,9 +133,7 @@ test("confidentiality terms accept route reports pending storage migration clear
     contentId: CONTENT_ID,
   };
 
-  const challengeResponse = await challengeRoute.POST(
-    jsonRequest("/api/confidentiality/terms/challenge", payload),
-  );
+  const challengeResponse = await challengeRoute.POST(jsonRequest("/api/confidentiality/terms/challenge", payload));
   assert.equal(challengeResponse.status, 200);
   const challenge = (await challengeResponse.json()) as {
     challengeId: string;

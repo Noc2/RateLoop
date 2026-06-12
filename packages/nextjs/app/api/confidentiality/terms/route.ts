@@ -153,7 +153,9 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     if (isConfidentialityTermsStorageUnavailableError(error)) {
-      console.warn("Confidentiality terms storage unavailable. Apply pending database migrations before accepting terms.");
+      console.warn(
+        "Confidentiality terms storage unavailable. Apply pending database migrations before accepting terms.",
+      );
       return NextResponse.json(
         {
           code: "service_unavailable",
