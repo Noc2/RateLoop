@@ -61,6 +61,13 @@ contract WeakLaunchRaterRegistry {
 
 contract MockLaunchConfidentialityNexus {
     mapping(uint8 => mapping(bytes32 => bool)) internal nexus;
+    address internal immutable registry;
+    address internal immutable protocolConfig;
+
+    constructor(address registry_) {
+        registry = registry_;
+        protocolConfig = address(new MockLaunchConfidentialityProtocolConfig(registry_, address(this)));
+    }
 
     function setNexus(uint8 provider, bytes32 nullifierHash, bool value) external {
         nexus[provider][nullifierHash] = value;
@@ -68,6 +75,20 @@ contract MockLaunchConfidentialityNexus {
 
     function hasConfidentialityNexus(uint8 provider, bytes32 nullifierHash) external view returns (bool) {
         return nexus[provider][nullifierHash];
+    }
+
+    function confidentialityEscrowConfigShape() external view returns (address registry_, address protocolConfig_) {
+        return (registry, protocolConfig);
+    }
+}
+
+contract MockLaunchConfidentialityProtocolConfig {
+    address public raterRegistry;
+    address public confidentialityEscrow;
+
+    constructor(address raterRegistry_, address confidentialityEscrow_) {
+        raterRegistry = raterRegistry_;
+        confidentialityEscrow = confidentialityEscrow_;
     }
 }
 
@@ -840,6 +861,31 @@ contract LaunchDistributionPoolTest is Test {
         assertTrue(pool.isRoundPayoutSnapshotConsumed(pool.PAYOUT_DOMAIN_LAUNCH_CREDIT(), 0, 1, 1));
     }
 
+    function test_LaunchCreditRejectsMismatchedPayoutIdentityKey() public {
+        ClusterPayoutOracle oracle = _configureLaunchOracle(1);
+
+        pool.recordEarnedRaterRewardWithSourceReady(
+            alice,
+            1,
+            1,
+            _commitKey(1),
+            8_000,
+            3,
+            true,
+            pool.MIN_LAUNCH_CREDIT_STAKE(),
+            _singleAnchor(bytes32("anchor-a")),
+            uint64(block.timestamp)
+        );
+
+        IClusterPayoutOracle.PayoutWeight memory payout =
+            _launchPayoutWeight(1, _commitKey(1), alice, 2_500, keccak256("clustered"));
+        payout.identityKey = bytes32(uint256(2));
+        _proposeAndFinalizeLaunchPayoutSnapshot(oracle, 1, payout, keccak256("epoch-artifact"));
+
+        vm.expectRevert(LaunchDistributionPool.InvalidProof.selector);
+        pool.finalizeEarnedRaterRewardCredit(1, 1, _commitKey(1), payout, new bytes32[](0));
+    }
+
     function test_LaunchCreditRejectsSnapshotForDifferentConsumer() public {
         MockLaunchOracleFrontendRegistry frontendRegistry = new MockLaunchOracleFrontendRegistry();
         frontendRegistry.setEligible(address(this), true);
@@ -1343,10 +1389,9 @@ contract LaunchDistributionPoolTest is Test {
         );
         assertEq(pool.pendingVerifiedAnchorReservationCount(anchorId, alice), 1);
 
-        _banIdentity(RaterRegistry.HumanCredentialProvider.SeededHuman, seedAnchor);
-
         IClusterPayoutOracle.PayoutWeight memory payout =
             _launchPayoutWeight(1, commitKey, alice, 10_000, keccak256("banned"));
+        _banIdentity(RaterRegistry.HumanCredentialProvider.SeededHuman, seedAnchor);
         _proposeAndFinalizeLaunchPayoutSnapshot(oracle, 1, payout, keccak256("epoch-artifact"));
 
         assertEq(pool.finalizeEarnedRaterRewardCredit(1, 1, commitKey, payout, new bytes32[](0)), 0);
@@ -2972,7 +3017,7 @@ contract LaunchDistributionPoolTest is Test {
     }
 
     function _banIdentity(RaterRegistry.HumanCredentialProvider provider, bytes32 nullifier) internal {
-        MockLaunchConfidentialityNexus nexus = new MockLaunchConfidentialityNexus();
+        MockLaunchConfidentialityNexus nexus = new MockLaunchConfidentialityNexus(address(registry));
         nexus.setNexus(uint8(provider), nullifier, true);
         registry.setConfidentialityEscrow(address(nexus));
         registry.banIdentity(

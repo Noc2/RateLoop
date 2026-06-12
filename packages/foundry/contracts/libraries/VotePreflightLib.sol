@@ -83,6 +83,20 @@ library VotePreflightLib {
         _validateConfidentialityGate(identityRegistry, confidentialityEscrow, contentId, resolved);
     }
 
+    function validateRoundOpenerRecordNexus(
+        IRaterIdentityRegistry identityRegistry,
+        ContentRegistry registry,
+        address opener,
+        uint256 contentId,
+        address confidentialityEscrow
+    ) external {
+        IRaterIdentityRegistry.ResolvedRater memory resolved = _resolveUnbannedRater(identityRegistry, opener);
+        _validateContentAndNotSubmitter(registry, opener, contentId, resolved);
+        if (_validateConfidentialityGate(identityRegistry, confidentialityEscrow, contentId, resolved)) {
+            IConfidentialityEscrow(confidentialityEscrow).recordConfidentialityNexus(contentId, resolved.holder);
+        }
+    }
+
     function validateConfidentialityGate(
         IRaterIdentityRegistry identityRegistry,
         address confidentialityEscrow,

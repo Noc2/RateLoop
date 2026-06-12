@@ -5,6 +5,7 @@ import { Test } from "forge-std/Test.sol";
 import { IAccessControl } from "@openzeppelin/contracts/access/IAccessControl.sol";
 import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import { RaterRegistry } from "../contracts/RaterRegistry.sol";
+import { IConfidentialityEscrow } from "../contracts/interfaces/IConfidentialityEscrow.sol";
 import { IRaterIdentityRegistry } from "../contracts/interfaces/IRaterIdentityRegistry.sol";
 import { LaunchRaterRewardLib } from "../contracts/libraries/LaunchRaterRewardLib.sol";
 import { MockWorldIDVerifier } from "../contracts/mocks/MockWorldIDVerifier.sol";
@@ -28,8 +29,25 @@ contract LaunchRaterRewardLibHarness {
     }
 }
 
+contract MockConfidentialityProtocolConfig {
+    address public raterRegistry;
+    address public confidentialityEscrow;
+
+    constructor(address raterRegistry_, address confidentialityEscrow_) {
+        raterRegistry = raterRegistry_;
+        confidentialityEscrow = confidentialityEscrow_;
+    }
+}
+
 contract MockConfidentialityNexus {
     mapping(uint8 => mapping(bytes32 => bool)) internal nexus;
+    address internal immutable registry;
+    address internal immutable protocolConfig;
+
+    constructor(address registry_) {
+        registry = registry_;
+        protocolConfig = address(new MockConfidentialityProtocolConfig(registry_, address(this)));
+    }
 
     function setNexus(uint8 provider, bytes32 nullifierHash, bool value) external {
         nexus[provider][nullifierHash] = value;
@@ -37,6 +55,22 @@ contract MockConfidentialityNexus {
 
     function hasConfidentialityNexus(uint8 provider, bytes32 nullifierHash) external view returns (bool) {
         return nexus[provider][nullifierHash];
+    }
+
+    function confidentialityEscrowConfigShape() external view returns (address registry_, address protocolConfig_) {
+        return (registry, protocolConfig);
+    }
+
+    function confidentialityConfig(uint256)
+        external
+        pure
+        returns (IConfidentialityEscrow.ConfidentialityConfig memory config)
+    {
+        return config;
+    }
+
+    function hasActiveBond(uint256, bytes32) external pure returns (bool) {
+        return false;
     }
 }
 
@@ -117,8 +151,8 @@ contract RaterRegistryTest is Test {
     }
 
     function test_SetConfidentialityEscrowRejectsRotationOrUnsetAfterConfigured() public {
-        MockConfidentialityNexus nexus = new MockConfidentialityNexus();
-        MockConfidentialityNexus replacementNexus = new MockConfidentialityNexus();
+        MockConfidentialityNexus nexus = new MockConfidentialityNexus(address(registry));
+        MockConfidentialityNexus replacementNexus = new MockConfidentialityNexus(address(registry));
 
         vm.prank(admin);
         registry.setConfidentialityEscrow(address(nexus));
@@ -766,7 +800,7 @@ contract RaterRegistryTest is Test {
 
     function test_LaunchRewardAnchorRejectsRotatedAddressBan() public {
         LaunchRaterRewardLibHarness launchHarness = new LaunchRaterRewardLibHarness();
-        MockConfidentialityNexus nexus = new MockConfidentialityNexus();
+        MockConfidentialityNexus nexus = new MockConfidentialityNexus(address(registry));
         nexus.setNexus(uint8(RaterRegistry.HumanCredentialProvider.SeededHuman), SEEDED_ANCHOR_ID, true);
 
         vm.prank(admin);
@@ -1328,7 +1362,7 @@ contract RaterRegistryTest is Test {
     }
 
     function test_UnbanClearsStaleAddressBanAfterNullifierRecycle() public {
-        MockConfidentialityNexus nexus = new MockConfidentialityNexus();
+        MockConfidentialityNexus nexus = new MockConfidentialityNexus(address(registry));
         nexus.setNexus(uint8(RaterRegistry.HumanCredentialProvider.SeededHuman), SEEDED_ANCHOR_ID, true);
 
         vm.prank(admin);
@@ -1381,7 +1415,7 @@ contract RaterRegistryTest is Test {
     }
 
     function test_BannedSeededIdentityStaysBannedAfterWorldIdRotation() public {
-        MockConfidentialityNexus nexus = new MockConfidentialityNexus();
+        MockConfidentialityNexus nexus = new MockConfidentialityNexus(address(registry));
         nexus.setNexus(uint8(RaterRegistry.HumanCredentialProvider.SeededHuman), SEEDED_ANCHOR_ID, true);
 
         vm.prank(admin);
@@ -1426,7 +1460,7 @@ contract RaterRegistryTest is Test {
     }
 
     function test_BanAfterCredentialRotationBansCurrentWorldIdIdentity() public {
-        MockConfidentialityNexus nexus = new MockConfidentialityNexus();
+        MockConfidentialityNexus nexus = new MockConfidentialityNexus(address(registry));
         nexus.setNexus(uint8(RaterRegistry.HumanCredentialProvider.SeededHuman), SEEDED_ANCHOR_ID, true);
 
         vm.prank(admin);
@@ -1468,7 +1502,7 @@ contract RaterRegistryTest is Test {
     }
 
     function test_UnbanningLaterCredentialKeepsEarlierDerivedAddressBan() public {
-        MockConfidentialityNexus nexus = new MockConfidentialityNexus();
+        MockConfidentialityNexus nexus = new MockConfidentialityNexus(address(registry));
         nexus.setNexus(uint8(RaterRegistry.HumanCredentialProvider.SeededHuman), SEEDED_ANCHOR_ID, true);
         nexus.setNexus(uint8(RaterRegistry.HumanCredentialProvider.WorldIdV4), NULLIFIER_HASH, true);
 
@@ -1733,7 +1767,7 @@ contract RaterRegistryTest is Test {
     }
 
     function _banRevokedSeededAddress(address account, bytes32 nullifierHash) internal {
-        MockConfidentialityNexus nexus = new MockConfidentialityNexus();
+        MockConfidentialityNexus nexus = new MockConfidentialityNexus(address(registry));
         nexus.setNexus(uint8(RaterRegistry.HumanCredentialProvider.SeededHuman), nullifierHash, true);
 
         vm.prank(admin);
