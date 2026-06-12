@@ -247,6 +247,35 @@ test.describe("Next.js API routes", () => {
     expect(otherWalletRes.status).toBe(401);
   });
 
+  test("email verification route redirects invalid tokens to notification settings", async () => {
+    const res = await fetch(`${BASE_URL}/api/notifications/email/verify?token=not-a-real-token`, {
+      redirect: "manual",
+    });
+    expect(res.status).toBe(307);
+    const location = res.headers.get("location");
+    expect(location).toContain("/settings");
+    expect(location).toContain("tab=notifications");
+    expect(location).toContain("email=invalid");
+  });
+
+  test("email unsubscribe route redirects invalid tokens to notification settings", async () => {
+    const res = await fetch(`${BASE_URL}/api/notifications/email/unsubscribe?token=not-a-real-token`, {
+      redirect: "manual",
+    });
+    expect(res.status).toBe(307);
+    const location = res.headers.get("location");
+    expect(location).toContain("/settings");
+    expect(location).toContain("tab=notifications");
+    expect(location).toContain("email=invalid_unsubscribe");
+  });
+
+  test("email delivery route requires bearer authorization", async () => {
+    const res = await fetch(`${BASE_URL}/api/notifications/email/deliver`, { method: "POST" });
+    expect([401, 503]).toContain(res.status);
+    const body = (await res.json()) as { error?: string };
+    expect(["Unauthorized", "Notification delivery is not configured"]).toContain(body.error);
+  });
+
   test("notification preference read session does not authorize watchlist reads", async () => {
     const { privateKeyToAccount } = await import("viem/accounts");
     const account = privateKeyToAccount(ANVIL_ACCOUNTS.account2.privateKey as `0x${string}`);
