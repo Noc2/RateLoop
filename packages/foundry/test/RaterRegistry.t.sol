@@ -74,6 +74,14 @@ contract MockConfidentialityNexus {
     }
 }
 
+contract MockBrokenConfidentialityEscrow { }
+
+contract MockWrongRegistryConfidentialityNexus {
+    function confidentialityEscrowConfigShape() external pure returns (address registry_, address protocolConfig_) {
+        return (address(0xBEEF), address(0xCAFE));
+    }
+}
+
 contract RaterRegistryTest is Test {
     RaterRegistry internal registry;
     MockWorldIDVerifier internal worldIdRouter;
@@ -146,8 +154,18 @@ contract RaterRegistryTest is Test {
         registry.setConfidentialityEscrow(address(0));
 
         vm.prank(admin);
-        vm.expectRevert(RaterRegistry.InvalidAddress.selector);
+        vm.expectRevert();
         registry.setConfidentialityEscrow(address(0xC0FFEE));
+
+        MockBrokenConfidentialityEscrow brokenEscrow = new MockBrokenConfidentialityEscrow();
+        vm.prank(admin);
+        vm.expectRevert();
+        registry.setConfidentialityEscrow(address(brokenEscrow));
+
+        MockWrongRegistryConfidentialityNexus wrongRegistryNexus = new MockWrongRegistryConfidentialityNexus();
+        vm.prank(admin);
+        vm.expectRevert(RaterRegistry.InvalidAddress.selector);
+        registry.setConfidentialityEscrow(address(wrongRegistryNexus));
     }
 
     function test_SetConfidentialityEscrowRejectsRotationOrUnsetAfterConfigured() public {

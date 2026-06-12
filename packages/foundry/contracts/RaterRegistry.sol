@@ -612,8 +612,9 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
 
     function setConfidentialityEscrow(address newEscrow) external onlyRole(ADMIN_ROLE) {
         address oldEscrow = confidentialityEscrow;
-        if (oldEscrow != address(0) && newEscrow != oldEscrow) revert InvalidAddress();
-        if (newEscrow == address(0) || newEscrow.code.length == 0) revert InvalidAddress();
+        if (newEscrow == address(0) || (oldEscrow != address(0) && newEscrow != oldEscrow)) revert InvalidAddress();
+        (address registry_,) = IConfidentialityEscrow(newEscrow).confidentialityEscrowConfigShape();
+        if (registry_ != address(this)) revert InvalidAddress();
         confidentialityEscrow = newEscrow;
     }
 
@@ -640,7 +641,7 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         bytes32 credentialKey = credentialIdentityKey(provider, nullifierHash);
         _writeIdentityBan(credentialKey, expiresAt, evidenceHash);
         _writeIdentityBan(launchHumanIdentityKey(provider, nullifierHash), expiresAt, evidenceHash);
-        HumanCredentialProvider slotProvider = _humanNullifierSlotProvider(provider);
+        HumanCredentialProvider slotProvider = provider;
         address owner = _humanNullifierOwnerByProvider[slotProvider][nullifierHash];
         if (owner == address(0)) {
             owner = _lastRevokedOwnerByProvider[slotProvider][nullifierHash];
@@ -657,7 +658,7 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         bytes32 credentialKey = credentialIdentityKey(provider, nullifierHash);
         delete _identityBans[credentialKey];
         delete _identityBans[launchHumanIdentityKey(provider, nullifierHash)];
-        HumanCredentialProvider slotProvider = _humanNullifierSlotProvider(provider);
+        HumanCredentialProvider slotProvider = provider;
         address owner = _humanNullifierOwnerByProvider[slotProvider][nullifierHash];
         _clearDerivedIdentityBan(owner, credentialKey);
         address lastHolder = _lastRevokedOwnerByProvider[slotProvider][nullifierHash];
@@ -931,9 +932,8 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
             ) {
                 revert InvalidCredential();
             }
-            address currentHumanOwner = _humanNullifierOwnerByProvider[
-                _humanNullifierSlotProvider(HumanCredentialProvider.WorldIdV4)
-            ][storedNullifier];
+            address currentHumanOwner =
+                _humanNullifierOwnerByProvider[HumanCredentialProvider.WorldIdV4][storedNullifier];
             if (currentHumanOwner != address(0) && currentHumanOwner != msg.sender) revert NullifierAlreadyAssigned();
         } else {
             WorldCredential storage previousCredential = _worldCredentials[msg.sender][kind];
@@ -1167,7 +1167,7 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
     {
         if (nullifierHash == bytes32(0)) revert InvalidCredential();
         if (provider == HumanCredentialProvider.None) revert InvalidCredential();
-        HumanCredentialProvider slotProvider = _humanNullifierSlotProvider(provider);
+        HumanCredentialProvider slotProvider = provider;
         _revokedHumanNullifierByProvider[slotProvider][nullifierHash] = false;
         address prevOwner = _lastRevokedOwnerByProvider[slotProvider][nullifierHash];
         emit HumanNullifierRevocationCleared(nullifierHash, provider, prevOwner);
@@ -1374,28 +1374,28 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
 
     function credentialStatusBits(address rater) external view returns (uint8 activeMask, uint8 freshMask) {
         if (hasActiveCredentialKind(rater, WORLD_CREDENTIAL_SELFIE)) {
-            activeMask |= _credentialKindBit(WORLD_CREDENTIAL_SELFIE);
+            activeMask |= uint8(2);
         }
         if (hasActiveCredentialKind(rater, WORLD_CREDENTIAL_PASSPORT)) {
-            activeMask |= _credentialKindBit(WORLD_CREDENTIAL_PASSPORT);
+            activeMask |= uint8(4);
         }
         if (hasActiveCredentialKind(rater, WORLD_CREDENTIAL_PROOF_OF_HUMAN)) {
-            activeMask |= _credentialKindBit(WORLD_CREDENTIAL_PROOF_OF_HUMAN);
+            activeMask |= uint8(8);
         }
         if (hasRecentCredentialRecheck(rater, WORLD_CREDENTIAL_SELFIE)) {
-            freshMask |= _credentialKindBit(WORLD_CREDENTIAL_SELFIE);
+            freshMask |= uint8(2);
         }
         if (hasRecentCredentialRecheck(rater, WORLD_CREDENTIAL_PASSPORT)) {
-            freshMask |= _credentialKindBit(WORLD_CREDENTIAL_PASSPORT);
+            freshMask |= uint8(4);
         }
         if (hasRecentCredentialRecheck(rater, WORLD_CREDENTIAL_PROOF_OF_HUMAN)) {
-            freshMask |= _credentialKindBit(WORLD_CREDENTIAL_PROOF_OF_HUMAN);
+            freshMask |= uint8(8);
         }
     }
 
     function _isCredentialRevoked(HumanCredential storage credential) private view returns (bool) {
         if (credential.revoked) return true;
-        HumanCredentialProvider slotProvider = _humanNullifierSlotProvider(credential.provider);
+        HumanCredentialProvider slotProvider = credential.provider;
         return _revokedHumanNullifierByProvider[slotProvider][credential.nullifierHash];
     }
 
@@ -1454,18 +1454,10 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         _writeDerivedIdentityBan(addressIdentityKey(holder), sourceKey);
     }
 
-    function _humanNullifierSlotProvider(HumanCredentialProvider provider)
-        private
-        pure
-        returns (HumanCredentialProvider)
-    {
-        return provider;
-    }
-
     function _revokeHumanNullifier(HumanCredentialProvider provider, bytes32 nullifierHash, address revokedRater)
         private
     {
-        HumanCredentialProvider slotProvider = _humanNullifierSlotProvider(provider);
+        HumanCredentialProvider slotProvider = provider;
         address slotOwner = _humanNullifierOwnerByProvider[slotProvider][nullifierHash];
         address lastRevokedOwner = slotOwner == address(0) ? revokedRater : slotOwner;
         if (slotOwner == revokedRater) {
@@ -1496,7 +1488,7 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         if (expiresAt <= block.timestamp) revert InvalidCredential();
         if (provider == HumanCredentialProvider.None) revert InvalidCredential();
         if (nullifierHash == bytes32(0) || scope == bytes32(0)) revert InvalidCredential();
-        HumanCredentialProvider slotProvider = _humanNullifierSlotProvider(provider);
+        HumanCredentialProvider slotProvider = provider;
         if (_revokedHumanNullifierByProvider[slotProvider][nullifierHash]) revert InvalidCredential();
 
         HumanCredential storage previous = _humanCredentials[rater];
@@ -1515,10 +1507,9 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         // by design, not an oversight.
         if (
             previous.nullifierHash != bytes32(0)
-                && (previous.nullifierHash != nullifierHash
-                    || _humanNullifierSlotProvider(previous.provider) != slotProvider)
+                && (previous.nullifierHash != nullifierHash || previous.provider != slotProvider)
         ) {
-            HumanCredentialProvider previousProvider = _humanNullifierSlotProvider(previous.provider);
+            HumanCredentialProvider previousProvider = previous.provider;
             bool previousOwnerSlotCleared;
             if (
                 previousProvider != HumanCredentialProvider.None
@@ -1620,11 +1611,6 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         return
             kind == WORLD_CREDENTIAL_SELFIE || kind == WORLD_CREDENTIAL_PASSPORT
                 || kind == WORLD_CREDENTIAL_PROOF_OF_HUMAN;
-    }
-
-    function _credentialKindBit(uint8 kind) private pure returns (uint8) {
-        if (!_isSupportedWorldCredentialKind(kind)) revert UnsupportedCredentialKind();
-        return uint8(1 << kind);
     }
 
     function _worldCredentialScope(uint64 rpId, uint256 action) private pure returns (bytes32) {
