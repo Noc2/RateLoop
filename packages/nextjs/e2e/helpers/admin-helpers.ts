@@ -9,7 +9,11 @@
  * the call with viem and send via eth_sendTransaction.
  */
 import { parseRound } from "../../lib/contracts/roundVotingEngine";
-import { buildQuestionSubmissionRevealCommitment } from "../../lib/questionSubmissionCommitment";
+import {
+  buildQuestionConfidentialityHash,
+  buildQuestionSubmissionKey,
+  buildQuestionSubmissionRevealCommitment,
+} from "../../lib/questionSubmissionCommitment";
 import { ANVIL_ACCOUNTS } from "./anvil-accounts";
 import { runCommitAttempts } from "./commit-attempts";
 import { type RpcSendResult, isRetryableDirectCommitSendResult } from "./direct-commit-retry";
@@ -80,6 +84,20 @@ const ANVIL_PRIVATE_KEYS_BY_ADDRESS = new Map(
 type SubmissionMedia = { imageUrls: string[]; videoUrl: string };
 type SubmissionMediaInput = { imageUrls?: readonly string[]; videoUrl?: string };
 type SubmissionRoundConfig = { epochDuration: number; maxDuration: number; minVoters: number; maxVoters: number };
+export type SubmissionConfidentialityConfig = {
+  gated: boolean;
+  bondAsset: number;
+  bondAmount: bigint;
+  flags: number;
+};
+type SubmissionDetailsInput = {
+  detailsHash?: `0x${string}`;
+  detailsUrl?: string;
+};
+type SubmissionContentOptions = {
+  confidentiality?: SubmissionConfidentialityConfig;
+  details?: SubmissionDetailsInput;
+};
 type SubmissionRewardTerms = {
   asset: number;
   amount: bigint;
@@ -91,7 +109,7 @@ type SubmissionRewardTerms = {
   bountyEligibility: number;
 };
 const MAX_SUBMISSION_IMAGE_URLS = 4;
-const DEFAULT_SUBMISSION_REWARD_ASSET_LREP = 0;
+export const DEFAULT_SUBMISSION_REWARD_ASSET_LREP = 0;
 export const SUBMISSION_REWARD_ASSET_USDC = 1;
 const DEFAULT_SUBMISSION_REWARD_AMOUNT = 1_000_000n;
 const DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS = 1n;
@@ -165,10 +183,19 @@ function assertSupportedSubmissionMedia(media: SubmissionMedia): SubmissionMedia
   return media;
 }
 
-function assertSupportedContextUrl(url: string, media: SubmissionMedia) {
+function resolveSubmissionDetails(details?: SubmissionDetailsInput) {
+  return {
+    detailsHash: details?.detailsHash ?? ZERO_BYTES32,
+    detailsUrl: details?.detailsUrl ?? "",
+  };
+}
+
+function assertSupportedContextUrl(url: string, media: SubmissionMedia, details: Required<SubmissionDetailsInput>) {
   const trimmedUrl = url.trim();
   if (!trimmedUrl) {
-    if (media.imageUrls.length > 0 || media.videoUrl.trim()) return;
+    if (media.imageUrls.length > 0 || media.videoUrl.trim() || details.detailsHash !== ZERO_BYTES32 || details.detailsUrl) {
+      return;
+    }
     throw new Error("E2E submissions require a context URL unless approved image URLs or a video URL are attached.");
   }
   if (trimmedUrl !== url) {
@@ -280,38 +307,27 @@ async function buildSubmissionReservation(
   media: SubmissionMedia,
   rewardTerms: SubmissionRewardTerms,
   roundConfig: SubmissionRoundConfig = DEFAULT_SUBMISSION_ROUND_CONFIG,
+  contentOptions: SubmissionContentOptions = {},
 ): Promise<{ revealCommitment: `0x${string}`; salt: `0x${string}` } | null> {
-  const { encodeAbiParameters, keccak256, stringToHex, toBytes } = await import("viem");
-
-  const detailsHash = `0x${"0".repeat(64)}` as const;
-  const submissionKey = keccak256(
-    encodeAbiParameters(
-      [
-        { type: "bytes32" },
-        { type: "uint256" },
-        { type: "bytes32" },
-        { type: "bytes32" },
-        { type: "string" },
-        { type: "string" },
-        { type: "string" },
-      ],
-      [
-        keccak256(toBytes("rateloop-question-context-v5")),
-        categoryId,
-        keccak256(encodeAbiParameters([{ type: "string[]" }, { type: "string" }], [media.imageUrls, media.videoUrl])),
-        keccak256(encodeAbiParameters([{ type: "string" }, { type: "bytes32" }], ["", detailsHash])),
-        url,
-        title,
-        tags,
-      ],
-    ),
-  );
+  const { keccak256, stringToHex } = await import("viem");
+  const details = resolveSubmissionDetails(contentOptions.details);
+  const confidentiality = contentOptions.confidentiality ?? PUBLIC_CONFIDENTIALITY_CONFIG;
+  const submissionKey = buildQuestionSubmissionKey({
+    categoryId,
+    contextUrl: url,
+    detailsHash: details.detailsHash,
+    detailsUrl: details.detailsUrl,
+    imageUrls: media.imageUrls,
+    tags,
+    title,
+    videoUrl: media.videoUrl,
+  });
 
   const salt = keccak256(stringToHex(`${fromAddress}:${categoryId}:${JSON.stringify(media)}:${title}:${Date.now()}`));
   const revealCommitment = buildQuestionSubmissionRevealCommitment({
     categoryId,
-    detailsHash,
-    detailsUrl: "",
+    detailsHash: details.detailsHash,
+    detailsUrl: details.detailsUrl,
     imageUrls: media.imageUrls,
     questionMetadataHash: DEFAULT_QUESTION_METADATA_HASH,
     rewardAmount: rewardTerms.amount,
@@ -323,6 +339,7 @@ async function buildSubmissionReservation(
     bountyWindowSeconds: rewardTerms.bountyWindowSeconds,
     feedbackWindowSeconds: rewardTerms.feedbackWindowSeconds,
     bountyEligibility: rewardTerms.bountyEligibility,
+    confidentialityHash: buildQuestionConfidentialityHash(confidentiality),
     roundConfig,
     salt,
     submissionKey,
@@ -910,11 +927,14 @@ export async function submitContentDirect(
   roundConfig?: SubmissionRoundConfig,
   rewardAsset: number = DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
   rewardTokenAddress?: string,
+  contentOptions: SubmissionContentOptions = {},
 ): Promise<boolean> {
   const { encodeFunctionData } = await import("viem");
   const resolvedCategoryId = BigInt(categoryId);
   const media = toSubmissionMedia(url, mediaInput);
-  assertSupportedContextUrl(url, media);
+  const details = resolveSubmissionDetails(contentOptions.details);
+  const confidentiality = contentOptions.confidentiality ?? PUBLIC_CONFIDENTIALITY_CONFIG;
+  assertSupportedContextUrl(url, media, details);
   const resolvedRoundConfig = await resolveSubmissionRoundConfig(contractAddress, roundConfig);
   const rewardTerms: SubmissionRewardTerms = {
     asset: rewardAsset,
@@ -937,6 +957,7 @@ export async function submitContentDirect(
     media,
     rewardTerms,
     resolvedRoundConfig,
+    { ...contentOptions, details, confidentiality },
   );
   if (!reservation) return false;
 
@@ -1048,8 +1069,8 @@ export async function submitContentDirect(
       tags,
       resolvedCategoryId,
       {
-        detailsHash: `0x${"0".repeat(64)}`,
-        detailsUrl: "",
+        detailsHash: details.detailsHash,
+        detailsUrl: details.detailsUrl,
       },
       reservation.salt,
       rewardTerms,
@@ -1058,7 +1079,7 @@ export async function submitContentDirect(
         questionMetadataHash: DEFAULT_QUESTION_METADATA_HASH,
         resultSpecHash: DEFAULT_RESULT_SPEC_HASH,
       },
-      PUBLIC_CONFIDENTIALITY_CONFIG,
+      confidentiality,
     ],
   });
   return sendTx(fromAddress, contractAddress, data);

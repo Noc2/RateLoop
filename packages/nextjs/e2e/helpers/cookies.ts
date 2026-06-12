@@ -2,16 +2,25 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function getSetCookieValues(headers: Headers): string[] {
+type HeaderSource = Headers | Record<string, string>;
+
+function getHeaderValue(headers: HeaderSource, name: string): string | null {
+  if (headers instanceof Headers) {
+    return headers.get(name);
+  }
+  return headers[name] ?? headers[name.toLowerCase()] ?? headers[name.toUpperCase()] ?? null;
+}
+
+function getSetCookieValues(headers: HeaderSource): string[] {
   const getSetCookie = (headers as Headers & { getSetCookie?: () => string[] }).getSetCookie;
   const values = typeof getSetCookie === "function" ? getSetCookie.call(headers) : [];
   if (values.length > 0) return values;
 
-  const combined = headers.get("set-cookie");
+  const combined = getHeaderValue(headers, "set-cookie");
   return combined ? [combined] : [];
 }
 
-export function getNamedSetCookie(headers: Headers, cookieName: string): string | undefined {
+export function getNamedSetCookie(headers: HeaderSource, cookieName: string): string | undefined {
   const cookiePattern = new RegExp(`(?:^|,\\s*)${escapeRegExp(cookieName)}=([^;]+)`);
 
   for (const value of getSetCookieValues(headers)) {
