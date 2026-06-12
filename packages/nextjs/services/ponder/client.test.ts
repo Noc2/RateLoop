@@ -1,6 +1,34 @@
 import { fetchPonderJson, invalidatePonderCache, isPonderAvailable, ponderApi, resolvePonderUrl } from "./client";
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
+
+const TEST_PONDER_DEPLOYMENT = resolveProtocolDeploymentScope(31337);
+
+function isPonderPreflightUrl(url: string) {
+  return /\/(?:health|deployment)$/.test(url);
+}
+
+function healthyPonderPreflightResponse(url: string): Response | null {
+  assert.ok(TEST_PONDER_DEPLOYMENT);
+  if (url.endsWith("/health")) {
+    return new Response("ok", { status: 200 });
+  }
+  if (url.endsWith("/deployment")) {
+    return new Response(
+      JSON.stringify({
+        configured: true,
+        chainId: TEST_PONDER_DEPLOYMENT.chainId,
+        contentRegistryAddress: TEST_PONDER_DEPLOYMENT.contentRegistryAddress,
+        feedbackRegistryAddress: TEST_PONDER_DEPLOYMENT.feedbackRegistryAddress,
+        deploymentKey: TEST_PONDER_DEPLOYMENT.deploymentKey,
+      }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
+  }
+
+  return null;
+}
 
 test("resolvePonderUrl uses the local default outside production", () => {
   assert.equal(resolvePonderUrl(undefined, false), "http://localhost:42069");
@@ -306,6 +334,8 @@ test("ponderApi follow helpers target the public follow routes", async () => {
   globalThis.fetch = (async input => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
     requestedUrls.push(url);
+    const preflightResponse = healthyPonderPreflightResponse(url);
+    if (preflightResponse) return preflightResponse;
     return new Response(
       JSON.stringify({
         items: [],
@@ -336,10 +366,12 @@ test("ponderApi follow helpers target the public follow routes", async () => {
     assert.equal(followers.followerCount, 3);
   } finally {
     globalThis.fetch = originalFetch;
+    invalidatePonderCache();
   }
 
-  assert.match(requestedUrls[0] ?? "", /\/follows\/0x1111111111111111111111111111111111111111\?limit=10&offset=5$/);
-  assert.match(requestedUrls[1] ?? "", /\/followers\/0x1111111111111111111111111111111111111111\?limit=10&offset=5$/);
+  const dataUrls = requestedUrls.filter(url => !isPonderPreflightUrl(url));
+  assert.match(dataUrls[0] ?? "", /\/follows\/0x1111111111111111111111111111111111111111\?limit=10&offset=5$/);
+  assert.match(dataUrls[1] ?? "", /\/followers\/0x1111111111111111111111111111111111111111\?limit=10&offset=5$/);
 });
 
 test("ponderApi.getAllFollows paginates the full public follow set", async () => {
@@ -349,6 +381,8 @@ test("ponderApi.getAllFollows paginates the full public follow set", async () =>
   globalThis.fetch = (async input => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
     requestedUrls.push(url);
+    const preflightResponse = healthyPonderPreflightResponse(url);
+    if (preflightResponse) return preflightResponse;
 
     if (url.includes("offset=0")) {
       return new Response(
@@ -396,10 +430,12 @@ test("ponderApi.getAllFollows paginates the full public follow set", async () =>
     assert.equal(follows.offset, 0);
   } finally {
     globalThis.fetch = originalFetch;
+    invalidatePonderCache();
   }
 
-  assert.match(requestedUrls[0] ?? "", /\/follows\/0x1111111111111111111111111111111111111111\?limit=200&offset=0$/);
-  assert.match(requestedUrls[1] ?? "", /\/follows\/0x1111111111111111111111111111111111111111\?limit=200&offset=200$/);
+  const dataUrls = requestedUrls.filter(url => !isPonderPreflightUrl(url));
+  assert.match(dataUrls[0] ?? "", /\/follows\/0x1111111111111111111111111111111111111111\?limit=200&offset=0$/);
+  assert.match(dataUrls[1] ?? "", /\/follows\/0x1111111111111111111111111111111111111111\?limit=200&offset=200$/);
 });
 
 test("ponderApi.getAccuracyLeaderboard forwards includeReputation", async () => {
@@ -408,6 +444,8 @@ test("ponderApi.getAccuracyLeaderboard forwards includeReputation", async () => 
 
   globalThis.fetch = (async input => {
     requestedUrl = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    const preflightResponse = healthyPonderPreflightResponse(requestedUrl);
+    if (preflightResponse) return preflightResponse;
     return new Response(
       JSON.stringify({
         items: [
@@ -451,6 +489,7 @@ test("ponderApi.getAccuracyLeaderboard forwards includeReputation", async () => 
     assert.equal(response.items[0]?.reputation?.followerCount, 3);
   } finally {
     globalThis.fetch = originalFetch;
+    invalidatePonderCache();
   }
 
   assert.match(requestedUrl, /\/accuracy-leaderboard\?/);
@@ -462,8 +501,12 @@ test("ponderApi.getAccuracyLeaderboard forwards includeReputation", async () => 
 test("ponderApi.getProfile exposes social counts from profile detail", async () => {
   const originalFetch = globalThis.fetch;
 
-  globalThis.fetch = (async () =>
-    new Response(
+  globalThis.fetch = (async input => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    const preflightResponse = healthyPonderPreflightResponse(url);
+    if (preflightResponse) return preflightResponse;
+
+    return new Response(
       JSON.stringify({
         profile: null,
         summary: {
@@ -483,7 +526,8 @@ test("ponderApi.getProfile exposes social counts from profile detail", async () 
         status: 200,
         headers: { "content-type": "application/json" },
       },
-    )) as typeof fetch;
+    );
+  }) as typeof fetch;
 
   try {
     const response = await ponderApi.getProfile("0x1111111111111111111111111111111111111111");
@@ -493,14 +537,19 @@ test("ponderApi.getProfile exposes social counts from profile detail", async () 
     });
   } finally {
     globalThis.fetch = originalFetch;
+    invalidatePonderCache();
   }
 });
 
 test("ponderApi.getRaterParticipationStatus exposes expanded reputation blocks", async () => {
   const originalFetch = globalThis.fetch;
 
-  globalThis.fetch = (async () =>
-    new Response(
+  globalThis.fetch = (async input => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    const preflightResponse = healthyPonderPreflightResponse(url);
+    if (preflightResponse) return preflightResponse;
+
+    return new Response(
       JSON.stringify({
         asOf: {
           chainTimestamp: "1000",
@@ -558,7 +607,8 @@ test("ponderApi.getRaterParticipationStatus exposes expanded reputation blocks",
         status: 200,
         headers: { "content-type": "application/json" },
       },
-    )) as typeof fetch;
+    );
+  }) as typeof fetch;
 
   try {
     const response = await ponderApi.getRaterParticipationStatus("0x1111111111111111111111111111111111111111");
@@ -572,5 +622,6 @@ test("ponderApi.getRaterParticipationStatus exposes expanded reputation blocks",
     assert.equal(response.participationPolicy.baseRewardWeightBps, 10000);
   } finally {
     globalThis.fetch = originalFetch;
+    invalidatePonderCache();
   }
 });

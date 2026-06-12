@@ -1,17 +1,14 @@
 import { NextResponse } from "next/server";
-import { isPonderAvailable } from "~~/services/ponder/client";
+import { getPonderAvailabilityStatus } from "~~/services/ponder/client";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const available = await isPonderAvailable();
+  const status = await getPonderAvailabilityStatus();
 
-  return NextResponse.json(
-    { available },
-    {
-      headers: {
-        "Cache-Control": "no-store",
-      },
+  return NextResponse.json(status, {
+    headers: {
+      "Cache-Control": "no-store",
     },
-  );
+  });
 }

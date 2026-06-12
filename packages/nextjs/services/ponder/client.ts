@@ -1,5 +1,7 @@
 import type { RoundState } from "@rateloop/contracts/protocol";
 import type { ProfileSelfReportAudienceContext, TargetAudience } from "@rateloop/node-utils/profileSelfReport";
+import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
+import scaffoldConfig from "~~/scaffold.config";
 import { resolvePonderUrlValue } from "~~/utils/env/ponderUrl";
 
 const isProduction = process.env.NODE_ENV === "production";
@@ -36,9 +38,27 @@ function getRequiredPonderUrl(): string {
   return url;
 }
 
-let cachedAvailability: boolean | null = null;
+export interface PonderDeploymentMetadata {
+  configured?: boolean;
+  network?: string | null;
+  chainId?: number;
+  contentRegistryAddress?: string;
+  feedbackRegistryAddress?: string;
+  deploymentKey?: string;
+  databaseSchema?: string | null;
+}
+
+export interface PonderAvailabilityStatus {
+  available: boolean;
+  reason?: "not_configured" | "health_check_failed" | "deployment_unconfigured" | "deployment_mismatch";
+  expectedDeploymentKey?: string;
+  ponderDeploymentKey?: string;
+  deployment?: PonderDeploymentMetadata | null;
+}
+
+let cachedAvailabilityStatus: PonderAvailabilityStatus | null = null;
 let cacheExpiry = 0;
-let availabilityPromise: Promise<boolean> | null = null;
+let availabilityPromise: Promise<PonderAvailabilityStatus> | null = null;
 
 const HEALTH_CHECK_TIMEOUT = 2000;
 const PONDER_REQUEST_TIMEOUT = 10_000;
@@ -234,14 +254,23 @@ export async function fetchPonderJson<T>(
   return request;
 }
 
-export async function isPonderAvailable(): Promise<boolean> {
+function getExpectedPonderDeploymentScope() {
+  const chainId = scaffoldConfig.targetNetworks[0]?.id;
+  return typeof chainId === "number" ? resolveProtocolDeploymentScope(chainId) : null;
+}
+
+function isPonderDeploymentMetadata(value: unknown): value is PonderDeploymentMetadata {
+  return value !== null && typeof value === "object";
+}
+
+export async function getPonderAvailabilityStatus(): Promise<PonderAvailabilityStatus> {
   const ponderUrl = getConfiguredPonderUrl();
   if (!ponderUrl) {
-    return false;
+    return { available: false, reason: "not_configured" };
   }
 
-  if (cachedAvailability !== null && Date.now() < cacheExpiry) {
-    return cachedAvailability;
+  if (cachedAvailabilityStatus !== null && Date.now() < cacheExpiry) {
+    return cachedAvailabilityStatus;
   }
 
   if (availabilityPromise) {
@@ -249,7 +278,7 @@ export async function isPonderAvailable(): Promise<boolean> {
   }
 
   availabilityPromise = (async () => {
-    cachedAvailability =
+    cachedAvailabilityStatus =
       typeof window === "undefined"
         ? await checkPonderAvailabilityDirect(ponderUrl)
         : await checkPonderAvailabilityThroughApi();
@@ -257,45 +286,107 @@ export async function isPonderAvailable(): Promise<boolean> {
     cacheExpiry = Date.now() + CACHE_DURATION;
     availabilityPromise = null;
 
-    return cachedAvailability;
+    return cachedAvailabilityStatus;
   })();
 
   return availabilityPromise;
 }
 
-async function checkPonderAvailabilityDirect(ponderUrl: string): Promise<boolean> {
+export async function isPonderAvailable(): Promise<boolean> {
+  return (await getPonderAvailabilityStatus()).available;
+}
+
+async function checkPonderAvailabilityDirect(ponderUrl: string): Promise<PonderAvailabilityStatus> {
   try {
-    const res = await fetch(`${ponderUrl}/health`, {
+    const healthResponse = await fetch(`${ponderUrl}/health`, {
       signal: AbortSignal.timeout(HEALTH_CHECK_TIMEOUT),
     });
-    return res.ok;
+    if (!healthResponse.ok) {
+      return { available: false, reason: "health_check_failed" };
+    }
+
+    const expectedDeployment = getExpectedPonderDeploymentScope();
+    if (!expectedDeployment) {
+      return { available: false, reason: "deployment_unconfigured" };
+    }
+
+    const deploymentResponse = await fetch(`${ponderUrl}/deployment`, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(HEALTH_CHECK_TIMEOUT),
+    });
+    if (!deploymentResponse.ok) {
+      return {
+        available: false,
+        reason: "deployment_unconfigured",
+        expectedDeploymentKey: expectedDeployment.deploymentKey,
+      };
+    }
+
+    const deployment = await deploymentResponse.json().catch(() => null);
+    if (!isPonderDeploymentMetadata(deployment) || typeof deployment.deploymentKey !== "string") {
+      return {
+        available: false,
+        reason: "deployment_unconfigured",
+        expectedDeploymentKey: expectedDeployment.deploymentKey,
+        deployment: isPonderDeploymentMetadata(deployment) ? deployment : null,
+      };
+    }
+
+    const ponderDeploymentKey = deployment.deploymentKey.toLowerCase();
+    if (ponderDeploymentKey !== expectedDeployment.deploymentKey) {
+      return {
+        available: false,
+        reason: "deployment_mismatch",
+        expectedDeploymentKey: expectedDeployment.deploymentKey,
+        ponderDeploymentKey,
+        deployment,
+      };
+    }
+
+    return {
+      available: true,
+      expectedDeploymentKey: expectedDeployment.deploymentKey,
+      ponderDeploymentKey,
+      deployment,
+    };
   } catch {
-    return false;
+    return { available: false, reason: "health_check_failed" };
   }
 }
 
-async function checkPonderAvailabilityThroughApi(): Promise<boolean> {
+async function checkPonderAvailabilityThroughApi(): Promise<PonderAvailabilityStatus> {
   try {
     const res = await fetch("/api/ponder/availability", {
       cache: "no-store",
       signal: AbortSignal.timeout(HEALTH_CHECK_TIMEOUT),
     });
-    if (!res.ok) return false;
+    if (!res.ok) return { available: false, reason: "health_check_failed" };
 
-    const data = (await res.json()) as { available?: unknown };
-    return data.available === true;
+    const data = (await res.json()) as PonderAvailabilityStatus;
+    return {
+      ...data,
+      available: data.available === true,
+    };
   } catch {
-    return false;
+    return { available: false, reason: "health_check_failed" };
   }
 }
 
 export function invalidatePonderCache() {
-  cachedAvailability = null;
+  cachedAvailabilityStatus = null;
   cacheExpiry = 0;
   availabilityPromise = null;
 }
 
+async function assertPonderAvailableForDataRead() {
+  const status = await getPonderAvailabilityStatus();
+  if (!status.available) {
+    throw new Error(`Ponder is unavailable for this deployment: ${status.reason ?? "unknown"}`);
+  }
+}
+
 export async function ponderGet<T>(path: string, params?: Record<string, string | undefined>): Promise<T> {
+  await assertPonderAvailableForDataRead();
   const url = new URL(`${getRequiredPonderUrl()}${path}`);
   if (params) {
     for (const [key, value] of Object.entries(params)) {
