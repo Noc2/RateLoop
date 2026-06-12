@@ -49,7 +49,7 @@ const clips = [
   },
   {
     name: "vo-02-ask",
-    text: "It turns the idea into one focused question, with a USDC bounty, on RateLoop.",
+    text: "That's where RateLoop comes in: the idea becomes one focused question, backed by a USDC bounty.",
   },
   {
     name: "vo-03-handoff",
