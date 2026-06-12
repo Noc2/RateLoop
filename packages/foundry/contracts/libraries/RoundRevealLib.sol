@@ -22,7 +22,7 @@ library RoundRevealLib {
     uint256 internal constant RBTS_SEED_TIMESTAMP_SHIFT = 64;
     uint256 internal constant RBTS_SEED_ORIGINAL_BLOCK_SHIFT = 112;
     uint256 internal constant RBTS_SEED_BLOCK_MASK = uint256(type(uint64).max);
-    uint256 internal constant RBTS_SEED_EXPIRY_BLOCKS = 256;
+    uint256 internal constant RBTS_SEED_EXPIRY_BLOCKS = 8191;
 
     error RoundNotOpen();
     error NoCommit();
@@ -278,17 +278,6 @@ library RoundRevealLib {
         uint256 roundId
     ) external {
         _captureRbtsSeed(roundRbtsSeedEntropy, contentId, roundId);
-    }
-
-    function isExpiredRbtsSeed(
-        mapping(uint256 => mapping(uint256 => bytes32)) storage roundRbtsSeedEntropy,
-        uint256 contentId,
-        uint256 roundId
-    ) public view returns (bool) {
-        uint256 seedWord = uint256(roundRbtsSeedEntropy[contentId][roundId]);
-        if (seedWord < RBTS_SEED_BLOCK_FLAG) return false;
-        uint256 seedBlock = uint64(seedWord);
-        return block.number > seedBlock + RBTS_SEED_EXPIRY_BLOCKS;
     }
 
     function finalizeRbtsSeed(

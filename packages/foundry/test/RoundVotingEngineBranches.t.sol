@@ -112,6 +112,22 @@ contract RevertingBundleObserver {
     }
 }
 
+contract MockEip2935History {
+    bytes32 public historyHash;
+
+    function setHistoryHash(bytes32 value) external {
+        historyHash = value;
+    }
+
+    fallback() external {
+        bytes32 value = historyHash;
+        assembly ("memory-safe") {
+            mstore(0, value)
+            return(0, 32)
+        }
+    }
+}
+
 // =========================================================================
 // TEST CONTRACT
 // =========================================================================
@@ -119,6 +135,7 @@ contract RevertingBundleObserver {
 contract RoundVotingEngineBranchesTest is VotingTestBase {
     // ContentRegistry.questionBundleRoundObserverByContent storage slot.
     uint256 internal constant QUESTION_BUNDLE_ROUND_OBSERVER_BY_CONTENT_SLOT = 26;
+    address internal constant EIP2935_HISTORY_STORAGE = 0x0000F90827F1C53a10cb7A02335B175320002935;
 
     LoopReputation public lrepToken;
     ContentRegistry public registry;
@@ -165,6 +182,11 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
     function _tlockDrandPeriod() internal pure override returns (uint64) {
         return DEFAULT_DRAND_PERIOD;
+    }
+
+    function _installMockEip2935History(bytes32 historyHash) internal {
+        vm.etch(EIP2935_HISTORY_STORAGE, address(new MockEip2935History()).code);
+        MockEip2935History(payable(EIP2935_HISTORY_STORAGE)).setHistoryHash(historyHash);
     }
 
     function _tlockEpochDuration() internal pure override returns (uint256) {
@@ -1344,7 +1366,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertEq(uint256(settledRound.state), uint256(RoundLib.RoundState.Settled));
     }
 
-    function test_RbtsExpiredSeedSettlesScorelessWithoutRefresh() public {
+    function test_RbtsSeedPastNativeWindowWithoutHistoryDoesNotSettleScoreless() public {
         uint256 contentId = _submitContent();
 
         (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, true, 8_000, 10e6);
@@ -1365,17 +1387,47 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         engine.settleRound(contentId, roundId);
         vm.roll(seedBlock + 257);
 
+        vm.expectRevert(RoundVotingEngine.RevealGraceActive.selector);
+        engine.settleRound(contentId, roundId);
+        RoundLib.Round memory openRound = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        assertEq(uint256(openRound.state), uint256(RoundLib.RoundState.Open));
+        assertFalse(_roundRbtsScored(engine, contentId, roundId), "missing history does not finalize RBTS accounting");
+        assertEq(_roundRbtsScoreSeed(engine, contentId, roundId), bytes32(0), "no sampler seed without history");
+        assertEq(_roundRbtsRewardWeight(engine, contentId, roundId), 0, "no RBTS rewards without settlement");
+        assertEq(_roundRbtsForfeitedPool(engine, contentId, roundId), 0, "no RBTS forfeits without settlement");
+        assertEq(_commitRbtsStakeReturned(engine, contentId, roundId, ck1), 0, "ck1 stake remains pending");
+        assertEq(_commitRbtsStakeReturned(engine, contentId, roundId, ck2), 0, "ck2 stake remains pending");
+        assertEq(_commitRbtsStakeReturned(engine, contentId, roundId, ck3), 0, "ck3 stake remains pending");
+        assertEq(_commitRbtsStakeReturned(engine, contentId, roundId, ck4), 0, "ck4 stake remains pending");
+    }
+
+    function test_RbtsSeedPastNativeWindowUsesEip2935History() public {
+        uint256 contentId = _submitContent();
+
+        (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, true, 8_000, 10e6);
+        (bytes32 ck2, bytes32 s2) = _commitPrediction(voter2, contentId, false, 5_000, 3e6);
+        (bytes32 ck3, bytes32 s3) = _commitPrediction(voter3, contentId, true, 6_500, 3e6);
+        (bytes32 ck4, bytes32 s4) = _commitPrediction(voter4, contentId, true, 7_000, 4e6);
+
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+        RoundLib.Round memory r0 = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        _warpPastTlockRevealTime(uint256(r0.startTime) + EPOCH);
+
+        engine.revealVoteByCommitKey(contentId, roundId, ck1, true, 8_000, s1);
+        engine.revealVoteByCommitKey(contentId, roundId, ck2, false, 5_000, s2);
+        engine.revealVoteByCommitKey(contentId, roundId, ck3, true, 6_500, s3);
+        engine.revealVoteByCommitKey(contentId, roundId, ck4, true, 7_000, s4);
+
+        uint256 seedBlock = block.number;
+        engine.settleRound(contentId, roundId);
+        vm.roll(seedBlock + 257);
+        _installMockEip2935History(keccak256("rbts-eip2935-history"));
+
         engine.settleRound(contentId, roundId);
         RoundLib.Round memory settledRound = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertEq(uint256(settledRound.state), uint256(RoundLib.RoundState.Settled));
-        assertTrue(_roundRbtsScored(engine, contentId, roundId), "expired seed finalizes RBTS accounting");
-        assertEq(_roundRbtsScoreSeed(engine, contentId, roundId), bytes32(0), "expired seed has no sampler seed");
-        assertEq(_roundRbtsRewardWeight(engine, contentId, roundId), 0, "expired seed has no RBTS rewards");
-        assertEq(_roundRbtsForfeitedPool(engine, contentId, roundId), 0, "expired seed has no RBTS forfeits");
-        assertEq(_commitRbtsStakeReturned(engine, contentId, roundId, ck1), 10e6, "ck1 stake returned");
-        assertEq(_commitRbtsStakeReturned(engine, contentId, roundId, ck2), 3e6, "ck2 stake returned");
-        assertEq(_commitRbtsStakeReturned(engine, contentId, roundId, ck3), 3e6, "ck3 stake returned");
-        assertEq(_commitRbtsStakeReturned(engine, contentId, roundId, ck4), 4e6, "ck4 stake returned");
+        assertTrue(_roundRbtsScored(engine, contentId, roundId), "history finalizes RBTS accounting");
+        assertNotEq(_roundRbtsScoreSeed(engine, contentId, roundId), bytes32(0), "history produces sampler seed");
     }
 
     function test_RbtsExpiredSeedScorelessSettlementPaysNoCallerIncentive() public {
@@ -1397,7 +1449,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
         uint256 seedBlock = block.number;
         engine.settleRound(contentId, roundId);
-        vm.roll(seedBlock + 257);
+        vm.roll(seedBlock + 8192);
 
         uint256 keeperBefore = lrepToken.balanceOf(keeper);
         vm.prank(keeper);
@@ -1426,7 +1478,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         engine.revealVoteByCommitKey(contentId, roundId, ck4, true, 7_000, s4);
 
         engine.settleRound(contentId, roundId);
-        vm.roll(block.number + 257);
+        vm.roll(block.number + 8192);
         engine.settleRound(contentId, roundId);
         assertTrue(_roundRbtsScored(engine, contentId, roundId), "expired seed finalizes once");
         assertEq(_roundRbtsScoreSeed(engine, contentId, roundId), bytes32(0), "no replacement seed captured");
@@ -1461,7 +1513,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
         uint256 seedBlock = block.number;
         engine.settleRound(contentId, roundId);
-        vm.roll(seedBlock + 257);
+        vm.roll(seedBlock + 8192);
 
         engine.settleRound(contentId, roundId);
         assertTrue(_roundRbtsScored(engine, contentId, roundId), "expired seed reaches RBTS accounting");
@@ -1599,7 +1651,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
         uint256 seedBlock = block.number;
         engine.settleRound(contentId, roundId);
-        vm.roll(seedBlock + 257);
+        vm.roll(seedBlock + 8192);
 
         bytes32 settlementPrevrandao = keccak256("expired-settlement-prevrandao");
         vm.prevrandao(settlementPrevrandao);
@@ -4701,7 +4753,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         engine.settleRound(contentId, roundId);
         assertFalse(_roundRbtsScored(engine, contentId, roundId), "first call only captures seed");
 
-        vm.roll(seedBlock + 257);
+        vm.roll(seedBlock + 8192);
         engine.settleRound(contentId, roundId);
 
         RoundLib.Round memory settled = RoundEngineReadHelpers.round(engine, contentId, roundId);
