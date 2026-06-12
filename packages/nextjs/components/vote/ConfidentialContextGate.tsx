@@ -389,34 +389,28 @@ export function ConfidentialContextGate({
   if (!blocker) return <>{renderConfidentialGateChildren(children, address)}</>;
 
   if (!accepted) {
+    const acceptTermsButton = (
+      <button
+        type="button"
+        className="btn btn-primary btn-sm"
+        onClick={() => setIsTermsDialogOpen(true)}
+        disabled={isCheckingTerms || isAccepting || isSigning}
+      >
+        {isCheckingTerms || isAccepting || isSigning ? <span className="loading loading-spinner loading-xs" /> : null}
+        Accept terms
+      </button>
+    );
+
     return (
-      <GateShell variant={variant}>
-        <div className="flex flex-wrap items-center justify-center gap-2">
-          <ConfidentialContextBadges item={item} />
-        </div>
-        <GateCopy title="Confidential context is locked" variant={variant}>
-          <p>
-            Review and accept the question confidentiality terms with your wallet to view hosted context for this
-            rating.
-          </p>
-          {bondRequirement.isRequired ? <p>Viewing and voting also require a {bondRequirement.label} bond.</p> : null}
-        </GateCopy>
-        <button
-          type="button"
-          className="btn btn-primary btn-sm"
-          onClick={() => setIsTermsDialogOpen(true)}
-          disabled={isCheckingTerms || isAccepting || isSigning}
-        >
-          {isCheckingTerms || isAccepting || isSigning ? <span className="loading loading-spinner loading-xs" /> : null}
-          Accept terms
-        </button>
+      <>
+        {variant === "inline" ? null : <GateShell variant={variant}>{acceptTermsButton}</GateShell>}
         <ConfidentialContextTermsDialog
           isBusy={isAccepting || isSigning}
           isOpen={isTermsDialogOpen}
           onAccept={acceptTerms}
           onClose={() => setIsTermsDialogOpen(false)}
         />
-      </GateShell>
+      </>
     );
   }
 

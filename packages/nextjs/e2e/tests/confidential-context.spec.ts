@@ -18,9 +18,9 @@ import {
   submitGatedQuestion,
   unbanConfidentialityIdentity,
 } from "../helpers/confidentiality";
+import { voteOnSpecificContent } from "../helpers/vote-helpers";
 import { gotoWithRetry } from "../helpers/wait-helpers";
 import { setupWallet } from "../helpers/wallet-session";
-import { voteOnSpecificContent } from "../helpers/vote-helpers";
 
 /**
  * Confidential private-context coverage.
@@ -73,7 +73,9 @@ test.describe("Confidential context", () => {
     expect(await viewerDetails.text()).toBe(description);
   });
 
-  test("bonded private details fail closed through the real contract denial matrix", async ({ connectedPage: page }) => {
+  test("bonded private details fail closed through the real contract denial matrix", async ({
+    connectedPage: page,
+  }) => {
     test.setTimeout(240_000);
 
     const uniqueId = Date.now();
@@ -160,8 +162,9 @@ test.describe("Confidential context", () => {
       await ensureHumanCredential(viewerPage, ANVIL_ACCOUNTS.account3);
       await gotoWithRetry(viewerPage, `/rate?content=${submitted.contentId}`, { ensureWalletConnected: true });
 
-      await expect(viewerPage.getByText("Confidential context is locked")).toBeVisible({ timeout: 30_000 });
-      await viewerPage.getByRole("button", { name: "Accept terms" }).first().click();
+      const acceptTermsButton = viewerPage.getByRole("button", { name: "Accept terms" }).first();
+      await expect(acceptTermsButton).toBeVisible({ timeout: 30_000 });
+      await acceptTermsButton.click();
       await expect(viewerPage.getByRole("dialog", { name: /Confidential Context Access Terms/i })).toBeVisible({
         timeout: 10_000,
       });
