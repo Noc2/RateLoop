@@ -37,6 +37,8 @@ export function isInsufficientFundsError(error: unknown) {
 
   return (
     haystack.includes("insufficient funds") ||
+    haystack.includes("aa21 didn't pay prefund") ||
+    haystack.includes("aa21 didnt pay prefund") ||
     haystack.includes("exceeds the balance of the account") ||
     haystack.includes("gas * gas fee + value")
   );

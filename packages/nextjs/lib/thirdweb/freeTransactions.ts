@@ -125,10 +125,12 @@ export type FreeTransactionAllowanceDecision =
 const DEFAULT_DENY_REASON = "Transaction not sponsored.";
 const FREE_TX_EXHAUSTED_REASON = "Free transactions used up. Add ETH to continue.";
 const NO_RATER_IDENTITY_REASON = "Verify your ID to unlock free transactions.";
+const FRONTEND_REGISTRATION_STAKE_AMOUNT = 1000_000_000n;
 const MAX_CONTENT_TAGS_LENGTH = 256;
 const FREE_TRANSACTION_RESERVATION_TTL_MS = 5 * 60_000;
 const FREE_TRANSACTION_IDEMPOTENCY_WINDOW_MS = 2 * 60_000;
 const EMPTY_DETAILS_HASH = `0x${"0".repeat(64)}`;
+const ALLOWED_APPROVE_TOKEN_NAMES = new Set(["LoopReputation", "MockERC20"]);
 const USER_OPERATION_RECEIPT_EVENT_ABI = parseAbi([
   "event UserOperationEvent(bytes32 indexed userOpHash, address indexed sender, address indexed paymaster, uint256 nonce, bool success, uint256 actualGasCost, uint256 actualGasUsed)",
 ]);
@@ -767,6 +769,22 @@ function normalizeAddressArg(value: unknown): `0x${string}` | null {
   return normalizeAddress(value);
 }
 
+function normalizeUintArg(value: unknown): bigint | null {
+  if (typeof value === "bigint") {
+    return value;
+  }
+
+  if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) {
+    return BigInt(value);
+  }
+
+  if (typeof value === "string" && /^\d+$/.test(value)) {
+    return BigInt(value);
+  }
+
+  return null;
+}
+
 type SponsoredSubmissionQuestion = {
   contextUrl: string;
   detailsHash: string;
@@ -998,7 +1016,6 @@ async function validateSponsoredCalls(
       .filter((value): value is Address => Boolean(value))
       .map(value => value.toLowerCase()),
   );
-  const allowedApproveTokenNames = new Set(["LoopReputation", "MockERC20"]);
 
   for (const call of calls) {
     if (!isZeroCallValue(call.value)) {
@@ -1032,7 +1049,11 @@ async function validateSponsoredCalls(
     const functionName = decoded.functionName;
     if (functionName === "approve") {
       const spender = normalizeAddressArg(args[0]);
-      if (allowedApproveTokenNames.has(contract.name) && spender && allowedApproveSpenders.has(spender.toLowerCase())) {
+      if (
+        ALLOWED_APPROVE_TOKEN_NAMES.has(contract.name) &&
+        spender &&
+        allowedApproveSpenders.has(spender.toLowerCase())
+      ) {
         continue;
       }
     }
@@ -1102,6 +1123,53 @@ async function validateSponsoredCalls(
   }
 
   return { ok: true };
+}
+
+function isUnmeteredFrontendRegistrationOperation(chainId: number, calls: readonly NormalizedVerifierCall[]) {
+  if (calls.length !== 2 || !calls.every(call => isZeroCallValue(call.value))) {
+    return false;
+  }
+
+  const contracts = getContractsForChain(chainId);
+  const frontendRegistry = contracts?.FrontendRegistry;
+  if (!frontendRegistry) {
+    return false;
+  }
+
+  const contractsByAddress = getContractsByAddress(chainId);
+  const approvalContract = contractsByAddress.get(calls[0].to.toLowerCase());
+  const registerContract = contractsByAddress.get(calls[1].to.toLowerCase());
+  if (
+    !approvalContract ||
+    !registerContract ||
+    !ALLOWED_APPROVE_TOKEN_NAMES.has(approvalContract.name) ||
+    registerContract.name !== "FrontendRegistry"
+  ) {
+    return false;
+  }
+
+  try {
+    const approval = decodeFunctionData({
+      abi: approvalContract.abi,
+      data: calls[0].data,
+    }) as { functionName: string; args: readonly unknown[] | undefined };
+    const registration = decodeFunctionData({
+      abi: registerContract.abi,
+      data: calls[1].data,
+    }) as { functionName: string; args: readonly unknown[] | undefined };
+    const spender = normalizeAddressArg(approval.args?.[0]);
+    const amount = normalizeUintArg(approval.args?.[1]);
+
+    return (
+      approval.functionName === "approve" &&
+      spender?.toLowerCase() === frontendRegistry.address.toLowerCase() &&
+      amount === FRONTEND_REGISTRATION_STAKE_AMOUNT &&
+      registration.functionName === "register" &&
+      (registration.args?.length ?? 0) === 0
+    );
+  } catch {
+    return false;
+  }
 }
 
 function logsIncludeWalletUserOperationSender(params: {
@@ -1295,6 +1363,17 @@ export async function evaluateFreeTransactionAllowance(
       isAllowed: false,
       debugCode: validatedCalls.debugCode,
       reason: DEFAULT_DENY_REASON,
+    };
+  }
+
+  if (isUnmeteredFrontendRegistrationOperation(body.chainId, calls)) {
+    return {
+      isAllowed: true,
+      summary: buildUnverifiedSummary({
+        chainId: body.chainId,
+        walletAddress,
+      }),
+      debugCode: "frontend_registration",
     };
   }
 

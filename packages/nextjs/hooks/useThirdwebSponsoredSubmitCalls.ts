@@ -45,6 +45,8 @@ type ThirdwebContractCall = {
 type ThirdwebBatchSponsorshipMode = "sponsored" | "self-funded";
 
 type ExecuteContractCallBatchOptions = {
+  allowSelfFundedFallback?: boolean;
+  allowUnmeteredSponsoredCalls?: boolean;
   atomicRequired?: boolean;
   action?: string;
   sponsorshipMode?: ThirdwebBatchSponsorshipMode;
@@ -154,6 +156,15 @@ export function shouldUseSelfFundedBatchCalls(params: {
     supportsThirdwebExecutionCapabilities(params.chainId);
 
   return isInAppSelfFunded || isExternalSelfFunded;
+}
+
+export function shouldUseUnmeteredSponsoredBatchCalls(params: {
+  chainId: number | undefined;
+  connectorId: string | undefined;
+  hasSendCalls?: boolean;
+  isThirdwebInApp?: boolean;
+}) {
+  return shouldExpectSponsoredThirdwebBatchCalls(params) && params.hasSendCalls === true;
 }
 
 export function shouldPreferSponsoredSubmitCalls(params: {
@@ -316,6 +327,19 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
       !isInspectingSponsoredDelegation &&
       !hasBrokenSponsoredDelegation,
   );
+  const canUseUnmeteredSponsoredSubmitCalls = Boolean(
+    thirdwebClient &&
+      activeWallet &&
+      typeof chainId === "number" &&
+      !isInspectingSponsoredDelegation &&
+      !hasBrokenSponsoredDelegation &&
+      shouldUseUnmeteredSponsoredBatchCalls({
+        chainId,
+        connectorId: connector?.id,
+        hasSendCalls,
+        isThirdwebInApp,
+      }),
+  );
   const canUseSelfFundedBatchCalls = Boolean(
     thirdwebClient && activeWallet && typeof chainId === "number" && hasSendCalls && prefersSelfFundedBatchCalls,
   );
@@ -366,8 +390,14 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
     async (calls: ThirdwebContractCall[], options: ExecuteContractCallBatchOptions = {}) => {
       const client = thirdwebClient;
       const sponsorshipMode = options.sponsorshipMode ?? "sponsored";
+      const allowUnmeteredSponsoredCalls = options.allowUnmeteredSponsoredCalls ?? false;
+      const allowSelfFundedFallback = options.allowSelfFundedFallback ?? true;
       const canUseRequestedMode =
-        sponsorshipMode === "sponsored" ? canUseSponsoredSubmitCalls : canUseSelfFundedBatchCalls;
+        sponsorshipMode === "sponsored"
+          ? allowUnmeteredSponsoredCalls
+            ? canUseUnmeteredSponsoredSubmitCalls
+            : canUseSponsoredSubmitCalls
+          : canUseSelfFundedBatchCalls;
 
       if (!client || !activeWallet || typeof chainId !== "number" || !canUseRequestedMode) {
         throw new Error("Thirdweb batch calls are unavailable.");
@@ -416,13 +446,35 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
             wallet,
           }),
         );
+      const getSponsoredWalletForUnmeteredCall = async () => {
+        if (
+          sponsorshipMode !== "sponsored" ||
+          !allowUnmeteredSponsoredCalls ||
+          !isThirdwebInAppWalletId(activeWallet.id) ||
+          executionMode === "sponsored_7702"
+        ) {
+          return activeWallet;
+        }
+
+        const sponsoredWallet = createThirdwebInAppWallet(chainId, {
+          sponsorshipMode: "sponsored",
+        });
+
+        await sponsoredWallet.autoConnect({
+          chain,
+          client,
+        });
+
+        return sponsoredWallet;
+      };
 
       try {
         if (!options.suppressStatusToast) {
           statusToast.showSubmitting({ action: options.action ?? "transaction" });
         }
 
-        const result = await sendCallsWithWallet(activeWallet);
+        const walletForSend = await getSponsoredWalletForUnmeteredCall();
+        const result = await sendCallsWithWallet(walletForSend);
 
         if (result.status !== "success") {
           const error = new Error("Sponsored calls failed.");
@@ -452,6 +504,7 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
         return result;
       } catch (error) {
         if (
+          allowSelfFundedFallback &&
           sponsorshipMode === "sponsored" &&
           shouldAttemptSelfFundedThirdwebFallback({
             activeWalletId: activeWallet.id,
@@ -514,6 +567,7 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
       address,
       canUseSelfFundedBatchCalls,
       canUseSponsoredSubmitCalls,
+      canUseUnmeteredSponsoredSubmitCalls,
       chainId,
       executionMode,
       freeTransactionAllowance.canUseFreeTransactions,
@@ -532,6 +586,7 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
     canUseSelfFundedBatchCalls,
     canUseSponsoredBatchCalls: canUseSponsoredSubmitCalls,
     canUseSponsoredSubmitCalls,
+    canUseUnmeteredSponsoredSubmitCalls,
     executionMode,
     executeContractCallBatch,
     executeSponsoredCalls,

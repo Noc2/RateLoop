@@ -705,6 +705,41 @@ test("supported sponsored operation families are allowlisted", async () => {
   }
 });
 
+test("allows exact frontend registration sponsorship before identity verification", async () => {
+  freeTransactions.__setFreeTransactionTestOverridesForTests({
+    allTransactionHashesSucceeded: async () => true,
+    resolveRaterIdentityKey: async () => null,
+  });
+
+  const calls = [
+    encodeCall(lrepContract, "approve", [frontendRegistryContract.address, 1_000_000_000n]),
+    encodeCall(frontendRegistryContract, "register"),
+  ];
+  const decision = await freeTransactions.evaluateFreeTransactionAllowance(buildRequest(calls) as never);
+
+  assert.equal(decision.isAllowed, true);
+  if (!decision.isAllowed) return;
+  assert.equal(decision.summary.verified, false);
+  assert.equal(decision.summary.remaining, 0);
+
+  const quotaRows = await dbModule.dbClient.execute("SELECT free_tx_used FROM free_transaction_quotas");
+  assert.equal(quotaRows.rows.length, 0);
+});
+
+test("keeps non-registration frontend approvals behind identity verification", async () => {
+  freeTransactions.__setFreeTransactionTestOverridesForTests({
+    allTransactionHashesSucceeded: async () => true,
+    resolveRaterIdentityKey: async () => null,
+  });
+
+  const calls = [encodeCall(lrepContract, "approve", [frontendRegistryContract.address, 1_000_000_001n])];
+  const decision = await freeTransactions.evaluateFreeTransactionAllowance(buildRequest(calls) as never);
+
+  assert.equal(decision.isAllowed, false);
+  if (decision.isAllowed) return;
+  assert.equal(decision.debugCode, "missing_rater_identity");
+});
+
 test("validates sponsored ContentRegistry submit question media", async () => {
   const allowedVideoOnlyDecision = await freeTransactions.evaluateFreeTransactionAllowance(
     buildRequest([

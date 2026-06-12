@@ -18,6 +18,14 @@ test("detects insufficient funds from nested viem errors", () => {
   assert.equal(isInsufficientFundsError(error), true);
 });
 
+test("detects account-abstraction prefund errors as insufficient gas", () => {
+  const error = new Error(
+    "eth_sendUserOperation error: UserOperation reverted during simulation with reason: AA21 didn't pay prefund",
+  );
+
+  assert.equal(isInsufficientFundsError(error), true);
+});
+
 test("ignores unrelated transaction failures", () => {
   const error = {
     shortMessage: "User rejected the request.",

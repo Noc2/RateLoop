@@ -89,6 +89,7 @@ export function FrontendRegistration() {
   const {
     canUseSelfFundedBatchCalls,
     canUseSponsoredSubmitCalls,
+    canUseUnmeteredSponsoredSubmitCalls,
     executeSponsoredCalls,
     isAwaitingSelfFundedSubmitCalls,
     isAwaitingSponsoredSubmitCalls,
@@ -109,6 +110,11 @@ export function FrontendRegistration() {
   const deploymentIsConfigured = !!configuredFrontendCode;
   const deploymentMatchesConnectedAddress =
     !!address && !!configuredFrontendCode && configuredFrontendCode.toLowerCase() === address.toLowerCase();
+  const canUseSponsoredFrontendRegistrationCalls = canUseSponsoredSubmitCalls || canUseUnmeteredSponsoredSubmitCalls;
+  const canUseBatchedFrontendRegistrationCalls = canUseSponsoredFrontendRegistrationCalls || canUseSelfFundedBatchCalls;
+  const frontendRegistrationBatchSponsorshipMode = canUseSponsoredFrontendRegistrationCalls
+    ? "sponsored"
+    : "self-funded";
   const canUseBatchedFrontendRegistryCalls = canUseSponsoredSubmitCalls || canUseSelfFundedBatchCalls;
   const frontendRegistryBatchSponsorshipMode = canUseSponsoredSubmitCalls ? "sponsored" : "self-funded";
 
@@ -217,6 +223,11 @@ export function FrontendRegistration() {
     ? new Date(pendingWithdrawalReleaseAt * 1000).toLocaleString()
     : "";
   const hasPendingDeadline = isExitPending || hasPendingWithdrawal;
+  const canUseSponsoredGasForRegistration = !isRegistered && canUseSponsoredFrontendRegistrationCalls;
+  const showGasBalanceWarning = isMissingGasBalance && !canUseSponsoredGasForRegistration;
+  const isRegisterButtonAwaitingWallet =
+    !canUseSponsoredFrontendRegistrationCalls && (isAwaitingSponsoredSubmitCalls || isAwaitingSelfFundedSubmitCalls);
+  const isRegisterButtonMissingGas = isMissingGasBalance && !canUseSponsoredFrontendRegistrationCalls;
 
   // LREP balance
   const lrepFormatted = lrepBalance ? Number(lrepBalance) / 1e6 : 0;
@@ -239,10 +250,14 @@ export function FrontendRegistration() {
     return () => window.clearInterval(timer);
   }, [hasPendingDeadline]);
 
-  const ensureGasBalance = () => {
-    if (isAwaitingSponsoredSubmitCalls || isAwaitingSelfFundedSubmitCalls) {
+  const ensureGasBalance = (options: { usesSponsoredGas?: boolean } = {}) => {
+    if (!options.usesSponsoredGas && (isAwaitingSponsoredSubmitCalls || isAwaitingSelfFundedSubmitCalls)) {
       notification.warning("Wallet reconnecting. Retry in a moment.");
       return false;
+    }
+
+    if (options.usesSponsoredGas) {
+      return true;
     }
 
     if (!isMissingGasBalance) {
@@ -273,7 +288,8 @@ export function FrontendRegistration() {
 
   const handleRegister = async () => {
     if (!address || !frontendRegistryInfo || !frontendRegistryAddress) return;
-    if (!ensureGasBalance()) return;
+    const registrationUsesSponsoredGas = frontendRegistrationBatchSponsorshipMode === "sponsored";
+    if (!ensureGasBalance({ usesSponsoredGas: registrationUsesSponsoredGas })) return;
 
     if (lrepFormatted < STAKE_AMOUNT) {
       notification.error("Insufficient LREP balance");
@@ -284,7 +300,7 @@ export function FrontendRegistration() {
     try {
       const amountWei = BigInt(STAKE_AMOUNT * 1e6);
 
-      if (canUseBatchedFrontendRegistryCalls && lrepInfo && lrepAddress) {
+      if (canUseBatchedFrontendRegistrationCalls && lrepInfo && lrepAddress) {
         await executeSponsoredCalls(
           [
             {
@@ -299,7 +315,13 @@ export function FrontendRegistration() {
               functionName: "register",
             },
           ],
-          { atomicRequired: true, sponsorshipMode: frontendRegistryBatchSponsorshipMode },
+          {
+            allowSelfFundedFallback: frontendRegistrationBatchSponsorshipMode !== "sponsored",
+            allowUnmeteredSponsoredCalls:
+              frontendRegistrationBatchSponsorshipMode === "sponsored" && !canUseSponsoredSubmitCalls,
+            atomicRequired: true,
+            sponsorshipMode: frontendRegistrationBatchSponsorshipMode,
+          },
         );
       } else {
         await writeLrep({
@@ -673,7 +695,7 @@ export function FrontendRegistration() {
         </Link>
       </p>
 
-      {isMissingGasBalance && (
+      {showGasBalanceWarning && (
         <GasBalanceWarning
           nativeTokenSymbol={nativeTokenSymbol}
           showTransactionCostsLink={showGasWarningTransactionCostsLink}
@@ -733,9 +755,12 @@ export function FrontendRegistration() {
           <GradientActionButton
             className="w-full"
             onClick={handleRegister}
-            motion={getGradientActionMotion(isRegistering || isAwaitingSponsoredSubmitCalls)}
+            motion={getGradientActionMotion(isRegistering || isRegisterButtonAwaitingWallet)}
             disabled={
-              isRegistering || isAwaitingSponsoredSubmitCalls || isMissingGasBalance || lrepFormatted < STAKE_AMOUNT
+              isRegistering ||
+              isRegisterButtonAwaitingWallet ||
+              isRegisterButtonMissingGas ||
+              lrepFormatted < STAKE_AMOUNT
             }
           >
             {isRegistering ? (

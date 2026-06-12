@@ -10,6 +10,7 @@ import {
   shouldPreferSponsoredSubmitCalls,
   shouldRetryThirdwebBundlerError,
   shouldUseSelfFundedBatchCalls,
+  shouldUseUnmeteredSponsoredBatchCalls,
 } from "./useThirdwebSponsoredSubmitCalls";
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -175,6 +176,36 @@ test("uses self-funded batch calls for active external wallets with atomic sendC
       executionMode: "fee_currency",
       hasSendCalls: true,
       supportsAtomicBatchCalls: false,
+    }),
+    false,
+  );
+});
+
+test("uses unmetered sponsored batch calls for in-app wallets with sendCalls support", () => {
+  assert.equal(
+    shouldUseUnmeteredSponsoredBatchCalls({
+      chainId: 4801,
+      connectorId: "in-app-wallet",
+      hasSendCalls: true,
+    }),
+    true,
+  );
+
+  assert.equal(
+    shouldUseUnmeteredSponsoredBatchCalls({
+      chainId: 4801,
+      connectorId: "in-app-wallet",
+      hasSendCalls: false,
+    }),
+    false,
+  );
+
+  assert.equal(
+    shouldUseUnmeteredSponsoredBatchCalls({
+      chainId: 4801,
+      connectorId: "io.metamask",
+      hasSendCalls: true,
+      isThirdwebInApp: true,
     }),
     false,
   );
