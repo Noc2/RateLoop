@@ -1,7 +1,7 @@
 import deployedContracts from "@rateloop/contracts/deployedContracts";
 import { ROUND_STATE, type RoundState } from "@rateloop/contracts/protocol";
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
-import { type Abi, type Address, createPublicClient, http, zeroHash } from "viem";
+import { type Abi, type Address, createPublicClient, getAddress, http, isAddress, zeroHash } from "viem";
 import { db } from "~~/lib/db";
 import { contentFeedback } from "~~/lib/db/schema";
 import { getPrimaryServerTargetNetwork, getServerRpcOverrides, getServerTargetNetworkById } from "~~/lib/env/server";
@@ -104,6 +104,7 @@ type FeedbackVoteEligibilityTestOverrides = {
   getFeedbackBonusPools?: typeof ponderApi.getFeedbackBonusPools;
   getVotes?: typeof ponderApi.getVotes;
   hasOnchainFeedbackEligibleVote?: (params: FeedbackVoteEligibilityParams) => Promise<boolean>;
+  isFeedbackRaterIdentityBanned?: (params: FeedbackVoteEligibilityParams) => Promise<boolean>;
   resolveOnchainOpenRoundId?: (params: { contentId: string; chainId?: number }) => Promise<string | null>;
 };
 
@@ -541,12 +542,65 @@ function resolveFeedbackVoteReadContext(chainId?: number) {
       chain: targetNetwork,
       transport: http(rpcUrl),
     }),
+    raterRegistry: contractsForChain?.RaterRegistry,
     votingEngine: contractsForChain?.RoundVotingEngine,
   };
 }
 
-function isNonZeroBytes32(value: unknown) {
+function isNonZeroBytes32(value: unknown): value is string {
   return typeof value === "string" && value !== zeroHash;
+}
+
+function normalizeChainAddress(value: unknown): Address | null {
+  return typeof value === "string" && isAddress(value) ? getAddress(value) : null;
+}
+
+function normalizeBytes32OrNull(value: unknown): `0x${string}` | null {
+  return isNonZeroBytes32(value) && /^0x[0-9a-fA-F]{64}$/.test(value) ? (value.toLowerCase() as `0x${string}`) : null;
+}
+
+function readResolvedRaterIdentityKey(value: unknown): `0x${string}` | null {
+  const tuple = Array.isArray(value) ? (value as readonly unknown[]) : null;
+  const object =
+    !tuple && value && typeof value === "object" ? (value as Record<string, unknown>) : ({} as Record<string, unknown>);
+  const holder = normalizeChainAddress(tuple ? tuple[0] : object.holder);
+  const identityKey = normalizeBytes32OrNull(tuple ? tuple[1] : object.identityKey);
+  return holder ? identityKey : null;
+}
+
+async function isFeedbackRaterIdentityBanned(params: FeedbackVoteEligibilityParams): Promise<boolean> {
+  const context = resolveFeedbackVoteReadContext(params.chainId);
+  if (!context?.raterRegistry) {
+    return false;
+  }
+
+  try {
+    const resolved = await context.publicClient.readContract({
+      address: context.raterRegistry.address,
+      abi: context.raterRegistry.abi,
+      functionName: "resolveRater",
+      args: [params.address],
+    });
+    const identityKey = readResolvedRaterIdentityKey(resolved);
+    if (!identityKey) return false;
+
+    const banned = await context.publicClient.readContract({
+      address: context.raterRegistry.address,
+      abi: context.raterRegistry.abi,
+      functionName: "isIdentityKeyBanned",
+      args: [identityKey],
+    });
+    return Boolean(banned);
+  } catch (error) {
+    console.warn("[content-feedback] Unable to verify rater identity ban.", {
+      address: params.address,
+      chainId: params.chainId,
+      contentId: params.contentId,
+      error,
+      roundId: params.roundId,
+    });
+    return false;
+  }
 }
 
 async function hasOnchainFeedbackEligibleVote(params: FeedbackVoteEligibilityParams): Promise<boolean> {
@@ -672,6 +726,13 @@ export function __setContentFeedbackVoteEligibilityTestOverridesForTests(
 }
 
 export async function assertContentFeedbackVoterEligibility(params: FeedbackVoteEligibilityParams): Promise<void> {
+  const identityBanned = await (
+    feedbackVoteEligibilityTestOverrides?.isFeedbackRaterIdentityBanned ?? isFeedbackRaterIdentityBanned
+  )(params);
+  if (identityBanned) {
+    throw new ContentFeedbackVoterEligibilityError("CONTENT_FEEDBACK_IDENTITY_BANNED");
+  }
+
   const votes = await (feedbackVoteEligibilityTestOverrides?.getVotes ?? ponderApi.getVotes)({
     voter: params.address,
     contentId: params.contentId,

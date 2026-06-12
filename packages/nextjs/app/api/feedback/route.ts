@@ -182,6 +182,9 @@ export async function POST(request: NextRequest) {
       });
     } catch (error) {
       if (error instanceof ContentFeedbackVoterEligibilityError) {
+        if (error.message === "CONTENT_FEEDBACK_IDENTITY_BANNED") {
+          return NextResponse.json({ error: "Rater identity is not eligible to save feedback" }, { status: 403 });
+        }
         return NextResponse.json({ error: "Vote on this question before saving feedback" }, { status: 403 });
       }
       throw error;

@@ -447,6 +447,27 @@ test("accepts feedback eligibility from indexed staked votes", async () => {
   );
 });
 
+test("rejects feedback eligibility when the rater identity is banned", async () => {
+  contentFeedback.__setContentFeedbackVoteEligibilityTestOverridesForTests({
+    getVotes: async () => buildVotesResponse([buildVoteItem({ contentId: "15", roundId: "2", voter: WALLET })]),
+    hasOnchainFeedbackEligibleVote: async () => true,
+    isFeedbackRaterIdentityBanned: async () => true,
+  });
+
+  await assert.rejects(
+    () =>
+      contentFeedback.assertContentFeedbackVoterEligibility({
+        address: WALLET,
+        chainId: CHAIN_ID,
+        contentId: "15",
+        roundId: "2",
+      }),
+    (error: unknown) =>
+      error instanceof contentFeedback.ContentFeedbackVoterEligibilityError &&
+      error.message === "CONTENT_FEEDBACK_IDENTITY_BANNED",
+  );
+});
+
 test("accepts feedback eligibility from on-chain advisory votes", async () => {
   let observedChainId: number | undefined;
   contentFeedback.__setContentFeedbackVoteEligibilityTestOverridesForTests({
