@@ -20,6 +20,12 @@ import { MockWorldIDVerifier } from "../contracts/mocks/MockWorldIDVerifier.sol"
 contract MockRevertingLaunchDistributionPool {
     error LaunchCreditRejected();
 
+    RaterRegistry public immutable raterRegistry;
+
+    constructor(RaterRegistry raterRegistry_) {
+        raterRegistry = raterRegistry_;
+    }
+
     function launchAnchorCredentialAgeSeconds() external pure returns (uint32) {
         return 0;
     }
@@ -42,6 +48,11 @@ contract MockRevertingLaunchDistributionPool {
 
 contract MockRewardDistributorConfidentialityNexus {
     mapping(uint8 => mapping(bytes32 => bool)) internal nexus;
+    address internal immutable registry;
+
+    constructor(address registry_) {
+        registry = registry_;
+    }
 
     function setNexus(uint8 provider, bytes32 nullifierHash, bool value) external {
         nexus[provider][nullifierHash] = value;
@@ -49,6 +60,10 @@ contract MockRewardDistributorConfidentialityNexus {
 
     function hasConfidentialityNexus(uint8 provider, bytes32 nullifierHash) external view returns (bool) {
         return nexus[provider][nullifierHash];
+    }
+
+    function confidentialityEscrowConfigShape() external view returns (address registry_, address protocolConfig_) {
+        return (registry, address(0));
     }
 }
 
@@ -428,6 +443,32 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         raterRegistry.attestHumanCredentialWithV4Proof(uint256(nullifier), 1, uint64(block.timestamp + 365 days), proof);
     }
 
+    function _deployReplacementRaterRegistry() internal returns (RaterRegistry replacementRegistry) {
+        replacementRegistry = new RaterRegistry(
+            owner,
+            owner,
+            address(worldIdRouter),
+            42,
+            uint256(keccak256("rateloop-human-credential-v4")),
+            uint256(keccak256("rateloop-human-presence-v1")),
+            365 days,
+            15 minutes,
+            7,
+            0
+        );
+    }
+
+    function _rotateLaunchRaterRegistry(RaterRegistry replacementRegistry) internal {
+        bytes32 launchConsumerRole = replacementRegistry.LAUNCH_CONSUMER_ROLE();
+        vm.prank(owner);
+        replacementRegistry.grantRole(launchConsumerRole, address(launchPool));
+        vm.prank(owner);
+        launchPool.setRaterRegistry(address(replacementRegistry));
+        ProtocolConfig config = ProtocolConfig(address(votingEngine.protocolConfig()));
+        vm.prank(owner);
+        config.setRaterRegistry(address(replacementRegistry));
+    }
+
     function _seedRateLoopHuman(address account, bytes32 anchorId) internal {
         _seedRateLoopHumanFresh(account, anchorId);
         _ageLaunchAnchorCredential();
@@ -624,21 +665,8 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         (uint256 contentId, uint256 roundId) = _setupSettledPredictionRound();
         assertEq(votingEngine.roundRaterRegistrySnapshot(contentId, roundId), address(raterRegistry));
 
-        RaterRegistry replacementRegistry = new RaterRegistry(
-            owner,
-            owner,
-            address(worldIdRouter),
-            42,
-            uint256(keccak256("rateloop-human-credential-v4")),
-            uint256(keccak256("rateloop-human-presence-v1")),
-            365 days,
-            15 minutes,
-            7,
-            0
-        );
-        ProtocolConfig config = ProtocolConfig(address(votingEngine.protocolConfig()));
-        vm.prank(owner);
-        config.setRaterRegistry(address(replacementRegistry));
+        RaterRegistry replacementRegistry = _deployReplacementRaterRegistry();
+        _rotateLaunchRaterRegistry(replacementRegistry);
 
         vm.prank(voter1);
         rewardDistributor.claimReward(contentId, roundId);
@@ -660,19 +688,9 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         (uint256 contentId, uint256 roundId) = _setupSettledPredictionRound();
         assertEq(votingEngine.roundRaterRegistrySnapshot(contentId, roundId), address(raterRegistry));
 
-        RaterRegistry replacementRegistry = new RaterRegistry(
-            owner,
-            owner,
-            address(worldIdRouter),
-            42,
-            uint256(keccak256("rateloop-human-credential-v4")),
-            uint256(keccak256("rateloop-human-presence-v1")),
-            365 days,
-            15 minutes,
-            7,
-            0
-        );
-        MockRewardDistributorConfidentialityNexus nexus = new MockRewardDistributorConfidentialityNexus();
+        RaterRegistry replacementRegistry = _deployReplacementRaterRegistry();
+        MockRewardDistributorConfidentialityNexus nexus =
+            new MockRewardDistributorConfidentialityNexus(address(replacementRegistry));
         nexus.setNexus(uint8(RaterRegistry.HumanCredentialProvider.WorldIdV4), anchorId, true);
         vm.prank(owner);
         replacementRegistry.setConfidentialityEscrow(address(nexus));
@@ -685,9 +703,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
             keccak256("current-registry-ban")
         );
 
-        ProtocolConfig config = ProtocolConfig(address(votingEngine.protocolConfig()));
-        vm.prank(owner);
-        config.setRaterRegistry(address(replacementRegistry));
+        _rotateLaunchRaterRegistry(replacementRegistry);
 
         vm.prank(voter1);
         rewardDistributor.claimReward(contentId, roundId);
@@ -823,7 +839,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         (uint256 contentId, uint256 roundId) = _setupSettledPredictionRound();
         bytes32 voter1CommitKey =
             keccak256(abi.encodePacked(voter1, _voterCommitHash(votingEngine, contentId, roundId, voter1)));
-        MockRevertingLaunchDistributionPool revertingLaunchPool = new MockRevertingLaunchDistributionPool();
+        MockRevertingLaunchDistributionPool revertingLaunchPool = new MockRevertingLaunchDistributionPool(raterRegistry);
 
         ProtocolConfig config = ProtocolConfig(address(votingEngine.protocolConfig()));
         vm.prank(owner);
