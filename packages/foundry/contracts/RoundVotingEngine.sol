@@ -274,6 +274,7 @@ contract RoundVotingEngine is
     event Unpaused(address account);
     event RoleAdminChanged(bytes32 indexed role, bytes32 indexed previousAdminRole, bytes32 indexed newAdminRole);
     event RoleGranted(bytes32 indexed role, address indexed account, address indexed sender);
+    event RoleRevoked(bytes32 indexed role, address indexed account, address indexed sender);
 
     bytes32 private constant PAUSABLE_STORAGE_LOCATION =
         0xcd5ed15c6e187e77e9aee88184c21f4f2182ab5827cb3b7e07fbedcd63f03300;
@@ -324,7 +325,17 @@ contract RoundVotingEngine is
 
     function setRole(bytes32 role, address account, bool enabled) external {
         if (!hasRole(bytes32(0), msg.sender)) revert Unauthorized();
-        _accessControlStorage().roles[role].hasRole[account] = enabled;
+        if (!enabled && role == bytes32(0) && account == msg.sender) revert Unauthorized();
+
+        RoleData storage roleData = _accessControlStorage().roles[role];
+        if (roleData.hasRole[account] == enabled) return;
+
+        roleData.hasRole[account] = enabled;
+        if (enabled) {
+            emit RoleGranted(role, account, msg.sender);
+        } else {
+            emit RoleRevoked(role, account, msg.sender);
+        }
     }
 
     modifier onlyRole(bytes32 role) {
@@ -337,7 +348,11 @@ contract RoundVotingEngine is
     }
 
     function _grantRole(bytes32 role, address account) internal {
-        _accessControlStorage().roles[role].hasRole[account] = true;
+        RoleData storage roleData = _accessControlStorage().roles[role];
+        if (roleData.hasRole[account]) return;
+
+        roleData.hasRole[account] = true;
+        emit RoleGranted(role, account, msg.sender);
     }
 
     function _accessControlStorage() private pure returns (AccessControlStorage storage $) {
