@@ -1167,10 +1167,11 @@ contract LaunchDistributionPoolTest is Test {
         IClusterPayoutOracle.PayoutWeight memory payout =
             _launchPayoutWeight(300, firstCommitKey, firstRater, 2_500, keccak256("cancelled"));
         _proposeAndFinalizeLaunchPayoutSnapshot(oracle, 300, payout, keccak256("epoch-artifact"));
-        vm.expectRevert(LaunchDistributionPool.InvalidAmount.selector);
-        pool.finalizeEarnedRaterRewardCredit(1, 300, firstCommitKey, payout, new bytes32[](0));
-        assertEq(pool.qualifyingCreditBps(firstRater), 0);
-        assertFalse(pool.earnedRewardCreditFinalized(1, 300, firstCommitKey));
+        assertEq(pool.finalizeEarnedRaterRewardCredit(1, 300, firstCommitKey, payout, new bytes32[](0)), 0);
+        assertEq(pool.qualifyingCreditBps(firstRater), 2_500);
+        assertTrue(pool.earnedRewardCreditFinalized(1, 300, firstCommitKey));
+        assertEq(pool.pendingVerifiedAnchorReservationCount(anchorId, firstRater), 0);
+        assertEq(pool.verifiedAnchorDistinctRaterCount(anchorId), maxFanout);
     }
 
     function test_CancelStalePendingLaunchCreditRespectsSharedAnchorReservations() public {

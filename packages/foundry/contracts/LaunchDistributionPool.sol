@@ -347,6 +347,7 @@ contract LaunchDistributionPool is
     {
         // L-Launch-A: one-shot. The reservations were already released by a prior cancel; running
         // the release again would corrupt shared per-anchor reservation counts and re-emit the event.
+        // The pending credit itself remains finalizable; cancellation only frees stale reservations.
         if (stalePendingEarnedRaterCreditCancelled[contentId][roundId][commitKey]) revert AlreadyClaimed();
         PendingEarnedRaterCredit memory pending = pendingEarnedRaterCredits[contentId][roundId][commitKey];
         if (!pending.pending) revert InvalidAmount();
@@ -356,9 +357,7 @@ contract LaunchDistributionPool is
             revert PendingCreditNotStale();
         }
         stalePendingEarnedRaterCreditCancelled[contentId][roundId][commitKey] = true;
-        _clearPendingVerifiedAnchorReservations(contentId, roundId, commitKey, pending.rater);
-        delete pendingEarnedRaterCredits[contentId][roundId][commitKey];
-        delete pendingEarnedRaterCreditReadyAt[contentId][roundId][commitKey];
+        _releasePendingVerifiedAnchorReservations(contentId, roundId, commitKey, pending.rater);
         emit StalePendingEarnedRaterCreditCancelled(pending.rater, contentId, roundId, commitKey);
     }
 
@@ -1331,7 +1330,9 @@ contract LaunchDistributionPool is
         bytes32 commitKey,
         address rater
     ) internal {
-        _releasePendingVerifiedAnchorReservations(contentId, roundId, commitKey, rater);
+        if (!stalePendingEarnedRaterCreditCancelled[contentId][roundId][commitKey]) {
+            _releasePendingVerifiedAnchorReservations(contentId, roundId, commitKey, rater);
+        }
         delete pendingEarnedRaterCreditAnchorIds[contentId][roundId][commitKey];
     }
 
