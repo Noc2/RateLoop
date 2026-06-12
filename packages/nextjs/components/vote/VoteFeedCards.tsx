@@ -380,7 +380,7 @@ function FeedContentHeader({ item, titleId, compact }: FeedContentHeaderProps) {
       </h2>
       {isPrivateContextMetadata(item) ? (
         <div className="mt-2 flex flex-wrap justify-center gap-2">
-          <ConfidentialContextBadges item={item} compact={compact} />
+          <ConfidentialContextBadges item={item} compact={compact} showBondRequirement={false} />
         </div>
       ) : null}
     </div>
@@ -548,7 +548,7 @@ function FeedContentMetaCard({
       {feedbackBonusTotal > 0n ? (
         <FeedbackBonusAmountDisplay amount={feedbackBonusTotal} currency={feedbackBonusCurrency} />
       ) : null}
-      {privateContext ? <ConfidentialContextBadges item={item} compact /> : null}
+      {privateContext ? <ConfidentialContextBadges item={item} compact showBondRequirement={false} /> : null}
       {!hasVisibleReward ? <NoRewardChip /> : null}
     </>
   );

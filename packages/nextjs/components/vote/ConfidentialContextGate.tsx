@@ -54,7 +54,15 @@ function ConfidentialBondRequirementChip({ compact = false, label }: { compact?:
   );
 }
 
-export function ConfidentialContextBadges({ compact = false, item }: { compact?: boolean; item: ContentItem }) {
+export function ConfidentialContextBadges({
+  compact = false,
+  item,
+  showBondRequirement = true,
+}: {
+  compact?: boolean;
+  item: ContentItem;
+  showBondRequirement?: boolean;
+}) {
   const privateContext = isPrivateContextMetadata(item);
   if (!privateContext) return null;
 
@@ -63,7 +71,7 @@ export function ConfidentialContextBadges({ compact = false, item }: { compact?:
   return (
     <>
       <PrivateContextBadge compact={compact} />
-      {bondRequirement.isRequired ? (
+      {showBondRequirement && bondRequirement.isRequired ? (
         <ConfidentialBondRequirementChip compact={compact} label={bondRequirement.label} />
       ) : null}
     </>
