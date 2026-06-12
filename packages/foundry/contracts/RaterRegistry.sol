@@ -146,7 +146,6 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
     mapping(bytes32 => IdentityBan) private _identityBans;
     address public confidentialityEscrow;
     mapping(bytes32 => bytes32) private _identityBanSource;
-
     /// @dev Reserved storage gap for future proxy-safe upgrades.
     uint256[26] private __gap;
 
@@ -635,29 +634,32 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         }
         _requireConfidentialityNexus(provider, nullifierHash);
 
-        _writeIdentityBan(credentialIdentityKey(provider, nullifierHash), expiresAt, evidenceHash);
+        bytes32 credentialKey = credentialIdentityKey(provider, nullifierHash);
+        _writeIdentityBan(credentialKey, expiresAt, evidenceHash);
         _writeIdentityBan(launchHumanIdentityKey(provider, nullifierHash), expiresAt, evidenceHash);
-        address owner = _humanNullifierOwnerByProvider[_humanNullifierSlotProvider(provider)][nullifierHash];
-        if (owner != address(0)) {
-            _writeDerivedIdentityBan(addressIdentityKey(owner), credentialIdentityKey(provider, nullifierHash));
+        HumanCredentialProvider slotProvider = _humanNullifierSlotProvider(provider);
+        address owner = _humanNullifierOwnerByProvider[slotProvider][nullifierHash];
+        if (owner == address(0)) {
+            owner = _lastRevokedOwnerByProvider[slotProvider][nullifierHash];
         }
+        _writeDerivedIdentityBanForHolder(owner, credentialKey);
+        address lastHolder = _lastRevokedOwnerByProvider[slotProvider][nullifierHash];
+        if (lastHolder != owner) _writeDerivedIdentityBanForHolder(lastHolder, credentialKey);
 
         emit IdentityBanned(provider, nullifierHash, expiresAt, permanent, evidenceHash, reason);
     }
 
     function unbanIdentity(HumanCredentialProvider provider, bytes32 nullifierHash) external onlyRole(GOVERNANCE_ROLE) {
         if (provider == HumanCredentialProvider.None || nullifierHash == bytes32(0)) revert InvalidCredential();
-        delete _identityBans[credentialIdentityKey(provider, nullifierHash)];
+        bytes32 credentialKey = credentialIdentityKey(provider, nullifierHash);
+        delete _identityBans[credentialKey];
         delete _identityBans[launchHumanIdentityKey(provider, nullifierHash)];
-        address owner = _humanNullifierOwnerByProvider[_humanNullifierSlotProvider(provider)][nullifierHash];
-        if (owner != address(0)) {
-            bytes32 ownerAddressKey = addressIdentityKey(owner);
-            delete _identityBanSource[ownerAddressKey];
-            bytes32 canonical = _canonicalHumanIdentityKey[owner];
-            if (canonical != bytes32(0)) {
-                delete _identityBanSource[canonical];
-            }
-        }
+        HumanCredentialProvider slotProvider = _humanNullifierSlotProvider(provider);
+        address owner = _humanNullifierOwnerByProvider[slotProvider][nullifierHash];
+        _clearDerivedIdentityBan(owner, credentialKey);
+        address lastHolder = _lastRevokedOwnerByProvider[slotProvider][nullifierHash];
+        if (lastHolder != owner) _clearDerivedIdentityBan(lastHolder, credentialKey);
+        delete _lastRevokedOwnerByProvider[slotProvider][nullifierHash];
         emit IdentityUnbanned(provider, nullifierHash);
     }
 
@@ -960,24 +962,8 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         );
         if (_usedWorldCredentialProof[kind][proofReplayKey]) revert NullifierAlreadyAssigned();
 
-        config.verifier
-            .verify(
-                nullifier,
-                config.action,
-                config.rpId,
-                nonce,
-                signalHash,
-                expiresAtMin,
-                config.issuerSchemaId,
-                config.credentialGenesisIssuedAtMin,
-                proof
-            );
-
-        if (expiresAtMin <= block.timestamp) revert InvalidCredential();
+        uint64 expiresAt = _verifyWorldIdV4Proof(config, nullifier, nonce, signalHash, expiresAtMin, proof);
         _usedWorldCredentialProof[kind][proofReplayKey] = true;
-        uint256 ttlExpiresAt = block.timestamp + config.ttl;
-        if (ttlExpiresAt > type(uint64).max) revert InvalidCredential();
-        uint64 expiresAt = expiresAtMin < ttlExpiresAt ? expiresAtMin : uint64(ttlExpiresAt);
 
         bytes32 evidenceHash = keccak256(
             abi.encodePacked(
@@ -1042,23 +1028,7 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         );
         if (_usedWorldPresenceProof[kind][proofReplayKey]) revert NullifierAlreadyAssigned();
 
-        config.verifier
-            .verify(
-                nullifier,
-                config.action,
-                config.rpId,
-                nonce,
-                signalHash,
-                expiresAtMin,
-                config.issuerSchemaId,
-                config.credentialGenesisIssuedAtMin,
-                proof
-            );
-        if (expiresAtMin <= block.timestamp) revert InvalidCredential();
-
-        uint256 ttlExpiresAt = block.timestamp + config.ttl;
-        if (ttlExpiresAt > type(uint64).max) revert InvalidCredential();
-        uint64 freshUntil = expiresAtMin < ttlExpiresAt ? expiresAtMin : uint64(ttlExpiresAt);
+        uint64 freshUntil = _verifyWorldIdV4Proof(config, nullifier, nonce, signalHash, expiresAtMin, proof);
         bytes32 evidenceHash = keccak256(
             abi.encodePacked(
                 "world-id-v4-presence",
@@ -1083,6 +1053,33 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
             evidenceHash: evidenceHash
         });
         emit HumanPresenceVerified(msg.sender, kind, storedNullifier, uint64(block.timestamp), freshUntil, evidenceHash);
+    }
+
+    function _verifyWorldIdV4Proof(
+        WorldIdV4Config storage config,
+        uint256 nullifier,
+        uint256 nonce,
+        uint256 signalHash,
+        uint64 expiresAtMin,
+        uint256[5] calldata proof
+    ) private view returns (uint64) {
+        config.verifier
+            .verify(
+                nullifier,
+                config.action,
+                config.rpId,
+                nonce,
+                signalHash,
+                expiresAtMin,
+                config.issuerSchemaId,
+                config.credentialGenesisIssuedAtMin,
+                proof
+            );
+
+        if (expiresAtMin <= block.timestamp) revert InvalidCredential();
+        uint256 ttlExpiresAt = block.timestamp + config.ttl;
+        if (ttlExpiresAt > type(uint64).max) revert InvalidCredential();
+        return expiresAtMin < ttlExpiresAt ? expiresAtMin : uint64(ttlExpiresAt);
     }
 
     /// @notice Seed an approved human credential as the same verified-human unit used by World ID.
@@ -1408,6 +1405,12 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         _identityBanSource[identityKey] = sourceKey;
     }
 
+    function _clearDerivedIdentityBan(address holder, bytes32 sourceKey) private {
+        if (holder == address(0)) return;
+        bytes32 identityKey = addressIdentityKey(holder);
+        if (_identityBanSource[identityKey] == sourceKey) delete _identityBanSource[identityKey];
+    }
+
     function _isBanActive(IdentityBan storage ban) private view returns (bool) {
         if (ban.bannedAt == 0) return false;
         return ban.expiresAt == type(uint64).max || ban.expiresAt > block.timestamp;
@@ -1424,20 +1427,13 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
     function _propagateActiveBan(address rater, HumanCredentialProvider provider, bytes32 nullifierHash) private {
         bytes32 sourceKey = credentialIdentityKey(provider, nullifierHash);
         IdentityBan storage credentialBan = _identityBans[sourceKey];
-        uint64 expiresAt = credentialBan.expiresAt;
-        bytes32 evidenceHash = credentialBan.evidenceHash;
-        if (!_isBanActive(credentialBan)) {
-            sourceKey = launchHumanIdentityKey(provider, nullifierHash);
-            IdentityBan storage launchBan = _identityBans[sourceKey];
-            if (!_isBanActive(launchBan)) return;
-            expiresAt = launchBan.expiresAt;
-            evidenceHash = launchBan.evidenceHash;
-        }
-        _writeDerivedIdentityBan(addressIdentityKey(rater), sourceKey);
-        bytes32 canonical = _canonicalHumanIdentityKey[rater];
-        if (canonical != bytes32(0)) {
-            _writeDerivedIdentityBan(canonical, sourceKey);
-        }
+        if (!_isBanActive(credentialBan)) return;
+        _writeDerivedIdentityBanForHolder(rater, sourceKey);
+    }
+
+    function _writeDerivedIdentityBanForHolder(address holder, bytes32 sourceKey) private {
+        if (holder == address(0)) return;
+        _writeDerivedIdentityBan(addressIdentityKey(holder), sourceKey);
     }
 
     function _humanNullifierSlotProvider(HumanCredentialProvider provider)
@@ -1511,6 +1507,7 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
                     && _humanNullifierOwnerByProvider[previousProvider][previous.nullifierHash] == rater
             ) {
                 delete _humanNullifierOwnerByProvider[previousProvider][previous.nullifierHash];
+                _lastRevokedOwnerByProvider[previousProvider][previous.nullifierHash] = rater;
                 previousOwnerSlotCleared = true;
             }
             if (previousOwnerSlotCleared) {
@@ -1537,8 +1534,6 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         if (_canonicalHumanIdentityKey[rater] == bytes32(0)) {
             _canonicalHumanIdentityKey[rater] = credentialIdentityKey(provider, nullifierHash);
         }
-        _propagateActiveBan(rater, provider, nullifierHash);
-        _clearInboundDelegation(rater);
 
         _humanCredentials[rater] = HumanCredential({
             verified: true,
@@ -1550,6 +1545,9 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
             expiresAt: expiresAt,
             evidenceHash: evidenceHash
         });
+
+        _propagateActiveBan(rater, provider, nullifierHash);
+        _clearInboundDelegation(rater);
 
         emit HumanCredentialVerified(
             rater, nullifierHash, scope, provider, uint64(block.timestamp), expiresAt, evidenceHash
@@ -1647,6 +1645,13 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
                 identityKey = credentialIdentityKey(credential.provider, humanNullifier);
             }
             hasActiveCredential = credential.expiresAt > block.timestamp;
+            if (hasActiveCredential) {
+                bytes32 holderAddressKey = addressIdentityKey(holder);
+                bytes32 sourceKey = _identityBanSource[holderAddressKey];
+                if (sourceKey != bytes32(0) && _isBanActive(_identityBans[sourceKey])) {
+                    identityKey = holderAddressKey;
+                }
+            }
         } else {
             identityKey = addressIdentityKey(holder);
         }

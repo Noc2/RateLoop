@@ -1302,6 +1302,106 @@ contract RaterRegistryTest is Test {
         assertFalse(registry.isIdentityKeyBanned(credentialKey));
         assertFalse(registry.isIdentityKeyBanned(oldAddressKey));
         assertFalse(registry.isIdentityKeyBanned(newAddressKey));
+
+        vm.prank(governance);
+        registry.banIdentity(
+            RaterRegistry.HumanCredentialProvider.SeededHuman,
+            SEEDED_ANCHOR_ID,
+            uint64(block.timestamp + 30 days),
+            "verified leak again",
+            EVIDENCE_HASH
+        );
+
+        assertTrue(registry.isIdentityKeyBanned(credentialKey));
+        assertFalse(registry.isIdentityKeyBanned(oldAddressKey));
+        assertTrue(registry.isIdentityKeyBanned(newAddressKey));
+    }
+
+    function test_BannedSeededIdentityStaysBannedAfterWorldIdRotation() public {
+        MockConfidentialityNexus nexus = new MockConfidentialityNexus();
+        nexus.setNexus(uint8(RaterRegistry.HumanCredentialProvider.SeededHuman), SEEDED_ANCHOR_ID, true);
+
+        vm.prank(admin);
+        registry.setConfidentialityEscrow(address(nexus));
+        vm.prank(admin);
+        registry.seedHumanCredential(rater, uint64(block.timestamp + 1), SEEDED_ANCHOR_ID, EVIDENCE_HASH);
+
+        bytes32 seededKey = _credentialKey(RaterRegistry.HumanCredentialProvider.SeededHuman, SEEDED_ANCHOR_ID);
+        bytes32 worldIdKey = _credentialKey(RaterRegistry.HumanCredentialProvider.WorldIdV4, NULLIFIER_HASH);
+        bytes32 addressKey = registry.addressIdentityKey(rater);
+
+        vm.prank(governance);
+        registry.banIdentity(
+            RaterRegistry.HumanCredentialProvider.SeededHuman,
+            SEEDED_ANCHOR_ID,
+            uint64(block.timestamp + 30 days),
+            "verified leak",
+            EVIDENCE_HASH
+        );
+        assertTrue(registry.isIdentityKeyBanned(seededKey));
+        assertTrue(registry.isIdentityKeyBanned(addressKey));
+
+        vm.warp(block.timestamp + 2);
+        vm.prank(rater);
+        registry.attestHumanCredentialWithV4Proof(
+            uint256(NULLIFIER_HASH), 1, uint64(block.timestamp + 1 hours), _emptyV4Proof()
+        );
+
+        IRaterIdentityRegistry.ResolvedRater memory resolved = registry.resolveRater(rater);
+        assertTrue(resolved.hasActiveHumanCredential);
+        assertEq(resolved.identityKey, addressKey);
+        assertFalse(registry.isIdentityKeyBanned(worldIdKey));
+        assertTrue(registry.isIdentityKeyBanned(resolved.identityKey));
+        assertTrue(registry.isIdentityKeyBanned(addressKey));
+
+        vm.prank(governance);
+        registry.unbanIdentity(RaterRegistry.HumanCredentialProvider.SeededHuman, SEEDED_ANCHOR_ID);
+
+        assertFalse(registry.isIdentityKeyBanned(seededKey));
+        assertFalse(registry.isIdentityKeyBanned(worldIdKey));
+        assertFalse(registry.isIdentityKeyBanned(addressKey));
+    }
+
+    function test_BanAfterCredentialRotationBansCurrentWorldIdIdentity() public {
+        MockConfidentialityNexus nexus = new MockConfidentialityNexus();
+        nexus.setNexus(uint8(RaterRegistry.HumanCredentialProvider.SeededHuman), SEEDED_ANCHOR_ID, true);
+
+        vm.prank(admin);
+        registry.setConfidentialityEscrow(address(nexus));
+        vm.prank(admin);
+        registry.seedHumanCredential(rater, uint64(block.timestamp + 1), SEEDED_ANCHOR_ID, EVIDENCE_HASH);
+
+        bytes32 seededKey = _credentialKey(RaterRegistry.HumanCredentialProvider.SeededHuman, SEEDED_ANCHOR_ID);
+        bytes32 worldIdKey = _credentialKey(RaterRegistry.HumanCredentialProvider.WorldIdV4, NULLIFIER_HASH);
+        bytes32 addressKey = registry.addressIdentityKey(rater);
+
+        vm.warp(block.timestamp + 2);
+        vm.prank(rater);
+        registry.attestHumanCredentialWithV4Proof(
+            uint256(NULLIFIER_HASH), 1, uint64(block.timestamp + 1 hours), _emptyV4Proof()
+        );
+        assertEq(registry.resolveRater(rater).identityKey, worldIdKey);
+
+        vm.prank(governance);
+        registry.banIdentity(
+            RaterRegistry.HumanCredentialProvider.SeededHuman,
+            SEEDED_ANCHOR_ID,
+            uint64(block.timestamp + 30 days),
+            "verified leak",
+            EVIDENCE_HASH
+        );
+
+        assertTrue(registry.isIdentityKeyBanned(seededKey));
+        assertTrue(registry.isIdentityKeyBanned(addressKey));
+        assertFalse(registry.isIdentityKeyBanned(worldIdKey));
+        assertEq(registry.resolveRater(rater).identityKey, addressKey);
+
+        vm.prank(governance);
+        registry.unbanIdentity(RaterRegistry.HumanCredentialProvider.SeededHuman, SEEDED_ANCHOR_ID);
+
+        assertFalse(registry.isIdentityKeyBanned(seededKey));
+        assertFalse(registry.isIdentityKeyBanned(worldIdKey));
+        assertFalse(registry.isIdentityKeyBanned(addressKey));
     }
 
     /// @notice RR-4 (2026-05-20 follow-up audit): governance can cap the SEEDER-seeded credential
