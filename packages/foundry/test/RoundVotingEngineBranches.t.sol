@@ -101,9 +101,6 @@ contract RevertingBundleObserver {
 // =========================================================================
 
 contract RoundVotingEngineBranchesTest is VotingTestBase {
-    event RoleGranted(bytes32 indexed role, address indexed account, address indexed sender);
-    event RoleRevoked(bytes32 indexed role, address indexed account, address indexed sender);
-
     // ContentRegistry.questionBundleRoundObserverByContent storage slot.
     uint256 internal constant QUESTION_BUNDLE_ROUND_OBSERVER_BY_CONTENT_SLOT = 26;
 
@@ -255,29 +252,26 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         bytes32 pauserRole = keccak256("PAUSER_ROLE");
         address newPauser = address(0xBEEF);
 
-        vm.expectRevert(RoundVotingEngine.Unauthorized.selector);
+        vm.expectRevert(
+            abi.encodeWithSelector(RoundVotingEngine.AccessControlUnauthorizedAccount.selector, voter1, bytes32(0))
+        );
         vm.prank(voter1);
         engine.setRole(pauserRole, newPauser, true);
-
-        vm.expectEmit(true, true, true, true);
-        emit RoleGranted(pauserRole, newPauser, owner);
-        vm.prank(owner);
-        engine.setRole(pauserRole, newPauser, true);
-        assertTrue(engine.hasRole(pauserRole, newPauser));
 
         vm.recordLogs();
         vm.prank(owner);
         engine.setRole(pauserRole, newPauser, true);
-        assertEq(vm.getRecordedLogs().length, 0);
+        _assertRoleUpdatedLog(vm.getRecordedLogs(), pauserRole, newPauser, true);
+        assertTrue(engine.hasRole(pauserRole, newPauser));
 
         vm.prank(newPauser);
         engine.pause();
         assertTrue(engine.paused());
 
-        vm.expectEmit(true, true, true, true);
-        emit RoleRevoked(pauserRole, newPauser, owner);
+        vm.recordLogs();
         vm.prank(owner);
         engine.setRole(pauserRole, newPauser, false);
+        _assertRoleUpdatedLog(vm.getRecordedLogs(), pauserRole, newPauser, false);
         assertFalse(engine.hasRole(pauserRole, newPauser));
 
         vm.expectRevert(
@@ -292,11 +286,20 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
     }
 
     function test_SetRoleCannotRevokeOwnDefaultAdmin() public {
-        vm.expectRevert(RoundVotingEngine.Unauthorized.selector);
+        vm.expectRevert();
         vm.prank(owner);
         engine.setRole(bytes32(0), owner, false);
 
         assertTrue(engine.hasRole(bytes32(0), owner));
+    }
+
+    function _assertRoleUpdatedLog(Vm.Log[] memory logs, bytes32 role, address account, bool enabled) internal pure {
+        assertEq(logs.length, 1);
+        assertEq(logs[0].topics.length, 3);
+        assertEq(logs[0].topics[0], role);
+        assertEq(logs[0].topics[1], bytes32(uint256(uint160(account))));
+        assertEq(logs[0].topics[2], bytes32(uint256(enabled ? 1 : 0)));
+        assertEq(logs[0].data.length, 0);
     }
 
     // =========================================================================

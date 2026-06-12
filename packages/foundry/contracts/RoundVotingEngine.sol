@@ -272,9 +272,7 @@ contract RoundVotingEngine is
     event TreasuryFeeDistributed(uint256 indexed contentId, uint256 indexed roundId, uint256 amount);
     event Paused(address account);
     event Unpaused(address account);
-    event RoleAdminChanged(bytes32 indexed role, bytes32 indexed previousAdminRole, bytes32 indexed newAdminRole);
-    event RoleGranted(bytes32 indexed role, address indexed account, address indexed sender);
-    event RoleRevoked(bytes32 indexed role, address indexed account, address indexed sender);
+    event RoleUpdated(bytes32 indexed role, address indexed account, bool indexed enabled) anonymous;
 
     bytes32 private constant PAUSABLE_STORAGE_LOCATION =
         0xcd5ed15c6e187e77e9aee88184c21f4f2182ab5827cb3b7e07fbedcd63f03300;
@@ -323,18 +321,19 @@ contract RoundVotingEngine is
         return _accessControlStorage().roles[role].hasRole[account];
     }
 
-    function setRole(bytes32 role, address account, bool enabled) external {
-        if (!hasRole(bytes32(0), msg.sender)) revert Unauthorized();
-        if (!enabled && role == bytes32(0) && account == msg.sender) revert Unauthorized();
-
-        RoleData storage roleData = _accessControlStorage().roles[role];
-        if (roleData.hasRole[account] == enabled) return;
-
-        roleData.hasRole[account] = enabled;
-        if (enabled) {
-            emit RoleGranted(role, account, msg.sender);
-        } else {
-            emit RoleRevoked(role, account, msg.sender);
+    function setRole(bytes32 role, address account, bool enabled) external onlyRole(bytes32(0)) {
+        assembly ("memory-safe") {
+            if and(iszero(or(enabled, role)), eq(account, caller())) {
+                revert(0x00, 0x00)
+            }
+            mstore(0x00, role)
+            mstore(0x20, ACCESS_CONTROL_STORAGE_LOCATION)
+            let roleSlot := keccak256(0x00, 0x40)
+            mstore(0x00, account)
+            mstore(0x20, roleSlot)
+            let normalizedEnabled := iszero(iszero(enabled))
+            sstore(keccak256(0x00, 0x40), normalizedEnabled)
+            log3(0x00, 0x00, role, account, normalizedEnabled)
         }
     }
 
@@ -348,11 +347,7 @@ contract RoundVotingEngine is
     }
 
     function _grantRole(bytes32 role, address account) internal {
-        RoleData storage roleData = _accessControlStorage().roles[role];
-        if (roleData.hasRole[account]) return;
-
-        roleData.hasRole[account] = true;
-        emit RoleGranted(role, account, msg.sender);
+        _accessControlStorage().roles[role].hasRole[account] = true;
     }
 
     function _accessControlStorage() private pure returns (AccessControlStorage storage $) {
@@ -1584,7 +1579,13 @@ contract RoundVotingEngine is
         view
         returns (uint256 snapshot)
     {
-        snapshot = uint256(uint160(roundConfidentialityEscrowSnapshot[contentId][roundId]));
+        assembly ("memory-safe") {
+            mstore(0x00, contentId)
+            mstore(0x20, roundConfidentialityEscrowSnapshot.slot)
+            mstore(0x20, keccak256(0x00, 0x40))
+            mstore(0x00, roundId)
+            snapshot := sload(keccak256(0x00, 0x40))
+        }
     }
 
     function voteCooldownTimestamps(uint256 contentId, address voter, address identityHolder, bytes32 identityKey)
@@ -1732,7 +1733,7 @@ contract RoundVotingEngine is
         _;
     }
 
-    function paused() public view returns (bool paused_) {
+    function paused() external view returns (bool paused_) {
         assembly ("memory-safe") {
             paused_ := sload(PAUSABLE_STORAGE_LOCATION)
         }
