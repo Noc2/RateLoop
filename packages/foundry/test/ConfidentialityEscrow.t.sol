@@ -45,6 +45,18 @@ contract ConfidentialityEscrowTest is VotingTestBase {
     bytes32 internal constant VOTER2_ANCHOR = keccak256("voter-2-world-id");
     bytes32 internal constant EVIDENCE_HASH = keccak256("confidentiality evidence");
 
+    struct FlaggedQuestionSubmission {
+        string contextUrl;
+        string title;
+        string tags;
+        bytes32 salt;
+        ContentRegistry.SubmissionDetails details;
+        ContentRegistry.SubmissionRewardTerms rewardTerms;
+        RoundLib.RoundConfig roundConfig;
+        ContentRegistry.QuestionSpecCommitment spec;
+        IConfidentialityEscrow.ConfidentialityConfig confidentiality;
+    }
+
     function _tlockEpochDuration() internal pure override returns (uint256) {
         return 1 hours;
     }
@@ -182,6 +194,55 @@ contract ConfidentialityEscrowTest is VotingTestBase {
         assertEq(lrepToken.balanceOf(reporter), reporterBefore + 1e6);
         assertEq(lrepToken.balanceOf(treasury), treasuryBefore + 1e6);
         assertFalse(confidentialityEscrow.hasActiveBond(slashContentId, slashIdentityKey));
+    }
+
+    function testConfigureRejectsUnsupportedFlags() public {
+        uint8 lrepAsset = confidentialityEscrow.BOND_ASSET_LREP();
+
+        vm.prank(address(registry));
+        vm.expectRevert("Invalid flags");
+        confidentialityEscrow.configure(
+            1001,
+            IConfidentialityEscrow.ConfidentialityConfig({
+                gated: true, bondAsset: lrepAsset, bondAmount: 0, flags: 2
+            })
+        );
+    }
+
+    function testConfigureRejectsUngatedFlags() public {
+        uint8 lrepAsset = confidentialityEscrow.BOND_ASSET_LREP();
+
+        vm.prank(address(registry));
+        vm.expectRevert("Ungated flags");
+        confidentialityEscrow.configure(
+            1002,
+            IConfidentialityEscrow.ConfidentialityConfig({
+                gated: false, bondAsset: lrepAsset, bondAmount: 0, flags: 1
+            })
+        );
+    }
+
+    function testRegistryRejectsUngatedConfidentialityFlags() public {
+        FlaggedQuestionSubmission memory submission = _ungatedFlaggedQuestionSubmission();
+        _reserveFlaggedQuestionSubmission(submission);
+
+        vm.startPrank(submitter);
+        vm.expectRevert("Ungated flags");
+        registry.submitQuestionWithRewardAndRoundConfig(
+            submission.contextUrl,
+            _emptyImageUrls(),
+            "",
+            submission.title,
+            submission.tags,
+            1,
+            submission.details,
+            submission.salt,
+            submission.rewardTerms,
+            submission.roundConfig,
+            submission.spec,
+            submission.confidentiality
+        );
+        vm.stopPrank();
     }
 
     function testGatedCommitRequiresCredentialAndBond() public {
@@ -496,6 +557,46 @@ contract ConfidentialityEscrowTest is VotingTestBase {
 
     function _submitGatedQuestion(string memory label, uint64 bondAmount) internal returns (uint256 contentId) {
         return _submitGatedQuestionWithAsset(label, confidentialityEscrow.BOND_ASSET_LREP(), bondAmount);
+    }
+
+    function _ungatedFlaggedQuestionSubmission() internal view returns (FlaggedQuestionSubmission memory submission) {
+        submission.contextUrl = "https://example.com/ungated-flags";
+        submission.title = "Public question";
+        submission.tags = "public";
+        submission.salt = keccak256("ungated-confidentiality-flags");
+        submission.details = ContentRegistry.SubmissionDetails({ detailsUrl: "", detailsHash: bytes32(0) });
+        submission.rewardTerms = _defaultSubmissionRewardTerms(registry);
+        submission.roundConfig = _defaultQuestionRoundConfig(registry);
+        submission.spec = _defaultQuestionSpec();
+        submission.confidentiality = IConfidentialityEscrow.ConfidentialityConfig({
+            gated: false, bondAsset: confidentialityEscrow.BOND_ASSET_LREP(), bondAmount: 0, flags: 1
+        });
+    }
+
+    function _reserveFlaggedQuestionSubmission(FlaggedQuestionSubmission memory submission) internal {
+        bytes32 submissionKey = _questionSubmissionKey(
+            submission.contextUrl, _emptyImageUrls(), "", submission.title, submission.tags, 1, submission.details
+        );
+        bytes32 revealCommitment = _questionRevealCommitment(
+            submissionKey,
+            keccak256(abi.encode(_emptyImageUrls(), "")),
+            submission.title,
+            submission.tags,
+            submission.details,
+            1,
+            submission.salt,
+            submitter,
+            submission.rewardTerms,
+            submission.roundConfig,
+            submission.spec,
+            _hashConfidentiality(submission.confidentiality)
+        );
+
+        vm.startPrank(submitter);
+        lrepToken.approve(registry.questionRewardPoolEscrow(), submission.rewardTerms.amount);
+        registry.reserveSubmission(revealCommitment);
+        vm.warp(block.timestamp + 1);
+        vm.stopPrank();
     }
 
     function _submitGatedQuestionWithAsset(string memory label, uint8 bondAsset, uint64 bondAmount)

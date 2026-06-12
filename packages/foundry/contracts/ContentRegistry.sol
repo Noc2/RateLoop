@@ -88,6 +88,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     bytes32 internal constant QUESTION_BUNDLE_ITEM_DOMAIN = keccak256("rateloop-question-bundle-item-v5");
     bytes32 internal constant QUESTION_BUNDLE_DOMAIN = keccak256("rateloop-question-bundle-v5");
     bytes32 internal constant QUESTION_BUNDLE_REVEAL_DOMAIN = keccak256("rateloop-question-bundle-reveal-v6");
+    uint8 internal constant CONFIDENTIALITY_FLAG_PRIVATE_FOREVER = 1;
 
     // Rating safety thresholds
     uint256 internal constant SLASH_RATING_THRESHOLD = 25; // Rating below this triggers slash
@@ -1116,7 +1117,9 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         uint256 contentId,
         IConfidentialityEscrow.ConfidentialityConfig memory confidentiality
     ) internal {
-        if (!confidentiality.gated && confidentiality.bondAmount == 0 && confidentiality.flags == 0) {
+        if (confidentiality.flags > CONFIDENTIALITY_FLAG_PRIVATE_FOREVER) revert("Invalid flags");
+        if (!confidentiality.gated && confidentiality.flags != 0) revert("Ungated flags");
+        if (!confidentiality.gated && confidentiality.bondAmount == 0) {
             return;
         }
         address escrow = protocolConfig.confidentialityEscrow();

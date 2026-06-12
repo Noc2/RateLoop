@@ -53,6 +53,7 @@ contract ConfidentialityEscrow is
 
     uint8 public constant BOND_ASSET_LREP = 0;
     uint8 public constant BOND_ASSET_USDC = 1;
+    uint8 public constant CONFIDENTIALITY_FLAG_PRIVATE_FOREVER = 1;
     uint256 public constant MIN_NONZERO_BOND = 1e6;
     uint256 public constant DEFAULT_MAX_BOND = 100e6;
     uint256 public constant ABSOLUTE_MAX_BOND = 1_000e6;
@@ -195,6 +196,8 @@ contract ConfidentialityEscrow is
             revert("Invalid bond");
         }
         if (!config.gated && config.bondAmount != 0) revert("Ungated bond");
+        if (config.flags > CONFIDENTIALITY_FLAG_PRIVATE_FOREVER) revert("Invalid flags");
+        if (!config.gated && config.flags != 0) revert("Ungated flags");
 
         configured[contentId] = true;
         _configs[contentId] = config;
