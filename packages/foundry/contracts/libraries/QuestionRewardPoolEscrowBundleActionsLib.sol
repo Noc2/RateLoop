@@ -1129,10 +1129,22 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         for (uint256 i = 0; i < questions.length;) {
             uint256 contentId = questions[i].contentId;
             uint256 roundId = bundleRoundIds[bundleId][i][roundSetIndex];
-            (bytes32 identityKey,,) = QuestionRewardPoolEscrowVoterLib.resolveRoundRewardClaim(
+            (bytes32 identityKey, bytes32 commitKey,) = QuestionRewardPoolEscrowVoterLib.resolveRoundRewardClaim(
                 votingEngine, protocolConfig, contentId, roundId, account
             );
             if (_isIdentityBannedForRound(votingEngine, protocolConfig, contentId, roundId, identityKey)) return true;
+            if (commitKey != bytes32(0)) {
+                (address voter,,,,,,) = votingEngine.commitCore(contentId, roundId, commitKey);
+                if (_isIdentityBannedForRound(
+                        votingEngine,
+                        protocolConfig,
+                        contentId,
+                        roundId,
+                        QuestionRewardPoolEscrowVoterLib.addressIdentityKey(voter)
+                    )) {
+                    return true;
+                }
+            }
             unchecked {
                 ++i;
             }

@@ -2510,6 +2510,37 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertEq(usdc.balanceOf(newDelegate), delegateBalanceBefore);
     }
 
+    function testBundleRewardRejectsOriginalDelegateAddressBanWhenNewDelegateClaims() public {
+        address newDelegate = address(0xD1E);
+        uint256[] memory contentIds = _submitBundleQuestions();
+        uint256 bundleId = _createSubmissionBundle(contentIds, funder, REWARD_ASSET_USDC, REWARD_POOL_AMOUNT, 3);
+        vm.prank(owner);
+        lrepToken.mint(delegate1, 10_000e6);
+
+        vm.prank(voter1);
+        raterIdentityRegistry.setDelegate(delegate1);
+
+        address[] memory voters = new address[](3);
+        voters[0] = delegate1;
+        voters[1] = voter2;
+        voters[2] = voter3;
+        bool[] memory directions = _directions(true, true, false);
+        _settleRoundWith(voters, contentIds[0], directions);
+        _settleRoundWith(voters, contentIds[1], directions);
+
+        vm.prank(voter1);
+        raterIdentityRegistry.removeDelegate();
+        vm.prank(voter1);
+        raterIdentityRegistry.setDelegate(newDelegate);
+        raterIdentityRegistry.setBanned(raterIdentityRegistry.addressIdentityKey(delegate1), true);
+
+        assertEq(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, newDelegate), 0);
+
+        vm.prank(newDelegate);
+        vm.expectRevert("Identity banned");
+        rewardPoolEscrow.claimQuestionBundleReward(bundleId, 0);
+    }
+
     function testFunderAndSubmitterRaterIdentitiesAreExcludedFromRewardPoolClaims() public {
         uint256 contentId = _submitQuestion("");
         uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
