@@ -2487,6 +2487,7 @@ async function recordNativeX402SubmissionPlan(params: {
     operationKey: params.operation.operationKey,
     ...(params.originalClientRequestId ? { originalClientRequestId: params.originalClientRequestId } : {}),
     preparedAt: now.toISOString(),
+    questionAttachments: serializeQuestionAttachmentRefs(params.payload),
     questionMetadata: serializeQuestionMetadata(params.payload),
     revealCommitment: params.plan.revealCommitment,
     walletAddress: params.plan.walletAddress,
