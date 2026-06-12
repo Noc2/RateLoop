@@ -246,6 +246,12 @@ function formatCorrelationVoteRow(row: {
   if (banState?.addressIdentityKeys.has(addressIdentityKey(row.voter).toLowerCase())) {
     excludedReasons.push("voter_address_banned");
   }
+  if (
+    account.toLowerCase() !== row.voter.toLowerCase() &&
+    banState?.addressIdentityKeys.has(addressIdentityKey(account).toLowerCase())
+  ) {
+    excludedReasons.push("holder_address_banned");
+  }
 
   if (excludedReasons.length > 0) {
     return {
