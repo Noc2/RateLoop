@@ -49,11 +49,11 @@ const clips = [
   },
   {
     name: "vo-02-ask",
-    text: "So it turns the idea into one focused question, with a USDC bounty, on RateLoop.",
+    text: "It turns the idea into one focused question, with a USDC bounty, on RateLoop.",
   },
   {
     name: "vo-03-handoff",
-    text: "Review the handoff, approve the USDC bounty, and it goes live — public, or confidential with gated context raters unlock only under your terms.",
+    text: "Review the handoff, approve the USDC bounty, and it goes live — public, or confidential.",
   },
   {
     name: "vo-04-raters",

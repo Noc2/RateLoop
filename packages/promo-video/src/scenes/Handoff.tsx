@@ -5,8 +5,8 @@ import { colors, orbitGradient, radiusCard } from "../theme";
 import { Card, CheckIcon, FieldRow } from "../ui";
 import { OrbGlow } from "./Intro";
 
-const APPROVE_AT = 150;
-const LIVE_AT = 210;
+const APPROVE_AT = 100;
+const LIVE_AT = 145;
 
 /** Beat 3 — review the handoff link and fund in one click. */
 export const Handoff = () => {
