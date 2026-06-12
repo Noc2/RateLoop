@@ -4,6 +4,7 @@ import {
   deregisterFrontend,
   evmIncreaseTime,
   getFrontendInfoOnChain,
+  readTokenBalance,
   registerFrontend,
   slashFrontend,
   transferLREP,
@@ -13,6 +14,9 @@ import {
 import { ANVIL_ACCOUNTS, DEPLOYER } from "../helpers/anvil-accounts";
 import { CONTRACT_ADDRESSES } from "../helpers/contracts";
 import { getFrontend } from "../helpers/ponder-api";
+import { E2E_RPC_URL } from "../helpers/service-urls";
+import { gotoWithRetry } from "../helpers/wait-helpers";
+import { setupWallet } from "../helpers/wallet-session";
 import { expect, test } from "@playwright/test";
 
 /**
@@ -32,9 +36,74 @@ test.describe("Frontend lifecycle", () => {
 
   const FRONTEND_REGISTRY = CONTRACT_ADDRESSES.FrontendRegistry;
   const LREP_TOKEN = CONTRACT_ADDRESSES.LoopReputation;
+  const UI_OPERATOR = ANVIL_ACCOUNTS.account11;
   const OPERATOR = ANVIL_ACCOUNTS.account8.address;
   let registered = false;
   let slashed = false;
+
+  async function topUpEth(address: `0x${string}`) {
+    await fetch(E2E_RPC_URL, {
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        method: "anvil_setBalance",
+        params: [address, "0x21E19E0C9BAB2400000"],
+        id: Date.now(),
+      }),
+      headers: { "Content-Type": "application/json" },
+      method: "POST",
+    });
+  }
+
+  async function ensureFrontendUnregistered(address: `0x${string}`) {
+    const info = await getFrontendInfoOnChain(address, FRONTEND_REGISTRY);
+    if (!info.registered) return;
+
+    if (info.slashed) {
+      await unslashFrontend(address, DEPLOYER.address, FRONTEND_REGISTRY);
+    }
+    await deregisterFrontend(address, FRONTEND_REGISTRY);
+    await evmIncreaseTime(14 * 86400 + 1);
+    await completeDeregisterFrontend(address, FRONTEND_REGISTRY);
+    await waitForPonderIndexed(async () => {
+      const chainInfo = await getFrontendInfoOnChain(address, FRONTEND_REGISTRY);
+      return !chainInfo.registered;
+    }, 15_000);
+  }
+
+  test("registers a frontend operator through the settings UI", async ({ page }) => {
+    test.setTimeout(150_000);
+
+    await ensureFrontendUnregistered(UI_OPERATOR.address);
+    await topUpEth(UI_OPERATOR.address);
+
+    const currentBalance = await readTokenBalance(UI_OPERATOR.address, LREP_TOKEN);
+    const stake = BigInt(1000e6);
+    if (currentBalance < stake) {
+      const funded = await transferLREP(UI_OPERATOR.address, stake - currentBalance, DEPLOYER.address, LREP_TOKEN);
+      expect(funded, "Funding UI frontend operator with LREP should succeed").toBe(true);
+    }
+
+    await setupWallet(page, UI_OPERATOR.privateKey);
+    await gotoWithRetry(page, "/settings#frontend", { ensureWalletConnected: true });
+    await expect(page.getByRole("heading", { name: "Frontend Registration" })).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText("Frontend Stake")).toBeVisible();
+    await expect(page.getByText("1,000 LREP")).toBeVisible();
+
+    await page.getByRole("button", { name: "Register as Frontend Operator" }).click();
+    await expect(page.getByText("Registered.")).toBeVisible({ timeout: 90_000 });
+
+    const registeredOnChain = await waitForPonderIndexed(
+      async () => {
+        const info = await getFrontendInfoOnChain(UI_OPERATOR.address, FRONTEND_REGISTRY);
+        return info.registered && info.eligible && !info.slashed;
+      },
+      90_000,
+      2_000,
+      "frontend-registration:ui-registered",
+    );
+    expect(registeredOnChain, "Frontend registration UI should register the operator on-chain").toBe(true);
+    await expect(page.getByText("Active")).toBeVisible({ timeout: 30_000 });
+  });
 
   test("register frontend and verify in Ponder", async () => {
     test.setTimeout(90_000);
