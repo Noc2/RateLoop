@@ -320,11 +320,13 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
 
         (bytes32 identityKey, address rewardRecipient, bytes32 commitKey, address frontend) =
             _requireRevealedIndependentRater(pool, recipient);
-        (bytes32 awardIdentityKey,,,,,) = votingEngine.commitIdentityState(pool.contentId, pool.roundId, commitKey);
+        (bytes32 awardIdentityKey, address awardHolder,,,,) =
+            votingEngine.commitIdentityState(pool.contentId, pool.roundId, commitKey);
         if (awardIdentityKey == bytes32(0)) awardIdentityKey = identityKey;
         require(
             !_isIdentityBanned(pool, identityKey)
-                && (awardIdentityKey == identityKey || !_isIdentityBanned(pool, awardIdentityKey)),
+                && (awardIdentityKey == identityKey || !_isIdentityBanned(pool, awardIdentityKey))
+                && !_isIdentityBanned(pool, _addressIdentityKey(awardHolder)),
             "Identity banned"
         );
         require(

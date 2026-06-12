@@ -571,6 +571,34 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         feedbackBonusEscrow.awardFeedbackBonus(poolId, voter1, feedbackHash, 10e6);
     }
 
+    function testAwardRejectsCommittedHolderAddressBannedInCurrentRegistry() public {
+        uint256 contentId = _submitQuestion("");
+        uint256 poolId = _createFeedbackBonusPool(contentId);
+
+        _setAcceptedDelegate(raterRegistry, voter1, delegate1);
+
+        address[] memory voters = new address[](3);
+        voters[0] = delegate1;
+        voters[1] = voter2;
+        voters[2] = voter3;
+        (uint256 settledRoundId, bytes32[] memory commitKeys) =
+            _settleRoundWithPublishedFeedback(voters, contentId, _directions(true, true, false), address(0));
+
+        (, address committedHolder,,,,) = votingEngine.commitIdentityState(contentId, settledRoundId, commitKeys[0]);
+        assertEq(committedHolder, voter1);
+
+        FeedbackRaterRegistryStatusMock replacementRegistry = new FeedbackRaterRegistryStatusMock();
+        replacementRegistry.setBanned(replacementRegistry.addressIdentityKey(committedHolder), true);
+
+        vm.prank(owner);
+        feedbackBonusEscrow.setRaterRegistry(address(replacementRegistry));
+
+        bytes32 delegateFeedbackHash = _feedbackHash(contentId, settledRoundId, delegate1);
+        vm.prank(funder);
+        vm.expectRevert("Identity banned");
+        feedbackBonusEscrow.awardFeedbackBonus(poolId, delegate1, delegateFeedbackHash, 10e6);
+    }
+
     function testAwardRejectsFeedbackPublishedAfterRequestedClose() public {
         uint256 contentId = _submitQuestion("");
         uint256 requestedDeadline = block.timestamp + 100;

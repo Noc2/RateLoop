@@ -173,6 +173,7 @@ library VotePreflightLib {
         if (
             _isIdentityBanned(identityRegistry, resolved.identityKey)
                 || _isIdentityBanned(identityRegistry, addressIdentityKey(actor))
+                || _isIdentityBanned(identityRegistry, addressIdentityKey(resolved.holder))
         ) {
             revert IdentityBanned();
         }

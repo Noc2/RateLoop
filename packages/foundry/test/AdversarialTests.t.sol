@@ -10,11 +10,45 @@ import { RaterRegistry } from "../contracts/RaterRegistry.sol";
 import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
 import { LoopReputation } from "../contracts/LoopReputation.sol";
 import { RoundLib } from "../contracts/libraries/RoundLib.sol";
+import { VotePreflightLib } from "../contracts/libraries/VotePreflightLib.sol";
 import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
 import { RewardMath } from "../contracts/libraries/RewardMath.sol";
 import { VotingTestBase } from "./helpers/VotingTestHelpers.sol";
 import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
 import { MockWorldIDVerifier } from "../contracts/mocks/MockWorldIDVerifier.sol";
+
+contract AdversarialConfidentialityProtocolConfig {
+    address public raterRegistry;
+    address public confidentialityEscrow;
+
+    constructor(address raterRegistry_, address confidentialityEscrow_) {
+        raterRegistry = raterRegistry_;
+        confidentialityEscrow = confidentialityEscrow_;
+    }
+}
+
+contract AdversarialConfidentialityNexus {
+    mapping(uint8 => mapping(bytes32 => bool)) internal nexus;
+    address internal immutable registry;
+    address internal immutable protocolConfig;
+
+    constructor(address registry_) {
+        registry = registry_;
+        protocolConfig = address(new AdversarialConfidentialityProtocolConfig(registry_, address(this)));
+    }
+
+    function setNexus(uint8 provider, bytes32 nullifierHash, bool value) external {
+        nexus[provider][nullifierHash] = value;
+    }
+
+    function hasConfidentialityNexus(uint8 provider, bytes32 nullifierHash) external view returns (bool) {
+        return nexus[provider][nullifierHash];
+    }
+
+    function confidentialityEscrowConfigShape() external view returns (address registry_, address protocolConfig_) {
+        return (registry, protocolConfig);
+    }
+}
 
 /// @title AdversarialTests
 /// @notice Pre-deployment adversarial tests covering reward exhaustion, state transition
@@ -980,6 +1014,78 @@ contract AdversarialTests is VotingTestBase {
             _tlockDrandChainHash(),
             commitHash2,
             ciphertext2,
+            STAKE,
+            address(0)
+        );
+        vm.stopPrank();
+    }
+
+    function test_BannedRotatedHolderCannotCommitThroughDelegateAfterCredentialExpiry() public {
+        RaterRegistry identityRegistry = _deployRaterRegistry();
+        ProtocolConfig cfg = ProtocolConfig(address(engine.protocolConfig()));
+        vm.prank(owner);
+        cfg.setRaterRegistry(address(identityRegistry));
+
+        address holder = address(0xA3);
+        address delegate = address(0xA4);
+        bytes32 oldAnchor = keccak256("banned-old-anchor");
+        bytes32 newAnchor = keccak256("temporary-new-anchor");
+        bytes32 evidenceHash = keccak256("evidence");
+
+        AdversarialConfidentialityNexus nexus = new AdversarialConfidentialityNexus(address(identityRegistry));
+        nexus.setNexus(uint8(RaterRegistry.HumanCredentialProvider.SeededHuman), oldAnchor, true);
+
+        vm.startPrank(owner);
+        lrepToken.mint(holder, 100_000e6);
+        lrepToken.mint(delegate, 100_000e6);
+        identityRegistry.setConfidentialityEscrow(address(nexus));
+        uint64 oldExpiresAt = uint64(block.timestamp + 1);
+        identityRegistry.seedHumanCredential(holder, oldExpiresAt, oldAnchor, evidenceHash);
+        vm.stopPrank();
+
+        vm.warp(uint256(oldExpiresAt) + 1);
+        uint64 newExpiresAt = uint64(block.timestamp + 30 days);
+        vm.prank(owner);
+        identityRegistry.seedHumanCredential(holder, newExpiresAt, newAnchor, evidenceHash);
+
+        _delegateIdentity(identityRegistry, holder, delegate);
+
+        vm.prank(owner);
+        identityRegistry.banIdentity(
+            RaterRegistry.HumanCredentialProvider.SeededHuman,
+            oldAnchor,
+            uint64(uint256(newExpiresAt) + 30 days),
+            "verified leak",
+            evidenceHash
+        );
+        vm.warp(uint256(newExpiresAt) + 1);
+
+        assertTrue(identityRegistry.isIdentityKeyBanned(identityRegistry.addressIdentityKey(holder)));
+        assertFalse(identityRegistry.isIdentityKeyBanned(identityRegistry.addressIdentityKey(delegate)));
+        assertFalse(identityRegistry.resolveRater(delegate).hasActiveHumanCredential);
+
+        uint256 contentId = _submitContent();
+        _openRoundForTest(engine, contentId, voter2);
+
+        bytes32 salt = keccak256(abi.encodePacked(delegate, block.timestamp, contentId));
+        uint64 targetRound = _tlockCommitTargetRound(engine, contentId);
+        bytes32 drandChainHash = _tlockDrandChainHash();
+        bytes memory ciphertext = _testCiphertext(true, salt, contentId, targetRound, drandChainHash);
+        uint16 referenceRatingBps = _currentRatingReferenceBps(contentId);
+        bytes32 commitHash =
+            _commitHash(true, salt, delegate, contentId, referenceRatingBps, targetRound, drandChainHash, ciphertext);
+        uint256 roundContext = _roundContext(_previewCommitRoundId(engine, contentId), referenceRatingBps);
+
+        vm.startPrank(delegate);
+        lrepToken.approve(address(engine), STAKE);
+        vm.expectRevert(VotePreflightLib.IdentityBanned.selector);
+        engine.commitVote(
+            contentId,
+            roundContext,
+            targetRound,
+            drandChainHash,
+            commitHash,
+            ciphertext,
             STAKE,
             address(0)
         );
