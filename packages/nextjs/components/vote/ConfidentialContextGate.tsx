@@ -1,11 +1,13 @@
 "use client";
 
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import React, { type ReactNode, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useAccount } from "wagmi";
 import { LockClosedIcon } from "@heroicons/react/24/outline";
 import { useConfidentialityBond } from "~~/hooks/useConfidentialityBond";
 import type { ContentItem } from "~~/hooks/useContentFeed";
 import { useWalletMessageSigner } from "~~/hooks/useWalletMessageSigner";
+import { CONFIDENTIALITY_TERMS_URI } from "~~/lib/confidentiality/terms";
 import {
   getConfidentialContextVoteBlocker,
   getConfidentialityBondRequirement,
@@ -17,6 +19,14 @@ export type ConfidentialContextGateChildren = ReactNode | ((params: { walletAddr
 
 export function renderConfidentialGateChildren(children: ConfidentialContextGateChildren, walletAddress?: string) {
   return typeof children === "function" ? children({ walletAddress }) : children;
+}
+
+export function ConfidentialContextTermsLink({ className = "link link-primary" }: { className?: string }) {
+  return (
+    <Link href={CONFIDENTIALITY_TERMS_URI} target="_blank" rel="noopener noreferrer" className={className}>
+      question confidentiality terms
+    </Link>
+  );
 }
 
 export function PrivateContextBadge({ compact = false }: { compact?: boolean }) {
@@ -230,7 +240,10 @@ export function ConfidentialContextGate({
           <ConfidentialContextBadges item={item} />
         </div>
         <GateCopy title="Confidential context is locked" variant={variant}>
-          <p>Accept the question confidentiality terms with your wallet to view hosted context for this rating.</p>
+          <p>
+            Review and accept the <ConfidentialContextTermsLink /> with your wallet to view hosted context for this
+            rating.
+          </p>
           {bondRequirement.isRequired ? <p>Viewing and voting also require a {bondRequirement.label} bond.</p> : null}
         </GateCopy>
         <button
