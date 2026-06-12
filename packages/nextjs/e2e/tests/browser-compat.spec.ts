@@ -1,4 +1,5 @@
 import { expect, test } from "../fixtures/wallet";
+import { openAdvancedQuestionSettings } from "../helpers/ask-form";
 import { expectNoHorizontalOverflow, expectNoNextErrorOverlay } from "../helpers/layout";
 import {
   FEED_EMPTY_STATE_RE,
@@ -51,17 +52,18 @@ test.describe("Browser compatibility smoke", () => {
     await expectNoHorizontalOverflow(page, "/rate browser compat");
   });
 
-  test("/ask keeps the URL field usable in a connected browser session", async ({ connectedPage: page }) => {
+  test("/ask keeps the context source field usable in a connected browser session", async ({ connectedPage: page }) => {
     await page.goto("/ask", { waitUntil: "domcontentloaded" });
     await expectNoNextErrorOverlay(page);
 
     const main = page.locator("main");
     await expect(main).toBeVisible({ timeout: 10_000 });
 
-    const urlInput = page.getByPlaceholder(/paste/i).or(page.getByRole("textbox").first()).first();
-    await expect(urlInput).toBeVisible({ timeout: 15_000 });
-    await urlInput.focus();
-    await expect(urlInput).toBeFocused();
+    await openAdvancedQuestionSettings(page);
+    const contextInput = page.getByPlaceholder("Paste a source link, or add media context below");
+    await expect(contextInput).toBeVisible({ timeout: 15_000 });
+    await contextInput.focus();
+    await expect(contextInput).toBeFocused();
     await expectNoHorizontalOverflow(page, "/ask browser compat");
   });
 });

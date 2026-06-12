@@ -1,5 +1,11 @@
 import { type Page, expect, test } from "../fixtures/wallet";
-import { continueToBountyStep, selectAskCategory, selectAskSubcategory } from "../helpers/ask-form";
+import {
+  continueToBountyStep,
+  fillAskContextSource,
+  openAdvancedQuestionSettings,
+  selectAskCategory,
+  selectAskSubcategory,
+} from "../helpers/ask-form";
 
 async function fillRequiredQuestionFields(page: Page, contextUrl?: string): Promise<void> {
   await selectAskCategory(page);
@@ -10,7 +16,7 @@ async function fillRequiredQuestionFields(page: Page, contextUrl?: string): Prom
   await selectAskSubcategory(page);
 
   if (contextUrl !== undefined) {
-    await page.locator("input[type='url']").first().fill(contextUrl);
+    await fillAskContextSource(page, contextUrl);
   }
 }
 
@@ -36,9 +42,9 @@ test.describe("Ask form validation", () => {
 
     await continueToBountyStep(page);
 
-    await expect(page.getByText("Add a website, image, or YouTube video before submitting.")).toBeVisible({
-      timeout: 5_000,
-    });
+    await expect(
+      page.getByText("Add a context source in advanced settings or upload at least one image before submitting."),
+    ).toBeVisible({ timeout: 5_000 });
   });
 
   test("private context hides the public context source field", async ({ connectedPage: page }) => {
@@ -47,6 +53,10 @@ test.describe("Ask form validation", () => {
     await expect(page.getByRole("heading", { name: "Submit Question" })).toBeVisible({ timeout: 15_000 });
 
     const form = page.locator("form").first();
+    await expect(form.getByRole("button", { name: /Advanced question settings/i })).toBeVisible({ timeout: 5_000 });
+    await expect(form.getByText("No audience targeting selected.")).toHaveCount(0);
+
+    await openAdvancedQuestionSettings(page);
     const contextInput = form.getByPlaceholder("Paste a source link, or add media context below");
     await expect(contextInput).toBeVisible({ timeout: 5_000 });
     await contextInput.fill("https://example.com/private-toggle");
@@ -98,7 +108,7 @@ test.describe("Ask form validation", () => {
 
     await fillRequiredQuestionFields(page, "not-a-valid-url");
 
-    const urlInput = page.locator("input[type='url']").first();
+    const urlInput = page.getByPlaceholder("Paste a source link, or add media context below");
     await urlInput.press("Tab");
     await continueToBountyStep(page);
 

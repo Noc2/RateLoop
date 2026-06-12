@@ -58,6 +58,25 @@ export async function selectAskSubcategory(page: Page, subcategoryNames = SEEDED
   ).toBeVisible();
 }
 
+export async function openAdvancedQuestionSettings(page: Page): Promise<void> {
+  const form = page.locator("form").first();
+  const trigger = form.getByRole("button", { name: /Advanced question settings/i });
+  await expect(trigger).toBeVisible({ timeout: 5_000 });
+  if ((await trigger.getAttribute("aria-expanded")) !== "true") {
+    await trigger.click();
+  }
+  await expect(trigger).toHaveAttribute("aria-expanded", "true");
+}
+
+export async function fillAskContextSource(page: Page, contextUrl: string): Promise<void> {
+  await openAdvancedQuestionSettings(page);
+
+  const form = page.locator("form").first();
+  const contextInput = form.getByPlaceholder("Paste a source link, or add media context below");
+  await expect(contextInput).toBeVisible({ timeout: 5_000 });
+  await contextInput.fill(contextUrl);
+}
+
 export async function continueToBountyStep(page: Page): Promise<void> {
   const continueButton = page.getByRole("button", { name: /^Continue to bounty$/i });
   await expect(continueButton).toBeVisible({ timeout: 5_000 });

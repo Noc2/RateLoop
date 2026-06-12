@@ -2981,12 +2981,6 @@ export function ContentSubmissionSection() {
           ? "Optional feedback bonus unavailable for bundles"
           : "Optional feedback bonus";
   const targetAudienceSelectedCount = countTargetAudienceValues(targetAudience);
-  const targetAudienceSummaryText =
-    targetAudienceSelectedCount === 0
-      ? "No audience targeting selected."
-      : `${targetAudienceSelectedCount.toLocaleString()} ${
-          targetAudienceSelectedCount === 1 ? "criterion" : "criteria"
-        } selected.`;
 
   const submissionStepIndicator = (
     <div className="flex flex-wrap items-center gap-2 text-sm font-medium text-base-content/55">
@@ -3041,6 +3035,34 @@ export function ContentSubmissionSection() {
   );
 
   const detailsPreviewText = getDetailsPreviewText(detailsText);
+  const contextSourceField = !privateContextEnabled ? (
+    <div>
+      <label
+        className={`mb-2 flex items-center gap-1.5 text-base font-medium ${
+          contextOrMediaMissing || contextUrlError ? "text-error" : ""
+        }`}
+      >
+        Context Source <span className="font-normal text-base-content/60">(optional with media)</span>
+        <InfoTooltip text="Use a public website as the source voters should judge. If there is no context source, add uploaded images or a YouTube link below." />
+      </label>
+      <input
+        type="url"
+        placeholder={urlConfig.contextPlaceholder}
+        className={`input input-bordered w-full bg-base-100 ${
+          contextOrMediaMissing || contextUrlError ? "input-error" : ""
+        }`}
+        value={contextUrl}
+        onChange={e => handleContextUrlChange(e.target.value)}
+        onBlur={() => setContextUrlError(getContextUrlValidationError(contextUrl))}
+        maxLength={MAX_SUBMISSION_URL_LENGTH}
+      />
+      {contextOrMediaMissing && !contextUrlError ? (
+        <p className="mt-1 text-base text-error">Add a website, image, or YouTube video before submitting.</p>
+      ) : null}
+      {contextUrlError ? <p className="mt-1 text-base text-error">{contextUrlError}</p> : null}
+    </div>
+  ) : null;
+
   const targetAudiencePicker = (
     <div className="border-t border-base-300 pt-5">
       <div className="surface-card-nested rounded-lg p-3">
@@ -3050,7 +3072,7 @@ export function ContentSubmissionSection() {
               <button
                 type="button"
                 aria-expanded={showTargetAudienceSettings}
-                aria-controls="target-audience-settings"
+                aria-controls="advanced-question-settings"
                 onClick={() => setShowTargetAudienceSettings(current => !current)}
                 className="inline-flex items-center gap-2 text-left text-base font-medium text-base-content transition-colors hover:text-base-content/80"
               >
@@ -3059,12 +3081,11 @@ export function ContentSubmissionSection() {
                   aria-hidden="true"
                 />
                 <span>
-                  Target audience <span className="font-normal text-base-content/60">(optional)</span>
+                  Advanced question settings <span className="font-normal text-base-content/60">(optional)</span>
                 </span>
               </button>
-              <InfoTooltip text="Structured self-report criteria used for targeted bounty eligibility. Raters see the normal question feed." />
+              <InfoTooltip text="Optional public context source and structured self-report criteria for targeted bounty eligibility." />
             </div>
-            <p className="mt-2 text-sm text-base-content/60">{targetAudienceSummaryText}</p>
           </div>
           {targetAudienceSelectedCount > 0 ? (
             <button
@@ -3084,7 +3105,9 @@ export function ContentSubmissionSection() {
         </div>
 
         {showTargetAudienceSettings ? (
-          <div id="target-audience-settings" className="mt-4 space-y-4">
+          <div id="advanced-question-settings" className="mt-4 space-y-4">
+            {contextSourceField}
+
             {TARGET_AUDIENCE_CHIP_GROUPS.map(group => (
               <AudienceChipGroup
                 key={group.field}
@@ -4345,36 +4368,6 @@ export function ContentSubmissionSection() {
                   </div>
                 </div>
 
-                {!privateContextEnabled ? (
-                  <div>
-                    <label
-                      className={`mb-2 flex items-center gap-1.5 text-base font-medium ${
-                        contextOrMediaMissing || contextUrlError ? "text-error" : ""
-                      }`}
-                    >
-                      Context Source <span className="font-normal text-base-content/60">(optional with media)</span>
-                      <InfoTooltip text="Use a public website as the source voters should judge. If there is no context source, add uploaded images or a YouTube link below." />
-                    </label>
-                    <input
-                      type="url"
-                      placeholder={urlConfig.contextPlaceholder}
-                      className={`input input-bordered w-full bg-base-100 ${
-                        contextOrMediaMissing || contextUrlError ? "input-error" : ""
-                      }`}
-                      value={contextUrl}
-                      onChange={e => handleContextUrlChange(e.target.value)}
-                      onBlur={() => setContextUrlError(getContextUrlValidationError(contextUrl))}
-                      maxLength={MAX_SUBMISSION_URL_LENGTH}
-                    />
-                    {contextOrMediaMissing && !contextUrlError ? (
-                      <p className="mt-1 text-base text-error">
-                        Add a website, image, or YouTube video before submitting.
-                      </p>
-                    ) : null}
-                    {contextUrlError ? <p className="mt-1 text-base text-error">{contextUrlError}</p> : null}
-                  </div>
-                ) : null}
-
                 <div>
                   <label
                     className={`mb-2 flex items-center gap-1.5 text-base font-medium ${
@@ -4467,7 +4460,7 @@ export function ContentSubmissionSection() {
                         <p className="text-base text-error">
                           {privateContextEnabled
                             ? "Add a hosted image or description before submitting."
-                            : "Upload at least one image before submitting."}
+                            : "Add a context source in advanced settings or upload at least one image before submitting."}
                         </p>
                       ) : null}
                     </div>
@@ -4486,7 +4479,9 @@ export function ContentSubmissionSection() {
                       />
                       {videoUrlError ? <p className="mt-1 text-base text-error">{videoUrlError}</p> : null}
                       {videoMediaMissing && !videoUrlError ? (
-                        <p className="mt-1 text-base text-error">Add a YouTube URL before submitting.</p>
+                        <p className="mt-1 text-base text-error">
+                          Add a context source in advanced settings or a YouTube URL before submitting.
+                        </p>
                       ) : null}
                     </div>
                   )}

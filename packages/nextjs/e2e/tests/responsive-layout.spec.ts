@@ -1,4 +1,5 @@
 import { type Page, expect, test } from "../fixtures/wallet";
+import { openAdvancedQuestionSettings } from "../helpers/ask-form";
 import { expectNoHorizontalOverflow, expectNoNextErrorOverlay } from "../helpers/layout";
 import { ensureVoteableContent } from "../helpers/voteable-content";
 import {
@@ -63,10 +64,11 @@ async function expectRouteControls(page: Page, path: string, width: number): Pro
   }
 
   if (path === "/ask") {
-    const urlInput = main.getByPlaceholder(/paste/i).or(main.getByRole("textbox").first()).first();
-    await expect(urlInput, "Ask URL input should stay visible").toBeVisible({ timeout: 15_000 });
-    await urlInput.focus();
-    await expect(urlInput).toBeFocused();
+    await openAdvancedQuestionSettings(page);
+    const contextInput = main.getByPlaceholder("Paste a source link, or add media context below");
+    await expect(contextInput, "Ask context source input should stay usable").toBeVisible({ timeout: 15_000 });
+    await contextInput.focus();
+    await expect(contextInput).toBeFocused();
     return;
   }
 

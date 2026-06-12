@@ -1,4 +1,5 @@
 import { expect, test } from "../fixtures/wallet";
+import { openAdvancedQuestionSettings } from "../helpers/ask-form";
 import { findVoteableContent, gotoWithRetry, waitForFeedLoaded } from "../helpers/wait-helpers";
 
 // Device profile comes from Playwright project config (iPhone / Android).
@@ -740,9 +741,11 @@ test.describe("Mobile viewport (phone)", () => {
     const main = page.locator("main");
     await expect(main).toBeVisible({ timeout: 10_000 });
 
-    // URL input should be visible and focusable
-    const urlInput = page.getByPlaceholder(/paste/i).or(page.getByRole("textbox").first());
-    await expect(urlInput.first()).toBeVisible({ timeout: 10_000 });
+    await openAdvancedQuestionSettings(page);
+    const contextInput = page.getByPlaceholder("Paste a source link, or add media context below");
+    await expect(contextInput).toBeVisible({ timeout: 10_000 });
+    await contextInput.focus();
+    await expect(contextInput).toBeFocused();
 
     // No horizontal overflow
     const hasOverflow = await page.evaluate(() => {

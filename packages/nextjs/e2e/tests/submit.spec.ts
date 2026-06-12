@@ -3,6 +3,7 @@ import { waitForPonderIndexed } from "../helpers/admin-helpers";
 import {
   continueToBountyStep,
   continueToFeedbackBonusStep,
+  fillAskContextSource,
   selectAskCategory,
   selectAskSubcategory,
   selectBountyRewardAsset,
@@ -12,9 +13,7 @@ import { gotoWithRetry } from "../helpers/wait-helpers";
 import type { Page } from "@playwright/test";
 
 async function fillBasicQuestionFields(page: Page, uniqueId: number) {
-  const urlInput = page.locator("input[type='url']").first();
-  await expect(urlInput).toBeVisible({ timeout: 5_000 });
-  await urlInput.fill(`https://example.com/e2etest-${uniqueId}`);
+  await fillAskContextSource(page, `https://example.com/e2etest-${uniqueId}`);
 
   const title = `E2E Test Title ${uniqueId}`;
   const titleInput = page.getByPlaceholder("Write a subjective question voters can rate");
