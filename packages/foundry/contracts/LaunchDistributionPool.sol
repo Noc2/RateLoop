@@ -10,7 +10,6 @@ import { ReentrancyGuardTransient } from "@openzeppelin/contracts/utils/Reentran
 import { RaterRegistry } from "./RaterRegistry.sol";
 import { IClusterPayoutOracle } from "./interfaces/IClusterPayoutOracle.sol";
 import { ILaunchDistributionPool } from "./interfaces/ILaunchDistributionPool.sol";
-import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol";
 import { IRoundPayoutSnapshotConsumer } from "./interfaces/IRoundPayoutSnapshotConsumer.sol";
 
 /// @dev M-Oracle-1: minimal view shape on RoundVotingEngine that LaunchDistributionPool needs to
@@ -441,16 +440,11 @@ contract LaunchDistributionPool is
     }
 
     function claimVerifiedBonus(address referrer) external nonReentrant returns (uint256 paidAmount) {
-        RaterRegistry.HumanCredential memory credential = raterRegistry.getHumanCredential(msg.sender);
-        if (!credential.verified || credential.revoked || credential.expiresAt <= block.timestamp) {
-            revert NotVerified();
-        }
-        if (credential.nullifierHash == bytes32(0)) revert NotVerified();
-        bytes32 credentialKey = _credentialClaimKey(credential.provider, credential.nullifierHash);
+        (bytes32 nullifierHash, bytes32 credentialKey) = _activeHumanCredential(msg.sender);
+        if (nullifierHash == bytes32(0)) revert NotVerified();
         if (verifiedCredentialClaimed[credentialKey] || verifiedBonusClaimedByAccount[msg.sender]) {
             revert AlreadyClaimed();
         }
-        credentialKey = _consumeCredentialClaimKey(credential.provider, credential.nullifierHash, credentialKey);
 
         uint256 baseBonus = currentVerifiedBonus();
         uint256 remaining = _remainingVerifiedReferralPool();
@@ -461,7 +455,7 @@ contract LaunchDistributionPool is
         verifiedClaimCount += 1;
         verifiedReferralDistributed += baseBonus;
         paidAmount = _pay(msg.sender, baseBonus);
-        emit VerifiedBonusClaimed(msg.sender, paidAmount, credential.nullifierHash);
+        emit VerifiedBonusClaimed(msg.sender, paidAmount, nullifierHash);
 
         uint256 referralBonus = _claimReferralBonus(referrer, msg.sender, baseBonus);
         paidAmount += referralBonus;
@@ -491,13 +485,11 @@ contract LaunchDistributionPool is
         if (!raterLaunchCapAssigned[rater]) revert InvalidAmount();
         if (raterFullLaunchCapUnlocked[rater]) return 0;
 
-        (bytes32 nullifierHash, bytes32 credentialKey, RaterRegistry.HumanCredentialProvider provider) =
-            _activeHumanCredential(rater);
+        (bytes32 nullifierHash, bytes32 credentialKey) = _activeHumanCredential(rater);
         if (nullifierHash == bytes32(0)) revert NotVerified();
 
         address claimedBy = launchFullCapNullifierRater[credentialKey];
         if (claimedBy != address(0) && claimedBy != rater) revert AlreadyClaimed();
-        credentialKey = _consumeCredentialClaimKey(provider, nullifierHash, credentialKey);
 
         uint256 previousCap = raterLaunchCap[rater];
         uint256 fullCap = raterFullLaunchCap[rater];
@@ -550,6 +542,7 @@ contract LaunchDistributionPool is
         uint64 sourceReadyAt
     ) internal returns (uint256 paidAmount) {
         LaunchRewardPolicy memory policy = launchRewardPolicy;
+        if (_isRaterBanned(rater)) return 0;
         uint16 distinctRoundAnchors = _countDistinctAvailableAnchors(policy, rater, verifiedAnchorIds);
         if (!_passesLaunchRewardContext(
                 policy,
@@ -632,6 +625,7 @@ contract LaunchDistributionPool is
         uint64 sourceReadyAt
     ) internal returns (bool recorded, uint256 paidAmount) {
         LaunchRewardPolicy memory policy = launchRewardPolicy;
+        if (_isRaterBanned(rater)) return (false, 0);
         uint16 distinctRoundAnchors = _countDistinctAvailableAnchors(policy, rater, verifiedAnchorIds);
         if (!_passesAdvisoryLaunchRewardContext(
                 policy, rater, advisoryCommitKey, scoreBps, revealedRaterCount, noPendingCleanup, distinctRoundAnchors
@@ -696,6 +690,23 @@ contract LaunchDistributionPool is
                 oracle, contentId, roundId, pendingEarnedRaterCreditReadyAt[contentId][roundId][commitKey]
             )) {
             revert InvalidProof();
+        }
+        if (_isRaterBanned(pending.rater)) {
+            earnedRewardCreditFinalized[contentId][roundId][commitKey] = true;
+            _clearPendingVerifiedAnchorReservations(contentId, roundId, commitKey, pending.rater);
+            delete pendingEarnedRaterCredits[contentId][roundId][commitKey];
+            delete pendingEarnedRaterCreditReadyAt[contentId][roundId][commitKey];
+            earnedRaterRoundPayoutSnapshotConsumed[contentId][roundId] = true;
+            emit EarnedRaterRewardCreditFinalized(
+                pending.rater,
+                contentId,
+                roundId,
+                commitKey,
+                payoutWeight.independenceBps,
+                0,
+                qualifyingCreditBps[pending.rater]
+            );
+            return 0;
         }
 
         // M-Funds-2: the cap is enforced at record time now, so no re-check or increment here.
@@ -1053,13 +1064,11 @@ contract LaunchDistributionPool is
         internal
         returns (uint256 activeCap, bool fullCapUnlocked)
     {
-        (bytes32 nullifierHash, bytes32 credentialKey, RaterRegistry.HumanCredentialProvider provider) =
-            _activeHumanCredential(rater);
+        (bytes32 nullifierHash, bytes32 credentialKey) = _activeHumanCredential(rater);
         bool credentialClaimedByOther;
         if (nullifierHash != bytes32(0)) {
             address claimedBy = launchFullCapNullifierRater[credentialKey];
             if (claimedBy == address(0) || claimedBy == rater) {
-                credentialKey = _consumeCredentialClaimKey(provider, nullifierHash, credentialKey);
                 fullCapUnlocked = true;
                 raterFullLaunchCapUnlocked[rater] = true;
                 raterLaunchCapNullifier[rater] = nullifierHash;
@@ -1125,7 +1134,7 @@ contract LaunchDistributionPool is
     }
 
     function _activeLaunchCredentialClaimedByOther(address rater) internal view returns (bool) {
-        (bytes32 nullifierHash, bytes32 credentialKey,) = _activeHumanCredential(rater);
+        (bytes32 nullifierHash, bytes32 credentialKey) = _activeHumanCredential(rater);
         if (nullifierHash == bytes32(0)) return false;
         address claimedBy = launchFullCapNullifierRater[credentialKey];
         return claimedBy != address(0) && claimedBy != rater;
@@ -1152,10 +1161,7 @@ contract LaunchDistributionPool is
         returns (uint256 referralBonus)
     {
         if (referrer == address(0) || referrer == referee) return 0;
-        RaterRegistry.HumanCredential memory credential = raterRegistry.getHumanCredential(referrer);
-        if (!credential.verified || credential.revoked || credential.expiresAt <= block.timestamp) {
-            return 0;
-        }
+        if (!_hasActiveHumanCredential(referrer)) return 0;
 
         uint256 remainingCap = MAX_REFERRAL_REWARD_PER_REFERRER > referralEarnings[referrer]
             ? MAX_REFERRAL_REWARD_PER_REFERRER - referralEarnings[referrer]
@@ -1382,18 +1388,14 @@ contract LaunchDistributionPool is
     }
 
     function _hasActiveHumanCredential(address rater) internal view returns (bool) {
-        return _activeHumanNullifier(rater) != bytes32(0);
-    }
-
-    function _activeHumanNullifier(address rater) internal view returns (bytes32) {
-        (bytes32 nullifierHash,,) = _activeHumanCredential(rater);
-        return nullifierHash;
+        (bytes32 nullifierHash,) = _activeHumanCredential(rater);
+        return nullifierHash != bytes32(0);
     }
 
     function _activeHumanCredential(address rater)
         internal
         view
-        returns (bytes32 nullifierHash, bytes32 credentialKey, RaterRegistry.HumanCredentialProvider provider)
+        returns (bytes32 nullifierHash, bytes32 credentialKey)
     {
         RaterRegistry.HumanCredential memory credential = raterRegistry.getHumanCredential(rater);
         if (
@@ -1401,20 +1403,15 @@ contract LaunchDistributionPool is
                 && credential.nullifierHash != bytes32(0)
         ) {
             nullifierHash = credential.nullifierHash;
-            provider = credential.provider;
-            credentialKey = _credentialClaimKey(provider, credential.nullifierHash);
-            if (raterRegistry.isIdentityKeyBanned(credentialKey)) {
-                return (bytes32(0), bytes32(0), RaterRegistry.HumanCredentialProvider.None);
+            credentialKey = _credentialClaimKey(credential.provider, credential.nullifierHash);
+            if (raterRegistry.isIdentityKeyBanned(credentialKey) || _isRaterBanned(rater)) {
+                return (bytes32(0), bytes32(0));
             }
         }
     }
 
-    function _consumeCredentialClaimKey(RaterRegistry.HumanCredentialProvider, bytes32, bytes32 credentialKey)
-        internal
-        pure
-        returns (bytes32)
-    {
-        return credentialKey;
+    function _isRaterBanned(address rater) internal view returns (bool) {
+        return raterRegistry.isIdentityKeyBanned(raterRegistry.addressIdentityKey(rater));
     }
 
     function _credentialClaimKey(RaterRegistry.HumanCredentialProvider provider, bytes32 nullifierHash)
@@ -1460,18 +1457,8 @@ contract LaunchDistributionPool is
         } catch {
             revert InvalidAddress();
         }
-        try registry.resolveRater(sample) returns (IRaterIdentityRegistry.ResolvedRater memory resolved) {
-            if (
-                resolved.holder != sample || resolved.identityKey != expectedSampleKey
-                    || resolved.humanNullifier != bytes32(0) || resolved.hasActiveHumanCredential || resolved.delegated
-            ) {
-                revert InvalidAddress();
-            }
-        } catch {
-            revert InvalidAddress();
-        }
-        try registry.hasActiveHumanCredential(sample) returns (bool active) {
-            if (active) revert InvalidAddress();
+        try registry.isIdentityKeyBanned(bytes32(0)) returns (bool banned) {
+            if (banned) revert InvalidAddress();
         } catch {
             revert InvalidAddress();
         }

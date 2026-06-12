@@ -734,6 +734,39 @@ contract RaterRegistryTest is Test {
         );
     }
 
+    function test_LaunchRewardAnchorRejectsRotatedAddressBan() public {
+        LaunchRaterRewardLibHarness launchHarness = new LaunchRaterRewardLibHarness();
+        MockConfidentialityNexus nexus = new MockConfidentialityNexus();
+        nexus.setNexus(uint8(RaterRegistry.HumanCredentialProvider.SeededHuman), SEEDED_ANCHOR_ID, true);
+
+        vm.prank(admin);
+        registry.setConfidentialityEscrow(address(nexus));
+        vm.prank(admin);
+        registry.seedHumanCredential(otherRater, uint64(block.timestamp + 1), SEEDED_ANCHOR_ID, EVIDENCE_HASH);
+
+        vm.prank(governance);
+        registry.banIdentity(
+            RaterRegistry.HumanCredentialProvider.SeededHuman,
+            SEEDED_ANCHOR_ID,
+            uint64(block.timestamp + 30 days),
+            "verified leak",
+            EVIDENCE_HASH
+        );
+
+        vm.warp(block.timestamp + 2);
+        vm.prank(otherRater);
+        registry.attestHumanCredentialWithV4Proof(
+            uint256(NULLIFIER_HASH), 1, uint64(block.timestamp + 1 hours), _emptyV4Proof()
+        );
+
+        assertFalse(
+            registry.isIdentityKeyBanned(
+                registry.launchHumanIdentityKey(RaterRegistry.HumanCredentialProvider.WorldIdV4, NULLIFIER_HASH)
+            )
+        );
+        assertEq(launchHarness.launchRewardAnchorId(registry, otherRater, uint48(block.timestamp), 0), bytes32(0));
+    }
+
     function test_DefaultWorldIdV4ConfigLeavesSelfieDisabledUntilExplicitlyConfigured() public view {
         uint8 selfieKind = registry.WORLD_CREDENTIAL_SELFIE();
 

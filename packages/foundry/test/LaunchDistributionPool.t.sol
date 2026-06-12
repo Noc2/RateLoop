@@ -59,6 +59,18 @@ contract WeakLaunchRaterRegistry {
     }
 }
 
+contract MockLaunchConfidentialityNexus {
+    mapping(uint8 => mapping(bytes32 => bool)) internal nexus;
+
+    function setNexus(uint8 provider, bytes32 nullifierHash, bool value) external {
+        nexus[provider][nullifierHash] = value;
+    }
+
+    function hasConfidentialityNexus(uint8 provider, bytes32 nullifierHash) external view returns (bool) {
+        return nexus[provider][nullifierHash];
+    }
+}
+
 contract LaunchDistributionPoolTest is Test {
     using stdStorage for StdStorage;
 
@@ -1245,6 +1257,45 @@ contract LaunchDistributionPoolTest is Test {
         assertEq(pool.verifiedAnchorDistinctRaterCount(bytes32("anchor-a")), 1);
     }
 
+    function test_FinalizePendingLaunchCreditSkipsBannedRaterAndReleasesAnchors() public {
+        ClusterPayoutOracle oracle = _configureLaunchOracle(1);
+        bytes32 seedAnchor = bytes32("alice-seeded-ban");
+        bytes32 anchorId = bytes32("anchor-ban-finalize");
+        bytes32 commitKey = keccak256("pending-ban-finalize");
+
+        registry.seedHumanCredential(alice, uint64(block.timestamp + 30 days), seedAnchor, bytes32("seed-evidence"));
+        assertEq(
+            pool.recordEarnedRaterRewardWithSourceReady(
+                alice,
+                1,
+                1,
+                commitKey,
+                8_000,
+                3,
+                true,
+                pool.MIN_LAUNCH_CREDIT_STAKE(),
+                _singleAnchor(anchorId),
+                uint64(block.timestamp)
+            ),
+            0
+        );
+        assertEq(pool.pendingVerifiedAnchorReservationCount(anchorId, alice), 1);
+
+        _banIdentity(RaterRegistry.HumanCredentialProvider.SeededHuman, seedAnchor);
+
+        IClusterPayoutOracle.PayoutWeight memory payout =
+            _launchPayoutWeight(1, commitKey, alice, 10_000, keccak256("banned"));
+        _proposeAndFinalizeLaunchPayoutSnapshot(oracle, 1, payout, keccak256("epoch-artifact"));
+
+        assertEq(pool.finalizeEarnedRaterRewardCredit(1, 1, commitKey, payout, new bytes32[](0)), 0);
+        assertEq(pool.qualifyingCreditBps(alice), 0);
+        assertTrue(pool.earnedRewardCreditFinalized(1, 1, commitKey));
+        assertTrue(pool.isRoundPayoutSnapshotConsumed(pool.PAYOUT_DOMAIN_LAUNCH_CREDIT(), 0, 1, 1));
+        assertEq(pool.pendingVerifiedAnchorReservationCount(anchorId, alice), 0);
+        assertFalse(pool.verifiedAnchorRaterSeen(anchorId, alice));
+        assertEq(pool.verifiedAnchorDistinctRaterCount(anchorId), 0);
+    }
+
     function test_PendingAdvisoryLaunchCreditsReserveVerifiedAnchorFanoutAtRecordTime() public {
         _configureLaunchOracle(1);
         bytes32 anchorId = bytes32("advisory-anchor");
@@ -1820,6 +1871,42 @@ contract LaunchDistributionPoolTest is Test {
 
         vm.expectRevert(LaunchDistributionPool.NotVerified.selector);
         pool.unlockFullEarnedRaterCap(alice);
+    }
+
+    function test_RecordLaunchRewardsRejectBannedRaterAddressIdentity() public {
+        bytes32 seedAnchor = bytes32("banned-rater-seed");
+        registry.seedHumanCredential(alice, uint64(block.timestamp + 1), seedAnchor, bytes32("seed-evidence"));
+        _banIdentity(RaterRegistry.HumanCredentialProvider.SeededHuman, seedAnchor);
+        vm.warp(block.timestamp + 2);
+
+        bytes32 earnedCommitKey = keccak256("banned-earned");
+        assertEq(
+            pool.recordEarnedRaterRewardWithSourceReady(
+                alice,
+                88,
+                1,
+                earnedCommitKey,
+                8_000,
+                3,
+                true,
+                pool.MIN_LAUNCH_CREDIT_STAKE(),
+                _singleAnchor(bytes32("anchor-a")),
+                uint64(block.timestamp)
+            ),
+            0
+        );
+        assertFalse(pool.earnedRewardCreditRecorded(88, 1, earnedCommitKey));
+        assertFalse(pool.raterRoundCreditRecorded(alice, 88, 1));
+        assertEq(pool.roundUnverifiedLaunchCreditCount(88, 1), 0);
+
+        bytes32 advisoryCommitKey = keccak256("banned-advisory");
+        (bool recorded, uint256 paid) = pool.recordAdvisoryRaterRewardWithSourceReady(
+            alice, 89, 1, advisoryCommitKey, 8_000, 3, true, _singleAnchor(bytes32("anchor-b")), uint64(block.timestamp)
+        );
+        assertFalse(recorded);
+        assertEq(paid, 0);
+        assertFalse(pool.earnedRewardCreditRecorded(89, 1, advisoryCommitKey));
+        assertFalse(pool.raterRoundCreditRecorded(alice, 89, 1));
     }
 
     function test_RecordEarnedRaterRewardEmitsCreditProgressBeforeAndAtEligibility() public {
@@ -2455,6 +2542,44 @@ contract LaunchDistributionPoolTest is Test {
         pool.claimVerifiedBonus(referrer);
     }
 
+    function test_ClaimVerifiedBonusRejectsBannedCredential() public {
+        bytes32 nullifier = bytes32("banned-v4-human");
+        _verify(alice, nullifier);
+        _banIdentity(RaterRegistry.HumanCredentialProvider.WorldIdV4, nullifier);
+
+        vm.prank(alice);
+        vm.expectRevert(LaunchDistributionPool.NotVerified.selector);
+        pool.claimVerifiedBonus(address(0));
+    }
+
+    function test_ClaimVerifiedBonusRejectsRotatedAddressBan() public {
+        bytes32 seedAnchor = bytes32("old-seeded-human");
+        registry.seedHumanCredential(alice, uint64(block.timestamp + 1), seedAnchor, bytes32("seed-evidence"));
+        _banIdentity(RaterRegistry.HumanCredentialProvider.SeededHuman, seedAnchor);
+
+        vm.warp(block.timestamp + 2);
+        _verify(alice, bytes32("fresh-v4-human"));
+
+        vm.prank(alice);
+        vm.expectRevert(LaunchDistributionPool.NotVerified.selector);
+        pool.claimVerifiedBonus(address(0));
+    }
+
+    function test_ClaimVerifiedBonusSkipsBannedReferrer() public {
+        bytes32 referrerNullifier = bytes32("banned-referrer");
+        _verify(referrer, referrerNullifier);
+        _banIdentity(RaterRegistry.HumanCredentialProvider.WorldIdV4, referrerNullifier);
+        _verify(alice, bytes32("alice"));
+
+        vm.prank(alice);
+        uint256 payout = pool.claimVerifiedBonus(referrer);
+
+        assertEq(payout, 250e6);
+        assertEq(lrep.balanceOf(alice), 250e6);
+        assertEq(lrep.balanceOf(referrer), 0);
+        assertEq(pool.referralEarnings(referrer), 0);
+    }
+
     function test_ClaimVerifiedBonusAcceptsRateLoopSeededHumanUnits() public {
         registry.seedHumanCredential(alice, uint64(block.timestamp + 30 days), bytes32("seeded-alice"), 0);
 
@@ -2742,6 +2867,15 @@ contract LaunchDistributionPoolTest is Test {
         uint256[5] memory proof;
         vm.prank(account);
         registry.attestHumanCredentialWithV4Proof(uint256(nullifier), 1, uint64(block.timestamp + 1 hours), proof);
+    }
+
+    function _banIdentity(RaterRegistry.HumanCredentialProvider provider, bytes32 nullifier) internal {
+        MockLaunchConfidentialityNexus nexus = new MockLaunchConfidentialityNexus();
+        nexus.setNexus(uint8(provider), nullifier, true);
+        registry.setConfidentialityEscrow(address(nexus));
+        registry.banIdentity(
+            provider, nullifier, uint64(block.timestamp + 30 days), "launch ban", bytes32("launch-ban-evidence")
+        );
     }
 
     function _credentialKey(RaterRegistry.HumanCredentialProvider provider, bytes32 nullifier)

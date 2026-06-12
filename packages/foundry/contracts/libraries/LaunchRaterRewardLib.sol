@@ -80,7 +80,10 @@ library LaunchRaterRewardLib {
                 return bytes32(0);
             }
             bytes32 anchorId = raterRegistry.launchHumanIdentityKey(credential.provider, credential.nullifierHash);
-            if (raterRegistry.isIdentityKeyBanned(anchorId)) return bytes32(0);
+            if (
+                raterRegistry.isIdentityKeyBanned(anchorId)
+                    || raterRegistry.isIdentityKeyBanned(raterRegistry.addressIdentityKey(account))
+            ) return bytes32(0);
             return anchorId;
         } catch {
             return bytes32(0);
