@@ -20,7 +20,7 @@ import {
   VotingQuestionContextDetails,
 } from "~~/components/shared/VotingQuestionCard";
 import { WatchContentButton } from "~~/components/shared/WatchContentButton";
-import { ConfidentialContextBadges, ConfidentialContextGate } from "~~/components/vote/ConfidentialContextGate";
+import { ConfidentialContextGate } from "~~/components/vote/ConfidentialContextGate";
 import { getVisibleContentRating } from "~~/hooks/contentFeed/shared";
 import type { ContentItem } from "~~/hooks/useContentFeed";
 import type { SubmitterProfile } from "~~/hooks/useSubmitterProfiles";
@@ -378,11 +378,6 @@ function FeedContentHeader({ item, titleId, compact }: FeedContentHeaderProps) {
       >
         {questionText}
       </h2>
-      {isPrivateContextMetadata(item) ? (
-        <div className="mt-2 flex flex-wrap justify-center gap-2">
-          <ConfidentialContextBadges item={item} compact={compact} showBondRequirement={false} />
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -548,7 +543,6 @@ function FeedContentMetaCard({
       {feedbackBonusTotal > 0n ? (
         <FeedbackBonusAmountDisplay amount={feedbackBonusTotal} currency={feedbackBonusCurrency} />
       ) : null}
-      {privateContext ? <ConfidentialContextBadges item={item} compact showBondRequirement={false} /> : null}
       {!hasVisibleReward ? <NoRewardChip /> : null}
     </>
   );
