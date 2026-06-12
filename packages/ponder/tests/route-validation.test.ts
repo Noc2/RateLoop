@@ -1,11 +1,21 @@
 import { Hono } from "hono";
 import { canonicalJson, canonicalJsonHash } from "@rateloop/node-utils/json";
+import { encodePacked, keccak256 } from "viem";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { resolvePonderProtocolDeploymentMetadata } from "../src/protocol-deployment.js";
 
 function serializeExpression(value: unknown) {
   return JSON.stringify(value, (_key, current) =>
     typeof current === "bigint" ? current.toString() : current,
+  );
+}
+
+function testAddressIdentityKey(account: `0x${string}`) {
+  return keccak256(
+    encodePacked(
+      ["string", "address"],
+      ["rateloop.address-identity-v1", account],
+    ),
   );
 }
 
@@ -2709,6 +2719,7 @@ describe("registerCorrelationRoutes", () => {
         },
       ],
       [
+        [],
         [
           {
             questionMetadataHash: `0x${"2".repeat(64)}`,
@@ -2801,6 +2812,77 @@ describe("registerCorrelationRoutes", () => {
     ).toBe(true);
   });
 
+  it("excludes raw-address banned voters from correlation scoring inputs", async () => {
+    const voter = "0x0000000000000000000000000000000000000001";
+    const nullifierHash = `0x${"1".repeat(64)}` as const;
+    const unrelatedIdentityKey = `0x${"a".repeat(64)}` as const;
+    expect(unrelatedIdentityKey).not.toBe(testAddressIdentityKey(voter));
+    const { queryBuilders } = mockPonderModules(
+      [
+        {
+          account: voter,
+          voter,
+          identityKey: unrelatedIdentityKey,
+          commitKey: `0x${"b".repeat(64)}`,
+          isUp: true,
+          stake: 25000000n,
+          epochIndex: 0,
+          revealWeight: 25000000n,
+          baseWeight: 10000n,
+          verifiedHuman: true,
+          historicalVoteCount: 0,
+          features: "",
+        },
+      ],
+      [
+        [
+          {
+            provider: 2,
+            nullifierHash,
+          },
+        ],
+        [
+          {
+            rater: voter,
+            provider: 2,
+            nullifierHash,
+          },
+        ],
+        [{ settledAt: 777n }],
+        [],
+      ],
+    );
+    const { registerCorrelationRoutes } = await import(
+      "../src/api/routes/correlation-routes.js"
+    );
+
+    const app = new Hono();
+    registerCorrelationRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/correlation/round-votes?rewardPoolId=7&contentId=9&roundId=2",
+    );
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.items).toEqual([]);
+    expect(body.excludedVotes).toEqual([
+      {
+        account: voter,
+        identityKey: unrelatedIdentityKey,
+        commitKey: `0x${"b".repeat(64)}`,
+        cooldownSeconds: null,
+        profileUpdatedAt: null,
+        reasons: ["voter_address_banned"],
+        roundOpenTime: null,
+      },
+    ]);
+    expect(serializeExpression(queryBuilders[1]?.where.mock.calls[0]?.[0])).toContain("raterIdentityBan.active");
+    expect(serializeExpression(queryBuilders[2]?.where.mock.calls[0]?.[0])).toContain(
+      "raterHumanCredential.nullifierHash",
+    );
+  });
+
   it("treats target audience as informational for correlation payouts", async () => {
     const cooldown = 7 * 24 * 60 * 60;
     mockPonderModules(
@@ -2878,7 +2960,7 @@ describe("registerCorrelationRoutes", () => {
           }),
         },
       ],
-      [[{ settledAt: 777n }], []],
+      [[], [{ settledAt: 777n }], []],
     );
     const { registerCorrelationRoutes } = await import(
       "../src/api/routes/correlation-routes.js"

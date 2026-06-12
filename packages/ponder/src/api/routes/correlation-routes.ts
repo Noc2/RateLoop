@@ -1,5 +1,6 @@
 import { ROUND_STATE } from "@rateloop/contracts/protocol";
-import { and, asc, desc, eq, or, sql } from "ponder";
+import { encodeAbiParameters, encodePacked, keccak256 } from "viem";
+import { and, asc, desc, eq, inArray, or, sql } from "ponder";
 import { db } from "ponder:api";
 import {
   content,
@@ -8,6 +9,7 @@ import {
   round,
   roundPayoutSnapshot,
   raterHumanCredential,
+  raterIdentityBan,
   vote,
   voterStats,
 } from "ponder:schema";
@@ -23,6 +25,7 @@ const BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG = 0x80;
 const BOUNTY_ELIGIBILITY_CREDENTIAL_MASK = 0x0e;
 const BOUNTY_ELIGIBILITY_PROOF_OF_HUMAN = 0x08;
 const ZERO_HASH = `0x${"0".repeat(64)}` as const;
+const HUMAN_CREDENTIAL_PROVIDER_NONE = 0;
 
 // Trailing base-rate window for surprise-weighted bounty claim weights: the most recent
 // settled rounds strictly preceding the requested round in lexicographic
@@ -42,6 +45,90 @@ function normalizeHex32(value: unknown): `0x${string}` | null {
 
 function normalizeString(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function addressIdentityKey(account: `0x${string}`) {
+  return keccak256(
+    encodePacked(
+      ["string", "address"],
+      ["rateloop.address-identity-v1", account],
+    ),
+  );
+}
+
+function credentialIdentityKey(provider: number, nullifierHash: `0x${string}`) {
+  if (provider === HUMAN_CREDENTIAL_PROVIDER_NONE || nullifierHash === ZERO_HASH) return ZERO_HASH;
+  return keccak256(
+    encodeAbiParameters(
+      [{ type: "string" }, { type: "uint8" }, { type: "bytes32" }],
+      ["rateloop.human-identity-v1", provider, nullifierHash],
+    ),
+  );
+}
+
+function identityBanSourceKey(provider: number, nullifierHash: `0x${string}`) {
+  return `${provider}:${nullifierHash.toLowerCase()}`;
+}
+
+type ActiveCorrelationIdentityBanState = {
+  addressIdentityKeys: Set<string>;
+  identityKeys: Set<string>;
+};
+
+async function loadActiveCorrelationIdentityBanState(nowSeconds: bigint): Promise<ActiveCorrelationIdentityBanState> {
+  const activeBans = await db
+    .select({
+      provider: raterIdentityBan.provider,
+      nullifierHash: raterIdentityBan.nullifierHash,
+    })
+    .from(raterIdentityBan)
+    .where(
+      and(
+        eq(raterIdentityBan.active, true),
+        or(
+          eq(raterIdentityBan.permanent, true),
+          sql`${raterIdentityBan.expiresAt} > ${nowSeconds}`,
+        ),
+      ),
+    );
+
+  const identityKeys = new Set<string>();
+  const sourceKeys = new Set<string>();
+  const nullifierHashes: `0x${string}`[] = [];
+  const seenNullifierHashes = new Set<string>();
+  for (const ban of activeBans) {
+    const nullifierHash = normalizeHex32(ban.nullifierHash);
+    if (nullifierHash === null) continue;
+    const provider = Number(ban.provider);
+    const identityKey = credentialIdentityKey(provider, nullifierHash);
+    if (identityKey !== ZERO_HASH) identityKeys.add(identityKey.toLowerCase());
+    sourceKeys.add(identityBanSourceKey(provider, nullifierHash));
+    if (!seenNullifierHashes.has(nullifierHash)) {
+      seenNullifierHashes.add(nullifierHash);
+      nullifierHashes.push(nullifierHash);
+    }
+  }
+
+  const addressIdentityKeys = new Set<string>();
+  if (nullifierHashes.length > 0) {
+    const credentialRows = await db
+      .select({
+        rater: raterHumanCredential.rater,
+        provider: raterHumanCredential.provider,
+        nullifierHash: raterHumanCredential.nullifierHash,
+      })
+      .from(raterHumanCredential)
+      .where(inArray(raterHumanCredential.nullifierHash, nullifierHashes));
+
+    for (const credential of credentialRows) {
+      const nullifierHash = normalizeHex32(credential.nullifierHash);
+      if (nullifierHash === null) continue;
+      if (!sourceKeys.has(identityBanSourceKey(Number(credential.provider), nullifierHash))) continue;
+      addressIdentityKeys.add(addressIdentityKey(credential.rater).toLowerCase());
+    }
+  }
+
+  return { addressIdentityKeys, identityKeys };
 }
 
 function questionMetadataRef(row: {
@@ -149,9 +236,31 @@ function formatCorrelationVoteRow(row: {
   baseWeight: bigint;
   verifiedHuman: boolean;
   historicalVoteCount: number;
-}) {
+}, banState?: ActiveCorrelationIdentityBanState) {
   const account = row.account ?? row.voter;
   const identityKey = row.identityKey ?? ZERO_HASH;
+  const excludedReasons: string[] = [];
+  if (banState?.identityKeys.has(identityKey.toLowerCase())) {
+    excludedReasons.push("identity_banned");
+  }
+  if (banState?.addressIdentityKeys.has(addressIdentityKey(row.voter).toLowerCase())) {
+    excludedReasons.push("voter_address_banned");
+  }
+
+  if (excludedReasons.length > 0) {
+    return {
+      excludedVote: {
+        account,
+        identityKey,
+        commitKey: row.commitKey,
+        cooldownSeconds: null,
+        profileUpdatedAt: null,
+        reasons: excludedReasons,
+        roundOpenTime: null,
+      },
+      item: null,
+    };
+  }
 
   const item = {
     account,
@@ -366,15 +475,20 @@ export function registerCorrelationRoutes(app: ApiApp) {
     const excludedVotes: NonNullable<ReturnType<typeof formatCorrelationVoteRow>["excludedVote"]>[] = [];
     let eligibleSeen = 0;
     let scanOffset = 0;
+    let banState: ActiveCorrelationIdentityBanState | null = null;
+    const nowSeconds = BigInt(Math.floor(Date.now() / 1000));
     for (let page = 0; page < MAX_VOTE_SCAN_PAGES; page += 1) {
       const rows = await loadVoteRows(VOTE_SCAN_PAGE_SIZE, scanOffset);
+      if (banState === null && rows.length > 0) {
+        banState = await loadActiveCorrelationIdentityBanState(nowSeconds);
+      }
       for (const row of rows) {
-        const formatted = formatCorrelationVoteRow(row);
+        const formatted = formatCorrelationVoteRow(row, banState ?? undefined);
         if (formatted.excludedVote) {
           excludedVotes.push(formatted.excludedVote);
           continue;
         }
-        if (eligibleSeen >= offset && items.length < limit) {
+        if (formatted.item && eligibleSeen >= offset && items.length < limit) {
           items.push(formatted.item);
         }
         eligibleSeen += 1;
