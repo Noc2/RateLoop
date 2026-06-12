@@ -52,6 +52,7 @@ export const Report = () => {
             valueColor={colors.yellow}
           />
           <FieldRow label="recommendation" value="Ship it — fix the pricing section first" startFrame={128} />
+          <FieldRow label="autonomous mode" value="humans & agents stay in the loop" startFrame={150} />
           <div
             style={{
               marginTop: 18,

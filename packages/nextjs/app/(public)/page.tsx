@@ -2,6 +2,7 @@ import Link from "next/link";
 import { LandingFaq } from "~~/components/home/LandingFaq";
 import { LandingPageActions } from "~~/components/home/LandingPageActions";
 import OrbAnimation from "~~/components/home/OrbAnimation";
+import { PromoVideo } from "~~/components/home/PromoVideo";
 import { SupportedAgentsSection } from "~~/components/home/SupportedAgentsSection";
 import { getOptionalPonderUrl } from "~~/lib/env/server";
 import {
@@ -156,6 +157,7 @@ function AskWorkflowSection() {
           <AskFlowPanel {...resultStep} />
         </div>
       </div>
+      <PromoVideo />
     </section>
   );
 }
