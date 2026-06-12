@@ -1569,13 +1569,7 @@ contract RoundVotingEngine is
         view
         returns (uint256 snapshot)
     {
-        assembly ("memory-safe") {
-            mstore(0x00, contentId)
-            mstore(0x20, roundConfidentialityEscrowSnapshot.slot)
-            mstore(0x00, roundId)
-            mstore(0x20, keccak256(0x00, 0x40))
-            snapshot := sload(keccak256(0x00, 0x40))
-        }
+        snapshot = uint256(uint160(roundConfidentialityEscrowSnapshot[contentId][roundId]));
     }
 
     function voteCooldownTimestamps(uint256 contentId, address voter, address identityHolder, bytes32 identityKey)

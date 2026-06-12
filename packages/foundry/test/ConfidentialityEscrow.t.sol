@@ -450,9 +450,11 @@ contract ConfidentialityEscrowTest is VotingTestBase {
     }
 
     function testAdvisoryVotesRejectedOnGatedContent() public {
+        _submitGatedQuestion("advisory-padding", 0);
         uint256 contentId = _submitGatedQuestion("advisory", 0);
         _commitVote(voter1, contentId, true);
         uint256 roundId = engine.currentRoundId(contentId);
+        assertNotEq(contentId, roundId);
         TestCommitArtifacts memory artifacts =
             _buildTestCommitArtifacts(address(engine), voter2, true, keccak256("advisory"), contentId);
 
