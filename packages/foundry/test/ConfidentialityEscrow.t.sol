@@ -196,6 +196,24 @@ contract ConfidentialityEscrowTest is VotingTestBase {
         assertFalse(confidentialityEscrow.hasActiveBond(slashContentId, slashIdentityKey));
     }
 
+    function testGatedQuestionConfiguresEscrowAndRoundSnapshotsEscrow() public {
+        uint256 contentId = _submitGatedQuestion("snapshot-shape", 0);
+
+        IConfidentialityEscrow.ConfidentialityConfig memory config =
+            confidentialityEscrow.confidentialityConfig(contentId);
+        assertTrue(config.gated);
+        assertEq(config.bondAsset, confidentialityEscrow.BOND_ASSET_LREP());
+        assertEq(config.bondAmount, 0);
+        assertEq(config.flags, 0);
+
+        vm.prank(voter1);
+        engine.openRound(contentId);
+        uint256 roundId = engine.currentRoundId(contentId);
+
+        address snapshotEscrow = address(uint160(engine.roundConfidentialityEscrowSnapshotWord(contentId, roundId)));
+        assertEq(snapshotEscrow, address(confidentialityEscrow));
+    }
+
     function testConfigureRejectsUnsupportedFlags() public {
         uint8 lrepAsset = confidentialityEscrow.BOND_ASSET_LREP();
 

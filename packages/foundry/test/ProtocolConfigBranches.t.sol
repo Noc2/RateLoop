@@ -464,6 +464,15 @@ contract ProtocolConfigBranchesTest is Test {
         config.setConfidentialityEscrow(address(brokenEscrow));
     }
 
+    function test_SetConfidentialityEscrow_RejectsZeroRegistryShape() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+        MockConfidentialityEscrowForConfig zeroRegistryEscrow =
+            new MockConfidentialityEscrowForConfig(address(0), address(config));
+
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.setConfidentialityEscrow(address(zeroRegistryEscrow));
+    }
+
     function test_SetConfidentialityEscrow_RejectsRotationOrUnsetAfterConfigured() public {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
         MockConfidentialityEscrowForConfig escrow =

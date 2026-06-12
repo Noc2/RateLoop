@@ -1291,6 +1291,34 @@ contract LaunchDistributionPoolTest is Test {
         assertEq(pool.verifiedAnchorDistinctRaterCount(bytes32("anchor-a")), 1);
     }
 
+    function test_FinalizedPendingLaunchCreditCannotBeStaleCancelled() public {
+        ClusterPayoutOracle oracle = _configureLaunchOracle(1);
+        bytes32 commitKey = _commitKey(1);
+
+        pool.recordEarnedRaterRewardWithSourceReady(
+            alice,
+            1,
+            1,
+            commitKey,
+            8_000,
+            3,
+            true,
+            pool.MIN_LAUNCH_CREDIT_STAKE(),
+            _singleAnchor(bytes32("anchor-a")),
+            uint64(block.timestamp)
+        );
+
+        IClusterPayoutOracle.PayoutWeight memory payout =
+            _launchPayoutWeight(1, commitKey, alice, 2_500, keccak256("finalized-before-cancel"));
+        _proposeAndFinalizeLaunchPayoutSnapshot(oracle, 1, payout, keccak256("epoch-artifact"));
+
+        pool.finalizeEarnedRaterRewardCredit(1, 1, commitKey, payout, new bytes32[](0));
+
+        vm.warp(block.timestamp + pool.STALE_PENDING_EARNED_RATER_CREDIT_DELAY());
+        vm.expectRevert(LaunchDistributionPool.InvalidAmount.selector);
+        pool.cancelStalePendingEarnedRaterCredit(1, 1, commitKey);
+    }
+
     function test_FinalizePendingLaunchCreditSkipsBannedRaterAndReleasesAnchors() public {
         ClusterPayoutOracle oracle = _configureLaunchOracle(1);
         bytes32 seedAnchor = bytes32("alice-seeded-ban");
