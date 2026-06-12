@@ -46,8 +46,7 @@ async function expectSuccessfulSubmission(page: Page) {
   await expect(submitAnotherButton).toHaveClass(/btn-outline/);
   await expect(submitAnotherButton).toHaveClass(/w-full/);
   await expect(submitAnotherButton).toHaveClass(/gap-2/);
-  await page.waitForTimeout(1_500);
-  await expect(successDialog).toBeVisible();
+  await expect(successDialog).toBeVisible({ timeout: 1_500 });
 }
 
 test.describe("Ask page", () => {

@@ -94,16 +94,11 @@ test.describe("Accessibility basics", () => {
 
     await waitForFeedLoaded(page, 30_000);
 
-    const emptyState = page.getByText(FEED_EMPTY_STATE_RE);
     const feed = page.locator('[role="feed"][aria-label="Content feed"]').first();
     await expect(
-      feed.or(emptyState.first()).first(),
-      "Vote route should expose either feed semantics or a recognized empty state",
+      feed,
+      `Vote route should expose feed semantics once ${FEED_EMPTY_STATE_RE} is no longer the expected seeded state`,
     ).toBeVisible({ timeout: 10_000 });
-
-    if (!(await feed.isVisible({ timeout: 5_000 }).catch(() => false))) {
-      return;
-    }
 
     await expect(feed).toHaveAttribute("aria-busy", /^(true|false)$/);
 
@@ -116,45 +111,24 @@ test.describe("Accessibility basics", () => {
 
     const titleId = await activeArticle.getAttribute("aria-labelledby");
     expect(titleId, "Active feed article should reference its visible title").toBeTruthy();
-    if (!titleId) {
-      return;
-    }
-
-    await expect(page.locator(`#${titleId}`)).toBeVisible({ timeout: 5_000 });
+    await expect(page.locator(`#${titleId!}`)).toBeVisible({ timeout: 5_000 });
   });
 
   test("StakeSelector dialog has ARIA attributes", async ({ page }) => {
     await setupWallet(page, ANVIL_ACCOUNTS.account2.privateKey);
     await gotoPath(page, "/rate", { ensureWalletConnected: true });
 
-    try {
-      await waitForFeedLoaded(page, 30_000);
-    } catch {
-      test.skip(true, "Vote feed did not stabilize for stake dialog accessibility assertions");
-      return;
-    }
-
-    if (!(await findVoteableContent(page))) {
-      test.skip(true, "No voteable content available for accessibility dialog assertions");
-      return;
-    }
+    await waitForFeedLoaded(page, 30_000);
+    expect(await findVoteableContent(page), "Seeded vote feed should expose voteable content").toBe(true);
 
     const voteUpBtn = page.getByRole("button", { name: VOTE_UP_BUTTON_NAME }).first();
-    if (!(await voteUpBtn.isVisible({ timeout: 10_000 }).catch(() => false))) {
-      test.skip(true, "No visible vote-up button available for accessibility dialog assertions");
-      return;
-    }
+    await expect(voteUpBtn).toBeVisible({ timeout: 10_000 });
 
     const dialog = page.getByRole("dialog").first();
-    try {
-      await expect(async () => {
-        await voteUpBtn.click({ timeout: 5_000 });
-        await expect(dialog).toBeVisible({ timeout: 5_000 });
-      }).toPass({ timeout: 30_000, intervals: [500, 1_000, 2_000] });
-    } catch {
-      test.skip(true, "Stake selector did not open reliably for accessibility assertions");
-      return;
-    }
+    await expect(async () => {
+      await voteUpBtn.click({ timeout: 5_000 });
+      await expect(dialog).toBeVisible({ timeout: 5_000 });
+    }).toPass({ timeout: 30_000, intervals: [500, 1_000, 2_000] });
 
     const slider = page.getByRole("slider", { name: "Stake amount" });
     const sliderVisible = await slider.isVisible({ timeout: 3_000 }).catch(() => false);

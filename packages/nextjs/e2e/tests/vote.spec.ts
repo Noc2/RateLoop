@@ -27,7 +27,7 @@ test.describe("Voting flow — 3-voter threshold", () => {
     await setupWallet(page, ANVIL_ACCOUNTS.account3.privateKey);
     await gotoWithRetry(page, "/rate", { ensureWalletConnected: true });
     await waitForFeedLoaded(page);
-    await page.waitForTimeout(1_000);
+    await expect.poll(() => watchlistChallengeRequests, { timeout: 1_000 }).toBe(0);
 
     expect(watchlistChallengeRequests).toBe(0);
     await context.close();

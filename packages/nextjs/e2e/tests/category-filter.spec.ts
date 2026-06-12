@@ -1,8 +1,9 @@
 import { expect, test } from "../fixtures/wallet";
 import { FEED_EMPTY_STATE_RE, waitForFeedLoaded } from "../helpers/wait-helpers";
+import type { Locator, Page } from "@playwright/test";
 
 test.describe("Category filter", () => {
-  async function loadVoteFeed(page: any, path = "/rate") {
+  async function loadVoteFeed(page: Page, path = "/rate") {
     await expect(async () => {
       await page.goto(path, { waitUntil: "domcontentloaded" });
       await waitForFeedLoaded(page, 20_000);
@@ -14,7 +15,7 @@ test.describe("Category filter", () => {
    * Waits for the "All" button to appear, then finds sibling category buttons.
    * Returns { name, locator } or null if none found.
    */
-  async function findVisibleCategoryPill(page: any) {
+  async function findVisibleCategoryPill(page: Page): Promise<{ name: string; locator: Locator }> {
     // Wait for the "All" button to appear — this confirms the category bar is rendered
     const allButton = page.getByTestId("category-filter-pill").filter({ hasText: /^All$/i }).first();
     await allButton.waitFor({ state: "visible", timeout: 10_000 }).catch(() => null);
@@ -32,35 +33,49 @@ test.describe("Category filter", () => {
       "General",
     ];
 
-    const deadline = Date.now() + 10_000;
-    while (Date.now() < deadline) {
-      for (const name of knownCategories) {
-        const pill = page.getByTestId("category-filter-pill").filter({ hasText: new RegExp(`^${name}$`, "i") }).first();
-        const isVisible = await pill.isVisible().catch(() => false);
-        if (isVisible) {
-          return { name, locator: pill };
-        }
-      }
+    let visiblePill: { name: string; locator: Locator } | null = null;
+    await expect
+      .poll(
+        async () => {
+          for (const name of knownCategories) {
+            const pill = page
+              .getByTestId("category-filter-pill")
+              .filter({ hasText: new RegExp(`^${name}$`, "i") })
+              .first();
+            const isVisible = await pill.isVisible().catch(() => false);
+            if (isVisible) {
+              visiblePill = { name, locator: pill };
+              return name;
+            }
+          }
 
-      const pills = page.getByTestId("category-filter-pill");
-      const count = await pills.count();
-      for (let i = 0; i < count; i++) {
-        const pill = pills.nth(i);
-        const text = (await pill.textContent())?.trim() ?? "";
-        if (!text || text === "All" || text.length < 2) {
-          continue;
-        }
+          const pills = page.getByTestId("category-filter-pill");
+          const count = await pills.count();
+          for (let i = 0; i < count; i++) {
+            const pill = pills.nth(i);
+            const text = (await pill.textContent())?.trim() ?? "";
+            if (!text || text === "All" || text.length < 2) {
+              continue;
+            }
 
-        const isVisible = await pill.isVisible().catch(() => false);
-        if (isVisible) {
-          return { name: text, locator: pill };
-        }
-      }
+            const isVisible = await pill.isVisible().catch(() => false);
+            if (isVisible) {
+              visiblePill = { name: text, locator: pill };
+              return text;
+            }
+          }
 
-      await page.waitForTimeout(500);
+          return "";
+        },
+        { timeout: 10_000, intervals: [250, 500, 1_000] },
+      )
+      .not.toBe("");
+
+    if (!visiblePill) {
+      throw new Error("Expected a visible category pill after polling.");
     }
 
-    return null;
+    return visiblePill;
   }
 
   test("clicking category pill updates URL hash and filters feed", async ({ connectedPage: page }) => {
@@ -90,11 +105,8 @@ test.describe("Category filter", () => {
     const allPill = page.getByTestId("category-filter-pill").filter({ hasText: /^All$/i }).first();
     await expect(allPill).toBeVisible({ timeout: 10_000 });
     await allPill.click();
-    await page.waitForFunction(() => !window.location.hash, { timeout: 5_000 });
 
-    // Hash should be cleared
-    const url = page.url();
-    expect(url).not.toContain("#");
+    await expect(page).not.toHaveURL(/#media/, { timeout: 5_000 });
   });
 
   test("URL hash on load activates corresponding category", async ({ connectedPage: page }) => {

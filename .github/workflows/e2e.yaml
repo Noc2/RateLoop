@@ -56,6 +56,12 @@ jobs:
             timeout: 45
             start_keeper: false
             warm_routes: true
+          - suite: world-id
+            command: yarn workspace @rateloop/nextjs e2e:ci:world-id
+            playwright_browsers: chromium
+            timeout: 30
+            start_keeper: false
+            warm_routes: false
           - suite: responsive
             command: yarn workspace @rateloop/nextjs e2e:responsive
             playwright_browsers: chromium

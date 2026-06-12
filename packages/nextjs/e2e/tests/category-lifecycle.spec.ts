@@ -22,13 +22,7 @@ test.describe("Seed categories", () => {
     const slug = `seed-${uniqueId}`;
 
     // Snapshot current categories.
-    let initialCategories: string[] = [];
-    try {
-      const { items } = await getCategories();
-      initialCategories = items.map(c => c.id);
-    } catch {
-      // Ponder may not be available
-    }
+    const initialCategories = (await getCategories()).items.map(c => c.id);
 
     // Add category metadata directly (account #0 has ADMIN_ROLE).
     const success = await addCategory(
@@ -46,10 +40,7 @@ test.describe("Seed categories", () => {
       return items.some(c => c.name === name);
     });
 
-    if (!indexed) {
-      test.skip(true, "Ponder not indexing local Anvil — on-chain add succeeded");
-      return;
-    }
+    expect(indexed, "Ponder should index the category metadata added on-chain").toBe(true);
 
     const { items } = await getCategories();
     const added = items.find(c => c.name === name);
@@ -79,10 +70,7 @@ test.describe("Seed categories", () => {
       return categories.every(cat => items.some(i => i.name === cat.name));
     });
 
-    if (!indexed) {
-      test.skip(true, "Ponder not indexing local Anvil — on-chain adds succeeded");
-      return;
-    }
+    expect(indexed, "Ponder should index all category metadata added on-chain").toBe(true);
 
     const { items } = await getCategories();
     for (const cat of categories) {

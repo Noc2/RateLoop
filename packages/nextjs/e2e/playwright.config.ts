@@ -87,6 +87,7 @@ export default defineConfig({
   testDir: "./tests",
   fullyParallel: false, // Tests share Anvil chain state — run sequentially
   forbidOnly: !!process.env.CI,
+  failOnFlakyTests: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   workers: 1, // Single worker to prevent Anvil nonce conflicts
   reporter: process.env.CI

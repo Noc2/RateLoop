@@ -74,13 +74,12 @@ test.describe("Negative cases", () => {
     await expect(voteUp).toBeVisible({ timeout: 10_000 });
     const votedContentId = await page.getByTestId("vote-content-card-shell").first().getAttribute("data-content-id");
 
-    // First vote — wait for the button to stabilize (React re-renders from Ponder polling
-    // can detach/reattach the element between locator resolution and click)
-    await voteUp.waitFor({ state: "visible", timeout: 10_000 });
-    await page.waitForTimeout(500); // let React settle
-    await voteUp.click();
     const stakeModal = page.locator("[role='dialog']").first();
-    await expect(stakeModal).toBeVisible({ timeout: 5_000 });
+    await expect(async () => {
+      await voteUp.waitFor({ state: "visible", timeout: 10_000 });
+      await voteUp.click({ timeout: 5_000 });
+      await expect(stakeModal).toBeVisible({ timeout: 5_000 });
+    }).toPass({ timeout: 30_000, intervals: [500, 1_000, 2_000] });
 
     const presetBtn = stakeModal.getByRole("button", { name: /^1$/ });
     if (await presetBtn.isVisible().catch(() => false)) {
