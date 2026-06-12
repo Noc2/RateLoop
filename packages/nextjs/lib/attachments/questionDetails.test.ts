@@ -16,6 +16,8 @@ import { createMemoryDatabaseResources } from "~~/lib/db/testMemory";
 
 const originalAppUrl = process.env.APP_URL;
 const originalModerationMode = process.env.RATELOOP_QUESTION_DETAILS_MODERATION_MODE;
+const originalE2EProductionBuild = process.env.RATELOOP_E2E_PRODUCTION_BUILD;
+const originalPublicE2EProductionBuild = process.env.NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD;
 const originalOpenAiKey = process.env.OPENAI_API_KEY;
 const WALLET = "0x00000000000000000000000000000000000000aa";
 
@@ -42,6 +44,16 @@ afterEach(() => {
     delete process.env.OPENAI_API_KEY;
   } else {
     process.env.OPENAI_API_KEY = originalOpenAiKey;
+  }
+  if (originalE2EProductionBuild === undefined) {
+    delete process.env.RATELOOP_E2E_PRODUCTION_BUILD;
+  } else {
+    process.env.RATELOOP_E2E_PRODUCTION_BUILD = originalE2EProductionBuild;
+  }
+  if (originalPublicE2EProductionBuild === undefined) {
+    delete process.env.NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD;
+  } else {
+    process.env.NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD = originalPublicE2EProductionBuild;
   }
 });
 
@@ -147,6 +159,8 @@ test("persists gated access intent for approved details at upload time", async (
 
 test("does not publish details from localhost because on-chain details URLs must be public HTTPS", async () => {
   process.env.APP_URL = "http://localhost:3000";
+  delete process.env.RATELOOP_E2E_PRODUCTION_BUILD;
+  delete process.env.NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD;
   const normalizedText = "Local-only details";
   const result = await createQuestionDetailsFromText({
     detailsId: "det_localdetailsurl01",
@@ -168,6 +182,29 @@ test("does not publish details from localhost because on-chain details URLs must
   const stored = await getQuestionDetails("det_localdetailsurl01");
   assert.equal(stored?.normalizedText, null);
   assert.equal(stored?.status, "failed");
+});
+
+test("allows localhost details in the e2e production-build harness", async () => {
+  delete process.env.APP_URL;
+  delete process.env.RATELOOP_QUESTION_DETAILS_MODERATION_MODE;
+  process.env.RATELOOP_E2E_PRODUCTION_BUILD = "true";
+  const normalizedText = "Local e2e hosted details";
+  const result = await createQuestionDetailsFromText({
+    detailsId: "det_locale2edetails01",
+    requestUrl: "http://localhost:3000/api/attachments/details/upload",
+    sha256: sha256Hex(normalizedText),
+    sizeBytes: new TextEncoder().encode(normalizedText).byteLength,
+    text: normalizedText,
+    uploader: {
+      kind: "wallet",
+      ownerWalletAddress: WALLET,
+    },
+  });
+
+  assert.equal(result.status, "approved");
+  assert.equal(result.detailsUrl, "http://localhost:3000/api/attachments/details/det_locale2edetails01");
+  const stored = await getQuestionDetails("det_locale2edetails01");
+  assert.equal(stored?.normalizedText, normalizedText);
 });
 
 test("stores failed details without publishing text when size or hash validation fails", async () => {

@@ -123,6 +123,17 @@ function isLocalhostDetailsHostname(hostname: string) {
   return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname === "[::1]";
 }
 
+function isE2EProductionBuild() {
+  return (
+    process.env.RATELOOP_E2E_PRODUCTION_BUILD === "true" ||
+    process.env.NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD === "true"
+  );
+}
+
+function shouldAllowLocalQuestionDetailsUrls() {
+  return process.env.NODE_ENV !== "production" || isE2EProductionBuild();
+}
+
 function isPublicHttpsQuestionDetailsUrl(value: string) {
   try {
     const parsed = new URL(value);
@@ -155,6 +166,24 @@ function isPublicHttpsQuestionDetailsUrl(value: string) {
   }
 }
 
+function isPublishableQuestionDetailsUrl(value: string) {
+  if (isPublicHttpsQuestionDetailsUrl(value)) return true;
+  if (!isE2EProductionBuild()) return false;
+
+  try {
+    const parsed = new URL(value);
+    return (
+      (parsed.protocol === "http:" || parsed.protocol === "https:") &&
+      !parsed.username &&
+      !parsed.password &&
+      isLocalhostDetailsHostname(parsed.hostname.toLowerCase()) &&
+      /^\/api\/attachments\/details\/det_[A-Za-z0-9_-]{16,80}$/.test(parsed.pathname)
+    );
+  } catch {
+    return false;
+  }
+}
+
 function getAllowedQuestionDetailsOrigins() {
   const origins = new Set(PRODUCTION_QUESTION_DETAILS_ORIGINS);
   const rawValues = [process.env.APP_URL, process.env.NEXT_PUBLIC_APP_URL, process.env.VERCEL_URL];
@@ -180,7 +209,7 @@ function getAllowedQuestionDetailsOrigins() {
 
 function isLocalQuestionDetailsOrigin(parsed: URL) {
   return (
-    process.env.NODE_ENV !== "production" &&
+    shouldAllowLocalQuestionDetailsUrls() &&
     (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1" || parsed.hostname === "[::1]")
   );
 }
@@ -229,11 +258,11 @@ function hasOpenAiModerationKey() {
 }
 
 function isDevelopmentModerationExplicitlyDisabled() {
-  return process.env.NODE_ENV !== "production" && process.env.RATELOOP_QUESTION_DETAILS_MODERATION_MODE === "disabled";
+  return shouldAllowLocalQuestionDetailsUrls() && process.env.RATELOOP_QUESTION_DETAILS_MODERATION_MODE === "disabled";
 }
 
 function isDevModerationSkipAllowed() {
-  return process.env.NODE_ENV !== "production" && !hasOpenAiModerationKey();
+  return shouldAllowLocalQuestionDetailsUrls() && !hasOpenAiModerationKey();
 }
 
 function textChunks(text: string) {
@@ -420,7 +449,7 @@ export async function createQuestionDetailsFromText(params: CreateQuestionDetail
     error = moderation.status === "review_required" ? "Details require moderation review before publication." : null;
     if (
       status === "approved" &&
-      !isPublicHttpsQuestionDetailsUrl(getQuestionDetailsUrl(params.requestUrl, params.detailsId))
+      !isPublishableQuestionDetailsUrl(getQuestionDetailsUrl(params.requestUrl, params.detailsId))
     ) {
       status = "failed";
       error = QUESTION_DETAILS_PUBLIC_URL_ERROR;

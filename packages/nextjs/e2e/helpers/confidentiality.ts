@@ -1,6 +1,7 @@
 import {
   DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
   approveLREP,
+  submitContentDirectWithResult,
   submitContentDirect,
   waitForPonderIndexed,
   type SubmissionConfidentialityConfig,
@@ -32,6 +33,7 @@ import {
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { foundry } from "viem/chains";
+import { createHash } from "node:crypto";
 import {
   ConfidentialityEscrowAbi,
   RaterRegistryAbi,
@@ -70,6 +72,20 @@ type SubmitGatedQuestionResult = {
   title: string;
 };
 
+type UploadedGatedQuestionDetails = {
+  detailsHash: Hex;
+  detailsId: string;
+  detailsUrl: string;
+  text: string;
+};
+
+type SubmitHostedGatedQuestionDirectResult = SubmitGatedQuestionResult & {
+  detailsHash: Hex;
+  transactionHash: Hex;
+};
+
+type DisclosurePolicy = "after_settlement" | "private_forever";
+
 type TermsAcceptanceInput = {
   contentHash?: string | null;
   contentId: string | bigint | number;
@@ -89,6 +105,7 @@ const confidentialityPublicClient = createPublicClient({
   chain: foundry,
   transport: http(E2E_RPC_URL),
 });
+let e2eDbPool: import("pg").Pool | null = null;
 
 function normalizeAssetName(asset: "LREP" | "USDC" | string) {
   return asset.trim().toUpperCase() === "USDC" ? "USDC" : "LREP";
@@ -103,6 +120,22 @@ function appendAddress(url: string, address?: string) {
 
 function privateDetailsHash(description: string): Hex {
   return keccak256(toBytes(description.trim()));
+}
+
+function sha256Hex(value: string): Hex {
+  return `0x${createHash("sha256").update(value, "utf8").digest("hex")}`;
+}
+
+function createDetailsId() {
+  return `det_e2e${Date.now().toString(36)}${Math.random().toString(36).slice(2, 14)}`;
+}
+
+async function getE2EDbPool() {
+  const databaseUrl = process.env.DATABASE_URL;
+  expect(databaseUrl, "DATABASE_URL must be set for confidentiality e2e database setup").toBeTruthy();
+  const { Pool } = await import("pg");
+  e2eDbPool ??= new Pool({ connectionString: databaseUrl, max: 2 });
+  return e2eDbPool;
 }
 
 export async function submitGatedQuestionDirect(config: SubmitGatedQuestionDirectConfig): Promise<boolean> {
@@ -134,6 +167,175 @@ export async function submitGatedQuestionDirect(config: SubmitGatedQuestionDirec
         detailsUrl: "",
       },
     },
+  );
+}
+
+export async function uploadGatedQuestionDetails(
+  request: APIRequestContext,
+  account: AnvilAccount,
+  text: string,
+): Promise<UploadedGatedQuestionDetails> {
+  const normalizedText = text.trim();
+  const detailsId = createDetailsId();
+  const detailsHash = sha256Hex(normalizedText);
+  const body = {
+    address: account.address,
+    detailsId,
+    requiresGatedAccess: true,
+    sha256: detailsHash.slice(2),
+    sizeBytes: new TextEncoder().encode(normalizedText).byteLength,
+  };
+
+  const challengeResponse = await request.post("/api/attachments/details/challenge", { data: body });
+  expect(challengeResponse.ok(), await challengeResponse.text()).toBe(true);
+  const challenge = await challengeResponse.json();
+  expect(typeof challenge.challengeId).toBe("string");
+  expect(typeof challenge.message).toBe("string");
+
+  const signer = privateKeyToAccount(account.privateKey);
+  const signature = await signer.signMessage({ message: challenge.message });
+  const uploadResponse = await request.post("/api/attachments/details/upload", {
+    data: {
+      ...body,
+      challengeId: challenge.challengeId,
+      signature,
+      text: normalizedText,
+    },
+  });
+  expect(uploadResponse.ok(), await uploadResponse.text()).toBe(true);
+  const uploaded = await uploadResponse.json();
+  expect(uploaded.status).toBe("approved");
+  expect(uploaded.detailsHash).toBe(detailsHash);
+  expect(typeof uploaded.detailsUrl).toBe("string");
+
+  return {
+    detailsHash,
+    detailsId,
+    detailsUrl: uploaded.detailsUrl,
+    text: normalizedText,
+  };
+}
+
+export async function submitHostedGatedQuestionDirect(config: SubmitGatedQuestionDirectConfig & {
+  detailsHash: Hex;
+  detailsUrl: string;
+}): Promise<SubmitHostedGatedQuestionDirectResult> {
+  const submitter = config.submitter ?? ANVIL_ACCOUNTS.account2;
+  const confidentiality: SubmissionConfidentialityConfig = {
+    gated: true,
+    bondAsset: config.bondAsset ?? CONFIDENTIALITY_BOND_ASSET_LREP,
+    bondAmount: config.bondAmount ?? 0n,
+    flags: config.flags ?? CONFIDENTIALITY_FLAG_PRIVATE_FOREVER,
+  };
+
+  const result = await submitContentDirectWithResult(
+    config.contextUrl ?? "",
+    config.title,
+    config.description,
+    config.tags ?? "test,private-context",
+    config.categoryId ?? 1,
+    submitter.address,
+    config.contentRegistryAddress ?? CONTRACT_ADDRESSES.ContentRegistry,
+    { imageUrls: config.imageUrls, videoUrl: config.videoUrl },
+    config.rewardAmount,
+    config.roundConfig,
+    config.rewardAsset ?? DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
+    config.rewardTokenAddress,
+    {
+      confidentiality,
+      details: {
+        detailsHash: config.detailsHash,
+        detailsUrl: config.detailsUrl,
+      },
+    },
+  );
+  expect(result.success, "Hosted gated direct question submission should succeed").toBe(true);
+  expect(result.txHash, "Hosted gated direct question submission should return a transaction hash").toBeTruthy();
+
+  let submitted: any;
+  const indexed = await waitForPonderIndexed(
+    async () => {
+      const data = await ponderGet(`/content?status=all&search=${encodeURIComponent(config.title)}&limit=10`);
+      submitted = data.items?.find((item: { title?: string }) => item.title === config.title);
+      return Boolean(submitted);
+    },
+    90_000,
+    2_000,
+    "confidentiality:hosted-gated-question-indexed",
+  );
+  expect(indexed, "Ponder should index the hosted gated direct submission").toBe(true);
+  expect(submitted?.id, "Hosted gated direct submission should have a content id").toBeTruthy();
+
+  return {
+    contentId: String(submitted.id),
+    detailsHash: config.detailsHash,
+    detailsUrl: config.detailsUrl,
+    title: config.title,
+    transactionHash: result.txHash!,
+  };
+}
+
+export async function attachHostedQuestionDetails(
+  request: APIRequestContext,
+  submission: Pick<SubmitHostedGatedQuestionDirectResult, "contentId" | "detailsHash" | "detailsUrl" | "transactionHash">,
+) {
+  const response = await request.post("/api/attachments/details/attach", {
+    data: {
+      chainId: 31337,
+      transactionHashes: [submission.transactionHash],
+      details: [
+        {
+          contentId: submission.contentId,
+          detailsHash: submission.detailsHash,
+          detailsUrl: submission.detailsUrl,
+        },
+      ],
+    },
+  });
+  expect(response.ok(), await response.text()).toBe(true);
+  const body = await response.json();
+  expect(body.attached, "Hosted details attach route should link the submitted details").toBeGreaterThanOrEqual(1);
+  return body;
+}
+
+export async function upsertQuestionConfidentialityForE2E({
+  bondAmount = "0",
+  bondAsset = "LREP",
+  contentId,
+  detailsHash,
+  disclosurePolicy,
+}: {
+  bondAmount?: string;
+  bondAsset?: "LREP" | "USDC";
+  contentId: string;
+  detailsHash?: Hex;
+  disclosurePolicy: DisclosurePolicy;
+}) {
+  const pool = await getE2EDbPool();
+  await pool.query(
+    `
+      insert into question_confidentiality (
+        content_id,
+        gated,
+        bond_asset,
+        bond_amount,
+        disclosure_policy,
+        published_at,
+        details_hash,
+        created_at,
+        updated_at
+      )
+      values ($1, true, $2, $3, $4, null, $5, now(), now())
+      on conflict (content_id) do update set
+        gated = excluded.gated,
+        bond_asset = excluded.bond_asset,
+        bond_amount = excluded.bond_amount,
+        disclosure_policy = excluded.disclosure_policy,
+        published_at = null,
+        details_hash = excluded.details_hash,
+        updated_at = now()
+    `,
+    [contentId, bondAsset, bondAmount, disclosurePolicy, detailsHash ?? null],
   );
 }
 

@@ -108,6 +108,7 @@ type SubmissionRewardTerms = {
   feedbackWindowSeconds: bigint;
   bountyEligibility: number;
 };
+type DirectTransactionResult = { success: boolean; txHash?: `0x${string}` };
 const MAX_SUBMISSION_IMAGE_URLS = 4;
 export const DEFAULT_SUBMISSION_REWARD_ASSET_LREP = 0;
 export const SUBMISSION_REWARD_ASSET_USDC = 1;
@@ -449,7 +450,7 @@ async function sendTxViaRpc(from: string, to: string, data: `0x${string}`): Prom
   return { status: "unknown", txHash, error };
 }
 
-async function sendTx(from: string, to: string, data: `0x${string}`): Promise<boolean> {
+async function sendTxDetailed(from: string, to: string, data: `0x${string}`): Promise<DirectTransactionResult> {
   const gasLimit = await resolveTxGasLimit(from, to, data);
   const privateKey = ANVIL_PRIVATE_KEYS_BY_ADDRESS.get(from.toLowerCase());
   if (privateKey) {
@@ -465,14 +466,19 @@ async function sendTx(from: string, to: string, data: `0x${string}`): Promise<bo
         gas: gasLimit,
       });
       const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
-      return receipt.status === "success";
+      return { success: receipt.status === "success", txHash };
     } catch (error) {
       console.warn(`[sendTx] Signed tx failed from=${from} to=${to}; falling back to RPC send: ${String(error)}`);
     }
   }
 
   const result = await sendTxViaRpc(from, to, data);
-  return result.status === "success";
+  return { success: result.status === "success", txHash: result.txHash };
+}
+
+async function sendTx(from: string, to: string, data: `0x${string}`): Promise<boolean> {
+  const result = await sendTxDetailed(from, to, data);
+  return result.success;
 }
 
 async function readLatestBlockSnapshot(): Promise<{ blockTag: `0x${string}`; timestampSeconds: number }> {
@@ -914,7 +920,7 @@ export async function registerFrontend(fromAddress: string, contractAddress: str
  * Caller funds the mandatory non-refundable LREP bounty during submission.
  * Returns true when the submission transaction succeeds.
  */
-export async function submitContentDirect(
+export async function submitContentDirectWithResult(
   url: string,
   title: string,
   description: string,
@@ -928,7 +934,7 @@ export async function submitContentDirect(
   rewardAsset: number = DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
   rewardTokenAddress?: string,
   contentOptions: SubmissionContentOptions = {},
-): Promise<boolean> {
+): Promise<DirectTransactionResult> {
   const { encodeFunctionData } = await import("viem");
   const resolvedCategoryId = BigInt(categoryId);
   const media = toSubmissionMedia(url, mediaInput);
@@ -959,20 +965,20 @@ export async function submitContentDirect(
     resolvedRoundConfig,
     { ...contentOptions, details, confidentiality },
   );
-  if (!reservation) return false;
+  if (!reservation) return { success: false };
 
   const [lrepTokenAddress, rewardEscrowAddress] = await Promise.all([
     resolveRegistryAddressGetter(contractAddress, "lrepToken"),
     resolveRegistryAddressGetter(contractAddress, "questionRewardPoolEscrow"),
   ]);
-  if (!lrepTokenAddress || !rewardEscrowAddress) return false;
+  if (!lrepTokenAddress || !rewardEscrowAddress) return { success: false };
 
   const resolvedRewardTokenAddress =
     rewardTerms.asset === DEFAULT_SUBMISSION_REWARD_ASSET_LREP ? lrepTokenAddress : rewardTokenAddress;
-  if (!resolvedRewardTokenAddress) return false;
+  if (!resolvedRewardTokenAddress) return { success: false };
 
   const rewardApproved = await approveLREP(rewardEscrowAddress, rewardAmount, fromAddress, resolvedRewardTokenAddress);
-  if (!rewardApproved) return false;
+  if (!rewardApproved) return { success: false };
 
   const reserveData = encodeFunctionData({
     abi: [
@@ -988,7 +994,7 @@ export async function submitContentDirect(
     args: [reservation.revealCommitment],
   });
   const reserved = await sendTx(fromAddress, contractAddress, reserveData);
-  if (!reserved) return false;
+  if (!reserved) return { success: false };
 
   await evmIncreaseTime(1);
 
@@ -1082,7 +1088,40 @@ export async function submitContentDirect(
       confidentiality,
     ],
   });
-  return sendTx(fromAddress, contractAddress, data);
+  return sendTxDetailed(fromAddress, contractAddress, data);
+}
+
+export async function submitContentDirect(
+  url: string,
+  title: string,
+  description: string,
+  tags: string,
+  categoryId: number | bigint,
+  fromAddress: string,
+  contractAddress: string,
+  mediaInput?: SubmissionMediaInput,
+  rewardAmount: bigint = DEFAULT_SUBMISSION_REWARD_AMOUNT,
+  roundConfig?: SubmissionRoundConfig,
+  rewardAsset: number = DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
+  rewardTokenAddress?: string,
+  contentOptions: SubmissionContentOptions = {},
+): Promise<boolean> {
+  const result = await submitContentDirectWithResult(
+    url,
+    title,
+    description,
+    tags,
+    categoryId,
+    fromAddress,
+    contractAddress,
+    mediaInput,
+    rewardAmount,
+    roundConfig,
+    rewardAsset,
+    rewardTokenAddress,
+    contentOptions,
+  );
+  return result.success;
 }
 
 /**
