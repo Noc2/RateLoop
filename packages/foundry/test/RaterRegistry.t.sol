@@ -1404,6 +1404,57 @@ contract RaterRegistryTest is Test {
         assertFalse(registry.isIdentityKeyBanned(addressKey));
     }
 
+    function test_UnbanningLaterCredentialKeepsEarlierDerivedAddressBan() public {
+        MockConfidentialityNexus nexus = new MockConfidentialityNexus();
+        nexus.setNexus(uint8(RaterRegistry.HumanCredentialProvider.SeededHuman), SEEDED_ANCHOR_ID, true);
+        nexus.setNexus(uint8(RaterRegistry.HumanCredentialProvider.WorldIdV4), NULLIFIER_HASH, true);
+
+        vm.prank(admin);
+        registry.setConfidentialityEscrow(address(nexus));
+        vm.prank(admin);
+        registry.seedHumanCredential(rater, uint64(block.timestamp + 1), SEEDED_ANCHOR_ID, EVIDENCE_HASH);
+
+        bytes32 seededKey = _credentialKey(RaterRegistry.HumanCredentialProvider.SeededHuman, SEEDED_ANCHOR_ID);
+        bytes32 worldIdKey = _credentialKey(RaterRegistry.HumanCredentialProvider.WorldIdV4, NULLIFIER_HASH);
+        bytes32 addressKey = registry.addressIdentityKey(rater);
+
+        vm.prank(governance);
+        registry.banIdentity(
+            RaterRegistry.HumanCredentialProvider.SeededHuman,
+            SEEDED_ANCHOR_ID,
+            uint64(block.timestamp + 30 days),
+            "first verified leak",
+            EVIDENCE_HASH
+        );
+
+        vm.warp(block.timestamp + 2);
+        vm.prank(rater);
+        registry.attestHumanCredentialWithV4Proof(
+            uint256(NULLIFIER_HASH), 1, uint64(block.timestamp + 1 hours), _emptyV4Proof()
+        );
+
+        vm.prank(governance);
+        registry.banIdentity(
+            RaterRegistry.HumanCredentialProvider.WorldIdV4,
+            NULLIFIER_HASH,
+            uint64(block.timestamp + 7 days),
+            "second verified leak",
+            EVIDENCE_HASH
+        );
+
+        assertTrue(registry.isIdentityKeyBanned(seededKey));
+        assertTrue(registry.isIdentityKeyBanned(worldIdKey));
+        assertTrue(registry.isIdentityKeyBanned(addressKey));
+
+        vm.prank(governance);
+        registry.unbanIdentity(RaterRegistry.HumanCredentialProvider.WorldIdV4, NULLIFIER_HASH);
+
+        assertTrue(registry.isIdentityKeyBanned(seededKey));
+        assertFalse(registry.isIdentityKeyBanned(worldIdKey));
+        assertTrue(registry.isIdentityKeyBanned(addressKey));
+        assertEq(registry.resolveRater(rater).identityKey, addressKey);
+    }
+
     /// @notice RR-4 (2026-05-20 follow-up audit): governance can cap the SEEDER-seeded credential
     ///         TTL, mirroring the immutable WorldID TTL cap. cap=0 is an explicit opt-out.
     function test_MaxSeededCredentialTtlClampsSeedExpiry() public {

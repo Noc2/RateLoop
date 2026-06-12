@@ -213,8 +213,8 @@
     {
       "slot": 32,
       "offset": 0,
-      "label": "_identityBanSource",
-      "type": "t_mapping(t_bytes32,t_bytes32)"
+      "label": "_identityBanSources",
+      "type": "t_mapping(t_bytes32,t_array(t_bytes32)dyn)"
     },
     {
       "slot": 33,
@@ -229,6 +229,13 @@
       "encoding": "inplace",
       "label": "address",
       "numberOfBytes": "20"
+    },
+    {
+      "id": "t_array(t_bytes32)dyn",
+      "encoding": "dynamic_array",
+      "label": "bytes32[]",
+      "numberOfBytes": "32",
+      "base": "t_bytes32"
     },
     {
       "id": "t_array(t_uint256)",
@@ -348,20 +355,20 @@
       "value": "t_address"
     },
     {
+      "id": "t_mapping(t_bytes32,t_array(t_bytes32)dyn)",
+      "encoding": "mapping",
+      "label": "mapping(bytes32 => bytes32[])",
+      "numberOfBytes": "32",
+      "key": "t_bytes32",
+      "value": "t_array(t_bytes32)dyn"
+    },
+    {
       "id": "t_mapping(t_bytes32,t_bool)",
       "encoding": "mapping",
       "label": "mapping(bytes32 => bool)",
       "numberOfBytes": "32",
       "key": "t_bytes32",
       "value": "t_bool"
-    },
-    {
-      "id": "t_mapping(t_bytes32,t_bytes32)",
-      "encoding": "mapping",
-      "label": "mapping(bytes32 => bytes32)",
-      "numberOfBytes": "32",
-      "key": "t_bytes32",
-      "value": "t_bytes32"
     },
     {
       "id": "t_mapping(t_bytes32,t_struct(IdentityBan))",

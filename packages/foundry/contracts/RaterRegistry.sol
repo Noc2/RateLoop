@@ -145,7 +145,7 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
     mapping(uint8 => mapping(bytes32 => bool)) private _usedWorldPresenceProof;
     mapping(bytes32 => IdentityBan) private _identityBans;
     address public confidentialityEscrow;
-    mapping(bytes32 => bytes32) private _identityBanSource;
+    mapping(bytes32 => bytes32[]) private _identityBanSources;
     /// @dev Reserved storage gap for future proxy-safe upgrades.
     uint256[26] private __gap;
 
@@ -1279,9 +1279,10 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
 
     function isIdentityKeyBanned(bytes32 identityKey) public view returns (bool) {
         if (identityKey == bytes32(0)) return false;
-        bytes32 sourceKey = _identityBanSource[identityKey];
-        if (sourceKey != bytes32(0)) {
-            return _isBanActive(_identityBans[sourceKey]);
+        bytes32[] storage sources = _identityBanSources[identityKey];
+        uint256 sourceCount = sources.length;
+        for (uint256 i = 0; i < sourceCount; i++) {
+            if (_isBanActive(_identityBans[sources[i]])) return true;
         }
         return _isBanActive(_identityBans[identityKey]);
     }
@@ -1395,20 +1396,32 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
 
     function _writeIdentityBan(bytes32 identityKey, uint64 expiresAt, bytes32 evidenceHash) private {
         if (identityKey == bytes32(0)) return;
-        delete _identityBanSource[identityKey];
+        delete _identityBanSources[identityKey];
         _identityBans[identityKey] =
             IdentityBan({ bannedAt: uint64(block.timestamp), expiresAt: expiresAt, evidenceHash: evidenceHash });
     }
 
     function _writeDerivedIdentityBan(bytes32 identityKey, bytes32 sourceKey) private {
         if (identityKey == bytes32(0) || sourceKey == bytes32(0)) return;
-        _identityBanSource[identityKey] = sourceKey;
+        bytes32[] storage sources = _identityBanSources[identityKey];
+        uint256 sourceCount = sources.length;
+        for (uint256 i = 0; i < sourceCount; i++) {
+            if (sources[i] == sourceKey) return;
+        }
+        sources.push(sourceKey);
     }
 
     function _clearDerivedIdentityBan(address holder, bytes32 sourceKey) private {
         if (holder == address(0)) return;
         bytes32 identityKey = addressIdentityKey(holder);
-        if (_identityBanSource[identityKey] == sourceKey) delete _identityBanSource[identityKey];
+        bytes32[] storage sources = _identityBanSources[identityKey];
+        uint256 sourceCount = sources.length;
+        for (uint256 i = 0; i < sourceCount; i++) {
+            if (sources[i] != sourceKey) continue;
+            sources[i] = sources[sourceCount - 1];
+            sources.pop();
+            return;
+        }
     }
 
     function _isBanActive(IdentityBan storage ban) private view returns (bool) {
@@ -1647,8 +1660,7 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
             hasActiveCredential = credential.expiresAt > block.timestamp;
             if (hasActiveCredential) {
                 bytes32 holderAddressKey = addressIdentityKey(holder);
-                bytes32 sourceKey = _identityBanSource[holderAddressKey];
-                if (sourceKey != bytes32(0) && _isBanActive(_identityBans[sourceKey])) {
+                if (isIdentityKeyBanned(holderAddressKey)) {
                     identityKey = holderAddressKey;
                 }
             }
