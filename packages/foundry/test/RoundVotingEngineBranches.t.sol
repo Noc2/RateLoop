@@ -24,10 +24,12 @@ import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.so
 import { MockWorldIDVerifier } from "../contracts/mocks/MockWorldIDVerifier.sol";
 
 contract MockAdvisoryLaunchDistributionPool {
+    RaterRegistry public immutable raterRegistry;
     uint16 public maxUnverifiedCreditsPerRound;
     uint256 public advisoryRecordCallCount;
 
-    constructor(uint16 cap) {
+    constructor(uint16 cap, address raterRegistry_) {
+        raterRegistry = RaterRegistry(raterRegistry_);
         maxUnverifiedCreditsPerRound = cap;
     }
 
@@ -1529,7 +1531,8 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
     }
 
     function test_AdvisoryLaunchCreditSkipsRawBannedDelegateAtClaim() public {
-        MockAdvisoryLaunchDistributionPool launchPool = new MockAdvisoryLaunchDistributionPool(3);
+        MockAdvisoryLaunchDistributionPool launchPool =
+            new MockAdvisoryLaunchDistributionPool(3, address(mockRaterIdentityRegistry));
         vm.prank(owner);
         ProtocolConfig(protocolConfigAddress).setLaunchDistributionPool(address(launchPool));
 
@@ -1569,7 +1572,8 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
     }
 
     function test_AdvisoryLaunchCreditSkipsBannedHolderAtClaim() public {
-        MockAdvisoryLaunchDistributionPool launchPool = new MockAdvisoryLaunchDistributionPool(3);
+        MockAdvisoryLaunchDistributionPool launchPool =
+            new MockAdvisoryLaunchDistributionPool(3, address(mockRaterIdentityRegistry));
         vm.prank(owner);
         ProtocolConfig(protocolConfigAddress).setLaunchDistributionPool(address(launchPool));
 
@@ -4021,7 +4025,8 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
     }
 
     function test_AdvisoryVoteCapsUnverifiedCommitsFromLaunchPolicy() public {
-        MockAdvisoryLaunchDistributionPool launchPool = new MockAdvisoryLaunchDistributionPool(1);
+        MockAdvisoryLaunchDistributionPool launchPool =
+            new MockAdvisoryLaunchDistributionPool(1, address(mockRaterIdentityRegistry));
         vm.prank(owner);
         ProtocolConfig(protocolConfigAddress).setLaunchDistributionPool(address(launchPool));
 
@@ -4052,7 +4057,8 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
     }
 
     function test_VerifiedAdvisoryVoteBypassesUnverifiedCommitCap() public {
-        MockAdvisoryLaunchDistributionPool launchPool = new MockAdvisoryLaunchDistributionPool(1);
+        MockAdvisoryLaunchDistributionPool launchPool =
+            new MockAdvisoryLaunchDistributionPool(1, address(mockRaterIdentityRegistry));
         vm.prank(owner);
         ProtocolConfig(protocolConfigAddress).setLaunchDistributionPool(address(launchPool));
 
