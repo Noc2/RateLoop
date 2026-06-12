@@ -1,10 +1,11 @@
 import { NextRequest } from "next/server";
-import { POST, __setDetailsAttachRouteTestOverridesForTests } from "./route";
+import { POST } from "./route";
 import { ContentRegistryAbi } from "@rateloop/contracts/abis";
 import { getSharedDeploymentAddress } from "@rateloop/contracts/deployments";
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
 import { type Address, type Hex, encodeAbiParameters, encodeEventTopics } from "viem";
+import { setDetailsAttachRouteTestOverrides } from "~~/lib/attachments/detailsAttachRouteTestOverrides";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testMemory";
 import { __setRateLimitStoreForTests } from "~~/utils/rateLimit";
@@ -52,7 +53,7 @@ function buildContentSubmittedLog(params: {
 }
 
 function installReceipt(logs: unknown[]) {
-  __setDetailsAttachRouteTestOverridesForTests({
+  setDetailsAttachRouteTestOverrides({
     createPublicClient: () =>
       ({
         getTransactionReceipt: async () => ({
@@ -148,7 +149,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  __setDetailsAttachRouteTestOverridesForTests(null);
+  setDetailsAttachRouteTestOverrides(null);
   __setRateLimitStoreForTests(null);
   __setDatabaseResourcesForTests(null);
 });

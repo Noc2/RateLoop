@@ -4,6 +4,7 @@ import { getSharedDeploymentAddress } from "@rateloop/contracts/deployments";
 import { canonicalJsonHash } from "@rateloop/node-utils/json";
 import { type TargetAudience, normalizeTargetAudience } from "@rateloop/node-utils/profileSelfReport";
 import { type Address, type Hex, createPublicClient, decodeEventLog, http, isAddress } from "viem";
+import { getDetailsAttachRouteTestOverrides } from "~~/lib/attachments/detailsAttachRouteTestOverrides";
 import { parseUploadedImageAttachmentUrlDigest } from "~~/lib/attachments/imageAttachmentUrls";
 import { attachImagesToContent, getImageAttachment } from "~~/lib/attachments/imageAttachments";
 import {
@@ -88,18 +89,8 @@ const CONTENT_REGISTRY_MEDIA_VALIDATOR_ABI = [
 
 type DetailsAttachRoutePublicClient = ReturnType<typeof createPublicClient>;
 
-type DetailsAttachRouteTestOverrides = {
-  createPublicClient?: typeof createPublicClient;
-};
-
-let detailsAttachRouteTestOverrides: DetailsAttachRouteTestOverrides | null = null;
-
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-export function __setDetailsAttachRouteTestOverridesForTests(overrides: DetailsAttachRouteTestOverrides | null) {
-  detailsAttachRouteTestOverrides = overrides;
-}
 
 function readChainId(value: unknown) {
   const chainId = typeof value === "number" ? value : Number.parseInt(String(value ?? ""), 10);
@@ -191,9 +182,10 @@ function resolveDetailsAttachContext(chainId: number) {
   const contentRegistryAddress = getSharedDeploymentAddress(chainId, "ContentRegistry");
   const rpcUrl = targetNetwork ? (getServerRpcOverrides()[chainId] ?? targetNetwork.rpcUrls.default.http[0]) : null;
   if (!targetNetwork || !contentRegistryAddress || !rpcUrl) return null;
+  const overrides = getDetailsAttachRouteTestOverrides();
   return {
     contentRegistryAddress,
-    publicClient: (detailsAttachRouteTestOverrides?.createPublicClient ?? createPublicClient)({
+    publicClient: (overrides?.createPublicClient ?? createPublicClient)({
       chain: targetNetwork,
       transport: http(rpcUrl),
     }) as DetailsAttachRoutePublicClient,
