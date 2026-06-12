@@ -35,6 +35,7 @@ const X402_DEFAULT_SUBMISSION_BOUNTY_USDC = 1_000_000n;
 const X402_MIN_REWARD_POOL_REQUIRED_VOTERS = 3n;
 const X402_MIN_REWARD_POOL_SETTLED_ROUNDS = 1n;
 const X402_MAX_QUESTION_BUNDLE_COUNT = 10;
+export const X402_MIN_NONZERO_CONFIDENTIALITY_BOND = 1_000_000n;
 const EMPTY_DETAILS_HASH = `0x${"0".repeat(64)}` as const;
 const DEFAULT_CONFIDENTIALITY_DISCLOSURE_POLICY = "after_settlement";
 const QUESTION_DETAILS_PATH_PATTERN = /^\/api\/attachments\/details\/det_[A-Za-z0-9_-]{16,80}$/;
@@ -385,6 +386,11 @@ function normalizeQuestionConfidentiality(value: unknown, fieldName: string): X4
       throw new X402QuestionInputError(`${fieldName}.bond must be an object when provided.`);
     }
     const amount = parseNonNegativeInteger(value.bond.amount ?? 0n, `${fieldName}.bond.amount`);
+    if (amount > 0n && amount < X402_MIN_NONZERO_CONFIDENTIALITY_BOND) {
+      throw new X402QuestionInputError(
+        `${fieldName}.bond.amount must be 0 or at least ${X402_MIN_NONZERO_CONFIDENTIALITY_BOND} atomic units.`,
+      );
+    }
     const asset = readOptionalString(value.bond.asset).toUpperCase() || "LREP";
     if (asset !== "LREP" && asset !== "USDC") {
       throw new X402QuestionInputError(`${fieldName}.bond.asset must be LREP or USDC.`);

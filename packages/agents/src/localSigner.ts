@@ -94,6 +94,7 @@ const X402_MAX_QUESTION_BUNDLE_COUNT = 10;
 const CONFIDENTIALITY_FLAG_PRIVATE_FOREVER = 1;
 const EMPTY_DETAILS_HASH = `0x${"0".repeat(64)}` as Hex;
 const DEFAULT_CONFIDENTIALITY_DISCLOSURE_POLICY = "after_settlement";
+const MIN_NONZERO_CONFIDENTIALITY_BOND = 1_000_000n;
 const QUESTION_CONTEXT_DOMAIN = keccak256(
   stringToHex("rateloop-question-context-v5"),
 );
@@ -1508,6 +1509,11 @@ function normalizeLocalQuestionConfidentiality(
       value.bond.amount ?? 0n,
       `${fieldName}.bond.amount`,
     );
+    if (amount > 0n && amount < MIN_NONZERO_CONFIDENTIALITY_BOND) {
+      throw new Error(
+        `${fieldName}.bond.amount must be 0 or at least ${MIN_NONZERO_CONFIDENTIALITY_BOND} atomic units.`,
+      );
+    }
     const asset = readOptionalString(value.bond.asset).toUpperCase() || "LREP";
     if (asset !== "LREP" && asset !== "USDC") {
       throw new Error(`${fieldName}.bond.asset must be LREP or USDC.`);

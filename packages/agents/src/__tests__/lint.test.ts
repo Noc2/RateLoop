@@ -147,6 +147,35 @@ describe("agent question linting", () => {
     );
   });
 
+  it("rejects dust gated confidentiality bonds", () => {
+    const findings = lintAgentAskRequest({
+      ...VALID_REQUEST,
+      question: {
+        ...VALID_REQUEST.question,
+        confidentiality: {
+          bond: {
+            amount: "1",
+            asset: "LREP",
+          },
+          visibility: "gated",
+        },
+        contextUrl: undefined,
+        detailsHash: DETAILS_HASH,
+        detailsUrl: DETAILS_URL,
+      },
+    });
+
+    expect(findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "error",
+          message: expect.stringContaining("at least 1000000 atomic units"),
+          path: "question.confidentiality.bond.amount",
+        }),
+      ]),
+    );
+  });
+
   it("accepts public HTTPS details URLs with matching hashes", () => {
     const findings = lintAgentAskRequest({
       ...VALID_REQUEST,

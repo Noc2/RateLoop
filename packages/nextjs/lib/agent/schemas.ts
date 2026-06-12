@@ -131,7 +131,8 @@ const agentQuestionConfidentialityInputSchema = {
       properties: {
         amount: {
           default: "0",
-          description: "Optional slashable confidentiality bond amount in atomic units. Use 0 for no bond.",
+          description:
+            "Optional slashable confidentiality bond amount in atomic units. Use 0 for no bond; nonzero bonds must be at least 1000000 atomic units.",
           pattern: "^\\d+$",
           type: ["integer", "string"],
         },

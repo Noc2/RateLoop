@@ -219,9 +219,10 @@ const FEEDBACK_BONUS_AMOUNT_TOOLTIP =
 const CONFIDENTIALITY_BOND_TOOLTIP =
   "Optional extra bond raters must post before private context is served. Use 0 for no extra bond.";
 const CONFIDENTIALITY_BOND_AMOUNT_TOOLTIP =
-  "Atomic LREP or USDC amount raters must post before private context is served. Use 0 for no extra bond.";
+  "LREP or USDC amount raters must post before private context is served. Use 0 for no bond, or at least 1.";
 const REQUIRED_VOTERS_TOOLTIP =
   "Eligible revealed voters required before the bounty can qualify for payout and the round can settle.";
+const MIN_CONFIDENTIALITY_BOND_ATOMIC = 1_000_000n;
 const DEFAULT_DRAFT_CONFIDENTIALITY: DraftConfidentiality = {
   bondAmount: "0",
   bondAsset: "LREP",
@@ -381,11 +382,49 @@ function readConfidentialityBondAsset(value: unknown, fallback: ConfidentialityB
   return asset === "USDC" || asset === "LREP" ? asset : fallback;
 }
 
-function readAtomicAmountInput(value: unknown, fallback: string) {
+function formatConfidentialityBondInputFromAtomic(value: bigint, asset: ConfidentialityBondAsset) {
+  return formatSubmissionRewardAmount(value, asset === "LREP" ? "lrep" : "usdc").replace(
+    asset === "LREP" ? / LREP$/ : / USDC$/,
+    "",
+  );
+}
+
+function readConfidentialityBondAmountInput(value: unknown, fallback: string, asset: ConfidentialityBondAsset) {
   const amount = readDisplayValue(value);
   if (!/^\d+$/.test(amount)) return fallback;
 
-  return BigInt(amount).toString();
+  return formatConfidentialityBondInputFromAtomic(BigInt(amount), asset);
+}
+
+function isZeroTokenAmountInput(value: string) {
+  return /^0+(?:\.0{0,6})?$/.test(value.trim().replace(/,/g, ""));
+}
+
+function parseConfidentialityBondAmountInput(value: string, asset: ConfidentialityBondAsset) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    throw new Error("Confidentiality bond must be 0 or a token amount with up to 6 decimals.");
+  }
+  if (isZeroTokenAmountInput(trimmed)) {
+    return "0";
+  }
+
+  const parsed = parseSubmissionRewardAmount(trimmed);
+  if (parsed === null) {
+    throw new Error("Confidentiality bond must be 0 or a token amount with up to 6 decimals.");
+  }
+  if (parsed < MIN_CONFIDENTIALITY_BOND_ATOMIC) {
+    throw new Error(`Confidentiality bond must be 0 or at least 1 ${asset}.`);
+  }
+
+  return parsed.toString();
+}
+
+function formatConfidentialityBondAmountInput(value: string, asset: ConfidentialityBondAsset) {
+  const trimmed = value.trim();
+  if (!trimmed || isZeroTokenAmountInput(trimmed)) return "0";
+  const parsed = parseSubmissionRewardAmount(trimmed);
+  return parsed === null ? value : formatConfidentialityBondInputFromAtomic(parsed, asset);
 }
 
 function readDraftConfidentiality(
@@ -396,25 +435,13 @@ function readDraftConfidentiality(
   if (!source) return cloneDraftConfidentiality(inherited);
 
   const bond = isJsonRecord(source.bond) ? source.bond : null;
+  const bondAsset = readConfidentialityBondAsset(bond?.asset ?? source.bondAsset, inherited.bondAsset);
   return {
-    bondAmount: readAtomicAmountInput(bond?.amount ?? source.bondAmount, inherited.bondAmount),
-    bondAsset: readConfidentialityBondAsset(bond?.asset ?? source.bondAsset, inherited.bondAsset),
+    bondAmount: readConfidentialityBondAmountInput(bond?.amount ?? source.bondAmount, inherited.bondAmount, bondAsset),
+    bondAsset,
     disclosurePolicy: PRIVATE_FOREVER_DISCLOSURE_POLICY,
     visibility: readConfidentialityVisibility(source.visibility, inherited.visibility),
   };
-}
-
-function normalizeAtomicAmountInput(value: string): string | null {
-  return value === "" || /^\d+$/.test(value) ? value : null;
-}
-
-function parseAtomicAmountInput(value: string, fieldName: string) {
-  const trimmed = value.trim();
-  if (!/^\d+$/.test(trimmed)) {
-    throw new Error(`${fieldName} must be a non-negative atomic integer.`);
-  }
-
-  return BigInt(trimmed).toString();
 }
 
 function buildDraftConfidentialityInput(confidentiality: DraftConfidentiality): JsonRecord {
@@ -424,7 +451,7 @@ function buildDraftConfidentialityInput(confidentiality: DraftConfidentiality): 
 
   return {
     bond: {
-      amount: parseAtomicAmountInput(confidentiality.bondAmount, "Confidentiality bond"),
+      amount: parseConfidentialityBondAmountInput(confidentiality.bondAmount, confidentiality.bondAsset),
       asset: confidentiality.bondAsset,
     },
     disclosurePolicy: PRIVATE_FOREVER_DISCLOSURE_POLICY,
@@ -1021,6 +1048,21 @@ async function buildDraftRequestBody(
   };
 }
 
+function getDraftConfidentialityBondError(form: DraftForm | null) {
+  if (!form) return null;
+
+  for (const question of form.questions) {
+    if (question.confidentiality.visibility !== "gated") continue;
+    try {
+      parseConfidentialityBondAmountInput(question.confidentiality.bondAmount, question.confidentiality.bondAsset);
+    } catch (error) {
+      return error instanceof Error ? error.message : "Confidentiality bond is invalid.";
+    }
+  }
+
+  return null;
+}
+
 function readSubmittedContentForShare(handoff: Handoff | null, ask: unknown): SubmittedContentModalState | null {
   const contentId = readSubmittedContentId(isJsonRecord(ask) ? ask : null);
   if (contentId === null) return null;
@@ -1222,6 +1264,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     () => draftNeedsQuestionDetailsUpload(handoff, draftForm),
     [draftForm, handoff],
   );
+  const draftConfidentialityBondError = useMemo(() => getDraftConfidentialityBondError(draftForm), [draftForm]);
   const hasUnsavedDraft = isDraftDirty || draftNeedsDescriptionUpload;
   const isExpiredHandoff = handoff?.status === "expired";
   const isTerminalStatus = handoff?.status === "expired" || handoff?.status === "submitted";
@@ -1252,6 +1295,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
       !connectedMismatch &&
       !isTerminalStatus &&
       !isBusy &&
+      !draftConfidentialityBondError &&
       (!hasUnsavedDraft || canSaveDraftBeforeSubmit) &&
       (hasTransactionPlan || (connectedChainId && canPrepareHandoffStatus(handoff.status))),
   );
@@ -1597,7 +1641,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
 
   const updateDraftConfidentialityBondAmount = useCallback(
     (value: string) => {
-      const normalizedValue = normalizeAtomicAmountInput(value);
+      const normalizedValue = normalizeUsdcAmountInput(value);
       if (normalizedValue === null) return;
 
       updateDraftPrivateConfidentialityBond({ bondAmount: normalizedValue });
@@ -1613,9 +1657,10 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
         ...current,
         questions: current.questions.map(question => {
           if (question.confidentiality.visibility !== "gated") return question;
-          const bondAmount = /^\d+$/.test(question.confidentiality.bondAmount.trim())
-            ? BigInt(question.confidentiality.bondAmount.trim()).toString()
-            : "0";
+          const bondAmount = formatConfidentialityBondAmountInput(
+            question.confidentiality.bondAmount,
+            question.confidentiality.bondAsset,
+          );
           return {
             ...question,
             confidentiality: {
@@ -2280,13 +2325,19 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                           id="agent-ask-confidentiality-bond-amount"
                           className="input input-bordered input-sm mt-1 w-full bg-base-100"
                           disabled={!canEditDraft}
-                          inputMode="numeric"
+                          inputMode="decimal"
                           value={primaryPrivateConfidentiality.bondAmount}
                           onBlur={formatDraftConfidentialityBondAmount}
                           onChange={event => updateDraftConfidentialityBondAmount(event.target.value)}
                         />
                       </label>
                     </div>
+                    {draftConfidentialityBondError ? (
+                      <p className="mt-3 text-xs leading-relaxed text-error">
+                        {draftConfidentialityBondError}
+                        {!canEditDraft ? " Ask the agent for a fresh handoff link." : ""}
+                      </p>
+                    ) : null}
                   </div>
                 ) : null}
 
