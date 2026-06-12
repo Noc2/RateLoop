@@ -93,8 +93,14 @@ type QuestionBundleSubmissionRevealCommitmentParams = Omit<QuestionBundleRevealC
   questions: readonly QuestionBundleSubmissionItem[];
 };
 
+export function canonicalQuestionImageUrls(imageUrls: readonly string[]): string[] {
+  return [...new Set(imageUrls)].sort();
+}
+
 function buildSubmissionMediaHash(imageUrls: readonly string[], videoUrl: string): Hex {
-  return keccak256(encodeAbiParameters([{ type: "string[]" }, { type: "string" }], [[...imageUrls], videoUrl]));
+  return keccak256(
+    encodeAbiParameters([{ type: "string[]" }, { type: "string" }], [canonicalQuestionImageUrls(imageUrls), videoUrl]),
+  );
 }
 
 function buildSubmissionDetailsHash(detailsUrl: string, detailsHash: Hex): Hex {

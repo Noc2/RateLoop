@@ -75,8 +75,10 @@ const arbitraryTokenContract = {
   abi: parseAbi(["function approve(address spender, uint256 amount) returns (bool)"]),
 };
 const APPROVED_IMAGE_ID = "att_sponsoredimage01";
+const APPROVED_IMAGE_ID_B = "att_sponsoredimage02";
 const APPROVED_IMAGE_SHA256 = "a".repeat(64);
 const APPROVED_IMAGE_URL = `https://www.rateloop.ai/api/attachments/images/${APPROVED_IMAGE_ID}.webp#sha256=0x${APPROVED_IMAGE_SHA256}`;
+const APPROVED_IMAGE_URL_B = `https://www.rateloop.ai/api/attachments/images/${APPROVED_IMAGE_ID_B}.webp#sha256=0x${APPROVED_IMAGE_SHA256}`;
 const submitQuestionWithRewardAndRoundConfigAbi = [
   {
     type: "function",
@@ -867,6 +869,7 @@ test("validates sponsored gated ContentRegistry submissions are hash-only", asyn
 
 test("validates sponsored ContentRegistry uploaded image ownership and origin", async () => {
   await insertApprovedImageAttachment({});
+  await insertApprovedImageAttachment({ id: APPROVED_IMAGE_ID_B });
 
   const allowedImageDecision = await freeTransactions.evaluateFreeTransactionAllowance(
     buildRequest([submitQuestionWithRewardCall({ contextUrl: "", imageUrls: [APPROVED_IMAGE_URL] })]) as never,
@@ -889,6 +892,15 @@ test("validates sponsored ContentRegistry uploaded image ownership and origin", 
   assert.equal(untrustedOriginDecision.isAllowed, false);
   if (untrustedOriginDecision.isAllowed) return;
   assert.equal(untrustedOriginDecision.debugCode, "unsupported_operation");
+
+  const unsortedImageDecision = await freeTransactions.evaluateFreeTransactionAllowance(
+    buildRequest([
+      submitQuestionWithRewardCall({ contextUrl: "", imageUrls: [APPROVED_IMAGE_URL_B, APPROVED_IMAGE_URL] }),
+    ]) as never,
+  );
+  assert.equal(unsortedImageDecision.isAllowed, false);
+  if (unsortedImageDecision.isAllowed) return;
+  assert.equal(unsortedImageDecision.debugCode, "unsupported_operation");
 });
 
 test("rejects token approvals to unsupported spenders", async () => {

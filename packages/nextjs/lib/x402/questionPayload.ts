@@ -22,6 +22,7 @@ import {
   requiredQuestionRewardVotersForAmount,
   serializeQuestionRoundConfig,
 } from "~~/lib/questionRoundConfig";
+import { canonicalQuestionImageUrls } from "~~/lib/questionSubmissionCommitment";
 
 export const X402_WORLD_CHAIN_USDC_BY_CHAIN_ID: Record<number, `0x${string}`> = {
   480: "0x79A02482A880bCE3F13e09Da970dC34db4CD24d1",
@@ -290,7 +291,7 @@ function normalizeImageUrls(value: unknown): string[] {
     throw new X402QuestionInputError("imageUrls supports at most four images.");
   }
 
-  return imageUrls;
+  return canonicalQuestionImageUrls(imageUrls);
 }
 
 function normalizeTags(value: unknown): { tags: string; tagList: string[] } {

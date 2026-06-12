@@ -138,13 +138,17 @@ function parseImageUrls(value) {
     if (unsupportedImageUrl) {
       fail(`Unsupported image URL: ${unsupportedImageUrl}`);
     }
-    return parsed;
+    return canonicalImageUrls(parsed);
   } catch (error) {
     if (error instanceof SyntaxError) {
       fail("Invalid image URL array JSON. Expected a JSON string array.");
     }
     throw error;
   }
+}
+
+function canonicalImageUrls(imageUrls) {
+  return [...new Set(imageUrls)].sort();
 }
 
 function parseQuestionArgs(questionArgs) {
@@ -234,7 +238,7 @@ function buildSubmissionMediaHash(imageUrls, videoUrl) {
   return keccak256(
     encodeAbiParameters(
       [{ type: "string[]" }, { type: "string" }],
-      [imageUrls, videoUrl]
+      [canonicalImageUrls(imageUrls), videoUrl]
     )
   );
 }

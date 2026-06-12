@@ -47,6 +47,10 @@ const CLIENT_REQUEST_ID = "local-signer-test";
 const QUESTION_CONTEXT_URL = "https://example.com/context";
 const QUESTION_TITLE = "Should this agent proceed?";
 const QUESTION_TAG = "agent";
+const UPLOADED_IMAGE_URL_A =
+  "https://www.rateloop.ai/api/attachments/images/att_aaaaaaaaaaaaaaaa.webp#sha256=0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+const UPLOADED_IMAGE_URL_B =
+  "https://www.rateloop.ai/api/attachments/images/att_bbbbbbbbbbbbbbbb.webp#sha256=0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 const QUESTION_METADATA_BASE_URL = "https://ponder.rateloop.ai";
 const BOUNTY_START_BY = 1_893_456_000n;
 const BOUNTY_WINDOW_SECONDS = 1_200n;
@@ -1614,5 +1618,25 @@ describe("local signer round config alignment", () => {
         5n,
       );
     }
+  });
+});
+
+describe("local signer media canonicalization", () => {
+  it("sorts and deduplicates image URLs before hashing local asks", () => {
+    const canonical = buildLocalQuestionCanonicalPayload(
+      {
+        ...askPayload(),
+        question: {
+          ...askPayload().question,
+          imageUrls: [UPLOADED_IMAGE_URL_B, UPLOADED_IMAGE_URL_A, UPLOADED_IMAGE_URL_A],
+        },
+      },
+      480,
+    );
+
+    expect(canonical.questions[0].imageUrls).toEqual([
+      UPLOADED_IMAGE_URL_A,
+      UPLOADED_IMAGE_URL_B,
+    ]);
   });
 });

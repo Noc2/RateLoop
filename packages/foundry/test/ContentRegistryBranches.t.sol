@@ -145,6 +145,14 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.stopPrank();
     }
 
+    function _anchoredImageUrl(string memory slug) internal pure returns (string memory) {
+        return string.concat(
+            "https://cdn.example.com/",
+            slug,
+            ".webp#sha256=0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        );
+    }
+
     function test_ContentRegistryProxyInitializesFreshMediaValidatorThroughFactory() public {
         ContentRegistry registryImpl = new ContentRegistry();
         address factoryAddress = vm.computeCreateAddress(address(registryImpl), 1);
@@ -822,8 +830,8 @@ contract ContentRegistryBranchesTest is VotingTestBase {
 
     function test_SubmitQuestion_AllowsMultipleOptionalImages() public {
         string[] memory imageUrls = new string[](2);
-        imageUrls[0] = _uploadedImageUrl("multi-image-a");
-        imageUrls[1] = _uploadedImageUrl("multi-image-b");
+        imageUrls[0] = _anchoredImageUrl("multi-image-a");
+        imageUrls[1] = _anchoredImageUrl("multi-image-b");
         string memory title = "Which product image works better?";
         string memory description = "Compare the two images for usefulness.";
         string memory tags = "Products,Images";
@@ -868,10 +876,48 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         assertTrue(registry.submissionKeyUsed(submissionKey));
     }
 
+    function test_SubmitQuestion_RejectsRepeatedImageUrls() public {
+        string[] memory imageUrls = new string[](2);
+        imageUrls[0] = _anchoredImageUrl("duplicate-image");
+        imageUrls[1] = imageUrls[0];
+
+        vm.expectRevert("Image URLs not sorted");
+        registry.submitQuestion(
+            "https://example.com/context",
+            imageUrls,
+            "",
+            "Which product image works better?",
+            "Products,Images",
+            1,
+            _emptySubmissionDetails(),
+            keccak256("repeated-image-question"),
+            _defaultQuestionSpec()
+        );
+    }
+
+    function test_SubmitQuestion_RejectsUnsortedImageUrls() public {
+        string[] memory imageUrls = new string[](2);
+        imageUrls[0] = _anchoredImageUrl("unsorted-image-b");
+        imageUrls[1] = _anchoredImageUrl("unsorted-image-a");
+
+        vm.expectRevert("Image URLs not sorted");
+        registry.submitQuestion(
+            "https://example.com/context",
+            imageUrls,
+            "",
+            "Which product image works better?",
+            "Products,Images",
+            1,
+            _emptySubmissionDetails(),
+            keccak256("unsorted-image-question"),
+            _defaultQuestionSpec()
+        );
+    }
+
     function test_SubmitQuestion_EmitsQuestionContentAnchors() public {
         string[] memory imageUrls = new string[](2);
-        imageUrls[0] = _uploadedImageUrl("anchor-image-a");
-        imageUrls[1] = _uploadedImageUrl("anchor-image-b");
+        imageUrls[0] = _anchoredImageUrl("anchor-image-a");
+        imageUrls[1] = _anchoredImageUrl("anchor-image-b");
         ContentRegistry.QuestionSpecCommitment memory spec = _defaultQuestionSpec();
         bytes32 salt = keccak256("anchored-question");
 
@@ -962,11 +1008,11 @@ contract ContentRegistryBranchesTest is VotingTestBase {
 
     function test_SubmitQuestion_RevertsWhenReservedMediaChanges() public {
         string[] memory reservedImageUrls = new string[](2);
-        reservedImageUrls[0] = _uploadedImageUrl("reserved-a");
-        reservedImageUrls[1] = _uploadedImageUrl("reserved-b");
+        reservedImageUrls[0] = _anchoredImageUrl("reserved-a");
+        reservedImageUrls[1] = _anchoredImageUrl("reserved-b");
         string[] memory changedImageUrls = new string[](2);
         changedImageUrls[0] = reservedImageUrls[0];
-        changedImageUrls[1] = _uploadedImageUrl("changed-b");
+        changedImageUrls[1] = _anchoredImageUrl("reserved-c");
         string memory title = "Which media set is better?";
         string memory description = "The reservation should bind every image URL.";
         string memory tags = "Products,Images";
@@ -1790,6 +1836,49 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.stopPrank();
     }
 
+    function test_SubmitQuestionBundleWithReward_RejectsReorderedImageDuplicate() public {
+        string[] memory sortedImageUrls = new string[](2);
+        sortedImageUrls[0] = _anchoredImageUrl("bundle-media-reordered-a");
+        sortedImageUrls[1] = _anchoredImageUrl("bundle-media-reordered-b");
+        string[] memory reorderedImageUrls = new string[](2);
+        reorderedImageUrls[0] = sortedImageUrls[1];
+        reorderedImageUrls[1] = sortedImageUrls[0];
+        ContentRegistry.BundleQuestionInput[] memory questions = new ContentRegistry.BundleQuestionInput[](2);
+        questions[0] = ContentRegistry.BundleQuestionInput({
+            contextUrl: "https://example.com/bundle-media-reordered",
+            imageUrls: sortedImageUrls,
+            videoUrl: "",
+            title: "Question?",
+            tags: "Products",
+            categoryId: 1,
+            details: _emptySubmissionDetails(),
+            salt: keccak256("bundle-media-reordered-a"),
+            spec: _defaultQuestionSpec()
+        });
+        questions[1] = ContentRegistry.BundleQuestionInput({
+            contextUrl: "https://example.com/bundle-media-reordered",
+            imageUrls: reorderedImageUrls,
+            videoUrl: "",
+            title: "Question?",
+            tags: "Products",
+            categoryId: 1,
+            details: _emptySubmissionDetails(),
+            salt: keccak256("bundle-media-reordered-b"),
+            spec: _defaultQuestionSpec()
+        });
+        ContentRegistry.SubmissionRewardTerms memory rewardTerms = _submissionRewardTerms(
+            DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
+            _defaultSubmissionRewardAmount(registry) * 2,
+            DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS,
+            DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
+            block.timestamp + 30 days
+        );
+
+        vm.prank(submitter);
+        vm.expectRevert("Image URLs not sorted");
+        registry.submitQuestionBundleWithRewardAndRoundConfig(questions, rewardTerms, _bundleContentRoundConfig());
+    }
+
     function test_SubmitQuestionBundleWithReward_RequiresBountyClose() public {
         ContentRegistry.BundleQuestionInput[] memory questions = new ContentRegistry.BundleQuestionInput[](2);
         questions[0] = ContentRegistry.BundleQuestionInput({
@@ -2548,6 +2637,51 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             1,
             _emptySubmissionDetails(),
             keccak256("media-duplicate-b"),
+            _defaultQuestionSpec()
+        );
+        vm.stopPrank();
+    }
+
+    function test_SubmitContent_DuplicateMediaVariantWithReorderedImages_Reverts() public {
+        string memory url = "https://example.com/media-duplicate-reordered";
+        string memory title = "goal";
+        string memory description = "goal";
+        string memory tags = "tags";
+        string[] memory sortedImageUrls = new string[](2);
+        sortedImageUrls[0] = _anchoredImageUrl("media-duplicate-reordered-a");
+        sortedImageUrls[1] = _anchoredImageUrl("media-duplicate-reordered-b");
+        string[] memory reorderedImageUrls = new string[](2);
+        reorderedImageUrls[0] = sortedImageUrls[1];
+        reorderedImageUrls[1] = sortedImageUrls[0];
+
+        vm.startPrank(submitter);
+        lrepToken.approve(address(registry), 20e6);
+        _reserveQuestionMediaSubmission(
+            registry, url, sortedImageUrls, "", title, description, tags, 1, keccak256("media-reordered-a"), submitter
+        );
+        vm.warp(block.timestamp + 1);
+        registry.submitQuestion(
+            url,
+            sortedImageUrls,
+            "",
+            title,
+            tags,
+            1,
+            _emptySubmissionDetails(),
+            keccak256("media-reordered-a"),
+            _defaultQuestionSpec()
+        );
+
+        vm.expectRevert("Image URLs not sorted");
+        registry.submitQuestion(
+            url,
+            reorderedImageUrls,
+            "",
+            title,
+            tags,
+            1,
+            _emptySubmissionDetails(),
+            keccak256("media-reordered-b"),
             _defaultQuestionSpec()
         );
         vm.stopPrank();

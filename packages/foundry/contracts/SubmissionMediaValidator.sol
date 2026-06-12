@@ -133,7 +133,21 @@ contract SubmissionMediaValidator {
         for (uint256 i = 0; i < imageUrls.length; i++) {
             require(_isValidMediaReferenceUrl(imageUrls[i]), "Invalid URL");
             require(_isSupportedImageUrl(imageUrls[i]), "Invalid media URL");
+            if (i > 0) {
+                require(_isStrictlyGreaterUrl(imageUrls[i], imageUrls[i - 1]), "Image URLs not sorted");
+            }
         }
+    }
+
+    function _isStrictlyGreaterUrl(string calldata current, string calldata previous) private pure returns (bool) {
+        bytes calldata currentBytes = bytes(current);
+        bytes calldata previousBytes = bytes(previous);
+        uint256 minLength = currentBytes.length < previousBytes.length ? currentBytes.length : previousBytes.length;
+        for (uint256 i = 0; i < minLength; i++) {
+            if (currentBytes[i] > previousBytes[i]) return true;
+            if (currentBytes[i] < previousBytes[i]) return false;
+        }
+        return currentBytes.length > previousBytes.length;
     }
 
     function _isSupportedMediaUrl(string memory url) internal pure returns (bool) {

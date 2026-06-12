@@ -920,7 +920,8 @@ function hasCanonicalVideoUrl(value: string) {
 function hasCanonicalUploadedImageUrls(imageUrls: readonly string[]) {
   if (imageUrls.length > MAX_SUBMISSION_IMAGE_URLS) return false;
 
-  return imageUrls.every(url => {
+  return imageUrls.every((url, index) => {
+    if (index > 0 && url <= imageUrls[index - 1]) return false;
     const normalized = normalizeSubmissionMediaUrl(url);
     return normalized === url && isUploadedImageUrl(normalized);
   });

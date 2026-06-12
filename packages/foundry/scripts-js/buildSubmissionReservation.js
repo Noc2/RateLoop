@@ -155,6 +155,10 @@ function assertSupportedImageUrls(imageUrls, { allowEmpty = false } = {}) {
   }
 }
 
+function canonicalImageUrls(imageUrls) {
+  return [...new Set(imageUrls)].sort();
+}
+
 function parseImageUrls(value, { allowEmpty = false } = {}) {
   const trimmed = value.trim();
   if (!trimmed) {
@@ -172,7 +176,7 @@ function parseImageUrls(value, { allowEmpty = false } = {}) {
         )
       ) {
         assertSupportedImageUrls(parsed, { allowEmpty });
-        return parsed;
+        return canonicalImageUrls(parsed);
       }
     } catch {
       // Fall through to the explicit error below.
@@ -331,7 +335,7 @@ function buildSubmissionMediaHash(imageUrls, videoUrl) {
   return keccak256(
     encodeAbiParameters(
       [{ type: "string[]" }, { type: "string" }],
-      [imageUrls, videoUrl]
+      [canonicalImageUrls(imageUrls), videoUrl]
     )
   );
 }

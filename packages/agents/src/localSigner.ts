@@ -1333,12 +1333,15 @@ function normalizeImageUrls(value: unknown): string[] {
   if (value.length > 4) {
     throw new Error("imageUrls supports at most four images.");
   }
-  return value.map((entry, index) =>
-    normalizeImageAttachmentUrl(
-      readRequiredString(entry, `imageUrls[${index}]`),
-      `imageUrls[${index}]`,
-    ),
-  );
+  return value
+    .map((entry, index) =>
+      normalizeImageAttachmentUrl(
+        readRequiredString(entry, `imageUrls[${index}]`),
+        `imageUrls[${index}]`,
+      ),
+    )
+    .filter((url, index, urls) => urls.indexOf(url) === index)
+    .sort();
 }
 
 function isYouTubeVideoUrl(url: string): boolean {
@@ -2035,7 +2038,7 @@ function buildSubmissionMediaHash(
   return keccak256(
     encodeAbiParameters(
       [{ type: "string[]" }, { type: "string" }],
-      [[...imageUrls], videoUrl],
+      [[...new Set(imageUrls)].sort(), videoUrl],
     ),
   );
 }

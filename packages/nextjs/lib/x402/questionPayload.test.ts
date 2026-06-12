@@ -8,6 +8,8 @@ import {
 
 const UPLOADED_IMAGE_URL =
   "https://www.rateloop.ai/api/attachments/images/att_abcdefghijklmnop.webp#sha256=0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+const UPLOADED_IMAGE_URL_B =
+  "https://www.rateloop.ai/api/attachments/images/att_bcdefghijklmnopq.webp#sha256=0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 const DETAILS_URL = "https://www.rateloop.ai/api/attachments/details/det_questiondetails01";
 const DETAILS_HASH = `0x${"8".repeat(64)}`;
 const EMPTY_DETAILS_HASH = `0x${"0".repeat(64)}`;
@@ -63,6 +65,18 @@ test("parseX402QuestionRequest accepts dry-run control fields", () => {
 
   assert.equal(payload.clientRequestId, VALID_REQUEST.clientRequestId);
   assert.equal(payload.questions.length, 1);
+});
+
+test("parseX402QuestionRequest canonicalizes image URL order and duplicates", () => {
+  const payload = parseX402QuestionRequest({
+    ...VALID_REQUEST,
+    question: {
+      ...VALID_REQUEST.question,
+      imageUrls: [UPLOADED_IMAGE_URL_B, UPLOADED_IMAGE_URL, UPLOADED_IMAGE_URL],
+    },
+  });
+
+  assert.deepEqual(payload.questions[0].imageUrls, [UPLOADED_IMAGE_URL, UPLOADED_IMAGE_URL_B]);
 });
 
 test("parseX402QuestionRequest accepts off-chain details URL and hash", () => {
