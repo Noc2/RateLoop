@@ -1239,6 +1239,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     [draftForm, handoff],
   );
   const hasUnsavedDraft = isDraftDirty || draftNeedsDescriptionUpload;
+  const isExpiredHandoff = handoff?.status === "expired";
   const isTerminalStatus = handoff?.status === "expired" || handoff?.status === "submitted";
   const isFeedbackBonusStep = handoff?.status === "feedback_bonus_prepared";
   const connectedMismatch = Boolean(handoff?.walletAddress && address && !sameAddress(handoff.walletAddress, address));
@@ -2048,7 +2049,13 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                   <CheckCircleIcon className="h-4 w-4" />
                   <span>Status</span>
                 </div>
-                <p className="mt-2 text-sm font-semibold">{handoff.status}</p>
+                <p
+                  className={`mt-2 inline-flex rounded-full px-2 py-0.5 text-sm font-semibold ${
+                    isExpiredHandoff ? "bg-error/15 text-error" : ""
+                  }`}
+                >
+                  {handoff.status}
+                </p>
               </div>
             </div>
 
@@ -2496,6 +2503,20 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                 </GradientActionButton>
               </div>
             </div>
+
+            {isExpiredHandoff ? (
+              <div className="surface-card-nested mt-4 rounded-lg border border-error/20 bg-error/10 p-4 text-sm text-error">
+                <div className="flex items-start gap-2">
+                  <ExclamationTriangleIcon className="mt-0.5 h-5 w-5 shrink-0" />
+                  <div>
+                    <p className="font-semibold">This handoff link expired.</p>
+                    <p className="mt-1 text-error/80">
+                      Ask agent for a fresh link before editing or submitting this ask.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : null}
 
             {handoff.publicUrl && !isFeedbackBonusStep ? (
               <Link className="btn btn-outline btn-sm mt-4" href={handoff.publicUrl}>
