@@ -11,6 +11,7 @@ import {
 } from "viem";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testMemory";
+import { CONFIDENTIALITY_FLAG_PRIVATE_FOREVER } from "~~/lib/questionSubmissionCommitment";
 import { X402QuestionInputError, type X402QuestionPayload } from "~~/lib/x402/questionPayload";
 import {
   __setX402QuestionSubmissionTestOverridesForTests,
@@ -613,7 +614,7 @@ test("prepareAgentWalletQuestionSubmissionRequest marks gated hosted attachments
       ...question,
       confidentiality: {
         bond: { amount: "0", asset: "LREP" },
-        disclosurePolicy: "after_settlement",
+        disclosurePolicy: "private_forever",
         visibility: "gated",
       },
       contextUrl: "",
@@ -685,6 +686,11 @@ test("prepareAgentWalletQuestionSubmissionRequest marks gated hosted attachments
   const submittedDetails = submitArgs[6] as { 0?: string; 1?: Hex; detailsHash?: Hex; detailsUrl?: string };
   assert.equal(submittedDetails.detailsUrl ?? submittedDetails[0], "");
   assert.equal(submittedDetails.detailsHash ?? submittedDetails[1], detailsHash);
+  const submittedConfidentiality = submitArgs[11] as { 3?: number; flags?: number };
+  assert.equal(
+    Number(submittedConfidentiality.flags ?? submittedConfidentiality[3]),
+    CONFIDENTIALITY_FLAG_PRIVATE_FOREVER,
+  );
 
   const details = await dbClient.execute({
     sql: "SELECT requires_gated_access FROM question_details WHERE id = ?",

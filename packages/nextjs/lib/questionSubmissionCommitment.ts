@@ -7,6 +7,7 @@ const QUESTION_CONTEXT_DOMAIN = keccak256(toBytes("rateloop-question-context-v5"
 const QUESTION_BUNDLE_ITEM_DOMAIN = keccak256(toBytes("rateloop-question-bundle-item-v5"));
 const QUESTION_BUNDLE_DOMAIN = keccak256(toBytes("rateloop-question-bundle-v5"));
 const QUESTION_BUNDLE_REVEAL_DOMAIN = keccak256(toBytes("rateloop-question-bundle-reveal-v6"));
+export const CONFIDENTIALITY_FLAG_PRIVATE_FOREVER = 1;
 
 type QuestionSubmissionRoundConfig = {
   epochDuration: bigint | number;

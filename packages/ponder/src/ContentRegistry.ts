@@ -105,6 +105,14 @@ function confidentialityBondAssetName(asset: number) {
   return asset === 1 ? "USDC" : "LREP";
 }
 
+const CONFIDENTIALITY_FLAG_PRIVATE_FOREVER = 1;
+
+function confidentialityDisclosurePolicyFromFlags(flags: number) {
+  return (flags & CONFIDENTIALITY_FLAG_PRIVATE_FOREVER) !== 0
+    ? "private_forever"
+    : "after_settlement";
+}
+
 async function applyIndexedConfidentialityConfig(
   context: Parameters<Parameters<typeof ponder.on>[1]>[0]["context"],
   contentId: bigint,
@@ -120,6 +128,9 @@ async function applyIndexedConfidentialityConfig(
       indexedConfig.bondAsset,
     ),
     confidentialityBondAmount: indexedConfig.bondAmount,
+    confidentialityDisclosurePolicy: confidentialityDisclosurePolicyFromFlags(
+      indexedConfig.flags,
+    ),
   });
 }
 

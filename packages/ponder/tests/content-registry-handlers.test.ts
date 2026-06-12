@@ -472,7 +472,7 @@ describe("ContentRegistry ponder handlers", () => {
           gated: true,
           bondAsset: 1,
           bondAmount: 2_500_000n,
-          flags: 0,
+          flags: 1,
         },
       },
     );
@@ -535,6 +535,7 @@ describe("ContentRegistry ponder handlers", () => {
             gated: true,
             confidentialityBondAsset: "USDC",
             confidentialityBondAmount: 2_500_000n,
+            confidentialityDisclosurePolicy: "private_forever",
           },
         }),
       ]),

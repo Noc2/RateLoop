@@ -51,6 +51,7 @@ import {
   serializeQuestionRoundConfig,
 } from "~~/lib/questionRoundConfig";
 import {
+  CONFIDENTIALITY_FLAG_PRIVATE_FOREVER,
   buildQuestionBundleSubmissionRevealCommitment,
   buildQuestionConfidentialityHash,
   buildQuestionMetadataUri,
@@ -136,11 +137,12 @@ type StoredQuestionMetadata = {
 
 function questionConfidentialityConfig(question: Pick<X402QuestionPayload["questions"][number], "confidentiality">) {
   const gated = question.confidentiality?.visibility === "gated";
+  const privateForever = gated && question.confidentiality?.disclosurePolicy === "private_forever";
   return {
     gated,
     bondAsset: gated && question.confidentiality?.bond?.asset === "USDC" ? 1 : 0,
     bondAmount: gated ? BigInt(question.confidentiality?.bond?.amount ?? "0") : 0n,
-    flags: 0,
+    flags: privateForever ? CONFIDENTIALITY_FLAG_PRIVATE_FOREVER : 0,
   } as const;
 }
 

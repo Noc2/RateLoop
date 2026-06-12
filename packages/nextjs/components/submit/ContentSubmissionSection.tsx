@@ -113,6 +113,7 @@ import {
   requiredQuestionRewardVotersForAmount,
 } from "~~/lib/questionRoundConfig";
 import {
+  CONFIDENTIALITY_FLAG_PRIVATE_FOREVER,
   buildQuestionBundleSubmissionRevealCommitment,
   buildQuestionConfidentialityHash,
   buildQuestionSubmissionKey,
@@ -2406,6 +2407,7 @@ export function ContentSubmissionSection() {
           title: question.trimmedTitle,
           tags: question.submittedTags,
           contextVisibility: question.contextVisibility,
+          disclosurePolicy: question.disclosurePolicy,
           categoryId: question.selectedCategory.id,
           detailsUrl: details.detailsUrl,
           detailsHash: details.detailsHash,
@@ -2484,7 +2486,11 @@ export function ContentSubmissionSection() {
         gated: primaryQuestion.contextVisibility === "gated",
         bondAsset: confidentialityBondAsset === "USDC" ? 1 : 0,
         bondAmount: primaryQuestion.contextVisibility === "gated" ? resolvedConfidentialityBondAtomic : 0n,
-        flags: 0,
+        flags:
+          primaryQuestion.contextVisibility === "gated" &&
+          primaryQuestion.disclosurePolicy === PRIVATE_FOREVER_DISCLOSURE_POLICY
+            ? CONFIDENTIALITY_FLAG_PRIVATE_FOREVER
+            : 0,
       } as const;
       const primaryQuestionConfidentialityHash = buildQuestionConfidentialityHash(primaryQuestionConfidentiality);
       const primaryQuestionConfidentialityAbi = {
