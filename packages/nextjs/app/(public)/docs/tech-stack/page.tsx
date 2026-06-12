@@ -1,6 +1,8 @@
 import Link from "next/link";
 import type { Metadata, NextPage } from "next";
 import { DocsTitle } from "~~/components/docs/DocsTitle";
+import { FormulaCard } from "~~/components/docs/FormulaCard";
+import { SurpriseMultiplierChart } from "~~/components/docs/SurpriseMultiplierChart";
 import { protocolDocFacts } from "~~/lib/docs/protocolFacts";
 
 const x402IntroHref = "https://docs.x402.org/introduction";
@@ -175,25 +177,66 @@ const TechStackPage: NextPage = () => {
         prediction work can be paid even when the rating outcome is contested.
       </p>
       <p>
-        A bounty claim uses <code>round allocation * claim weight / total claim weight</code>. Equal-weight bounty
-        rounds give one claim-weight unit to each eligible revealed rater. USDC bounty rounds can instead use the
-        finalized correlation payout snapshot, where the claim weight is the rater&apos;s effective correlation weight
-        built from a surprise-weighted base claim weight. Bounty size can raise the required rater floor:{" "}
-        {protocolDocFacts.bountyParticipantFloorsLabel}. With the current oracle default, USDC bounty claims have a{" "}
-        <strong>{protocolDocFacts.usdcBountyPayoutMinimumDelayLabel}</strong> minimum post-settlement delay when the
+        Equal-weight bounty rounds give one claim-weight unit to each eligible revealed rater. USDC bounty rounds can
+        instead use the finalized correlation payout snapshot, where the claim weight is the rater&apos;s effective
+        correlation weight built from a surprise-weighted base claim weight. Bounty size can raise the required rater
+        floor: {protocolDocFacts.bountyParticipantFloorsLabel}. With the current oracle default, USDC bounty claims have
+        a <strong>{protocolDocFacts.usdcBountyPayoutMinimumDelayLabel}</strong> minimum post-settlement delay when the
         correlation epoch is already finalized, or about{" "}
         <strong>{protocolDocFacts.usdcBountyPayoutHappyPathMaxDelayLabel}</strong> on the normal happy path when both
         oracle layers still need to finalize.
       </p>
       <p>
-        For USDC bounty snapshot rounds, the base claim weight is surprise-weighted: it ranges from 10,000 to 20,000 bps
-        depending on how surprisingly common the rater&apos;s revealed answer was among peers compared with a trailing
-        cross-round base rate. An answer that merely matches the prior pays the flat 10,000 bps floor, while an answer
-        that predicts peers better than the base rate earns up to the 20,000 bps cap; launch-credit weights stay flat.
-        The correlation snapshot then applies an independence multiplier to that base weight, and the resulting claim
-        weights split the bounty: a 30 USDC rater allocation across effective weights of 20,000, 10,000, and 10,000 pays
-        15 USDC, 7.5 USDC, and 7.5 USDC.
+        For USDC bounty snapshot rounds, the base claim weight is surprise-weighted: an answer that merely matches the
+        prior pays the flat floor, while an answer that predicts peers better than the trailing base rate earns up to
+        the cap; launch-credit weights stay flat. The correlation snapshot then applies an independence multiplier, and
+        the resulting claim weights split the bounty: a 30 USDC rater allocation across effective weights of 20,000,
+        10,000, and 10,000 pays 15 USDC, 7.5 USDC, and 7.5 USDC.
       </p>
+      <FormulaCard
+        title="Surprise-Weighted Claim Weights"
+        description="All arithmetic is integer math in basis points with floor division, recomputable from on-chain events by any challenger."
+        formulas={[
+          {
+            label: "Per-rater claim",
+            tex: String.raw`\mathrm{payout}_i = A_R \cdot \frac{w_i}{\sum_j w_j}`,
+          },
+          {
+            label: "Claim weight",
+            tex: String.raw`w_i = \left(5\,000 + 5\,000\cdot\frac{\sigma_i}{10\,000}\right)\cdot\frac{\mathrm{ind}_i}{10\,000}`,
+          },
+          {
+            label: "Surprise multiplier",
+            tex: String.raw`\sigma_i = \mathrm{clamp}\!\left(\frac{a_i}{p(\mathrm{side}_i)}\cdot 10\,000,\; 10\,000,\; 30\,000\right)`,
+          },
+          {
+            label: "Agreement & prior",
+            tex: String.raw`a_i = \frac{W_{\mathrm{side}(i)} - v_i}{W_{\mathrm{total}} - v_i} \qquad p(\mathrm{up}) = \mathrm{clamp}\!\left(\mathrm{upShare}_{100},\; 5\%,\; 95\%\right)`,
+          },
+        ]}
+        where={[
+          {
+            symbol: String.raw`A_R`,
+            meaning: "round allocation: funded amount / required rounds (the last round takes the remainder)",
+          },
+          {
+            symbol: String.raw`\sigma_i`,
+            meaning: "surprise multiplier; neutral (10\u202f000) below 8 eligible reveals",
+          },
+          { symbol: String.raw`\mathrm{ind}_i`, meaning: "independence multiplier (bps) from the correlation scorer" },
+          { symbol: String.raw`a_i`, meaning: "share of other raters' reveal weight on your side" },
+          { symbol: String.raw`v_i`, meaning: "your epoch-weighted reveal weight" },
+          { symbol: String.raw`p`, meaning: "clamped trailing up-vote share over the base-rate window" },
+        ]}
+        params={[
+          ["Surprise cap", "3.0x"],
+          ["Base-rate window", "100 rounds"],
+          ["Neutral below", "8 reveals"],
+          ["Base weight range", "10\u202f000\u201320\u202f000 bps"],
+        ]}
+        footnote="Defaults from the normative spec (scorer rateloop-correlation-epoch-v2); parameters are committed via the snapshot parameterHash."
+      />
+      <SurpriseMultiplierChart />
       <p>
         The weighting comes from the peer-prediction literature.{" "}
         <a href={btsHref} target="_blank" rel="noopener noreferrer" className="link link-primary">

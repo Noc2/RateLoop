@@ -1,8 +1,10 @@
 import Link from "next/link";
 import type { NextPage } from "next";
 import { DocsTitle } from "~~/components/docs/DocsTitle";
+import { FormulaCard } from "~~/components/docs/FormulaCard";
 import { QuestionLifecycleDiagram } from "~~/components/docs/QuestionLifecycleDiagram";
 import { RbtsScoreSpreadSettlementDiagram } from "~~/components/docs/RbtsScoreSpreadSettlementDiagram";
+import { TexFormula } from "~~/components/docs/TexFormula";
 import { protocolDocFacts } from "~~/lib/docs/protocolFacts";
 import { getFreeTransactionLimit } from "~~/lib/env/server";
 
@@ -81,41 +83,42 @@ const HowItWorks: NextPage = () => {
         compares every revealed staked report with the stake-weighted mean score. A report&apos;s score spread is its
         own score minus that mean.
       </p>
-      <ul>
-        <li>
-          <code>mean = sum(stake * score) / sum(stake)</code>
-        </li>
-        <li>
-          <code>spread = score - mean</code>
-        </li>
-        <li>
-          Negative spreads forfeit <code>stake * intensity * abs(spread) / 100</code> only when at least{" "}
-          <strong>{protocolDocFacts.scoreSpreadForfeitMinRevealsLabel}</strong> score-eligible voters revealed.
-        </li>
-        <li>
-          Once active, score-spread forfeits are capped at{" "}
-          <strong>{protocolDocFacts.maxScoreSpreadForfeitPercentLabel}</strong> of each report&apos;s stake.
-        </li>
-        <li>
-          The settlement caller first receives <code>min(forfeited pool * 1%, 1 LREP)</code>.
-        </li>
-        <li>
-          <code>voter share = remaining forfeited pool * 96%</code>
-        </li>
-        <li>
-          The rest of the remaining forfeited stake routes <code>1%</code> to the treasury and <code>3%</code> to the
-          eligible front-end operator when one is present.
-        </li>
-        <li>
-          Positive spread weight is <code>stake * spread</code>, and reward is{" "}
-          <code>voter share * weight / total positive weight</code>.
-        </li>
-        <li>
-          Final claims are <code>stake + positive reward</code> for positive spreads and <code>stake - forfeiture</code>{" "}
-          for negative spreads. Unrevealed reports do not earn from that round and can be cleaned up after the reveal
-          grace period.
-        </li>
-      </ul>
+      <FormulaCard
+        title="RBTS Score-Spread Settlement"
+        description="Stakes settle against the stake-weighted mean score: below-mean reports forfeit, above-mean reports split the forfeited pool."
+        formulas={[
+          {
+            label: "Mean & spread",
+            tex: String.raw`\bar{s} = \frac{\sum_i k_i\, s_i}{\sum_i k_i} \qquad d_i = s_i - \bar{s}`,
+          },
+          {
+            label: "Forfeit (below mean)",
+            tex: String.raw`f_i = \begin{cases} \min\!\left(k_i\,\lambda\,\dfrac{\lvert d_i\rvert}{100},\; 0.5\,k_i\right) & d_i < 0 \;\text{ and }\; n \ge ${protocolDocFacts.scoreSpreadForfeitMinRevealsLabel} \\[6pt] 0 & \text{otherwise} \end{cases}`,
+          },
+          {
+            label: "Reward (above mean)",
+            tex: String.raw`r_i = 0.96\, F' \cdot \frac{k_i\, d_i}{\sum_{d_j > 0} k_j\, d_j} \qquad F' = \sum_i f_i - \min\!\left(0.01 \textstyle\sum_i f_i,\; 1\right)`,
+          },
+          {
+            label: "Final claim",
+            tex: String.raw`\mathrm{claim}_i = \begin{cases} k_i + r_i & d_i > 0 \\ k_i - f_i & d_i < 0 \end{cases}`,
+          },
+        ]}
+        where={[
+          { symbol: String.raw`k_i`, meaning: "LREP stake on report i (0\u201310)" },
+          { symbol: String.raw`s_i`, meaning: "revealed RBTS score (0\u2013100)" },
+          { symbol: String.raw`\lambda`, meaning: "forfeit intensity (governance-set)" },
+          { symbol: String.raw`n`, meaning: "score-eligible revealed voters" },
+          { symbol: String.raw`F'`, meaning: "forfeited pool after the settlement-caller cut" },
+        ]}
+        params={[
+          ["Activation", `${protocolDocFacts.scoreSpreadForfeitMinRevealsLabel}+ reveals`],
+          ["Max forfeit", `${protocolDocFacts.maxScoreSpreadForfeitPercentLabel} of stake`],
+          ["Pool split", "96% voters \u00b7 1% treasury \u00b7 3% frontend"],
+          ["Caller cut", "min(1%, 1 LREP)"],
+        ]}
+        footnote="Unrevealed staked reports earn nothing from the round and can be cleaned up after the reveal grace period."
+      />
       <RbtsScoreSpreadSettlementDiagram />
       <p>
         Example once the score-spread economic threshold is met: Alice stakes 10 LREP and scores 93.5, Bob stakes 5 LREP
@@ -127,12 +130,28 @@ const HowItWorks: NextPage = () => {
 
       <h3 id="eligible-settled-rounds">Launch LREP Credits</h3>
       <p>
-        To earn launch LREP, reveal useful advisory or staked ratings in eligible settled rounds; each finalized round
-        adds <code>effective credit = finalized independence weight / 10,000</code>. After enough full credits and the
-        verified-anchor checks are met, the payout is <code>min(cap, cap * rewarded credits / 10) - already paid</code>;
-        verifying the same wallet unlocks the full earned cap, while dense correlated clusters may need more rounds
-        because each credit can count fractionally.
+        To earn launch LREP, reveal useful advisory or staked ratings in eligible settled rounds. Verifying the same
+        wallet unlocks the full earned cap, while dense correlated clusters may need more rounds because each credit can
+        count fractionally.
       </p>
+      <FormulaCard
+        title="Launch Credit Accrual"
+        formulas={[
+          {
+            label: "Round credit",
+            tex: String.raw`\mathrm{credit}_r = \frac{\mathrm{ind}_r}{10\,000}`,
+          },
+          {
+            label: "Unlocked payout",
+            tex: String.raw`\mathrm{payout} = \min\!\left(\mathrm{cap},\; \mathrm{cap}\cdot\frac{\sum_r \mathrm{credit}_r}{10}\right) - \mathrm{paid}`,
+          },
+        ]}
+        where={[
+          { symbol: String.raw`\mathrm{ind}_r`, meaning: "finalized independence weight for round r (bps)" },
+          { symbol: String.raw`\mathrm{cap}`, meaning: "wallet launch cap after verified-anchor checks" },
+          { symbol: String.raw`\mathrm{paid}`, meaning: "launch LREP already paid to the wallet" },
+        ]}
+      />
       <p>
         Example: you make useful advisory ratings in two eligible settled rounds, and each round has a different mature
         verified-human anchor. Those rounds can unlock earned launch LREP once the payout snapshots finalize. If both
@@ -149,14 +168,42 @@ const HowItWorks: NextPage = () => {
       </div>
       <p>
         To earn a bounty, reveal an eligible vote before the bounty closes; bundle bounties require revealing on every
-        question in the claimed round set. Each qualified round pays{" "}
-        <code>round allocation * claim weight / total claim weight</code>, where USDC claim weights come from the
-        finalized <Link href="/docs/tech-stack#correlation-epoch-snapshots">correlation payout snapshot</Link> — a
-        surprise-weighted base weight (10,000-20,000 bps, higher when your answer was surprisingly common versus the
-        trailing base rate) times an independence multiplier — and equal-weight rounds use one unit per eligible
-        revealed rater. An eligible commit-attributed frontend receives the default 3% frontend fee before rater
-        payouts; if that frontend is not payable, the share stays with the rater claim.
+        question in the claimed round set. USDC claim weights come from the finalized{" "}
+        <Link href="/docs/tech-stack#correlation-epoch-snapshots">correlation payout snapshot</Link>, and equal-weight
+        rounds use one unit per eligible revealed rater. An eligible commit-attributed frontend receives the default 3%
+        frontend fee before rater payouts; if that frontend is not payable, the share stays with the rater claim.
       </p>
+      <FormulaCard
+        title="Bounty Claim"
+        description={
+          <>
+            The full surprise-weighting chain behind <TexFormula tex={String.raw`w_i`} /> is on the{" "}
+            <Link href="/docs/tech-stack#bounties" className="link link-primary">
+              Surprise-Weighted Bounties
+            </Link>{" "}
+            page.
+          </>
+        }
+        formulas={[
+          {
+            label: "Per-rater claim",
+            tex: String.raw`\mathrm{payout}_i = A_R \cdot \frac{w_i}{\sum_j w_j}`,
+          },
+          {
+            label: "Claim weight",
+            tex: String.raw`w_i = w_i^{\mathrm{base}} \cdot \frac{\mathrm{ind}_i}{10\,000} \qquad w_i^{\mathrm{base}} \in [10\,000,\; 20\,000]\ \mathrm{bps}`,
+          },
+        ]}
+        where={[
+          {
+            symbol: String.raw`A_R`,
+            meaning: "round allocation: funded amount / required rounds (the last round takes the remainder)",
+          },
+          { symbol: String.raw`w_i^{\mathrm{base}}`, meaning: "surprise-weighted base weight from the snapshot" },
+          { symbol: String.raw`\mathrm{ind}_i`, meaning: "independence multiplier (bps) from the correlation scorer" },
+        ]}
+        footnote="Equal-weight rounds replace the weights with one unit per eligible revealed rater. The frontend fee is deducted proportionally from each claim when an eligible frontend is payable."
+      />
       <p>
         Bounty size can raise the required rater floor: {protocolDocFacts.bountyParticipantFloorsLabel}. The goal is to
         keep small asks usable while requiring broader participation for larger payout pools.

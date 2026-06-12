@@ -77,6 +77,16 @@ LREP is the public reputation and staking token used by open raters. Zero-LREP a
 
 RBTS settlement keeps each revealed report's `scoreBps`, computes the stake-weighted mean score, and compares each rater's score with that mean. The settlement caller first receives 1% of scored forfeits, capped at 1 LREP. Positive spreads recover full stake and share the 96% voter share of the remaining forfeited negative-spread stake; the rest of that remaining pool routes 1% to the treasury and 3% to the eligible front-end operator when one is present. Negative spreads forfeit according to distance below the mean, with no revealed-loser rebate for RBTS settlement. Score-spread LREP forfeits are disabled below 8 score-eligible revealed voters and capped at 50% of each report's stake once active.
 
+```
+mean       = sum(stake_i * score_i) / sum(stake_i)
+spread_i   = score_i - mean
+forfeit_i  = min(stake_i * intensity * |spread_i| / 100, 0.5 * stake_i)   when spread_i < 0 and >= 8 score-eligible reveals
+callerCut  = min(0.01 * sum(forfeit), 1 LREP)
+pool       = sum(forfeit) - callerCut                                     # split 96% voters / 1% treasury / 3% frontend
+reward_i   = 0.96 * pool * stake_i * spread_i / sum(stake_j * spread_j over spread_j > 0)
+claim_i    = stake_i + reward_i  (spread_i > 0)   or   stake_i - forfeit_i  (spread_i < 0)
+```
+
 Example: a fresh question starts as `N/A`. Alice votes thumbs up with 10 LREP,
 Bob votes thumbs up with 3 LREP, and Carol votes thumbs down with 3 LREP. Their
 rating evidence is 3.3 up units versus 1.3 down units, so settlement creates a
@@ -89,11 +99,20 @@ payout weight, not the public rating.
 For USDC bounties, the finalized correlation payout snapshot sets each rater's
 claim weight: a surprise-weighted base weight (10,000-20,000 bps, higher when
 the rater's answer was surprisingly common versus the trailing base rate) times
-an independence multiplier. It is not the rater's LREP stake amount. Example:
-if a 30 USDC rater allocation is claimable and three eligible raters have
-effective correlation weights of 20,000, 10,000, and 10,000 — one rater earned
-the maximum surprise bonus while the others pay the flat floor — they claim
-15 USDC, 7.50 USDC, and 7.50 USDC.
+an independence multiplier. It is not the rater's LREP stake amount.
+
+```
+payout_i   = allocation_R * w_i / sum(w_j)                                # allocation_R = funded / required rounds
+w_i        = (5000 + 5000 * surprise_i / 10000) * independence_i / 10000
+surprise_i = clamp(agreement_i / baseRate(side_i) * 10000, 10000, 30000)  # neutral 10000 below 8 eligible reveals
+```
+
+`agreement_i` is the share of other raters' reveal weight on the same side and
+`baseRate` is the clamped trailing up-vote share over the last 100 settled
+rounds. Example: if a 30 USDC rater allocation is claimable and three eligible
+raters have effective correlation weights of 20,000, 10,000, and 10,000 — one
+rater earned the maximum surprise bonus while the others pay the flat floor —
+they claim 15 USDC, 7.50 USDC, and 7.50 USDC.
 
 Score-spread example once the economic threshold is met: Alice stakes 10 LREP and scores 93.5, Bob stakes 5 LREP and scores 90.0, and Carol stakes 5 LREP and scores 64.0. The stake-weighted mean is 85.25. At 1.5 intensity, Carol forfeits 1.59375 LREP; 1.53 LREP is the voter share. Alice claims 11.188 LREP, Bob claims 5.342 LREP, and Carol claims 3.40625 LREP.
 
