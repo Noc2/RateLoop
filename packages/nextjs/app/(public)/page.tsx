@@ -146,6 +146,7 @@ function AskWorkflowSection() {
   return (
     <section className="relative z-10 mt-12 w-full sm:mt-16 lg:mt-20">
       <SectionHeading number="01" title="How It" gradientText="Works" />
+      <PromoVideo />
       <div className="grid grid-cols-1 items-stretch gap-x-12 gap-y-14 md:grid-cols-3">
         <div className="h-full">
           <AskFlowPanel {...agentStep} />
@@ -157,7 +158,6 @@ function AskWorkflowSection() {
           <AskFlowPanel {...resultStep} />
         </div>
       </div>
-      <PromoVideo />
     </section>
   );
 }
