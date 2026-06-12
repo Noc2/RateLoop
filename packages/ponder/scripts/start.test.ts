@@ -147,6 +147,50 @@ describe("Ponder production launcher", () => {
     );
   });
 
+  test("keeps Railway deployment schemas ahead of artifact deployment keys", () => {
+    class FakeChild extends EventEmitter {}
+
+    const child = new FakeChild();
+    const deploymentKey =
+      "4801:0x1000000000000000000000000000000000000001:0x1000000000000000000000000000000000000002";
+    const railwayDeploymentId = "123e4567-e89b-12d3-a456-426614174000";
+    const railwaySchema = "railway_123e4567_e89b_12d3_a456_426614174000";
+    const ensureContractsArtifactsImpl = vi.fn();
+    const resolveProtocolDeploymentKeyImpl = vi.fn(() => deploymentKey);
+    const spawnImpl = vi.fn(() => child);
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    expect(
+      startPonder({
+        argv: ["--port", "42069"],
+        env: {
+          PONDER_NETWORK: "worldchainSepolia",
+          RAILWAY_DEPLOYMENT_ID: railwayDeploymentId,
+        },
+        spawnImpl,
+        ensureContractsArtifactsImpl,
+        resolveProtocolDeploymentKeyImpl,
+      }),
+    ).toBe(child);
+
+    expect(spawnImpl).toHaveBeenCalledWith(
+      "ponder",
+      ["start", "--schema", railwaySchema, "--port", "42069"],
+      {
+        env: {
+          PONDER_NETWORK: "worldchainSepolia",
+          RAILWAY_DEPLOYMENT_ID: railwayDeploymentId,
+          RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY: deploymentKey,
+          DATABASE_SCHEMA: railwaySchema,
+        },
+        stdio: "inherit",
+      },
+    );
+    expect(warnSpy).toHaveBeenCalledWith(
+      `[ponder:start] Using Railway deployment-scoped Ponder schema ${railwaySchema}.`,
+    );
+  });
+
   test("rejects artifact deployment keys when PONDER_CHAIN_ID conflicts with PONDER_NETWORK", () => {
     expect(() =>
       resolveProtocolDeploymentKeyFromArtifacts({

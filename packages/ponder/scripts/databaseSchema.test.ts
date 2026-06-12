@@ -51,13 +51,25 @@ describe("Ponder database schema launcher", () => {
     expect(result.ignoredLegacyDatabaseSchema).toBe(true);
   });
 
-  test("uses protocol deployment keys before Railway deployment IDs", () => {
+  test("uses Railway deployment IDs before protocol deployment keys", () => {
     const deploymentKey =
       "4801:0x1000000000000000000000000000000000000001:0x1000000000000000000000000000000000000002";
     const result = resolvePonderDatabaseSchema({
       PONDER_NETWORK: "worldchainSepolia",
       RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY: deploymentKey,
       RAILWAY_DEPLOYMENT_ID: "123e4567-e89b-12d3-a456-426614174000",
+    });
+
+    expect(result.schema).toBe("railway_123e4567_e89b_12d3_a456_426614174000");
+    expect(result.source).toBe("RAILWAY_DEPLOYMENT_ID");
+  });
+
+  test("uses protocol deployment keys when Railway deployment IDs are unavailable", () => {
+    const deploymentKey =
+      "4801:0x1000000000000000000000000000000000000001:0x1000000000000000000000000000000000000002";
+    const result = resolvePonderDatabaseSchema({
+      PONDER_NETWORK: "worldchainSepolia",
+      RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY: deploymentKey,
     });
 
     expect(result.schema).toBe(schemaFromProtocolDeploymentKey(deploymentKey));

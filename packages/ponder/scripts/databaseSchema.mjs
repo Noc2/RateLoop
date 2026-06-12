@@ -120,8 +120,8 @@ export function resolvePonderDatabaseSchema(env = process.env) {
   const schema =
     rateloopSchema ??
     (isLegacyDatabaseSchema ? undefined : databaseSchema) ??
-    protocolDeploymentSchema ??
     railwaySchema ??
+    protocolDeploymentSchema ??
     defaultSchema;
 
   if (!SCHEMA_NAME_PATTERN.test(schema)) {
@@ -137,10 +137,10 @@ export function resolvePonderDatabaseSchema(env = process.env) {
         ? "RATELOOP_PONDER_DATABASE_SCHEMA"
         : databaseSchema !== undefined && !isLegacyDatabaseSchema
           ? "DATABASE_SCHEMA"
-          : protocolDeploymentSchema !== undefined
-            ? "RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY"
-            : railwaySchema !== undefined
-              ? "RAILWAY_DEPLOYMENT_ID"
+          : railwaySchema !== undefined
+            ? "RAILWAY_DEPLOYMENT_ID"
+            : protocolDeploymentSchema !== undefined
+              ? "RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY"
               : "default",
     ignoredLegacyDatabaseSchema: isLegacyDatabaseSchema,
   };
