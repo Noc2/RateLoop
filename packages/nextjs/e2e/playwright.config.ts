@@ -1,13 +1,12 @@
 import { E2E_BASE_URL } from "./helpers/service-urls";
 import { defineConfig, devices } from "@playwright/test";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
 
 const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const specFile = (name: string) => new RegExp(`(^|[/\\\\])${escapeRegex(name)}\\.spec\\.[cm]?[jt]sx?$`);
 const specFiles = (...names: string[]) =>
   new RegExp(`(^|[/\\\\])(?:${names.map(escapeRegex).join("|")})\\.spec\\.[cm]?[jt]sx?$`);
-const E2E_DIR = dirname(fileURLToPath(import.meta.url));
+const E2E_DIR = resolve("e2e");
 const PLAYWRIGHT_REPORT_DIR = resolve(E2E_DIR, "playwright-report");
 const PLAYWRIGHT_TEST_RESULTS_DIR = resolve(E2E_DIR, "test-results");
 
