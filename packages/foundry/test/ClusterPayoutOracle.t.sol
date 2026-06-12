@@ -1331,6 +1331,42 @@ contract ClusterPayoutOracleTest is Test {
         assertEq(usdc.balanceOf(address(oracle)), 0);
     }
 
+    function test_RoundPayoutChallengeRejectsShortUsdcBondReceipt() public {
+        address challenger = address(0xCA11);
+        usdc.mint(challenger, CHALLENGE_BOND);
+
+        oracle.proposeCorrelationEpoch(
+            1,
+            1,
+            20,
+            keccak256("cluster-root"),
+            keccak256("params"),
+            keccak256("epoch-artifact"),
+            "ipfs://epoch",
+            _defaultEpochSources()
+        );
+        vm.warp(1 hours + 2);
+        oracle.finalizeCorrelationEpoch(1);
+
+        IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
+        oracle.proposeRoundPayoutSnapshot(input);
+        bytes32 snapshotKey =
+            oracle.roundPayoutSnapshotKey(input.domain, input.rewardPoolId, input.contentId, input.roundId);
+
+        usdc.setTransferShortfall(1);
+
+        vm.startPrank(challenger);
+        usdc.approve(address(oracle), CHALLENGE_BOND);
+        vm.expectRevert(ClusterPayoutOracle.InvalidBond.selector);
+        oracle.challengeRoundPayoutSnapshot(snapshotKey, keccak256("bad-round-root"));
+        vm.stopPrank();
+
+        IClusterPayoutOracle.RoundPayoutSnapshot memory snapshot =
+            oracle.getRoundPayoutSnapshot(input.domain, input.rewardPoolId, input.contentId, input.roundId);
+        assertEq(uint8(snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Proposed));
+        assertEq(usdc.balanceOf(address(oracle)), 0);
+    }
+
     function test_ProposerCannotChallengeOwnCorrelationEpoch() public {
         oracle.proposeCorrelationEpoch(
             1,

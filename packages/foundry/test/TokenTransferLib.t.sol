@@ -78,7 +78,7 @@ contract TokenTransferLibTest is Test {
         assertFalse(TokenTransferLib.tryTransfer(IERC20(address(revertingToken)), recipient, 10));
     }
 
-    function test_TryTransferRevertsOnShortSuccessfulTransfer() public {
+    function test_TryTransferRevertsOnShortSuccessfulTransferToRollbackTokenState() public {
         TokenTransferShortReturn token = new TokenTransferShortReturn();
         token.mint(address(this), 10);
 

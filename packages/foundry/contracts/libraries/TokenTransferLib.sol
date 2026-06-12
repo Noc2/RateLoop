@@ -19,6 +19,8 @@ library TokenTransferLib {
         uint256 balanceBefore = token.balanceOf(recipient);
         (bool success, bytes memory data) = address(token).call(abi.encodeCall(IERC20.transfer, (recipient, amount)));
         if (!success || (data.length != 0 && (data.length != 32 || !abi.decode(data, (bool))))) return false;
+        // A successful but short transfer may have already mutated token state; revert
+        // so fallback callers do not continue under incorrect fee accounting.
         require(token.balanceOf(recipient) - balanceBefore == amount, "Bad token");
         return true;
     }
