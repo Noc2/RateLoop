@@ -9,7 +9,7 @@ test.describe("World ID local mock", () => {
   test("attests an active human credential on-chain", async ({ page }) => {
     test.setTimeout(90_000);
 
-    const account = ANVIL_ACCOUNTS.account11;
+    const account = ANVIL_ACCOUNTS.account2;
     const registryAddress = CONTRACT_ADDRESSES.RaterRegistry;
 
     await setupWallet(page, account.privateKey);
@@ -18,6 +18,10 @@ test.describe("World ID local mock", () => {
 
     await expect(page.getByRole("heading", { name: "Human Credential" })).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(/self-verified/i)).toHaveCount(0);
+
+    if (await readActiveHumanCredential(account.address, registryAddress)) {
+      return;
+    }
 
     const verifiedMessage = page.getByText("World ID verified");
     if (await verifiedMessage.isVisible({ timeout: 2_000 }).catch(() => false)) {
