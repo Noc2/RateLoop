@@ -29,6 +29,7 @@ import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import { useAdvisoryVoteAvailabilities } from "~~/hooks/useAdvisoryVoteAvailability";
 import { useCategoryPopularity } from "~~/hooks/useCategoryPopularity";
 import { useCategoryRegistry } from "~~/hooks/useCategoryRegistry";
+import { useConfidentialContextAccessBlocker } from "~~/hooks/useConfidentialContextAccessBlocker";
 import type { ContentItem } from "~~/hooks/useContentFeed";
 import { useContentFeed } from "~~/hooks/useContentFeed";
 import { useDelegation } from "~~/hooks/useDelegation";
@@ -143,6 +144,13 @@ function getLrepRequiredVoteStatus(unavailableMessage?: string | null) {
     detail:
       unavailableMessage ??
       "This wallet needs LREP to join this round. Zero-LREP advisory voting is only available after a staked rater opens the round.",
+  };
+}
+
+function getPrivateContextVoteStatus(blocker: string) {
+  return {
+    label: blocker.startsWith("Checking") ? "Checking access" : "Private context",
+    detail: blocker,
   };
 }
 
@@ -1194,6 +1202,8 @@ const HomeInner = () => {
   const feedbackSheetHasOptimisticCurrentRoundVote = feedbackSheetItem
     ? optimisticVotedContentIds.has(feedbackSheetItem.id.toString())
     : false;
+  const primaryConfidentialContextBlocker = useConfidentialContextAccessBlocker(primaryItem);
+  const feedbackSheetConfidentialContextBlocker = useConfidentialContextAccessBlocker(feedbackSheetItem);
   const primaryVoteEligibilityPending = primaryItem
     ? isVoteCooldownCheckPendingForContent(primaryItem.id) ||
       (isAdvisoryOnlyRater &&
@@ -1201,6 +1211,7 @@ const HomeInner = () => {
         !advisoryAvailabilityByContentId.has(primaryItem.id.toString()))
     : false;
   const primaryVoteUnavailableStatus = useMemo(() => {
+    if (primaryConfidentialContextBlocker) return getPrivateContextVoteStatus(primaryConfidentialContextBlocker);
     if (!primaryItem || !isAdvisoryOnlyRater) return null;
 
     const availability = advisoryAvailabilityByContentId.get(primaryItem.id.toString());
@@ -1208,7 +1219,13 @@ const HomeInner = () => {
     if (!availability && advisoryAvailabilityLoading) return null;
 
     return getLrepRequiredVoteStatus(getAdvisoryVoteUnavailableMessage(availability));
-  }, [advisoryAvailabilityByContentId, advisoryAvailabilityLoading, isAdvisoryOnlyRater, primaryItem]);
+  }, [
+    advisoryAvailabilityByContentId,
+    advisoryAvailabilityLoading,
+    isAdvisoryOnlyRater,
+    primaryConfidentialContextBlocker,
+    primaryItem,
+  ]);
   const primaryAttentionToken =
     primaryItem && voteAttention?.contentId === primaryItem.id.toString() ? voteAttention.token : null;
   const stakeModalCooldownSeconds = stakeModal.contentId > 0n ? getContentCooldownSeconds(stakeModal.contentId) : 0;
@@ -1264,6 +1281,12 @@ const HomeInner = () => {
         return;
       }
 
+      const confidentialBlocker = primaryItem && item.id === primaryItem.id ? primaryConfidentialContextBlocker : null;
+      if (confidentialBlocker) {
+        notification.info(confidentialBlocker, { duration: 6000 });
+        return;
+      }
+
       if (isAdvisoryOnlyRater) {
         const availability = advisoryAvailabilityByContentId.get(item.id.toString());
         if (!availability?.canCommit) {
@@ -1303,6 +1326,7 @@ const HomeInner = () => {
       isVoteCooldownCheckPendingForContent,
       markPrimaryInteraction,
       openConnectModal,
+      primaryConfidentialContextBlocker,
       primaryItem,
       primaryItemCooldownSeconds,
       recordRecommendationSignal,
@@ -2006,6 +2030,7 @@ const HomeInner = () => {
                 hasOptimisticCurrentRoundVote={primaryHasOptimisticCurrentRoundVote}
                 isVoteEligibilityPending={primaryVoteEligibilityPending}
                 voteUnavailableStatus={primaryVoteUnavailableStatus}
+                feedbackUnavailableReason={primaryConfidentialContextBlocker}
                 pendingRewardStatus={primaryPendingRewardStatus}
                 attentionToken={primaryAttentionToken}
                 onVote={handleButtonVote}
@@ -2045,6 +2070,7 @@ const HomeInner = () => {
                 variant="dock"
                 attentionToken={primaryAttentionToken}
                 onShareContent={() => handleShareContent(mobileVoteDockItem)}
+                feedbackUnavailableReason={primaryConfidentialContextBlocker}
                 onOpenFeedback={() => handleOpenFeedback(mobileVoteDockItem)}
               />
             </div>
@@ -2080,6 +2106,7 @@ const HomeInner = () => {
             <ContentFeedbackPanel
               item={feedbackSheetItem}
               hasOptimisticCurrentRoundVote={feedbackSheetHasOptimisticCurrentRoundVote}
+              submitBlocker={feedbackSheetConfidentialContextBlocker}
               variant="sheet"
               onRequestConnect={openConnectModal}
             />

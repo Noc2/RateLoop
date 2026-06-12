@@ -23,6 +23,7 @@ interface VoteSignalRailProps {
     label: string;
     detail: string;
   } | null;
+  feedbackUnavailableReason?: string | null;
   pendingRewardStatus?: ViewerRewardStatus | null;
   attentionToken?: number | null;
   onVote: (item: ContentItem, isUp: boolean) => void;
@@ -36,6 +37,7 @@ export function VoteSignalRail({
   hasOptimisticCurrentRoundVote = false,
   isVoteEligibilityPending = false,
   voteUnavailableStatus = null,
+  feedbackUnavailableReason = null,
   pendingRewardStatus = null,
   attentionToken,
   onVote,
@@ -97,6 +99,7 @@ export function VoteSignalRail({
         <ContentFeedbackPanel
           item={primaryItem}
           hasOptimisticCurrentRoundVote={hasOptimisticCurrentRoundVote}
+          submitBlocker={feedbackUnavailableReason}
           onRequestConnect={openConnectModal}
         />
       ) : null}

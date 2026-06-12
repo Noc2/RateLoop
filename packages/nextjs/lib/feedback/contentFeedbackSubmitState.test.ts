@@ -43,6 +43,19 @@ test("feedback submit tooltip explains existing feedback before vote gating", ()
   );
 });
 
+test("feedback submit tooltip explains confidential access before vote-first guidance", () => {
+  assert.equal(
+    getContentFeedbackSubmitTooltip({
+      canSubmitDraft: true,
+      hasCurrentRoundVote: false,
+      isFeedbackOpen: true,
+      isOwnContent: false,
+      submitBlocker: "Accept the confidentiality terms and unlock the private context before voting.",
+    }),
+    "Accept the confidentiality terms and unlock the private context before voting.",
+  );
+});
+
 test("feedback submit tooltip keeps vote-first guidance for non-voters on other questions", () => {
   assert.equal(
     getContentFeedbackSubmitTooltip({

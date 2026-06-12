@@ -51,6 +51,7 @@ interface VotingQuestionCardProps {
   variant?: "default" | "signal" | "dock";
   attentionToken?: number | null;
   onShareContent?: () => void;
+  feedbackUnavailableReason?: string | null;
   onOpenFeedback?: () => void;
 }
 
@@ -500,6 +501,7 @@ export function VotingQuestionCard({
   variant = "default",
   attentionToken,
   onShareContent,
+  feedbackUnavailableReason,
   onOpenFeedback,
 }: VotingQuestionCardProps) {
   const isSignalVariant = variant === "signal";
@@ -778,9 +780,10 @@ export function VotingQuestionCard({
     );
     const feedbackDockButton = (
       <DockCircleIconButton
-        label="Open feedback"
+        label={feedbackUnavailableReason ?? "Open feedback"}
         onClick={onOpenFeedback}
         icon={<ChatBubbleLeftRightIcon className="h-5 w-5 drop-shadow-sm" aria-hidden="true" />}
+        disabled={Boolean(feedbackUnavailableReason)}
         tone={hasMyVote ? "feedback" : "light"}
       />
     );

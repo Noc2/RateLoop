@@ -24,6 +24,7 @@ import { notification } from "~~/utils/scaffold-eth";
 interface ContentFeedbackPanelProps {
   item: ContentItem | null;
   hasOptimisticCurrentRoundVote?: boolean;
+  submitBlocker?: string | null;
   variant?: "rail" | "sheet";
   onRequestConnect?: () => void;
 }
@@ -150,6 +151,7 @@ function FeedbackItem({
 export function ContentFeedbackPanel({
   item,
   hasOptimisticCurrentRoundVote = false,
+  submitBlocker = null,
   variant = "rail",
   onRequestConnect,
 }: ContentFeedbackPanelProps) {
@@ -198,6 +200,7 @@ export function ContentFeedbackPanel({
   const submitDisabled =
     !canSubmitDraft ||
     isSubmitting ||
+    Boolean(submitBlocker) ||
     !isFeedbackOpen ||
     !hasCurrentRoundVote ||
     hasCurrentRoundFeedback ||
@@ -208,8 +211,11 @@ export function ContentFeedbackPanel({
     hasCurrentRoundFeedback,
     isFeedbackOpen,
     isOwnContent,
+    submitBlocker,
   });
-  const submitButtonToneClassName = isFeedbackOpen && hasCurrentRoundVote ? "vote-feedback" : "vote-light";
+  const submitButtonToneClassName =
+    isFeedbackOpen && hasCurrentRoundVote && !submitBlocker ? "vote-feedback" : "vote-light";
+  const feedbackFieldsDisabled = !item || isSubmitting || Boolean(submitBlocker);
   const panelClassName = isSheet
     ? "flex min-h-0 flex-col overflow-visible"
     : "surface-card flex min-h-0 max-h-[clamp(24rem,46vh,34rem)] flex-col overflow-hidden rounded-lg p-3.5";
@@ -244,6 +250,10 @@ export function ContentFeedbackPanel({
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (submitBlocker) {
+      notification.info(submitBlocker, { duration: 6000 });
+      return;
+    }
     if (!canSubmitDraft || !isFeedbackOpen || !hasCurrentRoundVote || hasCurrentRoundFeedback || isOwnContent) return;
 
     if (!address) {
@@ -295,7 +305,7 @@ export function ContentFeedbackPanel({
           value={feedbackType}
           onChange={event => setFeedbackType(event.target.value as ContentFeedbackType)}
           className="select select-sm w-full rounded-lg border-base-content/10 bg-base-200 text-sm font-medium focus:outline-none"
-          disabled={!item || isSubmitting}
+          disabled={feedbackFieldsDisabled}
         >
           {CONTENT_FEEDBACK_PICKER_TYPES.map(type => (
             <option key={type} value={type}>
@@ -315,7 +325,7 @@ export function ContentFeedbackPanel({
           rows={isSheet ? 4 : 3}
           className="textarea min-h-24 w-full resize-none rounded-lg border-base-content/10 bg-base-200 text-sm leading-relaxed focus:outline-none"
           placeholder={feedbackPlaceholder}
-          disabled={!item || isSubmitting}
+          disabled={feedbackFieldsDisabled}
         />
 
         <label className="sr-only" htmlFor={`feedback-source-${item?.id?.toString() ?? "none"}`}>
@@ -327,7 +337,7 @@ export function ContentFeedbackPanel({
           onChange={event => setSourceUrl(event.target.value)}
           className="input input-sm w-full rounded-lg border-base-content/10 bg-base-200 text-sm focus:outline-none"
           placeholder="Source URL, optional"
-          disabled={!item || isSubmitting}
+          disabled={feedbackFieldsDisabled}
         />
 
         <div className="flex items-center justify-between gap-3">

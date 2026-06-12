@@ -5,6 +5,7 @@ export function getContentFeedbackSubmitTooltip(params: {
   canSubmitDraft: boolean;
   hasCurrentRoundVote: boolean;
   hasCurrentRoundFeedback?: boolean;
+  submitBlocker?: string | null;
   isFeedbackOpen: boolean;
   isOwnContent: boolean;
 }) {
@@ -14,6 +15,10 @@ export function getContentFeedbackSubmitTooltip(params: {
 
   if (params.hasCurrentRoundFeedback) {
     return EXISTING_CONTENT_FEEDBACK_DISABLED_REASON;
+  }
+
+  if (params.submitBlocker) {
+    return params.submitBlocker;
   }
 
   if (!params.isFeedbackOpen) {
