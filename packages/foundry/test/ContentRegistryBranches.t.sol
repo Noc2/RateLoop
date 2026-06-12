@@ -207,16 +207,17 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         assertEq(registry.questionRewardPoolEscrow(), address(mockQuestionRewardPoolEscrow));
     }
 
-    function test_SetProtocolConfig_UpdatesIdentityRegistry() public {
+    function test_SetProtocolConfig_RejectsRotationAfterInitialWiring() public {
         ProtocolConfig replacementConfig = _deployProtocolConfig(owner);
         RaterRegistry replacementRaterRegistry = _deployRaterRegistry(owner);
 
         vm.startPrank(owner);
         replacementConfig.setRaterRegistry(address(replacementRaterRegistry));
+        vm.expectRevert(ContentRegistry.InvalidState.selector);
         registry.setProtocolConfig(address(replacementConfig));
         vm.stopPrank();
 
-        assertEq(address(registry.protocolConfig()), address(replacementConfig));
+        assertEq(address(registry.protocolConfig()), address(votingEngine.protocolConfig()));
     }
 
     function test_SetCategoryRegistryRejectsNoCodeOrWrongContract() public {
@@ -2918,6 +2919,27 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         registry.cancelContent(1);
     }
 
+    function test_SetVotingEngine_RejectsMismatchedProtocolConfig() public {
+        RoundVotingEngine replacementEngine;
+        vm.startPrank(owner);
+        replacementEngine = RoundVotingEngine(
+            address(
+                new ERC1967Proxy(
+                    address(new RoundVotingEngine()),
+                    abi.encodeCall(
+                        RoundVotingEngine.initialize,
+                        (owner, address(lrepToken), address(registry), address(_deployProtocolConfig(owner)))
+                    )
+                )
+            )
+        );
+        registry.pause();
+        vm.expectRevert(ContentRegistry.InvalidState.selector);
+        registry.setVotingEngine(address(replacementEngine));
+        registry.unpause();
+        vm.stopPrank();
+    }
+
     function test_SetVotingEngine_OldTrackedRoundCanSettleRegistryStatePostRotation() public {
         vm.startPrank(submitter);
         lrepToken.approve(address(registry), 10e6);
@@ -3129,7 +3151,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
                     address(new RoundVotingEngine()),
                     abi.encodeCall(
                         RoundVotingEngine.initialize,
-                        (owner, address(lrepToken), address(registry), address(_deployProtocolConfig(owner)))
+                        (owner, address(lrepToken), address(registry), address(registry.protocolConfig()))
                     )
                 )
             )
@@ -3198,73 +3220,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.prank(address(votingEngine));
         vm.expectRevert(ContentRegistry.OnlyVotingEngine.selector);
         registry.recordMeaningfulActivity(1);
-    }
-
-    function test_RevokeVotingEngine_ClearsAuthorizationAndEmitsEvent() public {
-        // Set up replacement engine so we have a non-canonical engine to revoke.
-        RoundVotingEngine replacementEngine = _deployReplacementVotingEngine();
-        vm.startPrank(owner);
-        registry.pause();
-        registry.setVotingEngine(address(replacementEngine));
-        registry.unpause();
-        vm.stopPrank();
-
-        address oldEngine = address(votingEngine);
-
-        vm.expectEmit(true, true, true, true, address(registry));
-        emit ContentRegistry.VotingEngineRevoked(oldEngine);
-        vm.prank(owner);
-        registry.revokeVotingEngine(oldEngine);
-
-        // After revoke, the old engine cannot call back even on content the replacement
-        // engine has never touched.
-        vm.startPrank(submitter);
-        lrepToken.approve(address(registry), 10e6);
-        _submitContentWithReservation(registry, "https://example.com/revoked-engine", "g", "g", "t", 0);
-        vm.stopPrank();
-
-        vm.prank(oldEngine);
-        vm.expectRevert(ContentRegistry.OnlyVotingEngine.selector);
-        registry.updateActivity(1);
-
-        RatingLib.RatingState memory attackerState;
-        attackerState.ratingBps = 7500;
-        attackerState.conservativeRatingBps = 7500;
-        attackerState.lastUpdatedAt = uint48(block.timestamp);
-        vm.prank(oldEngine);
-        vm.expectRevert(ContentRegistry.OnlyVotingEngine.selector);
-        registry.updateRatingState(1, 1, 5000, attackerState);
-    }
-
-    function test_RevokeVotingEngine_RejectsCanonicalEngine() public {
-        vm.prank(owner);
-        vm.expectRevert(ContentRegistry.InvalidState.selector);
-        registry.revokeVotingEngine(address(votingEngine));
-    }
-
-    function test_RevokeVotingEngine_RejectsZeroAddress() public {
-        vm.prank(owner);
-        vm.expectRevert(ContentRegistry.InvalidState.selector);
-        registry.revokeVotingEngine(address(0));
-    }
-
-    function test_RevokeVotingEngine_RejectsUnauthorizedEngine() public {
-        vm.prank(owner);
-        vm.expectRevert(ContentRegistry.InvalidState.selector);
-        registry.revokeVotingEngine(address(0xBEEF));
-    }
-
-    function test_RevokeVotingEngine_RequiresConfigRole() public {
-        RoundVotingEngine replacementEngine = _deployReplacementVotingEngine();
-        vm.startPrank(owner);
-        registry.pause();
-        registry.setVotingEngine(address(replacementEngine));
-        registry.unpause();
-        vm.stopPrank();
-
-        vm.prank(address(0xC0FFEE));
-        vm.expectRevert();
-        registry.revokeVotingEngine(address(votingEngine));
     }
 
     // =========================================================================

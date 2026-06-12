@@ -231,6 +231,18 @@ contract MockBrokenAdvisoryVoteRecorderForConfig {
 }
 
 contract MockConfidentialityEscrowForConfig {
+    address internal immutable registry;
+    address internal immutable protocolConfig;
+
+    constructor(address registry_, address protocolConfig_) {
+        registry = registry_;
+        protocolConfig = protocolConfig_;
+    }
+
+    function confidentialityEscrowConfigShape() external view returns (address registry_, address protocolConfig_) {
+        return (registry, protocolConfig);
+    }
+
     function confidentialityConfig(uint256)
         external
         pure
@@ -428,7 +440,8 @@ contract ProtocolConfigBranchesTest is Test {
 
     function test_SetConfidentialityEscrow_ValidatesIntegration() public {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
-        MockConfidentialityEscrowForConfig escrow = new MockConfidentialityEscrowForConfig();
+        MockConfidentialityEscrowForConfig escrow =
+            new MockConfidentialityEscrowForConfig(address(0xCAFE), address(config));
 
         config.setConfidentialityEscrow(address(escrow));
 
@@ -437,10 +450,15 @@ contract ProtocolConfigBranchesTest is Test {
 
     function test_SetConfidentialityEscrow_RejectsInvalidIntegration() public {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+        MockConfidentialityEscrowForConfig wrongConfigEscrow =
+            new MockConfidentialityEscrowForConfig(address(0xCAFE), address(this));
         MockBrokenConfidentialityEscrowForConfig brokenEscrow = new MockBrokenConfidentialityEscrowForConfig();
 
         vm.expectRevert(ProtocolConfig.InvalidAddress.selector);
         config.setConfidentialityEscrow(address(0xC0FFEE));
+
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.setConfidentialityEscrow(address(wrongConfigEscrow));
 
         vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
         config.setConfidentialityEscrow(address(brokenEscrow));
@@ -448,8 +466,10 @@ contract ProtocolConfigBranchesTest is Test {
 
     function test_SetConfidentialityEscrow_RejectsRotationOrUnsetAfterConfigured() public {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
-        MockConfidentialityEscrowForConfig escrow = new MockConfidentialityEscrowForConfig();
-        MockConfidentialityEscrowForConfig replacementEscrow = new MockConfidentialityEscrowForConfig();
+        MockConfidentialityEscrowForConfig escrow =
+            new MockConfidentialityEscrowForConfig(address(0xCAFE), address(config));
+        MockConfidentialityEscrowForConfig replacementEscrow =
+            new MockConfidentialityEscrowForConfig(address(0xBEEF), address(config));
 
         config.setConfidentialityEscrow(address(escrow));
 

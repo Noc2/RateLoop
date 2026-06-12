@@ -155,6 +155,10 @@ contract ConfidentialityEscrow is
         maxBondLockDuration = DEFAULT_MAX_BOND_LOCK_DURATION;
     }
 
+    function confidentialityEscrowConfigShape() external view returns (address registry_, address protocolConfig_) {
+        return (address(registry), address(protocolConfig));
+    }
+
     function setPaused(bool value) external onlyRole(PAUSER_ROLE) {
         if (value) _pause();
         else _unpause();

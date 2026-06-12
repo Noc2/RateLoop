@@ -305,7 +305,6 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     event ContentRoundConfigSet(
         uint256 indexed contentId, uint32 epochDuration, uint32 maxDuration, uint16 minVoters, uint16 maxVoters
     );
-    event VotingEngineRevoked(address indexed engine);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -324,10 +323,10 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         __AccessControl_init();
         __Pausable_init();
 
-        require(_admin != address(0), "admin");
-        require(_governance != address(0), "gov");
-        require(_treasuryAuthority != address(0), "treasury");
-        require(_lrepToken != address(0), "lrep");
+        if (
+            _admin == address(0) || _governance == address(0) || _treasuryAuthority == address(0)
+                || _lrepToken == address(0)
+        ) revert InvalidState();
         _initializeSubmissionMediaValidator();
 
         // Governance gets all permanent roles
@@ -371,13 +370,15 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
 
     /// @notice Set the VotingEngine address (can only be called by CONFIG_ROLE).
     /// @dev Authorization for the previous engine is NOT cleared by this call so already-tracked
-    ///      rounds can finish settlement callbacks. Operators should still follow up with
-    ///      `revokeVotingEngine(prevEngine)` after old rounds have drained.
+    ///      rounds can finish settlement callbacks, while fresh submissions route through the
+    ///      canonical engine.
     function setVotingEngine(address _votingEngine) external onlyRole(CONFIG_ROLE) {
         if (_votingEngine == address(0)) revert InvalidState();
-        require(_votingEngine.code.length != 0, "No code");
+        if (_votingEngine.code.length == 0) revert InvalidState();
         if (votingEngine == _votingEngine) return;
         if (votingEngine != address(0) && !paused()) revert InvalidState();
+        address currentProtocolConfig = address(protocolConfig);
+        if (currentProtocolConfig != address(0)) _requireEngineProtocolConfig(_votingEngine, currentProtocolConfig);
         uint256 nextGeneration;
         unchecked {
             nextGeneration = votingEngineGeneration + 1;
@@ -387,18 +388,6 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         votingEngineCallbackGeneration[_votingEngine] = nextGeneration;
     }
 
-    /// @notice Revoke callback authorization for a previously-registered voting engine.
-    /// @dev Use after `setVotingEngine` rotates to a new engine and any in-flight rounds on
-    ///      the old engine have been drained. Cannot be used on the canonical engine — call
-    ///      `setVotingEngine` to rotate first.
-    function revokeVotingEngine(address engine) external onlyRole(CONFIG_ROLE) {
-        if (engine == address(0)) revert InvalidState();
-        if (engine == votingEngine) revert InvalidState();
-        if (votingEngineCallbackGeneration[engine] == 0) revert InvalidState();
-        delete votingEngineCallbackGeneration[engine];
-        emit VotingEngineRevoked(engine);
-    }
-
     /// @notice Set the CategoryRegistry address (can only be called by CONFIG_ROLE).
     function setCategoryRegistry(address _categoryRegistry) external onlyRole(CONFIG_ROLE) {
         if (!_probeContractShape(_categoryRegistry, ICategoryRegistry.isCategory.selector, 36)) revert InvalidState();
@@ -406,8 +395,25 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     }
 
     function setProtocolConfig(address _protocolConfig) external onlyRole(CONFIG_ROLE) {
+        address currentProtocolConfig = address(protocolConfig);
+        if (currentProtocolConfig != address(0) && _protocolConfig != currentProtocolConfig) revert InvalidState();
         if (!_probeContractShape(_protocolConfig, 0x79502c55, 4)) revert InvalidState();
         protocolConfig = ProtocolConfig(_protocolConfig);
+    }
+
+    function _requireEngineProtocolConfig(address engine, address expectedConfig) private view {
+        assembly ("memory-safe") {
+            let ptr := mload(0x40)
+            mstore(ptr, shl(224, 0xf5efbb4f))
+            if iszero(staticcall(gas(), engine, ptr, 4, ptr, 32)) {
+                mstore(0, shl(224, 0xbaf3f0f7))
+                revert(0, 4)
+            }
+            if iszero(eq(and(mload(ptr), 0xffffffffffffffffffffffffffffffffffffffff), expectedConfig)) {
+                mstore(0, shl(224, 0xbaf3f0f7))
+                revert(0, 4)
+            }
+        }
     }
 
     function _probeContractShape(address target, bytes4 selector, uint256 inputSize) private view returns (bool valid) {
@@ -455,10 +461,10 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     /// @notice Reserve a hidden submission commitment before revealing the public content metadata.
     /// @param revealCommitment Keccak-256 hash of the future submission reveal payload.
     function reserveSubmission(bytes32 revealCommitment) external nonReentrant whenNotPaused {
-        require(revealCommitment != bytes32(0), "Invalid commitment");
+        if (revealCommitment == bytes32(0)) revert InvalidState();
         bytes32 key = _reservationKey(revealCommitment, msg.sender);
         PendingSubmission storage pending = pendingSubmissions[key];
-        require(pending.submitter == address(0), "Reservation exists");
+        if (pending.submitter != address(0)) revert InvalidState();
 
         // M-Identity-1: snapshot the submitter's identity at reservation time and store both
         // fields verbatim — never zero them out. The pre-fix shortcut zeroed the fields whenever
@@ -553,10 +559,10 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         SubmissionRewardTerms calldata rewardTerms,
         RoundLib.RoundConfig calldata roundConfig
     ) external nonReentrant whenNotPaused returns (uint256 bundleId, uint256[] memory contentIds) {
-        require(questions.length > 0, "No questions");
+        if (questions.length == 0) revert InvalidState();
         require(questions.length > 1, "Bundle needs multiple questions");
-        require(questions.length <= MAX_QUESTION_BUNDLE_COUNT, "Too many questions");
-        require(questionRewardPoolEscrow != address(0), "Bounty escrow not set");
+        if (questions.length > MAX_QUESTION_BUNDLE_COUNT) revert InvalidState();
+        if (questionRewardPoolEscrow == address(0)) revert InvalidState();
 
         RoundLib.RoundConfig memory validatedRoundConfig = _validatedRoundConfig(roundConfig);
         require(validatedRoundConfig.maxVoters <= MAX_QUESTION_BUNDLE_ROUND_VOTERS);
@@ -740,7 +746,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         IConfidentialityEscrow.ConfidentialityConfig memory confidentiality
     ) public onlyRole(X402_GATEWAY_ROLE) nonReentrant whenNotPaused returns (uint256 contentId) {
         if (submitter == address(0)) revert InvalidState();
-        require(rewardTerms.asset == SUBMISSION_REWARD_ASSET_USDC, "USDC required");
+        if (rewardTerms.asset != SUBMISSION_REWARD_ASSET_USDC) revert InvalidState();
         SubmissionMetadata memory metadata = _validatedContextSubmissionMetadata(
             contextUrl, imageUrls, videoUrl, title, tags, categoryId, confidentiality.gated
         );
@@ -787,7 +793,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     /// @notice Cancel content before any votes. Attached submission bounties stay non-refundable.
     /// @dev Only callable by the submitter. VotingEngine must confirm 0 votes.
     function cancelContent(uint256 contentId) external nonReentrant whenNotPaused {
-        require(bonusPool != address(0), "Bonus pool not set");
+        if (bonusPool == address(0)) revert InvalidState();
         Content storage c = contents[contentId];
         require(_isSubmitterIdentity(contentId, msg.sender), "Not submitter");
         require(c.status == ContentStatus.Active, "Not active");
@@ -821,7 +827,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     ) internal view returns (SubmissionMetadata memory metadata) {
         submissionMediaValidator.validateContextSubmission(contextUrl, imageUrls, videoUrl, title, tags, gated);
         metadata = SubmissionMetadata({ url: contextUrl, title: title, tags: tags, categoryId: categoryId });
-        require(address(categoryRegistry) != address(0), "Category unset");
+        if (address(categoryRegistry) == address(0)) revert InvalidState();
     }
 
     function _submitValidatedQuestionWithMedia(
@@ -920,7 +926,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         bytes32 reservationKey = _reservationKey(revealCommitment, submitter);
         pending = pendingSubmissions[reservationKey];
         require(pending.submitter == submitter, "Reservation not found");
-        require(block.timestamp <= pending.expiresAt, "Reservation expired");
+        if (block.timestamp > pending.expiresAt) revert InvalidState();
         require(block.timestamp >= pending.reservedAt + RESERVED_SUBMISSION_MIN_AGE, "Reservation too new");
 
         delete pendingSubmissions[reservationKey];
@@ -959,8 +965,8 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     }
 
     function _validateQuestionSpec(QuestionSpecCommitment memory spec) internal pure {
-        require(spec.questionMetadataHash != bytes32(0), "Bad metadata");
-        require(spec.resultSpecHash != bytes32(0), "Bad spec");
+        if (spec.questionMetadataHash == bytes32(0)) revert InvalidState();
+        if (spec.resultSpecHash == bytes32(0)) revert InvalidState();
     }
 
     function _validateSubmissionDetails(SubmissionDetails memory details, bool gated) internal view {
@@ -972,7 +978,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         view
         returns (uint256 resolvedCategoryId)
     {
-        require(metadata.categoryId != 0, "Category required");
+        if (metadata.categoryId == 0) revert InvalidState();
         require(categoryRegistry.isCategory(metadata.categoryId), "Category not registered");
         return metadata.categoryId;
     }
@@ -1070,7 +1076,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             bundleId
         );
         _configureConfidentiality(contentId, confidentiality);
-        require(questionRewardPoolEscrow != address(0), "Bounty escrow not set");
+        if (questionRewardPoolEscrow == address(0)) revert InvalidState();
         uint256 rewardPoolId = IQuestionRewardPoolEscrow(questionRewardPoolEscrow)
             .createSubmissionRewardPoolFromRegistry(
                 contentId,
@@ -1123,7 +1129,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             return;
         }
         address escrow = protocolConfig.confidentialityEscrow();
-        require(escrow != address(0), "Confidentiality escrow not set");
+        if (escrow == address(0)) revert InvalidState();
         IConfidentialityEscrow(escrow).configure(contentId, confidentiality);
     }
 
@@ -1170,16 +1176,16 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     function reviveContent(uint256 contentId) external nonReentrant whenNotPaused {
         Content storage c = contents[contentId];
         require(c.status == ContentStatus.Dormant, "Not dormant");
-        require(c.dormantCount < MAX_REVIVALS, "Max revivals reached");
+        if (c.dormantCount >= MAX_REVIVALS) revert InvalidState();
 
         bytes32 submissionKey = contentSubmissionKey[contentId];
         if (submissionKey == bytes32(0)) revert InvalidState();
         if (!submissionKeyUsed[submissionKey]) revert InvalidState();
-        require(_isSubmitterIdentity(contentId, msg.sender), "Not original submitter");
-        require(block.timestamp <= dormantKeyReleasableAt[contentId], "Revival window elapsed");
+        if (!_isSubmitterIdentity(contentId, msg.sender)) revert InvalidState();
+        if (block.timestamp > dormantKeyReleasableAt[contentId]) revert InvalidState();
 
         // M-1/M-2 fix: send revival stake to treasury instead of leaving it unaccounted
-        require(treasury != address(0), "Treasury not set");
+        if (treasury == address(0)) revert InvalidState();
         lrepToken.safeTransferFrom(msg.sender, treasury, REVIVAL_STAKE);
 
         c.status = ContentStatus.Active;
@@ -1201,7 +1207,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
 
         bytes32 submissionKey = contentSubmissionKey[contentId];
         if (submissionKey == bytes32(0)) revert InvalidState();
-        require(block.timestamp > dormantKeyReleasableAt[contentId], "Revival window active");
+        if (block.timestamp <= dormantKeyReleasableAt[contentId]) revert InvalidState();
 
         submissionKeyUsed[submissionKey] = false;
         delete contentSubmissionKey[contentId];
@@ -1229,7 +1235,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     /// @notice Called by VotingEngine to update raw activity timestamp after commits.
     /// @dev Vote commits refresh UI-facing activity without extending the dormancy window.
     ///      Stamps the per-content generation so any pre-existing older-engine grants are
-    ///      shut out from this content even before `revokeVotingEngine` is called.
+    ///      shut out from this content by the per-content callback generation.
     function updateActivity(uint256 contentId) external nonReentrant {
         uint256 callerGeneration = _authorizeCurrentEngineCallback();
 
@@ -1486,7 +1492,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         view
         returns (RoundLib.RoundConfig memory cfg)
     {
-        require(address(protocolConfig) != address(0), "Config not set");
+        if (address(protocolConfig) == address(0)) revert InvalidState();
         cfg = protocolConfig.validateRoundConfig(
             roundConfig.epochDuration, roundConfig.maxDuration, roundConfig.minVoters, roundConfig.maxVoters
         );

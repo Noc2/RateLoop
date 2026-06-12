@@ -32,4 +32,5 @@ interface IConfidentialityEscrow {
     function hasActiveBond(uint256 contentId, bytes32 identityKey) external view returns (bool);
     function confidentialityConfig(uint256 contentId) external view returns (ConfidentialityConfig memory config);
     function hasConfidentialityNexus(uint8 provider, bytes32 nullifierHash) external view returns (bool);
+    function confidentialityEscrowConfigShape() external view returns (address registry_, address protocolConfig_);
 }

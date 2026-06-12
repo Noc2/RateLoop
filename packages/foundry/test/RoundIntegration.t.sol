@@ -3453,7 +3453,7 @@ contract RoundIntegrationTest is VotingTestBase {
                     address(new RoundVotingEngine()),
                     abi.encodeCall(
                         RoundVotingEngine.initialize,
-                        (owner, address(lrepToken), address(registry), address(_deployProtocolConfig(owner)))
+                        (owner, address(lrepToken), address(registry), address(votingEngine.protocolConfig()))
                     )
                 )
             )
