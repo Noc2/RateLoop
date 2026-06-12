@@ -702,6 +702,37 @@ contract LaunchDistributionPoolTest is Test {
         assertEq(lrep.balanceOf(alice), FIRST_COHORT_UNVERIFIED_CAP);
     }
 
+    function test_RecordEarnedRaterRewardIgnoresCurrentBannedVerifiedAnchor() public {
+        bytes32 nullifier = keccak256("banned-launch-anchor");
+        bytes32 anchorId = registry.launchHumanIdentityKey(RaterRegistry.HumanCredentialProvider.SeededHuman, nullifier);
+        _banIdentity(RaterRegistry.HumanCredentialProvider.SeededHuman, nullifier);
+
+        assertEq(_recordLaunchReward(alice, 1, anchorId), 0);
+
+        assertEq(pool.qualifyingRatingCount(alice), 0);
+        assertEq(pool.raterDistinctVerifiedAnchorCount(alice), 0);
+        assertEq(pool.raterDistinctAnchorRoundCount(alice), 0);
+        assertFalse(pool.raterVerifiedAnchorSeen(alice, anchorId));
+        assertEq(pool.verifiedAnchorDistinctRaterCount(anchorId), 0);
+    }
+
+    function test_RecordAdvisoryRaterRewardIgnoresCurrentBannedVerifiedAnchor() public {
+        bytes32 nullifier = keccak256("banned-advisory-anchor");
+        bytes32 anchorId = registry.launchHumanIdentityKey(RaterRegistry.HumanCredentialProvider.SeededHuman, nullifier);
+        _banIdentity(RaterRegistry.HumanCredentialProvider.SeededHuman, nullifier);
+
+        (bool recorded, uint256 paid) = pool.recordAdvisoryRaterRewardWithSourceReady(
+            alice, 1, 1, _commitKey(1), 8_000, 3, true, _singleAnchor(anchorId), uint64(block.timestamp)
+        );
+
+        assertFalse(recorded);
+        assertEq(paid, 0);
+        assertEq(pool.qualifyingRatingCount(alice), 0);
+        assertEq(pool.raterDistinctVerifiedAnchorCount(alice), 0);
+        assertFalse(pool.raterVerifiedAnchorSeen(alice, anchorId));
+        assertEq(pool.verifiedAnchorDistinctRaterCount(anchorId), 0);
+    }
+
     function test_RecordEarnedRaterRewardPartialEarnedPoolDoesNotConsumeFullSlot() public {
         _recordLaunchRewardSlots(alice, 5);
         assertEq(pool.rewardedRatingCount(alice), 1);

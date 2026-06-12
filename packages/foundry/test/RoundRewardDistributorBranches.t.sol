@@ -40,6 +40,18 @@ contract MockRevertingLaunchDistributionPool {
     }
 }
 
+contract MockRewardDistributorConfidentialityNexus {
+    mapping(uint8 => mapping(bytes32 => bool)) internal nexus;
+
+    function setNexus(uint8 provider, bytes32 nullifierHash, bool value) external {
+        nexus[provider][nullifierHash] = value;
+    }
+
+    function hasConfidentialityNexus(uint8 provider, bytes32 nullifierHash) external view returns (bool) {
+        return nexus[provider][nullifierHash];
+    }
+}
+
 contract ClaimingBundleObserver {
     uint16 public defaultFrontendFeeBps = 300;
     uint256 public nextRewardPoolId = 1;
@@ -640,6 +652,51 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
             ),
             1
         );
+    }
+
+    function test_ClaimReward_SkipsVerifiedHumanAnchorBannedInCurrentRegistry() public {
+        bytes32 anchorId = bytes32("current-banned-anchor-voter-2");
+        _verifyHuman(voter2, anchorId);
+        (uint256 contentId, uint256 roundId) = _setupSettledPredictionRound();
+        assertEq(votingEngine.roundRaterRegistrySnapshot(contentId, roundId), address(raterRegistry));
+
+        RaterRegistry replacementRegistry = new RaterRegistry(
+            owner,
+            owner,
+            address(worldIdRouter),
+            42,
+            uint256(keccak256("rateloop-human-credential-v4")),
+            uint256(keccak256("rateloop-human-presence-v1")),
+            365 days,
+            15 minutes,
+            7,
+            0
+        );
+        MockRewardDistributorConfidentialityNexus nexus = new MockRewardDistributorConfidentialityNexus();
+        nexus.setNexus(uint8(RaterRegistry.HumanCredentialProvider.WorldIdV4), anchorId, true);
+        vm.prank(owner);
+        replacementRegistry.setConfidentialityEscrow(address(nexus));
+        vm.prank(owner);
+        replacementRegistry.banIdentity(
+            RaterRegistry.HumanCredentialProvider.WorldIdV4,
+            anchorId,
+            uint64(block.timestamp + 30 days),
+            "current registry ban",
+            keccak256("current-registry-ban")
+        );
+
+        ProtocolConfig config = ProtocolConfig(address(votingEngine.protocolConfig()));
+        vm.prank(owner);
+        config.setRaterRegistry(address(replacementRegistry));
+
+        vm.prank(voter1);
+        rewardDistributor.claimReward(contentId, roundId);
+
+        bytes32 launchAnchorId = _credentialKey(RaterRegistry.HumanCredentialProvider.WorldIdV4, anchorId);
+        assertEq(launchPool.qualifyingRatingCount(voter1), 0);
+        assertEq(launchPool.raterDistinctVerifiedAnchorCount(voter1), 0);
+        assertEq(launchPool.raterDistinctAnchorRoundCount(voter1), 0);
+        assertEq(launchPool.verifiedAnchorDistinctRaterCount(launchAnchorId), 0);
     }
 
     function test_ClaimReward_DoesNotRecordLaunchCreditWithFreshVerifiedHumanAnchor() public {

@@ -1296,7 +1296,7 @@ contract LaunchDistributionPool is
     }
 
     function _recordVerifiedAnchor(LaunchRewardPolicy memory policy, address rater, bytes32 anchorId)
-        internal
+        private
         returns (bool recorded)
     {
         if (raterVerifiedAnchorSeen[rater][anchorId]) return true;
@@ -1316,7 +1316,7 @@ contract LaunchDistributionPool is
     }
 
     function _reservePendingVerifiedAnchor(LaunchRewardPolicy memory policy, address rater, bytes32 anchorId)
-        internal
+        private
         returns (bool reserved)
     {
         if (raterVerifiedAnchorSeen[rater][anchorId]) return false;
@@ -1379,14 +1379,28 @@ contract LaunchDistributionPool is
         uint256 anchorCount = verifiedAnchorIds.length;
         for (uint256 i = 0; i < anchorCount; i++) {
             bytes32 anchorId = verifiedAnchorIds[i];
-            if (anchorId == bytes32(0) || _isDuplicateAnchor(verifiedAnchorIds, i)) continue;
+            if (anchorId == 0 || _isVerifiedAnchorBanned(anchorId) || _isDuplicateAnchor(verifiedAnchorIds, i)) {
+                continue;
+            }
             if (
                 !raterVerifiedAnchorSeen[rater][anchorId] && !verifiedAnchorRaterSeen[anchorId][rater]
                     && verifiedAnchorDistinctRaterCount[anchorId] >= policy.maxDistinctRatersPerVerifiedAnchor
             ) {
                 continue;
             }
-            distinctCount += 1;
+            unchecked {
+                ++distinctCount;
+            }
+        }
+    }
+
+    function _isVerifiedAnchorBanned(bytes32 anchorId) private view returns (bool banned) {
+        assembly ("memory-safe") {
+            mstore(0x00, shl(224, 0xf8e0a2d6))
+            mstore(0x04, anchorId)
+            if staticcall(gas(), sload(raterRegistry.slot), 0x00, 0x24, 0x00, 0x20) {
+                banned := iszero(iszero(mload(0x00)))
+            }
         }
     }
 

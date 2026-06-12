@@ -24,8 +24,10 @@ library LaunchRaterRewardLib {
             raterRegistryAddress = config.raterRegistry();
         }
         if (raterRegistryAddress == address(0) || voteCount == 0) return new bytes32[](0);
+        address currentRaterRegistryAddress = config.raterRegistry();
 
         RaterRegistry raterRegistry = RaterRegistry(raterRegistryAddress);
+        RaterRegistry currentRaterRegistry = RaterRegistry(currentRaterRegistryAddress);
         address submitterIdentity = registry.getSubmitterIdentity(contentId);
         bytes32[] memory candidates = new bytes32[](voteCount);
         uint256 anchorCount;
@@ -41,6 +43,10 @@ library LaunchRaterRewardLib {
             bytes32 anchorId =
                 launchRewardAnchorId(raterRegistry, anchorAccount, roundStartTime, minAnchorCredentialAgeSeconds);
             if (anchorId == bytes32(0) || launchRewardAnchorSeen(candidates, anchorCount, anchorId)) continue;
+            if (
+                currentRaterRegistryAddress != address(0) && currentRaterRegistryAddress != raterRegistryAddress
+                    && launchRewardAnchorBanned(currentRaterRegistry, anchorAccount, anchorId)
+            ) continue;
 
             candidates[anchorCount] = anchorId;
             anchorCount += 1;
@@ -88,6 +94,15 @@ library LaunchRaterRewardLib {
         } catch {
             return bytes32(0);
         }
+    }
+
+    function launchRewardAnchorBanned(RaterRegistry raterRegistry, address account, bytes32 anchorId)
+        internal
+        view
+        returns (bool)
+    {
+        return raterRegistry.isIdentityKeyBanned(anchorId)
+            || raterRegistry.isIdentityKeyBanned(raterRegistry.addressIdentityKey(account));
     }
 
     function launchRewardCredentialAnchorId(RaterRegistry.HumanCredentialProvider provider, bytes32 nullifierHash)
