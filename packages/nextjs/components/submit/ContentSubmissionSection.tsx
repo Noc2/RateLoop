@@ -841,6 +841,8 @@ export function ContentSubmissionSection() {
     if (enabled) {
       setContextUrl("");
       setContextUrlError(null);
+      setImageUrls([""]);
+      setImageUrlErrors([null]);
       setVideoUrl("");
       setVideoUrlError(null);
       setMediaMode("images");
@@ -848,6 +850,7 @@ export function ContentSubmissionSection() {
         contextUrl: "",
         contextVisibility: nextVisibility,
         disclosurePolicy: PRIVATE_FOREVER_DISCLOSURE_POLICY,
+        imageUrls: [""],
         mediaMode: "images",
         videoUrl: "",
       });
@@ -1787,11 +1790,9 @@ export function ContentSubmissionSection() {
       draft.mediaMode === "images"
         ? nextImageUrlErrors.some(Boolean)
         : !isPrivateContext && (Boolean(nextVideoUrlError) || Boolean(draft.videoUrl.trim() && !submittedVideoUrl));
-    const hasContextOrMedia =
-      Boolean(submittedContextUrl) ||
-      submittedImageUrls.length > 0 ||
-      Boolean(submittedVideoUrl) ||
-      (isPrivateContext && Boolean(trimmedDetailsText));
+    const hasContextOrMedia = isPrivateContext
+      ? Boolean(trimmedDetailsText)
+      : Boolean(submittedContextUrl) || submittedImageUrls.length > 0 || Boolean(submittedVideoUrl);
     if (applyErrors) {
       setImageUrlErrors(nextImageUrlErrors);
       setVideoUrlError(nextVideoUrlError);
@@ -2439,15 +2440,30 @@ export function ContentSubmissionSection() {
       if (!primaryQuestion) {
         throw new Error("Question is missing.");
       }
+      const toOnChainQuestion = (question: (typeof bundleQuestions)[number]) =>
+        question.contextVisibility === "gated"
+          ? {
+              ...question,
+              contextUrl: "",
+              detailsUrl: "",
+              imageUrls: [],
+              videoUrl: "",
+            }
+          : question;
+      const onChainBundleQuestions = bundleQuestions.map(toOnChainQuestion);
+      const onChainPrimaryQuestion = onChainBundleQuestions[0];
+      if (!onChainPrimaryQuestion) {
+        throw new Error("Question is missing.");
+      }
       const toQuestionContractSpec = (spec: (typeof bundleQuestions)[number]["spec"]) => ({
         questionMetadataHash: spec.questionMetadataHash,
         resultSpecHash: spec.resultSpecHash,
       });
-      const contractBundleQuestions = bundleQuestions.map(question => ({
+      const contractBundleQuestions = onChainBundleQuestions.map(question => ({
         ...question,
         spec: toQuestionContractSpec(question.spec),
       }));
-      const primaryQuestionContractSpec = toQuestionContractSpec(primaryQuestion.spec);
+      const primaryQuestionContractSpec = toQuestionContractSpec(onChainPrimaryQuestion.spec);
       await assertContentRegistryQuestionSubmissionSelector(
         publicClient,
         registryAddress,
@@ -2479,7 +2495,7 @@ export function ContentSubmissionSection() {
       } as const;
       const revealCommitment = isBundleSubmission
         ? buildQuestionBundleSubmissionRevealCommitment({
-            questions: bundleQuestions,
+            questions: onChainBundleQuestions,
             rewardAmount: selectedRewardAmount,
             rewardAsset: selectedRewardAssetId,
             requiredSettledRounds: selectedRequiredSettledRounds,
@@ -2492,27 +2508,27 @@ export function ContentSubmissionSection() {
             submitter: submitterAddress,
           })
         : buildQuestionSubmissionRevealCommitment({
-            categoryId: primaryQuestion.categoryId,
-            detailsHash: primaryQuestion.detailsHash,
-            detailsUrl: primaryQuestion.detailsUrl,
-            imageUrls: primaryQuestion.imageUrls,
-            questionMetadataHash: primaryQuestion.spec.questionMetadataHash,
+            categoryId: onChainPrimaryQuestion.categoryId,
+            detailsHash: onChainPrimaryQuestion.detailsHash,
+            detailsUrl: onChainPrimaryQuestion.detailsUrl,
+            imageUrls: onChainPrimaryQuestion.imageUrls,
+            questionMetadataHash: onChainPrimaryQuestion.spec.questionMetadataHash,
             rewardAmount: selectedRewardAmount,
             rewardAsset: selectedRewardAssetId,
             requiredSettledRounds: selectedRequiredSettledRounds,
             requiredVoters: selectedRequiredVoters,
-            resultSpecHash: primaryQuestion.spec.resultSpecHash,
+            resultSpecHash: onChainPrimaryQuestion.spec.resultSpecHash,
             bountyStartBy,
             bountyWindowSeconds: bountyWindowSecondsValue,
             feedbackWindowSeconds,
             bountyEligibility: selectedBountyEligibility.mode,
             roundConfig: selectedRoundConfig,
-            salt: primaryQuestion.salt,
-            submissionKey: getQuestionSubmissionKey(primaryQuestion),
+            salt: onChainPrimaryQuestion.salt,
+            submissionKey: getQuestionSubmissionKey(onChainPrimaryQuestion),
             submitter: submitterAddress,
-            tags: primaryQuestion.tags,
-            title: primaryQuestion.title,
-            videoUrl: primaryQuestion.videoUrl,
+            tags: onChainPrimaryQuestion.tags,
+            title: onChainPrimaryQuestion.title,
+            videoUrl: onChainPrimaryQuestion.videoUrl,
             confidentialityHash: primaryQuestionConfidentialityHash,
           });
 
@@ -2615,14 +2631,17 @@ export function ContentSubmissionSection() {
               args: isBundleSubmission
                 ? [contractBundleQuestions, rewardTerms, roundConfigAbi]
                 : [
-                    primaryQuestion.contextUrl,
-                    primaryQuestion.imageUrls,
-                    primaryQuestion.videoUrl,
-                    primaryQuestion.title,
-                    primaryQuestion.tags,
-                    primaryQuestion.categoryId,
-                    { detailsUrl: primaryQuestion.detailsUrl, detailsHash: primaryQuestion.detailsHash },
-                    primaryQuestion.salt,
+                    onChainPrimaryQuestion.contextUrl,
+                    onChainPrimaryQuestion.imageUrls,
+                    onChainPrimaryQuestion.videoUrl,
+                    onChainPrimaryQuestion.title,
+                    onChainPrimaryQuestion.tags,
+                    onChainPrimaryQuestion.categoryId,
+                    {
+                      detailsUrl: onChainPrimaryQuestion.detailsUrl,
+                      detailsHash: onChainPrimaryQuestion.detailsHash,
+                    },
+                    onChainPrimaryQuestion.salt,
                     rewardTerms,
                     roundConfigAbi,
                     primaryQuestionContractSpec,
@@ -2676,14 +2695,14 @@ export function ContentSubmissionSection() {
               abi: QUESTION_SUBMISSION_ABI,
               functionName: "submitQuestionWithRewardAndRoundConfig",
               args: [
-                primaryQuestion.contextUrl,
-                primaryQuestion.imageUrls,
-                primaryQuestion.videoUrl,
-                primaryQuestion.title,
-                primaryQuestion.tags,
-                primaryQuestion.categoryId,
-                { detailsUrl: primaryQuestion.detailsUrl, detailsHash: primaryQuestion.detailsHash },
-                primaryQuestion.salt,
+                onChainPrimaryQuestion.contextUrl,
+                onChainPrimaryQuestion.imageUrls,
+                onChainPrimaryQuestion.videoUrl,
+                onChainPrimaryQuestion.title,
+                onChainPrimaryQuestion.tags,
+                onChainPrimaryQuestion.categoryId,
+                { detailsUrl: onChainPrimaryQuestion.detailsUrl, detailsHash: onChainPrimaryQuestion.detailsHash },
+                onChainPrimaryQuestion.salt,
                 rewardTerms,
                 roundConfigAbi,
                 primaryQuestionContractSpec,
