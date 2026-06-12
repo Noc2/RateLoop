@@ -1156,14 +1156,20 @@ export interface PonderViewerRewardStatusesResponse {
   items: PonderViewerRewardStatusItem[];
 }
 
+export interface PonderConfidentialitySanction {
+  active: boolean;
+  bannedAt?: string | null;
+  evidenceHash?: string | null;
+  expiresAt?: string | null;
+  permanent?: boolean;
+  provider?: number | null;
+  reason?: string | null;
+  scope?: string | null;
+  unbannedAt?: string | null;
+}
+
 export interface PonderProfileDetailResponse {
-  confidentialitySanction?: {
-    active: boolean;
-    evidenceHash?: string | null;
-    expiresAt?: string | null;
-    reason?: string | null;
-    scope?: string | null;
-  } | null;
+  confidentialitySanction?: PonderConfidentialitySanction | null;
   profile: PonderProfile | null;
   summary: PonderProfileSummary;
   earningsSummary: PonderProfileEarningsSummary;
@@ -1243,6 +1249,7 @@ export interface PonderRaterParticipationStatusResponse {
     expiresAt: string | null;
     evidenceHash: string | null;
   };
+  confidentialitySanction?: PonderConfidentialitySanction | null;
   worldCredentials?: {
     activeMask: number;
     freshRecheckMask: number;

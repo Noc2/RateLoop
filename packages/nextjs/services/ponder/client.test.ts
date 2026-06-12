@@ -519,6 +519,13 @@ test("ponderApi.getRaterParticipationStatus exposes expanded reputation blocks",
           expiresAt: null,
           evidenceHash: null,
         },
+        confidentialitySanction: {
+          active: true,
+          reason: "verified leak",
+          scope: "surplus earning and gated-context access checks",
+          expiresAt: null,
+          evidenceHash: "0x1234",
+        },
         launchRewards: {
           eligible: true,
           qualifyingRatingCount: 6,
@@ -558,6 +565,8 @@ test("ponderApi.getRaterParticipationStatus exposes expanded reputation blocks",
 
     assert.equal(response.participationLane, "open");
     assert.equal(response.humanCredential.status, "missing");
+    assert.equal(response.confidentialitySanction?.active, true);
+    assert.equal(response.confidentialitySanction?.reason, "verified leak");
     assert.equal(response.launchRewards.remainingLaunchCap, "75");
     assert.equal(response.launchRewards.unlockableLaunchCap, "300");
     assert.equal(response.participationPolicy.baseRewardWeightBps, 10000);

@@ -835,8 +835,9 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
   const profileDetail = profileResult?.data ?? null;
   const summary = profileDetail?.profile ?? null;
   const social = profileDetail?.social ?? { followerCount: 0, followingCount: 0 };
-  const confidentialitySanction = profileDetail?.confidentialitySanction ?? null;
   const rewardStatus = rewardStatusQuery.data;
+  const confidentialitySanction =
+    rewardStatus?.confidentialitySanction ?? profileDetail?.confidentialitySanction ?? null;
   const dailyStreak = useVoterStreak(normalizedAddress);
   const recentVotes = profileDetail?.recentVotes ?? [];
   const recentSubmissions = profileDetail?.recentSubmissions ?? [];
@@ -976,6 +977,8 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
   const currentSelfReport = ownProfile ? committedSelfReport : ponderSelfReport;
   const currentSelfReportGroups = getProfileSelfReportDisplayGroups(currentSelfReport);
   const hasCurrentSelfReport = currentSelfReportGroups.length > 0;
+  const showStandaloneConfidentialitySanction =
+    !isEditing && Boolean(confidentialitySanction?.active) && !hasCurrentSelfReport && !ownProfile;
   const selfReportInputLength = getProfileSelfReportLength(effectiveSelfReportInput);
   const displayName = currentName || truncateAddress(normalizedAddress);
   const displayAvatarAccentHex = ownProfile ? (committedAvatarAccentHex ?? avatarAccent?.hex ?? null) : null;
@@ -1561,6 +1564,11 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
             </div>
           ) : ownProfile ? (
             <div className="mt-6 rounded-2xl border border-dashed border-base-content/15 px-5 py-4">
+              <AudienceContextHeading rightContent={audienceContextSanctionStatus} />
+            </div>
+          ) : null}
+          {showStandaloneConfidentialitySanction ? (
+            <div className="mt-6 surface-card-nested rounded-2xl px-5 py-4">
               <AudienceContextHeading rightContent={audienceContextSanctionStatus} />
             </div>
           ) : null}
