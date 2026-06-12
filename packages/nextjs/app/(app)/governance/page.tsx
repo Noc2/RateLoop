@@ -200,38 +200,38 @@ function ConfidentialityBreachesPanel({ reporter }: { reporter: `0x${string}` })
           </p>
         </div>
         <div className="grid gap-4">
-          <label className="form-control">
-            <span className="label-text text-base-content/65">Content id</span>
+          <label className="form-control gap-2 sm:grid sm:grid-cols-[max-content_minmax(0,1fr)] sm:items-center sm:gap-x-6">
+            <span className="label-text whitespace-nowrap text-base-content/65">Content id</span>
             <input
-              className="input input-bordered mt-2 bg-base-100"
+              className="input input-bordered mt-2 w-full bg-base-100 sm:mt-0 sm:max-w-xl sm:justify-self-end"
               inputMode="numeric"
               value={contentId}
               onChange={event => setContentId(event.target.value)}
               placeholder="123"
             />
           </label>
-          <label className="form-control">
-            <span className="label-text text-base-content/65">Accused identity key</span>
+          <label className="form-control gap-2 sm:grid sm:grid-cols-[max-content_minmax(0,1fr)] sm:items-center sm:gap-x-6">
+            <span className="label-text whitespace-nowrap text-base-content/65">Accused identity key</span>
             <input
-              className="input input-bordered mt-2 bg-base-100 font-mono text-sm"
+              className="input input-bordered mt-2 w-full bg-base-100 font-mono text-sm sm:mt-0 sm:max-w-xl sm:justify-self-end"
               value={accusedIdentityKey}
               onChange={event => setAccusedIdentityKey(event.target.value)}
               placeholder="0x..."
             />
           </label>
-          <label className="form-control">
-            <span className="label-text text-base-content/65">Evidence hash</span>
+          <label className="form-control gap-2 sm:grid sm:grid-cols-[max-content_minmax(0,1fr)] sm:items-center sm:gap-x-6">
+            <span className="label-text whitespace-nowrap text-base-content/65">Evidence hash</span>
             <input
-              className="input input-bordered mt-2 bg-base-100 font-mono text-sm"
+              className="input input-bordered mt-2 w-full bg-base-100 font-mono text-sm sm:mt-0 sm:max-w-xl sm:justify-self-end"
               value={evidenceHash}
               onChange={event => setEvidenceHash(event.target.value)}
               placeholder="0x..."
             />
           </label>
-          <label className="form-control">
-            <span className="label-text text-base-content/65">Evidence URL</span>
+          <label className="form-control gap-2 sm:grid sm:grid-cols-[max-content_minmax(0,1fr)] sm:items-center sm:gap-x-6">
+            <span className="label-text whitespace-nowrap text-base-content/65">Evidence URL</span>
             <input
-              className="input input-bordered mt-2 bg-base-100"
+              className="input input-bordered mt-2 w-full bg-base-100 sm:mt-0 sm:max-w-xl sm:justify-self-end"
               type="url"
               value={evidenceUrl}
               onChange={event => setEvidenceUrl(event.target.value)}
