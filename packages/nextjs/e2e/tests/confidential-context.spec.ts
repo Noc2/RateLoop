@@ -192,7 +192,7 @@ test.describe("Confidential context", () => {
     const form = page.locator("form").first();
     await selectAskCategory(page);
     await form.getByLabel("Number of questions").fill("2");
-    await form.getByLabel("Private context").check();
+    await form.getByRole("checkbox", { name: "Private context" }).check();
     await page.getByPlaceholder("Write a subjective question voters can rate").fill(`Private bundle Q1 ${uniqueId}`);
     await page
       .getByPlaceholder("Add context voters can expand before rating")
@@ -201,7 +201,7 @@ test.describe("Confidential context", () => {
 
     await page.getByRole("button", { name: /^Next Question/i }).click();
     await expect(page.getByText("Question 2 of 2")).toBeVisible({ timeout: 5_000 });
-    await form.getByLabel("Private context").check();
+    await form.getByRole("checkbox", { name: "Private context" }).check();
     await page.getByPlaceholder("Write a subjective question voters can rate").fill(`Private bundle Q2 ${uniqueId}`);
     await page
       .getByPlaceholder("Add context voters can expand before rating")

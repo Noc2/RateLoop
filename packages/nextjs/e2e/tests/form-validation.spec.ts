@@ -61,7 +61,7 @@ test.describe("Ask form validation", () => {
     await expect(contextInput).toBeVisible({ timeout: 5_000 });
     await contextInput.fill("https://example.com/private-toggle");
 
-    const privateContextToggle = form.getByLabel("Private context");
+    const privateContextToggle = form.getByRole("checkbox", { name: "Private context" });
     await privateContextToggle.check();
 
     await expect(form.getByText("Context Source")).toHaveCount(0);

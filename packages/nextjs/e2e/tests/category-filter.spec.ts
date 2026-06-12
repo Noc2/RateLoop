@@ -132,7 +132,7 @@ test.describe("Category filter", () => {
     await page.setViewportSize({ width: 640, height: 900 });
     await loadVoteFeed(page);
 
-    const moreButton = page.getByTestId("category-filter-overflow-trigger");
+    const moreButton = page.getByTestId("category-filter-overflow-trigger").first();
     await expect(moreButton, "category filter should overflow at the narrow E2E viewport").toBeVisible({
       timeout: 10_000,
     });
@@ -140,10 +140,10 @@ test.describe("Category filter", () => {
     await moreButton.click();
 
     // Search input should appear with the correct aria-label
-    const searchInput = page.getByTestId("category-filter-search");
+    const searchInput = page.getByTestId("category-filter-search").first();
     await expect(searchInput).toBeVisible({ timeout: 3_000 });
 
-    const dropdown = page.getByTestId("category-filter-overflow-menu");
+    const dropdown = page.getByTestId("category-filter-overflow-menu").first();
     await expect(dropdown).toBeVisible({ timeout: 3_000 });
 
     // Read a category that's actually in the overflow dropdown

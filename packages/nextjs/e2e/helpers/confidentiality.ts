@@ -98,6 +98,7 @@ type ResolvedConfidentialRater = {
   hasActiveHumanCredential: boolean;
   holder: `0x${string}`;
   humanNullifier: Hex;
+  humanCredentialProvider: number;
   identityKey: Hex;
 };
 
@@ -357,7 +358,7 @@ export async function submitGatedQuestion(
   await selectAskCategory(page);
 
   const form = page.locator("form").first();
-  await form.getByLabel("Private context").check();
+  await form.getByRole("checkbox", { name: "Private context" }).check();
 
   const titleInput = page.getByPlaceholder("Write a subjective question voters can rate");
   await expect(titleInput).toBeVisible({ timeout: 5_000 });
@@ -456,7 +457,9 @@ export async function acceptConfidentialityTerms(
   });
   expect(acceptResponse.ok(), await acceptResponse.text()).toBe(true);
 
-  const cookie = getNamedSetCookie(acceptResponse.headers(), "rateloop_gated_context_read_session");
+  const cookie =
+    getNamedSetCookie(acceptResponse.headersArray(), "rateloop_gated_context_read_session") ??
+    getNamedSetCookie(acceptResponse.headers(), "rateloop_gated_context_read_session");
   expect(cookie, "terms acceptance should return a gated context read-session cookie").toBeTruthy();
   return cookie!;
 }
@@ -484,7 +487,9 @@ export async function createPrivateAccountReadSessionCookie(
   });
   expect(sessionResponse.ok(), await sessionResponse.text()).toBe(true);
 
-  const cookie = getNamedSetCookie(sessionResponse.headers(), "rateloop_gated_context_read_session");
+  const cookie =
+    getNamedSetCookie(sessionResponse.headersArray(), "rateloop_gated_context_read_session") ??
+    getNamedSetCookie(sessionResponse.headers(), "rateloop_gated_context_read_session");
   expect(cookie, "private account session should return a gated context read-session cookie").toBeTruthy();
   return cookie!;
 }
@@ -581,12 +586,19 @@ export async function resolveConfidentialRater(account: AnvilAccount): Promise<R
     functionName: "resolveRater",
     args: [account.address],
   });
+  const credential = await confidentialityPublicClient.readContract({
+    address: CONTRACT_ADDRESSES.RaterRegistry,
+    abi: RaterRegistryAbi,
+    functionName: "getHumanCredential",
+    args: [account.address],
+  });
 
   return {
     delegated: Boolean(resolved.delegated),
     hasActiveHumanCredential: Boolean(resolved.hasActiveHumanCredential),
     holder: resolved.holder as `0x${string}`,
     humanNullifier: resolved.humanNullifier as Hex,
+    humanCredentialProvider: Number(credential.provider),
     identityKey: resolved.identityKey as Hex,
   };
 }
@@ -611,6 +623,7 @@ export async function banConfidentialityIdentity(account: AnvilAccount, reason =
   const resolved = await resolveConfidentialRater(account);
   expect(resolved.hasActiveHumanCredential, "Viewer must have an active credential before ban").toBe(true);
   expect(resolved.humanNullifier).not.toBe(`0x${"0".repeat(64)}`);
+  expect(resolved.humanCredentialProvider, "Viewer credential provider must be set before ban").not.toBe(0);
 
   const walletClient = createWalletClient({
     account: privateKeyToAccount(ANVIL_ACCOUNTS.account9.privateKey),
@@ -622,7 +635,7 @@ export async function banConfidentialityIdentity(account: AnvilAccount, reason =
     address: CONTRACT_ADDRESSES.RaterRegistry,
     abi: RaterRegistryConfidentialityAbi,
     functionName: "banIdentity",
-    args: [1, resolved.humanNullifier, maxUint64, reason, evidenceHash],
+    args: [resolved.humanCredentialProvider, resolved.humanNullifier, maxUint64, reason, evidenceHash],
   });
   const receipt = await confidentialityPublicClient.waitForTransactionReceipt({ hash });
   expect(receipt.status, `Confidentiality identity ban failed for ${account.address}`).toBe("success");
@@ -631,7 +644,7 @@ export async function banConfidentialityIdentity(account: AnvilAccount, reason =
 
 export async function unbanConfidentialityIdentity(account: AnvilAccount) {
   const resolved = await resolveConfidentialRater(account);
-  if (resolved.humanNullifier === `0x${"0".repeat(64)}`) return;
+  if (resolved.humanNullifier === `0x${"0".repeat(64)}` || resolved.humanCredentialProvider === 0) return;
 
   const walletClient = createWalletClient({
     account: privateKeyToAccount(ANVIL_ACCOUNTS.account9.privateKey),
@@ -642,7 +655,7 @@ export async function unbanConfidentialityIdentity(account: AnvilAccount) {
     address: CONTRACT_ADDRESSES.RaterRegistry,
     abi: RaterRegistryConfidentialityAbi,
     functionName: "unbanIdentity",
-    args: [1, resolved.humanNullifier],
+    args: [resolved.humanCredentialProvider, resolved.humanNullifier],
   });
   const receipt = await confidentialityPublicClient.waitForTransactionReceipt({ hash });
   expect(receipt.status, `Confidentiality identity unban failed for ${account.address}`).toBe("success");

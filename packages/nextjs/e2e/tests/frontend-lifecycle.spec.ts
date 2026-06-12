@@ -87,7 +87,7 @@ test.describe("Frontend lifecycle", () => {
     await gotoWithRetry(page, "/settings#frontend", { ensureWalletConnected: true });
     await expect(page.getByRole("heading", { name: "Frontend Registration" })).toBeVisible({ timeout: 20_000 });
     await expect(page.getByText("Frontend Stake")).toBeVisible();
-    await expect(page.getByText("1,000 LREP")).toBeVisible();
+    await expect(page.locator("#main-content").getByText("1,000 LREP", { exact: true }).first()).toBeVisible();
 
     await page.getByRole("button", { name: "Register as Frontend Operator" }).click();
     await expect(page.getByText("Registered.")).toBeVisible({ timeout: 90_000 });

@@ -43,7 +43,7 @@ test.describe("Content feedback", () => {
     const feedbackSection = page.getByRole("region", { name: "Question feedback" });
     await expect(feedbackSection).toBeVisible({ timeout: 30_000 });
     await feedbackSection.getByLabel("Feedback type").selectOption("concern");
-    await feedbackSection.getByLabel("Feedback").fill(feedbackBody);
+    await feedbackSection.getByRole("textbox", { name: "Feedback" }).fill(feedbackBody);
     await feedbackSection.getByPlaceholder("Source URL, optional").fill("https://example.com/feedback-source");
     await expect(feedbackSection.getByRole("button", { name: "Add feedback" })).toBeEnabled({ timeout: 30_000 });
     await feedbackSection.getByRole("button", { name: "Add feedback" }).click();

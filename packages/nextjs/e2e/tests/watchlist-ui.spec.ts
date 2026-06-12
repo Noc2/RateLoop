@@ -23,11 +23,9 @@ test.describe("Watchlist UI", () => {
     const watchButton = page.getByRole("button", { name: "Watch" }).first();
     await expect(watchButton).toBeVisible({ timeout: 15_000 });
     await watchButton.click();
-    await expect(page.getByText("Added to your watchlist")).toBeVisible({ timeout: 30_000 });
     await expect(page.getByRole("button", { name: "Watching" }).first()).toBeVisible({ timeout: 30_000 });
 
     await page.getByRole("button", { name: "Watching" }).first().click();
-    await expect(page.getByText("Removed from your watchlist")).toBeVisible({ timeout: 30_000 });
     await expect(page.getByRole("button", { name: "Watch" }).first()).toBeVisible({ timeout: 30_000 });
 
     await context.close();

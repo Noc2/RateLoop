@@ -116,7 +116,7 @@ test.describe("Agent browser handoffs", () => {
     await expect(page).toHaveURL(new RegExp(`/agent/handoff/${created.handoffId}$`));
     await expect(page.getByText("Agent ask handoff")).toBeVisible({ timeout: 30_000 });
     await expect(page.getByRole("heading", { name: originalTitle })).toBeVisible();
-    await expect(page.getByLabel("Private context")).toBeChecked();
+    await expect(page.getByRole("checkbox", { name: "Private context" })).toBeChecked();
     await expect(page.locator("#agent-ask-confidentiality-bond-amount")).toHaveValue("1");
 
     await page.getByLabel("Question").fill(editedTitle);
