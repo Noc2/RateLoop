@@ -925,6 +925,23 @@ contract ProtocolConfigBranchesTest is Test {
         assertFalse(config.isRewardDistributorForEngine(replacementDistributor, engine));
     }
 
+    function test_RevokeRewardDistributor_RejectsAfterClaimAccountingStarts() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+
+        address engine = _newRewardEngine(config);
+        MockRewardDistributorWithClaimStateForConfig distributor =
+            new MockRewardDistributorWithClaimStateForConfig(engine, false);
+
+        config.setRewardDistributor(address(distributor));
+        distributor.setClaimAccountingStarted(true);
+
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.revokeRewardDistributor(address(distributor));
+
+        assertTrue(config.isRewardDistributor(address(distributor)));
+        assertTrue(config.isRewardDistributorForEngine(address(distributor), engine));
+    }
+
     function test_ReplaceRevokedRewardDistributor_AllowsDefaultAdminBeforeClaims() public {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
 
