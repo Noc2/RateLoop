@@ -11,6 +11,8 @@ const { renderToStaticMarkup } = require("react-dom/server") as {
 
 const uploadedImageUrl =
   "https://www.rateloop.ai/api/attachments/images/att_abcdefghijklmnop.webp#sha256=0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+const gatedUploadedImageFetchUrl =
+  "https://www.rateloop.ai/api/attachments/images/att_abcdefghijklmnop.webp?address=0x1234567890abcdef1234567890abcdef12345678#sha256=0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
 test("ContentEmbed renders uploaded question images as lightbox triggers when enabled", () => {
   const html = renderToStaticMarkup(
@@ -23,6 +25,18 @@ test("ContentEmbed renders uploaded question images as lightbox triggers when en
   assert.match(
     html,
     /src="https:\/\/www\.rateloop\.ai\/api\/attachments\/images\/att_abcdefghijklmnop\.webp#sha256=0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"/,
+  );
+  assert.doesNotMatch(html, /<a\b/);
+});
+
+test("ContentEmbed renders gated uploaded image fetch URLs as images", () => {
+  const html = renderToStaticMarkup(
+    <ContentEmbed url={gatedUploadedImageFetchUrl} title="Private mockup" imageFit="contain" />,
+  ).replace(/\s+/g, " ");
+
+  assert.match(
+    html,
+    /src="https:\/\/www\.rateloop\.ai\/api\/attachments\/images\/att_abcdefghijklmnop\.webp\?address=0x1234567890abcdef1234567890abcdef12345678#sha256=0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"/,
   );
   assert.doesNotMatch(html, /<a\b/);
 });

@@ -1,4 +1,7 @@
-import { normalizeUploadedImageAttachmentUrl } from "~~/lib/attachments/imageAttachmentUrls";
+import {
+  isUploadedImageAttachmentFetchUrl,
+  normalizeUploadedImageAttachmentUrl,
+} from "~~/lib/attachments/imageAttachmentUrls";
 import { sanitizeExternalUrl } from "~~/utils/externalUrl";
 import { canonicalizeUrl, detectPlatform } from "~~/utils/platforms";
 
@@ -18,6 +21,10 @@ export interface ContentMediaItem {
 
 export function isUploadedImageUrl(url: string): boolean {
   return Boolean(normalizeUploadedImageUrl(url));
+}
+
+export function isUploadedImageFetchUrl(url: string): boolean {
+  return isUploadedImageAttachmentFetchUrl(url);
 }
 
 export function isContractSubmissionImageUrl(url: string): boolean {

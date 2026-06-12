@@ -72,6 +72,16 @@ test("resolveQuestionDetailsFetchUrl rewrites RateLoop details URLs to same-orig
   );
 });
 
+test("resolveQuestionDetailsFetchUrl preserves gated address query when rewriting", () => {
+  assert.equal(
+    resolveQuestionDetailsFetchUrl(
+      "https://rateloop.ai/api/attachments/details/det_5AGUshsagKf6qq6hUWV-s3Bh?address=0x1234567890abcdef1234567890abcdef12345678",
+      "https://www.rateloop.ai",
+    ),
+    "/api/attachments/details/det_5AGUshsagKf6qq6hUWV-s3Bh?address=0x1234567890abcdef1234567890abcdef12345678",
+  );
+});
+
 test("resolveQuestionDetailsFetchUrl leaves external and preview details URLs unchanged", () => {
   assert.equal(
     resolveQuestionDetailsFetchUrl(

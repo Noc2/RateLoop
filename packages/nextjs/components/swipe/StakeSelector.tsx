@@ -14,6 +14,7 @@ import { useConfidentialityBond } from "~~/hooks/useConfidentialityBond";
 import { useRaterIdentityStake, useRaterRegistryIdentity } from "~~/hooks/useRaterRegistryIdentity";
 import { useRoundSnapshot } from "~~/hooks/useRoundSnapshot";
 import { getBountyEligibilityBitForKind, getBountyEligibilityRequirement } from "~~/lib/bountyEligibility";
+import { fetchConfidentialityTermsStatus } from "~~/lib/confidentiality/clientTermsStatus";
 import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
 import {
   type OpenRoundFallbackData,
@@ -287,14 +288,9 @@ export function StakeSelector({
 
     let cancelled = false;
     setIsCheckingConfidentialTerms(true);
-    const params = new URLSearchParams({
-      address,
-      contentId: contentId.toString(),
-    });
-    fetch(`/api/confidentiality/terms?${params.toString()}`, { credentials: "include" })
-      .then(response => (response.ok ? response.json() : null))
-      .then(body => {
-        if (!cancelled) setHasAcceptedConfidentialTerms(body?.accepted === true);
+    fetchConfidentialityTermsStatus(address, contentId)
+      .then(status => {
+        if (!cancelled) setHasAcceptedConfidentialTerms(status.accepted);
       })
       .catch(() => {
         if (!cancelled) setHasAcceptedConfidentialTerms(false);

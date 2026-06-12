@@ -8,12 +8,14 @@ import { useConfidentialityBond } from "~~/hooks/useConfidentialityBond";
 import type { ContentItem } from "~~/hooks/useContentFeed";
 import { ensurePrivateAccountReadSession } from "~~/hooks/usePrivateAccountSession";
 import { useWalletMessageSigner } from "~~/hooks/useWalletMessageSigner";
+import { fetchConfidentialityTermsStatus } from "~~/lib/confidentiality/clientTermsStatus";
 import {
   CONFIDENTIALITY_TERMS_TEXT,
   CONFIDENTIALITY_TERMS_TITLE,
   CONFIDENTIALITY_TERMS_VERSION,
 } from "~~/lib/confidentiality/terms";
 import {
+  CONFIDENTIALITY_ACCEPTED_EVENT,
   getConfidentialContextVoteBlocker,
   getConfidentialityBondRequirement,
   isPrivateContextMetadata,
@@ -214,9 +216,9 @@ export function ConfidentialContextGate({
       const detail = event instanceof CustomEvent ? event.detail : null;
       if (detail?.contentId === item.id.toString()) setAccepted(true);
     };
-    window.addEventListener("rateloop:confidentiality-accepted", handleAccepted);
+    window.addEventListener(CONFIDENTIALITY_ACCEPTED_EVENT, handleAccepted);
     return () => {
-      window.removeEventListener("rateloop:confidentiality-accepted", handleAccepted);
+      window.removeEventListener(CONFIDENTIALITY_ACCEPTED_EVENT, handleAccepted);
     };
   }, [gated, item.id]);
 
@@ -224,16 +226,9 @@ export function ConfidentialContextGate({
     if (!gated || !address || isOwnContent) return;
     let cancelled = false;
     setIsCheckingTerms(true);
-    const params = new URLSearchParams({
-      address,
-      contentId: item.id.toString(),
-    });
-    fetch(`/api/confidentiality/terms?${params.toString()}`, {
-      credentials: "include",
-    })
-      .then(response => (response.ok ? response.json() : null))
-      .then(body => {
-        if (!cancelled && body?.accepted === true) setAccepted(true);
+    fetchConfidentialityTermsStatus(address, item.id)
+      .then(status => {
+        if (!cancelled && status.accepted) setAccepted(true);
       })
       .catch(() => undefined)
       .finally(() => {
@@ -309,7 +304,7 @@ export function ConfidentialContextGate({
       setIsTermsDialogOpen(false);
       if (typeof window !== "undefined") {
         window.dispatchEvent(
-          new CustomEvent("rateloop:confidentiality-accepted", {
+          new CustomEvent(CONFIDENTIALITY_ACCEPTED_EVENT, {
             detail: { contentId: item.id.toString() },
           }),
         );

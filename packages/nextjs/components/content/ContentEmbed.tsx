@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import { GenericLinkCard } from "./embeds";
 import { ContentImageLightbox } from "~~/components/shared/ContentImageLightbox";
 import { ExternalLinkBehaviorProvider, SafeExternalLink } from "~~/components/shared/SafeExternalLink";
-import { isUploadedImageUrl } from "~~/lib/contentMedia";
+import { isUploadedImageFetchUrl } from "~~/lib/contentMedia";
 import { detectPlatform } from "~~/utils/platforms";
 
 const EmbedSpinner = () => (
@@ -101,7 +101,7 @@ export function ContentEmbed({
   const disableExternalNavigation = interactionMode === "vote";
   const platformInfo = detectPlatform(url);
 
-  if (isUploadedImageUrl(url)) {
+  if (isUploadedImageFetchUrl(url)) {
     const imageAlt = title || "Question media";
     const imageClassName = `h-full w-full ${imageFit === "contain" ? "object-contain" : "object-cover"}`;
 

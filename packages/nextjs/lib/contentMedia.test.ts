@@ -1,6 +1,7 @@
 import {
   isContractSubmissionImageUrl,
   isDirectImageUrl,
+  isUploadedImageFetchUrl,
   isUploadedImageUrl,
   normalizeSubmissionContextUrl,
   normalizeSubmissionMediaUrl,
@@ -16,6 +17,22 @@ test("isUploadedImageUrl requires a trusted RateLoop image origin", () => {
   assert.equal(isUploadedImageUrl(`https://rateloop.ai${approvedPath}`), true);
   assert.equal(normalizeSubmissionMediaUrl(`https://rateloop.ai${approvedPath}`), `https://rateloop.ai${approvedPath}`);
   assert.equal(isUploadedImageUrl(`https://evil.example${approvedPath}`), false);
+});
+
+test("isUploadedImageFetchUrl allows wallet-address gated image fetch URLs", () => {
+  const fetchPath =
+    "/api/attachments/images/att_abcdefghijklmnop.webp?address=0x1234567890abcdef1234567890abcdef12345678#sha256=0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
+  assert.equal(isUploadedImageUrl(`https://www.rateloop.ai${fetchPath}`), false);
+  assert.equal(isUploadedImageFetchUrl(`https://www.rateloop.ai${fetchPath}`), true);
+  assert.equal(isUploadedImageFetchUrl(fetchPath), true);
+  assert.equal(isUploadedImageFetchUrl(`https://evil.example${fetchPath}`), false);
+  assert.equal(
+    isUploadedImageFetchUrl(
+      "https://www.rateloop.ai/api/attachments/images/att_abcdefghijklmnop.webp?debug=1#sha256=0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    ),
+    false,
+  );
 });
 
 test("isContractSubmissionImageUrl rejects local development attachment URLs", () => {

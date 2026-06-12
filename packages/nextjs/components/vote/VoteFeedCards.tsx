@@ -24,6 +24,7 @@ import { ConfidentialContextGate } from "~~/components/vote/ConfidentialContextG
 import { getVisibleContentRating } from "~~/hooks/contentFeed/shared";
 import type { ContentItem } from "~~/hooks/useContentFeed";
 import type { SubmitterProfile } from "~~/hooks/useSubmitterProfiles";
+import { appendGatedContextAddress, appendOptionalGatedContextAddress } from "~~/lib/attachments/gatedContextFetchUrls";
 import { type ContentMediaItem, buildFallbackMediaItems, isUploadedImageUrl } from "~~/lib/contentMedia";
 import { isPrivateContextMetadata } from "~~/lib/vote/confidentialContext";
 import { getVisibleFeedbackBonusAmount, getVisibleRewardPoolAmount } from "~~/lib/vote/discoverFeedFilter";
@@ -53,24 +54,6 @@ function isInteractiveTarget(target: EventTarget | null) {
 
 function getQuestionText(item: ContentItem) {
   return item.question?.trim() || item.title;
-}
-
-function appendGatedContextAddress(url: string, walletAddress?: string) {
-  if (!walletAddress || !url.startsWith("/")) return url;
-  try {
-    const parsed = new URL(url, "https://rateloop.local");
-    const isGatedAttachment =
-      parsed.pathname.startsWith("/api/attachments/images/") || parsed.pathname.startsWith("/api/attachments/details/");
-    if (!isGatedAttachment) return url;
-    parsed.searchParams.set("address", walletAddress);
-    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
-  } catch {
-    return url;
-  }
-}
-
-function appendOptionalGatedContextAddress(url: string | null | undefined, walletAddress?: string) {
-  return url ? appendGatedContextAddress(url, walletAddress) : url;
 }
 
 function getCardMediaItems(item: ContentItem): ContentMediaItem[] {

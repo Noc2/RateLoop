@@ -31,6 +31,7 @@ import {
   getWalletDisplaySummaryQueryKey,
   persistWalletDisplaySummarySnapshot,
 } from "~~/hooks/useWalletDisplaySummary";
+import { fetchConfidentialityTermsStatus } from "~~/lib/confidentiality/clientTermsStatus";
 import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
 import { DEFAULT_VOTING_CONFIG, type VotingConfig } from "~~/lib/contracts/roundVotingEngine";
 import { getGasBalanceErrorMessage, isFreeTransactionExhaustedError } from "~~/lib/transactionErrors";
@@ -139,17 +140,8 @@ function withLocalE2ETlockRuntime(runtime: RoundVoteCommitRuntime): RoundVoteCom
 }
 
 async function hasAcceptedConfidentialityTerms(address: string, contentId: bigint) {
-  const params = new URLSearchParams({
-    address,
-    contentId: contentId.toString(),
-  });
-  const response = await fetch(`/api/confidentiality/terms?${params.toString()}`, {
-    credentials: "include",
-  });
-  if (!response.ok) return false;
-
-  const body = await response.json().catch(() => null);
-  return body?.accepted === true;
+  const status = await fetchConfidentialityTermsStatus(address, contentId);
+  return status.accepted;
 }
 
 /**
