@@ -72,8 +72,6 @@ contract RoundVotingEngine is
     error RevealGraceActive();
     error EnforcedPause();
     error ExpectedPause();
-    error AccessControlUnauthorizedAccount(address account, bytes32 neededRole);
-
     error NotEnoughVotes();
     error AlreadyCommitted();
     error AlreadyRevealed();
@@ -323,23 +321,22 @@ contract RoundVotingEngine is
 
     function setRole(bytes32 role, address account, bool enabled) external onlyRole(bytes32(0)) {
         assembly ("memory-safe") {
-            let normalizedEnabled := iszero(iszero(enabled))
-            if and(iszero(or(normalizedEnabled, role)), eq(account, caller())) { revert(0x00, 0x00) }
+            if and(iszero(or(enabled, role)), eq(account, caller())) { revert(0x00, 0x00) }
             mstore(0x00, role)
             mstore(0x20, ACCESS_CONTROL_STORAGE_LOCATION)
             let roleSlot := keccak256(0x00, 0x40)
             mstore(0x00, account)
             mstore(0x20, roleSlot)
             let accountSlot := keccak256(0x00, 0x40)
-            if iszero(eq(sload(accountSlot), normalizedEnabled)) {
-                sstore(accountSlot, normalizedEnabled)
+            if iszero(eq(sload(accountSlot), enabled)) {
+                sstore(accountSlot, enabled)
                 log4(
                     0x00,
                     0x00,
                     0x5f0ecfd1ea5555d5b4b6140b49c92365beaf40d0a057dc34a9746990cd4ce8d4,
                     role,
                     account,
-                    normalizedEnabled
+                    enabled
                 )
             }
         }
@@ -351,7 +348,7 @@ contract RoundVotingEngine is
     }
 
     function _checkRole(bytes32 role, address account) internal view {
-        if (!hasRole(role, account)) revert AccessControlUnauthorizedAccount(account, role);
+        if (!hasRole(role, account)) revert Unauthorized();
     }
 
     function _grantRole(bytes32 role, address account) internal {
@@ -361,18 +358,15 @@ contract RoundVotingEngine is
             let roleSlot := keccak256(0x00, 0x40)
             mstore(0x00, account)
             mstore(0x20, roleSlot)
-            let accountSlot := keccak256(0x00, 0x40)
-            if iszero(sload(accountSlot)) {
-                sstore(accountSlot, 1)
-                log4(
-                    0x00,
-                    0x00,
-                    0x5f0ecfd1ea5555d5b4b6140b49c92365beaf40d0a057dc34a9746990cd4ce8d4,
-                    role,
-                    account,
-                    1
-                )
-            }
+            sstore(keccak256(0x00, 0x40), 1)
+            log4(
+                0x00,
+                0x00,
+                0x5f0ecfd1ea5555d5b4b6140b49c92365beaf40d0a057dc34a9746990cd4ce8d4,
+                role,
+                account,
+                1
+            )
         }
     }
 
