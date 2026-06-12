@@ -1111,7 +1111,7 @@ contract ProtocolConfigBranchesTest is Test {
         config.setDrandConfig(QUICKNET_CHAIN_HASH, 101, 3);
 
         vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
-        config.setDrandConfig(QUICKNET_CHAIN_HASH, 1, 1 minutes + 1);
+        config.setDrandConfig(QUICKNET_CHAIN_HASH, 1, 20 seconds + 1);
     }
 
     function test_InitializeWithDrandConfig_RejectsFutureGenesisOrPeriodLongerThanMinEpoch() public {
@@ -1132,7 +1132,7 @@ contract ProtocolConfigBranchesTest is Test {
             address(configImpl),
             abi.encodeCall(
                 ProtocolConfig.initializeWithDrandConfig,
-                (address(this), address(this), address(this), QUICKNET_CHAIN_HASH, uint64(1), uint64(1 minutes + 1))
+                (address(this), address(this), address(this), QUICKNET_CHAIN_HASH, uint64(1), uint64(20 seconds + 1))
             )
         );
     }
@@ -1299,9 +1299,9 @@ contract ProtocolConfigBranchesTest is Test {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
 
         ProtocolConfig.RoundConfigBounds memory bounds = config.getRoundConfigBounds();
-        assertEq(bounds.minEpochDuration, 1 minutes);
+        assertEq(bounds.minEpochDuration, 20 seconds);
         assertEq(bounds.maxEpochDuration, 30 days);
-        assertEq(bounds.minRoundDuration, 1 minutes);
+        assertEq(bounds.minRoundDuration, 20 seconds);
         assertEq(bounds.maxRoundDuration, 60 days);
         assertEq(config.ABSOLUTE_MAX_ROUND_DURATION(), 60 days);
         assertEq(bounds.minSettlementVoters, 3);
@@ -1344,11 +1344,22 @@ contract ProtocolConfigBranchesTest is Test {
         assertEq(roundCfg.maxDuration, 60 days);
     }
 
+    function test_ValidateRoundConfig_AcceptsTwentySecondFastRound() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+
+        RoundLib.RoundConfig memory roundCfg = config.validateRoundConfig(20 seconds, 20 seconds, 3, 3);
+
+        assertEq(roundCfg.epochDuration, 20 seconds);
+        assertEq(roundCfg.maxDuration, 20 seconds);
+        assertEq(roundCfg.minVoters, 3);
+        assertEq(roundCfg.maxVoters, 3);
+    }
+
     function test_ValidateRoundConfig_RejectsOutsideGovernanceBounds() public {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
 
         vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
-        config.validateRoundConfig(30 seconds, 2 hours, 4, 25);
+        config.validateRoundConfig(19 seconds, 2 hours, 4, 25);
 
         vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
         config.validateRoundConfig(31 days, 31 days, 4, 25);
@@ -1380,6 +1391,13 @@ contract ProtocolConfigBranchesTest is Test {
         assertEq(bounds.maxRoundDuration, 14 days);
         assertEq(bounds.maxVoterCap, 200);
         assertEq(config.revealGracePeriod(), 60 minutes);
+    }
+
+    function test_SetRoundConfigBounds_RejectsEpochFloorBelowTwentySeconds() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.setRoundConfigBounds(19 seconds, 7 days, 20 seconds, 30 days, 3, 100, 3, 200);
     }
 
     function test_SetConfig_RaisesRevealGraceToDefaultEpochDuration() public {

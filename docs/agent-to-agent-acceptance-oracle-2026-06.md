@@ -16,14 +16,14 @@ ERC-8004's Validation Registry, ERC-8183's Job evaluator, ACP's evaluation phase
 self-evaluation as the default**. RateLoop's commit-reveal, stake-weighted,
 peer-prediction-scored round is the right shape for that socket, and it sits in a
 latency band nobody occupies (minutes-scale independent judgment, between "instant
-but trust-me" and UMA's 2-hour optimistic window). Code-verified today: a
-keeper-driven 3-rater round runs **~2–4 minutes ask→readable result**; a
-self-driving agent pair can already reach **~75–90 seconds** with zero protocol
-changes, because reveal and settlement are permissionless. With one contract
-upgrade (epoch floor 60s → ~15s) the floor is **~30–45 seconds**. Below that, the
-commit-reveal mechanism itself is the bound — and the right answer is not to
-shrink it further but to pair it with an optimistic-acceptance pattern (instant
-release, RateLoop round only on dispute).
+but trust-me" and UMA's 2-hour optimistic window). Code-verified at HEAD: for
+first mainnet deployment, the codebase supports a **20s configurable epoch
+floor**, putting a keeper-driven 3-rater round around **~90–150 seconds
+ask→readable result** and the self-finalized fast lane around **~40–55 seconds**
+once standing AI raters exist. Below that, the commit-reveal mechanism itself is
+the bound — and the right answer is not to shrink it further but to pair it with
+an optimistic-acceptance pattern (instant release, RateLoop round only on
+dispute).
 
 The cheapest remaining unlocks are not latency at all: **the binary verdict
 (`upWins`) is now exposed on-chain as the trailing `roundCore` verdict flag**,
@@ -105,8 +105,8 @@ the buyer cannot run the jury because the buyer is a counterparty.
 
 **Works now, no changes:**
 
-- Per-question round config down to **epoch = maxDuration = 60s, minVoters = 3**
-  (`ProtocolConfig.sol:183-192`; defaults are 20 min but config is per-question
+- Per-question round config down to **epoch = maxDuration = 20s, minVoters = 3**
+  (`ProtocolConfig.sol`; defaults are 20 min but config is per-question
   at submission).
 - AI raters are first-class on public questions: `RaterType.AI`, normal
   stake+vote, no human credential required (`VotePreflightLib.sol:127-139`),
@@ -123,19 +123,19 @@ the buyer cannot run the jury because the buyer is a counterparty.
   webhooks exist (`question.settled` etc.) but delivery is operator-cron-driven,
   not push.
 
-**Latency budget for a 3-AI-rater round (epoch 60s), decomposed:**
+**Latency budget for a 3-AI-rater round (epoch 20s), decomposed:**
 
 | Component | Keeper-driven today | Self-driving agents today | Bound |
 |---|---|---|---|
 | Ask (reserve + EIP-3009 submit) | ~5-10s | ~3-5s | `RESERVED_SUBMISSION_MIN_AGE = 1s`; ~2s blocks |
 | Open round + 3 commits | ~4-8s | ~4-8s | rater arrival + block time |
-| Blind epoch | **60s** | **60s** | hard-coded floor (`ProtocolConfig.sol:835`) |
+| Blind epoch | **20s** | **20s** | configurable floor (`ProtocolConfig.sol`) |
 | drand key available | +0-6s | +0-6s | quicknet 3s period × ≤2-period target tolerance (`TlockVoteLib.sol:166-182`) |
 | 3 reveals | ≤30s tick + txs | ~6s | keeper tick vs self-reveal |
 | Settle step 1 (RBTS seed capture) | same tick | ~2s | — |
 | Settle step 2 (score + distribute) | **+30s** (next tick) | **~2s** | hard: `block.number > seedBlock` (+1 block); soft: keeper tick |
 | Verdict readable | +5-10s (Ponder) | 0 (chain) / +5-10s (API) | Ponder 5s polling |
-| **Total** | **~2-4 min** | **~75-90s** | epoch floor dominates |
+| **Total** | **~90-150s** | **~40-55s** | keeper ticks vs self-finalization dominate |
 
 **What's missing (the build list):**
 
@@ -168,9 +168,10 @@ the buyer cannot run the jury because the buyer is a counterparty.
 The user-visible question is "how fast can a round answer?" — broken into tiers
 by what they cost.
 
-### Tier 0 — No code changes (~75-90s, available today)
+### Tier 0 — Product work on the 20s floor (~40-55s self-finalized)
 
-The keeper's two 30s-tick waits are the bulk of the gap between 2-4 min and ~80s.
+The keeper's two 30s-tick waits are the bulk of the gap between keeper-driven
+~90-150s and self-finalized ~40-55s.
 Since reveal and both settle steps are permissionless, **the asking agent (or the
 RateLoop SDK on its behalf) should self-drive the endgame**: fetch the drand key
 at epoch end (+≤6s), submit the three reveals (~6s), call `settleRound` twice
@@ -180,9 +181,9 @@ reimplement keeper logic. Cheap supporting tweaks: lower `KEEPER_INTERVAL_MS`
 (env-only) for a dedicated fast-lane keeper, and run the webhook
 deliver/sweep cron at a few seconds for `question.settled` push.
 
-### Tier 1 — Config + product, no contract changes (~60-75s + recruitment fix)
+### Tier 1 — Config + product, no further contract changes (standing rater fix)
 
-- **Standing AI-rater pool with push notification.** The 60s epoch clock starts
+- **Standing AI-rater pool with push notification.** The 20s epoch clock starts
   at `openRound` (first rater), so *rater arrival* is the hidden variable today —
   there are no supply-side notifications. A registry of standing fast-lane AI
   raters that receive a push (webhook/queue) on `question.open` and commit within
@@ -193,10 +194,11 @@ deliver/sweep cron at a few seconds for `question.settled` push.
 - **Batch reveals** in one multicall (keeper currently sends sequential confirmed
   txs per commit) — shaves a few blocks.
 
-### Tier 2 — One contract upgrade: lower the epoch floor (~30-45s total)
+### Tier 2 — Mainnet-ready contract floor: 20s epochs (~40-55s total)
 
-`minEpochDuration ≥ 1 minutes` is hard-coded (`ProtocolConfig.sol:835`) —
-governance cannot lower it; a proxy upgrade can. The real physics under it:
+`minEpochDuration ≥ 20 seconds` is now the code-level floor. Because nothing is
+deployed in production yet, mainnet can launch with this bound instead of doing a
+later proxy upgrade. The real physics under it:
 
 - drand quicknet period 3s, and the config already enforces
   `drandPeriod ≤ minEpochDuration`; the tlock target lands at epoch end + ≤2
@@ -204,16 +206,14 @@ governance cannot lower it; a proxy upgrade can. The real physics under it:
 - World Chain ~2s blocks; commits must land inside the epoch, so the epoch must
   comfortably exceed (rater arrival + commit tx inclusion) — with a push-notified
   standing pool, ~10s of margin suffices.
-- Nothing in the frontend hard-codes the 60s floor (hooks read config); the only
-  human-UX assumptions live in the fast-lane *estimator* heuristic, which is
-  advisory.
+- Frontend fallback constants now advertise the 20s floor, while human-facing
+  controls can still choose minute-scale defaults for normal public questions.
 
-A **~15s epoch** is realistic: 15s blind window + ≤6s drand + ~8s
-reveals/settle/+1-block + ~5s ask-side ≈ **~35-45s ask→verdict** with
-self-finalization. Recommended floor: 15s (5× drand period) rather than the
-theoretical 3s — below ~15s, commit-inclusion variance under chain congestion
-starts producing rounds where a committed rater physically cannot land in the
-epoch, which converts latency into liveness failures (RevealFailed refunds).
+A **20s epoch** is the conservative fast-lane floor: 20s blind window + ≤6s
+drand + ~8s reveals/settle/+1-block + ~5s ask-side ≈ **~40-55s ask→verdict**
+with self-finalization. This is ~6.7× the 3s drand period and leaves real
+commit-inclusion slack; below ~20s, chain congestion starts
+turning latency wins into liveness failures (RevealFailed refunds).
 
 What is **not** worth doing at this tier: per-question keeper priority (the
 self-finalize SDK path makes the keeper a fallback, not the critical path).
@@ -242,7 +242,7 @@ self-finalize SDK path makes the keeper a fallback, not the critical path).
 - **Optimistic acceptance + RateLoop dispute round (recommended pattern instead
   of chasing sub-30s).** For high-volume/low-value A2A jobs, even 40s inline is
   worse than: release escrow optimistically at delivery; either party can
-  dispute within a window by funding a RateLoop round (15s-epoch fast round or
+  dispute within a window by funding a RateLoop round (20s-epoch fast round or
   8-voter human round by value tier); verdict routes the escrow + a
   loser-pays-the-round fee. This matches the UMA pattern but replaces the 2-hour
   liveness window + token-holder vote with a minutes-scale independent round —
@@ -254,9 +254,8 @@ self-finalize SDK path makes the keeper a fallback, not the critical path).
 
 | Configuration | Ask→verdict | Requires |
 |---|---|---|
-| Today, keeper-driven | ~2-4 min | nothing |
-| Today, SDK self-finalize | ~75-90s | SDK work only |
-| 15s epoch floor | ~35-45s | ProtocolConfig upgrade + standing rater pool |
+| 20s floor, keeper-driven | ~90-150s | deployed fast config + existing keeper |
+| 20s floor, SDK self-finalize | ~40-55s | SDK work + standing rater pool |
 | Optimistic + dispute round | ~0s happy path; dispute = above | adapter/escrow contract |
 | Instant advisory lane | ~5-10s, non-binding | new construction; weaker guarantees |
 
@@ -334,14 +333,13 @@ self-finalize SDK path makes the keeper a fallback, not the critical path).
    advisory-only, disclaimer intact.
 3. Standing fast-lane rater pool with push notifications (this is also the
    missing piece for use case 2's judgment gates — shared investment).
-4. Epoch floor 60s→15s, gated on the standing pool
-   existing.
+4. Ship 20s fast-lane presets, gated on the standing pool existing.
 5. Design the binding-acceptance tier (carve-out terms, economics table,
    counterparty exclusion) but ship it only when a probe shows pull.
 
 **Don't:**
-- Chase sub-15s binding rounds — the blind epoch is the product, not overhead;
-  below ~15s, liveness failures replace latency. The instant lane belongs inside
+- Chase sub-20s binding rounds — the blind epoch is the product, not overhead;
+  below ~20s, liveness failures replace latency. The instant lane belongs inside
   the optimistic-dispute pattern, not as a standalone oracle.
 - Build a proprietary A2A escrow before the adapters prove demand — ERC-8183 and
   the x402 escrow wrappers want to own that layer; being their evaluator is
@@ -356,11 +354,12 @@ genuinely unset (no market rate exists for agent-work evaluation as of June
 cents-to-low-dollars where a per-round fee only pays for itself on the disputed
 tail (hence the optimistic pattern); and the Validation Registry spec is still
 moving. The probes in §4 are deliberately cheap for that reason — the expensive
-investments (escrow, binding tier, sub-15s work) all wait for observed pull.
+investments (escrow, binding tier, sub-20s work) all wait for observed pull.
 
 ## Sources
 
-Repo: all file:line references at HEAD `3543a4e3`+ (ProtocolConfig.sol,
+Repo: all file:line references are code-verified against the repository HEAD at
+the time of writing (ProtocolConfig.sol,
 RoundVotingEngine.sol, TlockVoteLib.sol, RoundRevealLib.sol, RoundLib.sol,
 VotePreflightLib.sol, QuestionRewardPoolEscrow*.sol, RewardMath.sol,
 ConfidentialityEscrow.sol, keeper/src/{keeper,config,drand}.ts,

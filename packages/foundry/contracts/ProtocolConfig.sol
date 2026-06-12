@@ -35,6 +35,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     uint16 internal constant MAX_DEFAULT_ROUND_VOTERS = 100;
     uint16 internal constant MAX_BUNDLE_COMPATIBLE_MIN_VOTER_CAP = 100;
     uint16 internal constant MAX_CREATOR_ROUND_VOTERS = 200;
+    uint32 internal constant MIN_ROUND_DURATION_FLOOR = 20 seconds;
     uint8 internal constant PAYOUT_DOMAIN_LAUNCH_CREDIT = 2;
     bytes32 internal constant RATELOOP_REWARD_DISTRIBUTOR_MARKER = keccak256("rateloop.round-reward-distributor.v1");
 
@@ -181,9 +182,9 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
             maxVoters: MAX_DEFAULT_ROUND_VOTERS
         });
         roundConfigBounds = RoundConfigBounds({
-            minEpochDuration: uint32(1 minutes),
+            minEpochDuration: MIN_ROUND_DURATION_FLOOR,
             maxEpochDuration: uint32(30 days),
-            minRoundDuration: uint32(1 minutes),
+            minRoundDuration: MIN_ROUND_DURATION_FLOOR,
             maxRoundDuration: uint32(60 days),
             minSettlementVoters: uint16(3),
             maxSettlementVoters: uint16(100),
@@ -832,7 +833,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         uint256 minVoterCap,
         uint256 maxVoterCap
     ) internal pure returns (RoundConfigBounds memory bounds) {
-        if (minEpochDuration < 1 minutes || maxEpochDuration < minEpochDuration) {
+        if (minEpochDuration < MIN_ROUND_DURATION_FLOOR || maxEpochDuration < minEpochDuration) {
             revert InvalidConfig();
         }
         if (maxEpochDuration > type(uint32).max) revert InvalidConfig();

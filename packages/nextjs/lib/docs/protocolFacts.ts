@@ -45,9 +45,9 @@ function formatUsdcAmountLabel(value: number): string {
 }
 
 const ROUND_CONFIG_BOUNDS = {
-  minEpochDurationSeconds: 60,
+  minEpochDurationSeconds: 20,
   maxEpochDurationSeconds: 30 * 24 * 60 * 60,
-  minRoundDurationSeconds: 60,
+  minRoundDurationSeconds: 20,
   maxRoundDurationSeconds: 60 * 24 * 60 * 60,
   minSettlementVoters: 3,
   maxSettlementVoters: 100,
