@@ -707,7 +707,7 @@ test("supported sponsored operation families are allowlisted", async () => {
   }
 });
 
-test("allows exact frontend registration sponsorship before identity verification", async () => {
+test("rejects exact frontend registration sponsorship before identity verification", async () => {
   freeTransactions.__setFreeTransactionTestOverridesForTests({
     allTransactionHashesSucceeded: async () => true,
     resolveRaterIdentityKey: async () => null,
@@ -719,10 +719,33 @@ test("allows exact frontend registration sponsorship before identity verificatio
   ];
   const decision = await freeTransactions.evaluateFreeTransactionAllowance(buildRequest(calls) as never);
 
+  assert.equal(decision.isAllowed, false);
+  if (decision.isAllowed) return;
+  assert.equal(decision.debugCode, "missing_rater_identity");
+  assert.equal(decision.summary?.verified, false);
+
+  const quotaRows = await dbModule.dbClient.execute("SELECT free_tx_used FROM free_transaction_quotas");
+  assert.equal(quotaRows.rows.length, 0);
+});
+
+test("allows exact frontend registration sponsorship after identity verification without consuming quota", async () => {
+  const identityKey = "0x1111111111111111111111111111111111111111111111111111111111111111";
+  freeTransactions.__setFreeTransactionTestOverridesForTests({
+    allTransactionHashesSucceeded: async () => true,
+    resolveRaterIdentityKey: async () => identityKey,
+  });
+
+  const calls = [
+    encodeCall(lrepContract, "approve", [frontendRegistryContract.address, 1_000_000_000n]),
+    encodeCall(frontendRegistryContract, "register"),
+  ];
+  const decision = await freeTransactions.evaluateFreeTransactionAllowance(buildRequest(calls) as never);
+
   assert.equal(decision.isAllowed, true);
   if (!decision.isAllowed) return;
-  assert.equal(decision.summary.verified, false);
+  assert.equal(decision.summary.verified, true);
   assert.equal(decision.summary.remaining, 0);
+  assert.equal(decision.summary.raterIdentityKey, identityKey);
 
   const quotaRows = await dbModule.dbClient.execute("SELECT free_tx_used FROM free_transaction_quotas");
   assert.equal(quotaRows.rows.length, 0);

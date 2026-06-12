@@ -685,6 +685,26 @@ function buildUnverifiedSummary(params: { chainId: number; walletAddress: `0x${s
   } satisfies FreeTransactionAllowanceSummary;
 }
 
+function buildIdentityBoundUnmeteredSummary(params: {
+  chainId: number;
+  raterIdentityKey: string;
+  walletAddress: `0x${string}`;
+}) {
+  const limit = getFreeTransactionLimit();
+
+  return {
+    chainId: params.chainId,
+    environment: getServerEnvironmentScope(),
+    limit,
+    used: 0,
+    remaining: 0,
+    verified: true,
+    exhausted: false,
+    walletAddress: params.walletAddress,
+    raterIdentityKey: params.raterIdentityKey,
+  } satisfies FreeTransactionAllowanceSummary;
+}
+
 type NormalizedVerifierCall = {
   data: Hex;
   to: `0x${string}`;
@@ -1367,26 +1387,6 @@ export async function evaluateFreeTransactionAllowance(
     };
   }
 
-  if (isUnmeteredFrontendRegistrationOperation(body.chainId, calls)) {
-    return {
-      isAllowed: true,
-      summary: buildUnverifiedSummary({
-        chainId: body.chainId,
-        walletAddress,
-      }),
-      debugCode: "frontend_registration",
-    };
-  }
-
-  const operationKey = extractOperationKey(body, calls);
-  if (!operationKey) {
-    return {
-      isAllowed: false,
-      debugCode: "invalid_operation_key",
-      reason: DEFAULT_DENY_REASON,
-    };
-  }
-
   const raterIdentityKey = await (freeTransactionTestOverrides?.resolveRaterIdentityKey ?? resolveRaterIdentityKey)(
     walletAddress,
     body.chainId,
@@ -1401,6 +1401,27 @@ export async function evaluateFreeTransactionAllowance(
         chainId: body.chainId,
         walletAddress,
       }),
+    };
+  }
+
+  if (isUnmeteredFrontendRegistrationOperation(body.chainId, calls)) {
+    return {
+      isAllowed: true,
+      summary: buildIdentityBoundUnmeteredSummary({
+        chainId: body.chainId,
+        raterIdentityKey,
+        walletAddress,
+      }),
+      debugCode: "frontend_registration",
+    };
+  }
+
+  const operationKey = extractOperationKey(body, calls);
+  if (!operationKey) {
+    return {
+      isAllowed: false,
+      debugCode: "invalid_operation_key",
+      reason: DEFAULT_DENY_REASON,
     };
   }
 
