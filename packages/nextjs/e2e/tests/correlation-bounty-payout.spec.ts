@@ -22,8 +22,10 @@ import {
 import { CONTRACT_ADDRESSES } from "../helpers/contracts";
 import { ponderGet } from "../helpers/ponder-api";
 import { E2E_RPC_URL } from "../helpers/service-urls";
+import { gotoWithRetry } from "../helpers/wait-helpers";
+import { setupWallet } from "../helpers/wallet-session";
 import { QuestionRewardPoolEscrowAbi } from "@rateloop/contracts/abis";
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { createWalletClient, http, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { foundry } from "viem/chains";
@@ -45,7 +47,7 @@ test.describe("Correlation bounty payout e2e", () => {
     await stopCorrelationSnapshotKeeper();
   });
 
-  test("publishes non-neutral surprise snapshots and claims weighted USDC bounties", async () => {
+  test("publishes non-neutral surprise snapshots and claims weighted USDC bounties", async ({ page }) => {
     test.setTimeout(520_000);
 
     const submitter = ANVIL_ACCOUNTS.account2;
@@ -164,6 +166,10 @@ test.describe("Correlation bounty payout e2e", () => {
     );
 
     const artifact = await readRoundPayoutArtifact(BigInt(rewardPoolId!), BigInt(contentId!), roundId);
+    const roundVotes = await ponderGet(
+      `/correlation/round-votes?rewardPoolId=${rewardPoolId}&contentId=${contentId}&roundId=${roundId.toString()}&limit=1`,
+    );
+    expect(artifact.trailingBaseRateUpBps).toBe(roundVotes.roundContext?.trailingBaseRateUpBps);
     const bonusArtifactWeight = findArtifactWeight(artifact.payoutWeights, bonusVoter.address);
     const floorArtifactWeight = findArtifactWeight(artifact.payoutWeights, floorVoter.address);
     expect(artifact.payoutWeights).toHaveLength(8);
@@ -173,7 +179,13 @@ test.describe("Correlation bounty payout e2e", () => {
     expect(BigInt(floorArtifactWeight.effectiveWeight)).toBe(floorWeight.effectiveWeight);
     expect(BigInt(bonusArtifactWeight.baseWeight)).toBeGreaterThan(BigInt(floorArtifactWeight.baseWeight));
 
-    await claimAndExpectBalanceDelta(bonusVoter, rewardPoolId!, roundId, bonusWeight, bonusCandidate.payoutProof);
+    await claimWeightedBountyThroughProfile(page, {
+      claimant: bonusVoter,
+      contentId: contentId!,
+      expectedMinimumDelta: bonusClaimable,
+      rewardPoolId: rewardPoolId!,
+      roundId,
+    });
     await claimAndExpectBalanceDelta(floorVoter, rewardPoolId!, roundId, floorWeight, floorCandidate.payoutProof);
 
     const claimsIndexed = await waitForPonderIndexed(
@@ -247,6 +259,60 @@ async function claimAndExpectBalanceDelta(
 
   const after = await readTokenBalance(claimant.address, CONTRACT_ADDRESSES.MockERC20);
   expect(after - before, `Claimant ${claimant.address} did not receive the claimable USDC amount`).toBe(claimable);
+}
+
+async function claimWeightedBountyThroughProfile(
+  page: Page,
+  {
+    claimant,
+    contentId,
+    expectedMinimumDelta,
+    rewardPoolId,
+    roundId,
+  }: {
+    claimant: { address: `0x${string}`; privateKey: `0x${string}` };
+    contentId: string;
+    expectedMinimumDelta: bigint;
+    rewardPoolId: string;
+    roundId: bigint;
+  },
+) {
+  const before = await readTokenBalance(claimant.address, CONTRACT_ADDRESSES.MockERC20);
+  await setupWallet(page, claimant.privateKey);
+  await gotoWithRetry(page, `/profiles/${claimant.address}`, { ensureWalletConnected: true });
+
+  const claimButton = page.getByRole("button", { name: /^Claim\b/ }).first();
+  await expect(claimButton).toBeVisible({ timeout: 90_000 });
+  await claimButton.click();
+
+  let latestBalance = before;
+  const credited = await waitForPonderIndexed(
+    async () => {
+      latestBalance = await readTokenBalance(claimant.address, CONTRACT_ADDRESSES.MockERC20);
+      return latestBalance - before >= expectedMinimumDelta;
+    },
+    120_000,
+    2_000,
+    "correlation-bounty:ui-claim-balance",
+  );
+  expect(
+    credited,
+    `Profile claim button should credit at least ${expectedMinimumDelta.toString()} USDC atoms`,
+  ).toBe(true);
+
+  const claimRemoved = await waitForPonderIndexed(
+    async () => {
+      const candidates = await ponderGet(`/question-reward-claim-candidates?voter=${claimant.address}&limit=200`);
+      return !candidates.items?.some(
+        (item: { rewardPoolId: string; contentId: string; roundId: string }) =>
+          item.rewardPoolId === rewardPoolId && item.contentId === contentId && item.roundId === roundId.toString(),
+      );
+    },
+    90_000,
+    2_000,
+    "correlation-bounty:ui-claim-indexed",
+  );
+  expect(claimRemoved, "Ponder should remove the browser-claimed weighted bounty candidate").toBe(true);
 }
 
 function findArtifactWeight(weights: CorrelationArtifactPayoutWeight[], account: `0x${string}`) {
