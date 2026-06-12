@@ -92,13 +92,9 @@ export async function continueToFeedbackBonusStep(page: Page): Promise<void> {
 }
 
 export async function selectBountyRewardAsset(page: Page, asset: "lrep" | "usdc"): Promise<void> {
-  const buttonLabel = asset === "lrep" ? "LREP" : "USDC";
-  const assetButton = page
-    .getByTestId(`bounty-asset-${asset}`)
-    .or(page.getByRole("button", { name: new RegExp(`^${escapeRegExp(buttonLabel)}$`, "i") }))
-    .first();
+  const assetSelect = page.getByTestId("bounty-asset-select").or(page.locator("#submission-bounty-asset")).first();
 
-  await expect(assetButton).toBeVisible({ timeout: 5_000 });
-  await assetButton.click();
-  await expect(assetButton).toHaveAttribute("aria-pressed", "true");
+  await expect(assetSelect).toBeVisible({ timeout: 5_000 });
+  await assetSelect.selectOption(asset);
+  await expect(assetSelect).toHaveValue(asset);
 }

@@ -1451,6 +1451,14 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     [updateDraftField],
   );
 
+  const updateDraftFeedbackBonusAsset = useCallback((asset: FeedbackBonusAsset) => {
+    setDraftForm(current => {
+      if (!current || current.feedbackBonusAmount === null) return current;
+      return { ...current, feedbackBonusAsset: asset };
+    });
+    setDraftError(null);
+  }, []);
+
   const formatDraftBountyAmount = useCallback(() => {
     setDraftForm(current => {
       if (!current) return current;
@@ -2287,21 +2295,22 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
 
               <div className="space-y-5">
                 {hasPrivateContextDraft ? (
-                  <div className="rounded-lg border border-warning/30 bg-warning/10 p-4">
-                    <div className="flex items-center gap-2">
-                      <LockClosedIcon className="h-4 w-4 shrink-0 text-warning" />
-                      <p className="text-sm font-semibold text-base-content">Confidentiality bond</p>
-                      <InfoTooltip
-                        text={CONFIDENTIALITY_BOND_TOOLTIP}
-                        position="top"
-                        className="text-base-content/45"
-                      />
+                  <div className="space-y-3">
+                    <div>
+                      <p className="flex items-center gap-1.5 text-base font-medium text-base-content">
+                        Confidentiality bond
+                        <InfoTooltip
+                          text={CONFIDENTIALITY_BOND_TOOLTIP}
+                          position="top"
+                          className="text-base-content/45"
+                        />
+                      </p>
                     </div>
-                    <div className="mt-4 grid gap-3 sm:grid-cols-[9rem_minmax(0,1fr)] lg:grid-cols-1 xl:grid-cols-[9rem_minmax(0,1fr)]">
+                    <div className="grid gap-3 sm:grid-cols-[9rem_minmax(0,1fr)] lg:grid-cols-1 xl:grid-cols-[9rem_minmax(0,1fr)]">
                       <label className="form-control">
                         <span className="label-text text-sm font-medium">Asset</span>
                         <select
-                          className="select select-bordered select-sm bg-base-100"
+                          className="select select-bordered bg-base-100"
                           disabled={!canEditDraft}
                           value={primaryPrivateConfidentiality.bondAsset}
                           onChange={event =>
@@ -2315,15 +2324,17 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                         </select>
                       </label>
                       <label className="form-control">
-                        <DraftFieldLabel
-                          htmlFor="agent-ask-confidentiality-bond-amount"
-                          tooltip={CONFIDENTIALITY_BOND_AMOUNT_TOOLTIP}
-                        >
+                        <span className="label-text flex items-center gap-1.5 text-sm font-medium">
                           Amount
-                        </DraftFieldLabel>
+                          <InfoTooltip
+                            text={CONFIDENTIALITY_BOND_AMOUNT_TOOLTIP}
+                            position="top"
+                            className="text-base-content/45"
+                          />
+                        </span>
                         <input
                           id="agent-ask-confidentiality-bond-amount"
-                          className="input input-bordered input-sm mt-1 w-full bg-base-100"
+                          className="input input-bordered bg-base-100"
                           disabled={!canEditDraft}
                           inputMode="decimal"
                           value={primaryPrivateConfidentiality.bondAmount}
@@ -2341,35 +2352,76 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                   </div>
                 ) : null}
 
-                <div className="form-control">
-                  <DraftFieldLabel htmlFor="agent-ask-bounty-amount" tooltip={BOUNTY_AMOUNT_TOOLTIP}>
+                <div className="space-y-3">
+                  <p className="flex items-center gap-1.5 text-base font-medium text-base-content">
                     Bounty
-                  </DraftFieldLabel>
-                  <input
-                    id="agent-ask-bounty-amount"
-                    className="input input-bordered mt-1 w-full"
-                    disabled={!canEditDraft}
-                    inputMode="decimal"
-                    value={draftForm?.bountyAmount ?? ""}
-                    onBlur={formatDraftBountyAmount}
-                    onChange={event => updateDraftBountyAmount(event.target.value)}
-                  />
+                    <InfoTooltip text={BOUNTY_AMOUNT_TOOLTIP} position="top" className="text-base-content/45" />
+                  </p>
+                  <div className="grid gap-3 sm:grid-cols-[9rem_minmax(0,1fr)] lg:grid-cols-1 xl:grid-cols-[9rem_minmax(0,1fr)]">
+                    <label className="form-control">
+                      <span className="label-text text-sm font-medium">Asset</span>
+                      <select
+                        id="agent-ask-bounty-asset"
+                        className="select select-bordered bg-base-100"
+                        disabled
+                        value="USDC"
+                        aria-label="Bounty asset"
+                      >
+                        <option value="USDC">USDC</option>
+                      </select>
+                    </label>
+                    <label className="form-control">
+                      <span className="label-text text-sm font-medium">Amount</span>
+                      <input
+                        id="agent-ask-bounty-amount"
+                        className="input input-bordered bg-base-100"
+                        disabled={!canEditDraft}
+                        inputMode="decimal"
+                        value={draftForm?.bountyAmount ?? ""}
+                        onBlur={formatDraftBountyAmount}
+                        onChange={event => updateDraftBountyAmount(event.target.value)}
+                      />
+                    </label>
+                  </div>
                 </div>
 
                 {draftForm?.feedbackBonusAmount !== null ? (
-                  <div className="form-control">
-                    <DraftFieldLabel htmlFor="agent-ask-feedback-bonus-amount" tooltip={FEEDBACK_BONUS_AMOUNT_TOOLTIP}>
-                      Feedback Bonus {draftForm?.feedbackBonusAsset === "lrep" ? "LREP" : "USDC"}
-                    </DraftFieldLabel>
-                    <input
-                      id="agent-ask-feedback-bonus-amount"
-                      className="input input-bordered mt-1 w-full"
-                      disabled={!canEditDraft}
-                      inputMode="decimal"
-                      value={draftForm?.feedbackBonusAmount ?? ""}
-                      onBlur={formatDraftFeedbackBonusAmount}
-                      onChange={event => updateDraftFeedbackBonusAmount(event.target.value)}
-                    />
+                  <div className="space-y-3">
+                    <p className="flex items-center gap-1.5 text-base font-medium text-base-content">
+                      Feedback Bonus
+                      <InfoTooltip
+                        text={FEEDBACK_BONUS_AMOUNT_TOOLTIP}
+                        position="top"
+                        className="text-base-content/45"
+                      />
+                    </p>
+                    <div className="grid gap-3 sm:grid-cols-[9rem_minmax(0,1fr)] lg:grid-cols-1 xl:grid-cols-[9rem_minmax(0,1fr)]">
+                      <label className="form-control">
+                        <span className="label-text text-sm font-medium">Asset</span>
+                        <select
+                          id="agent-ask-feedback-bonus-asset"
+                          className="select select-bordered bg-base-100"
+                          disabled={!canEditDraft}
+                          value={draftForm?.feedbackBonusAsset ?? "usdc"}
+                          onChange={event => updateDraftFeedbackBonusAsset(event.target.value as FeedbackBonusAsset)}
+                        >
+                          <option value="lrep">LREP</option>
+                          <option value="usdc">USDC</option>
+                        </select>
+                      </label>
+                      <label className="form-control">
+                        <span className="label-text text-sm font-medium">Amount</span>
+                        <input
+                          id="agent-ask-feedback-bonus-amount"
+                          className="input input-bordered bg-base-100"
+                          disabled={!canEditDraft}
+                          inputMode="decimal"
+                          value={draftForm?.feedbackBonusAmount ?? ""}
+                          onBlur={formatDraftFeedbackBonusAmount}
+                          onChange={event => updateDraftFeedbackBonusAmount(event.target.value)}
+                        />
+                      </label>
+                    </div>
                   </div>
                 ) : null}
 

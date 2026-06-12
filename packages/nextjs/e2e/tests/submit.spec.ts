@@ -110,9 +110,9 @@ test.describe("Ask page", () => {
     await selectAskSubcategory(page);
 
     await continueToBountyStep(page);
-    const usdcAssetButton = page.getByTestId("bounty-asset-usdc");
-    await expect(usdcAssetButton).toBeVisible({ timeout: 5_000 });
-    await expect(usdcAssetButton).toHaveAttribute("aria-pressed", "true");
+    const bountyAssetSelect = page.getByTestId("bounty-asset-select");
+    await expect(bountyAssetSelect).toBeVisible({ timeout: 5_000 });
+    await expect(bountyAssetSelect).toHaveValue("usdc");
 
     await continueToFeedbackBonusStep(page);
     await expect(page.getByRole("heading", { name: "Feedback Bonus" })).toBeVisible({ timeout: 5_000 });

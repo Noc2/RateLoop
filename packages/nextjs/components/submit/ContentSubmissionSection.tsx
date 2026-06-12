@@ -3315,89 +3315,85 @@ export function ContentSubmissionSection() {
   const bountyDetailsCard = (
     <div className="space-y-5">
       {hasPrivateContextDraft ? (
-        <div className="rounded-lg border border-warning/30 bg-warning/10 p-4">
-          <div className="flex items-center gap-2">
-            <LockClosedIcon className="h-4 w-4 shrink-0 text-warning" />
-            <p className="text-sm font-semibold text-base-content">Confidentiality bond</p>
-            <InfoTooltip text={CONFIDENTIALITY_BOND_TOOLTIP} position="top" className="text-base-content/45" />
+        <div className="space-y-3">
+          <div>
+            <p className="flex items-center gap-1.5 text-base font-medium text-base-content">
+              Confidentiality bond
+              <InfoTooltip text={CONFIDENTIALITY_BOND_TOOLTIP} position="top" className="text-base-content/45" />
+            </p>
           </div>
-          <div className="mt-4 grid grid-cols-[max-content_minmax(0,1fr)] items-center gap-x-3 gap-y-2 sm:grid-cols-[max-content_7.5rem_max-content_9rem]">
-            <label htmlFor="submission-confidentiality-bond-asset" className="label-text text-sm font-medium">
-              Asset
+          <div className="grid gap-3 sm:grid-cols-[9rem_minmax(0,1fr)]">
+            <label className="form-control">
+              <span className="label-text text-sm font-medium">Asset</span>
+              <select
+                id="submission-confidentiality-bond-asset"
+                className="select select-bordered bg-base-100"
+                value={confidentialityBondAsset}
+                onChange={e => setConfidentialityBondAsset(e.target.value as "LREP" | "USDC")}
+              >
+                <option value="LREP">LREP</option>
+                <option value="USDC">USDC</option>
+              </select>
             </label>
-            <select
-              id="submission-confidentiality-bond-asset"
-              className="select select-bordered select-sm w-full bg-base-100"
-              value={confidentialityBondAsset}
-              onChange={e => setConfidentialityBondAsset(e.target.value as "LREP" | "USDC")}
-            >
-              <option value="LREP">LREP</option>
-              <option value="USDC">USDC</option>
-            </select>
-            <label htmlFor="submission-confidentiality-bond-amount" className="label-text text-sm font-medium">
-              Amount
+            <label className="form-control">
+              <span className="label-text text-sm font-medium">Amount</span>
+              <input
+                id="submission-confidentiality-bond-amount"
+                type="text"
+                inputMode="decimal"
+                className="input input-bordered bg-base-100"
+                value={confidentialityBondAmount}
+                onChange={e => setConfidentialityBondAmount(e.target.value)}
+                aria-label="Confidentiality bond amount"
+              />
             </label>
-            <input
-              id="submission-confidentiality-bond-amount"
-              type="text"
-              inputMode="decimal"
-              className="input input-bordered input-sm w-full bg-base-100"
-              value={confidentialityBondAmount}
-              onChange={e => setConfidentialityBondAmount(e.target.value)}
-              aria-label="Confidentiality bond amount"
-            />
           </div>
         </div>
       ) : null}
 
-      <p className="flex items-center gap-1.5 text-base font-medium text-base-content">
-        Bounty
-        <InfoTooltip text={protocolDocFacts.usdcBountyPayoutTimingTooltip} />
-      </p>
-
-      <div className="grid grid-cols-2 gap-2">
-        <button
-          type="button"
-          aria-pressed={rewardAsset === "usdc"}
-          data-testid="bounty-asset-usdc"
-          onClick={() => setRewardAsset("usdc")}
-          className={`btn btn-sm ${rewardAsset === "usdc" ? "btn-primary" : "btn-outline"}`}
-        >
-          USDC
-        </button>
-        <button
-          type="button"
-          aria-pressed={rewardAsset === "lrep"}
-          data-testid="bounty-asset-lrep"
-          onClick={() => setRewardAsset("lrep")}
-          className={`btn btn-sm ${rewardAsset === "lrep" ? "btn-primary" : "btn-outline"}`}
-        >
-          LREP
-        </button>
-      </div>
-
-      <div className="flex items-center gap-2">
-        <label
-          className={`input input-bordered flex min-w-0 flex-1 items-center gap-2 bg-base-100 ${
-            bountyStepAttempted && rewardAmountError ? "input-error" : ""
-          }`}
-        >
-          <input
-            type="text"
-            inputMode="decimal"
-            value={rewardAmount}
-            onChange={e => {
-              setRewardAmountTouched(true);
-              setRewardAmount(e.target.value);
-            }}
-            className="grow bg-transparent"
-            aria-label="Bounty amount"
-          />
-          <span className="shrink-0 whitespace-nowrap text-sm font-semibold text-base-content/50">
-            Min {formatSubmissionRewardAmount(minimumBountyAmount, rewardAsset)}
-          </span>
-        </label>
-        <InfoTooltip text={bountyAmountTooltipText} className="shrink-0" />
+      <div className="space-y-3">
+        <p className="flex items-center gap-1.5 text-base font-medium text-base-content">
+          Bounty
+          <InfoTooltip text={protocolDocFacts.usdcBountyPayoutTimingTooltip} />
+        </p>
+        <div className="grid gap-3 sm:grid-cols-[9rem_minmax(0,1fr)]">
+          <label className="form-control">
+            <span className="label-text text-sm font-medium">Asset</span>
+            <select
+              id="submission-bounty-asset"
+              className="select select-bordered bg-base-100"
+              data-testid="bounty-asset-select"
+              value={rewardAsset}
+              onChange={e => setRewardAsset(e.target.value as SubmissionRewardAsset)}
+            >
+              <option value="lrep">LREP</option>
+              <option value="usdc">USDC</option>
+            </select>
+          </label>
+          <label className="form-control">
+            <span className="label-text flex items-center gap-1.5 text-sm font-medium">
+              Amount
+              <InfoTooltip text={bountyAmountTooltipText} className="text-base-content/45" />
+            </span>
+            <input
+              id="submission-bounty-amount"
+              type="text"
+              inputMode="decimal"
+              value={rewardAmount}
+              onChange={e => {
+                setRewardAmountTouched(true);
+                setRewardAmount(e.target.value);
+              }}
+              className={`input input-bordered bg-base-100 ${
+                bountyStepAttempted && rewardAmountError ? "input-error" : ""
+              }`}
+              aria-label="Bounty amount"
+            />
+          </label>
+        </div>
+        <p className="text-sm font-semibold text-base-content/50">
+          Min {formatSubmissionRewardAmount(minimumBountyAmount, rewardAsset)}
+        </p>
       </div>
       {bountyStepAttempted && rewardAmountError ? <p className="text-base text-error">{rewardAmountError}</p> : null}
 
@@ -4119,43 +4115,37 @@ export function ContentSubmissionSection() {
 
       {feedbackBonusMode === "enabled" ? (
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-2 sm:max-w-md">
-            <button
-              type="button"
-              aria-pressed={feedbackBonusAsset === "usdc"}
-              onClick={() => setFeedbackBonusAsset("usdc")}
-              className={`btn btn-sm ${feedbackBonusAsset === "usdc" ? "btn-primary" : "btn-outline"}`}
-            >
-              USDC
-            </button>
-            <button
-              type="button"
-              aria-pressed={feedbackBonusAsset === "lrep"}
-              onClick={() => setFeedbackBonusAsset("lrep")}
-              className={`btn btn-sm ${feedbackBonusAsset === "lrep" ? "btn-primary" : "btn-outline"}`}
-            >
-              LREP
-            </button>
-          </div>
-          <div className="flex items-center gap-2">
-            <label
-              className={`input input-bordered flex min-w-0 flex-1 items-center gap-2 bg-base-100 ${
-                feedbackBonusAmountError ? "input-error" : ""
-              }`}
-            >
+          <div className="grid gap-3 sm:grid-cols-[9rem_minmax(0,1fr)]">
+            <label className="form-control">
+              <span className="label-text text-sm font-medium">Asset</span>
+              <select
+                id="submission-feedback-bonus-asset"
+                className="select select-bordered bg-base-100"
+                value={feedbackBonusAsset}
+                onChange={e => setFeedbackBonusAsset(e.target.value as FeedbackBonusAsset)}
+              >
+                <option value="lrep">LREP</option>
+                <option value="usdc">USDC</option>
+              </select>
+            </label>
+            <label className="form-control">
+              <span className="label-text flex items-center gap-1.5 text-sm font-medium">
+                Amount
+                <InfoTooltip
+                  text="Feedback Bonuses can use LREP or World Chain USDC. The selected awarder later chooses which eligible feedback to pay."
+                  className="text-base-content/45"
+                />
+              </span>
               <input
+                id="submission-feedback-bonus-amount"
                 type="text"
                 inputMode="decimal"
                 value={feedbackBonusAmount}
                 onChange={e => setFeedbackBonusAmount(e.target.value)}
-                className="grow bg-transparent"
+                className={`input input-bordered bg-base-100 ${feedbackBonusAmountError ? "input-error" : ""}`}
                 aria-label="Feedback Bonus amount"
               />
-              <span className="shrink-0 whitespace-nowrap text-sm font-semibold text-base-content/50">
-                {selectedFeedbackBonusAssetLabel}
-              </span>
             </label>
-            <InfoTooltip text="Feedback Bonuses can use LREP or World Chain USDC. The selected awarder later chooses which eligible feedback to pay." />
           </div>
           {feedbackBonusAmountError ? <p className="text-base text-error">{feedbackBonusAmountError}</p> : null}
 
