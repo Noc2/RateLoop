@@ -18,6 +18,8 @@ import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.so
 import { MockQuestionRewardPoolEscrow } from "./mocks/MockQuestionRewardPoolEscrow.sol";
 import { VotingTestBase } from "./helpers/VotingTestHelpers.sol";
 
+contract InvalidQuestionRewardPoolEscrowForRegistry { }
+
 // =========================================================================
 // TEST CONTRACT
 // =========================================================================
@@ -159,6 +161,18 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         assertEq(registry.questionRewardPoolEscrow(), address(replacementEscrow));
     }
 
+    function test_SetQuestionRewardPoolEscrow_RejectsInvalidEscrowShape() public {
+        InvalidQuestionRewardPoolEscrowForRegistry invalidEscrow = new InvalidQuestionRewardPoolEscrowForRegistry();
+        vm.startPrank(owner);
+        registry.pause();
+
+        vm.expectRevert(ContentRegistry.InvalidState.selector);
+        registry.setQuestionRewardPoolEscrow(address(invalidEscrow));
+        vm.stopPrank();
+
+        assertEq(registry.questionRewardPoolEscrow(), address(mockQuestionRewardPoolEscrow));
+    }
+
     function test_SetProtocolConfig_UpdatesIdentityRegistry() public {
         ProtocolConfig replacementConfig = _deployProtocolConfig(owner);
         RaterRegistry replacementRaterRegistry = _deployRaterRegistry(owner);
@@ -173,11 +187,11 @@ contract ContentRegistryBranchesTest is VotingTestBase {
 
     function test_SetCategoryRegistryRejectsNoCodeOrWrongContract() public {
         vm.prank(owner);
-        vm.expectRevert("Invalid category registry");
+        vm.expectRevert(ContentRegistry.InvalidState.selector);
         registry.setCategoryRegistry(address(0xBEEF));
 
         vm.prank(owner);
-        vm.expectRevert("Invalid category registry");
+        vm.expectRevert(ContentRegistry.InvalidState.selector);
         registry.setCategoryRegistry(address(mockQuestionRewardPoolEscrow));
     }
 

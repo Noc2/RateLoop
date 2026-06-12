@@ -394,10 +394,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
 
     /// @notice Set the CategoryRegistry address (can only be called by CONFIG_ROLE).
     function setCategoryRegistry(address _categoryRegistry) external onlyRole(CONFIG_ROLE) {
-        require(
-            _probeContractShape(_categoryRegistry, ICategoryRegistry.isCategory.selector, 36),
-            "Invalid category registry"
-        );
+        if (!_probeContractShape(_categoryRegistry, ICategoryRegistry.isCategory.selector, 36)) revert InvalidState();
         categoryRegistry = ICategoryRegistry(_categoryRegistry);
     }
 
@@ -412,14 +409,14 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             mstore(ptr, selector)
             mstore(add(ptr, 0x04), 0)
             valid := staticcall(gas(), target, ptr, inputSize, 0, 0)
-            if iszero(returndatasize()) { valid := 0 }
+            valid := and(valid, gt(returndatasize(), 0))
         }
     }
 
     /// @notice Set or update the bounty escrow.
     function setQuestionRewardPoolEscrow(address _questionRewardPoolEscrow) external onlyRole(CONFIG_ROLE) {
         if (_questionRewardPoolEscrow == address(0)) revert InvalidState();
-        require(_questionRewardPoolEscrow.code.length != 0, "No code");
+        if (!_probeContractShape(_questionRewardPoolEscrow, 0x1b363df8, 4)) revert InvalidState();
         if (questionRewardPoolEscrow == _questionRewardPoolEscrow) return;
         if (questionRewardPoolEscrow != address(0) && !paused()) revert InvalidState();
         questionRewardPoolEscrow = _questionRewardPoolEscrow;
