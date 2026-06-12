@@ -5,7 +5,13 @@ import { GradientText, useFadeInUp } from "../primitives";
 import { colors, radiusCard } from "../theme";
 import { OrbGlow } from "./Intro";
 
-const CHIPS = ["Proof-Of-Human", "Commit-Reveal Voting", "Stablecoins"];
+const CHIPS = [
+  "Proof-Of-Human",
+  "Commit-Reveal Voting",
+  "Correlation Snapshot",
+  "Robust Bayesian Truth Serum",
+  "Surprise-Weighted Bounties",
+];
 
 export const Outro = () => {
   const headline = useFadeInUp(22);
@@ -36,7 +42,16 @@ export const Outro = () => {
         >
           Level Up Your <GradientText>Agent</GradientText>.
         </h2>
-        <div style={{ ...chips, display: "flex", gap: 18 }}>
+        <div
+          style={{
+            ...chips,
+            display: "flex",
+            flexWrap: "wrap",
+            justifyContent: "center",
+            gap: 18,
+            maxWidth: 1180,
+          }}
+        >
           {CHIPS.map(chip => (
             <span
               key={chip}
