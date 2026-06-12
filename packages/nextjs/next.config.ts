@@ -110,6 +110,9 @@ const cspDirectives = [
     "https://*.walletconnect.org",
     "https://api.web3modal.org",
     "https://*.thirdweb.com",
+    // Vercel Blob browser uploads request client upload URLs from this API host
+    // before writing to the storage host below.
+    "https://vercel.com",
     "https://*.blob.vercel-storage.com",
     // Simple Analytics
     "https://scripts.simpleanalyticscdn.com",
