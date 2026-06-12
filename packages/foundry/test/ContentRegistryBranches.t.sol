@@ -6,6 +6,7 @@ import { Vm } from "forge-std/Vm.sol";
 import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import { ContentRegistry } from "../contracts/ContentRegistry.sol";
 import { SubmissionMediaValidator } from "../contracts/SubmissionMediaValidator.sol";
+import { SubmissionMediaValidatorFactory } from "../contracts/SubmissionMediaValidatorFactory.sol";
 import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
 import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
 import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
@@ -142,6 +143,31 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         }
 
         vm.stopPrank();
+    }
+
+    function test_ContentRegistryProxyInitializesFreshMediaValidatorThroughFactory() public {
+        ContentRegistry registryImpl = new ContentRegistry();
+        address factoryAddress = vm.computeCreateAddress(address(registryImpl), 1);
+        assertGt(factoryAddress.code.length, 0);
+
+        vm.prank(submitter);
+        SubmissionMediaValidator attackerValidator =
+            SubmissionMediaValidator(SubmissionMediaValidatorFactory(factoryAddress).create());
+        assertEq(attackerValidator.authorizedEmitter(), submitter);
+
+        ContentRegistry freshRegistry = ContentRegistry(
+            address(
+                new ERC1967Proxy(
+                    address(registryImpl),
+                    abi.encodeCall(ContentRegistry.initializeWithTreasury, (owner, owner, treasury, address(lrepToken)))
+                )
+            )
+        );
+        SubmissionMediaValidator validator = freshRegistry.submissionMediaValidator();
+
+        assertTrue(address(validator) != address(0));
+        assertTrue(address(validator) != address(attackerValidator));
+        assertEq(validator.authorizedEmitter(), address(freshRegistry));
     }
 
     function test_SetQuestionRewardPoolEscrow_RotationRequiresPause() public {

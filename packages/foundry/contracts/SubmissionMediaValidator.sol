@@ -15,7 +15,12 @@ contract SubmissionMediaValidator {
     error InvalidEmitter();
     error UnauthorizedEmitter();
 
+    address private immutable _initializer;
     address public authorizedEmitter;
+
+    constructor() {
+        _initializer = msg.sender;
+    }
 
     event QuestionContentAnchored(
         uint256 indexed contentId,
@@ -28,7 +33,7 @@ contract SubmissionMediaValidator {
 
     function initializeEmitter(address emitter) external {
         if (authorizedEmitter != address(0)) revert EmitterAlreadyInitialized();
-        if (emitter == address(0) || msg.sender != emitter) revert InvalidEmitter();
+        if (emitter == address(0) || (msg.sender != emitter && msg.sender != _initializer)) revert InvalidEmitter();
         authorizedEmitter = emitter;
     }
 

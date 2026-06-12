@@ -18,6 +18,7 @@ import { RatingMath } from "./libraries/RatingMath.sol";
 import { ContentRegistryRewardLib } from "./libraries/ContentRegistryRewardLib.sol";
 import { ProtocolConfig } from "./ProtocolConfig.sol";
 import { SubmissionMediaValidator } from "./SubmissionMediaValidator.sol";
+import { SubmissionMediaValidatorFactory } from "./SubmissionMediaValidatorFactory.sol";
 
 interface IQuestionRewardPoolEscrow {
     function createSubmissionRewardPoolFromRegistry(
@@ -223,7 +224,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     /// @notice Slash policy frozen at content creation so governance cannot retroactively rewrite stake terms.
     mapping(uint256 => RatingLib.SlashConfig) internal contentSlashConfigSnapshot;
 
-    SubmissionMediaValidator private immutable _defaultSubmissionMediaValidator;
+    address private immutable _submissionMediaValidatorFactory;
     SubmissionMediaValidator public submissionMediaValidator;
     mapping(uint256 => address) internal questionBundleRoundObserverByContent;
 
@@ -305,9 +306,9 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     );
     event VotingEngineRevoked(address indexed engine);
 
-    /// @custom:oz-upgrades-unsafe-allow constructor state-variable-immutable
+    /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
-        _defaultSubmissionMediaValidator = new SubmissionMediaValidator();
+        _submissionMediaValidatorFactory = address(new SubmissionMediaValidatorFactory());
         _disableInitializers();
     }
 
@@ -322,10 +323,10 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         __AccessControl_init();
         __Pausable_init();
 
-        require(_admin != address(0), "Invalid admin");
-        require(_governance != address(0), "Invalid governance");
-        require(_treasuryAuthority != address(0), "Bad treasury");
-        require(_lrepToken != address(0), "Invalid LREP token");
+        require(_admin != address(0), "admin");
+        require(_governance != address(0), "gov");
+        require(_treasuryAuthority != address(0), "treasury");
+        require(_lrepToken != address(0), "lrep");
         _initializeSubmissionMediaValidator();
 
         // Governance gets all permanent roles
@@ -356,10 +357,15 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     }
 
     function _initializeSubmissionMediaValidator() private {
-        if (address(submissionMediaValidator) != address(0)) return;
-        SubmissionMediaValidator validator = _defaultSubmissionMediaValidator;
-        submissionMediaValidator = validator;
-        validator.initializeEmitter(address(this));
+        address validator;
+        address factory = _submissionMediaValidatorFactory;
+        assembly ("memory-safe") {
+            let ptr := mload(0x40)
+            mstore(ptr, shl(224, 0xefc81a8c))
+            if iszero(call(gas(), factory, 0, ptr, 4, ptr, 32)) { revert(0, 0) }
+            validator := mload(ptr)
+        }
+        submissionMediaValidator = SubmissionMediaValidator(validator);
     }
 
     /// @notice Set the VotingEngine address (can only be called by CONFIG_ROLE).
