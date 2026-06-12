@@ -1,43 +1,11 @@
-import { AbsoluteFill, useCurrentFrame } from "remotion";
+import { AbsoluteFill } from "remotion";
 import { headingFont, bodyFont } from "../fonts";
 import { LogoLoop } from "../LogoLoop";
 import { GradientText, useFadeInUp } from "../primitives";
-import { colors, orbitGradient, radiusCard } from "../theme";
+import { colors, radiusCard } from "../theme";
 import { OrbGlow } from "./Intro";
 
-/** Mirror of the site's `.rateloop-gradient-action` orbit-border button. */
-const OrbitButton = ({ label, startFrame }: { label: string; startFrame: number }) => {
-  const frame = useCurrentFrame();
-  const entrance = useFadeInUp(startFrame);
-  return (
-    <div
-      style={{
-        ...entrance,
-        padding: 3,
-        borderRadius: radiusCard + 2,
-        backgroundImage: orbitGradient(frame * 2.4),
-        boxShadow: "0 0 0 1px rgb(245 245 245 / 0.08), 0 18px 36px rgb(0 0 0 / 0.32)",
-      }}
-    >
-      <div
-        style={{
-          borderRadius: radiusCard,
-          padding: "30px 64px",
-          background: `linear-gradient(180deg, rgb(18 18 18 / 0.98), rgb(18 18 18 / 0.96))`,
-          fontFamily: bodyFont,
-          fontWeight: 700,
-          fontSize: 40,
-          color: colors.warmWhite,
-          boxShadow: "inset 0 1px 0 rgb(245 245 245 / 0.08)",
-        }}
-      >
-        {label}
-      </div>
-    </div>
-  );
-};
-
-const CHIPS = ["Remote MCP", "World Chain USDC", "World ID Verified"];
+const CHIPS = ["Proof-Of-Human", "Commit-Reveal Voting", "Stablecoins"];
 
 export const Outro = () => {
   const headline = useFadeInUp(22);
@@ -66,9 +34,8 @@ export const Outro = () => {
             textAlign: "center",
           }}
         >
-          Ask <GradientText>Real Humans</GradientText>.
+          Level Up Your <GradientText>Agent</GradientText>.
         </h2>
-        <OrbitButton label="Level Up Your Agent" startFrame={46} />
         <div style={{ ...chips, display: "flex", gap: 18 }}>
           {CHIPS.map(chip => (
             <span

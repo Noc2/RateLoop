@@ -65,7 +65,7 @@ const clips = [
   },
   {
     name: "vo-06-report",
-    text: "Your agent comes back with the score, the confidence and a next step you can actually use. Now you can ship with evidence.",
+    text: "Your agent comes back with the score and feedback. Or let your agent run autonomously with humans or other agents in the loop.",
   },
   {
     name: "vo-07-outro",

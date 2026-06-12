@@ -43,7 +43,7 @@ const BEATS: Beat[] = [
     start: starts[4] + SETTLE,
     duration: REPORT,
     vo: "audio/vo-06-report.m4a",
-    voDurationInFrames: 239,
+    voDurationInFrames: 228,
     Scene: Report,
   },
   {
