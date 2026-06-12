@@ -975,27 +975,28 @@ export function ContentSubmissionSection() {
     () => (contextUrl.trim() ? (normalizeSubmissionContextUrl(contextUrl) ?? "") : ""),
     [contextUrl],
   );
+  const normalizedPublicContextUrl = contextVisibility === "gated" ? "" : normalizedContextUrl;
   const previewMediaUrl = mediaMode === "video" ? normalizedVideoUrl : (normalizedImageUrls[0] ?? "");
   const hasValidPreviewMedia =
     Boolean(previewMediaUrl) &&
     (mediaMode === "video"
       ? !videoUrlError && isYouTubeVideoUrl(previewMediaUrl)
       : !imageUrlErrors.some(Boolean) && isUploadedImageUrl(previewMediaUrl));
-  const previewUrl = hasValidPreviewMedia ? previewMediaUrl : normalizedContextUrl;
-  const shouldUseContextLinkPreview = Boolean(normalizedContextUrl) && previewUrl === normalizedContextUrl;
+  const previewUrl = hasValidPreviewMedia ? previewMediaUrl : normalizedPublicContextUrl;
+  const shouldUseContextLinkPreview = Boolean(normalizedPublicContextUrl) && previewUrl === normalizedPublicContextUrl;
   const shouldFetchContextPreviewMetadata =
     shouldUseContextLinkPreview &&
-    !isUploadedImageUrl(normalizedContextUrl) &&
-    !isYouTubeVideoUrl(normalizedContextUrl) &&
-    shouldFetchMetadataUrl(normalizedContextUrl);
+    !isUploadedImageUrl(normalizedPublicContextUrl) &&
+    !isYouTubeVideoUrl(normalizedPublicContextUrl) &&
+    shouldFetchMetadataUrl(normalizedPublicContextUrl);
   const { data: contextPreviewMetadataMap } = useQuery({
-    queryKey: ["submissionContextPreviewMetadata", normalizedContextUrl],
+    queryKey: ["submissionContextPreviewMetadata", normalizedPublicContextUrl],
     enabled: shouldFetchContextPreviewMetadata,
     staleTime: 60_000,
-    queryFn: async () => fetchThumbnailMetadataBatch([normalizedContextUrl]),
+    queryFn: async () => fetchThumbnailMetadataBatch([normalizedPublicContextUrl]),
   });
   const contextPreviewThumbnailUrl = shouldFetchContextPreviewMetadata
-    ? (contextPreviewMetadataMap?.[normalizedContextUrl]?.thumbnailUrl ?? null)
+    ? (contextPreviewMetadataMap?.[normalizedPublicContextUrl]?.thumbnailUrl ?? null)
     : null;
 
   const handleCategorySelect = (category: Category) => {
@@ -2960,7 +2961,7 @@ export function ContentSubmissionSection() {
   const contextOrMediaMissing =
     questionStepAttempted &&
     !hasPrivateContextDetails &&
-    !normalizedContextUrl &&
+    !normalizedPublicContextUrl &&
     normalizedImageUrls.length === 0 &&
     !hasImageInput &&
     !normalizedVideoUrl &&
@@ -3180,7 +3181,9 @@ export function ContentSubmissionSection() {
       <div className="surface-card rounded-2xl p-4 space-y-3">
         <p className="text-base font-medium uppercase tracking-wider text-base-content/60">Preview</p>
         <p className="text-base text-base-content/50">
-          Add the question and context link to preview how it will appear.
+          {privateContextEnabled
+            ? "Add the question and hosted private context to preview how it will appear."
+            : "Add the question and context link to preview how it will appear."}
         </p>
       </div>
     );
@@ -4342,42 +4345,35 @@ export function ContentSubmissionSection() {
                   </div>
                 </div>
 
-                <div>
-                  <label
-                    className={`mb-2 flex items-center gap-1.5 text-base font-medium ${
-                      contextOrMediaMissing || contextUrlError ? "text-error" : ""
-                    }`}
-                  >
-                    Context Source <span className="font-normal text-base-content/60">(optional with media)</span>
-                    <InfoTooltip text="Use a public website as the source voters should judge. If there is no context source, add uploaded images or a YouTube link below." />
-                  </label>
-                  <input
-                    type="url"
-                    placeholder={
-                      privateContextEnabled
-                        ? "Private context uses hosted images/details only"
-                        : urlConfig.contextPlaceholder
-                    }
-                    className={`input input-bordered w-full bg-base-100 ${
-                      contextOrMediaMissing || contextUrlError ? "input-error" : ""
-                    }`}
-                    value={contextUrl}
-                    onChange={e => handleContextUrlChange(e.target.value)}
-                    onBlur={() =>
-                      setContextUrlError(privateContextEnabled ? null : getContextUrlValidationError(contextUrl))
-                    }
-                    maxLength={MAX_SUBMISSION_URL_LENGTH}
-                    disabled={privateContextEnabled}
-                  />
-                  {contextOrMediaMissing && !contextUrlError ? (
-                    <p className="mt-1 text-base text-error">
-                      {privateContextEnabled
-                        ? "Add a hosted image or description before submitting."
-                        : "Add a website, image, or YouTube video before submitting."}
-                    </p>
-                  ) : null}
-                  {contextUrlError ? <p className="mt-1 text-base text-error">{contextUrlError}</p> : null}
-                </div>
+                {!privateContextEnabled ? (
+                  <div>
+                    <label
+                      className={`mb-2 flex items-center gap-1.5 text-base font-medium ${
+                        contextOrMediaMissing || contextUrlError ? "text-error" : ""
+                      }`}
+                    >
+                      Context Source <span className="font-normal text-base-content/60">(optional with media)</span>
+                      <InfoTooltip text="Use a public website as the source voters should judge. If there is no context source, add uploaded images or a YouTube link below." />
+                    </label>
+                    <input
+                      type="url"
+                      placeholder={urlConfig.contextPlaceholder}
+                      className={`input input-bordered w-full bg-base-100 ${
+                        contextOrMediaMissing || contextUrlError ? "input-error" : ""
+                      }`}
+                      value={contextUrl}
+                      onChange={e => handleContextUrlChange(e.target.value)}
+                      onBlur={() => setContextUrlError(getContextUrlValidationError(contextUrl))}
+                      maxLength={MAX_SUBMISSION_URL_LENGTH}
+                    />
+                    {contextOrMediaMissing && !contextUrlError ? (
+                      <p className="mt-1 text-base text-error">
+                        Add a website, image, or YouTube video before submitting.
+                      </p>
+                    ) : null}
+                    {contextUrlError ? <p className="mt-1 text-base text-error">{contextUrlError}</p> : null}
+                  </div>
+                ) : null}
 
                 <div>
                   <label
@@ -4468,7 +4464,11 @@ export function ContentSubmissionSection() {
                         ) : null,
                       )}
                       {imageMediaMissing && !imageUrlErrors.some(Boolean) ? (
-                        <p className="text-base text-error">Upload at least one image before submitting.</p>
+                        <p className="text-base text-error">
+                          {privateContextEnabled
+                            ? "Add a hosted image or description before submitting."
+                            : "Upload at least one image before submitting."}
+                        </p>
                       ) : null}
                     </div>
                   ) : (
