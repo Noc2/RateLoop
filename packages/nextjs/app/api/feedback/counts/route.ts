@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   listContentFeedbackCounts,
   normalizeContentFeedbackCountsInput,
+  resolveContentFeedbackDeploymentScope,
   resolveContentFeedbackRoundContext,
 } from "~~/lib/feedback/contentFeedback";
 import { checkRateLimit } from "~~/utils/rateLimit";
@@ -21,11 +22,16 @@ export async function GET(request: NextRequest) {
     if (contentIds.length === 0) {
       return NextResponse.json({ counts: {} });
     }
+    const deployment = resolveContentFeedbackDeploymentScope();
+    if (!deployment) {
+      return NextResponse.json({ error: "Feedback deployment is not configured" }, { status: 503 });
+    }
 
     const contextEntries = await Promise.all(
       contentIds.map(async contentId => [contentId, await resolveContentFeedbackRoundContext(contentId)] as const),
     );
     const counts = await listContentFeedbackCounts({
+      deploymentKey: deployment.deploymentKey,
       contentIds,
       contextByContentId: new Map(contextEntries),
     });

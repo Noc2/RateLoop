@@ -7,6 +7,9 @@ export const CONTENT_FEEDBACK_CHALLENGE_TITLE = "RateLoop feedback authorization
 export function hashContentFeedbackPayload(payload: ContentFeedbackChallengePayload): string {
   return hashSignedActionPayload([
     `chainId:${payload.chainId}`,
+    `deploymentKey:${payload.deploymentKey}`,
+    `contentRegistry:${payload.contentRegistryAddress}`,
+    `feedbackRegistry:${payload.feedbackRegistryAddress}`,
     `contentId:${payload.contentId}`,
     `roundId:${payload.roundId}`,
     `author:${payload.normalizedAddress}`,

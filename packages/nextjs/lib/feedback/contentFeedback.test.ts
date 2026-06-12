@@ -12,6 +12,7 @@ type PonderFeedbackBonusPool = import("~~/services/ponder/client").PonderFeedbac
 type PonderRoundItem = import("~~/services/ponder/client").PonderRoundItem;
 type PonderVoteItem = import("~~/services/ponder/client").PonderVoteItem;
 type PonderVotesResponse = import("~~/services/ponder/client").PonderVotesResponse;
+type ProtocolDeploymentScope = import("~~/lib/protocolDeployment").ProtocolDeploymentScope;
 type DbModule = typeof import("../db");
 type DbTestMemoryModule = typeof import("../db/testMemory");
 
@@ -24,19 +25,40 @@ const OTHER_WALLET = "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd" as const;
 const CHAIN_ID = 31337;
 const SIGNATURE = `0x${"11".repeat(65)}` as `0x${string}`;
 const DEFAULT_PUBLICATION_TX_HASH = `0x${"44".repeat(32)}` as `0x${string}`;
+const TEST_CONTENT_REGISTRY_A = "0x1000000000000000000000000000000000000001" as const;
+const TEST_FEEDBACK_REGISTRY_A = "0x1000000000000000000000000000000000000002" as const;
+const TEST_CONTENT_REGISTRY_B = "0x2000000000000000000000000000000000000001" as const;
+const TEST_FEEDBACK_REGISTRY_B = "0x2000000000000000000000000000000000000002" as const;
+const TEST_DEPLOYMENT_A: ProtocolDeploymentScope = {
+  chainId: CHAIN_ID,
+  contentRegistryAddress: TEST_CONTENT_REGISTRY_A,
+  feedbackRegistryAddress: TEST_FEEDBACK_REGISTRY_A,
+  deploymentKey: `${CHAIN_ID}:${TEST_CONTENT_REGISTRY_A}:${TEST_FEEDBACK_REGISTRY_A}`,
+};
+const TEST_DEPLOYMENT_B: ProtocolDeploymentScope = {
+  chainId: CHAIN_ID,
+  contentRegistryAddress: TEST_CONTENT_REGISTRY_B,
+  feedbackRegistryAddress: TEST_FEEDBACK_REGISTRY_B,
+  deploymentKey: `${CHAIN_ID}:${TEST_CONTENT_REGISTRY_B}:${TEST_FEEDBACK_REGISTRY_B}`,
+};
 let nonceCounter = 1n;
 
 function nextNonce(): `0x${string}` {
   return `0x${(nonceCounter++).toString(16).padStart(64, "0")}` as `0x${string}`;
 }
 
-function prepareFeedback(payload: NormalizedContentFeedbackInput, context: ContentFeedbackRoundContext) {
+function prepareFeedback(
+  payload: NormalizedContentFeedbackInput,
+  context: ContentFeedbackRoundContext,
+  deployment?: ProtocolDeploymentScope,
+) {
   assert.ok(context.currentRoundId);
   return contentFeedback.buildPreparedContentFeedbackInput(payload, {
     chainId: CHAIN_ID,
     roundId: context.currentRoundId,
     commitKey: nextNonce(),
     clientNonce: nextNonce(),
+    ...(deployment ? { deployment } : {}),
     publicationTxHash: DEFAULT_PUBLICATION_TX_HASH,
     payloadSignature: SIGNATURE,
   });
@@ -502,6 +524,64 @@ test("public reads show active round feedback immediately", async () => {
     viewerAddress: OTHER_WALLET,
   });
   assert.equal(otherResult.count, 1);
+});
+
+test("scopes local feedback rows by protocol deployment", async () => {
+  const activeContext = contentFeedback.buildContentFeedbackRoundContext([{ roundId: "7", state: ROUND_STATE.Open }]);
+  const firstPayload = contentFeedback.normalizeContentFeedbackInput({
+    address: WALLET,
+    contentId: "12",
+    feedbackType: "concern",
+    body: "First deployment feedback should stay attached to the first contracts.",
+  });
+  const secondPayload = contentFeedback.normalizeContentFeedbackInput({
+    address: WALLET,
+    contentId: "12",
+    feedbackType: "vote_rationale",
+    body: "Second deployment feedback should not see the old deployment row.",
+  });
+  assert.equal(firstPayload.ok, true);
+  assert.equal(secondPayload.ok, true);
+  if (!firstPayload.ok || !secondPayload.ok) return;
+
+  await contentFeedback.addContentFeedback(
+    prepareFeedback(firstPayload.payload, activeContext, TEST_DEPLOYMENT_A),
+    activeContext,
+  );
+  await contentFeedback.addContentFeedback(
+    prepareFeedback(secondPayload.payload, activeContext, TEST_DEPLOYMENT_B),
+    activeContext,
+  );
+
+  const firstResult = await contentFeedback.listContentFeedback({
+    deploymentKey: TEST_DEPLOYMENT_A.deploymentKey,
+    contentId: "12",
+    context: activeContext,
+  });
+  const secondResult = await contentFeedback.listContentFeedback({
+    deploymentKey: TEST_DEPLOYMENT_B.deploymentKey,
+    contentId: "12",
+    context: activeContext,
+  });
+  const firstCounts = await contentFeedback.listContentFeedbackCounts({
+    deploymentKey: TEST_DEPLOYMENT_A.deploymentKey,
+    contentIds: ["12"],
+    contextByContentId: new Map([["12", activeContext]]),
+  });
+  const secondExisting = await contentFeedback.getExistingActiveContentFeedbackForAuthor({
+    deploymentKey: TEST_DEPLOYMENT_B.deploymentKey,
+    contentId: "12",
+    roundId: activeContext.currentRoundId!,
+    authorAddress: WALLET,
+    context: activeContext,
+  });
+
+  assert.equal(firstResult.count, 1);
+  assert.equal(firstResult.items[0]?.body, "First deployment feedback should stay attached to the first contracts.");
+  assert.equal(secondResult.count, 1);
+  assert.equal(secondResult.items[0]?.body, "Second deployment feedback should not see the old deployment row.");
+  assert.equal(firstCounts["12"], 1);
+  assert.equal(secondExisting?.body, "Second deployment feedback should not see the old deployment row.");
 });
 
 test("terminal round feedback becomes public", async () => {

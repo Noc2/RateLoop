@@ -21,6 +21,7 @@ import {
   type ContentFeedbackListResult,
   type ContentFeedbackType,
 } from "~~/lib/feedback/types";
+import { type ProtocolDeploymentScope, resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 import { isValidWalletAddress, normalizeContentId, normalizeWalletAddress } from "~~/lib/watchlist/contentWatch";
 import {
   type PonderContentFeedbackItem,
@@ -42,7 +43,16 @@ export interface NormalizedContentFeedbackInput {
   sourceUrl: string | null;
 }
 
-export interface ContentFeedbackChallengePayload extends NormalizedContentFeedbackInput, ContentFeedbackHashMetadata {}
+export interface ContentFeedbackDeploymentIdentity {
+  deploymentKey: string;
+  contentRegistryAddress: `0x${string}`;
+  feedbackRegistryAddress: `0x${string}`;
+}
+
+export interface ContentFeedbackChallengePayload
+  extends NormalizedContentFeedbackInput,
+    ContentFeedbackHashMetadata,
+    ContentFeedbackDeploymentIdentity {}
 
 export interface PreparedContentFeedbackInput extends ContentFeedbackChallengePayload {
   commitKey: `0x${string}`;
@@ -127,6 +137,13 @@ export class ContentFeedbackPublicationMissingError extends Error {
   }
 }
 
+export class ContentFeedbackDeploymentUnavailableError extends Error {
+  constructor() {
+    super("CONTENT_FEEDBACK_DEPLOYMENT_UNAVAILABLE");
+    this.name = "ContentFeedbackDeploymentUnavailableError";
+  }
+}
+
 function isContentFeedbackStorageUnavailableError(error: unknown, depth = 0): boolean {
   if (!error || typeof error !== "object") return false;
   const maybeError = error as { code?: unknown; message?: unknown };
@@ -151,8 +168,12 @@ function isContentFeedbackDuplicateStorageError(error: unknown, depth = 0): bool
     return (
       constraint === "content_feedback_feedback_hash_unique" ||
       constraint === "content_feedback_active_author_round_unique" ||
+      constraint === "content_feedback_deployment_feedback_hash_unique" ||
+      constraint === "content_feedback_deployment_active_author_round_unique" ||
       message.includes("content_feedback_feedback_hash_unique") ||
       message.includes("content_feedback_active_author_round_unique") ||
+      message.includes("content_feedback_deployment_feedback_hash_unique") ||
+      message.includes("content_feedback_deployment_active_author_round_unique") ||
       message.includes("duplicate key value")
     );
   }
@@ -289,6 +310,27 @@ export function normalizeContentFeedbackCountsInput(value: unknown): string[] {
 
 function createContentFeedbackTimestamp(nowMs = Date.now()): Date {
   return new Date(Math.floor(nowMs / 1000) * 1000);
+}
+
+export function resolveContentFeedbackDeploymentScope(chainId?: number): ProtocolDeploymentScope | null {
+  const targetNetwork =
+    typeof chainId === "number" ? getServerTargetNetworkById(chainId) : getPrimaryServerTargetNetwork();
+  if (!targetNetwork) {
+    return null;
+  }
+
+  return resolveProtocolDeploymentScope(targetNetwork.id);
+}
+
+function requireContentFeedbackDeploymentScope(chainId?: number, scope?: ProtocolDeploymentScope) {
+  if (scope) return scope;
+
+  const resolvedScope = resolveContentFeedbackDeploymentScope(chainId);
+  if (!resolvedScope) {
+    throw new ContentFeedbackDeploymentUnavailableError();
+  }
+
+  return resolvedScope;
 }
 
 function isTerminalRoundState(state: unknown): state is Exclude<RoundState, typeof ROUND_STATE.Open> {
@@ -429,6 +471,7 @@ export function buildPreparedContentFeedbackInput(
   payload: NormalizedContentFeedbackInput,
   params: Omit<ContentFeedbackHashInput, "contentId" | "authorAddress" | "feedbackType" | "body" | "sourceUrl"> & {
     commitKey: `0x${string}`;
+    deployment?: ProtocolDeploymentScope;
     feedbackHash?: `0x${string}`;
     payloadSignature: `0x${string}`;
     publicationTxHash?: `0x${string}` | null;
@@ -445,9 +488,11 @@ export function buildPreparedContentFeedbackInput(
 export function buildContentFeedbackChallengePayload(
   payload: NormalizedContentFeedbackInput,
   params: Omit<ContentFeedbackHashInput, "contentId" | "authorAddress" | "feedbackType" | "body" | "sourceUrl"> & {
+    deployment?: ProtocolDeploymentScope;
     feedbackHash?: `0x${string}`;
   },
 ): ContentFeedbackChallengePayload {
+  const deployment = requireContentFeedbackDeploymentScope(params.chainId, params.deployment);
   const expectedHash = buildContentFeedbackHash({
     chainId: params.chainId,
     contentId: payload.contentId,
@@ -469,6 +514,9 @@ export function buildContentFeedbackChallengePayload(
     roundId: params.roundId,
     clientNonce: params.clientNonce,
     feedbackHash,
+    deploymentKey: deployment.deploymentKey,
+    contentRegistryAddress: deployment.contentRegistryAddress,
+    feedbackRegistryAddress: deployment.feedbackRegistryAddress,
   };
 }
 
@@ -926,6 +974,7 @@ export async function addContentFeedback(
       .from(contentFeedback)
       .where(
         and(
+          eq(contentFeedback.deploymentKey, payload.deploymentKey),
           eq(contentFeedback.contentId, payload.contentId),
           eq(contentFeedback.roundId, payload.roundId),
           eq(contentFeedback.authorAddress, payload.normalizedAddress),
@@ -940,6 +989,9 @@ export async function addContentFeedback(
     [row] = await db
       .insert(contentFeedback)
       .values({
+        deploymentKey: payload.deploymentKey,
+        contentRegistryAddress: payload.contentRegistryAddress,
+        feedbackRegistryAddress: payload.feedbackRegistryAddress,
         contentId: payload.contentId,
         roundId: payload.roundId,
         chainId: payload.chainId,
@@ -978,17 +1030,20 @@ export async function addContentFeedback(
 }
 
 export async function getExistingActiveContentFeedbackForAuthor(params: {
+  deploymentKey?: string;
   contentId: string;
   roundId: string;
   authorAddress: `0x${string}`;
   context: ContentFeedbackRoundContext;
 }): Promise<ContentFeedbackItem | null> {
+  const deploymentKey = params.deploymentKey ?? requireContentFeedbackDeploymentScope().deploymentKey;
   try {
     const [row] = await db
       .select()
       .from(contentFeedback)
       .where(
         and(
+          eq(contentFeedback.deploymentKey, deploymentKey),
           eq(contentFeedback.contentId, params.contentId),
           eq(contentFeedback.roundId, params.roundId),
           eq(contentFeedback.authorAddress, params.authorAddress),
@@ -1007,15 +1062,18 @@ export async function getExistingActiveContentFeedbackForAuthor(params: {
 }
 
 export async function listContentFeedback(params: {
+  deploymentKey?: string;
   contentId: string;
   context: ContentFeedbackRoundContext;
   viewerAddress?: `0x${string}` | null;
   awarderAddress?: `0x${string}` | null;
 }): Promise<ContentFeedbackListResult> {
+  const deploymentKey = params.deploymentKey ?? requireContentFeedbackDeploymentScope().deploymentKey;
   let rows: FeedbackRow[];
   let publicCount = 0;
   try {
     const baseCondition = and(
+      eq(contentFeedback.deploymentKey, deploymentKey),
       eq(contentFeedback.contentId, params.contentId),
       eq(contentFeedback.moderationStatus, APPROVED_MODERATION_STATUS),
       isNull(contentFeedback.deletedAt),
@@ -1095,9 +1153,11 @@ export async function listContentFeedback(params: {
 }
 
 export async function listContentFeedbackCounts(params: {
+  deploymentKey?: string;
   contentIds: string[];
   contextByContentId: Map<string, ContentFeedbackRoundContext>;
 }): Promise<Record<string, number>> {
+  const deploymentKey = params.deploymentKey ?? requireContentFeedbackDeploymentScope().deploymentKey;
   const counts = Object.fromEntries(params.contentIds.map(contentId => [contentId, 0]));
   if (params.contentIds.length === 0) {
     return counts;
@@ -1116,7 +1176,13 @@ export async function listContentFeedbackCounts(params: {
         publishedAt: contentFeedback.publishedAt,
       })
       .from(contentFeedback)
-      .where(and(inArray(contentFeedback.contentId, params.contentIds), isNull(contentFeedback.deletedAt)));
+      .where(
+        and(
+          eq(contentFeedback.deploymentKey, deploymentKey),
+          inArray(contentFeedback.contentId, params.contentIds),
+          isNull(contentFeedback.deletedAt),
+        ),
+      );
   } catch (error) {
     if (isContentFeedbackStorageUnavailableError(error)) {
       return counts;

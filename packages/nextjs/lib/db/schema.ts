@@ -87,6 +87,9 @@ export const contentFeedback = pgTable(
   "content_feedback",
   {
     id: serial("id").primaryKey(),
+    deploymentKey: text("deployment_key"),
+    contentRegistryAddress: text("content_registry_address"),
+    feedbackRegistryAddress: text("feedback_registry_address"),
     contentId: text("content_id").notNull(),
     roundId: text("round_id"),
     chainId: integer("chain_id"),
@@ -108,12 +111,24 @@ export const contentFeedback = pgTable(
   table => ({
     contentCreatedAtIdx: index("content_feedback_content_created_at_idx").on(table.contentId, table.createdAt),
     contentRoundIdx: index("content_feedback_content_round_idx").on(table.contentId, table.roundId),
+    deploymentContentCreatedAtIdx: index("content_feedback_deployment_content_created_at_idx").on(
+      table.deploymentKey,
+      table.contentId,
+      table.createdAt,
+    ),
+    deploymentContentRoundIdx: index("content_feedback_deployment_content_round_idx").on(
+      table.deploymentKey,
+      table.contentId,
+      table.roundId,
+    ),
     authorCreatedAtIdx: index("content_feedback_author_created_at_idx").on(table.authorAddress, table.createdAt),
     commitKeyIdx: index("content_feedback_commit_key_idx").on(table.commitKey),
-    feedbackHashUnique: uniqueIndex("content_feedback_feedback_hash_unique").on(table.feedbackHash),
-    activeAuthorRoundUnique: uniqueIndex("content_feedback_active_author_round_unique")
-      .on(table.contentId, table.roundId, table.authorAddress)
-      .where(sql`${table.deletedAt} IS NULL`),
+    deploymentFeedbackHashUnique: uniqueIndex("content_feedback_deployment_feedback_hash_unique")
+      .on(table.deploymentKey, table.feedbackHash)
+      .where(sql`${table.deploymentKey} IS NOT NULL AND ${table.feedbackHash} IS NOT NULL`),
+    deploymentActiveAuthorRoundUnique: uniqueIndex("content_feedback_deployment_active_author_round_unique")
+      .on(table.deploymentKey, table.contentId, table.roundId, table.authorAddress)
+      .where(sql`${table.deploymentKey} IS NOT NULL AND ${table.deletedAt} IS NULL`),
   }),
 );
 

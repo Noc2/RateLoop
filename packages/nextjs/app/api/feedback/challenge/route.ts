@@ -11,6 +11,7 @@ import {
   assertContentFeedbackVoterEligibility,
   buildContentFeedbackChallengePayload,
   normalizeContentFeedbackInput,
+  resolveContentFeedbackDeploymentScope,
   resolveContentFeedbackRoundContext,
 } from "~~/lib/feedback/contentFeedback";
 import { createContentFeedbackNonce } from "~~/lib/feedback/feedbackHash";
@@ -54,6 +55,10 @@ export async function POST(request: NextRequest) {
     if (!targetNetwork) {
       return NextResponse.json({ error: "Feedback chain is not configured" }, { status: 503 });
     }
+    const deployment = resolveContentFeedbackDeploymentScope(targetNetwork.id);
+    if (!deployment) {
+      return NextResponse.json({ error: "Feedback deployment is not configured" }, { status: 503 });
+    }
 
     const context = await resolveContentFeedbackRoundContext(normalized.payload.contentId, targetNetwork.id);
     const roundId = context.openRoundId;
@@ -79,6 +84,7 @@ export async function POST(request: NextRequest) {
       chainId: targetNetwork.id,
       roundId,
       clientNonce: createContentFeedbackNonce(),
+      deployment,
     });
 
     const challenge = await issueSignedActionChallenge({
@@ -97,6 +103,9 @@ export async function POST(request: NextRequest) {
       sourceUrl: normalized.payload.sourceUrl,
       clientNonce: challengePayload.clientNonce,
       feedbackHash: challengePayload.feedbackHash,
+      deploymentKey: challengePayload.deploymentKey,
+      contentRegistryAddress: challengePayload.contentRegistryAddress,
+      feedbackRegistryAddress: challengePayload.feedbackRegistryAddress,
     });
   } catch (error) {
     console.error("Error creating feedback challenge:", error);

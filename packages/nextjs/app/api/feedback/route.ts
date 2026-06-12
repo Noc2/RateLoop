@@ -6,6 +6,7 @@ import {
 } from "~~/lib/auth/contentFeedbackChallenge";
 import { verifySignedActionChallenge } from "~~/lib/auth/signedRouteHelpers";
 import {
+  ContentFeedbackDeploymentUnavailableError,
   ContentFeedbackDuplicateError,
   ContentFeedbackPublicationMissingError,
   ContentFeedbackStorageUnavailableError,
@@ -21,6 +22,7 @@ import {
   normalizeContentFeedbackInput,
   normalizeContentFeedbackListInput,
   normalizeContentFeedbackTxHash,
+  resolveContentFeedbackDeploymentScope,
   resolveContentFeedbackRoundContext,
 } from "~~/lib/feedback/contentFeedback";
 import { normalizeContentFeedbackHashMetadata } from "~~/lib/feedback/feedbackHash";
@@ -49,8 +51,13 @@ export async function GET(request: NextRequest) {
     }
 
     const requestedViewerAddress = normalized.payload.normalizedAddress;
+    const deployment = resolveContentFeedbackDeploymentScope();
+    if (!deployment) {
+      return NextResponse.json({ error: "Feedback deployment is not configured" }, { status: 503 });
+    }
     const context = await resolveContentFeedbackRoundContext(normalized.payload.contentId);
     const result = await listContentFeedback({
+      deploymentKey: deployment.deploymentKey,
       contentId: normalized.payload.contentId,
       context,
       awarderAddress: requestedViewerAddress,
@@ -114,6 +121,10 @@ export async function POST(request: NextRequest) {
     if (!metadata.ok) {
       return NextResponse.json({ error: metadata.error }, { status: 400 });
     }
+    const deployment = resolveContentFeedbackDeploymentScope(metadata.metadata.chainId);
+    if (!deployment) {
+      return NextResponse.json({ error: "Feedback deployment is not configured" }, { status: 503 });
+    }
     const commitKey = normalizeContentFeedbackCommitKey(body.commitKey);
     if (!commitKey) {
       return NextResponse.json({ error: "Missing or invalid feedback commit key" }, { status: 400 });
@@ -128,6 +139,7 @@ export async function POST(request: NextRequest) {
       preparedPayload = buildPreparedContentFeedbackInput(payload, {
         ...metadata.metadata,
         commitKey,
+        deployment,
         publicationTxHash,
         payloadSignature: body.signature,
       });
@@ -192,6 +204,7 @@ export async function POST(request: NextRequest) {
     } catch (error) {
       if (error instanceof ContentFeedbackDuplicateError) {
         const existingItem = await getExistingActiveContentFeedbackForAuthor({
+          deploymentKey: preparedPayload.deploymentKey,
           contentId: preparedPayload.contentId,
           roundId: preparedPayload.roundId,
           authorAddress: preparedPayload.normalizedAddress,
@@ -204,6 +217,9 @@ export async function POST(request: NextRequest) {
       throw error;
     }
   } catch (error) {
+    if (error instanceof ContentFeedbackDeploymentUnavailableError) {
+      return NextResponse.json({ error: "Feedback deployment is not configured" }, { status: 503 });
+    }
     if (error instanceof ContentFeedbackStorageUnavailableError) {
       return NextResponse.json({ error: "Feedback storage is not ready yet" }, { status: 503 });
     }
