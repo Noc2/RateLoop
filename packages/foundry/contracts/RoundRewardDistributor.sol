@@ -254,7 +254,7 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         }
         (bool scored,,,,) = votingEngine.rbtsRoundState(contentId, roundId);
         if (!scored) revert RoundNotSettled();
-        if (!_isCommitIdentityBanned(contentId, roundId, commitKey)) revert RewardNotConfiscatable();
+        if (!_isCommitRewardRecipientBanned(contentId, roundId, commitKey)) revert RewardNotConfiscatable();
 
         claimAccountingStarted = true;
         rewardCommitClaimed[contentId][roundId][commitKey] = true;
@@ -546,6 +546,22 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         address current = ProtocolConfig(votingEngine.protocolConfig()).raterRegistry();
         if (current == snapshot) return false;
         return _isIdentityBannedAt(current, identityKey) || _isIdentityBannedAt(current, voterAddressKey);
+    }
+
+    function _isCommitRewardRecipientBanned(uint256 contentId, uint256 roundId, bytes32 commitKey)
+        internal
+        view
+        returns (bool)
+    {
+        (bytes32 identityKey, address holder,,,,) = votingEngine.commitIdentityState(contentId, roundId, commitKey);
+        bytes32 holderAddressKey = _addressIdentityKey(holder);
+        if (identityKey == bytes32(0) && holderAddressKey == bytes32(0)) return false;
+        address snapshot = votingEngine.roundRaterRegistrySnapshot(contentId, roundId);
+        if (_isIdentityBannedAt(snapshot, identityKey)) return true;
+        if (_isIdentityBannedAt(snapshot, holderAddressKey)) return true;
+        address current = ProtocolConfig(votingEngine.protocolConfig()).raterRegistry();
+        if (current == snapshot) return false;
+        return _isIdentityBannedAt(current, identityKey) || _isIdentityBannedAt(current, holderAddressKey);
     }
 
     function _isIdentityBannedAt(address registryAddress, bytes32 identityKey) private view returns (bool) {

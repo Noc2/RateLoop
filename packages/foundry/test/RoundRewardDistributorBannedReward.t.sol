@@ -306,9 +306,23 @@ contract RoundRewardDistributorBannedRewardTest is Test {
         assertTrue(distributor.rewardCommitClaimed(CONTENT_ID, ROUND_ID, COMMIT_1));
     }
 
+    function test_ConfiscateBannedRewardRejectsStakePayerOnlyBan() public {
+        banRegistry.setBanned(_addressIdentityKey(voter1), true);
+
+        vm.expectRevert(RoundRewardDistributor.RewardNotConfiscatable.selector);
+        distributor.confiscateBannedReward(CONTENT_ID, ROUND_ID, COMMIT_1);
+
+        assertFalse(distributor.rewardCommitClaimed(CONTENT_ID, ROUND_ID, COMMIT_1));
+        assertFalse(distributor.rewardClaimed(CONTENT_ID, ROUND_ID, voter1));
+    }
+
     function test_ConfiscateBannedRewardRejectsUnbannedCommit() public {
         vm.expectRevert(RoundRewardDistributor.RewardNotConfiscatable.selector);
         distributor.confiscateBannedReward(CONTENT_ID, ROUND_ID, COMMIT_1);
+    }
+
+    function _addressIdentityKey(address account) internal pure returns (bytes32) {
+        return keccak256(abi.encodePacked("rateloop.address-identity-v1", account));
     }
 
     function _commit(address voter) internal pure returns (RoundLib.Commit memory commit) {
