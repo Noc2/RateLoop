@@ -3322,7 +3322,7 @@ export function ContentSubmissionSection() {
               <InfoTooltip text={CONFIDENTIALITY_BOND_TOOLTIP} position="top" className="text-base-content/45" />
             </p>
           </div>
-          <div className="grid gap-3 sm:grid-cols-[9rem_minmax(0,1fr)]">
+          <div className="grid grid-cols-2 gap-3">
             <label className="form-control">
               <span className="label-text text-sm font-medium">Asset</span>
               <select
@@ -3356,7 +3356,7 @@ export function ContentSubmissionSection() {
           Bounty
           <InfoTooltip text={protocolDocFacts.usdcBountyPayoutTimingTooltip} />
         </p>
-        <div className="grid gap-3 sm:grid-cols-[9rem_minmax(0,1fr)]">
+        <div className="grid grid-cols-2 gap-3">
           <label className="form-control">
             <span className="label-text text-sm font-medium">Asset</span>
             <select
@@ -4115,7 +4115,7 @@ export function ContentSubmissionSection() {
 
       {feedbackBonusMode === "enabled" ? (
         <div className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-[9rem_minmax(0,1fr)]">
+          <div className="grid grid-cols-2 gap-3">
             <label className="form-control">
               <span className="label-text text-sm font-medium">Asset</span>
               <select
