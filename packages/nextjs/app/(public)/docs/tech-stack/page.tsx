@@ -191,7 +191,8 @@ const TechStackPage: NextPage = () => {
         prior pays the flat floor, while an answer that predicts peers better than the trailing base rate earns up to
         the cap; launch-credit weights stay flat. The correlation snapshot then applies an independence multiplier, and
         the resulting claim weights split the bounty: a 30 USDC rater allocation across effective weights of 20,000,
-        10,000, and 10,000 pays 15 USDC, 7.5 USDC, and 7.5 USDC.
+        10,000, and 10,000 pays 15 USDC, 7.5 USDC, and 7.5 USDC. All arithmetic is integer math in basis points with
+        floor division, recomputable from on-chain events by any challenger.
       </p>
       <FormulaCard
         title="Surprise-Weighted Claim Weights"
@@ -234,6 +235,10 @@ const TechStackPage: NextPage = () => {
           ["Base weight range", "10\u202f000\u201320\u202f000 bps"],
         ]}
       />
+      <p>
+        Defaults come from the normative spec (scorer rateloop-correlation-epoch-v2); parameters are committed via the
+        snapshot parameterHash.
+      </p>
       <SurpriseMultiplierChart />
       <p>
         The weighting comes from the peer-prediction literature.{" "}

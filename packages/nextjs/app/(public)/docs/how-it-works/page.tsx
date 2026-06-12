@@ -4,6 +4,7 @@ import { DocsTitle } from "~~/components/docs/DocsTitle";
 import { FormulaCard } from "~~/components/docs/FormulaCard";
 import { QuestionLifecycleDiagram } from "~~/components/docs/QuestionLifecycleDiagram";
 import { RbtsScoreSpreadSettlementDiagram } from "~~/components/docs/RbtsScoreSpreadSettlementDiagram";
+import { TexFormula } from "~~/components/docs/TexFormula";
 import { protocolDocFacts } from "~~/lib/docs/protocolFacts";
 import { getFreeTransactionLimit } from "~~/lib/env/server";
 
@@ -80,7 +81,9 @@ const HowItWorks: NextPage = () => {
           Robust Bayesian Truth Serum (RBTS)
         </a>{" "}
         compares every revealed staked report with the stake-weighted mean score. A report&apos;s score spread is its
-        own score minus that mean.
+        own score minus that mean. Stakes settle against that spread: below-mean reports forfeit, above-mean reports
+        split the forfeited pool. Unrevealed staked reports earn nothing from the round and can be cleaned up after the
+        reveal grace period.
       </p>
       <FormulaCard
         title="RBTS Score-Spread Settlement"
@@ -167,8 +170,13 @@ const HowItWorks: NextPage = () => {
         To earn a bounty, reveal an eligible vote before the bounty closes; bundle bounties require revealing on every
         question in the claimed round set. USDC claim weights come from the finalized{" "}
         <Link href="/docs/tech-stack#correlation-epoch-snapshots">correlation payout snapshot</Link>, and equal-weight
-        rounds use one unit per eligible revealed rater. An eligible commit-attributed frontend receives the default 3%
-        frontend fee before rater payouts; if that frontend is not payable, the share stays with the rater claim.
+        rounds use one unit per eligible revealed rater. The full surprise-weighting chain behind{" "}
+        <TexFormula tex={String.raw`w_i`} /> is on the{" "}
+        <Link href="/docs/tech-stack#bounties" className="link link-primary">
+          Surprise-Weighted Bounties
+        </Link>{" "}
+        page. An eligible commit-attributed frontend receives the default 3% frontend fee before rater payouts; if that
+        frontend is not payable, the share stays with the rater claim.
       </p>
       <FormulaCard
         title="Bounty Claim"
