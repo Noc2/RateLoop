@@ -48,8 +48,10 @@ test.describe("Confidential context", () => {
 
     await ensureHumanCredential(page, ANVIL_ACCOUNTS.account2);
     await gotoWithRetry(page, `/rate?content=${submitted.contentId}`, { ensureWalletConnected: true });
-    await expect(page.getByText("Confirm wallet to view your private context")).toBeVisible({ timeout: 20_000 });
-    await page.getByRole("button", { name: "Confirm wallet" }).click();
+    await expect(page.getByText("Confirm wallet to view your private context").first()).toBeVisible({
+      timeout: 20_000,
+    });
+    await page.getByRole("button", { name: "Confirm wallet" }).first().click();
 
     const ownerDetails = await fetchGatedAttachment(page.request, submitted.detailsUrl!, {
       address: ANVIL_ACCOUNTS.account2.address,

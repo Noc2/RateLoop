@@ -29,7 +29,7 @@ test.describe("Funding modals", () => {
       const bountyDialog = page.getByRole("dialog", { name: "Fund a bounty" });
       await expect(bountyDialog).toBeVisible({ timeout: 10_000 });
       await expect(bountyDialog.getByRole("heading", { name: target!.title })).toBeVisible();
-      await expect(bountyDialog.getByRole("spinbutton", { name: "Bounty amount" })).toHaveValue("10");
+      await expect(bountyDialog.getByLabel("Bounty amount")).toHaveValue("10");
       await expect(bountyDialog.getByRole("spinbutton", { name: "Required voters" })).not.toHaveValue("");
       await expect(bountyDialog.getByRole("spinbutton", { name: "Settled rounds" })).toHaveValue("2");
       await expect(bountyDialog.getByText(/USDC claims take at least/i)).toBeVisible();

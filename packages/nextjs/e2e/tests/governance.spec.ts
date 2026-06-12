@@ -149,12 +149,16 @@ test.describe("Governance page", () => {
     await page.getByRole("button", { name: "Submit report" }).click();
 
     await expect(page.getByText("Breach report submitted.")).toBeVisible({ timeout: 20_000 });
-    await expect(page.locator("main").getByText(`identity ${accused.identityKey}`)).toBeVisible({ timeout: 20_000 });
-    await expect(page.locator("main").getByText(`evidence ${evidenceHash}`)).toBeVisible();
+    await expect(page.locator("main").getByText(`identity ${accused.identityKey}`).first()).toBeVisible({
+      timeout: 20_000,
+    });
+    await expect(page.locator("main").getByText(`evidence ${evidenceHash}`).first()).toBeVisible();
 
     await page.getByRole("button", { name: "Slash bond", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Governance Action Composer" })).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByLabel("Action")).toHaveValue("confidentiality-slash-bond");
+    await expect(page.getByRole("combobox", { name: "Governance action" })).toHaveValue(
+      "confidentiality-slash-bond",
+    );
     await expect(page.getByLabel("Content ID")).toHaveValue(contentId);
     await expect(page.getByLabel("Identity key")).toHaveValue(accused.identityKey);
     await expect(page.getByLabel("Evidence hash")).toHaveValue(evidenceHash);
@@ -165,9 +169,14 @@ test.describe("Governance page", () => {
     await gotoWithRetry(page, "/governance#breaches", { ensureWalletConnected: true });
     await page.getByLabel("Content id").fill(contentId);
     await page.getByRole("button", { name: "Load reports" }).click();
-    await expect(page.locator("main").getByText(`identity ${accused.identityKey}`)).toBeVisible({ timeout: 20_000 });
+    await expect(page.locator("main").getByText(`identity ${accused.identityKey}`).first()).toBeVisible({
+      timeout: 20_000,
+    });
     await page.getByRole("button", { name: "Ban identity", exact: true }).click();
-    await expect(page.getByLabel("Action")).toHaveValue("rater-registry-ban-identity", { timeout: 10_000 });
+    await expect(page.getByRole("combobox", { name: "Governance action" })).toHaveValue(
+      "rater-registry-ban-identity",
+      { timeout: 10_000 },
+    );
     await expect(page.getByLabel("Evidence hash")).toHaveValue(evidenceHash);
 
     try {

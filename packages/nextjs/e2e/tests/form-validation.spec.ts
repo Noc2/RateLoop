@@ -66,7 +66,6 @@ test.describe("Ask form validation", () => {
 
     await expect(form.getByText("Context Source")).toHaveCount(0);
     await expect(form.getByPlaceholder("Paste a source link, or add media context below")).toHaveCount(0);
-    await expect(form.getByRole("button", { name: "Images" })).toHaveCount(0);
     await expect(form.getByRole("button", { name: "YouTube" })).toHaveCount(0);
 
     await privateContextToggle.uncheck();

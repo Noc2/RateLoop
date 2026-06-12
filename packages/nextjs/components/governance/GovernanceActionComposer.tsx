@@ -1212,6 +1212,7 @@ export function GovernanceActionComposer() {
             <span className="label-text">Action</span>
           </label>
           <select
+            aria-label="Governance action"
             className="select select-bordered w-full"
             value={selectedActionId}
             onChange={event => handleActionChange(event.target.value)}

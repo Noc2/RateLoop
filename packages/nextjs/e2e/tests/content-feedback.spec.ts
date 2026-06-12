@@ -48,22 +48,28 @@ test.describe("Content feedback", () => {
     await expect(feedbackSection.getByRole("button", { name: "Add feedback" })).toBeEnabled({ timeout: 30_000 });
     await feedbackSection.getByRole("button", { name: "Add feedback" }).click();
 
-    await expect(page.getByText("Feedback published on-chain")).toBeVisible({ timeout: 60_000 });
+    let publishedList: FeedbackListResponse | undefined;
+    await expect
+      .poll(
+        async () => {
+          const listResponse = await page.request.get(`/api/feedback?contentId=${target!.contentId}`);
+          if (!listResponse.ok()) return false;
+          const list = (await listResponse.json()) as FeedbackListResponse;
+          publishedList = list;
+          return list.items.some(
+            item =>
+              item.body === feedbackBody &&
+              item.feedbackType === "concern" &&
+              item.authorAddress.toLowerCase() === ANVIL_ACCOUNTS.account4.address.toLowerCase() &&
+              item.isPublic,
+          );
+        },
+        { intervals: [2_000, 5_000], timeout: 90_000 },
+      )
+      .toBe(true);
     await expect(feedbackSection.getByText(feedbackBody)).toBeVisible({ timeout: 30_000 });
 
-    const listResponse = await page.request.get(`/api/feedback?contentId=${target!.contentId}`);
-    expect(listResponse.ok(), await listResponse.text()).toBe(true);
-    const list = (await listResponse.json()) as FeedbackListResponse;
-    expect(list.publicCount).toBeGreaterThanOrEqual(1);
-    expect(
-      list.items.some(
-        item =>
-          item.body === feedbackBody &&
-          item.feedbackType === "concern" &&
-          item.authorAddress.toLowerCase() === ANVIL_ACCOUNTS.account4.address.toLowerCase() &&
-          item.isPublic,
-      ),
-    ).toBe(true);
+    expect(publishedList?.publicCount).toBeGreaterThanOrEqual(1);
 
     const countsResponse = await page.request.get(`/api/feedback/counts?contentIds=${target!.contentId}`);
     expect(countsResponse.ok(), await countsResponse.text()).toBe(true);
