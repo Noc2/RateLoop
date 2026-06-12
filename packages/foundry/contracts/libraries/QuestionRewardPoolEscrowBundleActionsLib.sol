@@ -1140,7 +1140,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
                         contentId,
                         roundId,
                         QuestionRewardPoolEscrowVoterLib.addressIdentityKey(voter)
-                )) {
+                    )) {
                     return true;
                 }
                 if (_isIdentityBannedForRound(

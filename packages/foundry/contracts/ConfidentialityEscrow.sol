@@ -303,12 +303,9 @@ contract ConfidentialityEscrow is
         _recordConfidentialityNexus(contentId, holder, msg.sender, protocolConfig.raterRegistry());
     }
 
-    function _recordConfidentialityNexus(
-        uint256 contentId,
-        address holder,
-        address recorder,
-        address registryAddress
-    ) private {
+    function _recordConfidentialityNexus(uint256 contentId, address holder, address recorder, address registryAddress)
+        private
+    {
         if (!_configs[contentId].gated) return;
         _markNullifierBonded(holder, registryAddress);
         emit ConfidentialityNexusRecorded(contentId, holder, recorder);

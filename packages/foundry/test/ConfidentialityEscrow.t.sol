@@ -841,8 +841,9 @@ contract ConfidentialityEscrowTest is VotingTestBase {
         internal
         returns (bytes32 commitKey)
     {
-        bytes32 salt =
-            keccak256(abi.encodePacked("confidentiality-current-round", voter, contentId, isUp, block.timestamp));
+        bytes32 salt = keccak256(
+            abi.encodePacked("confidentiality-current-round", voter, contentId, isUp, block.timestamp)
+        );
         TestCommitArtifacts memory artifacts = _buildTestCommitArtifacts(address(engine), voter, isUp, salt, contentId);
         uint256 currentRoundId = engine.currentRoundId(contentId);
         assertGt(currentRoundId, 0);

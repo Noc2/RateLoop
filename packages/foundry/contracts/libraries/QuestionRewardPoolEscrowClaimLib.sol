@@ -485,8 +485,13 @@ library QuestionRewardPoolEscrowClaimLib {
         (, address holder,,,,) = votingEngine.commitIdentityState(contentId, roundId, commitKey);
         return _isIdentityBannedForRound(
             votingEngine, protocolConfig, contentId, roundId, QuestionRewardPoolEscrowVoterLib.addressIdentityKey(voter)
-        ) || _isIdentityBannedForRound(
-            votingEngine, protocolConfig, contentId, roundId, QuestionRewardPoolEscrowVoterLib.addressIdentityKey(holder)
+        )
+            || _isIdentityBannedForRound(
+            votingEngine,
+            protocolConfig,
+            contentId,
+            roundId,
+            QuestionRewardPoolEscrowVoterLib.addressIdentityKey(holder)
         );
     }
 

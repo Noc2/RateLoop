@@ -1580,7 +1580,8 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         uint256 contentId = _submitContent();
 
         (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, true, 8_000, 10e6);
-        (bytes32 advisoryCommitKey, bytes32 advisorySalt) = _recordAdvisory(delegate1, contentId, "holder-banned-advisory");
+        (bytes32 advisoryCommitKey, bytes32 advisorySalt) =
+            _recordAdvisory(delegate1, contentId, "holder-banned-advisory");
         (bytes32 ck2, bytes32 s2) = _commitPrediction(voter2, contentId, false, 5_000, 3e6);
         (bytes32 ck3, bytes32 s3) = _commitPrediction(voter3, contentId, true, 6_500, 3e6);
 

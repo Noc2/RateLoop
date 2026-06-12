@@ -1080,14 +1080,7 @@ contract AdversarialTests is VotingTestBase {
         lrepToken.approve(address(engine), STAKE);
         vm.expectRevert(VotePreflightLib.IdentityBanned.selector);
         engine.commitVote(
-            contentId,
-            roundContext,
-            targetRound,
-            drandChainHash,
-            commitHash,
-            ciphertext,
-            STAKE,
-            address(0)
+            contentId, roundContext, targetRound, drandChainHash, commitHash, ciphertext, STAKE, address(0)
         );
         vm.stopPrank();
     }

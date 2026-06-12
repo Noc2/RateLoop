@@ -682,9 +682,8 @@ contract LaunchDistributionPool is
             payoutWeight.domain != PAYOUT_DOMAIN_LAUNCH_CREDIT || payoutWeight.rewardPoolId != 0
                 || payoutWeight.contentId != contentId || payoutWeight.roundId != roundId
                 || payoutWeight.commitKey != commitKey || payoutWeight.account != pending.rater
-                || payoutWeight.identityKey != bytes32(0)
-                || payoutWeight.baseWeight != BPS_DENOMINATOR || payoutWeight.effectiveWeight == 0
-                || payoutWeight.effectiveWeight > BPS_DENOMINATOR
+                || payoutWeight.identityKey != bytes32(0) || payoutWeight.baseWeight != BPS_DENOMINATOR
+                || payoutWeight.effectiveWeight == 0 || payoutWeight.effectiveWeight > BPS_DENOMINATOR
         ) {
             revert InvalidProof();
         }

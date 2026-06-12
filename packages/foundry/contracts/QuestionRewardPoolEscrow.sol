@@ -736,10 +736,7 @@ contract QuestionRewardPoolEscrow is
         require(!_isIdentityBannedForRound(rewardPool.contentId, roundId, identityKey), "Identity banned");
         require(!_isCommitVoterBannedForRound(rewardPool.contentId, roundId, commitKey), "Identity banned");
         require(!_isExcludedClaimant(rewardPool, identityKey, rewardRecipient), "Excluded voter");
-        require(
-            _wasQuestionBountyEligibleAtQualification(rewardPoolId, roundId, commitKey),
-            "Not bounty eligible"
-        );
+        require(_wasQuestionBountyEligibleAtQualification(rewardPoolId, roundId, commitKey), "Not bounty eligible");
         require(!rewardClaimed[rewardPoolId][roundId][commitKey], "Already claimed");
 
         (bool revealed, address frontend) = _timelyRevealedCommitFrontend(
@@ -1469,11 +1466,11 @@ contract QuestionRewardPoolEscrow is
         );
     }
 
-    function _wasQuestionBountyEligibleAtQualification(
-        uint256 rewardPoolId,
-        uint256 roundId,
-        bytes32 commitKey
-    ) internal view returns (bool) {
+    function _wasQuestionBountyEligibleAtQualification(uint256 rewardPoolId, uint256 roundId, bytes32 commitKey)
+        internal
+        view
+        returns (bool)
+    {
         RoundSnapshot storage snapshot = roundSnapshots[rewardPoolId][roundId];
         return qualifiedQuestionRewardClaimants[rewardPoolId][roundId][snapshot.clusterSnapshotDigest][commitKey];
     }
