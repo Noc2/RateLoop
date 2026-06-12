@@ -4,6 +4,7 @@ import {
   ensureContractsArtifacts,
   startPonder,
 } from "./start.mjs";
+import { schemaFromProtocolDeploymentKey } from "./databaseSchema.mjs";
 
 describe("Ponder production launcher", () => {
   afterEach(() => {
@@ -99,6 +100,49 @@ describe("Ponder production launcher", () => {
         },
         stdio: "inherit",
       },
+    );
+  });
+
+  test("starts Ponder with a protocol deployment schema when artifacts provide one", () => {
+    class FakeChild extends EventEmitter {}
+
+    const child = new FakeChild();
+    const deploymentKey =
+      "4801:0x1000000000000000000000000000000000000001:0x1000000000000000000000000000000000000002";
+    const ensureContractsArtifactsImpl = vi.fn();
+    const resolveProtocolDeploymentKeyImpl = vi.fn(() => deploymentKey);
+    const spawnImpl = vi.fn(() => child);
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const schema = schemaFromProtocolDeploymentKey(deploymentKey);
+
+    expect(
+      startPonder({
+        argv: ["--port", "42069"],
+        env: { PONDER_NETWORK: "worldchainSepolia" },
+        spawnImpl,
+        ensureContractsArtifactsImpl,
+        resolveProtocolDeploymentKeyImpl,
+      }),
+    ).toBe(child);
+
+    expect(ensureContractsArtifactsImpl).toHaveBeenCalled();
+    expect(resolveProtocolDeploymentKeyImpl).toHaveBeenCalledWith({
+      env: { PONDER_NETWORK: "worldchainSepolia" },
+    });
+    expect(spawnImpl).toHaveBeenCalledWith(
+      "ponder",
+      ["start", "--schema", schema, "--port", "42069"],
+      {
+        env: {
+          PONDER_NETWORK: "worldchainSepolia",
+          RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY: deploymentKey,
+          DATABASE_SCHEMA: schema,
+        },
+        stdio: "inherit",
+      },
+    );
+    expect(warnSpy).toHaveBeenCalledWith(
+      `[ponder:start] Using protocol deployment-scoped Ponder schema ${schema}.`,
     );
   });
 });

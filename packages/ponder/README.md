@@ -45,7 +45,7 @@ Within the package directory, additional scripts are available:
 | `PONDER_CLUSTER_PAYOUT_ORACLE_ADDRESS`     | Correlation payout oracle address; optional env fallback until shared deployments are refreshed                            |
 | `PONDER_CONFIDENTIALITY_ESCROW_ADDRESS`    | Confidentiality escrow address; optional env fallback until shared deployments are refreshed                               |
 | `PONDER_CONTENT_REGISTRY_START_BLOCK` etc. | Optional fallback start blocks when the active chain has no shared deployment metadata                                      |
-| `RATELOOP_PONDER_DATABASE_SCHEMA`          | Optional production schema override for Ponder tables; `yarn ponder:start` defaults to a Railway deployment schema on Railway, otherwise a RateLoop-owned network schema |
+| `RATELOOP_PONDER_DATABASE_SCHEMA`          | Optional production schema override for Ponder tables; `yarn ponder:start` defaults to a protocol deployment schema, then a Railway deployment schema, then a RateLoop-owned network schema |
 | `CORS_ORIGIN`                              | Allowed origins (comma-separated; required in production)                                                                   |
 | `RATE_LIMIT_TRUSTED_IP_HEADERS`            | Comma-separated proxy IP headers to trust for API rate limiting in production                                               |
 | `PAYOUT_ARTIFACT_HTTPS_ALLOWLIST`          | Comma-separated HTTPS URL prefixes Ponder may fetch for keeper-published payout artifacts                                  |
@@ -57,8 +57,10 @@ the Foundry deployment script refreshes `packages/ponder/.env.local` to match th
 `PONDER_NETWORK=hardhat`; live deploys such as
 `yarn deploy --network worldchainSepolia --keystore <name>` set the matching live network.
 
-In production, `yarn ponder:start` launches Ponder with an explicit Postgres schema. On Railway, the
-launcher uses `RAILWAY_DEPLOYMENT_ID` to derive a deployment-scoped schema, matching Ponder's
+In production, `yarn ponder:start` launches Ponder with an explicit Postgres schema. The launcher first
+derives a protocol deployment key from the active chain's `ContentRegistry` and `FeedbackRegistry`
+addresses, so a contract redeploy automatically indexes into a fresh schema even if content IDs restart.
+If that key is unavailable, Railway deployments fall back to `RAILWAY_DEPLOYMENT_ID`, matching Ponder's
 zero-downtime deployment model. Outside Railway, if `DATABASE_SCHEMA` is unset or still set to the
 generic legacy `ponder` value, the launcher uses network-specific defaults such as
 `rateloop_ponder_worldchain_sepolia`. To force a specific schema, set
@@ -120,8 +122,8 @@ Routes `/health` and `/status` are reserved by Ponder.
 
 **Production schema collision:** If Railway logs `Schema '<name>' was previously used by a different
 Ponder app`, redeploy with this package's `yarn ponder:start` command so it can choose a
-Railway deployment-scoped schema from `RAILWAY_DEPLOYMENT_ID`. For non-Railway deployments, set
-`RATELOOP_PONDER_DATABASE_SCHEMA` to a fresh value such as `rateloop_ponder_worldchain_sepolia_v2`.
+protocol deployment-scoped schema. For non-Railway deployments without shared deployment artifacts, set
+`RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY` or `RATELOOP_PONDER_DATABASE_SCHEMA` to a fresh value.
 Only drop the old schema if you are certain it contains no data you need.
 
 **PGlite corruption or unrecoverable local state:** If Ponder still crashes or behaves unexpectedly after the retry, clear the local state manually:

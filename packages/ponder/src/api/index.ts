@@ -13,6 +13,7 @@ import { registerDataRoutes } from "./routes/data-routes.js";
 import { registerDiscoveryRoutes } from "./routes/discovery-routes.js";
 import { registerKeeperRoutes } from "./routes/keeper-routes.js";
 import { registerLeaderboardRoutes } from "./routes/leaderboard-routes.js";
+import { resolvePonderProtocolDeploymentMetadata } from "../protocol-deployment.js";
 
 const app = new Hono();
 
@@ -118,6 +119,15 @@ app.use(
 );
 
 // Ponder provides /health and /status natively — no custom health check needed.
+app.get("/deployment", (c) => {
+  const metadata = resolvePonderProtocolDeploymentMetadata();
+  if (!metadata) {
+    return c.json({ configured: false, error: "Protocol deployment is not configured" }, 503);
+  }
+
+  return c.json(metadata);
+});
+
 registerContentRoutes(app);
 registerCorrelationRoutes(app);
 registerDiscoveryRoutes(app);

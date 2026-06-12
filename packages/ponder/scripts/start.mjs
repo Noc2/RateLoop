@@ -1,18 +1,38 @@
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
+import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { pathToFileURL, fileURLToPath } from "node:url";
-import { buildPonderStartArgs } from "./databaseSchema.mjs";
+import { buildPonderStartArgs, buildProtocolDeploymentKey } from "./databaseSchema.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, "../../..");
 const contractsRoot = resolve(repoRoot, "packages/contracts");
+const require = createRequire(import.meta.url);
 export const requiredContractsArtifacts = [
   resolve(contractsRoot, "dist/esm/abis/index.js"),
   resolve(contractsRoot, "dist/esm/deployedContracts.js"),
   resolve(contractsRoot, "dist/esm/deployments.js"),
   resolve(contractsRoot, "dist/esm/protocol.js"),
 ];
+const PONDER_NETWORK_CHAIN_IDS = {
+  hardhat: 31337,
+  worldchainSepolia: 4801,
+  worldchain: 480,
+};
+
+function readEnv(env, key) {
+  const value = env[key]?.trim();
+  return value ? value : undefined;
+}
+
+function resolveChainId(env) {
+  const explicitChainId = Number.parseInt(readEnv(env, "PONDER_CHAIN_ID") ?? "", 10);
+  if (Number.isSafeInteger(explicitChainId) && explicitChainId > 0) return explicitChainId;
+
+  const ponderNetwork = readEnv(env, "PONDER_NETWORK");
+  return PONDER_NETWORK_CHAIN_IDS[ponderNetwork];
+}
 
 export function contractsArtifactsExist({
   exists = existsSync,
@@ -50,15 +70,59 @@ export function ensureContractsArtifacts({
   return true;
 }
 
+export function resolveProtocolDeploymentKeyFromArtifacts({
+  env = process.env,
+  requireImpl = require,
+} = {}) {
+  const chainId = resolveChainId(env);
+  if (!chainId) return undefined;
+
+  let deployments;
+  try {
+    deployments = requireImpl("@rateloop/contracts/deployments");
+  } catch {
+    return undefined;
+  }
+
+  const getSharedDeploymentAddress = deployments.getSharedDeploymentAddress;
+  if (typeof getSharedDeploymentAddress !== "function") return undefined;
+
+  const contentRegistryAddress = getSharedDeploymentAddress(chainId, "ContentRegistry");
+  const feedbackRegistryAddress = getSharedDeploymentAddress(chainId, "FeedbackRegistry");
+  if (!contentRegistryAddress || !feedbackRegistryAddress) return undefined;
+
+  return buildProtocolDeploymentKey({
+    chainId,
+    contentRegistryAddress,
+    feedbackRegistryAddress,
+  });
+}
+
+function withProtocolDeploymentKey(env, resolveProtocolDeploymentKeyImpl) {
+  if (readEnv(env, "RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY") || readEnv(env, "RATELOOP_PROTOCOL_DEPLOYMENT_KEY")) {
+    return env;
+  }
+
+  const deploymentKey = resolveProtocolDeploymentKeyImpl({ env });
+  if (!deploymentKey) return env;
+
+  return {
+    ...env,
+    RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY: deploymentKey,
+  };
+}
+
 export function startPonder({
   argv = process.argv.slice(2),
   env = process.env,
   spawnImpl = spawn,
   ensureContractsArtifactsImpl = ensureContractsArtifacts,
+  resolveProtocolDeploymentKeyImpl = resolveProtocolDeploymentKeyFromArtifacts,
 } = {}) {
   ensureContractsArtifactsImpl();
 
-  const { args, env: childEnv, schemaInfo } = buildPonderStartArgs(argv, env);
+  const launcherEnv = withProtocolDeploymentKey(env, resolveProtocolDeploymentKeyImpl);
+  const { args, env: childEnv, schemaInfo } = buildPonderStartArgs(argv, launcherEnv);
 
   if (schemaInfo?.ignoredLegacyDatabaseSchema) {
     console.warn(
@@ -68,6 +132,10 @@ export function startPonder({
   } else if (schemaInfo?.source === "RAILWAY_DEPLOYMENT_ID") {
     console.warn(
       `[ponder:start] Using Railway deployment-scoped Ponder schema ${schemaInfo.schema}.`,
+    );
+  } else if (schemaInfo?.source === "RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY") {
+    console.warn(
+      `[ponder:start] Using protocol deployment-scoped Ponder schema ${schemaInfo.schema}.`,
     );
   } else if (schemaInfo?.source === "default") {
     console.warn(
