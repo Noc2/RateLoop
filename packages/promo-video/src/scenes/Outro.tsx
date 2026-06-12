@@ -16,7 +16,6 @@ const CHIPS = [
 export const Outro = () => {
   const headline = useFadeInUp(22);
   const chips = useFadeInUp(70);
-  const url = useFadeInUp(110);
 
   return (
     <AbsoluteFill style={{ alignItems: "center", justifyContent: "center" }}>
@@ -25,7 +24,7 @@ export const Outro = () => {
         <div style={{ display: "flex", alignItems: "center", gap: 28 }}>
           <LogoLoop size={120} startFrame={0} segmentStagger={2} segmentDraw={10} spinDegPerFrame={0.25} idPrefix="outro" />
           <span style={{ fontFamily: headingFont, fontWeight: 700, fontSize: 72, color: colors.warmWhite }}>
-            RateLoop
+            RateLoop<GradientText>.ai</GradientText>
           </span>
         </div>
         <h2
@@ -40,7 +39,7 @@ export const Outro = () => {
             textAlign: "center",
           }}
         >
-          Level Up Your <GradientText>Agent</GradientText>.
+          Level Up Your <GradientText>Agent</GradientText>
         </h2>
         <div
           style={{
@@ -69,18 +68,6 @@ export const Outro = () => {
               {chip}
             </span>
           ))}
-        </div>
-        <div
-          style={{
-            ...url,
-            fontFamily: headingFont,
-            fontWeight: 700,
-            fontSize: 40,
-            letterSpacing: 1,
-            color: colors.warmWhite,
-          }}
-        >
-          rateloop<GradientText>.ai</GradientText>
         </div>
       </div>
     </AbsoluteFill>
