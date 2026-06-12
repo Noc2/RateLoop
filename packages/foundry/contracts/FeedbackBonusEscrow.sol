@@ -734,7 +734,11 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
         if (identityKey == bytes32(0)) return false;
         address snapshot = pool.raterRegistrySnapshot;
         if (_isIdentityBannedAt(snapshot, identityKey)) return true;
-        return _isIdentityBannedAt(address(raterRegistry), identityKey);
+        address roundSnapshot = votingEngine.roundRaterRegistrySnapshot(pool.contentId, pool.roundId);
+        if (roundSnapshot != snapshot && _isIdentityBannedAt(roundSnapshot, identityKey)) return true;
+        address configured = address(raterRegistry);
+        if (configured == snapshot || configured == roundSnapshot) return false;
+        return _isIdentityBannedAt(configured, identityKey);
     }
 
     function _isIdentityBannedAt(address registryAddress, bytes32 identityKey) private view returns (bool) {

@@ -110,6 +110,10 @@ contract FeedbackRaterRegistryStatusMock {
     function hasActiveHumanCredential(address) external pure returns (bool) {
         return false;
     }
+
+    function getHumanCredential(address) external pure returns (RaterRegistry.HumanCredential memory credential) {
+        return credential;
+    }
 }
 
 contract FeedbackBonusEscrowTest is VotingTestBase {
@@ -565,6 +569,32 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         (,,,,,,,,,, address snapshotRegistry,,,,,) = feedbackBonusEscrow.feedbackBonusPools(poolId);
         assertTrue(snapshotRegistry != address(replacementRegistry));
         assertTrue(replacementRegistry.isIdentityKeyBanned(awardIdentityKey));
+
+        vm.prank(funder);
+        vm.expectRevert("Identity banned");
+        feedbackBonusEscrow.awardFeedbackBonus(poolId, voter1, feedbackHash, 10e6);
+    }
+
+    function testAwardRejectsIdentityBannedInRoundRegistrySnapshotAfterProtocolRotation() public {
+        uint256 contentId = _submitQuestion("round-snapshot-feedback-ban");
+        uint256 poolId = _createFeedbackBonusPool(contentId);
+
+        FeedbackRaterRegistryStatusMock replacementRegistry = new FeedbackRaterRegistryStatusMock();
+        vm.prank(owner);
+        protocolConfig.setRaterRegistry(address(replacementRegistry));
+
+        (uint256 settledRoundId, bytes32[] memory commitKeys) =
+            _settleRoundWithPublishedFeedback(_threeVoters(), contentId, _directions(true, true, false), address(0));
+
+        assertEq(votingEngine.roundRaterRegistrySnapshot(contentId, settledRoundId), address(replacementRegistry));
+        assertEq(address(feedbackBonusEscrow.raterRegistry()), address(raterRegistry));
+        (,,,,,,,,,, address poolSnapshotRegistry,,,,,) = feedbackBonusEscrow.feedbackBonusPools(poolId);
+        assertEq(poolSnapshotRegistry, address(raterRegistry));
+
+        (bytes32 awardIdentityKey,,,,,) = votingEngine.commitIdentityState(contentId, settledRoundId, commitKeys[0]);
+        assertTrue(awardIdentityKey != bytes32(0));
+        replacementRegistry.setBanned(awardIdentityKey, true);
+        bytes32 feedbackHash = _feedbackHash(contentId, settledRoundId, voter1);
 
         vm.prank(funder);
         vm.expectRevert("Identity banned");
