@@ -34,14 +34,14 @@
 
 .secondary {
   color: var(--color-base-content);
-  background: var(--rateloop-control-idle);
-  border-color: transparent;
-  box-shadow: none;
+  background: var(--rateloop-secondary-button-bg);
+  border-color: var(--rateloop-secondary-button-border);
+  box-shadow: var(--rateloop-secondary-button-shadow);
 }
 
 .secondary:hover {
   color: var(--color-base-content);
-  background: var(--rateloop-control-idle-hover);
-  border-color: transparent;
-  box-shadow: none;
+  background: var(--rateloop-secondary-button-bg-hover);
+  border-color: var(--rateloop-secondary-button-border-hover);
+  box-shadow: var(--rateloop-secondary-button-shadow-hover);
 }

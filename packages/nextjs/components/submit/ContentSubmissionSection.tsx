@@ -13,7 +13,13 @@ import { useQuery } from "@tanstack/react-query";
 import { decodeEventLog, isAddress, toHex } from "viem";
 import { useAccount, useConfig, useReadContract } from "wagmi";
 import { getPublicClient, readContract, waitForTransactionReceipt, writeContract } from "wagmi/actions";
-import { ChevronDownIcon, LockClosedIcon, MagnifyingGlassIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import {
+  ChevronDownIcon,
+  ChevronLeftIcon,
+  LockClosedIcon,
+  MagnifyingGlassIcon,
+  XMarkIcon,
+} from "@heroicons/react/24/outline";
 import { ContentEmbed } from "~~/components/content/ContentEmbed";
 import { BountyFundingWarning } from "~~/components/shared/BountyFundingWarning";
 import { GasBalanceWarning, shouldShowGasWarningTransactionCostsLink } from "~~/components/shared/GasBalanceWarning";
@@ -4029,8 +4035,9 @@ export function ContentSubmissionSection() {
           setSubmissionStep("question");
           setBountyStepAttempted(false);
         }}
-        className="btn btn-ghost w-full sm:w-auto"
+        className="btn btn-ghost w-full gap-2 sm:w-auto"
       >
+        <ChevronLeftIcon className="h-4 w-4" />
         Back
       </button>
       <GradientActionButton onClick={handleGoToFeedbackBonusStep} className="w-full sm:flex-1" disabled={isSubmitting}>
@@ -4260,8 +4267,9 @@ export function ContentSubmissionSection() {
           setSubmissionStep("bounty");
           setFeedbackBonusStepAttempted(false);
         }}
-        className="btn btn-ghost w-full sm:w-auto"
+        className="btn btn-ghost w-full gap-2 sm:w-auto"
       >
+        <ChevronLeftIcon className="h-4 w-4" />
         Back
       </button>
       <GradientActionButton
@@ -4697,7 +4705,8 @@ export function ContentSubmissionSection() {
                   <BountyFundingWarning title={bountyFundingWarning.title} message={bountyFundingWarning.message} />
                 ) : null}
                 {activeQuestionIndex > 0 ? (
-                  <button type="button" onClick={handleGoToPreviousQuestion} className="btn btn-ghost w-full">
+                  <button type="button" onClick={handleGoToPreviousQuestion} className="btn btn-ghost w-full gap-2">
+                    <ChevronLeftIcon className="h-4 w-4" />
                     Back to Q{activeQuestionIndex}
                   </button>
                 ) : null}

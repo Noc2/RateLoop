@@ -95,6 +95,12 @@
   --rateloop-control-idle-hover: rgb(245 245 245 / 0.18);
   --rateloop-control-idle-muted: rgb(245 245 245 / 0.075);
   --rateloop-control-idle-muted-hover: rgb(245 245 245 / 0.13);
+  --rateloop-secondary-button-bg: rgb(245 245 245 / 0.18);
+  --rateloop-secondary-button-bg-hover: rgb(245 245 245 / 0.24);
+  --rateloop-secondary-button-border: transparent;
+  --rateloop-secondary-button-border-hover: transparent;
+  --rateloop-secondary-button-shadow: none;
+  --rateloop-secondary-button-shadow-hover: none;
   --rateloop-ember-rgb: 245 245 245;
   --rateloop-ember-hover-rgb: 212 212 212;
   --rateloop-ember-deep-rgb: 115 115 115;
@@ -695,24 +701,50 @@ body {
   background: rgb(245 245 245 / 0.04);
 }
 
-.btn.btn-outline {
+.btn.btn-ghost:not(.btn-circle):not(.btn-square):not([aria-label]) {
   color: var(--color-base-content);
-  background: var(--rateloop-control-idle);
+  background: var(--rateloop-secondary-button-bg);
+  border-color: var(--rateloop-secondary-button-border);
+  box-shadow: var(--rateloop-secondary-button-shadow);
+}
+
+.btn.btn-ghost:not(.btn-circle):not(.btn-square):not([aria-label]):hover:not(:disabled):not(.btn-disabled) {
+  color: var(--color-base-content);
+  background: var(--rateloop-secondary-button-bg-hover);
+  border-color: var(--rateloop-secondary-button-border-hover);
+  box-shadow: var(--rateloop-secondary-button-shadow-hover);
+}
+
+.btn.btn-ghost:not(.btn-circle):not(.btn-square):not([aria-label]):disabled,
+.btn.btn-ghost:not(.btn-circle):not(.btn-square):not([aria-label]).btn-disabled {
+  color: rgb(245 245 245 / 0.36);
+  background: rgb(245 245 245 / 0.055);
   border-color: transparent;
   box-shadow: none;
 }
 
-.btn.btn-outline:hover {
+.btn.btn-outline,
+.btn.btn-secondary:not(.btn-circle):not(.btn-square) {
   color: var(--color-base-content);
-  background: var(--rateloop-control-idle-hover);
-  border-color: transparent;
-  box-shadow: none;
+  background: var(--rateloop-secondary-button-bg);
+  border-color: var(--rateloop-secondary-button-border);
+  box-shadow: var(--rateloop-secondary-button-shadow);
+}
+
+.btn.btn-outline:hover:not(:disabled):not(.btn-disabled),
+.btn.btn-secondary:not(.btn-circle):not(.btn-square):hover:not(:disabled):not(.btn-disabled) {
+  color: var(--color-base-content);
+  background: var(--rateloop-secondary-button-bg-hover);
+  border-color: var(--rateloop-secondary-button-border-hover);
+  box-shadow: var(--rateloop-secondary-button-shadow-hover);
 }
 
 .btn.btn-outline:disabled,
-.btn.btn-outline.btn-disabled {
+.btn.btn-outline.btn-disabled,
+.btn.btn-secondary:not(.btn-circle):not(.btn-square):disabled,
+.btn.btn-secondary:not(.btn-circle):not(.btn-square).btn-disabled {
   color: rgb(245 245 245 / 0.36);
-  background: var(--rateloop-control-idle-muted);
+  background: rgb(245 245 245 / 0.055);
   border-color: transparent;
   box-shadow: none;
 }
