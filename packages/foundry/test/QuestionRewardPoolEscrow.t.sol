@@ -6730,7 +6730,8 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
                 revealedCount,
                 uint64(uint256(revealedCount) * STAKE),
                 uint48(block.timestamp),
-                uint48(block.timestamp)
+                uint48(block.timestamp),
+                uint8(0)
             )
         );
         vm.mockCall(
