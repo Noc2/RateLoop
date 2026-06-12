@@ -32,7 +32,7 @@ function restoreEnv(name: keyof NodeJS.ProcessEnv, value: string | undefined) {
   }
 }
 
-function uploadRequest(attachmentId: string) {
+function uploadRequest(attachmentId: string, payloadOverrides: Record<string, unknown> = {}) {
   const formData = new FormData();
   const file = new File([ONE_PIXEL_PNG], "mockup.png", { type: "image/png" });
   formData.set("file", file);
@@ -43,6 +43,7 @@ function uploadRequest(attachmentId: string) {
       attachmentId,
       filename: "mockup.png",
       mimeType: "image/png",
+      ...payloadOverrides,
       sha256: createHash("sha256").update(ONE_PIXEL_PNG).digest("hex"),
       sizeBytes: ONE_PIXEL_PNG.length,
     }),
@@ -149,6 +150,27 @@ test("duplicate image attachment ids do not consume upload quota", async () => {
         { imageCount: 1, subjectId: "upload-agent", subjectKind: "agent" },
         { imageCount: 1, subjectId: "0x00000000000000000000000000000000000000aa", subjectKind: "wallet" },
       ],
+    );
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("image upload reports pending gated attachment migration without leaking SQL", async () => {
+  const tempDir = await mkdtemp(path.join(tmpdir(), "rateloop-upload-route-"));
+
+  try {
+    env.RATELOOP_LOCAL_IMAGE_ATTACHMENT_DIR = tempDir;
+    await dbClient.execute("ALTER TABLE question_image_attachments DROP COLUMN requires_gated_access");
+
+    const response = await POST(uploadRequest("att_missinggatedcol01", { requiresGatedAccess: true }));
+    const body = (await response.json()) as { error?: string };
+
+    assert.equal(response.status, 503);
+    assert.match(body.error ?? "", /0006_pending_gated_attachments\.sql/);
+    assert.doesNotMatch(
+      body.error ?? "",
+      /Failed query|insert into|mockup\.png|0x00000000000000000000000000000000000000aa/i,
     );
   } finally {
     await rm(tempDir, { recursive: true, force: true });

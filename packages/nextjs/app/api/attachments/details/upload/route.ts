@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createQuestionDetailsFromText } from "~~/lib/attachments/questionDetails";
+import { PendingGatedAttachmentsMigrationError, isDatabaseQueryError } from "~~/lib/attachments/uploadErrors";
 import {
   UPLOAD_QUESTION_DETAILS_ACTION,
   buildQuestionDetailsUploadChallengeMessage,
@@ -22,6 +23,22 @@ const RATE_LIMIT = { limit: 20, windowMs: 60_000 };
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+function getDetailsUploadErrorResponse(error: unknown) {
+  if (error instanceof PendingGatedAttachmentsMigrationError) {
+    return { message: error.message, status: error.status };
+  }
+  if (isDatabaseQueryError(error)) {
+    console.error("[details-upload] Database query failed", error);
+    return { message: "Details upload failed.", status: 500 };
+  }
+
+  const message = error instanceof Error ? error.message : "Details upload failed.";
+  return {
+    message,
+    status: message.includes("too large") ? 413 : 400,
+  };
+}
 
 function getBearerToken(request: Request) {
   return request.headers.get("authorization")?.trim() ? request.headers.get("authorization") : null;
@@ -130,9 +147,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(result, { status: result.status === "approved" ? 200 : 400 });
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Details upload failed." },
-      { status: error instanceof Error && error.message.includes("too large") ? 413 : 400 },
-    );
+    const response = getDetailsUploadErrorResponse(error);
+    return NextResponse.json({ error: response.message }, { status: response.status });
   }
 }

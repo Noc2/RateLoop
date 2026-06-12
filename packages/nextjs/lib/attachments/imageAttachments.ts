@@ -9,6 +9,7 @@ import {
   parseAttachmentIdFromUploadedImageUrl,
   parseUploadedImageAttachmentUrlDigest,
 } from "~~/lib/attachments/imageAttachmentUrls";
+import { assertGatedAttachmentSchemaReady } from "~~/lib/attachments/uploadErrors";
 import { MAX_SUBMISSION_IMAGE_URLS } from "~~/lib/contentMedia";
 import { db, dbPool } from "~~/lib/db";
 import { type QuestionImageAttachment, questionImageAttachments } from "~~/lib/db/schema";
@@ -415,6 +416,8 @@ export async function getImageAttachment(id: string): Promise<QuestionImageAttac
 }
 
 export async function createPendingImageAttachment(params: CreatePendingImageAttachmentParams) {
+  await assertGatedAttachmentSchemaReady("question_image_attachments");
+
   const createdAt = nowDate();
   const [created] = await db
     .insert(questionImageAttachments)

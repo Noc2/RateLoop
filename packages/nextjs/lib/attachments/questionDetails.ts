@@ -6,6 +6,7 @@ import {
   getQuestionDetailsTextSizeBytes,
   normalizeQuestionDetailsText,
 } from "~~/lib/attachments/questionDetails.shared";
+import { assertGatedAttachmentSchemaReady } from "~~/lib/attachments/uploadErrors";
 import { db, dbPool } from "~~/lib/db";
 import { type QuestionDetails, questionDetails } from "~~/lib/db/schema";
 import { isValidWalletAddress, normalizeWalletAddress } from "~~/lib/watchlist/contentWatch";
@@ -385,6 +386,7 @@ export async function createQuestionDetailsFromText(params: CreateQuestionDetail
   if (!isQuestionDetailsId(params.detailsId)) {
     throw new Error("Invalid details id.");
   }
+  await assertGatedAttachmentSchemaReady("question_details");
 
   const createdAt = nowDate();
   const baseValues = {

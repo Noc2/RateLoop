@@ -12,6 +12,7 @@ import {
   processCompletedLocalImageUpload,
   reserveImageUploadDailyQuotas,
 } from "~~/lib/attachments/imageAttachments";
+import { PendingGatedAttachmentsMigrationError, isDatabaseQueryError } from "~~/lib/attachments/uploadErrors";
 import {
   UPLOAD_IMAGE_ACTION,
   buildImageUploadChallengeMessage,
@@ -182,7 +183,18 @@ async function reserveAuthorizedUploadQuota(authorization: Awaited<ReturnType<ty
 }
 
 function getUploadErrorStatus(error: unknown) {
+  if (error instanceof PendingGatedAttachmentsMigrationError) return error.status;
+  if (isDatabaseQueryError(error)) return 500;
   return error instanceof ImageUploadQuotaError ? error.status : 400;
+}
+
+function getUploadErrorMessage(error: unknown) {
+  if (error instanceof PendingGatedAttachmentsMigrationError) return error.message;
+  if (isDatabaseQueryError(error)) {
+    console.error("[image-upload] Database query failed", error);
+    return "Upload failed.";
+  }
+  return error instanceof Error ? error.message : "Upload failed.";
 }
 
 async function handleLocalUpload(request: NextRequest): Promise<NextResponse> {
@@ -242,10 +254,7 @@ async function handleLocalUpload(request: NextRequest): Promise<NextResponse> {
       status: attachment?.status ?? "processing",
     });
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Upload failed." },
-      { status: getUploadErrorStatus(error) },
-    );
+    return NextResponse.json({ error: getUploadErrorMessage(error) }, { status: getUploadErrorStatus(error) });
   }
 }
 
@@ -343,9 +352,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       status: "uploading",
     });
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Upload failed." },
-      { status: getUploadErrorStatus(error) },
-    );
+    return NextResponse.json({ error: getUploadErrorMessage(error) }, { status: getUploadErrorStatus(error) });
   }
 }
