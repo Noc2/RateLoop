@@ -193,6 +193,7 @@ contract ConfidentialityEscrow is
         onlyRole(CONFIG_ROLE)
         whenNotPaused
     {
+        if (msg.sender != address(registry)) revert("Invalid registry");
         if (configured[contentId]) revert("Already configured");
         if (contentId == 0) revert("Invalid content");
         if (config.bondAsset != BOND_ASSET_LREP && config.bondAsset != BOND_ASSET_USDC) revert("Invalid asset");

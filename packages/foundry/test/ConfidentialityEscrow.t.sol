@@ -214,6 +214,17 @@ contract ConfidentialityEscrowTest is VotingTestBase {
         assertEq(snapshotEscrow, address(confidentialityEscrow));
     }
 
+    function testConfigureOnlyAcceptsRegistryCaller() public {
+        uint8 lrepAsset = confidentialityEscrow.BOND_ASSET_LREP();
+
+        vm.prank(owner);
+        vm.expectRevert("Invalid registry");
+        confidentialityEscrow.configure(
+            1000,
+            IConfidentialityEscrow.ConfidentialityConfig({ gated: true, bondAsset: lrepAsset, bondAmount: 0, flags: 0 })
+        );
+    }
+
     function testConfigureRejectsUnsupportedFlags() public {
         uint8 lrepAsset = confidentialityEscrow.BOND_ASSET_LREP();
 
@@ -343,10 +354,13 @@ contract ConfidentialityEscrowTest is VotingTestBase {
             )
         );
         uint256 contentId = 999;
+        uint8 lrepAsset = shortEscrow.BOND_ASSET_LREP();
+        shortEscrow.grantRole(shortEscrow.CONFIG_ROLE(), address(registry));
+        vm.prank(address(registry));
         shortEscrow.configure(
             contentId,
             IConfidentialityEscrow.ConfidentialityConfig({
-                gated: true, bondAsset: shortEscrow.BOND_ASSET_LREP(), bondAmount: uint64(1e6), flags: 0
+                gated: true, bondAsset: lrepAsset, bondAmount: uint64(1e6), flags: 0
             })
         );
         IRaterIdentityRegistry.ResolvedRater memory resolved = raterRegistry.resolveRater(voter1);
