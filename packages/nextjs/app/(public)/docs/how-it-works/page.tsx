@@ -83,7 +83,8 @@ const HowItWorks: NextPage = () => {
         compares every revealed staked report with the stake-weighted mean score. A report&apos;s score spread is its
         own score minus that mean. Stakes settle against that spread: below-mean reports forfeit, above-mean reports
         split the forfeited pool. Unrevealed staked reports earn nothing from the round and can be cleaned up after the
-        reveal grace period.
+        reveal grace period. The benefit is that stake rewards follow relative predictive quality rather than raw
+        popularity, giving raters a reason to report independently instead of copying visible momentum.
       </p>
       <FormulaCard
         title="RBTS Score-Spread Settlement"
@@ -175,8 +176,10 @@ const HowItWorks: NextPage = () => {
         <Link href="/docs/tech-stack#bounties" className="link link-primary">
           Surprise-Weighted Bounties
         </Link>{" "}
-        page. An eligible commit-attributed frontend receives the default 3% frontend fee before rater payouts; if that
-        frontend is not payable, the share stays with the rater claim.
+        page. This weighting favors reports that are useful against recent base rates and independent of correlated
+        clusters, instead of paying every revealed answer identically when richer snapshot data is available. An
+        eligible commit-attributed frontend receives the default 3% frontend fee before rater payouts; if that frontend
+        is not payable, the share stays with the rater claim.
       </p>
       <FormulaCard
         title="Bounty Claim"

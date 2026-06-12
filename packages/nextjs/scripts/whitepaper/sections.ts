@@ -398,7 +398,7 @@ export const SECTIONS: Section[] = [
           },
           {
             type: "paragraph",
-            text: `RBTS settlement stores each revealed report's scoreBps, computes the stake-weighted mean score, and compares every staked report with that mean. Positive spreads recover full stake plus a pro-rata share of the 96% voter share of forfeited negative-spread stake; negative spreads forfeit, with no revealed-loser rebate, only after ${protocolDocFacts.scoreSpreadForfeitMinRevealsLabel} score-eligible voters reveal. Per-report score-spread forfeiture is capped at ${protocolDocFacts.maxScoreSpreadForfeitPercentLabel} of stake. Tier-1 raters carry full blind-epoch weight and later raters carry ${protocolDocFacts.openPhaseWeightLabel} weight, so the same anti-herding logic shapes settlement. USDC bounty and launch LREP claims add a second step: a finalized correlation payout snapshot proposed by a registered frontend operator supplies effective claim weights before funds move, without changing the already-settled result.`,
+            text: `RBTS settlement stores each revealed report's scoreBps, computes the stake-weighted mean score, and compares every staked report with that mean. Positive spreads recover full stake plus a pro-rata share of the 96% voter share of forfeited negative-spread stake; negative spreads forfeit, with no revealed-loser rebate, only after ${protocolDocFacts.scoreSpreadForfeitMinRevealsLabel} score-eligible voters reveal. Per-report score-spread forfeiture is capped at ${protocolDocFacts.maxScoreSpreadForfeitPercentLabel} of stake. The benefit is that stake rewards follow relative predictive quality rather than raw popularity, so raters have a reason to report independently instead of copying visible momentum. Tier-1 raters carry full blind-epoch weight and later raters carry ${protocolDocFacts.openPhaseWeightLabel} weight, so the same anti-herding logic shapes settlement. USDC bounty and launch LREP claims add a second step: a finalized correlation payout snapshot proposed by a registered frontend operator supplies effective claim weights before funds move, without changing the already-settled result.`,
           },
           {
             type: "sub_heading",
@@ -461,7 +461,7 @@ export const SECTIONS: Section[] = [
           },
           {
             type: "paragraph",
-            text: "A_R is the round allocation, w_i is the finalized claim weight, w_i^base is the surprise-weighted base weight from the snapshot, and ind_i is the independence multiplier in basis points from the correlation scorer.",
+            text: "A_R is the round allocation, w_i is the finalized claim weight, w_i^base is the surprise-weighted base weight from the snapshot, and ind_i is the independence multiplier in basis points from the correlation scorer. The benefit is a bounty rule that buys scarce, informative judgment instead of rewarding only participation or raw majority alignment.",
           },
         ],
       },

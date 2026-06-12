@@ -123,6 +123,7 @@ test("whitepaper contents include the current nine sections", () => {
 test("whitepaper includes how-it-works formulas as rendered formula blocks", () => {
   const incentives = SECTIONS.find(section => section.title === "Incentives & Token Flows");
   assert.ok(incentives);
+  const whitepaperText = collectWhitepaperText();
 
   const allFormulaLatex = incentives.subsections
     .flatMap(subsection => subsection.blocks)
@@ -136,6 +137,8 @@ test("whitepaper includes how-it-works formulas as rendered formula blocks", () 
   assert.ok(allFormulaLatex.some(latex => latex.includes(String.raw`\mathrm{credit}_r`)));
   assert.ok(allFormulaLatex.some(latex => latex.includes(String.raw`\mathrm{payout}`)));
   assert.ok(allFormulaLatex.some(latex => latex.includes(String.raw`w_i = w_i^{\mathrm{base}}`)));
+  assert.match(whitepaperText, /stake rewards follow relative predictive quality rather than raw popularity/i);
+  assert.match(whitepaperText, /buys scarce, informative judgment/i);
 });
 
 test("whitepaper executive summary centers the agent-first thesis", () => {

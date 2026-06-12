@@ -251,7 +251,8 @@ const TechStackPage: NextPage = () => {
         </a>{" "}
         shows that answers more popular than the crowd expected carry outsized information. Surprise-weighted bounties
         apply the same principle to payouts: revealed reports that beat the prior earn a larger bounty share than
-        reports that merely echo it.
+        reports that merely echo it. The benefit is a payout rule that buys scarce, informative judgment instead of
+        rewarding only participation or raw majority alignment.
       </p>
 
       <h2 id="correlation-epoch-snapshots">Correlation Epoch Snapshots</h2>
