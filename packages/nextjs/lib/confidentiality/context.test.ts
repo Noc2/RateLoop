@@ -239,3 +239,22 @@ test("checks nonzero confidentiality bonds against the escrow gate", async () =>
     error: "Active confidentiality bond required",
   });
 });
+
+test("confidentiality terms challenge message shows the focused terms metadata", () => {
+  const payload = termsPayload();
+  const message = confidentiality.buildConfidentialityTermsChallengeMessage({
+    address: payload.normalizedAddress,
+    expiresAt: new Date("2026-06-12T12:00:00.000Z"),
+    nonce: "nonce-terms",
+    payloadHash: confidentiality.hashConfidentialityTermsPayload(payload),
+    termsDocHash: payload.termsDocHash,
+    termsUri: payload.termsUri,
+    termsVersion: payload.termsVersion,
+  });
+
+  assert.match(message, new RegExp(`Terms URI: ${payload.termsUri}`));
+  assert.match(message, new RegExp(`Terms Version: ${payload.termsVersion}`));
+  assert.match(message, new RegExp(`Terms Hash: ${payload.termsDocHash}`));
+  assert.match(message, new RegExp(confidentiality.CONFIDENTIALITY_TERMS_TEXT.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.doesNotMatch(message, /\/legal\/terms#confidential-context/);
+});

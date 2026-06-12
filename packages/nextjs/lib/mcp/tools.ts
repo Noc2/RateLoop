@@ -116,6 +116,7 @@ import {
   CONFIDENTIALITY_TERMS_CHALLENGE_TITLE,
   CONFIDENTIALITY_TERMS_VERSION,
   buildConfidentialityTermsChallengeMessage,
+  buildConfidentialityTermsMessageLines,
   hasConfidentialityTermsAcceptance,
   hashConfidentialityTermsPayload,
   normalizeConfidentialityTermsInput,
@@ -1652,6 +1653,11 @@ async function acceptConfidentialityTerms(args: JsonObject, agent?: McpAgentAuth
     }
     const challenge = await issueSignedActionChallenge({
       action: CONFIDENTIALITY_TERMS_ACTION,
+      messageLines: buildConfidentialityTermsMessageLines({
+        termsDocHash: payload.termsDocHash,
+        termsUri: payload.termsUri,
+        termsVersion: payload.termsVersion,
+      }),
       payloadHash,
       title: CONFIDENTIALITY_TERMS_CHALLENGE_TITLE,
       walletAddress: payload.normalizedAddress,
@@ -1686,6 +1692,9 @@ async function acceptConfidentialityTerms(args: JsonObject, agent?: McpAgentAuth
             expiresAt,
             nonce: challengeNonce,
             payloadHash,
+            termsDocHash: payload.termsDocHash,
+            termsUri: payload.termsUri,
+            termsVersion: payload.termsVersion,
           }),
         challengeId,
         payloadHash,

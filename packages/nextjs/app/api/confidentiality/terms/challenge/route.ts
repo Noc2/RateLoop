@@ -3,6 +3,7 @@ import { issueSignedActionChallenge } from "~~/lib/auth/signedActions";
 import {
   CONFIDENTIALITY_TERMS_ACTION,
   CONFIDENTIALITY_TERMS_CHALLENGE_TITLE,
+  buildConfidentialityTermsMessageLines,
   hashConfidentialityTermsPayload,
   normalizeConfidentialityTermsInput,
 } from "~~/lib/confidentiality/context";
@@ -26,6 +27,11 @@ export async function POST(request: NextRequest) {
 
     const challenge = await issueSignedActionChallenge({
       action: CONFIDENTIALITY_TERMS_ACTION,
+      messageLines: buildConfidentialityTermsMessageLines({
+        termsDocHash: normalized.payload.termsDocHash,
+        termsUri: normalized.payload.termsUri,
+        termsVersion: normalized.payload.termsVersion,
+      }),
       payloadHash: hashConfidentialityTermsPayload(normalized.payload),
       title: CONFIDENTIALITY_TERMS_CHALLENGE_TITLE,
       walletAddress: normalized.payload.normalizedAddress,

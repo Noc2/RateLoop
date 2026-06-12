@@ -17,6 +17,11 @@ import {
 } from "viem";
 import { buildSignedActionMessage, hashSignedActionPayload } from "~~/lib/auth/signedActions";
 import { GATED_CONTEXT_SIGNED_READ_SESSION_COOKIE_NAME, verifySignedReadSession } from "~~/lib/auth/signedReadSessions";
+import {
+  CONFIDENTIALITY_TERMS_TEXT,
+  CONFIDENTIALITY_TERMS_URI,
+  CONFIDENTIALITY_TERMS_VERSION,
+} from "~~/lib/confidentiality/terms";
 import { db } from "~~/lib/db";
 import {
   confidentialContextAccessLogs,
@@ -29,13 +34,10 @@ import { isValidWalletAddress, normalizeWalletAddress } from "~~/lib/watchlist/c
 
 export const CONFIDENTIALITY_TERMS_ACTION = "confidentiality_terms:accept";
 export const CONFIDENTIALITY_TERMS_CHALLENGE_TITLE = "RateLoop confidential context";
-export const CONFIDENTIALITY_TERMS_VERSION = "2026-06";
-export const CONFIDENTIALITY_TERMS_URI = "/legal/terms#confidential-context";
-export const CONFIDENTIALITY_TERMS_TEXT =
-  "I agree not to record, copy, share, publish, or discuss this confidential RateLoop question context except as needed to rate it on RateLoop.";
 export const CONFIDENTIALITY_TERMS_DOC_HASH = createHash("sha256")
   .update(`${CONFIDENTIALITY_TERMS_VERSION}\n${CONFIDENTIALITY_TERMS_URI}\n${CONFIDENTIALITY_TERMS_TEXT}`)
   .digest("hex");
+export { CONFIDENTIALITY_TERMS_TEXT, CONFIDENTIALITY_TERMS_URI, CONFIDENTIALITY_TERMS_VERSION };
 
 const BYTES32_HEX_PATTERN = /^0x[0-9a-fA-F]{64}$/;
 const CONTENT_ID_PATTERN = /^[0-9]{1,78}$/;
@@ -235,9 +237,25 @@ export function hashConfidentialityTermsPayload(payload: ConfidentialityTermsPay
   ]);
 }
 
+export function buildConfidentialityTermsMessageLines(params: {
+  termsDocHash: string;
+  termsUri: string;
+  termsVersion: string;
+}) {
+  return [
+    `Terms URI: ${params.termsUri}`,
+    `Terms Version: ${params.termsVersion}`,
+    `Terms Hash: ${params.termsDocHash}`,
+    `Promise: ${CONFIDENTIALITY_TERMS_TEXT}`,
+  ];
+}
+
 export function buildConfidentialityTermsChallengeMessage(params: {
   address: `0x${string}`;
   payloadHash: string;
+  termsDocHash: string;
+  termsUri: string;
+  termsVersion: string;
   nonce: string;
   expiresAt: Date;
 }) {
@@ -246,6 +264,11 @@ export function buildConfidentialityTermsChallengeMessage(params: {
     action: CONFIDENTIALITY_TERMS_ACTION,
     address: params.address,
     payloadHash: params.payloadHash,
+    messageLines: buildConfidentialityTermsMessageLines({
+      termsDocHash: params.termsDocHash,
+      termsUri: params.termsUri,
+      termsVersion: params.termsVersion,
+    }),
     nonce: params.nonce,
     expiresAt: params.expiresAt,
   });

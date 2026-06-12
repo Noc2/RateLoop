@@ -24,15 +24,19 @@ export function buildSignedActionMessage(params: {
   action: string;
   address: `0x${string}`;
   payloadHash: string;
+  messageLines?: readonly string[];
   nonce: string;
   expiresAt: Date;
 }): string {
+  const messageLines = params.messageLines?.filter(line => line.trim().length > 0) ?? [];
+
   return [
     params.title,
     "",
     `Action: ${params.action}`,
     `Wallet: ${params.address}`,
     `Payload Hash: ${params.payloadHash}`,
+    ...messageLines,
     `Nonce: ${params.nonce}`,
     `Expires At: ${params.expiresAt.toISOString()}`,
   ].join("\n");
@@ -43,6 +47,7 @@ function createSignedActionChallenge(params: {
   action: string;
   address: `0x${string}`;
   payloadHash: string;
+  messageLines?: readonly string[];
   ttlMs?: number;
 }) {
   // Truncate to whole seconds so signing and verification always serialize the same timestamp.
@@ -55,6 +60,7 @@ function createSignedActionChallenge(params: {
     action: params.action,
     address: params.address,
     payloadHash: params.payloadHash,
+    messageLines: params.messageLines,
     nonce,
     expiresAt,
   });
@@ -74,6 +80,7 @@ export async function issueSignedActionChallenge(params: {
   action: string;
   walletAddress: `0x${string}`;
   payloadHash: string;
+  messageLines?: readonly string[];
   ttlMs?: number;
 }) {
   const challenge = createSignedActionChallenge({
@@ -81,6 +88,7 @@ export async function issueSignedActionChallenge(params: {
     action: params.action,
     address: params.walletAddress,
     payloadHash: params.payloadHash,
+    messageLines: params.messageLines,
     ttlMs: params.ttlMs,
   });
 
