@@ -2,7 +2,7 @@ import { AbsoluteFill } from "remotion";
 import { bodyFont, headingFont, monoFont } from "../fonts";
 import { useFadeInUp } from "../primitives";
 import { colors, radiusCard } from "../theme";
-import { Caption, ChatBubble, ChatPanel, FieldRow, TypeOn } from "../ui";
+import { ChatBubble, ChatPanel, FieldRow, TypeOn } from "../ui";
 import { OrbGlow } from "./Intro";
 
 /** Beat 6 — the agent returns a report the founder can act on. */
@@ -68,7 +68,6 @@ export const Report = () => {
           <TypeOn text="Shipping it." startFrame={218} charsPerFrame={0.8} style={{ fontFamily: bodyFont }} />
         </ChatBubble>
       </ChatPanel>
-      <Caption text="Your agent comes back with judgment, not guesses" startFrame={24} />
     </AbsoluteFill>
   );
 };

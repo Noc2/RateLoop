@@ -14,7 +14,7 @@ export const PROMO_FPS = 30;
 // Beat lengths (frames @30fps): one narrative ask, end to end. ~66s total.
 const HOOK = 180; // 6s   — founder prompts their agent
 const ASK = 240; // 8s    — agent drafts the RateLoop question
-const HANDOFF = 210; // 7s — review + fund via handoff link
+const HANDOFF = 345; // 11.5s — review + fund via handoff link, incl. confidential context
 const RATERS = 435; // 14.5s — blind votes, predictions, feedback, USDC
 const SETTLE = 240; // 8s  — reveal + on-chain settlement
 const REPORT = 360; // 12s — agent delivers the validation report
@@ -35,8 +35,8 @@ type Beat = {
 const starts = [0, HOOK, HOOK + ASK, HOOK + ASK + HANDOFF, HOOK + ASK + HANDOFF + RATERS];
 const BEATS: Beat[] = [
   { start: 0, duration: HOOK, vo: "audio/vo-01-hook.m4a", voDurationInFrames: 167, Scene: Hook, fadeIn: 6 },
-  { start: starts[1], duration: ASK, vo: "audio/vo-02-ask.m4a", voDurationInFrames: 186, Scene: AgentAsk },
-  { start: starts[2], duration: HANDOFF, vo: "audio/vo-03-handoff.m4a", voDurationInFrames: 155, Scene: Handoff },
+  { start: starts[1], duration: ASK, vo: "audio/vo-02-ask.m4a", voDurationInFrames: 216, Scene: AgentAsk },
+  { start: starts[2], duration: HANDOFF, vo: "audio/vo-03-handoff.m4a", voDurationInFrames: 323, Scene: Handoff },
   { start: starts[3], duration: RATERS, vo: "audio/vo-04-raters.m4a", voDurationInFrames: 258, Scene: Raters },
   { start: starts[4], duration: SETTLE, vo: "audio/vo-05-settle.m4a", voDurationInFrames: 117, Scene: Settle },
   {

@@ -57,6 +57,7 @@ export const Chip = ({
         fontFamily: bodyFont,
         fontWeight: 600,
         fontSize: 22,
+        whiteSpace: "nowrap",
         color,
         ...style,
       }}

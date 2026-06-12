@@ -118,12 +118,15 @@ export const Raters = () => {
 
         <div style={{ display: "flex", gap: 48, alignItems: "stretch" }}>
           {/* Blind vote card */}
-          <Card startFrame={84} style={{ width: 640, padding: "30px 38px" }}>
+          <Card startFrame={84} style={{ width: 760, padding: "30px 38px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 20 }}>
               <Chip startFrame={96} color={colors.green}>
-                <CheckDot /> Verified Human · World ID
+                <CheckDot /> Verified · World ID
               </Chip>
               <Chip startFrame={108}>blind vote</Chip>
+              <Chip startFrame={120} color={colors.yellow}>
+                <LockIcon size={16} color={colors.yellow} /> terms signed
+              </Chip>
             </div>
             <div style={{ display: "flex", gap: 22 }}>
               <VoteButton up active={upPick} scale={upPick ? pickSettle : 1} />
@@ -163,11 +166,7 @@ export const Raters = () => {
           </Card>
         </div>
       </div>
-      {frame < 240 ? (
-        <Caption text="Verified humans rate it blind — and earn USDC" startFrame={20} />
-      ) : (
-        <Caption text="Honest votes pay. Copying doesn't." startFrame={252} />
-      )}
+      <Caption text="Honest votes pay. Copying doesn't." startFrame={252} />
     </AbsoluteFill>
   );
 };

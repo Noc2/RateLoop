@@ -2,11 +2,11 @@ import { AbsoluteFill, interpolate, useCurrentFrame } from "remotion";
 import { bodyFont, headingFont, monoFont } from "../fonts";
 import { useFadeInUp } from "../primitives";
 import { colors, orbitGradient, radiusCard } from "../theme";
-import { Card, Caption, CheckIcon, FieldRow } from "../ui";
+import { Card, CheckIcon, FieldRow } from "../ui";
 import { OrbGlow } from "./Intro";
 
-const APPROVE_AT = 92;
-const LIVE_AT = 132;
+const APPROVE_AT = 150;
+const LIVE_AT = 210;
 
 /** Beat 3 — review the handoff link and fund in one click. */
 export const Handoff = () => {
@@ -61,7 +61,12 @@ export const Handoff = () => {
           <div style={{ marginTop: 10 }}>
             <FieldRow label="question" value="Would this landing page convince you?" startFrame={28} />
             <FieldRow label="bounty" value="25 USDC" startFrame={40} valueColor={colors.green} />
-            <FieldRow label="network" value="World Chain" startFrame={52} />
+            <FieldRow
+              label="context"
+              value="confidential · unlocked after terms"
+              startFrame={52}
+              valueColor={colors.yellow}
+            />
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 28, marginTop: 30 }}>
@@ -107,7 +112,6 @@ export const Handoff = () => {
           </div>
         </div>
       </Card>
-      <Caption text="You review and fund in one click" startFrame={20} />
     </AbsoluteFill>
   );
 };

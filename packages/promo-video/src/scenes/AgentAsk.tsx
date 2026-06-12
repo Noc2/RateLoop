@@ -2,7 +2,7 @@ import { AbsoluteFill } from "remotion";
 import { bodyFont, headingFont, monoFont } from "../fonts";
 import { useFadeInUp } from "../primitives";
 import { colors, radiusCard, spectrumGradient } from "../theme";
-import { Card, ChatBubble, ChatPanel, CheckIcon, Chip, Caption, FieldRow, TypeOn } from "../ui";
+import { Card, ChatBubble, ChatPanel, CheckIcon, FieldRow, TypeOn } from "../ui";
 import { OrbGlow } from "./Intro";
 
 const ToolCall = ({ name, startFrame, doneFrame }: { name: string; startFrame: number; doneFrame: number }) => {
@@ -47,7 +47,7 @@ export const AgentAsk = () => {
           <ChatPanel startFrame={4} width={760}>
             <ChatBubble from="agent" startFrame={14} width="92%">
               <TypeOn
-                text="On it. Drafting one focused RateLoop question with a USDC bounty."
+                text="On it — drafting the question."
                 startFrame={20}
                 charsPerFrame={1.6}
                 style={{ fontFamily: bodyFont }}
@@ -98,14 +98,8 @@ export const AgentAsk = () => {
           <FieldRow label="raters" value="25 votes required" startFrame={134} />
           <FieldRow label="audience" value="founders · freelancers" startFrame={148} />
           <FieldRow label="feedback bonus" value="5 USDC for written reasons" startFrame={162} />
-          <div style={{ display: "flex", gap: 12, marginTop: 22 }}>
-            <Chip startFrame={182}>blind round</Chip>
-            <Chip startFrame={192}>crowd prediction</Chip>
-            <Chip startFrame={202}>on-chain settle</Chip>
-          </div>
         </Card>
       </div>
-      <Caption text="Your agent turns it into one focused question" startFrame={26} />
     </AbsoluteFill>
   );
 };
