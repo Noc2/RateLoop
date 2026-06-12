@@ -222,8 +222,10 @@ const CONFIDENTIALITY_BOND_AMOUNT_TOOLTIP =
   "LREP or USDC amount raters must post before private context is served. Use 0 for no bond, or at least 1.";
 const REQUIRED_VOTERS_TOOLTIP =
   "Eligible revealed voters required before the bounty can qualify for payout and the round can settle.";
-const MONEY_FIELD_GRID_CLASS = "grid grid-cols-2 gap-x-3 gap-y-2";
-const MONEY_FIELD_LABEL_CLASS = "label-text flex min-h-5 min-w-0 items-center gap-1.5 text-sm font-medium";
+const MONEY_FIELD_LABEL_ROW_CLASS = "grid grid-cols-2 gap-3";
+const MONEY_FIELD_CONTROL_ROW_CLASS = "mt-1.5 grid grid-cols-2 items-start gap-3";
+const MONEY_FIELD_LABEL_CLASS = "label-text flex h-6 min-w-0 items-center gap-1.5 text-sm font-medium leading-none";
+const MONEY_FIELD_CONTROL_CLASS = "h-12 w-full min-w-0";
 const MIN_CONFIDENTIALITY_BOND_ATOMIC = 1_000_000n;
 const DEFAULT_DRAFT_CONFIDENTIALITY: DraftConfidentiality = {
   bondAmount: "0",
@@ -2308,41 +2310,45 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                         />
                       </p>
                     </div>
-                    <div className={MONEY_FIELD_GRID_CLASS}>
-                      <label htmlFor="agent-ask-confidentiality-bond-asset" className={MONEY_FIELD_LABEL_CLASS}>
-                        Asset
-                      </label>
-                      <div className={MONEY_FIELD_LABEL_CLASS}>
-                        <label htmlFor="agent-ask-confidentiality-bond-amount">Amount</label>
-                        <InfoTooltip
-                          text={CONFIDENTIALITY_BOND_AMOUNT_TOOLTIP}
-                          position="top"
-                          className="text-base-content/45"
+                    <div>
+                      <div className={MONEY_FIELD_LABEL_ROW_CLASS}>
+                        <label htmlFor="agent-ask-confidentiality-bond-asset" className={MONEY_FIELD_LABEL_CLASS}>
+                          Asset
+                        </label>
+                        <div className={MONEY_FIELD_LABEL_CLASS}>
+                          <label htmlFor="agent-ask-confidentiality-bond-amount">Amount</label>
+                          <InfoTooltip
+                            text={CONFIDENTIALITY_BOND_AMOUNT_TOOLTIP}
+                            position="top"
+                            className="text-base-content/45"
+                          />
+                        </div>
+                      </div>
+                      <div className={MONEY_FIELD_CONTROL_ROW_CLASS}>
+                        <select
+                          id="agent-ask-confidentiality-bond-asset"
+                          className={`select select-bordered ${MONEY_FIELD_CONTROL_CLASS} bg-base-100`}
+                          disabled={!canEditDraft}
+                          value={primaryPrivateConfidentiality.bondAsset}
+                          onChange={event =>
+                            updateDraftPrivateConfidentialityBond({
+                              bondAsset: event.target.value as ConfidentialityBondAsset,
+                            })
+                          }
+                        >
+                          <option value="LREP">LREP</option>
+                          <option value="USDC">USDC</option>
+                        </select>
+                        <input
+                          id="agent-ask-confidentiality-bond-amount"
+                          className={`input input-bordered ${MONEY_FIELD_CONTROL_CLASS} bg-base-100`}
+                          disabled={!canEditDraft}
+                          inputMode="decimal"
+                          value={primaryPrivateConfidentiality.bondAmount}
+                          onBlur={formatDraftConfidentialityBondAmount}
+                          onChange={event => updateDraftConfidentialityBondAmount(event.target.value)}
                         />
                       </div>
-                      <select
-                        id="agent-ask-confidentiality-bond-asset"
-                        className="select select-bordered w-full min-w-0 bg-base-100"
-                        disabled={!canEditDraft}
-                        value={primaryPrivateConfidentiality.bondAsset}
-                        onChange={event =>
-                          updateDraftPrivateConfidentialityBond({
-                            bondAsset: event.target.value as ConfidentialityBondAsset,
-                          })
-                        }
-                      >
-                        <option value="LREP">LREP</option>
-                        <option value="USDC">USDC</option>
-                      </select>
-                      <input
-                        id="agent-ask-confidentiality-bond-amount"
-                        className="input input-bordered w-full min-w-0 bg-base-100"
-                        disabled={!canEditDraft}
-                        inputMode="decimal"
-                        value={primaryPrivateConfidentiality.bondAmount}
-                        onBlur={formatDraftConfidentialityBondAmount}
-                        onChange={event => updateDraftConfidentialityBondAmount(event.target.value)}
-                      />
                     </div>
                     {draftConfidentialityBondError ? (
                       <p className="mt-3 text-xs leading-relaxed text-error">
@@ -2358,31 +2364,35 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                     Bounty
                     <InfoTooltip text={BOUNTY_AMOUNT_TOOLTIP} position="top" className="text-base-content/45" />
                   </p>
-                  <div className={MONEY_FIELD_GRID_CLASS}>
-                    <label htmlFor="agent-ask-bounty-asset" className={MONEY_FIELD_LABEL_CLASS}>
-                      Asset
-                    </label>
-                    <label htmlFor="agent-ask-bounty-amount" className={MONEY_FIELD_LABEL_CLASS}>
-                      Amount
-                    </label>
-                    <select
-                      id="agent-ask-bounty-asset"
-                      className="select select-bordered w-full min-w-0 bg-base-100"
-                      disabled
-                      value="USDC"
-                      aria-label="Bounty asset"
-                    >
-                      <option value="USDC">USDC</option>
-                    </select>
-                    <input
-                      id="agent-ask-bounty-amount"
-                      className="input input-bordered w-full min-w-0 bg-base-100"
-                      disabled={!canEditDraft}
-                      inputMode="decimal"
-                      value={draftForm?.bountyAmount ?? ""}
-                      onBlur={formatDraftBountyAmount}
-                      onChange={event => updateDraftBountyAmount(event.target.value)}
-                    />
+                  <div>
+                    <div className={MONEY_FIELD_LABEL_ROW_CLASS}>
+                      <label htmlFor="agent-ask-bounty-asset" className={MONEY_FIELD_LABEL_CLASS}>
+                        Asset
+                      </label>
+                      <label htmlFor="agent-ask-bounty-amount" className={MONEY_FIELD_LABEL_CLASS}>
+                        Amount
+                      </label>
+                    </div>
+                    <div className={MONEY_FIELD_CONTROL_ROW_CLASS}>
+                      <select
+                        id="agent-ask-bounty-asset"
+                        className={`select select-bordered ${MONEY_FIELD_CONTROL_CLASS} bg-base-100`}
+                        disabled
+                        value="USDC"
+                        aria-label="Bounty asset"
+                      >
+                        <option value="USDC">USDC</option>
+                      </select>
+                      <input
+                        id="agent-ask-bounty-amount"
+                        className={`input input-bordered ${MONEY_FIELD_CONTROL_CLASS} bg-base-100`}
+                        disabled={!canEditDraft}
+                        inputMode="decimal"
+                        value={draftForm?.bountyAmount ?? ""}
+                        onBlur={formatDraftBountyAmount}
+                        onChange={event => updateDraftBountyAmount(event.target.value)}
+                      />
+                    </div>
                   </div>
                 </div>
 
@@ -2396,32 +2406,36 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                         className="text-base-content/45"
                       />
                     </p>
-                    <div className={MONEY_FIELD_GRID_CLASS}>
-                      <label htmlFor="agent-ask-feedback-bonus-asset" className={MONEY_FIELD_LABEL_CLASS}>
-                        Asset
-                      </label>
-                      <label htmlFor="agent-ask-feedback-bonus-amount" className={MONEY_FIELD_LABEL_CLASS}>
-                        Amount
-                      </label>
-                      <select
-                        id="agent-ask-feedback-bonus-asset"
-                        className="select select-bordered w-full min-w-0 bg-base-100"
-                        disabled={!canEditDraft}
-                        value={draftForm?.feedbackBonusAsset ?? "usdc"}
-                        onChange={event => updateDraftFeedbackBonusAsset(event.target.value as FeedbackBonusAsset)}
-                      >
-                        <option value="lrep">LREP</option>
-                        <option value="usdc">USDC</option>
-                      </select>
-                      <input
-                        id="agent-ask-feedback-bonus-amount"
-                        className="input input-bordered w-full min-w-0 bg-base-100"
-                        disabled={!canEditDraft}
-                        inputMode="decimal"
-                        value={draftForm?.feedbackBonusAmount ?? ""}
-                        onBlur={formatDraftFeedbackBonusAmount}
-                        onChange={event => updateDraftFeedbackBonusAmount(event.target.value)}
-                      />
+                    <div>
+                      <div className={MONEY_FIELD_LABEL_ROW_CLASS}>
+                        <label htmlFor="agent-ask-feedback-bonus-asset" className={MONEY_FIELD_LABEL_CLASS}>
+                          Asset
+                        </label>
+                        <label htmlFor="agent-ask-feedback-bonus-amount" className={MONEY_FIELD_LABEL_CLASS}>
+                          Amount
+                        </label>
+                      </div>
+                      <div className={MONEY_FIELD_CONTROL_ROW_CLASS}>
+                        <select
+                          id="agent-ask-feedback-bonus-asset"
+                          className={`select select-bordered ${MONEY_FIELD_CONTROL_CLASS} bg-base-100`}
+                          disabled={!canEditDraft}
+                          value={draftForm?.feedbackBonusAsset ?? "usdc"}
+                          onChange={event => updateDraftFeedbackBonusAsset(event.target.value as FeedbackBonusAsset)}
+                        >
+                          <option value="lrep">LREP</option>
+                          <option value="usdc">USDC</option>
+                        </select>
+                        <input
+                          id="agent-ask-feedback-bonus-amount"
+                          className={`input input-bordered ${MONEY_FIELD_CONTROL_CLASS} bg-base-100`}
+                          disabled={!canEditDraft}
+                          inputMode="decimal"
+                          value={draftForm?.feedbackBonusAmount ?? ""}
+                          onBlur={formatDraftFeedbackBonusAmount}
+                          onChange={event => updateDraftFeedbackBonusAmount(event.target.value)}
+                        />
+                      </div>
                     </div>
                   </div>
                 ) : null}

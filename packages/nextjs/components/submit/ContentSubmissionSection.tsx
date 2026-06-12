@@ -164,8 +164,10 @@ const DEFAULT_SUBMISSION_BOUNTY_AMOUNT = "1";
 const DEFAULT_SUBMISSION_ROUND_MAX_VOTERS = 100;
 const CONFIDENTIALITY_BOND_TOOLTIP =
   "Optional extra bond raters must post before private context is served. Use 0 for no extra bond.";
-const MONEY_FIELD_GRID_CLASS = "grid grid-cols-2 gap-x-3 gap-y-2";
-const MONEY_FIELD_LABEL_CLASS = "label-text flex min-h-5 min-w-0 items-center gap-1.5 text-sm font-medium";
+const MONEY_FIELD_LABEL_ROW_CLASS = "grid grid-cols-2 gap-3";
+const MONEY_FIELD_CONTROL_ROW_CLASS = "mt-1.5 grid grid-cols-2 items-start gap-3";
+const MONEY_FIELD_LABEL_CLASS = "label-text flex h-6 min-w-0 items-center gap-1.5 text-sm font-medium leading-none";
+const MONEY_FIELD_CONTROL_CLASS = "h-12 w-full min-w-0";
 const SECONDS_PER_MINUTE = 60;
 const SECONDS_PER_HOUR = 60 * SECONDS_PER_MINUTE;
 const MIN_HUMAN_RESPONSE_WINDOW_MINUTES = 20;
@@ -3324,31 +3326,35 @@ export function ContentSubmissionSection() {
               <InfoTooltip text={CONFIDENTIALITY_BOND_TOOLTIP} position="top" className="text-base-content/45" />
             </p>
           </div>
-          <div className={MONEY_FIELD_GRID_CLASS}>
-            <label htmlFor="submission-confidentiality-bond-asset" className={MONEY_FIELD_LABEL_CLASS}>
-              Asset
-            </label>
-            <label htmlFor="submission-confidentiality-bond-amount" className={MONEY_FIELD_LABEL_CLASS}>
-              Amount
-            </label>
-            <select
-              id="submission-confidentiality-bond-asset"
-              className="select select-bordered w-full min-w-0 bg-base-100"
-              value={confidentialityBondAsset}
-              onChange={e => setConfidentialityBondAsset(e.target.value as "LREP" | "USDC")}
-            >
-              <option value="LREP">LREP</option>
-              <option value="USDC">USDC</option>
-            </select>
-            <input
-              id="submission-confidentiality-bond-amount"
-              type="text"
-              inputMode="decimal"
-              className="input input-bordered w-full min-w-0 bg-base-100"
-              value={confidentialityBondAmount}
-              onChange={e => setConfidentialityBondAmount(e.target.value)}
-              aria-label="Confidentiality bond amount"
-            />
+          <div>
+            <div className={MONEY_FIELD_LABEL_ROW_CLASS}>
+              <label htmlFor="submission-confidentiality-bond-asset" className={MONEY_FIELD_LABEL_CLASS}>
+                Asset
+              </label>
+              <label htmlFor="submission-confidentiality-bond-amount" className={MONEY_FIELD_LABEL_CLASS}>
+                Amount
+              </label>
+            </div>
+            <div className={MONEY_FIELD_CONTROL_ROW_CLASS}>
+              <select
+                id="submission-confidentiality-bond-asset"
+                className={`select select-bordered ${MONEY_FIELD_CONTROL_CLASS} bg-base-100`}
+                value={confidentialityBondAsset}
+                onChange={e => setConfidentialityBondAsset(e.target.value as "LREP" | "USDC")}
+              >
+                <option value="LREP">LREP</option>
+                <option value="USDC">USDC</option>
+              </select>
+              <input
+                id="submission-confidentiality-bond-amount"
+                type="text"
+                inputMode="decimal"
+                className={`input input-bordered ${MONEY_FIELD_CONTROL_CLASS} bg-base-100`}
+                value={confidentialityBondAmount}
+                onChange={e => setConfidentialityBondAmount(e.target.value)}
+                aria-label="Confidentiality bond amount"
+              />
+            </div>
           </div>
         </div>
       ) : null}
@@ -3358,38 +3364,42 @@ export function ContentSubmissionSection() {
           Bounty
           <InfoTooltip text={protocolDocFacts.usdcBountyPayoutTimingTooltip} />
         </p>
-        <div className={MONEY_FIELD_GRID_CLASS}>
-          <label htmlFor="submission-bounty-asset" className={MONEY_FIELD_LABEL_CLASS}>
-            Asset
-          </label>
-          <div className={MONEY_FIELD_LABEL_CLASS}>
-            <label htmlFor="submission-bounty-amount">Amount</label>
-            <InfoTooltip text={bountyAmountTooltipText} className="text-base-content/45" />
+        <div>
+          <div className={MONEY_FIELD_LABEL_ROW_CLASS}>
+            <label htmlFor="submission-bounty-asset" className={MONEY_FIELD_LABEL_CLASS}>
+              Asset
+            </label>
+            <div className={MONEY_FIELD_LABEL_CLASS}>
+              <label htmlFor="submission-bounty-amount">Amount</label>
+              <InfoTooltip text={bountyAmountTooltipText} className="text-base-content/45" />
+            </div>
           </div>
-          <select
-            id="submission-bounty-asset"
-            className="select select-bordered w-full min-w-0 bg-base-100"
-            data-testid="bounty-asset-select"
-            value={rewardAsset}
-            onChange={e => setRewardAsset(e.target.value as SubmissionRewardAsset)}
-          >
-            <option value="lrep">LREP</option>
-            <option value="usdc">USDC</option>
-          </select>
-          <input
-            id="submission-bounty-amount"
-            type="text"
-            inputMode="decimal"
-            value={rewardAmount}
-            onChange={e => {
-              setRewardAmountTouched(true);
-              setRewardAmount(e.target.value);
-            }}
-            className={`input input-bordered w-full min-w-0 bg-base-100 ${
-              bountyStepAttempted && rewardAmountError ? "input-error" : ""
-            }`}
-            aria-label="Bounty amount"
-          />
+          <div className={MONEY_FIELD_CONTROL_ROW_CLASS}>
+            <select
+              id="submission-bounty-asset"
+              className={`select select-bordered ${MONEY_FIELD_CONTROL_CLASS} bg-base-100`}
+              data-testid="bounty-asset-select"
+              value={rewardAsset}
+              onChange={e => setRewardAsset(e.target.value as SubmissionRewardAsset)}
+            >
+              <option value="lrep">LREP</option>
+              <option value="usdc">USDC</option>
+            </select>
+            <input
+              id="submission-bounty-amount"
+              type="text"
+              inputMode="decimal"
+              value={rewardAmount}
+              onChange={e => {
+                setRewardAmountTouched(true);
+                setRewardAmount(e.target.value);
+              }}
+              className={`input input-bordered ${MONEY_FIELD_CONTROL_CLASS} bg-base-100 ${
+                bountyStepAttempted && rewardAmountError ? "input-error" : ""
+              }`}
+              aria-label="Bounty amount"
+            />
+          </div>
         </div>
         <p className="text-sm font-semibold text-base-content/50">
           Min {formatSubmissionRewardAmount(minimumBountyAmount, rewardAsset)}
@@ -4115,35 +4125,39 @@ export function ContentSubmissionSection() {
 
       {feedbackBonusMode === "enabled" ? (
         <div className="space-y-4">
-          <div className={MONEY_FIELD_GRID_CLASS}>
-            <label htmlFor="submission-feedback-bonus-asset" className={MONEY_FIELD_LABEL_CLASS}>
-              Asset
-            </label>
-            <div className={MONEY_FIELD_LABEL_CLASS}>
-              <label htmlFor="submission-feedback-bonus-amount">Amount</label>
-              <InfoTooltip
-                text="Feedback Bonuses can use LREP or World Chain USDC. The selected awarder later chooses which eligible feedback to pay."
-                className="text-base-content/45"
+          <div>
+            <div className={MONEY_FIELD_LABEL_ROW_CLASS}>
+              <label htmlFor="submission-feedback-bonus-asset" className={MONEY_FIELD_LABEL_CLASS}>
+                Asset
+              </label>
+              <div className={MONEY_FIELD_LABEL_CLASS}>
+                <label htmlFor="submission-feedback-bonus-amount">Amount</label>
+                <InfoTooltip
+                  text="Feedback Bonuses can use LREP or World Chain USDC. The selected awarder later chooses which eligible feedback to pay."
+                  className="text-base-content/45"
+                />
+              </div>
+            </div>
+            <div className={MONEY_FIELD_CONTROL_ROW_CLASS}>
+              <select
+                id="submission-feedback-bonus-asset"
+                className={`select select-bordered ${MONEY_FIELD_CONTROL_CLASS} bg-base-100`}
+                value={feedbackBonusAsset}
+                onChange={e => setFeedbackBonusAsset(e.target.value as FeedbackBonusAsset)}
+              >
+                <option value="lrep">LREP</option>
+                <option value="usdc">USDC</option>
+              </select>
+              <input
+                id="submission-feedback-bonus-amount"
+                type="text"
+                inputMode="decimal"
+                value={feedbackBonusAmount}
+                onChange={e => setFeedbackBonusAmount(e.target.value)}
+                className={`input input-bordered ${MONEY_FIELD_CONTROL_CLASS} bg-base-100 ${feedbackBonusAmountError ? "input-error" : ""}`}
+                aria-label="Feedback Bonus amount"
               />
             </div>
-            <select
-              id="submission-feedback-bonus-asset"
-              className="select select-bordered w-full min-w-0 bg-base-100"
-              value={feedbackBonusAsset}
-              onChange={e => setFeedbackBonusAsset(e.target.value as FeedbackBonusAsset)}
-            >
-              <option value="lrep">LREP</option>
-              <option value="usdc">USDC</option>
-            </select>
-            <input
-              id="submission-feedback-bonus-amount"
-              type="text"
-              inputMode="decimal"
-              value={feedbackBonusAmount}
-              onChange={e => setFeedbackBonusAmount(e.target.value)}
-              className={`input input-bordered w-full min-w-0 bg-base-100 ${feedbackBonusAmountError ? "input-error" : ""}`}
-              aria-label="Feedback Bonus amount"
-            />
           </div>
           {feedbackBonusAmountError ? <p className="text-base text-error">{feedbackBonusAmountError}</p> : null}
 
