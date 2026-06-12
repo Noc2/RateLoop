@@ -19,6 +19,7 @@ const circleWorldChainUsdcHref = "https://www.circle.com/multi-chain-usdc/worldc
 const gitcoinCocmHref =
   "https://gitcoin.co/blog/leveling-the-field-how-connection-oriented-cluster-matching-strengthens-quadratic-funding#the-solution-connection-oriented-cluster-matching-cocm";
 const cocmPaperHref = "https://papers.ssrn.com/sol3/papers.cfm?abstract_id=4311507";
+const surprisinglyPopularHref = "https://www.nature.com/articles/nature21054";
 
 export const metadata = {
   title: "Tech Stack | RateLoop Docs",
@@ -167,7 +168,7 @@ const TechStackPage: NextPage = () => {
         rounds can qualify for launch credits.
       </p>
 
-      <h2 id="bounties">Bounties</h2>
+      <h2 id="bounties">Surprise-Weighted Bounties</h2>
       <p>
         Bounties are attached when an asker submits a question. They are separate from LREP stake settlement and can be
         funded in LREP or World Chain USDC. Eligible revealed raters claim them after qualified rounds, so useful
@@ -184,6 +185,28 @@ const TechStackPage: NextPage = () => {
         <strong>{protocolDocFacts.usdcBountyPayoutHappyPathMaxDelayLabel}</strong> on the normal happy path when both
         oracle layers still need to finalize.
       </p>
+      <p>
+        For USDC bounty snapshot rounds, the base claim weight is surprise-weighted: it ranges from 10,000 to 20,000 bps
+        depending on how surprisingly common the rater&apos;s revealed answer was among peers compared with a trailing
+        cross-round base rate. An answer that merely matches the prior pays the flat 10,000 bps floor, while an answer
+        that predicts peers better than the base rate earns up to the 20,000 bps cap; launch-credit weights stay flat.
+        The correlation snapshot then applies an independence multiplier to that base weight, and the resulting claim
+        weights split the bounty: a 30 USDC rater allocation across effective weights of 20,000, 10,000, and 10,000 pays
+        15 USDC, 7.5 USDC, and 7.5 USDC.
+      </p>
+      <p>
+        The weighting comes from the peer-prediction literature.{" "}
+        <a href={btsHref} target="_blank" rel="noopener noreferrer" className="link link-primary">
+          Prelec&apos;s Bayesian Truth Serum
+        </a>{" "}
+        rewards answers that are &quot;surprisingly common&quot; relative to what raters predicted, and the{" "}
+        <a href={surprisinglyPopularHref} target="_blank" rel="noopener noreferrer" className="link link-primary">
+          surprisingly popular criterion of Prelec, Seung, and McCoy
+        </a>{" "}
+        shows that answers more popular than the crowd expected carry outsized information. Surprise-weighted bounties
+        apply the same principle to payouts: revealed reports that beat the prior earn a larger bounty share than
+        reports that merely echo it.
+      </p>
 
       <h2 id="correlation-epoch-snapshots">Correlation Epoch Snapshots</h2>
       <p>
@@ -192,16 +215,14 @@ const TechStackPage: NextPage = () => {
         weights. This delays payout finality, not the result itself.
       </p>
       <p>
-        For USDC bounty snapshot rounds, the base claim weight is surprise-weighted: it ranges from 10,000 to 20,000 bps
-        depending on how surprisingly common the rater&apos;s revealed answer was among peers compared with a trailing
-        cross-round base rate. An answer that merely matches the prior pays the flat 10,000 bps floor, while an answer
-        that predicts peers better than the base rate earns up to the 20,000 bps cap; launch-credit weights stay flat.
-        Effective correlation weight is the payout weight left after applying an independence multiplier to that base
-        claim weight. It answers &quot;how much independent payout credit should this revealed rater receive?&quot;
-        rather than &quot;how much LREP did this rater stake?&quot; For example, a fully independent rater may keep
-        10,000 independence bps, while two tightly correlated raters may each be capped to a fractional weight. A 30
-        USDC rater allocation split across effective correlation weights of 20,000, 10,000, and 10,000 pays 15 USDC, 7.5
-        USDC, and 7.5 USDC.
+        Effective correlation weight is the payout weight left after applying an independence multiplier to the
+        surprise-weighted base claim weight described under{" "}
+        <a href="#bounties" className="link link-primary">
+          Surprise-Weighted Bounties
+        </a>
+        . It answers &quot;how much independent payout credit should this revealed rater receive?&quot; rather than
+        &quot;how much LREP did this rater stake?&quot; For example, a fully independent rater may keep 10,000
+        independence bps, while two tightly correlated raters may each be capped to a fractional weight.
       </p>
       <p>
         The scorer is inspired by{" "}
@@ -265,6 +286,9 @@ const TechStackPage: NextPage = () => {
           Bayesian Truth Serum: <a href={btsHref}>Prelec paper</a>
           {", "}
           <a href={robustBtsHref}>Witkowski and Parkes robust BTS paper</a>
+        </li>
+        <li>
+          Surprise weighting: <a href={surprisinglyPopularHref}>Prelec, Seung, and McCoy surprisingly popular paper</a>
         </li>
         <li>
           Correlation caps: <a href={gitcoinCocmHref}>Gitcoin COCM overview</a>,{" "}

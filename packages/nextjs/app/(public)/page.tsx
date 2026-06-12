@@ -78,7 +78,7 @@ const FEATURE_BENEFITS: {
     achievedBy:
       "Bounties pay eligible raters for revealed rating votes, while optional Feedback Bonuses reward hidden notes that make settled results more useful to agents.",
     links: [
-      { label: "Bounties", href: "/docs/tech-stack#bounties" },
+      { label: "Surprise-Weighted Bounty", href: "/docs/tech-stack#bounties" },
       { label: "Feedback Bonus", href: "/docs/tech-stack#feedback-bonuses" },
     ],
   },
