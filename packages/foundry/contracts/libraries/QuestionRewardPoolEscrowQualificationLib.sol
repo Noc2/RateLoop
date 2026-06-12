@@ -643,6 +643,7 @@ library QuestionRewardPoolEscrowQualificationLib {
             ctx.votingEngine, ctx.protocolConfig, ctx.contentId, ctx.roundId, commitKey, voter
         );
         if (_isIdentityBannedForRound(ctx, identityKey)) return false;
+        if (_isIdentityBannedForRound(ctx, QuestionRewardPoolEscrowVoterLib.addressIdentityKey(voter))) return false;
         (,,, uint8 credentialMask, uint8 freshCredentialMask,) =
             ctx.votingEngine.commitIdentityState(ctx.contentId, ctx.roundId, commitKey);
         if (!QuestionRewardPoolEscrowEligibilityLib.isCommitEligibleForBounty(

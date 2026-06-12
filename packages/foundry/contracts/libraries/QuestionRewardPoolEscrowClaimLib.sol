@@ -205,6 +205,9 @@ library QuestionRewardPoolEscrowClaimLib {
                 || _isIdentityBannedForRound(
                     votingEngine, protocolConfig, rewardPool.contentId, params.roundId, identityKey
                 )
+                || _isCommitVoterBannedForRound(
+                    votingEngine, protocolConfig, rewardPool.contentId, params.roundId, commitKey
+                )
                 || _isExcludedClaimant(
                     rewardPool, rewardPoolPayerIdentity, rewardPoolPayerIdentityKey, identityKey, rewardRecipient
                 )
@@ -355,6 +358,7 @@ library QuestionRewardPoolEscrowClaimLib {
         if (
             commitKey == bytes32(0)
                 || _isIdentityBannedForRound(votingEngine, protocolConfig, rewardPool.contentId, roundId, identityKey)
+                || _isCommitVoterBannedForRound(votingEngine, protocolConfig, rewardPool.contentId, roundId, commitKey)
                 || _isExcludedClaimant(
                     rewardPool, rewardPoolPayerIdentity, rewardPoolPayerIdentityKey, identityKey, rewardRecipient
                 )
@@ -470,6 +474,19 @@ library QuestionRewardPoolEscrowClaimLib {
         address current = protocolConfig.raterRegistry();
         if (current == snapshot) return false;
         return _isIdentityBannedAt(current, identityKey);
+    }
+
+    function _isCommitVoterBannedForRound(
+        RoundVotingEngine votingEngine,
+        ProtocolConfig protocolConfig,
+        uint256 contentId,
+        uint256 roundId,
+        bytes32 commitKey
+    ) private view returns (bool) {
+        (address voter,,,,,,) = votingEngine.commitCore(contentId, roundId, commitKey);
+        return _isIdentityBannedForRound(
+            votingEngine, protocolConfig, contentId, roundId, QuestionRewardPoolEscrowVoterLib.addressIdentityKey(voter)
+        );
     }
 
     function _isIdentityBannedAt(address registryAddress, bytes32 identityKey) private view returns (bool) {
