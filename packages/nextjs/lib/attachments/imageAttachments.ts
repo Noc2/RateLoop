@@ -330,8 +330,31 @@ function getConfiguredAttachmentBaseUrl() {
   }
 }
 
-export function isImageAttachmentBlobStorageConfigured(env: ImageAttachmentUploadModeEnv = process.env) {
+const BLOB_STORAGE_MISSING_CONFIGURATION_ERROR =
+  "Image uploads are not configured. Set BLOB_READ_WRITE_TOKEN in the deployment environment.";
+const BLOB_STORAGE_INVALID_CONFIGURATION_ERROR =
+  "Image uploads are misconfigured. Set BLOB_READ_WRITE_TOKEN to a Vercel Blob read-write token.";
+
+function hasImageAttachmentBlobStorageToken(env: ImageAttachmentUploadModeEnv = process.env) {
   return Boolean(env.BLOB_READ_WRITE_TOKEN?.trim());
+}
+
+export function getImageAttachmentBlobStorageConfigurationError(env: ImageAttachmentUploadModeEnv = process.env) {
+  const token = env.BLOB_READ_WRITE_TOKEN?.trim();
+  if (!token) {
+    return BLOB_STORAGE_MISSING_CONFIGURATION_ERROR;
+  }
+
+  const [, , tokenMode, storeId] = token.split("_");
+  if (tokenMode !== "rw" || !storeId || !token.startsWith("vercel_blob_rw_")) {
+    return BLOB_STORAGE_INVALID_CONFIGURATION_ERROR;
+  }
+
+  return null;
+}
+
+export function isImageAttachmentBlobStorageConfigured(env: ImageAttachmentUploadModeEnv = process.env) {
+  return getImageAttachmentBlobStorageConfigurationError(env) === null;
 }
 
 function getLocalImageAttachmentStorageRoot() {
@@ -369,7 +392,7 @@ export function getAttachmentImageUrl(requestUrl: string, attachmentId: string, 
 }
 
 export function getImageAttachmentUploadMode(env: ImageAttachmentUploadModeEnv = process.env): "blob" | "local" {
-  return env.NODE_ENV !== "production" && !isImageAttachmentBlobStorageConfigured(env) ? "local" : "blob";
+  return env.NODE_ENV !== "production" && !hasImageAttachmentBlobStorageToken(env) ? "local" : "blob";
 }
 
 export function parseAttachmentIdFromImageUrl(value: string): string | null {

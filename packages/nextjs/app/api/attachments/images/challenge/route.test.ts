@@ -46,3 +46,15 @@ test("image upload challenge reports missing production Blob configuration befor
     error: "Image uploads are not configured. Set BLOB_READ_WRITE_TOKEN in the deployment environment.",
   });
 });
+
+test("image upload challenge reports invalid production Blob configuration before signing", async () => {
+  env.NODE_ENV = "production";
+  env.BLOB_READ_WRITE_TOKEN = "not-a-vercel-blob-token";
+
+  const response = await POST(challengeRequest());
+
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), {
+    error: "Image uploads are misconfigured. Set BLOB_READ_WRITE_TOKEN to a Vercel Blob read-write token.",
+  });
+});

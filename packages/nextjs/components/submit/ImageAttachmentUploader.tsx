@@ -1,8 +1,8 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { upload } from "@vercel/blob/client";
 import { ArrowUpTrayIcon } from "@heroicons/react/24/outline";
+import { uploadImageAttachmentToBlob } from "~~/components/submit/imageAttachmentBlobUpload";
 import {
   IMAGE_ATTACHMENT_UPLOAD_PHASE_COPY,
   type ImageAttachmentUploadPhase,
@@ -180,13 +180,13 @@ export function ImageAttachmentUploader({
         );
         imageUrl = localUpload.imageUrl;
       } else {
-        await upload(`question-attachments/${attachmentId}/original.${getFileExtension(file)}`, file, {
-          access: "private",
+        await uploadImageAttachmentToBlob({
           clientPayload,
           contentType: file.type,
-          handleUploadUrl: "/api/attachments/images/upload",
+          file,
           multipart: file.size > 5 * 1024 * 1024,
           onUploadProgress: event => setProgress(current => Math.max(current, getBlobUploadProgress(event.percentage))),
+          pathname: `question-attachments/${attachmentId}/original.${getFileExtension(file)}`,
         });
       }
 

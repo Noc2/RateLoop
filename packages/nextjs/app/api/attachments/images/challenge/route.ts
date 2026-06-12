@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
+  getImageAttachmentBlobStorageConfigurationError,
   getImageAttachmentUploadMode,
-  isImageAttachmentBlobStorageConfigured,
 } from "~~/lib/attachments/imageAttachments";
 import {
   IMAGE_UPLOAD_CHALLENGE_TITLE,
@@ -14,8 +14,6 @@ import { isJsonObjectBody, jsonBodyErrorResponse, parseJsonBody } from "~~/lib/h
 import { checkRateLimit } from "~~/utils/rateLimit";
 
 const RATE_LIMIT = { limit: 20, windowMs: 60_000 };
-const BLOB_STORAGE_CONFIGURATION_ERROR =
-  "Image uploads are not configured. Set BLOB_READ_WRITE_TOKEN in the deployment environment.";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -30,8 +28,9 @@ export async function POST(request: NextRequest) {
   }
 
   const uploadMode = getImageAttachmentUploadMode();
-  if (uploadMode === "blob" && !isImageAttachmentBlobStorageConfigured()) {
-    return NextResponse.json({ error: BLOB_STORAGE_CONFIGURATION_ERROR }, { status: 503 });
+  const blobStorageConfigurationError = getImageAttachmentBlobStorageConfigurationError();
+  if (uploadMode === "blob" && blobStorageConfigurationError) {
+    return NextResponse.json({ error: blobStorageConfigurationError }, { status: 503 });
   }
 
   const limited = await checkRateLimit(request, RATE_LIMIT, {

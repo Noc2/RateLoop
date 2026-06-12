@@ -6,8 +6,8 @@ import {
   deleteUploadingImageAttachment,
   getAttachmentImageUrl,
   getImageAttachment,
+  getImageAttachmentBlobStorageConfigurationError,
   getImageAttachmentUploadMode,
-  isImageAttachmentBlobStorageConfigured,
   processCompletedImageUpload,
   processCompletedLocalImageUpload,
   reserveImageUploadDailyQuotas,
@@ -42,8 +42,6 @@ const RATE_LIMIT = { limit: 20, windowMs: 60_000 };
 const TOKEN_TTL_MS = 10 * 60 * 1000;
 const UPLOAD_METADATA_MAX_BYTES = 128 * 1024;
 const ALLOWED_CONTENT_TYPES = ["image/jpeg", "image/png", "image/webp"];
-const BLOB_STORAGE_CONFIGURATION_ERROR =
-  "Image uploads are not configured. Set BLOB_READ_WRITE_TOKEN in the deployment environment.";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -276,8 +274,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         { status: 400 },
       );
     }
-    if (!isImageAttachmentBlobStorageConfigured()) {
-      return NextResponse.json({ error: BLOB_STORAGE_CONFIGURATION_ERROR }, { status: 503 });
+    const blobStorageConfigurationError = getImageAttachmentBlobStorageConfigurationError();
+    if (blobStorageConfigurationError) {
+      return NextResponse.json({ error: blobStorageConfigurationError }, { status: 503 });
     }
 
     const body = await parseJsonBody(request, { maxBytes: UPLOAD_METADATA_MAX_BYTES });
