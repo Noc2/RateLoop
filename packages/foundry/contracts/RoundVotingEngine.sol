@@ -272,7 +272,7 @@ contract RoundVotingEngine is
     event TreasuryFeeDistributed(uint256 indexed contentId, uint256 indexed roundId, uint256 amount);
     event Paused(address account);
     event Unpaused(address account);
-    event RoleUpdated(bytes32 indexed role, address indexed account, bool indexed enabled) anonymous;
+    event RoleUpdated(bytes32 indexed role, address indexed account, bool indexed enabled);
 
     bytes32 private constant PAUSABLE_STORAGE_LOCATION =
         0xcd5ed15c6e187e77e9aee88184c21f4f2182ab5827cb3b7e07fbedcd63f03300;
@@ -323,17 +323,25 @@ contract RoundVotingEngine is
 
     function setRole(bytes32 role, address account, bool enabled) external onlyRole(bytes32(0)) {
         assembly ("memory-safe") {
-            if and(iszero(or(enabled, role)), eq(account, caller())) {
-                revert(0x00, 0x00)
-            }
+            let normalizedEnabled := iszero(iszero(enabled))
+            if and(iszero(or(normalizedEnabled, role)), eq(account, caller())) { revert(0x00, 0x00) }
             mstore(0x00, role)
             mstore(0x20, ACCESS_CONTROL_STORAGE_LOCATION)
             let roleSlot := keccak256(0x00, 0x40)
             mstore(0x00, account)
             mstore(0x20, roleSlot)
-            let normalizedEnabled := iszero(iszero(enabled))
-            sstore(keccak256(0x00, 0x40), normalizedEnabled)
-            log3(0x00, 0x00, role, account, normalizedEnabled)
+            let accountSlot := keccak256(0x00, 0x40)
+            if iszero(eq(sload(accountSlot), normalizedEnabled)) {
+                sstore(accountSlot, normalizedEnabled)
+                log4(
+                    0x00,
+                    0x00,
+                    0x5f0ecfd1ea5555d5b4b6140b49c92365beaf40d0a057dc34a9746990cd4ce8d4,
+                    role,
+                    account,
+                    normalizedEnabled
+                )
+            }
         }
     }
 
@@ -347,7 +355,25 @@ contract RoundVotingEngine is
     }
 
     function _grantRole(bytes32 role, address account) internal {
-        _accessControlStorage().roles[role].hasRole[account] = true;
+        assembly ("memory-safe") {
+            mstore(0x00, role)
+            mstore(0x20, ACCESS_CONTROL_STORAGE_LOCATION)
+            let roleSlot := keccak256(0x00, 0x40)
+            mstore(0x00, account)
+            mstore(0x20, roleSlot)
+            let accountSlot := keccak256(0x00, 0x40)
+            if iszero(sload(accountSlot)) {
+                sstore(accountSlot, 1)
+                log4(
+                    0x00,
+                    0x00,
+                    0x5f0ecfd1ea5555d5b4b6140b49c92365beaf40d0a057dc34a9746990cd4ce8d4,
+                    role,
+                    account,
+                    1
+                )
+            }
+        }
     }
 
     function _accessControlStorage() private pure returns (AccessControlStorage storage $) {

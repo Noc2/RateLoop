@@ -147,6 +147,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
     uint256 public constant STAKE = 5e6; // 5 LREP
     uint256 public constant T0 = 1_000_000; // setUp warp time
     uint256 public constant EPOCH = 1 hours; // epochDuration
+    bytes32 internal constant ROLE_UPDATED_TOPIC = keccak256("RoleUpdated(bytes32,address,bool)");
     uint256 internal constant SCORE_SPREAD_TEST_REVEALS = 8;
     uint8 internal constant COMMIT_STATUS_OPEN = 0;
     uint8 internal constant COMMIT_STATUS_STARTS_NEXT_ROUND = 1;
@@ -280,6 +281,11 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         _assertRoleUpdatedLog(vm.getRecordedLogs(), pauserRole, newPauser, true);
         assertTrue(engine.hasRole(pauserRole, newPauser));
 
+        vm.recordLogs();
+        vm.prank(owner);
+        engine.setRole(pauserRole, newPauser, true);
+        assertEq(vm.getRecordedLogs().length, 0);
+
         vm.prank(newPauser);
         engine.pause();
         assertTrue(engine.paused());
@@ -309,13 +315,54 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertTrue(engine.hasRole(bytes32(0), owner));
     }
 
+    function test_InitializeEmitsRoleUpdatedForGenesisRoles() public {
+        RoundVotingEngine impl = new RoundVotingEngine();
+
+        vm.recordLogs();
+        RoundVotingEngine freshEngine = RoundVotingEngine(
+            address(
+                new ERC1967Proxy(
+                    address(impl),
+                    abi.encodeCall(
+                        RoundVotingEngine.initialize,
+                        (owner, address(lrepToken), address(registry), protocolConfigAddress)
+                    )
+                )
+            )
+        );
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+
+        assertTrue(freshEngine.hasRole(bytes32(0), owner));
+        assertTrue(freshEngine.hasRole(keccak256("PAUSER_ROLE"), owner));
+        _assertContainsRoleUpdatedLog(logs, bytes32(0), owner, true);
+        _assertContainsRoleUpdatedLog(logs, keccak256("PAUSER_ROLE"), owner, true);
+    }
+
     function _assertRoleUpdatedLog(Vm.Log[] memory logs, bytes32 role, address account, bool enabled) internal pure {
         assertEq(logs.length, 1);
-        assertEq(logs[0].topics.length, 3);
-        assertEq(logs[0].topics[0], role);
-        assertEq(logs[0].topics[1], bytes32(uint256(uint160(account))));
-        assertEq(logs[0].topics[2], bytes32(uint256(enabled ? 1 : 0)));
-        assertEq(logs[0].data.length, 0);
+        _assertRoleUpdatedLog(logs[0], role, account, enabled);
+    }
+
+    function _assertContainsRoleUpdatedLog(Vm.Log[] memory logs, bytes32 role, address account, bool enabled)
+        internal
+        pure
+    {
+        for (uint256 i = 0; i < logs.length; i++) {
+            if (logs[i].topics.length == 4 && logs[i].topics[0] == ROLE_UPDATED_TOPIC && logs[i].topics[1] == role) {
+                address logAccount = address(uint160(uint256(logs[i].topics[2])));
+                if (logAccount == account && logs[i].topics[3] == bytes32(uint256(enabled ? 1 : 0))) return;
+            }
+        }
+        revert("RoleUpdated log missing");
+    }
+
+    function _assertRoleUpdatedLog(Vm.Log memory log, bytes32 role, address account, bool enabled) internal pure {
+        assertEq(log.topics.length, 4);
+        assertEq(log.topics[0], ROLE_UPDATED_TOPIC);
+        assertEq(log.topics[1], role);
+        assertEq(log.topics[2], bytes32(uint256(uint160(account))));
+        assertEq(log.topics[3], bytes32(uint256(enabled ? 1 : 0)));
+        assertEq(log.data.length, 0);
     }
 
     // =========================================================================
