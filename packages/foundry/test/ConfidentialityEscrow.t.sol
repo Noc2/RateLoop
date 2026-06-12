@@ -400,6 +400,36 @@ contract ConfidentialityEscrowTest is VotingTestBase {
         engine.openRound(secondContentId);
     }
 
+    function testZeroBondGatedCommitRecordsBanNexusForRoundRegistrySnapshotAfterRotation() public {
+        uint256 contentId = _submitGatedQuestion("zero-bond-rotated-round-registry-nexus", 0);
+        uint8 provider = uint8(RaterRegistry.HumanCredentialProvider.SeededHuman);
+
+        vm.prank(voter2);
+        engine.openRound(contentId);
+        uint256 roundId = engine.currentRoundId(contentId);
+        assertEq(engine.roundRaterRegistrySnapshot(contentId, roundId), address(raterRegistry));
+
+        RaterRegistry replacementRegistry = _deployRaterRegistry(owner);
+        vm.prank(owner);
+        protocolConfig.setRaterRegistry(address(replacementRegistry));
+        assertEq(protocolConfig.raterRegistry(), address(replacementRegistry));
+
+        assertFalse(confidentialityEscrow.hasConfidentialityNexus(provider, VOTER1_ANCHOR));
+        _commitVoteWithoutOpeningRound(voter1, contentId, true);
+        assertTrue(confidentialityEscrow.hasConfidentialityNexus(provider, VOTER1_ANCHOR));
+
+        vm.prank(owner);
+        raterRegistry.banIdentity(
+            RaterRegistry.HumanCredentialProvider.SeededHuman,
+            VOTER1_ANCHOR,
+            uint64(block.timestamp + 365 days),
+            "verified leak after registry rotation",
+            EVIDENCE_HASH
+        );
+
+        assertTrue(raterRegistry.isIdentityKeyBanned(raterRegistry.addressIdentityKey(voter1)));
+    }
+
     function testZeroBondGatedOpenRoundRecordsBanNexus() public {
         uint256 contentId = _submitGatedQuestion("zero-bond-open-nexus", 0);
         uint8 provider = uint8(RaterRegistry.HumanCredentialProvider.SeededHuman);
@@ -786,6 +816,53 @@ contract ConfidentialityEscrowTest is VotingTestBase {
                 salt: keccak256(abi.encodePacked("confidentiality-commit", voter, contentId, isUp, block.timestamp))
             })
         );
+    }
+
+    function _commitVoteWithoutOpeningRound(address voter, uint256 contentId, bool isUp)
+        internal
+        returns (bytes32 commitKey)
+    {
+        bytes32 salt =
+            keccak256(abi.encodePacked("confidentiality-current-round", voter, contentId, isUp, block.timestamp));
+        TestCommitArtifacts memory artifacts = _buildTestCommitArtifacts(address(engine), voter, isUp, salt, contentId);
+        uint256 currentRoundId = engine.currentRoundId(contentId);
+        assertGt(currentRoundId, 0);
+        if (currentRoundId != artifacts.roundId) {
+            artifacts.roundId = currentRoundId;
+            uint16 roundReferenceRatingBps = _roundReferenceRatingBpsForRound(engine, contentId, currentRoundId);
+            if (roundReferenceRatingBps != 0) {
+                artifacts.roundReferenceRatingBps = roundReferenceRatingBps;
+            }
+            artifacts.commitHash = _commitHash(
+                isUp,
+                salt,
+                voter,
+                contentId,
+                artifacts.roundId,
+                artifacts.roundReferenceRatingBps,
+                artifacts.targetRound,
+                artifacts.drandChainHash,
+                artifacts.ciphertext
+            );
+            artifacts.commitKey = _commitKey(voter, artifacts.commitHash);
+        }
+
+        vm.startPrank(voter);
+        lrepToken.approve(address(engine), STAKE);
+        engine.commitVote(
+            contentId,
+            _roundContext(artifacts.roundId, artifacts.roundReferenceRatingBps),
+            artifacts.targetRound,
+            artifacts.drandChainHash,
+            artifacts.commitHash,
+            artifacts.ciphertext,
+            STAKE,
+            address(0)
+        );
+        vm.stopPrank();
+
+        _rememberTestReveal(artifacts.commitKey, isUp, salt);
+        return artifacts.commitKey;
     }
 
     function _expectCommitVoteRevert(address voter, uint256 contentId, bool isUp, bytes4 selector) internal {

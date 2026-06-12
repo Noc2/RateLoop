@@ -67,7 +67,9 @@ library VotePreflightLib {
         resolved = _resolveUnbannedRater(identityRegistry, voter);
         _validateContentAndNotSubmitter(registry, voter, contentId, resolved);
         if (_validateConfidentialityGate(identityRegistry, confidentialityEscrow, contentId, resolved)) {
-            IConfidentialityEscrow(confidentialityEscrow).recordConfidentialityNexus(contentId, resolved.holder);
+            IConfidentialityEscrow(confidentialityEscrow).recordConfidentialityNexusForRegistry(
+                contentId, resolved.holder, address(identityRegistry)
+            );
         }
     }
 
@@ -93,7 +95,9 @@ library VotePreflightLib {
         IRaterIdentityRegistry.ResolvedRater memory resolved = _resolveUnbannedRater(identityRegistry, opener);
         _validateContentAndNotSubmitter(registry, opener, contentId, resolved);
         if (_validateConfidentialityGate(identityRegistry, confidentialityEscrow, contentId, resolved)) {
-            IConfidentialityEscrow(confidentialityEscrow).recordConfidentialityNexus(contentId, resolved.holder);
+            IConfidentialityEscrow(confidentialityEscrow).recordConfidentialityNexusForRegistry(
+                contentId, resolved.holder, address(identityRegistry)
+            );
         }
     }
 

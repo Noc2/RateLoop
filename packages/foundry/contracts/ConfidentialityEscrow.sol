@@ -156,7 +156,7 @@ contract ConfidentialityEscrow is
     }
 
     function confidentialityEscrowConfigShape() external view returns (address registry_, address protocolConfig_) {
-        return (address(registry), address(protocolConfig));
+        return (protocolConfig.raterRegistry(), address(protocolConfig));
     }
 
     function setPaused(bool value) external onlyRole(PAUSER_ROLE) {
@@ -285,7 +285,14 @@ contract ConfidentialityEscrow is
 
     function recordConfidentialityNexus(uint256 contentId, address holder) external {
         if (msg.sender != registry.votingEngine()) revert("Not voting engine");
-        _recordConfidentialityNexus(contentId, holder, msg.sender);
+        _recordConfidentialityNexus(contentId, holder, msg.sender, protocolConfig.raterRegistry());
+    }
+
+    function recordConfidentialityNexusForRegistry(uint256 contentId, address holder, address registryAddress)
+        external
+    {
+        if (msg.sender != registry.votingEngine()) revert("Not voting engine");
+        _recordConfidentialityNexus(contentId, holder, msg.sender, registryAddress);
     }
 
     function recordAccessNexus(uint256 contentId, address holder)
@@ -293,12 +300,17 @@ contract ConfidentialityEscrow is
         onlyRole(ACCESS_RECORDER_ROLE)
         whenNotPaused
     {
-        _recordConfidentialityNexus(contentId, holder, msg.sender);
+        _recordConfidentialityNexus(contentId, holder, msg.sender, protocolConfig.raterRegistry());
     }
 
-    function _recordConfidentialityNexus(uint256 contentId, address holder, address recorder) private {
+    function _recordConfidentialityNexus(
+        uint256 contentId,
+        address holder,
+        address recorder,
+        address registryAddress
+    ) private {
         if (!_configs[contentId].gated) return;
-        _markNullifierBonded(holder);
+        _markNullifierBonded(holder, registryAddress);
         emit ConfidentialityNexusRecorded(contentId, holder, recorder);
     }
 
@@ -390,7 +402,7 @@ contract ConfidentialityEscrow is
         position.amount = config.bondAmount;
         position.slashed = false;
         position.released = false;
-        _markNullifierBonded(resolved.holder);
+        _markNullifierBonded(resolved.holder, protocolConfig.raterRegistry());
         emit BondPosted(contentId, resolved.identityKey, poster, config.bondAsset, config.bondAmount);
         return resolved.identityKey;
     }
@@ -413,8 +425,10 @@ contract ConfidentialityEscrow is
         });
     }
 
-    function _markNullifierBonded(address holder) private {
-        address registryAddress = protocolConfig.raterRegistry();
+    function _markNullifierBonded(address holder, address registryAddress) private {
+        if (registryAddress == address(0)) {
+            registryAddress = protocolConfig.raterRegistry();
+        }
         if (registryAddress == address(0) || holder == address(0)) return;
         try RaterRegistry(registryAddress).getHumanCredential(holder) returns (
             RaterRegistry.HumanCredential memory credential
