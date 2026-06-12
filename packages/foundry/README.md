@@ -31,6 +31,13 @@ On World Chain mainnet and World Chain Sepolia, deploys use a Foundry keystore s
 auto-verification flow. Verify those contracts manually with
 `make verify-blockscout NETWORK=<worldchain|worldchainSepolia> CONTRACT_ADDRESS=0x... CONTRACT_NAME=MyContract`.
 
+The World Chain Sepolia flow is a fresh deployment flow: `script/Deploy.s.sol` creates new proxies and exports a new
+`deployments/4801.json`. Do not use the current `ContentRegistry` implementation as an in-place upgrade for an older
+Sepolia proxy unless a separate migration/backfill is provided for `submissionMediaValidator` and
+`questionBundleRoundObserverByContent`. The `worldchain-sepolia:check -- --live` readiness probe verifies the deployed
+`ContentRegistry.submissionMediaValidator()` exposes the gated-submission validator selectors before the deployment is
+treated as ready.
+
 For a temporary World Chain mainnet canary that uses World ID staging on chain `480`, run:
 
 ```bash
