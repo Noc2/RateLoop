@@ -33,6 +33,7 @@ contract BannedRewardRegistry {
 
 contract BannedRewardVotingEngine {
     struct CommitState {
+        address voter;
         uint16 predictedUpBps;
         uint16 scoreBps;
         uint256 scoringWeight;
@@ -62,10 +63,15 @@ contract BannedRewardVotingEngine {
         voterPool = voterPool_;
     }
 
-    function setCommitState(bytes32 commitKey, uint256 rewardWeight, uint256 stakeReturned, bytes32 identityKey)
-        external
-    {
+    function setCommitState(
+        bytes32 commitKey,
+        address voter,
+        uint256 rewardWeight,
+        uint256 stakeReturned,
+        bytes32 identityKey
+    ) external {
         commitStates[commitKey] = CommitState({
+            voter: voter,
             predictedUpBps: 8_000,
             scoreBps: 8_000,
             scoringWeight: rewardWeight,
@@ -73,6 +79,59 @@ contract BannedRewardVotingEngine {
             stakeReturned: stakeReturned,
             identityKey: identityKey
         });
+    }
+
+    function roundCore(uint256, uint256)
+        external
+        pure
+        returns (
+            uint48 startTime,
+            uint8 state,
+            uint16 voteCount,
+            uint16 revealedCount,
+            uint64 totalStake,
+            uint48 thresholdReachedAt,
+            uint48 settledAt
+        )
+    {
+        startTime = 1;
+        state = uint8(RoundLib.RoundState.Settled);
+        voteCount = 3;
+        revealedCount = 3;
+        totalStake = 3_000_000;
+        thresholdReachedAt = 1;
+        settledAt = 1;
+    }
+
+    function roundLifecycleState(uint256, uint256)
+        external
+        pure
+        returns (uint256 revealGracePeriod, uint256 lastRevealableAfter, uint256 cleanupRemaining, uint48 readyAt)
+    {
+        return (0, 0, 0, 0);
+    }
+
+    function commitCore(uint256, uint256, bytes32 commitKey)
+        external
+        view
+        returns (
+            address voter,
+            uint64 stakeAmount,
+            address frontend,
+            uint48 revealableAfter,
+            bool revealed,
+            bool isUp,
+            uint32 epochIndex
+        )
+    {
+        CommitState memory state = commitStates[commitKey];
+        voter = state.voter;
+        stakeAmount = 1_000_000;
+        frontend = address(0);
+        revealableAfter = 0;
+        revealed = voter != address(0);
+        isUp = true;
+        epochIndex = 0;
     }
 
     function rbtsCommitState(uint256, uint256, bytes32 commitKey)
@@ -182,9 +241,9 @@ contract RoundRewardDistributorBannedRewardTest is Test {
         );
 
         engine.setRoundState(600, 3, 300_000);
-        engine.setCommitState(COMMIT_1, 100, 1_000_000, IDENTITY_1);
-        engine.setCommitState(COMMIT_2, 200, 1_000_000, bytes32(uint256(2)));
-        engine.setCommitState(COMMIT_3, 300, 1_000_000, bytes32(uint256(3)));
+        engine.setCommitState(COMMIT_1, voter1, 100, 1_000_000, IDENTITY_1);
+        engine.setCommitState(COMMIT_2, voter2, 200, 1_000_000, bytes32(uint256(2)));
+        engine.setCommitState(COMMIT_3, voter3, 300, 1_000_000, bytes32(uint256(3)));
         lrep.mint(address(engine), 3_300_000);
     }
 
@@ -207,6 +266,28 @@ contract RoundRewardDistributorBannedRewardTest is Test {
         distributor.exposedClaimRbtsReward(CONTENT_ID, ROUND_ID, COMMIT_3, _commit(voter3), voter3);
         assertEq(lrep.balanceOf(voter3), 1_000_000 + voter3Reward);
         assertEq(distributor.roundVoterRewardClaimedAmount(CONTENT_ID, ROUND_ID), 300_000);
+    }
+
+    function test_ConfiscateBannedRewardCanBeCalledByThirdParty() public {
+        banRegistry.setBanned(IDENTITY_1, true);
+
+        uint256 blockedReward = RewardMath.calculateVoterReward(100, 600, 300_000);
+
+        vm.prank(address(0xBEEF));
+        distributor.confiscateBannedReward(CONTENT_ID, ROUND_ID, COMMIT_1);
+
+        assertEq(lrep.balanceOf(treasury), blockedReward, "blocked share routed");
+        assertEq(lrep.balanceOf(voter1), 1_000_000, "stake returned");
+        assertTrue(distributor.rewardCommitClaimed(CONTENT_ID, ROUND_ID, COMMIT_1));
+        assertTrue(distributor.rewardClaimed(CONTENT_ID, ROUND_ID, voter1));
+        assertEq(distributor.roundVoterRewardClaimedCount(CONTENT_ID, ROUND_ID), 1);
+        assertEq(distributor.roundVoterRewardClaimedAmount(CONTENT_ID, ROUND_ID), blockedReward);
+        assertTrue(distributor.claimAccountingStarted());
+    }
+
+    function test_ConfiscateBannedRewardRejectsUnbannedCommit() public {
+        vm.expectRevert(RoundRewardDistributor.RewardNotConfiscatable.selector);
+        distributor.confiscateBannedReward(CONTENT_ID, ROUND_ID, COMMIT_1);
     }
 
     function _commit(address voter) internal pure returns (RoundLib.Commit memory commit) {

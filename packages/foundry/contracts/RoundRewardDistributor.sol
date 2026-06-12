@@ -50,6 +50,7 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
     error RewardDustAlreadyFinalized();
     error NoRewardDust();
     error VotingEngineNotDrained();
+    error RewardNotConfiscatable();
 
     enum FrontendFeeDisposition {
         Direct,
@@ -236,6 +237,29 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         (bool scored,,,,) = votingEngine.rbtsRoundState(contentId, roundId);
         if (!scored) revert RoundNotSettled();
         _claimRbtsReward(contentId, roundId, commitKey, commit, rewardRecipient);
+    }
+
+    /// @notice Finalize a banned voter reward without requiring the banned voter to call.
+    /// @dev Returned stake still goes back to the original stake payer; the voter-pool reward
+    ///      is routed to protocol by the same blocked-reward branch used by `claimReward`.
+    function confiscateBannedReward(uint256 contentId, uint256 roundId, bytes32 commitKey) external nonReentrant {
+        RoundLib.Round memory round = _readRound(contentId, roundId);
+        if (round.state != RoundLib.RoundState.Settled) revert RoundNotSettled();
+        _requireNoPendingUnrevealedCleanup(contentId, roundId);
+
+        RoundLib.Commit memory commit = _readCommit(contentId, roundId, commitKey);
+        if (commit.voter == address(0) || !commit.revealed) revert InvalidFinalizationInput();
+        if (rewardCommitClaimed[contentId][roundId][commitKey] || rewardClaimed[contentId][roundId][commit.voter]) {
+            revert AlreadyClaimed();
+        }
+        (bool scored,,,,) = votingEngine.rbtsRoundState(contentId, roundId);
+        if (!scored) revert RoundNotSettled();
+        if (!_isCommitIdentityBanned(contentId, roundId, commitKey)) revert RewardNotConfiscatable();
+
+        claimAccountingStarted = true;
+        rewardCommitClaimed[contentId][roundId][commitKey] = true;
+        rewardClaimed[contentId][roundId][commit.voter] = true;
+        _claimRbtsReward(contentId, roundId, commitKey, commit, commit.voter);
     }
 
     function _claimRbtsReward(
