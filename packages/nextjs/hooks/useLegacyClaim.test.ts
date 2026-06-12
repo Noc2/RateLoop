@@ -79,6 +79,19 @@ test("does not switch external wallets or ineligible admin wallets", () => {
   );
 });
 
+test("does not switch when connected wallet is already the eligible legacy admin", () => {
+  assert.equal(
+    shouldSwitchToLegacyAdminWallet({
+      activeWalletId: "in-app-wallet",
+      adminAddress: "0x63cada40E8AcF7A1d47229af5Be35b78b16035fa",
+      adminClaimStatus: "eligible",
+      connectedAddress: "0x63CADA40E8ACF7A1D47229AF5BE35B78B16035FA",
+      isRestoring: false,
+    }),
+    false,
+  );
+});
+
 test("uses sponsored legacy claims only when execution sender matches claim address", () => {
   assert.equal(
     shouldUseSponsoredLegacyClaim({

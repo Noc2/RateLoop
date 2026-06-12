@@ -180,15 +180,11 @@ export function useLegacyClaim() {
     enabled: shouldInspectAdminClaim,
     staleTime: 30_000,
   });
-  const connectedClaimIsForLegacyAdmin =
-    claimQuery.data?.status === "eligible" &&
-    normalizeComparableAddress(legacyAdminAddress) === normalizeComparableAddress(connectedAddress);
-  const effectiveAdminClaimStatus = connectedClaimIsForLegacyAdmin ? "eligible" : adminClaimQuery.data?.status;
   const shouldRestoreLegacyAdminWallet = shouldSwitchToLegacyAdminWallet({
     activeWalletId: activeWallet?.id,
     adminAddress: legacyAdminAddress,
-    adminClaimStatus: effectiveAdminClaimStatus,
-    connectedAddress: activeExecutionAddress ?? connectedAddress,
+    adminClaimStatus: adminClaimQuery.data?.status,
+    connectedAddress,
     isRestoring: isRestoringLegacyWallet,
   });
 
@@ -440,7 +436,7 @@ export function useLegacyClaim() {
     isClaiming: isMining || isSponsoredClaiming,
     isConnected,
     isLoading: claimQuery.isLoading || (shouldInspectAdminClaim && adminClaimQuery.isLoading),
-    isRestoringLegacyWallet: isRestoringLegacyWallet || shouldRestoreLegacyAdminWallet,
+    isRestoringLegacyWallet,
     // CLAIM-3: callers can render a "switch network" prompt when this is true.
     isWrongChain,
     expectedChainId: targetNetwork.id,
