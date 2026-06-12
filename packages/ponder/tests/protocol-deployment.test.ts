@@ -30,6 +30,37 @@ describe("Ponder protocol deployment metadata", () => {
     });
   });
 
+  it("accepts explicit chain ids that match the configured network", () => {
+    const contentRegistryAddress = "0x1000000000000000000000000000000000000001";
+    const feedbackRegistryAddress = "0x1000000000000000000000000000000000000002";
+    const metadata = resolvePonderProtocolDeploymentMetadata({
+      PONDER_NETWORK: "hardhat",
+      PONDER_CHAIN_ID: "31337",
+      PONDER_CONTENT_REGISTRY_ADDRESS: contentRegistryAddress,
+      PONDER_FEEDBACK_REGISTRY_ADDRESS: feedbackRegistryAddress,
+    });
+
+    expect(metadata?.chainId).toBe(31337);
+    expect(metadata?.deploymentKey).toBe(
+      buildPonderProtocolDeploymentKey({
+        chainId: 31337,
+        contentRegistryAddress,
+        feedbackRegistryAddress,
+      }),
+    );
+  });
+
+  it("rejects explicit chain ids that do not match the configured network", () => {
+    expect(() =>
+      resolvePonderProtocolDeploymentMetadata({
+        PONDER_NETWORK: "hardhat",
+        PONDER_CHAIN_ID: "4801",
+        PONDER_CONTENT_REGISTRY_ADDRESS: "0x1000000000000000000000000000000000000001",
+        PONDER_FEEDBACK_REGISTRY_ADDRESS: "0x1000000000000000000000000000000000000002",
+      }),
+    ).toThrow("PONDER_CHAIN_ID 4801 does not match PONDER_NETWORK hardhat (31337).");
+  });
+
   it("returns null without a known chain", () => {
     expect(resolvePonderProtocolDeploymentMetadata({ PONDER_NETWORK: "unknown" })).toBeNull();
   });

@@ -32,11 +32,20 @@ function normalizeRequiredAddress(value: unknown): `0x${string}` | null {
 }
 
 function resolveChainId(env: NodeJS.ProcessEnv | Record<string, string | undefined>) {
-  const explicitChainId = Number.parseInt(readEnv(env, "PONDER_CHAIN_ID") ?? "", 10);
-  if (Number.isSafeInteger(explicitChainId) && explicitChainId > 0) return explicitChainId;
-
   const network = readEnv(env, "PONDER_NETWORK");
-  return network ? PONDER_NETWORK_CHAIN_IDS[network] : undefined;
+  const networkChainId = network ? PONDER_NETWORK_CHAIN_IDS[network] : undefined;
+  const explicitChainId = Number.parseInt(readEnv(env, "PONDER_CHAIN_ID") ?? "", 10);
+  if (Number.isSafeInteger(explicitChainId) && explicitChainId > 0) {
+    if (networkChainId !== undefined && explicitChainId !== networkChainId) {
+      throw new Error(
+        `PONDER_CHAIN_ID ${explicitChainId} does not match PONDER_NETWORK ${network} (${networkChainId}).`,
+      );
+    }
+    if (network !== undefined && networkChainId === undefined) return undefined;
+    return explicitChainId;
+  }
+
+  return networkChainId;
 }
 
 export function buildPonderProtocolDeploymentKey(params: {

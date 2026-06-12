@@ -2,6 +2,7 @@ import {
   DEFAULT_PONDER_DATABASE_SCHEMA,
   buildPonderStartArgs,
   hasSchemaFlag,
+  protocolDeploymentKeyFromEnv,
   schemaFromProtocolDeploymentKey,
   resolvePonderDatabaseSchema,
   schemaFromRailwayDeploymentId,
@@ -62,6 +63,17 @@ describe("Ponder database schema launcher", () => {
     expect(result.schema).toBe(schemaFromProtocolDeploymentKey(deploymentKey));
     expect(result.schema).toMatch(/^rateloop_deployment_[a-f0-9]{16}$/);
     expect(result.source).toBe("RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY");
+  });
+
+  test("rejects explicit chain ids that conflict with the configured network", () => {
+    expect(() =>
+      protocolDeploymentKeyFromEnv({
+        PONDER_NETWORK: "hardhat",
+        PONDER_CHAIN_ID: "4801",
+        PONDER_CONTENT_REGISTRY_ADDRESS: "0x1000000000000000000000000000000000000001",
+        PONDER_FEEDBACK_REGISTRY_ADDRESS: "0x1000000000000000000000000000000000000002",
+      }),
+    ).toThrow("PONDER_CHAIN_ID 4801 does not match PONDER_NETWORK hardhat (31337).");
   });
 
   test("honors a custom DATABASE_SCHEMA", () => {

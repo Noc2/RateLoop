@@ -36,11 +36,20 @@ function normalizeAddress(value) {
 }
 
 function resolveChainId(env) {
-  const explicitChainId = Number.parseInt(readEnv(env, "PONDER_CHAIN_ID") ?? "", 10);
-  if (Number.isSafeInteger(explicitChainId) && explicitChainId > 0) return explicitChainId;
-
   const ponderNetwork = readEnv(env, "PONDER_NETWORK");
-  return PONDER_NETWORK_CHAIN_IDS[ponderNetwork];
+  const networkChainId = PONDER_NETWORK_CHAIN_IDS[ponderNetwork];
+  const explicitChainId = Number.parseInt(readEnv(env, "PONDER_CHAIN_ID") ?? "", 10);
+  if (Number.isSafeInteger(explicitChainId) && explicitChainId > 0) {
+    if (networkChainId !== undefined && explicitChainId !== networkChainId) {
+      throw new Error(
+        `PONDER_CHAIN_ID ${explicitChainId} does not match PONDER_NETWORK ${ponderNetwork} (${networkChainId}).`,
+      );
+    }
+    if (ponderNetwork !== undefined && networkChainId === undefined) return undefined;
+    return explicitChainId;
+  }
+
+  return networkChainId;
 }
 
 export function buildProtocolDeploymentKey({ chainId, contentRegistryAddress, feedbackRegistryAddress }) {

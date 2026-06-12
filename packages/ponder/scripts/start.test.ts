@@ -2,6 +2,7 @@ import { EventEmitter } from "node:events";
 import {
   contractsArtifactsExist,
   ensureContractsArtifacts,
+  resolveProtocolDeploymentKeyFromArtifacts,
   startPonder,
 } from "./start.mjs";
 import { schemaFromProtocolDeploymentKey } from "./databaseSchema.mjs";
@@ -144,5 +145,17 @@ describe("Ponder production launcher", () => {
     expect(warnSpy).toHaveBeenCalledWith(
       `[ponder:start] Using protocol deployment-scoped Ponder schema ${schema}.`,
     );
+  });
+
+  test("rejects artifact deployment keys when PONDER_CHAIN_ID conflicts with PONDER_NETWORK", () => {
+    expect(() =>
+      resolveProtocolDeploymentKeyFromArtifacts({
+        env: {
+          PONDER_NETWORK: "hardhat",
+          PONDER_CHAIN_ID: "4801",
+        },
+        requireImpl: vi.fn(),
+      }),
+    ).toThrow("PONDER_CHAIN_ID 4801 does not match PONDER_NETWORK hardhat (31337).");
   });
 });
