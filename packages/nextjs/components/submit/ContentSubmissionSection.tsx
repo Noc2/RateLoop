@@ -983,7 +983,9 @@ export function ContentSubmissionSection() {
     [contextUrl],
   );
   const normalizedPublicContextUrl = contextVisibility === "gated" ? "" : normalizedContextUrl;
-  const previewMediaUrl = mediaMode === "video" ? normalizedVideoUrl : (normalizedImageUrls[0] ?? "");
+  const previewMediaUrl =
+    mediaMode === "video" ? normalizedVideoUrl : contextVisibility === "gated" ? "" : (normalizedImageUrls[0] ?? "");
+  const privatePreviewImageCount = contextVisibility === "gated" ? normalizedImageUrls.length : 0;
   const hasValidPreviewMedia =
     Boolean(previewMediaUrl) &&
     (mediaMode === "video"
@@ -1780,6 +1782,8 @@ export function ContentSubmissionSection() {
       } catch (error) {
         nextDetailsError = error instanceof Error ? error.message : "Details are invalid.";
       }
+    } else if (isPrivateContext) {
+      nextDetailsError = "Description is required for private context.";
     }
     const submittedImageUrls =
       draft.mediaMode === "images"
@@ -2974,10 +2978,10 @@ export function ContentSubmissionSection() {
   const hasPrivateContextDraft = questionDrafts.some((draft, index) =>
     index === activeQuestionIndex ? privateContextEnabled : draft.contextVisibility === "gated",
   );
-  const hasPrivateContextDetails = privateContextEnabled && Boolean(detailsText.trim());
+  const privateDetailsMissing = questionStepAttempted && privateContextEnabled && !detailsText.trim();
   const contextOrMediaMissing =
     questionStepAttempted &&
-    !hasPrivateContextDetails &&
+    !privateContextEnabled &&
     !normalizedPublicContextUrl &&
     normalizedImageUrls.length === 0 &&
     !hasImageInput &&
@@ -3193,10 +3197,22 @@ export function ContentSubmissionSection() {
   );
 
   const questionPreviewCard =
-    previewUrl || title || detailsPreviewText ? (
+    previewUrl || title || detailsPreviewText || privatePreviewImageCount > 0 ? (
       <div className="surface-card rounded-2xl p-4 space-y-3">
         <p className="text-base font-medium uppercase tracking-wider text-base-content/60">Preview</p>
         {title ? <h3 className="line-clamp-2 text-lg font-semibold text-base-content">{title}</h3> : null}
+        {privatePreviewImageCount > 0 ? (
+          <div className="flex items-center gap-3 rounded-lg border border-base-300 bg-base-100 p-3">
+            <div className="flex h-12 w-16 shrink-0 items-center justify-center rounded-md bg-base-200 text-base-content/60">
+              <LockClosedIcon className="h-5 w-5" aria-hidden="true" />
+            </div>
+            <p className="text-sm font-medium text-base-content">
+              {privatePreviewImageCount === 1
+                ? "Private image attached"
+                : `${privatePreviewImageCount} private images attached`}
+            </p>
+          </div>
+        ) : null}
         {previewUrl ? (
           <ContentEmbed
             url={previewUrl}
@@ -4375,20 +4391,27 @@ export function ContentSubmissionSection() {
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-base font-medium">
+                  <label
+                    className={`mb-2 block text-base font-medium ${
+                      detailsError || privateDetailsMissing ? "text-error" : ""
+                    }`}
+                  >
                     Description{" "}
                     <span className="text-base-content/60">{privateContextEnabled ? "(required)" : "(optional)"}</span>
                   </label>
                   <textarea
                     placeholder="Add context voters can expand before rating"
                     className={`textarea textarea-bordered min-h-32 w-full bg-base-100 ${
-                      detailsError ? "textarea-error" : ""
+                      detailsError || privateDetailsMissing ? "textarea-error" : ""
                     }`}
                     value={detailsText}
                     onChange={e => handleDetailsTextChange(e.target.value)}
                     maxLength={MAX_QUESTION_DETAILS_TEXT_LENGTH}
                   />
                   {detailsError ? <p className="mt-1 text-base text-error">{detailsError}</p> : null}
+                  {privateDetailsMissing && !detailsError ? (
+                    <p className="mt-1 text-base text-error">Description is required for private context.</p>
+                  ) : null}
                   <div className="mt-1 text-right">
                     <span className="text-base text-base-content/60">
                       {detailsText.length}/{MAX_QUESTION_DETAILS_TEXT_LENGTH}
