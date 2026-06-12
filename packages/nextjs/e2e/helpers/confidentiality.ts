@@ -21,8 +21,23 @@ import { setupWallet } from "./wallet-session";
 import { installLocalE2EWorldIdMock, readActiveHumanCredential } from "./world-id";
 import type { APIRequestContext, Page } from "@playwright/test";
 import { expect } from "@playwright/test";
-import { keccak256, toBytes, type Hex } from "viem";
+import {
+  createPublicClient,
+  createWalletClient,
+  http,
+  keccak256,
+  maxUint64,
+  toBytes,
+  type Hex,
+} from "viem";
 import { privateKeyToAccount } from "viem/accounts";
+import { foundry } from "viem/chains";
+import {
+  ConfidentialityEscrowAbi,
+  RaterRegistryAbi,
+  RaterRegistryConfidentialityAbi,
+} from "@rateloop/contracts/abis";
+import { E2E_RPC_URL } from "./service-urls";
 
 export const CONFIDENTIALITY_BOND_ASSET_LREP = 0;
 export const CONFIDENTIALITY_BOND_ASSET_USDC = 1;
@@ -61,6 +76,19 @@ type TermsAcceptanceInput = {
   detailsHash?: string | null;
   questionMetadataHash?: string | null;
 };
+
+type ResolvedConfidentialRater = {
+  delegated: boolean;
+  hasActiveHumanCredential: boolean;
+  holder: `0x${string}`;
+  humanNullifier: Hex;
+  identityKey: Hex;
+};
+
+const confidentialityPublicClient = createPublicClient({
+  chain: foundry,
+  transport: http(E2E_RPC_URL),
+});
 
 function normalizeAssetName(asset: "LREP" | "USDC" | string) {
   return asset.trim().toUpperCase() === "USDC" ? "USDC" : "LREP";
@@ -231,6 +259,34 @@ export async function acceptConfidentialityTerms(
   return cookie!;
 }
 
+export async function createPrivateAccountReadSessionCookie(
+  request: APIRequestContext,
+  account: AnvilAccount,
+): Promise<string> {
+  const challengeResponse = await request.post("/api/account/private-session/challenge", {
+    data: { address: account.address },
+  });
+  expect(challengeResponse.ok(), await challengeResponse.text()).toBe(true);
+  const challenge = await challengeResponse.json();
+  expect(typeof challenge.challengeId).toBe("string");
+  expect(typeof challenge.message).toBe("string");
+
+  const signer = privateKeyToAccount(account.privateKey);
+  const signature = await signer.signMessage({ message: challenge.message });
+  const sessionResponse = await request.post("/api/account/private-session", {
+    data: {
+      address: account.address,
+      challengeId: challenge.challengeId,
+      signature,
+    },
+  });
+  expect(sessionResponse.ok(), await sessionResponse.text()).toBe(true);
+
+  const cookie = getNamedSetCookie(sessionResponse.headers(), "rateloop_gated_context_read_session");
+  expect(cookie, "private account session should return a gated context read-session cookie").toBeTruthy();
+  return cookie!;
+}
+
 export async function postConfidentialityBond(page: Page, asset: "LREP" | "USDC" | string = "LREP") {
   const normalizedAsset = normalizeAssetName(asset);
   const button = page.getByRole("button", { name: new RegExp(`Post ${normalizedAsset} bond`, "i") });
@@ -314,4 +370,78 @@ export async function approveConfidentialityBondSpender(
   tokenAddress = CONTRACT_ADDRESSES.LoopReputation,
 ) {
   return approveLREP(CONTRACT_ADDRESSES.ConfidentialityEscrow, amount, account.address, tokenAddress);
+}
+
+export async function resolveConfidentialRater(account: AnvilAccount): Promise<ResolvedConfidentialRater> {
+  const resolved = await confidentialityPublicClient.readContract({
+    address: CONTRACT_ADDRESSES.RaterRegistry,
+    abi: RaterRegistryAbi,
+    functionName: "resolveRater",
+    args: [account.address],
+  });
+
+  return {
+    delegated: Boolean(resolved.delegated),
+    hasActiveHumanCredential: Boolean(resolved.hasActiveHumanCredential),
+    holder: resolved.holder as `0x${string}`,
+    humanNullifier: resolved.humanNullifier as Hex,
+    identityKey: resolved.identityKey as Hex,
+  };
+}
+
+export async function postConfidentialityBondDirect(account: AnvilAccount, contentId: string | number | bigint) {
+  const walletClient = createWalletClient({
+    account: privateKeyToAccount(account.privateKey),
+    chain: foundry,
+    transport: http(E2E_RPC_URL),
+  });
+  const hash = await walletClient.writeContract({
+    address: CONTRACT_ADDRESSES.ConfidentialityEscrow,
+    abi: ConfidentialityEscrowAbi,
+    functionName: "postBond",
+    args: [BigInt(contentId)],
+  });
+  const receipt = await confidentialityPublicClient.waitForTransactionReceipt({ hash });
+  expect(receipt.status, `Confidentiality bond post failed for ${account.address}`).toBe("success");
+}
+
+export async function banConfidentialityIdentity(account: AnvilAccount, reason = "E2E confidentiality breach") {
+  const resolved = await resolveConfidentialRater(account);
+  expect(resolved.hasActiveHumanCredential, "Viewer must have an active credential before ban").toBe(true);
+  expect(resolved.humanNullifier).not.toBe(`0x${"0".repeat(64)}`);
+
+  const walletClient = createWalletClient({
+    account: privateKeyToAccount(ANVIL_ACCOUNTS.account9.privateKey),
+    chain: foundry,
+    transport: http(E2E_RPC_URL),
+  });
+  const evidenceHash = keccak256(toBytes(`${reason}:${account.address}:${Date.now()}`));
+  const hash = await walletClient.writeContract({
+    address: CONTRACT_ADDRESSES.RaterRegistry,
+    abi: RaterRegistryConfidentialityAbi,
+    functionName: "banIdentity",
+    args: [1, resolved.humanNullifier, maxUint64, reason, evidenceHash],
+  });
+  const receipt = await confidentialityPublicClient.waitForTransactionReceipt({ hash });
+  expect(receipt.status, `Confidentiality identity ban failed for ${account.address}`).toBe("success");
+  return resolved;
+}
+
+export async function unbanConfidentialityIdentity(account: AnvilAccount) {
+  const resolved = await resolveConfidentialRater(account);
+  if (resolved.humanNullifier === `0x${"0".repeat(64)}`) return;
+
+  const walletClient = createWalletClient({
+    account: privateKeyToAccount(ANVIL_ACCOUNTS.account9.privateKey),
+    chain: foundry,
+    transport: http(E2E_RPC_URL),
+  });
+  const hash = await walletClient.writeContract({
+    address: CONTRACT_ADDRESSES.RaterRegistry,
+    abi: RaterRegistryConfidentialityAbi,
+    functionName: "unbanIdentity",
+    args: [1, resolved.humanNullifier],
+  });
+  const receipt = await confidentialityPublicClient.waitForTransactionReceipt({ hash });
+  expect(receipt.status, `Confidentiality identity unban failed for ${account.address}`).toBe("success");
 }
