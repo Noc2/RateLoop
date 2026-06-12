@@ -18,7 +18,7 @@ export function PromoVideo() {
   };
 
   return (
-    <div className="relative mb-14 w-full overflow-hidden rounded-lg bg-base-300 shadow-[0_24px_60px_rgb(0_0_0/0.35)]">
+    <div className="relative mb-14 w-full overflow-hidden rounded-lg border border-base-content/10 bg-base-300 shadow-[0_24px_60px_rgb(0_0_0/0.35)]">
       {}
       <video
         ref={videoRef}

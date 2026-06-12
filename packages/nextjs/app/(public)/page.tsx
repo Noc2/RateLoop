@@ -95,9 +95,19 @@ const FEATURE_BENEFITS: {
   },
 ];
 
-function SectionHeading({ number, title, gradientText }: { number: string; title: string; gradientText: string }) {
+function SectionHeading({
+  number,
+  title,
+  gradientText,
+  className = "mb-12 sm:mb-16",
+}: {
+  number: string;
+  title: string;
+  gradientText: string;
+  className?: string;
+}) {
   return (
-    <div className="mb-12 sm:mb-16">
+    <div className={className}>
       <span className="mb-6 block font-mono text-sm tracking-widest text-base-content/70">{number}</span>
       <h2 className="display-section text-[2.35rem] text-base-content sm:text-[3.25rem] lg:text-[3.9rem] xl:text-[4.15rem]">
         {title} <span className="rateloop-text-gradient">{gradientText}</span>
@@ -145,7 +155,7 @@ function AskWorkflowSection() {
 
   return (
     <section className="relative z-10 mt-12 w-full sm:mt-16 lg:mt-20">
-      <SectionHeading number="01" title="How It" gradientText="Works" />
+      <SectionHeading number="01" title="How It" gradientText="Works" className="mb-6" />
       <PromoVideo />
       <div className="grid grid-cols-1 items-stretch gap-x-12 gap-y-14 md:grid-cols-3">
         <div className="h-full">
