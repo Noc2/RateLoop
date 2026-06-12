@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { NextPage } from "next";
-import { DocumentTextIcon, IdentificationIcon, LockClosedIcon } from "@heroicons/react/24/outline";
+import { DocumentTextIcon, IdentificationIcon, LockClosedIcon, ShieldCheckIcon } from "@heroicons/react/24/outline";
 
 const LegalPage: NextPage = () => {
   const legalPages = [
@@ -22,6 +22,12 @@ const LegalPage: NextPage = () => {
       href: "/legal/imprint",
       icon: IdentificationIcon,
     },
+    {
+      title: "Confidential Context",
+      description: "Protocol-facing terms for gated question context",
+      href: "/confidential-context/terms",
+      icon: ShieldCheckIcon,
+    },
   ];
 
   return (
@@ -31,7 +37,7 @@ const LegalPage: NextPage = () => {
         Legal documents and disclosures for RateLoop and Loop Reputation (LREP).
       </p>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {legalPages.map(page => (
           <Link
             key={page.href}

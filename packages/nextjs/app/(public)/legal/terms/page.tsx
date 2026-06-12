@@ -282,24 +282,13 @@ const TermsPage: NextPage = () => {
           validate, transform, moderate, reject, store, cache, display, or remove uploaded media to operate the Service,
           protect users, comply with law, and enforce these Terms.
         </p>
-        <h3 id="confidential-context">10.1 Confidential Context</h3>
         <p>
-          Some questions may use RateLoop-hosted confidential context. Before viewing that context, you may be required
-          to sign a wallet message confirming: &quot;I agree not to record, copy, share, publish, or discuss this
-          confidential RateLoop question context except as needed to rate it on RateLoop.&quot;
-        </p>
-        <p>
-          Confidential context is a serving-layer access restriction, not a guarantee that disclosure is impossible. You
-          must not bypass the gate, share gated links, screenshot or redistribute confidential material, or use it
-          outside the rating task. The Interface may watermark served media, log access events, publish evidence hashes,
-          and submit suspected breaches to governance or moderation review.
-        </p>
-        <p>
-          A proven confidentiality breach may result in loss of access to gated questions, loss or slashing of any
-          posted confidentiality bond, clawback or denial of pending bonus rewards where protocol rules allow it,
-          reputation consequences, and governance-approved restrictions on future surplus earning paths. These measures
-          are intended to protect confidential rating workflows and do not create any promise that private material can
-          never be copied by a viewer.
+          Some questions may use RateLoop-hosted confidential context. Access to that material is governed by separate{" "}
+          <Link href="/confidential-context/terms" className="link link-primary">
+            Confidential Context Access Terms
+          </Link>{" "}
+          that are designed as protocol-facing gated-context terms rather than operator-specific Terms of Service. You
+          may be asked to sign those terms with your wallet before viewing hosted gated context.
         </p>
         <p>
           Questions, ratings, feedback, and other public submissions may be bounty-funded or otherwise compensated. You
