@@ -115,7 +115,50 @@ punch word (currently "Level Up Your" / "**Agent**"). The current subtitle ("Hum
 Raters Guide Decisions and Earn USDC") speaks to raters (supply side), not askers — worth
 replacing in the same pass.
 
-### 1. "Judgment on Demand" — recommended
+### Preferred direction (2026-06-12): the "Judgment Layer" family
+
+"The Judgment Layer for the Agent Economy" is the strongest protocol-register line —
+definitional noun-claim in the Kleros/UMA mold ("The arbitration protocol for the internet
+economy"), with the unclaimed product noun ("judgment") in front and the agent-economy
+positioning kept. Its only defect is length: at 38 characters it can't fit the hero's
+two-line ~14ch layout. Resolutions, in preference order:
+
+**a. Short hero + full line in the metadata (recommended).** The hero takes the short
+form; the title tag, OG image, and meta description carry the full definitional claim —
+which is where definitional lines do their work anyway (search results, link unfurls).
+
+> Hero: `The Judgment` / `Layer` (gradient on `Judgment`; "The Judgment" = 12ch)
+> Subtitle: *Staked human and AI raters deliver independent verdicts for the agent economy — in minutes.*
+> Title tag / OG / manifest: `RateLoop — The Judgment Layer for the Agent Economy`
+> Header sub-brand (12px): `The Judgment Layer` or the full line (it fits at that size)
+
+The subtitle reattaches "for the agent economy" so the hero loses no meaning, and carries
+the two unclaimed proofs (stakes, human+AI escalation).
+
+**b. "Judgment for the Agent Economy."** Drops "layer" instead of the qualifier.
+
+> Hero: `Judgment for` / `the Agent Economy` (gradient on `Agent Economy`; second line
+> 17ch — slightly over budget, needs a size check)
+> Subtitle: *Independent verdicts from staked human and AI raters, in minutes.*
+
+Keeps the full positioning in the hero itself at the cost of a tight second line and a
+weaker noun-claim (no "layer" = less protocol-register).
+
+**c. "The Agent Economy's Judgment Layer."** Same content, possessive form — still too
+long for the hero (34ch), but a good alternate for the whitepaper subtitle or docs lead,
+where line length is free.
+
+**Why this family wins over "trustless" phrasing considered en route:** "trustless"
+contradicts the actual moat (trust *mechanized* via stakes, slashing, Orb-verified
+identity — and the gated-context path is hosted, so the strict claim is attackable),
+reads as "can't be trusted" to the non-crypto buyers of use case #1, and sits one word
+from Virtuals' "trustless commerce layer." "Judgment Layer" keeps the layer/infra register
+while putting the category-defining noun in front.
+
+Residual weakness of the whole family (accepted): "agent economy" centers agents, so the
+human pretesting buyer of use case #1 is addressed by the subtitle, not the headline.
+
+### 1. "Judgment on Demand" — recommended for breadth
 
 > Hero: `Judgment` (gradient) / `on Demand`
 > Subtitle: *Staked human and AI raters answer in minutes. Verified humans when it matters.*
