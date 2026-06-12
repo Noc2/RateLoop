@@ -38,9 +38,10 @@ contract ProfileRegistry is IProfileRegistry, Initializable, AccessControlUpgrad
     IRaterIdentityRegistry public raterRegistry;
     mapping(address => bytes32) private _profileIdentityKeys;
     mapping(bytes32 => address) private _profileOwnerByIdentityKey;
+    uint256 private _activeProfileCount;
 
     /// @dev Reserved storage gap for future upgrades
-    uint256[46] private __gap;
+    uint256[45] private __gap;
 
     // --- Events ---
     event ProfileCreated(address indexed user, string name, string selfReport);
@@ -152,6 +153,7 @@ contract ProfileRegistry is IProfileRegistry, Initializable, AccessControlUpgrad
 
         if (isNewProfile) {
             profile.createdAt = block.timestamp;
+            _activeProfileCount += 1;
             _trackRegisteredAddress(msg.sender);
             emit ProfileCreated(msg.sender, name, selfReport);
         } else {
@@ -236,34 +238,22 @@ contract ProfileRegistry is IProfileRegistry, Initializable, AccessControlUpgrad
         view
         returns (address[] memory addresses, uint256 total)
     {
-        if (limit == 0) {
-            return (new address[](0), _activeRegisteredAddressCount());
-        }
+        total = _activeProfileCount;
+        if (limit == 0 || offset >= total) return (new address[](0), total);
 
-        address[] memory page = new address[](limit);
+        uint256 remaining = total - offset;
+        if (limit > remaining) limit = remaining;
+        addresses = new address[](limit);
+        uint256 activeSeen;
         uint256 collected;
         uint256 registeredLength = _registeredAddresses.length;
         for (uint256 i = 0; i < registeredLength; i++) {
             address candidate = _registeredAddresses[i];
             if (_profiles[candidate].createdAt == 0) continue;
 
-            if (total >= offset && collected < limit) {
-                page[collected] = candidate;
-                collected++;
-            }
-            total++;
-        }
-
-        addresses = new address[](collected);
-        for (uint256 i = 0; i < collected; i++) {
-            addresses[i] = page[i];
-        }
-    }
-
-    function _activeRegisteredAddressCount() internal view returns (uint256 total) {
-        uint256 registeredLength = _registeredAddresses.length;
-        for (uint256 i = 0; i < registeredLength; i++) {
-            if (_profiles[_registeredAddresses[i]].createdAt > 0) total++;
+            if (activeSeen++ < offset) continue;
+            addresses[collected++] = candidate;
+            if (collected == limit) break;
         }
     }
 
@@ -318,7 +308,8 @@ contract ProfileRegistry is IProfileRegistry, Initializable, AccessControlUpgrad
         StoredProfile storage previous = _profiles[previousOwner];
         string memory previousName = previous.name;
         bytes32 previousNameHash = bytes(previousName).length == 0 ? bytes32(0) : _normalizeAndHash(previousName);
-        bool canMoveProfile = previous.createdAt != 0 && _profiles[user].createdAt == 0;
+        bool previousHadProfile = previous.createdAt != 0;
+        bool canMoveProfile = previousHadProfile && _profiles[user].createdAt == 0;
 
         if (canMoveProfile) {
             StoredProfile storage migrated = _profiles[user];
@@ -340,6 +331,9 @@ contract ProfileRegistry is IProfileRegistry, Initializable, AccessControlUpgrad
         }
 
         delete _profiles[previousOwner];
+        if (!canMoveProfile && previousHadProfile) {
+            _activeProfileCount -= 1;
+        }
         delete _profileIdentityKeys[previousOwner];
         _profileOwnerByIdentityKey[identityKey] = user;
     }

@@ -51,6 +51,12 @@
     {
       "slot": 8,
       "offset": 0,
+      "label": "_activeProfileCount",
+      "type": "t_uint256"
+    },
+    {
+      "slot": 9,
+      "offset": 0,
       "label": "__gap",
       "type": "t_array(t_uint256)"
     }
@@ -72,8 +78,8 @@
     {
       "id": "t_array(t_uint256)",
       "encoding": "inplace",
-      "label": "uint256[46]",
-      "numberOfBytes": "1472",
+      "label": "uint256[45]",
+      "numberOfBytes": "1440",
       "base": "t_uint256"
     },
     {

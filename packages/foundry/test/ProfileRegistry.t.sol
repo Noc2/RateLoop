@@ -408,6 +408,32 @@ contract ProfileRegistryTest is Test {
         assertEq(addresses[1], remintedUser);
     }
 
+    function test_ReboundIdentityToExistingProfileRemovesOldOwnerFromPagination() public {
+        vm.prank(user1);
+        registry.setProfile("alice", "");
+        vm.prank(user2);
+        registry.setProfile("bob", "");
+
+        bytes32 anchor = bytes32(uint256(uint160(user1)));
+        vm.startPrank(admin);
+        raterRegistry.revokeHumanCredential(user1);
+        raterRegistry.clearRevokedHumanNullifier(RaterRegistry.HumanCredentialProvider.SeededHuman, anchor);
+        _seedIdentity(user2, anchor);
+        vm.stopPrank();
+
+        vm.prank(user2);
+        registry.setProfile("bob", "");
+
+        assertFalse(registry.hasProfile(user1));
+        assertTrue(registry.hasProfile(user2));
+        assertEq(registry.getAddressByName("alice"), address(0));
+
+        (address[] memory addresses, uint256 total) = registry.getRegisteredAddressesPaginated(0, 10);
+        assertEq(total, 1);
+        assertEq(addresses.length, 1);
+        assertEq(addresses[0], user2);
+    }
+
     function test_DifferentIdentityCannotReclaimProfileName() public {
         vm.prank(user1);
         registry.setProfile("alice", "");
