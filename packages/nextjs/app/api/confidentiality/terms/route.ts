@@ -20,6 +20,34 @@ import { checkRateLimit } from "~~/utils/rateLimit";
 
 const READ_RATE_LIMIT = { limit: 60, windowMs: 60_000 };
 const WRITE_RATE_LIMIT = { limit: 20, windowMs: 60_000 };
+const CONFIDENTIALITY_TERMS_STORAGE_MIGRATION_PATH = "packages/nextjs/drizzle/0005_confidentiality.sql";
+const CONFIDENTIALITY_TERMS_STORAGE_TABLES = [
+  "confidentiality_terms_acceptances",
+  "signed_action_challenges",
+  "signed_read_sessions",
+] as const;
+
+function isConfidentialityTermsStorageUnavailableError(error: unknown, depth = 0): boolean {
+  if (!error || typeof error !== "object") return false;
+
+  const maybeError = error as { cause?: unknown; code?: unknown; message?: unknown };
+  const message = typeof maybeError.message === "string" ? maybeError.message : "";
+  const code = typeof maybeError.code === "string" ? maybeError.code : "";
+  const mentionsTermsStorage = CONFIDENTIALITY_TERMS_STORAGE_TABLES.some(table => message.includes(table));
+
+  if ((code === "42P01" || code === "42703") && mentionsTermsStorage) return true;
+  if (
+    mentionsTermsStorage &&
+    ((message.includes("relation") && message.includes("does not exist")) ||
+      (message.includes("column") && message.includes("does not exist")))
+  ) {
+    return true;
+  }
+
+  return depth < 3 && maybeError.cause !== undefined
+    ? isConfidentialityTermsStorageUnavailableError(maybeError.cause, depth + 1)
+    : false;
+}
 
 export async function GET(request: NextRequest) {
   const contentId = request.nextUrl.searchParams.get("contentId");
@@ -124,6 +152,19 @@ export async function POST(request: NextRequest) {
       termsVersion: payload.termsVersion,
     });
   } catch (error) {
+    if (isConfidentialityTermsStorageUnavailableError(error)) {
+      console.warn("Confidentiality terms storage unavailable. Apply pending database migrations before accepting terms.");
+      return NextResponse.json(
+        {
+          code: "service_unavailable",
+          error: "Confidentiality terms storage is not ready yet",
+          message: `Apply pending database migrations, including ${CONFIDENTIALITY_TERMS_STORAGE_MIGRATION_PATH}, before accepting confidential context terms.`,
+          retryable: true,
+        },
+        { status: 503 },
+      );
+    }
+
     console.error("Error accepting confidentiality terms:", error);
     return NextResponse.json({ error: "Failed to accept confidentiality terms" }, { status: 500 });
   }
