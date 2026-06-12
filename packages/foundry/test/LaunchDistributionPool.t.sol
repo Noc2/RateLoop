@@ -1328,6 +1328,46 @@ contract LaunchDistributionPoolTest is Test {
         assertEq(pool.verifiedAnchorDistinctRaterCount(anchorId), 0);
     }
 
+    function test_FinalizePendingLaunchCreditSkipsAnchorBannedAfterRecord() public {
+        ClusterPayoutOracle oracle = _configureLaunchOracle(1);
+        bytes32 nullifier = keccak256("pending-anchor-ban");
+        bytes32 anchorId = registry.launchHumanIdentityKey(RaterRegistry.HumanCredentialProvider.SeededHuman, nullifier);
+        bytes32 commitKey = keccak256("pending-anchor-ban-finalize");
+
+        assertEq(
+            pool.recordEarnedRaterRewardWithSourceReady(
+                alice,
+                1,
+                1,
+                commitKey,
+                8_000,
+                3,
+                true,
+                pool.MIN_LAUNCH_CREDIT_STAKE(),
+                _singleAnchor(anchorId),
+                uint64(block.timestamp)
+            ),
+            0
+        );
+        assertEq(pool.pendingVerifiedAnchorReservationCount(anchorId, alice), 1);
+        assertTrue(pool.verifiedAnchorRaterSeen(anchorId, alice));
+        assertEq(pool.verifiedAnchorDistinctRaterCount(anchorId), 1);
+
+        _banIdentity(RaterRegistry.HumanCredentialProvider.SeededHuman, nullifier);
+
+        IClusterPayoutOracle.PayoutWeight memory payout =
+            _launchPayoutWeight(1, commitKey, alice, 10_000, keccak256("anchor-banned"));
+        _proposeAndFinalizeLaunchPayoutSnapshot(oracle, 1, payout, keccak256("epoch-artifact"));
+
+        assertEq(pool.finalizeEarnedRaterRewardCredit(1, 1, commitKey, payout, new bytes32[](0)), 0);
+        assertTrue(pool.earnedRewardCreditFinalized(1, 1, commitKey));
+        assertEq(pool.pendingVerifiedAnchorReservationCount(anchorId, alice), 0);
+        assertFalse(pool.raterVerifiedAnchorSeen(alice, anchorId));
+        assertFalse(pool.verifiedAnchorRaterSeen(anchorId, alice));
+        assertEq(pool.raterDistinctVerifiedAnchorCount(alice), 0);
+        assertEq(pool.verifiedAnchorDistinctRaterCount(anchorId), 0);
+    }
+
     function test_PendingAdvisoryLaunchCreditsReserveVerifiedAnchorFanoutAtRecordTime() public {
         _configureLaunchOracle(1);
         bytes32 anchorId = bytes32("advisory-anchor");

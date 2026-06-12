@@ -1236,13 +1236,9 @@ contract LaunchDistributionPool is
         uint256 stakeAmount,
         uint16 distinctRoundAnchors
     ) internal pure returns (bool) {
-        if (rater == address(0) || commitKey == bytes32(0)) return false;
-        if (scoreBps < policy.minQualifyingScoreBps) return false;
-        if (revealedRaterCount < policy.minVoters) return false;
-        if (policy.requireNoPendingCleanup && !noPendingCleanup) return false;
-        if (stakeAmount < policy.minLaunchCreditStake) return false;
-        if (distinctRoundAnchors < policy.minVerifiedHumans) return false;
-        return true;
+        return rater != address(0) && commitKey != bytes32(0) && scoreBps >= policy.minQualifyingScoreBps
+            && revealedRaterCount >= policy.minVoters && (!policy.requireNoPendingCleanup || noPendingCleanup)
+            && stakeAmount >= policy.minLaunchCreditStake && distinctRoundAnchors >= policy.minVerifiedHumans;
     }
 
     function _passesAdvisoryLaunchRewardContext(
@@ -1254,12 +1250,9 @@ contract LaunchDistributionPool is
         bool noPendingCleanup,
         uint16 distinctRoundAnchors
     ) internal pure returns (bool) {
-        if (rater == address(0) || advisoryCommitKey == bytes32(0)) return false;
-        if (scoreBps < policy.minQualifyingScoreBps) return false;
-        if (revealedRaterCount < policy.minVoters) return false;
-        if (policy.requireNoPendingCleanup && !noPendingCleanup) return false;
-        if (distinctRoundAnchors < policy.minVerifiedHumans) return false;
-        return true;
+        return rater != address(0) && advisoryCommitKey != bytes32(0) && scoreBps >= policy.minQualifyingScoreBps
+            && revealedRaterCount >= policy.minVoters && (!policy.requireNoPendingCleanup || noPendingCleanup)
+            && distinctRoundAnchors >= policy.minVerifiedHumans;
     }
 
     function _recordAnchorRound(address rater, uint256 contentId, uint256 roundId) internal {
@@ -1300,6 +1293,7 @@ contract LaunchDistributionPool is
         returns (bool recorded)
     {
         if (raterVerifiedAnchorSeen[rater][anchorId]) return true;
+        if (_isVerifiedAnchorBanned(anchorId)) return false;
         bool reservedOrSeen = verifiedAnchorRaterSeen[anchorId][rater];
         if (!reservedOrSeen && verifiedAnchorDistinctRaterCount[anchorId] >= policy.maxDistinctRatersPerVerifiedAnchor)
         {
