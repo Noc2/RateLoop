@@ -162,6 +162,8 @@ const MAX_QUESTION_BUNDLE_COUNT = 10;
 const MAX_CONTENT_TAGS_LENGTH = 256;
 const DEFAULT_SUBMISSION_BOUNTY_AMOUNT = "1";
 const DEFAULT_SUBMISSION_ROUND_MAX_VOTERS = 100;
+const CONFIDENTIALITY_BOND_TOOLTIP =
+  "Optional extra bond raters must post before private context is served. Use 0 for no extra bond.";
 const SECONDS_PER_MINUTE = 60;
 const SECONDS_PER_HOUR = 60 * SECONDS_PER_MINUTE;
 const MIN_HUMAN_RESPONSE_WINDOW_MINUTES = 20;
@@ -3312,6 +3314,42 @@ export function ContentSubmissionSection() {
 
   const bountyDetailsCard = (
     <div className="space-y-5">
+      {hasPrivateContextDraft ? (
+        <div className="rounded-lg border border-warning/30 bg-warning/10 p-4">
+          <div className="flex items-center gap-2">
+            <LockClosedIcon className="h-4 w-4 shrink-0 text-warning" />
+            <p className="text-sm font-semibold text-base-content">Confidentiality bond</p>
+            <InfoTooltip text={CONFIDENTIALITY_BOND_TOOLTIP} position="top" className="text-base-content/45" />
+          </div>
+          <div className="mt-4 grid grid-cols-[max-content_minmax(0,1fr)] items-center gap-x-3 gap-y-2 sm:grid-cols-[max-content_7.5rem_max-content_9rem]">
+            <label htmlFor="submission-confidentiality-bond-asset" className="label-text text-sm font-medium">
+              Asset
+            </label>
+            <select
+              id="submission-confidentiality-bond-asset"
+              className="select select-bordered select-sm w-full bg-base-100"
+              value={confidentialityBondAsset}
+              onChange={e => setConfidentialityBondAsset(e.target.value as "LREP" | "USDC")}
+            >
+              <option value="LREP">LREP</option>
+              <option value="USDC">USDC</option>
+            </select>
+            <label htmlFor="submission-confidentiality-bond-amount" className="label-text text-sm font-medium">
+              Amount
+            </label>
+            <input
+              id="submission-confidentiality-bond-amount"
+              type="text"
+              inputMode="decimal"
+              className="input input-bordered input-sm w-full bg-base-100"
+              value={confidentialityBondAmount}
+              onChange={e => setConfidentialityBondAmount(e.target.value)}
+              aria-label="Confidentiality bond amount"
+            />
+          </div>
+        </div>
+      ) : null}
+
       <p className="flex items-center gap-1.5 text-base font-medium text-base-content">
         Bounty
         <InfoTooltip text={protocolDocFacts.usdcBountyPayoutTimingTooltip} />
@@ -3362,45 +3400,6 @@ export function ContentSubmissionSection() {
         <InfoTooltip text={bountyAmountTooltipText} className="shrink-0" />
       </div>
       {bountyStepAttempted && rewardAmountError ? <p className="text-base text-error">{rewardAmountError}</p> : null}
-
-      {hasPrivateContextDraft ? (
-        <div className="rounded-lg border border-warning/30 bg-warning/10 p-4">
-          <div className="flex items-start gap-2">
-            <LockClosedIcon className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-base-content">Confidentiality bond</p>
-              <p className="mt-1 text-sm leading-relaxed text-base-content/65">
-                Optional extra bond expected from raters before private context is served. Use 0 to keep access
-                signature-only until escrow wiring is live.
-              </p>
-            </div>
-          </div>
-          <div className="mt-4 grid gap-3 sm:grid-cols-[9rem_minmax(0,1fr)]">
-            <label className="form-control">
-              <span className="label-text text-sm font-medium">Asset</span>
-              <select
-                className="select select-bordered select-sm bg-base-100"
-                value={confidentialityBondAsset}
-                onChange={e => setConfidentialityBondAsset(e.target.value as "LREP" | "USDC")}
-              >
-                <option value="LREP">LREP</option>
-                <option value="USDC">USDC</option>
-              </select>
-            </label>
-            <label className="form-control">
-              <span className="label-text text-sm font-medium">Amount</span>
-              <input
-                type="text"
-                inputMode="decimal"
-                className="input input-bordered input-sm bg-base-100"
-                value={confidentialityBondAmount}
-                onChange={e => setConfidentialityBondAmount(e.target.value)}
-                aria-label="Confidentiality bond amount"
-              />
-            </label>
-          </div>
-        </div>
-      ) : null}
 
       <div className="surface-card-nested space-y-3 rounded-lg p-3">
         <p className="flex items-center gap-1.5 text-sm font-medium text-base-content/80">
