@@ -10,6 +10,11 @@ const WORLDCHAIN_SEPOLIA_CHAIN_ID_HEX = "0x12c1";
 const WORLDCHAIN_SEPOLIA_USDC = "0x66145f38cBAC35Ca6F1Dfb4914dF98F1614aeA88";
 const EIP1967_IMPLEMENTATION_SLOT =
   "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc";
+const SUBMISSION_MEDIA_VALIDATOR_SELECTOR = "0x738dbaa0";
+const REQUIRED_SUBMISSION_MEDIA_VALIDATOR_SELECTORS = [
+  "0x6773a34f", // validateContextSubmission(string,string[],string,string,string,bool)
+  "0x6b974e07", // validateSubmissionDetails(string,bytes32,bool)
+];
 
 export const REQUIRED_DEPLOYED_CONTRACTS = [
   "AdvisoryVoteRecorder",
@@ -78,9 +83,24 @@ const REQUIRED_SELECTOR_CHECKS = [
     ],
   },
   {
+    contractName: "ConfidentialityEscrow",
+    selectors: [
+      "0xe3de2a7a", // recordAccessNexus(uint256,address)
+      "0x517fbf76", // recordConfidentialityNexus(uint256,address)
+    ],
+  },
+  {
     contractName: "ProtocolConfig",
     selectors: [
       "0xd5011d75", // confidentialityEscrow()
+      "0xefdd8d2b", // revokeAdvisoryVoteRecorder(address)
+    ],
+  },
+  {
+    contractName: "RoundVotingEngine",
+    selectors: [
+      "0x6a951316", // setRole(bytes32,address,bool)
+      "0x706f3d41", // roundConfidentialityEscrowSnapshotWord(uint256,uint256)
     ],
   },
 ];
@@ -285,6 +305,15 @@ async function getSelectorProbeCode(rpcUrl, contractName, address) {
   };
 }
 
+async function getSubmissionMediaValidatorAddress(rpcUrl, contentRegistryAddress) {
+  return parseStorageAddress(
+    await rpc(rpcUrl, "eth_call", [
+      { to: contentRegistryAddress, data: SUBMISSION_MEDIA_VALIDATOR_SELECTOR },
+      "latest",
+    ]),
+  );
+}
+
 export async function validateLiveReadiness({
   appUrl,
   deploymentJson,
@@ -324,6 +353,34 @@ export async function validateLiveReadiness({
             bytecodeContainsSelector(code, selector),
             `${target} bytecode contains selector ${selector}`,
           );
+        }
+      }
+
+      const contentRegistryAddress = deploymentAddresses.get("ContentRegistry");
+      if (contentRegistryAddress) {
+        const validatorAddress = await getSubmissionMediaValidatorAddress(rpcUrl, contentRegistryAddress);
+        addCheck(
+          checks,
+          failures,
+          isAddress(validatorAddress),
+          "ContentRegistry submissionMediaValidator has an address",
+        );
+        if (validatorAddress) {
+          const validatorCode = await rpc(rpcUrl, "eth_getCode", [validatorAddress, "latest"]);
+          addCheck(
+            checks,
+            failures,
+            typeof validatorCode === "string" && validatorCode !== "0x",
+            "ContentRegistry submissionMediaValidator has bytecode",
+          );
+          for (const selector of REQUIRED_SUBMISSION_MEDIA_VALIDATOR_SELECTORS) {
+            addCheck(
+              checks,
+              failures,
+              bytecodeContainsSelector(validatorCode, selector),
+              `ContentRegistry submissionMediaValidator bytecode contains selector ${selector}`,
+            );
+          }
         }
       }
     } catch (error) {

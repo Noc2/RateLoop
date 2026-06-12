@@ -222,16 +222,28 @@ test("validateLiveReadiness fails closed when required live targets are missing"
 test("validateLiveReadiness rejects live bytecode missing confidentiality selectors", async () => {
   const deploymentJson = makeDeploymentJson();
   const deploymentAddresses = buildDeploymentAddressMap(deploymentJson);
+  const confidentialityEscrowAddress = deploymentAddresses.get("ConfidentialityEscrow");
   const contentRegistryAddress = deploymentAddresses.get("ContentRegistry");
   const protocolConfigAddress = deploymentAddresses.get("ProtocolConfig");
+  const roundVotingEngineAddress = deploymentAddresses.get("RoundVotingEngine");
+  const confidentialityEscrowImplementation = addressFor(98);
   const contentRegistryImplementation = addressFor(99);
   const protocolConfigImplementation = addressFor(100);
+  const roundVotingEngineImplementation = addressFor(101);
+  const submissionMediaValidatorAddress = addressFor(102);
   const restoreFetch = mockRpc((method, params) => {
     if (method === "eth_chainId") return "0x12c1";
+    if (method === "eth_call") {
+      assert.equal(params[0].to, contentRegistryAddress);
+      assert.equal(params[0].data, "0x738dbaa0");
+      return encodeStorageAddress(submissionMediaValidatorAddress);
+    }
     if (method === "eth_getStorageAt") {
       assert.equal(params[1], EIP1967_IMPLEMENTATION_SLOT);
+      if (params[0] === confidentialityEscrowAddress) return encodeStorageAddress(confidentialityEscrowImplementation);
       if (params[0] === contentRegistryAddress) return encodeStorageAddress(contentRegistryImplementation);
       if (params[0] === protocolConfigAddress) return encodeStorageAddress(protocolConfigImplementation);
+      if (params[0] === roundVotingEngineAddress) return encodeStorageAddress(roundVotingEngineImplementation);
       throw new Error(`Unexpected proxy storage target ${params[0]}`);
     }
     if (method === "eth_getCode") return "0x6000";
@@ -248,7 +260,42 @@ test("validateLiveReadiness rejects live bytecode missing confidentiality select
     assert(result.failures.some(message => message.includes("X402QuestionSubmitter bytecode contains selector 0x1c2fa657")));
     assert(result.failures.some(message => message.includes("X402QuestionSubmitter bytecode contains selector 0x61b030bc")));
     assert(result.failures.some(message => message.includes("ContentRegistry implementation bytecode contains selector 0x774922ea")));
+    assert(
+      result.failures.some(message =>
+        message.includes("ConfidentialityEscrow implementation bytecode contains selector 0xe3de2a7a"),
+      ),
+    );
+    assert(
+      result.failures.some(message =>
+        message.includes("ConfidentialityEscrow implementation bytecode contains selector 0x517fbf76"),
+      ),
+    );
     assert(result.failures.some(message => message.includes("ProtocolConfig implementation bytecode contains selector 0xd5011d75")));
+    assert(
+      result.failures.some(message =>
+        message.includes("ProtocolConfig implementation bytecode contains selector 0xefdd8d2b"),
+      ),
+    );
+    assert(
+      result.failures.some(message =>
+        message.includes("RoundVotingEngine implementation bytecode contains selector 0x6a951316"),
+      ),
+    );
+    assert(
+      result.failures.some(message =>
+        message.includes("RoundVotingEngine implementation bytecode contains selector 0x706f3d41"),
+      ),
+    );
+    assert(
+      result.failures.some(message =>
+        message.includes("ContentRegistry submissionMediaValidator bytecode contains selector 0x6773a34f"),
+      ),
+    );
+    assert(
+      result.failures.some(message =>
+        message.includes("ContentRegistry submissionMediaValidator bytecode contains selector 0x6b974e07"),
+      ),
+    );
   } finally {
     restoreFetch();
   }
