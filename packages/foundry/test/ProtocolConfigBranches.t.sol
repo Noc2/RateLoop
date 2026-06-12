@@ -116,6 +116,7 @@ contract MockFrontendRegistryForConfig {
 contract MockLaunchDistributionPoolForConfig {
     mapping(address => bool) public authorizedCallers;
     address public clusterPayoutOracle;
+    address public raterRegistry;
 
     function setAuthorizedCaller(address caller, bool authorized) external {
         authorizedCallers[caller] = authorized;
@@ -123,6 +124,10 @@ contract MockLaunchDistributionPoolForConfig {
 
     function setClusterPayoutOracle(address oracle) external {
         clusterPayoutOracle = oracle;
+    }
+
+    function setRaterRegistry(address registry) external {
+        raterRegistry = registry;
     }
 
     function launchAnchorCredentialAgeSeconds() external pure returns (uint32) {
@@ -410,6 +415,24 @@ contract ProtocolConfigBranchesTest is Test {
         assertEq(config.raterRegistry(), replacementRaterRegistry);
     }
 
+    function test_SetRaterRegistry_RejectsRotationUntilLaunchPoolRegistryMoves() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+        address raterRegistry = address(new MockRaterIdentityRegistry());
+        address replacementRaterRegistry = address(new MockRaterIdentityRegistry());
+        MockLaunchDistributionPoolForConfig launchPool = new MockLaunchDistributionPoolForConfig();
+
+        launchPool.setRaterRegistry(raterRegistry);
+        config.setRaterRegistry(raterRegistry);
+        config.setLaunchDistributionPool(address(launchPool));
+
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.setRaterRegistry(replacementRaterRegistry);
+
+        launchPool.setRaterRegistry(replacementRaterRegistry);
+        config.setRaterRegistry(replacementRaterRegistry);
+        assertEq(config.raterRegistry(), replacementRaterRegistry);
+    }
+
     function test_SetRaterRegistry_RejectsZeroAddress() public {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
 
@@ -579,6 +602,23 @@ contract ProtocolConfigBranchesTest is Test {
         config.setLaunchDistributionPool(address(launchPool));
 
         launchPool.setClusterPayoutOracle(address(oracle));
+        config.setLaunchDistributionPool(address(launchPool));
+        assertEq(config.launchDistributionPool(), address(launchPool));
+    }
+
+    function test_SetLaunchDistributionPool_RequiresConfiguredRaterRegistryAlignment() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+        address raterRegistry = address(new MockRaterIdentityRegistry());
+        address staleRaterRegistry = address(new MockRaterIdentityRegistry());
+        MockLaunchDistributionPoolForConfig launchPool = new MockLaunchDistributionPoolForConfig();
+
+        config.setRaterRegistry(raterRegistry);
+        launchPool.setRaterRegistry(staleRaterRegistry);
+
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.setLaunchDistributionPool(address(launchPool));
+
+        launchPool.setRaterRegistry(raterRegistry);
         config.setLaunchDistributionPool(address(launchPool));
         assertEq(config.launchDistributionPool(), address(launchPool));
     }

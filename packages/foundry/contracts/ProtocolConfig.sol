@@ -288,6 +288,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         if (value == address(0)) revert InvalidAddress();
         _validateRaterRegistry(value);
         _validateConfiguredConfidentialityEscrowRaterRegistry(value);
+        _validateLaunchDistributionPoolRaterRegistry(launchDistributionPool, value);
         raterRegistry = value;
         emit RaterRegistryUpdated(value);
     }
@@ -295,6 +296,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     function setLaunchDistributionPool(address value) external onlyRole(CONFIG_ROLE) {
         if (value == address(0)) revert InvalidAddress();
         _validateLaunchDistributionPool(value);
+        _validateLaunchDistributionPoolRaterRegistry(value, raterRegistry);
         _validateConfiguredClusterPayoutOracleLaunchConsumer(value);
         _validateConfiguredClusterPayoutOracleLaunchPool(value);
         launchDistributionPool = value;
@@ -649,6 +651,15 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         if (value.code.length == 0) revert InvalidAddress();
         try ILaunchDistributionPool(value).launchAnchorCredentialAgeSeconds() returns (uint32) { }
         catch {
+            revert InvalidConfig();
+        }
+    }
+
+    function _validateLaunchDistributionPoolRaterRegistry(address launchPool, address registry) internal view {
+        if (launchPool == address(0) || registry == address(0)) return;
+        try ILaunchDistributionPool(launchPool).raterRegistry() returns (RaterRegistry poolRegistry) {
+            if (address(poolRegistry) != registry) revert InvalidConfig();
+        } catch {
             revert InvalidConfig();
         }
     }
