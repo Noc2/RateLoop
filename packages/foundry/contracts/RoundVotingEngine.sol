@@ -447,7 +447,7 @@ contract RoundVotingEngine is
     /// @dev Commits no vote and records no stake; it only fixes the round start/config/drand
     ///      snapshots so the caller can encrypt against deterministic commit timing.
     function openRound(uint256 contentId) external whenNotPaused nonReentrant {
-        VotePreflightLib.validateRoundOpener(
+        VotePreflightLib.validateVoterContentRecordNexus(
             IRaterIdentityRegistry(protocolConfig.raterRegistry()),
             registry,
             msg.sender,

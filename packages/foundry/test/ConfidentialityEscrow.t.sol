@@ -386,6 +386,27 @@ contract ConfidentialityEscrowTest is VotingTestBase {
         engine.openRound(secondContentId);
     }
 
+    function testZeroBondGatedOpenRoundRecordsBanNexus() public {
+        uint256 contentId = _submitGatedQuestion("zero-bond-open-nexus", 0);
+        uint8 provider = uint8(RaterRegistry.HumanCredentialProvider.SeededHuman);
+
+        assertFalse(confidentialityEscrow.hasConfidentialityNexus(provider, VOTER1_ANCHOR));
+        vm.prank(voter1);
+        engine.openRound(contentId);
+        assertTrue(confidentialityEscrow.hasConfidentialityNexus(provider, VOTER1_ANCHOR));
+
+        vm.prank(owner);
+        raterRegistry.banIdentity(
+            RaterRegistry.HumanCredentialProvider.SeededHuman,
+            VOTER1_ANCHOR,
+            uint64(block.timestamp + 365 days),
+            "verified open leak",
+            EVIDENCE_HASH
+        );
+
+        assertTrue(raterRegistry.isIdentityKeyBanned(raterRegistry.addressIdentityKey(voter1)));
+    }
+
     function testZeroBondGatedAccessRecorderCreatesBanNexusWithoutCommit() public {
         uint256 contentId = _submitGatedQuestion("zero-bond-access", 0);
         uint8 provider = uint8(RaterRegistry.HumanCredentialProvider.SeededHuman);
