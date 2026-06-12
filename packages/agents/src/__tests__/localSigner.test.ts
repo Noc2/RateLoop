@@ -870,7 +870,29 @@ describe("local signer", () => {
       NEXT_PUBLIC_PONDER_URL: "http://localhost:42069",
     } as NodeJS.ProcessEnv);
 
-    expect(config.questionMetadataBaseUrl).toBe("https://rateloop.ai");
+    expect(config.questionMetadataBaseUrl).toBeUndefined();
+    expect(config.questionMetadataBaseUrlPinned).toBe(false);
+  });
+
+  it("lets server metadata bases override inherited public env fallbacks", () => {
+    const config = loadLocalSignerConfig({}, {
+      NEXT_PUBLIC_APP_URL: "https://app.example",
+    } as NodeJS.ProcessEnv);
+
+    const calls = validateLocalSignerTransactionPlan({
+      accountAddress: account.address,
+      ask: walletCallsResponse({}, QUESTION_METADATA_BASE_URL),
+      config: {
+        ...validationConfig(),
+        questionMetadataBaseUrl: config.questionMetadataBaseUrl,
+        questionMetadataBaseUrlPinned: config.questionMetadataBaseUrlPinned,
+      },
+      expectedBountyAmount: BigInt(X402_AMOUNT),
+      expectedChainId: 480,
+      expectedPayload: askPayload(),
+    });
+
+    expect(calls).toHaveLength(3);
   });
 
   it("rejects server metadata bases that differ from the local signer pin", () => {

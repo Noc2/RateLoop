@@ -160,6 +160,7 @@ type LocalSignerConfig = {
   pollingIntervalMs: number;
   privateKey?: Hex;
   questionMetadataBaseUrl?: string;
+  questionMetadataBaseUrlPinned?: boolean;
   questionRewardPoolEscrowAddress?: Address;
   receiptTimeoutMs: number;
   rpcUrl?: string;
@@ -272,6 +273,7 @@ type TransactionPlanValidationConfig = Pick<
   | "feedbackBonusEscrowAddress"
   | "lrepAddress"
   | "questionMetadataBaseUrl"
+  | "questionMetadataBaseUrlPinned"
   | "questionRewardPoolEscrowAddress"
   | "usdcAddress"
   | "x402QuestionSubmitterAddress"
@@ -461,19 +463,28 @@ function normalizeInheritedQuestionMetadataBaseUrl(
   value: string | undefined,
 ): string | undefined {
   if (!value) return undefined;
-  return normalizeQuestionMetadataBaseUrl(value);
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== "https:") return undefined;
+    return normalizeQuestionMetadataBaseUrl(value);
+  } catch {
+    return undefined;
+  }
 }
 
-function resolveLocalSignerQuestionMetadataBaseUrl(
+function resolveLocalSignerQuestionMetadataBaseUrlConfig(
   options: CliOptions,
   env: NodeJS.ProcessEnv,
 ) {
   const optionValue = optionString(options, "question-metadata-base-url");
   if (optionValue !== undefined) {
-    return parseQuestionMetadataBaseUrl(
-      optionValue,
-      "question-metadata-base-url",
-    );
+    return {
+      questionMetadataBaseUrl: parseQuestionMetadataBaseUrl(
+        optionValue,
+        "question-metadata-base-url",
+      ),
+      questionMetadataBaseUrlPinned: true,
+    };
   }
 
   const localSignerValue = envString(
@@ -481,24 +492,33 @@ function resolveLocalSignerQuestionMetadataBaseUrl(
     "RATELOOP_LOCAL_SIGNER_QUESTION_METADATA_BASE_URL",
   );
   if (localSignerValue !== undefined) {
-    return parseQuestionMetadataBaseUrl(
-      localSignerValue,
-      "RATELOOP_LOCAL_SIGNER_QUESTION_METADATA_BASE_URL",
-    );
+    return {
+      questionMetadataBaseUrl: parseQuestionMetadataBaseUrl(
+        localSignerValue,
+        "RATELOOP_LOCAL_SIGNER_QUESTION_METADATA_BASE_URL",
+      ),
+      questionMetadataBaseUrlPinned: true,
+    };
   }
 
   const legacyValue = envString(env, "RATELOOP_QUESTION_METADATA_BASE_URL");
   if (legacyValue !== undefined) {
-    return parseQuestionMetadataBaseUrl(
-      legacyValue,
-      "RATELOOP_QUESTION_METADATA_BASE_URL",
-    );
+    return {
+      questionMetadataBaseUrl: parseQuestionMetadataBaseUrl(
+        legacyValue,
+        "RATELOOP_QUESTION_METADATA_BASE_URL",
+      ),
+      questionMetadataBaseUrlPinned: true,
+    };
   }
 
-  return normalizeInheritedQuestionMetadataBaseUrl(
-    envString(env, "NEXT_PUBLIC_PONDER_URL") ??
-      envString(env, "NEXT_PUBLIC_APP_URL"),
-  );
+  return {
+    questionMetadataBaseUrl: normalizeInheritedQuestionMetadataBaseUrl(
+      envString(env, "NEXT_PUBLIC_PONDER_URL") ??
+        envString(env, "NEXT_PUBLIC_APP_URL"),
+    ),
+    questionMetadataBaseUrlPinned: false,
+  };
 }
 
 function resolveAskQuestionMetadataBaseUrl(params: {
@@ -507,7 +527,12 @@ function resolveAskQuestionMetadataBaseUrl(params: {
 }) {
   const serverBaseUrl = readAskQuestionMetadataBaseUrl(params.ask);
   const localBaseUrl = params.config.questionMetadataBaseUrl;
-  if (serverBaseUrl && localBaseUrl && serverBaseUrl !== localBaseUrl) {
+  if (
+    serverBaseUrl &&
+    localBaseUrl &&
+    (params.config.questionMetadataBaseUrlPinned ?? true) &&
+    serverBaseUrl !== localBaseUrl
+  ) {
     throw new Error(
       `RateLoop ask response questionMetadataBaseUrl ${serverBaseUrl} does not match local signer questionMetadataBaseUrl ${localBaseUrl}.`,
     );
@@ -3579,10 +3604,7 @@ export function loadLocalSignerConfig(
         envString(env, "RATELOOP_LOCAL_SIGNER_PRIVATE_KEY"),
       "RATELOOP_LOCAL_SIGNER_PRIVATE_KEY",
     ),
-    questionMetadataBaseUrl: resolveLocalSignerQuestionMetadataBaseUrl(
-      options,
-      env,
-    ),
+    ...resolveLocalSignerQuestionMetadataBaseUrlConfig(options, env),
     questionRewardPoolEscrowAddress: parseOptionalAddress(
       optionString(options, "question-reward-pool-escrow-address") ??
         envString(
