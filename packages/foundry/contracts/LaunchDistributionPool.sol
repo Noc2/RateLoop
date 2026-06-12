@@ -343,7 +343,7 @@ contract LaunchDistributionPool is
 
     function cancelStalePendingEarnedRaterCredit(uint256 contentId, uint256 roundId, bytes32 commitKey)
         external
-        nonReentrant
+        onlyOwner
     {
         // L-Launch-A: one-shot. The reservations were already released by a prior cancel; running
         // the release again would corrupt shared per-anchor reservation counts and re-emit the event.

@@ -1128,12 +1128,14 @@ contract LaunchDistributionPoolTest is Test {
         assertFalse(pool.earnedRewardCreditRecorded(1, 400, blockedCommitKey));
         assertEq(pool.verifiedAnchorDistinctRaterCount(anchorId), maxFanout);
 
-        vm.prank(bob);
         vm.expectRevert(LaunchDistributionPool.PendingCreditNotStale.selector);
         pool.cancelStalePendingEarnedRaterCredit(1, 300, firstCommitKey);
 
         vm.warp(block.timestamp + pool.STALE_PENDING_EARNED_RATER_CREDIT_DELAY());
         vm.prank(bob);
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, bob));
+        pool.cancelStalePendingEarnedRaterCredit(1, 300, firstCommitKey);
+
         pool.cancelStalePendingEarnedRaterCredit(1, 300, firstCommitKey);
         assertEq(pool.pendingVerifiedAnchorReservationCount(anchorId, firstRater), 0);
         assertFalse(pool.verifiedAnchorRaterSeen(anchorId, firstRater));
@@ -1143,7 +1145,6 @@ contract LaunchDistributionPoolTest is Test {
 
         // L-Launch-A: cancel is one-shot — a repeat call reverts instead of re-emitting the
         // cancellation event after the reservations were already released.
-        vm.prank(bob);
         vm.expectRevert(LaunchDistributionPool.AlreadyClaimed.selector);
         pool.cancelStalePendingEarnedRaterCredit(1, 300, firstCommitKey);
 
