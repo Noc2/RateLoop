@@ -34,7 +34,9 @@ auto-verification flow. Verify those contracts manually with
 The World Chain Sepolia flow is a fresh deployment flow: `script/Deploy.s.sol` creates new proxies and exports a new
 `deployments/4801.json`. Do not use the current `ContentRegistry` implementation as an in-place upgrade for an older
 Sepolia proxy unless a separate migration/backfill is provided for `submissionMediaValidator` and
-`questionBundleRoundObserverByContent`. The `worldchain-sepolia:check -- --live` readiness probe verifies the deployed
+`questionBundleRoundObserverByContent`. Do not use the current `RaterRegistry` implementation as an in-place upgrade
+for an older Sepolia proxy unless a separate migration/backfill is provided for the `_identityBanSource` to
+`_identityBanSources` slot-32 retype. The `worldchain-sepolia:check -- --live` readiness probe verifies the deployed
 `ContentRegistry.submissionMediaValidator()` exposes the gated-submission validator selectors before the deployment is
 treated as ready.
 
