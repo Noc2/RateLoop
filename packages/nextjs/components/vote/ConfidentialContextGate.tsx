@@ -6,6 +6,7 @@ import { useAccount } from "wagmi";
 import { LockClosedIcon } from "@heroicons/react/24/outline";
 import { useConfidentialityBond } from "~~/hooks/useConfidentialityBond";
 import type { ContentItem } from "~~/hooks/useContentFeed";
+import { ensurePrivateAccountReadSession } from "~~/hooks/usePrivateAccountSession";
 import { useWalletMessageSigner } from "~~/hooks/useWalletMessageSigner";
 import { CONFIDENTIALITY_TERMS_URI } from "~~/lib/confidentiality/terms";
 import {
@@ -109,8 +110,12 @@ export function ConfidentialContextGate({
   const { address } = useAccount();
   const { isPending: isSigning, signMessageAsync } = useWalletMessageSigner({ address });
   const [accepted, setAccepted] = useState(false);
+  const [ownerSessionReady, setOwnerSessionReady] = useState(false);
   const [isCheckingTerms, setIsCheckingTerms] = useState(false);
+  const [isCheckingOwnerSession, setIsCheckingOwnerSession] = useState(false);
   const [isAccepting, setIsAccepting] = useState(false);
+  const [isConfirmingOwnerSession, setIsConfirmingOwnerSession] = useState(false);
+  const isOwnContent = Boolean(item.isOwnContent);
   const bondRequirement = useMemo(
     () => getConfidentialityBondRequirement(item.confidentiality),
     [item.confidentiality],
@@ -118,11 +123,12 @@ export function ConfidentialContextGate({
   const bond = useConfidentialityBond({
     bondRequirement,
     contentId: item.id,
-    enabled: gated && accepted,
+    enabled: gated && accepted && !isOwnContent,
   });
 
   useEffect(() => {
     setAccepted(false);
+    setOwnerSessionReady(false);
   }, [address, item.id]);
 
   useEffect(() => {
@@ -138,7 +144,7 @@ export function ConfidentialContextGate({
   }, [gated, item.id]);
 
   useEffect(() => {
-    if (!gated || !address) return;
+    if (!gated || !address || isOwnContent) return;
     let cancelled = false;
     setIsCheckingTerms(true);
     const params = new URLSearchParams({
@@ -159,7 +165,28 @@ export function ConfidentialContextGate({
     return () => {
       cancelled = true;
     };
-  }, [address, gated, item.id]);
+  }, [address, gated, isOwnContent, item.id]);
+
+  useEffect(() => {
+    if (!gated || !isOwnContent || !address) return;
+    let cancelled = false;
+    setIsCheckingOwnerSession(true);
+    const params = new URLSearchParams({ address });
+    fetch(`/api/account/private-session?${params.toString()}`, {
+      credentials: "include",
+    })
+      .then(response => (response.ok ? response.json() : null))
+      .then(body => {
+        if (!cancelled && body?.hasSession === true) setOwnerSessionReady(true);
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (!cancelled) setIsCheckingOwnerSession(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [address, gated, isOwnContent, item.id]);
 
   const acceptTerms = async () => {
     if (!address) {
@@ -216,6 +243,22 @@ export function ConfidentialContextGate({
     }
   };
 
+  const confirmOwnerSession = async () => {
+    if (!address) {
+      notification.warning("Connect a wallet to view your private context.");
+      return;
+    }
+    setIsConfirmingOwnerSession(true);
+    try {
+      await ensurePrivateAccountReadSession(address, signMessageAsync);
+      setOwnerSessionReady(true);
+    } catch (error) {
+      notification.error(error instanceof Error ? error.message : "Could not confirm wallet access.");
+    } finally {
+      setIsConfirmingOwnerSession(false);
+    }
+  };
+
   const postBond = async () => {
     const posted = await bond.postBond();
     if (posted) {
@@ -226,6 +269,38 @@ export function ConfidentialContextGate({
   };
 
   if (!gated) return <>{renderConfidentialGateChildren(children, address)}</>;
+
+  if (isOwnContent) {
+    if (ownerSessionReady) return <>{renderConfidentialGateChildren(children, address)}</>;
+
+    return (
+      <GateShell variant={variant}>
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          <ConfidentialContextBadges item={item} showBondRequirement={false} />
+        </div>
+        <GateCopy
+          title={
+            address ? "Confirm wallet to view your private context" : "Connect wallet to view your private context"
+          }
+          variant={variant}
+        >
+          <p>Your question&apos;s private context is visible after confirming the submitting wallet.</p>
+          <p>You still cannot vote on your own question.</p>
+        </GateCopy>
+        <button
+          type="button"
+          className="btn btn-primary btn-sm"
+          onClick={confirmOwnerSession}
+          disabled={!address || isCheckingOwnerSession || isConfirmingOwnerSession || isSigning}
+        >
+          {isCheckingOwnerSession || isConfirmingOwnerSession || isSigning ? (
+            <span className="loading loading-spinner loading-xs" />
+          ) : null}
+          {address ? "Confirm wallet" : "Connect wallet"}
+        </button>
+      </GateShell>
+    );
+  }
 
   const blocker = getConfidentialContextVoteBlocker({
     bondRequirement,

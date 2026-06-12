@@ -64,7 +64,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     ? !confidentiality?.publishedAt
     : isConfidentialityCurrentlyGated(confidentiality);
   if (gated && details.contentId) {
-    const authorization = await authorizeGatedContextRequest(request, details.contentId);
+    const authorization = await authorizeGatedContextRequest(request, details.contentId, {
+      ownerWalletAddress: details.ownerWalletAddress,
+    });
     if (!authorization.ok) {
       return NextResponse.json(
         { error: authorization.error },

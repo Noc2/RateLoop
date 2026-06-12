@@ -555,7 +555,19 @@ async function hasActiveBondForGatedContext(params: { contentId: string; identit
   return defaultHasActiveBond(params);
 }
 
-export async function authorizeGatedContextRequest(request: NextRequest, contentId: string) {
+function isOwnerWalletAddress(walletAddress: `0x${string}`, ownerWalletAddress: string | null | undefined) {
+  return (
+    typeof ownerWalletAddress === "string" &&
+    isValidWalletAddress(ownerWalletAddress) &&
+    normalizeWalletAddress(ownerWalletAddress) === walletAddress
+  );
+}
+
+export async function authorizeGatedContextRequest(
+  request: NextRequest,
+  contentId: string,
+  options: { ownerWalletAddress?: string | null } = {},
+) {
   const address = request.nextUrl.searchParams.get("address");
   if (!address || !isValidWalletAddress(address)) {
     return { ok: false as const, status: 401, error: "Signed wallet session required" };
@@ -569,6 +581,14 @@ export async function authorizeGatedContextRequest(request: NextRequest, content
   );
   if (!hasSession) {
     return { ok: false as const, status: 401, error: "Signed wallet session required" };
+  }
+
+  if (isOwnerWalletAddress(walletAddress, options.ownerWalletAddress)) {
+    return {
+      ok: true as const,
+      identityKey: null,
+      walletAddress,
+    };
   }
 
   if (!(await hasConfidentialityTermsAcceptance({ contentId, walletAddress }))) {

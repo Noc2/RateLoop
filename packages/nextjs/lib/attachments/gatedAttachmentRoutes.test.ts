@@ -36,6 +36,7 @@ const CONTENT_ID = "42";
 const DETAILS_ID = "det_routegatedetail01";
 const DETAILS_TEXT = "Sensitive unreleased positioning copy.";
 const WALLET = "0x1234567890abcdef1234567890abcdef12345678" as const;
+const RATER_WALLET = "0x2234567890abcdef1234567890abcdef12345678" as const;
 const IDENTITY_KEY = `0x${"a".repeat(64)}` as const;
 
 let tempDir: string | null = null;
@@ -101,7 +102,13 @@ async function seedGatedImage() {
   });
 }
 
-async function acceptTermsAndBuildCookie(nonce: string) {
+async function buildSignedGatedContextCookie(walletAddress: `0x${string}` = WALLET) {
+  const session = await issueSignedReadSession(walletAddress, "gated_context");
+  const cookie = getSignedReadSessionCookie("gated_context", session);
+  return `${cookie.name}=${cookie.value}`;
+}
+
+async function acceptTermsAndBuildCookie(nonce: string, walletAddress: `0x${string}` = RATER_WALLET) {
   await recordConfidentialityTermsAcceptance({
     acceptedAt: new Date("2026-06-11T12:01:00.000Z"),
     nonce,
@@ -111,7 +118,7 @@ async function acceptTermsAndBuildCookie(nonce: string) {
       detailsHash: null,
       identityKey: IDENTITY_KEY,
       mediaTupleHash: null,
-      normalizedAddress: WALLET,
+      normalizedAddress: walletAddress,
       questionMetadataHash: null,
       termsDocHash: CONFIDENTIALITY_TERMS_DOC_HASH,
       termsUri: CONFIDENTIALITY_TERMS_URI,
@@ -119,9 +126,7 @@ async function acceptTermsAndBuildCookie(nonce: string) {
     },
     signature: "0xab",
   });
-  const session = await issueSignedReadSession(WALLET, "gated_context");
-  const cookie = getSignedReadSessionCookie("gated_context", session);
-  return `${cookie.name}=${cookie.value}`;
+  return buildSignedGatedContextCookie(walletAddress);
 }
 
 beforeEach(async () => {
@@ -169,7 +174,7 @@ test("gated details require a signed accepted wallet session and avoid public ca
 
   const cookie = await acceptTermsAndBuildCookie("nonce-details");
   const allowed = await getDetails(
-    new NextRequest(`https://www.rateloop.ai/api/attachments/details/${DETAILS_ID}?address=${WALLET}`, {
+    new NextRequest(`https://www.rateloop.ai/api/attachments/details/${DETAILS_ID}?address=${RATER_WALLET}`, {
       headers: {
         cookie,
         "x-real-ip": "198.51.100.12",
@@ -197,6 +202,54 @@ test("gated details require a signed accepted wallet session and avoid public ca
       resource_kind: "details",
     },
   ]);
+});
+
+test("gated details allow the attachment owner with a signed wallet session without terms acceptance", async () => {
+  await seedGatedDetails();
+  const cookie = await buildSignedGatedContextCookie(WALLET);
+
+  const allowed = await getDetails(
+    new NextRequest(`https://www.rateloop.ai/api/attachments/details/${DETAILS_ID}?address=${WALLET}`, {
+      headers: {
+        cookie,
+        "x-real-ip": "198.51.100.14",
+      },
+    }),
+    { params: Promise.resolve({ detailsId: DETAILS_ID }) },
+  );
+
+  assert.equal(allowed.status, 200);
+  assert.equal(await allowed.text(), DETAILS_TEXT);
+  assert.equal(allowed.headers.get("cache-control"), "private, no-store");
+  assert.match(allowed.headers.get("x-rateloop-view-token") ?? "", /^[a-f0-9]{64}$/);
+
+  const rows = await dbClient.execute(
+    "SELECT content_id, identity_key, resource_id, resource_kind FROM confidential_context_access_logs",
+  );
+  assert.deepEqual(rows.rows, [
+    {
+      content_id: CONTENT_ID,
+      identity_key: null,
+      resource_id: DETAILS_ID,
+      resource_kind: "details",
+    },
+  ]);
+});
+
+test("gated details still require terms acceptance for signed non-owner sessions", async () => {
+  await seedGatedDetails();
+  const cookie = await buildSignedGatedContextCookie(RATER_WALLET);
+
+  const denied = await getDetails(
+    new NextRequest(`https://www.rateloop.ai/api/attachments/details/${DETAILS_ID}?address=${RATER_WALLET}`, {
+      headers: { cookie },
+    }),
+    { params: Promise.resolve({ detailsId: DETAILS_ID }) },
+  );
+
+  assert.equal(denied.status, 403);
+  assert.equal(await denied.text(), '{"error":"Confidentiality terms acceptance required"}');
+  assert.equal(denied.headers.get("cache-control"), "private, no-store");
 });
 
 test("pending gated hosted attachments fail closed before content linkage", async () => {
@@ -286,7 +339,7 @@ test("gated images require accepted wallet sessions and return watermarked no-st
 
   const cookie = await acceptTermsAndBuildCookie("nonce-image");
   const allowed = await getImage(
-    new NextRequest(`https://www.rateloop.ai/api/attachments/images/${ATTACHMENT_ID}.webp?address=${WALLET}`, {
+    new NextRequest(`https://www.rateloop.ai/api/attachments/images/${ATTACHMENT_ID}.webp?address=${RATER_WALLET}`, {
       headers: {
         cookie,
         "x-real-ip": "198.51.100.13",
@@ -309,6 +362,39 @@ test("gated images require accepted wallet sessions and return watermarked no-st
     {
       content_id: CONTENT_ID,
       identity_key: IDENTITY_KEY,
+      resource_id: ATTACHMENT_ID,
+      resource_kind: "image",
+    },
+  ]);
+});
+
+test("gated images allow the attachment owner with a signed wallet session without terms acceptance", async () => {
+  await seedGatedImage();
+  const cookie = await buildSignedGatedContextCookie(WALLET);
+
+  const allowed = await getImage(
+    new NextRequest(`https://www.rateloop.ai/api/attachments/images/${ATTACHMENT_ID}.webp?address=${WALLET}`, {
+      headers: {
+        cookie,
+        "x-real-ip": "198.51.100.15",
+      },
+    }),
+    { params: Promise.resolve({ attachmentId: `${ATTACHMENT_ID}.webp` }) },
+  );
+
+  assert.equal(allowed.status, 200);
+  assert.equal(allowed.headers.get("cache-control"), "private, no-store");
+  assert.equal(allowed.headers.get("content-type"), "image/webp");
+  assert.match(allowed.headers.get("x-rateloop-view-token") ?? "", /^[a-f0-9]{64}$/);
+  assert.ok((await allowed.arrayBuffer()).byteLength > 0);
+
+  const rows = await dbClient.execute(
+    "SELECT content_id, identity_key, resource_id, resource_kind FROM confidential_context_access_logs",
+  );
+  assert.deepEqual(rows.rows, [
+    {
+      content_id: CONTENT_ID,
+      identity_key: null,
       resource_id: ATTACHMENT_ID,
       resource_kind: "image",
     },
