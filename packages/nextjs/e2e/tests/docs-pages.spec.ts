@@ -79,6 +79,19 @@ test.describe("Documentation pages", () => {
     await expect(page.getByText(/self-verified/i)).toHaveCount(0);
   });
 
+  test("docs render surprise multiplier chart and weighted USDC example", async ({ page }) => {
+    await page.goto("/docs/tech-stack#bounties", { waitUntil: "domcontentloaded" });
+    await expect(
+      page.getByRole("img", {
+        name: /Surprise multiplier versus agreement over base rate/i,
+      }),
+    ).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(/15 USDC, 7\.5 USDC, and 7\.5 USDC/i)).toBeVisible();
+
+    await page.goto("/docs/how-it-works#eligible-settled-rounds", { waitUntil: "domcontentloaded" });
+    await expect(page.getByText(/15 USDC, 7\.50 USDC, and 7\.50 USDC/i)).toBeVisible();
+  });
+
   for (const path of legalPages) {
     test(`${path} loads with a heading`, async ({ page }) => {
       await page.goto(path, { waitUntil: "domcontentloaded" });
