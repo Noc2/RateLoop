@@ -1,5 +1,5 @@
 import { expect, test } from "../fixtures/wallet";
-import { waitForFeedLoaded } from "../helpers/wait-helpers";
+import { FEED_EMPTY_STATE_RE, waitForFeedLoaded } from "../helpers/wait-helpers";
 
 test.describe("Tablet viewport", () => {
   test("sidebar hidden on tablet width (xl breakpoint)", async ({ connectedPage: page }) => {
@@ -22,9 +22,11 @@ test.describe("Tablet viewport", () => {
     const main = page.locator("main");
     await expect(main).toBeVisible({ timeout: 10_000 });
 
-    // Content card and thumbnail grid should both render
-    const thumbnails = page.locator("[data-testid='content-thumbnail']");
-    await expect(thumbnails.first()).toBeVisible({ timeout: 10_000 });
+    // The snap feed renders content cards when seeded content exists, otherwise
+    // it keeps the surface stable and shows a scoped empty state.
+    const contentCard = page.getByTestId("vote-content-card-shell").first();
+    const emptyState = page.getByText(FEED_EMPTY_STATE_RE);
+    await expect(contentCard.or(emptyState).first()).toBeVisible({ timeout: 10_000 });
   });
 
   test("collapsing vote chrome does not aria-hide a focused pill", async ({ connectedPage: page }) => {

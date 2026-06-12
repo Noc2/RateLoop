@@ -2,8 +2,13 @@ import { cancelContent } from "../helpers/admin-helpers";
 import { ANVIL_ACCOUNTS } from "../helpers/anvil-accounts";
 import { newE2EContext } from "../helpers/browser-context";
 import { CONTRACT_ADDRESSES } from "../helpers/contracts";
-import { gotoWithRetry } from "../helpers/wait-helpers";
-import { VOTE_UP_BUTTON_NAME, findVoteableContent, waitForFeedLoaded } from "../helpers/wait-helpers";
+import {
+  VOTE_UP_BUTTON_NAME,
+  cycleVoteFeedForVisible,
+  findVoteableContent,
+  gotoWithRetry,
+  waitForFeedLoaded,
+} from "../helpers/wait-helpers";
 import { setupWallet } from "../helpers/wallet-session";
 import { expect, test } from "@playwright/test";
 
@@ -67,6 +72,7 @@ test.describe("Negative cases", () => {
 
     expect(canVote, "account #6 should have seeded voteable content in the default E2E suite").toBe(true);
     await expect(voteUp).toBeVisible({ timeout: 10_000 });
+    const votedContentId = await page.getByTestId("vote-content-card-shell").first().getAttribute("data-content-id");
 
     // First vote — wait for the button to stabilize (React re-renders from Ponder polling
     // can detach/reattach the element between locator resolution and click)
@@ -132,22 +138,20 @@ test.describe("Negative cases", () => {
       .catch(() => false);
 
     if (!foundVotedState) {
-      // Page may have auto-advanced to next content. Cycle through thumbnails
-      // to re-select the voted content and verify its voted/cooldown state.
-      const thumbnails = page.locator("[data-testid='content-thumbnail']");
-      const thumbCount = await thumbnails.count();
+      // Page may have auto-advanced to next content. Re-open the voted item
+      // directly when possible, then fall back to cycling the snap feed.
+      if (votedContentId) {
+        await gotoWithRetry(page, `/rate?content=${votedContentId}`, { ensureWalletConnected: true, timeout: 30_000 });
+        await waitForFeedLoaded(page, 20_000);
+        foundVotedState = await votedOrCooldown
+          .first()
+          .waitFor({ state: "visible", timeout: 5_000 })
+          .then(() => true)
+          .catch(() => false);
+      }
 
-      for (let i = 0; i < Math.min(thumbCount, 20); i++) {
-        const thumb = thumbnails.nth(i);
-        if (await thumb.isVisible().catch(() => false)) {
-          await thumb.click();
-          foundVotedState = await votedOrCooldown
-            .first()
-            .waitFor({ state: "visible", timeout: 3_000 })
-            .then(() => true)
-            .catch(() => false);
-          if (foundVotedState) break;
-        }
+      if (!foundVotedState) {
+        foundVotedState = await cycleVoteFeedForVisible(page, votedOrCooldown, { maxSteps: 20, timeout: 3_000 });
       }
     }
 

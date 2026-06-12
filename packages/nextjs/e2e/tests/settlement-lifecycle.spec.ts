@@ -176,8 +176,8 @@ test.describe("Settlement lifecycle", () => {
     await gotoWithRetry(page, "/governance#profile", { ensureWalletConnected: true });
 
     const main = page.locator("main");
-    await expect(main.getByText("Voting performance")).toBeVisible({ timeout: 15_000 });
-    await expect(main.getByText("Recent votes").first()).toBeVisible({ timeout: 10_000 });
+    await expect(main.getByText(/Voting performance/i)).toBeVisible({ timeout: 15_000 });
+    await expect(main.getByText(/Recent votes/i).first()).toBeVisible({ timeout: 10_000 });
     await expect(main.getByRole("link", { name: `Content #${newContentId}` }).first()).toBeVisible({
       timeout: 45_000,
     });

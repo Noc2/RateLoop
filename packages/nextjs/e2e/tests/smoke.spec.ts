@@ -1,6 +1,8 @@
 import { ANVIL_ACCOUNTS } from "../helpers/anvil-accounts";
 import {
   FEED_EMPTY_STATE_RE,
+  VOTE_DOWN_BUTTON_NAME,
+  VOTE_UP_BUTTON_NAME,
   getVisibleAuthConnectButton,
   gotoWithRetry,
   waitForFeedLoaded,
@@ -36,15 +38,17 @@ test.describe("Smoke tests", () => {
     await waitForFeedLoaded(page, 30_000);
 
     // After feed loads, check for wallet connection indicators.
-    // If the feed is empty ("No questions have been asked yet"), the sort dropdown still renders,
+    // If the feed is empty ("No questions have been asked yet"), the vote feed surface still renders,
     // proving the wallet connected and the page loaded (just no content in Ponder yet).
-    const voteButton = page.getByRole("button", { name: /^Vote (up|down)\b/i });
+    const voteButton = page
+      .getByRole("button", { name: VOTE_UP_BUTTON_NAME })
+      .or(page.getByRole("button", { name: VOTE_DOWN_BUTTON_NAME }));
     const votedStatus = page.getByText(/Voted(?: hidden| Up| Down)?/i);
     const ownContent = page.getByText("Your question");
     const emptyFeed = page.getByText(FEED_EMPTY_STATE_RE);
-    const sortDropdown = page.locator("select").first();
+    const feedSurface = page.getByTestId("vote-feed-surface");
 
-    const connectedIndicator = voteButton.or(votedStatus).or(ownContent).or(emptyFeed).or(sortDropdown);
+    const connectedIndicator = voteButton.or(votedStatus).or(ownContent).or(emptyFeed).or(feedSurface);
     // Use .first() to avoid strict mode violation when multiple indicators match
     await connectedIndicator.first().waitFor({ state: "visible", timeout: 15_000 });
 

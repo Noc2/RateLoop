@@ -5,7 +5,7 @@ export const VOTE_UP_BUTTON_NAME = /^Vote (?:thumbs )?up\b/i;
 export const VOTE_DOWN_BUTTON_NAME = /^Vote (?:thumbs )?down\b/i;
 const PREDICT_BUTTON_NAME = /^(?:Predict final rating|Predict)\b/i;
 export const FEED_EMPTY_STATE_RE =
-  /No questions have been asked yet|No content found|No content is trending right now|No recent questions are available right now|No live rounds look meaningfully contested right now|No funded USD bounties are available right now|No open rounds look close to settlement right now/i;
+  /No questions have been asked yet|No content found|No content is trending right now|No recent questions are available right now|No live rounds look meaningfully contested right now|No funded USD bounties are available right now|No open rounds look close to settlement right now|You aren't watching any content yet|Sign in to view watched content|You haven't voted on any content yet|Sign in to view your votes|You haven't asked any questions yet|Sign in to view your questions|No 0 LREP votes are available right now|Sign in to view 0 LREP votes|Follow a few curators to turn this into a live feed|Sign in to view activity from curators you follow/i;
 
 const RETRIABLE_GOTO_ERROR_PATTERNS = [
   /ERR_ABORTED/i,
@@ -22,6 +22,7 @@ const DEFAULT_E2E_TIMEOUT_MS = 30_000;
 const CI_MIN_E2E_TIMEOUT_MS = 60_000;
 const WALLET_CONNECT_RECOVERY_WAIT_MS = 12_000;
 const WALLET_CONNECT_CLICK_TIMEOUT_MS = 5_000;
+const VOTE_FEED_NAVIGATION_SETTLE_MS = 300;
 
 function isRetriableGotoError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
@@ -274,34 +275,48 @@ export async function waitForVisibleWithReload(
 }
 
 /**
- * Find voteable content by cycling through thumbnail grid items.
- * The default featured card may be the user's own content, so this clicks
- * through thumbnails until it finds one with an up-vote button.
+ * Move through the snap feed using its public keyboard controls until the
+ * target appears. This mirrors how a user advances the feed.
+ */
+export async function cycleVoteFeedForVisible(
+  page: Page,
+  target: Locator,
+  options: {
+    maxSteps?: number;
+    timeout?: number;
+  } = {},
+): Promise<boolean> {
+  const { maxSteps = 8, timeout = 3_000 } = options;
+
+  for (let step = 0; step <= maxSteps; step += 1) {
+    const stepTimeout = step === 0 ? timeout : Math.min(timeout, 2_000);
+    const isVisible = await target
+      .first()
+      .waitFor({ state: "visible", timeout: stepTimeout })
+      .then(() => true)
+      .catch(() => false);
+    if (isVisible) {
+      return true;
+    }
+
+    if (step === maxSteps) {
+      break;
+    }
+
+    await page.locator('article[aria-current="true"]').first().focus({ timeout: 1_000 }).catch(() => undefined);
+    await page.keyboard.press("PageDown");
+    await page.waitForTimeout(VOTE_FEED_NAVIGATION_SETTLE_MS);
+  }
+
+  return false;
+}
+
+/**
+ * Find voteable content by cycling through feed items. The first visible card
+ * may be the user's own content, so this advances until it finds an up-vote button.
  * Returns true if voteable content was found.
  */
 export async function findVoteableContent(page: Page): Promise<boolean> {
   const voteBtn = page.getByRole("button", { name: VOTE_UP_BUTTON_NAME });
-  let canVote = await voteBtn
-    .waitFor({ state: "visible", timeout: 5_000 })
-    .then(() => true)
-    .catch(() => false);
-
-  if (!canVote) {
-    const thumbnails = page.locator("[data-testid='content-thumbnail']");
-    const thumbCount = await thumbnails.count();
-
-    for (let i = 0; i < Math.min(thumbCount, 20); i++) {
-      const thumb = thumbnails.nth(i);
-      if (await thumb.isVisible().catch(() => false)) {
-        await thumb.click();
-        canVote = await voteBtn
-          .waitFor({ state: "visible", timeout: 5_000 })
-          .then(() => true)
-          .catch(() => false);
-        if (canVote) break;
-      }
-    }
-  }
-
-  return canVote;
+  return cycleVoteFeedForVisible(page, voteBtn, { maxSteps: 20, timeout: 5_000 });
 }

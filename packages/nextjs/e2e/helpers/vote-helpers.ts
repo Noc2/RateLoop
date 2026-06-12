@@ -1,7 +1,13 @@
 import type { ConsoleMessage, Page } from "@playwright/test";
 import { waitForPonderIndexed } from "./admin-helpers";
 import { getVotes } from "./ponder-api";
-import { VOTE_DOWN_BUTTON_NAME, VOTE_UP_BUTTON_NAME, gotoWithRetry, waitForFeedLoaded } from "./wait-helpers";
+import {
+  VOTE_DOWN_BUTTON_NAME,
+  VOTE_UP_BUTTON_NAME,
+  cycleVoteFeedForVisible,
+  gotoWithRetry,
+  waitForFeedLoaded,
+} from "./wait-helpers";
 
 type VoteSubmissionOptions = {
   voterAddress?: string;
@@ -69,22 +75,9 @@ export async function voteOnContent(
     .then(() => true)
     .catch(() => false);
 
-  // If not visible (cooldown, own content, round full), try clicking thumbnails
+  // If not visible (cooldown, own content, round full), advance the snap feed.
   if (!canVote) {
-    const thumbnails = page.locator("[data-testid='content-thumbnail']");
-    const thumbCount = await thumbnails.count();
-
-    for (let i = 0; i < Math.min(thumbCount, 6); i++) {
-      const thumb = thumbnails.nth(i);
-      if (await thumb.isVisible().catch(() => false)) {
-        await thumb.click();
-        canVote = await voteBtn
-          .waitFor({ state: "visible", timeout: 5_000 })
-          .then(() => true)
-          .catch(() => false);
-        if (canVote) break;
-      }
-    }
+    canVote = await cycleVoteFeedForVisible(page, voteBtn, { maxSteps: 6, timeout: 5_000 });
   }
 
   if (!canVote) {

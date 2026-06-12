@@ -1,5 +1,5 @@
 import { expect, test } from "../fixtures/wallet";
-import { waitForFeedLoaded } from "../helpers/wait-helpers";
+import { FEED_EMPTY_STATE_RE, waitForFeedLoaded } from "../helpers/wait-helpers";
 
 test.describe("Category filter", () => {
   async function loadVoteFeed(page: any, path = "/rate") {
@@ -146,7 +146,6 @@ test.describe("Category filter", () => {
     // Type part of the category name to filter
     const searchTerm = trimmed!.slice(0, 3).toLowerCase();
     await searchInput.fill(searchTerm);
-    await waitForFeedLoaded(page, 5_000);
 
     // Should still show the matching category
     const matchingOption = dropdown.locator("button").filter({ hasText: trimmed! });
@@ -172,12 +171,12 @@ test.describe("Category filter", () => {
     await waitForFeedLoaded(page, 5_000);
 
     // Should show content cards, vote buttons, loading state, or the empty state
-    const thumbnailCards = page.locator("[data-testid='content-thumbnail']");
+    const contentCards = page.getByTestId("vote-content-card-shell");
     const featuredCard = page.getByTestId("vote-button-up").or(page.getByTestId("vote-button-down"));
-    const emptyState = page.getByText(/No content found/i);
-    const sortDropdown = page.locator("select").first();
+    const emptyState = page.getByText(FEED_EMPTY_STATE_RE);
+    const feedSurface = page.getByTestId("vote-feed-surface");
 
-    const anyIndicator = featuredCard.first().or(thumbnailCards.first()).or(emptyState).or(sortDropdown);
+    const anyIndicator = featuredCard.first().or(contentCards.first()).or(emptyState).or(feedSurface);
     const anyVisible = await anyIndicator
       .first()
       .waitFor({ state: "visible", timeout: 10_000 })

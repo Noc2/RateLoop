@@ -18,11 +18,11 @@ test.describe("Public profiles", () => {
     await expect(page.getByText(/Win rate/i)).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(/Daily Streak\s+\d+/i)).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(/\b\d+\s+resolved\b/i).first()).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText("Voting performance")).toBeVisible({ timeout: 15_000 });
-    const recentSubmissions = page.getByText("Recent questions").or(page.getByText("No questions yet."));
+    await expect(page.getByText(/Voting performance/i)).toBeVisible({ timeout: 15_000 });
+    const recentSubmissions = page.getByText(/Recent questions/i).or(page.getByText("No questions yet."));
     await expect(recentSubmissions.first()).toBeVisible({ timeout: 15_000 });
 
-    const recentVotes = page.getByText("Recent votes").or(page.getByText("No recent votes yet."));
+    const recentVotes = page.getByText(/Recent votes/i).or(page.getByText("No recent votes yet."));
     await expect(recentVotes.first()).toBeVisible({ timeout: 15_000 });
   });
 
