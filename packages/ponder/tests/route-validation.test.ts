@@ -2956,6 +2956,154 @@ describe("registerCorrelationRoutes", () => {
     );
   });
 
+  it("reports both voter and holder address ban reasons for delegated correlation votes", async () => {
+    const voter = "0x0000000000000000000000000000000000000001";
+    const holder = "0x0000000000000000000000000000000000000002";
+    const voterNullifierHash = `0x${"1".repeat(64)}` as const;
+    const holderNullifierHash = `0x${"2".repeat(64)}` as const;
+    const unrelatedIdentityKey = `0x${"e".repeat(64)}` as const;
+    const { queryBuilders } = mockPonderModules(
+      [
+        {
+          account: holder,
+          voter,
+          identityKey: unrelatedIdentityKey,
+          commitKey: `0x${"f".repeat(64)}`,
+          isUp: true,
+          stake: 25000000n,
+          epochIndex: 0,
+          revealWeight: 25000000n,
+          baseWeight: 10000n,
+          verifiedHuman: true,
+          historicalVoteCount: 0,
+          features: "",
+        },
+      ],
+      [
+        [
+          { provider: 2, nullifierHash: voterNullifierHash },
+          { provider: 2, nullifierHash: holderNullifierHash },
+        ],
+        [
+          { rater: voter, provider: 2, nullifierHash: voterNullifierHash },
+          { rater: holder, provider: 2, nullifierHash: holderNullifierHash },
+        ],
+        [{ settledAt: 777n }],
+        [],
+      ],
+    );
+    const { registerCorrelationRoutes } = await import(
+      "../src/api/routes/correlation-routes.js"
+    );
+
+    const app = new Hono();
+    registerCorrelationRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/correlation/round-votes?rewardPoolId=7&contentId=9&roundId=2",
+    );
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.items).toEqual([]);
+    expect(body.excludedVotes).toEqual([
+      {
+        account: holder,
+        identityKey: unrelatedIdentityKey,
+        commitKey: `0x${"f".repeat(64)}`,
+        cooldownSeconds: null,
+        profileUpdatedAt: null,
+        reasons: ["voter_address_banned", "holder_address_banned"],
+        roundOpenTime: null,
+      },
+    ]);
+    const banWhere = serializeExpression(queryBuilders[1]?.where.mock.calls[0]?.[0]);
+    expect(banWhere).toContain("raterIdentityBan.active");
+    expect(banWhere).toContain("raterIdentityBan.permanent");
+    expect(banWhere).toContain("raterIdentityBan.expiresAt");
+    expect(serializeExpression(queryBuilders[2]?.where.mock.calls[0]?.[0])).toContain(
+      "raterHumanCredential.nullifierHash",
+    );
+  });
+
+  it("does not count holder-address banned votes against round-vote pagination", async () => {
+    const voter = "0x0000000000000000000000000000000000000001";
+    const holder = "0x0000000000000000000000000000000000000002";
+    const eligible = "0x0000000000000000000000000000000000000003";
+    const holderNullifierHash = `0x${"2".repeat(64)}` as const;
+    const excludedIdentityKey = `0x${"a".repeat(64)}` as const;
+    const eligibleIdentityKey = `0x${"b".repeat(64)}` as const;
+    mockPonderModules(
+      [
+        {
+          account: holder,
+          voter,
+          identityKey: excludedIdentityKey,
+          commitKey: `0x${"c".repeat(64)}`,
+          isUp: true,
+          stake: 25000000n,
+          epochIndex: 0,
+          revealWeight: 25000000n,
+          baseWeight: 10000n,
+          verifiedHuman: true,
+          historicalVoteCount: 0,
+          features: "",
+        },
+        {
+          account: eligible,
+          voter: eligible,
+          identityKey: eligibleIdentityKey,
+          commitKey: `0x${"d".repeat(64)}`,
+          isUp: false,
+          stake: 15000000n,
+          epochIndex: 1,
+          revealWeight: 15000000n,
+          baseWeight: 10000n,
+          verifiedHuman: true,
+          historicalVoteCount: 2,
+          features: "",
+        },
+      ],
+      [
+        [{ provider: 2, nullifierHash: holderNullifierHash }],
+        [{ rater: holder, provider: 2, nullifierHash: holderNullifierHash }],
+        [{ settledAt: 777n }],
+        [],
+      ],
+    );
+    const { registerCorrelationRoutes } = await import(
+      "../src/api/routes/correlation-routes.js"
+    );
+
+    const app = new Hono();
+    registerCorrelationRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/correlation/round-votes?rewardPoolId=7&contentId=9&roundId=2&limit=1&offset=0",
+    );
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.excludedVotes).toEqual([
+      {
+        account: holder,
+        identityKey: excludedIdentityKey,
+        commitKey: `0x${"c".repeat(64)}`,
+        cooldownSeconds: null,
+        profileUpdatedAt: null,
+        reasons: ["holder_address_banned"],
+        roundOpenTime: null,
+      },
+    ]);
+    expect(body.items).toHaveLength(1);
+    expect(body.items[0]).toMatchObject({
+      account: eligible,
+      commitKey: `0x${"d".repeat(64)}`,
+      identityKey: eligibleIdentityKey,
+      payoutEligible: true,
+    });
+  });
+
   it("treats target audience as informational for correlation payouts", async () => {
     const cooldown = 7 * 24 * 60 * 60;
     mockPonderModules(
