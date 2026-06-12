@@ -10,6 +10,7 @@ import { ILaunchDistributionPool } from "./interfaces/ILaunchDistributionPool.so
 import { IClusterPayoutOracle } from "./interfaces/IClusterPayoutOracle.sol";
 import { IFrontendRegistry } from "./interfaces/IFrontendRegistry.sol";
 import { ICategoryRegistry } from "./interfaces/ICategoryRegistry.sol";
+import { IConfidentialityEscrow } from "./interfaces/IConfidentialityEscrow.sol";
 import { RaterRegistry } from "./RaterRegistry.sol";
 import { RoundLib } from "./libraries/RoundLib.sol";
 import { RatingLib } from "./libraries/RatingLib.sol";
@@ -328,7 +329,11 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     }
 
     function setConfidentialityEscrow(address value) external onlyRole(CONFIG_ROLE) {
-        if (value != address(0) && value.code.length == 0) revert InvalidAddress();
+        address oldValue = confidentialityEscrow;
+        if (oldValue != address(0) && value != oldValue) revert InvalidConfig();
+        if (value != address(0)) {
+            _validateConfidentialityEscrow(value);
+        }
         confidentialityEscrow = value;
         emit ConfidentialityEscrowUpdated(value);
     }
@@ -644,6 +649,23 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         if (launchPool != address(0)) {
             _validateClusterPayoutOracleLaunchConsumer(value, launchPool);
             _validateLaunchDistributionPoolClusterPayoutOracle(launchPool, value);
+        }
+    }
+
+    function _validateConfidentialityEscrow(address value) internal view {
+        if (value.code.length == 0) revert InvalidAddress();
+        try IConfidentialityEscrow(value).confidentialityConfig(0) returns (
+            IConfidentialityEscrow.ConfidentialityConfig memory
+        ) { } catch {
+            revert InvalidConfig();
+        }
+        try IConfidentialityEscrow(value).hasActiveBond(0, bytes32(0)) returns (bool) { }
+        catch {
+            revert InvalidConfig();
+        }
+        try IConfidentialityEscrow(value).hasConfidentialityNexus(0, bytes32(0)) returns (bool) { }
+        catch {
+            revert InvalidConfig();
         }
     }
 

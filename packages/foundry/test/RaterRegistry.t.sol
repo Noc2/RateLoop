@@ -106,6 +106,36 @@ contract RaterRegistryTest is Test {
         return uint8(1 << kind);
     }
 
+    function test_SetConfidentialityEscrowRejectsInvalidTarget() public {
+        vm.prank(admin);
+        vm.expectRevert(RaterRegistry.InvalidAddress.selector);
+        registry.setConfidentialityEscrow(address(0));
+
+        vm.prank(admin);
+        vm.expectRevert(RaterRegistry.InvalidAddress.selector);
+        registry.setConfidentialityEscrow(address(0xC0FFEE));
+    }
+
+    function test_SetConfidentialityEscrowRejectsRotationOrUnsetAfterConfigured() public {
+        MockConfidentialityNexus nexus = new MockConfidentialityNexus();
+        MockConfidentialityNexus replacementNexus = new MockConfidentialityNexus();
+
+        vm.prank(admin);
+        registry.setConfidentialityEscrow(address(nexus));
+
+        vm.prank(admin);
+        vm.expectRevert(RaterRegistry.InvalidAddress.selector);
+        registry.setConfidentialityEscrow(address(replacementNexus));
+
+        vm.prank(admin);
+        vm.expectRevert(RaterRegistry.InvalidAddress.selector);
+        registry.setConfidentialityEscrow(address(0));
+
+        vm.prank(admin);
+        registry.setConfidentialityEscrow(address(nexus));
+        assertEq(registry.confidentialityEscrow(), address(nexus));
+    }
+
     function _deployProxiedRegistry() internal returns (RaterRegistry proxiedRegistry) {
         RaterRegistry implementation = new RaterRegistry(
             admin,

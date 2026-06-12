@@ -520,6 +520,7 @@ contract ConfidentialityEscrowTest is VotingTestBase {
             _buildTestCommitArtifacts(address(engine), voter2, true, keccak256("advisory"), contentId);
 
         vm.prank(owner);
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
         protocolConfig.setConfidentialityEscrow(address(0));
 
         vm.expectRevert(AdvisoryVoteRecorder.ConfidentialityGated.selector);

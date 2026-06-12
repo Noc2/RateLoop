@@ -5,6 +5,7 @@ import { Test } from "forge-std/Test.sol";
 import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
 import { FrontendRegistry } from "../contracts/FrontendRegistry.sol";
+import { IConfidentialityEscrow } from "../contracts/interfaces/IConfidentialityEscrow.sol";
 import { IRaterIdentityRegistry } from "../contracts/interfaces/IRaterIdentityRegistry.sol";
 import { RatingLib } from "../contracts/libraries/RatingLib.sol";
 import { RoundLib } from "../contracts/libraries/RoundLib.sol";
@@ -229,6 +230,38 @@ contract MockBrokenAdvisoryVoteRecorderForConfig {
     }
 }
 
+contract MockConfidentialityEscrowForConfig {
+    function confidentialityConfig(uint256)
+        external
+        pure
+        returns (IConfidentialityEscrow.ConfidentialityConfig memory config)
+    {
+        return config;
+    }
+
+    function hasActiveBond(uint256, bytes32) external pure returns (bool) {
+        return false;
+    }
+
+    function hasConfidentialityNexus(uint8, bytes32) external pure returns (bool) {
+        return false;
+    }
+}
+
+contract MockBrokenConfidentialityEscrowForConfig {
+    function confidentialityConfig(uint256)
+        external
+        pure
+        returns (IConfidentialityEscrow.ConfidentialityConfig memory config)
+    {
+        return config;
+    }
+
+    function hasActiveBond(uint256, bytes32) external pure returns (bool) {
+        return false;
+    }
+}
+
 contract ProtocolConfigBranchesTest is Test {
     bytes32 internal constant QUICKNET_CHAIN_HASH = 0x52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971;
     uint64 internal constant QUICKNET_TEST_GENESIS_TIME = 1;
@@ -391,6 +424,43 @@ contract ProtocolConfigBranchesTest is Test {
 
         vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
         config.setCategoryRegistry(invalidRegistry);
+    }
+
+    function test_SetConfidentialityEscrow_ValidatesIntegration() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+        MockConfidentialityEscrowForConfig escrow = new MockConfidentialityEscrowForConfig();
+
+        config.setConfidentialityEscrow(address(escrow));
+
+        assertEq(config.confidentialityEscrow(), address(escrow));
+    }
+
+    function test_SetConfidentialityEscrow_RejectsInvalidIntegration() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+        MockBrokenConfidentialityEscrowForConfig brokenEscrow = new MockBrokenConfidentialityEscrowForConfig();
+
+        vm.expectRevert(ProtocolConfig.InvalidAddress.selector);
+        config.setConfidentialityEscrow(address(0xC0FFEE));
+
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.setConfidentialityEscrow(address(brokenEscrow));
+    }
+
+    function test_SetConfidentialityEscrow_RejectsRotationOrUnsetAfterConfigured() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+        MockConfidentialityEscrowForConfig escrow = new MockConfidentialityEscrowForConfig();
+        MockConfidentialityEscrowForConfig replacementEscrow = new MockConfidentialityEscrowForConfig();
+
+        config.setConfidentialityEscrow(address(escrow));
+
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.setConfidentialityEscrow(address(replacementEscrow));
+
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.setConfidentialityEscrow(address(0));
+
+        config.setConfidentialityEscrow(address(escrow));
+        assertEq(config.confidentialityEscrow(), address(escrow));
     }
 
     function test_SetClusterPayoutOracle_AllowsBootstrapBeforeLaunchPool() public {

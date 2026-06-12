@@ -611,6 +611,9 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
     }
 
     function setConfidentialityEscrow(address newEscrow) external onlyRole(ADMIN_ROLE) {
+        address oldEscrow = confidentialityEscrow;
+        if (oldEscrow != address(0) && newEscrow != oldEscrow) revert InvalidAddress();
+        if (newEscrow == address(0) || newEscrow.code.length == 0) revert InvalidAddress();
         confidentialityEscrow = newEscrow;
     }
 
