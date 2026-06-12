@@ -86,6 +86,17 @@ const ZERO_CONFIDENTIALITY_HASH = keccak256(
     [false, 0, 0n, 0],
   ),
 );
+const PRIVATE_FOREVER_CONFIDENTIALITY_HASH = keccak256(
+  encodeAbiParameters(
+    [
+      { type: "bool" },
+      { type: "uint8" },
+      { type: "uint64" },
+      { type: "uint8" },
+    ],
+    [true, 0, 0n, 1],
+  ),
+);
 const ZERO_CONFIDENTIALITY_CONFIG = {
   bondAmount: 0n,
   bondAsset: 0,
@@ -242,6 +253,18 @@ function expectedOperationKey(questionMetadataBaseUrl?: string) {
     .digest("hex")}` as const;
 }
 
+function payloadHashFor(payload: AskHumansRequest) {
+  return createHash("sha256")
+    .update(JSON.stringify(buildLocalQuestionCanonicalPayload(payload, 480)))
+    .digest("hex");
+}
+
+function operationKeyFor(payload: AskHumansRequest) {
+  return `0x${createHash("sha256")
+    .update(`rateloop:x402-question:${payloadHashFor(payload)}`)
+    .digest("hex")}` as const;
+}
+
 function expectedSubmissionKey() {
   return keccak256(
     encodeAbiParameters(
@@ -270,6 +293,68 @@ function expectedSubmissionKey() {
       ],
     ),
   );
+}
+
+function submissionMediaHash(imageUrls: readonly string[], videoUrl: string) {
+  return keccak256(
+    encodeAbiParameters(
+      [{ type: "string[]" }, { type: "string" }],
+      [[...new Set(imageUrls)].sort(), videoUrl],
+    ),
+  );
+}
+
+function submissionDetailsHashFor(detailsUrl: string, detailsHash: Hex) {
+  return keccak256(
+    encodeAbiParameters(
+      [{ type: "string" }, { type: "bytes32" }],
+      [detailsUrl, detailsHash],
+    ),
+  );
+}
+
+function submissionKeyForPayload(payload: AskHumansRequest) {
+  const canonical = buildLocalQuestionCanonicalPayload(payload, 480);
+  const question = canonical.questions[0];
+  if (!question) throw new Error("Missing canonical question.");
+  return keccak256(
+    encodeAbiParameters(
+      [
+        { type: "bytes32" },
+        { type: "uint256" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "string" },
+        { type: "string" },
+        { type: "string" },
+      ],
+      [
+        QUESTION_CONTEXT_DOMAIN,
+        BigInt(question.categoryId),
+        submissionMediaHash(question.imageUrls, question.videoUrl),
+        submissionDetailsHashFor(question.detailsUrl, question.detailsHash as Hex),
+        question.contextUrl,
+        question.title,
+        question.tags.join(","),
+      ],
+    ),
+  );
+}
+
+function saltForPayload(payload: AskHumansRequest) {
+  return `0x${createHash("sha256")
+    .update(
+      [
+        "rateloop",
+        "agent-wallet-question-salt",
+        operationKeyFor(payload),
+        payloadHashFor(payload),
+        account.address.toLowerCase(),
+        submissionKeyForPayload(payload),
+        "0",
+      ].join(":"),
+    )
+    .digest("hex")}` as const;
 }
 
 function expectedSalt(questionMetadataBaseUrl?: string) {
@@ -461,6 +546,79 @@ function x402PaymentNonce(
         ZERO_CONFIDENTIALITY_HASH,
         spec.questionMetadataHash,
         spec.resultSpecHash,
+      ],
+    ),
+  );
+}
+
+function x402PaymentNonceForPayload(payload: AskHumansRequest, from = account.address) {
+  const canonical = buildLocalQuestionCanonicalPayload(payload, 480);
+  const question = canonical.questions[0];
+  if (!question) throw new Error("Missing canonical question.");
+  const submissionPayloadHash = keccak256(
+    encodeAbiParameters(
+      [
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "uint256" },
+        { type: "bytes32" },
+      ],
+      [
+        keccak256(stringToHex(question.contextUrl)),
+        x402StringArrayHash(question.imageUrls),
+        keccak256(stringToHex(question.videoUrl)),
+        keccak256(stringToHex(question.detailsUrl)),
+        question.detailsHash as Hex,
+        keccak256(stringToHex(question.title)),
+        keccak256(stringToHex(question.tags.join(","))),
+        BigInt(question.categoryId),
+        saltForPayload(payload),
+      ],
+    ),
+  );
+
+  return keccak256(
+    encodeAbiParameters(
+      [
+        { type: "bytes32" },
+        { type: "uint256" },
+        { type: "address" },
+        { type: "address" },
+        { type: "address" },
+        { type: "address" },
+        { type: "address" },
+        { type: "uint256" },
+        { type: "uint256" },
+        { type: "uint256" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+      ],
+      [
+        keccak256(stringToHex("rateloop-x402-question-payment-v3")),
+        480n,
+        CONTENT_REGISTRY_ADDRESS,
+        QUESTION_REWARD_ESCROW_ADDRESS,
+        X402_SUBMITTER_ADDRESS,
+        from,
+        X402_SUBMITTER_ADDRESS,
+        BigInt(X402_AMOUNT),
+        BigInt(X402_VALID_AFTER),
+        BigInt(X402_VALID_BEFORE),
+        submissionPayloadHash,
+        rewardTermsHash(),
+        roundConfigHash(),
+        PRIVATE_FOREVER_CONFIDENTIALITY_HASH,
+        question.questionMetadataHash as Hex,
+        question.resultSpecHash as Hex,
       ],
     ),
   );
@@ -721,6 +879,25 @@ function askPayload(walletAddress?: string): AskHumansRequest {
   };
 }
 
+function privateForeverAskPayload(): AskHumansRequest {
+  const payload = askPayload();
+  payload.question = {
+    ...payload.question,
+    confidentiality: {
+      bond: {
+        amount: "0",
+        asset: "LREP",
+      },
+      disclosurePolicy: "private_forever",
+      visibility: "gated",
+    },
+    contextUrl: "",
+    detailsHash: `0x${"4".repeat(64)}`,
+    detailsUrl: "https://www.rateloop.ai/api/attachments/details/det_abcdefghijklmnop",
+  };
+  return payload;
+}
+
 describe("local signer", () => {
   it("sets and guards the ask wallet address", () => {
     expect(
@@ -751,6 +928,63 @@ describe("local signer", () => {
       value: X402_AMOUNT,
     });
     expect(paymentAuthorization.signature).toMatch(/^0x[0-9a-f]{130}$/i);
+  });
+
+  it("signs native x402 authorization requests for private-forever gated asks", async () => {
+    const payload = privateForeverAskPayload();
+    const request = x402AuthorizationRequest();
+    const nonce = x402PaymentNonceForPayload(payload);
+    request.authorization.nonce = nonce;
+    request.typedData.message.nonce = nonce;
+    const askCalls: AskHumansRequest[] = [];
+    const agent = {
+      askHumans: async (requestPayload: AskHumansRequest) => {
+        askCalls.push(requestPayload);
+        return {
+          chainId: 480,
+          operationKey: operationKeyFor(payload),
+          payloadHash: payloadHashFor(payload),
+          paymentMode: "x402_authorization",
+          status: "awaiting_wallet_signature",
+          ...(requestPayload.paymentAuthorization ? {} : { x402AuthorizationRequest: request }),
+        } satisfies AskHumansResponse;
+      },
+      confirmAskTransactions: async () => {
+        throw new Error(
+          "confirmAskTransactions should not run without transaction hashes.",
+        );
+      },
+    } satisfies Pick<
+      RateLoopAgentClient,
+      "askHumans" | "confirmAskTransactions"
+    >;
+
+    const result = await askHumansWithLocalSigner({
+      account,
+      agent,
+      config: {
+        chainId: 480,
+        chainName: "test",
+        contentRegistryAddress: CONTENT_REGISTRY_ADDRESS,
+        pollingIntervalMs: 1,
+        questionRewardPoolEscrowAddress: QUESTION_REWARD_ESCROW_ADDRESS,
+        receiptTimeoutMs: 1,
+        usdcAddress: X402_USDC_ADDRESS,
+        x402QuestionSubmitterAddress: X402_SUBMITTER_ADDRESS,
+      },
+      payload,
+      paymentMode: "x402_authorization",
+    });
+
+    expect(result.signedX402Authorization).toBe(true);
+    expect(askCalls).toHaveLength(2);
+    expect(askCalls[0].question?.confidentiality).toMatchObject({
+      disclosurePolicy: "private_forever",
+      visibility: "gated",
+    });
+    expect(askCalls[1].paymentAuthorization?.signature).toMatch(
+      /^0x[0-9a-f]{130}$/i,
+    );
   });
 
   it("rejects x402 authorizations for the wrong chain", async () => {

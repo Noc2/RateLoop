@@ -91,6 +91,7 @@ const X402_MIN_REWARD_POOL_SETTLED_ROUNDS = 1n;
 const BOUNTY_ELIGIBILITY_CREDENTIAL_MASK = 2 | 4 | 8;
 const BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG = 128;
 const X402_MAX_QUESTION_BUNDLE_COUNT = 10;
+const CONFIDENTIALITY_FLAG_PRIVATE_FOREVER = 1;
 const EMPTY_DETAILS_HASH = `0x${"0".repeat(64)}` as Hex;
 const DEFAULT_CONFIDENTIALITY_DISCLOSURE_POLICY = "after_settlement";
 const QUESTION_CONTEXT_DOMAIN = keccak256(
@@ -362,6 +363,7 @@ function buildQuestionConfidentialityHash(
   const gated = confidentiality.visibility === "gated";
   const asset = gated && confidentiality.bond?.asset === "USDC" ? 1 : 0;
   const amount = gated ? BigInt(confidentiality.bond?.amount ?? "0") : 0n;
+  const flags = questionConfidentialityFlags(confidentiality);
   return keccak256(
     encodeAbiParameters(
       [
@@ -370,9 +372,15 @@ function buildQuestionConfidentialityHash(
         { type: "uint64" },
         { type: "uint8" },
       ],
-      [gated, asset, amount, 0],
+      [gated, asset, amount, flags],
     ),
   );
+}
+
+function questionConfidentialityFlags(confidentiality: LocalQuestionConfidentiality) {
+  return confidentiality.visibility === "gated" && confidentiality.disclosurePolicy === "private_forever"
+    ? CONFIDENTIALITY_FLAG_PRIVATE_FOREVER
+    : 0;
 }
 
 type ExpectedLocalSignerQuestionPlan = {
@@ -2680,7 +2688,7 @@ function assertQuestionConfidentiality(
   );
   assertEqualNumber(
     readStructField(value, "flags", 3, fieldName),
-    0,
+    questionConfidentialityFlags(expected),
     `${fieldName}.flags`,
   );
 }
