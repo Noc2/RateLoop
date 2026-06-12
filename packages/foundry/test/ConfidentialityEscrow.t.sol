@@ -203,9 +203,7 @@ contract ConfidentialityEscrowTest is VotingTestBase {
         vm.expectRevert("Invalid flags");
         confidentialityEscrow.configure(
             1001,
-            IConfidentialityEscrow.ConfidentialityConfig({
-                gated: true, bondAsset: lrepAsset, bondAmount: 0, flags: 2
-            })
+            IConfidentialityEscrow.ConfidentialityConfig({ gated: true, bondAsset: lrepAsset, bondAmount: 0, flags: 2 })
         );
     }
 
@@ -547,6 +545,27 @@ contract ConfidentialityEscrowTest is VotingTestBase {
         engine.cancelExpiredRound(contentId, roundId);
 
         vm.expectRevert(VotePreflightLib.ConfidentialityBondRequired.selector);
+        vm.prank(voter2);
+        engine.openRound(contentId);
+
+        uint256 beforeBalance = lrepToken.balanceOf(voter1);
+        confidentialityEscrow.releaseBond(contentId, identityKey);
+        assertEq(lrepToken.balanceOf(voter1), beforeBalance + 1e6);
+        assertFalse(confidentialityEscrow.hasActiveBond(contentId, identityKey));
+    }
+
+    function testBondedEmptyOpenRoundCannotRelockReleasableBond() public {
+        uint256 contentId = _submitGatedQuestion("bonded-release-grief", 1e6);
+        bytes32 identityKey = _postLrepBond(contentId, voter1);
+
+        vm.prank(voter1);
+        engine.openRound(contentId);
+        uint256 firstRoundId = engine.currentRoundId(contentId);
+
+        vm.warp(block.timestamp + 30 days);
+        engine.cancelExpiredRound(contentId, firstRoundId);
+
+        _postLrepBond(contentId, voter2);
         vm.prank(voter2);
         engine.openRound(contentId);
 
