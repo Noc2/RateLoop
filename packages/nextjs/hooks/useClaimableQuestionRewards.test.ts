@@ -17,6 +17,17 @@ test("buildClaimableQuestionRewardCandidateVoters includes linked delegate ident
   );
 });
 
+test("buildClaimableQuestionRewardCandidateVoters filters invalid and zero linked identities", () => {
+  assert.deepEqual(
+    buildClaimableQuestionRewardCandidateVoters({
+      address: "0xABCDEF0000000000000000000000000000000001",
+      delegateTo: "0x0000000000000000000000000000000000000000",
+      delegateOf: "not-an-address",
+    }),
+    ["0xabcdef0000000000000000000000000000000001"],
+  );
+});
+
 test("getClaimableQuestionRewardsQueryKey keeps linked claim discovery scoped by the full identity set", () => {
   assert.deepEqual(
     getClaimableQuestionRewardsQueryKey(

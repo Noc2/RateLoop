@@ -13,6 +13,7 @@ import {
   upsertAgentCallbackSubscription,
 } from "~~/lib/agent-callbacks";
 import { __setSignedActionVerificationClientForTests } from "~~/lib/auth/signedActions";
+import { CONFIDENTIALITY_TERMS_VERSION } from "~~/lib/confidentiality/context";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testMemory";
 import { __setUrlSafetyDnsResolversForTests } from "~~/utils/urlSafety";
@@ -969,7 +970,7 @@ test("rateloop_accept_confidentiality_terms records signed acceptance and return
   const challenge = (await callPublicRateLoopMcpTool({
     arguments: {
       contentId: RATING_CONTENT_ID,
-      termsVersion: "2026-06",
+      termsVersion: CONFIDENTIALITY_TERMS_VERSION,
       walletAddress: account.address,
     },
     name: "rateloop_accept_confidentiality_terms",
@@ -993,7 +994,7 @@ test("rateloop_accept_confidentiality_terms records signed acceptance and return
       challengeId: challenge.challengeId,
       contentId: RATING_CONTENT_ID,
       signature,
-      termsVersion: "2026-06",
+      termsVersion: CONFIDENTIALITY_TERMS_VERSION,
       walletAddress: account.address,
     },
     name: "rateloop_accept_confidentiality_terms",
@@ -1034,7 +1035,7 @@ test("rateloop_accept_confidentiality_terms records signed acceptance and return
   assert.deepEqual(rows.rows, [
     {
       content_id: RATING_CONTENT_ID,
-      terms_version: "2026-06",
+      terms_version: CONFIDENTIALITY_TERMS_VERSION,
       wallet_address: account.address.toLowerCase(),
     },
   ]);

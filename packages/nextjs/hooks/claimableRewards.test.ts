@@ -1,6 +1,7 @@
 import {
   buildRoundClaimStateLookup,
   calculateLastClaimAwarePoolShare,
+  getClaimableRoundKey,
   getQuestionRewardClaimArgs,
   hasIndexedRefundClaim,
   sortClaimableRewardItems,
@@ -191,5 +192,103 @@ test("getQuestionRewardClaimArgs includes payout proof data when present", () =>
       claimType: "question_reward",
     }),
     [9n, 1n],
+  );
+
+  assert.deepEqual(
+    getQuestionRewardClaimArgs({
+      rewardPoolId: 9n,
+      contentId: 5n,
+      roundId: 1n,
+      reward: 2n,
+      asset: "USDC",
+      title: "Is this worth it?",
+      payoutWeight,
+      claimType: "question_reward",
+    }),
+    [9n, 1n],
+  );
+
+  assert.deepEqual(
+    getQuestionRewardClaimArgs({
+      rewardPoolId: 9n,
+      contentId: 5n,
+      roundId: 1n,
+      reward: 2n,
+      asset: "USDC",
+      title: "Is this worth it?",
+      payoutProof,
+      claimType: "question_reward",
+    }),
+    [9n, 1n],
+  );
+});
+
+test("getClaimableRoundKey namespaces question and bundle rewards", () => {
+  assert.equal(
+    getClaimableRoundKey({
+      contentId: 8n,
+      roundId: 2n,
+      reward: 3n,
+      claimType: "reward",
+    }),
+    "8-2",
+  );
+  assert.equal(
+    getClaimableRoundKey({
+      contentId: 8n,
+      roundId: 2n,
+      reward: 3n,
+      claimType: "refund",
+    }),
+    "8-2",
+  );
+  assert.equal(
+    getClaimableRoundKey({
+      contentId: 8n,
+      roundId: 2n,
+      frontend: "0x3000000000000000000000000000000000000000",
+      reward: 3n,
+      claimType: "frontend_round_fee",
+    }),
+    "8-2",
+  );
+  assert.equal(
+    getClaimableRoundKey({
+      rewardPoolId: 9n,
+      contentId: 5n,
+      roundId: 1n,
+      reward: 2n,
+      asset: "USDC",
+      title: "Is this worth it?",
+      claimType: "question_reward",
+    }),
+    "question-reward:9-1",
+  );
+  assert.equal(
+    getClaimableRoundKey({
+      bundleId: 11n,
+      roundSetIndex: 3n,
+      reward: 2n,
+      asset: "LREP",
+      title: "Bundle",
+      claimType: "question_bundle_reward",
+    }),
+    "question-bundle-reward:11-3",
+  );
+  assert.equal(
+    getClaimableRoundKey({
+      frontend: "0x3000000000000000000000000000000000000000",
+      reward: 5n,
+      claimType: "frontend_registry_fee",
+    }),
+    null,
+  );
+  assert.equal(
+    getClaimableRoundKey({
+      frontend: "0x3000000000000000000000000000000000000000",
+      reward: 7n,
+      claimType: "frontend_registry_withdrawal",
+    }),
+    null,
   );
 });
