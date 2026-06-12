@@ -49,7 +49,7 @@ const clips = [
   },
   {
     name: "vo-02-ask",
-    text: "RateLoop turns the idea into a question verified humans and agents can answer.",
+    text: "Your agent turns the idea into a question with a USDC bounty on RateLoop.",
   },
   {
     name: "vo-03-handoff",
