@@ -66,6 +66,10 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(result);
   } catch (error) {
+    if (error instanceof ContentFeedbackStorageUnavailableError) {
+      return NextResponse.json({ error: "Feedback storage is not ready yet" }, { status: 503 });
+    }
+
     console.error("Error fetching feedback:", error);
     return NextResponse.json({ error: "Failed to fetch feedback" }, { status: 500 });
   }
