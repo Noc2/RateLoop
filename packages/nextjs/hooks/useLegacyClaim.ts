@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { defineChain } from "thirdweb";
 import { useActiveWallet, useSetActiveWallet } from "thirdweb/react";
 import { type Abi } from "viem";
-import { useAccount } from "wagmi";
+import { useAccount, usePublicClient } from "wagmi";
 import {
   useDeployedContractInfo,
   useScaffoldReadContract,
@@ -36,6 +36,67 @@ async function fetchLegacyClaim(address: `0x${string}`): Promise<LegacyClaimLook
 
 function normalizeComparableAddress(address: string | null | undefined) {
   return address?.toLowerCase() ?? null;
+}
+
+export function shouldUseSponsoredLegacyClaim(params: {
+  canUseSponsoredSubmitCalls: boolean;
+  claimAddress?: string | null;
+  executionAddress?: string | null;
+}) {
+  if (!params.canUseSponsoredSubmitCalls) {
+    return false;
+  }
+
+  const claimAddress = normalizeComparableAddress(params.claimAddress);
+  const executionAddress = normalizeComparableAddress(params.executionAddress);
+
+  return Boolean(claimAddress && executionAddress && claimAddress === executionAddress);
+}
+
+function getErrorText(error: unknown) {
+  const values = [error];
+  const maybeWalk = (error as { walk?: () => unknown } | undefined)?.walk;
+  if (typeof maybeWalk === "function") {
+    try {
+      values.push(maybeWalk.call(error));
+    } catch {
+      // Ignore malformed third-party error helpers.
+    }
+  }
+
+  return values
+    .flatMap(value => {
+      const record = value as { details?: unknown; message?: unknown; name?: unknown; shortMessage?: unknown } | null;
+      return [record?.details, record?.shortMessage, record?.message, record?.name];
+    })
+    .filter((value): value is string => typeof value === "string" && value.length > 0)
+    .join("\n");
+}
+
+export function getLegacyClaimTransactionErrorMessage(error: unknown, fallbackMessage = "Legacy claim failed.") {
+  const message = getErrorText(error);
+
+  if (/0x09bde339|InvalidProof/i.test(message)) {
+    return "Legacy claim proof does not match the wallet sending this transaction or the active claim root. Reconnect the eligible legacy wallet and try again.";
+  }
+
+  if (/LegacyClaimWindowClosed/i.test(message)) {
+    return "The legacy claim window has closed.";
+  }
+
+  if (/AlreadyClaimed/i.test(message)) {
+    return "There is no legacy LREP left to claim for this wallet right now.";
+  }
+
+  if (/PoolDepleted/i.test(message)) {
+    return "The legacy contributor pool cannot pay this claim right now.";
+  }
+
+  if (/InvalidAmount/i.test(message)) {
+    return "The legacy claim amount is invalid for the active claim root.";
+  }
+
+  return fallbackMessage;
 }
 
 export function shouldInspectLegacyAdminClaim(params: {
@@ -94,6 +155,8 @@ export function useLegacyClaim() {
   const { targetNetwork } = useTargetNetwork();
   const connectedChainId = chain?.id;
   const isWrongChain = isConnected && connectedChainId !== undefined && connectedChainId !== targetNetwork.id;
+  const publicClient = usePublicClient({ chainId: targetNetwork.id });
+  const activeExecutionAddress = activeWallet?.getAccount?.()?.address as `0x${string}` | undefined;
 
   const claimQuery = useQuery({
     queryKey: ["legacy-claim", connectedAddress],
@@ -117,11 +180,15 @@ export function useLegacyClaim() {
     enabled: shouldInspectAdminClaim,
     staleTime: 30_000,
   });
+  const connectedClaimIsForLegacyAdmin =
+    claimQuery.data?.status === "eligible" &&
+    normalizeComparableAddress(legacyAdminAddress) === normalizeComparableAddress(connectedAddress);
+  const effectiveAdminClaimStatus = connectedClaimIsForLegacyAdmin ? "eligible" : adminClaimQuery.data?.status;
   const shouldRestoreLegacyAdminWallet = shouldSwitchToLegacyAdminWallet({
     activeWalletId: activeWallet?.id,
     adminAddress: legacyAdminAddress,
-    adminClaimStatus: adminClaimQuery.data?.status,
-    connectedAddress,
+    adminClaimStatus: effectiveAdminClaimStatus,
+    connectedAddress: activeExecutionAddress ?? connectedAddress,
     isRestoring: isRestoringLegacyWallet,
   });
 
@@ -243,6 +310,11 @@ export function useLegacyClaim() {
   const { canUseSponsoredSubmitCalls, executeSponsoredCalls } = useThirdwebSponsoredSubmitCalls({
     allowInAppSponsorshipSync: false,
   });
+  const canUseSponsoredLegacyClaim = shouldUseSponsoredLegacyClaim({
+    canUseSponsoredSubmitCalls,
+    claimAddress: connectedAddress,
+    executionAddress: activeExecutionAddress,
+  });
   const {
     canShowFreeTransactionAllowance,
     canSponsorTransactions,
@@ -277,7 +349,7 @@ export function useLegacyClaim() {
 
     const preflightError = getClaimPreflightErrorMessage({
       canShowFreeTransactionAllowance,
-      canSponsorTransactions,
+      canSponsorTransactions: canSponsorTransactions && canUseSponsoredLegacyClaim,
       freeTransactionRemaining,
       freeTransactionVerified,
       hasNativeGasBalance: nativeBalanceValue > 0n,
@@ -300,7 +372,12 @@ export function useLegacyClaim() {
       return;
     }
 
-    if (canUseSponsoredSubmitCalls) {
+    if (shouldRestoreLegacyAdminWallet) {
+      notification.warning("Reconnecting the eligible legacy wallet before claiming. Try again once it finishes.");
+      return;
+    }
+
+    if (canUseSponsoredLegacyClaim) {
       if (!launchDistributionPoolInfo) {
         notification.error("Legacy claim contract is unavailable right now.");
         return;
@@ -308,6 +385,13 @@ export function useLegacyClaim() {
 
       setIsSponsoredClaiming(true);
       try {
+        await publicClient?.simulateContract({
+          abi: launchDistributionPoolInfo.abi as Abi,
+          account: activeExecutionAddress,
+          address: launchDistributionPoolInfo.address as `0x${string}`,
+          args: writeArgs as any,
+          functionName: "claimLegacyContributorAllocation",
+        });
         await executeSponsoredCalls(
           [
             {
@@ -320,22 +404,29 @@ export function useLegacyClaim() {
           { action: "Claim legacy LREP" },
         );
         await refetchOnChainState();
+      } catch (error) {
+        notification.error(getLegacyClaimTransactionErrorMessage(error));
       } finally {
         setIsSponsoredClaiming(false);
       }
       return;
     }
 
-    await writeContractAsync(
-      {
-        functionName: "claimLegacyContributorAllocation",
-        args: writeArgs as any,
-      },
-      {
-        action: "Claim legacy LREP",
-      },
-    );
-    await refetchOnChainState();
+    try {
+      await writeContractAsync(
+        {
+          functionName: "claimLegacyContributorAllocation",
+          args: writeArgs as any,
+        },
+        {
+          action: "Claim legacy LREP",
+          getErrorMessage: (error, defaultMessage) => getLegacyClaimTransactionErrorMessage(error, defaultMessage),
+        },
+      );
+      await refetchOnChainState();
+    } catch {
+      // `useScaffoldWriteContract` already surfaced the transaction error toast.
+    }
   };
 
   return {

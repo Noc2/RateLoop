@@ -178,16 +178,18 @@ export function LegacyClaimPage() {
             <button
               type="button"
               className="btn btn-primary mt-6 w-full sm:w-auto"
-              disabled={isClaiming || claimable <= 0n}
+              disabled={isClaiming || isRestoringLegacyWallet || claimable <= 0n}
               onClick={() => {
                 void claim();
               }}
             >
-              {isClaiming
-                ? "Claiming..."
-                : claimable > 0n
-                  ? `Claim ${formatLrepAmount(claimable)}`
-                  : "Nothing claimable yet"}
+              {isRestoringLegacyWallet
+                ? "Reconnecting legacy wallet..."
+                : isClaiming
+                  ? "Claiming..."
+                  : claimable > 0n
+                    ? `Claim ${formatLrepAmount(claimable)}`
+                    : "Nothing claimable yet"}
             </button>
           </section>
 
