@@ -54,4 +54,100 @@ test.describe("Funding modals", () => {
       await context.close();
     }
   });
+
+  test("feedback panel opens the award Feedback Bonus form", async ({ browser }) => {
+    test.setTimeout(120_000);
+
+    const target = await createFreshVoteableContent("Award Feedback Modal Target", ANVIL_ACCOUNTS.account3.address);
+    expect(target, "fresh award modal target should submit and index").not.toBeNull();
+
+    const context = await newE2EContext(browser);
+    const page = await context.newPage();
+
+    try {
+      const feedbackBody = `Awardable feedback rationale ${Date.now()}`;
+      const feedbackHash = `0x${"7".repeat(64)}`;
+      const now = new Date().toISOString();
+      const awardDeadline = Math.floor(Date.now() / 1000 + 7 * 24 * 60 * 60).toString();
+
+      await page.route("**/api/feedback?**", async route => {
+        const requestUrl = new URL(route.request().url());
+        if (requestUrl.searchParams.get("contentId") !== target!.contentId) {
+          await route.continue();
+          return;
+        }
+
+        await route.fulfill({
+          contentType: "application/json",
+          json: {
+            items: [
+              {
+                id: "feedback-award-e2e",
+                contentId: target!.contentId,
+                roundId: "1",
+                chainId: 31337,
+                authorAddress: ANVIL_ACCOUNTS.account4.address,
+                feedbackType: "concern",
+                feedbackTypeLabel: "Concern",
+                body: feedbackBody,
+                sourceUrl: null,
+                feedbackHash,
+                clientNonce: null,
+                moderationStatus: "published",
+                publicationTxHash: `0x${"8".repeat(64)}`,
+                publishedAt: now,
+                createdAt: now,
+                updatedAt: now,
+                isOwn: false,
+                isPublic: true,
+                feedbackBonusAwards: [],
+              },
+            ],
+            count: 1,
+            publicCount: 1,
+            settlementComplete: true,
+            openRoundId: null,
+            awardableFeedbackBonusPools: [
+              {
+                id: "17",
+                contentId: target!.contentId,
+                roundId: "1",
+                awarder: ANVIL_ACCOUNTS.account5.address,
+                asset: 1,
+                currency: "USDC",
+                displayCurrency: "USD",
+                fundedAmount: "3000000",
+                remainingAmount: "3000000",
+                awardedAmount: "0",
+                feedbackClosesAt: awardDeadline,
+                awardDeadline,
+                frontendFeeBps: 300,
+              },
+            ],
+          },
+        });
+      });
+
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await setupWallet(page, ANVIL_ACCOUNTS.account5.privateKey);
+      await gotoWithRetry(page, `/rate?content=${target!.contentId}`, { ensureWalletConnected: true });
+      await waitForFeedLoaded(page);
+      await expect(page.getByRole("heading", { name: target!.title }).first()).toBeVisible({ timeout: 30_000 });
+
+      const feedbackSection = page.getByRole("region", { name: "Question feedback" });
+      await expect(feedbackSection.getByText(feedbackBody)).toBeVisible({ timeout: 30_000 });
+      await feedbackSection.getByRole("button", { name: "Award Feedback Bonus" }).click();
+
+      const awardDialog = page.getByRole("dialog", { name: "Award Feedback Bonus" });
+      await expect(awardDialog).toBeVisible({ timeout: 10_000 });
+      await expect(awardDialog.getByText(feedbackBody)).toBeVisible();
+      await expect(awardDialog.getByText(/Round 1 .*3 USDC left/i)).toBeVisible();
+      await expect(awardDialog.getByLabel("Award amount")).toHaveValue("1");
+      await expect(awardDialog.getByText("Recipient gets")).toBeVisible();
+      await expect(awardDialog.getByText("Frontend fee")).toBeVisible();
+      await expect(awardDialog.getByRole("button", { name: "Award Bonus" })).toBeVisible();
+    } finally {
+      await context.close();
+    }
+  });
 });
