@@ -825,6 +825,11 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
         } catch {
             revert("Invalid registry");
         }
+        try IRaterRegistryStatus(registryAddress).isIdentityKeyBanned(bytes32(0)) returns (bool banned) {
+            require(!banned, "Invalid registry");
+        } catch {
+            revert("Invalid registry");
+        }
     }
 
     function _protocolTreasury() internal view returns (address treasury) {

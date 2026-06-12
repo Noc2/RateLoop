@@ -189,6 +189,41 @@ contract RaterRegistryWithoutCredentialAbiForConfig is IRaterIdentityRegistry {
     function credentialStatusBits(address) external pure returns (uint8 activeMask, uint8 freshMask) {
         return (0, 0);
     }
+
+    function isIdentityKeyBanned(bytes32) external pure virtual returns (bool) {
+        return false;
+    }
+}
+
+contract RaterRegistryWithoutBanStatusForConfig is IRaterIdentityRegistry {
+    function addressIdentityKey(address account) external pure returns (bytes32) {
+        if (account == address(0)) return bytes32(0);
+        return keccak256(abi.encodePacked("rateloop.address-identity-v1", account));
+    }
+
+    function resolveRater(address actor) external pure returns (ResolvedRater memory resolved) {
+        resolved = ResolvedRater({
+            holder: actor,
+            identityKey: keccak256(abi.encodePacked("rateloop.address-identity-v1", actor)),
+            humanNullifier: bytes32(0),
+            hasActiveHumanCredential: false,
+            delegated: false
+        });
+    }
+
+    function hasActiveHumanCredential(address) external pure returns (bool) {
+        return false;
+    }
+
+    function credentialStatusBits(address) external pure returns (uint8 activeMask, uint8 freshMask) {
+        return (0, 0);
+    }
+}
+
+contract RaterRegistryBansZeroKeyForConfig is RaterRegistryWithoutCredentialAbiForConfig {
+    function isIdentityKeyBanned(bytes32) external pure override returns (bool) {
+        return true;
+    }
 }
 
 contract MockAdvisoryVoteRecorderForConfig {
@@ -396,6 +431,18 @@ contract ProtocolConfigBranchesTest is Test {
 
         vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
         config.setRaterRegistry(address(weakRegistry));
+    }
+
+    function test_SetRaterRegistry_RejectsMissingOrInvalidBanStatusAbi() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+        RaterRegistryWithoutBanStatusForConfig missingBanStatus = new RaterRegistryWithoutBanStatusForConfig();
+        RaterRegistryBansZeroKeyForConfig bansZeroKey = new RaterRegistryBansZeroKeyForConfig();
+
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.setRaterRegistry(address(missingBanStatus));
+
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.setRaterRegistry(address(bansZeroKey));
     }
 
     function test_SetFrontendRegistry_ValidatesIntegration() public {

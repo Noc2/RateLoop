@@ -990,6 +990,15 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         feedbackBonusEscrow.setRaterRegistry(address(weakRegistry));
     }
 
+    function testSetRaterRegistryRejectsInvalidBanStatus() public {
+        FeedbackRaterRegistryStatusMock invalidRegistry = new FeedbackRaterRegistryStatusMock();
+        invalidRegistry.setBanned(bytes32(0), true);
+
+        vm.prank(owner);
+        vm.expectRevert("Invalid registry");
+        feedbackBonusEscrow.setRaterRegistry(address(invalidRegistry));
+    }
+
     function testAwardRequiresRevealedVote() public {
         uint256 contentId = _submitQuestion("");
         uint256 poolId = _createFeedbackBonusPool(contentId);

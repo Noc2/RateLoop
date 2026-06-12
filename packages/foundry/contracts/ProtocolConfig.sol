@@ -621,6 +621,11 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         } catch {
             revert InvalidConfig();
         }
+        try RaterRegistry(value).isIdentityKeyBanned(bytes32(0)) returns (bool banned) {
+            if (banned) revert InvalidConfig();
+        } catch {
+            revert InvalidConfig();
+        }
         try RaterRegistry(value).getHumanCredential(address(0)) returns (RaterRegistry.HumanCredential memory) { }
         catch {
             revert InvalidConfig();
