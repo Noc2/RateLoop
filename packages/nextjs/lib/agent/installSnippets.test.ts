@@ -4,7 +4,9 @@ import {
   RATELOOP_CODEX_MCP_COMMAND,
   RATELOOP_CONTRACT_DEPLOYMENT_NOTE,
   RATELOOP_GENERIC_MCP_CONFIG,
+  RATELOOP_ONE_TIME_AGENT_PROMPT,
   RATELOOP_PUBLIC_MCP_URL,
+  RATELOOP_PUBLIC_ORIGIN,
   RATELOOP_SKILL_URL,
   getAgentInstallTarget,
 } from "./installSnippets";
@@ -40,6 +42,11 @@ test("generic MCP config points at public RateLoop MCP endpoint", () => {
   assert.equal(parsed.mcpServers.rateloop.transport, "streamable-http");
   assert.equal(parsed.mcpServers.rateloop.url, RATELOOP_PUBLIC_MCP_URL);
   assert.equal(parsed.mcpServers.rateloop.headers["MCP-Protocol-Version"], "2025-11-25");
+});
+
+test("one-time trial prompt names the RateLoop website", () => {
+  assert.match(RATELOOP_ONE_TIME_AGENT_PROMPT, /Run an end-to-end RateLoop trial/);
+  assert.ok(RATELOOP_ONE_TIME_AGENT_PROMPT.includes(RATELOOP_PUBLIC_ORIGIN));
 });
 
 test("Codex target exposes MCP command, AGENTS.md rule, and skill URL", () => {

@@ -21,7 +21,7 @@ If RateLoop MCP or the RateLoop skill is available, use it to quote an ask. Pref
 
 ${RATELOOP_CONTRACT_DEPLOYMENT_NOTE}`;
 
-export const RATELOOP_ONE_TIME_AGENT_PROMPT = `Run an end-to-end RateLoop trial for a concrete product judgment.
+export const RATELOOP_ONE_TIME_AGENT_PROMPT = `Run an end-to-end RateLoop trial on ${RATELOOP_PUBLIC_ORIGIN} for a concrete product judgment.
 
 If this workspace contains a product, app, landing page, README, or screenshots, use that as the project. Otherwise use this demo scenario: an indie team is testing a new AI meeting-notes app for freelancers.
 
