@@ -118,6 +118,14 @@ export async function settleRoundWithVotes(
 
   for (const voter of votes) {
     const stake = voter.stake ?? CORRELATION_E2E_STAKE;
+    const funded = await transferLREP(
+      voter.account.address,
+      stake,
+      DEPLOYER.address,
+      CONTRACT_ADDRESSES.LoopReputation,
+    );
+    expect(funded, `Vote funding failed for ${voter.account.address}`).toBe(true);
+
     const approved = await approveLREP(
       CONTRACT_ADDRESSES.RoundVotingEngine,
       stake,
