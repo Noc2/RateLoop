@@ -25,6 +25,7 @@ import { MockWorldIDVerifier } from "../contracts/mocks/MockWorldIDVerifier.sol"
 
 contract MockAdvisoryLaunchDistributionPool {
     uint16 public maxUnverifiedCreditsPerRound;
+    uint256 public advisoryRecordCallCount;
 
     constructor(uint16 cap) {
         maxUnverifiedCreditsPerRound = cap;
@@ -58,6 +59,21 @@ contract MockAdvisoryLaunchDistributionPool {
         )
     {
         return (0, 3, 0, 0, 0, 0, 1, maxUnverifiedCreditsPerRound, 0, 1 days, 1, 1, false);
+    }
+
+    function recordAdvisoryRaterRewardWithSourceReady(
+        address,
+        uint256,
+        uint256,
+        bytes32,
+        uint16,
+        uint16,
+        bool,
+        bytes32[] calldata,
+        uint64
+    ) external returns (bool, uint256) {
+        advisoryRecordCallCount += 1;
+        return (true, 0);
     }
 }
 
@@ -1411,6 +1427,46 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertEq(paidAmount, 0, "fixture has no launch payment");
         assertEq(claimedScoreBps, storedScoreBps, "claim returns stored score");
         assertEq(storedScoreBps, 0, "expired seed stores zero advisory score");
+    }
+
+    function test_AdvisoryLaunchCreditSkipsRawBannedDelegateAtClaim() public {
+        MockAdvisoryLaunchDistributionPool launchPool = new MockAdvisoryLaunchDistributionPool(3);
+        vm.prank(owner);
+        ProtocolConfig(protocolConfigAddress).setLaunchDistributionPool(address(launchPool));
+
+        mockRaterIdentityRegistry.mint(voter5, 55);
+        vm.prank(voter5);
+        mockRaterIdentityRegistry.setDelegate(delegate1);
+
+        uint256 contentId = _submitContent();
+
+        (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, true, 8_000, 10e6);
+        (bytes32 advisoryCommitKey, bytes32 advisorySalt) = _recordAdvisory(delegate1, contentId, "raw-banned-advisory");
+        (bytes32 ck2, bytes32 s2) = _commitPrediction(voter2, contentId, false, 5_000, 3e6);
+        (bytes32 ck3, bytes32 s3) = _commitPrediction(voter3, contentId, true, 6_500, 3e6);
+
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+        RoundLib.Round memory r0 = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        _warpPastTlockRevealTime(uint256(r0.startTime) + EPOCH);
+
+        engine.revealVoteByCommitKey(contentId, roundId, ck1, true, 8_000, s1);
+        engine.revealVoteByCommitKey(contentId, roundId, ck2, false, 5_000, s2);
+        engine.revealVoteByCommitKey(contentId, roundId, ck3, true, 6_500, s3);
+        advisoryRecorder.revealAdvisoryVote(advisoryCommitKey, true, 5_000, advisorySalt);
+
+        _settleRoundAfterRbtsSeed(contentId, roundId);
+        assertTrue(_roundRbtsScored(engine, contentId, roundId), "round scored");
+        assertTrue(_roundRbtsScoreSeed(engine, contentId, roundId) != bytes32(0), "score seed captured");
+
+        mockRaterIdentityRegistry.setBanned(mockRaterIdentityRegistry.addressIdentityKey(delegate1), true);
+
+        (uint16 claimedScoreBps, uint256 paidAmount) = advisoryRecorder.claimAdvisoryLaunchCredit(advisoryCommitKey);
+        (,,,,,,,, bool launchCreditClaimed, uint16 storedScoreBps) =
+            advisoryRecorder.advisoryCommitCore(advisoryCommitKey);
+        assertTrue(launchCreditClaimed, "raw-banned delegate claim is terminal");
+        assertEq(paidAmount, 0, "raw-banned delegate receives no launch payment");
+        assertEq(claimedScoreBps, storedScoreBps, "claim returns stored score");
+        assertEq(launchPool.advisoryRecordCallCount(), 0, "launch pool not called");
     }
 
     function test_AdvisoryLaunchCreditRevealAfterRbtsSeedCaptureRejected() public {

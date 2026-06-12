@@ -512,7 +512,14 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
 
         address launchPool = protocolConfig.launchDistributionPool();
         if (launchPool == address(0)) return (scoreBps, 0);
-        if (_isIdentityBanned(advisoryCommit.contentId, advisoryCommit.roundId, advisoryCommit.identityKey)) {
+        if (
+            _isIdentityBanned(advisoryCommit.contentId, advisoryCommit.roundId, advisoryCommit.identityKey)
+                || _isIdentityBanned(
+                    advisoryCommit.contentId,
+                    advisoryCommit.roundId,
+                    VotePreflightLib.addressIdentityKey(advisoryCommit.voter)
+                )
+        ) {
             advisoryCommit.launchCreditClaimed = true;
             emit AdvisoryLaunchCreditClaimed(
                 advisoryCommit.contentId,
@@ -863,7 +870,14 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
 
     function _isIdentityBanned(uint256 contentId, uint256 roundId, bytes32 identityKey) internal view returns (bool) {
         if (identityKey == bytes32(0)) return false;
-        address registryAddress = address(_roundRaterRegistry(contentId, roundId));
+        address snapshot = votingEngine.roundRaterRegistrySnapshot(contentId, roundId);
+        if (_isIdentityBannedAt(snapshot, identityKey)) return true;
+        address current = protocolConfig.raterRegistry();
+        if (current == snapshot) return false;
+        return _isIdentityBannedAt(current, identityKey);
+    }
+
+    function _isIdentityBannedAt(address registryAddress, bytes32 identityKey) private view returns (bool) {
         if (registryAddress == address(0)) return false;
         try IRaterRegistryStatus(registryAddress).isIdentityKeyBanned(identityKey) returns (bool banned) {
             return banned;
