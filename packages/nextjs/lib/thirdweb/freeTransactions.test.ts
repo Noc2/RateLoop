@@ -55,6 +55,8 @@ const GATED_CONFIDENTIALITY_CONFIG = {
 const DETAILS_HASH = `0x${"8".repeat(64)}` as const;
 const DETAILS_URL = "https://www.rateloop.ai/api/attachments/details/det_sponsoreddetails01";
 const WALLET = "0x1234567890abcdef1234567890abcdef12345678" as const;
+const THIRDWEB_ADMIN_WALLET = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" as const;
+const THIRDWEB_ACCOUNT_FACTORY = "0x85e23b94e7F5E9cC1fF78BCe78cfb15B81f0DF00" as const;
 const USER_OPERATION_EVENT = parseAbiItem(
   "event UserOperationEvent(bytes32 indexed userOpHash, address indexed sender, address indexed paymaster, uint256 nonce, bool success, uint256 actualGasCost, uint256 actualGasUsed)",
 );
@@ -432,6 +434,39 @@ after(() => {
   }
 });
 
+test("extractThirdwebSmartAccountAdminCandidate decodes v0.7 factory data", () => {
+  const factoryData = encodeFunctionData({
+    abi: parseAbi(["function createAccount(address admin, bytes data) returns (address)"]),
+    functionName: "createAccount",
+    args: [THIRDWEB_ADMIN_WALLET, "0x"],
+  });
+  const candidate = freeTransactions.extractThirdwebSmartAccountAdminCandidate({
+    factory: THIRDWEB_ACCOUNT_FACTORY,
+    factoryData,
+  });
+
+  assert.ok(candidate);
+  assert.equal(candidate.adminAddress.toLowerCase(), THIRDWEB_ADMIN_WALLET);
+  assert.equal(candidate.factoryAddress.toLowerCase(), THIRDWEB_ACCOUNT_FACTORY.toLowerCase());
+  assert.equal(candidate.accountData, "0x");
+});
+
+test("extractThirdwebSmartAccountAdminCandidate decodes v0.6 init code", () => {
+  const factoryData = encodeFunctionData({
+    abi: parseAbi(["function createAccount(address admin, bytes data) returns (address)"]),
+    functionName: "createAccount",
+    args: [THIRDWEB_ADMIN_WALLET, "0x1234"],
+  });
+  const candidate = freeTransactions.extractThirdwebSmartAccountAdminCandidate({
+    initCode: `${THIRDWEB_ACCOUNT_FACTORY}${factoryData.slice(2)}`,
+  });
+
+  assert.ok(candidate);
+  assert.equal(candidate.adminAddress.toLowerCase(), THIRDWEB_ADMIN_WALLET);
+  assert.equal(candidate.factoryAddress.toLowerCase(), THIRDWEB_ACCOUNT_FACTORY.toLowerCase());
+  assert.equal(candidate.accountData, "0x1234");
+});
+
 test("pending reservations consume quota on verifier approval and stay idempotent while active", async () => {
   const firstCalls = [voteCall("0x01")];
   const secondCalls = [voteCall("0x02")];
@@ -527,6 +562,31 @@ test("confirm accepts relayed 7702 receipts when the executed event proves the w
 
   const quotaRows = await dbModule.dbClient.execute("SELECT free_tx_used FROM free_transaction_quotas");
   assert.equal(Number(quotaRows.rows[0]?.free_tx_used), 1);
+});
+
+test("verifier accepts thirdweb smart account senders controlled by verified admins", async () => {
+  const identityKey = "0x9999999999999999999999999999999999999999999999999999999999999999";
+  freeTransactions.__setFreeTransactionTestOverridesForTests({
+    allTransactionHashesSucceeded: async () => true,
+    getVerifiedThirdwebSmartAccountAdminAddresses: async ({ walletAddress }) =>
+      walletAddress.toLowerCase() === WALLET.toLowerCase() ? [THIRDWEB_ADMIN_WALLET] : [],
+    resolveRaterIdentityKey: async address =>
+      address.toLowerCase() === THIRDWEB_ADMIN_WALLET.toLowerCase() ? identityKey : null,
+  });
+
+  const decision = await freeTransactions.evaluateFreeTransactionAllowance(buildRequest([voteCall("0x0d")]) as never);
+
+  assert.equal(decision.isAllowed, true);
+  if (!decision.isAllowed) return;
+  assert.ok(decision.summary.walletAddress);
+  assert.equal(decision.summary.walletAddress.toLowerCase(), WALLET);
+  assert.equal(decision.summary.raterIdentityKey, identityKey);
+
+  const quotaRows = await dbModule.dbClient.execute(
+    "SELECT rater_identity_key, last_wallet_address FROM free_transaction_quotas",
+  );
+  assert.equal(quotaRows.rows[0]?.rater_identity_key, identityKey);
+  assert.equal(String(quotaRows.rows[0]?.last_wallet_address).toLowerCase(), WALLET);
 });
 
 test("confirm accepts relayed 4337 receipts when the user operation event proves the wallet", async () => {

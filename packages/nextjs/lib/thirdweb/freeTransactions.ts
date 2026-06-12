@@ -50,8 +50,11 @@ type DeployedContractsMap = Record<
   >
 >;
 
-type ThirdwebVerifierUserOp = {
+export type ThirdwebVerifierUserOp = {
   sender?: string;
+  factory?: string;
+  factoryData?: string;
+  initCode?: string;
   targets?: string[];
   gasLimit?: string;
   gasPrice?: string;
@@ -70,6 +73,11 @@ type ThirdwebVerifierRequest = {
 
 type FreeTransactionDbWrite = Pick<typeof db, "insert" | "select" | "update">;
 type ResolveRaterIdentityKey = (address: `0x${string}`, chainId: number) => Promise<string | null>;
+type GetVerifiedThirdwebSmartAccountAdminAddresses = (params: {
+  chainId: number;
+  userOp?: ThirdwebVerifierUserOp;
+  walletAddress: `0x${string}`;
+}) => Promise<readonly `0x${string}`[]>;
 type CheckTransactionHashesSucceeded = (params: {
   chainId: number;
   transactionHashes: Hash[];
@@ -137,6 +145,19 @@ const USER_OPERATION_RECEIPT_EVENT_ABI = parseAbi([
 const EXECUTED_RECEIPT_EVENT_ABI = parseAbi([
   "event Executed(address indexed user, address indexed signer, address indexed executor, uint256 batchSize)",
 ]);
+const THIRDWEB_ACCOUNT_FACTORY_ABI = parseAbi([
+  "function createAccount(address admin, bytes data) returns (address)",
+  "function getAccountsOfSigner(address signer) view returns (address[])",
+  "function getAddress(address adminSigner, bytes data) view returns (address)",
+]);
+const THIRDWEB_ACCOUNT_PERMISSIONS_ABI = parseAbi(["function getAllAdmins() view returns (address[])"]);
+const THIRDWEB_DEFAULT_ACCOUNT_FACTORY_ADDRESSES = [
+  "0x85e23b94e7F5E9cC1fF78BCe78cfb15B81f0DF00",
+  "0x4be0ddfebca9a5a4a617dee4dece99e7c862dceb",
+] as const satisfies readonly Address[];
+const THIRDWEB_DEFAULT_ACCOUNT_FACTORY_ADDRESS_SET = new Set(
+  THIRDWEB_DEFAULT_ACCOUNT_FACTORY_ADDRESSES.map(address => address.toLowerCase()),
+);
 const CONTENT_REGISTRY_SUBMISSION_ABI = [
   {
     type: "function",
@@ -364,6 +385,7 @@ const CONTENT_REGISTRY_SUBMISSION_ABI = [
 let ensureFreeTransactionQuotaTablePromise: Promise<void> | null = null;
 let freeTransactionTestOverrides: {
   resolveRaterIdentityKey?: ResolveRaterIdentityKey;
+  getVerifiedThirdwebSmartAccountAdminAddresses?: GetVerifiedThirdwebSmartAccountAdminAddresses;
   allTransactionHashesSucceeded?: CheckTransactionHashesSucceeded;
   getTransactionVerificationClient?: GetTransactionVerificationClient;
 } | null = null;
@@ -435,6 +457,236 @@ async function getPublicClientForChain(chainId: number) {
   });
 }
 
+type ChainPublicClient = NonNullable<Awaited<ReturnType<typeof getPublicClientForChain>>>;
+type ThirdwebSmartAccountAdminCandidate = {
+  accountData: Hex;
+  adminAddress: `0x${string}`;
+  factoryAddress: `0x${string}`;
+  factoryData: Hex;
+};
+
+function getKnownThirdwebAccountFactoryAddress(value: string | undefined): `0x${string}` | null {
+  if (!value || !isAddress(value)) {
+    return null;
+  }
+
+  const factoryAddress = normalizeAddress(value);
+  return THIRDWEB_DEFAULT_ACCOUNT_FACTORY_ADDRESS_SET.has(factoryAddress.toLowerCase()) ? factoryAddress : null;
+}
+
+function decodeThirdwebSmartAccountCreateAccount(
+  factoryAddress: `0x${string}`,
+  factoryData: string | undefined,
+): ThirdwebSmartAccountAdminCandidate | null {
+  if (!factoryData || !isHex(factoryData)) {
+    return null;
+  }
+
+  try {
+    const decoded = decodeFunctionData({
+      abi: THIRDWEB_ACCOUNT_FACTORY_ABI,
+      data: factoryData,
+    }) as { args: readonly unknown[] | undefined; functionName: string };
+    if (decoded.functionName !== "createAccount") {
+      return null;
+    }
+
+    const adminAddress = normalizeAddressArg(decoded.args?.[0]);
+    const accountData = decoded.args?.[1];
+    if (!adminAddress || typeof accountData !== "string" || !isHex(accountData)) {
+      return null;
+    }
+
+    return {
+      accountData,
+      adminAddress,
+      factoryAddress,
+      factoryData,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function extractThirdwebSmartAccountAdminCandidate(
+  userOp: ThirdwebVerifierUserOp | undefined,
+): ThirdwebSmartAccountAdminCandidate | null {
+  const factoryAddress = getKnownThirdwebAccountFactoryAddress(userOp?.factory);
+  if (factoryAddress) {
+    const candidate = decodeThirdwebSmartAccountCreateAccount(factoryAddress, userOp?.factoryData);
+    if (candidate) {
+      return candidate;
+    }
+  }
+
+  const initCode = userOp?.initCode;
+  if (!initCode || !isHex(initCode) || initCode.length <= 42) {
+    return null;
+  }
+
+  const initCodeFactoryAddress = getKnownThirdwebAccountFactoryAddress(`0x${initCode.slice(2, 42)}`);
+  if (!initCodeFactoryAddress) {
+    return null;
+  }
+
+  return decodeThirdwebSmartAccountCreateAccount(initCodeFactoryAddress, `0x${initCode.slice(42)}`);
+}
+
+async function readThirdwebFactoryAccountsOfSigner(params: {
+  adminAddress: `0x${string}`;
+  client: ChainPublicClient;
+  factoryAddress: `0x${string}`;
+}) {
+  const accounts = await params.client
+    .readContract({
+      address: params.factoryAddress,
+      abi: THIRDWEB_ACCOUNT_FACTORY_ABI,
+      functionName: "getAccountsOfSigner",
+      args: [params.adminAddress],
+    })
+    .catch(() => null);
+
+  if (!Array.isArray(accounts)) {
+    return [];
+  }
+
+  return accounts
+    .filter((account): account is string => typeof account === "string" && isAddress(account))
+    .map(account => normalizeAddress(account));
+}
+
+async function readThirdwebFactoryPredictedAccount(params: {
+  accountData: Hex;
+  adminAddress: `0x${string}`;
+  client: ChainPublicClient;
+  factoryAddress: `0x${string}`;
+}) {
+  const accountAddress = await params.client
+    .readContract({
+      address: params.factoryAddress,
+      abi: THIRDWEB_ACCOUNT_FACTORY_ABI,
+      functionName: "getAddress",
+      args: [params.adminAddress, params.accountData],
+    })
+    .catch(() => null);
+
+  return typeof accountAddress === "string" && isAddress(accountAddress) ? normalizeAddress(accountAddress) : null;
+}
+
+async function readThirdwebSmartAccountAdmins(params: { client: ChainPublicClient; walletAddress: `0x${string}` }) {
+  const admins = await params.client
+    .readContract({
+      address: params.walletAddress,
+      abi: THIRDWEB_ACCOUNT_PERMISSIONS_ABI,
+      functionName: "getAllAdmins",
+    })
+    .catch(() => null);
+
+  if (!Array.isArray(admins)) {
+    return [];
+  }
+
+  return admins
+    .filter((admin): admin is string => typeof admin === "string" && isAddress(admin))
+    .map(admin => normalizeAddress(admin));
+}
+
+async function isVerifiedThirdwebSmartAccountForAdmin(params: {
+  adminAddress: `0x${string}`;
+  candidate?: ThirdwebSmartAccountAdminCandidate | null;
+  client: ChainPublicClient;
+  walletAddress: `0x${string}`;
+}) {
+  const normalizedWalletAddress = params.walletAddress.toLowerCase();
+
+  for (const factoryAddress of THIRDWEB_DEFAULT_ACCOUNT_FACTORY_ADDRESSES) {
+    if (params.candidate?.factoryAddress.toLowerCase() === factoryAddress.toLowerCase()) {
+      const predictedAccount = await readThirdwebFactoryPredictedAccount({
+        accountData: params.candidate.accountData,
+        adminAddress: params.adminAddress,
+        client: params.client,
+        factoryAddress,
+      });
+      if (predictedAccount?.toLowerCase() === normalizedWalletAddress) {
+        return true;
+      }
+    }
+
+    const accounts = await readThirdwebFactoryAccountsOfSigner({
+      adminAddress: params.adminAddress,
+      client: params.client,
+      factoryAddress,
+    });
+    if (accounts.some(account => account.toLowerCase() === normalizedWalletAddress)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function dedupeNormalizedAddresses(addresses: readonly `0x${string}`[]) {
+  const deduped = new Map<string, `0x${string}`>();
+  for (const address of addresses) {
+    deduped.set(address.toLowerCase(), address);
+  }
+
+  return [...deduped.values()];
+}
+
+async function getVerifiedThirdwebSmartAccountAdminAddresses(params: {
+  chainId: number;
+  userOp?: ThirdwebVerifierUserOp;
+  walletAddress: `0x${string}`;
+}) {
+  if (freeTransactionTestOverrides?.getVerifiedThirdwebSmartAccountAdminAddresses) {
+    const overrideAddresses = await freeTransactionTestOverrides.getVerifiedThirdwebSmartAccountAdminAddresses(params);
+    return dedupeNormalizedAddresses(
+      overrideAddresses
+        .filter((address): address is `0x${string}` => typeof address === "string" && isAddress(address))
+        .map(address => normalizeAddress(address)),
+    );
+  }
+
+  const client = await getPublicClientForChain(params.chainId);
+  if (!client) {
+    return [];
+  }
+
+  const candidate = extractThirdwebSmartAccountAdminCandidate(params.userOp);
+  const adminAddresses: `0x${string}`[] = [];
+
+  if (
+    candidate &&
+    (await isVerifiedThirdwebSmartAccountForAdmin({
+      adminAddress: candidate.adminAddress,
+      candidate,
+      client,
+      walletAddress: params.walletAddress,
+    }))
+  ) {
+    adminAddresses.push(candidate.adminAddress);
+  }
+
+  const deployedAdmins = await readThirdwebSmartAccountAdmins({
+    client,
+    walletAddress: params.walletAddress,
+  });
+  for (const adminAddress of deployedAdmins) {
+    const isVerifiedAdmin = await isVerifiedThirdwebSmartAccountForAdmin({
+      adminAddress,
+      candidate: candidate?.adminAddress.toLowerCase() === adminAddress.toLowerCase() ? candidate : null,
+      client,
+      walletAddress: params.walletAddress,
+    });
+    if (isVerifiedAdmin) {
+      adminAddresses.push(adminAddress);
+    }
+  }
+
+  return dedupeNormalizedAddresses(adminAddresses);
+}
+
 async function getTransactionVerificationClient(chainId: number): Promise<TransactionVerificationClient | null> {
   if (freeTransactionTestOverrides?.getTransactionVerificationClient) {
     return freeTransactionTestOverrides.getTransactionVerificationClient(chainId);
@@ -504,6 +756,31 @@ async function resolveRaterIdentityKey(address: `0x${string}`, chainId: number) 
   }
 
   return identityKey.toLowerCase();
+}
+
+async function resolveConfiguredRaterIdentityKey(address: `0x${string}`, chainId: number) {
+  return (freeTransactionTestOverrides?.resolveRaterIdentityKey ?? resolveRaterIdentityKey)(address, chainId);
+}
+
+async function resolveFreeTransactionRaterIdentityKey(params: {
+  chainId: number;
+  userOp?: ThirdwebVerifierUserOp;
+  walletAddress: `0x${string}`;
+}) {
+  const directIdentityKey = await resolveConfiguredRaterIdentityKey(params.walletAddress, params.chainId);
+  if (directIdentityKey) {
+    return directIdentityKey;
+  }
+
+  const adminAddresses = await getVerifiedThirdwebSmartAccountAdminAddresses(params);
+  for (const adminAddress of adminAddresses) {
+    const adminIdentityKey = await resolveConfiguredRaterIdentityKey(adminAddress, params.chainId);
+    if (adminIdentityKey) {
+      return adminIdentityKey;
+    }
+  }
+
+  return null;
 }
 
 async function ensureQuotaRow(
@@ -662,6 +939,7 @@ async function readQuotaSummary(params: {
 export function __setFreeTransactionTestOverridesForTests(
   overrides: {
     resolveRaterIdentityKey?: ResolveRaterIdentityKey;
+    getVerifiedThirdwebSmartAccountAdminAddresses?: GetVerifiedThirdwebSmartAccountAdminAddresses;
     allTransactionHashesSucceeded?: CheckTransactionHashesSucceeded;
     getTransactionVerificationClient?: GetTransactionVerificationClient;
   } | null,
@@ -1308,10 +1586,10 @@ export async function getFreeTransactionAllowanceSummary(params: { address: stri
   }
 
   const walletAddress = normalizeAddress(params.address);
-  const raterIdentityKey = await (freeTransactionTestOverrides?.resolveRaterIdentityKey ?? resolveRaterIdentityKey)(
+  const raterIdentityKey = await resolveFreeTransactionRaterIdentityKey({
+    chainId: params.chainId,
     walletAddress,
-    params.chainId,
-  );
+  });
 
   if (!raterIdentityKey) {
     return buildUnverifiedSummary({
@@ -1387,10 +1665,11 @@ export async function evaluateFreeTransactionAllowance(
     };
   }
 
-  const raterIdentityKey = await (freeTransactionTestOverrides?.resolveRaterIdentityKey ?? resolveRaterIdentityKey)(
+  const raterIdentityKey = await resolveFreeTransactionRaterIdentityKey({
+    chainId: body.chainId,
+    userOp: body.userOp,
     walletAddress,
-    body.chainId,
-  );
+  });
 
   if (!raterIdentityKey) {
     return {

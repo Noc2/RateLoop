@@ -3,6 +3,7 @@ import {
   buildFreeTransactionAllowanceSnapshotKey,
   buildSponsorshipSyncAttemptKey,
   clearSponsorshipSyncAttemptAfterFailure,
+  getFreeTransactionAllowanceIdentityAddress,
 } from "./useFreeTransactionAllowance";
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -57,5 +58,37 @@ test("clearSponsorshipSyncAttemptAfterFailure preserves newer attempts", () => {
       "0xabcdef0000000000000000000000000000000000:4801:self-funded",
     ),
     "0xabcdef0000000000000000000000000000000000:480:sponsored",
+  );
+});
+
+test("getFreeTransactionAllowanceIdentityAddress prefers thirdweb admin identity", () => {
+  assert.equal(
+    getFreeTransactionAllowanceIdentityAddress({
+      activeWalletId: "inApp",
+      adminAddress: "0xAbCdEf0000000000000000000000000000000000",
+      connectedAddress: "0x1234567890abcdef1234567890abcdef12345678",
+    }),
+    "0xAbCdEf0000000000000000000000000000000000",
+  );
+});
+
+test("getFreeTransactionAllowanceIdentityAddress keeps external wallets on connected address", () => {
+  assert.equal(
+    getFreeTransactionAllowanceIdentityAddress({
+      activeWalletId: "io.metamask",
+      adminAddress: "0xAbCdEf0000000000000000000000000000000000",
+      connectedAddress: "0x1234567890abcdef1234567890abcdef12345678",
+    }),
+    "0x1234567890abcdef1234567890abcdef12345678",
+  );
+});
+
+test("getFreeTransactionAllowanceIdentityAddress falls back when thirdweb admin is unavailable", () => {
+  assert.equal(
+    getFreeTransactionAllowanceIdentityAddress({
+      activeWalletId: "in-app-wallet",
+      connectedAddress: "0x1234567890abcdef1234567890abcdef12345678",
+    }),
+    "0x1234567890abcdef1234567890abcdef12345678",
   );
 });

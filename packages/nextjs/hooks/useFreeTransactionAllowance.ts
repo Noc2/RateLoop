@@ -174,6 +174,22 @@ function getFreeTransactionAllowanceQueryKey(address?: string, chainId?: number)
   return [...FREE_TRANSACTION_ALLOWANCE_QUERY_KEY, address?.toLowerCase() ?? null, chainId ?? null] as const;
 }
 
+export function getFreeTransactionAllowanceIdentityAddress(params: {
+  activeWalletId?: string | null;
+  adminAddress?: string | null;
+  connectedAddress?: string | null;
+}) {
+  if (
+    params.adminAddress &&
+    isThirdwebInAppWalletId(params.activeWalletId) &&
+    /^0x[a-fA-F0-9]{40}$/.test(params.adminAddress)
+  ) {
+    return params.adminAddress;
+  }
+
+  return params.connectedAddress ?? undefined;
+}
+
 export function useFreeTransactionAllowance(options: FreeTransactionAllowanceOptions = {}) {
   const allowInAppSponsorshipSync = options.allowInAppSponsorshipSync ?? true;
   const { address, chain } = useAccount();
@@ -188,11 +204,18 @@ export function useFreeTransactionAllowance(options: FreeTransactionAllowanceOpt
   const usesInAppEip7702Execution = usesThirdwebInAppEip7702Execution(resolvedChainId);
   const publicClient = usePublicClient({ chainId: resolvedChainId });
   const currentSponsorshipMode = getThirdwebWalletSponsorshipMode(activeWallet);
+  const allowanceAddress = getFreeTransactionAllowanceIdentityAddress({
+    activeWalletId: activeWallet?.id,
+    adminAddress: activeWallet?.getAdminAccount?.()?.address,
+    connectedAddress: address,
+  });
 
   const query = useQuery({
-    queryKey: getFreeTransactionAllowanceQueryKey(address, resolvedChainId),
+    queryKey: getFreeTransactionAllowanceQueryKey(allowanceAddress, resolvedChainId),
     queryFn: async () => {
-      const response = await fetch(`/api/transactions/free/session?address=${address}&chainId=${resolvedChainId}`);
+      const response = await fetch(
+        `/api/transactions/free/session?address=${allowanceAddress}&chainId=${resolvedChainId}`,
+      );
       const body = (await response.json().catch(() => null)) as
         | FreeTransactionAllowanceResponse
         | { error?: string }
@@ -204,7 +227,7 @@ export function useFreeTransactionAllowance(options: FreeTransactionAllowanceOpt
 
       return body as FreeTransactionAllowanceResponse;
     },
-    enabled: Boolean(address) && typeof resolvedChainId === "number",
+    enabled: Boolean(allowanceAddress) && typeof resolvedChainId === "number",
     staleTime: 30_000,
     // M-2 (2026-05-22 audit): a single transient 5xx previously locked the hook into
     // {isResolved: false} for the rest of the session, blocking sponsored transactions
@@ -215,8 +238,8 @@ export function useFreeTransactionAllowance(options: FreeTransactionAllowanceOpt
   });
 
   const fallbackSummary = useMemo(
-    () => (query.data ? null : readStoredFreeTransactionAllowanceSummary(address, resolvedChainId)),
-    [address, query.data, resolvedChainId],
+    () => (query.data ? null : readStoredFreeTransactionAllowanceSummary(allowanceAddress, resolvedChainId)),
+    [allowanceAddress, query.data, resolvedChainId],
   );
 
   const shouldInspectInAppDelegation = Boolean(
@@ -255,8 +278,8 @@ export function useFreeTransactionAllowance(options: FreeTransactionAllowanceOpt
       return;
     }
 
-    storeFreeTransactionAllowanceSummary(query.data, address, resolvedChainId);
-  }, [address, query.data, resolvedChainId]);
+    storeFreeTransactionAllowanceSummary(query.data, allowanceAddress, resolvedChainId);
+  }, [allowanceAddress, query.data, resolvedChainId]);
 
   const allowance = useMemo(() => {
     const summary = query.data ?? fallbackSummary;
