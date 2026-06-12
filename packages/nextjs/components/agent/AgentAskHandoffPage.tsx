@@ -216,6 +216,8 @@ const BOUNTY_AMOUNT_TOOLTIP =
   "USDC amount funded from the connected wallet when the ask is submitted. Use up to 6 decimal places.";
 const FEEDBACK_BONUS_AMOUNT_TOOLTIP =
   "Optional pool reserved for useful public feedback after settlement. Use up to 6 decimal places.";
+const CONFIDENTIALITY_BOND_TOOLTIP =
+  "Optional extra bond raters must post before private context is served. Use 0 for no extra bond.";
 const CONFIDENTIALITY_BOND_AMOUNT_TOOLTIP =
   "Atomic LREP or USDC amount raters must post before private context is served. Use 0 for no extra bond.";
 const REQUIRED_VOTERS_TOOLTIP =
@@ -2255,49 +2257,16 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
               </div>
 
               <div className="space-y-5">
-                <div className="form-control">
-                  <DraftFieldLabel htmlFor="agent-ask-bounty-amount" tooltip={BOUNTY_AMOUNT_TOOLTIP}>
-                    Bounty
-                  </DraftFieldLabel>
-                  <input
-                    id="agent-ask-bounty-amount"
-                    className="input input-bordered mt-1 w-full"
-                    disabled={!canEditDraft}
-                    inputMode="decimal"
-                    value={draftForm?.bountyAmount ?? ""}
-                    onBlur={formatDraftBountyAmount}
-                    onChange={event => updateDraftBountyAmount(event.target.value)}
-                  />
-                </div>
-
-                {draftForm?.feedbackBonusAmount !== null ? (
-                  <div className="form-control">
-                    <DraftFieldLabel htmlFor="agent-ask-feedback-bonus-amount" tooltip={FEEDBACK_BONUS_AMOUNT_TOOLTIP}>
-                      Feedback Bonus {draftForm?.feedbackBonusAsset === "lrep" ? "LREP" : "USDC"}
-                    </DraftFieldLabel>
-                    <input
-                      id="agent-ask-feedback-bonus-amount"
-                      className="input input-bordered mt-1 w-full"
-                      disabled={!canEditDraft}
-                      inputMode="decimal"
-                      value={draftForm?.feedbackBonusAmount ?? ""}
-                      onBlur={formatDraftFeedbackBonusAmount}
-                      onChange={event => updateDraftFeedbackBonusAmount(event.target.value)}
-                    />
-                  </div>
-                ) : null}
-
                 {hasPrivateContextDraft ? (
                   <div className="rounded-lg border border-warning/30 bg-warning/10 p-4">
-                    <div className="flex items-start gap-2">
-                      <LockClosedIcon className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-semibold text-base-content">Confidentiality bond</p>
-                        <p className="mt-1 text-sm leading-relaxed text-base-content/65">
-                          Optional extra bond raters must post before private context is served. Use 0 for no extra
-                          bond.
-                        </p>
-                      </div>
+                    <div className="flex items-center gap-2">
+                      <LockClosedIcon className="h-4 w-4 shrink-0 text-warning" />
+                      <p className="text-sm font-semibold text-base-content">Confidentiality bond</p>
+                      <InfoTooltip
+                        text={CONFIDENTIALITY_BOND_TOOLTIP}
+                        position="top"
+                        className="text-base-content/45"
+                      />
                     </div>
                     <div className="mt-4 grid gap-3 sm:grid-cols-[9rem_minmax(0,1fr)] lg:grid-cols-1 xl:grid-cols-[9rem_minmax(0,1fr)]">
                       <label className="form-control">
@@ -2334,6 +2303,38 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                         />
                       </label>
                     </div>
+                  </div>
+                ) : null}
+
+                <div className="form-control">
+                  <DraftFieldLabel htmlFor="agent-ask-bounty-amount" tooltip={BOUNTY_AMOUNT_TOOLTIP}>
+                    Bounty
+                  </DraftFieldLabel>
+                  <input
+                    id="agent-ask-bounty-amount"
+                    className="input input-bordered mt-1 w-full"
+                    disabled={!canEditDraft}
+                    inputMode="decimal"
+                    value={draftForm?.bountyAmount ?? ""}
+                    onBlur={formatDraftBountyAmount}
+                    onChange={event => updateDraftBountyAmount(event.target.value)}
+                  />
+                </div>
+
+                {draftForm?.feedbackBonusAmount !== null ? (
+                  <div className="form-control">
+                    <DraftFieldLabel htmlFor="agent-ask-feedback-bonus-amount" tooltip={FEEDBACK_BONUS_AMOUNT_TOOLTIP}>
+                      Feedback Bonus {draftForm?.feedbackBonusAsset === "lrep" ? "LREP" : "USDC"}
+                    </DraftFieldLabel>
+                    <input
+                      id="agent-ask-feedback-bonus-amount"
+                      className="input input-bordered mt-1 w-full"
+                      disabled={!canEditDraft}
+                      inputMode="decimal"
+                      value={draftForm?.feedbackBonusAmount ?? ""}
+                      onBlur={formatDraftFeedbackBonusAmount}
+                      onChange={event => updateDraftFeedbackBonusAmount(event.target.value)}
+                    />
                   </div>
                 ) : null}
 
