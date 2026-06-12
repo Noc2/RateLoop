@@ -8,6 +8,7 @@ import {
   shouldIgnorePostTransactionFallbackWalletSyncError,
   shouldPreferSponsoredBatchCalls,
   shouldPreferSponsoredSubmitCalls,
+  shouldRetryThirdwebBundlerError,
   shouldUseSelfFundedBatchCalls,
 } from "./useThirdwebSponsoredSubmitCalls";
 import assert from "node:assert/strict";
@@ -274,6 +275,20 @@ test("treats exhausted free transactions as eligible for self-funded fallback", 
 
 test("ignores unrelated thirdweb submit failures", () => {
   assert.equal(isThirdwebSponsorshipDeniedError(new Error("User rejected the request.")), false);
+});
+
+test("retries transient thirdweb bundler infrastructure errors", () => {
+  const error = new Error(
+    'thirdweb_getUserOperationGasPrice error: Unexpected token "e", "error code: 522" is not valid JSON\nStatus: 500',
+  );
+
+  assert.equal(shouldRetryThirdwebBundlerError(error, 0), true);
+  assert.equal(shouldRetryThirdwebBundlerError(error, 1), true);
+  assert.equal(shouldRetryThirdwebBundlerError(error, 2), false);
+});
+
+test("does not retry user-rejected thirdweb submit failures", () => {
+  assert.equal(shouldRetryThirdwebBundlerError(new Error("User rejected the request."), 0), false);
 });
 
 test("skips self-funded fallback when a reserved free transaction was denied sponsorship", () => {

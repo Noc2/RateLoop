@@ -23,7 +23,7 @@ import {
   hasMissingEip7702DelegationImplementation,
 } from "~~/lib/thirdweb/eip7702Delegation";
 import { buildFreeTransactionOperationKey } from "~~/lib/thirdweb/freeTransactionOperation";
-import { isFreeTransactionExhaustedError } from "~~/lib/transactionErrors";
+import { isFreeTransactionExhaustedError, isThirdwebBundlerInfrastructureError } from "~~/lib/transactionErrors";
 import {
   createThirdwebInAppWallet,
   isThirdwebInAppWalletId,
@@ -54,6 +54,38 @@ type ExecuteContractCallBatchOptions = {
 type ThirdwebSponsoredSubmitCallsOptions = {
   allowInAppSponsorshipSync?: boolean;
 };
+
+const THIRDWEB_BUNDLER_RETRY_DELAYS_MS = [1_000, 2_000] as const;
+const THIRDWEB_BUNDLER_UNAVAILABLE_MESSAGE =
+  "thirdweb transaction service is temporarily unavailable. Retry in a moment.";
+
+function wait(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+export function shouldRetryThirdwebBundlerError(error: unknown, attemptIndex: number) {
+  return isThirdwebBundlerInfrastructureError(error) && attemptIndex < THIRDWEB_BUNDLER_RETRY_DELAYS_MS.length;
+}
+
+async function retryThirdwebBundlerOperation<T>(operation: () => Promise<T>) {
+  for (let attemptIndex = 0; ; attemptIndex += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      if (!shouldRetryThirdwebBundlerError(error, attemptIndex)) {
+        throw error;
+      }
+
+      await wait(THIRDWEB_BUNDLER_RETRY_DELAYS_MS[attemptIndex]);
+    }
+  }
+}
+
+function createThirdwebBundlerUnavailableError(cause: unknown) {
+  const error = new Error(THIRDWEB_BUNDLER_UNAVAILABLE_MESSAGE);
+  (error as Error & { cause?: unknown }).cause = cause;
+  return error;
+}
 
 export function shouldPreferSponsoredBatchCalls(params: {
   canUseFreeTransactions: boolean;
@@ -377,11 +409,13 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
         }),
       );
       const sendCallsWithWallet = async (wallet: NonNullable<typeof activeWallet>) =>
-        sendAndConfirmCalls({
-          atomicRequired: options.atomicRequired ?? false,
-          calls: preparedCalls,
-          wallet,
-        });
+        retryThirdwebBundlerOperation(() =>
+          sendAndConfirmCalls({
+            atomicRequired: options.atomicRequired ?? false,
+            calls: preparedCalls,
+            wallet,
+          }),
+        );
 
       try {
         if (!options.suppressStatusToast) {
@@ -463,6 +497,10 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
           } catch (fallbackError) {
             error = fallbackError;
           }
+        }
+
+        if (isThirdwebBundlerInfrastructureError(error)) {
+          throw createThirdwebBundlerUnavailableError(error);
         }
 
         throw error;

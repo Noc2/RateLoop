@@ -28,8 +28,12 @@ function collectErrorText(value: unknown, seen: Set<unknown>, depth = 0): string
   return parts;
 }
 
+export function getTransactionErrorText(error: unknown) {
+  return collectErrorText(error, new Set()).join(" ");
+}
+
 export function isInsufficientFundsError(error: unknown) {
-  const haystack = collectErrorText(error, new Set()).join(" ").toLowerCase();
+  const haystack = getTransactionErrorText(error).toLowerCase();
 
   return (
     haystack.includes("insufficient funds") ||
@@ -39,7 +43,7 @@ export function isInsufficientFundsError(error: unknown) {
 }
 
 export function isFreeTransactionExhaustedError(error: unknown) {
-  const haystack = collectErrorText(error, new Set()).join(" ").toLowerCase();
+  const haystack = getTransactionErrorText(error).toLowerCase();
 
   return (
     haystack.includes("free transactions used up") || haystack.includes("transactions are not sponsored right now")
@@ -47,13 +51,31 @@ export function isFreeTransactionExhaustedError(error: unknown) {
 }
 
 export function isUnsupportedRpcMethodError(error: unknown) {
-  const haystack = collectErrorText(error, new Set()).join(" ").toLowerCase();
+  const haystack = getTransactionErrorText(error).toLowerCase();
 
   return haystack.includes("this request method is not supported");
 }
 
+export function isThirdwebBundlerInfrastructureError(error: unknown) {
+  const haystack = getTransactionErrorText(error).toLowerCase();
+  const isThirdwebBundlerError =
+    haystack.includes("bundler.thirdweb.com") ||
+    haystack.includes("thirdweb_getuseroperationgasprice") ||
+    haystack.includes("useroperationgasprice");
+  const isTransientInfrastructureError =
+    haystack.includes("error code: 522") ||
+    haystack.includes("status: 500") ||
+    haystack.includes("status 500") ||
+    haystack.includes("internal server error") ||
+    haystack.includes("bad gateway") ||
+    haystack.includes("gateway timeout") ||
+    haystack.includes("service unavailable");
+
+  return isThirdwebBundlerError && isTransientInfrastructureError;
+}
+
 export function isWalletRpcOverloadedError(error: unknown) {
-  const haystack = collectErrorText(error, new Set()).join(" ").toLowerCase();
+  const haystack = getTransactionErrorText(error).toLowerCase();
 
   return (
     haystack.includes("rpc endpoint returned too many errors") ||

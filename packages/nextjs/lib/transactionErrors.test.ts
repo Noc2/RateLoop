@@ -2,6 +2,7 @@ import {
   getGasBalanceErrorMessage,
   isFreeTransactionExhaustedError,
   isInsufficientFundsError,
+  isThirdwebBundlerInfrastructureError,
   isUnsupportedRpcMethodError,
   isWalletRpcOverloadedError,
 } from "./transactionErrors";
@@ -50,6 +51,20 @@ test("detects wallet RPC overload errors", () => {
   };
 
   assert.equal(isWalletRpcOverloadedError(error), true);
+});
+
+test("detects transient thirdweb bundler infrastructure errors", () => {
+  const error = new Error(
+    'thirdweb_getUserOperationGasPrice error: Unexpected token "e", "error code: 522" is not valid JSON\nStatus: 500',
+  );
+
+  assert.equal(isThirdwebBundlerInfrastructureError(error), true);
+});
+
+test("ignores unrelated user operation errors", () => {
+  const error = new Error("thirdweb_getUserOperationGasPrice error: user rejected the request");
+
+  assert.equal(isThirdwebBundlerInfrastructureError(error), false);
 });
 
 test("detects unsupported RPC method errors from nested wallet responses", () => {

@@ -86,8 +86,13 @@ export function FrontendRegistration() {
     freeTransactionRemaining,
     freeTransactionVerified,
   });
-  const { canUseSponsoredSubmitCalls, executeSponsoredCalls, isAwaitingSponsoredSubmitCalls } =
-    useThirdwebSponsoredSubmitCalls();
+  const {
+    canUseSelfFundedBatchCalls,
+    canUseSponsoredSubmitCalls,
+    executeSponsoredCalls,
+    isAwaitingSelfFundedSubmitCalls,
+    isAwaitingSponsoredSubmitCalls,
+  } = useThirdwebSponsoredSubmitCalls();
   const { showWalletRpcOverloadNotification } = useWalletRpcRecovery();
   const [isRegistering, setIsRegistering] = useState(false);
   const [isDeregistering, setIsDeregistering] = useState(false);
@@ -104,6 +109,8 @@ export function FrontendRegistration() {
   const deploymentIsConfigured = !!configuredFrontendCode;
   const deploymentMatchesConnectedAddress =
     !!address && !!configuredFrontendCode && configuredFrontendCode.toLowerCase() === address.toLowerCase();
+  const canUseBatchedFrontendRegistryCalls = canUseSponsoredSubmitCalls || canUseSelfFundedBatchCalls;
+  const frontendRegistryBatchSponsorshipMode = canUseSponsoredSubmitCalls ? "sponsored" : "self-funded";
 
   // Contract info
   const { data: frontendRegistryInfo } = useDeployedContractInfo({ contractName: "FrontendRegistry" });
@@ -233,7 +240,7 @@ export function FrontendRegistration() {
   }, [hasPendingDeadline]);
 
   const ensureGasBalance = () => {
-    if (isAwaitingSponsoredSubmitCalls) {
+    if (isAwaitingSponsoredSubmitCalls || isAwaitingSelfFundedSubmitCalls) {
       notification.warning("Wallet reconnecting. Retry in a moment.");
       return false;
     }
@@ -277,7 +284,7 @@ export function FrontendRegistration() {
     try {
       const amountWei = BigInt(STAKE_AMOUNT * 1e6);
 
-      if (canUseSponsoredSubmitCalls && lrepInfo && lrepAddress) {
+      if (canUseBatchedFrontendRegistryCalls && lrepInfo && lrepAddress) {
         await executeSponsoredCalls(
           [
             {
@@ -292,7 +299,7 @@ export function FrontendRegistration() {
               functionName: "register",
             },
           ],
-          { atomicRequired: true },
+          { atomicRequired: true, sponsorshipMode: frontendRegistryBatchSponsorshipMode },
         );
       } else {
         await writeLrep({
@@ -327,14 +334,17 @@ export function FrontendRegistration() {
 
     setIsDeregistering(true);
     try {
-      if (canUseSponsoredSubmitCalls) {
-        await executeSponsoredCalls([
-          {
-            abi: frontendRegistryInfo.abi,
-            address: frontendRegistryAddress,
-            functionName: "requestDeregister",
-          },
-        ]);
+      if (canUseBatchedFrontendRegistryCalls) {
+        await executeSponsoredCalls(
+          [
+            {
+              abi: frontendRegistryInfo.abi,
+              address: frontendRegistryAddress,
+              functionName: "requestDeregister",
+            },
+          ],
+          { sponsorshipMode: frontendRegistryBatchSponsorshipMode },
+        );
       } else {
         await writeFrontendRegistry({
           functionName: "requestDeregister",
@@ -360,14 +370,17 @@ export function FrontendRegistration() {
 
     setIsCompletingDeregister(true);
     try {
-      if (canUseSponsoredSubmitCalls) {
-        await executeSponsoredCalls([
-          {
-            abi: frontendRegistryInfo.abi,
-            address: frontendRegistryAddress,
-            functionName: "completeDeregister",
-          },
-        ]);
+      if (canUseBatchedFrontendRegistryCalls) {
+        await executeSponsoredCalls(
+          [
+            {
+              abi: frontendRegistryInfo.abi,
+              address: frontendRegistryAddress,
+              functionName: "completeDeregister",
+            },
+          ],
+          { sponsorshipMode: frontendRegistryBatchSponsorshipMode },
+        );
       } else {
         await writeFrontendRegistry({
           functionName: "completeDeregister",
@@ -393,14 +406,17 @@ export function FrontendRegistration() {
 
     setIsClaiming(true);
     try {
-      if (canUseSponsoredSubmitCalls) {
-        await executeSponsoredCalls([
-          {
-            abi: frontendRegistryInfo.abi,
-            address: frontendRegistryAddress,
-            functionName: "requestFeeWithdrawal",
-          },
-        ]);
+      if (canUseBatchedFrontendRegistryCalls) {
+        await executeSponsoredCalls(
+          [
+            {
+              abi: frontendRegistryInfo.abi,
+              address: frontendRegistryAddress,
+              functionName: "requestFeeWithdrawal",
+            },
+          ],
+          { sponsorshipMode: frontendRegistryBatchSponsorshipMode },
+        );
       } else {
         await writeFrontendRegistry({
           functionName: "requestFeeWithdrawal",
@@ -427,14 +443,17 @@ export function FrontendRegistration() {
 
     setIsCompletingWithdrawal(true);
     try {
-      if (canUseSponsoredSubmitCalls) {
-        await executeSponsoredCalls([
-          {
-            abi: frontendRegistryInfo.abi,
-            address: frontendRegistryAddress,
-            functionName: "completeFeeWithdrawal",
-          },
-        ]);
+      if (canUseBatchedFrontendRegistryCalls) {
+        await executeSponsoredCalls(
+          [
+            {
+              abi: frontendRegistryInfo.abi,
+              address: frontendRegistryAddress,
+              functionName: "completeFeeWithdrawal",
+            },
+          ],
+          { sponsorshipMode: frontendRegistryBatchSponsorshipMode },
+        );
       } else {
         await writeFrontendRegistry({
           functionName: "completeFeeWithdrawal",
@@ -460,15 +479,18 @@ export function FrontendRegistration() {
     const roundKey = `${contentId}-${roundId}`;
     setClaimingRoundKey(roundKey);
     try {
-      if (canUseSponsoredSubmitCalls && rewardDistributorInfo && rewardDistributorAddress) {
-        await executeSponsoredCalls([
-          {
-            abi: rewardDistributorInfo.abi,
-            address: rewardDistributorAddress,
-            args: [BigInt(contentId), BigInt(roundId), address],
-            functionName: "claimFrontendFee",
-          },
-        ]);
+      if (canUseBatchedFrontendRegistryCalls && rewardDistributorInfo && rewardDistributorAddress) {
+        await executeSponsoredCalls(
+          [
+            {
+              abi: rewardDistributorInfo.abi,
+              address: rewardDistributorAddress,
+              args: [BigInt(contentId), BigInt(roundId), address],
+              functionName: "claimFrontendFee",
+            },
+          ],
+          { sponsorshipMode: frontendRegistryBatchSponsorshipMode },
+        );
       } else {
         await writeRewardDistributor({
           functionName: "claimFrontendFee",
@@ -495,7 +517,7 @@ export function FrontendRegistration() {
     let claimedCount = 0;
 
     try {
-      if (canUseSponsoredSubmitCalls && rewardDistributorInfo && rewardDistributorAddress) {
+      if (canUseBatchedFrontendRegistryCalls && rewardDistributorInfo && rewardDistributorAddress) {
         await executeSponsoredCalls(
           claimableRoundFees.map(item => ({
             abi: rewardDistributorInfo.abi,
@@ -503,6 +525,7 @@ export function FrontendRegistration() {
             args: [BigInt(item.contentId), BigInt(item.roundId), address],
             functionName: "claimFrontendFee",
           })),
+          { sponsorshipMode: frontendRegistryBatchSponsorshipMode },
         );
         claimedCount = claimableRoundFees.length;
       } else {
@@ -554,15 +577,18 @@ export function FrontendRegistration() {
 
     setIsSettingSnapshotProposer(true);
     try {
-      if (canUseSponsoredSubmitCalls) {
-        await executeSponsoredCalls([
-          {
-            abi: frontendRegistryInfo.abi,
-            address: frontendRegistryAddress,
-            args: [snapshotProposerAddress],
-            functionName: "setSnapshotProposer",
-          },
-        ]);
+      if (canUseBatchedFrontendRegistryCalls) {
+        await executeSponsoredCalls(
+          [
+            {
+              abi: frontendRegistryInfo.abi,
+              address: frontendRegistryAddress,
+              args: [snapshotProposerAddress],
+              functionName: "setSnapshotProposer",
+            },
+          ],
+          { sponsorshipMode: frontendRegistryBatchSponsorshipMode },
+        );
       } else {
         await writeFrontendRegistry({
           functionName: "setSnapshotProposer",
@@ -590,14 +616,17 @@ export function FrontendRegistration() {
 
     setIsClearingSnapshotProposer(true);
     try {
-      if (canUseSponsoredSubmitCalls) {
-        await executeSponsoredCalls([
-          {
-            abi: frontendRegistryInfo.abi,
-            address: frontendRegistryAddress,
-            functionName: "clearSnapshotProposer",
-          },
-        ]);
+      if (canUseBatchedFrontendRegistryCalls) {
+        await executeSponsoredCalls(
+          [
+            {
+              abi: frontendRegistryInfo.abi,
+              address: frontendRegistryAddress,
+              functionName: "clearSnapshotProposer",
+            },
+          ],
+          { sponsorshipMode: frontendRegistryBatchSponsorshipMode },
+        );
       } else {
         await writeFrontendRegistry({
           functionName: "clearSnapshotProposer",
