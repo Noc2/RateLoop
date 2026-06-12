@@ -75,6 +75,7 @@ const MAX_X402_AUTHORIZATION_VALIDITY_SECONDS = 24n * 60n * 60n;
 const FEEDBACK_BONUS_ASSET_LREP = 0;
 const FEEDBACK_BONUS_ASSET_USDC = 1;
 const QUESTION_CONTEXT_DOMAIN = keccak256(toBytes("rateloop-question-context-v5"));
+const ZERO_BYTES32 = `0x${"0".repeat(64)}` as const;
 type FeedbackBonusAsset = "LREP" | "USDC";
 
 function questionDetailsTuple(question: Pick<X402QuestionPayload["questions"][number], "detailsHash" | "detailsUrl">) {
@@ -112,9 +113,17 @@ type StoredWalletSubmissionPlanReceipt = {
   mode?: WalletSubmissionReceiptMode;
   operationKey?: string;
   originalClientRequestId?: string;
+  questionAttachments?: StoredQuestionAttachmentRefs[];
   questionMetadata?: StoredQuestionMetadata[];
   revealCommitment?: Hex;
   walletAddress?: Address;
+};
+
+type StoredQuestionAttachmentRefs = {
+  detailsHash: Hex;
+  detailsUrl: string;
+  gated: boolean;
+  imageUrls: string[];
 };
 
 type StoredQuestionMetadata = {
@@ -468,6 +477,36 @@ function serializeQuestionMetadata(payload: X402QuestionPayload): StoredQuestion
   }));
 }
 
+function serializeQuestionAttachmentRefs(payload: X402QuestionPayload): StoredQuestionAttachmentRefs[] {
+  return payload.questions.map(question => ({
+    detailsHash: question.detailsHash,
+    detailsUrl: question.detailsUrl,
+    gated: question.confidentiality?.visibility === "gated",
+    imageUrls: question.imageUrls,
+  }));
+}
+
+function parseStoredQuestionAttachmentRefs(value: unknown): StoredQuestionAttachmentRefs[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const items = value.flatMap(entry => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) return [];
+    const record = entry as Record<string, unknown>;
+    if (!isBytes32Hex(record.detailsHash)) return [];
+    const imageUrls = Array.isArray(record.imageUrls)
+      ? record.imageUrls.filter((url): url is string => typeof url === "string" && url.trim().length > 0)
+      : [];
+    return [
+      {
+        detailsHash: record.detailsHash.toLowerCase() as Hex,
+        detailsUrl: typeof record.detailsUrl === "string" ? record.detailsUrl.trim() : "",
+        gated: record.gated === true,
+        imageUrls,
+      },
+    ];
+  });
+  return items.length > 0 ? items : undefined;
+}
+
 function parseStoredQuestionMetadata(value: unknown): StoredQuestionMetadata[] | undefined {
   if (!Array.isArray(value)) return undefined;
   const items = value.flatMap(entry => {
@@ -614,6 +653,7 @@ function parseStoredSubmissionPlanReceipt(value: string | null): StoredWalletSub
       operationKey: typeof parsed.operationKey === "string" ? parsed.operationKey : undefined,
       originalClientRequestId:
         typeof parsed.originalClientRequestId === "string" ? parsed.originalClientRequestId : undefined,
+      questionAttachments: parseStoredQuestionAttachmentRefs(parsed.questionAttachments),
       questionMetadata: parseStoredQuestionMetadata(parsed.questionMetadata),
       revealCommitment: isBytes32Hex(parsed.revealCommitment) ? parsed.revealCommitment : undefined,
       walletAddress:
@@ -2211,6 +2251,39 @@ async function attachSubmittedQuestionImages(params: {
   }
 }
 
+async function attachStoredQuestionAttachments(params: {
+  agentId?: string | null;
+  contentIds: readonly bigint[];
+  ownerWalletAddress: Address;
+  receipt: StoredWalletSubmissionPlanReceipt | null;
+}) {
+  const attachments = params.receipt?.questionAttachments ?? [];
+  if (attachments.length === 0) return;
+
+  for (const [index, attachment] of attachments.entries()) {
+    if (!attachment.gated) continue;
+    const contentId = params.contentIds[index];
+    if (contentId === undefined) continue;
+    const contentIdString = contentId.toString();
+    if (attachment.detailsUrl && attachment.detailsHash !== ZERO_BYTES32) {
+      await attachQuestionDetailsToContent({
+        agentId: params.agentId,
+        contentId: contentIdString,
+        detailsUrl: attachment.detailsUrl,
+        ownerWalletAddress: params.ownerWalletAddress,
+      });
+    }
+    if (attachment.imageUrls.length > 0) {
+      await attachImagesToContent({
+        agentId: params.agentId,
+        contentId: contentIdString,
+        imageUrls: attachment.imageUrls,
+        ownerWalletAddress: params.ownerWalletAddress,
+      });
+    }
+  }
+}
+
 async function syncSubmittedQuestionMetadata(params: {
   contentIds: readonly bigint[];
   receipt: StoredWalletSubmissionPlanReceipt | null;
@@ -2310,6 +2383,7 @@ async function recordAgentWalletSubmissionPlan(params: {
     operationKey: params.operation.operationKey,
     ...(params.originalClientRequestId ? { originalClientRequestId: params.originalClientRequestId } : {}),
     preparedAt: now.toISOString(),
+    questionAttachments: serializeQuestionAttachmentRefs(params.payload),
     questionMetadata: serializeQuestionMetadata(params.payload),
     revealCommitment: params.plan.revealCommitment,
     walletAddress: params.plan.walletAddress,
@@ -3209,6 +3283,12 @@ export async function confirmAgentWalletQuestionSubmissionRequest(params: {
     contentIds,
     ownerWalletAddress: record.payerAddress as Address,
     submittedContents,
+  });
+  await attachStoredQuestionAttachments({
+    agentId: planReceipt?.agentId,
+    contentIds,
+    ownerWalletAddress: record.payerAddress as Address,
+    receipt: planReceipt,
   });
   await syncSubmittedQuestionMetadata({
     contentIds,
