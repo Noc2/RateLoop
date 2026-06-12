@@ -124,6 +124,7 @@ import {
   buildQuestionConfidentialityHash,
   buildQuestionSubmissionKey,
   buildQuestionSubmissionRevealCommitment,
+  canonicalQuestionImageUrls,
 } from "~~/lib/questionSubmissionCommitment";
 import {
   assertContentRegistryQuestionSubmissionSelector,
@@ -1707,6 +1708,7 @@ export function ContentSubmissionSection() {
     questions: ReadonlyArray<{
       detailsHash: `0x${string}`;
       detailsUrl: string;
+      imageUrls: string[];
       spec: {
         questionMetadata?: unknown;
         questionMetadataHash: `0x${string}`;
@@ -1724,6 +1726,12 @@ export function ContentSubmissionSection() {
         detailsUrl: question.detailsUrl,
       }))
       .filter(detail => detail.contentId && detail.detailsUrl);
+    const images = params.questions
+      .map((question, index) => ({
+        contentId: params.contentIds[index]?.toString() ?? "",
+        imageUrls: question.imageUrls,
+      }))
+      .filter(entry => entry.contentId && entry.imageUrls.length > 0);
     const metadata = params.questions
       .map((question, index) => ({
         contentId: params.contentIds[index]?.toString() ?? "",
@@ -1734,7 +1742,8 @@ export function ContentSubmissionSection() {
         targetAudience: question.targetAudience ?? null,
       }))
       .filter(entry => entry.contentId);
-    if ((details.length === 0 && metadata.length === 0) || params.transactionHashes.length === 0) return;
+    if ((details.length === 0 && images.length === 0 && metadata.length === 0) || params.transactionHashes.length === 0)
+      return;
 
     const response = await fetch("/api/attachments/details/attach", {
       method: "POST",
@@ -1742,6 +1751,7 @@ export function ContentSubmissionSection() {
       body: JSON.stringify({
         chainId: targetNetwork.id,
         details,
+        images,
         metadata,
         transactionHashes: params.transactionHashes,
       }),
@@ -2374,6 +2384,7 @@ export function ContentSubmissionSection() {
           throw new Error(`Question ${index + 1} is missing a category.`);
         }
         const details = submittedDetails[index] ?? EMPTY_SUBMISSION_DETAILS;
+        const submittedImageUrls = canonicalQuestionImageUrls(question.submittedImageUrls);
 
         const spec = buildQuestionSpecHashes({
           bounty: {
@@ -2396,7 +2407,7 @@ export function ContentSubmissionSection() {
             visibility: question.contextVisibility,
           },
           contextUrl: question.submittedContextUrl,
-          imageUrls: question.submittedImageUrls,
+          imageUrls: submittedImageUrls,
           roundConfig: selectedRoundConfig,
           study: {
             bundleIndex: index,
@@ -2409,7 +2420,7 @@ export function ContentSubmissionSection() {
 
         return {
           contextUrl: question.submittedContextUrl,
-          imageUrls: question.submittedImageUrls,
+          imageUrls: submittedImageUrls,
           videoUrl: question.submittedVideoUrl,
           title: question.trimmedTitle,
           tags: question.submittedTags,

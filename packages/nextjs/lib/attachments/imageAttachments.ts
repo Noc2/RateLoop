@@ -1010,6 +1010,12 @@ export async function attachImagesToOperation(params: {
   const attachmentIds = params.imageUrls.map(parseAttachmentIdFromImageUrl).filter((id): id is string => Boolean(id));
   if (attachmentIds.length === 0) return;
 
+  const identityPredicate = imageAttachmentIdentityPredicate({
+    agentId: params.agentId,
+    ownerWalletAddress: params.ownerWalletAddress,
+  });
+  if (!identityPredicate) return;
+
   const updatedAt = nowDate();
   for (const attachmentId of attachmentIds) {
     await db
@@ -1019,15 +1025,23 @@ export async function attachImagesToOperation(params: {
         clientRequestId: params.clientRequestId,
         updatedAt,
       })
-      .where(
-        and(
-          eq(questionImageAttachments.id, attachmentId),
-          params.agentId
-            ? eq(questionImageAttachments.agentId, params.agentId)
-            : eq(questionImageAttachments.ownerWalletAddress, params.ownerWalletAddress ?? ""),
-        ),
-      );
+      .where(and(eq(questionImageAttachments.id, attachmentId), identityPredicate));
   }
+}
+
+function imageAttachmentIdentityPredicate(params: { agentId?: string | null; ownerWalletAddress?: string | null }) {
+  const ownerWalletAddress = params.ownerWalletAddress?.trim().toLowerCase() ?? null;
+  const agentId = params.agentId?.trim() || null;
+  return agentId && ownerWalletAddress
+    ? or(
+        eq(questionImageAttachments.agentId, agentId),
+        eq(questionImageAttachments.ownerWalletAddress, ownerWalletAddress),
+      )
+    : agentId
+      ? eq(questionImageAttachments.agentId, agentId)
+      : ownerWalletAddress
+        ? eq(questionImageAttachments.ownerWalletAddress, ownerWalletAddress)
+        : null;
 }
 
 export async function markImagesRequireGatedAccess(params: {
@@ -1040,12 +1054,7 @@ export async function markImagesRequireGatedAccess(params: {
   ];
   if (attachmentIds.length === 0) return 0;
 
-  const ownerWalletAddress = params.ownerWalletAddress?.trim().toLowerCase() ?? null;
-  const identityPredicate = params.agentId
-    ? eq(questionImageAttachments.agentId, params.agentId)
-    : ownerWalletAddress
-      ? eq(questionImageAttachments.ownerWalletAddress, ownerWalletAddress)
-      : null;
+  const identityPredicate = imageAttachmentIdentityPredicate(params);
   if (!identityPredicate) return 0;
 
   let marked = 0;
@@ -1081,12 +1090,7 @@ export async function attachImagesToContent(params: {
   ];
   if (attachmentIds.length === 0) return 0;
 
-  const ownerWalletAddress = params.ownerWalletAddress?.trim().toLowerCase() ?? null;
-  const identityPredicate = params.agentId
-    ? eq(questionImageAttachments.agentId, params.agentId)
-    : ownerWalletAddress
-      ? eq(questionImageAttachments.ownerWalletAddress, ownerWalletAddress)
-      : null;
+  const identityPredicate = imageAttachmentIdentityPredicate(params);
   if (!identityPredicate) return 0;
 
   const updatedAt = nowDate();

@@ -4,9 +4,11 @@ import { getSharedDeploymentAddress } from "@rateloop/contracts/deployments";
 import { canonicalJsonHash } from "@rateloop/node-utils/json";
 import { type TargetAudience, normalizeTargetAudience } from "@rateloop/node-utils/profileSelfReport";
 import { type Address, type Hex, createPublicClient, decodeEventLog, http, isAddress } from "viem";
-import { attachImagesToContent } from "~~/lib/attachments/imageAttachments";
+import { parseUploadedImageAttachmentUrlDigest } from "~~/lib/attachments/imageAttachmentUrls";
+import { attachImagesToContent, getImageAttachment } from "~~/lib/attachments/imageAttachments";
 import {
   attachQuestionDetailsToContent,
+  getQuestionDetails,
   parseQuestionDetailsIdFromDetailsUrl,
 } from "~~/lib/attachments/questionDetails";
 import { upsertQuestionConfidentialityFromMetadata } from "~~/lib/confidentiality/context";
@@ -19,6 +21,7 @@ import { checkRateLimit } from "~~/utils/rateLimit";
 type DetailsAttachRequest = {
   chainId?: unknown;
   details?: unknown;
+  images?: unknown;
   metadata?: unknown;
   transactionHash?: unknown;
   transactionHashes?: unknown;
@@ -56,6 +59,16 @@ type ImageAttachmentProof = {
   submitter: Address;
 };
 
+type ImageAttachmentInput = {
+  contentId: string;
+  imageUrls: string[];
+};
+
+type ContentSubmissionProof = {
+  contentId: string;
+  submitter: Address;
+};
+
 const RATE_LIMIT = { limit: 30, windowMs: 60_000 };
 const ATTACH_JSON_BODY_MAX_BYTES = 32 * 1024;
 const MAX_ATTACH_DETAILS = 10;
@@ -73,8 +86,20 @@ const CONTENT_REGISTRY_MEDIA_VALIDATOR_ABI = [
   },
 ] as const;
 
+type DetailsAttachRoutePublicClient = ReturnType<typeof createPublicClient>;
+
+type DetailsAttachRouteTestOverrides = {
+  createPublicClient?: typeof createPublicClient;
+};
+
+let detailsAttachRouteTestOverrides: DetailsAttachRouteTestOverrides | null = null;
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+export function __setDetailsAttachRouteTestOverridesForTests(overrides: DetailsAttachRouteTestOverrides | null) {
+  detailsAttachRouteTestOverrides = overrides;
+}
 
 function readChainId(value: unknown) {
   const chainId = typeof value === "number" ? value : Number.parseInt(String(value ?? ""), 10);
@@ -140,6 +165,27 @@ function readQuestionMetadataAttachments(value: unknown): QuestionMetadataInput[
   return metadata;
 }
 
+function readImageAttachments(value: unknown): ImageAttachmentInput[] {
+  if (!Array.isArray(value)) return [];
+  const attachments: ImageAttachmentInput[] = [];
+  for (const entry of value.slice(0, MAX_ATTACH_DETAILS)) {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
+    const record = entry as Record<string, unknown>;
+    const contentId = normalizeContentId(record.contentId);
+    const imageUrls = Array.isArray(record.imageUrls)
+      ? record.imageUrls.filter(
+          (url): url is string => typeof url === "string" && parseUploadedImageAttachmentUrlDigest(url) !== null,
+        )
+      : [];
+    if (!contentId || imageUrls.length === 0) continue;
+    attachments.push({
+      contentId,
+      imageUrls: [...new Set(imageUrls)],
+    });
+  }
+  return attachments;
+}
+
 function resolveDetailsAttachContext(chainId: number) {
   const targetNetwork = getServerTargetNetworkById(chainId);
   const contentRegistryAddress = getSharedDeploymentAddress(chainId, "ContentRegistry");
@@ -147,10 +193,10 @@ function resolveDetailsAttachContext(chainId: number) {
   if (!targetNetwork || !contentRegistryAddress || !rpcUrl) return null;
   return {
     contentRegistryAddress,
-    publicClient: createPublicClient({
+    publicClient: (detailsAttachRouteTestOverrides?.createPublicClient ?? createPublicClient)({
       chain: targetNetwork,
       transport: http(rpcUrl),
-    }),
+    }) as DetailsAttachRoutePublicClient,
   };
 }
 
@@ -227,6 +273,11 @@ function collectDetailsProofsFromReceiptLogs(params: {
     }
   }
 
+  const submissionProofs = new Map<string, ContentSubmissionProof>();
+  for (const [contentId, submitter] of submittersByContentId.entries()) {
+    submissionProofs.set(contentId, { contentId, submitter });
+  }
+
   const proofs = new Map<string, ContentDetailsProof>();
   for (const [contentId, submitter] of submittersByContentId.entries()) {
     const details = detailsByContentId.get(contentId);
@@ -259,7 +310,43 @@ function collectDetailsProofsFromReceiptLogs(params: {
       submitter,
     });
   }
-  return { detailsProofs: proofs, imageProofs, metadataProofs };
+  return { detailsProofs: proofs, imageProofs, metadataProofs, submissionProofs };
+}
+
+async function isGatedDetailsAttachmentVerified(detail: DetailsAttachmentInput, proof: ContentSubmissionProof) {
+  const detailsId = parseQuestionDetailsIdFromDetailsUrl(detail.detailsUrl);
+  if (!detailsId) return false;
+  const storedDetails = await getQuestionDetails(detailsId);
+  if (
+    !storedDetails ||
+    storedDetails.status !== "approved" ||
+    storedDetails.requiresGatedAccess !== true ||
+    storedDetails.sha256?.trim().toLowerCase() !== detail.detailsHash.slice(2).toLowerCase()
+  ) {
+    return false;
+  }
+  return storedDetails.ownerWalletAddress?.trim().toLowerCase() === normalizeWalletAddress(proof.submitter);
+}
+
+async function gatedImageUrlsVerifiedBySubmitter(imageUrls: readonly string[], proof: ContentSubmissionProof) {
+  const submitter = normalizeWalletAddress(proof.submitter);
+  const verifiedUrls: string[] = [];
+  for (const imageUrl of imageUrls) {
+    const parsed = parseUploadedImageAttachmentUrlDigest(imageUrl);
+    if (!parsed) continue;
+    const attachment = await getImageAttachment(parsed.attachmentId);
+    if (
+      !attachment ||
+      attachment.status !== "approved" ||
+      attachment.requiresGatedAccess !== true ||
+      attachment.sha256?.trim().toLowerCase() !== parsed.sha256 ||
+      attachment.ownerWalletAddress?.trim().toLowerCase() !== submitter
+    ) {
+      continue;
+    }
+    verifiedUrls.push(imageUrl);
+  }
+  return verifiedUrls;
 }
 
 export async function POST(request: NextRequest) {
@@ -273,6 +360,7 @@ export async function POST(request: NextRequest) {
   const chainId = readChainId(payload.chainId);
   const transactionHashes = readTransactionHashes(payload);
   const details = readDetailsAttachments(payload.details);
+  const requestedImages = readImageAttachments(payload.images);
   let metadata: QuestionMetadataInput[];
   try {
     metadata = readQuestionMetadataAttachments(payload.metadata);
@@ -282,9 +370,13 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     );
   }
-  if (!chainId || transactionHashes.length === 0 || (details.length === 0 && metadata.length === 0)) {
+  if (
+    !chainId ||
+    transactionHashes.length === 0 ||
+    (details.length === 0 && requestedImages.length === 0 && metadata.length === 0)
+  ) {
     return NextResponse.json(
-      { error: "chainId, transactionHashes, and details or metadata are required." },
+      { error: "chainId, transactionHashes, and details, images, or metadata are required." },
       { status: 400 },
     );
   }
@@ -308,6 +400,7 @@ export async function POST(request: NextRequest) {
   const detailsProofs = new Map<string, ContentDetailsProof>();
   const imageProofs = new Map<string, ImageAttachmentProof>();
   const metadataProofs = new Map<string, QuestionMetadataProof>();
+  const submissionProofs = new Map<string, ContentSubmissionProof>();
   for (const transactionHash of transactionHashes) {
     const receipt = await context.publicClient.getTransactionReceipt({ hash: transactionHash }).catch(() => null);
     if (!receipt || receipt.status !== "success") continue;
@@ -325,23 +418,31 @@ export async function POST(request: NextRequest) {
     for (const [contentId, proof] of receiptProofs.metadataProofs.entries()) {
       metadataProofs.set(contentId, proof);
     }
+    for (const [contentId, proof] of receiptProofs.submissionProofs.entries()) {
+      submissionProofs.set(contentId, proof);
+    }
   }
 
   let attached = 0;
   for (const detail of details) {
     const proof = detailsProofs.get(detail.contentId);
-    if (
-      !proof ||
-      proof.detailsUrl !== detail.detailsUrl ||
-      proof.detailsHash.toLowerCase() !== detail.detailsHash.toLowerCase()
-    ) {
+    const hasPublicProof =
+      proof &&
+      proof.detailsUrl === detail.detailsUrl &&
+      proof.detailsHash.toLowerCase() === detail.detailsHash.toLowerCase();
+    const submissionProof = submissionProofs.get(detail.contentId);
+    const hasGatedProof =
+      !hasPublicProof && submissionProof ? await isGatedDetailsAttachmentVerified(detail, submissionProof) : false;
+    if (!hasPublicProof && !hasGatedProof) {
       continue;
     }
+    const submitter = proof?.submitter ?? submissionProof?.submitter;
+    if (!submitter) continue;
     if (
       await attachQuestionDetailsToContent({
         contentId: detail.contentId,
         detailsUrl: detail.detailsUrl,
-        ownerWalletAddress: normalizeWalletAddress(proof.submitter),
+        ownerWalletAddress: normalizeWalletAddress(submitter),
       })
     ) {
       attached += 1;
@@ -353,6 +454,17 @@ export async function POST(request: NextRequest) {
     imagesAttached += await attachImagesToContent({
       contentId: proof.contentId,
       imageUrls: proof.imageUrls,
+      ownerWalletAddress: normalizeWalletAddress(proof.submitter),
+    });
+  }
+  for (const requestedImage of requestedImages) {
+    const proof = submissionProofs.get(requestedImage.contentId);
+    if (!proof) continue;
+    const verifiedImageUrls = await gatedImageUrlsVerifiedBySubmitter(requestedImage.imageUrls, proof);
+    if (verifiedImageUrls.length === 0) continue;
+    imagesAttached += await attachImagesToContent({
+      contentId: requestedImage.contentId,
+      imageUrls: verifiedImageUrls,
       ownerWalletAddress: normalizeWalletAddress(proof.submitter),
     });
   }

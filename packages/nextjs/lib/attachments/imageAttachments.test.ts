@@ -16,6 +16,7 @@ import {
   getImageAttachmentUploadMode,
   isImageAttachmentBlobStorageConfigured,
   isLocalImageAttachmentPathname,
+  markImagesRequireGatedAccess,
   parseAttachmentIdFromImageUrl,
   processCompletedImageUpload,
   processCompletedLocalImageUpload,
@@ -824,6 +825,57 @@ test("attaches approved uploaded images to submitted content idempotently", asyn
     0,
   );
   assert.equal((await getImageAttachment("att_linkcontent00001"))?.contentId, "123");
+});
+
+test("marks and attaches wallet-owned images when an agent id is present", async () => {
+  const now = new Date();
+  const sha256 = "e".repeat(64);
+  const imageUrl = `https://www.rateloop.ai/api/attachments/images/att_walletagentlink01.webp#sha256=0x${sha256}`;
+  await db.insert(questionImageAttachments).values({
+    id: "att_walletagentlink01",
+    uploaderKind: "wallet",
+    ownerWalletAddress: "0x00000000000000000000000000000000000000aa",
+    originalFilename: "mockup.png",
+    mimeType: "image/webp",
+    sha256,
+    sizeBytes: 1024,
+    status: "approved",
+    moderationStatus: "approved",
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  assert.equal(
+    await markImagesRequireGatedAccess({
+      agentId: "agent-123",
+      imageUrls: [imageUrl],
+      ownerWalletAddress: "0x00000000000000000000000000000000000000AA",
+    }),
+    1,
+  );
+  assert.equal((await getImageAttachment("att_walletagentlink01"))?.requiresGatedAccess, true);
+
+  assert.equal(
+    await attachImagesToContent({
+      agentId: "agent-123",
+      contentId: "123",
+      imageUrls: [imageUrl],
+      ownerWalletAddress: "0x00000000000000000000000000000000000000AA",
+    }),
+    1,
+  );
+  assert.equal((await getImageAttachment("att_walletagentlink01"))?.contentId, "123");
+
+  assert.equal(
+    await attachImagesToContent({
+      agentId: "agent-456",
+      contentId: "456",
+      imageUrls: [imageUrl],
+      ownerWalletAddress: "0x00000000000000000000000000000000000000bb",
+    }),
+    0,
+  );
+  assert.equal((await getImageAttachment("att_walletagentlink01"))?.contentId, "123");
 });
 
 test("sweeps expired unattached image uploads and deletes stored files", async () => {
