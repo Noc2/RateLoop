@@ -698,7 +698,7 @@ describe("registerContentRoutes", () => {
       expect(await response.json()).toMatchObject({ updated: 1, skipped: 0 });
       expect(query).toHaveBeenCalledTimes(1);
       const [sqlText, params] = query.mock.calls[0]!;
-      expect(sqlText).toContain('"confidentialityPublishedAt" = case');
+      expect(sqlText).toContain('"confidentiality_published_at" = case');
       expect(sqlText).toContain('from "rateloop_ponder_hardhat"."round"');
       expect(sqlText).toContain('"state" in ($31, $32, $33)');
       expect(params[25]).toBe(true);

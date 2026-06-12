@@ -635,6 +635,14 @@ function quoteIdentifier(value: string) {
   return `"${value.replace(/"/g, '""')}"`;
 }
 
+function toSnakeCaseIdentifier(value: string) {
+  return value.replace(/([a-z0-9])([A-Z])/g, "$1_$2").toLowerCase();
+}
+
+function quotePonderColumn(value: string) {
+  return quoteIdentifier(toSnakeCaseIdentifier(value));
+}
+
 function getMetadataUpdatePool() {
   const connectionString = readEnv("DATABASE_URL");
   if (!connectionString) {
@@ -662,56 +670,56 @@ async function updateQuestionMetadataRow(params: {
     `
       update ${schema}.${quoteIdentifier("content")}
       set
-        ${quoteIdentifier("questionMetadataHash")} = $1,
-        ${quoteIdentifier("resultSpecHash")} = $2,
-        ${quoteIdentifier("questionMetadata")} = coalesce($3, ${quoteIdentifier("questionMetadata")}),
-        ${quoteIdentifier("questionMetadataUri")} = coalesce($4, ${quoteIdentifier("questionMetadataUri")}),
-        ${quoteIdentifier("targetAudience")} = $5,
-        ${quoteIdentifier("targetAudienceAgeGroups")} = $6,
-        ${quoteIdentifier("targetAudienceCountries")} = $7,
-        ${quoteIdentifier("targetAudienceExpertise")} = $8,
-        ${quoteIdentifier("targetAudienceLanguages")} = $9,
-        ${quoteIdentifier("targetAudienceNationalities")} = $10,
-        ${quoteIdentifier("targetAudienceRoles")} = $11,
-        ${quoteIdentifier("targetAudienceAiAgentFrameworks")} = $12,
-        ${quoteIdentifier("targetAudienceAiAutonomy")} = $13,
-        ${quoteIdentifier("targetAudienceAiExpertise")} = $14,
-        ${quoteIdentifier("targetAudienceAiLanguages")} = $15,
-        ${quoteIdentifier("targetAudienceAiModelProviders")} = $16,
-        ${quoteIdentifier("targetAudienceTeamCountries")} = $17,
-        ${quoteIdentifier("targetAudienceTeamExpertise")} = $18,
-        ${quoteIdentifier("targetAudienceTeamLanguages")} = $19,
-        ${quoteIdentifier("targetAudienceTeamSizes")} = $20,
-        ${quoteIdentifier("targetAudienceTeamTypes")} = $21,
-        ${quoteIdentifier("targetAudienceHybridExpertise")} = $22,
-        ${quoteIdentifier("targetAudienceHybridLanguages")} = $23,
-        ${quoteIdentifier("targetAudienceHybridModelProviders")} = $24,
-        ${quoteIdentifier("targetAudienceHybridOversight")} = $25,
-        ${quoteIdentifier("gated")} = $26,
-        ${quoteIdentifier("confidentialityDisclosurePolicy")} = $27,
-        ${quoteIdentifier("confidentialityBondAsset")} = $28,
-        ${quoteIdentifier("confidentialityBondAmount")} = $29,
-        ${quoteIdentifier("confidentialityPublishedAt")} = case
+        ${quotePonderColumn("questionMetadataHash")} = $1,
+        ${quotePonderColumn("resultSpecHash")} = $2,
+        ${quotePonderColumn("questionMetadata")} = coalesce($3, ${quotePonderColumn("questionMetadata")}),
+        ${quotePonderColumn("questionMetadataUri")} = coalesce($4, ${quotePonderColumn("questionMetadataUri")}),
+        ${quotePonderColumn("targetAudience")} = $5,
+        ${quotePonderColumn("targetAudienceAgeGroups")} = $6,
+        ${quotePonderColumn("targetAudienceCountries")} = $7,
+        ${quotePonderColumn("targetAudienceExpertise")} = $8,
+        ${quotePonderColumn("targetAudienceLanguages")} = $9,
+        ${quotePonderColumn("targetAudienceNationalities")} = $10,
+        ${quotePonderColumn("targetAudienceRoles")} = $11,
+        ${quotePonderColumn("targetAudienceAiAgentFrameworks")} = $12,
+        ${quotePonderColumn("targetAudienceAiAutonomy")} = $13,
+        ${quotePonderColumn("targetAudienceAiExpertise")} = $14,
+        ${quotePonderColumn("targetAudienceAiLanguages")} = $15,
+        ${quotePonderColumn("targetAudienceAiModelProviders")} = $16,
+        ${quotePonderColumn("targetAudienceTeamCountries")} = $17,
+        ${quotePonderColumn("targetAudienceTeamExpertise")} = $18,
+        ${quotePonderColumn("targetAudienceTeamLanguages")} = $19,
+        ${quotePonderColumn("targetAudienceTeamSizes")} = $20,
+        ${quotePonderColumn("targetAudienceTeamTypes")} = $21,
+        ${quotePonderColumn("targetAudienceHybridExpertise")} = $22,
+        ${quotePonderColumn("targetAudienceHybridLanguages")} = $23,
+        ${quotePonderColumn("targetAudienceHybridModelProviders")} = $24,
+        ${quotePonderColumn("targetAudienceHybridOversight")} = $25,
+        ${quotePonderColumn("gated")} = $26,
+        ${quotePonderColumn("confidentialityDisclosurePolicy")} = $27,
+        ${quotePonderColumn("confidentialityBondAsset")} = $28,
+        ${quotePonderColumn("confidentialityBondAmount")} = $29,
+        ${quotePonderColumn("confidentialityPublishedAt")} = case
           when $26 = true
             and $27 = 'after_settlement'
-            and ${quoteIdentifier("confidentialityPublishedAt")} is null
+            and ${quotePonderColumn("confidentialityPublishedAt")} is null
           then coalesce(
             (
-              select min(${quoteIdentifier("settledAt")})
+              select min(${quotePonderColumn("settledAt")})
               from ${schema}.${quoteIdentifier("round")}
-              where ${quoteIdentifier("contentId")} = $30
-                and ${quoteIdentifier("state")} in ($31, $32, $33)
-                and ${quoteIdentifier("settledAt")} is not null
+              where ${quotePonderColumn("contentId")} = $30
+                and ${quotePonderColumn("state")} in ($31, $32, $33)
+                and ${quotePonderColumn("settledAt")} is not null
             ),
-            ${quoteIdentifier("confidentialityPublishedAt")}
+            ${quotePonderColumn("confidentialityPublishedAt")}
           )
-          else ${quoteIdentifier("confidentialityPublishedAt")}
+          else ${quotePonderColumn("confidentialityPublishedAt")}
         end
-      where ${quoteIdentifier("id")} = $30
-        and (${quoteIdentifier("questionMetadataHash")} is null or lower(${quoteIdentifier("questionMetadataHash")}) = $1)
-        and (${quoteIdentifier("resultSpecHash")} is null or lower(${quoteIdentifier("resultSpecHash")}) = $2)
-        and ($3::text is null or ${quoteIdentifier("questionMetadata")} is null or ${quoteIdentifier("questionMetadata")} = $3)
-        and ($4::text is null or ${quoteIdentifier("questionMetadataUri")} is null or ${quoteIdentifier("questionMetadataUri")} = $4)
+      where ${quotePonderColumn("id")} = $30
+        and (${quotePonderColumn("questionMetadataHash")} is null or lower(${quotePonderColumn("questionMetadataHash")}) = $1)
+        and (${quotePonderColumn("resultSpecHash")} is null or lower(${quotePonderColumn("resultSpecHash")}) = $2)
+        and ($3::text is null or ${quotePonderColumn("questionMetadata")} is null or ${quotePonderColumn("questionMetadata")} = $3)
+        and ($4::text is null or ${quotePonderColumn("questionMetadataUri")} is null or ${quotePonderColumn("questionMetadataUri")} = $4)
     `,
     [
       params.questionMetadataHash,

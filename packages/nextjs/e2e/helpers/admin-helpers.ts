@@ -108,7 +108,7 @@ type SubmissionRewardTerms = {
   feedbackWindowSeconds: bigint;
   bountyEligibility: number;
 };
-type DirectTransactionResult = { success: boolean; txHash?: `0x${string}` };
+type DirectTransactionResult = { success: boolean; txHash?: `0x${string}`; error?: string; reason?: string };
 const MAX_SUBMISSION_IMAGE_URLS = 4;
 export const DEFAULT_SUBMISSION_REWARD_ASSET_LREP = 0;
 export const SUBMISSION_REWARD_ASSET_USDC = 1;
@@ -466,14 +466,23 @@ async function sendTxDetailed(from: string, to: string, data: `0x${string}`): Pr
         gas: gasLimit,
       });
       const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
-      return { success: receipt.status === "success", txHash };
+      return {
+        success: receipt.status === "success",
+        txHash,
+        error: receipt.status === "success" ? undefined : `receipt status ${receipt.status}`,
+      };
     } catch (error) {
       console.warn(`[sendTx] Signed tx failed from=${from} to=${to}; falling back to RPC send: ${String(error)}`);
     }
   }
 
   const result = await sendTxViaRpc(from, to, data);
-  return { success: result.status === "success", txHash: result.txHash };
+  return {
+    success: result.status === "success",
+    txHash: result.txHash,
+    error: result.status === "unknown" ? result.error : undefined,
+    reason: result.status === "reverted" ? result.reason : undefined,
+  };
 }
 
 async function sendTx(from: string, to: string, data: `0x${string}`): Promise<boolean> {

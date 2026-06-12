@@ -271,7 +271,7 @@ export function startCorrelationSnapshotKeeper(): ChildProcess {
       KEEPER_CORRELATION_SNAPSHOT_MAX_ROUNDS_PER_TICK: "200",
       METRICS_ENABLED: "false",
       LOG_FORMAT: "json",
-      MAX_GAS_PER_TX: "10000000",
+      MAX_GAS_PER_TX: "30000000",
       ADVISORY_VOTE_RECORDER_ADDRESS: CONTRACT_ADDRESSES.AdvisoryVoteRecorder,
       CONTENT_REGISTRY_ADDRESS: CONTRACT_ADDRESSES.ContentRegistry,
       VOTING_ENGINE_ADDRESS: CONTRACT_ADDRESSES.RoundVotingEngine,

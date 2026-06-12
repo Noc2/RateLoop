@@ -1,12 +1,14 @@
 import {
   DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
   approveLREP,
+  readTokenBalance,
   submitContentDirectWithResult,
   submitContentDirect,
+  transferLREP,
   waitForPonderIndexed,
   type SubmissionConfidentialityConfig,
 } from "./admin-helpers";
-import { ANVIL_ACCOUNTS } from "./anvil-accounts";
+import { ANVIL_ACCOUNTS, DEPLOYER } from "./anvil-accounts";
 import {
   continueToBountyStep,
   continueToFeedbackBonusStep,
@@ -44,6 +46,7 @@ import { E2E_RPC_URL } from "./service-urls";
 export const CONFIDENTIALITY_BOND_ASSET_LREP = 0;
 export const CONFIDENTIALITY_BOND_ASSET_USDC = 1;
 export const CONFIDENTIALITY_FLAG_PRIVATE_FOREVER = 1;
+const E2E_CONFIDENTIALITY_NEXUS_BOND_AMOUNT = 1_000_000n;
 
 type AnvilAccount = (typeof ANVIL_ACCOUNTS)[keyof typeof ANVIL_ACCOUNTS];
 
@@ -246,11 +249,16 @@ export async function submitHostedGatedQuestionDirect(config: SubmitGatedQuestio
       confidentiality,
       details: {
         detailsHash: config.detailsHash,
-        detailsUrl: config.detailsUrl,
+        detailsUrl: "",
       },
     },
   );
-  expect(result.success, "Hosted gated direct question submission should succeed").toBe(true);
+  expect(
+    result.success,
+    `Hosted gated direct question submission should succeed${
+      result.reason || result.error ? ` (${result.reason ?? result.error})` : ""
+    }`,
+  ).toBe(true);
   expect(result.txHash, "Hosted gated direct question submission should return a transaction hash").toBeTruthy();
 
   let submitted: any;
@@ -603,6 +611,65 @@ export async function resolveConfidentialRater(account: AnvilAccount): Promise<R
   };
 }
 
+async function hasConfidentialityNexus(provider: number, nullifier: Hex) {
+  return confidentialityPublicClient.readContract({
+    address: CONTRACT_ADDRESSES.ConfidentialityEscrow,
+    abi: ConfidentialityEscrowAbi,
+    functionName: "hasConfidentialityNexus",
+    args: [provider, nullifier],
+  });
+}
+
+async function ensureConfidentialityNexus(account: AnvilAccount, resolved: ResolvedConfidentialRater) {
+  if (await hasConfidentialityNexus(resolved.humanCredentialProvider, resolved.humanNullifier)) return;
+
+  const uniqueId = Date.now();
+  const title = `E2E confidentiality ban nexus ${uniqueId}`;
+  const submitted = await submitGatedQuestionDirect({
+    bondAmount: E2E_CONFIDENTIALITY_NEXUS_BOND_AMOUNT,
+    description: `Private bond nexus for ${account.address} ${uniqueId}`,
+    submitter: ANVIL_ACCOUNTS.account2,
+    title,
+  });
+  expect(submitted, "E2E ban nexus question submission should succeed").toBe(true);
+
+  let contentId: string | null = null;
+  const indexed = await waitForPonderIndexed(
+    async () => {
+      const data = await ponderGet(`/content?status=all&search=${encodeURIComponent(title)}&limit=10`);
+      const match = data.items?.find((item: { title?: string }) => item.title === title);
+      contentId = match?.id ? String(match.id) : null;
+      return Boolean(contentId);
+    },
+    90_000,
+    2_000,
+    "confidentiality:ban-nexus-question-indexed",
+  );
+  expect(indexed, "E2E ban nexus question should be indexed").toBe(true);
+  expect(contentId, "E2E ban nexus question should have a content id").toBeTruthy();
+
+  const balance = await readTokenBalance(account.address, CONTRACT_ADDRESSES.LoopReputation);
+  if (balance < E2E_CONFIDENTIALITY_NEXUS_BOND_AMOUNT) {
+    const funded = await transferLREP(
+      account.address,
+      E2E_CONFIDENTIALITY_NEXUS_BOND_AMOUNT - balance,
+      DEPLOYER.address,
+      CONTRACT_ADDRESSES.LoopReputation,
+    );
+    expect(funded, "E2E ban nexus account funding should succeed").toBe(true);
+  }
+
+  const approved = await approveConfidentialityBondSpender(account, E2E_CONFIDENTIALITY_NEXUS_BOND_AMOUNT);
+  expect(approved, "E2E ban nexus bond approval should succeed").toBe(true);
+  await postConfidentialityBondDirect(account, contentId!);
+  await expect
+    .poll(() => hasConfidentialityNexus(resolved.humanCredentialProvider, resolved.humanNullifier), {
+      intervals: [500, 1_000, 2_000],
+      timeout: 30_000,
+    })
+    .toBe(true);
+}
+
 export async function postConfidentialityBondDirect(account: AnvilAccount, contentId: string | number | bigint) {
   const walletClient = createWalletClient({
     account: privateKeyToAccount(account.privateKey),
@@ -624,6 +691,7 @@ export async function banConfidentialityIdentity(account: AnvilAccount, reason =
   expect(resolved.hasActiveHumanCredential, "Viewer must have an active credential before ban").toBe(true);
   expect(resolved.humanNullifier).not.toBe(`0x${"0".repeat(64)}`);
   expect(resolved.humanCredentialProvider, "Viewer credential provider must be set before ban").not.toBe(0);
+  await ensureConfidentialityNexus(account, resolved);
 
   const walletClient = createWalletClient({
     account: privateKeyToAccount(ANVIL_ACCOUNTS.account9.privateKey),
