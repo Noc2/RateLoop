@@ -69,6 +69,23 @@ test.describe("Smoke tests", () => {
     await expect(page).toHaveURL(/\/(?:\?landing=1)?$/);
   });
 
+  test("promo video is click-to-play", async ({ page }) => {
+    await gotoWithRetry(page, "/?landing=1");
+
+    const video = page.locator('video[poster="/videos/rateloop-promo-poster.jpg"]');
+    await expect(video).toBeVisible();
+    await expect(video).toHaveAttribute("preload", "none");
+    await expect(video.locator('source[src="/videos/rateloop-promo.mp4"][type="video/mp4"]')).toHaveCount(1);
+    await expect(video).toHaveJSProperty("controls", false);
+
+    const playButton = page.getByRole("button", { name: "Play the RateLoop intro video" });
+    await expect(playButton).toBeVisible();
+    await playButton.click();
+
+    await expect(playButton).toHaveCount(0);
+    await expect(video).toHaveJSProperty("controls", true);
+  });
+
   test("navigation to ask page works", async ({ page }) => {
     await setupWallet(page, ANVIL_ACCOUNTS.account2.privateKey);
     await gotoWithRetry(page, "/ask", { ensureWalletConnected: true });
