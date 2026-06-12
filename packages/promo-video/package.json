@@ -6,7 +6,9 @@
   "scripts": {
     "studio": "remotion studio src/index.ts",
     "render": "remotion render src/index.ts RateLoopPromo out/rateloop-promo.mp4",
+    "render:v2": "remotion render src/index.ts RateLoopPromoV2 out/rateloop-promo-v2.mp4",
     "poster": "remotion still src/index.ts RateLoopPromo out/rateloop-promo-poster.png --frame=800",
+    "poster:v2": "remotion still src/index.ts RateLoopPromoV2 out/rateloop-promo-v2-poster.png --frame=165",
     "generate:music": "node scripts/generate-music.mjs",
     "generate:openai-voiceover": "node scripts/generate-openai-voiceover.mjs",
     "generate:voiceover": "zsh scripts/generate-voiceover.zsh",

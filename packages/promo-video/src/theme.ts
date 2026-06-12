@@ -5,6 +5,7 @@
 export const colors = {
   surface: "#000000",
   surfaceElevated: "#121212",
+  surfaceElevatedHover: "#1a1a1a",
   surfaceNested: "#121212",
   warmWhite: "#f5f5f5",
   steel: "#a3a3a3",
