@@ -2,7 +2,7 @@
 
 import { type FormEvent, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useAccount } from "wagmi";
 import { AppPageShell } from "~~/components/shared/AppPageShell";
 import { ConnectWalletCard } from "~~/components/shared/ConnectWalletCard";
@@ -117,7 +117,12 @@ function buildBreachActionReason(reportId: number | null, contentId: string) {
   return "Confidentiality breach report";
 }
 
-function ConfidentialityBreachesPanel({ reporter }: { reporter: `0x${string}` }) {
+type ConfidentialityBreachesPanelProps = {
+  onOpenGovernanceAction: (href: string) => void;
+  reporter: `0x${string}`;
+};
+
+function ConfidentialityBreachesPanel({ onOpenGovernanceAction, reporter }: ConfidentialityBreachesPanelProps) {
   const [contentId, setContentId] = useState("");
   const [accusedIdentityKey, setAccusedIdentityKey] = useState("");
   const [evidenceHash, setEvidenceHash] = useState("");
@@ -188,6 +193,11 @@ function ConfidentialityBreachesPanel({ reporter }: { reporter: `0x${string}` })
     reason: draftReason,
   });
   const draftUnbanIdentityHref = buildGovernanceActionHref(RATER_REGISTRY_UNBAN_IDENTITY_ACTION_ID, {});
+  const missingSlashBondPrefillFields = [
+    contentId.trim() ? null : "content id",
+    accusedIdentityKey.trim() ? null : "identity key",
+    evidenceHash.trim() ? null : "evidence hash",
+  ].filter((field): field is string => field !== null);
 
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(18rem,0.9fr)]">
@@ -264,15 +274,33 @@ function ConfidentialityBreachesPanel({ reporter }: { reporter: `0x${string}` })
             raw nullifier hash.
           </p>
           <div className="mt-4 grid gap-2">
-            <Link href={draftSlashBondHref} className="btn btn-primary btn-sm justify-start">
+            <button
+              type="button"
+              className="btn btn-primary btn-sm justify-start"
+              onClick={() => onOpenGovernanceAction(draftSlashBondHref)}
+            >
               Slash bond proposal
-            </Link>
-            <Link href={draftBanIdentityHref} className="btn btn-outline btn-sm justify-start">
+            </button>
+            <button
+              type="button"
+              className="btn btn-outline btn-sm justify-start"
+              onClick={() => onOpenGovernanceAction(draftBanIdentityHref)}
+            >
               Ban identity proposal
-            </Link>
-            <Link href={draftUnbanIdentityHref} className="btn btn-outline btn-sm justify-start">
+            </button>
+            <button
+              type="button"
+              className="btn btn-outline btn-sm justify-start"
+              onClick={() => onOpenGovernanceAction(draftUnbanIdentityHref)}
+            >
               Unban identity proposal
-            </Link>
+            </button>
+          </div>
+          <div className="mt-3 space-y-1 text-xs leading-relaxed text-base-content/50">
+            {missingSlashBondPrefillFields.length > 0 ? (
+              <p>Slash prefill missing: {missingSlashBondPrefillFields.join(", ")}.</p>
+            ) : null}
+            <p>Identity ban actions still need provider and raw nullifier hash in the composer.</p>
           </div>
         </div>
 
@@ -293,34 +321,47 @@ function ConfidentialityBreachesPanel({ reporter }: { reporter: `0x${string}` })
                     <p className="break-all">evidence {report.evidenceHash}</p>
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">
-                    <Link
-                      href={buildGovernanceActionHref(CONFIDENTIALITY_SLASH_BOND_ACTION_ID, {
-                        contentId: report.contentId,
-                        evidenceHash: report.evidenceHash,
-                        identityKey: report.accusedIdentityKey,
-                        reason: buildBreachActionReason(report.id, report.contentId),
-                        reporterRecipient: report.reporter,
-                      })}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onOpenGovernanceAction(
+                          buildGovernanceActionHref(CONFIDENTIALITY_SLASH_BOND_ACTION_ID, {
+                            contentId: report.contentId,
+                            evidenceHash: report.evidenceHash,
+                            identityKey: report.accusedIdentityKey,
+                            reason: buildBreachActionReason(report.id, report.contentId),
+                            reporterRecipient: report.reporter,
+                          }),
+                        )
+                      }
                       className="btn btn-primary btn-xs"
                     >
                       Slash bond
-                    </Link>
-                    <Link
-                      href={buildGovernanceActionHref(RATER_REGISTRY_BAN_IDENTITY_ACTION_ID, {
-                        evidenceHash: report.evidenceHash,
-                        expiresAt: "0",
-                        reason: buildBreachActionReason(report.id, report.contentId),
-                      })}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onOpenGovernanceAction(
+                          buildGovernanceActionHref(RATER_REGISTRY_BAN_IDENTITY_ACTION_ID, {
+                            evidenceHash: report.evidenceHash,
+                            expiresAt: "0",
+                            reason: buildBreachActionReason(report.id, report.contentId),
+                          }),
+                        )
+                      }
                       className="btn btn-outline btn-xs"
                     >
                       Ban identity
-                    </Link>
-                    <Link
-                      href={buildGovernanceActionHref(RATER_REGISTRY_UNBAN_IDENTITY_ACTION_ID, {})}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onOpenGovernanceAction(buildGovernanceActionHref(RATER_REGISTRY_UNBAN_IDENTITY_ACTION_ID, {}))
+                      }
                       className="btn btn-outline btn-xs"
                     >
                       Unban identity
-                    </Link>
+                    </button>
                   </div>
                 </div>
               ))
@@ -335,6 +376,7 @@ function ConfidentialityBreachesPanel({ reporter }: { reporter: `0x${string}` })
 }
 
 function GovernancePageInner() {
+  const router = useRouter();
   const { isConnected, address } = useAccount();
   const { isRestoringWallet } = useWalletRestore();
   const [activeTab, setActiveTab] = useState<GovernanceTab>("profile");
@@ -347,6 +389,14 @@ function GovernancePageInner() {
     const hash = getGovernanceHash(tab);
     replaceUrlPreservingHistoryState(hash || window.location.pathname + window.location.search);
   }, []);
+
+  const openGovernanceAction = useCallback(
+    (href: string) => {
+      setActiveTab("governance");
+      router.push(href, { scroll: false });
+    },
+    [router],
+  );
 
   useEffect(() => {
     const applyHash = () => {
@@ -527,7 +577,12 @@ function GovernancePageInner() {
         </div>
       )}
 
-      {activeTab === "breaches" && address && <ConfidentialityBreachesPanel reporter={address as `0x${string}`} />}
+      {activeTab === "breaches" && address && (
+        <ConfidentialityBreachesPanel
+          reporter={address as `0x${string}`}
+          onOpenGovernanceAction={openGovernanceAction}
+        />
+      )}
     </AppPageShell>
   );
 }
