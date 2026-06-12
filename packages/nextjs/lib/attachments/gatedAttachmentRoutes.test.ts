@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { GET as getDetails } from "../../app/api/attachments/details/[detailsId]/route";
 import { GET as getImage } from "../../app/api/attachments/images/[attachmentId]/route";
+import { GET as getGatedContext } from "../../app/api/confidentiality/context/route";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
@@ -250,6 +251,46 @@ test("gated details still require terms acceptance for signed non-owner sessions
   assert.equal(denied.status, 403);
   assert.equal(await denied.text(), '{"error":"Confidentiality terms acceptance required"}');
   assert.equal(denied.headers.get("cache-control"), "private, no-store");
+});
+
+test("gated context manifest returns authorized private attachment fetch URLs", async () => {
+  await seedGatedDetails();
+  await seedGatedImage();
+
+  const requestUrl = `https://www.rateloop.ai/api/confidentiality/context?contentId=${CONTENT_ID}&address=${WALLET}`;
+  const denied = await getGatedContext(new NextRequest(requestUrl));
+
+  assert.equal(denied.status, 401);
+  assert.equal(denied.headers.get("cache-control"), "private, no-store");
+  assert.deepEqual(await denied.json(), { error: "Signed wallet session required" });
+
+  const cookie = await buildSignedGatedContextCookie(WALLET);
+  const allowed = await getGatedContext(new NextRequest(requestUrl, { headers: { cookie } }));
+  const body = (await allowed.json()) as {
+    contentId: string;
+    details: Array<{ id: string; sha256: string | null; url: string }>;
+    images: Array<{ id: string; mediaIndex: number; mediaType: string; sha256: string | null; url: string }>;
+  };
+
+  assert.equal(allowed.status, 200);
+  assert.equal(allowed.headers.get("cache-control"), "private, no-store");
+  assert.equal(body.contentId, CONTENT_ID);
+  assert.deepEqual(body.details, [
+    {
+      id: DETAILS_ID,
+      sha256: `0x${createHash("sha256").update(DETAILS_TEXT).digest("hex")}`,
+      url: `/api/attachments/details/${DETAILS_ID}?address=${WALLET}`,
+    },
+  ]);
+  assert.deepEqual(body.images, [
+    {
+      id: ATTACHMENT_ID,
+      mediaIndex: 0,
+      mediaType: "image",
+      sha256: `0x${"a".repeat(64)}`,
+      url: `/api/attachments/images/${ATTACHMENT_ID}.webp?address=${WALLET}#sha256=0x${"a".repeat(64)}`,
+    },
+  ]);
 });
 
 test("pending gated hosted attachments fail closed before content linkage", async () => {

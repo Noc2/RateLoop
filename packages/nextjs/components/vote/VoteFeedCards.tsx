@@ -23,6 +23,7 @@ import { WatchContentButton } from "~~/components/shared/WatchContentButton";
 import { ConfidentialContextGate } from "~~/components/vote/ConfidentialContextGate";
 import { getVisibleContentRating } from "~~/hooks/contentFeed/shared";
 import type { ContentItem } from "~~/hooks/useContentFeed";
+import { type GatedContextManifest, useGatedContextManifest } from "~~/hooks/useGatedContextManifest";
 import type { SubmitterProfile } from "~~/hooks/useSubmitterProfiles";
 import { appendGatedContextAddress, appendOptionalGatedContextAddress } from "~~/lib/attachments/gatedContextFetchUrls";
 import { type ContentMediaItem, buildFallbackMediaItems, isUploadedImageUrl } from "~~/lib/contentMedia";
@@ -56,7 +57,21 @@ function getQuestionText(item: ContentItem) {
   return item.question?.trim() || item.title;
 }
 
-function getCardMediaItems(item: ContentItem): ContentMediaItem[] {
+function getManifestMediaItems(manifest?: GatedContextManifest): ContentMediaItem[] {
+  return (
+    manifest?.images.map((image, index) => ({
+      mediaIndex: image.mediaIndex ?? index,
+      mediaType: image.mediaType,
+      url: image.url,
+      canonicalUrl: image.url,
+      urlHost: null,
+    })) ?? []
+  );
+}
+
+function getCardMediaItems(item: ContentItem, manifest?: GatedContextManifest): ContentMediaItem[] {
+  const manifestMedia = getManifestMediaItems(manifest);
+  if (manifestMedia.length > 0) return manifestMedia;
   if (item.media.length > 0) return item.media;
   if (item.thumbnailUrl) {
     return [
@@ -376,13 +391,59 @@ function ContentMediaCarousel({
   isActive: boolean;
   interactionMode: "default" | "vote";
 }) {
-  const mediaItems = getCardMediaItems(item);
+  return (
+    <ConfidentialContextGate item={item}>
+      {({ walletAddress }) => (
+        <UnlockedContentMediaCarousel
+          item={item}
+          compact={compact}
+          isActive={isActive}
+          interactionMode={interactionMode}
+          walletAddress={walletAddress}
+        />
+      )}
+    </ConfidentialContextGate>
+  );
+}
+
+function PrivateContextMediaStatus({ error, isLoading }: { error?: string | null; isLoading?: boolean }) {
+  return (
+    <div className="flex h-full min-h-[12rem] w-full flex-col items-center justify-center gap-3 bg-base-100 p-6 text-center">
+      {isLoading ? <span className="loading loading-spinner loading-md text-primary" /> : null}
+      <p className={`max-w-sm text-sm leading-relaxed ${error ? "text-error" : "text-base-content/65"}`}>
+        {error ?? (isLoading ? "Loading private context..." : "No private media is attached.")}
+      </p>
+    </div>
+  );
+}
+
+function UnlockedContentMediaCarousel({
+  item,
+  compact,
+  isActive,
+  interactionMode,
+  walletAddress,
+}: {
+  item: ContentItem;
+  compact: boolean;
+  isActive: boolean;
+  interactionMode: "default" | "vote";
+  walletAddress?: string;
+}) {
+  const privateContext = isPrivateContextMetadata(item);
+  const manifestQuery = useGatedContextManifest({
+    contentId: item.id,
+    enabled: privateContext && Boolean(walletAddress),
+    walletAddress,
+  });
+  const mediaItems = getCardMediaItems(item, privateContext ? manifestQuery.data : undefined);
   const [activeIndex, setActiveIndex] = useState(0);
   const activeMedia = mediaItems[activeIndex] ?? mediaItems[0] ?? null;
   const hasCarouselControls = mediaItems.length > 1;
   const contextUrl = item.url.trim();
   const embedUrl = activeMedia?.url.trim() || contextUrl;
   const activeMediaIsImage = activeMedia && getMediaPlatformType(activeMedia) === "image";
+  const hasPublicFallback = item.media.length > 0 || Boolean(item.thumbnailUrl) || contextUrl.length > 0;
 
   useEffect(() => {
     setActiveIndex(0);
@@ -400,26 +461,38 @@ function ContentMediaCarousel({
     setActiveIndex(current => (current + 1) % mediaItems.length);
   };
 
+  if (privateContext && !hasPublicFallback && manifestQuery.isLoading) {
+    return <PrivateContextMediaStatus isLoading />;
+  }
+
+  if (privateContext && !hasPublicFallback && manifestQuery.error) {
+    return (
+      <PrivateContextMediaStatus
+        error={manifestQuery.error instanceof Error ? manifestQuery.error.message : "Private context is not available."}
+      />
+    );
+  }
+
+  if (privateContext && !hasPublicFallback && !embedUrl) {
+    return <PrivateContextMediaStatus />;
+  }
+
   return (
     <>
-      <ConfidentialContextGate item={item}>
-        {({ walletAddress }) => (
-          <ContentEmbed
-            url={appendGatedContextAddress(embedUrl, walletAddress)}
-            thumbnailUrl={appendOptionalGatedContextAddress(item.thumbnailUrl, walletAddress)}
-            title={item.title}
-            description={item.description}
-            compact={compact}
-            showTextHeading={false}
-            isActive={isActive}
-            interactionMode={interactionMode}
-            imageFit="contain"
-            enableImageLightbox={Boolean(activeMediaIsImage)}
-            imageLightboxTriggerLabel="Open question image"
-            imageLightboxModalLabel={item.title ? `Image for ${item.title}` : "Question image"}
-          />
-        )}
-      </ConfidentialContextGate>
+      <ContentEmbed
+        url={appendGatedContextAddress(embedUrl, walletAddress)}
+        thumbnailUrl={appendOptionalGatedContextAddress(item.thumbnailUrl, walletAddress)}
+        title={item.title}
+        description={item.description}
+        compact={compact}
+        showTextHeading={false}
+        isActive={isActive}
+        interactionMode={interactionMode}
+        imageFit="contain"
+        enableImageLightbox={Boolean(activeMediaIsImage)}
+        imageLightboxTriggerLabel="Open question image"
+        imageLightboxModalLabel={item.title ? `Image for ${item.title}` : "Question image"}
+      />
       {hasCarouselControls ? (
         <>
           <button
@@ -450,6 +523,42 @@ function ContentMediaCarousel({
   );
 }
 
+function GatedQuestionDescription({
+  className,
+  description,
+  item,
+  referencedContentById,
+  walletAddress,
+}: {
+  className?: string;
+  description: string;
+  item: ContentItem;
+  referencedContentById?: ReadonlyMap<string, QuestionReferenceContentSummary>;
+  walletAddress?: string;
+}) {
+  const privateContext = isPrivateContextMetadata(item);
+  const manifestQuery = useGatedContextManifest({
+    contentId: item.id,
+    enabled: privateContext && Boolean(walletAddress),
+    walletAddress,
+  });
+  const primaryDetails = privateContext ? manifestQuery.data?.details[0] : null;
+
+  return (
+    <QuestionDescription
+      description={description}
+      detailsHash={primaryDetails?.sha256 ?? item.detailsHash}
+      detailsUrl={
+        privateContext
+          ? (primaryDetails?.url ?? appendOptionalGatedContextAddress(item.detailsUrl, walletAddress))
+          : item.detailsUrl
+      }
+      referencedContentById={referencedContentById}
+      className={className}
+    />
+  );
+}
+
 function FeedContentMetaCard({
   item,
   submitterProfile,
@@ -471,10 +580,10 @@ function FeedContentMetaCard({
   const [showShare, setShowShare] = useState(false);
   const hasFollowButton = !(normalizedAddress && item.submitter.toLowerCase() === normalizedAddress);
   const description = item.description.trim();
-  const hasDescription = description.length > 0 || Boolean(item.detailsUrl);
   const contextUrl = item.url.trim();
   const contextLabel = getSourceLabel(contextUrl);
   const privateContext = isPrivateContextMetadata(item);
+  const hasDescription = description.length > 0 || Boolean(item.detailsUrl) || privateContext;
   const hasContextLink = !privateContext && contextUrl.length > 0 && contextLabel.trim().length > 0;
   const rewardPoolTotal = getVisibleRewardPoolAmount(item);
   const rewardPoolCurrency = item.rewardPoolSummary?.currency;
@@ -530,12 +639,12 @@ function FeedContentMetaCard({
     </>
   );
   const questionDescription = (walletAddress?: string) => (
-    <QuestionDescription
+    <GatedQuestionDescription
       description={description}
-      detailsHash={item.detailsHash}
-      detailsUrl={privateContext ? appendOptionalGatedContextAddress(item.detailsUrl, walletAddress) : item.detailsUrl}
+      item={item}
       referencedContentById={referencedContentById}
       className="text-base leading-relaxed text-base-content/85"
+      walletAddress={walletAddress}
     />
   );
 
