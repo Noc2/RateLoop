@@ -287,6 +287,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     function setRaterRegistry(address value) external onlyRole(CONFIG_ROLE) {
         if (value == address(0)) revert InvalidAddress();
         _validateRaterRegistry(value);
+        _validateConfiguredConfidentialityEscrowRaterRegistry(value);
         raterRegistry = value;
         emit RaterRegistryUpdated(value);
     }
@@ -630,6 +631,16 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         }
         try RaterRegistry(value).getHumanCredential(address(0)) returns (RaterRegistry.HumanCredential memory) { }
         catch {
+            revert InvalidConfig();
+        }
+    }
+
+    function _validateConfiguredConfidentialityEscrowRaterRegistry(address value) internal view {
+        address escrow = confidentialityEscrow;
+        if (escrow == address(0)) return;
+        try RaterRegistry(value).confidentialityEscrow() returns (address registryEscrow) {
+            if (registryEscrow != escrow) revert InvalidConfig();
+        } catch {
             revert InvalidConfig();
         }
     }

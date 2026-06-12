@@ -614,7 +614,7 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         address oldEscrow = confidentialityEscrow;
         if (newEscrow == address(0) || (oldEscrow != address(0) && newEscrow != oldEscrow)) revert InvalidAddress();
         (address registry_,) = IConfidentialityEscrow(newEscrow).confidentialityEscrowConfigShape();
-        if (registry_ != address(this)) revert InvalidAddress();
+        if (registry_ != address(this) && registry_.code.length == 0) revert InvalidAddress();
         confidentialityEscrow = newEscrow;
     }
 

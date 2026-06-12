@@ -411,6 +411,13 @@ contract ConfidentialityEscrowTest is VotingTestBase {
 
         RaterRegistry replacementRegistry = _deployRaterRegistry(owner);
         vm.prank(owner);
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        protocolConfig.setRaterRegistry(address(replacementRegistry));
+
+        vm.prank(owner);
+        replacementRegistry.setConfidentialityEscrow(address(confidentialityEscrow));
+
+        vm.prank(owner);
         protocolConfig.setRaterRegistry(address(replacementRegistry));
         assertEq(protocolConfig.raterRegistry(), address(replacementRegistry));
 
@@ -428,6 +435,18 @@ contract ConfidentialityEscrowTest is VotingTestBase {
         );
 
         assertTrue(raterRegistry.isIdentityKeyBanned(raterRegistry.addressIdentityKey(voter1)));
+
+        vm.prank(owner);
+        replacementRegistry.banIdentity(
+            RaterRegistry.HumanCredentialProvider.SeededHuman,
+            VOTER1_ANCHOR,
+            uint64(block.timestamp + 365 days),
+            "replacement registry ban after rotation",
+            keccak256("replacement-registry-ban")
+        );
+        bytes32 replacementCredentialKey =
+            replacementRegistry.credentialIdentityKey(RaterRegistry.HumanCredentialProvider.SeededHuman, VOTER1_ANCHOR);
+        assertTrue(replacementRegistry.isIdentityKeyBanned(replacementCredentialKey));
     }
 
     function testZeroBondGatedOpenRoundRecordsBanNexus() public {
