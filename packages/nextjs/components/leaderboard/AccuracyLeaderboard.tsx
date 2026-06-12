@@ -217,11 +217,11 @@ export function AccuracyLeaderboard() {
     <div className="surface-card rounded-2xl p-6 space-y-3">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h2 className={surfaceSectionHeadingClassName}>Leaderboard</h2>
-        <div className="flex w-full rounded-full bg-base-200 p-1 sm:w-auto">
+        <div className="flex w-full gap-2 sm:w-auto">
           <button
             type="button"
-            className={`tab-control flex-1 px-4 py-1.5 text-sm font-medium transition-colors sm:flex-none ${
-              mode === "accuracy" ? "pill-active" : "pill-inactive"
+            className={`btn btn-sm h-11 min-h-11 flex-1 px-4 text-base font-medium sm:flex-none ${
+              mode === "accuracy" ? "btn-primary" : "btn-secondary"
             }`}
             onClick={() => setMode("accuracy")}
           >
@@ -229,8 +229,8 @@ export function AccuracyLeaderboard() {
           </button>
           <button
             type="button"
-            className={`tab-control flex-1 px-4 py-1.5 text-sm font-medium transition-colors sm:flex-none ${
-              mode === "earnings" ? "pill-active" : "pill-inactive"
+            className={`btn btn-sm h-11 min-h-11 flex-1 px-4 text-base font-medium sm:flex-none ${
+              mode === "earnings" ? "btn-primary" : "btn-secondary"
             }`}
             onClick={() => {
               if (earningsItems.length === 0) setEarningsLoading(true);
