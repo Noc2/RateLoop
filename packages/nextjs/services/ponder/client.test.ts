@@ -216,6 +216,52 @@ test("fetchPonderJson dedupes in-flight identical requests", async () => {
   assert.equal(calls, 1);
 });
 
+test("ponderApi.syncQuestionMetadata preflights deployment and sends the expected key", async () => {
+  const originalFetch = globalThis.fetch;
+  const expectedDeploymentKey = TEST_PONDER_DEPLOYMENT?.deploymentKey;
+  assert.equal(typeof expectedDeploymentKey, "string");
+  const requestedUrls: string[] = [];
+  let postedBody: Record<string, unknown> | null = null;
+
+  globalThis.fetch = (async (input, init) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    requestedUrls.push(url);
+    const preflightResponse = healthyPonderPreflightResponse(url);
+    if (preflightResponse) return preflightResponse;
+    postedBody = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+    return new Response(JSON.stringify({ updated: 1, skipped: 0, errors: [] }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    invalidatePonderCache();
+
+    const result = await ponderApi.syncQuestionMetadata([
+      {
+        contentId: "42",
+        questionMetadata: { schemaVersion: "rateloop.question.v3", title: "Question" },
+        questionMetadataHash: `0x${"2".repeat(64)}`,
+        questionMetadataUri: `https://rateloop.ai/question-metadata/0x${"2".repeat(64)}`,
+        resultSpecHash: `0x${"3".repeat(64)}`,
+        targetAudience: null,
+      },
+    ]);
+
+    assert.equal(result.updated, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+    invalidatePonderCache();
+  }
+
+  assert.match(requestedUrls[0] ?? "", /\/health$/);
+  assert.match(requestedUrls[1] ?? "", /\/deployment$/);
+  assert.match(requestedUrls[2] ?? "", /\/question-metadata$/);
+  const postedDeploymentKey = (postedBody as Record<string, unknown> | null)?.deploymentKey;
+  assert.equal(postedDeploymentKey, expectedDeploymentKey);
+});
+
 test("ponderApi.getContentWindow respects hasMore when search totals are omitted", async () => {
   const originalGetContent = ponderApi.getContent;
   let callCount = 0;

@@ -378,15 +378,16 @@ export function invalidatePonderCache() {
   availabilityPromise = null;
 }
 
-async function assertPonderAvailableForDataRead() {
+async function assertPonderAvailableForDeployment() {
   const status = await getPonderAvailabilityStatus();
   if (!status.available) {
     throw new Error(`Ponder is unavailable for this deployment: ${status.reason ?? "unknown"}`);
   }
+  return status;
 }
 
 export async function ponderGet<T>(path: string, params?: Record<string, string | undefined>): Promise<T> {
-  await assertPonderAvailableForDataRead();
+  await assertPonderAvailableForDeployment();
   const url = new URL(`${getRequiredPonderUrl()}${path}`);
   if (params) {
     for (const [key, value] of Object.entries(params)) {
@@ -399,6 +400,7 @@ export async function ponderGet<T>(path: string, params?: Record<string, string 
 }
 
 async function ponderPost<T>(path: string, body: unknown): Promise<T> {
+  await assertPonderAvailableForDeployment();
   const url = new URL(`${getRequiredPonderUrl()}${path}`);
   const response = await fetch(url, {
     body: JSON.stringify(body),
@@ -1421,7 +1423,9 @@ export const ponderApi = {
   },
 
   syncQuestionMetadata(metadata: PonderQuestionMetadataItem[]) {
+    const deployment = getExpectedPonderDeploymentScope();
     return ponderPost<PonderQuestionMetadataSyncResponse>("/question-metadata", {
+      deploymentKey: deployment?.deploymentKey ?? null,
       metadata,
     });
   },

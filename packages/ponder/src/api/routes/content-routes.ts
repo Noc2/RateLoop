@@ -40,6 +40,7 @@ import {
   getRecentProfileEarnings,
 } from "../earnings.js";
 import { getFollowStatsMap } from "../follow-utils.js";
+import { resolvePonderProtocolDeploymentMetadata } from "../../protocol-deployment.js";
 import type { ApiApp } from "../shared.js";
 import { attachOpenRoundSummary, jsonBig, parseBigIntList } from "../shared.js";
 import {
@@ -770,6 +771,10 @@ function isJsonRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function readDeploymentKey(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim().toLowerCase() : null;
+}
+
 function readQuestionMetadataItems(value: unknown) {
   if (!Array.isArray(value)) return [];
   return value.slice(0, MAX_TARGET_AUDIENCE_METADATA_ITEMS).flatMap((entry) => {
@@ -1113,11 +1118,27 @@ export function registerContentRoutes(app: ApiApp) {
     } catch {
       return c.json({ error: "Invalid JSON body." }, 400);
     }
-    const metadata = readQuestionMetadataItems(
-      body && typeof body === "object" && !Array.isArray(body)
-        ? (body as Record<string, unknown>).metadata
-        : null,
-    );
+    const bodyRecord = isJsonRecord(body) ? body : null;
+    const deployment = resolvePonderProtocolDeploymentMetadata();
+    if (!deployment) {
+      return c.json({ error: "Ponder deployment metadata is not configured." }, 503);
+    }
+    const callerDeploymentKey = readDeploymentKey(bodyRecord?.deploymentKey);
+    if (!callerDeploymentKey) {
+      return c.json({ error: "deploymentKey is required." }, 400);
+    }
+    if (callerDeploymentKey !== deployment.deploymentKey) {
+      return c.json(
+        {
+          error: "deploymentKey does not match this Ponder deployment.",
+          expectedDeploymentKey: deployment.deploymentKey,
+          receivedDeploymentKey: callerDeploymentKey,
+        },
+        409,
+      );
+    }
+
+    const metadata = readQuestionMetadataItems(bodyRecord?.metadata);
     if (metadata.length === 0) {
       return c.json({ error: "metadata is required." }, 400);
     }

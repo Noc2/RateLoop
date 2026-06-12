@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { canonicalJson, canonicalJsonHash } from "@rateloop/node-utils/json";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { resolvePonderProtocolDeploymentMetadata } from "../src/protocol-deployment.js";
 
 function serializeExpression(value: unknown) {
   return JSON.stringify(value, (_key, current) =>
@@ -664,9 +665,12 @@ describe("registerContentRoutes", () => {
         title: "Public-safe prototype title",
       };
       const questionMetadataHash = canonicalJsonHash(questionMetadata);
+      const deployment = resolvePonderProtocolDeploymentMetadata();
+      expect(deployment).not.toBeNull();
 
       const response = await app.request("http://localhost/question-metadata", {
         body: JSON.stringify({
+          deploymentKey: deployment?.deploymentKey,
           metadata: [
             {
               contentId: "42",
@@ -707,6 +711,80 @@ describe("registerContentRoutes", () => {
       } else {
         process.env.PONDER_NETWORK = originalPonderNetwork;
       }
+    }
+  });
+
+  it("rejects metadata sync writes for a different deployment key", async () => {
+    const originalDatabaseUrl = process.env.DATABASE_URL;
+    const originalNodeEnv = process.env.NODE_ENV;
+    const originalPonderNetwork = process.env.PONDER_NETWORK;
+    const query = vi.fn(async () => ({ rowCount: 1 }));
+    vi.doMock("pg", () => ({
+      Pool: vi.fn(function MockPool() {
+        return { query };
+      }),
+    }));
+    process.env.DATABASE_URL = "postgres://localhost/rateloop";
+    process.env.NODE_ENV = "test";
+    process.env.PONDER_NETWORK = "hardhat";
+
+    try {
+      mockPonderModules([]);
+      const { registerContentRoutes } = await import(
+        "../src/api/routes/content-routes.js"
+      );
+
+      const app = new Hono();
+      registerContentRoutes(app);
+      const questionMetadata = {
+        schemaVersion: "rateloop.question.v3",
+        title: "Public-safe prototype title",
+      };
+      const questionMetadataHash = canonicalJsonHash(questionMetadata);
+      const deployment = resolvePonderProtocolDeploymentMetadata();
+      expect(deployment).not.toBeNull();
+
+      const response = await app.request("http://localhost/question-metadata", {
+        body: JSON.stringify({
+          deploymentKey: `${deployment?.deploymentKey}:stale`,
+          metadata: [
+            {
+              contentId: "42",
+              questionMetadata,
+              questionMetadataHash,
+              resultSpecHash: `0x${"3".repeat(64)}`,
+            },
+          ],
+        }),
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      });
+
+      expect(response.status).toBe(409);
+      expect(await response.json()).toMatchObject({
+        error: "deploymentKey does not match this Ponder deployment.",
+        expectedDeploymentKey: deployment?.deploymentKey,
+        receivedDeploymentKey: `${deployment?.deploymentKey}:stale`,
+      });
+      expect(query).not.toHaveBeenCalled();
+    } finally {
+      if (originalDatabaseUrl === undefined) {
+        delete process.env.DATABASE_URL;
+      } else {
+        process.env.DATABASE_URL = originalDatabaseUrl;
+      }
+      if (originalNodeEnv === undefined) {
+        delete process.env.NODE_ENV;
+      } else {
+        process.env.NODE_ENV = originalNodeEnv;
+      }
+      if (originalPonderNetwork === undefined) {
+        delete process.env.PONDER_NETWORK;
+      } else {
+        process.env.PONDER_NETWORK = originalPonderNetwork;
+      }
+      vi.doUnmock("pg");
+      vi.resetModules();
     }
   });
 
