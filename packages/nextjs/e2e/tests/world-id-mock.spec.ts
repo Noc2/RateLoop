@@ -9,7 +9,7 @@ test.describe("World ID local mock", () => {
   test("attests an active human credential on-chain", async ({ page }) => {
     test.setTimeout(90_000);
 
-    const account = ANVIL_ACCOUNTS.account2;
+    const account = ANVIL_ACCOUNTS.account11;
     const registryAddress = CONTRACT_ADDRESSES.RaterRegistry;
 
     await setupWallet(page, account.privateKey);

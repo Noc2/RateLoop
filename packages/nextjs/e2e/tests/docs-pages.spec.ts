@@ -71,7 +71,7 @@ test.describe("Documentation pages", () => {
     await page.goto("/docs/how-it-works#eligible-settled-rounds", { waitUntil: "domcontentloaded" });
 
     await expect(page.getByRole("heading", { name: "Launch LREP Credits" })).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByText(/effective credit = finalized independence weight/i)).toBeVisible();
+    await expect(page.getByText(/finalized independence weight for round r/i)).toBeVisible();
     await expect(page.getByText(/self-verified/i)).toHaveCount(0);
 
     await page.goto("/docs/tokenomics", { waitUntil: "domcontentloaded" });
