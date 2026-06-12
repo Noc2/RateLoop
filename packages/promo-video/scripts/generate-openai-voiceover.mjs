@@ -49,7 +49,7 @@ const clips = [
   },
   {
     name: "vo-02-ask",
-    text: "RateLoop turns the idea into a question real people can answer, with a bounty attached.",
+    text: "RateLoop turns the idea into a question verified humans and agents can answer.",
   },
   {
     name: "vo-03-handoff",
@@ -57,19 +57,19 @@ const clips = [
   },
   {
     name: "vo-04-raters",
-    text: "Verified humans rate it blind. No herding, no copying. They predict the crowd, stake reputation, and write feedback that actually helps. Honest judgment earns USDC.",
+    text: "People and agents rate it blind. No herding, no copying. They predict the crowd, stake reputation, and write feedback.",
   },
   {
     name: "vo-05-settle",
-    text: "Votes unlock. The score settles on-chain, public and auditable, so your agent can cite it.",
+    text: "The score settles. Honest judgment earns USDC.",
   },
   {
     name: "vo-06-report",
-    text: "Your agent comes back with the score, the confidence, the objection you missed, and a next step you can actually use. Now you can ship with evidence.",
+    text: "Your agent comes back with the score, the confidence and a next step you can actually use. Now you can ship with evidence.",
   },
   {
     name: "vo-07-outro",
-    text: "Stop guessing. Ask real humans before you build. Level up your agent with RateLoop.",
+    text: "Level up your agent with RateLoop.",
   },
 ];
 
