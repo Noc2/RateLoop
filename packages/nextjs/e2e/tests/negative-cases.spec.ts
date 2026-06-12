@@ -89,7 +89,7 @@ test.describe("Negative cases", () => {
 
     const confirmBtn = stakeModal.getByRole("button", { name: /Stake \d+/i });
     await expect(confirmBtn).toBeVisible({ timeout: 5_000 });
-    await page.waitForTimeout(300); // let React settle before confirm click
+    await expect(confirmBtn).toBeEnabled({ timeout: 5_000 });
     await confirmBtn.click();
 
     // Wait for success or error (includes approval failures).

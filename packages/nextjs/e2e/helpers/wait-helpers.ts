@@ -22,7 +22,7 @@ const DEFAULT_E2E_TIMEOUT_MS = 30_000;
 const CI_MIN_E2E_TIMEOUT_MS = 60_000;
 const WALLET_CONNECT_RECOVERY_WAIT_MS = 12_000;
 const WALLET_CONNECT_CLICK_TIMEOUT_MS = 5_000;
-const VOTE_FEED_NAVIGATION_SETTLE_MS = 300;
+const VOTE_FEED_NAVIGATION_TIMEOUT_MS = 2_000;
 
 function isRetriableGotoError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
@@ -303,9 +303,21 @@ export async function cycleVoteFeedForVisible(
       break;
     }
 
-    await page.locator('article[aria-current="true"]').first().focus({ timeout: 1_000 }).catch(() => undefined);
+    const activeCard = page.locator('article[aria-current="true"]').first();
+    const previousIndex = await activeCard.getAttribute("data-feed-card-index", { timeout: 1_000 }).catch(() => null);
+
+    await activeCard.focus({ timeout: 1_000 }).catch(() => undefined);
     await page.keyboard.press("PageDown");
-    await page.waitForTimeout(VOTE_FEED_NAVIGATION_SETTLE_MS);
+    await page
+      .waitForFunction(
+        index => {
+          const active = document.querySelector('article[aria-current="true"]');
+          return active?.getAttribute("data-feed-card-index") !== index;
+        },
+        previousIndex,
+        { timeout: Math.min(timeout, VOTE_FEED_NAVIGATION_TIMEOUT_MS) },
+      )
+      .catch(() => undefined);
   }
 
   return false;

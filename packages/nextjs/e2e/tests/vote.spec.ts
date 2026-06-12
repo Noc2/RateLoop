@@ -3,7 +3,13 @@ import { newE2EContext } from "../helpers/browser-context";
 import { setupWallet } from "../helpers/wallet-session";
 import { createFreshVoteableContent } from "../helpers/voteable-content";
 import { voteOnSpecificContent } from "../helpers/vote-helpers";
-import { VOTE_DOWN_BUTTON_NAME, VOTE_UP_BUTTON_NAME, gotoWithRetry, waitForFeedLoaded } from "../helpers/wait-helpers";
+import {
+  FEED_EMPTY_STATE_RE,
+  VOTE_DOWN_BUTTON_NAME,
+  VOTE_UP_BUTTON_NAME,
+  gotoWithRetry,
+  waitForFeedLoaded,
+} from "../helpers/wait-helpers";
 import { expect, test } from "@playwright/test";
 
 test.describe("Voting flow — 3-voter threshold", () => {
@@ -44,7 +50,7 @@ test.describe("Voting flow — 3-voter threshold", () => {
       .or(page.getByText(/Cooldown/))
       .or(page.getByText(/Voted(?: hidden| Up| Down)?/i))
       .or(page.getByText("Round full"))
-      .or(page.getByText("No questions have been asked yet"))
+      .or(page.getByText(FEED_EMPTY_STATE_RE))
       .or(page.getByRole("feed", { name: "Content feed" }).getByRole("article"));
 
     await expect(connectedIndicators.first()).toBeVisible({ timeout: 15_000 });

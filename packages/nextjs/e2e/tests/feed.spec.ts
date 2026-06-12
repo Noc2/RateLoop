@@ -1,6 +1,6 @@
 import { expect, test } from "../fixtures/wallet";
 import { getContentById } from "../helpers/ponder-api";
-import { VOTE_UP_BUTTON_NAME, gotoWithRetry, waitForFeedLoaded } from "../helpers/wait-helpers";
+import { FEED_EMPTY_STATE_RE, VOTE_UP_BUTTON_NAME, gotoWithRetry, waitForFeedLoaded } from "../helpers/wait-helpers";
 
 test.describe("Content feed", () => {
   test("displays content items at /rate", async ({ connectedPage: page }) => {
@@ -14,7 +14,7 @@ test.describe("Content feed", () => {
       .or(page.getByText("Your question"))
       .or(page.getByText("Round full"))
       .or(page.getByText(/Cooldown/))
-      .or(page.getByText("No questions have been asked yet"))
+      .or(page.getByText(FEED_EMPTY_STATE_RE))
       .or(page.getByRole("feed", { name: "Content feed" }).getByRole("article"));
     await expect(anyState.first()).toBeVisible({ timeout: 15_000 });
   });
@@ -33,7 +33,7 @@ test.describe("Content feed", () => {
     await gotoWithRetry(page, "/rate", { ensureWalletConnected: true, timeout: 45_000 });
     await waitForFeedLoaded(page, 30_000);
 
-    const filterPill = page.getByRole("button", { name: /^View$/i }).first();
+    const filterPill = page.getByRole("button", { name: /^View(?:: .+)?$/i }).first();
     await expect(filterPill).toBeVisible({ timeout: 10_000 });
   });
 

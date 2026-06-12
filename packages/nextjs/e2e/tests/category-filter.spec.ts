@@ -16,7 +16,7 @@ test.describe("Category filter", () => {
    */
   async function findVisibleCategoryPill(page: any) {
     // Wait for the "All" button to appear — this confirms the category bar is rendered
-    const allButton = page.getByRole("button", { name: /^All$/i }).first();
+    const allButton = page.getByTestId("category-filter-pill").filter({ hasText: /^All$/i }).first();
     await allButton.waitFor({ state: "visible", timeout: 10_000 }).catch(() => null);
 
     // Prefer categories that the local deploy helper seeds with content so the
@@ -35,19 +35,19 @@ test.describe("Category filter", () => {
     const deadline = Date.now() + 10_000;
     while (Date.now() < deadline) {
       for (const name of knownCategories) {
-        const pill = page.getByRole("button", { name, exact: true }).first();
+        const pill = page.getByTestId("category-filter-pill").filter({ hasText: new RegExp(`^${name}$`, "i") }).first();
         const isVisible = await pill.isVisible().catch(() => false);
         if (isVisible) {
           return { name, locator: pill };
         }
       }
 
-      const pills = page.locator("main").getByRole("button");
+      const pills = page.getByTestId("category-filter-pill");
       const count = await pills.count();
       for (let i = 0; i < count; i++) {
         const pill = pills.nth(i);
         const text = (await pill.textContent())?.trim() ?? "";
-        if (!text || text === "All" || text === "View" || /^\+\d+ more/.test(text) || text.length < 2) {
+        if (!text || text === "All" || text.length < 2) {
           continue;
         }
 
@@ -87,7 +87,7 @@ test.describe("Category filter", () => {
     await loadVoteFeed(page, "/rate#media");
 
     // Click "All" pill
-    const allPill = page.getByRole("button", { name: /^All$/i }).first();
+    const allPill = page.getByTestId("category-filter-pill").filter({ hasText: /^All$/i }).first();
     await expect(allPill).toBeVisible({ timeout: 10_000 });
     await allPill.click();
     await page.waitForFunction(() => !window.location.hash, { timeout: 5_000 });
@@ -109,16 +109,18 @@ test.describe("Category filter", () => {
     // Navigate with that hash
     await loadVoteFeed(page, `/rate#${hash}`);
 
-    // The pill should have the active class
-    const activePill = page.getByRole("button", { name: new RegExp(`^${pill!.name}$`, "i") }).first();
-    await expect(activePill).toHaveClass(/pill-category/);
+    const activePill = page
+      .getByTestId("category-filter-pill")
+      .filter({ hasText: new RegExp(`^${pill!.name}$`, "i") })
+      .first();
+    await expect(activePill).toHaveAttribute("aria-pressed", "true");
   });
 
   test("overflow dropdown opens with search", async ({ connectedPage: page }) => {
     await page.setViewportSize({ width: 640, height: 900 });
     await loadVoteFeed(page);
 
-    const moreButton = page.getByRole("button", { name: /^\+\d+ more$/i });
+    const moreButton = page.getByTestId("category-filter-overflow-trigger");
     await expect(moreButton, "category filter should overflow at the narrow E2E viewport").toBeVisible({
       timeout: 10_000,
     });
@@ -126,15 +128,14 @@ test.describe("Category filter", () => {
     await moreButton.click();
 
     // Search input should appear with the correct aria-label
-    const searchInput = page.getByRole("textbox", { name: "Search categories" });
+    const searchInput = page.getByTestId("category-filter-search");
     await expect(searchInput).toBeVisible({ timeout: 3_000 });
 
-    // Scope to the dropdown container (absolute-positioned div with .menu inside)
-    const dropdown = page.locator(".rounded-box .menu");
+    const dropdown = page.getByTestId("category-filter-overflow-menu");
     await expect(dropdown).toBeVisible({ timeout: 3_000 });
 
     // Read a category that's actually in the overflow dropdown
-    const overflowItems = dropdown.locator("button");
+    const overflowItems = dropdown.getByTestId("category-filter-option");
     const firstItem = overflowItems.first();
     const firstItemVisible = await firstItem.isVisible({ timeout: 2_000 }).catch(() => false);
     expect(firstItemVisible).toBe(true);

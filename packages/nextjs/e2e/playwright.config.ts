@@ -1,10 +1,15 @@
 import { E2E_BASE_URL } from "./helpers/service-urls";
 import { defineConfig, devices } from "@playwright/test";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const specFile = (name: string) => new RegExp(`(^|[/\\\\])${escapeRegex(name)}\\.spec\\.[cm]?[jt]sx?$`);
 const specFiles = (...names: string[]) =>
   new RegExp(`(^|[/\\\\])(?:${names.map(escapeRegex).join("|")})\\.spec\\.[cm]?[jt]sx?$`);
+const E2E_DIR = dirname(fileURLToPath(import.meta.url));
+const PLAYWRIGHT_REPORT_DIR = resolve(E2E_DIR, "playwright-report");
+const PLAYWRIGHT_TEST_RESULTS_DIR = resolve(E2E_DIR, "test-results");
 
 const BROWSER_COMPAT_TESTS = specFile("browser-compat");
 const RESPONSIVE_LAYOUT_TESTS = specFile("responsive-layout");
@@ -88,10 +93,10 @@ export default defineConfig({
     ? [
         ["github"],
         ["./reporters/no-unexpected-skips.ts"],
-        ["html", { open: "never", outputFolder: "playwright-report" }],
+        ["html", { open: "never", outputFolder: PLAYWRIGHT_REPORT_DIR }],
       ]
-    : [["./reporters/no-unexpected-skips.ts"], ["html"]],
-  outputDir: "test-results",
+    : [["./reporters/no-unexpected-skips.ts"], ["html", { outputFolder: PLAYWRIGHT_REPORT_DIR }]],
+  outputDir: PLAYWRIGHT_TEST_RESULTS_DIR,
   timeout: 60_000, // On-chain tx confirmation needs time
 
   use: {

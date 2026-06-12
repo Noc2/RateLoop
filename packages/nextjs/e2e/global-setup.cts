@@ -151,6 +151,7 @@ async function globalSetup() {
     throw new Error(
       `E2E infrastructure not ready:\n${failures.join("\n")}\n\n` +
         "  Quick start:\n" +
+        "    Check first: yarn workspace @rateloop/nextjs e2e:preflight\n" +
         "    Terminal 1: yarn chain\n" +
         "    Terminal 2: yarn deploy\n" +
         "    Terminal 3: yarn dev:stack\n\n" +

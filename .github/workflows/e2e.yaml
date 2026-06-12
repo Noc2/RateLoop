@@ -151,14 +151,10 @@ jobs:
         run: yarn workspace @rateloop/nextjs serve &
 
       - name: Wait for services
-        run: |
-          # Wait for Next.js
-          timeout 120 bash -c 'until curl -s http://localhost:3000 > /dev/null 2>&1; do sleep 2; done'
-          echo "✓ Next.js ready"
-
-          # Wait for Ponder
-          timeout 300 bash -c 'until curl -sf http://127.0.0.1:42069/status > /dev/null 2>&1; do sleep 2; done'
-          echo "✓ Ponder ready"
+        env:
+          E2E_PREFLIGHT_TIMEOUT_MS: "300000"
+          NEXT_PUBLIC_PONDER_URL: http://127.0.0.1:42069
+        run: yarn workspace @rateloop/nextjs e2e:preflight
 
       - name: Warm critical Next.js routes
         if: matrix.warm_routes
@@ -313,14 +309,10 @@ jobs:
         run: yarn workspace @rateloop/nextjs serve &
 
       - name: Wait for services
-        run: |
-          # Wait for Next.js
-          timeout 120 bash -c 'until curl -s http://localhost:3000 > /dev/null 2>&1; do sleep 2; done'
-          echo "✓ Next.js ready"
-
-          # Wait for Ponder
-          timeout 300 bash -c 'until curl -sf http://127.0.0.1:42069/status > /dev/null 2>&1; do sleep 2; done'
-          echo "✓ Ponder ready"
+        env:
+          E2E_PREFLIGHT_TIMEOUT_MS: "300000"
+          NEXT_PUBLIC_PONDER_URL: http://127.0.0.1:42069
+        run: yarn workspace @rateloop/nextjs e2e:preflight
 
       - name: Warm critical Next.js routes
         if: matrix.warm_routes

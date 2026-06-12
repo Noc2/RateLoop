@@ -92,6 +92,7 @@
     "sdk:test": "yarn workspace @rateloop/sdk test",
     "sdk:check-types": "yarn workspace @rateloop/sdk check-types",
     "e2e": "yarn workspace @rateloop/nextjs e2e",
+    "e2e:preflight": "yarn workspace @rateloop/nextjs e2e:preflight",
     "e2e:ci:app": "yarn workspace @rateloop/nextjs e2e:ci:app",
     "e2e:ci:full": "yarn workspace @rateloop/nextjs e2e:ci:full",
     "e2e:ui": "yarn workspace @rateloop/nextjs e2e:ui",

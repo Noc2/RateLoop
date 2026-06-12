@@ -215,7 +215,7 @@ export function CategoryFilter({ categories, activeCategory, onSelect, pillClass
   };
 
   return (
-    <div ref={containerRef} className="shrink-0 sm:flex-1 sm:min-w-0 relative">
+    <div ref={containerRef} data-testid="category-filter" className="shrink-0 sm:flex-1 sm:min-w-0 relative">
       {/* Hidden measurement row */}
       <div
         ref={measureRef}
@@ -240,6 +240,7 @@ export function CategoryFilter({ categories, activeCategory, onSelect, pillClass
           className={`tab-control inline-flex items-center gap-1 px-3 py-1.5 text-base font-medium whitespace-nowrap transition-colors ${
             activeCategory !== categories[0] ? "pill-category" : "pill-inactive"
           }`}
+          data-testid="category-filter-mobile-trigger"
           aria-haspopup="dialog"
           aria-expanded={mobileOpen}
           aria-label={`Category: ${activeCategory}`}
@@ -259,6 +260,7 @@ export function CategoryFilter({ categories, activeCategory, onSelect, pillClass
               />
               <div
                 className="fixed inset-x-0 bottom-0 z-40 rounded-t-3xl bg-base-200 p-4 shadow-2xl sm:hidden"
+                data-testid="category-filter-mobile-dialog"
                 role="dialog"
                 aria-label="Category options"
               >
@@ -289,6 +291,7 @@ export function CategoryFilter({ categories, activeCategory, onSelect, pillClass
                     name="category-search-mobile"
                     type="text"
                     placeholder="Search categories..."
+                    data-testid="category-filter-search"
                     aria-label="Search categories"
                     value={search}
                     onChange={e => setSearch(e.target.value)}
@@ -305,6 +308,9 @@ export function CategoryFilter({ categories, activeCategory, onSelect, pillClass
                           key={category}
                           type="button"
                           onClick={() => handleSelect(category)}
+                          data-testid="category-filter-option"
+                          data-category={category}
+                          aria-pressed={isActive}
                           className={`flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left text-base font-medium transition-colors ${
                             isActive ? "choice-row-active" : "choice-row-inactive"
                           }`}
@@ -334,6 +340,9 @@ export function CategoryFilter({ categories, activeCategory, onSelect, pillClass
             <button
               key={category}
               onClick={() => handleSelect(category)}
+              data-testid="category-filter-pill"
+              data-category={category}
+              aria-pressed={isActive}
               className={`tab-control px-3 py-1.5 text-base font-medium whitespace-nowrap transition-colors shrink-0 ${custom ?? defaultCls}`}
             >
               {category}
@@ -346,9 +355,12 @@ export function CategoryFilter({ categories, activeCategory, onSelect, pillClass
             <button
               ref={dropdownButtonRef}
               onClick={() => setDropdownOpen(prev => !prev)}
+              data-testid="category-filter-overflow-trigger"
               className={`tab-control px-3 py-1.5 text-base font-medium whitespace-nowrap transition-colors flex items-center gap-1 ${
                 overflow.includes(activeCategory) ? "pill-category" : "pill-inactive"
               }`}
+              aria-haspopup="menu"
+              aria-expanded={dropdownOpen}
             >
               +{overflow.length} more
               <ChevronDownIcon className="w-3.5 h-3.5" />
@@ -358,6 +370,7 @@ export function CategoryFilter({ categories, activeCategory, onSelect, pillClass
               ? createPortal(
                   <div
                     ref={desktopPanelRef}
+                    data-testid="category-filter-overflow-menu"
                     className="fixed z-[1000] bg-base-200 rounded-box shadow-lg"
                     style={{
                       left: desktopLayout?.left ?? 0,
@@ -379,6 +392,7 @@ export function CategoryFilter({ categories, activeCategory, onSelect, pillClass
                           name="category-search-desktop"
                           type="text"
                           placeholder="Search categories..."
+                          data-testid="category-filter-search"
                           aria-label="Search categories"
                           value={search}
                           onChange={e => setSearch(e.target.value)}
@@ -407,6 +421,9 @@ export function CategoryFilter({ categories, activeCategory, onSelect, pillClass
                           <li key={category}>
                             <button
                               onClick={() => handleSelect(category)}
+                              data-testid="category-filter-option"
+                              data-category={category}
+                              aria-pressed={activeCategory === category}
                               className={`whitespace-nowrap ${
                                 activeCategory === category ? "action-orange-control" : ""
                               }`}
