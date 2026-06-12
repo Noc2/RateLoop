@@ -537,12 +537,15 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         returns (bool)
     {
         (bytes32 identityKey,,,,,) = votingEngine.commitIdentityState(contentId, roundId, commitKey);
-        if (identityKey == bytes32(0)) return false;
+        (address voter,,,,,,) = votingEngine.commitCore(contentId, roundId, commitKey);
+        bytes32 voterAddressKey = _addressIdentityKey(voter);
+        if (identityKey == bytes32(0) && voterAddressKey == bytes32(0)) return false;
         address snapshot = votingEngine.roundRaterRegistrySnapshot(contentId, roundId);
         if (_isIdentityBannedAt(snapshot, identityKey)) return true;
+        if (_isIdentityBannedAt(snapshot, voterAddressKey)) return true;
         address current = ProtocolConfig(votingEngine.protocolConfig()).raterRegistry();
         if (current == snapshot) return false;
-        return _isIdentityBannedAt(current, identityKey);
+        return _isIdentityBannedAt(current, identityKey) || _isIdentityBannedAt(current, voterAddressKey);
     }
 
     function _isIdentityBannedAt(address registryAddress, bytes32 identityKey) private view returns (bool) {
@@ -552,6 +555,11 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         } catch {
             return false;
         }
+    }
+
+    function _addressIdentityKey(address account) private pure returns (bytes32) {
+        if (account == address(0)) return bytes32(0);
+        return keccak256(abi.encodePacked("rateloop.address-identity-v1", account));
     }
 
     // --- Frontend Fee Claims ---

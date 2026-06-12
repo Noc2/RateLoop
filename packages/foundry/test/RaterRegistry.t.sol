@@ -1616,6 +1616,28 @@ contract RaterRegistryTest is Test {
         assertTrue(resolved.delegated);
     }
 
+    function test_BannedRawAddressCannotBeRequestedAsDelegate() public {
+        _banRevokedSeededAddress(otherRater, SEEDED_ANCHOR_ID);
+
+        vm.prank(rater);
+        vm.expectRevert(RaterRegistry.InvalidBan.selector);
+        registry.setDelegate(otherRater);
+    }
+
+    function test_BanningPendingDelegateClearsRequestBeforeAcceptance() public {
+        vm.prank(rater);
+        registry.setDelegate(otherRater);
+
+        _banRevokedSeededAddress(otherRater, SEEDED_ANCHOR_ID);
+
+        assertEq(registry.pendingDelegateTo(rater), address(0));
+        assertEq(registry.pendingDelegateOf(otherRater), address(0));
+
+        vm.prank(otherRater);
+        vm.expectRevert(RaterRegistry.NoPendingDelegate.selector);
+        registry.acceptDelegate();
+    }
+
     function test_DelegateCannotChainOrUseOwnCredentialIdentity() public {
         vm.prank(rater);
         registry.setDelegate(otherRater);
@@ -1678,5 +1700,28 @@ contract RaterRegistryTest is Test {
             resolved.identityKey, _credentialKey(RaterRegistry.HumanCredentialProvider.SeededHuman, SEEDED_ANCHOR_ID)
         );
         assertFalse(resolved.delegated);
+    }
+
+    function _banRevokedSeededAddress(address account, bytes32 nullifierHash) internal {
+        MockConfidentialityNexus nexus = new MockConfidentialityNexus();
+        nexus.setNexus(uint8(RaterRegistry.HumanCredentialProvider.SeededHuman), nullifierHash, true);
+
+        vm.prank(admin);
+        registry.setConfidentialityEscrow(address(nexus));
+        vm.prank(admin);
+        registry.seedHumanCredential(account, uint64(block.timestamp + 7 days), nullifierHash, EVIDENCE_HASH);
+
+        vm.prank(governance);
+        registry.banIdentity(
+            RaterRegistry.HumanCredentialProvider.SeededHuman,
+            nullifierHash,
+            uint64(block.timestamp + 30 days),
+            "verified leak",
+            EVIDENCE_HASH
+        );
+
+        vm.prank(admin);
+        registry.revokeHumanCredential(account);
+        assertTrue(registry.isIdentityKeyBanned(registry.addressIdentityKey(account)));
     }
 }

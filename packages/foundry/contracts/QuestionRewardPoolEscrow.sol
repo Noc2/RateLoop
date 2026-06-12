@@ -732,9 +732,10 @@ contract QuestionRewardPoolEscrow is
 
         (bytes32 identityKey, bytes32 commitKey, address rewardRecipient) =
             _resolveQuestionRewardClaim(rewardPool, roundId, msg.sender);
-        require(!_isIdentityBannedForRound(rewardPool.contentId, roundId, identityKey), "Identity banned");
-        require(!_isExcludedClaimant(rewardPool, identityKey, rewardRecipient), "Excluded voter");
         require(commitKey != bytes32(0), "No commit");
+        require(!_isIdentityBannedForRound(rewardPool.contentId, roundId, identityKey), "Identity banned");
+        require(!_isCommitVoterBannedForRound(rewardPool.contentId, roundId, commitKey), "Identity banned");
+        require(!_isExcludedClaimant(rewardPool, identityKey, rewardRecipient), "Excluded voter");
         require(
             _wasQuestionBountyEligibleAtQualification(rewardPool, rewardPoolId, roundId, commitKey),
             "Not bounty eligible"
@@ -845,6 +846,15 @@ contract QuestionRewardPoolEscrow is
         return _isIdentityBannedAt(current, identityKey);
     }
 
+    function _isCommitVoterBannedForRound(uint256 contentId, uint256 roundId, bytes32 commitKey)
+        internal
+        view
+        returns (bool)
+    {
+        (address voter,,,,,,) = votingEngine.commitCore(contentId, roundId, commitKey);
+        return _isIdentityBannedForRound(contentId, roundId, _addressIdentityKey(voter));
+    }
+
     function _isIdentityBannedAt(address registryAddress, bytes32 identityKey) private view returns (bool) {
         if (registryAddress == address(0)) return false;
         try IRaterRegistryStatus(registryAddress).isIdentityKeyBanned(identityKey) returns (bool banned) {
@@ -852,6 +862,11 @@ contract QuestionRewardPoolEscrow is
         } catch {
             return false;
         }
+    }
+
+    function _addressIdentityKey(address account) private pure returns (bytes32) {
+        if (account == address(0)) return bytes32(0);
+        return keccak256(abi.encodePacked("rateloop.address-identity-v1", account));
     }
 
     /// @dev Extracted out of `_claimQuestionReward` so the 9/12-arg library calls do not coexist

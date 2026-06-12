@@ -41,7 +41,7 @@ library VotePreflightLib {
         address voter,
         uint256 contentId
     ) external view returns (IRaterIdentityRegistry.ResolvedRater memory resolved) {
-        resolved = resolveRater(identityRegistry, voter);
+        resolved = _resolveUnbannedRater(identityRegistry, voter);
         _validateContentAndNotSubmitter(registry, voter, contentId, resolved);
     }
 
@@ -52,7 +52,7 @@ library VotePreflightLib {
         uint256 contentId,
         address confidentialityEscrow
     ) external view returns (IRaterIdentityRegistry.ResolvedRater memory resolved) {
-        resolved = resolveRater(identityRegistry, voter);
+        resolved = _resolveUnbannedRater(identityRegistry, voter);
         _validateContentAndNotSubmitter(registry, voter, contentId, resolved);
         _validateConfidentialityGate(identityRegistry, confidentialityEscrow, contentId, resolved);
     }
@@ -64,7 +64,7 @@ library VotePreflightLib {
         uint256 contentId,
         address confidentialityEscrow
     ) external returns (IRaterIdentityRegistry.ResolvedRater memory resolved) {
-        resolved = resolveRater(identityRegistry, voter);
+        resolved = _resolveUnbannedRater(identityRegistry, voter);
         _validateContentAndNotSubmitter(registry, voter, contentId, resolved);
         if (_validateConfidentialityGate(identityRegistry, confidentialityEscrow, contentId, resolved)) {
             IConfidentialityEscrow(confidentialityEscrow).recordConfidentialityNexus(contentId, resolved.holder);
@@ -78,7 +78,7 @@ library VotePreflightLib {
         uint256 contentId,
         address confidentialityEscrow
     ) external view {
-        IRaterIdentityRegistry.ResolvedRater memory resolved = resolveRater(identityRegistry, opener);
+        IRaterIdentityRegistry.ResolvedRater memory resolved = _resolveUnbannedRater(identityRegistry, opener);
         _validateContentAndNotSubmitter(registry, opener, contentId, resolved);
         _validateConfidentialityGate(identityRegistry, confidentialityEscrow, contentId, resolved);
     }
@@ -148,6 +148,20 @@ library VotePreflightLib {
     function addressIdentityKey(address account) public pure returns (bytes32) {
         if (account == address(0)) return bytes32(0);
         return keccak256(abi.encodePacked("rateloop.address-identity-v1", account));
+    }
+
+    function _resolveUnbannedRater(IRaterIdentityRegistry identityRegistry, address actor)
+        private
+        view
+        returns (IRaterIdentityRegistry.ResolvedRater memory resolved)
+    {
+        resolved = resolveRater(identityRegistry, actor);
+        if (
+            _isIdentityBanned(identityRegistry, resolved.identityKey)
+                || _isIdentityBanned(identityRegistry, addressIdentityKey(actor))
+        ) {
+            revert IdentityBanned();
+        }
     }
 
     function _isIdentityBanned(IRaterIdentityRegistry identityRegistry, bytes32 identityKey)

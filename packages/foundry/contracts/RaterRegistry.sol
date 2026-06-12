@@ -793,6 +793,7 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
     function setDelegate(address delegate) external {
         if (delegate == address(0)) revert InvalidAddress();
         if (delegate == msg.sender) revert CannotDelegateSelf();
+        if (isIdentityKeyBanned(addressIdentityKey(delegate))) revert InvalidBan();
         if (delegateOf[msg.sender] != address(0)) revert CallerIsDelegate();
         if (_hasCredentialIdentity(delegate)) revert DelegateIsHolder();
         if (delegateOf[delegate] != address(0)) revert DelegateAlreadyAssigned();
@@ -813,6 +814,7 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
     function acceptDelegate() external {
         address holder = pendingDelegateOf[msg.sender];
         if (holder == address(0)) revert NoPendingDelegate();
+        if (isIdentityKeyBanned(addressIdentityKey(msg.sender))) revert InvalidBan();
         if (_hasCredentialIdentity(msg.sender)) revert DelegateIsHolder();
         if (delegateOf[msg.sender] != address(0)) revert DelegateAlreadyAssigned();
         if (pendingDelegateTo[msg.sender] != address(0)) revert DelegateAlreadyAssigned();
