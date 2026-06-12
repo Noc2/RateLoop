@@ -4,16 +4,13 @@ import React, { type ReactNode, useEffect, useId, useMemo, useState } from "reac
 import { createPortal } from "react-dom";
 import { useAccount } from "wagmi";
 import { LockClosedIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { ConfidentialityTermsBody } from "~~/components/legal/ConfidentialityTermsBody";
 import { useConfidentialityBond } from "~~/hooks/useConfidentialityBond";
 import type { ContentItem } from "~~/hooks/useContentFeed";
 import { ensurePrivateAccountReadSession } from "~~/hooks/usePrivateAccountSession";
 import { useWalletMessageSigner } from "~~/hooks/useWalletMessageSigner";
 import { fetchConfidentialityTermsStatus } from "~~/lib/confidentiality/clientTermsStatus";
-import {
-  CONFIDENTIALITY_TERMS_TEXT,
-  CONFIDENTIALITY_TERMS_TITLE,
-  CONFIDENTIALITY_TERMS_VERSION,
-} from "~~/lib/confidentiality/terms";
+import { CONFIDENTIALITY_TERMS_TITLE, CONFIDENTIALITY_TERMS_VERSION } from "~~/lib/confidentiality/terms";
 import {
   CONFIDENTIALITY_ACCEPTED_EVENT,
   getConfidentialContextVoteBlocker,
@@ -53,7 +50,7 @@ export function ConfidentialContextTermsDialogPanel({
         onClick={onClose}
         disabled={isBusy}
       />
-      <div className="relative z-10 max-h-[calc(100svh-1rem)] w-full max-w-lg overflow-hidden rounded-t-2xl bg-base-200 p-6 shadow-2xl sm:rounded-2xl">
+      <div className="relative z-10 max-h-[calc(100svh-1rem)] w-full max-w-2xl overflow-hidden rounded-t-2xl bg-base-200 p-6 shadow-2xl sm:rounded-2xl">
         <button
           type="button"
           onClick={onClose}
@@ -71,8 +68,10 @@ export function ConfidentialContextTermsDialogPanel({
           Review these terms before unlocking hosted private context.
         </p>
 
-        <div className="mt-5 max-h-[42svh] overflow-y-auto rounded-lg border border-base-content/10 bg-base-100 p-4 text-sm leading-relaxed text-base-content/78 [scrollbar-gutter:stable]">
-          <p className="whitespace-pre-wrap">{CONFIDENTIALITY_TERMS_TEXT}</p>
+        <div className="mt-5 max-h-[58svh] overflow-y-auto rounded-lg border border-base-content/10 bg-base-100 p-4 text-sm leading-relaxed text-base-content/78 [scrollbar-gutter:stable]">
+          <div className="space-y-5">
+            <ConfidentialityTermsBody compact />
+          </div>
         </div>
         <p className="mt-3 text-xs text-base-content/48">Version: {CONFIDENTIALITY_TERMS_VERSION}</p>
 

@@ -147,6 +147,30 @@ test("upserts gated metadata and flips disclosure after settlement", async () =>
   assert.equal(confidentiality.isConfidentialityCurrentlyGated(disclosed), false);
 });
 
+test("confidentiality terms acceptance requires the current document hash", async () => {
+  await confidentiality.recordConfidentialityTermsAcceptance({
+    nonce: "nonce-hash",
+    payload: termsPayload(),
+    signature: "0xab",
+  });
+
+  assert.equal(
+    await confidentiality.hasConfidentialityTermsAcceptance({
+      contentId: CONTENT_ID,
+      walletAddress: WALLET,
+    }),
+    true,
+  );
+  assert.equal(
+    await confidentiality.hasConfidentialityTermsAcceptance({
+      contentId: CONTENT_ID,
+      termsDocHash: "stale-document-hash",
+      walletAddress: WALLET,
+    }),
+    false,
+  );
+});
+
 test("authorizes accepted signed sessions and logs gated context access", async () => {
   installConfidentialityGate();
   const resourceId = "det_contextaccess001";
@@ -255,6 +279,7 @@ test("confidentiality terms challenge message shows the focused terms metadata",
   assert.match(message, new RegExp(`Terms URI: ${payload.termsUri}`));
   assert.match(message, new RegExp(`Terms Version: ${payload.termsVersion}`));
   assert.match(message, new RegExp(`Terms Hash: ${payload.termsDocHash}`));
+  assert.match(message, /Terms: These are protocol-facing access terms/);
   assert.match(message, new RegExp(confidentiality.CONFIDENTIALITY_TERMS_TEXT.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   assert.doesNotMatch(message, /\/legal\/terms#confidential-context/);
 });

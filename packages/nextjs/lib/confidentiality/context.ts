@@ -246,7 +246,7 @@ export function buildConfidentialityTermsMessageLines(params: {
     `Terms URI: ${params.termsUri}`,
     `Terms Version: ${params.termsVersion}`,
     `Terms Hash: ${params.termsDocHash}`,
-    `Promise: ${CONFIDENTIALITY_TERMS_TEXT}`,
+    `Terms: ${CONFIDENTIALITY_TERMS_TEXT}`,
   ];
 }
 
@@ -336,6 +336,7 @@ export async function upsertQuestionConfidentialityFromMetadata(params: {
 
 export async function hasConfidentialityTermsAcceptance(params: {
   contentId: string;
+  termsDocHash?: string;
   termsVersion?: string;
   walletAddress: `0x${string}`;
 }) {
@@ -347,6 +348,7 @@ export async function hasConfidentialityTermsAcceptance(params: {
         eq(confidentialityTermsAcceptances.walletAddress, params.walletAddress),
         eq(confidentialityTermsAcceptances.contentId, params.contentId),
         eq(confidentialityTermsAcceptances.termsVersion, params.termsVersion ?? CONFIDENTIALITY_TERMS_VERSION),
+        eq(confidentialityTermsAcceptances.termsDocHash, params.termsDocHash ?? CONFIDENTIALITY_TERMS_DOC_HASH),
       ),
     )
     .limit(1);
