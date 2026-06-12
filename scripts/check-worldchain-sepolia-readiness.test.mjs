@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  PONDER_INDEXED_CONTRACTS,
   REQUIRED_DEPLOYED_CONTRACTS,
   buildDeploymentAddressMap,
   parseGeneratedContractsForChain,
@@ -105,6 +106,11 @@ const deployedContracts = {
   assert.equal(contracts.get("AdvisoryVoteRecorder").address, addressFor(1));
   assert.equal(contracts.get("AdvisoryVoteRecorder").deployedOnBlock, undefined);
   assert.equal(contracts.get("CategoryRegistry").deployedOnBlock, 222);
+});
+
+test("ProtocolConfig is required but not marked as Ponder-indexed", () => {
+  assert(REQUIRED_DEPLOYED_CONTRACTS.includes("ProtocolConfig"));
+  assert.equal(PONDER_INDEXED_CONTRACTS.includes("ProtocolConfig"), false);
 });
 
 test("validateOfflineReadiness flags a contract whose deployedOnBlock is missing", () => {

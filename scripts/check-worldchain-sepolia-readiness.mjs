@@ -43,7 +43,6 @@ export const PONDER_INDEXED_CONTRACTS = [
   "LaunchDistributionPool",
   "LoopReputation",
   "ProfileRegistry",
-  "ProtocolConfig",
   "QuestionRewardPoolEscrow",
   "RaterRegistry",
   "RoundRewardDistributor",
