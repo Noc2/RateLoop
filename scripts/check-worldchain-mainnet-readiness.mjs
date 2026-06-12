@@ -4,7 +4,13 @@ import { fileURLToPath } from "node:url";
 import {
   PONDER_INDEXED_CONTRACTS,
   REQUIRED_DEPLOYED_CONTRACTS,
+  REQUIRED_SELECTOR_CHECKS,
+  REQUIRED_SUBMISSION_MEDIA_VALIDATOR_SELECTORS,
   buildDeploymentAddressMap,
+  bytecodeContainsSelector,
+  getSelectorProbeCode,
+  getSubmissionMediaValidatorAddress,
+  getSubmissionMediaValidatorAuthorizedEmitter,
   parseGeneratedContractsForChain,
 } from "./check-worldchain-sepolia-readiness.mjs";
 
@@ -215,6 +221,70 @@ export async function validateLiveReadiness({
           typeof code === "string" && code !== "0x",
           `${contractName} has bytecode on RPC`,
         );
+      }
+
+      for (const selectorCheck of REQUIRED_SELECTOR_CHECKS) {
+        const address = deploymentAddresses.get(selectorCheck.contractName);
+        if (!address) continue;
+        const { code, target } = await getSelectorProbeCode(
+          rpcUrl,
+          selectorCheck.contractName,
+          address,
+        );
+        for (const selector of selectorCheck.selectors) {
+          addCheck(
+            checks,
+            failures,
+            bytecodeContainsSelector(code, selector),
+            `${target} bytecode contains selector ${selector}`,
+          );
+        }
+      }
+
+      const contentRegistryAddress = deploymentAddresses.get("ContentRegistry");
+      if (contentRegistryAddress) {
+        const validatorAddress = await getSubmissionMediaValidatorAddress(
+          rpcUrl,
+          contentRegistryAddress,
+        );
+        addCheck(
+          checks,
+          failures,
+          isAddress(validatorAddress),
+          "ContentRegistry submissionMediaValidator has an address",
+        );
+        if (validatorAddress) {
+          const validatorCode = await rpc(rpcUrl, "eth_getCode", [
+            validatorAddress,
+            "latest",
+          ]);
+          addCheck(
+            checks,
+            failures,
+            typeof validatorCode === "string" && validatorCode !== "0x",
+            "ContentRegistry submissionMediaValidator has bytecode",
+          );
+          for (const selector of REQUIRED_SUBMISSION_MEDIA_VALIDATOR_SELECTORS) {
+            addCheck(
+              checks,
+              failures,
+              bytecodeContainsSelector(validatorCode, selector),
+              `ContentRegistry submissionMediaValidator bytecode contains selector ${selector}`,
+            );
+          }
+          const authorizedEmitter =
+            await getSubmissionMediaValidatorAuthorizedEmitter(
+              rpcUrl,
+              validatorAddress,
+            );
+          addCheck(
+            checks,
+            failures,
+            normalizeAddress(authorizedEmitter) ===
+              normalizeAddress(contentRegistryAddress),
+            "ContentRegistry submissionMediaValidator authorizedEmitter is ContentRegistry",
+          );
+        }
       }
 
       const raterRegistry = deploymentAddresses.get("RaterRegistry");

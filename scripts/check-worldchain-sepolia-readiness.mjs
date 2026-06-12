@@ -11,7 +11,8 @@ const WORLDCHAIN_SEPOLIA_USDC = "0x66145f38cBAC35Ca6F1Dfb4914dF98F1614aeA88";
 const EIP1967_IMPLEMENTATION_SLOT =
   "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc";
 const SUBMISSION_MEDIA_VALIDATOR_SELECTOR = "0x738dbaa0";
-const REQUIRED_SUBMISSION_MEDIA_VALIDATOR_SELECTORS = [
+const SUBMISSION_MEDIA_VALIDATOR_AUTHORIZED_EMITTER_SELECTOR = "0xb717bbbd";
+export const REQUIRED_SUBMISSION_MEDIA_VALIDATOR_SELECTORS = [
   "0x6773a34f", // validateContextSubmission(string,string[],string,string,string,bool)
   "0x6b974e07", // validateSubmissionDetails(string,bytes32,bool)
 ];
@@ -68,7 +69,7 @@ const PROXY_CONTRACTS = new Set([
   "RoundVotingEngine",
 ]);
 
-const REQUIRED_SELECTOR_CHECKS = [
+export const REQUIRED_SELECTOR_CHECKS = [
   {
     contractName: "X402QuestionSubmitter",
     selectors: [
@@ -137,7 +138,10 @@ function extractBalancedObject(source, openBraceIndex) {
   return undefined;
 }
 
-export function parseGeneratedContractsForChain(source, chainId = WORLDCHAIN_SEPOLIA_CHAIN_ID) {
+export function parseGeneratedContractsForChain(
+  source,
+  chainId = WORLDCHAIN_SEPOLIA_CHAIN_ID,
+) {
   const marker = `  ${chainId}: {`;
   const start = source.indexOf(marker);
   if (start === -1) return new Map();
@@ -149,19 +153,28 @@ export function parseGeneratedContractsForChain(source, chainId = WORLDCHAIN_SEP
   const contracts = new Map();
 
   for (const contractName of REQUIRED_DEPLOYED_CONTRACTS) {
-    const keyMatch = new RegExp(`(?:^|[\\s{,])${contractName}:\\s*\\{`).exec(chainSource);
+    const keyMatch = new RegExp(`(?:^|[\\s{,])${contractName}:\\s*\\{`).exec(
+      chainSource,
+    );
     if (!keyMatch) continue;
 
     // Parse only inside this contract's own balanced object so a missing field
     // can never borrow a value from the next contract entry.
-    const contractSource = extractBalancedObject(chainSource, keyMatch.index + keyMatch[0].length - 1);
+    const contractSource = extractBalancedObject(
+      chainSource,
+      keyMatch.index + keyMatch[0].length - 1,
+    );
     if (!contractSource) continue;
 
     const addressMatch = /address:\s*"([^"]+)"/.exec(contractSource);
-    const deployedOnBlockMatch = /deployedOnBlock:\s*(\d+)/.exec(contractSource);
+    const deployedOnBlockMatch = /deployedOnBlock:\s*(\d+)/.exec(
+      contractSource,
+    );
     contracts.set(contractName, {
       address: addressMatch?.[1],
-      deployedOnBlock: deployedOnBlockMatch ? Number(deployedOnBlockMatch[1]) : undefined,
+      deployedOnBlock: deployedOnBlockMatch
+        ? Number(deployedOnBlockMatch[1])
+        : undefined,
     });
   }
 
@@ -176,7 +189,9 @@ export function validateOfflineReadiness({
   const checks = [];
   const failures = [];
   const deploymentAddresses = buildDeploymentAddressMap(deploymentJson);
-  const generatedContracts = parseGeneratedContractsForChain(deployedContractsSource);
+  const generatedContracts = parseGeneratedContractsForChain(
+    deployedContractsSource,
+  );
 
   addCheck(
     checks,
@@ -193,7 +208,8 @@ export function validateOfflineReadiness({
   addCheck(
     checks,
     failures,
-    Number.isInteger(deploymentJson.deploymentBlockNumber) && deploymentJson.deploymentBlockNumber > 0,
+    Number.isInteger(deploymentJson.deploymentBlockNumber) &&
+      deploymentJson.deploymentBlockNumber > 0,
     "deployment artifact has a positive deployment block",
   );
 
@@ -227,7 +243,8 @@ export function validateOfflineReadiness({
       addCheck(
         checks,
         failures,
-        Number.isInteger(generated?.deployedOnBlock) && generated.deployedOnBlock > 0,
+        Number.isInteger(generated?.deployedOnBlock) &&
+          generated.deployedOnBlock > 0,
         `${contractName} has a positive generated deployedOnBlock for Ponder start blocks`,
       );
     }
@@ -245,9 +262,20 @@ export function validateOfflineReadiness({
 
 function loadOfflineInputs(root = repoRoot) {
   return {
-    deploymentJson: JSON.parse(readFileSync(join(root, "packages/foundry/deployments/4801.json"), "utf8")),
-    deployedContractsSource: readFileSync(join(root, "packages/contracts/src/deployedContracts.ts"), "utf8"),
-    questionRewardPoolsSource: readFileSync(join(root, "packages/nextjs/lib/questionRewardPools.ts"), "utf8"),
+    deploymentJson: JSON.parse(
+      readFileSync(
+        join(root, "packages/foundry/deployments/4801.json"),
+        "utf8",
+      ),
+    ),
+    deployedContractsSource: readFileSync(
+      join(root, "packages/contracts/src/deployedContracts.ts"),
+      "utf8",
+    ),
+    questionRewardPoolsSource: readFileSync(
+      join(root, "packages/nextjs/lib/questionRewardPools.ts"),
+      "utf8",
+    ),
   };
 }
 
@@ -268,9 +296,13 @@ async function rpc(rpcUrl, method, params = []) {
     body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
     headers: { "content-type": "application/json" },
   });
-  if (!response.ok) throw new Error(`${method} returned HTTP ${response.status}`);
+  if (!response.ok)
+    throw new Error(`${method} returned HTTP ${response.status}`);
   const body = await response.json();
-  if (body.error) throw new Error(`${method} failed: ${body.error.message ?? JSON.stringify(body.error)}`);
+  if (body.error)
+    throw new Error(
+      `${method} failed: ${body.error.message ?? JSON.stringify(body.error)}`,
+    );
   return body.result;
 }
 
@@ -279,14 +311,19 @@ function parseStorageAddress(value) {
     return undefined;
   }
   const address = `0x${value.slice(-40)}`;
-  return address === "0x0000000000000000000000000000000000000000" ? undefined : address;
+  return address === "0x0000000000000000000000000000000000000000"
+    ? undefined
+    : address;
 }
 
-function bytecodeContainsSelector(code, selector) {
-  return typeof code === "string" && code.toLowerCase().includes(selector.toLowerCase().slice(2));
+export function bytecodeContainsSelector(code, selector) {
+  return (
+    typeof code === "string" &&
+    code.toLowerCase().includes(selector.toLowerCase().slice(2))
+  );
 }
 
-async function getSelectorProbeCode(rpcUrl, contractName, address) {
+export async function getSelectorProbeCode(rpcUrl, contractName, address) {
   if (!PROXY_CONTRACTS.has(contractName)) {
     return {
       address,
@@ -296,19 +333,44 @@ async function getSelectorProbeCode(rpcUrl, contractName, address) {
   }
 
   const implementation = parseStorageAddress(
-    await rpc(rpcUrl, "eth_getStorageAt", [address, EIP1967_IMPLEMENTATION_SLOT, "latest"]),
+    await rpc(rpcUrl, "eth_getStorageAt", [
+      address,
+      EIP1967_IMPLEMENTATION_SLOT,
+      "latest",
+    ]),
   );
   return {
     address: implementation ?? address,
-    code: await rpc(rpcUrl, "eth_getCode", [implementation ?? address, "latest"]),
+    code: await rpc(rpcUrl, "eth_getCode", [
+      implementation ?? address,
+      "latest",
+    ]),
     target: implementation ? `${contractName} implementation` : contractName,
   };
 }
 
-async function getSubmissionMediaValidatorAddress(rpcUrl, contentRegistryAddress) {
+export async function getSubmissionMediaValidatorAddress(
+  rpcUrl,
+  contentRegistryAddress,
+) {
   return parseStorageAddress(
     await rpc(rpcUrl, "eth_call", [
       { to: contentRegistryAddress, data: SUBMISSION_MEDIA_VALIDATOR_SELECTOR },
+      "latest",
+    ]),
+  );
+}
+
+export async function getSubmissionMediaValidatorAuthorizedEmitter(
+  rpcUrl,
+  validatorAddress,
+) {
+  return parseStorageAddress(
+    await rpc(rpcUrl, "eth_call", [
+      {
+        to: validatorAddress,
+        data: SUBMISSION_MEDIA_VALIDATOR_AUTHORIZED_EMITTER_SELECTOR,
+      },
       "latest",
     ]),
   );
@@ -339,13 +401,22 @@ export async function validateLiveReadiness({
         const address = deploymentAddresses.get(contractName);
         if (!address) continue;
         const code = await rpc(rpcUrl, "eth_getCode", [address, "latest"]);
-        addCheck(checks, failures, typeof code === "string" && code !== "0x", `${contractName} has bytecode on RPC`);
+        addCheck(
+          checks,
+          failures,
+          typeof code === "string" && code !== "0x",
+          `${contractName} has bytecode on RPC`,
+        );
       }
 
       for (const selectorCheck of REQUIRED_SELECTOR_CHECKS) {
         const address = deploymentAddresses.get(selectorCheck.contractName);
         if (!address) continue;
-        const { code, target } = await getSelectorProbeCode(rpcUrl, selectorCheck.contractName, address);
+        const { code, target } = await getSelectorProbeCode(
+          rpcUrl,
+          selectorCheck.contractName,
+          address,
+        );
         for (const selector of selectorCheck.selectors) {
           addCheck(
             checks,
@@ -358,7 +429,10 @@ export async function validateLiveReadiness({
 
       const contentRegistryAddress = deploymentAddresses.get("ContentRegistry");
       if (contentRegistryAddress) {
-        const validatorAddress = await getSubmissionMediaValidatorAddress(rpcUrl, contentRegistryAddress);
+        const validatorAddress = await getSubmissionMediaValidatorAddress(
+          rpcUrl,
+          contentRegistryAddress,
+        );
         addCheck(
           checks,
           failures,
@@ -366,7 +440,10 @@ export async function validateLiveReadiness({
           "ContentRegistry submissionMediaValidator has an address",
         );
         if (validatorAddress) {
-          const validatorCode = await rpc(rpcUrl, "eth_getCode", [validatorAddress, "latest"]);
+          const validatorCode = await rpc(rpcUrl, "eth_getCode", [
+            validatorAddress,
+            "latest",
+          ]);
           addCheck(
             checks,
             failures,
@@ -381,11 +458,28 @@ export async function validateLiveReadiness({
               `ContentRegistry submissionMediaValidator bytecode contains selector ${selector}`,
             );
           }
+          const authorizedEmitter =
+            await getSubmissionMediaValidatorAuthorizedEmitter(
+              rpcUrl,
+              validatorAddress,
+            );
+          addCheck(
+            checks,
+            failures,
+            authorizedEmitter?.toLowerCase() ===
+              contentRegistryAddress.toLowerCase(),
+            "ContentRegistry submissionMediaValidator authorizedEmitter is ContentRegistry",
+          );
         }
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      addCheck(checks, failures, false, `RPC readiness probe failed: ${message}`);
+      addCheck(
+        checks,
+        failures,
+        false,
+        `RPC readiness probe failed: ${message}`,
+      );
     }
   } else {
     addCheck(
@@ -400,7 +494,12 @@ export async function validateLiveReadiness({
     try {
       const statusUrl = new URL("/status", ponderUrl);
       const response = await fetchWithTimeout(statusUrl);
-      addCheck(checks, failures, response.ok, `Ponder /status returns HTTP ${response.status}`);
+      addCheck(
+        checks,
+        failures,
+        response.ok,
+        `Ponder /status returns HTTP ${response.status}`,
+      );
       if (response.ok) {
         const status = await response.json().catch(() => null);
         const blockNumber = status?.worldchainSepolia?.block?.number;
@@ -413,7 +512,12 @@ export async function validateLiveReadiness({
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      addCheck(checks, failures, false, `Ponder readiness probe failed: ${message}`);
+      addCheck(
+        checks,
+        failures,
+        false,
+        `Ponder readiness probe failed: ${message}`,
+      );
     }
   } else {
     addCheck(
@@ -428,10 +532,20 @@ export async function validateLiveReadiness({
     for (const path of ["/", "/ask", "/docs/ai", "/api/agent/templates"]) {
       try {
         const response = await fetchWithTimeout(new URL(path, appUrl));
-        addCheck(checks, failures, response.status < 500, `app route ${path} returns below HTTP 500`);
+        addCheck(
+          checks,
+          failures,
+          response.status < 500,
+          `app route ${path} returns below HTTP 500`,
+        );
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        addCheck(checks, failures, false, `app route ${path} probe failed: ${message}`);
+        addCheck(
+          checks,
+          failures,
+          false,
+          `app route ${path} probe failed: ${message}`,
+        );
       }
     }
   } else {
@@ -470,7 +584,11 @@ async function main() {
   const args = parseArgs(process.argv.slice(2));
   const offlineInputs = loadOfflineInputs();
   const offlineResult = validateOfflineReadiness(offlineInputs);
-  printResult("World Chain Sepolia offline readiness", offlineResult, args.json);
+  printResult(
+    "World Chain Sepolia offline readiness",
+    offlineResult,
+    args.json,
+  );
 
   let liveResult = { ok: true, checks: [], failures: [] };
   if (args.live) {
