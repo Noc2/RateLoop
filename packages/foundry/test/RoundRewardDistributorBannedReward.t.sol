@@ -97,7 +97,8 @@ contract BannedRewardVotingEngine {
             uint16 revealedCount,
             uint64 totalStake,
             uint48 thresholdReachedAt,
-            uint48 settledAt
+            uint48 settledAt,
+            uint8 upWins
         )
     {
         startTime = 1;
@@ -107,6 +108,7 @@ contract BannedRewardVotingEngine {
         totalStake = 3_000_000;
         thresholdReachedAt = 1;
         settledAt = 1;
+        upWins = 1;
     }
 
     function roundLifecycleState(uint256, uint256)
