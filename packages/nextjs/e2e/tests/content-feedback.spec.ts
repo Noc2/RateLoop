@@ -90,6 +90,13 @@ test.describe("Content feedback", () => {
 
     try {
       await ensureHumanCredential(page, ANVIL_ACCOUNTS.account6);
+      await setupWallet(page, ANVIL_ACCOUNTS.account5.privateKey);
+      const openedRound = await voteOnSpecificContent(page, target!.contentId, "up", {
+        indexedTimeoutMs: 90_000,
+        voterAddress: ANVIL_ACCOUNTS.account5.address,
+      });
+      expect(openedRound, "feedback ban target should have an active voting round").toBe(true);
+
       await unbanConfidentialityIdentity(ANVIL_ACCOUNTS.account6);
       await banConfidentialityIdentity(ANVIL_ACCOUNTS.account6, "E2E feedback identity ban");
 

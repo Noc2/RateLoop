@@ -52,6 +52,19 @@ test.describe("Confidential context", () => {
       timeout: 20_000,
     });
     await page.getByRole("button", { name: "Confirm wallet" }).first().click();
+    await expect
+      .poll(
+        async () => {
+          const sessionResponse = await page.request.get(
+            `/api/account/private-session?address=${ANVIL_ACCOUNTS.account2.address}`,
+          );
+          if (!sessionResponse.ok()) return false;
+          const session = await sessionResponse.json();
+          return session?.hasSession === true;
+        },
+        { intervals: [1_000, 2_000], timeout: 30_000 },
+      )
+      .toBe(true);
 
     const ownerDetails = await fetchGatedAttachment(page.request, submitted.detailsUrl!, {
       address: ANVIL_ACCOUNTS.account2.address,

@@ -24,13 +24,13 @@ test.describe("Watchlist UI", () => {
       `[data-testid="vote-content-card-shell"][data-content-id="${target!.contentId}"]`,
     );
     await expect(targetCard).toBeVisible({ timeout: 30_000 });
-    const watchButton = targetCard.getByRole("button", { name: "Watch" });
+    const watchButton = targetCard.getByRole("button", { name: "Watch", exact: true });
     await expect(watchButton).toBeVisible({ timeout: 15_000 });
     await watchButton.click();
-    await expect(targetCard.getByRole("button", { name: "Watching" })).toBeVisible({ timeout: 30_000 });
+    await expect(targetCard.getByRole("button", { name: "Watching", exact: true })).toBeVisible({ timeout: 30_000 });
 
-    await targetCard.getByRole("button", { name: "Watching" }).click();
-    await expect(targetCard.getByRole("button", { name: "Watch" })).toBeVisible({ timeout: 30_000 });
+    await targetCard.getByRole("button", { name: "Watching", exact: true }).click();
+    await expect(targetCard.getByRole("button", { name: "Watch", exact: true })).toBeVisible({ timeout: 30_000 });
 
     await context.close();
   });

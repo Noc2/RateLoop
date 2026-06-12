@@ -33,7 +33,7 @@ test.describe("Funding modals", () => {
       await expect(bountyDialog.getByRole("spinbutton", { name: "Required voters" })).not.toHaveValue("");
       await expect(bountyDialog.getByRole("spinbutton", { name: "Settled rounds" })).toHaveValue("2");
       await expect(bountyDialog.getByText(/USDC claims take at least/i)).toBeVisible();
-      await expect(bountyDialog.getByRole("button", { name: "Fund bounty" })).toBeVisible();
+      await expect(bountyDialog.getByRole("button", { name: "Fund bounty", exact: true })).toBeVisible();
       await bountyDialog.getByRole("button", { name: "Cancel" }).click();
       await expect(bountyDialog).toBeHidden({ timeout: 10_000 });
 
@@ -49,7 +49,7 @@ test.describe("Funding modals", () => {
       await expect(feedbackDialog.getByLabel("Feedback Bonus amount")).toHaveValue("2");
       await expect(feedbackDialog.getByLabel("Awarder address")).toBeVisible();
       await expect(feedbackDialog.getByText(/Feedback Bonuses reward useful written feedback/i)).toBeVisible();
-      await expect(feedbackDialog.getByRole("button", { name: "Fund Feedback Bonus" })).toBeVisible();
+      await expect(feedbackDialog.getByRole("button", { name: "Fund Feedback Bonus", exact: true })).toBeVisible();
     } finally {
       await context.close();
     }

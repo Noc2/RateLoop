@@ -7,6 +7,12 @@ import type { Page } from "@playwright/test";
 
 const SUBMIT_STAKE = BigInt(10e6);
 const FALLBACK_CONTENT_ATTEMPTS = 3;
+const FRESH_VOTEABLE_ROUND_CONFIG = {
+  epochDuration: 20 * 60,
+  maxDuration: 20 * 60,
+  minVoters: 3,
+  maxVoters: 100,
+};
 
 type ContentListItem = {
   id: string;
@@ -62,6 +68,9 @@ export async function createFreshVoteableContent(
     1,
     submitter,
     CONTRACT_ADDRESSES.ContentRegistry,
+    undefined,
+    undefined,
+    FRESH_VOTEABLE_ROUND_CONFIG,
   );
   if (!submitted) return null;
 

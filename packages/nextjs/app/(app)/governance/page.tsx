@@ -309,7 +309,11 @@ function ConfidentialityBreachesPanel({ onOpenGovernanceAction, reporter }: Conf
           <div className="mt-4 space-y-3">
             {reports.length > 0 ? (
               reports.map(report => (
-                <div key={report.id} className="rounded-xl border border-base-300 bg-base-100 p-3 text-sm">
+                <div
+                  key={report.id}
+                  className="rounded-xl border border-base-300 bg-base-100 p-3 text-sm"
+                  data-testid="confidentiality-breach-report"
+                >
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="font-semibold text-base-content">#{report.id}</span>
                     <span className="rounded-full bg-warning/15 px-2 py-0.5 text-xs font-semibold text-warning">
