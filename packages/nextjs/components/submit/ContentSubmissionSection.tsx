@@ -104,6 +104,7 @@ import {
   formatSubmissionRewardAmount,
   getConfiguredFeedbackBonusEscrowAddress,
   getDefaultUsdcAddress,
+  parseConfidentialityBondAmount,
   parseFeedbackBonusAmount,
   parseSubmissionRewardAmount,
 } from "~~/lib/questionRewardPools";
@@ -2381,10 +2382,10 @@ export function ContentSubmissionSection() {
         ),
       );
       const hasGatedQuestions = validatedQuestions.some(question => question.contextVisibility === "gated");
-      const confidentialityBondAtomic = parseSubmissionRewardAmount(confidentialityBondAmount);
+      const confidentialityBondAtomic = parseConfidentialityBondAmount(confidentialityBondAmount);
       if (hasGatedQuestions && confidentialityBondAtomic === null) {
         setSubmissionStep("bounty");
-        notification.warning("Enter a valid confidentiality bond amount.");
+        notification.warning(`Enter 0 or a confidentiality bond of at least 1 ${confidentialityBondAsset}.`);
         return;
       }
       const resolvedConfidentialityBondAtomic = confidentialityBondAtomic ?? 0n;

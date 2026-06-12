@@ -14,6 +14,7 @@ export const SUBMISSION_REWARD_ASSET_LREP = 0;
 export const SUBMISSION_REWARD_ASSET_USDC = 1;
 export const FEEDBACK_BONUS_ASSET_LREP = SUBMISSION_REWARD_ASSET_LREP;
 export const FEEDBACK_BONUS_ASSET_USDC = SUBMISSION_REWARD_ASSET_USDC;
+export const MIN_NONZERO_CONFIDENTIALITY_BOND = 1_000_000n;
 
 export type SubmissionRewardAsset = "lrep" | "usdc";
 export type FeedbackBonusAsset = SubmissionRewardAsset;
@@ -147,7 +148,14 @@ export function parseFeedbackBonusAmount(value: string): bigint | null {
   return parseTokenAmount6(value);
 }
 
-function parseTokenAmount6(value: string): bigint | null {
+export function parseConfidentialityBondAmount(value: string): bigint | null {
+  const parsed = parseTokenAmount6(value, { allowZero: true });
+  if (parsed === null) return null;
+  if (parsed > 0n && parsed < MIN_NONZERO_CONFIDENTIALITY_BOND) return null;
+  return parsed;
+}
+
+function parseTokenAmount6(value: string, options: { allowZero?: boolean } = {}): bigint | null {
   const trimmed = value.trim();
   const hasCommas = trimmed.includes(",");
   const normalized = hasCommas ? trimmed.replace(/,/g, "") : trimmed;
@@ -156,6 +164,7 @@ function parseTokenAmount6(value: string): bigint | null {
   if (hasCommas ? !validGroupedAmount : !validPlainAmount) return null;
   try {
     const parsed = parseUnits(normalized, SUBMISSION_REWARD_DECIMALS);
+    if (options.allowZero && parsed === 0n) return parsed;
     return parsed > 0n ? parsed : null;
   } catch {
     return null;

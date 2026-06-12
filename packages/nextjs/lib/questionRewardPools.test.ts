@@ -3,6 +3,7 @@ import {
   getConfiguredQuestionRewardPoolEscrowAddress,
   getDefaultUsdcAddress,
   getDefaultUsdcDisplayName,
+  parseConfidentialityBondAmount,
   parseUsdRewardPoolAmount,
 } from "./questionRewardPools";
 import assert from "node:assert/strict";
@@ -48,6 +49,20 @@ test("parseUsdRewardPoolAmount rejects ambiguous or malformed comma input", () =
   assert.equal(parseUsdRewardPoolAmount("1,2,3"), null);
   assert.equal(parseUsdRewardPoolAmount("12,34.56"), null);
   assert.equal(parseUsdRewardPoolAmount("1,000.1234567"), null);
+});
+
+test("parseConfidentialityBondAmount allows no bond and whole-token bonds", () => {
+  assert.equal(parseConfidentialityBondAmount("0"), 0n);
+  assert.equal(parseConfidentialityBondAmount("0.000000"), 0n);
+  assert.equal(parseConfidentialityBondAmount("1"), 1_000_000n);
+  assert.equal(parseConfidentialityBondAmount("1,234.56"), 1_234_560_000n);
+});
+
+test("parseConfidentialityBondAmount rejects dust and malformed bonds", () => {
+  assert.equal(parseConfidentialityBondAmount("0.000001"), null);
+  assert.equal(parseConfidentialityBondAmount("0.999999"), null);
+  assert.equal(parseConfidentialityBondAmount("1.0000001"), null);
+  assert.equal(parseConfidentialityBondAmount("1,2"), null);
 });
 
 test("getConfiguredQuestionRewardPoolEscrowAddress rejects mismatched production overrides", () => {
