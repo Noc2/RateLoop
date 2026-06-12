@@ -1,15 +1,18 @@
 import { resolveAppUrl } from "../env/server";
 import { createHmac, timingSafeEqual } from "crypto";
+import { isLocalE2EProductionBuildEnabled } from "~~/utils/env/e2eProduction";
 
 interface ResolveNotificationEmailAppUrlOptions {
   requestOrigin?: string | null;
   fallbackAppUrl?: string | null;
+  allowLocalhostInProduction?: boolean;
   production?: boolean;
 }
 
 export function resolveNotificationEmailAppUrl(options: ResolveNotificationEmailAppUrlOptions) {
   const production = options.production ?? process.env.NODE_ENV === "production";
-  const configuredAppUrl = resolveAppUrl(options.fallbackAppUrl ?? undefined, production);
+  const allowLocalhostInProduction = options.allowLocalhostInProduction ?? isLocalE2EProductionBuildEnabled();
+  const configuredAppUrl = resolveAppUrl(options.fallbackAppUrl ?? undefined, production, allowLocalhostInProduction);
   if (configuredAppUrl) {
     return configuredAppUrl;
   }

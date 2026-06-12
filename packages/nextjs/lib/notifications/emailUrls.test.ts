@@ -31,6 +31,30 @@ test("resolveNotificationEmailAppUrl falls back to the configured app URL when r
   );
 });
 
+test("resolveNotificationEmailAppUrl rejects configured localhost in production by default", () => {
+  assert.equal(
+    resolveNotificationEmailAppUrl({
+      requestOrigin: "http://localhost:3000",
+      fallbackAppUrl: "http://localhost:3000",
+      production: true,
+      allowLocalhostInProduction: false,
+    }),
+    null,
+  );
+});
+
+test("resolveNotificationEmailAppUrl allows configured localhost for local E2E production builds", () => {
+  assert.equal(
+    resolveNotificationEmailAppUrl({
+      requestOrigin: "http://localhost:3000",
+      fallbackAppUrl: "http://localhost:3000",
+      production: true,
+      allowLocalhostInProduction: true,
+    }),
+    "http://localhost:3000",
+  );
+});
+
 test("resolveNotificationEmailAppUrl rejects request origins in production without a configured app URL", () => {
   assert.equal(
     resolveNotificationEmailAppUrl({
