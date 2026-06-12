@@ -251,6 +251,42 @@ function DraftFieldLabel({ children, htmlFor, tooltip }: { children: ReactNode; 
   );
 }
 
+function PrivateContextToggleControl({
+  checked,
+  disabled,
+  onChange,
+}: {
+  checked: boolean;
+  disabled?: boolean;
+  onChange: (enabled: boolean) => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 sm:justify-end">
+      <div className="flex items-center gap-3">
+        <span className="flex min-w-0 items-center gap-2 text-sm font-medium text-base-content">
+          <LockClosedIcon className="h-4 w-4 shrink-0 text-warning" />
+          <span>Private context</span>
+          <Link href="/docs/how-it-works" className="link link-primary font-normal">
+            More
+          </Link>
+          <InfoTooltip
+            text="Use hosted private context for sensitive review material. Eligible raters must accept confidentiality terms before viewing, and the context stays private forever."
+            position="bottom"
+          />
+        </span>
+        <input
+          type="checkbox"
+          aria-label="Private context"
+          className="toggle toggle-warning"
+          checked={checked}
+          disabled={disabled}
+          onChange={event => onChange(event.target.checked)}
+        />
+      </div>
+    </div>
+  );
+}
+
 function sameAddress(left: string | undefined | null, right: string | undefined | null) {
   return Boolean(left && right && left.toLowerCase() === right.toLowerCase());
 }
@@ -2043,9 +2079,18 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
 
           <section className="surface-card rounded-lg p-5">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-2">
-                <ChatBubbleLeftRightIcon className="h-5 w-5 text-base-content/60" />
-                <h2 className="text-lg font-semibold">Ask details</h2>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <div className="flex items-center gap-2">
+                  <ChatBubbleLeftRightIcon className="h-5 w-5 text-base-content/60" />
+                  <h2 className="text-lg font-semibold">Ask details</h2>
+                </div>
+                {!hasQuestionBundle && draftForm?.questions[0] ? (
+                  <PrivateContextToggleControl
+                    checked={draftForm.questions[0].confidentiality.visibility === "gated"}
+                    disabled={!canEditDraft}
+                    onChange={enabled => updateDraftQuestionPrivateContext(0, enabled)}
+                  />
+                ) : null}
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="reward-chip reward-chip-muted px-2 py-0.5 text-xs">
@@ -2103,40 +2148,15 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                           />
                         </label>
 
-                        <div className="mt-4 rounded-lg border border-base-300/70 bg-base-100 p-4">
-                          <label className="flex items-start justify-between gap-4">
-                            <span className="min-w-0">
-                              <span className="flex items-center gap-2 text-sm font-semibold text-base-content">
-                                <LockClosedIcon className="h-4 w-4 text-warning" />
-                                <span>Private context</span>
-                              </span>
-                              <span className="mt-1 block text-sm leading-relaxed text-base-content/60">
-                                Hosted images and description attachments require wallet-signed confidentiality
-                                acceptance before viewing.
-                              </span>
-                            </span>
-                            <input
-                              type="checkbox"
-                              className="toggle toggle-warning"
+                        {hasQuestionBundle ? (
+                          <div className="mt-4">
+                            <PrivateContextToggleControl
                               checked={question.confidentiality.visibility === "gated"}
                               disabled={!canEditDraft}
-                              onChange={event => updateDraftQuestionPrivateContext(index, event.target.checked)}
+                              onChange={enabled => updateDraftQuestionPrivateContext(index, enabled)}
                             />
-                          </label>
-                          {question.confidentiality.visibility === "gated" ? (
-                            <p className="mt-4 text-sm leading-relaxed text-base-content/65">
-                              External context links and YouTube are disabled for private asks. Keep the title
-                              public-safe.
-                            </p>
-                          ) : null}
-                          {question.confidentiality.visibility === "gated" &&
-                          !draftQuestionHasHostedContext(question) &&
-                          !hasImageContext ? (
-                            <p className="mt-3 text-sm text-warning">
-                              Add a hosted image or description before submitting private context.
-                            </p>
-                          ) : null}
-                        </div>
+                          </div>
+                        ) : null}
 
                         <label className="form-control mt-4">
                           <span className="label-text text-xs font-semibold uppercase tracking-wide text-base-content/45">
