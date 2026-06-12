@@ -4408,19 +4408,19 @@ export function ContentSubmissionSection() {
                     </span>
                     <InfoTooltip text={visibleMediaMode === "images" ? urlConfig.imageHint : urlConfig.videoHint} />
                   </label>
-                  <div className={`mb-3 grid gap-2 ${privateContextEnabled ? "grid-cols-1" : "grid-cols-2"}`}>
-                    <button
-                      type="button"
-                      aria-pressed={visibleMediaMode === "images"}
-                      onClick={() => {
-                        setMediaMode("images");
-                        patchActiveQuestionDraft({ mediaMode: "images" });
-                      }}
-                      className={`btn btn-sm ${visibleMediaMode === "images" ? "btn-primary" : "btn-outline"}`}
-                    >
-                      Images
-                    </button>
-                    {!privateContextEnabled ? (
+                  {!privateContextEnabled ? (
+                    <div className="mb-3 grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        aria-pressed={visibleMediaMode === "images"}
+                        onClick={() => {
+                          setMediaMode("images");
+                          patchActiveQuestionDraft({ mediaMode: "images" });
+                        }}
+                        className={`btn btn-sm ${visibleMediaMode === "images" ? "btn-primary" : "btn-outline"}`}
+                      >
+                        Images
+                      </button>
                       <button
                         type="button"
                         aria-pressed={visibleMediaMode === "video"}
@@ -4432,8 +4432,8 @@ export function ContentSubmissionSection() {
                       >
                         YouTube
                       </button>
-                    ) : null}
-                  </div>
+                    </div>
+                  ) : null}
                   {visibleMediaMode === "images" ? (
                     <div className="space-y-2">
                       <ImageAttachmentUploader
