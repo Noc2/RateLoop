@@ -1605,32 +1605,7 @@ export const RoundVotingEngineAbi = [
   },
   {
     "type": "event",
-    "name": "RoleAdminChanged",
-    "inputs": [
-      {
-        "name": "role",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
-      },
-      {
-        "name": "previousAdminRole",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
-      },
-      {
-        "name": "newAdminRole",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "RoleGranted",
+    "name": "RoleUpdated",
     "inputs": [
       {
         "name": "role",
@@ -1645,13 +1620,13 @@ export const RoundVotingEngineAbi = [
         "internalType": "address"
       },
       {
-        "name": "sender",
-        "type": "address",
+        "name": "enabled",
+        "type": "bool",
         "indexed": true,
-        "internalType": "address"
+        "internalType": "bool"
       }
     ],
-    "anonymous": false
+    "anonymous": true
   },
   {
     "type": "event",
