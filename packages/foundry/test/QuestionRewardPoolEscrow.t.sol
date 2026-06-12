@@ -1459,6 +1459,30 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertGt(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter4), 0);
     }
 
+    function testOpenQuestionRewardClaimRequiresQualificationSnapshotAfterBanClears() public {
+        uint256 contentId = _submitQuestion("open-bounty-ban-cleared");
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 roundId = _settleRoundWith(_fourVoters(), contentId, _directions(true, true, false, true));
+
+        bytes32 voterKey = raterIdentityRegistry.addressIdentityKey(voter1);
+        raterIdentityRegistry.setBanned(voterKey, true);
+
+        rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
+
+        RoundSnapshot memory snapshot = rewardPoolEscrow.getRoundSnapshot(rewardPoolId, roundId);
+        assertTrue(snapshot.qualified);
+        assertEq(snapshot.rawEligibleVoters, 3);
+
+        raterIdentityRegistry.setBanned(voterKey, false);
+
+        assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter1), 0);
+        assertGt(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter4), 0);
+
+        vm.prank(voter1);
+        vm.expectRevert("Not bounty eligible");
+        rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
+    }
+
     function testRewardPoolQualificationChecksRawCommitVoterBan() public {
         uint256 contentId = _submitQuestion("raw-commit-voter-ban-before-qualification");
         uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
@@ -1589,6 +1613,31 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertEq(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, voter1), 0);
         vm.prank(voter1);
         vm.expectRevert("Identity banned");
+        rewardPoolEscrow.claimQuestionBundleReward(bundleId, 0);
+    }
+
+    function testOpenBundleClaimRequiresQualificationSnapshotAfterBanClears() public {
+        uint256[] memory contentIds = _submitBundleQuestions();
+        uint256 bundleId = _createSubmissionBundle(contentIds, funder, REWARD_ASSET_USDC, REWARD_POOL_AMOUNT, 3);
+
+        address[] memory voters = _fourVoters();
+        bool[] memory directions = _directions(true, true, false, true);
+
+        _settleRoundWithoutBundleSync(voters, contentIds[0], directions);
+        _settleRoundWithoutBundleSync(voters, contentIds[1], directions);
+
+        bytes32 voterKey = raterIdentityRegistry.addressIdentityKey(voter1);
+        raterIdentityRegistry.setBanned(voterKey, true);
+
+        rewardPoolEscrow.syncQuestionBundleTerminals(bundleId, 10);
+
+        raterIdentityRegistry.setBanned(voterKey, false);
+
+        assertEq(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, voter1), 0);
+        assertGt(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, voter4), 0);
+
+        vm.prank(voter1);
+        vm.expectRevert("Not bounty eligible");
         rewardPoolEscrow.claimQuestionBundleReward(bundleId, 0);
     }
 

@@ -439,7 +439,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         );
         require(
             _wasBundleBountyEligibleAtQualification(
-                bundle, qualifiedBundleRoundSetClaimants, bundleId, roundSetIndex, firstCommitKey
+                qualifiedBundleRoundSetClaimants, bundleId, roundSetIndex, firstCommitKey
             ),
             "Not bounty eligible"
         );
@@ -547,7 +547,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         );
         if (!completed) return 0;
         if (!_wasBundleBountyEligibleAtQualification(
-                bundle, qualifiedBundleRoundSetClaimants, bundleId, roundSetIndex, firstCommitKey
+                qualifiedBundleRoundSetClaimants, bundleId, roundSetIndex, firstCommitKey
             )) return 0;
         if (bundleRoundSetRewardClaimed[bundleId][roundSetIndex][firstCommitKey]) return 0;
         if (_isBundleCompleterBanned(
@@ -1038,13 +1038,11 @@ library QuestionRewardPoolEscrowBundleActionsLib {
     }
 
     function _wasBundleBountyEligibleAtQualification(
-        BundleReward storage bundle,
         mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) storage qualifiedBundleRoundSetClaimants,
         uint256 bundleId,
         uint256 roundSetIndex,
         bytes32 firstCommitKey
     ) private view returns (bool) {
-        if (bundle.bountyEligibility == BOUNTY_ELIGIBILITY_OPEN) return true;
         return qualifiedBundleRoundSetClaimants[bundleId][roundSetIndex][firstCommitKey];
     }
 

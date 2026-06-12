@@ -448,17 +448,15 @@ library QuestionRewardPoolEscrowClaimLib {
         RoundVotingEngine votingEngine,
         RoundSnapshot storage snapshot
     ) private view returns (bool) {
-        if (rewardPool.bountyEligibility == BOUNTY_ELIGIBILITY_OPEN) {
-            return true;
+        if (snapshot.qualified) {
+            return qualifiedQuestionRewardClaimants[rewardPoolId][roundId][snapshot.clusterSnapshotDigest][commitKey];
         }
-        if (!snapshot.qualified) {
-            (,,, uint8 credentialMask, uint8 freshCredentialMask,) =
-                votingEngine.commitIdentityState(rewardPool.contentId, roundId, commitKey);
-            return QuestionRewardPoolEscrowEligibilityLib.isCommitEligibleForBounty(
-                rewardPool.bountyEligibility, credentialMask, freshCredentialMask
-            );
-        }
-        return qualifiedQuestionRewardClaimants[rewardPoolId][roundId][snapshot.clusterSnapshotDigest][commitKey];
+        if (rewardPool.bountyEligibility == BOUNTY_ELIGIBILITY_OPEN) return true;
+        (,,, uint8 credentialMask, uint8 freshCredentialMask,) =
+            votingEngine.commitIdentityState(rewardPool.contentId, roundId, commitKey);
+        return QuestionRewardPoolEscrowEligibilityLib.isCommitEligibleForBounty(
+            rewardPool.bountyEligibility, credentialMask, freshCredentialMask
+        );
     }
 
     function _isIdentityBannedForRound(
