@@ -432,8 +432,8 @@ function buildDraftConfidentialityInput(confidentiality: DraftConfidentiality): 
   };
 }
 
-function draftQuestionHasHostedContext(question: Pick<DraftQuestionForm, "description" | "detailsUrl" | "imageUrls">) {
-  return Boolean(question.description.trim() || question.detailsUrl.trim() || question.imageUrls.length > 0);
+function draftQuestionHasHostedDetails(question: Pick<DraftQuestionForm, "description" | "detailsUrl">) {
+  return Boolean(question.description.trim() || question.detailsUrl.trim());
 }
 
 function readQuestionDetailsReference(source: JsonRecord | null | undefined): QuestionDetailsReference | null {
@@ -838,7 +838,6 @@ function parseTagsInput(value: string) {
 async function applyDraftQuestion(
   baseQuestion: JsonRecord,
   draft: DraftQuestionForm,
-  hasHandoffImageContext: boolean,
   index: number,
   uploadQuestionDetails: UploadQuestionDetails,
 ): Promise<JsonRecord> {
@@ -905,13 +904,9 @@ async function applyDraftQuestion(
     }
   }
   if (draft.confidentiality.visibility === "gated") {
-    const hasHostedContext = Boolean(
-      readQuestionDetailsReference(nextQuestion) ||
-        readStringArray(nextQuestion.imageUrls).length ||
-        hasHandoffImageContext,
-    );
-    if (!hasHostedContext) {
-      throw new Error(`Question ${index + 1} needs a hosted image or description for private context.`);
+    const hasHostedDetails = Boolean(readQuestionDetailsReference(nextQuestion));
+    if (!hasHostedDetails) {
+      throw new Error(`Question ${index + 1} needs a hosted description for private context.`);
     }
   }
   return nextQuestion;
@@ -1006,7 +1001,6 @@ async function buildDraftRequestBody(
         await applyDraftQuestion(
           isJsonRecord(question) ? question : {},
           form.questions[index] ?? form.questions[0],
-          Boolean(handoff.assets?.length),
           index,
           uploadQuestionDetails,
         ),
@@ -1017,25 +1011,13 @@ async function buildDraftRequestBody(
   }
 
   if (isJsonRecord(requestBody.question)) {
-    requestBody.question = await applyDraftQuestion(
-      requestBody.question,
-      form.questions[0],
-      Boolean(handoff.assets?.length),
-      0,
-      uploadQuestionDetails,
-    );
+    requestBody.question = await applyDraftQuestion(requestBody.question, form.questions[0], 0, uploadQuestionDetails);
     return requestBody;
   }
 
   return {
     ...requestBody,
-    ...(await applyDraftQuestion(
-      requestBody,
-      form.questions[0],
-      Boolean(handoff.assets?.length),
-      0,
-      uploadQuestionDetails,
-    )),
+    ...(await applyDraftQuestion(requestBody, form.questions[0], 0, uploadQuestionDetails)),
   };
 }
 
@@ -1300,7 +1282,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
         categoryId: question.categoryId,
         hasPublicContext:
           question.confidentiality.visibility === "gated"
-            ? draftQuestionHasHostedContext(question) || hasImageContext
+            ? draftQuestionHasHostedDetails(question)
             : Boolean(
                 question.contextUrl.trim() ||
                   question.videoUrl.trim() ||
@@ -1316,11 +1298,10 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
       categoryId: question.categoryId,
       hasPublicContext:
         question.confidentiality.visibility === "gated"
-          ? draftQuestionHasHostedContext({
+          ? draftQuestionHasHostedDetails({
               description: question.description,
               detailsUrl: question.detailsUrl,
-              imageUrls: question.imageUrls,
-            }) || hasImageContext
+            })
           : Boolean(question.contextUrl || question.videoUrl || question.description || hasImageContext),
       tags: question.tags,
       title: question.title,
@@ -2172,7 +2153,10 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
 
                         <label className="form-control mt-4">
                           <span className="label-text text-xs font-semibold uppercase tracking-wide text-base-content/45">
-                            Description <span className="text-base-content/35">(optional)</span>
+                            Description{" "}
+                            <span className="text-base-content/35">
+                              {question.confidentiality.visibility === "gated" ? "(required)" : "(optional)"}
+                            </span>
                           </span>
                           <textarea
                             className="textarea textarea-bordered mt-1 min-h-28 w-full resize-y"

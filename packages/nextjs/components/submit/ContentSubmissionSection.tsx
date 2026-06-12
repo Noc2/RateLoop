@@ -4376,7 +4376,8 @@ export function ContentSubmissionSection() {
 
                 <div>
                   <label className="mb-2 block text-base font-medium">
-                    Description <span className="text-base-content/60">(optional)</span>
+                    Description{" "}
+                    <span className="text-base-content/60">{privateContextEnabled ? "(required)" : "(optional)"}</span>
                   </label>
                   <textarea
                     placeholder="Add context voters can expand before rating"
@@ -4486,7 +4487,7 @@ export function ContentSubmissionSection() {
                       {imageMediaMissing && !imageUrlErrors.some(Boolean) ? (
                         <p className="text-base text-error">
                           {privateContextEnabled
-                            ? "Add a hosted image or description before submitting."
+                            ? "Add a description before submitting private context."
                             : "Add a context source in advanced settings or upload at least one image before submitting."}
                         </p>
                       ) : null}
