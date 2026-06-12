@@ -3408,8 +3408,8 @@ export function ContentSubmissionSection() {
       </div>
       {bountyStepAttempted && rewardAmountError ? <p className="text-base text-error">{rewardAmountError}</p> : null}
 
-      <div className="surface-card-nested space-y-3 rounded-lg p-3">
-        <p className="flex items-center gap-1.5 text-sm font-medium text-base-content/80">
+      <div className="space-y-3">
+        <p className="flex items-center gap-1.5 text-base font-medium text-base-content">
           Bounty eligibility
           <InfoTooltip text="Everyone can answer. This only selects which revealed answers can qualify for the bounty payout and the eligible result view." />
         </p>
