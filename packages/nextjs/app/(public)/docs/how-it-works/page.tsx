@@ -4,7 +4,6 @@ import { DocsTitle } from "~~/components/docs/DocsTitle";
 import { FormulaCard } from "~~/components/docs/FormulaCard";
 import { QuestionLifecycleDiagram } from "~~/components/docs/QuestionLifecycleDiagram";
 import { RbtsScoreSpreadSettlementDiagram } from "~~/components/docs/RbtsScoreSpreadSettlementDiagram";
-import { TexFormula } from "~~/components/docs/TexFormula";
 import { protocolDocFacts } from "~~/lib/docs/protocolFacts";
 import { getFreeTransactionLimit } from "~~/lib/env/server";
 
@@ -85,7 +84,6 @@ const HowItWorks: NextPage = () => {
       </p>
       <FormulaCard
         title="RBTS Score-Spread Settlement"
-        description="Stakes settle against the stake-weighted mean score: below-mean reports forfeit, above-mean reports split the forfeited pool."
         formulas={[
           {
             label: "Mean & spread",
@@ -117,7 +115,6 @@ const HowItWorks: NextPage = () => {
           ["Pool split", "96% voters \u00b7 1% treasury \u00b7 3% frontend"],
           ["Caller cut", "min(1%, 1 LREP)"],
         ]}
-        footnote="Unrevealed staked reports earn nothing from the round and can be cleaned up after the reveal grace period."
       />
       <RbtsScoreSpreadSettlementDiagram />
       <p>
@@ -175,15 +172,6 @@ const HowItWorks: NextPage = () => {
       </p>
       <FormulaCard
         title="Bounty Claim"
-        description={
-          <>
-            The full surprise-weighting chain behind <TexFormula tex={String.raw`w_i`} /> is on the{" "}
-            <Link href="/docs/tech-stack#bounties" className="link link-primary">
-              Surprise-Weighted Bounties
-            </Link>{" "}
-            page.
-          </>
-        }
         formulas={[
           {
             label: "Per-rater claim",
@@ -202,7 +190,6 @@ const HowItWorks: NextPage = () => {
           { symbol: String.raw`w_i^{\mathrm{base}}`, meaning: "surprise-weighted base weight from the snapshot" },
           { symbol: String.raw`\mathrm{ind}_i`, meaning: "independence multiplier (bps) from the correlation scorer" },
         ]}
-        footnote="Equal-weight rounds replace the weights with one unit per eligible revealed rater. The frontend fee is deducted proportionally from each claim when an eligible frontend is payable."
       />
       <p>
         Bounty size can raise the required rater floor: {protocolDocFacts.bountyParticipantFloorsLabel}. The goal is to

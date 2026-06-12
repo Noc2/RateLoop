@@ -195,7 +195,6 @@ const TechStackPage: NextPage = () => {
       </p>
       <FormulaCard
         title="Surprise-Weighted Claim Weights"
-        description="All arithmetic is integer math in basis points with floor division, recomputable from on-chain events by any challenger."
         formulas={[
           {
             label: "Per-rater claim",
@@ -234,7 +233,6 @@ const TechStackPage: NextPage = () => {
           ["Neutral below", "8 reveals"],
           ["Base weight range", "10\u202f000\u201320\u202f000 bps"],
         ]}
-        footnote="Defaults from the normative spec (scorer rateloop-correlation-epoch-v2); parameters are committed via the snapshot parameterHash."
       />
       <SurpriseMultiplierChart />
       <p>

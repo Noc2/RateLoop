@@ -18,32 +18,18 @@ export type WhereEntry = {
  */
 export function FormulaCard({
   title,
-  description,
   formulas,
   where,
   params,
-  footnote,
 }: {
   title: string;
-  description?: ReactNode;
   formulas: FormulaRow[];
   where?: WhereEntry[];
   params?: [string, ReactNode][];
-  footnote?: ReactNode;
 }) {
   return (
     <figure className="not-prose my-6 rounded-lg bg-base-200 p-4 text-base-content">
-      <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
-        <div className="min-w-0">
-          <p className="font-mono text-xs font-semibold uppercase tracking-wider text-base-content/45">Formula</p>
-          <h3 className="mt-1 text-xl font-semibold leading-tight text-base-content">{title}</h3>
-        </div>
-        {description ? (
-          <figcaption className="max-w-xl text-sm leading-6 text-base-content/62 sm:text-right">
-            {description}
-          </figcaption>
-        ) : null}
-      </div>
+      <h3 className="mb-4 text-xl font-semibold leading-tight text-base-content">{title}</h3>
 
       <div className="rounded-lg bg-base-100 p-4 sm:p-5">
         <div className="grid gap-4">
@@ -84,8 +70,6 @@ export function FormulaCard({
           ))}
         </div>
       ) : null}
-
-      {footnote ? <p className="mt-3 text-xs leading-5 text-base-content/55">{footnote}</p> : null}
     </figure>
   );
 }
