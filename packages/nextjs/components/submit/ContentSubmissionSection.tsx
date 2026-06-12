@@ -3369,16 +3369,20 @@ export function ContentSubmissionSection() {
         </div>
       ) : null}
 
-      <div className="space-y-2">
+      <div className="surface-card-nested space-y-3 rounded-lg p-3">
         <p className="flex items-center gap-1.5 text-sm font-medium text-base-content/80">
           Bounty eligibility
           <InfoTooltip text="Everyone can answer. This only selects which revealed answers can qualify for the bounty payout and the eligible result view." />
         </p>
         <div className="grid gap-2 sm:grid-cols-2">
-          <label className="flex min-h-10 items-center gap-3 rounded-lg border border-base-300 bg-base-100 px-3 py-2 text-sm">
+          <label
+            className={`flex min-h-10 cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
+              bountyEligibility === BOUNTY_ELIGIBILITY_OPEN ? "choice-row-active" : "choice-row-inactive"
+            }`}
+          >
             <input
               type="checkbox"
-              className="checkbox checkbox-primary checkbox-sm"
+              className="checkbox checkbox-primary checkbox-sm shrink-0"
               checked={bountyEligibility === BOUNTY_ELIGIBILITY_OPEN}
               onChange={() => {
                 setBountyEligibility(BOUNTY_ELIGIBILITY_OPEN);
@@ -3392,11 +3396,13 @@ export function ContentSubmissionSection() {
             return (
               <label
                 key={option.kind}
-                className="flex min-h-10 items-center gap-3 rounded-lg border border-base-300 bg-base-100 px-3 py-2 text-sm"
+                className={`flex min-h-10 cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
+                  checked ? "choice-row-active" : "choice-row-inactive"
+                }`}
               >
                 <input
                   type="checkbox"
-                  className="checkbox checkbox-primary checkbox-sm"
+                  className="checkbox checkbox-primary checkbox-sm shrink-0"
                   checked={checked}
                   onChange={event => {
                     const nextEligibility = event.target.checked
@@ -3414,8 +3420,10 @@ export function ContentSubmissionSection() {
           })}
         </div>
         <label
-          className={`mt-3 flex items-center justify-between gap-3 rounded-lg border border-base-300 bg-base-100 px-3 py-2 text-sm ${
-            bountyEligibility === BOUNTY_ELIGIBILITY_OPEN ? "opacity-55" : ""
+          className={`mt-3 flex items-center justify-between gap-3 rounded-lg px-3 py-3 text-sm transition-colors ${
+            bountyEligibility === BOUNTY_ELIGIBILITY_OPEN
+              ? "choice-row-inactive opacity-60"
+              : "choice-row-inactive cursor-pointer"
           }`}
         >
           <span className="min-w-0">
