@@ -60,8 +60,16 @@ if (rateLimitMisconfigured) {
 }
 
 app.use("/*", async (c, next) => {
-  if (rateLimitMisconfigured) {
+  const requestPath = new URL(c.req.url).pathname;
+  const isDeploymentProbe = requestPath === "/deployment";
+
+  if (rateLimitMisconfigured && !isDeploymentProbe) {
     return c.json({ error: "RATE_LIMIT_TRUSTED_IP_HEADERS not configured. Set the env var." }, 503);
+  }
+
+  if (isDeploymentProbe) {
+    await next();
+    return;
   }
 
   const identifier = resolveRateLimitIdentifier(name => c.req.header(name) ?? undefined, {

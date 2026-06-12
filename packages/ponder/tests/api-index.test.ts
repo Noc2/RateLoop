@@ -54,4 +54,27 @@ describe("ponder api bootstrap", () => {
 
     expect(response.status).toBe(404);
   });
+
+  it("keeps deployment probes outside the shared request limiter", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { default: app } = await loadApp({
+      NODE_ENV: "production",
+      CORS_ORIGIN: "https://app.rateloop.ai",
+      RATE_LIMIT_TRUSTED_IP_HEADERS: undefined,
+      PONDER_NETWORK: "hardhat",
+      PONDER_CONTENT_REGISTRY_ADDRESS: "0x0000000000000000000000000000000000000001",
+      PONDER_FEEDBACK_REGISTRY_ADDRESS: "0x0000000000000000000000000000000000000002",
+    });
+
+    const response = await app.request("https://ponder.rateloop.ai/deployment");
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      configured: true,
+      chainId: 31337,
+      deploymentKey:
+        "31337:0x0000000000000000000000000000000000000001:0x0000000000000000000000000000000000000002",
+    });
+  });
 });

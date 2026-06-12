@@ -57,6 +57,7 @@ export interface PonderAvailabilityStatus {
 }
 
 let cachedAvailabilityStatus: PonderAvailabilityStatus | null = null;
+let lastKnownGoodAvailabilityStatus: PonderAvailabilityStatus | null = null;
 let cacheExpiry = 0;
 let availabilityPromise: Promise<PonderAvailabilityStatus> | null = null;
 
@@ -65,6 +66,7 @@ const PONDER_REQUEST_TIMEOUT = 10_000;
 const CACHE_DURATION = 30_000;
 const PONDER_MAX_REQUEST_ATTEMPTS = 3;
 const PONDER_RETRY_BASE_DELAY_MS = 600;
+const PONDER_DEPLOYMENT_RETRY_BASE_DELAY_MS = 100;
 const PONDER_RETRY_MAX_DELAY_MS = 5_000;
 const PONDER_MAX_CONCURRENT_REQUESTS = 4;
 const PONDER_MIN_REQUEST_SPACING_MS = 75;
@@ -175,7 +177,10 @@ async function fetchPonderResponse(
 }
 
 function isRetryablePonderError(error: unknown) {
-  return error instanceof PonderHttpError && (error.status === 429 || error.status === 502 || error.status === 503);
+  return (
+    error instanceof PonderHttpError &&
+    (error.status === 429 || error.status === 502 || error.status === 503 || error.status === 504)
+  );
 }
 
 function getPonderRetryDelayMs(error: unknown, attempt: number, options: FetchPonderJsonOptions) {
@@ -263,6 +268,66 @@ function isPonderDeploymentMetadata(value: unknown): value is PonderDeploymentMe
   return value !== null && typeof value === "object";
 }
 
+type PonderDeploymentProbeResult = {
+  deployment: unknown;
+  transient: boolean;
+};
+
+function rememberAvailablePonderStatus(status: PonderAvailabilityStatus) {
+  if (status.available) {
+    lastKnownGoodAvailabilityStatus = status;
+  }
+  return status;
+}
+
+function lastKnownGoodPonderStatus(expectedDeploymentKey: string) {
+  if (
+    lastKnownGoodAvailabilityStatus?.available &&
+    lastKnownGoodAvailabilityStatus.expectedDeploymentKey === expectedDeploymentKey &&
+    lastKnownGoodAvailabilityStatus.ponderDeploymentKey === expectedDeploymentKey
+  ) {
+    return lastKnownGoodAvailabilityStatus;
+  }
+  return null;
+}
+
+async function fetchPonderDeploymentMetadata(ponderUrl: string): Promise<PonderDeploymentProbeResult> {
+  const url = `${ponderUrl}/deployment`;
+
+  for (let attempt = 1; attempt <= PONDER_MAX_REQUEST_ATTEMPTS; attempt++) {
+    try {
+      const response = await fetch(url, {
+        cache: "no-store",
+        signal: AbortSignal.timeout(HEALTH_CHECK_TIMEOUT),
+      });
+
+      if (response.ok) {
+        return { deployment: await response.json().catch(() => null), transient: false };
+      }
+
+      const error = new PonderHttpError(response);
+      if (attempt >= PONDER_MAX_REQUEST_ATTEMPTS || !isRetryablePonderError(error)) {
+        return {
+          deployment: await response.json().catch(() => null),
+          transient: isRetryablePonderError(error),
+        };
+      }
+
+      await sleep(getPonderRetryDelayMs(error, attempt, { retryBaseDelayMs: PONDER_DEPLOYMENT_RETRY_BASE_DELAY_MS }));
+    } catch (error) {
+      if (error instanceof PonderHttpError && !isRetryablePonderError(error)) {
+        return { deployment: null, transient: false };
+      }
+      if (attempt >= PONDER_MAX_REQUEST_ATTEMPTS) {
+        return { deployment: null, transient: true };
+      }
+      await sleep(getPonderRetryDelayMs(error, attempt, { retryBaseDelayMs: PONDER_DEPLOYMENT_RETRY_BASE_DELAY_MS }));
+    }
+  }
+
+  return { deployment: null, transient: true };
+}
+
 export async function getPonderAvailabilityStatus(): Promise<PonderAvailabilityStatus> {
   const ponderUrl = getConfiguredPonderUrl();
   if (!ponderUrl) {
@@ -310,23 +375,16 @@ async function checkPonderAvailabilityDirect(ponderUrl: string): Promise<PonderA
       return { available: false, reason: "deployment_unconfigured" };
     }
 
-    const deploymentResponse = await fetch(`${ponderUrl}/deployment`, {
-      cache: "no-store",
-      signal: AbortSignal.timeout(HEALTH_CHECK_TIMEOUT),
-    });
-    if (!deploymentResponse.ok) {
-      return {
-        available: false,
-        reason: "deployment_unconfigured",
-        expectedDeploymentKey: expectedDeployment.deploymentKey,
-      };
-    }
-
-    const deployment = await deploymentResponse.json().catch(() => null);
+    const deploymentProbe = await fetchPonderDeploymentMetadata(ponderUrl);
+    const deployment = deploymentProbe.deployment;
     if (!isPonderDeploymentMetadata(deployment) || typeof deployment.deploymentKey !== "string") {
+      if (deploymentProbe.transient) {
+        const lastKnownGood = lastKnownGoodPonderStatus(expectedDeployment.deploymentKey);
+        if (lastKnownGood) return lastKnownGood;
+      }
       return {
         available: false,
-        reason: "deployment_unconfigured",
+        reason: deploymentProbe.transient ? "health_check_failed" : "deployment_unconfigured",
         expectedDeploymentKey: expectedDeployment.deploymentKey,
         deployment: isPonderDeploymentMetadata(deployment) ? deployment : null,
       };
@@ -343,12 +401,12 @@ async function checkPonderAvailabilityDirect(ponderUrl: string): Promise<PonderA
       };
     }
 
-    return {
+    return rememberAvailablePonderStatus({
       available: true,
       expectedDeploymentKey: expectedDeployment.deploymentKey,
       ponderDeploymentKey,
       deployment,
-    };
+    });
   } catch {
     return { available: false, reason: "health_check_failed" };
   }
@@ -372,10 +430,13 @@ async function checkPonderAvailabilityThroughApi(): Promise<PonderAvailabilitySt
   }
 }
 
-export function invalidatePonderCache() {
+export function invalidatePonderCache(options?: { clearLastKnownGood?: boolean }) {
   cachedAvailabilityStatus = null;
   cacheExpiry = 0;
   availabilityPromise = null;
+  if (options?.clearLastKnownGood) {
+    lastKnownGoodAvailabilityStatus = null;
+  }
 }
 
 async function assertPonderAvailableForDeployment() {

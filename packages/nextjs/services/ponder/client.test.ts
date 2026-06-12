@@ -1,4 +1,11 @@
-import { fetchPonderJson, invalidatePonderCache, isPonderAvailable, ponderApi, resolvePonderUrl } from "./client";
+import {
+  fetchPonderJson,
+  getPonderAvailabilityStatus,
+  invalidatePonderCache,
+  isPonderAvailable,
+  ponderApi,
+  resolvePonderUrl,
+} from "./client";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
@@ -90,6 +97,84 @@ test("isPonderAvailable proxies browser health checks through Next", async () =>
 
   assert.equal(requestedUrl, "/api/ponder/availability");
   assert.equal(requestedCache, "no-store");
+});
+
+test("isPonderAvailable retries transient deployment probe failures", async () => {
+  const originalFetch = globalThis.fetch;
+  const requestedUrls: string[] = [];
+  let deploymentCalls = 0;
+
+  globalThis.fetch = (async input => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    requestedUrls.push(url);
+
+    if (url.endsWith("/health")) {
+      return new Response("ok", { status: 200 });
+    }
+
+    if (url.endsWith("/deployment")) {
+      deploymentCalls += 1;
+      if (deploymentCalls === 1) {
+        return new Response("rate limited", { status: 429 });
+      }
+      return healthyPonderPreflightResponse(url) ?? new Response("missing", { status: 404 });
+    }
+
+    return new Response("unexpected", { status: 500 });
+  }) as typeof fetch;
+
+  try {
+    invalidatePonderCache({ clearLastKnownGood: true });
+
+    assert.equal(await isPonderAvailable(), true);
+  } finally {
+    globalThis.fetch = originalFetch;
+    invalidatePonderCache({ clearLastKnownGood: true });
+  }
+
+  assert.match(requestedUrls[0] ?? "", /\/health$/);
+  assert.equal(deploymentCalls, 2);
+});
+
+test("getPonderAvailabilityStatus keeps last-known-good deployment status on transient probe failures", async () => {
+  const originalFetch = globalThis.fetch;
+  let forceTransientDeploymentFailure = false;
+  let deploymentCallsAfterFailure = 0;
+
+  globalThis.fetch = (async input => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    if (url.endsWith("/health")) {
+      return new Response("ok", { status: 200 });
+    }
+
+    if (url.endsWith("/deployment")) {
+      if (forceTransientDeploymentFailure) {
+        deploymentCallsAfterFailure += 1;
+        return new Response("temporarily unavailable", { status: 503 });
+      }
+      return healthyPonderPreflightResponse(url) ?? new Response("missing", { status: 404 });
+    }
+
+    return new Response("unexpected", { status: 500 });
+  }) as typeof fetch;
+
+  try {
+    invalidatePonderCache({ clearLastKnownGood: true });
+
+    const healthyStatus = await getPonderAvailabilityStatus();
+    assert.equal(healthyStatus.available, true);
+
+    forceTransientDeploymentFailure = true;
+    invalidatePonderCache();
+
+    const fallbackStatus = await getPonderAvailabilityStatus();
+    assert.equal(fallbackStatus.available, true);
+    assert.equal(fallbackStatus.ponderDeploymentKey, healthyStatus.ponderDeploymentKey);
+    assert.equal(deploymentCallsAfterFailure, 3);
+  } finally {
+    globalThis.fetch = originalFetch;
+    invalidatePonderCache({ clearLastKnownGood: true });
+  }
 });
 
 test("fetchPonderJson returns parsed json responses", async () => {
