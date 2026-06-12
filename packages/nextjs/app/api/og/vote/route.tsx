@@ -30,7 +30,7 @@ const brandColors = {
   surface: "#000000",
   surfaceElevated: "#121212",
   surfaceHover: "#1A1A1A",
-  surfaceNested: "#202020",
+  surfaceNested: "#121212",
   warmWhite: "#F5F5F5",
   muted: "#A3A3A3",
   border: "rgba(245,245,245,0.1)",

@@ -88,7 +88,7 @@
   --rateloop-surface-elevated: #121212;
   --rateloop-surface-elevated-hover: #1a1a1a;
   --rateloop-surface-mobile-vote: #121212;
-  --rateloop-surface-nested: #202020;
+  --rateloop-surface-nested: #121212;
   --rateloop-field: #1d1d1d;
   --rateloop-field-hover: #222222;
   --rateloop-control-idle: rgb(245 245 245 / 0.11);
@@ -108,7 +108,7 @@
   --rateloop-steel-rgb: 163 163 163;
   --rateloop-surface-rgb: 0 0 0;
   --rateloop-surface-elevated-rgb: 18 18 18;
-  --rateloop-surface-nested-rgb: 32 32 32;
+  --rateloop-surface-nested-rgb: 18 18 18;
   --rateloop-field-rgb: 29 29 29;
   --rateloop-field-hover-rgb: 34 34 34;
   --rateloop-radius-card: 0.5rem;

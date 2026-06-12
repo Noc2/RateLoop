@@ -2009,23 +2009,23 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
 
       {handoff ? (
         <>
-          <section className="surface-card rounded-lg p-5">
-            <div className="grid gap-3 md:grid-cols-5">
-              <div className="surface-card-nested rounded-lg p-4">
+          <section className="surface-card rounded-lg p-6">
+            <div className="grid gap-x-5 gap-y-4 md:grid-cols-5">
+              <div className="min-w-0">
                 <div className="flex items-center gap-2 text-sm font-medium text-base-content/60">
                   <WalletIcon className="h-4 w-4" />
                   <span>Funding wallet</span>
                 </div>
                 <p className="mt-2 font-mono text-sm">{shortAddress(handoff.walletAddress ?? address)}</p>
               </div>
-              <div className="surface-card-nested rounded-lg p-4">
+              <div className="min-w-0">
                 <div className="flex items-center gap-2 text-sm font-medium text-base-content/60">
                   <ShieldCheckIcon className="h-4 w-4" />
                   <span>Bounty</span>
                 </div>
                 <p className="mt-2 text-lg font-semibold">{readDraftBountyLabel(draftForm, handoff)}</p>
               </div>
-              <div className="surface-card-nested rounded-lg p-4">
+              <div className="min-w-0">
                 <div className="flex items-center gap-2 text-sm font-medium text-base-content/60">
                   <ChatBubbleLeftRightIcon className="h-4 w-4" />
                   <span>Feedback Bonus</span>
@@ -2034,7 +2034,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                   {feedbackBonusDraftLabel}
                 </p>
               </div>
-              <div className="surface-card-nested rounded-lg p-4">
+              <div className="min-w-0">
                 <div className="flex items-center gap-2 text-sm font-medium text-base-content/60">
                   <LockClosedIcon className="h-4 w-4" />
                   <span>Context</span>
@@ -2043,7 +2043,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                   {contextSummaryLabel}
                 </p>
               </div>
-              <div className="surface-card-nested rounded-lg p-4">
+              <div className="min-w-0">
                 <div className="flex items-center gap-2 text-sm font-medium text-base-content/60">
                   <CheckCircleIcon className="h-4 w-4" />
                   <span>Status</span>
@@ -2130,12 +2130,15 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
               </div>
             ) : null}
 
-            <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.72fr)]">
-              <div className="space-y-3">
+            <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.72fr)]">
+              <div className="space-y-5">
                 {draftForm?.questions.length ? (
                   draftForm.questions.map((question, index) => {
                     return (
-                      <div key={`${index}-${question.title}`} className="surface-card-nested rounded-lg p-4">
+                      <div
+                        key={`${index}-${question.title}`}
+                        className={hasQuestionBundle ? "rounded-lg border border-base-content/10 p-4" : ""}
+                      >
                         <label className="form-control">
                           <span className="label-text text-xs font-semibold uppercase tracking-wide text-base-content/45">
                             {hasQuestionBundle ? `Question ${index + 1}` : "Question"}
@@ -2238,13 +2241,13 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                     );
                   })
                 ) : (
-                  <div className="surface-card-nested rounded-lg p-4 text-sm text-base-content/55">
+                  <div className="rounded-lg border border-base-content/10 p-4 text-sm text-base-content/55">
                     Question details are unavailable for this handoff.
                   </div>
                 )}
               </div>
 
-              <div className="surface-card-nested rounded-lg p-4">
+              <div className="space-y-5">
                 <div className="form-control">
                   <DraftFieldLabel htmlFor="agent-ask-bounty-amount" tooltip={BOUNTY_AMOUNT_TOOLTIP}>
                     Bounty
@@ -2261,7 +2264,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                 </div>
 
                 {draftForm?.feedbackBonusAmount !== null ? (
-                  <div className="form-control mt-4">
+                  <div className="form-control">
                     <DraftFieldLabel htmlFor="agent-ask-feedback-bonus-amount" tooltip={FEEDBACK_BONUS_AMOUNT_TOOLTIP}>
                       Feedback Bonus {draftForm?.feedbackBonusAsset === "lrep" ? "LREP" : "USDC"}
                     </DraftFieldLabel>
@@ -2278,7 +2281,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                 ) : null}
 
                 {hasPrivateContextDraft ? (
-                  <div className="mt-5 rounded-lg border border-warning/30 bg-warning/10 p-4">
+                  <div className="rounded-lg border border-warning/30 bg-warning/10 p-4">
                     <div className="flex items-start gap-2">
                       <LockClosedIcon className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
                       <div className="min-w-0 flex-1">
@@ -2327,82 +2330,84 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                   </div>
                 ) : null}
 
-                <div className="mt-5 flex items-center gap-2 text-sm font-semibold text-base-content/75">
-                  <ClockIcon className="h-4 w-4" />
-                  <span>Round settings</span>
-                </div>
-                <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-                  <div className="form-control">
-                    <DraftFieldLabel htmlFor="agent-ask-round-blind-minutes" tooltip={blindMinutesTooltip}>
-                      Blind minutes
-                    </DraftFieldLabel>
-                    <input
-                      id="agent-ask-round-blind-minutes"
-                      type="number"
-                      className="input input-bordered mt-1 w-full"
-                      disabled={!canEditDraft}
-                      inputMode="numeric"
-                      min={roundBlindMinuteBounds.min}
-                      max={roundBlindMinuteBounds.max}
-                      step={1}
-                      value={draftForm?.roundBlindMinutes ?? ""}
-                      onBlur={() => clampDraftWholeNumberField("roundBlindMinutes")}
-                      onChange={event => updateDraftWholeNumberField("roundBlindMinutes", event.target.value)}
-                    />
+                <div>
+                  <div className="flex items-center gap-2 text-sm font-semibold text-base-content/75">
+                    <ClockIcon className="h-4 w-4" />
+                    <span>Round settings</span>
                   </div>
-                  <div className="form-control">
-                    <DraftFieldLabel htmlFor="agent-ask-round-max-minutes" tooltip={maxMinutesTooltip}>
-                      Max minutes
-                    </DraftFieldLabel>
-                    <input
-                      id="agent-ask-round-max-minutes"
-                      type="number"
-                      className="input input-bordered mt-1 w-full"
-                      disabled={!canEditDraft}
-                      inputMode="numeric"
-                      min={draftRoundMaxDurationMinuteBounds.min}
-                      max={draftRoundMaxDurationMinuteBounds.max}
-                      step={1}
-                      value={draftForm?.roundMaxDurationMinutes ?? ""}
-                      onBlur={() => clampDraftWholeNumberField("roundMaxDurationMinutes")}
-                      onChange={event => updateDraftWholeNumberField("roundMaxDurationMinutes", event.target.value)}
-                    />
-                  </div>
-                  <div className="form-control">
-                    <DraftFieldLabel htmlFor="agent-ask-round-min-voters" tooltip={minVotersTooltip}>
-                      Required voters
-                    </DraftFieldLabel>
-                    <input
-                      id="agent-ask-round-min-voters"
-                      type="number"
-                      className="input input-bordered mt-1 w-full"
-                      disabled={!canEditDraft}
-                      inputMode="numeric"
-                      min={roundMinVoterBounds.min}
-                      max={roundMinVoterBounds.max}
-                      step={1}
-                      value={draftForm?.roundMinVoters ?? ""}
-                      onBlur={() => clampDraftWholeNumberField("roundMinVoters")}
-                      onChange={event => updateDraftWholeNumberField("roundMinVoters", event.target.value)}
-                    />
-                  </div>
-                  <div className="form-control">
-                    <DraftFieldLabel htmlFor="agent-ask-round-max-voters" tooltip={maxVotersTooltip}>
-                      Max voters
-                    </DraftFieldLabel>
-                    <input
-                      id="agent-ask-round-max-voters"
-                      type="number"
-                      className="input input-bordered mt-1 w-full"
-                      disabled={!canEditDraft}
-                      inputMode="numeric"
-                      min={roundMaxVoterBounds.min}
-                      max={roundMaxVoterBounds.max}
-                      step={1}
-                      value={draftForm?.roundMaxVoters ?? ""}
-                      onBlur={() => clampDraftWholeNumberField("roundMaxVoters")}
-                      onChange={event => updateDraftWholeNumberField("roundMaxVoters", event.target.value)}
-                    />
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+                    <div className="form-control">
+                      <DraftFieldLabel htmlFor="agent-ask-round-blind-minutes" tooltip={blindMinutesTooltip}>
+                        Blind minutes
+                      </DraftFieldLabel>
+                      <input
+                        id="agent-ask-round-blind-minutes"
+                        type="number"
+                        className="input input-bordered mt-1 w-full"
+                        disabled={!canEditDraft}
+                        inputMode="numeric"
+                        min={roundBlindMinuteBounds.min}
+                        max={roundBlindMinuteBounds.max}
+                        step={1}
+                        value={draftForm?.roundBlindMinutes ?? ""}
+                        onBlur={() => clampDraftWholeNumberField("roundBlindMinutes")}
+                        onChange={event => updateDraftWholeNumberField("roundBlindMinutes", event.target.value)}
+                      />
+                    </div>
+                    <div className="form-control">
+                      <DraftFieldLabel htmlFor="agent-ask-round-max-minutes" tooltip={maxMinutesTooltip}>
+                        Max minutes
+                      </DraftFieldLabel>
+                      <input
+                        id="agent-ask-round-max-minutes"
+                        type="number"
+                        className="input input-bordered mt-1 w-full"
+                        disabled={!canEditDraft}
+                        inputMode="numeric"
+                        min={draftRoundMaxDurationMinuteBounds.min}
+                        max={draftRoundMaxDurationMinuteBounds.max}
+                        step={1}
+                        value={draftForm?.roundMaxDurationMinutes ?? ""}
+                        onBlur={() => clampDraftWholeNumberField("roundMaxDurationMinutes")}
+                        onChange={event => updateDraftWholeNumberField("roundMaxDurationMinutes", event.target.value)}
+                      />
+                    </div>
+                    <div className="form-control">
+                      <DraftFieldLabel htmlFor="agent-ask-round-min-voters" tooltip={minVotersTooltip}>
+                        Required voters
+                      </DraftFieldLabel>
+                      <input
+                        id="agent-ask-round-min-voters"
+                        type="number"
+                        className="input input-bordered mt-1 w-full"
+                        disabled={!canEditDraft}
+                        inputMode="numeric"
+                        min={roundMinVoterBounds.min}
+                        max={roundMinVoterBounds.max}
+                        step={1}
+                        value={draftForm?.roundMinVoters ?? ""}
+                        onBlur={() => clampDraftWholeNumberField("roundMinVoters")}
+                        onChange={event => updateDraftWholeNumberField("roundMinVoters", event.target.value)}
+                      />
+                    </div>
+                    <div className="form-control">
+                      <DraftFieldLabel htmlFor="agent-ask-round-max-voters" tooltip={maxVotersTooltip}>
+                        Max voters
+                      </DraftFieldLabel>
+                      <input
+                        id="agent-ask-round-max-voters"
+                        type="number"
+                        className="input input-bordered mt-1 w-full"
+                        disabled={!canEditDraft}
+                        inputMode="numeric"
+                        min={roundMaxVoterBounds.min}
+                        max={roundMaxVoterBounds.max}
+                        step={1}
+                        value={draftForm?.roundMaxVoters ?? ""}
+                        onBlur={() => clampDraftWholeNumberField("roundMaxVoters")}
+                        onChange={event => updateDraftWholeNumberField("roundMaxVoters", event.target.value)}
+                      />
+                    </div>
                   </div>
                 </div>
               </div>

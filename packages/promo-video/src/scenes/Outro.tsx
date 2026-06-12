@@ -23,7 +23,7 @@ const OrbitButton = ({ label, startFrame }: { label: string; startFrame: number 
         style={{
           borderRadius: radiusCard,
           padding: "30px 64px",
-          background: `linear-gradient(180deg, rgb(18 18 18 / 0.98), rgb(32 32 32 / 0.96))`,
+          background: `linear-gradient(180deg, rgb(18 18 18 / 0.98), rgb(18 18 18 / 0.96))`,
           fontFamily: bodyFont,
           fontWeight: 700,
           fontSize: 40,

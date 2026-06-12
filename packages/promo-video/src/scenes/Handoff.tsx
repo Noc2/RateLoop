@@ -78,7 +78,7 @@ export const Handoff = () => {
                 style={{
                   borderRadius: radiusCard,
                   padding: "18px 40px",
-                  background: "linear-gradient(180deg, rgb(18 18 18 / 0.98), rgb(32 32 32 / 0.96))",
+                  background: "linear-gradient(180deg, rgb(18 18 18 / 0.98), rgb(18 18 18 / 0.96))",
                   fontFamily: bodyFont,
                   fontWeight: 700,
                   fontSize: 28,
