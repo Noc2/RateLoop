@@ -3,6 +3,7 @@ import { bodyFont, headingFont, monoFont } from "../fonts";
 import { useFadeInUp } from "../primitives";
 import { colors, radiusCard, spectrumGradient } from "../theme";
 import { Card, ChatBubble, ChatPanel, CheckIcon, FieldRow, TypeOn } from "../ui";
+import { RewardChip, surfaceCardStyle } from "../siteUi";
 import { OrbGlow } from "./Intro";
 
 const ToolCall = ({ name, startFrame, doneFrame }: { name: string; startFrame: number; doneFrame: number }) => {
@@ -37,7 +38,7 @@ const FadeCheck = ({ startFrame }: { startFrame: number }) => {
   );
 };
 
-/** Beat 2 — the agent drafts the RateLoop question. */
+/** Beat 2 — the agent drafts the question, previewed as a discover feed card. */
 export const AgentAsk = () => {
   return (
     <AbsoluteFill style={{ alignItems: "center", justifyContent: "center" }}>
@@ -60,44 +61,55 @@ export const AgentAsk = () => {
           </ChatPanel>
         </div>
 
-        <Card startFrame={60} style={{ width: 700, padding: "30px 36px" }}>
+        {/* Question preview styled like a discover feed card: centered title header,
+            brand reward chips with near-black text, borderless surface card. */}
+        <Card startFrame={60} style={{ ...surfaceCardStyle, width: 700, padding: "26px 30px" }}>
           <div
             style={{
               fontFamily: monoFont,
               fontSize: 19,
               letterSpacing: 2,
               color: colors.steel,
-              marginBottom: 14,
+              marginBottom: 16,
             }}
           >
             RATELOOP QUESTION
           </div>
           <div
             style={{
+              borderRadius: radiusCard + 4,
+              background: "rgb(245 245 245 / 0.05)",
+              padding: "22px 28px",
+              textAlign: "center",
               fontFamily: headingFont,
-              fontWeight: 700,
-              fontSize: 33,
+              fontWeight: 600,
+              fontSize: 31,
               lineHeight: 1.3,
               color: colors.warmWhite,
-              marginBottom: 10,
             }}
           >
             <TypeOn text="Would this landing page convince you to try the app?" startFrame={74} charsPerFrame={1.5} />
           </div>
           <div
             style={{
-              height: 110,
+              height: 100,
               borderRadius: radiusCard,
               backgroundImage: spectrumGradient,
               opacity: 0.22,
-              margin: "14px 0 8px",
+              margin: "16px 0 18px",
               border: `1px solid ${colors.shellBorder}`,
             }}
           />
-          <FieldRow label="bounty" value="25 USDC" startFrame={120} valueColor={colors.green} />
-          <FieldRow label="raters" value="25 votes required" startFrame={134} />
-          <FieldRow label="audience" value="founders · freelancers" startFrame={148} />
-          <FieldRow label="feedback bonus" value="5 USDC for written reasons" startFrame={162} />
+          <div style={{ display: "flex", gap: 14, marginBottom: 8 }}>
+            <RewardChip brand="blue" startFrame={120}>
+              25 USDC Bounty
+            </RewardChip>
+            <RewardChip brand="green" startFrame={132}>
+              5 USDC Feedback Bonus
+            </RewardChip>
+          </div>
+          <FieldRow label="raters" value="25 votes required" startFrame={146} />
+          <FieldRow label="audience" value="founders · freelancers" startFrame={160} />
         </Card>
       </div>
     </AbsoluteFill>

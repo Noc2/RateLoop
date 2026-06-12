@@ -1,27 +1,60 @@
-import { AbsoluteFill, interpolate, useCurrentFrame } from "remotion";
+import type { ReactNode } from "react";
+import { AbsoluteFill, useCurrentFrame } from "remotion";
 import { bodyFont, headingFont, monoFont } from "../fonts";
 import { useFadeInUp } from "../primitives";
-import { colors, orbitGradient, radiusCard } from "../theme";
-import { Card, CheckIcon, FieldRow } from "../ui";
+import { colors, radiusCard } from "../theme";
+import { Card, CheckIcon } from "../ui";
+import { GradientActionButton, MicroLabel, surfaceCardStyle } from "../siteUi";
 import { OrbGlow } from "./Intro";
 
-const APPROVE_AT = 100;
+const SUBMIT_AT = 100;
 const LIVE_AT = 145;
 
-/** Beat 3 — review the handoff link and fund in one click. */
+/** Summary-grid cell mirroring AgentAskHandoffPage (icon label + bold value). */
+const SummaryCell = ({
+  label,
+  value,
+  startFrame,
+  valueColor = colors.warmWhite,
+  mono = false,
+}: {
+  label: string;
+  value: ReactNode;
+  startFrame: number;
+  valueColor?: string;
+  mono?: boolean;
+}) => {
+  const entrance = useFadeInUp(startFrame, 12);
+  return (
+    <div style={{ ...entrance, display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
+      <span style={{ fontFamily: bodyFont, fontWeight: 500, fontSize: 21, color: "rgb(245 245 245 / 0.6)" }}>
+        {label}
+      </span>
+      <span
+        style={{
+          fontFamily: mono ? monoFont : bodyFont,
+          fontWeight: 600,
+          fontSize: mono ? 22 : 25,
+          color: valueColor,
+          whiteSpace: "nowrap",
+        }}
+      >
+        {value}
+      </span>
+    </div>
+  );
+};
+
+/** Beat 3 — the real agent-ask handoff page: kicker, summary grid, Submit. */
 export const Handoff = () => {
   const frame = useCurrentFrame();
-  const approved = frame >= APPROVE_AT + 16;
+  const submitting = frame >= SUBMIT_AT + 10 && frame < LIVE_AT;
   const live = useFadeInUp(LIVE_AT, 16);
-  const buttonPress = interpolate(frame, [APPROVE_AT, APPROVE_AT + 6, APPROVE_AT + 14], [1, 0.96, 1], {
-    extrapolateLeft: "clamp",
-    extrapolateRight: "clamp",
-  });
 
   return (
     <AbsoluteFill style={{ alignItems: "center", justifyContent: "center" }}>
       <OrbGlow size={760} opacity={0.15} />
-      <Card startFrame={6} style={{ width: 880, overflow: "hidden" }}>
+      <Card startFrame={6} style={{ ...surfaceCardStyle, width: 1060, overflow: "hidden" }}>
         {/* Browser chrome */}
         <div
           style={{
@@ -54,46 +87,61 @@ export const Handoff = () => {
           </div>
         </div>
 
-        <div style={{ padding: "32px 40px" }}>
-          <div style={{ fontFamily: headingFont, fontWeight: 700, fontSize: 38, color: colors.warmWhite }}>
-            Review &amp; Fund
+        <div style={{ padding: "32px 40px 38px" }}>
+          <MicroLabel>Agent ask handoff</MicroLabel>
+          <div
+            style={{
+              fontFamily: headingFont,
+              fontWeight: 700,
+              fontSize: 36,
+              color: colors.warmWhite,
+              margin: "14px 0 30px",
+            }}
+          >
+            Would this landing page convince you to try the app?
           </div>
-          <div style={{ marginTop: 10 }}>
-            <FieldRow label="question" value="Would this landing page convince you?" startFrame={28} />
-            <FieldRow label="bounty" value="25 USDC" startFrame={40} valueColor={colors.green} />
-            <FieldRow
-              label="context"
-              value="confidential · unlocked after terms"
-              startFrame={52}
-              valueColor={colors.yellow}
+
+          {/* Summary grid, like the real page's 5-column overview */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1.2fr 0.9fr 1.2fr 1.4fr 0.9fr",
+              gap: 26,
+              paddingBottom: 30,
+              borderBottom: `1px solid rgb(245 245 245 / 0.06)`,
+            }}
+          >
+            <SummaryCell label="Funding wallet" value="0x7f3a…c41" startFrame={28} mono />
+            <SummaryCell label="Bounty" value="25 USDC" startFrame={38} valueColor={colors.green} />
+            <SummaryCell label="Feedback Bonus" value="5 USDC" startFrame={48} valueColor={colors.green} />
+            <SummaryCell label="Context" value="Confidential" startFrame={58} valueColor={colors.yellow} />
+            <SummaryCell
+              label="Status"
+              value={
+                <span
+                  style={{
+                    display: "inline-flex",
+                    borderRadius: 999,
+                    padding: "5px 16px",
+                    background: "rgb(245 245 245 / 0.08)",
+                    fontSize: 22,
+                  }}
+                >
+                  ready
+                </span>
+              }
+              startFrame={68}
             />
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: 28, marginTop: 30 }}>
-            <div
-              style={{
-                padding: 3,
-                borderRadius: radiusCard + 2,
-                backgroundImage: orbitGradient(frame * 2.4),
-                transform: `scale(${buttonPress})`,
-                opacity: approved ? 0.45 : 1,
-              }}
-            >
-              <div
-                style={{
-                  borderRadius: radiusCard,
-                  padding: "18px 40px",
-                  background: "linear-gradient(180deg, rgb(18 18 18 / 0.98), rgb(18 18 18 / 0.96))",
-                  fontFamily: bodyFont,
-                  fontWeight: 700,
-                  fontSize: 28,
-                  color: colors.warmWhite,
-                }}
-              >
-                Approve in Wallet
-              </div>
-            </div>
-
+          <div style={{ display: "flex", alignItems: "center", gap: 30, marginTop: 30 }}>
+            <GradientActionButton
+              label={submitting ? "Submitting..." : "Submit"}
+              frame={frame}
+              startFrame={20}
+              pressedAt={SUBMIT_AT}
+              width={300}
+            />
             <div
               style={{
                 ...live,

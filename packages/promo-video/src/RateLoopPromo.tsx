@@ -9,16 +9,21 @@ import { Report } from "./scenes/Report";
 import { Settle } from "./scenes/Settle";
 import { colors } from "./theme";
 
+/**
+ * One narrative ask, end to end. The product beats reuse the real site UI —
+ * the RatingOrb, Up/Down vote buttons, the stake sheet, the agent-ask handoff
+ * page, and the discover-card question preview.
+ */
+
 export const PROMO_FPS = 30;
 
-// Beat lengths (frames @30fps): one narrative ask, end to end. ~66s total.
-const HOOK = 180; // 6s   — founder prompts their agent
-const ASK = 240; // 8s    — agent drafts the RateLoop question
-const HANDOFF = 240; // 8s — review + fund via handoff link, public or confidential
-const RATERS = 435; // 14.5s — blind votes, predictions, feedback, USDC
-const SETTLE = 240; // 8s  — reveal + on-chain settlement
-const REPORT = 360; // 12s — agent delivers the validation report
-const OUTRO = 315; // 10.5s — logo, tagline, rateloop.ai
+const HOOK = 180;
+const ASK = 240;
+const HANDOFF = 240;
+const RATERS = 435;
+const SETTLE = 240;
+const REPORT = 360;
+const OUTRO = 315;
 
 export const PROMO_DURATION_IN_FRAMES = HOOK + ASK + HANDOFF + RATERS + SETTLE + REPORT + OUTRO;
 
@@ -56,13 +61,12 @@ const BEATS: Beat[] = [
   },
 ];
 
-const VO_OFFSET = 6; // VO starts shortly after each beat's fade-in
+const VO_OFFSET = 6;
 
 const VO_WINDOWS = BEATS.map(
   beat => [beat.start + VO_OFFSET, beat.start + VO_OFFSET + beat.voDurationInFrames] as const,
 );
 
-/** Music bed: brighter when VO rests, tightly ducked under narration. */
 const musicVolume = (frame: number) => {
   let duck = 1;
   for (const [a, b] of VO_WINDOWS) {

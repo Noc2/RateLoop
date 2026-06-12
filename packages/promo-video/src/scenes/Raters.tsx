@@ -1,8 +1,10 @@
 import { AbsoluteFill, interpolate, useCurrentFrame } from "remotion";
 import { bodyFont, headingFont, monoFont } from "../fonts";
-import { GradientText, useFadeInUp } from "../primitives";
-import { colors, radiusCard, spectrumGradient } from "../theme";
-import { Card, Caption, ChatBubble, Chip, LockIcon, ThumbIcon, TypeOn } from "../ui";
+import { useFadeInUp } from "../primitives";
+import { RatingOrb } from "../RatingOrb";
+import { colors, spectrumGradient } from "../theme";
+import { Caption, Card, ChatBubble, Chip, LockIcon, TypeOn } from "../ui";
+import { GradientActionButton, MicroLabel, VoteButton, surfaceCardStyle, votingCardOverlay } from "../siteUi";
 import { OrbGlow } from "./Intro";
 
 type Rater = { initials: string; ai?: boolean; commitAt: number };
@@ -18,6 +20,10 @@ const RATERS: Rater[] = [
   { initials: "EH", commitAt: 256 },
 ];
 
+const VOTE_AT = 150;
+const SHEET_AT = 205;
+const STAKE_PRESS_AT = 330;
+
 const RaterChip = ({ rater }: { rater: Rater }) => {
   const frame = useCurrentFrame();
   const entrance = useFadeInUp(rater.commitAt - 16, 14);
@@ -32,7 +38,6 @@ const RaterChip = ({ rater }: { rater: Rater }) => {
   });
   return (
     <div style={{ ...entrance, position: "relative", display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
-      {/* USDC earn chip floating up */}
       {earnT > 0 && earnT < 1 && (
         <div
           style={{
@@ -91,24 +96,85 @@ const RaterChip = ({ rater }: { rater: Rater }) => {
   );
 };
 
-/** Beat 4 — verified humans (and an AI rater) vote blind and earn USDC. */
+/** Range-slider replica of the stake sheet sliders: spectrum fill + round thumb. */
+const SheetSlider = ({ pct }: { pct: number }) => (
+  <div style={{ position: "relative", height: 12, borderRadius: 6, background: "rgb(245 245 245 / 0.1)" }}>
+    <div
+      style={{
+        position: "absolute",
+        inset: 0,
+        width: `${pct}%`,
+        borderRadius: 6,
+        backgroundImage: spectrumGradient,
+      }}
+    />
+    <div
+      style={{
+        position: "absolute",
+        top: "50%",
+        left: `${pct}%`,
+        transform: "translate(-50%, -50%)",
+        width: 28,
+        height: 28,
+        borderRadius: "50%",
+        background: colors.warmWhite,
+        boxShadow: "0 4px 10px rgb(0 0 0 / 0.45)",
+      }}
+    />
+  </div>
+);
+
+const SheetLabelRow = ({ label, value, valueColor }: { label: string; value: string; valueColor?: string }) => (
+  <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 20 }}>
+    <MicroLabel>{label}</MicroLabel>
+    <span
+      style={{
+        fontFamily: bodyFont,
+        fontWeight: 700,
+        fontSize: 30,
+        color: valueColor ?? colors.warmWhite,
+        fontVariantNumeric: "tabular-nums",
+      }}
+    >
+      {value}
+    </span>
+  </div>
+);
+
+/** Beat 4 — the real voting card (orb + Up/Down), then the stake sheet. */
 export const Raters = () => {
   const frame = useCurrentFrame();
-  const upPick = frame >= 150;
-  const slider = interpolate(frame, [180, 250], [0, 72], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
-  const pickPop = interpolate(frame, [150, 158], [1, 1.06], {
+  const upPick = frame >= VOTE_AT;
+  const pickScale = interpolate(frame, [VOTE_AT, VOTE_AT + 8, VOTE_AT + 18], [1, 1.06, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
-  const pickSettle = interpolate(frame, [158, 168], [pickPop, 1], {
+  const slider = interpolate(frame, [SHEET_AT + 25, SHEET_AT + 95], [50, 72], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
+  const stake = interpolate(frame, [SHEET_AT + 70, SHEET_AT + 110], [0, 5], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+  const voteOpacity = interpolate(frame, [SHEET_AT - 5, SHEET_AT + 10], [1, 0], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+  const sheetOpacity = interpolate(frame, [SHEET_AT + 6, SHEET_AT + 22], [0, 1], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+  const sheetRise = interpolate(frame, [SHEET_AT + 6, SHEET_AT + 24], [36, 0], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+  const hintBlink = 0.65 + 0.35 * Math.sin(frame * 0.14);
 
   return (
     <AbsoluteFill style={{ alignItems: "center", justifyContent: "center" }}>
       <OrbGlow size={840} opacity={0.13} />
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 40 }}>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 38 }}>
         {/* Committing raters */}
         <div style={{ display: "flex", gap: 34 }}>
           {RATERS.map(r => (
@@ -117,41 +183,100 @@ export const Raters = () => {
         </div>
 
         <div style={{ display: "flex", gap: 48, alignItems: "stretch" }}>
-          {/* Blind vote card */}
-          <Card startFrame={84} style={{ width: 760, padding: "30px 38px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 20 }}>
-              <Chip startFrame={96} color={colors.green}>
-                <CheckDot /> Verified · World ID
-              </Chip>
-              <Chip startFrame={108}>blind vote</Chip>
-              <Chip startFrame={120} color={colors.yellow}>
-                <LockIcon size={16} color={colors.yellow} /> terms signed
-              </Chip>
-            </div>
-            <div style={{ display: "flex", gap: 22 }}>
-              <VoteButton up active={upPick} scale={upPick ? pickSettle : 1} />
-              <VoteButton up={false} active={false} scale={1} />
-            </div>
-            <div style={{ marginTop: 30 }}>
-              <div style={{ fontFamily: monoFont, fontSize: 19, color: colors.steel, marginBottom: 12 }}>
-                PREDICT THE CROWD — {Math.round(slider)}% will vote up
+          {/* Voting card replica: warm radial overlay, orb, RATE HERE, Up/Down */}
+          <Card
+            startFrame={84}
+            style={{
+              ...surfaceCardStyle,
+              position: "relative",
+              width: 680,
+              height: 580,
+              padding: "26px 38px",
+              overflow: "hidden",
+            }}
+          >
+            <div style={{ position: "absolute", inset: 0, ...votingCardOverlay, pointerEvents: "none" }} />
+
+            {/* Phase A — blind vote on the signal card */}
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                padding: "26px 38px",
+                opacity: voteOpacity,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 14, alignSelf: "flex-start" }}>
+                <Chip startFrame={96} color={colors.green}>
+                  <CheckDot /> Verified · World ID
+                </Chip>
+                <Chip startFrame={108}>blind vote</Chip>
+                <Chip startFrame={120} color={colors.yellow}>
+                  <LockIcon size={16} color={colors.yellow} /> terms signed
+                </Chip>
               </div>
-              <div style={{ position: "relative", height: 12, borderRadius: 6, background: colors.surfaceNested }}>
-                <div
-                  style={{
-                    position: "absolute",
-                    inset: 0,
-                    width: `${slider}%`,
-                    borderRadius: 6,
-                    backgroundImage: spectrumGradient,
-                  }}
+              <div style={{ marginTop: 26 }}>
+                <RatingOrb score={null} progress={0} size={230} idPrefix="raters" />
+              </div>
+              <div
+                style={{
+                  marginTop: 16,
+                  fontFamily: bodyFont,
+                  fontWeight: 600,
+                  fontSize: 21,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.16em",
+                  color: colors.yellow,
+                  opacity: upPick ? 0 : hintBlink,
+                }}
+              >
+                Rate here
+              </div>
+              <div style={{ marginTop: 18, display: "flex", gap: 24 }}>
+                <VoteButton up pressed={upPick} scale={pickScale} />
+                <VoteButton up={false} />
+              </div>
+            </div>
+
+            {/* Phase B — the stake sheet (StakeSelector) slides up over the card */}
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                padding: "30px 42px",
+                opacity: sheetOpacity,
+                transform: `translateY(${sheetRise}px)`,
+                background: "rgb(18 18 18 / 0.97)",
+                display: "flex",
+                flexDirection: "column",
+                gap: 24,
+              }}
+            >
+              <SheetLabelRow label="Your signal" value="Thumbs up" valueColor={colors.voteYes} />
+              <div style={{ borderTop: "1px solid rgb(245 245 245 / 0.1)", paddingTop: 22, display: "flex", flexDirection: "column", gap: 16 }}>
+                <SheetLabelRow label="Crowd forecast" value={`${Math.round(slider)}% up`} />
+                <SheetSlider pct={slider} />
+              </div>
+              <div style={{ borderTop: "1px solid rgb(245 245 245 / 0.1)", paddingTop: 22, display: "flex", flexDirection: "column", gap: 16 }}>
+                <SheetLabelRow label="Stake amount" value={`${stake.toFixed(1)} LREP`} />
+                <SheetSlider pct={(stake / 10) * 100} />
+              </div>
+              <div style={{ marginTop: "auto" }}>
+                <GradientActionButton
+                  label={frame >= STAKE_PRESS_AT + 12 ? "Submitting..." : "Stake 5 LREP"}
+                  frame={frame}
+                  startFrame={SHEET_AT + 14}
+                  pressedAt={STAKE_PRESS_AT}
                 />
               </div>
             </div>
           </Card>
 
           {/* Feedback note */}
-          <Card startFrame={250} style={{ width: 560, padding: "28px 34px", alignSelf: "center" }}>
+          <Card startFrame={250} style={{ ...surfaceCardStyle, width: 560, padding: "28px 34px", alignSelf: "center" }}>
             <div style={{ fontFamily: monoFont, fontSize: 19, color: colors.steel, marginBottom: 14 }}>
               FEEDBACK · earns the bonus
             </div>
@@ -181,28 +306,4 @@ const CheckDot = () => (
       display: "inline-block",
     }}
   />
-);
-
-const VoteButton = ({ up, active, scale }: { up: boolean; active: boolean; scale: number }) => (
-  <div
-    style={{
-      flex: 1,
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: 14,
-      padding: "24px 0",
-      borderRadius: radiusCard + 2,
-      border: `2px solid ${active ? colors.voteYes : colors.shellBorder}`,
-      background: active ? "rgb(32 214 163 / 0.12)" : colors.surfaceNested,
-      transform: `scale(${scale})`,
-      fontFamily: bodyFont,
-      fontWeight: 700,
-      fontSize: 28,
-      color: active ? colors.voteYes : colors.steel,
-    }}
-  >
-    <ThumbIcon up={up} size={32} color={active ? colors.voteYes : colors.steel} />
-    {up ? "Convincing" : "Not yet"}
-  </div>
 );

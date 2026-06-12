@@ -1,11 +1,12 @@
 import { AbsoluteFill } from "remotion";
-import { bodyFont, headingFont, monoFont } from "../fonts";
+import { bodyFont, headingFont } from "../fonts";
 import { useFadeInUp } from "../primitives";
 import { colors, radiusCard } from "../theme";
 import { ChatBubble, ChatPanel, FieldRow, TypeOn } from "../ui";
+import { OutlineButton } from "../siteUi";
 import { OrbGlow } from "./Intro";
 
-/** Beat 6 — the agent returns a report the founder can act on. */
+/** Beat 6 — the agent's report, with the site's outline result button. */
 export const Report = () => {
   const reportCard = useFadeInUp(56, 16);
   return (
@@ -43,7 +44,7 @@ export const Report = () => {
           >
             Validation report — AI meeting-notes app
           </div>
-          <FieldRow label="rating" value="78% would try it" startFrame={86} valueColor={colors.voteYes} />
+          <FieldRow label="rating" value="7.8 / 10 · 78% would try it" startFrame={86} valueColor={colors.voteYes} />
           <FieldRow label="confidence" value="high · 25 of 25 revealed" startFrame={100} />
           <FieldRow
             label="top objection"
@@ -53,15 +54,8 @@ export const Report = () => {
           />
           <FieldRow label="recommendation" value="Ship it — fix the pricing section first" startFrame={128} />
           <FieldRow label="autonomous mode" value="humans & agents stay in the loop" startFrame={150} />
-          <div
-            style={{
-              marginTop: 18,
-              fontFamily: monoFont,
-              fontSize: 20,
-              color: colors.blue,
-            }}
-          >
-            rateloop.ai/rate/1284 — public, citable result
+          <div style={{ marginTop: 22 }}>
+            <OutlineButton label="View public result" startFrame={168} />
           </div>
         </div>
 
