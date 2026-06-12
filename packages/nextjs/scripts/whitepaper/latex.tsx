@@ -104,6 +104,32 @@ function mapNode(node: XmlNode, defs: DefsMap, fill: string, key: number): React
       );
     }
 
+    case "svg": {
+      const children: React.ReactElement[] = [];
+      for (let i = 0; i < node.childNodes.length; i++) {
+        const mapped = mapNode(node.childNodes[i], defs, fill, i);
+        if (mapped) children.push(mapped);
+      }
+      if (children.length === 0) return null;
+
+      const x = Number.parseFloat(node.getAttribute("x") || "0");
+      const y = Number.parseFloat(node.getAttribute("y") || "0");
+      const width = Number.parseFloat(node.getAttribute("width") || "0");
+      const height = Number.parseFloat(node.getAttribute("height") || "0");
+      const [minX, minY, viewBoxWidth, viewBoxHeight] = (node.getAttribute("viewBox") || "0 0 0 0")
+        .split(/\s+/)
+        .map(value => Number.parseFloat(value));
+      const scaleX = width && viewBoxWidth ? width / viewBoxWidth : 1;
+      const scaleY = height && viewBoxHeight ? height / viewBoxHeight : 1;
+      const transform = `translate(${x},${y}) scale(${scaleX},${scaleY}) translate(${-minX},${-minY})`;
+
+      return (
+        <G key={key} transform={transform}>
+          {children}
+        </G>
+      );
+    }
+
     case "use": {
       const href = node.getAttribute("xlink:href") || node.getAttribute("href") || "";
       const id = href.replace("#", "");

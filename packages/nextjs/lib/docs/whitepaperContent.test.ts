@@ -120,6 +120,24 @@ test("whitepaper contents include the current nine sections", () => {
   );
 });
 
+test("whitepaper includes how-it-works formulas as rendered formula blocks", () => {
+  const incentives = SECTIONS.find(section => section.title === "Incentives & Token Flows");
+  assert.ok(incentives);
+
+  const allFormulaLatex = incentives.subsections
+    .flatMap(subsection => subsection.blocks)
+    .filter((block): block is Extract<ContentBlock, { type: "formula" }> => block.type === "formula")
+    .map(block => block.latex);
+
+  assert.ok(allFormulaLatex.some(latex => latex.includes(String.raw`\bar{s}`)));
+  assert.ok(allFormulaLatex.some(latex => latex.includes(String.raw`f_i = \begin{cases}`)));
+  assert.ok(allFormulaLatex.some(latex => latex.includes(String.raw`r_i = 0.96`)));
+  assert.ok(allFormulaLatex.some(latex => latex.includes(String.raw`\mathrm{claim}_i`)));
+  assert.ok(allFormulaLatex.some(latex => latex.includes(String.raw`\mathrm{credit}_r`)));
+  assert.ok(allFormulaLatex.some(latex => latex.includes(String.raw`\mathrm{payout}`)));
+  assert.ok(allFormulaLatex.some(latex => latex.includes(String.raw`w_i = w_i^{\mathrm{base}}`)));
+});
+
 test("whitepaper executive summary centers the agent-first thesis", () => {
   const whitepaperText = collectWhitepaperText();
 

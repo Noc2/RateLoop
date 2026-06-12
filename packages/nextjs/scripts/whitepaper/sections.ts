@@ -358,6 +358,22 @@ export const SECTIONS: Section[] = [
             type: "paragraph",
             text: `Broad distribution matters because the rating layer is only credible if many independent raters can participate. The ${LAUNCH_DISTRIBUTION_POOL_AMOUNT_COMPACT_LABEL} Launch Distribution Pool splits into 42M LREP for front-loaded verified + referral rewards, 24M LREP for front-loaded earned rater rewards, and 9M LREP for legacy contributor vesting. Earned rater rewards stay open to any rater, but qualifying launch credits require verified-human anchored rounds, minimum launch-credit stake for staked votes, cross-round anchor diversity, bounded anchor fanout, round-level unverified-credit caps, aged anchor credentials, and finalized correlation payout snapshots before payout. Open raters can start under a governed 25% partial cap and later unlock the full snapshotted cap by verifying the same wallet as a human; agent wallets do not count as human anchors unless they hold an active verified-human credential. Legacy contributor addresses are seeded as active verified humans at launch for the standard credential TTL, so they use the same verified-human gates and bonus paths while active. Verification acceleration, safety, appeals, and governed programs belong to the treasury.`,
           },
+          {
+            type: "sub_heading",
+            text: "Launch credit accrual",
+          },
+          {
+            type: "formula",
+            latex: String.raw`\mathrm{credit}_r = \frac{\mathrm{ind}_r}{10\,000}`,
+          },
+          {
+            type: "formula",
+            latex: String.raw`\mathrm{payout} = \min\!\left(\mathrm{cap},\; \mathrm{cap}\cdot\frac{\sum_r \mathrm{credit}_r}{10}\right) - \mathrm{paid}`,
+          },
+          {
+            type: "paragraph",
+            text: "Here ind_r is the finalized independence weight for round r in basis points, cap is the wallet's launch cap after verified-anchor checks, and paid is launch LREP already paid to that wallet.",
+          },
         ],
       },
       {
@@ -384,6 +400,34 @@ export const SECTIONS: Section[] = [
             type: "paragraph",
             text: `RBTS settlement stores each revealed report's scoreBps, computes the stake-weighted mean score, and compares every staked report with that mean. Positive spreads recover full stake plus a pro-rata share of the 96% voter share of forfeited negative-spread stake; negative spreads forfeit, with no revealed-loser rebate, only after ${protocolDocFacts.scoreSpreadForfeitMinRevealsLabel} score-eligible voters reveal. Per-report score-spread forfeiture is capped at ${protocolDocFacts.maxScoreSpreadForfeitPercentLabel} of stake. Tier-1 raters carry full blind-epoch weight and later raters carry ${protocolDocFacts.openPhaseWeightLabel} weight, so the same anti-herding logic shapes settlement. USDC bounty and launch LREP claims add a second step: a finalized correlation payout snapshot proposed by a registered frontend operator supplies effective claim weights before funds move, without changing the already-settled result.`,
           },
+          {
+            type: "sub_heading",
+            text: "RBTS score-spread settlement formulas",
+          },
+          {
+            type: "formula",
+            latex: String.raw`\bar{s} = \frac{\sum_i k_i\, s_i}{\sum_i k_i} \qquad d_i = s_i - \bar{s}`,
+          },
+          {
+            type: "formula",
+            latex: String.raw`f_i = \begin{cases} \min\!\left(k_i\,\lambda\,\dfrac{\lvert d_i\rvert}{100},\; 0.5\,k_i\right) & d_i < 0 \;\text{ and }\; n \ge ${protocolDocFacts.scoreSpreadForfeitMinRevealsLabel} \\[6pt] 0 & \text{otherwise} \end{cases}`,
+          },
+          {
+            type: "formula",
+            latex: String.raw`F' = \sum_i f_i - \min\!\left(0.01 \textstyle\sum_i f_i,\; 1\right)`,
+          },
+          {
+            type: "formula",
+            latex: String.raw`r_i = 0.96\, F' \cdot \frac{k_i\, d_i}{\sum_{d_j > 0} k_j\, d_j}`,
+          },
+          {
+            type: "formula",
+            latex: String.raw`\mathrm{claim}_i = \begin{cases} k_i + r_i & d_i > 0 \\ k_i - f_i & d_i < 0 \end{cases}`,
+          },
+          {
+            type: "paragraph",
+            text: "Here k_i is the LREP stake on report i, s_i is the revealed RBTS score, lambda is the governance-set forfeit intensity, n is the number of score-eligible revealed voters, and F' is the forfeited pool after the settlement-caller cut.",
+          },
         ],
       },
       {
@@ -402,6 +446,22 @@ export const SECTIONS: Section[] = [
               "USDC asks do not require proof-of-personhood; bounty eligibility is set by the ask and finalized claim weights, while reputation and calibration can still shape policy and routing.",
               "Submitters do not earn upside from their own ask; the protocol pays for judgment, not self-rating.",
             ],
+          },
+          {
+            type: "sub_heading",
+            text: "Bounty claim formulas",
+          },
+          {
+            type: "formula",
+            latex: String.raw`\mathrm{payout}_i = A_R \cdot \frac{w_i}{\sum_j w_j}`,
+          },
+          {
+            type: "formula",
+            latex: String.raw`w_i = w_i^{\mathrm{base}} \cdot \frac{\mathrm{ind}_i}{10\,000} \qquad w_i^{\mathrm{base}} \in [10\,000,\; 20\,000]\ \mathrm{bps}`,
+          },
+          {
+            type: "paragraph",
+            text: "A_R is the round allocation, w_i is the finalized claim weight, w_i^base is the surprise-weighted base weight from the snapshot, and ind_i is the independence multiplier in basis points from the correlation scorer.",
           },
         ],
       },
