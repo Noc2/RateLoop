@@ -10,6 +10,7 @@ import { FeedbackRegistry } from "../contracts/FeedbackRegistry.sol";
 import { FrontendRegistry } from "../contracts/FrontendRegistry.sol";
 import { Eip3009Authorization } from "../contracts/interfaces/IEip3009.sol";
 import { IFrontendRegistry } from "../contracts/interfaces/IFrontendRegistry.sol";
+import { IRaterIdentityRegistry } from "../contracts/interfaces/IRaterIdentityRegistry.sol";
 import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
 import { MockERC20 } from "../contracts/mocks/MockERC20.sol";
 import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
@@ -81,6 +82,33 @@ contract WeakFeedbackRaterRegistry {
     function addressIdentityKey(address account) external pure returns (bytes32) {
         if (account == address(0)) return bytes32(0);
         return bytes32(uint256(1));
+    }
+}
+
+contract FeedbackRaterRegistryStatusMock {
+    mapping(bytes32 => bool) internal banned;
+
+    function setBanned(bytes32 identityKey, bool value) external {
+        banned[identityKey] = value;
+    }
+
+    function isIdentityKeyBanned(bytes32 identityKey) external view returns (bool) {
+        return banned[identityKey];
+    }
+
+    function addressIdentityKey(address account) external pure returns (bytes32) {
+        if (account == address(0)) return bytes32(0);
+        return keccak256(abi.encodePacked("rateloop.address-identity-v1", account));
+    }
+
+    function resolveRater(address actor) external pure returns (IRaterIdentityRegistry.ResolvedRater memory resolved) {
+        resolved.holder = actor;
+        resolved.identityKey =
+            actor == address(0) ? bytes32(0) : keccak256(abi.encodePacked("rateloop.address-identity-v1", actor));
+    }
+
+    function hasActiveHumanCredential(address) external pure returns (bool) {
+        return false;
     }
 }
 
@@ -514,6 +542,33 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         uint256 recipientAmount = feedbackBonusEscrow.awardFeedbackBonus(poolId, voter1, FEEDBACK_HASH, 10e6);
         assertEq(recipientAmount, 10e6);
         assertEq(usdc.balanceOf(voter1), 1_010e6);
+    }
+
+    function testAwardRejectsIdentityBannedInCurrentRegistryAfterPoolSnapshot() public {
+        uint256 contentId = _submitQuestion("");
+        uint256 poolId = _createFeedbackBonusPool(contentId);
+        (uint256 settledRoundId, bytes32[] memory commitKeys) =
+            _settleRoundWithPublishedFeedback(_threeVoters(), contentId, _directions(true, true, false), address(0));
+
+        (bytes32 awardIdentityKey,,,,,) = votingEngine.commitIdentityState(contentId, settledRoundId, commitKeys[0]);
+        if (awardIdentityKey == bytes32(0)) {
+            awardIdentityKey = raterRegistry.resolveRater(voter1).identityKey;
+        }
+        assertTrue(awardIdentityKey != bytes32(0));
+        FeedbackRaterRegistryStatusMock replacementRegistry = new FeedbackRaterRegistryStatusMock();
+        replacementRegistry.setBanned(awardIdentityKey, true);
+        bytes32 feedbackHash = _feedbackHash(contentId, settledRoundId, voter1);
+
+        vm.prank(owner);
+        feedbackBonusEscrow.setRaterRegistry(address(replacementRegistry));
+        assertEq(address(feedbackBonusEscrow.raterRegistry()), address(replacementRegistry));
+        (,,,,,,,,,, address snapshotRegistry,,,,,) = feedbackBonusEscrow.feedbackBonusPools(poolId);
+        assertTrue(snapshotRegistry != address(replacementRegistry));
+        assertTrue(replacementRegistry.isIdentityKeyBanned(awardIdentityKey));
+
+        vm.prank(funder);
+        vm.expectRevert("Identity banned");
+        feedbackBonusEscrow.awardFeedbackBonus(poolId, voter1, feedbackHash, 10e6);
     }
 
     function testAwardRejectsFeedbackPublishedAfterRequestedClose() public {

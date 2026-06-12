@@ -322,7 +322,11 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
             _requireRevealedIndependentRater(pool, recipient);
         (bytes32 awardIdentityKey,,,,,) = votingEngine.commitIdentityState(pool.contentId, pool.roundId, commitKey);
         if (awardIdentityKey == bytes32(0)) awardIdentityKey = identityKey;
-        require(!_isIdentityBanned(pool, awardIdentityKey), "Identity banned");
+        require(
+            !_isIdentityBanned(pool, identityKey)
+                && (awardIdentityKey == identityKey || !_isIdentityBanned(pool, awardIdentityKey)),
+            "Identity banned"
+        );
         require(
             !identityKeyAwarded[poolId][identityKey] && !identityKeyAwarded[poolId][awardIdentityKey],
             "Rater already awarded"
@@ -724,12 +728,17 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
     }
 
     function _isIdentityBanned(FeedbackBonusPool storage pool, bytes32 identityKey) internal view returns (bool) {
-        if (identityKey == bytes32(0) || pool.raterRegistrySnapshot == address(0)) return false;
-        try IRaterRegistryStatus(pool.raterRegistrySnapshot).isIdentityKeyBanned(identityKey) returns (bool banned) {
-            return banned;
-        } catch {
-            return false;
-        }
+        if (identityKey == bytes32(0)) return false;
+        address snapshot = pool.raterRegistrySnapshot;
+        if (_isIdentityBannedAt(snapshot, identityKey)) return true;
+        return _isIdentityBannedAt(address(raterRegistry), identityKey);
+    }
+
+    function _isIdentityBannedAt(address registryAddress, bytes32 identityKey) private view returns (bool) {
+        if (registryAddress == address(0)) return false;
+        (bool ok, bytes memory data) =
+            registryAddress.staticcall(abi.encodeCall(IRaterRegistryStatus.isIdentityKeyBanned, (identityKey)));
+        return ok && data.length >= 32 && abi.decode(data, (bool));
     }
 
     function _identityKeyForRound(uint256 contentId, uint256 roundId, address account)
