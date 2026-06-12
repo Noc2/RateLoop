@@ -5,6 +5,12 @@ const PENDING_GATED_ATTACHMENTS_MIGRATION_PATH = "packages/nextjs/drizzle/0006_p
 const PENDING_GATED_ATTACHMENTS_MIGRATION_MESSAGE =
   `Hosted private context attachment database migration is pending. Apply ${PENDING_GATED_ATTACHMENTS_MIGRATION_PATH} ` +
   "before uploading private context attachments.";
+const GATED_ATTACHMENT_SCHEMA_READY_CHECK_COLUMN = "requires_gated_access";
+
+const gatedAttachmentMigrationStatements = [
+  `ALTER TABLE "question_details" ADD COLUMN IF NOT EXISTS "${GATED_ATTACHMENT_SCHEMA_READY_CHECK_COLUMN}" boolean DEFAULT false NOT NULL`,
+  `ALTER TABLE "question_image_attachments" ADD COLUMN IF NOT EXISTS "${GATED_ATTACHMENT_SCHEMA_READY_CHECK_COLUMN}" boolean DEFAULT false NOT NULL`,
+] as const;
 
 type ErrorWithCause = {
   cause?: unknown;
@@ -56,12 +62,29 @@ export function isDatabaseQueryError(error: unknown, depth = 0): boolean {
   return depth < 3 && candidate.cause !== undefined ? isDatabaseQueryError(candidate.cause, depth + 1) : false;
 }
 
+async function checkGatedAttachmentSchemaReady(table: "question_details" | "question_image_attachments") {
+  await dbClient.execute(`SELECT ${GATED_ATTACHMENT_SCHEMA_READY_CHECK_COLUMN} FROM ${table} LIMIT 0`);
+}
+
+async function applyPendingGatedAttachmentsMigration() {
+  for (const statement of gatedAttachmentMigrationStatements) {
+    await dbClient.execute(statement);
+  }
+}
+
 export async function assertGatedAttachmentSchemaReady(table: "question_details" | "question_image_attachments") {
   try {
-    await dbClient.execute(`SELECT requires_gated_access FROM ${table} LIMIT 0`);
+    await checkGatedAttachmentSchemaReady(table);
   } catch (error) {
     if (isMissingGatedAttachmentSchemaError(error)) {
-      throw new PendingGatedAttachmentsMigrationError();
+      try {
+        await applyPendingGatedAttachmentsMigration();
+        await checkGatedAttachmentSchemaReady(table);
+        return;
+      } catch (migrationError) {
+        console.error("[attachments] Failed to apply pending gated attachments migration", migrationError);
+        throw new PendingGatedAttachmentsMigrationError();
+      }
     }
     throw error;
   }

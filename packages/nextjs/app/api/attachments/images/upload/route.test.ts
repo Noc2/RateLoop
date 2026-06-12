@@ -156,7 +156,7 @@ test("duplicate image attachment ids do not consume upload quota", async () => {
   }
 });
 
-test("image upload reports pending gated attachment migration without leaking SQL", async () => {
+test("image upload applies the pending gated attachment migration before insert", async () => {
   const tempDir = await mkdtemp(path.join(tmpdir(), "rateloop-upload-route-"));
 
   try {
@@ -164,14 +164,15 @@ test("image upload reports pending gated attachment migration without leaking SQ
     await dbClient.execute("ALTER TABLE question_image_attachments DROP COLUMN requires_gated_access");
 
     const response = await POST(uploadRequest("att_missinggatedcol01", { requiresGatedAccess: true }));
-    const body = (await response.json()) as { error?: string };
+    const body = (await response.json()) as { status?: string };
 
-    assert.equal(response.status, 503);
-    assert.match(body.error ?? "", /0006_pending_gated_attachments\.sql/);
-    assert.doesNotMatch(
-      body.error ?? "",
-      /Failed query|insert into|mockup\.png|0x00000000000000000000000000000000000000aa/i,
+    assert.equal(response.status, 200);
+    assert.equal(body.status, "approved");
+
+    const rows = await dbClient.execute(
+      "SELECT requires_gated_access FROM question_image_attachments WHERE id = 'att_missinggatedcol01'",
     );
+    assert.equal(rows.rows[0]?.requires_gated_access, true);
   } finally {
     await rm(tempDir, { recursive: true, force: true });
   }

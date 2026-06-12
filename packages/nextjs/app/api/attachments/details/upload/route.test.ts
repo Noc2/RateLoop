@@ -69,16 +69,17 @@ after(() => {
   restoreEnv("RATELOOP_QUESTION_DETAILS_MODERATION_MODE", originalModerationMode);
 });
 
-test("details upload reports pending gated attachment migration without leaking SQL", async () => {
+test("details upload applies the pending gated attachment migration before insert", async () => {
   await dbClient.execute("ALTER TABLE question_details DROP COLUMN requires_gated_access");
 
   const response = await POST(uploadRequest("det_routemissinggateddetail"));
-  const body = (await response.json()) as { error?: string };
+  const body = (await response.json()) as { status?: string };
 
-  assert.equal(response.status, 503);
-  assert.match(body.error ?? "", /0006_pending_gated_attachments\.sql/);
-  assert.doesNotMatch(
-    body.error ?? "",
-    /Failed query|insert into|Private details|0x00000000000000000000000000000000000000aa/i,
+  assert.equal(response.status, 200);
+  assert.equal(body.status, "approved");
+
+  const rows = await dbClient.execute(
+    "SELECT requires_gated_access FROM question_details WHERE id = 'det_routemissinggateddetail'",
   );
+  assert.equal(rows.rows[0]?.requires_gated_access, true);
 });
