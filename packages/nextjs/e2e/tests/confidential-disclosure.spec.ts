@@ -85,14 +85,11 @@ test.describe("Confidential disclosure after settlement", () => {
       { epochDuration: EPOCH_DURATION },
     );
 
+    // Gated submissions keep hosted details URLs off-chain; Ponder proves disclosure by unredacting public text.
     const ponderDisclosed = await waitForPonderIndexed(
       async () => {
         const after = await ponderGet(`/content/${afterQuestion.contentId}`);
-        return (
-          after.content.description === afterText &&
-          after.content.detailsUrl === afterQuestion.detailsUrl &&
-          after.content.contextAccess === "public"
-        );
+        return after.content.description === afterText && after.content.contextAccess === "public";
       },
       120_000,
       2_000,
