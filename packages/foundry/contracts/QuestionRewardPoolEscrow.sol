@@ -1138,6 +1138,33 @@ contract QuestionRewardPoolEscrow is
         );
     }
 
+    function claimableQuestionBundleRewardWithPayoutWeight(
+        uint256 bundleId,
+        uint256 roundSetIndex,
+        address account,
+        IClusterPayoutOracle.PayoutWeight calldata payoutWeight,
+        bytes32[] calldata proof
+    ) external view returns (uint256 claimableAmount) {
+        return QuestionRewardPoolEscrowBundleActionsLib.claimableQuestionBundleRewardWithPayoutWeight(
+            bundleRewards,
+            bundleQuestions,
+            bundleRoundIds,
+            bundleRoundSetSnapshots,
+            bundleRewardClusterPayoutOracle,
+            bundleRoundSetRewardClaimed,
+            qualifiedBundleRoundSetClaimants,
+            registry,
+            votingEngine,
+            votingEngine.protocolConfig(),
+            payoutWeight,
+            proof,
+            PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD,
+            bundleId,
+            roundSetIndex,
+            account
+        );
+    }
+
     function refundQuestionBundleReward(uint256 bundleId) external nonReentrant returns (uint256 refundAmount) {
         return QuestionRewardPoolEscrowBundleActionsLib.refundQuestionBundleReward(
             bundleRewards,
