@@ -9,6 +9,7 @@ import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import { ICategoryRegistry } from "./interfaces/ICategoryRegistry.sol";
+import { IClusterPayoutOracle } from "./interfaces/IClusterPayoutOracle.sol";
 import { IRoundVotingEngine } from "./interfaces/IRoundVotingEngine.sol";
 import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol";
 import { IConfidentialityEscrow } from "./interfaces/IConfidentialityEscrow.sol";
@@ -61,7 +62,8 @@ interface IRoundVotingEngineCoreView {
             uint16 revealedCount,
             uint64 totalStake,
             uint48 thresholdReachedAt,
-            uint48 settledAt
+            uint48 settledAt,
+            uint8 upWins
         );
 }
 
@@ -112,6 +114,10 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     uint48 internal constant DEFAULT_MIN_SLASH_LOW_DURATION = 7 days;
     uint256 internal constant DEFAULT_MIN_SLASH_EVIDENCE = 200e6;
     uint256 internal constant DEFAULT_CONFIDENCE_MASS_INITIAL = 80e6;
+    uint8 public constant PAYOUT_DOMAIN_PUBLIC_RATING = 3;
+    uint64 internal constant RATING_EVIDENCE_BASE_UNIT = 1_000_000;
+    uint64 internal constant RATING_EVIDENCE_STAKE_BONUS_CAP = 10_000_000;
+    uint64 internal constant RATING_EVIDENCE_MAX_STAKE_BONUS = 1_000_000;
 
     // String length limits (prevent storage bloat)
     uint16 internal constant MAX_QUESTION_BUNDLE_ROUND_VOTERS = 100;
@@ -143,6 +149,16 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         uint48 expiresAt;
         address submitterIdentity;
         bytes32 submitterIdentityKey;
+    }
+
+    struct PendingRatingSettlement {
+        address votingEngine;
+        uint64 upEvidence;
+        uint64 downEvidence;
+        uint48 readyAt;
+        uint16 referenceRatingBps;
+        bool exists;
+        bool applied;
     }
 
     struct SubmissionMetadata {
@@ -237,6 +253,12 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     /// @notice Rich rating state used by the score-relative rating system.
     mapping(uint256 => RatingLib.RatingState) internal _ratingState;
 
+    /// @notice Settled rounds whose canonical rating impact is waiting for finalized correlation weights.
+    mapping(uint256 => mapping(uint256 => PendingRatingSettlement)) internal pendingRatingSettlements;
+
+    /// @notice Applied rating snapshot digests keyed by content and round. Nonzero means the canonical rating consumed the root.
+    mapping(uint256 => mapping(uint256 => bytes32)) public appliedRatingSnapshotDigest;
+
     /// @notice Slash policy frozen at content creation so governance cannot retroactively rewrite stake terms.
     mapping(uint256 => RatingLib.SlashConfig) internal contentSlashConfigSnapshot;
 
@@ -245,7 +267,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     mapping(uint256 => address) internal questionBundleRoundObserverByContent;
 
     /// @dev Reserved storage gap for future upgrades
-    uint256[40] private __gap;
+    uint256[38] private __gap;
 
     // --- Events ---
     event ContentSubmitted(
@@ -315,6 +337,22 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         uint256 confidenceMass,
         uint256 effectiveEvidence,
         uint32 settledRounds
+    );
+    event RatingReviewPending(
+        uint256 indexed contentId,
+        uint256 indexed roundId,
+        uint16 referenceRatingBps,
+        uint256 rawUpEvidence,
+        uint256 rawDownEvidence,
+        uint256 readyAt
+    );
+    event RatingSnapshotApplied(
+        uint256 indexed contentId,
+        uint256 indexed roundId,
+        bytes32 indexed snapshotKey,
+        bytes32 snapshotDigest,
+        uint256 adjustedUpEvidence,
+        uint256 adjustedDownEvidence
     );
     event QuestionRewardPoolEscrowUpdated(address rewardPoolEscrow);
     event ContentRoundConfigSet(
@@ -1276,6 +1314,33 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         }
     }
 
+    /// @notice Called by VotingEngine when a round settles and its public rating impact must wait for correlation review.
+    function recordPendingRatingSettlement(
+        uint256 contentId,
+        uint256 roundId,
+        uint16 referenceRatingBps,
+        uint64 upEvidence,
+        uint64 downEvidence
+    ) external nonReentrant {
+        uint256 callerGeneration = _authorizeSettlementCallback(contentId);
+
+        Content storage c = contents[contentId];
+        if (c.id == 0) revert InvalidState();
+        contentSettlementEngineGeneration[contentId] = callerGeneration;
+
+        PendingRatingSettlement storage pending = pendingRatingSettlements[contentId][roundId];
+        if (pending.exists) return;
+
+        pending.votingEngine = msg.sender;
+        pending.upEvidence = upEvidence;
+        pending.downEvidence = downEvidence;
+        pending.readyAt = uint48(block.timestamp);
+        pending.referenceRatingBps = referenceRatingBps;
+        pending.exists = true;
+
+        emit RatingReviewPending(contentId, roundId, referenceRatingBps, upEvidence, downEvidence, block.timestamp);
+    }
+
     function updateRatingState(
         uint256 contentId,
         uint256 roundId,
@@ -1288,6 +1353,146 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         if (c.id == 0) revert InvalidState();
         contentSettlementEngineGeneration[contentId] = callerGeneration;
 
+        _updateRatingState(contentId, roundId, referenceRatingBps, nextState);
+    }
+
+    function applyRatingPayoutSnapshot(
+        uint256 contentId,
+        uint256 roundId,
+        IClusterPayoutOracle.PayoutWeight[] calldata payoutWeights,
+        bytes32[][] calldata proofs
+    ) external nonReentrant {
+        if (payoutWeights.length != proofs.length) revert InvalidState();
+
+        PendingRatingSettlement storage pending = pendingRatingSettlements[contentId][roundId];
+        if (!pending.exists || pending.applied) revert InvalidState();
+
+        address oracleAddress = protocolConfig.clusterPayoutOracle();
+        if (oracleAddress == address(0)) revert InvalidState();
+        IClusterPayoutOracle oracle = IClusterPayoutOracle(oracleAddress);
+        IClusterPayoutOracle.RoundPayoutSnapshot memory snapshot =
+            oracle.getRoundPayoutSnapshot(PAYOUT_DOMAIN_PUBLIC_RATING, 0, contentId, roundId);
+        if (snapshot.status != IClusterPayoutOracle.SnapshotStatus.Finalized) revert InvalidState();
+        if (snapshot.rawEligibleVoters != payoutWeights.length || snapshot.totalClaimWeight == 0) {
+            revert InvalidState();
+        }
+        (,, uint256 cleanupRemaining, uint48 sourceReadyAt) =
+            IRoundVotingEngine(pending.votingEngine).roundLifecycleState(contentId, roundId);
+        if (cleanupRemaining != 0 || sourceReadyAt == 0) revert InvalidState();
+
+        (, RoundLib.RoundState roundState,, uint16 revealedCount,,,,) =
+            IRoundVotingEngine(pending.votingEngine).roundCore(contentId, roundId);
+        if (roundState != RoundLib.RoundState.Settled || revealedCount != payoutWeights.length) {
+            revert InvalidState();
+        }
+
+        uint256 adjustedUpEvidence;
+        uint256 adjustedDownEvidence;
+        uint256 totalEffectiveWeight;
+        bytes32 previousCommitKey;
+        for (uint256 i = 0; i < payoutWeights.length; i++) {
+            IClusterPayoutOracle.PayoutWeight calldata payout = payoutWeights[i];
+            if (
+                payout.domain != PAYOUT_DOMAIN_PUBLIC_RATING || payout.rewardPoolId != 0
+                    || payout.contentId != contentId || payout.roundId != roundId
+            ) {
+                revert InvalidState();
+            }
+            if (i > 0 && payout.commitKey <= previousCommitKey) revert InvalidState();
+            previousCommitKey = payout.commitKey;
+            if (!oracle.verifyPayoutWeight(payout, proofs[i])) revert InvalidState();
+
+            (bool revealed, bool isUp, uint64 stakeAmount, uint8 epochIndex, bytes32 identityKey, address holder) =
+                IRoundVotingEngine(pending.votingEngine).ratingCommitState(contentId, roundId, payout.commitKey);
+            if (!revealed || identityKey != payout.identityKey || holder != payout.account) revert InvalidState();
+
+            uint256 baseEvidence = _ratingEvidenceWeight(stakeAmount, epochIndex);
+            if (payout.baseWeight != baseEvidence || payout.effectiveWeight > baseEvidence) revert InvalidState();
+
+            totalEffectiveWeight += payout.effectiveWeight;
+            if (isUp) {
+                adjustedUpEvidence += payout.effectiveWeight;
+            } else {
+                adjustedDownEvidence += payout.effectiveWeight;
+            }
+        }
+        if (totalEffectiveWeight != snapshot.totalClaimWeight) revert InvalidState();
+
+        bytes32 snapshotDigest = oracle.roundPayoutSnapshotProposalDigest(snapshot.snapshotKey);
+        pending.applied = true;
+        appliedRatingSnapshotDigest[contentId][roundId] = snapshotDigest;
+
+        RatingLib.RatingState memory nextState = RatingMath.applySettlement(
+            pending.referenceRatingBps,
+            adjustedUpEvidence,
+            adjustedDownEvidence,
+            _ratingState[contentId],
+            IRoundVotingEngine(pending.votingEngine).roundRatingConfig(contentId, roundId),
+            contentSlashConfigSnapshot[contentId],
+            uint48(block.timestamp)
+        );
+        _updateRatingState(contentId, roundId, pending.referenceRatingBps, nextState);
+
+        emit RatingSnapshotApplied(
+            contentId, roundId, snapshot.snapshotKey, snapshotDigest, adjustedUpEvidence, adjustedDownEvidence
+        );
+    }
+
+    function isRoundPayoutSnapshotConsumed(uint8 domain, uint256 rewardPoolId, uint256 contentId, uint256 roundId)
+        external
+        view
+        returns (bool)
+    {
+        if (domain != PAYOUT_DOMAIN_PUBLIC_RATING || rewardPoolId != 0) return false;
+        return appliedRatingSnapshotDigest[contentId][roundId] != bytes32(0);
+    }
+
+    function roundPayoutSnapshotSourceReadyAt(uint8 domain, uint256 rewardPoolId, uint256 contentId, uint256 roundId)
+        external
+        view
+        returns (uint64)
+    {
+        if (domain != PAYOUT_DOMAIN_PUBLIC_RATING || rewardPoolId != 0) return 0;
+        PendingRatingSettlement storage pending = pendingRatingSettlements[contentId][roundId];
+        if (!pending.exists || pending.applied) return 0;
+        (,, uint256 cleanupRemaining, uint48 sourceReadyAt) =
+            IRoundVotingEngine(pending.votingEngine).roundLifecycleState(contentId, roundId);
+        if (cleanupRemaining != 0) return 0;
+        return sourceReadyAt;
+    }
+
+    function pendingRatingSettlement(uint256 contentId, uint256 roundId)
+        external
+        view
+        returns (
+            address settlementVotingEngine,
+            uint64 upEvidence,
+            uint64 downEvidence,
+            uint48 readyAt,
+            uint16 referenceRatingBps,
+            bool exists,
+            bool applied
+        )
+    {
+        PendingRatingSettlement storage pending = pendingRatingSettlements[contentId][roundId];
+        return (
+            pending.votingEngine,
+            pending.upEvidence,
+            pending.downEvidence,
+            pending.readyAt,
+            pending.referenceRatingBps,
+            pending.exists,
+            pending.applied
+        );
+    }
+
+    function _updateRatingState(
+        uint256 contentId,
+        uint256 roundId,
+        uint16 referenceRatingBps,
+        RatingLib.RatingState memory nextState
+    ) private {
+        Content storage c = contents[contentId];
         RatingLib.RatingState storage state = _ratingState[contentId];
         uint16 oldRatingBps = state.ratingBps == 0 ? uint16(uint256(c.rating) * 100) : state.ratingBps;
         uint8 oldDisplayRating = c.rating;
@@ -1608,9 +1813,18 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         uint256 activeRoundId = IRoundVotingEngine(engine).currentRoundId(contentId);
         if (activeRoundId == 0) return false;
 
-        (, RoundLib.RoundState roundState, uint16 voteCount,, uint64 totalStake,,) =
+        (, RoundLib.RoundState roundState, uint16 voteCount,, uint64 totalStake,,,) =
             IRoundVotingEngineCoreView(engine).roundCore(contentId, activeRoundId);
         return roundState == RoundLib.RoundState.Open && voteCount != 0 && totalStake != 0;
+    }
+
+    function _ratingEvidenceWeight(uint64 stakeAmount, uint8 epochIndex) internal pure returns (uint256) {
+        uint256 stakeForBonus =
+            stakeAmount > RATING_EVIDENCE_STAKE_BONUS_CAP ? RATING_EVIDENCE_STAKE_BONUS_CAP : stakeAmount;
+        uint256 stakeBonus = (stakeForBonus * RATING_EVIDENCE_MAX_STAKE_BONUS) / RATING_EVIDENCE_STAKE_BONUS_CAP;
+        uint256 rawEvidence = uint256(RATING_EVIDENCE_BASE_UNIT) + stakeBonus;
+        uint256 epochWeightBps = RoundLib.epochWeightBps(epochIndex);
+        return (rawEvidence * epochWeightBps) / 10_000;
     }
 
     function _getInitialConfidenceMass() internal view returns (uint256) {

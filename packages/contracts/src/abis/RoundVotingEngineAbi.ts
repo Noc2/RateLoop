@@ -733,6 +733,60 @@ export const RoundVotingEngineAbi = [
   },
   {
     "type": "function",
+    "name": "ratingCommitState",
+    "inputs": [
+      {
+        "name": "contentId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "roundId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "commitKey",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "revealed",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "isUp",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "stakeAmount",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "epochIndex",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "identityKey",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "holder",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "rbtsCommitState",
     "inputs": [
       {
@@ -1155,6 +1209,97 @@ export const RoundVotingEngineAbi = [
         "name": "",
         "type": "address",
         "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "roundRatingConfig",
+    "inputs": [
+      {
+        "name": "contentId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "roundId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "cfg",
+        "type": "tuple",
+        "internalType": "struct RatingLib.RatingConfig",
+        "components": [
+          {
+            "name": "smoothingAlpha",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "smoothingBeta",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "observationBetaX18",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "confidenceMassInitial",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "confidenceMassMin",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "confidenceMassMax",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "confidenceGainBps",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "confidenceReopenBps",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "surpriseReferenceX18",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "maxDeltaLogitX18",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "maxAbsLogitX18",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "conservativePenaltyMaxBps",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "conservativePenaltyMinBps",
+            "type": "uint16",
+            "internalType": "uint16"
+          }
+        ]
       }
     ],
     "stateMutability": "view"
@@ -1631,7 +1776,7 @@ export const RoundVotingEngineAbi = [
         "internalType": "bool"
       }
     ],
-    "anonymous": true
+    "anonymous": false
   },
   {
     "type": "event",

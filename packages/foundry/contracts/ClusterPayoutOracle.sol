@@ -12,9 +12,9 @@ import { IFrontendRegistry } from "./interfaces/IFrontendRegistry.sol";
 import { IRoundPayoutSnapshotConsumer } from "./interfaces/IRoundPayoutSnapshotConsumer.sol";
 
 /// @title ClusterPayoutOracle
-/// @notice Optimistic oracle for correlation epoch snapshots and per-round payout weights.
+/// @notice Optimistic oracle for correlation epoch snapshots and per-round effective weights.
 /// @dev Fully bonded frontend operators can propose deterministic scorer outputs. Finalized roots gate
-///      USDC/LREP payouts, but they do not affect voting settlement or the public rating result. The oracle is
+///      USDC/LREP payouts and delayed public rating updates. The oracle is
 ///      intentionally not a fully per-snapshot economically secured oracle: proposers are accountable through the
 ///      FrontendRegistry's global LREP bond, public artifacts, challenge windows, governance arbitration, slashing,
 ///      reputation, and future fee loss. Challenge bonds are a USDC anti-spam mechanism.
@@ -36,7 +36,8 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
     uint16 public constant BPS_DENOMINATOR = 10_000;
     uint8 public constant PAYOUT_DOMAIN_QUESTION_REWARD = 1;
     uint8 public constant PAYOUT_DOMAIN_LAUNCH_CREDIT = 2;
-    uint64 public constant DEFAULT_CHALLENGE_WINDOW = 12 hours;
+    uint8 public constant PAYOUT_DOMAIN_PUBLIC_RATING = 3;
+    uint64 public constant DEFAULT_CHALLENGE_WINDOW = 2 hours;
     uint64 public constant MAX_CHALLENGE_WINDOW = 3 days;
     uint256 public constant DEFAULT_CHALLENGE_BOND = 5e6;
     uint256 public constant MIN_CHALLENGE_BOND = 1e6;
@@ -425,7 +426,9 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         if (msg.value != 0) revert InvalidBond();
         address frontendOperator = _requireEligibleFrontendProposer();
         CorrelationEpochSnapshot storage epoch = correlationEpochSnapshots[input.correlationEpochId];
-        if (epoch.status != SnapshotStatus.Finalized) revert SnapshotNotFinalizable();
+        if (epoch.status != SnapshotStatus.Proposed && epoch.status != SnapshotStatus.Finalized) {
+            revert SnapshotNotFinalizable();
+        }
         if (input.roundId < epoch.fromRoundId || input.roundId > epoch.toRoundId) revert InvalidSnapshot();
         if (input.artifactHash != epoch.artifactHash) revert InvalidSnapshot();
 
@@ -991,6 +994,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         }
         if (input.domain == PAYOUT_DOMAIN_QUESTION_REWARD && input.rewardPoolId == 0) revert InvalidSnapshot();
         if (input.domain == PAYOUT_DOMAIN_LAUNCH_CREDIT && input.rewardPoolId != 0) revert InvalidSnapshot();
+        if (input.domain == PAYOUT_DOMAIN_PUBLIC_RATING && input.rewardPoolId != 0) revert InvalidSnapshot();
     }
 
     function _requireCorrelationEpochSourcesReady(
@@ -1072,10 +1076,12 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         }
         if (sourceRef.domain == PAYOUT_DOMAIN_QUESTION_REWARD && sourceRef.rewardPoolId == 0) revert InvalidSnapshot();
         if (sourceRef.domain == PAYOUT_DOMAIN_LAUNCH_CREDIT && sourceRef.rewardPoolId != 0) revert InvalidSnapshot();
+        if (sourceRef.domain == PAYOUT_DOMAIN_PUBLIC_RATING && sourceRef.rewardPoolId != 0) revert InvalidSnapshot();
     }
 
     function _isPayoutDomain(uint8 domain) private pure returns (bool) {
-        return domain == PAYOUT_DOMAIN_QUESTION_REWARD || domain == PAYOUT_DOMAIN_LAUNCH_CREDIT;
+        return domain == PAYOUT_DOMAIN_QUESTION_REWARD || domain == PAYOUT_DOMAIN_LAUNCH_CREDIT
+            || domain == PAYOUT_DOMAIN_PUBLIC_RATING;
     }
 
     function _requireCurrentCorrelationEpoch(bytes32 expectedDigest, uint64 epochId) private view {

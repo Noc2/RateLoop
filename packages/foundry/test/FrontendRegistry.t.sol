@@ -7,6 +7,7 @@ import { FrontendRegistry } from "../contracts/FrontendRegistry.sol";
 import { LoopReputation } from "../contracts/LoopReputation.sol";
 import { IFrontendRegistry } from "../contracts/interfaces/IFrontendRegistry.sol";
 import { IRoundVotingEngine } from "../contracts/interfaces/IRoundVotingEngine.sol";
+import { RatingLib } from "../contracts/libraries/RatingLib.sol";
 import { RoundLib } from "../contracts/libraries/RoundLib.sol";
 
 /// @title Mock RoundVotingEngine for testing FrontendRegistry
@@ -38,6 +39,21 @@ contract MockVotingEngine is IRoundVotingEngine {
         returns (uint48, RoundLib.RoundState, uint16, uint16, uint64, uint48, uint48, uint8)
     {
         return (0, RoundLib.RoundState.Open, 0, 0, 0, 0, 0, 0);
+    }
+
+    function roundRatingConfig(uint256, uint256) external pure override returns (RatingLib.RatingConfig memory cfg) { }
+
+    function ratingCommitState(uint256, uint256, bytes32)
+        external
+        pure
+        override
+        returns (bool, bool, uint64, uint8, bytes32, address)
+    {
+        return (false, false, 0, 0, bytes32(0), address(0));
+    }
+
+    function roundLifecycleState(uint256, uint256) external pure override returns (uint256, uint256, uint256, uint48) {
+        return (0, 0, 0, 0);
     }
 
     function transferReward(address, uint256) external override { }

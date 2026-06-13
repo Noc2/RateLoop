@@ -132,7 +132,7 @@ contract ClaimingBundleObserver {
 /// @title RoundRewardDistributor branch coverage tests (tlock commit-reveal)
 contract RoundRewardDistributorBranchesTest is VotingTestBase {
     // ContentRegistry.questionBundleRoundObserverByContent storage slot.
-    uint256 internal constant QUESTION_BUNDLE_ROUND_OBSERVER_BY_CONTENT_SLOT = 26;
+    uint256 internal constant QUESTION_BUNDLE_ROUND_OBSERVER_BY_CONTENT_SLOT = 28;
 
     LoopReputation public lrepToken;
     ContentRegistry public registry;

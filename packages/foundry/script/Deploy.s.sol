@@ -394,6 +394,9 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         clusterPayoutOracle.setRoundPayoutSnapshotConsumer(
             clusterPayoutOracle.PAYOUT_DOMAIN_LAUNCH_CREDIT(), address(launchDistributionPool)
         );
+        clusterPayoutOracle.setRoundPayoutSnapshotConsumer(
+            clusterPayoutOracle.PAYOUT_DOMAIN_PUBLIC_RATING(), address(registry)
+        );
         if (!isLocalDev) {
             clusterPayoutOracle.grantRole(clusterPayoutOracle.DEFAULT_ADMIN_ROLE(), governance);
             clusterPayoutOracle.grantRole(clusterPayoutOracle.CONFIG_ROLE(), governance);

@@ -1073,7 +1073,6 @@ contract RoundVotingEngine is
 
         RoundSettlementSideEffectsLib.recordSettlement(
             registry,
-            _getRoundRatingConfig(contentId, roundId),
             contentId,
             roundId,
             _getRoundReferenceRatingBps(contentId, roundId),
@@ -1658,6 +1657,30 @@ contract RoundVotingEngine is
             commitRbtsWeight[contentId][roundId][commitKey],
             commitRbtsRewardWeight[contentId][roundId][commitKey],
             commitRbtsStakeReturned[contentId][roundId][commitKey]
+        );
+    }
+
+    function roundRatingConfig(uint256 contentId, uint256 roundId)
+        external
+        view
+        returns (RatingLib.RatingConfig memory cfg)
+    {
+        cfg = _getRoundRatingConfig(contentId, roundId);
+    }
+
+    function ratingCommitState(uint256 contentId, uint256 roundId, bytes32 commitKey)
+        external
+        view
+        returns (bool revealed, bool isUp, uint64 stakeAmount, uint8 epochIndex, bytes32 identityKey, address holder)
+    {
+        RoundLib.Commit storage commit = commits[contentId][roundId][commitKey];
+        return (
+            commit.revealed,
+            commit.isUp,
+            commit.stakeAmount,
+            commit.epochIndex,
+            commitIdentityKey[contentId][roundId][commitKey],
+            commitIdentityHolder[contentId][roundId][commitKey]
         );
     }
 

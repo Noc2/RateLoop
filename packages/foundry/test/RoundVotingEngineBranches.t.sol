@@ -137,7 +137,7 @@ contract MockEip2935History {
 
 contract RoundVotingEngineBranchesTest is VotingTestBase {
     // ContentRegistry.questionBundleRoundObserverByContent storage slot.
-    uint256 internal constant QUESTION_BUNDLE_ROUND_OBSERVER_BY_CONTENT_SLOT = 26;
+    uint256 internal constant QUESTION_BUNDLE_ROUND_OBSERVER_BY_CONTENT_SLOT = 28;
     address internal constant EIP2935_HISTORY_STORAGE = 0x0000F90827F1C53a10cb7A02335B175320002935;
 
     LoopReputation public lrepToken;
@@ -1242,6 +1242,25 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         );
     }
 
+    function _assertPendingRatingReview(uint256 contentId, uint256 roundId, address expectedEngine) internal view {
+        (
+            address settlementVotingEngine,
+            uint64 upEvidence,
+            uint64 downEvidence,
+            uint48 readyAt,
+            uint16 referenceRatingBps,
+            bool exists,
+            bool applied
+        ) = registry.pendingRatingSettlement(contentId, roundId);
+
+        assertEq(settlementVotingEngine, expectedEngine, "pending review uses settlement engine");
+        assertGt(upEvidence, downEvidence, "pending review preserves binary signal");
+        assertGt(readyAt, 0, "pending review ready timestamp recorded");
+        assertEq(referenceRatingBps, 5_000, "pending review stores reference rating");
+        assertTrue(exists, "pending review exists");
+        assertFalse(applied, "pending review not applied");
+    }
+
     function test_VerifiedHumanDoesNotBoostStakeWeight() public {
         RaterRegistry raterRegistry = _installRaterRegistry();
 
@@ -1286,7 +1305,8 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
         _settleRoundAfterRbtsSeed(contentId, roundId);
 
-        assertGt(registry.getRating(contentId), 5_000, "binary up majority moves rating up");
+        assertEq(registry.getRating(contentId), 5_000, "public rating waits for correlation snapshot");
+        _assertPendingRatingReview(contentId, roundId, address(engine));
         scored = _roundRbtsScored(engine, contentId, roundId);
         rewardWeight = _roundRbtsRewardWeight(engine, contentId, roundId);
         forfeitedPool = _roundRbtsForfeitedPool(engine, contentId, roundId);
@@ -1939,7 +1959,8 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         engine.revealVoteByCommitKey(contentId, roundId, ck3, true, 6_500, s3);
         _settleRoundAfterRbtsSeed(contentId, roundId);
 
-        assertGt(registry.getRating(contentId), 5_000, "binary signal remains public rating input");
+        assertEq(registry.getRating(contentId), 5_000, "public rating waits for correlation snapshot");
+        _assertPendingRatingReview(contentId, roundId, address(engine));
         assertEq(_commitPredictedUpBps(engine, contentId, roundId, ck2), 7_250, "crowd prediction stored");
         assertGt(_commitRbtsScoreBps(engine, contentId, roundId, ck1), 0, "ck1 RBTS score");
         assertGt(_commitRbtsScoreBps(engine, contentId, roundId, ck2), 0, "ck2 RBTS score");

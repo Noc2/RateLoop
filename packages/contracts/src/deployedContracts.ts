@@ -4622,6 +4622,19 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "PAYOUT_DOMAIN_PUBLIC_RATING",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "TREASURY_ADMIN_ROLE",
           inputs: [],
           outputs: [
@@ -4658,6 +4671,115 @@ const deployedContracts: GenericContractsDeclaration = {
             },
           ],
           stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "appliedRatingSnapshotDigest",
+          inputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "applyRatingPayoutSnapshot",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "payoutWeights",
+              type: "tuple[]",
+              internalType: "struct IClusterPayoutOracle.PayoutWeight[]",
+              components: [
+                {
+                  name: "domain",
+                  type: "uint8",
+                  internalType: "uint8",
+                },
+                {
+                  name: "rewardPoolId",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "contentId",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "roundId",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "commitKey",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+                {
+                  name: "identityKey",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+                {
+                  name: "account",
+                  type: "address",
+                  internalType: "address",
+                },
+                {
+                  name: "baseWeight",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "independenceBps",
+                  type: "uint16",
+                  internalType: "uint16",
+                },
+                {
+                  name: "effectiveWeight",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "reasonHash",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+              ],
+            },
+            {
+              name: "proofs",
+              type: "bytes32[][]",
+              internalType: "bytes32[][]",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
         },
         {
           type: "function",
@@ -5114,6 +5236,40 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "isRoundPayoutSnapshotConsumed",
+          inputs: [
+            {
+              name: "domain",
+              type: "uint8",
+              internalType: "uint8",
+            },
+            {
+              name: "rewardPoolId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "lrepToken",
           inputs: [],
           outputs: [
@@ -5173,6 +5329,60 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "pendingRatingSettlement",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "settlementVotingEngine",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "upEvidence",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "downEvidence",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "readyAt",
+              type: "uint48",
+              internalType: "uint48",
+            },
+            {
+              name: "referenceRatingBps",
+              type: "uint16",
+              internalType: "uint16",
+            },
+            {
+              name: "exists",
+              type: "bool",
+              internalType: "bool",
+            },
+            {
+              name: "applied",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "protocolConfig",
           inputs: [],
           outputs: [
@@ -5224,6 +5434,39 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "contentId",
               type: "uint256",
               internalType: "uint256",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "recordPendingRatingSettlement",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "referenceRatingBps",
+              type: "uint16",
+              internalType: "uint16",
+            },
+            {
+              name: "upEvidence",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "downEvidence",
+              type: "uint64",
+              internalType: "uint64",
             },
           ],
           outputs: [],
@@ -5306,16 +5549,37 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "revokeVotingEngine",
+          name: "roundPayoutSnapshotSourceReadyAt",
           inputs: [
             {
-              name: "engine",
-              type: "address",
-              internalType: "address",
+              name: "domain",
+              type: "uint8",
+              internalType: "uint8",
+            },
+            {
+              name: "rewardPoolId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              internalType: "uint256",
             },
           ],
-          outputs: [],
-          stateMutability: "nonpayable",
+          outputs: [
+            {
+              name: "",
+              type: "uint64",
+              internalType: "uint64",
+            },
+          ],
+          stateMutability: "view",
         },
         {
           type: "function",
@@ -6725,6 +6989,92 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "event",
+          name: "RatingReviewPending",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "referenceRatingBps",
+              type: "uint16",
+              indexed: false,
+              internalType: "uint16",
+            },
+            {
+              name: "rawUpEvidence",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+            {
+              name: "rawDownEvidence",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+            {
+              name: "readyAt",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "RatingSnapshotApplied",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "snapshotKey",
+              type: "bytes32",
+              indexed: true,
+              internalType: "bytes32",
+            },
+            {
+              name: "snapshotDigest",
+              type: "bytes32",
+              indexed: false,
+              internalType: "bytes32",
+            },
+            {
+              name: "adjustedUpEvidence",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+            {
+              name: "adjustedDownEvidence",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
           name: "RatingStateUpdated",
           inputs: [
             {
@@ -7033,19 +7383,6 @@ const deployedContracts: GenericContractsDeclaration = {
           anonymous: false,
         },
         {
-          type: "event",
-          name: "VotingEngineRevoked",
-          inputs: [
-            {
-              name: "engine",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-          ],
-          anonymous: false,
-        },
-        {
           type: "error",
           name: "AccessControlBadConfirmation",
           inputs: [],
@@ -7099,6 +7436,86 @@ const deployedContracts: GenericContractsDeclaration = {
         {
           type: "error",
           name: "OnlyVotingEngine",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "PRBMath_MulDiv_Overflow",
+          inputs: [
+            {
+              name: "x",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "y",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "denominator",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+        },
+        {
+          type: "error",
+          name: "PRBMath_SD59x18_Convert_Overflow",
+          inputs: [
+            {
+              name: "x",
+              type: "int256",
+              internalType: "int256",
+            },
+          ],
+        },
+        {
+          type: "error",
+          name: "PRBMath_SD59x18_Convert_Underflow",
+          inputs: [
+            {
+              name: "x",
+              type: "int256",
+              internalType: "int256",
+            },
+          ],
+        },
+        {
+          type: "error",
+          name: "PRBMath_SD59x18_Div_InputTooSmall",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "PRBMath_SD59x18_Div_Overflow",
+          inputs: [
+            {
+              name: "x",
+              type: "int256",
+              internalType: "SD59x18",
+            },
+            {
+              name: "y",
+              type: "int256",
+              internalType: "SD59x18",
+            },
+          ],
+        },
+        {
+          type: "error",
+          name: "PRBMath_SD59x18_Log_InputTooSmall",
+          inputs: [
+            {
+              name: "x",
+              type: "int256",
+              internalType: "SD59x18",
+            },
+          ],
+        },
+        {
+          type: "error",
+          name: "RatingMathOverflow",
           inputs: [],
         },
         {
@@ -7891,6 +8308,60 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "ratingCommitState",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "commitKey",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "revealed",
+              type: "bool",
+              internalType: "bool",
+            },
+            {
+              name: "isUp",
+              type: "bool",
+              internalType: "bool",
+            },
+            {
+              name: "stakeAmount",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "epochIndex",
+              type: "uint8",
+              internalType: "uint8",
+            },
+            {
+              name: "identityKey",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "holder",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "rbtsCommitState",
           inputs: [
             {
@@ -8313,6 +8784,97 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "address",
               internalType: "address",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "roundRatingConfig",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "cfg",
+              type: "tuple",
+              internalType: "struct RatingLib.RatingConfig",
+              components: [
+                {
+                  name: "smoothingAlpha",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "smoothingBeta",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "observationBetaX18",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "confidenceMassInitial",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "confidenceMassMin",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "confidenceMassMax",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "confidenceGainBps",
+                  type: "uint16",
+                  internalType: "uint16",
+                },
+                {
+                  name: "confidenceReopenBps",
+                  type: "uint16",
+                  internalType: "uint16",
+                },
+                {
+                  name: "surpriseReferenceX18",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "maxDeltaLogitX18",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "maxAbsLogitX18",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "conservativePenaltyMaxBps",
+                  type: "uint16",
+                  internalType: "uint16",
+                },
+                {
+                  name: "conservativePenaltyMinBps",
+                  type: "uint16",
+                  internalType: "uint16",
+                },
+              ],
             },
           ],
           stateMutability: "view",
@@ -8789,7 +9351,7 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "bool",
             },
           ],
-          anonymous: true,
+          anonymous: false,
         },
         {
           type: "event",
@@ -9372,7 +9934,10 @@ const deployedContracts: GenericContractsDeclaration = {
         currentRoundId: "contracts/interfaces/IRoundVotingEngine.sol",
         hasCommits: "contracts/interfaces/IRoundVotingEngine.sol",
         isDormancyBlocked: "contracts/interfaces/IRoundVotingEngine.sol",
+        ratingCommitState: "contracts/interfaces/IRoundVotingEngine.sol",
         roundCore: "contracts/interfaces/IRoundVotingEngine.sol",
+        roundLifecycleState: "contracts/interfaces/IRoundVotingEngine.sol",
+        roundRatingConfig: "contracts/interfaces/IRoundVotingEngine.sol",
         transferReward: "contracts/interfaces/IRoundVotingEngine.sol",
         commitVote: "contracts/interfaces/IRoundVotingCommitReveal.sol",
         commitVoteWithPermit:
@@ -9497,6 +10062,29 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "roundId",
               type: "uint256",
               internalType: "uint256",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "confiscateBannedReward",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "commitKey",
+              type: "bytes32",
+              internalType: "bytes32",
             },
           ],
           outputs: [],
@@ -10843,6 +11431,11 @@ const deployedContracts: GenericContractsDeclaration = {
         {
           type: "error",
           name: "RewardFinalizationTooEarly",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "RewardNotConfiscatable",
           inputs: [],
         },
         {
@@ -19971,6 +20564,19 @@ const deployedContracts: GenericContractsDeclaration = {
         {
           type: "function",
           name: "PAYOUT_DOMAIN_LAUNCH_CREDIT",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "PAYOUT_DOMAIN_PUBLIC_RATING",
           inputs: [],
           outputs: [
             {
@@ -30835,6 +31441,19 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "CONFIDENTIALITY_FLAG_PRIVATE_FOREVER",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "CONFIG_ROLE",
           inputs: [],
           outputs: [
@@ -31097,6 +31716,24 @@ const deployedContracts: GenericContractsDeclaration = {
                   internalType: "uint8",
                 },
               ],
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "confidentialityEscrowConfigShape",
+          inputs: [],
+          outputs: [
+            {
+              name: "registry_",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "protocolConfig_",
+              type: "address",
+              internalType: "address",
             },
           ],
           stateMutability: "view",
@@ -31586,6 +32223,29 @@ const deployedContracts: GenericContractsDeclaration = {
             },
             {
               name: "holder",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "recordConfidentialityNexusForRegistry",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "holder",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "registryAddress",
               type: "address",
               internalType: "address",
             },
@@ -32211,6 +32871,8 @@ const deployedContracts: GenericContractsDeclaration = {
       inheritedFunctions: {
         confidentialityConfig:
           "contracts/interfaces/IConfidentialityEscrow.sol",
+        confidentialityEscrowConfigShape:
+          "contracts/interfaces/IConfidentialityEscrow.sol",
         configure: "contracts/interfaces/IConfidentialityEscrow.sol",
         hasActiveBond: "contracts/interfaces/IConfidentialityEscrow.sol",
         hasConfidentialityNexus:
@@ -32221,6 +32883,8 @@ const deployedContracts: GenericContractsDeclaration = {
         postBondWithPermit: "contracts/interfaces/IConfidentialityEscrow.sol",
         recordAccessNexus: "contracts/interfaces/IConfidentialityEscrow.sol",
         recordConfidentialityNexus:
+          "contracts/interfaces/IConfidentialityEscrow.sol",
+        recordConfidentialityNexusForRegistry:
           "contracts/interfaces/IConfidentialityEscrow.sol",
         releaseBond: "contracts/interfaces/IConfidentialityEscrow.sol",
         slashBond: "contracts/interfaces/IConfidentialityEscrow.sol",
@@ -33721,6 +34385,19 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "PAYOUT_DOMAIN_PUBLIC_RATING",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "TREASURY_ADMIN_ROLE",
           inputs: [],
           outputs: [
@@ -33757,6 +34434,115 @@ const deployedContracts: GenericContractsDeclaration = {
             },
           ],
           stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "appliedRatingSnapshotDigest",
+          inputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "applyRatingPayoutSnapshot",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "payoutWeights",
+              type: "tuple[]",
+              internalType: "struct IClusterPayoutOracle.PayoutWeight[]",
+              components: [
+                {
+                  name: "domain",
+                  type: "uint8",
+                  internalType: "uint8",
+                },
+                {
+                  name: "rewardPoolId",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "contentId",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "roundId",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "commitKey",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+                {
+                  name: "identityKey",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+                {
+                  name: "account",
+                  type: "address",
+                  internalType: "address",
+                },
+                {
+                  name: "baseWeight",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "independenceBps",
+                  type: "uint16",
+                  internalType: "uint16",
+                },
+                {
+                  name: "effectiveWeight",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "reasonHash",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+              ],
+            },
+            {
+              name: "proofs",
+              type: "bytes32[][]",
+              internalType: "bytes32[][]",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
         },
         {
           type: "function",
@@ -34213,6 +34999,40 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "isRoundPayoutSnapshotConsumed",
+          inputs: [
+            {
+              name: "domain",
+              type: "uint8",
+              internalType: "uint8",
+            },
+            {
+              name: "rewardPoolId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "lrepToken",
           inputs: [],
           outputs: [
@@ -34272,6 +35092,60 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "pendingRatingSettlement",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "settlementVotingEngine",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "upEvidence",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "downEvidence",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "readyAt",
+              type: "uint48",
+              internalType: "uint48",
+            },
+            {
+              name: "referenceRatingBps",
+              type: "uint16",
+              internalType: "uint16",
+            },
+            {
+              name: "exists",
+              type: "bool",
+              internalType: "bool",
+            },
+            {
+              name: "applied",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "protocolConfig",
           inputs: [],
           outputs: [
@@ -34323,6 +35197,39 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "contentId",
               type: "uint256",
               internalType: "uint256",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "recordPendingRatingSettlement",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "referenceRatingBps",
+              type: "uint16",
+              internalType: "uint16",
+            },
+            {
+              name: "upEvidence",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "downEvidence",
+              type: "uint64",
+              internalType: "uint64",
             },
           ],
           outputs: [],
@@ -34405,16 +35312,37 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "revokeVotingEngine",
+          name: "roundPayoutSnapshotSourceReadyAt",
           inputs: [
             {
-              name: "engine",
-              type: "address",
-              internalType: "address",
+              name: "domain",
+              type: "uint8",
+              internalType: "uint8",
+            },
+            {
+              name: "rewardPoolId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              internalType: "uint256",
             },
           ],
-          outputs: [],
-          stateMutability: "nonpayable",
+          outputs: [
+            {
+              name: "",
+              type: "uint64",
+              internalType: "uint64",
+            },
+          ],
+          stateMutability: "view",
         },
         {
           type: "function",
@@ -35824,6 +36752,92 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "event",
+          name: "RatingReviewPending",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "referenceRatingBps",
+              type: "uint16",
+              indexed: false,
+              internalType: "uint16",
+            },
+            {
+              name: "rawUpEvidence",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+            {
+              name: "rawDownEvidence",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+            {
+              name: "readyAt",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "RatingSnapshotApplied",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "snapshotKey",
+              type: "bytes32",
+              indexed: true,
+              internalType: "bytes32",
+            },
+            {
+              name: "snapshotDigest",
+              type: "bytes32",
+              indexed: false,
+              internalType: "bytes32",
+            },
+            {
+              name: "adjustedUpEvidence",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+            {
+              name: "adjustedDownEvidence",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
           name: "RatingStateUpdated",
           inputs: [
             {
@@ -36132,19 +37146,6 @@ const deployedContracts: GenericContractsDeclaration = {
           anonymous: false,
         },
         {
-          type: "event",
-          name: "VotingEngineRevoked",
-          inputs: [
-            {
-              name: "engine",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-          ],
-          anonymous: false,
-        },
-        {
           type: "error",
           name: "AccessControlBadConfirmation",
           inputs: [],
@@ -36198,6 +37199,86 @@ const deployedContracts: GenericContractsDeclaration = {
         {
           type: "error",
           name: "OnlyVotingEngine",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "PRBMath_MulDiv_Overflow",
+          inputs: [
+            {
+              name: "x",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "y",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "denominator",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+        },
+        {
+          type: "error",
+          name: "PRBMath_SD59x18_Convert_Overflow",
+          inputs: [
+            {
+              name: "x",
+              type: "int256",
+              internalType: "int256",
+            },
+          ],
+        },
+        {
+          type: "error",
+          name: "PRBMath_SD59x18_Convert_Underflow",
+          inputs: [
+            {
+              name: "x",
+              type: "int256",
+              internalType: "int256",
+            },
+          ],
+        },
+        {
+          type: "error",
+          name: "PRBMath_SD59x18_Div_InputTooSmall",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "PRBMath_SD59x18_Div_Overflow",
+          inputs: [
+            {
+              name: "x",
+              type: "int256",
+              internalType: "SD59x18",
+            },
+            {
+              name: "y",
+              type: "int256",
+              internalType: "SD59x18",
+            },
+          ],
+        },
+        {
+          type: "error",
+          name: "PRBMath_SD59x18_Log_InputTooSmall",
+          inputs: [
+            {
+              name: "x",
+              type: "int256",
+              internalType: "SD59x18",
+            },
+          ],
+        },
+        {
+          type: "error",
+          name: "RatingMathOverflow",
           inputs: [],
         },
         {
@@ -36990,6 +38071,60 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "ratingCommitState",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "commitKey",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "revealed",
+              type: "bool",
+              internalType: "bool",
+            },
+            {
+              name: "isUp",
+              type: "bool",
+              internalType: "bool",
+            },
+            {
+              name: "stakeAmount",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "epochIndex",
+              type: "uint8",
+              internalType: "uint8",
+            },
+            {
+              name: "identityKey",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "holder",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "rbtsCommitState",
           inputs: [
             {
@@ -37412,6 +38547,97 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "address",
               internalType: "address",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "roundRatingConfig",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "cfg",
+              type: "tuple",
+              internalType: "struct RatingLib.RatingConfig",
+              components: [
+                {
+                  name: "smoothingAlpha",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "smoothingBeta",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "observationBetaX18",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "confidenceMassInitial",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "confidenceMassMin",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "confidenceMassMax",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "confidenceGainBps",
+                  type: "uint16",
+                  internalType: "uint16",
+                },
+                {
+                  name: "confidenceReopenBps",
+                  type: "uint16",
+                  internalType: "uint16",
+                },
+                {
+                  name: "surpriseReferenceX18",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "maxDeltaLogitX18",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "maxAbsLogitX18",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "conservativePenaltyMaxBps",
+                  type: "uint16",
+                  internalType: "uint16",
+                },
+                {
+                  name: "conservativePenaltyMinBps",
+                  type: "uint16",
+                  internalType: "uint16",
+                },
+              ],
             },
           ],
           stateMutability: "view",
@@ -37888,7 +39114,7 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "bool",
             },
           ],
-          anonymous: true,
+          anonymous: false,
         },
         {
           type: "event",
@@ -38471,7 +39697,10 @@ const deployedContracts: GenericContractsDeclaration = {
         currentRoundId: "contracts/interfaces/IRoundVotingEngine.sol",
         hasCommits: "contracts/interfaces/IRoundVotingEngine.sol",
         isDormancyBlocked: "contracts/interfaces/IRoundVotingEngine.sol",
+        ratingCommitState: "contracts/interfaces/IRoundVotingEngine.sol",
         roundCore: "contracts/interfaces/IRoundVotingEngine.sol",
+        roundLifecycleState: "contracts/interfaces/IRoundVotingEngine.sol",
+        roundRatingConfig: "contracts/interfaces/IRoundVotingEngine.sol",
         transferReward: "contracts/interfaces/IRoundVotingEngine.sol",
         commitVote: "contracts/interfaces/IRoundVotingCommitReveal.sol",
         commitVoteWithPermit:
@@ -38596,6 +39825,29 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "roundId",
               type: "uint256",
               internalType: "uint256",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "confiscateBannedReward",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "commitKey",
+              type: "bytes32",
+              internalType: "bytes32",
             },
           ],
           outputs: [],
@@ -39942,6 +41194,11 @@ const deployedContracts: GenericContractsDeclaration = {
         {
           type: "error",
           name: "RewardFinalizationTooEarly",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "RewardNotConfiscatable",
           inputs: [],
         },
         {
@@ -57516,6 +58773,19 @@ const deployedContracts: GenericContractsDeclaration = {
         {
           type: "function",
           name: "PAYOUT_DOMAIN_LAUNCH_CREDIT",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "PAYOUT_DOMAIN_PUBLIC_RATING",
           inputs: [],
           outputs: [
             {

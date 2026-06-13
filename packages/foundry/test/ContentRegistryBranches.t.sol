@@ -2969,7 +2969,22 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         votingEngine.revealVoteByCommitKey(1, roundId, ck3, false, 5_000, salt3);
         _settleAfterRbtsSeed(votingEngine, 1, roundId);
 
-        assertGt(registry.getRating(1), ratingBefore, "tracked old engine settlement updates rating");
+        assertEq(registry.getRating(1), ratingBefore, "tracked old engine rating waits for correlation snapshot");
+        (
+            address settlementVotingEngine,
+            uint64 upEvidence,
+            uint64 downEvidence,
+            uint48 readyAt,
+            uint16 referenceRatingBps,
+            bool exists,
+            bool applied
+        ) = registry.pendingRatingSettlement(1, roundId);
+        assertEq(settlementVotingEngine, address(votingEngine), "tracked old engine records pending review");
+        assertGt(upEvidence, downEvidence, "pending review preserves old-engine signal");
+        assertGt(readyAt, 0, "pending review ready timestamp recorded");
+        assertEq(referenceRatingBps, ratingBefore, "pending review stores reference rating");
+        assertTrue(exists, "pending review exists");
+        assertFalse(applied, "pending review not applied");
         vm.warp(block.timestamp + 30 days);
         vm.expectRevert(ContentRegistry.InvalidState.selector);
         registry.markDormant(1);

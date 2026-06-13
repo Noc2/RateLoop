@@ -45,6 +45,19 @@ export const ContentRegistryAbi = [
   },
   {
     "type": "function",
+    "name": "PAYOUT_DOMAIN_PUBLIC_RATING",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "TREASURY_ADMIN_ROLE",
     "inputs": [],
     "outputs": [
@@ -81,6 +94,115 @@ export const ContentRegistryAbi = [
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "appliedRatingSnapshotDigest",
+    "inputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "applyRatingPayoutSnapshot",
+    "inputs": [
+      {
+        "name": "contentId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "roundId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "payoutWeights",
+        "type": "tuple[]",
+        "internalType": "struct IClusterPayoutOracle.PayoutWeight[]",
+        "components": [
+          {
+            "name": "domain",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "rewardPoolId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "contentId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "roundId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "commitKey",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "identityKey",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "account",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "baseWeight",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "independenceBps",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "effectiveWeight",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "reasonHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ]
+      },
+      {
+        "name": "proofs",
+        "type": "bytes32[][]",
+        "internalType": "bytes32[][]"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -537,6 +659,40 @@ export const ContentRegistryAbi = [
   },
   {
     "type": "function",
+    "name": "isRoundPayoutSnapshotConsumed",
+    "inputs": [
+      {
+        "name": "domain",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "rewardPoolId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "contentId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "roundId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "lrepToken",
     "inputs": [],
     "outputs": [
@@ -596,6 +752,60 @@ export const ContentRegistryAbi = [
   },
   {
     "type": "function",
+    "name": "pendingRatingSettlement",
+    "inputs": [
+      {
+        "name": "contentId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "roundId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "settlementVotingEngine",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "upEvidence",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "downEvidence",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "readyAt",
+        "type": "uint48",
+        "internalType": "uint48"
+      },
+      {
+        "name": "referenceRatingBps",
+        "type": "uint16",
+        "internalType": "uint16"
+      },
+      {
+        "name": "exists",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "applied",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "protocolConfig",
     "inputs": [],
     "outputs": [
@@ -647,6 +857,39 @@ export const ContentRegistryAbi = [
         "name": "contentId",
         "type": "uint256",
         "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "recordPendingRatingSettlement",
+    "inputs": [
+      {
+        "name": "contentId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "roundId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "referenceRatingBps",
+        "type": "uint16",
+        "internalType": "uint16"
+      },
+      {
+        "name": "upEvidence",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "downEvidence",
+        "type": "uint64",
+        "internalType": "uint64"
       }
     ],
     "outputs": [],
@@ -729,16 +972,37 @@ export const ContentRegistryAbi = [
   },
   {
     "type": "function",
-    "name": "revokeVotingEngine",
+    "name": "roundPayoutSnapshotSourceReadyAt",
     "inputs": [
       {
-        "name": "engine",
-        "type": "address",
-        "internalType": "address"
+        "name": "domain",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "rewardPoolId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "contentId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "roundId",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -2146,6 +2410,92 @@ export const ContentRegistryAbi = [
   },
   {
     "type": "event",
+    "name": "RatingReviewPending",
+    "inputs": [
+      {
+        "name": "contentId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "roundId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "referenceRatingBps",
+        "type": "uint16",
+        "indexed": false,
+        "internalType": "uint16"
+      },
+      {
+        "name": "rawUpEvidence",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "rawDownEvidence",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "readyAt",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "RatingSnapshotApplied",
+    "inputs": [
+      {
+        "name": "contentId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "roundId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "snapshotKey",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "snapshotDigest",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "adjustedUpEvidence",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "adjustedDownEvidence",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "RatingStateUpdated",
     "inputs": [
       {
@@ -2454,19 +2804,6 @@ export const ContentRegistryAbi = [
     "anonymous": false
   },
   {
-    "type": "event",
-    "name": "VotingEngineRevoked",
-    "inputs": [
-      {
-        "name": "engine",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      }
-    ],
-    "anonymous": false
-  },
-  {
     "type": "error",
     "name": "AccessControlBadConfirmation",
     "inputs": []
@@ -2520,6 +2857,86 @@ export const ContentRegistryAbi = [
   {
     "type": "error",
     "name": "OnlyVotingEngine",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "PRBMath_MulDiv_Overflow",
+    "inputs": [
+      {
+        "name": "x",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "y",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "denominator",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "PRBMath_SD59x18_Convert_Overflow",
+    "inputs": [
+      {
+        "name": "x",
+        "type": "int256",
+        "internalType": "int256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "PRBMath_SD59x18_Convert_Underflow",
+    "inputs": [
+      {
+        "name": "x",
+        "type": "int256",
+        "internalType": "int256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "PRBMath_SD59x18_Div_InputTooSmall",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "PRBMath_SD59x18_Div_Overflow",
+    "inputs": [
+      {
+        "name": "x",
+        "type": "int256",
+        "internalType": "SD59x18"
+      },
+      {
+        "name": "y",
+        "type": "int256",
+        "internalType": "SD59x18"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "PRBMath_SD59x18_Log_InputTooSmall",
+    "inputs": [
+      {
+        "name": "x",
+        "type": "int256",
+        "internalType": "SD59x18"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "RatingMathOverflow",
     "inputs": []
   },
   {

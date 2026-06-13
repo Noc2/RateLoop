@@ -16,6 +16,16 @@ function _questionEpochSources(uint256 rewardPoolId, uint256 contentId, uint256 
     });
 }
 
+function _ratingEpochSources(uint256 contentId, uint256 roundId)
+    pure
+    returns (IClusterPayoutOracle.CorrelationEpochSourceRef[] memory sources)
+{
+    sources = new IClusterPayoutOracle.CorrelationEpochSourceRef[](1);
+    sources[0] = IClusterPayoutOracle.CorrelationEpochSourceRef({
+        domain: 3, rewardPoolId: 0, contentId: contentId, roundId: roundId
+    });
+}
+
 function _defaultEpochSources() pure returns (IClusterPayoutOracle.CorrelationEpochSourceRef[] memory sources) {
     return _questionEpochSources(7, 42, 3);
 }
@@ -41,6 +51,7 @@ contract ClusterPayoutOracleTest is Test {
     MockFrontendRegistry internal frontendRegistry;
     MockRoundPayoutSnapshotConsumer internal questionConsumer;
     MockRoundPayoutSnapshotConsumer internal launchConsumer;
+    MockRoundPayoutSnapshotConsumer internal ratingConsumer;
     MockERC20 internal usdc;
 
     receive() external payable { }
@@ -50,11 +61,13 @@ contract ClusterPayoutOracleTest is Test {
         frontendRegistry = new MockFrontendRegistry();
         frontendRegistry.setEligible(address(this), true);
         oracle = new ClusterPayoutOracle(address(this), address(frontendRegistry), address(usdc));
-        oracle.setOracleConfig(1 hours, CHALLENGE_BOND, address(this));
+        oracle.setOracleConfig(2 hours, CHALLENGE_BOND, address(this));
         questionConsumer = new MockRoundPayoutSnapshotConsumer();
         launchConsumer = new MockRoundPayoutSnapshotConsumer();
+        ratingConsumer = new MockRoundPayoutSnapshotConsumer();
         oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_QUESTION_REWARD(), address(questionConsumer));
         oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_LAUNCH_CREDIT(), address(launchConsumer));
+        oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_PUBLIC_RATING(), address(ratingConsumer));
         usdc.mint(address(this), 100e6);
         usdc.approve(address(oracle), type(uint256).max);
     }
@@ -123,7 +136,7 @@ contract ClusterPayoutOracleTest is Test {
             _defaultEpochSources()
         );
 
-        vm.warp(1 hours + 2);
+        vm.warp(2 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
 
         frontendRegistry.setEligible(ineligibleFrontend, false);
@@ -156,7 +169,7 @@ contract ClusterPayoutOracleTest is Test {
         assertEq(epoch.proposer, keeper);
         assertEq(epoch.frontendOperator, frontendOperator);
 
-        vm.warp(1 hours + 2);
+        vm.warp(2 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
 
         IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
@@ -209,7 +222,7 @@ contract ClusterPayoutOracleTest is Test {
             "ipfs://epoch",
             _defaultEpochSources()
         );
-        vm.warp(1 hours + 2);
+        vm.warp(2 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
 
         IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
@@ -227,17 +240,17 @@ contract ClusterPayoutOracleTest is Test {
 
     function test_ChallengeBondCannotExceedAntiSpamCap() public {
         uint256 maxChallengeBond = oracle.MAX_CHALLENGE_BOND();
-        oracle.setOracleConfig(1 hours, maxChallengeBond, address(this));
+        oracle.setOracleConfig(2 hours, maxChallengeBond, address(this));
         assertEq(oracle.challengeBond(), maxChallengeBond);
 
         vm.expectRevert(ClusterPayoutOracle.InvalidBond.selector);
-        oracle.setOracleConfig(1 hours, maxChallengeBond + 1, address(this));
+        oracle.setOracleConfig(2 hours, maxChallengeBond + 1, address(this));
     }
 
     function test_CorrelationEpochSourcesRequireConfiguredConsumer() public {
         ClusterPayoutOracle unconfiguredOracle =
             new ClusterPayoutOracle(address(this), address(frontendRegistry), address(usdc));
-        unconfiguredOracle.setOracleConfig(1 hours, CHALLENGE_BOND, address(this));
+        unconfiguredOracle.setOracleConfig(2 hours, CHALLENGE_BOND, address(this));
         vm.expectRevert(ClusterPayoutOracle.InvalidAddress.selector);
         unconfiguredOracle.proposeCorrelationEpoch(
             1,
@@ -301,7 +314,7 @@ contract ClusterPayoutOracleTest is Test {
             "ipfs://epoch",
             _defaultEpochSources()
         );
-        vm.warp(1 hours + 2);
+        vm.warp(2 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
 
         IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
@@ -398,7 +411,7 @@ contract ClusterPayoutOracleTest is Test {
             "ipfs://epoch",
             _questionEpochSources(7, 42, 4)
         );
-        vm.warp(1 hours + 2);
+        vm.warp(2 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
 
         bytes32 defaultKey = oracle.roundPayoutSnapshotKey(oracle.PAYOUT_DOMAIN_QUESTION_REWARD(), 7, 42, 3);
@@ -435,7 +448,7 @@ contract ClusterPayoutOracleTest is Test {
             "ipfs://epoch",
             _questionEpochSources(7, 42, 4)
         );
-        vm.warp(1 hours + 2);
+        vm.warp(2 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
 
         IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
@@ -455,7 +468,7 @@ contract ClusterPayoutOracleTest is Test {
             _defaultEpochSources()
         );
 
-        vm.warp(1 hours + 2);
+        vm.warp(2 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
 
         IClusterPayoutOracle.PayoutWeight memory payout = IClusterPayoutOracle.PayoutWeight({
@@ -491,7 +504,7 @@ contract ClusterPayoutOracleTest is Test {
         );
 
         bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(oracle.PAYOUT_DOMAIN_QUESTION_REWARD(), 7, 42, 3);
-        vm.warp(2 hours + 3);
+        vm.warp(4 hours + 3);
         oracle.finalizeRoundPayoutSnapshot(snapshotKey);
 
         bytes32[] memory proof = new bytes32[](0);
@@ -509,6 +522,68 @@ contract ClusterPayoutOracleTest is Test {
         );
     }
 
+    function test_PublicRatingRoundSnapshotCanCoProposeWithCorrelationEpoch() public {
+        oracle.proposeCorrelationEpoch(
+            1,
+            1,
+            20,
+            keccak256("cluster-root"),
+            keccak256("params"),
+            keccak256("epoch-artifact"),
+            "ipfs://epoch",
+            _ratingEpochSources(42, 3)
+        );
+
+        IClusterPayoutOracle.PayoutWeight memory payout = IClusterPayoutOracle.PayoutWeight({
+            domain: oracle.PAYOUT_DOMAIN_PUBLIC_RATING(),
+            rewardPoolId: 0,
+            contentId: 42,
+            roundId: 3,
+            commitKey: keccak256("rating-commit"),
+            identityKey: keccak256("rating-identity"),
+            account: address(0xBEEF),
+            baseWeight: 1_000_000,
+            independenceBps: 10_000,
+            effectiveWeight: 1_000_000,
+            reasonHash: keccak256("rating-reason")
+        });
+        bytes32 leaf = oracle.payoutWeightLeaf(payout);
+
+        oracle.proposeRoundPayoutSnapshot(
+            IClusterPayoutOracle.RoundPayoutSnapshotInput({
+                domain: oracle.PAYOUT_DOMAIN_PUBLIC_RATING(),
+                rewardPoolId: 0,
+                contentId: 42,
+                roundId: 3,
+                correlationEpochId: 1,
+                rawEligibleVoters: 1,
+                effectiveParticipantUnits: 10_000,
+                totalClaimWeight: 1_000_000,
+                weightRoot: leaf,
+                reasonRoot: keccak256("rating-reason-root"),
+                artifactHash: keccak256("epoch-artifact"),
+                artifactURI: "ipfs://rating-round"
+            })
+        );
+
+        bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(oracle.PAYOUT_DOMAIN_PUBLIC_RATING(), 0, 42, 3);
+        ClusterPayoutOracle.RoundPayoutProposal memory proposal = oracle.roundPayoutProposal(snapshotKey);
+        assertEq(uint8(proposal.snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Proposed));
+        assertEq(proposal.consumer, address(ratingConsumer));
+
+        vm.warp(2 hours + 2);
+        vm.expectRevert(ClusterPayoutOracle.SnapshotNotFinalizable.selector);
+        oracle.finalizeRoundPayoutSnapshot(snapshotKey);
+
+        oracle.finalizeCorrelationEpoch(1);
+        oracle.finalizeRoundPayoutSnapshot(snapshotKey);
+
+        IClusterPayoutOracle.RoundPayoutSnapshot memory snapshot =
+            oracle.getRoundPayoutSnapshot(oracle.PAYOUT_DOMAIN_PUBLIC_RATING(), 0, 42, 3);
+        assertEq(uint8(snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Finalized));
+        assertEq(snapshot.totalClaimWeight, 1_000_000);
+    }
+
     function test_EmptyRoundPayoutSnapshotFinalizesButCannotVerifyClaims() public {
         oracle.proposeCorrelationEpoch(
             1,
@@ -520,7 +595,7 @@ contract ClusterPayoutOracleTest is Test {
             "ipfs://epoch",
             _defaultEpochSources()
         );
-        vm.warp(1 hours + 2);
+        vm.warp(2 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
 
         IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
@@ -532,7 +607,7 @@ contract ClusterPayoutOracleTest is Test {
         oracle.proposeRoundPayoutSnapshot(input);
         bytes32 snapshotKey =
             oracle.roundPayoutSnapshotKey(input.domain, input.rewardPoolId, input.contentId, input.roundId);
-        vm.warp(block.timestamp + 1 hours + 1);
+        vm.warp(4 hours + 3);
         oracle.finalizeRoundPayoutSnapshot(snapshotKey);
 
         IClusterPayoutOracle.RoundPayoutSnapshot memory snapshot =
@@ -569,7 +644,7 @@ contract ClusterPayoutOracleTest is Test {
             "ipfs://epoch",
             _defaultEpochSources()
         );
-        vm.warp(1 hours + 2);
+        vm.warp(2 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
 
         IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
@@ -612,7 +687,7 @@ contract ClusterPayoutOracleTest is Test {
             "ipfs://epoch",
             _defaultEpochSources()
         );
-        vm.warp(1 hours + 2);
+        vm.warp(2 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
 
         IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
@@ -646,7 +721,7 @@ contract ClusterPayoutOracleTest is Test {
         );
         _challengeCorrelationEpoch(1, keccak256("bad-root"));
 
-        vm.warp(1 hours + 2);
+        vm.warp(2 hours + 2);
         vm.expectRevert(ClusterPayoutOracle.SnapshotChallenged.selector);
         oracle.finalizeCorrelationEpoch(1);
 
@@ -756,7 +831,7 @@ contract ClusterPayoutOracleTest is Test {
             "ipfs://epoch",
             _defaultEpochSources()
         );
-        vm.warp(1 hours + 2);
+        vm.warp(2 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
 
         oracle.rejectFinalizedCorrelationEpochRoot(1, keccak256("late-bad-root"));
@@ -781,7 +856,7 @@ contract ClusterPayoutOracleTest is Test {
             "ipfs://epoch",
             _defaultEpochSources()
         );
-        vm.warp(1 hours + 2);
+        vm.warp(2 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
 
         vm.warp(block.timestamp + oracle.FINALIZATION_VETO_WINDOW() + 1);
@@ -800,7 +875,7 @@ contract ClusterPayoutOracleTest is Test {
             "ipfs://epoch",
             _defaultEpochSources()
         );
-        vm.warp(1 hours + 2);
+        vm.warp(2 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
 
         IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
@@ -821,10 +896,10 @@ contract ClusterPayoutOracleTest is Test {
             "ipfs://epoch-replacement",
             _defaultEpochSources()
         );
-        vm.warp(block.timestamp + 1 hours + 1);
+        vm.warp(6 hours + 4);
         oracle.finalizeCorrelationEpoch(1);
 
-        vm.warp(block.timestamp + 1 hours + 1);
+        vm.warp(block.timestamp + 2 hours + 1);
         vm.expectRevert(ClusterPayoutOracle.SnapshotNotFinalizable.selector);
         oracle.finalizeRoundPayoutSnapshot(snapshotKey);
     }
@@ -840,7 +915,7 @@ contract ClusterPayoutOracleTest is Test {
             "ipfs://epoch",
             _defaultEpochSources()
         );
-        vm.warp(1 hours + 2);
+        vm.warp(2 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
 
         IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
@@ -862,7 +937,7 @@ contract ClusterPayoutOracleTest is Test {
             "ipfs://epoch-replacement",
             _defaultEpochSources()
         );
-        vm.warp(block.timestamp + 1 hours + 1);
+        vm.warp(block.timestamp + 2 hours + 1);
         oracle.finalizeCorrelationEpoch(1);
 
         vm.expectRevert(ClusterPayoutOracle.SnapshotNotFinalizable.selector);
@@ -880,7 +955,7 @@ contract ClusterPayoutOracleTest is Test {
             "ipfs://epoch",
             _defaultEpochSources()
         );
-        vm.warp(1 hours + 2);
+        vm.warp(2 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
 
         IClusterPayoutOracle.PayoutWeight memory payout = IClusterPayoutOracle.PayoutWeight({
@@ -916,7 +991,7 @@ contract ClusterPayoutOracleTest is Test {
         bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(
             oracle.PAYOUT_DOMAIN_QUESTION_REWARD(), input.rewardPoolId, input.contentId, input.roundId
         );
-        vm.warp(block.timestamp + 1 hours + 1);
+        vm.warp(block.timestamp + 2 hours + 1);
         oracle.finalizeRoundPayoutSnapshot(snapshotKey);
 
         bytes32[] memory proof = new bytes32[](0);
@@ -938,7 +1013,7 @@ contract ClusterPayoutOracleTest is Test {
             "ipfs://epoch-replacement",
             _defaultEpochSources()
         );
-        vm.warp(3 hours + 4);
+        vm.warp(6 hours + 4);
         oracle.finalizeCorrelationEpoch(1);
 
         assertFalse(
@@ -966,7 +1041,7 @@ contract ClusterPayoutOracleTest is Test {
             "ipfs://epoch",
             _defaultEpochSources()
         );
-        vm.warp(1 hours + 2);
+        vm.warp(2 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
 
         IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
@@ -974,7 +1049,7 @@ contract ClusterPayoutOracleTest is Test {
         bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(
             oracle.PAYOUT_DOMAIN_QUESTION_REWARD(), input.rewardPoolId, input.contentId, input.roundId
         );
-        vm.warp(block.timestamp + 1 hours + 1);
+        vm.warp(block.timestamp + 2 hours + 1);
         oracle.finalizeRoundPayoutSnapshot(snapshotKey);
         bytes32 staleDigest = oracle.roundPayoutSnapshotProposalDigest(snapshotKey);
 
@@ -989,7 +1064,7 @@ contract ClusterPayoutOracleTest is Test {
             "ipfs://epoch-replacement",
             _defaultEpochSources()
         );
-        vm.warp(3 hours + 4);
+        vm.warp(6 hours + 4);
         oracle.finalizeCorrelationEpoch(1);
 
         input.artifactHash = keccak256("replacement-epoch-artifact");
@@ -1016,7 +1091,7 @@ contract ClusterPayoutOracleTest is Test {
             "ipfs://epoch",
             _defaultEpochSources()
         );
-        vm.warp(1 hours + 2);
+        vm.warp(2 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
 
         IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
@@ -1024,7 +1099,7 @@ contract ClusterPayoutOracleTest is Test {
         bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(
             oracle.PAYOUT_DOMAIN_QUESTION_REWARD(), input.rewardPoolId, input.contentId, input.roundId
         );
-        vm.warp(block.timestamp + 1 hours + 1);
+        vm.warp(block.timestamp + 2 hours + 1);
         oracle.finalizeRoundPayoutSnapshot(snapshotKey);
 
         oracle.rejectFinalizedCorrelationEpoch(1, keccak256("bad-parent"));
@@ -1038,7 +1113,7 @@ contract ClusterPayoutOracleTest is Test {
             "ipfs://epoch-replacement",
             _defaultEpochSources()
         );
-        vm.warp(3 hours + 4);
+        vm.warp(6 hours + 4);
         oracle.finalizeCorrelationEpoch(1);
 
         questionConsumer.setConsumed(true);
@@ -1053,7 +1128,7 @@ contract ClusterPayoutOracleTest is Test {
         oracle.proposeCorrelationEpoch(
             1, 1, 20, badRoot, keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch", _defaultEpochSources()
         );
-        vm.warp(1 hours + 2);
+        vm.warp(2 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
         oracle.rejectFinalizedCorrelationEpochRoot(1, keccak256("bad-root"));
 
@@ -1072,7 +1147,7 @@ contract ClusterPayoutOracleTest is Test {
             "ipfs://epoch-replacement",
             _defaultEpochSources()
         );
-        vm.warp(block.timestamp + 1 hours + 2);
+        vm.warp(block.timestamp + 2 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
 
         ClusterPayoutOracle.CorrelationEpochSnapshot memory snapshot = oracle.correlationEpochSnapshot(1);
@@ -1092,7 +1167,7 @@ contract ClusterPayoutOracleTest is Test {
             "ipfs://bad-epoch",
             _defaultEpochSources()
         );
-        vm.warp(1 hours + 2);
+        vm.warp(2 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
 
         bytes32 rejectedDigest = oracle.correlationEpochProposalDigest(1);
@@ -1123,7 +1198,7 @@ contract ClusterPayoutOracleTest is Test {
             "ipfs://corrected-epoch",
             _defaultEpochSources()
         );
-        vm.warp(block.timestamp + 1 hours + 2);
+        vm.warp(block.timestamp + 2 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
 
         ClusterPayoutOracle.CorrelationEpochSnapshot memory snapshot = oracle.correlationEpochSnapshot(1);
@@ -1138,7 +1213,7 @@ contract ClusterPayoutOracleTest is Test {
         oracle.proposeCorrelationEpoch(
             1, 1, 20, clusterRoot, keccak256("params"), artifactHash, "ipfs://bad-epoch-uri", _defaultEpochSources()
         );
-        vm.warp(1 hours + 2);
+        vm.warp(2 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
 
         bytes32 rejectedDigest = oracle.correlationEpochProposalDigest(1);
@@ -1163,7 +1238,7 @@ contract ClusterPayoutOracleTest is Test {
             _defaultEpochSources()
         );
         assertTrue(oracle.correlationEpochProposalDigest(1) != rejectedDigest);
-        vm.warp(block.timestamp + 1 hours + 2);
+        vm.warp(block.timestamp + 2 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
 
         ClusterPayoutOracle.CorrelationEpochSnapshot memory snapshot = oracle.correlationEpochSnapshot(1);
@@ -1225,7 +1300,7 @@ contract ClusterPayoutOracleTest is Test {
             _defaultEpochSources()
         );
 
-        vm.warp(block.timestamp + 1 hours + 2);
+        vm.warp(block.timestamp + 2 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
         ClusterPayoutOracle.CorrelationEpochSnapshot memory finalSnapshot = oracle.correlationEpochSnapshot(1);
         assertEq(uint8(finalSnapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Finalized));
@@ -1266,7 +1341,7 @@ contract ClusterPayoutOracleTest is Test {
         );
         assertTrue(oracle.correlationEpochProposalDigest(1) != rejectedDigest);
 
-        vm.warp(block.timestamp + 1 hours + 2);
+        vm.warp(block.timestamp + 2 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
         ClusterPayoutOracle.CorrelationEpochSnapshot memory finalSnapshot = oracle.correlationEpochSnapshot(1);
         assertEq(uint8(finalSnapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Finalized));
@@ -1345,7 +1420,7 @@ contract ClusterPayoutOracleTest is Test {
             "ipfs://epoch",
             _defaultEpochSources()
         );
-        vm.warp(1 hours + 2);
+        vm.warp(2 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
 
         IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
@@ -1394,7 +1469,7 @@ contract ClusterPayoutOracleTest is Test {
             "ipfs://epoch",
             _defaultEpochSources()
         );
-        vm.warp(1 hours + 2);
+        vm.warp(2 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
 
         IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
@@ -1451,7 +1526,7 @@ contract ClusterPayoutOracleTest is Test {
             "ipfs://epoch",
             _defaultEpochSources()
         );
-        vm.warp(1 hours + 2);
+        vm.warp(2 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
 
         IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
@@ -1528,7 +1603,7 @@ contract ClusterPayoutOracleTest is Test {
             "ipfs://epoch",
             _defaultEpochSources()
         );
-        vm.warp(1 hours + 2);
+        vm.warp(2 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
 
         IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
@@ -1639,7 +1714,7 @@ contract ClusterPayoutOracleTest is Test {
             "ipfs://epoch",
             _defaultEpochSources()
         );
-        vm.warp(1 hours + 2);
+        vm.warp(2 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
 
         IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
@@ -1760,7 +1835,7 @@ contract ClusterPayoutOracleTest is Test {
             _defaultEpochSources()
         );
 
-        vm.warp(1 hours + 2);
+        vm.warp(2 hours + 2);
         vm.expectRevert(ClusterPayoutOracle.SnapshotNotFinalizable.selector);
         oracle.challengeCorrelationEpoch(1, keccak256("late-challenge"));
 
@@ -1785,7 +1860,7 @@ contract ClusterPayoutOracleTest is Test {
         );
         bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(questionRewardDomain, 7, 42, 3);
 
-        vm.warp(block.timestamp + 1 hours);
+        vm.warp(block.timestamp + 2 hours);
         vm.expectRevert(ClusterPayoutOracle.SnapshotNotFinalizable.selector);
         oracle.challengeRoundPayoutSnapshot(snapshotKey, keccak256("late-round-challenge"));
     }
@@ -1818,7 +1893,7 @@ contract ClusterPayoutOracleTest is Test {
             "ipfs://epoch",
             _defaultEpochSources()
         );
-        vm.warp(1 hours + 2);
+        vm.warp(2 hours + 2);
         oracle.finalizeCorrelationEpoch(2);
 
         uint8 questionRewardDomain = oracle.PAYOUT_DOMAIN_QUESTION_REWARD();
@@ -1860,7 +1935,7 @@ contract ClusterPayoutOracleTest is Test {
             "ipfs://epoch-replacement",
             _defaultEpochSources()
         );
-        vm.warp(1 hours + 2);
+        vm.warp(2 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
 
         IClusterPayoutOracle.PayoutWeight memory payout = IClusterPayoutOracle.PayoutWeight({
@@ -1936,7 +2011,7 @@ contract ClusterPayoutOracleTest is Test {
             "ipfs://epoch-replacement",
             _defaultEpochSources()
         );
-        vm.warp(1 hours + 2);
+        vm.warp(2 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
 
         IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
@@ -1971,7 +2046,7 @@ contract ClusterPayoutOracleTest is Test {
             "ipfs://epoch",
             _defaultEpochSources()
         );
-        vm.warp(1 hours + 2);
+        vm.warp(2 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
 
         IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
@@ -1979,7 +2054,7 @@ contract ClusterPayoutOracleTest is Test {
         bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(
             oracle.PAYOUT_DOMAIN_QUESTION_REWARD(), input.rewardPoolId, input.contentId, input.roundId
         );
-        vm.warp(2 hours + 3);
+        vm.warp(block.timestamp + 2 hours + 1);
         oracle.finalizeRoundPayoutSnapshot(snapshotKey);
 
         oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("bad-finalized-root"));
@@ -2015,7 +2090,7 @@ contract ClusterPayoutOracleTest is Test {
             "ipfs://epoch",
             _defaultEpochSources()
         );
-        vm.warp(1 hours + 2);
+        vm.warp(2 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
 
         IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
@@ -2023,7 +2098,7 @@ contract ClusterPayoutOracleTest is Test {
         bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(
             oracle.PAYOUT_DOMAIN_QUESTION_REWARD(), input.rewardPoolId, input.contentId, input.roundId
         );
-        vm.warp(2 hours + 3);
+        vm.warp(block.timestamp + 2 hours + 1);
         oracle.finalizeRoundPayoutSnapshot(snapshotKey);
 
         questionConsumer.setConsumed(true);
@@ -2045,7 +2120,7 @@ contract ClusterPayoutOracleTest is Test {
             "ipfs://epoch",
             _defaultEpochSources()
         );
-        vm.warp(1 hours + 2);
+        vm.warp(2 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
 
         IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
@@ -2053,7 +2128,7 @@ contract ClusterPayoutOracleTest is Test {
         bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(
             oracle.PAYOUT_DOMAIN_QUESTION_REWARD(), input.rewardPoolId, input.contentId, input.roundId
         );
-        vm.warp(2 hours + 3);
+        vm.warp(block.timestamp + 2 hours + 1);
         oracle.finalizeRoundPayoutSnapshot(snapshotKey);
 
         questionConsumer.setConsumed(true);
@@ -2086,7 +2161,7 @@ contract ClusterPayoutOracleTest is Test {
             "ipfs://epoch",
             _defaultEpochSources()
         );
-        vm.warp(1 hours + 2);
+        vm.warp(2 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
 
         IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
@@ -2094,7 +2169,7 @@ contract ClusterPayoutOracleTest is Test {
         bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(
             oracle.PAYOUT_DOMAIN_QUESTION_REWARD(), input.rewardPoolId, input.contentId, input.roundId
         );
-        vm.warp(2 hours + 3);
+        vm.warp(block.timestamp + 2 hours + 1);
         oracle.finalizeRoundPayoutSnapshot(snapshotKey);
 
         MockRoundPayoutSnapshotConsumer replacementConsumer = new MockRoundPayoutSnapshotConsumer();
@@ -2119,7 +2194,7 @@ contract ClusterPayoutOracleTest is Test {
             "ipfs://epoch",
             _defaultEpochSources()
         );
-        vm.warp(1 hours + 2);
+        vm.warp(2 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
 
         uint8 launchDomain = oracle.PAYOUT_DOMAIN_LAUNCH_CREDIT();
@@ -2153,7 +2228,7 @@ contract ClusterPayoutOracleTest is Test {
             "ipfs://epoch",
             _questionEpochSources(7, 42, 10)
         );
-        vm.warp(1 hours + 2);
+        vm.warp(2 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
 
         uint8 questionRewardDomain = oracle.PAYOUT_DOMAIN_QUESTION_REWARD();
@@ -2187,7 +2262,7 @@ contract ClusterPayoutOracleTest is Test {
             "ipfs://epoch",
             _defaultEpochSources()
         );
-        vm.warp(1 hours + 2);
+        vm.warp(2 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
 
         IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
@@ -2243,7 +2318,7 @@ contract ClusterPayoutOracleProposerBondTest is Test {
         frontendRegistry = new MockFrontendRegistry();
         frontendRegistry.setEligible(proposer, true);
         oracle = new TestableClusterPayoutOracle(arbiter, address(frontendRegistry), address(usdc));
-        oracle.setOracleConfig(1 hours, CHALLENGE_BOND, bondRecipient);
+        oracle.setOracleConfig(2 hours, CHALLENGE_BOND, bondRecipient);
         questionConsumer = new MockRoundPayoutSnapshotConsumer();
         oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_QUESTION_REWARD(), address(questionConsumer));
         usdc.mint(address(this), 100e6);
@@ -2329,7 +2404,7 @@ contract ClusterPayoutOracleProposerBondTest is Test {
             "ipfs://epoch",
             _defaultEpochSources()
         );
-        vm.warp(1 hours + 2);
+        vm.warp(2 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
 
         IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = IClusterPayoutOracle.RoundPayoutSnapshotInput({
@@ -2349,7 +2424,7 @@ contract ClusterPayoutOracleProposerBondTest is Test {
         vm.prank(proposer);
         oracle.proposeRoundPayoutSnapshot(input);
         snapshotKey = oracle.roundPayoutSnapshotKey(input.domain, input.rewardPoolId, input.contentId, input.roundId);
-        vm.warp(2 hours + 3);
+        vm.warp(block.timestamp + 2 hours + 1);
         oracle.finalizeRoundPayoutSnapshot(snapshotKey);
     }
 

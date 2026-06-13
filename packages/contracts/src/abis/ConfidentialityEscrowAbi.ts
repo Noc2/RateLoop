@@ -71,6 +71,19 @@ export const ConfidentialityEscrowAbi = [
   },
   {
     "type": "function",
+    "name": "CONFIDENTIALITY_FLAG_PRIVATE_FOREVER",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "CONFIG_ROLE",
     "inputs": [],
     "outputs": [
@@ -332,6 +345,24 @@ export const ConfidentialityEscrowAbi = [
             "internalType": "uint8"
           }
         ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "confidentialityEscrowConfigShape",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "registry_",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "protocolConfig_",
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "stateMutability": "view"
@@ -820,6 +851,29 @@ export const ConfidentialityEscrowAbi = [
       },
       {
         "name": "holder",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "recordConfidentialityNexusForRegistry",
+    "inputs": [
+      {
+        "name": "contentId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "holder",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "registryAddress",
         "type": "address",
         "internalType": "address"
       }

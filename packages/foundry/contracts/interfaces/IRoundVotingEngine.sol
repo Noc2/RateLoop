@@ -2,6 +2,7 @@
 pragma solidity ^0.8.34;
 
 import { RoundLib } from "../libraries/RoundLib.sol";
+import { RatingLib } from "../libraries/RatingLib.sol";
 
 /// @title IRoundVotingEngine
 /// @notice Interface for RoundVotingEngine contract used by ContentRegistry and other contracts.
@@ -29,6 +30,26 @@ interface IRoundVotingEngine {
             uint48 thresholdReachedAt,
             uint48 settledAt,
             uint8 upWins
+        );
+
+    function roundRatingConfig(uint256 contentId, uint256 roundId)
+        external
+        view
+        returns (RatingLib.RatingConfig memory cfg);
+
+    function ratingCommitState(uint256 contentId, uint256 roundId, bytes32 commitKey)
+        external
+        view
+        returns (bool revealed, bool isUp, uint64 stakeAmount, uint8 epochIndex, bytes32 identityKey, address holder);
+
+    function roundLifecycleState(uint256 contentId, uint256 roundId)
+        external
+        view
+        returns (
+            uint256 revealGracePeriod,
+            uint256 lastRevealableAfter,
+            uint256 cleanupRemaining,
+            uint48 clusterPayoutReadyAt
         );
 
     /// @notice Transfer LREP reward tokens to a recipient. Only callable by RewardDistributor.

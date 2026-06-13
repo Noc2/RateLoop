@@ -105,6 +105,29 @@ export const RoundRewardDistributorAbi = [
   },
   {
     "type": "function",
+    "name": "confiscateBannedReward",
+    "inputs": [
+      {
+        "name": "contentId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "roundId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "commitKey",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "confiscateFrontendFee",
     "inputs": [
       {
@@ -1443,6 +1466,11 @@ export const RoundRewardDistributorAbi = [
   {
     "type": "error",
     "name": "RewardFinalizationTooEarly",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "RewardNotConfiscatable",
     "inputs": []
   },
   {

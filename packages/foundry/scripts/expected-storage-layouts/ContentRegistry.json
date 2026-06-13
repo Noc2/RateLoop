@@ -147,23 +147,35 @@
     {
       "slot": 24,
       "offset": 0,
+      "label": "pendingRatingSettlements",
+      "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_struct(PendingRatingSettlement)))"
+    },
+    {
+      "slot": 25,
+      "offset": 0,
+      "label": "appliedRatingSnapshotDigest",
+      "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_bytes32))"
+    },
+    {
+      "slot": 26,
+      "offset": 0,
       "label": "contentSlashConfigSnapshot",
       "type": "t_mapping(t_uint256,t_struct(SlashConfig))"
     },
     {
-      "slot": 25,
+      "slot": 27,
       "offset": 0,
       "label": "submissionMediaValidator",
       "type": "t_contract(SubmissionMediaValidator)"
     },
     {
-      "slot": 26,
+      "slot": 28,
       "offset": 0,
       "label": "questionBundleRoundObserverByContent",
       "type": "t_mapping(t_uint256,t_address)"
     },
     {
-      "slot": 27,
+      "slot": 29,
       "offset": 0,
       "label": "__gap",
       "type": "t_array(t_uint256)"
@@ -179,8 +191,8 @@
     {
       "id": "t_array(t_uint256)",
       "encoding": "inplace",
-      "label": "uint256[40]",
-      "numberOfBytes": "1280",
+      "label": "uint256[38]",
+      "numberOfBytes": "1216",
       "base": "t_uint256"
     },
     {
@@ -272,12 +284,36 @@
       "value": "t_bytes32"
     },
     {
+      "id": "t_mapping(t_uint256,t_mapping(t_uint256,t_bytes32))",
+      "encoding": "mapping",
+      "label": "mapping(uint256 => mapping(uint256 => bytes32))",
+      "numberOfBytes": "32",
+      "key": "t_uint256",
+      "value": "t_mapping(t_uint256,t_bytes32)"
+    },
+    {
+      "id": "t_mapping(t_uint256,t_mapping(t_uint256,t_struct(PendingRatingSettlement)))",
+      "encoding": "mapping",
+      "label": "mapping(uint256 => mapping(uint256 => struct ContentRegistry.PendingRatingSettlement))",
+      "numberOfBytes": "32",
+      "key": "t_uint256",
+      "value": "t_mapping(t_uint256,t_struct(PendingRatingSettlement))"
+    },
+    {
       "id": "t_mapping(t_uint256,t_struct(Content))",
       "encoding": "mapping",
       "label": "mapping(uint256 => struct ContentRegistry.Content)",
       "numberOfBytes": "32",
       "key": "t_uint256",
       "value": "t_struct(Content)"
+    },
+    {
+      "id": "t_mapping(t_uint256,t_struct(PendingRatingSettlement))",
+      "encoding": "mapping",
+      "label": "mapping(uint256 => struct ContentRegistry.PendingRatingSettlement)",
+      "numberOfBytes": "32",
+      "key": "t_uint256",
+      "value": "t_struct(PendingRatingSettlement)"
     },
     {
       "id": "t_mapping(t_uint256,t_struct(RatingState))",
@@ -376,6 +412,56 @@
           "offset": 23,
           "label": "categoryId",
           "type": "t_uint64"
+        }
+      ]
+    },
+    {
+      "id": "t_struct(PendingRatingSettlement)",
+      "encoding": "inplace",
+      "label": "struct ContentRegistry.PendingRatingSettlement",
+      "numberOfBytes": "64",
+      "members": [
+        {
+          "slot": 0,
+          "offset": 0,
+          "label": "votingEngine",
+          "type": "t_address"
+        },
+        {
+          "slot": 0,
+          "offset": 20,
+          "label": "upEvidence",
+          "type": "t_uint64"
+        },
+        {
+          "slot": 1,
+          "offset": 0,
+          "label": "downEvidence",
+          "type": "t_uint64"
+        },
+        {
+          "slot": 1,
+          "offset": 8,
+          "label": "readyAt",
+          "type": "t_uint48"
+        },
+        {
+          "slot": 1,
+          "offset": 14,
+          "label": "referenceRatingBps",
+          "type": "t_uint16"
+        },
+        {
+          "slot": 1,
+          "offset": 16,
+          "label": "exists",
+          "type": "t_bool"
+        },
+        {
+          "slot": 1,
+          "offset": 17,
+          "label": "applied",
+          "type": "t_bool"
         }
       ]
     },

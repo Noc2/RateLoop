@@ -2,8 +2,6 @@
 pragma solidity ^0.8.34;
 
 import { ContentRegistry } from "../ContentRegistry.sol";
-import { RatingLib } from "./RatingLib.sol";
-import { RatingMath } from "./RatingMath.sol";
 
 /// @title RoundSettlementSideEffectsLib
 /// @notice Moves best-effort post-settlement external calls out of RoundVotingEngine runtime bytecode.
@@ -19,48 +17,20 @@ library RoundSettlementSideEffectsLib {
 
     function recordSettlement(
         ContentRegistry registry,
-        RatingLib.RatingConfig memory ratingConfig,
         uint256 contentId,
         uint256 roundId,
         uint16 referenceRatingBps,
-        uint64 weightedUpPool,
-        uint64 weightedDownPool
+        uint64 upEvidence,
+        uint64 downEvidence
     ) external {
-        // The two rating-state precondition reads share the SettlementSideEffectFailed/RatingStateUpdate
-        // stage with the eventual update call: any failure along this chain means "the rating state was
-        // not updated for this round," and downstream observers handle all three the same way.
-        // getSlashConfigForContent in particular may transitively call protocolConfig.slashConfig(),
-        // so guard it (and the symmetric getRatingState read) so a misbehaving config contract
-        // cannot brick settleRound.
-        RatingLib.RatingState memory previousState;
-        RatingLib.SlashConfig memory slashConfig;
-        bool ratingUpdatePossible;
-        try registry.getRatingState(contentId) returns (RatingLib.RatingState memory s) {
-            previousState = s;
-            try registry.getSlashConfigForContent(contentId) returns (RatingLib.SlashConfig memory c) {
-                slashConfig = c;
-                ratingUpdatePossible = true;
-            } catch {
-                emit SettlementSideEffectFailed(
-                    contentId, roundId, address(registry), SideEffectFailureStage.RatingStateUpdate
-                );
-            }
-        } catch {
+        // Canonical public rating movement waits for the correlation snapshot so correlated
+        // wallet clusters cannot move the visible rating by raw headcount. Settlement records
+        // the raw evidence as pending; anyone can later apply the finalized adjusted weights.
+        try registry.recordPendingRatingSettlement(contentId, roundId, referenceRatingBps, upEvidence, downEvidence) { }
+        catch {
             emit SettlementSideEffectFailed(
                 contentId, roundId, address(registry), SideEffectFailureStage.RatingStateUpdate
             );
-        }
-
-        if (ratingUpdatePossible) {
-            RatingLib.RatingState memory nextState = _applyBinarySettlement(
-                referenceRatingBps, weightedUpPool, weightedDownPool, previousState, ratingConfig, slashConfig
-            );
-            try registry.updateRatingState(contentId, roundId, referenceRatingBps, nextState) { }
-            catch {
-                emit SettlementSideEffectFailed(
-                    contentId, roundId, address(registry), SideEffectFailureStage.RatingStateUpdate
-                );
-            }
         }
 
         try registry.recordMeaningfulActivity(contentId) { }
@@ -69,24 +39,5 @@ library RoundSettlementSideEffectsLib {
                 contentId, roundId, address(registry), SideEffectFailureStage.MeaningfulActivityRecord
             );
         }
-    }
-
-    function _applyBinarySettlement(
-        uint16 referenceRatingBps,
-        uint64 upEvidence,
-        uint64 downEvidence,
-        RatingLib.RatingState memory previousState,
-        RatingLib.RatingConfig memory ratingConfig,
-        RatingLib.SlashConfig memory slashConfig
-    ) private view returns (RatingLib.RatingState memory nextState) {
-        nextState = RatingMath.applySettlement(
-            referenceRatingBps,
-            upEvidence,
-            downEvidence,
-            previousState,
-            ratingConfig,
-            slashConfig,
-            uint48(block.timestamp)
-        );
     }
 }
