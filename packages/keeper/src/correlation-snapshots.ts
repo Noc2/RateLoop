@@ -889,7 +889,6 @@ async function preflightAutomaticCorrelationSnapshots(
       }
 
       if (epochStatus === STATUS.Proposed) {
-        needsArtifactBuild = true;
         try {
           await writeContractAndConfirm(publicClient, walletClient, {
             account,
