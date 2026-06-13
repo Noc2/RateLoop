@@ -380,7 +380,10 @@ export async function submitGatedQuestion(
   await continueToBountyStep(page);
 
   if (bondAmount !== "0") {
-    await form.locator("#submission-confidentiality-bond-asset").selectOption(bondAsset);
+    const normalizedBondAsset = normalizeAssetName(bondAsset);
+    const bondAssetSelect = form.locator("#submission-confidentiality-bond-asset");
+    await bondAssetSelect.selectOption(normalizedBondAsset);
+    await expect(bondAssetSelect).toHaveValue(normalizedBondAsset);
     await form.locator("#submission-confidentiality-bond-amount").fill(bondAmount);
   }
 
