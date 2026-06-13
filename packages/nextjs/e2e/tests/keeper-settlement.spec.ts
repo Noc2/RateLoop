@@ -104,7 +104,7 @@ test.describe("Keeper-backed settlement lifecycle", () => {
         ZERO_ADDRESS,
         voter.account.address,
         VOTING_ENGINE,
-        TLOCK_EPOCH,
+        EPOCH_DURATION,
       );
       expect(commit.success, `Vote commit failed for ${voter.account.address}`).toBe(true);
     }

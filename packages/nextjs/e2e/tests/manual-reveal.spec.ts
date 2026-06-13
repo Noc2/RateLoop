@@ -82,7 +82,7 @@ test.describe("Manual reveal fallback", () => {
     const approved = await approveLREP(VOTING_ENGINE, STAKE, voter.address, LREP_TOKEN);
     expect(approved, "Vote approval failed").toBe(true);
 
-    // Commit with short tlock epoch — the ciphertext will be decryptable in TLOCK_EPOCH real seconds
+    // Chain-time offset keeps the on-chain epoch revealable after about TLOCK_EPOCH real seconds.
     const commit = await commitVoteDirect(
       BigInt(contentId!),
       true,
@@ -90,7 +90,7 @@ test.describe("Manual reveal fallback", () => {
       ZERO_ADDRESS,
       voter.address,
       VOTING_ENGINE,
-      TLOCK_EPOCH,
+      EPOCH_DURATION,
     );
     expect(commit.success, "Vote commit failed").toBe(true);
 
