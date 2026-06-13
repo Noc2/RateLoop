@@ -2053,6 +2053,8 @@ const HomeInner = () => {
                 categoryId={mobileVoteDockItem.categoryId}
                 questionTitle={mobileVoteDockItem.question || mobileVoteDockItem.title}
                 currentRating={getVisibleContentRating(mobileVoteDockItem)}
+                ratingReviewStatus={mobileVoteDockItem.ratingReviewStatus}
+                ratingReviewRoundId={mobileVoteDockItem.ratingReviewRoundId}
                 openRound={mobileVoteDockItem.openRound}
                 roundConfig={mobileVoteDockItem.roundConfig}
                 onVote={isUp => handleButtonVote(mobileVoteDockItem, isUp)}

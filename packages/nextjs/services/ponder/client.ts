@@ -528,6 +528,9 @@ export interface PonderContentItem {
   ratingDownEvidence?: string;
   ratingSettledRounds?: number;
   ratingLowSince?: string;
+  ratingReviewStatus?: number;
+  ratingReviewRoundId?: string | null;
+  ratingReviewUpdatedAt?: string | null;
   createdAt: string;
   lastActivityAt: string;
   totalVotes: number;

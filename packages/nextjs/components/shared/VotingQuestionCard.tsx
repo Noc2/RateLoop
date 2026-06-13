@@ -30,6 +30,8 @@ interface VotingQuestionCardProps {
   categoryId: bigint;
   questionTitle?: string;
   currentRating: number | null;
+  ratingReviewStatus?: number | string | null;
+  ratingReviewRoundId?: bigint | string | number | null;
   onVote: (isUp: boolean) => void;
   isCommitting: boolean;
   address?: string;
@@ -57,6 +59,8 @@ interface VotingQuestionCardProps {
 
 const RATING_GUIDANCE_TEXT =
   "The public rating appears after a round settles and is the cumulative share of bounded thumbs-up evidence across settled rounds. Vote thumbs up when the content is useful for the question, thumbs down when it is unhelpful, broken, misleading, or unsafe. Your separate forecast is the expected share of revealed raters choosing thumbs up.";
+const RATING_REVIEW_PENDING_TOOLTIP = "Waiting for the correlation snapshot before publishing the final rating.";
+const RATING_REVIEW_STATUS_PENDING = 1;
 const REWARD_POOL_TOOLTIP_TEXT =
   "This question's bounty is shown in USD and backed by USDC on World Chain. Eligible revealed raters can claim from it in qualified rounds, with 3% reserved for the eligible frontend operator.";
 const LREP_REWARD_POOL_TOOLTIP_TEXT =
@@ -395,6 +399,25 @@ function DockCircleIconButton({
   );
 }
 
+function isRatingReviewPending(status: number | string | null | undefined) {
+  const parsed = typeof status === "number" ? status : typeof status === "string" ? Number(status) : 0;
+  return Number.isFinite(parsed) && parsed === RATING_REVIEW_STATUS_PENDING;
+}
+
+function RatingPendingNotice({ compact = false }: { compact?: boolean }) {
+  return (
+    <HoverTooltip text={RATING_REVIEW_PENDING_TOOLTIP} position="bottom">
+      <span
+        className={`inline-flex items-center rounded-full border border-primary/20 bg-primary/10 font-semibold text-primary ${
+          compact ? "px-2 py-0.5 text-[0.68rem]" : "px-2.5 py-1 text-xs"
+        }`}
+      >
+        Rating pending
+      </span>
+    </HoverTooltip>
+  );
+}
+
 function AddRewardActionLinks({
   onFundQuestion,
   onFundFeedbackBonus,
@@ -484,6 +507,7 @@ export function VotingQuestionCard({
   contentId,
   questionTitle,
   currentRating,
+  ratingReviewStatus,
   onVote,
   isCommitting,
   address,
@@ -522,6 +546,7 @@ export function VotingQuestionCard({
     roundNotAcceptingMessage,
   });
   const contentInactive = !isContentActive;
+  const ratingPending = isRatingReviewPending(ratingReviewStatus);
   const voteActionDisabled =
     isCommitting || isVoteEligibilityPending || Boolean(voteUnavailableStatus) || contentInactive || !roundAcceptsVotes;
   const [isDetailsOpen, setIsDetailsOpen] = useState(isSignalVariant);
@@ -921,6 +946,12 @@ export function VotingQuestionCard({
                   </p>
                 ) : null}
 
+                {ratingPending ? (
+                  <div className="px-4 pb-1 text-center">
+                    <RatingPendingNotice compact />
+                  </div>
+                ) : null}
+
                 {displayError ? <p className="px-4 pb-1 text-center text-sm text-error">{displayError}</p> : null}
 
                 {isDetailsOpen ? (
@@ -977,6 +1008,11 @@ export function VotingQuestionCard({
         <div className="relative z-10 flex min-h-0 flex-1 flex-col overflow-hidden">
           <div className="flex shrink-0 flex-col items-center text-center">
             {ratingOrb}
+            {ratingPending ? (
+              <div className="mt-2">
+                <RatingPendingNotice compact={compact} />
+              </div>
+            ) : null}
             {showVoteAttentionHint && isSignalVariant ? (
               <p className="vote-attention-hint mt-3 text-[0.72rem] font-semibold uppercase tracking-[0.16em] text-primary/90">
                 Rate here

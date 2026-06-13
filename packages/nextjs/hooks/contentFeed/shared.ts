@@ -85,6 +85,9 @@ export interface ContentItem {
   ratingUpEvidence?: bigint;
   ratingDownEvidence?: bigint;
   ratingSettledRounds?: number;
+  ratingReviewStatus?: number;
+  ratingReviewRoundId?: bigint | null;
+  ratingReviewUpdatedAt?: bigint | null;
   createdAt: string | null;
   lastActivityAt: string | null;
   totalVotes: number;
@@ -378,6 +381,9 @@ export function mapContentItem(
     ratingBps?: number;
     conservativeRatingBps?: number;
     ratingSettledRounds?: number;
+    ratingReviewStatus?: string | number | null;
+    ratingReviewRoundId?: string | number | bigint | null;
+    ratingReviewUpdatedAt?: string | number | bigint | null;
     ratingUpEvidence?: string | number | bigint | null;
     ratingDownEvidence?: string | number | bigint | null;
     createdAt?: string | null;
@@ -616,6 +622,18 @@ export function mapContentItem(
     ratingUpEvidence,
     ratingDownEvidence,
     ratingSettledRounds,
+    ratingReviewStatus:
+      item.ratingReviewStatus === undefined || item.ratingReviewStatus === null
+        ? undefined
+        : Number(item.ratingReviewStatus),
+    ratingReviewRoundId:
+      item.ratingReviewRoundId === undefined || item.ratingReviewRoundId === null
+        ? null
+        : BigInt(item.ratingReviewRoundId),
+    ratingReviewUpdatedAt:
+      item.ratingReviewUpdatedAt === undefined || item.ratingReviewUpdatedAt === null
+        ? null
+        : BigInt(item.ratingReviewUpdatedAt),
     createdAt: item.createdAt ?? null,
     lastActivityAt: item.lastActivityAt ?? null,
     totalVotes: item.totalVotes ?? 0,

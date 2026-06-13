@@ -75,6 +75,8 @@ export function VoteSignalRail({
             categoryId={primaryItem.categoryId}
             questionTitle={primaryItem.question || primaryItem.title}
             currentRating={getVisibleContentRating(primaryItem)}
+            ratingReviewStatus={primaryItem.ratingReviewStatus}
+            ratingReviewRoundId={primaryItem.ratingReviewRoundId}
             openRound={primaryItem.openRound}
             roundConfig={primaryItem.roundConfig}
             onVote={isUp => onVote(primaryItem, isUp)}
