@@ -37,7 +37,8 @@ const X402_MIN_REWARD_POOL_SETTLED_ROUNDS = 1n;
 const X402_MAX_QUESTION_BUNDLE_COUNT = 10;
 export const X402_MIN_NONZERO_CONFIDENTIALITY_BOND = 1_000_000n;
 const EMPTY_DETAILS_HASH = `0x${"0".repeat(64)}` as const;
-const DEFAULT_CONFIDENTIALITY_DISCLOSURE_POLICY = "after_settlement";
+const AFTER_SETTLEMENT_DISCLOSURE_POLICY = "after_settlement";
+const DEFAULT_CONFIDENTIALITY_DISCLOSURE_POLICY = "private_forever";
 const QUESTION_DETAILS_PATH_PATTERN = /^\/api\/attachments\/details\/det_[A-Za-z0-9_-]{16,80}$/;
 const RATELOOP_PRODUCTION_ORIGINS = new Set(["https://rateloop.ai", "https://www.rateloop.ai"]);
 
@@ -373,10 +374,8 @@ function normalizeQuestionConfidentiality(value: unknown, fieldName: string): X4
 
   const rawDisclosurePolicy = readOptionalString(value.disclosurePolicy) || DEFAULT_CONFIDENTIALITY_DISCLOSURE_POLICY;
   const disclosurePolicy =
-    rawDisclosurePolicy === "private_until_settlement"
-      ? DEFAULT_CONFIDENTIALITY_DISCLOSURE_POLICY
-      : rawDisclosurePolicy;
-  if (disclosurePolicy !== DEFAULT_CONFIDENTIALITY_DISCLOSURE_POLICY && disclosurePolicy !== "private_forever") {
+    rawDisclosurePolicy === "private_until_settlement" ? AFTER_SETTLEMENT_DISCLOSURE_POLICY : rawDisclosurePolicy;
+  if (disclosurePolicy !== AFTER_SETTLEMENT_DISCLOSURE_POLICY && disclosurePolicy !== "private_forever") {
     throw new X402QuestionInputError(`${fieldName}.disclosurePolicy must be after_settlement or private_forever.`);
   }
 

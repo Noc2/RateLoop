@@ -27,7 +27,9 @@ only after the effective award deadline.
 
 Public asks can use ordinary context URLs, YouTube links, uploaded images, or verified details text. Confidential asks must use RateLoop-hosted gated context: `confidentiality.visibility="gated"`, hosted images and/or `detailsUrl` plus `detailsHash`, no external `contextUrl` or `videoUrl`, and a public-safe title.
 
-Gated context supports two disclosure policies. `after_settlement` keeps hosted context private during the round and discloses it after settlement. `private_forever` keeps hosted submitter-authored context gated and redacted from public result surfaces after settlement. In both cases, raters need accepted confidentiality terms, and any configured confidentiality bond, before RateLoop serves the context.
+Gated context supports two disclosure policies. `private_forever` is the default for gated asks and keeps hosted submitter-authored context gated and redacted from public result surfaces after settlement. `after_settlement` keeps hosted context gated during the round and discloses it after settlement. In both cases, raters need accepted confidentiality terms, and any configured confidentiality bond, before RateLoop serves the context.
+
+Private context is a serving-layer access restriction, not cryptographic secrecy. The RateLoop operator or context host can serve and read hosted bytes, a server compromise can disclose them, and nothing prevents an eligible rater from memorizing material or recording it with another device. Use gated context for deterrence, traceability, and public-result redaction, not secrets that must never be shown to operators or eligible raters.
 
 ## What Stays Public
 

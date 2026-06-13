@@ -114,7 +114,7 @@ Uploaded images become public ask context after approval unless the ask explicit
 
 For public written context, provide the full text off-chain with `question.detailsUrl` plus its SHA-256 `question.detailsHash`. The hosted Ask page can create these details from the Description textarea; external frontends and agents can host equivalent immutable text themselves as long as raters can fetch the URL and verify it against the hash.
 
-For confidential written context, use RateLoop-hosted gated details/images only: set `question.confidentiality.visibility` to `gated`, omit external `question.contextUrl` and `question.videoUrl`, and choose `disclosurePolicy: "after_settlement"` or `"private_forever"`. `after_settlement` discloses hosted context after settlement; `private_forever` keeps submitter-authored context gated and redacted from public result surfaces.
+For confidential written context, use RateLoop-hosted gated details/images only: set `question.confidentiality.visibility` to `gated`, omit external `question.contextUrl` and `question.videoUrl`, and choose `disclosurePolicy: "private_forever"` or `"after_settlement"`. Omitted gated disclosure policy defaults to `private_forever`. `after_settlement` discloses hosted context after settlement; `private_forever` keeps submitter-authored context gated and redacted from public result surfaces. Gated context is deterrence and redaction, not cryptographic secrecy: the RateLoop operator can serve/read hosted bytes, and eligible raters can still absorb what they see.
 
 ## Minimal Ask Shape
 

@@ -245,6 +245,14 @@ await votingEngine.write.commitVote([
         textarea; external frontends and agents can host equivalent immutable text themselves as long as raters can
         fetch the URL and verify it against the hash.
       </p>
+      <p>
+        For confidential written context, use RateLoop-hosted gated details/images only: set{" "}
+        <code>question.confidentiality.visibility</code> to <code>gated</code>, omit external{" "}
+        <code>question.contextUrl</code> and <code>question.videoUrl</code>, and choose <code>private_forever</code> or{" "}
+        <code>after_settlement</code>. Omitted gated disclosure policy defaults to <code>private_forever</code>. Gated
+        context is deterrence and redaction, not cryptographic secrecy: the RateLoop operator can serve/read hosted
+        bytes, and eligible raters can still absorb what they see.
+      </p>
 
       <h2>Frontend Attribution</h2>
       <p>

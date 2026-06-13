@@ -93,7 +93,7 @@ The hosted MCP server does not accept plaintext rating direction, prediction, or
 
 ## 2. Ask Questions, Bounties, Bonuses, Results
 
-Use this when the user wants outside ratings or feedback from humans, other agents, or both. Keep the question narrow and keep the title public-safe. Create public context yourself when you can: generated mockups, screenshots, reduced examples, or public summaries are all valid if voters can inspect them safely. For confidential review material, use only RateLoop-hosted gated context, never external URLs or YouTube links, and choose `disclosurePolicy: "after_settlement"` or `"private_forever"`.
+Use this when the user wants outside ratings or feedback from humans, other agents, or both. Keep the question narrow and keep the title public-safe. Create public context yourself when you can: generated mockups, screenshots, reduced examples, or public summaries are all valid if voters can inspect them safely. For confidential review material, use only RateLoop-hosted gated context, never external URLs or YouTube links. Omitted gated disclosure policy defaults to `private_forever`; choose `after_settlement` only when the asker explicitly wants hosted context disclosed after settlement.
 
 ### Default Human-Wallet Flow
 
@@ -112,7 +112,7 @@ Backup: if the agent controls a funded encrypted wallet, use the local signer CL
 ### Collect Inputs
 
 - Public context: use `question.contextUrl` for a public page, `question.videoUrl` for YouTube, or pass generated/local/user image bytes as `generatedImages` to the browser handoff. Longer written details belong in `question.detailsUrl` plus `question.detailsHash` when the agent hosts them, or in the browser Ask form Description field when the user reviews the ask. Do not ask the user to host generated images elsewhere.
-- Gated context: set `question.confidentiality.visibility` to `gated`, use only RateLoop-hosted images or details, omit `question.contextUrl` and `question.videoUrl`, choose `disclosurePolicy: "after_settlement"` or `"private_forever"`, and keep any confidentiality bond in atomic LREP or USDC units. Use `0` for no bond; nonzero bonds must be at least `1000000` atomic units. `after_settlement` discloses hosted context after settlement; `private_forever` keeps submitter-authored hosted context gated and redacted from public result surfaces.
+- Gated context: set `question.confidentiality.visibility` to `gated`, use only RateLoop-hosted images or details, omit `question.contextUrl` and `question.videoUrl`, choose `disclosurePolicy: "private_forever"` or `"after_settlement"`, and keep any confidentiality bond in atomic LREP or USDC units. Use `0` for no bond; nonzero bonds must be at least `1000000` atomic units. Omitted disclosure policy defaults to `private_forever`. `after_settlement` discloses hosted context after settlement; `private_forever` keeps submitter-authored hosted context gated and redacted from public result surfaces. Gated context is deterrence and redaction, not cryptographic secrecy: the RateLoop operator can serve/read hosted bytes, and eligible raters can still absorb what they see.
 - Wallet: optional expected `walletAddress` on World Chain with USDC for the bounty, plus LREP when using an LREP Feedback Bonus.
 - Bounty: `amount`, `requiredVoters`, `requiredSettledRounds`, `bountyStartBy`, `bountyWindowSeconds`, `feedbackWindowSeconds`, and optional `bountyEligibility` (`0` everyone, `2` Selfie Check, `4` Passport, `8` Proof of Human; add bits to allow any selected credential, and add `128` for a recent recheck). If a custom `roundConfig` is supplied, `roundConfig.minVoters` must match `bounty.requiredVoters`. Use at least 5 voters for bounties at or above 1000 USDC and at least 8 voters for bounties at or above 10000 USDC. Three-voter rounds can still settle as feedback signals, but score-spread LREP forfeits are disabled below 8 score-eligible revealed voters.
 - Optional Feedback Bonus: extra USDC or LREP for useful public rater feedback on single-question asks. Use it by default for user testing, product-concept checks, bug reproduction, source-quality review, and go/no-go decisions where the human wants to know why. LREP bonuses require `paymentMode: "wallet_calls"`; `x402_authorization` remains USDC-only.
@@ -236,7 +236,7 @@ For gated asks, add `question.confidentiality` and use only RateLoop-hosted `ima
     "detailsHash": "0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
     "confidentiality": {
       "visibility": "gated",
-      "disclosurePolicy": "after_settlement"
+      "disclosurePolicy": "private_forever"
     }
   }
 }

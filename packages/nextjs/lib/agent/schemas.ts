@@ -145,7 +145,7 @@ const agentQuestionConfidentialityInputSchema = {
       type: ["object", "null"],
     },
     disclosurePolicy: {
-      default: "after_settlement",
+      default: "private_forever",
       enum: ["after_settlement", "private_until_settlement", "private_forever"],
       type: "string",
     },

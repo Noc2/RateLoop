@@ -1578,6 +1578,29 @@ describe("local signer round config alignment", () => {
     expect(canonical.questions[0].contextUrl).toBe("");
   });
 
+  it("defaults omitted gated disclosure policy to private forever", () => {
+    const canonical = buildLocalQuestionCanonicalPayload(
+      fiveVoterAskPayload({
+        question: {
+          categoryId: "1",
+          confidentiality: {
+            visibility: "gated",
+          },
+          detailsHash: `0x${"4".repeat(64)}`,
+          detailsUrl:
+            "https://www.rateloop.ai/api/attachments/details/det_abcdefghijklmnop",
+          tags: [QUESTION_TAG],
+          title: QUESTION_TITLE,
+        },
+      }),
+      480,
+    );
+
+    expect(canonical.questions[0].confidentiality.disclosurePolicy).toBe(
+      "private_forever",
+    );
+  });
+
   it("rejects dust gated confidentiality bonds", () => {
     expect(() =>
       buildLocalQuestionCanonicalPayload(

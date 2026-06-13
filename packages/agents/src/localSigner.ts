@@ -93,7 +93,8 @@ const BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG = 128;
 const X402_MAX_QUESTION_BUNDLE_COUNT = 10;
 const CONFIDENTIALITY_FLAG_PRIVATE_FOREVER = 1;
 const EMPTY_DETAILS_HASH = `0x${"0".repeat(64)}` as Hex;
-const DEFAULT_CONFIDENTIALITY_DISCLOSURE_POLICY = "after_settlement";
+const AFTER_SETTLEMENT_DISCLOSURE_POLICY = "after_settlement";
+const DEFAULT_CONFIDENTIALITY_DISCLOSURE_POLICY = "private_forever";
 const MIN_NONZERO_CONFIDENTIALITY_BOND = 1_000_000n;
 const QUESTION_CONTEXT_DOMAIN = keccak256(
   stringToHex("rateloop-question-context-v5"),
@@ -1489,10 +1490,10 @@ function normalizeLocalQuestionConfidentiality(
     DEFAULT_CONFIDENTIALITY_DISCLOSURE_POLICY;
   const disclosurePolicy =
     rawDisclosurePolicy === "private_until_settlement"
-      ? DEFAULT_CONFIDENTIALITY_DISCLOSURE_POLICY
+      ? AFTER_SETTLEMENT_DISCLOSURE_POLICY
       : rawDisclosurePolicy;
   if (
-    disclosurePolicy !== DEFAULT_CONFIDENTIALITY_DISCLOSURE_POLICY &&
+    disclosurePolicy !== AFTER_SETTLEMENT_DISCLOSURE_POLICY &&
     disclosurePolicy !== "private_forever"
   ) {
     throw new Error(

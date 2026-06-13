@@ -40,7 +40,7 @@ export const SECTIONS: Section[] = [
           {
             type: "bullets",
             items: [
-              "Bounded asks -- one question, public context through a link, image, or YouTube video, and explicit round terms.",
+              "Bounded asks -- one question, public or RateLoop-hosted gated context, and explicit round terms.",
               "Paid attention -- every ask carries a non-refundable bounty funded in LREP or World Chain USDC, with optional payout-only eligibility scopes.",
               "Open participation -- people and agents use the same rating primitive after reputation and calibration rules are met.",
               "Skin in the game -- predictions can be backed by LREP stake for normal settlement upside and downside, while zero-LREP advisory raters can participate in rounds that already have a staked vote, do not count toward settlement quorum, and qualify for launch credits in eligible settled rounds.",
@@ -111,7 +111,7 @@ export const SECTIONS: Section[] = [
               "Not a truth oracle -- it returns public ratings with optional LREP-backed stake, visible disagreement, and limitations.",
               "Not a settlement oracle for external financial contracts -- settled scores are public feedback signals, not payout instructions for unrelated markets.",
               "Not a generic approval button -- it is designed for bounded questions that many raters can evaluate.",
-              "Not a private labeler marketplace -- the current design assumes public context URLs and public settled result pages.",
+              "Not a cryptographic secrecy system -- gated context is served by frontend/operator infrastructure after wallet-signed access checks, so operators and compromised serving infrastructure can see hosted bytes.",
               "Not a replacement for policy, law, or domain experts -- agents should use the result as one auditable input in a larger decision.",
             ],
           },
@@ -144,7 +144,7 @@ export const SECTIONS: Section[] = [
           {
             type: "ordered",
             items: [
-              "Ask: submit one question-first ask with a context URL, image context, or YouTube video context.",
+              "Ask: submit one question-first ask with a public context URL, image context, YouTube video context, or RateLoop-hosted gated context.",
               "Fund: attach a non-refundable bounty in LREP or USDC on World Chain; agent asks spend from user-authorized wallets, scoped agent wallets, EIP-3009 USDC authorization, or ordered wallet calls.",
               "Vote: raters submit an up/down signal, predict the crowd's up-vote share, can add LREP stake, and may add public written feedback.",
               "Settle: the round resolves once the configured reveal and participation conditions are met.",
@@ -158,7 +158,7 @@ export const SECTIONS: Section[] = [
         blocks: [
           {
             type: "paragraph",
-            text: "Submission starts from the question rather than from a passive content object. Every ask requires public evidence through a source URL, image context, or YouTube video context, and chooses blind phase, maximum duration, settlement raters, and rater cap inside governance bounds. Agents can submit through public MCP tools, direct JSON routes, browser signing intents, a local signer CLI, or optional managed policies, but the resulting public record is the same.",
+            text: "Submission starts from the question rather than from a passive content object. Every ask requires inspectable evidence through a public source URL, image context, YouTube video context, or RateLoop-hosted gated context, and chooses blind phase, maximum duration, settlement raters, and rater cap inside governance bounds. Agents can submit through public MCP tools, direct JSON routes, browser signing intents, a local signer CLI, or optional managed policies, but the resulting protocol record is the same.",
           },
         ],
       },
@@ -687,7 +687,7 @@ export const SECTIONS: Section[] = [
         blocks: [
           {
             type: "paragraph",
-            text: "A core design choice is that asks and settlement history live on-chain as public infrastructure. Context can be public, or RateLoop-hosted and gated behind wallet-signed confidentiality acceptance, but the canonical hashes, commitments, and settled result remain inspectable. Hosted indexers and frontends may apply rate limits, moderation filters, confidentiality redaction, or UX-specific views, but the canonical result remains permissionless and inspectable.",
+            text: "A core design choice is that asks and settlement history live on-chain as public infrastructure. Context can be public, or RateLoop-hosted and gated behind wallet-signed confidentiality acceptance, but the canonical hashes, commitments, and settled result remain inspectable. Gated context is a serving-layer access restriction: the frontend or context host can read the hosted bytes, and a server compromise can disclose them. Hosted indexers and frontends may apply rate limits, moderation filters, confidentiality redaction, or UX-specific views, but the canonical result remains permissionless and inspectable.",
           },
           {
             type: "bullets",
@@ -723,7 +723,7 @@ export const SECTIONS: Section[] = [
             items: [
               "RateLoop returns public rating judgment, not objective truth; ambiguous and taste-heavy questions remain subjective by design.",
               "The current reveal path still depends on drand plus off-chain keeper decryption, even though settlement and fallback reveal are permissionless.",
-              "The public agent path assumes public context URLs and public settled result pages rather than private or embargoed asks.",
+              "Private-context asks are operator-trust by design: wallet-signed terms, watermarks, access logs, optional bonds, and identity bans deter leaks, but they do not stop an eligible rater, the serving operator, or compromised infrastructure from seeing the material.",
               "The current evaluation layer is ask- and bundle-centric; project-level datasets, queue operations, agreement dashboards, and release gates remain future product work.",
               "Optional identity providers can add useful credentials but should not become a single dependency or hard participation gate.",
               "Resolution speed depends on turnout, reveal activity, and the ask's chosen round settings.",
@@ -741,7 +741,7 @@ export const SECTIONS: Section[] = [
               "Agreement and dissent analytics for rubric dimensions, reason clusters, stake-weighted views, and low-confidence routing.",
               "Richer reviewer operations around assignments, reservations, progress tracking, sampling, and bulk queue actions.",
               "Stronger managed operator controls around budgets, scopes, allowlists, callback management, and audit exports.",
-              "Private-context or permissioned-visibility asks for workflows that cannot publish their evidence immediately.",
+              "Stronger private-context evidence, including append-only anchored access-log roots, richer forensic watermarking, and permissioned cohorts for higher-sensitivity workflows.",
               "Expertise-aware or category-specific reputation overlays that preserve the same core ask-and-settle primitive.",
               "zk-based reveal proofs that reduce the remaining trust gap in the current off-chain decryption flow.",
             ],

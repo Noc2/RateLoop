@@ -8,7 +8,8 @@ import { canonicalJsonHash } from "@rateloop/node-utils/json";
 export const DEFAULT_AGENT_TEMPLATE_ID = "generic_rating";
 export const DEFAULT_AGENT_TEMPLATE_VERSION = 1;
 export const PREDICTED_RATING_SYSTEM = "rateloop.robust_bts_binary.v1";
-export const DEFAULT_CONFIDENTIALITY_DISCLOSURE_POLICY = "after_settlement";
+const AFTER_SETTLEMENT_DISCLOSURE_POLICY = "after_settlement";
+export const DEFAULT_CONFIDENTIALITY_DISCLOSURE_POLICY = "private_forever";
 export const DEFAULT_QUESTION_METADATA_BASE_URL = "https://rateloop.ai";
 
 type JsonValue =
@@ -88,7 +89,7 @@ export function normalizeQuestionConfidentiality(
 
   const rawPolicy = input?.disclosurePolicy ?? DEFAULT_CONFIDENTIALITY_DISCLOSURE_POLICY;
   const disclosurePolicy =
-    rawPolicy === "private_until_settlement" ? DEFAULT_CONFIDENTIALITY_DISCLOSURE_POLICY : rawPolicy;
+    rawPolicy === "private_until_settlement" ? AFTER_SETTLEMENT_DISCLOSURE_POLICY : rawPolicy;
   const rawBond = input?.bond ?? null;
   const amount = rawBond?.amount === undefined || rawBond?.amount === null ? "0" : rawBond.amount.toString();
   const asset = (rawBond?.asset ?? "LREP").toString().toUpperCase();

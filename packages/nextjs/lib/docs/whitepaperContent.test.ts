@@ -213,3 +213,13 @@ test("whitepaper removes legacy section framing", () => {
   assert.match(whitepaperText, /USDC on World Chain/i);
   assert.match(whitepaperText, /public infrastructure/i);
 });
+
+test("whitepaper reflects the current private-context trust model", () => {
+  const whitepaperText = collectWhitepaperText();
+
+  assert.match(whitepaperText, /RateLoop-hosted gated context/i);
+  assert.match(whitepaperText, /operators and compromised serving infrastructure can see hosted bytes/i);
+  assert.match(whitepaperText, /Private-context asks are operator-trust by design/i);
+  assert.doesNotMatch(whitepaperText, /current design assumes public context URLs/i);
+  assert.doesNotMatch(whitepaperText, /public context URLs and public settled result pages rather than private/i);
+});

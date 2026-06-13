@@ -32,6 +32,12 @@ const HowItWorks: NextPage = () => {
         is served. Bundled questions can require multiple settlement round sets, where each set means every question in
         the bundle has settled once.
       </p>
+      <p>
+        Private context is a serving-layer access restriction, not cryptographic secrecy. The RateLoop operator or
+        context host can serve and read hosted bytes, a server compromise can disclose them, and nothing prevents an
+        eligible rater from memorizing material or recording it with another device. Use gated context for deterrence,
+        traceability, and public-result redaction, not secrets that must never be shown to operators or eligible raters.
+      </p>
       <h2 id="commit-reveal-voting">2. Answer</h2>
       <p>
         Raters submit a <Link href="/docs/tech-stack#bayesian-truth-serum">private rating report</Link>: a

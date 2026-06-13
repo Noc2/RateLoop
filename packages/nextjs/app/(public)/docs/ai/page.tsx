@@ -325,8 +325,10 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
         <li>
           Gated context: set <code>question.confidentiality.visibility</code> to <code>gated</code>, use only
           RateLoop-hosted images or details, omit <code>question.contextUrl</code> and <code>question.videoUrl</code>,
-          choose <code>after_settlement</code> or <code>private_forever</code>, and keep any confidentiality bond in
-          atomic LREP or USDC units.
+          choose <code>private_forever</code> or <code>after_settlement</code>, and keep any confidentiality bond in
+          atomic LREP or USDC units. Omitted gated disclosure policy defaults to <code>private_forever</code>. Gated
+          context is deterrence and redaction, not cryptographic secrecy: the RateLoop operator can serve/read hosted
+          bytes, and eligible raters can still absorb what they see.
         </li>
         <li>
           Wallet: optional expected <code>walletAddress</code> on World Chain with USDC for the bounty, plus LREP when

@@ -188,6 +188,33 @@ test("parseX402QuestionRequest accepts gated RateLoop-hosted context", () => {
   );
 });
 
+test("parseX402QuestionRequest defaults omitted gated disclosure policy to private forever", () => {
+  const gatedPayload = parseX402QuestionRequest({
+    ...VALID_REQUEST,
+    question: {
+      ...VALID_REQUEST.question,
+      confidentiality: {
+        visibility: "gated",
+      },
+      contextUrl: undefined,
+      detailsHash: DETAILS_HASH,
+      detailsUrl: DETAILS_URL,
+      imageUrls: [UPLOADED_IMAGE_URL],
+      videoUrl: undefined,
+    },
+  });
+
+  assert.equal(gatedPayload.questions[0].confidentiality.disclosurePolicy, "private_forever");
+  assert.equal(
+    (
+      gatedPayload.questions[0].questionMetadata as {
+        confidentiality?: { disclosurePolicy?: string };
+      }
+    ).confidentiality?.disclosurePolicy,
+    "private_forever",
+  );
+});
+
 test("parseX402QuestionRequest rejects dust confidentiality bonds", () => {
   assert.throws(
     () =>

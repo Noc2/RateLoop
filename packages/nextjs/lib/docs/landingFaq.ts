@@ -25,7 +25,7 @@ export const landingFaqItems: LandingFaqItem[] = [
   {
     question: "Can I Keep My Question Confidential?",
     answer:
-      "Yes. Private context mode serves hosted images and details only to raters who sign wallet-bound confidentiality terms. Serving is watermarked and access-logged, askers can require a slashable LREP or USDC bond, and a proven leak costs the rater their World ID identity's earning power across the protocol. Context can publish after settlement or stay private.",
+      "Yes, with an explicit trust model. Private context mode serves hosted images and details only after wallet-bound confidentiality terms, watermarking, access logs, and any configured LREP or USDC bond checks. The RateLoop operator can still serve and therefore read hosted bytes, so use it for deterrence and redaction, not secrets that must never be shown to operators or eligible raters.",
     learnMoreHref: "/docs/how-it-works#ask",
     learnMoreLabel: "Private Context",
   },

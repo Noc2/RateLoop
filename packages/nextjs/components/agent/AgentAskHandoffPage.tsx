@@ -277,7 +277,7 @@ function PrivateContextToggleControl({
             More
           </Link>
           <InfoTooltip
-            text="Use hosted private context for sensitive review material. Eligible raters must accept confidentiality terms before viewing, and the context stays private forever."
+            text="Use hosted private context for sensitive review material. Eligible raters must accept confidentiality terms before viewing; RateLoop's operator can serve the bytes, so this is deterrence and redaction rather than cryptographic secrecy."
             position="bottom"
           />
         </span>

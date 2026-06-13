@@ -13,6 +13,14 @@ genuine **flaw**, a **documented/intended tradeoff**, or **acceptable-for-testne
 not for the mainnet claim**, and given a severity by design impact. 39 strengths and
 32 verified weaknesses survived verification; 2 candidates were refuted.
 
+> Follow-up update (2026-06-13): the asker-facing confidentiality copy issues called out
+> in this review have been remediated after the reviewed HEAD. The whitepaper source,
+> submit/agent private-context tooltips, landing FAQ, public docs, SDK/agent docs,
+> `llms.txt`, and the agent/x402 gated-context defaults now state that private context
+> is a serving-layer deterrence/redaction model, not cryptographic secrecy, and omitted
+> gated disclosure policy defaults to `private_forever`. The evidentiary/log-root and
+> breach-reporting governance issues remain open.
+
 > Coverage caveat: the trust-topology reviewer's *weakness* candidates could not be
 > individually re-verified (the verification stage hit a resource limit), so they are
 > not counted in the 32. Their substance — governance/proxy power over escrows,
@@ -64,11 +72,12 @@ literature independently predicts:
    reveal-withholding but **not** provable-commit bribery (a voter can prove their
    committed vote to a briber pre-reveal).
 
-4. **Confidentiality is operator-trust by design, and the asker is the one party not
-   clearly told so.** The hybrid (chain for bonds/bans, server for bytes) is coherent
-   and the rater-facing terms are honest, but the whitepaper still contradicts the
-   shipped feature, the submit form promises content "stays private forever," and the
-   evidence chain (mutable, unanchored log roots) currently can't back a slash dispute.
+4. **Confidentiality is operator-trust by design, and the evidence chain is still not
+   strong enough for mainnet gated-content marketing.** The hybrid (chain for
+   bonds/bans, server for bytes) is coherent, and the post-review copy pass now tells
+   askers that the operator can serve/read hosted bytes and that private context is
+   deterrence/redaction rather than cryptographic secrecy. But the evidence chain
+   (mutable, unanchored log roots) currently can't back a slash dispute.
 
 None of these is fatal; all are addressable, and the team's own internal docs already
 name most of them. But points 1–2 in particular mean that **the protocol's headline
@@ -356,14 +365,16 @@ flipped a disputed market at ~25% of votes under voter apathy.
   ≤100-USDC bond that is returned — they never leak, so nothing is slashable. For exactly
   the "under wraps" segment the use-case doc targets, this is the weakest point against the
   most motivated adversary; the absorption risk is omitted from the marketing caveats.
-- **The whitepaper contradicts the shipped confidentiality design, and "operator reads
-  everything" is never stated asker-facing.** *(flaw)* The whitepaper build simultaneously
-  says gated context exists and lists it under Future Directions / "the current design
-  assumes public context URLs." The honest framing (server reads every byte; a server
-  compromise discloses everything; nothing stops a phone camera) appears only rater-side
-  and in the internal plan — the submit-form tooltip tells the *asker* the context "stays
-  private forever" with zero qualification. A communication flaw that converts a defensible
-  documented tradeoff into an overclaim.
+- **At reviewed HEAD, the whitepaper contradicted the shipped confidentiality design, and
+  "operator reads everything" was not stated asker-facing.** *(flaw; copy remediated
+  2026-06-13)* The whitepaper build simultaneously said gated context exists and listed it
+  under Future Directions / "the current design assumes public context URLs." The honest
+  framing (server reads every byte; a server compromise discloses everything; nothing stops
+  a phone camera) appeared only rater-side and in the internal plan — the submit-form
+  tooltip told the *asker* the context "stays private forever" with zero qualification.
+  A follow-up copy pass now states the operator-trust model in the whitepaper, Ask and
+  agent handoff tooltips, landing FAQ, public docs, SDK/agent docs, `llms.txt`, and the
+  machine-readable RateLoop skill.
 - **The attribution/evidence chain is operator-trust end-to-end; log roots are unanchored
   and mutable.** *(testnet-acceptable, with a flaw inside)* Watermarks are croppable
   corner overlays; the access log, view tokens, and HMAC secret live in the operator's
@@ -410,10 +421,11 @@ flipped a disputed market at ~25% of votes under voter apathy.
   expressible); **"one human = one identity" is a SEEDER operator claim at launch** (9
   seeded legacy addresses persist into mainnet by design); **ban due process** has no
   bonded third-party challenge and the same DAO is the only appeal venue; **disclosure
-  default** in the agent SDK still silently defaults gated context to `after_settlement`
-  even though the UI now forces `private_forever`; and several **secondary confidentiality
-  erosions** (permanent global ban-nexus, no access time-boxing, gated *text* unattributable,
-  AI raters excluded from gated rounds).
+  default** was remediated after review: agent/x402 gated-context requests now default to
+  `private_forever` when the policy is omitted, while explicit `after_settlement` and the
+  legacy `private_until_settlement` alias remain supported; and several **secondary
+  confidentiality erosions** (permanent global ban-nexus, no access time-boxing, gated
+  *text* unattributable, AI raters excluded from gated rounds).
 
 ---
 
@@ -505,10 +517,12 @@ stake-weighting, voter apathy, and credential rental all erode.
 3. **Give at least one settlement-layer deterrent exogenous value (H2).** A USDC component
    in vote stakes or forfeits, a fee switch that backs LREP, or explicitly scoping the
    security claim to "while LREP has market value" — but the claim and the mechanism must agree.
-4. **Reconcile the confidentiality docs.** Fix the whitepaper contradiction, add an
-   asker-facing "the operator can read gated bytes; this is deterrence, not secrecy"
-   statement, and make the log-root table **append-only and anchored** before any mainnet
-   gated-content marketing — without it, no slash dispute is defensible.
+4. **Finish the confidentiality evidence work.** The copy portion is fixed: the
+   whitepaper contradiction is gone, askers now see "the operator can read gated bytes;
+   this is deterrence, not secrecy" framing, and agent/x402 defaults now align with
+   `private_forever`. The remaining gate item is to make the log-root table
+   **append-only and anchored** before any mainnet gated-content marketing — without it,
+   no slash dispute is defensible.
 
 **Strongly recommended:**
 
