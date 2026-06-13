@@ -141,6 +141,7 @@ export async function settleRoundWithVotes(
       ZERO_ADDRESS,
       voter.account.address,
       CONTRACT_ADDRESSES.RoundVotingEngine,
+      epochDuration,
     );
     expect(commit.success, `Vote commit failed for ${voter.account.address}`).toBe(true);
     commits.push({ commitKey: commit.commitKey, isUp: commit.isUp, salt: commit.salt });
