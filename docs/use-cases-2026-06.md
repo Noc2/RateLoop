@@ -26,8 +26,10 @@ The product changed under the analysis. Three of the original governing constrai
    challengeable payout artifact. Still self-reported — verified attribute tiers remain the
    binding constraint on the highest-value budgets.
 3. **Latency is asker-configurable down to minutes.** Round config is per-question; the
-   protocol floor (1-minute epoch, drand 3s period, 30s keeper tick, two-step settle) puts a
-   3-voter round with instant raters at **~2–4 minutes ask→readable result**. Human rounds stay
+   launch feedback tier keeps 3-voter rounds available for cold-start liveness, and governance
+   can raise the default and minimum voter floors for new asks as supply grows. The protocol
+   floor (1-minute epoch, drand 3s period, 30s keeper tick, two-step settle) puts a 3-voter
+   round with instant raters at **~2–4 minutes ask→readable result**. Human rounds stay
    recruitment-bound (~40 min–hours) — but **pure-AI-rater rounds** unlock an entirely new
    latency class, and AI raters are already first-class on public questions (stake, vote,
    bounty-eligible under open eligibility, MCP/SDK rating tools).
@@ -50,7 +52,7 @@ slot ERC-8004 deliberately left open.
 | Private context | **Live end-to-end**: hosted-only gated context, wallet-signed terms (server-recorded, content-commitment-bound), sharp watermark + HMAC view tokens + access logs, bond escrow (1–100 USDC default cap, 0 allowed), breach tab + slash/ban governance actions, disclosure-after-settlement or private-forever. Gaps: no gated bundles; log roots not yet anchored on-chain; **gated rounds are human-credential-only (AI raters excluded)** |
 | Targeting | Validated taxonomy + `rateloop_list_audience_options` + submit-UI picker + indexed `targetAudience` + `targetAudienceMatch` in results + 7-day cooldown + payout-artifact claim-weight enforcement. Still self-reported; consistency probes/verified tiers pending (`audience-targeting-plan-2026-06.md`) |
 | Rater pool | Humans (World ID-gateable via credential masks) and AI raters (first-class `RaterType`, normal stake+vote, bounty-eligible when eligibility is open). **No AI-only eligibility mask** — pure-AI rounds are achievable socially, not enforced. Legacy contributors seeded as verified humans (supply bootstrap) |
-| Accuracy-linked income | Surprise-weighted bounty claim weights live in the payout-root pipeline (herding finding mitigated); score-spread forfeits require ≥8 reveals; 3-voter rounds settle as feedback signals |
+| Accuracy-linked income | Surprise-weighted bounty claim weights live in the payout-root pipeline (herding finding mitigated); score-spread forfeits require ≥8 reveals; 3-voter launch rounds settle as feedback-tier signals, and governance can ratchet new-ask voter floors upward with usage |
 | Liveness/trust | RevealFailed refunds stakes; 24× reveal-failed grace; permissionless snapshot recovery; settlement-caller incentive; oracle challenger rewards from slash proceeds |
 | Agent integration | MCP (incl. confidentiality terms tool, audience options, gated context fetch), dry-run sandbox, signed public webhooks, x402-bound asks; SDK/agents packages built **but still 404 on npm** |
 

@@ -179,7 +179,8 @@ const GovernanceDocs: NextPage = () => {
               <td>Settlement raters</td>
               <td>{protocolDocFacts.minVotersLabel}</td>
               <td>
-                {protocolDocFacts.minSettlementVotersLabel} to {protocolDocFacts.maxSettlementVotersLabel}
+                {protocolDocFacts.minSettlementVotersLabel} to {protocolDocFacts.maxSettlementVotersLabel};{" "}
+                {protocolDocFacts.quorumRatchetPolicyLabel}
               </td>
             </tr>
             <tr>

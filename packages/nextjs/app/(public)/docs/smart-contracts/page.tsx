@@ -406,8 +406,9 @@ const SmartContracts: NextPage = () => {
               <td className="font-mono">minVoters</td>
               <td>{protocolDocFacts.minVotersLabel}</td>
               <td>
-                Default minimum revealed votes required before settlement is allowed. Bounty voter floors can rise with
-                bounty size: {protocolDocFacts.bountyParticipantFloorsLabel}.
+                Launch default minimum revealed votes required before settlement is allowed. Bounty voter floors can
+                rise with bounty size: {protocolDocFacts.bountyParticipantFloorsLabel}.{" "}
+                {protocolDocFacts.quorumRatchetPolicyLabel}
               </td>
             </tr>
             <tr>
@@ -537,7 +538,7 @@ const SmartContracts: NextPage = () => {
         Governance-controlled address book and parameter store for <code>RoundVotingEngine</code>. Governance sets the
         default round config and creator bounds; each question then stores its selected config, and the engine snapshots
         that config plus reveal grace at round creation so mid-round governance changes do not change an already open
-        round.
+        round. {protocolDocFacts.quorumRatchetPolicyLabel}
       </p>
       <ul>
         <li>

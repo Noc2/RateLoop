@@ -2706,7 +2706,7 @@ function dryRunResultPackage(params: {
       "Dry-run results are deterministic fixtures for integration testing; they are not public human judgment signals.",
       "No wallet signature, payment, on-chain transaction, rater payout, callback, or public question page was created.",
       "Settled RateLoop scores must not be used to settle external financial contracts.",
-      `Score-spread LREP forfeits require at least ${SCORE_SPREAD_POLICY.forfeitMinReveals} revealed voters; smaller settled rounds are feedback signals only.`,
+      `Score-spread LREP forfeits require at least ${SCORE_SPREAD_POLICY.forfeitMinReveals} revealed voters; smaller settled rounds are launch feedback-tier signals, and governance can raise new-round voter floors as usage grows.`,
     ],
     majorObjections: [
       {

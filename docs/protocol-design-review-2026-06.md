@@ -526,9 +526,12 @@ stake-weighting, voter apathy, and credential rental all erode.
 **Gate items (resolve before a mainnet that markets agent-decision / acceptance-oracle use):**
 
 1. **Give small rounds economic teeth without arming majorities (H1/H3, RBTS-inert).**
-   Options: a small protocol-funded base reward pool so honest reporting pays even below 8
-   reveals; a minimum verdict-flip cost that scales with the rating's claimed authority; or
-   raising the default quorum for rounds whose result is marketed as decision-grade.
+   Keep the launch default at 3 raters so cold-start asks remain usable, but document it as
+   the feedback tier rather than the permanent security target. Governance should raise the
+   default quorum, creator lower bound, and bounty-size voter floors for new asks as rater
+   supply, bounty value, and attack pressure grow. Rounds marketed as decision-grade should
+   start at the current 8-reveal score-spread threshold or whatever higher threshold governance
+   later ratchets to; already-created questions and open rounds keep their snapshotted config.
    Crucially, add a **concentration-aware backstop on the LREP forfeit rail** (cap forfeits
    or route them to treasury when revealed stake-weight is concentrated) so the ≥8-voter
    collusion path stops being profitable.

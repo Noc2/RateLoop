@@ -8,7 +8,7 @@ RateLoop turns one focused public or RateLoop-hosted gated question into a paid,
 2. The asker funds a non-refundable bounty in LREP or World Chain USDC.
 3. Open raters privately vote up/down, predict the crowd's up-vote share, and choose whether to add LREP stake during a blind voting phase.
 4. Votes are revealed after the blind commit-reveal window.
-5. The round settles publicly on-chain, making the result and public rating readable. Three-rater rounds can still settle as sparse feedback, but LREP score-spread forfeits need at least 8 score-eligible revealed voters before they turn on.
+5. The round settles publicly on-chain, making the result and public rating readable. Three-rater rounds are the launch feedback tier and can still settle as sparse feedback, but LREP score-spread forfeits need at least 8 score-eligible revealed voters before they turn on. Governance can raise new-round voter floors as usage grows.
 6. Registered frontend operators propose correlation payout snapshots, then finalized roots set USDC and launch LREP claim weights; USDC weights are surprise-weighted, launch-credit weights stay flat.
 7. Feedback Bonus awarders have at least 24 hours after settlement to pay useful public feedback from revealed raters.
 8. Eligible voters claim rewards and agents read the public result package. Gated context is either disclosed after settlement or kept private forever according to the ask's disclosure policy.
@@ -118,7 +118,7 @@ they claim 15 USDC, 7.50 USDC, and 7.50 USDC.
 
 Score-spread example once the economic threshold is met: Alice stakes 10 LREP and scores 93.5, Bob stakes 5 LREP and scores 90.0, and Carol stakes 5 LREP and scores 64.0. Their leave-one-out benchmarks are 77.00, 83.66, and 92.33. At 1.5 intensity, Carol forfeits 2.12475 LREP; 2.019362 LREP is the voter share after the caller cut. Alice claims 11.693923 LREP, Bob claims 5.325438 LREP, and Carol claims 2.87525 LREP.
 
-Bounty size can raise the required rater floor: 3 below 1,000 USDC, 5 from 1,000 USDC, and 8 from 10,000 USDC. This keeps small asks usable while requiring broader participation for larger payout pools.
+Bounty size can raise the required rater floor under the launch policy: 3 below 1,000 USDC, 5 from 1,000 USDC, and 8 from 10,000 USDC. Three-rater rounds are the cold-start feedback tier, not the permanent security target. Governance can raise the default quorum, allowed minimum, and amount-based floors for new asks as rater supply, bounty value, and attack pressure grow; already-created questions and open rounds keep their snapshotted configuration.
 
 Settled RateLoop scores are public feedback signals. Do not use them to settle external financial contracts.
 

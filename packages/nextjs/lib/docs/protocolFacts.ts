@@ -74,6 +74,9 @@ export const protocolDocFacts = {
   maxRoundDurationLabel: formatDurationLabel(DEFAULT_ROUND_CONFIG.maxDurationSeconds),
   minVotersLabel: String(DEFAULT_ROUND_CONFIG.minVoters),
   maxVotersLabel: DEFAULT_ROUND_CONFIG.maxVoters.toLocaleString(),
+  launchFeedbackQuorumLabel: `${DEFAULT_ROUND_CONFIG.minVoters}-rater launch default`,
+  quorumRatchetPolicyLabel:
+    "Governance can raise the default settlement voter count and the allowed minimum for new rounds as rater supply, bounty value, and attack pressure grow; already-created questions and already-open rounds keep their snapshotted configuration.",
   minBlindPhaseDurationLabel: formatDurationLabel(ROUND_CONFIG_BOUNDS.minEpochDurationSeconds),
   maxBlindPhaseDurationLabel: formatDurationLabel(ROUND_CONFIG_BOUNDS.maxEpochDurationSeconds),
   minRoundDurationLabel: formatDurationLabel(ROUND_CONFIG_BOUNDS.minRoundDurationSeconds),
@@ -95,12 +98,16 @@ export const protocolDocFacts = {
   openPhaseWeightLabel: formatPercent(percentFromBps(EPOCH_WEIGHT_BPS.informed)),
   earlyVoterAdvantageLabel: `${EPOCH_WEIGHT_BPS.blind / EPOCH_WEIGHT_BPS.informed}:1`,
   scoreSpreadForfeitMinRevealsLabel: String(SCORE_SPREAD_POLICY.forfeitMinReveals),
+  decisionGradeMinRevealsLabel: String(SCORE_SPREAD_POLICY.forfeitMinReveals),
   maxScoreSpreadForfeitPercentLabel: formatPercent(percentFromBps(SCORE_SPREAD_POLICY.maxForfeitBps)),
   scoreSpreadForfeitPolicyLabel: `Score-spread LREP forfeits are disabled below ${
     SCORE_SPREAD_POLICY.forfeitMinReveals
   } score-eligible revealed voters and capped at ${formatPercent(
     percentFromBps(SCORE_SPREAD_POLICY.maxForfeitBps),
   )} of each report's stake once active.`,
+  feedbackTierPolicyLabel: `${
+    DEFAULT_ROUND_CONFIG.minVoters
+  }-rater rounds are the launch feedback tier; ${SCORE_SPREAD_POLICY.forfeitMinReveals}+ score-eligible revealed voters are the initial floor for full score-spread economics and decision-grade wording.`,
   bountyBaseVotersLabel: String(QUESTION_REWARD_PARTICIPANT_FLOORS.minParticipants),
   bountyHighValueAmountLabel: formatUsdcAmountLabel(QUESTION_REWARD_PARTICIPANT_FLOORS.highValueAmount),
   bountyHighValueVotersLabel: String(QUESTION_REWARD_PARTICIPANT_FLOORS.highValueMinParticipants),
@@ -129,7 +136,7 @@ export const whitepaperSettlementConfigRows: string[][] = [
   [
     "minVoters",
     `${protocolDocFacts.minVotersLabel} default`,
-    "Creator-selected minimum revealed predictions required for settlement",
+    "Creator-selected minimum revealed predictions required for settlement; launch starts at 3 for feedback-tier liveness, and governance can raise defaults and new-round floors over time",
   ],
   [
     "maxDuration",
@@ -151,6 +158,9 @@ export const whitepaperSettlementConfigRows: string[][] = [
 export const whitepaperRoundConfigBoundsRows: string[][] = [
   ["blind phase", `${protocolDocFacts.minBlindPhaseDurationLabel} to ${protocolDocFacts.maxBlindPhaseDurationLabel}`],
   ["max duration", `${protocolDocFacts.minRoundDurationLabel} to ${protocolDocFacts.maxAllowedRoundDurationLabel}`],
-  ["settlement raters", `${protocolDocFacts.minSettlementVotersLabel} to ${protocolDocFacts.maxSettlementVotersLabel}`],
+  [
+    "settlement raters",
+    `${protocolDocFacts.minSettlementVotersLabel} to ${protocolDocFacts.maxSettlementVotersLabel}; governance-ratchetable for new rounds`,
+  ],
   ["rater cap", `${protocolDocFacts.minVoterCapLabel} to ${protocolDocFacts.maxVoterCapLabel}`],
 ];

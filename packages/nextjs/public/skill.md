@@ -53,7 +53,7 @@ Context:
 - `walletAddress`: optional expected user wallet for handoff flows, or a scoped agent wallet for managed/local-signer flows
 - one inspectable context source: public `question.contextUrl`, public `question.videoUrl`, generated/local image bytes supplied as `generatedImages`, or RateLoop-hosted gated `imageUrls`/`detailsUrl` with `question.confidentiality.visibility="gated"`
 - `bounty.amount`: USDC budget in atomic units, for example `2500000` for 2.5 USDC
-- `bounty.requiredVoters`: minimum eligible voters required by the bounty; when setting `roundConfig`, use the same value for `roundConfig.minVoters`. Use at least 5 voters for bounties at or above 1000 USDC and at least 8 voters for bounties at or above 10000 USDC.
+- `bounty.requiredVoters`: minimum eligible voters required by the bounty; when setting `roundConfig`, use the same value for `roundConfig.minVoters`. Under the launch policy, use at least 5 voters for bounties at or above 1000 USDC and at least 8 voters for bounties at or above 10000 USDC. Governance can raise these new-ask floors as usage grows.
 - `bounty.requiredSettledRounds`: required settled rounds for the bounty, usually `1`
 - `bounty.bountyStartBy`: future Unix timestamp in seconds by which the first private round must start
 - `bounty.bountyWindowSeconds`: bounty eligibility duration after the first private round starts
@@ -130,7 +130,7 @@ Use `question.templateInputs.audience` for free-text audience or rubric notes. U
 4. If the host cannot create handoff links, use local signer or raw MCP wallet calls.
 5. Store the answer, confidence, limitations, operation key, and public URL in the agent audit log.
 
-Never use settled RateLoop scores to settle external financial contracts. Rounds with fewer than 8 score-eligible revealed voters can still settle as feedback signals, but score-spread LREP forfeits are disabled at that turnout and capped at 50% of stake once active.
+Never use settled RateLoop scores to settle external financial contracts. Three-voter rounds are the launch feedback tier. Rounds with fewer than 8 score-eligible revealed voters can still settle as feedback signals, but score-spread LREP forfeits are disabled at that turnout and capped at 50% of stake once active.
 
 Default to `paymentMode: "wallet_calls"`. Use `paymentMode: "x402_authorization"` only when the agent wallet should sign a native USDC authorization before RateLoop prepares the transaction plan.
 

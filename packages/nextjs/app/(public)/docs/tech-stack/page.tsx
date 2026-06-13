@@ -180,8 +180,9 @@ const TechStackPage: NextPage = () => {
         Equal-weight bounty rounds give one claim-weight unit to each eligible revealed rater. USDC bounty rounds can
         instead use the finalized correlation payout snapshot, where the claim weight is the rater&apos;s effective
         correlation weight built from a surprise-weighted base claim weight. Bounty size can raise the required rater
-        floor: {protocolDocFacts.bountyParticipantFloorsLabel}. With the current oracle default, USDC bounty claims have
-        a <strong>{protocolDocFacts.usdcBountyPayoutMinimumDelayLabel}</strong> minimum post-settlement delay when the
+        floor under the launch policy: {protocolDocFacts.bountyParticipantFloorsLabel}.{" "}
+        {protocolDocFacts.quorumRatchetPolicyLabel} With the current oracle default, USDC bounty claims have a{" "}
+        <strong>{protocolDocFacts.usdcBountyPayoutMinimumDelayLabel}</strong> minimum post-settlement delay when the
         correlation epoch is already finalized, or about{" "}
         <strong>{protocolDocFacts.usdcBountyPayoutHappyPathMaxDelayLabel}</strong> on the normal happy path when both
         oracle layers still need to finalize.

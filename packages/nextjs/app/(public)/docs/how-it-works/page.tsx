@@ -57,8 +57,9 @@ const HowItWorks: NextPage = () => {
         </li>
         <li>
           <strong>Settle:</strong> once reveal conditions and the selected rater threshold are met, the round resolves.
-          Three-rater rounds can still settle as sparse feedback, but LREP score-spread forfeits need a larger
-          score-eligible set before they turn on.
+          Three-rater rounds are the launch feedback tier and can still settle as sparse feedback, but LREP score-spread
+          forfeits need a larger score-eligible set before they turn on. Governance can raise new-round voter floors as
+          usage grows.
         </li>
       </ol>
 
@@ -212,8 +213,9 @@ const HowItWorks: NextPage = () => {
         ]}
       />
       <p>
-        Bounty size can raise the required rater floor: {protocolDocFacts.bountyParticipantFloorsLabel}. The goal is to
-        keep small asks usable while requiring broader participation for larger payout pools.
+        Bounty size can raise the required rater floor under the launch policy:{" "}
+        {protocolDocFacts.bountyParticipantFloorsLabel}. The goal is to keep small asks usable while requiring broader
+        participation for larger payout pools. {protocolDocFacts.quorumRatchetPolicyLabel}
       </p>
       <p>
         Example: if a 30 USDC rater allocation is claimable and three eligible raters have effective correlation weights

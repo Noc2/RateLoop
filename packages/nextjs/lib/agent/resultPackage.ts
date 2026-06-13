@@ -551,7 +551,7 @@ export function buildAgentResultPackage(params: {
   }
   if (ready && revealedCount < SCORE_SPREAD_POLICY.forfeitMinReveals) {
     limitations.push(
-      `This round settled below the ${SCORE_SPREAD_POLICY.forfeitMinReveals}-reveal score-spread economic threshold, so low-turnout LREP forfeits were disabled.`,
+      `This round settled below the ${SCORE_SPREAD_POLICY.forfeitMinReveals}-reveal score-spread economic threshold, so it is a launch feedback-tier signal and low-turnout LREP forfeits were disabled.`,
     );
   }
   const distribution = {

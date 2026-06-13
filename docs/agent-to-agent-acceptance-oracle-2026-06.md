@@ -20,7 +20,8 @@ but trust-me" and UMA's 2-hour optimistic window). Code-verified at HEAD: for
 first mainnet deployment, the codebase supports a **20s configurable epoch
 floor**, putting a keeper-driven 3-rater round around **~90–150 seconds
 ask→readable result** and the self-finalized fast lane around **~40–55 seconds**
-once standing AI raters exist. Below that, the commit-reveal mechanism itself is
+once standing AI raters exist. That 3-rater path is the launch feedback tier,
+not the decision-grade target. Below that, the commit-reveal mechanism itself is
 the bound — and the right answer is not to shrink it further but to pair it with
 an optimistic-acceptance pattern (instant release, RateLoop round only on
 dispute).
@@ -157,11 +158,12 @@ the buyer cannot run the jury because the buyer is a counterparty.
    bits only (`QuestionRewardPoolEscrowTypes.sol:4-10`); pure-AI fast rounds are
    social convention, not enforced. Gated (confidential) rounds exclude AI raters
    entirely — relevant because A2A deliverables are usually confidential.
-4. **Small-round economics are deliberately soft**: 3-voter rounds settle as
-   "feedback signals" — score-spread LREP forfeits require ≥8 reveals
-   (`RewardMath.sol:17,95`), and pools ≥1,000 USDC require ≥5 voters on-chain.
-   A binding acceptance verdict with real money should not ride a 3-voter
-   feedback-signal round.
+4. **Small-round economics are deliberately soft**: 3-voter rounds are the
+   launch feedback tier, not the permanent security target. Score-spread LREP
+   forfeits require ≥8 reveals (`RewardMath.sol:17,95`), pools ≥1,000 USDC
+   require ≥5 voters on-chain, and governance can raise default and minimum
+   voter floors for new asks as rater supply grows. A binding acceptance verdict
+   with real money should not ride a 3-voter feedback-signal round.
 
 ## 3. Optimizations: reducing voting time
 
@@ -295,10 +297,10 @@ self-finalize SDK path makes the keeper a fallback, not the critical path).
   pre-signed agreement to abide. Don't silently delete the disclaimer — it
   encodes a real distinction between feedback signals and payout instructions
   that the small-round economics justify.
-- **Tier round economics to escrow value.** A 3-voter feedback-signal round
+- **Tier round economics to escrow value.** A 3-voter launch feedback-tier round
   (no score-spread forfeits below 8 reveals) is fine for advisory and for
   optimistic-dispute triage; binding release above meaningful value should
-  require the 8-reveal economic threshold (where forfeits activate) and the
+  require the 8-reveal economic threshold (where forfeits activate). The
   existing on-chain participant floors (≥5 voters at ≥1,000 USDC, ≥8 at
   ≥10,000) point the same direction. Publish this as an acceptance-tier table.
 - **AI-only eligibility mask + operator diversity attestation.** A2A acceptance

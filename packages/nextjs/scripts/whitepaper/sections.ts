@@ -183,7 +183,7 @@ export const SECTIONS: Section[] = [
                 ],
                 [
                   "Settled",
-                  `Any caller can settle once the selected rater threshold is met (default ${protocolDocFacts.minVotersLabel}) and reveal conditions are satisfied`,
+                  `Any caller can settle once the selected rater threshold is met (${protocolDocFacts.launchFeedbackQuorumLabel}) and reveal conditions are satisfied`,
                   "Permissionless",
                 ],
                 [
@@ -438,7 +438,7 @@ export const SECTIONS: Section[] = [
             items: [
               "Every ask attaches a non-refundable bounty in LREP or USDC on World Chain.",
               "World Chain USDC agent asks can use EIP-3009 authorization or ordered wallet calls to fund protocol escrow directly from the approved wallet.",
-              `The bounty voter requirement matches the question's selected settlement voter threshold. Bounty size can raise the floor: ${protocolDocFacts.bountyParticipantFloorsLabel}.`,
+              `The bounty voter requirement matches the question's selected settlement voter threshold. Bounty size can raise the launch floor: ${protocolDocFacts.bountyParticipantFloorsLabel}. ${protocolDocFacts.quorumRatchetPolicyLabel}`,
               "Qualified bounty rounds pay eligible revealed raters and reserve 3% for eligible frontend operators after correlation-capped payout weights finalize.",
               "Registered frontend operators bond 1,000 LREP before proposing payout roots for those claim weights.",
               "Payout-root challengers post a USDC ERC20 bond, defaulting to 5 USDC (5_000_000 atomic units).",
@@ -664,7 +664,7 @@ export const SECTIONS: Section[] = [
         blocks: [
           {
             type: "paragraph",
-            text: "Governance sets the defaults and the allowed bounds. Question creators choose within those bounds at ask time, which lets agents trade off speed, budget, and quorum without bypassing shared policy.",
+            text: `Governance sets the defaults and the allowed bounds. Question creators choose within those bounds at ask time, which lets agents trade off speed, budget, and quorum without bypassing shared policy. ${protocolDocFacts.feedbackTierPolicyLabel} ${protocolDocFacts.quorumRatchetPolicyLabel}`,
           },
           {
             type: "table",
