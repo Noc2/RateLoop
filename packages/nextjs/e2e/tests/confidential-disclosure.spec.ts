@@ -85,6 +85,12 @@ test.describe("Confidential disclosure after settlement", () => {
       { epochDuration: EPOCH_DURATION },
     );
 
+    const reconcile = await triggerDisclosureReconcile(request, [
+      afterQuestion.contentId,
+      foreverQuestion.contentId,
+    ]);
+    expect(reconcile.published).toBe(1);
+
     // Gated submissions keep hosted details URLs off-chain; Ponder proves disclosure by unredacting public text.
     const ponderDisclosed = await waitForPonderIndexed(
       async () => {
@@ -111,12 +117,6 @@ test.describe("Confidential disclosure after settlement", () => {
       "confidential-disclosure:ponder-private-forever-gated",
     );
     expect(foreverStayedPrivate, "Ponder should keep private-forever context redacted after settlement").toBe(true);
-
-    const reconcile = await triggerDisclosureReconcile(request, [
-      afterQuestion.contentId,
-      foreverQuestion.contentId,
-    ]);
-    expect(reconcile.published).toBe(1);
 
     const publicAfterDetails = await request.get(afterQuestion.detailsUrl!);
     expect(publicAfterDetails.status()).toBe(200);

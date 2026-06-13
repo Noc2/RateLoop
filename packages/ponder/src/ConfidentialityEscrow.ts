@@ -1,8 +1,11 @@
 import { ponder } from "ponder:registry";
 import {
+  content,
   confidentialityBond,
   confidentialityConfig,
 } from "ponder:schema";
+
+const CONFIDENTIALITY_FLAG_PRIVATE_FOREVER = 1;
 
 function bondId(contentId: bigint, identityKey: `0x${string}`) {
   return `${contentId.toString()}-${identityKey}`;
@@ -17,12 +20,23 @@ function toBigInt(value: unknown) {
   return typeof value === "bigint" ? value : BigInt(String(value ?? 0));
 }
 
+function confidentialityBondAssetName(asset: number) {
+  return asset === 1 ? "USDC" : "LREP";
+}
+
+function confidentialityDisclosurePolicyFromFlags(flags: number) {
+  return (flags & CONFIDENTIALITY_FLAG_PRIVATE_FOREVER) !== 0
+    ? "private_forever"
+    : "after_settlement";
+}
+
 ponder.on(
   "ConfidentialityEscrow:ConfidentialityConfigured" as never,
   async ({ event, context }: any) => {
     const { contentId, gated, bondAsset, bondAmount, flags } = event.args;
     const asset = toNumber(bondAsset);
     const amount = toBigInt(bondAmount);
+    const flagValue = toNumber(flags);
 
     await context.db
       .insert(confidentialityConfig)
@@ -31,7 +45,7 @@ ponder.on(
         gated,
         bondAsset: asset,
         bondAmount: amount,
-        flags: toNumber(flags),
+        flags: flagValue,
         configuredAt: event.block.timestamp,
         updatedAt: event.block.timestamp,
       })
@@ -39,10 +53,16 @@ ponder.on(
         gated,
         bondAsset: asset,
         bondAmount: amount,
-        flags: toNumber(flags),
+        flags: flagValue,
         updatedAt: event.block.timestamp,
       });
 
+    await context.db.update(content, { id: contentId }).set({
+      gated,
+      confidentialityBondAsset: confidentialityBondAssetName(asset),
+      confidentialityBondAmount: amount,
+      confidentialityDisclosurePolicy: confidentialityDisclosurePolicyFromFlags(flagValue),
+    });
   },
 );
 
