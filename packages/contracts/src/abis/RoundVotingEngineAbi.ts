@@ -1215,7 +1215,7 @@ export const RoundVotingEngineAbi = [
   },
   {
     "type": "function",
-    "name": "roundRatingConfig",
+    "name": "roundRatingConfigCompact",
     "inputs": [
       {
         "name": "contentId",
@@ -1230,76 +1230,29 @@ export const RoundVotingEngineAbi = [
     ],
     "outputs": [
       {
-        "name": "cfg",
-        "type": "tuple",
-        "internalType": "struct RatingLib.RatingConfig",
-        "components": [
-          {
-            "name": "smoothingAlpha",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "smoothingBeta",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "observationBetaX18",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "confidenceMassInitial",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "confidenceMassMin",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "confidenceMassMax",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "confidenceGainBps",
-            "type": "uint16",
-            "internalType": "uint16"
-          },
-          {
-            "name": "confidenceReopenBps",
-            "type": "uint16",
-            "internalType": "uint16"
-          },
-          {
-            "name": "surpriseReferenceX18",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "maxDeltaLogitX18",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "maxAbsLogitX18",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "conservativePenaltyMaxBps",
-            "type": "uint16",
-            "internalType": "uint16"
-          },
-          {
-            "name": "conservativePenaltyMinBps",
-            "type": "uint16",
-            "internalType": "uint16"
-          }
-        ]
+        "name": "confidenceMassInitial",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "confidenceMassMin",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "confidenceMassMax",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "conservativePenaltyMaxBps",
+        "type": "uint16",
+        "internalType": "uint16"
+      },
+      {
+        "name": "conservativePenaltyMinBps",
+        "type": "uint16",
+        "internalType": "uint16"
       }
     ],
     "stateMutability": "view"

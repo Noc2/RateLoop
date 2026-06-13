@@ -243,6 +243,19 @@ export const ClusterPayoutOracleAbi = [
   },
   {
     "type": "function",
+    "name": "PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "PAYOUT_DOMAIN_QUESTION_REWARD",
     "inputs": [],
     "outputs": [

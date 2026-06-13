@@ -72,6 +72,97 @@ export const QuestionRewardPoolEscrowAbi = [
   },
   {
     "type": "function",
+    "name": "claimQuestionBundleReward",
+    "inputs": [
+      {
+        "name": "bundleId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "roundSetIndex",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "payoutWeight",
+        "type": "tuple",
+        "internalType": "struct IClusterPayoutOracle.PayoutWeight",
+        "components": [
+          {
+            "name": "domain",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "rewardPoolId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "contentId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "roundId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "commitKey",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "identityKey",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "account",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "baseWeight",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "independenceBps",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "effectiveWeight",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "reasonHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ]
+      },
+      {
+        "name": "proof",
+        "type": "bytes32[]",
+        "internalType": "bytes32[]"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "rewardAmount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "claimQuestionReward",
     "inputs": [
       {
@@ -203,6 +294,102 @@ export const QuestionRewardPoolEscrowAbi = [
         "name": "account",
         "type": "address",
         "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "claimableAmount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "claimableQuestionBundleRewardWithPayoutWeight",
+    "inputs": [
+      {
+        "name": "bundleId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "roundSetIndex",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "account",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "payoutWeight",
+        "type": "tuple",
+        "internalType": "struct IClusterPayoutOracle.PayoutWeight",
+        "components": [
+          {
+            "name": "domain",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "rewardPoolId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "contentId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "roundId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "commitKey",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "identityKey",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "account",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "baseWeight",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "independenceBps",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "effectiveWeight",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "reasonHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ]
+      },
+      {
+        "name": "proof",
+        "type": "bytes32[]",
+        "internalType": "bytes32[]"
       }
     ],
     "outputs": [
@@ -1552,6 +1739,25 @@ export const QuestionRewardPoolEscrowAbi = [
   },
   {
     "type": "event",
+    "name": "QuestionBundleClusterPayoutOracleSnapshotted",
+    "inputs": [
+      {
+        "name": "bundleId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "clusterPayoutOracle",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "QuestionBundleEligibilitySet",
     "inputs": [
       {
@@ -1804,6 +2010,55 @@ export const QuestionRewardPoolEscrowAbi = [
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "QuestionBundleRoundSetCorrelationSnapshotApplied",
+    "inputs": [
+      {
+        "name": "bundleId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "roundSetIndex",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "correlationEpochId",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
+      },
+      {
+        "name": "rawEligibleCompleters",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "effectiveParticipantUnits",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "totalClaimWeight",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "weightRoot",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
       }
     ],
     "anonymous": false

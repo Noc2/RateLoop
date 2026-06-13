@@ -4622,19 +4622,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "PAYOUT_DOMAIN_PUBLIC_RATING",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "uint8",
-              internalType: "uint8",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
           name: "TREASURY_ADMIN_ROLE",
           inputs: [],
           outputs: [
@@ -4891,7 +4878,7 @@ const deployedContracts: GenericContractsDeclaration = {
             {
               name: "status",
               type: "uint8",
-              internalType: "enum ContentRegistry.ContentStatus",
+              internalType: "enum ContentRegistryTypes.ContentStatus",
             },
             {
               name: "dormantCount",
@@ -5329,60 +5316,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "pendingRatingSettlement",
-          inputs: [
-            {
-              name: "contentId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "roundId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "settlementVotingEngine",
-              type: "address",
-              internalType: "address",
-            },
-            {
-              name: "upEvidence",
-              type: "uint64",
-              internalType: "uint64",
-            },
-            {
-              name: "downEvidence",
-              type: "uint64",
-              internalType: "uint64",
-            },
-            {
-              name: "readyAt",
-              type: "uint48",
-              internalType: "uint48",
-            },
-            {
-              name: "referenceRatingBps",
-              type: "uint16",
-              internalType: "uint16",
-            },
-            {
-              name: "exists",
-              type: "bool",
-              internalType: "bool",
-            },
-            {
-              name: "applied",
-              type: "bool",
-              internalType: "bool",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
           name: "protocolConfig",
           inputs: [],
           outputs: [
@@ -5425,19 +5358,6 @@ const deployedContracts: GenericContractsDeclaration = {
             },
           ],
           stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "recordMeaningfulActivity",
-          inputs: [
-            {
-              name: "contentId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
         },
         {
           type: "function",
@@ -6529,86 +6449,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "updateRatingState",
-          inputs: [
-            {
-              name: "contentId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "roundId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "referenceRatingBps",
-              type: "uint16",
-              internalType: "uint16",
-            },
-            {
-              name: "nextState",
-              type: "tuple",
-              internalType: "struct RatingLib.RatingState",
-              components: [
-                {
-                  name: "ratingLogitX18",
-                  type: "int128",
-                  internalType: "int128",
-                },
-                {
-                  name: "confidenceMass",
-                  type: "uint128",
-                  internalType: "uint128",
-                },
-                {
-                  name: "effectiveEvidence",
-                  type: "uint128",
-                  internalType: "uint128",
-                },
-                {
-                  name: "upEvidence",
-                  type: "uint128",
-                  internalType: "uint128",
-                },
-                {
-                  name: "downEvidence",
-                  type: "uint128",
-                  internalType: "uint128",
-                },
-                {
-                  name: "settledRounds",
-                  type: "uint32",
-                  internalType: "uint32",
-                },
-                {
-                  name: "ratingBps",
-                  type: "uint16",
-                  internalType: "uint16",
-                },
-                {
-                  name: "conservativeRatingBps",
-                  type: "uint16",
-                  internalType: "uint16",
-                },
-                {
-                  name: "lastUpdatedAt",
-                  type: "uint48",
-                  internalType: "uint48",
-                },
-                {
-                  name: "lowSince",
-                  type: "uint48",
-                  internalType: "uint48",
-                },
-              ],
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
           name: "votingEngine",
           inputs: [],
           outputs: [
@@ -7436,86 +7276,6 @@ const deployedContracts: GenericContractsDeclaration = {
         {
           type: "error",
           name: "OnlyVotingEngine",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "PRBMath_MulDiv_Overflow",
-          inputs: [
-            {
-              name: "x",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "y",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "denominator",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-        },
-        {
-          type: "error",
-          name: "PRBMath_SD59x18_Convert_Overflow",
-          inputs: [
-            {
-              name: "x",
-              type: "int256",
-              internalType: "int256",
-            },
-          ],
-        },
-        {
-          type: "error",
-          name: "PRBMath_SD59x18_Convert_Underflow",
-          inputs: [
-            {
-              name: "x",
-              type: "int256",
-              internalType: "int256",
-            },
-          ],
-        },
-        {
-          type: "error",
-          name: "PRBMath_SD59x18_Div_InputTooSmall",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "PRBMath_SD59x18_Div_Overflow",
-          inputs: [
-            {
-              name: "x",
-              type: "int256",
-              internalType: "SD59x18",
-            },
-            {
-              name: "y",
-              type: "int256",
-              internalType: "SD59x18",
-            },
-          ],
-        },
-        {
-          type: "error",
-          name: "PRBMath_SD59x18_Log_InputTooSmall",
-          inputs: [
-            {
-              name: "x",
-              type: "int256",
-              internalType: "SD59x18",
-            },
-          ],
-        },
-        {
-          type: "error",
-          name: "RatingMathOverflow",
           inputs: [],
         },
         {
@@ -8790,7 +8550,7 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "roundRatingConfig",
+          name: "roundRatingConfigCompact",
           inputs: [
             {
               name: "contentId",
@@ -8805,76 +8565,29 @@ const deployedContracts: GenericContractsDeclaration = {
           ],
           outputs: [
             {
-              name: "cfg",
-              type: "tuple",
-              internalType: "struct RatingLib.RatingConfig",
-              components: [
-                {
-                  name: "smoothingAlpha",
-                  type: "uint256",
-                  internalType: "uint256",
-                },
-                {
-                  name: "smoothingBeta",
-                  type: "uint256",
-                  internalType: "uint256",
-                },
-                {
-                  name: "observationBetaX18",
-                  type: "uint256",
-                  internalType: "uint256",
-                },
-                {
-                  name: "confidenceMassInitial",
-                  type: "uint256",
-                  internalType: "uint256",
-                },
-                {
-                  name: "confidenceMassMin",
-                  type: "uint256",
-                  internalType: "uint256",
-                },
-                {
-                  name: "confidenceMassMax",
-                  type: "uint256",
-                  internalType: "uint256",
-                },
-                {
-                  name: "confidenceGainBps",
-                  type: "uint16",
-                  internalType: "uint16",
-                },
-                {
-                  name: "confidenceReopenBps",
-                  type: "uint16",
-                  internalType: "uint16",
-                },
-                {
-                  name: "surpriseReferenceX18",
-                  type: "uint256",
-                  internalType: "uint256",
-                },
-                {
-                  name: "maxDeltaLogitX18",
-                  type: "uint256",
-                  internalType: "uint256",
-                },
-                {
-                  name: "maxAbsLogitX18",
-                  type: "uint256",
-                  internalType: "uint256",
-                },
-                {
-                  name: "conservativePenaltyMaxBps",
-                  type: "uint16",
-                  internalType: "uint16",
-                },
-                {
-                  name: "conservativePenaltyMinBps",
-                  type: "uint16",
-                  internalType: "uint16",
-                },
-              ],
+              name: "confidenceMassInitial",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "confidenceMassMin",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "confidenceMassMax",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "conservativePenaltyMaxBps",
+              type: "uint16",
+              internalType: "uint16",
+            },
+            {
+              name: "conservativePenaltyMinBps",
+              type: "uint16",
+              internalType: "uint16",
             },
           ],
           stateMutability: "view",
@@ -9937,7 +9650,7 @@ const deployedContracts: GenericContractsDeclaration = {
         ratingCommitState: "contracts/interfaces/IRoundVotingEngine.sol",
         roundCore: "contracts/interfaces/IRoundVotingEngine.sol",
         roundLifecycleState: "contracts/interfaces/IRoundVotingEngine.sol",
-        roundRatingConfig: "contracts/interfaces/IRoundVotingEngine.sol",
+        roundRatingConfigCompact: "contracts/interfaces/IRoundVotingEngine.sol",
         transferReward: "contracts/interfaces/IRoundVotingEngine.sol",
         commitVote: "contracts/interfaces/IRoundVotingCommitReveal.sol",
         commitVoteWithPermit:
@@ -15805,6 +15518,97 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "claimQuestionBundleReward",
+          inputs: [
+            {
+              name: "bundleId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "roundSetIndex",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "payoutWeight",
+              type: "tuple",
+              internalType: "struct IClusterPayoutOracle.PayoutWeight",
+              components: [
+                {
+                  name: "domain",
+                  type: "uint8",
+                  internalType: "uint8",
+                },
+                {
+                  name: "rewardPoolId",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "contentId",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "roundId",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "commitKey",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+                {
+                  name: "identityKey",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+                {
+                  name: "account",
+                  type: "address",
+                  internalType: "address",
+                },
+                {
+                  name: "baseWeight",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "independenceBps",
+                  type: "uint16",
+                  internalType: "uint16",
+                },
+                {
+                  name: "effectiveWeight",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "reasonHash",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+              ],
+            },
+            {
+              name: "proof",
+              type: "bytes32[]",
+              internalType: "bytes32[]",
+            },
+          ],
+          outputs: [
+            {
+              name: "rewardAmount",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "claimQuestionReward",
           inputs: [
             {
@@ -15936,6 +15740,102 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "account",
               type: "address",
               internalType: "address",
+            },
+          ],
+          outputs: [
+            {
+              name: "claimableAmount",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "claimableQuestionBundleRewardWithPayoutWeight",
+          inputs: [
+            {
+              name: "bundleId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "roundSetIndex",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "account",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "payoutWeight",
+              type: "tuple",
+              internalType: "struct IClusterPayoutOracle.PayoutWeight",
+              components: [
+                {
+                  name: "domain",
+                  type: "uint8",
+                  internalType: "uint8",
+                },
+                {
+                  name: "rewardPoolId",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "contentId",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "roundId",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "commitKey",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+                {
+                  name: "identityKey",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+                {
+                  name: "account",
+                  type: "address",
+                  internalType: "address",
+                },
+                {
+                  name: "baseWeight",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "independenceBps",
+                  type: "uint16",
+                  internalType: "uint16",
+                },
+                {
+                  name: "effectiveWeight",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "reasonHash",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+              ],
+            },
+            {
+              name: "proof",
+              type: "bytes32[]",
+              internalType: "bytes32[]",
             },
           ],
           outputs: [
@@ -17285,6 +17185,25 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "event",
+          name: "QuestionBundleClusterPayoutOracleSnapshotted",
+          inputs: [
+            {
+              name: "bundleId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "clusterPayoutOracle",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
           name: "QuestionBundleEligibilitySet",
           inputs: [
             {
@@ -17537,6 +17456,55 @@ const deployedContracts: GenericContractsDeclaration = {
               type: "uint256",
               indexed: false,
               internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "QuestionBundleRoundSetCorrelationSnapshotApplied",
+          inputs: [
+            {
+              name: "bundleId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "roundSetIndex",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "correlationEpochId",
+              type: "uint64",
+              indexed: false,
+              internalType: "uint64",
+            },
+            {
+              name: "rawEligibleCompleters",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+            {
+              name: "effectiveParticipantUnits",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+            {
+              name: "totalClaimWeight",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+            {
+              name: "weightRoot",
+              type: "bytes32",
+              indexed: false,
+              internalType: "bytes32",
             },
           ],
           anonymous: false,
@@ -20577,6 +20545,19 @@ const deployedContracts: GenericContractsDeclaration = {
         {
           type: "function",
           name: "PAYOUT_DOMAIN_PUBLIC_RATING",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD",
           inputs: [],
           outputs: [
             {
@@ -34385,19 +34366,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "PAYOUT_DOMAIN_PUBLIC_RATING",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "uint8",
-              internalType: "uint8",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
           name: "TREASURY_ADMIN_ROLE",
           inputs: [],
           outputs: [
@@ -34654,7 +34622,7 @@ const deployedContracts: GenericContractsDeclaration = {
             {
               name: "status",
               type: "uint8",
-              internalType: "enum ContentRegistry.ContentStatus",
+              internalType: "enum ContentRegistryTypes.ContentStatus",
             },
             {
               name: "dormantCount",
@@ -35092,60 +35060,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "pendingRatingSettlement",
-          inputs: [
-            {
-              name: "contentId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "roundId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "settlementVotingEngine",
-              type: "address",
-              internalType: "address",
-            },
-            {
-              name: "upEvidence",
-              type: "uint64",
-              internalType: "uint64",
-            },
-            {
-              name: "downEvidence",
-              type: "uint64",
-              internalType: "uint64",
-            },
-            {
-              name: "readyAt",
-              type: "uint48",
-              internalType: "uint48",
-            },
-            {
-              name: "referenceRatingBps",
-              type: "uint16",
-              internalType: "uint16",
-            },
-            {
-              name: "exists",
-              type: "bool",
-              internalType: "bool",
-            },
-            {
-              name: "applied",
-              type: "bool",
-              internalType: "bool",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
           name: "protocolConfig",
           inputs: [],
           outputs: [
@@ -35188,19 +35102,6 @@ const deployedContracts: GenericContractsDeclaration = {
             },
           ],
           stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "recordMeaningfulActivity",
-          inputs: [
-            {
-              name: "contentId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
         },
         {
           type: "function",
@@ -36292,86 +36193,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "updateRatingState",
-          inputs: [
-            {
-              name: "contentId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "roundId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "referenceRatingBps",
-              type: "uint16",
-              internalType: "uint16",
-            },
-            {
-              name: "nextState",
-              type: "tuple",
-              internalType: "struct RatingLib.RatingState",
-              components: [
-                {
-                  name: "ratingLogitX18",
-                  type: "int128",
-                  internalType: "int128",
-                },
-                {
-                  name: "confidenceMass",
-                  type: "uint128",
-                  internalType: "uint128",
-                },
-                {
-                  name: "effectiveEvidence",
-                  type: "uint128",
-                  internalType: "uint128",
-                },
-                {
-                  name: "upEvidence",
-                  type: "uint128",
-                  internalType: "uint128",
-                },
-                {
-                  name: "downEvidence",
-                  type: "uint128",
-                  internalType: "uint128",
-                },
-                {
-                  name: "settledRounds",
-                  type: "uint32",
-                  internalType: "uint32",
-                },
-                {
-                  name: "ratingBps",
-                  type: "uint16",
-                  internalType: "uint16",
-                },
-                {
-                  name: "conservativeRatingBps",
-                  type: "uint16",
-                  internalType: "uint16",
-                },
-                {
-                  name: "lastUpdatedAt",
-                  type: "uint48",
-                  internalType: "uint48",
-                },
-                {
-                  name: "lowSince",
-                  type: "uint48",
-                  internalType: "uint48",
-                },
-              ],
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
           name: "votingEngine",
           inputs: [],
           outputs: [
@@ -37199,86 +37020,6 @@ const deployedContracts: GenericContractsDeclaration = {
         {
           type: "error",
           name: "OnlyVotingEngine",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "PRBMath_MulDiv_Overflow",
-          inputs: [
-            {
-              name: "x",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "y",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "denominator",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-        },
-        {
-          type: "error",
-          name: "PRBMath_SD59x18_Convert_Overflow",
-          inputs: [
-            {
-              name: "x",
-              type: "int256",
-              internalType: "int256",
-            },
-          ],
-        },
-        {
-          type: "error",
-          name: "PRBMath_SD59x18_Convert_Underflow",
-          inputs: [
-            {
-              name: "x",
-              type: "int256",
-              internalType: "int256",
-            },
-          ],
-        },
-        {
-          type: "error",
-          name: "PRBMath_SD59x18_Div_InputTooSmall",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "PRBMath_SD59x18_Div_Overflow",
-          inputs: [
-            {
-              name: "x",
-              type: "int256",
-              internalType: "SD59x18",
-            },
-            {
-              name: "y",
-              type: "int256",
-              internalType: "SD59x18",
-            },
-          ],
-        },
-        {
-          type: "error",
-          name: "PRBMath_SD59x18_Log_InputTooSmall",
-          inputs: [
-            {
-              name: "x",
-              type: "int256",
-              internalType: "SD59x18",
-            },
-          ],
-        },
-        {
-          type: "error",
-          name: "RatingMathOverflow",
           inputs: [],
         },
         {
@@ -38553,7 +38294,7 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "roundRatingConfig",
+          name: "roundRatingConfigCompact",
           inputs: [
             {
               name: "contentId",
@@ -38568,76 +38309,29 @@ const deployedContracts: GenericContractsDeclaration = {
           ],
           outputs: [
             {
-              name: "cfg",
-              type: "tuple",
-              internalType: "struct RatingLib.RatingConfig",
-              components: [
-                {
-                  name: "smoothingAlpha",
-                  type: "uint256",
-                  internalType: "uint256",
-                },
-                {
-                  name: "smoothingBeta",
-                  type: "uint256",
-                  internalType: "uint256",
-                },
-                {
-                  name: "observationBetaX18",
-                  type: "uint256",
-                  internalType: "uint256",
-                },
-                {
-                  name: "confidenceMassInitial",
-                  type: "uint256",
-                  internalType: "uint256",
-                },
-                {
-                  name: "confidenceMassMin",
-                  type: "uint256",
-                  internalType: "uint256",
-                },
-                {
-                  name: "confidenceMassMax",
-                  type: "uint256",
-                  internalType: "uint256",
-                },
-                {
-                  name: "confidenceGainBps",
-                  type: "uint16",
-                  internalType: "uint16",
-                },
-                {
-                  name: "confidenceReopenBps",
-                  type: "uint16",
-                  internalType: "uint16",
-                },
-                {
-                  name: "surpriseReferenceX18",
-                  type: "uint256",
-                  internalType: "uint256",
-                },
-                {
-                  name: "maxDeltaLogitX18",
-                  type: "uint256",
-                  internalType: "uint256",
-                },
-                {
-                  name: "maxAbsLogitX18",
-                  type: "uint256",
-                  internalType: "uint256",
-                },
-                {
-                  name: "conservativePenaltyMaxBps",
-                  type: "uint16",
-                  internalType: "uint16",
-                },
-                {
-                  name: "conservativePenaltyMinBps",
-                  type: "uint16",
-                  internalType: "uint16",
-                },
-              ],
+              name: "confidenceMassInitial",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "confidenceMassMin",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "confidenceMassMax",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "conservativePenaltyMaxBps",
+              type: "uint16",
+              internalType: "uint16",
+            },
+            {
+              name: "conservativePenaltyMinBps",
+              type: "uint16",
+              internalType: "uint16",
             },
           ],
           stateMutability: "view",
@@ -39700,7 +39394,7 @@ const deployedContracts: GenericContractsDeclaration = {
         ratingCommitState: "contracts/interfaces/IRoundVotingEngine.sol",
         roundCore: "contracts/interfaces/IRoundVotingEngine.sol",
         roundLifecycleState: "contracts/interfaces/IRoundVotingEngine.sol",
-        roundRatingConfig: "contracts/interfaces/IRoundVotingEngine.sol",
+        roundRatingConfigCompact: "contracts/interfaces/IRoundVotingEngine.sol",
         transferReward: "contracts/interfaces/IRoundVotingEngine.sol",
         commitVote: "contracts/interfaces/IRoundVotingCommitReveal.sol",
         commitVoteWithPermit:
@@ -45568,6 +45262,97 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "claimQuestionBundleReward",
+          inputs: [
+            {
+              name: "bundleId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "roundSetIndex",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "payoutWeight",
+              type: "tuple",
+              internalType: "struct IClusterPayoutOracle.PayoutWeight",
+              components: [
+                {
+                  name: "domain",
+                  type: "uint8",
+                  internalType: "uint8",
+                },
+                {
+                  name: "rewardPoolId",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "contentId",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "roundId",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "commitKey",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+                {
+                  name: "identityKey",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+                {
+                  name: "account",
+                  type: "address",
+                  internalType: "address",
+                },
+                {
+                  name: "baseWeight",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "independenceBps",
+                  type: "uint16",
+                  internalType: "uint16",
+                },
+                {
+                  name: "effectiveWeight",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "reasonHash",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+              ],
+            },
+            {
+              name: "proof",
+              type: "bytes32[]",
+              internalType: "bytes32[]",
+            },
+          ],
+          outputs: [
+            {
+              name: "rewardAmount",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "claimQuestionReward",
           inputs: [
             {
@@ -45699,6 +45484,102 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "account",
               type: "address",
               internalType: "address",
+            },
+          ],
+          outputs: [
+            {
+              name: "claimableAmount",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "claimableQuestionBundleRewardWithPayoutWeight",
+          inputs: [
+            {
+              name: "bundleId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "roundSetIndex",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "account",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "payoutWeight",
+              type: "tuple",
+              internalType: "struct IClusterPayoutOracle.PayoutWeight",
+              components: [
+                {
+                  name: "domain",
+                  type: "uint8",
+                  internalType: "uint8",
+                },
+                {
+                  name: "rewardPoolId",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "contentId",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "roundId",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "commitKey",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+                {
+                  name: "identityKey",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+                {
+                  name: "account",
+                  type: "address",
+                  internalType: "address",
+                },
+                {
+                  name: "baseWeight",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "independenceBps",
+                  type: "uint16",
+                  internalType: "uint16",
+                },
+                {
+                  name: "effectiveWeight",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "reasonHash",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+              ],
+            },
+            {
+              name: "proof",
+              type: "bytes32[]",
+              internalType: "bytes32[]",
             },
           ],
           outputs: [
@@ -47048,6 +46929,25 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "event",
+          name: "QuestionBundleClusterPayoutOracleSnapshotted",
+          inputs: [
+            {
+              name: "bundleId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "clusterPayoutOracle",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
           name: "QuestionBundleEligibilitySet",
           inputs: [
             {
@@ -47300,6 +47200,55 @@ const deployedContracts: GenericContractsDeclaration = {
               type: "uint256",
               indexed: false,
               internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "QuestionBundleRoundSetCorrelationSnapshotApplied",
+          inputs: [
+            {
+              name: "bundleId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "roundSetIndex",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "correlationEpochId",
+              type: "uint64",
+              indexed: false,
+              internalType: "uint64",
+            },
+            {
+              name: "rawEligibleCompleters",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+            {
+              name: "effectiveParticipantUnits",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+            {
+              name: "totalClaimWeight",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+            {
+              name: "weightRoot",
+              type: "bytes32",
+              indexed: false,
+              internalType: "bytes32",
             },
           ],
           anonymous: false,
@@ -58786,6 +58735,19 @@ const deployedContracts: GenericContractsDeclaration = {
         {
           type: "function",
           name: "PAYOUT_DOMAIN_PUBLIC_RATING",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD",
           inputs: [],
           outputs: [
             {

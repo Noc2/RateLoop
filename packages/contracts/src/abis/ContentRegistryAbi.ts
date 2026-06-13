@@ -45,19 +45,6 @@ export const ContentRegistryAbi = [
   },
   {
     "type": "function",
-    "name": "PAYOUT_DOMAIN_PUBLIC_RATING",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint8",
-        "internalType": "uint8"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "TREASURY_ADMIN_ROLE",
     "inputs": [],
     "outputs": [
@@ -314,7 +301,7 @@ export const ContentRegistryAbi = [
       {
         "name": "status",
         "type": "uint8",
-        "internalType": "enum ContentRegistry.ContentStatus"
+        "internalType": "enum ContentRegistryTypes.ContentStatus"
       },
       {
         "name": "dormantCount",
@@ -752,60 +739,6 @@ export const ContentRegistryAbi = [
   },
   {
     "type": "function",
-    "name": "pendingRatingSettlement",
-    "inputs": [
-      {
-        "name": "contentId",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "roundId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "settlementVotingEngine",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "upEvidence",
-        "type": "uint64",
-        "internalType": "uint64"
-      },
-      {
-        "name": "downEvidence",
-        "type": "uint64",
-        "internalType": "uint64"
-      },
-      {
-        "name": "readyAt",
-        "type": "uint48",
-        "internalType": "uint48"
-      },
-      {
-        "name": "referenceRatingBps",
-        "type": "uint16",
-        "internalType": "uint16"
-      },
-      {
-        "name": "exists",
-        "type": "bool",
-        "internalType": "bool"
-      },
-      {
-        "name": "applied",
-        "type": "bool",
-        "internalType": "bool"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "protocolConfig",
     "inputs": [],
     "outputs": [
@@ -848,19 +781,6 @@ export const ContentRegistryAbi = [
       }
     ],
     "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "recordMeaningfulActivity",
-    "inputs": [
-      {
-        "name": "contentId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -1950,86 +1870,6 @@ export const ContentRegistryAbi = [
   },
   {
     "type": "function",
-    "name": "updateRatingState",
-    "inputs": [
-      {
-        "name": "contentId",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "roundId",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "referenceRatingBps",
-        "type": "uint16",
-        "internalType": "uint16"
-      },
-      {
-        "name": "nextState",
-        "type": "tuple",
-        "internalType": "struct RatingLib.RatingState",
-        "components": [
-          {
-            "name": "ratingLogitX18",
-            "type": "int128",
-            "internalType": "int128"
-          },
-          {
-            "name": "confidenceMass",
-            "type": "uint128",
-            "internalType": "uint128"
-          },
-          {
-            "name": "effectiveEvidence",
-            "type": "uint128",
-            "internalType": "uint128"
-          },
-          {
-            "name": "upEvidence",
-            "type": "uint128",
-            "internalType": "uint128"
-          },
-          {
-            "name": "downEvidence",
-            "type": "uint128",
-            "internalType": "uint128"
-          },
-          {
-            "name": "settledRounds",
-            "type": "uint32",
-            "internalType": "uint32"
-          },
-          {
-            "name": "ratingBps",
-            "type": "uint16",
-            "internalType": "uint16"
-          },
-          {
-            "name": "conservativeRatingBps",
-            "type": "uint16",
-            "internalType": "uint16"
-          },
-          {
-            "name": "lastUpdatedAt",
-            "type": "uint48",
-            "internalType": "uint48"
-          },
-          {
-            "name": "lowSince",
-            "type": "uint48",
-            "internalType": "uint48"
-          }
-        ]
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
     "name": "votingEngine",
     "inputs": [],
     "outputs": [
@@ -2857,86 +2697,6 @@ export const ContentRegistryAbi = [
   {
     "type": "error",
     "name": "OnlyVotingEngine",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "PRBMath_MulDiv_Overflow",
-    "inputs": [
-      {
-        "name": "x",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "y",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "denominator",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "PRBMath_SD59x18_Convert_Overflow",
-    "inputs": [
-      {
-        "name": "x",
-        "type": "int256",
-        "internalType": "int256"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "PRBMath_SD59x18_Convert_Underflow",
-    "inputs": [
-      {
-        "name": "x",
-        "type": "int256",
-        "internalType": "int256"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "PRBMath_SD59x18_Div_InputTooSmall",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "PRBMath_SD59x18_Div_Overflow",
-    "inputs": [
-      {
-        "name": "x",
-        "type": "int256",
-        "internalType": "SD59x18"
-      },
-      {
-        "name": "y",
-        "type": "int256",
-        "internalType": "SD59x18"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "PRBMath_SD59x18_Log_InputTooSmall",
-    "inputs": [
-      {
-        "name": "x",
-        "type": "int256",
-        "internalType": "SD59x18"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "RatingMathOverflow",
     "inputs": []
   },
   {
