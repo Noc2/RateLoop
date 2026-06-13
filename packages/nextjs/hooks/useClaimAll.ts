@@ -6,6 +6,7 @@ import { useAccount } from "wagmi";
 import { useTermsAcceptance } from "~~/contexts/TermsAcceptanceContext";
 import {
   type ClaimableRewardItem,
+  getQuestionBundleRewardClaimArgs,
   getQuestionRewardClaimArgs,
   sortClaimableRewardItems,
 } from "~~/hooks/claimableRewards";
@@ -146,7 +147,7 @@ export function useClaimAll() {
       return {
         abi: questionRewardPoolEscrowInfo.abi as Abi,
         address: questionRewardPoolEscrowInfo.address as `0x${string}`,
-        args: [item.bundleId, item.roundSetIndex],
+        args: getQuestionBundleRewardClaimArgs(item),
         functionName: "claimQuestionBundleReward",
       };
     }
@@ -274,7 +275,7 @@ export function useClaimAll() {
                 address: questionRewardPoolEscrowAddress,
                 abi: QUESTION_REWARD_POOL_ESCROW_ABI,
                 functionName: "claimQuestionBundleReward",
-                args: [item.bundleId, item.roundSetIndex],
+                args: getQuestionBundleRewardClaimArgs(item),
               },
               { getErrorMessage: getTransactionErrorMessage },
             );

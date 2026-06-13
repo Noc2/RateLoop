@@ -81,7 +81,9 @@ export const content = onchainTable(
     targetAudienceCountriesIdx: index().on(table.targetAudienceCountries),
     targetAudienceExpertiseIdx: index().on(table.targetAudienceExpertise),
     targetAudienceLanguagesIdx: index().on(table.targetAudienceLanguages),
-    targetAudienceNationalitiesIdx: index().on(table.targetAudienceNationalities),
+    targetAudienceNationalitiesIdx: index().on(
+      table.targetAudienceNationalities,
+    ),
     targetAudienceRolesIdx: index().on(table.targetAudienceRoles),
     questionMetadataHashIdx: index().on(table.questionMetadataHash),
     resultSpecHashIdx: index().on(table.resultSpecHash),
@@ -201,7 +203,11 @@ export const round = onchainTable(
     contentIdx: index().on(table.contentId),
     roundIdx: index().on(table.roundId),
     stateIdx: index().on(table.state),
-    stateContentRoundIdx: index().on(table.state, table.contentId, table.roundId),
+    stateContentRoundIdx: index().on(
+      table.state,
+      table.contentId,
+      table.roundId,
+    ),
     settledAtIdx: index().on(table.settledAt),
   }),
 );
@@ -625,6 +631,11 @@ export const questionBundleRoundSet = onchainTable(
     roundSetIndex: t.integer().notNull(),
     allocation: t.bigint().notNull(),
     frontendFeeAllocation: t.bigint().notNull(),
+    rawEligibleCompleters: t.integer().notNull().default(0),
+    effectiveParticipantUnits: t.integer().notNull().default(0),
+    totalClaimWeight: t.bigint().notNull().default(0n),
+    correlationEpochId: t.bigint(),
+    correlationWeightRoot: t.hex(),
     claimedAmount: t.bigint().notNull(),
     voterClaimedAmount: t.bigint().notNull(),
     frontendClaimedAmount: t.bigint().notNull(),
@@ -732,11 +743,14 @@ export const raterIdentityBan = onchainTable(
   }),
 );
 
-export const raterRegistryConfig = onchainTable("rater_registry_config", (t) => ({
-  id: t.text().primaryKey(),
-  confidentialityEscrow: t.hex(),
-  updatedAt: t.bigint().notNull(),
-}));
+export const raterRegistryConfig = onchainTable(
+  "rater_registry_config",
+  (t) => ({
+    id: t.text().primaryKey(),
+    confidentialityEscrow: t.hex(),
+    updatedAt: t.bigint().notNull(),
+  }),
+);
 
 // ============================================================
 // FEEDBACK BONUS POOLS
@@ -1063,7 +1077,11 @@ export const profileSelfReportHistory = onchainTable(
   }),
   (table) => ({
     addressUpdatedAtIdx: index().on(table.address, table.updatedAt),
-    addressBlockIdx: index().on(table.address, table.blockNumber, table.logIndex),
+    addressBlockIdx: index().on(
+      table.address,
+      table.blockNumber,
+      table.logIndex,
+    ),
     updatedAtIdx: index().on(table.updatedAt),
   }),
 );

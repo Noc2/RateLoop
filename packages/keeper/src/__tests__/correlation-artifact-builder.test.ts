@@ -43,9 +43,18 @@ function fullVotePageResponse() {
   });
 }
 
+function isSupplementalCandidateEndpoint(pathname: string) {
+  return (
+    pathname === "/correlation/bundle-round-candidates" ||
+    pathname === "/correlation/rating-round-candidates"
+  );
+}
+
 function parseDataUri(uri: string) {
   const commaIndex = uri.indexOf(",");
-  return JSON.parse(Buffer.from(uri.slice(commaIndex + 1), "base64").toString("utf8"));
+  return JSON.parse(
+    Buffer.from(uri.slice(commaIndex + 1), "base64").toString("utf8"),
+  );
 }
 
 afterEach(() => {
@@ -57,65 +66,69 @@ afterEach(() => {
 describe("automatic correlation artifact builder", () => {
   it("builds a deterministic stored artifact from Ponder candidates and votes", async () => {
     mockConfig();
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
-      const url = new URL(input.toString());
-      if (url.pathname === "/correlation/round-candidates") {
-        expect(url.searchParams.get("limit")).toBe("6");
-        expect(url.searchParams.get("offset")).toBe("0");
-        return jsonResponse({
-          items: [
-            {
-              rewardPoolId: "7",
-              contentId: "9",
-              roundId: "2",
+    const fetchMock = vi.fn(
+      async (input: RequestInfo | URL, _init?: RequestInit) => {
+        const url = new URL(input.toString());
+        if (url.pathname === "/correlation/round-candidates") {
+          expect(url.searchParams.get("limit")).toBe("6");
+          expect(url.searchParams.get("offset")).toBe("0");
+          return jsonResponse({
+            items: [
+              {
+                rewardPoolId: "7",
+                contentId: "9",
+                roundId: "2",
+              },
+            ],
+          });
+        }
+        if (url.pathname === "/correlation/round-votes") {
+          expect(url.searchParams.get("rewardPoolId")).toBe("7");
+          return jsonResponse({
+            roundContext: {
+              trailingBaseRateUpBps: 2_000,
+              baseRateWindowRounds: 100,
+              questionMetadataRef: {
+                questionMetadataHash: `0x${"2".repeat(64)}`,
+                questionMetadataUri: `https://rateloop.ai/question-metadata/0x${"2".repeat(64)}`,
+                resultSpecHash: `0x${"3".repeat(64)}`,
+                targetAudienceHash: `0x${"4".repeat(64)}`,
+              },
+              settledRoundsInWindow: 12,
             },
-          ],
-        });
-      }
-      if (url.pathname === "/correlation/round-votes") {
-        expect(url.searchParams.get("rewardPoolId")).toBe("7");
-        return jsonResponse({
-          roundContext: {
-            trailingBaseRateUpBps: 2_000,
-            baseRateWindowRounds: 100,
-            questionMetadataRef: {
-              questionMetadataHash: `0x${"2".repeat(64)}`,
-              questionMetadataUri: `https://rateloop.ai/question-metadata/0x${"2".repeat(64)}`,
-              resultSpecHash: `0x${"3".repeat(64)}`,
-              targetAudienceHash: `0x${"4".repeat(64)}`,
-            },
-            settledRoundsInWindow: 12,
-          },
-          items: [
-            {
-              account: "0x0000000000000000000000000000000000000001",
-              identityKey: `0x${"a".repeat(64)}`,
-              commitKey: `0x${"b".repeat(64)}`,
-              isUp: true,
-              stake: "10000000",
-              epochIndex: 0,
-              revealWeight: "10000",
-              verifiedHuman: true,
-              historicalVoteCount: 12,
-              features: [`identity:0x${"a".repeat(64)}`],
-            },
-            {
-              account: "0x0000000000000000000000000000000000000002",
-              identityKey: `0x${"c".repeat(64)}`,
-              commitKey: `0x${"d".repeat(64)}`,
-              isUp: false,
-              stake: "10000000",
-              epochIndex: 1,
-              revealWeight: "2500",
-              verifiedHuman: false,
-              historicalVoteCount: 1,
-              features: [`identity:0x${"c".repeat(64)}`],
-            },
-          ],
-        });
-      }
-      return new Response("not found", { status: 404 });
-    });
+            items: [
+              {
+                account: "0x0000000000000000000000000000000000000001",
+                identityKey: `0x${"a".repeat(64)}`,
+                commitKey: `0x${"b".repeat(64)}`,
+                isUp: true,
+                stake: "10000000",
+                epochIndex: 0,
+                revealWeight: "10000",
+                verifiedHuman: true,
+                historicalVoteCount: 12,
+                features: [`identity:0x${"a".repeat(64)}`],
+              },
+              {
+                account: "0x0000000000000000000000000000000000000002",
+                identityKey: `0x${"c".repeat(64)}`,
+                commitKey: `0x${"d".repeat(64)}`,
+                isUp: false,
+                stake: "10000000",
+                epochIndex: 1,
+                revealWeight: "2500",
+                verifiedHuman: false,
+                historicalVoteCount: 1,
+                features: [`identity:0x${"c".repeat(64)}`],
+              },
+            ],
+          });
+        }
+        if (isSupplementalCandidateEndpoint(url.pathname))
+          return jsonResponse({ items: [] });
+        return new Response("not found", { status: 404 });
+      },
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     const { buildConfiguredCorrelationSnapshotArtifact } = await import(
@@ -153,20 +166,34 @@ describe("automatic correlation artifact builder", () => {
       artifactURI: artifact.correlationEpochs?.[0]?.artifactURI,
     });
 
-    const publicArtifact = parseDataUri(artifact.roundPayoutSnapshots![0]!.artifactURI);
-    expect(publicArtifact.artifactVersion).toBe("rateloop-correlation-artifact-v2");
-    expect(publicArtifact.scorerVersion).toBe("rateloop-correlation-epoch-v2");
-    expect(publicArtifact.roundPayoutSnapshots[0].trailingBaseRateUpBps).toBe(2_000);
+    const publicArtifact = parseDataUri(
+      artifact.roundPayoutSnapshots![0]!.artifactURI,
+    );
+    expect(publicArtifact.artifactVersion).toBe(
+      "rateloop-correlation-artifact-v2",
+    );
+    expect(publicArtifact.scorerVersion).toBe("rateloop-correlation-epoch-v3");
+    expect(publicArtifact.roundPayoutSnapshots[0].trailingBaseRateUpBps).toBe(
+      2_000,
+    );
     expect(publicArtifact.roundPayoutSnapshots[0].questionMetadataRef).toEqual({
       questionMetadataHash: `0x${"2".repeat(64)}`,
       questionMetadataUri: `https://rateloop.ai/question-metadata/0x${"2".repeat(64)}`,
       resultSpecHash: `0x${"3".repeat(64)}`,
       targetAudienceHash: null,
     });
-    expect(publicArtifact.roundPayoutSnapshots[0].payoutWeights).toHaveLength(2);
-    expect(publicArtifact.roundPayoutSnapshots[0].eligibleVotes).toHaveLength(2);
-    expect(publicArtifact.roundPayoutSnapshots[0].excludedVotes).toHaveLength(0);
-    expect(publicArtifact.roundPayoutSnapshots[0].payoutWeights[0]).toMatchObject({
+    expect(publicArtifact.roundPayoutSnapshots[0].payoutWeights).toHaveLength(
+      2,
+    );
+    expect(publicArtifact.roundPayoutSnapshots[0].eligibleVotes).toHaveLength(
+      2,
+    );
+    expect(publicArtifact.roundPayoutSnapshots[0].excludedVotes).toHaveLength(
+      0,
+    );
+    expect(
+      publicArtifact.roundPayoutSnapshots[0].payoutWeights[0],
+    ).toMatchObject({
       proof: expect.any(Array),
       effectiveWeight: expect.any(String),
       surpriseBps: 10_000,
@@ -189,7 +216,8 @@ describe("automatic correlation artifact builder", () => {
       errors: [],
     });
     const tamperedArtifact = structuredClone(publicArtifact);
-    tamperedArtifact.roundPayoutSnapshots[0].payoutWeights[0].effectiveWeight = "1";
+    tamperedArtifact.roundPayoutSnapshots[0].payoutWeights[0].effectiveWeight =
+      "1";
     expect(verifyCorrelationArtifact(tamperedArtifact)).toMatchObject({
       ok: false,
       errors: expect.arrayContaining([
@@ -257,6 +285,8 @@ describe("automatic correlation artifact builder", () => {
           ],
         });
       }
+      if (isSupplementalCandidateEndpoint(url.pathname))
+        return jsonResponse({ items: [] });
       return new Response("not found", { status: 404 });
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -272,7 +302,9 @@ describe("automatic correlation artifact builder", () => {
     };
 
     const artifact = await buildConfiguredCorrelationSnapshotArtifact(logger);
-    const publicArtifact = parseDataUri(artifact.roundPayoutSnapshots![0]!.artifactURI);
+    const publicArtifact = parseDataUri(
+      artifact.roundPayoutSnapshots![0]!.artifactURI,
+    );
     const snapshot = publicArtifact.roundPayoutSnapshots[0];
 
     expect(snapshot.eligibleVotes).toHaveLength(1);
@@ -288,6 +320,86 @@ describe("automatic correlation artifact builder", () => {
         roundOpenTime: null,
       },
     ]);
+  });
+
+  it("builds question-bundle payout snapshots from the bundle candidate endpoint", async () => {
+    mockConfig();
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(input.toString());
+      if (url.pathname === "/correlation/round-candidates") {
+        return jsonResponse({ items: [] });
+      }
+      if (url.pathname === "/correlation/bundle-round-candidates") {
+        return jsonResponse({
+          items: [
+            { domain: 4, rewardPoolId: "11", contentId: "11", roundId: "1" },
+          ],
+        });
+      }
+      if (url.pathname === "/correlation/rating-round-candidates") {
+        return jsonResponse({ items: [] });
+      }
+      if (url.pathname === "/correlation/bundle-round-votes") {
+        expect(url.searchParams.get("rewardPoolId")).toBe("11");
+        expect(url.searchParams.get("contentId")).toBe("11");
+        expect(url.searchParams.get("roundId")).toBe("1");
+        return jsonResponse({
+          roundContext: {
+            trailingBaseRateUpBps: 2_000,
+            baseRateWindowRounds: 100,
+            settledRoundsInWindow: 40,
+          },
+          items: [1, 2, 3].map((index) => ({
+            account: `0x000000000000000000000000000000000000000${index}`,
+            identityKey: `0x${String(index).repeat(64)}`,
+            commitKey: `0x${String(index + 3).repeat(64)}`,
+            isUp: index < 3,
+            stake: "10000000",
+            epochIndex: 0,
+            revealWeight: "10000",
+            verifiedHuman: true,
+            historicalVoteCount: 12,
+            features: [`identity:0x${String(index).repeat(64)}`],
+          })),
+        });
+      }
+      return new Response("not found", { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { buildConfiguredCorrelationSnapshotArtifact } = await import(
+      "../correlation-artifact-builder.js"
+    );
+    const logger = {
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    };
+
+    const artifact = await buildConfiguredCorrelationSnapshotArtifact(logger);
+    const publicArtifact = parseDataUri(
+      artifact.roundPayoutSnapshots![0]!.artifactURI,
+    );
+    const snapshot = publicArtifact.roundPayoutSnapshots[0];
+
+    expect(snapshot).toMatchObject({
+      domain: 4,
+      rewardPoolId: "11",
+      contentId: "11",
+      roundId: "1",
+      rawEligibleVoters: 3,
+    });
+    expect(
+      snapshot.payoutWeights.map((weight: { domain: number }) => weight.domain),
+    ).toEqual([4, 4, 4]);
+    expect(
+      fetchMock.mock.calls.some(
+        ([input]) =>
+          new URL(input.toString()).pathname ===
+          "/correlation/bundle-round-votes",
+      ),
+    ).toBe(true);
   });
 
   it("builds non-flat surprise-weighted baseWeights for a non-uniform round", async () => {
@@ -327,6 +439,8 @@ describe("automatic correlation artifact builder", () => {
           ),
         });
       }
+      if (isSupplementalCandidateEndpoint(url.pathname))
+        return jsonResponse({ items: [] });
       return new Response("not found", { status: 404 });
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -342,31 +456,66 @@ describe("automatic correlation artifact builder", () => {
     };
 
     const artifact = await buildConfiguredCorrelationSnapshotArtifact(logger);
-    const publicArtifact = parseDataUri(artifact.roundPayoutSnapshots![0]!.artifactURI);
+    const publicArtifact = parseDataUri(
+      artifact.roundPayoutSnapshots![0]!.artifactURI,
+    );
     const snapshot = publicArtifact.roundPayoutSnapshots[0];
 
-    expect(publicArtifact.artifactVersion).toBe("rateloop-correlation-artifact-v2");
+    expect(publicArtifact.artifactVersion).toBe(
+      "rateloop-correlation-artifact-v2",
+    );
     expect(snapshot.trailingBaseRateUpBps).toBe(2_000);
     // Five UP votes clear the 8-reveal floor and beat the 20% trailing base
     // rate: agreement 5_000 bps, surprise 25_000 bps, baseWeight
     // 5_000 + 5_000 * 25_000 / 10_000.
     expect(
-      snapshot.payoutWeights.map((payoutWeight: { surpriseBps: number }) => payoutWeight.surpriseBps),
-    ).toEqual([25_000, 25_000, 25_000, 25_000, 25_000, 10_000, 10_000, 10_000, 10_000]);
+      snapshot.payoutWeights.map(
+        (payoutWeight: { surpriseBps: number }) => payoutWeight.surpriseBps,
+      ),
+    ).toEqual([
+      25_000, 25_000, 25_000, 25_000, 25_000, 10_000, 10_000, 10_000, 10_000,
+    ]);
     expect(
-      snapshot.payoutWeights.map((payoutWeight: { baseWeight: string }) => payoutWeight.baseWeight),
-    ).toEqual(["17500", "17500", "17500", "17500", "17500", "10000", "10000", "10000", "10000"]);
+      snapshot.payoutWeights.map(
+        (payoutWeight: { baseWeight: string }) => payoutWeight.baseWeight,
+      ),
+    ).toEqual([
+      "17500",
+      "17500",
+      "17500",
+      "17500",
+      "17500",
+      "10000",
+      "10000",
+      "10000",
+      "10000",
+    ]);
     // Independent verified voters keep independenceBps = 10_000, so the
     // surprise-weighted baseWeights flow through to leaves and the total.
     expect(
       snapshot.payoutWeights.map(
-        (payoutWeight: { effectiveWeight: string }) => payoutWeight.effectiveWeight,
+        (payoutWeight: { effectiveWeight: string }) =>
+          payoutWeight.effectiveWeight,
       ),
-    ).toEqual(["17500", "17500", "17500", "17500", "17500", "10000", "10000", "10000", "10000"]);
+    ).toEqual([
+      "17500",
+      "17500",
+      "17500",
+      "17500",
+      "17500",
+      "10000",
+      "10000",
+      "10000",
+      "10000",
+    ]);
     expect(snapshot.totalClaimWeight).toBe("127500");
     expect(artifact.roundPayoutSnapshots?.[0]?.totalClaimWeight).toBe("127500");
     expect(
-      new Set(snapshot.payoutWeights.map((payoutWeight: { leaf: string }) => payoutWeight.leaf)).size,
+      new Set(
+        snapshot.payoutWeights.map(
+          (payoutWeight: { leaf: string }) => payoutWeight.leaf,
+        ),
+      ).size,
     ).toBe(9);
   });
 
@@ -393,6 +542,8 @@ describe("automatic correlation artifact builder", () => {
           })),
         });
       }
+      if (isSupplementalCandidateEndpoint(url.pathname))
+        return jsonResponse({ items: [] });
       return new Response("not found", { status: 404 });
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -408,15 +559,21 @@ describe("automatic correlation artifact builder", () => {
     };
 
     const artifact = await buildConfiguredCorrelationSnapshotArtifact(logger);
-    const publicArtifact = parseDataUri(artifact.roundPayoutSnapshots![0]!.artifactURI);
+    const publicArtifact = parseDataUri(
+      artifact.roundPayoutSnapshots![0]!.artifactURI,
+    );
     const snapshot = publicArtifact.roundPayoutSnapshots[0];
 
     expect(snapshot.trailingBaseRateUpBps).toBeNull();
     expect(
-      snapshot.payoutWeights.map((payoutWeight: { surpriseBps: number }) => payoutWeight.surpriseBps),
+      snapshot.payoutWeights.map(
+        (payoutWeight: { surpriseBps: number }) => payoutWeight.surpriseBps,
+      ),
     ).toEqual([10_000, 10_000, 10_000]);
     expect(
-      snapshot.payoutWeights.map((payoutWeight: { baseWeight: string }) => payoutWeight.baseWeight),
+      snapshot.payoutWeights.map(
+        (payoutWeight: { baseWeight: string }) => payoutWeight.baseWeight,
+      ),
     ).toEqual(["10000", "10000", "10000"]);
   });
 
@@ -438,6 +595,8 @@ describe("automatic correlation artifact builder", () => {
       if (url.pathname === "/correlation/round-votes") {
         return jsonResponse({ items: [] });
       }
+      if (isSupplementalCandidateEndpoint(url.pathname))
+        return jsonResponse({ items: [] });
       return new Response("not found", { status: 404 });
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -463,7 +622,9 @@ describe("automatic correlation artifact builder", () => {
       totalClaimWeight: "0",
       weightRoot: `0x${"0".repeat(64)}`,
     });
-    expect(artifact.correlationEpochs?.[0]?.clusterRoot).toMatch(/^0x[0-9a-f]{64}$/);
+    expect(artifact.correlationEpochs?.[0]?.clusterRoot).toMatch(
+      /^0x[0-9a-f]{64}$/,
+    );
     expect(artifact.correlationEpochs?.[0]?.clusterRoot).not.toBe(
       `0x${"0".repeat(64)}`,
     );
@@ -482,7 +643,11 @@ describe("automatic correlation artifact builder", () => {
           })),
         });
       }
-      return new Response("round votes should not be requested", { status: 500 });
+      if (isSupplementalCandidateEndpoint(url.pathname))
+        return jsonResponse({ items: [] });
+      return new Response("round votes should not be requested", {
+        status: 500,
+      });
     });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -499,7 +664,7 @@ describe("automatic correlation artifact builder", () => {
     const artifact = await buildConfiguredCorrelationSnapshotArtifact(logger);
 
     expect(artifact).toEqual({});
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(logger.warn).toHaveBeenCalledWith(
       "Skipping automatic correlation epoch because one round exceeds maxRoundsPerTick",
       expect.objectContaining({
@@ -511,13 +676,16 @@ describe("automatic correlation artifact builder", () => {
 
   it("rejects oversized Ponder responses before reading the body", async () => {
     mockConfig();
-    const fetchMock = vi.fn(async () => new Response("{}", {
-      status: 200,
-      headers: {
-        "content-length": "5000001",
-        "content-type": "application/json",
-      },
-    }));
+    const fetchMock = vi.fn(
+      async () =>
+        new Response("{}", {
+          status: 200,
+          headers: {
+            "content-length": "5000001",
+            "content-type": "application/json",
+          },
+        }),
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     const { buildConfiguredCorrelationSnapshotArtifact } = await import(
@@ -530,20 +698,20 @@ describe("automatic correlation artifact builder", () => {
       error: vi.fn(),
     };
 
-    await expect(buildConfiguredCorrelationSnapshotArtifact(logger)).rejects.toThrow(
-      "Ponder response too large",
-    );
+    await expect(
+      buildConfiguredCorrelationSnapshotArtifact(logger),
+    ).rejects.toThrow("Ponder response too large");
   });
 
   it("rejects streamed Ponder responses that exceed the byte cap", async () => {
     mockConfig();
-    const fetchMock = vi.fn(async () => new Response(
-      JSON.stringify({ items: [] }).padEnd(5_000_001, " "),
-      {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      },
-    ));
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ items: [] }).padEnd(5_000_001, " "), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     const { buildConfiguredCorrelationSnapshotArtifact } = await import(
@@ -556,9 +724,9 @@ describe("automatic correlation artifact builder", () => {
       error: vi.fn(),
     };
 
-    await expect(buildConfiguredCorrelationSnapshotArtifact(logger)).rejects.toThrow(
-      "Ponder response exceeded",
-    );
+    await expect(
+      buildConfiguredCorrelationSnapshotArtifact(logger),
+    ).rejects.toThrow("Ponder response exceeded");
   });
 
   it("stops vote pagination after the round page cap", async () => {
@@ -579,6 +747,8 @@ describe("automatic correlation artifact builder", () => {
       if (url.pathname === "/correlation/round-votes") {
         return fullVotePageResponse();
       }
+      if (isSupplementalCandidateEndpoint(url.pathname))
+        return jsonResponse({ items: [] });
       return new Response("not found", { status: 404 });
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -593,11 +763,12 @@ describe("automatic correlation artifact builder", () => {
       error: vi.fn(),
     };
 
-    await expect(buildConfiguredCorrelationSnapshotArtifact(logger)).rejects.toThrow(
-      "more than 50 correlation vote pages",
-    );
-    const voteRequests = fetchMock.mock.calls.filter(([input]) =>
-      new URL(input.toString()).pathname === "/correlation/round-votes"
+    await expect(
+      buildConfiguredCorrelationSnapshotArtifact(logger),
+    ).rejects.toThrow("more than 50 correlation vote pages");
+    const voteRequests = fetchMock.mock.calls.filter(
+      ([input]) =>
+        new URL(input.toString()).pathname === "/correlation/round-votes",
     );
     expect(voteRequests).toHaveLength(50);
   });

@@ -110,12 +110,8 @@ ponder.on(
 ponder.on(
   "QuestionRewardPoolEscrow:RewardPoolWindowActivated",
   async ({ event, context }) => {
-    const {
-      rewardPoolId,
-      bountyOpensAt,
-      bountyClosesAt,
-      feedbackClosesAt,
-    } = event.args;
+    const { rewardPoolId, bountyOpensAt, bountyClosesAt, feedbackClosesAt } =
+      event.args;
 
     await context.db.update(questionRewardPool, { id: rewardPoolId }).set({
       bountyOpensAt,
@@ -198,7 +194,9 @@ ponder.on(
       frontendFeeAllocation,
     } = event.args;
     const id = `${rewardPoolId}-${roundId}`;
-    const existingRound = await context.db.find(questionRewardPoolRound, { id });
+    const existingRound = await context.db.find(questionRewardPoolRound, {
+      id,
+    });
 
     // Re-qualification after a snapshot recovery works through this same insert: the
     // RejectedSnapshotRoundRecovered handler deletes the questionRewardPoolRound row (mirroring
@@ -253,7 +251,9 @@ ponder.on(
   async ({ event, context }) => {
     const { rewardPoolId, contentId, roundId, allocationReturned } = event.args;
     const id = `${rewardPoolId}-${roundId}`;
-    const existingRound = await context.db.find(questionRewardPoolRound, { id });
+    const existingRound = await context.db.find(questionRewardPoolRound, {
+      id,
+    });
 
     // Mirrors QuestionRewardPoolEscrowRecoveryLib.recoverRejectedSnapshotRound: the round is
     // un-qualified (qualifiedRounds -= 1), its allocation flows back into the unallocated
@@ -363,7 +363,9 @@ ponder.on(
       grossAmount,
     } = event.args;
     const id = `${rewardPoolId}-${roundId}-${claimant.toLowerCase()}-${identityKey}`;
-    const existingClaim = await context.db.find(questionRewardPoolClaim, { id });
+    const existingClaim = await context.db.find(questionRewardPoolClaim, {
+      id,
+    });
 
     await context.db
       .insert(questionRewardPoolClaim)
@@ -599,6 +601,11 @@ ponder.on(
         roundSetIndex: Number(roundSetIndex),
         allocation,
         frontendFeeAllocation,
+        rawEligibleCompleters: 0,
+        effectiveParticipantUnits: 0,
+        totalClaimWeight: 0n,
+        correlationEpochId: null,
+        correlationWeightRoot: null,
         claimedAmount: 0n,
         voterClaimedAmount: 0n,
         frontendClaimedAmount: 0n,
@@ -618,6 +625,34 @@ ponder.on(
           updatedAt: event.block.timestamp,
         }));
     }
+  },
+);
+
+ponder.on(
+  "QuestionRewardPoolEscrow:QuestionBundleRoundSetCorrelationSnapshotApplied",
+  async ({ event, context }) => {
+    const {
+      bundleId,
+      roundSetIndex,
+      correlationEpochId,
+      rawEligibleCompleters,
+      effectiveParticipantUnits,
+      totalClaimWeight,
+      weightRoot,
+    } = event.args;
+
+    await context.db
+      .update(questionBundleRoundSet, {
+        id: bundleRoundSetRowId(bundleId, roundSetIndex),
+      })
+      .set({
+        rawEligibleCompleters: Number(rawEligibleCompleters),
+        effectiveParticipantUnits: Number(effectiveParticipantUnits),
+        totalClaimWeight,
+        correlationEpochId,
+        correlationWeightRoot: weightRoot,
+        updatedAt: event.block.timestamp,
+      });
   },
 );
 

@@ -11,7 +11,11 @@ import {
   QUESTION_REWARD_POOL_ESCROW_ABI,
   getConfiguredQuestionRewardPoolEscrowAddress,
 } from "~~/lib/questionRewardPools";
-import { type PonderQuestionRewardClaimCandidate, ponderApi } from "~~/services/ponder/client";
+import {
+  type PonderQuestionBundleRewardClaimCandidate,
+  type PonderQuestionRewardClaimCandidate,
+  ponderApi,
+} from "~~/services/ponder/client";
 
 export function getClaimableQuestionRewardsQueryKey(addresses?: readonly string[], chainId?: number) {
   return ["claimableQuestionRewards", addresses?.join(",") ?? null, chainId ?? null] as const;
@@ -48,7 +52,9 @@ export function getQuestionRewardAsset(candidate: { asset?: number | null; curre
 }
 
 function buildPayoutWeight(
-  payoutWeight?: PonderQuestionRewardClaimCandidate["payoutWeight"],
+  payoutWeight?:
+    | PonderQuestionRewardClaimCandidate["payoutWeight"]
+    | PonderQuestionBundleRewardClaimCandidate["payoutWeight"],
 ): QuestionRewardPayoutWeight | null {
   if (!payoutWeight) return null;
 
@@ -67,7 +73,7 @@ function buildPayoutWeight(
   };
 }
 
-function buildPayoutProof(candidate: PonderQuestionRewardClaimCandidate) {
+function buildPayoutProof(candidate: PonderQuestionRewardClaimCandidate | PonderQuestionBundleRewardClaimCandidate) {
   const payoutWeight = buildPayoutWeight(candidate.payoutWeight);
   const payoutProof = candidate.payoutProof ?? null;
   if (!payoutWeight || !payoutProof) return null;
@@ -154,15 +160,34 @@ export function useClaimableQuestionRewards() {
     });
   }, [address, candidates, escrowAddress]);
   const claimableContracts = useMemo(() => claimableRequests.map(request => request.contract), [claimableRequests]);
-  const bundleClaimableContracts = useMemo(() => {
+  const bundleClaimableRequests = useMemo(() => {
     if (!address || !escrowAddress || bundleCandidates.length === 0) return [];
-    return bundleCandidates.map(candidate => ({
-      address: escrowAddress,
-      abi: QUESTION_REWARD_POOL_ESCROW_ABI,
-      functionName: "claimableQuestionBundleReward" as const,
-      args: [safeBigInt(candidate.bundleId), BigInt(candidate.roundSetIndex ?? 0), address],
-    }));
+    return bundleCandidates.flatMap(candidate => {
+      const payoutProof = buildPayoutProof(candidate);
+      if (candidate.requiresPayoutProof && !payoutProof) return [];
+      const bundleId = safeBigInt(candidate.bundleId);
+      const roundSetIndex = BigInt(candidate.roundSetIndex ?? 0);
+      const contract = payoutProof
+        ? {
+            address: escrowAddress,
+            abi: QUESTION_REWARD_POOL_ESCROW_ABI,
+            functionName: "claimableQuestionBundleRewardWithPayoutWeight" as const,
+            args: [bundleId, roundSetIndex, address, payoutProof.payoutWeight, payoutProof.payoutProof],
+          }
+        : {
+            address: escrowAddress,
+            abi: QUESTION_REWARD_POOL_ESCROW_ABI,
+            functionName: "claimableQuestionBundleReward" as const,
+            args: [bundleId, roundSetIndex, address],
+          };
+
+      return [{ candidate, payoutProof, contract }];
+    });
   }, [address, bundleCandidates, escrowAddress]);
+  const bundleClaimableContracts = useMemo(
+    () => bundleClaimableRequests.map(request => request.contract),
+    [bundleClaimableRequests],
+  );
 
   const {
     data: claimableResults,
@@ -208,8 +233,8 @@ export function useClaimableQuestionRewards() {
   }, [claimableRequests, claimableResults]);
 
   const bundleClaimableItems = useMemo<ClaimableRewardItem[]>(() => {
-    if (!bundleClaimableResults || bundleClaimableResults.length !== bundleCandidates.length) return [];
-    return bundleCandidates.flatMap((candidate, index) => {
+    if (!bundleClaimableResults || bundleClaimableResults.length !== bundleClaimableRequests.length) return [];
+    return bundleClaimableRequests.flatMap(({ candidate, payoutProof }, index) => {
       const resultItem = bundleClaimableResults[index];
       const reward = resultItem?.status === "success" ? safeBigInt(resultItem.result) : 0n;
       if (reward <= 0n) return [];
@@ -223,10 +248,16 @@ export function useClaimableQuestionRewards() {
           asset: getQuestionRewardAsset(candidate),
           title: `Bundle #${bundleId.toString()} round set ${roundSetIndex + 1n}`,
           claimType: "question_bundle_reward" as const,
+          ...(payoutProof
+            ? {
+                payoutWeight: payoutProof.payoutWeight,
+                payoutProof: payoutProof.payoutProof,
+              }
+            : {}),
         },
       ];
     });
-  }, [bundleCandidates, bundleClaimableResults]);
+  }, [bundleClaimableRequests, bundleClaimableResults]);
 
   const allClaimableItems = useMemo(
     () => [...claimableItems, ...bundleClaimableItems],

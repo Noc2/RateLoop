@@ -57,6 +57,7 @@ import { resolveQuestionPayoutProof } from "../payout-proofs.js";
 const VOTE_COOLDOWN_SECONDS = 24 * 60 * 60;
 const SNAPSHOT_STATUS_FINALIZED = 3;
 const PAYOUT_DOMAIN_QUESTION_REWARD = 1;
+const PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD = 4;
 const HEX_BYTES32_PATTERN = /^0x[0-9a-fA-F]{64}$/;
 const ZERO_BYTES32 = `0x${"0".repeat(64)}`;
 const PAYOUT_PROOF_ENRICHMENT_CONCURRENCY = 8;
@@ -87,10 +88,7 @@ type IndexedIdentityBan = {
 };
 
 function voteMatchesVoter(address: `0x${string}`) {
-  return or(
-    eq(vote.voter, address),
-    eq(vote.identityHolder, address),
-  );
+  return or(eq(vote.voter, address), eq(vote.identityHolder, address));
 }
 
 function formatConfidentialitySanction(
@@ -131,6 +129,67 @@ function voteMatchesAnyVoter(addresses: `0x${string}`[]) {
     inArray(vote.voter, addresses),
     inArray(vote.identityHolder, addresses),
   );
+}
+
+async function resolveQuestionBundleClaimPayoutProof(params: {
+  artifactHash: `0x${string}` | null;
+  artifactUri: string | null;
+  bundleId: bigint;
+  roundSetIndex: number;
+  voterAddrs: `0x${string}`[];
+}) {
+  const [firstBundleRound] = await db
+    .select({
+      contentId: questionBundleRound.contentId,
+      roundId: questionBundleRound.roundId,
+    })
+    .from(questionBundleRound)
+    .where(
+      and(
+        eq(questionBundleRound.bundleId, params.bundleId),
+        eq(questionBundleRound.roundSetIndex, params.roundSetIndex),
+        eq(questionBundleRound.bundleIndex, 0),
+      ),
+    )
+    .limit(1);
+
+  if (!firstBundleRound) return null;
+
+  const [firstVote] = await db
+    .select({
+      commitKey: vote.commitKey,
+      identityKey: vote.identityKey,
+    })
+    .from(vote)
+    .where(
+      and(
+        eq(vote.contentId, firstBundleRound.contentId),
+        eq(vote.roundId, firstBundleRound.roundId),
+        voteMatchesAnyVoter(params.voterAddrs),
+        eq(vote.revealed, true),
+        sql`${vote.identityKey} is not null`,
+        sql`${vote.identityHolder} is not null`,
+      ),
+    )
+    .orderBy(
+      asc(vote.commitBlockNumber),
+      asc(vote.commitLogIndex),
+      asc(vote.id),
+    )
+    .limit(1);
+
+  if (!firstVote?.identityKey) return null;
+
+  return resolveQuestionPayoutProof({
+    artifactHash: params.artifactHash,
+    artifactUri: params.artifactUri,
+    domain: PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD,
+    rewardPoolId: params.bundleId,
+    contentId: params.bundleId,
+    roundId: BigInt(params.roundSetIndex) + 1n,
+    commitKey: firstVote.commitKey,
+    identityKey: firstVote.identityKey,
+  });
 }
 
 function worldCredentialKindName(kind: number) {
@@ -183,23 +242,29 @@ async function mapWithConcurrency<T, R>(
 export function registerDataRoutes(app: ApiApp) {
   app.get("/feedback-bonus-pools", async (c) => {
     const contentId = safeBigInt(c.req.query("contentId") ?? "");
-    const roundId = c.req.query("roundId") ? safeBigInt(c.req.query("roundId") ?? "") : null;
+    const roundId = c.req.query("roundId")
+      ? safeBigInt(c.req.query("roundId") ?? "")
+      : null;
     const awarderRaw = c.req.query("awarder");
     const activeOnly = c.req.query("activeOnly") === "true";
     const limit = safeLimit(c.req.query("limit"), 100, 200);
     const offset = safeOffset(c.req.query("offset"));
     if (contentId === null) return c.json({ error: "Invalid contentId" }, 400);
-    if (c.req.query("roundId") && roundId === null) return c.json({ error: "Invalid roundId" }, 400);
+    if (c.req.query("roundId") && roundId === null)
+      return c.json({ error: "Invalid roundId" }, 400);
     if (Number.isNaN(offset)) return c.json({ error: "Invalid offset" }, 400);
 
-    const awarder = awarderRaw?.trim().toLowerCase() as `0x${string}` | undefined;
+    const awarder = awarderRaw?.trim().toLowerCase() as
+      | `0x${string}`
+      | undefined;
     if (awarderRaw && (!awarder || !isValidAddress(awarder))) {
       return c.json({ error: "Invalid awarder address" }, 400);
     }
 
     const nowSeconds = BigInt(Math.floor(Date.now() / 1000));
     const conditions = [eq(feedbackBonusPool.contentId, contentId)];
-    if (roundId !== null) conditions.push(eq(feedbackBonusPool.roundId, roundId));
+    if (roundId !== null)
+      conditions.push(eq(feedbackBonusPool.roundId, roundId));
     if (awarder) conditions.push(eq(feedbackBonusPool.awarder, awarder));
     if (activeOnly) {
       conditions.push(
@@ -227,26 +292,35 @@ export function registerDataRoutes(app: ApiApp) {
 
   app.get("/feedback-bonus-awards", async (c) => {
     const contentId = safeBigInt(c.req.query("contentId") ?? "");
-    const roundId = c.req.query("roundId") ? safeBigInt(c.req.query("roundId") ?? "") : null;
+    const roundId = c.req.query("roundId")
+      ? safeBigInt(c.req.query("roundId") ?? "")
+      : null;
     const feedbackHashesRaw = c.req.query("feedbackHashes");
     const limit = safeLimit(c.req.query("limit"), 100, 200);
     const offset = safeOffset(c.req.query("offset"));
     if (contentId === null) return c.json({ error: "Invalid contentId" }, 400);
-    if (c.req.query("roundId") && roundId === null) return c.json({ error: "Invalid roundId" }, 400);
+    if (c.req.query("roundId") && roundId === null)
+      return c.json({ error: "Invalid roundId" }, 400);
     if (Number.isNaN(offset)) return c.json({ error: "Invalid offset" }, 400);
 
     const feedbackHashes = (feedbackHashesRaw ?? "")
       .split(",")
-      .map(value => value.trim().toLowerCase())
+      .map((value) => value.trim().toLowerCase())
       .filter(Boolean);
-    if (feedbackHashes.some(value => !HEX_BYTES32_PATTERN.test(value))) {
+    if (feedbackHashes.some((value) => !HEX_BYTES32_PATTERN.test(value))) {
       return c.json({ error: "Invalid feedback hash" }, 400);
     }
 
     const conditions = [eq(feedbackBonusAward.contentId, contentId)];
-    if (roundId !== null) conditions.push(eq(feedbackBonusAward.roundId, roundId));
+    if (roundId !== null)
+      conditions.push(eq(feedbackBonusAward.roundId, roundId));
     if (feedbackHashes.length > 0) {
-      conditions.push(inArray(feedbackBonusAward.feedbackHash, feedbackHashes as `0x${string}`[]));
+      conditions.push(
+        inArray(
+          feedbackBonusAward.feedbackHash,
+          feedbackHashes as `0x${string}`[],
+        ),
+      );
     }
 
     const items = await db
@@ -267,12 +341,15 @@ export function registerDataRoutes(app: ApiApp) {
 
   app.get("/content-feedback", async (c) => {
     const contentId = safeBigInt(c.req.query("contentId") ?? "");
-    const roundId = c.req.query("roundId") ? safeBigInt(c.req.query("roundId") ?? "") : null;
+    const roundId = c.req.query("roundId")
+      ? safeBigInt(c.req.query("roundId") ?? "")
+      : null;
     const authorRaw = c.req.query("author");
     const limit = safeLimit(c.req.query("limit"), 100, 200);
     const offset = safeOffset(c.req.query("offset"));
     if (contentId === null) return c.json({ error: "Invalid contentId" }, 400);
-    if (c.req.query("roundId") && roundId === null) return c.json({ error: "Invalid roundId" }, 400);
+    if (c.req.query("roundId") && roundId === null)
+      return c.json({ error: "Invalid roundId" }, 400);
     if (Number.isNaN(offset)) return c.json({ error: "Invalid offset" }, 400);
 
     const author = authorRaw?.trim().toLowerCase() as `0x${string}` | undefined;
@@ -280,7 +357,10 @@ export function registerDataRoutes(app: ApiApp) {
       return c.json({ error: "Invalid author address" }, 400);
     }
 
-    const conditions = [eq(contentFeedback.contentId, contentId), eq(contentFeedback.revealed, true)];
+    const conditions = [
+      eq(contentFeedback.contentId, contentId),
+      eq(contentFeedback.revealed, true),
+    ];
     if (roundId !== null) conditions.push(eq(contentFeedback.roundId, roundId));
     if (author) conditions.push(eq(contentFeedback.author, author));
 
@@ -293,7 +373,11 @@ export function registerDataRoutes(app: ApiApp) {
       .select()
       .from(contentFeedback)
       .where(where)
-      .orderBy(desc(contentFeedback.revealedAt), desc(contentFeedback.updatedAt), desc(contentFeedback.id))
+      .orderBy(
+        desc(contentFeedback.revealedAt),
+        desc(contentFeedback.updatedAt),
+        desc(contentFeedback.id),
+      )
       .limit(limit)
       .offset(offset);
 
@@ -382,6 +466,14 @@ export function registerDataRoutes(app: ApiApp) {
         fundedAmount: questionBundleReward.fundedAmount,
         claimedAmount: questionBundleReward.claimedAmount,
         allocation: questionBundleRoundSet.allocation,
+        rawEligibleCompleters: questionBundleRoundSet.rawEligibleCompleters,
+        effectiveParticipantUnits:
+          questionBundleRoundSet.effectiveParticipantUnits,
+        totalClaimWeight: questionBundleRoundSet.totalClaimWeight,
+        correlationWeightRoot: questionBundleRoundSet.correlationWeightRoot,
+        payoutWeightRoot: roundPayoutSnapshot.weightRoot,
+        payoutArtifactHash: roundPayoutSnapshot.artifactHash,
+        payoutArtifactUri: roundPayoutSnapshot.artifactUri,
         roundSetClaimedAmount: questionBundleRoundSet.claimedAmount,
         requiredCompleters: questionBundleReward.requiredCompleters,
         requiredSettledRounds: questionBundleReward.requiredSettledRounds,
@@ -413,6 +505,16 @@ export function registerDataRoutes(app: ApiApp) {
             questionBundleRound.roundSetIndex,
             questionBundleRoundSet.roundSetIndex,
           ),
+        ),
+      )
+      .leftJoin(
+        roundPayoutSnapshot,
+        and(
+          eq(roundPayoutSnapshot.domain, PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD),
+          eq(roundPayoutSnapshot.rewardPoolId, questionBundleReward.id),
+          eq(roundPayoutSnapshot.contentId, questionBundleReward.id),
+          sql`${roundPayoutSnapshot.roundId} = ${questionBundleRoundSet.roundSetIndex} + 1`,
+          eq(roundPayoutSnapshot.status, SNAPSHOT_STATUS_FINALIZED),
         ),
       )
       .innerJoin(
@@ -457,6 +559,13 @@ export function registerDataRoutes(app: ApiApp) {
         questionBundleReward.fundedAmount,
         questionBundleReward.claimedAmount,
         questionBundleRoundSet.allocation,
+        questionBundleRoundSet.rawEligibleCompleters,
+        questionBundleRoundSet.effectiveParticipantUnits,
+        questionBundleRoundSet.totalClaimWeight,
+        questionBundleRoundSet.correlationWeightRoot,
+        roundPayoutSnapshot.weightRoot,
+        roundPayoutSnapshot.artifactHash,
+        roundPayoutSnapshot.artifactUri,
         questionBundleRoundSet.claimedAmount,
         questionBundleReward.requiredCompleters,
         questionBundleReward.requiredSettledRounds,
@@ -485,8 +594,40 @@ export function registerDataRoutes(app: ApiApp) {
       .limit(limit)
       .offset(offset);
 
+    const enrichedItems = await mapWithConcurrency(
+      items,
+      PAYOUT_PROOF_ENRICHMENT_CONCURRENCY,
+      async (item) => {
+        const requiresPayoutProof =
+          item.correlationWeightRoot != null ||
+          item.payoutWeightRoot != null ||
+          item.payoutArtifactUri != null;
+        const payoutProof = requiresPayoutProof
+          ? await resolveQuestionBundleClaimPayoutProof({
+              artifactHash: item.payoutArtifactHash,
+              artifactUri: item.payoutArtifactUri,
+              bundleId: item.bundleId,
+              roundSetIndex: item.roundSetIndex,
+              voterAddrs,
+            })
+          : null;
+
+        return {
+          ...item,
+          requiresPayoutProof,
+          payoutWeight: payoutProof?.payoutWeight ?? null,
+          payoutProof: payoutProof?.proof ?? null,
+        };
+      },
+    );
+    const claimableItems = enrichedItems.filter(
+      (item) =>
+        !item.requiresPayoutProof ||
+        (item.payoutWeight !== null && item.payoutProof !== null),
+    );
+
     return jsonBig(c, {
-      items: items.map((item) => ({
+      items: claimableItems.map((item) => ({
         ...item,
         currency: item.asset === 0 ? "LREP" : "USDC",
         displayCurrency: item.asset === 0 ? "LREP" : "USD",
@@ -682,14 +823,18 @@ export function registerDataRoutes(app: ApiApp) {
     ]);
 
     const [identityBan] =
-      humanCredential?.provider && humanCredential.nullifierHash !== ZERO_BYTES32
+      humanCredential?.provider &&
+      humanCredential.nullifierHash !== ZERO_BYTES32
         ? await db
             .select()
             .from(raterIdentityBan)
             .where(
               and(
                 eq(raterIdentityBan.provider, humanCredential.provider),
-                eq(raterIdentityBan.nullifierHash, humanCredential.nullifierHash),
+                eq(
+                  raterIdentityBan.nullifierHash,
+                  humanCredential.nullifierHash,
+                ),
               ),
             )
             .limit(1)
@@ -1128,7 +1273,10 @@ export function registerDataRoutes(app: ApiApp) {
           eq(rewardClaim.source, "refund"),
           eq(rewardClaim.contentId, vote.contentId),
           eq(rewardClaim.roundId, vote.roundId),
-          or(eq(rewardClaim.voter, vote.voter), eq(rewardClaim.stakePayer, vote.voter)),
+          or(
+            eq(rewardClaim.voter, vote.voter),
+            eq(rewardClaim.stakePayer, vote.voter),
+          ),
         ),
       )
       .where(where)
@@ -1295,12 +1443,17 @@ export function registerDataRoutes(app: ApiApp) {
         ),
       ),
     ];
-    if (contentIds.length > 0) bountyConditions.push(inArray(vote.contentId, contentIds));
+    if (contentIds.length > 0)
+      bountyConditions.push(inArray(vote.contentId, contentIds));
 
     const feedbackConditions = [
       inArray(contentFeedback.author, voterAddrs),
       eq(contentFeedback.revealed, true),
-      inArray(round.state, [ROUND_STATE.Settled, ROUND_STATE.Tied, ROUND_STATE.RevealFailed]),
+      inArray(round.state, [
+        ROUND_STATE.Settled,
+        ROUND_STATE.Tied,
+        ROUND_STATE.RevealFailed,
+      ]),
       eq(feedbackBonusPool.forfeited, false),
       sql`${feedbackBonusPool.remainingAmount} > 0`,
       sql`${feedbackBonusPool.awardDeadline} >= ${nowSeconds}`,
@@ -1308,7 +1461,8 @@ export function registerDataRoutes(app: ApiApp) {
       sql`${contentFeedback.committedAt} <= ${feedbackBonusPool.feedbackClosesAt}`,
       sql`${feedbackBonusAward.id} is null`,
     ];
-    if (contentIds.length > 0) feedbackConditions.push(inArray(contentFeedback.contentId, contentIds));
+    if (contentIds.length > 0)
+      feedbackConditions.push(inArray(contentFeedback.contentId, contentIds));
 
     const bountyRows = await db
       .select({
@@ -1356,16 +1510,16 @@ export function registerDataRoutes(app: ApiApp) {
           eq(questionRewardPoolClaim.identityKey, vote.identityKey),
         ),
       )
-      .where(
-        and(...bountyConditions),
-      )
+      .where(and(...bountyConditions))
       .groupBy(vote.contentId);
 
     const feedbackRows = await db
       .select({
         contentId: contentFeedback.contentId,
         pendingFeedbackBonusCount: sql<number>`count(*)`,
-        latestFeedbackBonusRoundId: sql<bigint | null>`max(${contentFeedback.roundId})`,
+        latestFeedbackBonusRoundId: sql<
+          bigint | null
+        >`max(${contentFeedback.roundId})`,
       })
       .from(contentFeedback)
       .innerJoin(
@@ -1389,9 +1543,7 @@ export function registerDataRoutes(app: ApiApp) {
           eq(feedbackBonusAward.feedbackHash, contentFeedback.feedbackHash),
         ),
       )
-      .where(
-        and(...feedbackConditions),
-      )
+      .where(and(...feedbackConditions))
       .groupBy(contentFeedback.contentId);
 
     const statusByContentId = new Map<
@@ -1428,21 +1580,31 @@ export function registerDataRoutes(app: ApiApp) {
       const status = ensureStatus(row.contentId);
       status.pendingBountyCount = Number(row.pendingBountyCount ?? 0);
       status.claimableBountyCount = Number(row.claimableBountyCount ?? 0);
-      status.awaitingBountyAllocationCount = Number(row.awaitingBountyAllocationCount ?? 0);
-      status.awaitingBountyPayoutCount = Number(row.awaitingBountyPayoutCount ?? 0);
+      status.awaitingBountyAllocationCount = Number(
+        row.awaitingBountyAllocationCount ?? 0,
+      );
+      status.awaitingBountyPayoutCount = Number(
+        row.awaitingBountyPayoutCount ?? 0,
+      );
       status.latestBountyRoundId = row.latestBountyRoundId ?? null;
     }
 
     for (const row of feedbackRows) {
       const status = ensureStatus(row.contentId);
-      status.pendingFeedbackBonusCount = Number(row.pendingFeedbackBonusCount ?? 0);
-      status.latestFeedbackBonusRoundId = row.latestFeedbackBonusRoundId ?? null;
+      status.pendingFeedbackBonusCount = Number(
+        row.pendingFeedbackBonusCount ?? 0,
+      );
+      status.latestFeedbackBonusRoundId =
+        row.latestFeedbackBonusRoundId ?? null;
     }
 
     return jsonBig(c, {
       items: Array.from(statusByContentId.values())
-        .filter(item => item.pendingBountyCount > 0 || item.pendingFeedbackBonusCount > 0)
-        .map(item => ({
+        .filter(
+          (item) =>
+            item.pendingBountyCount > 0 || item.pendingFeedbackBonusCount > 0,
+        )
+        .map((item) => ({
           ...item,
           hasPendingBounty: item.pendingBountyCount > 0,
           hasPendingFeedbackBonus: item.pendingFeedbackBonusCount > 0,
@@ -1579,8 +1741,8 @@ export function registerDataRoutes(app: ApiApp) {
       async (item) => {
         const requiresPayoutProof =
           item.correlationWeightRoot != null ||
-            item.payoutWeightRoot != null ||
-            item.payoutArtifactUri != null;
+          item.payoutWeightRoot != null ||
+          item.payoutArtifactUri != null;
         const payoutProof = requiresPayoutProof
           ? await resolveQuestionPayoutProof({
               artifactHash: item.payoutArtifactHash,
@@ -1603,7 +1765,9 @@ export function registerDataRoutes(app: ApiApp) {
       },
     );
     const claimableItems = enrichedItems.filter(
-      item => !item.requiresPayoutProof || (item.payoutWeight !== null && item.payoutProof !== null),
+      (item) =>
+        !item.requiresPayoutProof ||
+        (item.payoutWeight !== null && item.payoutProof !== null),
     );
 
     return jsonBig(c, {

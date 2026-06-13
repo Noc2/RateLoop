@@ -66,7 +66,9 @@ export async function verifyCorrelationArtifactFile(
   return verifyCorrelationArtifactJson(await readFile(path, "utf8"));
 }
 
-export function verifyCorrelationArtifactJson(json: string): VerificationResult {
+export function verifyCorrelationArtifactJson(
+  json: string,
+): VerificationResult {
   return verifyCorrelationArtifact(JSON.parse(json));
 }
 
@@ -75,16 +77,28 @@ export function verifyCorrelationArtifact(
 ): VerificationResult {
   const errors: string[] = [];
   const artifactHash = canonicalJsonHash(artifact);
-  const record = requireRecord(artifact, "artifact", errors) as PublicCorrelationArtifact | null;
+  const record = requireRecord(
+    artifact,
+    "artifact",
+    errors,
+  ) as PublicCorrelationArtifact | null;
   if (!record) {
     return emptyResult(artifactHash, errors);
   }
 
   const chainId = readPositiveBigInt(record.chainId, "chainId", errors);
-  const oracleAddress = readAddress(record.oracleAddress, "oracleAddress", errors);
+  const oracleAddress = readAddress(
+    record.oracleAddress,
+    "oracleAddress",
+    errors,
+  );
   const params = readScoringParams(record.parameters, errors);
   const parameterHash = params ? correlationParameterHash(params) : null;
-  const rounds = readArray(record.roundPayoutSnapshots, "roundPayoutSnapshots", errors)
+  const rounds = readArray(
+    record.roundPayoutSnapshots,
+    "roundPayoutSnapshots",
+    errors,
+  )
     .map((value, index) => readRoundSnapshot(value, index, errors))
     .filter((round): round is NormalizedRoundSnapshot => round !== null);
 
@@ -94,7 +108,11 @@ export function verifyCorrelationArtifact(
     }
   }
 
-  const epochs = readArray(record.correlationEpochs, "correlationEpochs", errors);
+  const epochs = readArray(
+    record.correlationEpochs,
+    "correlationEpochs",
+    errors,
+  );
   if (parameterHash) {
     verifyEpochs(epochs, rounds, parameterHash, errors);
   }
@@ -134,7 +152,9 @@ function readScoringParams(
     correlationParameterHash(params);
     return params;
   } catch (error) {
-    errors.push(`parameters: ${error instanceof Error ? error.message : String(error)}`);
+    errors.push(
+      `parameters: ${error instanceof Error ? error.message : String(error)}`,
+    );
     return null;
   }
 }
@@ -148,23 +168,77 @@ function readRoundSnapshot(
   const record = requireRecord(value, label, errors);
   if (!record) return null;
 
-  const eligibleVotes = readArray(record.eligibleVotes, `${label}.eligibleVotes`, errors)
-    .map((entry, voteIndex) => readEligibleVote(entry, `${label}.eligibleVotes[${voteIndex}]`, errors))
+  const eligibleVotes = readArray(
+    record.eligibleVotes,
+    `${label}.eligibleVotes`,
+    errors,
+  )
+    .map((entry, voteIndex) =>
+      readEligibleVote(entry, `${label}.eligibleVotes[${voteIndex}]`, errors),
+    )
     .filter((vote): vote is CorrelationVoteInput => vote !== null);
-  const payoutWeights = readArray(record.payoutWeights, `${label}.payoutWeights`, errors)
-    .map((entry, weightIndex) => readPayoutWeight(entry, `${label}.payoutWeights[${weightIndex}]`, errors))
+  const payoutWeights = readArray(
+    record.payoutWeights,
+    `${label}.payoutWeights`,
+    errors,
+  )
+    .map((entry, weightIndex) =>
+      readPayoutWeight(entry, `${label}.payoutWeights[${weightIndex}]`, errors),
+    )
     .filter((weight): weight is NormalizedPayoutWeight => weight !== null);
 
-  const domain = readNonNegativeInteger(record.domain, `${label}.domain`, errors);
-  const rewardPoolId = readPositiveBigInt(record.rewardPoolId, `${label}.rewardPoolId`, errors);
-  const contentId = readPositiveBigInt(record.contentId, `${label}.contentId`, errors);
-  const roundId = readPositiveBigInt(record.roundId, `${label}.roundId`, errors);
-  const correlationEpochId = readPositiveBigInt(record.correlationEpochId, `${label}.correlationEpochId`, errors);
-  const rawEligibleVoters = readNonNegativeInteger(record.rawEligibleVoters, `${label}.rawEligibleVoters`, errors);
-  const effectiveParticipantUnits = readNonNegativeInteger(record.effectiveParticipantUnits, `${label}.effectiveParticipantUnits`, errors);
-  const totalClaimWeight = readNonNegativeBigInt(record.totalClaimWeight, `${label}.totalClaimWeight`, errors);
-  const weightRoot = readHex(record.weightRoot, `${label}.weightRoot`, 32, errors);
-  const reasonRoot = readHex(record.reasonRoot, `${label}.reasonRoot`, 32, errors);
+  const domain = readNonNegativeInteger(
+    record.domain,
+    `${label}.domain`,
+    errors,
+  );
+  const rewardPoolId = readPositiveBigInt(
+    record.rewardPoolId,
+    `${label}.rewardPoolId`,
+    errors,
+  );
+  const contentId = readPositiveBigInt(
+    record.contentId,
+    `${label}.contentId`,
+    errors,
+  );
+  const roundId = readPositiveBigInt(
+    record.roundId,
+    `${label}.roundId`,
+    errors,
+  );
+  const correlationEpochId = readPositiveBigInt(
+    record.correlationEpochId,
+    `${label}.correlationEpochId`,
+    errors,
+  );
+  const rawEligibleVoters = readNonNegativeInteger(
+    record.rawEligibleVoters,
+    `${label}.rawEligibleVoters`,
+    errors,
+  );
+  const effectiveParticipantUnits = readNonNegativeInteger(
+    record.effectiveParticipantUnits,
+    `${label}.effectiveParticipantUnits`,
+    errors,
+  );
+  const totalClaimWeight = readNonNegativeBigInt(
+    record.totalClaimWeight,
+    `${label}.totalClaimWeight`,
+    errors,
+  );
+  const weightRoot = readHex(
+    record.weightRoot,
+    `${label}.weightRoot`,
+    32,
+    errors,
+  );
+  const reasonRoot = readHex(
+    record.reasonRoot,
+    `${label}.reasonRoot`,
+    32,
+    errors,
+  );
   const trailingBaseRateUpBps = readTrailingBaseRateUpBps(
     record.trailingBaseRateUpBps,
     `${label}.trailingBaseRateUpBps`,
@@ -230,16 +304,31 @@ function readEligibleVote(
   const record = requireRecord(value, label, errors);
   if (!record) return null;
   const account = readAddress(record.account, `${label}.account`, errors);
-  const identityKey = readHex(record.identityKey, `${label}.identityKey`, 32, errors);
-  const commitKey = readHex(record.commitKey, `${label}.commitKey`, 32, errors);
-  const historicalVoteCount = readNonNegativeInteger(record.historicalVoteCount, `${label}.historicalVoteCount`, errors);
-  const features = readArray(record.features, `${label}.features`, errors).filter(
-    (feature): feature is string => typeof feature === "string",
+  const identityKey = readHex(
+    record.identityKey,
+    `${label}.identityKey`,
+    32,
+    errors,
   );
+  const commitKey = readHex(record.commitKey, `${label}.commitKey`, 32, errors);
+  const historicalVoteCount = readNonNegativeInteger(
+    record.historicalVoteCount,
+    `${label}.historicalVoteCount`,
+    errors,
+  );
+  const features = readArray(
+    record.features,
+    `${label}.features`,
+    errors,
+  ).filter((feature): feature is string => typeof feature === "string");
   const revealWeight =
     record.revealWeight === undefined || record.revealWeight === null
       ? null
-      : readNonNegativeBigInt(record.revealWeight, `${label}.revealWeight`, errors);
+      : readNonNegativeBigInt(
+          record.revealWeight,
+          `${label}.revealWeight`,
+          errors,
+        );
   if (!account || !identityKey || !commitKey || historicalVoteCount === null) {
     return null;
   }
@@ -262,21 +351,65 @@ function readPayoutWeight(
 ): NormalizedPayoutWeight | null {
   const record = requireRecord(value, label, errors);
   if (!record) return null;
-  const domain = readNonNegativeInteger(record.domain, `${label}.domain`, errors);
-  const rewardPoolId = readPositiveBigInt(record.rewardPoolId, `${label}.rewardPoolId`, errors);
-  const contentId = readPositiveBigInt(record.contentId, `${label}.contentId`, errors);
-  const roundId = readPositiveBigInt(record.roundId, `${label}.roundId`, errors);
+  const domain = readNonNegativeInteger(
+    record.domain,
+    `${label}.domain`,
+    errors,
+  );
+  const rewardPoolId = readPositiveBigInt(
+    record.rewardPoolId,
+    `${label}.rewardPoolId`,
+    errors,
+  );
+  const contentId = readPositiveBigInt(
+    record.contentId,
+    `${label}.contentId`,
+    errors,
+  );
+  const roundId = readPositiveBigInt(
+    record.roundId,
+    `${label}.roundId`,
+    errors,
+  );
   const commitKey = readHex(record.commitKey, `${label}.commitKey`, 32, errors);
-  const identityKey = readHex(record.identityKey, `${label}.identityKey`, 32, errors);
+  const identityKey = readHex(
+    record.identityKey,
+    `${label}.identityKey`,
+    32,
+    errors,
+  );
   const account = readAddress(record.account, `${label}.account`, errors);
-  const baseWeight = readPositiveBigInt(record.baseWeight, `${label}.baseWeight`, errors);
-  const independenceBps = readNonNegativeInteger(record.independenceBps, `${label}.independenceBps`, errors);
-  const effectiveWeight = readNonNegativeBigInt(record.effectiveWeight, `${label}.effectiveWeight`, errors);
-  const surpriseBps = readNonNegativeInteger(record.surpriseBps, `${label}.surpriseBps`, errors);
-  const reasonHash = readHex(record.reasonHash, `${label}.reasonHash`, 32, errors);
+  const baseWeight = readPositiveBigInt(
+    record.baseWeight,
+    `${label}.baseWeight`,
+    errors,
+  );
+  const independenceBps = readNonNegativeInteger(
+    record.independenceBps,
+    `${label}.independenceBps`,
+    errors,
+  );
+  const effectiveWeight = readNonNegativeBigInt(
+    record.effectiveWeight,
+    `${label}.effectiveWeight`,
+    errors,
+  );
+  const surpriseBps = readNonNegativeInteger(
+    record.surpriseBps,
+    `${label}.surpriseBps`,
+    errors,
+  );
+  const reasonHash = readHex(
+    record.reasonHash,
+    `${label}.reasonHash`,
+    32,
+    errors,
+  );
   const leaf = readHex(record.leaf, `${label}.leaf`, 32, errors);
   const proof = readArray(record.proof, `${label}.proof`, errors)
-    .map((entry, proofIndex) => readHex(entry, `${label}.proof[${proofIndex}]`, 32, errors))
+    .map((entry, proofIndex) =>
+      readHex(entry, `${label}.proof[${proofIndex}]`, 32, errors),
+    )
     .filter((entry): entry is Hex => entry !== null);
 
   if (
@@ -336,40 +469,121 @@ function verifyRoundSnapshot(
       params,
     });
   } catch (error) {
-    errors.push(`${label}: ${error instanceof Error ? error.message : String(error)}`);
+    errors.push(
+      `${label}: ${error instanceof Error ? error.message : String(error)}`,
+    );
     return;
   }
 
-  compareValue(label, "rawEligibleVoters", round.rawEligibleVoters, scored.rawEligibleVoters, errors);
-  compareValue(label, "effectiveParticipantUnits", round.effectiveParticipantUnits, scored.effectiveParticipantUnits, errors);
-  compareValue(label, "totalClaimWeight", round.totalClaimWeight.toString(), scored.totalClaimWeight.toString(), errors);
-  compareValue(label, "weightRoot", round.weightRoot.toLowerCase(), scored.weightRoot.toLowerCase(), errors);
-  compareValue(label, "reasonRoot", round.reasonRoot.toLowerCase(), scored.reasonRoot.toLowerCase(), errors);
+  compareValue(
+    label,
+    "rawEligibleVoters",
+    round.rawEligibleVoters,
+    scored.rawEligibleVoters,
+    errors,
+  );
+  compareValue(
+    label,
+    "effectiveParticipantUnits",
+    round.effectiveParticipantUnits,
+    scored.effectiveParticipantUnits,
+    errors,
+  );
+  compareValue(
+    label,
+    "totalClaimWeight",
+    round.totalClaimWeight.toString(),
+    scored.totalClaimWeight.toString(),
+    errors,
+  );
+  compareValue(
+    label,
+    "weightRoot",
+    round.weightRoot.toLowerCase(),
+    scored.weightRoot.toLowerCase(),
+    errors,
+  );
+  compareValue(
+    label,
+    "reasonRoot",
+    round.reasonRoot.toLowerCase(),
+    scored.reasonRoot.toLowerCase(),
+    errors,
+  );
 
   const expectedByKey = new Map(
-    scored.leaves.map((leaf) => [payoutKey(leaf.commitKey, leaf.identityKey), leaf]),
+    scored.leaves.map((leaf) => [
+      payoutKey(leaf.commitKey, leaf.identityKey),
+      leaf,
+    ]),
   );
   const leaves = scored.leaves.map((leaf) => leaf.leaf);
   for (const actual of round.payoutWeights) {
-    const expected = expectedByKey.get(payoutKey(actual.commitKey, actual.identityKey));
+    const expected = expectedByKey.get(
+      payoutKey(actual.commitKey, actual.identityKey),
+    );
     if (!expected) {
-      errors.push(`${label}: unexpected payout weight ${actual.commitKey}/${actual.identityKey}`);
+      errors.push(
+        `${label}: unexpected payout weight ${actual.commitKey}/${actual.identityKey}`,
+      );
       continue;
     }
-    compareValue(label, "leaf", actual.leaf.toLowerCase(), expected.leaf.toLowerCase(), errors);
-    compareValue(label, "baseWeight", actual.baseWeight.toString(), expected.baseWeight.toString(), errors);
-    compareValue(label, "independenceBps", actual.independenceBps, expected.independenceBps, errors);
-    compareValue(label, "effectiveWeight", actual.effectiveWeight.toString(), expected.effectiveWeight.toString(), errors);
-    compareValue(label, "surpriseBps", actual.surpriseBps, expected.surpriseBps, errors);
-    compareValue(label, "reasonHash", actual.reasonHash.toLowerCase(), expected.reasonHash.toLowerCase(), errors);
-    const expectedProof = merkleProof(leaves, expected.leaf).map((entry) => entry.toLowerCase());
+    compareValue(
+      label,
+      "leaf",
+      actual.leaf.toLowerCase(),
+      expected.leaf.toLowerCase(),
+      errors,
+    );
+    compareValue(
+      label,
+      "baseWeight",
+      actual.baseWeight.toString(),
+      expected.baseWeight.toString(),
+      errors,
+    );
+    compareValue(
+      label,
+      "independenceBps",
+      actual.independenceBps,
+      expected.independenceBps,
+      errors,
+    );
+    compareValue(
+      label,
+      "effectiveWeight",
+      actual.effectiveWeight.toString(),
+      expected.effectiveWeight.toString(),
+      errors,
+    );
+    compareValue(
+      label,
+      "surpriseBps",
+      actual.surpriseBps,
+      expected.surpriseBps,
+      errors,
+    );
+    compareValue(
+      label,
+      "reasonHash",
+      actual.reasonHash.toLowerCase(),
+      expected.reasonHash.toLowerCase(),
+      errors,
+    );
+    const expectedProof = merkleProof(leaves, expected.leaf).map((entry) =>
+      entry.toLowerCase(),
+    );
     const actualProof = actual.proof.map((entry) => entry.toLowerCase());
     if (JSON.stringify(actualProof) !== JSON.stringify(expectedProof)) {
-      errors.push(`${label}: Merkle proof mismatch for ${actual.commitKey}/${actual.identityKey}`);
+      errors.push(
+        `${label}: Merkle proof mismatch for ${actual.commitKey}/${actual.identityKey}`,
+      );
     }
   }
   if (round.payoutWeights.length !== scored.leaves.length) {
-    errors.push(`${label}: payoutWeights length ${round.payoutWeights.length} != ${scored.leaves.length}`);
+    errors.push(
+      `${label}: payoutWeights length ${round.payoutWeights.length} != ${scored.leaves.length}`,
+    );
   }
 }
 
@@ -383,14 +597,37 @@ function verifyEpochs(
     const label = `correlationEpochs[${index}]`;
     const epoch = requireRecord(epochs[index], label, errors);
     if (!epoch) continue;
-    const epochId = readPositiveBigInt(epoch.epochId, `${label}.epochId`, errors);
-    const clusterRoot = readHex(epoch.clusterRoot, `${label}.clusterRoot`, 32, errors);
-    const epochParameterHash = readHex(epoch.parameterHash, `${label}.parameterHash`, 32, errors);
+    const epochId = readPositiveBigInt(
+      epoch.epochId,
+      `${label}.epochId`,
+      errors,
+    );
+    const clusterRoot = readHex(
+      epoch.clusterRoot,
+      `${label}.clusterRoot`,
+      32,
+      errors,
+    );
+    const epochParameterHash = readHex(
+      epoch.parameterHash,
+      `${label}.parameterHash`,
+      32,
+      errors,
+    );
     if (epochId === null || !clusterRoot || !epochParameterHash) continue;
-    compareValue(label, "parameterHash", epochParameterHash.toLowerCase(), parameterHash.toLowerCase(), errors);
-    const epochRounds = rounds.filter((round) => round.correlationEpochId === epochId);
+    compareValue(
+      label,
+      "parameterHash",
+      epochParameterHash.toLowerCase(),
+      parameterHash.toLowerCase(),
+      errors,
+    );
+    const epochRounds = rounds.filter(
+      (round) => round.correlationEpochId === epochId,
+    );
     const expectedClusterRoot = hashJson(
       epochRounds.map((round) => ({
+        domain: round.domain,
         rewardPoolId: round.rewardPoolId.toString(),
         contentId: round.contentId.toString(),
         roundId: round.roundId.toString(),
@@ -398,7 +635,13 @@ function verifyEpochs(
         reasonRoot: round.reasonRoot,
       })),
     );
-    compareValue(label, "clusterRoot", clusterRoot.toLowerCase(), expectedClusterRoot.toLowerCase(), errors);
+    compareValue(
+      label,
+      "clusterRoot",
+      clusterRoot.toLowerCase(),
+      expectedClusterRoot.toLowerCase(),
+      errors,
+    );
   }
 }
 
@@ -461,7 +704,11 @@ function readHex(
   bytes: number,
   errors: string[],
 ): Hex | null {
-  if (typeof value !== "string" || !isHex(value) || value.length !== 2 + bytes * 2) {
+  if (
+    typeof value !== "string" ||
+    !isHex(value) ||
+    value.length !== 2 + bytes * 2
+  ) {
     errors.push(`${label} must be ${bytes}-byte hex`);
     return null;
   }
@@ -514,7 +761,8 @@ function readNonNegativeInteger(
 
 function parseBigIntLike(value: unknown): bigint | null {
   if (typeof value === "bigint") return value;
-  if (typeof value === "number" && Number.isSafeInteger(value)) return BigInt(value);
+  if (typeof value === "number" && Number.isSafeInteger(value))
+    return BigInt(value);
   if (typeof value === "string" && /^\d+$/u.test(value)) return BigInt(value);
   return null;
 }
@@ -522,7 +770,9 @@ function parseBigIntLike(value: unknown): bigint | null {
 if (import.meta.url === `file://${process.argv[1]}`) {
   const artifactPath = process.argv[2];
   if (!artifactPath) {
-    console.error("Usage: tsx src/correlation-artifact-verifier.ts <artifact.json>");
+    console.error(
+      "Usage: tsx src/correlation-artifact-verifier.ts <artifact.json>",
+    );
     process.exit(1);
   }
   verifyCorrelationArtifactFile(artifactPath)

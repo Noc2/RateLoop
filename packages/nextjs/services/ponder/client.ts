@@ -684,6 +684,12 @@ export interface PonderQuestionBundleRewardClaimCandidate {
   fundedAmount: string;
   claimedAmount: string;
   allocation: string;
+  rawEligibleCompleters?: number | null;
+  effectiveParticipantUnits?: number | null;
+  totalClaimWeight?: string | null;
+  correlationWeightRoot?: `0x${string}` | null;
+  payoutWeightRoot?: `0x${string}` | null;
+  payoutArtifactUri?: string | null;
   roundSetClaimedAmount: string;
   requiredCompleters: number;
   requiredSettledRounds: number;
@@ -700,6 +706,21 @@ export interface PonderQuestionBundleRewardClaimCandidate {
   feedbackWindowSeconds: number;
   expiresAt: string;
   updatedAt: string;
+  requiresPayoutProof?: boolean;
+  payoutWeight?: {
+    domain: number;
+    rewardPoolId: string;
+    contentId: string;
+    roundId: string;
+    commitKey: `0x${string}`;
+    identityKey: `0x${string}`;
+    account: `0x${string}`;
+    baseWeight: string;
+    independenceBps: number;
+    effectiveWeight: string;
+    reasonHash: `0x${string}`;
+  } | null;
+  payoutProof?: `0x${string}`[] | null;
   currency: PonderRewardCurrency;
   displayCurrency: "LREP" | "USD";
   decimals: 6;

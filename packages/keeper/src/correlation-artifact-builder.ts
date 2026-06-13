@@ -1,4 +1,5 @@
 import {
+  PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD,
   PAYOUT_DOMAIN_PUBLIC_RATING,
   PAYOUT_DOMAIN_QUESTION_REWARD,
   correlationParameterHash,
@@ -146,21 +147,27 @@ const loggedAutomaticArtifactHashes = new Set<string>();
 export async function buildConfiguredCorrelationSnapshotArtifact(
   logger: Logger,
 ): Promise<CorrelationSnapshotArtifactFile> {
-  return (await buildConfiguredCorrelationSnapshotArtifactDetails(logger)).artifact;
+  return (await buildConfiguredCorrelationSnapshotArtifactDetails(logger))
+    .artifact;
 }
 
 async function buildConfiguredCorrelationSnapshotArtifactDetails(
   logger: Logger,
 ): Promise<BuiltConfiguredCorrelationSnapshotArtifact> {
   const candidates = await loadConfiguredCorrelationSnapshotCandidates(logger);
-  return buildConfiguredCorrelationSnapshotArtifactForCandidates(candidates, logger);
+  return buildConfiguredCorrelationSnapshotArtifactForCandidates(
+    candidates,
+    logger,
+  );
 }
 
 export async function loadConfiguredCorrelationSnapshotCandidates(
   logger: Logger,
 ): Promise<CorrelationRoundCandidate[]> {
   if (!config.ponderBaseUrl) {
-    throw new Error("PONDER_BASE_URL is required for automatic correlation snapshots");
+    throw new Error(
+      "PONDER_BASE_URL is required for automatic correlation snapshots",
+    );
   }
 
   const candidateWindow = await fetchRoundCandidateWindow(
@@ -190,15 +197,15 @@ export async function buildConfiguredCorrelationSnapshotArtifactForCandidates(
   }
 
   if (!config.ponderBaseUrl) {
-    throw new Error("PONDER_BASE_URL is required for automatic correlation snapshots");
+    throw new Error(
+      "PONDER_BASE_URL is required for automatic correlation snapshots",
+    );
   }
   const publicRounds: PublicRoundPayoutSnapshot[] = [];
 
   for (const candidate of candidates) {
-    const { excludedVotes, questionMetadataRef, votes, trailingBaseRateUpBps } = await fetchRoundVotes(
-      config.ponderBaseUrl,
-      candidate,
-    );
+    const { excludedVotes, questionMetadataRef, votes, trailingBaseRateUpBps } =
+      await fetchRoundVotes(config.ponderBaseUrl, candidate);
 
     const scored =
       candidate.domain === PAYOUT_DOMAIN_PUBLIC_RATING
@@ -212,7 +219,7 @@ export async function buildConfiguredCorrelationSnapshotArtifactForCandidates(
         : scoreRoundPayoutWeights({
             chainId: BigInt(config.chainId),
             oracleAddress: config.contracts.clusterPayoutOracle,
-            domain: PAYOUT_DOMAIN_QUESTION_REWARD,
+            domain: candidate.domain,
             rewardPoolId: candidate.rewardPoolId,
             contentId: candidate.contentId,
             roundId: candidate.roundId,
@@ -234,47 +241,49 @@ export async function buildConfiguredCorrelationSnapshotArtifactForCandidates(
       reasonRoot: scored.reasonRoot,
       questionMetadataRef,
       trailingBaseRateUpBps,
-      eligibleVotes: votes.map((vote): PublicCorrelationVoteInput => ({
-        account: vote.account,
-        identityKey: vote.identityKey,
-        commitKey: vote.commitKey,
-        verifiedHuman: vote.verifiedHuman,
-        historicalVoteCount: vote.historicalVoteCount,
-        features: [...vote.features].sort(),
-        isUp: typeof vote.isUp === "boolean" ? vote.isUp : null,
-        revealWeight:
-          typeof vote.revealWeight === "bigint"
-            ? vote.revealWeight.toString()
-            : null,
-        stake:
-          typeof vote.stake === "bigint"
-            ? vote.stake.toString()
-            : null,
-        epochIndex:
-          typeof vote.epochIndex === "number" && Number.isSafeInteger(vote.epochIndex)
-            ? vote.epochIndex
-            : null,
-      })),
+      eligibleVotes: votes.map(
+        (vote): PublicCorrelationVoteInput => ({
+          account: vote.account,
+          identityKey: vote.identityKey,
+          commitKey: vote.commitKey,
+          verifiedHuman: vote.verifiedHuman,
+          historicalVoteCount: vote.historicalVoteCount,
+          features: [...vote.features].sort(),
+          isUp: typeof vote.isUp === "boolean" ? vote.isUp : null,
+          revealWeight:
+            typeof vote.revealWeight === "bigint"
+              ? vote.revealWeight.toString()
+              : null,
+          stake: typeof vote.stake === "bigint" ? vote.stake.toString() : null,
+          epochIndex:
+            typeof vote.epochIndex === "number" &&
+            Number.isSafeInteger(vote.epochIndex)
+              ? vote.epochIndex
+              : null,
+        }),
+      ),
       excludedVotes,
-      payoutWeights: scored.leaves.map((leaf): PublicPayoutWeight => ({
-        domain: leaf.domain,
-        rewardPoolId: leaf.rewardPoolId.toString(),
-        contentId: leaf.contentId.toString(),
-        roundId: leaf.roundId.toString(),
-        commitKey: leaf.commitKey,
-        identityKey: leaf.identityKey,
-        account: leaf.account,
-        baseWeight: leaf.baseWeight.toString(),
-        independenceBps: leaf.independenceBps,
-        effectiveWeight: leaf.effectiveWeight.toString(),
-        surpriseBps: leaf.surpriseBps,
-        reasonHash: leaf.reasonHash,
-        leaf: leaf.leaf,
-        proof: merkleProof(leaves, leaf.leaf),
-        clusterId: leaf.clusterId,
-        verifiedHuman: leaf.verifiedHuman,
-        reasons: leaf.reasons,
-      })),
+      payoutWeights: scored.leaves.map(
+        (leaf): PublicPayoutWeight => ({
+          domain: leaf.domain,
+          rewardPoolId: leaf.rewardPoolId.toString(),
+          contentId: leaf.contentId.toString(),
+          roundId: leaf.roundId.toString(),
+          commitKey: leaf.commitKey,
+          identityKey: leaf.identityKey,
+          account: leaf.account,
+          baseWeight: leaf.baseWeight.toString(),
+          independenceBps: leaf.independenceBps,
+          effectiveWeight: leaf.effectiveWeight.toString(),
+          surpriseBps: leaf.surpriseBps,
+          reasonHash: leaf.reasonHash,
+          leaf: leaf.leaf,
+          proof: merkleProof(leaves, leaf.leaf),
+          clusterId: leaf.clusterId,
+          verifiedHuman: leaf.verifiedHuman,
+          reasons: leaf.reasons,
+        }),
+      ),
     });
   }
 
@@ -351,7 +360,10 @@ export function correlationSnapshotCandidateFingerprint(
       roundId: candidate.roundId.toString(),
     }))
     .sort((left, right) => {
-      const roundCompare = bigintCompare(BigInt(left.roundId), BigInt(right.roundId));
+      const roundCompare = bigintCompare(
+        BigInt(left.roundId),
+        BigInt(right.roundId),
+      );
       if (roundCompare !== 0) return roundCompare;
       const domainCompare = left.domain - right.domain;
       if (domainCompare !== 0) return domainCompare;
@@ -363,14 +375,18 @@ export function correlationSnapshotCandidateFingerprint(
       return bigintCompare(BigInt(left.contentId), BigInt(right.contentId));
     });
 
-  return keccak256(toBytes(canonicalJson({
-    version: CANDIDATE_FINGERPRINT_VERSION,
-    chainId: config.chainId,
-    oracleAddress: config.contracts.clusterPayoutOracle,
-    scorerVersion: params.scorerVersion,
-    parameterHash: correlationParameterHash(params),
-    candidates: normalizedCandidates,
-  })));
+  return keccak256(
+    toBytes(
+      canonicalJson({
+        version: CANDIDATE_FINGERPRINT_VERSION,
+        chainId: config.chainId,
+        oracleAddress: config.contracts.clusterPayoutOracle,
+        scorerVersion: params.scorerVersion,
+        parameterHash: correlationParameterHash(params),
+        candidates: normalizedCandidates,
+      }),
+    ),
+  );
 }
 
 export async function restoreConfiguredCorrelationSnapshotArtifactFromCanonicalJson(
@@ -378,7 +394,10 @@ export async function restoreConfiguredCorrelationSnapshotArtifactFromCanonicalJ
 ): Promise<BuiltConfiguredCorrelationSnapshotArtifact> {
   const stored = await materializeCorrelationArtifactCanonicalJson(canonical);
   const publicArtifact = JSON.parse(canonical) as PublicCorrelationArtifact;
-  const artifact = buildSnapshotArtifactFromStoredPublicArtifact(publicArtifact, stored);
+  const artifact = buildSnapshotArtifactFromStoredPublicArtifact(
+    publicArtifact,
+    stored,
+  );
   return {
     artifact,
     artifactHash: stored.artifactHash,
@@ -392,7 +411,9 @@ export async function restoreConfiguredCorrelationSnapshotArtifactFromCanonicalJ
 }
 
 interface PublicCorrelationArtifact {
-  correlationEpochs?: Array<Omit<CorrelationEpochArtifact, "artifactHash" | "artifactURI">>;
+  correlationEpochs?: Array<
+    Omit<CorrelationEpochArtifact, "artifactHash" | "artifactURI">
+  >;
   roundPayoutSnapshots?: PublicRoundPayoutSnapshot[];
 }
 
@@ -492,10 +513,11 @@ async function fetchRoundCandidateWindow(
   const targetCount = maxRoundsPerTick + 1;
   const endpoints = [
     "/correlation/round-candidates",
+    "/correlation/bundle-round-candidates",
     "/correlation/rating-round-candidates",
   ];
   for (const pathname of endpoints) {
-    for (let offset = 0; candidates.length < targetCount * endpoints.length;) {
+    for (let offset = 0; candidates.length < targetCount * endpoints.length; ) {
       const limit = Math.min(targetCount, 200);
       const url = new URL(pathname, ponderBaseUrl);
       url.searchParams.set("limit", String(limit));
@@ -503,7 +525,9 @@ async function fetchRoundCandidateWindow(
       const response = await fetchJson<CandidateResponse>(url);
       const items = response.items ?? [];
       if (items.length > limit) {
-        throw new Error(`Ponder returned too many correlation candidates: ${items.length} > ${limit}`);
+        throw new Error(
+          `Ponder returned too many correlation candidates: ${items.length} > ${limit}`,
+        );
       }
       candidates.push(...items.map(parseCandidate));
       if (items.length < limit) {
@@ -525,14 +549,24 @@ function selectCompleteEpochCandidates(
   }
 
   const epochRoundId = candidates[0]!.roundId;
-  const epochCandidates = candidates.filter((candidate) => candidate.roundId === epochRoundId);
-  const sawNextEpoch = candidates.some((candidate) => candidate.roundId !== epochRoundId);
-  if (epochCandidates.length > maxRoundsPerTick || (!sawNextEpoch && candidates.length > maxRoundsPerTick)) {
-    logger.warn("Skipping automatic correlation epoch because one round exceeds maxRoundsPerTick", {
-      roundId: epochRoundId.toString(),
-      candidateCountSeen: epochCandidates.length,
-      maxRoundsPerTick,
-    });
+  const epochCandidates = candidates.filter(
+    (candidate) => candidate.roundId === epochRoundId,
+  );
+  const sawNextEpoch = candidates.some(
+    (candidate) => candidate.roundId !== epochRoundId,
+  );
+  if (
+    epochCandidates.length > maxRoundsPerTick ||
+    (!sawNextEpoch && candidates.length > maxRoundsPerTick)
+  ) {
+    logger.warn(
+      "Skipping automatic correlation epoch because one round exceeds maxRoundsPerTick",
+      {
+        roundId: epochRoundId.toString(),
+        candidateCountSeen: epochCandidates.length,
+        maxRoundsPerTick,
+      },
+    );
     return [];
   }
 
@@ -553,7 +587,9 @@ async function fetchRoundVotes(
     const url = new URL(
       candidate.domain === PAYOUT_DOMAIN_PUBLIC_RATING
         ? "/correlation/rating-round-votes"
-        : "/correlation/round-votes",
+        : candidate.domain === PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD
+          ? "/correlation/bundle-round-votes"
+          : "/correlation/round-votes",
       ponderBaseUrl,
     );
     if (candidate.domain !== PAYOUT_DOMAIN_PUBLIC_RATING) {
@@ -566,15 +602,21 @@ async function fetchRoundVotes(
     const response = await fetchJson<VoteResponse>(url);
     const items = response.items ?? [];
     if (items.length > VOTE_PAGE_SIZE) {
-      throw new Error(`Ponder returned too many correlation votes: ${items.length} > ${VOTE_PAGE_SIZE}`);
+      throw new Error(
+        `Ponder returned too many correlation votes: ${items.length} > ${VOTE_PAGE_SIZE}`,
+      );
     }
     trailingBaseRateUpBps ??= parseRoundContextTrailingBaseRateUpBps(
       response.roundContext,
     );
     if (page === 0) {
-      questionMetadataRef = parseRoundContextQuestionMetadataRef(response.roundContext);
+      questionMetadataRef = parseRoundContextQuestionMetadataRef(
+        response.roundContext,
+      );
     }
-    for (const excludedVote of (response.excludedVotes ?? []).map(parseExcludedVote)) {
+    for (const excludedVote of (response.excludedVotes ?? []).map(
+      parseExcludedVote,
+    )) {
       const key = `${excludedVote.commitKey.toLowerCase()}:${excludedVote.identityKey.toLowerCase()}`;
       if (excludedVoteKeys.has(key)) continue;
       excludedVoteKeys.add(key);
@@ -582,7 +624,12 @@ async function fetchRoundVotes(
     }
     votes.push(...items.map(parseVote));
     if (items.length < VOTE_PAGE_SIZE) {
-      return { excludedVotes, questionMetadataRef, votes, trailingBaseRateUpBps };
+      return {
+        excludedVotes,
+        questionMetadataRef,
+        votes,
+        trailingBaseRateUpBps,
+      };
     }
   }
   throw new Error(
@@ -596,19 +643,31 @@ async function fetchJson<T>(url: URL): Promise<T> {
     signal: AbortSignal.timeout(PONDER_FETCH_TIMEOUT_MS),
   });
   if (!response.ok) {
-    throw new Error(`Ponder request failed: ${url.pathname} ${response.status}`);
+    throw new Error(
+      `Ponder request failed: ${url.pathname} ${response.status}`,
+    );
   }
   const contentLengthHeader = response.headers.get("content-length");
   if (contentLengthHeader) {
     const declaredLength = Number.parseInt(contentLengthHeader, 10);
-    if (Number.isFinite(declaredLength) && declaredLength > PONDER_JSON_MAX_BYTES) {
-      throw new Error(`Ponder response too large: ${declaredLength} > ${PONDER_JSON_MAX_BYTES} bytes`);
+    if (
+      Number.isFinite(declaredLength) &&
+      declaredLength > PONDER_JSON_MAX_BYTES
+    ) {
+      throw new Error(
+        `Ponder response too large: ${declaredLength} > ${PONDER_JSON_MAX_BYTES} bytes`,
+      );
     }
   }
-  return JSON.parse(await readResponseBody(response, PONDER_JSON_MAX_BYTES)) as T;
+  return JSON.parse(
+    await readResponseBody(response, PONDER_JSON_MAX_BYTES),
+  ) as T;
 }
 
-async function readResponseBody(response: Response, maxBytes: number): Promise<string> {
+async function readResponseBody(
+  response: Response,
+  maxBytes: number,
+): Promise<string> {
   if (!response.body) {
     throw new Error("Ponder response body is not readable");
   }
@@ -643,7 +702,9 @@ function parseCandidate(value: unknown): CorrelationRoundCandidate {
     domain:
       record.domain === PAYOUT_DOMAIN_PUBLIC_RATING
         ? PAYOUT_DOMAIN_PUBLIC_RATING
-        : PAYOUT_DOMAIN_QUESTION_REWARD,
+        : record.domain === PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD
+          ? PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD
+          : PAYOUT_DOMAIN_QUESTION_REWARD,
     rewardPoolId: requireNonNegativeBigInt(record.rewardPoolId, "rewardPoolId"),
     contentId: requirePositiveBigInt(record.contentId, "contentId"),
     roundId: requirePositiveBigInt(record.roundId, "roundId"),
@@ -667,15 +728,20 @@ function parseVote(value: unknown): CorrelationVoteInput {
       "historicalVoteCount",
     ),
     features: Array.isArray(record.features)
-      ? record.features.filter((feature): feature is string => typeof feature === "string")
+      ? record.features.filter(
+          (feature): feature is string => typeof feature === "string",
+        )
       : [],
     // Surprise inputs are optional: a missing or malformed value falls back
     // to the neutral surprise multiplier inside the scorer (spec fallback).
     isUp: typeof record.isUp === "boolean" ? record.isUp : null,
-    revealWeight: revealWeight !== null && revealWeight >= 0n ? revealWeight : null,
+    revealWeight:
+      revealWeight !== null && revealWeight >= 0n ? revealWeight : null,
     stake: stake !== null && stake >= 0n ? stake : null,
     epochIndex:
-      typeof record.epochIndex === "number" && Number.isSafeInteger(record.epochIndex) && record.epochIndex >= 0
+      typeof record.epochIndex === "number" &&
+      Number.isSafeInteger(record.epochIndex) &&
+      record.epochIndex >= 0
         ? record.epochIndex
         : null,
   };
@@ -690,7 +756,9 @@ function parseExcludedVote(value: unknown): PublicExcludedCorrelationVote {
     cooldownSeconds: parseNonNegativeNumber(record.cooldownSeconds),
     profileUpdatedAt: parseOptionalString(record.profileUpdatedAt),
     reasons: Array.isArray(record.reasons)
-      ? record.reasons.filter((reason): reason is string => typeof reason === "string").sort()
+      ? record.reasons
+          .filter((reason): reason is string => typeof reason === "string")
+          .sort()
       : [],
     roundOpenTime: parseOptionalString(record.roundOpenTime),
   };
@@ -722,7 +790,9 @@ function emptyQuestionMetadataRef(): PublicQuestionMetadataRef {
   };
 }
 
-function parseRoundContextQuestionMetadataRef(value: unknown): PublicQuestionMetadataRef {
+function parseRoundContextQuestionMetadataRef(
+  value: unknown,
+): PublicQuestionMetadataRef {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return emptyQuestionMetadataRef();
   }
@@ -746,7 +816,9 @@ function parseOptionalString(value: unknown): string | null {
 }
 
 function parseOptionalHex(value: unknown): Hex | null {
-  return typeof value === "string" && HEX32_PATTERN.test(value) ? (value.toLowerCase() as Hex) : null;
+  return typeof value === "string" && HEX32_PATTERN.test(value)
+    ? (value.toLowerCase() as Hex)
+    : null;
 }
 
 function parseNonNegativeNumber(value: unknown): number | null {
@@ -811,7 +883,8 @@ function requireNonNegativeNumber(value: unknown, label: string): number {
 
 function parseBigInt(value: unknown): bigint | null {
   if (typeof value === "bigint") return value;
-  if (typeof value === "number" && Number.isSafeInteger(value)) return BigInt(value);
+  if (typeof value === "number" && Number.isSafeInteger(value))
+    return BigInt(value);
   if (typeof value === "string" && /^\d+$/.test(value)) return BigInt(value);
   return null;
 }
@@ -826,12 +899,18 @@ function bigintCompare(left: bigint, right: bigint) {
   return 0;
 }
 
-function compareCandidates(left: CorrelationRoundCandidate, right: CorrelationRoundCandidate) {
+function compareCandidates(
+  left: CorrelationRoundCandidate,
+  right: CorrelationRoundCandidate,
+) {
   const roundCompare = bigintCompare(right.roundId, left.roundId);
   if (roundCompare !== 0) return roundCompare;
   const domainCompare = left.domain - right.domain;
   if (domainCompare !== 0) return domainCompare;
-  const rewardPoolCompare = bigintCompare(left.rewardPoolId, right.rewardPoolId);
+  const rewardPoolCompare = bigintCompare(
+    left.rewardPoolId,
+    right.rewardPoolId,
+  );
   if (rewardPoolCompare !== 0) return rewardPoolCompare;
   return bigintCompare(left.contentId, right.contentId);
 }

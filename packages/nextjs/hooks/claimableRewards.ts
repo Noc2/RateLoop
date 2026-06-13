@@ -75,6 +75,8 @@ export interface QuestionBundleRewardClaimableRewardItem {
   reward: bigint;
   asset: "LREP" | "USDC";
   title: string;
+  payoutWeight?: QuestionRewardPayoutWeight;
+  payoutProof?: `0x${string}`[];
   claimType: "question_bundle_reward";
 }
 
@@ -215,4 +217,12 @@ export function getQuestionRewardClaimArgs(item: QuestionRewardPoolClaimableRewa
   }
 
   return [item.rewardPoolId, item.roundId] as const;
+}
+
+export function getQuestionBundleRewardClaimArgs(item: QuestionBundleRewardClaimableRewardItem) {
+  if (item.payoutWeight && item.payoutProof) {
+    return [item.bundleId, item.roundSetIndex, item.payoutWeight, item.payoutProof] as const;
+  }
+
+  return [item.bundleId, item.roundSetIndex] as const;
 }

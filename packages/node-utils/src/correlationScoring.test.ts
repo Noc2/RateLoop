@@ -5,6 +5,7 @@ import {
   BPS_DENOMINATOR,
   PAYOUT_DOMAIN_LAUNCH_CREDIT,
   PAYOUT_DOMAIN_PUBLIC_RATING,
+  PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD,
   PAYOUT_DOMAIN_QUESTION_REWARD,
   correlationParameterHash,
   defaultCorrelationScoringParams,
@@ -27,7 +28,9 @@ function address(byte: string): Address {
   return `0x${byte.repeat(20)}` as Address;
 }
 
-function vote(overrides: Partial<CorrelationVoteInput> = {}): CorrelationVoteInput {
+function vote(
+  overrides: Partial<CorrelationVoteInput> = {},
+): CorrelationVoteInput {
   const index = overrides.account?.slice(2, 4) ?? "aa";
   return {
     account: address(index),
@@ -75,9 +78,30 @@ function verifyProof(root: Hex, leaf: Hex, proof: readonly Hex[]) {
 
 test("scoreRoundPayoutWeights is deterministic and stable across input order", () => {
   const votes = [
-    vote({ account: address("a1"), identityKey: hex("a1"), commitKey: hex("11"), features: ["ip:shared"], isUp: true, revealWeight: 10_000n }),
-    vote({ account: address("b2"), identityKey: hex("b2"), commitKey: hex("22"), features: ["ip:shared", "device:shared"], isUp: true, revealWeight: 2_500n }),
-    vote({ account: address("c3"), identityKey: hex("c3"), commitKey: hex("33"), features: ["device:shared"], isUp: false, revealWeight: 10_000n }),
+    vote({
+      account: address("a1"),
+      identityKey: hex("a1"),
+      commitKey: hex("11"),
+      features: ["ip:shared"],
+      isUp: true,
+      revealWeight: 10_000n,
+    }),
+    vote({
+      account: address("b2"),
+      identityKey: hex("b2"),
+      commitKey: hex("22"),
+      features: ["ip:shared", "device:shared"],
+      isUp: true,
+      revealWeight: 2_500n,
+    }),
+    vote({
+      account: address("c3"),
+      identityKey: hex("c3"),
+      commitKey: hex("33"),
+      features: ["device:shared"],
+      isUp: false,
+      revealWeight: 10_000n,
+    }),
   ];
 
   const first = scoreRoundPayoutWeights({
@@ -110,9 +134,18 @@ test("scoreRoundPayoutWeights is deterministic and stable across input order", (
   const byAccount = (result: typeof first, account: Address) =>
     result.leaves.find((leaf) => leaf.account === account)!;
   for (const account of [address("a1"), address("b2"), address("c3")]) {
-    assert.equal(byAccount(first, account).surpriseBps, byAccount(second, account).surpriseBps);
-    assert.equal(byAccount(first, account).baseWeight, byAccount(second, account).baseWeight);
-    assert.equal(byAccount(first, account).leaf, byAccount(second, account).leaf);
+    assert.equal(
+      byAccount(first, account).surpriseBps,
+      byAccount(second, account).surpriseBps,
+    );
+    assert.equal(
+      byAccount(first, account).baseWeight,
+      byAccount(second, account).baseWeight,
+    );
+    assert.equal(
+      byAccount(first, account).leaf,
+      byAccount(second, account).leaf,
+    );
   }
 });
 
@@ -229,6 +262,36 @@ test("split rounds reward the side that beats the trailing base rate", () => {
   assert.equal(result.totalClaimWeight, 45_000n);
 });
 
+test("question-bundle bounty domain uses surprise-weighted baseWeights", () => {
+  const result = scoreQuestionRound({
+    domain: PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD,
+    votes: [
+      surpriseVote("a1", true, 10_000n),
+      surpriseVote("b2", true, 10_000n),
+      surpriseVote("c3", false, 10_000n),
+    ],
+    trailingBaseRateUpBps: 2_000,
+    params: { surpriseMinReveals: 3 },
+  });
+
+  assert.deepEqual(
+    result.leaves.map((leaf) => leaf.surpriseBps),
+    [25_000, 25_000, 10_000],
+  );
+  assert.deepEqual(
+    result.leaves.map((leaf) => leaf.baseWeight),
+    [17_500n, 17_500n, 10_000n],
+  );
+  assert.deepEqual(
+    result.leaves.map((leaf) => leaf.domain),
+    [
+      PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD,
+      PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD,
+      PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD,
+    ],
+  );
+});
+
 test("manufactured surprise clamps at surpriseCapBps", () => {
   const votes = [
     surpriseVote("a1", false, 10_000n),
@@ -278,8 +341,14 @@ test("missing surprise inputs fall back to the neutral multiplier", () => {
     votes: [surpriseVote("a1", true, 10_000n)],
     trailingBaseRateUpBps: 2_000,
   });
-  assert.deepEqual(soleVoter.leaves.map((leaf) => leaf.surpriseBps), [10_000]);
-  assert.deepEqual(soleVoter.leaves.map((leaf) => leaf.baseWeight), [10_000n]);
+  assert.deepEqual(
+    soleVoter.leaves.map((leaf) => leaf.surpriseBps),
+    [10_000],
+  );
+  assert.deepEqual(
+    soleVoter.leaves.map((leaf) => leaf.baseWeight),
+    [10_000n],
+  );
 
   const noBaseRate = scoreQuestionRound({
     votes: [

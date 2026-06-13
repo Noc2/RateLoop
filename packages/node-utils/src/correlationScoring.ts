@@ -12,6 +12,7 @@ import { canonicalJsonHash } from "./json";
 export const PAYOUT_DOMAIN_QUESTION_REWARD = 1;
 export const PAYOUT_DOMAIN_LAUNCH_CREDIT = 2;
 export const PAYOUT_DOMAIN_PUBLIC_RATING = 3;
+export const PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD = 4;
 export const CORRELATION_CANONICAL_JSON_VERSION = "rateloop-canonical-json-v1";
 export const CORRELATION_ELIGIBILITY_SPEC_VERSION =
   "rateloop-correlation-eligibility-v1";
@@ -285,7 +286,9 @@ export function scoreRoundRatingWeights(args: {
     membersByCluster.set(root, members);
   }
 
-  const baseEvidenceByVote = args.votes.map((vote) => ratingEvidenceForVote(vote));
+  const baseEvidenceByVote = args.votes.map((vote) =>
+    ratingEvidenceForVote(vote),
+  );
   const effectiveEvidenceByVote = Array<bigint>(args.votes.length).fill(0n);
   const independenceBpsByVote = Array<number>(args.votes.length).fill(0);
   const reasonsByVote = Array<readonly string[]>(args.votes.length).fill([]);
@@ -459,7 +462,7 @@ function buildClusters(votes: readonly CorrelationVoteInput[]): DisjointSet {
 /**
  * Surprise-weighted bounty claim weights.
  *
- * Surprise applies only to the question-reward payout domain; the
+ * Surprise applies to claimable question bounty payout domains. The
  * launch-credit domain requires flat weights and stays neutral. All math is
  * integer bps with floor division, mirroring the normative spec exactly.
  */
@@ -470,7 +473,7 @@ function surpriseBpsForVotes(
   params: CorrelationScoringParams,
 ): number[] {
   if (
-    domain !== PAYOUT_DOMAIN_QUESTION_REWARD ||
+    !isSurpriseWeightedBountyDomain(domain) ||
     trailingBaseRateUpBps === null ||
     trailingBaseRateUpBps === undefined ||
     !Number.isSafeInteger(trailingBaseRateUpBps)
@@ -530,9 +533,9 @@ function baseWeightForVote(
   surpriseBps: number,
   params: CorrelationScoringParams,
 ): bigint {
-  if (domain !== PAYOUT_DOMAIN_QUESTION_REWARD) {
+  if (!isSurpriseWeightedBountyDomain(domain)) {
     // LaunchDistributionPool requires flat weights for the launch-credit
-    // domain; surprise weighting never applies outside question rewards.
+    // domain; surprise weighting never applies outside bounty reward domains.
     return FLAT_BASE_WEIGHT;
   }
   return (
@@ -541,10 +544,19 @@ function baseWeightForVote(
   );
 }
 
+function isSurpriseWeightedBountyDomain(domain: number) {
+  return (
+    domain === PAYOUT_DOMAIN_QUESTION_REWARD ||
+    domain === PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD
+  );
+}
+
 function ratingEvidenceForVote(vote: CorrelationVoteInput): bigint {
-  const stake = typeof vote.stake === "bigint" && vote.stake > 0n ? vote.stake : 0n;
+  const stake =
+    typeof vote.stake === "bigint" && vote.stake > 0n ? vote.stake : 0n;
   const stakeBonus =
-    (minBigInt(stake, RATING_EVIDENCE_STAKE_BONUS_CAP) * RATING_EVIDENCE_MAX_STAKE_BONUS) /
+    (minBigInt(stake, RATING_EVIDENCE_STAKE_BONUS_CAP) *
+      RATING_EVIDENCE_MAX_STAKE_BONUS) /
     RATING_EVIDENCE_STAKE_BONUS_CAP;
   const rawEvidence = RATING_EVIDENCE_BASE_UNIT + stakeBonus;
   return vote.epochIndex === 0 ? rawEvidence : rawEvidence / 4n;
