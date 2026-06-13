@@ -3,6 +3,7 @@ pragma solidity ^0.8.34;
 
 import { ContentRegistry } from "../ContentRegistry.sol";
 import { ProtocolConfig } from "../ProtocolConfig.sol";
+import { ContentRegistryTypes } from "./ContentRegistryTypes.sol";
 import { RoundCleanupLib } from "./RoundCleanupLib.sol";
 import { RoundLib } from "./RoundLib.sol";
 
@@ -27,9 +28,9 @@ library RoundVotingReadLib {
             RoundLib.Round storage round = rounds[contentId][openRoundId];
             RoundLib.RoundConfig memory roundCfg =
                 _roundConfig(roundConfigSnapshot, protocolConfig, contentId, openRoundId);
-            (uint64 id, uint48 lastActivityAt, ContentRegistry.ContentStatus status, uint8 dormantCount) =
+            (uint64 id, uint48 lastActivityAt, ContentRegistryTypes.ContentStatus status, uint8 dormantCount) =
                 _contentLifecycle(registry, contentId);
-            bool lifecycleStale = id == 0 || status != ContentRegistry.ContentStatus.Active
+            bool lifecycleStale = id == 0 || status != ContentRegistryTypes.ContentStatus.Active
                 || dormantCount != roundContentDormantCountSnapshot[contentId][openRoundId];
             bool emptyRoundStale = round.state == RoundLib.RoundState.Open && round.voteCount == 0
                 && round.totalStake == 0 && lastActivityAt > round.startTime && lastActivityAt <= block.timestamp;
@@ -83,7 +84,7 @@ library RoundVotingReadLib {
     function _contentLifecycle(ContentRegistry registry, uint256 contentId)
         private
         view
-        returns (uint64 id, uint48 lastActivityAt, ContentRegistry.ContentStatus status, uint8 dormantCount)
+        returns (uint64 id, uint48 lastActivityAt, ContentRegistryTypes.ContentStatus status, uint8 dormantCount)
     {
         (id,,,, lastActivityAt, status, dormantCount,,,) = registry.contents(contentId);
     }

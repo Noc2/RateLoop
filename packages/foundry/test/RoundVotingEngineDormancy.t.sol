@@ -5,6 +5,7 @@ import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy
 import { ContentRegistry } from "../contracts/ContentRegistry.sol";
 import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
 import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
+import { ContentRegistryTypes } from "../contracts/libraries/ContentRegistryTypes.sol";
 import { RoundLib } from "../contracts/libraries/RoundLib.sol";
 import { LoopReputation } from "../contracts/LoopReputation.sol";
 import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
@@ -181,8 +182,8 @@ contract RoundVotingEngineDormancyTest is VotingTestBase {
         vm.warp(T0 + 31 days);
         registry.markDormant(contentId);
 
-        (,,,,, ContentRegistry.ContentStatus status,,,,) = registry.contents(contentId);
-        assertEq(uint256(status), uint256(ContentRegistry.ContentStatus.Dormant));
+        (,,,,, ContentRegistryTypes.ContentStatus status,,,,) = registry.contents(contentId);
+        assertEq(uint256(status), uint256(ContentRegistryTypes.ContentStatus.Dormant));
     }
 
     function test_MarkDormant_AllSybilQuorumRoundCannotRevealAfterDormancy() public {

@@ -245,7 +245,12 @@ contract GameTheoryImprovementsTest is VotingTestBase {
         RoundLib.Round memory settled = RoundEngineReadHelpers.round(engine, cid, roundId);
         assertEq(uint256(settled.state), uint256(RoundLib.RoundState.Settled), "Round settled");
         assertFalse(settled.upWins, "DOWN wins despite raw UP majority - epoch weighting prevails");
-        assertLt(registry.getRating(cid), 5_000, "rating follows weighted DOWN evidence");
+        assertEq(registry.getRating(cid), 5_000, "public rating waits for correlation snapshot");
+        assertGt(
+            registry.roundPayoutSnapshotSourceReadyAt(3, 0, cid, roundId),
+            0,
+            "weighted DOWN evidence is pending correlation review"
+        );
     }
 
     function test_WeightedTieBreak_PreventsLateEpochRefundGrief() public {

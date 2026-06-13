@@ -12,6 +12,7 @@ import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
 import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
 import { RaterRegistry } from "../contracts/RaterRegistry.sol";
 import { LoopReputation } from "../contracts/LoopReputation.sol";
+import { ContentRegistryTypes } from "../contracts/libraries/ContentRegistryTypes.sol";
 import { RoundLib } from "../contracts/libraries/RoundLib.sol";
 import { RatingLib } from "../contracts/libraries/RatingLib.sol";
 import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
@@ -2807,9 +2808,9 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.stopPrank();
 
         assertEq(contentId, 1);
-        (uint64 id,,,,, ContentRegistry.ContentStatus status,,,,) = registry.contents(contentId);
+        (uint64 id,,,,, ContentRegistryTypes.ContentStatus status,,,,) = registry.contents(contentId);
         assertEq(id, uint64(contentId));
-        assertEq(uint256(status), uint256(ContentRegistry.ContentStatus.Active));
+        assertEq(uint256(status), uint256(ContentRegistryTypes.ContentStatus.Active));
     }
 
     function test_SubmitContent_EmptyTitle_Reverts() public {
@@ -2901,8 +2902,8 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.prank(submitter);
         registry.cancelContent(contentId);
 
-        (,,,,, ContentRegistry.ContentStatus status,,,,) = registry.contents(contentId);
-        assertEq(uint256(status), uint256(ContentRegistry.ContentStatus.Cancelled));
+        (,,,,, ContentRegistryTypes.ContentStatus status,,,,) = registry.contents(contentId);
+        assertEq(uint256(status), uint256(ContentRegistryTypes.ContentStatus.Cancelled));
     }
 
     function test_CancelContent_NotActive_Reverts() public {
@@ -2928,8 +2929,10 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.prank(submitter);
         registry.cancelContent(1);
 
-        (,,,,, ContentRegistry.ContentStatus status,,,,) = registry.contents(1);
-        assertEq(uint256(status), uint256(ContentRegistry.ContentStatus.Cancelled), "empty open round can be cancelled");
+        (,,,,, ContentRegistryTypes.ContentStatus status,,,,) = registry.contents(1);
+        assertEq(
+            uint256(status), uint256(ContentRegistryTypes.ContentStatus.Cancelled), "empty open round can be cancelled"
+        );
         assertFalse(votingEngine.hasCommits(1), "open round records no commits");
     }
 
@@ -3018,21 +3021,10 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         _settleAfterRbtsSeed(votingEngine, 1, roundId);
 
         assertEq(registry.getRating(1), ratingBefore, "tracked old engine rating waits for correlation snapshot");
-        (
-            address settlementVotingEngine,
-            uint64 upEvidence,
-            uint64 downEvidence,
-            uint48 readyAt,
-            uint16 referenceRatingBps,
-            bool exists,
-            bool applied
-        ) = registry.pendingRatingSettlement(1, roundId);
-        assertEq(settlementVotingEngine, address(votingEngine), "tracked old engine records pending review");
-        assertGt(upEvidence, downEvidence, "pending review preserves old-engine signal");
-        assertGt(readyAt, 0, "pending review ready timestamp recorded");
-        assertEq(referenceRatingBps, ratingBefore, "pending review stores reference rating");
-        assertTrue(exists, "pending review exists");
-        assertFalse(applied, "pending review not applied");
+        assertGt(
+            registry.roundPayoutSnapshotSourceReadyAt(3, 0, 1, roundId), 0, "tracked old engine records pending review"
+        );
+        assertEq(registry.appliedRatingSnapshotDigest(1, roundId), bytes32(0), "pending review not applied");
         vm.warp(block.timestamp + 30 days);
         vm.expectRevert(ContentRegistry.InvalidState.selector);
         registry.markDormant(1);
@@ -3098,13 +3090,10 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         registry.unpause();
         vm.stopPrank();
 
-        RatingLib.RatingState memory replacementState = registry.getRatingState(1);
-        replacementState.ratingBps = 5200;
-        replacementState.conservativeRatingBps = 5200;
-        replacementState.settledRounds += 1;
-        replacementState.lastUpdatedAt = uint48(block.timestamp);
+        vm.expectEmit(true, true, false, true, address(registry));
+        emit ContentRegistry.RatingReviewPending(1, 1, 5000, 2, 1, block.timestamp);
         vm.prank(address(replacementEngine));
-        registry.updateRatingState(1, 1, 5000, replacementState);
+        registry.recordPendingRatingSettlement(1, 1, 5000, 2, 1);
 
         _warpPastTlockRevealTime(block.timestamp + 1 hours);
         votingEngine.revealVoteByCommitKey(1, roundId, ck1, true, 5_000, salt1);
@@ -3113,15 +3102,14 @@ contract ContentRegistryBranchesTest is VotingTestBase {
 
         _settleAfterRbtsSeed(votingEngine, 1, roundId);
 
-        assertEq(registry.getRating(1), 5200);
         assertEq(
             uint8(RoundEngineReadHelpers.round(votingEngine, 1, roundId).state), uint8(RoundLib.RoundState.Settled)
         );
 
         vm.warp(T0 + 30 days + 30 minutes);
         registry.markDormant(1);
-        (,,,,, ContentRegistry.ContentStatus status,,,,) = registry.contents(1);
-        assertEq(uint256(status), uint256(ContentRegistry.ContentStatus.Dormant));
+        (,,,,, ContentRegistryTypes.ContentStatus status,,,,) = registry.contents(1);
+        assertEq(uint256(status), uint256(ContentRegistryTypes.ContentStatus.Dormant));
     }
 
     function test_SetVotingEngine_OldEngineRecordMeaningfulActivity_RevertsOnFreshContent_AfterRotation() public {
@@ -3141,11 +3129,11 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.stopPrank();
 
         vm.prank(address(votingEngine));
-        registry.recordMeaningfulActivity(1);
+        registry.recordPendingRatingSettlement(1, 2, 5000, 1, 0);
 
         vm.prank(address(votingEngine));
         vm.expectRevert(ContentRegistry.OnlyVotingEngine.selector);
-        registry.recordMeaningfulActivity(2);
+        registry.recordPendingRatingSettlement(2, 1, 5000, 1, 0);
     }
 
     function test_CancelContent_VotingEngineNotSet_AllowsCancel() public {
@@ -3173,8 +3161,8 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         reg2.cancelContent(1);
         vm.stopPrank();
 
-        (,,,,, ContentRegistry.ContentStatus status,,,,) = reg2.contents(1);
-        assertEq(uint256(status), uint256(ContentRegistry.ContentStatus.Cancelled));
+        (,,,,, ContentRegistryTypes.ContentStatus status,,,,) = reg2.contents(1);
+        assertEq(uint256(status), uint256(ContentRegistryTypes.ContentStatus.Cancelled));
     }
 
     function test_CancelContent_DoesNotChargeDeprecatedFee() public {
@@ -3245,22 +3233,15 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         registry.unpause();
         vm.stopPrank();
 
-        // The old engine attempts to write rating state on a content the new engine has not
-        // touched yet. Under the buggy pre-fix behavior this would succeed (per-content
-        // generation defaults to zero, so the stale check passes). Under the fix it reverts.
-        RatingLib.RatingState memory attackerState;
-        attackerState.ratingBps = 7500;
-        attackerState.conservativeRatingBps = 7500;
-        attackerState.lastUpdatedAt = uint48(block.timestamp);
-
         vm.prank(address(votingEngine));
         vm.expectRevert(ContentRegistry.OnlyVotingEngine.selector);
-        registry.updateRatingState(freshContentId, 1, 5000, attackerState);
+        registry.recordPendingRatingSettlement(freshContentId, 1, 5000, 1, 0);
 
-        // Sanity: the canonical (replacement) engine can still write to the same content.
+        // Sanity: the canonical (replacement) engine can still record pending settlement.
+        vm.expectEmit(true, true, false, true, address(registry));
+        emit ContentRegistry.RatingReviewPending(freshContentId, 1, 5000, 1, 0, block.timestamp);
         vm.prank(address(replacementEngine));
-        registry.updateRatingState(freshContentId, 1, 5000, attackerState);
-        assertEq(registry.getRating(freshContentId), 7500);
+        registry.recordPendingRatingSettlement(freshContentId, 1, 5000, 1, 0);
     }
 
     function test_SetVotingEngine_OldEngine_UpdateActivity_RevertsAfterRotation() public {
@@ -3282,7 +3263,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
 
         vm.prank(address(votingEngine));
         vm.expectRevert(ContentRegistry.OnlyVotingEngine.selector);
-        registry.recordMeaningfulActivity(1);
+        registry.recordPendingRatingSettlement(1, 1, 5000, 1, 0);
     }
 
     // =========================================================================
@@ -3333,8 +3314,8 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.warp(T0 + 31 days);
         reg2.markDormant(1);
 
-        (,,,,, ContentRegistry.ContentStatus status,,,,) = reg2.contents(1);
-        assertEq(uint256(status), uint256(ContentRegistry.ContentStatus.Dormant));
+        (,,,,, ContentRegistryTypes.ContentStatus status,,,,) = reg2.contents(1);
+        assertEq(uint256(status), uint256(ContentRegistryTypes.ContentStatus.Dormant));
     }
 
     function test_MarkDormant_Success() public {
@@ -3346,8 +3327,8 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.warp(T0 + 31 days);
         registry.markDormant(1);
 
-        (,,,,, ContentRegistry.ContentStatus status,,,,) = registry.contents(1);
-        assertEq(uint256(status), uint256(ContentRegistry.ContentStatus.Dormant));
+        (,,,,, ContentRegistryTypes.ContentStatus status,,,,) = registry.contents(1);
+        assertEq(uint256(status), uint256(ContentRegistryTypes.ContentStatus.Dormant));
     }
 
     function test_VoteCommit_UpdatesLastActivityAt() public {
@@ -3382,8 +3363,8 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.warp(T0 + 31 days);
         registry.markDormant(1);
 
-        (,,,,, ContentRegistry.ContentStatus status,,,,) = registry.contents(1);
-        assertEq(uint256(status), uint256(ContentRegistry.ContentStatus.Dormant));
+        (,,,,, ContentRegistryTypes.ContentStatus status,,,,) = registry.contents(1);
+        assertEq(uint256(status), uint256(ContentRegistryTypes.ContentStatus.Dormant));
     }
 
     function test_MarkDormant_AfterEngineRotationWithSubQuorumHistoricalVotes_AllowsDormant() public {
@@ -3404,8 +3385,8 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.warp(T0 + 31 days);
         registry.markDormant(1);
 
-        (,,,,, ContentRegistry.ContentStatus status,,,,) = registry.contents(1);
-        assertEq(uint256(status), uint256(ContentRegistry.ContentStatus.Dormant));
+        (,,,,, ContentRegistryTypes.ContentStatus status,,,,) = registry.contents(1);
+        assertEq(uint256(status), uint256(ContentRegistryTypes.ContentStatus.Dormant));
     }
 
     function test_MarkDormant_AfterRotatedOldRoundCancelled_AllowsDormant() public {
@@ -3432,8 +3413,8 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.warp(T0 + 31 days);
         registry.markDormant(1);
 
-        (,,,,, ContentRegistry.ContentStatus status,,,,) = registry.contents(1);
-        assertEq(uint256(status), uint256(ContentRegistry.ContentStatus.Dormant));
+        (,,,,, ContentRegistryTypes.ContentStatus status,,,,) = registry.contents(1);
+        assertEq(uint256(status), uint256(ContentRegistryTypes.ContentStatus.Dormant));
     }
 
     function test_MarkDormant_AfterRotationChecksCurrentEngineOpenRound() public {
@@ -3482,8 +3463,8 @@ contract ContentRegistryBranchesTest is VotingTestBase {
 
         registry.markDormant(1);
 
-        (,,,,, ContentRegistry.ContentStatus status,,,,) = registry.contents(1);
-        assertEq(uint256(status), uint256(ContentRegistry.ContentStatus.Dormant));
+        (,,,,, ContentRegistryTypes.ContentStatus status,,,,) = registry.contents(1);
+        assertEq(uint256(status), uint256(ContentRegistryTypes.ContentStatus.Dormant));
     }
 
     function test_MarkDormant_ZeroStakeOpenRound_AllowsDormant() public {
@@ -3504,8 +3485,8 @@ contract ContentRegistryBranchesTest is VotingTestBase {
 
         registry.markDormant(1);
 
-        (,,,,, ContentRegistry.ContentStatus status,,,,) = registry.contents(1);
-        assertEq(uint256(status), uint256(ContentRegistry.ContentStatus.Dormant));
+        (,,,,, ContentRegistryTypes.ContentStatus status,,,,) = registry.contents(1);
+        assertEq(uint256(status), uint256(ContentRegistryTypes.ContentStatus.Dormant));
     }
 
     function test_MarkDormant_ZeroStakeOpenRound_EligibilityPathAllowsDormant() public {
@@ -3521,8 +3502,8 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         votingEngine.openRound(1);
 
         registry.markDormant(1);
-        (,,,,, ContentRegistry.ContentStatus status,,,,) = registry.contents(1);
-        assertEq(uint256(status), uint256(ContentRegistry.ContentStatus.Dormant));
+        (,,,,, ContentRegistryTypes.ContentStatus status,,,,) = registry.contents(1);
+        assertEq(uint256(status), uint256(ContentRegistryTypes.ContentStatus.Dormant));
     }
 
     function test_CommitVote_DormancyEligibleContent_CanStartNewRoundAfterCancellation() public {
@@ -3594,8 +3575,8 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.stopPrank();
 
         // New content created with same URL
-        (,,,,, ContentRegistry.ContentStatus status,,,,) = registry.contents(2);
-        assertEq(uint256(status), uint256(ContentRegistry.ContentStatus.Active));
+        (,,,,, ContentRegistryTypes.ContentStatus status,,,,) = registry.contents(2);
+        assertEq(uint256(status), uint256(ContentRegistryTypes.ContentStatus.Active));
 
         vm.expectRevert(ContentRegistry.InvalidState.selector);
         registry.releaseDormantSubmissionKey(1);
@@ -3662,8 +3643,8 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         registry.reviveContent(contentId);
         vm.stopPrank();
 
-        (,,,,, ContentRegistry.ContentStatus status,, address reviver,,) = registry.contents(contentId);
-        assertEq(uint256(status), uint256(ContentRegistry.ContentStatus.Active));
+        (,,,,, ContentRegistryTypes.ContentStatus status,, address reviver,,) = registry.contents(contentId);
+        assertEq(uint256(status), uint256(ContentRegistryTypes.ContentStatus.Active));
         assertEq(reviver, submitter);
     }
 

@@ -7,8 +7,7 @@ import { ContentRegistry } from "../ContentRegistry.sol";
 /// @notice Moves best-effort post-settlement external calls out of RoundVotingEngine runtime bytecode.
 library RoundSettlementSideEffectsLib {
     enum SideEffectFailureStage {
-        RatingStateUpdate,
-        MeaningfulActivityRecord
+        RatingStateUpdate
     }
 
     event SettlementSideEffectFailed(
@@ -30,13 +29,6 @@ library RoundSettlementSideEffectsLib {
         catch {
             emit SettlementSideEffectFailed(
                 contentId, roundId, address(registry), SideEffectFailureStage.RatingStateUpdate
-            );
-        }
-
-        try registry.recordMeaningfulActivity(contentId) { }
-        catch {
-            emit SettlementSideEffectFailed(
-                contentId, roundId, address(registry), SideEffectFailureStage.MeaningfulActivityRecord
             );
         }
     }

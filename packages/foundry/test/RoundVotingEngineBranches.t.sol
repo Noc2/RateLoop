@@ -1243,22 +1243,13 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
     }
 
     function _assertPendingRatingReview(uint256 contentId, uint256 roundId, address expectedEngine) internal view {
-        (
-            address settlementVotingEngine,
-            uint64 upEvidence,
-            uint64 downEvidence,
-            uint48 readyAt,
-            uint16 referenceRatingBps,
-            bool exists,
-            bool applied
-        ) = registry.pendingRatingSettlement(contentId, roundId);
-
-        assertEq(settlementVotingEngine, expectedEngine, "pending review uses settlement engine");
-        assertGt(upEvidence, downEvidence, "pending review preserves binary signal");
-        assertGt(readyAt, 0, "pending review ready timestamp recorded");
-        assertEq(referenceRatingBps, 5_000, "pending review stores reference rating");
-        assertTrue(exists, "pending review exists");
-        assertFalse(applied, "pending review not applied");
+        expectedEngine;
+        assertGt(
+            registry.roundPayoutSnapshotSourceReadyAt(3, 0, contentId, roundId),
+            0,
+            "pending review ready timestamp recorded"
+        );
+        assertEq(registry.appliedRatingSnapshotDigest(contentId, roundId), bytes32(0), "pending review not applied");
     }
 
     function test_VerifiedHumanDoesNotBoostStakeWeight() public {

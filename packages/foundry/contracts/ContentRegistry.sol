@@ -15,8 +15,9 @@ import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol"
 import { IConfidentialityEscrow } from "./interfaces/IConfidentialityEscrow.sol";
 import { RoundLib } from "./libraries/RoundLib.sol";
 import { RatingLib } from "./libraries/RatingLib.sol";
-import { RatingMath } from "./libraries/RatingMath.sol";
 import { ContentRegistryRewardLib } from "./libraries/ContentRegistryRewardLib.sol";
+import { ContentRegistryRatingSnapshotLib } from "./libraries/ContentRegistryRatingSnapshotLib.sol";
+import { ContentRegistryTypes } from "./libraries/ContentRegistryTypes.sol";
 import { ProtocolConfig } from "./ProtocolConfig.sol";
 import { SubmissionMediaValidator } from "./SubmissionMediaValidator.sol";
 import { SubmissionMediaValidatorFactory } from "./SubmissionMediaValidatorFactory.sol";
@@ -114,51 +115,17 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     uint48 internal constant DEFAULT_MIN_SLASH_LOW_DURATION = 7 days;
     uint256 internal constant DEFAULT_MIN_SLASH_EVIDENCE = 200e6;
     uint256 internal constant DEFAULT_CONFIDENCE_MASS_INITIAL = 80e6;
-    uint8 public constant PAYOUT_DOMAIN_PUBLIC_RATING = 3;
-    uint64 internal constant RATING_EVIDENCE_BASE_UNIT = 1_000_000;
-    uint64 internal constant RATING_EVIDENCE_STAKE_BONUS_CAP = 10_000_000;
-    uint64 internal constant RATING_EVIDENCE_MAX_STAKE_BONUS = 1_000_000;
 
     // String length limits (prevent storage bloat)
     uint16 internal constant MAX_QUESTION_BUNDLE_ROUND_VOTERS = 100;
 
-    // --- Enums ---
-    enum ContentStatus {
-        Active,
-        Dormant,
-        Cancelled
-    }
-
     // --- Structs ---
-    struct Content {
-        uint64 id;
-        bytes32 contentHash;
-        address submitter;
-        uint48 createdAt;
-        uint48 lastActivityAt;
-        ContentStatus status;
-        uint8 dormantCount;
-        address reviver;
-        uint8 rating; // 0-100, starts at 50
-        uint64 categoryId; // Reference to seeded discovery category
-    }
-
     struct PendingSubmission {
         address submitter;
         uint48 reservedAt;
         uint48 expiresAt;
         address submitterIdentity;
         bytes32 submitterIdentityKey;
-    }
-
-    struct PendingRatingSettlement {
-        address votingEngine;
-        uint64 upEvidence;
-        uint64 downEvidence;
-        uint48 readyAt;
-        uint16 referenceRatingBps;
-        bool exists;
-        bool applied;
     }
 
     struct SubmissionMetadata {
@@ -209,7 +176,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     address public treasury; // Receives 100% of slashed stakes (governance timelock)
     uint256 public nextContentId;
     uint256 internal nextQuestionBundleId;
-    mapping(uint256 => Content) public contents;
+    mapping(uint256 => ContentRegistryTypes.Content) public contents;
     mapping(bytes32 => bool) public submissionKeyUsed; // Canonical submission keys prevent duplicate content variants
     /// @notice Escrow that holds mandatory bounties.
     address public questionRewardPoolEscrow;
@@ -254,7 +221,8 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     mapping(uint256 => RatingLib.RatingState) internal _ratingState;
 
     /// @notice Settled rounds whose canonical rating impact is waiting for finalized correlation weights.
-    mapping(uint256 => mapping(uint256 => PendingRatingSettlement)) internal pendingRatingSettlements;
+    mapping(uint256 => mapping(uint256 => ContentRegistryTypes.PendingRatingSettlement)) internal
+        pendingRatingSettlement;
 
     /// @notice Applied rating snapshot digests keyed by content and round. Nonzero means the canonical rating consumed the root.
     mapping(uint256 => mapping(uint256 => bytes32)) public appliedRatingSnapshotDigest;
@@ -847,9 +815,9 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     /// @dev Only callable by the submitter. VotingEngine must confirm 0 votes.
     function cancelContent(uint256 contentId) external nonReentrant whenNotPaused {
         if (bonusPool == address(0)) revert InvalidState();
-        Content storage c = contents[contentId];
+        ContentRegistryTypes.Content storage c = contents[contentId];
         require(_isSubmitterIdentity(contentId, msg.sender), "Not submitter");
-        require(c.status == ContentStatus.Active, "Not active");
+        require(c.status == ContentRegistryTypes.ContentStatus.Active, "Not active");
         if (contentRoundTrackingEngine[contentId] != address(0)) revert InvalidState();
         if (votingEngine != address(0)) {
             if (IRoundVotingEngine(votingEngine).hasCommits(contentId)) revert InvalidState();
@@ -858,7 +826,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         // completing all configured round sets. Treat bundles as atomic once submitted.
         if (contentBundleId[contentId] != 0) revert InvalidState();
 
-        c.status = ContentStatus.Cancelled;
+        c.status = ContentRegistryTypes.ContentStatus.Cancelled;
 
         // Release the canonical submission key so the content can be resubmitted.
         bytes32 submissionKey = contentSubmissionKey[contentId];
@@ -1073,13 +1041,13 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         getSubmitterIdentity[contentId] = submitterIdentity;
         contentSubmitterIdentityKey[contentId] = submitterIdentityKey;
         contentRoundConfig[contentId] = roundConfig;
-        contents[contentId] = Content({
+        contents[contentId] = ContentRegistryTypes.Content({
             id: contentId.toUint64(),
             contentHash: contentHash,
             submitter: submitter,
             createdAt: block.timestamp.toUint48(),
             lastActivityAt: block.timestamp.toUint48(),
-            status: ContentStatus.Active,
+            status: ContentRegistryTypes.ContentStatus.Active,
             dormantCount: 0,
             reviver: address(0),
             rating: 50,
@@ -1206,14 +1174,14 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     /// @notice Mark content as dormant if it hasn't reached milestone 0 within DORMANCY_PERIOD.
     /// @dev Anyone can call this. The mandatory submission bounty is not refunded.
     function markDormant(uint256 contentId) external nonReentrant whenNotPaused {
-        Content storage c = contents[contentId];
+        ContentRegistryTypes.Content storage c = contents[contentId];
         if (c.id == 0) revert InvalidState();
-        require(c.status == ContentStatus.Active, "Not active");
+        require(c.status == ContentRegistryTypes.ContentStatus.Active, "Not active");
         if (block.timestamp <= dormancyAnchorAt[contentId] + DORMANCY_PERIOD) revert InvalidState();
         if (_hasDormancyBlockingRound(contentId)) revert InvalidState();
         if (contentBundleId[contentId] != 0) revert InvalidState();
 
-        c.status = ContentStatus.Dormant;
+        c.status = ContentRegistryTypes.ContentStatus.Dormant;
 
         bytes32 submissionKey = contentSubmissionKey[contentId];
         if (submissionKey != bytes32(0)) {
@@ -1227,8 +1195,8 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     /// @dev Resets the activity timer. Max MAX_REVIVALS revivals per content.
     ///      Revival stake is sent to treasury (non-refundable).
     function reviveContent(uint256 contentId) external nonReentrant whenNotPaused {
-        Content storage c = contents[contentId];
-        require(c.status == ContentStatus.Dormant, "Not dormant");
+        ContentRegistryTypes.Content storage c = contents[contentId];
+        require(c.status == ContentRegistryTypes.ContentStatus.Dormant, "Not dormant");
         if (c.dormantCount >= MAX_REVIVALS) revert InvalidState();
 
         bytes32 submissionKey = contentSubmissionKey[contentId];
@@ -1241,7 +1209,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         if (treasury == address(0)) revert InvalidState();
         lrepToken.safeTransferFrom(msg.sender, treasury, REVIVAL_STAKE);
 
-        c.status = ContentStatus.Active;
+        c.status = ContentRegistryTypes.ContentStatus.Active;
         c.dormantCount++;
         c.lastActivityAt = uint48(block.timestamp);
         dormancyAnchorAt[contentId] = block.timestamp;
@@ -1253,9 +1221,9 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
 
     /// @notice Release a dormant content key after the exclusive revival window expires.
     function releaseDormantSubmissionKey(uint256 contentId) external nonReentrant whenNotPaused {
-        Content storage c = contents[contentId];
+        ContentRegistryTypes.Content storage c = contents[contentId];
         if (c.id == 0) revert InvalidState();
-        require(c.status == ContentStatus.Dormant, "Not dormant");
+        require(c.status == ContentRegistryTypes.ContentStatus.Dormant, "Not dormant");
         if (contentBundleId[contentId] != 0) revert InvalidState();
 
         bytes32 submissionKey = contentSubmissionKey[contentId];
@@ -1304,16 +1272,6 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         }
     }
 
-    /// @notice Called by VotingEngine when content reaches milestone 0 through a settled round.
-    function recordMeaningfulActivity(uint256 contentId) external nonReentrant {
-        uint256 callerGeneration = _authorizeSettlementCallback(contentId);
-        contents[contentId].lastActivityAt = uint48(block.timestamp);
-        dormancyAnchorAt[contentId] = block.timestamp;
-        if (callerGeneration > contentSettlementEngineGeneration[contentId]) {
-            contentSettlementEngineGeneration[contentId] = callerGeneration;
-        }
-    }
-
     /// @notice Called by VotingEngine when a round settles and its public rating impact must wait for correlation review.
     function recordPendingRatingSettlement(
         uint256 contentId,
@@ -1321,39 +1279,25 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         uint16 referenceRatingBps,
         uint64 upEvidence,
         uint64 downEvidence
-    ) external nonReentrant {
+    ) external {
         uint256 callerGeneration = _authorizeSettlementCallback(contentId);
 
-        Content storage c = contents[contentId];
+        ContentRegistryTypes.Content storage c = contents[contentId];
         if (c.id == 0) revert InvalidState();
+        c.lastActivityAt = uint48(block.timestamp);
+        dormancyAnchorAt[contentId] = block.timestamp;
         contentSettlementEngineGeneration[contentId] = callerGeneration;
 
-        PendingRatingSettlement storage pending = pendingRatingSettlements[contentId][roundId];
-        if (pending.exists) return;
-
-        pending.votingEngine = msg.sender;
-        pending.upEvidence = upEvidence;
-        pending.downEvidence = downEvidence;
-        pending.readyAt = uint48(block.timestamp);
-        pending.referenceRatingBps = referenceRatingBps;
-        pending.exists = true;
-
-        emit RatingReviewPending(contentId, roundId, referenceRatingBps, upEvidence, downEvidence, block.timestamp);
-    }
-
-    function updateRatingState(
-        uint256 contentId,
-        uint256 roundId,
-        uint16 referenceRatingBps,
-        RatingLib.RatingState calldata nextState
-    ) external nonReentrant {
-        uint256 callerGeneration = _authorizeSettlementCallback(contentId);
-
-        Content storage c = contents[contentId];
-        if (c.id == 0) revert InvalidState();
-        contentSettlementEngineGeneration[contentId] = callerGeneration;
-
-        _updateRatingState(contentId, roundId, referenceRatingBps, nextState);
+        ContentRegistryRatingSnapshotLib.recordPendingRatingSettlement(
+            pendingRatingSettlement[contentId][roundId],
+            msg.sender,
+            contentId,
+            roundId,
+            referenceRatingBps,
+            upEvidence,
+            downEvidence,
+            uint48(block.timestamp)
+        );
     }
 
     function applyRatingPayoutSnapshot(
@@ -1361,80 +1305,19 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         uint256 roundId,
         IClusterPayoutOracle.PayoutWeight[] calldata payoutWeights,
         bytes32[][] calldata proofs
-    ) external nonReentrant {
-        if (payoutWeights.length != proofs.length) revert InvalidState();
-
-        PendingRatingSettlement storage pending = pendingRatingSettlements[contentId][roundId];
-        if (!pending.exists || pending.applied) revert InvalidState();
-
-        address oracleAddress = protocolConfig.clusterPayoutOracle();
-        if (oracleAddress == address(0)) revert InvalidState();
-        IClusterPayoutOracle oracle = IClusterPayoutOracle(oracleAddress);
-        IClusterPayoutOracle.RoundPayoutSnapshot memory snapshot =
-            oracle.getRoundPayoutSnapshot(PAYOUT_DOMAIN_PUBLIC_RATING, 0, contentId, roundId);
-        if (snapshot.status != IClusterPayoutOracle.SnapshotStatus.Finalized) revert InvalidState();
-        if (snapshot.rawEligibleVoters != payoutWeights.length || snapshot.totalClaimWeight == 0) {
-            revert InvalidState();
-        }
-        (,, uint256 cleanupRemaining, uint48 sourceReadyAt) =
-            IRoundVotingEngine(pending.votingEngine).roundLifecycleState(contentId, roundId);
-        if (cleanupRemaining != 0 || sourceReadyAt == 0) revert InvalidState();
-
-        (, RoundLib.RoundState roundState,, uint16 revealedCount,,,,) =
-            IRoundVotingEngine(pending.votingEngine).roundCore(contentId, roundId);
-        if (roundState != RoundLib.RoundState.Settled || revealedCount != payoutWeights.length) {
-            revert InvalidState();
-        }
-
-        uint256 adjustedUpEvidence;
-        uint256 adjustedDownEvidence;
-        uint256 totalEffectiveWeight;
-        bytes32 previousCommitKey;
-        for (uint256 i = 0; i < payoutWeights.length; i++) {
-            IClusterPayoutOracle.PayoutWeight calldata payout = payoutWeights[i];
-            if (
-                payout.domain != PAYOUT_DOMAIN_PUBLIC_RATING || payout.rewardPoolId != 0
-                    || payout.contentId != contentId || payout.roundId != roundId
-            ) {
-                revert InvalidState();
-            }
-            if (i > 0 && payout.commitKey <= previousCommitKey) revert InvalidState();
-            previousCommitKey = payout.commitKey;
-            if (!oracle.verifyPayoutWeight(payout, proofs[i])) revert InvalidState();
-
-            (bool revealed, bool isUp, uint64 stakeAmount, uint8 epochIndex, bytes32 identityKey, address holder) =
-                IRoundVotingEngine(pending.votingEngine).ratingCommitState(contentId, roundId, payout.commitKey);
-            if (!revealed || identityKey != payout.identityKey || holder != payout.account) revert InvalidState();
-
-            uint256 baseEvidence = _ratingEvidenceWeight(stakeAmount, epochIndex);
-            if (payout.baseWeight != baseEvidence || payout.effectiveWeight > baseEvidence) revert InvalidState();
-
-            totalEffectiveWeight += payout.effectiveWeight;
-            if (isUp) {
-                adjustedUpEvidence += payout.effectiveWeight;
-            } else {
-                adjustedDownEvidence += payout.effectiveWeight;
-            }
-        }
-        if (totalEffectiveWeight != snapshot.totalClaimWeight) revert InvalidState();
-
-        bytes32 snapshotDigest = oracle.roundPayoutSnapshotProposalDigest(snapshot.snapshotKey);
-        pending.applied = true;
-        appliedRatingSnapshotDigest[contentId][roundId] = snapshotDigest;
-
-        RatingLib.RatingState memory nextState = RatingMath.applySettlement(
-            pending.referenceRatingBps,
-            adjustedUpEvidence,
-            adjustedDownEvidence,
+    ) external {
+        ContentRegistryRatingSnapshotLib.applyRatingPayoutSnapshot(
+            pendingRatingSettlement[contentId][roundId],
+            contents[contentId],
             _ratingState[contentId],
-            IRoundVotingEngine(pending.votingEngine).roundRatingConfig(contentId, roundId),
             contentSlashConfigSnapshot[contentId],
+            appliedRatingSnapshotDigest,
+            protocolConfig,
+            contentId,
+            roundId,
+            payoutWeights,
+            proofs,
             uint48(block.timestamp)
-        );
-        _updateRatingState(contentId, roundId, pending.referenceRatingBps, nextState);
-
-        emit RatingSnapshotApplied(
-            contentId, roundId, snapshot.snapshotKey, snapshotDigest, adjustedUpEvidence, adjustedDownEvidence
         );
     }
 
@@ -1443,7 +1326,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         view
         returns (bool)
     {
-        if (domain != PAYOUT_DOMAIN_PUBLIC_RATING || rewardPoolId != 0) return false;
+        if (domain != 3 || rewardPoolId != 0) return false;
         return appliedRatingSnapshotDigest[contentId][roundId] != bytes32(0);
     }
 
@@ -1452,91 +1335,13 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         view
         returns (uint64)
     {
-        if (domain != PAYOUT_DOMAIN_PUBLIC_RATING || rewardPoolId != 0) return 0;
-        PendingRatingSettlement storage pending = pendingRatingSettlements[contentId][roundId];
-        if (!pending.exists || pending.applied) return 0;
-        (,, uint256 cleanupRemaining, uint48 sourceReadyAt) =
-            IRoundVotingEngine(pending.votingEngine).roundLifecycleState(contentId, roundId);
-        if (cleanupRemaining != 0) return 0;
-        return sourceReadyAt;
-    }
-
-    function pendingRatingSettlement(uint256 contentId, uint256 roundId)
-        external
-        view
-        returns (
-            address settlementVotingEngine,
-            uint64 upEvidence,
-            uint64 downEvidence,
-            uint48 readyAt,
-            uint16 referenceRatingBps,
-            bool exists,
-            bool applied
-        )
-    {
-        PendingRatingSettlement storage pending = pendingRatingSettlements[contentId][roundId];
-        return (
-            pending.votingEngine,
-            pending.upEvidence,
-            pending.downEvidence,
-            pending.readyAt,
-            pending.referenceRatingBps,
-            pending.exists,
-            pending.applied
-        );
-    }
-
-    function _updateRatingState(
-        uint256 contentId,
-        uint256 roundId,
-        uint16 referenceRatingBps,
-        RatingLib.RatingState memory nextState
-    ) private {
-        Content storage c = contents[contentId];
-        RatingLib.RatingState storage state = _ratingState[contentId];
-        uint16 oldRatingBps = state.ratingBps == 0 ? uint16(uint256(c.rating) * 100) : state.ratingBps;
-        uint8 oldDisplayRating = c.rating;
-        uint16 clampedRatingBps = RatingMath.clampRatingBps(nextState.ratingBps);
-        uint16 clampedConservativeRatingBps =
-            nextState.conservativeRatingBps > clampedRatingBps ? clampedRatingBps : nextState.conservativeRatingBps;
-
-        state.ratingLogitX18 = nextState.ratingLogitX18;
-        state.confidenceMass = nextState.confidenceMass;
-        state.effectiveEvidence = nextState.effectiveEvidence;
-        state.upEvidence = nextState.upEvidence;
-        state.downEvidence = nextState.downEvidence;
-        state.settledRounds = nextState.settledRounds;
-        state.ratingBps = clampedRatingBps;
-        state.conservativeRatingBps = clampedConservativeRatingBps;
-        state.lastUpdatedAt = nextState.lastUpdatedAt == 0 ? uint48(block.timestamp) : nextState.lastUpdatedAt;
-        state.lowSince = nextState.lowSince;
-
-        uint8 newDisplayRating = RatingMath.displayRatingFromBps(clampedRatingBps);
-        if (newDisplayRating != oldDisplayRating) {
-            c.rating = newDisplayRating;
-            emit RatingUpdated(contentId, oldDisplayRating, newDisplayRating);
-        }
-
-        emit RatingStateUpdated(
-            contentId,
-            roundId,
-            referenceRatingBps,
-            oldRatingBps,
-            clampedRatingBps,
-            clampedConservativeRatingBps,
-            nextState.upEvidence,
-            nextState.downEvidence,
-            nextState.confidenceMass,
-            nextState.effectiveEvidence,
-            nextState.settledRounds
+        if (domain != 3 || rewardPoolId != 0) return 0;
+        return ContentRegistryRatingSnapshotLib.roundPayoutSnapshotSourceReadyAt(
+            pendingRatingSettlement[contentId][roundId], contentId, roundId
         );
     }
 
     // --- View functions ---
-
-    function getRatingState(uint256 contentId) external view returns (RatingLib.RatingState memory state) {
-        state = _ratingState[contentId];
-    }
 
     function getRating(uint256 contentId) external view returns (uint16) {
         uint16 ratingBps = _ratingState[contentId].ratingBps;
@@ -1545,8 +1350,8 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     }
 
     function isContentActive(uint256 contentId) external view returns (bool) {
-        Content storage c = contents[contentId];
-        return c.id != 0 && c.status == ContentStatus.Active;
+        ContentRegistryTypes.Content storage c = contents[contentId];
+        return c.id != 0 && uint8(c.status) == 0;
     }
 
     function _computeRevealCommitment(
@@ -1682,16 +1487,13 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     }
 
     function _minimumSubmissionReward(uint8 rewardAsset) internal view returns (uint256 minimum) {
-        if (address(protocolConfig) != address(0)) {
-            minimum = rewardAsset == SUBMISSION_REWARD_ASSET_LREP
-                ? protocolConfig.minSubmissionLrepPool()
-                : protocolConfig.minSubmissionUsdcPool();
-        }
-        if (minimum == 0) minimum = DEFAULT_MIN_SUBMISSION_REWARD_POOL;
-        RoundLib.RoundConfig memory defaultConfig = _defaultRoundConfig();
-        uint256 maxTurnoutMinimum = uint256(defaultConfig.maxVoters) * MIN_SUBMISSION_REWARD_SETTLED_ROUNDS
-            * SUBMISSION_REWARD_PARTICIPANT_UNIT;
-        return minimum > maxTurnoutMinimum ? minimum : maxTurnoutMinimum;
+        return ContentRegistryRewardLib.minimumSubmissionReward(
+            protocolConfig,
+            rewardAsset,
+            DEFAULT_MIN_SUBMISSION_REWARD_POOL,
+            MIN_SUBMISSION_REWARD_SETTLED_ROUNDS,
+            SUBMISSION_REWARD_PARTICIPANT_UNIT
+        );
     }
 
     function _defaultRoundConfig() internal view returns (RoundLib.RoundConfig memory cfg) {
@@ -1719,7 +1521,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     }
 
     function _isSubmitterIdentity(uint256 contentId, address account) private view returns (bool) {
-        Content storage content = contents[contentId];
+        ContentRegistryTypes.Content storage content = contents[contentId];
         address submitterIdentity = getSubmitterIdentity[contentId];
         if (submitterIdentity == address(0)) {
             if (content.submitter == account) return true;
@@ -1818,15 +1620,6 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         return roundState == RoundLib.RoundState.Open && voteCount != 0 && totalStake != 0;
     }
 
-    function _ratingEvidenceWeight(uint64 stakeAmount, uint8 epochIndex) internal pure returns (uint256) {
-        uint256 stakeForBonus =
-            stakeAmount > RATING_EVIDENCE_STAKE_BONUS_CAP ? RATING_EVIDENCE_STAKE_BONUS_CAP : stakeAmount;
-        uint256 stakeBonus = (stakeForBonus * RATING_EVIDENCE_MAX_STAKE_BONUS) / RATING_EVIDENCE_STAKE_BONUS_CAP;
-        uint256 rawEvidence = uint256(RATING_EVIDENCE_BASE_UNIT) + stakeBonus;
-        uint256 epochWeightBps = RoundLib.epochWeightBps(epochIndex);
-        return (rawEvidence * epochWeightBps) / 10_000;
-    }
-
     function _getInitialConfidenceMass() internal view returns (uint256) {
         if (address(protocolConfig) == address(0)) {
             return DEFAULT_CONFIDENCE_MASS_INITIAL;
@@ -1853,17 +1646,6 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             slashConfig.minSlashLowDuration,
             slashConfig.minSlashEvidence
         ) = protocolConfig.slashConfig();
-    }
-
-    function getSlashConfigForContent(uint256 contentId)
-        public
-        view
-        returns (RatingLib.SlashConfig memory slashConfig)
-    {
-        slashConfig = contentSlashConfigSnapshot[contentId];
-        if (slashConfig.slashThresholdBps == 0) {
-            return _getCurrentSlashConfig();
-        }
     }
 
     // --- Admin ---

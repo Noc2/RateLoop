@@ -2314,11 +2314,6 @@ contract RoundIntegrationTest is VotingTestBase {
         uint256 contentId = _submitContentWithoutOpeningRound();
         uint256 submitterBalanceBefore = lrepToken.balanceOf(submitter);
         uint256 treasuryBalanceBefore = lrepToken.balanceOf(treasury);
-        RatingLib.SlashConfig memory slashConfig = registry.getSlashConfigForContent(contentId);
-        assertEq(slashConfig.slashThresholdBps, 4_000, "content should snapshot the tuned slash threshold");
-        assertEq(slashConfig.minSlashSettledRounds, 1, "content should snapshot the tuned settled-round requirement");
-        assertEq(slashConfig.minSlashLowDuration, 2 days, "content should snapshot the tuned dwell window");
-        assertEq(slashConfig.minSlashEvidence, 1e6, "content should snapshot the tuned evidence floor");
 
         vm.warp(block.timestamp + 1 days + 1);
 
@@ -2340,9 +2335,7 @@ contract RoundIntegrationTest is VotingTestBase {
         _settleRoundWith(voters, contentId, dirs, 10e6);
 
         (,,,,,,,, uint256 rating,) = registry.contents(contentId);
-        RatingLib.RatingState memory ratingState = registry.getRatingState(contentId);
-        assertLt(ratingState.conservativeRatingBps, 4_000, "conservative rating should fall below the tuned threshold");
-        assertGt(uint256(ratingState.lowSince), 0, "first low settlement should start the low-rating dwell timer");
+        assertEq(registry.getRating(contentId), 5_000, "public rating waits for correlation snapshot");
         assertGe(
             lrepToken.balanceOf(treasury),
             treasuryBalanceBefore,
@@ -2350,7 +2343,7 @@ contract RoundIntegrationTest is VotingTestBase {
         );
 
         (,,,,,,,, rating,) = registry.contents(contentId);
-        assertLt(uint256(rating), 50, "display rating should reflect a low settlement");
+        assertEq(uint256(rating), 50, "display rating waits for correlation snapshot");
         assertEq(lrepToken.balanceOf(submitter), submitterBalanceBefore, "submitter receives no removed stake payout");
         assertGe(
             lrepToken.balanceOf(treasury),

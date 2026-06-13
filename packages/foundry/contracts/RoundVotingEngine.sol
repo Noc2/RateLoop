@@ -14,6 +14,7 @@ import { RoundLib } from "./libraries/RoundLib.sol";
 import { RatingLib } from "./libraries/RatingLib.sol";
 import { RoundSettlementSideEffectsLib } from "./libraries/RoundSettlementSideEffectsLib.sol";
 import { RoundSettlementDistributionLib } from "./libraries/RoundSettlementDistributionLib.sol";
+import { ContentRegistryTypes } from "./libraries/ContentRegistryTypes.sol";
 import { RoundCleanupLib } from "./libraries/RoundCleanupLib.sol";
 import { RoundCreationLib } from "./libraries/RoundCreationLib.sol";
 import { RoundRevealLib } from "./libraries/RoundRevealLib.sol";
@@ -1404,14 +1405,14 @@ contract RoundVotingEngine is
     }
 
     function _snapshotRoundContentLifecycle(uint256 contentId, uint256 roundId) internal {
-        (uint64 id,,,,, ContentRegistry.ContentStatus status, uint8 dormantCount,,,) = registry.contents(contentId);
-        if (id == 0 || status != ContentRegistry.ContentStatus.Active) revert ContentNotActive();
+        (uint64 id,,,,, ContentRegistryTypes.ContentStatus status, uint8 dormantCount,,,) = registry.contents(contentId);
+        if (id == 0 || status != ContentRegistryTypes.ContentStatus.Active) revert ContentNotActive();
         roundContentDormantCountSnapshot[contentId][roundId] = dormantCount;
     }
 
     function _isRoundContentLifecycleStale(uint256 contentId, uint256 roundId) internal view returns (bool) {
-        (uint64 id,,,,, ContentRegistry.ContentStatus status, uint8 dormantCount,,,) = registry.contents(contentId);
-        return id == 0 || status != ContentRegistry.ContentStatus.Active
+        (uint64 id,,,,, ContentRegistryTypes.ContentStatus status, uint8 dormantCount,,,) = registry.contents(contentId);
+        return id == 0 || status != ContentRegistryTypes.ContentStatus.Active
             || dormantCount != roundContentDormantCountSnapshot[contentId][roundId];
     }
 
@@ -1660,25 +1661,36 @@ contract RoundVotingEngine is
         );
     }
 
-    function roundRatingConfig(uint256 contentId, uint256 roundId)
+    function roundRatingConfigCompact(uint256 contentId, uint256 roundId)
         external
         view
-        returns (RatingLib.RatingConfig memory cfg)
+        returns (
+            uint256 confidenceMassInitial,
+            uint256 confidenceMassMin,
+            uint256 confidenceMassMax,
+            uint16 conservativePenaltyMaxBps,
+            uint16 conservativePenaltyMinBps
+        )
     {
-        cfg = _getRoundRatingConfig(contentId, roundId);
+        RatingLib.RatingConfig memory cfg = _getRoundRatingConfig(contentId, roundId);
+        return (
+            cfg.confidenceMassInitial,
+            cfg.confidenceMassMin,
+            cfg.confidenceMassMax,
+            cfg.conservativePenaltyMaxBps,
+            cfg.conservativePenaltyMinBps
+        );
     }
 
-    function ratingCommitState(uint256 contentId, uint256 roundId, bytes32 commitKey)
+    function ratingCommitStateCompact(uint256 contentId, uint256 roundId, bytes32 commitKey)
         external
         view
-        returns (bool revealed, bool isUp, uint64 stakeAmount, uint8 epochIndex, bytes32 identityKey, address holder)
+        returns (uint256 flags, bytes32 identityKey, address holder)
     {
         RoundLib.Commit storage commit = commits[contentId][roundId][commitKey];
         return (
-            commit.revealed,
-            commit.isUp,
-            commit.stakeAmount,
-            commit.epochIndex,
+            (commit.revealed ? 1 : 0) | (commit.isUp ? 2 : 0) | (uint256(commit.stakeAmount) << 8)
+                | (uint256(commit.epochIndex) << 72),
             commitIdentityKey[contentId][roundId][commitKey],
             commitIdentityHolder[contentId][roundId][commitKey]
         );

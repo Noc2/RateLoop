@@ -5,6 +5,7 @@ import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { RoundVotingEngine } from "../../contracts/RoundVotingEngine.sol";
 import { RoundRewardDistributor } from "../../contracts/RoundRewardDistributor.sol";
 import { ContentRegistry } from "../../contracts/ContentRegistry.sol";
+import { ContentRegistryTypes } from "../../contracts/libraries/ContentRegistryTypes.sol";
 import { RoundLib } from "../../contracts/libraries/RoundLib.sol";
 import { RoundEngineReadHelpers } from "../helpers/RoundEngineReadHelpers.sol";
 import { VotingTestBase } from "../helpers/VotingTestHelpers.sol";
@@ -106,8 +107,8 @@ contract VotingHandler is VotingTestBase {
         if (voteRecords[voter][contentId].committed && !voteRecords[voter][contentId].claimed) return;
 
         // Skip if content not active
-        (uint256 existingContentId,,,,, ContentRegistry.ContentStatus status,,,,) = registry.contents(contentId);
-        if (existingContentId == 0 || status != ContentRegistry.ContentStatus.Active) return;
+        (uint256 existingContentId,,,,, ContentRegistryTypes.ContentStatus status,,,,) = registry.contents(contentId);
+        if (existingContentId == 0 || status != ContentRegistryTypes.ContentStatus.Active) return;
 
         // Skip if voter doesn't have enough balance
         if (lrepToken.balanceOf(voter) < stakeAmount) return;

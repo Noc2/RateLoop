@@ -3,6 +3,7 @@ pragma solidity ^0.8.34;
 
 import { QuestionRewardPoolEscrowEligibilityLib } from "./QuestionRewardPoolEscrowEligibilityLib.sol";
 import { QuestionRewardParticipantFloorLib } from "./QuestionRewardParticipantFloorLib.sol";
+import { ProtocolConfig } from "../ProtocolConfig.sol";
 
 /// @title ContentRegistryRewardLib
 /// @notice Submission reward validation extracted from ContentRegistry to keep registry bytecode deployable.
@@ -12,6 +13,7 @@ library ContentRegistryRewardLib {
     uint256 internal constant MIN_SUBMISSION_REWARD_REQUIRED_VOTERS = 3;
     uint256 internal constant MIN_SUBMISSION_REWARD_SETTLED_ROUNDS = 1;
     uint256 internal constant MAX_SUBMISSION_REWARD_SETTLED_ROUNDS = 16;
+    uint16 internal constant DEFAULT_MAX_VOTERS = 100;
 
     function validateSubmissionReward(
         uint8 asset,
@@ -47,4 +49,24 @@ library ContentRegistryRewardLib {
         }
         require(QuestionRewardPoolEscrowEligibilityLib.isValidPolicy(bountyEligibility), "Invalid eligibility");
     }
+
+    function minimumSubmissionReward(
+        ProtocolConfig protocolConfig,
+        uint8 rewardAsset,
+        uint256 defaultMinimum,
+        uint256 minSettledRounds,
+        uint256 participantUnit
+    ) external view returns (uint256 minimum) {
+        uint16 maxVoters = DEFAULT_MAX_VOTERS;
+        if (address(protocolConfig) != address(0)) {
+            minimum = rewardAsset == SUBMISSION_REWARD_ASSET_LREP
+                ? protocolConfig.minSubmissionLrepPool()
+                : protocolConfig.minSubmissionUsdcPool();
+            (,,, maxVoters) = protocolConfig.config();
+        }
+        if (minimum == 0) minimum = defaultMinimum;
+        uint256 maxTurnoutMinimum = uint256(maxVoters) * minSettledRounds * participantUnit;
+        return minimum > maxTurnoutMinimum ? minimum : maxTurnoutMinimum;
+    }
+
 }

@@ -32,15 +32,21 @@ interface IRoundVotingEngine {
             uint8 upWins
         );
 
-    function roundRatingConfig(uint256 contentId, uint256 roundId)
+    function roundRatingConfigCompact(uint256 contentId, uint256 roundId)
         external
         view
-        returns (RatingLib.RatingConfig memory cfg);
+        returns (
+            uint256 confidenceMassInitial,
+            uint256 confidenceMassMin,
+            uint256 confidenceMassMax,
+            uint16 conservativePenaltyMaxBps,
+            uint16 conservativePenaltyMinBps
+        );
 
-    function ratingCommitState(uint256 contentId, uint256 roundId, bytes32 commitKey)
+    function ratingCommitStateCompact(uint256 contentId, uint256 roundId, bytes32 commitKey)
         external
         view
-        returns (bool revealed, bool isUp, uint64 stakeAmount, uint8 epochIndex, bytes32 identityKey, address holder);
+        returns (uint256 flags, bytes32 identityKey, address holder);
 
     function roundLifecycleState(uint256 contentId, uint256 roundId)
         external
