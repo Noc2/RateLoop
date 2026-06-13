@@ -695,7 +695,6 @@ abstract contract VotingTestBase is Test, ContentSubmissionTestBase {
         uint16 roundReferenceRatingBps;
         uint64 targetRound;
         bytes32 drandChainHash;
-        bytes32 ciphertextHash;
         bytes32 commitHash;
         bytes32 commitKey;
     }
@@ -1050,7 +1049,6 @@ abstract contract VotingTestBase is Test, ContentSubmissionTestBase {
         artifacts.targetRound = _tlockCommitTargetRound();
         artifacts.drandChainHash = _tlockDrandChainHash();
         artifacts.ciphertext = _testCiphertext(isUp, salt, contentId, artifacts.targetRound, artifacts.drandChainHash);
-        artifacts.ciphertextHash = keccak256(artifacts.ciphertext);
         artifacts.commitHash = _commitHash(
             isUp,
             salt,
