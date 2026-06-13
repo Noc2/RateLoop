@@ -155,6 +155,7 @@ jobs:
           NEXT_PUBLIC_TARGET_NETWORKS: "31337"
           NEXT_PUBLIC_THIRDWEB_CLIENT_ID: 124332de491a2aa8b7ba8ea6db1ce693
           NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID: 3a8170812b534d0ff9d794f19a901d64
+          RATELOOP_CONFIDENTIALITY_SECRET: rateloop-e2e-confidentiality-secret
           NOTIFICATION_DELIVERY_SECRET: rateloop-e2e-confidentiality-secret
         run: yarn workspace @rateloop/nextjs serve &
 
@@ -201,6 +202,7 @@ jobs:
           NEXT_PUBLIC_TARGET_NETWORKS: "31337"
           NEXT_PUBLIC_THIRDWEB_CLIENT_ID: 124332de491a2aa8b7ba8ea6db1ce693
           NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID: 3a8170812b534d0ff9d794f19a901d64
+          RATELOOP_CONFIDENTIALITY_SECRET: rateloop-e2e-confidentiality-secret
           NOTIFICATION_DELIVERY_SECRET: rateloop-e2e-confidentiality-secret
           # Anvil/Hardhat account #2 — well-known test key, no real funds
           KEEPER_PRIVATE_KEY: "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d"
@@ -315,6 +317,7 @@ jobs:
           NEXT_PUBLIC_TARGET_NETWORKS: "31337"
           NEXT_PUBLIC_THIRDWEB_CLIENT_ID: 124332de491a2aa8b7ba8ea6db1ce693
           NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID: 3a8170812b534d0ff9d794f19a901d64
+          RATELOOP_CONFIDENTIALITY_SECRET: rateloop-e2e-confidentiality-secret
           NOTIFICATION_DELIVERY_SECRET: rateloop-e2e-confidentiality-secret
         run: yarn workspace @rateloop/nextjs serve &
 
@@ -343,6 +346,7 @@ jobs:
           NEXT_PUBLIC_TARGET_NETWORKS: "31337"
           NEXT_PUBLIC_THIRDWEB_CLIENT_ID: 124332de491a2aa8b7ba8ea6db1ce693
           NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID: 3a8170812b534d0ff9d794f19a901d64
+          RATELOOP_CONFIDENTIALITY_SECRET: rateloop-e2e-confidentiality-secret
           NOTIFICATION_DELIVERY_SECRET: rateloop-e2e-confidentiality-secret
           # Anvil/Hardhat account #2 — well-known test key, no real funds
           KEEPER_PRIVATE_KEY: "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d"
