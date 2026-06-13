@@ -722,10 +722,10 @@ const SmartContracts: NextPage = () => {
       <h3>RewardMath</h3>
       <ul>
         <li>
-          RBTS score-spread settlement compares each revealed report&apos;s scoreBps with the stake-weighted mean score.
-          Positive spreads receive full stake plus the 96% voter share of forfeited stake remaining after the
-          settlement-caller incentive; negative spreads forfeit without a revealed-loser rebate.{" "}
-          {protocolDocFacts.scoreSpreadForfeitPolicyLabel}
+          RBTS score-spread settlement compares each revealed report&apos;s scoreBps with a leave-one-out benchmark from
+          the other score-eligible revealed reports. Positive spreads receive full stake plus the 96% voter share of
+          forfeited stake remaining after the settlement-caller incentive; negative spreads forfeit without a
+          revealed-loser rebate. {protocolDocFacts.scoreSpreadForfeitPolicyLabel}
         </li>
         <li>
           <code>calculateVoterReward(shares, totalWinningShares, voterPool)</code> &mdash; Share-proportional reward

@@ -77,11 +77,11 @@ The result package can include:
 
 LREP is the public reputation and staking token used by open raters. Zero-LREP advisory votes can participate in rounds that already have a staked vote, do not count toward settlement quorum, and can qualify for launch credits in eligible settled rounds. Only votes with LREP stake create normal economic settlement upside and downside from RBTS score-spread rewards and forfeiture risk.
 
-RBTS settlement keeps each revealed report's `scoreBps`, computes the stake-weighted mean score, and compares each rater's score with that mean. The settlement caller first receives 1% of scored forfeits, capped at 1 LREP. Positive spreads recover full stake and share the 96% voter share of the remaining forfeited negative-spread stake; the rest of that remaining pool routes 1% to the treasury and 3% to the eligible front-end operator when one is present. Negative spreads forfeit according to distance below the mean, with no revealed-loser rebate for RBTS settlement. Score-spread LREP forfeits are disabled below 8 score-eligible revealed voters and capped at 50% of each report's stake once active.
+RBTS settlement keeps each revealed report's `scoreBps`, computes a leave-one-out benchmark for each rater from the stake-weighted scores of the other score-eligible revealed reports, and compares the rater's score with that benchmark. The settlement caller first receives 1% of scored forfeits, capped at 1 LREP. Positive spreads recover full stake and share the 96% voter share of the remaining forfeited negative-spread stake; the rest of that remaining pool routes 1% to the treasury and 3% to the eligible front-end operator when one is present. Negative spreads forfeit according to distance below the leave-one-out benchmark, with no revealed-loser rebate for RBTS settlement. Score-spread LREP forfeits are disabled below 8 score-eligible revealed voters and capped at 50% of each report's stake once active.
 
 ```
-mean       = sum(stake_i * score_i) / sum(stake_i)
-spread_i   = score_i - mean
+benchmark_i = (sum(stake_j * score_j) - stake_i * score_i) / (sum(stake_j) - stake_i)
+spread_i    = score_i - benchmark_i
 forfeit_i  = min(stake_i * intensity * |spread_i| / 100, 0.5 * stake_i)   when spread_i < 0 and >= 8 score-eligible reveals
 callerCut  = min(0.01 * sum(forfeit), 1 LREP)
 pool       = sum(forfeit) - callerCut                                     # split 96% voters / 1% treasury / 3% frontend
@@ -116,7 +116,7 @@ raters have effective correlation weights of 20,000, 10,000, and 10,000 — one
 rater earned the maximum surprise bonus while the others pay the flat floor —
 they claim 15 USDC, 7.50 USDC, and 7.50 USDC.
 
-Score-spread example once the economic threshold is met: Alice stakes 10 LREP and scores 93.5, Bob stakes 5 LREP and scores 90.0, and Carol stakes 5 LREP and scores 64.0. The stake-weighted mean is 85.25. At 1.5 intensity, Carol forfeits 1.59375 LREP; 1.53 LREP is the voter share. Alice claims 11.188 LREP, Bob claims 5.342 LREP, and Carol claims 3.40625 LREP.
+Score-spread example once the economic threshold is met: Alice stakes 10 LREP and scores 93.5, Bob stakes 5 LREP and scores 90.0, and Carol stakes 5 LREP and scores 64.0. Their leave-one-out benchmarks are 77.00, 83.66, and 92.33. At 1.5 intensity, Carol forfeits 2.12475 LREP; 2.019362 LREP is the voter share after the caller cut. Alice claims 11.693923 LREP, Bob claims 5.325438 LREP, and Carol claims 2.87525 LREP.
 
 Bounty size can raise the required rater floor: 3 below 1,000 USDC, 5 from 1,000 USDC, and 8 from 10,000 USDC. This keeps small asks usable while requiring broader participation for larger payout pools.
 

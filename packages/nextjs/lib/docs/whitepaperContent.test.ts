@@ -130,7 +130,7 @@ test("whitepaper includes how-it-works formulas as rendered formula blocks", () 
     .filter((block): block is Extract<ContentBlock, { type: "formula" }> => block.type === "formula")
     .map(block => block.latex);
 
-  assert.ok(allFormulaLatex.some(latex => latex.includes(String.raw`\bar{s}`)));
+  assert.ok(allFormulaLatex.some(latex => latex.includes(String.raw`b_i = \frac{\sum_j k_j`)));
   assert.ok(allFormulaLatex.some(latex => latex.includes(String.raw`f_i = \begin{cases}`)));
   assert.ok(allFormulaLatex.some(latex => latex.includes(String.raw`r_i = 0.96`)));
   assert.ok(allFormulaLatex.some(latex => latex.includes(String.raw`\mathrm{claim}_i`)));

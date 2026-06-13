@@ -159,8 +159,8 @@ const TechStackPage: NextPage = () => {
       <p>
         LREP is the optional reputation stake used in rating and the governance token used for protocol control. Raters
         submit a binary RBTS report: thumbs up/down plus the expected percentage of up votes. They can stake 0-10 LREP
-        on that report; staked reports above the stake-weighted mean score recover full stake and share forfeited
-        negative-spread stake, while below-mean reports can forfeit and unrevealed staked reports can forfeit.{" "}
+        on that report; staked reports above their leave-one-out benchmark recover full stake and share forfeited
+        negative-spread stake, while below-benchmark reports can forfeit and unrevealed staked reports can forfeit.{" "}
         {protocolDocFacts.scoreSpreadForfeitPolicyLabel}
       </p>
       <p>

@@ -6,38 +6,41 @@ const raters = [
     name: "Alice",
     stake: "10 LREP",
     score: "93.5",
-    spread: "+8.25",
-    reward: "+1.188",
-    final: "11.188",
+    benchmark: "77.00",
+    spread: "+16.50",
+    reward: "+1.693923",
+    final: "11.693923",
     accent: "green" as const,
   },
   {
     name: "Bob",
     stake: "5 LREP",
     score: "90.0",
-    spread: "+4.75",
-    reward: "+0.342",
-    final: "5.342",
+    benchmark: "83.66",
+    spread: "+6.34",
+    reward: "+0.325438",
+    final: "5.325438",
     accent: "blue" as const,
   },
   {
     name: "Carol",
     stake: "5 LREP",
     score: "64.0",
-    spread: "-21.25",
-    reward: "-1.59375",
-    final: "3.40625",
+    benchmark: "92.33",
+    spread: "-28.33",
+    reward: "-2.12475",
+    final: "2.87525",
     accent: "pink" as const,
   },
 ];
 
 const settlementFacts = [
-  ["Stake-weighted mean", "85.25"],
+  ["Benchmark", "Leave-one-out"],
   ["Economic threshold", `${protocolDocFacts.scoreSpreadForfeitMinRevealsLabel} revealed`],
   ["Intensity", "1.5"],
   ["Max forfeit", protocolDocFacts.maxScoreSpreadForfeitPercentLabel],
-  ["Forfeited pool", "1.59375 LREP"],
-  ["Voter share", "1.53 LREP"],
+  ["Forfeited pool", "2.12475 LREP"],
+  ["Voter share", "2.019362 LREP"],
   ["Rebate", "None"],
 ];
 
@@ -54,12 +57,13 @@ export function RbtsScoreSpreadSettlementDiagram() {
           ))}
         </div>
         <div className="overflow-x-auto">
-          <table className="min-w-[720px] text-left text-sm">
+          <table className="min-w-[780px] text-left text-sm">
             <thead className="text-xs uppercase text-base-content/45">
               <tr>
                 <th className="px-3 py-2 font-semibold">Rater</th>
                 <th className="px-3 py-2 font-semibold">Stake</th>
                 <th className="px-3 py-2 font-semibold">Score</th>
+                <th className="px-3 py-2 font-semibold">LOO Benchmark</th>
                 <th className="px-3 py-2 font-semibold">Spread</th>
                 <th className="px-3 py-2 font-semibold">Reward / Forfeit</th>
                 <th className="px-3 py-2 font-semibold">Final Claim</th>
@@ -73,6 +77,7 @@ export function RbtsScoreSpreadSettlementDiagram() {
                   </td>
                   <td className="px-3 py-3 font-mono text-base-content/70">{rater.stake}</td>
                   <td className="px-3 py-3 font-mono text-base-content/70">{rater.score}</td>
+                  <td className="px-3 py-3 font-mono text-base-content/70">{rater.benchmark}</td>
                   <td className="px-3 py-3 font-mono text-base-content/70">{rater.spread}</td>
                   <td className="px-3 py-3 font-mono text-base-content/70">{rater.reward}</td>
                   <td className="px-3 py-3 font-mono font-semibold text-base-content">{rater.final}</td>

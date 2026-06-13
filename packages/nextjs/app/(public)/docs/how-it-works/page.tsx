@@ -86,25 +86,26 @@ const HowItWorks: NextPage = () => {
         <a href={robustBtsHref} target="_blank" rel="noopener noreferrer" className="link link-primary">
           Robust Bayesian Truth Serum (RBTS)
         </a>{" "}
-        compares every revealed staked report with the stake-weighted mean score. A report&apos;s score spread is its
-        own score minus that mean. Stakes settle against that spread: below-mean reports forfeit, above-mean reports
-        split the forfeited pool. Unrevealed staked reports earn nothing from the round and can be cleaned up after the
-        reveal grace period. The benefit is that stake rewards follow relative predictive quality rather than raw
-        popularity, giving raters a reason to report independently instead of copying visible momentum.
+        compares every revealed staked report with a leave-one-out benchmark: the stake-weighted score of the other
+        score-eligible revealed reports. A report&apos;s score spread is its own score minus that benchmark. Stakes
+        settle against that spread: below-benchmark reports forfeit, above-benchmark reports split the forfeited pool.
+        Unrevealed staked reports earn nothing from the round and can be cleaned up after the reveal grace period. The
+        benefit is that stake rewards follow relative predictive quality rather than raw popularity, giving raters a
+        reason to report independently instead of copying visible momentum.
       </p>
       <FormulaCard
         title="RBTS Score-Spread Settlement"
         formulas={[
           {
-            label: "Mean & spread",
-            tex: String.raw`\bar{s} = \frac{\sum_i k_i\, s_i}{\sum_i k_i} \qquad d_i = s_i - \bar{s}`,
+            label: "Benchmark & spread",
+            tex: String.raw`b_i = \frac{\sum_j k_j\, s_j - k_i\,s_i}{\sum_j k_j - k_i} \qquad d_i = s_i - b_i`,
           },
           {
-            label: "Forfeit (below mean)",
+            label: "Forfeit (below benchmark)",
             tex: String.raw`f_i = \begin{cases} \min\!\left(k_i\,\lambda\,\dfrac{\lvert d_i\rvert}{100},\; 0.5\,k_i\right) & d_i < 0 \;\text{ and }\; n \ge ${protocolDocFacts.scoreSpreadForfeitMinRevealsLabel} \\[6pt] 0 & \text{otherwise} \end{cases}`,
           },
           {
-            label: "Reward (above mean)",
+            label: "Reward (above benchmark)",
             tex: String.raw`r_i = 0.96\, F' \cdot \frac{k_i\, d_i}{\sum_{d_j > 0} k_j\, d_j} \qquad F' = \sum_i f_i - \min\!\left(0.01 \textstyle\sum_i f_i,\; 1\right)`,
           },
           {
@@ -115,6 +116,7 @@ const HowItWorks: NextPage = () => {
         where={[
           { symbol: String.raw`k_i`, meaning: "LREP stake on report i (0\u201310)" },
           { symbol: String.raw`s_i`, meaning: "revealed RBTS score (0\u2013100)" },
+          { symbol: String.raw`b_i`, meaning: "leave-one-out benchmark score for report i" },
           { symbol: String.raw`\lambda`, meaning: "forfeit intensity (governance-set)" },
           { symbol: String.raw`n`, meaning: "score-eligible revealed voters" },
           { symbol: String.raw`F'`, meaning: "forfeited pool after the settlement-caller cut" },
@@ -129,10 +131,11 @@ const HowItWorks: NextPage = () => {
       <RbtsScoreSpreadSettlementDiagram />
       <p>
         Example once the score-spread economic threshold is met: Alice stakes 10 LREP and scores 93.5, Bob stakes 5 LREP
-        and scores 90.0, and Carol stakes 5 LREP and scores 64.0. The stake-weighted mean is 85.25. At 1.5 intensity,
-        Carol forfeits 1.59375 LREP; 0.0159375 LREP pays the settlement caller, then the remaining 1.5778125 LREP splits
-        into 1.5147 LREP for positive-spread voters, 0.015778125 LREP for treasury, and 0.047334375 LREP for the
-        eligible front-end operator. Alice claims 11.17612 LREP, Bob claims 5.33858 LREP, and Carol claims 3.40625 LREP.
+        and scores 90.0, and Carol stakes 5 LREP and scores 64.0. Their leave-one-out benchmarks are 77.00, 83.66, and
+        92.33. At 1.5 intensity, Carol forfeits 2.12475 LREP; 0.021247 LREP pays the settlement caller, then the
+        remaining 2.103503 LREP splits into 2.019362 LREP for positive-spread voters, 0.021035 LREP for treasury, and
+        0.063105 LREP for the eligible front-end operator. Alice claims 11.693923 LREP, Bob claims 5.325438 LREP, and
+        Carol claims 2.87525 LREP.
       </p>
 
       <h3 id="eligible-settled-rounds">Launch LREP Credits</h3>

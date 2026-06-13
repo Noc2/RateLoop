@@ -25,7 +25,7 @@ The real issues live **off-chain and at the boundaries**:
 2. **Indexer-vs-contract fidelity (Ponder).** Five confirmed places where the indexer's
    aggregates diverge from on-chain economics — mislabeled refunded pools, an inflated
    allocated balance, a missing reorg-replay guard that can double-count, and a dropped
-   event field. None lose funds on-chain; all corrupt what the app *displays* and what
+   event field. None lose funds on-chain; all corrupt what the app _displays_ and what
    downstream consumers read.
 3. **Spec-vs-code consistency.** Two documented invariants ("protocol-wide identity earning
    ban", "gated rounds are human-credential-only") are narrower or softer in the code than
@@ -36,15 +36,15 @@ the only High), then the Ponder aggregation fixes, then adjudicate the spec-vs-c
 
 ## Method
 
-| Agent | Scope | Result |
-| --- | --- | --- |
-| 1 | Core voting / round lifecycle / settlement math (14 libs + engine) | No Crit/High; 1 Low edge case |
-| 2 | Escrow / rewards / confidentiality / payout pipeline | No Crit/High; 1 Med + 3 Low (mostly by-design) |
-| 3 | Registries / identity / governance / submission | No Crit/High; 1 Med + 2 Low |
-| 4 | **ABI parity** (TS ABIs vs compiled Solidity; deployment addresses) | **1 High + 2 Med + 1 Low** |
-| 5 | Ponder indexer + keeper bot | 5 Med + 4 Low |
-| 6 | SDK + agents (commit-reveal / signing parity) | No Crit/High; 2 Low |
-| 7 | Next.js critical money/identity flows | No Crit/High; 2 Low |
+| Agent | Scope                                                               | Result                                         |
+| ----- | ------------------------------------------------------------------- | ---------------------------------------------- |
+| 1     | Core voting / round lifecycle / settlement math (14 libs + engine)  | No Crit/High; 1 Low edge case                  |
+| 2     | Escrow / rewards / confidentiality / payout pipeline                | No Crit/High; 1 Med + 3 Low (mostly by-design) |
+| 3     | Registries / identity / governance / submission                     | No Crit/High; 1 Med + 2 Low                    |
+| 4     | **ABI parity** (TS ABIs vs compiled Solidity; deployment addresses) | **1 High + 2 Med + 1 Low**                     |
+| 5     | Ponder indexer + keeper bot                                         | 5 Med + 4 Low                                  |
+| 6     | SDK + agents (commit-reveal / signing parity)                       | No Crit/High; 2 Low                            |
+| 7     | Next.js critical money/identity flows                               | No Crit/High; 2 Low                            |
 
 Note on Agent 4: the compiled `packages/foundry/out/*.json` artifacts were stale at audit
 start (compiled Jun 12 12:17; sources modified through Jun 13 08:36). The agent ran
@@ -106,7 +106,7 @@ A single ABI regeneration after `forge build` resolves all three.
   reads the stale data; consumed by `packages/keeper/src/config.ts`,
   `packages/ponder/src/protocol-deployment.ts`, `packages/nextjs/lib/protocolDeployment.ts`.
   So nextjs/keeper resolve **wrong** local addresses and would revert/no-op against them.
-  Meanwhile `packages/ponder/.env.local` hardcodes 31337 addresses that *do* match the
+  Meanwhile `packages/ponder/.env.local` hardcodes 31337 addresses that _do_ match the
   fresh artifact — so the local stack disagrees with itself.
 - Scope: **local-dev only.** Chain 4801 (testnet): all 19 addresses match
   `packages/foundry/deployments/4801.json` — consistent.
@@ -164,31 +164,28 @@ downstream API routes read.
   re-seed/cleanup) the persisted provider is wrong (0 = None). The `onConflictDoUpdate` path
   preserves an existing row's provider, which narrows the blast radius — hence Medium.
 
-### 2.5 — MEDIUM / latent (suspected): RBTS settlement recomputes the mean instead of trusting the emitted `meanScoreBps`
+### 2.5 — RESOLVED: RBTS settlement now mirrors leave-one-out benchmarks
 
-- `packages/ponder/src/RoundVotingEngine.ts:1110-1111` recomputes
-  `indexedMeanScoreBps = weightedScoreSum / totalScoreWeight` over `scoredVotes`, and
-  `:1131-1137` gates forfeiture on `scoredVotes.length` — but the `continue` guards at
-  `:1038-1045` and `:1070-1072` can drop a weight>0 vote, after which both the recomputed
-  mean and the count diverge from chain. The authoritative `meanScoreBps` is already stored
-  to `round.rbtsMeanScoreBps` (~:971) but is **not** used for per-vote settlement.
-- When a guard fires, indexed `rbtsRewardWeight`/`rbtsStakeReturned`/`rbtsForfeitedStake`
-  (feeding `voterStats.totalStakeLost`) diverge from on-chain economics. Latent because the
-  guards shouldn't fire for a revealed weight>0 vote under consistent indexing; the smell is
-  the design choice to recompute rather than consume the emitted mean/count.
+- On-chain settlement no longer uses the emitted global `meanScoreBps` as the payment
+  benchmark. It stores that value for event/read compatibility, then computes each vote's
+  leave-one-out benchmark from the round aggregate minus the vote's own weighted score.
+- `packages/ponder/src/RoundVotingEngine.ts` now mirrors that calculation for
+  `rbtsRewardWeight`/`rbtsStakeReturned`/`rbtsForfeitedStake` instead of applying one shared
+  recomputed mean to every vote. The stored `rbtsMeanScoreBps` remains telemetry, not the
+  payout benchmark.
 
 ### 2.6–2.9 — LOW
 
 - **2.6** `packages/ponder/src/api/routes/correlation-routes.ts:~37-38,486-504`: a silent
   50k-row scan cap (`MAX_VOTE_SCAN_PAGES=50 × 1000`) on a settlement path; a round needing
-  >50k scanned rows to reach the offset would silently drop eligible votes from the payout
-  merkle tree with no error surfaced. Only fires for pathologically large rounds.
+  > 50k scanned rows to reach the offset would silently drop eligible votes from the payout
+  > merkle tree with no error surfaced. Only fires for pathologically large rounds.
 - **2.7** `packages/ponder/src/QuestionRewardPoolEscrow.ts:492`: `questionBundleReward.failed`
   is never written (always false) yet API routes filter on it — dead column or a
   missing/intended signal.
 - **2.8** `packages/keeper/src/keeper.ts:~1578-1583` (gate ~1183-1220): when a commit's
   ciphertext is in neither Ponder nor the `eth_getLogs` lookback window, the keeper sets
-  `infrastructureFailure=true` (blocking *this* keeper from `finalizeRevealFailedRound`) and
+  `infrastructureFailure=true` (blocking _this_ keeper from `finalizeRevealFailedRound`) and
   never increments the decrypt-failure budget, re-scanning every tick forever. Bounded —
   finalization stays permissionless and the deadline normally lands inside the log window —
   but no escape/alert inside this keeper.
@@ -237,11 +234,11 @@ double-emit reveal guard were all checked and match the contracts.
 ### 3.3 — LOW items (contracts)
 
 - **`ConfidentialityEscrow.sol:390-405,425-440`** — `_markNullifierBonded` records the nexus
-  against the holder's *current* credential nullifier, read independently of the bonded
+  against the holder's _current_ credential nullifier, read independently of the bonded
   `identityKey`; if the holder rotates credentials the nexus can bind the wrong nullifier
   (compounds 3.1).
 - **`LaunchDistributionPool.sol:564-587,640-660,696-717`** — the "gated rounds are
-  human-credential-only" invariant is **not enforced**: unverified raters are *capped*
+  human-credential-only" invariant is **not enforced**: unverified raters are _capped_
   (25% via `unverifiedEarnedRaterCapBps`), not blocked, and `finalize…` re-checks only ban
   status, not credential. The presence of dedicated unverified-cap constants suggests the
   **docs are stale**, not the code — but reconcile explicitly. (Cross-references 3.1 and the
@@ -317,8 +314,8 @@ Solidity, so they get no findings beyond minor hardening:
    cluster. Add the CI parity gate.
 2. **Ponder aggregation fixes:** add the replay guard to `FeedbackBonusAwarded` (2.3), pass
    the real `provider` in `HumanCredentialRevoked` (2.4) — both are local, unambiguous code
-   fixes. Then address 2.1/2.2 (needs the on-chain event-disambiguation decision) and 2.5
-   (consume the emitted `meanScoreBps`).
+   fixes. Then address 2.1/2.2 (needs the on-chain event-disambiguation decision). 2.5 is
+   resolved by mirroring the on-chain leave-one-out benchmark.
 3. **Adjudicate spec-vs-code:** decide the intended scope of the identity ban (3.1) and the
    gated-round credential rule (3.3 / use-case doc), then align either the contracts or the
    documentation.
@@ -327,7 +324,7 @@ Solidity, so they get no findings beyond minor hardening:
 
 ---
 
-*Severity reflects on-chain/financial blast radius. "Confirmed" = re-verified against
+_Severity reflects on-chain/financial blast radius. "Confirmed" = re-verified against
 source by the audit compiler; "suspected" = agent-reported, plausible, not exhaustively
 reproduced. Solidity audited at `packages/foundry/contracts`; ABIs recompiled from current
-source.*
+source._

@@ -387,7 +387,7 @@ export const SECTIONS: Section[] = [
                 ["Positive score-spread reports", "Full stake plus pro-rata share of the 96% voter share"],
                 [
                   "Negative score-spread reports",
-                  `Forfeit according to distance below the stake-weighted mean score once ${protocolDocFacts.scoreSpreadForfeitMinRevealsLabel} score-eligible voters reveal, capped at ${protocolDocFacts.maxScoreSpreadForfeitPercentLabel} of stake`,
+                  `Forfeit according to distance below the report's leave-one-out benchmark once ${protocolDocFacts.scoreSpreadForfeitMinRevealsLabel} score-eligible voters reveal, capped at ${protocolDocFacts.maxScoreSpreadForfeitPercentLabel} of stake`,
                 ],
                 ["Frontend rail", "3% of forfeited stake when an eligible frontend exists"],
                 ["Treasury rail", "1% of forfeited stake with voter-pool fallback if unavailable"],
@@ -398,7 +398,7 @@ export const SECTIONS: Section[] = [
           },
           {
             type: "paragraph",
-            text: `RBTS settlement stores each revealed report's scoreBps, computes the stake-weighted mean score, and compares every staked report with that mean. Positive spreads recover full stake plus a pro-rata share of the 96% voter share of forfeited negative-spread stake; negative spreads forfeit, with no revealed-loser rebate, only after ${protocolDocFacts.scoreSpreadForfeitMinRevealsLabel} score-eligible voters reveal. Per-report score-spread forfeiture is capped at ${protocolDocFacts.maxScoreSpreadForfeitPercentLabel} of stake. The benefit is that stake rewards follow relative predictive quality rather than raw popularity, so raters have a reason to report independently instead of copying visible momentum. Tier-1 raters carry full blind-epoch weight and later raters carry ${protocolDocFacts.openPhaseWeightLabel} weight, so the same anti-herding logic shapes settlement. USDC bounty and launch LREP claims add a second step: a finalized correlation payout snapshot proposed by a registered frontend operator supplies effective claim weights before funds move, without changing the already-settled result.`,
+            text: `RBTS settlement stores each revealed report's scoreBps, computes a leave-one-out benchmark for each staked report from the stake-weighted scores of the other score-eligible revealed reports, and compares the report with that benchmark. Positive spreads recover full stake plus a pro-rata share of the 96% voter share of forfeited negative-spread stake; negative spreads forfeit, with no revealed-loser rebate, only after ${protocolDocFacts.scoreSpreadForfeitMinRevealsLabel} score-eligible voters reveal. Per-report score-spread forfeiture is capped at ${protocolDocFacts.maxScoreSpreadForfeitPercentLabel} of stake. The benefit is that stake rewards follow relative predictive quality rather than raw popularity, so raters have a reason to report independently instead of copying visible momentum; leave-one-out also prevents a large staker from pulling its own payout benchmark toward its score. Tier-1 raters carry full blind-epoch weight and later raters carry ${protocolDocFacts.openPhaseWeightLabel} weight, so the same anti-herding logic shapes settlement. USDC bounty and launch LREP claims add a second step: a finalized correlation payout snapshot proposed by a registered frontend operator supplies effective claim weights before funds move, without changing the already-settled result.`,
           },
           {
             type: "sub_heading",
@@ -406,7 +406,7 @@ export const SECTIONS: Section[] = [
           },
           {
             type: "formula",
-            latex: String.raw`\bar{s} = \frac{\sum_i k_i\, s_i}{\sum_i k_i} \qquad d_i = s_i - \bar{s}`,
+            latex: String.raw`b_i = \frac{\sum_j k_j\, s_j - k_i\,s_i}{\sum_j k_j - k_i} \qquad d_i = s_i - b_i`,
           },
           {
             type: "formula",
@@ -426,7 +426,7 @@ export const SECTIONS: Section[] = [
           },
           {
             type: "paragraph",
-            text: "Here k_i is the LREP stake on report i, s_i is the revealed RBTS score, lambda is the governance-set forfeit intensity, n is the number of score-eligible revealed voters, and F' is the forfeited pool after the settlement-caller cut.",
+            text: "Here k_i is the LREP stake on report i, s_i is the revealed RBTS score, b_i is report i's leave-one-out benchmark, lambda is the governance-set forfeit intensity, n is the number of score-eligible revealed voters, and F' is the forfeited pool after the settlement-caller cut.",
           },
         ],
       },
