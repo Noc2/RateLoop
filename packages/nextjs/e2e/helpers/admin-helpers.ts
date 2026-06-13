@@ -507,10 +507,12 @@ async function resolveTlockCommitRuntime(
   votingEngineAddress: string,
   contentId: bigint,
   commitRoundId: bigint,
+  epochDurationSeconds?: number,
 ): Promise<{ targetRound: bigint }> {
   const latestBlock = await readLatestBlockSnapshot();
   const currentRoundId = await readCurrentRoundId(votingEngineAddress, contentId, latestBlock.blockTag);
-  const { epochDuration } = await readRoundConfig(votingEngineAddress);
+  const roundEpochDurationSeconds =
+    epochDurationSeconds ?? Number((await readRoundConfig(votingEngineAddress)).epochDuration);
   const drandConfig = await readRoundDrandConfig(votingEngineAddress, contentId, commitRoundId, latestBlock.blockTag);
 
   let roundStartTimeSeconds: number | null = null;
@@ -524,7 +526,7 @@ async function resolveTlockCommitRuntime(
 
   const targetRound = deriveAcceptedTlockTargetRound({
     latestBlockTimestampSeconds: latestBlock.timestampSeconds,
-    roundEpochDurationSeconds: Number(epochDuration),
+    roundEpochDurationSeconds,
     drandGenesisTimeSeconds: drandConfig.genesisTime,
     drandPeriodSeconds: drandConfig.period,
     roundStartTimeSeconds,
@@ -1642,7 +1644,12 @@ export async function commitVoteDirect(
         latestBlock.blockTag,
       );
       const roundContext = packVoteRoundContext(roundId, roundReferenceRatingBps);
-      const tlockRuntime = await resolveTlockCommitRuntime(contractAddress, contentIdBigInt, roundId);
+      const tlockRuntime = await resolveTlockCommitRuntime(
+        contractAddress,
+        contentIdBigInt,
+        roundId,
+        resolvedEpochDurationSeconds,
+      );
       const predictedUpBps = defaultPredictedUpBps(isUp);
       const {
         ciphertext,
