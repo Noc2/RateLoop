@@ -20,6 +20,17 @@ not for the mainnet claim**, and given a severity by design impact. 39 strengths
 > is a serving-layer deterrence/redaction model, not cryptographic secrecy, and omitted
 > gated disclosure policy defaults to `private_forever`. The evidentiary/log-root and
 > breach-reporting governance issues remain open.
+>
+> Follow-up update (2026-06-13): the public-rating correlation gap called out in H1 and
+> gate item 2 has been remediated after the reviewed HEAD. Settlement now records raw
+> rating evidence as pending; the visible rating updates only after a finalized
+> `PAYOUT_DOMAIN_PUBLIC_RATING` correlation root supplies per-rater effective weights.
+> The keeper co-proposes the correlation epoch and the dependent public-rating root
+> against the same 2-hour optimistic-oracle window, and the UI shows a small
+> "Rating pending" notice while that root is pending. This does **not** make public-rating
+> weights feed LREP payouts; LREP/USDC payout roots remain separate oracle domains.
+> The remaining H1 concern is the small-round binary verdict itself, which still settles
+> by epoch-weighted vote pools before any correlation root is applied.
 
 > Coverage caveat: the trust-topology reviewer's _weakness_ candidates could not be
 > individually re-verified (the verification stage hit a resource limit), so they are
@@ -55,7 +66,9 @@ literature independently predicts:
    is the single most important issue to resolve before mainnet, and it is partly an
    intended tradeoff (forfeits at n=3 would _arm_ a colluding majority, not deter it)
    and partly an under-defended gap (no base reward pool, no concentration-aware
-   forfeit cap, no on-chain correlation defense on the rating itself).
+   forfeit cap). A post-review public-rating correlation root now prevents the same
+   wallet cluster from moving the displayed rating by raw headcount, but it deliberately
+   does not rewrite the settled binary verdict.
 
 2. **Every on-chain economic deterrent is denominated in LREP, a token with no
    exogenous value source.** Vote stakes, forfeits, the frontend bond, slashing, and
@@ -123,8 +136,13 @@ starred.
   Governance or registry rotation cannot retroactively change an in-flight round's
   rules — the commit hash itself binds the snapshotted reference rating. Excellent
   immunization for 20-minute economic games.
-- **Headcount-dominant public rating with a capped stake bonus.** A 10-LREP whale
-  moves the displayed rating at most 2× a 1-LREP voter (vs 10× reward exposure), and
+- **Post-review: public rating is now independence-adjusted before publication.**
+  Settlement records raw up/down evidence as pending, then the visible rating consumes
+  a finalized public-rating correlation root with per-rater effective weights. A single
+  correlated cluster with many wallets is capped at roughly the strongest independent
+  participant in that cluster, rather than moving the displayed rating by raw headcount.
+  The previous capped-stake property remains: before correlation discounting, a
+  10-LREP whale contributes at most 2× a 1-LREP voter (vs 10× reward exposure), and
   raters report an _absolute_ thumbs signal against a snapshotted prior rather than
   "raise/lower the visible number," avoiding reflexivity.
 - **Advisory votes are a contained onboarding channel** that cannot reach quorum, skew
@@ -242,17 +260,16 @@ hours' float. The per-identity stake cap doesn't help: an unverified identity is
 across `RoundVotingEngine.sol:95`, `VotePreflightLib.sol:157-168`). For 5-voter rounds
 forfeits arm, but they key off the stake-weighted _mean_ a majority controls, so the
 mechanism _helps_ the attacker drain the honest minority. The ClusterPayoutOracle can
-zero the attacker's _bounty_ weights but explicitly "does not affect voting settlement
-or the public rating result" — so the flipped verdict and rating are final. The "don't
-settle external financial contracts" disclaimer covers the external-settlement angle,
-but the whitepaper's own "Signal Integrity" section affirmatively claims sybil
-resistance from stake caps and credentials that the code does not deliver for small
-rounds, and markets agent-action gates whose value _is_ the verdict. **This is the
-gating issue for mainnet.** (Closely related identity finding, also high: the public
-rating has _no_ correlation/independence defense at all — the cluster oracle only
-discounts USDC and launch payouts, never the rating — so an asker can fund from an
-unlinked wallet, fill the 3-voter floor with their own agents, and mint an arbitrary
-permanent public rating for ~bounty + gas.)
+zero the attacker's _bounty_ weights but does not rewrite voting settlement, so the
+flipped binary verdict is final. The "don't settle external financial contracts"
+disclaimer covers the external-settlement angle, but the whitepaper's own "Signal
+Integrity" section affirmatively claims sybil resistance from stake caps and
+credentials that the code does not deliver for small rounds, and markets agent-action
+gates whose value _is_ the verdict. **This remains the gating issue for mainnet.**
+Post-review, the closely related public-rating issue is fixed differently: settlement
+leaves the displayed rating pending until a finalized public-rating correlation root
+applies independence-adjusted weights, so an asker can no longer mint an arbitrary
+permanent public rating by filling the 3-voter floor with their own correlated wallets.
 
 **H2 — LREP value circularity: every economic deterrent is denominated in a token with
 no value source.** _(Economic security foundation; flaw)_
@@ -348,11 +365,14 @@ predictedUpBps, salt, voter, …)` is public at commit time, so an epoch-1 voter
 - **Money-lane sybil economics rest on an optimistic off-chain oracle with small bonds.**
   _(intended tradeoff)_ The independence multiplier that neutralizes sybil clusters in
   USDC claims is computed off-chain and lands as a challengeable merkle root from a
-  1,000-LREP-bonded operator, challengeable for 5 USDC. The single mechanism that makes 50
-  wallets unprofitable in the money lane is a social/optimistic process, not a
-  cryptographic or economic one; behaviorally-decorrelated sybil farms on open-eligibility
-  pools evade clustering and earn ~1× floor shares each. Documented model, but the
-  scorer-evasion economics and the load-bearing honest-challenger assumption are unquantified.
+  1,000-LREP-bonded operator, challengeable for 5 USDC. The same optimistic root family
+  now also gates the public rating, with a separate `PAYOUT_DOMAIN_PUBLIC_RATING` root
+  and no reward-pool id. The single mechanism that makes 50 wallets unprofitable in the
+  money lane and prevents raw-headcount rating movement is a social/optimistic process,
+  not a cryptographic or fully collateralized one; behaviorally-decorrelated sybil farms
+  on open-eligibility pools evade clustering and earn ~1× floor shares each. Documented
+  model, but the scorer-evasion economics and the load-bearing honest-challenger
+  assumption are unquantified.
 - **Bounty volume-farming: the per-claimant weight band (1×–2×) can't outweigh headcount.**
   _(intended tradeoff)_ Adding one revealed sybil adds a full ~1× share; the funder
   exclusion is identity-keyed and fresh-wallet-bypassable; a $0.03 minimum pool means a
@@ -403,7 +423,7 @@ null`, never anchored on-chain, and `onConflictDoUpdate` lets past epochs be sil
 - **Epoch-weighting and score-spread machinery are near-dormant at default settings**
   (single-epoch 20-min rounds, threshold-truncated, forfeit-free) — the 4:1 anti-herding
   dynamic the docs describe isn't the operative protection for typical rounds.
-- **Challenging the payout oracle is EV-negative for a third-party watcher** — a
+- **Challenging the payout/rating oracle is EV-negative for a third-party watcher** — a
   successful challenge returns only the 5-USDC bond; the only upside is a discretionary
   governance slash bounty in LREP. The realistic security model is "the operator watches
   itself plus the arbiter," which the contract header admits but `how-it-works.md`
@@ -512,9 +532,13 @@ stake-weighting, voter apathy, and credential rental all erode.
    Crucially, add a **concentration-aware backstop on the LREP forfeit rail** (cap forfeits
    or route them to treasury when revealed stake-weight is concentrated) so the ≥8-voter
    collusion path stops being profitable.
-2. **Add an independence/correlation defense to the public rating itself, or stop marketing
-   the rating of small/fresh-content rounds as sybil-resistant.** Today the cluster oracle
-   protects only payouts; the rating an agent reads is undefended.
+2. **Done after reviewed HEAD: add an independence/correlation defense to the public
+   rating itself.** The cluster oracle now publishes a separate public-rating root with
+   per-rater effective weights, and `ContentRegistry` keeps the rating pending until that
+   root finalizes. Normal latency is one shared 2-hour optimistic window plus keeper/tx
+   time because the epoch and rating root can be co-proposed; the UI marks the rating as
+   pending during that interval. This closes the raw-headcount public-rating issue, but
+   not the separate small-round verdict issue in item 1.
 3. **Give at least one settlement-layer deterrent exogenous value (H2).** A USDC component
    in vote stakes or forfeits, a fee switch that backs LREP, or explicitly scoping the
    security claim to "while LREP has market value" — but the claim and the mechanism must agree.
