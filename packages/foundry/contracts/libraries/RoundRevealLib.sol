@@ -193,25 +193,15 @@ library RoundRevealLib {
         bytes32[] memory revealedKeysMem = new bytes32[](committedCount);
         bytes32 scoringSetHash;
         uint256 revealedBuildIdx;
-        uint256 economicCount;
         RbtsRoundTotals memory totals;
         for (uint256 i = 0; i < committedCount;) {
             bytes32 commitKey = commitKeys[i];
             RoundLib.Commit storage revealedCommit = roundCommits[commitKey];
-            if (revealedCommit.revealed) {
-                if (commitRbtsWeight[commitKey] > 0) {
-                    scoringSetHash = keccak256(abi.encodePacked(scoringSetHash, commitKey));
-                    revealedKeysMem[revealedBuildIdx] = commitKey;
-                    unchecked {
-                        ++economicCount;
-                    }
-                    unchecked {
-                        ++revealedBuildIdx;
-                    }
-                } else {
-                    totals = _accountPostThresholdReveal(
-                        commitRbtsStakeReturned, commitRbtsForfeitedStake, commitKey, revealedCommit, totals
-                    );
+            if (revealedCommit.revealed && commitRbtsWeight[commitKey] > 0) {
+                scoringSetHash = keccak256(abi.encodePacked(scoringSetHash, commitKey));
+                revealedKeysMem[revealedBuildIdx] = commitKey;
+                unchecked {
+                    ++revealedBuildIdx;
                 }
             }
             unchecked {
@@ -242,7 +232,7 @@ library RoundRevealLib {
             revealedBuildIdx
         );
 
-        if (economicCount < params.minParticipants || scoreWeightSum == 0) {
+        if (scoreWeightSum == 0) {
             _returnScoredStakes(
                 roundCommits, commitRbtsWeight, commitRbtsStakeReturned, revealedKeysMem, revealedBuildIdx
             );
@@ -259,7 +249,6 @@ library RoundRevealLib {
             commitRbtsForfeitedStake,
             revealedKeysMem,
             revealedBuildIdx,
-            economicCount,
             weightedScoreSum,
             scoreWeightSum,
             meanScoreBps
@@ -353,7 +342,7 @@ library RoundRevealLib {
         bytes32 commitKey,
         uint16 benchmarkScoreBps,
         uint256 positiveSpreadWeight,
-        uint256 economicCount,
+        uint256 revealedCount,
         RbtsRoundTotals memory totals
     ) private returns (RbtsRoundTotals memory) {
         uint16 scoreBps = commitRbtsScoreBps[commitKey];
@@ -362,7 +351,7 @@ library RoundRevealLib {
         uint256 stakeAmount = roundCommits[commitKey].stakeAmount;
         uint256 forfeitedStake = positiveSpreadWeight == 0
             ? 0
-            : RewardMath.calculateNegativeScoreSpreadForfeit(stakeAmount, scoreBps, benchmarkScoreBps, economicCount);
+            : RewardMath.calculateNegativeScoreSpreadForfeit(stakeAmount, scoreBps, benchmarkScoreBps, revealedCount);
         uint256 stakeReturned = stakeAmount - forfeitedStake;
 
         commitRbtsRewardWeight[commitKey] = scoreWeight;
@@ -432,7 +421,6 @@ library RoundRevealLib {
         mapping(bytes32 => uint256) storage commitRbtsForfeitedStake,
         bytes32[] memory revealedKeys,
         uint256 revealedCount,
-        uint256 economicCount,
         uint256 weightedScoreSum,
         uint256 scoreWeightSum,
         uint16 meanScoreBps
@@ -466,7 +454,7 @@ library RoundRevealLib {
                 commitKey,
                 benchmarkScoreBps,
                 positiveSpreadWeight,
-                economicCount,
+                revealedCount,
                 totals
             );
             unchecked {
@@ -474,19 +462,6 @@ library RoundRevealLib {
             }
         }
         totals.meanScoreBps = meanScoreBps;
-    }
-
-    function _accountPostThresholdReveal(
-        mapping(bytes32 => uint256) storage commitRbtsStakeReturned,
-        mapping(bytes32 => uint256) storage commitRbtsForfeitedStake,
-        bytes32 commitKey,
-        RoundLib.Commit storage commit,
-        RbtsRoundTotals memory totals
-    ) private returns (RbtsRoundTotals memory) {
-        if (commit.stakeAmount == 0) return totals;
-        commitRbtsStakeReturned[commitKey] = commit.stakeAmount;
-        commitRbtsForfeitedStake[commitKey] = 0;
-        return totals;
     }
 
     function _returnScoredStakes(

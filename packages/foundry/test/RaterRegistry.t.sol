@@ -11,14 +11,6 @@ import { LaunchRaterRewardLib } from "../contracts/libraries/LaunchRaterRewardLi
 import { MockWorldIDVerifier } from "../contracts/mocks/MockWorldIDVerifier.sol";
 
 contract LaunchRaterRewardLibHarness {
-    function launchRewardCredentialAnchorId(RaterRegistry.HumanCredentialProvider provider, bytes32 nullifierHash)
-        external
-        pure
-        returns (bytes32)
-    {
-        return LaunchRaterRewardLib.launchRewardCredentialAnchorId(provider, nullifierHash);
-    }
-
     function launchRewardAnchorId(
         RaterRegistry raterRegistry,
         address account,
@@ -785,20 +777,9 @@ contract RaterRegistryTest is Test {
 
         assertEq(resolved.identityKey, v4Key);
         assertEq(resolved.humanNullifier, NULLIFIER_HASH);
-        LaunchRaterRewardLibHarness launchHarness = new LaunchRaterRewardLibHarness();
-        assertEq(
-            launchHarness.launchRewardCredentialAnchorId(
-                RaterRegistry.HumanCredentialProvider.WorldIdV4, NULLIFIER_HASH
-            ),
-            keccak256(abi.encode(RaterRegistry.HumanCredentialProvider.WorldIdV4, NULLIFIER_HASH))
-        );
         assertTrue(
-            launchHarness.launchRewardCredentialAnchorId(
-                RaterRegistry.HumanCredentialProvider.SeededHuman, NULLIFIER_HASH
-            )
-            != launchHarness.launchRewardCredentialAnchorId(
-                RaterRegistry.HumanCredentialProvider.WorldIdV4, NULLIFIER_HASH
-            )
+            registry.launchHumanIdentityKey(RaterRegistry.HumanCredentialProvider.SeededHuman, NULLIFIER_HASH)
+            != registry.launchHumanIdentityKey(RaterRegistry.HumanCredentialProvider.WorldIdV4, NULLIFIER_HASH)
         );
     }
 

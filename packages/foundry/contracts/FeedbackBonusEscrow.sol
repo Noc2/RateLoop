@@ -435,14 +435,6 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
         _setFeedbackRegistry(feedbackRegistry_);
     }
 
-    /// @notice The voting engine is immutable for this escrow; this setter exists only for
-    ///         compatibility with tooling that probes the shared setter surface.
-    /// @dev Always reverts and never emits an event. Bonus accounting is keyed by
-    ///      contentId/roundId, so rotating engines requires deploying a fresh escrow.
-    function setVotingEngine(address) external view onlyRole(CONFIG_ROLE) {
-        revert("Invalid engine");
-    }
-
     function setDefaultFrontendFeeBps(uint256 frontendFeeBps_) external onlyRole(CONFIG_ROLE) {
         require(frontendFeeBps_ <= MAX_FRONTEND_FEE_BPS, "Fee too high");
         uint256 previousFrontendFeeBps = defaultFrontendFeeBps;

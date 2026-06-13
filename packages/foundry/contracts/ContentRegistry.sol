@@ -97,9 +97,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     uint8 internal constant SUBMISSION_REWARD_ASSET_USDC = 1;
     uint256 internal constant DEFAULT_MIN_SUBMISSION_REWARD_POOL = 1e6;
     uint256 internal constant SUBMISSION_REWARD_PARTICIPANT_UNIT = 10_000;
-    uint256 internal constant MIN_SUBMISSION_REWARD_REQUIRED_VOTERS = 3;
     uint256 internal constant MIN_SUBMISSION_REWARD_SETTLED_ROUNDS = 1;
-    uint256 internal constant MAX_SUBMISSION_REWARD_SETTLED_ROUNDS = 16;
     uint256 internal constant MAX_QUESTION_BUNDLE_COUNT = 10;
     bytes32 internal constant QUESTION_CONTEXT_DOMAIN = keccak256("rateloop-question-context-v5");
     bytes32 internal constant QUESTION_REVEAL_DOMAIN = keccak256("rateloop-question-reveal-v8");
@@ -108,8 +106,6 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     bytes32 internal constant QUESTION_BUNDLE_REVEAL_DOMAIN = keccak256("rateloop-question-bundle-reveal-v6");
     uint8 internal constant CONFIDENTIALITY_FLAG_PRIVATE_FOREVER = 1;
 
-    // Rating safety thresholds
-    uint256 internal constant SLASH_RATING_THRESHOLD = 25; // Rating below this triggers slash
     uint16 internal constant DEFAULT_SLASH_THRESHOLD_BPS = 2500;
     uint16 internal constant DEFAULT_MIN_SLASH_SETTLED_ROUNDS = 2;
     uint48 internal constant DEFAULT_MIN_SLASH_LOW_DURATION = 7 days;
@@ -172,7 +168,8 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     IERC20 public lrepToken;
     address public votingEngine;
     ICategoryRegistry public categoryRegistry;
-    address public bonusPool; // Legacy cancellation sink retained for upgrade/storage compatibility
+    // Deprecated cancellation sink slot retained for proxy-safe upgrades.
+    address private bonusPool;
     address public treasury; // Receives 100% of slashed stakes (governance timelock)
     uint256 public nextContentId;
     uint256 internal nextQuestionBundleId;
@@ -375,7 +372,6 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         nextContentId = 1;
         nextQuestionBundleId = 1;
         treasury = _treasuryAuthority;
-        bonusPool = _treasuryAuthority;
     }
 
     function _initializeSubmissionMediaValidator() private {
@@ -456,12 +452,6 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         if (questionRewardPoolEscrow != address(0) && !paused()) revert InvalidState();
         questionRewardPoolEscrow = _questionRewardPoolEscrow;
         emit QuestionRewardPoolEscrowUpdated(_questionRewardPoolEscrow);
-    }
-
-    /// @notice Set the legacy cancellation sink address (can only be called by TREASURY_ROLE).
-    function setBonusPool(address _bonusPool) external onlyRole(TREASURY_ROLE) {
-        if (_bonusPool == address(0)) revert InvalidState();
-        bonusPool = _bonusPool;
     }
 
     /// @notice Set the treasury address that receives slashed stakes (can only be called by TREASURY_ROLE).
@@ -815,7 +805,6 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     /// @notice Cancel content before any votes. Attached submission bounties stay non-refundable.
     /// @dev Only callable by the submitter. VotingEngine must confirm 0 votes.
     function cancelContent(uint256 contentId) external nonReentrant whenNotPaused {
-        if (bonusPool == address(0)) revert InvalidState();
         ContentRegistryTypes.Content storage c = contents[contentId];
         require(_isSubmitterIdentity(contentId, msg.sender), "Not submitter");
         require(c.status == ContentRegistryTypes.ContentStatus.Active, "Not active");

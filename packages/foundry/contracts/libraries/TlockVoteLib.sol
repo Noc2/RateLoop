@@ -38,15 +38,6 @@ library TlockVoteLib {
         if (embeddedTargetRound != targetRound || embeddedDrandChainHash != drandChainHash) revert InvalidCiphertext();
     }
 
-    function targetRoundTimestamp(uint64 targetRound, uint64 genesisTime, uint64 period)
-        external
-        pure
-        returns (uint256)
-    {
-        if (targetRound == 0 || genesisTime == 0 || period == 0) revert TargetRoundOutOfWindow();
-        return uint256(genesisTime) + (uint256(targetRound) - 1) * uint256(period);
-    }
-
     /// @dev `buildExpectedRbtsCommitHash(bytes memory ciphertext)` — kept for off-chain /
     ///      test callers that have the raw ciphertext in scope. Body delegates to the
     ///      `*FromCiphertextHash` variant after computing the hash, so production paths

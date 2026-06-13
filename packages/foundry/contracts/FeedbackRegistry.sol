@@ -61,10 +61,6 @@ contract FeedbackRegistry is IFeedbackRegistry, Initializable, AccessControlUpgr
         _setVotingEngine(votingEngine_);
     }
 
-    function setVotingEngine(address) external view onlyRole(CONFIG_ROLE) {
-        revert("Invalid engine");
-    }
-
     function publishFeedback(
         uint256 contentId,
         uint256 roundId,

@@ -59,19 +59,6 @@ library QuestionRewardPoolEscrowClaimLib {
         return _nextEqualShare(totalAmount, eligibleVoters, claimedCount);
     }
 
-    function computeClaimSplit(
-        RoundVotingEngine votingEngine,
-        uint256 contentId,
-        uint256 roundId,
-        bytes32 commitKey,
-        address frontend,
-        uint256 grossAmount,
-        uint256 reservedFrontendFee
-    ) external view returns (uint256 voterReward, uint256 frontendFee, address frontendRecipient) {
-        return
-            _computeClaimSplit(votingEngine, contentId, roundId, commitKey, frontend, grossAmount, reservedFrontendFee);
-    }
-
     function frontendRewardRecipient(
         RoundVotingEngine votingEngine,
         uint256 contentId,

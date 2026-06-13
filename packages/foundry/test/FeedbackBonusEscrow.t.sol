@@ -309,38 +309,6 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         vm.stopPrank();
     }
 
-    function testVotingEngineIsPinnedAfterInitialization() public {
-        address newEngine = address(0xBEEF);
-
-        vm.prank(owner);
-        vm.expectRevert("Invalid engine");
-        feedbackBonusEscrow.setVotingEngine(newEngine);
-
-        assertEq(address(feedbackBonusEscrow.votingEngine()), address(votingEngine));
-    }
-
-    function testSetVotingEngineRejectsZeroAddress() public {
-        vm.prank(owner);
-        vm.expectRevert("Invalid engine");
-        feedbackBonusEscrow.setVotingEngine(address(0));
-    }
-
-    function testSetVotingEngineRequiresConfigRole() public {
-        vm.prank(voter1);
-        vm.expectRevert();
-        feedbackBonusEscrow.setVotingEngine(address(0xBEEF));
-    }
-
-    function testFeedbackRegistryVotingEngineIsPinnedAfterInitialization() public {
-        RoundVotingEngine replacementEngine = _deployReplacementEngine();
-
-        vm.prank(owner);
-        vm.expectRevert("Invalid engine");
-        feedbackRegistry.setVotingEngine(address(replacementEngine));
-
-        assertEq(address(feedbackRegistry.votingEngine()), address(votingEngine));
-    }
-
     function testCreateFeedbackBonusPoolRejectsStaleEscrowAfterEngineRotation() public {
         uint256 contentId = _submitQuestion("");
         RoundVotingEngine replacementEngine = _deployReplacementEngine();

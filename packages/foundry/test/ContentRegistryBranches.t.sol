@@ -47,7 +47,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
     address public voter6 = address(8);
     address public keeper = address(9);
     address public treasury = address(100);
-    address public bonusPool = address(101);
     address public delegate = address(102);
 
     uint256 public constant T0 = 1000;
@@ -116,7 +115,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         );
 
         registry.setVotingEngine(address(votingEngine));
-        registry.setBonusPool(bonusPool);
         registry.setTreasury(treasury);
         ProtocolConfig(address(votingEngine.protocolConfig())).setRewardDistributor(address(rewardDistributor));
         ProtocolConfig(address(votingEngine.protocolConfig())).setTreasury(treasury);
@@ -3148,7 +3146,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
                 )
             )
         );
-        reg2.setBonusPool(bonusPool);
         MockCategoryRegistry mockCategoryRegistry2 = new MockCategoryRegistry();
         mockCategoryRegistry2.seedDefaultTestCategories();
         reg2.setCategoryRegistry(address(mockCategoryRegistry2));
@@ -3170,18 +3167,11 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         lrepToken.approve(address(registry), 10e6);
         _submitContentWithReservation(registry, "https://example.com/1", "goal", "goal", "tags", 0);
 
-        uint256 bonusBefore = lrepToken.balanceOf(bonusPool);
         registry.cancelContent(1);
         vm.stopPrank();
-
-        uint256 bonusAfter = lrepToken.balanceOf(bonusPool);
-        assertEq(bonusAfter - bonusBefore, 0);
     }
 
     function test_CancelContent_DeprecatedFeeNotSentToTreasury() public {
-        vm.prank(owner);
-        registry.setBonusPool(treasury);
-
         vm.startPrank(submitter);
         lrepToken.approve(address(registry), 10e6);
         _submitContentWithReservation(registry, "https://example.com/treasury", "goal", "goal", "tags", 0);
@@ -3697,7 +3687,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.stopPrank();
 
         assertEq(reg2.treasury(), treasury);
-        assertEq(reg2.bonusPool(), treasury);
         assertTrue(reg2.hasRole(reg2.DEFAULT_ADMIN_ROLE(), governance));
         assertTrue(reg2.hasRole(reg2.TREASURY_ADMIN_ROLE(), governance));
         assertTrue(reg2.hasRole(reg2.TREASURY_ADMIN_ROLE(), treasury));

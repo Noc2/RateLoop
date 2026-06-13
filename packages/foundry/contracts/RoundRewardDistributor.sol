@@ -80,13 +80,6 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
     mapping(uint256 => mapping(uint256 => uint256)) public roundVoterRewardClaimedAmount;
     mapping(uint256 => mapping(uint256 => bool)) public roundVoterRewardDustFinalized;
 
-    /// @notice L-Funds-B: per-commit recipient + stake captured on the first failed
-    ///         launch-credit record attempt. Non-zero recipient ⇒ retry is permitted via
-    ///         {retryLaunchRaterRewardCredit}. Cleared on success. Defined here so the
-    ///         struct is in scope for the storage mapping below; the mapping itself is
-    ///         appended to the end of storage (see `pendingLaunchCreditRetry` near `__gap`)
-    ///         to keep upgrade-compatibility with existing TransparentUpgradeableProxy
-    ///         deployments that already populated `frontendFeeClaimed`.
     struct PendingLaunchCredit {
         address recipient;
         uint96 stakeAmount;
@@ -191,17 +184,6 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
 
         lrepToken.safeTransfer(treasury, amount);
         emit StrandedLrepSwept(treasury, amount);
-    }
-
-    /// @notice The voting engine is immutable for this distributor; this setter is a
-    ///         compatibility no-op kept for tooling that probes the shared setter surface.
-    /// @dev It never updates state and emits no event: it succeeds only when passed the
-    ///      current engine and reverts for any other address. Claim accounting is keyed by
-    ///      contentId/roundId, so a fresh engine with reused round IDs must use a fresh
-    ///      distributor instead of reusing this stateful instance.
-    function setVotingEngine(address _votingEngine) external view onlyRole(DEFAULT_ADMIN_ROLE) {
-        require(_votingEngine != address(0), "Invalid voting engine");
-        require(_votingEngine == address(votingEngine), "Voting engine immutable");
     }
 
     // --- Voter Reward Claiming ---
@@ -1017,15 +999,10 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
     mapping(uint256 => mapping(uint256 => uint256)) public roundFrontendFeeDustExpectedTotal;
     mapping(uint256 => mapping(uint256 => address)) public roundFrontendFeeDustLastFrontend;
 
-    /// @notice L-Funds-B retry slot, appended at end of storage so an upgrade from any
-    ///         layout that already populated `frontendFeeClaimed` etc. does not shift
-    ///         existing slots. Reads at the new slot before the upgrade are zero, which
-    ///         is the correct "no pending retry" semantic.
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => PendingLaunchCredit))) public pendingLaunchCreditRetry;
 
     /// @notice True once this distributor has mutated reward, frontend-fee, or dust claim accounting.
     bool public claimAccountingStarted;
 
-    // --- Storage Gap for Future Upgrades ---
     uint256[29] private __gap;
 }

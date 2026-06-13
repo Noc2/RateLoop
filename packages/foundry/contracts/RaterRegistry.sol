@@ -24,7 +24,6 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
     uint64 public constant WORLD_ISSUER_SCHEMA_PROOF_OF_HUMAN = 1;
     uint64 public constant WORLD_ISSUER_SCHEMA_SELFIE = 11;
     uint64 public constant WORLD_ISSUER_SCHEMA_PASSPORT = 9303;
-    uint64 public constant DEFAULT_PRESENCE_TTL = 15 minutes;
 
     enum RaterType {
         Unknown,
@@ -117,7 +116,7 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
     mapping(uint8 => WorldIdV4Config) private _worldCredentialConfigs;
     mapping(uint8 => WorldIdV4Config) private _worldPresenceConfigs;
     mapping(address => mapping(address => bool)) internal isFollowing;
-    // Deprecated follow counters. Keep the original slots reserved for proxy-safe upgrades.
+    // Deprecated follow counters retained for proxy-safe upgrades.
     mapping(address => uint256) private followingCount;
     mapping(address => uint256) private followerCount;
     mapping(address => address) public delegateTo;

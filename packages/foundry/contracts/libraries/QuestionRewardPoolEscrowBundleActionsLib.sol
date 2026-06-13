@@ -138,7 +138,6 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         require(params.requiredCompleters >= _requiredParticipantFloorForAmount(params.amount), "High-value floor");
         require(params.requiredSettledRounds >= 1, "Too few rounds");
         require(params.requiredSettledRounds <= MAX_REQUIRED_SETTLED_ROUNDS, "Too many rounds");
-        require(params.amount >= params.requiredCompleters * params.requiredSettledRounds, "Amount too small");
         require(QuestionRewardPoolEscrowEligibilityLib.isValidPolicy(params.bountyEligibility), "Invalid eligibility");
         _requireCompletersMatchSettlementVoters(registry, params.contentIds, params.requiredCompleters);
         QuestionRewardPoolEscrowBundleLib.requireFundingCoversMaxCompleters(

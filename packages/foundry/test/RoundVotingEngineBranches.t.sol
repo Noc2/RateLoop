@@ -4339,8 +4339,6 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
     function test_Commit_ContentNotActive_Reverts() public {
         uint256 contentId = _submitContent();
 
-        vm.prank(owner);
-        registry.setBonusPool(address(100));
         vm.prank(submitter);
         registry.cancelContent(contentId);
 

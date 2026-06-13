@@ -591,7 +591,7 @@ library RoundCleanupLib {
         }
 
         uint256 cleanupIncentivePaid = roundCleanupIncentivePaid[contentId][roundId];
-        cleanupIncentive = _cleanupIncentive(forfeitedToTreasury, 5e6 - cleanupIncentivePaid);
+        cleanupIncentive = _cleanupIncentive(forfeitedToTreasury, CLEANUP_INCENTIVE_MAX - cleanupIncentivePaid);
         if (cleanupIncentive > 0) {
             forfeitedToTreasury -= cleanupIncentive;
             // Count the paid incentive toward the per-round 5 LREP cap across batches.

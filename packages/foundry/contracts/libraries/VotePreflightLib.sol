@@ -45,18 +45,6 @@ library VotePreflightLib {
         _validateContentAndNotSubmitter(registry, voter, contentId, resolved);
     }
 
-    function validateVoterContentAndConfidentiality(
-        IRaterIdentityRegistry identityRegistry,
-        ContentRegistry registry,
-        address voter,
-        uint256 contentId,
-        address confidentialityEscrow
-    ) external view returns (IRaterIdentityRegistry.ResolvedRater memory resolved) {
-        resolved = _resolveUnbannedRater(identityRegistry, voter);
-        _validateContentAndNotSubmitter(registry, voter, contentId, resolved);
-        _validateConfidentialityGate(identityRegistry, confidentialityEscrow, contentId, resolved);
-    }
-
     function validateVoterContentRecordNexus(
         IRaterIdentityRegistry identityRegistry,
         ContentRegistry registry,
@@ -72,18 +60,6 @@ library VotePreflightLib {
         }
     }
 
-    function validateRoundOpener(
-        IRaterIdentityRegistry identityRegistry,
-        ContentRegistry registry,
-        address opener,
-        uint256 contentId,
-        address confidentialityEscrow
-    ) external view {
-        IRaterIdentityRegistry.ResolvedRater memory resolved = _resolveUnbannedRater(identityRegistry, opener);
-        _validateContentAndNotSubmitter(registry, opener, contentId, resolved);
-        _validateConfidentialityGate(identityRegistry, confidentialityEscrow, contentId, resolved);
-    }
-
     function validateRoundOpenerRecordNexus(
         IRaterIdentityRegistry identityRegistry,
         ContentRegistry registry,
@@ -97,15 +73,6 @@ library VotePreflightLib {
             IConfidentialityEscrow(confidentialityEscrow)
                 .recordConfidentialityNexusForRegistry(contentId, resolved.holder, address(identityRegistry));
         }
-    }
-
-    function validateConfidentialityGate(
-        IRaterIdentityRegistry identityRegistry,
-        address confidentialityEscrow,
-        uint256 contentId,
-        IRaterIdentityRegistry.ResolvedRater memory resolved
-    ) external view {
-        _validateConfidentialityGate(identityRegistry, confidentialityEscrow, contentId, resolved);
     }
 
     function _validateConfidentialityGate(

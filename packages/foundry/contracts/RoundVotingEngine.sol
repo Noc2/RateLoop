@@ -22,7 +22,6 @@ import { RoundVotingReadLib } from "./libraries/RoundVotingReadLib.sol";
 import { TokenTransferLib } from "./libraries/TokenTransferLib.sol";
 import { VotePreflightLib } from "./libraries/VotePreflightLib.sol";
 import { IFrontendRegistry } from "./interfaces/IFrontendRegistry.sol";
-import { ICategoryRegistry } from "./interfaces/ICategoryRegistry.sol";
 import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol";
 import { IRoundVotingEngine } from "./interfaces/IRoundVotingEngine.sol";
 import { IRoundVotingCommitReveal } from "./interfaces/IRoundVotingCommitReveal.sol";
@@ -95,7 +94,6 @@ contract RoundVotingEngine is
     uint256 internal constant MIN_STAKE = 1e6; // 1 LREP; zero-LREP ratings use AdvisoryVoteRecorder
     uint256 internal constant MAX_STAKE = 10e6; // 10 LREP (6 decimals)
     uint256 internal constant VOTE_COOLDOWN = 24 hours; // Time-based cooldown per content per voter
-    uint256 internal constant MAX_CIPHERTEXT_SIZE = 2_048; // 2 KB max ciphertext to prevent storage bloat
     uint16 internal constant MIN_RBTS_PARTICIPANTS = 3;
     uint256 internal constant SETTLEMENT_CALLER_INCENTIVE_BPS = 100; // 1% of scored RBTS forfeits
     uint256 internal constant SETTLEMENT_CALLER_INCENTIVE_MAX = 1e6; // 1 LREP
@@ -115,7 +113,7 @@ contract RoundVotingEngine is
     //     when the consensus-reserve mechanism was deleted (`bc96d7e5`); all later slots
     //     shifted up by 1.
     //   * Post-2026-05-19: `roundRbtsMeanScoreBps` (uint256→uint16) inserted mid-layout at
-    //     line 139; all later slots shifted down by 1.
+    //     line 159; all later slots shifted down by 1.
     //   * Post-2026-05-28: `roundRbtsScoreSeed` inserted after `roundRbtsMeanScoreBps` so
     //     advisory sampling can bind to the finalized engine seed. Fresh deployments only.
     //   * Post-2026-05-29: `roundAdvisoryVoteRecorderSnapshot` inserted after
@@ -1126,12 +1124,6 @@ contract RoundVotingEngine is
     ///      belong to voters indefinitely. Adding a deadline would create a governance extraction vector.
     function claimCancelledRoundRefund(uint256 contentId, uint256 roundId) external nonReentrant {
         RoundLib.Round storage round = rounds[contentId][roundId];
-        if (
-            round.state != RoundLib.RoundState.Cancelled && round.state != RoundLib.RoundState.Tied
-                && round.state != RoundLib.RoundState.RevealFailed
-        ) {
-            revert RoundCleanupLib.RoundNotCancelledOrTied();
-        }
 
         (bytes32 commitKey,) = _resolveClaimCommit(contentId, roundId, msg.sender);
         if (commitKey == bytes32(0)) revert RoundCleanupLib.NoCommit();
@@ -1293,10 +1285,6 @@ contract RoundVotingEngine is
             contentId,
             MIN_RBTS_PARTICIPANTS
         );
-    }
-
-    function _getCategoryRegistry() internal view returns (ICategoryRegistry) {
-        return ICategoryRegistry(protocolConfig.categoryRegistry());
     }
 
     function _getRoundRaterRegistry(uint256 contentId, uint256 roundId) internal view returns (IRaterIdentityRegistry) {

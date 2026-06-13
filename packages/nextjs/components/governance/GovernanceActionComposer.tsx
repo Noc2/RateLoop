@@ -849,20 +849,6 @@ const actionTemplates: readonly GovernanceActionTemplate[] = [
     buildDescription: values => `Set ProtocolConfig RaterRegistry to ${values.raterRegistry || "address"}`,
   },
   {
-    id: "content-set-bonus-pool",
-    group: "Content Registry",
-    label: "Set legacy cancellation sink",
-    mode: "proposal",
-    contractName: "ContentRegistry",
-    functionName: "setBonusPool",
-    description:
-      "Create a proposal to update the legacy cancellation sink retained for contract compatibility. Content cancellation does not currently charge a fee.",
-    advanced: true,
-    fields: [{ key: "bonusPool", label: "Legacy sink address", type: "address", required: true }],
-    buildArgs: (_, parser) => [parser.address("bonusPool", "Legacy sink address")],
-    buildDescription: values => `Set ContentRegistry legacy cancellation sink to ${values.bonusPool || "address"}`,
-  },
-  {
     id: "content-set-treasury",
     group: "Content Registry",
     label: "Set treasury",

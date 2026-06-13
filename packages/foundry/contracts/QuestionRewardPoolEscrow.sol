@@ -62,7 +62,6 @@ contract QuestionRewardPoolEscrow is
     bytes32 internal constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 
     uint256 internal constant MIN_REQUIRED_SETTLED_ROUNDS = 1;
-    uint256 internal constant MIN_EFFECTIVE_PARTICIPANT_UNITS = 3;
     uint256 internal constant BPS_SCALE = 10_000;
     uint256 internal constant DEFAULT_FRONTEND_FEE_BPS = 300;
     /// @notice Grace period voters have after bountyClosesAt to claim on a still-claimable bundle
@@ -168,9 +167,6 @@ contract QuestionRewardPoolEscrow is
     event RewardPoolClusterPayoutOracleRepointed(
         uint256 indexed rewardPoolId, address indexed oldClusterPayoutOracle, address indexed newClusterPayoutOracle
     );
-    event RewardPoolCursorAdvanced(
-        uint256 indexed rewardPoolId, uint256 indexed contentId, uint256 fromRoundId, uint256 toRoundId, uint256 skipped
-    );
     event QuestionRewardClaimed(
         uint256 indexed rewardPoolId,
         uint256 indexed contentId,
@@ -238,8 +234,6 @@ contract QuestionRewardPoolEscrow is
         bytes32 weightRoot
     );
     event QuestionBundleClusterPayoutOracleSnapshotted(uint256 indexed bundleId, address indexed clusterPayoutOracle);
-    /// @dev Removed: QuestionBundleFailed is no longer emitted after the retry-after-
-    ///      failed-round refactor, so subscribing to that event is a no-op on current deployments.
     event QuestionBundleRewardClaimed(
         uint256 indexed bundleId,
         uint256 indexed roundSetIndex,

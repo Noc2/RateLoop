@@ -431,26 +431,6 @@ library QuestionRewardPoolEscrowQualificationLib {
         );
     }
 
-    function clusterRoundQualificationStatus(
-        mapping(uint256 => address) storage rewardPoolPayerIdentity,
-        mapping(uint256 => bytes32) storage rewardPoolPayerIdentityKey,
-        mapping(uint256 => address) storage rewardPoolClusterPayoutOracle,
-        RoundVotingEngine votingEngine,
-        RewardPool storage rewardPool,
-        uint256 roundId,
-        uint8 payoutDomain
-    ) external view returns (bool roundFinished, bool canQualify, uint256 eligibleVoters) {
-        return _clusterRoundQualificationStatus(
-            rewardPoolPayerIdentity,
-            rewardPoolPayerIdentityKey,
-            rewardPoolClusterPayoutOracle,
-            votingEngine,
-            rewardPool,
-            roundId,
-            payoutDomain
-        );
-    }
-
     function _roundQualificationStatus(
         mapping(uint256 => address) storage rewardPoolPayerIdentity,
         mapping(uint256 => bytes32) storage rewardPoolPayerIdentityKey,

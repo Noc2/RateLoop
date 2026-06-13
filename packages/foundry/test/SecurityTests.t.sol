@@ -667,12 +667,6 @@ contract SecurityAccessControlTest is Test {
         registry.setProtocolConfig(attacker);
     }
 
-    function test_ACL_Registry_setBonusPool_Unauthorized() public {
-        vm.prank(attacker);
-        _expectUnauthorized(attacker, TREASURY_ROLE_REGISTRY);
-        registry.setBonusPool(attacker);
-    }
-
     function test_ACL_Registry_setTreasury_Unauthorized() public {
         vm.prank(attacker);
         _expectUnauthorized(attacker, TREASURY_ROLE_REGISTRY);

@@ -4,7 +4,6 @@ pragma solidity ^0.8.34;
 /// @title IFrontendRegistry
 /// @notice Interface for the FrontendRegistry contract that manages frontend operator registration and fees
 interface IFrontendRegistry {
-    error FrontendIsSlashed();
     error FrontendExitPending();
 
     /// @notice Fixed LREP stake required for frontend registration

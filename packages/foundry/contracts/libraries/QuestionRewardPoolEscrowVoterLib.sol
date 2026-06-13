@@ -11,16 +11,6 @@ library QuestionRewardPoolEscrowVoterLib {
         uint256 contentId,
         uint256 roundId,
         bytes32 commitKey,
-        uint64 closesAt
-    ) internal view returns (bool revealed, address frontend) {
-        return timelyRevealedCommitFrontend(votingEngine, contentId, roundId, commitKey, 0, closesAt);
-    }
-
-    function timelyRevealedCommitFrontend(
-        RoundVotingEngine votingEngine,
-        uint256 contentId,
-        uint256 roundId,
-        bytes32 commitKey,
         uint64 opensAt,
         uint64 closesAt
     ) internal view returns (bool revealed, address frontend) {
@@ -175,16 +165,6 @@ library QuestionRewardPoolEscrowVoterLib {
         returns (bytes32)
     {
         return resolveCurrentRater(protocolConfig, account).identityKey;
-    }
-
-    function identityKeyForRoundRater(
-        RoundVotingEngine votingEngine,
-        ProtocolConfig protocolConfig,
-        uint256 contentId,
-        uint256 roundId,
-        address account
-    ) internal view returns (bytes32) {
-        return resolveRoundRater(votingEngine, protocolConfig, contentId, roundId, account).identityKey;
     }
 
     function addressIdentityKey(address account) internal pure returns (bytes32) {
