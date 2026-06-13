@@ -68,5 +68,4 @@ library ContentRegistryRewardLib {
         uint256 maxTurnoutMinimum = uint256(maxVoters) * minSettledRounds * participantUnit;
         return minimum > maxTurnoutMinimum ? minimum : maxTurnoutMinimum;
     }
-
 }

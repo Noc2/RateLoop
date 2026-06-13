@@ -27,7 +27,9 @@ import {
 import { QuestionRewardPoolEscrowQualificationLib } from "./libraries/QuestionRewardPoolEscrowQualificationLib.sol";
 import { QuestionRewardPoolEscrowRecoveryLib } from "./libraries/QuestionRewardPoolEscrowRecoveryLib.sol";
 import { QuestionRewardPoolEscrowPoolActionsLib } from "./libraries/QuestionRewardPoolEscrowPoolActionsLib.sol";
-import { QuestionRewardPoolEscrowSnapshotConsumerLib } from "./libraries/QuestionRewardPoolEscrowSnapshotConsumerLib.sol";
+import {
+    QuestionRewardPoolEscrowSnapshotConsumerLib
+} from "./libraries/QuestionRewardPoolEscrowSnapshotConsumerLib.sol";
 import { QuestionRewardPoolEscrowTransferLib } from "./libraries/QuestionRewardPoolEscrowTransferLib.sol";
 import { QuestionRewardPoolEscrowWindowLib } from "./libraries/QuestionRewardPoolEscrowWindowLib.sol";
 import {

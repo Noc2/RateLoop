@@ -35,7 +35,8 @@ library QuestionRewardPoolEscrowSnapshotConsumerLib {
         IClusterPayoutOracle oracle = IClusterPayoutOracle(newOracle);
         try oracle.roundPayoutSnapshotProposedAt(payoutDomain, rewardPoolId, rewardPool.contentId, 0) returns (
             uint64
-        ) { } catch {
+        ) { }
+        catch {
             revert("Invalid oracle");
         }
         try oracle.roundPayoutSnapshotConsumer(payoutDomain) returns (address consumer) {

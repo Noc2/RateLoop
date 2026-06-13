@@ -737,13 +737,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         );
         if (claimWeight == 0) return 0;
         (, claimableAmount,,) = _claimableWeightedBundle(
-            votingEngine,
-            ctx.firstContentId,
-            ctx.firstRoundId,
-            ctx.firstCommitKey,
-            ctx.frontend,
-            claimWeight,
-            snapshot
+            votingEngine, ctx.firstContentId, ctx.firstRoundId, ctx.firstCommitKey, ctx.frontend, claimWeight, snapshot
         );
     }
 
