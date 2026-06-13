@@ -31,6 +31,15 @@ contract RewardMathHarness {
         return RewardMath.calculatePositiveScoreSpreadWeight(rbtsWeight, scoreBps, meanScoreBps);
     }
 
+    function calculateLeaveOneOutMeanScoreBps(
+        uint256 weightedScoreSum,
+        uint256 scoreWeightSum,
+        uint256 ownWeight,
+        uint16 ownScoreBps
+    ) external pure returns (uint16) {
+        return RewardMath.calculateLeaveOneOutMeanScoreBps(weightedScoreSum, scoreWeightSum, ownWeight, ownScoreBps);
+    }
+
     function calculateNegativeScoreSpreadForfeit(
         uint256 stakeAmount,
         uint16 scoreBps,
@@ -192,6 +201,38 @@ contract RewardMathTest is Test {
     // ====================================================
     // score-spread accounting — Unit Tests
     // ====================================================
+
+    function test_CalculateLeaveOneOutMeanScoreBps_RemovesOwnBenchmarkInfluence() public view {
+        uint256 weightedScoreSum = (10e6 * 6_000) + (7e6 * 9_000);
+        uint256 scoreWeightSum = 17e6;
+
+        assertEq(
+            harness.calculateLeaveOneOutMeanScoreBps(weightedScoreSum, scoreWeightSum, 10e6, 6_000),
+            9_000,
+            "Whale is benchmarked against the other seven raters"
+        );
+        assertEq(
+            harness.calculateLeaveOneOutMeanScoreBps(weightedScoreSum, scoreWeightSum, 1e6, 9_000),
+            7_125,
+            "Minnow benchmark excludes only the minnow's own score"
+        );
+    }
+
+    function test_CalculateLeaveOneOutMeanScoreBps_RewardsHighConvictionOutlierIfItScoresWell() public view {
+        uint256 weightedScoreSum = (10e6 * 9_500) + (7e6 * 7_000);
+        uint256 scoreWeightSum = 17e6;
+
+        assertEq(
+            harness.calculateLeaveOneOutMeanScoreBps(weightedScoreSum, scoreWeightSum, 10e6, 9_500),
+            7_000,
+            "High-scoring whale no longer raises its own benchmark"
+        );
+        assertEq(
+            harness.calculatePositiveScoreSpreadWeight(10e6, 9_500, 7_000),
+            2_500_000,
+            "Reward weight uses the leave-one-out spread"
+        );
+    }
 
     function test_CalculatePositiveScoreSpreadWeight_UsesRbtsWeightAndDelta() public view {
         uint256 weight = harness.calculatePositiveScoreSpreadWeight(10e6, 9350, 8525);

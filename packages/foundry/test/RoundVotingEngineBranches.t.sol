@@ -12,6 +12,7 @@ import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
 import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
 import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
 import { RoundLib } from "../contracts/libraries/RoundLib.sol";
+import { RewardMath } from "../contracts/libraries/RewardMath.sol";
 import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
 import { TlockVoteLib } from "../contracts/libraries/TlockVoteLib.sol";
 import { VotePreflightLib } from "../contracts/libraries/VotePreflightLib.sol";
@@ -1293,6 +1294,82 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertGt(rewardWeight, 0, "positive RBTS reward weight");
         assertGt(forfeitedPool, 0, "imperfect scores forfeit some stake");
         assertGt(_commitRbtsScoreBps(engine, contentId, roundId, commitKeys[0]), 0, "first commit scored");
+    }
+
+    function test_RbtsSettlement_UsesLeaveOneOutScoreSpreadBenchmarks() public {
+        uint256 contentId = _submitContent();
+
+        address[] memory voters = _scoreSpreadFixtureVoters();
+        bool[] memory directions = _scoreSpreadFixtureDirections();
+        bytes32[] memory commitKeys = new bytes32[](SCORE_SPREAD_TEST_REVEALS);
+        bytes32[] memory salts = new bytes32[](SCORE_SPREAD_TEST_REVEALS);
+        uint256[] memory stakes = new uint256[](SCORE_SPREAD_TEST_REVEALS);
+        stakes[0] = 10e6;
+        for (uint256 i = 1; i < SCORE_SPREAD_TEST_REVEALS; i++) {
+            stakes[i] = 1e6;
+        }
+
+        for (uint256 i = 0; i < SCORE_SPREAD_TEST_REVEALS; i++) {
+            (commitKeys[i], salts[i]) =
+                _commitPrediction(voters[i], contentId, directions[i], _predictionBps(i, directions[i]), stakes[i]);
+        }
+
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+        RoundLib.Round memory r0 = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        _warpPastTlockRevealTime(uint256(r0.startTime) + EPOCH);
+
+        for (uint256 i = 0; i < SCORE_SPREAD_TEST_REVEALS; i++) {
+            _revealPrediction(
+                contentId, roundId, commitKeys[i], directions[i], _predictionBps(i, directions[i]), salts[i]
+            );
+        }
+
+        _settleRoundAfterRbtsSeed(contentId, roundId);
+
+        uint256 weightedScoreSum;
+        uint256 scoreWeightSum;
+        for (uint256 i = 0; i < SCORE_SPREAD_TEST_REVEALS; i++) {
+            uint256 scoringWeight = _commitRbtsScoringWeight(engine, contentId, roundId, commitKeys[i]);
+            uint16 scoreBps = _commitRbtsScoreBps(engine, contentId, roundId, commitKeys[i]);
+            weightedScoreSum += scoringWeight * scoreBps;
+            scoreWeightSum += scoringWeight;
+        }
+
+        uint256 expectedPositiveSpreadWeight;
+        for (uint256 i = 0; i < SCORE_SPREAD_TEST_REVEALS; i++) {
+            uint256 scoringWeight = _commitRbtsScoringWeight(engine, contentId, roundId, commitKeys[i]);
+            uint16 scoreBps = _commitRbtsScoreBps(engine, contentId, roundId, commitKeys[i]);
+            uint16 benchmarkScoreBps =
+                RewardMath.calculateLeaveOneOutMeanScoreBps(weightedScoreSum, scoreWeightSum, scoringWeight, scoreBps);
+            expectedPositiveSpreadWeight += RewardMath.calculatePositiveScoreSpreadWeight(
+                scoringWeight, scoreBps, benchmarkScoreBps
+            );
+        }
+
+        assertGt(expectedPositiveSpreadWeight, 0, "fixture should create positive leave-one-out spreads");
+
+        for (uint256 i = 0; i < SCORE_SPREAD_TEST_REVEALS; i++) {
+            uint256 scoringWeight = _commitRbtsScoringWeight(engine, contentId, roundId, commitKeys[i]);
+            uint16 scoreBps = _commitRbtsScoreBps(engine, contentId, roundId, commitKeys[i]);
+            uint16 benchmarkScoreBps =
+                RewardMath.calculateLeaveOneOutMeanScoreBps(weightedScoreSum, scoreWeightSum, scoringWeight, scoreBps);
+            uint256 expectedRewardWeight =
+                RewardMath.calculatePositiveScoreSpreadWeight(scoringWeight, scoreBps, benchmarkScoreBps);
+            uint256 expectedForfeit = RewardMath.calculateNegativeScoreSpreadForfeit(
+                stakes[i], scoreBps, benchmarkScoreBps, SCORE_SPREAD_TEST_REVEALS
+            );
+
+            assertEq(
+                _commitRbtsRewardWeight(engine, contentId, roundId, commitKeys[i]),
+                expectedRewardWeight,
+                "reward weight should use leave-one-out benchmark"
+            );
+            assertEq(
+                _commitRbtsForfeitedStake(engine, contentId, roundId, commitKeys[i]),
+                expectedForfeit,
+                "forfeited stake should use leave-one-out benchmark"
+            );
+        }
     }
 
     function test_SettleRound_PaysCallerIncentiveFromRbtsForfeits() public {

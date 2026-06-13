@@ -68,33 +68,54 @@ library RewardMath {
         return (voterPool * effectiveStake) / totalWeightedWinningStake;
     }
 
-    /// @notice Calculate the positive reward weight from score spread above the round mean.
+    /// @notice Calculate a per-report leave-one-out benchmark from the round score aggregate.
+    /// @dev The caller supplies the aggregate that includes the report being benchmarked.
+    ///      Excluding the report prevents large-stake raters from dragging their own
+    ///      payment benchmark toward their score.
+    function calculateLeaveOneOutMeanScoreBps(
+        uint256 weightedScoreSum,
+        uint256 scoreWeightSum,
+        uint256 ownWeight,
+        uint16 ownScoreBps
+    ) internal pure returns (uint16) {
+        if (ownWeight == 0) {
+            if (scoreWeightSum == 0) return 0;
+            return uint16(weightedScoreSum / scoreWeightSum);
+        }
+
+        uint256 remainingWeight = scoreWeightSum - ownWeight;
+        if (remainingWeight == 0) return 0;
+
+        return uint16((weightedScoreSum - (ownWeight * ownScoreBps)) / remainingWeight);
+    }
+
+    /// @notice Calculate the positive reward weight from score spread above the report benchmark.
     /// @param rbtsWeight Epoch-weighted stake used for RBTS reward accounting.
     /// @param scoreBps Rater's RBTS score in bps.
-    /// @param meanScoreBps Stake-weighted round mean RBTS score in bps.
-    function calculatePositiveScoreSpreadWeight(uint256 rbtsWeight, uint16 scoreBps, uint16 meanScoreBps)
+    /// @param benchmarkScoreBps Benchmark RBTS score in bps.
+    function calculatePositiveScoreSpreadWeight(uint256 rbtsWeight, uint16 scoreBps, uint16 benchmarkScoreBps)
         internal
         pure
         returns (uint256)
     {
-        if (rbtsWeight == 0 || scoreBps <= meanScoreBps) return 0;
-        return (rbtsWeight * (uint256(scoreBps) - meanScoreBps)) / BPS_TOTAL;
+        if (rbtsWeight == 0 || scoreBps <= benchmarkScoreBps) return 0;
+        return (rbtsWeight * (uint256(scoreBps) - benchmarkScoreBps)) / BPS_TOTAL;
     }
 
-    /// @notice Calculate forfeited stake from score spread below the round mean.
+    /// @notice Calculate forfeited stake from score spread below the report benchmark.
     /// @param stakeAmount Raw stake attached to the revealed report.
     /// @param scoreBps Rater's RBTS score in bps.
-    /// @param meanScoreBps Stake-weighted round mean RBTS score in bps.
+    /// @param benchmarkScoreBps Benchmark RBTS score in bps.
     /// @param revealedCount Number of score-eligible revealed participants in the round.
     function calculateNegativeScoreSpreadForfeit(
         uint256 stakeAmount,
         uint16 scoreBps,
-        uint16 meanScoreBps,
+        uint16 benchmarkScoreBps,
         uint256 revealedCount
     ) internal pure returns (uint256) {
         if (revealedCount < SCORE_SPREAD_FORFEIT_MIN_REVEALS) return 0;
-        if (stakeAmount == 0 || scoreBps >= meanScoreBps) return 0;
-        uint256 deltaBps = uint256(meanScoreBps) - scoreBps;
+        if (stakeAmount == 0 || scoreBps >= benchmarkScoreBps) return 0;
+        uint256 deltaBps = uint256(benchmarkScoreBps) - scoreBps;
         uint256 forfeitedStake = (stakeAmount * SCORE_SPREAD_INTENSITY_BPS * deltaBps) / BPS_TOTAL / BPS_TOTAL;
         uint256 maxForfeit = (stakeAmount * MAX_SCORE_SPREAD_FORFEIT_BPS) / BPS_TOTAL;
         return forfeitedStake > maxForfeit ? maxForfeit : forfeitedStake;
