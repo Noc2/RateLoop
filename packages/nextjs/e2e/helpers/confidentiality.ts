@@ -507,7 +507,7 @@ export async function createPrivateAccountReadSessionCookie(
 
 export async function postConfidentialityBond(page: Page, asset: "LREP" | "USDC" | string = "LREP") {
   const normalizedAsset = normalizeAssetName(asset);
-  const button = page.getByRole("button", { name: new RegExp(`Post ${normalizedAsset} bond`, "i") });
+  const button = page.getByRole("button", { name: new RegExp(`^Post ${normalizedAsset} bond$`, "i") }).first();
   await expect(button).toBeVisible({ timeout: 20_000 });
   await expect(button).toBeEnabled({ timeout: 20_000 });
   await button.click();
