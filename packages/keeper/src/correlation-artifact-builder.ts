@@ -699,16 +699,22 @@ async function readResponseBody(
 function parseCandidate(value: unknown): CorrelationRoundCandidate {
   const record = requireRecord(value, "correlation round candidate");
   return {
-    domain:
-      record.domain === PAYOUT_DOMAIN_PUBLIC_RATING
-        ? PAYOUT_DOMAIN_PUBLIC_RATING
-        : record.domain === PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD
-          ? PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD
-          : PAYOUT_DOMAIN_QUESTION_REWARD,
+    domain: parseCandidateDomain(record.domain),
     rewardPoolId: requireNonNegativeBigInt(record.rewardPoolId, "rewardPoolId"),
     contentId: requirePositiveBigInt(record.contentId, "contentId"),
     roundId: requirePositiveBigInt(record.roundId, "roundId"),
   };
+}
+
+function parseCandidateDomain(value: unknown) {
+  const parsed = parseBigInt(value);
+  if (parsed === BigInt(PAYOUT_DOMAIN_PUBLIC_RATING)) {
+    return PAYOUT_DOMAIN_PUBLIC_RATING;
+  }
+  if (parsed === BigInt(PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD)) {
+    return PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD;
+  }
+  return PAYOUT_DOMAIN_QUESTION_REWARD;
 }
 
 function parseVote(value: unknown): CorrelationVoteInput {

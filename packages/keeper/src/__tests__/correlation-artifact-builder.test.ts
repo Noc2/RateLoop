@@ -402,6 +402,82 @@ describe("automatic correlation artifact builder", () => {
     ).toBe(true);
   });
 
+  it("routes string public-rating candidates to the rating vote endpoint", async () => {
+    mockConfig();
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(input.toString());
+      if (url.pathname === "/correlation/round-candidates") {
+        return jsonResponse({ items: [] });
+      }
+      if (url.pathname === "/correlation/bundle-round-candidates") {
+        return jsonResponse({ items: [] });
+      }
+      if (url.pathname === "/correlation/rating-round-candidates") {
+        return jsonResponse({
+          items: [
+            { domain: "3", rewardPoolId: "0", contentId: "9", roundId: "2" },
+          ],
+        });
+      }
+      if (url.pathname === "/correlation/rating-round-votes") {
+        expect(url.searchParams.has("rewardPoolId")).toBe(false);
+        expect(url.searchParams.get("contentId")).toBe("9");
+        expect(url.searchParams.get("roundId")).toBe("2");
+        return jsonResponse({
+          items: [
+            {
+              account: "0x0000000000000000000000000000000000000001",
+              identityKey: `0x${"a".repeat(64)}`,
+              commitKey: `0x${"b".repeat(64)}`,
+              isUp: true,
+              stake: "10000000",
+              epochIndex: 0,
+              revealWeight: "10000",
+              verifiedHuman: true,
+              historicalVoteCount: 12,
+              features: [`identity:0x${"a".repeat(64)}`],
+            },
+          ],
+        });
+      }
+      if (url.pathname === "/correlation/round-votes") {
+        return new Response("wrong endpoint", { status: 500 });
+      }
+      return new Response("not found", { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { buildConfiguredCorrelationSnapshotArtifact } = await import(
+      "../correlation-artifact-builder.js"
+    );
+    const logger = {
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    };
+
+    const artifact = await buildConfiguredCorrelationSnapshotArtifact(logger);
+    const publicArtifact = parseDataUri(
+      artifact.roundPayoutSnapshots![0]!.artifactURI,
+    );
+    const snapshot = publicArtifact.roundPayoutSnapshots[0];
+
+    expect(snapshot).toMatchObject({
+      domain: 3,
+      rewardPoolId: "0",
+      contentId: "9",
+      roundId: "2",
+      rawEligibleVoters: 1,
+    });
+    expect(
+      fetchMock.mock.calls.some(
+        ([input]) =>
+          new URL(input.toString()).pathname === "/correlation/round-votes",
+      ),
+    ).toBe(false);
+  });
+
   it("builds non-flat surprise-weighted baseWeights for a non-uniform round", async () => {
     mockConfig();
     const voteItem = (index: number, isUp: boolean) => {
