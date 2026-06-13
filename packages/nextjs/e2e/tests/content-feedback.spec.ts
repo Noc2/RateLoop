@@ -47,6 +47,13 @@ test.describe("Content feedback", () => {
     await feedbackSection.getByPlaceholder("Source URL, optional").fill("https://example.com/feedback-source");
     await expect(feedbackSection.getByRole("button", { name: "Add feedback" })).toBeEnabled({ timeout: 30_000 });
     await feedbackSection.getByRole("button", { name: "Add feedback" }).click();
+    const publishSuccess = page.getByText(/Feedback (?:already )?published on-chain/i);
+    const publishFailure = page
+      .getByText(/Failed to add feedback/i)
+      .or(page.getByText(/Vote on this question before saving feedback/i))
+      .or(page.getByText(/Feedback has not been published on-chain yet/i));
+    await expect(publishSuccess.or(publishFailure).first()).toBeVisible({ timeout: 90_000 });
+    await expect(publishFailure).toHaveCount(0);
 
     let publishedList: FeedbackListResponse | undefined;
     await expect

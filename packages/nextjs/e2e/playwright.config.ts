@@ -100,7 +100,7 @@ export default defineConfig({
       ]
     : [["./reporters/no-unexpected-skips.ts"], ["html", { outputFolder: PLAYWRIGHT_REPORT_DIR }]],
   outputDir: PLAYWRIGHT_TEST_RESULTS_DIR,
-  timeout: 60_000, // On-chain tx confirmation needs time
+  timeout: process.env.CI ? 180_000 : 60_000, // CI production shards include chain writes plus indexer waits.
 
   use: {
     baseURL: E2E_BASE_URL,
