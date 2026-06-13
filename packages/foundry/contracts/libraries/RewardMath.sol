@@ -13,7 +13,7 @@ library RewardMath {
     uint256 internal constant PLATFORM_BPS = 300; // 3% frontend fee share
     uint256 internal constant TREASURY_BPS = 100; // 1% treasury
     uint256 internal constant BPS_TOTAL = 10000;
-    uint256 internal constant SCORE_SPREAD_INTENSITY_BPS = 15_000; // 1.5x below-mean score penalty
+    uint256 internal constant SCORE_SPREAD_INTENSITY_BPS = 15_000; // 1.5x below-benchmark score penalty
     uint256 internal constant SCORE_SPREAD_FORFEIT_MIN_REVEALS = 8;
     uint256 internal constant MAX_SCORE_SPREAD_FORFEIT_BPS = 5_000; // 50% max score-spread stake loss
 

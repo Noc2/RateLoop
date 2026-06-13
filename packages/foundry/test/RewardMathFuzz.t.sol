@@ -94,14 +94,14 @@ contract RewardMathFuzz is Test {
     function testFuzz_calculatePositiveScoreSpreadWeight_MatchesDelta(
         uint256 rbtsWeight,
         uint16 scoreBps,
-        uint16 meanScoreBps
+        uint16 benchmarkScoreBps
     ) public pure {
         rbtsWeight = bound(rbtsWeight, 0, type(uint128).max);
         scoreBps = uint16(bound(scoreBps, 0, 10_000));
-        meanScoreBps = uint16(bound(meanScoreBps, 0, 10_000));
+        benchmarkScoreBps = uint16(bound(benchmarkScoreBps, 0, 10_000));
 
-        uint256 weight = RewardMath.calculatePositiveScoreSpreadWeight(rbtsWeight, scoreBps, meanScoreBps);
-        uint256 expected = scoreBps > meanScoreBps ? (rbtsWeight * (scoreBps - meanScoreBps)) / 10_000 : 0;
+        uint256 weight = RewardMath.calculatePositiveScoreSpreadWeight(rbtsWeight, scoreBps, benchmarkScoreBps);
+        uint256 expected = scoreBps > benchmarkScoreBps ? (rbtsWeight * (scoreBps - benchmarkScoreBps)) / 10_000 : 0;
 
         assertEq(weight, expected, "positive spread weight mismatch");
     }
@@ -109,18 +109,19 @@ contract RewardMathFuzz is Test {
     function testFuzz_calculateNegativeScoreSpreadForfeit_CappedAtStake(
         uint256 stake,
         uint16 scoreBps,
-        uint16 meanScoreBps,
+        uint16 benchmarkScoreBps,
         uint256 revealedCount
     ) public pure {
         stake = bound(stake, 0, type(uint128).max);
         scoreBps = uint16(bound(scoreBps, 0, 10_000));
-        meanScoreBps = uint16(bound(meanScoreBps, 0, 10_000));
+        benchmarkScoreBps = uint16(bound(benchmarkScoreBps, 0, 10_000));
         revealedCount = bound(revealedCount, 0, 256);
 
-        uint256 forfeited = RewardMath.calculateNegativeScoreSpreadForfeit(stake, scoreBps, meanScoreBps, revealedCount);
+        uint256 forfeited =
+            RewardMath.calculateNegativeScoreSpreadForfeit(stake, scoreBps, benchmarkScoreBps, revealedCount);
 
         assertLe(forfeited, (stake * 5_000) / 10_000, "forfeit exceeds 50% cap");
-        if (revealedCount < 8 || scoreBps >= meanScoreBps) {
+        if (revealedCount < 8 || scoreBps >= benchmarkScoreBps) {
             assertEq(forfeited, 0, "inactive or non-negative spread should not forfeit");
         }
     }

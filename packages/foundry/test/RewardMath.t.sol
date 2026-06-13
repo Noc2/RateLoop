@@ -23,12 +23,12 @@ contract RewardMathHarness {
         return RewardMath.calculateRating(totalUpStake, totalDownStake);
     }
 
-    function calculatePositiveScoreSpreadWeight(uint256 rbtsWeight, uint16 scoreBps, uint16 meanScoreBps)
+    function calculatePositiveScoreSpreadWeight(uint256 rbtsWeight, uint16 scoreBps, uint16 benchmarkScoreBps)
         external
         pure
         returns (uint256)
     {
-        return RewardMath.calculatePositiveScoreSpreadWeight(rbtsWeight, scoreBps, meanScoreBps);
+        return RewardMath.calculatePositiveScoreSpreadWeight(rbtsWeight, scoreBps, benchmarkScoreBps);
     }
 
     function calculateLeaveOneOutMeanScoreBps(
@@ -43,10 +43,10 @@ contract RewardMathHarness {
     function calculateNegativeScoreSpreadForfeit(
         uint256 stakeAmount,
         uint16 scoreBps,
-        uint16 meanScoreBps,
+        uint16 benchmarkScoreBps,
         uint256 revealedCount
     ) external pure returns (uint256) {
-        return RewardMath.calculateNegativeScoreSpreadForfeit(stakeAmount, scoreBps, meanScoreBps, revealedCount);
+        return RewardMath.calculateNegativeScoreSpreadForfeit(stakeAmount, scoreBps, benchmarkScoreBps, revealedCount);
     }
 
     function epochWeightBps(uint8 epochIndex) external pure returns (uint256) {
@@ -240,10 +240,14 @@ contract RewardMathTest is Test {
         assertEq(weight, 825_000, "Alice positive spread weight should be stake * 8.25%");
     }
 
-    function test_CalculatePositiveScoreSpreadWeight_ZeroAtOrBelowMean() public view {
-        assertEq(harness.calculatePositiveScoreSpreadWeight(10e6, 8525, 8525), 0, "Mean score has no reward weight");
+    function test_CalculatePositiveScoreSpreadWeight_ZeroAtOrBelowBenchmark() public view {
         assertEq(
-            harness.calculatePositiveScoreSpreadWeight(10e6, 6400, 8525), 0, "Below-mean score has no reward weight"
+            harness.calculatePositiveScoreSpreadWeight(10e6, 8525, 8525), 0, "Benchmark score has no reward weight"
+        );
+        assertEq(
+            harness.calculatePositiveScoreSpreadWeight(10e6, 6400, 8525),
+            0,
+            "Below-benchmark score has no reward weight"
         );
     }
 
@@ -262,10 +266,10 @@ contract RewardMathTest is Test {
         assertEq(harness.calculateNegativeScoreSpreadForfeit(5e6, 0, 10_000, 8), 2_500_000, "Forfeit is capped at 50%");
     }
 
-    function test_CalculateNegativeScoreSpreadForfeit_ZeroAtOrAboveMean() public view {
-        assertEq(harness.calculateNegativeScoreSpreadForfeit(5e6, 8525, 8525, 8), 0, "Mean score does not forfeit");
+    function test_CalculateNegativeScoreSpreadForfeit_ZeroAtOrAboveBenchmark() public view {
+        assertEq(harness.calculateNegativeScoreSpreadForfeit(5e6, 8525, 8525, 8), 0, "Benchmark score does not forfeit");
         assertEq(
-            harness.calculateNegativeScoreSpreadForfeit(5e6, 9350, 8525, 8), 0, "Above-mean score does not forfeit"
+            harness.calculateNegativeScoreSpreadForfeit(5e6, 9350, 8525, 8), 0, "Above-benchmark score does not forfeit"
         );
     }
 
