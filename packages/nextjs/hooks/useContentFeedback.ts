@@ -3,9 +3,11 @@
 import { useCallback, useMemo, useState } from "react";
 import { FeedbackRegistryAbi, RoundVotingEngineAbi } from "@rateloop/contracts/abis";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { encodePacked, keccak256, zeroHash } from "viem";
+import { type Address, encodePacked, keccak256, zeroHash } from "viem";
 import { useConfig, usePublicClient, useSignMessage, useWriteContract } from "wagmi";
 import { waitForTransactionReceipt } from "wagmi/actions";
+import { useTransactor } from "~~/hooks/scaffold-eth";
+import { useLocalE2ETestWalletClient } from "~~/hooks/scaffold-eth/useLocalE2ETestWalletClient";
 import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import type { ContentFeedbackItem, ContentFeedbackListResult, ContentFeedbackType } from "~~/lib/feedback/types";
 import {
@@ -92,6 +94,8 @@ export function useContentFeedback(contentId: bigint | string | number | null | 
   const wagmiConfig = useConfig();
   const { targetNetwork } = useTargetNetwork();
   const publicClient = usePublicClient({ chainId: targetNetwork.id });
+  const localE2ETestWalletClient = useLocalE2ETestWalletClient(address as Address | undefined, targetNetwork.id);
+  const writeTx = useTransactor(localE2ETestWalletClient);
   const normalizedContentId = useMemo(() => normalizeContentId(contentId), [contentId]);
   const normalizedAddress = address?.toLowerCase();
   const queryKey = useMemo(
@@ -162,7 +166,7 @@ export function useContentFeedback(contentId: bigint | string | number | null | 
 
       let txHash: `0x${string}`;
       try {
-        txHash = await writeContractAsync({
+        const request = {
           address: feedbackRegistryAddress,
           abi: FeedbackRegistryAbi,
           functionName: "publishFeedback",
@@ -175,7 +179,18 @@ export function useContentFeedback(contentId: bigint | string | number | null | 
             params.sourceUrl ?? "",
             params.clientNonce,
           ],
-        });
+        } as const;
+        const submittedHash = await writeTx(
+          () =>
+            localE2ETestWalletClient
+              ? localE2ETestWalletClient.writeContract(request as any)
+              : writeContractAsync(request as any),
+          { action: "Publish feedback", suppressSuccessToast: true },
+        );
+        if (!submittedHash) {
+          throw new Error("Feedback publication transaction was not submitted.");
+        }
+        txHash = submittedHash as `0x${string}`;
       } catch (error) {
         if (await hasAlreadyPublishedFeedback()) {
           return { commitKey, txHash: null, alreadyPublished: true };
@@ -191,7 +206,16 @@ export function useContentFeedback(contentId: bigint | string | number | null | 
       }
       return { commitKey, txHash };
     },
-    [normalizedContentId, publicClient, resolveCommitKey, targetNetwork.id, wagmiConfig, writeContractAsync],
+    [
+      localE2ETestWalletClient,
+      normalizedContentId,
+      publicClient,
+      resolveCommitKey,
+      targetNetwork.id,
+      wagmiConfig,
+      writeContractAsync,
+      writeTx,
+    ],
   );
 
   const feedbackQuery = useQuery({
