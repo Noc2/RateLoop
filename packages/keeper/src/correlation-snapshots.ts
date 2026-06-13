@@ -5,7 +5,8 @@ import {
   FrontendRegistryAbi,
   QuestionRewardPoolEscrowAbi,
 } from "@rateloop/contracts/abis";
-import type { Address } from "viem";
+import { canonicalJsonHash } from "@rateloop/node-utils/json";
+import type { Address, Hex } from "viem";
 import type { Logger } from "./logger.js";
 import { config } from "./config.js";
 import {
@@ -30,14 +31,17 @@ const STATUS = {
   Finalized: 3,
   Rejected: 4,
 } as const;
-const PAYOUT_DOMAIN_QUESTION_REWARD = 1;
+const PAYOUT_DOMAIN_PUBLIC_RATING = 3;
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as const;
+const ARTIFACT_FETCH_TIMEOUT_MS = 5_000;
+const ARTIFACT_MAX_BYTES = 10_000_000;
 
 interface CorrelationSnapshotPublisherResult {
   epochsProposed: number;
   epochsFinalized: number;
   roundSnapshotsProposed: number;
   roundSnapshotsFinalized: number;
+  ratingSnapshotsApplied: number;
 }
 
 export interface CorrelationEpochArtifact {
@@ -75,6 +79,33 @@ export interface CorrelationSnapshotArtifactFile {
   roundPayoutSnapshots?: RoundPayoutSnapshotArtifact[];
 }
 
+interface PublicRatingPayoutWeight {
+  domain?: unknown;
+  rewardPoolId?: unknown;
+  contentId?: unknown;
+  roundId?: unknown;
+  commitKey?: unknown;
+  identityKey?: unknown;
+  account?: unknown;
+  baseWeight?: unknown;
+  independenceBps?: unknown;
+  effectiveWeight?: unknown;
+  reasonHash?: unknown;
+  proof?: unknown;
+}
+
+interface PublicRoundPayoutSnapshotWithWeights {
+  domain?: unknown;
+  rewardPoolId?: unknown;
+  contentId?: unknown;
+  roundId?: unknown;
+  payoutWeights?: unknown;
+}
+
+interface PublicCorrelationArtifactWithWeights {
+  roundPayoutSnapshots?: unknown;
+}
+
 interface SnapshotProposerAuthorization {
   authorized: boolean;
   frontendOperator?: Address;
@@ -93,8 +124,52 @@ function emptyResult(): CorrelationSnapshotPublisherResult {
     epochsFinalized: 0,
     roundSnapshotsProposed: 0,
     roundSnapshotsFinalized: 0,
+    ratingSnapshotsApplied: 0,
   };
 }
+
+const ContentRegistryRatingSnapshotAbi = [
+  {
+    type: "function",
+    name: "isRoundPayoutSnapshotConsumed",
+    stateMutability: "view",
+    inputs: [
+      { name: "domain", type: "uint8" },
+      { name: "rewardPoolId", type: "uint256" },
+      { name: "contentId", type: "uint256" },
+      { name: "roundId", type: "uint256" },
+    ],
+    outputs: [{ name: "", type: "bool" }],
+  },
+  {
+    type: "function",
+    name: "applyRatingPayoutSnapshot",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "contentId", type: "uint256" },
+      { name: "roundId", type: "uint256" },
+      {
+        name: "payoutWeights",
+        type: "tuple[]",
+        components: [
+          { name: "domain", type: "uint8" },
+          { name: "rewardPoolId", type: "uint256" },
+          { name: "contentId", type: "uint256" },
+          { name: "roundId", type: "uint256" },
+          { name: "commitKey", type: "bytes32" },
+          { name: "identityKey", type: "bytes32" },
+          { name: "account", type: "address" },
+          { name: "baseWeight", type: "uint256" },
+          { name: "independenceBps", type: "uint16" },
+          { name: "effectiveWeight", type: "uint256" },
+          { name: "reasonHash", type: "bytes32" },
+        ],
+      },
+      { name: "proofs", type: "bytes32[][]" },
+    ],
+    outputs: [],
+  },
+] as const;
 
 function rejectedAutomaticCorrelationCandidateKey(
   epochId: string,
@@ -296,6 +371,249 @@ async function roundSnapshotSourceReady(
     );
     return false;
   }
+}
+
+async function readPublicCorrelationArtifact(
+  snapshot: Pick<RoundPayoutSnapshotArtifact, "artifactHash" | "artifactURI">,
+): Promise<PublicCorrelationArtifactWithWeights | null> {
+  const canonical = await readArtifactCanonicalJson(snapshot.artifactURI);
+  if (!canonical) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(canonical);
+  } catch {
+    return null;
+  }
+  if (canonicalJsonHash(parsed).toLowerCase() !== snapshot.artifactHash.toLowerCase()) {
+    return null;
+  }
+  return parsed && typeof parsed === "object"
+    ? (parsed as PublicCorrelationArtifactWithWeights)
+    : null;
+}
+
+async function readArtifactCanonicalJson(uri: string): Promise<string | null> {
+  if (uri.startsWith("data:")) {
+    const commaIndex = uri.indexOf(",");
+    if (commaIndex < 0) return null;
+    const metadata = uri.slice("data:".length, commaIndex);
+    const payload = uri.slice(commaIndex + 1);
+    if (payload.length > Math.ceil(ARTIFACT_MAX_BYTES / 3) * 4) return null;
+    const isBase64 = metadata.split(";").some((part) => part.toLowerCase() === "base64");
+    const decoded = isBase64
+      ? Buffer.from(payload, "base64").toString("utf8")
+      : decodeURIComponent(payload);
+    return Buffer.byteLength(decoded, "utf8") <= ARTIFACT_MAX_BYTES ? decoded : null;
+  }
+
+  const response = await fetch(uri, {
+    headers: { accept: "application/json" },
+    signal: AbortSignal.timeout(ARTIFACT_FETCH_TIMEOUT_MS),
+  });
+  if (!response.ok) return null;
+  const contentLength = response.headers.get("content-length");
+  if (contentLength) {
+    const declared = Number.parseInt(contentLength, 10);
+    if (Number.isFinite(declared) && declared > ARTIFACT_MAX_BYTES) return null;
+  }
+  const body = await response.text();
+  return Buffer.byteLength(body, "utf8") <= ARTIFACT_MAX_BYTES ? body : null;
+}
+
+function ratingSnapshotWithWeights(
+  artifact: PublicCorrelationArtifactWithWeights,
+  snapshot: RoundPayoutSnapshotArtifact,
+): PublicRoundPayoutSnapshotWithWeights | null {
+  if (!Array.isArray(artifact.roundPayoutSnapshots)) return null;
+  return (
+    artifact.roundPayoutSnapshots.find((entry): entry is PublicRoundPayoutSnapshotWithWeights => {
+      if (!entry || typeof entry !== "object") return false;
+      const record = entry as PublicRoundPayoutSnapshotWithWeights;
+      return (
+        normalizeNumber(record.domain) === PAYOUT_DOMAIN_PUBLIC_RATING &&
+        normalizeBigIntString(record.rewardPoolId) === "0" &&
+        normalizeBigIntString(record.contentId) === BigInt(snapshot.contentId).toString() &&
+        normalizeBigIntString(record.roundId) === BigInt(snapshot.roundId).toString()
+      );
+    }) ?? null
+  );
+}
+
+function ratingPayoutWeightArgs(round: PublicRoundPayoutSnapshotWithWeights) {
+  if (!Array.isArray(round.payoutWeights)) return null;
+  const normalized = round.payoutWeights
+    .map((entry) => normalizeRatingPayoutWeight(entry))
+    .filter((entry): entry is NonNullable<ReturnType<typeof normalizeRatingPayoutWeight>> => entry !== null)
+    .sort((left, right) => left.payoutWeight.commitKey.localeCompare(right.payoutWeight.commitKey));
+  if (normalized.length !== round.payoutWeights.length) return null;
+  return {
+    payoutWeights: normalized.map((entry) => entry.payoutWeight),
+    proofs: normalized.map((entry) => entry.proof),
+  };
+}
+
+function normalizeRatingPayoutWeight(value: unknown) {
+  if (!value || typeof value !== "object") return null;
+  const record = value as PublicRatingPayoutWeight;
+  const domain = normalizeNumber(record.domain);
+  const rewardPoolId = normalizeBigIntString(record.rewardPoolId);
+  const contentId = normalizeBigIntString(record.contentId);
+  const roundId = normalizeBigIntString(record.roundId);
+  const commitKey = normalizeHex(record.commitKey, 32);
+  const identityKey = normalizeHex(record.identityKey, 32);
+  const account = normalizeHex(record.account, 20);
+  const baseWeight = normalizeBigIntString(record.baseWeight);
+  const independenceBps = normalizeNumber(record.independenceBps);
+  const effectiveWeight = normalizeBigIntString(record.effectiveWeight);
+  const reasonHash = normalizeHex(record.reasonHash, 32);
+  const proof = normalizeHexArray(record.proof);
+  if (
+    domain !== PAYOUT_DOMAIN_PUBLIC_RATING ||
+    rewardPoolId !== "0" ||
+    contentId === null ||
+    roundId === null ||
+    commitKey === null ||
+    identityKey === null ||
+    account === null ||
+    baseWeight === null ||
+    independenceBps === null ||
+    effectiveWeight === null ||
+    reasonHash === null ||
+    proof === null
+  ) {
+    return null;
+  }
+  return {
+    payoutWeight: {
+      domain,
+      rewardPoolId: 0n,
+      contentId: BigInt(contentId),
+      roundId: BigInt(roundId),
+      commitKey,
+      identityKey,
+      account,
+      baseWeight: BigInt(baseWeight),
+      independenceBps,
+      effectiveWeight: BigInt(effectiveWeight),
+      reasonHash,
+    },
+    proof,
+  };
+}
+
+function normalizeHex(value: unknown, byteLength: number): Hex | null {
+  if (typeof value !== "string" || !/^0x[0-9a-fA-F]+$/.test(value)) return null;
+  return value.length === 2 + byteLength * 2 ? (value as Hex) : null;
+}
+
+function normalizeHexArray(value: unknown): Hex[] | null {
+  if (!Array.isArray(value)) return null;
+  const normalized = value.map((entry) => normalizeHex(entry, 32));
+  return normalized.every((entry): entry is Hex => entry !== null) ? normalized : null;
+}
+
+function normalizeBigIntString(value: unknown): string | null {
+  if (typeof value === "bigint") return value >= 0n ? value.toString() : null;
+  if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) return value.toString();
+  if (typeof value === "string" && /^\d+$/.test(value)) return value;
+  return null;
+}
+
+function normalizeNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) return value;
+  if (typeof value === "bigint" && value >= 0n && value <= BigInt(Number.MAX_SAFE_INTEGER)) return Number(value);
+  if (typeof value === "string" && /^\d+$/.test(value)) {
+    const parsed = Number(value);
+    return Number.isSafeInteger(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+async function applyFinalizedRatingSnapshotsFromArtifact(
+  artifact: CorrelationSnapshotArtifactFile,
+  publicClient: PublicClient,
+  walletClient: WalletClient,
+  chain: Chain,
+  account: Account,
+  logger: Logger,
+): Promise<number> {
+  let applied = 0;
+  const parsedArtifactByHash = new Map<string, PublicCorrelationArtifactWithWeights | null>();
+  for (const snapshot of artifact.roundPayoutSnapshots ?? []) {
+    if (snapshot.domain !== PAYOUT_DOMAIN_PUBLIC_RATING || BigInt(snapshot.rewardPoolId) !== 0n) continue;
+
+    const snapshotKey = await publicClient.readContract({
+      address: config.contracts.clusterPayoutOracle,
+      abi: ClusterPayoutOracleAbi,
+      functionName: "roundPayoutSnapshotKey",
+      args: [snapshot.domain, 0n, BigInt(snapshot.contentId), BigInt(snapshot.roundId)],
+    });
+
+    let status: number = STATUS.None;
+    try {
+      const existing = await publicClient.readContract({
+        address: config.contracts.clusterPayoutOracle,
+        abi: ClusterPayoutOracleAbi,
+        functionName: "roundPayoutProposal",
+        args: [snapshotKey],
+      });
+      status = Number(existing.snapshot.status);
+    } catch {
+      continue;
+    }
+    if (status !== STATUS.Finalized) continue;
+
+    const consumed = (await publicClient.readContract({
+      address: config.contracts.contentRegistry,
+      abi: ContentRegistryRatingSnapshotAbi,
+      functionName: "isRoundPayoutSnapshotConsumed",
+      args: [PAYOUT_DOMAIN_PUBLIC_RATING, 0n, BigInt(snapshot.contentId), BigInt(snapshot.roundId)],
+    })) as boolean;
+    if (consumed) continue;
+
+    const artifactKey = snapshot.artifactHash.toLowerCase();
+    let publicArtifact = parsedArtifactByHash.get(artifactKey);
+    if (publicArtifact === undefined) {
+      publicArtifact = await readPublicCorrelationArtifact(snapshot);
+      parsedArtifactByHash.set(artifactKey, publicArtifact);
+    }
+    if (!publicArtifact) {
+      logger.warn("Skipping rating snapshot application because artifact could not be read or verified", {
+        snapshotKey,
+        artifactHash: snapshot.artifactHash,
+      });
+      continue;
+    }
+
+    const publicRound = ratingSnapshotWithWeights(publicArtifact, snapshot);
+    const args = publicRound ? ratingPayoutWeightArgs(publicRound) : null;
+    if (!args) {
+      logger.warn("Skipping rating snapshot application because payout weights are missing or malformed", {
+        snapshotKey,
+        artifactHash: snapshot.artifactHash,
+      });
+      continue;
+    }
+
+    try {
+      await writeContractAndConfirm(publicClient, walletClient, {
+        account,
+        chain,
+        address: config.contracts.contentRegistry,
+        abi: ContentRegistryRatingSnapshotAbi,
+        functionName: "applyRatingPayoutSnapshot",
+        args: [BigInt(snapshot.contentId), BigInt(snapshot.roundId), args.payoutWeights, args.proofs],
+      });
+      applied += 1;
+      logger.info("Applied finalized rating payout snapshot", { snapshotKey });
+    } catch (error) {
+      logger.debug("Rating payout snapshot not applicable yet", {
+        snapshotKey,
+        error: getRevertReason(error),
+      });
+    }
+  }
+  return applied;
 }
 
 async function readyCorrelationEpochSourceRefs(
@@ -571,6 +889,7 @@ async function preflightAutomaticCorrelationSnapshots(
       }
 
       if (epochStatus === STATUS.Proposed) {
+        needsArtifactBuild = true;
         try {
           await writeContractAndConfirm(publicClient, walletClient, {
             account,
@@ -609,7 +928,7 @@ async function preflightAutomaticCorrelationSnapshots(
       abi: ClusterPayoutOracleAbi,
       functionName: "roundPayoutSnapshotKey",
       args: [
-        PAYOUT_DOMAIN_QUESTION_REWARD,
+        candidate.domain,
         candidate.rewardPoolId,
         candidate.contentId,
         candidate.roundId,
@@ -634,7 +953,7 @@ async function preflightAutomaticCorrelationSnapshots(
         await roundSnapshotSourceReady(
           publicClient,
           {
-            domain: PAYOUT_DOMAIN_QUESTION_REWARD,
+            domain: candidate.domain,
             rewardPoolId: candidate.rewardPoolId,
             contentId: candidate.contentId,
             roundId: candidate.roundId,
@@ -655,6 +974,9 @@ async function preflightAutomaticCorrelationSnapshots(
           args: [snapshotKey],
         });
         result.roundSnapshotsFinalized += 1;
+        if (candidate.domain === PAYOUT_DOMAIN_PUBLIC_RATING) {
+          needsArtifactBuild = true;
+        }
         logger.info("Finalized round payout snapshot", { snapshotKey });
       } catch (error) {
         logger.debug("Round payout snapshot not finalizable yet", {
@@ -666,6 +988,8 @@ async function preflightAutomaticCorrelationSnapshots(
       logger.debug("Skipping challenged round payout snapshot", {
         snapshotKey,
       });
+    } else if (roundStatus === STATUS.Finalized && candidate.domain === PAYOUT_DOMAIN_PUBLIC_RATING) {
+      needsArtifactBuild = true;
     }
   }
 
@@ -704,7 +1028,7 @@ async function publishCorrelationSnapshotArtifact(
     );
     return snapshotProposerAuthorization;
   }
-  const finalizedEpochIds = new Set<string>();
+  const coveredEpochIds = new Set<string>();
 
   for (const epoch of artifact.correlationEpochs ?? []) {
     const epochId = BigInt(epoch.epochId);
@@ -781,6 +1105,7 @@ async function publishCorrelationSnapshotArtifact(
           ],
         });
         result.epochsProposed += 1;
+        coveredEpochIds.add(epochId.toString());
         logger.info("Proposed correlation epoch snapshot", {
           epochId: epochId.toString(),
         });
@@ -791,6 +1116,7 @@ async function publishCorrelationSnapshotArtifact(
         });
       }
     } else if (status === STATUS.Proposed) {
+      coveredEpochIds.add(epochId.toString());
       try {
         await writeContractAndConfirm(publicClient, walletClient, {
           account,
@@ -804,7 +1130,6 @@ async function publishCorrelationSnapshotArtifact(
         logger.info("Finalized correlation epoch snapshot", {
           epochId: epochId.toString(),
         });
-        finalizedEpochIds.add(epochId.toString());
       } catch (error) {
         logger.debug("Correlation epoch snapshot not finalizable yet", {
           epochId: epochId.toString(),
@@ -812,7 +1137,7 @@ async function publishCorrelationSnapshotArtifact(
         });
       }
     } else if (status === STATUS.Finalized) {
-      finalizedEpochIds.add(epochId.toString());
+      coveredEpochIds.add(epochId.toString());
     } else if (status === STATUS.Challenged) {
       logger.debug("Skipping challenged correlation epoch snapshot", {
         epochId: epochId.toString(),
@@ -822,9 +1147,9 @@ async function publishCorrelationSnapshotArtifact(
 
   for (const snapshot of artifact.roundPayoutSnapshots ?? []) {
     const correlationEpochId = BigInt(snapshot.correlationEpochId);
-    if (!finalizedEpochIds.has(correlationEpochId.toString())) {
+    if (!coveredEpochIds.has(correlationEpochId.toString())) {
       logger.debug(
-        "Skipping round payout snapshot until correlation epoch is finalized",
+        "Skipping round payout snapshot until correlation epoch is proposed",
         {
           correlationEpochId: correlationEpochId.toString(),
           rewardPoolId: snapshot.rewardPoolId.toString(),
@@ -934,6 +1259,15 @@ async function publishCorrelationSnapshotArtifact(
       });
     }
   }
+
+  result.ratingSnapshotsApplied += await applyFinalizedRatingSnapshotsFromArtifact(
+    artifact,
+    publicClient,
+    walletClient,
+    chain,
+    account,
+    logger,
+  );
 
   return result;
 }

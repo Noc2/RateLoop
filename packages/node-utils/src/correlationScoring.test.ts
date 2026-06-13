@@ -4,6 +4,7 @@ import { concat, keccak256, type Address, type Hex } from "viem";
 import {
   BPS_DENOMINATOR,
   PAYOUT_DOMAIN_LAUNCH_CREDIT,
+  PAYOUT_DOMAIN_PUBLIC_RATING,
   PAYOUT_DOMAIN_QUESTION_REWARD,
   correlationParameterHash,
   defaultCorrelationScoringParams,
@@ -11,6 +12,7 @@ import {
   merkleRoot,
   payoutWeightLeaf,
   scoreRoundPayoutWeights,
+  scoreRoundRatingWeights,
   type CorrelationVoteInput,
 } from "./correlationScoring";
 
@@ -321,10 +323,10 @@ test("surprise bonuses stay neutral below the minimum reveal floor", () => {
 
 test("correlationParameterHash commits to the surprise parameters", () => {
   const params = defaultCorrelationScoringParams();
-  assert.equal(params.scorerVersion, "rateloop-correlation-epoch-v2");
+  assert.equal(params.scorerVersion, "rateloop-correlation-epoch-v3");
   assert.equal(
     correlationParameterHash(params),
-    "0xd70bff6a96793230e7bf1384cf7768aeec8387785672f4d5a34adc3bb5f1c2c8",
+    "0x82bea57cf43fad8c239e80d082e8609c61668d75a7bf5d52193539812ce43c6e",
   );
 
   const defaultHash = correlationParameterHash(params);
@@ -355,6 +357,40 @@ test("correlationParameterHash commits to the surprise parameters", () => {
   assert.notEqual(
     correlationParameterHash({ ...params, surpriseMinReveals: 3 }),
     defaultHash,
+  );
+});
+
+test("public rating weights cap a correlated cluster at one strongest participant", () => {
+  const votes = Array.from({ length: 10 }, (_, index) =>
+    vote({
+      account: address(`a${index}`.slice(0, 2)),
+      identityKey: hex(`a${index}`.slice(0, 2)),
+      commitKey: hex(String(index + 1).padStart(2, "0")),
+      features: ["identity:shared"],
+      stake: 0n,
+      epochIndex: 0,
+    }),
+  );
+
+  const result = scoreRoundRatingWeights({
+    chainId: CHAIN_ID,
+    oracleAddress: ORACLE,
+    contentId: 42n,
+    roundId: 3n,
+    votes,
+  });
+
+  assert.equal(result.rawEligibleVoters, 10);
+  assert.equal(result.totalClaimWeight, 1_000_000n);
+  assert.equal(result.effectiveParticipantUnits, 10_000);
+  assert.equal(result.leaves[0]?.domain, PAYOUT_DOMAIN_PUBLIC_RATING);
+  assert.deepEqual(
+    result.leaves.map((leaf) => leaf.baseWeight),
+    Array.from({ length: 10 }, () => 1_000_000n),
+  );
+  assert.deepEqual(
+    result.leaves.map((leaf) => leaf.effectiveWeight),
+    Array.from({ length: 10 }, () => 100_000n),
   );
 });
 
@@ -460,7 +496,7 @@ test("correlationParameterHash pins spec versions and canonical params", () => {
 
   assert.equal(
     correlationParameterHash(params),
-    "0xd70bff6a96793230e7bf1384cf7768aeec8387785672f4d5a34adc3bb5f1c2c8",
+    "0x82bea57cf43fad8c239e80d082e8609c61668d75a7bf5d52193539812ce43c6e",
   );
   assert.notEqual(
     correlationParameterHash({

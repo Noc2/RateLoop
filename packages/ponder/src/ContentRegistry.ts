@@ -106,6 +106,9 @@ function confidentialityBondAssetName(asset: number) {
 }
 
 const CONFIDENTIALITY_FLAG_PRIVATE_FOREVER = 1;
+const RATING_REVIEW_STATUS_NONE = 0;
+const RATING_REVIEW_STATUS_PENDING = 1;
+const RATING_REVIEW_STATUS_APPLIED = 3;
 
 function confidentialityDisclosurePolicyFromFlags(flags: number) {
   return (flags & CONFIDENTIALITY_FLAG_PRIVATE_FOREVER) !== 0
@@ -278,6 +281,9 @@ ponder.on("ContentRegistry:ContentSubmitted", async ({ event, context }) => {
       ratingDownEvidence: 0n,
       ratingSettledRounds: 0,
       ratingLowSince: 0n,
+      ratingReviewStatus: RATING_REVIEW_STATUS_NONE,
+      ratingReviewRoundId: null,
+      ratingReviewUpdatedAt: null,
       createdAt: event.block.timestamp,
       lastActivityAt: event.block.timestamp,
       totalVotes: 0,
@@ -473,6 +479,9 @@ ponder.on("ContentRegistry:RatingStateUpdated", async ({ event, context }) => {
     ratingDownEvidence: downEvidence,
     ratingSettledRounds: Number(settledRounds),
     ratingLowSince: lowSince,
+    ratingReviewStatus: RATING_REVIEW_STATUS_NONE,
+    ratingReviewRoundId: null,
+    ratingReviewUpdatedAt: event.block.timestamp,
     lastActivityAt: event.block.timestamp,
   });
 
@@ -490,6 +499,8 @@ ponder.on("ContentRegistry:RatingStateUpdated", async ({ event, context }) => {
       downEvidence,
       settledRounds: Number(settledRounds),
       lowSince,
+      ratingReviewStatus: RATING_REVIEW_STATUS_APPLIED,
+      ratingReviewUpdatedAt: event.block.timestamp,
     });
   } else {
     await context.db.insert(round).values({
@@ -513,6 +524,8 @@ ponder.on("ContentRegistry:RatingStateUpdated", async ({ event, context }) => {
       downEvidence,
       settledRounds: Number(settledRounds),
       lowSince,
+      ratingReviewStatus: RATING_REVIEW_STATUS_APPLIED,
+      ratingReviewUpdatedAt: event.block.timestamp,
       ...defaultRoundConfigFields(),
     });
   }
@@ -538,4 +551,86 @@ ponder.on("ContentRegistry:RatingStateUpdated", async ({ event, context }) => {
       timestamp: event.block.timestamp,
     })
     .onConflictDoNothing();
+});
+
+ponder.on("ContentRegistry:RatingReviewPending", async ({ event, context }) => {
+  const { contentId, roundId, referenceRatingBps, rawUpEvidence, rawDownEvidence } = event.args;
+  const roundKey = `${contentId}-${roundId}`;
+
+  await context.db.update(content, { id: contentId }).set({
+    ratingReviewStatus: RATING_REVIEW_STATUS_PENDING,
+    ratingReviewRoundId: roundId,
+    ratingReviewUpdatedAt: event.block.timestamp,
+    lastActivityAt: event.block.timestamp,
+  });
+
+  const existingRound = await context.db.find(round, { id: roundKey });
+  if (existingRound) {
+    await context.db.update(round, { id: roundKey }).set({
+      referenceRatingBps: Number(referenceRatingBps),
+      ratingReviewStatus: RATING_REVIEW_STATUS_PENDING,
+      ratingReviewReferenceRatingBps: Number(referenceRatingBps),
+      ratingReviewRawUpEvidence: rawUpEvidence,
+      ratingReviewRawDownEvidence: rawDownEvidence,
+      ratingReviewUpdatedAt: event.block.timestamp,
+    });
+    return;
+  }
+
+  await context.db.insert(round).values({
+    id: roundKey,
+    contentId,
+    roundId,
+    state: ROUND_STATE.Settled,
+    voteCount: 0,
+    revealedCount: 0,
+    totalStake: 0n,
+    upPool: 0n,
+    downPool: 0n,
+    upCount: 0,
+    downCount: 0,
+    referenceRatingBps: Number(referenceRatingBps),
+    ratingBps: Number(referenceRatingBps),
+    conservativeRatingBps: Number(referenceRatingBps),
+    confidenceMass: 0n,
+    effectiveEvidence: 0n,
+    upEvidence: rawUpEvidence,
+    downEvidence: rawDownEvidence,
+    settledRounds: 0,
+    lowSince: 0n,
+    ratingReviewStatus: RATING_REVIEW_STATUS_PENDING,
+    ratingReviewReferenceRatingBps: Number(referenceRatingBps),
+    ratingReviewRawUpEvidence: rawUpEvidence,
+    ratingReviewRawDownEvidence: rawDownEvidence,
+    ratingReviewUpdatedAt: event.block.timestamp,
+    ...defaultRoundConfigFields(),
+  });
+});
+
+ponder.on("ContentRegistry:RatingSnapshotApplied", async ({ event, context }) => {
+  const { contentId, roundId, snapshotDigest, adjustedUpEvidence, adjustedDownEvidence } = event.args;
+  const roundKey = `${contentId}-${roundId}`;
+  const existingContent = await context.db.find(content, { id: contentId });
+  const contentUpdate =
+    existingContent?.ratingReviewRoundId === roundId
+      ? {
+          ratingReviewStatus: RATING_REVIEW_STATUS_NONE,
+          ratingReviewRoundId: null,
+          ratingReviewUpdatedAt: event.block.timestamp,
+        }
+      : {
+          ratingReviewUpdatedAt: event.block.timestamp,
+        };
+  await context.db.update(content, { id: contentId }).set(contentUpdate);
+
+  const existingRound = await context.db.find(round, { id: roundKey });
+  if (existingRound) {
+    await context.db.update(round, { id: roundKey }).set({
+      ratingReviewStatus: RATING_REVIEW_STATUS_APPLIED,
+      ratingReviewSnapshotDigest: snapshotDigest,
+      ratingReviewRawUpEvidence: adjustedUpEvidence,
+      ratingReviewRawDownEvidence: adjustedDownEvidence,
+      ratingReviewUpdatedAt: event.block.timestamp,
+    });
+  }
 });

@@ -1,9 +1,11 @@
 import {
+  PAYOUT_DOMAIN_PUBLIC_RATING,
   PAYOUT_DOMAIN_QUESTION_REWARD,
   correlationParameterHash,
   defaultCorrelationScoringParams,
   merkleProof,
   scoreRoundPayoutWeights,
+  scoreRoundRatingWeights,
   type CorrelationVoteInput,
 } from "@rateloop/node-utils/correlationScoring";
 import {
@@ -48,6 +50,7 @@ interface RoundVotesPage {
 }
 
 export interface CorrelationRoundCandidate {
+  domain: number;
   rewardPoolId: bigint;
   contentId: bigint;
   roundId: bigint;
@@ -98,6 +101,8 @@ interface PublicCorrelationVoteInput {
   features: readonly string[];
   isUp: boolean | null;
   revealWeight: string | null;
+  stake: string | null;
+  epochIndex: number | null;
 }
 
 interface PublicExcludedCorrelationVote {
@@ -195,20 +200,29 @@ export async function buildConfiguredCorrelationSnapshotArtifactForCandidates(
       candidate,
     );
 
-    const scored = scoreRoundPayoutWeights({
-      chainId: BigInt(config.chainId),
-      oracleAddress: config.contracts.clusterPayoutOracle,
-      domain: PAYOUT_DOMAIN_QUESTION_REWARD,
-      rewardPoolId: candidate.rewardPoolId,
-      contentId: candidate.contentId,
-      roundId: candidate.roundId,
-      votes,
-      trailingBaseRateUpBps,
-    });
+    const scored =
+      candidate.domain === PAYOUT_DOMAIN_PUBLIC_RATING
+        ? scoreRoundRatingWeights({
+            chainId: BigInt(config.chainId),
+            oracleAddress: config.contracts.clusterPayoutOracle,
+            contentId: candidate.contentId,
+            roundId: candidate.roundId,
+            votes,
+          })
+        : scoreRoundPayoutWeights({
+            chainId: BigInt(config.chainId),
+            oracleAddress: config.contracts.clusterPayoutOracle,
+            domain: PAYOUT_DOMAIN_QUESTION_REWARD,
+            rewardPoolId: candidate.rewardPoolId,
+            contentId: candidate.contentId,
+            roundId: candidate.roundId,
+            votes,
+            trailingBaseRateUpBps,
+          });
     const leaves = scored.leaves.map((leaf) => leaf.leaf);
 
     publicRounds.push({
-      domain: PAYOUT_DOMAIN_QUESTION_REWARD,
+      domain: candidate.domain,
       rewardPoolId: candidate.rewardPoolId.toString(),
       contentId: candidate.contentId.toString(),
       roundId: candidate.roundId.toString(),
@@ -231,6 +245,14 @@ export async function buildConfiguredCorrelationSnapshotArtifactForCandidates(
         revealWeight:
           typeof vote.revealWeight === "bigint"
             ? vote.revealWeight.toString()
+            : null,
+        stake:
+          typeof vote.stake === "bigint"
+            ? vote.stake.toString()
+            : null,
+        epochIndex:
+          typeof vote.epochIndex === "number" && Number.isSafeInteger(vote.epochIndex)
+            ? vote.epochIndex
             : null,
       })),
       excludedVotes,
@@ -323,6 +345,7 @@ export function correlationSnapshotCandidateFingerprint(
   const params = defaultCorrelationScoringParams();
   const normalizedCandidates = candidates
     .map((candidate) => ({
+      domain: candidate.domain,
       rewardPoolId: candidate.rewardPoolId.toString(),
       contentId: candidate.contentId.toString(),
       roundId: candidate.roundId.toString(),
@@ -330,6 +353,8 @@ export function correlationSnapshotCandidateFingerprint(
     .sort((left, right) => {
       const roundCompare = bigintCompare(BigInt(left.roundId), BigInt(right.roundId));
       if (roundCompare !== 0) return roundCompare;
+      const domainCompare = left.domain - right.domain;
+      if (domainCompare !== 0) return domainCompare;
       const rewardPoolCompare = bigintCompare(
         BigInt(left.rewardPoolId),
         BigInt(right.rewardPoolId),
@@ -446,6 +471,7 @@ function buildPublicEpochs(
       toRoundId: epochId,
       clusterRoot: hashJson(
         epochRounds.map((round) => ({
+          domain: round.domain,
           rewardPoolId: round.rewardPoolId,
           contentId: round.contentId,
           roundId: round.roundId,
@@ -464,23 +490,29 @@ async function fetchRoundCandidateWindow(
 ): Promise<CorrelationRoundCandidate[]> {
   const candidates: CorrelationRoundCandidate[] = [];
   const targetCount = maxRoundsPerTick + 1;
-  for (let offset = 0; candidates.length < targetCount;) {
-    const limit = Math.min(targetCount - candidates.length, 200);
-    const url = new URL("/correlation/round-candidates", ponderBaseUrl);
-    url.searchParams.set("limit", String(limit));
-    url.searchParams.set("offset", String(offset));
-    const response = await fetchJson<CandidateResponse>(url);
-    const items = response.items ?? [];
-    if (items.length > limit) {
-      throw new Error(`Ponder returned too many correlation candidates: ${items.length} > ${limit}`);
+  const endpoints = [
+    "/correlation/round-candidates",
+    "/correlation/rating-round-candidates",
+  ];
+  for (const pathname of endpoints) {
+    for (let offset = 0; candidates.length < targetCount * endpoints.length;) {
+      const limit = Math.min(targetCount, 200);
+      const url = new URL(pathname, ponderBaseUrl);
+      url.searchParams.set("limit", String(limit));
+      url.searchParams.set("offset", String(offset));
+      const response = await fetchJson<CandidateResponse>(url);
+      const items = response.items ?? [];
+      if (items.length > limit) {
+        throw new Error(`Ponder returned too many correlation candidates: ${items.length} > ${limit}`);
+      }
+      candidates.push(...items.map(parseCandidate));
+      if (items.length < limit) {
+        break;
+      }
+      offset += items.length;
     }
-    candidates.push(...items.map(parseCandidate));
-    if (items.length < limit) {
-      break;
-    }
-    offset += items.length;
   }
-  return candidates;
+  return candidates.sort(compareCandidates).slice(0, targetCount);
 }
 
 function selectCompleteEpochCandidates(
@@ -518,8 +550,15 @@ async function fetchRoundVotes(
   let trailingBaseRateUpBps: number | null = null;
   for (let page = 0; page < MAX_VOTE_PAGES_PER_ROUND; page += 1) {
     const offset = page * VOTE_PAGE_SIZE;
-    const url = new URL("/correlation/round-votes", ponderBaseUrl);
-    url.searchParams.set("rewardPoolId", candidate.rewardPoolId.toString());
+    const url = new URL(
+      candidate.domain === PAYOUT_DOMAIN_PUBLIC_RATING
+        ? "/correlation/rating-round-votes"
+        : "/correlation/round-votes",
+      ponderBaseUrl,
+    );
+    if (candidate.domain !== PAYOUT_DOMAIN_PUBLIC_RATING) {
+      url.searchParams.set("rewardPoolId", candidate.rewardPoolId.toString());
+    }
     url.searchParams.set("contentId", candidate.contentId.toString());
     url.searchParams.set("roundId", candidate.roundId.toString());
     url.searchParams.set("limit", String(VOTE_PAGE_SIZE));
@@ -601,7 +640,11 @@ async function readResponseBody(response: Response, maxBytes: number): Promise<s
 function parseCandidate(value: unknown): CorrelationRoundCandidate {
   const record = requireRecord(value, "correlation round candidate");
   return {
-    rewardPoolId: requirePositiveBigInt(record.rewardPoolId, "rewardPoolId"),
+    domain:
+      record.domain === PAYOUT_DOMAIN_PUBLIC_RATING
+        ? PAYOUT_DOMAIN_PUBLIC_RATING
+        : PAYOUT_DOMAIN_QUESTION_REWARD,
+    rewardPoolId: requireNonNegativeBigInt(record.rewardPoolId, "rewardPoolId"),
     contentId: requirePositiveBigInt(record.contentId, "contentId"),
     roundId: requirePositiveBigInt(record.roundId, "roundId"),
   };
@@ -613,6 +656,7 @@ function parseVote(value: unknown): CorrelationVoteInput {
   const identityKey = requireHex(record.identityKey, "identityKey");
   const commitKey = requireHex(record.commitKey, "commitKey");
   const revealWeight = parseBigInt(record.revealWeight);
+  const stake = parseBigInt(record.stake);
   return {
     account,
     identityKey,
@@ -629,6 +673,11 @@ function parseVote(value: unknown): CorrelationVoteInput {
     // to the neutral surprise multiplier inside the scorer (spec fallback).
     isUp: typeof record.isUp === "boolean" ? record.isUp : null,
     revealWeight: revealWeight !== null && revealWeight >= 0n ? revealWeight : null,
+    stake: stake !== null && stake >= 0n ? stake : null,
+    epochIndex:
+      typeof record.epochIndex === "number" && Number.isSafeInteger(record.epochIndex) && record.epochIndex >= 0
+        ? record.epochIndex
+        : null,
   };
 }
 
@@ -739,6 +788,14 @@ function requirePositiveBigInt(value: unknown, label: string): bigint {
   return parsed;
 }
 
+function requireNonNegativeBigInt(value: unknown, label: string): bigint {
+  const parsed = parseBigInt(value);
+  if (parsed === null || parsed < 0n) {
+    throw new Error(`${label} must be a non-negative integer`);
+  }
+  return parsed;
+}
+
 function requireNonNegativeNumber(value: unknown, label: string): number {
   const parsed =
     typeof value === "number"
@@ -767,4 +824,14 @@ function bigintCompare(left: bigint, right: bigint) {
   if (left < right) return -1;
   if (left > right) return 1;
   return 0;
+}
+
+function compareCandidates(left: CorrelationRoundCandidate, right: CorrelationRoundCandidate) {
+  const roundCompare = bigintCompare(right.roundId, left.roundId);
+  if (roundCompare !== 0) return roundCompare;
+  const domainCompare = left.domain - right.domain;
+  if (domainCompare !== 0) return domainCompare;
+  const rewardPoolCompare = bigintCompare(left.rewardPoolId, right.rewardPoolId);
+  if (rewardPoolCompare !== 0) return rewardPoolCompare;
+  return bigintCompare(left.contentId, right.contentId);
 }

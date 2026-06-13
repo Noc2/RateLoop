@@ -19,8 +19,11 @@ import { safeBigInt, safeLimit, safeOffset } from "../utils.js";
 
 const REWARD_ASSET_USDC = 1;
 const PAYOUT_DOMAIN_QUESTION_REWARD = 1;
+const PAYOUT_DOMAIN_PUBLIC_RATING = 3;
 const SNAPSHOT_STATUS_PROPOSED = 1;
+const SNAPSHOT_STATUS_FINALIZED = 3;
 const SNAPSHOT_STATUS_REJECTED = 4;
+const RATING_REVIEW_STATUS_PENDING = 1;
 const BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG = 0x80;
 const BOUNTY_ELIGIBILITY_CREDENTIAL_MASK = 0x0e;
 const BOUNTY_ELIGIBILITY_PROOF_OF_HUMAN = 0x08;
@@ -360,6 +363,52 @@ export function registerCorrelationRoutes(app: ApiApp) {
     return jsonBig(c, { items: rows });
   });
 
+  app.get("/correlation/rating-round-candidates", async (c) => {
+    const limit = safeLimit(c.req.query("limit"), 50, 200);
+    const offset = safeOffset(c.req.query("offset"));
+    if (Number.isNaN(offset)) return c.json({ error: "Invalid offset" }, 400);
+
+    const rows = await db
+      .select({
+        domain: sql<number>`${PAYOUT_DOMAIN_PUBLIC_RATING}`,
+        rewardPoolId: sql<bigint>`0`,
+        contentId: round.contentId,
+        roundId: round.roundId,
+        settledAt: round.settledAt,
+        revealedCount: round.revealedCount,
+        ratingReviewStatus: round.ratingReviewStatus,
+        snapshotStatus: roundPayoutSnapshot.status,
+      })
+      .from(round)
+      .leftJoin(
+        roundPayoutSnapshot,
+        and(
+          eq(roundPayoutSnapshot.domain, PAYOUT_DOMAIN_PUBLIC_RATING),
+          eq(roundPayoutSnapshot.rewardPoolId, 0n),
+          eq(roundPayoutSnapshot.contentId, round.contentId),
+          eq(roundPayoutSnapshot.roundId, round.roundId),
+        ),
+      )
+      .where(
+        and(
+          eq(round.state, ROUND_STATE.Settled),
+          eq(round.ratingReviewStatus, RATING_REVIEW_STATUS_PENDING),
+          sql`${round.revealedCount} > 0`,
+          or(
+            sql`${roundPayoutSnapshot.id} is null`,
+            eq(roundPayoutSnapshot.status, SNAPSHOT_STATUS_PROPOSED),
+            eq(roundPayoutSnapshot.status, SNAPSHOT_STATUS_FINALIZED),
+            eq(roundPayoutSnapshot.status, SNAPSHOT_STATUS_REJECTED),
+          ),
+        ),
+      )
+      .orderBy(desc(round.roundId), asc(round.contentId))
+      .limit(limit)
+      .offset(offset);
+
+    return jsonBig(c, { items: rows });
+  });
+
   app.get("/correlation/round-votes", async (c) => {
     const rewardPoolId = validPositiveBigIntParam(c.req.query("rewardPoolId"));
     const contentId = validPositiveBigIntParam(c.req.query("contentId"));
@@ -508,6 +557,75 @@ export function registerCorrelationRoutes(app: ApiApp) {
     return jsonBig(c, {
       excludedVotes,
       items,
+      roundContext,
+    });
+  });
+
+  app.get("/correlation/rating-round-votes", async (c) => {
+    const contentId = validPositiveBigIntParam(c.req.query("contentId"));
+    const roundId = validPositiveBigIntParam(c.req.query("roundId"));
+    const limit = safeLimit(c.req.query("limit"), 500, 1000);
+    const offset = safeOffset(c.req.query("offset"));
+
+    if (contentId === null || roundId === null) {
+      return c.json({ error: "contentId and roundId must be positive integers" }, 400);
+    }
+    if (Number.isNaN(offset)) return c.json({ error: "Invalid offset" }, 400);
+
+    const rows = await db
+      .select({
+        account: vote.identityHolder,
+        voter: vote.voter,
+        identityKey: vote.identityKey,
+        commitKey: vote.commitKey,
+        isUp: vote.isUp,
+        stake: vote.stake,
+        epochIndex: vote.epochIndex,
+        revealWeight: vote.rbtsWeight,
+        baseWeight: sql<bigint>`10000`,
+        verifiedHuman: sql<boolean>`case when ${raterHumanCredential.rater} is not null then true else false end`,
+        historicalVoteCount: sql<number>`case when coalesce(${voterStats.totalSettledVotes}, 0) > 0 then coalesce(${voterStats.totalSettledVotes}, 0) - 1 else 0 end`,
+      })
+      .from(vote)
+      .innerJoin(
+        round,
+        and(
+          eq(round.contentId, vote.contentId),
+          eq(round.roundId, vote.roundId),
+        ),
+      )
+      .leftJoin(
+        voterStats,
+        eq(voterStats.voter, vote.identityHolder),
+      )
+      .leftJoin(
+        raterHumanCredential,
+        and(
+          eq(raterHumanCredential.rater, vote.identityHolder),
+          eq(raterHumanCredential.verified, true),
+          eq(raterHumanCredential.revoked, false),
+          sql`(
+            ${raterHumanCredential.expiresAt} = 0
+            or ${raterHumanCredential.expiresAt} > coalesce(${round.settledAt}, ${round.startTime})
+          )`,
+        ),
+      )
+      .where(
+        and(
+          eq(vote.contentId, contentId),
+          eq(vote.roundId, roundId),
+          eq(vote.revealed, true),
+          eq(round.state, ROUND_STATE.Settled),
+        ),
+      )
+      .orderBy(asc(vote.commitBlockNumber), asc(vote.commitLogIndex), asc(vote.id))
+      .limit(limit)
+      .offset(offset);
+
+    const roundContext = await getRoundContext(contentId, roundId);
+    return jsonBig(c, {
+      excludedVotes: [],
+      items: rows.map((row) => formatCorrelationVoteRow(row).item).filter(Boolean),
       roundContext,
     });
   });

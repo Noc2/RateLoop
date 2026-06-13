@@ -11,6 +11,7 @@ import { canonicalJsonHash } from "./json";
 
 export const PAYOUT_DOMAIN_QUESTION_REWARD = 1;
 export const PAYOUT_DOMAIN_LAUNCH_CREDIT = 2;
+export const PAYOUT_DOMAIN_PUBLIC_RATING = 3;
 export const CORRELATION_CANONICAL_JSON_VERSION = "rateloop-canonical-json-v1";
 export const CORRELATION_ELIGIBILITY_SPEC_VERSION =
   "rateloop-correlation-eligibility-v1";
@@ -22,6 +23,9 @@ export const PAYOUT_WEIGHT_DOMAIN = keccak256(
 export const BPS_DENOMINATOR = 10_000n;
 export const NEUTRAL_SURPRISE_BPS = 10_000;
 const FLAT_BASE_WEIGHT = 10_000n;
+const RATING_EVIDENCE_BASE_UNIT = 1_000_000n;
+const RATING_EVIDENCE_STAKE_BONUS_CAP = 10_000_000n;
+const RATING_EVIDENCE_MAX_STAKE_BONUS = 1_000_000n;
 
 export interface CorrelationScoringParams {
   minUnverifiedMaturityVotes: number;
@@ -58,6 +62,13 @@ export interface CorrelationVoteInput {
    * Missing (null/undefined) yields the neutral surprise multiplier.
    */
   revealWeight?: bigint | null;
+  /**
+   * Raw stake and epoch index from the vote commit. Required for the public
+   * rating domain, whose base evidence mirrors ContentRegistry's on-chain
+   * rating evidence calculation.
+   */
+  stake?: bigint | null;
+  epochIndex?: number | null;
 }
 
 export interface PayoutWeightLeafInput {
@@ -141,7 +152,7 @@ export function defaultCorrelationScoringParams(): CorrelationScoringParams {
     baseRateWindowRounds: 100,
     baseRateMinBps: 500,
     baseRateMaxBps: 9_500,
-    scorerVersion: "rateloop-correlation-epoch-v2",
+    scorerVersion: "rateloop-correlation-epoch-v3",
     eligibilitySpecVersion: CORRELATION_ELIGIBILITY_SPEC_VERSION,
     canonicalJsonVersion: CORRELATION_CANONICAL_JSON_VERSION,
     featureSpecVersion: CORRELATION_FEATURE_SPEC_VERSION,
@@ -233,6 +244,106 @@ export function scoreRoundPayoutWeights(args: {
       clusterId,
       verifiedHuman: vote.verifiedHuman,
       surpriseBps,
+      leaf: payoutWeightLeaf(args.chainId, args.oracleAddress, payout),
+      reasons,
+    };
+  });
+
+  return {
+    rawEligibleVoters: leaves.length,
+    effectiveParticipantUnits: leaves.reduce(
+      (sum, leaf) => sum + leaf.independenceBps,
+      0,
+    ),
+    totalClaimWeight: leaves.reduce(
+      (sum, leaf) => sum + leaf.effectiveWeight,
+      0n,
+    ),
+    weightRoot: merkleRoot(leaves.map((leaf) => leaf.leaf)),
+    reasonRoot: merkleRoot(leaves.map((leaf) => leaf.reasonHash)),
+    leaves,
+    parameterHash: correlationParameterHash(params),
+  };
+}
+
+export function scoreRoundRatingWeights(args: {
+  chainId: bigint;
+  oracleAddress: Address;
+  contentId: bigint;
+  roundId: bigint;
+  votes: readonly CorrelationVoteInput[];
+  params?: Partial<CorrelationScoringParams>;
+}): RoundPayoutScoringResult {
+  const params = { ...defaultCorrelationScoringParams(), ...args.params };
+  validateParams(params);
+  const clusters = buildClusters(args.votes);
+  const membersByCluster = new Map<number, number[]>();
+  for (let index = 0; index < args.votes.length; index++) {
+    const root = clusters.find(index);
+    const members = membersByCluster.get(root) ?? [];
+    members.push(index);
+    membersByCluster.set(root, members);
+  }
+
+  const baseEvidenceByVote = args.votes.map((vote) => ratingEvidenceForVote(vote));
+  const effectiveEvidenceByVote = Array<bigint>(args.votes.length).fill(0n);
+  const independenceBpsByVote = Array<number>(args.votes.length).fill(0);
+  const reasonsByVote = Array<readonly string[]>(args.votes.length).fill([]);
+
+  for (const [clusterRoot, memberIndexes] of membersByCluster.entries()) {
+    let clusterBaseEvidence = 0n;
+    let clusterBudget = 0n;
+    for (const index of memberIndexes) {
+      const baseEvidence = baseEvidenceByVote[index] ?? 0n;
+      clusterBaseEvidence += baseEvidence;
+      if (baseEvidence > clusterBudget) clusterBudget = baseEvidence;
+    }
+
+    for (const index of memberIndexes) {
+      const baseEvidence = baseEvidenceByVote[index] ?? 0n;
+      const effectiveEvidence =
+        clusterBaseEvidence > 0n
+          ? (baseEvidence * clusterBudget) / clusterBaseEvidence
+          : 0n;
+      const independenceBps =
+        baseEvidence > 0n
+          ? Number((effectiveEvidence * BPS_DENOMINATOR) / baseEvidence)
+          : 0;
+      effectiveEvidenceByVote[index] = effectiveEvidence;
+      independenceBpsByVote[index] = Math.min(10_000, independenceBps);
+      reasonsByVote[index] = [
+        `rating_domain=true`,
+        `cluster_size=${memberIndexes.length}`,
+        `cluster_base_evidence=${clusterBaseEvidence}`,
+        `cluster_effective_cap=${clusterBudget}`,
+        `stake=${args.votes[index]?.stake ?? 0n}`,
+        `epoch_index=${args.votes[index]?.epochIndex ?? 0}`,
+      ];
+    }
+  }
+
+  const leaves = args.votes.map((vote, index) => {
+    const clusterRoot = clusters.find(index);
+    const clusterId = clusterIdFor(args.votes, clusters, clusterRoot);
+    const reasons = reasonsByVote[index] ?? [];
+    const payout: PayoutWeightLeafInput = {
+      domain: PAYOUT_DOMAIN_PUBLIC_RATING,
+      rewardPoolId: 0n,
+      contentId: args.contentId,
+      roundId: args.roundId,
+      commitKey: vote.commitKey,
+      identityKey: vote.identityKey,
+      account: vote.account,
+      baseWeight: baseEvidenceByVote[index] ?? 0n,
+      independenceBps: independenceBpsByVote[index] ?? 0,
+      effectiveWeight: effectiveEvidenceByVote[index] ?? 0n,
+      reasonHash: keccak256(toBytes(reasons.join("|"))),
+    };
+    return {
+      ...payout,
+      clusterId,
+      verifiedHuman: vote.verifiedHuman,
+      surpriseBps: NEUTRAL_SURPRISE_BPS,
       leaf: payoutWeightLeaf(args.chainId, args.oracleAddress, payout),
       reasons,
     };
@@ -428,6 +539,19 @@ function baseWeightForVote(
     BigInt(params.baseWeightFloorBps) +
     (BigInt(params.baseWeightBonusBps) * BigInt(surpriseBps)) / BPS_DENOMINATOR
   );
+}
+
+function ratingEvidenceForVote(vote: CorrelationVoteInput): bigint {
+  const stake = typeof vote.stake === "bigint" && vote.stake > 0n ? vote.stake : 0n;
+  const stakeBonus =
+    (minBigInt(stake, RATING_EVIDENCE_STAKE_BONUS_CAP) * RATING_EVIDENCE_MAX_STAKE_BONUS) /
+    RATING_EVIDENCE_STAKE_BONUS_CAP;
+  const rawEvidence = RATING_EVIDENCE_BASE_UNIT + stakeBonus;
+  return vote.epochIndex === 0 ? rawEvidence : rawEvidence / 4n;
+}
+
+function minBigInt(left: bigint, right: bigint): bigint {
+  return left < right ? left : right;
 }
 
 function independenceForVote(
