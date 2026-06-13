@@ -40,7 +40,8 @@ test.describe("Ponder API endpoints", () => {
       data.rounds.some(round => round.state === 1),
       "seeded content #1 should include a settled round indexed by Ponder",
     ).toBe(true);
-    expect(data.ratings.length, "seeded content #1 should include indexed rating history").toBeGreaterThan(0);
+    expect(data.content.rating).toBe(50);
+    expect(data.content.ratingBps).toBe(5000);
   });
 
   test("GET /content with categoryId filter", async () => {

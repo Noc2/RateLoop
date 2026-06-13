@@ -27,7 +27,8 @@ export type ContentItem = {
   imageUrl?: string;
   description?: string;
   status: number;
-  rating: string;
+  rating: number;
+  ratingBps: number;
   totalVotes: string;
   submitter: string;
   createdAt: number;

@@ -272,9 +272,13 @@ type SeededCommit = {
   salt: `0x${string}`;
 };
 
+function maxIndexedRoundVoteCount(rounds: Array<{ voteCount: string | number }>): number {
+  return rounds.reduce((maxCount, round) => Math.max(maxCount, Number(round.voteCount)), 0);
+}
+
 async function hasSettledBaselineRound(contentId: bigint): Promise<boolean> {
   const data = await getContentById(contentId.toString());
-  return data.rounds.some(round => round.state === 1) && data.ratings.length > 0;
+  return data.rounds.some(round => round.state === 1);
 }
 
 async function ensureBaselineContentSettled(contentId: bigint, seededCommits: SeededCommit[]): Promise<void> {
@@ -393,7 +397,7 @@ export async function ensureBaselineSeedData(): Promise<void> {
   const seededVoteCounts = await Promise.all(
     [...expectedVoteCountsById.keys()].map(async contentId => {
       const { rounds } = await getContentById(contentId.toString());
-      return Number(rounds[0]?.voteCount ?? "0");
+      return maxIndexedRoundVoteCount(rounds);
     }),
   );
   const votesAlreadySeeded = seededVoteCounts.every(
@@ -463,7 +467,7 @@ export async function ensureBaselineSeedData(): Promise<void> {
       const updatedVoteCounts = await Promise.all(
         [...expectedVoteCountsById.keys()].map(async contentId => {
           const { rounds } = await getContentById(contentId.toString());
-          return Number(rounds[0]?.voteCount ?? "0");
+          return maxIndexedRoundVoteCount(rounds);
         }),
       );
       return updatedVoteCounts.every((count, index) => count >= [...expectedVoteCountsById.values()][index]);
