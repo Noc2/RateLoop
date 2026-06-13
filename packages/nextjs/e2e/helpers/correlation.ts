@@ -1,5 +1,8 @@
 import "./fetch-shim";
 import { spawn, type ChildProcess } from "node:child_process";
+import { randomUUID } from "node:crypto";
+import { unlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import {
   approveLREP,
@@ -37,6 +40,7 @@ export const correlationPublicClient = createPublicClient({
 });
 
 let correlationKeeper: ChildProcess | null = null;
+let correlationKeeperArtifactPath: string | null = null;
 const correlationKeeperLogs: string[] = [];
 
 type AnvilAccount = (typeof ANVIL_ACCOUNTS)[keyof typeof ANVIL_ACCOUNTS];
@@ -189,7 +193,8 @@ export async function publishAndFinalizeCorrelationSnapshotsWithKeeper(
     args: [],
   });
 
-  correlationKeeper = startCorrelationSnapshotKeeper();
+  const artifactPath = await writeTargetedCorrelationArtifact(rewardPoolId, contentId, roundId);
+  correlationKeeper = startCorrelationSnapshotKeeper(artifactPath);
   await waitForCorrelationEpochStatus(roundId, [SNAPSHOT_STATUS_PROPOSED, SNAPSHOT_STATUS_FINALIZED]);
 
   await evmIncreaseTime(Number(challengeWindow) + 1);
@@ -260,32 +265,14 @@ export function normalizePayoutWeight(value: any): PayoutWeight {
   };
 }
 
-export function startCorrelationSnapshotKeeper(): ChildProcess {
+export function startCorrelationSnapshotKeeper(artifactPath?: string): ChildProcess {
   correlationKeeperLogs.length = 0;
+  correlationKeeperArtifactPath = artifactPath ?? null;
   const child = spawn("yarn", ["workspace", "@rateloop/keeper", "start"], {
     cwd: REPO_ROOT,
     env: {
       ...process.env,
-      CHAIN_ID: "31337",
-      RPC_URL: E2E_RPC_URL,
-      PONDER_BASE_URL: PONDER_URL,
-      KEEPER_PRIVATE_KEY: ANVIL_ACCOUNTS.account1.privateKey,
-      KEEPER_INTERVAL_MS: "1000",
-      KEEPER_STARTUP_JITTER_MS: "0",
-      KEEPER_CLEANUP_BATCH_SIZE: "1",
-      KEEPER_FRONTEND_FEE_ENABLED: "false",
-      KEEPER_CORRELATION_SNAPSHOTS_ENABLED: "true",
-      KEEPER_CORRELATION_SNAPSHOTS_MODE: "auto",
-      KEEPER_CORRELATION_ARTIFACT_STORAGE: "data-uri",
-      KEEPER_CORRELATION_SNAPSHOT_MAX_ROUNDS_PER_TICK: "200",
-      METRICS_ENABLED: "false",
-      LOG_FORMAT: "json",
-      MAX_GAS_PER_TX: "30000000",
-      ADVISORY_VOTE_RECORDER_ADDRESS: CONTRACT_ADDRESSES.AdvisoryVoteRecorder,
-      CONTENT_REGISTRY_ADDRESS: CONTRACT_ADDRESSES.ContentRegistry,
-      VOTING_ENGINE_ADDRESS: CONTRACT_ADDRESSES.RoundVotingEngine,
-      CLUSTER_PAYOUT_ORACLE_ADDRESS: CONTRACT_ADDRESSES.ClusterPayoutOracle,
-      FRONTEND_REGISTRY_ADDRESS: CONTRACT_ADDRESSES.FrontendRegistry,
+      ...correlationKeeperEnvOverrides(artifactPath),
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -309,20 +296,107 @@ function collectKeeperOutput(chunk: Buffer) {
 
 export async function stopCorrelationSnapshotKeeper() {
   const child = correlationKeeper;
+  const artifactPath = correlationKeeperArtifactPath;
   correlationKeeper = null;
-  if (!child || child.exitCode !== null || child.killed) return;
+  correlationKeeperArtifactPath = null;
 
-  await new Promise<void>(resolve => {
-    const timeout = setTimeout(() => {
-      child.kill("SIGKILL");
-      resolve();
-    }, 5_000);
-    child.once("exit", () => {
-      clearTimeout(timeout);
-      resolve();
+  if (child && child.exitCode === null && !child.killed) {
+    await new Promise<void>(resolve => {
+      const timeout = setTimeout(() => {
+        child.kill("SIGKILL");
+        resolve();
+      }, 5_000);
+      child.once("exit", () => {
+        clearTimeout(timeout);
+        resolve();
+      });
+      child.kill("SIGTERM");
     });
-    child.kill("SIGTERM");
-  });
+  }
+  if (artifactPath) await unlink(artifactPath).catch(() => {});
+}
+
+function correlationKeeperEnvOverrides(artifactPath?: string) {
+  return {
+    CHAIN_ID: "31337",
+    RPC_URL: E2E_RPC_URL,
+    PONDER_BASE_URL: PONDER_URL,
+    KEEPER_PRIVATE_KEY: ANVIL_ACCOUNTS.account1.privateKey,
+    KEEPER_INTERVAL_MS: "1000",
+    KEEPER_STARTUP_JITTER_MS: "0",
+    KEEPER_CLEANUP_BATCH_SIZE: "1",
+    KEEPER_FRONTEND_FEE_ENABLED: "false",
+    KEEPER_CORRELATION_SNAPSHOTS_ENABLED: "true",
+    KEEPER_CORRELATION_SNAPSHOTS_MODE: artifactPath ? "file" : "auto",
+    KEEPER_CORRELATION_SNAPSHOT_ARTIFACT_PATH: artifactPath,
+    KEEPER_CORRELATION_ARTIFACT_STORAGE: "data-uri",
+    KEEPER_CORRELATION_SNAPSHOT_MAX_ROUNDS_PER_TICK: "20",
+    METRICS_ENABLED: "false",
+    LOG_FORMAT: "json",
+    MAX_GAS_PER_TX: "30000000",
+    ADVISORY_VOTE_RECORDER_ADDRESS: CONTRACT_ADDRESSES.AdvisoryVoteRecorder,
+    CONTENT_REGISTRY_ADDRESS: CONTRACT_ADDRESSES.ContentRegistry,
+    VOTING_ENGINE_ADDRESS: CONTRACT_ADDRESSES.RoundVotingEngine,
+    CLUSTER_PAYOUT_ORACLE_ADDRESS: CONTRACT_ADDRESSES.ClusterPayoutOracle,
+    FRONTEND_REGISTRY_ADDRESS: CONTRACT_ADDRESSES.FrontendRegistry,
+  };
+}
+
+async function writeTargetedCorrelationArtifact(
+  rewardPoolId: bigint,
+  contentId: bigint,
+  roundId: bigint,
+) {
+  const envOverrides = correlationKeeperEnvOverrides();
+  const previousEnv = new Map<string, string | undefined>();
+  for (const [key, value] of Object.entries(envOverrides)) {
+    previousEnv.set(key, process.env[key]);
+    if (value === undefined) {
+      delete process.env[key];
+    } else {
+      process.env[key] = value;
+    }
+  }
+
+  try {
+    const { buildConfiguredCorrelationSnapshotArtifactForCandidates } = await import(
+      "../../../keeper/src/correlation-artifact-builder"
+    );
+    const logger = {
+      debug: () => {},
+      info: () => {},
+      warn: () => {},
+      error: () => {},
+    };
+    const built = await buildConfiguredCorrelationSnapshotArtifactForCandidates(
+      [
+        {
+          domain: PAYOUT_DOMAIN_QUESTION_REWARD,
+          rewardPoolId,
+          contentId,
+          roundId,
+        },
+      ],
+      logger,
+    );
+    expect(built.roundSnapshotCount, "Targeted correlation artifact should contain one round snapshot").toBe(1);
+    expect(built.epochCount, "Targeted correlation artifact should contain one epoch").toBe(1);
+
+    const artifactPath = path.join(
+      tmpdir(),
+      `rateloop-correlation-${process.pid}-${Date.now()}-${randomUUID()}.json`,
+    );
+    await writeFile(artifactPath, JSON.stringify(built.artifact), "utf8");
+    return artifactPath;
+  } finally {
+    for (const [key, value] of previousEnv) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+  }
 }
 
 async function waitForCorrelationEpochStatus(epochId: bigint, acceptedStatuses: readonly number[]) {
