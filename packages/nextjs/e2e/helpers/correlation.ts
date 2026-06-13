@@ -1,7 +1,7 @@
 import "./fetch-shim";
 import { spawn, type ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { unlink, writeFile } from "node:fs/promises";
+import { unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
@@ -347,56 +347,68 @@ async function writeTargetedCorrelationArtifact(
   contentId: bigint,
   roundId: bigint,
 ) {
-  const envOverrides = correlationKeeperEnvOverrides();
-  const previousEnv = new Map<string, string | undefined>();
-  for (const [key, value] of Object.entries(envOverrides)) {
-    previousEnv.set(key, process.env[key]);
-    if (value === undefined) {
-      delete process.env[key];
-    } else {
-      process.env[key] = value;
-    }
-  }
-
+  const artifactPath = path.join(
+    tmpdir(),
+    `rateloop-correlation-${process.pid}-${Date.now()}-${randomUUID()}.json`,
+  );
   try {
-    const { buildConfiguredCorrelationSnapshotArtifactForCandidates } = await import(
-      "../../../keeper/src/correlation-artifact-builder"
-    );
-    const logger = {
-      debug: () => {},
-      info: () => {},
-      warn: () => {},
-      error: () => {},
-    };
-    const built = await buildConfiguredCorrelationSnapshotArtifactForCandidates(
-      [
-        {
-          domain: PAYOUT_DOMAIN_QUESTION_REWARD,
-          rewardPoolId,
-          contentId,
-          roundId,
-        },
-      ],
-      logger,
-    );
-    expect(built.roundSnapshotCount, "Targeted correlation artifact should contain one round snapshot").toBe(1);
-    expect(built.epochCount, "Targeted correlation artifact should contain one epoch").toBe(1);
-
-    const artifactPath = path.join(
-      tmpdir(),
-      `rateloop-correlation-${process.pid}-${Date.now()}-${randomUUID()}.json`,
-    );
-    await writeFile(artifactPath, JSON.stringify(built.artifact), "utf8");
-    return artifactPath;
-  } finally {
-    for (const [key, value] of previousEnv) {
-      if (value === undefined) {
-        delete process.env[key];
-      } else {
-        process.env[key] = value;
-      }
-    }
+    await runKeeperArtifactBuilder(artifactPath, rewardPoolId, contentId, roundId);
+  } catch (error) {
+    await unlink(artifactPath).catch(() => {});
+    throw error;
   }
+  return artifactPath;
+}
+
+async function runKeeperArtifactBuilder(
+  artifactPath: string,
+  rewardPoolId: bigint,
+  contentId: bigint,
+  roundId: bigint,
+) {
+  const child = spawn(
+    "yarn",
+    [
+      "workspace",
+      "@rateloop/keeper",
+      "build:correlation-artifact",
+      "--domain",
+      String(PAYOUT_DOMAIN_QUESTION_REWARD),
+      "--reward-pool-id",
+      rewardPoolId.toString(),
+      "--content-id",
+      contentId.toString(),
+      "--round-id",
+      roundId.toString(),
+      "--out",
+      artifactPath,
+    ],
+    {
+      cwd: REPO_ROOT,
+      env: {
+        ...process.env,
+        ...correlationKeeperEnvOverrides(),
+      },
+      stdio: ["ignore", "pipe", "pipe"],
+    },
+  );
+  let output = "";
+  const collect = (chunk: Buffer) => {
+    output = `${output}${chunk.toString("utf8")}`.slice(-20_000);
+  };
+  child.stdout?.on("data", collect);
+  child.stderr?.on("data", collect);
+
+  await new Promise<void>((resolve, reject) => {
+    child.once("error", reject);
+    child.once("exit", code => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+      reject(new Error(`Correlation artifact builder exited with code ${code ?? "null"}:\n${output}`));
+    });
+  });
 }
 
 async function waitForCorrelationEpochStatus(epochId: bigint, acceptedStatuses: readonly number[]) {
