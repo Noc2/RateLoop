@@ -21,7 +21,9 @@ library QuestionRewardPoolEscrowBundleLib {
     ) external view returns (bool) {
         if (bundle.refunded || roundSetIndex >= bundle.requiredSettledRounds) return false;
         BundleRoundSetSnapshot storage snapshot = bundleRoundSetSnapshots[bundleId][roundSetIndex];
-        return snapshot.qualified && snapshot.claimedCount < snapshot.eligibleCompleters;
+        if (!snapshot.qualified) return false;
+        if (snapshot.totalClaimWeight != 0) return snapshot.claimedWeight < snapshot.totalClaimWeight;
+        return snapshot.claimedCount < snapshot.eligibleCompleters;
     }
 
     function requireCleanupComplete(

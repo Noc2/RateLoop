@@ -112,8 +112,16 @@ struct BundleRoundSetSnapshot {
     bool qualified;
     uint32 claimedCount;
     uint32 eligibleCompleters;
+    uint32 rawEligibleCompleters;
     uint256 allocation;
     uint256 frontendFeeAllocation;
+    uint256 totalClaimWeight;
+    uint256 claimedWeight;
+    uint256 claimedAmount;
+    uint256 frontendFeeClaimedAmount;
+    bool firstClaimPaid;
+    bytes32 clusterWeightRoot;
+    bytes32 clusterSnapshotDigest;
 }
 
 /// @dev Caller-supplied params for `QuestionRewardPoolEscrowPoolActionsLib.createRewardPool`.

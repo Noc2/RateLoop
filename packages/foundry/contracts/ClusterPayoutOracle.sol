@@ -37,6 +37,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
     uint8 public constant PAYOUT_DOMAIN_QUESTION_REWARD = 1;
     uint8 public constant PAYOUT_DOMAIN_LAUNCH_CREDIT = 2;
     uint8 public constant PAYOUT_DOMAIN_PUBLIC_RATING = 3;
+    uint8 public constant PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD = 4;
     uint64 public constant DEFAULT_CHALLENGE_WINDOW = 2 hours;
     uint64 public constant MAX_CHALLENGE_WINDOW = 3 days;
     uint256 public constant DEFAULT_CHALLENGE_BOND = 5e6;
@@ -992,7 +993,10 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         } else {
             if (input.effectiveParticipantUnits == 0 || input.weightRoot == bytes32(0)) revert InvalidSnapshot();
         }
-        if (input.domain == PAYOUT_DOMAIN_QUESTION_REWARD && input.rewardPoolId == 0) revert InvalidSnapshot();
+        if (
+            (input.domain == PAYOUT_DOMAIN_QUESTION_REWARD || input.domain == PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD)
+                && input.rewardPoolId == 0
+        ) revert InvalidSnapshot();
         if (input.domain == PAYOUT_DOMAIN_LAUNCH_CREDIT && input.rewardPoolId != 0) revert InvalidSnapshot();
         if (input.domain == PAYOUT_DOMAIN_PUBLIC_RATING && input.rewardPoolId != 0) revert InvalidSnapshot();
     }
@@ -1074,14 +1078,17 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         if (!_isPayoutDomain(sourceRef.domain) || sourceRef.contentId == 0 || sourceRef.roundId == 0) {
             revert InvalidSnapshot();
         }
-        if (sourceRef.domain == PAYOUT_DOMAIN_QUESTION_REWARD && sourceRef.rewardPoolId == 0) revert InvalidSnapshot();
+        if (
+            (sourceRef.domain == PAYOUT_DOMAIN_QUESTION_REWARD
+                    || sourceRef.domain == PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD) && sourceRef.rewardPoolId == 0
+        ) revert InvalidSnapshot();
         if (sourceRef.domain == PAYOUT_DOMAIN_LAUNCH_CREDIT && sourceRef.rewardPoolId != 0) revert InvalidSnapshot();
         if (sourceRef.domain == PAYOUT_DOMAIN_PUBLIC_RATING && sourceRef.rewardPoolId != 0) revert InvalidSnapshot();
     }
 
     function _isPayoutDomain(uint8 domain) private pure returns (bool) {
         return domain == PAYOUT_DOMAIN_QUESTION_REWARD || domain == PAYOUT_DOMAIN_LAUNCH_CREDIT
-            || domain == PAYOUT_DOMAIN_PUBLIC_RATING;
+            || domain == PAYOUT_DOMAIN_PUBLIC_RATING || domain == PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD;
     }
 
     function _requireCurrentCorrelationEpoch(bytes32 expectedDigest, uint64 epochId) private view {

@@ -58,6 +58,8 @@ interface IClusterPayoutOracle {
         address account;
         /// @dev Question-reward domain: surprise-weighted base claim weight in
         ///      [10_000, 20_000] bps.
+        ///      Question-bundle-reward domain: same surprise-weighted base claim weight,
+        ///      addressed by (bundleId, bundleId, roundSetIndex + 1).
         ///      Launch-credit domain: remains exactly 10_000 (flat).
         uint256 baseWeight;
         uint16 independenceBps;

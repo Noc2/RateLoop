@@ -27,6 +27,7 @@ import {
 import { QuestionRewardPoolEscrowQualificationLib } from "./libraries/QuestionRewardPoolEscrowQualificationLib.sol";
 import { QuestionRewardPoolEscrowRecoveryLib } from "./libraries/QuestionRewardPoolEscrowRecoveryLib.sol";
 import { QuestionRewardPoolEscrowPoolActionsLib } from "./libraries/QuestionRewardPoolEscrowPoolActionsLib.sol";
+import { QuestionRewardPoolEscrowSnapshotConsumerLib } from "./libraries/QuestionRewardPoolEscrowSnapshotConsumerLib.sol";
 import { QuestionRewardPoolEscrowTransferLib } from "./libraries/QuestionRewardPoolEscrowTransferLib.sol";
 import { QuestionRewardPoolEscrowWindowLib } from "./libraries/QuestionRewardPoolEscrowWindowLib.sol";
 import {
@@ -67,6 +68,7 @@ contract QuestionRewardPoolEscrow is
     uint8 internal constant REWARD_ASSET_LREP = 0;
     uint8 internal constant REWARD_ASSET_USDC = 1;
     uint8 internal constant PAYOUT_DOMAIN_QUESTION_REWARD = 1;
+    uint8 internal constant PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD = 4;
     bytes32 internal constant REWARD_POOL_AUTHORIZATION_TYPEHASH = keccak256(
         "RateLoopRewardPoolAuthorization(uint256 chainId,address escrow,uint256 contentId,uint256 amount,uint256 requiredVoters,uint256 requiredSettledRounds,uint256 bountyStartBy,uint256 bountyWindowSeconds,uint256 feedbackWindowSeconds,uint8 bountyEligibility,uint8 bountyKind,uint256 relatedRoundId,bytes32 reasonHash,address funder,uint256 validAfter,uint256 validBefore)"
     );
@@ -95,6 +97,7 @@ contract QuestionRewardPoolEscrow is
     mapping(uint256 => uint256) private contentBundleIndex;
     uint16 public defaultFrontendFeeBps;
     mapping(uint256 => address) private rewardPoolClusterPayoutOracle;
+    mapping(uint256 => address) private bundleRewardClusterPayoutOracle;
     mapping(uint256 => mapping(uint256 => uint256)) private bundleQuestionTerminalSyncCursor;
     // FE-1 (audit 2026-05-20-followup): track rounds whose finalized snapshot was rejected and
     // whose allocation was returned via `recoverRejectedSnapshotRound`. Required so any caller
@@ -222,6 +225,16 @@ contract QuestionRewardPoolEscrow is
     event QuestionBundleRoundSetQualified(
         uint256 indexed bundleId, uint256 indexed roundSetIndex, uint256 allocation, uint256 frontendFeeAllocation
     );
+    event QuestionBundleRoundSetCorrelationSnapshotApplied(
+        uint256 indexed bundleId,
+        uint256 indexed roundSetIndex,
+        uint64 correlationEpochId,
+        uint256 rawEligibleCompleters,
+        uint256 effectiveParticipantUnits,
+        uint256 totalClaimWeight,
+        bytes32 weightRoot
+    );
+    event QuestionBundleClusterPayoutOracleSnapshotted(uint256 indexed bundleId, address indexed clusterPayoutOracle);
     /// @dev Removed: QuestionBundleFailed is no longer emitted after the retry-after-
     ///      failed-round refactor, so subscribing to that event is a no-op on current deployments.
     event QuestionBundleRewardClaimed(
@@ -562,6 +575,13 @@ contract QuestionRewardPoolEscrow is
             defaultFrontendFeeBps,
             params
         );
+        QuestionRewardPoolEscrowBundleActionsLib.snapshotBundleClusterPayoutOracle(
+            bundleRewardClusterPayoutOracle,
+            votingEngine,
+            rewardPoolId,
+            PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD,
+            address(this)
+        );
     }
 
     function _createRewardPool(
@@ -642,34 +662,14 @@ contract QuestionRewardPoolEscrow is
         external
         onlyRole(DEFAULT_ADMIN_ROLE)
     {
-        RewardPool storage rewardPool = _getExistingRewardPool(rewardPoolId);
-        require(rewardPool.qualifiedRounds == 0 && rewardPool.claimedAmount == 0, "Pool already consumed");
-        address oldOracle = rewardPoolClusterPayoutOracle[rewardPoolId];
-        require(oldOracle != address(0), "Oracle not pinned");
-        require(newOracle != address(0) && newOracle.code.length != 0, "Invalid oracle");
-        require(newOracle != oldOracle, "Oracle unchanged");
-        IClusterPayoutOracle oracle = IClusterPayoutOracle(newOracle);
-        // ABI shape + consumer-pin probe (L-Oracle-B). `roundPayoutSnapshotProposedAt` is the
-        // canonical view probe; `roundPayoutSnapshotConsumer` then confirms the new oracle
-        // routes the question-reward domain back to this escrow so future claims do not revert
-        // on the `msg.sender != proposal.consumer` check inside `verifyPayoutWeight`. The
-        // redundant pure-selector probe of `roundPayoutSnapshotKey` was dropped to keep
-        // QuestionRewardPoolEscrow under the EIP-170 size limit.
-        try oracle.roundPayoutSnapshotProposedAt(
-            PAYOUT_DOMAIN_QUESTION_REWARD, rewardPoolId, rewardPool.contentId, 0
-        ) returns (
-            uint64
-        ) { }
-        catch {
-            revert("Invalid oracle");
-        }
-        try oracle.roundPayoutSnapshotConsumer(PAYOUT_DOMAIN_QUESTION_REWARD) returns (address consumer) {
-            require(consumer == address(this), "Oracle consumer mismatch");
-        } catch {
-            revert("Invalid oracle");
-        }
-        rewardPoolClusterPayoutOracle[rewardPoolId] = newOracle;
-        emit RewardPoolClusterPayoutOracleRepointed(rewardPoolId, oldOracle, newOracle);
+        QuestionRewardPoolEscrowSnapshotConsumerLib.repoint(
+            rewardPools,
+            rewardPoolClusterPayoutOracle,
+            PAYOUT_DOMAIN_QUESTION_REWARD,
+            address(this),
+            rewardPoolId,
+            newOracle
+        );
     }
 
     function qualifyRound(uint256 rewardPoolId, uint256 roundId) external nonReentrant {
@@ -1028,6 +1028,7 @@ contract QuestionRewardPoolEscrow is
             bundleQuestionRecordedRounds,
             bundleRoundIds,
             bundleRoundSetSnapshots,
+            bundleRewardClusterPayoutOracle,
             bundleQuestionTerminalSyncCursor,
             qualifiedBundleRoundSetClaimants,
             contentBundleId,
@@ -1035,6 +1036,7 @@ contract QuestionRewardPoolEscrow is
             registry,
             votingEngine,
             votingEngine.protocolConfig(),
+            PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD,
             contentId,
             roundId
         );
@@ -1050,6 +1052,7 @@ contract QuestionRewardPoolEscrow is
             bundleQuestionRecordedRounds,
             bundleRoundIds,
             bundleRoundSetSnapshots,
+            bundleRewardClusterPayoutOracle,
             bundleQuestionTerminalSyncCursor,
             qualifiedBundleRoundSetClaimants,
             contentBundleId,
@@ -1057,6 +1060,7 @@ contract QuestionRewardPoolEscrow is
             registry,
             votingEngine,
             votingEngine.protocolConfig(),
+            PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD,
             bundleId,
             maxRounds
         );
@@ -1067,12 +1071,34 @@ contract QuestionRewardPoolEscrow is
         nonReentrant
         returns (uint256 rewardAmount)
     {
+        bytes32[] memory proof;
+        IClusterPayoutOracle.PayoutWeight memory payoutWeight;
+        return _claimQuestionBundleReward(bundleId, roundSetIndex, payoutWeight, proof, false);
+    }
+
+    function claimQuestionBundleReward(
+        uint256 bundleId,
+        uint256 roundSetIndex,
+        IClusterPayoutOracle.PayoutWeight calldata payoutWeight,
+        bytes32[] calldata proof
+    ) external nonReentrant returns (uint256 rewardAmount) {
+        return _claimQuestionBundleReward(bundleId, roundSetIndex, payoutWeight, proof, true);
+    }
+
+    function _claimQuestionBundleReward(
+        uint256 bundleId,
+        uint256 roundSetIndex,
+        IClusterPayoutOracle.PayoutWeight memory payoutWeight,
+        bytes32[] memory proof,
+        bool hasCorrelationProof
+    ) internal returns (uint256 rewardAmount) {
         return QuestionRewardPoolEscrowBundleActionsLib.claimQuestionBundleReward(
             bundleRewards,
             bundleQuestions,
             bundleQuestionRecordedRounds,
             bundleRoundIds,
             bundleRoundSetSnapshots,
+            bundleRewardClusterPayoutOracle,
             bundleQuestionTerminalSyncCursor,
             bundleRoundSetRewardClaimed,
             qualifiedBundleRoundSetClaimants,
@@ -1081,6 +1107,10 @@ contract QuestionRewardPoolEscrow is
             votingEngine.protocolConfig(),
             lrepToken,
             usdcToken,
+            payoutWeight,
+            proof,
+            PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD,
+            hasCorrelationProof,
             bundleId,
             roundSetIndex
         );
@@ -1096,6 +1126,7 @@ contract QuestionRewardPoolEscrow is
             bundleQuestions,
             bundleRoundIds,
             bundleRoundSetSnapshots,
+            bundleRewardClusterPayoutOracle,
             bundleRoundSetRewardClaimed,
             qualifiedBundleRoundSetClaimants,
             registry,
@@ -1114,6 +1145,7 @@ contract QuestionRewardPoolEscrow is
             bundleQuestionRecordedRounds,
             bundleRoundIds,
             bundleRoundSetSnapshots,
+            bundleRewardClusterPayoutOracle,
             bundleQuestionTerminalSyncCursor,
             qualifiedBundleRoundSetClaimants,
             contentBundleId,
@@ -1122,6 +1154,7 @@ contract QuestionRewardPoolEscrow is
             votingEngine,
             lrepToken,
             usdcToken,
+            PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD,
             bundleId
         );
     }
@@ -1200,15 +1233,20 @@ contract QuestionRewardPoolEscrow is
         view
         returns (bool)
     {
-        if (domain != PAYOUT_DOMAIN_QUESTION_REWARD) return false;
-        RewardPool storage rewardPool = rewardPools[rewardPoolId];
-        if (rewardPool.id == 0 || rewardPool.contentId != contentId || !_usesClusterPayoutSnapshot(rewardPool)) {
-            return false;
-        }
-        // M-Oracle-2-Followup (audit 2026-05-17): tracks whether any claim against this
-        // snapshot has actually moved funds, matching the launch consumer's "first paid wei"
-        // semantics.
-        return _snapshotHasPaidClaim(roundSnapshots[rewardPoolId][roundId]);
+        return QuestionRewardPoolEscrowSnapshotConsumerLib.isConsumed(
+            rewardPools,
+            roundSnapshots,
+            bundleRewards,
+            bundleRoundSetSnapshots,
+            rewardPoolClusterPayoutOracle,
+            bundleRewardClusterPayoutOracle,
+            PAYOUT_DOMAIN_QUESTION_REWARD,
+            PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD,
+            domain,
+            rewardPoolId,
+            contentId,
+            roundId
+        );
     }
 
     /// @notice M-Oracle-1: report the timestamp at which a payout snapshot is acceptable for the
@@ -1221,25 +1259,22 @@ contract QuestionRewardPoolEscrow is
         view
         returns (uint64)
     {
-        if (domain != PAYOUT_DOMAIN_QUESTION_REWARD) return 0;
-        RewardPool storage rewardPool = rewardPools[rewardPoolId];
-        if (rewardPool.id == 0 || rewardPool.refunded || rewardPool.contentId != contentId) return 0;
-        if (!_usesClusterPayoutSnapshot(rewardPool)) return 0;
-        // L-Oracle-4: reject snapshot proposals for rounds before the pool's `startRoundId`
-        // (the qualifier wouldn't accept them anyway). The post-completion gate was removed
-        // because it broke the legitimate post-rejection re-propose flow: after
-        // `rejectFinalizedRoundPayoutSnapshot` the pool's `qualifiedRounds` counter stays
-        // "stale-high" until `recoverRejectedSnapshotRound` decrements it, so a replacement
-        // snapshot must still be propose-able during that window. Storage griefing past
-        // completion is a low-impact concern and is anyway gated by the frontend operator's
-        // global LREP bond at FrontendRegistry.
-        if (roundId < rewardPool.startRoundId) return 0;
-        (,,, uint48 readyAt) = votingEngine.roundLifecycleState(contentId, roundId);
-        return readyAt;
-    }
-
-    function _snapshotHasPaidClaim(RoundSnapshot storage snapshot) private view returns (bool) {
-        return snapshot.firstClaimPaid;
+        return QuestionRewardPoolEscrowSnapshotConsumerLib.sourceReadyAt(
+            rewardPools,
+            bundleRewards,
+            bundleQuestions,
+            bundleQuestionRecordedRounds,
+            bundleRoundIds,
+            rewardPoolClusterPayoutOracle,
+            bundleRewardClusterPayoutOracle,
+            votingEngine,
+            PAYOUT_DOMAIN_QUESTION_REWARD,
+            PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD,
+            domain,
+            rewardPoolId,
+            contentId,
+            roundId
+        );
     }
 
     function getRewardPoolEligibility(uint256 rewardPoolId)

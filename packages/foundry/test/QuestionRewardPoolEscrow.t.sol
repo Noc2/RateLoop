@@ -1270,7 +1270,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertGt(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, voter1), 0);
     }
 
-    function testUsdcSubmissionBundleRejectsActiveClusterOracle() public {
+    function testUsdcSubmissionBundlePinsActiveClusterOracle() public {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
         assertEq(address(protocolConfig.clusterPayoutOracle()), address(oracle));
         assertEq(address(votingEngine.protocolConfig().clusterPayoutOracle()), address(oracle));
@@ -1278,9 +1278,8 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
         vm.prank(funder);
         usdc.approve(address(rewardPoolEscrow), REWARD_POOL_AMOUNT);
-        vm.expectRevert("Cluster bundle unsupported");
         vm.prank(address(registry));
-        rewardPoolEscrow.createSubmissionBundleFromRegistry(
+        uint256 bundleId = rewardPoolEscrow.createSubmissionBundleFromRegistry(
             1,
             contentIds,
             funder,
@@ -1291,6 +1290,16 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             block.timestamp + 30 days,
             30 days,
             30 days,
+            0
+        );
+        assertEq(bundleId, 1);
+        assertEq(
+            oracle.roundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD()), address(rewardPoolEscrow)
+        );
+        assertEq(
+            rewardPoolEscrow.roundPayoutSnapshotSourceReadyAt(
+                oracle.PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD(), bundleId, bundleId, 1
+            ),
             0
         );
     }
@@ -6104,6 +6113,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         oracle = _newEligibleClusterPayoutOracle();
         oracle.setOracleConfig(1 hours, 5e6, address(this));
         oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_QUESTION_REWARD(), address(rewardPoolEscrow));
+        oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD(), address(rewardPoolEscrow));
         vm.prank(owner);
         protocolConfig.setClusterPayoutOracle(address(oracle));
     }

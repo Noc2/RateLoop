@@ -392,6 +392,9 @@ contract DeployRateLoop is ScaffoldETHDeploy {
             clusterPayoutOracle.PAYOUT_DOMAIN_QUESTION_REWARD(), address(questionRewardPoolEscrow)
         );
         clusterPayoutOracle.setRoundPayoutSnapshotConsumer(
+            clusterPayoutOracle.PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD(), address(questionRewardPoolEscrow)
+        );
+        clusterPayoutOracle.setRoundPayoutSnapshotConsumer(
             clusterPayoutOracle.PAYOUT_DOMAIN_LAUNCH_CREDIT(), address(launchDistributionPool)
         );
         clusterPayoutOracle.setRoundPayoutSnapshotConsumer(
