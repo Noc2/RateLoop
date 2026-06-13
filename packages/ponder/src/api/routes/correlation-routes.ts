@@ -1,5 +1,6 @@
 import { ROUND_STATE } from "@rateloop/contracts/protocol";
-import { encodeAbiParameters, encodePacked, keccak256 } from "viem";
+import { PAYOUT_DOMAIN_QUESTION_REWARD } from "@rateloop/node-utils/correlationScoring";
+import { encodeAbiParameters, keccak256, zeroHash } from "viem";
 import { and, asc, desc, eq, inArray, or, sql } from "ponder";
 import { db } from "ponder:api";
 import {
@@ -18,8 +19,8 @@ import {
 import type { ApiApp } from "../shared.js";
 import { jsonBig } from "../shared.js";
 import { safeBigInt, safeLimit, safeOffset } from "../utils.js";
+import { addressIdentityKey } from "../../identity-keys.js";
 
-const PAYOUT_DOMAIN_QUESTION_REWARD = 1;
 const PAYOUT_DOMAIN_PUBLIC_RATING = 3;
 const PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD = 4;
 const SNAPSHOT_STATUS_PROPOSED = 1;
@@ -29,7 +30,6 @@ const RATING_REVIEW_STATUS_PENDING = 1;
 const BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG = 0x80;
 const BOUNTY_ELIGIBILITY_CREDENTIAL_MASK = 0x0e;
 const BOUNTY_ELIGIBILITY_PROOF_OF_HUMAN = 0x08;
-const ZERO_HASH = `0x${"0".repeat(64)}` as const;
 const HUMAN_CREDENTIAL_PROVIDER_NONE = 0;
 
 // Trailing base-rate window for surprise-weighted bounty claim weights: the most recent
@@ -54,21 +54,12 @@ function normalizeString(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
-function addressIdentityKey(account: `0x${string}`) {
-  return keccak256(
-    encodePacked(
-      ["string", "address"],
-      ["rateloop.address-identity-v1", account],
-    ),
-  );
-}
-
 function credentialIdentityKey(provider: number, nullifierHash: `0x${string}`) {
   if (
     provider === HUMAN_CREDENTIAL_PROVIDER_NONE ||
-    nullifierHash === ZERO_HASH
+    nullifierHash === zeroHash
   )
-    return ZERO_HASH;
+    return zeroHash;
   return keccak256(
     encodeAbiParameters(
       [{ type: "string" }, { type: "uint8" }, { type: "bytes32" }],
@@ -114,7 +105,7 @@ async function loadActiveCorrelationIdentityBanState(
     if (nullifierHash === null) continue;
     const provider = Number(ban.provider);
     const identityKey = credentialIdentityKey(provider, nullifierHash);
-    if (identityKey !== ZERO_HASH) identityKeys.add(identityKey.toLowerCase());
+    if (identityKey !== zeroHash) identityKeys.add(identityKey.toLowerCase());
     sourceKeys.add(identityBanSourceKey(provider, nullifierHash));
     if (!seenNullifierHashes.has(nullifierHash)) {
       seenNullifierHashes.add(nullifierHash);
@@ -268,7 +259,7 @@ function formatCorrelationVoteRow(
   banState?: ActiveCorrelationIdentityBanState,
 ) {
   const account = row.account ?? row.voter;
-  const identityKey = row.identityKey ?? ZERO_HASH;
+  const identityKey = row.identityKey ?? zeroHash;
   const excludedReasons: string[] = [];
   if (banState?.identityKeys.has(identityKey.toLowerCase())) {
     excludedReasons.push("identity_banned");
@@ -594,7 +585,7 @@ export function registerCorrelationRoutes(app: ApiApp) {
             sql`coalesce(${round.settledAt}, ${round.startTime}) is not null`,
             sql`${vote.identityKey} is not null`,
             sql`${vote.identityHolder} is not null`,
-            sql`${vote.identityKey} != ${ZERO_HASH}`,
+            sql`${vote.identityKey} != ${zeroHash}`,
             sql`${vote.identityHolder} != ${questionRewardPool.funder}`,
             sql`${vote.identityKey} != ${questionRewardPool.funderIdentityKey}`,
             sql`${vote.identityHolder} != ${content.submitter}`,
@@ -820,7 +811,7 @@ export function registerCorrelationRoutes(app: ApiApp) {
           eq(round.state, ROUND_STATE.Settled),
           sql`${vote.identityKey} is not null`,
           sql`${vote.identityHolder} is not null`,
-          sql`${vote.identityKey} != ${ZERO_HASH}`,
+          sql`${vote.identityKey} != ${zeroHash}`,
           sql`${vote.identityHolder} != ${bundle.funder}`,
           sql`${vote.identityKey} != ${bundle.funderIdentityKey}`,
           sql`${vote.identityHolder} != ${content.submitter}`,
@@ -875,7 +866,7 @@ export function registerCorrelationRoutes(app: ApiApp) {
       );
       if (bundleIndex === undefined) continue;
       const account = row.account ?? row.voter;
-      const identityKey = row.identityKey ?? ZERO_HASH;
+      const identityKey = row.identityKey ?? zeroHash;
       const key = `${identityKey.toLowerCase()}:${account.toLowerCase()}`;
       const entry = completedByIdentity.get(key) ?? {
         firstVote: null,

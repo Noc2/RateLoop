@@ -2,6 +2,7 @@ import { ponder } from "ponder:registry";
 import { asc, eq, and } from "ponder";
 import { encodePacked, isAddress, keccak256, zeroAddress } from "viem";
 import { RoundVotingEngineAbi } from "@rateloop/contracts/abis";
+import { buildCommitKey } from "@rateloop/contracts/votingCore";
 import {
   DEFAULT_ROUND_CONFIG,
   ROUND_STATE,
@@ -27,6 +28,7 @@ import {
 } from "./streak-utils.js";
 import { extendFeedbackBonusAwardDeadlinesForTerminalRound } from "./feedback-bonus-deadlines.js";
 import { tryContractRead } from "./contract-read.js";
+import { addressIdentityKey } from "./identity-keys.js";
 
 const RBTS_SCORE_SCALE_BPS = 10_000;
 const RBTS_SCORE_SCALE = 10_000n;
@@ -51,15 +53,6 @@ function normalizeBytes32(value: unknown): `0x${string}` | null {
     return null;
   }
   return value.toLowerCase() as `0x${string}`;
-}
-
-function addressIdentityKey(account: `0x${string}`) {
-  return keccak256(
-    encodePacked(
-      ["string", "address"],
-      ["rateloop.address-identity-v1", account],
-    ),
-  );
 }
 
 function nonZeroIdentityKey(
@@ -402,10 +395,6 @@ function rbtsLeaveOneOutMeanScoreBps({
   return (weightedScoreSum - ownWeight * BigInt(ownScoreBps)) / remainingWeight;
 }
 
-function rbtsCommitKey(voter: `0x${string}`, commitHash: `0x${string}`) {
-  return keccak256(encodePacked(["address", "bytes32"], [voter, commitHash]));
-}
-
 async function resolveRbtsScoringWeights(params: {
   context: any;
   contentId: bigint;
@@ -694,7 +683,7 @@ ponder.on("RoundVotingEngine:VoteCommitted", async ({ event, context }) => {
   const roundKey = `${contentId}-${roundId}`;
   const rawVoter = normalizeAddress(voter) ?? voter;
   const voteKey = `${contentId}-${roundId}-${rawVoter}`;
-  const commitKey = rbtsCommitKey(rawVoter, commitHash);
+  const commitKey = buildCommitKey(rawVoter, commitHash);
   const {
     identityKey,
     identityHolder,

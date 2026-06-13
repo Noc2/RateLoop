@@ -1,8 +1,7 @@
 import { getSharedDeploymentAddress } from "@rateloop/contracts/deployments";
-import { isAddress } from "viem";
+import { isAddress, zeroAddress } from "viem";
 
-const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
-const PONDER_NETWORK_CHAIN_IDS: Record<string, number> = {
+export const PONDER_NETWORK_CHAIN_IDS: Record<string, number> = {
   hardhat: 31337,
   worldchainSepolia: 4801,
   worldchain: 480,
@@ -24,7 +23,7 @@ function readEnv(env: NodeJS.ProcessEnv | Record<string, string | undefined>, ke
 }
 
 function normalizeRequiredAddress(value: unknown): `0x${string}` | null {
-  if (typeof value !== "string" || !isAddress(value) || value.toLowerCase() === ZERO_ADDRESS) {
+  if (typeof value !== "string" || !isAddress(value) || value.toLowerCase() === zeroAddress) {
     return null;
   }
 

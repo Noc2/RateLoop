@@ -1,4 +1,5 @@
 import type { Account, Chain, PublicClient, WalletClient } from "viem";
+import { zeroAddress } from "viem";
 import {
   ContentRegistryAbi,
   FrontendRegistryAbi,
@@ -14,7 +15,6 @@ import { writeContractAndConfirm } from "./keeper.js";
 import type { Logger } from "./logger.js";
 import { getRevertReason } from "./revert-utils.js";
 
-const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as const;
 const PROTOCOL_FRONTEND_FEE_DISPOSITION = 2;
 
 interface FrontendFeeSweepCursor {
@@ -118,7 +118,7 @@ async function previewAndClaimFrontendFee(params: {
     }
 
     if (
-      operator !== ZERO_ADDRESS &&
+      operator !== zeroAddress &&
       operator.toLowerCase() !== params.account.address.toLowerCase()
     ) {
       params.logger.warn(

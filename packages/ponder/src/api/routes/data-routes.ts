@@ -1,5 +1,7 @@
 import { ROUND_STATE } from "@rateloop/contracts/protocol";
+import { PAYOUT_DOMAIN_QUESTION_REWARD } from "@rateloop/node-utils/correlationScoring";
 import { and, asc, desc, eq, gte, inArray, or, sql } from "ponder";
+import { zeroHash } from "viem";
 import { db } from "ponder:api";
 import {
   advisoryVote,
@@ -56,10 +58,8 @@ import { resolveQuestionPayoutProof } from "../payout-proofs.js";
 
 const VOTE_COOLDOWN_SECONDS = 24 * 60 * 60;
 const SNAPSHOT_STATUS_FINALIZED = 3;
-const PAYOUT_DOMAIN_QUESTION_REWARD = 1;
 const PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD = 4;
 const HEX_BYTES32_PATTERN = /^0x[0-9a-fA-F]{64}$/;
-const ZERO_BYTES32 = `0x${"0".repeat(64)}`;
 const PAYOUT_PROOF_ENRICHMENT_CONCURRENCY = 8;
 const WORLD_CREDENTIAL_SELFIE = 1;
 const WORLD_CREDENTIAL_PASSPORT = 2;
@@ -824,7 +824,7 @@ export function registerDataRoutes(app: ApiApp) {
 
     const [identityBan] =
       humanCredential?.provider &&
-      humanCredential.nullifierHash !== ZERO_BYTES32
+      humanCredential.nullifierHash !== zeroHash
         ? await db
             .select()
             .from(raterIdentityBan)
@@ -1457,7 +1457,7 @@ export function registerDataRoutes(app: ApiApp) {
       eq(feedbackBonusPool.forfeited, false),
       sql`${feedbackBonusPool.remainingAmount} > 0`,
       sql`${feedbackBonusPool.awardDeadline} >= ${nowSeconds}`,
-      sql`${contentFeedback.feedbackHash} != ${ZERO_BYTES32}`,
+      sql`${contentFeedback.feedbackHash} != ${zeroHash}`,
       sql`${contentFeedback.committedAt} <= ${feedbackBonusPool.feedbackClosesAt}`,
       sql`${feedbackBonusAward.id} is null`,
     ];

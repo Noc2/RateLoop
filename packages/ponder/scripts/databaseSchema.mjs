@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { PONDER_NETWORK_CHAIN_IDS } from "../src/protocol-deployment.ts";
 
 export const DEFAULT_PONDER_DATABASE_SCHEMA = "rateloop_ponder";
 export const LEGACY_PONDER_DATABASE_SCHEMA = "ponder";
@@ -12,12 +13,6 @@ const DEFAULT_PONDER_DATABASE_SCHEMA_BY_NETWORK = {
   worldchainSepolia: "rateloop_ponder_worldchain_sepolia",
   worldchain: "rateloop_ponder_worldchain",
 };
-const PONDER_NETWORK_CHAIN_IDS = {
-  hardhat: 31337,
-  worldchainSepolia: 4801,
-  worldchain: 480,
-};
-
 function readEnv(env, key) {
   const value = env[key]?.trim();
   return value ? value : undefined;

@@ -1,5 +1,5 @@
 import { createConfig } from "ponder";
-import { isAddress } from "viem";
+import { isAddress, zeroAddress } from "viem";
 
 import {
   AdvisoryVoteRecorderAbi,
@@ -90,7 +90,6 @@ function getActiveNetwork(): PonderNetworkName {
 
 const activeNetwork = getActiveNetwork();
 const activeChainId = NETWORKS[activeNetwork].chainId;
-const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as const;
 let warnedAboutHardhatStartBlocks = false;
 
 function readEnv(key: string): string | undefined {
@@ -247,7 +246,7 @@ function resolveOptionalAddress(
     }
 
     if (sharedAddress) return sharedAddress;
-    return ZERO_ADDRESS;
+    return zeroAddress;
   }
 
   if (envValue) {

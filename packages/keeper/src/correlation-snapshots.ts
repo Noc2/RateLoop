@@ -7,6 +7,7 @@ import {
 } from "@rateloop/contracts/abis";
 import { canonicalJsonHash } from "@rateloop/node-utils/json";
 import type { Address, Hex } from "viem";
+import { zeroAddress } from "viem";
 import type { Logger } from "./logger.js";
 import { config } from "./config.js";
 import {
@@ -32,7 +33,6 @@ const STATUS = {
   Rejected: 4,
 } as const;
 const PAYOUT_DOMAIN_PUBLIC_RATING = 3;
-const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as const;
 const ARTIFACT_FETCH_TIMEOUT_MS = 5_000;
 const ARTIFACT_MAX_BYTES = 10_000_000;
 
@@ -232,7 +232,7 @@ async function readSnapshotProposerAuthorization(
       functionName: "authorizedSnapshotFrontend",
       args: [account.address],
     })) as Address;
-    const authorized = frontendOperator !== ZERO_ADDRESS;
+    const authorized = frontendOperator !== zeroAddress;
 
     const data = {
       snapshotProposer: account.address,

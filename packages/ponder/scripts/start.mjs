@@ -4,6 +4,7 @@ import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { pathToFileURL, fileURLToPath } from "node:url";
 import { buildPonderStartArgs, buildProtocolDeploymentKey } from "./databaseSchema.mjs";
+import { PONDER_NETWORK_CHAIN_IDS } from "../src/protocol-deployment.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, "../../..");
@@ -15,12 +16,6 @@ export const requiredContractsArtifacts = [
   resolve(contractsRoot, "dist/esm/deployments.js"),
   resolve(contractsRoot, "dist/esm/protocol.js"),
 ];
-const PONDER_NETWORK_CHAIN_IDS = {
-  hardhat: 31337,
-  worldchainSepolia: 4801,
-  worldchain: 480,
-};
-
 function readEnv(env, key) {
   const value = env[key]?.trim();
   return value ? value : undefined;

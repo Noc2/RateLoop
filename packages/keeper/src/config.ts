@@ -1,7 +1,7 @@
 import path from "node:path";
 import { getSharedDeploymentAddress as getSharedArtifactAddress } from "@rateloop/contracts/deployments";
 import { config as loadDotenv } from "dotenv";
-import { isAddress } from "viem";
+import { isAddress, zeroAddress } from "viem";
 
 loadDotenv({ path: ".env.local", override: false });
 loadDotenv();
@@ -20,7 +20,6 @@ const LOCAL_HARDHAT_CHAIN_ID = 31337;
 // in sync with packages/foundry/contracts/ContentRegistry.sol.
 const CONTRACT_DORMANCY_PERIOD_S = 30n * 24n * 60n * 60n;
 const isProduction = process.env.NODE_ENV === "production";
-const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const CORRELATION_SNAPSHOT_MODES = ["file", "auto"] as const;
 const CORRELATION_ARTIFACT_STORAGE_MODES = ["file", "data-uri"] as const;
 const LOOPBACK_BIND_ADDRESSES = new Set(["127.0.0.1", "::1", "localhost"]);
@@ -242,12 +241,12 @@ function requireAddressEnv(name: string, errors: string[]): `0x${string}` {
   const value = readEnv(name);
   if (!value) {
     errors.push(`${name} is required`);
-    return ZERO_ADDRESS;
+    return zeroAddress;
   }
 
   if (!isAddress(value)) {
     errors.push(`${name} must be a valid address`);
-    return ZERO_ADDRESS;
+    return zeroAddress;
   }
 
   return value as `0x${string}`;
@@ -288,7 +287,7 @@ function resolveOptionalContractAddress(params: {
   if (envValue) {
     if (!isAddress(envValue)) {
       errors.push(`${envName} must be a valid address`);
-      return ZERO_ADDRESS;
+      return zeroAddress;
     }
     if (
       sharedAddress &&
@@ -301,7 +300,7 @@ function resolveOptionalContractAddress(params: {
     return envValue as `0x${string}`;
   }
 
-  return (sharedAddress as `0x${string}` | undefined) ?? ZERO_ADDRESS;
+  return (sharedAddress as `0x${string}` | undefined) ?? zeroAddress;
 }
 
 function resolveContractAddress(params: {
@@ -319,7 +318,7 @@ function resolveContractAddress(params: {
     if (envValue) {
       if (!isAddress(envValue)) {
         errors.push(`${envName} must be a valid address`);
-        return ZERO_ADDRESS;
+        return zeroAddress;
       }
 
       if (
@@ -347,7 +346,7 @@ function resolveContractAddress(params: {
         errors.push(
           `${envName} must be a valid address when provided for chain ${chainId}`,
         );
-        return ZERO_ADDRESS;
+        return zeroAddress;
       }
 
       if (envValue.toLowerCase() !== sharedAddress.toLowerCase()) {
@@ -368,7 +367,7 @@ function resolveContractAddress(params: {
   errors.push(
     `Missing shared deployment artifact for ${contractName} on chain ${chainId}. Refresh @rateloop/contracts deployedContracts.ts before starting the keeper for live networks.`,
   );
-  return ZERO_ADDRESS;
+  return zeroAddress;
 }
 
 function loadConfig() {
@@ -697,7 +696,7 @@ function loadConfig() {
         "KEEPER_CORRELATION_ARTIFACT_STORAGE=data-uri must not be used in production",
       );
     }
-    if (loadedConfig.contracts.clusterPayoutOracle === ZERO_ADDRESS) {
+    if (loadedConfig.contracts.clusterPayoutOracle === zeroAddress) {
       errors.push(
         "CLUSTER_PAYOUT_ORACLE_ADDRESS or a shared ClusterPayoutOracle deployment artifact is required when KEEPER_CORRELATION_SNAPSHOTS_ENABLED=true",
       );

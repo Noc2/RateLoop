@@ -19,7 +19,6 @@
  * ends, the drand beacon makes the decryption key available and the keeper can decrypt.
  */
 import {
-  encodePacked,
   getAbiItem,
   keccak256,
   type AbiEvent,
@@ -44,6 +43,7 @@ import {
   decodeRbtsVotePlaintext,
   parseTlockCiphertextMetadata,
 } from "@rateloop/contracts/voting";
+import { buildCommitKey } from "@rateloop/contracts/votingCore";
 import {
   type CommitData,
   type RoundData,
@@ -801,14 +801,6 @@ interface CommitEventArgs {
   ciphertext?: `0x${string}`;
 }
 
-/** Vote commit keys are `keccak256(abi.encodePacked(voter, commitHash))` on-chain. */
-function voteCommitKeyFromEvent(args: CommitEventArgs): `0x${string}` | null {
-  if (!args.voter || !args.commitHash) return null;
-  return keccak256(
-    encodePacked(["address", "bytes32"], [args.voter, args.commitHash]),
-  );
-}
-
 async function fetchLogCiphertextsForRound(params: {
   publicClient: Pick<PublicClient, "getBlockNumber" | "getLogs">;
   kind: "vote" | "advisory";
@@ -846,7 +838,9 @@ async function fetchLogCiphertextsForRound(params: {
         const args = (log as { args?: CommitEventArgs }).args ?? {};
         const commitKey =
           params.kind === "vote"
-            ? voteCommitKeyFromEvent(args)
+            ? args.voter && args.commitHash
+              ? buildCommitKey(args.voter, args.commitHash)
+              : null
             : (args.advisoryCommitKey ?? null);
         if (!commitKey || !args.ciphertextHash || !args.ciphertext) continue;
         logCiphertexts.set(indexedCiphertextKey(commitKey), {

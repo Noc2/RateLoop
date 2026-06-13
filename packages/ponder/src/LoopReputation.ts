@@ -1,14 +1,8 @@
 import { getSharedDeploymentAddress } from "@rateloop/contracts/deployments";
 import { ponder } from "ponder:registry";
 import { tokenHolder, tokenTransfer } from "ponder:schema";
-import { isAddress } from "viem";
-
-const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
-const PONDER_NETWORK_CHAIN_IDS: Record<string, number> = {
-  hardhat: 31337,
-  worldchainSepolia: 4801,
-  worldchain: 480,
-};
+import { isAddress, zeroAddress } from "viem";
+import { PONDER_NETWORK_CHAIN_IDS } from "./protocol-deployment.js";
 
 const INDEXED_CONTRACT_NAMES = [
   "ContentRegistry",
@@ -86,7 +80,7 @@ ponder.on("LoopReputation:Transfer", async ({ event, context }) => {
     .onConflictDoNothing();
 
   // Track token holders (skip burns and known contracts)
-  if (to === ZERO_ADDRESS) return;
+  if (to === zeroAddress) return;
   if (excludedAddresses.has(to.toLowerCase())) return;
 
   await context.db
