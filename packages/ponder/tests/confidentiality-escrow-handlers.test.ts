@@ -24,7 +24,9 @@ vi.mock("ponder:schema", () => ({
   content: "content",
 }));
 
-function createDb() {
+function createDb(
+  options: { existingContent?: Record<string, unknown> | null } = {},
+) {
   const inserts: Array<{
     table: string;
     values: Record<string, unknown>;
@@ -38,6 +40,14 @@ function createDb() {
 
   return {
     db: {
+      find: vi.fn(async (table: string) => {
+        if (table === "content") {
+          return Object.hasOwn(options, "existingContent")
+            ? options.existingContent
+            : { id: 42n };
+        }
+        return null;
+      }),
       insert: vi.fn((table: string) => ({
         values: vi.fn((values: Record<string, unknown>) => ({
           onConflictDoUpdate: vi.fn(async (update: Record<string, unknown>) => {
@@ -69,7 +79,7 @@ afterEach(() => {
 });
 
 describe("ConfidentialityEscrow ponder handlers", () => {
-  it("indexes confidentiality config and backfills the content row", async () => {
+  it("indexes confidentiality config and backfills the existing content row", async () => {
     const { db, inserts, updates } = createDb();
     const registeredHandlers = await loadHandlers();
     const handler = registeredHandlers.get(
@@ -125,6 +135,44 @@ describe("ConfidentialityEscrow ponder handlers", () => {
         },
       },
     ]);
+  });
+
+  it("indexes confidentiality config without crashing when content is not indexed yet", async () => {
+    const { db, inserts, updates } = createDb({ existingContent: null });
+    const registeredHandlers = await loadHandlers();
+    const handler = registeredHandlers.get(
+      "ConfidentialityEscrow:ConfidentialityConfigured",
+    );
+
+    expect(handler).toBeDefined();
+
+    await handler!({
+      event: {
+        args: {
+          contentId: 42n,
+          gated: true,
+          bondAsset: 0,
+          bondAmount: 1_000_000n,
+          flags: 1,
+        },
+        block: { timestamp: 1_000n },
+      },
+      context: { db },
+    });
+
+    expect(inserts).toEqual([
+      expect.objectContaining({
+        table: "confidentialityConfig",
+        values: expect.objectContaining({
+          contentId: 42n,
+          gated: true,
+          bondAsset: 0,
+          bondAmount: 1_000_000n,
+          flags: 1,
+        }),
+      }),
+    ]);
+    expect(updates).toEqual([]);
   });
 
   it("tracks posted and released bonds by content identity key", async () => {

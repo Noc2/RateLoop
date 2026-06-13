@@ -57,12 +57,16 @@ ponder.on(
         updatedAt: event.block.timestamp,
       });
 
-    await context.db.update(content, { id: contentId }).set({
-      gated,
-      confidentialityBondAsset: confidentialityBondAssetName(asset),
-      confidentialityBondAmount: amount,
-      confidentialityDisclosurePolicy: confidentialityDisclosurePolicyFromFlags(flagValue),
-    });
+    const existingContent = await context.db.find(content, { id: contentId });
+    if (existingContent) {
+      await context.db.update(content, { id: contentId }).set({
+        gated,
+        confidentialityBondAsset: confidentialityBondAssetName(asset),
+        confidentialityBondAmount: amount,
+        confidentialityDisclosurePolicy:
+          confidentialityDisclosurePolicyFromFlags(flagValue),
+      });
+    }
   },
 );
 
