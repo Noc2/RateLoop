@@ -493,7 +493,6 @@ export const payoutArtifactCache = onchainTable(
     updatedAt: t.bigint().notNull(),
   }),
   (table) => ({
-    artifactUriIdx: index().on(table.artifactUri),
     lastFetchedAtIdx: index().on(table.lastFetchedAt),
   }),
 );
