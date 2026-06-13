@@ -13,15 +13,15 @@ import {
 import { ANVIL_ACCOUNTS, DEPLOYER } from "../helpers/anvil-accounts";
 import { CONTRACT_ADDRESSES } from "../helpers/contracts";
 import { fastForwardTime } from "../helpers/keeper";
-import { getContentById } from "../helpers/ponder-api";
+import { RATING_REVIEW_STATUS_PENDING, getContentById } from "../helpers/ponder-api";
 import { expect, test } from "@playwright/test";
 
 /**
  * Multi-round succession — same content settles two consecutive rounds.
  *
  * Verifies that after round 1 settles, a new round 2 can be opened on the
- * same content and settled independently. Rating changes accumulate across
- * rounds.
+ * same content and settled independently. Settlement records pending rating
+ * reviews for the later snapshot/apply flow.
  *
  * Uses direct contract calls (tlock commit-reveal) to avoid UI cooldown
  * and timing issues. Fast-forwards 24h between rounds to clear the
@@ -214,7 +214,7 @@ test.describe("Multi-round succession", () => {
     expect(settledIndexed, "Round 2 not indexed by Ponder").toBe(true);
   });
 
-  test("verify both rounds are settled with cumulative rating changes", async () => {
+  test("verify both rounds are settled with pending rating reviews", async () => {
     test.skip(!contentId || round2Id === 0n, "No content or round 2 from previous test");
 
     const data = await getContentById(contentId!);
@@ -227,13 +227,11 @@ test.describe("Multi-round succession", () => {
     const roundIds = new Set(terminalRounds.map(r => r.roundId));
     expect(roundIds.size).toBeGreaterThanOrEqual(2);
 
-    // Should have at least 2 rating changes (one per round)
-    expect(data.ratings.length).toBeGreaterThanOrEqual(2);
+    for (const round of terminalRounds) {
+      expect(round.ratingReviewStatus).toBe(RATING_REVIEW_STATUS_PENDING);
+      expect(round.ratingReviewReferenceRatingBps).toBeGreaterThanOrEqual(0);
+    }
 
-    // Round 1 was all UP → rating should have increased from default (50)
-    // Round 2 was all DOWN → rating should have decreased
-    // The exact values depend on RewardMath, but rating after round 2
-    // should differ from rating after round 1
     expect(data.content.rating).toBeDefined();
   });
 });

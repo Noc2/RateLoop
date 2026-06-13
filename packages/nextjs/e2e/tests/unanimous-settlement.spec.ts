@@ -14,7 +14,7 @@ import {
 } from "../helpers/admin-helpers";
 import { ANVIL_ACCOUNTS, DEPLOYER } from "../helpers/anvil-accounts";
 import { CONTRACT_ADDRESSES } from "../helpers/contracts";
-import { getContentById } from "../helpers/ponder-api";
+import { RATING_REVIEW_STATUS_PENDING, getContentById } from "../helpers/ponder-api";
 import { expect, test } from "@playwright/test";
 
 /**
@@ -164,10 +164,8 @@ test.describe("Unanimous settlement without reserve subsidy", () => {
     // and the winning side should remain indexed.
     expect(BigInt(round!.totalStake)).toBe(STAKE * 3n);
 
-    // A unanimous settled round should emit a rating record, but the indexed
-    // value may remain neutral after settlement cleanup.
-    expect(data.ratings.length).toBeGreaterThanOrEqual(1);
-    const latestRating = data.ratings[data.ratings.length - 1];
-    expect(latestRating.newRating).toBeGreaterThanOrEqual(latestRating.oldRating);
+    expect(round!.ratingReviewStatus).toBe(RATING_REVIEW_STATUS_PENDING);
+    expect(round!.ratingReviewReferenceRatingBps).toBe(5000);
+    expect(BigInt(round!.ratingReviewRawUpEvidence ?? "0")).toBeGreaterThan(0n);
   });
 });

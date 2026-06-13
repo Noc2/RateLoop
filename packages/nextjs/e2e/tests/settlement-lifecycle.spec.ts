@@ -15,7 +15,7 @@ import { newE2EContext } from "../helpers/browser-context";
 import { CONTRACT_ADDRESSES } from "../helpers/contracts";
 import { gotoWithRetry } from "../helpers/wait-helpers";
 import { setupWallet } from "../helpers/wallet-session";
-import { getContentById, getContentList, ponderGet } from "../helpers/ponder-api";
+import { RATING_REVIEW_STATUS_PENDING, getContentById, getContentList, ponderGet } from "../helpers/ponder-api";
 import { expect, test } from "@playwright/test";
 
 /**
@@ -137,21 +137,23 @@ test.describe("Settlement lifecycle", () => {
     const settled = await settleRoundDirect(BigInt(newContentId!), roundId, revealer.address, VOTING_ENGINE);
     expect(settled, "Settlement failed").toBe(true);
 
-    // Step 7: Wait for Ponder to index the settlement AND rating update
+    // Step 7: Wait for Ponder to index the settlement and pending rating review
     const settledIndexed = await waitForPonderIndexed(async () => {
       const data = await getContentById(newContentId!);
-      const roundSettled = data.rounds.some(
-        r => String(r.roundId) === String(roundId) && (r.state === 1 || r.state === 3),
+      const round = data.rounds.find(r => String(r.roundId) === String(roundId));
+      return (
+        round !== undefined &&
+        (round.state === 1 || round.state === 3) &&
+        round.ratingReviewStatus === RATING_REVIEW_STATUS_PENDING
       );
-      return roundSettled && data.ratings.length >= 1;
     }, 30_000);
-    expect(settledIndexed, "Ponder did not index settlement + rating for the fresh content").toBe(true);
+    expect(settledIndexed, "Ponder did not index settlement + pending rating review").toBe(true);
 
-    // Step 8: Verify RatingUpdated
-    const { ratings } = await getContentById(newContentId!);
-    expect(ratings.length).toBeGreaterThanOrEqual(1);
-    expect(ratings[0]).toHaveProperty("oldRating");
-    expect(ratings[0]).toHaveProperty("newRating");
+    // Step 8: Verify review evidence was indexed for the later rating snapshot/apply flow.
+    const { rounds } = await getContentById(newContentId!);
+    const indexedRound = rounds.find(r => String(r.roundId) === String(roundId));
+    expect(indexedRound?.ratingReviewReferenceRatingBps).toBeGreaterThanOrEqual(0);
+    expect(BigInt(indexedRound?.ratingReviewRawUpEvidence ?? "0")).toBeGreaterThan(0n);
   });
 
   test("governance profile shows vote history after voting", async ({ browser }) => {

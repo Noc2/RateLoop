@@ -54,8 +54,14 @@ export type ContentRound = {
   upCount: string;
   downCount: string;
   upWins: boolean;
+  ratingReviewStatus: number;
+  ratingReviewReferenceRatingBps: number | null;
+  ratingReviewRawUpEvidence: string | null;
+  ratingReviewRawDownEvidence: string | null;
   createdAt: number;
 };
+
+export const RATING_REVIEW_STATUS_PENDING = 1;
 
 export type VoteItem = {
   id: string;

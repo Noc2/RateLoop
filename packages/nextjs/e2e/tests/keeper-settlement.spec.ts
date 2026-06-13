@@ -11,7 +11,7 @@ import {
 import { ANVIL_ACCOUNTS, DEPLOYER } from "../helpers/anvil-accounts";
 import { CONTRACT_ADDRESSES } from "../helpers/contracts";
 import "../helpers/fetch-shim";
-import { getContentById, getContentList, getVotes } from "../helpers/ponder-api";
+import { RATING_REVIEW_STATUS_PENDING, getContentById, getContentList, getVotes } from "../helpers/ponder-api";
 import { E2E_KEEPER_HEALTH_URL, E2E_RPC_URL } from "../helpers/service-urls";
 import { deriveKeeperDecryptWaitMs } from "../helpers/tlockRuntime";
 import { ProtocolConfigAbi, RoundVotingEngineAbi } from "@rateloop/contracts/abis";
@@ -210,6 +210,7 @@ test.describe("Keeper-backed settlement lifecycle", () => {
     expect(round!.state).toBe(1);
     expect(round!.upWins).toBe(true);
     expect(Number(round!.voteCount)).toBe(voters.length);
-    expect(data.ratings.length).toBeGreaterThanOrEqual(1);
+    expect(round!.ratingReviewStatus).toBe(RATING_REVIEW_STATUS_PENDING);
+    expect(BigInt(round!.ratingReviewRawUpEvidence ?? "0")).toBeGreaterThan(0n);
   });
 });
