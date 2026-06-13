@@ -3,6 +3,10 @@ import { FEED_EMPTY_STATE_RE, waitForFeedLoaded } from "../helpers/wait-helpers"
 import type { Locator, Page } from "@playwright/test";
 
 test.describe("Category filter", () => {
+  const visibleCategoryPills = (page: Page) => page.locator('[data-testid="category-filter-pill"]:visible');
+  const visibleCategoryPill = (page: Page, name: string | RegExp) =>
+    visibleCategoryPills(page).filter({ hasText: name }).first();
+
   async function loadVoteFeed(page: Page, path = "/rate") {
     await expect(async () => {
       await page.goto(path, { waitUntil: "domcontentloaded" });
@@ -17,7 +21,7 @@ test.describe("Category filter", () => {
    */
   async function findVisibleCategoryPill(page: Page): Promise<{ name: string; locator: Locator }> {
     // Wait for the "All" button to appear — this confirms the category bar is rendered
-    const allButton = page.getByTestId("category-filter-pill").filter({ hasText: /^All$/i }).first();
+    const allButton = visibleCategoryPill(page, /^All$/i);
     await allButton.waitFor({ state: "visible", timeout: 10_000 }).catch(() => null);
 
     // Prefer categories that the local deploy helper seeds with content so the
@@ -38,10 +42,7 @@ test.describe("Category filter", () => {
       .poll(
         async () => {
           for (const name of knownCategories) {
-            const pill = page
-              .getByTestId("category-filter-pill")
-              .filter({ hasText: new RegExp(`^${name}$`, "i") })
-              .first();
+            const pill = visibleCategoryPill(page, new RegExp(`^${name}$`, "i"));
             const isVisible = await pill.isVisible().catch(() => false);
             if (isVisible) {
               visiblePill = { name, locator: pill };
@@ -49,7 +50,7 @@ test.describe("Category filter", () => {
             }
           }
 
-          const pills = page.getByTestId("category-filter-pill");
+          const pills = visibleCategoryPills(page);
           const count = await pills.count();
           for (let i = 0; i < count; i++) {
             const pill = pills.nth(i);
@@ -102,7 +103,7 @@ test.describe("Category filter", () => {
     await loadVoteFeed(page, "/rate#media");
 
     // Click "All" pill
-    const allPill = page.getByTestId("category-filter-pill").filter({ hasText: /^All$/i }).first();
+    const allPill = visibleCategoryPill(page, /^All$/i);
     await expect(allPill).toBeVisible({ timeout: 10_000 });
     await allPill.click();
 
@@ -121,10 +122,7 @@ test.describe("Category filter", () => {
     // Navigate with that hash
     await loadVoteFeed(page, `/rate#${hash}`);
 
-    const activePill = page
-      .getByTestId("category-filter-pill")
-      .filter({ hasText: new RegExp(`^${pill!.name}$`, "i") })
-      .first();
+    const activePill = visibleCategoryPill(page, new RegExp(`^${pill!.name}$`, "i"));
     await expect(activePill).toHaveAttribute("aria-pressed", "true");
   });
 
