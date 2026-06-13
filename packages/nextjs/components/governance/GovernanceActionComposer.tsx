@@ -1245,40 +1245,47 @@ export function GovernanceActionComposer() {
               {selectedTemplate.note && <p className="text-base text-warning">{selectedTemplate.note}</p>}
             </div>
 
-            {selectedTemplate.fields.map(field => (
-              <div key={field.key}>
-                <label className="label">
-                  <span className="label-text">{field.label}</span>
-                </label>
-                {field.type === "textarea" ? (
-                  <textarea
-                    className="textarea textarea-bordered w-full min-h-[96px]"
-                    value={formValues[field.key] ?? ""}
-                    placeholder={field.placeholder}
-                    onChange={event => setFormValues(current => ({ ...current, [field.key]: event.target.value }))}
-                  />
-                ) : field.type === "credentialProvider" ? (
-                  <select
-                    className="select select-bordered w-full"
-                    value={formValues[field.key] ?? ""}
-                    onChange={event => setFormValues(current => ({ ...current, [field.key]: event.target.value }))}
-                  >
-                    <option value="">Select a provider</option>
-                    <option value="1">Seeded human</option>
-                    <option value="2">World ID v4</option>
-                  </select>
-                ) : (
-                  <input
-                    className="input input-bordered w-full"
-                    type="text"
-                    value={formValues[field.key] ?? ""}
-                    placeholder={field.placeholder}
-                    onChange={event => setFormValues(current => ({ ...current, [field.key]: event.target.value }))}
-                  />
-                )}
-                {field.helperText && <p className="text-base text-base-content/50 mt-1">{field.helperText}</p>}
-              </div>
-            ))}
+            {selectedTemplate.fields.map(field => {
+              const fieldInputId = `governance-action-${field.key}`;
+
+              return (
+                <div key={field.key}>
+                  <label className="label" htmlFor={fieldInputId}>
+                    <span className="label-text">{field.label}</span>
+                  </label>
+                  {field.type === "textarea" ? (
+                    <textarea
+                      id={fieldInputId}
+                      className="textarea textarea-bordered w-full min-h-[96px]"
+                      value={formValues[field.key] ?? ""}
+                      placeholder={field.placeholder}
+                      onChange={event => setFormValues(current => ({ ...current, [field.key]: event.target.value }))}
+                    />
+                  ) : field.type === "credentialProvider" ? (
+                    <select
+                      id={fieldInputId}
+                      className="select select-bordered w-full"
+                      value={formValues[field.key] ?? ""}
+                      onChange={event => setFormValues(current => ({ ...current, [field.key]: event.target.value }))}
+                    >
+                      <option value="">Select a provider</option>
+                      <option value="1">Seeded human</option>
+                      <option value="2">World ID v4</option>
+                    </select>
+                  ) : (
+                    <input
+                      id={fieldInputId}
+                      className="input input-bordered w-full"
+                      type="text"
+                      value={formValues[field.key] ?? ""}
+                      placeholder={field.placeholder}
+                      onChange={event => setFormValues(current => ({ ...current, [field.key]: event.target.value }))}
+                    />
+                  )}
+                  {field.helperText && <p className="text-base text-base-content/50 mt-1">{field.helperText}</p>}
+                </div>
+              );
+            })}
 
             {selectedTemplate.mode === "proposal" && selectedTemplate.allowCustomDescription !== false && (
               <div>
