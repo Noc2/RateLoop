@@ -643,7 +643,6 @@ contract QuestionRewardPoolEscrow is
         onlyRole(DEFAULT_ADMIN_ROLE)
     {
         RewardPool storage rewardPool = _getExistingRewardPool(rewardPoolId);
-        require(rewardPool.asset == REWARD_ASSET_USDC, "Not USDC pool");
         require(rewardPool.qualifiedRounds == 0 && rewardPool.claimedAmount == 0, "Pool already consumed");
         address oldOracle = rewardPoolClusterPayoutOracle[rewardPoolId];
         require(oldOracle != address(0), "Oracle not pinned");
@@ -693,7 +692,7 @@ contract QuestionRewardPoolEscrow is
             votingEngine,
             rewardPool,
             QuestionRewardPoolEscrowQualificationLib.AdvanceCursorParams({
-                maxRounds: maxRounds, rewardAssetUsdc: REWARD_ASSET_USDC, payoutDomain: PAYOUT_DOMAIN_QUESTION_REWARD
+                maxRounds: maxRounds, payoutDomain: PAYOUT_DOMAIN_QUESTION_REWARD
             })
         );
     }
@@ -1187,7 +1186,6 @@ contract QuestionRewardPoolEscrow is
                 roundId: roundId,
                 account: account,
                 bpsScale: BPS_SCALE,
-                rewardAssetUsdc: REWARD_ASSET_USDC,
                 payoutDomain: PAYOUT_DOMAIN_QUESTION_REWARD
             })
         );
@@ -1447,7 +1445,7 @@ contract QuestionRewardPoolEscrow is
     }
 
     function _usesClusterPayoutSnapshot(RewardPool storage rewardPool) internal view returns (bool) {
-        return rewardPool.asset == REWARD_ASSET_USDC && rewardPoolClusterPayoutOracle[rewardPool.id] != address(0);
+        return rewardPoolClusterPayoutOracle[rewardPool.id] != address(0);
     }
 
     function _isExcludedClaimant(RewardPool storage rewardPool, bytes32 identityKey, address account)

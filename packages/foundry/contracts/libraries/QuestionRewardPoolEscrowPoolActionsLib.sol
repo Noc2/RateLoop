@@ -131,7 +131,7 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         uint8 asset,
         address expectedConsumer
     ) external {
-        if (asset != REWARD_ASSET_USDC) return;
+        if (asset != REWARD_ASSET_LREP && asset != REWARD_ASSET_USDC) return;
         address clusterPayoutOracle = votingEngine.protocolConfig().clusterPayoutOracle();
         if (clusterPayoutOracle == address(0)) return;
         try IClusterPayoutOracle(clusterPayoutOracle)

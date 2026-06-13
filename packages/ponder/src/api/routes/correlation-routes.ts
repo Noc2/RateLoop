@@ -17,7 +17,6 @@ import type { ApiApp } from "../shared.js";
 import { jsonBig } from "../shared.js";
 import { safeBigInt, safeLimit, safeOffset } from "../utils.js";
 
-const REWARD_ASSET_USDC = 1;
 const PAYOUT_DOMAIN_QUESTION_REWARD = 1;
 const PAYOUT_DOMAIN_PUBLIC_RATING = 3;
 const SNAPSHOT_STATUS_PROPOSED = 1;
@@ -331,7 +330,6 @@ export function registerCorrelationRoutes(app: ApiApp) {
       )
       .where(
         and(
-          eq(questionRewardPool.asset, REWARD_ASSET_USDC),
           eq(questionRewardPool.refunded, false),
           sql`${questionRewardPool.qualifiedRounds} < ${questionRewardPool.requiredSettledRounds}`,
           eq(round.state, ROUND_STATE.Settled),

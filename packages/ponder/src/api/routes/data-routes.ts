@@ -1578,10 +1578,9 @@ export function registerDataRoutes(app: ApiApp) {
       PAYOUT_PROOF_ENRICHMENT_CONCURRENCY,
       async (item) => {
         const requiresPayoutProof =
-          item.asset !== 0 &&
-          (item.correlationWeightRoot != null ||
+          item.correlationWeightRoot != null ||
             item.payoutWeightRoot != null ||
-            item.payoutArtifactUri != null);
+            item.payoutArtifactUri != null;
         const payoutProof = requiresPayoutProof
           ? await resolveQuestionPayoutProof({
               artifactHash: item.payoutArtifactHash,

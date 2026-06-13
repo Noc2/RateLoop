@@ -2634,7 +2634,7 @@ describe("registerDataRoutes", () => {
 });
 
 describe("registerCorrelationRoutes", () => {
-  it("lists settled USDC reward rounds that still need payout snapshots", async () => {
+  it("lists settled reward rounds that still need payout snapshots", async () => {
     const { queryBuilder } = mockPonderModules([
       {
         rewardPoolId: 7n,
@@ -2679,7 +2679,6 @@ describe("registerCorrelationRoutes", () => {
     });
     const whereArg = queryBuilder.where.mock.calls[0]?.[0];
     const serialized = serializeExpression(whereArg);
-    expect(serialized).toContain("questionRewardPool.asset");
     expect(serialized).toContain("round.state");
     expect(serialized).toContain("roundPayoutSnapshot.id");
     expect(serialized).toContain("round.revealedCount");

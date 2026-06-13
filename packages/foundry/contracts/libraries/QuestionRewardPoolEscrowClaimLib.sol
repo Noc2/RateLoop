@@ -32,7 +32,6 @@ struct ClaimableQuestionRewardParams {
     uint256 roundId;
     address account;
     uint256 bpsScale;
-    uint8 rewardAssetUsdc;
     uint8 payoutDomain;
 }
 
@@ -180,7 +179,7 @@ library QuestionRewardPoolEscrowClaimLib {
     ) external view returns (uint256 claimableAmount) {
         RewardPool storage rewardPool = rewardPools[params.rewardPoolId];
         if (rewardPool.id == 0 || rewardPool.refunded) return 0;
-        if (!_usesClusterPayoutSnapshot(rewardPoolClusterPayoutOracle, rewardPool, params.rewardAssetUsdc)) {
+        if (!_usesClusterPayoutSnapshot(rewardPoolClusterPayoutOracle, rewardPool)) {
             return _claimableQuestionReward(
                 rewardPools,
                 roundSnapshots,
@@ -717,10 +716,9 @@ library QuestionRewardPoolEscrowClaimLib {
 
     function _usesClusterPayoutSnapshot(
         mapping(uint256 => address) storage rewardPoolClusterPayoutOracle,
-        RewardPool storage rewardPool,
-        uint8 rewardAssetUsdc
+        RewardPool storage rewardPool
     ) private view returns (bool) {
-        return rewardPool.asset == rewardAssetUsdc && rewardPoolClusterPayoutOracle[rewardPool.id] != address(0);
+        return rewardPoolClusterPayoutOracle[rewardPool.id] != address(0);
     }
 
     function _computeClaimSplit(

@@ -63,7 +63,6 @@ library QuestionRewardPoolEscrowQualificationLib {
 
     struct AdvanceCursorParams {
         uint256 maxRounds;
-        uint8 rewardAssetUsdc;
         uint8 payoutDomain;
     }
 
@@ -147,7 +146,6 @@ library QuestionRewardPoolEscrowQualificationLib {
                 votingEngine,
                 rewardPool,
                 nextRoundToEvaluate,
-                params.rewardAssetUsdc,
                 params.payoutDomain
             );
             if (!roundFinished || canQualify) break;
@@ -460,7 +458,6 @@ library QuestionRewardPoolEscrowQualificationLib {
         RoundVotingEngine votingEngine,
         RewardPool storage rewardPool,
         uint256 roundId,
-        uint8 rewardAssetUsdc,
         uint8 payoutDomain
     ) private view returns (bool roundFinished, bool canQualify, uint256 eligibleVoters) {
         (, RoundLib.RoundState state,,,,,,) = votingEngine.roundCore(rewardPool.contentId, roundId);
@@ -474,7 +471,7 @@ library QuestionRewardPoolEscrowQualificationLib {
         // advancing the cursor moves no funds and the unallocated balance still refunds normally.
         if (!windowActive) return (true, false, 0);
 
-        if (rewardPool.asset == rewardAssetUsdc && rewardPoolClusterPayoutOracle[rewardPool.id] != address(0)) {
+        if (rewardPoolClusterPayoutOracle[rewardPool.id] != address(0)) {
             return _clusterRoundQualificationStatus(
                 rewardPoolPayerIdentity,
                 rewardPoolPayerIdentityKey,

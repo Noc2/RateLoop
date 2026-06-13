@@ -5,8 +5,6 @@ import { IClusterPayoutOracle } from "../interfaces/IClusterPayoutOracle.sol";
 import { RewardPool, RoundSnapshot } from "./QuestionRewardPoolEscrowTypes.sol";
 
 library QuestionRewardPoolEscrowRecoveryLib {
-    uint8 internal constant REWARD_ASSET_USDC = 1;
-
     event RecoveredSnapshotRoundReopened(
         uint256 indexed rewardPoolId, uint256 indexed contentId, uint256 indexed roundId, bytes32 newWeightRoot
     );
@@ -115,6 +113,6 @@ library QuestionRewardPoolEscrowRecoveryLib {
         RewardPool storage rewardPool,
         mapping(uint256 => address) storage rewardPoolClusterPayoutOracle
     ) private view returns (bool) {
-        return rewardPool.asset == REWARD_ASSET_USDC && rewardPoolClusterPayoutOracle[rewardPool.id] != address(0);
+        return rewardPoolClusterPayoutOracle[rewardPool.id] != address(0);
     }
 }
