@@ -1395,6 +1395,34 @@ contract ProtocolConfigBranchesTest is Test {
         assertEq(roundCfg.maxVoters, 3);
     }
 
+    function test_GovernanceCanRatchetDefaultAndMinimumSettlementVoters() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+
+        config.setConfig(20 minutes, 20 minutes, 5, 100);
+        (,, uint16 minVoters, uint16 maxVoters) = config.config();
+        assertEq(minVoters, 5, "default quorum ratchets up");
+        assertEq(maxVoters, 100, "default voter cap remains launch-compatible");
+
+        config.setRoundConfigBounds(20 seconds, 30 days, 20 seconds, 60 days, 5, 100, 5, 200);
+
+        ProtocolConfig.RoundConfigBounds memory bounds = config.getRoundConfigBounds();
+        assertEq(bounds.minSettlementVoters, 5, "hard creator floor ratchets up");
+        assertEq(bounds.minVoterCap, 5, "voter cap floor follows settlement floor");
+
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.validateRoundConfig(20 minutes, 20 minutes, 3, 100);
+
+        RoundLib.RoundConfig memory roundCfg = config.validateRoundConfig(20 minutes, 20 minutes, 5, 100);
+        assertEq(roundCfg.minVoters, 5, "new floor remains valid");
+    }
+
+    function test_GovernanceCannotRaiseMinimumSettlementVotersPastCurrentDefault() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.setRoundConfigBounds(20 seconds, 30 days, 20 seconds, 60 days, 5, 100, 5, 200);
+    }
+
     function test_ValidateRoundConfig_RejectsOutsideGovernanceBounds() public {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
 

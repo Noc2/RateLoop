@@ -588,6 +588,54 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         assertEq(id, 1);
     }
 
+    function test_SubmitQuestion_UsesGovernanceRatchetDefaultVoters() public {
+        ProtocolConfig config = ProtocolConfig(address(votingEngine.protocolConfig()));
+        vm.startPrank(owner);
+        config.setConfig(1 hours, 7 days, 5, 100);
+        config.setRoundConfigBounds(20 seconds, 30 days, 20 seconds, 60 days, 5, 100, 5, 200);
+        vm.stopPrank();
+
+        string memory contextUrl = "https://example.com/ratcheted-default";
+        string[] memory imageUrls = _emptyImageUrls();
+        bytes32 salt = keccak256("ratcheted-default-submit-question");
+        uint256 rewardAmount = _defaultSubmissionRewardAmount(registry);
+        ContentRegistry.SubmissionRewardTerms memory rewardTerms = ContentRegistry.SubmissionRewardTerms({
+            asset: DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
+            amount: rewardAmount,
+            requiredVoters: 5,
+            requiredSettledRounds: DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
+            bountyStartBy: 0,
+            bountyWindowSeconds: 0,
+            feedbackWindowSeconds: 0,
+            bountyEligibility: 0
+        });
+        RoundLib.RoundConfig memory roundConfig =
+            RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 7 days, minVoters: 5, maxVoters: 100 });
+
+        vm.startPrank(submitter);
+        lrepToken.approve(address(registry), rewardAmount);
+        _reserveQuestionSubmissionWithRewardTermsAndRoundConfig(
+            contextUrl, imageUrls, "", "Question?", "Context", "Products", 1, salt, submitter, rewardTerms, roundConfig
+        );
+        vm.warp(block.timestamp + 1);
+        uint256 id = registry.submitQuestion(
+            contextUrl,
+            imageUrls,
+            "",
+            "Question?",
+            "Products",
+            1,
+            _emptySubmissionDetails(),
+            salt,
+            _defaultQuestionSpec()
+        );
+        vm.stopPrank();
+
+        RoundLib.RoundConfig memory storedConfig = registry.getContentRoundConfig(id);
+        assertEq(storedConfig.minVoters, 5, "question stores raised default quorum");
+        assertEq(mockQuestionRewardPoolEscrow.lastRequiredVoters(), 5, "reward terms follow raised default");
+    }
+
     function test_SubmitQuestion_AllowsDetailsUrlAndEmitsHash() public {
         string memory contextUrl = "https://example.com/context";
         string[] memory imageUrls = _emptyImageUrls();
