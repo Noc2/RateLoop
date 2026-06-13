@@ -105,6 +105,23 @@ type ResolvedConfidentialRater = {
   identityKey: Hex;
 };
 
+function indexedContentIsGated(item: any) {
+  return (
+    item?.contextVisibility === "gated" ||
+    item?.contextAccess === "gated" ||
+    item?.confidentiality?.visibility === "gated"
+  );
+}
+
+function indexedConfidentialityState(item: any) {
+  return JSON.stringify({
+    contextAccess: item?.contextAccess,
+    contextVisibility: item?.contextVisibility,
+    confidentiality: item?.confidentiality,
+    id: item?.id,
+  });
+}
+
 const confidentialityPublicClient = createPublicClient({
   chain: foundry,
   transport: http(E2E_RPC_URL),
@@ -262,17 +279,22 @@ export async function submitHostedGatedQuestionDirect(config: SubmitGatedQuestio
   expect(result.txHash, "Hosted gated direct question submission should return a transaction hash").toBeTruthy();
 
   let submitted: any;
-  const indexed = await waitForPonderIndexed(
+  const indexedAsGated = await waitForPonderIndexed(
     async () => {
       const data = await ponderGet(`/content?status=all&search=${encodeURIComponent(config.title)}&limit=10`);
       submitted = data.items?.find((item: { title?: string }) => item.title === config.title);
-      return Boolean(submitted);
+      return indexedContentIsGated(submitted);
     },
     90_000,
     2_000,
     "confidentiality:hosted-gated-question-indexed",
   );
-  expect(indexed, "Ponder should index the hosted gated direct submission").toBe(true);
+  expect(
+    indexedAsGated,
+    `Ponder should index the hosted gated direct submission as gated; last indexed state: ${indexedConfidentialityState(
+      submitted,
+    )}`,
+  ).toBe(true);
   expect(submitted?.id, "Hosted gated direct submission should have a content id").toBeTruthy();
 
   return {
@@ -411,18 +433,22 @@ export async function submitGatedQuestion(
   await expect(page.getByRole("dialog", { name: /Question submitted/i })).toBeVisible({ timeout: 90_000 });
 
   let submitted: any;
-  const indexed = await waitForPonderIndexed(
+  const indexedAsGated = await waitForPonderIndexed(
     async () => {
       const data = await ponderGet(`/content?status=all&search=${encodeURIComponent(title)}&limit=10`);
       submitted = data.items?.find((item: { title?: string }) => item.title === title);
-      return Boolean(submitted);
+      return indexedContentIsGated(submitted);
     },
     90_000,
     2_000,
     "confidentiality:gated-question-indexed",
   );
-  expect(indexed, "Ponder should index the gated browser submission").toBe(true);
-  expect(submitted?.contextVisibility ?? submitted?.contextAccess).toBe("gated");
+  expect(
+    indexedAsGated,
+    `Ponder should index the gated browser submission as gated; last indexed state: ${indexedConfidentialityState(
+      submitted,
+    )}`,
+  ).toBe(true);
 
   const publicDetails = await page.request.get(uploadedDetailsUrl!);
   expect([401, 403], "linked gated details should require a signed session").toContain(publicDetails.status());
