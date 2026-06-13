@@ -206,7 +206,9 @@ test.describe("Confidential context", () => {
     const uniqueId = Date.now();
     const form = page.locator("form").first();
     await selectAskCategory(page);
-    await form.getByLabel("Number of questions").fill("2");
+    const questionCountInput = page.getByLabel(/Number of Questions/i);
+    await expect(questionCountInput).toBeVisible({ timeout: 5_000 });
+    await questionCountInput.fill("2");
     await form.getByRole("checkbox", { name: "Private context" }).check();
     await page.getByPlaceholder("Write a subjective question voters can rate").fill(`Private bundle Q1 ${uniqueId}`);
     await page
