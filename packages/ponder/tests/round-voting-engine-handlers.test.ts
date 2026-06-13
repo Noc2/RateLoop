@@ -1491,17 +1491,19 @@ describe("RoundVotingEngine ponder handlers", () => {
     expect(economicUpdates.map((update) => update.rbtsScoreBps)).toEqual([
       1800, 8750, 6750,
     ]);
-    const meanScoreBps =
-      economicUpdates.reduce(
-        (sum, update) => sum + 25n * BigInt(update.rbtsScoreBps as number),
-        0n,
-      ) / 75n;
+    const totalScoreWeight = 75n;
+    const weightedScoreSum = economicUpdates.reduce(
+      (sum, update) => sum + 25n * BigInt(update.rbtsScoreBps as number),
+      0n,
+    );
 
     let positiveSpreadCount = 0;
     let negativeSpreadCount = 0;
     for (const update of economicUpdates) {
       const scoreBps = BigInt(update.rbtsScoreBps as number);
-      const deltaBps = scoreBps - meanScoreBps;
+      const benchmarkScoreBps =
+        (weightedScoreSum - 25n * scoreBps) / (totalScoreWeight - 25n);
+      const deltaBps = scoreBps - benchmarkScoreBps;
       if (deltaBps > 0n) {
         positiveSpreadCount += 1;
         expect(update.rbtsRewardWeight).toBe((25n * deltaBps) / 10_000n);

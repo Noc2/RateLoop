@@ -383,6 +383,25 @@ function rbtsNegativeSpreadForfeiture(
   return forfeiture > maxForfeiture ? maxForfeiture : forfeiture;
 }
 
+function rbtsLeaveOneOutMeanScoreBps({
+  weightedScoreSum,
+  totalScoreWeight,
+  ownWeight,
+  ownScoreBps,
+}: {
+  weightedScoreSum: bigint;
+  totalScoreWeight: bigint;
+  ownWeight: bigint;
+  ownScoreBps: number;
+}): bigint {
+  if (ownWeight <= 0n) {
+    return totalScoreWeight > 0n ? weightedScoreSum / totalScoreWeight : 0n;
+  }
+  const remainingWeight = totalScoreWeight - ownWeight;
+  if (remainingWeight <= 0n) return 0n;
+  return (weightedScoreSum - ownWeight * BigInt(ownScoreBps)) / remainingWeight;
+}
+
 function rbtsCommitKey(voter: `0x${string}`, commitHash: `0x${string}`) {
   return keccak256(encodePacked(["address", "bytes32"], [voter, commitHash]));
 }
@@ -1107,10 +1126,14 @@ ponder.on("RoundVotingEngine:RbtsRewardsScored", async ({ event, context }) => {
         sum + scoredVote.rbtsWeight * BigInt(scoredVote.scoreBps),
       0n,
     );
-    const indexedMeanScoreBps =
-      totalScoreWeight > 0n ? weightedScoreSum / totalScoreWeight : 0n;
     const positiveSpreadWeight = scoredVotes.reduce((sum, scoredVote) => {
-      const deltaBps = BigInt(scoredVote.scoreBps) - indexedMeanScoreBps;
+      const benchmarkScoreBps = rbtsLeaveOneOutMeanScoreBps({
+        weightedScoreSum,
+        totalScoreWeight,
+        ownWeight: scoredVote.rbtsWeight,
+        ownScoreBps: scoredVote.scoreBps,
+      });
+      const deltaBps = BigInt(scoredVote.scoreBps) - benchmarkScoreBps;
       return deltaBps > 0n
         ? sum + rbtsPositiveSpreadRewardWeight(scoredVote.rbtsWeight, deltaBps)
         : sum;
@@ -1127,7 +1150,13 @@ ponder.on("RoundVotingEngine:RbtsRewardsScored", async ({ event, context }) => {
         continue;
       }
 
-      const deltaBps = BigInt(scoredVote.scoreBps) - indexedMeanScoreBps;
+      const benchmarkScoreBps = rbtsLeaveOneOutMeanScoreBps({
+        weightedScoreSum,
+        totalScoreWeight,
+        ownWeight: scoredVote.rbtsWeight,
+        ownScoreBps: scoredVote.scoreBps,
+      });
+      const deltaBps = BigInt(scoredVote.scoreBps) - benchmarkScoreBps;
       const forfeitedStake =
         positiveSpreadWeight > 0n && deltaBps < 0n
           ? rbtsNegativeSpreadForfeiture(
