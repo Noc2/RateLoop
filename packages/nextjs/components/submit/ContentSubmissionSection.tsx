@@ -40,6 +40,7 @@ import { useTransactionStatusToast } from "~~/hooks/useTransactionStatusToast";
 import { useWalletMessageSigner } from "~~/hooks/useWalletMessageSigner";
 import { useWalletRpcRecovery } from "~~/hooks/useWalletRpcRecovery";
 import { type AgentQuestionSpecInput, buildQuestionSpecHashes } from "~~/lib/agent/questionSpecs";
+import { createQuestionDetailsId, sha256Hex } from "~~/lib/attachments/browserQuestionDetails";
 import {
   MAX_QUESTION_DETAILS_TEXT_LENGTH,
   getQuestionDetailsTextSizeBytes,
@@ -325,21 +326,6 @@ const EMPTY_SUBMISSION_DETAILS = {
   detailsUrl: "",
   detailsHash: `0x${"0".repeat(64)}` as `0x${string}`,
 };
-
-function createQuestionDetailsId() {
-  const bytes = new Uint8Array(18);
-  window.crypto.getRandomValues(bytes);
-  let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return `det_${btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")}`;
-}
-
-async function sha256Hex(value: string) {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
-  return Array.from(new Uint8Array(digest))
-    .map(byte => byte.toString(16).padStart(2, "0"))
-    .join("");
-}
 
 function areSubcategorySelectionsEqual(left: readonly string[], right: readonly string[]): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index]);

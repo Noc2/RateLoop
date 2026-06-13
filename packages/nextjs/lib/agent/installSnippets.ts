@@ -1,10 +1,8 @@
 export const RATELOOP_PUBLIC_ORIGIN = "https://www.rateloop.ai";
 export const RATELOOP_PUBLIC_MCP_URL = `${RATELOOP_PUBLIC_ORIGIN}/api/mcp/public`;
 export const RATELOOP_SKILL_URL = `${RATELOOP_PUBLIC_ORIGIN}/skill.md`;
-export const RATELOOP_AGENT_DOCS_URL = `${RATELOOP_PUBLIC_ORIGIN}/docs/ai`;
-export const RATELOOP_HOW_IT_WORKS_URL = `${RATELOOP_PUBLIC_ORIGIN}/docs/how-it-works`;
 
-export const RATELOOP_MCP_PROTOCOL_VERSION = "2025-11-25";
+const RATELOOP_MCP_PROTOCOL_VERSION = "2025-11-25";
 
 export const RATELOOP_CONTRACT_DEPLOYMENT_NOTE =
   "If RateLoop contracts are not deployed for the requested chain yet, stop before paid submission. Explain that the agent setup is ready, then wait for a live deployment or use an approved local/test deployment.";
@@ -36,7 +34,7 @@ Create the materials for a RateLoop ask:
 
 Use RateLoop for the human/open-rater judgment step, not to explain what RateLoop is. Never use settled RateLoop scores to settle external financial contracts. ${RATELOOP_CONTRACT_DEPLOYMENT_NOTE}`;
 
-export const RATELOOP_OPENCLAW_ONE_TIME_AGENT_PROMPT = `${RATELOOP_ONE_TIME_AGENT_PROMPT} Use the RateLoop local signer CLI (\`wallet --generate\`, then \`local-ask\`) only when you control a funded encrypted wallet and the target deployment is approved.`;
+const RATELOOP_OPENCLAW_ONE_TIME_AGENT_PROMPT = `${RATELOOP_ONE_TIME_AGENT_PROMPT} Use the RateLoop local signer CLI (\`wallet --generate\`, then \`local-ask\`) only when you control a funded encrypted wallet and the target deployment is approved.`;
 
 export const RATELOOP_GENERIC_MCP_CONFIG = `{
   "mcpServers": {
@@ -61,7 +59,7 @@ export const RATELOOP_CURSOR_MCP_CONFIG = `{
   }
 }`;
 
-export const RATELOOP_VSCODE_MCP_CONFIG = `{
+const RATELOOP_VSCODE_MCP_CONFIG = `{
   "servers": {
     "rateloop": {
       "type": "http",
@@ -73,7 +71,7 @@ export const RATELOOP_VSCODE_MCP_CONFIG = `{
   }
 }`;
 
-export const RATELOOP_CURSOR_RULE = `---
+const RATELOOP_CURSOR_RULE = `---
 description: Use RateLoop for human/open-rater judgment on evaluative product, UX, AI-output, source-support, confidential pre-launch, and go/no-go decisions with public or gated hosted context.
 alwaysApply: false
 ---

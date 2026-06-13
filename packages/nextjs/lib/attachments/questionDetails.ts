@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from "crypto";
+import { createHash } from "crypto";
 import { and, eq, or } from "drizzle-orm";
 import "server-only";
 import {
@@ -86,10 +86,6 @@ export type QuestionDetailsUploadResult = {
 
 function nowDate() {
   return new Date();
-}
-
-export function createQuestionDetailsId() {
-  return `det_${randomBytes(18).toString("base64url")}`;
 }
 
 export function isQuestionDetailsId(value: string) {

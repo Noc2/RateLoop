@@ -1,9 +1,4 @@
-import {
-  DEFAULT_ROUND_CONFIG,
-  QUESTION_REWARD_PARTICIPANT_FLOORS,
-  SCORE_SPREAD_POLICY,
-  requiredQuestionRewardParticipants,
-} from "@rateloop/contracts/protocol";
+import { DEFAULT_ROUND_CONFIG, requiredQuestionRewardParticipants } from "@rateloop/contracts/protocol";
 
 export type QuestionRoundConfig = {
   epochDuration: bigint;
@@ -32,9 +27,6 @@ export type QuestionRoundConfigBounds = {
 
 export const QUESTION_ROUND_MAX_EPOCH_COUNT = 2016;
 export const MAX_QUESTION_BUNDLE_ROUND_VOTERS = 100;
-export const SCORE_SPREAD_FORFEIT_MIN_REVEALS = SCORE_SPREAD_POLICY.forfeitMinReveals;
-export const MAX_SCORE_SPREAD_FORFEIT_BPS = SCORE_SPREAD_POLICY.maxForfeitBps;
-export const QUESTION_REWARD_PARTICIPANT_FLOOR_TIERS = QUESTION_REWARD_PARTICIPANT_FLOORS;
 
 export const DEFAULT_QUESTION_ROUND_CONFIG: QuestionRoundConfig = {
   epochDuration: BigInt(DEFAULT_ROUND_CONFIG.epochDurationSeconds),
@@ -63,15 +55,6 @@ export function serializeQuestionRoundConfig(config: QuestionRoundConfig): Seria
   };
 }
 
-export function questionRoundConfigsEqual(left: QuestionRoundConfig, right: QuestionRoundConfig): boolean {
-  return (
-    left.epochDuration === right.epochDuration &&
-    left.maxDuration === right.maxDuration &&
-    left.minVoters === right.minVoters &&
-    left.maxVoters === right.maxVoters
-  );
-}
-
 export function questionRoundConfigToAbi(config: QuestionRoundConfig) {
   return {
     epochDuration: Number(config.epochDuration),
@@ -83,19 +66,6 @@ export function questionRoundConfigToAbi(config: QuestionRoundConfig) {
 
 export function requiredQuestionRewardVotersForAmount(amountAtomic: bigint | number): bigint {
   return BigInt(requiredQuestionRewardParticipants(amountAtomic));
-}
-
-export function coerceQuestionRoundConfig(
-  value: Partial<SerializedQuestionRoundConfig> | Partial<QuestionRoundConfig> | null | undefined,
-): QuestionRoundConfig {
-  if (!value) return DEFAULT_QUESTION_ROUND_CONFIG;
-  const source = value as Record<string, bigint | number | string | undefined>;
-  return {
-    epochDuration: BigInt(source.epochDuration ?? DEFAULT_QUESTION_ROUND_CONFIG.epochDuration),
-    maxDuration: BigInt(source.maxDuration ?? DEFAULT_QUESTION_ROUND_CONFIG.maxDuration),
-    minVoters: BigInt(source.minVoters ?? DEFAULT_QUESTION_ROUND_CONFIG.minVoters),
-    maxVoters: BigInt(source.maxVoters ?? DEFAULT_QUESTION_ROUND_CONFIG.maxVoters),
-  };
 }
 
 export function getQuestionRoundMaxDurationForEpoch(

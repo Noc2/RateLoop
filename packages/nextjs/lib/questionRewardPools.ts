@@ -14,7 +14,7 @@ export const SUBMISSION_REWARD_ASSET_LREP = 0;
 export const SUBMISSION_REWARD_ASSET_USDC = 1;
 export const FEEDBACK_BONUS_ASSET_LREP = SUBMISSION_REWARD_ASSET_LREP;
 export const FEEDBACK_BONUS_ASSET_USDC = SUBMISSION_REWARD_ASSET_USDC;
-export const MIN_NONZERO_CONFIDENTIALITY_BOND = 1_000_000n;
+const MIN_NONZERO_CONFIDENTIALITY_BOND = 1_000_000n;
 
 export type SubmissionRewardAsset = "lrep" | "usdc";
 export type FeedbackBonusAsset = SubmissionRewardAsset;

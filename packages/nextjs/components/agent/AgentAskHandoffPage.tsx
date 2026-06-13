@@ -29,6 +29,7 @@ import { useRateLoopSwitchNetwork } from "~~/hooks/useRateLoopSwitchNetwork";
 import { useTransactionStatusToast } from "~~/hooks/useTransactionStatusToast";
 import { useWalletMessageSigner } from "~~/hooks/useWalletMessageSigner";
 import { buildCleanHandoffLocationPath, readHandoffTokenFromLocation } from "~~/lib/agent/handoffLocation";
+import { createQuestionDetailsId, sha256Hex } from "~~/lib/attachments/browserQuestionDetails";
 import {
   MAX_QUESTION_DETAILS_TEXT_LENGTH,
   getQuestionDetailsTextSizeBytes,
@@ -500,21 +501,6 @@ function draftNeedsQuestionDetailsUpload(handoff: Handoff | null, draftForm: Dra
   return draftForm.questions.some((question, index) =>
     draftQuestionNeedsDetailsUpload(baseQuestions[index] ?? baseQuestions[0], question),
   );
-}
-
-function createQuestionDetailsId() {
-  const bytes = new Uint8Array(18);
-  window.crypto.getRandomValues(bytes);
-  let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return `det_${btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")}`;
-}
-
-async function sha256Hex(value: string) {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
-  return Array.from(new Uint8Array(digest))
-    .map(byte => byte.toString(16).padStart(2, "0"))
-    .join("");
 }
 
 async function uploadQuestionDetailsForHandoff(params: {

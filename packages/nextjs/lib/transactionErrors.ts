@@ -28,7 +28,7 @@ function collectErrorText(value: unknown, seen: Set<unknown>, depth = 0): string
   return parts;
 }
 
-export function getTransactionErrorText(error: unknown) {
+function getTransactionErrorText(error: unknown) {
   return collectErrorText(error, new Set()).join(" ");
 }
 

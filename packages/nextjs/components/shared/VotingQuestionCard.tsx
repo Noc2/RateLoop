@@ -302,7 +302,7 @@ function RewardAmountDisplay({
   );
 }
 
-export function getRewardPoolDisplay(amount: bigint, currency: RewardPoolCurrency | undefined) {
+function getRewardPoolDisplay(amount: bigint, currency: RewardPoolCurrency | undefined) {
   if (currency === "LREP") {
     return {
       amountLabel: formatSubmissionRewardAmount(amount, "lrep"),
@@ -350,7 +350,7 @@ export function FeedbackBonusAmountDisplay({ amount, currency }: { amount: bigin
   );
 }
 
-export function getFeedbackBonusDisplay(amount: bigint, currency: RewardPoolCurrency | undefined) {
+function getFeedbackBonusDisplay(amount: bigint, currency: RewardPoolCurrency | undefined) {
   const amountLabel =
     currency === "LREP"
       ? formatSubmissionRewardAmount(amount, "lrep")

@@ -9,10 +9,10 @@ import {
 } from "~~/lib/world-id/credentials";
 
 export const BOUNTY_ELIGIBILITY_OPEN = 0;
-export const BOUNTY_ELIGIBILITY_SELFIE = 1 << WORLD_CREDENTIAL_SELFIE;
+const BOUNTY_ELIGIBILITY_SELFIE = 1 << WORLD_CREDENTIAL_SELFIE;
 export const BOUNTY_ELIGIBILITY_PASSPORT = 1 << WORLD_CREDENTIAL_PASSPORT;
 export const BOUNTY_ELIGIBILITY_VERIFIED_HUMAN = 1 << WORLD_CREDENTIAL_PROOF_OF_HUMAN;
-export const BOUNTY_ELIGIBILITY_CREDENTIAL_MASK =
+const BOUNTY_ELIGIBILITY_CREDENTIAL_MASK =
   BOUNTY_ELIGIBILITY_SELFIE | BOUNTY_ELIGIBILITY_PASSPORT | BOUNTY_ELIGIBILITY_VERIFIED_HUMAN;
 export const BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG = 0x80;
 const BOUNTY_ELIGIBILITY_KINDS: WorldCredentialKind[] = [
@@ -46,7 +46,7 @@ export function getBountyEligibilityKinds(value: number): WorldCredentialKind[] 
   });
 }
 
-export function bountyEligibilityRequiresRecentRecheck(value: number): boolean {
+function bountyEligibilityRequiresRecentRecheck(value: number): boolean {
   return (value & BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG) !== 0 && getBountyEligibilityCredentialMask(value) !== 0;
 }
 
