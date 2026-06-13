@@ -41,13 +41,9 @@ contract MockVotingEngine is IRoundVotingEngine {
         return (0, RoundLib.RoundState.Open, 0, 0, 0, 0, 0, 0);
     }
 
-    function roundRatingConfigCompact(uint256, uint256)
-        external
-        pure
-        override
-        returns (uint256, uint256, uint256, uint16, uint16)
+    function roundRatingConfigPacked(uint256, uint256) external pure override returns (uint256, uint256)
     {
-        return (0, 0, 0, 0, 0);
+        return (0, 0);
     }
 
     function ratingCommitStateCompact(uint256, uint256, bytes32)

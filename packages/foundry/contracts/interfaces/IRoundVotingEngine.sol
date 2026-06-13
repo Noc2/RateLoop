@@ -32,16 +32,10 @@ interface IRoundVotingEngine {
             uint8 upWins
         );
 
-    function roundRatingConfigCompact(uint256 contentId, uint256 roundId)
+    function roundRatingConfigPacked(uint256 contentId, uint256 roundId)
         external
         view
-        returns (
-            uint256 confidenceMassInitial,
-            uint256 confidenceMassMin,
-            uint256 confidenceMassMax,
-            uint16 conservativePenaltyMaxBps,
-            uint16 conservativePenaltyMinBps
-        );
+        returns (uint256 massWord, uint256 penaltyWord);
 
     function ratingCommitStateCompact(uint256 contentId, uint256 roundId, bytes32 commitKey)
         external

@@ -147,7 +147,7 @@
     {
       "slot": 24,
       "offset": 0,
-      "label": "pendingRatingSettlements",
+      "label": "pendingRatingSettlement",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_struct(PendingRatingSettlement)))"
     },
     {
@@ -234,7 +234,7 @@
     {
       "id": "t_enum(ContentStatus)",
       "encoding": "inplace",
-      "label": "enum ContentRegistry.ContentStatus",
+      "label": "enum ContentRegistryTypes.ContentStatus",
       "numberOfBytes": "1"
     },
     {
@@ -294,7 +294,7 @@
     {
       "id": "t_mapping(t_uint256,t_mapping(t_uint256,t_struct(PendingRatingSettlement)))",
       "encoding": "mapping",
-      "label": "mapping(uint256 => mapping(uint256 => struct ContentRegistry.PendingRatingSettlement))",
+      "label": "mapping(uint256 => mapping(uint256 => struct ContentRegistryTypes.PendingRatingSettlement))",
       "numberOfBytes": "32",
       "key": "t_uint256",
       "value": "t_mapping(t_uint256,t_struct(PendingRatingSettlement))"
@@ -302,7 +302,7 @@
     {
       "id": "t_mapping(t_uint256,t_struct(Content))",
       "encoding": "mapping",
-      "label": "mapping(uint256 => struct ContentRegistry.Content)",
+      "label": "mapping(uint256 => struct ContentRegistryTypes.Content)",
       "numberOfBytes": "32",
       "key": "t_uint256",
       "value": "t_struct(Content)"
@@ -310,7 +310,7 @@
     {
       "id": "t_mapping(t_uint256,t_struct(PendingRatingSettlement))",
       "encoding": "mapping",
-      "label": "mapping(uint256 => struct ContentRegistry.PendingRatingSettlement)",
+      "label": "mapping(uint256 => struct ContentRegistryTypes.PendingRatingSettlement)",
       "numberOfBytes": "32",
       "key": "t_uint256",
       "value": "t_struct(PendingRatingSettlement)"
@@ -350,7 +350,7 @@
     {
       "id": "t_struct(Content)",
       "encoding": "inplace",
-      "label": "struct ContentRegistry.Content",
+      "label": "struct ContentRegistryTypes.Content",
       "numberOfBytes": "128",
       "members": [
         {
@@ -418,7 +418,7 @@
     {
       "id": "t_struct(PendingRatingSettlement)",
       "encoding": "inplace",
-      "label": "struct ContentRegistry.PendingRatingSettlement",
+      "label": "struct ContentRegistryTypes.PendingRatingSettlement",
       "numberOfBytes": "64",
       "members": [
         {

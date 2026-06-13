@@ -733,7 +733,7 @@ export const RoundVotingEngineAbi = [
   },
   {
     "type": "function",
-    "name": "ratingCommitState",
+    "name": "ratingCommitStateCompact",
     "inputs": [
       {
         "name": "contentId",
@@ -753,24 +753,9 @@ export const RoundVotingEngineAbi = [
     ],
     "outputs": [
       {
-        "name": "revealed",
-        "type": "bool",
-        "internalType": "bool"
-      },
-      {
-        "name": "isUp",
-        "type": "bool",
-        "internalType": "bool"
-      },
-      {
-        "name": "stakeAmount",
-        "type": "uint64",
-        "internalType": "uint64"
-      },
-      {
-        "name": "epochIndex",
-        "type": "uint8",
-        "internalType": "uint8"
+        "name": "flags",
+        "type": "uint256",
+        "internalType": "uint256"
       },
       {
         "name": "identityKey",
@@ -1215,7 +1200,7 @@ export const RoundVotingEngineAbi = [
   },
   {
     "type": "function",
-    "name": "roundRatingConfigCompact",
+    "name": "roundRatingConfigPacked",
     "inputs": [
       {
         "name": "contentId",
@@ -1230,29 +1215,14 @@ export const RoundVotingEngineAbi = [
     ],
     "outputs": [
       {
-        "name": "confidenceMassInitial",
+        "name": "massWord",
         "type": "uint256",
         "internalType": "uint256"
       },
       {
-        "name": "confidenceMassMin",
+        "name": "penaltyWord",
         "type": "uint256",
         "internalType": "uint256"
-      },
-      {
-        "name": "confidenceMassMax",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "conservativePenaltyMaxBps",
-        "type": "uint16",
-        "internalType": "uint16"
-      },
-      {
-        "name": "conservativePenaltyMinBps",
-        "type": "uint16",
-        "internalType": "uint16"
       }
     ],
     "stateMutability": "view"

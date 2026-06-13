@@ -4,6 +4,7 @@ pragma solidity ^0.8.34;
 import { ContentRegistry } from "../ContentRegistry.sol";
 import { ProtocolConfig } from "../ProtocolConfig.sol";
 import { ContentRegistryTypes } from "./ContentRegistryTypes.sol";
+import { RatingLib } from "./RatingLib.sol";
 import { RoundCleanupLib } from "./RoundCleanupLib.sol";
 import { RoundLib } from "./RoundLib.sol";
 
@@ -79,6 +80,36 @@ library RoundVotingReadLib {
         if (!roundHasHumanVerifiedCommit[contentId][roundId]) return false;
         return !(RoundLib.isExpired(round, roundCfg.maxDuration) && round.revealedCount < roundCfg.minVoters
                 && (round.voteCount < roundCfg.minVoters || !roundHasHumanVerifiedCommit[contentId][roundId]));
+    }
+
+    function roundRatingConfigPacked(
+        mapping(uint256 => mapping(uint256 => RatingLib.RatingConfig)) storage roundRatingConfigSnapshot,
+        ProtocolConfig protocolConfig,
+        uint256 contentId,
+        uint256 roundId
+    ) external view returns (uint256 massWord, uint256 penaltyWord) {
+        RatingLib.RatingConfig memory cfg = roundRatingConfigSnapshot[contentId][roundId];
+        if (cfg.confidenceMassInitial == 0) cfg = protocolConfig.getRatingConfig();
+        return (
+            uint128(cfg.confidenceMassInitial) | (uint256(uint128(cfg.confidenceMassMin)) << 128),
+            uint128(cfg.confidenceMassMax) | (uint256(cfg.conservativePenaltyMaxBps) << 128)
+                | (uint256(cfg.conservativePenaltyMinBps) << 144)
+        );
+    }
+
+    function ratingCommitStateCompact(
+        mapping(bytes32 => RoundLib.Commit) storage roundCommits,
+        mapping(bytes32 => bytes32) storage commitIdentityKey,
+        mapping(bytes32 => address) storage commitIdentityHolder,
+        bytes32 commitKey
+    ) external view returns (uint256 flags, bytes32 identityKey, address holder) {
+        RoundLib.Commit storage commit = roundCommits[commitKey];
+        return (
+            (commit.revealed ? 1 : 0) | (commit.isUp ? 2 : 0) | (uint256(commit.stakeAmount) << 8)
+                | (uint256(commit.epochIndex) << 72),
+            commitIdentityKey[commitKey],
+            commitIdentityHolder[commitKey]
+        );
     }
 
     function _contentLifecycle(ContentRegistry registry, uint256 contentId)

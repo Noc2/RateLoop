@@ -304,7 +304,8 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         uint256 downEvidence,
         uint256 confidenceMass,
         uint256 effectiveEvidence,
-        uint32 settledRounds
+        uint32 settledRounds,
+        uint48 lowSince
     );
     event RatingReviewPending(
         uint256 indexed contentId,

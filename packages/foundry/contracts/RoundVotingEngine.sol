@@ -1661,25 +1661,12 @@ contract RoundVotingEngine is
         );
     }
 
-    function roundRatingConfigCompact(uint256 contentId, uint256 roundId)
+    function roundRatingConfigPacked(uint256 contentId, uint256 roundId)
         external
         view
-        returns (
-            uint256 confidenceMassInitial,
-            uint256 confidenceMassMin,
-            uint256 confidenceMassMax,
-            uint16 conservativePenaltyMaxBps,
-            uint16 conservativePenaltyMinBps
-        )
+        returns (uint256 massWord, uint256 penaltyWord)
     {
-        RatingLib.RatingConfig memory cfg = _getRoundRatingConfig(contentId, roundId);
-        return (
-            cfg.confidenceMassInitial,
-            cfg.confidenceMassMin,
-            cfg.confidenceMassMax,
-            cfg.conservativePenaltyMaxBps,
-            cfg.conservativePenaltyMinBps
-        );
+        return RoundVotingReadLib.roundRatingConfigPacked(roundRatingConfigSnapshot, protocolConfig, contentId, roundId);
     }
 
     function ratingCommitStateCompact(uint256 contentId, uint256 roundId, bytes32 commitKey)
@@ -1687,12 +1674,11 @@ contract RoundVotingEngine is
         view
         returns (uint256 flags, bytes32 identityKey, address holder)
     {
-        RoundLib.Commit storage commit = commits[contentId][roundId][commitKey];
-        return (
-            (commit.revealed ? 1 : 0) | (commit.isUp ? 2 : 0) | (uint256(commit.stakeAmount) << 8)
-                | (uint256(commit.epochIndex) << 72),
-            commitIdentityKey[contentId][roundId][commitKey],
-            commitIdentityHolder[contentId][roundId][commitKey]
+        return RoundVotingReadLib.ratingCommitStateCompact(
+            commits[contentId][roundId],
+            commitIdentityKey[contentId][roundId],
+            commitIdentityHolder[contentId][roundId],
+            commitKey
         );
     }
 

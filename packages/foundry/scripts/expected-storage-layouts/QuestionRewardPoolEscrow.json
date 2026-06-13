@@ -129,35 +129,41 @@
     {
       "slot": 21,
       "offset": 0,
+      "label": "bundleRewardClusterPayoutOracle",
+      "type": "t_mapping(t_uint256,t_address)"
+    },
+    {
+      "slot": 22,
+      "offset": 0,
       "label": "bundleQuestionTerminalSyncCursor",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_uint256))"
     },
     {
-      "slot": 22,
+      "slot": 23,
       "offset": 0,
       "label": "rejectedRecoveredRound",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_bool))"
     },
     {
-      "slot": 23,
+      "slot": 24,
       "offset": 0,
       "label": "reopenedRecoveredRound",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_bool))"
     },
     {
-      "slot": 24,
+      "slot": 25,
       "offset": 0,
       "label": "qualifiedQuestionRewardClaimants",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_mapping(t_bytes32,t_mapping(t_bytes32,t_bool))))"
     },
     {
-      "slot": 25,
+      "slot": 26,
       "offset": 0,
       "label": "qualifiedBundleRoundSetClaimants",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_mapping(t_bytes32,t_bool)))"
     },
     {
-      "slot": 26,
+      "slot": 27,
       "offset": 0,
       "label": "__gap",
       "type": "t_array(t_uint256)"
@@ -594,7 +600,7 @@
       "id": "t_struct(BundleRoundSetSnapshot)",
       "encoding": "inplace",
       "label": "struct BundleRoundSetSnapshot",
-      "numberOfBytes": "96",
+      "numberOfBytes": "320",
       "members": [
         {
           "slot": 0,
@@ -615,6 +621,12 @@
           "type": "t_uint32"
         },
         {
+          "slot": 0,
+          "offset": 9,
+          "label": "rawEligibleCompleters",
+          "type": "t_uint32"
+        },
+        {
           "slot": 1,
           "offset": 0,
           "label": "allocation",
@@ -625,6 +637,48 @@
           "offset": 0,
           "label": "frontendFeeAllocation",
           "type": "t_uint256"
+        },
+        {
+          "slot": 3,
+          "offset": 0,
+          "label": "totalClaimWeight",
+          "type": "t_uint256"
+        },
+        {
+          "slot": 4,
+          "offset": 0,
+          "label": "claimedWeight",
+          "type": "t_uint256"
+        },
+        {
+          "slot": 5,
+          "offset": 0,
+          "label": "claimedAmount",
+          "type": "t_uint256"
+        },
+        {
+          "slot": 6,
+          "offset": 0,
+          "label": "frontendFeeClaimedAmount",
+          "type": "t_uint256"
+        },
+        {
+          "slot": 7,
+          "offset": 0,
+          "label": "firstClaimPaid",
+          "type": "t_bool"
+        },
+        {
+          "slot": 8,
+          "offset": 0,
+          "label": "clusterWeightRoot",
+          "type": "t_bytes32"
+        },
+        {
+          "slot": 9,
+          "offset": 0,
+          "label": "clusterSnapshotDigest",
+          "type": "t_bytes32"
         }
       ]
     },

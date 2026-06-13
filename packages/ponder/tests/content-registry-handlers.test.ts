@@ -763,11 +763,8 @@ describe("ContentRegistry ponder handlers", () => {
     expect(insertCalls).toEqual([]);
   });
 
-  it("loads lowSince from on-chain rating state for RatingStateUpdated events", async () => {
+  it("indexes lowSince from RatingStateUpdated events", async () => {
     const { db, insertCalls, updateCalls } = createDb();
-    const readContract = vi.fn(async () => ({
-      lowSince: 777n,
-    }));
 
     const registeredHandlers = await loadHandlers();
     const handler = registeredHandlers.get(
@@ -789,6 +786,7 @@ describe("ContentRegistry ponder handlers", () => {
           referenceRatingBps: 5000,
           roundId: 2n,
           settledRounds: 3,
+          lowSince: 777n,
           upEvidence: 345n,
         },
         block: {
@@ -797,7 +795,7 @@ describe("ContentRegistry ponder handlers", () => {
         },
       },
       context: {
-        client: { readContract },
+        client: { readContract: vi.fn() },
         contracts: {
           ContentRegistry: {
             address: "0x000000000000000000000000000000000000c0de",
@@ -805,13 +803,6 @@ describe("ContentRegistry ponder handlers", () => {
         },
         db,
       },
-    });
-
-    expect(readContract).toHaveBeenCalledWith({
-      abi: CONTENT_REGISTRY_ABI,
-      address: REGISTRY_ADDRESS,
-      args: [1n],
-      functionName: "getRatingState",
     });
 
     expect(updateCalls).toEqual(
@@ -871,6 +862,7 @@ describe("ContentRegistry ponder handlers", () => {
           referenceRatingBps: 5000,
           roundId: 2n,
           settledRounds: 3,
+          lowSince: 777n,
           upEvidence: 345n,
         },
         block: {
@@ -879,7 +871,7 @@ describe("ContentRegistry ponder handlers", () => {
         },
       },
       context: {
-        client: { readContract: vi.fn(async () => ({ lowSince: 777n })) },
+        client: { readContract: vi.fn() },
         contracts: {
           ContentRegistry: {
             address: "0x000000000000000000000000000000000000c0de",

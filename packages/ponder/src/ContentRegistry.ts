@@ -53,18 +53,6 @@ function contentRegistryAddress(
   return address;
 }
 
-async function readRatingStateAtEventBlock(
-  context: Parameters<Parameters<typeof ponder.on>[1]>[0]["context"],
-  contentId: bigint,
-) {
-  return context.client.readContract({
-    abi: ContentRegistryAbi,
-    address: contentRegistryAddress(context),
-    functionName: "getRatingState",
-    args: [contentId],
-  });
-}
-
 async function readContentRoundConfigAtEventBlock(
   context: Parameters<Parameters<typeof ponder.on>[1]>[0]["context"],
   contentId: bigint,
@@ -463,9 +451,9 @@ ponder.on("ContentRegistry:RatingStateUpdated", async ({ event, context }) => {
     confidenceMass,
     effectiveEvidence,
     settledRounds,
+    lowSince: eventLowSince,
   } = event.args;
-  const ratingState = await readRatingStateAtEventBlock(context, contentId);
-  const lowSince = BigInt(ratingState.lowSince);
+  const lowSince = BigInt(eventLowSince);
   const oldRating = displayRatingFromBps(Number(oldRatingBps));
   const newRating = displayRatingFromBps(Number(newRatingBps));
 

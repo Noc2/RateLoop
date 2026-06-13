@@ -20,7 +20,8 @@ library ContentRegistryRatingStateLib {
         uint256 downEvidence,
         uint256 confidenceMass,
         uint256 effectiveEvidence,
-        uint32 settledRounds
+        uint32 settledRounds,
+        uint48 lowSince
     );
 
     function updateRatingState(
@@ -66,7 +67,8 @@ library ContentRegistryRatingStateLib {
             nextState.downEvidence,
             nextState.confidenceMass,
             nextState.effectiveEvidence,
-            nextState.settledRounds
+            nextState.settledRounds,
+            nextState.lowSince
         );
     }
 }

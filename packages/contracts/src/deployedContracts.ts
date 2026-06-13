@@ -4984,77 +4984,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "getRatingState",
-          inputs: [
-            {
-              name: "contentId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "state",
-              type: "tuple",
-              internalType: "struct RatingLib.RatingState",
-              components: [
-                {
-                  name: "ratingLogitX18",
-                  type: "int128",
-                  internalType: "int128",
-                },
-                {
-                  name: "confidenceMass",
-                  type: "uint128",
-                  internalType: "uint128",
-                },
-                {
-                  name: "effectiveEvidence",
-                  type: "uint128",
-                  internalType: "uint128",
-                },
-                {
-                  name: "upEvidence",
-                  type: "uint128",
-                  internalType: "uint128",
-                },
-                {
-                  name: "downEvidence",
-                  type: "uint128",
-                  internalType: "uint128",
-                },
-                {
-                  name: "settledRounds",
-                  type: "uint32",
-                  internalType: "uint32",
-                },
-                {
-                  name: "ratingBps",
-                  type: "uint16",
-                  internalType: "uint16",
-                },
-                {
-                  name: "conservativeRatingBps",
-                  type: "uint16",
-                  internalType: "uint16",
-                },
-                {
-                  name: "lastUpdatedAt",
-                  type: "uint48",
-                  internalType: "uint48",
-                },
-                {
-                  name: "lowSince",
-                  type: "uint48",
-                  internalType: "uint48",
-                },
-              ],
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
           name: "getRoleAdmin",
           inputs: [
             {
@@ -5068,47 +4997,6 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "bytes32",
               internalType: "bytes32",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "getSlashConfigForContent",
-          inputs: [
-            {
-              name: "contentId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "slashConfig",
-              type: "tuple",
-              internalType: "struct RatingLib.SlashConfig",
-              components: [
-                {
-                  name: "slashThresholdBps",
-                  type: "uint16",
-                  internalType: "uint16",
-                },
-                {
-                  name: "minSlashSettledRounds",
-                  type: "uint16",
-                  internalType: "uint16",
-                },
-                {
-                  name: "minSlashLowDuration",
-                  type: "uint48",
-                  internalType: "uint48",
-                },
-                {
-                  name: "minSlashEvidence",
-                  type: "uint256",
-                  internalType: "uint256",
-                },
-              ],
             },
           ],
           stateMutability: "view",
@@ -6983,6 +6871,12 @@ const deployedContracts: GenericContractsDeclaration = {
               indexed: false,
               internalType: "uint32",
             },
+            {
+              name: "lowSince",
+              type: "uint48",
+              indexed: false,
+              internalType: "uint48",
+            },
           ],
           anonymous: false,
         },
@@ -8068,7 +7962,7 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "ratingCommitState",
+          name: "ratingCommitStateCompact",
           inputs: [
             {
               name: "contentId",
@@ -8088,24 +7982,9 @@ const deployedContracts: GenericContractsDeclaration = {
           ],
           outputs: [
             {
-              name: "revealed",
-              type: "bool",
-              internalType: "bool",
-            },
-            {
-              name: "isUp",
-              type: "bool",
-              internalType: "bool",
-            },
-            {
-              name: "stakeAmount",
-              type: "uint64",
-              internalType: "uint64",
-            },
-            {
-              name: "epochIndex",
-              type: "uint8",
-              internalType: "uint8",
+              name: "flags",
+              type: "uint256",
+              internalType: "uint256",
             },
             {
               name: "identityKey",
@@ -8550,7 +8429,7 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "roundRatingConfigCompact",
+          name: "roundRatingConfigPacked",
           inputs: [
             {
               name: "contentId",
@@ -8565,29 +8444,14 @@ const deployedContracts: GenericContractsDeclaration = {
           ],
           outputs: [
             {
-              name: "confidenceMassInitial",
+              name: "massWord",
               type: "uint256",
               internalType: "uint256",
             },
             {
-              name: "confidenceMassMin",
+              name: "penaltyWord",
               type: "uint256",
               internalType: "uint256",
-            },
-            {
-              name: "confidenceMassMax",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "conservativePenaltyMaxBps",
-              type: "uint16",
-              internalType: "uint16",
-            },
-            {
-              name: "conservativePenaltyMinBps",
-              type: "uint16",
-              internalType: "uint16",
             },
           ],
           stateMutability: "view",
@@ -9647,10 +9511,10 @@ const deployedContracts: GenericContractsDeclaration = {
         currentRoundId: "contracts/interfaces/IRoundVotingEngine.sol",
         hasCommits: "contracts/interfaces/IRoundVotingEngine.sol",
         isDormancyBlocked: "contracts/interfaces/IRoundVotingEngine.sol",
-        ratingCommitState: "contracts/interfaces/IRoundVotingEngine.sol",
+        ratingCommitStateCompact: "contracts/interfaces/IRoundVotingEngine.sol",
         roundCore: "contracts/interfaces/IRoundVotingEngine.sol",
         roundLifecycleState: "contracts/interfaces/IRoundVotingEngine.sol",
-        roundRatingConfigCompact: "contracts/interfaces/IRoundVotingEngine.sol",
+        roundRatingConfigPacked: "contracts/interfaces/IRoundVotingEngine.sol",
         transferReward: "contracts/interfaces/IRoundVotingEngine.sol",
         commitVote: "contracts/interfaces/IRoundVotingCommitReveal.sol",
         commitVoteWithPermit:
@@ -34728,77 +34592,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "getRatingState",
-          inputs: [
-            {
-              name: "contentId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "state",
-              type: "tuple",
-              internalType: "struct RatingLib.RatingState",
-              components: [
-                {
-                  name: "ratingLogitX18",
-                  type: "int128",
-                  internalType: "int128",
-                },
-                {
-                  name: "confidenceMass",
-                  type: "uint128",
-                  internalType: "uint128",
-                },
-                {
-                  name: "effectiveEvidence",
-                  type: "uint128",
-                  internalType: "uint128",
-                },
-                {
-                  name: "upEvidence",
-                  type: "uint128",
-                  internalType: "uint128",
-                },
-                {
-                  name: "downEvidence",
-                  type: "uint128",
-                  internalType: "uint128",
-                },
-                {
-                  name: "settledRounds",
-                  type: "uint32",
-                  internalType: "uint32",
-                },
-                {
-                  name: "ratingBps",
-                  type: "uint16",
-                  internalType: "uint16",
-                },
-                {
-                  name: "conservativeRatingBps",
-                  type: "uint16",
-                  internalType: "uint16",
-                },
-                {
-                  name: "lastUpdatedAt",
-                  type: "uint48",
-                  internalType: "uint48",
-                },
-                {
-                  name: "lowSince",
-                  type: "uint48",
-                  internalType: "uint48",
-                },
-              ],
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
           name: "getRoleAdmin",
           inputs: [
             {
@@ -34812,47 +34605,6 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "bytes32",
               internalType: "bytes32",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "getSlashConfigForContent",
-          inputs: [
-            {
-              name: "contentId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "slashConfig",
-              type: "tuple",
-              internalType: "struct RatingLib.SlashConfig",
-              components: [
-                {
-                  name: "slashThresholdBps",
-                  type: "uint16",
-                  internalType: "uint16",
-                },
-                {
-                  name: "minSlashSettledRounds",
-                  type: "uint16",
-                  internalType: "uint16",
-                },
-                {
-                  name: "minSlashLowDuration",
-                  type: "uint48",
-                  internalType: "uint48",
-                },
-                {
-                  name: "minSlashEvidence",
-                  type: "uint256",
-                  internalType: "uint256",
-                },
-              ],
             },
           ],
           stateMutability: "view",
@@ -36727,6 +36479,12 @@ const deployedContracts: GenericContractsDeclaration = {
               indexed: false,
               internalType: "uint32",
             },
+            {
+              name: "lowSince",
+              type: "uint48",
+              indexed: false,
+              internalType: "uint48",
+            },
           ],
           anonymous: false,
         },
@@ -37812,7 +37570,7 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "ratingCommitState",
+          name: "ratingCommitStateCompact",
           inputs: [
             {
               name: "contentId",
@@ -37832,24 +37590,9 @@ const deployedContracts: GenericContractsDeclaration = {
           ],
           outputs: [
             {
-              name: "revealed",
-              type: "bool",
-              internalType: "bool",
-            },
-            {
-              name: "isUp",
-              type: "bool",
-              internalType: "bool",
-            },
-            {
-              name: "stakeAmount",
-              type: "uint64",
-              internalType: "uint64",
-            },
-            {
-              name: "epochIndex",
-              type: "uint8",
-              internalType: "uint8",
+              name: "flags",
+              type: "uint256",
+              internalType: "uint256",
             },
             {
               name: "identityKey",
@@ -38294,7 +38037,7 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "roundRatingConfigCompact",
+          name: "roundRatingConfigPacked",
           inputs: [
             {
               name: "contentId",
@@ -38309,29 +38052,14 @@ const deployedContracts: GenericContractsDeclaration = {
           ],
           outputs: [
             {
-              name: "confidenceMassInitial",
+              name: "massWord",
               type: "uint256",
               internalType: "uint256",
             },
             {
-              name: "confidenceMassMin",
+              name: "penaltyWord",
               type: "uint256",
               internalType: "uint256",
-            },
-            {
-              name: "confidenceMassMax",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "conservativePenaltyMaxBps",
-              type: "uint16",
-              internalType: "uint16",
-            },
-            {
-              name: "conservativePenaltyMinBps",
-              type: "uint16",
-              internalType: "uint16",
             },
           ],
           stateMutability: "view",
@@ -39391,10 +39119,10 @@ const deployedContracts: GenericContractsDeclaration = {
         currentRoundId: "contracts/interfaces/IRoundVotingEngine.sol",
         hasCommits: "contracts/interfaces/IRoundVotingEngine.sol",
         isDormancyBlocked: "contracts/interfaces/IRoundVotingEngine.sol",
-        ratingCommitState: "contracts/interfaces/IRoundVotingEngine.sol",
+        ratingCommitStateCompact: "contracts/interfaces/IRoundVotingEngine.sol",
         roundCore: "contracts/interfaces/IRoundVotingEngine.sol",
         roundLifecycleState: "contracts/interfaces/IRoundVotingEngine.sol",
-        roundRatingConfigCompact: "contracts/interfaces/IRoundVotingEngine.sol",
+        roundRatingConfigPacked: "contracts/interfaces/IRoundVotingEngine.sol",
         transferReward: "contracts/interfaces/IRoundVotingEngine.sol",
         commitVote: "contracts/interfaces/IRoundVotingCommitReveal.sol",
         commitVoteWithPermit:

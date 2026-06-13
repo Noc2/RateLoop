@@ -407,77 +407,6 @@ export const ContentRegistryAbi = [
   },
   {
     "type": "function",
-    "name": "getRatingState",
-    "inputs": [
-      {
-        "name": "contentId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "state",
-        "type": "tuple",
-        "internalType": "struct RatingLib.RatingState",
-        "components": [
-          {
-            "name": "ratingLogitX18",
-            "type": "int128",
-            "internalType": "int128"
-          },
-          {
-            "name": "confidenceMass",
-            "type": "uint128",
-            "internalType": "uint128"
-          },
-          {
-            "name": "effectiveEvidence",
-            "type": "uint128",
-            "internalType": "uint128"
-          },
-          {
-            "name": "upEvidence",
-            "type": "uint128",
-            "internalType": "uint128"
-          },
-          {
-            "name": "downEvidence",
-            "type": "uint128",
-            "internalType": "uint128"
-          },
-          {
-            "name": "settledRounds",
-            "type": "uint32",
-            "internalType": "uint32"
-          },
-          {
-            "name": "ratingBps",
-            "type": "uint16",
-            "internalType": "uint16"
-          },
-          {
-            "name": "conservativeRatingBps",
-            "type": "uint16",
-            "internalType": "uint16"
-          },
-          {
-            "name": "lastUpdatedAt",
-            "type": "uint48",
-            "internalType": "uint48"
-          },
-          {
-            "name": "lowSince",
-            "type": "uint48",
-            "internalType": "uint48"
-          }
-        ]
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "getRoleAdmin",
     "inputs": [
       {
@@ -491,47 +420,6 @@ export const ContentRegistryAbi = [
         "name": "",
         "type": "bytes32",
         "internalType": "bytes32"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "getSlashConfigForContent",
-    "inputs": [
-      {
-        "name": "contentId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "slashConfig",
-        "type": "tuple",
-        "internalType": "struct RatingLib.SlashConfig",
-        "components": [
-          {
-            "name": "slashThresholdBps",
-            "type": "uint16",
-            "internalType": "uint16"
-          },
-          {
-            "name": "minSlashSettledRounds",
-            "type": "uint16",
-            "internalType": "uint16"
-          },
-          {
-            "name": "minSlashLowDuration",
-            "type": "uint48",
-            "internalType": "uint48"
-          },
-          {
-            "name": "minSlashEvidence",
-            "type": "uint256",
-            "internalType": "uint256"
-          }
-        ]
       }
     ],
     "stateMutability": "view"
@@ -2403,6 +2291,12 @@ export const ContentRegistryAbi = [
         "type": "uint32",
         "indexed": false,
         "internalType": "uint32"
+      },
+      {
+        "name": "lowSince",
+        "type": "uint48",
+        "indexed": false,
+        "internalType": "uint48"
       }
     ],
     "anonymous": false

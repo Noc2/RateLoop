@@ -259,12 +259,11 @@ library ContentRegistryRatingSnapshotLib {
         view
         returns (RatingLib.RatingConfig memory cfg)
     {
-        (
-            cfg.confidenceMassInitial,
-            cfg.confidenceMassMin,
-            cfg.confidenceMassMax,
-            cfg.conservativePenaltyMaxBps,
-            cfg.conservativePenaltyMinBps
-        ) = votingEngine.roundRatingConfigCompact(contentId, roundId);
+        (uint256 massWord, uint256 penaltyWord) = votingEngine.roundRatingConfigPacked(contentId, roundId);
+        cfg.confidenceMassInitial = uint128(massWord);
+        cfg.confidenceMassMin = uint128(massWord >> 128);
+        cfg.confidenceMassMax = uint128(penaltyWord);
+        cfg.conservativePenaltyMaxBps = uint16(penaltyWord >> 128);
+        cfg.conservativePenaltyMinBps = uint16(penaltyWord >> 144);
     }
 }
