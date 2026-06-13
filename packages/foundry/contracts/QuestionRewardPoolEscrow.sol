@@ -18,6 +18,7 @@ import { IRaterRegistryStatus } from "./interfaces/IRaterRegistryStatus.sol";
 import { IRoundPayoutSnapshotConsumer } from "./interfaces/IRoundPayoutSnapshotConsumer.sol";
 import { RoundLib } from "./libraries/RoundLib.sol";
 import { QuestionRewardPoolEscrowBundleActionsLib } from "./libraries/QuestionRewardPoolEscrowBundleActionsLib.sol";
+import { QuestionRewardPoolEscrowBundlePreviewLib } from "./libraries/QuestionRewardPoolEscrowBundlePreviewLib.sol";
 import {
     QuestionRewardPoolEscrowClaimLib,
     EqualShareInputs,
@@ -1147,7 +1148,7 @@ contract QuestionRewardPoolEscrow is
         IClusterPayoutOracle.PayoutWeight calldata payoutWeight,
         bytes32[] calldata proof
     ) external view returns (uint256 claimableAmount) {
-        return QuestionRewardPoolEscrowBundleActionsLib.claimableQuestionBundleRewardWithPayoutWeight(
+        return QuestionRewardPoolEscrowBundlePreviewLib.claimableQuestionBundleRewardWithPayoutWeight(
             bundleRewards,
             bundleQuestions,
             bundleRoundIds,
