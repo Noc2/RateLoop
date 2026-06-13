@@ -39,11 +39,13 @@ deploy:
 #
 # Keep this as an ordered recipe instead of independent prerequisites. If make
 # is invoked with parallel jobs, `generate-abis` must still wait for the fresh
-# broadcast/deployments JSON written by `deploy`.
+# broadcast/deployments JSON written by `deploy`. Rebuild the shared package so
+# consumers that import package exports see the regenerated deployment metadata.
 deploy-and-generate-abis: check-contract-sizes
 	$(MAKE) deploy
 	node scripts-js/exportDeploymentFromBroadcast.js
 	$(MAKE) generate-abis
+	cd ../.. && yarn workspace @rateloop/contracts build
 
 # Generate TypeScript ABIs
 generate-abis:
