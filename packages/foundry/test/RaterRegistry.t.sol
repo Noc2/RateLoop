@@ -779,7 +779,7 @@ contract RaterRegistryTest is Test {
         assertEq(resolved.humanNullifier, NULLIFIER_HASH);
         assertTrue(
             registry.launchHumanIdentityKey(RaterRegistry.HumanCredentialProvider.SeededHuman, NULLIFIER_HASH)
-            != registry.launchHumanIdentityKey(RaterRegistry.HumanCredentialProvider.WorldIdV4, NULLIFIER_HASH)
+                != registry.launchHumanIdentityKey(RaterRegistry.HumanCredentialProvider.WorldIdV4, NULLIFIER_HASH)
         );
     }
 
