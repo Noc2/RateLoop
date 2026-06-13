@@ -45,7 +45,10 @@ test.describe("Funding modals", () => {
       const feedbackDialog = page.getByRole("dialog", { name: "Fund a Feedback Bonus" });
       await expect(feedbackDialog).toBeVisible({ timeout: 10_000 });
       await expect(feedbackDialog.getByRole("heading", { name: target!.title })).toBeVisible();
-      await expect(feedbackDialog.getByRole("button", { name: "USDC" })).toHaveAttribute("aria-pressed", "true");
+      await expect(feedbackDialog.getByRole("button", { name: "USDC", exact: true })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
       await expect(feedbackDialog.getByLabel("Feedback Bonus amount")).toHaveValue("2");
       await expect(feedbackDialog.getByLabel("Awarder address")).toBeVisible();
       await expect(feedbackDialog.getByText(/Feedback Bonuses reward useful written feedback/i)).toBeVisible();
