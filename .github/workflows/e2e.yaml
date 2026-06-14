@@ -113,6 +113,15 @@ jobs:
           restore-keys: |
             playwright-${{ runner.os }}-
 
+      - name: Disable optional Microsoft apt sources
+        if: matrix.playwright_browsers != 'none'
+        run: |
+          sudo rm -f \
+            /etc/apt/sources.list.d/azure-cli.list \
+            /etc/apt/sources.list.d/azure-cli.sources \
+            /etc/apt/sources.list.d/microsoft-prod.list \
+            /etc/apt/sources.list.d/microsoft-prod.sources
+
       - name: Install Playwright browsers
         if: matrix.playwright_browsers != 'none'
         run: yarn workspace @rateloop/nextjs exec playwright install ${{ matrix.playwright_browsers }} --with-deps
@@ -275,6 +284,14 @@ jobs:
           key: playwright-${{ runner.os }}-${{ hashFiles('yarn.lock', 'packages/nextjs/package.json') }}
           restore-keys: |
             playwright-${{ runner.os }}-
+
+      - name: Disable optional Microsoft apt sources
+        run: |
+          sudo rm -f \
+            /etc/apt/sources.list.d/azure-cli.list \
+            /etc/apt/sources.list.d/azure-cli.sources \
+            /etc/apt/sources.list.d/microsoft-prod.list \
+            /etc/apt/sources.list.d/microsoft-prod.sources
 
       - name: Install Playwright browsers
         run: yarn workspace @rateloop/nextjs exec playwright install ${{ matrix.playwright_browsers }} --with-deps
