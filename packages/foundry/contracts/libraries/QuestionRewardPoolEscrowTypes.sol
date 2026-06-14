@@ -101,6 +101,7 @@ struct BundleReward {
     // refunded to the funder. Mirrors RewardPool.nonRefundable for the mandatory-
     // bounty anti-spam model on registry-initiated submissions.
     bool nonRefundable;
+    uint32 pendingRecoveredRoundSets;
 }
 
 struct BundleQuestion {

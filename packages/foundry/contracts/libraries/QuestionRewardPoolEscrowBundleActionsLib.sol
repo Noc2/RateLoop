@@ -589,6 +589,51 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         );
     }
 
+    function qualifyRecoveredBundleRoundSet(
+        mapping(uint256 => BundleReward) storage bundleRewards,
+        mapping(uint256 => BundleQuestion[]) storage bundleQuestions,
+        mapping(uint256 => mapping(uint256 => uint32)) storage bundleQuestionRecordedRounds,
+        mapping(uint256 => mapping(uint256 => mapping(uint256 => uint64))) storage bundleRoundIds,
+        mapping(uint256 => mapping(uint256 => BundleRoundSetSnapshot)) storage bundleRoundSetSnapshots,
+        mapping(uint256 => address) storage bundleRewardClusterPayoutOracle,
+        mapping(uint256 => mapping(uint256 => uint256)) storage bundleQuestionTerminalSyncCursor,
+        mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) storage qualifiedBundleRoundSetClaimants,
+        ContentRegistry registry,
+        RoundVotingEngine votingEngine,
+        ProtocolConfig protocolConfig,
+        uint8 payoutDomain,
+        uint256 bundleId,
+        uint256 roundSetIndex,
+        uint256 recoveredAllocation
+    ) internal returns (bool qualified) {
+        BundleReward storage bundle = _getExistingBundleReward(bundleRewards, bundleId);
+        if (bundleRoundSetSnapshots[bundleId][roundSetIndex].qualified) return true;
+        if (roundSetIndex >= bundle.requiredSettledRounds) return false;
+        if (!_isBundleRoundSetComplete(bundleQuestions, bundleQuestionRecordedRounds, bundleId, roundSetIndex)) {
+            return false;
+        }
+        _qualifyBundleRoundSet(
+            bundleRewards,
+            bundleQuestions,
+            bundleQuestionRecordedRounds,
+            bundleRoundIds,
+            bundleRoundSetSnapshots,
+            bundleRewardClusterPayoutOracle,
+            bundleQuestionTerminalSyncCursor,
+            qualifiedBundleRoundSetClaimants,
+            registry,
+            votingEngine,
+            protocolConfig,
+            payoutDomain,
+            bundleId,
+            bundle,
+            roundSetIndex,
+            true,
+            recoveredAllocation
+        );
+        return bundleRoundSetSnapshots[bundleId][roundSetIndex].qualified;
+    }
+
     function claimableQuestionBundleReward(
         mapping(uint256 => BundleReward) storage bundleRewards,
         mapping(uint256 => BundleQuestion[]) storage bundleQuestions,
@@ -719,6 +764,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             bundleId,
             bundle
         );
+        require(bundle.pendingRecoveredRoundSets == 0);
         if (bundle.completedRoundSets != 0) {
             QuestionRewardPoolEscrowBundleLib.requireCleanupComplete(
                 bundleQuestions, bundleRoundIds, votingEngine, bundleId, bundle.completedRoundSets
@@ -942,6 +988,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         uint256 bundleId,
         BundleReward storage bundle
     ) private {
+        if (bundle.pendingRecoveredRoundSets != 0) return;
         uint256 roundSetIndex = bundle.completedRoundSets;
         if (roundSetIndex >= bundle.requiredSettledRounds) return;
         if (bundleRoundSetSnapshots[bundleId][roundSetIndex].qualified) return;
@@ -961,7 +1008,9 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             payoutDomain,
             bundleId,
             bundle,
-            roundSetIndex
+            roundSetIndex,
+            false,
+            0
         );
     }
 
@@ -980,12 +1029,15 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         uint8 payoutDomain,
         uint256 bundleId,
         BundleReward storage bundle,
-        uint256 roundSetIndex
+        uint256 roundSetIndex,
+        bool recovered,
+        uint256 recoveredAllocation
     ) private {
         if (bundleRoundSetSnapshots[bundleId][roundSetIndex].qualified) return;
         if (!QuestionRewardPoolEscrowWindowLib.activateBundleWindowForRoundSet(
                 votingEngine, bundle, bundleQuestions[bundleId], bundleRoundIds, bundleId, roundSetIndex
             )) {
+            if (recovered) return;
             QuestionRewardPoolEscrowBundleLib.resetRoundSet(
                 bundleQuestions,
                 bundleQuestionRecordedRounds,
@@ -1001,6 +1053,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             bundleQuestions, bundleRoundIds, registry, votingEngine, protocolConfig, bundle, bundleId, roundSetIndex
         );
         if (completerCount < bundle.requiredCompleters) {
+            if (recovered) return;
             QuestionRewardPoolEscrowBundleLib.resetRoundSet(
                 bundleQuestions,
                 bundleQuestionRecordedRounds,
@@ -1039,9 +1092,10 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             correlationEpochId = payoutSnapshot.correlationEpochId;
         }
 
-        uint256 allocation = _previewBundleRoundSetAllocation(bundle);
+        uint256 allocation = recovered ? recoveredAllocation : _previewBundleRoundSetAllocation(bundle);
         uint256 allocationFloor = clusterSnapshot ? effectiveParticipantUnits : completerCount;
-        if (allocation == 0 || allocation < allocationFloor) {
+        if (allocation == 0 || allocation > bundle.unallocatedAmount || allocation < allocationFloor) {
+            if (recovered) return;
             QuestionRewardPoolEscrowBundleLib.resetRoundSet(
                 bundleQuestions,
                 bundleQuestionRecordedRounds,
@@ -1054,8 +1108,12 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         }
         uint256 frontendFeeAllocation = (allocation * bundle.frontendFeeBps) / BPS_SCALE;
 
-        unchecked {
-            bundle.completedRoundSets++;
+        if (!recovered) {
+            unchecked {
+                bundle.completedRoundSets++;
+            }
+        } else if (block.timestamp > bundle.claimDeadline) {
+            bundle.claimDeadline = block.timestamp.toUint64();
         }
         bundle.unallocatedAmount -= allocation;
 
@@ -1546,10 +1604,16 @@ library QuestionRewardPoolEscrowBundleActionsLib {
     ) private view returns (IClusterPayoutOracle.RoundPayoutSnapshot memory payoutSnapshot, bool ready) {
         address oracleAddr = bundleRewardClusterPayoutOracle[bundleId];
         require(oracleAddr != address(0), "Oracle not pinned");
-        payoutSnapshot = IClusterPayoutOracle(oracleAddr)
-            .getRoundPayoutSnapshot(payoutDomain, bundleId, bundleId, _bundleSnapshotRoundId(roundSetIndex));
-        ready = payoutSnapshot.status == IClusterPayoutOracle.SnapshotStatus.Finalized
-            && payoutSnapshot.weightRoot != bytes32(0) && payoutSnapshot.totalClaimWeight > 0;
+        try IClusterPayoutOracle(oracleAddr)
+            .getRoundPayoutSnapshot(payoutDomain, bundleId, bundleId, _bundleSnapshotRoundId(roundSetIndex)) returns (
+            IClusterPayoutOracle.RoundPayoutSnapshot memory snapshot
+        ) {
+            payoutSnapshot = snapshot;
+            ready = snapshot.status == IClusterPayoutOracle.SnapshotStatus.Finalized
+                && snapshot.weightRoot != bytes32(0) && snapshot.totalClaimWeight > 0;
+        } catch {
+            ready = false;
+        }
     }
 
     function _effectiveClusterBundleClaimWeight(

@@ -165,6 +165,18 @@
     {
       "slot": 27,
       "offset": 0,
+      "label": "rejectedRecoveredBundleRoundSet",
+      "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_bool))"
+    },
+    {
+      "slot": 28,
+      "offset": 0,
+      "label": "reopenedRecoveredBundleRoundSet",
+      "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_bool))"
+    },
+    {
+      "slot": 29,
+      "offset": 0,
       "label": "__gap",
       "type": "t_array(t_uint256)"
     }
@@ -186,8 +198,8 @@
     {
       "id": "t_array(t_uint256)",
       "encoding": "inplace",
-      "label": "uint256[46]",
-      "numberOfBytes": "1472",
+      "label": "uint256[44]",
+      "numberOfBytes": "1408",
       "base": "t_uint256"
     },
     {
@@ -593,6 +605,12 @@
           "offset": 1,
           "label": "nonRefundable",
           "type": "t_bool"
+        },
+        {
+          "slot": 10,
+          "offset": 2,
+          "label": "pendingRecoveredRoundSets",
+          "type": "t_uint32"
         }
       ]
     },

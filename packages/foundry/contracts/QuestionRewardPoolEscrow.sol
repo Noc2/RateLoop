@@ -27,6 +27,7 @@ import {
 } from "./libraries/QuestionRewardPoolEscrowClaimLib.sol";
 import { QuestionRewardPoolEscrowQualificationLib } from "./libraries/QuestionRewardPoolEscrowQualificationLib.sol";
 import { QuestionRewardPoolEscrowRecoveryLib } from "./libraries/QuestionRewardPoolEscrowRecoveryLib.sol";
+import { QuestionRewardPoolEscrowBundleRecoveryLib } from "./libraries/QuestionRewardPoolEscrowBundleRecoveryLib.sol";
 import { QuestionRewardPoolEscrowPoolActionsLib } from "./libraries/QuestionRewardPoolEscrowPoolActionsLib.sol";
 import {
     QuestionRewardPoolEscrowSnapshotConsumerLib
@@ -113,6 +114,8 @@ contract QuestionRewardPoolEscrow is
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => mapping(bytes32 => bool)))) private
         qualifiedQuestionRewardClaimants;
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) private qualifiedBundleRoundSetClaimants;
+    mapping(uint256 => mapping(uint256 => bool)) private rejectedRecoveredBundleRoundSet;
+    mapping(uint256 => mapping(uint256 => bool)) private reopenedRecoveredBundleRoundSet;
 
     event RewardPoolCreated(
         uint256 indexed rewardPoolId,
@@ -989,6 +992,23 @@ contract QuestionRewardPoolEscrow is
         );
     }
 
+    function recoverOrReopenSnapshotBundleRoundSet(uint256 bundleId, uint256 roundSetIndex) external nonReentrant {
+        QuestionRewardPoolEscrowBundleRecoveryLib.recoverOrReopenSnapshotRoundSet(
+            bundleRewards,
+            bundleQuestions,
+            bundleRoundIds,
+            bundleRoundSetSnapshots,
+            bundleRewardClusterPayoutOracle,
+            rejectedRecoveredBundleRoundSet,
+            reopenedRecoveredBundleRoundSet,
+            qualifiedBundleRoundSetClaimants,
+            votingEngine,
+            bundleId,
+            roundSetIndex,
+            PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD
+        );
+    }
+
     function recordBundleQuestionTerminal(uint256 contentId, uint256 roundId, bool settled) external {
         // Intentionally NOT gated by whenNotPaused: the voting engine invokes this inside a
         // try/catch during settlement, so a paused escrow would silently swallow the terminal
@@ -1089,6 +1109,24 @@ contract QuestionRewardPoolEscrow is
         bytes32[] memory proof,
         bool hasCorrelationProof
     ) internal returns (uint256 rewardAmount) {
+        QuestionRewardPoolEscrowBundleRecoveryLib.qualifyRecoveredRoundSetIfNeeded(
+            bundleRewards,
+            bundleQuestions,
+            bundleQuestionRecordedRounds,
+            bundleRoundIds,
+            bundleRoundSetSnapshots,
+            bundleRewardClusterPayoutOracle,
+            bundleQuestionTerminalSyncCursor,
+            qualifiedBundleRoundSetClaimants,
+            rejectedRecoveredBundleRoundSet,
+            reopenedRecoveredBundleRoundSet,
+            registry,
+            votingEngine,
+            votingEngine.protocolConfig(),
+            PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD,
+            bundleId,
+            roundSetIndex
+        );
         return QuestionRewardPoolEscrowBundleActionsLib.claimQuestionBundleReward(
             bundleRewards,
             bundleQuestions,
@@ -1569,5 +1607,5 @@ contract QuestionRewardPoolEscrow is
         rejectedRecoveredRound[rewardPoolId][roundId] = false;
     }
 
-    uint256[46] private __gap;
+    uint256[44] private __gap;
 }
