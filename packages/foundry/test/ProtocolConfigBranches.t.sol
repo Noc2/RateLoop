@@ -518,6 +518,24 @@ contract ProtocolConfigBranchesTest is Test {
         assertEq(config.confidentialityEscrow(), address(escrow));
     }
 
+    function test_SetConfidentialityEscrow_RequiresConfiguredRaterRegistryAlignment() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+        address raterRegistry = address(new MockRaterIdentityRegistry());
+        address staleRaterRegistry = address(new MockRaterIdentityRegistry());
+        MockConfidentialityEscrowForConfig staleEscrow =
+            new MockConfidentialityEscrowForConfig(staleRaterRegistry, address(config));
+        MockConfidentialityEscrowForConfig alignedEscrow =
+            new MockConfidentialityEscrowForConfig(raterRegistry, address(config));
+
+        config.setRaterRegistry(raterRegistry);
+
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.setConfidentialityEscrow(address(staleEscrow));
+
+        config.setConfidentialityEscrow(address(alignedEscrow));
+        assertEq(config.confidentialityEscrow(), address(alignedEscrow));
+    }
+
     function test_SetConfidentialityEscrow_RejectsInvalidIntegration() public {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
         MockConfidentialityEscrowForConfig wrongConfigEscrow =

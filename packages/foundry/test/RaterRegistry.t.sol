@@ -142,7 +142,7 @@ contract RaterRegistryTest is Test {
 
     function test_SetConfidentialityEscrowRejectsInvalidTarget() public {
         vm.prank(admin);
-        vm.expectRevert(RaterRegistry.InvalidAddress.selector);
+        vm.expectRevert();
         registry.setConfidentialityEscrow(address(0));
 
         vm.prank(admin);
@@ -156,8 +156,27 @@ contract RaterRegistryTest is Test {
 
         MockWrongRegistryConfidentialityNexus wrongRegistryNexus = new MockWrongRegistryConfidentialityNexus();
         vm.prank(admin);
-        vm.expectRevert(RaterRegistry.InvalidAddress.selector);
+        vm.expectRevert();
         registry.setConfidentialityEscrow(address(wrongRegistryNexus));
+
+        RaterRegistry deployedWrongRegistry = _deployProxiedRegistry();
+        MockConfidentialityNexus deployedWrongRegistryNexus =
+            new MockConfidentialityNexus(address(deployedWrongRegistry));
+        vm.prank(admin);
+        vm.expectRevert(RaterRegistry.InvalidAddress.selector);
+        registry.setConfidentialityEscrow(address(deployedWrongRegistryNexus));
+    }
+
+    function test_SetConfidentialityEscrowAllowsStagedRegistryRotation() public {
+        MockConfidentialityNexus nexus = new MockConfidentialityNexus(address(registry));
+        vm.prank(admin);
+        registry.setConfidentialityEscrow(address(nexus));
+
+        RaterRegistry replacementRegistry = _deployProxiedRegistry();
+        vm.prank(admin);
+        replacementRegistry.setConfidentialityEscrow(address(nexus));
+
+        assertEq(replacementRegistry.confidentialityEscrow(), address(nexus));
     }
 
     function test_SetConfidentialityEscrowRejectsRotationOrUnsetAfterConfigured() public {

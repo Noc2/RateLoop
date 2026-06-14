@@ -46,12 +46,24 @@ contract MockRevertingLaunchDistributionPool {
     }
 }
 
+contract MockRewardDistributorConfidentialityProtocolConfig {
+    address public raterRegistry;
+    address public confidentialityEscrow;
+
+    constructor(address raterRegistry_, address confidentialityEscrow_) {
+        raterRegistry = raterRegistry_;
+        confidentialityEscrow = confidentialityEscrow_;
+    }
+}
+
 contract MockRewardDistributorConfidentialityNexus {
     mapping(uint8 => mapping(bytes32 => bool)) internal nexus;
     address internal immutable registry;
+    address internal immutable protocolConfig;
 
     constructor(address registry_) {
         registry = registry_;
+        protocolConfig = address(new MockRewardDistributorConfidentialityProtocolConfig(registry_, address(this)));
     }
 
     function setNexus(uint8 provider, bytes32 nullifierHash, bool value) external {
@@ -63,7 +75,7 @@ contract MockRewardDistributorConfidentialityNexus {
     }
 
     function confidentialityEscrowConfigShape() external view returns (address registry_, address protocolConfig_) {
-        return (registry, address(0));
+        return (registry, protocolConfig);
     }
 }
 

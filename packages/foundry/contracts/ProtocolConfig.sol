@@ -290,6 +290,8 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         _validateConfiguredConfidentialityEscrowRaterRegistry(value);
         _validateLaunchDistributionPoolRaterRegistry(launchDistributionPool, value);
         raterRegistry = value;
+        address escrow = confidentialityEscrow;
+        if (escrow != address(0)) _validateConfidentialityEscrow(escrow);
         emit RaterRegistryUpdated(value);
     }
 
@@ -686,7 +688,13 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         try IConfidentialityEscrow(value).confidentialityEscrowConfigShape() returns (
             address registry_, address protocolConfig_
         ) {
-            if (registry_ == address(0) || protocolConfig_ != address(this)) revert InvalidConfig();
+            address configuredRegistry = raterRegistry;
+            if (
+                registry_ == address(0) || protocolConfig_ != address(this)
+                    || (configuredRegistry != address(0) && registry_ != configuredRegistry)
+            ) {
+                revert InvalidConfig();
+            }
         } catch {
             revert InvalidConfig();
         }

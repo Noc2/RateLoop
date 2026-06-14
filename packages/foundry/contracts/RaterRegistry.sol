@@ -21,9 +21,9 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
     uint8 public constant WORLD_CREDENTIAL_SELFIE = 1;
     uint8 public constant WORLD_CREDENTIAL_PASSPORT = 2;
     uint8 public constant WORLD_CREDENTIAL_PROOF_OF_HUMAN = 3;
-    uint64 public constant WORLD_ISSUER_SCHEMA_PROOF_OF_HUMAN = 1;
-    uint64 public constant WORLD_ISSUER_SCHEMA_SELFIE = 11;
-    uint64 public constant WORLD_ISSUER_SCHEMA_PASSPORT = 9303;
+    uint64 private constant WORLD_ISSUER_SCHEMA_PROOF_OF_HUMAN = 1;
+    uint64 private constant WORLD_ISSUER_SCHEMA_SELFIE = 11;
+    uint64 private constant WORLD_ISSUER_SCHEMA_PASSPORT = 9303;
 
     enum RaterType {
         Unknown,
@@ -611,9 +611,13 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
 
     function setConfidentialityEscrow(address newEscrow) external onlyRole(ADMIN_ROLE) {
         address oldEscrow = confidentialityEscrow;
-        if (newEscrow == address(0) || (oldEscrow != address(0) && newEscrow != oldEscrow)) revert InvalidAddress();
+        if (oldEscrow != address(0) && newEscrow != oldEscrow) {
+            revert InvalidAddress();
+        }
         (address registry_,) = IConfidentialityEscrow(newEscrow).confidentialityEscrowConfigShape();
-        if (registry_ != address(this) && registry_.code.length == 0) revert InvalidAddress();
+        if (registry_ != address(this) && RaterRegistry(registry_).confidentialityEscrow() != newEscrow) {
+            revert InvalidAddress();
+        }
         confidentialityEscrow = newEscrow;
     }
 
