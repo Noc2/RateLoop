@@ -132,7 +132,6 @@ contract ConfidentialityEscrowTest is VotingTestBase {
         protocolConfig.setRewardDistributor(address(rewardDistributor));
         protocolConfig.setCategoryRegistry(address(categoryRegistry));
         protocolConfig.setRaterRegistry(address(raterRegistry));
-        protocolConfig.setConfidentialityEscrow(address(confidentialityEscrow));
         protocolConfig.setTreasury(treasury);
         _setTlockRoundConfig(protocolConfig, 1 hours, 7 days, 3, 100);
 
@@ -152,6 +151,7 @@ contract ConfidentialityEscrowTest is VotingTestBase {
         protocolConfig.setFrontendRegistry(address(frontendRegistry));
 
         raterRegistry.setConfidentialityEscrow(address(confidentialityEscrow));
+        protocolConfig.setConfidentialityEscrow(address(confidentialityEscrow));
         _seedRaterIdentity(raterRegistry, voter1, VOTER1_ANCHOR);
         _seedRaterIdentity(raterRegistry, voter2, VOTER2_ANCHOR);
 

@@ -338,8 +338,8 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         protocolConfig.setFrontendRegistry(address(frontendRegistry));
         protocolConfig.setCategoryRegistry(address(categoryRegistry));
         protocolConfig.setRaterRegistry(address(raterRegistry));
-        protocolConfig.setConfidentialityEscrow(address(confidentialityEscrow));
         raterRegistry.setConfidentialityEscrow(address(confidentialityEscrow));
+        protocolConfig.setConfidentialityEscrow(address(confidentialityEscrow));
         if (!isLocalDev) {
             registry.renounceRole(registry.CONFIG_ROLE(), deployer);
             registry.renounceRole(registry.PAUSER_ROLE(), deployer);

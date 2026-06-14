@@ -231,6 +231,14 @@ contract RaterRegistryBansZeroKeyForConfig is RaterRegistryWithoutCredentialAbiF
     }
 }
 
+contract MockRaterRegistryWithEscrowForConfig is MockRaterIdentityRegistry {
+    address public confidentialityEscrow;
+
+    function setConfidentialityEscrow(address value) external {
+        confidentialityEscrow = value;
+    }
+}
+
 contract MockAdvisoryVoteRecorderForConfig {
     address internal recorderProtocolConfig;
     bool internal revertProtocolConfig;
@@ -520,18 +528,22 @@ contract ProtocolConfigBranchesTest is Test {
 
     function test_SetConfidentialityEscrow_RequiresConfiguredRaterRegistryAlignment() public {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
-        address raterRegistry = address(new MockRaterIdentityRegistry());
+        MockRaterRegistryWithEscrowForConfig raterRegistry = new MockRaterRegistryWithEscrowForConfig();
         address staleRaterRegistry = address(new MockRaterIdentityRegistry());
         MockConfidentialityEscrowForConfig staleEscrow =
             new MockConfidentialityEscrowForConfig(staleRaterRegistry, address(config));
         MockConfidentialityEscrowForConfig alignedEscrow =
-            new MockConfidentialityEscrowForConfig(raterRegistry, address(config));
+            new MockConfidentialityEscrowForConfig(address(raterRegistry), address(config));
 
-        config.setRaterRegistry(raterRegistry);
+        config.setRaterRegistry(address(raterRegistry));
 
         vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
         config.setConfidentialityEscrow(address(staleEscrow));
 
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.setConfidentialityEscrow(address(alignedEscrow));
+
+        raterRegistry.setConfidentialityEscrow(address(alignedEscrow));
         config.setConfidentialityEscrow(address(alignedEscrow));
         assertEq(config.confidentialityEscrow(), address(alignedEscrow));
     }

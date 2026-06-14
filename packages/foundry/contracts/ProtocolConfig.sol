@@ -685,10 +685,10 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
 
     function _validateConfidentialityEscrow(address value) internal view {
         if (value.code.length == 0) revert InvalidAddress();
+        address configuredRegistry = raterRegistry;
         try IConfidentialityEscrow(value).confidentialityEscrowConfigShape() returns (
             address registry_, address protocolConfig_
         ) {
-            address configuredRegistry = raterRegistry;
             if (
                 registry_ == address(0) || protocolConfig_ != address(this)
                     || (configuredRegistry != address(0) && registry_ != configuredRegistry)
@@ -697,6 +697,13 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
             }
         } catch {
             revert InvalidConfig();
+        }
+        if (configuredRegistry != address(0)) {
+            try RaterRegistry(configuredRegistry).confidentialityEscrow() returns (address registryEscrow) {
+                if (registryEscrow != value) revert InvalidConfig();
+            } catch {
+                revert InvalidConfig();
+            }
         }
         try IConfidentialityEscrow(value).confidentialityConfig(0) returns (
             IConfidentialityEscrow.ConfidentialityConfig memory
