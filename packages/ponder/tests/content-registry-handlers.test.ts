@@ -100,6 +100,8 @@ vi.mock("@rateloop/contracts/protocol", () => ({
     minVoters: 3,
     maxVoters: 100,
   },
+  USER_PREDICTION_BPS: { min: 100, max: 9_900 },
+  USER_PREDICTION_PERCENT: { min: 1, max: 99 },
   ROUND_STATE: { Settled: 1 },
 }));
 
