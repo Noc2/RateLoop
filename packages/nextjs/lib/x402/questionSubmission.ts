@@ -271,6 +271,7 @@ type StoredFeedbackBonusRequest = {
   fundedAt?: string;
   poolId?: string;
   preparedAt?: string;
+  roundId?: string;
   status?: StoredFeedbackBonusStatus;
   transactionHashes?: Hex[];
 };
@@ -592,6 +593,7 @@ function parseStoredFeedbackBonusRequest(value: unknown): StoredFeedbackBonusReq
     fundedAt: typeof parsed.fundedAt === "string" ? parsed.fundedAt : undefined,
     poolId: typeof parsed.poolId === "string" ? parsed.poolId : undefined,
     preparedAt: typeof parsed.preparedAt === "string" ? parsed.preparedAt : undefined,
+    roundId: typeof parsed.roundId === "string" && /^\d+$/.test(parsed.roundId) ? parsed.roundId : undefined,
     status,
     transactionHashes,
   };
@@ -2042,6 +2044,7 @@ function readFeedbackBonusPoolCreated(
   awarder: Address;
   contentId: string;
   feedbackClosesAt: string;
+  funder: Address;
   poolId: bigint;
   roundId: string;
 } | null {
@@ -2060,6 +2063,8 @@ function readFeedbackBonusPoolCreated(
         typeof decoded.args.poolId === "bigint" &&
         typeof decoded.args.contentId === "bigint" &&
         typeof decoded.args.roundId === "bigint" &&
+        typeof decoded.args.funder === "string" &&
+        isAddress(decoded.args.funder) &&
         typeof decoded.args.awarder === "string" &&
         isAddress(decoded.args.awarder)
       ) {
@@ -2071,6 +2076,7 @@ function readFeedbackBonusPoolCreated(
           awarder: decoded.args.awarder,
           contentId: decoded.args.contentId.toString(),
           feedbackClosesAt: toDecimalString(decoded.args.feedbackClosesAt),
+          funder: decoded.args.funder,
           poolId: decoded.args.poolId,
           roundId: decoded.args.roundId.toString(),
         };
@@ -2604,6 +2610,7 @@ function buildFeedbackBonusStatusBody(record: X402QuestionSubmissionRecord | nul
     error: feedbackBonus.error ?? null,
     feedbackClosesAt: feedbackBonus.feedbackClosesAt,
     poolId: feedbackBonus.poolId ?? null,
+    roundId: feedbackBonus.roundId ?? null,
     status,
     transactionHashes: feedbackBonus.transactionHashes ?? [],
   };
@@ -2614,6 +2621,7 @@ async function updateStoredFeedbackBonusReceipt(params: {
   operationKey: `0x${string}`;
   poolId?: bigint | null;
   preparedAt?: Date | null;
+  roundId?: bigint | string | null;
   status: StoredFeedbackBonusStatus;
   transactionHashes?: Hex[];
 }) {
@@ -2629,6 +2637,7 @@ async function updateStoredFeedbackBonusReceipt(params: {
     error: params.error ?? undefined,
     ...(params.poolId === undefined ? {} : { poolId: params.poolId?.toString() }),
     ...(params.preparedAt ? { preparedAt: params.preparedAt.toISOString() } : {}),
+    ...(params.roundId === undefined ? {} : { roundId: params.roundId?.toString() }),
     ...(params.status === "funded" ? { fundedAt: now.toISOString() } : {}),
     status: params.status,
     ...(params.transactionHashes ? { transactionHashes: params.transactionHashes } : {}),
@@ -2773,6 +2782,7 @@ export async function prepareFeedbackBonusQuestionSubmissionRequest(params: {
   await updateStoredFeedbackBonusReceipt({
     operationKey: params.operationKey,
     preparedAt: new Date(),
+    roundId,
     status: "awaiting_wallet_signature",
   });
 
@@ -2839,6 +2849,12 @@ export async function confirmFeedbackBonusQuestionSubmissionRequest(params: {
   if (!record.contentId) {
     throw new X402QuestionConflictError("Question content id is required before confirming the Feedback Bonus.");
   }
+  if (!feedbackBonus.roundId) {
+    throw new X402QuestionConflictError("Feedback Bonus transaction plan must be prepared before confirmation.");
+  }
+  if (!record.payerAddress || !isAddress(record.payerAddress)) {
+    throw new X402QuestionConflictError("Feedback Bonus payer wallet is required before confirmation.");
+  }
 
   const publicClient = createPublicQuestionClient(config);
   let createdPool: ReturnType<typeof readFeedbackBonusPoolCreated> | null = null;
@@ -2851,6 +2867,12 @@ export async function confirmFeedbackBonusQuestionSubmissionRequest(params: {
   }
   if (createdPool.contentId !== record.contentId) {
     throw new X402QuestionConflictError("Confirmed Feedback Bonus pool does not match the submitted question.");
+  }
+  if (createdPool.roundId !== feedbackBonus.roundId) {
+    throw new X402QuestionConflictError("Confirmed Feedback Bonus round does not match the prepared round.");
+  }
+  if (createdPool.funder.toLowerCase() !== record.payerAddress.toLowerCase()) {
+    throw new X402QuestionConflictError("Confirmed Feedback Bonus funder does not match the payer wallet.");
   }
   if (createdPool.amount !== feedbackBonus.amount) {
     throw new X402QuestionConflictError("Confirmed Feedback Bonus amount does not match the requested amount.");
