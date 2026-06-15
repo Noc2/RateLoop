@@ -13,6 +13,7 @@ import { fetchConfidentialityTermsStatus } from "~~/lib/confidentiality/clientTe
 import { CONFIDENTIALITY_TERMS_TITLE, CONFIDENTIALITY_TERMS_VERSION } from "~~/lib/confidentiality/terms";
 import {
   CONFIDENTIALITY_ACCEPTED_EVENT,
+  CONFIDENTIALITY_OWNER_SESSION_CONFIRMED_EVENT,
   getConfidentialContextVoteBlocker,
   getConfidentialityBondRequirement,
   isPrivateContextMetadata,
@@ -259,6 +260,20 @@ export function ConfidentialContextGate({
     };
   }, [address, gated, isOwnContent, item.id]);
 
+  useEffect(() => {
+    if (!gated || !isOwnContent || typeof window === "undefined") return;
+
+    const handleOwnerSessionConfirmed = (event: Event) => {
+      const detail = event instanceof CustomEvent ? event.detail : null;
+      if (detail?.contentId === item.id.toString()) setOwnerSessionReady(true);
+    };
+
+    window.addEventListener(CONFIDENTIALITY_OWNER_SESSION_CONFIRMED_EVENT, handleOwnerSessionConfirmed);
+    return () => {
+      window.removeEventListener(CONFIDENTIALITY_OWNER_SESSION_CONFIRMED_EVENT, handleOwnerSessionConfirmed);
+    };
+  }, [gated, isOwnContent, item.id]);
+
   const acceptTerms = async () => {
     if (!address) {
       notification.warning("Connect a wallet to view private context.");
@@ -324,6 +339,13 @@ export function ConfidentialContextGate({
     try {
       await ensurePrivateAccountReadSession(address, signMessageAsync);
       setOwnerSessionReady(true);
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent(CONFIDENTIALITY_OWNER_SESSION_CONFIRMED_EVENT, {
+            detail: { contentId: item.id.toString() },
+          }),
+        );
+      }
     } catch (error) {
       notification.error(error instanceof Error ? error.message : "Could not confirm wallet access.");
     } finally {
@@ -344,6 +366,7 @@ export function ConfidentialContextGate({
 
   if (isOwnContent) {
     if (ownerSessionReady) return <>{renderConfidentialGateChildren(children, address)}</>;
+    if (variant === "inline") return null;
 
     return (
       <GateShell variant={variant}>
@@ -387,6 +410,7 @@ export function ConfidentialContextGate({
   });
 
   if (!blocker) return <>{renderConfidentialGateChildren(children, address)}</>;
+  if (variant === "inline") return null;
 
   if (!accepted) {
     const acceptTermsButton = (
@@ -403,7 +427,7 @@ export function ConfidentialContextGate({
 
     return (
       <>
-        {variant === "inline" ? null : <GateShell variant={variant}>{acceptTermsButton}</GateShell>}
+        <GateShell variant={variant}>{acceptTermsButton}</GateShell>
         <ConfidentialContextTermsDialog
           isBusy={isAccepting || isSigning}
           isOpen={isTermsDialogOpen}

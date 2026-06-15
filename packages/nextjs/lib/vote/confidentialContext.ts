@@ -3,6 +3,7 @@
 import type { ContentItem } from "~~/hooks/contentFeed/shared";
 
 export const CONFIDENTIALITY_ACCEPTED_EVENT = "rateloop:confidentiality-accepted";
+export const CONFIDENTIALITY_OWNER_SESSION_CONFIRMED_EVENT = "rateloop:confidentiality-owner-session-confirmed";
 
 export type ConfidentialityBondAsset = "LREP" | "USDC";
 
