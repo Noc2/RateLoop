@@ -57,9 +57,17 @@ const desktopSidebarSurfaceClassName = "border-r bg-black";
 const isModifiedNavigationEvent = (event: React.MouseEvent<HTMLElement>) =>
   event.metaKey || event.ctrlKey || event.shiftKey || event.altKey;
 
+export const closeDetailsMenu = (menu: HTMLDetailsElement | null | undefined) => {
+  menu?.removeAttribute("open");
+
+  if (menu && document.activeElement instanceof HTMLElement && menu.contains(document.activeElement)) {
+    document.activeElement.blur();
+  }
+};
+
 const closeContainingDetailsMenu = (event: React.MouseEvent<HTMLElement>) => {
   const menu = event.currentTarget.closest("details");
-  window.setTimeout(() => menu?.removeAttribute("open"), 0);
+  window.setTimeout(() => closeDetailsMenu(menu), 0);
 };
 
 const HeaderNavLink = ({ className, compact = false, href, icon: Icon, isActive, label }: HeaderNavLinkProps) => {
@@ -395,10 +403,13 @@ export const Header = () => {
   const lastMobileHeaderVisibilityChangeAtRef = useRef(0);
   const suppressNextVoteRootScrollRef = useRef(false);
   const [measuredMobileHeaderHeight, setMeasuredMobileHeaderHeight] = useState(160);
-  useOutsideClick(burgerMenuRef, () => {
-    burgerMenuRef?.current?.removeAttribute("open");
+
+  const closeMobileMenu = useCallback(() => {
+    closeDetailsMenu(burgerMenuRef.current);
     setMobileMenuOpen(false);
-  });
+  }, []);
+
+  useOutsideClick(burgerMenuRef, closeMobileMenu);
 
   useEffect(() => {
     isMobileHeaderVisibleRef.current = isMobileHeaderVisible;
@@ -430,13 +441,13 @@ export const Header = () => {
   );
 
   useEffect(() => {
-    setMobileMenuOpen(false);
+    closeMobileMenu();
     setMobileSearchOpen(false);
     isMobileHeaderVisibleRef.current = true;
     lastMobileHeaderVisibilityChangeAtRef.current = 0;
     suppressNextVoteRootScrollRef.current = false;
     setIsMobileHeaderVisible(true);
-  }, [pathname, setIsMobileHeaderVisible]);
+  }, [closeMobileMenu, pathname, setIsMobileHeaderVisible]);
 
   useLayoutEffect(() => {
     if (!shouldUseVoteLayoutCollapse) {
@@ -827,10 +838,7 @@ export const Header = () => {
                     </summary>
                     <ul
                       className={`menu menu-compact dropdown-content z-[80] mt-3 w-64 rounded-xl border p-2 shadow-lg ${headerChromeSurfaceClassName} ${headerChromeBorderClassName}`}
-                      onClick={() => {
-                        burgerMenuRef?.current?.removeAttribute("open");
-                        setMobileMenuOpen(false);
-                      }}
+                      onClick={closeMobileMenu}
                     >
                       <Suspense>
                         <MobileMenuLinks />
@@ -843,8 +851,7 @@ export const Header = () => {
                   <button
                     type="button"
                     onClick={() => {
-                      burgerMenuRef?.current?.removeAttribute("open");
-                      setMobileMenuOpen(false);
+                      closeMobileMenu();
                       setMobileSearchOpen(true);
                     }}
                     className="btn btn-ghost btn-sm p-1 sm:hidden"
