@@ -1367,6 +1367,65 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         );
     }
 
+    function testBundleClusterSnapshotWithWrongConsumerDoesNotQualifyRoundSet() public {
+        ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
+        uint256[] memory contentIds = _submitBundleQuestions();
+        uint256 bundleId = _createSubmissionBundle(contentIds, funder, REWARD_ASSET_USDC, REWARD_POOL_AMOUNT, 3);
+
+        address[] memory voters = _threeVoters();
+        bool[] memory directions = _directions(true, true, false);
+        uint256 firstRoundId = _settleRoundWithoutBundleSync(voters, contentIds[0], directions);
+        uint256 secondRoundId = _settleRoundWithoutBundleSync(voters, contentIds[1], directions);
+        _recordBundleRoundSetTerminals(contentIds, firstRoundId, secondRoundId);
+
+        IClusterPayoutOracle.PayoutWeight memory payoutWeight =
+            _bundlePayoutWeight(bundleId, 0, contentIds[0], firstRoundId, 0);
+        bytes32 root = oracle.payoutWeightLeaf(payoutWeight);
+
+        oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD(), address(this));
+        _finalizeBundleClusterPayoutSnapshotWithRoot(oracle, bundleId, 0, 3, 30_000, payoutWeight.effectiveWeight, root);
+        oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD(), address(rewardPoolEscrow));
+
+        rewardPoolEscrow.syncQuestionBundleTerminals(bundleId, 10);
+
+        vm.prank(voter1);
+        vm.expectRevert("Bundle not claimable");
+        rewardPoolEscrow.claimQuestionBundleReward(bundleId, 0, payoutWeight, new bytes32[](0));
+    }
+
+    function testBundleClusterSnapshotProposedBeforeRetrySourceReadyDoesNotQualifyRoundSet() public {
+        ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
+        uint256[] memory contentIds = _submitBundleQuestions();
+        uint256 bundleId = _createSubmissionBundle(contentIds, funder, REWARD_ASSET_USDC, REWARD_POOL_AMOUNT, 3);
+
+        address[] memory firstQuestionVoters = _threeVoters();
+        bool[] memory directions = _directions(true, true, false);
+
+        uint256 staleFirstRoundId = _settleRoundWith(firstQuestionVoters, contentIds[0], directions);
+        _settleRoundWith(firstQuestionVoters, contentIds[1], directions);
+
+        IClusterPayoutOracle.PayoutWeight memory staleWeight =
+            _bundlePayoutWeight(bundleId, 0, contentIds[0], staleFirstRoundId, 0);
+        bytes32 staleRoot = oracle.payoutWeightLeaf(staleWeight);
+        _finalizeBundleClusterPayoutSnapshotWithRoot(
+            oracle, bundleId, 0, 3, 30_000, staleWeight.effectiveWeight, staleRoot
+        );
+
+        raterIdentityRegistry.setBanned(_identityKey(voter1), true);
+        rewardPoolEscrow.syncQuestionBundleTerminals(bundleId, 10);
+        raterIdentityRegistry.setBanned(_identityKey(voter1), false);
+
+        vm.warp(block.timestamp + 25 hours);
+        uint256 retryFirstRoundId = _settleRoundWith(firstQuestionVoters, contentIds[0], directions);
+        _settleRoundWith(firstQuestionVoters, contentIds[1], directions);
+
+        IClusterPayoutOracle.PayoutWeight memory currentWeight =
+            _bundlePayoutWeight(bundleId, 0, contentIds[0], retryFirstRoundId, 0);
+        vm.prank(voter1);
+        vm.expectRevert("Bundle not claimable");
+        rewardPoolEscrow.claimQuestionBundleReward(bundleId, 0, currentWeight, new bytes32[](0));
+    }
+
     function testSetVotingEngineRejectsZeroAddress() public {
         vm.prank(owner);
         (bool ok,) = address(rewardPoolEscrow).call(abi.encodeWithSignature("setVotingEngine(address)", address(0)));
@@ -5609,6 +5668,15 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         contentIds = new uint256[](2);
         contentIds[0] = _submitQuestionWithContext("https://example.com/bundle-a", "bundle-a");
         contentIds[1] = _submitQuestionWithContext("https://example.com/bundle-b", "bundle-b");
+    }
+
+    function _recordBundleRoundSetTerminals(uint256[] memory contentIds, uint256 firstRoundId, uint256 secondRoundId)
+        internal
+    {
+        vm.startPrank(address(votingEngine));
+        rewardPoolEscrow.recordBundleQuestionTerminal(contentIds[0], firstRoundId, true);
+        rewardPoolEscrow.recordBundleQuestionTerminal(contentIds[1], secondRoundId, true);
+        vm.stopPrank();
     }
 
     function _createSubmissionBundle(
