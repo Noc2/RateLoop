@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   createThirdwebInAppWallet,
+  currentThirdwebWalletMatchesWagmiAddress,
   getThirdwebWalletIds,
   getThirdwebWalletSmartAccountOptions,
   getThirdwebWalletSponsorshipMode,
@@ -51,6 +52,44 @@ test("thirdwebWalletAddressMatchesWagmiAddress compares addresses case-insensiti
       wagmiAddress: "0x63cada40E8AcF7A1d47229af5Be35b78b16035fa",
     }),
     false,
+  );
+});
+
+test("currentThirdwebWalletMatchesWagmiAddress prefers the active wallet account over stale active account", () => {
+  assert.equal(
+    currentThirdwebWalletMatchesWagmiAddress({
+      activeThirdwebAccountAddress: "0x63cada40E8AcF7A1d47229af5Be35b78b16035fa",
+      activeWalletAccountAddress: "0x6D12cC9Ee8392740306F87Fbd1ccB1cBC16FA593",
+      wagmiAddress: "0x6d12cc9ee8392740306f87fbd1ccb1cbc16fa593",
+    }),
+    true,
+  );
+  assert.equal(
+    currentThirdwebWalletMatchesWagmiAddress({
+      activeThirdwebAccountAddress: "0x6D12cC9Ee8392740306F87Fbd1ccB1cBC16FA593",
+      activeWalletAccountAddress: "0x63cada40E8AcF7A1d47229af5Be35b78b16035fa",
+      wagmiAddress: "0x6d12cc9ee8392740306f87fbd1ccb1cbc16fa593",
+    }),
+    false,
+  );
+});
+
+test("currentThirdwebWalletMatchesWagmiAddress accepts admin matches and active-account fallback", () => {
+  assert.equal(
+    currentThirdwebWalletMatchesWagmiAddress({
+      activeThirdwebAccountAddress: "0x1111111111111111111111111111111111111111",
+      activeWalletAccountAddress: "0x2222222222222222222222222222222222222222",
+      thirdwebAdminAddress: "0x6D12cC9Ee8392740306F87Fbd1ccB1cBC16FA593",
+      wagmiAddress: "0x6d12cc9ee8392740306f87fbd1ccb1cbc16fa593",
+    }),
+    true,
+  );
+  assert.equal(
+    currentThirdwebWalletMatchesWagmiAddress({
+      activeThirdwebAccountAddress: "0x6D12cC9Ee8392740306F87Fbd1ccB1cBC16FA593",
+      wagmiAddress: "0x6d12cc9ee8392740306f87fbd1ccb1cbc16fa593",
+    }),
+    true,
   );
 });
 

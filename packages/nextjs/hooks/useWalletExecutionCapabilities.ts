@@ -5,6 +5,7 @@ import { useActiveAccount, useActiveWallet, useActiveWalletChain, useCapabilitie
 import type { GetCapabilitiesResult } from "thirdweb/wallets/eip5792";
 import { useAccount } from "wagmi";
 import {
+  currentThirdwebWalletMatchesWagmiAddress,
   getThirdwebWalletSponsorshipMode,
   isThirdwebInAppWalletCurrentForAddress,
   isThirdwebInAppWalletId,
@@ -120,8 +121,20 @@ export function useWalletExecutionCapabilities() {
   const supportedChain = supportsThirdwebExecutionCapabilities(chainId);
   const supportsInAppExecution = supportsThirdwebInAppExecutionCapabilities(chainId);
   const walletId = wallet?.id;
-  const hasSendCallsForQuery = Boolean(thirdwebAccount?.sendCalls ?? wallet?.getAccount()?.sendCalls);
-  const thirdwebAccountAddress = thirdwebAccount?.address ?? wallet?.getAccount()?.address;
+  const activeWalletAccount = wallet?.getAccount();
+  const activeThirdwebAccountAddress = thirdwebAccount?.address;
+  const activeThirdwebAccountSendCalls = thirdwebAccount?.sendCalls;
+  const thirdwebAccountMatchesActiveWallet = currentThirdwebWalletMatchesWagmiAddress({
+    activeThirdwebAccountAddress,
+    activeWalletAccountAddress: activeWalletAccount?.address,
+    wagmiAddress: activeWalletAccount?.address,
+  });
+  const currentThirdwebAccountAddress =
+    thirdwebAccountMatchesActiveWallet || !activeWalletAccount?.address ? activeThirdwebAccountAddress : undefined;
+  const currentThirdwebAccountSendCalls =
+    thirdwebAccountMatchesActiveWallet || !activeWalletAccount?.address ? activeThirdwebAccountSendCalls : undefined;
+  const hasSendCallsForQuery = Boolean(activeWalletAccount?.sendCalls ?? currentThirdwebAccountSendCalls);
+  const thirdwebAccountAddress = activeWalletAccount?.address ?? currentThirdwebAccountAddress;
   const thirdwebAdminAddress = wallet?.getAdminAccount?.()?.address;
   const isThirdwebInAppWallet = isThirdwebInAppWalletCurrentForAddress({
     activeWalletId: walletId,
@@ -145,7 +158,15 @@ export function useWalletExecutionCapabilities() {
 
   return useMemo(() => {
     const activeCapabilities = resolveWalletCapabilitiesForChain(capabilities, chainId);
-    const hasSendCalls = Boolean(thirdwebAccount?.sendCalls ?? wallet?.getAccount()?.sendCalls);
+    const walletAccount = wallet?.getAccount();
+    const activeThirdwebAccountMatchesWallet = currentThirdwebWalletMatchesWagmiAddress({
+      activeThirdwebAccountAddress,
+      activeWalletAccountAddress: walletAccount?.address,
+      wagmiAddress: walletAccount?.address,
+    });
+    const resolvedThirdwebAccountSendCalls =
+      activeThirdwebAccountMatchesWallet || !walletAccount?.address ? activeThirdwebAccountSendCalls : undefined;
+    const hasSendCalls = Boolean(walletAccount?.sendCalls ?? resolvedThirdwebAccountSendCalls);
     const isThirdwebInApp = isThirdwebInAppWallet;
     const walletExecutionSupported = isThirdwebInApp ? supportsInAppExecution : supportedChain;
     const thirdwebSponsorshipMode = isThirdwebInApp ? getThirdwebWalletSponsorshipMode(wallet) : null;
@@ -171,11 +192,12 @@ export function useWalletExecutionCapabilities() {
     };
   }, [
     capabilities,
+    activeThirdwebAccountAddress,
+    activeThirdwebAccountSendCalls,
     chainId,
     isThirdwebInAppWallet,
     supportedChain,
     supportsInAppExecution,
-    thirdwebAccount?.sendCalls,
     wallet,
   ]);
 }

@@ -58,6 +58,35 @@ export function thirdwebWalletAddressMatchesWagmiAddress(params: {
   );
 }
 
+export function currentThirdwebWalletMatchesWagmiAddress(params: {
+  activeThirdwebAccountAddress?: string | null;
+  activeWalletAccountAddress?: string | null;
+  thirdwebAdminAddress?: string | null;
+  wagmiAddress?: string | null;
+}) {
+  if (
+    thirdwebWalletAddressMatchesWagmiAddress({
+      thirdwebAddress: params.activeWalletAccountAddress,
+      wagmiAddress: params.wagmiAddress,
+    }) ||
+    thirdwebWalletAddressMatchesWagmiAddress({
+      thirdwebAddress: params.thirdwebAdminAddress,
+      wagmiAddress: params.wagmiAddress,
+    })
+  ) {
+    return true;
+  }
+
+  if (params.activeWalletAccountAddress) {
+    return false;
+  }
+
+  return thirdwebWalletAddressMatchesWagmiAddress({
+    thirdwebAddress: params.activeThirdwebAccountAddress,
+    wagmiAddress: params.wagmiAddress,
+  });
+}
+
 export function isThirdwebInAppWalletCurrentForAddress(params: {
   activeWalletId?: string | null;
   connectedAddress?: string | null;

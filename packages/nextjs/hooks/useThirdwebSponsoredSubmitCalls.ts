@@ -26,11 +26,11 @@ import { buildFreeTransactionOperationKey } from "~~/lib/thirdweb/freeTransactio
 import { isFreeTransactionExhaustedError, isThirdwebBundlerInfrastructureError } from "~~/lib/transactionErrors";
 import {
   createThirdwebInAppWallet,
+  currentThirdwebWalletMatchesWagmiAddress,
   isThirdwebInAppWalletId,
   supportsThirdwebExecutionCapabilities,
   supportsThirdwebInAppExecutionCapabilities,
   thirdwebClient,
-  thirdwebWalletAddressMatchesWagmiAddress,
   usesThirdwebInAppEip7702Execution,
 } from "~~/services/thirdweb/client";
 
@@ -250,17 +250,14 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
   const chainId = resolveWalletExecutionChainId(wagmiChainId, activeWalletChain?.id);
   const publicClient = usePublicClient({ chainId });
   const usesInAppEip7702Execution = usesThirdwebInAppEip7702Execution(chainId);
-  const activeWalletAccountAddress = activeThirdwebAccount?.address ?? activeWallet?.getAccount()?.address;
+  const activeWalletAccountAddress = activeWallet?.getAccount()?.address;
   const activeWalletAdminAddress = activeWallet?.getAdminAccount?.()?.address;
-  const activeWalletMatchesWagmiAddress =
-    thirdwebWalletAddressMatchesWagmiAddress({
-      thirdwebAddress: activeWalletAccountAddress,
-      wagmiAddress: address,
-    }) ||
-    thirdwebWalletAddressMatchesWagmiAddress({
-      thirdwebAddress: activeWalletAdminAddress,
-      wagmiAddress: address,
-    });
+  const activeWalletMatchesWagmiAddress = currentThirdwebWalletMatchesWagmiAddress({
+    activeThirdwebAccountAddress: activeThirdwebAccount?.address,
+    activeWalletAccountAddress,
+    thirdwebAdminAddress: activeWalletAdminAddress,
+    wagmiAddress: address,
+  });
 
   const expectsSponsoredBatchCalls = useMemo(
     () =>
