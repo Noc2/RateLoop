@@ -1,7 +1,7 @@
 "use client";
 
 import { type CSSProperties, useEffect, useId, useMemo, useState } from "react";
-import { EPOCH_WEIGHT_BPS, USER_PREDICTION_PERCENT } from "@rateloop/contracts/protocol";
+import { USER_PREDICTION_PERCENT } from "@rateloop/contracts/protocol";
 import { AnimatePresence, motion } from "framer-motion";
 import { useAccount } from "wagmi";
 import { HandThumbDownIcon, HandThumbUpIcon, XMarkIcon } from "@heroicons/react/24/outline";
@@ -27,7 +27,6 @@ import {
   getConfidentialityBondRequirement,
   isPrivateContextMetadata,
 } from "~~/lib/vote/confidentialContext";
-import { estimateVoteReturn, formatLrepAmount } from "~~/lib/vote/voteIncentives";
 import {
   type WorldCredentialKind,
   type WorldIdProofPurpose,
@@ -67,28 +66,10 @@ const EXPECTED_CROWD_TOOLTIP =
   "Your forecast of what share of revealed raters will choose thumbs up this round. This forecast helps determine rewards; it is separate from your own thumbs up/down vote.";
 export const RATING_TOOLTIP =
   "Rating is N/A until this content has at least one settled round. After settlement, it uses the settled community score converted from the protocol's 0-100 scale to a 0-10 display.";
-const ACCURACY_BASED_REWARDS_TOOLTIP =
-  "Calculated after reveal and settlement. Early eligible raters can qualify for up to 2.5 LREP unverified or 10 LREP verified; later cohorts step down. Final payout depends on accuracy, launch-credit eligibility, and finalized snapshots.";
-const OPEN_PHASE_REWARDS_TOOLTIP =
-  "After the private epoch, estimates use the currently revealed stake pools. Final returns may change as more voters reveal or unrevealed votes are cleaned up.";
 const metricLabelClassName =
   "inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-base-content/55";
 const metricValueClassName = "mt-1 text-2xl font-bold tabular-nums text-base-content";
 const metricUnitClassName = "ml-1 text-sm font-semibold text-base-content/55";
-
-export function getLaunchRewardEstimateLabel(stakeAmount: number, symbol = "LREP") {
-  if (!Number.isFinite(stakeAmount) || stakeAmount < MIN_COUNTED_STAKE_AMOUNT) return "Accuracy based";
-  return `Est. cap 2.5-10 ${symbol}`;
-}
-
-function AccuracyBasedRewardLabel({ estimateLabel }: { estimateLabel: string }) {
-  return (
-    <span className="inline-flex items-center justify-end gap-1.5 text-right font-semibold tabular-nums">
-      <span>{estimateLabel}</span>
-      <InfoTooltip text={ACCURACY_BASED_REWARDS_TOOLTIP} position="top" className="[&>svg]:h-3.5 [&>svg]:w-3.5" />
-    </span>
-  );
-}
 
 function clampRating(value: number) {
   if (!Number.isFinite(value)) return 5;
@@ -212,17 +193,8 @@ export function StakeSelector({
   });
 
   const roundSnapshot = useRoundSnapshot(contentId, openRound ?? undefined, roundConfig ?? undefined);
-  const { roundId: currentRoundId, phase, isEpoch1, upPool, downPool } = roundSnapshot;
+  const { roundId: currentRoundId } = roundSnapshot;
   const roundAcceptsVotes = isRoundAcceptingVotes(roundSnapshot);
-  const effectiveIsBlind = phase !== "voting" || isEpoch1;
-
-  const estimateSnapshot = useMemo(
-    () => ({
-      ...roundSnapshot,
-      isEpoch1: effectiveIsBlind,
-    }),
-    [effectiveIsBlind, roundSnapshot],
-  );
 
   const { remainingCapacity } = useRaterIdentityStake(contentId, currentRoundId, identityKey);
 
@@ -246,7 +218,6 @@ export function StakeSelector({
 
   const symbol = tokenSymbol ?? "LREP";
   const normalizedCurrentRating = normalizeStakeSelectorRating(currentRating);
-  const voteEstimate = estimateVoteReturn(estimateSnapshot, isUp, amount);
   const signalTone = isUp ? "Thumbs up" : "Thumbs down";
   const signalToneClassName = isUp ? "text-success" : "text-error";
   const currentRatingLabel =
@@ -406,16 +377,8 @@ export function StakeSelector({
   const roundUnavailableMessage = getRoundVoteUnavailableMessage(roundSnapshot);
   const roundNotAcceptingMessage =
     !roundAcceptsVotes && !confirmError && !isConfirming ? roundUnavailableMessage : null;
-  const phaseHeadline = effectiveIsBlind ? "Private round" : "Post-epoch reveal";
-  const phaseHeadlineClassName = effectiveIsBlind ? "text-primary" : "text-warning";
   const sliderClassName = "range range-primary range-sm w-full";
   const sliderStyle = { "--range-thumb": "var(--rateloop-warm-white)" } as CSSProperties;
-  const weightPercent = Math.round(
-    (effectiveIsBlind ? EPOCH_WEIGHT_BPS.blind : EPOCH_WEIGHT_BPS.informed) / 100,
-  ).toLocaleString();
-  const launchRewardEstimateLabel = getLaunchRewardEstimateLabel(amount, symbol);
-  const openPhaseGrossReturnMicro = voteEstimate.estimatedGrossReturnMicro;
-  const openPhaseBelowMeanFloorMicro = voteEstimate.belowMeanFloorMicro;
   const canPostConfidentialityBond =
     privateContext &&
     hasAcceptedConfidentialTerms &&
@@ -618,55 +581,6 @@ export function StakeSelector({
               <div className="mt-1 flex justify-between text-base text-base-content/60">
                 <span>0</span>
                 <span>{sliderMax}</span>
-              </div>
-            </div>
-
-            <div className="mb-4 border-t border-base-content/10 pt-4">
-              <div className="flex items-center gap-1.5">
-                <p className={`text-sm font-semibold ${phaseHeadlineClassName}`}>{phaseHeadline}</p>
-                {!effectiveIsBlind && <InfoTooltip text={OPEN_PHASE_REWARDS_TOOLTIP} position="bottom" />}
-              </div>
-              <div className="mt-3 grid grid-cols-1 gap-2 text-sm text-base-content/80">
-                {effectiveIsBlind ? (
-                  amount === 0 ? (
-                    <div className="flex items-center justify-between gap-3">
-                      <span>Starter rewards</span>
-                      <AccuracyBasedRewardLabel estimateLabel={launchRewardEstimateLabel} />
-                    </div>
-                  ) : (
-                    <>
-                      <div className="flex items-center justify-between gap-3">
-                        <span>Launch rewards</span>
-                        <AccuracyBasedRewardLabel estimateLabel={launchRewardEstimateLabel} />
-                      </div>
-                      <div className="flex items-center justify-between gap-3">
-                        <span>Reward weight</span>
-                        <span className="font-semibold tabular-nums">{weightPercent}% (4x vs open)</span>
-                      </div>
-                    </>
-                  )
-                ) : (
-                  <>
-                    <div className="flex items-center justify-between gap-3">
-                      <span>Est. return if accurate</span>
-                      <span className="font-semibold tabular-nums">
-                        {formatLrepAmount(openPhaseGrossReturnMicro)} {symbol}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between gap-3">
-                      <span>Below-mean floor</span>
-                      <span className="font-semibold tabular-nums">
-                        {formatLrepAmount(openPhaseBelowMeanFloorMicro)} {symbol}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between gap-3">
-                      <span>Live pools</span>
-                      <span className="font-semibold tabular-nums">
-                        up {formatLrepAmount(upPool, 0)} · down {formatLrepAmount(downPool, 0)}
-                      </span>
-                    </div>
-                  </>
-                )}
               </div>
             </div>
 

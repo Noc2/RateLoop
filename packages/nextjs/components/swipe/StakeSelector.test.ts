@@ -4,7 +4,6 @@ import {
   RATING_TOOLTIP,
   canStakeSelectorRequestWorldIdProof,
   getInitialPredictedUpPercent,
-  getLaunchRewardEstimateLabel,
   getNextStakeSelectorAmount,
   getStakeSelectorEligibilityAddress,
   normalizeStakeSelectorAmount,
@@ -122,17 +121,6 @@ test("normalizeStakeSelectorPredictedUpPercent matches reveal bounds", () => {
   assert.equal(normalizeStakeSelectorPredictedUpPercent(99), 99);
   assert.equal(normalizeStakeSelectorPredictedUpPercent(100), 99);
   assert.equal(normalizeStakeSelectorPredictedUpPercent(Number.NaN), 50);
-});
-
-test("getLaunchRewardEstimateLabel keeps advisory rewards qualitative", () => {
-  assert.equal(getLaunchRewardEstimateLabel(0), "Accuracy based");
-  assert.equal(getLaunchRewardEstimateLabel(0.5), "Accuracy based");
-  assert.equal(getLaunchRewardEstimateLabel(Number.NaN), "Accuracy based");
-});
-
-test("getLaunchRewardEstimateLabel shows the early rater cap range for counted stake", () => {
-  assert.equal(getLaunchRewardEstimateLabel(1), "Est. cap 2.5-10 LREP");
-  assert.equal(getLaunchRewardEstimateLabel(4, "TOKEN"), "Est. cap 2.5-10 TOKEN");
 });
 
 test("rating tooltip explains unrated and settled rating states", () => {
