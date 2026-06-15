@@ -15,6 +15,10 @@ import {
 } from "~~/lib/world-id/credentials";
 import { parseWorldIdProof } from "~~/lib/world-id/onchainProof";
 import {
+  getWorldIdProofDialogAutoStartKey,
+  getWorldIdProofDialogUnavailableMessage,
+} from "~~/lib/world-id/proofDialogStart";
+import {
   assertWorldIdProofHasSubmissionWindow,
   getWorldIdCredentialRequestExpiresAtMin,
   getWorldIdRequestPollingTimeoutMs,
@@ -56,6 +60,7 @@ export function WorldIdProofDialog({ address, kind, onClose, onSuccess, open, pu
   const [status, setStatus] = useState<DialogStatus>("idle");
   const [message, setMessage] = useState<string | null>(null);
   const activeRequestRef = useRef(0);
+  const autoStartKeyRef = useRef<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const { writeContractAsync: writeRaterRegistry, isMining } = useScaffoldWriteContract({
     contractName: "RaterRegistry",
@@ -67,7 +72,17 @@ export function WorldIdProofDialog({ address, kind, onClose, onSuccess, open, pu
     () => (address ? getWorldIdSignalForPurpose(address, kind, purpose) : ""),
     [address, kind, purpose],
   );
-  const isBusy = isPreparing || isAwaitingApproval || isSubmitting || isMining;
+  const autoStartKey = useMemo(
+    () => getWorldIdProofDialogAutoStartKey({ address, appId, kind, open, purpose, signal }),
+    [address, appId, kind, open, purpose, signal],
+  );
+  const unavailableMessage = useMemo(
+    () => getWorldIdProofDialogUnavailableMessage({ address, appId, kind, open, purpose, signal }),
+    [address, appId, kind, open, purpose, signal],
+  );
+  const isSubmittingTransaction = isSubmitting || isMining;
+  const isBusy = isPreparing || isAwaitingApproval || isSubmittingTransaction;
+  const canCancelRequest = !isSubmittingTransaction;
   const panelState = getWorldIdRequestPanelState({
     connectorURI,
     errorCode,
@@ -80,6 +95,7 @@ export function WorldIdProofDialog({ address, kind, onClose, onSuccess, open, pu
 
   const reset = useCallback(() => {
     activeRequestRef.current += 1;
+    autoStartKeyRef.current = null;
     abortControllerRef.current?.abort();
     abortControllerRef.current = null;
     setConnectorURI(null);
@@ -242,13 +258,33 @@ export function WorldIdProofDialog({ address, kind, onClose, onSuccess, open, pu
   }, [address, appId, fetchRequestContext, onClose, onSuccess, open, option, purpose, signal, submitProof]);
 
   useEffect(() => {
-    if (!open) {
-      reset();
-      return;
-    }
+    if (open) return;
+    reset();
+  }, [open, reset]);
 
+  useEffect(() => {
+    if (!open || !unavailableMessage) return;
+
+    autoStartKeyRef.current = null;
+    activeRequestRef.current += 1;
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
+    setConnectorURI(null);
+    setErrorCode("generic_error");
+    setIsAwaitingApproval(false);
+    setIsPreparing(false);
+    setIsSubmitting(false);
+    setMessage(unavailableMessage);
+    setStatus("error");
+  }, [open, unavailableMessage]);
+
+  useEffect(() => {
+    if (!open || !autoStartKey) return;
+    if (autoStartKeyRef.current === autoStartKey) return;
+
+    autoStartKeyRef.current = autoStartKey;
     void start();
-  }, [open, reset, start]);
+  }, [autoStartKey, open, start]);
 
   useEffect(() => {
     return () => {
@@ -265,14 +301,14 @@ export function WorldIdProofDialog({ address, kind, onClose, onSuccess, open, pu
       <button
         type="button"
         className="absolute inset-0 bg-black/45 backdrop-blur-sm"
-        onClick={isBusy ? undefined : onClose}
+        onClick={canCancelRequest ? onClose : undefined}
       />
       <div className="surface-card relative w-full max-w-lg rounded-t-2xl p-5 shadow-2xl sm:rounded-2xl">
         <button
           type="button"
           className="btn btn-ghost btn-sm btn-circle absolute right-3 top-3"
           aria-label="Close World ID dialog"
-          disabled={isBusy}
+          disabled={!canCancelRequest}
           onClick={onClose}
         >
           <XMarkIcon className="h-5 w-5" />
@@ -320,7 +356,7 @@ export function WorldIdProofDialog({ address, kind, onClose, onSuccess, open, pu
         </div>
 
         <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-end">
-          <button type="button" className="btn btn-ghost" disabled={isBusy} onClick={onClose}>
+          <button type="button" className="btn btn-ghost" disabled={!canCancelRequest} onClick={onClose}>
             Cancel
           </button>
           {status === "error" ? (
