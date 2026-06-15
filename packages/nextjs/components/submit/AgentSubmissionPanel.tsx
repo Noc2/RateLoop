@@ -767,10 +767,6 @@ export function AgentSubmissionPanel() {
           <div>
             <p className="text-sm font-semibold uppercase tracking-wide text-base-content/50">Agent Access</p>
             <h1 className={surfaceSectionHeadingClassName}>Agent Access</h1>
-            <p className="mt-2 max-w-3xl text-sm leading-relaxed text-base-content/65">
-              Fund the wallet an agent uses, or add RateLoop-managed controls for tokens, limits, callbacks, and audit
-              history. Normal browser handoffs still start from the agent chat or API.
-            </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {policySelector}
