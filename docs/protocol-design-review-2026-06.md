@@ -206,11 +206,11 @@ starred.
   earning identity; a banned human cannot launder the ban by re-attesting from a fresh
   wallet; reward consumers check bans against both the round-time snapshot and the
   current registry.
-- **★ The credential→nexus→bond→ban confidentiality deterrence stack is coherent and
+- **★ The credential→evidence→sanction confidentiality deterrence stack is coherent and
   genuinely novel.** Pricing confidentiality in _identity_ (a permanent ban destroys an
   Orb human's only possible verified identity) rather than only in collateral is an
-  idea not seen elsewhere; `banIdentity` literally cannot touch an identity that never
-  accessed gated content.
+  idea not seen elsewhere; `banIdentity` is deliberately a broader governance sanction
+  power with published reason/evidence, not a confidentiality-only nexus gate.
 - **Intentionally non-gating identity keeps World ID a multiplier, not a single point
   of failure** — a World ID outage degrades the protocol to the unverified tier instead
   of halting it; credential value is expressed as earning multipliers, not a
@@ -464,8 +464,8 @@ null`, never anchored on-chain, and `onConflictDoUpdate` lets past epochs be sil
   default** was remediated after review: agent/x402 gated-context requests now default to
   `private_forever` when the policy is omitted, while explicit `after_settlement` and the
   legacy `private_until_settlement` alias remain supported; and several **secondary
-  confidentiality erosions** (permanent global ban-nexus, no access time-boxing, gated
-  _text_ unattributable, AI raters excluded from gated rounds).
+  confidentiality erosions** (broad governance sanction due process, no access time-boxing,
+  gated _text_ unattributable, AI raters excluded from gated rounds).
 
 ---
 
@@ -561,12 +561,10 @@ stake-weighting, voter apathy, and credential rental all erode.
   one-World-ID-per-human ban are all real; a value ceiling _is_ communicated ("do not use
   for private secrets"). Recalibrated to the low-severity residue (gated _text_ lacks an
   inline watermark; the landing FAQ omits the "not for secrets" caveat).
-- **"The 'ban applies even at bond=0' promise has a dead link."** Refuted: governance holds
-  `ACCESS_RECORDER_ROLE` and the test suite demonstrates the intended path (governance
-  records the nexus at arbitration time, then bans) — so bond-0 view-only leakers _are_
-  bannable. The residual is that `recordAccessNexus` requires no proof of access, making the
-  "governance cannot ban arbitrary identities" constraint a soft procedural speed bump
-  rather than a hard one.
+- **"The 'ban applies even at bond=0' promise has a dead link."** Refuted: governance now has a
+  named broader governance sanction power with required reason/evidence, and confidentiality
+  cases can point at the anchored terms/access-log artifact. The residual is procedural rather
+  than mechanical: sanction due process depends on governance review of the published evidence.
 
 ---
 

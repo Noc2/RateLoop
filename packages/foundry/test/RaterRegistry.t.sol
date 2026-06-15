@@ -1570,7 +1570,7 @@ contract RaterRegistryTest is Test {
         assertEq(registry.resolveRater(rater).identityKey, addressKey);
     }
 
-    function test_BanIdentityDoesNotRequireConfidentialityNexus() public {
+    function test_BroadGovernanceSanctionDoesNotRequireConfidentialityNexus() public {
         vm.prank(admin);
         registry.seedHumanCredential(rater, uint64(block.timestamp + 365 days), SEEDED_ANCHOR_ID, EVIDENCE_HASH);
 
@@ -1579,6 +1579,8 @@ contract RaterRegistryTest is Test {
             registry.launchHumanIdentityKey(RaterRegistry.HumanCredentialProvider.SeededHuman, SEEDED_ANCHOR_ID);
         bytes32 addressKey = registry.addressIdentityKey(rater);
 
+        // Broader governance sanctions are intentionally not limited to identities with a
+        // recorded confidentiality nexus; due process lives in the reason/evidence flow.
         vm.prank(governance);
         registry.banIdentity(
             RaterRegistry.HumanCredentialProvider.SeededHuman,

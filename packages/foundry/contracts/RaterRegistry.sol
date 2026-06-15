@@ -621,6 +621,10 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         confidentialityEscrow = newEscrow;
     }
 
+    /// @notice Applies a protocol-wide identity sanction by credential nullifier.
+    /// @dev This is a broader governance sanction power, not a confidentiality-only gate:
+    ///      governance must publish `reason` and `evidenceHash`, but the registry does not
+    ///      require a ConfidentialityEscrow nexus before writing the ban.
     function banIdentity(
         HumanCredentialProvider provider,
         bytes32 nullifierHash,
@@ -631,6 +635,9 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         _banCredentialNullifier(provider, nullifierHash, expiresAt, reason, evidenceHash);
     }
 
+    /// @notice Applies the same broader governance sanction to a known credential nullifier.
+    /// @dev Kept as a separately named entrypoint for arbitration flows that learn the
+    ///      nullifier before or after the current holder is known.
     function banKnownCredentialNullifier(
         HumanCredentialProvider provider,
         bytes32 nullifierHash,

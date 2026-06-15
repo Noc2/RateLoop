@@ -221,10 +221,12 @@ the architecture.
    access logs are anchored as daily Merkle roots (the payout-root trust shape: public
    deterministic artifact, recomputable, governance-arbitrated) so slash cases never reduce to
    "trust the server screenshot".
-8. **Ban power is constrained in code, not just process.** `banIdentity` requires a nexus (the
-   identity has a bond, gated commit, or recorded acceptance anchor — governance cannot ban
-   arbitrary identities), a reason ≤280 bytes + `evidenceHash`, and a default expiry
-   (permanent = explicit flag); `unbanIdentity` always available.
+8. **Ban power is a broader governance sanction power.** `banIdentity` / `banKnownCredentialNullifier`
+   are not limited to confidentiality nexus cases; governance can sanction a credential nullifier
+   when the reason ≤280 bytes and `evidenceHash` are published. Confidentiality breaches should
+   point at the anchored acceptance/access-log artifact, but the registry deliberately keeps the
+   sanction primitive broader than the confidentiality subsystem. Default expiry is 365 days
+   (permanent = explicit flag); `unbanIdentity` is always available.
 9. **Advisory votes are disallowed on gated content** (one check in `AdvisoryVoteRecorder`
    against the confidentiality snapshot) — otherwise unbonded, possibly uncredentialed
    participation with a launch-credit earning path routes around the gate. Bundles require
@@ -280,9 +282,11 @@ convention), with library `ConfidentialityLib` for size discipline:
 **`RaterRegistry`** (upgradeable, gap available):
 
 - `banIdentity(provider, nullifierHash, expiry, reason, evidenceHash)` /
-  `unbanIdentity(provider, nullifierHash)` — `GOVERNANCE_ROLE`; derives and stores all three
-  identity keys + raw nullifier record; nexus check against `ConfidentialityEscrow`; hooks in
-  `_attestHumanCredential`/rotation paths propagate bans to newly derived keys.
+  `banKnownCredentialNullifier(...)` / `unbanIdentity(provider, nullifierHash)` —
+  `GOVERNANCE_ROLE`; broader governance sanction power with required reason + evidence hash,
+  not limited to a `ConfidentialityEscrow` nexus; derives and stores all three identity keys +
+  raw nullifier record; hooks in `_attestHumanCredential`/rotation paths propagate bans to
+  newly derived keys.
 - `isIdentityKeyBanned(bytes32)` view; integrated into `credentialStatusBits` where appropriate
   so credential-gated paths in non-upgradeable consumers get coverage through the registry choke
   point.
