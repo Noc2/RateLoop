@@ -60,6 +60,39 @@ export function buildLrepPermitTypedData(params: {
   } as const;
 }
 
+export function buildRaterDelegateAuthorizationTypedData(params: {
+  chainId: number;
+  deadline: bigint;
+  delegate: Address;
+  holder: Address;
+  nonce: bigint;
+  registryAddress: Address;
+}) {
+  return {
+    domain: {
+      chainId: params.chainId,
+      name: "RateLoop RaterRegistry",
+      verifyingContract: params.registryAddress,
+      version: "1",
+    },
+    message: {
+      deadline: params.deadline,
+      delegate: params.delegate,
+      holder: params.holder,
+      nonce: params.nonce,
+    },
+    primaryType: "DelegateAuthorization",
+    types: {
+      DelegateAuthorization: [
+        { name: "holder", type: "address" },
+        { name: "delegate", type: "address" },
+        { name: "nonce", type: "uint256" },
+        { name: "deadline", type: "uint256" },
+      ],
+    },
+  } as const;
+}
+
 export function buildUsdcReceiveWithAuthorizationTypedData(params: {
   authorization: {
     from: Address;

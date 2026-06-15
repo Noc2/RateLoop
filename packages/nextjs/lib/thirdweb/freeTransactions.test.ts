@@ -750,6 +750,7 @@ test("supported sponsored operation families are allowlisted", async () => {
     [encodeCall(profileRegistryContract, "setAvatarAccent", [0x76bb40])],
     [encodeCall(profileRegistryContract, "clearAvatarAccent")],
     [encodeCall(raterRegistryContract, "setProfile", [2, `0x${"0".repeat(64)}`])],
+    [encodeCall(raterRegistryContract, "acceptDelegateWithSig", [THIRDWEB_ADMIN_WALLET, 1_234n, "0x1234"])],
     [encodeCall(votingEngineContract, "claimCancelledRoundRefund", [1n, 1n])],
     [encodeCall(rewardDistributorContract, "claimFrontendFee", [1n, 1n, WALLET])],
     [encodeCall(rewardDistributorContract, "claimReward", [1n, 1n])],

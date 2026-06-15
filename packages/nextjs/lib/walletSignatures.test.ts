@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildLrepPermitTypedData,
+  buildRaterDelegateAuthorizationTypedData,
   buildUsdcReceiveWithAuthorizationTypedData,
   getDefaultSignatureDeadline,
   getSignatureParts,
@@ -29,6 +30,27 @@ test("buildLrepPermitTypedData binds the LREP permit domain and spender", () => 
   assert.equal(typedData.message.owner, owner);
   assert.equal(typedData.message.spender, spender);
   assert.equal(typedData.message.value, 10n);
+});
+
+test("buildRaterDelegateAuthorizationTypedData binds the holder and smart-account delegate", () => {
+  const registryAddress = "0x0000000000000000000000000000000000000004";
+  const typedData = buildRaterDelegateAuthorizationTypedData({
+    chainId: 480,
+    deadline: 1234n,
+    delegate: spender,
+    holder: owner,
+    nonce: 7n,
+    registryAddress,
+  });
+
+  assert.equal(typedData.domain.name, "RateLoop RaterRegistry");
+  assert.equal(typedData.domain.version, "1");
+  assert.equal(typedData.domain.chainId, 480);
+  assert.equal(typedData.domain.verifyingContract, registryAddress);
+  assert.equal(typedData.primaryType, "DelegateAuthorization");
+  assert.equal(typedData.message.holder, owner);
+  assert.equal(typedData.message.delegate, spender);
+  assert.equal(typedData.message.nonce, 7n);
 });
 
 test("buildUsdcReceiveWithAuthorizationTypedData builds Circle EIP-3009 typed data", () => {

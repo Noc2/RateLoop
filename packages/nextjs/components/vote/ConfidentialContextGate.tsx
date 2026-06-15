@@ -8,6 +8,7 @@ import { ConfidentialityTermsBody } from "~~/components/legal/ConfidentialityTer
 import { useConfidentialityBond } from "~~/hooks/useConfidentialityBond";
 import type { ContentItem } from "~~/hooks/useContentFeed";
 import { ensurePrivateAccountReadSession } from "~~/hooks/usePrivateAccountSession";
+import { useThirdwebRaterDelegationLink } from "~~/hooks/useThirdwebRaterDelegationLink";
 import { useWalletMessageSigner } from "~~/hooks/useWalletMessageSigner";
 import { fetchConfidentialityTermsStatus } from "~~/lib/confidentiality/clientTermsStatus";
 import { CONFIDENTIALITY_TERMS_TITLE, CONFIDENTIALITY_TERMS_VERSION } from "~~/lib/confidentiality/terms";
@@ -205,6 +206,9 @@ export function ConfidentialContextGate({
     contentId: item.id,
     enabled: gated && accepted && !isOwnContent,
   });
+  const delegationLink = useThirdwebRaterDelegationLink({
+    enabled: gated && accepted && !isOwnContent,
+  });
 
   useEffect(() => {
     setAccepted(false);
@@ -378,6 +382,16 @@ export function ConfidentialContextGate({
     }
   };
 
+  const linkThirdwebHumanCredential = async () => {
+    try {
+      await delegationLink.link();
+      await bond.refetchIdentity();
+      notification.success("Human credential linked to this wallet.");
+    } catch (error) {
+      notification.error(error instanceof Error ? error.message : "Could not link this wallet identity.");
+    }
+  };
+
   const postBond = async () => {
     const posted = await bond.postBond();
     if (posted) {
@@ -512,12 +526,39 @@ export function ConfidentialContextGate({
         <div className="flex flex-wrap items-center justify-center gap-2">
           <ConfidentialContextBadges item={item} />
         </div>
-        <GateCopy title="Human credential required" variant={variant}>
-          <p>Private-context ratings require an active human credential before hosted context is shown.</p>
-        </GateCopy>
-        <a className="btn btn-outline btn-sm" href="/settings">
-          Verify in Settings
-        </a>
+        {delegationLink.canLink ? (
+          <>
+            <GateCopy title="Link legacy human credential" variant={variant}>
+              <p>Your thirdweb Google wallet has a legacy human credential. Link it to this RateLoop wallet.</p>
+              {delegationLink.error ? <p className="font-medium text-error">{delegationLink.error}</p> : null}
+            </GateCopy>
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              disabled={delegationLink.isLinking}
+              onClick={() => void linkThirdwebHumanCredential()}
+            >
+              {delegationLink.isLinking ? <span className="loading loading-spinner loading-xs" /> : null}
+              Link Credential
+            </button>
+          </>
+        ) : delegationLink.isChecking ? (
+          <>
+            <GateCopy title="Checking human credential" variant={variant}>
+              <p>Checking whether this thirdweb Google wallet has a legacy credential to link.</p>
+            </GateCopy>
+            <span className="loading loading-spinner loading-sm text-primary" />
+          </>
+        ) : (
+          <>
+            <GateCopy title="Human credential required" variant={variant}>
+              <p>Private-context ratings require an active human credential before hosted context is shown.</p>
+            </GateCopy>
+            <a className="btn btn-outline btn-sm" href="/settings">
+              Verify in Settings
+            </a>
+          </>
+        )}
       </GateShell>
     );
   }

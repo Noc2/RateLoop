@@ -326,6 +326,7 @@ export function useConfidentialityBond({ bondRequirement, contentId, enabled = t
     isIdentityResolved,
     isPostingBond,
     postBond,
+    refetchIdentity,
     refreshBond,
     tokenAddress,
   };

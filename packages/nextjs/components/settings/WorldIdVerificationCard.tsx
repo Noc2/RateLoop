@@ -22,7 +22,9 @@ import {
   useScaffoldReadContract,
   useScaffoldWriteContract,
 } from "~~/hooks/scaffold-eth";
+import { useRaterRegistryIdentity } from "~~/hooks/useRaterRegistryIdentity";
 import { useRefreshWalletBalances } from "~~/hooks/useRefreshWalletBalances";
+import { useThirdwebRaterDelegationLink } from "~~/hooks/useThirdwebRaterDelegationLink";
 import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
 import { getLaunchReferralInputState, resolveLaunchClaimReferrer } from "~~/lib/referrals/launchReferral";
 import {
@@ -83,6 +85,10 @@ function formatLrepAmount(amount: bigint | undefined) {
   }).format(value);
 }
 
+function formatShortAddress(address: string | null | undefined) {
+  return address ? `${address.slice(0, 6)}...${address.slice(-4)}` : "unknown holder";
+}
+
 // M-12 (2026-05-22 audit): previously published the connector URI to a public window
 // global plus a global CustomEvent. Both surfaces were readable by any third-party
 // script on the page (analytics, embedded widgets) which let other code observe the
@@ -118,6 +124,8 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
   const walletAddress = address as `0x${string}` | undefined;
   const isConfigured = Boolean((appId && config.enabled) || localE2EWorldIdMock);
   const canVerify = Boolean(isConfigured && address);
+  const resolvedIdentity = useRaterRegistryIdentity(walletAddress);
+  const thirdwebCredentialLink = useThirdwebRaterDelegationLink({ enabled: Boolean(walletAddress) });
   const { data: hasActiveCredential, refetch: refetchHasActiveCredential } = useScaffoldReadContract({
     contractName: "RaterRegistry",
     functionName: "hasActiveHumanCredential",
@@ -204,9 +212,11 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
   );
   const referralBonusPreview =
     currentVerifiedBonus !== undefined ? (currentVerifiedBonus * REFERRAL_BONUS_BPS) / 10_000n : undefined;
-  const isCredentialActive = hasActiveCredential === true;
+  const hasDirectCredential = hasActiveCredential === true;
+  const isCredentialActive = hasDirectCredential || resolvedIdentity.hasActiveHumanCredential;
+  const linkedHolderLabel = formatShortAddress(resolvedIdentity.holder);
   const canClaimVerifiedBonus =
-    isCredentialActive &&
+    hasDirectCredential &&
     verifiedBonusClaimed === false &&
     currentVerifiedBonus !== undefined &&
     currentVerifiedBonus > 0n;
@@ -654,6 +664,16 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
     }
   }, [address, appId, fetchWorldIdRequestContext, handleSuccess, handleVerify, signal]);
 
+  const handleLinkThirdwebCredential = useCallback(async () => {
+    try {
+      await thirdwebCredentialLink.link();
+      await Promise.all([refetchHasActiveCredential(), resolvedIdentity.refetch()]);
+      notification.success("Human credential linked to this wallet.");
+    } catch (error) {
+      notification.error(error instanceof Error ? error.message : "Could not link this wallet identity.");
+    }
+  }, [refetchHasActiveCredential, resolvedIdentity, thirdwebCredentialLink]);
+
   return (
     <section className="surface-card rounded-2xl p-6">
       <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
@@ -749,6 +769,39 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
         <div className="surface-card-nested mt-5 flex items-start gap-3 rounded-2xl px-4 py-3 text-sm text-error">
           <ExclamationTriangleIcon className="mt-0.5 h-5 w-5 shrink-0" />
           <p>{verificationState.message}</p>
+        </div>
+      ) : null}
+
+      {thirdwebCredentialLink.canLink ? (
+        <div className="surface-card-nested mt-5 flex flex-col gap-3 rounded-2xl px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="font-medium text-base-content">Legacy human credential available</p>
+            <p className="mt-1 text-base-content/60">
+              Your thirdweb Google wallet can link its legacy human credential to this RateLoop wallet.
+            </p>
+            {thirdwebCredentialLink.error ? (
+              <p className="mt-2 font-medium text-error">{thirdwebCredentialLink.error}</p>
+            ) : null}
+          </div>
+          <button
+            type="button"
+            className="btn btn-primary btn-sm shrink-0"
+            disabled={thirdwebCredentialLink.isLinking}
+            onClick={() => void handleLinkThirdwebCredential()}
+          >
+            {thirdwebCredentialLink.isLinking ? <span className="loading loading-spinner loading-xs" /> : null}
+            Link Credential
+          </button>
+        </div>
+      ) : null}
+
+      {isCredentialActive && resolvedIdentity.delegated && !hasDirectCredential ? (
+        <div className="mt-5 flex items-start gap-3 rounded-2xl bg-success/10 px-4 py-3 text-sm text-success">
+          <CheckCircleIcon className="mt-0.5 h-5 w-5 shrink-0" />
+          <div>
+            <p className="font-medium">Human credential linked</p>
+            <p className="mt-1 text-success/80">This wallet resolves to the human credential on {linkedHolderLabel}.</p>
+          </div>
         </div>
       ) : null}
 
