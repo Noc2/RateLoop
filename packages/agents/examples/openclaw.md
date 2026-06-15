@@ -27,8 +27,8 @@ funded encrypted wallet:
 
 ```bash
 export RATELOOP_API_BASE_URL="https://www.rateloop.ai"
-export RATELOOP_RPC_URL="https://worldchain-mainnet.g.alchemy.com/public"
-export RATELOOP_CHAIN_ID=480
+export RATELOOP_RPC_URL="https://worldchain-sepolia.g.alchemy.com/public"
+export RATELOOP_CHAIN_ID=4801
 export RATELOOP_LOCAL_SIGNER_KEYSTORE_PATH="$HOME/.rateloop/local-signer.json"
 export RATELOOP_LOCAL_SIGNER_KEYSTORE_PASSWORD="<load-from-secret-store>"
 
@@ -37,7 +37,7 @@ yarn workspace @rateloop/agents wallet
 yarn workspace @rateloop/agents local-ask --file ./ask.json
 ```
 
-The local signer never prints the private key. Fund the printed signer address with World Chain USDC before the first
+The local signer never prints the private key. Fund the printed signer address with World Chain Sepolia USDC before the first
 paid ask. Bearer tokens are optional; use `generic-remote-mcp.json` with narrow scopes and small budget caps only when
 you want RateLoop-enforced policy limits, callbacks, or managed audit exports.
 

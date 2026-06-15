@@ -77,7 +77,7 @@ npx rateloop-agents sandbox --file packages/agents/examples/questions/landing-pi
 Dry runs validate the ask shape and return a deterministic synthetic result. They do not require a funded wallet,
 signature, USDC authorization, transaction plan, callback registration, or mainnet submission.
 
-Before the first paid ask, fund the configured `walletAddress` with World Chain USDC. Quote with
+Before the first paid ask, fund the configured `walletAddress` with World Chain Sepolia USDC. Quote with
 `rateloop_quote_question`, then prefer a browser handoff link for human wallets:
 
 ```text

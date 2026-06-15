@@ -8,6 +8,7 @@ const env = process.env as Record<string, string | undefined>;
 const originalAgents = env.RATELOOP_MCP_AGENTS;
 const originalDatabaseUrl = env.DATABASE_URL;
 const originalNodeEnv = env.NODE_ENV;
+const originalTargetNetworks = env.NEXT_PUBLIC_TARGET_NETWORKS;
 
 env.DATABASE_URL = "memory:";
 
@@ -42,6 +43,7 @@ type UrlSafetyModule = typeof import("~~/utils/urlSafety");
 type McpToolTestOverrides = NonNullable<Parameters<McpToolsModule["__setMcpToolTestOverridesForTests"]>[0]>;
 
 const OPERATION_KEY = `0x${"1".repeat(64)}` as const;
+const HANDOFF_CHAIN_ID = 4801;
 const ONE_PIXEL_PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=",
   "base64",
@@ -153,7 +155,7 @@ function makePublicGet(url: string, headers: Record<string, string> = {}) {
   });
 }
 
-function questionPayload(clientRequestId: string) {
+function questionPayload(clientRequestId: string, params: { chainId?: number } = {}) {
   return {
     bounty: {
       amount: "1000000",
@@ -162,7 +164,7 @@ function questionPayload(clientRequestId: string) {
       bountyWindowSeconds: "1200",
       feedbackWindowSeconds: "1200",
     },
-    chainId: 480,
+    chainId: params.chainId ?? 480,
     clientRequestId,
     question: {
       categoryId: "5",
@@ -172,6 +174,10 @@ function questionPayload(clientRequestId: string) {
       title: "Pitch interest",
     },
   };
+}
+
+function handoffQuestionPayload(clientRequestId: string) {
+  return questionPayload(clientRequestId, { chainId: HANDOFF_CHAIN_ID });
 }
 
 async function seedManagedAskAudit(params: {
@@ -531,6 +537,7 @@ before(async () => {
 
 beforeEach(async () => {
   env.NODE_ENV = "development";
+  env.NEXT_PUBLIC_TARGET_NETWORKS = String(HANDOFF_CHAIN_ID);
   configureAgent();
   urlSafetyModule.__setUrlSafetyDnsResolversForTests({
     resolve4: async () => ["93.184.216.34"],
@@ -561,6 +568,7 @@ after(() => {
   restoreEnv("RATELOOP_MCP_AGENTS", originalAgents);
   restoreEnv("DATABASE_URL", originalDatabaseUrl);
   restoreEnv("NODE_ENV", originalNodeEnv);
+  restoreEnv("NEXT_PUBLIC_TARGET_NETWORKS", originalTargetNetworks);
 });
 
 test("agent templates route returns public templates without bearer auth", async () => {
@@ -814,6 +822,25 @@ test("agent signing intent route accepts ttlMs on direct ask bodies without pers
   assert.equal(new Date(String(body.expiresAt)).getTime() - new Date(String(body.createdAt)).getTime(), 300000);
 });
 
+test("agent ask handoff route rejects chains unavailable on this server", async () => {
+  const response = await handoffsRoute.POST(
+    makePublicPost("https://rateloop.ai/api/agent/handoffs", {
+      request: {
+        ...questionPayload("agent-handoff-unsupported-chain"),
+        maxPaymentAmount: "1500000",
+      },
+      ttlMs: 300000,
+    }),
+  );
+  const body = (await response.json()) as Record<string, unknown>;
+
+  assert.equal(response.status, 400);
+  assert.equal(body.code, "invalid_arguments");
+  assert.equal(body.retryable, false);
+  assert.match(String(body.message), /Chain 480 is not available for browser handoffs/);
+  assert.match(String(body.message), /Chain 480 is not configured for this server/);
+});
+
 test("agent ask handoff route stages generated image bytes behind a browser link", async () => {
   const response = await handoffsRoute.POST(
     makePublicPost("https://rateloop.ai/api/agent/handoffs", {
@@ -827,7 +854,7 @@ test("agent ask handoff route stages generated image bytes behind a browser link
         },
       ],
       request: {
-        ...questionPayload("agent-handoff-image"),
+        ...handoffQuestionPayload("agent-handoff-image"),
         maxPaymentAmount: "1500000",
         question: {
           categoryId: "5",
@@ -866,7 +893,7 @@ test("agent ask handoff route stages generated image bytes behind a browser link
 
   const prepareResponse = await handoffPrepareRoute.POST(
     makePublicPost(`https://rateloop.ai/api/agent/handoffs/${handoffId}/prepare`, {
-      chainId: 480,
+      chainId: HANDOFF_CHAIN_ID,
       token,
       walletAddress: "0x00000000000000000000000000000000000000aa",
     }),
@@ -879,7 +906,7 @@ test("agent ask handoff route stages generated image bytes behind a browser link
   };
 
   assert.equal(prepareResponse.status, 200);
-  assert.equal(prepareBody.chainId, 480);
+  assert.equal(prepareBody.chainId, HANDOFF_CHAIN_ID);
   assert.equal(prepareBody.status, "awaiting_image_signatures");
   assert.equal(prepareBody.uploadChallenges?.length, 1);
   assert.equal(prepareBody.uploadChallenges?.[0]?.assetId, readBody.assets?.[0]?.id);
@@ -899,7 +926,7 @@ test("agent ask handoff route rejects corrupt generated image bytes before stagi
         },
       ],
       request: {
-        ...questionPayload("agent-handoff-corrupt-image"),
+        ...handoffQuestionPayload("agent-handoff-corrupt-image"),
         maxPaymentAmount: "1500000",
       },
       ttlMs: 300000,
@@ -924,7 +951,7 @@ test("agent ask handoff route unwraps base64-encoded image data URLs", async () 
         },
       ],
       request: {
-        ...questionPayload("agent-handoff-nested-data-url"),
+        ...handoffQuestionPayload("agent-handoff-nested-data-url"),
         maxPaymentAmount: "1500000",
         question: {
           categoryId: "5",
@@ -1006,7 +1033,7 @@ test("agent ask handoff route uploads signed generated images before preparing a
 
   const account = privateKeyToAccount(`0x${"6".repeat(64)}`);
   const handoffRequest = {
-    ...questionPayload("agent-handoff-upload-image"),
+    ...handoffQuestionPayload("agent-handoff-upload-image"),
     maxPaymentAmount: "1500000",
     question: {
       categoryId: "5",
@@ -1054,7 +1081,7 @@ test("agent ask handoff route uploads signed generated images before preparing a
 
   const challengeResponse = await handoffPrepareRoute.POST(
     makePublicPost(`https://rateloop.ai/api/agent/handoffs/${handoffId}/prepare`, {
-      chainId: 480,
+      chainId: HANDOFF_CHAIN_ID,
       token,
       walletAddress: account.address,
     }),
@@ -1071,7 +1098,7 @@ test("agent ask handoff route uploads signed generated images before preparing a
   const signature = await account.signMessage({ message: String(challenge.message) });
   const prepareResponse = await handoffPrepareRoute.POST(
     makePublicPost(`https://rateloop.ai/api/agent/handoffs/${handoffId}/prepare`, {
-      chainId: 480,
+      chainId: HANDOFF_CHAIN_ID,
       imageSignatures: [
         {
           assetId: challenge.assetId,
@@ -1116,7 +1143,7 @@ test("agent ask handoff route marks parent failed when signed generated image up
         },
       ],
       request: {
-        ...questionPayload("agent-handoff-upload-image-fails"),
+        ...handoffQuestionPayload("agent-handoff-upload-image-fails"),
         maxPaymentAmount: "1500000",
       },
       ttlMs: 300000,
@@ -1143,7 +1170,7 @@ test("agent ask handoff route marks parent failed when signed generated image up
 
   const challengeResponse = await handoffPrepareRoute.POST(
     makePublicPost(`https://rateloop.ai/api/agent/handoffs/${handoffId}/prepare`, {
-      chainId: 480,
+      chainId: HANDOFF_CHAIN_ID,
       token,
       walletAddress: account.address,
     }),
@@ -1160,7 +1187,7 @@ test("agent ask handoff route marks parent failed when signed generated image up
   const signature = await account.signMessage({ message: String(challenge.message) });
   const prepareResponse = await handoffPrepareRoute.POST(
     makePublicPost(`https://rateloop.ai/api/agent/handoffs/${handoffId}/prepare`, {
-      chainId: 480,
+      chainId: HANDOFF_CHAIN_ID,
       imageSignatures: [
         {
           assetId: challenge.assetId,
@@ -1206,7 +1233,7 @@ test("agent ask handoff route reports a pending draft migration clearly", async 
   const response = await handoffsRoute.POST(
     makePublicPost("https://rateloop.ai/api/agent/handoffs", {
       request: {
-        ...questionPayload("agent-handoff-missing-draft-migration"),
+        ...handoffQuestionPayload("agent-handoff-missing-draft-migration"),
         maxPaymentAmount: "1500000",
       },
       ttlMs: 300000,
@@ -1227,7 +1254,7 @@ test("agent ask handoff route prepares and completes no-image wallet-call asks",
   const createResponse = await handoffsRoute.POST(
     makePublicPost("https://rateloop.ai/api/agent/handoffs", {
       request: {
-        ...questionPayload("agent-handoff-no-image"),
+        ...handoffQuestionPayload("agent-handoff-no-image"),
         maxPaymentAmount: "1500000",
       },
       ttlMs: 300000,
@@ -1243,7 +1270,7 @@ test("agent ask handoff route prepares and completes no-image wallet-call asks",
 
   const prepareResponse = await handoffPrepareRoute.POST(
     makePublicPost(`https://rateloop.ai/api/agent/handoffs/${handoffId}/prepare`, {
-      chainId: 480,
+      chainId: HANDOFF_CHAIN_ID,
       token,
       walletAddress: "0x00000000000000000000000000000000000000aa",
     }),
@@ -1252,8 +1279,8 @@ test("agent ask handoff route prepares and completes no-image wallet-call asks",
   const prepareBody = (await prepareResponse.json()) as Record<string, unknown>;
 
   assert.equal(prepareResponse.status, 200);
-  assert.equal(prepareBody.chainId, 480);
-  assert.equal((prepareBody.ask as Record<string, unknown>).chainId, 480);
+  assert.equal(prepareBody.chainId, HANDOFF_CHAIN_ID);
+  assert.equal((prepareBody.ask as Record<string, unknown>).chainId, HANDOFF_CHAIN_ID);
   assert.equal(prepareBody.status, "prepared");
   assert.equal(prepareBody.operationKey, OPERATION_KEY);
   assert.equal((prepareBody.transactionPlan as { calls: unknown[] }).calls.length, 1);
@@ -1278,7 +1305,7 @@ test("agent ask handoff route rejects prepare requests on the wrong chain", asyn
   const createResponse = await handoffsRoute.POST(
     makePublicPost("https://rateloop.ai/api/agent/handoffs", {
       request: {
-        ...questionPayload("agent-handoff-chain-drift"),
+        ...handoffQuestionPayload("agent-handoff-chain-drift"),
         maxPaymentAmount: "1500000",
       },
       ttlMs: 300000,
@@ -1289,12 +1316,12 @@ test("agent ask handoff route rejects prepare requests on the wrong chain", asyn
   const token = new URLSearchParams(new URL(String(createBody.handoffUrl)).hash.replace(/^#/, "")).get("token");
 
   assert.equal(createResponse.status, 200);
-  assert.equal(createBody.chainId, 480);
+  assert.equal(createBody.chainId, HANDOFF_CHAIN_ID);
   assert.ok(token);
 
   const prepareResponse = await handoffPrepareRoute.POST(
     makePublicPost(`https://rateloop.ai/api/agent/handoffs/${handoffId}/prepare`, {
-      chainId: 4801,
+      chainId: 480,
       token,
       walletAddress: "0x00000000000000000000000000000000000000aa",
     }),
@@ -1303,8 +1330,8 @@ test("agent ask handoff route rejects prepare requests on the wrong chain", asyn
   const prepareBody = (await prepareResponse.json()) as Record<string, unknown>;
 
   assert.equal(prepareResponse.status, 409);
-  assert.match(String(prepareBody.message), /handoff is for chain 480/);
-  assert.match(String(prepareBody.message), /requested for chain 4801/);
+  assert.match(String(prepareBody.message), /handoff is for chain 4801/);
+  assert.match(String(prepareBody.message), /requested for chain 480/);
 
   const statusResponse = await handoffRoute.GET(
     makePublicGet(`https://rateloop.ai/api/agent/handoffs/${handoffId}`, {
@@ -1320,8 +1347,8 @@ test("agent ask handoff route rejects prepare requests on the wrong chain", asyn
 
   assert.equal(statusResponse.status, 200);
   assert.equal(statusBody.status, "pending");
-  assert.equal(statusBody.chainId, 480);
-  assert.equal(statusBody.requestBody?.chainId, 480);
+  assert.equal(statusBody.chainId, HANDOFF_CHAIN_ID);
+  assert.equal(statusBody.requestBody?.chainId, HANDOFF_CHAIN_ID);
 });
 
 test("agent ask handoff route saves edited drafts before prepare", async () => {
@@ -1365,7 +1392,7 @@ test("agent ask handoff route saves edited drafts before prepare", async () => {
   });
 
   const originalRequest = {
-    ...questionPayload("agent-handoff-editable"),
+    ...handoffQuestionPayload("agent-handoff-editable"),
     maxPaymentAmount: "1000000",
   };
   const editedRequest = {
@@ -1431,7 +1458,7 @@ test("agent ask handoff route saves edited drafts before prepare", async () => {
 
   const prepareResponse = await handoffPrepareRoute.POST(
     makePublicPost(`https://rateloop.ai/api/agent/handoffs/${handoffId}/prepare`, {
-      chainId: 480,
+      chainId: HANDOFF_CHAIN_ID,
       token,
       walletAddress: "0x00000000000000000000000000000000000000aa",
     }),
@@ -1464,7 +1491,7 @@ test("agent ask handoff route blocks draft edits after prepare", async () => {
   installAskOverrides();
 
   const originalRequest = {
-    ...questionPayload("agent-handoff-edit-blocked"),
+    ...handoffQuestionPayload("agent-handoff-edit-blocked"),
     maxPaymentAmount: "1500000",
   };
   const createResponse = await handoffsRoute.POST(
@@ -1483,7 +1510,7 @@ test("agent ask handoff route blocks draft edits after prepare", async () => {
 
   const prepareResponse = await handoffPrepareRoute.POST(
     makePublicPost(`https://rateloop.ai/api/agent/handoffs/${handoffId}/prepare`, {
-      chainId: 480,
+      chainId: HANDOFF_CHAIN_ID,
       token,
       walletAddress: "0x00000000000000000000000000000000000000aa",
     }),
@@ -1607,7 +1634,7 @@ test("agent ask handoff route funds feedback bonus after submitting the ask", as
   const createResponse = await handoffsRoute.POST(
     makePublicPost("https://rateloop.ai/api/agent/handoffs", {
       request: {
-        ...questionPayload("agent-handoff-feedback-bonus"),
+        ...handoffQuestionPayload("agent-handoff-feedback-bonus"),
         feedbackBonus: {
           amount: "2000000",
           asset: "USDC",
@@ -1631,7 +1658,7 @@ test("agent ask handoff route funds feedback bonus after submitting the ask", as
 
   const prepareResponse = await handoffPrepareRoute.POST(
     makePublicPost(`https://rateloop.ai/api/agent/handoffs/${handoffId}/prepare`, {
-      chainId: 480,
+      chainId: HANDOFF_CHAIN_ID,
       token,
       walletAddress: "0x00000000000000000000000000000000000000aa",
     }),

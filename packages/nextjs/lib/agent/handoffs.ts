@@ -9,6 +9,7 @@ import {
 import { getMaxImageUploadSizeBytes, isSupportedImageUploadMimeType } from "~~/lib/auth/imageUploadChallenge.shared";
 import { dbClient } from "~~/lib/db";
 import { parseX402QuestionRequest } from "~~/lib/x402/questionPayload";
+import { X402QuestionConfigError, resolveX402QuestionConfig } from "~~/lib/x402/questionSubmission";
 
 type JsonObject = Record<string, unknown>;
 
@@ -511,6 +512,19 @@ function assertWalletCallsPaymentMode(requestBody: JsonObject) {
   }
 }
 
+function assertHandoffChainSubmitReady(chainId: number) {
+  try {
+    resolveX402QuestionConfig(chainId);
+  } catch (error) {
+    if (error instanceof X402QuestionConfigError) {
+      throw new AgentAskHandoffError(
+        `Chain ${chainId} is not available for browser handoffs on this server: ${error.message}`,
+      );
+    }
+    throw error;
+  }
+}
+
 export function buildAgentAskHandoffValidationImageUrls(params: {
   assets: AgentAskHandoffAssetRecord[];
   origin: string;
@@ -530,6 +544,7 @@ export function normalizeAgentAskHandoffRequestBody(params: {
     cloneWithImageUrls(requestBody, params.validationImageUrls ?? []),
   );
   const parsed = parseX402QuestionRequest(validationBody);
+  assertHandoffChainSubmitReady(parsed.chainId);
   const walletAddress = readOptionalAddress(
     requestBody.walletAddress ?? requestBody.agentWalletAddress,
     "walletAddress",

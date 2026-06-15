@@ -91,7 +91,7 @@ const walletAddress = "0xYourFundedAgentWallet";
 
 const quote = await agent.quoteQuestion({
   clientRequestId: "launch-check-1",
-  chainId: 480,
+  chainId: 4801,
   bounty: {
     amount: "1000000",
     requiredVoters: "3",
@@ -114,7 +114,7 @@ const quote = await agent.quoteQuestion({
 });
 
 const dryRun = await agent.askHumans({
-  chainId: 480,
+  chainId: 4801,
   clientRequestId: "launch-check-1-dry-run",
   dryRun: true,
   mode: "dry_run",
@@ -141,7 +141,7 @@ const dryRun = await agent.askHumans({
 });
 
 const ask = await agent.askHumans({
-  chainId: 480,
+  chainId: 4801,
   clientRequestId: "launch-check-1",
   maxPaymentAmount: quote.payment?.amount ?? "1000000",
   bounty: {
@@ -171,19 +171,19 @@ const status = await agent.getQuestionStatus({
 const result = await agent.getResult({ operationKey: status.operationKey });
 
 let ratingContext = await agent.getRatingContext({
-  chainId: 480,
+  chainId: 4801,
   contentId: "42",
   walletAddress,
 });
 
 if (ratingContext.content?.contextAccess === "gated") {
   await agent.acceptConfidentialityTerms({
-    chainId: 480,
+    chainId: 4801,
     contentId: "42",
     walletAddress,
   });
   ratingContext = await agent.getRatingContext({
-    chainId: 480,
+    chainId: 4801,
     contentId: "42",
     walletAddress,
   });
@@ -221,7 +221,7 @@ const encryptedCommit = await buildCommitVoteParams({
 });
 
 const preparedRating = await agent.prepareRatingTransactions({
-  chainId: 480,
+  chainId: 4801,
   contentId: "42",
   walletAddress,
   roundId: encryptedCommit.roundId,

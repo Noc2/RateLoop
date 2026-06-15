@@ -1,6 +1,6 @@
 {
   "clientRequestId": "answer-variant-safety-demo",
-  "chainId": 480,
+  "chainId": 4801,
   "templateId": "pairwise_output_preference",
   "maxPaymentAmount": "3000000",
   "bounty": {
