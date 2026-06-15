@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { PAYOUT_DOMAIN_PUBLIC_RATING } from "@rateloop/node-utils/correlationScoring";
 import type { Account, Chain, PublicClient, WalletClient } from "viem";
 import {
   ClusterPayoutOracleAbi,
@@ -32,7 +33,6 @@ const STATUS = {
   Finalized: 3,
   Rejected: 4,
 } as const;
-const PAYOUT_DOMAIN_PUBLIC_RATING = 3;
 const ARTIFACT_FETCH_TIMEOUT_MS = 5_000;
 const ARTIFACT_MAX_BYTES = 10_000_000;
 

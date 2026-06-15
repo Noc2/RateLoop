@@ -1,7 +1,7 @@
 "use client";
 
 import { ContentRegistryAbi, FeedbackBonusEscrowAbi, QuestionRewardPoolEscrowAbi } from "@rateloop/contracts/abis";
-import { MIN_NONZERO_CONFIDENTIALITY_BOND } from "@rateloop/contracts/protocol";
+import { MIN_NONZERO_CONFIDENTIALITY_BOND, WORLD_CHAIN_USDC_BY_CHAIN_ID } from "@rateloop/contracts/protocol";
 import { isAddress, parseUnits } from "viem";
 import { contracts } from "~~/utils/scaffold-eth/contract";
 
@@ -50,11 +50,6 @@ export const ERC20_APPROVAL_ABI = [
     stateMutability: "nonpayable",
   },
 ] as const;
-
-const WORLD_CHAIN_USDC_BY_CHAIN_ID: Record<number, `0x${string}`> = {
-  480: "0x79A02482A880bCE3F13e09Da970dC34db4CD24d1",
-  4801: "0x66145f38cBAC35Ca6F1Dfb4914dF98F1614aeA88",
-};
 
 const LOCAL_MOCK_USDC_CONTRACT_NAME = "MockERC20";
 

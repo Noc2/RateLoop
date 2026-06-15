@@ -1,3 +1,4 @@
+import { ROUND_STATE } from "@rateloop/contracts/protocol";
 import type { PublicClient } from "viem";
 import { getAddress } from "viem";
 import {
@@ -7,13 +8,7 @@ import {
 } from "@rateloop/contracts/abis";
 import { getRevertReason } from "./revert-utils.js";
 
-export const RoundState = {
-  Open: 0,
-  Settled: 1,
-  Cancelled: 2,
-  Tied: 3,
-  RevealFailed: 4,
-} as const;
+export const RoundState = ROUND_STATE;
 
 export interface RoundVotingConfig {
   epochDuration: bigint;

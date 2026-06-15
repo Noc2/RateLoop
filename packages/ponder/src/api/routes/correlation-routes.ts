@@ -3,7 +3,11 @@ import {
   BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG,
   ROUND_STATE,
 } from "@rateloop/contracts/protocol";
-import { PAYOUT_DOMAIN_QUESTION_REWARD } from "@rateloop/node-utils/correlationScoring";
+import {
+  PAYOUT_DOMAIN_PUBLIC_RATING,
+  PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD,
+  PAYOUT_DOMAIN_QUESTION_REWARD,
+} from "@rateloop/node-utils/correlationScoring";
 import { encodeAbiParameters, keccak256, zeroHash } from "viem";
 import { and, asc, desc, eq, inArray, or, sql } from "ponder";
 import { db } from "ponder:api";
@@ -25,8 +29,6 @@ import { jsonBig } from "../shared.js";
 import { safeBigInt, safeLimit, safeOffset } from "../utils.js";
 import { addressIdentityKey } from "../../identity-keys.js";
 
-const PAYOUT_DOMAIN_PUBLIC_RATING = 3;
-const PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD = 4;
 const SNAPSHOT_STATUS_PROPOSED = 1;
 const SNAPSHOT_STATUS_FINALIZED = 3;
 const SNAPSHOT_STATUS_REJECTED = 4;
