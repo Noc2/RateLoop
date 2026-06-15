@@ -535,11 +535,14 @@ export function AgentSubmissionPanel() {
         <div className="mt-4 flex flex-wrap items-center gap-2">
           {agentPolicies.isReadSessionBusy ? <span className="loading loading-spinner loading-sm" /> : policySelector}
           {selectedPolicy ? (
-            <span
-              className={`reward-chip reward-chip-muted inline-flex px-3 py-1 text-sm ${statusClassName(selectedPolicy.status)}`}
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              onClick={() => void handleCopy(selectedPolicy.agentId)}
             >
-              {selectedPolicy.status}
-            </span>
+              <ClipboardDocumentIcon className="h-4 w-4" />
+              Copy identity
+            </button>
           ) : (
             <span className="text-sm text-base-content/60">No saved controls selected yet.</span>
           )}
@@ -870,13 +873,6 @@ export function AgentSubmissionPanel() {
             {policyControlsPanel}
             {selectedPolicy ? (
               <div className="mt-4 grid gap-3">
-                <div className="surface-card-nested rounded-lg p-4">
-                  <div className="flex items-center gap-2 text-sm font-medium text-base-content/60">
-                    <CpuChipIcon className="h-4 w-4" />
-                    <span>Policy Identity</span>
-                  </div>
-                  <p className="mt-2 break-words text-lg font-semibold">{selectedPolicy.agentId}</p>
-                </div>
                 <div className="surface-card-nested rounded-lg p-4">
                   <div className="flex items-center gap-2 text-sm font-medium text-base-content/60">
                     <KeyIcon className="h-4 w-4" />
