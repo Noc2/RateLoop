@@ -74,7 +74,7 @@ type CreateHandoffImageInput = {
 };
 
 const DEFAULT_HANDOFF_TTL_MS = 30 * 60 * 1000;
-const MAX_HANDOFF_TTL_MS = 24 * 60 * 60 * 1000;
+const PUBLIC_HANDOFF_MAX_TTL_MS = DEFAULT_HANDOFF_TTL_MS;
 const CLIENT_REQUEST_ID_PATTERN = /^[A-Za-z0-9._:-]{4,160}$/;
 const HANDOFF_TOKEN_HEADER = "x-rateloop-handoff-token";
 const HANDOFF_DRAFT_MIGRATION_PATH = "packages/nextjs/drizzle/0003_agent_handoff_drafts.sql";
