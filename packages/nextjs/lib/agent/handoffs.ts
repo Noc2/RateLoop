@@ -452,10 +452,12 @@ function cloneWithImageUrls(requestBody: JsonObject, imageUrls: string[]) {
   const cloned = structuredClone(requestBody) as JsonObject;
   const question = cloned.question;
   if (question && typeof question === "object" && !Array.isArray(question)) {
-    cloned.question = {
+    const nextQuestion: JsonObject = {
       ...(question as JsonObject),
       imageUrls: [...new Set([...existingImageUrlStrings((question as JsonObject).imageUrls), ...imageUrls])],
     };
+    delete nextQuestion.videoUrl;
+    cloned.question = nextQuestion;
     return cloned;
   }
   const questions = cloned.questions;
@@ -464,15 +466,16 @@ function cloneWithImageUrls(requestBody: JsonObject, imageUrls: string[]) {
       throw new AgentAskHandoffError("generatedImages currently support single-question handoffs.");
     }
     const firstQuestion = questions[0] as JsonObject;
-    cloned.questions = [
-      {
-        ...firstQuestion,
-        imageUrls: [...new Set([...existingImageUrlStrings(firstQuestion.imageUrls), ...imageUrls])],
-      },
-    ];
+    const nextQuestion: JsonObject = {
+      ...firstQuestion,
+      imageUrls: [...new Set([...existingImageUrlStrings(firstQuestion.imageUrls), ...imageUrls])],
+    };
+    delete nextQuestion.videoUrl;
+    cloned.questions = [nextQuestion];
     return cloned;
   }
   cloned.imageUrls = [...new Set([...existingImageUrlStrings(cloned.imageUrls), ...imageUrls])];
+  delete cloned.videoUrl;
   return cloned;
 }
 

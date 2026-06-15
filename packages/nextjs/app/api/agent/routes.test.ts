@@ -946,9 +946,46 @@ test("agent ask handoff route unwraps base64-encoded image data URLs", async () 
 });
 
 test("agent ask handoff route uploads signed generated images before preparing ask", async () => {
-  installAskOverrides();
+  let preparedPayload: unknown = null;
+  installAskOverrides({
+    preparePermissionlessWalletQuestionSubmissionRequest: async params => {
+      preparedPayload = params.payload;
+      return {
+        body: {
+          chainId: params.payload.chainId,
+          clientRequestId: params.payload.clientRequestId,
+          operationKey: OPERATION_KEY,
+          payment: {
+            amount: "1000000",
+            asset: "USDC",
+            bountyAmount: "1000000",
+            decimals: 6,
+            spender: "0x0000000000000000000000000000000000000002",
+            tokenAddress: "0x0000000000000000000000000000000000000001",
+          },
+          status: "awaiting_wallet_signature",
+          transactionPlan: {
+            calls: [{ id: "approve-usdc", to: "0x0000000000000000000000000000000000000001" }],
+            requiresOrderedExecution: true,
+          },
+          wallet: { address: params.walletAddress, fundingMode: "permissionless_wallet" },
+        },
+        status: 202,
+      };
+    },
+  });
 
   const account = privateKeyToAccount(`0x${"6".repeat(64)}`);
+  const handoffRequest = {
+    ...questionPayload("agent-handoff-upload-image"),
+    maxPaymentAmount: "1500000",
+    question: {
+      categoryId: "5",
+      description: "Would this make you want to learn more?",
+      tags: ["agents", "pitch"],
+      title: "Generated concept image",
+    },
+  };
   const createResponse = await handoffsRoute.POST(
     makePublicPost("https://rateloop.ai/api/agent/handoffs", {
       generatedImages: [
@@ -960,16 +997,7 @@ test("agent ask handoff route uploads signed generated images before preparing a
           sizeBytes: ONE_PIXEL_PNG.length,
         },
       ],
-      request: {
-        ...questionPayload("agent-handoff-upload-image"),
-        maxPaymentAmount: "1500000",
-        question: {
-          categoryId: "5",
-          description: "Would this make you want to learn more?",
-          tags: ["agents", "pitch"],
-          title: "Generated concept image",
-        },
-      },
+      request: handoffRequest,
       ttlMs: 300000,
     }),
   );
@@ -979,6 +1007,21 @@ test("agent ask handoff route uploads signed generated images before preparing a
 
   assert.equal(createResponse.status, 200);
   assert.ok(token);
+
+  const patchResponse = await handoffRoute.PATCH(
+    makePublicPatch(`https://rateloop.ai/api/agent/handoffs/${handoffId}`, {
+      requestBody: {
+        ...handoffRequest,
+        question: {
+          ...handoffRequest.question,
+          videoUrl: "https://www.youtube.com/watch?v=abc123",
+        },
+      },
+      token,
+    }),
+    { params: Promise.resolve({ handoffId }) },
+  );
+  assert.equal(patchResponse.status, 200);
 
   const challengeResponse = await handoffPrepareRoute.POST(
     makePublicPost(`https://rateloop.ai/api/agent/handoffs/${handoffId}/prepare`, {
@@ -1023,6 +1066,11 @@ test("agent ask handoff route uploads signed generated images before preparing a
   assert.equal(prepareBody.assets?.[0]?.status, "uploaded");
   assert.match(String(prepareBody.assets?.[0]?.imageUrl), /^https:\/\/rateloop\.ai\/api\/attachments\/images\/att_/);
   assert.equal(prepareBody.transactionPlan?.calls?.length, 1);
+  const payload = preparedPayload as {
+    questions: Array<{ imageUrls: string[]; videoUrl?: string }>;
+  };
+  assert.match(String(payload.questions[0]?.imageUrls[0]), /^https:\/\/rateloop\.ai\/api\/attachments\/images\/att_/);
+  assert.equal(payload.questions[0]?.videoUrl || undefined, undefined);
 });
 
 test("agent ask handoff route reports a pending draft migration clearly", async () => {

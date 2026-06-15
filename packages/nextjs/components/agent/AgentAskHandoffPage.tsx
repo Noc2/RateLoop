@@ -861,6 +861,7 @@ async function applyDraftQuestion(
   draft: DraftQuestionForm,
   index: number,
   uploadQuestionDetails: UploadQuestionDetails,
+  options: { hasHandoffImageContext?: boolean } = {},
 ): Promise<JsonRecord> {
   const title = draft.title.trim();
   const categoryId = draft.categoryId.trim();
@@ -881,6 +882,10 @@ async function applyDraftQuestion(
   const contextUrl = draft.contextUrl.trim();
   const videoUrl = draft.videoUrl.trim();
   const templateId = draft.templateId.trim();
+  const hasImageContext =
+    draft.imageUrls.length > 0 ||
+    readStringArray(baseQuestion.imageUrls).length > 0 ||
+    Boolean(options.hasHandoffImageContext);
   if (draft.confidentiality.visibility === "gated") {
     delete nextQuestion.contextUrl;
     delete nextQuestion.videoUrl;
@@ -890,7 +895,7 @@ async function applyDraftQuestion(
     } else {
       delete nextQuestion.contextUrl;
     }
-    if (videoUrl) {
+    if (videoUrl && !hasImageContext) {
       nextQuestion.videoUrl = videoUrl;
     } else {
       delete nextQuestion.videoUrl;
@@ -1024,6 +1029,7 @@ async function buildDraftRequestBody(
           form.questions[index] ?? form.questions[0],
           index,
           uploadQuestionDetails,
+          { hasHandoffImageContext: Boolean(handoff.assets?.length) },
         ),
       );
     }
@@ -1032,13 +1038,17 @@ async function buildDraftRequestBody(
   }
 
   if (isJsonRecord(requestBody.question)) {
-    requestBody.question = await applyDraftQuestion(requestBody.question, form.questions[0], 0, uploadQuestionDetails);
+    requestBody.question = await applyDraftQuestion(requestBody.question, form.questions[0], 0, uploadQuestionDetails, {
+      hasHandoffImageContext: Boolean(handoff.assets?.length),
+    });
     return requestBody;
   }
 
   return {
     ...requestBody,
-    ...(await applyDraftQuestion(requestBody, form.questions[0], 0, uploadQuestionDetails)),
+    ...(await applyDraftQuestion(requestBody, form.questions[0], 0, uploadQuestionDetails, {
+      hasHandoffImageContext: Boolean(handoff.assets?.length),
+    })),
   };
 }
 
@@ -2171,6 +2181,8 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
               <div className="space-y-5">
                 {draftForm?.questions.length ? (
                   draftForm.questions.map((question, index) => {
+                    const questionHasImageContext = hasImageContext || question.imageUrls.length > 0;
+
                     return (
                       <div
                         key={`${index}-${question.title}`}
@@ -2243,7 +2255,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                           />
                         </label>
 
-                        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                        <div className={`mt-4 grid gap-3 ${questionHasImageContext ? "" : "sm:grid-cols-2"}`}>
                           <label className="form-control">
                             <span className="label-text text-xs font-semibold uppercase tracking-wide text-base-content/45">
                               Context URL
@@ -2260,22 +2272,24 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                               onChange={event => updateDraftQuestion(index, { contextUrl: event.target.value })}
                             />
                           </label>
-                          <label className="form-control">
-                            <span className="label-text text-xs font-semibold uppercase tracking-wide text-base-content/45">
-                              Video URL
-                            </span>
-                            <input
-                              className="input input-bordered mt-1 w-full"
-                              disabled={!canEditDraft || question.confidentiality.visibility === "gated"}
-                              placeholder={
-                                question.confidentiality.visibility === "gated"
-                                  ? "Disabled for private context"
-                                  : undefined
-                              }
-                              value={question.videoUrl}
-                              onChange={event => updateDraftQuestion(index, { videoUrl: event.target.value })}
-                            />
-                          </label>
+                          {!questionHasImageContext ? (
+                            <label className="form-control">
+                              <span className="label-text text-xs font-semibold uppercase tracking-wide text-base-content/45">
+                                Video URL
+                              </span>
+                              <input
+                                className="input input-bordered mt-1 w-full"
+                                disabled={!canEditDraft || question.confidentiality.visibility === "gated"}
+                                placeholder={
+                                  question.confidentiality.visibility === "gated"
+                                    ? "Disabled for private context"
+                                    : undefined
+                                }
+                                value={question.videoUrl}
+                                onChange={event => updateDraftQuestion(index, { videoUrl: event.target.value })}
+                              />
+                            </label>
+                          ) : null}
                         </div>
                       </div>
                     );
