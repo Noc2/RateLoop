@@ -324,9 +324,10 @@ renounce, `deployments.push`).
    identityKey, contentId, termsVersion, termsDocHash, signature, nonce, acceptedAt),
    `confidential_context_access_logs` (identityKey, contentId, resourceId, viewToken HMAC,
    viewedAt, ipHash with bounded retention), `confidentiality_breach_reports` (reporter,
-   accused identityKey, contentId, evidenceUrl/hash, status), `question_confidentiality`
-   mirror (contentId, gated, bondAsset, bondAmount, disclosurePolicy, publishedAt),
-   `confidentiality_log_roots` (epoch, merkleRoot, publishedAt).
+   accused identityKey, contentId, evidenceUrl/hash, rooted evidence artifact, status),
+   `question_confidentiality` mirror (contentId, gated, bondAsset, bondAmount,
+   disclosurePolicy, publishedAt), `confidentiality_log_roots` (epoch, merkleRoot,
+   artifact hash/json/url, anchor tx, publishedAt).
 3. **Terms acceptance flow:** challenge + acceptance routes following the image-upload-challenge
    pattern; the signed message embeds contentId, the content commitment (`contentHash` /
    `detailsHash` / media-tuple hash — binding the bytes, not just the id), terms URI hash,
@@ -348,8 +349,10 @@ renounce, `deployments.push`).
 6. **Disclosure flip:** settlement-event handler (plus cron reconciliation) sets `publishedAt`
    when policy is `after_settlement`; routes stop gating; notification `context_now_public`.
 7. **Evidence artifacts:** daily job Merkle-roots acceptance + access logs into
-   `confidentiality_log_roots` and publishes the root (artifact host + on-chain anchor via the
-   existing artifact pattern); breach reports reference epoch root + proofs.
+   append-only `confidentiality_log_roots` and publishes the root (artifact host + on-chain
+   anchor via the existing artifact pattern); breach reports require a matching view token,
+   an anchored epoch root, and a published `rateloop.confidentiality-breach-evidence.v1`
+   artifact whose hash becomes the governance `evidenceHash`.
 8. **Notifications:** `context_now_public`, `breach_reported`, cohort breach announcement
    (Centercode playbook), with preference columns.
 

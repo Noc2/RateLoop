@@ -592,12 +592,13 @@ stake-weighting, voter apathy, and credential rental all erode.
 3. **Give at least one settlement-layer deterrent exogenous value (H2).** A USDC component
    in vote stakes or forfeits, a fee switch that backs LREP, or explicitly scoping the
    security claim to "while LREP has market value" — but the claim and the mechanism must agree.
-4. **Finish the confidentiality evidence work.** The copy portion is fixed: the
-   whitepaper contradiction is gone, askers now see "the operator can read gated bytes;
-   this is deterrence, not secrecy" framing, and agent/x402 defaults now align with
-   `private_forever`. The remaining gate item is to make the log-root table
-   **append-only and anchored** before any mainnet gated-content marketing — without it,
-   no slash dispute is defensible.
+4. **Done after reviewed HEAD: finish the confidentiality evidence work.** The copy portion
+   is fixed: the whitepaper contradiction is gone, askers now see "the operator can read
+   gated bytes; this is deterrence, not secrecy" framing, and agent/x402 defaults now align
+   with `private_forever`. Log roots are append-only per epoch, the cron path requires an
+   on-chain anchor before sealing by default, and breach filings now require rooted
+   view-token evidence bound to a published breach artifact hash. The mainnet operational
+   gate that remains is provisioning and verifying the production anchor key/role.
 
 **Operational launch gates for the first World Chain mainnet deployment:**
 
@@ -642,8 +643,11 @@ stake-weighting, voter apathy, and credential rental all erode.
 12. Reprice or rate-limit the **tlock garbage-ciphertext grief** (scale the grace-triggering
    stake, or forfeit even on reveal-failed when the round otherwise had quorum) so a thin
    content can't be stalled 24h for ~free.
-13. Add a **reporter bond** to breach filing and **bind `evidenceHash`** to a published,
-   precommitted artifact.
+13. **Done after reviewed HEAD:** bind `evidenceHash` to a published breach-evidence
+   artifact and require rooted view-token evidence before slash-ready filing. This is the
+   current anti-grief cost: reporters must possess a valid access receipt tied to an anchored
+   log root rather than filing a free arbitrary accusation. A value-proportional reporter bond
+   can still be added later if governance wants stronger spam economics.
 14. Replace the imperative multi-mapping identity state with an **explicit lifecycle-state or
    append-only history** model, given it has needed repeated emergency repair.
 15. Fund **third-party keeper/challenger incentives** for rounds outside the operator's own

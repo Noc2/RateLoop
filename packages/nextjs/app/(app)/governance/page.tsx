@@ -28,6 +28,7 @@ type BreachReport = {
   contentId: string;
   createdAt: string;
   epoch: string | null;
+  evidenceArtifactUrl: string | null;
   evidenceHash: string;
   evidenceUrl: string | null;
   id: number;
@@ -128,6 +129,8 @@ function ConfidentialityBreachesPanel({ onOpenGovernanceAction, reporter }: Conf
   const [contentId, setContentId] = useState("");
   const [accusedIdentityKey, setAccusedIdentityKey] = useState("");
   const [evidenceHash, setEvidenceHash] = useState("");
+  const [evidenceArtifactUrl, setEvidenceArtifactUrl] = useState("");
+  const [externalEvidenceHash, setExternalEvidenceHash] = useState("");
   const [evidenceUrl, setEvidenceUrl] = useState("");
   const [viewToken, setViewToken] = useState("");
   const [reports, setReports] = useState<BreachReport[]>([]);
@@ -161,7 +164,7 @@ function ConfidentialityBreachesPanel({ onOpenGovernanceAction, reporter }: Conf
         body: JSON.stringify({
           accusedIdentityKey,
           contentId,
-          evidenceHash,
+          externalEvidenceHash: externalEvidenceHash.trim() || undefined,
           evidenceUrl: evidenceUrl.trim() || undefined,
           reporter,
           viewToken: viewToken.trim() || undefined,
@@ -174,6 +177,8 @@ function ConfidentialityBreachesPanel({ onOpenGovernanceAction, reporter }: Conf
       if (!response.ok || body.ok !== true) {
         throw new Error(body.error || "Could not submit breach report.");
       }
+      if (typeof body.evidenceHash === "string") setEvidenceHash(body.evidenceHash);
+      if (typeof body.evidenceArtifactUrl === "string") setEvidenceArtifactUrl(body.evidenceArtifactUrl);
       notification.success("Breach report submitted.");
       await loadReports();
     } catch (error) {
@@ -209,8 +214,8 @@ function ConfidentialityBreachesPanel({ onOpenGovernanceAction, reporter }: Conf
         <div className="mb-5">
           <h2 className="text-xl font-semibold text-base-content">Confidentiality breach report</h2>
           <p className="mt-2 text-sm leading-relaxed text-base-content/60">
-            Reports require a gated-context signed session for this wallet. Governance can use the evidence hash and
-            access-log proof to arbitrate slash or sanction proposals.
+            Reports require a signed reporter session and a rooted view token. Governance uses the published evidence
+            artifact hash to arbitrate slash or sanction proposals.
           </p>
         </div>
         <div className="grid gap-4">
@@ -220,7 +225,11 @@ function ConfidentialityBreachesPanel({ onOpenGovernanceAction, reporter }: Conf
               className="input input-bordered mt-2 w-full bg-base-100 sm:mt-0 sm:max-w-xl sm:justify-self-end"
               inputMode="numeric"
               value={contentId}
-              onChange={event => setContentId(event.target.value)}
+              onChange={event => {
+                setContentId(event.target.value);
+                setEvidenceHash("");
+                setEvidenceArtifactUrl("");
+              }}
               placeholder="123"
             />
           </label>
@@ -229,16 +238,24 @@ function ConfidentialityBreachesPanel({ onOpenGovernanceAction, reporter }: Conf
             <input
               className="input input-bordered mt-2 w-full bg-base-100 font-mono text-sm sm:mt-0 sm:max-w-xl sm:justify-self-end"
               value={accusedIdentityKey}
-              onChange={event => setAccusedIdentityKey(event.target.value)}
+              onChange={event => {
+                setAccusedIdentityKey(event.target.value);
+                setEvidenceHash("");
+                setEvidenceArtifactUrl("");
+              }}
               placeholder="0x..."
             />
           </label>
           <label className="form-control gap-2 sm:grid sm:grid-cols-[max-content_minmax(0,1fr)] sm:items-center sm:gap-x-6">
-            <span className="label-text whitespace-nowrap text-base-content/65">Evidence hash</span>
+            <span className="label-text whitespace-nowrap text-base-content/65">External evidence hash</span>
             <input
               className="input input-bordered mt-2 w-full bg-base-100 font-mono text-sm sm:mt-0 sm:max-w-xl sm:justify-self-end"
-              value={evidenceHash}
-              onChange={event => setEvidenceHash(event.target.value)}
+              value={externalEvidenceHash}
+              onChange={event => {
+                setExternalEvidenceHash(event.target.value);
+                setEvidenceHash("");
+                setEvidenceArtifactUrl("");
+              }}
               placeholder="0x..."
             />
           </label>
@@ -248,7 +265,11 @@ function ConfidentialityBreachesPanel({ onOpenGovernanceAction, reporter }: Conf
               className="input input-bordered mt-2 w-full bg-base-100 sm:mt-0 sm:max-w-xl sm:justify-self-end"
               type="url"
               value={evidenceUrl}
-              onChange={event => setEvidenceUrl(event.target.value)}
+              onChange={event => {
+                setEvidenceUrl(event.target.value);
+                setEvidenceHash("");
+                setEvidenceArtifactUrl("");
+              }}
               placeholder="https://..."
             />
           </label>
@@ -257,10 +278,24 @@ function ConfidentialityBreachesPanel({ onOpenGovernanceAction, reporter }: Conf
             <input
               className="input input-bordered mt-2 w-full bg-base-100 font-mono text-sm sm:mt-0 sm:max-w-xl sm:justify-self-end"
               value={viewToken}
-              onChange={event => setViewToken(event.target.value)}
+              onChange={event => {
+                setViewToken(event.target.value);
+                setEvidenceHash("");
+                setEvidenceArtifactUrl("");
+              }}
               placeholder="64 hex characters"
             />
           </label>
+          {evidenceHash ? (
+            <div className="rounded-xl border border-base-300 bg-base-100 p-3 text-xs text-base-content/60">
+              <p className="break-all font-mono">evidence {evidenceHash}</p>
+              {evidenceArtifactUrl ? (
+                <a className="link mt-1 inline-block" href={evidenceArtifactUrl} rel="noreferrer" target="_blank">
+                  Evidence artifact
+                </a>
+              ) : null}
+            </div>
+          ) : null}
           <div className="flex flex-wrap gap-2">
             <button type="submit" className="btn btn-primary" disabled={isSubmittingReport}>
               {isSubmittingReport ? <span className="loading loading-spinner loading-xs" /> : null}
@@ -338,6 +373,11 @@ function ConfidentialityBreachesPanel({ onOpenGovernanceAction, reporter }: Conf
                     <p className="break-all">evidence {report.evidenceHash}</p>
                     {report.accessLogId ? <p>access log #{report.accessLogId}</p> : null}
                     {report.epoch ? <p>epoch {report.epoch}</p> : null}
+                    {report.evidenceArtifactUrl ? (
+                      <a className="link block" href={report.evidenceArtifactUrl} rel="noreferrer" target="_blank">
+                        evidence artifact
+                      </a>
+                    ) : null}
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <button

@@ -2,18 +2,23 @@ import { expect, test } from "../fixtures/wallet";
 import { ANVIL_ACCOUNTS } from "../helpers/anvil-accounts";
 import { newE2EContext } from "../helpers/browser-context";
 import {
+  acceptConfidentialityTerms,
+  attachHostedQuestionDetails,
   banConfidentialityIdentity,
   createPrivateAccountReadSessionCookie,
   ensureHumanCredential,
+  fetchGatedAttachment,
   resolveConfidentialRater,
+  seedAnchoredLogRootForViewToken,
+  submitHostedGatedQuestionDirect,
   unbanConfidentialityIdentity,
+  uploadGatedQuestionDetails,
 } from "../helpers/confidentiality";
 import { waitForPonderIndexed } from "../helpers/admin-helpers";
 import { ponderGet } from "../helpers/ponder-api";
 import { E2E_BASE_URL } from "../helpers/service-urls";
 import { gotoWithRetry, waitForFeedLoaded } from "../helpers/wait-helpers";
 import { setupWallet } from "../helpers/wallet-session";
-import { keccak256, toBytes } from "viem";
 
 test.describe("Governance page", () => {
   test("page loads and shows tabs", async ({ connectedPage: page }) => {
@@ -120,7 +125,7 @@ test.describe("Governance page", () => {
     connectedPage: page,
     browser,
   }) => {
-    test.setTimeout(180_000);
+    test.setTimeout(240_000);
 
     const credentialContext = await browser.newContext();
     const credentialPage = await credentialContext.newPage();
@@ -131,8 +136,34 @@ test.describe("Governance page", () => {
     }
 
     const accused = await resolveConfidentialRater(ANVIL_ACCOUNTS.account3);
-    const evidenceHash = keccak256(toBytes(`governance breach e2e ${Date.now()}`));
-    const contentId = "1";
+    const uniqueId = Date.now();
+    const privateDetails = await uploadGatedQuestionDetails(
+      page.request,
+      ANVIL_ACCOUNTS.account2,
+      `Governance breach rooted evidence ${uniqueId}`,
+    );
+    const submitted = await submitHostedGatedQuestionDirect({
+      description: `Governance breach rooted evidence ${uniqueId}`,
+      detailsHash: privateDetails.detailsHash,
+      detailsUrl: privateDetails.detailsUrl,
+      title: `Governance breach evidence ${uniqueId}`,
+    });
+    await attachHostedQuestionDetails(page.request, submitted);
+    const contentId = submitted.contentId;
+    const submittedDetailsUrl = submitted.detailsUrl;
+    expect(submittedDetailsUrl, "submitted gated question should keep its hosted details URL").toBeTruthy();
+    const accusedCookie = await acceptConfidentialityTerms(page.request, ANVIL_ACCOUNTS.account3, {
+      contentId,
+      detailsHash: submitted.detailsHash,
+    });
+    const accusedDetails = await fetchGatedAttachment(page.request, submittedDetailsUrl!, {
+      address: ANVIL_ACCOUNTS.account3.address,
+      cookie: accusedCookie,
+      expectedStatus: 200,
+    });
+    const viewToken = accusedDetails.headers()["x-rateloop-view-token"] ?? "";
+    expect(viewToken).toMatch(/^[a-f0-9]{64}$/);
+    await seedAnchoredLogRootForViewToken(viewToken);
     const readSessionCookie = await createPrivateAccountReadSessionCookie(page.request, ANVIL_ACCOUNTS.account2);
     const [cookieName, cookieValue] = readSessionCookie.split("=");
     await page.context().addCookies([{ name: cookieName, value: cookieValue, url: E2E_BASE_URL }]);
@@ -144,19 +175,24 @@ test.describe("Governance page", () => {
 
     await page.getByLabel("Content id").fill(contentId);
     await page.getByLabel("Accused identity key").fill(accused.identityKey);
-    await page.getByLabel("Evidence hash").fill(evidenceHash);
+    await page.getByLabel("External evidence hash").fill(`0x${"5".repeat(64)}`);
     await page.getByLabel("Evidence URL").fill("https://www.rateloop.ai/confidentiality/evidence/e2e");
+    await page.getByLabel("View token").fill(viewToken);
     await page.getByRole("button", { name: "Submit report" }).click();
 
     await expect(page.getByText("Breach report submitted.")).toBeVisible({ timeout: 20_000 });
     const submittedReport = page
       .getByTestId("confidentiality-breach-report")
-      .filter({ hasText: `evidence ${evidenceHash}` })
+      .filter({ hasText: accused.identityKey })
       .first();
     await expect(submittedReport.getByText(`identity ${accused.identityKey}`)).toBeVisible({
       timeout: 20_000,
     });
-    await expect(submittedReport.getByText(`evidence ${evidenceHash}`)).toBeVisible();
+    const evidenceLine = submittedReport.getByText(/^evidence 0x[0-9a-f]{64}$/);
+    await expect(evidenceLine).toBeVisible();
+    const evidenceHash = (await evidenceLine.textContent())?.replace(/^evidence\s+/, "") ?? "";
+    expect(evidenceHash).toMatch(/^0x[0-9a-f]{64}$/);
+    await expect(submittedReport.getByRole("link", { name: "evidence artifact" })).toBeVisible();
 
     await submittedReport.getByRole("button", { name: "Slash bond", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Governance Action Composer" })).toBeVisible({ timeout: 10_000 });
