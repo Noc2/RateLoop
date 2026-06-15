@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getOptionalAppUrl } from "~~/lib/env/server";
 import { verifyEmailNotificationToken } from "~~/lib/notifications/emailSettings";
 import { buildNotificationSettingsRedirectUrl } from "~~/lib/notifications/emailUrls";
+import { checkRateLimit } from "~~/utils/rateLimit";
+
+const RATE_LIMIT = { limit: 30, windowMs: 60_000 };
 
 function buildRedirect(request: NextRequest, status: "verified" | "invalid") {
   return buildNotificationSettingsRedirectUrl({
@@ -12,6 +15,11 @@ function buildRedirect(request: NextRequest, status: "verified" | "invalid") {
 }
 
 export async function GET(request: NextRequest) {
+  const limited = await checkRateLimit(request, RATE_LIMIT, {
+    extraKeyParts: [request.nextUrl.searchParams.get("token")?.slice(0, 16)],
+  });
+  if (limited) return limited;
+
   const token = request.nextUrl.searchParams.get("token");
   if (!token) {
     const redirectUrl = buildRedirect(request, "invalid");
