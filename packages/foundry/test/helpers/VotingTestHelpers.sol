@@ -1086,6 +1086,16 @@ abstract contract VotingTestBase is Test, ContentSubmissionTestBase {
         artifacts.roundReferenceRatingBps = _currentRatingReferenceBps(contentId);
         artifacts.targetRound = _tlockCommitTargetRound();
         artifacts.drandChainHash = _tlockDrandChainHash();
+        artifacts = _completeTestCommitArtifacts(artifacts, voter, isUp, salt, contentId);
+    }
+
+    function _completeTestCommitArtifacts(
+        TestCommitArtifacts memory artifacts,
+        address voter,
+        bool isUp,
+        bytes32 salt,
+        uint256 contentId
+    ) private view returns (TestCommitArtifacts memory) {
         artifacts.ciphertext = _testCiphertext(isUp, salt, contentId, artifacts.targetRound, artifacts.drandChainHash);
         artifacts.commitHash = _commitHash(
             isUp,
@@ -1099,6 +1109,7 @@ abstract contract VotingTestBase is Test, ContentSubmissionTestBase {
             artifacts.ciphertext
         );
         artifacts.commitKey = _commitKey(voter, artifacts.commitHash);
+        return artifacts;
     }
 
     function _commitTestVote(DirectTestCommitRequest memory request) internal returns (bytes32 commitKey) {
@@ -1340,21 +1351,8 @@ abstract contract VotingTestBase is Test, ContentSubmissionTestBase {
         artifacts.roundId = _previewTestCommitRoundId(engine, contentId);
         if (engine != address(0)) {
             artifacts.targetRound = _tlockCommitTargetRound(RoundVotingEngine(engine), contentId);
-            artifacts.ciphertext =
-                _testCiphertext(isUp, salt, contentId, artifacts.targetRound, artifacts.drandChainHash);
         }
-        artifacts.commitHash = _commitHash(
-            isUp,
-            salt,
-            voter,
-            contentId,
-            artifacts.roundId,
-            artifacts.roundReferenceRatingBps,
-            artifacts.targetRound,
-            artifacts.drandChainHash,
-            artifacts.ciphertext
-        );
-        artifacts.commitKey = _commitKey(voter, artifacts.commitHash);
+        artifacts = _completeTestCommitArtifacts(artifacts, voter, isUp, salt, contentId);
     }
 
     function _previewTestCommitRoundId(address engine, uint256 contentId) internal view returns (uint256) {
