@@ -566,7 +566,23 @@ function completeBroadcast({
     receipts,
     "ClusterPayoutOracle",
     "setRoundPayoutSnapshotConsumer(uint8,address)",
+    ["4", questionEscrow],
+    clusterOracle
+  );
+  pushCall(
+    transactions,
+    receipts,
+    "ClusterPayoutOracle",
+    "setRoundPayoutSnapshotConsumer(uint8,address)",
     ["2", launchPool],
+    clusterOracle
+  );
+  pushCall(
+    transactions,
+    receipts,
+    "ClusterPayoutOracle",
+    "setRoundPayoutSnapshotConsumer(uint8,address)",
+    ["3", contentRegistry],
     clusterOracle
   );
   pushCall(
@@ -1037,6 +1053,42 @@ test("reconstructDeploymentExportFromBroadcast rejects missing completion calls"
   );
 });
 
+test("reconstructDeploymentExportFromBroadcast rejects missing oracle payout consumers", () => {
+  const cases = [
+    {
+      domain: "4",
+      label:
+        /ClusterPayoutOracle\.setRoundPayoutSnapshotConsumer\(QUESTION_BUNDLE_REWARD\)/,
+    },
+    {
+      domain: "3",
+      label:
+        /ClusterPayoutOracle\.setRoundPayoutSnapshotConsumer\(PUBLIC_RATING\)/,
+    },
+  ];
+
+  for (const { domain, label } of cases) {
+    const { transactions, receipts } = completeBroadcast();
+    removeRequiredCall(
+      transactions,
+      receipts,
+      (tx) =>
+        tx.contractName === "ClusterPayoutOracle" &&
+        tx.function === "setRoundPayoutSnapshotConsumer(uint8,address)" &&
+        tx.arguments?.[0] === domain
+    );
+
+    assert.throws(
+      () =>
+        reconstructDeploymentExportFromBroadcast(
+          { transactions, receipts },
+          "worldchainSepolia"
+        ),
+      label
+    );
+  }
+});
+
 test("reconstructDeploymentExportFromBroadcast rejects missing deployer handoffs", () => {
   const defaultAdminRole =
     "0x0000000000000000000000000000000000000000000000000000000000000000";
@@ -1374,6 +1426,34 @@ test("reconstructDeploymentExportFromBroadcast rejects final-state rewrites afte
         );
       },
     },
+    {
+      label:
+        /ClusterPayoutOracle\.setRoundPayoutSnapshotConsumer\(QUESTION_BUNDLE_REWARD\)/,
+      mutate: (transactions, receipts) => {
+        pushCall(
+          transactions,
+          receipts,
+          "ClusterPayoutOracle",
+          "setRoundPayoutSnapshotConsumer(uint8,address)",
+          ["4", address(604)],
+          address(6)
+        );
+      },
+    },
+    {
+      label:
+        /ClusterPayoutOracle\.setRoundPayoutSnapshotConsumer\(PUBLIC_RATING\)/,
+      mutate: (transactions, receipts) => {
+        pushCall(
+          transactions,
+          receipts,
+          "ClusterPayoutOracle",
+          "setRoundPayoutSnapshotConsumer(uint8,address)",
+          ["3", address(605)],
+          address(6)
+        );
+      },
+    },
   ];
 
   for (const { label, mutate } of cases) {
@@ -1546,6 +1626,36 @@ test("reconstructDeploymentExportFromBroadcast rejects tampered completion argum
             candidate.arguments?.[0] === "1"
         );
         tx.arguments[1] = address(205);
+      },
+    },
+    {
+      label:
+        /ClusterPayoutOracle\.setRoundPayoutSnapshotConsumer\(QUESTION_BUNDLE_REWARD\)/,
+      mutate: (transactions) => {
+        const tx = findRequiredCall(
+          transactions,
+          (candidate) =>
+            candidate.contractName === "ClusterPayoutOracle" &&
+            candidate.function ===
+              "setRoundPayoutSnapshotConsumer(uint8,address)" &&
+            candidate.arguments?.[0] === "4"
+        );
+        tx.arguments[1] = address(206);
+      },
+    },
+    {
+      label:
+        /ClusterPayoutOracle\.setRoundPayoutSnapshotConsumer\(PUBLIC_RATING\)/,
+      mutate: (transactions) => {
+        const tx = findRequiredCall(
+          transactions,
+          (candidate) =>
+            candidate.contractName === "ClusterPayoutOracle" &&
+            candidate.function ===
+              "setRoundPayoutSnapshotConsumer(uint8,address)" &&
+            candidate.arguments?.[0] === "3"
+        );
+        tx.arguments[1] = address(207);
       },
     },
     {
