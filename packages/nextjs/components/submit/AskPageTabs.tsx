@@ -88,7 +88,7 @@ export function AskPageTabs() {
             activeTab === ASK_AGENT_ROUTE_TAB ? "pill-active" : "pill-inactive"
           }`}
         >
-          <span>Agent</span>
+          <span>Agent Access</span>
         </button>
         <button
           type="button"

@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { defineChain } from "thirdweb";
 import { BuyWidget } from "thirdweb/react";
@@ -45,17 +45,14 @@ const WORLD_CHAIN_MAINNET_CHAIN_ID = 480;
 const DEFAULT_FUNDING_AMOUNT_USDC = "10";
 const DEFAULT_PER_ASK_CAP_ATOMIC = 2_000_000n;
 const DEFAULT_AGENT_SCOPES = ["rateloop:ask", "rateloop:rate", "rateloop:read", "rateloop:quote", "rateloop:balance"];
-const MANAGED_SETUP_STEP_ORDER = ["wallet", "fund", "policy", "mcp"] as const;
-const WALLET_DIRECT_SETUP_STEP_ORDER = ["wallet", "fund", "mcp"] as const;
 const AGENT_WALLET_HELP_TEXT =
   "The agent wallet is the address your client passes as walletAddress when it pays USDC for asks.";
 const AGENT_FUND_HELP_TEXT =
   "Add USDC to the agent wallet. Agent clients automatically use the compatible payment path when submitting asks.";
 const AGENT_POLICY_HELP_TEXT =
   "Leave limits blank to allow all usage, or set only the restrictions RateLoop should enforce for this agent.";
-const AGENT_MCP_HELP_TEXT = "Use public MCP without a token, or create a managed token after saving optional controls.";
 
-type AgentSetupStep = (typeof MANAGED_SETUP_STEP_ORDER)[number];
+type AgentAccessPanel = "overview" | "controls" | "advanced";
 type AgentAccessMode = "wallet_direct" | "managed_policy";
 
 type AgentPolicyFormState = {
@@ -77,10 +74,6 @@ const DEFAULT_POLICY_FORM: AgentPolicyFormState = {
   policyId: null,
   scopes: DEFAULT_AGENT_SCOPES,
 };
-
-function shortAddress(value: string | undefined) {
-  return value ? `${value.slice(0, 6)}...${value.slice(-4)}` : "Not connected";
-}
 
 function toAddress(value: string | undefined): `0x${string}` | undefined {
   const trimmed = value?.trim();
@@ -174,9 +167,8 @@ export function AgentSubmissionPanel() {
   const [transferAmount, setTransferAmount] = useState("5");
   const [selectedPolicyId, setSelectedPolicyId] = useState<string | null>(null);
   const [policyForm, setPolicyForm] = useState<AgentPolicyFormState>(DEFAULT_POLICY_FORM);
-  const [activeSetupStep, setActiveSetupStep] = useState<AgentSetupStep>("wallet");
+  const [activePanel, setActivePanel] = useState<AgentAccessPanel>("overview");
   const [agentAccessMode, setAgentAccessMode] = useState<AgentAccessMode>("wallet_direct");
-  const [isSetupMode, setIsSetupMode] = useState(false);
   const [generatedToken, setGeneratedToken] = useState<string | null>(null);
   const [generatedMcpConfig, setGeneratedMcpConfig] = useState<string | null>(null);
   const [publicAgentApiBaseUrl, setPublicAgentApiBaseUrl] = useState("");
@@ -237,35 +229,6 @@ export function AgentSubmissionPanel() {
       : targetNetwork.id === WORLD_CHAIN_MAINNET_CHAIN_ID
         ? "World Chain USDC is not configured for this network."
         : "Switch to World Chain mainnet to buy World Chain USDC here. On local networks, use the faucet from your wallet menu.";
-  const dashboardMode = Boolean(selectedPolicy && !isSetupMode);
-  const activeSetupStepOrder: readonly AgentSetupStep[] = policyControlsEnabled
-    ? MANAGED_SETUP_STEP_ORDER
-    : WALLET_DIRECT_SETUP_STEP_ORDER;
-  const allSetupSteps: Array<{ complete: boolean; id: AgentSetupStep; label: string }> = [
-    {
-      complete: Boolean(agentWalletAddress && !agentWalletInputInvalid),
-      id: "wallet",
-      label: "Agent wallet",
-    },
-    {
-      complete: Boolean(agentWalletAddress && fundingReady),
-      id: "fund",
-      label: "Fund wallet",
-    },
-    {
-      complete: Boolean(selectedPolicy),
-      id: "policy",
-      label: "Optional controls",
-    },
-    {
-      complete: policyControlsEnabled
-        ? Boolean(selectedPolicy?.hasToken || generatedToken)
-        : Boolean(agentWalletAddress),
-      id: "mcp",
-      label: "Agent access",
-    },
-  ];
-  const setupSteps = allSetupSteps.filter(step => activeSetupStepOrder.includes(step.id));
 
   useEffect(() => {
     setPolicyForm(prev => {
@@ -279,17 +242,12 @@ export function AgentSubmissionPanel() {
   }, []);
 
   useEffect(() => {
-    if (selectedPolicyId || isSetupMode || agentPolicies.policies.length === 0) return;
+    if (selectedPolicyId || activePanel === "controls" || agentPolicies.policies.length === 0) return;
     const firstPolicy = agentPolicies.policies[0];
     setAgentAccessMode("managed_policy");
     setSelectedPolicyId(firstPolicy.id);
     setPolicyForm(policyToForm(firstPolicy, address));
-  }, [address, agentPolicies.policies, isSetupMode, selectedPolicyId]);
-
-  useEffect(() => {
-    if (activeSetupStepOrder.some(step => step === activeSetupStep)) return;
-    setActiveSetupStep("mcp");
-  }, [activeSetupStep, activeSetupStepOrder]);
+  }, [activePanel, address, agentPolicies.policies, selectedPolicyId]);
 
   const handleCopy = useCallback(
     async (value: string | undefined) => {
@@ -371,12 +329,11 @@ export function AgentSubmissionPanel() {
       setSelectedPolicyId(policyId || null);
       setGeneratedToken(null);
       setGeneratedMcpConfig(null);
-      setIsSetupMode(false);
       if (policy) {
+        setActivePanel("overview");
         setPolicyForm(policyToForm(policy, address));
       } else {
-        setIsSetupMode(true);
-        setActiveSetupStep("wallet");
+        setActivePanel("controls");
         setPolicyForm({ ...DEFAULT_POLICY_FORM, agentWalletAddress: address ?? "" });
       }
     },
@@ -449,8 +406,7 @@ export function AgentSubmissionPanel() {
       setAgentAccessMode("managed_policy");
       setSelectedPolicyId(result.policy.id);
       setPolicyForm(policyToForm(result.policy, address));
-      setActiveSetupStep("mcp");
-      setIsSetupMode(true);
+      setActivePanel("overview");
       notification.success("Managed controls saved.");
       return;
     }
@@ -581,17 +537,11 @@ export function AgentSubmissionPanel() {
     setAgentAccessMode(mode);
     setGeneratedToken(null);
     setGeneratedMcpConfig(null);
-    setIsSetupMode(true);
+    setActivePanel(enabled ? "controls" : "overview");
     if (mode === "managed_policy") {
       void handleLoadManagedAgentPolicies();
     }
-    if (mode === "wallet_direct" && activeSetupStep === "policy") {
-      setActiveSetupStep("mcp");
-    }
   };
-
-  const activeStepIndex = Math.max(0, activeSetupStepOrder.indexOf(activeSetupStep));
-  const activeStepNumber = activeStepIndex + 1;
 
   const handleStartNewPolicy = () => {
     setAgentAccessMode("managed_policy");
@@ -599,8 +549,7 @@ export function AgentSubmissionPanel() {
     setGeneratedToken(null);
     setGeneratedMcpConfig(null);
     setPolicyForm({ ...DEFAULT_POLICY_FORM, agentWalletAddress: address ?? "" });
-    setActiveSetupStep("wallet");
-    setIsSetupMode(true);
+    setActivePanel("controls");
   };
 
   const handleResetSetup = () => {
@@ -609,8 +558,7 @@ export function AgentSubmissionPanel() {
     setGeneratedToken(null);
     setGeneratedMcpConfig(null);
     setPolicyForm({ ...DEFAULT_POLICY_FORM, agentWalletAddress: address ?? "" });
-    setActiveSetupStep("wallet");
-    setIsSetupMode(true);
+    setActivePanel("overview");
   };
 
   const handleEditSelectedPolicy = () => {
@@ -620,8 +568,7 @@ export function AgentSubmissionPanel() {
     }
     setGeneratedToken(null);
     setGeneratedMcpConfig(null);
-    setActiveSetupStep("wallet");
-    setIsSetupMode(true);
+    setActivePanel("controls");
   };
 
   const policySelector =
@@ -813,129 +760,249 @@ export function AgentSubmissionPanel() {
       />
     );
 
-  if (dashboardMode && selectedPolicy) {
-    return (
-      <section className="space-y-4">
-        <div className="surface-card rounded-lg p-5">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-            <div>
-              <p className="text-sm font-semibold uppercase tracking-wide text-base-content/50">Configured Agent</p>
-              <h2 className="mt-1 text-2xl font-semibold">Agent Dashboard</h2>
+  const showControlsPanel = activePanel === "controls";
+  const showAdvancedPanel = activePanel === "advanced";
+  const managedControlsStatus = selectedPolicy ? selectedPolicy.status : policyControlsEnabled ? "Unsaved" : "Off";
+  const accessTokenStatus = selectedPolicy
+    ? selectedPolicy.hasToken || generatedToken
+      ? "Active"
+      : "Not created"
+    : "Managed controls required";
+
+  return (
+    <section className="space-y-4">
+      <div className="surface-card rounded-lg p-5">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-wide text-base-content/50">Agent Access</p>
+            <h1 className={surfaceSectionHeadingClassName}>Agent Access</h1>
+            <p className="mt-2 max-w-3xl text-sm leading-relaxed text-base-content/65">
+              Fund the wallet an agent uses, or add RateLoop-managed controls for tokens, limits, callbacks, and audit
+              history. Normal browser handoffs still start from the agent chat or API.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {policySelector}
+            <button type="button" className="btn btn-outline btn-sm" onClick={handleStartNewPolicy}>
+              New controls
+            </button>
+            <Link href={DOCS_AI_ROUTE + "#paths"} className="btn btn-outline btn-sm">
+              Agent docs
+              <ArrowTopRightOnSquareIcon className="h-4 w-4" />
+            </Link>
+            <span
+              className={
+                "reward-chip reward-chip-muted inline-flex w-fit items-center gap-2 px-3 py-1 text-sm font-medium " +
+                (ready ? "text-success" : "text-warning")
+              }
+            >
+              <CheckCircleIcon className="h-4 w-4" />
+              {ready ? "Ready" : "Needs attention"}
+            </span>
+          </div>
+        </div>
+
+        <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <div className="surface-card-nested rounded-lg p-4">
+            <div className="flex items-center gap-2 text-sm font-medium text-base-content/60">
+              <WalletIcon className="h-4 w-4" />
+              <span>Agent Wallet</span>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              {policySelector}
-              <button type="button" className="btn btn-outline btn-sm" onClick={handleEditSelectedPolicy}>
-                Edit setup
-              </button>
-              <button type="button" className="btn btn-outline btn-sm" onClick={handleStartNewPolicy}>
-                New
-              </button>
-              <span
-                className={`reward-chip reward-chip-muted inline-flex w-fit items-center gap-2 px-3 py-1 text-sm font-medium ${
-                  ready ? "text-success" : "text-warning"
-                }`}
+            <p className="mt-2 break-words font-mono text-sm">{agentWalletAddress ?? "0x..."}</p>
+          </div>
+          <div className="surface-card-nested rounded-lg p-4">
+            <div className="flex items-center gap-2 text-sm font-medium text-base-content/60">
+              <CpuChipIcon className="h-4 w-4" />
+              <span>{usdcDisplayName}</span>
+            </div>
+            <p className="mt-2 text-lg font-semibold">{formatUsdc(balance)}</p>
+            <p className="mt-1 text-sm text-base-content/55">Required per ask: {formatUsdc(requiredPerAskFunding)}</p>
+          </div>
+          <div className="surface-card-nested rounded-lg p-4">
+            <div className="flex items-center gap-2 text-sm font-medium text-base-content/60">
+              <KeyIcon className="h-4 w-4" />
+              <span>Managed Controls</span>
+            </div>
+            <p className="mt-2 text-sm text-base-content/75">{managedControlsStatus}</p>
+          </div>
+          <div className="surface-card-nested rounded-lg p-4">
+            <div className="flex items-center gap-2 text-sm font-medium text-base-content/60">
+              <KeyIcon className="h-4 w-4" />
+              <span>Access Token</span>
+            </div>
+            <p className="mt-2 text-sm text-base-content/75">{accessTokenStatus}</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(340px,460px)]">
+        <div className="surface-card rounded-lg p-5">
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-wide text-base-content/50">Wallet Funding</p>
+              <h3 className="mt-1 flex items-center gap-2 text-lg font-semibold">
+                Fund wallet
+                <InfoTooltip text={AGENT_FUND_HELP_TEXT} position="right" />
+              </h3>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                disabled={!agentWalletAddress}
+                onClick={() => void handleCopy(agentWalletAddress)}
               >
-                <WalletIcon className="h-4 w-4" />
-                {ready ? "Ready" : "Needs attention"}
-              </span>
+                <ClipboardDocumentIcon className="h-4 w-4" />
+                {isCopiedToClipboard ? "Copied" : "Copy wallet"}
+              </button>
+              <button type="button" className="btn btn-outline btn-sm" onClick={handleResetSetup}>
+                Reset
+              </button>
             </div>
           </div>
 
-          <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <div className="surface-card-nested rounded-lg p-4">
-              <div className="flex items-center gap-2 text-sm font-medium text-base-content/60">
-                <CpuChipIcon className="h-4 w-4" />
-                <span>Policy Identity</span>
-              </div>
-              <p className="mt-2 break-words text-lg font-semibold">{selectedPolicy.agentId}</p>
-            </div>
-            <div className="surface-card-nested rounded-lg p-4">
-              <div className="flex items-center gap-2 text-sm font-medium text-base-content/60">
-                <WalletIcon className="h-4 w-4" />
-                <span>Agent Wallet</span>
-              </div>
-              <p className="mt-2 font-mono text-sm">{shortAddress(selectedPolicy.agentWalletAddress)}</p>
-            </div>
-            <div className="surface-card-nested rounded-lg p-4">
-              <div className="flex items-center gap-2 text-sm font-medium text-base-content/60">
-                <KeyIcon className="h-4 w-4" />
-                <span>Spend Caps</span>
-              </div>
-              <p className="mt-2 text-sm text-base-content/75">
-                {formatPolicyCap(selectedPolicy.perAskLimitAtomic)} per ask
-              </p>
-              <p className="mt-1 text-sm text-base-content/60">
-                {formatPolicyCap(selectedPolicy.dailyBudgetAtomic)} daily
-              </p>
-            </div>
-            <div className="surface-card-nested rounded-lg p-4">
-              <div className="flex items-center gap-2 text-sm font-medium text-base-content/60">
-                <CheckCircleIcon className="h-4 w-4" />
-                <span>Status</span>
-              </div>
-              <span
-                className={`reward-chip reward-chip-muted mt-2 inline-flex px-3 py-1 text-sm ${statusClassName(selectedPolicy.status)}`}
-              >
-                {selectedPolicy.status}
+          <div className="mt-5 grid gap-4">
+            <label className="form-control gap-2 sm:grid sm:grid-cols-[max-content_minmax(0,1fr)] sm:items-center sm:gap-x-6">
+              <span className="label-text flex items-center gap-2 text-sm font-medium">
+                Agent wallet
+                <InfoTooltip text={AGENT_WALLET_HELP_TEXT} position="right" />
               </span>
+              <input
+                className={
+                  "input input-bordered mt-1 min-w-0 font-mono sm:mt-0 " +
+                  (agentWalletInputInvalid ? "input-error" : "")
+                }
+                value={policyForm.agentWalletAddress}
+                onChange={event => setPolicyForm(prev => ({ ...prev, agentWalletAddress: event.target.value }))}
+                placeholder="0x..."
+              />
+              {agentWalletInputInvalid ? (
+                <span className="mt-1 text-sm text-error sm:col-start-2">Enter a valid EVM address.</span>
+              ) : null}
+            </label>
+
+            <div className="surface-card-nested rounded-lg p-4">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                <label className="form-control w-full lg:max-w-xs">
+                  <span className="label-text text-sm font-medium">Transfer from connected wallet</span>
+                  <div className="join mt-1">
+                    <input
+                      className="input input-bordered join-item w-full"
+                      value={transferAmount}
+                      onChange={event => setTransferAmount(event.target.value)}
+                      inputMode="decimal"
+                    />
+                    <span className="join-item inline-flex items-center bg-base-200 px-3 text-sm text-base-content/70">
+                      USDC
+                    </span>
+                  </div>
+                </label>
+                <GradientActionButton
+                  onClick={() => void handleTransferUsdc()}
+                  disabled={
+                    !address ||
+                    !agentWalletAddress ||
+                    !usdcAddress ||
+                    agentWalletMatchesConnectedWallet ||
+                    isTransferringUsdc
+                  }
+                  size="sm"
+                  motion={getGradientActionMotion(isTransferringUsdc)}
+                >
+                  <WalletIcon className="h-4 w-4" />
+                  {isTransferringUsdc ? "Transferring..." : "Transfer USDC"}
+                </GradientActionButton>
+              </div>
+              <p className="mt-3 text-sm text-base-content/60">
+                {agentWalletMatchesConnectedWallet
+                  ? "The connected wallet already matches the agent wallet."
+                  : "Sends USDC from the connected wallet to the configured agent wallet."}
+              </p>
+            </div>
+
+            <div className="min-w-0">
+              {canUseThirdwebFunding && thirdwebClient && agentWalletAddress && usdcAddress ? (
+                <BuyWidget
+                  amount={DEFAULT_FUNDING_AMOUNT_USDC}
+                  amountEditable
+                  buttonLabel="Add USDC"
+                  chain={thirdwebTargetChain}
+                  client={thirdwebClient}
+                  description="Fund this agent wallet with World Chain USDC."
+                  onSuccess={() => void refetchBalance()}
+                  presetOptions={[5, 10, 20]}
+                  receiverAddress={agentWalletAddress}
+                  showThirdwebBranding={false}
+                  theme="dark"
+                  title="Add World Chain USDC"
+                  tokenAddress={usdcAddress}
+                  tokenEditable={false}
+                />
+              ) : (
+                <div className="surface-card-nested rounded-lg p-4">
+                  <p className="text-sm leading-relaxed text-base-content/65">{fundingUnavailableMessage}</p>
+                </div>
+              )}
             </div>
           </div>
         </div>
 
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(320px,420px)]">
-          <div className="space-y-4">
-            <div className="surface-card rounded-lg p-5">
-              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <p className="text-sm font-semibold uppercase tracking-wide text-base-content/50">Wallet Readiness</p>
-                  <h3 className="mt-1 text-lg font-semibold">Funding</h3>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    className="btn btn-outline btn-sm"
-                    disabled={!agentWalletAddress}
-                    onClick={() => void handleCopy(agentWalletAddress)}
-                  >
-                    <ClipboardDocumentIcon className="h-4 w-4" />
-                    {isCopiedToClipboard ? "Copied" : "Copy wallet"}
-                  </button>
-                </div>
+        <div className="space-y-4">
+          <div className="surface-card rounded-lg p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-wide text-base-content/50">Managed Controls</p>
+                <h3 className="mt-1 text-lg font-semibold">Policy and token</h3>
               </div>
+              <button type="button" className="btn btn-outline btn-sm" onClick={handleEditSelectedPolicy}>
+                Configure
+              </button>
+            </div>
+            {policyControlsPanel}
+            {selectedPolicy ? (
               <div className="mt-4 grid gap-3">
                 <div className="surface-card-nested rounded-lg p-4">
-                  <p className="text-sm text-base-content/60">World Chain USDC</p>
-                  <p className="mt-1 text-xl font-semibold">{formatUsdc(balance)}</p>
-                  <p className="mt-1 text-sm text-base-content/55">
-                    Required per ask: {formatUsdc(requiredPerAskFunding)}
+                  <div className="flex items-center gap-2 text-sm font-medium text-base-content/60">
+                    <CpuChipIcon className="h-4 w-4" />
+                    <span>Policy Identity</span>
+                  </div>
+                  <p className="mt-2 break-words text-lg font-semibold">{selectedPolicy.agentId}</p>
+                </div>
+                <div className="surface-card-nested rounded-lg p-4">
+                  <div className="flex items-center gap-2 text-sm font-medium text-base-content/60">
+                    <KeyIcon className="h-4 w-4" />
+                    <span>Spend Caps</span>
+                  </div>
+                  <p className="mt-2 text-sm text-base-content/75">
+                    {formatPolicyCap(selectedPolicy.perAskLimitAtomic)} per ask
+                  </p>
+                  <p className="mt-1 text-sm text-base-content/60">
+                    {formatPolicyCap(selectedPolicy.dailyBudgetAtomic)} daily
                   </p>
                 </div>
               </div>
-            </div>
-
-            <div className="surface-card rounded-lg p-5">
-              <p className="text-sm font-semibold uppercase tracking-wide text-base-content/50">Recent Agent Asks</p>
-              <h3 className="mt-1 text-lg font-semibold">Audit Trail</h3>
-              <div className="mt-4">{recentAsksPanel}</div>
-            </div>
+            ) : (
+              <p className="mt-4 text-sm leading-relaxed text-base-content/65">
+                Leave controls off for wallet-direct agents, or configure managed controls when RateLoop should enforce
+                limits and issue an access token.
+              </p>
+            )}
           </div>
 
-          <div className="space-y-4">
-            <div className="surface-card rounded-lg p-5">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold uppercase tracking-wide text-base-content/50">Agent Access</p>
-                  <h3 className="mt-1 text-lg font-semibold">Access Token</h3>
-                </div>
-                <div className="flex flex-wrap items-center justify-end gap-2">
-                  <Link href={`${DOCS_AI_ROUTE}#mcp`} className="link link-primary text-sm">
-                    For Agents
-                  </Link>
-                </div>
+          <div className="surface-card rounded-lg p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-wide text-base-content/50">Agent Access</p>
+                <h3 className="mt-1 text-lg font-semibold">Access Token</h3>
               </div>
-              {tokenAccessPanel}
+              <Link href={DOCS_AI_ROUTE + "#mcp"} className="link link-primary text-sm">
+                Agent docs
+              </Link>
             </div>
+            {tokenAccessPanel}
+          </div>
 
+          {selectedPolicy ? (
             <div className="surface-card rounded-lg p-5">
               <p className="text-sm font-semibold uppercase tracking-wide text-base-content/50">Pause / Revoke</p>
               <h3 className="mt-1 text-lg font-semibold">Kill Switch</h3>
@@ -969,76 +1036,49 @@ export function AgentSubmissionPanel() {
                 </button>
               </div>
             </div>
-          </div>
-        </div>
-      </section>
-    );
-  }
-
-  return (
-    <section className="space-y-4">
-      <div className="surface-card rounded-lg p-5">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className={surfaceSectionHeadingClassName}>For Agents</h1>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Link href={`${DOCS_AI_ROUTE}#paths`} className="btn btn-outline btn-sm">
-              For Agents
-              <ArrowTopRightOnSquareIcon className="h-4 w-4" />
-            </Link>
-            {selectedPolicy ? (
-              <button type="button" className="btn btn-outline btn-sm" onClick={() => setIsSetupMode(false)}>
-                Manage agent
-              </button>
-            ) : null}
-          </div>
-        </div>
-
-        <div className="mt-5 flex flex-wrap items-center gap-2 text-sm font-medium text-base-content/55">
-          {setupSteps.map((step, index) => (
-            <Fragment key={step.id}>
-              <button
-                type="button"
-                aria-current={activeSetupStep === step.id ? "step" : undefined}
-                aria-label={`Go to ${step.label}`}
-                onClick={() => setActiveSetupStep(step.id)}
-                title={`Go to ${step.label}`}
-                className={`cursor-pointer rounded-md border px-2 py-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/80 ${
-                  activeSetupStep === step.id
-                    ? "border-primary bg-primary text-primary-content hover:bg-primary/90"
-                    : "step-control-inactive"
-                }`}
-              >
-                {index + 1}. {step.label}
-              </button>
-              {index < setupSteps.length - 1 ? <span aria-hidden="true">→</span> : null}
-            </Fragment>
-          ))}
+          ) : null}
         </div>
       </div>
 
-      {activeSetupStep === "wallet" ? (
+      {showControlsPanel ? (
         <div className="surface-card rounded-lg p-5">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-wide text-base-content/50">
-              Step {activeStepNumber} of {activeSetupStepOrder.length}
-            </p>
-            <h3 className="mt-1 flex items-center gap-2 text-xl font-semibold">
-              Choose the agent wallet
-              <InfoTooltip text={AGENT_WALLET_HELP_TEXT} position="right" />
-            </h3>
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-wide text-base-content/50">Optional Controls</p>
+              <h3 className="mt-1 flex items-center gap-2 text-xl font-semibold">
+                RateLoop-managed controls
+                <InfoTooltip text={AGENT_POLICY_HELP_TEXT} position="right" />
+              </h3>
+              <p className="mt-2 max-w-2xl text-sm leading-relaxed text-base-content/65">
+                Defaults are open: all categories, all scopes, and no spend caps. Fill in only the limits this agent
+                should have.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {selectedPolicy ? (
+                <span
+                  className={
+                    "reward-chip reward-chip-muted inline-flex w-fit px-3 py-1 text-sm " +
+                    statusClassName(selectedPolicy.status)
+                  }
+                >
+                  {selectedPolicy.status}
+                </span>
+              ) : null}
+              <button type="button" className="btn btn-outline btn-sm" onClick={() => setActivePanel("overview")}>
+                Close
+              </button>
+            </div>
           </div>
-
-          {policyControlsPanel}
 
           <div className="mt-5 grid gap-3">
             <label className="form-control gap-2 sm:grid sm:grid-cols-[max-content_minmax(0,1fr)] sm:items-center sm:gap-x-6">
               <span className="label-text text-sm font-medium">Agent wallet</span>
               <input
-                className={`input input-bordered mt-1 min-w-0 font-mono sm:mt-0 ${
-                  agentWalletInputInvalid ? "input-error" : ""
-                }`}
+                className={
+                  "input input-bordered mt-1 min-w-0 font-mono sm:mt-0 " +
+                  (agentWalletInputInvalid ? "input-error" : "")
+                }
                 value={policyForm.agentWalletAddress}
                 onChange={event => setPolicyForm(prev => ({ ...prev, agentWalletAddress: event.target.value }))}
                 placeholder="0x..."
@@ -1047,200 +1087,7 @@ export function AgentSubmissionPanel() {
                 <span className="mt-1 text-sm text-error sm:col-start-2">Enter a valid EVM address.</span>
               ) : null}
             </label>
-          </div>
 
-          <div className="mt-5 grid gap-3 md:grid-cols-3">
-            <div className="surface-card-nested rounded-lg p-4">
-              <h4 className="text-sm font-semibold">User Signs In Browser</h4>
-              <p className="mt-2 text-sm leading-relaxed text-base-content/60">
-                The agent creates a signing link. The user opens RateLoop, connects the wallet, and approves the exact
-                ask calls in the browser.
-              </p>
-              <button type="button" className="btn btn-outline btn-xs mt-3" onClick={() => setActiveSetupStep("mcp")}>
-                View handoff API
-              </button>
-            </div>
-            <div className="surface-card-nested rounded-lg p-4">
-              <h4 className="text-sm font-semibold">Local Signer CLI</h4>
-              <p className="mt-2 text-sm leading-relaxed text-base-content/60">
-                Generate an encrypted local signer, paste its public address here, fund it with World Chain USDC, then
-                run
-                <span className="font-mono"> local-ask</span>.
-              </p>
-              <button type="button" className="btn btn-outline btn-xs mt-3" onClick={() => setActiveSetupStep("fund")}>
-                Fund signer
-              </button>
-            </div>
-            <div className="surface-card-nested rounded-lg p-4">
-              <h4 className="text-sm font-semibold">Managed Policy Token</h4>
-              <p className="mt-2 text-sm leading-relaxed text-base-content/60">
-                Save optional spend/category controls and create a bearer token for agents that need callbacks, audit
-                history, or operator-managed limits.
-              </p>
-              <button
-                type="button"
-                className="btn btn-outline btn-xs mt-3"
-                onClick={() => handlePolicyControlsChange(true)}
-              >
-                Use controls
-              </button>
-            </div>
-          </div>
-
-          <div className="mt-5 flex items-center justify-between gap-2">
-            <button type="button" className="btn btn-outline btn-sm" onClick={handleResetSetup}>
-              Reset
-            </button>
-            <GradientActionButton
-              size="sm"
-              disabled={!agentWalletAddress || agentWalletInputInvalid}
-              onClick={() => setActiveSetupStep("fund")}
-            >
-              Continue
-            </GradientActionButton>
-          </div>
-        </div>
-      ) : null}
-
-      {activeSetupStep === "fund" ? (
-        <div className="surface-card rounded-lg p-5">
-          <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(320px,420px)]">
-            <div>
-              <p className="text-sm font-semibold uppercase tracking-wide text-base-content/50">
-                Step {activeStepNumber} of {activeSetupStepOrder.length}
-              </p>
-              <h3 className="mt-1 flex items-center gap-2 text-xl font-semibold">
-                Fund the wallet
-                <InfoTooltip text={AGENT_FUND_HELP_TEXT} position="right" />
-              </h3>
-              <p className="mt-2 max-w-2xl text-sm leading-relaxed text-base-content/65">
-                For browser signing, fund the wallet that will open the signing link. For the local signer CLI, paste
-                the generated signer address above and fund that address here.
-              </p>
-
-              <div className="mt-4 grid gap-3">
-                <div className="surface-card-nested rounded-lg p-4">
-                  <div className="flex items-center gap-2 text-sm font-medium text-base-content/60">
-                    <CpuChipIcon className="h-4 w-4" />
-                    <span>{usdcDisplayName}</span>
-                  </div>
-                  <p className="mt-2 text-lg font-semibold">{formatUsdc(balance)}</p>
-                  <p className="mt-1 text-sm text-base-content/55">
-                    Required per ask: {formatUsdc(requiredPerAskFunding)}
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-4 surface-card-nested rounded-lg p-4">
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-                  <label className="form-control w-full lg:max-w-xs">
-                    <span className="label-text text-sm font-medium">Transfer from connected wallet</span>
-                    <div className="join mt-1">
-                      <input
-                        className="input input-bordered join-item w-full"
-                        value={transferAmount}
-                        onChange={event => setTransferAmount(event.target.value)}
-                        inputMode="decimal"
-                      />
-                      <span className="join-item inline-flex items-center bg-base-200 px-3 text-sm text-base-content/70">
-                        USDC
-                      </span>
-                    </div>
-                  </label>
-                  <GradientActionButton
-                    onClick={() => void handleTransferUsdc()}
-                    disabled={
-                      !address ||
-                      !agentWalletAddress ||
-                      !usdcAddress ||
-                      agentWalletMatchesConnectedWallet ||
-                      isTransferringUsdc
-                    }
-                    size="sm"
-                    motion={getGradientActionMotion(isTransferringUsdc)}
-                  >
-                    <WalletIcon className="h-4 w-4" />
-                    {isTransferringUsdc ? "Transferring..." : "Transfer USDC"}
-                  </GradientActionButton>
-                </div>
-                {agentWalletMatchesConnectedWallet ? (
-                  <p className="mt-3 text-sm text-base-content/60">
-                    The connected wallet already matches the agent wallet.
-                  </p>
-                ) : (
-                  <p className="mt-3 text-sm text-base-content/60">
-                    Sends USDC from the connected wallet to the configured agent wallet.
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <div className="min-w-0">
-              {canUseThirdwebFunding && thirdwebClient && agentWalletAddress && usdcAddress ? (
-                <BuyWidget
-                  amount={DEFAULT_FUNDING_AMOUNT_USDC}
-                  amountEditable
-                  buttonLabel="Add USDC"
-                  chain={thirdwebTargetChain}
-                  client={thirdwebClient}
-                  description="Fund this agent wallet with World Chain USDC."
-                  onSuccess={() => void refetchBalance()}
-                  presetOptions={[5, 10, 20]}
-                  receiverAddress={agentWalletAddress}
-                  showThirdwebBranding={false}
-                  theme="dark"
-                  title="Add World Chain USDC"
-                  tokenAddress={usdcAddress}
-                  tokenEditable={false}
-                />
-              ) : (
-                <div className="surface-card-nested rounded-lg p-4">
-                  <p className="text-sm leading-relaxed text-base-content/65">{fundingUnavailableMessage}</p>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="mt-5 flex flex-wrap gap-2">
-            <button type="button" className="btn btn-outline btn-sm" onClick={() => setActiveSetupStep("wallet")}>
-              Back
-            </button>
-            <GradientActionButton
-              size="sm"
-              onClick={() => setActiveSetupStep(policyControlsEnabled ? "policy" : "mcp")}
-            >
-              Continue
-            </GradientActionButton>
-          </div>
-        </div>
-      ) : null}
-
-      {policyControlsEnabled && activeSetupStep === "policy" ? (
-        <div className="surface-card rounded-lg p-5">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-            <div>
-              <p className="text-sm font-semibold uppercase tracking-wide text-base-content/50">
-                Step {activeStepNumber} of {activeSetupStepOrder.length}
-              </p>
-              <h3 className="mt-1 flex items-center gap-2 text-xl font-semibold">
-                Optional managed controls
-                <InfoTooltip text={AGENT_POLICY_HELP_TEXT} position="right" />
-              </h3>
-              <p className="mt-2 max-w-2xl text-sm leading-relaxed text-base-content/65">
-                Defaults are open: all categories, all scopes, and no spend caps. Fill in only the limits this agent
-                should have.
-              </p>
-            </div>
-            {selectedPolicy ? (
-              <span
-                className={`reward-chip reward-chip-muted inline-flex w-fit px-3 py-1 text-sm ${statusClassName(selectedPolicy.status)}`}
-              >
-                {selectedPolicy.status}
-              </span>
-            ) : null}
-          </div>
-
-          <div className="mt-5 grid gap-3">
             <label className="form-control gap-2 sm:grid sm:grid-cols-[max-content_minmax(0,1fr)] sm:items-center sm:gap-x-6">
               <span className="label-text text-sm font-medium">Agent label</span>
               <input
@@ -1290,12 +1137,10 @@ export function AgentSubmissionPanel() {
 
           <div className="mt-5 surface-card-nested rounded-lg p-4">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-              <div>
-                <h4 className="font-semibold">Allowed Categories</h4>
-              </div>
+              <h4 className="font-semibold">Allowed Categories</h4>
               <button
                 type="button"
-                className={`btn btn-sm ${allCategoriesSelected ? "btn-primary" : "btn-outline"}`}
+                className={"btn btn-sm " + (allCategoriesSelected ? "btn-primary" : "btn-outline")}
                 onClick={() => setPolicyForm(prev => ({ ...prev, categories: [] }))}
               >
                 All categories
@@ -1322,8 +1167,8 @@ export function AgentSubmissionPanel() {
           </div>
 
           <div className="mt-5 flex flex-wrap gap-2">
-            <button type="button" className="btn btn-outline btn-sm" onClick={() => setActiveSetupStep("fund")}>
-              Back
+            <button type="button" className="btn btn-outline btn-sm" onClick={() => setActivePanel("overview")}>
+              Cancel
             </button>
             <button
               className="btn btn-primary btn-sm"
@@ -1338,194 +1183,107 @@ export function AgentSubmissionPanel() {
         </div>
       ) : null}
 
-      {activeSetupStep === "mcp" ? (
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(340px,460px)]">
+        <div className="surface-card rounded-lg p-5">
+          <p className="text-sm font-semibold uppercase tracking-wide text-base-content/50">Recent Agent Asks</p>
+          <h3 className="mt-1 text-lg font-semibold">Audit Trail</h3>
+          <div className="mt-4">{recentAsksPanel}</div>
+        </div>
+
         <div className="surface-card rounded-lg p-5">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-sm font-semibold uppercase tracking-wide text-base-content/50">
-                Step {activeStepNumber} of {activeSetupStepOrder.length}
-              </p>
-              <h3 className="mt-1 flex items-center gap-2 text-xl font-semibold">
-                {!policyControlsEnabled
-                  ? "Public Agent Access"
-                  : selectedPolicy
-                    ? "Agent Controls Saved"
-                    : "Connect Agent"}
-                <InfoTooltip text={AGENT_MCP_HELP_TEXT} position="right" />
-              </h3>
-              <p className="mt-2 max-w-2xl text-sm leading-relaxed text-base-content/65">
-                {!policyControlsEnabled
-                  ? "Your agent can submit asks as long as it controls the wallet and lets the client use the compatible payment path."
-                  : selectedPolicy
-                    ? "Your agent can now submit asks with these optional controls. Create an access token when you are ready to connect it to an AI client."
-                    : "Save optional controls before creating managed agent access."}
+              <p className="text-sm font-semibold uppercase tracking-wide text-base-content/50">Advanced</p>
+              <h3 className="mt-1 text-lg font-semibold">Connection references</h3>
+              <p className="mt-2 text-sm leading-relaxed text-base-content/65">
+                Public MCP, browser signing endpoints, and local signer commands stay here for manual integration work.
               </p>
             </div>
-            <Link href={`${DOCS_AI_ROUTE}#accountless-public-access`} className="link link-primary text-sm">
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              onClick={() => setActivePanel(showAdvancedPanel ? "overview" : "advanced")}
+            >
+              {showAdvancedPanel ? "Hide" : "Show"}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {showAdvancedPanel ? (
+        <div className="surface-card rounded-lg p-5">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-wide text-base-content/50">Advanced References</p>
+              <h3 className="mt-1 text-lg font-semibold">Manual integration details</h3>
+            </div>
+            <Link href={DOCS_AI_ROUTE + "#accountless-public-access"} className="link link-primary text-sm">
               Setup guide
             </Link>
           </div>
 
-          {!policyControlsEnabled ? (
-            <>
-              <div className="mt-5 grid gap-3 md:grid-cols-3">
-                <div className="surface-card-nested rounded-lg p-4">
-                  <div className="flex items-center gap-2 text-sm font-medium text-base-content/60">
-                    <WalletIcon className="h-4 w-4" />
-                    <span>Wallet Address</span>
-                  </div>
-                  <p className="mt-2 break-words font-mono text-sm">{agentWalletAddress ?? "0x..."}</p>
-                </div>
-                <div className="surface-card-nested rounded-lg p-4">
-                  <div className="flex items-center gap-2 text-sm font-medium text-base-content/60">
-                    <CpuChipIcon className="h-4 w-4" />
-                    <span>Direct HTTP</span>
-                  </div>
-                  <p className="mt-2 break-all font-mono text-xs">{publicAgentHttpUrl}</p>
-                </div>
-                <div className="surface-card-nested rounded-lg p-4">
-                  <div className="flex items-center gap-2 text-sm font-medium text-base-content/60">
-                    <KeyIcon className="h-4 w-4" />
-                    <span>Auth</span>
-                  </div>
-                  <p className="mt-2 text-sm text-base-content/70">No bearer token or RateLoop account required</p>
-                </div>
+          <div className="mt-5 grid gap-4 lg:grid-cols-2">
+            <div className="surface-card-nested rounded-lg p-4">
+              <div className="flex items-center justify-between gap-2">
+                <h4 className="font-semibold">Public MCP Config</h4>
+                <button
+                  type="button"
+                  className="btn btn-outline btn-xs"
+                  onClick={() => void handleCopy(publicMcpConfig)}
+                >
+                  Copy config
+                </button>
               </div>
-
-              <div className="mt-5 surface-card-nested rounded-lg p-4">
-                <div className="flex items-center justify-between gap-2">
-                  <h4 className="font-semibold">Public MCP Config</h4>
-                  <button
-                    type="button"
-                    className="btn btn-outline btn-xs"
-                    onClick={() => void handleCopy(publicMcpConfig)}
-                  >
-                    Copy config
-                  </button>
-                </div>
-                <pre className="mt-3 max-h-56 overflow-auto whitespace-pre-wrap break-words rounded bg-black p-3 text-xs text-white">
-                  {publicMcpConfig}
-                </pre>
-                <p className="mt-3 text-sm leading-relaxed text-base-content/60">
-                  Include walletAddress on quote, ask, status, and result calls that use clientRequestId lookups.
-                </p>
-              </div>
-
-              <div className="mt-5 grid gap-4 lg:grid-cols-2">
-                <div className="surface-card-nested rounded-lg p-4">
-                  <div className="flex items-center justify-between gap-2">
-                    <h4 className="font-semibold">Browser Signing Link</h4>
-                    <button
-                      type="button"
-                      className="btn btn-outline btn-xs"
-                      onClick={() => void handleCopy(publicSigningIntentUrl)}
-                    >
-                      Copy endpoint
-                    </button>
-                  </div>
-                  <p className="mt-2 text-sm leading-relaxed text-base-content/60">
-                    Create a short-lived signing link when a user should approve spend in their wallet.
-                  </p>
-                  <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded bg-black p-3 text-xs text-white">
-                    {`POST ${publicSigningIntentUrl}\n\n${browserSigningPayload}`}
-                  </pre>
-                </div>
-
-                <div className="surface-card-nested rounded-lg p-4">
-                  <div className="flex items-center justify-between gap-2">
-                    <h4 className="font-semibold">Local Signer CLI</h4>
-                    <button
-                      type="button"
-                      className="btn btn-outline btn-xs"
-                      onClick={() => void handleCopy(localSignerSnippet)}
-                    >
-                      Copy commands
-                    </button>
-                  </div>
-                  <p className="mt-2 text-sm leading-relaxed text-base-content/60">
-                    Use this path when a local agent owns an encrypted signer and can execute RateLoop wallet calls.
-                  </p>
-                  <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded bg-black p-3 text-xs text-white">
-                    {localSignerSnippet}
-                  </pre>
-                </div>
-              </div>
-            </>
-          ) : selectedPolicy ? (
-            <>
-              <div className="mt-5 grid gap-3 md:grid-cols-3">
-                <div className="surface-card-nested rounded-lg p-4">
-                  <div className="flex items-center gap-2 text-sm font-medium text-base-content/60">
-                    <CpuChipIcon className="h-4 w-4" />
-                    <span>Policy Identity</span>
-                  </div>
-                  <p className="mt-2 break-words text-lg font-semibold">{selectedPolicy.agentId}</p>
-                </div>
-                <div className="surface-card-nested rounded-lg p-4">
-                  <div className="flex items-center gap-2 text-sm font-medium text-base-content/60">
-                    <WalletIcon className="h-4 w-4" />
-                    <span>Agent Wallet</span>
-                  </div>
-                  <p className="mt-2 font-mono text-sm">{shortAddress(selectedPolicy.agentWalletAddress)}</p>
-                </div>
-                <div className="surface-card-nested rounded-lg p-4">
-                  <div className="flex items-center gap-2 text-sm font-medium text-base-content/60">
-                    <KeyIcon className="h-4 w-4" />
-                    <span>Spend Caps</span>
-                  </div>
-                  <p className="mt-2 text-sm text-base-content/75">
-                    {formatPolicyCap(selectedPolicy.perAskLimitAtomic)} per ask
-                  </p>
-                  <p className="mt-1 text-sm text-base-content/60">
-                    {formatPolicyCap(selectedPolicy.dailyBudgetAtomic)} daily
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-5 surface-card-nested rounded-lg p-4">
-                <h4 className="font-semibold">Access Token</h4>
-                <p className="mt-1 text-sm leading-relaxed text-base-content/60">
-                  Use this token and config in the agent client that will call RateLoop tools.
-                </p>
-                {tokenAccessPanel}
-              </div>
-            </>
-          ) : (
-            <div className="surface-card-nested mt-5 rounded-lg p-4">
-              <h4 className="font-semibold text-warning">No Saved Controls Selected</h4>
-              <p className="mt-2 text-sm leading-relaxed text-base-content/70">
-                Go back to Optional controls and save them first, or turn controls off to use public wallet access.
-              </p>
+              <pre className="mt-3 max-h-56 overflow-auto whitespace-pre-wrap break-words rounded bg-black p-3 text-xs text-white">
+                {publicMcpConfig}
+              </pre>
             </div>
-          )}
 
-          <div className="mt-5 flex flex-wrap gap-2">
-            <button
-              type="button"
-              className="btn btn-outline btn-sm"
-              onClick={() => setActiveSetupStep(policyControlsEnabled ? "policy" : "fund")}
-            >
-              Back
-            </button>
-            {!policyControlsEnabled ? (
-              <span
-                className={`reward-chip reward-chip-muted inline-flex items-center px-3 py-1 text-sm ${
-                  ready ? "text-success" : "text-warning"
-                }`}
-              >
-                {ready ? "Ready for wallet-paid asks" : "Add wallet USDC before asking"}
-              </span>
-            ) : null}
-            {policyControlsEnabled && selectedPolicy && !(selectedPolicy.hasToken || generatedToken) ? (
-              <button type="button" className="btn btn-outline btn-sm" onClick={() => setIsSetupMode(false)}>
-                Finish without token
-              </button>
-            ) : null}
-            {policyControlsEnabled && selectedPolicy && (selectedPolicy.hasToken || generatedToken) ? (
-              <button type="button" className="btn btn-primary btn-sm" onClick={() => setIsSetupMode(false)}>
-                Manage agent
-              </button>
-            ) : null}
+            <div className="surface-card-nested rounded-lg p-4">
+              <div className="flex items-center justify-between gap-2">
+                <h4 className="font-semibold">Direct HTTP</h4>
+                <button
+                  type="button"
+                  className="btn btn-outline btn-xs"
+                  onClick={() => void handleCopy(publicAgentHttpUrl)}
+                >
+                  Copy endpoint
+                </button>
+              </div>
+              <p className="mt-3 break-all font-mono text-xs text-base-content/75">{publicAgentHttpUrl}</p>
+            </div>
+
+            <div className="surface-card-nested rounded-lg p-4">
+              <div className="flex items-center justify-between gap-2">
+                <h4 className="font-semibold">Browser Signing Link</h4>
+                <button
+                  type="button"
+                  className="btn btn-outline btn-xs"
+                  onClick={() => void handleCopy(publicSigningIntentUrl)}
+                >
+                  Copy endpoint
+                </button>
+              </div>
+              <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded bg-black p-3 text-xs text-white">
+                {"POST " + publicSigningIntentUrl + "\n\n" + browserSigningPayload}
+              </pre>
+            </div>
+
+            <div className="surface-card-nested rounded-lg p-4">
+              <div className="flex items-center justify-between gap-2">
+                <h4 className="font-semibold">Local Signer CLI</h4>
+                <button
+                  type="button"
+                  className="btn btn-outline btn-xs"
+                  onClick={() => void handleCopy(localSignerSnippet)}
+                >
+                  Copy commands
+                </button>
+              </div>
+              <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded bg-black p-3 text-xs text-white">
+                {localSignerSnippet}
+              </pre>
+            </div>
           </div>
         </div>
       ) : null}
