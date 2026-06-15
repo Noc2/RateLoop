@@ -1,6 +1,7 @@
 "use client";
 
 import { ContentRegistryAbi, FeedbackBonusEscrowAbi, QuestionRewardPoolEscrowAbi } from "@rateloop/contracts/abis";
+import { MIN_NONZERO_CONFIDENTIALITY_BOND } from "@rateloop/contracts/protocol";
 import { isAddress, parseUnits } from "viem";
 import { contracts } from "~~/utils/scaffold-eth/contract";
 
@@ -14,8 +15,6 @@ export const SUBMISSION_REWARD_ASSET_LREP = 0;
 export const SUBMISSION_REWARD_ASSET_USDC = 1;
 export const FEEDBACK_BONUS_ASSET_LREP = SUBMISSION_REWARD_ASSET_LREP;
 export const FEEDBACK_BONUS_ASSET_USDC = SUBMISSION_REWARD_ASSET_USDC;
-const MIN_NONZERO_CONFIDENTIALITY_BOND = 1_000_000n;
-
 export type SubmissionRewardAsset = "lrep" | "usdc";
 export type FeedbackBonusAsset = SubmissionRewardAsset;
 

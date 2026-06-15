@@ -1,11 +1,10 @@
+import { CONFIDENTIALITY_FLAG_PRIVATE_FOREVER } from "@rateloop/contracts/protocol";
 import { ponder } from "ponder:registry";
 import {
   content,
   confidentialityBond,
   confidentialityConfig,
 } from "ponder:schema";
-
-const CONFIDENTIALITY_FLAG_PRIVATE_FOREVER = 1;
 
 function bondId(contentId: bigint, identityKey: `0x${string}`) {
   return `${contentId.toString()}-${identityKey}`;

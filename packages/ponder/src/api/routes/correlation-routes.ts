@@ -1,4 +1,8 @@
-import { ROUND_STATE } from "@rateloop/contracts/protocol";
+import {
+  BOUNTY_ELIGIBILITY_CREDENTIAL_MASK,
+  BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG,
+  ROUND_STATE,
+} from "@rateloop/contracts/protocol";
 import { PAYOUT_DOMAIN_QUESTION_REWARD } from "@rateloop/node-utils/correlationScoring";
 import { encodeAbiParameters, keccak256, zeroHash } from "viem";
 import { and, asc, desc, eq, inArray, or, sql } from "ponder";
@@ -27,8 +31,6 @@ const SNAPSHOT_STATUS_PROPOSED = 1;
 const SNAPSHOT_STATUS_FINALIZED = 3;
 const SNAPSHOT_STATUS_REJECTED = 4;
 const RATING_REVIEW_STATUS_PENDING = 1;
-const BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG = 0x80;
-const BOUNTY_ELIGIBILITY_CREDENTIAL_MASK = 0x0e;
 const BOUNTY_ELIGIBILITY_PROOF_OF_HUMAN = 0x08;
 const HUMAN_CREDENTIAL_PROVIDER_NONE = 0;
 

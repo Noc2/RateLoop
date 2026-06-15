@@ -77,3 +77,15 @@ export function requiredQuestionRewardParticipants(amountAtomic: bigint | number
   }
   return QUESTION_REWARD_PARTICIPANT_FLOORS.minParticipants;
 }
+
+export const CONFIDENTIALITY_FLAG_PRIVATE_FOREVER = 1 as const;
+
+export const MIN_NONZERO_CONFIDENTIALITY_BOND = 1_000_000n;
+
+export const WORLD_CHAIN_USDC_BY_CHAIN_ID: Record<number, `0x${string}`> = {
+  480: "0x79A02482A880bCE3F13e09Da970dC34db4CD24d1",
+  4801: "0x66145f38cBAC35Ca6F1Dfb4914dF98F1614aeA88",
+};
+
+export const BOUNTY_ELIGIBILITY_CREDENTIAL_MASK = 0x0e as const;
+export const BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG = 0x80 as const;

@@ -1,5 +1,5 @@
 import { ContentRegistryAbi } from "@rateloop/contracts/abis";
-import { DEFAULT_ROUND_CONFIG, ROUND_STATE } from "@rateloop/contracts/protocol";
+import { DEFAULT_ROUND_CONFIG, CONFIDENTIALITY_FLAG_PRIVATE_FOREVER, ROUND_STATE } from "@rateloop/contracts/protocol";
 import { eq } from "ponder";
 import { decodeEventLog } from "viem";
 import { ponder } from "ponder:registry";
@@ -93,7 +93,6 @@ function confidentialityBondAssetName(asset: number) {
   return asset === 1 ? "USDC" : "LREP";
 }
 
-const CONFIDENTIALITY_FLAG_PRIVATE_FOREVER = 1;
 const RATING_REVIEW_STATUS_NONE = 0;
 const RATING_REVIEW_STATUS_PENDING = 1;
 const RATING_REVIEW_STATUS_APPLIED = 3;

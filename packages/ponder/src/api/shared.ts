@@ -1,4 +1,5 @@
 import {
+  BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG,
   DEFAULT_REVEAL_GRACE_PERIOD_SECONDS,
   DEFAULT_ROUND_CONFIG,
   ROUND_STATE,
@@ -499,7 +500,6 @@ function formatQuestionRewardAsset(value: number | string | bigint | null | unde
   };
 }
 
-const BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG = 0x80;
 const BOUNTY_ELIGIBILITY_CREDENTIALS = [
   { bit: 0x02, kind: 1, name: "selfie" },
   { bit: 0x04, kind: 2, name: "passport" },
