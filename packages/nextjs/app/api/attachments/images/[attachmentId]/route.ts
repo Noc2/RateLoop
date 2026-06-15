@@ -65,8 +65,16 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     return new NextResponse("Not found", { status: 404 });
   }
 
-  if (attachment.requiresGatedAccess && !attachment.contentId) {
-    return new NextResponse("Not found", { status: 404, headers: { "Cache-Control": "private, no-store" } });
+  if (!attachment.contentId) {
+    return new NextResponse("Not found", {
+      status: 404,
+      headers: attachment.requiresGatedAccess
+        ? {
+            "Cache-Control": "private, no-store",
+            "X-Robots-Tag": "noindex, noimageindex",
+          }
+        : { "Cache-Control": "private, no-store" },
+    });
   }
 
   const confidentiality = attachment.contentId ? await getQuestionConfidentiality(attachment.contentId) : null;

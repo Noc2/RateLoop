@@ -55,8 +55,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     );
   }
 
-  if (details.requiresGatedAccess && !details.contentId) {
-    return NextResponse.json({ error: "Question details not found." }, GATED_DETAILS_NOT_FOUND_RESPONSE);
+  if (!details.contentId) {
+    return NextResponse.json(
+      { error: "Question details not found." },
+      details.requiresGatedAccess
+        ? GATED_DETAILS_NOT_FOUND_RESPONSE
+        : { headers: UNLINKED_DETAILS_RESPONSE_HEADERS, status: 404 },
+    );
   }
 
   const confidentiality = details.contentId ? await getQuestionConfidentiality(details.contentId) : null;
