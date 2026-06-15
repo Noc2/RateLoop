@@ -140,7 +140,6 @@ contract ConfidentialityEscrowTest is VotingTestBase {
         registry.setProtocolConfig(address(protocolConfig));
         registry.setCategoryRegistry(address(categoryRegistry));
         registry.setQuestionRewardPoolEscrow(address(_newMockQuestionRewardPoolEscrow(registry)));
-        confidentialityEscrow.grantRole(confidentialityEscrow.CONFIG_ROLE(), address(registry));
 
         protocolConfig.setRewardDistributor(address(rewardDistributor));
         protocolConfig.setCategoryRegistry(address(categoryRegistry));

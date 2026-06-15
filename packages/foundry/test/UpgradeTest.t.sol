@@ -758,7 +758,10 @@ contract UpgradeTest is Test {
         assertEq(confidentialityEscrow.evidenceWindow(), 14 days);
         assertEq(confidentialityEscrow.maxBondLockDuration(), 90 days);
         assertTrue(confidentialityEscrow.hasRole(confidentialityEscrow.DEFAULT_ADMIN_ROLE(), governance));
+        assertFalse(confidentialityEscrow.hasRole(confidentialityEscrow.DEFAULT_ADMIN_ROLE(), admin));
         assertTrue(confidentialityEscrow.hasRole(confidentialityEscrow.CONFIG_ROLE(), governance));
+        assertTrue(confidentialityEscrow.hasRole(confidentialityEscrow.CONFIG_ROLE(), admin));
+        assertTrue(confidentialityEscrow.hasRole(confidentialityEscrow.CONFIG_ROLE(), address(contentRegistry)));
 
         ConfidentialityEscrow newImpl = new ConfidentialityEscrow();
         vm.prank(governance);
@@ -774,7 +777,10 @@ contract UpgradeTest is Test {
         assertEq(confidentialityEscrow.evidenceWindow(), 14 days);
         assertEq(confidentialityEscrow.maxBondLockDuration(), 90 days);
         assertTrue(confidentialityEscrow.hasRole(confidentialityEscrow.DEFAULT_ADMIN_ROLE(), governance));
+        assertFalse(confidentialityEscrow.hasRole(confidentialityEscrow.DEFAULT_ADMIN_ROLE(), admin));
         assertTrue(confidentialityEscrow.hasRole(confidentialityEscrow.CONFIG_ROLE(), governance));
+        assertTrue(confidentialityEscrow.hasRole(confidentialityEscrow.CONFIG_ROLE(), admin));
+        assertTrue(confidentialityEscrow.hasRole(confidentialityEscrow.CONFIG_ROLE(), address(contentRegistry)));
     }
 
     // =========================================================================

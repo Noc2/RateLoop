@@ -333,7 +333,6 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         registry.unpause();
         registry.setCategoryRegistry(address(categoryRegistry));
         registry.grantRole(registry.X402_GATEWAY_ROLE(), address(x402QuestionSubmitter));
-        confidentialityEscrow.grantRole(confidentialityEscrow.CONFIG_ROLE(), address(registry));
 
         protocolConfig.setRewardDistributor(address(rewardDistributor));
         protocolConfig.setFrontendRegistry(address(frontendRegistry));
@@ -347,7 +346,6 @@ contract DeployRateLoop is ScaffoldETHDeploy {
             confidentialityEscrow.renounceRole(confidentialityEscrow.PAUSER_ROLE(), deployer);
             confidentialityEscrow.renounceRole(confidentialityEscrow.CONFIG_ROLE(), deployer);
             confidentialityEscrow.renounceRole(confidentialityEscrow.ACCESS_RECORDER_ROLE(), deployer);
-            confidentialityEscrow.renounceRole(confidentialityEscrow.DEFAULT_ADMIN_ROLE(), deployer);
         }
 
         profileRegistry.setRaterRegistry(address(raterRegistry));

@@ -157,8 +157,8 @@ contract ConfidentialityEscrow is
         _grantRole(PAUSER_ROLE, governance);
         _grantRole(GOVERNANCE_ROLE, governance);
         _grantRole(ACCESS_RECORDER_ROLE, governance);
+        _grantRole(CONFIG_ROLE, registry_);
         if (admin != governance) {
-            _grantRole(DEFAULT_ADMIN_ROLE, admin);
             _grantRole(CONFIG_ROLE, admin);
             _grantRole(PAUSER_ROLE, admin);
             _grantRole(ACCESS_RECORDER_ROLE, admin);
