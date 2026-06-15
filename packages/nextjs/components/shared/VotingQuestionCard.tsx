@@ -408,7 +408,7 @@ function RatingPendingNotice({ compact = false }: { compact?: boolean }) {
   return (
     <HoverTooltip text={RATING_REVIEW_PENDING_TOOLTIP} position="bottom">
       <span
-        className={`inline-flex items-center rounded-full border border-primary/20 bg-primary/10 font-semibold text-primary ${
+        className={`inline-flex items-center rounded-full bg-primary/10 font-semibold text-primary ${
           compact ? "px-2 py-0.5 text-[0.68rem]" : "px-2.5 py-1 text-xs"
         }`}
       >
