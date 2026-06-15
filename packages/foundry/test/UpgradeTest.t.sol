@@ -17,6 +17,7 @@ import { ProfileRegistry } from "../contracts/ProfileRegistry.sol";
 import { FrontendRegistry } from "../contracts/FrontendRegistry.sol";
 import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
 import { QuestionRewardPoolEscrow } from "../contracts/QuestionRewardPoolEscrow.sol";
+import { ConfidentialityEscrow } from "../contracts/ConfidentialityEscrow.sol";
 import { FeedbackBonusEscrow } from "../contracts/FeedbackBonusEscrow.sol";
 import { FeedbackRegistry } from "../contracts/FeedbackRegistry.sol";
 import { LoopReputation } from "../contracts/LoopReputation.sol";
@@ -80,6 +81,7 @@ contract UpgradeTest is Test {
     FrontendRegistry public frontendRegistry;
     ProtocolConfig public protocolConfig;
     QuestionRewardPoolEscrow public questionRewardPoolEscrow;
+    ConfidentialityEscrow public confidentialityEscrow;
     FeedbackBonusEscrow public feedbackBonusEscrow;
     FeedbackRegistry public feedbackRegistry;
     RaterRegistry public raterRegistry;
@@ -90,6 +92,7 @@ contract UpgradeTest is Test {
     ProxyAdmin public frontendRegistryAdmin;
     ProxyAdmin public protocolConfigAdmin;
     ProxyAdmin public questionRewardPoolEscrowAdmin;
+    ProxyAdmin public confidentialityEscrowAdmin;
     ProxyAdmin public feedbackBonusEscrowAdmin;
     ProxyAdmin public feedbackRegistryAdmin;
     ProxyAdmin public raterRegistryAdmin;
@@ -238,6 +241,27 @@ contract UpgradeTest is Test {
         );
         questionRewardPoolEscrow = QuestionRewardPoolEscrow(address(qrpProxy));
         questionRewardPoolEscrowAdmin = _proxyAdmin(address(qrpProxy));
+
+        // --- ConfidentialityEscrow ---
+        ConfidentialityEscrow ceImpl = new ConfidentialityEscrow();
+        TransparentUpgradeableProxy ceProxy = new TransparentUpgradeableProxy(
+            address(ceImpl),
+            governance,
+            abi.encodeCall(
+                ConfidentialityEscrow.initialize,
+                (
+                    admin,
+                    governance,
+                    address(lrepToken),
+                    address(lrepToken),
+                    address(contentRegistry),
+                    address(protocolConfig),
+                    governance
+                )
+            )
+        );
+        confidentialityEscrow = ConfidentialityEscrow(address(ceProxy));
+        confidentialityEscrowAdmin = _proxyAdmin(address(ceProxy));
 
         // --- FeedbackBonusEscrow ---
         FeedbackRegistry feedbackRegistryImpl = new FeedbackRegistry();
@@ -690,6 +714,70 @@ contract UpgradeTest is Test {
     }
 
     // =========================================================================
+    // ConfidentialityEscrow upgrade tests
+    // =========================================================================
+
+    function test_ConfidentialityEscrow_GovernanceCanUpgrade() public {
+        ConfidentialityEscrow newImpl = new ConfidentialityEscrow();
+        vm.prank(governance);
+        confidentialityEscrowAdmin.upgradeAndCall(_proxy(address(confidentialityEscrow)), address(newImpl), "");
+    }
+
+    function test_ConfidentialityEscrow_UnauthorizedCannotUpgrade() public {
+        ConfidentialityEscrow newImpl = new ConfidentialityEscrow();
+        vm.prank(attacker);
+        vm.expectRevert();
+        confidentialityEscrowAdmin.upgradeAndCall(_proxy(address(confidentialityEscrow)), address(newImpl), "");
+    }
+
+    function test_ConfidentialityEscrow_CannotReinitialize() public {
+        vm.prank(admin);
+        vm.expectRevert(Initializable.InvalidInitialization.selector);
+        confidentialityEscrow.initialize(
+            admin,
+            governance,
+            address(lrepToken),
+            address(lrepToken),
+            address(contentRegistry),
+            address(protocolConfig),
+            governance
+        );
+    }
+
+    function test_ConfidentialityEscrow_StatePreservedAfterUpgrade() public {
+        vm.prank(governance);
+        confidentialityEscrow.setBondBounds(123e6, 14 days, 90 days);
+
+        assertEq(confidentialityEscrowAdmin.owner(), governance);
+        assertEq(address(confidentialityEscrow.lrepToken()), address(lrepToken));
+        assertEq(address(confidentialityEscrow.usdcToken()), address(lrepToken));
+        assertEq(address(confidentialityEscrow.registry()), address(contentRegistry));
+        assertEq(address(confidentialityEscrow.protocolConfig()), address(protocolConfig));
+        assertEq(confidentialityEscrow.confiscationRecipient(), governance);
+        assertEq(confidentialityEscrow.maxBond(), 123e6);
+        assertEq(confidentialityEscrow.evidenceWindow(), 14 days);
+        assertEq(confidentialityEscrow.maxBondLockDuration(), 90 days);
+        assertTrue(confidentialityEscrow.hasRole(confidentialityEscrow.DEFAULT_ADMIN_ROLE(), governance));
+        assertTrue(confidentialityEscrow.hasRole(confidentialityEscrow.CONFIG_ROLE(), governance));
+
+        ConfidentialityEscrow newImpl = new ConfidentialityEscrow();
+        vm.prank(governance);
+        confidentialityEscrowAdmin.upgradeAndCall(_proxy(address(confidentialityEscrow)), address(newImpl), "");
+
+        assertEq(confidentialityEscrowAdmin.owner(), governance);
+        assertEq(address(confidentialityEscrow.lrepToken()), address(lrepToken));
+        assertEq(address(confidentialityEscrow.usdcToken()), address(lrepToken));
+        assertEq(address(confidentialityEscrow.registry()), address(contentRegistry));
+        assertEq(address(confidentialityEscrow.protocolConfig()), address(protocolConfig));
+        assertEq(confidentialityEscrow.confiscationRecipient(), governance);
+        assertEq(confidentialityEscrow.maxBond(), 123e6);
+        assertEq(confidentialityEscrow.evidenceWindow(), 14 days);
+        assertEq(confidentialityEscrow.maxBondLockDuration(), 90 days);
+        assertTrue(confidentialityEscrow.hasRole(confidentialityEscrow.DEFAULT_ADMIN_ROLE(), governance));
+        assertTrue(confidentialityEscrow.hasRole(confidentialityEscrow.CONFIG_ROLE(), governance));
+    }
+
+    // =========================================================================
     // FeedbackBonusEscrow upgrade tests
     // =========================================================================
 
@@ -821,6 +909,18 @@ contract UpgradeTest is Test {
             address(contentRegistry),
             address(votingEngine),
             address(raterRegistry)
+        );
+
+        ConfidentialityEscrow ceImpl = new ConfidentialityEscrow();
+        vm.expectRevert(Initializable.InvalidInitialization.selector);
+        ceImpl.initialize(
+            admin,
+            governance,
+            address(lrepToken),
+            address(lrepToken),
+            address(contentRegistry),
+            address(protocolConfig),
+            governance
         );
 
         FeedbackBonusEscrow fbeImpl = new FeedbackBonusEscrow();
