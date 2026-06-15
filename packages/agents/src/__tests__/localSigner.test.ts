@@ -871,6 +871,7 @@ function askPayload(walletAddress?: string): AskHumansRequest {
       requiredVoters: "3",
     },
     clientRequestId: CLIENT_REQUEST_ID,
+    maxPaymentAmount: X402_AMOUNT,
     question: {
       categoryId: "1",
       contextUrl: QUESTION_CONTEXT_URL,
@@ -967,24 +968,25 @@ describe("local signer", () => {
       "askHumans" | "confirmAskTransactions"
     >;
 
-    const result = await askHumansWithLocalSigner({
-      account,
-      agent,
-      config: {
-        chainId: 480,
-        chainName: "test",
-        contentRegistryAddress: CONTENT_REGISTRY_ADDRESS,
-        pollingIntervalMs: 1,
-        questionRewardPoolEscrowAddress: QUESTION_REWARD_ESCROW_ADDRESS,
-        receiptTimeoutMs: 1,
-        usdcAddress: X402_USDC_ADDRESS,
-        x402QuestionSubmitterAddress: X402_SUBMITTER_ADDRESS,
-      },
-      payload,
-      paymentMode: "x402_authorization",
-    });
+    await expect(
+      askHumansWithLocalSigner({
+        account,
+        agent,
+        config: {
+          chainId: 480,
+          chainName: "test",
+          contentRegistryAddress: CONTENT_REGISTRY_ADDRESS,
+          pollingIntervalMs: 1,
+          questionRewardPoolEscrowAddress: QUESTION_REWARD_ESCROW_ADDRESS,
+          receiptTimeoutMs: 1,
+          usdcAddress: X402_USDC_ADDRESS,
+          x402QuestionSubmitterAddress: X402_SUBMITTER_ADDRESS,
+        },
+        payload,
+        paymentMode: "x402_authorization",
+      }),
+    ).rejects.toThrow(/missing wallet calls/);
 
-    expect(result.signedX402Authorization).toBe(true);
     expect(askCalls).toHaveLength(2);
     expect(askCalls[0].question?.confidentiality).toMatchObject({
       disclosurePolicy: "private_forever",
@@ -1349,7 +1351,7 @@ describe("local signer", () => {
     ).toThrow(/unexpected function selector/);
   });
 
-  it("re-calls askHumans with a signed x402 authorization", async () => {
+  it("rejects empty transaction plans after x402 resubmit", async () => {
     const askCalls: AskHumansRequest[] = [];
     const agent = {
       askHumans: async (
@@ -1381,34 +1383,29 @@ describe("local signer", () => {
       "askHumans" | "confirmAskTransactions"
     >;
 
-    const result = await askHumansWithLocalSigner({
-      account,
-      agent,
-      config: {
-        chainId: 480,
-        chainName: "test",
-        contentRegistryAddress: CONTENT_REGISTRY_ADDRESS,
-        pollingIntervalMs: 1,
-        questionRewardPoolEscrowAddress: QUESTION_REWARD_ESCROW_ADDRESS,
-        receiptTimeoutMs: 1,
-        usdcAddress: X402_USDC_ADDRESS,
-        x402QuestionSubmitterAddress: X402_SUBMITTER_ADDRESS,
-      },
-      payload: askPayload(),
-      paymentMode: "x402_authorization",
-    });
+    await expect(
+      askHumansWithLocalSigner({
+        account,
+        agent,
+        config: {
+          chainId: 480,
+          chainName: "test",
+          contentRegistryAddress: CONTENT_REGISTRY_ADDRESS,
+          pollingIntervalMs: 1,
+          questionRewardPoolEscrowAddress: QUESTION_REWARD_ESCROW_ADDRESS,
+          receiptTimeoutMs: 1,
+          usdcAddress: X402_USDC_ADDRESS,
+          x402QuestionSubmitterAddress: X402_SUBMITTER_ADDRESS,
+        },
+        payload: askPayload(),
+        paymentMode: "x402_authorization",
+      }),
+    ).rejects.toThrow(/missing wallet calls/);
 
-    expect(result.signedX402Authorization).toBe(true);
     expect(askCalls).toHaveLength(2);
-    expect(askCalls[0]).toMatchObject({
-      chainId: 480,
-      paymentMode: "x402_authorization",
-      walletAddress: account.address,
-    });
     expect(askCalls[1].paymentAuthorization?.signature).toMatch(
       /^0x[0-9a-f]{130}$/i,
     );
-    expect(result.transactions).toBeUndefined();
   });
 
   it("rejects x402 authorization asks whose server metadata base differs from the local signer pin", async () => {

@@ -47,6 +47,7 @@ import type {
   RateLoopAgentWalletTransactionCall,
   QuestionStatusResponse,
 } from "@rateloop/sdk/agent";
+import { assertSafeScryptParams } from "@rateloop/node-utils/keystore";
 import {
   normalizeQuestionMetadataBaseUrl,
 } from "./questionSpecs.js";
@@ -470,6 +471,58 @@ function resolveAskQuestionMetadataBaseUrl(params: {
     );
   }
   return serverBaseUrl ?? localBaseUrl;
+}
+
+function parseMaxPaymentAmount(value: unknown): bigint {
+  const raw =
+    typeof value === "number" || typeof value === "bigint" || typeof value === "string"
+      ? String(value).trim()
+      : "";
+  if (!/^\d+$/.test(raw)) {
+    throw new Error("maxPaymentAmount must be a non-negative integer string.");
+  }
+  return BigInt(raw);
+}
+
+function feedbackBonusUsdcAmount(request: AskHumansRequest): bigint {
+  const bonus = request.feedbackBonus;
+  if (!bonus || bonus.asset?.toUpperCase() !== "USDC") return 0n;
+  return normalizeBigInt(bonus.amount, "feedbackBonus.amount");
+}
+
+function assertWithinMaxPaymentAmount(request: AskHumansRequest): bigint {
+  if (request.maxPaymentAmount === undefined || request.maxPaymentAmount === null) {
+    throw new Error("maxPaymentAmount is required for local signer asks.");
+  }
+  const cap = parseMaxPaymentAmount(request.maxPaymentAmount);
+  const total =
+    normalizeBigInt(request.bounty.amount, "bounty.amount") + feedbackBonusUsdcAmount(request);
+  if (total > cap) {
+    throw new Error("Quoted payment exceeds maxPaymentAmount.");
+  }
+  return cap;
+}
+
+function assertAskPaymentWithinCap(ask: AskHumansResponse, cap: bigint): void {
+  const payment = ask.payment;
+  if (!payment) return;
+  const quoted = normalizeBigInt(
+    payment.totalAmount ?? payment.amount,
+    "payment.totalAmount",
+  );
+  if (quoted > cap) {
+    throw new Error("RateLoop quoted payment exceeds maxPaymentAmount.");
+  }
+}
+
+function assertProductionQuestionMetadataBaseUrlPinned(
+  config: TransactionPlanValidationConfig,
+): void {
+  if (process.env.NODE_ENV === "production" && !config.questionMetadataBaseUrlPinned) {
+    throw new Error(
+      "Production local signer requires RATELOOP_LOCAL_SIGNER_QUESTION_METADATA_BASE_URL or --question-metadata-base-url.",
+    );
+  }
 }
 
 function assertRecord(value: unknown, name: string): JsonRecord {
@@ -2354,7 +2407,7 @@ export function validateLocalSignerTransactionPlan(params: {
 }): RateLoopAgentWalletTransactionCall[] {
   const calls = params.ask.transactionPlan?.calls ?? [];
   if (calls.length === 0) {
-    return [];
+    throw new Error("RateLoop transaction plan is missing wallet calls.");
   }
   normalizeOperationKey(params.ask.operationKey, "operationKey");
   if (params.ask.transactionPlan?.requiresOrderedExecution !== true) {
@@ -2610,6 +2663,7 @@ async function decryptLocalKeystore(
   }
 
   const params = keystore.crypto.kdfparams;
+  assertSafeScryptParams(params);
   const salt = Buffer.from(params.salt, "hex");
   const ciphertext = Buffer.from(keystore.crypto.ciphertext, "hex");
   const derivedKey = await deriveScryptKey(password, salt, params);
@@ -2996,9 +3050,12 @@ export async function askHumansWithLocalSigner(params: {
   if (params.paymentMode) {
     baseAsk.paymentMode = params.paymentMode;
   }
+  assertProductionQuestionMetadataBaseUrlPinned(params.config);
+  const maxPaymentCap = assertWithinMaxPaymentAmount(baseAsk);
 
   const initialAsk = await params.agent.askHumans(baseAsk);
   params.onProgress?.({ response: initialAsk, type: "ask_submitted" });
+  assertAskPaymentWithinCap(initialAsk, maxPaymentCap);
 
   let finalAsk = initialAsk;
   let signedX402Authorization = false;
@@ -3098,6 +3155,8 @@ export async function askHumansWithLocalSigner(params: {
     params.onProgress?.({ response: finalAsk, type: "x402_resubmitted" });
   }
 
+  assertAskPaymentWithinCap(finalAsk, maxPaymentCap);
+
   const calls = validateLocalSignerTransactionPlan({
     accountAddress: params.account.address,
     ask: finalAsk,
@@ -3110,14 +3169,6 @@ export async function askHumansWithLocalSigner(params: {
     expectedPaymentAuthorization: signedPaymentAuthorization,
     expectedPayload: baseAsk,
   });
-  if (!calls.length) {
-    return {
-      finalAsk,
-      initialAsk,
-      signedX402Authorization,
-      walletAddress: params.account.address,
-    };
-  }
 
   if (!finalAsk.operationKey) {
     throw new Error(
