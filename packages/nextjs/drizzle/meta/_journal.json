@@ -57,6 +57,13 @@
       "when": 1781265306000,
       "tag": "0007_content_feedback_deployment_scope",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1781268906000,
+      "tag": "0008_confidentiality_log_root_anchors",
+      "breakpoints": true
     }
   ]
 }

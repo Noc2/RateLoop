@@ -7,14 +7,17 @@ import {
   type Abi,
   type Address,
   type Chain,
+  type Hex,
   type PublicClient,
   createPublicClient,
+  createWalletClient,
   getAddress,
   http,
   isAddress,
   zeroAddress,
   zeroHash,
 } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
 import { buildSignedActionMessage, hashSignedActionPayload } from "~~/lib/auth/signedActions";
 import { GATED_CONTEXT_SIGNED_READ_SESSION_COOKIE_NAME, verifySignedReadSession } from "~~/lib/auth/signedReadSessions";
 import {
@@ -124,6 +127,23 @@ const CONFIDENTIALITY_ESCROW_READ_ABI = [
     stateMutability: "view",
   },
 ] as const satisfies Abi;
+
+const CONFIDENTIALITY_ESCROW_LOG_ROOT_ABI = [
+  {
+    type: "function",
+    name: "publishLogRoot",
+    inputs: [
+      { name: "epoch", type: "string" },
+      { name: "merkleRoot", type: "bytes32" },
+      { name: "artifactHash", type: "bytes32" },
+      { name: "artifactUri", type: "string" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+] as const satisfies Abi;
+
+const PRIVATE_KEY_PATTERN = /^0x[0-9a-fA-F]{64}$/;
 
 let confidentialityGateOverrideForTests: ConfidentialityOnchainGate | null = null;
 
@@ -413,9 +433,13 @@ function getContractsForPrimaryServerNetwork() {
   return { contracts, targetNetwork };
 }
 
-function getServerPublicClient(targetNetwork: Chain): PublicClient {
+function getServerRpcUrl(targetNetwork: Chain) {
   const rpcOverrides = getServerRpcOverrides();
-  const rpcUrl = rpcOverrides[targetNetwork.id] ?? targetNetwork.rpcUrls.default.http[0];
+  return rpcOverrides[targetNetwork.id] ?? targetNetwork.rpcUrls.default.http[0];
+}
+
+function getServerPublicClient(targetNetwork: Chain): PublicClient {
+  const rpcUrl = getServerRpcUrl(targetNetwork);
   return createPublicClient({
     chain: targetNetwork,
     transport: http(rpcUrl),
@@ -740,6 +764,87 @@ function merkleRoot(leaves: string[]) {
   return `0x${level[0]!.toString("hex")}`;
 }
 
+function defaultConfidentialityLogRootArtifactUrl(epoch: string) {
+  const configuredBase = process.env.RATELOOP_CONFIDENTIALITY_LOG_ROOT_ARTIFACT_BASE_URL?.trim();
+  if (configuredBase) {
+    return `${configuredBase.replace(/\/+$/, "")}/${encodeURIComponent(epoch)}.json`;
+  }
+  const appUrl = process.env.APP_URL?.trim() || process.env.NEXT_PUBLIC_APP_URL?.trim();
+  if (!appUrl) return null;
+  try {
+    return new URL(`/api/confidentiality/log-roots/${encodeURIComponent(epoch)}/artifact`, appUrl).toString();
+  } catch {
+    return null;
+  }
+}
+
+function buildConfidentialityLogRootArtifact(params: {
+  acceptanceCount: number;
+  accessCount: number;
+  end: Date;
+  epoch: string;
+  leaves: string[];
+  merkleRoot: string;
+  start: Date;
+}) {
+  return {
+    schemaVersion: "rateloop.confidentiality-log-root.v1",
+    epoch: params.epoch,
+    intervalStart: params.start.toISOString(),
+    intervalEnd: params.end.toISOString(),
+    merkleRoot: params.merkleRoot,
+    acceptanceCount: params.acceptanceCount,
+    accessCount: params.accessCount,
+    leaves: params.leaves.map(leaf => `0x${leaf}`),
+  };
+}
+
+function hashArtifactJson(artifactJson: string): Hex {
+  return `0x${createHash("sha256").update(artifactJson).digest("hex")}` as Hex;
+}
+
+async function publishConfidentialityLogRootAnchor(params: {
+  artifactHash: Hex;
+  artifactUri: string | null;
+  epoch: string;
+  merkleRoot: Hex;
+}) {
+  const privateKey = process.env.RATELOOP_CONFIDENTIALITY_LOG_ROOT_ANCHOR_PRIVATE_KEY?.trim();
+  if (!privateKey) return { status: "skipped" as const, reason: "anchor_private_key_unset" };
+  if (!PRIVATE_KEY_PATTERN.test(privateKey)) {
+    throw new Error("RATELOOP_CONFIDENTIALITY_LOG_ROOT_ANCHOR_PRIVATE_KEY must be a 32-byte hex private key.");
+  }
+
+  const context = getContractsForPrimaryServerNetwork();
+  const confidentialityEscrow = context?.contracts?.ConfidentialityEscrow;
+  if (!context || !confidentialityEscrow) {
+    throw new Error("ConfidentialityEscrow is not configured for log-root anchoring.");
+  }
+
+  const account = privateKeyToAccount(privateKey as Hex);
+  const publicClient = getServerPublicClient(context.targetNetwork);
+  const walletClient = createWalletClient({
+    account,
+    chain: context.targetNetwork,
+    transport: http(getServerRpcUrl(context.targetNetwork)),
+  });
+  const txHash = await walletClient.writeContract({
+    address: confidentialityEscrow.address,
+    abi: CONFIDENTIALITY_ESCROW_LOG_ROOT_ABI,
+    functionName: "publishLogRoot",
+    args: [params.epoch, params.merkleRoot, params.artifactHash, params.artifactUri ?? ""],
+  });
+  await publicClient.waitForTransactionReceipt({ hash: txHash });
+
+  return {
+    status: "submitted" as const,
+    chainId: context.targetNetwork.id,
+    contract: confidentialityEscrow.address,
+    publisher: account.address,
+    txHash,
+  };
+}
+
 function epochBounds(epoch: string) {
   const start = new Date(`${epoch}T00:00:00.000Z`);
   if (Number.isNaN(start.getTime())) throw new Error("Invalid confidentiality log epoch.");
@@ -751,7 +856,9 @@ export function confidentialityEpochForDate(date: Date) {
   return date.toISOString().slice(0, 10);
 }
 
-export async function publishConfidentialityLogRoot(params: { epoch?: string; now?: Date } = {}) {
+export async function publishConfidentialityLogRoot(
+  params: { anchor?: boolean; artifactUrl?: string | null; epoch?: string; now?: Date } = {},
+) {
   const now = params.now ?? new Date();
   const epoch = params.epoch ?? confidentialityEpochForDate(new Date(now.getTime() - 24 * 60 * 60 * 1000));
   const { start, end } = epochBounds(epoch);
@@ -792,17 +899,43 @@ export async function publishConfidentialityLogRoot(params: { epoch?: string; no
         row.viewedAt.toISOString(),
       ]),
     ),
-  ];
+  ].sort();
   const root = merkleRoot(leaves);
-  const artifactHash = leafHash({ epoch, leaves, root });
+  const artifact = buildConfidentialityLogRootArtifact({
+    acceptanceCount: acceptances.length,
+    accessCount: accesses.length,
+    end,
+    epoch,
+    leaves,
+    merkleRoot: root,
+    start,
+  });
+  const artifactJson = JSON.stringify(artifact);
+  const artifactHash = hashArtifactJson(artifactJson);
+  const artifactUrl =
+    params.artifactUrl === undefined ? defaultConfidentialityLogRootArtifactUrl(epoch) : params.artifactUrl;
+  const anchor =
+    params.anchor === false
+      ? { status: "skipped" as const, reason: "anchor_disabled" }
+      : await publishConfidentialityLogRootAnchor({
+          artifactHash,
+          artifactUri: artifactUrl,
+          epoch,
+          merkleRoot: root as Hex,
+        });
 
   await db
     .insert(confidentialityLogRoots)
     .values({
       acceptanceCount: acceptances.length,
       accessCount: accesses.length,
-      artifactHash: `0x${artifactHash}`,
-      artifactUrl: null,
+      anchorChainId: anchor.status === "submitted" ? anchor.chainId : null,
+      anchorContract: anchor.status === "submitted" ? anchor.contract : null,
+      anchorPublishedAt: anchor.status === "submitted" ? now : null,
+      anchorTxHash: anchor.status === "submitted" ? anchor.txHash : null,
+      artifactHash,
+      artifactJson,
+      artifactUrl,
       createdAt: now,
       epoch,
       merkleRoot: root,
@@ -813,8 +946,13 @@ export async function publishConfidentialityLogRoot(params: { epoch?: string; no
       set: {
         acceptanceCount: acceptances.length,
         accessCount: accesses.length,
-        artifactHash: `0x${artifactHash}`,
-        artifactUrl: null,
+        anchorChainId: anchor.status === "submitted" ? anchor.chainId : null,
+        anchorContract: anchor.status === "submitted" ? anchor.contract : null,
+        anchorPublishedAt: anchor.status === "submitted" ? now : null,
+        anchorTxHash: anchor.status === "submitted" ? anchor.txHash : null,
+        artifactHash,
+        artifactJson,
+        artifactUrl,
         merkleRoot: root,
         publishedAt: now,
       },
@@ -823,7 +961,9 @@ export async function publishConfidentialityLogRoot(params: { epoch?: string; no
   return {
     acceptanceCount: acceptances.length,
     accessCount: accesses.length,
-    artifactHash: `0x${artifactHash}`,
+    anchor,
+    artifactHash,
+    artifactUrl,
     epoch,
     merkleRoot: root,
   };

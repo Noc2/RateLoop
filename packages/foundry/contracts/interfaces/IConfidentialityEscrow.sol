@@ -21,6 +21,12 @@ interface IConfidentialityEscrow {
         returns (bytes32 identityKey);
     function recordAccessNexus(uint256 contentId, address holder) external;
     function recordConfidentialityNexusForRegistry(uint256 contentId, address holder, address registryAddress) external;
+    function publishLogRoot(
+        string calldata epoch,
+        bytes32 merkleRoot,
+        bytes32 artifactHash,
+        string calldata artifactUri
+    ) external;
     function releaseBond(uint256 contentId, bytes32 identityKey) external returns (uint256 amount);
     function slashBond(
         uint256 contentId,

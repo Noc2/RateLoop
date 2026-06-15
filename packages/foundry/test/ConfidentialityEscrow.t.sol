@@ -46,6 +46,17 @@ contract ConfidentialityEscrowTest is VotingTestBase {
     bytes32 internal constant VOTER2_ANCHOR = keccak256("voter-2-world-id");
     bytes32 internal constant DELEGATE_ANCHOR = keccak256("delegate-world-id");
     bytes32 internal constant EVIDENCE_HASH = keccak256("confidentiality evidence");
+    bytes32 internal constant LOG_ROOT = keccak256("confidentiality log root");
+    bytes32 internal constant LOG_ARTIFACT_HASH = keccak256("confidentiality log artifact");
+
+    event ConfidentialityLogRootPublished(
+        bytes32 indexed epochHash,
+        bytes32 indexed merkleRoot,
+        address indexed publisher,
+        string epoch,
+        bytes32 artifactHash,
+        string artifactUri
+    );
 
     struct FlaggedQuestionSubmission {
         string contextUrl;
@@ -499,6 +510,42 @@ contract ConfidentialityEscrowTest is VotingTestBase {
         vm.expectRevert();
         vm.prank(voter1);
         confidentialityEscrow.recordAccessNexus(contentId, voter1);
+    }
+
+    function testPublishLogRootRequiresRecorderRoleAndEmitsArtifactAnchor() public {
+        string memory epoch = "2026-06-15";
+        string memory artifactUri = "https://rateloop.ai/api/confidentiality/log-roots/2026-06-15/artifact";
+
+        vm.prank(voter1);
+        vm.expectRevert();
+        confidentialityEscrow.publishLogRoot(epoch, LOG_ROOT, LOG_ARTIFACT_HASH, artifactUri);
+
+        vm.expectEmit(true, true, true, true);
+        emit ConfidentialityLogRootPublished(
+            keccak256(bytes(epoch)), LOG_ROOT, owner, epoch, LOG_ARTIFACT_HASH, artifactUri
+        );
+        vm.prank(owner);
+        confidentialityEscrow.publishLogRoot(epoch, LOG_ROOT, LOG_ARTIFACT_HASH, artifactUri);
+    }
+
+    function testPublishLogRootRejectsInvalidArtifact() public {
+        vm.startPrank(owner);
+
+        vm.expectRevert("Invalid epoch");
+        confidentialityEscrow.publishLogRoot("", LOG_ROOT, LOG_ARTIFACT_HASH, "");
+
+        vm.expectRevert("Invalid artifact");
+        confidentialityEscrow.publishLogRoot("2026-06-15", LOG_ROOT, bytes32(0), "");
+
+        vm.expectRevert("Invalid artifact URI");
+        confidentialityEscrow.publishLogRoot(
+            "2026-06-15",
+            LOG_ROOT,
+            LOG_ARTIFACT_HASH,
+            "https://rateloop.ai/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        );
+
+        vm.stopPrank();
     }
 
     function testGatedQuestionRejectsPublicContextAndDetailsUrl() public {

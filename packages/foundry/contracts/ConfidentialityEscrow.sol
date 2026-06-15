@@ -66,6 +66,8 @@ contract ConfidentialityEscrow is
     uint256 public constant DEFAULT_MAX_BOND_LOCK_DURATION = 120 days;
     uint256 public constant MIN_MAX_BOND_LOCK_DURATION = 30 days;
     uint256 public constant MAX_MAX_BOND_LOCK_DURATION = 180 days;
+    uint256 public constant MAX_LOG_ROOT_EPOCH_LENGTH = 32;
+    uint256 public constant MAX_LOG_ROOT_ARTIFACT_URI_LENGTH = 512;
 
     struct BondPosition {
         address poster;
@@ -111,6 +113,14 @@ contract ConfidentialityEscrow is
     event ConfiscationRecipientUpdated(address indexed previousRecipient, address indexed newRecipient);
     event BondBoundsUpdated(uint256 maxBond, uint256 evidenceWindow, uint256 maxBondLockDuration);
     event ConfidentialityNexusRecorded(uint256 indexed contentId, address indexed holder, address indexed recorder);
+    event ConfidentialityLogRootPublished(
+        bytes32 indexed epochHash,
+        bytes32 indexed merkleRoot,
+        address indexed publisher,
+        string epoch,
+        bytes32 artifactHash,
+        string artifactUri
+    );
 
     constructor() {
         _disableInitializers();
@@ -296,6 +306,21 @@ contract ConfidentialityEscrow is
         whenNotPaused
     {
         _recordConfidentialityNexus(contentId, holder, msg.sender, protocolConfig.raterRegistry());
+    }
+
+    function publishLogRoot(
+        string calldata epoch,
+        bytes32 merkleRoot,
+        bytes32 artifactHash,
+        string calldata artifactUri
+    ) external onlyRole(ACCESS_RECORDER_ROLE) whenNotPaused {
+        uint256 epochLength = bytes(epoch).length;
+        if (epochLength == 0 || epochLength > MAX_LOG_ROOT_EPOCH_LENGTH) revert("Invalid epoch");
+        if (artifactHash == bytes32(0)) revert("Invalid artifact");
+        if (bytes(artifactUri).length > MAX_LOG_ROOT_ARTIFACT_URI_LENGTH) revert("Invalid artifact URI");
+        emit ConfidentialityLogRootPublished(
+            keccak256(bytes(epoch)), merkleRoot, msg.sender, epoch, artifactHash, artifactUri
+        );
     }
 
     function _recordConfidentialityNexus(uint256 contentId, address holder, address recorder, address registryAddress)

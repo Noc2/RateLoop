@@ -20,11 +20,14 @@ export async function POST(request: NextRequest) {
   const body = await parseJsonBody(request).catch(() => ({}));
   if (!isJsonObjectBody(body)) return jsonBodyErrorResponse(body);
   const epoch = typeof body.epoch === "string" && EPOCH_PATTERN.test(body.epoch) ? body.epoch : undefined;
+  const artifactUrl =
+    typeof body.artifactUrl === "string" && body.artifactUrl.trim() ? body.artifactUrl.trim() : undefined;
+  const anchor = body.anchor === false ? false : undefined;
 
   try {
     return NextResponse.json({
       ok: true,
-      ...(await publishConfidentialityLogRoot({ epoch })),
+      ...(await publishConfidentialityLogRoot({ anchor, artifactUrl, epoch })),
     });
   } catch (error) {
     console.error("Error publishing confidentiality log root:", error);

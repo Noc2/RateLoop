@@ -175,6 +175,32 @@ export const ConfidentialityEscrowAbi = [
   },
   {
     "type": "function",
+    "name": "MAX_LOG_ROOT_ARTIFACT_URI_LENGTH",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MAX_LOG_ROOT_EPOCH_LENGTH",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "MAX_MAX_BOND_LOCK_DURATION",
     "inputs": [],
     "outputs": [
@@ -824,6 +850,34 @@ export const ConfidentialityEscrowAbi = [
   },
   {
     "type": "function",
+    "name": "publishLogRoot",
+    "inputs": [
+      {
+        "name": "epoch",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "merkleRoot",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "artifactHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "artifactUri",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "recordAccessNexus",
     "inputs": [
       {
@@ -1242,6 +1296,49 @@ export const ConfidentialityEscrowAbi = [
         "type": "uint8",
         "indexed": false,
         "internalType": "uint8"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ConfidentialityLogRootPublished",
+    "inputs": [
+      {
+        "name": "epochHash",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "merkleRoot",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "publisher",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "epoch",
+        "type": "string",
+        "indexed": false,
+        "internalType": "string"
+      },
+      {
+        "name": "artifactHash",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "artifactUri",
+        "type": "string",
+        "indexed": false,
+        "internalType": "string"
       }
     ],
     "anonymous": false

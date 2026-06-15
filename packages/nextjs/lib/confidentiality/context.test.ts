@@ -7,10 +7,12 @@ const env = process.env as Record<string, string | undefined>;
 const originalDatabaseUrl = env.DATABASE_URL;
 const originalNodeEnv = env.NODE_ENV;
 const originalConfidentialitySecret = env.RATELOOP_CONFIDENTIALITY_SECRET;
+const originalAppUrl = env.APP_URL;
 
 env.DATABASE_URL = "memory:";
 env.NODE_ENV = "test";
 env.RATELOOP_CONFIDENTIALITY_SECRET = "test-confidentiality-secret";
+env.APP_URL = "https://rateloop.ai";
 
 type DbModule = typeof import("~~/lib/db");
 type DbTestMemoryModule = typeof import("~~/lib/db/testMemory");
@@ -113,6 +115,7 @@ after(() => {
   restoreEnv("DATABASE_URL", originalDatabaseUrl);
   restoreEnv("NODE_ENV", originalNodeEnv);
   restoreEnv("RATELOOP_CONFIDENTIALITY_SECRET", originalConfidentialitySecret);
+  restoreEnv("APP_URL", originalAppUrl);
 });
 
 test("upserts gated metadata and flips disclosure after settlement", async () => {
@@ -212,7 +215,25 @@ test("authorizes accepted signed sessions and logs gated context access", async 
   });
   assert.equal(root.accessCount, 1);
   assert.equal(root.acceptanceCount, 1);
+  assert.equal(root.anchor.status, "skipped");
+  assert.equal(root.artifactUrl, `https://rateloop.ai/api/confidentiality/log-roots/${root.epoch}/artifact`);
+  assert.match(root.artifactHash, /^0x[0-9a-f]{64}$/);
   assert.match(root.merkleRoot, /^0x[0-9a-f]{64}$/);
+
+  const rootRows = await dbModule.dbClient.execute({
+    sql: "SELECT artifact_hash, artifact_json, artifact_url, anchor_tx_hash FROM confidentiality_log_roots WHERE epoch = ?",
+    args: [root.epoch],
+  });
+  assert.equal(rootRows.rowCount, 1);
+  assert.equal(rootRows.rows[0].artifact_hash, root.artifactHash);
+  assert.equal(rootRows.rows[0].artifact_url, root.artifactUrl);
+  assert.equal(rootRows.rows[0].anchor_tx_hash, null);
+  const artifact = JSON.parse(String(rootRows.rows[0].artifact_json));
+  assert.equal(artifact.schemaVersion, "rateloop.confidentiality-log-root.v1");
+  assert.equal(artifact.merkleRoot, root.merkleRoot);
+  assert.equal(artifact.acceptanceCount, 1);
+  assert.equal(artifact.accessCount, 1);
+  assert.equal(artifact.leaves.length, 2);
 });
 
 test("rejects gated reads without an active human credential identity", async () => {

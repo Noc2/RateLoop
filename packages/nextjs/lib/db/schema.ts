@@ -518,11 +518,17 @@ export const confidentialityLogRoots = pgTable(
     accessCount: integer("access_count").notNull().default(0),
     artifactUrl: text("artifact_url"),
     artifactHash: text("artifact_hash"),
+    artifactJson: text("artifact_json"),
+    anchorChainId: integer("anchor_chain_id"),
+    anchorContract: text("anchor_contract"),
+    anchorTxHash: text("anchor_tx_hash"),
+    anchorPublishedAt: timestamp("anchor_published_at", { mode: "date", withTimezone: true }),
     publishedAt: timestamp("published_at", { mode: "date", withTimezone: true }).notNull(),
     createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull(),
   },
   table => ({
     publishedIdx: index("confidentiality_log_roots_published_idx").on(table.publishedAt),
+    anchorTxIdx: index("confidentiality_log_roots_anchor_tx_idx").on(table.anchorTxHash),
   }),
 );
 
