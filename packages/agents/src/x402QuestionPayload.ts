@@ -1,0 +1,960 @@
+import {
+  BOUNTY_ELIGIBILITY_CREDENTIAL_MASK,
+  BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG,
+  DEFAULT_ROUND_CONFIG,
+  MIN_NONZERO_CONFIDENTIALITY_BOND,
+  WORLD_CHAIN_USDC_BY_CHAIN_ID,
+  requiredQuestionRewardParticipants,
+} from "@rateloop/contracts/protocol";
+import { normalizeTargetAudience } from "@rateloop/node-utils/profileSelfReport";
+import {
+  findBlockedContentTags,
+  getContentTitleValidationError,
+} from "@rateloop/node-utils/submissionValidation";
+import { X402_QUESTION_TOP_LEVEL_FIELDS } from "@rateloop/node-utils/x402QuestionFields";
+import { createHash } from "node:crypto";
+import {
+  DEFAULT_AGENT_TEMPLATE_ID,
+  DEFAULT_AGENT_TEMPLATE_VERSION,
+  buildQuestionMetadataUri,
+  buildQuestionSpecHashes,
+  normalizeQuestionMetadataBaseUrl,
+  type AgentQuestionSpecInput,
+} from "./questionSpecs";
+import { findAgentResultTemplate } from "./templates";
+
+export const X402_WORLD_CHAIN_USDC_BY_CHAIN_ID = WORLD_CHAIN_USDC_BY_CHAIN_ID;
+export const X402_SUBMISSION_REWARD_ASSET_USDC = 1;
+export const X402_USDC_DECIMALS = 6;
+export const X402_MIN_NONZERO_CONFIDENTIALITY_BOND = MIN_NONZERO_CONFIDENTIALITY_BOND;
+
+const X402_DEFAULT_SUBMISSION_BOUNTY_USDC = 1_000_000n;
+const X402_MIN_REWARD_POOL_REQUIRED_VOTERS = 3n;
+const X402_MIN_REWARD_POOL_SETTLED_ROUNDS = 1n;
+const X402_MAX_QUESTION_BUNDLE_COUNT = 10;
+const EMPTY_DETAILS_HASH = `0x${"0".repeat(64)}` as const;
+const AFTER_SETTLEMENT_DISCLOSURE_POLICY = "after_settlement";
+const DEFAULT_CONFIDENTIALITY_DISCLOSURE_POLICY = "private_forever";
+const CLIENT_REQUEST_ID_PATTERN = /^[A-Za-z0-9._:-]{4,160}$/;
+const DIRECT_IMAGE_URL_PATH_PATTERN = /\.(?:avif|bmp|gif|jpe?g|png|svg|webp)$/i;
+const QUESTION_DETAILS_PATH_PATTERN = /^\/api\/attachments\/details\/det_[A-Za-z0-9_-]{16,80}$/;
+const IMAGE_ATTACHMENT_PATH_PATTERN = /^\/api\/attachments\/images\/(att_[A-Za-z0-9_-]{16,80})\.webp$/;
+const IMAGE_ATTACHMENT_SHA256_FRAGMENT_PATTERN = /^#sha256=0x([a-fA-F0-9]{64})$/;
+const RATELOOP_PRODUCTION_ORIGINS = ["https://www.rateloop.ai", "https://rateloop.ai"] as const;
+
+export class X402QuestionInputError extends Error {
+  readonly status = 400;
+
+  constructor(message: string) {
+    super(message);
+    this.name = "X402QuestionInputError";
+  }
+}
+
+export type X402QuestionRoundConfig = {
+  epochDuration: bigint;
+  maxDuration: bigint;
+  minVoters: bigint;
+  maxVoters: bigint;
+};
+
+export type SerializedX402QuestionRoundConfig = {
+  epochDuration: string;
+  maxDuration: string;
+  minVoters: string;
+  maxVoters: string;
+};
+
+export type X402QuestionPayload = {
+  clientRequestId: string;
+  chainId: number;
+  questions: X402QuestionItemPayload[];
+  roundConfig: X402QuestionRoundConfig;
+  bounty: {
+    asset: "USDC";
+    amount: bigint;
+    requiredVoters: bigint;
+    requiredSettledRounds: bigint;
+    bountyStartBy: bigint;
+    bountyWindowSeconds: bigint;
+    feedbackWindowSeconds: bigint;
+    bountyEligibility: number;
+  };
+};
+
+type X402QuestionMetadata = ReturnType<typeof buildQuestionSpecHashes>["questionMetadata"];
+type X402QuestionConfidentiality = NonNullable<AgentQuestionSpecInput["confidentiality"]>;
+
+export type X402QuestionItemPayload = {
+  confidentiality: X402QuestionConfidentiality;
+  contextUrl: string;
+  imageUrls: string[];
+  videoUrl: string;
+  title: string;
+  detailsHash: `0x${string}`;
+  detailsUrl: string;
+  tags: string;
+  tagList: string[];
+  categoryId: bigint;
+  targetAudience: AgentQuestionSpecInput["targetAudience"];
+  templateId: string;
+  templateInputs: AgentQuestionSpecInput["templateInputs"];
+  templateVersion: number;
+  questionMetadata?: X402QuestionMetadata;
+  questionMetadataHash: `0x${string}`;
+  questionMetadataUri?: string;
+  resultSpecHash: `0x${string}`;
+};
+
+export type X402QuestionCanonicalPayload = ReturnType<typeof toCanonicalQuestionPayload>;
+
+export type X402QuestionOperation = {
+  operationKey: `0x${string}`;
+  payloadHash: string;
+  canonicalPayload: X402QuestionCanonicalPayload;
+};
+
+export type X402QuestionParserOptions = {
+  allowedRateLoopAttachmentOrigins?: readonly string[];
+  allowLocalhostAttachmentOrigins?: boolean;
+  questionMetadataBaseUrl?: string | null;
+};
+
+export function serializeX402QuestionRoundConfig(
+  config: X402QuestionRoundConfig,
+): SerializedX402QuestionRoundConfig {
+  return {
+    epochDuration: config.epochDuration.toString(),
+    maxDuration: config.maxDuration.toString(),
+    minVoters: config.minVoters.toString(),
+    maxVoters: config.maxVoters.toString(),
+  };
+}
+
+export function assertSupportedX402BundleBounty(
+  bounty: Pick<X402QuestionPayload["bounty"], "bountyStartBy" | "bountyWindowSeconds">,
+) {
+  if (bounty.bountyStartBy <= 0n) {
+    throw new X402QuestionInputError("bounty.bountyStartBy must be greater than zero for bundle submissions.");
+  }
+  if (bounty.bountyWindowSeconds <= 0n) {
+    throw new X402QuestionInputError("bounty.bountyWindowSeconds must be greater than zero for bundle submissions.");
+  }
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function readString(value: unknown, fieldName: string): string {
+  if (typeof value !== "string") {
+    throw new X402QuestionInputError(`${fieldName} must be a string.`);
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    throw new X402QuestionInputError(`${fieldName} is required.`);
+  }
+
+  return trimmed;
+}
+
+function readOptionalString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function readOptionalBytes32Hex(value: unknown, fieldName: string): `0x${string}` {
+  if (value === undefined || value === null || value === "") {
+    return EMPTY_DETAILS_HASH;
+  }
+  if (typeof value === "string" && /^0x[a-fA-F0-9]{64}$/.test(value)) {
+    return value as `0x${string}`;
+  }
+
+  throw new X402QuestionInputError(`${fieldName} must be a bytes32 hex string.`);
+}
+
+function parseNonNegativeInteger(value: unknown, fieldName: string): bigint {
+  const rawValue =
+    typeof value === "bigint" || typeof value === "number" || typeof value === "string" ? String(value).trim() : "";
+  if (!/^\d+$/.test(rawValue)) {
+    throw new X402QuestionInputError(`${fieldName} must be a non-negative integer.`);
+  }
+
+  return BigInt(rawValue);
+}
+
+function parsePositiveAtomicAmount(value: unknown, fieldName: string): bigint {
+  const parsed = parseNonNegativeInteger(value, fieldName);
+  if (parsed <= 0n) {
+    throw new X402QuestionInputError(`${fieldName} must be greater than zero.`);
+  }
+  return parsed;
+}
+
+function normalizeHttpsUrl(value: string, fieldName: string): string {
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== "https:") {
+      throw new X402QuestionInputError(`${fieldName} must be an HTTPS URL.`);
+    }
+    if (parsed.username || parsed.password) {
+      throw new X402QuestionInputError(`${fieldName} must not include credentials.`);
+    }
+    return parsed.toString();
+  } catch (error) {
+    if (error instanceof X402QuestionInputError) throw error;
+    throw new X402QuestionInputError(`${fieldName} must be a valid HTTPS URL.`);
+  }
+}
+
+function matchesHostname(hostname: string, domain: string): boolean {
+  const normalizedHost = hostname.toLowerCase();
+  const normalizedDomain = domain.toLowerCase();
+  return normalizedHost === normalizedDomain || normalizedHost.endsWith(`.${normalizedDomain}`);
+}
+
+function extractYouTubeId(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    let id: string | null | undefined;
+    if (matchesHostname(parsed.hostname, "youtube.com") && parsed.searchParams.has("v")) {
+      id = parsed.searchParams.get("v");
+    } else if (parsed.hostname.toLowerCase() === "youtu.be") {
+      id = parsed.pathname.slice(1).split("/")[0];
+    } else if (matchesHostname(parsed.hostname, "youtube.com") && parsed.pathname.startsWith("/embed/")) {
+      id = parsed.pathname.split("/embed/")[1]?.split("/")[0];
+    }
+    return id && /^[\w-]+$/.test(id) ? id : null;
+  } catch {
+    return null;
+  }
+}
+
+function canonicalizeUrl(url: string): string {
+  const youtubeId = extractYouTubeId(url);
+  if (youtubeId) {
+    return `https://www.youtube.com/watch?v=${youtubeId}`;
+  }
+  try {
+    const parsed = new URL(url);
+    let hostname = parsed.hostname.toLowerCase();
+    if (hostname.startsWith("www.")) hostname = hostname.slice(4);
+    const path = parsed.pathname.replace(/\/+$/, "") || "/";
+    return `https://${hostname}${path}${parsed.search}`;
+  } catch {
+    return url;
+  }
+}
+
+function normalizeQuestionContextUrl(value: string, fieldName: string): string {
+  const normalized = normalizeHttpsUrl(value, fieldName);
+  try {
+    if (DIRECT_IMAGE_URL_PATH_PATTERN.test(new URL(normalized).pathname)) {
+      throw new X402QuestionInputError(
+        `${fieldName} must be a public HTTPS page URL. Upload images through imageUrls.`,
+      );
+    }
+  } catch (error) {
+    if (error instanceof X402QuestionInputError) throw error;
+    throw new X402QuestionInputError(`${fieldName} must be a valid HTTPS URL.`);
+  }
+  return canonicalizeUrl(normalized);
+}
+
+function normalizeQuestionDetails(value: Record<string, unknown>, fieldPrefix: string) {
+  const detailsUrl = readOptionalString(value.detailsUrl);
+  const detailsHash = readOptionalBytes32Hex(value.detailsHash, `${fieldPrefix}.detailsHash`);
+
+  if (detailsUrl) {
+    if (detailsHash === EMPTY_DETAILS_HASH) {
+      throw new X402QuestionInputError(`${fieldPrefix}.detailsHash is required when detailsUrl is provided.`);
+    }
+    return {
+      detailsHash,
+      detailsUrl: normalizeHttpsUrl(detailsUrl, `${fieldPrefix}.detailsUrl`),
+    };
+  }
+
+  if (detailsHash !== EMPTY_DETAILS_HASH) {
+    throw new X402QuestionInputError(`${fieldPrefix}.detailsUrl is required when detailsHash is provided.`);
+  }
+
+  return {
+    detailsHash,
+    detailsUrl: "",
+  };
+}
+
+function normalizeOrigin(value: string | null | undefined) {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+  try {
+    return new URL(trimmed).origin;
+  } catch {
+    return null;
+  }
+}
+
+function isLocalhostOrigin(origin: string) {
+  try {
+    const parsed = new URL(origin);
+    return ["localhost", "127.0.0.1", "::1", "[::1]"].includes(parsed.hostname);
+  } catch {
+    return false;
+  }
+}
+
+function getDefaultRateLoopAttachmentOrigins() {
+  return [
+    ...RATELOOP_PRODUCTION_ORIGINS,
+    normalizeOrigin(process.env.APP_URL),
+    normalizeOrigin(process.env.NEXT_PUBLIC_APP_URL),
+    normalizeOrigin(process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null),
+  ].filter((origin): origin is string => Boolean(origin));
+}
+
+function getAllowedRateLoopAttachmentOrigins(options: X402QuestionParserOptions) {
+  return new Set(
+    (options.allowedRateLoopAttachmentOrigins ?? getDefaultRateLoopAttachmentOrigins())
+      .map(normalizeOrigin)
+      .filter((origin): origin is string => Boolean(origin)),
+  );
+}
+
+function shouldAllowLocalhostAttachmentOrigins(options: X402QuestionParserOptions) {
+  return (
+    options.allowLocalhostAttachmentOrigins ??
+    (process.env.NODE_ENV !== "production" || process.env.NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD === "true")
+  );
+}
+
+function isRateLoopAttachmentOrigin(parsed: URL, options: X402QuestionParserOptions) {
+  return (
+    getAllowedRateLoopAttachmentOrigins(options).has(parsed.origin) ||
+    (shouldAllowLocalhostAttachmentOrigins(options) && isLocalhostOrigin(parsed.origin))
+  );
+}
+
+function isHostedQuestionDetailsUrl(value: string, options: X402QuestionParserOptions): boolean {
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== "https:" || parsed.username || parsed.password || parsed.search || parsed.hash) {
+      return false;
+    }
+    return QUESTION_DETAILS_PATH_PATTERN.test(parsed.pathname) && isRateLoopAttachmentOrigin(parsed, options);
+  } catch {
+    return false;
+  }
+}
+
+function normalizeUploadedImageAttachmentUrl(value: string, options: X402QuestionParserOptions): string | null {
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== "https:" || parsed.username || parsed.password || parsed.search) {
+      return null;
+    }
+    if (!IMAGE_ATTACHMENT_PATH_PATTERN.test(parsed.pathname)) {
+      return null;
+    }
+    const digestMatch = parsed.hash.match(IMAGE_ATTACHMENT_SHA256_FRAGMENT_PATTERN);
+    if (!digestMatch || !isRateLoopAttachmentOrigin(parsed, options)) {
+      return null;
+    }
+
+    parsed.hash = `sha256=0x${digestMatch[1].toLowerCase()}`;
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
+function normalizeImageUrls(value: unknown, options: X402QuestionParserOptions): string[] {
+  if (value === undefined || value === null) {
+    return [];
+  }
+  if (!Array.isArray(value)) {
+    throw new X402QuestionInputError(
+      "imageUrls must be an array of RateLoop imageUrl values returned by rateloop_upload_image.",
+    );
+  }
+
+  const imageUrls = value.map((entry, index) => {
+    const normalized = normalizeHttpsUrl(readString(entry, `imageUrls[${index}]`), `imageUrls[${index}]`);
+    const uploadedImageUrl = normalizeUploadedImageAttachmentUrl(normalized, options);
+    if (!uploadedImageUrl) {
+      throw new X402QuestionInputError(
+        "imageUrls must come from RateLoop uploads. Upload bytes with rateloop_upload_image first.",
+      );
+    }
+    return uploadedImageUrl;
+  });
+
+  if (imageUrls.length > 4) {
+    throw new X402QuestionInputError("imageUrls supports at most four images.");
+  }
+
+  return [...new Set(imageUrls)].sort();
+}
+
+function isYouTubeVideoUrl(url: string): boolean {
+  return extractYouTubeId(url) !== null;
+}
+
+function normalizeTags(value: unknown): { tags: string; tagList: string[] } {
+  const rawTags = Array.isArray(value) ? value : typeof value === "string" ? value.split(",") : [];
+  const tagList = rawTags
+    .map((tag) => (typeof tag === "string" ? tag.trim() : ""))
+    .filter(Boolean)
+    .slice(0, 4);
+
+  if (tagList.length === 0) {
+    throw new X402QuestionInputError("At least one tag is required.");
+  }
+  if (tagList.length > 3) {
+    throw new X402QuestionInputError("At most three tags are supported.");
+  }
+
+  const blockedTags = findBlockedContentTags(tagList);
+  if (blockedTags.length > 0) {
+    throw new X402QuestionInputError("Tags contain prohibited content.");
+  }
+
+  return {
+    tagList,
+    tags: tagList.join(","),
+  };
+}
+
+function normalizeTemplateInputs(value: unknown, fieldName: string): AgentQuestionSpecInput["templateInputs"] {
+  if (value === undefined || value === null) return null;
+  if (!isObject(value)) {
+    throw new X402QuestionInputError(`${fieldName} must be an object when provided.`);
+  }
+
+  try {
+    return JSON.parse(JSON.stringify(value)) as AgentQuestionSpecInput["templateInputs"];
+  } catch {
+    throw new X402QuestionInputError(`${fieldName} must be JSON serializable.`);
+  }
+}
+
+function normalizeQuestionTargetAudience(value: unknown, fieldName: string): AgentQuestionSpecInput["targetAudience"] {
+  try {
+    return normalizeTargetAudience(value, { fieldPrefix: fieldName }) as AgentQuestionSpecInput["targetAudience"];
+  } catch (error) {
+    if (error instanceof Error) {
+      throw new X402QuestionInputError(error.message);
+    }
+    throw new X402QuestionInputError(`${fieldName} is invalid.`);
+  }
+}
+
+function normalizeQuestionConfidentiality(value: unknown, fieldName: string): X402QuestionConfidentiality {
+  if (value === undefined || value === null) {
+    return {
+      bond: null,
+      disclosurePolicy: null,
+      visibility: "public",
+    };
+  }
+  if (!isObject(value)) {
+    throw new X402QuestionInputError(`${fieldName} must be an object when provided.`);
+  }
+
+  const visibility = readOptionalString(value.visibility) || "public";
+  if (visibility !== "public" && visibility !== "gated") {
+    throw new X402QuestionInputError(`${fieldName}.visibility must be public or gated.`);
+  }
+  if (visibility === "public") {
+    if (value.bond !== undefined && value.bond !== null) {
+      throw new X402QuestionInputError(`${fieldName}.bond is only supported for gated questions.`);
+    }
+    return {
+      bond: null,
+      disclosurePolicy: null,
+      visibility,
+    };
+  }
+
+  const rawDisclosurePolicy = readOptionalString(value.disclosurePolicy) || DEFAULT_CONFIDENTIALITY_DISCLOSURE_POLICY;
+  const disclosurePolicy =
+    rawDisclosurePolicy === "private_until_settlement" ? AFTER_SETTLEMENT_DISCLOSURE_POLICY : rawDisclosurePolicy;
+  if (disclosurePolicy !== AFTER_SETTLEMENT_DISCLOSURE_POLICY && disclosurePolicy !== "private_forever") {
+    throw new X402QuestionInputError(`${fieldName}.disclosurePolicy must be after_settlement or private_forever.`);
+  }
+
+  let bond: NonNullable<X402QuestionConfidentiality["bond"]> | null = null;
+  if (value.bond !== undefined && value.bond !== null) {
+    if (!isObject(value.bond)) {
+      throw new X402QuestionInputError(`${fieldName}.bond must be an object when provided.`);
+    }
+    const amount = parseNonNegativeInteger(value.bond.amount ?? 0n, `${fieldName}.bond.amount`);
+    if (amount > 0n && amount < X402_MIN_NONZERO_CONFIDENTIALITY_BOND) {
+      throw new X402QuestionInputError(
+        `${fieldName}.bond.amount must be 0 or at least ${X402_MIN_NONZERO_CONFIDENTIALITY_BOND} atomic units.`,
+      );
+    }
+    const asset = readOptionalString(value.bond.asset).toUpperCase() || "LREP";
+    if (asset !== "LREP" && asset !== "USDC") {
+      throw new X402QuestionInputError(`${fieldName}.bond.asset must be LREP or USDC.`);
+    }
+    bond = {
+      amount: amount.toString(),
+      asset,
+    };
+  }
+
+  return {
+    bond: bond ?? {
+      amount: "0",
+      asset: "LREP",
+    },
+    disclosurePolicy,
+    visibility,
+  };
+}
+
+function normalizeTemplateSelection(
+  value: Record<string, unknown>,
+  fieldPrefix: string,
+  defaults: {
+    confidentiality?: X402QuestionConfidentiality;
+    templateId?: string;
+    templateInputs?: AgentQuestionSpecInput["templateInputs"];
+    templateVersion?: number;
+  },
+) {
+  const rawTemplateId = readOptionalString(value.templateId) || defaults.templateId || DEFAULT_AGENT_TEMPLATE_ID;
+  const template = findAgentResultTemplate(rawTemplateId);
+  if (!template) {
+    throw new X402QuestionInputError(`${fieldPrefix}.templateId is not supported.`);
+  }
+
+  const templateVersion =
+    value.templateVersion === undefined || value.templateVersion === null
+      ? (defaults.templateVersion ?? template.version)
+      : Number.parseInt(String(value.templateVersion), 10);
+  if (!Number.isSafeInteger(templateVersion) || templateVersion <= 0) {
+    throw new X402QuestionInputError(`${fieldPrefix}.templateVersion must be a positive integer.`);
+  }
+  if (templateVersion !== template.version) {
+    throw new X402QuestionInputError(
+      `${fieldPrefix}.templateVersion ${templateVersion} is not supported for ${template.id}.`,
+    );
+  }
+
+  const templateInputs =
+    value.templateInputs === undefined
+      ? (defaults.templateInputs ?? null)
+      : normalizeTemplateInputs(value.templateInputs, `${fieldPrefix}.templateInputs`);
+
+  return {
+    template,
+    templateId: template.id,
+    templateInputs,
+    templateVersion,
+  };
+}
+
+function normalizeChainId(value: unknown, fallbackChainId?: number): number {
+  const rawValue = value ?? fallbackChainId;
+  const chainId = typeof rawValue === "number" ? rawValue : Number.parseInt(String(rawValue ?? ""), 10);
+  if (!Number.isSafeInteger(chainId) || chainId <= 0) {
+    throw new X402QuestionInputError("chainId must be a positive integer.");
+  }
+
+  return chainId;
+}
+
+function isSupportedBountyEligibility(value: number): boolean {
+  if (!Number.isSafeInteger(value) || value < 0 || value > 255) return false;
+  if ((value & ~(BOUNTY_ELIGIBILITY_CREDENTIAL_MASK | BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG)) !== 0) {
+    return false;
+  }
+
+  const credentialMask = value & BOUNTY_ELIGIBILITY_CREDENTIAL_MASK;
+  return credentialMask === 0 ? value === 0 : true;
+}
+
+function normalizeBounty(value: unknown): X402QuestionPayload["bounty"] {
+  if (!isObject(value)) {
+    throw new X402QuestionInputError("bounty is required.");
+  }
+
+  const asset = readOptionalString(value.asset).toUpperCase() || "USDC";
+  if (asset !== "USDC") {
+    throw new X402QuestionInputError("Only USDC bounties are supported for agent question submissions.");
+  }
+
+  const amount = parsePositiveAtomicAmount(value.amount, "bounty.amount");
+  const requiredVoters = parseNonNegativeInteger(
+    value.requiredVoters ?? X402_MIN_REWARD_POOL_REQUIRED_VOTERS,
+    "bounty.requiredVoters",
+  );
+  const requiredSettledRounds = parseNonNegativeInteger(
+    value.requiredSettledRounds ?? X402_MIN_REWARD_POOL_SETTLED_ROUNDS,
+    "bounty.requiredSettledRounds",
+  );
+  const bountyStartBy = parseNonNegativeInteger(value.bountyStartBy ?? 0n, "bounty.bountyStartBy");
+  const bountyWindowSeconds = parseNonNegativeInteger(value.bountyWindowSeconds ?? 0n, "bounty.bountyWindowSeconds");
+  const feedbackWindowSeconds = parseNonNegativeInteger(
+    value.feedbackWindowSeconds ?? value.bountyWindowSeconds ?? 0n,
+    "bounty.feedbackWindowSeconds",
+  );
+  const bountyEligibility = Number(parseNonNegativeInteger(value.bountyEligibility ?? 0n, "bounty.bountyEligibility"));
+
+  if (requiredVoters < X402_MIN_REWARD_POOL_REQUIRED_VOTERS) {
+    throw new X402QuestionInputError(`bounty.requiredVoters must be at least ${X402_MIN_REWARD_POOL_REQUIRED_VOTERS}.`);
+  }
+  const requiredVoterFloor = BigInt(requiredQuestionRewardParticipants(amount));
+  if (requiredVoters < requiredVoterFloor) {
+    throw new X402QuestionInputError(
+      `bounty.requiredVoters must be at least ${requiredVoterFloor} for this bounty amount.`,
+    );
+  }
+  if (requiredSettledRounds < X402_MIN_REWARD_POOL_SETTLED_ROUNDS) {
+    throw new X402QuestionInputError(
+      `bounty.requiredSettledRounds must be at least ${X402_MIN_REWARD_POOL_SETTLED_ROUNDS}.`,
+    );
+  }
+  if (amount < X402_DEFAULT_SUBMISSION_BOUNTY_USDC) {
+    throw new X402QuestionInputError("bounty.amount must be at least 1000000 atomic USDC.");
+  }
+  if (amount < requiredVoters * requiredSettledRounds) {
+    throw new X402QuestionInputError("bounty.amount is too small for the selected voter requirements.");
+  }
+  if (feedbackWindowSeconds > bountyWindowSeconds) {
+    throw new X402QuestionInputError("bounty.feedbackWindowSeconds cannot exceed bounty.bountyWindowSeconds.");
+  }
+  if (!isSupportedBountyEligibility(bountyEligibility)) {
+    throw new X402QuestionInputError(
+      "bounty.bountyEligibility must be 0 or a supported credential bitmask: 2 Selfie Check, 4 Passport, 8 Proof of Human, add values to allow any selected credential, and add 128 to require a recent recheck.",
+    );
+  }
+  assertSupportedX402BundleBounty({
+    bountyStartBy,
+    bountyWindowSeconds,
+  });
+
+  return {
+    asset: "USDC",
+    amount,
+    requiredVoters,
+    requiredSettledRounds,
+    bountyStartBy,
+    bountyWindowSeconds,
+    feedbackWindowSeconds,
+    bountyEligibility,
+  };
+}
+
+function defaultRoundConfig(requiredVoters: bigint): X402QuestionRoundConfig {
+  const defaultMaxVoters = BigInt(DEFAULT_ROUND_CONFIG.maxVoters);
+  return {
+    epochDuration: BigInt(DEFAULT_ROUND_CONFIG.epochDurationSeconds),
+    maxDuration: BigInt(DEFAULT_ROUND_CONFIG.maxDurationSeconds),
+    minVoters: requiredVoters,
+    maxVoters: defaultMaxVoters < requiredVoters ? requiredVoters : defaultMaxVoters,
+  };
+}
+
+function normalizeRoundConfig(value: unknown, requiredVoters: bigint): X402QuestionRoundConfig {
+  if (value === undefined || value === null) {
+    return defaultRoundConfig(requiredVoters);
+  }
+  if (!isObject(value)) {
+    throw new X402QuestionInputError("question.roundConfig must be an object.");
+  }
+
+  const epochDuration = parseNonNegativeInteger(
+    value.epochDuration ?? value.blindPhaseSeconds ?? value.blindSeconds,
+    "question.roundConfig.epochDuration",
+  );
+  const maxDuration = parseNonNegativeInteger(
+    value.maxDuration ?? value.maxDurationSeconds ?? value.deadlineSeconds,
+    "question.roundConfig.maxDuration",
+  );
+  const minVoters = parseNonNegativeInteger(value.minVoters, "question.roundConfig.minVoters");
+  const maxVoters = parseNonNegativeInteger(value.maxVoters, "question.roundConfig.maxVoters");
+
+  if (epochDuration <= 0n) {
+    throw new X402QuestionInputError("question.roundConfig.epochDuration must be greater than zero.");
+  }
+  if (maxDuration <= 0n) {
+    throw new X402QuestionInputError("question.roundConfig.maxDuration must be greater than zero.");
+  }
+  if (minVoters <= 0n || maxVoters <= 0n || maxVoters < minVoters) {
+    throw new X402QuestionInputError("question.roundConfig voter values are invalid.");
+  }
+  if (minVoters !== requiredVoters) {
+    throw new X402QuestionInputError("question.roundConfig.minVoters must match bounty.requiredVoters.");
+  }
+
+  return { epochDuration, maxDuration, minVoters, maxVoters };
+}
+
+type NormalizedQuestionInput = Omit<X402QuestionItemPayload, "questionMetadataHash" | "resultSpecHash"> & {
+  template: NonNullable<ReturnType<typeof findAgentResultTemplate>>;
+};
+
+function normalizeQuestion(
+  value: unknown,
+  index: number,
+  defaults: {
+    confidentiality?: X402QuestionConfidentiality;
+    templateId?: string;
+    templateInputs?: AgentQuestionSpecInput["templateInputs"];
+    templateVersion?: number;
+  },
+  options: X402QuestionParserOptions,
+): NormalizedQuestionInput {
+  if (!isObject(value)) {
+    throw new X402QuestionInputError(`questions[${index}] must be an object.`);
+  }
+
+  const fieldPrefix = `questions[${index}]`;
+  const title = readString(value.title, `${fieldPrefix}.title`);
+  const titleError = getContentTitleValidationError(title);
+  if (titleError) {
+    throw new X402QuestionInputError(titleError);
+  }
+
+  const imageUrls = normalizeImageUrls(value.imageUrls, options);
+  const rawContextUrl = readOptionalString(value.contextUrl);
+  const contextUrl = rawContextUrl ? normalizeQuestionContextUrl(rawContextUrl, `${fieldPrefix}.contextUrl`) : "";
+  const rawVideoUrl = readOptionalString(value.videoUrl);
+  const videoUrl = rawVideoUrl ? normalizeHttpsUrl(rawVideoUrl, `${fieldPrefix}.videoUrl`) : "";
+  const details = normalizeQuestionDetails(value, fieldPrefix);
+  const confidentiality = normalizeQuestionConfidentiality(
+    value.confidentiality ?? defaults.confidentiality,
+    `${fieldPrefix}.confidentiality`,
+  );
+  if (videoUrl && !isYouTubeVideoUrl(videoUrl)) {
+    throw new X402QuestionInputError(`${fieldPrefix}.videoUrl must be a supported YouTube URL.`);
+  }
+  if (videoUrl && imageUrls.length > 0) {
+    throw new X402QuestionInputError("Use imageUrls or videoUrl, not both.");
+  }
+  if (confidentiality.visibility === "gated") {
+    if (contextUrl || videoUrl) {
+      throw new X402QuestionInputError(
+        `${fieldPrefix}.confidentiality.visibility gated requires a RateLoop-hosted detailsUrl; external contextUrl and videoUrl are not allowed.`,
+      );
+    }
+    if (!details.detailsUrl) {
+      throw new X402QuestionInputError(`${fieldPrefix}.detailsUrl is required for gated questions.`);
+    }
+    if (!isHostedQuestionDetailsUrl(details.detailsUrl, options)) {
+      throw new X402QuestionInputError(
+        `${fieldPrefix}.detailsUrl must be a RateLoop-hosted details attachment for gated questions.`,
+      );
+    }
+  }
+  if (
+    !contextUrl &&
+    imageUrls.length === 0 &&
+    !videoUrl &&
+    !(confidentiality.visibility === "gated" && details.detailsUrl)
+  ) {
+    throw new X402QuestionInputError(`${fieldPrefix}.contextUrl, imageUrls, or videoUrl is required.`);
+  }
+
+  const { tags, tagList } = normalizeTags(value.tags);
+  const categoryId = parseNonNegativeInteger(value.categoryId, `${fieldPrefix}.categoryId`);
+  const targetAudience = normalizeQuestionTargetAudience(value.targetAudience, `${fieldPrefix}.targetAudience`);
+  const templateSelection = normalizeTemplateSelection(value, fieldPrefix, defaults);
+
+  return {
+    categoryId,
+    confidentiality,
+    contextUrl,
+    detailsHash: details.detailsHash,
+    detailsUrl: details.detailsUrl,
+    imageUrls,
+    tags,
+    tagList,
+    targetAudience,
+    template: templateSelection.template,
+    templateId: templateSelection.templateId,
+    templateInputs: templateSelection.templateInputs,
+    templateVersion: templateSelection.templateVersion,
+    title,
+    videoUrl,
+  };
+}
+
+function resolveQuestionMetadataBaseUrl(options: X402QuestionParserOptions) {
+  return normalizeQuestionMetadataBaseUrl(options.questionMetadataBaseUrl);
+}
+
+export function parseX402QuestionRequest(
+  value: unknown,
+  fallbackChainId?: number,
+  options: X402QuestionParserOptions = {},
+): X402QuestionPayload {
+  if (!isObject(value)) {
+    throw new X402QuestionInputError("Request body must be a JSON object.");
+  }
+
+  for (const key of Object.keys(value)) {
+    if (!X402_QUESTION_TOP_LEVEL_FIELDS.has(key)) {
+      throw new X402QuestionInputError(`Unknown top-level field: ${key}`);
+    }
+  }
+
+  const clientRequestId = readString(value.clientRequestId, "clientRequestId");
+  if (!CLIENT_REQUEST_ID_PATTERN.test(clientRequestId)) {
+    throw new X402QuestionInputError(
+      "clientRequestId must be 4-160 characters using letters, numbers, dot, dash, colon, or underscore.",
+    );
+  }
+
+  const rawQuestions = Array.isArray(value.questions)
+    ? value.questions
+    : [isObject(value.question) ? value.question : value];
+  if (rawQuestions.length === 0) {
+    throw new X402QuestionInputError("At least one question is required.");
+  }
+  if (rawQuestions.length > X402_MAX_QUESTION_BUNDLE_COUNT) {
+    throw new X402QuestionInputError(`At most ${X402_MAX_QUESTION_BUNDLE_COUNT} questions are supported.`);
+  }
+
+  const firstQuestion = isObject(rawQuestions[0]) ? rawQuestions[0] : {};
+  const bounty = normalizeBounty(value.bounty);
+  const roundConfig = normalizeRoundConfig(value.roundConfig ?? firstQuestion.roundConfig, bounty.requiredVoters);
+  const topLevelTemplateInputs = normalizeTemplateInputs(value.templateInputs, "templateInputs");
+  const topLevelTemplateVersion =
+    value.templateVersion === undefined || value.templateVersion === null
+      ? DEFAULT_AGENT_TEMPLATE_VERSION
+      : Number.parseInt(String(value.templateVersion), 10);
+  const templateDefaults = {
+    confidentiality: normalizeQuestionConfidentiality(value.confidentiality, "confidentiality"),
+    templateId: readOptionalString(value.templateId) || DEFAULT_AGENT_TEMPLATE_ID,
+    templateInputs: topLevelTemplateInputs,
+    templateVersion: topLevelTemplateVersion,
+  };
+  const metadataBaseUrl = resolveQuestionMetadataBaseUrl(options);
+  const questions = rawQuestions.map((question, index) => {
+    const normalizedQuestion = normalizeQuestion(question, index, templateDefaults, options);
+    const spec = buildQuestionSpecHashes(
+      {
+        bounty: {
+          amount: bounty.amount,
+          asset: bounty.asset,
+          bountyEligibility: bounty.bountyEligibility,
+          requiredSettledRounds: bounty.requiredSettledRounds,
+          requiredVoters: bounty.requiredVoters,
+        },
+        categoryId: normalizedQuestion.categoryId,
+        confidentiality: normalizedQuestion.confidentiality,
+        contextUrl: normalizedQuestion.contextUrl,
+        imageUrls: normalizedQuestion.imageUrls,
+        roundConfig,
+        study: {
+          bundleIndex: index,
+        },
+        tags: normalizedQuestion.tagList,
+        targetAudience: normalizedQuestion.targetAudience,
+        templateId: normalizedQuestion.templateId,
+        templateInputs: normalizedQuestion.templateInputs,
+        templateVersion: normalizedQuestion.templateVersion,
+        title: normalizedQuestion.title,
+        videoUrl: normalizedQuestion.videoUrl,
+        voteSemantics: normalizedQuestion.template.voteSemantics,
+      },
+      { questionMetadataBaseUrl: metadataBaseUrl },
+    );
+
+    return {
+      categoryId: normalizedQuestion.categoryId,
+      confidentiality: normalizedQuestion.confidentiality,
+      contextUrl: normalizedQuestion.contextUrl,
+      detailsHash: normalizedQuestion.detailsHash,
+      detailsUrl: normalizedQuestion.detailsUrl,
+      imageUrls: normalizedQuestion.imageUrls,
+      questionMetadata: spec.questionMetadata,
+      questionMetadataHash: spec.questionMetadataHash,
+      questionMetadataUri: spec.questionMetadataUri,
+      resultSpecHash: spec.resultSpecHash,
+      tags: normalizedQuestion.tags,
+      tagList: normalizedQuestion.tagList,
+      targetAudience: normalizedQuestion.targetAudience,
+      templateId: normalizedQuestion.templateId,
+      templateInputs: normalizedQuestion.templateInputs,
+      templateVersion: normalizedQuestion.templateVersion,
+      title: normalizedQuestion.title,
+      videoUrl: normalizedQuestion.videoUrl,
+    };
+  });
+  if (questions.length > 1 && questions.some((question) => question.confidentiality.visibility === "gated")) {
+    throw new X402QuestionInputError(
+      "Private context bundles are not supported yet. Submit gated questions one at a time.",
+    );
+  }
+
+  return {
+    clientRequestId,
+    chainId: normalizeChainId(value.chainId ?? firstQuestion.chainId, fallbackChainId),
+    questions,
+    roundConfig,
+    bounty,
+  };
+}
+
+export function toCanonicalQuestionPayload(
+  payload: X402QuestionPayload,
+  options: X402QuestionParserOptions = {},
+) {
+  const metadataBaseUrl = resolveQuestionMetadataBaseUrl(options);
+  return {
+    bounty: {
+      amount: payload.bounty.amount.toString(),
+      asset: payload.bounty.asset,
+      requiredSettledRounds: payload.bounty.requiredSettledRounds.toString(),
+      requiredVoters: payload.bounty.requiredVoters.toString(),
+      bountyStartBy: payload.bounty.bountyStartBy.toString(),
+      bountyWindowSeconds: payload.bounty.bountyWindowSeconds.toString(),
+      feedbackWindowSeconds: payload.bounty.feedbackWindowSeconds.toString(),
+      bountyEligibility: String(payload.bounty.bountyEligibility),
+    },
+    chainId: payload.chainId,
+    clientRequestId: payload.clientRequestId,
+    questions: payload.questions.map((question) => ({
+      categoryId: question.categoryId.toString(),
+      confidentiality: question.confidentiality,
+      contextUrl: question.contextUrl,
+      detailsHash: question.detailsHash,
+      detailsUrl: question.detailsUrl,
+      imageUrls: question.imageUrls,
+      questionMetadataHash: question.questionMetadataHash,
+      questionMetadataUri: question.questionMetadataUri ?? buildQuestionMetadataUri(question.questionMetadataHash, metadataBaseUrl),
+      resultSpecHash: question.resultSpecHash,
+      tags: question.tagList,
+      targetAudience: question.targetAudience,
+      templateId: question.templateId,
+      templateInputs: question.templateInputs,
+      templateVersion: question.templateVersion,
+      title: question.title,
+      videoUrl: question.videoUrl,
+    })),
+    roundConfig: serializeX402QuestionRoundConfig(payload.roundConfig),
+  };
+}
+
+export function buildX402QuestionOperation(
+  payload: X402QuestionPayload,
+  options: X402QuestionParserOptions = {},
+): X402QuestionOperation {
+  assertSupportedX402BundleBounty(payload.bounty);
+  const canonicalPayload = toCanonicalQuestionPayload(payload, options);
+  const payloadHash = createHash("sha256").update(JSON.stringify(canonicalPayload)).digest("hex");
+  const operationKey =
+    `0x${createHash("sha256").update(`rateloop:x402-question:${payloadHash}`).digest("hex")}` as const;
+
+  return {
+    canonicalPayload,
+    operationKey,
+    payloadHash,
+  };
+}

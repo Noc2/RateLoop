@@ -18,5 +18,25 @@ export {
   listAgentResultTemplates,
 } from "./templates";
 export type { AgentDecisionAnswer, AgentResultTemplate } from "./templates";
+export {
+  X402_MIN_NONZERO_CONFIDENTIALITY_BOND,
+  X402_SUBMISSION_REWARD_ASSET_USDC,
+  X402_USDC_DECIMALS,
+  X402_WORLD_CHAIN_USDC_BY_CHAIN_ID,
+  X402QuestionInputError,
+  assertSupportedX402BundleBounty,
+  buildX402QuestionOperation,
+  parseX402QuestionRequest,
+  toCanonicalQuestionPayload,
+} from "./x402QuestionPayload";
+export type {
+  SerializedX402QuestionRoundConfig,
+  X402QuestionCanonicalPayload,
+  X402QuestionItemPayload,
+  X402QuestionOperation,
+  X402QuestionParserOptions,
+  X402QuestionPayload,
+  X402QuestionRoundConfig,
+} from "./x402QuestionPayload";
 export { lintAgentAskRequest, lintAgentQuestion, summarizeLintFindings } from "./questions/lint";
 export type { AgentAskExample, AgentQuestionExample, QuestionLintFinding } from "./questions/types";

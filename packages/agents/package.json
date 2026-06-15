@@ -38,6 +38,9 @@
       "templates": [
         "dist/esm/templates.d.ts"
       ],
+      "x402-question-payload": [
+        "dist/esm/x402QuestionPayload.d.ts"
+      ],
       "*": [
         "dist/esm/index.d.ts"
       ]
@@ -74,6 +77,11 @@
       "types": "./dist/esm/templates.d.ts",
       "import": "./dist/esm/templates.js",
       "require": "./dist/cjs/templates.js"
+    },
+    "./x402-question-payload": {
+      "types": "./dist/esm/x402QuestionPayload.d.ts",
+      "import": "./dist/esm/x402QuestionPayload.js",
+      "require": "./dist/cjs/x402QuestionPayload.js"
     }
   },
   "scripts": {
