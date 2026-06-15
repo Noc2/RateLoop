@@ -595,6 +595,7 @@ export function ContentSubmissionSection() {
     isAwaitingSelfFundedSubmitCalls,
     isAwaitingSponsoredSubmitCalls,
   } = useThirdwebSponsoredSubmitCalls();
+  const isAwaitingSubmitWallet = isAwaitingSponsoredSubmitCalls || isAwaitingSelfFundedSubmitCalls;
   const canUseBatchedSubmitCalls = canUseSponsoredSubmitCalls || canUseSelfFundedBatchCalls;
   const submitCallSponsorshipMode = canUseSponsoredSubmitCalls ? "sponsored" : "self-funded";
   const { showWalletRpcOverloadNotification } = useWalletRpcRecovery();
@@ -2084,7 +2085,7 @@ export function ContentSubmissionSection() {
 
     setQuestionStepAttempted(true);
 
-    if (isAwaitingSponsoredSubmitCalls || isAwaitingSelfFundedSubmitCalls) {
+    if (isAwaitingSubmitWallet) {
       notification.warning("Wallet reconnecting. Retry in a moment.");
       return;
     }
@@ -4293,17 +4294,18 @@ export function ContentSubmissionSection() {
       <GradientActionButton
         onClick={handleFinalSubmit}
         className="w-full sm:flex-1"
-        motion={getGradientActionMotion(
-          isSubmitting || isAwaitingSponsoredSubmitCalls || isAwaitingSelfFundedSubmitCalls,
-        )}
-        disabled={
-          isSubmitting || isAwaitingSponsoredSubmitCalls || isAwaitingSelfFundedSubmitCalls || isMissingGasBalance
-        }
+        motion={getGradientActionMotion(isSubmitting || isAwaitingSubmitWallet)}
+        disabled={isSubmitting || isAwaitingSubmitWallet || isMissingGasBalance}
       >
         {isSubmitting ? (
           <span className="flex items-center gap-2 text-base-content">
             <span className="loading loading-spinner loading-sm"></span>
             Submitting...
+          </span>
+        ) : isAwaitingSubmitWallet ? (
+          <span className="flex items-center gap-2 text-base-content">
+            <span className="loading loading-spinner loading-sm"></span>
+            Wallet reconnecting...
           </span>
         ) : (
           "Submit"
