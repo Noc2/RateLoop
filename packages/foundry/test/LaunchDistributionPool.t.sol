@@ -111,7 +111,9 @@ contract LaunchDistributionPoolTest is Test {
         address indexed rater, bytes32 indexed nullifierHash, uint256 previousCap, uint256 fullCap, uint256 catchUpPaid
     );
     event LegacyContributorRootUpdated(bytes32 indexed root, uint256 allocationTotal, uint64 vestingStart);
-    event LegacyContributorClaimed(address indexed account, uint256 amount, uint256 allocation, uint256 totalClaimed);
+    event LegacyContributorClaimed(
+        address indexed account, address indexed recipient, uint256 amount, uint256 allocation, uint256 totalClaimed
+    );
     event LegacyContributorUnclaimedSwept(address indexed treasury, uint256 amount);
 
     LoopReputation internal lrep;
@@ -448,8 +450,8 @@ contract LaunchDistributionPoolTest is Test {
         assertEq(pool.claimableLegacyContributorAllocation(alice, allocation, proof), immediate);
 
         vm.prank(alice);
-        vm.expectEmit(true, false, false, true);
-        emit LegacyContributorClaimed(alice, immediate, allocation, immediate);
+        vm.expectEmit(true, true, false, true);
+        emit LegacyContributorClaimed(alice, alice, immediate, allocation, immediate);
         assertEq(pool.claimLegacyContributorAllocation(allocation, proof), immediate);
         assertEq(lrep.balanceOf(alice), immediate);
         assertEq(pool.legacyContributorClaimed(alice), immediate);
@@ -480,6 +482,39 @@ contract LaunchDistributionPoolTest is Test {
             pool.LEGACY_CONTRIBUTOR_POOL_AMOUNT() - pool.legacyContributorDistributed(),
             pool.LEGACY_CONTRIBUTOR_POOL_AMOUNT() - allocation
         );
+    }
+
+    function test_ClaimLegacyContributorAllocationToPaysRecipientAndAccountsToLegacyWallet() public {
+        uint256 allocation = 1_000e6;
+        bytes32 root = _legacyContributorLeaf(alice, allocation);
+        pool.setLegacyContributorRoot(root, pool.LEGACY_CONTRIBUTOR_POOL_AMOUNT());
+        bytes32[] memory proof = new bytes32[](0);
+
+        uint256 immediate = (allocation * pool.LEGACY_IMMEDIATE_BPS()) / pool.BPS_DENOMINATOR();
+
+        vm.prank(alice);
+        vm.expectEmit(true, true, false, true);
+        emit LegacyContributorClaimed(alice, bob, immediate, allocation, immediate);
+        assertEq(pool.claimLegacyContributorAllocationTo(bob, allocation, proof), immediate);
+
+        assertEq(lrep.balanceOf(alice), 0);
+        assertEq(lrep.balanceOf(bob), immediate);
+        assertEq(pool.legacyContributorClaimed(alice), immediate);
+        assertEq(pool.legacyContributorClaimed(bob), 0);
+        assertEq(pool.legacyContributorDistributed(), immediate);
+
+        vm.warp(block.timestamp + (pool.LEGACY_VESTING_DURATION() / 2));
+        uint256 halfVested = pool.vestedLegacyContributorAllocation(alice, allocation, proof);
+        uint256 halfDelta = halfVested - immediate;
+
+        vm.prank(alice);
+        assertEq(pool.claimLegacyContributorAllocationTo(bob, allocation, proof), halfDelta);
+        assertEq(lrep.balanceOf(bob), halfVested);
+        assertEq(pool.legacyContributorClaimed(alice), halfVested);
+
+        vm.prank(alice);
+        vm.expectRevert(LaunchDistributionPool.InvalidAddress.selector);
+        pool.claimLegacyContributorAllocationTo(address(0), allocation, proof);
     }
 
     function test_SweepExpiredLegacyContributorAllocationRoutesUnclaimedToTreasury() public {

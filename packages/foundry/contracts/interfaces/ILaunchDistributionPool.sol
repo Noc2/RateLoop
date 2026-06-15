@@ -50,6 +50,10 @@ interface ILaunchDistributionPool {
         external
         returns (uint256 paidAmount);
 
+    function claimLegacyContributorAllocationTo(address recipient, uint256 allocation, bytes32[] calldata proof)
+        external
+        returns (uint256 paidAmount);
+
     function claimableLegacyContributorAllocation(address account, uint256 allocation, bytes32[] calldata proof)
         external
         view

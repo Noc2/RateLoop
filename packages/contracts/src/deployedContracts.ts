@@ -26856,6 +26856,35 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "claimLegacyContributorAllocationTo",
+          inputs: [
+            {
+              name: "recipient",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "allocation",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "proof",
+              type: "bytes32[]",
+              internalType: "bytes32[]",
+            },
+          ],
+          outputs: [
+            {
+              name: "paidAmount",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "claimVerifiedBonus",
           inputs: [
             {
@@ -28950,6 +28979,12 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "address",
             },
             {
+              name: "recipient",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
               name: "amount",
               type: "uint256",
               indexed: false,
@@ -29427,6 +29462,8 @@ const deployedContracts: GenericContractsDeclaration = {
       inheritedFunctions: {
         authorizedCallers: "contracts/interfaces/ILaunchDistributionPool.sol",
         claimLegacyContributorAllocation:
+          "contracts/interfaces/ILaunchDistributionPool.sol",
+        claimLegacyContributorAllocationTo:
           "contracts/interfaces/ILaunchDistributionPool.sol",
         claimableLegacyContributorAllocation:
           "contracts/interfaces/ILaunchDistributionPool.sol",
@@ -55347,6 +55384,35 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "claimLegacyContributorAllocationTo",
+          inputs: [
+            {
+              name: "recipient",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "allocation",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "proof",
+              type: "bytes32[]",
+              internalType: "bytes32[]",
+            },
+          ],
+          outputs: [
+            {
+              name: "paidAmount",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "claimVerifiedBonus",
           inputs: [
             {
@@ -57441,6 +57507,12 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "address",
             },
             {
+              name: "recipient",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
               name: "amount",
               type: "uint256",
               indexed: false,
@@ -57918,6 +57990,8 @@ const deployedContracts: GenericContractsDeclaration = {
       inheritedFunctions: {
         authorizedCallers: "contracts/interfaces/ILaunchDistributionPool.sol",
         claimLegacyContributorAllocation:
+          "contracts/interfaces/ILaunchDistributionPool.sol",
+        claimLegacyContributorAllocationTo:
           "contracts/interfaces/ILaunchDistributionPool.sol",
         claimableLegacyContributorAllocation:
           "contracts/interfaces/ILaunchDistributionPool.sol",

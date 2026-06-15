@@ -238,7 +238,9 @@ contract LaunchDistributionPool is
     event VerifiedBonusClaimed(address indexed account, uint256 amount, bytes32 indexed nullifierHash);
     event ReferralBonusPaid(address indexed referrer, address indexed referee, uint256 amount);
     event LegacyContributorRootUpdated(bytes32 indexed root, uint256 allocationTotal, uint64 vestingStart);
-    event LegacyContributorClaimed(address indexed account, uint256 amount, uint256 allocation, uint256 totalClaimed);
+    event LegacyContributorClaimed(
+        address indexed account, address indexed recipient, uint256 amount, uint256 allocation, uint256 totalClaimed
+    );
     event LegacyContributorUnclaimedSwept(address indexed treasury, uint256 amount);
 
     modifier onlyAuthorized() {
@@ -468,18 +470,36 @@ contract LaunchDistributionPool is
         nonReentrant
         returns (uint256 paidAmount)
     {
-        _validateLegacyContributorProof(msg.sender, allocation, proof);
+        paidAmount = _claimLegacyContributorAllocation(msg.sender, msg.sender, allocation, proof);
+    }
+
+    function claimLegacyContributorAllocationTo(address recipient, uint256 allocation, bytes32[] calldata proof)
+        external
+        nonReentrant
+        returns (uint256 paidAmount)
+    {
+        paidAmount = _claimLegacyContributorAllocation(msg.sender, recipient, allocation, proof);
+    }
+
+    function _claimLegacyContributorAllocation(
+        address account,
+        address recipient,
+        uint256 allocation,
+        bytes32[] calldata proof
+    ) internal returns (uint256 paidAmount) {
+        if (recipient == address(0)) revert InvalidAddress();
+        _validateLegacyContributorProof(account, allocation, proof);
         if (_legacyContributorClaimWindowClosed()) revert LegacyClaimWindowClosed();
-        paidAmount = _claimableLegacyContributorAllocation(msg.sender, allocation);
+        paidAmount = _claimableLegacyContributorAllocation(account, allocation);
         if (paidAmount == 0) revert AlreadyClaimed();
         if (legacyContributorDistributed + paidAmount > legacyContributorAllocationTotal) revert PoolDepleted();
         if (paidAmount > _remainingLegacyContributorPool()) revert PoolDepleted();
 
-        uint256 totalClaimed = legacyContributorClaimed[msg.sender] + paidAmount;
-        legacyContributorClaimed[msg.sender] = totalClaimed;
+        uint256 totalClaimed = legacyContributorClaimed[account] + paidAmount;
+        legacyContributorClaimed[account] = totalClaimed;
         legacyContributorDistributed += paidAmount;
-        _pay(msg.sender, paidAmount);
-        emit LegacyContributorClaimed(msg.sender, paidAmount, allocation, totalClaimed);
+        _pay(recipient, paidAmount);
+        emit LegacyContributorClaimed(account, recipient, paidAmount, allocation, totalClaimed);
     }
 
     function unlockFullEarnedRaterCap(address rater) external nonReentrant returns (uint256 catchUpPaid) {
