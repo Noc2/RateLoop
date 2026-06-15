@@ -47,6 +47,43 @@ export function isThirdwebInAppWalletId(walletId: string | null | undefined): bo
   return walletId === "inApp" || walletId === "in-app-wallet";
 }
 
+export function thirdwebWalletAddressMatchesWagmiAddress(params: {
+  thirdwebAddress?: string | null;
+  wagmiAddress?: string | null;
+}) {
+  return (
+    typeof params.thirdwebAddress === "string" &&
+    typeof params.wagmiAddress === "string" &&
+    params.thirdwebAddress.toLowerCase() === params.wagmiAddress.toLowerCase()
+  );
+}
+
+export function isThirdwebInAppWalletCurrentForAddress(params: {
+  activeWalletId?: string | null;
+  connectedAddress?: string | null;
+  thirdwebAccountAddress?: string | null;
+  thirdwebAdminAddress?: string | null;
+}) {
+  if (!isThirdwebInAppWalletId(params.activeWalletId)) {
+    return false;
+  }
+
+  if (!params.connectedAddress) {
+    return true;
+  }
+
+  return (
+    thirdwebWalletAddressMatchesWagmiAddress({
+      thirdwebAddress: params.thirdwebAccountAddress,
+      wagmiAddress: params.connectedAddress,
+    }) ||
+    thirdwebWalletAddressMatchesWagmiAddress({
+      thirdwebAddress: params.thirdwebAdminAddress,
+      wagmiAddress: params.connectedAddress,
+    })
+  );
+}
+
 export function isThirdwebWalletChain(chainId: number | null | undefined): boolean {
   return typeof chainId === "number" && THIRDWEB_CONNECT_CHAIN_IDS.has(chainId);
 }

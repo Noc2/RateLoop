@@ -67,8 +67,21 @@ test("getFreeTransactionAllowanceIdentityAddress prefers thirdweb admin identity
       activeWalletId: "inApp",
       adminAddress: "0xAbCdEf0000000000000000000000000000000000",
       connectedAddress: "0x1234567890abcdef1234567890abcdef12345678",
+      thirdwebAccountAddress: "0x1234567890abcdef1234567890abcdef12345678",
     }),
     "0xAbCdEf0000000000000000000000000000000000",
+  );
+});
+
+test("getFreeTransactionAllowanceIdentityAddress ignores stale thirdweb admin identity", () => {
+  assert.equal(
+    getFreeTransactionAllowanceIdentityAddress({
+      activeWalletId: "inApp",
+      adminAddress: "0xAbCdEf0000000000000000000000000000000000",
+      connectedAddress: "0x1234567890abcdef1234567890abcdef12345678",
+      thirdwebAccountAddress: "0xfedcba0987654321fedcba0987654321fedcba09",
+    }),
+    "0x1234567890abcdef1234567890abcdef12345678",
   );
 });
 

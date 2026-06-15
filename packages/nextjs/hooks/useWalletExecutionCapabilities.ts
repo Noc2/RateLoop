@@ -6,6 +6,7 @@ import type { GetCapabilitiesResult } from "thirdweb/wallets/eip5792";
 import { useAccount } from "wagmi";
 import {
   getThirdwebWalletSponsorshipMode,
+  isThirdwebInAppWalletCurrentForAddress,
   isThirdwebInAppWalletId,
   supportsThirdwebExecutionCapabilities,
   supportsThirdwebInAppExecutionCapabilities,
@@ -114,13 +115,20 @@ export function useWalletExecutionCapabilities() {
   const wallet = useActiveWallet();
   const thirdwebAccount = useActiveAccount();
   const activeWalletChain = useActiveWalletChain();
-  const { chainId: wagmiChainId } = useAccount();
+  const { address, chainId: wagmiChainId } = useAccount();
   const chainId = resolveWalletExecutionChainId(wagmiChainId, activeWalletChain?.id);
   const supportedChain = supportsThirdwebExecutionCapabilities(chainId);
   const supportsInAppExecution = supportsThirdwebInAppExecutionCapabilities(chainId);
   const walletId = wallet?.id;
   const hasSendCallsForQuery = Boolean(thirdwebAccount?.sendCalls ?? wallet?.getAccount()?.sendCalls);
-  const isThirdwebInAppWallet = isThirdwebInAppWalletId(walletId);
+  const thirdwebAccountAddress = thirdwebAccount?.address ?? wallet?.getAccount()?.address;
+  const thirdwebAdminAddress = wallet?.getAdminAccount?.()?.address;
+  const isThirdwebInAppWallet = isThirdwebInAppWalletCurrentForAddress({
+    activeWalletId: walletId,
+    connectedAddress: address,
+    thirdwebAccountAddress,
+    thirdwebAdminAddress,
+  });
   const shouldQueryCapabilities = shouldQueryWalletCapabilities({
     chainId,
     hasSendCalls: hasSendCallsForQuery,
@@ -138,7 +146,7 @@ export function useWalletExecutionCapabilities() {
   return useMemo(() => {
     const activeCapabilities = resolveWalletCapabilitiesForChain(capabilities, chainId);
     const hasSendCalls = Boolean(thirdwebAccount?.sendCalls ?? wallet?.getAccount()?.sendCalls);
-    const isThirdwebInApp = isThirdwebInAppWalletId(wallet?.id);
+    const isThirdwebInApp = isThirdwebInAppWallet;
     const walletExecutionSupported = isThirdwebInApp ? supportsInAppExecution : supportedChain;
     const thirdwebSponsorshipMode = isThirdwebInApp ? getThirdwebWalletSponsorshipMode(wallet) : null;
     const supportsAtomicBatchCalls = walletCapabilitiesSupportAtomicBatch(activeCapabilities);
@@ -161,5 +169,13 @@ export function useWalletExecutionCapabilities() {
       supportsPaymasterService,
       supportsSponsoredCalls: executionMode === "sponsored_7702",
     };
-  }, [capabilities, chainId, supportedChain, supportsInAppExecution, thirdwebAccount?.sendCalls, wallet]);
+  }, [
+    capabilities,
+    chainId,
+    isThirdwebInAppWallet,
+    supportedChain,
+    supportsInAppExecution,
+    thirdwebAccount?.sendCalls,
+    wallet,
+  ]);
 }

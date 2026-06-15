@@ -30,6 +30,7 @@ import {
   supportsThirdwebExecutionCapabilities,
   supportsThirdwebInAppExecutionCapabilities,
   thirdwebClient,
+  thirdwebWalletAddressMatchesWagmiAddress,
   usesThirdwebInAppEip7702Execution,
 } from "~~/services/thirdweb/client";
 
@@ -184,17 +185,6 @@ export function shouldExpectSponsoredSubmitCalls(params: {
   return shouldExpectSponsoredThirdwebBatchCalls(params);
 }
 
-export function thirdwebWalletAddressMatchesWagmiAddress(params: {
-  thirdwebAddress?: string | null;
-  wagmiAddress?: string | null;
-}) {
-  return (
-    typeof params.thirdwebAddress === "string" &&
-    typeof params.wagmiAddress === "string" &&
-    params.thirdwebAddress.toLowerCase() === params.wagmiAddress.toLowerCase()
-  );
-}
-
 export function isThirdwebSponsorshipDeniedError(error: unknown) {
   const message =
     (error as { message?: string; shortMessage?: string } | undefined)?.message ??
@@ -261,10 +251,16 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
   const publicClient = usePublicClient({ chainId });
   const usesInAppEip7702Execution = usesThirdwebInAppEip7702Execution(chainId);
   const activeWalletAccountAddress = activeThirdwebAccount?.address ?? activeWallet?.getAccount()?.address;
-  const activeWalletMatchesWagmiAddress = thirdwebWalletAddressMatchesWagmiAddress({
-    thirdwebAddress: activeWalletAccountAddress,
-    wagmiAddress: address,
-  });
+  const activeWalletAdminAddress = activeWallet?.getAdminAccount?.()?.address;
+  const activeWalletMatchesWagmiAddress =
+    thirdwebWalletAddressMatchesWagmiAddress({
+      thirdwebAddress: activeWalletAccountAddress,
+      wagmiAddress: address,
+    }) ||
+    thirdwebWalletAddressMatchesWagmiAddress({
+      thirdwebAddress: activeWalletAdminAddress,
+      wagmiAddress: address,
+    });
 
   const expectsSponsoredBatchCalls = useMemo(
     () =>

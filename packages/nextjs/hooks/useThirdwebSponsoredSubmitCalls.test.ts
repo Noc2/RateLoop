@@ -11,7 +11,6 @@ import {
   shouldRetryThirdwebBundlerError,
   shouldUseSelfFundedBatchCalls,
   shouldUseUnmeteredSponsoredBatchCalls,
-  thirdwebWalletAddressMatchesWagmiAddress,
 } from "./useThirdwebSponsoredSubmitCalls";
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -19,6 +18,7 @@ import {
   getEip7702DelegationTarget,
   hasMissingEip7702DelegationImplementation,
 } from "~~/lib/thirdweb/eip7702Delegation";
+import { thirdwebWalletAddressMatchesWagmiAddress } from "~~/services/thirdweb/client";
 
 test("detects EIP-7702 delegations with missing implementations", () => {
   const implementation = "0x3e515544f8d8293b0a353e10ff3b7ca03b52f35b";

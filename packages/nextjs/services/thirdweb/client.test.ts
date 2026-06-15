@@ -6,8 +6,10 @@ import {
   getThirdwebWalletSmartAccountOptions,
   getThirdwebWalletSponsorshipMode,
   getThirdwebWallets,
+  isThirdwebInAppWalletCurrentForAddress,
   isThirdwebInAppWalletId,
   shouldIncludeThirdwebWalletAuthOption,
+  thirdwebWalletAddressMatchesWagmiAddress,
 } from "~~/services/thirdweb/client";
 
 function getInAppWalletAuthOptions(wallets: ReturnType<typeof getThirdwebWallets>) {
@@ -33,6 +35,74 @@ test("isThirdwebInAppWalletId accepts thirdweb and wagmi in-app ids", () => {
   assert.equal(isThirdwebInAppWalletId("in-app-wallet"), true);
   assert.equal(isThirdwebInAppWalletId("io.metamask"), false);
   assert.equal(isThirdwebInAppWalletId(undefined), false);
+});
+
+test("thirdwebWalletAddressMatchesWagmiAddress compares addresses case-insensitively", () => {
+  assert.equal(
+    thirdwebWalletAddressMatchesWagmiAddress({
+      thirdwebAddress: "0x6D12cC9Ee8392740306F87Fbd1ccB1cBC16FA593",
+      wagmiAddress: "0x6d12cc9ee8392740306f87fbd1ccb1cbc16fa593",
+    }),
+    true,
+  );
+  assert.equal(
+    thirdwebWalletAddressMatchesWagmiAddress({
+      thirdwebAddress: "0x6D12cC9Ee8392740306F87Fbd1ccB1cBC16FA593",
+      wagmiAddress: "0x63cada40E8AcF7A1d47229af5Be35b78b16035fa",
+    }),
+    false,
+  );
+});
+
+test("isThirdwebInAppWalletCurrentForAddress accepts current smart and admin accounts", () => {
+  assert.equal(
+    isThirdwebInAppWalletCurrentForAddress({
+      activeWalletId: "inApp",
+      connectedAddress: "0x1111111111111111111111111111111111111111",
+      thirdwebAccountAddress: "0x1111111111111111111111111111111111111111",
+      thirdwebAdminAddress: "0x2222222222222222222222222222222222222222",
+    }),
+    true,
+  );
+  assert.equal(
+    isThirdwebInAppWalletCurrentForAddress({
+      activeWalletId: "inApp",
+      connectedAddress: "0x2222222222222222222222222222222222222222",
+      thirdwebAccountAddress: "0x1111111111111111111111111111111111111111",
+      thirdwebAdminAddress: "0x2222222222222222222222222222222222222222",
+    }),
+    true,
+  );
+});
+
+test("isThirdwebInAppWalletCurrentForAddress rejects stale in-app wallets after MetaMask connects", () => {
+  assert.equal(
+    isThirdwebInAppWalletCurrentForAddress({
+      activeWalletId: "inApp",
+      connectedAddress: "0x3333333333333333333333333333333333333333",
+      thirdwebAccountAddress: "0x1111111111111111111111111111111111111111",
+      thirdwebAdminAddress: "0x2222222222222222222222222222222222222222",
+    }),
+    false,
+  );
+  assert.equal(
+    isThirdwebInAppWalletCurrentForAddress({
+      activeWalletId: "io.metamask",
+      connectedAddress: "0x3333333333333333333333333333333333333333",
+      thirdwebAccountAddress: "0x3333333333333333333333333333333333333333",
+    }),
+    false,
+  );
+});
+
+test("isThirdwebInAppWalletCurrentForAddress allows the pre-wagmi reconnect window", () => {
+  assert.equal(
+    isThirdwebInAppWalletCurrentForAddress({
+      activeWalletId: "inApp",
+      thirdwebAccountAddress: "0x1111111111111111111111111111111111111111",
+    }),
+    true,
+  );
 });
 
 test("getThirdwebWalletIds keeps the modal on the in-app wallet when no branded injected providers are present", () => {
