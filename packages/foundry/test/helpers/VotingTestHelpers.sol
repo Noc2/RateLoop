@@ -775,7 +775,7 @@ abstract contract VotingTestBase is Test, ContentSubmissionTestBase {
     uint256 internal constant ROUND_REVEAL_GRACE_PERIOD_SNAPSHOT_SLOT = 48;
     uint256 internal constant ROUND_RATING_UP_EVIDENCE_SLOT = 57;
     uint256 internal constant ROUND_RATING_DOWN_EVIDENCE_SLOT = 58;
-    uint256 internal constant ROUND_HAS_HUMAN_VERIFIED_COMMIT_SLOT = 61;
+    uint256 internal constant ROUND_HUMAN_VERIFIED_COMMIT_COUNT_SLOT = 61;
     ProtocolConfig internal activeTlockProtocolConfig;
     bytes32 internal activeTlockDrandChainHash = DEFAULT_DRAND_CHAIN_HASH;
     uint64 internal activeTlockDrandGenesisTime = DEFAULT_DRAND_GENESIS_TIME;
@@ -883,9 +883,22 @@ abstract contract VotingTestBase is Test, ContentSubmissionTestBase {
         view
         returns (bool)
     {
-        return uint256(
-            HEVM.load(address(engine), _doubleUintMappingSlot(ROUND_HAS_HUMAN_VERIFIED_COMMIT_SLOT, contentId, roundId))
-        ) != 0;
+        return _roundHumanVerifiedCommitCount(engine, contentId, roundId) != 0;
+    }
+
+    function _roundHumanVerifiedCommitCount(RoundVotingEngine engine, uint256 contentId, uint256 roundId)
+        internal
+        view
+        returns (uint16)
+    {
+        return uint16(
+            uint256(
+                HEVM.load(
+                    address(engine),
+                    _doubleUintMappingSlot(ROUND_HUMAN_VERIFIED_COMMIT_COUNT_SLOT, contentId, roundId)
+                )
+            )
+        );
     }
 
     function _deployProtocolConfig(address admin) internal returns (ProtocolConfig protocolConfig) {

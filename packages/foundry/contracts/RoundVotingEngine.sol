@@ -616,10 +616,8 @@ contract RoundVotingEngine is
         _recordCommitAccounting(
             round, contentId, roundId, voter, resolved.holder, resolved.identityKey, stakeAmount64, stakeAmount
         );
-        // Flag whether at least one commit in this round originated from an HRC-verified identity.
-        // `cancelExpiredRound` consults this flag to keep all-sybil rounds refund-cancellable.
-        if (resolved.hasActiveHumanCredential && !roundHasHumanVerifiedCommit[contentId][roundId]) {
-            roundHasHumanVerifiedCommit[contentId][roundId] = true;
+        if (resolved.hasActiveHumanCredential) {
+            roundHumanVerifiedCommitCount[contentId][roundId] += 1;
         }
 
         emit VoteCommitted(
@@ -1278,7 +1276,7 @@ contract RoundVotingEngine is
             roundReferenceRatingBpsSnapshot,
             roundRevealGracePeriodSnapshot,
             lastCommitRevealableAfter,
-            roundHasHumanVerifiedCommit,
+            roundHumanVerifiedCommitCount,
             roundContentDormantCountSnapshot,
             registry,
             protocolConfig,
@@ -1330,7 +1328,8 @@ contract RoundVotingEngine is
         view
         returns (bool)
     {
-        if (!roundHasHumanVerifiedCommit[contentId][roundId]) return false;
+        RoundLib.RoundConfig memory roundCfg = _getRoundConfig(contentId, roundId);
+        if (roundHumanVerifiedCommitCount[contentId][roundId] < roundCfg.minVoters) return false;
         return RoundCleanupLib.canFinalizeRevealFailedRound(
             round,
             roundConfigSnapshot[contentId],
@@ -1353,7 +1352,8 @@ contract RoundVotingEngine is
         // minSettlementVoters >= MIN_RBTS_PARTICIPANTS; see finalizeRevealFailedRound.
         uint16 rbtsRevealQuorum = roundCfg.minVoters;
         if (round.revealedCount >= rbtsRevealQuorum) return false;
-        return round.voteCount < rbtsRevealQuorum || !roundHasHumanVerifiedCommit[contentId][roundId];
+        return round.voteCount < rbtsRevealQuorum
+            || roundHumanVerifiedCommitCount[contentId][roundId] < rbtsRevealQuorum;
     }
 
     function _isSettlementRevealGraceElapsed(uint256 contentId, uint256 roundId, RoundLib.Round storage round)
@@ -1758,7 +1758,12 @@ contract RoundVotingEngine is
 
     function isDormancyBlocked(uint256 contentId) external view returns (bool) {
         return RoundVotingReadLib.isDormancyBlocked(
-            currentRoundId, rounds, roundConfigSnapshot, roundHasHumanVerifiedCommit, protocolConfig, contentId
+            currentRoundId,
+            rounds,
+            roundConfigSnapshot,
+            roundHumanVerifiedCommitCount,
+            protocolConfig,
+            contentId
         );
     }
 
@@ -1850,11 +1855,9 @@ contract RoundVotingEngine is
     ///      Indexed by (contentId, roundId).
     mapping(uint256 contentId => mapping(uint256 roundId => bool)) internal pendingBundleObserverReplay;
 
-    // True if at least one commit in this round originated from an address with an active human
-    // credential. `cancelExpiredRound` requires this flag before the min-RBTS-quorum cancel-lockout
-    // engages -- attacker-only rounds (all non-HRC sybils) remain refund-cancellable so they
-    // cannot grief honest content into a RevealFailed cycle.
-    mapping(uint256 => mapping(uint256 => bool)) internal roundHasHumanVerifiedCommit;
+    // Commit-time count of HRC-verified voters. RevealFailed lockout requires HRC commit quorum,
+    // not merely one HRC voter plus non-HRC padding.
+    mapping(uint256 => mapping(uint256 => uint16)) internal roundHumanVerifiedCommitCount;
 
     // Delayed seed marker captured when settlement closes the scoring set; the marker packs
     // closure timestamp and seed block so cleanup uses the original scoring cutoff.

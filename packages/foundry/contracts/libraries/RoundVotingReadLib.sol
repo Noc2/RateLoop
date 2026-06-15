@@ -17,7 +17,7 @@ library RoundVotingReadLib {
         mapping(uint256 => mapping(uint256 => uint16)) storage roundReferenceRatingBpsSnapshot,
         mapping(uint256 => mapping(uint256 => uint256)) storage roundRevealGracePeriodSnapshot,
         mapping(uint256 => mapping(uint256 => uint256)) storage lastCommitRevealableAfter,
-        mapping(uint256 => mapping(uint256 => bool)) storage roundHasHumanVerifiedCommit,
+        mapping(uint256 => mapping(uint256 => uint16)) storage roundHumanVerifiedCommitCount,
         mapping(uint256 => mapping(uint256 => uint8)) storage roundContentDormantCountSnapshot,
         ContentRegistry registry,
         ProtocolConfig protocolConfig,
@@ -35,10 +35,12 @@ library RoundVotingReadLib {
                 || dormantCount != roundContentDormantCountSnapshot[contentId][openRoundId];
             bool emptyRoundStale = round.state == RoundLib.RoundState.Open && round.voteCount == 0
                 && round.totalStake == 0 && lastActivityAt > round.startTime && lastActivityAt <= block.timestamp;
+            uint16 rbtsRevealQuorum = _rbtsRevealQuorum(roundCfg.minVoters, minRbtsParticipants);
+            bool hrcCommitQuorum =
+                roundHumanVerifiedCommitCount[contentId][openRoundId] >= rbtsRevealQuorum;
             bool cancelExpired = RoundLib.isExpired(round, roundCfg.maxDuration)
-                && round.revealedCount < roundCfg.minVoters
-                && (round.voteCount < roundCfg.minVoters || !roundHasHumanVerifiedCommit[contentId][openRoundId]);
-            bool revealFailed = roundHasHumanVerifiedCommit[contentId][openRoundId]
+                && round.revealedCount < rbtsRevealQuorum && (round.voteCount < rbtsRevealQuorum || !hrcCommitQuorum);
+            bool revealFailed = hrcCommitQuorum
                 && RoundCleanupLib.canFinalizeRevealFailedRound(
                     round,
                     roundConfigSnapshot[contentId],
@@ -64,7 +66,7 @@ library RoundVotingReadLib {
         mapping(uint256 => uint256) storage currentRoundId,
         mapping(uint256 => mapping(uint256 => RoundLib.Round)) storage rounds,
         mapping(uint256 => mapping(uint256 => RoundLib.RoundConfig)) storage roundConfigSnapshot,
-        mapping(uint256 => mapping(uint256 => bool)) storage roundHasHumanVerifiedCommit,
+        mapping(uint256 => mapping(uint256 => uint16)) storage roundHumanVerifiedCommitCount,
         ProtocolConfig protocolConfig,
         uint256 contentId
     ) external view returns (bool) {
@@ -77,9 +79,12 @@ library RoundVotingReadLib {
         RoundLib.RoundConfig memory roundCfg = _roundConfig(roundConfigSnapshot, protocolConfig, contentId, roundId);
         if (round.revealedCount >= roundCfg.minVoters) return true;
         if (round.voteCount < roundCfg.minVoters) return false;
-        if (!roundHasHumanVerifiedCommit[contentId][roundId]) return false;
-        return !(RoundLib.isExpired(round, roundCfg.maxDuration) && round.revealedCount < roundCfg.minVoters
-                && (round.voteCount < roundCfg.minVoters || !roundHasHumanVerifiedCommit[contentId][roundId]));
+        if (roundHumanVerifiedCommitCount[contentId][roundId] < roundCfg.minVoters) return false;
+        return !(RoundLib.isExpired(round, roundCfg.maxDuration) && round.revealedCount < roundCfg.minVoters);
+    }
+
+    function _rbtsRevealQuorum(uint16 minVoters, uint16 minRbtsParticipants) private pure returns (uint16) {
+        return minVoters > minRbtsParticipants ? minVoters : minRbtsParticipants;
     }
 
     function roundRatingConfigPacked(

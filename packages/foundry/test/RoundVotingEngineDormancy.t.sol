@@ -82,6 +82,8 @@ contract RoundVotingEngineDormancyTest is VotingTestBase {
         uint256 contentId = _submitContent();
 
         raterIdentityRegistry.setHolder(voter1);
+        raterIdentityRegistry.setHolder(voter2);
+        raterIdentityRegistry.setHolder(voter3);
 
         _commit(voter1, contentId, true);
         _commit(voter2, contentId, false);
@@ -106,6 +108,8 @@ contract RoundVotingEngineDormancyTest is VotingTestBase {
         uint256 contentId = _submitContent();
 
         raterIdentityRegistry.setHolder(voter1);
+        raterIdentityRegistry.setHolder(voter2);
+        raterIdentityRegistry.setHolder(voter3);
 
         _commit(voter1, contentId, true);
         _commit(voter2, contentId, false);

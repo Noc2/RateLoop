@@ -487,6 +487,8 @@ contract FormalVerification_RoundLifecycleTest is VotingTestBase {
 
         MockRaterIdentityRegistry mockRaterIdentityRegistry = new MockRaterIdentityRegistry();
         mockRaterIdentityRegistry.setHolder(v[0]);
+        mockRaterIdentityRegistry.setHolder(v[1]);
+        mockRaterIdentityRegistry.setHolder(v[2]);
         vm.prank(owner);
         cfg.setRaterRegistry(address(mockRaterIdentityRegistry));
 

@@ -369,8 +369,8 @@
     {
       "slot": 61,
       "offset": 0,
-      "label": "roundHasHumanVerifiedCommit",
-      "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_bool))"
+      "label": "roundHumanVerifiedCommitCount",
+      "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_uint16))"
     },
     {
       "slot": 62,

@@ -2145,9 +2145,10 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
     function test_CancelExpired_RevertsIfThresholdAlreadyReached() public {
         uint256 contentId = _submitContent();
 
-        // L-Vote-4: cancel-lockout requires both commit quorum AND ≥1 HRC-verified commit.
-        // Mark voter1 as HRC so the lockout engages.
+        // L-Vote-4 follow-up: cancel-lockout requires HRC commit quorum.
         mockRaterIdentityRegistry.setHolder(voter1);
+        mockRaterIdentityRegistry.setHolder(voter2);
+        mockRaterIdentityRegistry.setHolder(voter3);
 
         (bytes32 ck1, bytes32 s1) = _commit(voter1, contentId, true, STAKE);
         (bytes32 ck2, bytes32 s2) = _commit(voter2, contentId, true, STAKE);
@@ -2171,8 +2172,10 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
     function test_CancelExpired_RevertsIfCommitQuorumReachedWithoutReveals() public {
         uint256 contentId = _submitContent();
 
-        // L-Vote-4: cancel-lockout requires both commit quorum AND ≥1 HRC-verified commit.
+        // L-Vote-4 follow-up: cancel-lockout requires HRC commit quorum.
         mockRaterIdentityRegistry.setHolder(voter1);
+        mockRaterIdentityRegistry.setHolder(voter2);
+        mockRaterIdentityRegistry.setHolder(voter3);
 
         _commit(voter1, contentId, true, STAKE);
         _commit(voter2, contentId, false, STAKE);
@@ -2233,9 +2236,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertFalse(_roundHasHumanVerifiedCommit(engine, contentId, roundId));
     }
 
-    /// @notice L-Vote-4: once any HRC voter has committed, subsequent non-HRC sybil commits
-    ///         still engage the cancel-lockout. The flag is sticky for the round.
-    function test_CancelExpired_HrcThenSybils_LockoutStillEngages() public {
+    function test_CancelExpired_OneHrcPlusSybilQuorum_Cancellable() public {
         uint256 contentId = _submitContent();
 
         // voter1 is HRC, voters 2/3 are not.
@@ -2246,11 +2247,72 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
         assertTrue(_roundHasHumanVerifiedCommit(engine, contentId, roundId));
+        assertEq(_roundHumanVerifiedCommitCount(engine, contentId, roundId), 1);
+
+        vm.warp(block.timestamp + 7 days + 1);
+
+        engine.cancelExpiredRound(contentId, roundId);
+
+        RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        assertEq(uint256(round.state), uint256(RoundLib.RoundState.Cancelled));
+    }
+
+    function test_CancelExpired_HrcCommitQuorum_LockoutStillEngages() public {
+        uint256 contentId = _submitContent();
+
+        mockRaterIdentityRegistry.setHolder(voter1);
+        mockRaterIdentityRegistry.setHolder(voter2);
+        mockRaterIdentityRegistry.setHolder(voter3);
+        _commit(voter1, contentId, true, STAKE);
+        _commit(voter2, contentId, false, STAKE);
+        _commit(voter3, contentId, true, STAKE);
+
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+        assertTrue(_roundHasHumanVerifiedCommit(engine, contentId, roundId));
+        assertEq(_roundHumanVerifiedCommitCount(engine, contentId, roundId), 3);
 
         vm.warp(block.timestamp + 7 days + 1);
 
         vm.expectRevert(RoundVotingEngine.ThresholdReached.selector);
         engine.cancelExpiredRound(contentId, roundId);
+    }
+
+    function test_CancelExpired_HrcCommitQuorum_IsCommitTimeSnapshot() public {
+        uint256 contentId = _submitContent();
+
+        mockRaterIdentityRegistry.setHolder(voter1);
+        mockRaterIdentityRegistry.setHolder(voter2);
+        mockRaterIdentityRegistry.setHolder(voter3);
+        _commit(voter1, contentId, true, STAKE);
+        _commit(voter2, contentId, false, STAKE);
+        _commit(voter3, contentId, true, STAKE);
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+
+        mockRaterIdentityRegistry.removeHolder(voter1);
+        mockRaterIdentityRegistry.removeHolder(voter2);
+        mockRaterIdentityRegistry.removeHolder(voter3);
+
+        assertEq(_roundHumanVerifiedCommitCount(engine, contentId, roundId), 3);
+        vm.warp(block.timestamp + 7 days + 1);
+        vm.expectRevert(RoundVotingEngine.ThresholdReached.selector);
+        engine.cancelExpiredRound(contentId, roundId);
+
+        uint256 nonHrcContentId = _submitContentWithUrl("https://example.com/hrc-later");
+        _commit(voter4, nonHrcContentId, true, STAKE);
+        _commit(voter5, nonHrcContentId, false, STAKE);
+        _commit(voter6, nonHrcContentId, true, STAKE);
+        uint256 nonHrcRoundId = RoundEngineReadHelpers.activeRoundId(engine, nonHrcContentId);
+
+        mockRaterIdentityRegistry.setHolder(voter4);
+        mockRaterIdentityRegistry.setHolder(voter5);
+        mockRaterIdentityRegistry.setHolder(voter6);
+
+        assertEq(_roundHumanVerifiedCommitCount(engine, nonHrcContentId, nonHrcRoundId), 0);
+        RoundLib.Round memory nonHrcOpenRound = RoundEngineReadHelpers.round(engine, nonHrcContentId, nonHrcRoundId);
+        vm.warp(nonHrcOpenRound.startTime + 7 days + 1);
+        engine.cancelExpiredRound(nonHrcContentId, nonHrcRoundId);
+        RoundLib.Round memory nonHrcRound = RoundEngineReadHelpers.round(engine, nonHrcContentId, nonHrcRoundId);
+        assertEq(uint256(nonHrcRound.state), uint256(RoundLib.RoundState.Cancelled));
     }
 
     function test_CancelExpired_RevertsIfRoundNotOpen() public {
@@ -3428,6 +3490,8 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         uint256 contentId = _submitContent();
 
         mockRaterIdentityRegistry.setHolder(voter1);
+        mockRaterIdentityRegistry.setHolder(voter2);
+        mockRaterIdentityRegistry.setHolder(voter3);
         (bytes32 ck1, bytes32 s1) = _commit(voter1, contentId, true, STAKE);
         _commit(voter2, contentId, false, STAKE);
         _commit(voter3, contentId, true, STAKE);
@@ -3495,6 +3559,8 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         uint256 contentId = _submitContent();
 
         mockRaterIdentityRegistry.setHolder(voter1);
+        mockRaterIdentityRegistry.setHolder(voter2);
+        mockRaterIdentityRegistry.setHolder(voter3);
         (bytes32 ck1, bytes32 s1) = _commit(voter1, contentId, true, STAKE);
         (bytes32 ck2, bytes32 s2) = _commit(voter2, contentId, false, STAKE);
         _commit(voter3, contentId, true, STAKE);
@@ -3543,6 +3609,8 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         uint256 contentId = _submitContent();
 
         mockRaterIdentityRegistry.setHolder(voter1);
+        mockRaterIdentityRegistry.setHolder(voter2);
+        mockRaterIdentityRegistry.setHolder(voter3);
         (bytes32 ck1, bytes32 s1) = _commit(voter1, contentId, true, STAKE);
         _commit(voter2, contentId, false, STAKE);
         _commit(voter3, contentId, true, STAKE);
@@ -3589,6 +3657,8 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         uint256 contentId = _submitContent();
 
         mockRaterIdentityRegistry.setHolder(voter1);
+        mockRaterIdentityRegistry.setHolder(voter2);
+        mockRaterIdentityRegistry.setHolder(voter3);
 
         _commit(voter1, contentId, true, STAKE);
         _commit(voter2, contentId, false, STAKE);
