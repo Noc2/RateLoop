@@ -26,3 +26,14 @@ export function normalizeQuestionDetailsText(value: string) {
 export function getQuestionDetailsTextSizeBytes(value: string) {
   return new TextEncoder().encode(value).byteLength;
 }
+
+export function questionDetailsHashInput(params: {
+  detailsId: string;
+  normalizedText: string;
+  requiresGatedAccess?: boolean;
+}) {
+  if (params.requiresGatedAccess) {
+    return ["rateloop.gated-question-details.v1", params.detailsId, params.normalizedText].join("\n");
+  }
+  return params.normalizedText;
+}

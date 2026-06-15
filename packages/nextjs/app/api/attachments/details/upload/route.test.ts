@@ -3,6 +3,7 @@ import { POST } from "./route";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { after, beforeEach, test } from "node:test";
+import { questionDetailsHashInput } from "~~/lib/attachments/questionDetails.shared";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testMemory";
 
@@ -24,13 +25,16 @@ function restoreEnv(name: keyof NodeJS.ProcessEnv, value: string | undefined) {
 function uploadRequest(detailsId: string) {
   const text = "Private details that should not be echoed from database errors.";
   const normalizedText = text.trim();
+  const sha256 = createHash("sha256")
+    .update(questionDetailsHashInput({ detailsId, normalizedText, requiresGatedAccess: true }), "utf8")
+    .digest("hex");
 
   return new NextRequest("https://rateloop.ai/api/attachments/details/upload", {
     body: JSON.stringify({
       address: "0x00000000000000000000000000000000000000aa",
       detailsId,
       requiresGatedAccess: true,
-      sha256: createHash("sha256").update(normalizedText, "utf8").digest("hex"),
+      sha256,
       sizeBytes: new TextEncoder().encode(normalizedText).byteLength,
       text,
     }),

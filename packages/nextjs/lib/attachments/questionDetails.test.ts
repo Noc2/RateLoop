@@ -10,6 +10,7 @@ import {
   parseQuestionDetailsIdFromDetailsUrl,
   sweepOrphanedQuestionDetails,
 } from "~~/lib/attachments/questionDetails";
+import { questionDetailsHashInput } from "~~/lib/attachments/questionDetails.shared";
 import { __setDatabaseResourcesForTests, db } from "~~/lib/db";
 import { questionDetails } from "~~/lib/db/schema";
 import { createMemoryDatabaseResources } from "~~/lib/db/testMemory";
@@ -61,6 +62,14 @@ function sha256Hex(value: string) {
   return createHash("sha256").update(value, "utf8").digest("hex");
 }
 
+function questionDetailsSha256Hex(params: {
+  detailsId: string;
+  normalizedText: string;
+  requiresGatedAccess?: boolean;
+}) {
+  return sha256Hex(questionDetailsHashInput(params));
+}
+
 async function createApprovedQuestionDetails(params: {
   agentId?: string;
   detailsId: string;
@@ -71,7 +80,7 @@ async function createApprovedQuestionDetails(params: {
   return createQuestionDetailsFromText({
     detailsId: params.detailsId,
     requestUrl: "https://www.rateloop.ai/api/attachments/details/upload",
-    sha256: sha256Hex(normalizedText),
+    sha256: questionDetailsSha256Hex({ detailsId: params.detailsId, normalizedText }),
     sizeBytes: new TextEncoder().encode(normalizedText).byteLength,
     text: normalizedText,
     uploader: params.agentId
@@ -139,11 +148,13 @@ test("stores normalized approved details with a verifiable sha256 hash", async (
 
 test("persists gated access intent for approved details at upload time", async () => {
   const normalizedText = "Private launch notes";
+  const detailsId = "det_gateduploaddetail";
+  const sha256 = questionDetailsSha256Hex({ detailsId, normalizedText, requiresGatedAccess: true });
   const result = await createQuestionDetailsFromText({
-    detailsId: "det_gateduploaddetail",
+    detailsId,
     requestUrl: "https://preview.example/api/attachments/details/upload",
     requiresGatedAccess: true,
-    sha256: sha256Hex(normalizedText),
+    sha256,
     sizeBytes: new TextEncoder().encode(normalizedText).byteLength,
     text: normalizedText,
     uploader: {
@@ -153,6 +164,8 @@ test("persists gated access intent for approved details at upload time", async (
   });
 
   assert.equal(result.status, "approved");
+  assert.equal(result.detailsHash, `0x${sha256}`);
+  assert.notEqual(result.detailsHash, `0x${sha256Hex(normalizedText)}`);
   const stored = await getQuestionDetails("det_gateduploaddetail");
   assert.equal(stored?.requiresGatedAccess, true);
 });

@@ -183,6 +183,22 @@ test("upserts gated metadata and flips disclosure after settlement", async () =>
   assert.equal(confidentiality.isConfidentialityCurrentlyGated(disclosed), false);
 });
 
+test("defaults omitted gated disclosure policy to private forever", async () => {
+  await confidentiality.upsertQuestionConfidentialityFromMetadata({
+    contentId: CONTENT_ID,
+    metadata: {
+      confidentiality: {
+        bond: { amount: "0", asset: "USDC" },
+        visibility: "gated",
+      },
+    },
+  });
+
+  const gated = await confidentiality.getQuestionConfidentiality(CONTENT_ID);
+  assert.equal(gated?.gated, true);
+  assert.equal(gated?.disclosurePolicy, "private_forever");
+});
+
 test("confidentiality terms acceptance requires the current document hash", async () => {
   await confidentiality.recordConfidentialityTermsAcceptance({
     nonce: "nonce-hash",

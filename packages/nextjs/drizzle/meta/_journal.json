@@ -71,6 +71,13 @@
       "when": 1781272506000,
       "tag": "0009_confidentiality_terms_payload_snapshot",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1781276106000,
+      "tag": "0010_confidentiality_private_forever_default",
+      "breakpoints": true
     }
   ]
 }

@@ -5,6 +5,7 @@ import {
   MAX_QUESTION_DETAILS_TEXT_BYTES,
   getQuestionDetailsTextSizeBytes,
   normalizeQuestionDetailsText,
+  questionDetailsHashInput,
 } from "~~/lib/attachments/questionDetails.shared";
 import { assertGatedAttachmentSchemaReady } from "~~/lib/attachments/uploadErrors";
 import { db, dbPool } from "~~/lib/db";
@@ -231,7 +232,21 @@ export async function getQuestionDetails(id: string): Promise<QuestionDetails | 
   return details ?? null;
 }
 
-function assertSupportedDetailsInput(params: { normalizedText: string; sha256: string; sizeBytes: number }) {
+function questionDetailsSha256Hex(params: {
+  detailsId: string;
+  normalizedText: string;
+  requiresGatedAccess?: boolean;
+}) {
+  return createHash("sha256").update(questionDetailsHashInput(params), "utf8").digest("hex");
+}
+
+function assertSupportedDetailsInput(params: {
+  detailsId: string;
+  normalizedText: string;
+  requiresGatedAccess?: boolean;
+  sha256: string;
+  sizeBytes: number;
+}) {
   const sizeBytes = getQuestionDetailsTextSizeBytes(params.normalizedText);
   if (!Number.isSafeInteger(params.sizeBytes) || params.sizeBytes <= 0) {
     throw new Error("Details size is invalid.");
@@ -243,7 +258,11 @@ function assertSupportedDetailsInput(params: { normalizedText: string; sha256: s
     throw new Error("Details size does not match the signed metadata.");
   }
 
-  const actualSha256 = createHash("sha256").update(params.normalizedText, "utf8").digest("hex");
+  const actualSha256 = questionDetailsSha256Hex({
+    detailsId: params.detailsId,
+    normalizedText: params.normalizedText,
+    requiresGatedAccess: params.requiresGatedAccess,
+  });
   if (actualSha256 !== params.sha256) {
     throw new Error("Details hash does not match the signed metadata.");
   }
@@ -435,7 +454,9 @@ export async function createQuestionDetailsFromText(params: CreateQuestionDetail
   try {
     normalizedText = normalizeQuestionDetailsText(params.text);
     assertSupportedDetailsInput({
+      detailsId: params.detailsId,
       normalizedText,
+      requiresGatedAccess: params.requiresGatedAccess,
       sha256: params.sha256,
       sizeBytes: params.sizeBytes,
     });

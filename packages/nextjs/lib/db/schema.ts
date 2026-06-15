@@ -417,7 +417,7 @@ export const questionConfidentiality = pgTable(
     gated: boolean("gated").notNull().default(false),
     bondAsset: text("bond_asset"),
     bondAmount: text("bond_amount").notNull().default("0"),
-    disclosurePolicy: text("disclosure_policy").notNull().default("after_settlement"),
+    disclosurePolicy: text("disclosure_policy").notNull().default("private_forever"),
     publishedAt: timestamp("published_at", { mode: "date", withTimezone: true }),
     questionMetadataHash: text("question_metadata_hash"),
     contentHash: text("content_hash"),

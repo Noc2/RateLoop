@@ -147,6 +147,10 @@ function sha256Hex(value: string): Hex {
   return `0x${createHash("sha256").update(value, "utf8").digest("hex")}`;
 }
 
+function gatedDetailsHash(detailsId: string, normalizedText: string): Hex {
+  return sha256Hex(["rateloop.gated-question-details.v1", detailsId, normalizedText].join("\n"));
+}
+
 function createDetailsId() {
   return `det_e2e${Date.now().toString(36)}${Math.random().toString(36).slice(2, 14)}`;
 }
@@ -198,7 +202,7 @@ export async function uploadGatedQuestionDetails(
 ): Promise<UploadedGatedQuestionDetails> {
   const normalizedText = text.trim();
   const detailsId = createDetailsId();
-  const detailsHash = sha256Hex(normalizedText);
+  const detailsHash = gatedDetailsHash(detailsId, normalizedText);
   const body = {
     address: account.address,
     detailsId,

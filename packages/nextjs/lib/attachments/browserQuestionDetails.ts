@@ -1,4 +1,5 @@
 /** Browser-only helpers for question detail ids and content hashing (submit + handoff flows). */
+import { questionDetailsHashInput } from "~~/lib/attachments/questionDetails.shared";
 
 export function createQuestionDetailsId() {
   const bytes = new Uint8Array(18);
@@ -13,4 +14,12 @@ export async function sha256Hex(value: string) {
   return Array.from(new Uint8Array(digest))
     .map(byte => byte.toString(16).padStart(2, "0"))
     .join("");
+}
+
+export async function questionDetailsSha256Hex(params: {
+  detailsId: string;
+  normalizedText: string;
+  requiresGatedAccess?: boolean;
+}) {
+  return sha256Hex(questionDetailsHashInput(params));
 }

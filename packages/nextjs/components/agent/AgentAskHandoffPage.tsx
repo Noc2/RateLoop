@@ -29,7 +29,7 @@ import { useRateLoopSwitchNetwork } from "~~/hooks/useRateLoopSwitchNetwork";
 import { useTransactionStatusToast } from "~~/hooks/useTransactionStatusToast";
 import { useWalletMessageSigner } from "~~/hooks/useWalletMessageSigner";
 import { buildCleanHandoffLocationPath, readHandoffTokenFromLocation } from "~~/lib/agent/handoffLocation";
-import { createQuestionDetailsId, sha256Hex } from "~~/lib/attachments/browserQuestionDetails";
+import { createQuestionDetailsId, questionDetailsSha256Hex } from "~~/lib/attachments/browserQuestionDetails";
 import {
   MAX_QUESTION_DETAILS_TEXT_LENGTH,
   getQuestionDetailsTextSizeBytes,
@@ -511,7 +511,11 @@ async function uploadQuestionDetailsForHandoff(params: {
 }): Promise<QuestionDetailsReference> {
   const normalizedText = normalizeQuestionDetailsText(params.text);
   const detailsId = createQuestionDetailsId();
-  const sha256 = await sha256Hex(normalizedText);
+  const sha256 = await questionDetailsSha256Hex({
+    detailsId,
+    normalizedText,
+    requiresGatedAccess: params.requiresGatedAccess === true,
+  });
   const sizeBytes = getQuestionDetailsTextSizeBytes(normalizedText);
   const challengeResponse = await fetch("/api/attachments/details/challenge", {
     body: JSON.stringify({

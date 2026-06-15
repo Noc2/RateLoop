@@ -40,7 +40,7 @@ import { useTransactionStatusToast } from "~~/hooks/useTransactionStatusToast";
 import { useWalletMessageSigner } from "~~/hooks/useWalletMessageSigner";
 import { useWalletRpcRecovery } from "~~/hooks/useWalletRpcRecovery";
 import { type AgentQuestionSpecInput, buildQuestionSpecHashes } from "~~/lib/agent/questionSpecs";
-import { createQuestionDetailsId, sha256Hex } from "~~/lib/attachments/browserQuestionDetails";
+import { createQuestionDetailsId, questionDetailsSha256Hex } from "~~/lib/attachments/browserQuestionDetails";
 import {
   MAX_QUESTION_DETAILS_TEXT_LENGTH,
   getQuestionDetailsTextSizeBytes,
@@ -1856,7 +1856,7 @@ export function ContentSubmissionSection() {
 
     const normalizedText = normalizeQuestionDetailsText(text);
     const detailsId = createQuestionDetailsId();
-    const sha256 = await sha256Hex(normalizedText);
+    const sha256 = await questionDetailsSha256Hex({ detailsId, normalizedText, requiresGatedAccess });
     const sizeBytes = getQuestionDetailsTextSizeBytes(normalizedText);
     const challengeResponse = await fetch("/api/attachments/details/challenge", {
       method: "POST",

@@ -192,18 +192,20 @@ function parseMetadataConfidentiality(value: unknown): {
   gated: boolean;
 } {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return { bondAmount: "0", bondAsset: null, disclosurePolicy: "after_settlement", gated: false };
+    return { bondAmount: "0", bondAsset: null, disclosurePolicy: "private_forever", gated: false };
   }
 
   const record = value as Record<string, unknown>;
   const visibility = typeof record.visibility === "string" ? record.visibility.trim() : "public";
   const disclosure =
-    record.disclosurePolicy === "private_forever" ? "private_forever" : ("after_settlement" as DisclosurePolicy);
+    record.disclosurePolicy === "after_settlement" || record.disclosurePolicy === "private_until_settlement"
+      ? ("after_settlement" as DisclosurePolicy)
+      : ("private_forever" as DisclosurePolicy);
   const bond = record.bond && typeof record.bond === "object" && !Array.isArray(record.bond) ? record.bond : null;
   return {
     bondAmount: bond ? normalizeBondAmount((bond as Record<string, unknown>).amount) : "0",
     bondAsset: bond ? normalizeBondAsset((bond as Record<string, unknown>).asset) : null,
-    disclosurePolicy: disclosure,
+    disclosurePolicy: visibility === "gated" ? disclosure : "after_settlement",
     gated: visibility === "gated",
   };
 }

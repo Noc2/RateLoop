@@ -3,7 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { buildRateContentHref } from "~~/constants/routes";
-import { MAX_QUESTION_DETAILS_TEXT_BYTES } from "~~/lib/attachments/questionDetails.shared";
+import { MAX_QUESTION_DETAILS_TEXT_BYTES, questionDetailsHashInput } from "~~/lib/attachments/questionDetails.shared";
 import { resolveQuestionDetailsFetchUrl } from "~~/lib/attachments/questionDetailsUrls";
 import { parseQuestionReferences } from "~~/lib/questionReferences";
 
@@ -45,6 +45,28 @@ async function sha256Hex(value: string) {
   return `0x${Array.from(new Uint8Array(digest))
     .map(byte => byte.toString(16).padStart(2, "0"))
     .join("")}`;
+}
+
+function detailsIdFromUrl(value: string) {
+  try {
+    const parsed = new URL(value, window.location.origin);
+    return parsed.pathname.match(/\/api\/attachments\/details\/(det_[A-Za-z0-9_-]{16,80})$/)?.[1] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function matchesQuestionDetailsHash(params: { detailsHash: string; detailsUrl: string; text: string }) {
+  const expected = params.detailsHash.toLowerCase();
+  const rawHash = await sha256Hex(params.text);
+  if (rawHash.toLowerCase() === expected) return true;
+
+  const detailsId = detailsIdFromUrl(params.detailsUrl);
+  if (!detailsId) return false;
+  const gatedHash = await sha256Hex(
+    questionDetailsHashInput({ detailsId, normalizedText: params.text, requiresGatedAccess: true }),
+  );
+  return gatedHash.toLowerCase() === expected;
 }
 
 export async function readQuestionDetailsResponseText(response: Response) {
@@ -120,8 +142,7 @@ export function QuestionDescription({
       if (!response.ok) throw new Error("Details are not available.");
       const text = await readQuestionDetailsResponseText(response);
       if (detailsHash) {
-        const fetchedHash = await sha256Hex(text);
-        if (fetchedHash.toLowerCase() !== detailsHash.toLowerCase()) {
+        if (!(await matchesQuestionDetailsHash({ detailsHash, detailsUrl, text }))) {
           throw new Error("Details hash mismatch.");
         }
       }
