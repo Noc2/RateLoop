@@ -298,7 +298,7 @@ function isDevModerationSkipAllowed() {
   return process.env.NODE_ENV !== "production" && !hasOpenAiModerationKey();
 }
 
-function assertSupportedImageSignature(buffer: Buffer, mimeType: string) {
+export function assertSupportedImageSignature(buffer: Buffer, mimeType: string) {
   const isPng = buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
   const isJpeg = buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
   const isWebp =

@@ -34,6 +34,9 @@ type ImageSignatureInput = {
   signature: Hex;
 };
 
+const IMAGE_UPLOAD_POLL_INTERVAL_MS = 1_250;
+const IMAGE_UPLOAD_POLL_TIMEOUT_MS = 45_000;
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -74,6 +77,60 @@ function readImageSignatures(value: unknown): ImageSignatureInput[] {
     }
     return { assetId, challengeId, signature: signature as Hex };
   });
+}
+
+function wait(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function readResultString(result: JsonObject, field: string) {
+  const value = result[field];
+  return typeof value === "string" ? value : "";
+}
+
+function readApprovedImageUrl(result: JsonObject) {
+  const imageUrl = readResultString(result, "imageUrl");
+  return readResultString(result, "status") === "approved" && imageUrl ? imageUrl : null;
+}
+
+function throwForTerminalImageUploadStatus(result: JsonObject): never | null {
+  const status = readResultString(result, "status");
+  const error = readResultString(result, "error");
+  if (status === "blocked") {
+    throw new AgentAskHandoffError(error ? `Image upload was blocked: ${error}` : "Image upload was blocked.");
+  }
+  if (status === "failed") {
+    throw new AgentAskHandoffError(error ? `Image upload failed: ${error}` : "Image upload failed.");
+  }
+  if (status === "deleted") {
+    throw new AgentAskHandoffError("Image upload failed because the attachment was deleted.");
+  }
+  return null;
+}
+
+async function waitForApprovedImageUrl(params: {
+  attachmentId: string;
+  initialResult: JsonObject;
+  requestUrl: string;
+}) {
+  let result = params.initialResult;
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt < IMAGE_UPLOAD_POLL_TIMEOUT_MS) {
+    const approvedImageUrl = readApprovedImageUrl(result);
+    if (approvedImageUrl) return approvedImageUrl;
+
+    throwForTerminalImageUploadStatus(result);
+    await wait(IMAGE_UPLOAD_POLL_INTERVAL_MS);
+
+    result = (await callPublicRateLoopMcpTool({
+      arguments: { attachmentId: params.attachmentId },
+      name: "rateloop_get_image_upload_status",
+      requestUrl: params.requestUrl,
+    })) as JsonObject;
+  }
+
+  throw new AgentAskHandoffError("Image moderation is still processing. Refresh and try submitting again.");
 }
 
 async function buildUploadChallenges(params: {
@@ -159,11 +216,11 @@ async function uploadSignedImages(params: {
         name: "rateloop_upload_image",
         requestUrl: params.requestUrl,
       })) as JsonObject;
-      const imageUrl = typeof result.imageUrl === "string" ? result.imageUrl : null;
-      const status = typeof result.status === "string" ? result.status : "";
-      if (!imageUrl || status !== "approved") {
-        throw new AgentAskHandoffError("Image upload did not return an approved imageUrl.");
-      }
+      const imageUrl = await waitForApprovedImageUrl({
+        attachmentId: asset.attachmentId,
+        initialResult: result,
+        requestUrl: params.requestUrl,
+      });
       await updateAgentAskHandoffAsset({
         assetId: asset.id,
         imageUrl,

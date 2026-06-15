@@ -1,6 +1,8 @@
 import { NextRequest } from "next/server";
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { after, before, beforeEach, test } from "node:test";
+import { privateKeyToAccount } from "viem/accounts";
 
 const env = process.env as Record<string, string | undefined>;
 const originalAgents = env.RATELOOP_MCP_AGENTS;
@@ -40,6 +42,12 @@ type UrlSafetyModule = typeof import("~~/utils/urlSafety");
 type McpToolTestOverrides = NonNullable<Parameters<McpToolsModule["__setMcpToolTestOverridesForTests"]>[0]>;
 
 const OPERATION_KEY = `0x${"1".repeat(64)}` as const;
+const ONE_PIXEL_PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=",
+  "base64",
+);
+const ONE_PIXEL_PNG_BASE64 = ONE_PIXEL_PNG.toString("base64");
+const ONE_PIXEL_PNG_SHA256 = createHash("sha256").update(ONE_PIXEL_PNG).digest("hex");
 
 let asksByClientRoute: AgentAsksByClientRouteModule;
 let asksByClientAuditRoute: AgentAsksByClientAuditRouteModule;
@@ -809,10 +817,10 @@ test("agent ask handoff route stages generated image bytes behind a browser link
       generatedImages: [
         {
           filename: "concept.png",
-          imageBase64: "aGVsbG8=",
+          imageBase64: ONE_PIXEL_PNG_BASE64,
           mimeType: "image/png",
-          sha256: "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
-          sizeBytes: 5,
+          sha256: ONE_PIXEL_PNG_SHA256,
+          sizeBytes: ONE_PIXEL_PNG.length,
         },
       ],
       request: {
@@ -851,7 +859,7 @@ test("agent ask handoff route stages generated image bytes behind a browser link
   assert.equal(readResponse.status, 200);
   assert.equal(readBody.status, "pending");
   assert.equal(readBody.assets?.[0]?.status, "staged");
-  assert.equal(readBody.assets?.[0]?.dataUrl, "data:image/png;base64,aGVsbG8=");
+  assert.equal(readBody.assets?.[0]?.dataUrl, `data:image/png;base64,${ONE_PIXEL_PNG_BASE64}`);
 
   const prepareResponse = await handoffPrepareRoute.POST(
     makePublicPost(`https://rateloop.ai/api/agent/handoffs/${handoffId}/prepare`, {
@@ -873,6 +881,148 @@ test("agent ask handoff route stages generated image bytes behind a browser link
   assert.equal(prepareBody.uploadChallenges?.length, 1);
   assert.equal(prepareBody.uploadChallenges?.[0]?.assetId, readBody.assets?.[0]?.id);
   assert.match(String(prepareBody.uploadChallenges?.[0]?.challengeId), /^[a-f0-9]{32}$/);
+});
+
+test("agent ask handoff route unwraps base64-encoded image data URLs", async () => {
+  const nestedDataUrl = `data:image/png;base64,${ONE_PIXEL_PNG_BASE64}`;
+  const legacyWrappedBytes = Buffer.from(nestedDataUrl, "utf8");
+  const response = await handoffsRoute.POST(
+    makePublicPost("https://rateloop.ai/api/agent/handoffs", {
+      generatedImages: [
+        {
+          filename: "nested-data-url.png",
+          imageBase64: Buffer.from(nestedDataUrl, "utf8").toString("base64"),
+        },
+      ],
+      request: {
+        ...questionPayload("agent-handoff-nested-data-url"),
+        maxPaymentAmount: "1500000",
+        question: {
+          categoryId: "5",
+          description: "Would this make you want to learn more?",
+          tags: ["agents", "pitch"],
+          title: "Generated concept image",
+        },
+      },
+      ttlMs: 300000,
+    }),
+  );
+  const body = (await response.json()) as Record<string, unknown>;
+  const handoffId = String(body.handoffId);
+  const token = new URLSearchParams(new URL(String(body.handoffUrl)).hash.replace(/^#/, "")).get("token");
+
+  assert.equal(response.status, 200);
+  assert.ok(token);
+
+  await dbModule.dbClient.execute({
+    args: [
+      legacyWrappedBytes.toString("base64"),
+      createHash("sha256").update(legacyWrappedBytes).digest("hex"),
+      legacyWrappedBytes.length,
+      handoffId,
+    ],
+    sql: `
+      UPDATE agent_ask_handoff_assets
+      SET image_base64 = ?,
+          sha256 = ?,
+          size_bytes = ?
+      WHERE handoff_id = ?
+    `,
+  });
+
+  const readResponse = await handoffRoute.GET(
+    makePublicGet(`https://rateloop.ai/api/agent/handoffs/${handoffId}`, {
+      "x-rateloop-handoff-token": token,
+    }),
+    { params: Promise.resolve({ handoffId }) },
+  );
+  const readBody = (await readResponse.json()) as { assets?: Array<Record<string, unknown>> };
+
+  assert.equal(readResponse.status, 200);
+  assert.equal(readBody.assets?.[0]?.dataUrl, nestedDataUrl);
+  assert.equal(readBody.assets?.[0]?.mimeType, "image/png");
+  assert.equal(readBody.assets?.[0]?.sha256, ONE_PIXEL_PNG_SHA256);
+  assert.equal(readBody.assets?.[0]?.sizeBytes, ONE_PIXEL_PNG.length);
+});
+
+test("agent ask handoff route uploads signed generated images before preparing ask", async () => {
+  installAskOverrides();
+
+  const account = privateKeyToAccount(`0x${"6".repeat(64)}`);
+  const createResponse = await handoffsRoute.POST(
+    makePublicPost("https://rateloop.ai/api/agent/handoffs", {
+      generatedImages: [
+        {
+          filename: "concept.png",
+          imageBase64: ONE_PIXEL_PNG_BASE64,
+          mimeType: "image/png",
+          sha256: ONE_PIXEL_PNG_SHA256,
+          sizeBytes: ONE_PIXEL_PNG.length,
+        },
+      ],
+      request: {
+        ...questionPayload("agent-handoff-upload-image"),
+        maxPaymentAmount: "1500000",
+        question: {
+          categoryId: "5",
+          description: "Would this make you want to learn more?",
+          tags: ["agents", "pitch"],
+          title: "Generated concept image",
+        },
+      },
+      ttlMs: 300000,
+    }),
+  );
+  const createBody = (await createResponse.json()) as Record<string, unknown>;
+  const handoffId = String(createBody.handoffId);
+  const token = new URLSearchParams(new URL(String(createBody.handoffUrl)).hash.replace(/^#/, "")).get("token");
+
+  assert.equal(createResponse.status, 200);
+  assert.ok(token);
+
+  const challengeResponse = await handoffPrepareRoute.POST(
+    makePublicPost(`https://rateloop.ai/api/agent/handoffs/${handoffId}/prepare`, {
+      chainId: 4801,
+      token,
+      walletAddress: account.address,
+    }),
+    { params: Promise.resolve({ handoffId }) },
+  );
+  const challengeBody = (await challengeResponse.json()) as {
+    uploadChallenges?: Array<Record<string, unknown>>;
+  };
+  const challenge = challengeBody.uploadChallenges?.[0];
+
+  assert.equal(challengeResponse.status, 200);
+  assert.ok(challenge);
+
+  const signature = await account.signMessage({ message: String(challenge.message) });
+  const prepareResponse = await handoffPrepareRoute.POST(
+    makePublicPost(`https://rateloop.ai/api/agent/handoffs/${handoffId}/prepare`, {
+      chainId: 4801,
+      imageSignatures: [
+        {
+          assetId: challenge.assetId,
+          challengeId: challenge.challengeId,
+          signature,
+        },
+      ],
+      token,
+      walletAddress: account.address,
+    }),
+    { params: Promise.resolve({ handoffId }) },
+  );
+  const prepareBody = (await prepareResponse.json()) as {
+    assets?: Array<Record<string, unknown>>;
+    status?: string;
+    transactionPlan?: { calls?: unknown[] };
+  };
+
+  assert.equal(prepareResponse.status, 200);
+  assert.equal(prepareBody.status, "prepared");
+  assert.equal(prepareBody.assets?.[0]?.status, "uploaded");
+  assert.match(String(prepareBody.assets?.[0]?.imageUrl), /^https:\/\/rateloop\.ai\/api\/attachments\/images\/att_/);
+  assert.equal(prepareBody.transactionPlan?.calls?.length, 1);
 });
 
 test("agent ask handoff route reports a pending draft migration clearly", async () => {

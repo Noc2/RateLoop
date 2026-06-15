@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from "crypto";
 import "server-only";
 import { type Address, type Hex, isAddress } from "viem";
-import { createImageAttachmentId } from "~~/lib/attachments/imageAttachments";
+import { assertSupportedImageSignature, createImageAttachmentId } from "~~/lib/attachments/imageAttachments";
 import { getMaxImageUploadSizeBytes, isSupportedImageUploadMimeType } from "~~/lib/auth/imageUploadChallenge.shared";
 import { dbClient } from "~~/lib/db";
 import { parseX402QuestionRequest } from "~~/lib/x402/questionPayload";
@@ -284,18 +284,25 @@ function rowToHandoff(row: Record<string, unknown> | undefined): AgentAskHandoff
 }
 
 function rowToAsset(row: Record<string, unknown>): AgentAskHandoffAssetRecord {
+  const imageData = normalizeStoredAssetImageData({
+    imageBase64: String(row.image_base64),
+    mimeType: String(row.mime_type),
+    sha256: String(row.sha256),
+    sizeBytes: Number(row.size_bytes),
+  });
+
   return {
     attachmentId: String(row.attachment_id),
     createdAt: row.created_at instanceof Date ? row.created_at : new Date(String(row.created_at)),
     error: typeof row.error === "string" ? row.error : null,
     handoffId: String(row.handoff_id),
     id: String(row.id),
-    imageBase64: String(row.image_base64),
+    imageBase64: imageData.imageBase64,
     imageUrl: typeof row.image_url === "string" ? row.image_url : null,
-    mimeType: String(row.mime_type),
+    mimeType: imageData.mimeType,
     originalFilename: String(row.original_filename),
-    sha256: String(row.sha256),
-    sizeBytes: Number(row.size_bytes),
+    sha256: imageData.sha256,
+    sizeBytes: imageData.sizeBytes,
     status: String(row.status) as AgentAskHandoffAssetRecord["status"],
     updatedAt: row.updated_at instanceof Date ? row.updated_at : new Date(String(row.updated_at)),
   };
@@ -314,7 +321,7 @@ function assetImageUrl(origin: string, attachmentId: string, sha256: string) {
 }
 
 function readDataUrl(value: string) {
-  const match = value.match(/^data:([^;,]+);base64,(.+)$/);
+  const match = value.trim().match(/^data:([^;,]+);base64,([A-Za-z0-9+/=_-]+)$/i);
   if (!match) return null;
   return {
     imageBase64: match[2],
@@ -323,10 +330,48 @@ function readDataUrl(value: string) {
 }
 
 function decodeBase64(value: string) {
-  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(value) && !/^[A-Za-z0-9_-]+={0,2}$/.test(value)) {
+  const normalized = value.replace(/\s/g, "");
+  if (
+    !normalized ||
+    (!/^[A-Za-z0-9+/]+={0,2}$/.test(normalized) && !/^[A-Za-z0-9_-]+={0,2}$/.test(normalized)) ||
+    normalized.length % 4 === 1
+  ) {
     throw new AgentAskHandoffError("generatedImages[].imageBase64 must be base64-encoded image bytes.");
   }
-  return Buffer.from(value, "base64");
+  const buffer = Buffer.from(normalized, "base64");
+  if (buffer.length === 0) {
+    throw new AgentAskHandoffError("generatedImages[].imageBase64 must be base64-encoded image bytes.");
+  }
+  return buffer;
+}
+
+function readNestedDataUrl(buffer: Buffer) {
+  const text = buffer.toString("utf8").trim();
+  return text.startsWith("data:") ? readDataUrl(text) : null;
+}
+
+function normalizeStoredAssetImageData(imageData: {
+  imageBase64: string;
+  mimeType: string;
+  sha256: string;
+  sizeBytes: number;
+}) {
+  try {
+    const buffer = decodeBase64(imageData.imageBase64);
+    const nestedDataUrlParts = readNestedDataUrl(buffer);
+    if (!nestedDataUrlParts) return imageData;
+
+    const nestedBuffer = decodeBase64(nestedDataUrlParts.imageBase64);
+    assertSupportedImageSignature(nestedBuffer, nestedDataUrlParts.mimeType);
+    return {
+      imageBase64: nestedBuffer.toString("base64"),
+      mimeType: nestedDataUrlParts.mimeType,
+      sha256: createHash("sha256").update(nestedBuffer).digest("hex"),
+      sizeBytes: nestedBuffer.byteLength,
+    };
+  } catch {
+    return imageData;
+  }
 }
 
 function normalizeGeneratedImage(input: CreateHandoffImageInput, index: number) {
@@ -336,16 +381,35 @@ function normalizeGeneratedImage(input: CreateHandoffImageInput, index: number) 
   if (dataUrl && !dataUrlParts) {
     throw new AgentAskHandoffError(`generatedImages[${index}].dataUrl must be a base64 image data URL.`);
   }
-  const imageBase64 =
+  let imageBase64 =
     dataUrlParts?.imageBase64 ?? readRequiredString(input.imageBase64, `generatedImages[${index}].imageBase64`);
-  const mimeType = (
-    dataUrlParts?.mimeType ?? readRequiredString(input.mimeType, `generatedImages[${index}].mimeType`)
-  ).toLowerCase();
+  let mimeType = (dataUrlParts?.mimeType ?? readOptionalString(input.mimeType)).toLowerCase();
+  let buffer = decodeBase64(imageBase64);
+  const nestedDataUrlParts = dataUrlParts ? null : readNestedDataUrl(buffer);
+  if (nestedDataUrlParts) {
+    if (mimeType && mimeType !== nestedDataUrlParts.mimeType) {
+      throw new AgentAskHandoffError(
+        `generatedImages[${index}].mimeType must match the MIME type embedded in imageBase64.`,
+      );
+    }
+    imageBase64 = nestedDataUrlParts.imageBase64;
+    mimeType = nestedDataUrlParts.mimeType;
+    buffer = decodeBase64(imageBase64);
+  }
+  if (!mimeType) {
+    throw new AgentAskHandoffError(`generatedImages[${index}].mimeType is required.`);
+  }
   if (!isSupportedImageUploadMimeType(mimeType)) {
     throw new AgentAskHandoffError(`generatedImages[${index}].mimeType must be image/jpeg, image/png, or image/webp.`);
   }
 
-  const buffer = decodeBase64(imageBase64);
+  try {
+    assertSupportedImageSignature(buffer, mimeType);
+  } catch {
+    throw new AgentAskHandoffError(
+      `generatedImages[${index}] bytes do not match the declared ${mimeType} content type.`,
+    );
+  }
   const sizeBytes = readPositiveSizeBytes(input.sizeBytes, buffer.byteLength);
   if (sizeBytes !== buffer.byteLength) {
     throw new AgentAskHandoffError(`generatedImages[${index}].sizeBytes must match the decoded image byte length.`);
