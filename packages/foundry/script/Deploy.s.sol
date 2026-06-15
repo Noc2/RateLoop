@@ -324,12 +324,13 @@ contract DeployRateLoop is ScaffoldETHDeploy {
 
         // Bracket the first setVotingEngine AND setQuestionRewardPoolEscrow calls with
         // pause/unpause so the deploy script exercises the same observable state as a future
-        // rotation (L-Identity-5, L-Identity-7).
+        // rotation (L-Identity-5, L-Identity-7). ProtocolConfig must be wired before escrow
+        // validation runs against the configured voting engine.
         registry.pause();
+        registry.setProtocolConfig(address(protocolConfig));
         registry.setVotingEngine(address(votingEngine));
         registry.setQuestionRewardPoolEscrow(address(questionRewardPoolEscrow));
         registry.unpause();
-        registry.setProtocolConfig(address(protocolConfig));
         registry.setCategoryRegistry(address(categoryRegistry));
         registry.grantRole(registry.X402_GATEWAY_ROLE(), address(x402QuestionSubmitter));
         confidentialityEscrow.grantRole(confidentialityEscrow.CONFIG_ROLE(), address(registry));
