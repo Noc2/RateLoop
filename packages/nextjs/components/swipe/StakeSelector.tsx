@@ -592,9 +592,8 @@ export function StakeSelector({
                     <span>Checking bounty eligibility...</span>
                   </div>
                 ) : worldIdActions.length > 0 && worldIdActionMessage ? (
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <span>{worldIdActionMessage}</span>
-                    <div className="flex flex-wrap gap-2 sm:justify-end">
+                  <div className="flex flex-col items-start gap-2">
+                    <div className="flex max-w-full flex-wrap gap-2">
                       {worldIdActions.map(action => (
                         <button
                           key={`${action.purpose}-${action.kind}`}
@@ -604,7 +603,7 @@ export function StakeSelector({
                             if (!isWorldCredentialEnabledForBountyUi(action.kind)) return;
                             onRequestWorldIdProof?.({ kind: action.kind, purpose: action.purpose });
                           }}
-                          className="btn btn-sm btn-outline shrink-0"
+                          className="btn btn-sm btn-outline h-auto max-w-full whitespace-normal px-3 py-2 text-left leading-tight"
                           disabled={
                             isConfirming ||
                             !canRequestWorldIdProof ||
@@ -616,6 +615,7 @@ export function StakeSelector({
                         </button>
                       ))}
                     </div>
+                    <span className="block leading-relaxed">{worldIdActionMessage}</span>
                   </div>
                 ) : null}
               </div>
