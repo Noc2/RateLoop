@@ -509,7 +509,12 @@ async function fetchKeeperWorkFromPonder(
   const timeout = setTimeout(() => controller.abort(), PONDER_FETCH_TIMEOUT_MS);
 
   try {
-    const response = await fetch(url, { signal: controller.signal });
+    const headers: Record<string, string> = {};
+    const keeperWorkToken = process.env.PONDER_KEEPER_WORK_TOKEN?.trim();
+    if (keeperWorkToken) {
+      headers.authorization = `Bearer ${keeperWorkToken}`;
+    }
+    const response = await fetch(url, { headers, signal: controller.signal });
     if (!response.ok) {
       throw new Error(`Ponder keeper work request failed: ${response.status}`);
     }

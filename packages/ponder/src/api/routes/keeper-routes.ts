@@ -1,3 +1,4 @@
+import type { Context } from "hono";
 import { ROUND_STATE } from "@rateloop/contracts/protocol";
 import { and, asc, eq, inArray, or, sql } from "ponder";
 import { db } from "ponder:api";
@@ -16,8 +17,23 @@ function safeNonNegativeBigIntParam(value: string | undefined): bigint | null {
   return parsed !== null && parsed >= 0n ? parsed : null;
 }
 
+function authorizeKeeperWork(c: Context) {
+  const token = process.env.PONDER_KEEPER_WORK_TOKEN?.trim() || null;
+  if (!token) {
+    return process.env.NODE_ENV === "production"
+      ? "PONDER_KEEPER_WORK_TOKEN is required in production."
+      : null;
+  }
+  return c.req.header("authorization") === `Bearer ${token}` ? null : "Invalid keeper work token.";
+}
+
 export function registerKeeperRoutes(app: ApiApp) {
   app.get("/keeper/work", async (c) => {
+    const authError = authorizeKeeperWork(c);
+    if (authError) {
+      return c.json({ error: authError }, authError.includes("required") ? 503 : 401);
+    }
+
     const now = safeNonNegativeBigIntParam(c.req.query("now"));
     const dormancyPeriod = safeNonNegativeBigIntParam(
       c.req.query("dormancyPeriod"),
