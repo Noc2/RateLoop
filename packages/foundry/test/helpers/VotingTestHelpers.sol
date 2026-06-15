@@ -718,6 +718,44 @@ abstract contract VotingTestBase is Test, ContentSubmissionTestBase {
 
     mapping(bytes32 => TestRevealPayload) internal testRevealPayloads;
 
+    // ContentRegistry.questionBundleRoundObserverByContent storage slot (see ContentRegistry.json).
+    uint256 internal constant QUESTION_BUNDLE_ROUND_OBSERVER_BY_CONTENT_SLOT = 28;
+
+    uint256 private _votingTestCheckpoint;
+
+    /// @dev Reset inherited fixture fields and global block context that can leak across tests.
+    function _resetVotingTestFixture() internal {
+        activeTlockContentRegistry = ContentRegistry(address(0));
+        activeTlockProtocolConfig = ProtocolConfig(address(0));
+        activeTlockDrandChainHash = DEFAULT_DRAND_CHAIN_HASH;
+        activeTlockDrandGenesisTime = DEFAULT_DRAND_GENESIS_TIME;
+        activeTlockDrandPeriod = DEFAULT_DRAND_PERIOD;
+        activeTlockEpochDuration = DEFAULT_TLOCK_EPOCH_DURATION;
+        vm.roll(1);
+    }
+
+    /// @dev Capture post-setUp state so tearDown can undo per-test mutations (mappings, vm.store, rotations).
+    function _checkpointVotingTestState() internal {
+        _votingTestCheckpoint = vm.snapshotState();
+    }
+
+    function _restoreVotingTestCheckpoint() internal {
+        if (_votingTestCheckpoint != 0) {
+            vm.revertToStateAndDelete(_votingTestCheckpoint);
+            _votingTestCheckpoint = 0;
+        }
+    }
+
+    /// @dev Inject a bundle round observer without a bundle submit path; verifies the storage slot.
+    function _linkBundleRoundObserver(ContentRegistry registry, uint256 contentId, address observer) internal {
+        vm.store(
+            address(registry),
+            keccak256(abi.encode(contentId, QUESTION_BUNDLE_ROUND_OBSERVER_BY_CONTENT_SLOT)),
+            bytes32(uint256(uint160(observer)))
+        );
+        require(registry.questionBundleRoundObserver(contentId) == observer, "bundle observer link failed");
+    }
+
     bytes32 internal constant DEFAULT_DRAND_CHAIN_HASH = TEST_PROTOCOL_CONFIG_DRAND_CHAIN_HASH;
     uint64 internal constant DEFAULT_DRAND_GENESIS_TIME = TEST_PROTOCOL_CONFIG_DRAND_GENESIS_TIME;
     uint64 internal constant DEFAULT_DRAND_PERIOD = TEST_PROTOCOL_CONFIG_DRAND_PERIOD;

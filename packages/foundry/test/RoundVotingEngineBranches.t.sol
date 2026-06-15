@@ -136,8 +136,6 @@ contract MockEip2935History {
 // =========================================================================
 
 contract RoundVotingEngineBranchesTest is VotingTestBase {
-    // ContentRegistry.questionBundleRoundObserverByContent storage slot.
-    uint256 internal constant QUESTION_BUNDLE_ROUND_OBSERVER_BY_CONTENT_SLOT = 28;
     address internal constant EIP2935_HISTORY_STORAGE = 0x0000F90827F1C53a10cb7A02335B175320002935;
 
     LoopReputation public lrepToken;
@@ -197,6 +195,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
     }
 
     function setUp() public {
+        _resetVotingTestFixture();
         vm.warp(T0);
         vm.startPrank(owner);
 
@@ -288,6 +287,12 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         }
 
         vm.stopPrank();
+
+        _checkpointVotingTestState();
+    }
+
+    function tearDown() public {
+        _restoreVotingTestCheckpoint();
     }
 
     function test_SetRoleRotatesPauser() public {
@@ -1214,7 +1219,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         registry.setQuestionRewardPoolEscrow(address(observer));
         vm.prank(owner);
         registry.unpause();
-        _storeBundleRoundObserver(contentId, address(observer));
+        _linkBundleRoundObserver(registry, contentId, address(observer));
 
         _settleRoundAfterRbtsSeed(contentId, roundId);
         assertEq(observer.notifyCount(), 0, "failed callback is retained for replay");
@@ -1232,14 +1237,6 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         vm.prank(owner);
         vm.expectRevert("no pending replay");
         engine.replayBundleObserverNotify(contentId, roundId);
-    }
-
-    function _storeBundleRoundObserver(uint256 contentId, address observer) internal {
-        vm.store(
-            address(registry),
-            keccak256(abi.encode(contentId, QUESTION_BUNDLE_ROUND_OBSERVER_BY_CONTENT_SLOT)),
-            bytes32(uint256(uint160(observer)))
-        );
     }
 
     function _assertPendingRatingReview(uint256 contentId, uint256 roundId, address expectedEngine) internal view {
