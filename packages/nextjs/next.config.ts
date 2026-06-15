@@ -11,13 +11,6 @@ import { fileURLToPath } from "node:url";
 
 loadEnvConfig(dirname(fileURLToPath(import.meta.url)));
 
-// Vercel PR previews are CI smoke builds. When the project has no preview target-network
-// env, use the existing local-chain production-build profile; production stays strict.
-if (process.env.VERCEL_ENV === "preview" && !process.env.NEXT_PUBLIC_TARGET_NETWORKS?.trim()) {
-  process.env.RATELOOP_E2E_PRODUCTION_BUILD ??= "true";
-  process.env.NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD ??= "true";
-}
-
 const isDev = process.env.NODE_ENV === "development";
 // WS-5 (2026-05-21 repo audit): Vercel Live is a preview-deployment debugging feature; it
 // should not load on production. The CSP previously allowed `https://vercel.live` and
