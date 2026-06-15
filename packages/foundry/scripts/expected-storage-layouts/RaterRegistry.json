@@ -123,104 +123,104 @@
     {
       "slot": 20,
       "offset": 0,
-      "label": "delegateAuthorizationNonces",
-      "type": "t_mapping(t_address,t_uint256)"
-    },
-    {
-      "slot": 21,
-      "offset": 0,
       "label": "maxSeededCredentialTtl",
       "type": "t_uint64"
     },
     {
-      "slot": 21,
+      "slot": 20,
       "offset": 8,
       "label": "worldIdV4Verifier",
       "type": "t_contract(IWorldIDVerifier)"
     },
     {
-      "slot": 22,
+      "slot": 21,
       "offset": 0,
       "label": "worldIdV4RpId",
       "type": "t_uint64"
     },
     {
-      "slot": 23,
+      "slot": 22,
       "offset": 0,
       "label": "worldIdV4Action",
       "type": "t_uint256"
     },
     {
-      "slot": 24,
+      "slot": 23,
       "offset": 0,
       "label": "worldIdV4CredentialTtl",
       "type": "t_uint64"
     },
     {
-      "slot": 24,
+      "slot": 23,
       "offset": 8,
       "label": "worldIdV4IssuerSchemaId",
       "type": "t_uint64"
     },
     {
-      "slot": 25,
+      "slot": 24,
       "offset": 0,
       "label": "worldIdV4CredentialGenesisIssuedAtMin",
       "type": "t_uint256"
     },
     {
-      "slot": 26,
+      "slot": 25,
       "offset": 0,
       "label": "worldIdV4VerifierConfigFrozen",
       "type": "t_bool"
     },
     {
-      "slot": 27,
+      "slot": 26,
       "offset": 0,
       "label": "worldIdV4PresenceAction",
       "type": "t_uint256"
     },
     {
-      "slot": 28,
+      "slot": 27,
       "offset": 0,
       "label": "worldIdV4PresenceTtl",
       "type": "t_uint64"
     },
     {
-      "slot": 28,
+      "slot": 27,
       "offset": 8,
       "label": "worldIdV4PresenceConfigFrozen",
       "type": "t_bool"
     },
     {
-      "slot": 29,
+      "slot": 28,
       "offset": 0,
       "label": "_usedWorldCredentialProof",
       "type": "t_mapping(t_uint8,t_mapping(t_bytes32,t_bool))"
     },
     {
-      "slot": 30,
+      "slot": 29,
       "offset": 0,
       "label": "_usedWorldPresenceProof",
       "type": "t_mapping(t_uint8,t_mapping(t_bytes32,t_bool))"
     },
     {
-      "slot": 31,
+      "slot": 30,
       "offset": 0,
       "label": "_identityBans",
       "type": "t_mapping(t_bytes32,t_struct(IdentityBan))"
     },
     {
-      "slot": 32,
+      "slot": 31,
       "offset": 0,
       "label": "confidentialityEscrow",
       "type": "t_address"
     },
     {
-      "slot": 33,
+      "slot": 32,
       "offset": 0,
       "label": "_identityBanSources",
       "type": "t_mapping(t_bytes32,t_array(t_bytes32)dyn)"
+    },
+    {
+      "slot": 33,
+      "offset": 0,
+      "label": "delegateAuthorizationNonces",
+      "type": "t_mapping(t_address,t_uint256)"
     },
     {
       "slot": 34,
@@ -246,8 +246,8 @@
     {
       "id": "t_array(t_uint256)",
       "encoding": "inplace",
-      "label": "uint256[26]",
-      "numberOfBytes": "832",
+      "label": "uint256[25]",
+      "numberOfBytes": "800",
       "base": "t_uint256"
     },
     {

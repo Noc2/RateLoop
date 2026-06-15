@@ -132,7 +132,6 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
     mapping(address => address) public delegateOf;
     mapping(address => address) public pendingDelegateTo;
     mapping(address => address) public pendingDelegateOf;
-    mapping(address => uint256) public delegateAuthorizationNonces;
 
     /// @dev RR-4 (2026-05-20 follow-up audit): governance-tunable upper bound on the TTL
     ///      SEEDER_ROLE can grant via `seedHumanCredential`. WorldID credentials are already
@@ -155,8 +154,9 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
     mapping(bytes32 => IdentityBan) private _identityBans;
     address public confidentialityEscrow;
     mapping(bytes32 => bytes32[]) private _identityBanSources;
+    mapping(address => uint256) public delegateAuthorizationNonces;
     /// @dev Reserved storage gap for future proxy-safe upgrades.
-    uint256[26] private __gap;
+    uint256[25] private __gap;
 
     event RaterProfileUpdated(
         address indexed rater, RaterType indexed raterType, bytes32 indexed metadataHash, uint64 updatedAt
