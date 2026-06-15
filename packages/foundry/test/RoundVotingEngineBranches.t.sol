@@ -2482,6 +2482,49 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertEq(round.revealedCount, 1);
     }
 
+    function test_Reveal_PostCommitIdentityBan_RevertsWithoutAccounting() public {
+        uint256 contentId = _submitContent();
+
+        (bytes32 commitKey, bytes32 salt) = _commit(voter1, contentId, true, STAKE);
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+        mockRaterIdentityRegistry.setBanned(mockRaterIdentityRegistry.addressIdentityKey(voter1), true);
+
+        _warpPastTlockRevealTime(block.timestamp + EPOCH);
+
+        vm.expectRevert(VotePreflightLib.IdentityBanned.selector);
+        engine.revealVoteByCommitKey(contentId, roundId, commitKey, true, 5_000, salt);
+
+        RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        assertEq(round.revealedCount, 0);
+        (,,,, bool revealed,,) = engine.commitCore(contentId, roundId, commitKey);
+        assertFalse(revealed);
+        assertEq(_commitRbtsScoringWeight(engine, contentId, roundId, commitKey), 0);
+        assertEq(_commitPredictedUpBps(engine, contentId, roundId, commitKey), 0);
+    }
+
+    function test_Reveal_PostCommitBanInCurrentRegistryAfterRotation_Reverts() public {
+        uint256 contentId = _submitContent();
+
+        (bytes32 commitKey, bytes32 salt) = _commit(voter1, contentId, true, STAKE);
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+        MockRaterIdentityRegistry replacementRegistry = new MockRaterIdentityRegistry();
+        replacementRegistry.setBanned(replacementRegistry.addressIdentityKey(voter1), true);
+        vm.prank(owner);
+        ProtocolConfig(protocolConfigAddress).setRaterRegistry(address(replacementRegistry));
+
+        _warpPastTlockRevealTime(block.timestamp + EPOCH);
+
+        vm.expectRevert(VotePreflightLib.IdentityBanned.selector);
+        engine.revealVoteByCommitKey(contentId, roundId, commitKey, true, 5_000, salt);
+
+        RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        assertEq(round.revealedCount, 0);
+        (,,,, bool revealed,,) = engine.commitCore(contentId, roundId, commitKey);
+        assertFalse(revealed);
+        assertEq(_commitRbtsScoringWeight(engine, contentId, roundId, commitKey), 0);
+        assertEq(_commitPredictedUpBps(engine, contentId, roundId, commitKey), 0);
+    }
+
     // =========================================================================
     // 5. WRONG HASH ON REVEAL (HashMismatch)
     // =========================================================================

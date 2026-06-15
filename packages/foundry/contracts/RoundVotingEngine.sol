@@ -1463,6 +1463,13 @@ contract RoundVotingEngine is
         RoundLib.Commit storage commit = commits[contentId][roundId][commitKey];
         RoundLib.RoundConfig memory roundCfg = _getRoundConfig(contentId, roundId);
         uint256 targetRoundRevealableAt = _targetRoundRevealableAt(contentId, roundId, commit.targetRound);
+        VotePreflightLib.validateCommittedRaterUnbanned(
+            _getRoundRaterRegistry(contentId, roundId),
+            IRaterIdentityRegistry(protocolConfig.raterRegistry()),
+            commitIdentityKey[contentId][roundId][commitKey],
+            commit.voter,
+            commitIdentityHolder[contentId][roundId][commitKey]
+        );
         if (roundRbtsSeedEntropy[contentId][roundId] != bytes32(0)) revert UnrevealedPastEpochVotes();
         if (_canFinalizeRevealFailedRound(contentId, roundId, round)) revert UnrevealedPastEpochVotes();
         uint256 thresholdBlock = roundThresholdReachedBlock[contentId][roundId];

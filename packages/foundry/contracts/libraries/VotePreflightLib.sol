@@ -133,6 +133,30 @@ library VotePreflightLib {
         return keccak256(abi.encodePacked("rateloop.address-identity-v1", account));
     }
 
+    function validateCommittedRaterUnbanned(
+        IRaterIdentityRegistry roundRegistry,
+        IRaterIdentityRegistry currentRegistry,
+        bytes32 identityKey,
+        address voter,
+        address identityHolder
+    ) external view {
+        bytes32 voterKey = addressIdentityKey(voter);
+        bytes32 holderKey = addressIdentityKey(identityHolder);
+        if (
+            _isIdentityBanned(roundRegistry, identityKey) || _isIdentityBanned(roundRegistry, voterKey)
+                || _isIdentityBanned(roundRegistry, holderKey)
+        ) {
+            revert IdentityBanned();
+        }
+        if (address(currentRegistry) == address(roundRegistry)) return;
+        if (
+            _isIdentityBanned(currentRegistry, identityKey) || _isIdentityBanned(currentRegistry, voterKey)
+                || _isIdentityBanned(currentRegistry, holderKey)
+        ) {
+            revert IdentityBanned();
+        }
+    }
+
     function _resolveUnbannedRater(IRaterIdentityRegistry identityRegistry, address actor)
         private
         view
