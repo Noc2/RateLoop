@@ -596,8 +596,14 @@ export async function triggerDisclosureReconcile(
   contentIds: Array<string | number | bigint>,
   settledAt?: Date,
 ) {
-  const secret = process.env.NOTIFICATION_DELIVERY_SECRET;
-  expect(secret, "NOTIFICATION_DELIVERY_SECRET must be set for disclosure reconciliation e2e").toBeTruthy();
+  const secret =
+    process.env.RATELOOP_CONFIDENTIALITY_JOB_SECRET ??
+    process.env.CRON_SECRET ??
+    process.env.NOTIFICATION_DELIVERY_SECRET;
+  expect(
+    secret,
+    "RATELOOP_CONFIDENTIALITY_JOB_SECRET or CRON_SECRET must be set for disclosure reconciliation e2e",
+  ).toBeTruthy();
 
   const response = await request.post("/api/confidentiality/disclosure/reconcile", {
     data: {

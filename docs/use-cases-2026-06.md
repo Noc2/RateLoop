@@ -49,7 +49,7 @@ slot ERC-8004 deliberately left open.
 | --- | --- |
 | Latency | Per-question `roundConfig`; human rounds ~40 min–hours (recruitment-bound; fast-lane estimator: epoch + ≥15 min); instant-rater rounds floor at **~2–4 min** (1-min epoch min, drand quicknet 3s, keeper 30s tick, 2-step settle +1 block, Ponder seconds) |
 | Cost | 1 USDC floor; fast-lane guidance $0.33–0.75/rater → ~$5/10 raters, ~$12.50/25; ≥1,000 USDC bounties require ≥5 voters; gated mode unpriced; confidentiality bonds are rater-side |
-| Private context | **Live end-to-end**: hosted-only gated context, wallet-signed terms (server-recorded, content-commitment-bound), sharp watermark + HMAC view tokens + access logs, bond escrow (1–100 USDC default cap, 0 allowed), breach tab + slash/ban governance actions, disclosure-after-settlement or private-forever. Gaps: no gated bundles; log roots not yet anchored on-chain; **gated rounds are human-credential-only (AI raters excluded)** |
+| Private context | **Live end-to-end**: hosted-only gated context, wallet-signed terms (server-recorded, content-commitment-bound), sharp watermark + HMAC view tokens + access logs, daily log-root artifacts with best-effort on-chain anchors, bond escrow (1–100 USDC default cap, 0 allowed), breach tab + slash/ban governance actions, disclosure-after-settlement or private-forever. Gaps: no gated bundles; mainnet anchor key/role still needs operational verification; **gated rounds are human-credential-only (AI raters excluded)** |
 | Targeting | Validated taxonomy + `rateloop_list_audience_options` + submit-UI picker + indexed `targetAudience` + `targetAudienceMatch` in results + 7-day cooldown + payout-artifact claim-weight enforcement. Still self-reported; consistency probes/verified tiers pending (`audience-targeting-plan-2026-06.md`) |
 | Rater pool | Humans (World ID-gateable via credential masks) and AI raters (first-class `RaterType`, normal stake+vote, bounty-eligible when eligibility is open). **No AI-only eligibility mask** — pure-AI rounds are achievable socially, not enforced. Legacy contributors seeded as verified humans (supply bootstrap) |
 | Accuracy-linked income | Surprise-weighted bounty claim weights live in the payout-root pipeline (herding finding mitigated); score-spread forfeits require ≥8 reveals; 3-voter launch rounds settle as feedback-tier signals, and governance can ratchet new-ask voter floors upward with usage |
@@ -256,8 +256,8 @@ the channel (MCP + x402 directories); 2 and 6 additionally ride the agent-econom
   contributors seeded as verified humans bootstrap the human pool. BTS + stakes must make
   cheap-wrapper farming unprofitable — that's working as designed.
 - **Adoption blockers that remain:** `@rateloop/sdk` / `@rateloop/agents` still 404 on npm
-  (built, release-prepped, unpublished — ship it); no gated bundles; confidentiality log roots
-  not yet anchored on-chain; no supply-side audience matching notifications.
+  (built, release-prepped, unpublished — ship it); no gated bundles; confidentiality log-root
+  anchors still need mainnet key/role verification; no supply-side audience matching notifications.
 
 ## Suggested sequencing
 

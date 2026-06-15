@@ -210,6 +210,12 @@ export function getNotificationDeliverySecret(): string | undefined {
   return readEnv("NOTIFICATION_DELIVERY_SECRET");
 }
 
+export function getConfidentialityJobSecrets(): string[] {
+  return [readEnv("RATELOOP_CONFIDENTIALITY_JOB_SECRET"), readEnv("CRON_SECRET")].filter((secret): secret is string =>
+    Boolean(secret),
+  );
+}
+
 export function getThirdwebClientId(): string | undefined {
   return readEnv("NEXT_PUBLIC_THIRDWEB_CLIENT_ID");
 }

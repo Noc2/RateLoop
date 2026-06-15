@@ -1,7 +1,8 @@
 import type { NextRequest } from "next/server";
 import deployedContracts from "@rateloop/contracts/deployedContracts";
+import { ROUND_STATE } from "@rateloop/contracts/protocol";
 import { createHash, createHmac, randomBytes } from "crypto";
-import { and, eq, gte, isNull, lt } from "drizzle-orm";
+import { and, asc, eq, gte, isNull, lt } from "drizzle-orm";
 import "server-only";
 import {
   type Abi,
@@ -34,6 +35,7 @@ import {
 } from "~~/lib/db/schema";
 import { getPrimaryServerTargetNetwork, getServerRpcOverrides } from "~~/lib/env/server";
 import { isValidWalletAddress, normalizeWalletAddress } from "~~/lib/watchlist/contentWatch";
+import { ponderApi } from "~~/services/ponder/client";
 
 export const CONFIDENTIALITY_TERMS_ACTION = "confidentiality_terms:accept";
 export const CONFIDENTIALITY_TERMS_CHALLENGE_TITLE = "RateLoop confidential context";
@@ -146,12 +148,22 @@ const CONFIDENTIALITY_ESCROW_LOG_ROOT_ABI = [
 const PRIVATE_KEY_PATTERN = /^0x[0-9a-fA-F]{64}$/;
 
 let confidentialityGateOverrideForTests: ConfidentialityOnchainGate | null = null;
+let confidentialitySettledAtLookupOverrideForTests: ((contentId: string) => Promise<Date | null>) | null = null;
 
 export function __setConfidentialityOnchainGateForTests(gate: ConfidentialityOnchainGate | null) {
   if (process.env.NODE_ENV !== "test") {
     throw new Error("__setConfidentialityOnchainGateForTests is only available in tests.");
   }
   confidentialityGateOverrideForTests = gate;
+}
+
+export function __setConfidentialitySettledAtLookupForTests(
+  lookup: ((contentId: string) => Promise<Date | null>) | null,
+) {
+  if (process.env.NODE_ENV !== "test") {
+    throw new Error("__setConfidentialitySettledAtLookupForTests is only available in tests.");
+  }
+  confidentialitySettledAtLookupOverrideForTests = lookup;
 }
 
 function isBytes32Hex(value: unknown): value is `0x${string}` {
@@ -798,6 +810,84 @@ export async function reconcileConfidentialDisclosure(params: { settledContentId
   });
 }
 
+function normalizePositiveLimit(value: unknown, fallback: number, max: number) {
+  const parsed = typeof value === "number" ? value : Number.parseInt(String(value ?? ""), 10);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) return fallback;
+  return Math.min(parsed, max);
+}
+
+async function lookupSettledAtForConfidentialContent(contentId: string) {
+  if (confidentialitySettledAtLookupOverrideForTests) {
+    return confidentialitySettledAtLookupOverrideForTests(contentId);
+  }
+
+  const rounds = await ponderApi.getAllRounds({ contentId, state: String(ROUND_STATE.Settled) });
+  const settledTimes = rounds
+    .map(round => (round.settledAt ? new Date(round.settledAt) : null))
+    .filter((date): date is Date => Boolean(date && !Number.isNaN(date.getTime())))
+    .sort((left, right) => left.getTime() - right.getTime());
+  return settledTimes[0] ?? null;
+}
+
+export async function findDueConfidentialDisclosureContent(params: { limit?: number; scanLimit?: number } = {}) {
+  const limit = normalizePositiveLimit(params.limit, 100, 500);
+  const scanLimit = normalizePositiveLimit(params.scanLimit, Math.max(limit * 10, 500), 5_000);
+  const candidates = await db
+    .select({ contentId: questionConfidentiality.contentId })
+    .from(questionConfidentiality)
+    .where(
+      and(
+        eq(questionConfidentiality.gated, true),
+        eq(questionConfidentiality.disclosurePolicy, "after_settlement"),
+        isNull(questionConfidentiality.publishedAt),
+      ),
+    )
+    .orderBy(asc(questionConfidentiality.createdAt))
+    .limit(scanLimit);
+
+  const due: Array<{ contentId: string; settledAt: Date }> = [];
+  const errors: Array<{ contentId: string; error: string }> = [];
+  let checked = 0;
+  for (const candidate of candidates) {
+    if (due.length >= limit) break;
+    checked += 1;
+    try {
+      const settledAt = await lookupSettledAtForConfidentialContent(candidate.contentId);
+      if (settledAt) due.push({ contentId: candidate.contentId, settledAt });
+    } catch (error) {
+      errors.push({
+        contentId: candidate.contentId,
+        error: error instanceof Error ? error.message : "Unable to check settlement status",
+      });
+    }
+  }
+
+  return {
+    checked,
+    due,
+    errors,
+  };
+}
+
+export async function reconcileDueConfidentialDisclosure(params: { limit?: number; scanLimit?: number } = {}) {
+  const dueResult = await findDueConfidentialDisclosureContent(params);
+  let published = 0;
+  for (const item of dueResult.due) {
+    const result = await publishConfidentialContextAfterSettlement({
+      contentIds: [item.contentId],
+      settledAt: item.settledAt,
+    });
+    published += result.published;
+  }
+
+  return {
+    checked: dueResult.checked,
+    due: dueResult.due.length,
+    errors: dueResult.errors,
+    published,
+  };
+}
+
 function leafHash(value: unknown) {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex");
 }
@@ -902,6 +992,25 @@ async function publishConfidentialityLogRootAnchor(params: {
   };
 }
 
+type ConfidentialityLogRootAnchorResult =
+  | Awaited<ReturnType<typeof publishConfidentialityLogRootAnchor>>
+  | { status: "failed"; reason: string };
+
+async function attemptConfidentialityLogRootAnchor(params: {
+  artifactHash: Hex;
+  artifactUri: string | null;
+  epoch: string;
+  merkleRoot: Hex;
+}): Promise<ConfidentialityLogRootAnchorResult> {
+  try {
+    return await publishConfidentialityLogRootAnchor(params);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : "Unable to publish confidentiality log-root anchor.";
+    console.error("[confidentiality] failed to publish log-root anchor.", { epoch: params.epoch, reason });
+    return { status: "failed", reason };
+  }
+}
+
 function epochBounds(epoch: string) {
   const start = new Date(`${epoch}T00:00:00.000Z`);
   if (Number.isNaN(start.getTime())) throw new Error("Invalid confidentiality log epoch.");
@@ -979,7 +1088,7 @@ export async function publishConfidentialityLogRoot(
   const anchor =
     params.anchor === false
       ? { status: "skipped" as const, reason: "anchor_disabled" }
-      : await publishConfidentialityLogRootAnchor({
+      : await attemptConfidentialityLogRootAnchor({
           artifactHash,
           artifactUri: artifactUrl,
           epoch,

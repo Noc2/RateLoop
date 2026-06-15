@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { GATED_CONTEXT_SIGNED_READ_SESSION_COOKIE_NAME, verifySignedReadSession } from "~~/lib/auth/signedReadSessions";
+import { confidentialityEpochForDate } from "~~/lib/confidentiality/context";
 import { db } from "~~/lib/db";
-import { confidentialityBreachReports } from "~~/lib/db/schema";
+import { confidentialContextAccessLogs, confidentialityBreachReports, confidentialityLogRoots } from "~~/lib/db/schema";
 import { isJsonObjectBody, jsonBodyErrorResponse, parseJsonBody } from "~~/lib/http/jsonBody";
 import { isValidWalletAddress, normalizeWalletAddress } from "~~/lib/watchlist/contentWatch";
 import { checkRateLimit } from "~~/utils/rateLimit";
@@ -13,6 +14,7 @@ export const dynamic = "force-dynamic";
 const RATE_LIMIT = { limit: 20, windowMs: 60_000 };
 const BYTES32_PATTERN = /^0x[0-9a-fA-F]{64}$/;
 const CONTENT_ID_PATTERN = /^[0-9]{1,78}$/;
+const VIEW_TOKEN_PATTERN = /^[0-9a-fA-F]{64}$/;
 
 function readOptionalEvidenceUrl(value: unknown) {
   if (typeof value !== "string" || !value.trim()) return null;
@@ -22,6 +24,13 @@ function readOptionalEvidenceUrl(value: unknown) {
   } catch {
     return null;
   }
+}
+
+function readOptionalViewToken(value: unknown) {
+  if (value === undefined || value === null || value === "") return { ok: true as const, viewToken: null };
+  if (typeof value !== "string") return { ok: false as const };
+  const viewToken = value.trim().toLowerCase();
+  return VIEW_TOKEN_PATTERN.test(viewToken) ? { ok: true as const, viewToken } : { ok: false as const };
 }
 
 export async function GET(request: NextRequest) {
@@ -44,6 +53,8 @@ export async function GET(request: NextRequest) {
       evidenceHash: row.evidenceHash,
       evidenceUrl: row.evidenceUrl,
       id: row.id,
+      accessLogId: row.accessLogId,
+      epoch: row.epoch,
       reporter: row.reporter,
       status: row.status,
       updatedAt: row.updatedAt.toISOString(),
@@ -85,21 +96,98 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Signed reporter session required" }, { status: 401 });
   }
 
+  const viewTokenResult = readOptionalViewToken(body.viewToken);
+  if (!viewTokenResult.ok) {
+    return NextResponse.json({ error: "Invalid view token" }, { status: 400 });
+  }
+
+  let verifiedAccess: {
+    accessLogId: number;
+    epoch: string;
+    proof: string;
+    status: "access_rooted" | "access_verified";
+  } | null = null;
+
+  if (viewTokenResult.viewToken) {
+    const [accessLog] = await db
+      .select({
+        contentId: confidentialContextAccessLogs.contentId,
+        id: confidentialContextAccessLogs.id,
+        identityKey: confidentialContextAccessLogs.identityKey,
+        resourceId: confidentialContextAccessLogs.resourceId,
+        resourceKind: confidentialContextAccessLogs.resourceKind,
+        viewedAt: confidentialContextAccessLogs.viewedAt,
+      })
+      .from(confidentialContextAccessLogs)
+      .where(
+        and(
+          eq(confidentialContextAccessLogs.viewToken, viewTokenResult.viewToken),
+          eq(confidentialContextAccessLogs.contentId, contentId),
+          eq(confidentialContextAccessLogs.identityKey, accusedIdentityKey),
+        ),
+      )
+      .limit(1);
+
+    if (!accessLog) {
+      return NextResponse.json({ error: "View token does not match a confidential access log" }, { status: 400 });
+    }
+
+    const epoch = confidentialityEpochForDate(accessLog.viewedAt);
+    const [root] = await db
+      .select({
+        artifactHash: confidentialityLogRoots.artifactHash,
+        artifactUrl: confidentialityLogRoots.artifactUrl,
+        merkleRoot: confidentialityLogRoots.merkleRoot,
+        publishedAt: confidentialityLogRoots.publishedAt,
+      })
+      .from(confidentialityLogRoots)
+      .where(eq(confidentialityLogRoots.epoch, epoch))
+      .limit(1);
+
+    verifiedAccess = {
+      accessLogId: accessLog.id,
+      epoch,
+      proof: JSON.stringify({
+        accessLog: {
+          contentId: accessLog.contentId,
+          id: accessLog.id,
+          identityKey: accessLog.identityKey,
+          resourceId: accessLog.resourceId,
+          resourceKind: accessLog.resourceKind,
+          viewedAt: accessLog.viewedAt.toISOString(),
+        },
+        logRoot: root
+          ? {
+              artifactHash: root.artifactHash,
+              artifactUrl: root.artifactUrl,
+              epoch,
+              merkleRoot: root.merkleRoot,
+              publishedAt: root.publishedAt.toISOString(),
+            }
+          : null,
+        schemaVersion: "rateloop.confidentiality-breach-proof.v1",
+        viewToken: viewTokenResult.viewToken,
+      }),
+      status: root ? "access_rooted" : "access_verified",
+    };
+  }
+
   const now = new Date();
   const [created] = await db
     .insert(confidentialityBreachReports)
     .values({
       accessLogId:
-        typeof body.accessLogId === "number" && Number.isSafeInteger(body.accessLogId) ? body.accessLogId : null,
+        verifiedAccess?.accessLogId ??
+        (typeof body.accessLogId === "number" && Number.isSafeInteger(body.accessLogId) ? body.accessLogId : null),
       accusedIdentityKey,
       contentId,
       createdAt: now,
-      epoch: typeof body.epoch === "string" ? body.epoch.trim() || null : null,
+      epoch: verifiedAccess?.epoch ?? (typeof body.epoch === "string" ? body.epoch.trim() || null : null),
       evidenceHash,
       evidenceUrl: readOptionalEvidenceUrl(body.evidenceUrl),
-      proof: typeof body.proof === "string" ? body.proof.trim() || null : null,
+      proof: verifiedAccess?.proof ?? (typeof body.proof === "string" ? body.proof.trim() || null : null),
       reporter,
-      status: "reported",
+      status: verifiedAccess?.status ?? "reported",
       updatedAt: now,
     })
     .returning({ id: confidentialityBreachReports.id });

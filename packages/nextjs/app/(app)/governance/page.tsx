@@ -23,9 +23,11 @@ const RATER_REGISTRY_BAN_IDENTITY_ACTION_ID = "rater-registry-ban-identity";
 const RATER_REGISTRY_UNBAN_IDENTITY_ACTION_ID = "rater-registry-unban-identity";
 
 type BreachReport = {
+  accessLogId: number | null;
   accusedIdentityKey: string;
   contentId: string;
   createdAt: string;
+  epoch: string | null;
   evidenceHash: string;
   evidenceUrl: string | null;
   id: number;
@@ -127,6 +129,7 @@ function ConfidentialityBreachesPanel({ onOpenGovernanceAction, reporter }: Conf
   const [accusedIdentityKey, setAccusedIdentityKey] = useState("");
   const [evidenceHash, setEvidenceHash] = useState("");
   const [evidenceUrl, setEvidenceUrl] = useState("");
+  const [viewToken, setViewToken] = useState("");
   const [reports, setReports] = useState<BreachReport[]>([]);
   const [isLoadingReports, setIsLoadingReports] = useState(false);
   const [isSubmittingReport, setIsSubmittingReport] = useState(false);
@@ -161,6 +164,7 @@ function ConfidentialityBreachesPanel({ onOpenGovernanceAction, reporter }: Conf
           evidenceHash,
           evidenceUrl: evidenceUrl.trim() || undefined,
           reporter,
+          viewToken: viewToken.trim() || undefined,
         }),
         credentials: "include",
         headers: { "content-type": "application/json" },
@@ -248,6 +252,15 @@ function ConfidentialityBreachesPanel({ onOpenGovernanceAction, reporter }: Conf
               placeholder="https://..."
             />
           </label>
+          <label className="form-control gap-2 sm:grid sm:grid-cols-[max-content_minmax(0,1fr)] sm:items-center sm:gap-x-6">
+            <span className="label-text whitespace-nowrap text-base-content/65">View token</span>
+            <input
+              className="input input-bordered mt-2 w-full bg-base-100 font-mono text-sm sm:mt-0 sm:max-w-xl sm:justify-self-end"
+              value={viewToken}
+              onChange={event => setViewToken(event.target.value)}
+              placeholder="64 hex characters"
+            />
+          </label>
           <div className="flex flex-wrap gap-2">
             <button type="submit" className="btn btn-primary" disabled={isSubmittingReport}>
               {isSubmittingReport ? <span className="loading loading-spinner loading-xs" /> : null}
@@ -323,6 +336,8 @@ function ConfidentialityBreachesPanel({ onOpenGovernanceAction, reporter }: Conf
                   <div className="mt-2 space-y-1 font-mono text-xs text-base-content/60">
                     <p className="break-all">identity {report.accusedIdentityKey}</p>
                     <p className="break-all">evidence {report.evidenceHash}</p>
+                    {report.accessLogId ? <p>access log #{report.accessLogId}</p> : null}
+                    {report.epoch ? <p>epoch {report.epoch}</p> : null}
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <button

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "crypto";
-import { getNotificationDeliverySecret } from "~~/lib/env/server";
+import { getConfidentialityJobSecrets } from "~~/lib/env/server";
 
 function constantTimeEquals(left: string, right: string): boolean {
   const leftBuffer = Buffer.from(left);
@@ -14,13 +14,13 @@ function readBearerToken(request: Request) {
 }
 
 export function requireConfidentialityJobAuth(request: NextRequest) {
-  const secret = getNotificationDeliverySecret();
-  if (!secret) {
+  const secrets = getConfidentialityJobSecrets();
+  if (secrets.length === 0) {
     return NextResponse.json({ error: "Confidentiality jobs are not configured" }, { status: 503 });
   }
 
   const token = request.headers.get("x-rateloop-confidentiality-secret")?.trim() || readBearerToken(request);
-  if (!token || !constantTimeEquals(token, secret)) {
+  if (!token || !secrets.some(secret => constantTimeEquals(token, secret))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

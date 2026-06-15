@@ -7,6 +7,7 @@ const env = process.env as Record<string, string | undefined>;
 const originalDatabaseUrl = env.DATABASE_URL;
 const originalNodeEnv = env.NODE_ENV;
 const originalConfidentialitySecret = env.RATELOOP_CONFIDENTIALITY_SECRET;
+const originalLogRootAnchorPrivateKey = env.RATELOOP_CONFIDENTIALITY_LOG_ROOT_ANCHOR_PRIVATE_KEY;
 const originalAppUrl = env.APP_URL;
 
 env.DATABASE_URL = "memory:";
@@ -140,14 +141,18 @@ before(async () => {
 beforeEach(async () => {
   await clearTables();
   confidentiality.__setConfidentialityOnchainGateForTests(null);
+  confidentiality.__setConfidentialitySettledAtLookupForTests(null);
+  delete env.RATELOOP_CONFIDENTIALITY_LOG_ROOT_ANCHOR_PRIVATE_KEY;
 });
 
 after(() => {
   confidentiality.__setConfidentialityOnchainGateForTests(null);
+  confidentiality.__setConfidentialitySettledAtLookupForTests(null);
   dbModule.__setDatabaseResourcesForTests(null);
   restoreEnv("DATABASE_URL", originalDatabaseUrl);
   restoreEnv("NODE_ENV", originalNodeEnv);
   restoreEnv("RATELOOP_CONFIDENTIALITY_SECRET", originalConfidentialitySecret);
+  restoreEnv("RATELOOP_CONFIDENTIALITY_LOG_ROOT_ANCHOR_PRIVATE_KEY", originalLogRootAnchorPrivateKey);
   restoreEnv("APP_URL", originalAppUrl);
 });
 
@@ -197,6 +202,89 @@ test("defaults omitted gated disclosure policy to private forever", async () => 
   const gated = await confidentiality.getQuestionConfidentiality(CONTENT_ID);
   assert.equal(gated?.gated, true);
   assert.equal(gated?.disclosurePolicy, "private_forever");
+});
+
+test("reconciles due gated disclosure rows after settlement", async () => {
+  const settledAt = new Date("2026-06-11T12:34:56.000Z");
+  await confidentiality.upsertQuestionConfidentialityFromMetadata({
+    contentId: CONTENT_ID,
+    metadata: {
+      confidentiality: {
+        bond: { amount: "0", asset: "USDC" },
+        disclosurePolicy: "after_settlement",
+        visibility: "gated",
+      },
+    },
+  });
+  await confidentiality.upsertQuestionConfidentialityFromMetadata({
+    contentId: "43",
+    metadata: {
+      confidentiality: {
+        bond: { amount: "0", asset: "USDC" },
+        disclosurePolicy: "private_forever",
+        visibility: "gated",
+      },
+    },
+  });
+  confidentiality.__setConfidentialitySettledAtLookupForTests(async contentId =>
+    contentId === CONTENT_ID ? settledAt : null,
+  );
+
+  assert.deepEqual(await confidentiality.reconcileDueConfidentialDisclosure({ limit: 10 }), {
+    checked: 1,
+    due: 1,
+    errors: [],
+    published: 1,
+  });
+
+  const disclosed = await confidentiality.getQuestionConfidentiality(CONTENT_ID);
+  const privateForever = await confidentiality.getQuestionConfidentiality("43");
+  assert.equal(disclosed?.publishedAt?.toISOString(), settledAt.toISOString());
+  assert.equal(privateForever?.publishedAt, null);
+});
+
+test("due disclosure reconciliation scans past older unsettled rows", async () => {
+  const settledAt = new Date("2026-06-11T12:34:56.000Z");
+  await confidentiality.upsertQuestionConfidentialityFromMetadata({
+    contentId: "43",
+    metadata: {
+      confidentiality: {
+        bond: { amount: "0", asset: "USDC" },
+        disclosurePolicy: "after_settlement",
+        visibility: "gated",
+      },
+    },
+  });
+  await confidentiality.upsertQuestionConfidentialityFromMetadata({
+    contentId: "44",
+    metadata: {
+      confidentiality: {
+        bond: { amount: "0", asset: "USDC" },
+        disclosurePolicy: "after_settlement",
+        visibility: "gated",
+      },
+    },
+  });
+  await dbModule.dbClient.execute(
+    "UPDATE question_confidentiality SET created_at = '2026-06-01T00:00:00.000Z' WHERE content_id = '43'",
+  );
+  await dbModule.dbClient.execute(
+    "UPDATE question_confidentiality SET created_at = '2026-06-02T00:00:00.000Z' WHERE content_id = '44'",
+  );
+  confidentiality.__setConfidentialitySettledAtLookupForTests(async contentId =>
+    contentId === "44" ? settledAt : null,
+  );
+
+  assert.deepEqual(await confidentiality.reconcileDueConfidentialDisclosure({ limit: 1 }), {
+    checked: 2,
+    due: 1,
+    errors: [],
+    published: 1,
+  });
+  assert.equal(
+    (await confidentiality.getQuestionConfidentiality("44"))?.publishedAt?.toISOString(),
+    settledAt.toISOString(),
+  );
 });
 
 test("confidentiality terms acceptance requires the current document hash", async () => {
@@ -353,6 +441,24 @@ test("authorizes accepted signed sessions and logs gated context access", async 
   assert.equal(artifact.acceptanceCount, 1);
   assert.equal(artifact.accessCount, 1);
   assert.equal(artifact.leaves.length, 2);
+});
+
+test("persists log-root artifacts when on-chain anchoring fails", async () => {
+  env.RATELOOP_CONFIDENTIALITY_LOG_ROOT_ANCHOR_PRIVATE_KEY = "not-a-private-key";
+
+  const root = await confidentiality.publishConfidentialityLogRoot({
+    epoch: "2026-06-11",
+    now: new Date("2026-06-12T00:00:00.000Z"),
+  });
+
+  assert.equal(root.anchor.status, "failed");
+  const rows = await dbModule.dbClient.execute(
+    "SELECT artifact_hash, merkle_root, anchor_tx_hash FROM confidentiality_log_roots WHERE epoch = '2026-06-11'",
+  );
+  assert.equal(rows.rowCount, 1);
+  assert.equal(rows.rows[0].artifact_hash, root.artifactHash);
+  assert.equal(rows.rows[0].merkle_root, root.merkleRoot);
+  assert.equal(rows.rows[0].anchor_tx_hash, null);
 });
 
 test("rejects gated reads without an active human credential identity", async () => {

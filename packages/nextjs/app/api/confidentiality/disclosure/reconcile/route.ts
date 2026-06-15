@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { reconcileConfidentialDisclosure } from "~~/lib/confidentiality/context";
+import { reconcileConfidentialDisclosure, reconcileDueConfidentialDisclosure } from "~~/lib/confidentiality/context";
 import { requireConfidentialityJobAuth } from "~~/lib/confidentiality/routeAuth";
 import { isJsonObjectBody, jsonBodyErrorResponse, parseJsonBody } from "~~/lib/http/jsonBody";
 import { checkRateLimit } from "~~/utils/rateLimit";
@@ -15,6 +15,28 @@ function readContentIds(value: unknown) {
     .map(item => (typeof item === "string" || typeof item === "number" || typeof item === "bigint" ? String(item) : ""))
     .map(item => item.trim())
     .filter(item => /^[0-9]{1,78}$/.test(item));
+}
+
+function readLimit(value: string | null) {
+  if (!value) return undefined;
+  const parsed = Number.parseInt(value, 10);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+export async function GET(request: NextRequest) {
+  const unauthorized = requireConfidentialityJobAuth(request);
+  if (unauthorized) return unauthorized;
+
+  const limited = await checkRateLimit(request, RATE_LIMIT, { allowOnStoreUnavailable: true });
+  if (limited) return limited;
+
+  return NextResponse.json({
+    ok: true,
+    ...(await reconcileDueConfidentialDisclosure({
+      limit: readLimit(request.nextUrl.searchParams.get("limit")),
+      scanLimit: readLimit(request.nextUrl.searchParams.get("scanLimit")),
+    })),
+  });
 }
 
 export async function POST(request: NextRequest) {
