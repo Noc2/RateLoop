@@ -56,6 +56,16 @@ function parseEnvFile(filePath) {
   return values;
 }
 
+function redactDatabaseUrl(url) {
+  try {
+    const parsed = new URL(url);
+    if (parsed.password) parsed.password = "***";
+    return parsed.toString();
+  } catch {
+    return "<invalid DATABASE_URL>";
+  }
+}
+
 export function resolveNextDatabaseConfig() {
   const envFileValues = parseEnvFile(nextEnvLocalFile);
   const envDatabaseUrl = process.env.DATABASE_URL?.trim();
@@ -80,16 +90,16 @@ export function resolveNextDatabaseConfig() {
   try {
     parsed = new URL(url);
   } catch {
-    throw new Error(`DATABASE_URL must be a valid PostgreSQL URL. Received: ${url}`);
+    throw new Error(`DATABASE_URL must be a valid PostgreSQL URL. Received: ${redactDatabaseUrl(url)}`);
   }
 
   if (parsed.protocol !== "postgres:" && parsed.protocol !== "postgresql:") {
-    throw new Error(`DATABASE_URL must use the postgres:// or postgresql:// scheme. Received: ${url}`);
+    throw new Error(`DATABASE_URL must use the postgres:// or postgresql:// scheme. Received: ${redactDatabaseUrl(url)}`);
   }
 
   const databaseName = parsed.pathname.replace(/^\//, "");
   if (!databaseName) {
-    throw new Error(`DATABASE_URL must include a database name. Received: ${url}`);
+    throw new Error(`DATABASE_URL must include a database name. Received: ${redactDatabaseUrl(url)}`);
   }
 
   return {

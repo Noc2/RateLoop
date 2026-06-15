@@ -435,7 +435,7 @@ export function getDbPushPlan(databaseConfig, options = {}) {
       reason: `DATABASE_URL points to non-local ${formatDatabaseTarget(databaseConfig)}`,
       help:
         "Run `yarn workspace @rateloop/nextjs db:push` manually when you intend to migrate this database, " +
-        `or rerun dev-stack with ${allowRemoteDbPushFlag} / RATELOOP_DEV_STACK_ALLOW_REMOTE_DB_PUSH=1.`,
+        `or rerun dev-stack with ${allowRemoteDbPushFlag}.`,
     };
   }
 
@@ -576,7 +576,6 @@ Options:
 
 Environment:
   RATELOOP_DEV_STACK_SKIP_DB_PUSH=1
-  RATELOOP_DEV_STACK_ALLOW_REMOTE_DB_PUSH=1
 `);
     return;
   }
@@ -584,8 +583,7 @@ Environment:
   const databaseConfig = resolveNextDatabaseConfig();
   const skipDb = process.argv.includes("--skip-db");
   const skipDbPush = process.argv.includes(skipDbPushFlag) || envFlagIsEnabled("RATELOOP_DEV_STACK_SKIP_DB_PUSH");
-  const allowRemoteDbPush =
-    process.argv.includes(allowRemoteDbPushFlag) || envFlagIsEnabled("RATELOOP_DEV_STACK_ALLOW_REMOTE_DB_PUSH");
+  const allowRemoteDbPush = process.argv.includes(allowRemoteDbPushFlag);
   const activeNextDevLock = readActiveNextDevLock();
   const keeperStartup = resolveKeeperStartupStatus();
 
