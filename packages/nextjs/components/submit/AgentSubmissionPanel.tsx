@@ -50,7 +50,7 @@ const AGENT_FUND_HELP_TEXT =
 const AGENT_POLICY_HELP_TEXT =
   "Leave limits blank to allow all usage, or set only the restrictions RateLoop should enforce for this agent.";
 
-type AgentAccessPanel = "overview" | "controls" | "advanced";
+type AgentAccessPanel = "overview" | "controls";
 type AgentAccessMode = "wallet_direct" | "managed_policy";
 
 type AgentPolicyFormState = {
@@ -169,7 +169,6 @@ export function AgentSubmissionPanel() {
   const [agentAccessMode, setAgentAccessMode] = useState<AgentAccessMode>("wallet_direct");
   const [generatedToken, setGeneratedToken] = useState<string | null>(null);
   const [generatedMcpConfig, setGeneratedMcpConfig] = useState<string | null>(null);
-  const [publicAgentApiBaseUrl, setPublicAgentApiBaseUrl] = useState("");
   const usdcAddress = getDefaultUsdcAddress(targetNetwork.id);
   const usdcDisplayName = getDefaultUsdcDisplayName(targetNetwork.id);
   const thirdwebTargetChain = useMemo(() => defineChain(targetNetwork), [targetNetwork]);
@@ -227,10 +226,6 @@ export function AgentSubmissionPanel() {
       return { ...prev, agentWalletAddress: address };
     });
   }, [address]);
-
-  useEffect(() => {
-    setPublicAgentApiBaseUrl(window.location.origin);
-  }, []);
 
   useEffect(() => {
     if (selectedPolicyId || activePanel === "controls" || agentPolicies.policies.length === 0) return;
@@ -472,57 +467,6 @@ export function AgentSubmissionPanel() {
     [address, agentPolicies, selectedPolicy],
   );
 
-  const publicAgentOrigin = publicAgentApiBaseUrl || "https://rateloop.example";
-  const publicMcpUrl = `${publicAgentOrigin}/api/mcp/public`;
-  const publicAgentHttpUrl = `${publicAgentOrigin}/api/agent`;
-  const publicSigningIntentUrl = `${publicAgentHttpUrl}/signing-intents`;
-  const localSignerSnippet = [
-    "export RATELOOP_API_BASE_URL=" + publicAgentOrigin,
-    "export RATELOOP_RPC_URL=https://worldchain-mainnet.g.alchemy.com/public",
-    "export RATELOOP_CHAIN_ID=480",
-    "export RATELOOP_LOCAL_SIGNER_KEYSTORE_PATH=$HOME/.rateloop/local-signer.json",
-    "export RATELOOP_LOCAL_SIGNER_KEYSTORE_PASSWORD=<load-from-secret-store>",
-    "yarn workspace @rateloop/agents wallet --generate",
-    "yarn workspace @rateloop/agents local-ask --file ./ask.json",
-  ].join("\n");
-  const browserSigningPayload = JSON.stringify(
-    {
-      request: {
-        chainId: targetNetwork.id,
-        clientRequestId: "agent-design-review-001",
-        signatureMode: "browser_link",
-        walletAddress: agentWalletAddress ?? "0x...",
-        bounty: { amount: "1000000", asset: "USDC" },
-        maxPaymentAmount: "1000000",
-        question: {
-          title: "Is this generated product concept clear enough to test?",
-          imageUrls: ["https://www.rateloop.ai/uploads/example-generated-concept.webp"],
-          categoryId: "5",
-          tags: ["agent", "design", "generated-context"],
-        },
-      },
-    },
-    null,
-    2,
-  );
-  const publicMcpConfig = useMemo(() => {
-    return JSON.stringify(
-      {
-        mcpServers: {
-          rateloop: {
-            transport: "streamable-http",
-            headers: {
-              "MCP-Protocol-Version": "2025-11-25",
-            },
-            url: publicMcpUrl,
-          },
-        },
-      },
-      null,
-      2,
-    );
-  }, [publicMcpUrl]);
-
   const handlePolicyControlsChange = (enabled: boolean) => {
     const mode: AgentAccessMode = enabled ? "managed_policy" : "wallet_direct";
     setAgentAccessMode(mode);
@@ -743,7 +687,6 @@ export function AgentSubmissionPanel() {
     );
 
   const showControlsPanel = activePanel === "controls";
-  const showAdvancedPanel = activePanel === "advanced";
   const managedControlsStatus = selectedPolicy ? selectedPolicy.status : policyControlsEnabled ? "Unsaved" : "Off";
   const accessTokenStatus = selectedPolicy
     ? selectedPolicy.hasToken || generatedToken
@@ -1149,110 +1092,11 @@ export function AgentSubmissionPanel() {
         </div>
       ) : null}
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(340px,460px)]">
-        <div className="surface-card rounded-lg p-5">
-          <p className="text-sm font-semibold uppercase tracking-wide text-base-content/50">Recent Agent Asks</p>
-          <h3 className="mt-1 text-lg font-semibold">Audit Trail</h3>
-          <div className="mt-4">{recentAsksPanel}</div>
-        </div>
-
-        <div className="surface-card rounded-lg p-5">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-sm font-semibold uppercase tracking-wide text-base-content/50">Advanced</p>
-              <h3 className="mt-1 text-lg font-semibold">Connection references</h3>
-              <p className="mt-2 text-sm leading-relaxed text-base-content/65">
-                Public MCP, browser signing endpoints, and local signer commands stay here for manual integration work.
-              </p>
-            </div>
-            <button
-              type="button"
-              className="btn btn-outline btn-sm"
-              onClick={() => setActivePanel(showAdvancedPanel ? "overview" : "advanced")}
-            >
-              {showAdvancedPanel ? "Hide" : "Show"}
-            </button>
-          </div>
-        </div>
+      <div className="surface-card rounded-lg p-5">
+        <p className="text-sm font-semibold uppercase tracking-wide text-base-content/50">Recent Agent Asks</p>
+        <h3 className="mt-1 text-lg font-semibold">Audit Trail</h3>
+        <div className="mt-4">{recentAsksPanel}</div>
       </div>
-
-      {showAdvancedPanel ? (
-        <div className="surface-card rounded-lg p-5">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-sm font-semibold uppercase tracking-wide text-base-content/50">Advanced References</p>
-              <h3 className="mt-1 text-lg font-semibold">Manual integration details</h3>
-            </div>
-            <Link href={DOCS_AI_ROUTE + "#accountless-public-access"} className="link link-primary text-sm">
-              Setup guide
-            </Link>
-          </div>
-
-          <div className="mt-5 grid gap-4 lg:grid-cols-2">
-            <div className="surface-card-nested rounded-lg p-4">
-              <div className="flex items-center justify-between gap-2">
-                <h4 className="font-semibold">Public MCP Config</h4>
-                <button
-                  type="button"
-                  className="btn btn-outline btn-xs"
-                  onClick={() => void handleCopy(publicMcpConfig)}
-                >
-                  Copy config
-                </button>
-              </div>
-              <pre className="mt-3 max-h-56 overflow-auto whitespace-pre-wrap break-words rounded bg-black p-3 text-xs text-white">
-                {publicMcpConfig}
-              </pre>
-            </div>
-
-            <div className="surface-card-nested rounded-lg p-4">
-              <div className="flex items-center justify-between gap-2">
-                <h4 className="font-semibold">Direct HTTP</h4>
-                <button
-                  type="button"
-                  className="btn btn-outline btn-xs"
-                  onClick={() => void handleCopy(publicAgentHttpUrl)}
-                >
-                  Copy endpoint
-                </button>
-              </div>
-              <p className="mt-3 break-all font-mono text-xs text-base-content/75">{publicAgentHttpUrl}</p>
-            </div>
-
-            <div className="surface-card-nested rounded-lg p-4">
-              <div className="flex items-center justify-between gap-2">
-                <h4 className="font-semibold">Browser Signing Link</h4>
-                <button
-                  type="button"
-                  className="btn btn-outline btn-xs"
-                  onClick={() => void handleCopy(publicSigningIntentUrl)}
-                >
-                  Copy endpoint
-                </button>
-              </div>
-              <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded bg-black p-3 text-xs text-white">
-                {"POST " + publicSigningIntentUrl + "\n\n" + browserSigningPayload}
-              </pre>
-            </div>
-
-            <div className="surface-card-nested rounded-lg p-4">
-              <div className="flex items-center justify-between gap-2">
-                <h4 className="font-semibold">Local Signer CLI</h4>
-                <button
-                  type="button"
-                  className="btn btn-outline btn-xs"
-                  onClick={() => void handleCopy(localSignerSnippet)}
-                >
-                  Copy commands
-                </button>
-              </div>
-              <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded bg-black p-3 text-xs text-white">
-                {localSignerSnippet}
-              </pre>
-            </div>
-          </div>
-        </div>
-      ) : null}
     </section>
   );
 }
