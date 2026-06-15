@@ -201,14 +201,6 @@ const REQUIRED_COMPLETION_CALLS = [
     args: (ctx) => [ROLE_HASHES.x402Gateway, ctx.x402QuestionSubmitter],
   },
   {
-    label: "ConfidentialityEscrow.grantRole(CONFIG_ROLE, ContentRegistry)",
-    contractNames: ["ConfidentialityEscrow", "TransparentUpgradeableProxy"],
-    target: "ConfidentialityEscrow",
-    functionNames: ["grantRole", "grantRole(bytes32,address)"],
-    abi: CONFIDENTIALITY_ESCROW_COMPLETION_ABI,
-    args: (ctx) => [ROLE_HASHES.config, ctx.contentRegistry],
-  },
-  {
     label: "RaterRegistry.renounceRole(ADMIN_ROLE)",
     contractNames: ["RaterRegistry", "TransparentUpgradeableProxy"],
     target: "RaterRegistry",
@@ -276,14 +268,6 @@ const REQUIRED_COMPLETION_CALLS = [
     functionNames: ["renounceRole", "renounceRole(bytes32,address)"],
     abi: CONFIDENTIALITY_ESCROW_COMPLETION_ABI,
     args: (ctx) => [ROLE_HASHES.accessRecorder, ctx.deployer],
-  },
-  {
-    label: "ConfidentialityEscrow.renounceRole(DEFAULT_ADMIN_ROLE)",
-    contractNames: ["ConfidentialityEscrow", "TransparentUpgradeableProxy"],
-    target: "ConfidentialityEscrow",
-    functionNames: ["renounceRole", "renounceRole(bytes32,address)"],
-    abi: CONFIDENTIALITY_ESCROW_COMPLETION_ABI,
-    args: (ctx) => [ROLE_HASHES.defaultAdmin, ctx.deployer],
   },
   {
     label: "ContentRegistry.renounceRole(CONFIG_ROLE)",

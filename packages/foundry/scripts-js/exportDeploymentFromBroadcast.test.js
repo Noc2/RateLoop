@@ -75,7 +75,6 @@ const feedbackRegistryAbi = parseAbi([
 ]);
 
 const confidentialityEscrowAbi = parseAbi([
-  "function grantRole(bytes32 role,address account)",
   "function renounceRole(bytes32 role,address account)",
 ]);
 
@@ -381,14 +380,6 @@ function completeBroadcast({
       x402QuestionSubmitter,
     ]
   );
-  pushProxyCall(
-    transactions,
-    receipts,
-    confidentialityEscrow,
-    confidentialityEscrowAbi,
-    "grantRole",
-    [configRole, contentRegistry]
-  );
   pushProtocolConfigProxyCall(
     transactions,
     receipts,
@@ -504,14 +495,6 @@ function completeBroadcast({
     confidentialityEscrowAbi,
     "renounceRole",
     [accessRecorderRole, deployer]
-  );
-  pushProxyCall(
-    transactions,
-    receipts,
-    confidentialityEscrow,
-    confidentialityEscrowAbi,
-    "renounceRole",
-    [defaultAdminRole, deployer]
   );
   pushCall(
     transactions,
@@ -1090,8 +1073,6 @@ test("reconstructDeploymentExportFromBroadcast rejects missing oracle payout con
 });
 
 test("reconstructDeploymentExportFromBroadcast rejects missing deployer handoffs", () => {
-  const defaultAdminRole =
-    "0x0000000000000000000000000000000000000000000000000000000000000000";
   const configRole =
     "0x82db594318110a04b6349ce48645aa69f0892751bc893d15e61d9e2b9c4630f5";
   const pauserRole =
@@ -1156,13 +1137,6 @@ test("reconstructDeploymentExportFromBroadcast rejects missing deployer handoffs
         tx.contractAddress?.toLowerCase() ===
           confidentialityEscrow.toLowerCase() &&
         tx.input === confidentialityEscrowRenounce(accessRecorderRole),
-    },
-    {
-      label: /ConfidentialityEscrow\.renounceRole\(DEFAULT_ADMIN_ROLE\)/,
-      predicate: (tx) =>
-        tx.contractAddress?.toLowerCase() ===
-          confidentialityEscrow.toLowerCase() &&
-        tx.input === confidentialityEscrowRenounce(defaultAdminRole),
     },
   ];
 
@@ -1234,12 +1208,6 @@ test("reconstructDeploymentExportFromBroadcast rejects missing critical wiring",
       selector: "0x2f2ff15d",
       target: address(13),
       arg: "0xf8fc5b762a56b84305af28ac287dfaf08d491f8de4965459339ae40cec115613",
-    },
-    {
-      label: /ConfidentialityEscrow\.grantRole\(CONFIG_ROLE, ContentRegistry\)/,
-      selector: "0x2f2ff15d",
-      target: address(25),
-      arg: "0x82db594318110a04b6349ce48645aa69f0892751bc893d15e61d9e2b9c4630f5",
     },
     {
       label: /ProtocolConfig\.setConfig/,

@@ -367,7 +367,7 @@ contract ConfidentialityEscrowTest is VotingTestBase {
         );
         uint256 contentId = 999;
         uint8 lrepAsset = shortEscrow.BOND_ASSET_LREP();
-        shortEscrow.grantRole(shortEscrow.CONFIG_ROLE(), address(registry));
+        assertTrue(shortEscrow.hasRole(shortEscrow.CONFIG_ROLE(), address(registry)));
         vm.prank(address(registry));
         shortEscrow.configure(
             contentId,
