@@ -15,7 +15,6 @@ type ConfirmFreeTransactionRequest = {
 
 export async function POST(request: NextRequest) {
   const preParseLimited = await checkRateLimit(request, WRITE_RATE_LIMIT, {
-    allowOnStoreUnavailable: true,
     extraKeyParts: ["preparse"],
   });
   if (preParseLimited) return preParseLimited;
@@ -25,9 +24,6 @@ export async function POST(request: NextRequest) {
   const body = parsedBody as ConfirmFreeTransactionRequest;
 
   const limited = await checkRateLimit(request, WRITE_RATE_LIMIT, {
-    // This is post-transaction quota accounting, so keep serving if only the
-    // shared rate-limit store is temporarily unavailable.
-    allowOnStoreUnavailable: true,
     extraKeyParts: [body?.address],
   });
   if (limited) return limited;

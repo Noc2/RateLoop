@@ -34,9 +34,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Callback delivery is not configured." }, { status: 503 });
   }
 
-  const rateLimitResponse = await checkRateLimit(request, CALLBACK_DELIVERY_ROUTE_RATE_LIMIT, {
-    allowOnStoreUnavailable: true,
-  });
+  const rateLimitResponse = await checkRateLimit(request, CALLBACK_DELIVERY_ROUTE_RATE_LIMIT);
   if (rateLimitResponse) return rateLimitResponse;
 
   const token = request.headers.get("x-rateloop-agent-callback-secret")?.trim() || readBearerToken(request);

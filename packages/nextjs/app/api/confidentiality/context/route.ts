@@ -28,7 +28,6 @@ export async function GET(request: NextRequest) {
   const address = request.nextUrl.searchParams.get("address");
   const contentId = request.nextUrl.searchParams.get("contentId");
   const limited = await checkRateLimit(request, READ_RATE_LIMIT, {
-    allowOnStoreUnavailable: true,
     extraKeyParts: [address ?? undefined, contentId ?? undefined],
   });
   if (limited) return limited;
