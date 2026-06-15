@@ -46,11 +46,7 @@ contract MockQuestionRewardPoolEscrow {
         votingEngine = votingEngine_;
     }
 
-    function questionRewardPoolEscrowConfigShape()
-        external
-        view
-        returns (address registry_, address votingEngine_)
-    {
+    function questionRewardPoolEscrowConfigShape() external view returns (address registry_, address votingEngine_) {
         return (registry, votingEngine);
     }
 

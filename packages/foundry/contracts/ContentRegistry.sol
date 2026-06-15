@@ -451,8 +451,10 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             valid := staticcall(gas(), target, ptr, 4, ptr, 0x40)
             valid := and(valid, eq(returndatasize(), 0x40))
             valid := and(valid, eq(and(mload(ptr), 0xffffffffffffffffffffffffffffffffffffffff), expectedRegistry))
-            valid :=
-                and(valid, eq(and(mload(add(ptr, 0x20)), 0xffffffffffffffffffffffffffffffffffffffff), expectedEngine))
+            valid := and(
+                valid,
+                eq(and(mload(add(ptr, 0x20)), 0xffffffffffffffffffffffffffffffffffffffff), expectedEngine)
+            )
         }
     }
 

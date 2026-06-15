@@ -1428,7 +1428,9 @@ contract LaunchDistributionPool is
         view
         returns (bytes32 nullifierHash, bytes32 credentialKey)
     {
-        if (_isRaterBanned(rater)) return (bytes32(0), bytes32(0));
+        if (_isRaterBanned(rater)) {
+            return (bytes32(0), bytes32(0));
+        }
         RaterRegistry.HumanCredential memory credential = raterRegistry.getHumanCredential(rater);
         if (
             credential.verified && !credential.revoked && credential.expiresAt > block.timestamp

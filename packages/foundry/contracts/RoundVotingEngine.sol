@@ -1352,8 +1352,8 @@ contract RoundVotingEngine is
         // minSettlementVoters >= MIN_RBTS_PARTICIPANTS; see finalizeRevealFailedRound.
         uint16 rbtsRevealQuorum = roundCfg.minVoters;
         if (round.revealedCount >= rbtsRevealQuorum) return false;
-        return round.voteCount < rbtsRevealQuorum
-            || roundHumanVerifiedCommitCount[contentId][roundId] < rbtsRevealQuorum;
+        return
+            round.voteCount < rbtsRevealQuorum || roundHumanVerifiedCommitCount[contentId][roundId] < rbtsRevealQuorum;
     }
 
     function _isSettlementRevealGraceElapsed(uint256 contentId, uint256 roundId, RoundLib.Round storage round)
@@ -1758,12 +1758,7 @@ contract RoundVotingEngine is
 
     function isDormancyBlocked(uint256 contentId) external view returns (bool) {
         return RoundVotingReadLib.isDormancyBlocked(
-            currentRoundId,
-            rounds,
-            roundConfigSnapshot,
-            roundHumanVerifiedCommitCount,
-            protocolConfig,
-            contentId
+            currentRoundId, rounds, roundConfigSnapshot, roundHumanVerifiedCommitCount, protocolConfig, contentId
         );
     }
 

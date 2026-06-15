@@ -36,8 +36,7 @@ library RoundVotingReadLib {
             bool emptyRoundStale = round.state == RoundLib.RoundState.Open && round.voteCount == 0
                 && round.totalStake == 0 && lastActivityAt > round.startTime && lastActivityAt <= block.timestamp;
             uint16 rbtsRevealQuorum = _rbtsRevealQuorum(roundCfg.minVoters, minRbtsParticipants);
-            bool hrcCommitQuorum =
-                roundHumanVerifiedCommitCount[contentId][openRoundId] >= rbtsRevealQuorum;
+            bool hrcCommitQuorum = roundHumanVerifiedCommitCount[contentId][openRoundId] >= rbtsRevealQuorum;
             bool cancelExpired = RoundLib.isExpired(round, roundCfg.maxDuration)
                 && round.revealedCount < rbtsRevealQuorum && (round.voteCount < rbtsRevealQuorum || !hrcCommitQuorum);
             bool revealFailed = hrcCommitQuorum

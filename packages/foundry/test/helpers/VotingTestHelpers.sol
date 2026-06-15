@@ -902,8 +902,7 @@ abstract contract VotingTestBase is Test, ContentSubmissionTestBase {
         return uint16(
             uint256(
                 HEVM.load(
-                    address(engine),
-                    _doubleUintMappingSlot(ROUND_HUMAN_VERIFIED_COMMIT_COUNT_SLOT, contentId, roundId)
+                    address(engine), _doubleUintMappingSlot(ROUND_HUMAN_VERIFIED_COMMIT_COUNT_SLOT, contentId, roundId)
                 )
             )
         );

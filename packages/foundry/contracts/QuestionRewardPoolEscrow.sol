@@ -286,11 +286,7 @@ contract QuestionRewardPoolEscrow is
         defaultFrontendFeeBps = DEFAULT_FRONTEND_FEE_BPS.toUint16();
     }
 
-    function questionRewardPoolEscrowConfigShape()
-        external
-        view
-        returns (address registry_, address votingEngine_)
-    {
+    function questionRewardPoolEscrowConfigShape() external view returns (address registry_, address votingEngine_) {
         return (address(registry), address(votingEngine));
     }
 
