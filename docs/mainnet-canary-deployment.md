@@ -281,3 +281,20 @@ Before the actual canary window, the repo can be prepared with:
 - reset scripts or SQL snippets for app, Ponder, and keeper state;
 - a post-deploy verifier script that checks bytecode, verifier address, Ponder
   status, and frontend public configuration.
+
+## Voting Engine Rotation
+
+Rotating `ContentRegistry.setVotingEngine` alone is not sufficient for a live
+deployment. Escrows pin the engine at initialization and reject new work with
+`"Stale engine"` until the full replacement stack is deployed and rewired:
+
+- `QuestionRewardPoolEscrow`
+- `FeedbackBonusEscrow`
+- `FeedbackRegistry` (engine is set only in `initialize`; there is no governed
+  `setVotingEngine`)
+- `FrontendRegistry` (a new engine clears the active `feeCreditor` until it is
+  re-bound)
+
+Treat voting-engine replacement as a coordinated governance runbook, not a
+single timelock action. The Foundry escrow tests document the required
+full-stack replacement sequence.
