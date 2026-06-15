@@ -260,50 +260,72 @@ async function resolveRoundVoteabilityStateAtCommit(params: {
     };
   }
 
-  try {
-    const [advisoryRoundContext, lifecycleState] = await Promise.all([
-      params.context.client.readContract({
-        abi: RoundVotingEngineAbi,
-        address: engineAddress,
-        functionName: "advisoryRoundContext",
-        args: [params.contentId, params.roundId, params.targetRound],
-      }),
-      indexedRevealGracePeriod ??
-        params.context.client.readContract({
-          abi: RoundVotingEngineAbi,
-          address: engineAddress,
-          functionName: "roundLifecycleState",
-          args: [params.contentId, params.roundId],
-        }),
-    ]);
-    const targetRoundRevealableAt = Array.isArray(advisoryRoundContext)
-      ? advisoryRoundContext[1]
-      : params.epochEnd;
-    const revealableAt =
-      typeof targetRoundRevealableAt === "bigint"
-        ? targetRoundRevealableAt
-        : BigInt(String(targetRoundRevealableAt));
-    const rawGrace = Array.isArray(lifecycleState)
-      ? lifecycleState[0]
-      : (indexedRevealGracePeriod ?? lifecycleState);
-    const grace =
-      typeof rawGrace === "bigint" ? rawGrace : BigInt(String(rawGrace));
-
-    return {
-      hasHumanVerifiedCommit:
-        indexedHasHumanVerifiedCommit ||
-        params.commitHasHumanCredential === true,
-      lastCommitRevealableAfter:
-        revealableAt > params.epochEnd ? revealableAt : params.epochEnd,
-      revealGracePeriod: grace > 0n ? grace : null,
-    };
-  } catch {
+  const advisoryResult = await tryContractRead(() =>
+    params.context.client.readContract({
+      abi: RoundVotingEngineAbi,
+      address: engineAddress,
+      functionName: "advisoryRoundContext",
+      args: [params.contentId, params.roundId, params.targetRound],
+    }),
+  );
+  if (!advisoryResult.ok) {
     return {
       hasHumanVerifiedCommit: indexedHasHumanVerifiedCommit,
       lastCommitRevealableAfter: params.epochEnd,
       revealGracePeriod: indexedRevealGracePeriod,
     };
   }
+
+  let grace = indexedRevealGracePeriod;
+  if (grace === null) {
+    const lifecycleResult = await tryContractRead(() =>
+      params.context.client.readContract({
+        abi: RoundVotingEngineAbi,
+        address: engineAddress,
+        functionName: "roundLifecycleState",
+        args: [params.contentId, params.roundId],
+      }),
+    );
+    if (!lifecycleResult.ok) {
+      return {
+        hasHumanVerifiedCommit: indexedHasHumanVerifiedCommit,
+        lastCommitRevealableAfter: params.epochEnd,
+        revealGracePeriod: indexedRevealGracePeriod,
+      };
+    }
+
+    const lifecycleState = lifecycleResult.value;
+    const rawGrace = Array.isArray(lifecycleState)
+      ? lifecycleState[0]
+      : lifecycleState;
+    grace =
+      typeof rawGrace === "bigint"
+        ? rawGrace
+        : rawGrace === null || rawGrace === undefined
+          ? null
+          : BigInt(String(rawGrace));
+    if (grace !== null && grace <= 0n) {
+      grace = null;
+    }
+  }
+
+  const advisoryRoundContext = advisoryResult.value;
+  const targetRoundRevealableAt = Array.isArray(advisoryRoundContext)
+    ? advisoryRoundContext[1]
+    : params.epochEnd;
+  const revealableAt =
+    typeof targetRoundRevealableAt === "bigint"
+      ? targetRoundRevealableAt
+      : BigInt(String(targetRoundRevealableAt));
+
+  return {
+    hasHumanVerifiedCommit:
+      indexedHasHumanVerifiedCommit ||
+      params.commitHasHumanCredential === true,
+    lastCommitRevealableAfter:
+      revealableAt > params.epochEnd ? revealableAt : params.epochEnd,
+    revealGracePeriod: grace,
+  };
 }
 
 function shadowPredictionBps(
