@@ -11,6 +11,7 @@ export interface WalletDisplaySummary {
   votingStakedMicro: bigint;
   submissionStakedMicro: bigint;
   frontendStakedMicro: bigint;
+  pendingLiquidCreditMicro: bigint;
   pendingStakedMicro: bigint;
   totalStakedMicro: bigint;
   totalMicro: bigint;
@@ -38,14 +39,16 @@ function isSnapshotFresh(snapshot: WalletDisplaySummary, now = Date.now()) {
 
 export function buildWalletDisplaySummary(
   input: WalletDisplaySummaryInput,
-  options?: { pendingStakedMicro?: bigint; totalMicro?: bigint; updatedAt?: number },
+  options?: { pendingLiquidCreditMicro?: bigint; pendingStakedMicro?: bigint; totalMicro?: bigint; updatedAt?: number },
 ): WalletDisplaySummary {
+  const pendingLiquidCreditMicro = options?.pendingLiquidCreditMicro ?? 0n;
   const pendingStakedMicro = options?.pendingStakedMicro ?? 0n;
   const totalStakedMicro =
     input.votingStakedMicro + input.submissionStakedMicro + input.frontendStakedMicro + pendingStakedMicro;
 
   return {
     ...input,
+    pendingLiquidCreditMicro,
     pendingStakedMicro,
     totalStakedMicro,
     totalMicro: options?.totalMicro ?? input.liquidMicro + totalStakedMicro,
@@ -59,6 +62,7 @@ function snapshotsEqual(a: WalletDisplaySummary, b: WalletDisplaySummary) {
     a.votingStakedMicro === b.votingStakedMicro &&
     a.submissionStakedMicro === b.submissionStakedMicro &&
     a.frontendStakedMicro === b.frontendStakedMicro &&
+    a.pendingLiquidCreditMicro === b.pendingLiquidCreditMicro &&
     a.pendingStakedMicro === b.pendingStakedMicro &&
     a.totalStakedMicro === b.totalStakedMicro &&
     a.totalMicro === b.totalMicro
@@ -71,6 +75,7 @@ function serializeSnapshot(snapshot: WalletDisplaySummary) {
     votingStakedMicro: snapshot.votingStakedMicro.toString(),
     submissionStakedMicro: snapshot.submissionStakedMicro.toString(),
     frontendStakedMicro: snapshot.frontendStakedMicro.toString(),
+    pendingLiquidCreditMicro: snapshot.pendingLiquidCreditMicro.toString(),
     pendingStakedMicro: snapshot.pendingStakedMicro.toString(),
     totalStakedMicro: snapshot.totalStakedMicro.toString(),
     totalMicro: snapshot.totalMicro.toString(),
@@ -85,6 +90,7 @@ function deserializeSnapshot(raw: string): WalletDisplaySummary | null {
       votingStakedMicro: string;
       submissionStakedMicro: string;
       frontendStakedMicro: string;
+      pendingLiquidCreditMicro?: string;
       pendingStakedMicro?: string;
       totalStakedMicro: string;
       totalMicro: string;
@@ -108,6 +114,7 @@ function deserializeSnapshot(raw: string): WalletDisplaySummary | null {
       votingStakedMicro: BigInt(parsed.votingStakedMicro),
       submissionStakedMicro: BigInt(parsed.submissionStakedMicro),
       frontendStakedMicro: BigInt(parsed.frontendStakedMicro),
+      pendingLiquidCreditMicro: BigInt(parsed.pendingLiquidCreditMicro ?? "0"),
       pendingStakedMicro: BigInt(parsed.pendingStakedMicro ?? "0"),
       totalStakedMicro: BigInt(parsed.totalStakedMicro),
       totalMicro: BigInt(parsed.totalMicro),
@@ -171,6 +178,40 @@ export function resetWalletDisplaySummaryCache(
   queryClient.setQueryData(getWalletDisplaySummaryQueryKey(address, chainId), null);
 }
 
+export function applyWalletDisplayLiquidCredit(
+  queryClient: QueryClient,
+  address: string | undefined,
+  chainId: number | undefined,
+  creditMicro: bigint | undefined,
+) {
+  if (!address || !creditMicro || creditMicro <= 0n) return;
+
+  const normalizedAddress = address.toLowerCase();
+  const key = getWalletDisplaySummaryQueryKey(normalizedAddress, chainId);
+  const updatedSnapshot = queryClient.setQueryData<WalletDisplaySummary | null | undefined>(key, current => {
+    if (!current) return current;
+
+    return buildWalletDisplaySummary(
+      {
+        liquidMicro: current.liquidMicro + creditMicro,
+        votingStakedMicro: current.votingStakedMicro,
+        submissionStakedMicro: current.submissionStakedMicro,
+        frontendStakedMicro: current.frontendStakedMicro,
+      },
+      {
+        pendingLiquidCreditMicro: (current.pendingLiquidCreditMicro ?? 0n) + creditMicro,
+        pendingStakedMicro: current.pendingStakedMicro,
+        totalMicro: current.totalMicro + creditMicro,
+        updatedAt: Date.now(),
+      },
+    );
+  });
+
+  if (updatedSnapshot) {
+    persistWalletDisplaySummarySnapshot(normalizedAddress, chainId, updatedSnapshot);
+  }
+}
+
 export function reconcileWalletDisplaySummary(
   current: WalletDisplaySummary | null,
   rawSnapshot: WalletDisplaySummary | null,
@@ -179,6 +220,13 @@ export function reconcileWalletDisplaySummary(
   if (!rawSnapshot) return current;
   if (!current) return rawSnapshot;
   if (!isSnapshotFresh(current, now)) return rawSnapshot;
+  if (current.pendingLiquidCreditMicro > 0n) {
+    if (rawSnapshot.liquidMicro >= current.liquidMicro || rawSnapshot.totalMicro >= current.totalMicro) {
+      return rawSnapshot;
+    }
+
+    return current;
+  }
   if (current.totalMicro === rawSnapshot.totalMicro) return rawSnapshot;
 
   const rawKnownStakedMicro =

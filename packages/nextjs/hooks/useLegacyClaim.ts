@@ -322,12 +322,15 @@ export function useLegacyClaim() {
     includeExternalSendCalls: true,
   });
 
-  const refetchOnChainState = async () => {
-    await Promise.all([refetchVested(), refetchClaimable(), refetchClaimed()]);
-    await refreshWalletBalances(claimRecipientAddress);
+  const refetchOnChainState = async (claimedAmount?: bigint) => {
+    const recipientRefreshOptions =
+      claimedAmount !== undefined && claimedAmount > 0n ? { lrepCreditMicro: claimedAmount } : undefined;
+    const walletRefreshes = [refreshWalletBalances(claimRecipientAddress, recipientRefreshOptions)];
     if (claimOwnerAddress && !addressesMatch(claimOwnerAddress, claimRecipientAddress)) {
-      await refreshWalletBalances(claimOwnerAddress);
+      walletRefreshes.push(refreshWalletBalances(claimOwnerAddress));
     }
+
+    await Promise.all([refetchVested(), refetchClaimable(), refetchClaimed(), ...walletRefreshes]);
   };
 
   const claim = async () => {
@@ -397,7 +400,7 @@ export function useLegacyClaim() {
         }
 
         notification.success("Legacy LREP claimed to your RateLoop wallet.");
-        await refetchOnChainState();
+        await refetchOnChainState(claimableAmount);
       } catch (error) {
         notification.error(getLegacyClaimTransactionErrorMessage(error));
       } finally {
@@ -458,7 +461,7 @@ export function useLegacyClaim() {
           ],
           { action: "Claim legacy LREP" },
         );
-        await refetchOnChainState();
+        await refetchOnChainState(claimableAmount);
       } catch (error) {
         notification.error(getLegacyClaimTransactionErrorMessage(error));
       } finally {
@@ -478,7 +481,7 @@ export function useLegacyClaim() {
           getErrorMessage: (error, defaultMessage) => getLegacyClaimTransactionErrorMessage(error, defaultMessage),
         },
       );
-      await refetchOnChainState();
+      await refetchOnChainState(claimableAmount);
     } catch {
       // `useScaffoldWriteContract` already surfaced the transaction error toast.
     }

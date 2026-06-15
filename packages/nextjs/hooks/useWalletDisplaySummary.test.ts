@@ -9,7 +9,7 @@ import test from "node:test";
 
 const MICRO = 1_000_000n;
 
-test("buildWalletDisplaySummary initializes pending stake to zero", () => {
+test("buildWalletDisplaySummary initializes pending fields to zero", () => {
   const snapshot = buildWalletDisplaySummary(
     {
       liquidMicro: 700n * MICRO,
@@ -20,6 +20,7 @@ test("buildWalletDisplaySummary initializes pending stake to zero", () => {
     { updatedAt: 123 },
   );
 
+  assert.equal(snapshot.pendingLiquidCreditMicro, 0n);
   assert.equal(snapshot.pendingStakedMicro, 0n);
   assert.equal(snapshot.totalStakedMicro, 300n * MICRO);
   assert.equal(snapshot.totalMicro, 1000n * MICRO);
@@ -175,6 +176,65 @@ test("reconcileWalletDisplaySummary keeps the previous coherent snapshot when li
 
   const reconciled = reconcileWalletDisplaySummary(current, raw, 6_100);
   assert.equal(reconciled, current);
+});
+
+test("reconcileWalletDisplaySummary keeps a confirmed liquid credit while the raw balance lags", () => {
+  const current = buildWalletDisplaySummary(
+    {
+      liquidMicro: 750n * MICRO,
+      votingStakedMicro: 300n * MICRO,
+      submissionStakedMicro: 0n,
+      frontendStakedMicro: 0n,
+    },
+    {
+      pendingLiquidCreditMicro: 50n * MICRO,
+      totalMicro: 1050n * MICRO,
+      updatedAt: 6_000,
+    },
+  );
+
+  const raw = buildWalletDisplaySummary(
+    {
+      liquidMicro: 700n * MICRO,
+      votingStakedMicro: 300n * MICRO,
+      submissionStakedMicro: 0n,
+      frontendStakedMicro: 0n,
+    },
+    { updatedAt: 6_050 },
+  );
+
+  const reconciled = reconcileWalletDisplaySummary(current, raw, 6_100);
+  assert.equal(reconciled, current);
+});
+
+test("reconcileWalletDisplaySummary clears a confirmed liquid credit once the raw balance catches up", () => {
+  const current = buildWalletDisplaySummary(
+    {
+      liquidMicro: 750n * MICRO,
+      votingStakedMicro: 300n * MICRO,
+      submissionStakedMicro: 0n,
+      frontendStakedMicro: 0n,
+    },
+    {
+      pendingLiquidCreditMicro: 50n * MICRO,
+      totalMicro: 1050n * MICRO,
+      updatedAt: 6_000,
+    },
+  );
+
+  const raw = buildWalletDisplaySummary(
+    {
+      liquidMicro: 750n * MICRO,
+      votingStakedMicro: 300n * MICRO,
+      submissionStakedMicro: 0n,
+      frontendStakedMicro: 0n,
+    },
+    { updatedAt: 6_050 },
+  );
+
+  const reconciled = reconcileWalletDisplaySummary(current, raw, 6_100);
+  assert.equal(reconciled, raw);
+  assert.equal(reconciled.pendingLiquidCreditMicro, 0n);
 });
 
 test("reconcileWalletDisplaySummary keeps the previous coherent snapshot when stake rises before liquid catches up", () => {
