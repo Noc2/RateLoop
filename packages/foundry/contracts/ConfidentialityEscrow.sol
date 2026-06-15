@@ -370,7 +370,12 @@ contract ConfidentialityEscrow is
         if (config.bondAmount == 0) revert("No bond required");
         resolved = _resolveRater(poster);
         if (resolved.identityKey == bytes32(0) || !resolved.hasActiveHumanCredential) revert("Credential required");
-        if (_isIdentityBanned(resolved.identityKey)) revert("Identity banned");
+        if (
+            _isIdentityBanned(resolved.identityKey) || _isIdentityBanned(_addressIdentityKey(poster))
+                || _isIdentityBanned(_addressIdentityKey(resolved.holder))
+        ) {
+            revert("Identity banned");
+        }
 
         BondPosition storage position = bonds[contentId][resolved.identityKey];
         if (position.poster != address(0) && !position.released && !position.slashed) revert("Bond exists");
@@ -415,6 +420,11 @@ contract ConfidentialityEscrow is
             hasActiveHumanCredential: false,
             delegated: false
         });
+    }
+
+    function _addressIdentityKey(address account) private pure returns (bytes32) {
+        if (account == address(0)) return bytes32(0);
+        return keccak256(abi.encodePacked("rateloop.address-identity-v1", account));
     }
 
     function _markNullifierBonded(address holder, address registryAddress) private {

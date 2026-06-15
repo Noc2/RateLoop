@@ -37,12 +37,14 @@ contract ConfidentialityEscrowTest is VotingTestBase {
     address internal submitter = address(0xB0B);
     address internal voter1 = address(0xCAFE);
     address internal voter2 = address(0xD00D);
+    address internal delegate = address(0xDE1E6A7E);
     address internal reporter = address(0xE11);
     address internal treasury = address(0xFEE);
 
     uint256 internal constant STAKE = 5e6;
     bytes32 internal constant VOTER1_ANCHOR = keccak256("voter-1-world-id");
     bytes32 internal constant VOTER2_ANCHOR = keccak256("voter-2-world-id");
+    bytes32 internal constant DELEGATE_ANCHOR = keccak256("delegate-world-id");
     bytes32 internal constant EVIDENCE_HASH = keccak256("confidentiality evidence");
 
     struct FlaggedQuestionSubmission {
@@ -608,6 +610,44 @@ contract ConfidentialityEscrowTest is VotingTestBase {
         registry.cancelContent(contentId);
         vm.warp(block.timestamp + confidentialityEscrow.evidenceWindow());
         confidentialityEscrow.releaseBond(contentId, identityKey);
+    }
+
+    function testBannedDelegateCannotPostBondForUnbannedHolder() public {
+        uint256 contentId = _submitGatedQuestion("delegate-ban-bond", 1e6);
+
+        vm.startPrank(owner);
+        _seedRaterIdentity(raterRegistry, delegate, DELEGATE_ANCHOR);
+        raterRegistry.revokeHumanCredential(delegate);
+        lrepToken.mint(delegate, 10_000e6);
+        vm.stopPrank();
+
+        vm.prank(voter1);
+        raterRegistry.setDelegate(delegate);
+        vm.prank(delegate);
+        raterRegistry.acceptDelegate();
+
+        IRaterIdentityRegistry.ResolvedRater memory resolved = raterRegistry.resolveRater(delegate);
+        assertTrue(resolved.delegated);
+        assertEq(resolved.holder, voter1);
+        assertTrue(resolved.hasActiveHumanCredential);
+
+        vm.prank(owner);
+        raterRegistry.banKnownCredentialNullifier(
+            RaterRegistry.HumanCredentialProvider.SeededHuman,
+            DELEGATE_ANCHOR,
+            uint64(block.timestamp + 365 days),
+            "delegate leak",
+            EVIDENCE_HASH
+        );
+
+        assertTrue(raterRegistry.isIdentityKeyBanned(raterRegistry.addressIdentityKey(delegate)));
+        assertFalse(raterRegistry.isIdentityKeyBanned(resolved.identityKey));
+
+        vm.startPrank(delegate);
+        lrepToken.approve(address(confidentialityEscrow), 1_000e6);
+        vm.expectRevert("Identity banned");
+        confidentialityEscrow.postBond(contentId);
+        vm.stopPrank();
     }
 
     function testAdvisoryVotesRejectedOnGatedContent() public {
