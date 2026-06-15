@@ -543,15 +543,6 @@ export function AgentSubmissionPanel() {
     }
   };
 
-  const handleStartNewPolicy = () => {
-    setAgentAccessMode("managed_policy");
-    setSelectedPolicyId(null);
-    setGeneratedToken(null);
-    setGeneratedMcpConfig(null);
-    setPolicyForm({ ...DEFAULT_POLICY_FORM, agentWalletAddress: address ?? "" });
-    setActivePanel("controls");
-  };
-
   const handleResetSetup = () => {
     setAgentAccessMode("wallet_direct");
     setSelectedPolicyId(null);
@@ -783,9 +774,6 @@ export function AgentSubmissionPanel() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {policySelector}
-            <button type="button" className="btn btn-outline btn-sm" onClick={handleStartNewPolicy}>
-              New controls
-            </button>
             <Link href={DOCS_AI_ROUTE + "#paths"} className="btn btn-outline btn-sm">
               Agent docs
               <ArrowTopRightOnSquareIcon className="h-4 w-4" />
