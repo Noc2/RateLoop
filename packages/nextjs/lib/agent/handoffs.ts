@@ -609,6 +609,32 @@ export function buildAgentAskHandoffResponse(params: {
   handoff: AgentAskHandoffRecord;
   includeImageData?: boolean;
 }) {
+  const failedAsset = params.assets.find(asset => asset.status === "failed");
+  const nextAction = (() => {
+    if (params.handoff.status === "failed" && failedAsset) {
+      return "Image upload failed. Ask the agent for a fresh handoff link with a regenerated or re-exported image.";
+    }
+    if (params.handoff.status === "failed") {
+      return "Review the handoff error, save any needed draft changes, then retry preparation or ask the agent for a fresh link.";
+    }
+    if (params.handoff.status === "expired") {
+      return "Ask the agent for a fresh handoff link.";
+    }
+    if (params.handoff.status === "submitted") {
+      return "Use resultTool or the public result URL to inspect the submitted ask.";
+    }
+    if (params.handoff.status === "prepared" || params.handoff.status === "feedback_bonus_prepared") {
+      return "Execute the returned transactionPlan.calls in the connected wallet, then confirm the transaction hashes.";
+    }
+    if (params.handoff.status === "awaiting_image_signatures") {
+      return "Sign each upload challenge in the browser wallet, then prepare the handoff again with imageSignatures.";
+    }
+    if (params.handoff.status === "uploading_images") {
+      return "Image upload is still processing. Poll rateloop_get_handoff_status for completion or failure.";
+    }
+    return "Share or open the handoffUrl, review the draft, connect the funding wallet, and submit.";
+  })();
+
   return {
     assets: params.assets.map(asset => ({
       attachmentId: asset.attachmentId,
@@ -631,6 +657,7 @@ export function buildAgentAskHandoffResponse(params: {
     error: params.handoff.error,
     expiresAt: params.handoff.expiresAt.toISOString(),
     id: params.handoff.id,
+    nextAction,
     operationKey: params.handoff.operationKey,
     originalRequestBody: params.handoff.originalRequestBody,
     payloadHash: params.handoff.payloadHash,

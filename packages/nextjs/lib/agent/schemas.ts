@@ -619,6 +619,7 @@ export const agentAskHandoffOutputSchema = {
   additionalProperties: true,
   properties: {
     assets: { items: { type: "object" }, type: "array" },
+    chainId: { type: ["integer", "null"] },
     draftRevision: {
       description: "Current editable draft revision. Increments when the browser user saves changes before prepare.",
       type: "integer",
@@ -627,6 +628,11 @@ export const agentAskHandoffOutputSchema = {
       description: "True when the browser user changed the agent-created draft before preparing the ask.",
       type: "boolean",
     },
+    error: {
+      description: "Top-level handoff failure, or null when no handoff-level error has occurred.",
+      type: ["string", "null"],
+    },
+    expiresAt: { type: "string" },
     handoffId: { type: "string" },
     handoffToken: { type: "string" },
     handoffUrl: { type: "string" },

@@ -1102,6 +1102,104 @@ test("agent ask handoff route uploads signed generated images before preparing a
   assert.equal(payload.questions[0]?.videoUrl || undefined, undefined);
 });
 
+test("agent ask handoff route marks parent failed when signed generated image upload fails", async () => {
+  const account = privateKeyToAccount(`0x${"7".repeat(64)}`);
+  const createResponse = await handoffsRoute.POST(
+    makePublicPost("https://rateloop.ai/api/agent/handoffs", {
+      generatedImages: [
+        {
+          filename: "concept.png",
+          imageBase64: ONE_PIXEL_PNG_BASE64,
+          mimeType: "image/png",
+          sha256: ONE_PIXEL_PNG_SHA256,
+          sizeBytes: ONE_PIXEL_PNG.length,
+        },
+      ],
+      request: {
+        ...questionPayload("agent-handoff-upload-image-fails"),
+        maxPaymentAmount: "1500000",
+      },
+      ttlMs: 300000,
+    }),
+  );
+  const createBody = (await createResponse.json()) as Record<string, unknown>;
+  const handoffId = String(createBody.handoffId);
+  const token = new URLSearchParams(new URL(String(createBody.handoffUrl)).hash.replace(/^#/, "")).get("token");
+
+  assert.equal(createResponse.status, 200);
+  assert.ok(token);
+
+  await dbModule.dbClient.execute({
+    args: [TRUNCATED_JPEG_BASE64, "image/jpeg", TRUNCATED_JPEG_SHA256, TRUNCATED_JPEG.length, handoffId],
+    sql: `
+      UPDATE agent_ask_handoff_assets
+      SET image_base64 = ?,
+          mime_type = ?,
+          sha256 = ?,
+          size_bytes = ?
+      WHERE handoff_id = ?
+    `,
+  });
+
+  const challengeResponse = await handoffPrepareRoute.POST(
+    makePublicPost(`https://rateloop.ai/api/agent/handoffs/${handoffId}/prepare`, {
+      chainId: 4801,
+      token,
+      walletAddress: account.address,
+    }),
+    { params: Promise.resolve({ handoffId }) },
+  );
+  const challengeBody = (await challengeResponse.json()) as {
+    uploadChallenges?: Array<Record<string, unknown>>;
+  };
+  const challenge = challengeBody.uploadChallenges?.[0];
+
+  assert.equal(challengeResponse.status, 200);
+  assert.ok(challenge);
+
+  const signature = await account.signMessage({ message: String(challenge.message) });
+  const prepareResponse = await handoffPrepareRoute.POST(
+    makePublicPost(`https://rateloop.ai/api/agent/handoffs/${handoffId}/prepare`, {
+      chainId: 4801,
+      imageSignatures: [
+        {
+          assetId: challenge.assetId,
+          challengeId: challenge.challengeId,
+          signature,
+        },
+      ],
+      token,
+      walletAddress: account.address,
+    }),
+    { params: Promise.resolve({ handoffId }) },
+  );
+  const prepareBody = (await prepareResponse.json()) as Record<string, unknown>;
+
+  assert.equal(prepareResponse.status, 400);
+  assert.match(String(prepareBody.message), /Image upload failed/);
+  assert.match(String(prepareBody.message), /corrupt or incomplete/);
+
+  const statusResponse = await handoffRoute.GET(
+    makePublicGet(`https://rateloop.ai/api/agent/handoffs/${handoffId}`, {
+      "x-rateloop-handoff-token": token,
+    }),
+    { params: Promise.resolve({ handoffId }) },
+  );
+  const statusBody = (await statusResponse.json()) as {
+    assets?: Array<Record<string, unknown>>;
+    error?: string | null;
+    nextAction?: string;
+    status?: string;
+  };
+
+  assert.equal(statusResponse.status, 200);
+  assert.equal(statusBody.status, "failed");
+  assert.match(String(statusBody.error), /Image upload failed/);
+  assert.match(String(statusBody.nextAction), /fresh handoff link/);
+  assert.equal(statusBody.assets?.[0]?.status, "failed");
+  assert.match(String(statusBody.assets?.[0]?.error), /corrupt or incomplete/);
+});
+
 test("agent ask handoff route reports a pending draft migration clearly", async () => {
   handoffsModule.__setAgentAskHandoffDraftSchemaReadyForTests(false);
 

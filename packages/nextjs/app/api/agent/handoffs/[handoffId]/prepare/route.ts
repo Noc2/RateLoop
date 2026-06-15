@@ -227,10 +227,17 @@ async function uploadSignedImages(params: {
         status: "uploaded",
       });
     } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
       await updateAgentAskHandoffAsset({
         assetId: asset.id,
-        error: error instanceof Error ? error.message : String(error),
+        error: message,
         status: "failed",
+      });
+      await updateAgentAskHandoffStatus({
+        error: message,
+        handoffId: params.handoffId,
+        status: "failed",
+        walletAddress: params.walletAddress,
       });
       throw error;
     }

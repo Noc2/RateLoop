@@ -1682,6 +1682,9 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
   const isExpiredHandoff = handoff?.status === "expired";
   const isTerminalStatus = handoff?.status === "expired" || handoff?.status === "submitted";
   const isFeedbackBonusStep = handoff?.status === "feedback_bonus_prepared";
+  const failedImageAsset = handoff?.assets?.find(asset => asset.status === "failed") ?? null;
+  const failedImageUploadMessage =
+    handoff?.status === "failed" && failedImageAsset ? handoff.error || failedImageAsset.error || null : null;
   const connectedMismatch = Boolean(handoff?.walletAddress && address && !sameAddress(handoff.walletAddress, address));
   const hasTransactionPlan = Boolean(handoff?.transactionPlan?.calls?.length);
   const connectedChainId = chain?.id ?? chainId ?? null;
@@ -1708,6 +1711,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
       !connectedMismatch &&
       !isTerminalStatus &&
       !isBusy &&
+      !failedImageUploadMessage &&
       !draftConfidentialityBondError &&
       (!hasUnsavedDraft || canSaveDraftBeforeSubmit) &&
       (hasTransactionPlan || (connectedChainId && canPrepareHandoffStatus(handoff.status))),
@@ -2517,6 +2521,20 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
               <p className="surface-card-nested mt-4 rounded-lg p-3 text-sm text-warning">
                 This prepared ask is on chain {handoff.chainId}. Your wallet is on chain {connectedChainId}.
               </p>
+            ) : null}
+            {failedImageUploadMessage ? (
+              <div className="surface-card-nested mt-4 rounded-lg border border-error/20 bg-error/10 p-3 text-sm text-error">
+                <div className="flex items-start gap-2">
+                  <ExclamationTriangleIcon className="mt-0.5 h-5 w-5 shrink-0" />
+                  <div>
+                    <p className="font-semibold">Image upload failed.</p>
+                    <p className="mt-1 text-error/80">{failedImageUploadMessage}</p>
+                    <p className="mt-1 text-error/80">
+                      Ask the agent for a fresh handoff link with a regenerated or re-exported image.
+                    </p>
+                  </div>
+                </div>
+              </div>
             ) : null}
             {showMissingFeedbackBonusNotice ? (
               <div className="surface-card-nested mt-4 rounded-lg p-3 text-sm text-warning">
