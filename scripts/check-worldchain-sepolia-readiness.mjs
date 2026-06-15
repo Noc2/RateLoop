@@ -87,7 +87,7 @@ export const REQUIRED_SELECTOR_CHECKS = [
     contractName: "ConfidentialityEscrow",
     selectors: [
       "0xe3de2a7a", // recordAccessNexus(uint256,address)
-      "0x517fbf76", // recordConfidentialityNexus(uint256,address)
+      "0x80fb3870", // recordConfidentialityNexusForRegistry(uint256,address,address)
     ],
   },
   {

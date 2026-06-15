@@ -355,7 +355,7 @@ test("validateLiveReadiness rejects live bytecode missing confidentiality select
     assert(
       result.failures.some((message) =>
         message.includes(
-          "ConfidentialityEscrow implementation bytecode contains selector 0x517fbf76",
+          "ConfidentialityEscrow implementation bytecode contains selector 0x80fb3870",
         ),
       ),
     );
