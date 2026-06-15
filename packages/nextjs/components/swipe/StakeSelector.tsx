@@ -363,12 +363,16 @@ export function StakeSelector({
       : canRequestWorldIdProof
         ? hasEnabledWorldIdAction
           ? worldIdActionPurpose === "presence"
-            ? "Recheck one eligible credential before voting to qualify for this bounty."
+            ? "Recheck before voting. Otherwise no bounty rewards."
             : "Verify one eligible credential before voting to qualify for this bounty."
           : "One of the selected credential lanes is not enabled for this deployment."
         : worldIdActionPurpose === "presence"
-          ? "The delegated holder must recheck before this vote can qualify for the bounty."
+          ? "Holder must recheck. Otherwise no bounty rewards."
           : "The delegated holder must verify before this vote can qualify for the bounty.";
+  const worldIdNoticeClassName =
+    worldIdActionPurpose === "presence"
+      ? "mb-4 rounded-lg border border-warning/50 bg-warning/15 p-3 text-sm text-base-content"
+      : "mb-4 rounded-lg border border-base-content/10 bg-base-300/60 p-3 text-sm text-base-content/75";
   const formDisabled = isConfirming || !roundAcceptsVotes;
   const isConfidentialTermsStatusPending = Boolean(
     isOpen && privateContext && address && !hasAcceptedConfidentialTerms && !hasCheckedConfidentialTerms,
@@ -617,7 +621,7 @@ export function StakeSelector({
             </div>
 
             {(isWorldIdEligibilityPending || (worldIdActions.length > 0 && worldIdActionMessage)) && (
-              <div className="mb-4 rounded-lg border border-base-content/10 bg-base-300/60 p-3 text-sm text-base-content/75">
+              <div className={worldIdNoticeClassName}>
                 {isWorldIdEligibilityPending ? (
                   <div className="flex items-center gap-2">
                     <span className="loading loading-spinner loading-xs" />
