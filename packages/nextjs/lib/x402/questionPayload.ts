@@ -1,4 +1,6 @@
+import { MIN_NONZERO_CONFIDENTIALITY_BOND, WORLD_CHAIN_USDC_BY_CHAIN_ID } from "@rateloop/contracts/protocol";
 import { normalizeTargetAudience } from "@rateloop/node-utils/profileSelfReport";
+import { X402_QUESTION_TOP_LEVEL_FIELDS } from "@rateloop/node-utils/x402QuestionFields";
 import { createHash } from "crypto";
 import {
   buildQuestionMetadataUri,
@@ -24,10 +26,7 @@ import {
 } from "~~/lib/questionRoundConfig";
 import { canonicalQuestionImageUrls } from "~~/lib/questionSubmissionCommitment";
 
-export const X402_WORLD_CHAIN_USDC_BY_CHAIN_ID: Record<number, `0x${string}`> = {
-  480: "0x79A02482A880bCE3F13e09Da970dC34db4CD24d1",
-  4801: "0x66145f38cBAC35Ca6F1Dfb4914dF98F1614aeA88",
-};
+export const X402_WORLD_CHAIN_USDC_BY_CHAIN_ID = WORLD_CHAIN_USDC_BY_CHAIN_ID;
 
 export const X402_SUBMISSION_REWARD_ASSET_USDC = 1;
 export const X402_USDC_DECIMALS = 6;
@@ -35,7 +34,7 @@ const X402_DEFAULT_SUBMISSION_BOUNTY_USDC = 1_000_000n;
 const X402_MIN_REWARD_POOL_REQUIRED_VOTERS = 3n;
 const X402_MIN_REWARD_POOL_SETTLED_ROUNDS = 1n;
 const X402_MAX_QUESTION_BUNDLE_COUNT = 10;
-export const X402_MIN_NONZERO_CONFIDENTIALITY_BOND = 1_000_000n;
+export const X402_MIN_NONZERO_CONFIDENTIALITY_BOND = MIN_NONZERO_CONFIDENTIALITY_BOND;
 const EMPTY_DETAILS_HASH = `0x${"0".repeat(64)}` as const;
 const AFTER_SETTLEMENT_DISCLOSURE_POLICY = "after_settlement";
 const DEFAULT_CONFIDENTIALITY_DISCLOSURE_POLICY = "private_forever";
@@ -675,46 +674,6 @@ function normalizeQuestion(
  *
  * Adding a new top-level field requires extending this set explicitly.
  */
-const X402_QUESTION_TOP_LEVEL_FIELDS = new Set<string>([
-  // Used by parseX402QuestionRequest itself
-  "clientRequestId",
-  "questions",
-  "question",
-  "roundConfig",
-  "bounty",
-  "templateId",
-  "templateInputs",
-  "templateVersion",
-  "confidentiality",
-  "chainId",
-  // Used by signingIntents.ts when persisting the same requestBody
-  "maxPaymentAmount",
-  "paymentMode",
-  "fundingMode",
-  "walletAddress",
-  "agentWalletAddress",
-  // Used by lib/mcp/tools.ts when the same args object is also handed to
-  // parseAskHumansMode / parseWebhookOptions / EIP-3009 authorization orchestration. Each of
-  // these has its own dedicated validator that runs after parseX402QuestionRequest; we keep
-  // them in the allowlist so the strict gate does not pre-empt those error messages.
-  "mode",
-  "webhookUrl",
-  "webhookSecret",
-  "webhookEvents",
-  "webhookChallengeId",
-  "webhookSignature",
-  "paymentAuthorization",
-  "dryRun",
-  "executionMode",
-  "sandbox",
-  // Used by the public SDK's `AskHumansRequest` type (packages/sdk/src/agent.ts). The Next.js
-  // signing-intents POST persists the request body as-is, and these fields are part of the
-  // public contract — `signatureMode` selects browser-handoff vs agent_signs, `transport`
-  // selects http vs mcp.
-  "signatureMode",
-  "transport",
-]);
-
 export function parseX402QuestionRequest(value: unknown, fallbackChainId?: number): X402QuestionPayload {
   if (!isObject(value)) {
     throw new X402QuestionInputError("Request body must be a JSON object.");

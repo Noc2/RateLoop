@@ -35,7 +35,15 @@ import {
   X402QuestionSubmitterAbi,
 } from "@rateloop/contracts/abis";
 import { getSharedDeploymentAddress } from "@rateloop/contracts/deployments";
-import { DEFAULT_ROUND_CONFIG } from "@rateloop/contracts/protocol";
+import {
+  BOUNTY_ELIGIBILITY_CREDENTIAL_MASK,
+  BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG,
+  CONFIDENTIALITY_FLAG_PRIVATE_FOREVER,
+  DEFAULT_ROUND_CONFIG,
+  MIN_NONZERO_CONFIDENTIALITY_BOND,
+  WORLD_CHAIN_USDC_BY_CHAIN_ID,
+} from "@rateloop/contracts/protocol";
+import { X402_QUESTION_TOP_LEVEL_FIELDS } from "@rateloop/node-utils/x402QuestionFields";
 import { normalizeTargetAudience } from "@rateloop/node-utils/profileSelfReport";
 import type {
   AskHumansRequest,
@@ -64,10 +72,8 @@ const DEFAULT_SCRYPT_PARAMS = {
   p: 1,
   r: 8,
 };
-const X402_USDC_BY_CHAIN_ID: Record<number, Address> = {
-  480: "0x79A02482A880bCE3F13e09Da970dC34db4CD24d1",
-  4801: "0x66145f38cBAC35Ca6F1Dfb4914dF98F1614aeA88",
-};
+
+const X402_USDC_BY_CHAIN_ID: Record<number, Address> = WORLD_CHAIN_USDC_BY_CHAIN_ID;
 const X402_PRIMARY_TYPE = "ReceiveWithAuthorization";
 const X402_AUTHORIZATION_FIELDS = [
   { name: "from", type: "address" },
@@ -88,14 +94,10 @@ const X402_SUBMISSION_REWARD_ASSET_USDC = 1;
 const X402_DEFAULT_SUBMISSION_BOUNTY_USDC = 1_000_000n;
 const X402_MIN_REWARD_POOL_REQUIRED_VOTERS = 3n;
 const X402_MIN_REWARD_POOL_SETTLED_ROUNDS = 1n;
-const BOUNTY_ELIGIBILITY_CREDENTIAL_MASK = 2 | 4 | 8;
-const BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG = 128;
 const X402_MAX_QUESTION_BUNDLE_COUNT = 10;
-const CONFIDENTIALITY_FLAG_PRIVATE_FOREVER = 1;
 const EMPTY_DETAILS_HASH = `0x${"0".repeat(64)}` as Hex;
 const AFTER_SETTLEMENT_DISCLOSURE_POLICY = "after_settlement";
 const DEFAULT_CONFIDENTIALITY_DISCLOSURE_POLICY = "private_forever";
-const MIN_NONZERO_CONFIDENTIALITY_BOND = 1_000_000n;
 const QUESTION_CONTEXT_DOMAIN = keccak256(
   stringToHex("rateloop-question-context-v5"),
 );
@@ -125,33 +127,6 @@ const DEFAULT_IMAGE_ATTACHMENT_ORIGINS = new Set([
   "https://www.rateloop.ai",
   "https://rateloop.ai",
 ]);
-const X402_QUESTION_TOP_LEVEL_FIELDS = new Set([
-  "clientRequestId",
-  "questions",
-  "question",
-  "roundConfig",
-  "bounty",
-  "templateId",
-  "templateInputs",
-  "templateVersion",
-  "confidentiality",
-  "chainId",
-  "maxPaymentAmount",
-  "paymentMode",
-  "fundingMode",
-  "walletAddress",
-  "agentWalletAddress",
-  "detailsHash",
-  "detailsUrl",
-  "mode",
-  "webhookUrl",
-  "webhookSecret",
-  "webhookEvents",
-  "paymentAuthorization",
-  "signatureMode",
-  "transport",
-]);
-
 type LocalSignerConfig = {
   chainId?: number;
   chainName: string;

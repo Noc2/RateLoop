@@ -6,9 +6,11 @@
   "exports": {
     "./contentModeration": "./src/contentModeration.ts",
     "./correlationScoring": "./src/correlationScoring.ts",
+    "./identityKeys": "./src/identityKeys.ts",
     "./json": "./src/json.ts",
     "./keystore": "./src/keystore.ts",
-    "./profileSelfReport": "./src/profileSelfReport.ts"
+    "./profileSelfReport": "./src/profileSelfReport.ts",
+    "./x402QuestionFields": "./src/x402QuestionFields.ts"
   },
   "typesVersions": {
     "*": {
@@ -18,6 +20,9 @@
       "correlationScoring": [
         "src/correlationScoring.ts"
       ],
+      "identityKeys": [
+        "src/identityKeys.ts"
+      ],
       "json": [
         "src/json.ts"
       ],
@@ -26,6 +31,9 @@
       ],
       "profileSelfReport": [
         "src/profileSelfReport.ts"
+      ],
+      "x402QuestionFields": [
+        "src/x402QuestionFields.ts"
       ]
     }
   },

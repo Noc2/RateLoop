@@ -1,0 +1,35 @@
+/**
+ * Top-level JSON fields accepted by x402 question submission parsers.
+ * Keep agents `local-ask` and nextjs MCP/server parsers aligned.
+ */
+export const X402_QUESTION_TOP_LEVEL_FIELDS = new Set<string>([
+  "clientRequestId",
+  "questions",
+  "question",
+  "roundConfig",
+  "bounty",
+  "templateId",
+  "templateInputs",
+  "templateVersion",
+  "confidentiality",
+  "chainId",
+  "maxPaymentAmount",
+  "paymentMode",
+  "fundingMode",
+  "walletAddress",
+  "agentWalletAddress",
+  "detailsHash",
+  "detailsUrl",
+  "mode",
+  "webhookUrl",
+  "webhookSecret",
+  "webhookEvents",
+  "webhookChallengeId",
+  "webhookSignature",
+  "paymentAuthorization",
+  "dryRun",
+  "executionMode",
+  "sandbox",
+  "signatureMode",
+  "transport",
+]);
