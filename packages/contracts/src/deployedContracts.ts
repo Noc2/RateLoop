@@ -22662,6 +22662,8 @@ const deployedContracts: GenericContractsDeclaration = {
         },
       ],
       inheritedFunctions: {
+        FINALIZATION_VETO_WINDOW:
+          "contracts/interfaces/IClusterPayoutOracle.sol",
         getRoundPayoutSnapshot: "contracts/interfaces/IClusterPayoutOracle.sol",
         isRoundPayoutSnapshotFinalized:
           "contracts/interfaces/IClusterPayoutOracle.sol",
@@ -61028,6 +61030,8 @@ const deployedContracts: GenericContractsDeclaration = {
         },
       ],
       inheritedFunctions: {
+        FINALIZATION_VETO_WINDOW:
+          "contracts/interfaces/IClusterPayoutOracle.sol",
         getRoundPayoutSnapshot: "contracts/interfaces/IClusterPayoutOracle.sol",
         isRoundPayoutSnapshotFinalized:
           "contracts/interfaces/IClusterPayoutOracle.sol",
