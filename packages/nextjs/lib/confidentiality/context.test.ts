@@ -51,6 +51,38 @@ function termsPayload(): ConfidentialityTermsPayload {
   };
 }
 
+async function ensureGatedConfidentiality() {
+  if (await confidentiality.getQuestionConfidentiality(CONTENT_ID)) return;
+  await confidentiality.upsertQuestionConfidentialityFromMetadata({
+    contentId: CONTENT_ID,
+    metadata: {
+      confidentiality: {
+        bond: { amount: "0", asset: "USDC" },
+        disclosurePolicy: "after_settlement",
+        visibility: "gated",
+      },
+      contentHash: `0x${"1".repeat(64)}`,
+      detailsHash: `0x${"2".repeat(64)}`,
+      mediaTupleHash: `0x${"3".repeat(64)}`,
+    },
+    questionMetadataHash: `0x${"4".repeat(64)}`,
+  });
+}
+
+async function serverTermsPayload() {
+  await ensureGatedConfidentiality();
+  const serverPayload = await confidentiality.buildServerConfidentialityTermsPayload({
+    address: WALLET,
+    contentHash: `0x${"9".repeat(64)}`,
+    contentId: CONTENT_ID,
+    detailsHash: `0x${"8".repeat(64)}`,
+    mediaTupleHash: `0x${"7".repeat(64)}`,
+    questionMetadataHash: `0x${"6".repeat(64)}`,
+  });
+  if (!serverPayload.ok) throw new Error(serverPayload.error);
+  return serverPayload.payload;
+}
+
 async function clearTables() {
   await dbModule.dbClient.execute("DELETE FROM confidentiality_log_roots");
   await dbModule.dbClient.execute("DELETE FROM confidential_context_access_logs");
@@ -81,9 +113,10 @@ function installConfidentialityGate(
 }
 
 async function createAcceptedRequest() {
+  const payload = await serverTermsPayload();
   await confidentiality.recordConfidentialityTermsAcceptance({
     nonce: "nonce-1",
-    payload: termsPayload(),
+    payload,
     signature: "0xab",
   });
   const session = await signedReadSessions.issueSignedReadSession(WALLET, "gated_context");
@@ -172,6 +205,76 @@ test("confidentiality terms acceptance requires the current document hash", asyn
     }),
     false,
   );
+});
+
+test("server-bound terms payload ignores caller-supplied content commitments", async () => {
+  const payload = await serverTermsPayload();
+  assert.equal(payload.identityKey, null);
+  assert.equal(payload.contentHash, `0x${"1".repeat(64)}`);
+  assert.equal(payload.detailsHash, `0x${"2".repeat(64)}`);
+  assert.equal(payload.mediaTupleHash, `0x${"3".repeat(64)}`);
+  assert.equal(payload.questionMetadataHash, `0x${"4".repeat(64)}`);
+
+  await confidentiality.recordConfidentialityTermsAcceptance({
+    nonce: "nonce-server-bound",
+    payload,
+    signature: "0xab",
+  });
+
+  const rows = await dbModule.dbClient.execute(
+    "SELECT payload_hash, question_metadata_hash, content_hash, details_hash, media_tuple_hash, identity_key FROM confidentiality_terms_acceptances",
+  );
+  assert.equal(rows.rowCount, 1);
+  assert.equal(rows.rows[0].payload_hash, confidentiality.hashConfidentialityTermsPayload(payload));
+  assert.equal(rows.rows[0].question_metadata_hash, payload.questionMetadataHash);
+  assert.equal(rows.rows[0].content_hash, payload.contentHash);
+  assert.equal(rows.rows[0].details_hash, payload.detailsHash);
+  assert.equal(rows.rows[0].media_tuple_hash, payload.mediaTupleHash);
+  assert.equal(rows.rows[0].identity_key, null);
+});
+
+test("gated context signed read sessions are short lived", async () => {
+  const issuedAt = Date.now();
+  const session = await signedReadSessions.issueSignedReadSession(WALLET, "gated_context");
+  const ttlMs = session.expiresAt.getTime() - issuedAt;
+
+  assert.ok(ttlMs <= signedReadSessions.GATED_CONTEXT_SIGNED_READ_SESSION_TTL_MS + 2_000);
+  assert.ok(ttlMs > signedReadSessions.GATED_CONTEXT_SIGNED_READ_SESSION_TTL_MS - 2_000);
+});
+
+test("rejects gated reads when an acceptance no longer matches current content commitments", async () => {
+  installConfidentialityGate();
+  await createAcceptedRequest();
+  await confidentiality.upsertQuestionConfidentialityFromMetadata({
+    contentId: CONTENT_ID,
+    metadata: {
+      confidentiality: {
+        bond: { amount: "0", asset: "USDC" },
+        disclosurePolicy: "after_settlement",
+        visibility: "gated",
+      },
+      contentHash: `0x${"1".repeat(64)}`,
+      detailsHash: `0x${"9".repeat(64)}`,
+      mediaTupleHash: `0x${"3".repeat(64)}`,
+    },
+    questionMetadataHash: `0x${"4".repeat(64)}`,
+  });
+
+  const session = await signedReadSessions.issueSignedReadSession(WALLET, "gated_context");
+  const cookie = signedReadSessions.getSignedReadSessionCookie("gated_context", session);
+  const request = new NextRequest(
+    `https://rateloop.ai/api/attachments/details/det_contextaccess001?address=${WALLET}`,
+    {
+      headers: { cookie: `${cookie.name}=${cookie.value}` },
+    },
+  );
+
+  const authorization = await confidentiality.authorizeGatedContextRequest(request, CONTENT_ID);
+  assert.deepEqual(authorization, {
+    ok: false,
+    status: 403,
+    error: "Confidentiality terms acceptance required",
+  });
 });
 
 test("authorizes accepted signed sessions and logs gated context access", async () => {

@@ -47,6 +47,22 @@ function restoreEnv(name: keyof NodeJS.ProcessEnv, value: string | undefined) {
   }
 }
 
+async function seedGatedConfidentiality() {
+  await confidentiality.upsertQuestionConfidentialityFromMetadata({
+    contentId: CONTENT_ID,
+    metadata: {
+      confidentiality: {
+        bond: { amount: "0", asset: "USDC" },
+        disclosurePolicy: "after_settlement",
+        visibility: "gated",
+      },
+      contentHash: `0x${"1".repeat(64)}`,
+      detailsHash: `0x${"2".repeat(64)}`,
+    },
+    questionMetadataHash: `0x${"3".repeat(64)}`,
+  });
+}
+
 before(async () => {
   dbModule = await import("~~/lib/db");
   dbTestMemory = await import("~~/lib/db/testMemory");
@@ -70,12 +86,13 @@ after(() => {
 });
 
 test("confidentiality terms accept route records acceptance and issues gated context read session", async () => {
+  await seedGatedConfidentiality();
   const payload = {
     address: WALLET,
-    contentHash: `0x${"1".repeat(64)}`,
+    contentHash: `0x${"9".repeat(64)}`,
     contentId: CONTENT_ID,
-    detailsHash: `0x${"2".repeat(64)}`,
-    questionMetadataHash: `0x${"3".repeat(64)}`,
+    detailsHash: `0x${"8".repeat(64)}`,
+    questionMetadataHash: `0x${"7".repeat(64)}`,
   };
 
   const challengeResponse = await challengeRoute.POST(jsonRequest("/api/confidentiality/terms/challenge", payload));
@@ -153,7 +170,7 @@ test("confidentiality terms accept route records acceptance and issues gated con
 
   const rows = await dbModule.dbClient.execute({
     sql: `
-      SELECT wallet_address, content_id, terms_version, terms_doc_hash
+      SELECT wallet_address, content_id, terms_version, terms_doc_hash, payload_hash, question_metadata_hash, content_hash, details_hash
       FROM confidentiality_terms_acceptances
     `,
   });
@@ -162,9 +179,14 @@ test("confidentiality terms accept route records acceptance and issues gated con
   assert.equal(rows.rows[0].content_id, CONTENT_ID);
   assert.equal(rows.rows[0].terms_version, challenge.termsVersion);
   assert.equal(rows.rows[0].terms_doc_hash, challenge.termsDocHash);
+  assert.match(String(rows.rows[0].payload_hash), /^[a-f0-9]{64}$/);
+  assert.equal(rows.rows[0].question_metadata_hash, `0x${"3".repeat(64)}`);
+  assert.equal(rows.rows[0].content_hash, `0x${"1".repeat(64)}`);
+  assert.equal(rows.rows[0].details_hash, `0x${"2".repeat(64)}`);
 });
 
 test("confidentiality terms accept route reports pending storage migration clearly", async () => {
+  await seedGatedConfidentiality();
   const payload = {
     address: WALLET,
     contentId: CONTENT_ID,

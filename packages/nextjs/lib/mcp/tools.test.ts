@@ -184,6 +184,50 @@ async function insertGatedContextAttachments(contentId = RATING_CONTENT_ID) {
   const now = new Date("2026-06-11T10:00:00.000Z");
   await dbClient.execute({
     sql: `
+      INSERT INTO question_confidentiality (
+        content_id,
+        gated,
+        bond_asset,
+        bond_amount,
+        disclosure_policy,
+        published_at,
+        question_metadata_hash,
+        content_hash,
+        details_hash,
+        media_tuple_hash,
+        created_at,
+        updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT (content_id) DO UPDATE SET
+        gated = excluded.gated,
+        bond_asset = excluded.bond_asset,
+        bond_amount = excluded.bond_amount,
+        disclosure_policy = excluded.disclosure_policy,
+        published_at = excluded.published_at,
+        question_metadata_hash = excluded.question_metadata_hash,
+        content_hash = excluded.content_hash,
+        details_hash = excluded.details_hash,
+        media_tuple_hash = excluded.media_tuple_hash,
+        updated_at = excluded.updated_at
+    `,
+    args: [
+      contentId,
+      true,
+      "USDC",
+      "0",
+      "after_settlement",
+      null,
+      `0x${"4".repeat(64)}`,
+      `0x${"1".repeat(64)}`,
+      `0x${"2".repeat(64)}`,
+      null,
+      now,
+      now,
+    ],
+  });
+  await dbClient.execute({
+    sql: `
       INSERT INTO question_details (
         id,
         uploader_kind,

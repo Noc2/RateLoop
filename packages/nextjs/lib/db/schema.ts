@@ -444,6 +444,11 @@ export const confidentialityTermsAcceptances = pgTable(
     contentId: text("content_id").notNull(),
     termsVersion: text("terms_version").notNull(),
     termsDocHash: text("terms_doc_hash").notNull(),
+    payloadHash: text("payload_hash"),
+    questionMetadataHash: text("question_metadata_hash"),
+    contentHash: text("content_hash"),
+    detailsHash: text("details_hash"),
+    mediaTupleHash: text("media_tuple_hash"),
     signature: text("signature").notNull(),
     nonce: text("nonce").notNull(),
     acceptedAt: timestamp("accepted_at", { mode: "date", withTimezone: true }).notNull(),
@@ -455,6 +460,7 @@ export const confidentialityTermsAcceptances = pgTable(
       table.termsVersion,
     ),
     contentIdentityIdx: index("confidentiality_terms_content_identity_idx").on(table.contentId, table.identityKey),
+    payloadHashIdx: index("confidentiality_terms_payload_hash_idx").on(table.payloadHash),
   }),
 );
 

@@ -9,6 +9,7 @@ export const NOTIFICATION_EMAIL_SIGNED_READ_SESSION_COOKIE_NAME = "rateloop_noti
 export const AGENT_POLICIES_SIGNED_READ_SESSION_COOKIE_NAME = "rateloop_agent_policies_read_session";
 export const GATED_CONTEXT_SIGNED_READ_SESSION_COOKIE_NAME = "rateloop_gated_context_read_session";
 const SIGNED_READ_SESSION_TTL_MS = 365 * 24 * 60 * 60 * 1000;
+export const GATED_CONTEXT_SIGNED_READ_SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 
 export const SIGNED_READ_SESSION_SCOPES = [
   "watchlist",
@@ -31,7 +32,7 @@ export const SIGNED_READ_SESSION_COOKIE_NAMES: Record<SignedReadSessionScope, st
 const signedReadSessionStore = createSignedSessionStore<SignedReadSessionScope>({
   tableName: "signed_read_sessions",
   indexName: "signed_read_sessions_wallet_scope_expires_idx",
-  ttlMs: SIGNED_READ_SESSION_TTL_MS,
+  ttlMs: scope => (scope === "gated_context" ? GATED_CONTEXT_SIGNED_READ_SESSION_TTL_MS : SIGNED_READ_SESSION_TTL_MS),
   cookieNames: SIGNED_READ_SESSION_COOKIE_NAMES,
 });
 

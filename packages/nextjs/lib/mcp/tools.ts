@@ -117,9 +117,9 @@ import {
   CONFIDENTIALITY_TERMS_VERSION,
   buildConfidentialityTermsChallengeMessage,
   buildConfidentialityTermsMessageLines,
+  buildServerConfidentialityTermsPayload,
   hasConfidentialityTermsAcceptance,
   hashConfidentialityTermsPayload,
-  normalizeConfidentialityTermsInput,
   recordConfidentialityTermsAcceptance,
 } from "~~/lib/confidentiality/context";
 import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
@@ -1415,33 +1415,22 @@ function contentContextAccess(content: PonderContentItem): "public" | "gated" {
   return content.contextAccess === "gated" || content.contextVisibility === "gated" ? "gated" : "public";
 }
 
-function normalizeOptionalBytes32String(value: unknown): `0x${string}` | undefined {
-  if (typeof value === "string" && /^0x[0-9a-fA-F]{64}$/.test(value)) {
-    return value.toLowerCase() as `0x${string}`;
-  }
-  return undefined;
-}
-
-function buildConfidentialityTermsInput(params: {
-  content: PonderContentItem;
+async function buildConfidentialityTermsInput(params: {
   contentId: string;
   termsVersion?: string;
   walletAddress: Address;
 }) {
-  const normalized = normalizeConfidentialityTermsInput({
+  const serverPayload = await buildServerConfidentialityTermsPayload({
     address: params.walletAddress,
-    contentHash: normalizeOptionalBytes32String(params.content.contentHash),
     contentId: params.contentId,
-    detailsHash: normalizeOptionalBytes32String(params.content.detailsHash),
-    questionMetadataHash: normalizeOptionalBytes32String(params.content.questionMetadataHash),
     termsVersion: params.termsVersion,
   });
 
-  if (!normalized.ok) {
-    throw new McpToolError(normalized.error);
+  if (!serverPayload.ok) {
+    throw new McpToolError(serverPayload.error, serverPayload.status);
   }
 
-  return normalized.payload;
+  return serverPayload.payload;
 }
 
 function gatedContextFetchUrl(baseUrl: string, walletAddress: Address) {
@@ -1551,11 +1540,13 @@ async function buildRatingGatedContextInfo(params: {
   requestUrl?: string;
   walletAddress: Address;
 }) {
-  const termsPayload = buildConfidentialityTermsInput(params);
+  const termsPayload = await buildConfidentialityTermsInput(params);
+  const payloadHash = hashConfidentialityTermsPayload(termsPayload);
   let termsAccepted = false;
   try {
     termsAccepted = await hasConfidentialityTermsAcceptance({
       contentId: params.contentId,
+      payloadHash,
       termsVersion: termsPayload.termsVersion,
       walletAddress: termsPayload.normalizedAddress,
     });
@@ -1631,8 +1622,7 @@ async function acceptConfidentialityTerms(args: JsonObject, agent?: McpAgentAuth
     };
   }
 
-  const payload = buildConfidentialityTermsInput({
-    content,
+  const payload = await buildConfidentialityTermsInput({
     contentId: contentId.toString(),
     termsVersion,
     walletAddress,
@@ -1640,6 +1630,7 @@ async function acceptConfidentialityTerms(args: JsonObject, agent?: McpAgentAuth
   const payloadHash = hashConfidentialityTermsPayload(payload);
   const existingAccepted = await hasConfidentialityTermsAcceptance({
     contentId: payload.contentId,
+    payloadHash,
     termsVersion: payload.termsVersion,
     walletAddress: payload.normalizedAddress,
   });

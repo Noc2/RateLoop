@@ -64,6 +64,13 @@
       "when": 1781268906000,
       "tag": "0008_confidentiality_log_root_anchors",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1781272506000,
+      "tag": "0009_confidentiality_terms_payload_snapshot",
+      "breakpoints": true
     }
   ]
 }

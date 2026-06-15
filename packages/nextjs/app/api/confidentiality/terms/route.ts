@@ -9,6 +9,7 @@ import { createSignedReadResponse } from "~~/lib/auth/signedRouteHelpers";
 import {
   CONFIDENTIALITY_TERMS_ACTION,
   buildConfidentialityTermsChallengeMessage,
+  buildServerConfidentialityTermsPayload,
   hasConfidentialityTermsAcceptance,
   hashConfidentialityTermsPayload,
   normalizeConfidentialityTermsInput,
@@ -20,7 +21,8 @@ import { checkRateLimit } from "~~/utils/rateLimit";
 
 const READ_RATE_LIMIT = { limit: 60, windowMs: 60_000 };
 const WRITE_RATE_LIMIT = { limit: 20, windowMs: 60_000 };
-const CONFIDENTIALITY_TERMS_STORAGE_MIGRATION_PATH = "packages/nextjs/drizzle/0005_confidentiality.sql";
+const CONFIDENTIALITY_TERMS_STORAGE_MIGRATION_PATH =
+  "packages/nextjs/drizzle/0005_confidentiality.sql and 0009_confidentiality_terms_payload_snapshot.sql";
 const CONFIDENTIALITY_TERMS_STORAGE_TABLES = [
   "confidentiality_terms_acceptances",
   "signed_action_challenges",
@@ -65,6 +67,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: normalized.error }, { status: 400 });
   }
 
+  const serverPayload = await buildServerConfidentialityTermsPayload({
+    address: normalized.payload.normalizedAddress,
+    contentId: normalized.payload.contentId,
+  });
+  if (!serverPayload.ok) {
+    return NextResponse.json({ error: serverPayload.error }, { status: serverPayload.status });
+  }
+
   const hasSession = await verifySignedReadSession(
     request.cookies.get(GATED_CONTEXT_SIGNED_READ_SESSION_COOKIE_NAME)?.value,
     normalized.payload.normalizedAddress,
@@ -73,14 +83,15 @@ export async function GET(request: NextRequest) {
 
   const accepted = await hasConfidentialityTermsAcceptance({
     contentId: normalized.payload.contentId,
+    payloadHash: hashConfidentialityTermsPayload(serverPayload.payload),
     walletAddress: normalized.payload.normalizedAddress,
   });
   return NextResponse.json({
     accepted,
     hasSession,
-    termsDocHash: normalized.payload.termsDocHash,
-    termsUri: normalized.payload.termsUri,
-    termsVersion: normalized.payload.termsVersion,
+    termsDocHash: serverPayload.payload.termsDocHash,
+    termsUri: serverPayload.payload.termsUri,
+    termsVersion: serverPayload.payload.termsVersion,
   });
 }
 
@@ -99,12 +110,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing or invalid fields" }, { status: 400 });
     }
 
-    const normalized = normalizeConfidentialityTermsInput(body);
-    if (!normalized.ok) {
-      return NextResponse.json({ error: normalized.error }, { status: 400 });
+    const serverPayload = await buildServerConfidentialityTermsPayload(body);
+    if (!serverPayload.ok) {
+      return NextResponse.json({ error: serverPayload.error }, { status: serverPayload.status });
     }
 
-    const payload = normalized.payload;
+    const payload = serverPayload.payload;
     const payloadHash = hashConfidentialityTermsPayload(payload);
     let nonce = "";
     await ensureSignedActionChallengeTable();

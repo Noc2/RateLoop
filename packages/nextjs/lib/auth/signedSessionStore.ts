@@ -20,7 +20,7 @@ type SessionValue = {
 type SignedSessionStoreConfig<Scope extends string> = {
   tableName: string;
   indexName: string;
-  ttlMs: number;
+  ttlMs: number | ((scope: Scope) => number);
   cookieNames: Record<Scope, string>;
 };
 
@@ -50,7 +50,8 @@ export function createSignedSessionStore<Scope extends string>(config: SignedSes
     await ensureTable();
 
     const now = Date.now();
-    const expiresAt = now + config.ttlMs;
+    const ttlMs = typeof config.ttlMs === "function" ? config.ttlMs(scope) : config.ttlMs;
+    const expiresAt = now + ttlMs;
     const token = randomBytes(32).toString("hex");
 
     await cleanupExpiredSessions(now);

@@ -4,8 +4,8 @@ import {
   CONFIDENTIALITY_TERMS_ACTION,
   CONFIDENTIALITY_TERMS_CHALLENGE_TITLE,
   buildConfidentialityTermsMessageLines,
+  buildServerConfidentialityTermsPayload,
   hashConfidentialityTermsPayload,
-  normalizeConfidentialityTermsInput,
 } from "~~/lib/confidentiality/context";
 import { isJsonObjectBody, jsonBodyErrorResponse, parseJsonBody } from "~~/lib/http/jsonBody";
 import { checkRateLimit } from "~~/utils/rateLimit";
@@ -20,28 +20,28 @@ export async function POST(request: NextRequest) {
     const body = await parseJsonBody(request);
     if (!isJsonObjectBody(body)) return jsonBodyErrorResponse(body, "Invalid JSON body");
 
-    const normalized = normalizeConfidentialityTermsInput(body);
-    if (!normalized.ok) {
-      return NextResponse.json({ error: normalized.error }, { status: 400 });
+    const serverPayload = await buildServerConfidentialityTermsPayload(body);
+    if (!serverPayload.ok) {
+      return NextResponse.json({ error: serverPayload.error }, { status: serverPayload.status });
     }
 
     const challenge = await issueSignedActionChallenge({
       action: CONFIDENTIALITY_TERMS_ACTION,
       messageLines: buildConfidentialityTermsMessageLines({
-        termsDocHash: normalized.payload.termsDocHash,
-        termsUri: normalized.payload.termsUri,
-        termsVersion: normalized.payload.termsVersion,
+        termsDocHash: serverPayload.payload.termsDocHash,
+        termsUri: serverPayload.payload.termsUri,
+        termsVersion: serverPayload.payload.termsVersion,
       }),
-      payloadHash: hashConfidentialityTermsPayload(normalized.payload),
+      payloadHash: hashConfidentialityTermsPayload(serverPayload.payload),
       title: CONFIDENTIALITY_TERMS_CHALLENGE_TITLE,
-      walletAddress: normalized.payload.normalizedAddress,
+      walletAddress: serverPayload.payload.normalizedAddress,
     });
 
     return NextResponse.json({
       ...challenge,
-      termsDocHash: normalized.payload.termsDocHash,
-      termsUri: normalized.payload.termsUri,
-      termsVersion: normalized.payload.termsVersion,
+      termsDocHash: serverPayload.payload.termsDocHash,
+      termsUri: serverPayload.payload.termsUri,
+      termsVersion: serverPayload.payload.termsVersion,
     });
   } catch (error) {
     console.error("Error creating confidentiality terms challenge:", error);

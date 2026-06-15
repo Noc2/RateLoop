@@ -242,6 +242,37 @@ export function normalizeConfidentialityTermsInput(
   };
 }
 
+export async function buildServerConfidentialityTermsPayload(
+  body: Record<string, unknown>,
+): Promise<
+  | { ok: true; payload: ConfidentialityTermsPayload; record: StoredConfidentiality }
+  | { ok: false; error: string; status: number }
+> {
+  const normalized = normalizeConfidentialityTermsInput(body);
+  if (!normalized.ok) return { ...normalized, status: 400 };
+
+  const record = await getQuestionConfidentiality(normalized.payload.contentId);
+  if (!record?.gated) {
+    return { ok: false, status: 404, error: "Confidential context metadata unavailable" };
+  }
+  if (!isConfidentialityCurrentlyGated(record)) {
+    return { ok: false, status: 410, error: "Confidential context is no longer gated" };
+  }
+
+  return {
+    ok: true,
+    payload: {
+      ...normalized.payload,
+      contentHash: normalizeOptionalBytes32(record.contentHash),
+      detailsHash: normalizeOptionalBytes32(record.detailsHash),
+      identityKey: null,
+      mediaTupleHash: normalizeOptionalBytes32(record.mediaTupleHash),
+      questionMetadataHash: normalizeOptionalBytes32(record.questionMetadataHash),
+    },
+    record,
+  };
+}
+
 export function hashConfidentialityTermsPayload(payload: ConfidentialityTermsPayload) {
   return hashSignedActionPayload([
     payload.normalizedAddress,
@@ -356,21 +387,24 @@ export async function upsertQuestionConfidentialityFromMetadata(params: {
 
 export async function hasConfidentialityTermsAcceptance(params: {
   contentId: string;
+  payloadHash?: string;
   termsDocHash?: string;
   termsVersion?: string;
   walletAddress: `0x${string}`;
 }) {
+  const commonConditions = [
+    eq(confidentialityTermsAcceptances.walletAddress, params.walletAddress),
+    eq(confidentialityTermsAcceptances.contentId, params.contentId),
+    eq(confidentialityTermsAcceptances.termsVersion, params.termsVersion ?? CONFIDENTIALITY_TERMS_VERSION),
+    eq(confidentialityTermsAcceptances.termsDocHash, params.termsDocHash ?? CONFIDENTIALITY_TERMS_DOC_HASH),
+  ];
+  const conditions = params.payloadHash
+    ? [...commonConditions, eq(confidentialityTermsAcceptances.payloadHash, params.payloadHash)]
+    : commonConditions;
   const [acceptance] = await db
     .select({ id: confidentialityTermsAcceptances.id })
     .from(confidentialityTermsAcceptances)
-    .where(
-      and(
-        eq(confidentialityTermsAcceptances.walletAddress, params.walletAddress),
-        eq(confidentialityTermsAcceptances.contentId, params.contentId),
-        eq(confidentialityTermsAcceptances.termsVersion, params.termsVersion ?? CONFIDENTIALITY_TERMS_VERSION),
-        eq(confidentialityTermsAcceptances.termsDocHash, params.termsDocHash ?? CONFIDENTIALITY_TERMS_DOC_HASH),
-      ),
-    )
+    .where(and(...conditions))
     .limit(1);
   return Boolean(acceptance);
 }
@@ -382,13 +416,19 @@ export async function recordConfidentialityTermsAcceptance(params: {
   acceptedAt?: Date;
 }) {
   const acceptedAt = params.acceptedAt ?? new Date();
+  const payloadHash = hashConfidentialityTermsPayload(params.payload);
   await db
     .insert(confidentialityTermsAcceptances)
     .values({
       acceptedAt,
       contentId: params.payload.contentId,
+      contentHash: params.payload.contentHash,
+      detailsHash: params.payload.detailsHash,
       identityKey: params.payload.identityKey,
+      mediaTupleHash: params.payload.mediaTupleHash,
       nonce: params.nonce,
+      payloadHash,
+      questionMetadataHash: params.payload.questionMetadataHash,
       signature: params.signature,
       termsDocHash: params.payload.termsDocHash,
       termsVersion: params.payload.termsVersion,
@@ -402,8 +442,13 @@ export async function recordConfidentialityTermsAcceptance(params: {
       ],
       set: {
         acceptedAt,
+        contentHash: params.payload.contentHash,
+        detailsHash: params.payload.detailsHash,
         identityKey: params.payload.identityKey,
+        mediaTupleHash: params.payload.mediaTupleHash,
         nonce: params.nonce,
+        payloadHash,
+        questionMetadataHash: params.payload.questionMetadataHash,
         signature: params.signature,
         termsDocHash: params.payload.termsDocHash,
       },
@@ -617,11 +662,21 @@ export async function authorizeGatedContextRequest(
     };
   }
 
-  if (!(await hasConfidentialityTermsAcceptance({ contentId, walletAddress }))) {
+  const serverPayload = await buildServerConfidentialityTermsPayload({ address: walletAddress, contentId });
+  if (!serverPayload.ok) {
+    return { ok: false as const, status: serverPayload.status, error: serverPayload.error };
+  }
+
+  if (
+    !(await hasConfidentialityTermsAcceptance({
+      contentId,
+      payloadHash: hashConfidentialityTermsPayload(serverPayload.payload),
+      walletAddress,
+    }))
+  ) {
     return { ok: false as const, status: 403, error: "Confidentiality terms acceptance required" };
   }
 
-  const confidentiality = await getQuestionConfidentiality(contentId);
   const resolvedViewer = await resolveViewerForGatedContext(walletAddress);
   if (!resolvedViewer.ok) {
     return { ok: false as const, status: 503, error: resolvedViewer.error };
@@ -640,7 +695,7 @@ export async function authorizeGatedContextRequest(
     return { ok: false as const, status: 403, error: "Confidentiality access revoked" };
   }
 
-  if (isPositiveBondAmount(confidentiality?.bondAmount)) {
+  if (isPositiveBondAmount(serverPayload.record.bondAmount)) {
     const bond = await hasActiveBondForGatedContext({ contentId, identityKey: viewer.identityKey });
     if (!bond.ok) {
       return { ok: false as const, status: 503, error: bond.error };
@@ -883,6 +938,11 @@ export async function publishConfidentialityLogRoot(
         row.contentId,
         row.termsVersion,
         row.termsDocHash,
+        row.payloadHash,
+        row.questionMetadataHash,
+        row.contentHash,
+        row.detailsHash,
+        row.mediaTupleHash,
         row.nonce,
         row.acceptedAt.toISOString(),
       ]),

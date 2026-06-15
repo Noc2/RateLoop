@@ -117,7 +117,7 @@ async function acceptTermsAndBuildCookie(nonce: string, walletAddress: `0x${stri
       contentHash: null,
       contentId: CONTENT_ID,
       detailsHash: null,
-      identityKey: IDENTITY_KEY,
+      identityKey: null,
       mediaTupleHash: null,
       normalizedAddress: walletAddress,
       questionMetadataHash: null,
