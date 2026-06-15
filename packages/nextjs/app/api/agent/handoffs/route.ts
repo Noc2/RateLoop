@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { AgentAskHandoffError, createAgentAskHandoff } from "~~/lib/agent/handoffs";
+import { createAgentAskHandoff } from "~~/lib/agent/handoffs";
 import {
   AGENT_WRITE_RATE_LIMIT,
   handlePublicAgentRoute,
@@ -43,9 +43,6 @@ export async function POST(request: NextRequest) {
         });
       } catch (error) {
         if (error instanceof ImageUploadQuotaError) {
-          return NextResponse.json({ error: error.message }, { status: error.status });
-        }
-        if (error instanceof AgentAskHandoffError) {
           return NextResponse.json({ error: error.message }, { status: error.status });
         }
         throw error;
