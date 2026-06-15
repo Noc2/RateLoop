@@ -700,6 +700,9 @@ function loadConfig() {
   };
 
   if (correlationSnapshotsEnabled) {
+    if (isProduction && !keeperDatabaseUrl) {
+      errors.push("KEEPER_DATABASE_URL is required in production");
+    }
     if (correlationSnapshotMode === "file" && !correlationSnapshotArtifactPath) {
       errors.push(
         "KEEPER_CORRELATION_SNAPSHOT_ARTIFACT_PATH is required when KEEPER_CORRELATION_SNAPSHOTS_ENABLED=true and KEEPER_CORRELATION_SNAPSHOTS_MODE=file",

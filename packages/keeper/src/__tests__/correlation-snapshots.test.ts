@@ -11,6 +11,25 @@ vi.mock("node:fs/promises", () => ({
   readFile: vi.fn(),
 }));
 
+vi.mock("../correlation-artifact-verifier.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../correlation-artifact-verifier.js")>();
+  return {
+    ...actual,
+    verifyCorrelationArtifact: (artifact: unknown) => ({
+      ok: true,
+      artifactHash: `0x${"a".repeat(64)}`,
+      parameterHash: null,
+      roundSnapshotCount: Array.isArray((artifact as { roundPayoutSnapshots?: unknown[] })?.roundPayoutSnapshots)
+        ? (artifact as { roundPayoutSnapshots: unknown[] }).roundPayoutSnapshots.length
+        : 0,
+      epochCount: Array.isArray((artifact as { correlationEpochs?: unknown[] })?.correlationEpochs)
+        ? (artifact as { correlationEpochs: unknown[] }).correlationEpochs.length
+        : 0,
+      errors: [],
+    }),
+  };
+});
+
 function mockConfig(
   frontendRegistry: `0x${string}` | undefined = FRONTEND_REGISTRY,
 ) {
@@ -28,7 +47,7 @@ function mockConfig(
         artifactStorage: {
           mode: "data-uri",
           outputDir: "correlation-artifacts",
-          publicBaseUrl: "",
+          publicBaseUrl: "https://ipfs.io/ipfs/",
         },
       },
     },
@@ -148,7 +167,7 @@ describe("correlation snapshot publisher", () => {
           artifactStorage: {
             mode: "data-uri",
             outputDir: "correlation-artifacts",
-            publicBaseUrl: "",
+            publicBaseUrl: "https://ipfs.io/ipfs/",
           },
         },
       },
@@ -233,7 +252,7 @@ describe("correlation snapshot publisher", () => {
           artifactStorage: {
             mode: "data-uri",
             outputDir: "correlation-artifacts",
-            publicBaseUrl: "",
+            publicBaseUrl: "https://ipfs.io/ipfs/",
           },
         },
       },
@@ -372,7 +391,7 @@ describe("correlation snapshot publisher", () => {
           artifactStorage: {
             mode: "data-uri",
             outputDir: "correlation-artifacts",
-            publicBaseUrl: "",
+            publicBaseUrl: "https://ipfs.io/ipfs/",
           },
         },
       },

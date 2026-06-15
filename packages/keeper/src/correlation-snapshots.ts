@@ -1,5 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { PAYOUT_DOMAIN_PUBLIC_RATING } from "@rateloop/node-utils/correlationScoring";
+import { verifyCorrelationArtifact } from "./correlation-artifact-verifier.js";
+import { resolveAllowedArtifactUri } from "./artifact-uri.js";
 import type { Account, Chain, PublicClient, WalletClient } from "viem";
 import {
   ClusterPayoutOracleAbi,
@@ -290,9 +292,17 @@ async function loadConfiguredCorrelationSnapshotArtifact(
     return null;
   }
 
-  return JSON.parse(
-    await readFile(config.correlationSnapshots.artifactPath, "utf8"),
-  ) as CorrelationSnapshotArtifactFile;
+  const raw = await readFile(config.correlationSnapshots.artifactPath, "utf8");
+  const verification = verifyCorrelationArtifact(JSON.parse(raw));
+  if (!verification.ok) {
+    logger.error("Refusing to publish invalid correlation snapshot artifact file", {
+      artifactPath: config.correlationSnapshots.artifactPath,
+      errors: verification.errors,
+    });
+    return null;
+  }
+
+  return JSON.parse(raw) as CorrelationSnapshotArtifactFile;
 }
 
 async function roundSnapshotSourceReady(
@@ -406,7 +416,18 @@ async function readArtifactCanonicalJson(uri: string): Promise<string | null> {
     return Buffer.byteLength(decoded, "utf8") <= ARTIFACT_MAX_BYTES ? decoded : null;
   }
 
-  const response = await fetch(uri, {
+  const allowlistCsv = [
+    process.env.KEEPER_ARTIFACT_HTTPS_ALLOWLIST?.trim(),
+    config.correlationSnapshots.artifactStorage.publicBaseUrl?.trim(),
+  ]
+    .filter(Boolean)
+    .join(",");
+  const allowedUri = resolveAllowedArtifactUri(uri, allowlistCsv);
+  if (!allowedUri) {
+    return null;
+  }
+
+  const response = await fetch(allowedUri, {
     headers: { accept: "application/json" },
     signal: AbortSignal.timeout(ARTIFACT_FETCH_TIMEOUT_MS),
   });
