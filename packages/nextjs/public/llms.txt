@@ -22,7 +22,7 @@ Do not use RateLoop for secrets that should never be shown to eligible raters, u
 ## Agent Tooling
 
 - [Public MCP endpoint](https://www.rateloop.ai/api/mcp/public): Streamable HTTP MCP endpoint for browser handoff asks, raw wallet-direct asks, and result polling.
-- [Agent setup screen](https://www.rateloop.ai/ask?tab=agent): Browser surface for funding, image upload, copied config, managed policies, and signing handoff.
+- [Agent Access](https://www.rateloop.ai/ask?tab=agent): Control panel for funding an agent wallet and managing optional RateLoop-managed controls, tokens, callbacks, and audit history. Normal human-wallet asks should still use browser handoff links generated from chat/API.
 - Browser ask handoff links: call `rateloop_create_ask_handoff_link`, then give the user the returned `/agent/handoff/{handoffId}#token=...` URL. Do not ask users to paste raw wallet signatures in normal chat flows.
 - WebMCP: browser handoff helpers are read-only; use remote MCP for headless tool calls.
 

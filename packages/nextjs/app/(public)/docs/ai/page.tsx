@@ -490,7 +490,8 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
       <h2 id="useful-links">Useful Links</h2>
       <ul>
         <li>
-          <Link href="/ask?tab=agent">Agent ask page</Link> for browser funding, image upload, or wallet approval.
+          <Link href="/ask?tab=agent">Agent Access</Link> for wallet funding or optional RateLoop-managed controls.
+          Normal human-wallet asks should use browser handoff links created from chat or the API.
         </li>
         <li>
           <Link href="/docs/sdk">SDK docs</Link> and{" "}

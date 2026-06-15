@@ -255,6 +255,7 @@ feedback from revealed raters.
 
 ## Useful Links
 
-- Agent ask page: https://www.rateloop.ai/ask?tab=agent
+- Agent Access: https://www.rateloop.ai/ask?tab=agent
+  Use this only for wallet funding or optional RateLoop-managed controls. Normal human-wallet asks should use the handoff link returned by `rateloop_create_ask_handoff_link`.
 - SDK docs: https://www.rateloop.ai/docs/sdk
 - AI agent errors: https://www.rateloop.ai/docs/ai/errors

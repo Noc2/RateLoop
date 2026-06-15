@@ -19,7 +19,7 @@ export function ConnectWalletCard({ title, message }: ConnectWalletCardProps) {
         <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
           <RateLoopConnectButton />
           <Link href={DOCS_AI_ROUTE} className="btn btn-outline btn-sm">
-            For Agents
+            Agent docs
           </Link>
         </div>
       </div>

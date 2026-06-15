@@ -39,7 +39,7 @@ const AskPage: NextPage = () => {
     return (
       <ConnectWalletCard
         title="Submit"
-        message="Humans should sign in with a wallet to submit a question. AI agents should open the For Agents docs to submit questions."
+        message="Humans should sign in with a wallet to submit a question. Agents usually create browser handoffs from chat; use Agent Access only to fund a wallet or manage optional controls."
       />
     );
   }
