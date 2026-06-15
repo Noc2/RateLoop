@@ -256,6 +256,20 @@ contract RaterRegistryTest is Test {
         return registry.credentialIdentityKey(provider, nullifierHash);
     }
 
+    function _signDelegateAuthorization(
+        RaterRegistry target,
+        uint256 holderKey,
+        address holder,
+        address delegate,
+        uint256 deadline
+    ) internal view returns (bytes memory) {
+        bytes32 digest = target.delegateAuthorizationDigest(
+            holder, delegate, target.delegateAuthorizationNonces(holder), deadline
+        );
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(holderKey, digest);
+        return abi.encodePacked(r, s, v);
+    }
+
     function test_ConstructorGrantsGovernanceAndAdminRoles() public view {
         assertTrue(registry.hasRole(registry.DEFAULT_ADMIN_ROLE(), governance));
         assertTrue(registry.hasRole(registry.ADMIN_ROLE(), governance));
@@ -1765,6 +1779,75 @@ contract RaterRegistryTest is Test {
         assertEq(resolved.holder, rater);
         assertEq(resolved.identityKey, registry.addressIdentityKey(rater));
         assertTrue(resolved.delegated);
+    }
+
+    function test_SignedDelegationResolvesSmartAccountToCredentialedHolderIdentity() public {
+        uint256 holderKey = 0xA11CE1;
+        address holder = vm.addr(holderKey);
+        address smartAccount = address(0x6D12);
+
+        vm.prank(admin);
+        registry.seedHumanCredential(holder, uint64(block.timestamp + 7 days), SEEDED_ANCHOR_ID, EVIDENCE_HASH);
+
+        uint256 deadline = block.timestamp + 1 hours;
+        bytes memory signature = _signDelegateAuthorization(registry, holderKey, holder, smartAccount, deadline);
+
+        vm.prank(smartAccount);
+        registry.acceptDelegateWithSig(holder, deadline, signature);
+
+        assertEq(registry.delegateAuthorizationNonces(holder), 1);
+        assertEq(registry.delegateTo(holder), smartAccount);
+        assertEq(registry.delegateOf(smartAccount), holder);
+
+        IRaterIdentityRegistry.ResolvedRater memory resolved = registry.resolveRater(smartAccount);
+        assertEq(resolved.holder, holder);
+        assertEq(
+            resolved.identityKey, _credentialKey(RaterRegistry.HumanCredentialProvider.SeededHuman, SEEDED_ANCHOR_ID)
+        );
+        assertEq(resolved.humanNullifier, SEEDED_ANCHOR_ID);
+        assertTrue(resolved.hasActiveHumanCredential);
+        assertTrue(resolved.delegated);
+    }
+
+    function test_SignedDelegationRejectsReplayAfterNonceAdvances() public {
+        uint256 holderKey = 0xA11CE2;
+        address holder = vm.addr(holderKey);
+        address smartAccount = address(0x6D12);
+        uint256 deadline = block.timestamp + 1 hours;
+        bytes memory signature = _signDelegateAuthorization(registry, holderKey, holder, smartAccount, deadline);
+
+        vm.prank(smartAccount);
+        registry.acceptDelegateWithSig(holder, deadline, signature);
+
+        vm.prank(smartAccount);
+        vm.expectRevert(RaterRegistry.InvalidSignature.selector);
+        registry.acceptDelegateWithSig(holder, deadline, signature);
+    }
+
+    function test_SignedDelegationRejectsSignatureForDifferentDelegate() public {
+        uint256 holderKey = 0xA11CE3;
+        address holder = vm.addr(holderKey);
+        address intendedDelegate = address(0x6D12);
+        address attackerDelegate = address(0xBAD);
+        uint256 deadline = block.timestamp + 1 hours;
+        bytes memory signature = _signDelegateAuthorization(registry, holderKey, holder, intendedDelegate, deadline);
+
+        vm.prank(attackerDelegate);
+        vm.expectRevert(RaterRegistry.InvalidSignature.selector);
+        registry.acceptDelegateWithSig(holder, deadline, signature);
+    }
+
+    function test_SignedDelegationRejectsExpiredAuthorization() public {
+        uint256 holderKey = 0xA11CE4;
+        address holder = vm.addr(holderKey);
+        address smartAccount = address(0x6D12);
+        uint256 deadline = block.timestamp + 1;
+        bytes memory signature = _signDelegateAuthorization(registry, holderKey, holder, smartAccount, deadline);
+
+        vm.warp(deadline + 1);
+        vm.prank(smartAccount);
+        vm.expectRevert(RaterRegistry.SignatureExpired.selector);
+        registry.acceptDelegateWithSig(holder, deadline, signature);
     }
 
     function test_BannedRawAddressCannotBeRequestedAsDelegate() public {

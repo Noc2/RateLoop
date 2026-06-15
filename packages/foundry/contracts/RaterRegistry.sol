@@ -3,6 +3,8 @@ pragma solidity ^0.8.34;
 
 import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import { ECDSA } from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import { MessageHashUtils } from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 import { IWorldIDVerifier } from "./interfaces/IWorldIDVerifier.sol";
 import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol";
 import { IConfidentialityEscrow } from "./interfaces/IConfidentialityEscrow.sol";
@@ -24,6 +26,12 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
     uint64 private constant WORLD_ISSUER_SCHEMA_PROOF_OF_HUMAN = 1;
     uint64 private constant WORLD_ISSUER_SCHEMA_SELFIE = 11;
     uint64 private constant WORLD_ISSUER_SCHEMA_PASSPORT = 9303;
+    bytes32 public constant DELEGATE_AUTHORIZATION_TYPEHASH =
+        keccak256("DelegateAuthorization(address holder,address delegate,uint256 nonce,uint256 deadline)");
+    bytes32 private constant EIP712_DOMAIN_TYPEHASH =
+        keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
+    bytes32 private constant EIP712_NAME_HASH = keccak256("RateLoop RaterRegistry");
+    bytes32 private constant EIP712_VERSION_HASH = keccak256("1");
 
     enum RaterType {
         Unknown,
@@ -123,6 +131,7 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
     mapping(address => address) public delegateOf;
     mapping(address => address) public pendingDelegateTo;
     mapping(address => address) public pendingDelegateOf;
+    mapping(address => uint256) public delegateAuthorizationNonces;
 
     /// @dev RR-4 (2026-05-20 follow-up audit): governance-tunable upper bound on the TTL
     ///      SEEDER_ROLE can grant via `seedHumanCredential`. WorldID credentials are already
@@ -259,6 +268,8 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
     error NoDelegateSet();
     error NoPendingDelegate();
     error ActiveHumanCredentialRequiresHumanProfile();
+    error SignatureExpired();
+    error InvalidSignature();
     error WorldIdV4VerifierConfigFrozen();
     error WorldIdV4PresenceConfigFrozen();
     error WorldIdV4VerifierNotConfigured();
@@ -847,27 +858,21 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
     function acceptDelegate() external {
         address holder = pendingDelegateOf[msg.sender];
         if (holder == address(0)) revert NoPendingDelegate();
-        if (isIdentityKeyBanned(addressIdentityKey(msg.sender))) revert InvalidBan();
-        if (_hasCredentialIdentity(msg.sender)) revert DelegateIsHolder();
-        if (delegateOf[msg.sender] != address(0)) revert DelegateAlreadyAssigned();
-        if (pendingDelegateTo[msg.sender] != address(0)) revert DelegateAlreadyAssigned();
-        if (delegateTo[msg.sender] != address(0)) revert DelegateAlreadyAssigned();
-        if (delegateOf[holder] != address(0)) revert CallerIsDelegate();
-        if (pendingDelegateOf[holder] != address(0)) revert CallerIsDelegate();
+        _validateDelegateActivation(holder, msg.sender);
+        _activateDelegate(holder, msg.sender);
+    }
 
-        address oldDelegate = delegateTo[holder];
-        if (oldDelegate != address(0)) {
-            delete delegateOf[oldDelegate];
-            emit DelegateRemoved(holder, oldDelegate);
-        }
+    /// @notice Accept a holder-signed delegation authorization for the caller.
+    /// @dev Lets smart-wallet delegates link to an existing human-credential holder in one sponsored call.
+    function acceptDelegateWithSig(address holder, uint256 deadline, bytes calldata signature) external {
+        if (block.timestamp > deadline) revert SignatureExpired();
+        uint256 nonce = delegateAuthorizationNonces[holder];
+        bytes32 digest = delegateAuthorizationDigest(holder, msg.sender, nonce, deadline);
+        if (ECDSA.recover(digest, signature) != holder) revert InvalidSignature();
 
-        delete pendingDelegateTo[holder];
-        delete pendingDelegateOf[msg.sender];
-
-        delegateTo[holder] = msg.sender;
-        delegateOf[msg.sender] = holder;
-
-        emit DelegateSet(holder, msg.sender);
+        delegateAuthorizationNonces[holder] = nonce + 1;
+        _validateDelegateActivation(holder, msg.sender);
+        _activateDelegate(holder, msg.sender);
     }
 
     /// @notice Remove active or pending delegation involving the caller.
@@ -906,6 +911,21 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
             delete delegateTo[activeDelegator];
             emit DelegateRemoved(activeDelegator, msg.sender);
         }
+    }
+
+    function DOMAIN_SEPARATOR() public view returns (bytes32) {
+        return _domainSeparatorV4();
+    }
+
+    function delegateAuthorizationDigest(address holder, address delegate, uint256 nonce, uint256 deadline)
+        public
+        view
+        returns (bytes32)
+    {
+        return MessageHashUtils.toTypedDataHash(
+            _domainSeparatorV4(),
+            keccak256(abi.encode(DELEGATE_AUTHORIZATION_TYPEHASH, holder, delegate, nonce, deadline))
+        );
     }
 
     /// @notice World ID 4.0 Proof-of-Human uniqueness attestation path.
@@ -1684,6 +1704,42 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
     function _hasCredentialIdentity(address holder) internal view returns (bool) {
         HumanCredential storage credential = _humanCredentials[holder];
         return credential.verified && !_isCredentialRevoked(credential) && credential.nullifierHash != bytes32(0);
+    }
+
+    function _domainSeparatorV4() private view returns (bytes32) {
+        return keccak256(
+            abi.encode(EIP712_DOMAIN_TYPEHASH, EIP712_NAME_HASH, EIP712_VERSION_HASH, block.chainid, address(this))
+        );
+    }
+
+    function _validateDelegateActivation(address holder, address delegate) private view {
+        if (holder == address(0) || delegate == address(0)) revert InvalidAddress();
+        if (holder == delegate) revert CannotDelegateSelf();
+        if (isIdentityKeyBanned(addressIdentityKey(delegate))) revert InvalidBan();
+        if (_hasCredentialIdentity(delegate)) revert DelegateIsHolder();
+        if (delegateOf[delegate] != address(0)) revert DelegateAlreadyAssigned();
+        if (pendingDelegateTo[delegate] != address(0)) revert DelegateAlreadyAssigned();
+        if (delegateTo[delegate] != address(0)) revert DelegateAlreadyAssigned();
+        if (delegateOf[holder] != address(0)) revert CallerIsDelegate();
+        if (pendingDelegateOf[holder] != address(0)) revert CallerIsDelegate();
+
+        address pendingHolder = pendingDelegateOf[delegate];
+        if (pendingHolder != address(0) && pendingHolder != holder) revert DelegateAlreadyAssigned();
+    }
+
+    function _activateDelegate(address holder, address delegate) private {
+        address oldDelegate = delegateTo[holder];
+        if (oldDelegate != address(0)) {
+            delete delegateOf[oldDelegate];
+            emit DelegateRemoved(holder, oldDelegate);
+        }
+
+        _clearPendingDelegateRequest(holder);
+
+        delegateTo[holder] = delegate;
+        delegateOf[delegate] = holder;
+
+        emit DelegateSet(holder, delegate);
     }
 
     function _clearPendingDelegateRequest(address holder) internal {
