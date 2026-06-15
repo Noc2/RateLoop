@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { defineChain } from "thirdweb";
-import { useActiveWallet, useSetActiveWallet } from "thirdweb/react";
+import { defineChain, getContract, prepareContractCall, sendAndConfirmTransaction } from "thirdweb";
+import { useActiveWallet } from "thirdweb/react";
 import { type Abi } from "viem";
 import { useAccount, usePublicClient } from "wagmi";
 import {
@@ -14,16 +14,13 @@ import {
 } from "~~/hooks/scaffold-eth";
 import { useGasBalanceStatus } from "~~/hooks/useGasBalanceStatus";
 import { useRefreshWalletBalances } from "~~/hooks/useRefreshWalletBalances";
-import { useThirdwebSponsoredSubmitCalls } from "~~/hooks/useThirdwebSponsoredSubmitCalls";
-import { useThirdwebWagmiSync } from "~~/hooks/useThirdwebWagmiSync";
+import {
+  isThirdwebSponsorshipDeniedError,
+  useThirdwebSponsoredSubmitCalls,
+} from "~~/hooks/useThirdwebSponsoredSubmitCalls";
 import { getClaimPreflightErrorMessage } from "~~/lib/claimTransactionFeedback";
 import type { LegacyClaimLookupResult } from "~~/lib/legacy-claim/lookup";
-import {
-  createThirdwebInAppWallet,
-  isThirdwebInAppWalletId,
-  setStoredThirdwebSponsorshipMode,
-  thirdwebClient,
-} from "~~/services/thirdweb/client";
+import { createThirdwebInAppWallet, isThirdwebInAppWalletId, thirdwebClient } from "~~/services/thirdweb/client";
 import { notification } from "~~/utils/scaffold-eth";
 
 async function fetchLegacyClaim(address: `0x${string}`): Promise<LegacyClaimLookupResult> {
@@ -36,6 +33,12 @@ async function fetchLegacyClaim(address: `0x${string}`): Promise<LegacyClaimLook
 
 function normalizeComparableAddress(address: string | null | undefined) {
   return address?.toLowerCase() ?? null;
+}
+
+function addressesMatch(left: string | null | undefined, right: string | null | undefined) {
+  const normalizedLeft = normalizeComparableAddress(left);
+  const normalizedRight = normalizeComparableAddress(right);
+  return Boolean(normalizedLeft && normalizedRight && normalizedLeft === normalizedRight);
 }
 
 export function shouldUseSponsoredLegacyClaim(params: {
@@ -77,7 +80,7 @@ export function getLegacyClaimTransactionErrorMessage(error: unknown, fallbackMe
   const message = getErrorText(error);
 
   if (/0x09bde339|InvalidProof/i.test(message)) {
-    return "Legacy claim proof does not match the wallet sending this transaction or the active claim root. Reconnect the eligible legacy wallet and try again.";
+    return "Legacy claim proof does not match the eligible legacy wallet or the active claim root.";
   }
 
   if (/LegacyClaimWindowClosed/i.test(message)) {
@@ -117,19 +120,17 @@ export function shouldInspectLegacyAdminClaim(params: {
   );
 }
 
-export function shouldSwitchToLegacyAdminWallet(params: {
+export function shouldUseLegacyAdminClaim(params: {
   activeWalletId?: string | null;
   adminAddress?: string | null;
   adminClaimStatus?: LegacyClaimLookupResult["status"] | null;
   connectedAddress?: string | null;
-  isRestoring: boolean;
 }) {
   const connectedAddress = normalizeComparableAddress(params.connectedAddress);
   const adminAddress = normalizeComparableAddress(params.adminAddress);
 
   return Boolean(
-    !params.isRestoring &&
-      isThirdwebInAppWalletId(params.activeWalletId) &&
+    isThirdwebInAppWalletId(params.activeWalletId) &&
       connectedAddress &&
       adminAddress &&
       connectedAddress !== adminAddress &&
@@ -137,15 +138,68 @@ export function shouldSwitchToLegacyAdminWallet(params: {
   );
 }
 
+type TemporaryLegacyClaimWalletMode = "sponsored" | "eoa";
+
+async function connectTemporaryLegacyClaimAccount(params: {
+  chainId: number;
+  claimAddress: `0x${string}`;
+  mode: TemporaryLegacyClaimWalletMode;
+}) {
+  if (!thirdwebClient) {
+    throw new Error("Legacy claim wallet is unavailable right now.");
+  }
+
+  const wallet = createThirdwebInAppWallet(
+    params.chainId,
+    params.mode === "eoa"
+      ? {
+          forceEoa: true,
+        }
+      : {
+          sponsorshipMode: "sponsored",
+        },
+  );
+  const chain = defineChain(params.chainId);
+
+  await wallet.autoConnect({
+    chain,
+    client: thirdwebClient,
+  });
+
+  const account = wallet.getAccount();
+  if (!account) {
+    throw new Error("Temporary legacy claim wallet is unavailable.");
+  }
+
+  if (!addressesMatch(account?.address, params.claimAddress)) {
+    throw new Error(
+      params.mode === "sponsored"
+        ? "Temporary sponsored legacy claim wallet does not match the eligible legacy account."
+        : "Temporary legacy claim wallet does not match the eligible legacy account.",
+    );
+  }
+
+  return account;
+}
+
+function shouldRetryTemporaryLegacyClaimAsEoa(error: unknown) {
+  const text = getErrorText(error).toLowerCase();
+  return (
+    isThirdwebSponsorshipDeniedError(error) ||
+    text.includes("temporary sponsored legacy claim wallet does not match") ||
+    text.includes("bundler") ||
+    text.includes("paymaster") ||
+    text.includes("useroperation") ||
+    text.includes("userop")
+  );
+}
+
 export function useLegacyClaim() {
   const { address, chain, isConnected } = useAccount();
   const activeWallet = useActiveWallet();
-  const setActiveWallet = useSetActiveWallet();
-  const { syncWalletToWagmi } = useThirdwebWagmiSync();
   const refreshWalletBalances = useRefreshWalletBalances();
   const [isSponsoredClaiming, setIsSponsoredClaiming] = useState(false);
-  const [isRestoringLegacyWallet, setIsRestoringLegacyWallet] = useState(false);
-  const legacyWalletRestoreAttemptRef = useRef<string | null>(null);
+  const [isTemporaryLegacyClaiming, setIsTemporaryLegacyClaiming] = useState(false);
   const connectedAddress = address as `0x${string}` | undefined;
   const legacyAdminAddress = activeWallet?.getAdminAccount?.()?.address as `0x${string}` | undefined;
   // CLAIM-3 (2026-05-21 testnet-readiness audit): if the wallet is on the wrong chain, the
@@ -180,84 +234,25 @@ export function useLegacyClaim() {
     enabled: shouldInspectAdminClaim,
     staleTime: 30_000,
   });
-  const shouldRestoreLegacyAdminWallet = shouldSwitchToLegacyAdminWallet({
+  const useLegacyAdminClaim = shouldUseLegacyAdminClaim({
     activeWalletId: activeWallet?.id,
     adminAddress: legacyAdminAddress,
     adminClaimStatus: adminClaimQuery.data?.status,
     connectedAddress,
-    isRestoring: isRestoringLegacyWallet,
   });
+  const effectiveClaimData = useLegacyAdminClaim ? adminClaimQuery.data : claimQuery.data;
+  const claimOwnerAddress = (useLegacyAdminClaim ? legacyAdminAddress : connectedAddress) as `0x${string}` | undefined;
+  const claimRecipientAddress = connectedAddress;
+  const canClaimWithConnectedWallet = addressesMatch(claimOwnerAddress, claimRecipientAddress);
 
-  useEffect(() => {
-    if (
-      !shouldRestoreLegacyAdminWallet ||
-      !thirdwebClient ||
-      !legacyAdminAddress ||
-      !activeWallet ||
-      !isThirdwebInAppWalletId(activeWallet.id)
-    ) {
-      if (!shouldRestoreLegacyAdminWallet) {
-        legacyWalletRestoreAttemptRef.current = null;
-      }
-      return;
-    }
-
-    const attemptKey = `${legacyAdminAddress.toLowerCase()}:${targetNetwork.id}`;
-    if (legacyWalletRestoreAttemptRef.current === attemptKey) {
-      return;
-    }
-
-    legacyWalletRestoreAttemptRef.current = attemptKey;
-    setIsRestoringLegacyWallet(true);
-
-    void (async () => {
-      try {
-        setStoredThirdwebSponsorshipMode(null);
-        const replacementWallet = createThirdwebInAppWallet(targetNetwork.id, {
-          forceEoa: true,
-        });
-
-        await replacementWallet.autoConnect({
-          chain: defineChain(targetNetwork.id),
-          client: thirdwebClient,
-        });
-
-        const replacementAddress = replacementWallet.getAccount()?.address;
-        if (replacementAddress?.toLowerCase() !== legacyAdminAddress.toLowerCase()) {
-          throw new Error("Restored legacy wallet does not match the eligible admin account.");
-        }
-
-        await syncWalletToWagmi(replacementWallet, targetNetwork.id, {
-          reconnect: true,
-          replaceActiveConnection: true,
-        });
-        await setActiveWallet(replacementWallet);
-      } catch (error) {
-        legacyWalletRestoreAttemptRef.current = null;
-        console.error("Failed to restore thirdweb legacy claim wallet:", error);
-      } finally {
-        setIsRestoringLegacyWallet(false);
-      }
-    })();
-  }, [
-    activeWallet,
-    legacyAdminAddress,
-    setActiveWallet,
-    shouldRestoreLegacyAdminWallet,
-    syncWalletToWagmi,
-    targetNetwork.id,
-  ]);
-
-  const claimEntry = claimQuery.data?.status === "eligible" ? claimQuery.data : undefined;
+  const claimEntry = effectiveClaimData?.status === "eligible" ? effectiveClaimData : undefined;
   const allocation = useMemo(() => {
     return claimEntry ? BigInt(claimEntry.allocation) : undefined;
   }, [claimEntry]);
   const proof = claimEntry?.proof;
-  const hasClaimEntry = !!connectedAddress && allocation !== undefined && !!proof;
+  const hasClaimEntry = !!claimOwnerAddress && allocation !== undefined && !!proof;
 
-  const claimArgs = hasClaimEntry ? ([connectedAddress, allocation, proof] as const) : undefined;
-  const writeArgs = hasClaimEntry ? ([allocation, proof] as const) : undefined;
-
+  const claimArgs = hasClaimEntry ? ([claimOwnerAddress, allocation, proof] as const) : undefined;
   const { data: vestedRaw, refetch: refetchVested } = useScaffoldReadContract({
     contractName: "LaunchDistributionPool",
     functionName: "vestedLegacyContributorAllocation",
@@ -275,26 +270,26 @@ export function useLegacyClaim() {
   const { data: claimedRaw, refetch: refetchClaimed } = useScaffoldReadContract({
     contractName: "LaunchDistributionPool",
     functionName: "legacyContributorClaimed",
-    args: connectedAddress ? ([connectedAddress] as const) : undefined,
-    query: { enabled: !!connectedAddress && claimQuery.data?.status === "eligible" },
+    args: claimOwnerAddress ? ([claimOwnerAddress] as const) : undefined,
+    query: { enabled: !!claimOwnerAddress && effectiveClaimData?.status === "eligible" },
   } as any);
 
   const { data: vestingStartRaw } = useScaffoldReadContract({
     contractName: "LaunchDistributionPool",
     functionName: "legacyContributorVestingStart",
-    query: { enabled: claimQuery.data?.status === "eligible" },
+    query: { enabled: effectiveClaimData?.status === "eligible" },
   } as any);
 
   const { data: vestingDurationRaw } = useScaffoldReadContract({
     contractName: "LaunchDistributionPool",
     functionName: "LEGACY_VESTING_DURATION",
-    query: { enabled: claimQuery.data?.status === "eligible" },
+    query: { enabled: effectiveClaimData?.status === "eligible" },
   } as any);
 
   const { data: claimDurationRaw } = useScaffoldReadContract({
     contractName: "LaunchDistributionPool",
     functionName: "LEGACY_CLAIM_DURATION",
-    query: { enabled: claimQuery.data?.status === "eligible" },
+    query: { enabled: effectiveClaimData?.status === "eligible" },
   } as any);
 
   const { writeContractAsync, isMining } = useScaffoldWriteContract({
@@ -307,8 +302,8 @@ export function useLegacyClaim() {
     allowInAppSponsorshipSync: false,
   });
   const canUseSponsoredLegacyClaim = shouldUseSponsoredLegacyClaim({
-    canUseSponsoredSubmitCalls,
-    claimAddress: connectedAddress,
+    canUseSponsoredSubmitCalls: canUseSponsoredSubmitCalls && canClaimWithConnectedWallet,
+    claimAddress: claimOwnerAddress,
     executionAddress: activeExecutionAddress,
   });
   const {
@@ -329,19 +324,88 @@ export function useLegacyClaim() {
 
   const refetchOnChainState = async () => {
     await Promise.all([refetchVested(), refetchClaimable(), refetchClaimed()]);
-    await refreshWalletBalances(connectedAddress);
+    await refreshWalletBalances(claimRecipientAddress);
+    if (claimOwnerAddress && !addressesMatch(claimOwnerAddress, claimRecipientAddress)) {
+      await refreshWalletBalances(claimOwnerAddress);
+    }
   };
 
   const claim = async () => {
     // Guard against firing the claim before the on-chain claimable read resolves.
-    // `claimableRaw` and `writeArgs` are gated by the same eligibility condition but
+    // `claimableRaw` and the claim proof are gated by the same eligibility condition but
     // resolve through independent React Query reads, so there is a window where
-    // `writeArgs` is defined while `claimableRaw` is still `undefined`. The previous
+    // the proof is defined while `claimableRaw` is still `undefined`. The previous
     // guard only checked `=== 0n` (and `undefined === 0n` is false), so a programmatic
     // call could submit a transaction mid-load. Treat undefined (loading) and any
     // non-positive amount as "nothing to claim".
     const claimableAmount = claimableRaw as bigint | undefined;
-    if (!writeArgs || claimableAmount === undefined || claimableAmount <= 0n) return;
+    if (allocation === undefined || !proof || claimableAmount === undefined || claimableAmount <= 0n) return;
+    if (!claimOwnerAddress || !claimRecipientAddress) return;
+    const writeArgs = [allocation, proof] as const;
+
+    if (!canClaimWithConnectedWallet) {
+      const client = thirdwebClient;
+      if (!launchDistributionPoolInfo || !publicClient || !client) {
+        notification.error("Legacy claim contract is unavailable right now.");
+        return;
+      }
+
+      const recipientClaimArgs = [claimRecipientAddress, allocation, proof] as const;
+      const submitTemporaryLegacyClaim = async (mode: TemporaryLegacyClaimWalletMode) => {
+        const account = await connectTemporaryLegacyClaimAccount({
+          chainId: targetNetwork.id,
+          claimAddress: claimOwnerAddress,
+          mode,
+        });
+        const contract = getContract({
+          abi: launchDistributionPoolInfo.abi as Abi,
+          address: launchDistributionPoolInfo.address as `0x${string}`,
+          chain: defineChain(targetNetwork.id),
+          client,
+        });
+        const transaction = prepareContractCall({
+          contract,
+          method:
+            "function claimLegacyContributorAllocationTo(address recipient, uint256 allocation, bytes32[] proof) returns (uint256)",
+          params: recipientClaimArgs,
+        });
+
+        return sendAndConfirmTransaction({
+          account,
+          transaction,
+        });
+      };
+
+      setIsTemporaryLegacyClaiming(true);
+      const toastId = notification.loading("Claiming legacy LREP to your RateLoop wallet...");
+      try {
+        await publicClient.simulateContract({
+          abi: launchDistributionPoolInfo.abi as Abi,
+          account: claimOwnerAddress,
+          address: launchDistributionPoolInfo.address as `0x${string}`,
+          args: recipientClaimArgs as any,
+          functionName: "claimLegacyContributorAllocationTo",
+        });
+
+        try {
+          await submitTemporaryLegacyClaim("sponsored");
+        } catch (error) {
+          if (!shouldRetryTemporaryLegacyClaimAsEoa(error)) {
+            throw error;
+          }
+          await submitTemporaryLegacyClaim("eoa");
+        }
+
+        notification.success("Legacy LREP claimed to your RateLoop wallet.");
+        await refetchOnChainState();
+      } catch (error) {
+        notification.error(getLegacyClaimTransactionErrorMessage(error));
+      } finally {
+        notification.remove(toastId);
+        setIsTemporaryLegacyClaiming(false);
+      }
+      return;
+    }
 
     const preflightError = getClaimPreflightErrorMessage({
       canShowFreeTransactionAllowance,
@@ -365,11 +429,6 @@ export function useLegacyClaim() {
       } else {
         notification.error(preflightError);
       }
-      return;
-    }
-
-    if (shouldRestoreLegacyAdminWallet) {
-      notification.warning("Reconnecting the eligible legacy wallet before claiming. Try again once it finishes.");
       return;
     }
 
@@ -431,12 +490,14 @@ export function useLegacyClaim() {
     claimDuration: (claimDurationRaw as bigint | undefined) ?? 0n,
     claimed: (claimedRaw as bigint | undefined) ?? 0n,
     claimable: (claimableRaw as bigint | undefined) ?? 0n,
-    claimData: claimQuery.data,
-    error: claimQuery.error,
-    isClaiming: isMining || isSponsoredClaiming,
+    claimData: effectiveClaimData,
+    claimOwnerAddress,
+    claimRecipientAddress,
+    error: claimQuery.error ?? adminClaimQuery.error,
+    isClaiming: isMining || isSponsoredClaiming || isTemporaryLegacyClaiming,
     isConnected,
     isLoading: claimQuery.isLoading || (shouldInspectAdminClaim && adminClaimQuery.isLoading),
-    isRestoringLegacyWallet,
+    isRecipientClaim: Boolean(claimOwnerAddress && claimRecipientAddress && !canClaimWithConnectedWallet),
     // CLAIM-3: callers can render a "switch network" prompt when this is true.
     isWrongChain,
     expectedChainId: targetNetwork.id,

@@ -28,6 +28,11 @@ function formatScheduleDate(vestingStart: bigint | undefined, offset: bigint, pe
   });
 }
 
+function formatShortAddress(address: string | undefined) {
+  if (!address) return "Unknown";
+  return `${address.slice(0, 6)}...${address.slice(-4)}`;
+}
+
 function StatTile({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg border border-base-content/10 bg-base-100 p-4">
@@ -46,12 +51,14 @@ export function LegacyClaimPage() {
     claimed,
     claimable,
     claimData,
+    claimOwnerAddress,
+    claimRecipientAddress,
     error,
     expectedChainName,
     isClaiming,
     isConnected,
     isLoading,
-    isRestoringLegacyWallet,
+    isRecipientClaim,
     isWrongChain,
     vested,
     vestingDuration,
@@ -108,22 +115,13 @@ export function LegacyClaimPage() {
         </section>
       )}
 
-      {isConnected && !isWrongChain && isLoading && !isRestoringLegacyWallet && (
+      {isConnected && !isWrongChain && isLoading && (
         <section className="rounded-lg border border-base-content/10 bg-base-200 p-6">
           <span className="loading loading-spinner loading-md" />
         </section>
       )}
 
-      {isConnected && !isWrongChain && isRestoringLegacyWallet && (
-        <section className="rounded-lg border border-base-content/10 bg-base-200 p-6">
-          <h2 className="text-xl font-semibold text-base-content">Restoring Legacy Wallet</h2>
-          <p className="mt-2 text-base leading-7 text-base-content/65">
-            This thirdweb smart account is backed by an eligible legacy wallet. Reconnecting that wallet now.
-          </p>
-        </section>
-      )}
-
-      {isConnected && error && (
+      {isConnected && !isWrongChain && !isLoading && error && (
         <section className="rounded-lg border border-error/20 bg-error/10 p-6">
           <h2 className="text-xl font-semibold text-error">Claim Lookup Unavailable</h2>
           <p className="mt-2 text-base leading-7 text-base-content/65">
@@ -132,7 +130,7 @@ export function LegacyClaimPage() {
         </section>
       )}
 
-      {isConnected && claimData?.status === "not_published" && (
+      {isConnected && !isWrongChain && !isLoading && claimData?.status === "not_published" && (
         <section className="rounded-lg border border-base-content/10 bg-base-200 p-6">
           <h2 className="text-xl font-semibold text-base-content">Legacy Claim Root Pending</h2>
           <p className="mt-2 text-base leading-7 text-base-content/65">
@@ -142,7 +140,7 @@ export function LegacyClaimPage() {
         </section>
       )}
 
-      {isConnected && !isRestoringLegacyWallet && claimData?.status === "not_eligible" && (
+      {isConnected && !isWrongChain && !isLoading && claimData?.status === "not_eligible" && (
         <section className="rounded-lg border border-base-content/10 bg-base-200 p-6">
           <h2 className="text-xl font-semibold text-base-content">No Legacy Allocation Found</h2>
           <p className="mt-2 text-base leading-7 text-base-content/65">
@@ -151,7 +149,7 @@ export function LegacyClaimPage() {
         </section>
       )}
 
-      {isConnected && claimData?.status === "eligible" && (
+      {isConnected && !isWrongChain && !isLoading && claimData?.status === "eligible" && (
         <>
           <section className="rounded-lg border border-base-content/10 bg-base-200 p-4 sm:p-6">
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -175,21 +173,43 @@ export function LegacyClaimPage() {
               </p>
             </div>
 
+            {isRecipientClaim && (
+              <div className="mt-6 border-t border-base-content/10 pt-5">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-base-content/50">
+                      Legacy wallet
+                    </p>
+                    <p className="mt-1 font-mono text-sm text-base-content">{formatShortAddress(claimOwnerAddress)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-base-content/50">
+                      Recipient wallet
+                    </p>
+                    <p className="mt-1 font-mono text-sm text-base-content">
+                      {formatShortAddress(claimRecipientAddress)}
+                    </p>
+                  </div>
+                </div>
+                <p className="mt-3 text-sm leading-6 text-base-content/65">
+                  Claimed LREP will be sent to the connected RateLoop wallet so voting keeps using this account.
+                </p>
+              </div>
+            )}
+
             <button
               type="button"
               className="btn btn-primary mt-6 w-full sm:w-auto"
-              disabled={isClaiming || isRestoringLegacyWallet || claimable <= 0n}
+              disabled={isClaiming || claimable <= 0n}
               onClick={() => {
                 void claim();
               }}
             >
-              {isRestoringLegacyWallet
-                ? "Reconnecting legacy wallet..."
-                : isClaiming
-                  ? "Claiming..."
-                  : claimable > 0n
-                    ? `Claim ${formatLrepAmount(claimable)}`
-                    : "Nothing claimable yet"}
+              {isClaiming
+                ? "Claiming..."
+                : claimable > 0n
+                  ? `Claim ${formatLrepAmount(claimable)}${isRecipientClaim ? " to wallet" : ""}`
+                  : "Nothing claimable yet"}
             </button>
           </section>
 
