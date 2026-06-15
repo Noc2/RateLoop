@@ -9,7 +9,6 @@ import { useAccount, useConfig, useReadContract, useWriteContract } from "wagmi"
 import { waitForTransactionReceipt } from "wagmi/actions";
 import {
   ArrowTopRightOnSquareIcon,
-  CheckCircleIcon,
   ClipboardDocumentIcon,
   CpuChipIcon,
   KeyIcon,
@@ -33,7 +32,6 @@ import {
 import { useCategoryRegistry } from "~~/hooks/useCategoryRegistry";
 import {
   formatSubmissionRewardAmount,
-  getConfiguredQuestionRewardPoolEscrowAddress,
   getDefaultUsdcAddress,
   getDefaultUsdcDisplayName,
   parseSubmissionRewardAmount,
@@ -172,7 +170,6 @@ export function AgentSubmissionPanel() {
   const [generatedToken, setGeneratedToken] = useState<string | null>(null);
   const [generatedMcpConfig, setGeneratedMcpConfig] = useState<string | null>(null);
   const [publicAgentApiBaseUrl, setPublicAgentApiBaseUrl] = useState("");
-  const escrowAddress = getConfiguredQuestionRewardPoolEscrowAddress(targetNetwork.id);
   const usdcAddress = getDefaultUsdcAddress(targetNetwork.id);
   const usdcDisplayName = getDefaultUsdcDisplayName(targetNetwork.id);
   const thirdwebTargetChain = useMemo(() => defineChain(targetNetwork), [targetNetwork]);
@@ -213,12 +210,6 @@ export function AgentSubmissionPanel() {
   const requiredPerAskFunding = selectedPolicy
     ? parsePositiveAtomicAmount(selectedPolicy.perAskLimitAtomic, DEFAULT_PER_ASK_CAP_ATOMIC)
     : (policyFormPerAskCapAtomic ?? DEFAULT_PER_ASK_CAP_ATOMIC);
-  const fundingReady = Boolean(agentWalletAddress && balance >= requiredPerAskFunding);
-  const managedReady = Boolean(
-    address && agentWalletAddress && escrowAddress && usdcAddress && fundingReady && selectedPolicy,
-  );
-  const walletDirectReady = Boolean(agentWalletAddress && escrowAddress && usdcAddress && fundingReady);
-  const ready = policyControlsEnabled ? managedReady : walletDirectReady;
   const canUseThirdwebFunding = Boolean(
     thirdwebClient && agentWalletAddress && usdcAddress && targetNetwork.id === WORLD_CHAIN_MAINNET_CHAIN_ID,
   );
@@ -774,15 +765,6 @@ export function AgentSubmissionPanel() {
               Agent docs
               <ArrowTopRightOnSquareIcon className="h-4 w-4" />
             </Link>
-            <span
-              className={
-                "reward-chip reward-chip-muted inline-flex w-fit items-center gap-2 px-3 py-1 text-sm font-medium " +
-                (ready ? "text-success" : "text-warning")
-              }
-            >
-              <CheckCircleIcon className="h-4 w-4" />
-              {ready ? "Ready" : "Needs attention"}
-            </span>
           </div>
         </div>
 
