@@ -26,6 +26,10 @@ import {
   validateLocalSignerTransactionPlan,
   withLocalSignerWallet,
 } from "../localSigner.js";
+import {
+  parseX402QuestionRequest,
+  toCanonicalQuestionPayload,
+} from "../x402QuestionPayload.js";
 import type {
   AskHumansRequest,
   AskHumansResponse,
@@ -1672,6 +1676,30 @@ describe("local signer round config alignment", () => {
 });
 
 describe("local signer media canonicalization", () => {
+  it("matches the shared x402 parser canonical payload byte-for-byte", () => {
+    const base = askPayload();
+    const payload = {
+      ...base,
+      question: {
+        ...base.question,
+        contextUrl: undefined,
+        imageUrls: [
+          UPLOADED_IMAGE_URL_B,
+          UPLOADED_IMAGE_URL_A,
+          UPLOADED_IMAGE_URL_A,
+        ],
+      },
+    };
+    const options = { questionMetadataBaseUrl: QUESTION_METADATA_BASE_URL };
+
+    expect(buildLocalQuestionCanonicalPayload(payload, 480, options)).toEqual(
+      toCanonicalQuestionPayload(
+        parseX402QuestionRequest(payload, 480, options),
+        options,
+      ),
+    );
+  });
+
   it("sorts and deduplicates image URLs before hashing local asks", () => {
     const canonical = buildLocalQuestionCanonicalPayload(
       {

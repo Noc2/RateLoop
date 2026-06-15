@@ -36,20 +36,9 @@ import {
 } from "@rateloop/contracts/abis";
 import { getSharedDeploymentAddress } from "@rateloop/contracts/deployments";
 import {
-  BOUNTY_ELIGIBILITY_CREDENTIAL_MASK,
-  BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG,
   CONFIDENTIALITY_FLAG_PRIVATE_FOREVER,
-  DEFAULT_ROUND_CONFIG,
-  MIN_NONZERO_CONFIDENTIALITY_BOND,
-  requiredQuestionRewardParticipants,
   WORLD_CHAIN_USDC_BY_CHAIN_ID,
 } from "@rateloop/contracts/protocol";
-import { X402_QUESTION_TOP_LEVEL_FIELDS } from "@rateloop/node-utils/x402QuestionFields";
-import {
-  findBlockedContentTags,
-  getContentTitleValidationError,
-} from "@rateloop/node-utils/submissionValidation";
-import { normalizeTargetAudience } from "@rateloop/node-utils/profileSelfReport";
 import type {
   AskHumansRequest,
   AskHumansResponse,
@@ -59,13 +48,17 @@ import type {
   QuestionStatusResponse,
 } from "@rateloop/sdk/agent";
 import {
-  DEFAULT_AGENT_TEMPLATE_ID,
-  DEFAULT_AGENT_TEMPLATE_VERSION,
-  buildQuestionSpecHashes,
   normalizeQuestionMetadataBaseUrl,
-  type AgentQuestionSpecInput,
 } from "./questionSpecs.js";
-import { findAgentResultTemplate } from "./templates.js";
+import {
+  buildX402QuestionOperation as buildSharedX402QuestionOperation,
+  parseX402QuestionRequest as parseSharedX402QuestionRequest,
+  toCanonicalQuestionPayload as toSharedCanonicalQuestionPayload,
+  type X402QuestionItemPayload,
+  type X402QuestionPayload,
+  type X402QuestionParserOptions,
+  type X402QuestionRoundConfig,
+} from "./x402QuestionPayload.js";
 
 type CliOptions = Record<string, string | boolean | undefined>;
 type JsonRecord = Record<string, unknown>;
@@ -96,13 +89,6 @@ const X402_AUTHORIZATION_FIELDS = [
  */
 const MAX_X402_AUTHORIZATION_VALIDITY_SECONDS = 24n * 60n * 60n;
 const X402_SUBMISSION_REWARD_ASSET_USDC = 1;
-const X402_DEFAULT_SUBMISSION_BOUNTY_USDC = 1_000_000n;
-const X402_MIN_REWARD_POOL_REQUIRED_VOTERS = 3n;
-const X402_MIN_REWARD_POOL_SETTLED_ROUNDS = 1n;
-const X402_MAX_QUESTION_BUNDLE_COUNT = 10;
-const EMPTY_DETAILS_HASH = `0x${"0".repeat(64)}` as Hex;
-const AFTER_SETTLEMENT_DISCLOSURE_POLICY = "after_settlement";
-const DEFAULT_CONFIDENTIALITY_DISCLOSURE_POLICY = "private_forever";
 const QUESTION_CONTEXT_DOMAIN = keccak256(
   stringToHex("rateloop-question-context-v5"),
 );
@@ -121,17 +107,6 @@ const QUESTION_BUNDLE_REVEAL_DOMAIN = keccak256(
 const X402_QUESTION_PAYMENT_DOMAIN = keccak256(
   stringToHex("rateloop-x402-question-payment-v3"),
 );
-const CLIENT_REQUEST_ID_PATTERN = /^[A-Za-z0-9._:-]{4,160}$/;
-const DIRECT_IMAGE_URL_PATH_PATTERN = /\.(?:avif|bmp|gif|jpe?g|png|svg|webp)$/i;
-const IMAGE_ATTACHMENT_PATH_PATTERN =
-  /^\/api\/attachments\/images\/(att_[A-Za-z0-9_-]{16,80})\.webp$/;
-const IMAGE_ATTACHMENT_HASH_PATTERN = /^#sha256=0x[a-fA-F0-9]{64}$/;
-const QUESTION_DETAILS_ATTACHMENT_PATH_PATTERN =
-  /^\/api\/attachments\/details\/det_[A-Za-z0-9_-]{16,80}$/;
-const DEFAULT_IMAGE_ATTACHMENT_ORIGINS = new Set([
-  "https://www.rateloop.ai",
-  "https://rateloop.ai",
-]);
 type LocalSignerConfig = {
   chainId?: number;
   chainName: string;
@@ -262,52 +237,19 @@ type TransactionPlanValidationConfig = Pick<
   | "x402QuestionSubmitterAddress"
 >;
 
-type LocalQuestionRoundConfig = {
-  epochDuration: bigint;
-  maxDuration: bigint;
-  minVoters: bigint;
-  maxVoters: bigint;
-};
-
-type LocalQuestionPayload = {
-  bounty: {
-    amount: bigint;
-    asset: "USDC";
-    bountyEligibility: number;
-    bountyStartBy: bigint;
-    bountyWindowSeconds: bigint;
-    feedbackWindowSeconds: bigint;
-    requiredSettledRounds: bigint;
-    requiredVoters: bigint;
-  };
-  chainId: number;
-  clientRequestId: string;
-  questions: LocalQuestionItemPayload[];
-  roundConfig: LocalQuestionRoundConfig;
-};
-
-type LocalQuestionConfidentiality = NonNullable<
-  AgentQuestionSpecInput["confidentiality"]
->;
-
-type LocalQuestionItemPayload = {
-  categoryId: bigint;
-  confidentiality: LocalQuestionConfidentiality;
-  contextUrl: string;
+type LocalQuestionRoundConfig = X402QuestionRoundConfig;
+type LocalQuestionConfidentiality = X402QuestionItemPayload["confidentiality"];
+type LocalQuestionItemPayload = Omit<
+  X402QuestionItemPayload,
+  "detailsHash" | "questionMetadataHash" | "questionMetadataUri" | "resultSpecHash"
+> & {
   detailsHash: Hex;
-  detailsUrl: string;
-  imageUrls: string[];
   questionMetadataHash: Hex;
   questionMetadataUri: string;
   resultSpecHash: Hex;
-  tags: string;
-  tagList: string[];
-  targetAudience: AgentQuestionSpecInput["targetAudience"];
-  templateId: string;
-  templateInputs: AgentQuestionSpecInput["templateInputs"];
-  templateVersion: number;
-  title: string;
-  videoUrl: string;
+};
+type LocalQuestionPayload = Omit<X402QuestionPayload, "questions"> & {
+  questions: LocalQuestionItemPayload[];
 };
 
 type LocalRewardTerms = {
@@ -1066,761 +1008,11 @@ function assertTrustedX402Authorization(
   }
 }
 
-function isJsonRecord(value: unknown): value is JsonRecord {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
-function readRequiredString(value: unknown, fieldName: string): string {
-  if (typeof value !== "string") {
-    throw new Error(`${fieldName} must be a string.`);
-  }
-  const trimmed = value.trim();
-  if (!trimmed) {
-    throw new Error(`${fieldName} is required.`);
-  }
-  return trimmed;
-}
-
-function readOptionalString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function readOptionalBytes32(value: unknown, fieldName: string): Hex {
-  if (value === undefined || value === null || value === "")
-    return EMPTY_DETAILS_HASH;
-  return normalizeBytes32(value, fieldName);
-}
-
-function parseNonNegativeInteger(value: unknown, fieldName: string): bigint {
-  const rawValue =
-    typeof value === "bigint" ||
-    typeof value === "number" ||
-    typeof value === "string"
-      ? String(value).trim()
-      : "";
-  if (!/^\d+$/.test(rawValue)) {
-    throw new Error(`${fieldName} must be a non-negative integer.`);
-  }
-  return BigInt(rawValue);
-}
-
-function isSupportedBountyEligibility(value: number): boolean {
-  if (!Number.isSafeInteger(value) || value < 0 || value > 255) return false;
-  if (
-    (value &
-      ~(
-        BOUNTY_ELIGIBILITY_CREDENTIAL_MASK |
-        BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG
-      )) !==
-    0
-  ) {
-    return false;
-  }
-
-  const credentialMask = value & BOUNTY_ELIGIBILITY_CREDENTIAL_MASK;
-  return credentialMask === 0 ? value === 0 : true;
-}
-
-function parsePositiveAtomicAmount(value: unknown, fieldName: string): bigint {
-  const parsed = parseNonNegativeInteger(value, fieldName);
-  if (parsed <= 0n) {
-    throw new Error(`${fieldName} must be greater than zero.`);
-  }
-  return parsed;
-}
-
-function sanitizeHttpsUrl(value: string, fieldName: string): string {
-  try {
-    const parsed = new URL(value);
-    if (parsed.protocol !== "https:" || parsed.username || parsed.password) {
-      throw new Error(`${fieldName} must be a public HTTPS URL.`);
-    }
-    return parsed.toString();
-  } catch (error) {
-    if (error instanceof Error && error.message.includes(fieldName))
-      throw error;
-    throw new Error(`${fieldName} must be a valid HTTPS URL.`);
-  }
-}
-
-function matchesHostname(hostname: string, domain: string): boolean {
-  const normalizedHost = hostname.toLowerCase();
-  const normalizedDomain = domain.toLowerCase();
-  return (
-    normalizedHost === normalizedDomain ||
-    normalizedHost.endsWith(`.${normalizedDomain}`)
-  );
-}
-
-function extractYouTubeId(url: string): string | null {
-  try {
-    const parsed = new URL(url);
-    let id: string | null | undefined;
-    if (
-      matchesHostname(parsed.hostname, "youtube.com") &&
-      parsed.pathname === "/watch"
-    ) {
-      id = parsed.searchParams.get("v");
-    } else if (parsed.hostname.toLowerCase() === "youtu.be") {
-      id = parsed.pathname.slice(1).split("/")[0];
-    } else if (
-      matchesHostname(parsed.hostname, "youtube.com") &&
-      parsed.pathname.startsWith("/embed/")
-    ) {
-      id = parsed.pathname.split("/embed/")[1]?.split("/")[0];
-    }
-    return id && /^[\w-]+$/.test(id) ? id : null;
-  } catch {
-    return null;
-  }
-}
-
-function canonicalizeLocalUrl(url: string): string {
-  const youtubeId = extractYouTubeId(url);
-  if (youtubeId) {
-    return `https://www.youtube.com/watch?v=${youtubeId}`;
-  }
-  try {
-    const parsed = new URL(url);
-    let hostname = parsed.hostname.toLowerCase();
-    if (hostname.startsWith("www.")) hostname = hostname.slice(4);
-    const path = parsed.pathname.replace(/\/+$/, "") || "/";
-    return `https://${hostname}${path}${parsed.search}`;
-  } catch {
-    return url;
-  }
-}
-
-function normalizeQuestionContextUrl(value: string, fieldName: string): string {
-  const sanitized = sanitizeHttpsUrl(value, fieldName);
-  const parsed = new URL(sanitized);
-  if (DIRECT_IMAGE_URL_PATH_PATTERN.test(parsed.pathname)) {
-    throw new Error(
-      `${fieldName} must be a public HTTPS page URL. Upload images through imageUrls.`,
-    );
-  }
-  return canonicalizeLocalUrl(sanitized);
-}
-
-function isLocalhostOrigin(origin: string) {
-  try {
-    const parsed = new URL(origin);
-    return ["localhost", "127.0.0.1", "::1", "[::1]"].includes(parsed.hostname);
-  } catch {
-    return false;
-  }
-}
-
-function normalizeImageAttachmentUrl(value: string, fieldName: string): string {
-  let parsed: URL;
-  try {
-    parsed = new URL(value);
-  } catch {
-    throw new Error(`${fieldName} must be a valid image upload URL.`);
-  }
-
-  if (
-    parsed.username ||
-    parsed.password ||
-    parsed.search ||
-    !IMAGE_ATTACHMENT_PATH_PATTERN.test(parsed.pathname) ||
-    !IMAGE_ATTACHMENT_HASH_PATTERN.test(parsed.hash)
-  ) {
-    throw new Error(
-      "imageUrls must come from RateLoop uploads. Upload bytes with rateloop_upload_image first.",
-    );
-  }
-  const configuredOrigins = [
-    process.env.APP_URL,
-    process.env.NEXT_PUBLIC_APP_URL,
-  ]
-    .map((origin) => {
-      try {
-        return origin ? new URL(origin).origin : null;
-      } catch {
-        return null;
-      }
-    })
-    .filter((origin): origin is string => Boolean(origin));
-  const allowedOrigins = new Set([
-    ...DEFAULT_IMAGE_ATTACHMENT_ORIGINS,
-    ...configuredOrigins,
-  ]);
-  const localhostAllowed =
-    process.env.NODE_ENV !== "production" ||
-    process.env.NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD === "true";
-  const isAllowedProtocol =
-    parsed.protocol === "https:" ||
-    (localhostAllowed && parsed.protocol === "http:");
-  if (!isAllowedProtocol) {
-    throw new Error(
-      "imageUrls must come from RateLoop uploads. Upload bytes with rateloop_upload_image first.",
-    );
-  }
-  if (
-    !allowedOrigins.has(parsed.origin) &&
-    !(localhostAllowed && isLocalhostOrigin(parsed.origin))
-  ) {
-    throw new Error(
-      "imageUrls must come from RateLoop uploads. Upload bytes with rateloop_upload_image first.",
-    );
-  }
-  parsed.hash = parsed.hash.toLowerCase();
-  return parsed.toString();
-}
-
-function allowedRateLoopAttachmentOrigins() {
-  const configuredOrigins = [
-    process.env.APP_URL,
-    process.env.NEXT_PUBLIC_APP_URL,
-    process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined,
-  ]
-    .map((origin) => {
-      try {
-        return origin ? new URL(origin).origin : null;
-      } catch {
-        return null;
-      }
-    })
-    .filter((origin): origin is string => Boolean(origin));
-  return new Set([...DEFAULT_IMAGE_ATTACHMENT_ORIGINS, ...configuredOrigins]);
-}
-
-function isHostedQuestionDetailsUrl(value: string): boolean {
-  try {
-    const parsed = new URL(value);
-    return (
-      parsed.protocol === "https:" &&
-      !parsed.username &&
-      !parsed.password &&
-      !parsed.search &&
-      !parsed.hash &&
-      QUESTION_DETAILS_ATTACHMENT_PATH_PATTERN.test(parsed.pathname) &&
-      allowedRateLoopAttachmentOrigins().has(parsed.origin)
-    );
-  } catch {
-    return false;
-  }
-}
-
-function normalizeImageUrls(value: unknown): string[] {
-  if (value === undefined || value === null) {
-    return [];
-  }
-  if (!Array.isArray(value)) {
-    throw new Error(
-      "imageUrls must be an array of RateLoop imageUrl values returned by rateloop_upload_image.",
-    );
-  }
-  if (value.length > 4) {
-    throw new Error("imageUrls supports at most four images.");
-  }
-  return value
-    .map((entry, index) =>
-      normalizeImageAttachmentUrl(
-        readRequiredString(entry, `imageUrls[${index}]`),
-        `imageUrls[${index}]`,
-      ),
-    )
-    .filter((url, index, urls) => urls.indexOf(url) === index)
-    .sort();
-}
-
-function isYouTubeVideoUrl(url: string): boolean {
-  return extractYouTubeId(url) !== null;
-}
-
-function normalizeTags(value: unknown): { tagList: string[]; tags: string } {
-  const rawTags = Array.isArray(value)
-    ? value
-    : typeof value === "string"
-      ? value.split(",")
-      : [];
-  const tagList = rawTags
-    .map((tag) => (typeof tag === "string" ? tag.trim() : ""))
-    .filter(Boolean)
-    .slice(0, 4);
-
-  if (tagList.length === 0) {
-    throw new Error("At least one tag is required.");
-  }
-  if (tagList.length > 3) {
-    throw new Error("At most three tags are supported.");
-  }
+function localQuestionParserOptions(
+  options: { questionMetadataBaseUrl?: string } = {},
+): X402QuestionParserOptions {
   return {
-    tagList,
-    tags: tagList.join(","),
-  };
-}
-
-function cloneJsonObject<T>(
-  value: unknown,
-  fieldName: string,
-  defaultValue: T,
-): T {
-  if (value === undefined || value === null) return defaultValue;
-  if (!isJsonRecord(value)) {
-    throw new Error(`${fieldName} must be an object when provided.`);
-  }
-  try {
-    return JSON.parse(JSON.stringify(value)) as T;
-  } catch {
-    throw new Error(`${fieldName} must be JSON serializable.`);
-  }
-}
-
-function normalizeTemplateSelection(
-  value: JsonRecord,
-  fieldPrefix: string,
-  defaults: {
-    confidentiality?: LocalQuestionConfidentiality;
-    templateId?: string;
-    templateInputs?: AgentQuestionSpecInput["templateInputs"];
-    templateVersion?: number;
-  },
-) {
-  const rawTemplateId =
-    readOptionalString(value.templateId) ||
-    defaults.templateId ||
-    DEFAULT_AGENT_TEMPLATE_ID;
-  const template = findAgentResultTemplate(rawTemplateId);
-  if (!template) {
-    throw new Error(`${fieldPrefix}.templateId is not supported.`);
-  }
-
-  const templateVersion =
-    value.templateVersion === undefined || value.templateVersion === null
-      ? (defaults.templateVersion ?? template.version)
-      : Number.parseInt(String(value.templateVersion), 10);
-  if (!Number.isSafeInteger(templateVersion) || templateVersion <= 0) {
-    throw new Error(
-      `${fieldPrefix}.templateVersion must be a positive integer.`,
-    );
-  }
-  if (templateVersion !== template.version) {
-    throw new Error(
-      `${fieldPrefix}.templateVersion ${templateVersion} is not supported for ${template.id}.`,
-    );
-  }
-
-  return {
-    template,
-    templateId: template.id,
-    templateInputs:
-      value.templateInputs === undefined
-        ? (defaults.templateInputs ?? null)
-        : cloneJsonObject<AgentQuestionSpecInput["templateInputs"]>(
-            value.templateInputs,
-            `${fieldPrefix}.templateInputs`,
-            null,
-          ),
-    templateVersion,
-  };
-}
-
-function normalizeLocalChainId(
-  value: unknown,
-  fallbackChainId?: number,
-): number {
-  const rawValue = value ?? fallbackChainId;
-  const chainId =
-    typeof rawValue === "number"
-      ? rawValue
-      : Number.parseInt(String(rawValue ?? ""), 10);
-  if (!Number.isSafeInteger(chainId) || chainId <= 0) {
-    throw new Error("chainId must be a positive integer.");
-  }
-  return chainId;
-}
-
-function normalizeLocalQuestionConfidentiality(
-  value: unknown,
-  fieldName: string,
-): LocalQuestionConfidentiality {
-  if (value === undefined || value === null) {
-    return {
-      bond: null,
-      disclosurePolicy: null,
-      visibility: "public",
-    };
-  }
-  if (!isJsonRecord(value)) {
-    throw new Error(`${fieldName} must be an object when provided.`);
-  }
-
-  const visibility = readOptionalString(value.visibility) || "public";
-  if (visibility !== "public" && visibility !== "gated") {
-    throw new Error(`${fieldName}.visibility must be public or gated.`);
-  }
-  if (visibility === "public") {
-    if (value.bond !== undefined && value.bond !== null) {
-      throw new Error(
-        `${fieldName}.bond is only supported for gated questions.`,
-      );
-    }
-    return {
-      bond: null,
-      disclosurePolicy: null,
-      visibility,
-    };
-  }
-
-  const rawDisclosurePolicy =
-    readOptionalString(value.disclosurePolicy) ||
-    DEFAULT_CONFIDENTIALITY_DISCLOSURE_POLICY;
-  const disclosurePolicy =
-    rawDisclosurePolicy === "private_until_settlement"
-      ? AFTER_SETTLEMENT_DISCLOSURE_POLICY
-      : rawDisclosurePolicy;
-  if (
-    disclosurePolicy !== AFTER_SETTLEMENT_DISCLOSURE_POLICY &&
-    disclosurePolicy !== "private_forever"
-  ) {
-    throw new Error(
-      `${fieldName}.disclosurePolicy must be after_settlement or private_forever.`,
-    );
-  }
-
-  let bond: NonNullable<LocalQuestionConfidentiality["bond"]> | null = null;
-  if (value.bond !== undefined && value.bond !== null) {
-    if (!isJsonRecord(value.bond)) {
-      throw new Error(`${fieldName}.bond must be an object when provided.`);
-    }
-    const amount = parseNonNegativeInteger(
-      value.bond.amount ?? 0n,
-      `${fieldName}.bond.amount`,
-    );
-    if (amount > 0n && amount < MIN_NONZERO_CONFIDENTIALITY_BOND) {
-      throw new Error(
-        `${fieldName}.bond.amount must be 0 or at least ${MIN_NONZERO_CONFIDENTIALITY_BOND} atomic units.`,
-      );
-    }
-    const asset = readOptionalString(value.bond.asset).toUpperCase() || "LREP";
-    if (asset !== "LREP" && asset !== "USDC") {
-      throw new Error(`${fieldName}.bond.asset must be LREP or USDC.`);
-    }
-    bond = {
-      amount: amount.toString(),
-      asset,
-    };
-  }
-
-  return {
-    bond: bond ?? {
-      amount: "0",
-      asset: "LREP",
-    },
-    disclosurePolicy,
-    visibility,
-  };
-}
-
-function normalizeLocalBounty(value: unknown): LocalQuestionPayload["bounty"] {
-  if (!isJsonRecord(value)) {
-    throw new Error("bounty is required.");
-  }
-
-  const asset = readOptionalString(value.asset).toUpperCase() || "USDC";
-  if (asset !== "USDC") {
-    throw new Error(
-      "Only USDC bounties are supported for local signer question submissions.",
-    );
-  }
-
-  const amount = parsePositiveAtomicAmount(value.amount, "bounty.amount");
-  const requiredVoters = parseNonNegativeInteger(
-    value.requiredVoters ?? X402_MIN_REWARD_POOL_REQUIRED_VOTERS,
-    "bounty.requiredVoters",
-  );
-  const requiredSettledRounds = parseNonNegativeInteger(
-    value.requiredSettledRounds ?? X402_MIN_REWARD_POOL_SETTLED_ROUNDS,
-    "bounty.requiredSettledRounds",
-  );
-  const bountyStartBy = parseNonNegativeInteger(
-    value.bountyStartBy ?? 0n,
-    "bounty.bountyStartBy",
-  );
-  const bountyWindowSeconds = parseNonNegativeInteger(
-    value.bountyWindowSeconds ?? 0n,
-    "bounty.bountyWindowSeconds",
-  );
-  const feedbackWindowSeconds = parseNonNegativeInteger(
-    value.feedbackWindowSeconds ?? value.bountyWindowSeconds ?? 0n,
-    "bounty.feedbackWindowSeconds",
-  );
-  const bountyEligibility = Number(
-    parseNonNegativeInteger(
-      value.bountyEligibility ?? 0n,
-      "bounty.bountyEligibility",
-    ),
-  );
-
-  if (requiredVoters < X402_MIN_REWARD_POOL_REQUIRED_VOTERS) {
-    throw new Error(
-      `bounty.requiredVoters must be at least ${X402_MIN_REWARD_POOL_REQUIRED_VOTERS}.`,
-    );
-  }
-  const requiredVoterFloor = requiredQuestionRewardParticipants(amount);
-  if (requiredVoters < requiredVoterFloor) {
-    throw new Error(
-      `bounty.requiredVoters must be at least ${requiredVoterFloor} for this bounty amount.`,
-    );
-  }
-  if (requiredSettledRounds < X402_MIN_REWARD_POOL_SETTLED_ROUNDS) {
-    throw new Error(
-      `bounty.requiredSettledRounds must be at least ${X402_MIN_REWARD_POOL_SETTLED_ROUNDS}.`,
-    );
-  }
-  if (amount < X402_DEFAULT_SUBMISSION_BOUNTY_USDC) {
-    throw new Error("bounty.amount must be at least 1000000 atomic USDC.");
-  }
-  if (amount < requiredVoters * requiredSettledRounds) {
-    throw new Error(
-      "bounty.amount is too small for the selected voter requirements.",
-    );
-  }
-  if (bountyStartBy <= 0n) {
-    throw new Error(
-      "bounty.bountyStartBy must be greater than zero for local signer submissions.",
-    );
-  }
-  if (bountyWindowSeconds <= 0n) {
-    throw new Error(
-      "bounty.bountyWindowSeconds must be greater than zero for local signer submissions.",
-    );
-  }
-  if (feedbackWindowSeconds > bountyWindowSeconds) {
-    throw new Error(
-      "bounty.feedbackWindowSeconds cannot exceed bounty.bountyWindowSeconds.",
-    );
-  }
-  if (!isSupportedBountyEligibility(bountyEligibility)) {
-    throw new Error(
-      "bounty.bountyEligibility must be 0 or a supported credential bitmask: 2 Selfie Check, 4 Passport, 8 Proof of Human, add values to allow any selected credential, and add 128 to require a recent recheck.",
-    );
-  }
-
-  return {
-    amount,
-    asset: "USDC",
-    bountyEligibility,
-    bountyStartBy,
-    bountyWindowSeconds,
-    feedbackWindowSeconds,
-    requiredSettledRounds,
-    requiredVoters,
-  };
-}
-
-function normalizeLocalRoundConfig(
-  value: unknown,
-  requiredVoters: bigint,
-): LocalQuestionRoundConfig {
-  if (value === undefined || value === null) {
-    const defaultMaxVoters = BigInt(DEFAULT_ROUND_CONFIG.maxVoters);
-    return {
-      epochDuration: BigInt(DEFAULT_ROUND_CONFIG.epochDurationSeconds),
-      maxDuration: BigInt(DEFAULT_ROUND_CONFIG.maxDurationSeconds),
-      minVoters: requiredVoters,
-      maxVoters:
-        defaultMaxVoters < requiredVoters ? requiredVoters : defaultMaxVoters,
-    };
-  }
-  if (!isJsonRecord(value)) {
-    throw new Error("question.roundConfig must be an object.");
-  }
-
-  const epochDuration = parseNonNegativeInteger(
-    value.epochDuration ?? value.blindPhaseSeconds ?? value.blindSeconds,
-    "question.roundConfig.epochDuration",
-  );
-  const maxDuration = parseNonNegativeInteger(
-    value.maxDuration ?? value.maxDurationSeconds ?? value.deadlineSeconds,
-    "question.roundConfig.maxDuration",
-  );
-  const minVoters = parseNonNegativeInteger(
-    value.minVoters,
-    "question.roundConfig.minVoters",
-  );
-  const maxVoters = parseNonNegativeInteger(
-    value.maxVoters,
-    "question.roundConfig.maxVoters",
-  );
-
-  if (epochDuration <= 0n) {
-    throw new Error(
-      "question.roundConfig.epochDuration must be greater than zero.",
-    );
-  }
-  if (maxDuration <= 0n) {
-    throw new Error(
-      "question.roundConfig.maxDuration must be greater than zero.",
-    );
-  }
-  if (minVoters <= 0n || maxVoters <= 0n || maxVoters < minVoters) {
-    throw new Error("question.roundConfig voter values are invalid.");
-  }
-  if (minVoters !== requiredVoters) {
-    throw new Error(
-      "question.roundConfig.minVoters must match bounty.requiredVoters.",
-    );
-  }
-
-  return { epochDuration, maxDuration, minVoters, maxVoters };
-}
-
-function normalizeLocalQuestion(
-  value: unknown,
-  index: number,
-  defaults: {
-    confidentiality?: LocalQuestionConfidentiality;
-    templateId?: string;
-    templateInputs?: AgentQuestionSpecInput["templateInputs"];
-    templateVersion?: number;
-  },
-  bounty: LocalQuestionPayload["bounty"],
-  questionMetadataBaseUrl: string | undefined,
-  roundConfig: LocalQuestionRoundConfig,
-): LocalQuestionItemPayload {
-  if (!isJsonRecord(value)) {
-    throw new Error(`questions[${index}] must be an object.`);
-  }
-
-  const fieldPrefix = `questions[${index}]`;
-  const title = readRequiredString(value.title, `${fieldPrefix}.title`);
-  const titleError = getContentTitleValidationError(title);
-  if (titleError) {
-    throw new Error(`${fieldPrefix}.title: ${titleError}`);
-  }
-  const imageUrls = normalizeImageUrls(value.imageUrls);
-  const rawContextUrl = readOptionalString(value.contextUrl);
-  const contextUrl = rawContextUrl
-    ? normalizeQuestionContextUrl(rawContextUrl, `${fieldPrefix}.contextUrl`)
-    : "";
-  const rawVideoUrl = readOptionalString(value.videoUrl);
-  const videoUrl = rawVideoUrl
-    ? sanitizeHttpsUrl(rawVideoUrl, `${fieldPrefix}.videoUrl`)
-    : "";
-  const rawDetailsUrl = readOptionalString(value.detailsUrl);
-  const detailsHash = readOptionalBytes32(
-    value.detailsHash,
-    `${fieldPrefix}.detailsHash`,
-  );
-  const detailsUrl = rawDetailsUrl
-    ? sanitizeHttpsUrl(rawDetailsUrl, `${fieldPrefix}.detailsUrl`)
-    : "";
-  const confidentiality = normalizeLocalQuestionConfidentiality(
-    value.confidentiality ?? defaults.confidentiality,
-    `${fieldPrefix}.confidentiality`,
-  );
-  if (detailsUrl && detailsHash.toLowerCase() === EMPTY_DETAILS_HASH) {
-    throw new Error(
-      `${fieldPrefix}.detailsHash is required when detailsUrl is provided.`,
-    );
-  }
-  if (!detailsUrl && detailsHash.toLowerCase() !== EMPTY_DETAILS_HASH) {
-    throw new Error(
-      `${fieldPrefix}.detailsUrl is required when detailsHash is provided.`,
-    );
-  }
-  if (videoUrl && !isYouTubeVideoUrl(videoUrl)) {
-    throw new Error(`${fieldPrefix}.videoUrl must be a supported YouTube URL.`);
-  }
-  if (videoUrl && imageUrls.length > 0) {
-    throw new Error("Use imageUrls or videoUrl, not both.");
-  }
-  if (confidentiality.visibility === "gated") {
-    if (contextUrl || videoUrl) {
-      throw new Error(
-        `${fieldPrefix}.confidentiality.visibility gated requires RateLoop-hosted detailsUrl; external contextUrl and videoUrl are not allowed.`,
-      );
-    }
-    if (!detailsUrl) {
-      throw new Error(`${fieldPrefix}.detailsUrl is required for gated questions.`);
-    }
-    if (!isHostedQuestionDetailsUrl(detailsUrl)) {
-      throw new Error(
-        `${fieldPrefix}.detailsUrl must be a RateLoop-hosted details attachment for gated questions.`,
-      );
-    }
-  }
-  if (
-    !contextUrl &&
-    imageUrls.length === 0 &&
-    !videoUrl &&
-    !(confidentiality.visibility === "gated" && detailsUrl)
-  ) {
-    throw new Error(
-      `${fieldPrefix}.contextUrl, imageUrls, or videoUrl is required.`,
-    );
-  }
-
-  const { tags, tagList } = normalizeTags(value.tags);
-  const blockedTags = findBlockedContentTags(tagList);
-  if (blockedTags.length > 0) {
-    throw new Error(
-      `${fieldPrefix}.tags contains prohibited content: ${blockedTags.join(", ")}`,
-    );
-  }
-  const categoryId = parseNonNegativeInteger(
-    value.categoryId,
-    `${fieldPrefix}.categoryId`,
-  );
-  const targetAudience = normalizeTargetAudience(value.targetAudience, {
-    fieldPrefix: `${fieldPrefix}.targetAudience`,
-  }) as AgentQuestionSpecInput["targetAudience"];
-  const templateSelection = normalizeTemplateSelection(
-    value,
-    fieldPrefix,
-    defaults,
-  );
-  const spec = buildQuestionSpecHashes(
-    {
-      bounty: {
-        amount: bounty.amount,
-        asset: bounty.asset,
-        bountyEligibility: bounty.bountyEligibility,
-        requiredSettledRounds: bounty.requiredSettledRounds,
-        requiredVoters: bounty.requiredVoters,
-      },
-      categoryId,
-      confidentiality,
-      contextUrl,
-      imageUrls,
-      roundConfig,
-      study: {
-        bundleIndex: index,
-      },
-      tags: tagList,
-      targetAudience,
-      templateId: templateSelection.templateId,
-      templateInputs: templateSelection.templateInputs,
-      templateVersion: templateSelection.templateVersion,
-      title,
-      videoUrl,
-      voteSemantics: templateSelection.template.voteSemantics,
-    },
-    { questionMetadataBaseUrl },
-  );
-
-  return {
-    categoryId,
-    confidentiality,
-    contextUrl,
-    detailsHash,
-    detailsUrl,
-    imageUrls,
-    questionMetadataHash: spec.questionMetadataHash,
-    questionMetadataUri: spec.questionMetadataUri,
-    resultSpecHash: spec.resultSpecHash,
-    tags,
-    tagList,
-    targetAudience,
-    templateId: templateSelection.templateId,
-    templateInputs: templateSelection.templateInputs,
-    templateVersion: templateSelection.templateVersion,
-    title,
-    videoUrl,
+    questionMetadataBaseUrl: options.questionMetadataBaseUrl,
   };
 }
 
@@ -1829,134 +1021,15 @@ function parseLocalQuestionRequest(
   fallbackChainId?: number,
   options: { questionMetadataBaseUrl?: string } = {},
 ): LocalQuestionPayload {
-  const request = assertRecord(value, "ask payload");
-  for (const key of Object.keys(request)) {
-    if (!X402_QUESTION_TOP_LEVEL_FIELDS.has(key)) {
-      throw new Error(`Unknown top-level ask payload field: ${key}`);
-    }
-  }
-
-  const clientRequestId = readRequiredString(
-    request.clientRequestId,
-    "clientRequestId",
-  );
-  if (!CLIENT_REQUEST_ID_PATTERN.test(clientRequestId)) {
-    throw new Error(
-      "clientRequestId must be 4-160 characters using letters, numbers, dot, dash, colon, or underscore.",
-    );
-  }
-
-  const rawQuestions = Array.isArray(request.questions)
-    ? request.questions
-    : [isJsonRecord(request.question) ? request.question : request];
-  if (rawQuestions.length === 0) {
-    throw new Error("At least one question is required.");
-  }
-  if (rawQuestions.length > X402_MAX_QUESTION_BUNDLE_COUNT) {
-    throw new Error(
-      `At most ${X402_MAX_QUESTION_BUNDLE_COUNT} questions are supported.`,
-    );
-  }
-
-  const firstQuestion = isJsonRecord(rawQuestions[0]) ? rawQuestions[0] : {};
-  const bounty = normalizeLocalBounty(request.bounty);
-  const roundConfig = normalizeLocalRoundConfig(
-    request.roundConfig ?? firstQuestion.roundConfig,
-    bounty.requiredVoters,
-  );
-  const topLevelTemplateInputs = cloneJsonObject<
-    AgentQuestionSpecInput["templateInputs"]
-  >(request.templateInputs, "templateInputs", null);
-  const topLevelTemplateVersion =
-    request.templateVersion === undefined || request.templateVersion === null
-      ? DEFAULT_AGENT_TEMPLATE_VERSION
-      : Number.parseInt(String(request.templateVersion), 10);
-  const templateDefaults = {
-    confidentiality: normalizeLocalQuestionConfidentiality(
-      request.confidentiality,
-      "confidentiality",
-    ),
-    templateId:
-      readOptionalString(request.templateId) || DEFAULT_AGENT_TEMPLATE_ID,
-    templateInputs: topLevelTemplateInputs,
-    templateVersion: topLevelTemplateVersion,
-  };
-  const questions = rawQuestions.map((question, index) =>
-    normalizeLocalQuestion(
-      question,
-      index,
-      templateDefaults,
-      bounty,
-      options.questionMetadataBaseUrl,
-      roundConfig,
-    ),
-  );
-  if (
-    questions.length > 1 &&
-    questions.some(
-      (question) => question.confidentiality.visibility === "gated",
-    )
-  ) {
-    throw new Error(
-      "Private context bundles are not supported yet. Submit gated questions one at a time.",
-    );
-  }
-
-  return {
-    bounty,
-    chainId: normalizeLocalChainId(
-      request.chainId ?? firstQuestion.chainId,
-      fallbackChainId,
-    ),
-    clientRequestId,
-    questions,
-    roundConfig,
-  };
-}
-
-function serializeLocalRoundConfig(config: LocalQuestionRoundConfig) {
-  return {
-    epochDuration: config.epochDuration.toString(),
-    maxDuration: config.maxDuration.toString(),
-    minVoters: config.minVoters.toString(),
-    maxVoters: config.maxVoters.toString(),
-  };
+  return parseSharedX402QuestionRequest(
+    value,
+    fallbackChainId,
+    localQuestionParserOptions(options),
+  ) as LocalQuestionPayload;
 }
 
 function toCanonicalLocalQuestionPayload(payload: LocalQuestionPayload) {
-  return {
-    bounty: {
-      amount: payload.bounty.amount.toString(),
-      asset: payload.bounty.asset,
-      requiredSettledRounds: payload.bounty.requiredSettledRounds.toString(),
-      requiredVoters: payload.bounty.requiredVoters.toString(),
-      bountyStartBy: payload.bounty.bountyStartBy.toString(),
-      bountyWindowSeconds: payload.bounty.bountyWindowSeconds.toString(),
-      feedbackWindowSeconds: payload.bounty.feedbackWindowSeconds.toString(),
-      bountyEligibility: String(payload.bounty.bountyEligibility),
-    },
-    chainId: payload.chainId,
-    clientRequestId: payload.clientRequestId,
-    questions: payload.questions.map((question) => ({
-      categoryId: question.categoryId.toString(),
-      confidentiality: question.confidentiality,
-      contextUrl: question.contextUrl,
-      detailsHash: question.detailsHash,
-      detailsUrl: question.detailsUrl,
-      imageUrls: question.imageUrls,
-      questionMetadataHash: question.questionMetadataHash,
-      questionMetadataUri: question.questionMetadataUri,
-      resultSpecHash: question.resultSpecHash,
-      tags: question.tagList,
-      targetAudience: question.targetAudience,
-      templateId: question.templateId,
-      templateInputs: question.templateInputs,
-      templateVersion: question.templateVersion,
-      title: question.title,
-      videoUrl: question.videoUrl,
-    })),
-    roundConfig: serializeLocalRoundConfig(payload.roundConfig),
-  };
+  return toSharedCanonicalQuestionPayload(payload);
 }
 
 /**
@@ -1971,22 +1044,19 @@ export function buildLocalQuestionCanonicalPayload(
   fallbackChainId?: number,
   options: { questionMetadataBaseUrl?: string } = {},
 ) {
-  return toCanonicalLocalQuestionPayload(
-    parseLocalQuestionRequest(payload, fallbackChainId, options),
+  const parsed = parseLocalQuestionRequest(payload, fallbackChainId, options);
+  return toSharedCanonicalQuestionPayload(
+    parsed,
+    localQuestionParserOptions(options),
   );
 }
 
 function buildLocalQuestionOperation(payload: LocalQuestionPayload) {
-  const canonicalPayload = toCanonicalLocalQuestionPayload(payload);
-  const payloadHash = createHash("sha256")
-    .update(JSON.stringify(canonicalPayload))
-    .digest("hex");
-  const operationKey =
-    `0x${createHash("sha256").update(`rateloop:x402-question:${payloadHash}`).digest("hex")}` as Hex;
+  const operation = buildSharedX402QuestionOperation(payload);
   return {
-    canonicalPayload,
-    operationKey,
-    payloadHash,
+    canonicalPayload: operation.canonicalPayload,
+    operationKey: operation.operationKey as Hex,
+    payloadHash: operation.payloadHash,
   };
 }
 
