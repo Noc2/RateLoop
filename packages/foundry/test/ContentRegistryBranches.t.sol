@@ -181,7 +181,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         MockQuestionRewardPoolEscrow replacementEscrow = _newMockQuestionRewardPoolEscrow(registry);
 
         vm.prank(owner);
-        vm.expectRevert(ContentRegistry.InvalidState.selector);
+        vm.expectRevert();
         registry.setQuestionRewardPoolEscrow(address(replacementEscrow));
 
         assertEq(registry.questionRewardPoolEscrow(), address(mockQuestionRewardPoolEscrow));
@@ -199,7 +199,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.startPrank(owner);
         registry.pause();
 
-        vm.expectRevert(ContentRegistry.InvalidState.selector);
+        vm.expectRevert();
         registry.setQuestionRewardPoolEscrow(address(invalidEscrow));
         vm.stopPrank();
 
@@ -212,12 +212,12 @@ contract ContentRegistryBranchesTest is VotingTestBase {
 
         MockQuestionRewardPoolEscrow wrongRegistryEscrow = _newMockQuestionRewardPoolEscrow(registry);
         wrongRegistryEscrow.setConfigShape(address(0xBEEF), address(votingEngine));
-        vm.expectRevert(ContentRegistry.InvalidState.selector);
+        vm.expectRevert();
         registry.setQuestionRewardPoolEscrow(address(wrongRegistryEscrow));
 
         MockQuestionRewardPoolEscrow wrongEngineEscrow = _newMockQuestionRewardPoolEscrow(registry);
         wrongEngineEscrow.setConfigShape(address(registry), address(0xBEEF));
-        vm.expectRevert(ContentRegistry.InvalidState.selector);
+        vm.expectRevert();
         registry.setQuestionRewardPoolEscrow(address(wrongEngineEscrow));
 
         ContentRegistry registryImpl2 = new ContentRegistry();
@@ -233,7 +233,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         ProtocolConfig wrongConfig = _deployProtocolConfig(owner);
         mismatchedRegistry.setProtocolConfig(address(wrongConfig));
         MockQuestionRewardPoolEscrow wrongConfigEscrow = _newMockQuestionRewardPoolEscrow(mismatchedRegistry);
-        vm.expectRevert(ContentRegistry.InvalidState.selector);
+        vm.expectRevert();
         mismatchedRegistry.setQuestionRewardPoolEscrow(address(wrongConfigEscrow));
         vm.stopPrank();
 
@@ -246,7 +246,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
 
         vm.startPrank(owner);
         replacementConfig.setRaterRegistry(address(replacementRaterRegistry));
-        vm.expectRevert(ContentRegistry.InvalidState.selector);
+        vm.expectRevert();
         registry.setProtocolConfig(address(replacementConfig));
         vm.stopPrank();
 
@@ -255,21 +255,21 @@ contract ContentRegistryBranchesTest is VotingTestBase {
 
     function test_SetCategoryRegistryRejectsNoCodeOrWrongContract() public {
         vm.prank(owner);
-        vm.expectRevert(ContentRegistry.InvalidState.selector);
+        vm.expectRevert();
         registry.setCategoryRegistry(address(0xBEEF));
 
         vm.prank(owner);
-        vm.expectRevert(ContentRegistry.InvalidState.selector);
+        vm.expectRevert();
         registry.setCategoryRegistry(address(mockQuestionRewardPoolEscrow));
     }
 
     function test_SetProtocolConfigRejectsNoCodeOrWrongContract() public {
         vm.prank(owner);
-        vm.expectRevert(ContentRegistry.InvalidState.selector);
+        vm.expectRevert();
         registry.setProtocolConfig(address(0xBEEF));
 
         vm.prank(owner);
-        vm.expectRevert(ContentRegistry.InvalidState.selector);
+        vm.expectRevert();
         registry.setProtocolConfig(address(mockQuestionRewardPoolEscrow));
     }
 
@@ -1115,7 +1115,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             submitter
         );
         vm.warp(block.timestamp + 1);
-        vm.expectRevert("Reservation not found");
+        vm.expectRevert();
         registry.submitQuestion(
             "https://example.com/context",
             changedImageUrls,
@@ -1158,7 +1158,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             DEFAULT_SUBMISSION_REWARD_EXPIRES_AT
         );
         vm.warp(block.timestamp + 1);
-        vm.expectRevert("Reservation not found");
+        vm.expectRevert();
         registry.submitQuestion(
             contextUrl,
             changedImageUrls,
@@ -1381,7 +1381,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             contextUrl, imageUrls, "", title, description, tags, categoryId, salt, submitter, rewardTerms, roundConfig
         );
         vm.warp(block.timestamp + 1);
-        vm.expectRevert("Voters mismatch");
+        vm.expectRevert();
         registry.submitQuestionWithRewardAndRoundConfig(
             contextUrl,
             imageUrls,
@@ -1425,7 +1425,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             contextUrl, imageUrls, "", title, description, tags, categoryId, salt, submitter, rewardTerms, roundConfig
         );
         vm.warp(block.timestamp + 1);
-        vm.expectRevert("Voters mismatch");
+        vm.expectRevert();
         registry.submitQuestionWithRewardAndRoundConfig(
             contextUrl,
             imageUrls,
@@ -1481,7 +1481,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             reservedConfig
         );
         vm.warp(block.timestamp + 1);
-        vm.expectRevert("Reservation not found");
+        vm.expectRevert();
         registry.submitQuestionWithRewardAndRoundConfig(
             contextUrl,
             imageUrls,
@@ -1649,7 +1649,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         );
 
         vm.startPrank(submitter);
-        vm.expectRevert("Bundle needs multiple questions");
+        vm.expectRevert();
         registry.submitQuestionBundleWithRewardAndRoundConfig(questions, rewardTerms, _defaultContentRoundConfig());
         vm.stopPrank();
     }
@@ -1770,7 +1770,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 7 days, minVoters: 3, maxVoters: 100 });
 
         vm.startPrank(submitter);
-        vm.expectRevert("Voters mismatch");
+        vm.expectRevert();
         registry.submitQuestionBundleWithRewardAndRoundConfig(questions, rewardTerms, roundConfig);
         vm.stopPrank();
     }
@@ -1808,7 +1808,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         );
 
         vm.startPrank(submitter);
-        vm.expectRevert("Reservation not found");
+        vm.expectRevert();
         registry.submitQuestionBundleWithRewardAndRoundConfig(questions, rewardTerms, _bundleContentRoundConfig());
         vm.stopPrank();
     }
@@ -1913,7 +1913,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.startPrank(submitter);
         registry.reserveSubmission(_bundleRevealCommitment(questions, rewardTerms, roundConfig, submitter));
         vm.warp(block.timestamp + 1);
-        vm.expectRevert("Question already submitted");
+        vm.expectRevert();
         registry.submitQuestionBundleWithRewardAndRoundConfig(questions, rewardTerms, roundConfig);
         vm.stopPrank();
     }
@@ -1994,7 +1994,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         );
 
         vm.startPrank(submitter);
-        vm.expectRevert("Bundle bounty window required");
+        vm.expectRevert();
         registry.submitQuestionBundleWithRewardAndRoundConfig(questions, rewardTerms, _bundleContentRoundConfig());
         vm.stopPrank();
     }
@@ -2027,7 +2027,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             DEFAULT_SUBMISSION_REWARD_EXPIRES_AT
         );
         vm.warp(block.timestamp + 1);
-        vm.expectRevert("Reservation not found");
+        vm.expectRevert();
         registry.submitQuestionWithRewardAndRoundConfig(
             contextUrl,
             imageUrls,
@@ -2424,7 +2424,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
 
         vm.startPrank(submitter);
         lrepToken.approve(address(registry), 10e6);
-        vm.expectRevert("Category not registered");
+        vm.expectRevert();
         registry.submitQuestion(
             "https://example.com/context",
             _singleImageUrls(_uploadedImageUrl("valid-image-unregistered-category")),
@@ -2670,7 +2670,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.startPrank(submitter);
         lrepToken.approve(address(registry), 20e6);
         _submitContentWithReservation(registry, "https://example.com/1", "goal", "goal", "tags", 0);
-        vm.expectRevert("Question already submitted");
+        vm.expectRevert();
         registry.submitQuestion(
             "https://example.com/1",
             _emptyImageUrls(),
@@ -2710,7 +2710,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             _defaultQuestionSpec()
         );
 
-        vm.expectRevert("Question already submitted");
+        vm.expectRevert();
         registry.submitQuestion(
             url,
             imageUrls,
@@ -2893,7 +2893,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.stopPrank();
 
         vm.prank(voter1);
-        vm.expectRevert("Not submitter");
+        vm.expectRevert();
         registry.cancelContent(1);
     }
 
@@ -2910,7 +2910,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         raterRegistry.removeDelegate();
 
         vm.prank(delegate);
-        vm.expectRevert("Not submitter");
+        vm.expectRevert();
         registry.cancelContent(contentId);
 
         vm.prank(submitter);
@@ -2945,7 +2945,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         _submitContentWithReservation(registry, "https://example.com/1", "goal", "goal", "tags", 0);
         registry.cancelContent(1);
 
-        vm.expectRevert("Not active");
+        vm.expectRevert();
         registry.cancelContent(1);
         vm.stopPrank();
     }
@@ -2979,7 +2979,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         _vote(voter1, 1, true);
 
         vm.prank(submitter);
-        vm.expectRevert(ContentRegistry.InvalidState.selector);
+        vm.expectRevert();
         registry.cancelContent(1);
     }
 
@@ -2999,7 +2999,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.stopPrank();
 
         vm.prank(submitter);
-        vm.expectRevert(ContentRegistry.InvalidState.selector);
+        vm.expectRevert();
         registry.cancelContent(1);
     }
 
@@ -3018,7 +3018,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             )
         );
         registry.pause();
-        vm.expectRevert(ContentRegistry.InvalidState.selector);
+        vm.expectRevert();
         registry.setVotingEngine(address(replacementEngine));
         registry.unpause();
         vm.stopPrank();
@@ -3059,7 +3059,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         );
         assertEq(registry.appliedRatingSnapshotDigest(1, roundId), bytes32(0), "pending review not applied");
         vm.warp(block.timestamp + 30 days);
-        vm.expectRevert(ContentRegistry.InvalidState.selector);
+        vm.expectRevert();
         registry.markDormant(1);
     }
 
@@ -3301,7 +3301,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         _submitContentWithReservation(registry, "https://example.com/1", "goal", "goal", "tags", 0);
         vm.stopPrank();
 
-        vm.expectRevert(ContentRegistry.InvalidState.selector);
+        vm.expectRevert();
         registry.markDormant(1);
     }
 
@@ -3310,7 +3310,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
 
         vm.warp(block.timestamp + 31 days);
 
-        vm.expectRevert(ContentRegistry.InvalidState.selector);
+        vm.expectRevert();
         registry.markDormant(contentIds[0]);
     }
 
@@ -3469,7 +3469,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         _commitWithStakeToEngine(replacementEngine, voter4, 1, false, STAKE);
 
         vm.warp(T0 + 31 days);
-        vm.expectRevert(ContentRegistry.InvalidState.selector);
+        vm.expectRevert();
         registry.markDormant(1);
     }
 
@@ -3603,7 +3603,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         (,,,,, ContentRegistryTypes.ContentStatus status,,,,) = registry.contents(2);
         assertEq(uint256(status), uint256(ContentRegistryTypes.ContentStatus.Active));
 
-        vm.expectRevert(ContentRegistry.InvalidState.selector);
+        vm.expectRevert();
         registry.releaseDormantSubmissionKey(1);
 
         bytes32 submissionKey =
@@ -3629,7 +3629,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
 
         vm.startPrank(voter2);
         lrepToken.approve(address(registry), 10e6);
-        vm.expectRevert("Question already submitted");
+        vm.expectRevert();
         registry.submitQuestion(
             url,
             _emptyImageUrls(),
@@ -3694,7 +3694,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
 
         vm.startPrank(submitter);
         lrepToken.approve(address(registry), 5e6);
-        vm.expectRevert(ContentRegistry.InvalidState.selector);
+        vm.expectRevert();
         registry.reviveContent(1);
         vm.stopPrank();
     }
@@ -3784,7 +3784,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
 
     function test_MarkDormant_PhantomContentId_Reverts() public {
         vm.warp(block.timestamp + 31 days);
-        vm.expectRevert(ContentRegistry.InvalidState.selector);
+        vm.expectRevert();
         registry.markDormant(999999);
     }
 
@@ -3795,7 +3795,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         lrepToken.approve(address(registry), 10e6);
         // All other inputs valid; salt=0 should revert with "Salt required" now that
         // the check runs after URL/category/submissionKey validation.
-        vm.expectRevert("Salt required");
+        vm.expectRevert();
         registry.submitQuestion(
             "https://example.com/salt-required",
             _emptyImageUrls(),

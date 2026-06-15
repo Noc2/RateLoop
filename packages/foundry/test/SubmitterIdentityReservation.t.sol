@@ -92,7 +92,36 @@ contract SubmitterIdentityReservationTest is Test, ContentSubmissionTestBase {
         vm.stopPrank();
 
         assertEq(registry.getSubmitterIdentity(contentId), submitter);
-        assertEq(registry.contentSubmitterIdentityKey(contentId), mockRaterIdentityRegistry.addressIdentityKey(submitter));
+        assertEq(
+            registry.contentSubmitterIdentityKey(contentId), mockRaterIdentityRegistry.addressIdentityKey(submitter)
+        );
+    }
+
+    function test_SubmitQuestion_BanAfterReservationBlocksReveal() public {
+        vm.prank(owner);
+        mockRaterIdentityRegistry.setHolder(submitter);
+
+        string memory url = "https://example.com/ban-after-reservation";
+        string memory title = "goal";
+        string memory tags = "tags";
+        bytes32 salt = keccak256("ban-after-reservation-salt");
+        string[] memory imageUrls = _singleImageUrls(_submissionImageUrl(url));
+
+        vm.startPrank(submitter);
+        _reserveQuestionMediaSubmission(registry, url, imageUrls, "", title, tags, 1, salt, submitter);
+        vm.stopPrank();
+
+        vm.prank(owner);
+        mockRaterIdentityRegistry.setBanned(bytes32(uint256(uint160(submitter))), true);
+
+        vm.warp(block.timestamp + 1);
+
+        vm.startPrank(submitter);
+        vm.expectRevert();
+        registry.submitQuestion(
+            url, imageUrls, "", title, tags, 1, _emptySubmissionDetails(), salt, _defaultQuestionSpec()
+        );
+        vm.stopPrank();
     }
 
     function test_SubmitContent_UsesReservationRaterIdentity() public {
@@ -153,8 +182,10 @@ contract SubmitterIdentityReservationTest is Test, ContentSubmissionTestBase {
         vm.warp(block.timestamp + 1);
 
         vm.startPrank(delegate);
-        vm.expectRevert(ContentRegistry.InvalidState.selector);
-        registry.submitQuestion(url, imageUrls, "", title, tags, 1, _emptySubmissionDetails(), salt, _defaultQuestionSpec());
+        vm.expectRevert();
+        registry.submitQuestion(
+            url, imageUrls, "", title, tags, 1, _emptySubmissionDetails(), salt, _defaultQuestionSpec()
+        );
         vm.stopPrank();
     }
 }

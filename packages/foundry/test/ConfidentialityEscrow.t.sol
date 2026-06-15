@@ -266,7 +266,7 @@ contract ConfidentialityEscrowTest is VotingTestBase {
         _reserveFlaggedQuestionSubmission(submission);
 
         vm.startPrank(submitter);
-        vm.expectRevert("Ungated flags");
+        vm.expectRevert();
         registry.submitQuestionWithRewardAndRoundConfig(
             submission.contextUrl,
             _emptyImageUrls(),

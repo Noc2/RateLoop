@@ -493,10 +493,10 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     /// @notice Reserve a hidden submission commitment before revealing the public content metadata.
     /// @param revealCommitment Keccak-256 hash of the future submission reveal payload.
     function reserveSubmission(bytes32 revealCommitment) external nonReentrant whenNotPaused {
-        if (revealCommitment == bytes32(0)) revert InvalidState();
+        require(revealCommitment != bytes32(0));
         bytes32 key = _reservationKey(revealCommitment, msg.sender);
         PendingSubmission storage pending = pendingSubmissions[key];
-        if (pending.submitter != address(0)) revert InvalidState();
+        require(pending.submitter == address(0));
 
         // M-Identity-1: snapshot the submitter's identity at reservation time and store both
         // fields verbatim — never zero them out. The pre-fix shortcut zeroed the fields whenever
@@ -519,7 +519,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     function cancelReservedSubmission(bytes32 revealCommitment) external nonReentrant whenNotPaused {
         bytes32 key = _reservationKey(revealCommitment, msg.sender);
         PendingSubmission memory pending = pendingSubmissions[key];
-        require(pending.submitter == msg.sender, "Not submitter");
+        require(pending.submitter == msg.sender);
         delete pendingSubmissions[key];
 
         emit SubmissionReservationCancelled(msg.sender, revealCommitment);
@@ -591,16 +591,16 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         SubmissionRewardTerms calldata rewardTerms,
         RoundLib.RoundConfig calldata roundConfig
     ) external nonReentrant whenNotPaused returns (uint256 bundleId, uint256[] memory contentIds) {
-        if (questions.length == 0) revert InvalidState();
-        require(questions.length > 1, "Bundle needs multiple questions");
-        if (questions.length > MAX_QUESTION_BUNDLE_COUNT) revert InvalidState();
-        if (questionRewardPoolEscrow == address(0)) revert InvalidState();
+        require(questions.length != 0);
+        require(questions.length > 1);
+        require(questions.length <= MAX_QUESTION_BUNDLE_COUNT);
+        require(questionRewardPoolEscrow != address(0));
 
         RoundLib.RoundConfig memory validatedRoundConfig = _validatedRoundConfig(roundConfig);
         require(validatedRoundConfig.maxVoters <= MAX_QUESTION_BUNDLE_ROUND_VOTERS);
-        require(rewardTerms.requiredVoters == validatedRoundConfig.minVoters, "Voters mismatch");
+        require(rewardTerms.requiredVoters == validatedRoundConfig.minVoters);
         _validateSubmissionReward(rewardTerms);
-        require(rewardTerms.bountyWindowSeconds != 0, "Bundle bounty window required");
+        require(rewardTerms.bountyWindowSeconds != 0);
 
         SubmissionMetadata[] memory metadataList = new SubmissionMetadata[](questions.length);
         bytes32[] memory submissionKeys = new bytes32[](questions.length);
@@ -628,12 +628,12 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             // without it, two identical questions in one bundle would both pass the
             // check here and later point at the same submissionKey, so releasing one
             // in Dormant state would brick the sibling forever ("Dormant key released").
-            require(!submissionKeyUsed[submissionKey], "Question already submitted");
+            require(!submissionKeyUsed[submissionKey]);
             submissionKeyUsed[submissionKey] = true;
             // A zero salt collapses the reveal commitment's entropy and lets a front-runner
             // pre-reserve the same (metadata, ..., salt=0) tuple. Force non-zero salt per
             // question so every reveal hash carries caller-supplied randomness.
-            require(question.salt != bytes32(0), "Salt required");
+            require(question.salt != bytes32(0));
 
             metadataList[i] = metadata;
             submissionKeys[i] = submissionKey;
@@ -777,8 +777,8 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         address submitter,
         IConfidentialityEscrow.ConfidentialityConfig memory confidentiality
     ) public onlyRole(X402_GATEWAY_ROLE) nonReentrant whenNotPaused returns (uint256 contentId) {
-        if (submitter == address(0)) revert InvalidState();
-        if (rewardTerms.asset != SUBMISSION_REWARD_ASSET_USDC) revert InvalidState();
+        require(submitter != address(0));
+        require(rewardTerms.asset == SUBMISSION_REWARD_ASSET_USDC);
         SubmissionMetadata memory metadata = _validatedContextSubmissionMetadata(
             contextUrl, imageUrls, videoUrl, title, tags, categoryId, confidentiality.gated
         );
@@ -826,15 +826,15 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     /// @dev Only callable by the submitter. VotingEngine must confirm 0 votes.
     function cancelContent(uint256 contentId) external nonReentrant whenNotPaused {
         ContentRegistryTypes.Content storage c = contents[contentId];
-        require(_isSubmitterIdentity(contentId, msg.sender), "Not submitter");
-        require(c.status == ContentRegistryTypes.ContentStatus.Active, "Not active");
-        if (contentRoundTrackingEngine[contentId] != address(0)) revert InvalidState();
+        require(_isSubmitterIdentity(contentId, msg.sender));
+        require(c.status == ContentRegistryTypes.ContentStatus.Active);
+        require(contentRoundTrackingEngine[contentId] == address(0));
         if (votingEngine != address(0)) {
-            if (IRoundVotingEngine(votingEngine).hasCommits(contentId)) revert InvalidState();
+            require(!IRoundVotingEngine(votingEngine).hasCommits(contentId));
         }
         // Cancelling a bundle member would permanently prevent the bundle escrow from
         // completing all configured round sets. Treat bundles as atomic once submitted.
-        if (contentBundleId[contentId] != 0) revert InvalidState();
+        require(contentBundleId[contentId] == 0);
 
         c.status = ContentRegistryTypes.ContentStatus.Cancelled;
 
@@ -858,7 +858,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     ) internal view returns (SubmissionMetadata memory metadata) {
         submissionMediaValidator.validateContextSubmission(contextUrl, imageUrls, videoUrl, title, tags, gated);
         metadata = SubmissionMetadata({ url: contextUrl, title: title, tags: tags, categoryId: categoryId });
-        if (address(categoryRegistry) == address(0)) revert InvalidState();
+        require(address(categoryRegistry) != address(0));
     }
 
     function _submitValidatedQuestionWithMedia(
@@ -924,13 +924,13 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         resolvedCategoryId = _resolveQuestionSubmissionCategory(metadata);
         bytes32 mediaHash = _submissionMediaHash(imageUrls, videoUrl);
         submissionKey = _deriveQuestionMediaSubmissionKey(metadata, mediaHash, details, resolvedCategoryId);
-        require(!submissionKeyUsed[submissionKey], "Question already submitted");
+        require(!submissionKeyUsed[submissionKey]);
         // A zero salt collapses the reveal commitment's entropy and lets a front-runner
         // pre-reserve the same (metadata, ..., salt=0) tuple. Force non-zero salt so every
         // reveal hash carries caller-supplied randomness.
-        require(salt != bytes32(0), "Salt required");
+        require(salt != bytes32(0));
         _validateSubmissionReward(rewardTerms);
-        require(rewardTerms.requiredVoters == roundConfig.minVoters, "Voters mismatch");
+        require(rewardTerms.requiredVoters == roundConfig.minVoters);
 
         bytes32 revealCommitment = _computeRevealCommitment(
             submissionKey,
@@ -956,20 +956,39 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     {
         bytes32 reservationKey = _reservationKey(revealCommitment, submitter);
         pending = pendingSubmissions[reservationKey];
-        require(pending.submitter == submitter, "Reservation not found");
-        if (block.timestamp > pending.expiresAt) revert InvalidState();
-        require(block.timestamp >= pending.reservedAt + RESERVED_SUBMISSION_MIN_AGE, "Reservation too new");
-        _requireReservedSubmitterIdentityCurrent(pending);
+        require(pending.submitter == submitter);
+        require(block.timestamp <= pending.expiresAt);
+        require(block.timestamp >= pending.reservedAt + RESERVED_SUBMISSION_MIN_AGE);
+        (address submitterIdentity, bytes32 submitterIdentityKey) = _pendingSubmitterIdentity(pending);
+        _requireSubmitterIdentityNotBanned(pending.submitter, submitterIdentity, submitterIdentityKey);
+        _requireReservedSubmitterIdentityCurrent(pending, submitterIdentity, submitterIdentityKey);
 
         delete pendingSubmissions[reservationKey];
     }
 
-    function _requireReservedSubmitterIdentityCurrent(PendingSubmission memory pending) internal view {
-        (address submitterIdentity, bytes32 submitterIdentityKey) = _pendingSubmitterIdentity(pending);
+    function _requireReservedSubmitterIdentityCurrent(
+        PendingSubmission memory pending,
+        address submitterIdentity,
+        bytes32 submitterIdentityKey
+    ) internal view {
         if (submitterIdentity == pending.submitter) return;
         IRaterIdentityRegistry.ResolvedRater memory resolved = _resolveRater(pending.submitter);
         if (resolved.holder != submitterIdentity || resolved.identityKey != submitterIdentityKey) {
-            revert InvalidState();
+            assembly ("memory-safe") {
+                revert(0, 0)
+            }
+        }
+    }
+
+    function _requireSubmitterIdentityNotBanned(
+        address submitter,
+        address submitterIdentity,
+        bytes32 submitterIdentityKey
+    ) internal view {
+        if (protocolConfig.isSubmitterIdentityBanned(submitter, submitterIdentity, submitterIdentityKey)) {
+            assembly ("memory-safe") {
+                revert(0, 0)
+            }
         }
     }
 
@@ -1006,8 +1025,8 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     }
 
     function _validateQuestionSpec(QuestionSpecCommitment memory spec) internal pure {
-        if (spec.questionMetadataHash == bytes32(0)) revert InvalidState();
-        if (spec.resultSpecHash == bytes32(0)) revert InvalidState();
+        require(spec.questionMetadataHash != bytes32(0));
+        require(spec.resultSpecHash != bytes32(0));
     }
 
     function _validateSubmissionDetails(SubmissionDetails memory details, bool gated) internal view {
@@ -1019,8 +1038,8 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         view
         returns (uint256 resolvedCategoryId)
     {
-        if (metadata.categoryId == 0) revert InvalidState();
-        require(categoryRegistry.isCategory(metadata.categoryId), "Category not registered");
+        require(metadata.categoryId != 0);
+        require(categoryRegistry.isCategory(metadata.categoryId));
         return metadata.categoryId;
     }
 
@@ -1117,7 +1136,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             bundleId
         );
         _configureConfidentiality(contentId, confidentiality);
-        if (questionRewardPoolEscrow == address(0)) revert InvalidState();
+        require(questionRewardPoolEscrow != address(0));
         uint256 rewardPoolId = IQuestionRewardPoolEscrow(questionRewardPoolEscrow)
             .createSubmissionRewardPoolFromRegistry(
                 contentId,
@@ -1164,13 +1183,13 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         uint256 contentId,
         IConfidentialityEscrow.ConfidentialityConfig memory confidentiality
     ) internal {
-        if (confidentiality.flags > CONFIDENTIALITY_FLAG_PRIVATE_FOREVER) revert("Invalid flags");
-        if (!confidentiality.gated && confidentiality.flags != 0) revert("Ungated flags");
+        require(confidentiality.flags <= CONFIDENTIALITY_FLAG_PRIVATE_FOREVER);
+        require(confidentiality.gated || confidentiality.flags == 0);
         if (!confidentiality.gated && confidentiality.bondAmount == 0) {
             return;
         }
         address escrow = protocolConfig.confidentialityEscrow();
-        if (escrow == address(0)) revert InvalidState();
+        require(escrow != address(0));
         IConfidentialityEscrow(escrow).configure(contentId, confidentiality);
     }
 
@@ -1195,11 +1214,11 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     /// @dev Anyone can call this. The mandatory submission bounty is not refunded.
     function markDormant(uint256 contentId) external nonReentrant whenNotPaused {
         ContentRegistryTypes.Content storage c = contents[contentId];
-        if (c.id == 0) revert InvalidState();
-        require(c.status == ContentRegistryTypes.ContentStatus.Active, "Not active");
-        if (block.timestamp <= dormancyAnchorAt[contentId] + DORMANCY_PERIOD) revert InvalidState();
-        if (_hasDormancyBlockingRound(contentId)) revert InvalidState();
-        if (contentBundleId[contentId] != 0) revert InvalidState();
+        require(c.id != 0);
+        require(c.status == ContentRegistryTypes.ContentStatus.Active);
+        require(block.timestamp > dormancyAnchorAt[contentId] + DORMANCY_PERIOD);
+        require(!_hasDormancyBlockingRound(contentId));
+        require(contentBundleId[contentId] == 0);
 
         c.status = ContentRegistryTypes.ContentStatus.Dormant;
 
@@ -1216,17 +1235,17 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     ///      Revival stake is sent to treasury (non-refundable).
     function reviveContent(uint256 contentId) external nonReentrant whenNotPaused {
         ContentRegistryTypes.Content storage c = contents[contentId];
-        require(c.status == ContentRegistryTypes.ContentStatus.Dormant, "Not dormant");
-        if (c.dormantCount >= MAX_REVIVALS) revert InvalidState();
+        require(c.status == ContentRegistryTypes.ContentStatus.Dormant);
+        require(c.dormantCount < MAX_REVIVALS);
 
         bytes32 submissionKey = contentSubmissionKey[contentId];
-        if (submissionKey == bytes32(0)) revert InvalidState();
-        if (!submissionKeyUsed[submissionKey]) revert InvalidState();
-        if (!_isSubmitterIdentity(contentId, msg.sender)) revert InvalidState();
-        if (block.timestamp > dormantKeyReleasableAt[contentId]) revert InvalidState();
+        require(submissionKey != bytes32(0));
+        require(submissionKeyUsed[submissionKey]);
+        require(_isSubmitterIdentity(contentId, msg.sender));
+        require(block.timestamp <= dormantKeyReleasableAt[contentId]);
 
         // M-1/M-2 fix: send revival stake to treasury instead of leaving it unaccounted
-        if (treasury == address(0)) revert InvalidState();
+        require(treasury != address(0));
         lrepToken.safeTransferFrom(msg.sender, treasury, REVIVAL_STAKE);
 
         c.status = ContentRegistryTypes.ContentStatus.Active;
@@ -1242,13 +1261,13 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     /// @notice Release a dormant content key after the exclusive revival window expires.
     function releaseDormantSubmissionKey(uint256 contentId) external nonReentrant whenNotPaused {
         ContentRegistryTypes.Content storage c = contents[contentId];
-        if (c.id == 0) revert InvalidState();
-        require(c.status == ContentRegistryTypes.ContentStatus.Dormant, "Not dormant");
-        if (contentBundleId[contentId] != 0) revert InvalidState();
+        require(c.id != 0);
+        require(c.status == ContentRegistryTypes.ContentStatus.Dormant);
+        require(contentBundleId[contentId] == 0);
 
         bytes32 submissionKey = contentSubmissionKey[contentId];
-        if (submissionKey == bytes32(0)) revert InvalidState();
-        if (block.timestamp <= dormantKeyReleasableAt[contentId]) revert InvalidState();
+        require(submissionKey != bytes32(0));
+        require(block.timestamp > dormantKeyReleasableAt[contentId]);
 
         submissionKeyUsed[submissionKey] = false;
         delete contentSubmissionKey[contentId];
@@ -1303,7 +1322,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         uint256 callerGeneration = _authorizeSettlementCallback(contentId);
 
         ContentRegistryTypes.Content storage c = contents[contentId];
-        if (c.id == 0) revert InvalidState();
+        require(c.id != 0);
         c.lastActivityAt = uint48(block.timestamp);
         dormancyAnchorAt[contentId] = block.timestamp;
         contentSettlementEngineGeneration[contentId] = callerGeneration;
@@ -1534,7 +1553,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         view
         returns (RoundLib.RoundConfig memory cfg)
     {
-        if (address(protocolConfig) == address(0)) revert InvalidState();
+        require(address(protocolConfig) != address(0));
         cfg = protocolConfig.validateRoundConfig(
             roundConfig.epochDuration, roundConfig.maxDuration, roundConfig.minVoters, roundConfig.maxVoters
         );

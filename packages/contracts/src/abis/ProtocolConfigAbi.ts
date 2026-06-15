@@ -621,6 +621,35 @@ export const ProtocolConfigAbi = [
   },
   {
     "type": "function",
+    "name": "isSubmitterIdentityBanned",
+    "inputs": [
+      {
+        "name": "submitter",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "submitterIdentity",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "submitterIdentityKey",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "launchDistributionPool",
     "inputs": [],
     "outputs": [

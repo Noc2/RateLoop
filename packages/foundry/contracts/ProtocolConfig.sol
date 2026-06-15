@@ -295,6 +295,19 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         emit RaterRegistryUpdated(value);
     }
 
+    function isSubmitterIdentityBanned(address submitter, address submitterIdentity, bytes32 submitterIdentityKey)
+        external
+        view
+        returns (bool)
+    {
+        address registry = raterRegistry;
+        if (registry == address(0)) return false;
+        RaterRegistry status = RaterRegistry(registry);
+        return _isIdentityBannedAt(status, submitterIdentityKey)
+            || _isIdentityBannedAt(status, _addressIdentityKey(submitter))
+            || _isIdentityBannedAt(status, _addressIdentityKey(submitterIdentity));
+    }
+
     function setLaunchDistributionPool(address value) external onlyRole(CONFIG_ROLE) {
         if (value == address(0)) revert InvalidAddress();
         _validateLaunchDistributionPool(value);
@@ -637,6 +650,15 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         catch {
             revert InvalidConfig();
         }
+    }
+
+    function _isIdentityBannedAt(RaterRegistry registry, bytes32 identityKey) private view returns (bool) {
+        return identityKey != bytes32(0) && registry.isIdentityKeyBanned(identityKey);
+    }
+
+    function _addressIdentityKey(address account) private pure returns (bytes32) {
+        if (account == address(0)) return bytes32(0);
+        return keccak256(abi.encodePacked("rateloop.address-identity-v1", account));
     }
 
     function _validateConfiguredConfidentialityEscrowRaterRegistry(address value) internal view {
