@@ -10,6 +10,7 @@ import {
   normalizeStakeSelectorAmount,
   normalizeStakeSelectorPredictedUpPercent,
   normalizeStakeSelectorRating,
+  shouldShowConfidentialStakeStatus,
 } from "~~/components/swipe/StakeSelector";
 
 test("normalizeStakeSelectorRating keeps unrated commit defaults neutral", () => {
@@ -67,6 +68,45 @@ test("canStakeSelectorRequestWorldIdProof only allows the eligibility wallet to 
   assert.equal(canStakeSelectorRequestWorldIdProof("0xAbC", "0xabc"), true);
   assert.equal(canStakeSelectorRequestWorldIdProof("0xdelegate", "0xholder"), false);
   assert.equal(canStakeSelectorRequestWorldIdProof(undefined, "0xholder"), false);
+});
+
+test("shouldShowConfidentialStakeStatus hides satisfied private context state", () => {
+  assert.equal(
+    shouldShowConfidentialStakeStatus({
+      blocker: null,
+      canPostBond: false,
+      isPrivateContext: true,
+    }),
+    false,
+  );
+});
+
+test("shouldShowConfidentialStakeStatus keeps actionable private context state visible", () => {
+  assert.equal(
+    shouldShowConfidentialStakeStatus({
+      blocker: "Accept the confidentiality terms and unlock the private context before voting.",
+      canPostBond: false,
+      isPrivateContext: true,
+    }),
+    true,
+  );
+  assert.equal(
+    shouldShowConfidentialStakeStatus({
+      blocker: null,
+      canPostBond: true,
+      isPrivateContext: true,
+    }),
+    true,
+  );
+  assert.equal(
+    shouldShowConfidentialStakeStatus({
+      blocker: null,
+      canPostBond: false,
+      hasError: true,
+      isPrivateContext: true,
+    }),
+    true,
+  );
 });
 
 test("getInitialPredictedUpPercent starts from the chosen binary signal", () => {

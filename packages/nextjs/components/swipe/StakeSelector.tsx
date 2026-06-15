@@ -137,6 +137,15 @@ export function canStakeSelectorRequestWorldIdProof(
   return Boolean(address && eligibilityAddress && address.toLowerCase() === eligibilityAddress.toLowerCase());
 }
 
+export function shouldShowConfidentialStakeStatus(params: {
+  isPrivateContext: boolean;
+  blocker: string | null;
+  canPostBond: boolean;
+  hasError?: boolean;
+}) {
+  return params.isPrivateContext && (Boolean(params.blocker) || params.canPostBond || Boolean(params.hasError));
+}
+
 function normalizeCredentialStatusBits(data: unknown): { activeMask: number; freshMask: number } | undefined {
   if (!Array.isArray(data) || data.length < 2) return undefined;
   return {
@@ -413,6 +422,12 @@ export function StakeSelector({
     confidentialityBondRequirement.isRequired &&
     confidentialityBond.hasActiveHumanCredential &&
     !confidentialityBond.hasActiveBond;
+  const showConfidentialStakeStatus = shouldShowConfidentialStakeStatus({
+    blocker: confidentialVoteBlocker,
+    canPostBond: canPostConfidentialityBond,
+    hasError: Boolean(confidentialityBond.error),
+    isPrivateContext: privateContext,
+  });
 
   const handlePostConfidentialityBond = async () => {
     const posted = await confidentialityBond.postBond();
@@ -692,17 +707,12 @@ export function StakeSelector({
               </div>
             )}
 
-            {privateContext ? (
+            {showConfidentialStakeStatus ? (
               <div className="mb-4 rounded-lg border border-warning/20 bg-warning/10 p-3 text-sm text-base-content/75">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="space-y-1">
                     <p className="font-semibold text-warning">Private context</p>
-                    <p>
-                      {confidentialVoteBlocker ??
-                        (confidentialityBondRequirement.isRequired
-                          ? `${confidentialityBondRequirement.label} confidentiality bond active.`
-                          : "Confidentiality terms accepted. No bond required.")}
-                    </p>
+                    {confidentialVoteBlocker ? <p>{confidentialVoteBlocker}</p> : null}
                     {confidentialityBond.error ? (
                       <p className="font-medium text-error">{confidentialityBond.error}</p>
                     ) : null}
