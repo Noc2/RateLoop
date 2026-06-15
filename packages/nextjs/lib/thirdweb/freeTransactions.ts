@@ -1309,9 +1309,10 @@ async function validateSponsoredCalls(
   const contractsByAddress = getContractsByAddress(chainId);
   const frontendRegistry = contracts?.FrontendRegistry;
   const rewardEscrow = contracts?.QuestionRewardPoolEscrow;
+  const feedbackBonusEscrow = contracts?.FeedbackBonusEscrow;
   const votingEngine = contracts?.RoundVotingEngine;
   const allowedApproveSpenders = new Set(
-    [frontendRegistry?.address, rewardEscrow?.address, votingEngine?.address]
+    [frontendRegistry?.address, rewardEscrow?.address, feedbackBonusEscrow?.address, votingEngine?.address]
       .filter((value): value is Address => Boolean(value))
       .map(value => value.toLowerCase()),
   );
@@ -1413,6 +1414,11 @@ async function validateSponsoredCalls(
         return { ok: false, debugCode: "unsupported_operation" };
       case "QuestionRewardPoolEscrow":
         if (functionName === "claimQuestionReward" || functionName === "claimQuestionBundleReward") {
+          continue;
+        }
+        return { ok: false, debugCode: "unsupported_operation" };
+      case "FeedbackBonusEscrow":
+        if (functionName === "createFeedbackBonusPoolWithAsset") {
           continue;
         }
         return { ok: false, debugCode: "unsupported_operation" };

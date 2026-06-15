@@ -70,6 +70,7 @@ const frontendRegistryContract = contractsForChain.FrontendRegistry;
 const profileRegistryContract = contractsForChain.ProfileRegistry;
 const raterRegistryContract = contractsForChain.RaterRegistry;
 const rewardEscrowContract = contractsForChain.QuestionRewardPoolEscrow;
+const feedbackBonusEscrowContract = contractsForChain.FeedbackBonusEscrow;
 const rewardDistributorContract = contractsForChain.RoundRewardDistributor;
 const votingEngineContract = contractsForChain.RoundVotingEngine;
 const arbitraryTokenContract = {
@@ -733,6 +734,17 @@ test("supported sponsored operation families are allowlisted", async () => {
       encodeCall(lrepContract, "approve", [rewardEscrowContract.address, 1_000_000n]),
       encodeCall(contentRegistryContract, "reserveSubmission", [`0x${"1".repeat(64)}`]),
     ],
+    [
+      encodeCall(lrepContract, "approve", [feedbackBonusEscrowContract.address, 1_000_000n]),
+      encodeCall(feedbackBonusEscrowContract, "createFeedbackBonusPoolWithAsset", [
+        1n,
+        1n,
+        0,
+        1_000_000n,
+        1_234n,
+        WALLET,
+      ]),
+    ],
     [encodeCall(lrepContract, "approve", [votingEngineContract.address, 1_000_000n]), voteCall("0x08")],
     [encodeCall(contentRegistryContract, "cancelReservedSubmission", [`0x${"2".repeat(64)}`])],
     [submitQuestionWithRewardCall()],
@@ -1010,6 +1022,16 @@ test("rejects approvals from arbitrary token contracts to supported spenders", a
 test("rejects arbitrary token methods even on allowlisted contracts", async () => {
   const decision = await freeTransactions.evaluateFreeTransactionAllowance(
     buildRequest([encodeCall(lrepContract, "transfer", [WALLET, 10n])]) as never,
+  );
+
+  assert.equal(decision.isAllowed, false);
+  if (decision.isAllowed) return;
+  assert.equal(decision.debugCode, "unsupported_operation");
+});
+
+test("rejects unsupported FeedbackBonusEscrow operations", async () => {
+  const decision = await freeTransactions.evaluateFreeTransactionAllowance(
+    buildRequest([encodeCall(feedbackBonusEscrowContract, "forfeitExpiredFeedbackBonus", [1n])]) as never,
   );
 
   assert.equal(decision.isAllowed, false);
