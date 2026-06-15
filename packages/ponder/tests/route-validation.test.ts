@@ -721,6 +721,7 @@ describe("registerContentRoutes", () => {
     process.env.DATABASE_URL = "postgres://localhost/rateloop";
     process.env.NODE_ENV = "test";
     process.env.PONDER_NETWORK = "hardhat";
+    process.env.PONDER_METADATA_SYNC_ALLOW_OPEN = "true";
 
     try {
       mockPonderModules([]);
@@ -802,6 +803,7 @@ describe("registerContentRoutes", () => {
     process.env.DATABASE_URL = "postgres://localhost/rateloop";
     process.env.NODE_ENV = "test";
     process.env.PONDER_NETWORK = "hardhat";
+    process.env.PONDER_METADATA_SYNC_ALLOW_OPEN = "true";
 
     try {
       mockPonderModules([]);

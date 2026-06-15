@@ -688,9 +688,12 @@ async function updateQuestionMetadataRow(params: {
 function authorizeMetadataSync(c: Context) {
   const token = metadataSyncToken();
   if (!token) {
-    return process.env.NODE_ENV === "production"
-      ? "PONDER_METADATA_SYNC_TOKEN is required in production."
-      : null;
+    if (process.env.PONDER_METADATA_SYNC_ALLOW_OPEN === "true") {
+      return null;
+    }
+    return process.env.DATABASE_URL?.trim()
+      ? "PONDER_METADATA_SYNC_TOKEN is required when DATABASE_URL is configured."
+      : "PONDER_METADATA_SYNC_TOKEN is required.";
   }
   return c.req.header("authorization") === `Bearer ${token}` ? null : "Invalid metadata sync token.";
 }
