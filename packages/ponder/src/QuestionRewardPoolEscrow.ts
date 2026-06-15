@@ -34,6 +34,68 @@ function bundleClaimRowId(
 const ZERO_HASH =
   "0x0000000000000000000000000000000000000000000000000000000000000000" as const;
 
+type RewardPoolAccountingRow = {
+  fundedAmount: bigint;
+  unallocatedAmount: bigint;
+  allocatedAmount: bigint;
+  claimedAmount: bigint;
+  refundedAmount: bigint;
+  qualifiedRounds: number;
+  requiredSettledRounds: number;
+};
+
+// RewardPoolRefunded/Forfeited share one event shape for two on-chain paths:
+// unallocated-only sweeps (pool stays live) vs complete post-grace sweeps (pool closed).
+function isCompleteRewardPoolRefund(
+  row: RewardPoolAccountingRow,
+  amount: bigint,
+): boolean {
+  if (amount > row.unallocatedAmount) return true;
+  if (row.unallocatedAmount === 0n && amount > 0n) return true;
+  const remainingBalance =
+    row.fundedAmount - row.claimedAmount - row.refundedAmount;
+  return (
+    amount === remainingBalance &&
+    row.qualifiedRounds >= row.requiredSettledRounds
+  );
+}
+
+function applyRewardPoolResidueUpdate(
+  row: RewardPoolAccountingRow,
+  amount: bigint,
+  timestamp: bigint,
+) {
+  if (isCompleteRewardPoolRefund(row, amount)) {
+    return {
+      unallocatedAmount: 0n,
+      allocatedAmount: 0n,
+      refundedAmount: row.refundedAmount + amount,
+      refunded: true,
+      updatedAt: timestamp,
+    };
+  }
+
+  return {
+    unallocatedAmount: 0n,
+    refundedAmount: row.refundedAmount + amount,
+    updatedAt: timestamp,
+  };
+}
+
+function applyBundleRewardResidueUpdate(
+  row: { refundedAmount: bigint },
+  amount: bigint,
+  timestamp: bigint,
+) {
+  return {
+    unallocatedAmount: 0n,
+    allocatedAmount: 0n,
+    refundedAmount: row.refundedAmount + amount,
+    refunded: true,
+    updatedAt: timestamp,
+  };
+}
+
 ponder.on(
   "QuestionRewardPoolEscrow:RewardPoolCreated",
   async ({ event, context }) => {
@@ -160,12 +222,9 @@ ponder.on(
 
     await context.db
       .update(questionRewardPool, { id: rewardPoolId })
-      .set((row) => ({
-        unallocatedAmount: 0n,
-        refundedAmount: row.refundedAmount + amount,
-        refunded: true,
-        updatedAt: event.block.timestamp,
-      }));
+      .set((row) =>
+        applyRewardPoolResidueUpdate(row, amount, event.block.timestamp),
+      );
 
     if (existingRewardPool) {
       const existingContent = await context.db.find(content, {
@@ -417,12 +476,9 @@ ponder.on(
 
     await context.db
       .update(questionRewardPool, { id: rewardPoolId })
-      .set((row) => ({
-        unallocatedAmount: 0n,
-        refundedAmount: row.refundedAmount + amount,
-        refunded: true,
-        updatedAt: event.block.timestamp,
-      }));
+      .set((row) =>
+        applyRewardPoolResidueUpdate(row, amount, event.block.timestamp),
+      );
 
     if (existingRewardPool) {
       const existingContent = await context.db.find(content, {
@@ -723,12 +779,9 @@ ponder.on(
 
     await context.db
       .update(questionBundleReward, { id: bundleId })
-      .set((row) => ({
-        unallocatedAmount: 0n,
-        refundedAmount: row.refundedAmount + amount,
-        refunded: true,
-        updatedAt: event.block.timestamp,
-      }));
+      .set((row) =>
+        applyBundleRewardResidueUpdate(row, amount, event.block.timestamp),
+      );
   },
 );
 
@@ -739,11 +792,8 @@ ponder.on(
 
     await context.db
       .update(questionBundleReward, { id: bundleId })
-      .set((row) => ({
-        unallocatedAmount: 0n,
-        refundedAmount: row.refundedAmount + amount,
-        refunded: true,
-        updatedAt: event.block.timestamp,
-      }));
+      .set((row) =>
+        applyBundleRewardResidueUpdate(row, amount, event.block.timestamp),
+      );
   },
 );

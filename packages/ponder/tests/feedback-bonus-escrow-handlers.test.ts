@@ -312,4 +312,44 @@ describe("FeedbackBonusEscrow ponder handlers", () => {
     );
     expect(updates).toContainEqual(expect.objectContaining({ table: "content" }));
   });
+
+  it("does not double-count duplicate feedback bonus awards", async () => {
+    const awardId =
+      "7-0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const { db, inserts, updates } = createDb({
+      'feedbackBonusPool:{"id":"7"}': { id: 7n, contentId: 1n, asset: 0 },
+      [`feedbackBonusAward:{"id":"${awardId}"}`]: { id: awardId },
+    });
+    const registeredHandlers = await loadHandlers();
+
+    await registeredHandlers.get("FeedbackBonusEscrow:FeedbackBonusAwarded")!({
+      event: {
+        args: {
+          poolId: 7n,
+          contentId: 1n,
+          roundId: 3n,
+          recipient: "0x0000000000000000000000000000000000000003",
+          identityKey:
+            "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          feedbackHash:
+            "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          grossAmount: 10_000_000n,
+          recipientAmount: 9_700_000n,
+          frontend: "0x00000000000000000000000000000000000000f1",
+          frontendRecipient: "0x00000000000000000000000000000000000000f2",
+          frontendFee: 300_000n,
+        },
+        block: { number: 11n, timestamp: 1_800n },
+      },
+      context: { db },
+    });
+
+    expect(inserts).toContainEqual(
+      expect.objectContaining({
+        table: "feedbackBonusAward",
+        values: expect.objectContaining({ id: awardId }),
+      }),
+    );
+    expect(updates).toEqual([]);
+  });
 });

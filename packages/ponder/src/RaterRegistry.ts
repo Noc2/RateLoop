@@ -402,7 +402,7 @@ ponder.on(
 ponder.on(
   "RaterRegistry:HumanCredentialRevoked",
   async ({ event, context }) => {
-    const { rater } = event.args;
+    const { rater, nullifierHash, provider } = event.args;
 
     await context.db
       .insert(raterHumanCredential)
@@ -410,8 +410,8 @@ ponder.on(
         rater,
         verified: false,
         revoked: true,
-        provider: 0,
-        nullifierHash: event.args.nullifierHash,
+        provider: Number(provider),
+        nullifierHash,
         scope: ZERO_HASH,
         verifiedAt: event.block.timestamp,
         expiresAt: event.block.timestamp,

@@ -69,12 +69,14 @@ ponder.on("FeedbackBonusEscrow:FeedbackBonusAwarded", async ({ event, context })
     frontendRecipient,
     frontendFee,
   } = event.args;
+  const awardId = `${poolId}-${feedbackHash}`;
   const existingPool = await context.db.find(feedbackBonusPool, { id: poolId });
+  const existingAward = await context.db.find(feedbackBonusAward, { id: awardId });
 
   await context.db
     .insert(feedbackBonusAward)
     .values({
-      id: `${poolId}-${feedbackHash}`,
+      id: awardId,
       poolId,
       contentId,
       roundId,
@@ -91,14 +93,16 @@ ponder.on("FeedbackBonusEscrow:FeedbackBonusAwarded", async ({ event, context })
     })
     .onConflictDoNothing();
 
-  await context.db.update(feedbackBonusPool, { id: poolId }).set((row) => ({
-    remainingAmount: row.remainingAmount - grossAmount,
-    awardedAmount: row.awardedAmount + grossAmount,
-    voterAwardedAmount: row.voterAwardedAmount + recipientAmount,
-    frontendAwardedAmount: row.frontendAwardedAmount + frontendFee,
-    awardCount: row.awardCount + 1,
-    updatedAt: event.block.timestamp,
-  }));
+  if (!existingAward) {
+    await context.db.update(feedbackBonusPool, { id: poolId }).set((row) => ({
+      remainingAmount: row.remainingAmount - grossAmount,
+      awardedAmount: row.awardedAmount + grossAmount,
+      voterAwardedAmount: row.voterAwardedAmount + recipientAmount,
+      frontendAwardedAmount: row.frontendAwardedAmount + frontendFee,
+      awardCount: row.awardCount + 1,
+      updatedAt: event.block.timestamp,
+    }));
+  }
 
   await touchContent(context, contentId, event.block.timestamp);
 });

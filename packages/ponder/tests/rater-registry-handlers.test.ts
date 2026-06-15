@@ -403,4 +403,43 @@ describe("RaterRegistry ponder handlers", () => {
       },
     ]);
   });
+
+  it("indexes human credential revocations with the emitted provider", async () => {
+    const { db, upserts } = createDb();
+    const registeredHandlers = await loadHandlers();
+    const handler = registeredHandlers.get(
+      "RaterRegistry:HumanCredentialRevoked",
+    );
+
+    expect(handler).toBeDefined();
+
+    await handler!({
+      event: {
+        args: {
+          rater: "0x0000000000000000000000000000000000001234",
+          nullifierHash: `0x${"99".repeat(32)}`,
+          provider: 1,
+        },
+        block: { timestamp: 300n },
+      },
+      context: { db },
+    });
+
+    expect(upserts).toEqual([
+      {
+        table: "raterHumanCredential",
+        values: expect.objectContaining({
+          rater: "0x0000000000000000000000000000000000001234",
+          verified: false,
+          revoked: true,
+          provider: 1,
+          nullifierHash: `0x${"99".repeat(32)}`,
+        }),
+        update: expect.objectContaining({
+          revoked: true,
+          updatedAt: 300n,
+        }),
+      },
+    ]);
+  });
 });

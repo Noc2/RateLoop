@@ -36,6 +36,7 @@ function resolveSetter(
   valuesOrUpdater:
     | Record<string, unknown>
     | ((row: any) => Record<string, unknown>),
+  rowOverrides: Record<string, unknown> = {},
 ) {
   if (typeof valuesOrUpdater !== "function") return valuesOrUpdater;
 
@@ -45,15 +46,21 @@ function resolveSetter(
     claimedCount: 0,
     completedRoundSetCount: 0,
     frontendClaimedAmount: 0n,
+    fundedAmount: 100_000_000n,
     qualifiedRounds: 0,
     refundedAmount: 0n,
+    requiredSettledRounds: 2,
     totalRecordedQuestionRounds: 0,
     unallocatedAmount: 100_000_000n,
     voterClaimedAmount: 0n,
+    ...rowOverrides,
   });
 }
 
-function createDb(findResults: Record<string, unknown> = {}) {
+function createDb(
+  findResults: Record<string, unknown> = {},
+  updateRow: Record<string, unknown> = {},
+) {
   const inserts: Array<{ table: string; values: Record<string, unknown> }> = [];
   const updates: Array<{
     table: string;
@@ -89,7 +96,7 @@ function createDb(findResults: Record<string, unknown> = {}) {
             | Record<string, unknown>
             | ((row: any) => Record<string, unknown>),
         ) => {
-          updates.push({ table, key, values: resolveSetter(valuesOrUpdater) });
+          updates.push({ table, key, values: resolveSetter(valuesOrUpdater, updateRow) });
         },
       ),
     })),
@@ -466,8 +473,8 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
         expect.objectContaining({
           table: "questionRewardPool",
           values: expect.objectContaining({
-            refunded: true,
             refundedAmount: 50_000_000n,
+            unallocatedAmount: 0n,
           }),
         }),
       ]),
@@ -856,6 +863,45 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
     );
   });
 
+  it("zeros allocated balance and marks pools refunded on complete residue sweeps", async () => {
+    const { db, updates } = createDb(
+      {},
+      {
+        unallocatedAmount: 10_000_000n,
+        allocatedAmount: 80_000_000n,
+        claimedAmount: 10_000_000n,
+        qualifiedRounds: 2,
+      },
+    );
+    const registeredHandlers = await loadHandlers();
+
+    await registeredHandlers.get(
+      "QuestionRewardPoolEscrow:RewardPoolRefunded",
+    )!({
+      event: {
+        args: {
+          rewardPoolId: 7n,
+          funder: "0x0000000000000000000000000000000000000001",
+          amount: 90_000_000n,
+        },
+        block: { number: 13n, timestamp: 2_000n },
+      },
+      context: { db },
+    });
+
+    expect(updates).toContainEqual({
+      table: "questionRewardPool",
+      key: { id: 7n },
+      values: {
+        unallocatedAmount: 0n,
+        allocatedAmount: 0n,
+        refundedAmount: 90_000_000n,
+        refunded: true,
+        updatedAt: 2_000n,
+      },
+    });
+  });
+
   it("marks bundle rewards refunded when unused funds are returned or forfeited", async () => {
     const { db, updates } = createDb();
     const registeredHandlers = await loadHandlers();
@@ -900,6 +946,8 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
           values: expect.objectContaining({
             refunded: true,
             refundedAmount: 30_000_000n,
+            allocatedAmount: 0n,
+            unallocatedAmount: 0n,
           }),
         }),
         expect.objectContaining({
@@ -908,6 +956,8 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
           values: expect.objectContaining({
             refunded: true,
             refundedAmount: 20_000_000n,
+            allocatedAmount: 0n,
+            unallocatedAmount: 0n,
           }),
         }),
       ]),
