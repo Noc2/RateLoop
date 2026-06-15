@@ -289,6 +289,54 @@ contract LaunchDistributionPoolTest is Test {
         assertEq(address(pool.clusterPayoutOracle()), address(oracle));
     }
 
+    function test_RaterRegistryMismatchRevertsAfterProtocolConfigAdoptsPool() public {
+        MockLaunchProtocolConfig config = new MockLaunchProtocolConfig(address(registry), address(pool));
+        pool.setRoundClusterReadyAtSource(address(new MockConfiguredClusterSource(address(config))));
+
+        RaterRegistry replacementRegistry = new RaterRegistry(
+            address(this),
+            address(this),
+            address(worldIdRouter),
+            WORLD_ID_V4_RP_ID,
+            uint256(keccak256("replacement-human-credential-v4")),
+            WORLD_ID_V4_PRESENCE_ACTION,
+            365 days,
+            15 minutes,
+            WORLD_ID_V4_ISSUER_SCHEMA_ID,
+            WORLD_ID_V4_CREDENTIAL_GENESIS_ISSUED_AT_MIN
+        );
+        pool.setRaterRegistry(address(replacementRegistry));
+
+        vm.prank(alice);
+        vm.expectRevert(LaunchDistributionPool.InvalidAddress.selector);
+        pool.claimVerifiedBonus(address(0));
+    }
+
+    function test_RaterRegistryCanMoveBeforeProtocolConfigAdoptsPool() public {
+        MockLaunchProtocolConfig config = new MockLaunchProtocolConfig(address(registry), address(0xBEEF));
+        pool.setRoundClusterReadyAtSource(address(new MockConfiguredClusterSource(address(config))));
+
+        RaterRegistry replacementRegistry = new RaterRegistry(
+            address(this),
+            address(this),
+            address(worldIdRouter),
+            WORLD_ID_V4_RP_ID,
+            uint256(keccak256("replacement-human-credential-v4")),
+            WORLD_ID_V4_PRESENCE_ACTION,
+            365 days,
+            15 minutes,
+            WORLD_ID_V4_ISSUER_SCHEMA_ID,
+            WORLD_ID_V4_CREDENTIAL_GENESIS_ISSUED_AT_MIN
+        );
+        pool.setRaterRegistry(address(replacementRegistry));
+        replacementRegistry.seedHumanCredential(
+            alice, uint64(block.timestamp + 30 days), bytes32("replacement-alice"), bytes32("evidence")
+        );
+
+        vm.prank(alice);
+        assertGt(pool.claimVerifiedBonus(address(0)), 0);
+    }
+
     function test_InterruptedDeploymentCannotRetargetGovernanceAndDrainPool() public {
         address deployer = address(0xD00D);
         address intendedGovernance = address(0xBEEF);
@@ -3127,6 +3175,48 @@ contract MockAlwaysReadyClusterSource {
 
     function revealGracePeriod() external pure returns (uint256) {
         return 0;
+    }
+}
+
+contract MockLaunchProtocolConfig {
+    address public raterRegistry;
+    address public launchDistributionPool;
+
+    constructor(address raterRegistry_, address launchDistributionPool_) {
+        raterRegistry = raterRegistry_;
+        launchDistributionPool = launchDistributionPool_;
+    }
+
+    function setRaterRegistry(address value) external {
+        raterRegistry = value;
+    }
+
+    function setLaunchDistributionPool(address value) external {
+        launchDistributionPool = value;
+    }
+
+    function revealGracePeriod() external pure returns (uint256) {
+        return 0;
+    }
+}
+
+contract MockConfiguredClusterSource {
+    address internal immutable config;
+
+    constructor(address config_) {
+        config = config_;
+    }
+
+    function roundLifecycleState(uint256, uint256) external pure returns (uint256, uint256, uint256, uint48) {
+        return (0, 0, 0, 1);
+    }
+
+    function roundCore(uint256, uint256) external pure returns (uint48, uint8, uint16, uint16, uint64, uint48, uint48) {
+        return (1, 1, 0, 0, 0, 0, 1);
+    }
+
+    function protocolConfig() external view returns (address) {
+        return config;
     }
 }
 

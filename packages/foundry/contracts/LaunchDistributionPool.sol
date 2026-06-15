@@ -1428,6 +1428,7 @@ contract LaunchDistributionPool is
         view
         returns (bytes32 nullifierHash, bytes32 credentialKey)
     {
+        if (_isRaterBanned(rater)) return (bytes32(0), bytes32(0));
         RaterRegistry.HumanCredential memory credential = raterRegistry.getHumanCredential(rater);
         if (
             credential.verified && !credential.revoked && credential.expiresAt > block.timestamp
@@ -1435,14 +1436,33 @@ contract LaunchDistributionPool is
         ) {
             nullifierHash = credential.nullifierHash;
             credentialKey = _credentialClaimKey(credential.provider, credential.nullifierHash);
-            if (raterRegistry.isIdentityKeyBanned(credentialKey) || _isRaterBanned(rater)) {
+            if (raterRegistry.isIdentityKeyBanned(credentialKey)) {
                 return (bytes32(0), bytes32(0));
             }
         }
     }
 
     function _isRaterBanned(address rater) internal view returns (bool) {
+        _requireConfiguredRaterRegistry();
         return raterRegistry.isIdentityKeyBanned(raterRegistry.addressIdentityKey(rater));
+    }
+
+    function _requireConfiguredRaterRegistry() private view {
+        address protocolConfig = _roundSourceProtocolConfig(address(roundClusterReadyAtSource));
+
+        address configuredPool;
+        address configuredRegistry;
+        assembly ("memory-safe") {
+            let ptr := mload(0x40)
+            mstore(ptr, shl(224, 0xced2665e))
+            pop(staticcall(gas(), protocolConfig, ptr, 4, ptr, 0x20))
+            configuredPool := and(mload(ptr), 0xffffffffffffffffffffffffffffffffffffffff)
+            mstore(ptr, shl(224, 0x53b86ffb))
+            pop(staticcall(gas(), protocolConfig, ptr, 4, ptr, 0x20))
+            configuredRegistry := and(mload(ptr), 0xffffffffffffffffffffffffffffffffffffffff)
+        }
+        if (configuredPool != address(this)) return;
+        if (configuredRegistry != address(raterRegistry)) revert InvalidAddress();
     }
 
     function _credentialClaimKey(RaterRegistry.HumanCredentialProvider provider, bytes32 nullifierHash)
