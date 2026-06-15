@@ -69,6 +69,32 @@ contract SubmitterIdentityReservationTest is Test, ContentSubmissionTestBase {
         assertEq(registry.getSubmitterIdentity(contentId), submitter);
     }
 
+    function test_DirectReveal_KeepsReservationSnapshotAfterIdentityChange() public {
+        string memory url = "https://example.com/direct-identity-change";
+        string memory title = "goal";
+        string memory tags = "tags";
+        bytes32 salt = keccak256("direct-identity-change-salt");
+        string[] memory imageUrls = _singleImageUrls(_submissionImageUrl(url));
+
+        vm.startPrank(submitter);
+        _reserveQuestionMediaSubmission(registry, url, imageUrls, "", title, tags, 1, salt, submitter);
+        vm.stopPrank();
+
+        vm.prank(owner);
+        mockRaterIdentityRegistry.setHolder(submitter);
+
+        vm.warp(block.timestamp + 1);
+
+        vm.startPrank(submitter);
+        uint256 contentId = registry.submitQuestion(
+            url, imageUrls, "", title, tags, 1, _emptySubmissionDetails(), salt, _defaultQuestionSpec()
+        );
+        vm.stopPrank();
+
+        assertEq(registry.getSubmitterIdentity(contentId), submitter);
+        assertEq(registry.contentSubmitterIdentityKey(contentId), mockRaterIdentityRegistry.addressIdentityKey(submitter));
+    }
+
     function test_SubmitContent_UsesReservationRaterIdentity() public {
         vm.prank(owner);
         mockRaterIdentityRegistry.setHolder(submitter);
@@ -88,12 +114,6 @@ contract SubmitterIdentityReservationTest is Test, ContentSubmissionTestBase {
         _reserveQuestionMediaSubmission(registry, contextUrl, imageUrls, "", title, tags, 1, salt, delegate);
         vm.stopPrank();
 
-        vm.prank(submitter);
-        mockRaterIdentityRegistry.removeDelegate();
-
-        vm.prank(delegate);
-        mockRaterIdentityRegistry.setHolder(delegate);
-
         vm.warp(block.timestamp + 1);
 
         vm.startPrank(delegate);
@@ -106,7 +126,7 @@ contract SubmitterIdentityReservationTest is Test, ContentSubmissionTestBase {
         assertEq(registry.contentSubmitterIdentityKey(contentId), bytes32(uint256(uint160(submitter))));
     }
 
-    function test_SubmitQuestion_UsesReservationRaterIdentity() public {
+    function test_SubmitQuestion_RevokedDelegateCannotRevealReservation() public {
         vm.prank(owner);
         mockRaterIdentityRegistry.setHolder(submitter);
 
@@ -120,6 +140,7 @@ contract SubmitterIdentityReservationTest is Test, ContentSubmissionTestBase {
         string[] memory imageUrls = _singleImageUrls(url);
 
         vm.startPrank(delegate);
+        lrepToken.approve(address(registry), 10e6);
         _reserveQuestionMediaSubmission(registry, url, imageUrls, "", title, tags, 1, salt, delegate);
         vm.stopPrank();
 
@@ -132,12 +153,8 @@ contract SubmitterIdentityReservationTest is Test, ContentSubmissionTestBase {
         vm.warp(block.timestamp + 1);
 
         vm.startPrank(delegate);
-        uint256 contentId = registry.submitQuestion(
-            url, imageUrls, "", title, tags, 1, _emptySubmissionDetails(), salt, _defaultQuestionSpec()
-        );
+        vm.expectRevert(ContentRegistry.InvalidState.selector);
+        registry.submitQuestion(url, imageUrls, "", title, tags, 1, _emptySubmissionDetails(), salt, _defaultQuestionSpec());
         vm.stopPrank();
-
-        assertEq(registry.getSubmitterIdentity(contentId), submitter);
-        assertEq(registry.contentSubmitterIdentityKey(contentId), bytes32(uint256(uint160(submitter))));
     }
 }

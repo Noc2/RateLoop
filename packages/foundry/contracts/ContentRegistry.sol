@@ -959,8 +959,18 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         require(pending.submitter == submitter, "Reservation not found");
         if (block.timestamp > pending.expiresAt) revert InvalidState();
         require(block.timestamp >= pending.reservedAt + RESERVED_SUBMISSION_MIN_AGE, "Reservation too new");
+        _requireReservedSubmitterIdentityCurrent(pending);
 
         delete pendingSubmissions[reservationKey];
+    }
+
+    function _requireReservedSubmitterIdentityCurrent(PendingSubmission memory pending) internal view {
+        (address submitterIdentity, bytes32 submitterIdentityKey) = _pendingSubmitterIdentity(pending);
+        if (submitterIdentity == pending.submitter) return;
+        IRaterIdentityRegistry.ResolvedRater memory resolved = _resolveRater(pending.submitter);
+        if (resolved.holder != submitterIdentity || resolved.identityKey != submitterIdentityKey) {
+            revert InvalidState();
+        }
     }
 
     function _submissionMediaHash(string[] memory imageUrls, string memory videoUrl) internal pure returns (bytes32) {
