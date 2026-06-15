@@ -81,6 +81,7 @@ export function registerDiscoveryRoutes(app: ApiApp) {
         categoryId: content.categoryId,
         roundStartTime: round.startTime,
         epochDuration: round.epochDuration,
+        revealGracePeriod: round.revealGracePeriod,
         profileName: profile.name,
       })
       .from(vote)
@@ -119,6 +120,7 @@ export function registerDiscoveryRoutes(app: ApiApp) {
               categoryId: content.categoryId,
               roundStartTime: round.startTime,
               epochDuration: round.epochDuration,
+              revealGracePeriod: round.revealGracePeriod,
               profileName: profile.name,
             })
             .from(round)
@@ -166,6 +168,7 @@ export function registerDiscoveryRoutes(app: ApiApp) {
           estimatedSettlementTime: getEstimatedSettlementTime(
             item.roundStartTime,
             item.epochDuration,
+            item.revealGracePeriod,
           ),
           source:
             existing && existing.source !== source
@@ -314,6 +317,7 @@ export function registerDiscoveryRoutes(app: ApiApp) {
         categoryId: content.categoryId,
         roundStartTime: round.startTime,
         epochDuration: round.epochDuration,
+        revealGracePeriod: round.revealGracePeriod,
         profileName: profile.name,
       })
       .from(vote)
@@ -352,6 +356,7 @@ export function registerDiscoveryRoutes(app: ApiApp) {
               categoryId: content.categoryId,
               roundStartTime: round.startTime,
               epochDuration: round.epochDuration,
+              revealGracePeriod: round.revealGracePeriod,
               profileName: profile.name,
             })
             .from(round)
@@ -381,6 +386,7 @@ export function registerDiscoveryRoutes(app: ApiApp) {
           estimatedSettlementTime: getEstimatedSettlementTime(
             item.roundStartTime,
             item.epochDuration,
+            item.revealGracePeriod,
           ),
           source:
             existing && existing.source !== source

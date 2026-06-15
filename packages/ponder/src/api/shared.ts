@@ -62,13 +62,19 @@ export function parseAddressList(value: string | undefined, max = 200) {
 export function getEstimatedSettlementTime(
   startTime: bigint | null | undefined,
   epochDurationSeconds = DEFAULT_ROUND_CONFIG.epochDurationSeconds,
+  revealGracePeriodSeconds: bigint | number | null = DEFAULT_REVEAL_GRACE_PERIOD_SECONDS,
 ) {
   if (startTime === null || startTime === undefined) return null;
+
+  const graceSeconds =
+    revealGracePeriodSeconds === null || revealGracePeriodSeconds === undefined
+      ? DEFAULT_REVEAL_GRACE_PERIOD_SECONDS
+      : Number(revealGracePeriodSeconds);
 
   return (
     startTime
     + BigInt(epochDurationSeconds)
-    + BigInt(DEFAULT_REVEAL_GRACE_PERIOD_SECONDS)
+    + BigInt(graceSeconds > 0 ? graceSeconds : DEFAULT_REVEAL_GRACE_PERIOD_SECONDS)
   );
 }
 
@@ -328,7 +334,13 @@ function formatRoundSummary(row: {
       forfeitsEnabled: row.revealedCount >= SCORE_SPREAD_POLICY.forfeitMinReveals,
     },
     estimatedSettlementTime:
-      row.state === ROUND_STATE.Open ? getEstimatedSettlementTime(row.startTime, row.epochDuration) : null,
+      row.state === ROUND_STATE.Open
+        ? getEstimatedSettlementTime(
+            row.startTime,
+            row.epochDuration,
+            row.revealGracePeriod,
+          )
+        : null,
   };
 }
 
