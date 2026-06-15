@@ -829,25 +829,10 @@ contract LaunchDistributionPool is
         if (paidAmount == 0) return 0;
 
         // L-Funds-5: when the pool is depleted mid-slot, advance rewardedRatingCount only to
-        // the proportional position that the actually-paid amount represents, not all the way
-        // to targetRewardedCount. Otherwise the slot count irreversibly outpaces the paid
-        // total and the rater's remaining cap becomes locked even after the pool is refilled.
-        if (poolDepleted) {
-            uint256 newTotalPaid = raterLaunchPaid[rater] + paidAmount;
-            uint32 proportionalCount;
-            if (newTotalPaid >= cap) {
-                proportionalCount = policy.rewardingRatingCount;
-            } else if (cap > 0) {
-                proportionalCount = uint32((newTotalPaid * uint256(policy.rewardingRatingCount)) / cap);
-            } else {
-                proportionalCount = rewardedCount;
-            }
-            if (proportionalCount < rewardedCount) proportionalCount = rewardedCount;
-            if (proportionalCount > targetRewardedCount) proportionalCount = targetRewardedCount;
-            rewardedRatingCount[rater] = proportionalCount;
-        } else {
-            rewardedRatingCount[rater] = targetRewardedCount;
-        }
+        // the proportional position represented by the actually-paid amount.
+        _setRewardedCountAfterPaidAmount(
+            rater, cap, rewardedCount, targetRewardedCount, paidAmount, poolDepleted, policy
+        );
         raterLaunchPaid[rater] += paidAmount;
         earnedRaterDistributed += paidAmount;
         _pay(rater, paidAmount);
@@ -1134,22 +1119,9 @@ contract LaunchDistributionPool is
         if (poolDepleted) catchUpPaid = remaining;
         if (catchUpPaid == 0) return 0;
 
-        if (poolDepleted) {
-            uint256 newTotalPaid = raterLaunchPaid[rater] + catchUpPaid;
-            uint32 proportionalCount;
-            if (newTotalPaid >= fullCap) {
-                proportionalCount = policy.rewardingRatingCount;
-            } else if (fullCap > 0) {
-                proportionalCount = uint32((newTotalPaid * uint256(policy.rewardingRatingCount)) / fullCap);
-            } else {
-                proportionalCount = currentRewardedCount;
-            }
-            if (proportionalCount < currentRewardedCount) proportionalCount = currentRewardedCount;
-            if (proportionalCount > targetRewardedCount) proportionalCount = targetRewardedCount;
-            rewardedRatingCount[rater] = proportionalCount;
-        } else {
-            rewardedRatingCount[rater] = targetRewardedCount;
-        }
+        _setRewardedCountAfterPaidAmount(
+            rater, fullCap, currentRewardedCount, targetRewardedCount, catchUpPaid, poolDepleted, policy
+        );
         raterLaunchPaid[rater] += catchUpPaid;
         earnedRaterDistributed += catchUpPaid;
         _pay(rater, catchUpPaid);
@@ -1160,6 +1132,33 @@ contract LaunchDistributionPool is
         if (nullifierHash == bytes32(0)) return false;
         address claimedBy = launchFullCapNullifierRater[credentialKey];
         return claimedBy != address(0) && claimedBy != rater;
+    }
+
+    function _setRewardedCountAfterPaidAmount(
+        address rater,
+        uint256 cap,
+        uint32 currentRewardedCount,
+        uint32 targetRewardedCount,
+        uint256 paidAmount,
+        bool poolDepleted,
+        LaunchRewardPolicy memory policy
+    ) internal {
+        if (!poolDepleted) {
+            rewardedRatingCount[rater] = targetRewardedCount;
+            return;
+        }
+        uint256 newTotalPaid = raterLaunchPaid[rater] + paidAmount;
+        uint32 proportionalCount;
+        if (newTotalPaid >= cap) {
+            proportionalCount = policy.rewardingRatingCount;
+        } else if (cap > 0) {
+            proportionalCount = uint32((newTotalPaid * uint256(policy.rewardingRatingCount)) / cap);
+        } else {
+            proportionalCount = currentRewardedCount;
+        }
+        if (proportionalCount < currentRewardedCount) proportionalCount = currentRewardedCount;
+        if (proportionalCount > targetRewardedCount) proportionalCount = targetRewardedCount;
+        rewardedRatingCount[rater] = proportionalCount;
     }
 
     function _earnedRewardSlotCount(uint32 qualifyingCount, LaunchRewardPolicy memory policy)
