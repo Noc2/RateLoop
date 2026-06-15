@@ -342,7 +342,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       readOnlyHint: false,
     },
     description:
-      "Create a browser handoff link for normal human-wallet asks. Use this for public URL, YouTube, generated/local image, or gated RateLoop-hosted private context; share the returned handoffUrl with the user. Do not ask users to paste raw wallet signatures.",
+      "Create a browser handoff link for normal human-wallet asks. Use this for public URL, YouTube, generated/local image, or gated RateLoop-hosted private context; share the returned handoffUrl with the user. generatedImages are decoded before the link is returned, so corrupt image bytes fail synchronously. Do not ask users to paste raw wallet signatures.",
     inputSchema: agentCreateAskHandoffInputSchema,
     name: "rateloop_create_ask_handoff_link",
     outputSchema: agentAskHandoffOutputSchema,

@@ -12,7 +12,8 @@ const atomicAmountSchema = {
 };
 
 const chainIdSchema = {
-  description: "EVM chain id.",
+  description:
+    "Target RateLoop deployment EVM chain id. Browser handoffs keep this saved chain during prepare; the connected wallet may need to switch to it before execution.",
   minimum: 1,
   type: "integer",
 };
@@ -61,8 +62,9 @@ const templateSelectorSchema = {
 } satisfies JsonSchema;
 
 function enumArraySchema(values: readonly string[], description?: string) {
+  const allowedValues = `Allowed values: ${values.join(", ")}.`;
   return {
-    description,
+    description: description ? `${description} ${allowedValues}` : allowedValues,
     items: { enum: [...values], type: "string" },
     type: "array",
   };
@@ -79,7 +81,7 @@ function stringArraySchema(description: string) {
 const targetAudienceInputSchema = {
   additionalProperties: false,
   description:
-    "Optional structured self-reported audience request. Use rateloop_list_audience_options for valid values. Target criteria are hidden from the normal rating UI but are part of the public question metadata preimage; do not put secrets here.",
+    "Optional structured self-reported audience request. Enum fields list their supported values and rateloop_list_audience_options returns the full taxonomy; do not invent aliases. Target criteria are hidden from the normal rating UI but are part of the public question metadata preimage; do not put secrets here.",
   properties: {
     ageGroups: enumArraySchema(targetAudienceTaxonomy.ageGroups),
     countries: stringArraySchema(targetAudienceTaxonomy.countries),
@@ -165,7 +167,7 @@ const agentQuestionInputSchema = {
     confidentiality: agentQuestionConfidentialityInputSchema,
     contextUrl: {
       description:
-        "Optional HTTPS page URL voters should inspect. For images, upload bytes first and use imageUrls. Required when both imageUrls and videoUrl are empty.",
+        "Optional public HTTPS page URL voters should inspect. For generated/local images in human-wallet flows, use rateloop_create_ask_handoff_link with generatedImages; for direct asks, upload bytes first and use imageUrls. Required when both imageUrls and videoUrl are empty.",
       type: "string",
     },
     detailsHash: {
@@ -179,13 +181,15 @@ const agentQuestionInputSchema = {
     },
     imageUrls: {
       description:
-        "Image URLs returned by rateloop_upload_image for public mockups, screenshots, or generated visuals. Required only when both contextUrl and videoUrl are empty.",
+        "Image URLs returned by RateLoop image upload for public mockups, screenshots, or generated visuals. External .jpg/.png/.webp URLs are rejected for direct submissions. For human-wallet local/generated images, prefer rateloop_create_ask_handoff_link with generatedImages.",
       items: { type: "string" },
       type: "array",
     },
     tags: {
       description: "One to three public tags.",
       items: { type: "string" },
+      maxItems: 3,
+      minItems: 1,
       type: ["array", "string"],
     },
     targetAudience: targetAudienceInputSchema,
@@ -563,7 +567,7 @@ export const agentCreateAskHandoffInputSchema = {
     ...agentAskInputBaseProperties,
     generatedImages: {
       description:
-        "Optional generated/local image bytes to stage into the browser handoff. Use this instead of raw public image-upload challenges for normal chat flows.",
+        "Optional generated/local image bytes to stage into the browser handoff. RateLoop fully decodes these bytes before returning a link, so corrupt or truncated images are rejected synchronously. Use this instead of raw public image-upload challenges for normal chat flows.",
       items: agentHandoffGeneratedImageInputSchema,
       maxItems: 4,
       type: "array",
@@ -586,7 +590,7 @@ export const agentCreateAskHandoffInputSchema = {
       type: "object",
     },
     ttlMs: {
-      description: "Optional handoff link lifetime in milliseconds.",
+      description: "Optional handoff link lifetime in milliseconds. Defaults to 30 minutes; minimum 60000, maximum 86400000.",
       minimum: 60000,
       type: "integer",
     },
@@ -666,6 +670,8 @@ export const agentAskHandoffOutputSchema = {
 
 export const agentQuoteInputSchema = {
   additionalProperties: true,
+  description:
+    "Preflight an ask using public URLs or already uploaded RateLoop imageUrls. generatedImages are validated by rateloop_create_ask_handoff_link, not by quote.",
   properties: {
     ...agentAskInputBaseProperties,
     walletAddress: {
