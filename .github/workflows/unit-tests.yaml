@@ -28,6 +28,11 @@ jobs:
       - name: Enforce storage layout pinning
         working-directory: packages/foundry
         run: make check-storage-layouts
+      - name: Verify shared ABIs match compiled Solidity
+        working-directory: packages/foundry
+        run: |
+          make generate-abis-only
+          git diff --exit-code ../contracts/src/abis ../contracts/src/deployedContracts.ts
 
   foundry:
     runs-on: ubuntu-latest

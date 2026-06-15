@@ -701,6 +701,93 @@ export function filterGeneratedContractsForDeployTarget(allGeneratedContracts) {
     : {};
 }
 
+function writeDeployedContractsFile(mergedContracts) {
+  const CONTRACTS_TARGET_DIR = join(__dirname, "..", "..", "contracts", "src");
+  const deployedContractsTargetFile = join(
+    CONTRACTS_TARGET_DIR,
+    "deployedContracts.ts"
+  );
+
+  const fileContent = Object.entries(mergedContracts).reduce(
+    (content, [chainId, chainConfig]) => {
+      const cleanedChainConfig = Object.fromEntries(
+        Object.entries(chainConfig).map(([contractName, contractData]) => {
+          const { deploymentFile, deploymentScript, ...rest } = contractData;
+          return [contractName, rest];
+        })
+      );
+      return `${content}${parseInt(chainId).toFixed(0)}:${JSON.stringify(
+        cleanedChainConfig,
+        null,
+        2
+      )},`;
+    },
+    ""
+  );
+
+  const fileTemplate = `
+    ${generatedContractComment}
+    import type { GenericContractsDeclaration } from "./types";
+
+    const deployedContracts: GenericContractsDeclaration = {${fileContent}};
+
+    export default deployedContracts;
+  `;
+
+  writeFileSync(
+    deployedContractsTargetFile,
+    format(fileTemplate, {
+      parser: "typescript",
+    })
+  );
+
+  console.log(
+    `📝 Updated shared contract definition file on ${deployedContractsTargetFile}`
+  );
+}
+
+export function refreshExistingDeployedContractAbis(existingContracts) {
+  return Object.fromEntries(
+    Object.entries(existingContracts).map(([chainId, chainConfig]) => [
+      chainId,
+      Object.fromEntries(
+        Object.entries(chainConfig).map(([contractName, contractData]) => {
+          const artifact = getArtifactOfContract(contractName);
+          if (!artifact) {
+            return [contractName, contractData];
+          }
+
+          return [
+            contractName,
+            {
+              ...contractData,
+              abi: artifact.abi,
+              inheritedFunctions: getInheritedFunctions(artifact),
+            },
+          ];
+        })
+      ),
+    ])
+  );
+}
+
+export function regenerateAbisOnly() {
+  const CONTRACTS_TARGET_DIR = join(__dirname, "..", "..", "contracts", "src");
+  const deployedContractsTargetFile = join(
+    CONTRACTS_TARGET_DIR,
+    "deployedContracts.ts"
+  );
+  const existingContracts = readExistingDeployedContracts(
+    deployedContractsTargetFile
+  );
+  const mergedContracts = refreshExistingDeployedContractAbis(
+    pruneGeneratedOnlyContracts(existingContracts)
+  );
+
+  generateAbiFiles();
+  writeDeployedContractsFile(mergedContracts);
+}
+
 function main() {
   const current_path_to_broadcast = join(__dirname, "..", "broadcast");
   const current_path_to_deployments = join(__dirname, "..", "deployments");
@@ -816,44 +903,7 @@ function main() {
   };
   assertSharedDeploymentArtifactsSynced(mergedContracts, deployments);
 
-  // Generate the shared deployedContracts content
-  const fileContent = Object.entries(mergedContracts).reduce(
-    (content, [chainId, chainConfig]) => {
-      const cleanedChainConfig = Object.fromEntries(
-        Object.entries(chainConfig).map(([contractName, contractData]) => {
-          const { deploymentFile, deploymentScript, ...rest } = contractData;
-          return [contractName, rest];
-        })
-      );
-      return `${content}${parseInt(chainId).toFixed(0)}:${JSON.stringify(
-        cleanedChainConfig,
-        null,
-        2
-      )},`;
-    },
-    ""
-  );
-
-  // Write the files
-  const fileTemplate = `
-    ${generatedContractComment}
-    import type { GenericContractsDeclaration } from "./types";
-
-    const deployedContracts: GenericContractsDeclaration = {${fileContent}};
-
-    export default deployedContracts;
-  `;
-
-  writeFileSync(
-    deployedContractsTargetFile,
-    format(fileTemplate, {
-      parser: "typescript",
-    })
-  );
-
-  console.log(
-    `📝 Updated shared contract definition file on ${deployedContractsTargetFile}`
-  );
+  writeDeployedContractsFile(mergedContracts);
 
   // --- Auto-generate ABI files for the shared contracts package ---
   generateAbiFiles();
@@ -1147,7 +1197,11 @@ if (
   fileURLToPath(import.meta.url) === resolve(process.argv[1])
 ) {
   try {
-    main();
+    if (process.argv.includes("--abis-only")) {
+      regenerateAbisOnly();
+    } else {
+      main();
+    }
   } catch (error) {
     console.error("Error:", error);
     process.exitCode = 1;

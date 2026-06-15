@@ -846,19 +846,6 @@ export const RoundRewardDistributorAbi = [
   },
   {
     "type": "function",
-    "name": "setVotingEngine",
-    "inputs": [
-      {
-        "name": "_votingEngine",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "supportsInterface",
     "inputs": [
       {

@@ -193,19 +193,6 @@ export const ContentRegistryAbi = [
   },
   {
     "type": "function",
-    "name": "bonusPool",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "cancelContent",
     "inputs": [
       {
@@ -811,19 +798,6 @@ export const ContentRegistryAbi = [
       }
     ],
     "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "setBonusPool",
-    "inputs": [
-      {
-        "name": "_bonusPool",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
   },
   {
     "type": "function",

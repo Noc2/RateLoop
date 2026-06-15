@@ -1536,11 +1536,6 @@ export const ClusterPayoutOracleAbi = [
             "internalType": "uint256"
           },
           {
-            "name": "proposerBond",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
             "name": "correlationEpochDigest",
             "type": "bytes32",
             "internalType": "bytes32"
@@ -2120,31 +2115,6 @@ export const ClusterPayoutOracleAbi = [
         "type": "address",
         "indexed": false,
         "internalType": "address"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "ProposerBondUnrecoverable",
-    "inputs": [
-      {
-        "name": "snapshotKey",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
-      },
-      {
-        "name": "proposer",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "missingAmount",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
       }
     ],
     "anonymous": false

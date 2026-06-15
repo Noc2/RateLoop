@@ -83,19 +83,6 @@ export const RaterRegistryAbi = [
   },
   {
     "type": "function",
-    "name": "DEFAULT_PRESENCE_TTL",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint64",
-        "internalType": "uint64"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "GOVERNANCE_ROLE",
     "inputs": [],
     "outputs": [
@@ -181,45 +168,6 @@ export const RaterRegistryAbi = [
         "name": "",
         "type": "uint8",
         "internalType": "uint8"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "WORLD_ISSUER_SCHEMA_PASSPORT",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint64",
-        "internalType": "uint64"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "WORLD_ISSUER_SCHEMA_PROOF_OF_HUMAN",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint64",
-        "internalType": "uint64"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "WORLD_ISSUER_SCHEMA_SELFIE",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint64",
-        "internalType": "uint64"
       }
     ],
     "stateMutability": "view"
@@ -347,6 +295,39 @@ export const RaterRegistryAbi = [
   {
     "type": "function",
     "name": "banIdentity",
+    "inputs": [
+      {
+        "name": "provider",
+        "type": "uint8",
+        "internalType": "enum RaterRegistry.HumanCredentialProvider"
+      },
+      {
+        "name": "nullifierHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "expiresAt",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "reason",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "evidenceHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "banKnownCredentialNullifier",
     "inputs": [
       {
         "name": "provider",

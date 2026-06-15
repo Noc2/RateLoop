@@ -4770,19 +4770,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "bonusPool",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
           name: "cancelContent",
           inputs: [
             {
@@ -5388,19 +5375,6 @@ const deployedContracts: GenericContractsDeclaration = {
             },
           ],
           stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "setBonusPool",
-          inputs: [
-            {
-              name: "_bonusPool",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
         },
         {
           type: "function",
@@ -9431,11 +9405,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "error",
-          name: "RoundNotCancelledOrTied",
-          inputs: [],
-        },
-        {
-          type: "error",
           name: "RoundNotExpired",
           inputs: [],
         },
@@ -10384,19 +10353,6 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "bool",
             },
           ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "setVotingEngine",
-          inputs: [
-            {
-              name: "_votingEngine",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [],
           stateMutability: "view",
         },
         {
@@ -12441,11 +12397,6 @@ const deployedContracts: GenericContractsDeclaration = {
         {
           type: "error",
           name: "FrontendExitPending",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "FrontendIsSlashed",
           inputs: [],
         },
         {
@@ -16677,6 +16628,24 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "recoverOrReopenSnapshotBundleRoundSet",
+          inputs: [
+            {
+              name: "bundleId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "roundSetIndex",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "recoverRejectedSnapshotRound",
           inputs: [
             {
@@ -17707,43 +17676,6 @@ const deployedContracts: GenericContractsDeclaration = {
               type: "bool",
               indexed: false,
               internalType: "bool",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "RewardPoolCursorAdvanced",
-          inputs: [
-            {
-              name: "rewardPoolId",
-              type: "uint256",
-              indexed: true,
-              internalType: "uint256",
-            },
-            {
-              name: "contentId",
-              type: "uint256",
-              indexed: true,
-              internalType: "uint256",
-            },
-            {
-              name: "fromRoundId",
-              type: "uint256",
-              indexed: false,
-              internalType: "uint256",
-            },
-            {
-              name: "toRoundId",
-              type: "uint256",
-              indexed: false,
-              internalType: "uint256",
-            },
-            {
-              name: "skipped",
-              type: "uint256",
-              indexed: false,
-              internalType: "uint256",
             },
           ],
           anonymous: false,
@@ -19076,19 +19008,6 @@ const deployedContracts: GenericContractsDeclaration = {
           ],
           outputs: [],
           stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "setVotingEngine",
-          inputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [],
-          stateMutability: "view",
         },
         {
           type: "function",
@@ -21718,11 +21637,6 @@ const deployedContracts: GenericContractsDeclaration = {
                   internalType: "uint256",
                 },
                 {
-                  name: "proposerBond",
-                  type: "uint256",
-                  internalType: "uint256",
-                },
-                {
                   name: "correlationEpochDigest",
                   type: "bytes32",
                   internalType: "bytes32",
@@ -22308,31 +22222,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "event",
-          name: "ProposerBondUnrecoverable",
-          inputs: [
-            {
-              name: "snapshotKey",
-              type: "bytes32",
-              indexed: true,
-              internalType: "bytes32",
-            },
-            {
-              name: "proposer",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "missingAmount",
-              type: "uint256",
-              indexed: false,
-              internalType: "uint256",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
           name: "RoleAdminChanged",
           inputs: [
             {
@@ -22878,19 +22767,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "DEFAULT_PRESENCE_TTL",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "uint64",
-              internalType: "uint64",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
           name: "GOVERNANCE_ROLE",
           inputs: [],
           outputs: [
@@ -22976,45 +22852,6 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "uint8",
               internalType: "uint8",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "WORLD_ISSUER_SCHEMA_PASSPORT",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "uint64",
-              internalType: "uint64",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "WORLD_ISSUER_SCHEMA_PROOF_OF_HUMAN",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "uint64",
-              internalType: "uint64",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "WORLD_ISSUER_SCHEMA_SELFIE",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "uint64",
-              internalType: "uint64",
             },
           ],
           stateMutability: "view",
@@ -23142,6 +22979,39 @@ const deployedContracts: GenericContractsDeclaration = {
         {
           type: "function",
           name: "banIdentity",
+          inputs: [
+            {
+              name: "provider",
+              type: "uint8",
+              internalType: "enum RaterRegistry.HumanCredentialProvider",
+            },
+            {
+              name: "nullifierHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "expiresAt",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "reason",
+              type: "string",
+              internalType: "string",
+            },
+            {
+              name: "evidenceHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "banKnownCredentialNullifier",
           inputs: [
             {
               name: "provider",
@@ -30953,19 +30823,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "setVotingEngine",
-          inputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
           name: "supportsInterface",
           inputs: [
             {
@@ -32059,24 +31916,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "recordConfidentialityNexus",
-          inputs: [
-            {
-              name: "contentId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "holder",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
           name: "recordConfidentialityNexusForRegistry",
           inputs: [
             {
@@ -32727,8 +32566,6 @@ const deployedContracts: GenericContractsDeclaration = {
           "contracts/interfaces/IConfidentialityEscrow.sol",
         postBondWithPermit: "contracts/interfaces/IConfidentialityEscrow.sol",
         recordAccessNexus: "contracts/interfaces/IConfidentialityEscrow.sol",
-        recordConfidentialityNexus:
-          "contracts/interfaces/IConfidentialityEscrow.sol",
         recordConfidentialityNexusForRegistry:
           "contracts/interfaces/IConfidentialityEscrow.sol",
         releaseBond: "contracts/interfaces/IConfidentialityEscrow.sol",
@@ -34378,19 +34215,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "bonusPool",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
           name: "cancelContent",
           inputs: [
             {
@@ -34996,19 +34820,6 @@ const deployedContracts: GenericContractsDeclaration = {
             },
           ],
           stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "setBonusPool",
-          inputs: [
-            {
-              name: "_bonusPool",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
         },
         {
           type: "function",
@@ -39039,11 +38850,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "error",
-          name: "RoundNotCancelledOrTied",
-          inputs: [],
-        },
-        {
-          type: "error",
           name: "RoundNotExpired",
           inputs: [],
         },
@@ -39992,19 +39798,6 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "bool",
             },
           ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "setVotingEngine",
-          inputs: [
-            {
-              name: "_votingEngine",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [],
           stateMutability: "view",
         },
         {
@@ -42049,11 +41842,6 @@ const deployedContracts: GenericContractsDeclaration = {
         {
           type: "error",
           name: "FrontendExitPending",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "FrontendIsSlashed",
           inputs: [],
         },
         {
@@ -46285,6 +46073,24 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "recoverOrReopenSnapshotBundleRoundSet",
+          inputs: [
+            {
+              name: "bundleId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "roundSetIndex",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "recoverRejectedSnapshotRound",
           inputs: [
             {
@@ -47315,43 +47121,6 @@ const deployedContracts: GenericContractsDeclaration = {
               type: "bool",
               indexed: false,
               internalType: "bool",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "RewardPoolCursorAdvanced",
-          inputs: [
-            {
-              name: "rewardPoolId",
-              type: "uint256",
-              indexed: true,
-              internalType: "uint256",
-            },
-            {
-              name: "contentId",
-              type: "uint256",
-              indexed: true,
-              internalType: "uint256",
-            },
-            {
-              name: "fromRoundId",
-              type: "uint256",
-              indexed: false,
-              internalType: "uint256",
-            },
-            {
-              name: "toRoundId",
-              type: "uint256",
-              indexed: false,
-              internalType: "uint256",
-            },
-            {
-              name: "skipped",
-              type: "uint256",
-              indexed: false,
-              internalType: "uint256",
             },
           ],
           anonymous: false,
@@ -48687,19 +48456,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "setVotingEngine",
-          inputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
           name: "supportsInterface",
           inputs: [
             {
@@ -49657,19 +49413,6 @@ const deployedContracts: GenericContractsDeclaration = {
           ],
           outputs: [],
           stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "setVotingEngine",
-          inputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [],
-          stateMutability: "view",
         },
         {
           type: "function",
@@ -51515,19 +51258,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "DEFAULT_PRESENCE_TTL",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "uint64",
-              internalType: "uint64",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
           name: "GOVERNANCE_ROLE",
           inputs: [],
           outputs: [
@@ -51613,45 +51343,6 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "uint8",
               internalType: "uint8",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "WORLD_ISSUER_SCHEMA_PASSPORT",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "uint64",
-              internalType: "uint64",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "WORLD_ISSUER_SCHEMA_PROOF_OF_HUMAN",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "uint64",
-              internalType: "uint64",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "WORLD_ISSUER_SCHEMA_SELFIE",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "uint64",
-              internalType: "uint64",
             },
           ],
           stateMutability: "view",
@@ -51779,6 +51470,39 @@ const deployedContracts: GenericContractsDeclaration = {
         {
           type: "function",
           name: "banIdentity",
+          inputs: [
+            {
+              name: "provider",
+              type: "uint8",
+              internalType: "enum RaterRegistry.HumanCredentialProvider",
+            },
+            {
+              name: "nullifierHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "expiresAt",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "reason",
+              type: "string",
+              internalType: "string",
+            },
+            {
+              name: "evidenceHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "banKnownCredentialNullifier",
           inputs: [
             {
               name: "provider",
@@ -59772,11 +59496,6 @@ const deployedContracts: GenericContractsDeclaration = {
                   internalType: "uint256",
                 },
                 {
-                  name: "proposerBond",
-                  type: "uint256",
-                  internalType: "uint256",
-                },
-                {
                   name: "correlationEpochDigest",
                   type: "bytes32",
                   internalType: "bytes32",
@@ -60356,31 +60075,6 @@ const deployedContracts: GenericContractsDeclaration = {
               type: "address",
               indexed: false,
               internalType: "address",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "ProposerBondUnrecoverable",
-          inputs: [
-            {
-              name: "snapshotKey",
-              type: "bytes32",
-              indexed: true,
-              internalType: "bytes32",
-            },
-            {
-              name: "proposer",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "missingAmount",
-              type: "uint256",
-              indexed: false,
-              internalType: "uint256",
             },
           ],
           anonymous: false,

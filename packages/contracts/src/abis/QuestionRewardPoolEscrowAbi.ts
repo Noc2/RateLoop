@@ -1367,6 +1367,24 @@ export const QuestionRewardPoolEscrowAbi = [
   },
   {
     "type": "function",
+    "name": "recoverOrReopenSnapshotBundleRoundSet",
+    "inputs": [
+      {
+        "name": "bundleId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "roundSetIndex",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "recoverRejectedSnapshotRound",
     "inputs": [
       {
@@ -2397,43 +2415,6 @@ export const QuestionRewardPoolEscrowAbi = [
         "type": "bool",
         "indexed": false,
         "internalType": "bool"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "RewardPoolCursorAdvanced",
-    "inputs": [
-      {
-        "name": "rewardPoolId",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
-      },
-      {
-        "name": "contentId",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
-      },
-      {
-        "name": "fromRoundId",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "toRoundId",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "skipped",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
       }
     ],
     "anonymous": false

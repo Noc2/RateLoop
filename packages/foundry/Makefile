@@ -51,6 +51,10 @@ deploy-and-generate-abis: check-contract-sizes
 generate-abis:
 	node scripts-js/generateTsAbis.js
 
+# Refresh shared ABIs from compiled artifacts without touching deployment metadata.
+generate-abis-only:
+	node scripts-js/generateTsAbis.js --abis-only
+
 # List account
 account:
 	@node scripts-js/checkAccountBalance.js

@@ -143,8 +143,8 @@ test("confidentiality ABI snippets expose indexer event surface", () => {
   );
   assert.deepEqual(escrowFunctions.has("slashBond"), true);
   assert.deepEqual(
-    ["banIdentity", "unbanIdentity"].every((functionName) =>
-      raterFunctions.has(functionName),
+    ["banIdentity", "banKnownCredentialNullifier", "unbanIdentity"].every(
+      (functionName) => raterFunctions.has(functionName),
     ),
     true,
   );

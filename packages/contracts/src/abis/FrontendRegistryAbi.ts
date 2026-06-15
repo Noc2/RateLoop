@@ -1350,11 +1350,6 @@ export const FrontendRegistryAbi = [
   },
   {
     "type": "error",
-    "name": "FrontendIsSlashed",
-    "inputs": []
-  },
-  {
-    "type": "error",
     "name": "InvalidInitialization",
     "inputs": []
   },

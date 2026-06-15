@@ -413,19 +413,6 @@ export const FeedbackRegistryAbi = [
   },
   {
     "type": "function",
-    "name": "setVotingEngine",
-    "inputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "supportsInterface",
     "inputs": [
       {

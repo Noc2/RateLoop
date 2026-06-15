@@ -2202,11 +2202,6 @@ export const RoundVotingEngineAbi = [
   },
   {
     "type": "error",
-    "name": "RoundNotCancelledOrTied",
-    "inputs": []
-  },
-  {
-    "type": "error",
     "name": "RoundNotExpired",
     "inputs": []
   },
