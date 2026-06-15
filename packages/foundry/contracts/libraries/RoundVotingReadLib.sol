@@ -80,7 +80,7 @@ library RoundVotingReadLib {
         if (round.revealedCount >= roundCfg.minVoters) return true;
         if (round.voteCount < roundCfg.minVoters) return false;
         if (roundHumanVerifiedCommitCount[contentId][roundId] < roundCfg.minVoters) return false;
-        return !(RoundLib.isExpired(round, roundCfg.maxDuration) && round.revealedCount < roundCfg.minVoters);
+        return true;
     }
 
     function _rbtsRevealQuorum(uint16 minVoters, uint16 minRbtsParticipants) private pure returns (uint16) {
