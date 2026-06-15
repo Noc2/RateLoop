@@ -33,10 +33,13 @@ library QuestionRewardPoolEscrowBundleRecoveryLib {
         if (rejectedRecoveredBundleRoundSet[bundleId][roundSetIndex]) {
             _reopenRecoveredSnapshotRoundSet(
                 bundleRewards,
+                bundleQuestions,
+                bundleRoundIds,
                 bundleRoundSetSnapshots,
                 bundleRewardClusterPayoutOracle,
                 rejectedRecoveredBundleRoundSet,
                 reopenedRecoveredBundleRoundSet,
+                votingEngine,
                 bundleId,
                 roundSetIndex,
                 payoutDomain
@@ -124,10 +127,13 @@ library QuestionRewardPoolEscrowBundleRecoveryLib {
 
     function _reopenRecoveredSnapshotRoundSet(
         mapping(uint256 => BundleReward) storage bundleRewards,
+        mapping(uint256 => BundleQuestion[]) storage bundleQuestions,
+        mapping(uint256 => mapping(uint256 => mapping(uint256 => uint64))) storage bundleRoundIds,
         mapping(uint256 => mapping(uint256 => BundleRoundSetSnapshot)) storage bundleRoundSetSnapshots,
         mapping(uint256 => address) storage bundleRewardClusterPayoutOracle,
         mapping(uint256 => mapping(uint256 => bool)) storage rejectedRecoveredBundleRoundSet,
         mapping(uint256 => mapping(uint256 => bool)) storage reopenedRecoveredBundleRoundSet,
+        RoundVotingEngine votingEngine,
         uint256 bundleId,
         uint256 roundSetIndex,
         uint8 payoutDomain
@@ -153,6 +159,17 @@ library QuestionRewardPoolEscrowBundleRecoveryLib {
         bytes32 newSnapshotDigest = oracle.roundPayoutSnapshotProposalDigest(snapshotKey);
         require(!oracle.rejectedRoundPayoutSnapshotDigests(snapshotKey, newSnapshotDigest), "Snapshot payload rejected");
         require(!oracle.rejectedRoundPayoutSnapshotRoots(snapshotKey, newSnapshot.weightRoot), "Snapshot root rejected");
+        uint64 sourceReadyAt =
+            _bundlePayoutSnapshotSourceReadyAt(bundleQuestions, bundleRoundIds, votingEngine, bundleId, roundSetIndex);
+        require(sourceReadyAt != 0, "Cluster source pending");
+        require(
+            oracle.roundPayoutSnapshotConsumerFor(payoutDomain, bundleId, bundleId, snapshotRoundId) == address(this),
+            "Cluster consumer mismatch"
+        );
+        require(
+            oracle.roundPayoutSnapshotProposedAt(payoutDomain, bundleId, bundleId, snapshotRoundId) >= sourceReadyAt,
+            "Cluster source stale"
+        );
 
         reopenedRecoveredBundleRoundSet[bundleId][roundSetIndex] = true;
 
@@ -251,5 +268,30 @@ library QuestionRewardPoolEscrowBundleRecoveryLib {
 
     function _bundleSnapshotRoundId(uint256 roundSetIndex) private pure returns (uint256) {
         return roundSetIndex + 1;
+    }
+
+    function _bundlePayoutSnapshotSourceReadyAt(
+        mapping(uint256 => BundleQuestion[]) storage bundleQuestions,
+        mapping(
+            uint256
+                => mapping(
+                uint256 => mapping(uint256 => uint64)
+            )
+        ) storage bundleRoundIds,
+        RoundVotingEngine votingEngine,
+        uint256 bundleId,
+        uint256 roundSetIndex
+    ) private view returns (uint64 readyAt) {
+        BundleQuestion[] storage questions = bundleQuestions[bundleId];
+        for (uint256 i; i < questions.length;) {
+            uint256 questionRoundId = bundleRoundIds[bundleId][i][roundSetIndex];
+            if (questionRoundId == 0) return 0;
+            (,,, uint48 questionReadyAt) = votingEngine.roundLifecycleState(questions[i].contentId, questionRoundId);
+            if (questionReadyAt == 0) return 0;
+            if (questionReadyAt > readyAt) readyAt = questionReadyAt;
+            unchecked {
+                ++i;
+            }
+        }
     }
 }

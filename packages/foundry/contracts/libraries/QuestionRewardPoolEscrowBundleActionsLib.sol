@@ -1072,8 +1072,15 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         bytes32 clusterSnapshotDigest;
         uint64 correlationEpochId;
         if (clusterSnapshot) {
-            (IClusterPayoutOracle.RoundPayoutSnapshot memory payoutSnapshot, bool snapshotReady) =
-                _finalizedBundlePayoutSnapshot(bundleRewardClusterPayoutOracle, bundleId, roundSetIndex, payoutDomain);
+            (IClusterPayoutOracle.RoundPayoutSnapshot memory payoutSnapshot, bool snapshotReady) = _finalizedBundlePayoutSnapshot(
+                bundleQuestions,
+                bundleRoundIds,
+                bundleRewardClusterPayoutOracle,
+                votingEngine,
+                bundleId,
+                roundSetIndex,
+                payoutDomain
+            );
             if (!snapshotReady) return;
             require(payoutSnapshot.rawEligibleVoters == completerCount, "Cluster snapshot mismatch");
             effectiveParticipantUnits = payoutSnapshot.effectiveParticipantUnits;
@@ -1597,22 +1604,66 @@ library QuestionRewardPoolEscrowBundleActionsLib {
     }
 
     function _finalizedBundlePayoutSnapshot(
+        mapping(uint256 => BundleQuestion[]) storage bundleQuestions,
+        mapping(
+            uint256
+                => mapping(
+                uint256 => mapping(uint256 => uint64)
+            )
+        ) storage bundleRoundIds,
         mapping(uint256 => address) storage bundleRewardClusterPayoutOracle,
+        RoundVotingEngine votingEngine,
         uint256 bundleId,
         uint256 roundSetIndex,
         uint8 payoutDomain
     ) private view returns (IClusterPayoutOracle.RoundPayoutSnapshot memory payoutSnapshot, bool ready) {
         address oracleAddr = bundleRewardClusterPayoutOracle[bundleId];
         require(oracleAddr != address(0), "Oracle not pinned");
-        try IClusterPayoutOracle(oracleAddr)
-            .getRoundPayoutSnapshot(payoutDomain, bundleId, bundleId, _bundleSnapshotRoundId(roundSetIndex)) returns (
+        IClusterPayoutOracle oracle = IClusterPayoutOracle(oracleAddr);
+        uint256 snapshotRoundId = _bundleSnapshotRoundId(roundSetIndex);
+        try oracle.getRoundPayoutSnapshot(payoutDomain, bundleId, bundleId, snapshotRoundId) returns (
             IClusterPayoutOracle.RoundPayoutSnapshot memory snapshot
         ) {
             payoutSnapshot = snapshot;
             ready = snapshot.status == IClusterPayoutOracle.SnapshotStatus.Finalized
                 && snapshot.weightRoot != bytes32(0) && snapshot.totalClaimWeight > 0;
+            if (ready) {
+                uint64 sourceReadyAt = _bundlePayoutSnapshotSourceReadyAt(
+                    bundleQuestions, bundleRoundIds, votingEngine, bundleId, roundSetIndex
+                );
+                ready = sourceReadyAt != 0
+                    && oracle.roundPayoutSnapshotConsumerFor(payoutDomain, bundleId, bundleId, snapshotRoundId)
+                        == address(this)
+                    && oracle.roundPayoutSnapshotProposedAt(payoutDomain, bundleId, bundleId, snapshotRoundId)
+                        >= sourceReadyAt;
+            }
         } catch {
             ready = false;
+        }
+    }
+
+    function _bundlePayoutSnapshotSourceReadyAt(
+        mapping(uint256 => BundleQuestion[]) storage bundleQuestions,
+        mapping(
+            uint256
+                => mapping(
+                uint256 => mapping(uint256 => uint64)
+            )
+        ) storage bundleRoundIds,
+        RoundVotingEngine votingEngine,
+        uint256 bundleId,
+        uint256 roundSetIndex
+    ) private view returns (uint64 readyAt) {
+        BundleQuestion[] storage questions = bundleQuestions[bundleId];
+        for (uint256 i; i < questions.length;) {
+            uint256 questionRoundId = bundleRoundIds[bundleId][i][roundSetIndex];
+            if (questionRoundId == 0) return 0;
+            (,,, uint48 questionReadyAt) = votingEngine.roundLifecycleState(questions[i].contentId, questionRoundId);
+            if (questionReadyAt == 0) return 0;
+            if (questionReadyAt > readyAt) readyAt = questionReadyAt;
+            unchecked {
+                ++i;
+            }
         }
     }
 
