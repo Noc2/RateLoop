@@ -713,10 +713,11 @@ function toolOrigin(requestUrl: string | undefined) {
   }
 }
 
-async function createAskHandoffLink(args: JsonObject, requestUrl: string | undefined) {
+async function createAskHandoffLink(args: JsonObject, requestUrl: string | undefined, rateLimitSubjectId?: string) {
   return createAgentAskHandoff({
     generatedImages: args.generatedImages,
     origin: toolOrigin(requestUrl),
+    rateLimitSubjectId,
     requestBody: handoffRequestArgs(args),
     ttlMs: typeof args.ttlMs === "number" ? args.ttlMs : undefined,
   });
@@ -3189,6 +3190,7 @@ async function buildPublicQuestionResult(args: JsonObject) {
 export async function callPublicRateLoopMcpTool(params: {
   arguments: unknown;
   name: string;
+  rateLimitSubjectId?: string;
   requestUrl?: string;
 }): Promise<unknown> {
   if (!PUBLIC_MCP_TOOL_NAMES.has(params.name)) {
@@ -3209,7 +3211,7 @@ export async function callPublicRateLoopMcpTool(params: {
       return getProfileSelfReportTaxonomy();
 
     case "rateloop_create_ask_handoff_link":
-      return createAskHandoffLink(args, params.requestUrl);
+      return createAskHandoffLink(args, params.requestUrl, params.rateLimitSubjectId);
 
     case "rateloop_get_handoff_status":
       return getAskHandoffStatus(args);
@@ -3493,6 +3495,7 @@ export async function callRateLoopMcpTool(params: {
   agent: McpAgentAuth;
   arguments: unknown;
   name: string;
+  rateLimitSubjectId?: string;
   requestUrl?: string;
   scheduleBackgroundTask?: BackgroundTaskScheduler;
 }) {
@@ -3510,7 +3513,7 @@ export async function callRateLoopMcpTool(params: {
       return getProfileSelfReportTaxonomy();
 
     case "rateloop_create_ask_handoff_link":
-      return createAskHandoffLink(args, params.requestUrl);
+      return createAskHandoffLink(args, params.requestUrl, params.rateLimitSubjectId);
 
     case "rateloop_get_handoff_status":
       return getAskHandoffStatus(args);

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "node:crypto";
 import { sweepAgentLifecycleCallbacks } from "~~/lib/agent-callbacks/lifecycle";
 import { getAgentCallbackSweepRouteTestOverrides } from "~~/lib/agent-callbacks/route-test-overrides";
+import { sweepExpiredHandoffIntents } from "~~/lib/agent/handoffs";
 import { checkRateLimit } from "~~/utils/rateLimit";
 
 export const runtime = "nodejs";
@@ -34,9 +35,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Callback delivery is not configured." }, { status: 503 });
   }
 
-  const rateLimitResponse = await checkRateLimit(request, CALLBACK_SWEEP_ROUTE_RATE_LIMIT, {
-    allowOnStoreUnavailable: true,
-  });
+  const rateLimitResponse = await checkRateLimit(request, CALLBACK_SWEEP_ROUTE_RATE_LIMIT);
   if (rateLimitResponse) return rateLimitResponse;
 
   const token = request.headers.get("x-rateloop-agent-callback-secret")?.trim() || readBearerToken(request);
@@ -47,5 +46,8 @@ export async function POST(request: NextRequest) {
   const overrides = getAgentCallbackSweepRouteTestOverrides();
   const sweepCallbacks = overrides?.sweepAgentLifecycleCallbacks ?? sweepAgentLifecycleCallbacks;
 
-  return NextResponse.json(await sweepCallbacks({ limit: parseLimit(request) }));
+  const limit = parseLimit(request);
+  const [callbacks, handoffs] = await Promise.all([sweepCallbacks({ limit }), sweepExpiredHandoffIntents(limit)]);
+
+  return NextResponse.json({ ...callbacks, handoffs });
 }

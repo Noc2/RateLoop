@@ -22,6 +22,8 @@ const LOCAL_IMAGE_ATTACHMENT_STORAGE_PREFIX = "question-attachments";
 const DEFAULT_WALLET_DAILY_IMAGE_UPLOAD_LIMIT = 40;
 const DEFAULT_AGENT_DAILY_IMAGE_UPLOAD_LIMIT = 20;
 const DEFAULT_WALLET_DAILY_IMAGE_UPLOAD_BYTES = 200 * 1024 * 1024;
+const DEFAULT_HANDOFF_IP_DAILY_IMAGE_UPLOAD_BYTES = 50 * 1024 * 1024;
+const DEFAULT_HANDOFF_IP_DAILY_IMAGE_UPLOAD_LIMIT = 20;
 const DEFAULT_AGENT_DAILY_IMAGE_UPLOAD_BYTES = 100 * 1024 * 1024;
 const DEFAULT_PENDING_ORPHAN_TTL_MS = 60 * 60 * 1000;
 const DEFAULT_UNATTACHED_ORPHAN_TTL_MS = 24 * 60 * 60 * 1000;
@@ -92,7 +94,7 @@ type ImageAttachmentBlobDependencies = {
   putBlob: typeof putBlob;
 };
 
-export type ImageUploadQuotaSubjectKind = "agent" | "wallet";
+export type ImageUploadQuotaSubjectKind = "agent" | "wallet" | "handoff_ip";
 
 export class ImageUploadQuotaError extends Error {
   readonly status = 429;
@@ -165,6 +167,18 @@ function readPositiveIntegerEnv(name: string, fallback: number) {
 }
 
 export function getImageUploadDailyQuotaConfig(subjectKind: ImageUploadQuotaSubjectKind) {
+  if (subjectKind === "handoff_ip") {
+    return {
+      byteLimit: readPositiveIntegerEnv(
+        "RATELOOP_HANDOFF_STAGING_DAILY_BYTES",
+        DEFAULT_HANDOFF_IP_DAILY_IMAGE_UPLOAD_BYTES,
+      ),
+      imageLimit: readPositiveIntegerEnv(
+        "RATELOOP_HANDOFF_STAGING_DAILY_LIMIT",
+        DEFAULT_HANDOFF_IP_DAILY_IMAGE_UPLOAD_LIMIT,
+      ),
+    };
+  }
   if (subjectKind === "agent") {
     return {
       byteLimit: readPositiveIntegerEnv(

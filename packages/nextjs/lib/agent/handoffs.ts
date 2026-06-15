@@ -5,6 +5,7 @@ import {
   assertProcessableImageBuffer,
   assertSupportedImageSignature,
   createImageAttachmentId,
+  reserveImageUploadDailyQuotas,
 } from "~~/lib/attachments/imageAttachments";
 import { getMaxImageUploadSizeBytes, isSupportedImageUploadMimeType } from "~~/lib/auth/imageUploadChallenge.shared";
 import { dbClient } from "~~/lib/db";
@@ -690,6 +691,7 @@ export function buildAgentAskHandoffResponse(params: {
 export async function createAgentAskHandoff(params: {
   generatedImages?: unknown;
   origin: string;
+  rateLimitSubjectId?: string;
   requestBody: unknown;
   ttlMs?: number;
 }) {
@@ -698,10 +700,17 @@ export async function createAgentAskHandoff(params: {
 
   const generatedImages = readGeneratedImages(params.generatedImages);
   await assertGeneratedImagesProcessable(generatedImages);
+  const totalStagingBytes = generatedImages.reduce((sum, image) => sum + image.sizeBytes, 0);
+  if (params.rateLimitSubjectId && totalStagingBytes > 0) {
+    await reserveImageUploadDailyQuotas({
+      sizeBytes: totalStagingBytes,
+      subjects: [{ subjectId: params.rateLimitSubjectId, subjectKind: "handoff_ip" }],
+    });
+  }
   const id = randomHandoffId();
   const token = randomToken();
   const now = nowDate();
-  const ttlMs = Math.min(Math.max(params.ttlMs ?? DEFAULT_HANDOFF_TTL_MS, 60_000), MAX_HANDOFF_TTL_MS);
+  const ttlMs = Math.min(Math.max(params.ttlMs ?? DEFAULT_HANDOFF_TTL_MS, 60_000), DEFAULT_HANDOFF_TTL_MS);
   const expiresAt = new Date(now.getTime() + ttlMs);
   const assets = generatedImages.map(image => ({
     ...image,
@@ -975,4 +984,34 @@ export function assertClientRequestId(value: unknown) {
     );
   }
   return clientRequestId;
+}
+
+export async function sweepExpiredHandoffIntents(limit = 100) {
+  const now = nowDate();
+  const expired = await dbClient.execute({
+    sql: `
+      SELECT id
+      FROM agent_ask_handoff_intents
+      WHERE expires_at <= ?
+        AND status NOT IN ('submitted')
+      ORDER BY expires_at ASC
+      LIMIT ?
+    `,
+    args: [now, limit],
+  });
+
+  let deleted = 0;
+  for (const row of expired.rows as Array<{ id: string }>) {
+    await dbClient.execute({
+      sql: "DELETE FROM agent_ask_handoff_assets WHERE handoff_id = ?",
+      args: [row.id],
+    });
+    await dbClient.execute({
+      sql: "DELETE FROM agent_ask_handoff_intents WHERE id = ?",
+      args: [row.id],
+    });
+    deleted += 1;
+  }
+
+  return { deleted };
 }

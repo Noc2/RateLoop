@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { JSON_BODY_TOO_LARGE, parseJsonBody } from "~~/lib/http/jsonBody";
 import { PUBLIC_MCP_TOOLS, callPublicRateLoopMcpTool, normalizeToolError } from "~~/lib/mcp/tools";
-import { checkRateLimit } from "~~/utils/rateLimit";
+import { checkRateLimit, resolveRateLimitSubject } from "~~/utils/rateLimit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -240,6 +240,7 @@ export async function POST(request: NextRequest) {
     const result = await callPublicRateLoopMcpTool({
       arguments: body.params?.arguments,
       name,
+      rateLimitSubjectId: resolveRateLimitSubject(request),
       requestUrl: request.url,
     }).then(toolResult, toolErrorResult);
 

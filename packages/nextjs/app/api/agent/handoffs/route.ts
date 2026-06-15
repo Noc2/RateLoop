@@ -1,5 +1,5 @@
-import { NextRequest } from "next/server";
-import { createAgentAskHandoff } from "~~/lib/agent/handoffs";
+import { NextRequest, NextResponse } from "next/server";
+import { AgentAskHandoffError, createAgentAskHandoff } from "~~/lib/agent/handoffs";
 import {
   AGENT_WRITE_RATE_LIMIT,
   handlePublicAgentRoute,
@@ -7,6 +7,8 @@ import {
   jsonBodyErrorResponse,
   parseJsonBody,
 } from "~~/lib/agent/http";
+import { ImageUploadQuotaError } from "~~/lib/attachments/imageAttachments";
+import { resolveRateLimitSubject } from "~~/utils/rateLimit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -31,12 +33,23 @@ export async function POST(request: NextRequest) {
         ? (body as { request?: unknown }).request
         : Object.fromEntries(Object.entries(body).filter(([key]) => key !== "generatedImages" && key !== "ttlMs"));
 
-      return createAgentAskHandoff({
-        generatedImages: (body as { generatedImages?: unknown }).generatedImages,
-        origin,
-        requestBody,
-        ttlMs: readTtlMs((body as { ttlMs?: unknown }).ttlMs),
-      });
+      try {
+        return await createAgentAskHandoff({
+          generatedImages: (body as { generatedImages?: unknown }).generatedImages,
+          origin,
+          rateLimitSubjectId: resolveRateLimitSubject(request),
+          requestBody,
+          ttlMs: readTtlMs((body as { ttlMs?: unknown }).ttlMs),
+        });
+      } catch (error) {
+        if (error instanceof ImageUploadQuotaError) {
+          return NextResponse.json({ error: error.message }, { status: error.status });
+        }
+        if (error instanceof AgentAskHandoffError) {
+          return NextResponse.json({ error: error.message }, { status: error.status });
+        }
+        throw error;
+      }
     },
     rateLimit: AGENT_WRITE_RATE_LIMIT,
     request,
