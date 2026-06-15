@@ -4,7 +4,7 @@ import test from "node:test";
 import {
   findBlockedContentTags,
   getContentTitleValidationError,
-} from "./submissionValidation.js";
+} from "./submissionValidation";
 
 test("getContentTitleValidationError rejects prohibited terms", () => {
   assert.equal(

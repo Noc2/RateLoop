@@ -1,4 +1,4 @@
-import { contentModerationPolicy } from "./contentModeration.js";
+import { contentModerationPolicy } from "./contentModeration";
 
 export const MAX_QUESTION_LENGTH = 120;
 
