@@ -8,7 +8,7 @@ export const NOTIFICATION_PREFERENCES_SIGNED_READ_SESSION_COOKIE_NAME =
 export const NOTIFICATION_EMAIL_SIGNED_READ_SESSION_COOKIE_NAME = "rateloop_notification_email_read_session";
 export const AGENT_POLICIES_SIGNED_READ_SESSION_COOKIE_NAME = "rateloop_agent_policies_read_session";
 export const GATED_CONTEXT_SIGNED_READ_SESSION_COOKIE_NAME = "rateloop_gated_context_read_session";
-const SIGNED_READ_SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const SIGNED_READ_SESSION_TTL_MS = 365 * 24 * 60 * 60 * 1000;
 
 export const SIGNED_READ_SESSION_SCOPES = [
   "watchlist",

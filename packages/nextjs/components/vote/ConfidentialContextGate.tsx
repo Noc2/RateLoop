@@ -188,6 +188,7 @@ export function ConfidentialContextGate({
   const { address } = useAccount();
   const { isPending: isSigning, signMessageAsync } = useWalletMessageSigner({ address });
   const [accepted, setAccepted] = useState(false);
+  const [hasReadSession, setHasReadSession] = useState(false);
   const [ownerSessionReady, setOwnerSessionReady] = useState(false);
   const [isCheckingTerms, setIsCheckingTerms] = useState(false);
   const [isCheckingOwnerSession, setIsCheckingOwnerSession] = useState(false);
@@ -207,6 +208,7 @@ export function ConfidentialContextGate({
 
   useEffect(() => {
     setAccepted(false);
+    setHasReadSession(false);
     setOwnerSessionReady(false);
   }, [address, item.id]);
 
@@ -214,7 +216,10 @@ export function ConfidentialContextGate({
     if (!gated || typeof window === "undefined") return;
     const handleAccepted = (event: Event) => {
       const detail = event instanceof CustomEvent ? event.detail : null;
-      if (detail?.contentId === item.id.toString()) setAccepted(true);
+      if (detail?.contentId === item.id.toString()) {
+        setAccepted(true);
+        setHasReadSession(true);
+      }
     };
     window.addEventListener(CONFIDENTIALITY_ACCEPTED_EVENT, handleAccepted);
     return () => {
@@ -228,7 +233,10 @@ export function ConfidentialContextGate({
     setIsCheckingTerms(true);
     fetchConfidentialityTermsStatus(address, item.id)
       .then(status => {
-        if (!cancelled && status.accepted) setAccepted(true);
+        if (!cancelled) {
+          setAccepted(status.accepted);
+          setHasReadSession(status.hasSession);
+        }
       })
       .catch(() => undefined)
       .finally(() => {
@@ -315,6 +323,7 @@ export function ConfidentialContextGate({
         throw new Error(acceptedBody.error || "Could not record confidentiality acceptance.");
       }
       setAccepted(true);
+      setHasReadSession(true);
       setIsTermsDialogOpen(false);
       if (typeof window !== "undefined") {
         window.dispatchEvent(
@@ -346,6 +355,22 @@ export function ConfidentialContextGate({
           }),
         );
       }
+    } catch (error) {
+      notification.error(error instanceof Error ? error.message : "Could not confirm wallet access.");
+    } finally {
+      setIsConfirmingOwnerSession(false);
+    }
+  };
+
+  const confirmGatedContextSession = async () => {
+    if (!address) {
+      notification.warning("Connect a wallet to view private context.");
+      return;
+    }
+    setIsConfirmingOwnerSession(true);
+    try {
+      await ensurePrivateAccountReadSession(address, signMessageAsync);
+      setHasReadSession(true);
     } catch (error) {
       notification.error(error instanceof Error ? error.message : "Could not confirm wallet access.");
     } finally {
@@ -389,6 +414,35 @@ export function ConfidentialContextGate({
           disabled={!address || isCheckingOwnerSession || isConfirmingOwnerSession || isSigning}
         >
           {isCheckingOwnerSession || isConfirmingOwnerSession || isSigning ? (
+            <span className="loading loading-spinner loading-xs" />
+          ) : null}
+          {address ? "Confirm wallet" : "Connect wallet"}
+        </button>
+      </GateShell>
+    );
+  }
+
+  if (accepted && !hasReadSession) {
+    if (variant === "inline") return null;
+
+    return (
+      <GateShell variant={variant}>
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          <ConfidentialContextBadges item={item} />
+        </div>
+        <GateCopy
+          title={address ? "Confirm wallet to view private context" : "Connect wallet to view private context"}
+          variant={variant}
+        >
+          <p>You already accepted the confidentiality terms. Confirm this wallet to refresh private context access.</p>
+        </GateCopy>
+        <button
+          type="button"
+          className="btn btn-primary btn-sm"
+          onClick={confirmGatedContextSession}
+          disabled={!address || isCheckingTerms || isConfirmingOwnerSession || isSigning}
+        >
+          {isCheckingTerms || isConfirmingOwnerSession || isSigning ? (
             <span className="loading loading-spinner loading-xs" />
           ) : null}
           {address ? "Confirm wallet" : "Connect wallet"}

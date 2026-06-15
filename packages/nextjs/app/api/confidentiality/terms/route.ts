@@ -70,9 +70,6 @@ export async function GET(request: NextRequest) {
     normalized.payload.normalizedAddress,
     "gated_context",
   );
-  if (!hasSession) {
-    return NextResponse.json({ error: "Signed read required" }, { status: 401 });
-  }
 
   const accepted = await hasConfidentialityTermsAcceptance({
     contentId: normalized.payload.contentId,
@@ -80,6 +77,7 @@ export async function GET(request: NextRequest) {
   });
   return NextResponse.json({
     accepted,
+    hasSession,
     termsDocHash: normalized.payload.termsDocHash,
     termsUri: normalized.payload.termsUri,
     termsVersion: normalized.payload.termsVersion,

@@ -114,6 +114,43 @@ test("confidentiality terms accept route records acceptance and issues gated con
     true,
   );
 
+  const rememberedResponse = await termsRoute.GET(
+    new NextRequest(
+      `https://rateloop.ai/api/confidentiality/terms?address=${encodeURIComponent(WALLET)}&contentId=${CONTENT_ID}`,
+      {
+        headers: new Headers({ "x-real-ip": "198.51.100.7" }),
+      },
+    ),
+  );
+  assert.equal(rememberedResponse.status, 200);
+  assert.deepEqual(await rememberedResponse.json(), {
+    accepted: true,
+    hasSession: false,
+    termsDocHash: challenge.termsDocHash,
+    termsUri: challenge.termsUri,
+    termsVersion: challenge.termsVersion,
+  });
+
+  const liveSessionResponse = await termsRoute.GET(
+    new NextRequest(
+      `https://rateloop.ai/api/confidentiality/terms?address=${encodeURIComponent(WALLET)}&contentId=${CONTENT_ID}`,
+      {
+        headers: new Headers({
+          cookie: `${signedReadSessions.GATED_CONTEXT_SIGNED_READ_SESSION_COOKIE_NAME}=${cookie.value}`,
+          "x-real-ip": "198.51.100.7",
+        }),
+      },
+    ),
+  );
+  assert.equal(liveSessionResponse.status, 200);
+  assert.deepEqual(await liveSessionResponse.json(), {
+    accepted: true,
+    hasSession: true,
+    termsDocHash: challenge.termsDocHash,
+    termsUri: challenge.termsUri,
+    termsVersion: challenge.termsVersion,
+  });
+
   const rows = await dbModule.dbClient.execute({
     sql: `
       SELECT wallet_address, content_id, terms_version, terms_doc_hash

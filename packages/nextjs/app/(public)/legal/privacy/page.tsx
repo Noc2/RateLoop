@@ -239,7 +239,7 @@ const PrivacyPage: NextPage = () => {
             abuse review, or operational cleanup
           </li>
           <li>
-            <strong>Signed read/write sessions:</strong> Up to 7 days
+            <strong>Signed read sessions:</strong> Up to 1 year; <strong>signed write sessions:</strong> up to 7 days
           </li>
           <li>
             <strong>Signed action challenges:</strong> Typically 5 minutes; used challenge records may be retained for

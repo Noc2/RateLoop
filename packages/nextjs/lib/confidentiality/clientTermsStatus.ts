@@ -19,22 +19,14 @@ export async function fetchConfidentialityTermsStatus(
   contentId: bigint | string,
 ): Promise<ConfidentialityTermsStatus> {
   const params = buildConfidentialityTermsParams(address, contentId);
-  const sessionResponse = await fetch(`/api/confidentiality/terms/session?${params.toString()}`, {
-    credentials: "include",
-  });
-  if (!sessionResponse.ok) return { accepted: false, hasSession: false };
-
-  const sessionBody = await readJson(sessionResponse);
-  if (sessionBody?.hasSession !== true) return { accepted: false, hasSession: false };
-
   const termsResponse = await fetch(`/api/confidentiality/terms?${params.toString()}`, {
     credentials: "include",
   });
-  if (!termsResponse.ok) return { accepted: false, hasSession: true };
+  if (!termsResponse.ok) return { accepted: false, hasSession: false };
 
   const termsBody = await readJson(termsResponse);
   return {
     accepted: termsBody?.accepted === true,
-    hasSession: true,
+    hasSession: termsBody?.hasSession === true,
   };
 }
