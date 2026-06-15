@@ -75,6 +75,12 @@
     {
       "slot": 12,
       "offset": 0,
+      "label": "logRootAnchors",
+      "type": "t_mapping(t_bytes32,t_struct(LogRootAnchor))"
+    },
+    {
+      "slot": 13,
+      "offset": 0,
       "label": "__gap",
       "type": "t_array(t_uint256)"
     }
@@ -89,8 +95,8 @@
     {
       "id": "t_array(t_uint256)",
       "encoding": "inplace",
-      "label": "uint256[40]",
-      "numberOfBytes": "1280",
+      "label": "uint256[39]",
+      "numberOfBytes": "1248",
       "base": "t_uint256"
     },
     {
@@ -138,6 +144,14 @@
       "numberOfBytes": "32",
       "key": "t_bytes32",
       "value": "t_struct(BondPosition)"
+    },
+    {
+      "id": "t_mapping(t_bytes32,t_struct(LogRootAnchor))",
+      "encoding": "mapping",
+      "label": "mapping(bytes32 => struct ConfidentialityEscrow.LogRootAnchor)",
+      "numberOfBytes": "32",
+      "key": "t_bytes32",
+      "value": "t_struct(LogRootAnchor)"
     },
     {
       "id": "t_mapping(t_uint256,t_bool)",
@@ -238,6 +252,44 @@
           "offset": 10,
           "label": "flags",
           "type": "t_uint8"
+        }
+      ]
+    },
+    {
+      "id": "t_struct(LogRootAnchor)",
+      "encoding": "inplace",
+      "label": "struct ConfidentialityEscrow.LogRootAnchor",
+      "numberOfBytes": "128",
+      "members": [
+        {
+          "slot": 0,
+          "offset": 0,
+          "label": "merkleRoot",
+          "type": "t_bytes32"
+        },
+        {
+          "slot": 1,
+          "offset": 0,
+          "label": "artifactHash",
+          "type": "t_bytes32"
+        },
+        {
+          "slot": 2,
+          "offset": 0,
+          "label": "artifactUriHash",
+          "type": "t_bytes32"
+        },
+        {
+          "slot": 3,
+          "offset": 0,
+          "label": "publisher",
+          "type": "t_address"
+        },
+        {
+          "slot": 3,
+          "offset": 20,
+          "label": "publishedAt",
+          "type": "t_uint64"
         }
       ]
     },

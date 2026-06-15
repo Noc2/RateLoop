@@ -632,6 +632,45 @@ export const ConfidentialityEscrowAbi = [
   },
   {
     "type": "function",
+    "name": "logRootAnchors",
+    "inputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "merkleRoot",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "artifactHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "artifactUriHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "publisher",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "publishedAt",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "lrepToken",
     "inputs": [],
     "outputs": [

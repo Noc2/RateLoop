@@ -1023,7 +1023,7 @@ export function confidentialityEpochForDate(date: Date) {
 }
 
 export async function publishConfidentialityLogRoot(
-  params: { anchor?: boolean; artifactUrl?: string | null; epoch?: string; now?: Date } = {},
+  params: { anchor?: boolean; artifactUrl?: string | null; epoch?: string; now?: Date; requireAnchor?: boolean } = {},
 ) {
   const now = params.now ?? new Date();
   const epoch = params.epoch ?? confidentialityEpochForDate(new Date(now.getTime() - 24 * 60 * 60 * 1000));
@@ -1085,6 +1085,63 @@ export async function publishConfidentialityLogRoot(
   const artifactHash = hashArtifactJson(artifactJson);
   const artifactUrl =
     params.artifactUrl === undefined ? defaultConfidentialityLogRootArtifactUrl(epoch) : params.artifactUrl;
+
+  const selectExistingRoot = async () => {
+    const [row] = await db
+      .select({
+        acceptanceCount: confidentialityLogRoots.acceptanceCount,
+        accessCount: confidentialityLogRoots.accessCount,
+        anchorChainId: confidentialityLogRoots.anchorChainId,
+        anchorContract: confidentialityLogRoots.anchorContract,
+        anchorPublishedAt: confidentialityLogRoots.anchorPublishedAt,
+        anchorTxHash: confidentialityLogRoots.anchorTxHash,
+        artifactHash: confidentialityLogRoots.artifactHash,
+        artifactJson: confidentialityLogRoots.artifactJson,
+        artifactUrl: confidentialityLogRoots.artifactUrl,
+        merkleRoot: confidentialityLogRoots.merkleRoot,
+        publishedAt: confidentialityLogRoots.publishedAt,
+      })
+      .from(confidentialityLogRoots)
+      .where(eq(confidentialityLogRoots.epoch, epoch))
+      .limit(1);
+    return row;
+  };
+
+  const existingRootPublication = (existingRoot: NonNullable<Awaited<ReturnType<typeof selectExistingRoot>>>) => {
+    if (
+      existingRoot.artifactHash !== artifactHash ||
+      existingRoot.artifactJson !== artifactJson ||
+      existingRoot.merkleRoot !== root
+    ) {
+      throw new Error("Confidentiality log root already sealed for epoch with a different artifact.");
+    }
+    if (params.requireAnchor && !existingRoot.anchorTxHash) {
+      throw new Error("Confidentiality log root was already sealed without an on-chain anchor.");
+    }
+    return {
+      acceptanceCount: existingRoot.acceptanceCount,
+      accessCount: existingRoot.accessCount,
+      anchor: existingRoot.anchorTxHash
+        ? {
+            status: "already_anchored" as const,
+            chainId: existingRoot.anchorChainId,
+            contract: existingRoot.anchorContract,
+            publishedAt: existingRoot.anchorPublishedAt,
+            txHash: existingRoot.anchorTxHash,
+          }
+        : { status: "already_published" as const, reason: "append_only_epoch" },
+      artifactHash: existingRoot.artifactHash,
+      artifactUrl: existingRoot.artifactUrl,
+      epoch,
+      merkleRoot: existingRoot.merkleRoot,
+    };
+  };
+
+  const existingRoot = await selectExistingRoot();
+  if (existingRoot) {
+    return existingRootPublication(existingRoot);
+  }
+
   const anchor =
     params.anchor === false
       ? { status: "skipped" as const, reason: "anchor_disabled" }
@@ -1095,7 +1152,11 @@ export async function publishConfidentialityLogRoot(
           merkleRoot: root as Hex,
         });
 
-  await db
+  if (params.requireAnchor && anchor.status !== "submitted") {
+    throw new Error(`Confidentiality log-root anchor required before sealing epoch (${anchor.status}).`);
+  }
+
+  const inserted = await db
     .insert(confidentialityLogRoots)
     .values({
       acceptanceCount: acceptances.length,
@@ -1112,22 +1173,14 @@ export async function publishConfidentialityLogRoot(
       merkleRoot: root,
       publishedAt: now,
     })
-    .onConflictDoUpdate({
-      target: confidentialityLogRoots.epoch,
-      set: {
-        acceptanceCount: acceptances.length,
-        accessCount: accesses.length,
-        anchorChainId: anchor.status === "submitted" ? anchor.chainId : null,
-        anchorContract: anchor.status === "submitted" ? anchor.contract : null,
-        anchorPublishedAt: anchor.status === "submitted" ? now : null,
-        anchorTxHash: anchor.status === "submitted" ? anchor.txHash : null,
-        artifactHash,
-        artifactJson,
-        artifactUrl,
-        merkleRoot: root,
-        publishedAt: now,
-      },
-    });
+    .onConflictDoNothing({ target: confidentialityLogRoots.epoch })
+    .returning({ epoch: confidentialityLogRoots.epoch });
+
+  if (inserted.length === 0) {
+    const sealedRoot = await selectExistingRoot();
+    if (!sealedRoot) throw new Error("Confidentiality log root insert conflicted before the sealed root was visible.");
+    return existingRootPublication(sealedRoot);
+  }
 
   return {
     acceptanceCount: acceptances.length,

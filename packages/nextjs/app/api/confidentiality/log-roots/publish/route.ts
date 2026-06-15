@@ -22,6 +22,18 @@ function readAnchor(value: string | null) {
   return value === "false" ? false : undefined;
 }
 
+function readRequireAnchor(value: string | null, fallback: boolean) {
+  if (value === "true") return true;
+  if (value === "false") return false;
+  return fallback;
+}
+
+function readBodyRequireAnchor(value: unknown, fallback: boolean) {
+  if (value === true) return true;
+  if (value === false) return false;
+  return fallback;
+}
+
 export async function GET(request: NextRequest) {
   const unauthorized = requireConfidentialityJobAuth(request);
   if (unauthorized) return unauthorized;
@@ -30,12 +42,15 @@ export async function GET(request: NextRequest) {
   if (limited) return limited;
 
   try {
+    const anchor = readAnchor(request.nextUrl.searchParams.get("anchor"));
     return NextResponse.json({
       ok: true,
       ...(await publishConfidentialityLogRoot({
-        anchor: readAnchor(request.nextUrl.searchParams.get("anchor")),
+        anchor,
         artifactUrl: readArtifactUrl(request.nextUrl.searchParams.get("artifactUrl")),
         epoch: readEpoch(request.nextUrl.searchParams.get("epoch")),
+        requireAnchor:
+          anchor === false ? false : readRequireAnchor(request.nextUrl.searchParams.get("requireAnchor"), true),
       })),
     });
   } catch (error) {
@@ -57,11 +72,12 @@ export async function POST(request: NextRequest) {
   const artifactUrl =
     typeof body.artifactUrl === "string" && body.artifactUrl.trim() ? body.artifactUrl.trim() : undefined;
   const anchor = body.anchor === false ? false : undefined;
+  const requireAnchor = anchor === false ? false : readBodyRequireAnchor(body.requireAnchor, true);
 
   try {
     return NextResponse.json({
       ok: true,
-      ...(await publishConfidentialityLogRoot({ anchor, artifactUrl, epoch })),
+      ...(await publishConfidentialityLogRoot({ anchor, artifactUrl, epoch, requireAnchor })),
     });
   } catch (error) {
     console.error("Error publishing confidentiality log root:", error);

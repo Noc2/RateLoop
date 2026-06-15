@@ -57,7 +57,7 @@ after(() => {
 
 test("GET publishes log-root artifacts with Vercel cron bearer auth", async () => {
   const response = await logRootPublishRoute.GET(
-    new NextRequest("https://rateloop.ai/api/confidentiality/log-roots/publish?epoch=2026-06-11", {
+    new NextRequest("https://rateloop.ai/api/confidentiality/log-roots/publish?epoch=2026-06-11&anchor=false", {
       headers: new Headers({ authorization: "Bearer cron-secret" }),
     }),
   );
@@ -80,4 +80,18 @@ test("GET publishes log-root artifacts with Vercel cron bearer auth", async () =
   assert.equal(rows.rowCount, 1);
   assert.equal(rows.rows[0].artifact_hash, body.artifactHash);
   assert.equal(rows.rows[0].artifact_url, "https://rateloop.ai/api/confidentiality/log-roots/2026-06-11/artifact");
+});
+
+test("GET requires an on-chain anchor by default before sealing an epoch", async () => {
+  const response = await logRootPublishRoute.GET(
+    new NextRequest("https://rateloop.ai/api/confidentiality/log-roots/publish?epoch=2026-06-11", {
+      headers: new Headers({ authorization: "Bearer cron-secret" }),
+    }),
+  );
+
+  assert.equal(response.status, 500);
+  assert.deepEqual(await response.json(), { error: "Failed to publish confidentiality log root" });
+
+  const rows = await dbModule.dbClient.execute("SELECT epoch FROM confidentiality_log_roots");
+  assert.equal(rows.rowCount, 0);
 });

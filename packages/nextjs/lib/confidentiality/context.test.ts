@@ -441,6 +441,38 @@ test("authorizes accepted signed sessions and logs gated context access", async 
   assert.equal(artifact.acceptanceCount, 1);
   assert.equal(artifact.accessCount, 1);
   assert.equal(artifact.leaves.length, 2);
+
+  const retry = await confidentiality.publishConfidentialityLogRoot({
+    epoch: root.epoch,
+    now: new Date(),
+  });
+  assert.equal(retry.anchor.status, "already_published");
+  assert.equal(retry.artifactHash, root.artifactHash);
+
+  await dbModule.dbClient.execute({
+    sql: `
+      INSERT INTO confidential_context_access_logs (
+        identity_key, wallet_address, content_id, resource_id, resource_kind, view_token, viewed_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    `,
+    args: [
+      IDENTITY_KEY,
+      WALLET,
+      CONTENT_ID,
+      "det_contextaccess002",
+      "details",
+      "b".repeat(64),
+      new Date().toISOString(),
+    ],
+  });
+  await assert.rejects(
+    () =>
+      confidentiality.publishConfidentialityLogRoot({
+        epoch: root.epoch,
+        now: new Date(),
+      }),
+    /already sealed/,
+  );
 });
 
 test("persists log-root artifacts when on-chain anchoring fails", async () => {

@@ -526,6 +526,26 @@ contract ConfidentialityEscrowTest is VotingTestBase {
         );
         vm.prank(owner);
         confidentialityEscrow.publishLogRoot(epoch, LOG_ROOT, LOG_ARTIFACT_HASH, artifactUri);
+
+        (
+            bytes32 anchoredRoot,
+            bytes32 anchoredArtifactHash,
+            bytes32 anchoredArtifactUriHash,
+            address publisher,
+            uint64 publishedAt
+        ) = confidentialityEscrow.logRootAnchors(keccak256(bytes(epoch)));
+        assertEq(anchoredRoot, LOG_ROOT);
+        assertEq(anchoredArtifactHash, LOG_ARTIFACT_HASH);
+        assertEq(anchoredArtifactUriHash, keccak256(bytes(artifactUri)));
+        assertEq(publisher, owner);
+        assertEq(publishedAt, block.timestamp);
+
+        vm.prank(owner);
+        confidentialityEscrow.publishLogRoot(epoch, LOG_ROOT, LOG_ARTIFACT_HASH, artifactUri);
+
+        vm.prank(owner);
+        vm.expectRevert("Log root sealed");
+        confidentialityEscrow.publishLogRoot(epoch, keccak256("changed root"), LOG_ARTIFACT_HASH, artifactUri);
     }
 
     function testPublishLogRootRejectsInvalidArtifact() public {

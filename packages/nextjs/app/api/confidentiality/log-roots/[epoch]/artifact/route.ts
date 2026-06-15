@@ -30,7 +30,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
   return new NextResponse(row.artifactJson, {
     headers: {
-      "cache-control": "public, max-age=300, s-maxage=86400",
+      "cache-control": "public, max-age=31536000, immutable",
       "content-type": "application/json; charset=utf-8",
       "x-rateloop-artifact-hash": row.artifactHash ?? "",
       "x-rateloop-merkle-root": row.merkleRoot,

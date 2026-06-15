@@ -77,6 +77,14 @@ contract ConfidentialityEscrow is
         bool released;
     }
 
+    struct LogRootAnchor {
+        bytes32 merkleRoot;
+        bytes32 artifactHash;
+        bytes32 artifactUriHash;
+        address publisher;
+        uint64 publishedAt;
+    }
+
     IERC20 public lrepToken;
     IERC20 public usdcToken;
     ContentRegistry public registry;
@@ -90,8 +98,9 @@ contract ConfidentialityEscrow is
     mapping(uint256 => bool) public configured;
     mapping(uint256 => mapping(bytes32 => BondPosition)) public bonds;
     mapping(uint8 => mapping(bytes32 => bool)) public nullifierHasBond;
+    mapping(bytes32 => LogRootAnchor) public logRootAnchors;
 
-    uint256[40] private __gap;
+    uint256[39] private __gap;
 
     event ConfidentialityConfigured(
         uint256 indexed contentId, bool gated, uint8 indexed bondAsset, uint64 bondAmount, uint8 flags
@@ -318,9 +327,24 @@ contract ConfidentialityEscrow is
         if (epochLength == 0 || epochLength > MAX_LOG_ROOT_EPOCH_LENGTH) revert("Invalid epoch");
         if (artifactHash == bytes32(0)) revert("Invalid artifact");
         if (bytes(artifactUri).length > MAX_LOG_ROOT_ARTIFACT_URI_LENGTH) revert("Invalid artifact URI");
-        emit ConfidentialityLogRootPublished(
-            keccak256(bytes(epoch)), merkleRoot, msg.sender, epoch, artifactHash, artifactUri
-        );
+        bytes32 epochHash = keccak256(bytes(epoch));
+        bytes32 artifactUriHash = keccak256(bytes(artifactUri));
+        LogRootAnchor storage anchor = logRootAnchors[epochHash];
+        if (anchor.artifactHash != bytes32(0)) {
+            if (
+                anchor.merkleRoot != merkleRoot || anchor.artifactHash != artifactHash
+                    || anchor.artifactUriHash != artifactUriHash
+            ) {
+                revert("Log root sealed");
+            }
+            return;
+        }
+        anchor.merkleRoot = merkleRoot;
+        anchor.artifactHash = artifactHash;
+        anchor.artifactUriHash = artifactUriHash;
+        anchor.publisher = msg.sender;
+        anchor.publishedAt = block.timestamp.toUint64();
+        emit ConfidentialityLogRootPublished(epochHash, merkleRoot, msg.sender, epoch, artifactHash, artifactUri);
     }
 
     function _recordConfidentialityNexus(uint256 contentId, address holder, address recorder, address registryAddress)
