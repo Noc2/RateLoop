@@ -710,7 +710,7 @@ export async function createAgentAskHandoff(params: {
   const id = randomHandoffId();
   const token = randomToken();
   const now = nowDate();
-  const ttlMs = Math.min(Math.max(params.ttlMs ?? DEFAULT_HANDOFF_TTL_MS, 60_000), DEFAULT_HANDOFF_TTL_MS);
+  const ttlMs = Math.min(Math.max(params.ttlMs ?? DEFAULT_HANDOFF_TTL_MS, 60_000), PUBLIC_HANDOFF_MAX_TTL_MS);
   const expiresAt = new Date(now.getTime() + ttlMs);
   const assets = generatedImages.map(image => ({
     ...image,
