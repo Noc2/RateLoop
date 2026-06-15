@@ -41,6 +41,7 @@ const protocolConfigAbi = parseAbi([
   "function setFrontendRegistry(address value)",
   "function setCategoryRegistry(address value)",
   "function setRaterRegistry(address value)",
+  "function setConfidentialityEscrow(address value)",
   "function renounceRole(bytes32 role,address account)",
 ]);
 
@@ -65,10 +66,16 @@ const frontendRegistryAbi = parseAbi([
 ]);
 
 const raterRegistryAbi = parseAbi([
+  "function setConfidentialityEscrow(address value)",
   "function renounceRole(bytes32 role,address account)",
 ]);
 
 const feedbackRegistryAbi = parseAbi([
+  "function renounceRole(bytes32 role,address account)",
+]);
+
+const confidentialityEscrowAbi = parseAbi([
+  "function grantRole(bytes32 role,address account)",
   "function renounceRole(bytes32 role,address account)",
 ]);
 
@@ -293,6 +300,8 @@ function completeBroadcast({
     "0x65d7a28e3265b37a6474929f336521b332c1681b933f6cb9f3376673440d862a";
   const seederRole =
     "0x240afcd1926e36e0297a1eb63ba484f52ddbef788e7f4e9b38b0dcc66de129e1";
+  const accessRecorderRole =
+    "0xb82259307557a2e745f9b5e8967a4017845406824ddb2b55b3da0f9e27c2a8db";
   const governance = directAddressByName.get("TimelockController");
   const governor = directAddressByName.get("RateLoopGovernor");
   const clusterOracle = directAddressByName.get("ClusterPayoutOracle");
@@ -305,6 +314,7 @@ function completeBroadcast({
   const questionEscrow = proxyAddressByName.get("QuestionRewardPoolEscrow");
   const rewardDistributor = proxyAddressByName.get("RoundRewardDistributor");
   const raterRegistry = proxyAddressByName.get("RaterRegistry");
+  const confidentialityEscrow = proxyAddressByName.get("ConfidentialityEscrow");
   const feedbackRegistry = proxyAddressByName.get("FeedbackRegistry");
   const advisoryRecorder = directAddressByName.get("AdvisoryVoteRecorder");
   const protocolConfig = proxyAddressByName.get("ProtocolConfig");
@@ -371,6 +381,14 @@ function completeBroadcast({
       x402QuestionSubmitter,
     ]
   );
+  pushProxyCall(
+    transactions,
+    receipts,
+    confidentialityEscrow,
+    confidentialityEscrowAbi,
+    "grantRole",
+    [configRole, contentRegistry]
+  );
   pushProtocolConfigProxyCall(
     transactions,
     receipts,
@@ -398,6 +416,21 @@ function completeBroadcast({
     protocolConfig,
     "setRaterRegistry",
     [raterRegistry]
+  );
+  pushProxyCall(
+    transactions,
+    receipts,
+    raterRegistry,
+    raterRegistryAbi,
+    "setConfidentialityEscrow",
+    [confidentialityEscrow]
+  );
+  pushProtocolConfigProxyCall(
+    transactions,
+    receipts,
+    protocolConfig,
+    "setConfidentialityEscrow",
+    [confidentialityEscrow]
   );
   pushProxyCall(
     transactions,
@@ -447,6 +480,38 @@ function completeBroadcast({
     "renounceRole(bytes32,address)",
     [configRole, deployer],
     feedbackRegistry
+  );
+  pushProxyCall(
+    transactions,
+    receipts,
+    confidentialityEscrow,
+    confidentialityEscrowAbi,
+    "renounceRole",
+    [pauserRole, deployer]
+  );
+  pushProxyCall(
+    transactions,
+    receipts,
+    confidentialityEscrow,
+    confidentialityEscrowAbi,
+    "renounceRole",
+    [configRole, deployer]
+  );
+  pushProxyCall(
+    transactions,
+    receipts,
+    confidentialityEscrow,
+    confidentialityEscrowAbi,
+    "renounceRole",
+    [accessRecorderRole, deployer]
+  );
+  pushProxyCall(
+    transactions,
+    receipts,
+    confidentialityEscrow,
+    confidentialityEscrowAbi,
+    "renounceRole",
+    [defaultAdminRole, deployer]
   );
   pushCall(
     transactions,
@@ -973,6 +1038,21 @@ test("reconstructDeploymentExportFromBroadcast rejects missing completion calls"
 });
 
 test("reconstructDeploymentExportFromBroadcast rejects missing deployer handoffs", () => {
+  const defaultAdminRole =
+    "0x0000000000000000000000000000000000000000000000000000000000000000";
+  const configRole =
+    "0x82db594318110a04b6349ce48645aa69f0892751bc893d15e61d9e2b9c4630f5";
+  const pauserRole =
+    "0x65d7a28e3265b37a6474929f336521b332c1681b933f6cb9f3376673440d862a";
+  const accessRecorderRole =
+    "0xb82259307557a2e745f9b5e8967a4017845406824ddb2b55b3da0f9e27c2a8db";
+  const confidentialityEscrow = address(25);
+  const confidentialityEscrowRenounce = (role) =>
+    encodeFunctionData({
+      abi: confidentialityEscrowAbi,
+      functionName: "renounceRole",
+      args: [role, fixtureDeployer],
+    });
   const cases = [
     {
       label: /RaterRegistry\.renounceRole\(ADMIN_ROLE\)/,
@@ -1003,6 +1083,34 @@ test("reconstructDeploymentExportFromBroadcast rejects missing deployer handoffs
       predicate: (tx) =>
         tx.contractName === "CategoryRegistry" &&
         tx.function === "renounceRole(bytes32,address)",
+    },
+    {
+      label: /ConfidentialityEscrow\.renounceRole\(PAUSER_ROLE\)/,
+      predicate: (tx) =>
+        tx.contractAddress?.toLowerCase() ===
+          confidentialityEscrow.toLowerCase() &&
+        tx.input === confidentialityEscrowRenounce(pauserRole),
+    },
+    {
+      label: /ConfidentialityEscrow\.renounceRole\(CONFIG_ROLE\)/,
+      predicate: (tx) =>
+        tx.contractAddress?.toLowerCase() ===
+          confidentialityEscrow.toLowerCase() &&
+        tx.input === confidentialityEscrowRenounce(configRole),
+    },
+    {
+      label: /ConfidentialityEscrow\.renounceRole\(ACCESS_RECORDER_ROLE\)/,
+      predicate: (tx) =>
+        tx.contractAddress?.toLowerCase() ===
+          confidentialityEscrow.toLowerCase() &&
+        tx.input === confidentialityEscrowRenounce(accessRecorderRole),
+    },
+    {
+      label: /ConfidentialityEscrow\.renounceRole\(DEFAULT_ADMIN_ROLE\)/,
+      predicate: (tx) =>
+        tx.contractAddress?.toLowerCase() ===
+          confidentialityEscrow.toLowerCase() &&
+        tx.input === confidentialityEscrowRenounce(defaultAdminRole),
     },
   ];
 
@@ -1076,6 +1184,12 @@ test("reconstructDeploymentExportFromBroadcast rejects missing critical wiring",
       arg: "0xf8fc5b762a56b84305af28ac287dfaf08d491f8de4965459339ae40cec115613",
     },
     {
+      label: /ConfidentialityEscrow\.grantRole\(CONFIG_ROLE, ContentRegistry\)/,
+      selector: "0x2f2ff15d",
+      target: address(25),
+      arg: "0x82db594318110a04b6349ce48645aa69f0892751bc893d15e61d9e2b9c4630f5",
+    },
+    {
       label: /ProtocolConfig\.setConfig/,
       selector: "0xe5c389cd",
       target: address(15),
@@ -1101,9 +1215,21 @@ test("reconstructDeploymentExportFromBroadcast rejects missing critical wiring",
       target: address(15),
     },
     {
+      label: /ProtocolConfig\.setConfidentialityEscrow/,
+      selector: "0x1bc0f67c",
+      target: address(15),
+      arg: address(25),
+    },
+    {
       label: /ProfileRegistry\.setRaterRegistry/,
       selector: "0x4ae92ae4",
       target: address(11),
+    },
+    {
+      label: /RaterRegistry\.setConfidentialityEscrow/,
+      selector: "0x1bc0f67c",
+      target: address(21),
+      arg: address(25),
     },
     {
       label: /FrontendRegistry\.setVotingEngine/,
@@ -1206,6 +1332,31 @@ test("reconstructDeploymentExportFromBroadcast rejects final-state rewrites afte
           "setAuthorizedCaller(address,bool)",
           [address(19), "false"],
           address(7)
+        );
+      },
+    },
+    {
+      label: /RaterRegistry\.setConfidentialityEscrow/,
+      mutate: (transactions, receipts) => {
+        pushProxyCall(
+          transactions,
+          receipts,
+          address(21),
+          raterRegistryAbi,
+          "setConfidentialityEscrow",
+          [address(603)]
+        );
+      },
+    },
+    {
+      label: /ProtocolConfig\.setConfidentialityEscrow/,
+      mutate: (transactions, receipts) => {
+        pushProtocolConfigProxyCall(
+          transactions,
+          receipts,
+          address(15),
+          "setConfidentialityEscrow",
+          [address(604)]
         );
       },
     },
