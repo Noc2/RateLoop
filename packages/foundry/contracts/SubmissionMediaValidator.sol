@@ -10,6 +10,10 @@ contract SubmissionMediaValidator {
     uint256 internal constant MAX_QUESTION_LENGTH = 120;
     uint256 internal constant MAX_TAGS_LENGTH = 256;
     uint256 internal constant YOUTUBE_VIDEO_ID_LENGTH = 11;
+    uint256 internal constant IPFS_CIDV0_LENGTH = 46;
+    uint256 internal constant IPFS_CIDV1_MIN_LENGTH = 32;
+    uint256 internal constant IPFS_CIDV1_MAX_LENGTH = 128;
+    uint256 internal constant ARWEAVE_TX_ID_LENGTH = 43;
 
     error EmitterAlreadyInitialized();
     error InvalidEmitter();
@@ -223,17 +227,33 @@ contract SubmissionMediaValidator {
 
     function _isValidContentAddressedUri(string memory url) internal pure returns (bool) {
         bytes memory urlBytes = bytes(url);
-        bool ipfs = _hasPrefix(url, "ipfs://");
-        bool ar = _hasPrefix(url, "ar://");
-        if (!ipfs && !ar) return false;
-        if (urlBytes.length > MAX_URL_LENGTH) return false;
+        if (_hasPrefix(url, "ipfs://")) return _isValidIpfsCid(urlBytes, bytes("ipfs://").length);
+        if (_hasPrefix(url, "ar://")) return _isValidArweaveTxId(urlBytes, bytes("ar://").length);
+        return false;
+    }
 
-        uint256 prefixLength = ipfs ? bytes("ipfs://").length : bytes("ar://").length;
-        if (urlBytes.length <= prefixLength) return false;
-        for (uint256 i = prefixLength; i < urlBytes.length; i++) {
-            bytes1 char = urlBytes[i];
-            if (char < 0x21 || char > 0x7E) return false;
-            if (!_isSafeSubmissionUrlChar(char)) return false;
+    function _isValidIpfsCid(bytes memory value, uint256 offset) private pure returns (bool) {
+        uint256 cidLength = value.length - offset;
+        if (cidLength == IPFS_CIDV0_LENGTH && value[offset] == "Q" && value[offset + 1] == "m") {
+            for (uint256 i = offset; i < value.length; i++) {
+                if (!_isBase58btcByte(value[i])) return false;
+            }
+            return true;
+        }
+
+        if (cidLength < IPFS_CIDV1_MIN_LENGTH || cidLength > IPFS_CIDV1_MAX_LENGTH || value[offset] != "b") {
+            return false;
+        }
+        for (uint256 i = offset; i < value.length; i++) {
+            if (!_isLowerBase32Byte(value[i])) return false;
+        }
+        return true;
+    }
+
+    function _isValidArweaveTxId(bytes memory value, uint256 offset) private pure returns (bool) {
+        if (value.length != offset + ARWEAVE_TX_ID_LENGTH) return false;
+        for (uint256 i = offset; i < value.length; i++) {
+            if (!_isBase64UrlByte(value[i])) return false;
         }
         return true;
     }
@@ -249,6 +269,26 @@ contract SubmissionMediaValidator {
 
     function _isHexByte(bytes1 char) private pure returns (bool) {
         return (char >= "0" && char <= "9") || (char >= "A" && char <= "F") || (char >= "a" && char <= "f");
+    }
+
+    function _isBase58btcByte(bytes1 char) private pure returns (bool) {
+        if (char >= "1" && char <= "9") return true;
+        if (char >= "A" && char <= "H") return true;
+        if (char >= "J" && char <= "N") return true;
+        if (char >= "P" && char <= "Z") return true;
+        if (char >= "a" && char <= "k") return true;
+        return char >= "m" && char <= "z";
+    }
+
+    function _isLowerBase32Byte(bytes1 char) private pure returns (bool) {
+        return (char >= "a" && char <= "z") || (char >= "2" && char <= "7");
+    }
+
+    function _isBase64UrlByte(bytes1 char) private pure returns (bool) {
+        if (char >= "0" && char <= "9") return true;
+        if (char >= "A" && char <= "Z") return true;
+        if (char >= "a" && char <= "z") return true;
+        return char == "-" || char == "_";
     }
 
     function _hasSha256AnchoredHttpsUrl(string memory value) internal pure returns (bool) {

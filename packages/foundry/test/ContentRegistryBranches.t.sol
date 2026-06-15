@@ -816,15 +816,42 @@ contract ContentRegistryBranchesTest is VotingTestBase {
     }
 
     function test_SubmitQuestion_AllowsContentAddressedExternalImages() public view {
-        string[] memory imageUrls = new string[](3);
-        imageUrls[0] = "ipfs://bafybeigdyrzt5sfp7udm7hu76u5n3da7z5jhjxvzv35gn4c2kaou6mriya";
-        imageUrls[1] = "ar://VZcC2M9fXxTcdGQYQ0lM8dPj7Q8g3F6h3xUR8nW8L4Q";
-        imageUrls[2] =
+        string[] memory imageUrls = new string[](4);
+        imageUrls[0] = "ar://VZcC2M9fXxTcdGQYQ0lM8dPj7Q8g3F6h3xUR8nW8L4Q";
+        imageUrls[1] =
             "https://cdn.example.com/review/image.webp#sha256=0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        imageUrls[2] = "ipfs://QmYwAPJzv5CZsnAzt8auVZRnWnZAhMeQVK8Vxezf5iAumA";
+        imageUrls[3] = "ipfs://bafybeigdyrzt5sfp7udm7hu76u5n3da7z5jhjxvzv35gn4c2kaou6mriya";
 
+        registry.submissionMediaValidator().validateOptionalMediaSet(imageUrls, "");
         _questionSubmissionKey(
             "https://example.com/context", imageUrls, "", "Question?", "Products", 1, _emptySubmissionDetails()
         );
+    }
+
+    function test_SubmitQuestion_RejectsMalformedContentAddressedExternalImages() public {
+        _expectInvalidQuestionImageUrl("ipfs://not-a-cid");
+        _expectInvalidQuestionImageUrl("ipfs://Bafybeigdyrzt5sfp7udm7hu76u5n3da7z5jhjxvzv35gn4c2kaou6mriya");
+        _expectInvalidQuestionImageUrl("ipfs://bafybeigdyrzt5sfp7udm7hu76u5n3da7z5jhjxvzv35gn4c2kaou6mriya?download=1");
+        _expectInvalidQuestionImageUrl("ar://short");
+        _expectInvalidQuestionImageUrl("ar://VZcC2M9fXxTcdGQYQ0lM8dPj7Q8g3F6h3xUR8nW8L4Q/extra");
+    }
+
+    function _expectInvalidQuestionImageUrl(string memory imageUrl) private {
+        vm.startPrank(submitter);
+        vm.expectRevert("Invalid URL");
+        registry.submitQuestion(
+            "https://example.com/context",
+            _singleImageUrls(imageUrl),
+            "",
+            "Question?",
+            "Products",
+            1,
+            _emptySubmissionDetails(),
+            bytes32(0),
+            _defaultQuestionSpec()
+        );
+        vm.stopPrank();
     }
 
     function test_SubmitQuestion_AllowsYouTubeVideoWithoutContextUrl() public {
