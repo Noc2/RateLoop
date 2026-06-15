@@ -69,7 +69,7 @@ export function validateHandoffWebMcpDraft(state: HandoffWebMcpState) {
       issues.push(`${label} needs a category.`);
     }
     if (question.tags.length === 0 || question.tags.length > 3) {
-      issues.push(`${label} needs one to three tags.`);
+      issues.push(`${label} needs one to three categories.`);
     }
     if (!question.hasPublicContext) {
       issues.push(`${label} needs public context.`);

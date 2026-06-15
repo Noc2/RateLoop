@@ -63,7 +63,7 @@ test("validates missing handoff draft fields", () => {
   assert.ok(result.issues.includes("Bounty amount is missing."));
   assert.ok(result.issues.includes("Question needs a title."));
   assert.ok(result.issues.includes("Question needs a category."));
-  assert.ok(result.issues.includes("Question needs one to three tags."));
+  assert.ok(result.issues.includes("Question needs one to three categories."));
   assert.ok(result.issues.includes("Question needs public context."));
 });
 

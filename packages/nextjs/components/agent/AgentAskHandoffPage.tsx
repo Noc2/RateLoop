@@ -868,7 +868,7 @@ async function applyDraftQuestion(
   if (!title) throw new Error(`Question ${index + 1} needs a title.`);
   if (!categoryId) throw new Error(`Question ${index + 1} needs a category.`);
   if (tags.length === 0 || tags.length > 3) {
-    throw new Error(`Question ${index + 1} needs one to three tags.`);
+    throw new Error(`Question ${index + 1} needs one to three categories.`);
   }
 
   const nextQuestion: JsonRecord = {
@@ -2233,7 +2233,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                         <label className="form-control mt-4">
                           <span className="label-text flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-base-content/45">
                             <TagIcon className="h-3.5 w-3.5" />
-                            <span>Tags</span>
+                            <span>Categories (1-3)</span>
                           </span>
                           <input
                             className="input input-bordered mt-1 w-full"
