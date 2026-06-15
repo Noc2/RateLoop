@@ -56,6 +56,7 @@ async function loadKeeperIndex(options: KeeperIndexOptions = {}) {
             advisoryLaunchCreditsClaimed: 0,
             cleanupBatchesProcessed: 0,
             contentMarkedDormant: 0,
+            feedbackBonusPoolsForfeited: 0,
             roundsAwaitingRevealQuorum: 0,
             minRevealGraceSecondsRemaining: null,
             ...options.resolveRoundsResult,
@@ -95,6 +96,7 @@ async function loadKeeperIndex(options: KeeperIndexOptions = {}) {
         votingEngine: ENGINE,
         contentRegistry: REGISTRY,
         clusterPayoutOracle: "0x0000000000000000000000000000000000000000",
+        feedbackBonusEscrow: "0x0000000000000000000000000000000000000000",
       },
       intervalMs: 30_000,
       metricsEnabled: false,
@@ -119,6 +121,11 @@ async function loadKeeperIndex(options: KeeperIndexOptions = {}) {
               frontendRegistry: "0x5555555555555555555555555555555555555555",
             }
           : null,
+      },
+      feedbackBonusForfeits: {
+        enabled: true,
+        maxPoolsPerTick: 25,
+        minAgeSeconds: 60,
       },
       correlationSnapshots: {
         enabled: false,
@@ -247,11 +254,12 @@ describe("keeper index", () => {
     expect(keeper.resolveRounds).toHaveBeenCalledOnce();
   });
 
-  it("logs a run summary for ticks that only finalize reveal-failed rounds or clean up", async () => {
+  it("logs a run summary for ticks that only finalize reveal-failed rounds, clean up, or forfeit bonuses", async () => {
     const keeper = await loadKeeperIndex({
       resolveRoundsResult: {
         roundsRevealFailedFinalized: 1,
         cleanupBatchesProcessed: 2,
+        feedbackBonusPoolsForfeited: 3,
       },
     });
 
@@ -260,6 +268,7 @@ describe("keeper index", () => {
       expect.objectContaining({
         roundsRevealFailedFinalized: 1,
         cleanupBatchesProcessed: 2,
+        feedbackBonusPoolsForfeited: 3,
       }),
     );
   });

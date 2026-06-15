@@ -1,6 +1,6 @@
 # RateLoop — Keeper (Round Resolution Service)
 
-Stateless service that reveals committed RBTS votes via `revealVoteByCommitKey()` after each epoch, settles eligible rounds via `settleRound()`, finalizes `RevealFailed` rounds after the last grace deadline, sweeps unrevealed-vote cleanup via `processUnrevealedVotes()`, cancels expired rounds, marks dormant content, and can optionally sweep frontend fees or publish `ClusterPayoutOracle` snapshot artifacts for a registered frontend operator. In the redeployed tlock model, it also performs deeper AGE/tlock stanza checks against the stored drand metadata before decrypting. Designed for horizontal scaling — multiple instances run independently for redundancy.
+Stateless service that reveals committed RBTS votes via `revealVoteByCommitKey()` after each epoch, settles eligible rounds via `settleRound()`, finalizes `RevealFailed` rounds after the last grace deadline, sweeps unrevealed-vote cleanup via `processUnrevealedVotes()`, cancels expired rounds, marks dormant content, forfeits expired Feedback Bonus residue, and can optionally sweep frontend fees or publish `ClusterPayoutOracle` snapshot artifacts for a registered frontend operator. In the redeployed tlock model, it also performs deeper AGE/tlock stanza checks against the stored drand metadata before decrypting. Designed for horizontal scaling — multiple instances run independently for redundancy.
 
 ## Quick Start
 
@@ -38,6 +38,7 @@ machine-specific local addresses. Only set address vars on unsupported chains or
 | `ROUND_REWARD_DISTRIBUTOR_ADDRESS`                | Auto-derived when frontend-fee sweep is enabled on supported chains | Local `31337` override only; live chains require shared deployment artifacts                                       |
 | `FRONTEND_REGISTRY_ADDRESS`                       | Auto-derived when frontend-fee sweep is enabled on supported chains | Local `31337` override only; live chains require shared deployment artifacts                                       |
 | `CLUSTER_PAYOUT_ORACLE_ADDRESS`                   | Auto-derived for supported chains                                   | Required when correlation snapshot publication is enabled                                                          |
+| `FEEDBACK_BONUS_ESCROW_ADDRESS`                   | Auto-derived for supported chains                                   | Local `31337` override only; used for expired Feedback Bonus residue forfeits                                      |
 | `CHAIN_NAME`                                      | Auto-derived from `CHAIN_ID`                                        | Optional human-readable chain label                                                                                |
 | `KEYSTORE_ACCOUNT`                                | —                                                                   | Foundry keystore account name (preferred)                                                                          |
 | `KEYSTORE_PASSWORD`                               | —                                                                   | Keystore decryption password                                                                                       |
@@ -47,6 +48,9 @@ machine-specific local addresses. Only set address vars on unsupported chains or
 | `KEEPER_LOG_FALLBACK_LOOKBACK_BLOCKS`             | `300000`                                                            | Max blocks the `eth_getLogs` ciphertext fallback scans when Ponder is unavailable or missing a commit              |
 | `KEEPER_STARTUP_JITTER_MS`                        | `0`                                                                 | Random startup delay for multi-instance staggering                                                                 |
 | `KEEPER_CLEANUP_BATCH_SIZE`                       | `25`                                                                | Max commit window processed per `processUnrevealedVotes()` batch                                                   |
+| `KEEPER_FEEDBACK_BONUS_FORFEITS_ENABLED`          | `true`                                                              | Enable permissionless forfeiture of expired Feedback Bonus pools returned by Ponder keeper work discovery          |
+| `KEEPER_FEEDBACK_BONUS_FORFEITS_PER_TICK`         | `25`                                                                | Max expired Feedback Bonus pools to forfeit per keeper tick                                                        |
+| `KEEPER_FEEDBACK_BONUS_FORFEIT_MIN_AGE_SECONDS`   | `60`                                                                | Extra age after the indexed award deadline before Ponder returns a pool as a forfeit candidate                     |
 | `KEEPER_DATABASE_URL`                             | —                                                                   | Optional Postgres URL for keeper-only correlation artifact cache and advisory locks                                |
 | `METRICS_ENABLED`                                 | `true`                                                              | Enable Prometheus metrics server                                                                                   |
 | `METRICS_BIND_ADDRESS`                            | `127.0.0.1`                                                         | Metrics server bind address                                                                                        |
@@ -82,7 +86,7 @@ docker run --env-file packages/keeper/.env.local -e METRICS_BIND_ADDRESS=0.0.0.0
 - **Prometheus metrics:** `http://localhost:9090/metrics`
 - **Health check:** `http://localhost:9090/health`
 
-Key metrics: `keeper_is_running` (gauge), `keeper_wallet_balance_wei` (gauge), `keeper_rounds_settled_total` (counter), `keeper_rounds_cancelled_total` (counter), `keeper_rounds_reveal_failed_finalized_total` (counter), and `keeper_unrevealed_cleanup_batches_total` (counter).
+Key metrics: `keeper_is_running` (gauge), `keeper_wallet_balance_wei` (gauge), `keeper_rounds_settled_total` (counter), `keeper_rounds_cancelled_total` (counter), `keeper_rounds_reveal_failed_finalized_total` (counter), `keeper_unrevealed_cleanup_batches_total` (counter), and `keeper_feedback_bonus_forfeits_total` (counter).
 
 ### Reveal-liveness metrics and alerting
 

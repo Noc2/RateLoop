@@ -26,6 +26,8 @@ const counters: Record<string, number> = {
   keeper_reveal_failed_finalize_skipped_total: 0,
   keeper_work_discovery_ponder_failures_total: 0,
   keeper_main_loop_lock_skips_total: 0,
+  keeper_feedback_bonus_forfeits_total: 0,
+  keeper_feedback_bonus_forfeit_failures_total: 0,
 };
 
 // --- Gauges ---
@@ -42,6 +44,7 @@ const gauges: Record<string, number> = {
   keeper_work_discovery_open_round_candidates: 0,
   keeper_work_discovery_cleanup_round_candidates: 0,
   keeper_work_discovery_dormant_content_candidates: 0,
+  keeper_work_discovery_feedback_bonus_forfeit_candidates: 0,
 };
 
 const startTime = Date.now();
@@ -94,6 +97,7 @@ export function recordRun(result: KeeperResult, durationMs: number) {
   counters.keeper_advisory_launch_credits_claimed_total += result.advisoryLaunchCreditsClaimed;
   counters.keeper_unrevealed_cleanup_batches_total += result.cleanupBatchesProcessed;
   counters.keeper_content_marked_dormant_total += result.contentMarkedDormant;
+  counters.keeper_feedback_bonus_forfeits_total += result.feedbackBonusPoolsForfeited;
   gauges.keeper_rounds_awaiting_reveal_quorum = result.roundsAwaitingRevealQuorum;
   gauges.keeper_reveal_grace_seconds_remaining_min =
     result.minRevealGraceSecondsRemaining ?? -1;
@@ -135,6 +139,8 @@ function renderMetrics(): string {
       "Total reveal-failed finalizations skipped because the reveal pipeline was unhealthy",
     keeper_work_discovery_ponder_failures_total: "Total Ponder keeper-work discovery failures",
     keeper_main_loop_lock_skips_total: "Total keeper runs skipped because another keeper held the main loop lock",
+    keeper_feedback_bonus_forfeits_total: "Total expired Feedback Bonus pools forfeited by keeper",
+    keeper_feedback_bonus_forfeit_failures_total: "Total unexpected Feedback Bonus forfeit failures",
   };
 
   for (const [name, value] of Object.entries(counters)) {
@@ -158,6 +164,8 @@ function renderMetrics(): string {
     keeper_work_discovery_open_round_candidates: "Open round candidates returned by the last keeper work discovery phase",
     keeper_work_discovery_cleanup_round_candidates: "Cleanup round candidates returned by the last keeper work discovery phase",
     keeper_work_discovery_dormant_content_candidates: "Dormant content candidates returned by the last keeper work discovery phase",
+    keeper_work_discovery_feedback_bonus_forfeit_candidates:
+      "Expired Feedback Bonus pool candidates returned by the last keeper work discovery phase",
   };
 
   for (const [name, value] of Object.entries(gauges)) {
@@ -190,6 +198,7 @@ function renderHealth(): { status: number; body: string } {
     totalRuns: counters.keeper_runs_total,
     roundsRevealFailedFinalized: counters.keeper_rounds_reveal_failed_finalized_total,
     cleanupBatchesProcessed: counters.keeper_unrevealed_cleanup_batches_total,
+    feedbackBonusPoolsForfeited: counters.keeper_feedback_bonus_forfeits_total,
     decryptFailures: counters.keeper_decrypt_failures_total,
     roundsAwaitingRevealQuorum: gauges.keeper_rounds_awaiting_reveal_quorum,
     revealGraceSecondsRemainingMin: gauges.keeper_reveal_grace_seconds_remaining_min,
@@ -198,6 +207,8 @@ function renderHealth(): { status: number; body: string } {
     openRoundCandidates: gauges.keeper_work_discovery_open_round_candidates,
     cleanupRoundCandidates: gauges.keeper_work_discovery_cleanup_round_candidates,
     dormantContentCandidates: gauges.keeper_work_discovery_dormant_content_candidates,
+    feedbackBonusForfeitCandidates:
+      gauges.keeper_work_discovery_feedback_bonus_forfeit_candidates,
     walletBalanceWei: (walletBalanceWei ?? 0n).toString(),
   });
   return { status: healthy ? 200 : 503, body };

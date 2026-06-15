@@ -1,7 +1,7 @@
 import { ROUND_STATE } from "@rateloop/contracts/protocol";
 import { and, asc, eq, inArray, or, sql } from "ponder";
 import { db } from "ponder:api";
-import { content, round } from "ponder:schema";
+import { content, feedbackBonusPool, round } from "ponder:schema";
 import type { ApiApp } from "../shared.js";
 import { jsonBig } from "../shared.js";
 import { safeBigInt, safeLimit } from "../utils.js";
@@ -22,6 +22,9 @@ export function registerKeeperRoutes(app: ApiApp) {
     const dormancyPeriod = safeNonNegativeBigIntParam(
       c.req.query("dormancyPeriod"),
     );
+    const feedbackBonusForfeitMinAge = safeNonNegativeBigIntParam(
+      c.req.query("feedbackBonusForfeitMinAge"),
+    ) ?? 0n;
     const limit = safeLimit(
       c.req.query("limit"),
       DEFAULT_KEEPER_WORK_LIMIT,
@@ -118,6 +121,41 @@ export function registerKeeperRoutes(app: ApiApp) {
       .orderBy(asc(content.lastActivityAt), asc(content.id))
       .limit(Math.min(limit, MAX_DORMANT_CANDIDATE_LIMIT));
 
+    const feedbackBonusForfeits = await db
+      .select({
+        poolId: feedbackBonusPool.id,
+        contentId: feedbackBonusPool.contentId,
+        roundId: feedbackBonusPool.roundId,
+        awardDeadline: feedbackBonusPool.awardDeadline,
+        remainingAmount: feedbackBonusPool.remainingAmount,
+        reason: sql<string>`'feedback_bonus_forfeit'`,
+      })
+      .from(feedbackBonusPool)
+      .leftJoin(
+        round,
+        and(
+          eq(round.contentId, feedbackBonusPool.contentId),
+          eq(round.roundId, feedbackBonusPool.roundId),
+        ),
+      )
+      .where(
+        and(
+          eq(feedbackBonusPool.forfeited, false),
+          sql`${feedbackBonusPool.remainingAmount} > 0`,
+          or(
+            sql`${round.contentId} is null`,
+            sql`not (
+              ${round.state} = ${ROUND_STATE.Open}
+              and ${round.startTime} is not null
+              and ${round.startTime} > 0
+            )`,
+          ),
+          sql`${feedbackBonusPool.awardDeadline} + ${feedbackBonusForfeitMinAge} < ${now}`,
+        ),
+      )
+      .orderBy(asc(feedbackBonusPool.awardDeadline), asc(feedbackBonusPool.id))
+      .limit(limit);
+
     return jsonBig(c, {
       now,
       limit,
@@ -125,6 +163,7 @@ export function registerKeeperRoutes(app: ApiApp) {
       openRounds,
       cleanupRounds,
       dormantContent,
+      feedbackBonusForfeits,
     });
   });
 }

@@ -7,6 +7,8 @@ import {
 
 const ENGINE = "0x1111111111111111111111111111111111111111" as const;
 const REGISTRY = "0x2222222222222222222222222222222222222222" as const;
+const FEEDBACK_BONUS_ESCROW =
+  "0x5555555555555555555555555555555555555555" as const;
 
 describe("assertContractDeployed", () => {
   it("throws when the configured address has no bytecode", async () => {
@@ -93,5 +95,71 @@ describe("validateKeeperContracts", () => {
       `ContentRegistry at ${REGISTRY} is wired to RoundVotingEngine ${otherEngine}, but keeper is configured for ${ENGINE}`,
     );
     expect(publicClient.readContract).toHaveBeenCalledTimes(3);
+  });
+
+  it("validates feedback bonus escrow wiring when configured", async () => {
+    const publicClient = {
+      getCode: vi.fn().mockResolvedValue("0x1234"),
+      readContract: vi
+        .fn()
+        .mockResolvedValueOnce("0x3333333333333333333333333333333333333333")
+        .mockResolvedValueOnce([1200n, 604800n, 3n, 1000n])
+        .mockResolvedValueOnce(ENGINE)
+        .mockResolvedValueOnce(7n)
+        .mockResolvedValueOnce(REGISTRY)
+        .mockResolvedValueOnce(ENGINE),
+    };
+
+    await expect(
+      validateKeeperContracts(
+        publicClient as any,
+        ENGINE,
+        REGISTRY,
+        FEEDBACK_BONUS_ESCROW,
+      ),
+    ).resolves.toBeUndefined();
+    expect(publicClient.getCode).toHaveBeenNthCalledWith(3, {
+      address: FEEDBACK_BONUS_ESCROW,
+    });
+    expect(publicClient.readContract).toHaveBeenNthCalledWith(
+      5,
+      expect.objectContaining({
+        address: FEEDBACK_BONUS_ESCROW,
+        functionName: "registry",
+      }),
+    );
+    expect(publicClient.readContract).toHaveBeenNthCalledWith(
+      6,
+      expect.objectContaining({
+        address: FEEDBACK_BONUS_ESCROW,
+        functionName: "votingEngine",
+      }),
+    );
+  });
+
+  it("rejects stale feedback bonus escrow wiring", async () => {
+    const otherRegistry = "0x6666666666666666666666666666666666666666";
+    const publicClient = {
+      getCode: vi.fn().mockResolvedValue("0x1234"),
+      readContract: vi
+        .fn()
+        .mockResolvedValueOnce("0x3333333333333333333333333333333333333333")
+        .mockResolvedValueOnce([1200n, 604800n, 3n, 1000n])
+        .mockResolvedValueOnce(ENGINE)
+        .mockResolvedValueOnce(7n)
+        .mockResolvedValueOnce(otherRegistry)
+        .mockResolvedValueOnce(ENGINE),
+    };
+
+    await expect(
+      validateKeeperContracts(
+        publicClient as any,
+        ENGINE,
+        REGISTRY,
+        FEEDBACK_BONUS_ESCROW,
+      ),
+    ).rejects.toThrow(
+      `FeedbackBonusEscrow at ${FEEDBACK_BONUS_ESCROW} is wired to ContentRegistry ${otherRegistry}, but keeper is configured for ${REGISTRY}`,
+    );
   });
 });

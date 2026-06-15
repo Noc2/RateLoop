@@ -14,6 +14,8 @@
  *   5. Call `cancelExpiredRound(contentId, roundId)` for rounds past maxDuration that
  *      never reached commit quorum.
  *   6. Call `markDormant(contentId)` for stale content.
+ *   7. Call `forfeitExpiredFeedbackBonus(poolId)` for expired Feedback Bonus pools
+ *      that still hold residue.
  *
  * Vote ciphertext is tlock-encrypted to a future drand round. After the epoch
  * ends, the drand beacon makes the decryption key available and the keeper can decrypt.
@@ -21,6 +23,7 @@
 import {
   getAbiItem,
   keccak256,
+  zeroAddress,
   type AbiEvent,
   type PublicClient,
   type WalletClient,
@@ -36,6 +39,7 @@ import {
 import {
   AdvisoryVoteRecorderAbi,
   ContentRegistryAbi,
+  FeedbackBonusEscrowAbi,
   QuestionRewardPoolEscrowAbi,
   RoundVotingEngineAbi,
 } from "@rateloop/contracts/abis";
@@ -71,6 +75,7 @@ export interface KeeperResult {
   advisoryLaunchCreditsClaimed: number;
   cleanupBatchesProcessed: number;
   contentMarkedDormant: number;
+  feedbackBonusPoolsForfeited: number;
   /** Open rounds with commit quorum but reveal quorum still unmet this tick. */
   roundsAwaitingRevealQuorum: number;
   /**
@@ -96,12 +101,21 @@ interface KeeperWorkContentCandidate {
   contentId: bigint;
   reason?: string;
 }
+interface KeeperWorkFeedbackBonusForfeitCandidate {
+  poolId: bigint;
+  contentId?: bigint;
+  roundId?: bigint;
+  awardDeadline?: bigint;
+  remainingAmount?: bigint;
+  reason?: string;
+}
 interface KeeperWorkDiscovery {
   source: "ponder" | "chain";
   contentIds: bigint[];
   openRounds: KeeperWorkRoundCandidate[];
   cleanupRounds: KeeperWorkRoundCandidate[];
   dormantContent: KeeperWorkContentCandidate[];
+  feedbackBonusForfeits: KeeperWorkFeedbackBonusForfeitCandidate[];
 }
 
 const MAX_CLEANUP_BATCHES_PER_TICK = 4;
@@ -129,6 +143,7 @@ function emptyResult(): KeeperResult {
     advisoryLaunchCreditsClaimed: 0,
     cleanupBatchesProcessed: 0,
     contentMarkedDormant: 0,
+    feedbackBonusPoolsForfeited: 0,
     roundsAwaitingRevealQuorum: 0,
     minRevealGraceSecondsRemaining: null,
   };
@@ -438,6 +453,10 @@ async function discoverKeeperWorkCandidates(
     "keeper_work_discovery_dormant_content_candidates",
     discovery.dormantContent.length,
   );
+  setGauge(
+    "keeper_work_discovery_feedback_bonus_forfeit_candidates",
+    discovery.feedbackBonusForfeits.length,
+  );
 
   return discovery;
 }
@@ -464,6 +483,7 @@ async function discoverKeeperWorkFromChain(
     openRounds: [],
     cleanupRounds: [],
     dormantContent: [],
+    feedbackBonusForfeits: [],
   };
 }
 
@@ -479,6 +499,10 @@ async function fetchKeeperWorkFromPonder(
   const url = new URL("/keeper/work", baseUrl);
   url.searchParams.set("now", now.toString());
   url.searchParams.set("dormancyPeriod", dormancyPeriod.toString());
+  url.searchParams.set(
+    "feedbackBonusForfeitMinAge",
+    String(config.feedbackBonusForfeits?.minAgeSeconds ?? 0),
+  );
   url.searchParams.set("limit", String(Math.max(1, limit)));
 
   const controller = new AbortController();
@@ -514,8 +538,16 @@ function parseKeeperWorkPayload(payload: unknown): KeeperWorkDiscovery | null {
   const openRounds = parseKeeperWorkRoundArray(record.openRounds);
   const cleanupRounds = parseKeeperWorkRoundArray(record.cleanupRounds);
   const dormantContent = parseKeeperWorkContentArray(record.dormantContent);
+  const feedbackBonusForfeits = parseKeeperWorkFeedbackBonusForfeitArray(
+    record.feedbackBonusForfeits ?? [],
+  );
 
-  if (!openRounds || !cleanupRounds || !dormantContent) {
+  if (
+    !openRounds ||
+    !cleanupRounds ||
+    !dormantContent ||
+    !feedbackBonusForfeits
+  ) {
     return null;
   }
 
@@ -531,6 +563,7 @@ function parseKeeperWorkPayload(payload: unknown): KeeperWorkDiscovery | null {
     openRounds,
     cleanupRounds,
     dormantContent,
+    feedbackBonusForfeits,
   };
 }
 
@@ -567,6 +600,32 @@ function parseKeeperWorkContentArray(
     });
   }
   return candidates.sort((a, b) => compareBigInt(a.contentId, b.contentId));
+}
+
+function parseKeeperWorkFeedbackBonusForfeitArray(
+  value: unknown,
+): KeeperWorkFeedbackBonusForfeitCandidate[] | null {
+  if (!Array.isArray(value)) return null;
+  const candidates: KeeperWorkFeedbackBonusForfeitCandidate[] = [];
+  const seen = new Set<string>();
+  for (const item of value) {
+    if (!item || typeof item !== "object") return null;
+    const record = item as Record<string, unknown>;
+    const poolId = parsePositiveBigInt(record.poolId);
+    if (poolId === null) return null;
+    const key = poolId.toString();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    candidates.push({
+      poolId,
+      contentId: parseOptionalPositiveBigInt(record.contentId),
+      roundId: parseOptionalPositiveBigInt(record.roundId),
+      awardDeadline: parseOptionalNonNegativeBigInt(record.awardDeadline),
+      remainingAmount: parseOptionalNonNegativeBigInt(record.remainingAmount),
+      reason: typeof record.reason === "string" ? record.reason : undefined,
+    });
+  }
+  return candidates;
 }
 
 function parseKeeperWorkRound(value: unknown): KeeperWorkRoundCandidate | null {
@@ -613,6 +672,21 @@ function parsePositiveBigInt(value: unknown): bigint | null {
     return parsed > 0n ? parsed : null;
   } catch {
     return null;
+  }
+}
+
+function parseOptionalPositiveBigInt(value: unknown): bigint | undefined {
+  if (value === undefined || value === null) return undefined;
+  return parsePositiveBigInt(value) ?? undefined;
+}
+
+function parseOptionalNonNegativeBigInt(value: unknown): bigint | undefined {
+  if (value === undefined || value === null) return undefined;
+  try {
+    const parsed = typeof value === "bigint" ? value : BigInt(String(value));
+    return parsed >= 0n ? parsed : undefined;
+  } catch {
+    return undefined;
   }
 }
 
@@ -1377,7 +1451,97 @@ export async function resolveRounds(
     engineAddr,
   );
 
+  result.feedbackBonusPoolsForfeited += await _forfeitExpiredFeedbackBonuses(
+    publicClient,
+    walletClient,
+    chain,
+    account,
+    logger,
+    discovery.feedbackBonusForfeits,
+  );
+
   return result;
+}
+
+function isExpectedFeedbackBonusForfeitRevert(reason: string): boolean {
+  const benign = [
+    "Already forfeited",
+    "Not expired",
+    "No funds",
+    "EnforcedPause",
+    "Pausable",
+  ];
+  const lower = reason.toLowerCase();
+  return benign.some((phrase) => lower.includes(phrase.toLowerCase()));
+}
+
+async function _forfeitExpiredFeedbackBonuses(
+  publicClient: PublicClient,
+  walletClient: WalletClient,
+  chain: Chain,
+  account: Account,
+  logger: Logger,
+  candidates: readonly KeeperWorkFeedbackBonusForfeitCandidate[],
+): Promise<number> {
+  const feedbackBonusForfeits = config.feedbackBonusForfeits ?? {
+    enabled: false,
+    maxPoolsPerTick: 0,
+  };
+  const escrowAddr = config.contracts.feedbackBonusEscrow;
+  if (
+    !feedbackBonusForfeits.enabled ||
+    feedbackBonusForfeits.maxPoolsPerTick <= 0 ||
+    !escrowAddr ||
+    escrowAddr === zeroAddress ||
+    candidates.length === 0
+  ) {
+    return 0;
+  }
+
+  let forfeited = 0;
+  for (const candidate of candidates.slice(
+    0,
+    feedbackBonusForfeits.maxPoolsPerTick,
+  )) {
+    try {
+      await writeContractAndConfirm(publicClient, walletClient, {
+        chain,
+        account,
+        address: escrowAddr,
+        abi: FeedbackBonusEscrowAbi,
+        functionName: "forfeitExpiredFeedbackBonus",
+        args: [candidate.poolId],
+      });
+      forfeited++;
+      logger.info("Forfeited expired Feedback Bonus pool", {
+        poolId: candidate.poolId.toString(),
+        contentId: candidate.contentId?.toString(),
+        roundId: candidate.roundId?.toString(),
+        remainingAmount: candidate.remainingAmount?.toString(),
+      });
+    } catch (err: unknown) {
+      const reason = getRevertReason(err);
+      if (isExpectedFeedbackBonusForfeitRevert(reason)) {
+        logger.debug("Skipped Feedback Bonus forfeit candidate", {
+          poolId: candidate.poolId.toString(),
+          contentId: candidate.contentId?.toString(),
+          roundId: candidate.roundId?.toString(),
+          error: reason,
+        });
+        continue;
+      }
+
+      incrementCounter("keeper_feedback_bonus_forfeit_failures_total");
+      logger.warn("Failed to forfeit expired Feedback Bonus pool", {
+        poolId: candidate.poolId.toString(),
+        contentId: candidate.contentId?.toString(),
+        roundId: candidate.roundId?.toString(),
+        error: reason,
+      });
+    }
+  }
+
+  return forfeited;
 }
 
 // Small headroom over eth_estimateGas so minor state drift between estimation and

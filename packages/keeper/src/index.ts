@@ -2,12 +2,14 @@
  * RateLoop Keeper — standalone stateless round settlement service.
  *
  * Iterates on-chain content, reveals tlock votes, settles or reveal-fails eligible rounds,
- * cleans up unrevealed terminal-round commits, cancels expired rounds, and sweeps dormant content.
+ * cleans up unrevealed terminal-round commits, cancels expired rounds, sweeps dormant content,
+ * and forfeits expired Feedback Bonus residue.
  *
  * Usage:
  *   npx tsx src/index.ts        # start the keeper loop
  *   npx tsx watch src/index.ts  # restart on file changes (dev)
  */
+import { zeroAddress } from "viem";
 import { config } from "./config.js";
 import { createLogger } from "./logger.js";
 import {
@@ -49,6 +51,7 @@ function emptyKeeperResult(): KeeperResult {
     advisoryLaunchCreditsClaimed: 0,
     cleanupBatchesProcessed: 0,
     contentMarkedDormant: 0,
+    feedbackBonusPoolsForfeited: 0,
     roundsAwaitingRevealQuorum: 0,
     minRevealGraceSecondsRemaining: null,
   };
@@ -68,14 +71,30 @@ async function main() {
     frontendFeesEnabled: config.frontendFees.enabled,
     frontendFeeAddress: config.frontendFees.frontendAddress ?? account.address,
     correlationSnapshotsEnabled: config.correlationSnapshots.enabled,
+    feedbackBonusForfeitsEnabled: config.feedbackBonusForfeits.enabled,
+    feedbackBonusEscrow: config.contracts.feedbackBonusEscrow,
   });
 
   await validateKeeperConnectivity(publicClient);
-  await validateKeeperContracts(
-    publicClient,
-    config.contracts.votingEngine,
-    config.contracts.contentRegistry,
-  );
+  const feedbackBonusEscrowForValidation =
+    config.feedbackBonusForfeits.enabled &&
+    config.contracts.feedbackBonusEscrow !== zeroAddress
+      ? config.contracts.feedbackBonusEscrow
+      : undefined;
+  if (feedbackBonusEscrowForValidation) {
+    await validateKeeperContracts(
+      publicClient,
+      config.contracts.votingEngine,
+      config.contracts.contentRegistry,
+      feedbackBonusEscrowForValidation,
+    );
+  } else {
+    await validateKeeperContracts(
+      publicClient,
+      config.contracts.votingEngine,
+      config.contracts.contentRegistry,
+    );
+  }
   logger.info("Keeper contract connectivity verified");
 
   const walletClient = getWalletClient();
@@ -211,7 +230,8 @@ async function main() {
         result.advisoryVotesRevealed +
         result.advisoryLaunchCreditsClaimed +
         result.cleanupBatchesProcessed +
-        result.contentMarkedDormant;
+        result.contentMarkedDormant +
+        result.feedbackBonusPoolsForfeited;
       if (total > 0) {
         logger.info("Run complete", { ...result, durationMs: duration });
       }

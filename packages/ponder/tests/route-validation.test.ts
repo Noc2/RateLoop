@@ -3619,7 +3619,23 @@ describe("registerKeeperRoutes", () => {
   });
 
   it("returns keeper work candidates as JSON-safe strings", async () => {
-    mockPonderModules([{ contentId: 9n, roundId: 2n, reason: "settle" }]);
+    mockPonderModules(
+      [{ contentId: 9n, roundId: 2n, reason: "settle" }],
+      [
+        [{ contentId: 9n, roundId: 2n, reason: "cleanup" }],
+        [{ contentId: 9n, reason: "dormant" }],
+        [
+          {
+            poolId: 3n,
+            contentId: 9n,
+            roundId: 2n,
+            awardDeadline: 90n,
+            remainingAmount: 1_000_000n,
+            reason: "feedback_bonus_forfeit",
+          },
+        ],
+      ],
+    );
     const { registerKeeperRoutes } = await import(
       "../src/api/routes/keeper-routes.js"
     );
@@ -3634,9 +3650,54 @@ describe("registerKeeperRoutes", () => {
     await expect(response.json()).resolves.toMatchObject({
       source: "ponder",
       openRounds: [{ contentId: "9", roundId: "2", reason: "settle" }],
-      cleanupRounds: [{ contentId: "9", roundId: "2", reason: "settle" }],
-      dormantContent: [{ contentId: "9", roundId: "2", reason: "settle" }],
+      cleanupRounds: [{ contentId: "9", roundId: "2", reason: "cleanup" }],
+      dormantContent: [{ contentId: "9", reason: "dormant" }],
+      feedbackBonusForfeits: [
+        {
+          poolId: "3",
+          contentId: "9",
+          roundId: "2",
+          awardDeadline: "90",
+          remainingAmount: "1000000",
+          reason: "feedback_bonus_forfeit",
+        },
+      ],
     });
+  });
+
+  it("filters feedback bonus forfeits to expired pools that are not started open rounds", async () => {
+    const { queryBuilders } = mockPonderModules([], [[], [], []]);
+    const { registerKeeperRoutes } = await import(
+      "../src/api/routes/keeper-routes.js"
+    );
+    const app = new Hono();
+    registerKeeperRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/keeper/work?now=100&dormancyPeriod=60&feedbackBonusForfeitMinAge=5&limit=5",
+    );
+
+    expect(response.status).toBe(200);
+    const feedbackBonusBuilder = queryBuilders[3]!;
+    expect(feedbackBonusBuilder.leftJoin).toHaveBeenCalled();
+    expect(feedbackBonusBuilder.limit).toHaveBeenCalledWith(5);
+
+    const serializedWhere = serializeExpression(
+      feedbackBonusBuilder.where.mock.calls[0]?.[0],
+    );
+    expect(serializedWhere).toContain("feedbackBonusPool.forfeited");
+    expect(serializedWhere).toContain("feedbackBonusPool.remainingAmount");
+    expect(serializedWhere).toContain("feedbackBonusPool.awardDeadline");
+    expect(serializedWhere).toContain("round.contentId");
+    expect(serializedWhere).toContain("round.state");
+    expect(serializedWhere).toContain("round.startTime");
+    expect(serializedWhere).toContain("<");
+
+    const serializedOrderBy = serializeExpression(
+      feedbackBonusBuilder.orderBy.mock.calls[0],
+    );
+    expect(serializedOrderBy).toContain("feedbackBonusPool.awardDeadline");
+    expect(serializedOrderBy).toContain("feedbackBonusPool.id");
   });
 });
 
