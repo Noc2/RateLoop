@@ -103,10 +103,17 @@ export function useConfidentialityBond({ bondRequirement, contentId, enabled = t
   const shouldCheckBond = Boolean(
     enabled && bondRequirement.isRequired && publicClient && escrowAddress && identityKey && identityKey !== zeroHash,
   );
+  const bondCheckKey =
+    shouldCheckBond && escrowAddress && identityKey
+      ? `${targetNetwork.id}:${contentId.toString()}:${escrowAddress}:${identityKey}:${bondRequirement.asset}:${bondRequirement.amount.toString()}`
+      : null;
+  const [checkedBondKey, setCheckedBondKey] = useState<string | null>(null);
+  const hasCheckedBond = !bondRequirement.isRequired || (bondCheckKey !== null && checkedBondKey === bondCheckKey);
 
   const refreshBond = useCallback(async () => {
     if (!bondRequirement.isRequired) {
       setHasActiveBond(true);
+      setCheckedBondKey(null);
       return true;
     }
 
@@ -126,6 +133,7 @@ export function useConfidentialityBond({ bondRequirement, contentId, enabled = t
       });
       const normalizedActive = active === true;
       setHasActiveBond(normalizedActive);
+      setCheckedBondKey(bondCheckKey);
       return normalizedActive;
     } catch (bondError) {
       console.warn("[confidentiality] failed to check active confidentiality bond.", {
@@ -133,12 +141,13 @@ export function useConfidentialityBond({ bondRequirement, contentId, enabled = t
         error: bondError,
       });
       setHasActiveBond(false);
+      setCheckedBondKey(bondCheckKey);
       setError("Could not check confidentiality bond status.");
       return false;
     } finally {
       setIsCheckingBond(false);
     }
-  }, [bondRequirement.isRequired, contentId, escrowAddress, identityKey, publicClient, shouldCheckBond]);
+  }, [bondCheckKey, bondRequirement.isRequired, contentId, escrowAddress, identityKey, publicClient, shouldCheckBond]);
 
   useEffect(() => {
     void refreshBond();
@@ -270,6 +279,7 @@ export function useConfidentialityBond({ bondRequirement, contentId, enabled = t
 
       await refetchIdentity();
       setHasActiveBond(true);
+      setCheckedBondKey(bondCheckKey);
       dispatchConfidentialityBondPosted(contentId, identityKey);
       void refreshBond();
       return true;
@@ -284,6 +294,7 @@ export function useConfidentialityBond({ bondRequirement, contentId, enabled = t
     }
   }, [
     address,
+    bondCheckKey,
     bondRequirement.amount,
     bondRequirement.asset,
     bondRequirement.isRequired,
@@ -305,6 +316,7 @@ export function useConfidentialityBond({ bondRequirement, contentId, enabled = t
   return {
     error,
     escrowAddress,
+    hasCheckedBond,
     hasActiveBond: bondRequirement.isRequired ? hasActiveBond : true,
     hasActiveHumanCredential,
     identityKey,

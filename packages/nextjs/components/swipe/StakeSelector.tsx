@@ -123,8 +123,12 @@ export function shouldShowConfidentialStakeStatus(params: {
   blocker: string | null;
   canPostBond: boolean;
   hasError?: boolean;
+  isPending?: boolean;
 }) {
-  return params.isPrivateContext && (Boolean(params.blocker) || params.canPostBond || Boolean(params.hasError));
+  return (
+    params.isPrivateContext &&
+    (params.canPostBond || Boolean(params.hasError) || (Boolean(params.blocker) && !params.isPending))
+  );
 }
 
 function normalizeCredentialStatusBits(data: unknown): { activeMask: number; freshMask: number } | undefined {
@@ -186,6 +190,7 @@ export function StakeSelector({
   );
   const [hasAcceptedConfidentialTerms, setHasAcceptedConfidentialTerms] = useState(false);
   const [isCheckingConfidentialTerms, setIsCheckingConfidentialTerms] = useState(false);
+  const [hasCheckedConfidentialTerms, setHasCheckedConfidentialTerms] = useState(false);
   const confidentialityBond = useConfidentialityBond({
     bondRequirement: confidentialityBondRequirement,
     contentId,
@@ -257,12 +262,14 @@ export function StakeSelector({
     if (!isOpen || !privateContext) {
       setHasAcceptedConfidentialTerms(false);
       setIsCheckingConfidentialTerms(false);
+      setHasCheckedConfidentialTerms(false);
       return;
     }
 
     if (!address) {
       setHasAcceptedConfidentialTerms(false);
       setIsCheckingConfidentialTerms(false);
+      setHasCheckedConfidentialTerms(false);
       return;
     }
 
@@ -270,10 +277,16 @@ export function StakeSelector({
     setIsCheckingConfidentialTerms(true);
     fetchConfidentialityTermsStatus(address, contentId)
       .then(status => {
-        if (!cancelled) setHasAcceptedConfidentialTerms(status.accepted);
+        if (!cancelled) {
+          setHasAcceptedConfidentialTerms(status.accepted);
+          setHasCheckedConfidentialTerms(true);
+        }
       })
       .catch(() => {
-        if (!cancelled) setHasAcceptedConfidentialTerms(false);
+        if (!cancelled) {
+          setHasAcceptedConfidentialTerms(false);
+          setHasCheckedConfidentialTerms(true);
+        }
       })
       .finally(() => {
         if (!cancelled) setIsCheckingConfidentialTerms(false);
@@ -357,6 +370,23 @@ export function StakeSelector({
           ? "The delegated holder must recheck before this vote can qualify for the bounty."
           : "The delegated holder must verify before this vote can qualify for the bounty.";
   const formDisabled = isConfirming || !roundAcceptsVotes;
+  const isConfidentialTermsStatusPending = Boolean(
+    isOpen && privateContext && address && !hasAcceptedConfidentialTerms && !hasCheckedConfidentialTerms,
+  );
+  const isConfidentialBondStatusPending = Boolean(
+    hasAcceptedConfidentialTerms &&
+      confidentialityBondRequirement.isRequired &&
+      confidentialityBond.hasActiveHumanCredential &&
+      confidentialityBond.identityKey &&
+      !confidentialityBond.hasCheckedBond &&
+      !confidentialityBond.error,
+  );
+  const isConfidentialAccessPending =
+    isCheckingConfidentialTerms ||
+    isConfidentialTermsStatusPending ||
+    confidentialityBond.isIdentityLoading ||
+    confidentialityBond.isCheckingBond ||
+    isConfidentialBondStatusPending;
   const confidentialVoteBlocker = getConfidentialContextVoteBlocker({
     bondRequirement: confidentialityBondRequirement,
     escrowConfigured: Boolean(confidentialityBond.escrowAddress),
@@ -364,9 +394,9 @@ export function StakeSelector({
     hasActiveBond: confidentialityBond.hasActiveBond,
     hasActiveHumanCredential: confidentialityBond.hasActiveHumanCredential && Boolean(confidentialityBond.identityKey),
     identityResolved: confidentialityBond.isIdentityResolved && !confidentialityBond.isIdentityLoading,
-    isBondChecking: confidentialityBond.isCheckingBond,
+    isBondChecking: confidentialityBond.isCheckingBond || isConfidentialBondStatusPending,
     isGated: privateContext,
-    isTermsChecking: isCheckingConfidentialTerms,
+    isTermsChecking: isCheckingConfidentialTerms || isConfidentialTermsStatusPending,
   });
   const confirmDisabled =
     formDisabled ||
@@ -384,12 +414,14 @@ export function StakeSelector({
     hasAcceptedConfidentialTerms &&
     confidentialityBondRequirement.isRequired &&
     confidentialityBond.hasActiveHumanCredential &&
+    confidentialityBond.hasCheckedBond &&
     !confidentialityBond.hasActiveBond;
   const showConfidentialStakeStatus = shouldShowConfidentialStakeStatus({
     blocker: confidentialVoteBlocker,
     canPostBond: canPostConfidentialityBond,
     hasError: Boolean(confidentialityBond.error),
     isPrivateContext: privateContext,
+    isPending: isConfidentialAccessPending,
   });
 
   const handlePostConfidentialityBond = async () => {

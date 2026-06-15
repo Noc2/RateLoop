@@ -23,10 +23,12 @@ export function useConfidentialContextAccessBlocker(item: ContentItem | null | u
   );
   const [accepted, setAccepted] = useState(false);
   const [isCheckingTerms, setIsCheckingTerms] = useState(false);
+  const [hasCheckedTerms, setHasCheckedTerms] = useState(false);
 
   useEffect(() => {
     setAccepted(false);
     setIsCheckingTerms(false);
+    setHasCheckedTerms(false);
   }, [address, contentId, gated, isOwnContent]);
 
   useEffect(() => {
@@ -36,10 +38,16 @@ export function useConfidentialContextAccessBlocker(item: ContentItem | null | u
     setIsCheckingTerms(true);
     fetchConfidentialityTermsStatus(address, contentId)
       .then(status => {
-        if (!cancelled) setAccepted(status.accepted);
+        if (!cancelled) {
+          setAccepted(status.accepted);
+          setHasCheckedTerms(true);
+        }
       })
       .catch(() => {
-        if (!cancelled) setAccepted(false);
+        if (!cancelled) {
+          setAccepted(false);
+          setHasCheckedTerms(true);
+        }
       })
       .finally(() => {
         if (!cancelled) setIsCheckingTerms(false);
@@ -55,7 +63,10 @@ export function useConfidentialContextAccessBlocker(item: ContentItem | null | u
 
     const handleAccepted = (event: Event) => {
       const detail = event instanceof CustomEvent ? event.detail : null;
-      if (detail?.contentId === contentId.toString()) setAccepted(true);
+      if (detail?.contentId === contentId.toString()) {
+        setAccepted(true);
+        setHasCheckedTerms(true);
+      }
     };
 
     window.addEventListener(CONFIDENTIALITY_ACCEPTED_EVENT, handleAccepted);
@@ -72,6 +83,16 @@ export function useConfidentialContextAccessBlocker(item: ContentItem | null | u
 
   if (!gated || isOwnContent) return null;
 
+  const isTermsStatusPending = Boolean(address && !hasCheckedTerms && !accepted);
+  const isBondStatusPending = Boolean(
+    accepted &&
+      bondRequirement.isRequired &&
+      bond.hasActiveHumanCredential &&
+      bond.identityKey &&
+      !bond.hasCheckedBond &&
+      !bond.error,
+  );
+
   return getConfidentialContextVoteBlocker({
     bondRequirement,
     escrowConfigured: Boolean(bond.escrowAddress),
@@ -79,8 +100,8 @@ export function useConfidentialContextAccessBlocker(item: ContentItem | null | u
     hasActiveBond: bond.hasActiveBond,
     hasActiveHumanCredential: bond.hasActiveHumanCredential && Boolean(bond.identityKey),
     identityResolved: bond.isIdentityResolved && !bond.isIdentityLoading,
-    isBondChecking: bond.isCheckingBond,
+    isBondChecking: bond.isCheckingBond || isBondStatusPending,
     isGated: gated,
-    isTermsChecking: isCheckingTerms,
+    isTermsChecking: isCheckingTerms || isTermsStatusPending,
   });
 }

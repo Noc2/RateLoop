@@ -80,6 +80,28 @@ test("shouldShowConfidentialStakeStatus hides satisfied private context state", 
   );
 });
 
+test("shouldShowConfidentialStakeStatus hides pending private context checks", () => {
+  assert.equal(
+    shouldShowConfidentialStakeStatus({
+      blocker: "Checking private-context eligibility.",
+      canPostBond: false,
+      isPending: true,
+      isPrivateContext: true,
+    }),
+    false,
+  );
+  assert.equal(
+    shouldShowConfidentialStakeStatus({
+      blocker: "Checking confidentiality bond status.",
+      canPostBond: false,
+      hasError: true,
+      isPending: true,
+      isPrivateContext: true,
+    }),
+    true,
+  );
+});
+
 test("shouldShowConfidentialStakeStatus keeps actionable private context state visible", () => {
   assert.equal(
     shouldShowConfidentialStakeStatus({
