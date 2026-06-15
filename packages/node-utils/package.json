@@ -10,6 +10,7 @@
     "./json": "./src/json.ts",
     "./keystore": "./src/keystore.ts",
     "./profileSelfReport": "./src/profileSelfReport.ts",
+    "./submissionValidation": "./src/submissionValidation.ts",
     "./x402QuestionFields": "./src/x402QuestionFields.ts"
   },
   "typesVersions": {
@@ -31,6 +32,9 @@
       ],
       "profileSelfReport": [
         "src/profileSelfReport.ts"
+      ],
+      "submissionValidation": [
+        "src/submissionValidation.ts"
       ],
       "x402QuestionFields": [
         "src/x402QuestionFields.ts"
