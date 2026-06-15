@@ -286,6 +286,14 @@ contract QuestionRewardPoolEscrow is
         defaultFrontendFeeBps = DEFAULT_FRONTEND_FEE_BPS.toUint16();
     }
 
+    function questionRewardPoolEscrowConfigShape()
+        external
+        view
+        returns (address registry_, address votingEngine_)
+    {
+        return (address(registry), address(votingEngine));
+    }
+
     /// @notice Create a reward pool with the default open-eligibility policy.
     /// @dev FE-2 (2026-05-20 follow-up audit): the funder's effective refund-eligibility time is
     ///      `max(bountyClosesAt, lastQualifyingRound.settledAt) + 7 days`, NOT
@@ -1380,22 +1388,22 @@ contract QuestionRewardPoolEscrow is
     }
 
     function _requireRegistryVotingEngine() internal view {
-        require(registry.votingEngine() == address(votingEngine), "Stale engine");
+        if (registry.votingEngine() != address(votingEngine)) revert();
     }
 
     function _requireCurrentRegistryEscrow() internal view {
         _requireRegistryVotingEngine();
-        require(registry.questionRewardPoolEscrow() == address(this), "Stale escrow");
+        if (registry.questionRewardPoolEscrow() != address(this)) revert();
     }
 
     function _getExistingRewardPool(uint256 rewardPoolId) internal view returns (RewardPool storage rewardPool) {
         rewardPool = rewardPools[rewardPoolId];
-        require(rewardPool.id != 0, "Bounty not found");
+        if (rewardPool.id == 0) revert();
     }
 
     function _getExistingBundleReward(uint256 bundleId) internal view returns (BundleReward storage bundle) {
         bundle = bundleRewards[bundleId];
-        require(bundle.id != 0, "Bundle not found");
+        if (bundle.id == 0) revert();
     }
 
     function _getIncompleteRewardPoolForQualification(uint256 rewardPoolId)

@@ -227,6 +227,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         mockCategoryRegistry.seedDefaultTestCategories();
         registry.setCategoryRegistry(address(mockCategoryRegistry));
         ProtocolConfig config = ProtocolConfig(address(votingEngine.protocolConfig()));
+        registry.setProtocolConfig(address(config));
         config.setRewardDistributor(address(rewardDistributor));
         config.setCategoryRegistry(address(mockCategoryRegistry));
         config.setTreasury(treasury);
@@ -543,8 +544,6 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
 
     function test_SettleRound_BundleObserverSeesInitializedRewardPoolsBeforeClaim() public {
         ClaimingBundleObserver observer = new ClaimingBundleObserver(votingEngine, rewardDistributor);
-        vm.prank(owner);
-        registry.setQuestionRewardPoolEscrow(address(observer));
         vm.prank(owner);
         lrepToken.mint(address(observer), 10_000e6);
 

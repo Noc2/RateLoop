@@ -633,7 +633,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
         vm.startPrank(funder);
         usdc.approve(address(rewardPoolEscrow), REWARD_POOL_AMOUNT);
-        vm.expectRevert("Stale escrow");
+        vm.expectRevert();
         rewardPoolEscrow.createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1, block.timestamp + 30 days, 30 days, 0);
         vm.stopPrank();
     }
@@ -1214,7 +1214,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         lrepToken.approve(address(rewardPoolEscrow), rewardAmount);
         registry.reserveSubmission(revealCommitment);
         vm.warp(block.timestamp + 1);
-        vm.expectRevert("Stale engine");
+        vm.expectRevert();
         registry.submitQuestionWithRewardAndRoundConfig(
             "https://example.com/context",
             imageUrls,
@@ -2642,7 +2642,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             raterIdentityRegistry.setHolder(extraVoters[i]);
             lrepToken.mint(extraVoters[i], 10_000e6);
         }
-        MockQuestionRewardPoolEscrow mockEscrow = new MockQuestionRewardPoolEscrow();
+        MockQuestionRewardPoolEscrow mockEscrow = _newMockQuestionRewardPoolEscrow(registry);
         registry.pause();
         registry.setQuestionRewardPoolEscrow(address(mockEscrow));
         registry.unpause();
@@ -5417,7 +5417,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         registry.unpause();
         vm.stopPrank();
 
-        vm.expectRevert("Stale escrow");
+        vm.expectRevert();
         x402QuestionSubmitter.submitQuestionWithX402Payment(
             question.contextUrl,
             question.imageUrls,
@@ -5507,7 +5507,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         QuestionRewardPoolEscrow replacementEscrow = _deployReplacementQuestionRewardPoolEscrow();
 
         vm.prank(owner);
-        vm.expectRevert("Stale escrow");
+        vm.expectRevert();
         x402QuestionSubmitter.setQuestionRewardPoolEscrow(address(replacementEscrow));
 
         assertEq(x402QuestionSubmitter.questionRewardPoolEscrow(), address(rewardPoolEscrow));
@@ -7260,7 +7260,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         uint256 bountyClosesAt = block.timestamp + 30 days;
 
         vm.startPrank(owner);
-        MockQuestionRewardPoolEscrow mockEscrow = new MockQuestionRewardPoolEscrow();
+        MockQuestionRewardPoolEscrow mockEscrow = _newMockQuestionRewardPoolEscrow(registry);
         registry.pause();
         registry.setQuestionRewardPoolEscrow(address(mockEscrow));
         registry.unpause();
@@ -7337,7 +7337,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         _settleRoundWith(voters, contentIds[1], directions);
 
         vm.startPrank(owner);
-        MockQuestionRewardPoolEscrow mockEscrow = new MockQuestionRewardPoolEscrow();
+        MockQuestionRewardPoolEscrow mockEscrow = _newMockQuestionRewardPoolEscrow(registry);
         registry.pause();
         registry.setQuestionRewardPoolEscrow(address(mockEscrow));
         registry.unpause();
@@ -7383,7 +7383,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         _settleRoundWith(voters, contentIds[1], directions);
 
         vm.startPrank(owner);
-        MockQuestionRewardPoolEscrow mockEscrow = new MockQuestionRewardPoolEscrow();
+        MockQuestionRewardPoolEscrow mockEscrow = _newMockQuestionRewardPoolEscrow(registry);
         registry.pause();
         registry.setQuestionRewardPoolEscrow(address(mockEscrow));
         registry.unpause();

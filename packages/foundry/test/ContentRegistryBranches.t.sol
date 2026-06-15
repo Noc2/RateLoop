@@ -123,9 +123,9 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         raterRegistry = _deployRaterRegistry(owner);
         mockCategoryRegistry = new MockCategoryRegistry();
         mockCategoryRegistry.seedDefaultTestCategories();
-        mockQuestionRewardPoolEscrow = new MockQuestionRewardPoolEscrow();
         registry.setCategoryRegistry(address(mockCategoryRegistry));
         registry.setProtocolConfig(address(votingEngine.protocolConfig()));
+        mockQuestionRewardPoolEscrow = _newMockQuestionRewardPoolEscrow(registry);
         registry.setQuestionRewardPoolEscrow(address(mockQuestionRewardPoolEscrow));
         ProtocolConfig(address(votingEngine.protocolConfig())).setCategoryRegistry(address(mockCategoryRegistry));
         ProtocolConfig(address(votingEngine.protocolConfig())).setRaterRegistry(address(raterRegistry));
@@ -178,7 +178,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
     }
 
     function test_SetQuestionRewardPoolEscrow_RotationRequiresPause() public {
-        MockQuestionRewardPoolEscrow replacementEscrow = new MockQuestionRewardPoolEscrow();
+        MockQuestionRewardPoolEscrow replacementEscrow = _newMockQuestionRewardPoolEscrow(registry);
 
         vm.prank(owner);
         vm.expectRevert(ContentRegistry.InvalidState.selector);
@@ -201,6 +201,40 @@ contract ContentRegistryBranchesTest is VotingTestBase {
 
         vm.expectRevert(ContentRegistry.InvalidState.selector);
         registry.setQuestionRewardPoolEscrow(address(invalidEscrow));
+        vm.stopPrank();
+
+        assertEq(registry.questionRewardPoolEscrow(), address(mockQuestionRewardPoolEscrow));
+    }
+
+    function test_SetQuestionRewardPoolEscrow_RejectsMismatchedConfigShape() public {
+        vm.startPrank(owner);
+        registry.pause();
+
+        MockQuestionRewardPoolEscrow wrongRegistryEscrow = _newMockQuestionRewardPoolEscrow(registry);
+        wrongRegistryEscrow.setConfigShape(address(0xBEEF), address(votingEngine));
+        vm.expectRevert(ContentRegistry.InvalidState.selector);
+        registry.setQuestionRewardPoolEscrow(address(wrongRegistryEscrow));
+
+        MockQuestionRewardPoolEscrow wrongEngineEscrow = _newMockQuestionRewardPoolEscrow(registry);
+        wrongEngineEscrow.setConfigShape(address(registry), address(0xBEEF));
+        vm.expectRevert(ContentRegistry.InvalidState.selector);
+        registry.setQuestionRewardPoolEscrow(address(wrongEngineEscrow));
+
+        ContentRegistry registryImpl2 = new ContentRegistry();
+        ContentRegistry mismatchedRegistry = ContentRegistry(
+            address(
+                new ERC1967Proxy(
+                    address(registryImpl2),
+                    abi.encodeCall(ContentRegistry.initializeWithTreasury, (owner, owner, owner, address(lrepToken)))
+                )
+            )
+        );
+        mismatchedRegistry.setVotingEngine(address(votingEngine));
+        ProtocolConfig wrongConfig = _deployProtocolConfig(owner);
+        mismatchedRegistry.setProtocolConfig(address(wrongConfig));
+        MockQuestionRewardPoolEscrow wrongConfigEscrow = _newMockQuestionRewardPoolEscrow(mismatchedRegistry);
+        vm.expectRevert(ContentRegistry.InvalidState.selector);
+        mismatchedRegistry.setQuestionRewardPoolEscrow(address(wrongConfigEscrow));
         vm.stopPrank();
 
         assertEq(registry.questionRewardPoolEscrow(), address(mockQuestionRewardPoolEscrow));
@@ -1650,7 +1684,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
 
     function test_SubmitQuestionBundleWithReward_SnapshotsRoundObserverAcrossEscrowRotation() public {
         uint256[] memory contentIds = _submitReservedQuestionBundleForDormancyTest();
-        MockQuestionRewardPoolEscrow replacementEscrow = new MockQuestionRewardPoolEscrow();
+        MockQuestionRewardPoolEscrow replacementEscrow = _newMockQuestionRewardPoolEscrow(registry);
 
         vm.startPrank(owner);
         registry.pause();
@@ -2133,7 +2167,8 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         noRaterConfig.setTreasury(treasury);
         reg2.setCategoryRegistry(address(mockCategoryRegistry2));
         reg2.setProtocolConfig(address(noRaterConfig));
-        reg2.setQuestionRewardPoolEscrow(address(mockQuestionRewardPoolEscrow));
+        MockQuestionRewardPoolEscrow reg2Escrow = _newMockQuestionRewardPoolEscrow(reg2);
+        reg2.setQuestionRewardPoolEscrow(address(reg2Escrow));
         vm.stopPrank();
 
         vm.startPrank(submitter);
@@ -2147,7 +2182,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         bytes32 revealCommitment = _defaultQuestionRevealCommitment(
             reg2, submissionKey, _emptyImageUrls(), "", question.title, question.tags, 1, salt, submitter
         );
-        lrepToken.approve(address(mockQuestionRewardPoolEscrow), DEFAULT_SUBMISSION_REWARD_POOL);
+        lrepToken.approve(address(reg2Escrow), DEFAULT_SUBMISSION_REWARD_POOL);
         reg2.reserveSubmission(revealCommitment);
         vm.warp(block.timestamp + 1);
         uint256 id = _submitNoMediaQuestion(reg2, question, 1, salt);

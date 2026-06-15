@@ -442,10 +442,30 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         }
     }
 
+    function _validQuestionRewardPoolEscrow(address target) private view returns (bool valid) {
+        address expectedRegistry = address(this);
+        address expectedEngine = votingEngine;
+        assembly ("memory-safe") {
+            let ptr := mload(0x40)
+            mstore(ptr, shl(224, 0xe1b361ac))
+            valid := staticcall(gas(), target, ptr, 4, ptr, 0x40)
+            valid := and(valid, eq(returndatasize(), 0x40))
+            valid := and(valid, eq(and(mload(ptr), 0xffffffffffffffffffffffffffffffffffffffff), expectedRegistry))
+            valid :=
+                and(valid, eq(and(mload(add(ptr, 0x20)), 0xffffffffffffffffffffffffffffffffffffffff), expectedEngine))
+        }
+    }
+
     /// @notice Set or update the bounty escrow.
     function setQuestionRewardPoolEscrow(address _questionRewardPoolEscrow) external onlyRole(CONFIG_ROLE) {
         if (_questionRewardPoolEscrow == address(0)) revert InvalidState();
-        if (!_probeContractShape(_questionRewardPoolEscrow, 0x1b363df8, 4)) revert InvalidState();
+        address currentEngine = votingEngine;
+        if (currentEngine != address(0)) {
+            address currentProtocolConfig = address(protocolConfig);
+            if (currentProtocolConfig == address(0)) revert InvalidState();
+            _requireEngineProtocolConfig(currentEngine, currentProtocolConfig);
+        }
+        if (!_validQuestionRewardPoolEscrow(_questionRewardPoolEscrow)) revert InvalidState();
         if (questionRewardPoolEscrow == _questionRewardPoolEscrow) return;
         if (questionRewardPoolEscrow != address(0) && !paused()) revert InvalidState();
         questionRewardPoolEscrow = _questionRewardPoolEscrow;

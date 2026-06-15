@@ -649,7 +649,7 @@ abstract contract ContentSubmissionTestBase {
         rewardEscrow = registry.questionRewardPoolEscrow();
         if (rewardEscrow != address(0)) return rewardEscrow;
 
-        MockQuestionRewardPoolEscrow mockRewardPoolEscrow = new MockQuestionRewardPoolEscrow();
+        MockQuestionRewardPoolEscrow mockRewardPoolEscrow = _newMockQuestionRewardPoolEscrow(registry);
         bytes32 configRole = registry.CONFIG_ROLE();
         address[8] memory candidates = [
             address(this), address(1), address(2), address(0xA), address(0xB), address(0xAA), address(0xBB), address(10)
@@ -662,6 +662,14 @@ abstract contract ContentSubmissionTestBase {
             }
         }
         revert("Bounty escrow not set");
+    }
+
+    function _newMockQuestionRewardPoolEscrow(ContentRegistry registry)
+        internal
+        returns (MockQuestionRewardPoolEscrow mockRewardPoolEscrow)
+    {
+        mockRewardPoolEscrow = new MockQuestionRewardPoolEscrow();
+        mockRewardPoolEscrow.setConfigShape(address(registry), registry.votingEngine());
     }
 
     function _singleImageUrls(string memory imageUrl) internal pure returns (string[] memory imageUrls) {
