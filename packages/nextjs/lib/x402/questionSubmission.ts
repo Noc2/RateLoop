@@ -1074,7 +1074,10 @@ export function resolveX402QuestionConfig(chainId: number): X402QuestionSubmissi
     throw new X402QuestionConfigError(`Chain ${chainId} is not configured for this server.`);
   }
 
-  const usdcAddress = getX402UsdcAddressOverride() ?? X402_WORLD_CHAIN_USDC_BY_CHAIN_ID[chainId];
+  const usdcAddress =
+    getX402UsdcAddressOverride() ??
+    getSharedDeploymentAddress(chainId, "MockERC20") ??
+    X402_WORLD_CHAIN_USDC_BY_CHAIN_ID[chainId];
   if (!usdcAddress || !isAddress(usdcAddress)) {
     throw new X402QuestionConfigError("x402 question submissions require World Chain or World Chain Sepolia USDC.");
   }
