@@ -138,6 +138,7 @@ import {
   isInsufficientFundsError,
   isWalletRpcOverloadedError,
 } from "~~/lib/transactionErrors";
+import { WORLD_ID_PRESENCE_RECHECK_WINDOW_SECONDS } from "~~/lib/world-id/proofExpiry";
 import { containsBlockedUrl } from "~~/utils/contentFilter";
 import { sanitizeExternalUrl } from "~~/utils/externalUrl";
 import { notification } from "~~/utils/scaffold-eth";
@@ -172,6 +173,8 @@ const MONEY_FIELD_LABEL_CLASS = "label-text flex h-6 min-w-0 items-center gap-1.
 const MONEY_FIELD_CONTROL_CLASS = "h-12 w-full min-w-0";
 const SECONDS_PER_MINUTE = 60;
 const SECONDS_PER_HOUR = 60 * SECONDS_PER_MINUTE;
+const RECENT_RECHECK_WINDOW_MINUTES = WORLD_ID_PRESENCE_RECHECK_WINDOW_SECONDS / SECONDS_PER_MINUTE;
+const RECENT_RECHECK_TOOLTIP_TEXT = `Voters must refresh this credential within ${RECENT_RECHECK_WINDOW_MINUTES} minutes before voting for their answer to qualify for the bounty.`;
 const MIN_HUMAN_RESPONSE_WINDOW_MINUTES = 20;
 const QUESTION_DETAILS_PREVIEW_WORDS = 32;
 const ROUND_RESPONSE_WINDOW_PRESETS = [
@@ -3452,9 +3455,9 @@ export function ContentSubmissionSection() {
           }`}
         >
           <span className="min-w-0">
-            <span className="block font-medium text-base-content">Require recent recheck</span>
-            <span className="block text-base-content/55">
-              Voters must refresh this credential shortly before voting.
+            <span className="inline-flex items-center gap-1.5 font-medium text-base-content">
+              Require recent recheck
+              <InfoTooltip text={RECENT_RECHECK_TOOLTIP_TEXT} />
             </span>
           </span>
           <input
