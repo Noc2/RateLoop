@@ -46,7 +46,7 @@ const deployedContracts = {
 };`;
 }
 
-const questionRewardPoolsSource =
+const protocolSource =
   'const WORLD_CHAIN_USDC_BY_CHAIN_ID = { 4801: "0x66145f38cBAC35Ca6F1Dfb4914dF98F1614aeA88" };';
 const EIP1967_IMPLEMENTATION_SLOT =
   "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc";
@@ -141,7 +141,7 @@ test("validateOfflineReadiness flags a contract whose deployedOnBlock is missing
   const result = validateOfflineReadiness({
     deploymentJson: makeDeploymentJson(),
     deployedContractsSource,
-    questionRewardPoolsSource,
+    protocolSource,
   });
 
   assert.equal(result.ok, false);
@@ -158,7 +158,7 @@ test("validateOfflineReadiness accepts synchronized Sepolia deployment artifacts
   const result = validateOfflineReadiness({
     deploymentJson: makeDeploymentJson(),
     deployedContractsSource: makeGeneratedContractsSource(),
-    questionRewardPoolsSource,
+    protocolSource,
   });
 
   assert.equal(result.ok, true);
@@ -173,7 +173,7 @@ test("validateOfflineReadiness rejects stale generated contract addresses", () =
         address: "0xffffffffffffffffffffffffffffffffffffffff",
       },
     }),
-    questionRewardPoolsSource,
+    protocolSource,
   });
 
   assert.equal(result.ok, false);
@@ -188,7 +188,7 @@ test("validateOfflineReadiness rejects missing World Chain Sepolia USDC config",
   const result = validateOfflineReadiness({
     deploymentJson: makeDeploymentJson(),
     deployedContractsSource: makeGeneratedContractsSource(),
-    questionRewardPoolsSource: "const WORLD_CHAIN_USDC_BY_CHAIN_ID = {};",
+    protocolSource: "const WORLD_CHAIN_USDC_BY_CHAIN_ID = {};",
   });
 
   assert.equal(result.ok, false);
@@ -205,7 +205,7 @@ test("validateOfflineReadiness rejects missing x402 submitter deployment", () =>
   const result = validateOfflineReadiness({
     deploymentJson,
     deployedContractsSource: makeGeneratedContractsSource(),
-    questionRewardPoolsSource,
+    protocolSource,
   });
 
   assert.equal(result.ok, false);
@@ -226,7 +226,7 @@ test("validateOfflineReadiness rejects missing confidentiality escrow deployment
   const result = validateOfflineReadiness({
     deploymentJson,
     deployedContractsSource: makeGeneratedContractsSource(),
-    questionRewardPoolsSource,
+    protocolSource,
   });
 
   assert.equal(result.ok, false);

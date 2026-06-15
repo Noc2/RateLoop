@@ -184,7 +184,7 @@ export function parseGeneratedContractsForChain(
 export function validateOfflineReadiness({
   deploymentJson,
   deployedContractsSource,
-  questionRewardPoolsSource,
+  protocolSource,
 }) {
   const checks = [];
   const failures = [];
@@ -253,7 +253,7 @@ export function validateOfflineReadiness({
   addCheck(
     checks,
     failures,
-    questionRewardPoolsSource.includes(`4801: "${WORLDCHAIN_SEPOLIA_USDC}"`),
+    protocolSource.includes(`4801: "${WORLDCHAIN_SEPOLIA_USDC}"`),
     "Next.js default USDC address is configured for World Chain Sepolia",
   );
 
@@ -272,8 +272,8 @@ function loadOfflineInputs(root = repoRoot) {
       join(root, "packages/contracts/src/deployedContracts.ts"),
       "utf8",
     ),
-    questionRewardPoolsSource: readFileSync(
-      join(root, "packages/nextjs/lib/questionRewardPools.ts"),
+    protocolSource: readFileSync(
+      join(root, "packages/contracts/src/protocol.ts"),
       "utf8",
     ),
   };

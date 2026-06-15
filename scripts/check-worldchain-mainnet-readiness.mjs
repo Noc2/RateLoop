@@ -62,7 +62,7 @@ export function validateOfflineReadiness({
   deploymentJson,
   deployedContractsSource,
   expectedMode = "production",
-  questionRewardPoolsSource,
+  protocolSource,
 }) {
   const checks = [];
   const failures = [];
@@ -139,7 +139,7 @@ export function validateOfflineReadiness({
   addCheck(
     checks,
     failures,
-    questionRewardPoolsSource.includes(`480: "${WORLDCHAIN_USDC}"`),
+    protocolSource.includes(`480: "${WORLDCHAIN_USDC}"`),
     "Next.js default USDC address is configured for World Chain mainnet",
   );
 
@@ -154,8 +154,8 @@ export function loadOfflineInputs(root = repoRoot) {
       join(root, "packages/contracts/src/deployedContracts.ts"),
       "utf8",
     ),
-    questionRewardPoolsSource: readFileSync(
-      join(root, "packages/nextjs/lib/questionRewardPools.ts"),
+    protocolSource: readFileSync(
+      join(root, "packages/contracts/src/protocol.ts"),
       "utf8",
     ),
   };
