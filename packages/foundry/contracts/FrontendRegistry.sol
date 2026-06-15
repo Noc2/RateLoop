@@ -451,8 +451,9 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     ///         (stake cut, accrued fees, pending withdrawals) to the successful challenger.
     /// @dev Governance policy: `bountyRecipient` must be the recorded challenger of the
     ///      rejected ClusterPayoutOracle snapshot that triggered the slash — the match is
-    ///      verifiable on-chain against the oracle's stored proposal. The remainder goes to
-    ///      `confiscationRecipient` as in a plain slash.
+    ///      verifiable on-chain against the oracle's stored proposal. The live snapshot-proposer
+    ///      assignment is intentionally ignored here because it is mutable after the challenge.
+    ///      The remainder goes to `confiscationRecipient` as in a plain slash.
     /// @param frontend The frontend address to slash
     /// @param amount Amount of LREP to slash
     /// @param reason Reason for the slash
@@ -464,7 +465,6 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     {
         require(bountyRecipient != address(0), "Invalid bounty recipient");
         require(bountyRecipient != frontend, "Bounty recipient is frontend");
-        require(bountyRecipient != snapshotProposerForFrontend[frontend], "Bounty recipient is proposer");
         _slashFrontend(frontend, amount, reason, bountyRecipient);
     }
 

@@ -701,18 +701,25 @@ contract FrontendRegistryTest is Test {
         vm.stopPrank();
     }
 
-    function test_RevertSlashFrontendWithBountyRecipientIsProposer() public {
-        address proposer = address(88);
+    function test_SlashFrontendWithBountyIgnoresLiveSnapshotProposerAssignment() public {
+        address challenger = address(88);
 
         vm.startPrank(frontend1);
         lrepToken.approve(address(registry), STAKE);
         registry.register();
-        registry.setSnapshotProposer(proposer);
+        registry.setSnapshotProposer(challenger);
         vm.stopPrank();
 
+        uint256 slashAmount = STAKE / 2;
+        uint256 expectedBounty = (slashAmount * registry.CHALLENGER_BOUNTY_BPS()) / 10_000;
+        uint256 challengerBefore = lrepToken.balanceOf(challenger);
+
         vm.prank(admin);
-        vm.expectRevert("Bounty recipient is proposer");
-        registry.slashFrontendWithBounty(frontend1, STAKE / 2, "Test", proposer);
+        registry.slashFrontendWithBounty(frontend1, slashAmount, "Rejected payout root", challenger);
+
+        assertEq(lrepToken.balanceOf(challenger) - challengerBefore, expectedBounty);
+        assertEq(registry.snapshotProposerForFrontend(frontend1), address(0));
+        assertEq(registry.frontendForSnapshotProposer(challenger), address(0));
     }
 
     function test_RevertSlashFrontendWithBountyNonGovernance() public {
