@@ -1011,6 +1011,7 @@ contract QuestionRewardPoolEscrow is
             roundSetIndex,
             PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD
         );
+        _qualifyRecoveredSnapshotBundleRoundSetIfNeeded(bundleId, roundSetIndex);
     }
 
     function recordBundleQuestionTerminal(uint256 contentId, uint256 roundId, bool settled) external {
@@ -1113,24 +1114,7 @@ contract QuestionRewardPoolEscrow is
         bytes32[] memory proof,
         bool hasCorrelationProof
     ) internal returns (uint256 rewardAmount) {
-        QuestionRewardPoolEscrowBundleRecoveryLib.qualifyRecoveredRoundSetIfNeeded(
-            bundleRewards,
-            bundleQuestions,
-            bundleQuestionRecordedRounds,
-            bundleRoundIds,
-            bundleRoundSetSnapshots,
-            bundleRewardClusterPayoutOracle,
-            bundleQuestionTerminalSyncCursor,
-            qualifiedBundleRoundSetClaimants,
-            rejectedRecoveredBundleRoundSet,
-            reopenedRecoveredBundleRoundSet,
-            registry,
-            votingEngine,
-            votingEngine.protocolConfig(),
-            PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD,
-            bundleId,
-            roundSetIndex
-        );
+        _qualifyRecoveredSnapshotBundleRoundSetIfNeeded(bundleId, roundSetIndex);
         return QuestionRewardPoolEscrowBundleActionsLib.claimQuestionBundleReward(
             bundleRewards,
             bundleQuestions,
@@ -1150,6 +1134,27 @@ contract QuestionRewardPoolEscrow is
             proof,
             PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD,
             hasCorrelationProof,
+            bundleId,
+            roundSetIndex
+        );
+    }
+
+    function _qualifyRecoveredSnapshotBundleRoundSetIfNeeded(uint256 bundleId, uint256 roundSetIndex) private {
+        QuestionRewardPoolEscrowBundleRecoveryLib.qualifyRecoveredRoundSetIfNeeded(
+            bundleRewards,
+            bundleQuestions,
+            bundleQuestionRecordedRounds,
+            bundleRoundIds,
+            bundleRoundSetSnapshots,
+            bundleRewardClusterPayoutOracle,
+            bundleQuestionTerminalSyncCursor,
+            qualifiedBundleRoundSetClaimants,
+            rejectedRecoveredBundleRoundSet,
+            reopenedRecoveredBundleRoundSet,
+            registry,
+            votingEngine,
+            votingEngine.protocolConfig(),
+            PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD,
             bundleId,
             roundSetIndex
         );
