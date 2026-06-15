@@ -45,9 +45,10 @@ export async function POST(request: NextRequest) {
 
   const overrides = getAgentCallbackSweepRouteTestOverrides();
   const sweepCallbacks = overrides?.sweepAgentLifecycleCallbacks ?? sweepAgentLifecycleCallbacks;
+  const sweepHandoffs = overrides?.sweepExpiredHandoffIntents ?? sweepExpiredHandoffIntents;
 
   const limit = parseLimit(request);
-  const [callbacks, handoffs] = await Promise.all([sweepCallbacks({ limit }), sweepExpiredHandoffIntents(limit)]);
+  const [callbacks, handoffs] = await Promise.all([sweepCallbacks({ limit }), sweepHandoffs(limit)]);
 
   return NextResponse.json({ ...callbacks, handoffs });
 }

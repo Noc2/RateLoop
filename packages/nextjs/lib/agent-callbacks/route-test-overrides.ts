@@ -1,6 +1,7 @@
 import type { processDueAgentCallbackDeliveries } from "./index";
 import type { sweepAgentLifecycleCallbacks } from "./lifecycle";
 import type { randomUUID } from "node:crypto";
+import type { sweepExpiredHandoffIntents } from "~~/lib/agent/handoffs";
 
 type AgentCallbackDeliverRouteTestOverrides = {
   processDueAgentCallbackDeliveries?: typeof processDueAgentCallbackDeliveries;
@@ -9,6 +10,7 @@ type AgentCallbackDeliverRouteTestOverrides = {
 
 type AgentCallbackSweepRouteTestOverrides = {
   sweepAgentLifecycleCallbacks?: typeof sweepAgentLifecycleCallbacks;
+  sweepExpiredHandoffIntents?: typeof sweepExpiredHandoffIntents;
 };
 
 let deliverOverrides: AgentCallbackDeliverRouteTestOverrides | null = null;

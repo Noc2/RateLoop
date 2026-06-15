@@ -28,6 +28,9 @@ const sweepResult = {
   hasMore: false,
   scanned: 1,
 };
+const handoffSweepResult = {
+  deleted: 0,
+};
 
 function makeRequest(path: string, headers: Record<string, string> = {}) {
   return new NextRequest(`https://rateloop.ai${path}`, {
@@ -58,6 +61,7 @@ beforeEach(() => {
   });
   setAgentCallbackSweepRouteTestOverrides({
     sweepAgentLifecycleCallbacks: async () => sweepResult,
+    sweepExpiredHandoffIntents: async () => handoffSweepResult,
   });
 });
 
@@ -130,6 +134,10 @@ test("agent callback sweep route accepts header auth and defaults invalid limits
       calls.push(input);
       return sweepResult;
     },
+    sweepExpiredHandoffIntents: async limit => {
+      calls.push({ handoffLimit: limit });
+      return handoffSweepResult;
+    },
   });
 
   const response = await sweepRoute.POST(
@@ -139,6 +147,6 @@ test("agent callback sweep route accepts header auth and defaults invalid limits
   );
 
   assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), sweepResult);
-  assert.deepEqual(calls, [{ limit: 25 }]);
+  assert.deepEqual(await response.json(), { ...sweepResult, handoffs: handoffSweepResult });
+  assert.deepEqual(calls, [{ limit: 25 }, { handoffLimit: 25 }]);
 });
