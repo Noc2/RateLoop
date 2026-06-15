@@ -94,6 +94,7 @@ vi.mock("@rateloop/contracts/abis", () => ({
 }));
 
 vi.mock("@rateloop/contracts/protocol", () => ({
+  CONFIDENTIALITY_FLAG_PRIVATE_FOREVER: 1,
   DEFAULT_ROUND_CONFIG: {
     epochDurationSeconds: 1200,
     maxDurationSeconds: 1200,
@@ -113,6 +114,7 @@ function createDb(
   existingRound: Record<string, unknown> | null = { id: "1-2" },
   options: {
     confidentialityConfig?: Record<string, unknown> | null;
+    contentRecord?: Record<string, unknown> | null;
   } = {},
 ) {
   const updateCalls: Array<{
@@ -129,6 +131,9 @@ function createDb(
       find: vi.fn(async (table: unknown) => {
         if (tableName(table) === "confidentialityConfig") {
           return options.confidentialityConfig ?? null;
+        }
+        if (tableName(table) === "content") {
+          return options.contentRecord ?? existingRound;
         }
         return existingRound;
       }),
@@ -892,6 +897,138 @@ describe("ContentRegistry ponder handlers", () => {
             maxDuration: 1200,
             maxVoters: 100,
             minVoters: 3,
+          }),
+        }),
+      ]),
+    );
+  });
+
+  it("indexes raw pending rating evidence as a provisional round score", async () => {
+    const { db, updateCalls } = createDb(
+      {
+        id: "1-2",
+        referenceRatingBps: 5000,
+        ratingBps: 5000,
+        conservativeRatingBps: 5000,
+      },
+      {
+        contentRecord: {
+          id: 1n,
+          ratingUpEvidence: 200n,
+          ratingDownEvidence: 100n,
+        },
+      },
+    );
+
+    const registeredHandlers = await loadHandlers();
+    const handler = registeredHandlers.get(
+      "ContentRegistry:RatingReviewPending",
+    );
+
+    expect(handler).toBeDefined();
+
+    await handler!({
+      event: {
+        args: {
+          contentId: 1n,
+          roundId: 2n,
+          referenceRatingBps: 5000,
+          rawUpEvidence: 100n,
+          rawDownEvidence: 100n,
+        },
+        block: {
+          number: 100n,
+          timestamp: 999n,
+        },
+      },
+      context: {
+        client: { readContract: vi.fn() },
+        contracts: {
+          ContentRegistry: {
+            address: "0x000000000000000000000000000000000000c0de",
+          },
+        },
+        db,
+      },
+    });
+
+    expect(updateCalls).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          table: "content",
+          values: expect.objectContaining({
+            ratingReviewRoundId: 2n,
+            ratingReviewStatus: 1,
+          }),
+        }),
+        expect.objectContaining({
+          table: "round",
+          values: expect.objectContaining({
+            downEvidence: 200n,
+            effectiveEvidence: 500n,
+            ratingBps: 6000,
+            conservativeRatingBps: 6000,
+            ratingReviewRawDownEvidence: 100n,
+            ratingReviewRawUpEvidence: 100n,
+            upEvidence: 300n,
+          }),
+        }),
+      ]),
+    );
+  });
+
+  it("computes a provisional score for pending review fallback round inserts", async () => {
+    const { db, insertCalls } = createDb(null, {
+      contentRecord: {
+        id: 1n,
+        ratingUpEvidence: 0n,
+        ratingDownEvidence: 0n,
+      },
+    });
+
+    const registeredHandlers = await loadHandlers();
+    const handler = registeredHandlers.get(
+      "ContentRegistry:RatingReviewPending",
+    );
+
+    expect(handler).toBeDefined();
+
+    await handler!({
+      event: {
+        args: {
+          contentId: 1n,
+          roundId: 2n,
+          referenceRatingBps: 5000,
+          rawUpEvidence: 3n,
+          rawDownEvidence: 1n,
+        },
+        block: {
+          number: 101n,
+          timestamp: 1000n,
+        },
+      },
+      context: {
+        client: { readContract: vi.fn() },
+        contracts: {
+          ContentRegistry: {
+            address: "0x000000000000000000000000000000000000c0de",
+          },
+        },
+        db,
+      },
+    });
+
+    expect(insertCalls).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          table: "round",
+          values: expect.objectContaining({
+            downEvidence: 1n,
+            effectiveEvidence: 4n,
+            ratingBps: 7500,
+            conservativeRatingBps: 7500,
+            ratingReviewStatus: 1,
+            upEvidence: 3n,
           }),
         }),
       ]),

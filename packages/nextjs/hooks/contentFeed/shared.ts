@@ -13,6 +13,7 @@ export const CONTENT_STATUS = {
   Dormant: 1,
   Cancelled: 2,
 } as const;
+export const RATING_REVIEW_STATUS_PENDING = 1;
 
 export type ContentStatus = (typeof CONTENT_STATUS)[keyof typeof CONTENT_STATUS];
 
@@ -794,11 +795,37 @@ export function mapContentItem(
   };
 }
 
-export function getVisibleContentRating(
-  item: Pick<ContentItem, "rating" | "ratingBps" | "ratingSettledRounds">,
-): number | null {
+type VisibleContentRatingItem = Pick<ContentItem, "rating" | "ratingBps" | "ratingSettledRounds"> &
+  Partial<Pick<ContentItem, "ratingReviewStatus" | "ratingReviewRoundId" | "latestRound">>;
+
+function isPendingRatingReview(status: number | null | undefined) {
+  return status === RATING_REVIEW_STATUS_PENDING;
+}
+
+function ratingFromBps(ratingBps: bigint | number | null | undefined): number | null {
+  if (ratingBps === null || ratingBps === undefined) return null;
+  return Number(ratingBps) / 100;
+}
+
+function getPendingReviewRating(item: VisibleContentRatingItem): number | null {
+  if (!isPendingRatingReview(item.ratingReviewStatus)) return null;
+
+  const latestRound = item.latestRound;
+  if (!latestRound) return null;
+
+  if (item.ratingReviewRoundId !== null && item.ratingReviewRoundId !== undefined) {
+    if (latestRound.roundId !== item.ratingReviewRoundId) return null;
+  }
+
+  return ratingFromBps(latestRound.ratingBps ?? latestRound.referenceRatingBps);
+}
+
+export function getVisibleContentRating(item: VisibleContentRatingItem): number | null {
+  const pendingReviewRating = getPendingReviewRating(item);
+  if (pendingReviewRating !== null) return pendingReviewRating;
+
   if ((item.ratingSettledRounds ?? 0) <= 0) return null;
-  return item.ratingBps !== undefined ? Number(item.ratingBps) / 100 : item.rating;
+  return ratingFromBps(item.ratingBps) ?? item.rating;
 }
 
 export function mergeContentFeedMetadata(

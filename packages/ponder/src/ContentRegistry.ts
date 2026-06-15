@@ -96,6 +96,21 @@ function confidentialityBondAssetName(asset: number) {
 const RATING_REVIEW_STATUS_NONE = 0;
 const RATING_REVIEW_STATUS_PENDING = 1;
 const RATING_REVIEW_STATUS_APPLIED = 3;
+const RATING_BPS_SCALE = 10_000n;
+
+function evidenceRatingBps(
+  referenceRatingBps: number,
+  upEvidence: bigint,
+  downEvidence: bigint,
+) {
+  const totalEvidence = upEvidence + downEvidence;
+  if (totalEvidence === 0n) return referenceRatingBps;
+
+  const ratingBps = (upEvidence * RATING_BPS_SCALE) / totalEvidence;
+  if (ratingBps < 0n) return 0;
+  if (ratingBps > RATING_BPS_SCALE) return Number(RATING_BPS_SCALE);
+  return Number(ratingBps);
+}
 
 function confidentialityDisclosurePolicyFromFlags(flags: number) {
   return (flags & CONFIDENTIALITY_FLAG_PRIVATE_FOREVER) !== 0
@@ -543,6 +558,11 @@ ponder.on("ContentRegistry:RatingStateUpdated", async ({ event, context }) => {
 ponder.on("ContentRegistry:RatingReviewPending", async ({ event, context }) => {
   const { contentId, roundId, referenceRatingBps, rawUpEvidence, rawDownEvidence } = event.args;
   const roundKey = `${contentId}-${roundId}`;
+  const contentRecord = await context.db.find(content, { id: contentId });
+  const pendingUpEvidence = (contentRecord?.ratingUpEvidence ?? 0n) + rawUpEvidence;
+  const pendingDownEvidence = (contentRecord?.ratingDownEvidence ?? 0n) + rawDownEvidence;
+  const pendingEffectiveEvidence = pendingUpEvidence + pendingDownEvidence;
+  const pendingRatingBps = evidenceRatingBps(Number(referenceRatingBps), pendingUpEvidence, pendingDownEvidence);
 
   await context.db.update(content, { id: contentId }).set({
     ratingReviewStatus: RATING_REVIEW_STATUS_PENDING,
@@ -555,6 +575,11 @@ ponder.on("ContentRegistry:RatingReviewPending", async ({ event, context }) => {
   if (existingRound) {
     await context.db.update(round, { id: roundKey }).set({
       referenceRatingBps: Number(referenceRatingBps),
+      ratingBps: pendingRatingBps,
+      conservativeRatingBps: pendingRatingBps,
+      effectiveEvidence: pendingEffectiveEvidence,
+      upEvidence: pendingUpEvidence,
+      downEvidence: pendingDownEvidence,
       ratingReviewStatus: RATING_REVIEW_STATUS_PENDING,
       ratingReviewReferenceRatingBps: Number(referenceRatingBps),
       ratingReviewRawUpEvidence: rawUpEvidence,
@@ -577,12 +602,12 @@ ponder.on("ContentRegistry:RatingReviewPending", async ({ event, context }) => {
     upCount: 0,
     downCount: 0,
     referenceRatingBps: Number(referenceRatingBps),
-    ratingBps: Number(referenceRatingBps),
-    conservativeRatingBps: Number(referenceRatingBps),
+    ratingBps: pendingRatingBps,
+    conservativeRatingBps: pendingRatingBps,
     confidenceMass: 0n,
-    effectiveEvidence: 0n,
-    upEvidence: rawUpEvidence,
-    downEvidence: rawDownEvidence,
+    effectiveEvidence: pendingEffectiveEvidence,
+    upEvidence: pendingUpEvidence,
+    downEvidence: pendingDownEvidence,
     settledRounds: 0,
     lowSince: 0n,
     ratingReviewStatus: RATING_REVIEW_STATUS_PENDING,

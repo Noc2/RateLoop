@@ -1,6 +1,7 @@
 import {
   CONTENT_STATUS,
   type ContentItem,
+  RATING_REVIEW_STATUS_PENDING,
   filterModeratedContentItems,
   filterRpcFeed,
   getVisibleContentRating,
@@ -326,6 +327,81 @@ test("mapContentItem preserves the latest terminal round separately from the ope
   assert.equal(item.latestRound?.state, ROUND_STATE.RevealFailed);
   assert.equal(item.latestRound?.voteCount, 3);
   assert.equal(item.latestRound?.revealedCount, 0);
+  assert.equal(getVisibleContentRating(item), null);
+});
+
+test("mapContentItem exposes the pending review round rating before final snapshot application", () => {
+  const item = mapContentItem({
+    id: "8",
+    url: "https://example.com/pending-rating",
+    title: "Pending review question",
+    description: "The raw round result is indexed while the final snapshot is pending.",
+    tags: "",
+    submitter: "0x00000000000000000000000000000000000000aa",
+    contentHash: "hash-8",
+    categoryId: "1",
+    rating: 50,
+    ratingBps: 5_000,
+    ratingSettledRounds: 0,
+    ratingReviewStatus: RATING_REVIEW_STATUS_PENDING,
+    ratingReviewRoundId: "1",
+    openRound: null,
+    latestRound: {
+      roundId: "1",
+      state: ROUND_STATE.Settled,
+      voteCount: 4,
+      revealedCount: 4,
+      totalStake: "4000000",
+      upPool: "3000000",
+      downPool: "1000000",
+      referenceRatingBps: 5_000,
+      ratingBps: 7_620,
+      conservativeRatingBps: 7_620,
+      settledRounds: 0,
+      startTime: "1780077334",
+      estimatedSettlementTime: null,
+    },
+  });
+
+  assert.equal(item.rating, 50);
+  assert.equal(item.ratingSettledRounds, 0);
+  assert.equal(item.ratingReviewStatus, RATING_REVIEW_STATUS_PENDING);
+  assert.equal(getVisibleContentRating(item), 76.2);
+});
+
+test("mapContentItem does not expose a pending review rating from a mismatched latest round", () => {
+  const item = mapContentItem({
+    id: "9",
+    url: "https://example.com/stale-pending-rating",
+    title: "Stale pending review question",
+    description: "A newer round should not stand in for the pending review round.",
+    tags: "",
+    submitter: "0x00000000000000000000000000000000000000aa",
+    contentHash: "hash-9",
+    categoryId: "1",
+    rating: 50,
+    ratingBps: 5_000,
+    ratingSettledRounds: 0,
+    ratingReviewStatus: RATING_REVIEW_STATUS_PENDING,
+    ratingReviewRoundId: "1",
+    openRound: null,
+    latestRound: {
+      roundId: "2",
+      state: ROUND_STATE.Settled,
+      voteCount: 4,
+      revealedCount: 4,
+      totalStake: "4000000",
+      upPool: "3000000",
+      downPool: "1000000",
+      referenceRatingBps: 5_000,
+      ratingBps: 8_100,
+      conservativeRatingBps: 8_100,
+      settledRounds: 0,
+      startTime: "1780077334",
+      estimatedSettlementTime: null,
+    },
+  });
+
   assert.equal(getVisibleContentRating(item), null);
 });
 
