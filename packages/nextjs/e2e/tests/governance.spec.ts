@@ -13,6 +13,7 @@ import {
   submitHostedGatedQuestionDirect,
   unbanConfidentialityIdentity,
   uploadGatedQuestionDetails,
+  upsertQuestionConfidentialityForE2E,
 } from "../helpers/confidentiality";
 import { waitForPonderIndexed } from "../helpers/admin-helpers";
 import { ponderGet } from "../helpers/ponder-api";
@@ -149,6 +150,11 @@ test.describe("Governance page", () => {
       title: `Governance breach evidence ${uniqueId}`,
     });
     await attachHostedQuestionDetails(page.request, submitted);
+    await upsertQuestionConfidentialityForE2E({
+      contentId: submitted.contentId,
+      detailsHash: submitted.detailsHash,
+      disclosurePolicy: "private_forever",
+    });
     const contentId = submitted.contentId;
     const submittedDetailsUrl = submitted.detailsUrl;
     expect(submittedDetailsUrl, "submitted gated question should keep its hosted details URL").toBeTruthy();
