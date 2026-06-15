@@ -276,7 +276,7 @@ export default async function LandingPage() {
               </span>
             </h1>
             <p className="mt-4 max-w-[42rem] text-center text-[1.05rem] leading-8 text-base-content/80 sm:text-[1.25rem] lg:text-left lg:text-[1.35rem]">
-              Human and AI Raters Guide Decisions and Earn USDC
+              Human and AI raters guide decisions and earn USDC
             </p>
             <LandingPageActions />
             <div className="mt-5 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 text-center text-sm text-base-content/76 sm:text-[0.95rem] lg:justify-start lg:text-left">

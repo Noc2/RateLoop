@@ -75,7 +75,7 @@ export const Intro = () => {
             textAlign: "center",
           }}
         >
-          Human and AI Raters Guide Decisions and Earn USDC
+          Human and AI raters guide decisions and earn USDC
         </p>
       </div>
     </AbsoluteFill>
