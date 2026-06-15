@@ -311,6 +311,30 @@ export function assertSupportedImageSignature(buffer: Buffer, mimeType: string) 
   throw new Error("Image signature does not match the declared content type.");
 }
 
+export function normalizeImageProcessingError(error: unknown) {
+  const message = error instanceof Error ? error.message : "";
+  if (
+    /\bVips(?:Jpeg|Png|Webp)\b/i.test(message) ||
+    /corrupt|premature end|truncated|unsupported image format|Input buffer contains unsupported image format/i.test(
+      message,
+    )
+  ) {
+    return "Image file is corrupt or incomplete. Re-export or regenerate the image, then try again.";
+  }
+  return message || "Image processing failed.";
+}
+
+export async function assertProcessableImageBuffer(buffer: Buffer) {
+  try {
+    await sharp(buffer, { limitInputPixels: MAX_INPUT_PIXELS })
+      .rotate()
+      .webp({ quality: NORMALIZED_IMAGE_QUALITY })
+      .toBuffer();
+  } catch (error) {
+    throw new Error(normalizeImageProcessingError(error));
+  }
+}
+
 function getAttachmentImagePath(attachmentId: string) {
   return `${IMAGE_ATTACHMENT_ROUTE_PREFIX}/${attachmentId}.${IMAGE_ATTACHMENT_PUBLIC_EXTENSION}`;
 }
@@ -607,10 +631,15 @@ async function processImageAttachmentBuffer(params: {
       throw new Error("Image hash does not match the signed upload challenge.");
     }
 
-    const normalized = await sharp(params.buffer, { limitInputPixels: MAX_INPUT_PIXELS })
-      .rotate()
-      .webp({ quality: NORMALIZED_IMAGE_QUALITY })
-      .toBuffer({ resolveWithObject: true });
+    let normalized: { data: Buffer; info: { height: number; width: number } };
+    try {
+      normalized = await sharp(params.buffer, { limitInputPixels: MAX_INPUT_PIXELS })
+        .rotate()
+        .webp({ quality: NORMALIZED_IMAGE_QUALITY })
+        .toBuffer({ resolveWithObject: true });
+    } catch (error) {
+      throw new Error(normalizeImageProcessingError(error));
+    }
     const normalizedSha256 = createHash("sha256").update(normalized.data).digest("hex");
     const normalizedBlob = await params.saveNormalizedImage(normalized.data);
     const moderation = await moderateImage(normalized.data);

@@ -48,6 +48,9 @@ const ONE_PIXEL_PNG = Buffer.from(
 );
 const ONE_PIXEL_PNG_BASE64 = ONE_PIXEL_PNG.toString("base64");
 const ONE_PIXEL_PNG_SHA256 = createHash("sha256").update(ONE_PIXEL_PNG).digest("hex");
+const TRUNCATED_JPEG = Buffer.from("ffd8ffe000104a46494600010101006000600000", "hex");
+const TRUNCATED_JPEG_BASE64 = TRUNCATED_JPEG.toString("base64");
+const TRUNCATED_JPEG_SHA256 = createHash("sha256").update(TRUNCATED_JPEG).digest("hex");
 
 let asksByClientRoute: AgentAsksByClientRouteModule;
 let asksByClientAuditRoute: AgentAsksByClientAuditRouteModule;
@@ -881,6 +884,32 @@ test("agent ask handoff route stages generated image bytes behind a browser link
   assert.equal(prepareBody.uploadChallenges?.length, 1);
   assert.equal(prepareBody.uploadChallenges?.[0]?.assetId, readBody.assets?.[0]?.id);
   assert.match(String(prepareBody.uploadChallenges?.[0]?.challengeId), /^[a-f0-9]{32}$/);
+});
+
+test("agent ask handoff route rejects corrupt generated image bytes before staging", async () => {
+  const response = await handoffsRoute.POST(
+    makePublicPost("https://rateloop.ai/api/agent/handoffs", {
+      generatedImages: [
+        {
+          filename: "truncated.jpg",
+          imageBase64: TRUNCATED_JPEG_BASE64,
+          mimeType: "image/jpeg",
+          sha256: TRUNCATED_JPEG_SHA256,
+          sizeBytes: TRUNCATED_JPEG.length,
+        },
+      ],
+      request: {
+        ...questionPayload("agent-handoff-corrupt-image"),
+        maxPaymentAmount: "1500000",
+      },
+      ttlMs: 300000,
+    }),
+  );
+  const body = (await response.json()) as Record<string, unknown>;
+
+  assert.equal(response.status, 400);
+  assert.match(String(body.message), /generatedImages\[0\] is not a processable image/);
+  assert.match(String(body.message), /corrupt or incomplete/);
 });
 
 test("agent ask handoff route unwraps base64-encoded image data URLs", async () => {

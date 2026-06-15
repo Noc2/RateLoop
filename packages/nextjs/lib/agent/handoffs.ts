@@ -1,7 +1,11 @@
 import { createHash, randomBytes } from "crypto";
 import "server-only";
 import { type Address, type Hex, isAddress } from "viem";
-import { assertSupportedImageSignature, createImageAttachmentId } from "~~/lib/attachments/imageAttachments";
+import {
+  assertProcessableImageBuffer,
+  assertSupportedImageSignature,
+  createImageAttachmentId,
+} from "~~/lib/attachments/imageAttachments";
 import { getMaxImageUploadSizeBytes, isSupportedImageUploadMimeType } from "~~/lib/auth/imageUploadChallenge.shared";
 import { dbClient } from "~~/lib/db";
 import { parseX402QuestionRequest } from "~~/lib/x402/questionPayload";
@@ -443,6 +447,20 @@ function readGeneratedImages(value: unknown) {
   return value.map((entry, index) => normalizeGeneratedImage(asJsonObject(entry, `generatedImages[${index}]`), index));
 }
 
+async function assertGeneratedImagesProcessable(images: ReturnType<typeof readGeneratedImages>): Promise<void> {
+  for (const [index, image] of images.entries()) {
+    try {
+      await assertProcessableImageBuffer(Buffer.from(image.imageBase64, "base64"));
+    } catch (error) {
+      throw new AgentAskHandoffError(
+        `generatedImages[${index}] is not a processable image. ${
+          error instanceof Error ? error.message : "Re-export or regenerate the image, then try again."
+        }`,
+      );
+    }
+  }
+}
+
 function existingImageUrlStrings(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];
 }
@@ -637,6 +655,7 @@ export async function createAgentAskHandoff(params: {
   assertWalletCallsPaymentMode(requestBody);
 
   const generatedImages = readGeneratedImages(params.generatedImages);
+  await assertGeneratedImagesProcessable(generatedImages);
   const id = randomHandoffId();
   const token = randomToken();
   const now = nowDate();
