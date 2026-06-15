@@ -1689,9 +1689,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
   const hasTransactionPlan = Boolean(handoff?.transactionPlan?.calls?.length);
   const connectedChainId = chain?.id ?? chainId ?? null;
   const handoffChainId = handoff?.chainId ?? null;
-  const needsChainSwitch = Boolean(
-    handoffChainId && connectedChainId && connectedChainId !== handoffChainId,
-  );
+  const needsChainSwitch = Boolean(handoffChainId && connectedChainId && connectedChainId !== handoffChainId);
   const isBusy = isPreparing || isExecuting || isSigningMessage || isSavingDraft || switchingChainId !== null;
   const isDraftEditable = Boolean(handoff && (handoff.status === "pending" || handoff.status === "failed"));
   const canEditDraft = Boolean(isDraftEditable && !isBusy);

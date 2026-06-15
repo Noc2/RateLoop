@@ -54,7 +54,10 @@ function readChainId(value: unknown): number {
   return chainId;
 }
 
-function resolvePrepareChainId(handoff: Awaited<ReturnType<typeof loadAgentAskHandoffByToken>>, requestedChainId: number) {
+function resolvePrepareChainId(
+  handoff: Awaited<ReturnType<typeof loadAgentAskHandoffByToken>>,
+  requestedChainId: number,
+) {
   if (!handoff.chainId) return requestedChainId;
   if (handoff.chainId !== requestedChainId) {
     throw new AgentAskHandoffError(

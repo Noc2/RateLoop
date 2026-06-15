@@ -590,7 +590,8 @@ export const agentCreateAskHandoffInputSchema = {
       type: "object",
     },
     ttlMs: {
-      description: "Optional handoff link lifetime in milliseconds. Defaults to 30 minutes; minimum 60000, maximum 86400000.",
+      description:
+        "Optional handoff link lifetime in milliseconds. Defaults to 30 minutes; minimum 60000, maximum 86400000.",
       minimum: 60000,
       type: "integer",
     },
