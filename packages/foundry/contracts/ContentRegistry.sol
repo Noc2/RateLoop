@@ -168,8 +168,6 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     IERC20 public lrepToken;
     address public votingEngine;
     ICategoryRegistry public categoryRegistry;
-    // Deprecated cancellation sink slot retained for proxy-safe upgrades.
-    address private bonusPool;
     address public treasury; // Receives 100% of slashed stakes (governance timelock)
     uint256 public nextContentId;
     uint256 internal nextQuestionBundleId;
