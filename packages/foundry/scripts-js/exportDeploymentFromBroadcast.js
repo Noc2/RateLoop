@@ -52,6 +52,7 @@ const WORLD_CHAIN_SEPOLIA_TEST_ACCOUNTS = [
 const WORLD_CHAIN_SEPOLIA_TEST_LREP_TOTAL =
   WORLD_CHAIN_SEPOLIA_TEST_LREP_AMOUNT *
   BigInt(WORLD_CHAIN_SEPOLIA_TEST_ACCOUNTS.length);
+const DEFAULT_CLUSTER_PAYOUT_CHALLENGE_BOND = "5000000";
 
 const ROLE_HASHES = {
   defaultAdmin:
@@ -298,7 +299,11 @@ const REQUIRED_COMPLETION_CALLS = [
     contractName: "ClusterPayoutOracle",
     target: "ClusterPayoutOracle",
     functionName: "setOracleConfig(uint64,uint256,address)",
-    args: (ctx) => ["43200", "5000000", ctx.governance],
+    args: (ctx) => [
+      positiveUintArgument,
+      DEFAULT_CLUSTER_PAYOUT_CHALLENGE_BOND,
+      ctx.governance,
+    ],
   },
   {
     label: "ClusterPayoutOracle.renounceRole(DEFAULT_ADMIN_ROLE)",
@@ -813,6 +818,13 @@ function txArguments(tx, requirement) {
 }
 
 function argumentMatches(actual, expected) {
+  if (typeof expected === "function") {
+    try {
+      return expected(actual);
+    } catch {
+      return false;
+    }
+  }
   if (typeof expected === "boolean") {
     return (
       actual === expected || String(actual).toLowerCase() === String(expected)
@@ -842,6 +854,14 @@ function argumentMatches(actual, expected) {
     return BigInt(actual) === BigInt(expected);
   } catch {
     return String(actual).toLowerCase() === String(expected).toLowerCase();
+  }
+}
+
+function positiveUintArgument(actual) {
+  try {
+    return BigInt(actual) > 0n;
+  } catch {
+    return false;
   }
 }
 

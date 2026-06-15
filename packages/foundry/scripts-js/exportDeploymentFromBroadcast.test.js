@@ -533,7 +533,7 @@ function completeBroadcast({
     receipts,
     "ClusterPayoutOracle",
     "setOracleConfig(uint64,uint256,address)",
-    ["43200", "5000000", governance],
+    ["7200", "5000000", governance],
     clusterOracle
   );
   pushCall(
@@ -1332,6 +1332,42 @@ test("reconstructDeploymentExportFromBroadcast rejects tampered completion argum
             candidate.arguments?.[0] === defaultAdminRole
         );
         tx.arguments[1] = address(203);
+      },
+    },
+    {
+      label: /ClusterPayoutOracle\.setOracleConfig/,
+      mutate: (transactions) => {
+        const tx = findRequiredCall(
+          transactions,
+          (candidate) =>
+            candidate.contractName === "ClusterPayoutOracle" &&
+            candidate.function === "setOracleConfig(uint64,uint256,address)"
+        );
+        tx.arguments[0] = "0";
+      },
+    },
+    {
+      label: /ClusterPayoutOracle\.setOracleConfig/,
+      mutate: (transactions) => {
+        const tx = findRequiredCall(
+          transactions,
+          (candidate) =>
+            candidate.contractName === "ClusterPayoutOracle" &&
+            candidate.function === "setOracleConfig(uint64,uint256,address)"
+        );
+        tx.arguments[1] = "1000000";
+      },
+    },
+    {
+      label: /ClusterPayoutOracle\.setOracleConfig/,
+      mutate: (transactions) => {
+        const tx = findRequiredCall(
+          transactions,
+          (candidate) =>
+            candidate.contractName === "ClusterPayoutOracle" &&
+            candidate.function === "setOracleConfig(uint64,uint256,address)"
+        );
+        tx.arguments[2] = address(209);
       },
     },
     {
