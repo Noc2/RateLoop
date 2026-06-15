@@ -36,6 +36,7 @@ const REQUIRED_WORLD_CHAIN_EXPORT = {
   "0x000000000000000000000000000000000000000a": "QuestionRewardPoolEscrow",
   "0x000000000000000000000000000000000000000b": "X402QuestionSubmitter",
   "0x000000000000000000000000000000000000001c": "FeedbackRegistry",
+  "0x000000000000000000000000000000000000001d": "ConfidentialityEscrow",
   "0x000000000000000000000000000000000000000c": "FeedbackBonusEscrow",
   "0x000000000000000000000000000000000000000d": "CategoryRegistry",
   "0x000000000000000000000000000000000000000e": "RaterRegistry",
@@ -54,6 +55,8 @@ const REQUIRED_WORLD_CHAIN_EXPORT = {
   "0x0000000000000000000000000000000000000019": "FeedbackRegistryProxyAdmin",
   "0x000000000000000000000000000000000000001a": "FeedbackBonusEscrowProxyAdmin",
   "0x000000000000000000000000000000000000001b": "RaterRegistryProxyAdmin",
+  "0x000000000000000000000000000000000000001e":
+    "ConfidentialityEscrowProxyAdmin",
   deploymentBlockNumber: "200",
   deploymentComplete: "true",
   networkName: "worldchain",
@@ -165,6 +168,25 @@ describe("assertFreshTargetDeployment", () => {
     );
   });
 
+  test("rejects complete exports missing ConfidentialityEscrow", () => {
+    process.env.DEPLOY_TARGET_NETWORK = "worldchain";
+    const {
+      "0x000000000000000000000000000000000000001d": _confidentialityEscrow,
+      ...deploymentExport
+    } = REQUIRED_WORLD_CHAIN_EXPORT;
+
+    assert.throws(
+      () =>
+        assertFreshTargetDeployment(
+          {},
+          {},
+          { 480: deploymentExport },
+          { 480: 200 }
+        ),
+      /missing required contracts: ConfidentialityEscrow/
+    );
+  });
+
   test("rejects proxy-backed deployment exports without proxy admins", () => {
     process.env.DEPLOY_TARGET_NETWORK = "worldchain";
     const {
@@ -181,6 +203,25 @@ describe("assertFreshTargetDeployment", () => {
           { 480: 200 }
         ),
       /missing proxy admin entries: RaterRegistryProxyAdmin/
+    );
+  });
+
+  test("rejects ConfidentialityEscrow exports without proxy admins", () => {
+    process.env.DEPLOY_TARGET_NETWORK = "worldchain";
+    const {
+      "0x000000000000000000000000000000000000001e": _proxyAdmin,
+      ...deploymentExport
+    } = REQUIRED_WORLD_CHAIN_EXPORT;
+
+    assert.throws(
+      () =>
+        assertFreshTargetDeployment(
+          {},
+          {},
+          { 480: deploymentExport },
+          { 480: 200 }
+        ),
+      /missing proxy admin entries: ConfidentialityEscrowProxyAdmin/
     );
   });
 
@@ -202,6 +243,30 @@ describe("assertFreshTargetDeployment", () => {
           }
         ),
       /maps proxy-backed contracts to implementation CREATE addresses: RaterRegistry/
+    );
+  });
+
+  test("rejects ConfidentialityEscrow exports that point at implementation creates", () => {
+    process.env.DEPLOY_TARGET_NETWORK = "worldchain";
+
+    assert.throws(
+      () =>
+        assertFreshTargetDeployment(
+          {},
+          {},
+          { 480: REQUIRED_WORLD_CHAIN_EXPORT },
+          { 480: 200 },
+          {},
+          {
+            480: new Map([
+              [
+                "0x000000000000000000000000000000000000001d",
+                "ConfidentialityEscrow",
+              ],
+            ]),
+          }
+        ),
+      /maps proxy-backed contracts to implementation CREATE addresses: ConfidentialityEscrow/
     );
   });
 
