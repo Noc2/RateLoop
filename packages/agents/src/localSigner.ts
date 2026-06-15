@@ -41,9 +41,14 @@ import {
   CONFIDENTIALITY_FLAG_PRIVATE_FOREVER,
   DEFAULT_ROUND_CONFIG,
   MIN_NONZERO_CONFIDENTIALITY_BOND,
+  requiredQuestionRewardParticipants,
   WORLD_CHAIN_USDC_BY_CHAIN_ID,
 } from "@rateloop/contracts/protocol";
 import { X402_QUESTION_TOP_LEVEL_FIELDS } from "@rateloop/node-utils/x402QuestionFields";
+import {
+  findBlockedContentTags,
+  getContentTitleValidationError,
+} from "@rateloop/node-utils/submissionValidation";
 import { normalizeTargetAudience } from "@rateloop/node-utils/profileSelfReport";
 import type {
   AskHumansRequest,
@@ -1555,6 +1560,12 @@ function normalizeLocalBounty(value: unknown): LocalQuestionPayload["bounty"] {
       `bounty.requiredVoters must be at least ${X402_MIN_REWARD_POOL_REQUIRED_VOTERS}.`,
     );
   }
+  const requiredVoterFloor = requiredQuestionRewardParticipants(amount);
+  if (requiredVoters < requiredVoterFloor) {
+    throw new Error(
+      `bounty.requiredVoters must be at least ${requiredVoterFloor} for this bounty amount.`,
+    );
+  }
   if (requiredSettledRounds < X402_MIN_REWARD_POOL_SETTLED_ROUNDS) {
     throw new Error(
       `bounty.requiredSettledRounds must be at least ${X402_MIN_REWARD_POOL_SETTLED_ROUNDS}.`,
@@ -1677,6 +1688,10 @@ function normalizeLocalQuestion(
 
   const fieldPrefix = `questions[${index}]`;
   const title = readRequiredString(value.title, `${fieldPrefix}.title`);
+  const titleError = getContentTitleValidationError(title);
+  if (titleError) {
+    throw new Error(`${fieldPrefix}.title: ${titleError}`);
+  }
   const imageUrls = normalizeImageUrls(value.imageUrls);
   const rawContextUrl = readOptionalString(value.contextUrl);
   const contextUrl = rawContextUrl
@@ -1717,10 +1732,13 @@ function normalizeLocalQuestion(
   if (confidentiality.visibility === "gated") {
     if (contextUrl || videoUrl) {
       throw new Error(
-        `${fieldPrefix}.confidentiality.visibility gated requires RateLoop-hosted imageUrls and/or detailsUrl; external contextUrl and videoUrl are not allowed.`,
+        `${fieldPrefix}.confidentiality.visibility gated requires RateLoop-hosted detailsUrl; external contextUrl and videoUrl are not allowed.`,
       );
     }
-    if (detailsUrl && !isHostedQuestionDetailsUrl(detailsUrl)) {
+    if (!detailsUrl) {
+      throw new Error(`${fieldPrefix}.detailsUrl is required for gated questions.`);
+    }
+    if (!isHostedQuestionDetailsUrl(detailsUrl)) {
       throw new Error(
         `${fieldPrefix}.detailsUrl must be a RateLoop-hosted details attachment for gated questions.`,
       );
@@ -1738,6 +1756,12 @@ function normalizeLocalQuestion(
   }
 
   const { tags, tagList } = normalizeTags(value.tags);
+  const blockedTags = findBlockedContentTags(tagList);
+  if (blockedTags.length > 0) {
+    throw new Error(
+      `${fieldPrefix}.tags contains prohibited content: ${blockedTags.join(", ")}`,
+    );
+  }
   const categoryId = parseNonNegativeInteger(
     value.categoryId,
     `${fieldPrefix}.categoryId`,

@@ -13,7 +13,11 @@ const AGENT_TRACE_REVIEW_REQUIRED_INPUTS = ["traceId", "taskGoal", "reviewFocus"
 const UPLOADED_IMAGE_ATTACHMENT_PATH_PATTERN = /^\/api\/attachments\/images\/att_[A-Za-z0-9_-]{16,80}\.webp$/;
 const UPLOADED_IMAGE_ATTACHMENT_HASH_PATTERN = /^#sha256=0x[a-fA-F0-9]{64}$/;
 const QUESTION_DETAILS_ATTACHMENT_PATH_PATTERN = /^\/api\/attachments\/details\/det_[A-Za-z0-9_-]{16,80}$/;
-import { MIN_NONZERO_CONFIDENTIALITY_BOND } from "@rateloop/contracts/protocol";
+import { MIN_NONZERO_CONFIDENTIALITY_BOND, requiredQuestionRewardParticipants } from "@rateloop/contracts/protocol";
+import {
+  findBlockedContentTags,
+  getContentTitleValidationError,
+} from "@rateloop/node-utils/submissionValidation";
 const DIRECT_IMAGE_URL_PATH_PATTERN = /\.(?:avif|bmp|gif|jpe?g|png|svg|webp)$/i;
 const SURVEY_STYLE_PATTERN =
   /\b(multiple[-\s]?choice|answer options?|choose one|choose from|select one|select from|price range|pricing range)\b/i;
@@ -194,6 +198,10 @@ export function lintAgentQuestion(
 
   if (!title) pushFinding(findings, "error", `${path}.title`, "Question title is required.");
   if (title.length > 120) pushFinding(findings, "error", `${path}.title`, "Question title must fit the 120 character on-chain limit.");
+  const titleError = getContentTitleValidationError(title);
+  if (titleError) {
+    pushFinding(findings, "error", `${path}.title`, titleError);
+  }
   if (/[?].*[?]/.test(title)) {
     pushFinding(findings, "warning", `${path}.title`, "Ask one bounded question instead of bundling several questions into the title.");
   }
@@ -283,6 +291,9 @@ export function lintAgentQuestion(
     if (detailsUrl && !looksLikeHostedDetailsUrl(detailsUrl)) {
       pushFinding(findings, "error", `${path}.detailsUrl`, "Private context details must use a RateLoop-hosted details attachment URL.");
     }
+    if (!detailsUrl) {
+      pushFinding(findings, "error", `${path}.detailsUrl`, "Private context requires a RateLoop-hosted detailsUrl.");
+    }
     pushFinding(
       findings,
       "warning",
@@ -307,6 +318,22 @@ export function lintAgentQuestion(
   }
   if (question.tags && !Array.isArray(question.tags) && typeof question.tags !== "string") {
     pushFinding(findings, "error", `${path}.tags`, "Tags must be an array or comma-separated string.");
+  } else if (question.tags) {
+    const tagList = Array.isArray(question.tags)
+      ? question.tags.map((tag) => String(tag).trim()).filter(Boolean)
+      : String(question.tags)
+          .split(",")
+          .map((tag) => tag.trim())
+          .filter(Boolean);
+    const blockedTags = findBlockedContentTags(tagList);
+    if (blockedTags.length > 0) {
+      pushFinding(
+        findings,
+        "error",
+        `${path}.tags`,
+        `Tags contain prohibited content: ${blockedTags.join(", ")}`,
+      );
+    }
   }
   if (question.templateId && !findAgentResultTemplate(question.templateId)) {
     pushFinding(findings, "error", `${path}.templateId`, `Unknown result template: ${question.templateId}.`);
@@ -376,6 +403,19 @@ export function lintAgentAskRequest(input: unknown): QuestionLintFinding[] {
     pushFinding(findings, "error", "bounty", "A bounty object is required before an agent spends.");
   } else if (!/^\d+$/.test(String(request.bounty.amount ?? "")) || BigInt(String(request.bounty.amount ?? "0")) <= 0n) {
     pushFinding(findings, "error", "bounty.amount", "Bounty amount must be a positive atomic integer.");
+  } else {
+    const amount = BigInt(String(request.bounty.amount));
+    const requiredVoters =
+      parseLintVoterCount(request.bounty.requiredVoters) ?? DEFAULT_REQUIRED_VOTERS;
+    const requiredVoterFloor = requiredQuestionRewardParticipants(amount);
+    if (requiredVoters < requiredVoterFloor) {
+      pushFinding(
+        findings,
+        "error",
+        "bounty.requiredVoters",
+        `bounty.requiredVoters must be at least ${requiredVoterFloor} for this bounty amount.`,
+      );
+    }
   }
 
   if (request.templateId && !findAgentResultTemplate(request.templateId)) {
