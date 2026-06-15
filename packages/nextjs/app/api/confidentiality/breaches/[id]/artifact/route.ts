@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createHash } from "crypto";
 import { eq } from "drizzle-orm";
 import { db } from "~~/lib/db";
 import { confidentialityBreachReports } from "~~/lib/db/schema";
@@ -7,6 +8,10 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const REPORT_ID_PATTERN = /^[0-9]{1,15}$/;
+
+function hashEvidenceArtifactJson(artifactJson: string) {
+  return `0x${createHash("sha256").update(artifactJson).digest("hex")}`;
+}
 
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -30,6 +35,9 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
   if (!row?.proof) {
     return NextResponse.json({ error: "Breach evidence artifact not found" }, { status: 404 });
+  }
+  if (hashEvidenceArtifactJson(row.proof) !== row.evidenceHash) {
+    return NextResponse.json({ error: "Breach evidence artifact hash mismatch" }, { status: 409 });
   }
 
   return new NextResponse(row.proof, {

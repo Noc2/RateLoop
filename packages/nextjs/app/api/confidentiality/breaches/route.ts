@@ -93,7 +93,10 @@ export async function GET(request: NextRequest) {
       contentId: row.contentId,
       createdAt: row.createdAt.toISOString(),
       evidenceHash: row.evidenceHash,
-      evidenceArtifactUrl: row.proof ? breachEvidenceArtifactUrl(request, row.id) : null,
+      evidenceArtifactUrl:
+        row.proof && hashEvidenceArtifactJson(row.proof) === row.evidenceHash
+          ? breachEvidenceArtifactUrl(request, row.id)
+          : null,
       evidenceUrl: row.evidenceUrl,
       id: row.id,
       accessLogId: row.accessLogId,

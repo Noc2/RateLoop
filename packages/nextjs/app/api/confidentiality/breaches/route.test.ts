@@ -198,6 +198,34 @@ test("breach reports reject caller-supplied evidenceHash values that do not matc
   assert.deepEqual(await response.json(), { error: "evidenceHash must match the breach evidence artifact" });
 });
 
+test("breach artifact routes reject stored proof bytes that do not match evidenceHash", async () => {
+  const now = new Date("2026-06-12T12:00:00.000Z");
+  await dbModule.db.insert(dbSchema.confidentialityBreachReports).values({
+    accusedIdentityKey: IDENTITY_KEY,
+    contentId: CONTENT_ID,
+    createdAt: now,
+    evidenceHash: EVIDENCE_HASH,
+    proof: JSON.stringify({ schemaVersion: "legacy-or-tampered" }),
+    reporter: REPORTER,
+    status: "reported",
+    updatedAt: now,
+  });
+
+  const artifactResponse = await breachArtifactRoute.GET(
+    new NextRequest("https://rateloop.ai/api/confidentiality/breaches/1/artifact"),
+    { params: Promise.resolve({ id: "1" }) },
+  );
+  assert.equal(artifactResponse.status, 409);
+  assert.deepEqual(await artifactResponse.json(), { error: "Breach evidence artifact hash mismatch" });
+
+  const listResponse = await breachesRoute.GET(
+    new NextRequest(`https://rateloop.ai/api/confidentiality/breaches?contentId=${CONTENT_ID}`),
+  );
+  const body = (await listResponse.json()) as { reports: Array<{ evidenceArtifactUrl: string | null }> };
+  assert.equal(listResponse.status, 200);
+  assert.equal(body.reports[0]?.evidenceArtifactUrl, null);
+});
+
 test("breach reports require an anchored log root before publishing evidence", async () => {
   await insertRootedAccess({ anchored: false });
 
