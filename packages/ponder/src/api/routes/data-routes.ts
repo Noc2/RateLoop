@@ -45,6 +45,10 @@ import {
   parseAddressList,
   parseBigIntList,
 } from "../shared.js";
+import {
+  confidentialityContentSelectFields,
+  formatConfidentialContentPreview,
+} from "../confidentiality-redaction.js";
 import { getFollowStatsMap } from "../follow-utils.js";
 import {
   BASE_RATER_MULTIPLIER_BPS,
@@ -411,6 +415,7 @@ export function registerDataRoutes(app: ApiApp) {
         contentId: questionBundleQuestion.contentId,
         bundleIndex: questionBundleQuestion.bundleIndex,
         updatedAt: questionBundleQuestion.updatedAt,
+        ...confidentialityContentSelectFields(),
         title: content.title,
         description: content.description,
         url: content.url,
@@ -441,7 +446,12 @@ export function registerDataRoutes(app: ApiApp) {
       .where(eq(questionBundleRoundSet.bundleId, bundleId))
       .orderBy(asc(questionBundleRoundSet.roundSetIndex));
 
-    return jsonBig(c, { bundle, questions, rounds, roundSets });
+    return jsonBig(c, {
+      bundle,
+      questions: questions.map(item => formatConfidentialContentPreview(item)),
+      rounds,
+      roundSets,
+    });
   });
 
   app.get("/question-bundle-claim-candidates", async (c) => {

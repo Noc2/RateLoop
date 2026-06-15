@@ -555,6 +555,26 @@ function mockSharedModule() {
   });
 }
 
+function gatedConfidentialityFields(overrides: Record<string, unknown> = {}) {
+  return {
+    confidentialityBondAmount: 0n,
+    confidentialityBondAsset: "LREP",
+    confidentialityDisclosurePolicy: "private_forever",
+    confidentialityPublishedAt: null,
+    gated: true,
+    questionMetadata: canonicalJson({
+      confidentiality: {
+        bond: { amount: "0", asset: "LREP" },
+        disclosurePolicy: "private_forever",
+        visibility: "gated",
+      },
+      schemaVersion: "rateloop.question.v3",
+      title: "Public-safe private context title",
+    }),
+    ...overrides,
+  };
+}
+
 describe("registerContentRoutes", () => {
   it("rejects invalid content status filters before querying the database", async () => {
     const { db } = mockPonderModules([]);
@@ -641,6 +661,51 @@ describe("registerContentRoutes", () => {
         title: "German engineering feedback",
       },
     ]);
+  });
+
+  it("does not serve gated undisclosed question metadata preimages", async () => {
+    const questionMetadata = {
+      schemaVersion: "rateloop.question.v3",
+      confidentiality: {
+        bond: { amount: "0", asset: "LREP" },
+        disclosurePolicy: "private_forever",
+        visibility: "gated",
+      },
+      targetAudience: { roles: ["founder"] },
+      templateInputs: { privateStimulus: "unreleased concept text" },
+      title: "Public-safe prototype title",
+    };
+    const questionMetadataHash = canonicalJsonHash(questionMetadata);
+    mockPonderModules([
+      {
+        contentId: 43n,
+        createdAt: 123n,
+        ...gatedConfidentialityFields({
+          questionMetadata: canonicalJson(questionMetadata),
+        }),
+        questionMetadataHash,
+        questionMetadataUri: `https://rateloop.ai/question-metadata/${questionMetadataHash}`,
+        resultSpecHash: `0x${"3".repeat(64)}`,
+        targetAudience: JSON.stringify(questionMetadata.targetAudience),
+        title: "Public-safe prototype title",
+      },
+    ]);
+    const { registerContentRoutes } = await import(
+      "../src/api/routes/content-routes.js"
+    );
+
+    const app = new Hono();
+    registerContentRoutes(app);
+
+    const response = await app.request(
+      `http://localhost/question-metadata/${questionMetadataHash}`,
+    );
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({
+      error:
+        "Question metadata preimage is not available until confidential context is public.",
+    });
   });
 
   it("publishes late-synced after_settlement confidentiality when a terminal round already exists", async () => {
@@ -1404,6 +1469,43 @@ describe("registerContentRoutes", () => {
     expect(serialized).toContain("round.state");
   });
 
+  it("redacts gated undisclosed context from round previews", async () => {
+    mockPonderModules(
+      [
+        {
+          id: "42-1",
+          contentId: 42n,
+          roundId: 1n,
+          description: "Sensitive prototype text.",
+          title: "Public-safe private context title",
+          url: "https://rateloop.ai/api/attachments/details/det_privatecontext1",
+          submitter: "0x0000000000000000000000000000000000000001",
+          categoryId: 1n,
+          ...gatedConfidentialityFields(),
+        },
+      ],
+      [[{ count: 1 }]],
+    );
+    const { registerContentRoutes } = await import(
+      "../src/api/routes/content-routes.js"
+    );
+
+    const app = new Hono();
+    registerContentRoutes(app);
+
+    const response = await app.request("http://localhost/rounds?state=1");
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.items[0]).toMatchObject({
+      contextAccess: "gated",
+      description: "",
+      url: "",
+    });
+    expect(body.items[0]).not.toHaveProperty("gated");
+    expect(body.items[0]).not.toHaveProperty("questionMetadata");
+  });
+
   it("rejects submitter settled round requests without a valid submitter", async () => {
     const { db } = mockPonderModules([]);
     const { registerContentRoutes } = await import(
@@ -1763,6 +1865,60 @@ describe("registerLeaderboardRoutes", () => {
 });
 
 describe("registerDataRoutes", () => {
+  it("redacts gated undisclosed context from question bundle previews", async () => {
+    mockPonderModules(
+      [
+        {
+          id: 7n,
+          asset: "LREP",
+          fundedAmount: 10n,
+          requiredCompleters: 2,
+        },
+      ],
+      [
+        [
+          {
+            id: 1n,
+            bundleId: 7n,
+            contentId: 42n,
+            bundleIndex: 0,
+            updatedAt: 123n,
+            description: "Sensitive bundle member text.",
+            title: "Public-safe private context title",
+            url: "https://rateloop.ai/api/attachments/details/det_privatecontext2",
+            submitter: "0x0000000000000000000000000000000000000001",
+            categoryId: 1n,
+            status: 0,
+            rating: 0n,
+            ratingBps: 0,
+            createdAt: 100n,
+            ...gatedConfidentialityFields(),
+          },
+        ],
+        [],
+        [],
+      ],
+    );
+    const { registerDataRoutes } = await import(
+      "../src/api/routes/data-routes.js"
+    );
+
+    const app = new Hono();
+    registerDataRoutes(app);
+
+    const response = await app.request("http://localhost/question-bundles/7");
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.questions[0]).toMatchObject({
+      contextAccess: "gated",
+      description: "",
+      url: "",
+    });
+    expect(body.questions[0]).not.toHaveProperty("gated");
+    expect(body.questions[0]).not.toHaveProperty("questionMetadata");
+  });
+
   it("rejects invalid feedback bonus pool awarder filters before querying the database", async () => {
     const { db } = mockPonderModules([]);
     const { registerDataRoutes } = await import(
@@ -3654,5 +3810,48 @@ describe("registerDiscoveryRoutes", () => {
     expect(
       serializedWhereCalls.every((value) => value.includes("content.tags")),
     ).toBe(true);
+  });
+
+  it("redacts gated undisclosed context from featured previews", async () => {
+    mockPonderModules(
+      [
+        {
+          id: "42-1",
+          contentId: 42n,
+          roundId: 1n,
+          description: "Sensitive featured copy.",
+          title: "Public-safe private context title",
+          url: "https://rateloop.ai/api/attachments/details/det_privatecontext3",
+          submitter: "0x0000000000000000000000000000000000000001",
+          categoryId: 1n,
+          voteCount: 3,
+          minVoters: 3,
+          totalStake: 10n,
+          roundStartTime: 100n,
+          profileName: "Submitter",
+          ...gatedConfidentialityFields(),
+        },
+      ],
+      [[]],
+    );
+    const { registerDiscoveryRoutes } = await import(
+      "../src/api/routes/discovery-routes.js"
+    );
+
+    const app = new Hono();
+    registerDiscoveryRoutes(app);
+
+    const response = await app.request("http://localhost/featured-today");
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.items[0]).toMatchObject({
+      contextAccess: "gated",
+      description: "",
+      featuredReason: "Active debate",
+      url: "",
+    });
+    expect(body.items[0]).not.toHaveProperty("gated");
+    expect(body.items[0]).not.toHaveProperty("questionMetadata");
   });
 });

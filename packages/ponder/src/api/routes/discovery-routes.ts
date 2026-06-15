@@ -4,6 +4,10 @@ import { db } from "ponder:api";
 import { content, profile, round, vote } from "ponder:schema";
 import { listActiveFollowedAddresses } from "../follow-utils.js";
 import { buildAllowedContentCondition } from "../moderation.js";
+import {
+  confidentialityContentSelectFields,
+  formatConfidentialContentPreview,
+} from "../confidentiality-redaction.js";
 import type { ApiApp } from "../shared.js";
 import {
   DISCOVER_MODULE_LIMIT,
@@ -49,6 +53,7 @@ async function resolveFollowedAddresses(
 }
 
 export function registerDiscoveryRoutes(app: ApiApp) {
+  const confidentialitySelect = confidentialityContentSelectFields();
   const allowedContentCondition = buildAllowedContentCondition({
     canonicalUrl: content.canonicalUrl,
     description: content.description,
@@ -74,6 +79,7 @@ export function registerDiscoveryRoutes(app: ApiApp) {
         id: round.id,
         contentId: round.contentId,
         roundId: round.roundId,
+        ...confidentialitySelect,
         title: content.title,
         description: content.description,
         url: content.url,
@@ -113,6 +119,7 @@ export function registerDiscoveryRoutes(app: ApiApp) {
               id: round.id,
               contentId: round.contentId,
               roundId: round.roundId,
+              ...confidentialitySelect,
               title: content.title,
               description: content.description,
               url: content.url,
@@ -207,6 +214,7 @@ export function registerDiscoveryRoutes(app: ApiApp) {
         : await db
             .select({
               contentId: content.id,
+              ...confidentialitySelect,
               title: content.title,
               description: content.description,
               url: content.url,
@@ -241,6 +249,7 @@ export function registerDiscoveryRoutes(app: ApiApp) {
               drandChainHash: vote.drandChainHash,
               isUp: vote.isUp,
               predictedUpBps: vote.predictedUpBps,
+              ...confidentialitySelect,
               title: content.title,
               description: content.description,
               url: content.url,
@@ -276,10 +285,10 @@ export function registerDiscoveryRoutes(app: ApiApp) {
             .limit(DISCOVER_MODULE_LIMIT);
 
     return jsonBig(c, {
-      settlingSoon: settlingSoonItems,
-      followedSubmissions,
+      settlingSoon: settlingSoonItems.map(item => formatConfidentialContentPreview(item)),
+      followedSubmissions: followedSubmissions.map(item => formatConfidentialContentPreview(item)),
       followedResolutions: followedResolutions.map((item) => ({
-        ...item,
+        ...formatConfidentialContentPreview(item),
         outcome: getDiscoverResolutionOutcome(
           item.roundState,
           item.isUp,
@@ -310,6 +319,7 @@ export function registerDiscoveryRoutes(app: ApiApp) {
         id: round.id,
         contentId: round.contentId,
         roundId: round.roundId,
+        ...confidentialitySelect,
         title: content.title,
         description: content.description,
         url: content.url,
@@ -349,6 +359,7 @@ export function registerDiscoveryRoutes(app: ApiApp) {
               id: round.id,
               contentId: round.contentId,
               roundId: round.roundId,
+              ...confidentialitySelect,
               title: content.title,
               description: content.description,
               url: content.url,
@@ -416,6 +427,7 @@ export function registerDiscoveryRoutes(app: ApiApp) {
         : await db
             .select({
               contentId: content.id,
+              ...confidentialitySelect,
               title: content.title,
               description: content.description,
               url: content.url,
@@ -448,6 +460,7 @@ export function registerDiscoveryRoutes(app: ApiApp) {
               voter: vote.voter,
               isUp: vote.isUp,
               predictedUpBps: vote.predictedUpBps,
+              ...confidentialitySelect,
               title: content.title,
               description: content.description,
               url: content.url,
@@ -491,6 +504,7 @@ export function registerDiscoveryRoutes(app: ApiApp) {
         voter: vote.voter,
         isUp: vote.isUp,
         predictedUpBps: vote.predictedUpBps,
+        ...confidentialitySelect,
         title: content.title,
         description: content.description,
         url: content.url,
@@ -536,6 +550,7 @@ export function registerDiscoveryRoutes(app: ApiApp) {
               roundId: round.roundId,
               voter: sql<string>`''`,
               isUp: sql<boolean | null>`NULL`,
+              ...confidentialitySelect,
               title: content.title,
               description: content.description,
               url: content.url,
@@ -583,10 +598,10 @@ export function registerDiscoveryRoutes(app: ApiApp) {
     }
 
     return jsonBig(c, {
-      settlingSoon,
-      followedSubmissions,
+      settlingSoon: settlingSoon.map(item => formatConfidentialContentPreview(item)),
+      followedSubmissions: followedSubmissions.map(item => formatConfidentialContentPreview(item)),
       followedResolutions: followedResolutions.map((item) => ({
-        ...item,
+        ...formatConfidentialContentPreview(item),
         outcome: getDiscoverResolutionOutcome(
           item.roundState,
           item.isUp,
@@ -600,7 +615,8 @@ export function registerDiscoveryRoutes(app: ApiApp) {
           if (aTime === bTime) return 0;
           return aTime > bTime ? -1 : 1;
         })
-        .slice(0, 24),
+        .slice(0, 24)
+        .map(item => formatConfidentialContentPreview(item)),
     });
   });
 
@@ -613,6 +629,7 @@ export function registerDiscoveryRoutes(app: ApiApp) {
       id: round.id,
       contentId: round.contentId,
       roundId: round.roundId,
+      ...confidentialitySelect,
       title: content.title,
       description: content.description,
       url: content.url,
@@ -669,7 +686,7 @@ export function registerDiscoveryRoutes(app: ApiApp) {
         return true;
       })
       .slice(0, limit)
-      .map((item) => ({
+      .map((item) => formatConfidentialContentPreview({
         ...item,
         featuredReason:
           item.voteCount >= item.minVoters

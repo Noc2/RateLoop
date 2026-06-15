@@ -44,6 +44,15 @@ import { resolvePonderProtocolDeploymentMetadata } from "../../protocol-deployme
 import type { ApiApp } from "../shared.js";
 import { attachOpenRoundSummary, jsonBig, parseBigIntList } from "../shared.js";
 import {
+  confidentialityContentSelectFields,
+  formatConfidentialContent,
+  formatConfidentialContentPreview,
+  isGatedUndisclosedContent,
+  parseStoredJson,
+  readQuestionMetadataConfidentiality,
+  type ContentConfidentialityState,
+} from "../confidentiality-redaction.js";
+import {
   getUrlLookupCandidates,
   isValidAddress,
   normalizeContentSearchQuery,
@@ -72,14 +81,6 @@ type AudienceFilter = {
   column: AudienceColumn;
   normalize: (values: string[]) => string[];
   queryNames: readonly string[];
-};
-
-type ContentConfidentialityState = {
-  bondAmount: bigint;
-  bondAsset: "LREP" | "USDC";
-  disclosurePolicy: "after_settlement" | "private_forever";
-  publishedAt: bigint | null;
-  visibility: "public" | "gated";
 };
 
 const TARGET_AUDIENCE_RESPONSE_FIELDS = [
@@ -526,82 +527,6 @@ function formatContentTargetAudience<T extends Record<string, unknown>>(item: T,
   return redacted;
 }
 
-function parseBigIntish(value: unknown) {
-  if (typeof value === "bigint") return value;
-  if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) return BigInt(value);
-  if (typeof value === "string" && /^[0-9]+$/.test(value.trim())) return BigInt(value.trim());
-  return 0n;
-}
-
-function normalizeDisclosurePolicy(value: unknown): ContentConfidentialityState["disclosurePolicy"] {
-  return value === "private_forever" ? "private_forever" : "after_settlement";
-}
-
-function normalizeBondAsset(value: unknown): ContentConfidentialityState["bondAsset"] {
-  return typeof value === "string" && value.trim().toUpperCase() === "USDC" ? "USDC" : "LREP";
-}
-
-function readQuestionMetadataConfidentiality(value: unknown): ContentConfidentialityState | null {
-  if (!isJsonRecord(value) || !isJsonRecord(value.confidentiality)) return null;
-  const confidentiality = value.confidentiality;
-  if (confidentiality.visibility !== "gated") return null;
-  const bond = isJsonRecord(confidentiality.bond) ? confidentiality.bond : {};
-  return {
-    visibility: "gated",
-    disclosurePolicy: normalizeDisclosurePolicy(confidentiality.disclosurePolicy),
-    bondAsset: normalizeBondAsset(bond.asset),
-    bondAmount: parseBigIntish(bond.amount),
-    publishedAt: null,
-  };
-}
-
-function rowConfidentialityState(record: Record<string, unknown>): ContentConfidentialityState {
-  const metadataState = readQuestionMetadataConfidentiality(parseStoredJson(record.questionMetadata as string | null));
-  const rowGated = record.gated === true || metadataState?.visibility === "gated";
-  const publishedAt =
-    typeof record.confidentialityPublishedAt === "bigint"
-      ? record.confidentialityPublishedAt
-      : metadataState?.publishedAt ?? null;
-
-  if (!rowGated) {
-    return {
-      visibility: "public",
-      disclosurePolicy: "after_settlement",
-      bondAsset: "LREP",
-      bondAmount: 0n,
-      publishedAt: null,
-    };
-  }
-
-  return {
-    visibility: "gated",
-    disclosurePolicy: normalizeDisclosurePolicy(record.confidentialityDisclosurePolicy ?? metadataState?.disclosurePolicy),
-    bondAsset: normalizeBondAsset(record.confidentialityBondAsset ?? metadataState?.bondAsset),
-    bondAmount: parseBigIntish(record.confidentialityBondAmount ?? metadataState?.bondAmount),
-    publishedAt,
-  };
-}
-
-function formatConfidentialContent<T extends Record<string, unknown>>(item: T): T {
-  const formatted = { ...item };
-  const record = formatted as Record<string, unknown>;
-  const confidentiality = rowConfidentialityState(record);
-  const gatedUndisclosed = confidentiality.visibility === "gated" && confidentiality.publishedAt === null;
-
-  record.contextVisibility = confidentiality.visibility;
-  record.contextAccess = gatedUndisclosed ? "gated" : "public";
-  record.confidentiality = confidentiality;
-
-  if (gatedUndisclosed) {
-    record.description = "";
-    record.detailsUrl = null;
-    record.detailsHash = null;
-    record.media = [];
-  }
-
-  return formatted;
-}
-
 function formatContentResponse<T extends Record<string, unknown>>(item: T, includeTargetAudience = false): T {
   return formatConfidentialContent(formatContentTargetAudience(item, includeTargetAudience));
 }
@@ -820,15 +745,6 @@ function readQuestionMetadataItems(value: unknown) {
       },
     ];
   });
-}
-
-function parseStoredJson(value: string | null | undefined) {
-  if (!value) return null;
-  try {
-    return JSON.parse(value) as unknown;
-  } catch {
-    return null;
-  }
 }
 
 function getRoundAdvisoryCommitCount() {
@@ -1072,7 +988,7 @@ export function registerContentRoutes(app: ApiApp) {
     const rows = await db
       .select({
         contentId: content.id,
-        questionMetadata: content.questionMetadata,
+        ...confidentialityContentSelectFields(),
         questionMetadataHash: content.questionMetadataHash,
         questionMetadataUri: content.questionMetadataUri,
         resultSpecHash: content.resultSpecHash,
@@ -1089,18 +1005,23 @@ export function registerContentRoutes(app: ApiApp) {
       return c.json({ error: "Question metadata not found." }, 404);
     }
 
-    const verifiedMetadata = rows
-      .map((row) => parseStoredJson(row.questionMetadata))
-      .find((value) => value !== null && canonicalJsonHash(value).toLowerCase() === hash);
+    const verifiedRows = rows.filter(row => {
+      const metadata = parseStoredJson(row.questionMetadata);
+      return metadata !== null && canonicalJsonHash(metadata).toLowerCase() === hash;
+    });
+    const verifiedMetadata = verifiedRows.length > 0 ? parseStoredJson(verifiedRows[0]!.questionMetadata) : null;
 
     if (!verifiedMetadata) {
       return c.json({ error: "Question metadata preimage is not available." }, 404);
+    }
+    if (verifiedRows.every(row => isGatedUndisclosedContent(row as Record<string, unknown>))) {
+      return c.json({ error: "Question metadata preimage is not available until confidential context is public." }, 404);
     }
 
     return jsonBig(c, {
       questionMetadata: verifiedMetadata,
       questionMetadataHash: hash,
-      items: rows.map((row) => ({
+      items: verifiedRows.map((row) => ({
         contentId: row.contentId,
         createdAt: row.createdAt,
         questionMetadataUri: row.questionMetadataUri,
@@ -1559,6 +1480,7 @@ export function registerContentRoutes(app: ApiApp) {
         maxDuration: round.maxDuration,
         minVoters: round.minVoters,
         maxVoters: round.maxVoters,
+        ...confidentialityContentSelectFields(),
         title: content.title,
         description: content.description,
         url: content.url,
@@ -1583,7 +1505,7 @@ export function registerContentRoutes(app: ApiApp) {
       .where(where);
 
     return jsonBig(c, {
-      items,
+      items: items.map(item => formatConfidentialContentPreview(item)),
       total: countResult?.count ?? 0,
       limit,
       offset,
@@ -1877,6 +1799,7 @@ export function registerContentRoutes(app: ApiApp) {
         createdAt: content.createdAt,
         totalVotes: content.totalVotes,
         totalRounds: content.totalRounds,
+        ...confidentialityContentSelectFields(),
       })
       .from(content)
       .leftJoin(category, eq(content.categoryId, category.id))
@@ -1897,7 +1820,7 @@ export function registerContentRoutes(app: ApiApp) {
       recentVotes,
       recentRewards,
       recentEarnings,
-      recentSubmissions,
+      recentSubmissions: recentSubmissions.map(item => formatConfidentialContentPreview(item)),
     });
   });
 }
