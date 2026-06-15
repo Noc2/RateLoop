@@ -120,14 +120,11 @@ test("resolveServerTargetNetworks tolerates local-chain builds in explicit e2e p
   );
 });
 
-test("resolveServerTargetNetworks uses the local fallback for Vercel preview smoke builds", () => {
+test("resolveServerTargetNetworks does not auto-fallback on Vercel preview production builds", () => {
   env.VERCEL_ENV = "preview";
 
   const networks = resolveServerTargetNetworks(undefined, true);
-  assert.deepEqual(
-    networks?.map(network => network.id),
-    [31337],
-  );
+  assert.equal(networks, null);
 });
 
 test("resolveServerTargetNetworks returns null for invalid production values", () => {
