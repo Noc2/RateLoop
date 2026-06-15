@@ -719,7 +719,7 @@ abstract contract VotingTestBase is Test, ContentSubmissionTestBase {
     mapping(bytes32 => TestRevealPayload) internal testRevealPayloads;
 
     // ContentRegistry.questionBundleRoundObserverByContent storage slot (see ContentRegistry.json).
-    uint256 internal constant QUESTION_BUNDLE_ROUND_OBSERVER_BY_CONTENT_SLOT = 28;
+    uint256 internal constant QUESTION_BUNDLE_ROUND_OBSERVER_BY_CONTENT_SLOT = 27;
 
     uint256 private _votingTestCheckpoint;
 
