@@ -890,12 +890,7 @@ export function AgentSubmissionPanel() {
                   </p>
                 </div>
               </div>
-            ) : (
-              <p className="mt-4 text-sm leading-relaxed text-base-content/65">
-                Leave controls off for wallet-direct agents, or configure managed controls when RateLoop should enforce
-                limits and issue an access token.
-              </p>
-            )}
+            ) : null}
           </div>
 
           <div className="surface-card rounded-lg p-5">
