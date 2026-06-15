@@ -8,6 +8,7 @@ import { MessageHashUtils } from "@openzeppelin/contracts/utils/cryptography/Mes
 import { IWorldIDVerifier } from "./interfaces/IWorldIDVerifier.sol";
 import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol";
 import { IConfidentialityEscrow } from "./interfaces/IConfidentialityEscrow.sol";
+import { RaterRegistryWorldIdLib } from "./libraries/RaterRegistryWorldIdLib.sol";
 
 /// @title RaterRegistry
 /// @notice Optional rater metadata, human credentials, public follows, and delegation for RateLoop.
@@ -557,7 +558,9 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         uint256 credentialGenesisIssuedAtMin,
         bool enabled
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (!_isSupportedWorldCredentialKind(kind)) revert UnsupportedCredentialKind();
+        if (!RaterRegistryWorldIdLib.isSupportedWorldCredentialKind(kind)) {
+            revert UnsupportedCredentialKind();
+        }
         if (_worldCredentialConfigs[kind].frozen) revert WorldCredentialConfigFrozen();
         if (kind == WORLD_CREDENTIAL_PROOF_OF_HUMAN && worldIdV4VerifierConfigFrozen) {
             revert WorldIdV4VerifierConfigFrozen();
@@ -577,7 +580,7 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
     }
 
     function freezeWorldCredentialV4Config(uint8 kind) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (!_isSupportedWorldCredentialKind(kind)) revert UnsupportedCredentialKind();
+        if (!RaterRegistryWorldIdLib.isSupportedWorldCredentialKind(kind)) revert UnsupportedCredentialKind();
         _worldCredentialConfigs[kind].frozen = true;
         if (kind == WORLD_CREDENTIAL_PROOF_OF_HUMAN) {
             worldIdV4VerifierConfigFrozen = true;
@@ -596,7 +599,9 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         uint256 credentialGenesisIssuedAtMin,
         bool enabled
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (!_isSupportedWorldCredentialKind(kind)) revert UnsupportedCredentialKind();
+        if (!RaterRegistryWorldIdLib.isSupportedWorldCredentialKind(kind)) {
+            revert UnsupportedCredentialKind();
+        }
         if (_worldPresenceConfigs[kind].frozen) revert WorldPresenceConfigFrozen();
         if (kind == WORLD_CREDENTIAL_PROOF_OF_HUMAN && worldIdV4PresenceConfigFrozen) {
             revert WorldIdV4PresenceConfigFrozen();
@@ -612,7 +617,7 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
     }
 
     function freezeWorldPresenceV4Config(uint8 kind) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (!_isSupportedWorldCredentialKind(kind)) revert UnsupportedCredentialKind();
+        if (!RaterRegistryWorldIdLib.isSupportedWorldCredentialKind(kind)) revert UnsupportedCredentialKind();
         _worldPresenceConfigs[kind].frozen = true;
         if (kind == WORLD_CREDENTIAL_PROOF_OF_HUMAN) {
             worldIdV4PresenceConfigFrozen = true;
@@ -936,9 +941,25 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         uint64 expiresAtMin,
         uint256[5] calldata proof
     ) external {
-        _attestWorldCredentialWithV4Proof(
-            WORLD_CREDENTIAL_PROOF_OF_HUMAN, nullifier, nonce, expiresAtMin, proof, _worldIdSignalHash(msg.sender)
+        (RaterRegistryWorldIdLib.PendingHumanAttest memory pending, bool isPendingHuman) = RaterRegistryWorldIdLib.attestWorldCredentialWithV4Proof(
+            msg.sender,
+            WORLD_CREDENTIAL_PROOF_OF_HUMAN,
+            nullifier,
+            nonce,
+            expiresAtMin,
+            proof,
+            RaterRegistryWorldIdLib.worldIdSignalHash(msg.sender),
+            _worldCredentialConfigs,
+            _humanCredentials[msg.sender],
+            _worldCredentials[msg.sender],
+            _humanNullifierOwnerByProvider,
+            _worldCredentialNullifierOwner,
+            _revokedWorldCredentialNullifier,
+            _usedWorldCredentialProof
         );
+        if (isPendingHuman) {
+            _finalizePendingHumanAttest(msg.sender, WORLD_CREDENTIAL_PROOF_OF_HUMAN, pending);
+        }
     }
 
     function attestWorldCredentialWithV4Proof(
@@ -948,101 +969,28 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         uint64 expiresAtMin,
         uint256[5] calldata proof
     ) external {
-        if (kind == WORLD_CREDENTIAL_PROOF_OF_HUMAN) {
-            _attestWorldCredentialWithV4Proof(
-                kind, nullifier, nonce, expiresAtMin, proof, _worldIdSignalHash(msg.sender)
-            );
-            return;
-        }
-        _attestWorldCredentialWithV4Proof(
-            kind, nullifier, nonce, expiresAtMin, proof, _worldCredentialSignalHash(msg.sender, kind)
+        uint256 signalHash = kind == WORLD_CREDENTIAL_PROOF_OF_HUMAN
+            ? RaterRegistryWorldIdLib.worldIdSignalHash(msg.sender)
+            : RaterRegistryWorldIdLib.worldCredentialSignalHash(msg.sender, kind);
+        (RaterRegistryWorldIdLib.PendingHumanAttest memory pending, bool isPendingHuman) = RaterRegistryWorldIdLib.attestWorldCredentialWithV4Proof(
+            msg.sender,
+            kind,
+            nullifier,
+            nonce,
+            expiresAtMin,
+            proof,
+            signalHash,
+            _worldCredentialConfigs,
+            _humanCredentials[msg.sender],
+            _worldCredentials[msg.sender],
+            _humanNullifierOwnerByProvider,
+            _worldCredentialNullifierOwner,
+            _revokedWorldCredentialNullifier,
+            _usedWorldCredentialProof
         );
-    }
-
-    function _attestWorldCredentialWithV4Proof(
-        uint8 kind,
-        uint256 nullifier,
-        uint256 nonce,
-        uint64 expiresAtMin,
-        uint256[5] calldata proof,
-        uint256 signalHash
-    ) private {
-        if (!_isSupportedWorldCredentialKind(kind)) revert UnsupportedCredentialKind();
-        WorldIdV4Config storage config = _worldCredentialConfigs[kind];
-        if (!config.enabled || address(config.verifier) == address(0)) revert WorldIdV4VerifierNotConfigured();
-        if (nullifier == 0) revert InvalidCredential();
-        bytes32 storedNullifier = bytes32(nullifier);
-
-        if (kind == WORLD_CREDENTIAL_PROOF_OF_HUMAN) {
-            HumanCredential storage previous = _humanCredentials[msg.sender];
-            if (
-                previous.verified && !previous.revoked && previous.expiresAt > block.timestamp
-                    && previous.nullifierHash != storedNullifier
-            ) {
-                revert InvalidCredential();
-            }
-            address currentHumanOwner =
-                _humanNullifierOwnerByProvider[HumanCredentialProvider.WorldIdV4][storedNullifier];
-            if (currentHumanOwner != address(0) && currentHumanOwner != msg.sender) revert NullifierAlreadyAssigned();
-        } else {
-            WorldCredential storage previousCredential = _worldCredentials[msg.sender][kind];
-            if (
-                previousCredential.verified && !previousCredential.revoked
-                    && previousCredential.expiresAt > block.timestamp
-                    && previousCredential.nullifierHash != storedNullifier
-            ) {
-                revert InvalidCredential();
-            }
-            address currentOwner = _worldCredentialNullifierOwner[kind][storedNullifier];
-            if (currentOwner != address(0) && currentOwner != msg.sender) revert NullifierAlreadyAssigned();
-            if (_revokedWorldCredentialNullifier[kind][storedNullifier]) revert InvalidCredential();
+        if (isPendingHuman) {
+            _finalizePendingHumanAttest(msg.sender, kind, pending);
         }
-
-        bytes32 proofReplayKey = keccak256(
-            abi.encode(
-                "world-id-v4-credential-proof",
-                kind,
-                block.chainid,
-                address(config.verifier),
-                config.rpId,
-                config.action,
-                config.issuerSchemaId,
-                config.credentialGenesisIssuedAtMin,
-                storedNullifier,
-                nonce,
-                signalHash,
-                expiresAtMin
-            )
-        );
-        if (_usedWorldCredentialProof[kind][proofReplayKey]) revert NullifierAlreadyAssigned();
-
-        uint64 expiresAt = _verifyWorldIdV4Proof(config, nullifier, nonce, signalHash, expiresAtMin, proof);
-        _usedWorldCredentialProof[kind][proofReplayKey] = true;
-
-        bytes32 evidenceHash = keccak256(
-            abi.encodePacked(
-                "world-id-v4",
-                kind,
-                block.chainid,
-                address(config.verifier),
-                config.rpId,
-                config.action,
-                nonce,
-                signalHash,
-                expiresAtMin
-            )
-        );
-        bytes32 scope = _worldCredentialScope(config.rpId, config.action);
-        if (kind == WORLD_CREDENTIAL_PROOF_OF_HUMAN) {
-            _attestHumanCredential(
-                msg.sender, storedNullifier, scope, expiresAt, HumanCredentialProvider.WorldIdV4, evidenceHash
-            );
-            emit WorldCredentialVerified(
-                msg.sender, kind, storedNullifier, scope, uint64(block.timestamp), expiresAt, evidenceHash
-            );
-            return;
-        }
-        _attestWorldCredential(msg.sender, kind, storedNullifier, scope, expiresAt, evidenceHash);
     }
 
     function attestHumanPresenceWithV4Proof(
@@ -1052,88 +1000,46 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         uint64 expiresAtMin,
         uint256[5] calldata proof
     ) external {
-        if (!_isSupportedWorldCredentialKind(kind)) revert UnsupportedCredentialKind();
-        if (!hasActiveCredentialKind(msg.sender, kind)) revert InvalidCredential();
-        WorldIdV4Config storage config = _worldPresenceConfigs[kind];
-        if (!config.enabled || address(config.verifier) == address(0)) revert WorldIdV4VerifierNotConfigured();
-        if (nullifier == 0) revert InvalidCredential();
-        bytes32 storedNullifier = bytes32(nullifier);
-        address presenceNullifierOwner = _worldPresenceNullifierOwner[kind][storedNullifier];
-        if (presenceNullifierOwner != address(0) && presenceNullifierOwner != msg.sender) {
-            revert NullifierAlreadyAssigned();
+        if (!RaterRegistryWorldIdLib.isSupportedWorldCredentialKind(kind)) {
+            revert UnsupportedCredentialKind();
         }
-
-        uint256 signalHash = _worldPresenceSignalHash(msg.sender, kind);
-        bytes32 proofReplayKey = keccak256(
-            abi.encode(
-                "world-id-v4-presence-proof",
-                kind,
-                block.chainid,
-                address(config.verifier),
-                config.rpId,
-                config.action,
-                config.issuerSchemaId,
-                config.credentialGenesisIssuedAtMin,
-                storedNullifier,
-                nonce,
-                signalHash,
-                expiresAtMin
-            )
+        if (!hasActiveCredentialKind(msg.sender, kind)) revert InvalidCredential();
+        RaterRegistryWorldIdLib.attestHumanPresenceWithV4Proof(
+            msg.sender,
+            kind,
+            nullifier,
+            nonce,
+            expiresAtMin,
+            proof,
+            _worldPresenceConfigs,
+            _worldPresenceNullifierOwner,
+            _usedWorldPresenceProof,
+            _humanPresence[msg.sender]
         );
-        if (_usedWorldPresenceProof[kind][proofReplayKey]) revert NullifierAlreadyAssigned();
-
-        uint64 freshUntil = _verifyWorldIdV4Proof(config, nullifier, nonce, signalHash, expiresAtMin, proof);
-        bytes32 evidenceHash = keccak256(
-            abi.encodePacked(
-                "world-id-v4-presence",
-                kind,
-                block.chainid,
-                address(config.verifier),
-                config.rpId,
-                config.action,
-                nonce,
-                signalHash,
-                expiresAtMin
-            )
-        );
-
-        _usedWorldPresenceProof[kind][proofReplayKey] = true;
-        _worldPresenceNullifierOwner[kind][storedNullifier] = msg.sender;
-        _humanPresence[msg.sender][kind] = HumanPresence({
-            verified: true,
-            kind: kind,
-            lastRecheckedAt: uint64(block.timestamp),
-            freshUntil: freshUntil,
-            evidenceHash: evidenceHash
-        });
-        emit HumanPresenceVerified(msg.sender, kind, storedNullifier, uint64(block.timestamp), freshUntil, evidenceHash);
     }
 
-    function _verifyWorldIdV4Proof(
-        WorldIdV4Config storage config,
-        uint256 nullifier,
-        uint256 nonce,
-        uint256 signalHash,
-        uint64 expiresAtMin,
-        uint256[5] calldata proof
-    ) private view returns (uint64) {
-        config.verifier
-            .verify(
-                nullifier,
-                config.action,
-                config.rpId,
-                nonce,
-                signalHash,
-                expiresAtMin,
-                config.issuerSchemaId,
-                config.credentialGenesisIssuedAtMin,
-                proof
-            );
-
-        if (expiresAtMin <= block.timestamp) revert InvalidCredential();
-        uint256 ttlExpiresAt = block.timestamp + config.ttl;
-        if (ttlExpiresAt > type(uint64).max) revert InvalidCredential();
-        return expiresAtMin < ttlExpiresAt ? expiresAtMin : uint64(ttlExpiresAt);
+    function _finalizePendingHumanAttest(
+        address rater,
+        uint8 kind,
+        RaterRegistryWorldIdLib.PendingHumanAttest memory pending
+    ) private {
+        _attestHumanCredential(
+            rater,
+            pending.nullifierHash,
+            pending.scope,
+            pending.expiresAt,
+            HumanCredentialProvider.WorldIdV4,
+            pending.evidenceHash
+        );
+        emit WorldCredentialVerified(
+            rater,
+            kind,
+            pending.nullifierHash,
+            pending.scope,
+            uint64(block.timestamp),
+            pending.expiresAt,
+            pending.evidenceHash
+        );
     }
 
     /// @notice Seed an approved human credential as the same verified-human unit used by World ID.
@@ -1191,7 +1097,7 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
 
     function revokeWorldCredential(address rater, uint8 kind) external onlyRole(SEEDER_ROLE) {
         if (rater == address(0)) revert InvalidAddress();
-        if (!_isSupportedWorldCredentialKind(kind) || kind == WORLD_CREDENTIAL_PROOF_OF_HUMAN) {
+        if (!RaterRegistryWorldIdLib.isSupportedWorldCredentialKind(kind) || kind == WORLD_CREDENTIAL_PROOF_OF_HUMAN) {
             revert UnsupportedCredentialKind();
         }
         WorldCredential storage credential = _worldCredentials[rater][kind];
@@ -1385,29 +1291,13 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         return keccak256(abi.encode(provider, nullifierHash));
     }
 
-    function _worldIdSignalHash(address rater) private pure returns (uint256) {
-        return _hashToField(abi.encodePacked(rater));
-    }
-
-    function _worldCredentialSignalHash(address rater, uint8 kind) private pure returns (uint256) {
-        return _hashToField(abi.encodePacked("rateloop-world-credential-v1", rater, kind));
-    }
-
-    function _worldPresenceSignalHash(address rater, uint8 kind) private pure returns (uint256) {
-        return _hashToField(abi.encodePacked("rateloop-world-presence-v1", rater, kind));
-    }
-
-    function _hashToField(bytes memory value) private pure returns (uint256) {
-        return uint256(keccak256(value)) >> 8;
-    }
-
     function hasActiveHumanCredential(address rater) public view returns (bool) {
         HumanCredential storage credential = _humanCredentials[rater];
         return credential.verified && !_isCredentialRevoked(credential) && credential.expiresAt > block.timestamp;
     }
 
     function hasActiveCredentialKind(address rater, uint8 kind) public view returns (bool) {
-        if (!_isSupportedWorldCredentialKind(kind)) return false;
+        if (!RaterRegistryWorldIdLib.isSupportedWorldCredentialKind(kind)) return false;
         if (kind == WORLD_CREDENTIAL_PROOF_OF_HUMAN) return hasActiveHumanCredential(rater);
         WorldCredential storage credential = _worldCredentials[rater][kind];
         return credential.verified && !credential.revoked && credential.expiresAt > block.timestamp
@@ -1604,59 +1494,6 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         );
 
         _forceHumanCredentialCompatibleProfile(rater);
-    }
-
-    function _attestWorldCredential(
-        address rater,
-        uint8 kind,
-        bytes32 nullifierHash,
-        bytes32 scope,
-        uint64 expiresAt,
-        bytes32 evidenceHash
-    ) private {
-        if (rater == address(0)) revert InvalidAddress();
-        if (!_isSupportedWorldCredentialKind(kind)) revert UnsupportedCredentialKind();
-        if (expiresAt <= block.timestamp || nullifierHash == bytes32(0) || scope == bytes32(0)) {
-            revert InvalidCredential();
-        }
-        if (_revokedWorldCredentialNullifier[kind][nullifierHash]) revert InvalidCredential();
-
-        WorldCredential storage previous = _worldCredentials[rater][kind];
-        if (
-            previous.nullifierHash != bytes32(0) && previous.nullifierHash != nullifierHash
-                && _worldCredentialNullifierOwner[kind][previous.nullifierHash] == rater
-        ) {
-            delete _worldCredentialNullifierOwner[kind][previous.nullifierHash];
-        }
-
-        address currentOwner = _worldCredentialNullifierOwner[kind][nullifierHash];
-        if (currentOwner != address(0) && currentOwner != rater) revert NullifierAlreadyAssigned();
-        _worldCredentialNullifierOwner[kind][nullifierHash] = rater;
-
-        _worldCredentials[rater][kind] = WorldCredential({
-            verified: true,
-            revoked: false,
-            kind: kind,
-            nullifierHash: nullifierHash,
-            scope: scope,
-            verifiedAt: uint64(block.timestamp),
-            expiresAt: expiresAt,
-            evidenceHash: evidenceHash
-        });
-        emit WorldCredentialVerified(
-            rater, kind, nullifierHash, scope, uint64(block.timestamp), expiresAt, evidenceHash
-        );
-    }
-
-    function _isSupportedWorldCredentialKind(uint8 kind) private pure returns (bool) {
-        return
-            kind == WORLD_CREDENTIAL_SELFIE || kind == WORLD_CREDENTIAL_PASSPORT
-                || kind == WORLD_CREDENTIAL_PROOF_OF_HUMAN;
-    }
-
-    function _worldCredentialScope(uint64 rpId, uint256 action) private pure returns (bytes32) {
-        if (rpId == 0 || action == 0) return bytes32(0);
-        return keccak256(abi.encode("world-id-v4", rpId, action));
     }
 
     function _worldIdLaunchIdentityKey(bytes32 nullifierHash) private pure returns (bytes32) {
