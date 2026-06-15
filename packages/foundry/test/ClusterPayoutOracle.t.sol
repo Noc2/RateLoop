@@ -2209,6 +2209,101 @@ contract ClusterPayoutOracleTest is Test {
         oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("snapshotted-consumer"));
     }
 
+    function test_StaleProposedRoundPayoutSnapshotCanBeReplacedAfterParentReproposal() public {
+        bytes32 firstArtifact = keccak256("epoch-artifact");
+        _proposeDefaultCorrelationEpoch(1, keccak256("cluster-root"), firstArtifact);
+
+        IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
+        oracle.proposeRoundPayoutSnapshot(input);
+        bytes32 snapshotKey =
+            oracle.roundPayoutSnapshotKey(input.domain, input.rewardPoolId, input.contentId, input.roundId);
+        bytes32 staleDigest = oracle.roundPayoutSnapshotProposalDigest(snapshotKey);
+
+        oracle.rejectCorrelationEpoch(1, keccak256("bad-parent"));
+        IClusterPayoutOracle.RoundPayoutSnapshot memory staleSnapshot =
+            oracle.getRoundPayoutSnapshot(input.domain, input.rewardPoolId, input.contentId, input.roundId);
+        assertEq(uint8(staleSnapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Rejected));
+
+        bytes32 replacementArtifact = keccak256("epoch-artifact-v2");
+        _proposeDefaultCorrelationEpoch(1, keccak256("cluster-root"), replacementArtifact);
+        input.artifactHash = replacementArtifact;
+        input.artifactURI = "ipfs://round-v2";
+        oracle.proposeRoundPayoutSnapshot(input);
+
+        ClusterPayoutOracle.RoundPayoutProposal memory replacement = oracle.roundPayoutProposal(snapshotKey);
+        assertEq(uint8(replacement.snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Proposed));
+        assertEq(replacement.artifactHash, replacementArtifact);
+        assertTrue(oracle.rejectedRoundPayoutSnapshotDigests(snapshotKey, staleDigest));
+    }
+
+    function test_StaleChallengedRoundPayoutSnapshotReplacementCreditsChallengerBond() public {
+        bytes32 firstArtifact = keccak256("epoch-artifact");
+        _proposeDefaultCorrelationEpoch(1, keccak256("cluster-root"), firstArtifact);
+
+        IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
+        oracle.proposeRoundPayoutSnapshot(input);
+        bytes32 snapshotKey =
+            oracle.roundPayoutSnapshotKey(input.domain, input.rewardPoolId, input.contentId, input.roundId);
+        _challengeRoundPayoutSnapshot(snapshotKey, keccak256("bad-round"));
+        bytes32 staleDigest = oracle.roundPayoutSnapshotProposalDigest(snapshotKey);
+
+        oracle.rejectCorrelationEpoch(1, keccak256("bad-parent"));
+        IClusterPayoutOracle.RoundPayoutSnapshot memory staleSnapshot =
+            oracle.getRoundPayoutSnapshot(input.domain, input.rewardPoolId, input.contentId, input.roundId);
+        assertEq(uint8(staleSnapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Rejected));
+        assertEq(oracle.pendingBondWithdrawals(CHALLENGER), 0);
+
+        bytes32 replacementArtifact = keccak256("epoch-artifact-v2");
+        _proposeDefaultCorrelationEpoch(1, keccak256("cluster-root"), replacementArtifact);
+        input.artifactHash = replacementArtifact;
+        input.artifactURI = "ipfs://round-v2";
+        oracle.proposeRoundPayoutSnapshot(input);
+
+        assertTrue(oracle.rejectedRoundPayoutSnapshotDigests(snapshotKey, staleDigest));
+        assertEq(oracle.pendingBondWithdrawals(CHALLENGER), CHALLENGE_BOND);
+        ClusterPayoutOracle.RoundPayoutProposal memory replacement = oracle.roundPayoutProposal(snapshotKey);
+        assertEq(uint8(replacement.snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Proposed));
+        assertEq(replacement.bond, 0);
+        assertEq(replacement.challenger, address(0));
+    }
+
+    function test_StaleRoundPayoutSnapshotChallengeRevertsBeforeBondPull() public {
+        _proposeDefaultCorrelationEpoch(1, keccak256("cluster-root"), keccak256("epoch-artifact"));
+
+        IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
+        oracle.proposeRoundPayoutSnapshot(input);
+        bytes32 snapshotKey =
+            oracle.roundPayoutSnapshotKey(input.domain, input.rewardPoolId, input.contentId, input.roundId);
+        oracle.rejectCorrelationEpoch(1, keccak256("bad-parent"));
+
+        usdc.mint(CHALLENGER, CHALLENGE_BOND);
+        vm.startPrank(CHALLENGER);
+        usdc.approve(address(oracle), CHALLENGE_BOND);
+        uint256 balanceBefore = usdc.balanceOf(CHALLENGER);
+        vm.expectRevert(ClusterPayoutOracle.SnapshotNotFinalizable.selector);
+        oracle.challengeRoundPayoutSnapshot(snapshotKey, keccak256("stale-child"));
+        assertEq(usdc.balanceOf(CHALLENGER), balanceBefore);
+        vm.stopPrank();
+    }
+
+    function test_ChallengedParentKeepsMatchingRoundPayoutSnapshotLive() public {
+        _proposeDefaultCorrelationEpoch(1, keccak256("cluster-root"), keccak256("epoch-artifact"));
+
+        IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
+        oracle.proposeRoundPayoutSnapshot(input);
+        bytes32 snapshotKey =
+            oracle.roundPayoutSnapshotKey(input.domain, input.rewardPoolId, input.contentId, input.roundId);
+        _challengeCorrelationEpoch(1, keccak256("bad-parent"));
+
+        IClusterPayoutOracle.RoundPayoutSnapshot memory snapshot =
+            oracle.getRoundPayoutSnapshot(input.domain, input.rewardPoolId, input.contentId, input.roundId);
+        assertEq(uint8(snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Proposed));
+
+        _challengeRoundPayoutSnapshot(snapshotKey, keccak256("bad-round"));
+        ClusterPayoutOracle.RoundPayoutProposal memory proposal = oracle.roundPayoutProposal(snapshotKey);
+        assertEq(uint8(proposal.snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Challenged));
+    }
+
     function test_LaunchSnapshotsUseZeroRewardPoolId() public {
         oracle.proposeCorrelationEpoch(
             1,
@@ -2317,6 +2412,12 @@ contract ClusterPayoutOracleTest is Test {
             artifactHash: keccak256("epoch-artifact"),
             artifactURI: "ipfs://round"
         });
+    }
+
+    function _proposeDefaultCorrelationEpoch(uint64 epochId, bytes32 clusterRoot, bytes32 artifactHash) private {
+        oracle.proposeCorrelationEpoch(
+            epochId, 1, 20, clusterRoot, keccak256("params"), artifactHash, "ipfs://epoch", _defaultEpochSources()
+        );
     }
 }
 

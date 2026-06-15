@@ -440,16 +440,15 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         }
         RoundPayoutProposal storage existing = roundPayoutProposals[snapshotKey];
         if (existing.snapshot.status != SnapshotStatus.None && existing.snapshot.status != SnapshotStatus.Rejected) {
-            if (
-                existing.snapshot.status != SnapshotStatus.Finalized
-                    || _isCurrentCorrelationEpoch(existing.correlationEpochDigest, existing.snapshot.correlationEpochId)
-            ) {
+            if (_isLiveCorrelationEpoch(existing.correlationEpochDigest, existing.snapshot.correlationEpochId)) {
                 revert SnapshotExists();
             }
-            (bool consumed, bool consumedKnown) = _roundPayoutSnapshotConsumptionStatus(existing);
-            if (!consumedKnown) revert SnapshotExists();
-            if (consumed) revert SnapshotConsumed();
-            rejectedRoundPayoutSnapshotDigests[snapshotKey][_roundPayoutSnapshotProposalDigest(existing)] = true;
+            if (existing.snapshot.status == SnapshotStatus.Finalized) {
+                (bool consumed, bool consumedKnown) = _roundPayoutSnapshotConsumptionStatus(existing);
+                if (!consumedKnown) revert SnapshotExists();
+                if (consumed) revert SnapshotConsumed();
+            }
+            _rejectStaleRoundPayoutSnapshot(snapshotKey, existing);
         }
         if (existing.snapshot.status == SnapshotStatus.Rejected && rejectedRoundPayoutSnapshotConsumed[snapshotKey]) {
             revert SnapshotConsumed();
@@ -526,6 +525,9 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         RoundPayoutProposal storage proposal = roundPayoutProposals[snapshotKey];
         if (proposal.snapshot.status == SnapshotStatus.None) revert SnapshotNotFound();
         if (proposal.snapshot.status != SnapshotStatus.Proposed) revert SnapshotNotFinalizable();
+        if (!_isLiveCorrelationEpoch(proposal.correlationEpochDigest, proposal.snapshot.correlationEpochId)) {
+            revert SnapshotNotFinalizable();
+        }
         if (block.timestamp >= uint256(proposal.proposedAt) + uint256(challengeWindow)) {
             revert SnapshotNotFinalizable();
         }
@@ -761,8 +763,8 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         RoundPayoutSnapshot memory snapshot = proposal.snapshot;
         if (snapshot.status == SnapshotStatus.None) revert SnapshotNotFound();
         if (
-            snapshot.status == SnapshotStatus.Finalized
-                && !_isCurrentCorrelationEpoch(proposal.correlationEpochDigest, snapshot.correlationEpochId)
+            _isLiveRoundPayoutStatus(snapshot.status)
+                && !_isLiveCorrelationEpoch(proposal.correlationEpochDigest, snapshot.correlationEpochId)
         ) {
             snapshot.status = SnapshotStatus.Rejected;
         }
@@ -899,6 +901,15 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         } catch {
             return (true, false);
         }
+    }
+
+    function _rejectStaleRoundPayoutSnapshot(bytes32 snapshotKey, RoundPayoutProposal storage proposal) private {
+        rejectedRoundPayoutSnapshotDigests[snapshotKey][_roundPayoutSnapshotProposalDigest(proposal)] = true;
+        address challenger = proposal.challenger;
+        uint256 bond = proposal.bond;
+        proposal.snapshot.status = SnapshotStatus.Rejected;
+        proposal.bond = 0;
+        if (bond > 0) _creditBond(challenger == address(0) ? bondRecipient : challenger, bond);
     }
 
     function _roundPayoutSnapshotDigest(
@@ -1058,6 +1069,17 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
     function _isCurrentCorrelationEpoch(bytes32 expectedDigest, uint64 epochId) private view returns (bool) {
         CorrelationEpochSnapshot storage snapshot = correlationEpochSnapshots[epochId];
         return snapshot.status == SnapshotStatus.Finalized && _correlationEpochDigest(snapshot) == expectedDigest;
+    }
+
+    function _isLiveCorrelationEpoch(bytes32 expectedDigest, uint64 epochId) private view returns (bool) {
+        CorrelationEpochSnapshot storage snapshot = correlationEpochSnapshots[epochId];
+        return _isLiveRoundPayoutStatus(snapshot.status) && _correlationEpochDigest(snapshot) == expectedDigest;
+    }
+
+    function _isLiveRoundPayoutStatus(SnapshotStatus status) private pure returns (bool) {
+        return
+            status == SnapshotStatus.Proposed || status == SnapshotStatus.Challenged
+                || status == SnapshotStatus.Finalized;
     }
 
     function _correlationEpochDigest(CorrelationEpochSnapshot storage snapshot) private view returns (bytes32) {
