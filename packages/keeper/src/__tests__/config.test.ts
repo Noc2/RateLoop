@@ -9,6 +9,8 @@ const chain4801 = sharedDeployments[4801];
 const chain480 = sharedDeployments[480];
 const chain31337 = sharedDeployments[31337];
 const itWithWorldChainArtifacts = chain480 ? it : it.skip;
+const itWithWorldChainSepoliaFeedbackBonusEscrowArtifact =
+  chain4801?.FeedbackBonusEscrow ? it : it.skip;
 const ORIGINAL_ENV = { ...process.env };
 const VALID_ENV = {
   RPC_URL: "https://rpc.example.com",
@@ -66,6 +68,11 @@ describe("keeper config", () => {
     expect(config.chainId).toBe(31337);
     expect(config.chainName).toBe("Foundry");
     expect(config.cleanupBatchSize).toBe(25);
+    expect(config.feedbackBonusForfeits).toEqual({
+      enabled: true,
+      maxPoolsPerTick: 25,
+      minAgeSeconds: 60,
+    });
     expect(config.frontendFees.enabled).toBe(false);
     expect(config.persistence.databaseUrl).toBeNull();
   });
@@ -233,6 +240,8 @@ describe("keeper config", () => {
     ["KEEPER_INTERVAL_MS", "30000ms", "KEEPER_INTERVAL_MS must be a positive integer"],
     ["KEEPER_STARTUP_JITTER_MS", "0ms", "KEEPER_STARTUP_JITTER_MS must be a non-negative integer"],
     ["KEEPER_CLEANUP_BATCH_SIZE", "25items", "KEEPER_CLEANUP_BATCH_SIZE must be a positive integer"],
+    ["KEEPER_FEEDBACK_BONUS_FORFEITS_PER_TICK", "25items", "KEEPER_FEEDBACK_BONUS_FORFEITS_PER_TICK must be a non-negative integer"],
+    ["KEEPER_FEEDBACK_BONUS_FORFEIT_MIN_AGE_SECONDS", "60seconds", "KEEPER_FEEDBACK_BONUS_FORFEIT_MIN_AGE_SECONDS must be a non-negative integer"],
     ["KEEPER_FRONTEND_FEE_RECENT_ROUNDS_PER_TICK", "50rounds", "KEEPER_FRONTEND_FEE_RECENT_ROUNDS_PER_TICK must be a non-negative integer"],
     ["KEEPER_FRONTEND_FEE_BACKFILL_ROUNDS_PER_TICK", "50rounds", "KEEPER_FRONTEND_FEE_BACKFILL_ROUNDS_PER_TICK must be a non-negative integer"],
     ["MAX_GAS_PER_TX", "2000000gas", "MAX_GAS_PER_TX must be a positive integer"],
@@ -250,10 +259,14 @@ describe("keeper config", () => {
   it("accepts zero for non-negative numeric settings", async () => {
     const { config } = await loadKeeperConfig({
       KEEPER_STARTUP_JITTER_MS: "0",
+      KEEPER_FEEDBACK_BONUS_FORFEITS_PER_TICK: "0",
+      KEEPER_FEEDBACK_BONUS_FORFEIT_MIN_AGE_SECONDS: "0",
       MIN_GAS_BALANCE_WEI: "0",
     });
 
     expect(config.startupJitterMs).toBe(0);
+    expect(config.feedbackBonusForfeits.maxPoolsPerTick).toBe(0);
+    expect(config.feedbackBonusForfeits.minAgeSeconds).toBe(0);
     expect(config.minGasBalanceWei).toBe("0");
   });
 
@@ -280,6 +293,39 @@ describe("keeper config", () => {
         METRICS_ENABLED: "disabled",
       }),
     ).rejects.toThrow("METRICS_ENABLED must be a boolean-like value");
+  });
+
+  it("loads feedback bonus forfeit sweep settings from the environment", async () => {
+    const localFeedbackBonusEscrow =
+      chain31337?.FeedbackBonusEscrow?.address ??
+      "0x7777777777777777777777777777777777777777";
+    const { config } = await loadKeeperConfig({
+      FEEDBACK_BONUS_ESCROW_ADDRESS: localFeedbackBonusEscrow,
+      KEEPER_FEEDBACK_BONUS_FORFEITS_ENABLED: "false",
+      KEEPER_FEEDBACK_BONUS_FORFEITS_PER_TICK: "7",
+      KEEPER_FEEDBACK_BONUS_FORFEIT_MIN_AGE_SECONDS: "120",
+    });
+
+    expect(config.contracts.feedbackBonusEscrow).toBe(localFeedbackBonusEscrow);
+    expect(config.feedbackBonusForfeits).toEqual({
+      enabled: false,
+      maxPoolsPerTick: 7,
+      minAgeSeconds: 120,
+    });
+  });
+
+  it("rejects invalid feedback bonus forfeit settings", async () => {
+    await expect(
+      loadKeeperConfig({
+        KEEPER_FEEDBACK_BONUS_FORFEITS_ENABLED: "sometimes",
+      }),
+    ).rejects.toThrow("KEEPER_FEEDBACK_BONUS_FORFEITS_ENABLED must be a boolean-like value");
+
+    await expect(
+      loadKeeperConfig({
+        FEEDBACK_BONUS_ESCROW_ADDRESS: "not-an-address",
+      }),
+    ).rejects.toThrow("FEEDBACK_BONUS_ESCROW_ADDRESS must be a valid address");
   });
 
   it("uses PORT as the hosted metrics port fallback", async () => {
@@ -402,6 +448,28 @@ describe("keeper config", () => {
       }),
     ).rejects.toThrow("conflicts with RoundVotingEngine from shared deployment artifacts");
   });
+
+  itWithWorldChainSepoliaFeedbackBonusEscrowArtifact(
+    "rejects stale live FeedbackBonusEscrow env values when shared deployment artifacts exist",
+    async () => {
+      await expect(
+        loadKeeperConfig(
+          {
+            CHAIN_ID: "4801",
+            FEEDBACK_BONUS_ESCROW_ADDRESS:
+              "0x7777777777777777777777777777777777777777",
+          },
+          [
+            "VOTING_ENGINE_ADDRESS",
+            "CONTENT_REGISTRY_ADDRESS",
+            "ADVISORY_VOTE_RECORDER_ADDRESS",
+          ],
+        ),
+      ).rejects.toThrow(
+        "conflicts with FeedbackBonusEscrow from shared deployment artifacts",
+      );
+    },
+  );
 
   it("rejects live env-only contract addresses when no shared deployment artifact exists for the chain", async () => {
     await expect(

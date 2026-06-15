@@ -1,8 +1,9 @@
 import { ROUND_STATE } from "@rateloop/contracts/protocol";
 import type { PublicClient } from "viem";
-import { getAddress } from "viem";
+import { getAddress, zeroAddress } from "viem";
 import {
   ContentRegistryAbi,
+  FeedbackBonusEscrowAbi,
   ProtocolConfigAbi,
   RoundVotingEngineAbi,
 } from "@rateloop/contracts/abis";
@@ -247,6 +248,7 @@ export async function validateKeeperContracts(
   publicClient: Pick<PublicClient, "getCode" | "readContract">,
   engineAddr: `0x${string}`,
   registryAddr: `0x${string}`,
+  feedbackBonusEscrowAddr?: `0x${string}`,
 ): Promise<void> {
   await assertContractDeployed(publicClient, engineAddr, "RoundVotingEngine");
   await readRoundVotingConfig(publicClient, engineAddr);
@@ -283,6 +285,60 @@ export async function validateKeeperContracts(
   } catch (err: unknown) {
     throw new Error(
       `Failed to read ContentRegistry.nextContentId() at ${registryAddr}: ${getRevertReason(err)}`,
+    );
+  }
+
+  if (
+    feedbackBonusEscrowAddr &&
+    getAddress(feedbackBonusEscrowAddr) !== getAddress(zeroAddress)
+  ) {
+    await validateFeedbackBonusEscrowContract(
+      publicClient,
+      feedbackBonusEscrowAddr,
+      engineAddr,
+      registryAddr,
+    );
+  }
+}
+
+async function validateFeedbackBonusEscrowContract(
+  publicClient: Pick<PublicClient, "getCode" | "readContract">,
+  escrowAddr: `0x${string}`,
+  engineAddr: `0x${string}`,
+  registryAddr: `0x${string}`,
+): Promise<void> {
+  await assertContractDeployed(publicClient, escrowAddr, "FeedbackBonusEscrow");
+
+  let escrowRegistry: `0x${string}`;
+  let escrowVotingEngine: `0x${string}`;
+  try {
+    escrowRegistry = (await publicClient.readContract({
+      address: escrowAddr,
+      abi: FeedbackBonusEscrowAbi,
+      functionName: "registry",
+      args: [],
+    })) as `0x${string}`;
+    escrowVotingEngine = (await publicClient.readContract({
+      address: escrowAddr,
+      abi: FeedbackBonusEscrowAbi,
+      functionName: "votingEngine",
+      args: [],
+    })) as `0x${string}`;
+  } catch (err: unknown) {
+    throw new Error(
+      `Failed to read FeedbackBonusEscrow wiring at ${escrowAddr}: ${getRevertReason(err)}`,
+    );
+  }
+
+  if (getAddress(escrowRegistry) !== getAddress(registryAddr)) {
+    throw new Error(
+      `FeedbackBonusEscrow at ${escrowAddr} is wired to ContentRegistry ${escrowRegistry}, but keeper is configured for ${registryAddr}. Check deployment artifacts and contract addresses.`,
+    );
+  }
+
+  if (getAddress(escrowVotingEngine) !== getAddress(engineAddr)) {
+    throw new Error(
+      `FeedbackBonusEscrow at ${escrowAddr} is wired to RoundVotingEngine ${escrowVotingEngine}, but keeper is configured for ${engineAddr}. Check deployment artifacts and contract addresses.`,
     );
   }
 }

@@ -279,8 +279,16 @@ function resolveOptionalContractAddress(params: {
   contractName: string;
   errors: string[];
   warnings: string[];
+  rejectLiveMismatch?: boolean;
 }): `0x${string}` {
-  const { chainId, envName, contractName, errors, warnings } = params;
+  const {
+    chainId,
+    envName,
+    contractName,
+    errors,
+    warnings,
+    rejectLiveMismatch,
+  } = params;
   const sharedAddress = getSharedArtifactAddress(chainId, contractName);
   const envValue = readEnv(envName);
 
@@ -293,9 +301,18 @@ function resolveOptionalContractAddress(params: {
       sharedAddress &&
       envValue.toLowerCase() !== sharedAddress.toLowerCase()
     ) {
-      warnings.push(
-        `Using ${envName}=${envValue}; shared ${contractName} artifact points at ${sharedAddress}.`,
-      );
+      const message =
+        `${envName}=${envValue} conflicts with ${contractName} from shared deployment artifacts ` +
+        `(${sharedAddress}) for chain ${chainId}.`;
+      if (rejectLiveMismatch && chainId !== LOCAL_HARDHAT_CHAIN_ID) {
+        errors.push(
+          `${message} Remove the env override or refresh shared deployments.`,
+        );
+      } else {
+        warnings.push(
+          `Using ${envName}=${envValue}; shared ${contractName} artifact points at ${sharedAddress}.`,
+        );
+      }
     }
     return envValue as `0x${string}`;
   }
@@ -522,6 +539,14 @@ function loadConfig() {
         errors,
         warnings,
       }),
+      feedbackBonusEscrow: resolveOptionalContractAddress({
+        chainId,
+        envName: "FEEDBACK_BONUS_ESCROW_ADDRESS",
+        contractName: "FeedbackBonusEscrow",
+        errors,
+        warnings,
+        rejectLiveMismatch: true,
+      }),
     },
 
     // Wallet
@@ -549,6 +574,23 @@ function loadConfig() {
       maxCandidates: readPositiveIntEnv(
         "KEEPER_WORK_DISCOVERY_MAX_CANDIDATES",
         "500",
+        errors,
+      ),
+    },
+    feedbackBonusForfeits: {
+      enabled: parseBooleanEnv(
+        readEnv("KEEPER_FEEDBACK_BONUS_FORFEITS_ENABLED"),
+        true,
+        "KEEPER_FEEDBACK_BONUS_FORFEITS_ENABLED",
+      ),
+      maxPoolsPerTick: readNonNegativeIntEnv(
+        "KEEPER_FEEDBACK_BONUS_FORFEITS_PER_TICK",
+        "25",
+        errors,
+      ),
+      minAgeSeconds: readNonNegativeIntEnv(
+        "KEEPER_FEEDBACK_BONUS_FORFEIT_MIN_AGE_SECONDS",
+        "60",
         errors,
       ),
     },

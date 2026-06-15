@@ -11,6 +11,8 @@ const ADVISORY_COMMIT_KEY =
   "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc" as const;
 const QUESTION_REWARD_POOL_ESCROW =
   "0x6666666666666666666666666666666666666666" as const;
+const FEEDBACK_BONUS_ESCROW =
+  "0x7777777777777777777777777777777777777777" as const;
 const TOO_EARLY_TLOCK_ERROR =
   "It's too early to decrypt the ciphertext - decryptable at round 27013021";
 const zeroHash = `0x${"0".repeat(64)}` as const;
@@ -28,6 +30,7 @@ const {
       votingEngine: "0x1111111111111111111111111111111111111111",
       contentRegistry: "0x2222222222222222222222222222222222222222",
       advisoryVoteRecorder: "0x5555555555555555555555555555555555555555",
+      feedbackBonusEscrow: "0x7777777777777777777777777777777777777777",
     },
     ponderBaseUrl: "https://ponder.example.test",
     keeperWorkDiscovery: {
@@ -35,9 +38,15 @@ const {
       reconciliationEveryTicks: 120,
       maxCandidates: 500,
     },
+    feedbackBonusForfeits: {
+      enabled: true,
+      maxPoolsPerTick: 25,
+      minAgeSeconds: 60,
+    },
     dormancyPeriod: 30n * 24n * 60n * 60n,
     cleanupBatchSize: 25,
     logFallbackLookbackBlocks: 300_000,
+    maxGasPerTx: 2_000_000,
   },
   timelockDecrypt: vi.fn(),
   mainnetClient: vi.fn(() => ({ kind: "mainnet" })),
@@ -574,6 +583,10 @@ function makeHarness(options: {
           return "0xdormant";
         }
 
+        if (functionName === "forfeitExpiredFeedbackBonus") {
+          return "0xfeedbackbonusforfeit";
+        }
+
         throw new Error(`Unexpected writeContract(${functionName})`);
       },
     ),
@@ -589,6 +602,10 @@ describe("resolveRounds", () => {
     mockConfig.keeperWorkDiscovery.enabled = false;
     mockConfig.keeperWorkDiscovery.reconciliationEveryTicks = 120;
     mockConfig.keeperWorkDiscovery.maxCandidates = 500;
+    mockConfig.feedbackBonusForfeits.enabled = true;
+    mockConfig.feedbackBonusForfeits.maxPoolsPerTick = 25;
+    mockConfig.feedbackBonusForfeits.minAgeSeconds = 60;
+    mockConfig.contracts.feedbackBonusEscrow = FEEDBACK_BONUS_ESCROW;
     mockConfig.cleanupBatchSize = 25;
     resetKeeperStateForTests();
   });
@@ -611,6 +628,7 @@ describe("resolveRounds", () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(input.toString());
       expect(url.pathname).toBe("/keeper/work");
+      expect(url.searchParams.get("feedbackBonusForfeitMinAge")).toBe("60");
       return {
         ok: true,
         status: 200,
@@ -641,6 +659,125 @@ describe("resolveRounds", () => {
       expect.objectContaining({
         functionName: "markDormant",
         args: [1n],
+      }),
+    );
+  });
+
+  it("forfeits expired Feedback Bonus pools discovered by Ponder", async () => {
+    mockConfig.keeperWorkDiscovery.enabled = true;
+
+    const round = makeRound({
+      state: 1,
+      voteCount: 0n,
+      revealedCount: 0n,
+    });
+    const { publicClient, walletClient } = makeHarness({
+      activeRoundId: 0n,
+      latestRoundId: 0n,
+      round,
+      now: 3_000_000n,
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(input.toString());
+      expect(url.pathname).toBe("/keeper/work");
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          openRounds: [],
+          cleanupRounds: [],
+          dormantContent: [],
+          feedbackBonusForfeits: [
+            {
+              poolId: "7",
+              contentId: "9",
+              roundId: "2",
+              awardDeadline: "2999900",
+              remainingAmount: "1000000",
+              reason: "feedback_bonus_forfeit",
+            },
+          ],
+        }),
+      };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const logger = makeLogger();
+
+    const result = await resolveRounds(
+      publicClient as any,
+      walletClient as any,
+      {} as any,
+      { address: ACCOUNT } as any,
+      logger as any,
+    );
+
+    expect(result.feedbackBonusPoolsForfeited).toBe(1);
+    expect(walletClient.writeContract).toHaveBeenCalledWith(
+      expect.objectContaining({
+        address: FEEDBACK_BONUS_ESCROW,
+        functionName: "forfeitExpiredFeedbackBonus",
+        args: [7n],
+      }),
+    );
+  });
+
+  it("skips stale Feedback Bonus forfeit candidates without broadcasting", async () => {
+    mockConfig.keeperWorkDiscovery.enabled = true;
+
+    const round = makeRound({
+      state: 1,
+      voteCount: 0n,
+      revealedCount: 0n,
+    });
+    const { publicClient, walletClient } = makeHarness({
+      activeRoundId: 0n,
+      latestRoundId: 0n,
+      round,
+      now: 3_000_000n,
+      estimateContractGas: async ({ functionName }) => {
+        if (functionName === "forfeitExpiredFeedbackBonus") {
+          throw new Error("Not expired");
+        }
+        return 100n;
+      },
+    });
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        openRounds: [],
+        cleanupRounds: [],
+        dormantContent: [],
+        feedbackBonusForfeits: [
+          {
+            poolId: "7",
+            contentId: "9",
+            roundId: "2",
+            awardDeadline: "2999900",
+            remainingAmount: "1000000",
+            reason: "feedback_bonus_forfeit",
+          },
+        ],
+      }),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const logger = makeLogger();
+
+    const result = await resolveRounds(
+      publicClient as any,
+      walletClient as any,
+      {} as any,
+      { address: ACCOUNT } as any,
+      logger as any,
+    );
+
+    expect(result.feedbackBonusPoolsForfeited).toBe(0);
+    expect(walletClient.writeContract).not.toHaveBeenCalled();
+    expect(logger.debug).toHaveBeenCalledWith(
+      "Skipped Feedback Bonus forfeit candidate",
+      expect.objectContaining({
+        poolId: "7",
+        error: "Not expired",
       }),
     );
   });

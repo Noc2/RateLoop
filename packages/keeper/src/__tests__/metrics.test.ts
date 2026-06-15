@@ -28,6 +28,7 @@ function makeResult(overrides: Partial<KeeperResult> = {}): KeeperResult {
     advisoryLaunchCreditsClaimed: 0,
     cleanupBatchesProcessed: 0,
     contentMarkedDormant: 0,
+    feedbackBonusPoolsForfeited: 0,
     roundsAwaitingRevealQuorum: 0,
     minRevealGraceSecondsRemaining: null,
     ...overrides,
@@ -97,6 +98,7 @@ describe("metrics", () => {
       makeResult({
         roundsRevealFailedFinalized: 2,
         cleanupBatchesProcessed: 3,
+        feedbackBonusPoolsForfeited: 5,
         roundsAwaitingRevealQuorum: 4,
         minRevealGraceSecondsRemaining: 120,
       }),
@@ -107,6 +109,7 @@ describe("metrics", () => {
     const metricsBody = getMetricsText();
     expect(metricsBody).toContain("keeper_rounds_reveal_failed_finalized_total 2");
     expect(metricsBody).toContain("keeper_unrevealed_cleanup_batches_total 3");
+    expect(metricsBody).toContain("keeper_feedback_bonus_forfeits_total 5");
     expect(metricsBody).toContain("keeper_wallet_balance_wei 4000000000000");
     expect(metricsBody).toContain("keeper_rounds_awaiting_reveal_quorum 4");
     expect(metricsBody).toContain("keeper_reveal_grace_seconds_remaining_min 120");
@@ -119,6 +122,7 @@ describe("metrics", () => {
     expect(JSON.parse(health.body)).toMatchObject({
       roundsRevealFailedFinalized: 2,
       cleanupBatchesProcessed: 3,
+      feedbackBonusPoolsForfeited: 5,
       walletBalanceWei: "4000000000000",
       roundsAwaitingRevealQuorum: 4,
       revealGraceSecondsRemainingMin: 120,
