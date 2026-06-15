@@ -94,6 +94,8 @@ contract LockingLoopGovernor {
 
 contract RevertingBundleObserver {
     uint16 public defaultFrontendFeeBps = 300;
+    address public registry;
+    address public votingEngine;
     bool public shouldRevert = true;
     uint256 public observedContentId;
     uint256 public observedRoundId;
@@ -104,6 +106,15 @@ contract RevertingBundleObserver {
 
     function setShouldRevert(bool value) external {
         shouldRevert = value;
+    }
+
+    function setConfigShape(address registry_, address votingEngine_) external {
+        registry = registry_;
+        votingEngine = votingEngine_;
+    }
+
+    function questionRewardPoolEscrowConfigShape() external view returns (address, address) {
+        return (registry, votingEngine);
     }
 
     function recordBundleQuestionTerminal(uint256 contentId, uint256 roundId, bool settled) external {
@@ -1212,6 +1223,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
     function test_ReplayBundleObserverNotify_ReplaysFailedSettledNotification() public {
         (uint256 contentId, uint256 roundId) = _setupThreeVoterRound(true, true, false);
         RevertingBundleObserver observer = new RevertingBundleObserver();
+        observer.setConfigShape(address(registry), address(engine));
 
         vm.prank(owner);
         registry.pause();
