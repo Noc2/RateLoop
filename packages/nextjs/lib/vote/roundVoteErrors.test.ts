@@ -1,5 +1,8 @@
 import {
+  CONFIDENTIALITY_BOND_REQUIRED_ERROR_SELECTOR,
+  CONFIDENTIALITY_CREDENTIAL_REQUIRED_ERROR_SELECTOR,
   CONTENT_NOT_ACTIVE_ERROR_SELECTOR,
+  IDENTITY_BANNED_ERROR_SELECTOR,
   SELF_VOTE_ERROR_SELECTOR,
   normalizeRoundVoteError,
 } from "./roundVoteErrors";
@@ -24,6 +27,21 @@ test("normalizeRoundVoteError translates content inactive selectors", () => {
   assert.equal(
     normalizeRoundVoteError(`commitVote reverted with selector ${CONTENT_NOT_ACTIVE_ERROR_SELECTOR}`),
     "This content is no longer active for voting.",
+  );
+});
+
+test("normalizeRoundVoteError translates confidentiality gate selectors", () => {
+  assert.equal(
+    normalizeRoundVoteError(`Encoded error signature "${CONFIDENTIALITY_CREDENTIAL_REQUIRED_ERROR_SELECTOR}"`),
+    "Private-context questions require an active human credential before voting.",
+  );
+  assert.equal(
+    normalizeRoundVoteError(`commitVote reverted with selector ${CONFIDENTIALITY_BOND_REQUIRED_ERROR_SELECTOR}`),
+    "Post the required confidentiality bond before voting.",
+  );
+  assert.equal(
+    normalizeRoundVoteError(`commitVote reverted with selector ${IDENTITY_BANNED_ERROR_SELECTOR}`),
+    "This rater identity is not allowed to vote.",
   );
 });
 

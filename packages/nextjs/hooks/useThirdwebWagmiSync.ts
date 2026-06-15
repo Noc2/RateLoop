@@ -72,9 +72,13 @@ export function shouldReplaceActiveThirdwebWagmiConnection(params: {
 export function getThirdwebWagmiSyncOptions(
   wallet: Pick<Wallet, "id">,
   options: { source: "autoConnect" | "manualConnect" },
-): { reconnect: true } | undefined {
+): { reconnect: true; replaceActiveConnection?: true } | undefined {
   if (isThirdwebInAppWalletId(wallet.id) && options.source === "autoConnect") {
     return { reconnect: true };
+  }
+
+  if (isThirdwebInAppWalletId(wallet.id) && options.source === "manualConnect") {
+    return { reconnect: true, replaceActiveConnection: true };
   }
 
   if (isTargetedInjectedThirdwebWallet(wallet)) {

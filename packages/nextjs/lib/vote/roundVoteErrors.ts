@@ -2,6 +2,9 @@ import { VOTE_COOLDOWN_SECONDS } from "~~/lib/vote/cooldown";
 
 export const SELF_VOTE_ERROR_SELECTOR = "0x2f4015a5";
 export const CONTENT_NOT_ACTIVE_ERROR_SELECTOR = "0x74e73b6d";
+export const CONFIDENTIALITY_CREDENTIAL_REQUIRED_ERROR_SELECTOR = "0x9aacec92";
+export const CONFIDENTIALITY_BOND_REQUIRED_ERROR_SELECTOR = "0x2b720139";
+export const IDENTITY_BANNED_ERROR_SELECTOR = "0xe51434d4";
 const TARGET_ROUND_OUT_OF_WINDOW_ERROR_SELECTOR = "0xe56a7aca";
 
 /**
@@ -51,6 +54,29 @@ export function normalizeRoundVoteError(message: string) {
   }
   if (matchesContractError(message, normalizedMessage, "ContentNotActive", CONTENT_NOT_ACTIVE_ERROR_SELECTOR)) {
     return "This content is no longer active for voting.";
+  }
+  if (
+    matchesContractError(
+      message,
+      normalizedMessage,
+      "ConfidentialityCredentialRequired",
+      CONFIDENTIALITY_CREDENTIAL_REQUIRED_ERROR_SELECTOR,
+    )
+  ) {
+    return "Private-context questions require an active human credential before voting.";
+  }
+  if (
+    matchesContractError(
+      message,
+      normalizedMessage,
+      "ConfidentialityBondRequired",
+      CONFIDENTIALITY_BOND_REQUIRED_ERROR_SELECTOR,
+    )
+  ) {
+    return "Post the required confidentiality bond before voting.";
+  }
+  if (matchesContractError(message, normalizedMessage, "IdentityBanned", IDENTITY_BANNED_ERROR_SELECTOR)) {
+    return "This rater identity is not allowed to vote.";
   }
   if (
     matchesContractError(

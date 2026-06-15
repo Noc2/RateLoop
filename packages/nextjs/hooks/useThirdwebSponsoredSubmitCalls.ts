@@ -3,7 +3,7 @@
 import { useCallback, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { defineChain, prepareTransaction } from "thirdweb";
-import { useActiveWallet, useActiveWalletChain, useSetActiveWallet } from "thirdweb/react";
+import { useActiveAccount, useActiveWallet, useActiveWalletChain, useSetActiveWallet } from "thirdweb/react";
 import { sendAndConfirmCalls } from "thirdweb/wallets/eip5792";
 import { type Abi, type Hex, encodeFunctionData } from "viem";
 import { useAccount, usePublicClient } from "wagmi";
@@ -184,6 +184,17 @@ export function shouldExpectSponsoredSubmitCalls(params: {
   return shouldExpectSponsoredThirdwebBatchCalls(params);
 }
 
+export function thirdwebWalletAddressMatchesWagmiAddress(params: {
+  thirdwebAddress?: string | null;
+  wagmiAddress?: string | null;
+}) {
+  return (
+    typeof params.thirdwebAddress === "string" &&
+    typeof params.wagmiAddress === "string" &&
+    params.thirdwebAddress.toLowerCase() === params.wagmiAddress.toLowerCase()
+  );
+}
+
 export function isThirdwebSponsorshipDeniedError(error: unknown) {
   const message =
     (error as { message?: string; shortMessage?: string } | undefined)?.message ??
@@ -237,6 +248,7 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
   const allowInAppSponsorshipSync = options.allowInAppSponsorshipSync ?? true;
   const queryClient = useQueryClient();
   const activeWallet = useActiveWallet();
+  const activeThirdwebAccount = useActiveAccount();
   const activeWalletId = activeWallet?.id;
   const activeWalletChain = useActiveWalletChain();
   const setActiveWallet = useSetActiveWallet();
@@ -248,6 +260,11 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
   const chainId = resolveWalletExecutionChainId(wagmiChainId, activeWalletChain?.id);
   const publicClient = usePublicClient({ chainId });
   const usesInAppEip7702Execution = usesThirdwebInAppEip7702Execution(chainId);
+  const activeWalletAccountAddress = activeThirdwebAccount?.address ?? activeWallet?.getAccount()?.address;
+  const activeWalletMatchesWagmiAddress = thirdwebWalletAddressMatchesWagmiAddress({
+    thirdwebAddress: activeWalletAccountAddress,
+    wagmiAddress: address,
+  });
 
   const expectsSponsoredBatchCalls = useMemo(
     () =>
@@ -321,6 +338,7 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
   const canUseSponsoredSubmitCalls = Boolean(
     thirdwebClient &&
       activeWallet &&
+      activeWalletMatchesWagmiAddress &&
       typeof chainId === "number" &&
       hasSendCalls &&
       prefersSponsoredBatchCalls &&
@@ -330,6 +348,7 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
   const canUseUnmeteredSponsoredSubmitCalls = Boolean(
     thirdwebClient &&
       activeWallet &&
+      activeWalletMatchesWagmiAddress &&
       typeof chainId === "number" &&
       !isInspectingSponsoredDelegation &&
       !hasBrokenSponsoredDelegation &&
@@ -341,7 +360,12 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
       }),
   );
   const canUseSelfFundedBatchCalls = Boolean(
-    thirdwebClient && activeWallet && typeof chainId === "number" && hasSendCalls && prefersSelfFundedBatchCalls,
+    thirdwebClient &&
+      activeWallet &&
+      activeWalletMatchesWagmiAddress &&
+      typeof chainId === "number" &&
+      hasSendCalls &&
+      prefersSelfFundedBatchCalls,
   );
   const isAwaitingSponsoredSubmitCalls =
     expectsSponsoredBatchCalls &&
@@ -398,6 +422,10 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
             ? canUseUnmeteredSponsoredSubmitCalls
             : canUseSponsoredSubmitCalls
           : canUseSelfFundedBatchCalls;
+
+      if (client && activeWallet && typeof chainId === "number" && !activeWalletMatchesWagmiAddress) {
+        throw new Error("Wallet reconnecting. Retry in a moment.");
+      }
 
       if (!client || !activeWallet || typeof chainId !== "number" || !canUseRequestedMode) {
         throw new Error("Thirdweb batch calls are unavailable.");
@@ -564,6 +592,7 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
     },
     [
       activeWallet,
+      activeWalletMatchesWagmiAddress,
       address,
       canUseSelfFundedBatchCalls,
       canUseSponsoredSubmitCalls,

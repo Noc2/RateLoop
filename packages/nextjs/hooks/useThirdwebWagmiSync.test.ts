@@ -223,12 +223,18 @@ test("getThirdwebWagmiSyncOptions keeps auto-connected unknown external wallets 
   );
 });
 
-test("getThirdwebWagmiSyncOptions keeps manual in-app wallet sync on the direct adapter path", () => {
-  assert.equal(
+test("getThirdwebWagmiSyncOptions replaces stale manual in-app wallet connections", () => {
+  assert.deepEqual(
     getThirdwebWagmiSyncOptions({ id: "inApp" } as any, {
       source: "manualConnect",
     }),
-    undefined,
+    { reconnect: true, replaceActiveConnection: true },
+  );
+  assert.deepEqual(
+    getThirdwebWagmiSyncOptions({ id: "in-app-wallet" } as any, {
+      source: "manualConnect",
+    }),
+    { reconnect: true, replaceActiveConnection: true },
   );
 });
 

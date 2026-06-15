@@ -11,6 +11,7 @@ import {
   shouldRetryThirdwebBundlerError,
   shouldUseSelfFundedBatchCalls,
   shouldUseUnmeteredSponsoredBatchCalls,
+  thirdwebWalletAddressMatchesWagmiAddress,
 } from "./useThirdwebSponsoredSubmitCalls";
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -206,6 +207,30 @@ test("uses unmetered sponsored batch calls for in-app wallets with sendCalls sup
       connectorId: "io.metamask",
       hasSendCalls: true,
       isThirdwebInApp: true,
+    }),
+    false,
+  );
+});
+
+test("matches thirdweb execution address against the connected wagmi address", () => {
+  assert.equal(
+    thirdwebWalletAddressMatchesWagmiAddress({
+      thirdwebAddress: "0x6D12cC9Ee8392740306F87Fbd1ccB1cBC16FA593",
+      wagmiAddress: "0x6d12cc9ee8392740306f87fbd1ccb1cbc16fa593",
+    }),
+    true,
+  );
+  assert.equal(
+    thirdwebWalletAddressMatchesWagmiAddress({
+      thirdwebAddress: "0x6D12cC9Ee8392740306F87Fbd1ccB1cBC16FA593",
+      wagmiAddress: "0x63cada40E8AcF7A1d47229af5Be35b78b16035fa",
+    }),
+    false,
+  );
+  assert.equal(
+    thirdwebWalletAddressMatchesWagmiAddress({
+      thirdwebAddress: null,
+      wagmiAddress: "0x63cada40E8AcF7A1d47229af5Be35b78b16035fa",
     }),
     false,
   );
