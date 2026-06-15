@@ -7,6 +7,9 @@ import {
   evaluateFreeTransactionAllowance,
 } from "~~/lib/thirdweb/freeTransactions";
 import { getThirdwebVerifierRouteTestOverrides } from "~~/lib/thirdweb/routeTestOverrides";
+import { checkRateLimit } from "~~/utils/rateLimit";
+
+const RATE_LIMIT = { limit: 60, windowMs: 60_000 };
 
 function getVerifierRequestSummary(body: Record<string, unknown>) {
   const userOp = (body.userOp ?? {}) as {
@@ -35,6 +38,9 @@ function createDeniedResponse(reason: string) {
 }
 
 export async function POST(request: NextRequest) {
+  const limited = await checkRateLimit(request, RATE_LIMIT);
+  if (limited) return limited;
+
   const overrides = getThirdwebVerifierRouteTestOverrides();
   const configuredSecret = overrides?.getThirdwebServerVerifierSecret?.() ?? getThirdwebServerVerifierSecret();
   const providedSecret = request.headers.get("x-thirdweb-verifier-secret");
