@@ -185,6 +185,8 @@ library ContentRegistryRatingSnapshotLib {
         snapshot = context.oracle
         .getRoundPayoutSnapshot(PAYOUT_DOMAIN_PUBLIC_RATING, 0, context.contentId, context.roundId);
         if (snapshot.status != IClusterPayoutOracle.SnapshotStatus.Finalized) revert InvalidState();
+        uint64 vetoWindow = context.oracle.FINALIZATION_VETO_WINDOW();
+        if (block.timestamp <= uint256(snapshot.finalizedAt) + uint256(vetoWindow)) revert InvalidState();
         if (snapshot.rawEligibleVoters != payoutWeightCount || snapshot.totalClaimWeight == 0) revert InvalidState();
 
         (,, uint256 cleanupRemaining, uint48 sourceReadyAt) =

@@ -3700,6 +3700,36 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertEq(nextRoundToEvaluate, roundId);
     }
 
+    function testPublicRatingSnapshotAppliesOnlyAfterFinalizationVetoWindow() public {
+        ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
+        oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_PUBLIC_RATING(), address(registry));
+        uint256 contentId = _submitQuestion("");
+        uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
+
+        (IClusterPayoutOracle.PayoutWeight[] memory payoutWeights, bytes32[] memory leaves) =
+            _publicRatingPayoutLeaves(oracle, contentId, roundId, 3);
+        bytes32 snapshotKey = _finalizePublicRatingPayoutSnapshotWithRoot(
+            oracle, contentId, roundId, 3, 30_000, _sumEffectiveWeights(payoutWeights), _merkleRoot(leaves)
+        );
+        bytes32[][] memory proofs = _merkleProofs(leaves);
+        ClusterPayoutOracle.RoundPayoutProposal memory proposal = oracle.roundPayoutProposal(snapshotKey);
+
+        vm.warp(uint256(proposal.snapshot.finalizedAt) + uint256(oracle.FINALIZATION_VETO_WINDOW()));
+        vm.expectRevert(ContentRegistry.InvalidState.selector);
+        registry.applyRatingPayoutSnapshot(contentId, roundId, payoutWeights, proofs);
+        assertEq(registry.appliedRatingSnapshotDigest(contentId, roundId), bytes32(0));
+
+        vm.warp(block.timestamp + 1);
+        registry.applyRatingPayoutSnapshot(contentId, roundId, payoutWeights, proofs);
+        assertEq(
+            registry.appliedRatingSnapshotDigest(contentId, roundId),
+            oracle.roundPayoutSnapshotProposalDigest(snapshotKey)
+        );
+
+        vm.expectRevert(ClusterPayoutOracle.SnapshotConsumed.selector);
+        oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("late-rating-veto"));
+    }
+
     function testClusterRewardPoolRejectsOracleWithDifferentConsumer() public {
         uint256 contentId = _submitQuestion("");
 
@@ -6412,6 +6442,51 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         oracle.finalizeRoundPayoutSnapshot(snapshotKey);
     }
 
+    function _finalizePublicRatingPayoutSnapshotWithRoot(
+        ClusterPayoutOracle oracle,
+        uint256 contentId,
+        uint256 roundId,
+        uint32 rawEligibleVoters,
+        uint32 effectiveParticipantUnits,
+        uint256 totalClaimWeight,
+        bytes32 weightRoot
+    ) internal returns (bytes32 snapshotKey) {
+        uint64 correlationEpochId = uint64(roundId);
+        oracle.proposeCorrelationEpoch(
+            correlationEpochId,
+            uint64(roundId),
+            uint64(roundId),
+            keccak256(abi.encode("public-rating-cluster-root", roundId)),
+            keccak256("params"),
+            keccak256("epoch-artifact"),
+            "ipfs://rating-epoch",
+            _publicRatingEpochSources(contentId, roundId)
+        );
+        vm.warp(block.timestamp + 1 hours + 1);
+        oracle.finalizeCorrelationEpoch(correlationEpochId);
+
+        oracle.proposeRoundPayoutSnapshot(
+            IClusterPayoutOracle.RoundPayoutSnapshotInput({
+                domain: oracle.PAYOUT_DOMAIN_PUBLIC_RATING(),
+                rewardPoolId: 0,
+                contentId: contentId,
+                roundId: roundId,
+                correlationEpochId: correlationEpochId,
+                rawEligibleVoters: rawEligibleVoters,
+                effectiveParticipantUnits: effectiveParticipantUnits,
+                totalClaimWeight: totalClaimWeight,
+                weightRoot: weightRoot,
+                reasonRoot: keccak256("rating-reason-root"),
+                artifactHash: keccak256("epoch-artifact"),
+                artifactURI: "ipfs://rating-round"
+            })
+        );
+        snapshotKey = oracle.roundPayoutSnapshotKey(oracle.PAYOUT_DOMAIN_PUBLIC_RATING(), 0, contentId, roundId);
+        ClusterPayoutOracle.RoundPayoutProposal memory proposal = oracle.roundPayoutProposal(snapshotKey);
+        vm.warp(uint256(proposal.proposedAt) + uint256(oracle.challengeWindow()) + 1);
+        oracle.finalizeRoundPayoutSnapshot(snapshotKey);
+    }
+
     function _finalizeBundleClusterPayoutSnapshotWithRoot(
         ClusterPayoutOracle oracle,
         uint256 bundleId,
@@ -6504,6 +6579,54 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         });
     }
 
+    function _publicRatingPayoutLeaves(
+        ClusterPayoutOracle oracle,
+        uint256 contentId,
+        uint256 roundId,
+        uint256 commitCount
+    ) internal view returns (IClusterPayoutOracle.PayoutWeight[] memory payoutWeights, bytes32[] memory leaves) {
+        payoutWeights = new IClusterPayoutOracle.PayoutWeight[](commitCount);
+        for (uint256 i = 0; i < commitCount; i++) {
+            bytes32 commitKey = votingEngine.getRoundCommitKey(contentId, roundId, i);
+            (uint256 flags, bytes32 identityKey, address holder) =
+                votingEngine.ratingCommitStateCompact(contentId, roundId, commitKey);
+            uint256 baseEvidence = _ratingEvidenceWeight(uint64(flags >> 8), uint8(flags >> 72));
+            payoutWeights[i] = IClusterPayoutOracle.PayoutWeight({
+                domain: oracle.PAYOUT_DOMAIN_PUBLIC_RATING(),
+                rewardPoolId: 0,
+                contentId: contentId,
+                roundId: roundId,
+                commitKey: commitKey,
+                identityKey: identityKey,
+                account: holder,
+                baseWeight: baseEvidence,
+                independenceBps: 10_000,
+                effectiveWeight: baseEvidence,
+                reasonHash: keccak256(abi.encodePacked("public-rating-payout", i))
+            });
+        }
+        for (uint256 i = 0; i < payoutWeights.length; i++) {
+            for (uint256 j = i + 1; j < payoutWeights.length; j++) {
+                if (payoutWeights[j].commitKey < payoutWeights[i].commitKey) {
+                    IClusterPayoutOracle.PayoutWeight memory current = payoutWeights[i];
+                    payoutWeights[i] = payoutWeights[j];
+                    payoutWeights[j] = current;
+                }
+            }
+        }
+        leaves = new bytes32[](commitCount);
+        for (uint256 i = 0; i < commitCount; i++) {
+            leaves[i] = oracle.payoutWeightLeaf(payoutWeights[i]);
+        }
+    }
+
+    function _ratingEvidenceWeight(uint64 stakeAmount, uint8 epochIndex) internal pure returns (uint256) {
+        uint256 stakeForBonus = stakeAmount > 10_000_000 ? 10_000_000 : stakeAmount;
+        uint256 stakeBonus = (stakeForBonus * 1_000_000) / 10_000_000;
+        uint256 rawEvidence = 1_000_000 + stakeBonus;
+        return (rawEvidence * RoundLib.epochWeightBps(epochIndex)) / 10_000;
+    }
+
     function _bundlePayoutWeight(
         uint256 bundleId,
         uint256 roundSetIndex,
@@ -6539,12 +6662,30 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         });
     }
 
+    function _publicRatingEpochSources(uint256 contentId, uint256 roundId)
+        internal
+        pure
+        returns (IClusterPayoutOracle.CorrelationEpochSourceRef[] memory sources)
+    {
+        sources = new IClusterPayoutOracle.CorrelationEpochSourceRef[](1);
+        sources[0] = IClusterPayoutOracle.CorrelationEpochSourceRef({
+            domain: 3, rewardPoolId: 0, contentId: contentId, roundId: roundId
+        });
+    }
+
     function _merkleRoot(bytes32[] memory leaves) internal pure returns (bytes32) {
         bytes32[] memory level = _sortedLeaves(leaves);
         while (level.length > 1) {
             level = _nextMerkleLevel(level);
         }
         return level.length == 0 ? bytes32(0) : level[0];
+    }
+
+    function _merkleProofs(bytes32[] memory leaves) internal pure returns (bytes32[][] memory proofs) {
+        proofs = new bytes32[][](leaves.length);
+        for (uint256 i = 0; i < leaves.length; i++) {
+            proofs[i] = _merkleProof(leaves, leaves[i]);
+        }
     }
 
     function _merkleProof(bytes32[] memory leaves, bytes32 leaf) internal pure returns (bytes32[] memory proof) {
