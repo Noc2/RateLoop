@@ -628,6 +628,26 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         string calldata reason,
         bytes32 evidenceHash
     ) external onlyRole(GOVERNANCE_ROLE) {
+        _banCredentialNullifier(provider, nullifierHash, expiresAt, reason, evidenceHash);
+    }
+
+    function banKnownCredentialNullifier(
+        HumanCredentialProvider provider,
+        bytes32 nullifierHash,
+        uint64 expiresAt,
+        string calldata reason,
+        bytes32 evidenceHash
+    ) external onlyRole(GOVERNANCE_ROLE) {
+        _banCredentialNullifier(provider, nullifierHash, expiresAt, reason, evidenceHash);
+    }
+
+    function _banCredentialNullifier(
+        HumanCredentialProvider provider,
+        bytes32 nullifierHash,
+        uint64 expiresAt,
+        string calldata reason,
+        bytes32 evidenceHash
+    ) private {
         if (provider == HumanCredentialProvider.None || nullifierHash == bytes32(0)) {
             revert InvalidCredential();
         }
@@ -639,7 +659,6 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
             }
             if (expiresAt <= block.timestamp) revert InvalidBan();
         }
-        _requireConfidentialityNexus(provider, nullifierHash);
 
         bytes32 credentialKey = credentialIdentityKey(provider, nullifierHash);
         _writeIdentityBan(credentialKey, expiresAt, evidenceHash);
@@ -1435,14 +1454,6 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
     function _isBanActive(IdentityBan storage ban) private view returns (bool) {
         if (ban.bannedAt == 0) return false;
         return ban.expiresAt == type(uint64).max || ban.expiresAt > block.timestamp;
-    }
-
-    function _requireConfidentialityNexus(HumanCredentialProvider provider, bytes32 nullifierHash) private view {
-        address escrow = confidentialityEscrow;
-        if (escrow == address(0)) revert InvalidBan();
-        if (!IConfidentialityEscrow(escrow).hasConfidentialityNexus(uint8(provider), nullifierHash)) {
-            revert InvalidBan();
-        }
     }
 
     function _propagateActiveBan(address rater, HumanCredentialProvider provider, bytes32 nullifierHash) private {
