@@ -946,6 +946,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         ) {
             revert InvalidSnapshot();
         }
+        if (input.domain == PAYOUT_DOMAIN_PUBLIC_RATING && input.totalClaimWeight == 0) revert InvalidSnapshot();
         bool emptyPayout = input.totalClaimWeight == 0;
         if (emptyPayout) {
             if (input.effectiveParticipantUnits != 0 || input.weightRoot != bytes32(0)) revert InvalidSnapshot();
