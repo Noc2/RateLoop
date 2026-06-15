@@ -1688,8 +1688,9 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
   const connectedMismatch = Boolean(handoff?.walletAddress && address && !sameAddress(handoff.walletAddress, address));
   const hasTransactionPlan = Boolean(handoff?.transactionPlan?.calls?.length);
   const connectedChainId = chain?.id ?? chainId ?? null;
+  const handoffChainId = handoff?.chainId ?? null;
   const needsChainSwitch = Boolean(
-    hasTransactionPlan && handoff?.chainId && connectedChainId && connectedChainId !== handoff.chainId,
+    handoffChainId && connectedChainId && connectedChainId !== handoffChainId,
   );
   const isBusy = isPreparing || isExecuting || isSigningMessage || isSavingDraft || switchingChainId !== null;
   const isDraftEditable = Boolean(handoff && (handoff.status === "pending" || handoff.status === "failed"));
@@ -1826,9 +1827,10 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     async (imageSignatures?: Array<{ assetId: string; challengeId: string; signature: Hex }>) => {
       if (!address) throw new Error("Connect a wallet before preparing this ask.");
       if (!connectedChainId) throw new Error("Connect a supported network before preparing this ask.");
+      const prepareChainId = handoff?.chainId ?? connectedChainId;
       const response = await fetch(`/api/agent/handoffs/${handoffId}/prepare`, {
         body: JSON.stringify({
-          chainId: connectedChainId,
+          chainId: prepareChainId,
           imageSignatures,
           token,
           walletAddress: address,
@@ -1840,7 +1842,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
       if (!response.ok) throw new Error(readResponseError(body, "Failed to prepare handoff."));
       return body as PrepareResponse;
     },
-    [address, connectedChainId, handoffId, token],
+    [address, connectedChainId, handoff?.chainId, handoffId, token],
   );
 
   const updateDraftField = useCallback((field: keyof Omit<DraftForm, "questions">, value: string) => {
@@ -2519,7 +2521,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
             ) : null}
             {needsChainSwitch ? (
               <p className="surface-card-nested mt-4 rounded-lg p-3 text-sm text-warning">
-                This prepared ask is on chain {handoff.chainId}. Your wallet is on chain {connectedChainId}.
+                This handoff is on chain {handoff.chainId}. Your wallet is on chain {connectedChainId}.
               </p>
             ) : null}
             {failedImageUploadMessage ? (

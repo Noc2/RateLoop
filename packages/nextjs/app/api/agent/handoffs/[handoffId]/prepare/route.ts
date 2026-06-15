@@ -54,6 +54,17 @@ function readChainId(value: unknown): number {
   return chainId;
 }
 
+function resolvePrepareChainId(handoff: Awaited<ReturnType<typeof loadAgentAskHandoffByToken>>, requestedChainId: number) {
+  if (!handoff.chainId) return requestedChainId;
+  if (handoff.chainId !== requestedChainId) {
+    throw new AgentAskHandoffError(
+      `This handoff is for chain ${handoff.chainId}, but prepare was requested for chain ${requestedChainId}. Switch the wallet to chain ${handoff.chainId} and try again.`,
+      409,
+    );
+  }
+  return handoff.chainId;
+}
+
 function readToken(value: unknown) {
   if (typeof value === "string" && value.trim()) return value.trim();
   throw new AgentAskHandoffError("token is required.");
@@ -305,9 +316,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ha
 
       const token = readToken((body as { token?: unknown }).token);
       const walletAddress = readWalletAddress((body as { walletAddress?: unknown }).walletAddress);
-      const chainId = readChainId((body as { chainId?: unknown }).chainId);
+      const requestedChainId = readChainId((body as { chainId?: unknown }).chainId);
       const imageSignatures = readImageSignatures((body as { imageSignatures?: unknown }).imageSignatures);
       const handoff = await loadAgentAskHandoffByToken({ handoffId, token });
+      const chainId = resolvePrepareChainId(handoff, requestedChainId);
       assertHandoffCanPrepare(handoff);
       if (handoff.walletAddress && handoff.walletAddress.toLowerCase() !== walletAddress.toLowerCase()) {
         return NextResponse.json({ error: "Connected wallet does not match this handoff." }, { status: 403 });
