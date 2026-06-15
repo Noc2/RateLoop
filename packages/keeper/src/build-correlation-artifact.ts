@@ -56,7 +56,13 @@ const built = await buildConfiguredCorrelationSnapshotArtifactForCandidates(
   logger,
 );
 
-await writeFile(out, `${JSON.stringify(built.artifact)}\n`, "utf8");
+if (!built.canonicalJson || built.roundSnapshotCount === 0) {
+  throw new Error(
+    `No correlation snapshots built for candidate (candidateCount=${built.candidateCount}, roundSnapshotCount=${built.roundSnapshotCount})`,
+  );
+}
+
+await writeFile(out, `${built.canonicalJson}\n`, "utf8");
 console.log(
   JSON.stringify({
     out,
