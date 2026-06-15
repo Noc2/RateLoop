@@ -32,6 +32,25 @@ not for the mainnet claim**, and given a severity by design impact. 39 strengths
 > The remaining H1 concern is the small-round binary verdict itself, which still settles
 > by epoch-weighted vote pools before any correlation root is applied.
 
+> Follow-up update (2026-06-15): this addendum was checked against local checkout
+> `2501e9f3` before the document edit. Several blockers from the repo's
+> `docs/repo-audit-2026-06-16.md` file are now resolved in source: deploy-profile
+> contract-size checks pass (`LaunchDistributionPool` 24,458 bytes,
+> `QuestionRewardPoolEscrow` 24,506, `RaterRegistry` 24,487, all below the
+> 24,576-byte EIP-170 cap); Ponder voteability reads now route through
+> `tryContractRead`, so transient RPC failures retry/fail the handler rather than
+> silently persisting indexed defaults; the World Chain readiness selector now probes
+> `recordConfidentialityNexusForRegistry`; the ABI-parity CI job installs workspace
+> deps before `generate-abis-only`; scheduled live readiness is skipped when live RPC
+> env is absent; and discovery serializers use each round's indexed
+> `revealGracePeriod`. `node scripts/check-worldchain-sepolia-readiness.mjs` passes
+> offline. `node scripts/check-worldchain-mainnet-readiness.mjs --production`
+> correctly fails until the first chain `480` production artifact exists.
+> Remaining pre-mainnet work: small-round verdict economics, LREP value circularity,
+> confidentiality evidence anchoring, x402 local/server validation drift, governed
+> full-stack engine-rotation runbook, World ID production live-proof/ABI validation,
+> and fast-tier AI/operator-diversity controls.
+
 > Coverage caveat: the trust-topology reviewer's _weakness_ candidates could not be
 > individually re-verified (the verification stage hit a resource limit), so they are
 > not counted in the 32. Their substance — governance/proxy power over escrows,
@@ -493,6 +512,36 @@ sharpens the collusion analysis:
   (iris scans ~$30, KYC accounts ~$0.50 in 2023); a current rental price for an active
   proof-of-personhood wasn't found (flagged uncertain). Treat World ID as a real but
   rentable scarcity, which is exactly how RateLoop's non-gating design uses it.
+- **2026 agent-commerce standards sharpen the adapter opportunity but not the security
+  claim.** ERC-8004 is still a Draft ERC; its Validation Registry is exactly the
+  socket RateLoop can fill, but the spec explicitly puts validator incentives and
+  slashing outside the registry. A June 10, 2026 ERC-8004 readiness study found
+  registration-heavy but operationally shallow adoption in its 10,000-agent dataset:
+  only 67 agents exposed service records, 628 received reputation feedback, the top
+  10 owners held 51.40% of agents, and the largest feedback client produced 65.82% of
+  feedback. The implication is favorable but narrow: RateLoop should enter as a
+  validation/evidence provider, not assume ERC-8004 reputation is already a broad,
+  decentralized rater marketplace.
+- **ERC-8183 validates the same evaluator slot, but treats the evaluator as trusted.**
+  The draft Agentic Commerce contract fixes one evaluator at job creation; after
+  submission, only that evaluator can `complete` or `reject`, and the Security
+  Considerations section says a malicious evaluator can decide arbitrarily and should
+  be backed by reputation or staking for high-value jobs. A RateLoop adapter fits,
+  but only after the protocol defines an explicit binding-acceptance tier with value
+  caps, counterparty exclusions, and minimum round economics.
+- **World ID v4 is now concrete enough to be an operational launch gate.** World docs
+  list the production and staging World Chain `WorldIDVerifier` proxies and the v4
+  `verify` ABI that RateLoop's `IWorldIDVerifier` mirrors. The same docs recommend
+  upgradeable verification logic for integrations because World ID versions change.
+  RateLoop's current canary runbook correctly treats the production verifier ABI and
+  live proof path as a pre-launch gate, not a deploy-time address swap.
+- **Fresh agent-security research reinforces the prompt-injection caveat for AI
+  raters.** A June 2026 agentic prompt-injection study finds automated indirect
+  injections remain a credible, model-dependent threat for agents operating on
+  untrusted external data; the April 2026 agentic-commerce SoK frames these failures
+  as cross-layer risks that can propagate into custody and settlement. This supports
+  the existing "advisory until scoped carve-out" posture for AI fast rounds and raises
+  the priority of prompt-injection red-teaming before any binding acceptance product.
 
 **Net:** the cryptographic layer is sound and the RBTS + capped-stake + proof-of-personhood
 stack is thoughtful and literature-aware. The four under-defended seams the evidence
@@ -552,33 +601,72 @@ stake-weighting, voter apathy, and credential rental all erode.
    **append-only and anchored** before any mainnet gated-content marketing — without it,
    no slash dispute is defensible.
 
+**Operational launch gates for the first World Chain mainnet deployment:**
+
+5. **Freeze a public deployment evidence bundle before production traffic.** Include the
+   exact commit, Foundry profile, compiler/optimizer config, ABIs, storage-layout
+   snapshots, contract-size output, deployment artifact profile, chain `480` start
+   blocks, World ID verifier address and ABI/proof smoke test, Ponder schema/start
+   state, keeper config hash, oracle artifact base URL, and the canary-to-production
+   reset checklist. This is cheap now and makes the first incident or external review
+   dramatically less ambiguous.
+6. **Keep EIP-170 margins release-blocking.** The latest check passes, but the tightest
+   contracts have only double-digit to low-triple-byte headroom (`QuestionRewardPoolEscrow`
+   70 bytes, `RaterRegistry` 89, `LaunchDistributionPool` 118). Treat any mainnet-bound
+   code change that moves those numbers as a deploy blocker until `make check-contract-sizes`
+   is green under the deploy profile.
+7. **Run a real World ID v4 production proof before public launch.** The canary runbook's
+   ABI warning should become a hard launch checklist item: verify the exact production
+   proxy, selector, argument order, proof array shape, nullifier behavior, issuer schema,
+   RP id, action hash, and expiry fields against the deployed `RaterRegistry` path. If
+   any of those differ, redeploy before real users earn credentials.
+8. **Unify x402 / local-agent validation before agent-channel acquisition.** The server
+   and local signer still differ on gated `detailsUrl` and several validation/moderation
+   checks. That is not a contract-loss issue, but it is a launch trust issue for agents:
+   an agent should not be able to locally sign a question that the server later rejects
+   or hashes differently. Promote one canonical normalization/validation module before
+   listing the agent/x402 path as production-grade.
+9. **Document and guard full-stack engine rotation.** Governance can mis-run a partial
+   engine migration because escrows and some registries pin or clear related pointers.
+   Before mainnet, ship a governance runbook and, ideally, composer checks that treat
+   voting-engine replacement as an ordered stack migration rather than a single setter.
+10. **Keep agent-acceptance / AI fast-tier copy advisory until the missing controls exist.**
+    ERC-8004/8183 are attractive sockets, but recent evidence says those ecosystems are
+    early and evaluator trust is explicit. Binding acceptance should wait for an explicit
+    question class with value caps, 8+ decision-grade economics, counterparty/operator
+    exclusions, AI/mixed eligibility masks, model/operator diversity attestations, and
+    published AI-vs-human plus prompt-injection calibration data.
+
 **Strongly recommended:**
 
-5. **Done:** use a **leave-one-out mean** in the RBTS payment benchmark. This fixes the
+11. **Done:** use a **leave-one-out mean** in the RBTS payment benchmark. This fixes the
    whale self-benchmark issue; the separate non-affine payoff-shape caveat remains.
-6. Reprice or rate-limit the **tlock garbage-ciphertext grief** (scale the grace-triggering
+12. Reprice or rate-limit the **tlock garbage-ciphertext grief** (scale the grace-triggering
    stake, or forfeit even on reveal-failed when the round otherwise had quorum) so a thin
    content can't be stalled 24h for ~free.
-7. Add a **reporter bond** to breach filing and **bind `evidenceHash`** to a published,
+13. Add a **reporter bond** to breach filing and **bind `evidenceHash`** to a published,
    precommitted artifact.
-8. Replace the imperative multi-mapping identity state with an **explicit lifecycle-state or
+14. Replace the imperative multi-mapping identity state with an **explicit lifecycle-state or
    append-only history** model, given it has needed repeated emergency repair.
-9. Fund **third-party keeper/challenger incentives** for rounds outside the operator's own
+15. Fund **third-party keeper/challenger incentives** for rounds outside the operator's own
    frontend, or state plainly that operator liveness is a trusted service.
 
 **Worth doing, lower urgency:** per-question/per-category surprise priors; value-proportional
-or fee-funded frontend bonds; the SDK disclosure default flip; AI-only eligibility mask;
+or fee-funded frontend bonds; SDK/API disclosure-default parity checks; AI-only eligibility mask;
 documenting the no-decay rating's drift limitation and the small-round "feedback signal"
 property in user-facing copy.
 
 ## Sources
 
-Repo: file:line references throughout at HEAD `3d58264b` (RoundVotingEngine, RoundRevealLib,
+Repo: file:line references throughout at reviewed HEAD `3d58264b`, with the
+2026-06-15 addendum re-checked against local checkout `2501e9f3` before this doc edit
+(RoundVotingEngine, RoundRevealLib,
 RobustBtsMath, RewardMath, TlockVoteLib, RatingMath, VotePreflightLib, QuestionRewardPoolEscrow\*,
 ConfidentialityEscrow, RaterRegistry, ClusterPayoutOracle, FrontendRegistry, LaunchDistributionPool,
 RateLoopGovernor, ProtocolConfig, Deploy.s.sol; public docs `how-it-works.md`, `ai.md`, `sdk.md`,
 whitepaper `sections.ts`; internal `private-context-plan-2026-06.md`, `use-cases-2026-06.md`,
-`agent-to-agent-acceptance-oracle-2026-06.md`).
+`agent-to-agent-acceptance-oracle-2026-06.md`, `mainnet-canary-deployment.md`,
+`repo-audit-2026-06-15.md`, `repo-audit-2026-06-16.md`).
 
 External (selected): Witkowski & Parkes, _A Robust BTS for Small Populations_ (AAAI 2012);
 Radanovic & Faltings, _RBTS for Non-Binary Signals_ (AAAI 2013); Gao, Wright & Leyton-Brown,
@@ -589,5 +677,10 @@ Austgen et al. (arXiv 2311.03530); UMA/Polymarket March-2025 governance-attack r
 UMIP-189; Augur v2 (arXiv 1501.01042); Kleros p+ε analyses; MTurk quality-crisis literature;
 Worldcoin black-market reporting (CoinDesk/Gizmodo/The Block 2023); Verga et al. _Replacing
 Judges with Juries_ (arXiv 2404.18796); Wu, Hashimoto et al. _Correlated Errors in LLMs_
-(arXiv 2506.07962); Lu et al. (arXiv 2405.15077); Qiu, Carroll & Allen (arXiv 2601.20299).
+(arXiv 2506.07962); Lu et al. (arXiv 2405.15077); Qiu, Carroll & Allen (arXiv 2601.20299);
+ERC-8004 and ERC-8183 drafts (eips.ethereum.org); Mafrur & Khusumanegara, _From Agent
+Identity to Agent Economy_ (arXiv 2606.12128); Mao et al., _SoK: Security of Autonomous
+LLM Agents in Agentic Commerce_ (arXiv 2604.15367); Hofer, Debenedetti & Tramer,
+_Assessing Automated Prompt Injection Attacks in Agentic Environments_ (arXiv 2606.10525);
+World ID docs for v4 on-chain verification and World Chain verifier proxies (docs.world.org).
 Scale/rental figures carry uncertainty flags in the underlying research.
