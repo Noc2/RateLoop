@@ -54,7 +54,7 @@ function baseAgentQuestionRequest(clientRequestId: string, title: string): Agent
       bountyWindowSeconds: "1200",
       feedbackWindowSeconds: "1200",
     },
-    chainId: 4801,
+    chainId: 31337,
     clientRequestId,
     maxPaymentAmount: "1000000",
     paymentMode: "wallet_calls",
