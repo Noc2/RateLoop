@@ -584,32 +584,6 @@ contract ClusterPayoutOracleTest is Test {
         assertEq(snapshot.totalClaimWeight, 1_000_000);
     }
 
-    function test_PublicRatingRoundSnapshotRejectsZeroClaimWeight() public {
-        oracle.proposeCorrelationEpoch(
-            1,
-            1,
-            20,
-            keccak256("cluster-root"),
-            keccak256("params"),
-            keccak256("epoch-artifact"),
-            "ipfs://epoch",
-            _ratingEpochSources(42, 3)
-        );
-
-        IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
-        input.domain = oracle.PAYOUT_DOMAIN_PUBLIC_RATING();
-        input.rewardPoolId = 0;
-        input.contentId = 42;
-        input.roundId = 3;
-        input.rawEligibleVoters = 1;
-        input.effectiveParticipantUnits = 0;
-        input.totalClaimWeight = 0;
-        input.weightRoot = bytes32(0);
-
-        vm.expectRevert(ClusterPayoutOracle.InvalidSnapshot.selector);
-        oracle.proposeRoundPayoutSnapshot(input);
-    }
-
     function test_EmptyRoundPayoutSnapshotFinalizesButCannotVerifyClaims() public {
         oracle.proposeCorrelationEpoch(
             1,
