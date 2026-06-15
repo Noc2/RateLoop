@@ -3,6 +3,11 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
+import {
+  type TargetAudience,
+  getProfileSelfReportTaxonomy,
+  normalizeTargetAudience,
+} from "@rateloop/node-utils/profileSelfReport";
 import { type Address, type Hex, isAddress } from "viem";
 import { useAccount, useConfig } from "wagmi";
 import { getPublicClient, sendTransaction, waitForTransactionReceipt } from "wagmi/actions";
@@ -10,6 +15,7 @@ import {
   ArrowPathIcon,
   ChatBubbleLeftRightIcon,
   CheckCircleIcon,
+  ChevronDownIcon,
   ClockIcon,
   ExclamationTriangleIcon,
   LockClosedIcon,
@@ -148,6 +154,7 @@ type QuestionSummary = {
   detailsUrl: string;
   imageUrls: string[];
   tags: string[];
+  targetAudience: QuestionTargetAudienceDraft;
   templateId: string;
   title: string;
   videoUrl: string;
@@ -160,6 +167,9 @@ type RoundSettings = {
   minVoters: bigint;
 };
 
+type TargetAudienceDraftField = "ageGroups" | "countries" | "expertise" | "languages" | "nationalities" | "roles";
+type QuestionTargetAudienceDraft = Record<TargetAudienceDraftField, string[]>;
+
 type DraftQuestionForm = {
   categoryId: string;
   confidentiality: DraftConfidentiality;
@@ -169,6 +179,7 @@ type DraftQuestionForm = {
   detailsUrl: string;
   imageUrls: string[];
   tags: string;
+  targetAudience: QuestionTargetAudienceDraft;
   templateId: string;
   title: string;
   videoUrl: string;
@@ -234,6 +245,18 @@ const DEFAULT_DRAFT_CONFIDENTIALITY: DraftConfidentiality = {
   disclosurePolicy: PRIVATE_FOREVER_DISCLOSURE_POLICY,
   visibility: "public",
 };
+const TARGET_AUDIENCE_TAXONOMY = getProfileSelfReportTaxonomy().targetAudience;
+const COUNTRY_CODE_PATTERN = /^[A-Z]{2}$/;
+const TARGET_AUDIENCE_CHIP_GROUPS: Array<{
+  field: Extract<TargetAudienceDraftField, "ageGroups" | "expertise" | "languages" | "roles">;
+  label: string;
+  options: readonly string[];
+}> = [
+  { field: "roles", label: "Roles", options: TARGET_AUDIENCE_TAXONOMY.roles },
+  { field: "languages", label: "Languages", options: TARGET_AUDIENCE_TAXONOMY.languages },
+  { field: "expertise", label: "Expertise", options: TARGET_AUDIENCE_TAXONOMY.expertise },
+  { field: "ageGroups", label: "Age", options: TARGET_AUDIENCE_TAXONOMY.ageGroups },
+];
 
 type QuestionDetailsReference = {
   detailsHash: Hex;
@@ -290,6 +313,315 @@ function PrivateContextToggleControl({
           disabled={disabled}
           onChange={event => onChange(event.target.checked)}
         />
+      </div>
+    </div>
+  );
+}
+
+function AudienceChipGroup({
+  disabled,
+  label,
+  onToggle,
+  options,
+  selected,
+}: {
+  disabled?: boolean;
+  label: string;
+  onToggle: (value: string) => void;
+  options: readonly string[];
+  selected: readonly string[];
+}) {
+  return (
+    <div>
+      <p className="mb-2 text-sm font-medium text-base-content/60">{label}</p>
+      <div className="flex flex-wrap gap-2">
+        {options.map(option => {
+          const isSelected = selected.includes(option);
+          return (
+            <button
+              key={option}
+              type="button"
+              aria-pressed={isSelected}
+              disabled={disabled}
+              onClick={() => onToggle(option)}
+              className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+                isSelected ? "pill-active" : "pill-inactive"
+              } ${disabled ? "cursor-not-allowed opacity-60" : ""}`}
+            >
+              {formatAudienceOptionLabel(option)}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function AudienceCountryCodeInput({
+  disabled,
+  error,
+  inputValue,
+  label,
+  onAdd,
+  onInputChange,
+  onRemove,
+  selected,
+}: {
+  disabled?: boolean;
+  error: string | null;
+  inputValue: string;
+  label: string;
+  onAdd: () => void;
+  onInputChange: (value: string) => void;
+  onRemove: (value: string) => void;
+  selected: readonly string[];
+}) {
+  return (
+    <div>
+      <p className="mb-2 text-sm font-medium text-base-content/60">{label}</p>
+      <div className="flex gap-2">
+        <input
+          type="text"
+          inputMode="text"
+          autoCapitalize="characters"
+          placeholder="DE"
+          value={inputValue}
+          onChange={event => onInputChange(event.target.value)}
+          onKeyDown={event => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              onAdd();
+            }
+          }}
+          maxLength={2}
+          disabled={disabled}
+          className={`input input-bordered input-sm w-24 bg-base-100 uppercase ${error ? "input-error" : ""}`}
+        />
+        <button type="button" onClick={onAdd} disabled={disabled} className="btn btn-outline btn-sm">
+          Add
+        </button>
+      </div>
+      {error ? <p className="mt-1 text-sm text-error">{error}</p> : null}
+      {selected.length > 0 ? (
+        <div className="mt-2 flex flex-wrap gap-2">
+          {selected.map(value => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => onRemove(value)}
+              disabled={disabled}
+              className={`pill-active flex items-center gap-1 rounded-full px-3 py-1.5 text-sm font-medium ${
+                disabled ? "cursor-not-allowed opacity-60" : ""
+              }`}
+            >
+              {value}
+              <span className="opacity-70">x</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function AdvancedQuestionSettingsControl({
+  contextUrl,
+  disabled,
+  hasImageContext,
+  isPrivateContext,
+  onContextUrlChange,
+  onTargetAudienceChange,
+  onVideoUrlChange,
+  questionIndex,
+  targetAudience,
+  videoUrl,
+}: {
+  contextUrl: string;
+  disabled?: boolean;
+  hasImageContext: boolean;
+  isPrivateContext: boolean;
+  onContextUrlChange: (value: string) => void;
+  onTargetAudienceChange: (value: QuestionTargetAudienceDraft) => void;
+  onVideoUrlChange: (value: string) => void;
+  questionIndex: number;
+  targetAudience: QuestionTargetAudienceDraft;
+  videoUrl: string;
+}) {
+  const selectedCount = countTargetAudienceValues(targetAudience);
+  const canUseVideoUrl = !hasImageContext;
+  const [isOpen, setIsOpen] = useState(() =>
+    Boolean(selectedCount || contextUrl.trim() || (canUseVideoUrl && videoUrl.trim())),
+  );
+  const [countryInput, setCountryInput] = useState("");
+  const [countryError, setCountryError] = useState<string | null>(null);
+  const [nationalityInput, setNationalityInput] = useState("");
+  const [nationalityError, setNationalityError] = useState<string | null>(null);
+  const settingsId = `agent-ask-advanced-question-settings-${questionIndex}`;
+
+  useEffect(() => {
+    if (selectedCount > 0) setIsOpen(true);
+  }, [selectedCount]);
+
+  useEffect(() => {
+    if (hasImageContext && videoUrl) onVideoUrlChange("");
+  }, [hasImageContext, onVideoUrlChange, videoUrl]);
+
+  const updateTargetAudienceDraft = (
+    updater: (current: QuestionTargetAudienceDraft) => QuestionTargetAudienceDraft,
+  ) => {
+    onTargetAudienceChange(updater(cloneTargetAudienceDraft(targetAudience)));
+  };
+
+  const handleTargetAudienceToggle = (field: TargetAudienceDraftField, value: string) => {
+    updateTargetAudienceDraft(current => {
+      const selectedValues = current[field];
+      const nextValues = selectedValues.includes(value)
+        ? selectedValues.filter(item => item !== value)
+        : [...selectedValues, value];
+      return { ...current, [field]: nextValues };
+    });
+  };
+
+  const handleTargetAudienceCodeAdd = (field: Extract<TargetAudienceDraftField, "countries" | "nationalities">) => {
+    const rawValue = field === "countries" ? countryInput : nationalityInput;
+    const normalized = normalizeAudienceCountryCodeInput(rawValue);
+    if (!normalized) {
+      const setError = field === "countries" ? setCountryError : setNationalityError;
+      setError("Use a two-letter country code.");
+      return;
+    }
+
+    updateTargetAudienceDraft(current => {
+      if (current[field].includes(normalized)) return current;
+      return { ...current, [field]: [...current[field], normalized] };
+    });
+    if (field === "countries") {
+      setCountryInput("");
+      setCountryError(null);
+    } else {
+      setNationalityInput("");
+      setNationalityError(null);
+    }
+  };
+
+  return (
+    <div className="mt-4 border-t border-base-300 pt-4">
+      <div className="surface-card-nested rounded-lg p-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              aria-expanded={isOpen}
+              aria-controls={settingsId}
+              onClick={() => setIsOpen(current => !current)}
+              className="inline-flex items-center gap-2 text-left text-base font-medium text-base-content transition-colors hover:text-base-content/80"
+            >
+              <ChevronDownIcon
+                className={`h-4 w-4 shrink-0 transition-transform ${isOpen ? "rotate-180" : ""}`}
+                aria-hidden="true"
+              />
+              <span>
+                Advanced question settings <span className="font-normal text-base-content/60">(optional)</span>
+              </span>
+            </button>
+            <InfoTooltip text="Optional public context source and structured self-report criteria for targeted bounty eligibility." />
+          </div>
+          {selectedCount > 0 ? (
+            <button
+              type="button"
+              onClick={() => {
+                onTargetAudienceChange(createEmptyTargetAudienceDraft());
+                setCountryInput("");
+                setCountryError(null);
+                setNationalityInput("");
+                setNationalityError(null);
+              }}
+              disabled={disabled}
+              className="btn btn-ghost btn-sm"
+            >
+              Clear
+            </button>
+          ) : null}
+        </div>
+
+        {isOpen ? (
+          <div id={settingsId} className="mt-4 space-y-4">
+            <label className="form-control">
+              <span className="label-text flex items-center gap-1.5 text-sm font-medium text-base-content">
+                Context Source <span className="font-normal text-base-content/60">(optional with media)</span>
+                <InfoTooltip text="Use a public website as the source voters should judge." />
+              </span>
+              <input
+                className="input input-bordered mt-1 w-full bg-base-100"
+                disabled={disabled || isPrivateContext}
+                placeholder={
+                  isPrivateContext
+                    ? "Private context uses hosted images/details only"
+                    : "Paste a source link, or add media context below"
+                }
+                type="url"
+                value={contextUrl}
+                onChange={event => onContextUrlChange(event.target.value)}
+              />
+            </label>
+
+            {canUseVideoUrl ? (
+              <label className="form-control">
+                <span className="label-text text-sm font-medium text-base-content">
+                  Video URL <span className="font-normal text-base-content/60">(optional)</span>
+                </span>
+                <input
+                  className="input input-bordered mt-1 w-full bg-base-100"
+                  disabled={disabled || isPrivateContext}
+                  placeholder={isPrivateContext ? "Disabled for private context" : "Paste a YouTube URL"}
+                  type="url"
+                  value={videoUrl}
+                  onChange={event => onVideoUrlChange(event.target.value)}
+                />
+              </label>
+            ) : null}
+
+            {TARGET_AUDIENCE_CHIP_GROUPS.map(group => (
+              <AudienceChipGroup
+                key={group.field}
+                disabled={disabled}
+                label={group.label}
+                options={group.options}
+                selected={targetAudience[group.field]}
+                onToggle={value => handleTargetAudienceToggle(group.field, value)}
+              />
+            ))}
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <AudienceCountryCodeInput
+                disabled={disabled}
+                label="Residence country"
+                inputValue={countryInput}
+                error={countryError}
+                selected={targetAudience.countries}
+                onInputChange={value => {
+                  setCountryInput(value.toUpperCase());
+                  setCountryError(null);
+                }}
+                onAdd={() => handleTargetAudienceCodeAdd("countries")}
+                onRemove={value => handleTargetAudienceToggle("countries", value)}
+              />
+              <AudienceCountryCodeInput
+                disabled={disabled}
+                label="Nationality"
+                inputValue={nationalityInput}
+                error={nationalityError}
+                selected={targetAudience.nationalities}
+                onInputChange={value => {
+                  setNationalityInput(value.toUpperCase());
+                  setNationalityError(null);
+                }}
+                onAdd={() => handleTargetAudienceCodeAdd("nationalities")}
+                onRemove={value => handleTargetAudienceToggle("nationalities", value)}
+              />
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -371,6 +703,74 @@ function readQuestionTags(value: unknown) {
 
 function readStringArray(value: unknown) {
   return Array.isArray(value) ? value.map(entry => readString(entry)).filter(Boolean) : [];
+}
+
+function createEmptyTargetAudienceDraft(): QuestionTargetAudienceDraft {
+  return {
+    ageGroups: [],
+    countries: [],
+    expertise: [],
+    languages: [],
+    nationalities: [],
+    roles: [],
+  };
+}
+
+function cloneTargetAudienceDraft(draft: QuestionTargetAudienceDraft): QuestionTargetAudienceDraft {
+  return {
+    ageGroups: [...draft.ageGroups],
+    countries: [...draft.countries],
+    expertise: [...draft.expertise],
+    languages: [...draft.languages],
+    nationalities: [...draft.nationalities],
+    roles: [...draft.roles],
+  };
+}
+
+function targetAudienceDraftToMetadata(draft: QuestionTargetAudienceDraft): TargetAudience | null {
+  return normalizeTargetAudience({
+    ageGroups: draft.ageGroups,
+    countries: draft.countries,
+    expertise: draft.expertise,
+    languages: draft.languages,
+    nationalities: draft.nationalities,
+    roles: draft.roles,
+  });
+}
+
+function readTargetAudienceDraft(value: unknown): QuestionTargetAudienceDraft {
+  let targetAudience: TargetAudience | null = null;
+  try {
+    targetAudience = normalizeTargetAudience(value);
+  } catch {
+    targetAudience = null;
+  }
+
+  return {
+    ageGroups: [...(targetAudience?.ageGroups ?? [])],
+    countries: [...(targetAudience?.countries ?? [])],
+    expertise: [...(targetAudience?.expertise ?? [])],
+    languages: [...(targetAudience?.languages ?? [])],
+    nationalities: [...(targetAudience?.nationalities ?? [])],
+    roles: [...(targetAudience?.roles ?? [])],
+  };
+}
+
+function countTargetAudienceValues(draft: QuestionTargetAudienceDraft) {
+  return Object.values(draft).reduce((total, values) => total + values.length, 0);
+}
+
+function formatAudienceOptionLabel(value: string) {
+  if (/^[a-z]{2,3}$/i.test(value)) return value.toUpperCase();
+  return value
+    .split("-")
+    .map(part => part.slice(0, 1).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function normalizeAudienceCountryCodeInput(value: string) {
+  const normalized = value.trim().toUpperCase();
+  return COUNTRY_CODE_PATTERN.test(normalized) ? normalized : null;
 }
 
 function cloneDraftConfidentiality(value: DraftConfidentiality): DraftConfidentiality {
@@ -583,6 +983,7 @@ function readQuestionSummaries(handoff: Handoff | null): QuestionSummary[] {
     detailsUrl: readString(question.detailsUrl),
     imageUrls: readStringArray(question.imageUrls),
     tags: readQuestionTags(question.tags),
+    targetAudience: readTargetAudienceDraft(question.targetAudience),
     templateId: readString(question.templateId),
     title: readString(question.title) || `Question ${index + 1}`,
     videoUrl: readString(question.videoUrl),
@@ -709,6 +1110,7 @@ function createDraftForm(handoff: Handoff): DraftForm {
           detailsUrl: question.detailsUrl,
           imageUrls: question.imageUrls,
           tags: question.tags.join(", "),
+          targetAudience: cloneTargetAudienceDraft(question.targetAudience),
           templateId: question.templateId,
           title: question.title,
           videoUrl: question.confidentiality.visibility === "gated" ? "" : question.videoUrl,
@@ -723,6 +1125,7 @@ function createDraftForm(handoff: Handoff): DraftForm {
             detailsUrl: "",
             imageUrls: [],
             tags: "",
+            targetAudience: createEmptyTargetAudienceDraft(),
             templateId: "",
             title: readQuestionTitle(handoff),
             videoUrl: "",
@@ -905,6 +1308,12 @@ async function applyDraftQuestion(
     nextQuestion.templateId = templateId;
   } else {
     delete nextQuestion.templateId;
+  }
+  const targetAudience = targetAudienceDraftToMetadata(draft.targetAudience);
+  if (targetAudience) {
+    nextQuestion.targetAudience = targetAudience;
+  } else {
+    delete nextQuestion.targetAudience;
   }
 
   const description = readNormalizedDraftDescription(draft.description);
@@ -2185,7 +2594,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
 
                     return (
                       <div
-                        key={`${index}-${question.title}`}
+                        key={`agent-ask-question-${index}`}
                         className={hasQuestionBundle ? "rounded-lg border border-base-content/10 p-4" : ""}
                       >
                         <label className="form-control">
@@ -2255,42 +2664,18 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                           />
                         </label>
 
-                        <div className={`mt-4 grid gap-3 ${questionHasImageContext ? "" : "sm:grid-cols-2"}`}>
-                          <label className="form-control">
-                            <span className="label-text text-xs font-semibold uppercase tracking-wide text-base-content/45">
-                              Context URL
-                            </span>
-                            <input
-                              className="input input-bordered mt-1 w-full"
-                              disabled={!canEditDraft || question.confidentiality.visibility === "gated"}
-                              placeholder={
-                                question.confidentiality.visibility === "gated"
-                                  ? "Private context uses hosted images/details only"
-                                  : undefined
-                              }
-                              value={question.contextUrl}
-                              onChange={event => updateDraftQuestion(index, { contextUrl: event.target.value })}
-                            />
-                          </label>
-                          {!questionHasImageContext ? (
-                            <label className="form-control">
-                              <span className="label-text text-xs font-semibold uppercase tracking-wide text-base-content/45">
-                                Video URL
-                              </span>
-                              <input
-                                className="input input-bordered mt-1 w-full"
-                                disabled={!canEditDraft || question.confidentiality.visibility === "gated"}
-                                placeholder={
-                                  question.confidentiality.visibility === "gated"
-                                    ? "Disabled for private context"
-                                    : undefined
-                                }
-                                value={question.videoUrl}
-                                onChange={event => updateDraftQuestion(index, { videoUrl: event.target.value })}
-                              />
-                            </label>
-                          ) : null}
-                        </div>
+                        <AdvancedQuestionSettingsControl
+                          contextUrl={question.contextUrl}
+                          disabled={!canEditDraft}
+                          hasImageContext={questionHasImageContext}
+                          isPrivateContext={question.confidentiality.visibility === "gated"}
+                          questionIndex={index}
+                          targetAudience={question.targetAudience}
+                          videoUrl={question.videoUrl}
+                          onContextUrlChange={contextUrl => updateDraftQuestion(index, { contextUrl })}
+                          onTargetAudienceChange={targetAudience => updateDraftQuestion(index, { targetAudience })}
+                          onVideoUrlChange={videoUrl => updateDraftQuestion(index, { videoUrl })}
+                        />
                       </div>
                     );
                   })
