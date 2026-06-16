@@ -220,7 +220,11 @@ export function getThirdwebServerVerifierSecret(): string | undefined {
 }
 
 export function getX402UsdcAddressOverride(): `0x${string}` | undefined {
-  const value = readEnv("RATELOOP_X402_USDC_ADDRESS");
+  const publicUsdc = readEnv("NEXT_PUBLIC_USDC_ADDRESS")?.trim().toLowerCase();
+  const value = readEnv("RATELOOP_X402_USDC_ADDRESS")?.trim();
+  if (publicUsdc && value?.startsWith("0x") && publicUsdc !== value.toLowerCase()) {
+    throw new Error("NEXT_PUBLIC_USDC_ADDRESS and RATELOOP_X402_USDC_ADDRESS must match when both are set.");
+  }
   return value?.startsWith("0x") ? (value as `0x${string}`) : undefined;
 }
 
