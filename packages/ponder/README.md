@@ -121,11 +121,13 @@ Routes `/health` and `/status` are reserved by Ponder.
 **Local chain rewind / reset:** `yarn ponder:dev` now auto-recovers once if the local hardhat/anvil chain was reset and the persisted Ponder checkpoint points at a block that no longer exists. It clears `packages/ponder/.ponder/pglite` and retries automatically.
 
 **Production schema collision:** If Railway logs `Schema '<name>' was previously used by a different
-Ponder app`, make sure the service is running this package's `yarn ponder:start` command and remove
-any static `RATELOOP_PONDER_DATABASE_SCHEMA` override, such as `rateloop_ponder_worldchain_canary`,
-so the launcher can choose a Railway deployment-scoped schema. For non-Railway deployments without
-shared deployment artifacts, set `RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY` or
-`RATELOOP_PONDER_DATABASE_SCHEMA` to a fresh value.
+Ponder app`, make sure the service uses `yarn start` (via `packages/ponder/railway.toml` or
+`yarn ponder:start`) so the launcher injects a deployment-scoped schema. When
+`RAILWAY_DEPLOYMENT_ID` is set, the launcher automatically ignores deprecated static overrides such
+as `rateloop_ponder_worldchain_canary` and uses `railway_<deployment_id>` instead. Remove that
+static value from Railway env vars so future deploys stay on the deployment-scoped schema. For
+non-Railway deployments without shared deployment artifacts, set
+`RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY` or `RATELOOP_PONDER_DATABASE_SCHEMA` to a fresh value.
 Only drop the old schema if you are certain it contains no data you need.
 
 **PGlite corruption or unrecoverable local state:** If Ponder still crashes or behaves unexpectedly after the retry, clear the local state manually:

@@ -133,6 +133,13 @@ export function startPonder({
       `[ponder:start] Ignoring DATABASE_SCHEMA=ponder to avoid colliding with legacy Ponder app metadata; using ${schemaInfo.schema}.`,
     );
     console.warn("[ponder:start] Set RATELOOP_PONDER_DATABASE_SCHEMA to choose a different Ponder schema.");
+  } else if (schemaInfo?.ignoredDeprecatedStaticSchema) {
+    console.warn(
+      `[ponder:start] Ignoring deprecated static Ponder schema override on Railway; using deployment-scoped schema ${schemaInfo.schema}.`,
+    );
+    console.warn(
+      "[ponder:start] Remove RATELOOP_PONDER_DATABASE_SCHEMA=rateloop_ponder_worldchain_canary (or DATABASE_SCHEMA with the same value) from Railway env vars.",
+    );
   } else if (schemaInfo?.source === "RAILWAY_DEPLOYMENT_ID") {
     console.warn(
       `[ponder:start] Using Railway deployment-scoped Ponder schema ${schemaInfo.schema}.`,

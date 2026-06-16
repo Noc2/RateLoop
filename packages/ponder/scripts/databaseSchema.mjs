@@ -8,6 +8,8 @@ const SCHEMA_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const MAX_PONDER_DATABASE_SCHEMA_LENGTH = 45;
 const RAILWAY_DATABASE_SCHEMA_PREFIX = "railway_";
 const PROTOCOL_DEPLOYMENT_DATABASE_SCHEMA_PREFIX = "rateloop_deployment_";
+/** Shared static schemas that collide with Ponder app identity after upgrades. */
+const DEPRECATED_STATIC_RAILWAY_SCHEMAS = new Set(["rateloop_ponder_worldchain_canary"]);
 const DEFAULT_PONDER_DATABASE_SCHEMA_BY_NETWORK = {
   hardhat: "rateloop_ponder_hardhat",
   worldchainSepolia: "rateloop_ponder_worldchain_sepolia",
@@ -103,6 +105,10 @@ export function schemaFromRailwayDeploymentId(deploymentId) {
   return `${RAILWAY_DATABASE_SCHEMA_PREFIX}${shortenedSlug || "deployment"}_${hash}`;
 }
 
+function isDeprecatedStaticRailwaySchema(schema) {
+  return schema !== undefined && DEPRECATED_STATIC_RAILWAY_SCHEMAS.has(schema);
+}
+
 export function resolvePonderDatabaseSchema(env = process.env) {
   const rateloopSchema = readEnv(env, "RATELOOP_PONDER_DATABASE_SCHEMA");
   const databaseSchema = readEnv(env, "DATABASE_SCHEMA");
@@ -110,11 +116,18 @@ export function resolvePonderDatabaseSchema(env = process.env) {
   const protocolDeploymentSchema = schemaFromProtocolDeploymentKey(protocolDeploymentKey);
   const railwaySchema = schemaFromRailwayDeploymentId(readEnv(env, "RAILWAY_DEPLOYMENT_ID"));
   const defaultSchema = resolveDefaultPonderDatabaseSchema(env);
+  const ignoredDeprecatedStaticSchema =
+    railwaySchema !== undefined &&
+    (isDeprecatedStaticRailwaySchema(rateloopSchema) || isDeprecatedStaticRailwaySchema(databaseSchema));
+  const effectiveRateloopSchema =
+    railwaySchema && isDeprecatedStaticRailwaySchema(rateloopSchema) ? undefined : rateloopSchema;
+  const effectiveDatabaseSchema =
+    railwaySchema && isDeprecatedStaticRailwaySchema(databaseSchema) ? undefined : databaseSchema;
   const isLegacyDatabaseSchema =
-    rateloopSchema === undefined && databaseSchema === LEGACY_PONDER_DATABASE_SCHEMA;
+    effectiveRateloopSchema === undefined && effectiveDatabaseSchema === LEGACY_PONDER_DATABASE_SCHEMA;
   const schema =
-    rateloopSchema ??
-    (isLegacyDatabaseSchema ? undefined : databaseSchema) ??
+    effectiveRateloopSchema ??
+    (isLegacyDatabaseSchema ? undefined : effectiveDatabaseSchema) ??
     railwaySchema ??
     protocolDeploymentSchema ??
     defaultSchema;
@@ -128,9 +141,9 @@ export function resolvePonderDatabaseSchema(env = process.env) {
   return {
     schema,
     source:
-      rateloopSchema !== undefined
+      effectiveRateloopSchema !== undefined
         ? "RATELOOP_PONDER_DATABASE_SCHEMA"
-        : databaseSchema !== undefined && !isLegacyDatabaseSchema
+        : effectiveDatabaseSchema !== undefined && !isLegacyDatabaseSchema
           ? "DATABASE_SCHEMA"
           : railwaySchema !== undefined
             ? "RAILWAY_DEPLOYMENT_ID"
@@ -138,6 +151,7 @@ export function resolvePonderDatabaseSchema(env = process.env) {
               ? "RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY"
               : "default",
     ignoredLegacyDatabaseSchema: isLegacyDatabaseSchema,
+    ignoredDeprecatedStaticSchema,
   };
 }
 

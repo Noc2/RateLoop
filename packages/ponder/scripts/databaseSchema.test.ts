@@ -109,6 +109,28 @@ describe("Ponder database schema launcher", () => {
     expect(result.ignoredLegacyDatabaseSchema).toBe(false);
   });
 
+  test("ignores deprecated static canary schemas on Railway deployments", () => {
+    const result = resolvePonderDatabaseSchema({
+      RATELOOP_PONDER_DATABASE_SCHEMA: "rateloop_ponder_worldchain_canary",
+      RAILWAY_DEPLOYMENT_ID: "123e4567-e89b-12d3-a456-426614174000",
+    });
+
+    expect(result.schema).toBe("railway_123e4567_e89b_12d3_a456_426614174000");
+    expect(result.source).toBe("RAILWAY_DEPLOYMENT_ID");
+    expect(result.ignoredDeprecatedStaticSchema).toBe(true);
+  });
+
+  test("ignores deprecated static canary DATABASE_SCHEMA on Railway deployments", () => {
+    const result = resolvePonderDatabaseSchema({
+      DATABASE_SCHEMA: "rateloop_ponder_worldchain_canary",
+      RAILWAY_DEPLOYMENT_ID: "123e4567-e89b-12d3-a456-426614174000",
+    });
+
+    expect(result.schema).toBe("railway_123e4567_e89b_12d3_a456_426614174000");
+    expect(result.source).toBe("RAILWAY_DEPLOYMENT_ID");
+    expect(result.ignoredDeprecatedStaticSchema).toBe(true);
+  });
+
   test("rejects schema names that are unsafe to pass to Ponder", () => {
     expect(() => resolvePonderDatabaseSchema({ DATABASE_SCHEMA: "rate-loop" })).toThrow(
       "Invalid Ponder database schema",
