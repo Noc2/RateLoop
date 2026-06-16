@@ -22,6 +22,9 @@ export interface RateLoopOpenRoundSummary {
   settledRounds?: number;
   lowSince?: string;
   startTime: string | null;
+  hasHumanVerifiedCommit?: boolean;
+  humanVerifiedCommitCount?: number;
+  humanVerifiedCommitQuorumMet?: boolean;
   estimatedSettlementTime: string | null;
   [key: string]: unknown;
 }
@@ -101,6 +104,9 @@ export interface RateLoopRoundItem {
   url: string | null;
   submitter: `0x${string}` | null;
   categoryId: string | null;
+  hasHumanVerifiedCommit?: boolean;
+  humanVerifiedCommitCount?: number;
+  humanVerifiedCommitQuorumMet?: boolean;
   [key: string]: unknown;
 }
 

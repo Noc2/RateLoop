@@ -44,6 +44,8 @@ export interface ContentOpenRoundSummary {
   minVoters?: number;
   maxVoters?: number;
   hasHumanVerifiedCommit?: boolean;
+  humanVerifiedCommitCount?: number;
+  humanVerifiedCommitQuorumMet?: boolean;
   lastCommitRevealableAfter?: bigint | null;
   revealGracePeriod?: bigint | null;
   estimatedSettlementTime: bigint | null;
@@ -296,6 +298,8 @@ function mapRoundSummary(
         minVoters?: number;
         maxVoters?: number;
         hasHumanVerifiedCommit?: boolean;
+        humanVerifiedCommitCount?: number;
+        humanVerifiedCommitQuorumMet?: boolean;
         lastCommitRevealableAfter?: string | null;
         revealGracePeriod?: string | null;
         estimatedSettlementTime: string | null;
@@ -331,6 +335,8 @@ function mapRoundSummary(
     minVoters: numberOrDefault(round.minVoters, roundConfig.minVoters),
     maxVoters: numberOrDefault(round.maxVoters, roundConfig.maxVoters),
     hasHumanVerifiedCommit: round.hasHumanVerifiedCommit,
+    humanVerifiedCommitCount: round.humanVerifiedCommitCount,
+    humanVerifiedCommitQuorumMet: round.humanVerifiedCommitQuorumMet,
     lastCommitRevealableAfter: round.lastCommitRevealableAfter ? BigInt(round.lastCommitRevealableAfter) : null,
     revealGracePeriod: round.revealGracePeriod ? BigInt(round.revealGracePeriod) : null,
     estimatedSettlementTime: round.estimatedSettlementTime ? BigInt(round.estimatedSettlementTime) : null,
@@ -448,6 +454,8 @@ export function mapContentItem(
       minVoters?: number;
       maxVoters?: number;
       hasHumanVerifiedCommit?: boolean;
+      humanVerifiedCommitCount?: number;
+      humanVerifiedCommitQuorumMet?: boolean;
       lastCommitRevealableAfter?: string | null;
       revealGracePeriod?: string | null;
       estimatedSettlementTime: string | null;
@@ -477,6 +485,8 @@ export function mapContentItem(
       minVoters?: number;
       maxVoters?: number;
       hasHumanVerifiedCommit?: boolean;
+      humanVerifiedCommitCount?: number;
+      humanVerifiedCommitQuorumMet?: boolean;
       lastCommitRevealableAfter?: string | null;
       revealGracePeriod?: string | null;
       estimatedSettlementTime: string | null;

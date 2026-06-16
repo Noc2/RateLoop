@@ -809,6 +809,8 @@ export interface PonderContentOpenRoundSummary {
   minVoters?: number;
   maxVoters?: number;
   hasHumanVerifiedCommit?: boolean;
+  humanVerifiedCommitCount?: number;
+  humanVerifiedCommitQuorumMet?: boolean;
   lastCommitRevealableAfter?: string | null;
   revealGracePeriod?: string | null;
   estimatedSettlementTime: string | null;
