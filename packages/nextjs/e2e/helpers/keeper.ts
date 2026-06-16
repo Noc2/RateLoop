@@ -2,6 +2,7 @@
  * Settlement lifecycle helpers for E2E tests.
  * Uses Anvil JSON-RPC to fast-forward time and mine blocks for settlement.
  */
+import { ROUND_STATE } from "@rateloop/contracts/protocol";
 import "./fetch-shim";
 import { PONDER_URL } from "./ponder-url";
 import { E2E_RPC_URL } from "./service-urls";
@@ -105,8 +106,9 @@ export async function waitForSettlementIndexed(
       if (res.ok) {
         const data = await res.json();
         lastRoundStates = data.rounds?.map((r: { state: number }) => r.state) ?? [];
-        // Check if any round has state=1 (Settled) or state=3 (Tied)
-        const hasSettledRound = lastRoundStates.some(s => s === 1 || s === 3);
+        const hasSettledRound = lastRoundStates.some(
+          state => state === ROUND_STATE.Settled || state === ROUND_STATE.Tied,
+        );
         if (hasSettledRound) return true;
       }
     } catch (err) {
