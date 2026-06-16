@@ -164,7 +164,10 @@ Rotating `ContentRegistry.setVotingEngine` or `FrontendRegistry.setVotingEngine`
 4. Call `ContentRegistry.setVotingEngine` and `FrontendRegistry.setVotingEngine`; re-bind the frontend fee creditor.
 5. Repoint pinned oracle consumers for in-flight payout work:
    - `QuestionRewardPoolEscrow.repointRewardPoolClusterPayoutOracle`
-   - `ContentRegistry.repointPendingRatingClusterPayoutOracle`
+   - Pending public-rating settlements pin `clusterPayoutOracle` at record time. There is no
+     on-chain `ContentRegistry.repointPendingRatingClusterPayoutOracle` wrapper yet (EIP-170
+     headroom). Let in-flight pending ratings settle against the pinned oracle, or redeploy a
+     governance helper that calls `ContentRegistryRatingSnapshotLib.repointPendingRatingClusterPayoutOracle`.
    - `LaunchDistributionPool.rescueStalePendingEarnedRaterCredit` (launch credits)
 6. Update off-chain X402 submitter escrow pointers and any keeper/indexer wiring.
 7. Unpause only after integration checks pass.
