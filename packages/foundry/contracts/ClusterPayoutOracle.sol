@@ -441,13 +441,20 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         RoundPayoutProposal storage existing = roundPayoutProposals[snapshotKey];
         if (existing.snapshot.status != SnapshotStatus.None && existing.snapshot.status != SnapshotStatus.Rejected) {
             if (_isLiveCorrelationEpoch(existing.correlationEpochDigest, existing.snapshot.correlationEpochId)) {
-                revert SnapshotExists();
+                if (existing.snapshot.status == SnapshotStatus.Finalized) {
+                    (bool consumed, bool consumedKnown) = _roundPayoutSnapshotConsumptionStatus(existing);
+                    if (consumedKnown && consumed) revert SnapshotConsumed();
+                    _rejectStaleRoundPayoutSnapshot(snapshotKey, existing);
+                } else {
+                    revert SnapshotExists();
+                }
+            } else {
+                if (existing.snapshot.status == SnapshotStatus.Finalized) {
+                    (bool consumed, bool consumedKnown) = _roundPayoutSnapshotConsumptionStatus(existing);
+                    if (consumedKnown && consumed) revert SnapshotConsumed();
+                }
+                _rejectStaleRoundPayoutSnapshot(snapshotKey, existing);
             }
-            if (existing.snapshot.status == SnapshotStatus.Finalized) {
-                (bool consumed, bool consumedKnown) = _roundPayoutSnapshotConsumptionStatus(existing);
-                if (consumedKnown && consumed) revert SnapshotConsumed();
-            }
-            _rejectStaleRoundPayoutSnapshot(snapshotKey, existing);
         }
         if (existing.snapshot.status == SnapshotStatus.Rejected && rejectedRoundPayoutSnapshotConsumed[snapshotKey]) {
             revert SnapshotConsumed();
