@@ -220,12 +220,14 @@ export function getThirdwebServerVerifierSecret(): string | undefined {
 }
 
 export function getX402UsdcAddressOverride(): `0x${string}` | undefined {
-  const publicUsdc = readEnv("NEXT_PUBLIC_USDC_ADDRESS")?.trim().toLowerCase();
-  const value = readEnv("RATELOOP_X402_USDC_ADDRESS")?.trim();
-  if (publicUsdc && value?.startsWith("0x") && publicUsdc !== value.toLowerCase()) {
+  const publicUsdc = readEnv("NEXT_PUBLIC_USDC_ADDRESS")?.trim();
+  const serverUsdc = readEnv("RATELOOP_X402_USDC_ADDRESS")?.trim();
+  const normalizedPublic = publicUsdc?.startsWith("0x") ? (publicUsdc.toLowerCase() as `0x${string}`) : undefined;
+  const normalizedServer = serverUsdc?.startsWith("0x") ? (serverUsdc.toLowerCase() as `0x${string}`) : undefined;
+  if (normalizedPublic && normalizedServer && normalizedPublic !== normalizedServer) {
     throw new Error("NEXT_PUBLIC_USDC_ADDRESS and RATELOOP_X402_USDC_ADDRESS must match when both are set.");
   }
-  return value?.startsWith("0x") ? (value as `0x${string}`) : undefined;
+  return normalizedServer ?? normalizedPublic;
 }
 
 export function getFreeTransactionLimit(): number {
