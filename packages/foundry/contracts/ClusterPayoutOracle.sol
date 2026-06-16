@@ -676,8 +676,10 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         }
         if (!withinVetoWindow) {
             // Outside the veto window the rejection is only safe if the consumer has not yet paid
-            // any claim against this snapshot's merkle root.
-            if (consumed) {
+            // any claim against this snapshot's merkle root. A catch-path default of
+            // `consumed=true` with `consumedKnown=false` must not block rejection when the
+            // consumer view is broken or removed.
+            if (consumedKnown && consumed) {
                 revert SnapshotConsumed();
             }
         }

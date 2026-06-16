@@ -2209,6 +2209,38 @@ contract ClusterPayoutOracleTest is Test {
         oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("snapshotted-consumer"));
     }
 
+    function test_FinalizedRoundPayoutSnapshotRejectAllowedPostVetoWhenConsumerViewReverts() public {
+        RevertingConsumedRoundPayoutSnapshotConsumer revertingConsumer = new RevertingConsumedRoundPayoutSnapshotConsumer();
+        oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_QUESTION_REWARD(), address(revertingConsumer));
+
+        oracle.proposeCorrelationEpoch(
+            1,
+            1,
+            20,
+            keccak256("cluster-root"),
+            keccak256("params"),
+            keccak256("epoch-artifact"),
+            "ipfs://epoch",
+            _defaultEpochSources()
+        );
+        vm.warp(2 hours + 2);
+        oracle.finalizeCorrelationEpoch(1);
+
+        IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
+        oracle.proposeRoundPayoutSnapshot(input);
+        bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(
+            oracle.PAYOUT_DOMAIN_QUESTION_REWARD(), input.rewardPoolId, input.contentId, input.roundId
+        );
+        vm.warp(block.timestamp + 2 hours + 1);
+        oracle.finalizeRoundPayoutSnapshot(snapshotKey);
+
+        vm.warp(block.timestamp + oracle.FINALIZATION_VETO_WINDOW() + 1);
+        oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("broken-consumer-view"));
+        ClusterPayoutOracle.RoundPayoutProposal memory rejected = oracle.roundPayoutProposal(snapshotKey);
+        assertEq(uint8(rejected.snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Rejected));
+        assertFalse(oracle.rejectedRoundPayoutSnapshotConsumed(snapshotKey));
+    }
+
     function test_StaleProposedRoundPayoutSnapshotCanBeReplacedAfterParentReproposal() public {
         bytes32 firstArtifact = keccak256("epoch-artifact");
         _proposeDefaultCorrelationEpoch(1, keccak256("cluster-root"), firstArtifact);
@@ -2507,5 +2539,15 @@ contract MockRoundPayoutSnapshotConsumer {
 
     function roundPayoutSnapshotSourceReadyAt(uint8, uint256, uint256, uint256) external view returns (uint64) {
         return sourceReadyAt;
+    }
+}
+
+contract RevertingConsumedRoundPayoutSnapshotConsumer {
+    function isRoundPayoutSnapshotConsumed(uint8, uint256, uint256, uint256) external pure returns (bool) {
+        revert("consumer view reverts");
+    }
+
+    function roundPayoutSnapshotSourceReadyAt(uint8, uint256, uint256, uint256) external pure returns (uint64) {
+        return 1;
     }
 }
