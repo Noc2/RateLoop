@@ -22,14 +22,21 @@ describe("areCorrelationCandidatesPonderFresh", () => {
   });
 
   it("queries Ponder with roundId and limit=1", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes("/correlation/round-votes")) {
+        return new Response(JSON.stringify({ items: [{}, {}, {}] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response(
         JSON.stringify({
           items: [{ roundId: "7", revealedCount: "3", voteCount: "3", state: ROUND_STATE.Settled }],
         }),
         { status: 200, headers: { "content-type": "application/json" } },
-      ),
-    );
+      );
+    });
     mockReadRound.mockResolvedValue({
       state: ROUND_STATE.Settled,
       revealedCount: 3n,
@@ -51,14 +58,21 @@ describe("areCorrelationCandidatesPonderFresh", () => {
   });
 
   it("defers when Ponder vote count lags chain", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes("/correlation/round-votes")) {
+        return new Response(JSON.stringify({ items: [{}, {}, {}] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response(
         JSON.stringify({
           items: [{ roundId: "7", revealedCount: "3", voteCount: "2", state: ROUND_STATE.Settled }],
         }),
         { status: 200, headers: { "content-type": "application/json" } },
-      ),
-    );
+      );
+    });
     mockReadRound.mockResolvedValue({
       state: ROUND_STATE.Settled,
       revealedCount: 3n,
@@ -78,5 +92,41 @@ describe("areCorrelationCandidatesPonderFresh", () => {
       "Deferring correlation artifact build until Ponder reflects vote count",
       expect.objectContaining({ chainVoteCount: "3", ponderVoteCount: "2" }),
     );
+  });
+
+  it("defers when correlation-eligible revealed vote rows lag chain", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes("/correlation/round-votes")) {
+        return new Response(JSON.stringify({ items: [{ account: "0x1" }] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response(
+        JSON.stringify({
+          items: [{ roundId: "7", revealedCount: "3", voteCount: "3", state: ROUND_STATE.Settled }],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    });
+    mockReadRound.mockResolvedValue({
+      state: ROUND_STATE.Settled,
+      revealedCount: 3n,
+      voteCount: 3n,
+    });
+
+    const { areCorrelationCandidatesPonderFresh } = await import("../correlation-ponder-freshness.js");
+    const logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    const fresh = await areCorrelationCandidatesPonderFresh(
+      {} as never,
+      [{ domain: 1, rewardPoolId: 0n, contentId: 42n, roundId: 7n }],
+      logger,
+    );
+
+    expect(fresh).toBe(false);
+    expect(
+      fetchMock.mock.calls.some(call => String(call[0]).includes("/correlation/round-votes")),
+    ).toBe(true);
   });
 });

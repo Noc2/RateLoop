@@ -12,6 +12,34 @@ interface PonderRoundListResponse {
   items?: Array<{ roundId?: unknown; revealedCount?: unknown; voteCount?: unknown; state?: unknown }>;
 }
 
+interface PonderCorrelationRoundVotesResponse {
+  items?: unknown[];
+}
+
+async function fetchPonderCorrelationRevealedVoteCount(
+  ponderBaseUrl: string,
+  rewardPoolId: bigint,
+  contentId: bigint,
+  roundId: bigint,
+  expectedCount: bigint,
+): Promise<number | null> {
+  if (expectedCount <= 0n) {
+    return 0;
+  }
+  const limit = Number(expectedCount > 1000n ? 1000n : expectedCount);
+  const url = new URL("/correlation/round-votes", ponderBaseUrl);
+  url.searchParams.set("rewardPoolId", rewardPoolId.toString());
+  url.searchParams.set("contentId", contentId.toString());
+  url.searchParams.set("roundId", roundId.toString());
+  url.searchParams.set("limit", String(limit));
+  const response = await fetchPonderJson<PonderCorrelationRoundVotesResponse>(url);
+  const count = (response.items ?? []).length;
+  if (expectedCount > BigInt(limit) && count >= limit) {
+    return count;
+  }
+  return count;
+}
+
 function parseBigInt(value: unknown): bigint | null {
   if (typeof value === "bigint") return value;
   if (typeof value === "number" && Number.isSafeInteger(value)) return BigInt(value);
@@ -139,6 +167,33 @@ export async function areCorrelationCandidatesPonderFresh(
         ponderVoteCount: ponderRound.voteCount.toString(),
       });
       return false;
+    }
+    if (
+      chainRound.state === ROUND_STATE.Settled &&
+      chainRound.revealedCount > 0n
+    ) {
+      const ponderCorrelationVotes = await fetchPonderCorrelationRevealedVoteCount(
+        config.ponderBaseUrl,
+        candidate.rewardPoolId,
+        candidate.contentId,
+        candidate.roundId,
+        chainRound.revealedCount,
+      );
+      if (
+        ponderCorrelationVotes === null ||
+        BigInt(ponderCorrelationVotes) < chainRound.revealedCount
+      ) {
+        logger.debug(
+          "Deferring correlation artifact build until Ponder indexes correlation-eligible revealed votes",
+          {
+            contentId: candidate.contentId.toString(),
+            roundId: candidate.roundId.toString(),
+            chainRevealedCount: chainRound.revealedCount.toString(),
+            ponderCorrelationVoteCount: ponderCorrelationVotes?.toString() ?? "null",
+          },
+        );
+        return false;
+      }
     }
   }
 
