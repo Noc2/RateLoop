@@ -13,6 +13,7 @@ import { RoundLib } from "../contracts/libraries/RoundLib.sol";
 import { RatingLib } from "../contracts/libraries/RatingLib.sol";
 import { RewardMath } from "../contracts/libraries/RewardMath.sol";
 import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
+import { RoundSettlementSideEffectsLib } from "../contracts/libraries/RoundSettlementSideEffectsLib.sol";
 import { LoopReputation } from "../contracts/LoopReputation.sol";
 import { FrontendRegistry } from "../contracts/FrontendRegistry.sol";
 import { IFrontendRegistry } from "../contracts/interfaces/IFrontendRegistry.sol";
@@ -2826,6 +2827,50 @@ contract RoundIntegrationTest is VotingTestBase {
             uint256(RoundEngineReadHelpers.round(votingEngine, contentId, roundId).state),
             uint256(RoundLib.RoundState.Settled),
             "Settlement side effects should not block settlement"
+        );
+    }
+
+    function test_SettlementSideEffectFailure_DoesNotBlockSettlement() public {
+        uint256 contentId = _submitContent();
+
+        address[] memory voters = new address[](3);
+        voters[0] = voter1;
+        voters[1] = voter2;
+        voters[2] = voter3;
+        bool[] memory dirs = new bool[](3);
+        dirs[0] = true;
+        dirs[1] = true;
+        dirs[2] = false;
+
+        _commitAllThenReveal(voters, contentId, dirs, STAKE);
+        uint256 roundId = _getActiveOrLatestRoundId(contentId);
+
+        vm.mockCallRevert(
+            address(registry),
+            abi.encodeWithSelector(ContentRegistry.recordPendingRatingSettlement.selector),
+            abi.encodeWithSignature("Error(string)", "rating side effect blocked")
+        );
+
+        vm.recordLogs();
+        _settleAfterRbtsSeed(votingEngine, contentId, roundId);
+
+        bytes32 failureTopic = keccak256(
+            "SettlementSideEffectFailed(uint256,uint256,address,uint8)"
+        );
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        bool sawFailure;
+        for (uint256 i = 0; i < logs.length; i++) {
+            if (logs[i].topics[0] == failureTopic) {
+                sawFailure = true;
+                break;
+            }
+        }
+        assertTrue(sawFailure, "SettlementSideEffectFailed should be emitted");
+
+        assertEq(
+            uint256(RoundEngineReadHelpers.round(votingEngine, contentId, roundId).state),
+            uint256(RoundLib.RoundState.Settled),
+            "Settlement should succeed even when rating side effect fails"
         );
     }
 
