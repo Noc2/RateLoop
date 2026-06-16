@@ -144,7 +144,6 @@ NODE_ENV=production
 PONDER_NETWORK=worldchain
 PONDER_RPC_URL_480=<mainnet rpc>
 DATABASE_URL=<Postgres url>
-RATELOOP_PONDER_DATABASE_SCHEMA=rateloop_ponder_worldchain_canary
 CORS_ORIGIN=https://<app-domain>
 RATE_LIMIT_TRUSTED_IP_HEADERS=x-forwarded-for
 ```
@@ -156,8 +155,14 @@ PAYOUT_ARTIFACT_HTTPS_ALLOWLIST=https://<keeper-domain>/correlation-artifacts
 ```
 
 Ponder reads live-chain contract addresses from `@rateloop/contracts`, but its
-database tables and checkpoints persist. Use a canary schema even when using the
-same Railway Postgres service.
+database tables and checkpoints persist. On Railway, leave
+`RATELOOP_PONDER_DATABASE_SCHEMA` unset so `yarn ponder:start` can use the
+Railway deployment-scoped schema and avoid reusing schema metadata from an older
+Ponder app build. If Railway logs `Schema '<name>' was previously used by a
+different Ponder app`, unset the static schema override or switch it to a fresh,
+never-used schema before redeploying. Reusing
+`rateloop_ponder_worldchain_canary` across canary builds can trigger that startup
+failure after the Ponder app signature changes.
 
 ### Railway / Keeper
 
