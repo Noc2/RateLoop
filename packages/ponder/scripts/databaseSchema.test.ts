@@ -131,6 +131,20 @@ describe("Ponder database schema launcher", () => {
     expect(result.ignoredDeprecatedStaticSchema).toBe(true);
   });
 
+  test("ignores deprecated static canary schemas when a protocol deployment schema is available", () => {
+    const deploymentKey =
+      "480:0x1000000000000000000000000000000000000001:0x1000000000000000000000000000000000000002";
+    const result = resolvePonderDatabaseSchema({
+      DATABASE_SCHEMA: "rateloop_ponder_worldchain_canary",
+      PONDER_NETWORK: "worldchain",
+      RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY: deploymentKey,
+    });
+
+    expect(result.schema).toBe(schemaFromProtocolDeploymentKey(deploymentKey));
+    expect(result.source).toBe("RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY");
+    expect(result.ignoredDeprecatedStaticSchema).toBe(true);
+  });
+
   test("rejects schema names that are unsafe to pass to Ponder", () => {
     expect(() => resolvePonderDatabaseSchema({ DATABASE_SCHEMA: "rate-loop" })).toThrow(
       "Invalid Ponder database schema",

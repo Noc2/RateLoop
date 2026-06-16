@@ -116,13 +116,14 @@ export function resolvePonderDatabaseSchema(env = process.env) {
   const protocolDeploymentSchema = schemaFromProtocolDeploymentKey(protocolDeploymentKey);
   const railwaySchema = schemaFromRailwayDeploymentId(readEnv(env, "RAILWAY_DEPLOYMENT_ID"));
   const defaultSchema = resolveDefaultPonderDatabaseSchema(env);
+  const canReplaceDeprecatedStaticSchema = railwaySchema !== undefined || protocolDeploymentSchema !== undefined;
   const ignoredDeprecatedStaticSchema =
-    railwaySchema !== undefined &&
+    canReplaceDeprecatedStaticSchema &&
     (isDeprecatedStaticRailwaySchema(rateloopSchema) || isDeprecatedStaticRailwaySchema(databaseSchema));
   const effectiveRateloopSchema =
-    railwaySchema && isDeprecatedStaticRailwaySchema(rateloopSchema) ? undefined : rateloopSchema;
+    canReplaceDeprecatedStaticSchema && isDeprecatedStaticRailwaySchema(rateloopSchema) ? undefined : rateloopSchema;
   const effectiveDatabaseSchema =
-    railwaySchema && isDeprecatedStaticRailwaySchema(databaseSchema) ? undefined : databaseSchema;
+    canReplaceDeprecatedStaticSchema && isDeprecatedStaticRailwaySchema(databaseSchema) ? undefined : databaseSchema;
   const isLegacyDatabaseSchema =
     effectiveRateloopSchema === undefined && effectiveDatabaseSchema === LEGACY_PONDER_DATABASE_SCHEMA;
   const schema =
