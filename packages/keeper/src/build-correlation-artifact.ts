@@ -13,6 +13,7 @@ const { values } = parseArgs({
     "round-id": { type: "string" },
     out: { type: "string" },
     "skip-ponder-freshness": { type: "boolean", default: false },
+    now: { type: "string" },
   },
 });
 
@@ -66,10 +67,13 @@ if (values["skip-ponder-freshness"]) {
   );
 }
 
-const built = await buildConfiguredCorrelationSnapshotArtifactForCandidates(
-  candidates,
-  logger,
-);
+const latestBlock = await publicClient.getBlock({ blockTag: "latest" });
+const ponderNowSeconds =
+  values.now !== undefined ? requireNonNegativeBigInt(values.now, "--now") : latestBlock.timestamp;
+
+const built = await buildConfiguredCorrelationSnapshotArtifactForCandidates(candidates, logger, {
+  ponderNowSeconds,
+});
 
 if (!built.canonicalJson || built.roundSnapshotCount === 0) {
   throw new Error(
