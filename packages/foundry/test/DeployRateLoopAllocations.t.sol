@@ -25,18 +25,6 @@ contract DeployRateLoopHarness is DeployRateLoop {
         return _resolveWorldIdRouterAddress(isLocalDev);
     }
 
-    function treasuryMintAmountForChain(uint256 chainId) external pure returns (uint256) {
-        return _treasuryMintAmountForChain(chainId);
-    }
-
-    function worldChainSepoliaTestingAccounts() external pure returns (address[4] memory) {
-        return _worldChainSepoliaTestingAccounts();
-    }
-
-    function worldChainSepoliaTestingLrepTotal() external pure returns (uint256) {
-        return _worldChainSepoliaTestingLrepTotal();
-    }
-
     function legacyContributorAccounts() external pure returns (address[9] memory) {
         return _legacyContributorAccounts();
     }
@@ -47,10 +35,6 @@ contract DeployRateLoopHarness is DeployRateLoop {
 
     function legacyContributorHumanEvidence(address account) external pure returns (bytes32) {
         return _legacyContributorHumanEvidence(account);
-    }
-
-    function fundWorldChainSepoliaTestingAccounts(LoopReputation lrepToken, RaterRegistry raterRegistry) external {
-        _fundWorldChainSepoliaTestingAccounts(lrepToken, raterRegistry);
     }
 
     function seedLegacyContributorHumanCredentials(RaterRegistry raterRegistry) external {
@@ -190,39 +174,6 @@ contract DeployRateLoopAllocationsTest is Test {
         assertEq(launchPool.poolBalance(), deployScript.LAUNCH_DISTRIBUTION_AMOUNT());
         assertEq(lrepToken.balanceOf(address(deployScript)), 0);
         assertEq(lrepToken.allowance(address(deployScript), address(launchPool)), 0);
-    }
-
-    function test_WorldChainSepoliaTestingGrantsComeFromTreasuryAllocation() public {
-        DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
-
-        uint256 sepoliaTreasuryMint = deployScript.treasuryMintAmountForChain(4801);
-        uint256 testingGrantTotal = deployScript.worldChainSepoliaTestingLrepTotal();
-
-        assertEq(testingGrantTotal, 4 * deployScript.WORLD_CHAIN_SEPOLIA_TEST_LREP_AMOUNT());
-        assertEq(sepoliaTreasuryMint, deployScript.TREASURY_AMOUNT() - testingGrantTotal);
-        assertEq(
-            sepoliaTreasuryMint + testingGrantTotal + deployScript.LAUNCH_DISTRIBUTION_AMOUNT(),
-            deployScript.TOTAL_SUPPLY_CAP(),
-            "Sepolia test grants should stay inside capped supply"
-        );
-        assertEq(deployScript.treasuryMintAmountForChain(480), deployScript.TREASURY_AMOUNT());
-        assertEq(deployScript.treasuryMintAmountForChain(31337), deployScript.TREASURY_AMOUNT());
-    }
-
-    function test_FundWorldChainSepoliaTestingAccountsSeedsCredentialsAndLrep() public {
-        DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
-        LoopReputation lrepToken = new LoopReputation(address(deployScript), address(this));
-        RaterRegistry raterRegistry =
-            new RaterRegistry(address(deployScript), address(this), address(0), 0, 0, 0, 0, 0, 0, 0);
-
-        deployScript.fundWorldChainSepoliaTestingAccounts(lrepToken, raterRegistry);
-
-        address[4] memory testAccounts = deployScript.worldChainSepoliaTestingAccounts();
-        for (uint256 i = 0; i < testAccounts.length; i++) {
-            assertEq(lrepToken.balanceOf(testAccounts[i]), deployScript.WORLD_CHAIN_SEPOLIA_TEST_LREP_AMOUNT());
-            assertTrue(raterRegistry.hasActiveHumanCredential(testAccounts[i]));
-        }
-        assertEq(lrepToken.totalSupply(), deployScript.worldChainSepoliaTestingLrepTotal());
     }
 
     function test_SeedLegacyContributorHumanCredentialsMarksManifestAddressesAsHumans() public {

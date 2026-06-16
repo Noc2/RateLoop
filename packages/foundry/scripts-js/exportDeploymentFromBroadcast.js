@@ -42,16 +42,6 @@ const DIRECT_DEPLOYMENT_NAMES = new Set([
 ]);
 
 const TREASURY_LREP_AMOUNT = 25_000_000n * 1_000_000n;
-const WORLD_CHAIN_SEPOLIA_TEST_LREP_AMOUNT = 250n * 1_000_000n;
-const WORLD_CHAIN_SEPOLIA_TEST_ACCOUNTS = [
-  "0xfa9605A2c38a0B4f16f689FDD07B63F295b86d1C",
-  "0x113aFCbA5C5Ee43125C2a24c8E06dd9b4dA38f15",
-  "0xf51BA40d80c7687A6A46c6A279ec145069A9da10",
-  "0x623F82Ef0Fa750AB28D8912C53690B04826874bE",
-];
-const WORLD_CHAIN_SEPOLIA_TEST_LREP_TOTAL =
-  WORLD_CHAIN_SEPOLIA_TEST_LREP_AMOUNT *
-  BigInt(WORLD_CHAIN_SEPOLIA_TEST_ACCOUNTS.length);
 const DEFAULT_CLUSTER_PAYOUT_CHALLENGE_BOND = "5000000";
 
 const ROLE_HASHES = {
@@ -529,17 +519,8 @@ const REQUIRED_COMPLETION_CALLS = [
     target: "LoopReputation",
     functionName: "mint(address,uint256)",
     abi: LOOP_REPUTATION_COMPLETION_ABI,
-    args: (ctx) => [ctx.governance, expectedTreasuryMintAmount(ctx)],
+    args: (ctx) => [ctx.governance, TREASURY_LREP_AMOUNT.toString()],
   },
-  ...WORLD_CHAIN_SEPOLIA_TEST_ACCOUNTS.map((account) => ({
-    label: `LoopReputation.mint(WorldChainSepoliaTestAccount:${account})`,
-    contractName: "LoopReputation",
-    target: "LoopReputation",
-    functionName: "mint(address,uint256)",
-    abi: LOOP_REPUTATION_COMPLETION_ABI,
-    args: () => [account, WORLD_CHAIN_SEPOLIA_TEST_LREP_AMOUNT.toString()],
-    requiredWhen: (ctx) => ctx.networkName === "worldchainSepolia",
-  })),
   {
     label: "TimelockController.grantRole(PROPOSER_ROLE)",
     contractName: "TimelockController",
@@ -803,15 +784,6 @@ function completionContext(transactions, deployments) {
       "FeedbackBonusEscrow"
     ),
   };
-}
-
-function expectedTreasuryMintAmount(ctx) {
-  if (ctx.networkName === "worldchainSepolia") {
-    return (
-      TREASURY_LREP_AMOUNT - WORLD_CHAIN_SEPOLIA_TEST_LREP_TOTAL
-    ).toString();
-  }
-  return TREASURY_LREP_AMOUNT.toString();
 }
 
 function expectedTargetAddress(requirement, ctx) {

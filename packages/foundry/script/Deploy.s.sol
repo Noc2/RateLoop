@@ -38,7 +38,6 @@ contract DeployRateLoop is ScaffoldETHDeploy {
     uint256 public constant TOTAL_SUPPLY_CAP = 100_000_000 * 1e6;
     uint256 public constant TREASURY_AMOUNT = 25_000_000 * 1e6;
     uint256 public constant LAUNCH_DISTRIBUTION_AMOUNT = TOTAL_SUPPLY_CAP - TREASURY_AMOUNT;
-    uint256 public constant WORLD_CHAIN_SEPOLIA_TEST_LREP_AMOUNT = 250 * 1e6;
     bytes32 public constant LEGACY_CONTRIBUTOR_ROOT =
         0xcaa28d15e6c6c1bb47d347a413cb808e40c38a7e43171ce9a131983a92b97d18;
     uint256 public constant LEGACY_CONTRIBUTOR_ALLOCATION_TOTAL = 9_000_000 * 1e6;
@@ -338,15 +337,12 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         }
         protocolConfig.setConfig(20 minutes, 20 minutes, 3, 100);
 
-        lrepToken.mint(governance, _treasuryMintAmountForChain(block.chainid));
+        lrepToken.mint(governance, TREASURY_AMOUNT);
         console.log("Minted LREP treasury allocation");
 
         LaunchDistributionPool launchDistributionPool =
             new LaunchDistributionPool(address(lrepToken), address(raterRegistry), governance);
         raterRegistry.grantRole(raterRegistry.LAUNCH_CONSUMER_ROLE(), address(launchDistributionPool));
-        if (block.chainid == 4801) {
-            _fundWorldChainSepoliaTestingAccounts(lrepToken, raterRegistry);
-        }
         _seedLegacyContributorHumanCredentials(raterRegistry);
         if (!isLocalDev) {
             _renounceRaterRegistryDeployerRoles(raterRegistry, deployer);
@@ -675,40 +671,6 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         }
         holders[count] = candidate;
         return count + 1;
-    }
-
-    function _worldChainSepoliaTestingAccounts() internal pure returns (address[4] memory accounts) {
-        accounts = [
-            0xfa9605A2c38a0B4f16f689FDD07B63F295b86d1C,
-            0x113aFCbA5C5Ee43125C2a24c8E06dd9b4dA38f15,
-            0xf51BA40d80c7687A6A46c6A279ec145069A9da10,
-            0x623F82Ef0Fa750AB28D8912C53690B04826874bE
-        ];
-    }
-
-    function _worldChainSepoliaTestingLrepTotal() internal pure returns (uint256) {
-        return WORLD_CHAIN_SEPOLIA_TEST_LREP_AMOUNT * _worldChainSepoliaTestingAccounts().length;
-    }
-
-    function _treasuryMintAmountForChain(uint256 chainId) internal pure returns (uint256) {
-        if (chainId == 4801) {
-            return TREASURY_AMOUNT - _worldChainSepoliaTestingLrepTotal();
-        }
-        return TREASURY_AMOUNT;
-    }
-
-    function _fundWorldChainSepoliaTestingAccounts(LoopReputation lrepToken, RaterRegistry raterRegistry) internal {
-        address[4] memory testAccounts = _worldChainSepoliaTestingAccounts();
-        for (uint256 i = 0; i < testAccounts.length; i++) {
-            address account = testAccounts[i];
-            lrepToken.mint(account, WORLD_CHAIN_SEPOLIA_TEST_LREP_AMOUNT);
-            bytes32 anchorId = keccak256(abi.encodePacked("rateloop:worldchain-sepolia-human-v1", account));
-            bytes32 evidenceHash = keccak256(abi.encodePacked("rateloop:worldchain-sepolia-evidence-v1", account));
-            raterRegistry.seedHumanCredential(
-                account, uint64(block.timestamp + WORLD_ID_CREDENTIAL_TTL_SECONDS), anchorId, evidenceHash
-            );
-        }
-        console.log("Funded World Chain Sepolia test human accounts:", testAccounts.length);
     }
 
     function _fundLocalDevAccounts(LoopReputation lrepToken, MockERC20 localUsdcToken, RaterRegistry raterRegistry)
