@@ -29,7 +29,7 @@ function isAuthorizedCallbackRequest(token: string, secret: string) {
   return tokenBuffer.length === secretBuffer.length && timingSafeEqual(tokenBuffer, secretBuffer);
 }
 
-export async function POST(request: NextRequest) {
+async function handleSweep(request: NextRequest) {
   const secret = process.env.RATELOOP_AGENT_CALLBACK_DELIVERY_SECRET?.trim() || process.env.CRON_SECRET?.trim() || "";
   if (!secret) {
     return NextResponse.json({ error: "Callback delivery is not configured." }, { status: 503 });
@@ -51,4 +51,12 @@ export async function POST(request: NextRequest) {
   const [callbacks, handoffs] = await Promise.all([sweepCallbacks({ limit }), sweepHandoffs(limit)]);
 
   return NextResponse.json({ ...callbacks, handoffs });
+}
+
+export async function GET(request: NextRequest) {
+  return handleSweep(request);
+}
+
+export async function POST(request: NextRequest) {
+  return handleSweep(request);
 }

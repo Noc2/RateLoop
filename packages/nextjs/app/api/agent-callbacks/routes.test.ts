@@ -39,6 +39,13 @@ function makeRequest(path: string, headers: Record<string, string> = {}) {
   });
 }
 
+function makeGetRequest(path: string, headers: Record<string, string> = {}) {
+  return new NextRequest(`https://rateloop.ai${path}`, {
+    method: "GET",
+    headers,
+  });
+}
+
 before(async () => {
   __setRateLimitStoreForTests({
     execute: async input => {
@@ -149,4 +156,15 @@ test("agent callback sweep route accepts header auth and defaults invalid limits
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { ...sweepResult, handoffs: handoffSweepResult });
   assert.deepEqual(calls, [{ limit: 25 }, { handoffLimit: 25 }]);
+});
+
+test("agent callback sweep route accepts Vercel cron GET bearer auth", async () => {
+  const response = await sweepRoute.GET(
+    makeGetRequest("/api/agent-callbacks/sweep?limit=7", {
+      authorization: "Bearer callback-secret",
+    }),
+  );
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { ...sweepResult, handoffs: handoffSweepResult });
 });
