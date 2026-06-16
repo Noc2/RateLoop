@@ -560,23 +560,37 @@ function loadConfig() {
     // Keeper behavior
     intervalMs: readPositiveIntEnv("KEEPER_INTERVAL_MS", "30000", errors),
     ponderBaseUrl,
-    keeperWorkDiscovery: {
-      enabled: parseBooleanEnv(
-        readEnv("KEEPER_WORK_DISCOVERY_PONDER_ENABLED"),
-        true,
-        "KEEPER_WORK_DISCOVERY_PONDER_ENABLED",
-      ),
-      reconciliationEveryTicks: readPositiveIntEnv(
-        "KEEPER_WORK_DISCOVERY_RECONCILE_EVERY_TICKS",
-        "120",
-        errors,
-      ),
-      maxCandidates: readPositiveIntEnv(
+    // Work discovery: Ponder `/keeper/work` on most ticks; full chain enumeration on
+    // reconciliation ticks. See packages/keeper/README.md for liveness bounds.
+    keeperWorkDiscovery: (() => {
+      const maxCandidates = readPositiveIntEnv(
         "KEEPER_WORK_DISCOVERY_MAX_CANDIDATES",
         "500",
         errors,
-      ),
-    },
+      );
+      const reconciliationEveryTicks = readPositiveIntEnv(
+        "KEEPER_WORK_DISCOVERY_RECONCILE_EVERY_TICKS",
+        "120",
+        errors,
+      );
+      const defaultChainScanPerTick = String(
+        Math.max(1, Math.ceil(maxCandidates / reconciliationEveryTicks)),
+      );
+      return {
+        enabled: parseBooleanEnv(
+          readEnv("KEEPER_WORK_DISCOVERY_PONDER_ENABLED"),
+          true,
+          "KEEPER_WORK_DISCOVERY_PONDER_ENABLED",
+        ),
+        reconciliationEveryTicks,
+        maxCandidates,
+        chainScanPerTick: readPositiveIntEnv(
+          "KEEPER_WORK_DISCOVERY_CHAIN_SCAN_PER_TICK",
+          defaultChainScanPerTick,
+          errors,
+        ),
+      };
+    })(),
     feedbackBonusForfeits: {
       enabled: parseBooleanEnv(
         readEnv("KEEPER_FEEDBACK_BONUS_FORFEITS_ENABLED"),

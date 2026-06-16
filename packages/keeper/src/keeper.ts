@@ -132,6 +132,8 @@ const cleanupQueue = new Map<string, CleanupCursor>();
 const cleanupCompletedRounds = new Set<string>();
 const cleanupDiscoveryRoundByContent = new Map<bigint, bigint>();
 let keeperWorkDiscoveryTick = 0;
+// Rotating cursor for bounded chain content scans on Ponder discovery ticks.
+let chainReconciliationContentCursor = 1n;
 
 function emptyResult(): KeeperResult {
   return {
@@ -156,6 +158,7 @@ export function resetKeeperStateForTests(): void {
   cleanupCompletedRounds.clear();
   cleanupDiscoveryRoundByContent.clear();
   keeperWorkDiscoveryTick = 0;
+  chainReconciliationContentCursor = 1n;
   decryptFailureCount.clear();
   resetTlockClientCacheForTests();
   lastBlockTimestampS = null;
@@ -399,6 +402,44 @@ async function discoverCleanupCandidate(
   }
 }
 
+async function scanBoundedChainContentIds(
+  publicClient: Pick<PublicClient, "readContract">,
+  registryAddr: `0x${string}`,
+  batchSize: number,
+): Promise<bigint[]> {
+  if (batchSize <= 0) {
+    return [];
+  }
+
+  const nextContentId = (await publicClient.readContract({
+    address: registryAddr,
+    abi: ContentRegistryAbi,
+    functionName: "nextContentId",
+    args: [],
+  })) as bigint;
+
+  if (nextContentId <= 1n) {
+    chainReconciliationContentCursor = 1n;
+    return [];
+  }
+
+  let cursor = chainReconciliationContentCursor;
+  if (cursor < 1n || cursor >= nextContentId) {
+    cursor = 1n;
+  }
+
+  const contentIds: bigint[] = [];
+  for (let i = 0; i < batchSize && cursor < nextContentId; i++) {
+    contentIds.push(cursor);
+    cursor += 1n;
+  }
+
+  chainReconciliationContentCursor =
+    cursor >= nextContentId ? 1n : cursor;
+
+  return contentIds;
+}
+
 async function discoverKeeperWorkCandidates(
   publicClient: Pick<PublicClient, "readContract">,
   registryAddr: `0x${string}`,
@@ -410,6 +451,7 @@ async function discoverKeeperWorkCandidates(
     enabled: false,
     reconciliationEveryTicks: 1,
     maxCandidates: 500,
+    chainScanPerTick: 5,
   };
 
   keeperWorkDiscoveryTick += 1;
@@ -427,9 +469,26 @@ async function discoverKeeperWorkCandidates(
       Number(discoveryConfig.maxCandidates ?? 500),
       logger,
     );
+    if (discovery) {
+      const chainBatch = await scanBoundedChainContentIds(
+        publicClient,
+        registryAddr,
+        Number(discoveryConfig.chainScanPerTick ?? 5),
+      );
+      if (chainBatch.length > 0) {
+        discovery = {
+          ...discovery,
+          contentIds: sortedUniqueBigInts([
+            ...discovery.contentIds,
+            ...chainBatch,
+          ]),
+        };
+      }
+    }
   }
 
   if (!discovery) {
+    chainReconciliationContentCursor = 1n;
     discovery = await discoverKeeperWorkFromChain(publicClient, registryAddr);
   }
 
@@ -1344,20 +1403,18 @@ export async function resolveRounds(
       }
 
       // --- 5. CLEANUP DISCOVERY: inspect at most one historical round per content ---
-      if (discovery.source === "chain") {
-        try {
-          await discoverCleanupCandidate(
-            publicClient,
-            engineAddr,
-            contentId,
-            latestRoundId,
-          );
-        } catch (err: unknown) {
-          logger.debug("Could not discover cleanup candidate", {
-            contentId: contentId.toString(),
-            error: getRevertReason(err),
-          });
-        }
+      try {
+        await discoverCleanupCandidate(
+          publicClient,
+          engineAddr,
+          contentId,
+          latestRoundId,
+        );
+      } catch (err: unknown) {
+        logger.debug("Could not discover cleanup candidate", {
+          contentId: contentId.toString(),
+          error: getRevertReason(err),
+        });
       }
 
       if (latestRoundId > 0n) {

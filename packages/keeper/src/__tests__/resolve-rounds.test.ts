@@ -37,6 +37,7 @@ const {
       enabled: false,
       reconciliationEveryTicks: 120,
       maxCandidates: 500,
+      chainScanPerTick: 5,
     },
     feedbackBonusForfeits: {
       enabled: true,
@@ -651,7 +652,7 @@ describe("resolveRounds", () => {
     );
 
     expect(result.contentMarkedDormant).toBe(1);
-    expect(publicClient.readContract).not.toHaveBeenCalledWith(
+    expect(publicClient.readContract).toHaveBeenCalledWith(
       expect.objectContaining({ functionName: "nextContentId" }),
     );
     expect(fetchMock).toHaveBeenCalledOnce();
@@ -660,6 +661,86 @@ describe("resolveRounds", () => {
         functionName: "markDormant",
         args: [1n],
       }),
+    );
+  });
+
+  it("merges a bounded chain content scan with Ponder keeper work candidates", async () => {
+    mockConfig.keeperWorkDiscovery.enabled = true;
+    mockConfig.keeperWorkDiscovery.chainScanPerTick = 3;
+
+    const round = makeRound({
+      state: 1,
+      voteCount: 0n,
+      revealedCount: 0n,
+    });
+    const { publicClient, walletClient } = makeHarness({
+      activeRoundId: 0n,
+      latestRoundId: 0n,
+      round,
+      now: 3_000_000n,
+    });
+    publicClient.readContract.mockImplementation(
+      async ({
+        functionName,
+        args = [],
+      }: {
+        functionName: string;
+        args?: readonly unknown[];
+      }) => {
+        if (functionName === "nextContentId") {
+          return 100n;
+        }
+        if (functionName === "contents") {
+          return {
+            id: args[0] ?? 1n,
+            contentHash: zeroHash,
+            submitter: ACCOUNT,
+            createdAt: 1n,
+            lastActivityAt: 3_000_000n,
+            status: 0,
+            dormantCount: 0,
+            reviver: "0x0000000000000000000000000000000000000000",
+            rating: 50,
+            categoryId: 1n,
+          };
+        }
+        if (functionName === "currentRoundId") {
+          return 0n;
+        }
+        if (functionName === "nextRoundId") {
+          return 0n;
+        }
+        throw new Error(`Unexpected readContract(${functionName})`);
+      },
+    );
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        openRounds: [],
+        cleanupRounds: [],
+        dormantContent: [{ contentId: "99", reason: "dormant" }],
+      }),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const logger = makeLogger();
+
+    await resolveRounds(
+      publicClient as any,
+      walletClient as any,
+      {} as any,
+      { address: ACCOUNT } as any,
+      logger as any,
+    );
+
+    const processedContentIds = publicClient.readContract.mock.calls
+      .filter(
+        (call: [{ functionName?: string }]) =>
+          call[0]?.functionName === "contents",
+      )
+      .map((call: [{ args?: readonly unknown[] }]) => call[0]?.args?.[0]);
+    expect(processedContentIds).toEqual(
+      expect.arrayContaining([1n, 2n, 3n, 99n]),
     );
   });
 
