@@ -184,6 +184,7 @@ export function parseGeneratedContractsForChain(
 export function validateOfflineReadiness({
   deploymentJson,
   deployedContractsSource,
+  envProductionSource = "",
   protocolSource,
 }) {
   const checks = [];
@@ -256,6 +257,18 @@ export function validateOfflineReadiness({
     protocolSource.includes(`4801: "${WORLDCHAIN_SEPOLIA_USDC}"`),
     "Next.js default USDC address is configured for World Chain Sepolia",
   );
+  addCheck(
+    checks,
+    failures,
+    envProductionSource.includes("NEXT_PUBLIC_TARGET_NETWORKS=4801"),
+    "Next.js production env targets World Chain Sepolia",
+  );
+  addCheck(
+    checks,
+    failures,
+    envProductionSource.includes("NEXT_PUBLIC_WORLD_ID_PROOF_MODE=legacy"),
+    "Next.js production env requests legacy World ID proofs",
+  );
 
   return { ok: failures.length === 0, checks, failures };
 }
@@ -270,6 +283,10 @@ function loadOfflineInputs(root = repoRoot) {
     ),
     deployedContractsSource: readFileSync(
       join(root, "packages/contracts/src/deployedContracts.ts"),
+      "utf8",
+    ),
+    envProductionSource: readFileSync(
+      join(root, "packages/nextjs/.env.production"),
       "utf8",
     ),
     protocolSource: readFileSync(

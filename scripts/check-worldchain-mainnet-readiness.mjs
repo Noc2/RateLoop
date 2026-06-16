@@ -61,7 +61,6 @@ export function mainnetNotDeployedMessage() {
 export function validateOfflineReadiness({
   deploymentJson,
   deployedContractsSource,
-  envProductionSource = "",
   expectedMode = "production",
   protocolSource,
 }) {
@@ -143,12 +142,6 @@ export function validateOfflineReadiness({
     protocolSource.includes(`480: "${WORLDCHAIN_USDC}"`),
     "Next.js default USDC address is configured for World Chain mainnet",
   );
-  addCheck(
-    checks,
-    failures,
-    envProductionSource.includes("NEXT_PUBLIC_WORLD_ID_PROOF_MODE=v4"),
-    "Next.js production env requests World ID v4 proofs",
-  );
 
   return { ok: failures.length === 0, checks, failures };
 }
@@ -159,10 +152,6 @@ export function loadOfflineInputs(root = repoRoot) {
     deploymentJson: JSON.parse(readFileSync(deploymentPath, "utf8")),
     deployedContractsSource: readFileSync(
       join(root, "packages/contracts/src/deployedContracts.ts"),
-      "utf8",
-    ),
-    envProductionSource: readFileSync(
-      join(root, "packages/nextjs/.env.production"),
       "utf8",
     ),
     protocolSource: readFileSync(
