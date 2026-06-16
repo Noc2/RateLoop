@@ -85,6 +85,13 @@
       "when": 1781279706000,
       "tag": "0011_confidentiality_deployment_scope",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1781283306000,
+      "tag": "0012_agent_signing_intent_prepared_artifacts",
+      "breakpoints": true
     }
   ]
 }

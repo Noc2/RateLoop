@@ -635,6 +635,8 @@ export const agentSigningIntents = pgTable(
     operationKey: text("operation_key"),
     payloadHash: text("payload_hash"),
     requestBody: text("request_body").notNull(),
+    transactionPlan: text("transaction_plan"),
+    x402AuthorizationRequest: text("x402_authorization_request"),
     transactionHashes: text("transaction_hashes"),
     error: text("error"),
     expiresAt: timestamp("expires_at", { mode: "date", withTimezone: true }).notNull(),

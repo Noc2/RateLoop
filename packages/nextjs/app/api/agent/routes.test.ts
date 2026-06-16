@@ -799,8 +799,31 @@ test("agent signing intent routes create and prepare browser handoff asks", asyn
   assert.equal(prepareResponse.status, 200);
   assert.equal(prepareBody.id, intentId);
   assert.equal(prepareBody.operationKey, OPERATION_KEY);
-  assert.equal(prepareBody.status, "awaiting_wallet_signature");
+  assert.equal(prepareBody.status, "prepared");
   assert.equal((prepareBody.transactionPlan as { calls: unknown[] }).calls.length, 1);
+
+  const prepareAgainResponse = await signingIntentPrepareRoute.POST(
+    makePublicPost(`https://rateloop.ai/api/agent/signing-intents/${intentId}/prepare`, {
+      token,
+      walletAddress: "0x00000000000000000000000000000000000000aa",
+    }),
+    { params: Promise.resolve({ intentId }) },
+  );
+  const prepareAgainBody = (await prepareAgainResponse.json()) as Record<string, unknown>;
+  assert.equal(prepareAgainResponse.status, 200);
+  assert.equal(prepareAgainBody.status, "prepared");
+  assert.equal((prepareAgainBody.transactionPlan as { calls: unknown[] }).calls.length, 1);
+
+  const readAfterPrepare = await signingIntentRoute.GET(
+    makePublicGet(`https://rateloop.ai/api/agent/signing-intents/${intentId}`, {
+      "x-rateloop-signing-intent-token": token,
+    }),
+    { params: Promise.resolve({ intentId }) },
+  );
+  const readAfterPrepareBody = (await readAfterPrepare.json()) as Record<string, unknown>;
+  assert.equal(readAfterPrepare.status, 200);
+  assert.equal(readAfterPrepareBody.status, "prepared");
+  assert.equal((readAfterPrepareBody.transactionPlan as { calls: unknown[] }).calls.length, 1);
 });
 
 test("agent signing intent route accepts ttlMs on direct ask bodies without persisting it", async () => {
@@ -1747,7 +1770,7 @@ test("agent signing intent read requires a private token outside the request URL
   const body = (await response.json()) as Record<string, unknown>;
 
   assert.equal(response.status, 400);
-  assert.equal(body.error, "token is required.");
+  assert.equal(body.message, "token is required.");
 });
 
 test("agent asks route requires walletAddress for tokenless asks", async () => {

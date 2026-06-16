@@ -24,8 +24,10 @@ type AgentSigningIntentRecord = {
   status: AgentSigningIntentStatus;
   tokenHash: string;
   transactionHashes: Hex[];
+  transactionPlan: JsonObject | null;
   updatedAt: Date;
   walletAddress: Address | null;
+  x402AuthorizationRequest: JsonObject | null;
 };
 
 const DEFAULT_SIGNING_INTENT_TTL_MS = 30 * 60 * 1000;
@@ -127,9 +129,13 @@ function rowToIntent(row: Record<string, unknown> | undefined): AgentSigningInte
     status: String(row.status) as AgentSigningIntentStatus,
     tokenHash: String(row.token_hash),
     transactionHashes: parseStoredHashes(typeof row.transaction_hashes === "string" ? row.transaction_hashes : null),
+    transactionPlan: parseStoredJsonObject(typeof row.transaction_plan === "string" ? row.transaction_plan : null),
     updatedAt: row.updated_at instanceof Date ? row.updated_at : new Date(String(row.updated_at)),
     walletAddress:
       typeof row.wallet_address === "string" && isAddress(row.wallet_address) ? (row.wallet_address as Address) : null,
+    x402AuthorizationRequest: parseStoredJsonObject(
+      typeof row.x402_authorization_request === "string" ? row.x402_authorization_request : null,
+    ),
   };
 }
 
@@ -187,17 +193,31 @@ async function loadIntentByToken(params: { intentId: string; token: string }): P
   return intent;
 }
 
-function readTransactionPlanCalls(body: JsonObject) {
+function parseStoredJsonObject(value: string | null): JsonObject | null {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(value);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+    return parsed as JsonObject;
+  } catch {
+    return null;
+  }
+}
+
+function readTransactionPlanFromBody(body: JsonObject) {
   const transactionPlan =
     body.transactionPlan && typeof body.transactionPlan === "object" && !Array.isArray(body.transactionPlan)
       ? (body.transactionPlan as JsonObject)
       : null;
-  return Array.isArray(transactionPlan?.calls) ? transactionPlan.calls : [];
+  return {
+    calls: Array.isArray(transactionPlan?.calls) ? transactionPlan.calls : [],
+    transactionPlan,
+  };
 }
 
-function hasX402AuthorizationRequest(body: JsonObject) {
+function readX402AuthorizationRequest(body: JsonObject): JsonObject | null {
   const request = body.x402AuthorizationRequest;
-  return Boolean(request && typeof request === "object" && !Array.isArray(request));
+  return request && typeof request === "object" && !Array.isArray(request) ? (request as JsonObject) : null;
 }
 
 function signingIntentResponse(intent: AgentSigningIntentRecord, extras: JsonObject = {}) {
@@ -215,10 +235,31 @@ function signingIntentResponse(intent: AgentSigningIntentRecord, extras: JsonObj
     requestBody: intent.requestBody,
     status: intent.status,
     transactionHashes: intent.transactionHashes,
+    transactionPlan: intent.transactionPlan,
     updatedAt: intent.updatedAt.toISOString(),
     walletAddress: intent.walletAddress,
+    x402AuthorizationRequest: intent.x402AuthorizationRequest,
     ...extras,
   };
+}
+
+function signingIntentPrepareExtras(body: JsonObject): JsonObject {
+  const extras: JsonObject = {};
+  const { transactionPlan } = readTransactionPlanFromBody(body);
+  const x402AuthorizationRequest = readX402AuthorizationRequest(body);
+  if (transactionPlan) extras.transactionPlan = transactionPlan;
+  if (x402AuthorizationRequest) extras.x402AuthorizationRequest = x402AuthorizationRequest;
+  if (body.wallet && typeof body.wallet === "object" && !Array.isArray(body.wallet)) {
+    extras.wallet = body.wallet;
+  }
+  return extras;
+}
+
+function hasPreparedSigningArtifacts(intent: AgentSigningIntentRecord) {
+  if (intent.paymentMode === "x402_authorization") {
+    return intent.x402AuthorizationRequest !== null;
+  }
+  return readTransactionPlanFromBody({ transactionPlan: intent.transactionPlan }).calls.length > 0;
 }
 
 export async function createAgentSigningIntent(params: { origin: string; requestBody: unknown; ttlMs?: number }) {
@@ -286,8 +327,10 @@ export async function createAgentSigningIntent(params: { origin: string; request
     status: "pending",
     tokenHash: hashToken(token),
     transactionHashes: [],
+    transactionPlan: null,
     updatedAt: now,
     walletAddress,
+    x402AuthorizationRequest: null,
   };
 
   return signingIntentResponse(intent, {
@@ -319,6 +362,9 @@ export async function prepareAgentSigningIntent(params: {
   if (intent.walletAddress && intent.walletAddress.toLowerCase() !== walletAddress.toLowerCase()) {
     throw new McpToolError("Connected wallet does not match this signing intent.", 403);
   }
+  if (intent.status === "prepared" && hasPreparedSigningArtifacts(intent)) {
+    return signingIntentResponse(intent);
+  }
 
   try {
     const body = (await callPublicRateLoopMcpTool({
@@ -333,13 +379,15 @@ export async function prepareAgentSigningIntent(params: {
 
     const operationKey = typeof body.operationKey === "string" ? (body.operationKey as `0x${string}`) : null;
     const payloadHash = typeof body.payloadHash === "string" ? body.payloadHash : null;
+    const { calls, transactionPlan } = readTransactionPlanFromBody(body);
+    const x402AuthorizationRequest = readX402AuthorizationRequest(body);
     const now = nowDate();
     const prepareError =
       intent.paymentMode === "x402_authorization"
-        ? hasX402AuthorizationRequest(body)
+        ? x402AuthorizationRequest
           ? null
           : "RateLoop ask did not return an x402 authorization request. Review the draft and try again."
-        : readTransactionPlanCalls(body).length > 0
+        : calls.length > 0
           ? null
           : "RateLoop ask did not return an executable transaction plan. Review the draft and try again.";
     if (prepareError) {
@@ -366,11 +414,22 @@ export async function prepareAgentSigningIntent(params: {
             wallet_address = ?,
             operation_key = ?,
             payload_hash = ?,
+            transaction_plan = ?,
+            x402_authorization_request = ?,
             error = NULL,
             updated_at = ?
         WHERE id = ?
       `,
-      args: ["prepared", walletAddress, operationKey, payloadHash, now, intent.id],
+      args: [
+        "prepared",
+        walletAddress,
+        operationKey,
+        payloadHash,
+        transactionPlan ? JSON.stringify(transactionPlan) : null,
+        x402AuthorizationRequest ? JSON.stringify(x402AuthorizationRequest) : null,
+        now,
+        intent.id,
+      ],
     });
 
     return signingIntentResponse(
@@ -379,10 +438,12 @@ export async function prepareAgentSigningIntent(params: {
         operationKey,
         payloadHash,
         status: "prepared",
+        transactionPlan,
         updatedAt: now,
         walletAddress,
+        x402AuthorizationRequest,
       },
-      body,
+      signingIntentPrepareExtras(body),
     );
   } catch (error) {
     const now = nowDate();
