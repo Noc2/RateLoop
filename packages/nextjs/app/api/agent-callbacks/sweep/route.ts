@@ -30,7 +30,7 @@ function isAuthorizedCallbackRequest(token: string, secret: string) {
 }
 
 export async function POST(request: NextRequest) {
-  const secret = process.env.RATELOOP_AGENT_CALLBACK_DELIVERY_SECRET?.trim() ?? "";
+  const secret = process.env.RATELOOP_AGENT_CALLBACK_DELIVERY_SECRET?.trim() || process.env.CRON_SECRET?.trim() || "";
   if (!secret) {
     return NextResponse.json({ error: "Callback delivery is not configured." }, { status: 503 });
   }

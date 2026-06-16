@@ -8,6 +8,10 @@
     {
       "path": "/api/confidentiality/log-roots/publish",
       "schedule": "7 0 * * *"
+    },
+    {
+      "path": "/api/agent-callbacks/sweep",
+      "schedule": "23 * * * *"
     }
   ]
 }
