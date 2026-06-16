@@ -54,6 +54,7 @@ export function getWorldIdClientConfig() {
 }
 
 export function getWorldIdServerConfig(purpose: WorldIdActionPurpose = "credential") {
+  const appId = cleanEnv(process.env.NEXT_PUBLIC_WORLD_ID_APP_ID);
   const { error: rpIdError, rpId } = resolveWorldIdRpContextId();
   const credentialAction =
     cleanEnv(process.env.NEXT_PUBLIC_WORLD_ID_CREDENTIAL_ACTION) ?? DEFAULT_WORLD_ID_CREDENTIAL_ACTION;
@@ -63,6 +64,7 @@ export function getWorldIdServerConfig(purpose: WorldIdActionPurpose = "credenti
 
   return {
     action: purpose === "presence" ? presenceAction : credentialAction,
+    appId,
     credentialAction,
     environment: environment === "staging" ? "staging" : "production",
     presenceAction,

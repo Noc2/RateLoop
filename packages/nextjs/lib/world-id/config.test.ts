@@ -73,6 +73,7 @@ test("World ID server config selects credential and presence actions", () => {
 
   assert.deepEqual(getWorldIdServerConfig("credential"), {
     action: "rateloop-credential-test",
+    appId: "app_staging_rateloop_local",
     credentialAction: "rateloop-credential-test",
     environment: "production",
     presenceAction: "rateloop-presence-test",

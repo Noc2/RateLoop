@@ -13,6 +13,13 @@ import {
   getWorldCredentialOption,
   getWorldIdSignalForPurpose,
 } from "~~/lib/world-id/credentials";
+import {
+  type WorldIdDiagnosticPhase,
+  getConnectorScheme,
+  getWorldIdErrorMessage,
+  getWorldIdRequestId,
+  reportWorldIdDiagnostic,
+} from "~~/lib/world-id/diagnostics";
 import { parseWorldIdProof } from "~~/lib/world-id/onchainProof";
 import {
   getWorldIdProofDialogAutoStartKey,
@@ -34,6 +41,7 @@ import { notification } from "~~/utils/scaffold-eth";
 
 type RpContextResponse = {
   action: string;
+  diagnosticId?: string;
   environment: "production" | "staging";
   purpose: WorldIdProofPurpose;
   rpContext: RpContext;
@@ -121,6 +129,7 @@ export function WorldIdProofDialog({ address, kind, onClose, onSuccess, open, pu
 
     return {
       action: body.action,
+      diagnosticId: typeof body.diagnosticId === "string" ? body.diagnosticId : undefined,
       environment: body.environment,
       purpose,
       rpContext: body.rpContext,
@@ -185,8 +194,42 @@ export function WorldIdProofDialog({ address, kind, onClose, onSuccess, open, pu
     setMessage(null);
     setStatus("loading");
 
+    let diagnosticContext: RpContextResponse | null = null;
+    let diagnosticPhase: WorldIdDiagnosticPhase = "rp_context";
+    let idkitRequestId: string | null = null;
+    const reportRequestDiagnostic = (
+      event: "request_created" | "request_create_failed" | "poll_failed" | "request_exception",
+      extras: {
+        connectorScheme?: string | null;
+        errorCode?: string | null;
+        message?: string | null;
+        phase?: WorldIdDiagnosticPhase;
+      } = {},
+    ) => {
+      if (!diagnosticContext) {
+        return;
+      }
+
+      void reportWorldIdDiagnostic({
+        action: diagnosticContext.action,
+        appId,
+        credential: option.identifier,
+        diagnosticId: diagnosticContext.diagnosticId,
+        environment: diagnosticContext.environment,
+        event,
+        phase: extras.phase ?? diagnosticPhase,
+        purpose,
+        requestId: idkitRequestId,
+        rpContextExpiresAt: diagnosticContext.rpContext.expires_at,
+        rpId: diagnosticContext.rpContext.rp_id,
+        ...extras,
+      });
+    };
+
     try {
       const requestContext = await fetchRequestContext();
+      diagnosticContext = requestContext;
+      diagnosticPhase = "create_request";
       if (activeRequestRef.current !== requestId || abortController.signal.aborted) return;
 
       const request = await IDKit.request({
@@ -202,6 +245,12 @@ export function WorldIdProofDialog({ address, kind, onClose, onSuccess, open, pu
           signal,
         }),
       );
+      idkitRequestId = getWorldIdRequestId(request);
+      reportRequestDiagnostic("request_created", {
+        connectorScheme: getConnectorScheme(request.connectorURI),
+        phase: "poll",
+      });
+      diagnosticPhase = "poll";
       if (activeRequestRef.current !== requestId || abortController.signal.aborted) return;
 
       setConnectorURI(request.connectorURI);
@@ -212,6 +261,10 @@ export function WorldIdProofDialog({ address, kind, onClose, onSuccess, open, pu
         setStatus("error");
         setMessage("World ID request expired. Try again with a fresh request.");
         setErrorCode("timeout");
+        reportRequestDiagnostic("poll_failed", {
+          errorCode: "timeout",
+          message: "World ID request expired before polling could start.",
+        });
         return;
       }
 
@@ -229,11 +282,16 @@ export function WorldIdProofDialog({ address, kind, onClose, onSuccess, open, pu
         setStatus("error");
         setMessage(nextMessage);
         setErrorCode(completion.error);
+        reportRequestDiagnostic("poll_failed", {
+          errorCode: completion.error,
+          message: nextMessage,
+        });
         return;
       }
 
       setIsAwaitingApproval(false);
       setIsSubmitting(true);
+      diagnosticPhase = "submit_onchain";
       await submitProof(completion.result, requestContext);
       if (activeRequestRef.current !== requestId || abortController.signal.aborted) return;
 
@@ -248,6 +306,10 @@ export function WorldIdProofDialog({ address, kind, onClose, onSuccess, open, pu
       setStatus("error");
       setMessage(nextMessage);
       setErrorCode(isWorldIdProofExpiredError(error) ? "timeout" : "generic_error");
+      reportRequestDiagnostic(diagnosticPhase === "create_request" ? "request_create_failed" : "request_exception", {
+        errorCode: isWorldIdProofExpiredError(error) ? "timeout" : "generic_error",
+        message: getWorldIdErrorMessage(error),
+      });
     } finally {
       if (activeRequestRef.current === requestId) {
         setIsPreparing(false);

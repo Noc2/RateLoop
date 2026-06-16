@@ -73,6 +73,8 @@ test("World ID RP context route signs a short-lived v4 credential request", asyn
 
   assert.equal(response.status, 200);
   assert.equal(body.action, "rateloop-test");
+  assert.equal(typeof body.diagnosticId, "string");
+  assert.ok(body.diagnosticId.length > 0);
   assert.equal(body.environment, "staging");
   assert.equal(body.purpose, "credential");
   assert.equal(body.rpContext.rp_id, "rp_test");

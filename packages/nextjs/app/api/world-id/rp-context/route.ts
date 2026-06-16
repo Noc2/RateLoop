@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { signRequest } from "@worldcoin/idkit/signing";
 import { type WorldIdActionPurpose, getWorldIdServerConfig } from "~~/lib/world-id/config";
+import { createWorldIdDiagnosticId } from "~~/lib/world-id/diagnostics";
 import { checkRateLimit } from "~~/utils/rateLimit";
 
 const RP_CONTEXT_TTL_SECONDS = 5 * 60;
@@ -22,6 +23,14 @@ export async function POST(request: NextRequest): Promise<Response> {
   const config = getWorldIdServerConfig(purpose);
 
   if (!config.rpId || config.rpIdError) {
+    console.warn("[world-id] rp-context unavailable", {
+      action: config.action,
+      appId: config.appId,
+      environment: config.environment,
+      purpose,
+      reason: config.rpIdError ?? "missing_rp_id",
+      signingKeyConfigured: Boolean(config.signingKey),
+    });
     return NextResponse.json(
       { error: config.rpIdError ?? "World ID relying-party ID is not configured for this deployment." },
       { status: 503 },
@@ -29,18 +38,39 @@ export async function POST(request: NextRequest): Promise<Response> {
   }
 
   if (!config.signingKey) {
+    console.warn("[world-id] rp-context unavailable", {
+      action: config.action,
+      appId: config.appId,
+      environment: config.environment,
+      purpose,
+      reason: "missing_signing_key",
+      rpId: config.rpId,
+      signingKeyConfigured: false,
+    });
     return NextResponse.json({ error: "World ID signing key is not configured for this deployment." }, { status: 503 });
   }
 
   try {
+    const diagnosticId = createWorldIdDiagnosticId();
     const signature = signRequest({
       action: config.action,
       signingKeyHex: config.signingKey,
       ttl: RP_CONTEXT_TTL_SECONDS,
     });
 
+    console.info("[world-id] rp-context issued", {
+      action: config.action,
+      appId: config.appId,
+      diagnosticId,
+      environment: config.environment,
+      expiresAt: signature.expiresAt,
+      purpose,
+      rpId: config.rpId,
+    });
+
     return NextResponse.json({
       action: config.action,
+      diagnosticId,
       environment: config.environment,
       purpose,
       rpContext: {
@@ -52,7 +82,14 @@ export async function POST(request: NextRequest): Promise<Response> {
       },
     });
   } catch (error) {
-    console.error("[world-id] failed to sign request", error);
+    console.error("[world-id] failed to sign request", {
+      action: config.action,
+      appId: config.appId,
+      environment: config.environment,
+      error,
+      purpose,
+      rpId: config.rpId,
+    });
     return NextResponse.json({ error: "World ID request signing failed." }, { status: 500 });
   }
 }

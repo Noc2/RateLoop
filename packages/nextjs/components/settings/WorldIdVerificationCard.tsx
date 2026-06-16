@@ -35,6 +35,13 @@ import {
 } from "~~/lib/referrals/referralAttribution";
 import { getWorldIdClientConfig } from "~~/lib/world-id/config";
 import { WORLD_CREDENTIAL_PROOF_OF_HUMAN, getWorldIdSignalForPurpose } from "~~/lib/world-id/credentials";
+import {
+  type WorldIdDiagnosticPhase,
+  getConnectorScheme,
+  getWorldIdErrorMessage,
+  getWorldIdRequestId,
+  reportWorldIdDiagnostic,
+} from "~~/lib/world-id/diagnostics";
 import { readLocalE2EWorldIdMock } from "~~/lib/world-id/e2eMock";
 import { parseWorldIdProof } from "~~/lib/world-id/onchainProof";
 import {
@@ -57,6 +64,7 @@ const WORLD_ID_V4_ATTEST_FUNCTION_NAME = "attestHumanCredentialWithV4Proof";
 
 type RpContextResponse = {
   action: string;
+  diagnosticId?: string;
   environment: "production" | "staging";
   purpose?: "credential" | "presence";
   rpContext: RpContext;
@@ -280,6 +288,7 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
 
     return {
       action: body.action,
+      diagnosticId: typeof body.diagnosticId === "string" ? body.diagnosticId : undefined,
       environment: body.environment,
       purpose: "credential",
       rpContext: body.rpContext,
@@ -541,6 +550,38 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
     setVerificationState({ status: "loading" });
     setWorldIdErrorCode(null);
 
+    let diagnosticContext: RpContextResponse | null = null;
+    let diagnosticPhase: WorldIdDiagnosticPhase = "rp_context";
+    let idkitRequestId: string | null = null;
+    const reportRequestDiagnostic = (
+      event: "request_created" | "request_create_failed" | "poll_failed" | "request_exception",
+      extras: {
+        connectorScheme?: string | null;
+        errorCode?: string | null;
+        message?: string | null;
+        phase?: WorldIdDiagnosticPhase;
+      } = {},
+    ) => {
+      if (!diagnosticContext) {
+        return;
+      }
+
+      void reportWorldIdDiagnostic({
+        action: diagnosticContext.action,
+        appId,
+        credential: "proof_of_human",
+        diagnosticId: diagnosticContext.diagnosticId,
+        environment: diagnosticContext.environment,
+        event,
+        phase: extras.phase ?? diagnosticPhase,
+        purpose: "credential",
+        requestId: idkitRequestId,
+        rpContextExpiresAt: diagnosticContext.rpContext.expires_at,
+        rpId: diagnosticContext.rpContext.rp_id,
+        ...extras,
+      });
+    };
+
     try {
       const localMock = readLocalE2EWorldIdMock();
       const requestContext = localMock
@@ -551,6 +592,8 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
             rpContext: localMock.rpContext,
           }
         : await fetchWorldIdRequestContext();
+      diagnosticContext = requestContext;
+      diagnosticPhase = "create_request";
       if (activeWorldIdRequestRef.current !== requestId || abortController.signal.aborted) {
         return;
       }
@@ -595,6 +638,12 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
           signal,
         }),
       );
+      idkitRequestId = getWorldIdRequestId(request);
+      reportRequestDiagnostic("request_created", {
+        connectorScheme: getConnectorScheme(request.connectorURI),
+        phase: "poll",
+      });
+      diagnosticPhase = "poll";
       if (activeWorldIdRequestRef.current !== requestId || abortController.signal.aborted) {
         return;
       }
@@ -609,6 +658,10 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
           message: "World ID request expired. Try again with a fresh request.",
         });
         setWorldIdErrorCode("timeout");
+        reportRequestDiagnostic("poll_failed", {
+          errorCode: "timeout",
+          message: "World ID request expired before polling could start.",
+        });
         return;
       }
 
@@ -629,10 +682,15 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
         const message = `World ID returned ${formatWorldIdError(completion.error)}.`;
         setVerificationState({ status: "error", message });
         setWorldIdErrorCode(completion.error);
+        reportRequestDiagnostic("poll_failed", {
+          errorCode: completion.error,
+          message,
+        });
         return;
       }
 
       setIsSubmittingWorldIdCredential(true);
+      diagnosticPhase = "submit_onchain";
       try {
         await handleVerify(completion.result, requestContext);
         if (activeWorldIdRequestRef.current !== requestId || abortController.signal.aborted) {
@@ -656,6 +714,10 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
         message,
       });
       setWorldIdErrorCode(isWorldIdProofExpiredError(error) ? "timeout" : "generic_error");
+      reportRequestDiagnostic(diagnosticPhase === "create_request" ? "request_create_failed" : "request_exception", {
+        errorCode: isWorldIdProofExpiredError(error) ? "timeout" : "generic_error",
+        message: getWorldIdErrorMessage(error),
+      });
     } finally {
       if (activeWorldIdRequestRef.current === requestId) {
         setIsPreparingWorldIdRequest(false);
