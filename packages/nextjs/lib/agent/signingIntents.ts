@@ -187,6 +187,19 @@ async function loadIntentByToken(params: { intentId: string; token: string }): P
   return intent;
 }
 
+function readTransactionPlanCalls(body: JsonObject) {
+  const transactionPlan =
+    body.transactionPlan && typeof body.transactionPlan === "object" && !Array.isArray(body.transactionPlan)
+      ? (body.transactionPlan as JsonObject)
+      : null;
+  return Array.isArray(transactionPlan?.calls) ? transactionPlan.calls : [];
+}
+
+function hasX402AuthorizationRequest(body: JsonObject) {
+  const request = body.x402AuthorizationRequest;
+  return Boolean(request && typeof request === "object" && !Array.isArray(request));
+}
+
 function signingIntentResponse(intent: AgentSigningIntentRecord, extras: JsonObject = {}) {
   return {
     chainId: intent.chainId,
@@ -321,6 +334,31 @@ export async function prepareAgentSigningIntent(params: {
     const operationKey = typeof body.operationKey === "string" ? (body.operationKey as `0x${string}`) : null;
     const payloadHash = typeof body.payloadHash === "string" ? body.payloadHash : null;
     const now = nowDate();
+    const prepareError =
+      intent.paymentMode === "x402_authorization"
+        ? hasX402AuthorizationRequest(body)
+          ? null
+          : "RateLoop ask did not return an x402 authorization request. Review the draft and try again."
+        : readTransactionPlanCalls(body).length > 0
+          ? null
+          : "RateLoop ask did not return an executable transaction plan. Review the draft and try again.";
+    if (prepareError) {
+      await dbClient.execute({
+        sql: `
+          UPDATE agent_signing_intents
+          SET status = 'failed',
+              wallet_address = ?,
+              operation_key = ?,
+              payload_hash = ?,
+              error = ?,
+              updated_at = ?
+          WHERE id = ?
+        `,
+        args: [walletAddress, operationKey, payloadHash, prepareError, now, intent.id],
+      });
+      throw new McpToolError(prepareError);
+    }
+
     await dbClient.execute({
       sql: `
         UPDATE agent_signing_intents
