@@ -51,6 +51,8 @@ POST /api/agent/handoffs
 
 Return the `handoffUrl` to the user. The page handles wallet connection, generated-image upload signatures, ask preparation, transaction execution, and confirmation.
 
+For browser-only signing without a full handoff page, create a signing intent via `POST /api/agent/signing-intents` and send the user to `/agent/sign/{intentId}#token=…` (token in the URL fragment, not query string). Prepare and complete via the signing-intent routes with the `x-rateloop-signing-intent-token` header.
+
 Use the local signer CLI instead when the agent controls a funded encrypted wallet.
 
 ## Use JSON Routes When
@@ -64,6 +66,9 @@ Core routes:
 GET  /api/agent/templates
 POST /api/agent/quote
 POST /api/agent/handoffs
+POST /api/agent/signing-intents
+POST /api/agent/signing-intents/{intentId}/prepare
+POST /api/agent/signing-intents/{intentId}/complete
 POST /api/agent/asks
 POST /api/agent/asks/{operationKey}/confirm
 GET  /api/agent/asks/{operationKey}
