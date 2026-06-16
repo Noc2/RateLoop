@@ -445,8 +445,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
             }
             if (existing.snapshot.status == SnapshotStatus.Finalized) {
                 (bool consumed, bool consumedKnown) = _roundPayoutSnapshotConsumptionStatus(existing);
-                if (!consumedKnown) revert SnapshotExists();
-                if (consumed) revert SnapshotConsumed();
+                if (consumedKnown && consumed) revert SnapshotConsumed();
             }
             _rejectStaleRoundPayoutSnapshot(snapshotKey, existing);
         }

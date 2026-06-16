@@ -2241,6 +2241,35 @@ contract ClusterPayoutOracleTest is Test {
         assertFalse(oracle.rejectedRoundPayoutSnapshotConsumed(snapshotKey));
     }
 
+    function test_FinalizedRoundPayoutSnapshotReproposalAllowedWhenConsumerViewReverts() public {
+        RevertingConsumedRoundPayoutSnapshotConsumer revertingConsumer = new RevertingConsumedRoundPayoutSnapshotConsumer();
+        oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_QUESTION_REWARD(), address(revertingConsumer));
+
+        bytes32 firstArtifact = keccak256("epoch-artifact");
+        _proposeDefaultCorrelationEpoch(1, keccak256("cluster-root"), firstArtifact);
+        vm.warp(2 hours + 2);
+        oracle.finalizeCorrelationEpoch(1);
+
+        IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
+        oracle.proposeRoundPayoutSnapshot(input);
+        bytes32 snapshotKey =
+            oracle.roundPayoutSnapshotKey(input.domain, input.rewardPoolId, input.contentId, input.roundId);
+        vm.warp(block.timestamp + 2 hours + 1);
+        oracle.finalizeRoundPayoutSnapshot(snapshotKey);
+
+        oracle.rejectFinalizedCorrelationEpoch(1, keccak256("bad-parent"));
+
+        bytes32 replacementArtifact = keccak256("epoch-artifact-v2");
+        _proposeDefaultCorrelationEpoch(1, keccak256("cluster-root"), replacementArtifact);
+        input.artifactHash = replacementArtifact;
+        input.artifactURI = "ipfs://round-v2";
+        oracle.proposeRoundPayoutSnapshot(input);
+
+        ClusterPayoutOracle.RoundPayoutProposal memory replacement = oracle.roundPayoutProposal(snapshotKey);
+        assertEq(uint8(replacement.snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Proposed));
+        assertEq(replacement.artifactHash, replacementArtifact);
+    }
+
     function test_StaleProposedRoundPayoutSnapshotCanBeReplacedAfterParentReproposal() public {
         bytes32 firstArtifact = keccak256("epoch-artifact");
         _proposeDefaultCorrelationEpoch(1, keccak256("cluster-root"), firstArtifact);
