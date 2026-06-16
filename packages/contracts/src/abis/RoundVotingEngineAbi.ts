@@ -520,30 +520,6 @@ export const RoundVotingEngineAbi = [
   },
   {
     "type": "function",
-    "name": "hasRole",
-    "inputs": [
-      {
-        "name": "role",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      },
-      {
-        "name": "account",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bool",
-        "internalType": "bool"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "identityCommitState",
     "inputs": [
       {
@@ -629,6 +605,25 @@ export const RoundVotingEngineAbi = [
         "name": "",
         "type": "bool",
         "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "nextRoundIdForContent",
+    "inputs": [
+      {
+        "name": "contentId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
@@ -2051,22 +2046,6 @@ export const RoundVotingEngineAbi = [
   },
   {
     "type": "error",
-    "name": "AccessControlUnauthorizedAccount",
-    "inputs": [
-      {
-        "name": "account",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "neededRole",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ]
-  },
-  {
-    "type": "error",
     "name": "AlreadyClaimed",
     "inputs": []
   },
@@ -2102,17 +2081,7 @@ export const RoundVotingEngineAbi = [
   },
   {
     "type": "error",
-    "name": "EnforcedPause",
-    "inputs": []
-  },
-  {
-    "type": "error",
     "name": "EpochNotEnded",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "ExpectedPause",
     "inputs": []
   },
   {

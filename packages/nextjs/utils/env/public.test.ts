@@ -71,6 +71,12 @@ test("World Chain Sepolia deployment metadata includes production-required contr
   assert.deepEqual(missingContracts, []);
 });
 
+test("World Chain mainnet deployment metadata includes production-required contracts", () => {
+  const missingContracts = listMissingRequiredTargetContracts([480], deployedContracts);
+
+  assert.deepEqual(missingContracts, []);
+});
+
 test("public env source no longer exposes an undeployed-network bypass", () => {
   const publicEnvSource = readFileSync(new URL("./public.ts", import.meta.url), "utf8");
   const exampleEnvSource = readFileSync(new URL("../../.env.example", import.meta.url), "utf8");

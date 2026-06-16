@@ -13,15 +13,23 @@ test("World Chain Sepolia uses ETH as the native token symbol", () => {
   assert.equal(network.nativeCurrency.symbol, "ETH");
 });
 
+test("World Chain mainnet is an available production target", () => {
+  const [network] = resolveTargetNetworks(`${chains.worldchain.id}`, {
+    production: true,
+  });
+
+  assert.equal(network.id, chains.worldchain.id);
+});
+
 test("production builds can explicitly opt into the local Foundry chain", () => {
-  const networks = resolveTargetNetworks(`${chains.foundry.id},${chains.worldchainSepolia.id}`, {
+  const networks = resolveTargetNetworks(`${chains.foundry.id},${chains.worldchain.id}`, {
     allowFoundryInProduction: true,
     production: true,
   });
 
   assert.deepEqual(
     networks.map(network => network.id),
-    [chains.foundry.id, chains.worldchainSepolia.id],
+    [chains.foundry.id, chains.worldchain.id],
   );
 });
 

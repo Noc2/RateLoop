@@ -1350,6 +1350,11 @@ export const FrontendRegistryAbi = [
   },
   {
     "type": "error",
+    "name": "HistoricalFeeCreditor",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "InvalidInitialization",
     "inputs": []
   },

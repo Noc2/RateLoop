@@ -81,13 +81,7 @@ function getActiveNetwork(): PonderNetworkName {
 
   if (!isPonderNetworkName(value)) {
     throw new Error(
-      `Unsupported PONDER_NETWORK "${value}". Use hardhat or worldchainSepolia.`,
-    );
-  }
-
-  if (value === "worldchain") {
-    throw new Error(
-      "PONDER_NETWORK=worldchain is disabled until World Chain mainnet deployment artifacts are committed.",
+      `Unsupported PONDER_NETWORK "${value}". Use hardhat, worldchainSepolia, or worldchain.`,
     );
   }
 
