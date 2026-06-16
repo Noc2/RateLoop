@@ -246,6 +246,14 @@ function optionalNonNegativeNumberParam(
   return Number.isSafeInteger(parsed) ? parsed : Number.NaN;
 }
 
+function resolveCorrelationNowSeconds(value: string | undefined): bigint | null {
+  if (value === undefined) {
+    return BigInt(Math.floor(Date.now() / 1000));
+  }
+  if (!/^\d+$/.test(value)) return null;
+  return BigInt(value);
+}
+
 function formatCorrelationVoteRow(
   row: {
     account: `0x${string}` | null;
@@ -535,6 +543,10 @@ export function registerCorrelationRoutes(app: ApiApp) {
       );
     }
     if (Number.isNaN(offset)) return c.json({ error: "Invalid offset" }, 400);
+    const nowSeconds = resolveCorrelationNowSeconds(c.req.query("now"));
+    if (nowSeconds === null) {
+      return c.json({ error: "now must be a non-negative integer" }, 400);
+    }
 
     const loadVoteRows = (scanLimit: number, scanOffset: number) =>
       db
@@ -649,7 +661,6 @@ export function registerCorrelationRoutes(app: ApiApp) {
     let eligibleSeen = 0;
     let scanOffset = 0;
     let banState: ActiveCorrelationIdentityBanState | null = null;
-    const nowSeconds = BigInt(Math.floor(Date.now() / 1000));
     for (let page = 0; page < MAX_VOTE_SCAN_PAGES; page += 1) {
       const rows = await loadVoteRows(VOTE_SCAN_PAGE_SIZE, scanOffset);
       if (banState === null && rows.length > 0) {
@@ -702,6 +713,10 @@ export function registerCorrelationRoutes(app: ApiApp) {
       );
     }
     if (Number.isNaN(offset)) return c.json({ error: "Invalid offset" }, 400);
+    const nowSeconds = resolveCorrelationNowSeconds(c.req.query("now"));
+    if (nowSeconds === null) {
+      return c.json({ error: "now must be a non-negative integer" }, 400);
+    }
     if (roundId > BigInt(Number.MAX_SAFE_INTEGER)) {
       return c.json({ error: "roundId is too large" }, 400);
     }
@@ -895,9 +910,7 @@ export function registerCorrelationRoutes(app: ApiApp) {
 
     const banState =
       firstVotes.length > 0
-        ? await loadActiveCorrelationIdentityBanState(
-            BigInt(Math.floor(Date.now() / 1000)),
-          )
+        ? await loadActiveCorrelationIdentityBanState(nowSeconds)
         : null;
     const items: ReturnType<typeof formatCorrelationVoteRow>["item"][] = [];
     const excludedVotes: NonNullable<
