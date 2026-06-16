@@ -1,5 +1,5 @@
 import type { Context } from "hono";
-import { ROUND_STATE } from "@rateloop/contracts/protocol";
+import { REVEAL_FAILED_GRACE_MULTIPLIER, ROUND_STATE } from "@rateloop/contracts/protocol";
 import { and, asc, eq, inArray, or, sql } from "ponder";
 import { db } from "ponder:api";
 import { content, feedbackBonusPool, round } from "ponder:schema";
@@ -67,7 +67,7 @@ export function registerKeeperRoutes(app: ApiApp) {
       and ${now} >= greatest(
         ${round.lastCommitRevealableAfter},
         coalesce(${round.startTime}, 0) + ${round.maxDuration}
-      ) + ${round.revealGracePeriod}
+      ) + ${round.revealGracePeriod} * ${REVEAL_FAILED_GRACE_MULTIPLIER}
     `;
 
     const openRounds = await db
@@ -130,8 +130,16 @@ export function registerKeeperRoutes(app: ApiApp) {
       .where(
         and(
           eq(content.status, 0),
+          sql`${content.bundleId} = 0`,
           sql`${content.lastActivityAt} > 0`,
           sql`${now} > ${content.lastActivityAt} + ${dormancyPeriod}`,
+          sql`not exists (
+            select 1 from ${round}
+            where ${round.contentId} = ${content.id}
+              and ${round.state} = ${ROUND_STATE.Open}
+              and ${round.voteCount} > 0
+              and ${round.totalStake} > 0
+          )`,
         ),
       )
       .orderBy(asc(content.lastActivityAt), asc(content.id))

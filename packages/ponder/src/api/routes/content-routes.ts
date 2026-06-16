@@ -1,4 +1,4 @@
-import { ROUND_STATE } from "@rateloop/contracts/protocol";
+import { REVEAL_FAILED_GRACE_MULTIPLIER, ROUND_STATE } from "@rateloop/contracts/protocol";
 import { canonicalJson, canonicalJsonHash } from "@rateloop/node-utils/json";
 import {
   aggregateProfileSelfReports,
@@ -804,7 +804,7 @@ function getVoteableContentCondition() {
                         then ${round.lastCommitRevealableAfter}
                       else ${round.startTime} + ${round.maxDuration}
                     end
-                  ) + ${round.revealGracePeriod}
+                  ) + ${round.revealGracePeriod} * ${REVEAL_FAILED_GRACE_MULTIPLIER}
                 )
               )
             )

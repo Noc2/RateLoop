@@ -37,6 +37,9 @@ export const DEFAULT_ROUND_CONFIG = {
 
 export const DEFAULT_REVEAL_GRACE_PERIOD_SECONDS = 60 * 60;
 
+/** Matches `RoundCleanupLib.REVEAL_FAILED_GRACE_MULTIPLIER` in foundry. */
+export const REVEAL_FAILED_GRACE_MULTIPLIER = 24;
+
 export const EPOCH_WEIGHT_BPS = {
   blind: BPS_SCALE,
   informed: 2_500,
