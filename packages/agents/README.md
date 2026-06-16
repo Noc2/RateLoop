@@ -43,7 +43,11 @@ yarn agents:templates
 
 # Validate a focused example ask.
 yarn agents:lint --file packages/agents/examples/questions/landing-pitch-review.json
+```
 
+`agents:lint` checks structural payload shape (category, template, context URLs, bounty fields, wallet shape). Submit-time economics (`minSubmissionUsdcPool`, coverage minimum vs `maxVoters`), image moderation status, and on-chain gates run only when `askHumans` executes against the hosted API (or via `local-ask` after the same server-side validation path).
+
+```bash
 # First run without a funded wallet, signature, transaction, callback, or bounty.
 yarn agents:sandbox --file packages/agents/examples/questions/landing-pitch-review.json
 
@@ -164,6 +168,7 @@ cp packages/agents/.env.example packages/agents/.env
 | `RATELOOP_CHAIN_ID`                                         | Optional chain guard; `local-ask` refuses mismatched RPCs                                                                |
 | `RATELOOP_LOCAL_SIGNER_USDC_ADDRESS`                        | Optional trusted USDC override used to validate EIP-3009 typed-data before signing                                       |
 | `RATELOOP_LOCAL_SIGNER_X402_SUBMITTER_ADDRESS`              | Optional trusted submitter override used to validate EIP-3009 authorization recipients; the variable name is legacy      |
+| `RATELOOP_X402_QUESTION_SUBMITTER_ADDRESS`                  | Alias for `RATELOOP_LOCAL_SIGNER_X402_SUBMITTER_ADDRESS` when validating EIP-3009 authorization recipients               |
 | `RATELOOP_LOCAL_SIGNER_CONTENT_REGISTRY_ADDRESS`            | Optional trusted ContentRegistry override used to validate wallet-call transaction plans                                 |
 | `RATELOOP_LOCAL_SIGNER_QUESTION_REWARD_POOL_ESCROW_ADDRESS` | Optional trusted QuestionRewardPoolEscrow override used to validate wallet-call approvals                                |
 | `RATELOOP_LOCAL_SIGNER_KEYSTORE_PATH`                       | Encrypted local signer keystore path                                                                                     |
@@ -175,6 +180,8 @@ cp packages/agents/.env.example packages/agents/.env
 | `RATELOOP_MCP_TOKEN`                                        | Optional managed agent bearer token with quote, ask, read, and balance scopes                                            |
 | `RATELOOP_MCP_API_URL`                                      | Optional MCP endpoint override; with `RATELOOP_MCP_TOKEN` SDK clients default to `/api/mcp`, otherwise `/api/mcp/public` |
 | `RATELOOP_MCP_PROTOCOL_VERSION`                             | Optional MCP protocol version override                                                                                   |
+
+See [`docs/env-parity.md`](../../docs/env-parity.md) for USDC aliases, E2E flags, and contract-address prefix mapping across packages.
 
 ## Examples
 

@@ -20,6 +20,8 @@ The exported helper names use the RateLoop namespace.
 
 Framework-specific hooks and UI components should live in a follow-up package rather than this core SDK.
 
+**Chain IDs:** `4801` = World Chain Sepolia (testnet); `480` = World Chain mainnet (current in-repo artifact is the `mainnet-canary` profile). Examples below use Sepolia unless noted.
+
 ## Available Today
 
 - client config normalization via `createRateLoopClient(...)`
