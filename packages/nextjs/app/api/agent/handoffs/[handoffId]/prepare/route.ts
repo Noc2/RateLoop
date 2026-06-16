@@ -351,8 +351,17 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ha
             409,
           );
         }
-        const assets = await listAgentAskHandoffAssets(handoff.id);
-        return buildAgentAskHandoffResponse({ assets, handoff, includeImageData: true });
+        const transactionPlan =
+          handoff.transactionPlan &&
+          typeof handoff.transactionPlan === "object" &&
+          !Array.isArray(handoff.transactionPlan)
+            ? handoff.transactionPlan
+            : null;
+        const calls = Array.isArray(transactionPlan?.calls) ? transactionPlan.calls : [];
+        if (calls.length > 0) {
+          const assets = await listAgentAskHandoffAssets(handoff.id);
+          return buildAgentAskHandoffResponse({ assets, handoff, includeImageData: true });
+        }
       }
 
       let assets = await listAgentAskHandoffAssets(handoff.id);
