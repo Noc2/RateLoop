@@ -9,6 +9,7 @@ const originalCredentialAction = env.NEXT_PUBLIC_WORLD_ID_CREDENTIAL_ACTION;
 const originalPresenceAction = env.NEXT_PUBLIC_WORLD_ID_PRESENCE_ACTION;
 const originalAppId = env.NEXT_PUBLIC_WORLD_ID_APP_ID;
 const originalEnvironment = env.NEXT_PUBLIC_WORLD_ID_ENVIRONMENT;
+const originalProofMode = env.NEXT_PUBLIC_WORLD_ID_PROOF_MODE;
 const originalRpId = env.WORLD_ID_RP_ID;
 const originalV4RpId = env.WORLD_ID_V4_RP_ID;
 const originalSigningKey = env.WORLD_ID_SIGNING_KEY;
@@ -49,6 +50,9 @@ afterEach(() => {
   if (originalEnvironment === undefined) delete env.NEXT_PUBLIC_WORLD_ID_ENVIRONMENT;
   else env.NEXT_PUBLIC_WORLD_ID_ENVIRONMENT = originalEnvironment;
 
+  if (originalProofMode === undefined) delete env.NEXT_PUBLIC_WORLD_ID_PROOF_MODE;
+  else env.NEXT_PUBLIC_WORLD_ID_PROOF_MODE = originalProofMode;
+
   if (originalRpId === undefined) delete env.WORLD_ID_RP_ID;
   else env.WORLD_ID_RP_ID = originalRpId;
 
@@ -59,7 +63,7 @@ afterEach(() => {
   else env.WORLD_ID_SIGNING_KEY = originalSigningKey;
 });
 
-test("World ID RP context route signs a short-lived v4 credential request", async () => {
+test("World ID RP context route signs a short-lived legacy credential request", async () => {
   env.NEXT_PUBLIC_WORLD_ID_CREDENTIAL_ACTION = "rateloop-test";
   env.NEXT_PUBLIC_WORLD_ID_PRESENCE_ACTION = "rateloop-presence";
   env.NEXT_PUBLIC_WORLD_ID_APP_ID = "app_test";
@@ -76,6 +80,7 @@ test("World ID RP context route signs a short-lived v4 credential request", asyn
   assert.equal(typeof body.diagnosticId, "string");
   assert.ok(body.diagnosticId.length > 0);
   assert.equal(body.environment, "staging");
+  assert.equal(body.proofMode, "legacy");
   assert.equal(body.purpose, "credential");
   assert.equal(body.rpContext.rp_id, "rp_test");
   assert.match(body.rpContext.nonce, /^0x[0-9a-f]+$/);
@@ -87,6 +92,7 @@ test("World ID RP context route signs presence requests with the presence action
   env.NEXT_PUBLIC_WORLD_ID_CREDENTIAL_ACTION = "rateloop-test";
   env.NEXT_PUBLIC_WORLD_ID_PRESENCE_ACTION = "rateloop-presence";
   env.NEXT_PUBLIC_WORLD_ID_APP_ID = "app_test";
+  env.NEXT_PUBLIC_WORLD_ID_PROOF_MODE = "v4";
   env.WORLD_ID_RP_ID = "rp_test";
   env.WORLD_ID_SIGNING_KEY = TEST_SIGNING_KEY;
 
@@ -95,7 +101,22 @@ test("World ID RP context route signs presence requests with the presence action
 
   assert.equal(response.status, 200);
   assert.equal(body.action, "rateloop-presence");
+  assert.equal(body.proofMode, "v4");
   assert.equal(body.purpose, "presence");
+});
+
+test("World ID RP context route rejects presence requests in legacy proof mode", async () => {
+  env.NEXT_PUBLIC_WORLD_ID_CREDENTIAL_ACTION = "rateloop-test";
+  env.NEXT_PUBLIC_WORLD_ID_PRESENCE_ACTION = "rateloop-presence";
+  env.NEXT_PUBLIC_WORLD_ID_APP_ID = "app_test";
+  env.WORLD_ID_RP_ID = "rp_test";
+  env.WORLD_ID_SIGNING_KEY = TEST_SIGNING_KEY;
+
+  const response = await POST(makeRequest({ purpose: "presence" }));
+  const body = await response.json();
+
+  assert.equal(response.status, 400);
+  assert.match(body.error, /v3 does not support fresh recheck/);
 });
 
 test("World ID RP context route fails closed without signing credentials", async () => {

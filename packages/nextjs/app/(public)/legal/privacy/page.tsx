@@ -106,7 +106,7 @@ const PrivacyPage: NextPage = () => {
         <p>This Interface also does not collect:</p>
         <ul>
           <li>Name, phone number, postal address, or similar offline contact details</li>
-          <li>Passport, government ID, or biometric document data from optional third-party identity providers</li>
+          <li>Passport, government ID, biometric, or document contents from World ID or other identity providers</li>
           <li>Advertising or cross-site behavioral tracking profiles</li>
           <li>Biometric data</li>
           <li>Your wallet private keys, seed phrases, or custody of your assets</li>

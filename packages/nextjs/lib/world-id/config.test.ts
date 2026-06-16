@@ -8,6 +8,7 @@ const originalPresenceAction = env.NEXT_PUBLIC_WORLD_ID_PRESENCE_ACTION;
 const originalAppId = env.NEXT_PUBLIC_WORLD_ID_APP_ID;
 const originalE2EMode = env.NEXT_PUBLIC_WORLD_ID_E2E_MODE;
 const originalEnvironment = env.NEXT_PUBLIC_WORLD_ID_ENVIRONMENT;
+const originalProofMode = env.NEXT_PUBLIC_WORLD_ID_PROOF_MODE;
 const originalRpId = env.WORLD_ID_RP_ID;
 const originalV4RpId = env.WORLD_ID_V4_RP_ID;
 const originalSigningKey = env.WORLD_ID_SIGNING_KEY;
@@ -28,6 +29,9 @@ afterEach(() => {
   if (originalEnvironment === undefined) delete env.NEXT_PUBLIC_WORLD_ID_ENVIRONMENT;
   else env.NEXT_PUBLIC_WORLD_ID_ENVIRONMENT = originalEnvironment;
 
+  if (originalProofMode === undefined) delete env.NEXT_PUBLIC_WORLD_ID_PROOF_MODE;
+  else env.NEXT_PUBLIC_WORLD_ID_PROOF_MODE = originalProofMode;
+
   if (originalRpId === undefined) delete env.WORLD_ID_RP_ID;
   else env.WORLD_ID_RP_ID = originalRpId;
 
@@ -38,7 +42,7 @@ afterEach(() => {
   else env.WORLD_ID_SIGNING_KEY = originalSigningKey;
 });
 
-test("World ID client config exposes v4 actions and local mock E2E mode", () => {
+test("World ID client config defaults to legacy proofs and exposes local mock E2E mode", () => {
   env.NEXT_PUBLIC_WORLD_ID_APP_ID = "app_staging_rateloop_local";
   env.NEXT_PUBLIC_WORLD_ID_CREDENTIAL_ACTION = "rateloop-credential-test";
   env.NEXT_PUBLIC_WORLD_ID_PRESENCE_ACTION = "rateloop-presence-test";
@@ -53,7 +57,21 @@ test("World ID client config exposes v4 actions and local mock E2E mode", () => 
     enabled: true,
     environment: "staging",
     presenceAction: "rateloop-presence-test",
+    proofMode: "legacy",
   });
+});
+
+test("World ID client config accepts compat and v4 proof modes", () => {
+  env.NEXT_PUBLIC_WORLD_ID_APP_ID = "app_staging_rateloop_local";
+
+  env.NEXT_PUBLIC_WORLD_ID_PROOF_MODE = "compat";
+  assert.equal(getWorldIdClientConfig().proofMode, "compat");
+
+  env.NEXT_PUBLIC_WORLD_ID_PROOF_MODE = "v4";
+  assert.equal(getWorldIdClientConfig().proofMode, "v4");
+
+  env.NEXT_PUBLIC_WORLD_ID_PROOF_MODE = "unexpected";
+  assert.equal(getWorldIdClientConfig().proofMode, "legacy");
 });
 
 test("World ID client config ignores unsupported E2E modes", () => {
@@ -77,6 +95,7 @@ test("World ID server config selects credential and presence actions", () => {
     credentialAction: "rateloop-credential-test",
     environment: "production",
     presenceAction: "rateloop-presence-test",
+    proofMode: "legacy",
     rpId: "rp_test",
     rpIdError: undefined,
     signingKey: "0x1234",

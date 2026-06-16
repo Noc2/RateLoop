@@ -1,3 +1,4 @@
+import type { WorldIdProofMode } from "./config";
 import type { WorldIdProofPurpose } from "./credentials";
 
 export type WorldIdDiagnosticEvent = "request_created" | "request_create_failed" | "poll_failed" | "request_exception";
@@ -15,6 +16,7 @@ export type WorldIdDiagnosticPayload = {
   event: WorldIdDiagnosticEvent;
   message?: string | null;
   phase?: WorldIdDiagnosticPhase;
+  proofMode?: WorldIdProofMode | string | null;
   purpose?: WorldIdProofPurpose | "credential" | "presence" | string;
   requestId?: string | null;
   rpContextExpiresAt?: number | string | null;

@@ -29,8 +29,8 @@ test("getWorldIdProofDialogAutoStartKey is stable for equivalent request inputs"
 
 test("getWorldIdProofDialogAutoStartKey changes when the proof purpose changes", () => {
   assert.notEqual(
-    getWorldIdProofDialogAutoStartKey(READY_INPUT),
-    getWorldIdProofDialogAutoStartKey({ ...READY_INPUT, purpose: "presence" }),
+    getWorldIdProofDialogAutoStartKey({ ...READY_INPUT, proofMode: "v4" }),
+    getWorldIdProofDialogAutoStartKey({ ...READY_INPUT, proofMode: "v4", purpose: "presence" }),
   );
 });
 
@@ -52,4 +52,12 @@ test("getWorldIdProofDialogUnavailableMessage explains missing prerequisites", (
   );
   assert.equal(getWorldIdProofDialogUnavailableMessage({ ...READY_INPUT, open: false, appId: null }), null);
   assert.equal(getWorldIdProofDialogUnavailableMessage(READY_INPUT), null);
+});
+
+test("getWorldIdProofDialogUnavailableMessage blocks v4-only actions in legacy mode", () => {
+  assert.match(
+    getWorldIdProofDialogUnavailableMessage({ ...READY_INPUT, purpose: "presence" }) ?? "",
+    /World ID v3 credential/,
+  );
+  assert.equal(getWorldIdProofDialogUnavailableMessage({ ...READY_INPUT, proofMode: "v4", purpose: "presence" }), null);
 });

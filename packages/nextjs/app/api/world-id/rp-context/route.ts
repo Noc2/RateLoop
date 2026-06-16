@@ -22,11 +22,28 @@ export async function POST(request: NextRequest): Promise<Response> {
   const purpose = await readPurpose(request);
   const config = getWorldIdServerConfig(purpose);
 
+  if (purpose === "presence" && config.proofMode === "legacy") {
+    console.warn("[world-id] rp-context unavailable", {
+      action: config.action,
+      appId: config.appId,
+      environment: config.environment,
+      proofMode: config.proofMode,
+      purpose,
+      reason: "legacy_presence_unsupported",
+      rpId: config.rpId,
+    });
+    return NextResponse.json(
+      { error: "World ID v3 does not support fresh recheck requests on this deployment." },
+      { status: 400 },
+    );
+  }
+
   if (!config.rpId || config.rpIdError) {
     console.warn("[world-id] rp-context unavailable", {
       action: config.action,
       appId: config.appId,
       environment: config.environment,
+      proofMode: config.proofMode,
       purpose,
       reason: config.rpIdError ?? "missing_rp_id",
       signingKeyConfigured: Boolean(config.signingKey),
@@ -42,6 +59,7 @@ export async function POST(request: NextRequest): Promise<Response> {
       action: config.action,
       appId: config.appId,
       environment: config.environment,
+      proofMode: config.proofMode,
       purpose,
       reason: "missing_signing_key",
       rpId: config.rpId,
@@ -64,6 +82,7 @@ export async function POST(request: NextRequest): Promise<Response> {
       diagnosticId,
       environment: config.environment,
       expiresAt: signature.expiresAt,
+      proofMode: config.proofMode,
       purpose,
       rpId: config.rpId,
     });
@@ -72,6 +91,7 @@ export async function POST(request: NextRequest): Promise<Response> {
       action: config.action,
       diagnosticId,
       environment: config.environment,
+      proofMode: config.proofMode,
       purpose,
       rpContext: {
         rp_id: config.rpId,
@@ -87,6 +107,7 @@ export async function POST(request: NextRequest): Promise<Response> {
       appId: config.appId,
       environment: config.environment,
       error,
+      proofMode: config.proofMode,
       purpose,
       rpId: config.rpId,
     });

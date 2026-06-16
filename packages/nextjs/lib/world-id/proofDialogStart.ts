@@ -1,10 +1,12 @@
-import type { WorldCredentialKind, WorldIdProofPurpose } from "./credentials";
+import type { WorldIdProofMode } from "./config";
+import { WORLD_CREDENTIAL_PROOF_OF_HUMAN, type WorldCredentialKind, type WorldIdProofPurpose } from "./credentials";
 
 type WorldIdProofDialogStartInput = {
   address?: string;
   appId?: string | null;
   kind: WorldCredentialKind;
   open: boolean;
+  proofMode?: WorldIdProofMode;
   purpose: WorldIdProofPurpose;
   signal?: string | null;
 };
@@ -20,6 +22,13 @@ export function getWorldIdProofDialogUnavailableMessage(input: WorldIdProofDialo
 
   if (!input.address || !input.signal) {
     return "Connect a wallet before verifying with World ID.";
+  }
+
+  if (
+    (input.proofMode ?? "legacy") === "legacy" &&
+    (input.purpose !== "credential" || input.kind !== WORLD_CREDENTIAL_PROOF_OF_HUMAN)
+  ) {
+    return "This deployment only supports the Proof of Human World ID v3 credential.";
   }
 
   return null;

@@ -71,6 +71,7 @@ function normalizeDiagnosticPayload(value: unknown): WorldIdDiagnosticPayload | 
     event,
     message: truncateWorldIdDiagnosticMessage(cleanString(input.message, 512)),
     phase: isWorldIdDiagnosticPhase(phase) ? phase : "unknown",
+    proofMode: cleanString(input.proofMode, 32),
     purpose: cleanString(input.purpose, 32),
     requestId: cleanString(input.requestId, 128),
     rpContextExpiresAt: cleanNumberOrString(input.rpContextExpiresAt),

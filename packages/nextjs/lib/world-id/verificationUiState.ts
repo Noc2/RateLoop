@@ -89,7 +89,8 @@ export function getWorldIdCredentialAttestationErrorMessage(
 
   if (
     message.includes("InvalidCredential") &&
-    (message.includes("attestHumanCredentialWithV4Proof") ||
+    (message.includes("attestHumanCredentialWithProof") ||
+      message.includes("attestHumanCredentialWithV4Proof") ||
       message.includes("attestWorldCredentialWithV4Proof") ||
       message.includes("attestHumanPresenceWithV4Proof"))
   ) {

@@ -218,12 +218,12 @@ const SmartContracts: NextPage = () => {
       <h3>Key Functions</h3>
       <ul>
         <li>
-          <code>attestHumanCredentialWithV4Proof(nullifier, nonce, expiresAtMin, proof)</code> &mdash; Verify a World ID
-          v4 Proof of Human credential and attach it to the submitting wallet.
+          <code>attestHumanCredentialWithProof(root, nullifierHash, proof)</code> &mdash; Verify a World ID v3 Proof of
+          Human credential and attach it to the submitting wallet.
         </li>
         <li>
-          <code>attestHumanPresenceWithV4Proof(kind, nullifier, nonce, expiresAtMin, proof)</code> &mdash; Record a
-          short-lived credential recheck for bounties that require fresh presence before voting.
+          <code>attestHumanCredentialWithV4Proof(nullifier, nonce, expiresAtMin, proof)</code> &mdash; Reserved for a
+          future governance upgrade to World ID v4 Proof of Human.
         </li>
         <li>
           <code>seedHumanCredential(rater, expiresAt, anchorId, evidenceHash)</code> &mdash; Seed an approved human
@@ -317,10 +317,9 @@ const SmartContracts: NextPage = () => {
           subjective template, rationale, and interpretation data stays off-chain; the contract commits to its hashes in{" "}
           <code>contentHash</code> and emits optional details through <code>ContentDetailsSubmitted</code>. Agent asks
           use the same function after the user or scoped agent wallet executes the returned funding and submission
-          calls. <code>rewardTerms</code> also commits to bounty eligibility: everyone, any selected mix of Selfie
-          Check, Passport, and Proof of Human credentials, optionally with a recent-recheck requirement.{" "}
-          <code>rewardTerms.requiredVoters</code> must match <code>roundConfig.minVoters</code> so a settled qualifying
-          round is also bounty-qualifying, and bounty size can raise the required participant floor.
+          calls. <code>rewardTerms</code> also commits to bounty eligibility: everyone or Proof of Human for the v3
+          launch. <code>rewardTerms.requiredVoters</code> must match <code>roundConfig.minVoters</code> so a settled
+          qualifying round is also bounty-qualifying, and bounty size can raise the required participant floor.
         </li>
         <li>
           <code>submitQuestionBundleWithRewardAndRoundConfig(..., rewardTerms, roundConfig)</code> &mdash; Submit a

@@ -1,13 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CredentialRequest, IDKit, type IDKitResult, type RpContext } from "@worldcoin/idkit";
+import { CredentialRequest, IDKit, type IDKitResult, type RpContext, orbLegacy } from "@worldcoin/idkit";
 import { ArrowTopRightOnSquareIcon, ExclamationTriangleIcon, QrCodeIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { WorldIdQrCode } from "~~/components/settings/WorldIdQrCode";
 import { GradientActionButton, getGradientActionMotion } from "~~/components/shared/GradientAction";
 import { useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
-import { getWorldIdClientConfig } from "~~/lib/world-id/config";
+import { type WorldIdProofMode, getWorldIdClientConfig } from "~~/lib/world-id/config";
 import {
+  WORLD_CREDENTIAL_PROOF_OF_HUMAN,
   type WorldCredentialKind,
   type WorldIdProofPurpose,
   getWorldCredentialOption,
@@ -43,6 +44,7 @@ type RpContextResponse = {
   action: string;
   diagnosticId?: string;
   environment: "production" | "staging";
+  proofMode?: WorldIdProofMode;
   purpose: WorldIdProofPurpose;
   rpContext: RpContext;
 };
@@ -60,6 +62,7 @@ type DialogStatus = "idle" | "loading" | "success" | "error";
 
 export function WorldIdProofDialog({ address, kind, onClose, onSuccess, open, purpose }: WorldIdProofDialogProps) {
   const config = getWorldIdClientConfig();
+  const proofMode = config.proofMode;
   const [connectorURI, setConnectorURI] = useState<string | null>(null);
   const [isPreparing, setIsPreparing] = useState(false);
   const [isAwaitingApproval, setIsAwaitingApproval] = useState(false);
@@ -76,17 +79,20 @@ export function WorldIdProofDialog({ address, kind, onClose, onSuccess, open, pu
 
   const option = getWorldCredentialOption(kind);
   const appId = config.appId?.startsWith("app_") ? (config.appId as `app_${string}`) : null;
-  const signal = useMemo(
-    () => (address ? getWorldIdSignalForPurpose(address, kind, purpose) : ""),
-    [address, kind, purpose],
-  );
+  const signal = useMemo(() => {
+    if (!address) return "";
+    if (proofMode === "legacy" && kind === WORLD_CREDENTIAL_PROOF_OF_HUMAN && purpose === "credential") {
+      return address.toLowerCase();
+    }
+    return getWorldIdSignalForPurpose(address, kind, purpose);
+  }, [address, kind, proofMode, purpose]);
   const autoStartKey = useMemo(
-    () => getWorldIdProofDialogAutoStartKey({ address, appId, kind, open, purpose, signal }),
-    [address, appId, kind, open, purpose, signal],
+    () => getWorldIdProofDialogAutoStartKey({ address, appId, kind, open, proofMode, purpose, signal }),
+    [address, appId, kind, open, proofMode, purpose, signal],
   );
   const unavailableMessage = useMemo(
-    () => getWorldIdProofDialogUnavailableMessage({ address, appId, kind, open, purpose, signal }),
-    [address, appId, kind, open, purpose, signal],
+    () => getWorldIdProofDialogUnavailableMessage({ address, appId, kind, open, proofMode, purpose, signal }),
+    [address, appId, kind, open, proofMode, purpose, signal],
   );
   const isSubmittingTransaction = isSubmitting || isMining;
   const isBusy = isPreparing || isAwaitingApproval || isSubmittingTransaction;
@@ -131,6 +137,7 @@ export function WorldIdProofDialog({ address, kind, onClose, onSuccess, open, pu
       action: body.action,
       diagnosticId: typeof body.diagnosticId === "string" ? body.diagnosticId : undefined,
       environment: body.environment,
+      proofMode: body.proofMode === "compat" || body.proofMode === "v4" ? body.proofMode : "legacy",
       purpose,
       rpContext: body.rpContext,
     };
@@ -142,37 +149,58 @@ export function WorldIdProofDialog({ address, kind, onClose, onSuccess, open, pu
         expectedAction: requestContext.action,
         expectedCredential: option.identifier,
         expectedSignal: signal,
+        proofMode: requestContext.proofMode ?? proofMode,
       });
-      assertWorldIdProofHasSubmissionWindow(parsedProof.expiresAtMin);
+
+      if (parsedProof.protocolVersion === "4.0") {
+        assertWorldIdProofHasSubmissionWindow(parsedProof.expiresAtMin);
+        await (writeRaterRegistry as any)(
+          {
+            functionName:
+              purpose === "presence" ? "attestHumanPresenceWithV4Proof" : "attestWorldCredentialWithV4Proof",
+            args:
+              purpose === "presence"
+                ? [
+                    kind,
+                    parsedProof.nullifierHash,
+                    parsedProof.nonce,
+                    BigInt(parsedProof.expiresAtMin),
+                    parsedProof.proof,
+                  ]
+                : [
+                    kind,
+                    parsedProof.nullifierHash,
+                    parsedProof.nonce,
+                    BigInt(parsedProof.expiresAtMin),
+                    parsedProof.proof,
+                  ],
+          },
+          {
+            action: purpose === "presence" ? "attest World ID recheck" : "attest World ID credential",
+            getErrorMessage: getWorldIdCredentialAttestationErrorMessage,
+            suppressSuccessToast: true,
+          },
+        );
+        return;
+      }
+
+      if (purpose !== "credential" || kind !== WORLD_CREDENTIAL_PROOF_OF_HUMAN) {
+        throw new Error("World ID v3 only supports the Proof of Human credential.");
+      }
 
       await (writeRaterRegistry as any)(
         {
-          functionName: purpose === "presence" ? "attestHumanPresenceWithV4Proof" : "attestWorldCredentialWithV4Proof",
-          args:
-            purpose === "presence"
-              ? [
-                  kind,
-                  parsedProof.nullifierHash,
-                  parsedProof.nonce,
-                  BigInt(parsedProof.expiresAtMin),
-                  parsedProof.proof,
-                ]
-              : [
-                  kind,
-                  parsedProof.nullifierHash,
-                  parsedProof.nonce,
-                  BigInt(parsedProof.expiresAtMin),
-                  parsedProof.proof,
-                ],
+          functionName: "attestHumanCredentialWithProof",
+          args: [parsedProof.root, parsedProof.nullifierHash, parsedProof.proof],
         },
         {
-          action: purpose === "presence" ? "attest World ID recheck" : "attest World ID credential",
+          action: "attest World ID credential",
           getErrorMessage: getWorldIdCredentialAttestationErrorMessage,
           suppressSuccessToast: true,
         },
       );
     },
-    [kind, option.identifier, purpose, signal, writeRaterRegistry],
+    [kind, option.identifier, proofMode, purpose, signal, writeRaterRegistry],
   );
 
   const start = useCallback(async () => {
@@ -218,6 +246,7 @@ export function WorldIdProofDialog({ address, kind, onClose, onSuccess, open, pu
         environment: diagnosticContext.environment,
         event,
         phase: extras.phase ?? diagnosticPhase,
+        proofMode: diagnosticContext.proofMode ?? proofMode,
         purpose,
         requestId: idkitRequestId,
         rpContextExpiresAt: diagnosticContext.rpContext.expires_at,
@@ -232,19 +261,23 @@ export function WorldIdProofDialog({ address, kind, onClose, onSuccess, open, pu
       diagnosticPhase = "create_request";
       if (activeRequestRef.current !== requestId || abortController.signal.aborted) return;
 
-      const request = await IDKit.request({
+      const requestBuilder = IDKit.request({
         action: requestContext.action,
-        allow_legacy_proofs: false,
+        allow_legacy_proofs: (requestContext.proofMode ?? proofMode) !== "v4",
         app_id: appId,
         environment: requestContext.environment,
         ...(purpose === "presence" ? { require_user_presence: true } : {}),
         rp_context: requestContext.rpContext,
-      }).constraints(
-        CredentialRequest(option.identifier, {
-          expires_at_min: getWorldIdCredentialRequestExpiresAtMin(purpose),
-          signal,
-        }),
-      );
+      });
+      const request =
+        (requestContext.proofMode ?? proofMode) === "legacy"
+          ? await requestBuilder.preset(orbLegacy({ signal }))
+          : await requestBuilder.constraints(
+              CredentialRequest(option.identifier, {
+                expires_at_min: getWorldIdCredentialRequestExpiresAtMin(purpose),
+                signal,
+              }),
+            );
       idkitRequestId = getWorldIdRequestId(request);
       reportRequestDiagnostic("request_created", {
         connectorScheme: getConnectorScheme(request.connectorURI),
@@ -317,7 +350,7 @@ export function WorldIdProofDialog({ address, kind, onClose, onSuccess, open, pu
         setIsSubmitting(false);
       }
     }
-  }, [address, appId, fetchRequestContext, onClose, onSuccess, open, option, purpose, signal, submitProof]);
+  }, [address, appId, fetchRequestContext, onClose, onSuccess, open, option, proofMode, purpose, signal, submitProof]);
 
   useEffect(() => {
     if (open) return;
