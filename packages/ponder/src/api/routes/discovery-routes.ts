@@ -14,9 +14,10 @@ import {
   NOTIFICATION_EMAIL_LOOKBACK_SECONDS,
   SETTLING_SOON_WINDOW_SECONDS,
   getDiscoverResolutionOutcome,
-  getEstimatedSettlementTime,
+  getOpenRoundEstimatedResolutionTime,
   jsonBig,
   parseBigIntList,
+  resolveApiNowSeconds,
 } from "../shared.js";
 import { isValidAddress, safeLimit } from "../utils.js";
 
@@ -73,6 +74,10 @@ export function registerDiscoveryRoutes(app: ApiApp) {
       address,
       c.req.query("followed"),
     );
+    const nowSeconds = resolveApiNowSeconds(c.req.query("now"));
+    if (nowSeconds === null) {
+      return c.json({ error: "now must be a non-negative integer" }, 400);
+    }
 
     const votedOpenRounds = await db
       .select({
@@ -87,6 +92,12 @@ export function registerDiscoveryRoutes(app: ApiApp) {
         categoryId: content.categoryId,
         roundStartTime: round.startTime,
         epochDuration: round.epochDuration,
+        maxDuration: round.maxDuration,
+        minVoters: round.minVoters,
+        voteCount: round.voteCount,
+        revealedCount: round.revealedCount,
+        humanVerifiedCommitCount: round.humanVerifiedCommitCount,
+        lastCommitRevealableAfter: round.lastCommitRevealableAfter,
         revealGracePeriod: round.revealGracePeriod,
         profileName: profile.name,
       })
@@ -127,6 +138,12 @@ export function registerDiscoveryRoutes(app: ApiApp) {
               categoryId: content.categoryId,
               roundStartTime: round.startTime,
               epochDuration: round.epochDuration,
+              maxDuration: round.maxDuration,
+              minVoters: round.minVoters,
+              voteCount: round.voteCount,
+              revealedCount: round.revealedCount,
+              humanVerifiedCommitCount: round.humanVerifiedCommitCount,
+              lastCommitRevealableAfter: round.lastCommitRevealableAfter,
               revealGracePeriod: round.revealGracePeriod,
               profileName: profile.name,
             })
@@ -172,11 +189,17 @@ export function registerDiscoveryRoutes(app: ApiApp) {
         const existing = settlingSoonMap.get(key);
         settlingSoonMap.set(key, {
           ...item,
-          estimatedSettlementTime: getEstimatedSettlementTime(
-            item.roundStartTime,
-            item.epochDuration,
-            item.revealGracePeriod,
-          ),
+          estimatedSettlementTime: getOpenRoundEstimatedResolutionTime({
+            startTime: item.roundStartTime,
+            epochDuration: item.epochDuration,
+            maxDuration: item.maxDuration,
+            minVoters: item.minVoters,
+            voteCount: item.voteCount,
+            revealedCount: item.revealedCount,
+            humanVerifiedCommitCount: item.humanVerifiedCommitCount,
+            lastCommitRevealableAfter: item.lastCommitRevealableAfter,
+            revealGracePeriod: item.revealGracePeriod,
+          }),
           source:
             existing && existing.source !== source
               ? "watched_voted"
@@ -188,7 +211,6 @@ export function registerDiscoveryRoutes(app: ApiApp) {
     addSettlingItems(votedOpenRounds, "voted");
     addSettlingItems(watchedOpenRounds, "watched");
 
-    const nowSeconds = BigInt(Math.floor(Date.now() / 1000));
     const cutoff = nowSeconds + BigInt(SETTLING_SOON_WINDOW_SECONDS);
     const allSettlingSoon = [...settlingSoonMap.values()].sort((a, b) => {
       const aTime = a.estimatedSettlementTime ?? 2n ** 62n;
@@ -308,28 +330,39 @@ export function registerDiscoveryRoutes(app: ApiApp) {
       address,
       c.req.query("followed"),
     );
-    const nowSeconds = BigInt(Math.floor(Date.now() / 1000));
+    const nowSeconds = resolveApiNowSeconds(c.req.query("now"));
+    if (nowSeconds === null) {
+      return c.json({ error: "now must be a non-negative integer" }, 400);
+    }
     const settlingSoonCutoff =
       nowSeconds + BigInt(SETTLING_SOON_WINDOW_SECONDS);
     const recentCutoff =
       nowSeconds - BigInt(NOTIFICATION_EMAIL_LOOKBACK_SECONDS);
 
+    const openRoundSelectFields = {
+      id: round.id,
+      contentId: round.contentId,
+      roundId: round.roundId,
+      ...confidentialitySelect,
+      title: content.title,
+      description: content.description,
+      url: content.url,
+      submitter: content.submitter,
+      categoryId: content.categoryId,
+      roundStartTime: round.startTime,
+      epochDuration: round.epochDuration,
+      maxDuration: round.maxDuration,
+      minVoters: round.minVoters,
+      voteCount: round.voteCount,
+      revealedCount: round.revealedCount,
+      humanVerifiedCommitCount: round.humanVerifiedCommitCount,
+      lastCommitRevealableAfter: round.lastCommitRevealableAfter,
+      revealGracePeriod: round.revealGracePeriod,
+      profileName: profile.name,
+    };
+
     const votedOpenRounds = await db
-      .select({
-        id: round.id,
-        contentId: round.contentId,
-        roundId: round.roundId,
-        ...confidentialitySelect,
-        title: content.title,
-        description: content.description,
-        url: content.url,
-        submitter: content.submitter,
-        categoryId: content.categoryId,
-        roundStartTime: round.startTime,
-        epochDuration: round.epochDuration,
-        revealGracePeriod: round.revealGracePeriod,
-        profileName: profile.name,
-      })
+      .select(openRoundSelectFields)
       .from(vote)
       .innerJoin(
         round,
@@ -355,21 +388,7 @@ export function registerDiscoveryRoutes(app: ApiApp) {
       watchedContentIds.length === 0
         ? []
         : await db
-            .select({
-              id: round.id,
-              contentId: round.contentId,
-              roundId: round.roundId,
-              ...confidentialitySelect,
-              title: content.title,
-              description: content.description,
-              url: content.url,
-              submitter: content.submitter,
-              categoryId: content.categoryId,
-              roundStartTime: round.startTime,
-              epochDuration: round.epochDuration,
-              revealGracePeriod: round.revealGracePeriod,
-              profileName: profile.name,
-            })
+            .select(openRoundSelectFields)
             .from(round)
             .innerJoin(content, eq(round.contentId, content.id))
             .leftJoin(profile, eq(content.submitter, profile.address))
@@ -394,11 +413,17 @@ export function registerDiscoveryRoutes(app: ApiApp) {
         const existing = settlingSoonMap.get(key);
         settlingSoonMap.set(key, {
           ...item,
-          estimatedSettlementTime: getEstimatedSettlementTime(
-            item.roundStartTime,
-            item.epochDuration,
-            item.revealGracePeriod,
-          ),
+          estimatedSettlementTime: getOpenRoundEstimatedResolutionTime({
+            startTime: item.roundStartTime,
+            epochDuration: item.epochDuration,
+            maxDuration: item.maxDuration,
+            minVoters: item.minVoters,
+            voteCount: item.voteCount,
+            revealedCount: item.revealedCount,
+            humanVerifiedCommitCount: item.humanVerifiedCommitCount,
+            lastCommitRevealableAfter: item.lastCommitRevealableAfter,
+            revealGracePeriod: item.revealGracePeriod,
+          }),
           source:
             existing && existing.source !== source
               ? "watched_voted"

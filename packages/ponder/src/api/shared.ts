@@ -2,6 +2,7 @@ import {
   BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG,
   DEFAULT_REVEAL_GRACE_PERIOD_SECONDS,
   DEFAULT_ROUND_CONFIG,
+  REVEAL_FAILED_GRACE_MULTIPLIER,
   ROUND_STATE,
   SCORE_SPREAD_POLICY,
 } from "@rateloop/contracts/protocol";
@@ -59,6 +60,24 @@ export function parseAddressList(value: string | undefined, max = 200) {
   return items;
 }
 
+export function resolveApiNowSeconds(value: string | undefined): bigint | null {
+  if (value === undefined) {
+    return BigInt(Math.floor(Date.now() / 1000));
+  }
+  if (!/^\d+$/.test(value)) return null;
+  return BigInt(value);
+}
+
+function normalizedRevealGraceSeconds(
+  revealGracePeriodSeconds: bigint | number | null | undefined,
+) {
+  if (revealGracePeriodSeconds === null || revealGracePeriodSeconds === undefined) {
+    return DEFAULT_REVEAL_GRACE_PERIOD_SECONDS;
+  }
+  const graceSeconds = Number(revealGracePeriodSeconds);
+  return graceSeconds > 0 ? graceSeconds : DEFAULT_REVEAL_GRACE_PERIOD_SECONDS;
+}
+
 export function getEstimatedSettlementTime(
   startTime: bigint | null | undefined,
   epochDurationSeconds = DEFAULT_ROUND_CONFIG.epochDurationSeconds,
@@ -66,15 +85,77 @@ export function getEstimatedSettlementTime(
 ) {
   if (startTime === null || startTime === undefined) return null;
 
-  const graceSeconds =
-    revealGracePeriodSeconds === null || revealGracePeriodSeconds === undefined
-      ? DEFAULT_REVEAL_GRACE_PERIOD_SECONDS
-      : Number(revealGracePeriodSeconds);
+  const graceSeconds = normalizedRevealGraceSeconds(revealGracePeriodSeconds);
+
+  return startTime + BigInt(epochDurationSeconds) + BigInt(graceSeconds);
+}
+
+export function getEstimatedRevealFailedTime(
+  startTime: bigint | null | undefined,
+  maxDurationSeconds: number,
+  lastCommitRevealableAfter: bigint | null | undefined,
+  revealGracePeriodSeconds: bigint | number | null = DEFAULT_REVEAL_GRACE_PERIOD_SECONDS,
+) {
+  if (startTime === null || startTime === undefined) return null;
+  if (
+    lastCommitRevealableAfter === null
+    || lastCommitRevealableAfter === undefined
+    || lastCommitRevealableAfter <= 0n
+  ) {
+    return null;
+  }
+
+  const graceSeconds = normalizedRevealGraceSeconds(revealGracePeriodSeconds);
+  const epochEnd = startTime + BigInt(maxDurationSeconds);
+  const revealDeadline =
+    lastCommitRevealableAfter > epochEnd
+      ? lastCommitRevealableAfter
+      : epochEnd;
 
   return (
-    startTime
-    + BigInt(epochDurationSeconds)
-    + BigInt(graceSeconds > 0 ? graceSeconds : DEFAULT_REVEAL_GRACE_PERIOD_SECONDS)
+    revealDeadline
+    + BigInt(graceSeconds) * BigInt(REVEAL_FAILED_GRACE_MULTIPLIER)
+  );
+}
+
+export function isRevealFailedEligibleRound(row: {
+  minVoters: number;
+  voteCount: number;
+  revealedCount: number;
+  humanVerifiedCommitCount: number;
+}) {
+  const revealQuorum = Math.max(row.minVoters, 3);
+  return (
+    row.voteCount >= revealQuorum
+    && row.revealedCount < revealQuorum
+    && row.humanVerifiedCommitCount >= revealQuorum
+  );
+}
+
+export function getOpenRoundEstimatedResolutionTime(row: {
+  startTime: bigint | null;
+  epochDuration: number;
+  maxDuration: number;
+  minVoters: number;
+  voteCount: number;
+  revealedCount: number;
+  humanVerifiedCommitCount: number;
+  lastCommitRevealableAfter: bigint | null;
+  revealGracePeriod: bigint | null;
+}) {
+  if (isRevealFailedEligibleRound(row)) {
+    return getEstimatedRevealFailedTime(
+      row.startTime,
+      row.maxDuration,
+      row.lastCommitRevealableAfter,
+      row.revealGracePeriod,
+    );
+  }
+
+  return getEstimatedSettlementTime(
+    row.startTime,
+    row.epochDuration,
+    row.revealGracePeriod,
   );
 }
 
@@ -89,7 +170,10 @@ export function getDiscoverResolutionOutcome(state: number | null, isUp: boolean
   return "resolved" as const;
 }
 
-export async function attachOpenRoundSummary<T extends { id: bigint }>(items: T[]) {
+export async function attachOpenRoundSummary<T extends { id: bigint }>(
+  items: T[],
+  nowSeconds = BigInt(Math.floor(Date.now() / 1000)),
+) {
   if (items.length === 0) {
     return items.map(item => ({
       ...item,
@@ -104,7 +188,6 @@ export async function attachOpenRoundSummary<T extends { id: bigint }>(items: T[
   }
 
   const contentIds = items.map(item => item.id);
-  const nowSeconds = BigInt(Math.floor(Date.now() / 1000));
   // I-5: match the contract's strict boundary (WindowLib.rewardPoolExpired treats a pool as expired
   // only when block.timestamp > closesAt/startBy). So active iff now <= boundary (>=), expired iff
   // now > boundary (<). Previously the indexer flipped at now == boundary, one second early.
@@ -224,6 +307,7 @@ export async function attachOpenRoundSummary<T extends { id: bigint }>(items: T[
     minVoters: round.minVoters,
     maxVoters: round.maxVoters,
     hasHumanVerifiedCommit: round.hasHumanVerifiedCommit,
+    humanVerifiedCommitCount: round.humanVerifiedCommitCount,
     lastCommitRevealableAfter: round.lastCommitRevealableAfter,
     revealGracePeriod: round.revealGracePeriod,
   };
@@ -298,6 +382,7 @@ function formatRoundSummary(row: {
   minVoters: number;
   maxVoters: number;
   hasHumanVerifiedCommit: boolean;
+  humanVerifiedCommitCount: number;
   lastCommitRevealableAfter: bigint | null;
   revealGracePeriod: bigint | null;
 }) {
@@ -326,6 +411,7 @@ function formatRoundSummary(row: {
     minVoters: row.minVoters,
     maxVoters: row.maxVoters,
     hasHumanVerifiedCommit: row.hasHumanVerifiedCommit,
+    humanVerifiedCommitCount: row.humanVerifiedCommitCount,
     lastCommitRevealableAfter: row.lastCommitRevealableAfter,
     revealGracePeriod: row.revealGracePeriod,
     scoreSpreadEconomics: {
@@ -335,11 +421,17 @@ function formatRoundSummary(row: {
     },
     estimatedSettlementTime:
       row.state === ROUND_STATE.Open
-        ? getEstimatedSettlementTime(
-            row.startTime,
-            row.epochDuration,
-            row.revealGracePeriod,
-          )
+        ? getOpenRoundEstimatedResolutionTime({
+            startTime: row.startTime,
+            epochDuration: row.epochDuration,
+            maxDuration: row.maxDuration,
+            minVoters: row.minVoters,
+            voteCount: row.voteCount,
+            revealedCount: row.revealedCount,
+            humanVerifiedCommitCount: row.humanVerifiedCommitCount,
+            lastCommitRevealableAfter: row.lastCommitRevealableAfter,
+            revealGracePeriod: row.revealGracePeriod,
+          })
         : null,
   };
 }
