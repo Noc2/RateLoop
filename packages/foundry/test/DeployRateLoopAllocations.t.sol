@@ -122,6 +122,10 @@ contract RevertingDecimalsToken {
 }
 
 contract DeployRateLoopAllocationsTest is Test {
+    function setUp() public {
+        vm.setEnv("WORLD_ID_ROUTER_ADDRESS", vm.toString(address(0)));
+    }
+
     function test_LaunchAllocations_MintFullLrepSupplyAtLaunch() public {
         DeployRateLoop deployScript = new DeployRateLoop();
         LoopReputation lrepToken = new LoopReputation(address(this), address(this));
