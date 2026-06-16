@@ -5,7 +5,7 @@ import { BuyWidget } from "thirdweb/react";
 import { formatEther, isAddress } from "viem";
 import { worldchain } from "viem/chains";
 import { useAccount, useBalance } from "wagmi";
-import { ArrowsRightLeftIcon, BanknotesIcon, WalletIcon } from "@heroicons/react/24/outline";
+import { ArrowsRightLeftIcon, WalletIcon } from "@heroicons/react/24/outline";
 import { DelegationSection } from "~~/components/profile/DelegationSection";
 import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import { useRateLoopSwitchNetwork } from "~~/hooks/useRateLoopSwitchNetwork";
@@ -89,21 +89,31 @@ export function WalletSettingsPanel({ address }: { address?: string }) {
 
   return (
     <section className="space-y-6">
-      <div className="surface-card rounded-2xl p-6">
-        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-base-content/55">
-              <WalletIcon className="h-4 w-4" />
-              Wallet
-            </div>
-            <h2 className="mt-3 text-3xl font-semibold text-base-content sm:text-4xl">Gas And Wallet Funding</h2>
-            <p className="mt-3 max-w-2xl text-base leading-relaxed text-base-content/65">
-              RateLoop uses World Chain. External wallets need a small native ETH balance for transaction fees, while
-              bounties and agent asks still use LREP or World Chain USDC.
-            </p>
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(340px,400px)] lg:items-start">
+        <div className="surface-card rounded-2xl p-6">
+          <div className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-base-content/55">
+            <WalletIcon className="h-4 w-4" />
+            Wallet
           </div>
+          <h2 className="mt-3 text-3xl font-semibold text-base-content sm:text-4xl">Gas And Wallet Funding</h2>
+          <p className="mt-3 max-w-2xl text-base leading-relaxed text-base-content/65">
+            RateLoop uses World Chain. External wallets need a small native ETH balance for transaction fees, while
+            bounties and agent asks still use LREP or World Chain USDC.
+          </p>
 
-          <dl className="w-full shrink-0 divide-y divide-base-content/10 border-y border-base-content/10 md:max-w-md">
+          {targetIsWorldChain && !connectedToWorldChain ? (
+            <button
+              type="button"
+              className="btn btn-primary mt-5 gap-2"
+              disabled={switchingChainId === WORLD_CHAIN_MAINNET_CHAIN_ID}
+              onClick={() => void switchToChain(WORLD_CHAIN_MAINNET_CHAIN_ID)}
+            >
+              <ArrowsRightLeftIcon className="h-5 w-5" />
+              {switchingChainId === WORLD_CHAIN_MAINNET_CHAIN_ID ? "Switching..." : "Switch to World Chain"}
+            </button>
+          ) : null}
+
+          <dl className="mt-6 w-full divide-y divide-base-content/10 border-y border-base-content/10">
             <WalletSnapshotRow
               label="Address"
               testId="wallet-snapshot-address"
@@ -123,33 +133,8 @@ export function WalletSettingsPanel({ address }: { address?: string }) {
             />
           </dl>
         </div>
-      </div>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(340px,1.1fr)]">
-        <div className="surface-card rounded-2xl p-6">
-          <div className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-base-content/55">
-            <BanknotesIcon className="h-4 w-4" />
-            ETH for gas
-          </div>
-          <h3 className="mt-3 text-2xl font-semibold text-base-content">Top Up Network Fees</h3>
-          <p className="mt-3 text-base leading-relaxed text-base-content/65">
-            Buy native ETH directly to the connected wallet.
-          </p>
-
-          {targetIsWorldChain && !connectedToWorldChain ? (
-            <button
-              type="button"
-              className="btn btn-primary mt-5 gap-2"
-              disabled={switchingChainId === WORLD_CHAIN_MAINNET_CHAIN_ID}
-              onClick={() => void switchToChain(WORLD_CHAIN_MAINNET_CHAIN_ID)}
-            >
-              <ArrowsRightLeftIcon className="h-5 w-5" />
-              {switchingChainId === WORLD_CHAIN_MAINNET_CHAIN_ID ? "Switching..." : "Switch to World Chain"}
-            </button>
-          ) : null}
-        </div>
-
-        <div className="min-w-0">
+        <div className="min-w-0 lg:w-[400px] lg:max-w-full" data-testid="eth-top-up-panel">
           {canUseEthTopUp && thirdwebClient && walletAddress ? (
             <BuyWidget
               amount={DEFAULT_ETH_TOP_UP_AMOUNT}
