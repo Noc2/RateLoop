@@ -3702,7 +3702,6 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
     function testPublicRatingSnapshotAppliesOnlyAfterFinalizationVetoWindow() public {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
-        oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_PUBLIC_RATING(), address(registry));
         uint256 contentId = _submitQuestion("");
         uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
 
@@ -3727,12 +3726,42 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("late-rating-veto"));
     }
 
+    function testPublicRatingSnapshotUsesPinnedOracleAfterConfigRotation() public {
+        ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
+        uint256 contentId = _submitQuestion("");
+        uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
+
+        (IClusterPayoutOracle.PayoutWeight[] memory payoutWeights, bytes32[] memory leaves) =
+            _publicRatingPayoutLeaves(oracle, contentId, roundId, 3);
+        bytes32 snapshotKey = _finalizePublicRatingPayoutSnapshotWithRoot(
+            oracle, contentId, roundId, 3, 30_000, _sumEffectiveWeights(payoutWeights), _merkleRoot(leaves)
+        );
+        bytes32[][] memory proofs = _merkleProofs(leaves);
+        ClusterPayoutOracle.RoundPayoutProposal memory proposal = oracle.roundPayoutProposal(snapshotKey);
+
+        ClusterPayoutOracle replacementOracle = _newEligibleClusterPayoutOracle();
+        replacementOracle.setOracleConfig(1 hours, 5e6, address(this));
+        replacementOracle.setRoundPayoutSnapshotConsumer(
+            replacementOracle.PAYOUT_DOMAIN_QUESTION_REWARD(), address(rewardPoolEscrow)
+        );
+        replacementOracle.setRoundPayoutSnapshotConsumer(
+            replacementOracle.PAYOUT_DOMAIN_PUBLIC_RATING(), address(registry)
+        );
+        vm.prank(owner);
+        protocolConfig.setClusterPayoutOracle(address(replacementOracle));
+
+        vm.warp(uint256(proposal.snapshot.finalizedAt) + uint256(oracle.FINALIZATION_VETO_WINDOW()) + 1);
+        registry.applyRatingPayoutSnapshot(contentId, roundId, payoutWeights, proofs);
+        assertTrue(registry.isRoundPayoutSnapshotConsumed(3, 0, contentId, roundId));
+    }
+
     function testClusterRewardPoolRejectsOracleWithDifferentConsumer() public {
         uint256 contentId = _submitQuestion("");
 
         ClusterPayoutOracle oracle = _newEligibleClusterPayoutOracle();
         oracle.setOracleConfig(1 hours, 5e6, address(this));
         oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_QUESTION_REWARD(), address(this));
+        oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_PUBLIC_RATING(), address(registry));
         vm.prank(owner);
         protocolConfig.setClusterPayoutOracle(address(oracle));
 
@@ -3749,6 +3778,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         ClusterPayoutOracle oracle = _newEligibleClusterPayoutOracle();
         oracle.setOracleConfig(1 hours, 5e6, address(this));
         oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_QUESTION_REWARD(), address(this));
+        oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_PUBLIC_RATING(), address(registry));
         vm.prank(owner);
         protocolConfig.setClusterPayoutOracle(address(oracle));
 
@@ -4629,6 +4659,13 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         );
 
         ClusterPayoutOracle replacementOracle = _newEligibleClusterPayoutOracle();
+        replacementOracle.setOracleConfig(1 hours, 5e6, address(this));
+        replacementOracle.setRoundPayoutSnapshotConsumer(
+            replacementOracle.PAYOUT_DOMAIN_QUESTION_REWARD(), address(rewardPoolEscrow)
+        );
+        replacementOracle.setRoundPayoutSnapshotConsumer(
+            replacementOracle.PAYOUT_DOMAIN_PUBLIC_RATING(), address(registry)
+        );
         vm.prank(owner);
         protocolConfig.setClusterPayoutOracle(address(replacementOracle));
 
@@ -6329,6 +6366,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         oracle.setOracleConfig(1 hours, 5e6, address(this));
         oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_QUESTION_REWARD(), address(rewardPoolEscrow));
         oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD(), address(rewardPoolEscrow));
+        oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_PUBLIC_RATING(), address(registry));
         vm.prank(owner);
         protocolConfig.setClusterPayoutOracle(address(oracle));
     }

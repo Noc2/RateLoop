@@ -419,7 +419,7 @@
       "id": "t_struct(PendingRatingSettlement)",
       "encoding": "inplace",
       "label": "struct ContentRegistryTypes.PendingRatingSettlement",
-      "numberOfBytes": "64",
+      "numberOfBytes": "96",
       "members": [
         {
           "slot": 0,
@@ -462,6 +462,12 @@
           "offset": 17,
           "label": "applied",
           "type": "t_bool"
+        },
+        {
+          "slot": 2,
+          "offset": 0,
+          "label": "clusterPayoutOracle",
+          "type": "t_address"
         }
       ]
     },

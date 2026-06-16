@@ -1356,6 +1356,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         ContentRegistryRatingSnapshotLib.recordPendingRatingSettlement(
             pendingRatingSettlement[contentId][roundId],
             msg.sender,
+            protocolConfig,
             contentId,
             roundId,
             referenceRatingBps,
@@ -1377,7 +1378,6 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             _ratingState[contentId],
             contentSlashConfigSnapshot[contentId],
             appliedRatingSnapshotDigest,
-            protocolConfig,
             contentId,
             roundId,
             payoutWeights,

@@ -31,6 +31,12 @@ library ContentRegistryRatingSnapshotLib {
         uint256 downEvidence,
         uint256 readyAt
     );
+    event PendingRatingClusterPayoutOracleRepointed(
+        uint256 indexed contentId,
+        uint256 indexed roundId,
+        address indexed oldClusterPayoutOracle,
+        address newClusterPayoutOracle
+    );
 
     uint8 internal constant PAYOUT_DOMAIN_PUBLIC_RATING = 3;
     uint64 internal constant RATING_EVIDENCE_BASE_UNIT = 1_000_000;
@@ -62,6 +68,7 @@ library ContentRegistryRatingSnapshotLib {
     function recordPendingRatingSettlement(
         ContentRegistryTypes.PendingRatingSettlement storage pending,
         address votingEngine,
+        ProtocolConfig protocolConfig,
         uint256 contentId,
         uint256 roundId,
         uint16 referenceRatingBps,
@@ -72,6 +79,7 @@ library ContentRegistryRatingSnapshotLib {
         if (pending.exists) return;
 
         pending.votingEngine = votingEngine;
+        pending.clusterPayoutOracle = protocolConfig.clusterPayoutOracle();
         pending.upEvidence = upEvidence;
         pending.downEvidence = downEvidence;
         pending.readyAt = readyAt;
@@ -79,6 +87,35 @@ library ContentRegistryRatingSnapshotLib {
         pending.exists = true;
 
         emit RatingReviewPending(contentId, roundId, referenceRatingBps, upEvidence, downEvidence, readyAt);
+    }
+
+    function repointPendingRatingClusterPayoutOracle(
+        ContentRegistryTypes.PendingRatingSettlement storage pending,
+        address expectedConsumer,
+        uint256 contentId,
+        uint256 roundId,
+        address newOracle
+    ) external {
+        if (!pending.exists || pending.applied) revert InvalidState();
+        address oldOracle = pending.clusterPayoutOracle;
+        if (oldOracle == address(0) || newOracle == address(0) || newOracle.code.length == 0) revert InvalidState();
+        if (newOracle == oldOracle) revert InvalidState();
+
+        IClusterPayoutOracle oracle = IClusterPayoutOracle(newOracle);
+        try oracle.roundPayoutSnapshotProposedAt(PAYOUT_DOMAIN_PUBLIC_RATING, 0, contentId, roundId) returns (
+            uint64
+        ) { }
+        catch {
+            revert InvalidState();
+        }
+        try oracle.roundPayoutSnapshotConsumer(PAYOUT_DOMAIN_PUBLIC_RATING) returns (address consumer) {
+            if (consumer != expectedConsumer) revert InvalidState();
+        } catch {
+            revert InvalidState();
+        }
+
+        pending.clusterPayoutOracle = newOracle;
+        emit PendingRatingClusterPayoutOracleRepointed(contentId, roundId, oldOracle, newOracle);
     }
 
     function roundPayoutSnapshotSourceReadyAt(
@@ -99,7 +136,6 @@ library ContentRegistryRatingSnapshotLib {
         RatingLib.RatingState storage ratingState,
         RatingLib.SlashConfig storage slashConfig,
         mapping(uint256 => mapping(uint256 => bytes32)) storage appliedRatingSnapshotDigest,
-        ProtocolConfig protocolConfig,
         uint256 contentId,
         uint256 roundId,
         IClusterPayoutOracle.PayoutWeight[] calldata payoutWeights,
@@ -110,7 +146,7 @@ library ContentRegistryRatingSnapshotLib {
         pending.applied = true;
 
         SnapshotApplication memory application = _validateAndBuild(
-            protocolConfig.clusterPayoutOracle(),
+            pending.clusterPayoutOracle,
             pending.votingEngine,
             contentId,
             roundId,

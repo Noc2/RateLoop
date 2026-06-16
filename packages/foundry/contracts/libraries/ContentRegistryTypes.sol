@@ -29,5 +29,6 @@ library ContentRegistryTypes {
         uint16 referenceRatingBps;
         bool exists;
         bool applied;
+        address clusterPayoutOracle;
     }
 }
