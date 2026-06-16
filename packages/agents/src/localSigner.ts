@@ -54,6 +54,7 @@ import {
 import {
   buildX402QuestionOperation as buildSharedX402QuestionOperation,
   parseX402QuestionRequest as parseSharedX402QuestionRequest,
+  buildDefaultX402QuestionParserOptions,
   toCanonicalQuestionPayload as toSharedCanonicalQuestionPayload,
   type X402QuestionItemPayload,
   type X402QuestionPayload,
@@ -1065,7 +1066,8 @@ function localQuestionParserOptions(
   options: { questionMetadataBaseUrl?: string } = {},
 ): X402QuestionParserOptions {
   return {
-    questionMetadataBaseUrl: options.questionMetadataBaseUrl,
+    ...buildDefaultX402QuestionParserOptions(),
+    ...options,
   };
 }
 
@@ -1081,8 +1083,11 @@ function parseLocalQuestionRequest(
   ) as LocalQuestionPayload;
 }
 
-function toCanonicalLocalQuestionPayload(payload: LocalQuestionPayload) {
-  return toSharedCanonicalQuestionPayload(payload);
+function toCanonicalLocalQuestionPayload(
+  payload: LocalQuestionPayload,
+  options: { questionMetadataBaseUrl?: string } = {},
+) {
+  return toSharedCanonicalQuestionPayload(payload, localQuestionParserOptions(options));
 }
 
 /**

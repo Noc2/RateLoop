@@ -120,6 +120,29 @@ export type X402QuestionParserOptions = {
   questionMetadataBaseUrl?: string | null;
 };
 
+export function buildDefaultX402QuestionParserOptions(): X402QuestionParserOptions {
+  return {
+    allowedRateLoopAttachmentOrigins: getDefaultRateLoopAttachmentOrigins(),
+    allowLocalhostAttachmentOrigins:
+      process.env.NODE_ENV !== "production" || process.env.NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD === "true",
+    questionMetadataBaseUrl: process.env.NEXT_PUBLIC_PONDER_URL ?? process.env.NEXT_PUBLIC_APP_URL,
+  };
+}
+
+export function isAllowedX402UploadedImageUrl(
+  value: string,
+  options: X402QuestionParserOptions = buildDefaultX402QuestionParserOptions(),
+): boolean {
+  return normalizeUploadedImageAttachmentUrl(value, options) !== null;
+}
+
+export function isAllowedX402HostedDetailsUrl(
+  value: string,
+  options: X402QuestionParserOptions = buildDefaultX402QuestionParserOptions(),
+): boolean {
+  return isHostedQuestionDetailsUrl(value, options);
+}
+
 export function serializeX402QuestionRoundConfig(
   config: X402QuestionRoundConfig,
 ): SerializedX402QuestionRoundConfig {
