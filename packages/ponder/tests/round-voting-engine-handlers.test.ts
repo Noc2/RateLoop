@@ -748,6 +748,94 @@ describe("RoundVotingEngine ponder handlers", () => {
     });
   });
 
+  it("accumulates humanVerifiedCommitCount toward quorum on human-credential commits", async () => {
+    const voter = "0x0000000000000000000000000000000000000002";
+    const commitHash = `0x${"22".repeat(32)}` as `0x${string}`;
+    const ciphertext = "0x5678" as `0x${string}`;
+    const ciphertextHash = keccak256(ciphertext);
+    const readContract = vi.fn(
+      async ({ functionName }: { functionName: string }) => {
+        if (functionName === "commitIdentityState") {
+          return [
+            `0x${"00".repeat(32)}`,
+            voter,
+            0n,
+            0x08,
+            0x08,
+            false,
+          ];
+        }
+        if (functionName === "advisoryRoundContext") {
+          return [
+            0,
+            2_000n,
+            `0x${"00".repeat(32)}`,
+            0n,
+            0n,
+            false,
+            "0x0000000000000000000000000000000000000000",
+          ];
+        }
+        if (functionName === "roundLifecycleState") return [3_600n, 0n, 0n, 0n];
+        return null;
+      },
+    );
+    const { db, updateCalls } = createDb({
+      existingRound: {
+        id: "7-2",
+        startTime: 1_000n,
+        epochDuration: 600,
+        voteCount: 2,
+        totalStake: 20n,
+        minVoters: 3,
+        hasHumanVerifiedCommit: true,
+        humanVerifiedCommitCount: 2,
+        lastCommitRevealableAfter: 1_500n,
+      },
+    });
+    const registeredHandlers = await loadHandlers();
+    const handler = registeredHandlers.get("RoundVotingEngine:VoteCommitted");
+
+    await handler!({
+      event: {
+        args: {
+          contentId: 7n,
+          roundId: 2n,
+          voter,
+          commitHash,
+          roundReferenceRatingBps: 7200,
+          targetRound: 123n,
+          drandChainHash: `0x${"33".repeat(32)}`,
+          stake: 10n,
+          ciphertextHash,
+          ciphertext,
+        },
+        transaction: { hash: `0x${"55".repeat(32)}` },
+        block: { number: 44n, timestamp: 1_602n },
+        log: { logIndex: 10 },
+      },
+      context: {
+        db,
+        client: { readContract },
+        contracts: {
+          RoundVotingEngine: {
+            address: "0x0000000000000000000000000000000000000666",
+          },
+        },
+      },
+    });
+
+    expect(updateCalls).toContainEqual({
+      table: "round",
+      key: { id: "7-2" },
+      values: expect.objectContaining({
+        voteCount: 3,
+        humanVerifiedCommitCount: 3,
+        hasHumanVerifiedCommit: true,
+      }),
+    });
+  });
+
   it("falls back to the address identity when the identity read reverts deterministically", async () => {
     const voter = "0x0000000000000000000000000000000000000001";
     const commitHash = `0x${"11".repeat(32)}` as `0x${string}`;

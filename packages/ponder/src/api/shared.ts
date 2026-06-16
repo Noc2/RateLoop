@@ -410,6 +410,7 @@ function formatRoundSummary(row: {
     maxDuration: row.maxDuration,
     minVoters: row.minVoters,
     maxVoters: row.maxVoters,
+    // Sticky legacy flag (count > 0); prefer humanVerifiedCommitQuorumMet.
     hasHumanVerifiedCommit: row.hasHumanVerifiedCommit,
     humanVerifiedCommitCount: row.humanVerifiedCommitCount,
     humanVerifiedCommitQuorumMet:
