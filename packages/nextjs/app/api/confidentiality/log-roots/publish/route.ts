@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
   const unauthorized = requireConfidentialityJobAuth(request);
   if (unauthorized) return unauthorized;
 
-  const limited = await checkRateLimit(request, RATE_LIMIT, { allowOnStoreUnavailable: true });
+  const limited = await checkRateLimit(request, RATE_LIMIT);
   if (limited) return limited;
 
   try {
@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
   const unauthorized = requireConfidentialityJobAuth(request);
   if (unauthorized) return unauthorized;
 
-  const limited = await checkRateLimit(request, RATE_LIMIT, { allowOnStoreUnavailable: true });
+  const limited = await checkRateLimit(request, RATE_LIMIT);
   if (limited) return limited;
 
   const body = await parseJsonBody(request).catch(() => ({}));
