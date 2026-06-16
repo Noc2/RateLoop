@@ -737,7 +737,7 @@ test("agent asks route rejects oversized JSON bodies", async () => {
     new NextRequest("https://rateloop.ai/api/agent/asks", {
       body: "{}",
       headers: new Headers({
-        "content-length": String(128 * 1024 + 1),
+        "content-length": String(16 * 1024 * 1024 + 1),
         "content-type": "application/json",
       }),
       method: "POST",
@@ -1820,6 +1820,17 @@ test("agent signing intent read requires a private token outside the request URL
   const response = await signingIntentRoute.GET(
     makePublicGet("https://rateloop.ai/api/agent/signing-intents/asi_missing"),
     { params: Promise.resolve({ intentId: "asi_missing" }) },
+  );
+  const body = (await response.json()) as Record<string, unknown>;
+
+  assert.equal(response.status, 400);
+  assert.equal(body.message, "token is required.");
+});
+
+test("agent signing intent read rejects token in query string", async () => {
+  const response = await signingIntentRoute.GET(
+    makePublicGet("https://rateloop.ai/api/agent/signing-intents/asi_test?token=leaked-token"),
+    { params: Promise.resolve({ intentId: "asi_test" }) },
   );
   const body = (await response.json()) as Record<string, unknown>;
 

@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import {
+  AGENT_JSON_BODY_MAX_BYTES,
   AGENT_WRITE_RATE_LIMIT,
   MCP_SCOPES,
   handleAgentRoute,
@@ -18,7 +19,7 @@ export async function POST(request: NextRequest) {
   if (!hasAgentBearerToken(request)) {
     return handlePublicAgentRoute({
       handler: async () => {
-        const body = await parseJsonBody(request);
+        const body = await parseJsonBody(request, { maxBytes: AGENT_JSON_BODY_MAX_BYTES });
         if (!isJsonObjectBody(body)) return jsonBodyErrorResponse(body);
         return callPublicRateLoopMcpTool({
           arguments: body,
@@ -32,7 +33,7 @@ export async function POST(request: NextRequest) {
 
   return handleAgentRoute({
     handler: async ({ agent }) => {
-      const body = await parseJsonBody(request);
+      const body = await parseJsonBody(request, { maxBytes: AGENT_JSON_BODY_MAX_BYTES });
       if (!isJsonObjectBody(body)) return jsonBodyErrorResponse(body);
       return callRateLoopMcpTool({
         agent,
