@@ -795,6 +795,24 @@ test("managed agents can upload generated image bytes and get a question imageUr
   assert.match(body.nextAction, /question\.imageUrls/);
 });
 
+test("managed image upload explains byte-count mismatches", async () => {
+  await assert.rejects(
+    () =>
+      callRateLoopMcpTool({
+        agent: AGENT,
+        arguments: {
+          dataUrl: `data:image/png;base64,${ONE_PIXEL_PNG.toString("base64")}`,
+          filename: "generated-mockup.png",
+          sizeBytes: ONE_PIXEL_PNG.length + 1,
+          walletAddress: AGENT.walletAddress,
+        },
+        name: "rateloop_upload_image",
+        requestUrl: "https://www.rateloop.ai/api/mcp",
+      }),
+    /exact image buffer in the same request process/,
+  );
+});
+
 test("public MCP image upload uses a wallet-signed upload challenge", async () => {
   const account = privateKeyToAccount(`0x${"1".repeat(64)}`);
   const attachmentId = "att_mcppublicupload01";

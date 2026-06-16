@@ -197,6 +197,8 @@ type McpToolDefinition = {
 
 type AskHumansPaymentMode = "wallet_calls" | "x402_authorization";
 type BackgroundTaskScheduler = (task: () => Promise<void> | void) => void;
+const IMAGE_BASE64_TRANSPORT_HINT =
+  "Read the image from disk or memory in the same process that sends the request; do not copy base64 from terminal output or downscale solely because a chat display capped the output.";
 
 type McpToolDependencies = {
   confirmAgentWalletQuestionSubmissionRequest: typeof confirmAgentWalletQuestionSubmissionRequest;
@@ -342,7 +344,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       readOnlyHint: false,
     },
     description:
-      "Create a browser handoff link for normal human-wallet asks. Use this for public URL, YouTube, generated/local image, or gated RateLoop-hosted private context; share the returned handoffUrl with the user. generatedImages are decoded before the link is returned, so corrupt image bytes fail synchronously. Do not ask users to paste raw wallet signatures.",
+      "Create a browser handoff link for normal human-wallet asks. Use this for public URL, YouTube, generated/local image, or gated RateLoop-hosted private context; share the returned handoffUrl with the user. generatedImages use the same under-10 MB JPG/PNG/WEBP per-image limit as the submit page and are decoded before the link is returned, so corrupt image bytes fail synchronously. Pass image bytes from file-backed tooling; do not shrink an image just because terminal or chat output cannot display its base64. Do not ask users to paste raw wallet signatures.",
     inputSchema: agentCreateAskHandoffInputSchema,
     name: "rateloop_create_ask_handoff_link",
     outputSchema: agentAskHandoffOutputSchema,
@@ -392,7 +394,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       readOnlyHint: false,
     },
     description:
-      "Advanced raw image-upload flow. Upload AI-generated or local image bytes after a managed token or public wallet signature; normal chat handoffs should use rateloop_create_ask_handoff_link instead.",
+      "Advanced raw image-upload flow. Upload AI-generated or local image bytes after a managed token or public wallet signature; normal chat handoffs should use rateloop_create_ask_handoff_link instead. Read bytes directly from disk or memory in the caller process rather than copying base64 from terminal output.",
     inputSchema: agentUploadImageInputSchema,
     name: "rateloop_upload_image",
     outputSchema: agentImageUploadOutputSchema,
@@ -1003,11 +1005,11 @@ function normalizePreparedUploadMetadata(args: JsonObject, walletAddress: Addres
 function parseImageBase64(value: string) {
   const normalized = value.replace(/\s/g, "");
   if (!normalized || !/^[A-Za-z0-9+/]*={0,2}$/.test(normalized) || normalized.length % 4 === 1) {
-    throw new McpToolError("imageBase64 must be valid base64 image bytes.");
+    throw new McpToolError(`imageBase64 must be valid base64 image bytes. ${IMAGE_BASE64_TRANSPORT_HINT}`);
   }
   const buffer = Buffer.from(normalized, "base64");
   if (buffer.length === 0 || buffer.toString("base64").replace(/=+$/, "") !== normalized.replace(/=+$/, "")) {
-    throw new McpToolError("imageBase64 must be valid base64 image bytes.");
+    throw new McpToolError(`imageBase64 must be valid base64 image bytes. ${IMAGE_BASE64_TRANSPORT_HINT}`);
   }
   return buffer;
 }
@@ -1025,7 +1027,7 @@ function parseImageUploadData(args: JsonObject) {
   if (dataUrl) {
     const match = dataUrl.match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/i);
     if (!match) {
-      throw new McpToolError("dataUrl must be a supported base64 image data URL.");
+      throw new McpToolError(`dataUrl must be a supported base64 image data URL. ${IMAGE_BASE64_TRANSPORT_HINT}`);
     }
     return {
       buffer: parseImageBase64(match[2]),
@@ -1048,17 +1050,20 @@ function normalizeUploadImageArgs(args: JsonObject, walletAddress: Address) {
   const attachmentId = readUploadAttachmentId(args);
   const filename = readRequiredStringField(args, "filename").slice(0, 180);
   const mimeType = readUploadMimeType(args, dataUrlMimeType);
-  const sizeBytes = readOptionalStringField(args, "sizeBytes")
-    ? readPositiveSizeBytes(args.sizeBytes, "sizeBytes")
-    : buffer.byteLength;
+  const hasSuppliedSizeBytes = args.sizeBytes !== undefined && args.sizeBytes !== null && args.sizeBytes !== "";
+  const sizeBytes = hasSuppliedSizeBytes ? readPositiveSizeBytes(args.sizeBytes, "sizeBytes") : buffer.byteLength;
   if (sizeBytes !== buffer.byteLength) {
-    throw new McpToolError("sizeBytes must match the decoded image byte length.");
+    throw new McpToolError(
+      "sizeBytes must match the decoded image byte length. Omit sizeBytes or compute it from the exact image buffer in the same request process.",
+    );
   }
 
   const computedSha256 = createHash("sha256").update(buffer).digest("hex");
   const sha256 = readOptionalStringField(args, "sha256") ? readSha256(args.sha256, "sha256") : computedSha256;
   if (sha256 !== computedSha256) {
-    throw new McpToolError("sha256 must match the decoded image bytes.");
+    throw new McpToolError(
+      "sha256 must match the decoded image bytes. Omit sha256 or compute it from the exact image buffer in the same request process.",
+    );
   }
 
   const normalized = normalizeImageUploadChallengeInput({

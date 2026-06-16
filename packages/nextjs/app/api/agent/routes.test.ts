@@ -939,6 +939,32 @@ test("agent ask handoff route rejects corrupt generated image bytes before stagi
   assert.match(String(body.message), /corrupt or incomplete/);
 });
 
+test("agent ask handoff route explains generated image byte-count mismatches", async () => {
+  const response = await handoffsRoute.POST(
+    makePublicPost("https://rateloop.ai/api/agent/handoffs", {
+      generatedImages: [
+        {
+          filename: "concept.png",
+          imageBase64: ONE_PIXEL_PNG_BASE64,
+          mimeType: "image/png",
+          sha256: ONE_PIXEL_PNG_SHA256,
+          sizeBytes: ONE_PIXEL_PNG.length + 1,
+        },
+      ],
+      request: {
+        ...handoffQuestionPayload("agent-handoff-image-size-mismatch"),
+        maxPaymentAmount: "1500000",
+      },
+      ttlMs: 300000,
+    }),
+  );
+  const body = (await response.json()) as Record<string, unknown>;
+
+  assert.equal(response.status, 400);
+  assert.match(String(body.message), /sizeBytes must match the decoded image byte length/);
+  assert.match(String(body.message), /exact image buffer in the same request process/);
+});
+
 test("agent ask handoff route unwraps base64-encoded image data URLs", async () => {
   const nestedDataUrl = `data:image/png;base64,${ONE_PIXEL_PNG_BASE64}`;
   const legacyWrappedBytes = Buffer.from(nestedDataUrl, "utf8");

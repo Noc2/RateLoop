@@ -87,6 +87,8 @@ const HANDOFF_DRAFT_COLUMNS = [
 const HANDOFF_DRAFT_MIGRATION_MESSAGE =
   `Agent ask handoff database migration is pending. Apply ${HANDOFF_DRAFT_MIGRATION_PATH} ` +
   "to the handoff database before creating or preparing browser handoff links.";
+const IMAGE_BASE64_TRANSPORT_HINT =
+  "Read the image from disk or memory in the same process that sends the request; do not copy base64 from terminal output or downscale solely because a chat display capped the output.";
 
 type ErrorWithCause = {
   cause?: unknown;
@@ -342,11 +344,15 @@ function decodeBase64(value: string) {
     (!/^[A-Za-z0-9+/]+={0,2}$/.test(normalized) && !/^[A-Za-z0-9_-]+={0,2}$/.test(normalized)) ||
     normalized.length % 4 === 1
   ) {
-    throw new AgentAskHandoffError("generatedImages[].imageBase64 must be base64-encoded image bytes.");
+    throw new AgentAskHandoffError(
+      `generatedImages[].imageBase64 must be base64-encoded image bytes. ${IMAGE_BASE64_TRANSPORT_HINT}`,
+    );
   }
   const buffer = Buffer.from(normalized, "base64");
   if (buffer.length === 0) {
-    throw new AgentAskHandoffError("generatedImages[].imageBase64 must be base64-encoded image bytes.");
+    throw new AgentAskHandoffError(
+      `generatedImages[].imageBase64 must be base64-encoded image bytes. ${IMAGE_BASE64_TRANSPORT_HINT}`,
+    );
   }
   return buffer;
 }
@@ -385,7 +391,9 @@ function normalizeGeneratedImage(input: CreateHandoffImageInput, index: number) 
   const dataUrl = readOptionalString(input.dataUrl);
   const dataUrlParts = dataUrl ? readDataUrl(dataUrl) : null;
   if (dataUrl && !dataUrlParts) {
-    throw new AgentAskHandoffError(`generatedImages[${index}].dataUrl must be a base64 image data URL.`);
+    throw new AgentAskHandoffError(
+      `generatedImages[${index}].dataUrl must be a base64 image data URL. ${IMAGE_BASE64_TRANSPORT_HINT}`,
+    );
   }
   let imageBase64 =
     dataUrlParts?.imageBase64 ?? readRequiredString(input.imageBase64, `generatedImages[${index}].imageBase64`);
@@ -418,15 +426,21 @@ function normalizeGeneratedImage(input: CreateHandoffImageInput, index: number) 
   }
   const sizeBytes = readPositiveSizeBytes(input.sizeBytes, buffer.byteLength);
   if (sizeBytes !== buffer.byteLength) {
-    throw new AgentAskHandoffError(`generatedImages[${index}].sizeBytes must match the decoded image byte length.`);
+    throw new AgentAskHandoffError(
+      `generatedImages[${index}].sizeBytes must match the decoded image byte length. Omit sizeBytes or compute it from the exact image buffer in the same request process.`,
+    );
   }
   if (sizeBytes > getMaxImageUploadSizeBytes()) {
-    throw new AgentAskHandoffError(`generatedImages[${index}] exceeds the maximum image upload size.`);
+    throw new AgentAskHandoffError(
+      `generatedImages[${index}] exceeds the maximum image upload size of ${getMaxImageUploadSizeBytes()} bytes.`,
+    );
   }
   const sha256 = createHash("sha256").update(buffer).digest("hex");
   const suppliedSha256 = readOptionalString(input.sha256).toLowerCase();
   if (suppliedSha256 && suppliedSha256 !== sha256) {
-    throw new AgentAskHandoffError(`generatedImages[${index}].sha256 must match the decoded image bytes.`);
+    throw new AgentAskHandoffError(
+      `generatedImages[${index}].sha256 must match the decoded image bytes. Omit sha256 or compute it from the exact image buffer in the same request process.`,
+    );
   }
 
   return {
