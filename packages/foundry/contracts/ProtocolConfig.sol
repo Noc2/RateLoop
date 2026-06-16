@@ -37,6 +37,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     uint16 internal constant MAX_CREATOR_ROUND_VOTERS = 200;
     uint32 internal constant MIN_ROUND_DURATION_FLOOR = 20 seconds;
     uint8 internal constant PAYOUT_DOMAIN_LAUNCH_CREDIT = 2;
+    uint8 internal constant PAYOUT_DOMAIN_PUBLIC_RATING = 3;
     bytes32 internal constant RATELOOP_REWARD_DISTRIBUTOR_MARKER = keccak256("rateloop.round-reward-distributor.v1");
 
     error InvalidAddress();
@@ -719,6 +720,10 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
             _validateClusterPayoutOracleLaunchConsumer(value, launchPool);
             _validateLaunchDistributionPoolClusterPayoutOracle(launchPool, value);
         }
+        address distributor = rewardDistributor;
+        if (distributor != address(0)) {
+            _validateClusterPayoutOraclePublicRatingConsumer(value, distributor);
+        }
     }
 
     function _validateConfidentialityEscrow(address value) internal view {
@@ -776,6 +781,26 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
             address consumer
         ) {
             if (consumer != launchPool) revert InvalidConfig();
+        } catch {
+            revert InvalidConfig();
+        }
+    }
+
+    function _validateClusterPayoutOraclePublicRatingConsumer(address oracle, address distributor) internal view {
+        address contentRegistry = _readRewardDistributorRegistry(distributor);
+        if (contentRegistry == address(0)) revert InvalidConfig();
+        try IClusterPayoutOracle(oracle).roundPayoutSnapshotConsumer(PAYOUT_DOMAIN_PUBLIC_RATING) returns (
+            address consumer
+        ) {
+            if (consumer != contentRegistry) revert InvalidConfig();
+        } catch {
+            revert InvalidConfig();
+        }
+    }
+
+    function _readRewardDistributorRegistry(address distributor) internal view returns (address registry) {
+        try IRoundRewardDistributor(distributor).registry() returns (address distributorRegistry) {
+            return distributorRegistry;
         } catch {
             revert InvalidConfig();
         }

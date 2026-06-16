@@ -142,6 +142,7 @@ contract MockLaunchDistributionPoolForConfig {
 
 contract MockClusterPayoutOracleForConfig {
     address internal launchConsumer;
+    address internal publicRatingConsumer;
 
     constructor(address launchConsumer_) {
         launchConsumer = launchConsumer_;
@@ -149,6 +150,10 @@ contract MockClusterPayoutOracleForConfig {
 
     function setLaunchConsumer(address launchConsumer_) external {
         launchConsumer = launchConsumer_;
+    }
+
+    function setPublicRatingConsumer(address publicRatingConsumer_) external {
+        publicRatingConsumer = publicRatingConsumer_;
     }
 
     function roundPayoutSnapshotKey(uint8 domain, uint256 rewardPoolId, uint256 contentId, uint256 roundId)
@@ -165,6 +170,7 @@ contract MockClusterPayoutOracleForConfig {
 
     function roundPayoutSnapshotConsumer(uint8 domain) external view returns (address) {
         if (domain == 2) return launchConsumer;
+        if (domain == 3) return publicRatingConsumer;
         return address(0);
     }
 }
@@ -678,6 +684,33 @@ contract ProtocolConfigBranchesTest is Test {
         replacementLaunchPool.setClusterPayoutOracle(address(oracle));
         config.setLaunchDistributionPool(address(replacementLaunchPool));
         assertEq(config.launchDistributionPool(), address(replacementLaunchPool));
+    }
+
+    function test_SetClusterPayoutOracle_RequiresPinnedPublicRatingConsumerAfterRewardDistributorConfigured() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+        address engine = _newRewardEngine(config);
+        address contentRegistry = MockVotingEngineForConfig(engine).registry();
+        address distributor = address(new MockRewardDistributorForConfig(engine));
+        MockClusterPayoutOracleForConfig mismatchedOracle = new MockClusterPayoutOracleForConfig(address(0));
+        MockClusterPayoutOracleForConfig pinnedOracle = new MockClusterPayoutOracleForConfig(address(0));
+
+        config.setRewardDistributor(distributor);
+
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.setClusterPayoutOracle(address(mismatchedOracle));
+
+        pinnedOracle.setPublicRatingConsumer(contentRegistry);
+        config.setClusterPayoutOracle(address(pinnedOracle));
+        assertEq(config.clusterPayoutOracle(), address(pinnedOracle));
+    }
+
+    function test_SetClusterPayoutOracle_AllowsBootstrapBeforeRewardDistributor() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+        MockClusterPayoutOracleForConfig oracle = new MockClusterPayoutOracleForConfig(address(0));
+
+        config.setClusterPayoutOracle(address(oracle));
+
+        assertEq(config.clusterPayoutOracle(), address(oracle));
     }
 
     function test_SetAdvisoryVoteRecorder_UpdatesAddressAndEmits() public {
