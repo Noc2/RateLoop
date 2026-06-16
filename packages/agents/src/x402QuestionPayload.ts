@@ -120,11 +120,18 @@ export type X402QuestionParserOptions = {
   questionMetadataBaseUrl?: string | null;
 };
 
+function isLocalE2EProductionBuildEnabled() {
+  return (
+    process.env.RATELOOP_E2E_PRODUCTION_BUILD === "true" ||
+    process.env.NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD === "true"
+  );
+}
+
 export function buildDefaultX402QuestionParserOptions(): X402QuestionParserOptions {
   return {
     allowedRateLoopAttachmentOrigins: getDefaultRateLoopAttachmentOrigins(),
     allowLocalhostAttachmentOrigins:
-      process.env.NODE_ENV !== "production" || process.env.NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD === "true",
+      process.env.NODE_ENV !== "production" || isLocalE2EProductionBuildEnabled(),
     questionMetadataBaseUrl: process.env.NEXT_PUBLIC_PONDER_URL ?? process.env.NEXT_PUBLIC_APP_URL,
   };
 }
@@ -348,7 +355,7 @@ function getAllowedRateLoopAttachmentOrigins(options: X402QuestionParserOptions)
 function shouldAllowLocalhostAttachmentOrigins(options: X402QuestionParserOptions) {
   return (
     options.allowLocalhostAttachmentOrigins ??
-    (process.env.NODE_ENV !== "production" || process.env.NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD === "true")
+    (process.env.NODE_ENV !== "production" || isLocalE2EProductionBuildEnabled())
   );
 }
 

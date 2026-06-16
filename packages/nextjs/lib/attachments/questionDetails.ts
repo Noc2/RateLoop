@@ -11,6 +11,7 @@ import { assertGatedAttachmentSchemaReady } from "~~/lib/attachments/uploadError
 import { db, dbPool } from "~~/lib/db";
 import { type QuestionDetails, questionDetails } from "~~/lib/db/schema";
 import { isValidWalletAddress, normalizeWalletAddress } from "~~/lib/watchlist/contentWatch";
+import { isLocalE2EProductionBuildEnabled } from "~~/utils/env/e2eProduction";
 
 const QUESTION_DETAILS_ROUTE_PREFIX = "/api/attachments/details";
 const DEFAULT_DETAILS_TEXT_PREVIEW_LENGTH = 600;
@@ -126,15 +127,8 @@ function isLocalhostDetailsHostname(hostname: string) {
   return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname === "[::1]";
 }
 
-function isE2EProductionBuild() {
-  return (
-    process.env.RATELOOP_E2E_PRODUCTION_BUILD === "true" ||
-    process.env.NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD === "true"
-  );
-}
-
 function shouldAllowLocalQuestionDetailsUrls() {
-  return process.env.NODE_ENV !== "production" || isE2EProductionBuild();
+  return process.env.NODE_ENV !== "production" || isLocalE2EProductionBuildEnabled();
 }
 
 function isPublicHttpsQuestionDetailsUrl(value: string) {
@@ -171,7 +165,7 @@ function isPublicHttpsQuestionDetailsUrl(value: string) {
 
 function isPublishableQuestionDetailsUrl(value: string) {
   if (isPublicHttpsQuestionDetailsUrl(value)) return true;
-  if (!isE2EProductionBuild()) return false;
+  if (!isLocalE2EProductionBuildEnabled()) return false;
 
   try {
     const parsed = new URL(value);
