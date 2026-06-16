@@ -39,7 +39,16 @@ export async function verifySignedActionChallenge(params: {
   } catch (error: unknown) {
     const mapped = mapSignedActionError(error);
     if (mapped) {
-      return NextResponse.json({ error: mapped.error }, { status: mapped.status });
+      return NextResponse.json(
+        {
+          code: "invalid_arguments",
+          message: mapped.error,
+          recoverWith: "fix_request_and_retry",
+          retryable: false,
+          status: mapped.status,
+        },
+        { status: mapped.status },
+      );
     }
     throw error;
   }
