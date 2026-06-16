@@ -24,7 +24,9 @@ const rawPublicEnv = {
   alchemyApiKey: optionalEnv(process.env.NEXT_PUBLIC_ALCHEMY_API_KEY),
   enableRpcFallback: optionalEnv(process.env.NEXT_PUBLIC_ENABLE_RPC_FALLBACK),
   frontendCode: optionalEnv(process.env.NEXT_PUBLIC_FRONTEND_CODE),
-  localE2EProductionBuild: optionalEnv(process.env.NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD),
+  localE2EProductionBuild:
+    optionalEnv(process.env.NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD) ??
+    (process.env.RATELOOP_E2E_PRODUCTION_BUILD === "true" ? "true" : undefined),
   ponderUrl: optionalEnv(process.env.NEXT_PUBLIC_PONDER_URL),
   rpcUrl4801: optionalEnv(process.env.NEXT_PUBLIC_RPC_URL_4801),
   rpcUrl31337: optionalEnv(process.env.NEXT_PUBLIC_RPC_URL_31337),
