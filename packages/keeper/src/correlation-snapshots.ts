@@ -20,6 +20,7 @@ import {
   restoreConfiguredCorrelationSnapshotArtifactFromCanonicalJson,
   type CorrelationRoundCandidate,
 } from "./correlation-artifact-builder.js";
+import { areCorrelationCandidatesPonderFresh } from "./correlation-ponder-freshness.js";
 import {
   readCachedCorrelationArtifact,
   runWithCorrelationSnapshotPublishLock,
@@ -829,6 +830,10 @@ async function publishAutomaticCorrelationSnapshots(
     logger.debug(
       "Deferring automatic correlation artifact build until Ponder reflects on-chain settlement/reveal",
     );
+    return preflight.result;
+  }
+
+  if (!(await areCorrelationCandidatesPonderFresh(publicClient, candidates, logger))) {
     return preflight.result;
   }
 

@@ -63,6 +63,10 @@ vi.mock("../correlation-artifact-verifier.js", async (importOriginal) => {
   };
 });
 
+vi.mock("../correlation-ponder-freshness.js", () => ({
+  areCorrelationCandidatesPonderFresh: vi.fn(async () => true),
+}));
+
 vi.mock("../correlation-artifact-builder.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../correlation-artifact-builder.js")>();
   return {
