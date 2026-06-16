@@ -405,18 +405,20 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         vm.stopPrank();
 
         uint256 contentId = _submitQuestion("replacement-feedback-stack");
+        uint256 replacementRoundId = replacementEngine.nextRoundIdForContent(contentId);
 
         vm.startPrank(funder);
         usdc.approve(address(replacementEscrow), BONUS_AMOUNT);
-        uint256 poolId =
-            replacementEscrow.createFeedbackBonusPool(contentId, 1, BONUS_AMOUNT, block.timestamp + 7 days, funder);
+        uint256 poolId = replacementEscrow.createFeedbackBonusPool(
+            contentId, replacementRoundId, BONUS_AMOUNT, block.timestamp + 7 days, funder
+        );
         vm.stopPrank();
 
         (uint64 storedId, uint64 storedContentId, uint64 storedRoundId,,,,,,,,,, uint256 fundedAmount,,,) =
             replacementEscrow.feedbackBonusPools(poolId);
         assertEq(storedId, poolId);
         assertEq(storedContentId, contentId);
-        assertEq(storedRoundId, 1);
+        assertEq(storedRoundId, replacementRoundId);
         assertEq(fundedAmount, BONUS_AMOUNT);
         assertEq(address(replacementFeedbackRegistry.votingEngine()), address(replacementEngine));
     }

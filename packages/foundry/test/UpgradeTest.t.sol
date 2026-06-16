@@ -38,6 +38,10 @@ contract MockVotingEngineForUpgrade is IRoundVotingEngine {
         return 0;
     }
 
+    function nextRoundIdForContent(uint256) external pure override returns (uint256) {
+        return 1;
+    }
+
     function isDormancyBlocked(uint256) external pure override returns (bool) {
         return false;
     }

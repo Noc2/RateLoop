@@ -82,13 +82,14 @@ library RoundCreationLib {
         mapping(uint256 => uint256) storage currentRoundId,
         mapping(uint256 => uint256) storage nextRoundId,
         mapping(uint256 => mapping(uint256 => RoundLib.Round)) storage rounds,
-        uint256 contentId
+        uint256 contentId,
+        uint256 allocatedRoundId
     ) external returns (uint256 roundId) {
-        nextRoundId[contentId]++;
-        roundId = nextRoundId[contentId];
-        currentRoundId[contentId] = roundId;
+        roundId = allocatedRoundId;
+        nextRoundId[contentId] = allocatedRoundId;
+        currentRoundId[contentId] = allocatedRoundId;
 
-        rounds[contentId][roundId].startTime = block.timestamp.toUint48();
-        rounds[contentId][roundId].state = RoundLib.RoundState.Open;
+        rounds[contentId][allocatedRoundId].startTime = block.timestamp.toUint48();
+        rounds[contentId][allocatedRoundId].state = RoundLib.RoundState.Open;
     }
 }

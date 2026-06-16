@@ -342,6 +342,10 @@ contract RoundVotingEngine is
         }
     }
 
+    function nextRoundIdForContent(uint256 contentId) external view returns (uint256) {
+        return _nextRoundIdForContent(contentId);
+    }
+
     modifier onlyRole(bytes32 role) {
         _checkRole(role, msg.sender);
         _;
@@ -840,7 +844,9 @@ contract RoundVotingEngine is
             }
         }
 
-        roundId = RoundCreationLib.activateNewRound(currentRoundId, nextRoundId, rounds, contentId);
+        roundId = RoundCreationLib.activateNewRound(
+            currentRoundId, nextRoundId, rounds, contentId, registry.reserveNextVotingRound(contentId)
+        );
         _snapshotRoundContentLifecycle(contentId, roundId);
         RoundCreationLib.snapshotRoundVotingConfig(
             roundConfigSnapshot,
@@ -1270,7 +1276,6 @@ contract RoundVotingEngine is
     {
         return RoundVotingReadLib.previewCommitContext(
             currentRoundId,
-            nextRoundId,
             rounds,
             roundConfigSnapshot,
             roundReferenceRatingBpsSnapshot,
@@ -1283,6 +1288,10 @@ contract RoundVotingEngine is
             contentId,
             MIN_RBTS_PARTICIPANTS
         );
+    }
+
+    function _nextRoundIdForContent(uint256 contentId) internal view returns (uint256) {
+        return registry.nextVotingRoundId(contentId);
     }
 
     function _getRoundRaterRegistry(uint256 contentId, uint256 roundId) internal view returns (IRaterIdentityRegistry) {

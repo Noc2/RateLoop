@@ -15,6 +15,9 @@ interface IRoundVotingEngine {
     /// @return Latest current-round ID, or 0 if no round has been opened.
     function currentRoundId(uint256 contentId) external view returns (uint256);
 
+    /// @notice Get the round ID that would be created next for a content item.
+    function nextRoundIdForContent(uint256 contentId) external view returns (uint256);
+
     /// @notice Whether the current round should block dormancy for a content item.
     function isDormancyBlocked(uint256 contentId) external view returns (bool);
 

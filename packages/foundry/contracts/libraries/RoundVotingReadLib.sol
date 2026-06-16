@@ -11,7 +11,6 @@ import { RoundLib } from "./RoundLib.sol";
 library RoundVotingReadLib {
     function previewCommitContext(
         mapping(uint256 => uint256) storage currentRoundId,
-        mapping(uint256 => uint256) storage nextRoundId,
         mapping(uint256 => mapping(uint256 => RoundLib.Round)) storage rounds,
         mapping(uint256 => mapping(uint256 => RoundLib.RoundConfig)) storage roundConfigSnapshot,
         mapping(uint256 => mapping(uint256 => uint16)) storage roundReferenceRatingBpsSnapshot,
@@ -55,9 +54,7 @@ library RoundVotingReadLib {
             }
         }
 
-        unchecked {
-            openRoundId = nextRoundId[contentId] + 1;
-        }
+        openRoundId = registry.nextVotingRoundId(contentId);
         referenceRatingBps = registry.getRating(contentId);
     }
 

@@ -3090,7 +3090,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         registry.markDormant(1);
     }
 
-    function test_SetVotingEngine_ReplacementCannotCommitWhileTrackedOldRoundOpen() public {
+    function test_SetVotingEngine_ReplacementCannotOpenWhileTrackedOldRoundOpen() public {
         vm.startPrank(submitter);
         lrepToken.approve(address(registry), 10e6);
         _submitContentWithReservation(registry, "https://example.com/tracked-open-engine", "goal", "goal", "tags", 0);
@@ -3107,29 +3107,9 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         registry.unpause();
         vm.stopPrank();
 
-        _openRoundForTest(replacementEngine, 1, voter2);
-        bytes32 salt = keccak256(abi.encodePacked(voter2, block.timestamp));
-        uint16 referenceRatingBps = _currentRatingReferenceBps(1);
-        bytes memory ciphertext = _testCiphertext(true, salt, 1);
-        bytes32 commitHash = _commitHash(
-            true, salt, voter2, 1, referenceRatingBps, _tlockCommitTargetRound(), _tlockDrandChainHash(), ciphertext
-        );
-
-        vm.startPrank(voter2);
-        lrepToken.approve(address(replacementEngine), STAKE);
-        uint256 roundContext = _roundContext(_previewCommitRoundId(replacementEngine, 1), referenceRatingBps);
+        vm.prank(voter2);
         vm.expectRevert(ContentRegistry.ActiveRoundOnPreviousEngine.selector);
-        replacementEngine.commitVote(
-            1,
-            roundContext,
-            _tlockCommitTargetRound(),
-            _tlockDrandChainHash(),
-            commitHash,
-            ciphertext,
-            STAKE,
-            address(0)
-        );
-        vm.stopPrank();
+        replacementEngine.openRound(1);
     }
 
     function test_SetVotingEngine_OldEngineCanSettleAfterReplacementSettlement() public {
@@ -3150,10 +3130,11 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         registry.unpause();
         vm.stopPrank();
 
+        uint256 replacementRoundId = replacementEngine.nextRoundIdForContent(1);
         vm.expectEmit(true, true, false, true, address(registry));
-        emit ContentRegistry.RatingReviewPending(1, 1, 5000, 2, 1, block.timestamp);
+        emit ContentRegistry.RatingReviewPending(1, replacementRoundId, 5000, 2, 1, block.timestamp);
         vm.prank(address(replacementEngine));
-        registry.recordPendingRatingSettlement(1, 1, 5000, 2, 1);
+        registry.recordPendingRatingSettlement(1, replacementRoundId, 5000, 2, 1);
 
         _warpPastTlockRevealTime(block.timestamp + 1 hours);
         votingEngine.revealVoteByCommitKey(1, roundId, ck1, true, 5_000, salt1);
@@ -3260,6 +3241,27 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             )
         );
         vm.stopPrank();
+    }
+
+    function test_SetVotingEngine_ReplacementContinuesDenseRoundIds() public {
+        vm.startPrank(submitter);
+        lrepToken.approve(address(registry), 10e6);
+        _submitContentWithReservation(registry, "https://example.com/dense-replacement", "goal", "goal", "tags", 0);
+        vm.stopPrank();
+        _openRoundForTest(votingEngine, 1, voter1);
+        assertEq(RoundEngineReadHelpers.activeRoundId(votingEngine, 1), 1);
+
+        RoundVotingEngine replacementEngine = _deployReplacementVotingEngine();
+
+        vm.startPrank(owner);
+        registry.pause();
+        registry.setVotingEngine(address(replacementEngine));
+        registry.unpause();
+        vm.stopPrank();
+
+        assertEq(replacementEngine.nextRoundIdForContent(1), 2);
+        _openRoundForTest(replacementEngine, 1, voter2);
+        assertEq(RoundEngineReadHelpers.activeRoundId(replacementEngine, 1), 2);
     }
 
     // =========================================================================

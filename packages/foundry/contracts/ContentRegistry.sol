@@ -202,6 +202,8 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
 
     /// @notice Voting engine whose current round may still need to block dormancy for this content.
     mapping(uint256 => address) internal contentRoundTrackingEngine;
+    /// @notice Latest globally allocated voting round id per content, shared across engine rotations.
+    mapping(uint256 => uint256) public latestVotingRoundId;
 
     /// @notice ProtocolConfig used for governance-tunable rating and slash parameters.
     ProtocolConfig public protocolConfig;
@@ -230,7 +232,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     mapping(uint256 => address) internal questionBundleRoundObserverByContent;
 
     /// @dev Reserved storage gap for future upgrades
-    uint256[38] private __gap;
+    uint256[37] private __gap;
 
     // --- Events ---
     event ContentSubmitted(
@@ -1309,6 +1311,30 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         if (callerGeneration > contentSettlementEngineGeneration[contentId]) {
             contentSettlementEngineGeneration[contentId] = callerGeneration;
         }
+    }
+
+    function nextVotingRoundId(uint256 contentId) external view returns (uint256) {
+        unchecked {
+            return latestVotingRoundId[contentId] + 1;
+        }
+    }
+
+    function reserveNextVotingRound(uint256 contentId) external nonReentrant returns (uint256 roundId) {
+        _authorizeCurrentEngineCallback();
+
+        ContentRegistryTypes.Content storage c = contents[contentId];
+        require(c.id != 0 && c.status == ContentRegistryTypes.ContentStatus.Active);
+
+        address trackedEngine = contentRoundTrackingEngine[contentId];
+        if (trackedEngine != address(0) && trackedEngine != msg.sender && _engineHasOpenRound(trackedEngine, contentId))
+        {
+            revert ActiveRoundOnPreviousEngine();
+        }
+
+        unchecked {
+            roundId = latestVotingRoundId[contentId] + 1;
+        }
+        latestVotingRoundId[contentId] = roundId;
     }
 
     /// @notice Called by VotingEngine when a round settles and its public rating impact must wait for correlation review.

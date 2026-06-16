@@ -494,7 +494,7 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
     function _requireTargetRound(uint256 contentId, uint256 roundId) internal view {
         uint256 currentRoundId = votingEngine.currentRoundId(contentId);
         if (currentRoundId == 0) {
-            require(roundId == 1, "Invalid target round");
+            require(roundId == votingEngine.nextRoundIdForContent(contentId), "Invalid target round");
             return;
         }
 

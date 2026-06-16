@@ -1745,7 +1745,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         returns (uint256 cursor)
     {
         cursor = votingEngine.currentRoundId(contentId);
-        if (cursor == 0) return 1;
+        if (cursor == 0) return votingEngine.nextRoundIdForContent(contentId);
         (uint48 startTime, RoundLib.RoundState state,,,,,,) = votingEngine.roundCore(contentId, cursor);
         if (startTime == 0 || state != RoundLib.RoundState.Open) return cursor + 1;
     }

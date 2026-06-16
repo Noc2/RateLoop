@@ -284,7 +284,7 @@ library QuestionRewardPoolEscrowPoolActionsLib {
 
     function _nextStartRoundId(RoundVotingEngine votingEngine, uint256 contentId) private view returns (uint256) {
         uint256 currentRoundId = votingEngine.currentRoundId(contentId);
-        return currentRoundId == 0 ? 1 : currentRoundId + 1;
+        return currentRoundId == 0 ? votingEngine.nextRoundIdForContent(contentId) : currentRoundId + 1;
     }
 
     function _resolveSubmitterIdentity(ContentRegistry registry, ProtocolConfig protocolConfig, uint256 contentId)
