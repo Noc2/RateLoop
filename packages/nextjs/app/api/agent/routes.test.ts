@@ -826,6 +826,60 @@ test("agent signing intent routes create and prepare browser handoff asks", asyn
   assert.equal((readAfterPrepareBody.transactionPlan as { calls: unknown[] }).calls.length, 1);
 });
 
+test("agent signing intent prepare fails when MCP returns an empty transaction plan", async () => {
+  installAskOverrides({
+    preparePermissionlessWalletQuestionSubmissionRequest: async params => ({
+      body: {
+        chainId: params.payload.chainId,
+        clientRequestId: params.payload.clientRequestId,
+        operationKey: OPERATION_KEY,
+        payment: {
+          amount: "1000000",
+          asset: "USDC",
+          bountyAmount: "1000000",
+          decimals: 6,
+          spender: "0x0000000000000000000000000000000000000002",
+          tokenAddress: "0x0000000000000000000000000000000000000001",
+        },
+        status: "awaiting_wallet_signature",
+        transactionPlan: {
+          calls: [],
+          requiresOrderedExecution: true,
+        },
+        wallet: { address: params.walletAddress, fundingMode: "permissionless_wallet" },
+      },
+      status: 202,
+    }),
+  });
+
+  const createResponse = await signingIntentsRoute.POST(
+    makePublicPost("https://rateloop.ai/api/agent/signing-intents", {
+      request: {
+        ...questionPayload("browser-empty-plan"),
+        maxPaymentAmount: "1500000",
+        signatureMode: "browser_link",
+      },
+      ttlMs: 300000,
+    }),
+  );
+  const createBody = (await createResponse.json()) as Record<string, unknown>;
+  const intentId = String(createBody.id);
+  const signingUrl = new URL(String(createBody.signingUrl));
+  const token = new URLSearchParams(signingUrl.hash.replace(/^#/, "")).get("token");
+
+  const prepareResponse = await signingIntentPrepareRoute.POST(
+    makePublicPost(`https://rateloop.ai/api/agent/signing-intents/${intentId}/prepare`, {
+      token,
+      walletAddress: "0x00000000000000000000000000000000000000aa",
+    }),
+    { params: Promise.resolve({ intentId }) },
+  );
+  const prepareBody = (await prepareResponse.json()) as Record<string, unknown>;
+
+  assert.equal(prepareResponse.status, 400);
+  assert.match(String(prepareBody.message), /executable transaction plan/i);
+});
+
 test("agent signing intent route accepts ttlMs on direct ask bodies without persisting it", async () => {
   installAskOverrides();
 
