@@ -28,6 +28,8 @@ Run these from the monorepo root unless noted otherwise:
 | `yarn workspace @rateloop/nextjs format`           | Format frontend code with Prettier                                                         |
 | `yarn workspace @rateloop/nextjs db:generate`      | Generate Drizzle migrations                                                                |
 | `yarn workspace @rateloop/nextjs db:push`          | Apply migrations to the configured database                                                |
+
+**Production deploy:** Run `db:push` (or apply SQL migrations) on the Neon app database before shipping signing-intent changes. Migration `0012_agent_signing_intent_prepared_artifacts.sql` adds `transaction_plan` and `x402_authorization_request` columns required for browser signing reload.
 | `yarn workspace @rateloop/nextjs db:studio`        | Open the Drizzle studio UI                                                                 |
 | `yarn workspace @rateloop/nextjs whitepaper`       | Generate the whitepaper PDF                                                                |
 | `yarn workspace @rateloop/nextjs demo:record`      | Record the short Playwright product demo video                                             |
