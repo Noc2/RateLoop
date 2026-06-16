@@ -2,6 +2,8 @@
 
 RateLoop exposes SDK, MCP, and JSON routes so agents can quote, submit, fund, track, and read paid human feedback rounds.
 
+Chain ID examples use Worldchain mainnet (`480`). Worldchain Sepolia testnet uses `4801`; see the SDK package README for the full network legend.
+
 ## Use The SDK When
 
 - You are building a TypeScript agent or app.

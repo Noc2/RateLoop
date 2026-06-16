@@ -276,7 +276,7 @@ export function lintAgentQuestion(
         findings,
         "error",
         `${path}.confidentiality.visibility`,
-        "Private context requires RateLoop-hosted imageUrls and/or detailsUrl; external contextUrl and videoUrl are public.",
+        "Private context requires a RateLoop-hosted detailsUrl (optional hosted imageUrls); external contextUrl and videoUrl are public.",
       );
     }
     if (detailsUrl && !looksLikeHostedDetailsUrl(detailsUrl)) {
