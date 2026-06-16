@@ -328,9 +328,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         bytes32 pauserRole = keccak256("PAUSER_ROLE");
         address newPauser = address(0xBEEF);
 
-        vm.expectRevert(
-            abi.encodeWithSelector(RoundVotingEngine.AccessControlUnauthorizedAccount.selector, voter1, bytes32(0))
-        );
+        vm.expectRevert(RoundVotingEngine.Unauthorized.selector);
         vm.prank(voter1);
         engine.setRole(pauserRole, newPauser, true);
 
@@ -338,7 +336,6 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         vm.prank(owner);
         engine.setRole(pauserRole, newPauser, true);
         _assertRoleUpdatedLog(vm.getRecordedLogs(), pauserRole, newPauser, true);
-        assertTrue(engine.hasRole(pauserRole, newPauser));
 
         vm.recordLogs();
         vm.prank(owner);
@@ -353,11 +350,8 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         vm.prank(owner);
         engine.setRole(pauserRole, newPauser, false);
         _assertRoleUpdatedLog(vm.getRecordedLogs(), pauserRole, newPauser, false);
-        assertFalse(engine.hasRole(pauserRole, newPauser));
 
-        vm.expectRevert(
-            abi.encodeWithSelector(RoundVotingEngine.AccessControlUnauthorizedAccount.selector, newPauser, pauserRole)
-        );
+        vm.expectRevert(RoundVotingEngine.Unauthorized.selector);
         vm.prank(newPauser);
         engine.unpause();
 
@@ -371,7 +365,10 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         vm.prank(owner);
         engine.setRole(bytes32(0), owner, false);
 
-        assertTrue(engine.hasRole(bytes32(0), owner));
+        vm.recordLogs();
+        vm.prank(owner);
+        engine.setRole(keccak256("PAUSER_ROLE"), address(0xCAFE), true);
+        _assertRoleUpdatedLog(vm.getRecordedLogs(), keccak256("PAUSER_ROLE"), address(0xCAFE), true);
     }
 
     function test_InitializeEmitsRoleUpdatedForGenesisRoles() public {
@@ -391,10 +388,12 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         );
         Vm.Log[] memory logs = vm.getRecordedLogs();
 
-        assertTrue(freshEngine.hasRole(bytes32(0), owner));
-        assertTrue(freshEngine.hasRole(keccak256("PAUSER_ROLE"), owner));
         _assertContainsRoleUpdatedLog(logs, bytes32(0), owner, true);
         _assertContainsRoleUpdatedLog(logs, keccak256("PAUSER_ROLE"), owner, true);
+
+        vm.prank(owner);
+        freshEngine.pause();
+        assertTrue(freshEngine.paused());
     }
 
     function _assertRoleUpdatedLog(Vm.Log[] memory logs, bytes32 role, address account, bool enabled) internal pure {
@@ -1276,7 +1275,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
             0,
             "pending review ready timestamp recorded"
         );
-        assertEq(registry.appliedRatingSnapshotDigest(contentId, roundId), bytes32(0), "pending review not applied");
+        assertFalse(registry.isRoundPayoutSnapshotConsumed(3, 0, contentId, roundId), "pending review not applied");
     }
 
     function test_VerifiedHumanDoesNotBoostStakeWeight() public {

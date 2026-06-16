@@ -628,7 +628,7 @@ abstract contract ContentSubmissionTestBase {
             return;
         }
 
-        bytes32 configRole = registry.CONFIG_ROLE();
+        bytes32 configRole = keccak256("CONFIG_ROLE");
         address[8] memory candidates = [
             address(this), address(1), address(2), address(0xA), address(0xB), address(0xAA), address(0xBB), address(10)
         ];
@@ -650,7 +650,7 @@ abstract contract ContentSubmissionTestBase {
         if (rewardEscrow != address(0)) return rewardEscrow;
 
         MockQuestionRewardPoolEscrow mockRewardPoolEscrow = _newMockQuestionRewardPoolEscrow(registry);
-        bytes32 configRole = registry.CONFIG_ROLE();
+        bytes32 configRole = keccak256("CONFIG_ROLE");
         address[8] memory candidates = [
             address(this), address(1), address(2), address(0xA), address(0xB), address(0xAA), address(0xBB), address(10)
         ];
@@ -727,7 +727,7 @@ abstract contract VotingTestBase is Test, ContentSubmissionTestBase {
     mapping(bytes32 => TestRevealPayload) internal testRevealPayloads;
 
     // ContentRegistry.questionBundleRoundObserverByContent storage slot (see ContentRegistry.json).
-    uint256 internal constant QUESTION_BUNDLE_ROUND_OBSERVER_BY_CONTENT_SLOT = 27;
+    uint256 internal constant QUESTION_BUNDLE_ROUND_OBSERVER_BY_CONTENT_SLOT = 28;
 
     uint256 private _votingTestCheckpoint;
 

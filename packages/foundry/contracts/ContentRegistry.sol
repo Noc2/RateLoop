@@ -80,11 +80,11 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     error InvalidState();
 
     // --- Access Control Roles ---
-    bytes32 public constant CONFIG_ROLE = keccak256("CONFIG_ROLE");
-    bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
-    bytes32 public constant TREASURY_ROLE = keccak256("TREASURY_ROLE");
-    bytes32 public constant TREASURY_ADMIN_ROLE = keccak256("TREASURY_ADMIN_ROLE");
-    bytes32 public constant X402_GATEWAY_ROLE = keccak256("X402_GATEWAY_ROLE");
+    bytes32 internal constant CONFIG_ROLE = keccak256("CONFIG_ROLE");
+    bytes32 internal constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
+    bytes32 internal constant TREASURY_ROLE = keccak256("TREASURY_ROLE");
+    bytes32 internal constant TREASURY_ADMIN_ROLE = keccak256("TREASURY_ADMIN_ROLE");
+    bytes32 internal constant X402_GATEWAY_ROLE = keccak256("X402_GATEWAY_ROLE");
 
     // --- Constants ---
     uint256 internal constant REVIVAL_STAKE = 5e6; // 5 LREP (6 decimals)
@@ -167,7 +167,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     // --- State ---
     IERC20 public lrepToken;
     address public votingEngine;
-    ICategoryRegistry public categoryRegistry;
+    ICategoryRegistry internal categoryRegistry;
     address public treasury; // Receives 100% of slashed stakes (governance timelock)
     uint256 public nextContentId;
     uint256 internal nextQuestionBundleId;
@@ -203,7 +203,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     /// @notice Voting engine whose current round may still need to block dormancy for this content.
     mapping(uint256 => address) internal contentRoundTrackingEngine;
     /// @notice Latest globally allocated voting round id per content, shared across engine rotations.
-    mapping(uint256 => uint256) public latestVotingRoundId;
+    mapping(uint256 => uint256) internal latestVotingRoundId;
 
     /// @notice ProtocolConfig used for governance-tunable rating and slash parameters.
     ProtocolConfig public protocolConfig;
@@ -222,7 +222,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         pendingRatingSettlement;
 
     /// @notice Applied rating snapshot digests keyed by content and round. Nonzero means the canonical rating consumed the root.
-    mapping(uint256 => mapping(uint256 => bytes32)) public appliedRatingSnapshotDigest;
+    mapping(uint256 => mapping(uint256 => bytes32)) internal appliedRatingSnapshotDigest;
 
     /// @notice Slash policy frozen at content creation so governance cannot retroactively rewrite stake terms.
     mapping(uint256 => RatingLib.SlashConfig) internal contentSlashConfigSnapshot;
@@ -338,7 +338,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         _initialize(_admin, _governance, _treasuryAuthority, _lrepToken);
     }
 
-    function _initialize(address _admin, address _governance, address _treasuryAuthority, address _lrepToken) internal {
+    function _initialize(address _admin, address _governance, address _treasuryAuthority, address _lrepToken) private {
         __AccessControl_init();
         __Pausable_init();
 
@@ -994,11 +994,11 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         }
     }
 
-    function _submissionMediaHash(string[] memory imageUrls, string memory videoUrl) internal pure returns (bytes32) {
+    function _submissionMediaHash(string[] memory imageUrls, string memory videoUrl) private pure returns (bytes32) {
         return keccak256(abi.encode(imageUrls, videoUrl));
     }
 
-    function _submissionDetailsHash(SubmissionDetails memory details) internal pure returns (bytes32) {
+    function _submissionDetailsHash(SubmissionDetails memory details) private pure returns (bytes32) {
         return keccak256(abi.encode(details.detailsUrl, details.detailsHash));
     }
 
@@ -1009,7 +1009,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         SubmissionDetails memory details,
         uint256 resolvedCategoryId,
         QuestionSpecCommitment memory spec
-    ) internal pure returns (bytes32) {
+    ) private pure returns (bytes32) {
         return keccak256(
             abi.encode(
                 QUESTION_CONTEXT_DOMAIN,
@@ -1026,17 +1026,17 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         );
     }
 
-    function _validateQuestionSpec(QuestionSpecCommitment memory spec) internal pure {
+    function _validateQuestionSpec(QuestionSpecCommitment memory spec) private pure {
         require(spec.questionMetadataHash != bytes32(0));
         require(spec.resultSpecHash != bytes32(0));
     }
 
-    function _validateSubmissionDetails(SubmissionDetails memory details, bool gated) internal view {
+    function _validateSubmissionDetails(SubmissionDetails memory details, bool gated) private view {
         submissionMediaValidator.validateSubmissionDetails(details.detailsUrl, details.detailsHash, gated);
     }
 
     function _resolveQuestionSubmissionCategory(SubmissionMetadata memory metadata)
-        internal
+        private
         view
         returns (uint256 resolvedCategoryId)
     {
@@ -1050,7 +1050,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         bytes32 mediaHash,
         SubmissionDetails memory details,
         uint256 resolvedCategoryId
-    ) internal pure returns (bytes32) {
+    ) private pure returns (bytes32) {
         return keccak256(
             abi.encode(
                 QUESTION_CONTEXT_DOMAIN,

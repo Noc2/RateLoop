@@ -3084,7 +3084,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         assertGt(
             registry.roundPayoutSnapshotSourceReadyAt(3, 0, 1, roundId), 0, "tracked old engine records pending review"
         );
-        assertEq(registry.appliedRatingSnapshotDigest(1, roundId), bytes32(0), "pending review not applied");
+        assertFalse(registry.isRoundPayoutSnapshotConsumed(3, 0, 1, roundId), "pending review not applied");
         vm.warp(block.timestamp + 30 days);
         vm.expectRevert();
         registry.markDormant(1);
@@ -3752,15 +3752,15 @@ contract ContentRegistryBranchesTest is VotingTestBase {
 
         assertEq(reg2.treasury(), treasury);
         assertTrue(reg2.hasRole(reg2.DEFAULT_ADMIN_ROLE(), governance));
-        assertTrue(reg2.hasRole(reg2.TREASURY_ADMIN_ROLE(), governance));
-        assertTrue(reg2.hasRole(reg2.TREASURY_ADMIN_ROLE(), treasury));
-        assertTrue(reg2.hasRole(reg2.TREASURY_ROLE(), treasury));
-        assertFalse(reg2.hasRole(reg2.TREASURY_ROLE(), governance));
-        assertEq(reg2.getRoleAdmin(reg2.TREASURY_ROLE()), reg2.TREASURY_ADMIN_ROLE());
-        assertEq(reg2.getRoleAdmin(reg2.TREASURY_ADMIN_ROLE()), reg2.DEFAULT_ADMIN_ROLE());
+        assertTrue(reg2.hasRole(keccak256("TREASURY_ADMIN_ROLE"), governance));
+        assertTrue(reg2.hasRole(keccak256("TREASURY_ADMIN_ROLE"), treasury));
+        assertTrue(reg2.hasRole(keccak256("TREASURY_ROLE"), treasury));
+        assertFalse(reg2.hasRole(keccak256("TREASURY_ROLE"), governance));
+        assertEq(reg2.getRoleAdmin(keccak256("TREASURY_ROLE")), keccak256("TREASURY_ADMIN_ROLE"));
+        assertEq(reg2.getRoleAdmin(keccak256("TREASURY_ADMIN_ROLE")), reg2.DEFAULT_ADMIN_ROLE());
 
-        bytes32 treasuryRole = reg2.TREASURY_ROLE();
-        bytes32 treasuryAdminRole = reg2.TREASURY_ADMIN_ROLE();
+        bytes32 treasuryRole = keccak256("TREASURY_ROLE");
+        bytes32 treasuryAdminRole = keccak256("TREASURY_ADMIN_ROLE");
         vm.prank(governance);
         reg2.grantRole(treasuryRole, newTreasuryOperator);
 

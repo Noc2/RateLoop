@@ -117,59 +117,65 @@
     {
       "slot": 19,
       "offset": 0,
+      "label": "latestVotingRoundId",
+      "type": "t_mapping(t_uint256,t_uint256)"
+    },
+    {
+      "slot": 20,
+      "offset": 0,
       "label": "protocolConfig",
       "type": "t_contract(ProtocolConfig)"
     },
     {
-      "slot": 20,
+      "slot": 21,
       "offset": 0,
       "label": "pendingSubmissions",
       "type": "t_mapping(t_bytes32,t_struct(PendingSubmission))"
     },
     {
-      "slot": 21,
+      "slot": 22,
       "offset": 0,
       "label": "dormantKeyReleasableAt",
       "type": "t_mapping(t_uint256,t_uint256)"
     },
     {
-      "slot": 22,
+      "slot": 23,
       "offset": 0,
       "label": "_ratingState",
       "type": "t_mapping(t_uint256,t_struct(RatingState))"
     },
     {
-      "slot": 23,
+      "slot": 24,
       "offset": 0,
       "label": "pendingRatingSettlement",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_struct(PendingRatingSettlement)))"
     },
     {
-      "slot": 24,
+      "slot": 25,
       "offset": 0,
       "label": "appliedRatingSnapshotDigest",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_bytes32))"
     },
     {
-      "slot": 25,
+      "slot": 26,
       "offset": 0,
       "label": "contentSlashConfigSnapshot",
       "type": "t_mapping(t_uint256,t_struct(SlashConfig))"
     },
     {
-      "slot": 26,
+      "slot": 27,
       "offset": 0,
       "label": "submissionMediaValidator",
       "type": "t_contract(SubmissionMediaValidator)"
     },
     {
-      "slot": 27,
+      "slot": 28,
       "offset": 0,
       "label": "questionBundleRoundObserverByContent",
       "type": "t_mapping(t_uint256,t_address)"
     },
     {
-      "slot": 28,
+      "slot": 29,
       "offset": 0,
       "label": "__gap",
       "type": "t_array(t_uint256)"
@@ -185,8 +191,8 @@
     {
       "id": "t_array(t_uint256)",
       "encoding": "inplace",
-      "label": "uint256[38]",
-      "numberOfBytes": "1216",
+      "label": "uint256[37]",
+      "numberOfBytes": "1184",
       "base": "t_uint256"
     },
     {

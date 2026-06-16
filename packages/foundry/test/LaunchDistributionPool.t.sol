@@ -800,7 +800,7 @@ contract LaunchDistributionPoolTest is Test {
         assertEq(pool.raterFullLaunchCap(alice), FIRST_COHORT_FULL_CAP);
         assertTrue(pool.raterLaunchCapAssigned(alice));
         assertFalse(pool.raterFullLaunchCapUnlocked(alice));
-        assertEq(pool.eligibleRaterCount(), 1);
+        assertEq(_eligibleRaterCount(), 1);
         assertEq(lrep.balanceOf(alice), firstReward);
 
         for (uint256 i = 0; i < 9; i++) {
@@ -1160,8 +1160,9 @@ contract LaunchDistributionPoolTest is Test {
         uint64 expectedReadyAt = uint64(uint256(settledAt) + revealGrace);
         assertEq(pool.roundPayoutSnapshotSourceReadyAt(pool.PAYOUT_DOMAIN_LAUNCH_CREDIT(), 0, 1, 1), expectedReadyAt);
 
-        stdstore.target(address(pool)).sig("launchRoundSourceReadyAt(uint256,uint256)").with_key(uint256(1))
-            .with_key(uint256(1)).checked_write(uint256(settledAt));
+        bytes32 launchRoundSourceReadyAtSlot = keccak256(abi.encode(uint256(1), uint256(46)));
+        launchRoundSourceReadyAtSlot = keccak256(abi.encode(uint256(1), launchRoundSourceReadyAtSlot));
+        vm.store(address(pool), launchRoundSourceReadyAtSlot, bytes32(uint256(settledAt)));
 
         source.setRevealGraceReverts(true);
         assertEq(pool.roundPayoutSnapshotSourceReadyAt(pool.PAYOUT_DOMAIN_LAUNCH_CREDIT(), 0, 1, 1), 0);
@@ -1977,7 +1978,7 @@ contract LaunchDistributionPoolTest is Test {
         assertEq(pool.raterLaunchCap(bob), 0);
         assertEq(pool.raterLaunchPaid(bob), 0);
         assertEq(lrep.balanceOf(bob), 0);
-        assertEq(pool.eligibleRaterCount(), 1);
+        assertEq(_eligibleRaterCount(), 1);
         assertFalse(pool.raterFullLaunchCapUnlocked(bob));
         vm.expectRevert(LaunchDistributionPool.AlreadyClaimed.selector);
         pool.unlockFullEarnedRaterCap(bob);
@@ -3164,11 +3165,15 @@ contract LaunchDistributionPoolTest is Test {
     }
 
     function _setEligibleRaterCount(uint256 count) internal {
-        stdstore.target(address(pool)).sig("eligibleRaterCount()").checked_write(count);
+        vm.store(address(pool), bytes32(uint256(13)), bytes32(count));
+    }
+
+    function _eligibleRaterCount() internal view returns (uint256 count) {
+        count = uint256(vm.load(address(pool), bytes32(uint256(13))));
     }
 
     function _setVerifiedClaimCount(uint256 count) internal {
-        stdstore.target(address(pool)).sig("verifiedClaimCount()").checked_write(count);
+        vm.store(address(pool), bytes32(uint256(14)), bytes32(count));
     }
 
     function _setEarnedRaterDistributed(uint256 amount) internal {

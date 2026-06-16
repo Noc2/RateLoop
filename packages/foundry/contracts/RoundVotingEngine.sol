@@ -70,9 +70,6 @@ contract RoundVotingEngine is
     error RoundNotCancelledOrTied();
     error ThresholdReached();
     error RevealGraceActive();
-    error EnforcedPause();
-    error ExpectedPause();
-    error AccessControlUnauthorizedAccount(address account, bytes32 neededRole);
     error NotEnoughVotes();
     error AlreadyCommitted();
     error AlreadyRevealed();
@@ -310,12 +307,11 @@ contract RoundVotingEngine is
     /// @notice Recover LREP sent directly to this contract outside accounted protocol flows.
     /// @dev Admin-only and naturally reentrancy-safe: a re-entrant call would compute
     ///      `balanceOf - accountedLrepBalance == 0` after the first transfer, draining nothing.
-    function recoverSurplusLrep() external {
-        if (!hasRole(bytes32(0), msg.sender)) revert Unauthorized();
+    function recoverSurplusLrep() external onlyRole(bytes32(0)) {
         lrepToken.safeTransfer(msg.sender, lrepToken.balanceOf(address(this)) - accountedLrepBalance);
     }
 
-    function hasRole(bytes32 role, address account) public view returns (bool) {
+    function _hasRole(bytes32 role, address account) private view returns (bool) {
         return _accessControlStorage().roles[role].hasRole[account];
     }
 
@@ -343,7 +339,7 @@ contract RoundVotingEngine is
     }
 
     function nextRoundIdForContent(uint256 contentId) external view returns (uint256) {
-        return _nextRoundIdForContent(contentId);
+        return registry.nextVotingRoundId(contentId);
     }
 
     modifier onlyRole(bytes32 role) {
@@ -352,13 +348,8 @@ contract RoundVotingEngine is
     }
 
     function _checkRole(bytes32 role, address account) internal view {
-        if (!hasRole(role, account)) {
-            assembly ("memory-safe") {
-                mstore(0x00, 0xe2517d3f00000000000000000000000000000000000000000000000000000000)
-                mstore(0x04, account)
-                mstore(0x24, role)
-                revert(0x00, 0x44)
-            }
+        if (!_hasRole(role, account)) {
+            revert Unauthorized();
         }
     }
 
@@ -391,7 +382,11 @@ contract RoundVotingEngine is
     /// @notice Transfer LREP reward tokens to a recipient. Only callable by RewardDistributor.
     function transferReward(address recipient, uint256 lrepAmount) external {
         if (!protocolConfig.isRewardDistributorForEngine(msg.sender, address(this))) revert Unauthorized();
-        if (recipient == address(0)) revert InvalidAddress();
+        if (recipient == address(0)) {
+            assembly ("memory-safe") {
+                revert(0, 0)
+            }
+        }
         accountedLrepBalance -= lrepAmount;
         lrepToken.safeTransfer(recipient, lrepAmount);
     }
@@ -1288,10 +1283,6 @@ contract RoundVotingEngine is
             contentId,
             MIN_RBTS_PARTICIPANTS
         );
-    }
-
-    function _nextRoundIdForContent(uint256 contentId) internal view returns (uint256) {
-        return registry.nextVotingRoundId(contentId);
     }
 
     function _getRoundRaterRegistry(uint256 contentId, uint256 roundId) internal view returns (IRaterIdentityRegistry) {

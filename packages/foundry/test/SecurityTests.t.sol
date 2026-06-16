@@ -584,9 +584,9 @@ contract SecurityAccessControlTest is Test {
         CONFIG_ROLE_ENGINE = ProtocolConfig(protocolConfigAddress).CONFIG_ROLE();
         TREASURY_ROLE_ENGINE = ProtocolConfig(protocolConfigAddress).TREASURY_ROLE();
         PAUSER_ROLE_ENGINE = keccak256("PAUSER_ROLE");
-        CONFIG_ROLE_REGISTRY = registry.CONFIG_ROLE();
-        TREASURY_ROLE_REGISTRY = registry.TREASURY_ROLE();
-        PAUSER_ROLE_REGISTRY = registry.PAUSER_ROLE();
+        CONFIG_ROLE_REGISTRY = keccak256("CONFIG_ROLE");
+        TREASURY_ROLE_REGISTRY = keccak256("TREASURY_ROLE");
+        PAUSER_ROLE_REGISTRY = keccak256("PAUSER_ROLE");
         MINTER_ROLE_TOKEN = lrepToken.MINTER_ROLE();
         CONFIG_ROLE_TOKEN = lrepToken.CONFIG_ROLE();
     }
@@ -637,13 +637,13 @@ contract SecurityAccessControlTest is Test {
 
     function test_ACL_Engine_pause_Unauthorized() public {
         vm.prank(attacker);
-        _expectUnauthorized(attacker, PAUSER_ROLE_ENGINE);
+        vm.expectRevert(RoundVotingEngine.Unauthorized.selector);
         votingEngine.pause();
     }
 
     function test_ACL_Engine_unpause_Unauthorized() public {
         vm.prank(attacker);
-        _expectUnauthorized(attacker, PAUSER_ROLE_ENGINE);
+        vm.expectRevert(RoundVotingEngine.Unauthorized.selector);
         votingEngine.unpause();
     }
 

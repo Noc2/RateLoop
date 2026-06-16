@@ -99,8 +99,8 @@ contract LaunchDistributionPool is
     bytes32 public legacyContributorRoot;
     uint64 public legacyContributorVestingStart;
 
-    uint256 public eligibleRaterCount;
-    uint256 public verifiedClaimCount;
+    uint256 internal eligibleRaterCount;
+    uint256 internal verifiedClaimCount;
 
     mapping(address => bool) public authorizedCallers;
     mapping(address => uint32) public qualifyingRatingCount;
@@ -114,13 +114,13 @@ contract LaunchDistributionPool is
     mapping(address => uint256) public raterLaunchPaid;
     mapping(bytes32 => bool) public verifiedCredentialClaimed;
     mapping(bytes32 => address) public launchFullCapNullifierRater;
-    mapping(address => bool) public verifiedBonusClaimedByAccount;
+    mapping(address => bool) internal verifiedBonusClaimedByAccount;
     mapping(address => uint256) public referralEarnings;
     mapping(address => uint256) public legacyContributorClaimed;
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) public earnedRewardCreditRecorded;
     mapping(address => mapping(bytes32 => bool)) public raterVerifiedAnchorSeen;
     mapping(address => uint32) public raterDistinctVerifiedAnchorCount;
-    mapping(address => mapping(bytes32 => bool)) public raterAnchorRoundSeen;
+    mapping(address => mapping(bytes32 => bool)) internal raterAnchorRoundSeen;
     mapping(address => uint32) public raterDistinctAnchorRoundCount;
     mapping(bytes32 => mapping(address => bool)) public verifiedAnchorRaterSeen;
     mapping(bytes32 => uint32) public verifiedAnchorDistinctRaterCount;
@@ -140,13 +140,13 @@ contract LaunchDistributionPool is
     ///         event or the AlreadyClaimed revert.
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) internal stalePendingEarnedRaterCreditCancelled;
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) public earnedRewardCreditFinalized;
-    mapping(uint256 => mapping(uint256 => bool)) public earnedRaterRoundPayoutSnapshotConsumed;
+    mapping(uint256 => mapping(uint256 => bool)) internal earnedRaterRoundPayoutSnapshotConsumed;
     /// @notice M-Oracle-1: Earliest sourceReadyAt observed for a given (contentId, roundId).
     ///         Set on the first pending earned-rater credit recorded for the round and surfaced via
     ///         {roundPayoutSnapshotSourceReadyAt} so the cluster oracle can reject pre-source
     ///         slot-squat proposals. Once set the value is monotonic — later credits with later
     ///         sourceReadyAt do not overwrite it.
-    mapping(uint256 => mapping(uint256 => uint64)) public launchRoundSourceReadyAt;
+    mapping(uint256 => mapping(uint256 => uint64)) internal launchRoundSourceReadyAt;
     LaunchRewardPolicy public launchRewardPolicy;
 
     event PoolDeposit(uint256 amount);
@@ -459,7 +459,7 @@ contract LaunchDistributionPool is
         address recipient,
         uint256 allocation,
         bytes32[] calldata proof
-    ) internal returns (uint256 paidAmount) {
+    ) private returns (uint256 paidAmount) {
         if (recipient == address(0)) revert InvalidAddress();
         _validateLegacyContributorProof(account, allocation, proof);
         if (_legacyContributorClaimWindowClosed()) revert LegacyClaimWindowClosed();
@@ -535,7 +535,7 @@ contract LaunchDistributionPool is
         uint256 stakeAmount,
         bytes32[] calldata verifiedAnchorIds,
         uint64 sourceReadyAt
-    ) internal returns (uint256 paidAmount) {
+    ) private returns (uint256 paidAmount) {
         LaunchRewardPolicy memory policy = launchRewardPolicy;
         if (_isRaterBanned(rater)) return 0;
         uint16 distinctRoundAnchors = _countDistinctAvailableAnchors(policy, rater, verifiedAnchorIds);
@@ -618,7 +618,7 @@ contract LaunchDistributionPool is
         bool noPendingCleanup,
         bytes32[] calldata verifiedAnchorIds,
         uint64 sourceReadyAt
-    ) internal returns (bool recorded, uint256 paidAmount) {
+    ) private returns (bool recorded, uint256 paidAmount) {
         LaunchRewardPolicy memory policy = launchRewardPolicy;
         if (_isRaterBanned(rater)) return (false, 0);
         uint16 distinctRoundAnchors = _countDistinctAvailableAnchors(policy, rater, verifiedAnchorIds);
@@ -743,7 +743,7 @@ contract LaunchDistributionPool is
         uint16 scoreBps,
         LaunchRewardPolicy memory policy,
         uint256 effectiveCreditBps
-    ) internal returns (uint256 paidAmount) {
+    ) private returns (uint256 paidAmount) {
         uint32 previousQualifyingCount = _fullQualifyingCreditCount(qualifyingCreditBps[rater]);
         uint256 updatedCreditBps = qualifyingCreditBps[rater] + effectiveCreditBps;
         qualifyingCreditBps[rater] = updatedCreditBps;
@@ -833,7 +833,7 @@ contract LaunchDistributionPool is
         LaunchRewardPolicy memory policy,
         bytes32[] calldata verifiedAnchorIds,
         uint64 sourceReadyAt
-    ) internal {
+    ) private {
         address oracle = address(clusterPayoutOracle);
         if (oracle == address(0) || sourceReadyAt == 0) revert SnapshotNotFinalized();
         IRoundClusterReadyAtSource source = roundClusterReadyAtSource;
@@ -870,7 +870,7 @@ contract LaunchDistributionPool is
         emit EarnedRaterRewardCreditPending(rater, contentId, roundId, commitKey, scoreBps);
     }
 
-    function _fullQualifyingCreditCount(uint256 creditBps) internal pure returns (uint32) {
+    function _fullQualifyingCreditCount(uint256 creditBps) private pure returns (uint32) {
         uint256 count = creditBps / BPS_DENOMINATOR;
         return count > type(uint32).max ? type(uint32).max : uint32(count);
     }
@@ -1063,7 +1063,7 @@ contract LaunchDistributionPool is
     }
 
     function _assignLaunchCap(address rater, uint256 fullCap, LaunchRewardPolicy memory policy)
-        internal
+        private
         returns (uint256 activeCap, bool fullCapUnlocked)
     {
         (bytes32 nullifierHash, bytes32 credentialKey) = _activeHumanCredential(rater);
@@ -1090,7 +1090,7 @@ contract LaunchDistributionPool is
     }
 
     function _payLaunchCapCatchUp(address rater, uint256 fullCap, LaunchRewardPolicy memory policy)
-        internal
+        private
         returns (uint256 catchUpPaid)
     {
         uint32 targetRewardedCount = _earnedRewardSlotCount(qualifyingRatingCount[rater], policy);
@@ -1122,7 +1122,7 @@ contract LaunchDistributionPool is
         _pay(rater, catchUpPaid);
     }
 
-    function _activeLaunchCredentialClaimedByOther(address rater) internal view returns (bool) {
+    function _activeLaunchCredentialClaimedByOther(address rater) private view returns (bool) {
         (bytes32 nullifierHash, bytes32 credentialKey) = _activeHumanCredential(rater);
         if (nullifierHash == bytes32(0)) return false;
         address claimedBy = launchFullCapNullifierRater[credentialKey];
@@ -1137,7 +1137,7 @@ contract LaunchDistributionPool is
         uint256 paidAmount,
         bool poolDepleted,
         LaunchRewardPolicy memory policy
-    ) internal {
+    ) private {
         if (!poolDepleted) {
             rewardedRatingCount[rater] = targetRewardedCount;
             return;
@@ -1157,7 +1157,7 @@ contract LaunchDistributionPool is
     }
 
     function _earnedRewardSlotCount(uint32 qualifyingCount, LaunchRewardPolicy memory policy)
-        internal
+        private
         pure
         returns (uint32)
     {
@@ -1166,7 +1166,7 @@ contract LaunchDistributionPool is
         return slots > policy.rewardingRatingCount ? policy.rewardingRatingCount : slots;
     }
 
-    function _launchCapBps(uint256 activeCap, uint256 fullCap) internal pure returns (uint16) {
+    function _launchCapBps(uint256 activeCap, uint256 fullCap) private pure returns (uint16) {
         if (fullCap == 0) return 0;
         uint256 capBps = (activeCap * BPS_DENOMINATOR) / fullCap;
         return capBps > BPS_DENOMINATOR ? BPS_DENOMINATOR : uint16(capBps);

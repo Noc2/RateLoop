@@ -218,7 +218,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         registry.setCategoryRegistry(address(mockCategoryRegistry));
         registry.setQuestionRewardPoolEscrow(address(rewardPoolEscrow));
         x402QuestionSubmitter = new X402QuestionSubmitter(registry, address(usdc), address(rewardPoolEscrow), owner);
-        registry.grantRole(registry.X402_GATEWAY_ROLE(), address(x402QuestionSubmitter));
+        registry.grantRole(keccak256("X402_GATEWAY_ROLE"), address(x402QuestionSubmitter));
 
         frontendRegistry.setVotingEngine(address(votingEngine));
 
@@ -3717,14 +3717,11 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.warp(uint256(proposal.snapshot.finalizedAt) + uint256(oracle.FINALIZATION_VETO_WINDOW()));
         vm.expectRevert();
         registry.applyRatingPayoutSnapshot(contentId, roundId, payoutWeights, proofs);
-        assertEq(registry.appliedRatingSnapshotDigest(contentId, roundId), bytes32(0));
+        assertFalse(registry.isRoundPayoutSnapshotConsumed(3, 0, contentId, roundId));
 
         vm.warp(block.timestamp + 1);
         registry.applyRatingPayoutSnapshot(contentId, roundId, payoutWeights, proofs);
-        assertEq(
-            registry.appliedRatingSnapshotDigest(contentId, roundId),
-            oracle.roundPayoutSnapshotProposalDigest(snapshotKey)
-        );
+        assertTrue(registry.isRoundPayoutSnapshotConsumed(3, 0, contentId, roundId));
 
         vm.expectRevert(ClusterPayoutOracle.SnapshotConsumed.selector);
         oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("late-rating-veto"));

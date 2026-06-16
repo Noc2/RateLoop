@@ -332,7 +332,7 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         registry.setQuestionRewardPoolEscrow(address(questionRewardPoolEscrow));
         registry.unpause();
         registry.setCategoryRegistry(address(categoryRegistry));
-        registry.grantRole(registry.X402_GATEWAY_ROLE(), address(x402QuestionSubmitter));
+        registry.grantRole(keccak256("X402_GATEWAY_ROLE"), address(x402QuestionSubmitter));
 
         protocolConfig.setRewardDistributor(address(rewardDistributor));
         protocolConfig.setFrontendRegistry(address(frontendRegistry));
@@ -341,8 +341,8 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         raterRegistry.setConfidentialityEscrow(address(confidentialityEscrow));
         protocolConfig.setConfidentialityEscrow(address(confidentialityEscrow));
         if (!isLocalDev) {
-            registry.renounceRole(registry.CONFIG_ROLE(), deployer);
-            registry.renounceRole(registry.PAUSER_ROLE(), deployer);
+            registry.renounceRole(keccak256("CONFIG_ROLE"), deployer);
+            registry.renounceRole(keccak256("PAUSER_ROLE"), deployer);
             confidentialityEscrow.renounceRole(confidentialityEscrow.PAUSER_ROLE(), deployer);
             confidentialityEscrow.renounceRole(confidentialityEscrow.CONFIG_ROLE(), deployer);
             confidentialityEscrow.renounceRole(confidentialityEscrow.ACCESS_RECORDER_ROLE(), deployer);
