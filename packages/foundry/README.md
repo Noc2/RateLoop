@@ -27,6 +27,20 @@ yarn foundry:test # Run test suite
 | `yarn account:generate` | Create a new keystore account                           |
 | `yarn account:import`   | Import an existing account into keystore                |
 
+## Contract size limits (EIP-170)
+
+Run `yarn workspace @rateloop/foundry check:sizes` (or `make check-contract-sizes` after `forge build`) to verify deployed bytecode stays at or below the 24,576 byte limit.
+
+Several production contracts run close to the limit. As of June 2026 local checks:
+
+| Contract | Size (B) | Headroom (B) |
+| --- | --- | --- |
+| `LaunchDistributionPool` | 24,538 | 38 |
+| `RaterRegistry` | 24,540 | 36 |
+| `RoundVotingEngine` | 24,562 | 14 |
+
+Treat new features on these contracts as size-sensitive: prefer library extraction or split contracts before adding bytecode.
+
 On World Chain mainnet and World Chain Sepolia, deploys use a Foundry keystore selected via `--keystore <name>` and skip Forge's
 auto-verification flow. Verify those contracts manually with
 `make verify-blockscout NETWORK=<worldchain|worldchainSepolia> CONTRACT_ADDRESS=0x... CONTRACT_NAME=MyContract`.
@@ -122,3 +136,37 @@ non-upgradeable. For upgradeable implementation contracts, storage layout must b
 reorder, remove, or change types of existing storage variables.
 
 Compiled ABIs and deployed addresses are generated into `packages/contracts/src/` and consumed via the `@rateloop/contracts` workspace package.
+
+## Governance Runbooks
+
+### Voting engine rotation
+
+Rotating `ContentRegistry.setVotingEngine` or `FrontendRegistry.setVotingEngine` alone does **not** migrate the full protocol stack. Several contracts pin the voting engine at initialization and reject callbacks from a replacement engine with `"Stale engine"` until a coordinated replacement is deployed and rewired.
+
+**Contracts that accept governed engine rotation**
+
+| Contract | Entrypoint | Footgun |
+| --- | --- | --- |
+| `ContentRegistry` | `setVotingEngine` | In-flight rounds on the previous engine may still settle; fresh content routes through the new engine. Pending public-rating settlements pin both `votingEngine` and `clusterPayoutOracle`. |
+| `FrontendRegistry` | `setVotingEngine` | Clears the fee creditor until `initializeFeeCreditor` is called again for the new reward distributor. |
+
+**Contracts that pin engine at init (no governed rotation today)**
+
+- `QuestionRewardPoolEscrow`
+- `FeedbackRegistry`
+- `FeedbackBonusEscrow`
+
+**Coordinated engine-migration checklist**
+
+1. Pause affected registries and escrows.
+2. Deploy the replacement voting engine, reward distributor, and any escrow stacks bound to the new engine.
+3. Rewire `ProtocolConfig.setRewardDistributor` (use `replaceRevokedRewardDistributor` when replacing a revoked distributor on the same engine).
+4. Call `ContentRegistry.setVotingEngine` and `FrontendRegistry.setVotingEngine`; re-bind the frontend fee creditor.
+5. Repoint pinned oracle consumers for in-flight payout work:
+   - `QuestionRewardPoolEscrow.repointRewardPoolClusterPayoutOracle`
+   - `ContentRegistry.repointPendingRatingClusterPayoutOracle`
+   - `LaunchDistributionPool.rescueStalePendingEarnedRaterCredit` (launch credits)
+6. Update off-chain X402 submitter escrow pointers and any keeper/indexer wiring.
+7. Unpause only after integration checks pass.
+
+Until the full replacement stack is live, in-flight bounty claims, feedback bonuses, and escrow settlement paths can remain stranded.
