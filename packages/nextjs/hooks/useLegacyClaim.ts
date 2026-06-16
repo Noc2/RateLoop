@@ -139,6 +139,7 @@ export function shouldUseLegacyAdminClaim(params: {
 }
 
 type TemporaryLegacyClaimWalletMode = "sponsored" | "eoa";
+export const LEGACY_CLAIM_ALLOW_IN_APP_SPONSORSHIP_SYNC = true;
 
 async function connectTemporaryLegacyClaimAccount(params: {
   chainId: number;
@@ -299,7 +300,7 @@ export function useLegacyClaim() {
     contractName: "LaunchDistributionPool",
   });
   const { canUseSponsoredSubmitCalls, executeSponsoredCalls } = useThirdwebSponsoredSubmitCalls({
-    allowInAppSponsorshipSync: false,
+    allowInAppSponsorshipSync: LEGACY_CLAIM_ALLOW_IN_APP_SPONSORSHIP_SYNC,
   });
   const canUseSponsoredLegacyClaim = shouldUseSponsoredLegacyClaim({
     canUseSponsoredSubmitCalls: canUseSponsoredSubmitCalls && canClaimWithConnectedWallet,
@@ -318,7 +319,7 @@ export function useLegacyClaim() {
     nativeBalanceValue,
     nativeTokenSymbol,
   } = useGasBalanceStatus({
-    allowInAppSponsorshipSync: false,
+    allowInAppSponsorshipSync: LEGACY_CLAIM_ALLOW_IN_APP_SPONSORSHIP_SYNC,
     includeExternalSendCalls: true,
   });
 

@@ -1,4 +1,5 @@
 import {
+  LEGACY_CLAIM_ALLOW_IN_APP_SPONSORSHIP_SYNC,
   getLegacyClaimTransactionErrorMessage,
   shouldInspectLegacyAdminClaim,
   shouldUseLegacyAdminClaim,
@@ -115,6 +116,10 @@ test("uses sponsored legacy claims only when execution sender matches claim addr
     }),
     false,
   );
+});
+
+test("allows legacy claims to sync thirdweb in-app sponsorship mode", () => {
+  assert.equal(LEGACY_CLAIM_ALLOW_IN_APP_SPONSORSHIP_SYNC, true);
 });
 
 test("formats raw thirdweb invalid proof decode failures for legacy claims", () => {
