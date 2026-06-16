@@ -17522,9 +17522,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"vite@npm:6.4.2":
-  version: 6.4.2
-  resolution: "vite@npm:6.4.2"
+"vite@npm:6.4.3":
+  version: 6.4.3
+  resolution: "vite@npm:6.4.3"
   dependencies:
     esbuild: ^0.25.0
     fdir: ^6.4.4
@@ -17573,13 +17573,13 @@ __metadata:
       optional: true
   bin:
     vite: bin/vite.js
-  checksum: f0b57b675aaa8a61b03f5e53c0f58ec4c7e77705adae5a8086e3ab8664bf763fb77332a8309a9dad092267bdedc5e583b28c72fc950a2ddce119ac1574181bf5
+  checksum: 349e2cc44efa3fad3f89f415f45c5a94ee08d710b87b3e8b3f2556494c34b0f56af9f92c42316ff2117e442bbda617aa2ee502772f2301fcb687020b6be96f7e
   languageName: node
   linkType: hard
 
-"vite@npm:7.3.2":
-  version: 7.3.2
-  resolution: "vite@npm:7.3.2"
+"vite@npm:7.3.5":
+  version: 7.3.5
+  resolution: "vite@npm:7.3.5"
   dependencies:
     esbuild: ^0.27.0
     fdir: ^6.5.0
@@ -17628,7 +17628,7 @@ __metadata:
       optional: true
   bin:
     vite: bin/vite.js
-  checksum: f98bf7feb114794ae4b1ccbb2363f0417fd7a8c7e493e8cbc988b39313401db15d2ff64737eb8f10d805458c028a67b81395afcbff5b5fa70a70ffa2ec70aa52
+  checksum: 55d839f84eff86e302f88cc1e5b5dfe0d6d3a3d4946eb199c1d27a6078628bbc9d1e2a4786e093173496654bedc18b7473374fff72d27897d11b0a7375986a65
   languageName: node
   linkType: hard
 
