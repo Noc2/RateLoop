@@ -15,6 +15,7 @@ import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol"
 import { IConfidentialityEscrow } from "./interfaces/IConfidentialityEscrow.sol";
 import { RoundLib } from "./libraries/RoundLib.sol";
 import { RatingLib } from "./libraries/RatingLib.sol";
+import { ContentRegistryDormancyLib } from "./libraries/ContentRegistryDormancyLib.sol";
 import { ContentRegistryRewardLib } from "./libraries/ContentRegistryRewardLib.sol";
 import { ContentRegistryRatingSnapshotLib } from "./libraries/ContentRegistryRatingSnapshotLib.sol";
 import { ContentRegistryTypes } from "./libraries/ContentRegistryTypes.sol";
@@ -1212,70 +1213,50 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         );
     }
 
-    /// @notice Mark content as dormant if it hasn't reached milestone 0 within DORMANCY_PERIOD.
-    /// @dev Anyone can call this. The mandatory submission bounty is not refunded.
     function markDormant(uint256 contentId) external nonReentrant whenNotPaused {
-        ContentRegistryTypes.Content storage c = contents[contentId];
-        require(c.id != 0);
-        require(c.status == ContentRegistryTypes.ContentStatus.Active);
-        require(block.timestamp > dormancyAnchorAt[contentId] + DORMANCY_PERIOD);
-        require(!_hasDormancyBlockingRound(contentId));
-        require(contentBundleId[contentId] == 0);
-
-        c.status = ContentRegistryTypes.ContentStatus.Dormant;
-
-        bytes32 submissionKey = contentSubmissionKey[contentId];
-        if (submissionKey != bytes32(0)) {
-            dormantKeyReleasableAt[contentId] = block.timestamp + DORMANT_EXCLUSIVE_REVIVAL_PERIOD;
-        }
-
-        emit ContentDormant(contentId);
+        ContentRegistryDormancyLib.markDormant(
+            contents[contentId],
+            dormancyAnchorAt,
+            contentSubmissionKey,
+            dormantKeyReleasableAt,
+            contentId,
+            DORMANCY_PERIOD,
+            DORMANT_EXCLUSIVE_REVIVAL_PERIOD,
+            _hasDormancyBlockingRound(contentId),
+            contentBundleId[contentId] != 0
+        );
     }
 
     /// @notice Revive dormant content by staking REVIVAL_STAKE LREP tokens.
     /// @dev Resets the activity timer. Max MAX_REVIVALS revivals per content.
     ///      Revival stake is sent to treasury (non-refundable).
     function reviveContent(uint256 contentId) external nonReentrant whenNotPaused {
-        ContentRegistryTypes.Content storage c = contents[contentId];
-        require(c.status == ContentRegistryTypes.ContentStatus.Dormant);
-        require(c.dormantCount < MAX_REVIVALS);
-
-        bytes32 submissionKey = contentSubmissionKey[contentId];
-        require(submissionKey != bytes32(0));
-        require(submissionKeyUsed[submissionKey]);
-        require(_isSubmitterIdentity(contentId, msg.sender));
-        require(block.timestamp <= dormantKeyReleasableAt[contentId]);
-
-        // M-1/M-2 fix: send revival stake to treasury instead of leaving it unaccounted
-        require(treasury != address(0));
-        lrepToken.safeTransferFrom(msg.sender, treasury, REVIVAL_STAKE);
-
-        c.status = ContentRegistryTypes.ContentStatus.Active;
-        c.dormantCount++;
-        c.lastActivityAt = uint48(block.timestamp);
-        dormancyAnchorAt[contentId] = block.timestamp;
-        delete dormantKeyReleasableAt[contentId];
-        c.reviver = msg.sender;
-
-        emit ContentRevived(contentId, msg.sender);
+        ContentRegistryDormancyLib.reviveContent(
+            contents[contentId],
+            contentSubmissionKey,
+            submissionKeyUsed,
+            dormancyAnchorAt,
+            dormantKeyReleasableAt,
+            lrepToken,
+            treasury,
+            contentId,
+            msg.sender,
+            REVIVAL_STAKE,
+            MAX_REVIVALS,
+            _isSubmitterIdentity(contentId, msg.sender)
+        );
     }
 
     /// @notice Release a dormant content key after the exclusive revival window expires.
     function releaseDormantSubmissionKey(uint256 contentId) external nonReentrant whenNotPaused {
-        ContentRegistryTypes.Content storage c = contents[contentId];
-        require(c.id != 0);
-        require(c.status == ContentRegistryTypes.ContentStatus.Dormant);
-        require(contentBundleId[contentId] == 0);
-
-        bytes32 submissionKey = contentSubmissionKey[contentId];
-        require(submissionKey != bytes32(0));
-        require(block.timestamp > dormantKeyReleasableAt[contentId]);
-
-        submissionKeyUsed[submissionKey] = false;
-        delete contentSubmissionKey[contentId];
-        delete dormantKeyReleasableAt[contentId];
-
-        emit DormantSubmissionKeyReleased(contentId, submissionKey);
+        ContentRegistryDormancyLib.releaseDormantSubmissionKey(
+            contents[contentId],
+            contentSubmissionKey,
+            submissionKeyUsed,
+            dormantKeyReleasableAt,
+            contentId,
+            contentBundleId[contentId] != 0
+        );
     }
 
     // --- VotingEngine callbacks ---
@@ -1383,6 +1364,16 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             payoutWeights,
             proofs,
             uint48(block.timestamp)
+        );
+    }
+
+    /// @notice Repoint the pinned cluster payout oracle for an in-flight pending public rating.
+    function repointPendingRatingClusterPayoutOracle(uint256 contentId, uint256 roundId, address newOracle)
+        external
+        onlyRole(CONFIG_ROLE)
+    {
+        ContentRegistryRatingSnapshotLib.repointPendingRatingClusterPayoutOracle(
+            pendingRatingSettlement[contentId][roundId], address(this), contentId, roundId, newOracle
         );
     }
 

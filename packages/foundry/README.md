@@ -35,9 +35,13 @@ Several production contracts run close to the limit. As of June 2026 local check
 
 | Contract | Size (B) | Headroom (B) |
 | --- | --- | --- |
+| `ContentRegistry` | 24,394 | 182 |
 | `LaunchDistributionPool` | 24,538 | 38 |
-| `RaterRegistry` | 24,540 | 36 |
+| `QuestionRewardPoolEscrow` | 24,424 | 152 |
 | `RoundVotingEngine` | 24,562 | 14 |
+| `RaterRegistry` | 22,900 | 1,676 |
+
+`ContentRegistry.repointPendingRatingClusterPayoutOracle` is exposed via a thin `CONFIG_ROLE` wrapper; dormancy lifecycle helpers live in `ContentRegistryDormancyLib` to preserve EIP-170 headroom.
 
 Treat new features on these contracts as size-sensitive: prefer library extraction or split contracts before adding bytecode.
 
@@ -152,10 +156,7 @@ Rotating `ContentRegistry.setVotingEngine` or `FrontendRegistry.setVotingEngine`
 4. Call `ContentRegistry.setVotingEngine` and `FrontendRegistry.setVotingEngine`; re-bind the frontend fee creditor.
 5. Repoint pinned oracle consumers for in-flight payout work:
    - `QuestionRewardPoolEscrow.repointRewardPoolClusterPayoutOracle`
-   - Pending public-rating settlements pin `clusterPayoutOracle` at record time. There is no
-     on-chain `ContentRegistry.repointPendingRatingClusterPayoutOracle` wrapper yet (EIP-170
-     headroom). Let in-flight pending ratings settle against the pinned oracle, or redeploy a
-     governance helper that calls `ContentRegistryRatingSnapshotLib.repointPendingRatingClusterPayoutOracle`.
+   - `ContentRegistry.repointPendingRatingClusterPayoutOracle` for pending public-rating settlements
    - `LaunchDistributionPool.rescueStalePendingEarnedRaterCredit` (launch credits)
 6. Update off-chain X402 submitter escrow pointers and any keeper/indexer wiring.
 7. Unpause only after integration checks pass.
