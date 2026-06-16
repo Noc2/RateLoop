@@ -71,6 +71,7 @@ const profileRegistryContract = contractsForChain.ProfileRegistry;
 const raterRegistryContract = contractsForChain.RaterRegistry;
 const rewardEscrowContract = contractsForChain.QuestionRewardPoolEscrow;
 const feedbackBonusEscrowContract = contractsForChain.FeedbackBonusEscrow;
+const launchDistributionPoolContract = contractsForChain.LaunchDistributionPool;
 const rewardDistributorContract = contractsForChain.RoundRewardDistributor;
 const votingEngineContract = contractsForChain.RoundVotingEngine;
 const arbitraryTokenContract = {
@@ -270,6 +271,18 @@ const permitVoteCall = (voteMarker: `0x${string}`): EncodedCall => {
     `0x${"4".repeat(64)}`,
   ]);
 };
+
+const legacyClaimProof = [`0x${"a".repeat(64)}`] as const;
+
+const legacyClaimCall = () =>
+  encodeCall(launchDistributionPoolContract, "claimLegacyContributorAllocation", [1_000_000n, legacyClaimProof]);
+
+const legacyRecipientClaimCall = () =>
+  encodeCall(launchDistributionPoolContract, "claimLegacyContributorAllocationTo", [
+    "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    1_000_000n,
+    legacyClaimProof,
+  ]);
 
 function submitQuestionWithRewardCall(
   overrides: Partial<{
@@ -499,6 +512,24 @@ test("pending reservations consume quota on verifier approval and stay idempoten
   if (deniedDecision.isAllowed) return;
   assert.equal(deniedDecision.debugCode, "free_tx_exhausted");
   assert.equal(deniedDecision.summary?.used, 2);
+});
+
+test("legacy contributor claims are eligible for metered free transactions", async () => {
+  const directDecision = await freeTransactions.evaluateFreeTransactionAllowance(
+    buildRequest([legacyClaimCall()]) as never,
+  );
+  assert.equal(directDecision.isAllowed, true);
+  if (!directDecision.isAllowed) return;
+  assert.equal(directDecision.summary.used, 1);
+  assert.equal(directDecision.summary.remaining, 1);
+
+  const recipientDecision = await freeTransactions.evaluateFreeTransactionAllowance(
+    buildRequest([legacyRecipientClaimCall()]) as never,
+  );
+  assert.equal(recipientDecision.isAllowed, true);
+  if (!recipientDecision.isAllowed) return;
+  assert.equal(recipientDecision.summary.used, 2);
+  assert.equal(recipientDecision.summary.remaining, 0);
 });
 
 test("confirm finalizes a consumed reservation without double-counting quota", async () => {
@@ -1032,6 +1063,16 @@ test("rejects arbitrary token methods even on allowlisted contracts", async () =
 test("rejects unsupported FeedbackBonusEscrow operations", async () => {
   const decision = await freeTransactions.evaluateFreeTransactionAllowance(
     buildRequest([encodeCall(feedbackBonusEscrowContract, "forfeitExpiredFeedbackBonus", [1n])]) as never,
+  );
+
+  assert.equal(decision.isAllowed, false);
+  if (decision.isAllowed) return;
+  assert.equal(decision.debugCode, "unsupported_operation");
+});
+
+test("rejects non-legacy LaunchDistributionPool operations", async () => {
+  const decision = await freeTransactions.evaluateFreeTransactionAllowance(
+    buildRequest([encodeCall(launchDistributionPoolContract, "claimVerifiedBonus", [ZERO_ADDRESS])]) as never,
   );
 
   assert.equal(decision.isAllowed, false);

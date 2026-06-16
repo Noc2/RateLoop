@@ -1422,6 +1422,14 @@ async function validateSponsoredCalls(
           continue;
         }
         return { ok: false, debugCode: "unsupported_operation" };
+      case "LaunchDistributionPool":
+        if (
+          functionName === "claimLegacyContributorAllocation" ||
+          functionName === "claimLegacyContributorAllocationTo"
+        ) {
+          continue;
+        }
+        return { ok: false, debugCode: "unsupported_operation" };
       default:
         return { ok: false, debugCode: "target_not_allowlisted" };
     }
