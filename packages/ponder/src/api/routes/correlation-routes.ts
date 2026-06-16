@@ -950,64 +950,94 @@ export function registerCorrelationRoutes(app: ApiApp) {
       );
     }
     if (Number.isNaN(offset)) return c.json({ error: "Invalid offset" }, 400);
+    const nowSeconds = resolveCorrelationNowSeconds(c.req.query("now"));
+    if (nowSeconds === null) {
+      return c.json({ error: "now must be a non-negative integer" }, 400);
+    }
 
-    const rows = await db
-      .select({
-        account: vote.identityHolder,
-        voter: vote.voter,
-        identityKey: vote.identityKey,
-        commitKey: vote.commitKey,
-        isUp: vote.isUp,
-        stake: vote.stake,
-        epochIndex: vote.epochIndex,
-        revealWeight: vote.rbtsWeight,
-        baseWeight: sql<bigint>`10000`,
-        verifiedHuman: sql<boolean>`case when ${raterHumanCredential.rater} is not null then true else false end`,
-        historicalVoteCount: sql<number>`case when coalesce(${voterStats.totalSettledVotes}, 0) > 0 then coalesce(${voterStats.totalSettledVotes}, 0) - 1 else 0 end`,
-      })
-      .from(vote)
-      .innerJoin(
-        round,
-        and(
-          eq(round.contentId, vote.contentId),
-          eq(round.roundId, vote.roundId),
-        ),
-      )
-      .leftJoin(voterStats, eq(voterStats.voter, vote.identityHolder))
-      .leftJoin(
-        raterHumanCredential,
-        and(
-          eq(raterHumanCredential.rater, vote.identityHolder),
-          eq(raterHumanCredential.verified, true),
-          eq(raterHumanCredential.revoked, false),
-          sql`(
+    const loadVoteRows = (scanLimit: number, scanOffset: number) =>
+      db
+        .select({
+          account: vote.identityHolder,
+          voter: vote.voter,
+          identityKey: vote.identityKey,
+          commitKey: vote.commitKey,
+          isUp: vote.isUp,
+          stake: vote.stake,
+          epochIndex: vote.epochIndex,
+          revealWeight: vote.rbtsWeight,
+          baseWeight: sql<bigint>`10000`,
+          verifiedHuman: sql<boolean>`case when ${raterHumanCredential.rater} is not null then true else false end`,
+          historicalVoteCount: sql<number>`case when coalesce(${voterStats.totalSettledVotes}, 0) > 0 then coalesce(${voterStats.totalSettledVotes}, 0) - 1 else 0 end`,
+        })
+        .from(vote)
+        .innerJoin(
+          round,
+          and(
+            eq(round.contentId, vote.contentId),
+            eq(round.roundId, vote.roundId),
+          ),
+        )
+        .leftJoin(voterStats, eq(voterStats.voter, vote.identityHolder))
+        .leftJoin(
+          raterHumanCredential,
+          and(
+            eq(raterHumanCredential.rater, vote.identityHolder),
+            eq(raterHumanCredential.verified, true),
+            eq(raterHumanCredential.revoked, false),
+            sql`(
             ${raterHumanCredential.expiresAt} = 0
             or ${raterHumanCredential.expiresAt} > coalesce(${round.settledAt}, ${round.startTime})
           )`,
-        ),
-      )
-      .where(
-        and(
-          eq(vote.contentId, contentId),
-          eq(vote.roundId, roundId),
-          eq(vote.revealed, true),
-          eq(round.state, ROUND_STATE.Settled),
-        ),
-      )
-      .orderBy(
-        asc(vote.commitBlockNumber),
-        asc(vote.commitLogIndex),
-        asc(vote.id),
-      )
-      .limit(limit)
-      .offset(offset);
+          ),
+        )
+        .where(
+          and(
+            eq(vote.contentId, contentId),
+            eq(vote.roundId, roundId),
+            eq(vote.revealed, true),
+            eq(round.state, ROUND_STATE.Settled),
+          ),
+        )
+        .orderBy(
+          asc(vote.commitBlockNumber),
+          asc(vote.commitLogIndex),
+          asc(vote.id),
+        )
+        .limit(scanLimit)
+        .offset(scanOffset);
+
+    const items: ReturnType<typeof formatCorrelationVoteRow>["item"][] = [];
+    const excludedVotes: NonNullable<
+      ReturnType<typeof formatCorrelationVoteRow>["excludedVote"]
+    >[] = [];
+    let eligibleSeen = 0;
+    let scanOffset = 0;
+    let banState: ActiveCorrelationIdentityBanState | null = null;
+    for (let page = 0; page < MAX_VOTE_SCAN_PAGES; page += 1) {
+      const rows = await loadVoteRows(VOTE_SCAN_PAGE_SIZE, scanOffset);
+      if (banState === null && rows.length > 0) {
+        banState = await loadActiveCorrelationIdentityBanState(nowSeconds);
+      }
+      for (const row of rows) {
+        const formatted = formatCorrelationVoteRow(row, banState ?? undefined);
+        if (formatted.excludedVote) {
+          excludedVotes.push(formatted.excludedVote);
+          continue;
+        }
+        if (formatted.item && eligibleSeen >= offset && items.length < limit) {
+          items.push(formatted.item);
+        }
+        eligibleSeen += 1;
+      }
+      scanOffset += rows.length;
+      if (rows.length < VOTE_SCAN_PAGE_SIZE) break;
+    }
 
     const roundContext = await getRoundContext(contentId, roundId);
     return jsonBig(c, {
-      excludedVotes: [],
-      items: rows
-        .map((row) => formatCorrelationVoteRow(row).item)
-        .filter(Boolean),
+      excludedVotes,
+      items,
       roundContext,
     });
   });

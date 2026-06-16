@@ -454,6 +454,7 @@ function mockPonderModules<T>(result: T, additionalResults: unknown[] = []) {
       conservativeRatingBps: "round.conservativeRatingBps",
       effectiveEvidence: "round.effectiveEvidence",
       hasHumanVerifiedCommit: "round.hasHumanVerifiedCommit",
+      humanVerifiedCommitCount: "round.humanVerifiedCommitCount",
       lastCommitRevealableAfter: "round.lastCommitRevealableAfter",
       lowSince: "round.lowSince",
       maxDuration: "round.maxDuration",
@@ -1335,7 +1336,8 @@ describe("registerContentRoutes", () => {
     expect(serializedWhere).toContain("round.maxVoters");
     expect(serializedWhere).toContain("round.revealedCount");
     expect(serializedWhere).toContain("round.minVoters");
-    expect(serializedWhere).toContain("round.hasHumanVerifiedCommit");
+    expect(serializedWhere).toContain("round.humanVerifiedCommitCount");
+    expect(serializedWhere).toContain("greatest");
     expect(serializedWhere).toContain("round.lastCommitRevealableAfter");
     expect(serializedWhere).toContain("round.revealGracePeriod");
     expect(serializedWhere).toContain("advisoryVote.contentId");
@@ -1358,6 +1360,25 @@ describe("registerContentRoutes", () => {
 
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({ error: "Invalid voteable filter" });
+    expect(db.select).not.toHaveBeenCalled();
+  });
+
+  it("rejects malformed content now timestamps before querying the database", async () => {
+    const { db } = mockPonderModules([]);
+    mockSharedModule();
+    const { registerContentRoutes } = await import(
+      "../src/api/routes/content-routes.js"
+    );
+
+    const app = new Hono();
+    registerContentRoutes(app);
+
+    const response = await app.request("http://localhost/content?now=abc");
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      error: "now must be a non-negative integer",
+    });
     expect(db.select).not.toHaveBeenCalled();
   });
 
@@ -3594,6 +3615,72 @@ describe("registerCorrelationRoutes", () => {
       error: "rewardPoolId, contentId, and roundId must be positive integers",
     });
   });
+
+  it("excludes voter-address banned voters from rating correlation scoring inputs", async () => {
+    const voter = "0x0000000000000000000000000000000000000001";
+    const nullifierHash = `0x${"2".repeat(64)}` as const;
+    const unrelatedIdentityKey = `0x${"a".repeat(64)}` as const;
+    const { queryBuilders } = mockPonderModules(
+      [
+        {
+          account: voter,
+          voter,
+          identityKey: unrelatedIdentityKey,
+          commitKey: `0x${"b".repeat(64)}`,
+          isUp: true,
+          stake: 25000000n,
+          epochIndex: 0,
+          revealWeight: 25000000n,
+          baseWeight: 10000n,
+          verifiedHuman: true,
+          historicalVoteCount: 0,
+        },
+      ],
+      [
+        [
+          {
+            provider: 2,
+            nullifierHash,
+          },
+        ],
+        [
+          {
+            rater: voter,
+            provider: 2,
+            nullifierHash,
+          },
+        ],
+        [{ settledAt: 777n }],
+        [],
+      ],
+    );
+    const { registerCorrelationRoutes } = await import(
+      "../src/api/routes/correlation-routes.js"
+    );
+
+    const app = new Hono();
+    registerCorrelationRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/correlation/rating-round-votes?contentId=9&roundId=2&now=1000",
+    );
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.items).toEqual([]);
+    expect(body.excludedVotes).toEqual([
+      {
+        account: voter,
+        identityKey: unrelatedIdentityKey,
+        commitKey: `0x${"b".repeat(64)}`,
+        cooldownSeconds: null,
+        profileUpdatedAt: null,
+        reasons: ["voter_address_banned"],
+        roundOpenTime: null,
+      },
+    ]);
+    expect(serializeExpression(queryBuilders[1]?.where.mock.calls[0]?.[0])).toContain("raterIdentityBan.active");
+  });
 });
 
 describe("registerKeeperRoutes", () => {
@@ -3700,6 +3787,25 @@ describe("registerKeeperRoutes", () => {
     );
     expect(serializedOrderBy).toContain("feedbackBonusPool.awardDeadline");
     expect(serializedOrderBy).toContain("feedbackBonusPool.id");
+  });
+
+  it("uses humanVerifiedCommitCount quorum for reveal_failed keeper hints", async () => {
+    const { db, queryBuilders } = mockPonderModules([], [[], [], []]);
+    const { registerKeeperRoutes } = await import(
+      "../src/api/routes/keeper-routes.js"
+    );
+    const app = new Hono();
+    registerKeeperRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/keeper/work?now=100&dormancyPeriod=60&limit=5",
+    );
+
+    expect(response.status).toBe(200);
+    const serializedSelect = serializeExpression(db.select.mock.calls[0]?.[0]);
+    expect(serializedSelect).toContain("round.humanVerifiedCommitCount");
+    expect(serializedSelect).toContain("greatest");
+    expect(queryBuilders[0]?.from).toHaveBeenCalled();
   });
 });
 
@@ -3916,5 +4022,59 @@ describe("registerDiscoveryRoutes", () => {
     });
     expect(body.items[0]).not.toHaveProperty("gated");
     expect(body.items[0]).not.toHaveProperty("questionMetadata");
+  });
+
+  it("rejects malformed discover-signals now timestamps", async () => {
+    mockPonderModules([]);
+    const { registerDiscoveryRoutes } = await import(
+      "../src/api/routes/discovery-routes.js"
+    );
+
+    const app = new Hono();
+    registerDiscoveryRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/discover-signals/0x0000000000000000000000000000000000000001?now=abc",
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      error: "now must be a non-negative integer",
+    });
+  });
+});
+
+describe("shared settlement helpers", () => {
+  it("uses reveal-failed grace multiplier when the round is reveal-failed eligible", async () => {
+    const {
+      getEstimatedRevealFailedTime,
+      getEstimatedSettlementTime,
+      getOpenRoundEstimatedResolutionTime,
+    } = await import("../src/api/shared.js");
+
+    const row = {
+      startTime: 1_000n,
+      epochDuration: 600,
+      maxDuration: 1_200,
+      minVoters: 3,
+      voteCount: 4,
+      revealedCount: 1,
+      humanVerifiedCommitCount: 3,
+      lastCommitRevealableAfter: 1_500n,
+      revealGracePeriod: 60n,
+    };
+
+    expect(getEstimatedSettlementTime(row.startTime, row.epochDuration, row.revealGracePeriod)).toBe(
+      1_660n,
+    );
+    expect(
+      getEstimatedRevealFailedTime(
+        row.startTime,
+        row.maxDuration,
+        row.lastCommitRevealableAfter,
+        row.revealGracePeriod,
+      ),
+    ).toBe(3_640n);
+    expect(getOpenRoundEstimatedResolutionTime(row)).toBe(3_640n);
   });
 });
