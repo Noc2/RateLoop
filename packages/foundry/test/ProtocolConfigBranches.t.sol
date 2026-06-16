@@ -117,6 +117,7 @@ contract MockLaunchDistributionPoolForConfig {
     mapping(address => bool) public authorizedCallers;
     address public clusterPayoutOracle;
     address public raterRegistry;
+    address public roundClusterReadyAtSource;
 
     function setAuthorizedCaller(address caller, bool authorized) external {
         authorizedCallers[caller] = authorized;
@@ -128,6 +129,10 @@ contract MockLaunchDistributionPoolForConfig {
 
     function setRaterRegistry(address registry) external {
         raterRegistry = registry;
+    }
+
+    function setRoundClusterReadyAtSource(address source) external {
+        roundClusterReadyAtSource = source;
     }
 
     function launchAnchorCredentialAgeSeconds() external pure returns (uint32) {
@@ -877,6 +882,54 @@ contract ProtocolConfigBranchesTest is Test {
         assertFalse(config.isRewardDistributorForEngine(replacementDistributor, engine));
     }
 
+    function test_SetRewardDistributor_RequiresLaunchPoolAuthorizationAndSource() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+
+        address engine = _newRewardEngine(config);
+        address distributor = address(new MockRewardDistributorForConfig(engine));
+        MockLaunchDistributionPoolForConfig launchPool = new MockLaunchDistributionPoolForConfig();
+
+        config.setLaunchDistributionPool(address(launchPool));
+
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.setRewardDistributor(distributor);
+
+        launchPool.setAuthorizedCaller(distributor, true);
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.setRewardDistributor(distributor);
+
+        launchPool.setRoundClusterReadyAtSource(address(0xBEEF));
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.setRewardDistributor(distributor);
+
+        launchPool.setRoundClusterReadyAtSource(engine);
+        config.setRewardDistributor(distributor);
+
+        assertTrue(config.isRewardDistributorForEngine(distributor, engine));
+    }
+
+    function test_SetLaunchDistributionPool_RequiresExistingRewardDistributorIntegration() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+
+        address engine = _newRewardEngine(config);
+        address distributor = address(new MockRewardDistributorForConfig(engine));
+        MockLaunchDistributionPoolForConfig launchPool = new MockLaunchDistributionPoolForConfig();
+
+        config.setRewardDistributor(distributor);
+
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.setLaunchDistributionPool(address(launchPool));
+
+        launchPool.setAuthorizedCaller(distributor, true);
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.setLaunchDistributionPool(address(launchPool));
+
+        launchPool.setRoundClusterReadyAtSource(engine);
+        config.setLaunchDistributionPool(address(launchPool));
+
+        assertEq(config.launchDistributionPool(), address(launchPool));
+    }
+
     function test_SetRewardDistributor_RejectsEoa() public {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
         address eoaDistributor = address(0xBEEF);
@@ -1048,6 +1101,8 @@ contract ProtocolConfigBranchesTest is Test {
 
         config.setFrontendRegistry(address(frontend));
         config.setLaunchDistributionPool(address(launchPool));
+        launchPool.setRoundClusterReadyAtSource(engine);
+        launchPool.setAuthorizedCaller(firstDistributor, true);
         config.setRewardDistributor(firstDistributor);
         config.revokeRewardDistributor(firstDistributor);
 

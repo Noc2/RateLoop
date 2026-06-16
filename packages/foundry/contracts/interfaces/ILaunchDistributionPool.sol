@@ -4,6 +4,35 @@ pragma solidity ^0.8.34;
 import { RaterRegistry } from "../RaterRegistry.sol";
 import { IClusterPayoutOracle } from "./IClusterPayoutOracle.sol";
 
+interface IRevealGraceConfig {
+    function revealGracePeriod() external view returns (uint256);
+}
+
+interface IRoundClusterReadyAtSource {
+    function roundLifecycleState(uint256 contentId, uint256 roundId)
+        external
+        view
+        returns (
+            uint256 revealGracePeriod,
+            uint256 lastRevealableAfter,
+            uint256 cleanupRemaining,
+            uint48 clusterPayoutReadyAt
+        );
+    function roundCore(uint256 contentId, uint256 roundId)
+        external
+        view
+        returns (
+            uint48 startTime,
+            uint8 state,
+            uint16 voteCount,
+            uint16 revealedCount,
+            uint64 totalStake,
+            uint48 thresholdReachedAt,
+            uint48 settledAt
+        );
+    function protocolConfig() external view returns (IRevealGraceConfig);
+}
+
 interface ILaunchDistributionPool {
     struct LaunchRewardPolicy {
         uint16 minQualifyingScoreBps;
@@ -42,6 +71,7 @@ interface ILaunchDistributionPool {
             bool requireNoPendingCleanup
         );
     function raterRegistry() external view returns (RaterRegistry);
+    function roundClusterReadyAtSource() external view returns (IRoundClusterReadyAtSource);
     function raterRoundCreditRecorded(address rater, uint256 contentId, uint256 roundId) external view returns (bool);
     function roundUnverifiedLaunchCreditCount(uint256 contentId, uint256 roundId) external view returns (uint16);
     function authorizedCallers(address caller) external view returns (bool);

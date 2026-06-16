@@ -6,7 +6,7 @@ import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/ac
 import { IAdvisoryVoteRecorder } from "./interfaces/IAdvisoryVoteRecorder.sol";
 import { IRoundRewardDistributor } from "./interfaces/IRoundRewardDistributor.sol";
 import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol";
-import { ILaunchDistributionPool } from "./interfaces/ILaunchDistributionPool.sol";
+import { ILaunchDistributionPool, IRoundClusterReadyAtSource } from "./interfaces/ILaunchDistributionPool.sol";
 import { IClusterPayoutOracle } from "./interfaces/IClusterPayoutOracle.sol";
 import { IFrontendRegistry } from "./interfaces/IFrontendRegistry.sol";
 import { ICategoryRegistry } from "./interfaces/ICategoryRegistry.sol";
@@ -255,7 +255,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
 
         address previousNewEngine = rewardDistributorVotingEngine[newValue];
         if (previousNewEngine != address(0) && previousNewEngine != engine) revert InvalidConfig();
-        _validateRewardDistributorReplacementIntegrations(newValue, engine);
+        _validateRewardDistributorIntegrations(newValue, engine);
 
         rewardDistributorVotingEngine[newValue] = engine;
         rewardDistributorForVotingEngine[engine] = newValue;
@@ -314,6 +314,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         _validateLaunchDistributionPoolRaterRegistry(value, raterRegistry);
         _validateConfiguredClusterPayoutOracleLaunchConsumer(value);
         _validateConfiguredClusterPayoutOracleLaunchPool(value);
+        _validateLaunchDistributionPoolRewardDistributor(value, rewardDistributor);
         launchDistributionPool = value;
         emit LaunchDistributionPoolUpdated(value);
     }
@@ -494,7 +495,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         if (value == address(0)) revert InvalidAddress();
         address engine = _readRewardDistributorVotingEngine(value);
         if (_readRewardDistributorClaimAccountingStarted(value)) revert InvalidConfig();
-        _validateRewardDistributorShape(value, engine);
+        _validateRewardDistributorIntegrations(value, engine);
         address previousForEngine = rewardDistributorForVotingEngine[engine];
         if (previousForEngine != address(0) && previousForEngine != value) revert InvalidConfig();
         rewardDistributorVotingEngine[value] = engine;
@@ -560,16 +561,31 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         }
     }
 
-    function _validateRewardDistributorReplacementIntegrations(address value, address engine) internal view {
+    function _validateRewardDistributorIntegrations(address value, address engine) internal view {
         _validateRewardDistributorShape(value, engine);
 
         address launchPool = launchDistributionPool;
         if (launchPool != address(0)) {
-            try ILaunchDistributionPool(launchPool).authorizedCallers(value) returns (bool authorized) {
-                if (!authorized) revert InvalidConfig();
-            } catch {
-                revert InvalidConfig();
-            }
+            _validateLaunchDistributionPoolRewardDistributor(launchPool, value);
+        }
+    }
+
+    function _validateLaunchDistributionPoolRewardDistributor(address launchPool, address distributor) internal view {
+        if (launchPool == address(0) || distributor == address(0)) return;
+        address engine = rewardDistributorVotingEngine[distributor];
+        if (engine == address(0)) engine = _readRewardDistributorVotingEngine(distributor);
+
+        try ILaunchDistributionPool(launchPool).authorizedCallers(distributor) returns (bool authorized) {
+            if (!authorized) revert InvalidConfig();
+        } catch {
+            revert InvalidConfig();
+        }
+        try ILaunchDistributionPool(launchPool).roundClusterReadyAtSource() returns (
+            IRoundClusterReadyAtSource source
+        ) {
+            if (address(source) != engine) revert InvalidConfig();
+        } catch {
+            revert InvalidConfig();
         }
     }
 

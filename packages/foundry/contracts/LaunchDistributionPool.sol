@@ -9,39 +9,16 @@ import { MerkleProof } from "@openzeppelin/contracts/utils/cryptography/MerklePr
 import { ReentrancyGuardTransient } from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
 import { RaterRegistry } from "./RaterRegistry.sol";
 import { IClusterPayoutOracle } from "./interfaces/IClusterPayoutOracle.sol";
-import { ILaunchDistributionPool } from "./interfaces/ILaunchDistributionPool.sol";
+import {
+    ILaunchDistributionPool,
+    IRoundClusterReadyAtSource,
+    IRevealGraceConfig
+} from "./interfaces/ILaunchDistributionPool.sol";
 import { IRoundPayoutSnapshotConsumer } from "./interfaces/IRoundPayoutSnapshotConsumer.sol";
 
-/// @dev M-Oracle-1: minimal view shape on RoundVotingEngine that LaunchDistributionPool needs to
-///      authoritatively answer whether a (contentId, roundId) payload is source-ready for a
-///      cluster snapshot proposal. Avoids a heavy import dependency.
-interface IRoundClusterReadyAtSource {
-    function roundLifecycleState(uint256 contentId, uint256 roundId)
-        external
-        view
-        returns (
-            uint256 revealGracePeriod,
-            uint256 lastRevealableAfter,
-            uint256 cleanupRemaining,
-            uint48 clusterPayoutReadyAt
-        );
-    function roundCore(uint256 contentId, uint256 roundId)
-        external
-        view
-        returns (
-            uint48 startTime,
-            uint8 state,
-            uint16 voteCount,
-            uint16 revealedCount,
-            uint64 totalStake,
-            uint48 thresholdReachedAt,
-            uint48 settledAt
-        );
-    function protocolConfig() external view returns (IRevealGraceConfig);
-}
-
-interface IRevealGraceConfig {
-    function revealGracePeriod() external view returns (uint256);
+interface ILaunchReadySourceProtocolConfig {
+    function launchDistributionPool() external view returns (address);
+    function raterRegistry() external view returns (address);
 }
 
 /// @title LaunchDistributionPool
@@ -277,6 +254,9 @@ contract LaunchDistributionPool is
 
     function setRaterRegistry(address newRegistry) external onlyOwner {
         _validateRaterRegistry(newRegistry);
+        if (address(roundClusterReadyAtSource) != address(0)) {
+            _validateRoundClusterReadyAtSource(address(roundClusterReadyAtSource), newRegistry);
+        }
         raterRegistry = RaterRegistry(newRegistry);
     }
 
@@ -290,14 +270,7 @@ contract LaunchDistributionPool is
     ///         RoundVotingEngine). Must be set before the cluster oracle is enabled.
     function setRoundClusterReadyAtSource(address newSource) external onlyOwner {
         if (newSource == address(0) || newSource.code.length == 0) revert InvalidAddress();
-        // ABI shape probes — calling with (0,0) must not revert on a properly conforming
-        // source. Returned values are intentionally discarded; the probes verify the
-        // source-readiness and advisory-grace views used at runtime.
-        (bool readyAtOk,) = _roundReadyAtView(newSource, 0, 0);
-        (bool roundCoreOk,) = _roundCoreSettledAtView(newSource, 0, 0);
-        address protocolConfig = _roundSourceProtocolConfig(newSource);
-        (bool revealGraceOk,) = _revealGracePeriodView(protocolConfig);
-        if (!readyAtOk || !roundCoreOk || !revealGraceOk) revert InvalidAddress();
+        _validateRoundClusterReadyAtSource(newSource, address(raterRegistry));
         roundClusterReadyAtSource = IRoundClusterReadyAtSource(newSource);
         emit RoundClusterReadyAtSourceUpdated(newSource);
     }
@@ -864,9 +837,11 @@ contract LaunchDistributionPool is
         address oracle = address(clusterPayoutOracle);
         if (oracle == address(0) || sourceReadyAt == 0) revert SnapshotNotFinalized();
         IRoundClusterReadyAtSource source = roundClusterReadyAtSource;
-        uint64 creditReadyAt =
-            address(source) == address(0) ? 0 : _roundClusterSourceReadyAt(source, contentId, roundId);
-        if (creditReadyAt == 0) {
+        uint64 creditReadyAt;
+        if (address(source) != address(0)) {
+            creditReadyAt = _roundClusterSourceReadyAt(source, contentId, roundId);
+            if (creditReadyAt == 0) revert SnapshotNotFinalized();
+        } else {
             creditReadyAt = uint64(block.timestamp);
             if (sourceReadyAt > creditReadyAt) {
                 creditReadyAt = sourceReadyAt;
@@ -1011,6 +986,24 @@ contract LaunchDistributionPool is
         if (graceReadyAt > type(uint64).max) return type(uint64).max;
         if (graceReadyAt > sourceReadyAt) return graceReadyAt.toUint64();
         return sourceReadyAt;
+    }
+
+    function _validateRoundClusterReadyAtSource(address source, address expectedRaterRegistry) private view {
+        (bool readyAtOk,) = _roundReadyAtView(source, 0, 0);
+        (bool roundCoreOk,) = _roundCoreSettledAtView(source, 0, 0);
+        address protocolConfig = _roundSourceProtocolConfig(source);
+        (bool revealGraceOk,) = _revealGracePeriodView(protocolConfig);
+        if (!readyAtOk || !roundCoreOk || !revealGraceOk) revert InvalidAddress();
+        try ILaunchReadySourceProtocolConfig(protocolConfig).launchDistributionPool() returns (address configuredPool) {
+            if (configuredPool != address(this)) revert InvalidAddress();
+        } catch {
+            revert InvalidAddress();
+        }
+        try ILaunchReadySourceProtocolConfig(protocolConfig).raterRegistry() returns (address configuredRegistry) {
+            if (configuredRegistry != expectedRaterRegistry) revert InvalidAddress();
+        } catch {
+            revert InvalidAddress();
+        }
     }
 
     function _roundReadyAtView(address source, uint256 contentId, uint256 roundId)
@@ -1450,7 +1443,10 @@ contract LaunchDistributionPool is
     }
 
     function _requireConfiguredRaterRegistry() private view {
-        address protocolConfig = _roundSourceProtocolConfig(address(roundClusterReadyAtSource));
+        address source = address(roundClusterReadyAtSource);
+        if (source == address(0)) return;
+        address protocolConfig = _roundSourceProtocolConfig(source);
+        if (protocolConfig == address(0)) revert InvalidAddress();
 
         address configuredPool;
         address configuredRegistry;
@@ -1463,7 +1459,7 @@ contract LaunchDistributionPool is
             pop(staticcall(gas(), protocolConfig, ptr, 4, ptr, 0x20))
             configuredRegistry := and(mload(ptr), 0xffffffffffffffffffffffffffffffffffffffff)
         }
-        if (configuredPool != address(this)) return;
+        if (configuredPool != address(this)) revert InvalidAddress();
         if (configuredRegistry != address(raterRegistry)) revert InvalidAddress();
     }
 

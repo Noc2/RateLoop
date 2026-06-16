@@ -214,7 +214,7 @@ contract LaunchDistributionPoolTest is Test {
         vm.expectRevert(LaunchDistributionPool.InvalidAddress.selector);
         pool.setClusterPayoutOracle(address(oracle));
 
-        pool.setRoundClusterReadyAtSource(address(new MockAlwaysReadyClusterSource()));
+        pool.setRoundClusterReadyAtSource(address(new MockAlwaysReadyClusterSource(address(registry), address(pool))));
         pool.setClusterPayoutOracle(address(oracle));
         assertEq(address(pool.clusterPayoutOracle()), address(oracle));
     }
@@ -264,7 +264,17 @@ contract LaunchDistributionPoolTest is Test {
         MockWeakClusterSource weakReadySource = new MockWeakClusterSource();
         vm.expectRevert(LaunchDistributionPool.InvalidAddress.selector);
         pool.setRoundClusterReadyAtSource(address(weakReadySource));
-        MockAlwaysReadyClusterSource readySource = new MockAlwaysReadyClusterSource();
+        MockLaunchProtocolConfig wrongPoolConfig =
+            new MockLaunchProtocolConfig(address(replacementRegistry), address(0xBEEF));
+        MockConfiguredClusterSource wrongPoolSource = new MockConfiguredClusterSource(address(wrongPoolConfig));
+        vm.expectRevert(LaunchDistributionPool.InvalidAddress.selector);
+        pool.setRoundClusterReadyAtSource(address(wrongPoolSource));
+        MockLaunchProtocolConfig wrongRegistryConfig = new MockLaunchProtocolConfig(address(registry), address(pool));
+        MockConfiguredClusterSource wrongRegistrySource = new MockConfiguredClusterSource(address(wrongRegistryConfig));
+        vm.expectRevert(LaunchDistributionPool.InvalidAddress.selector);
+        pool.setRoundClusterReadyAtSource(address(wrongRegistrySource));
+        MockAlwaysReadyClusterSource readySource =
+            new MockAlwaysReadyClusterSource(address(replacementRegistry), address(pool));
         pool.setRoundClusterReadyAtSource(address(readySource));
         assertEq(address(pool.roundClusterReadyAtSource()), address(readySource));
 
@@ -871,7 +881,7 @@ contract LaunchDistributionPoolTest is Test {
         ClusterPayoutOracle oracle = new ClusterPayoutOracle(address(this), address(frontendRegistry), address(lrep));
         oracle.setOracleConfig(1, oracle.MIN_CHALLENGE_BOND(), address(this));
         oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_LAUNCH_CREDIT(), address(pool));
-        pool.setRoundClusterReadyAtSource(address(new MockAlwaysReadyClusterSource()));
+        pool.setRoundClusterReadyAtSource(address(new MockAlwaysReadyClusterSource(address(registry), address(pool))));
         pool.setClusterPayoutOracle(address(oracle));
 
         uint256 paidBeforeSnapshot = _recordLaunchReward(alice, 1, bytes32("anchor-a"));
@@ -979,7 +989,7 @@ contract LaunchDistributionPoolTest is Test {
         // to `address(this)` to recreate the "different consumer" scenario that the rest
         // of this test targets.
         oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_LAUNCH_CREDIT(), address(pool));
-        pool.setRoundClusterReadyAtSource(address(new MockAlwaysReadyClusterSource()));
+        pool.setRoundClusterReadyAtSource(address(new MockAlwaysReadyClusterSource(address(registry), address(pool))));
         pool.setClusterPayoutOracle(address(oracle));
         oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_LAUNCH_CREDIT(), address(this));
 
@@ -1070,11 +1080,34 @@ contract LaunchDistributionPoolTest is Test {
         assertTrue(pool.earnedRewardCreditFinalized(1, 1, _commitKey(1)));
     }
 
+    function test_LaunchCreditRejectsCallerReadyAtWhenConfiguredSourceNotReady() public {
+        _configureLaunchOracle(1);
+        pool.setRoundClusterReadyAtSource(address(new MockGraceClusterSource(0, 0, address(registry), address(pool))));
+
+        uint256 stake = pool.MIN_LAUNCH_CREDIT_STAKE();
+        vm.expectRevert(LaunchDistributionPool.SnapshotNotFinalized.selector);
+        pool.recordEarnedRaterRewardWithSourceReady(
+            alice,
+            1,
+            1,
+            _commitKey(1),
+            8_000,
+            3,
+            true,
+            stake,
+            _singleAnchor(bytes32("anchor-a")),
+            uint64(block.timestamp)
+        );
+        assertEq(pool.pendingEarnedRaterCreditReadyAt(1, 1, _commitKey(1)), 0);
+    }
+
     function test_LaunchSnapshotSourceWaitsForAdvisoryRevealGrace() public {
         ClusterPayoutOracle oracle = _configureLaunchOracle(1);
         uint48 settledAt = uint48(block.timestamp);
         uint256 revealGrace = 60 minutes;
-        pool.setRoundClusterReadyAtSource(address(new MockGraceClusterSource(settledAt, revealGrace)));
+        pool.setRoundClusterReadyAtSource(
+            address(new MockGraceClusterSource(settledAt, revealGrace, address(registry), address(pool)))
+        );
 
         uint64 expectedReadyAt = uint64(uint256(settledAt) + revealGrace);
         assertEq(pool.roundPayoutSnapshotSourceReadyAt(pool.PAYOUT_DOMAIN_LAUNCH_CREDIT(), 0, 1, 1), expectedReadyAt);
@@ -1110,7 +1143,8 @@ contract LaunchDistributionPoolTest is Test {
     function test_LaunchSnapshotSourceFailsClosedWhenAdvisoryGraceUnavailable() public {
         uint48 settledAt = uint48(block.timestamp);
         uint256 revealGrace = 60 minutes;
-        MockGraceClusterSource source = new MockGraceClusterSource(settledAt, revealGrace);
+        MockGraceClusterSource source =
+            new MockGraceClusterSource(settledAt, revealGrace, address(registry), address(pool));
         pool.setRoundClusterReadyAtSource(address(source));
 
         uint64 expectedReadyAt = uint64(uint256(settledAt) + revealGrace);
@@ -2976,7 +3010,7 @@ contract LaunchDistributionPoolTest is Test {
         oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_LAUNCH_CREDIT(), address(pool));
         // M-Oracle-1: wire an always-ready cluster source so proposals can land before the first
         // pending credit record (the legitimate front-run case exercised by these tests).
-        pool.setRoundClusterReadyAtSource(address(new MockAlwaysReadyClusterSource()));
+        pool.setRoundClusterReadyAtSource(address(new MockAlwaysReadyClusterSource(address(registry), address(pool))));
         pool.setClusterPayoutOracle(address(oracle));
 
         oracle.proposeCorrelationEpoch(
@@ -3161,6 +3195,14 @@ contract MockLaunchOracleFrontendRegistry {
 /// @dev Test source for M-Oracle-1 readiness checks. Always returns 1 (epoch-second 1) so that
 ///      any positive block.timestamp counts as ready.
 contract MockAlwaysReadyClusterSource {
+    address internal immutable raterRegistry_;
+    address internal immutable launchDistributionPool_;
+
+    constructor(address raterRegistry__, address launchDistributionPool__) {
+        raterRegistry_ = raterRegistry__;
+        launchDistributionPool_ = launchDistributionPool__;
+    }
+
     function roundLifecycleState(uint256, uint256) external pure returns (uint256, uint256, uint256, uint48) {
         return (0, 0, 0, 1);
     }
@@ -3175,6 +3217,14 @@ contract MockAlwaysReadyClusterSource {
 
     function revealGracePeriod() external pure returns (uint256) {
         return 0;
+    }
+
+    function raterRegistry() external view returns (address) {
+        return raterRegistry_;
+    }
+
+    function launchDistributionPool() external view returns (address) {
+        return launchDistributionPool_;
     }
 }
 
@@ -3229,11 +3279,15 @@ contract MockWeakClusterSource {
 contract MockGraceClusterSource {
     uint48 internal immutable settledAt;
     uint256 internal immutable gracePeriod;
+    address internal immutable raterRegistry_;
+    address internal immutable launchDistributionPool_;
     bool internal revealGraceReverts;
 
-    constructor(uint48 _settledAt, uint256 _gracePeriod) {
+    constructor(uint48 _settledAt, uint256 _gracePeriod, address raterRegistry__, address launchDistributionPool__) {
         settledAt = _settledAt;
         gracePeriod = _gracePeriod;
+        raterRegistry_ = raterRegistry__;
+        launchDistributionPool_ = launchDistributionPool__;
     }
 
     function roundLifecycleState(uint256, uint256) external view returns (uint256, uint256, uint256, uint48) {
@@ -3255,5 +3309,13 @@ contract MockGraceClusterSource {
 
     function setRevealGraceReverts(bool value) external {
         revealGraceReverts = value;
+    }
+
+    function raterRegistry() external view returns (address) {
+        return raterRegistry_;
+    }
+
+    function launchDistributionPool() external view returns (address) {
+        return launchDistributionPool_;
     }
 }
