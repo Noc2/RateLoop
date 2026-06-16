@@ -199,7 +199,6 @@ async function main() {
                 { chainTimestamp: runContext.blockTimestamp },
               )
             : null;
-          const ponderStaleRisk = result.roundsSettled > 0 || result.votesRevealed > 0;
           const correlationSnapshotResult = config.correlationSnapshots.enabled
             ? await publishConfiguredCorrelationSnapshots(
                 publicClient,
@@ -208,7 +207,6 @@ async function main() {
                 account,
                 logger,
                 {
-                  deferPonderArtifactBuild: ponderStaleRisk,
                   ponderNowSeconds: runContext.blockTimestamp,
                 },
               )

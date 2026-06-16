@@ -31,7 +31,6 @@ import { readRoundLifecycleState } from "./contract-reads.js";
 import { getRevertReason } from "./revert-utils.js";
 
 export interface CorrelationSnapshotPublishOptions {
-  deferPonderArtifactBuild?: boolean;
   ponderNowSeconds?: bigint;
 }
 
@@ -823,13 +822,6 @@ async function publishAutomaticCorrelationSnapshots(
     logger,
   );
   if (!preflight.needsArtifactBuild) {
-    return preflight.result;
-  }
-
-  if (options.deferPonderArtifactBuild) {
-    logger.debug(
-      "Deferring automatic correlation artifact build until Ponder reflects on-chain settlement/reveal",
-    );
     return preflight.result;
   }
 
