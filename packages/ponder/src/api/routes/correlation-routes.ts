@@ -25,7 +25,7 @@ import {
   voterStats,
 } from "ponder:schema";
 import type { ApiApp } from "../shared.js";
-import { jsonBig } from "../shared.js";
+import { jsonBig, resolveApiNowSeconds } from "../shared.js";
 import { safeBigInt, safeLimit, safeOffset } from "../utils.js";
 import { addressIdentityKey } from "../../identity-keys.js";
 
@@ -244,14 +244,6 @@ function optionalNonNegativeNumberParam(
   if (!/^\d+$/.test(value)) return Number.NaN;
   const parsed = Number(value);
   return Number.isSafeInteger(parsed) ? parsed : Number.NaN;
-}
-
-function resolveCorrelationNowSeconds(value: string | undefined): bigint | null {
-  if (value === undefined) {
-    return BigInt(Math.floor(Date.now() / 1000));
-  }
-  if (!/^\d+$/.test(value)) return null;
-  return BigInt(value);
 }
 
 function formatCorrelationVoteRow(
@@ -543,7 +535,7 @@ export function registerCorrelationRoutes(app: ApiApp) {
       );
     }
     if (Number.isNaN(offset)) return c.json({ error: "Invalid offset" }, 400);
-    const nowSeconds = resolveCorrelationNowSeconds(c.req.query("now"));
+    const nowSeconds = resolveApiNowSeconds(c.req.query("now"));
     if (nowSeconds === null) {
       return c.json({ error: "now must be a non-negative integer" }, 400);
     }
@@ -713,7 +705,7 @@ export function registerCorrelationRoutes(app: ApiApp) {
       );
     }
     if (Number.isNaN(offset)) return c.json({ error: "Invalid offset" }, 400);
-    const nowSeconds = resolveCorrelationNowSeconds(c.req.query("now"));
+    const nowSeconds = resolveApiNowSeconds(c.req.query("now"));
     if (nowSeconds === null) {
       return c.json({ error: "now must be a non-negative integer" }, 400);
     }
@@ -950,7 +942,7 @@ export function registerCorrelationRoutes(app: ApiApp) {
       );
     }
     if (Number.isNaN(offset)) return c.json({ error: "Invalid offset" }, 400);
-    const nowSeconds = resolveCorrelationNowSeconds(c.req.query("now"));
+    const nowSeconds = resolveApiNowSeconds(c.req.query("now"));
     if (nowSeconds === null) {
       return c.json({ error: "now must be a non-negative integer" }, 400);
     }
