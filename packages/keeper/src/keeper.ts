@@ -488,8 +488,45 @@ async function discoverKeeperWorkCandidates(
   }
 
   if (!discovery) {
-    chainReconciliationContentCursor = 1n;
-    discovery = await discoverKeeperWorkFromChain(publicClient, registryAddr);
+    const chainBatchSize = reconciliationDue
+      ? Math.max(
+          Number(discoveryConfig.chainScanPerTick ?? 10) * 5,
+          Math.ceil(Number(discoveryConfig.maxCandidates ?? 500) / reconcileEvery),
+        )
+      : Number(discoveryConfig.chainScanPerTick ?? 10);
+    const chainContentIds = await scanBoundedChainContentIds(
+      publicClient,
+      registryAddr,
+      chainBatchSize,
+    );
+    let ponderHints: KeeperWorkDiscovery | null = null;
+    if (discoveryConfig.enabled) {
+      ponderHints = await fetchKeeperWorkFromPonder(
+        now,
+        BigInt(config.dormancyPeriod),
+        Number(discoveryConfig.maxCandidates ?? 500),
+        logger,
+      );
+    }
+    if (ponderHints) {
+      discovery = {
+        ...ponderHints,
+        source: reconciliationDue ? "chain" : ponderHints.source,
+        contentIds: sortedUniqueBigInts([
+          ...ponderHints.contentIds,
+          ...chainContentIds,
+        ]),
+      };
+    } else {
+      discovery = {
+        source: "chain",
+        contentIds: chainContentIds,
+        openRounds: [],
+        cleanupRounds: [],
+        dormantContent: [],
+        feedbackBonusForfeits: [],
+      };
+    }
   }
 
   setGauge(
@@ -518,32 +555,6 @@ async function discoverKeeperWorkCandidates(
   );
 
   return discovery;
-}
-
-async function discoverKeeperWorkFromChain(
-  publicClient: Pick<PublicClient, "readContract">,
-  registryAddr: `0x${string}`,
-): Promise<KeeperWorkDiscovery> {
-  const nextContentId = (await publicClient.readContract({
-    address: registryAddr,
-    abi: ContentRegistryAbi,
-    functionName: "nextContentId",
-    args: [],
-  })) as bigint;
-
-  const contentIds: bigint[] = [];
-  for (let contentId = 1n; contentId < nextContentId; contentId++) {
-    contentIds.push(contentId);
-  }
-
-  return {
-    source: "chain",
-    contentIds,
-    openRounds: [],
-    cleanupRounds: [],
-    dormantContent: [],
-    feedbackBonusForfeits: [],
-  };
 }
 
 async function fetchKeeperWorkFromPonder(
