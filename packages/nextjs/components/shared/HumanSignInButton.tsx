@@ -2,6 +2,7 @@
 
 import { type ButtonHTMLAttributes, type ReactNode, useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useActiveWalletChain } from "thirdweb/react";
 import { useAccount } from "wagmi";
 import {
   GradientActionButton,
@@ -9,22 +10,33 @@ import {
   type GradientActionSize,
 } from "~~/components/shared/GradientAction";
 import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
+import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import { useRateLoopConnectModal } from "~~/hooks/useRateLoopConnectModal";
 import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
 import { HUMAN_SIGN_IN_LABEL, getHumanSignInRoute } from "~~/lib/home/humanSignInRoute";
 
 type HumanSignInButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children" | "onClick" | "type"> & {
   children?: ReactNode;
+  gradientInnerClassName?: string;
   gradientMotion?: GradientActionMotion | false;
   gradientPill?: boolean;
   gradientSize?: GradientActionSize;
   postSignInRoute?: string;
 };
 
+export function hasCompleteHumanSignInSession(params: {
+  address?: string | null;
+  chainId?: number | null;
+  targetChainId: number;
+}): boolean {
+  return Boolean(params.address && params.chainId === params.targetChainId);
+}
+
 export function HumanSignInButton({
   children,
   className,
   disabled,
+  gradientInnerClassName,
   gradientMotion = false,
   gradientPill = false,
   gradientSize = "default",
@@ -32,7 +44,10 @@ export function HumanSignInButton({
   ...props
 }: HumanSignInButtonProps) {
   const router = useRouter();
-  const { address } = useAccount();
+  const { address, chain } = useAccount();
+  const activeThirdwebChain = useActiveWalletChain();
+  const resolvedChainId = chain?.id ?? activeThirdwebChain?.id;
+  const { targetNetwork } = useTargetNetwork();
   const { openConnectModal, isConnecting } = useRateLoopConnectModal();
   const [shouldRouteAfterSignIn, setShouldRouteAfterSignIn] = useState(false);
   const { data: lrepBalance } = useScaffoldReadContract({
@@ -44,7 +59,7 @@ export function HumanSignInButton({
   const resolvedLrepBalance = typeof lrepBalance === "bigint" ? lrepBalance : undefined;
 
   const routeSignedInRater = useCallback(() => {
-    if (!address) {
+    if (!hasCompleteHumanSignInSession({ address, chainId: resolvedChainId, targetChainId: targetNetwork.id })) {
       return false;
     }
 
@@ -62,7 +77,7 @@ export function HumanSignInButton({
     setShouldRouteAfterSignIn(false);
     router.push(getHumanSignInRoute({ lrepBalance: resolvedLrepBalance }));
     return true;
-  }, [address, postSignInRoute, resolvedLrepBalance, router]);
+  }, [address, postSignInRoute, resolvedChainId, resolvedLrepBalance, router, targetNetwork.id]);
 
   useEffect(() => {
     if (!shouldRouteAfterSignIn) {
@@ -97,6 +112,7 @@ export function HumanSignInButton({
         {...props}
         className={className}
         disabled={isDisabled}
+        innerClassName={gradientInnerClassName}
         motion={isBusy ? "processing" : gradientMotion}
         pill={gradientPill}
         size={gradientSize}
