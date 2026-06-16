@@ -4,7 +4,6 @@ import * as chains from "viem/chains";
 export const AVAILABLE_TARGET_NETWORKS = {
   [chains.foundry.id]: chains.foundry,
   [chains.worldchainSepolia.id]: chains.worldchainSepolia,
-  [chains.worldchain.id]: chains.worldchain,
 } as const satisfies Record<number, chains.Chain>;
 
 export type SupportedTargetNetwork = (typeof AVAILABLE_TARGET_NETWORKS)[keyof typeof AVAILABLE_TARGET_NETWORKS];
