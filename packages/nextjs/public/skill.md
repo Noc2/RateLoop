@@ -47,7 +47,10 @@ Context:
 
 - Page: set `question.contextUrl`.
 - YouTube: set `question.videoUrl`.
-- Image: pass generated, local, or user-provided image bytes as `generatedImages` to `rateloop_create_ask_handoff_link` when using a human wallet. The browser handoff signs, uploads, moderates, and attaches the returned RateLoop image URLs. Generate public visual context yourself when that is enough; do not ask the user to host images elsewhere.
+- Image: pass generated, local, or user-provided image bytes as `generatedImages` to `rateloop_create_ask_handoff_link` when using a human wallet. Use the original JPG, PNG, or WEBP when it is within the normal submit-page limit of 10 MB per image. The browser handoff signs, uploads, moderates, and attaches the returned RateLoop image URLs. Generate public visual context yourself when that is enough; do not ask the user to host images elsewhere.
+
+Image transport rule: do not print base64 to the terminal or copy base64 out of visible command output. A chat, terminal, or tool display cap is not a RateLoop image-size limit, and is not a reason to shrink or redraw the image. Read bytes directly from disk inside the tool host, SDK, or a local script; compute optional `sizeBytes` and `sha256` from that exact buffer, or omit them and let RateLoop compute them where supported.
+
 - Gated hosted context: set `question.confidentiality.visibility` to `gated`, use only RateLoop-hosted `imageUrls` and/or `detailsUrl` plus `detailsHash`, omit `question.contextUrl` and `question.videoUrl`, default to `disclosurePolicy: "private_forever"` unless the asker explicitly wants `after_settlement`, and keep the public title non-sensitive. Eligible raters must accept confidentiality terms, and any configured bond, before RateLoop serves the context. Gated context is deterrence and redaction, not cryptographic secrecy: the RateLoop operator can serve/read hosted bytes, and eligible raters can still absorb what they see.
 
 - `walletAddress`: optional expected user wallet for handoff flows, or a scoped agent wallet for managed/local-signer flows
@@ -69,10 +72,10 @@ Context:
 For chat agents, keep the user flow short:
 
 1. Create or collect public context, or prepare RateLoop-hosted gated context when the material is confidential but safe for eligible raters. Generate a public mockup, screenshot, or summary yourself when that is enough.
-2. Put generated/local image bytes in `generatedImages` when useful.
+2. Put generated/local image bytes in `generatedImages` when useful. Keep the original image if it is at or below 10 MB; change the transport, not the image, if a chat display cannot show the base64.
 3. Add `feedbackBonus` when the user needs reasons, not just a rating.
 4. Choose a category/template only if needed.
-5. Call `rateloop_quote_question` and show the cost plus `legalNotice`.
+5. Call `rateloop_quote_question` and show the cost plus `legalNotice` when the ask already uses public URLs or uploaded RateLoop `imageUrls`. If the only inspectable context is `generatedImages`, do not make a tiny surrogate just to quote; create the handoff and let the browser prepare step price the ask before payment.
 6. Call `rateloop_create_ask_handoff_link` with the same ask payload and optional `generatedImages`.
 7. Give the user the returned `/agent/handoff/{handoffId}#token=...` link. They connect the wallet, review, sign image uploads if needed, and approve funding/submission there.
 8. Poll `rateloop_get_handoff_status`, then `rateloop_get_question_status` and `rateloop_get_result`.

@@ -281,7 +281,8 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
         </li>
         <li>
           If context is a generated, local, or user-provided image, keep the bytes ready as <code>generatedImages</code>
-          . If the user has a business plan, white paper, or other written context, provide it through the Ask form
+          . Use the original JPG, PNG, or WEBP when it is within the same 10 MB per-image limit shown on the submit
+          page. If the user has a business plan, white paper, or other written context, provide it through the Ask form
           Description field or a public <code>detailsUrl</code> with its SHA-256 <code>detailsHash</code>.
         </li>
         <li>
@@ -293,7 +294,9 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
           <code>rateloop-agents sandbox</code> to validate the payload without payment.
         </li>
         <li>
-          Call <code>rateloop_quote_question</code> for the live ask and show the cost plus <code>legalNotice</code>.
+          Call <code>rateloop_quote_question</code> for the live ask and show the cost plus <code>legalNotice</code>{" "}
+          when the ask already uses public URLs or uploaded RateLoop <code>imageUrls</code>. For generated-image-only
+          handoffs, create the handoff directly; the browser prepare step prices the ask before payment.
         </li>
         <li>
           Call <code>rateloop_create_ask_handoff_link</code> with the same ask payload and optional{" "}
@@ -312,6 +315,12 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
         Backup: if the agent controls a funded encrypted wallet, use the local signer CLI:{" "}
         <code>wallet --generate</code>, then <code>local-ask</code>. Use raw MCP wallet calls only when the host can
         sign and execute calls cleanly.
+      </p>
+      <p>
+        Do not move image bytes through visible terminal output. If base64 output is too large for the chat or command
+        display, read the file directly inside a local Node/Python script, SDK call, or MCP host and pass the base64 in
+        that request. A display cap is not a RateLoop image-size limit, and should not cause the agent to downscale or
+        redraw an otherwise valid image.
       </p>
 
       <h3 id="ask-inputs">Collect Inputs</h3>
@@ -403,7 +412,8 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
       <p>For normal human-wallet asks, use handoff tools in order:</p>
       <ol>
         <li>
-          <code>rateloop_quote_question</code>
+          <code>rateloop_quote_question</code> when the ask already uses public URLs or uploaded RateLoop{" "}
+          <code>imageUrls</code>; otherwise go straight to handoff for <code>generatedImages</code>.
         </li>
         <li>
           <code>rateloop_create_ask_handoff_link</code>
@@ -445,7 +455,8 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
           Run a no-payment dry run with <code>{"dryRun: true"}</code> or <code>{'mode: "dry_run"'}</code>.
         </li>
         <li>
-          Call <code>rateloop_quote_question</code> with the live draft ask and optional <code>feedbackBonus</code>.
+          Call <code>rateloop_quote_question</code> with the live draft ask and optional <code>feedbackBonus</code> when
+          the ask already uses public URLs or uploaded RateLoop <code>imageUrls</code>.
         </li>
         <li>
           Show or log the returned <code>legalNotice</code> before spending.

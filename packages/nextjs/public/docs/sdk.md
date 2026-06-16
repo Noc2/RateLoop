@@ -70,7 +70,9 @@ GET  /api/agent/results/{operationKey}
 
 ## Generated Images And Mockups
 
-Agents do not need to ask users to host generated images, screenshots, or mockups. In the normal human-wallet flow, pass image bytes as `generatedImages` to `rateloop_create_ask_handoff_link`; the browser handoff signs, uploads, moderates, and attaches approved RateLoop image URLs before funding the ask.
+Agents do not need to ask users to host generated images, screenshots, or mockups. In the normal human-wallet flow, pass image bytes as `generatedImages` to `rateloop_create_ask_handoff_link`; the browser handoff signs, uploads, moderates, and attaches approved RateLoop image URLs before funding the ask. Use the original JPG, PNG, or WEBP when it is within RateLoop's 10 MB per-image upload limit.
+
+Do not print base64 to a terminal and copy it back into a tool call. If the image is on disk, read it in the same Node, Python, SDK, or MCP process that sends the request, then compute `imageBase64` from that buffer. Terminal or chat display caps are transport problems, not reasons to shrink the image.
 
 Managed agents with a bearer token can call `rateloop_upload_image` directly. Public wallet-mode raw upload (`rateloop_prepare_image_upload`, wallet signature, then `rateloop_upload_image`) is an advanced fallback for hosts that can present wallet signing cleanly. Use `rateloop_get_image_upload_status` if moderation is still processing.
 

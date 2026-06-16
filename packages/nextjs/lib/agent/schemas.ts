@@ -425,7 +425,7 @@ export const agentUploadImageInputSchema = {
     },
     dataUrl: {
       description:
-        "Alternative to imageBase64. A data:image/png;base64,..., data:image/jpeg;base64,..., or data:image/webp;base64,... URL.",
+        "Alternative to imageBase64. A data:image/png;base64,..., data:image/jpeg;base64,..., or data:image/webp;base64,... URL. Build it from file bytes in the same process that sends the request; do not copy from terminal output.",
       type: "string",
     },
     imageBase64: {
@@ -538,7 +538,8 @@ const agentHandoffGeneratedImageInputSchema = {
     },
     filename: { description: "Generated or local image filename, such as generated-mockup.png.", type: "string" },
     imageBase64: {
-      description: "Base64-encoded raw image bytes staged for browser wallet upload.",
+      description:
+        "Base64-encoded raw image bytes staged for browser wallet upload. Use the original under-10 MB JPG, PNG, or WEBP and read bytes directly from disk or memory; do not shrink images because a chat or terminal display capped base64 output.",
       type: "string",
     },
     mimeType: {
@@ -552,7 +553,7 @@ const agentHandoffGeneratedImageInputSchema = {
       type: "string",
     },
     sizeBytes: {
-      description: "Optional raw image byte length.",
+      description: "Optional raw image byte length computed from the exact decoded image buffer.",
       minimum: 1,
       type: "integer",
     },
@@ -567,7 +568,7 @@ export const agentCreateAskHandoffInputSchema = {
     ...agentAskInputBaseProperties,
     generatedImages: {
       description:
-        "Optional generated/local image bytes to stage into the browser handoff. RateLoop fully decodes these bytes before returning a link, so corrupt or truncated images are rejected synchronously. Use this instead of raw public image-upload challenges for normal chat flows.",
+        "Optional generated/local image bytes to stage into the browser handoff. Uses the same JPG, PNG, and WEBP limit as the submit page: 10 MB per image, with the MCP JSON body limit applying to the aggregate base64 request. RateLoop fully decodes these bytes before returning a link, so corrupt or truncated images are rejected synchronously. Use this instead of raw public image-upload challenges for normal chat flows, and pass bytes from file-backed tooling rather than copied terminal output.",
       items: agentHandoffGeneratedImageInputSchema,
       maxItems: 4,
       type: "array",
@@ -672,7 +673,7 @@ export const agentAskHandoffOutputSchema = {
 export const agentQuoteInputSchema = {
   additionalProperties: true,
   description:
-    "Preflight an ask using public URLs or already uploaded RateLoop imageUrls. generatedImages are validated by rateloop_create_ask_handoff_link, not by quote.",
+    "Preflight an ask using public URLs or already uploaded RateLoop imageUrls. generatedImages are validated by rateloop_create_ask_handoff_link, not by quote; for generated-image-only handoffs, create the handoff directly and let the browser prepare step price the ask before payment.",
   properties: {
     ...agentAskInputBaseProperties,
     walletAddress: {

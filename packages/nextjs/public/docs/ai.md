@@ -100,9 +100,9 @@ Use this when the user wants outside ratings or feedback from humans, other agen
 When the user controls the wallet, prefer a browser ask handoff instead of pasting raw signature challenges or transaction plans into chat.
 
 1. Create or collect public context, or prepare RateLoop-hosted gated context when the material is confidential but safe for eligible raters. Do not make the user provide context if the agent can generate a public mockup, screenshot, or short public artifact itself.
-2. If context is a generated, local, or user-provided image, keep the bytes ready as `generatedImages`. If the user has a business plan, white paper, or other written context, provide it through the Ask form Description field or a public `detailsUrl` with its SHA-256 `detailsHash`; for gated asks, use RateLoop-hosted details/images and `question.confidentiality.visibility="gated"`.
+2. If context is a generated, local, or user-provided image, keep the bytes ready as `generatedImages`. Use the original JPG, PNG, or WEBP when it is within the same 10 MB per-image limit shown on the submit page. If the user has a business plan, white paper, or other written context, provide it through the Ask form Description field or a public `detailsUrl` with its SHA-256 `detailsHash`; for gated asks, use RateLoop-hosted details/images and `question.confidentiality.visibility="gated"`.
 3. Add a small `feedbackBonus` when written reasons, objections, bug details, or product rationale matter. Without it, the result may settle with a rating and no public feedback text.
-4. Call `rateloop_quote_question` and show the cost plus `legalNotice`.
+4. Call `rateloop_quote_question` and show the cost plus `legalNotice` when the ask already uses public URLs or uploaded RateLoop `imageUrls`. If the only inspectable context is `generatedImages`, create the browser handoff directly; the browser prepare step prices the ask before payment.
 5. Call `rateloop_create_ask_handoff_link` with the same ask payload and optional `generatedImages`.
 6. Give the user the returned `/agent/handoff/{handoffId}#token=...` link so they can connect the wallet, review, sign image uploads if needed, and approve funding/submission.
 7. Poll `rateloop_get_handoff_status`, then `rateloop_get_question_status`, then fetch `rateloop_get_result`.
@@ -121,6 +121,8 @@ Backup: if the agent controls a funded encrypted wallet, use the local signer CL
 - Audience fields: use `question.templateInputs.audience` for a free-text audience or rubric note that helps interpret the result package. Use `question.targetAudience` only for structured self-reported targeting from `rateloop_list_audience_options`; invalid aliases such as `developer` are rejected with canonical suggestions such as `engineer`. Target criteria are hidden from the normal rating UI but are part of the public question metadata preimage; do not put secrets there.
 
 The browser handoff signs and uploads staged generated images before funding the ask. Managed MCP agents can still call `rateloop_upload_image` directly. Public wallet-mode raw image upload (`rateloop_prepare_image_upload`, wallet signature, then `rateloop_upload_image`) is an advanced fallback for hosts that can present wallet signing cleanly. Uploaded images and Details text become public ask context after approval unless the ask explicitly uses RateLoop-hosted gated context. Avoid secrets that should never be shown to eligible raters, personal data without permission, rights-restricted material, or prohibited content.
+
+Do not move image bytes through visible terminal output. If base64 output is too large for the chat or command display, read the file directly inside a local Node/Python script, SDK call, or MCP host and pass the base64 in that request. A display cap is not a RateLoop image-size limit, and should not cause the agent to downscale or redraw an otherwise valid image.
 
 ### Tier-0 Blinding
 
