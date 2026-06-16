@@ -200,6 +200,19 @@ export const RaterRegistryAbi = [
   },
   {
     "type": "function",
+    "name": "WORLD_ID_GROUP_ID",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "acceptDelegate",
     "inputs": [],
     "outputs": [],
@@ -249,6 +262,29 @@ export const RaterRegistryAbi = [
   },
   {
     "type": "function",
+    "name": "attestHumanCredentialWithProof",
+    "inputs": [
+      {
+        "name": "root",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "nullifierHash",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "proof",
+        "type": "uint256[8]",
+        "internalType": "uint256[8]"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "attestHumanCredentialWithV4Proof",
     "inputs": [
       {
@@ -280,33 +316,33 @@ export const RaterRegistryAbi = [
     "name": "attestHumanPresenceWithV4Proof",
     "inputs": [
       {
-        "name": "kind",
+        "name": "",
         "type": "uint8",
         "internalType": "uint8"
       },
       {
-        "name": "nullifier",
+        "name": "",
         "type": "uint256",
         "internalType": "uint256"
       },
       {
-        "name": "nonce",
+        "name": "",
         "type": "uint256",
         "internalType": "uint256"
       },
       {
-        "name": "expiresAtMin",
+        "name": "",
         "type": "uint64",
         "internalType": "uint64"
       },
       {
-        "name": "proof",
+        "name": "",
         "type": "uint256[5]",
         "internalType": "uint256[5]"
       }
     ],
     "outputs": [],
-    "stateMutability": "nonpayable"
+    "stateMutability": "pure"
   },
   {
     "type": "function",
@@ -619,16 +655,23 @@ export const RaterRegistryAbi = [
   },
   {
     "type": "function",
+    "name": "freezeWorldIdVerifierConfig",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "freezeWorldPresenceV4Config",
     "inputs": [
       {
-        "name": "kind",
+        "name": "",
         "type": "uint8",
         "internalType": "uint8"
       }
     ],
     "outputs": [],
-    "stateMutability": "nonpayable"
+    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -696,7 +739,7 @@ export const RaterRegistryAbi = [
     "name": "getHumanPresence",
     "inputs": [
       {
-        "name": "rater",
+        "name": "",
         "type": "address",
         "internalType": "address"
       },
@@ -708,7 +751,7 @@ export const RaterRegistryAbi = [
     ],
     "outputs": [
       {
-        "name": "",
+        "name": "presence",
         "type": "tuple",
         "internalType": "struct RaterRegistry.HumanPresence",
         "components": [
@@ -740,7 +783,7 @@ export const RaterRegistryAbi = [
         ]
       }
     ],
-    "stateMutability": "view"
+    "stateMutability": "pure"
   },
   {
     "type": "function",
@@ -929,12 +972,12 @@ export const RaterRegistryAbi = [
     "name": "hasRecentCredentialRecheck",
     "inputs": [
       {
-        "name": "rater",
+        "name": "",
         "type": "address",
         "internalType": "address"
       },
       {
-        "name": "kind",
+        "name": "",
         "type": "uint8",
         "internalType": "uint8"
       }
@@ -946,7 +989,7 @@ export const RaterRegistryAbi = [
         "internalType": "bool"
       }
     ],
-    "stateMutability": "view"
+    "stateMutability": "pure"
   },
   {
     "type": "function",
@@ -971,6 +1014,25 @@ export const RaterRegistryAbi = [
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "hashToField",
+    "inputs": [
+      {
+        "name": "value",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "pure"
   },
   {
     "type": "function",
@@ -1032,6 +1094,44 @@ export const RaterRegistryAbi = [
   },
   {
     "type": "function",
+    "name": "initializeWithWorldIdV3",
+    "inputs": [
+      {
+        "name": "admin",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "governance",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "_worldIdRouter",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "_worldIdScope",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "_worldIdExternalNullifierHash",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "_worldIdCredentialTtl",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "isIdentityKeyBanned",
     "inputs": [
       {
@@ -1072,6 +1172,19 @@ export const RaterRegistryAbi = [
       }
     ],
     "stateMutability": "pure"
+  },
+  {
+    "type": "function",
+    "name": "legacyWorldIdAttestationDisabled",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -1231,18 +1344,18 @@ export const RaterRegistryAbi = [
     "name": "revokeWorldCredential",
     "inputs": [
       {
-        "name": "rater",
+        "name": "",
         "type": "address",
         "internalType": "address"
       },
       {
-        "name": "kind",
+        "name": "",
         "type": "uint8",
         "internalType": "uint8"
       }
     ],
     "outputs": [],
-    "stateMutability": "nonpayable"
+    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -1306,6 +1419,19 @@ export const RaterRegistryAbi = [
         "name": "delegate",
         "type": "address",
         "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setLegacyWorldIdAttestationDisabled",
+    "inputs": [
+      {
+        "name": "disabled",
+        "type": "bool",
+        "internalType": "bool"
       }
     ],
     "outputs": [],
@@ -1395,38 +1521,38 @@ export const RaterRegistryAbi = [
     "name": "setWorldIdV4PresenceConfig",
     "inputs": [
       {
-        "name": "_worldIdV4Verifier",
+        "name": "",
         "type": "address",
         "internalType": "address"
       },
       {
-        "name": "_worldIdV4RpId",
+        "name": "",
         "type": "uint64",
         "internalType": "uint64"
       },
       {
-        "name": "_worldIdV4PresenceAction",
+        "name": "",
         "type": "uint256",
         "internalType": "uint256"
       },
       {
-        "name": "_worldIdV4PresenceTtl",
+        "name": "",
         "type": "uint64",
         "internalType": "uint64"
       },
       {
-        "name": "_worldIdV4IssuerSchemaId",
+        "name": "",
         "type": "uint64",
         "internalType": "uint64"
       },
       {
-        "name": "_worldIdV4CredentialGenesisIssuedAtMin",
+        "name": "",
         "type": "uint256",
         "internalType": "uint256"
       }
     ],
     "outputs": [],
-    "stateMutability": "nonpayable"
+    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -1468,51 +1594,79 @@ export const RaterRegistryAbi = [
   },
   {
     "type": "function",
-    "name": "setWorldPresenceV4Config",
+    "name": "setWorldIdVerifierConfig",
     "inputs": [
       {
-        "name": "kind",
-        "type": "uint8",
-        "internalType": "uint8"
-      },
-      {
-        "name": "verifier",
+        "name": "_worldIdRouter",
         "type": "address",
         "internalType": "address"
       },
       {
-        "name": "rpId",
-        "type": "uint64",
-        "internalType": "uint64"
+        "name": "_worldIdScope",
+        "type": "bytes32",
+        "internalType": "bytes32"
       },
       {
-        "name": "action",
+        "name": "_worldIdExternalNullifierHash",
         "type": "uint256",
         "internalType": "uint256"
       },
       {
-        "name": "presenceTtl",
+        "name": "_worldIdCredentialTtl",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setWorldPresenceV4Config",
+    "inputs": [
+      {
+        "name": "",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "",
         "type": "uint64",
         "internalType": "uint64"
       },
       {
-        "name": "issuerSchemaId",
-        "type": "uint64",
-        "internalType": "uint64"
-      },
-      {
-        "name": "credentialGenesisIssuedAtMin",
+        "name": "",
         "type": "uint256",
         "internalType": "uint256"
       },
       {
-        "name": "enabled",
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "",
         "type": "bool",
         "internalType": "bool"
       }
     ],
     "outputs": [],
-    "stateMutability": "nonpayable"
+    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -1617,6 +1771,77 @@ export const RaterRegistryAbi = [
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "worldIdCredentialTtl",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "worldIdExternalNullifierHash",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "worldIdRouter",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract IWorldIDRouter"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "worldIdScope",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "worldIdSignalHash",
+    "inputs": [
+      {
+        "name": "rater",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "pure"
   },
   {
     "type": "function",
@@ -1750,10 +1975,23 @@ export const RaterRegistryAbi = [
   },
   {
     "type": "function",
+    "name": "worldIdVerifierConfigFrozen",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "worldPresenceV4Config",
     "inputs": [
       {
-        "name": "kind",
+        "name": "",
         "type": "uint8",
         "internalType": "uint8"
       }
@@ -1800,7 +2038,7 @@ export const RaterRegistryAbi = [
         "internalType": "bool"
       }
     ],
-    "stateMutability": "view"
+    "stateMutability": "pure"
   },
   {
     "type": "event",
@@ -2122,6 +2360,19 @@ export const RaterRegistryAbi = [
         "type": "uint64",
         "indexed": false,
         "internalType": "uint64"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "LegacyWorldIdAttestationDisabledSet",
+    "inputs": [
+      {
+        "name": "disabled",
+        "type": "bool",
+        "indexed": false,
+        "internalType": "bool"
       }
     ],
     "anonymous": false
@@ -2526,6 +2777,50 @@ export const RaterRegistryAbi = [
   },
   {
     "type": "event",
+    "name": "WorldIdVerifierConfigLocked",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "WorldIdVerifierConfigUpdated",
+    "inputs": [
+      {
+        "name": "router",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "scope",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "externalNullifierHash",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "credentialTtl",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "WorldPresenceV4ConfigLocked",
     "inputs": [
       {
@@ -2698,6 +2993,11 @@ export const RaterRegistryAbi = [
   },
   {
     "type": "error",
+    "name": "LegacyWorldIdAttestationDisabled",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "NoDelegateSet",
     "inputs": []
   },
@@ -2744,6 +3044,11 @@ export const RaterRegistryAbi = [
   {
     "type": "error",
     "name": "WorldIdV4VerifierNotConfigured",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "WorldIdVerifierConfigFrozen",
     "inputs": []
   },
   {
