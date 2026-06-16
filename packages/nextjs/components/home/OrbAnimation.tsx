@@ -5,6 +5,8 @@ import { useEffect, useRef } from "react";
 const ELLIPSE_COUNT = 30;
 const ORB_COLORS = ["#359EEE", "#FFC43D", "#EF476F", "#03CEA4"];
 
+// Derived from Chris Gannon's MIT-licensed "AI Inside" CodePen.
+// See THIRD_PARTY_NOTICES.md for the full upstream notice.
 export default function OrbAnimation() {
   const containerRef = useRef<HTMLDivElement>(null);
 

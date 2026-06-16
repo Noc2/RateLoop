@@ -251,3 +251,6 @@ Please do not open public issues for suspected vulnerabilities. Report security 
 ## License
 
 [MIT](LICENSE) © Hawig Ventures UG
+
+Third-party notices, including attribution for the CodePen-derived landing page animation, are listed in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
