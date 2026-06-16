@@ -23,7 +23,13 @@ function makeMalformedRequest(path: string, method = "POST") {
 
 async function expectInvalidJson(response: Response) {
   assert.equal(response.status, 400);
-  assert.deepEqual(await response.json(), { error: "Invalid JSON body" });
+  assert.deepEqual(await response.json(), {
+    code: "invalid_arguments",
+    message: "Invalid JSON body",
+    recoverWith: "fix_request_and_retry",
+    retryable: false,
+    status: 400,
+  });
 }
 
 before(async () => {

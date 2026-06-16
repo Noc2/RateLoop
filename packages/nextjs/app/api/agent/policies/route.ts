@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { parseJsonBody } from "~~/lib/agent/http";
+import { agentRouteErrorResponse, parseJsonBody } from "~~/lib/agent/http";
 import { AgentPolicyLifecycleError, listAgentPolicies, upsertAgentPolicy } from "~~/lib/agent/policies";
 import {
   READ_AGENT_POLICIES_ACTION,
@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
   try {
     const normalized = normalizeAgentPoliciesReadInput({ address: typeof address === "string" ? address : undefined });
     if (!normalized.ok) {
-      return NextResponse.json({ error: normalized.error }, { status: 400 });
+      return agentRouteErrorResponse(normalized.error, 400);
     }
 
     const hasSession = await verifySignedReadSession(
@@ -39,14 +39,17 @@ export async function GET(request: NextRequest) {
       "agent_policies",
     );
     if (!hasSession) {
-      return NextResponse.json({ error: "Signed read required" }, { status: 401 });
+      return agentRouteErrorResponse("Signed read required", 401);
     }
 
     const items = await listAgentPolicies(normalized.payload.normalizedAddress);
-    return NextResponse.json({ items, count: items.length });
+    return createSignedReadResponse(normalized.payload.normalizedAddress, "agent_policies", {
+      items,
+      count: items.length,
+    });
   } catch (error) {
     console.error("Error fetching agent policies:", error);
-    return NextResponse.json({ error: "Failed to fetch agent policies" }, { status: 500 });
+    return agentRouteErrorResponse("Failed to fetch agent policies", 500);
   }
 }
 
@@ -57,16 +60,16 @@ export async function POST(request: NextRequest) {
   try {
     const body = await parseJsonBody(request);
     if (!body || typeof body !== "object" || Array.isArray(body)) {
-      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+      return agentRouteErrorResponse("Invalid JSON body", 400);
     }
 
     if (!body.signature || !body.challengeId) {
-      return NextResponse.json({ error: "Missing or invalid fields" }, { status: 400 });
+      return agentRouteErrorResponse("Missing or invalid fields", 400);
     }
 
     const normalized = normalizeAgentPoliciesReadInput(body);
     if (!normalized.ok) {
-      return NextResponse.json({ error: normalized.error }, { status: 400 });
+      return agentRouteErrorResponse(normalized.error, 400);
     }
 
     const payloadHash = hashAgentPoliciesReadPayload(normalized.payload);
@@ -94,7 +97,7 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error("Error fetching agent policies:", error);
-    return NextResponse.json({ error: "Failed to fetch agent policies" }, { status: 500 });
+    return agentRouteErrorResponse("Failed to fetch agent policies", 500);
   }
 }
 
@@ -105,16 +108,16 @@ export async function PUT(request: NextRequest) {
   try {
     const body = await parseJsonBody(request);
     if (!body || typeof body !== "object" || Array.isArray(body)) {
-      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+      return agentRouteErrorResponse("Invalid JSON body", 400);
     }
 
     if (!body.signature || !body.challengeId) {
-      return NextResponse.json({ error: "Missing or invalid fields" }, { status: 400 });
+      return agentRouteErrorResponse("Missing or invalid fields", 400);
     }
 
     const normalized = normalizeAgentPolicySaveInput(body);
     if (!normalized.ok) {
-      return NextResponse.json({ error: normalized.error }, { status: 400 });
+      return agentRouteErrorResponse(normalized.error, 400);
     }
 
     const payloadHash = hashAgentPolicySavePayload(normalized.payload);
@@ -139,9 +142,9 @@ export async function PUT(request: NextRequest) {
     return createSignedReadResponse(normalized.payload.normalizedAddress, "agent_policies", { ok: true, policy });
   } catch (error) {
     if (error instanceof AgentPolicyLifecycleError) {
-      return NextResponse.json({ error: error.message }, { status: 409 });
+      return agentRouteErrorResponse(error.message, 409);
     }
     console.error("Error saving agent policy:", error);
-    return NextResponse.json({ error: "Failed to save agent policy" }, { status: 500 });
+    return agentRouteErrorResponse("Failed to save agent policy", 500);
   }
 }

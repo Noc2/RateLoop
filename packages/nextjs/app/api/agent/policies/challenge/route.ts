@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { parseJsonBody } from "~~/lib/agent/http";
+import { agentRouteErrorResponse, parseJsonBody } from "~~/lib/agent/http";
 import {
   AGENT_POLICIES_CHALLENGE_TITLE,
   PAUSE_AGENT_POLICY_ACTION,
@@ -36,13 +36,13 @@ export async function POST(request: NextRequest) {
   try {
     const body = await parseJsonBody(request);
     if (!body || typeof body !== "object" || Array.isArray(body)) {
-      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+      return agentRouteErrorResponse("Invalid JSON body", 400);
     }
 
     if (body.intent === "read") {
       const normalized = normalizeAgentPoliciesReadInput(body);
       if (!normalized.ok) {
-        return NextResponse.json({ error: normalized.error }, { status: 400 });
+        return agentRouteErrorResponse(normalized.error, 400);
       }
 
       const challenge = await issueSignedActionChallenge({
@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
     if (body.intent === "save") {
       const normalized = normalizeAgentPolicySaveInput(body);
       if (!normalized.ok) {
-        return NextResponse.json({ error: normalized.error }, { status: 400 });
+        return agentRouteErrorResponse(normalized.error, 400);
       }
 
       const challenge = await issueSignedActionChallenge({
@@ -72,12 +72,12 @@ export async function POST(request: NextRequest) {
     const intent = typeof body.intent === "string" ? body.intent : typeof body.action === "string" ? body.action : "";
     const action = MANAGEMENT_ACTION_BY_INTENT[intent as keyof typeof MANAGEMENT_ACTION_BY_INTENT];
     if (!action) {
-      return NextResponse.json({ error: "Invalid managed agent action" }, { status: 400 });
+      return agentRouteErrorResponse("Invalid managed agent action", 400);
     }
 
     const normalized = normalizeAgentPolicyManagementInput(body);
     if (!normalized.ok) {
-      return NextResponse.json({ error: normalized.error }, { status: 400 });
+      return agentRouteErrorResponse(normalized.error, 400);
     }
 
     const challenge = await issueSignedActionChallenge({
@@ -89,6 +89,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(challenge);
   } catch (error) {
     console.error("Error creating agent policy challenge:", error);
-    return NextResponse.json({ error: "Failed to create agent policy challenge" }, { status: 500 });
+    return agentRouteErrorResponse("Failed to create agent policy challenge", 500);
   }
 }

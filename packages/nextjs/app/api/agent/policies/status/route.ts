@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
-import { parseJsonBody } from "~~/lib/agent/http";
+import { NextRequest } from "next/server";
+import { agentRouteErrorResponse, parseJsonBody } from "~~/lib/agent/http";
 import { AgentPolicyLifecycleError, type AgentPolicyStatus, updateAgentPolicyStatus } from "~~/lib/agent/policies";
 import {
   PAUSE_AGENT_POLICY_ACTION,
@@ -27,21 +27,21 @@ export async function POST(request: NextRequest) {
   try {
     const body = await parseJsonBody(request);
     if (!body || typeof body !== "object" || Array.isArray(body)) {
-      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+      return agentRouteErrorResponse("Invalid JSON body", 400);
     }
 
     const statusAction =
       typeof body.action === "string" ? STATUS_BY_ACTION[body.action as keyof typeof STATUS_BY_ACTION] : null;
     if (!statusAction) {
-      return NextResponse.json({ error: "Invalid managed agent status action" }, { status: 400 });
+      return agentRouteErrorResponse("Invalid managed agent status action", 400);
     }
     if (!body.signature || !body.challengeId) {
-      return NextResponse.json({ error: "Missing or invalid fields" }, { status: 400 });
+      return agentRouteErrorResponse("Missing or invalid fields", 400);
     }
 
     const normalized = normalizeAgentPolicyManagementInput(body);
     if (!normalized.ok) {
-      return NextResponse.json({ error: normalized.error }, { status: 400 });
+      return agentRouteErrorResponse(normalized.error, 400);
     }
 
     const payloadHash = hashAgentPolicyManagementPayload(normalized.payload);
@@ -70,9 +70,9 @@ export async function POST(request: NextRequest) {
     return createSignedReadResponse(normalized.payload.normalizedAddress, "agent_policies", { ok: true, policy });
   } catch (error) {
     if (error instanceof AgentPolicyLifecycleError) {
-      return NextResponse.json({ error: error.message }, { status: 409 });
+      return agentRouteErrorResponse(error.message, 409);
     }
     console.error("Error updating agent policy status:", error);
-    return NextResponse.json({ error: "Failed to update agent policy status" }, { status: 500 });
+    return agentRouteErrorResponse("Failed to update agent policy status", 500);
   }
 }

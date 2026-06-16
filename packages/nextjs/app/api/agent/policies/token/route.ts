@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
-import { parseJsonBody } from "~~/lib/agent/http";
+import { NextRequest } from "next/server";
+import { agentRouteErrorResponse, parseJsonBody } from "~~/lib/agent/http";
 import { AgentPolicyLifecycleError, revokeAgentPolicyToken, rotateAgentPolicyToken } from "~~/lib/agent/policies";
 import {
   REVOKE_AGENT_POLICY_TOKEN_ACTION,
@@ -35,12 +35,12 @@ async function verifyManagementAction(
   action: typeof ROTATE_AGENT_POLICY_TOKEN_ACTION | typeof REVOKE_AGENT_POLICY_TOKEN_ACTION,
 ) {
   if (!body.signature || !body.challengeId) {
-    return { ok: false as const, response: NextResponse.json({ error: "Missing or invalid fields" }, { status: 400 }) };
+    return { ok: false as const, response: agentRouteErrorResponse("Missing or invalid fields", 400) };
   }
 
   const normalized = normalizeAgentPolicyManagementInput(body);
   if (!normalized.ok) {
-    return { ok: false as const, response: NextResponse.json({ error: normalized.error }, { status: 400 }) };
+    return { ok: false as const, response: agentRouteErrorResponse(normalized.error, 400) };
   }
 
   const payloadHash = hashAgentPolicyManagementPayload(normalized.payload);
@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await parseJsonBody(request);
     if (!body || typeof body !== "object" || Array.isArray(body)) {
-      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+      return agentRouteErrorResponse("Invalid JSON body", 400);
     }
 
     const verified = await verifyManagementAction(body, ROTATE_AGENT_POLICY_TOKEN_ACTION);
@@ -89,10 +89,10 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     if (error instanceof AgentPolicyLifecycleError) {
-      return NextResponse.json({ error: error.message }, { status: 409 });
+      return agentRouteErrorResponse(error.message, 409);
     }
     console.error("Error rotating agent policy token:", error);
-    return NextResponse.json({ error: "Failed to rotate agent policy token" }, { status: 500 });
+    return agentRouteErrorResponse("Failed to rotate agent policy token", 500);
   }
 }
 
@@ -103,7 +103,7 @@ export async function DELETE(request: NextRequest) {
   try {
     const body = await parseJsonBody(request);
     if (!body || typeof body !== "object" || Array.isArray(body)) {
-      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+      return agentRouteErrorResponse("Invalid JSON body", 400);
     }
 
     const verified = await verifyManagementAction(body, REVOKE_AGENT_POLICY_TOKEN_ACTION);
@@ -116,6 +116,6 @@ export async function DELETE(request: NextRequest) {
     return createSignedReadResponse(verified.payload.normalizedAddress, "agent_policies", { ok: true, policy });
   } catch (error) {
     console.error("Error revoking agent policy token:", error);
-    return NextResponse.json({ error: "Failed to revoke agent policy token" }, { status: 500 });
+    return agentRouteErrorResponse("Failed to revoke agent policy token", 500);
   }
 }

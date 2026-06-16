@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { agentRouteErrorResponse } from "~~/lib/agent/http";
 import { listAgentAskSummaries } from "~~/lib/agent/policies";
 import { normalizeAgentPoliciesReadInput } from "~~/lib/auth/agentPolicies";
 import {
@@ -20,10 +21,10 @@ export async function GET(request: NextRequest) {
   try {
     const normalized = normalizeAgentPoliciesReadInput({ address: typeof address === "string" ? address : undefined });
     if (!normalized.ok) {
-      return NextResponse.json({ error: normalized.error }, { status: 400 });
+      return agentRouteErrorResponse(normalized.error, 400);
     }
     if (!policyId) {
-      return NextResponse.json({ error: "Invalid agent policy id" }, { status: 400 });
+      return agentRouteErrorResponse("Invalid agent policy id", 400);
     }
 
     const hasSession = await verifySignedReadSession(
@@ -32,7 +33,7 @@ export async function GET(request: NextRequest) {
       "agent_policies",
     );
     if (!hasSession) {
-      return NextResponse.json({ error: "Signed read required" }, { status: 401 });
+      return agentRouteErrorResponse("Signed read required", 401);
     }
 
     // WS-7 (2026-05-21 repo audit): bound and validate the `limit` query parameter so that
@@ -49,6 +50,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ items, count: items.length });
   } catch (error) {
     console.error("Error fetching recent agent asks:", error);
-    return NextResponse.json({ error: "Failed to fetch recent agent asks" }, { status: 500 });
+    return agentRouteErrorResponse("Failed to fetch recent agent asks", 500);
   }
 }

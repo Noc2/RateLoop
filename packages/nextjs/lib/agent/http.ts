@@ -132,6 +132,42 @@ export async function handlePublicAgentRoute(params: PublicAgentRouteOptions) {
   }
 }
 
+function defaultAgentRouteErrorCode(status: number) {
+  if (status === 401) return "transport_auth_required";
+  if (status === 409) return "conflict";
+  if (status === 503) return "service_unavailable";
+  if (status >= 500) return "internal_error";
+  return "invalid_arguments";
+}
+
+function defaultAgentRouteRecoverWith(status: number) {
+  if (status === 401) return "provide_bearer_token";
+  if (status === 409) return "refresh_and_retry";
+  if (status >= 500) return "retry_or_contact_operator";
+  return "fix_request_and_retry";
+}
+
+export function agentRouteErrorResponse(
+  message: string,
+  status: number,
+  options?: {
+    code?: string;
+    recoverWith?: string;
+    retryable?: boolean;
+  },
+) {
+  return NextResponse.json(
+    {
+      code: options?.code ?? defaultAgentRouteErrorCode(status),
+      message,
+      recoverWith: options?.recoverWith ?? defaultAgentRouteRecoverWith(status),
+      retryable: options?.retryable ?? status >= 500,
+      status,
+    },
+    { status },
+  );
+}
+
 export const AGENT_READ_RATE_LIMIT = { limit: 120, windowMs: 60_000 } satisfies AgentRouteRateLimit;
 export const AGENT_WRITE_RATE_LIMIT = { limit: 30, windowMs: 60_000 } satisfies AgentRouteRateLimit;
 export { MCP_SCOPES };
