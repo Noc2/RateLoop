@@ -7,6 +7,39 @@ const FRONTEND_REGISTRY = "0x3333333333333333333333333333333333333333" as const;
 const SNAPSHOT_CONSUMER = "0x4444444444444444444444444444444444444444" as const;
 const SNAPSHOT_KEY = `0x${"a".repeat(64)}` as const;
 
+const { mockRestoreFromCanonical } = vi.hoisted(() => ({
+  mockRestoreFromCanonical: vi.fn(async (canonical: string) => {
+    const parsed = JSON.parse(canonical) as {
+      correlationEpochs?: Array<Record<string, unknown>>;
+      roundPayoutSnapshots?: Array<Record<string, unknown>>;
+    };
+    const artifactHash = `0x${"a".repeat(64)}` as const;
+    const artifactURI = "data:application/json;base64,e30=";
+    const artifact = {
+      correlationEpochs: (parsed.correlationEpochs ?? []).map(epoch => ({
+        ...epoch,
+        artifactHash: epoch.artifactHash ?? artifactHash,
+        artifactURI: epoch.artifactURI ?? artifactURI,
+      })),
+      roundPayoutSnapshots: (parsed.roundPayoutSnapshots ?? []).map(snapshot => ({
+        ...snapshot,
+        artifactHash: snapshot.artifactHash ?? artifactHash,
+        artifactURI: snapshot.artifactURI ?? artifactURI,
+      })),
+    };
+    return {
+      artifact,
+      artifactHash,
+      artifactURI,
+      canonicalJson: canonical,
+      canonicalBytes: Buffer.byteLength(canonical),
+      candidateCount: 0,
+      roundSnapshotCount: artifact.roundPayoutSnapshots.length,
+      epochCount: artifact.correlationEpochs.length,
+    };
+  }),
+}));
+
 vi.mock("node:fs/promises", () => ({
   readFile: vi.fn(),
 }));
@@ -27,6 +60,14 @@ vi.mock("../correlation-artifact-verifier.js", async (importOriginal) => {
         : 0,
       errors: [],
     }),
+  };
+});
+
+vi.mock("../correlation-artifact-builder.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../correlation-artifact-builder.js")>();
+  return {
+    ...actual,
+    restoreConfiguredCorrelationSnapshotArtifactFromCanonicalJson: mockRestoreFromCanonical,
   };
 });
 
@@ -184,6 +225,7 @@ describe("correlation snapshot publisher", () => {
       ]),
       correlationSnapshotCandidateFingerprint: vi.fn(() => `0x${"f".repeat(64)}`),
       buildConfiguredCorrelationSnapshotArtifactForCandidates,
+      restoreConfiguredCorrelationSnapshotArtifactFromCanonicalJson: mockRestoreFromCanonical,
     }));
 
     const readContract = vi.fn(
@@ -430,7 +472,7 @@ describe("correlation snapshot publisher", () => {
         },
       ]),
       correlationSnapshotCandidateFingerprint: vi.fn(() => fingerprint),
-      restoreConfiguredCorrelationSnapshotArtifactFromCanonicalJson: vi.fn(),
+      restoreConfiguredCorrelationSnapshotArtifactFromCanonicalJson: mockRestoreFromCanonical,
       buildConfiguredCorrelationSnapshotArtifactForCandidates,
     }));
 

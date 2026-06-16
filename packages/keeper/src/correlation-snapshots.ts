@@ -26,7 +26,13 @@ import {
   writeCachedCorrelationArtifact,
 } from "./keeper-state.js";
 import { writeContractAndConfirm } from "./keeper.js";
+import { readRoundLifecycleState } from "./contract-reads.js";
 import { getRevertReason } from "./revert-utils.js";
+
+export interface CorrelationSnapshotPublishOptions {
+  deferPonderArtifactBuild?: boolean;
+  ponderNowSeconds?: bigint;
+}
 
 const STATUS = {
   None: 0,
@@ -292,8 +298,8 @@ async function loadConfiguredCorrelationSnapshotArtifact(
     return null;
   }
 
-  const raw = await readFile(config.correlationSnapshots.artifactPath, "utf8");
-  const verification = verifyCorrelationArtifact(JSON.parse(raw));
+  const canonical = (await readFile(config.correlationSnapshots.artifactPath, "utf8")).trimEnd();
+  const verification = verifyCorrelationArtifact(JSON.parse(canonical));
   if (!verification.ok) {
     logger.error("Refusing to publish invalid correlation snapshot artifact file", {
       artifactPath: config.correlationSnapshots.artifactPath,
@@ -302,7 +308,9 @@ async function loadConfiguredCorrelationSnapshotArtifact(
     return null;
   }
 
-  return JSON.parse(raw) as CorrelationSnapshotArtifactFile;
+  const { artifact } =
+    await restoreConfiguredCorrelationSnapshotArtifactFromCanonicalJson(canonical);
+  return artifact;
 }
 
 async function roundSnapshotSourceReady(
@@ -571,6 +579,7 @@ async function applyFinalizedRatingSnapshotsFromArtifact(
     });
 
     let status: number = STATUS.None;
+    let finalizedAt = 0n;
     try {
       const existing = await publicClient.readContract({
         address: config.contracts.clusterPayoutOracle,
@@ -579,10 +588,40 @@ async function applyFinalizedRatingSnapshotsFromArtifact(
         args: [snapshotKey],
       });
       status = Number(existing.snapshot.status);
+      finalizedAt = BigInt(existing.snapshot.finalizedAt);
     } catch {
       continue;
     }
     if (status !== STATUS.Finalized) continue;
+
+    const [block, vetoWindow] = await Promise.all([
+      publicClient.getBlock(),
+      publicClient.readContract({
+        address: config.contracts.clusterPayoutOracle,
+        abi: ClusterPayoutOracleAbi,
+        functionName: "FINALIZATION_VETO_WINDOW",
+      }) as Promise<bigint>,
+    ]);
+    if (block.timestamp <= finalizedAt + vetoWindow) {
+      logger.debug("Skipping rating snapshot apply until veto window elapses", {
+        snapshotKey,
+      });
+      continue;
+    }
+
+    const lifecycle = await readRoundLifecycleState(
+      publicClient,
+      config.contracts.votingEngine,
+      BigInt(snapshot.contentId),
+      BigInt(snapshot.roundId),
+    );
+    if (lifecycle.cleanupRemaining !== 0n) {
+      logger.debug("Skipping rating snapshot apply until cleanup completes", {
+        snapshotKey,
+        cleanupRemaining: lifecycle.cleanupRemaining.toString(),
+      });
+      continue;
+    }
 
     const consumed = (await publicClient.readContract({
       address: config.contracts.contentRegistry,
@@ -713,6 +752,7 @@ export async function publishConfiguredCorrelationSnapshots(
   chain: Chain,
   account: Account,
   logger: Logger,
+  options: CorrelationSnapshotPublishOptions = {},
 ): Promise<CorrelationSnapshotPublisherResult> {
   return runWithCorrelationSnapshotPublishLock(logger, emptyResult(), () =>
     publishConfiguredCorrelationSnapshotsUnlocked(
@@ -721,6 +761,7 @@ export async function publishConfiguredCorrelationSnapshots(
       chain,
       account,
       logger,
+      options,
     ),
   );
 }
@@ -731,6 +772,7 @@ async function publishConfiguredCorrelationSnapshotsUnlocked(
   chain: Chain,
   account: Account,
   logger: Logger,
+  options: CorrelationSnapshotPublishOptions = {},
 ): Promise<CorrelationSnapshotPublisherResult> {
   if (!config.correlationSnapshots.enabled) {
     return emptyResult();
@@ -743,6 +785,7 @@ async function publishConfiguredCorrelationSnapshotsUnlocked(
       chain,
       account,
       logger,
+      options,
     );
   }
 
@@ -763,6 +806,7 @@ async function publishAutomaticCorrelationSnapshots(
   chain: Chain,
   account: Account,
   logger: Logger,
+  options: CorrelationSnapshotPublishOptions = {},
 ): Promise<CorrelationSnapshotPublisherResult> {
   const candidates = await loadConfiguredCorrelationSnapshotCandidates(logger);
   if (candidates.length === 0) {
@@ -778,6 +822,13 @@ async function publishAutomaticCorrelationSnapshots(
     logger,
   );
   if (!preflight.needsArtifactBuild) {
+    return preflight.result;
+  }
+
+  if (options.deferPonderArtifactBuild) {
+    logger.debug(
+      "Deferring automatic correlation artifact build until Ponder reflects on-chain settlement/reveal",
+    );
     return preflight.result;
   }
 
@@ -835,6 +886,7 @@ async function publishAutomaticCorrelationSnapshots(
     built = await buildConfiguredCorrelationSnapshotArtifactForCandidates(
       candidates,
       logger,
+      { ponderNowSeconds: options.ponderNowSeconds },
     );
   }
   if (
