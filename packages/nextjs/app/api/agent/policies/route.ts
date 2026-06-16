@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { agentRouteErrorResponse, parseJsonBody } from "~~/lib/agent/http";
 import { AgentPolicyLifecycleError, listAgentPolicies, upsertAgentPolicy } from "~~/lib/agent/policies";
 import {
