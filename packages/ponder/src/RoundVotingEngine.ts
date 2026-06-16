@@ -749,6 +749,7 @@ ponder.on("RoundVotingEngine:VoteCommitted", async ({ event, context }) => {
   });
 
   if (!existingRound) {
+    const humanVerifiedCommitCount = hasHumanCredential ? 1 : 0;
     await context.db.insert(round).values({
       id: roundKey,
       contentId,
@@ -769,26 +770,32 @@ ponder.on("RoundVotingEngine:VoteCommitted", async ({ event, context }) => {
       settledRounds: 0,
       lowSince: 0n,
       startTime: event.block.timestamp,
-      ...roundVoteabilityState,
+      hasHumanVerifiedCommit: humanVerifiedCommitCount > 0,
+      humanVerifiedCommitCount,
+      lastCommitRevealableAfter: roundVoteabilityState.lastCommitRevealableAfter,
+      revealGracePeriod: roundVoteabilityState.revealGracePeriod,
       ...defaultRoundConfigFields(),
     });
   } else {
-    await context.db.update(round, { id: roundKey }).set((row) => ({
-      voteCount: row.voteCount + 1,
-      totalStake: row.totalStake + stake,
-      hasHumanVerifiedCommit:
-        row.hasHumanVerifiedCommit ||
-        roundVoteabilityState.hasHumanVerifiedCommit,
-      lastCommitRevealableAfter:
-        row.lastCommitRevealableAfter === null ||
-        roundVoteabilityState.lastCommitRevealableAfter >
-          row.lastCommitRevealableAfter
-          ? roundVoteabilityState.lastCommitRevealableAfter
-          : row.lastCommitRevealableAfter,
-      revealGracePeriod:
-        roundVoteabilityState.revealGracePeriod ?? row.revealGracePeriod,
-      ...roundReferenceFields(referenceRatingBps),
-    }));
+    await context.db.update(round, { id: roundKey }).set((row) => {
+      const humanVerifiedCommitCount =
+        row.humanVerifiedCommitCount + (hasHumanCredential ? 1 : 0);
+      return {
+        voteCount: row.voteCount + 1,
+        totalStake: row.totalStake + stake,
+        hasHumanVerifiedCommit: humanVerifiedCommitCount > 0,
+        humanVerifiedCommitCount,
+        lastCommitRevealableAfter:
+          row.lastCommitRevealableAfter === null ||
+          roundVoteabilityState.lastCommitRevealableAfter >
+            row.lastCommitRevealableAfter
+            ? roundVoteabilityState.lastCommitRevealableAfter
+            : row.lastCommitRevealableAfter,
+        revealGracePeriod:
+          roundVoteabilityState.revealGracePeriod ?? row.revealGracePeriod,
+        ...roundReferenceFields(referenceRatingBps),
+      };
+    });
   }
 
   // Create vote record (direction hidden until revealed)

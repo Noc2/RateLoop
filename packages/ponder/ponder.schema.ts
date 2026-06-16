@@ -196,6 +196,7 @@ export const round = onchainTable(
     startTime: t.bigint(),
     settledAt: t.bigint(),
     hasHumanVerifiedCommit: t.boolean().notNull().default(false),
+    humanVerifiedCommitCount: t.integer().notNull().default(0),
     lastCommitRevealableAfter: t.bigint(),
     revealGracePeriod: t.bigint(),
   }),

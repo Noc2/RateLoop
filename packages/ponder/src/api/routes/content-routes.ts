@@ -42,7 +42,7 @@ import {
 import { getFollowStatsMap } from "../follow-utils.js";
 import { resolvePonderProtocolDeploymentMetadata } from "../../protocol-deployment.js";
 import type { ApiApp } from "../shared.js";
-import { attachOpenRoundSummary, jsonBig, parseBigIntList } from "../shared.js";
+import { attachOpenRoundSummary, jsonBig, parseBigIntList, resolveApiNowSeconds } from "../shared.js";
 import {
   confidentialityContentSelectFields,
   formatConfidentialContent,
@@ -158,8 +158,7 @@ function buildContentSearchExpressions(search: string) {
   };
 }
 
-function getRewardAvailableAmount() {
-  const nowSeconds = BigInt(Math.floor(Date.now() / 1000));
+function getRewardAvailableAmount(nowSeconds: bigint) {
   return sql<bigint>`coalesce((
     select sum(
       case
@@ -202,28 +201,28 @@ function getRewardAvailableAmount() {
   ), 0)`;
 }
 
-function getRewardPriority() {
-  return sql<number>`case when ${getRewardAvailableAmount()} > 0 then 1 else 0 end`;
+function getRewardPriority(nowSeconds: bigint) {
+  return sql<number>`case when ${getRewardAvailableAmount(nowSeconds)} > 0 then 1 else 0 end`;
 }
 
 function getRatedContentPriority() {
   return sql<number>`case when ${content.ratingSettledRounds} > 0 then 1 else 0 end`;
 }
 
-function getContentOrderBy(sortBy: string) {
+function getContentOrderBy(sortBy: string, nowSeconds: bigint) {
   switch (sortBy) {
     case "oldest":
       return [asc(content.createdAt), asc(content.id)];
     case "bounty_first":
       return [
-        desc(getRewardPriority()),
-        desc(getRewardAvailableAmount()),
+        desc(getRewardPriority(nowSeconds)),
+        desc(getRewardAvailableAmount(nowSeconds)),
         desc(content.createdAt),
         desc(content.id),
       ];
     case "highest_rewards":
       return [
-        desc(getRewardAvailableAmount()),
+        desc(getRewardAvailableAmount(nowSeconds)),
         desc(content.createdAt),
         desc(content.id),
       ];
@@ -259,6 +258,7 @@ function getContentOrderBy(sortBy: string) {
 function getSearchOrderBy(
   searchRank: ReturnType<typeof sql<number>>,
   sortBy: string,
+  nowSeconds: bigint,
 ) {
   switch (sortBy) {
     case "oldest":
@@ -266,15 +266,15 @@ function getSearchOrderBy(
     case "bounty_first":
       return [
         desc(searchRank),
-        desc(getRewardPriority()),
-        desc(getRewardAvailableAmount()),
+        desc(getRewardPriority(nowSeconds)),
+        desc(getRewardAvailableAmount(nowSeconds)),
         desc(content.createdAt),
         desc(content.id),
       ];
     case "highest_rewards":
       return [
         desc(searchRank),
-        desc(getRewardAvailableAmount()),
+        desc(getRewardAvailableAmount(nowSeconds)),
         desc(content.createdAt),
         desc(content.id),
       ];
@@ -759,8 +759,8 @@ function getRoundAdvisoryCommitCount() {
   ), 0)`;
 }
 
-function getVoteableContentCondition() {
-  const nowSeconds = BigInt(Math.floor(Date.now() / 1000));
+function getVoteableContentCondition(nowSeconds: bigint) {
+  const revealQuorum = sql<number>`greatest(${round.minVoters}, 3)`;
   return sql<boolean>`(
     ${content.status} = ${CONTENT_STATUS_ACTIVE}
     and (
@@ -791,8 +791,8 @@ function getVoteableContentCondition() {
               and (
                 ${round.voteCount} < ${round.minVoters}
                 or (
-                  ${round.hasHumanVerifiedCommit} = false
-                  and ${round.revealedCount} < ${round.minVoters}
+                  ${round.humanVerifiedCommitCount} < ${revealQuorum}
+                  and ${round.revealedCount} < ${revealQuorum}
                 )
                 or (
                   ${round.revealedCount} < ${round.minVoters}
@@ -1126,6 +1126,10 @@ export function registerContentRoutes(app: ApiApp) {
     const limit = safeLimit(c.req.query("limit"), 50, 200);
     const offset = safeOffset(c.req.query("offset"));
     if (Number.isNaN(offset)) return c.json({ error: "Invalid offset" }, 400);
+    const nowSeconds = resolveApiNowSeconds(c.req.query("now"));
+    if (nowSeconds === null) {
+      return c.json({ error: "now must be a non-negative integer" }, 400);
+    }
     if (voteable === undefined) return c.json({ error: "Invalid voteable filter" }, 400);
     if (requestedSearch && search === null) {
       return jsonBig(c, {
@@ -1153,10 +1157,10 @@ export function registerContentRoutes(app: ApiApp) {
       conditions.push(eq(content.status, parsed));
     }
     if (sortBy === "highest_rewards") {
-      conditions.push(sql<boolean>`${getRewardAvailableAmount()} > 0`);
+      conditions.push(sql<boolean>`${getRewardAvailableAmount(nowSeconds)} > 0`);
     }
     if (voteable === true) {
-      conditions.push(getVoteableContentCondition());
+      conditions.push(getVoteableContentCondition(nowSeconds));
     }
     if (categoryId) {
       const parsed = safeBigInt(categoryId);
@@ -1215,8 +1219,8 @@ export function registerContentRoutes(app: ApiApp) {
     const where = conditions.length > 0 ? and(...conditions) : undefined;
     const queryLimit = limit + 1;
     const orderByExprs = searchExpressions
-      ? getSearchOrderBy(searchExpressions.rank, sortBy)
-      : getContentOrderBy(sortBy);
+      ? getSearchOrderBy(searchExpressions.rank, sortBy, nowSeconds)
+      : getContentOrderBy(sortBy, nowSeconds);
 
     const items = await db
       .select()
@@ -1228,7 +1232,7 @@ export function registerContentRoutes(app: ApiApp) {
 
     const hasMore = items.length > limit;
     const pageItems = hasMore ? items.slice(0, limit) : items;
-    const itemsWithOpenRound = await attachOpenRoundSummary(pageItems);
+    const itemsWithOpenRound = await attachOpenRoundSummary(pageItems, nowSeconds);
     const itemsWithMedia = await attachContentMedia(itemsWithOpenRound);
     const itemsWithBundles =
       await attachQuestionBundleSummaries(itemsWithMedia);
@@ -1270,6 +1274,10 @@ export function registerContentRoutes(app: ApiApp) {
     }
     if (!url) {
       return c.json({ error: "url parameter required" }, 400);
+    }
+    const nowSeconds = resolveApiNowSeconds(c.req.query("now"));
+    if (nowSeconds === null) {
+      return c.json({ error: "now must be a non-negative integer" }, 400);
     }
 
     const candidates = getUrlLookupCandidates(url);
@@ -1324,7 +1332,7 @@ export function registerContentRoutes(app: ApiApp) {
       return c.json({ error: "Content not found" }, 404);
     }
 
-    const [contentWithOpenRound] = await attachOpenRoundSummary([item]);
+    const [contentWithOpenRound] = await attachOpenRoundSummary([item], nowSeconds);
     const [contentWithMedia] = await attachContentMedia([contentWithOpenRound]);
     const [contentWithBundle] = await attachQuestionBundleSummaries([
       contentWithMedia,
@@ -1366,6 +1374,10 @@ export function registerContentRoutes(app: ApiApp) {
     if (includeTargetAudience === undefined) {
       return c.json({ error: "Invalid includeTargetAudience filter" }, 400);
     }
+    const nowSeconds = resolveApiNowSeconds(c.req.query("now"));
+    if (nowSeconds === null) {
+      return c.json({ error: "now must be a non-negative integer" }, 400);
+    }
 
     const [item] = await db
       .select()
@@ -1389,7 +1401,7 @@ export function registerContentRoutes(app: ApiApp) {
       return c.json({ error: "Content not found" }, 404);
     }
 
-    const [contentWithOpenRound] = await attachOpenRoundSummary([item]);
+    const [contentWithOpenRound] = await attachOpenRoundSummary([item], nowSeconds);
     const [contentWithMedia] = await attachContentMedia([contentWithOpenRound]);
     const [contentWithBundle] = await attachQuestionBundleSummaries([
       contentWithMedia,
