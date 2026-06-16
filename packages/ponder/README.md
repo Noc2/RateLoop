@@ -130,6 +130,26 @@ non-Railway deployments without shared deployment artifacts, set
 `RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY` or `RATELOOP_PONDER_DATABASE_SCHEMA` to a fresh value.
 Only drop the old schema if you are certain it contains no data you need.
 
+**`humanVerifiedCommitCount` backfill:** After deploying schema changes that add
+`humanVerifiedCommitCount`, existing Postgres rows default to `0`. Either run a full
+Ponder reindex, or backfill from indexed vote rows before relying on keeper
+`reveal_failed` hints:
+
+```sql
+UPDATE "<schema>"."round" AS r
+SET human_verified_commit_count = COALESCE(v.count, 0),
+    has_human_verified_commit = COALESCE(v.count, 0) > 0
+FROM (
+  SELECT content_id, round_id, COUNT(*)::integer AS count
+  FROM "<schema>"."vote"
+  WHERE human_credential = true AND committed_at > 0
+  GROUP BY content_id, round_id
+) AS v
+WHERE r.content_id = v.content_id AND r.round_id = v.round_id;
+```
+
+Replace `<schema>` with your deployment schema (for example `railway_<deployment_id>`).
+
 **PGlite corruption or unrecoverable local state:** If Ponder still crashes or behaves unexpectedly after the retry, clear the local state manually:
 
 ```bash

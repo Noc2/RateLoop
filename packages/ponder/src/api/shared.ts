@@ -412,6 +412,8 @@ function formatRoundSummary(row: {
     maxVoters: row.maxVoters,
     hasHumanVerifiedCommit: row.hasHumanVerifiedCommit,
     humanVerifiedCommitCount: row.humanVerifiedCommitCount,
+    humanVerifiedCommitQuorumMet:
+      row.humanVerifiedCommitCount >= Math.max(row.minVoters, 3),
     lastCommitRevealableAfter: row.lastCommitRevealableAfter,
     revealGracePeriod: row.revealGracePeriod,
     scoreSpreadEconomics: {

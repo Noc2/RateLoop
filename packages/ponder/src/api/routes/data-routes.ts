@@ -47,6 +47,7 @@ import {
   jsonBig,
   parseAddressList,
   parseBigIntList,
+  resolveApiNowSeconds,
 } from "../shared.js";
 import {
   confidentialityContentSelectFields,
@@ -267,7 +268,10 @@ export function registerDataRoutes(app: ApiApp) {
       return c.json({ error: "Invalid awarder address" }, 400);
     }
 
-    const nowSeconds = BigInt(Math.floor(Date.now() / 1000));
+    const nowSeconds = resolveApiNowSeconds(c.req.query("now"));
+    if (nowSeconds === null) {
+      return c.json({ error: "now must be a non-negative integer" }, 400);
+    }
     const conditions = [eq(feedbackBonusPool.contentId, contentId)];
     if (roundId !== null)
       conditions.push(eq(feedbackBonusPool.roundId, roundId));
@@ -784,6 +788,11 @@ export function registerDataRoutes(app: ApiApp) {
       return c.json({ error: "Invalid address" }, 400);
     }
 
+    const nowSeconds = resolveApiNowSeconds(c.req.query("now"));
+    if (nowSeconds === null) {
+      return c.json({ error: "now must be a non-negative integer" }, 400);
+    }
+
     const [
       [profile],
       [humanCredential],
@@ -852,7 +861,7 @@ export function registerDataRoutes(app: ApiApp) {
             .limit(1)
         : [];
 
-    const wallSeconds = BigInt(Math.floor(Date.now() / 1000));
+    const wallSeconds = nowSeconds;
     const indexedChainTimestamp =
       maxBigInt([
         profile?.updatedAt,
@@ -1019,6 +1028,11 @@ export function registerDataRoutes(app: ApiApp) {
     if (!isValidAddress(address))
       return c.json({ error: "Invalid address" }, 400);
 
+    const nowSeconds = resolveApiNowSeconds(c.req.query("now"));
+    if (nowSeconds === null) {
+      return c.json({ error: "now must be a non-negative integer" }, 400);
+    }
+
     const [stats, streak, streakActivity, humanCredential] = await Promise.all([
       db
         .select()
@@ -1056,10 +1070,7 @@ export function registerDataRoutes(app: ApiApp) {
     ]);
 
     const categoryCutoff = BigInt(
-      Math.max(
-        0,
-        Math.floor(Date.now() / 1000) - AVATAR_CATEGORY_WINDOW_SECONDS,
-      ),
+      Math.max(0, Number(nowSeconds) - AVATAR_CATEGORY_WINDOW_SECONDS),
     );
     const categoryRows = await db
       .select({
@@ -1381,8 +1392,13 @@ export function registerDataRoutes(app: ApiApp) {
       return c.json({ error: "contentIds parameter required" }, 400);
     }
 
+    const nowSeconds = resolveApiNowSeconds(c.req.query("now"));
+    if (nowSeconds === null) {
+      return c.json({ error: "now must be a non-negative integer" }, 400);
+    }
+
     const activeCooldownCutoff = BigInt(
-      Math.max(0, Math.floor(Date.now() / 1000) - VOTE_COOLDOWN_SECONDS),
+      Math.max(0, Number(nowSeconds) - VOTE_COOLDOWN_SECONDS),
     );
     const items = await db
       .select({
@@ -1423,7 +1439,10 @@ export function registerDataRoutes(app: ApiApp) {
       return c.json({ error: "Invalid voter address" }, 400);
     }
 
-    const nowSeconds = BigInt(Math.floor(Date.now() / 1000));
+    const nowSeconds = resolveApiNowSeconds(c.req.query("now"));
+    if (nowSeconds === null) {
+      return c.json({ error: "now must be a non-negative integer" }, 400);
+    }
     const bountyConditions = [
       voteMatchesAnyVoter(voterAddrs),
       eq(vote.revealed, true),
@@ -1848,7 +1867,10 @@ export function registerDataRoutes(app: ApiApp) {
   });
 
   app.get("/stats", async (c) => {
-    const nowSeconds = BigInt(Math.floor(Date.now() / 1000));
+    const nowSeconds = resolveApiNowSeconds(c.req.query("now"));
+    if (nowSeconds === null) {
+      return c.json({ error: "now must be a non-negative integer" }, 400);
+    }
     const [
       [stats],
       [rewardPoolStats],

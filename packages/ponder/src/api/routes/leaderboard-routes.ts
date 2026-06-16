@@ -31,7 +31,7 @@ import {
 } from "../earnings.js";
 import { credentialStatus, raterTypeName } from "../reputation-utils.js";
 import type { ApiApp } from "../shared.js";
-import { jsonBig } from "../shared.js";
+import { jsonBig, resolveApiNowSeconds } from "../shared.js";
 import { safeBigInt, safeLimit, safeOffset } from "../utils.js";
 
 type OrderableExpression = Parameters<typeof desc>[0];
@@ -69,13 +69,12 @@ function raterTypeFilterSql(filter: AccuracyLeaderboardRaterTypeFilter | null, n
 
 async function attachAccuracyLeaderboardReputation<
   T extends { voter: `0x${string}` },
->(items: T[]) {
+>(items: T[], nowSeconds: bigint) {
   if (items.length === 0) return items;
 
   const addresses = [
     ...new Set(items.map((item) => item.voter.toLowerCase() as `0x${string}`)),
   ];
-  const nowSeconds = BigInt(Math.floor(Date.now() / 1000));
 
   const [raterProfiles, humanCredentials, profileRows, followStats] =
     await Promise.all([
@@ -328,7 +327,10 @@ export function registerLeaderboardRoutes(app: ApiApp) {
     if (categoryIdParam && categoryId === null)
       return c.json({ error: "Invalid categoryId" }, 400);
 
-    const nowSeconds = BigInt(Math.floor(Date.now() / 1000));
+    const nowSeconds = resolveApiNowSeconds(c.req.query("now"));
+    if (nowSeconds === null) {
+      return c.json({ error: "now must be a non-negative integer" }, 400);
+    }
     const raterTypeCondition = raterTypeFilterSql(raterTypeFilter, nowSeconds);
 
     if (sortBy === "signalScore") {
@@ -477,7 +479,7 @@ export function registerLeaderboardRoutes(app: ApiApp) {
 
       return jsonBig(c, {
         items: includeReputation
-          ? await attachAccuracyLeaderboardReputation(items)
+          ? await attachAccuracyLeaderboardReputation(items, nowSeconds)
           : items,
         categoryId: categoryIdParam,
         window: windowBounds.window,
@@ -620,7 +622,7 @@ export function registerLeaderboardRoutes(app: ApiApp) {
 
       return jsonBig(c, {
         items: includeReputation
-          ? await attachAccuracyLeaderboardReputation(items)
+          ? await attachAccuracyLeaderboardReputation(items, nowSeconds)
           : items,
         categoryId: categoryIdParam,
         window: windowBounds.window,
@@ -671,7 +673,7 @@ export function registerLeaderboardRoutes(app: ApiApp) {
 
       return jsonBig(c, {
         items: includeReputation
-          ? await attachAccuracyLeaderboardReputation(result)
+          ? await attachAccuracyLeaderboardReputation(result, nowSeconds)
           : result,
         categoryId: categoryIdParam,
         window: windowBounds.window,
@@ -719,7 +721,7 @@ export function registerLeaderboardRoutes(app: ApiApp) {
 
     return jsonBig(c, {
       items: includeReputation
-        ? await attachAccuracyLeaderboardReputation(result)
+        ? await attachAccuracyLeaderboardReputation(result, nowSeconds)
         : result,
       window: windowBounds.window,
       startsAt: null,
