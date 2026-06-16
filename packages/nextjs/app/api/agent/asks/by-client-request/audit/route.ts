@@ -12,7 +12,6 @@ export async function GET(request: NextRequest) {
   const chainId = Number.parseInt(searchParams.get("chainId") ?? "", 10);
 
   return handleAgentRoute({
-    allowOnStoreUnavailable: true,
     handler: async ({ agent }) => {
       if (!clientRequestId) {
         throw new McpToolError("clientRequestId is required.");

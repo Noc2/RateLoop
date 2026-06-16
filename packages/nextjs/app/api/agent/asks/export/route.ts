@@ -62,7 +62,6 @@ export async function GET(request: NextRequest) {
   const format = (searchParams.get("format") ?? "json").trim().toLowerCase();
 
   return handleAgentRoute({
-    allowOnStoreUnavailable: true,
     handler: async ({ agent }) => {
       if (format !== "json" && format !== "csv") {
         throw new McpToolError("format must be json or csv.");

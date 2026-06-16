@@ -10,7 +10,6 @@ export async function GET(request: NextRequest, context: { params: Promise<{ ope
   const { operationKey } = await context.params;
 
   return handleAgentRoute({
-    allowOnStoreUnavailable: true,
     handler: async ({ agent }) => {
       if (!/^0x[a-fA-F0-9]{64}$/.test(operationKey)) {
         throw new McpToolError("operationKey must be a 32-byte hex string.");
