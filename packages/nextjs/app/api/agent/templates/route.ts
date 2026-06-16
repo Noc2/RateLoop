@@ -14,7 +14,6 @@ export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
   if (!hasAgentBearerToken(request)) {
     return handlePublicAgentRoute({
-      allowOnStoreUnavailable: true,
       handler: () =>
         callPublicRateLoopMcpTool({
           arguments: {},
@@ -26,7 +25,6 @@ export async function GET(request: NextRequest) {
   }
 
   return handleAgentRoute({
-    allowOnStoreUnavailable: true,
     handler: ({ agent }) =>
       callRateLoopMcpTool({
         agent,

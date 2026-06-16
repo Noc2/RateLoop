@@ -16,7 +16,6 @@ export async function GET(request: NextRequest, context: { params: Promise<{ con
 
   if (!hasAgentBearerToken(request)) {
     return handlePublicAgentRoute({
-      allowOnStoreUnavailable: true,
       handler: () =>
         callPublicRateLoopMcpTool({
           arguments: { contentId },
@@ -28,7 +27,6 @@ export async function GET(request: NextRequest, context: { params: Promise<{ con
   }
 
   return handleAgentRoute({
-    allowOnStoreUnavailable: true,
     handler: ({ agent }) =>
       callRateLoopMcpTool({
         agent,
