@@ -5,6 +5,22 @@ export type JsonObjectBody = Record<string, unknown>;
 const DEFAULT_JSON_BODY_MAX_BYTES = 128 * 1024;
 export const JSON_BODY_TOO_LARGE = Symbol("json_body_too_large");
 
+function requestErrorEnvelope(params: {
+  code: string;
+  message: string;
+  recoverWith: string;
+  retryable: boolean;
+  status: number;
+}) {
+  return {
+    code: params.code,
+    message: params.message,
+    recoverWith: params.recoverWith,
+    retryable: params.retryable,
+    status: params.status,
+  };
+}
+
 async function readRequestTextWithLimit(request: NextRequest, maxBytes: number) {
   const contentLength = request.headers.get("content-length");
   if (contentLength && /^\d+$/.test(contentLength) && Number(contentLength) > maxBytes) {
@@ -37,9 +53,23 @@ export function isJsonObjectBody(body: unknown): body is JsonObjectBody {
 
 export function jsonBodyErrorResponse(body: unknown, message = "Request body must be valid JSON.") {
   if (body === JSON_BODY_TOO_LARGE) {
-    return NextResponse.json({ error: "Request body is too large." }, { status: 413 });
+    const normalized = requestErrorEnvelope({
+      code: "request_entity_too_large",
+      message: "Request body is too large.",
+      recoverWith: "reduce_payload_size",
+      retryable: false,
+      status: 413,
+    });
+    return NextResponse.json(normalized, { status: normalized.status });
   }
-  return NextResponse.json({ error: message }, { status: 400 });
+  const normalized = requestErrorEnvelope({
+    code: "invalid_request",
+    message,
+    recoverWith: "fix_request_body",
+    retryable: false,
+    status: 400,
+  });
+  return NextResponse.json(normalized, { status: normalized.status });
 }
 
 export async function parseJsonBody(request: NextRequest, options: { maxBytes?: number } = {}) {

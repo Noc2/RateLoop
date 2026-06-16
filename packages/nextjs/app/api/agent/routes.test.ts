@@ -745,7 +745,7 @@ test("agent asks route rejects oversized JSON bodies", async () => {
   );
 
   assert.equal(response.status, 413);
-  assert.deepEqual(await response.json(), { error: "Request body is too large." });
+  assert.equal((await response.json()).message, "Request body is too large.");
 });
 
 test("agent signing intent routes create and prepare browser handoff asks", async () => {

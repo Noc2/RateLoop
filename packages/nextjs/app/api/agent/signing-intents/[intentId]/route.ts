@@ -1,7 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
-import { AGENT_READ_RATE_LIMIT, handlePublicAgentRoute } from "~~/lib/agent/http";
+import { NextRequest } from "next/server";
+import { AGENT_READ_RATE_LIMIT, agentRouteErrorResponse, handlePublicAgentRoute } from "~~/lib/agent/http";
 import { getAgentSigningIntent } from "~~/lib/agent/signingIntents";
-import { McpToolError, normalizeToolError } from "~~/lib/mcp/tools";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,8 +11,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ int
   const token =
     request.headers.get(SIGNING_INTENT_TOKEN_HEADER)?.trim() ?? request.nextUrl.searchParams.get("token")?.trim() ?? "";
   if (!token) {
-    const normalized = normalizeToolError(new McpToolError("token is required."));
-    return NextResponse.json(normalized, { status: normalized.status });
+    return agentRouteErrorResponse("token is required.", 400);
   }
 
   const { intentId } = await context.params;

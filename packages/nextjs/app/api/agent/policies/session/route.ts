@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { agentRouteErrorResponse } from "~~/lib/agent/http";
 import { normalizeAgentPoliciesReadInput } from "~~/lib/auth/agentPolicies";
 import {
   AGENT_POLICIES_SIGNED_READ_SESSION_COOKIE_NAME,
@@ -17,7 +18,7 @@ export async function GET(request: NextRequest) {
 
   const normalized = normalizeAgentPoliciesReadInput({ address: typeof address === "string" ? address : undefined });
   if (!normalized.ok) {
-    return NextResponse.json({ error: normalized.error }, { status: 400 });
+    return agentRouteErrorResponse(normalized.error, 400);
   }
 
   try {
@@ -29,6 +30,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ hasSession });
   } catch (error) {
     console.error("Error checking agent policy signed read session:", error);
-    return NextResponse.json({ error: "Failed to check agent policy session" }, { status: 500 });
+    return agentRouteErrorResponse("Failed to check agent policy session", 500);
   }
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   AGENT_WRITE_RATE_LIMIT,
+  agentRouteErrorResponse,
   handlePublicAgentRoute,
   isJsonObjectBody,
   jsonBodyErrorResponse,
@@ -25,7 +26,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ in
         walletAddress?: unknown;
       };
       if (typeof token !== "string" || !token.trim()) {
-        return NextResponse.json({ error: "token is required." }, { status: 400 });
+        return agentRouteErrorResponse("token is required.", 400);
       }
 
       return prepareAgentSigningIntent({
