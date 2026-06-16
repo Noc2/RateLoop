@@ -544,7 +544,7 @@ async function fetchRoundCandidateWindow(
   return candidates.sort(compareCandidates).slice(0, targetCount);
 }
 
-function selectCompleteEpochCandidates(
+export function selectCompleteEpochCandidates(
   candidates: readonly CorrelationRoundCandidate[],
   maxRoundsPerTick: number,
   logger: Logger,
@@ -577,15 +577,14 @@ function selectCompleteEpochCandidates(
     }
 
     logger.warn(
-      "Processing partial automatic correlation epoch at maxRoundsPerTick",
+      "Skipping automatic correlation epoch because epoch exceeds maxRoundsPerTick with a following epoch visible",
       {
         roundId: epochRoundId.toString(),
         candidateCountSeen: epochCandidates.length,
-        selectedCount: maxRoundsPerTick,
         maxRoundsPerTick,
       },
     );
-    return epochCandidates.slice(0, maxRoundsPerTick);
+    return [];
   }
 
   return epochCandidates;

@@ -750,6 +750,43 @@ describe("automatic correlation artifact builder", () => {
     );
   });
 
+  it("skips an automatic epoch when a following epoch is visible and the current epoch exceeds the tick limit", async () => {
+    const { selectCompleteEpochCandidates } = await import(
+      "../correlation-artifact-builder.js"
+    );
+    const logger = {
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    };
+    const candidates = [
+      ...Array.from({ length: 6 }, (_, index) => ({
+        domain: 1,
+        rewardPoolId: BigInt(index + 1),
+        contentId: BigInt(index + 10),
+        roundId: 5n,
+      })),
+      {
+        domain: 1,
+        rewardPoolId: 99n,
+        contentId: 99n,
+        roundId: 4n,
+      },
+    ];
+
+    const selected = selectCompleteEpochCandidates(candidates, 5, logger);
+
+    expect(selected).toEqual([]);
+    expect(logger.warn).toHaveBeenCalledWith(
+      "Skipping automatic correlation epoch because epoch exceeds maxRoundsPerTick with a following epoch visible",
+      expect.objectContaining({
+        roundId: "5",
+        maxRoundsPerTick: 5,
+      }),
+    );
+  });
+
   it("rejects oversized Ponder responses before reading the body", async () => {
     mockConfig();
     const fetchMock = vi.fn(
