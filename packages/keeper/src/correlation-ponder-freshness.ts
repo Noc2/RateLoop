@@ -1,4 +1,5 @@
 import type { PublicClient } from "viem";
+import { ROUND_STATE } from "@rateloop/contracts/protocol";
 import { config } from "./config.js";
 import { readRound } from "./contract-reads.js";
 import type { CorrelationRoundCandidate } from "./correlation-artifact-builder.js";
@@ -8,7 +9,7 @@ const PONDER_FETCH_TIMEOUT_MS = 15_000;
 const PONDER_JSON_MAX_BYTES = 5_000_000;
 
 interface PonderRoundListResponse {
-  items?: Array<{ roundId?: unknown; revealedCount?: unknown }>;
+  items?: Array<{ roundId?: unknown; revealedCount?: unknown; state?: unknown }>;
 }
 
 function parseBigInt(value: unknown): bigint | null {
@@ -41,24 +42,26 @@ async function fetchPonderJson<T>(url: URL): Promise<T> {
   return (await response.json()) as T;
 }
 
-async function fetchPonderRoundRevealedCount(
+async function fetchPonderRoundSnapshot(
   ponderBaseUrl: string,
   contentId: bigint,
   roundId: bigint,
-): Promise<bigint | null> {
+): Promise<{ revealedCount: bigint; state: number } | null> {
   const url = new URL("/rounds", ponderBaseUrl);
   url.searchParams.set("contentId", contentId.toString());
-  url.searchParams.set("limit", "200");
+  url.searchParams.set("roundId", roundId.toString());
+  url.searchParams.set("limit", "1");
   const response = await fetchPonderJson<PonderRoundListResponse>(url);
-  const match = (response.items ?? []).find((item) => {
-    const parsedRoundId = parseBigInt(item.roundId);
-    return parsedRoundId === roundId;
-  });
+  const match = (response.items ?? [])[0];
   if (!match) {
     return null;
   }
   const revealedCount = parseBigInt(match.revealedCount);
-  return revealedCount !== null && revealedCount >= 0n ? revealedCount : null;
+  const state = typeof match.state === "number" ? match.state : Number(match.state);
+  if (revealedCount === null || revealedCount < 0n || !Number.isFinite(state)) {
+    return null;
+  }
+  return { revealedCount, state };
 }
 
 export async function areCorrelationCandidatesPonderFresh(
@@ -85,26 +88,38 @@ export async function areCorrelationCandidatesPonderFresh(
       candidate.contentId,
       candidate.roundId,
     );
-    const ponderRevealedCount = await fetchPonderRoundRevealedCount(
+    const ponderRound = await fetchPonderRoundSnapshot(
       config.ponderBaseUrl,
       candidate.contentId,
       candidate.roundId,
     );
-    if (ponderRevealedCount === null) {
+    if (ponderRound === null) {
       logger.debug("Deferring correlation artifact build until Ponder indexes round", {
         contentId: candidate.contentId.toString(),
         roundId: candidate.roundId.toString(),
       });
       return false;
     }
-    if (ponderRevealedCount < chainRound.revealedCount) {
+    if (
+      chainRound.state === ROUND_STATE.Settled &&
+      ponderRound.state !== ROUND_STATE.Settled
+    ) {
+      logger.debug("Deferring correlation artifact build until Ponder marks round settled", {
+        contentId: candidate.contentId.toString(),
+        roundId: candidate.roundId.toString(),
+        chainState: chainRound.state,
+        ponderState: ponderRound.state,
+      });
+      return false;
+    }
+    if (ponderRound.revealedCount < chainRound.revealedCount) {
       logger.debug(
         "Deferring correlation artifact build until Ponder reflects revealed vote count",
         {
           contentId: candidate.contentId.toString(),
           roundId: candidate.roundId.toString(),
           chainRevealedCount: chainRound.revealedCount.toString(),
-          ponderRevealedCount: ponderRevealedCount.toString(),
+          ponderRevealedCount: ponderRound.revealedCount.toString(),
         },
       );
       return false;

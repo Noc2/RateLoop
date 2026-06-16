@@ -1435,6 +1435,7 @@ export function registerContentRoutes(app: ApiApp) {
 
   app.get("/rounds", async (c) => {
     const contentId = c.req.query("contentId");
+    const roundIdRaw = c.req.query("roundId");
     const stateFilter = c.req.query("state");
     const submitter = c.req.query("submitter");
     const limit = safeLimit(c.req.query("limit"), 50, 200);
@@ -1446,6 +1447,11 @@ export function registerContentRoutes(app: ApiApp) {
       const parsed = safeBigInt(contentId);
       if (parsed === null) return c.json({ error: "Invalid contentId" }, 400);
       conditions.push(eq(round.contentId, parsed));
+    }
+    if (roundIdRaw !== undefined) {
+      const parsedRoundId = safeBigInt(roundIdRaw);
+      if (parsedRoundId === null) return c.json({ error: "Invalid roundId" }, 400);
+      conditions.push(eq(round.roundId, parsedRoundId));
     }
     if (stateFilter !== undefined) {
       const parsed = parseInt(stateFilter);

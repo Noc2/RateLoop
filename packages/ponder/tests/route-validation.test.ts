@@ -1449,6 +1449,46 @@ describe("registerContentRoutes", () => {
     expect(serialized).toContain("category.name");
   });
 
+  it("rejects invalid roundId filters before querying the database", async () => {
+    const { db } = mockPonderModules([]);
+    const { registerContentRoutes } = await import(
+      "../src/api/routes/content-routes.js"
+    );
+
+    const app = new Hono();
+    registerContentRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/rounds?contentId=1&roundId=not-a-number",
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "Invalid roundId" });
+    expect(db.select).not.toHaveBeenCalled();
+  });
+
+  it("filters rounds by roundId in the database query", async () => {
+    const { queryBuilder } = mockPonderModules([{ id: "42-7" }]);
+    const { registerContentRoutes } = await import(
+      "../src/api/routes/content-routes.js"
+    );
+
+    const app = new Hono();
+    registerContentRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/rounds?contentId=42&roundId=7&limit=1",
+    );
+
+    expect(response.status).toBe(200);
+
+    const whereArg = queryBuilder.where.mock.calls[0]?.[0];
+    const serialized = serializeExpression(whereArg);
+
+    expect(serialized).toContain("round.contentId");
+    expect(serialized).toContain("round.roundId");
+  });
+
   it("rejects invalid round submitter filters before querying the database", async () => {
     const { db } = mockPonderModules([]);
     const { registerContentRoutes } = await import(
