@@ -177,7 +177,7 @@ async function main() {
       let mainLoopRan = false;
       const mainLoopResult = await runWithKeeperMainLoopLock(
         logger,
-        { result: emptyKeeperResult(), frontendFeeResult: null },
+        { result: emptyKeeperResult(), frontendFeeResult: null, correlationSnapshotResult: null },
         async () => {
           mainLoopRan = true;
           const runContext: KeeperRunContext = {};
@@ -199,23 +199,28 @@ async function main() {
                 { chainTimestamp: runContext.blockTimestamp },
               )
             : null;
-          return { result, frontendFeeResult };
+          const ponderStaleRisk = result.roundsSettled > 0 || result.votesRevealed > 0;
+          const correlationSnapshotResult = config.correlationSnapshots.enabled
+            ? await publishConfiguredCorrelationSnapshots(
+                publicClient,
+                walletClient,
+                chain,
+                account,
+                logger,
+                {
+                  deferPonderArtifactBuild: ponderStaleRisk,
+                  ponderNowSeconds: runContext.blockTimestamp,
+                },
+              )
+            : null;
+          return { result, frontendFeeResult, correlationSnapshotResult };
         },
       );
       if (!mainLoopRan) {
         incrementCounter("keeper_main_loop_lock_skips_total");
       }
 
-      const { result, frontendFeeResult } = mainLoopResult;
-      const correlationSnapshotResult = config.correlationSnapshots.enabled
-        ? await publishConfiguredCorrelationSnapshots(
-            publicClient,
-            walletClient,
-            chain,
-            account,
-            logger,
-          )
-        : null;
+      const { result, frontendFeeResult, correlationSnapshotResult } = mainLoopResult;
       const duration = Date.now() - start;
       recordRun(result, duration);
 

@@ -182,9 +182,14 @@ export async function loadConfiguredCorrelationSnapshotCandidates(
   return candidates;
 }
 
+export interface CorrelationArtifactBuildOptions {
+  ponderNowSeconds?: bigint;
+}
+
 export async function buildConfiguredCorrelationSnapshotArtifactForCandidates(
   candidates: readonly CorrelationRoundCandidate[],
   logger: Logger,
+  options: CorrelationArtifactBuildOptions = {},
 ): Promise<BuiltConfiguredCorrelationSnapshotArtifact> {
   if (candidates.length === 0) {
     return {
@@ -205,7 +210,7 @@ export async function buildConfiguredCorrelationSnapshotArtifactForCandidates(
 
   for (const candidate of candidates) {
     const { excludedVotes, questionMetadataRef, votes, trailingBaseRateUpBps } =
-      await fetchRoundVotes(config.ponderBaseUrl, candidate);
+      await fetchRoundVotes(config.ponderBaseUrl, candidate, options.ponderNowSeconds);
 
     const scored =
       candidate.domain === PAYOUT_DOMAIN_PUBLIC_RATING
@@ -559,15 +564,28 @@ function selectCompleteEpochCandidates(
     epochCandidates.length > maxRoundsPerTick ||
     (!sawNextEpoch && candidates.length > maxRoundsPerTick)
   ) {
+    if (!sawNextEpoch) {
+      logger.warn(
+        "Skipping automatic correlation epoch because one round exceeds maxRoundsPerTick",
+        {
+          roundId: epochRoundId.toString(),
+          candidateCountSeen: epochCandidates.length,
+          maxRoundsPerTick,
+        },
+      );
+      return [];
+    }
+
     logger.warn(
-      "Skipping automatic correlation epoch because one round exceeds maxRoundsPerTick",
+      "Processing partial automatic correlation epoch at maxRoundsPerTick",
       {
         roundId: epochRoundId.toString(),
         candidateCountSeen: epochCandidates.length,
+        selectedCount: maxRoundsPerTick,
         maxRoundsPerTick,
       },
     );
-    return [];
+    return epochCandidates.slice(0, maxRoundsPerTick);
   }
 
   return epochCandidates;
@@ -576,6 +594,7 @@ function selectCompleteEpochCandidates(
 async function fetchRoundVotes(
   ponderBaseUrl: string,
   candidate: CorrelationRoundCandidate,
+  ponderNowSeconds?: bigint,
 ): Promise<RoundVotesPage> {
   const excludedVotes: PublicExcludedCorrelationVote[] = [];
   const excludedVoteKeys = new Set<string>();
@@ -599,6 +618,9 @@ async function fetchRoundVotes(
     url.searchParams.set("roundId", candidate.roundId.toString());
     url.searchParams.set("limit", String(VOTE_PAGE_SIZE));
     url.searchParams.set("offset", String(offset));
+    if (ponderNowSeconds !== undefined) {
+      url.searchParams.set("now", ponderNowSeconds.toString());
+    }
     const response = await fetchJson<VoteResponse>(url);
     const items = response.items ?? [];
     if (items.length > VOTE_PAGE_SIZE) {
