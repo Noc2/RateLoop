@@ -26,7 +26,14 @@ World Chain USDC defaults are in `@rateloop/contracts` (`WORLD_CHAIN_USDC_BY_CHA
 | Agents local signer | `RATELOOP_LOCAL_SIGNER_USDC_ADDRESS` | Trusted USDC override before signing EIP-3009 typed data |
 | Agents local signer (alias) | `RATELOOP_X402_USDC_ADDRESS` | Same as above; accepted alias in `localSigner.ts` |
 
-Next.js throws when **both** `NEXT_PUBLIC_USDC_ADDRESS` and `RATELOOP_X402_USDC_ADDRESS` are set and differ (`lib/env/server.ts`). Set one override or keep both aligned.
+Next.js throws when **both** `NEXT_PUBLIC_USDC_ADDRESS` and `RATELOOP_X402_USDC_ADDRESS` are set and differ (`lib/env/server.ts`). Server x402 resolution accepts either variable when only one is set; set both to the same address in production to keep browser bounty reads aligned with server submission.
+
+### Keeper / Ponder shared secrets
+
+| Package | Variable | Purpose |
+| --- | --- | --- |
+| Keeper | `PONDER_KEEPER_WORK_TOKEN` | Bearer token for Ponder `GET /keeper/work` (must match Ponder) |
+| Ponder | `PONDER_KEEPER_WORK_TOKEN` | Required in production for `/keeper/work` |
 
 ## E2E production-build flags
 
