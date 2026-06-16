@@ -1,3 +1,4 @@
+import { ROUND_STATE } from "@rateloop/contracts/protocol";
 import {
   approveLREP,
   commitVoteDirect,
@@ -143,7 +144,7 @@ test.describe("Settlement lifecycle", () => {
       const round = data.rounds.find(r => String(r.roundId) === String(roundId));
       return (
         round !== undefined &&
-        (round.state === 1 || round.state === 3) &&
+        (round.state === ROUND_STATE.Settled || round.state === ROUND_STATE.Tied) &&
         round.ratingReviewStatus === RATING_REVIEW_STATUS_PENDING
       );
     }, 30_000);

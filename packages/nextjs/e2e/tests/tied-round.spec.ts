@@ -1,3 +1,4 @@
+import { ROUND_STATE } from "@rateloop/contracts/protocol";
 import {
   approveLREP,
   commitVoteDirect,
@@ -167,7 +168,7 @@ test.describe("Tied round lifecycle", () => {
       async () => {
         const data = await getContentById(contentId);
         const round = data.rounds.find(item => item.roundId === String(roundId));
-        return round?.state === 3;
+        return round?.state === ROUND_STATE.Tied;
       },
       90_000,
       2_000,
@@ -177,7 +178,7 @@ test.describe("Tied round lifecycle", () => {
 
     // Verify round state — must be Tied (state=3) since pools are equal
     const postData = await getContentById(contentId);
-    const tiedRound = postData.rounds.find(r => r.roundId === String(roundId) && r.state === 3);
+    const tiedRound = postData.rounds.find(r => r.roundId === String(roundId) && r.state === ROUND_STATE.Tied);
 
     expect(tiedRound, "Round should be Tied (state=3) when upPool === downPool").toBeTruthy();
 

@@ -15,6 +15,7 @@ import { RATING_REVIEW_STATUS_PENDING, getContentById, getContentList, getVotes 
 import { E2E_KEEPER_HEALTH_URL, E2E_RPC_URL } from "../helpers/service-urls";
 import { deriveKeeperDecryptWaitMs } from "../helpers/tlockRuntime";
 import { ProtocolConfigAbi, RoundVotingEngineAbi } from "@rateloop/contracts/abis";
+import { ROUND_STATE } from "@rateloop/contracts/protocol";
 import { expect, test } from "@playwright/test";
 import { createPublicClient, http } from "viem";
 import { foundry } from "viem/chains";
@@ -184,7 +185,7 @@ test.describe("Keeper-backed settlement lifecycle", () => {
       async () => {
         const data = await getContentById(contentId!);
         const round = data.rounds.find(item => item.roundId === String(roundId));
-        return round !== undefined && round.state === 1;
+        return round !== undefined && round.state === ROUND_STATE.Settled;
       },
       240_000,
       2_000,
@@ -207,7 +208,7 @@ test.describe("Keeper-backed settlement lifecycle", () => {
     const round = data.rounds.find(item => item.roundId === String(roundId));
 
     expect(round).toBeTruthy();
-    expect(round!.state).toBe(1);
+    expect(round!.state).toBe(ROUND_STATE.Settled);
     expect(round!.upWins).toBe(true);
     expect(Number(round!.voteCount)).toBe(voters.length);
     expect(round!.ratingReviewStatus).toBe(RATING_REVIEW_STATUS_PENDING);

@@ -1,3 +1,4 @@
+import { ROUND_STATE } from "@rateloop/contracts/protocol";
 import {
   approveLREP,
   commitVoteDirect,
@@ -136,7 +137,9 @@ test.describe("Unanimous settlement without reserve subsidy", () => {
     // Wait for Ponder to index
     const settledIndexed = await waitForPonderIndexed(async () => {
       const data = await getContentById(contentId!);
-      return data.rounds.some(r => String(r.roundId) === String(roundId) && (r.state === 1 || r.state === 3));
+      return data.rounds.some(
+        r => String(r.roundId) === String(roundId) && (r.state === ROUND_STATE.Settled || r.state === ROUND_STATE.Tied),
+      );
     }, 30_000);
     expect(settledIndexed, "Ponder did not index settlement").toBe(true);
   });
@@ -156,7 +159,7 @@ test.describe("Unanimous settlement without reserve subsidy", () => {
     const round = data.rounds.find(r => String(r.roundId) === String(roundId));
 
     expect(round).toBeTruthy();
-    expect(round!.state).toBe(1); // Settled (not tied — all UP, downStake=0)
+    expect(round!.state).toBe(ROUND_STATE.Settled); // Settled (not tied — all UP, downStake=0)
     expect(round!.upWins).toBe(true);
     expect(Number(round!.voteCount)).toBe(3);
 

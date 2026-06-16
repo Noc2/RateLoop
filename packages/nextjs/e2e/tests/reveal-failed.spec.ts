@@ -1,3 +1,4 @@
+import { ROUND_STATE } from "@rateloop/contracts/protocol";
 import {
   approveLREP,
   claimCancelledRoundRefund,
@@ -120,7 +121,9 @@ test.describe("RevealFailed lifecycle", () => {
 
     const indexedRound = await waitForPonderIndexed(async () => {
       const data = await getContentById(contentId!);
-      return data.rounds.some(round => String(round.roundId) === String(roundId) && round.state === 4);
+      return data.rounds.some(
+        round => String(round.roundId) === String(roundId) && round.state === ROUND_STATE.RevealFailed,
+      );
     }, 30_000);
     expect(indexedRound, "Ponder did not index the RevealFailed round").toBe(true);
 

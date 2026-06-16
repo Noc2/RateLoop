@@ -1,3 +1,4 @@
+import { ROUND_STATE } from "@rateloop/contracts/protocol";
 import { ANVIL_ACCOUNTS } from "../helpers/anvil-accounts";
 import "../helpers/fetch-shim";
 import { getContentById, getContentList, getStats, ponderGet } from "../helpers/ponder-api";
@@ -37,7 +38,7 @@ test.describe("Ponder API endpoints", () => {
     expect(Array.isArray(data.rounds)).toBe(true);
     expect(Array.isArray(data.ratings)).toBe(true);
     expect(
-      data.rounds.some(round => round.state === 1),
+      data.rounds.some(round => round.state === ROUND_STATE.Settled),
       "seeded content #1 should include a settled round indexed by Ponder",
     ).toBe(true);
     expect(data.content.rating).toBe(50);

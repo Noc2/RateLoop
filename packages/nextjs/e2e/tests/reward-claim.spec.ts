@@ -1,3 +1,4 @@
+import { ROUND_STATE } from "@rateloop/contracts/protocol";
 import {
   approveLREP,
   claimVoterReward,
@@ -146,7 +147,9 @@ test.describe("Reward claim lifecycle", () => {
     // Step 7: Wait for Ponder to index
     const settledIndexed = await waitForPonderIndexed(async () => {
       const data = await getContentById(newContentId!);
-      return data.rounds.some(r => String(r.roundId) === String(roundId) && (r.state === 1 || r.state === 3));
+      return data.rounds.some(
+        r => String(r.roundId) === String(roundId) && (r.state === ROUND_STATE.Settled || r.state === ROUND_STATE.Tied),
+      );
     }, 30_000);
     expect(settledIndexed, "Ponder did not index settlement").toBe(true);
 
@@ -160,7 +163,9 @@ test.describe("Reward claim lifecycle", () => {
     expect(data).toHaveProperty("content");
     expect(data).toHaveProperty("rounds");
 
-    const settledRounds = data.rounds.filter((r: { state: number }) => r.state === 1 || r.state === 3);
+    const settledRounds = data.rounds.filter(
+      (r: { state: number }) => r.state === ROUND_STATE.Settled || r.state === ROUND_STATE.Tied,
+    );
     expect(settledRounds.length).toBeGreaterThanOrEqual(1);
 
     expect(data.content).toHaveProperty("rating");
@@ -191,7 +196,7 @@ test.describe("Reward claim lifecycle", () => {
     expect(success, "Revealed losing voter should be able to claim their RBTS stake return").toBe(true);
 
     const data = await ponderGet(`/content/${settledContentId}`);
-    const settledRound = data.rounds?.find((r: { state: number }) => r.state === 1);
+    const settledRound = data.rounds?.find((r: { state: number }) => r.state === ROUND_STATE.Settled);
 
     if (!settledRound) {
       test.skip(true, "No definitively settled round (may be tied)");

@@ -1,3 +1,4 @@
+import { ROUND_STATE } from "@rateloop/contracts/protocol";
 import {
   approveLREP,
   commitVoteDirect,
@@ -278,7 +279,7 @@ function maxIndexedRoundVoteCount(rounds: Array<{ voteCount: string | number }>)
 
 async function hasSettledBaselineRound(contentId: bigint): Promise<boolean> {
   const data = await getContentById(contentId.toString());
-  return data.rounds.some(round => round.state === 1);
+  return data.rounds.some(round => round.state === ROUND_STATE.Settled);
 }
 
 async function ensureBaselineContentSettled(contentId: bigint, seededCommits: SeededCommit[]): Promise<void> {

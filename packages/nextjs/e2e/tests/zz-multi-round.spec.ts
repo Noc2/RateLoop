@@ -1,3 +1,4 @@
+import { ROUND_STATE } from "@rateloop/contracts/protocol";
 import {
   approveLREP,
   commitVoteDirect,
@@ -145,7 +146,9 @@ test.describe("Multi-round succession", () => {
     // Wait for Ponder to index settlement
     const settledIndexed = await waitForPonderIndexed(async () => {
       const data = await getContentById(contentId!);
-      return data.rounds.some(r => String(r.roundId) === String(round1Id) && (r.state === 1 || r.state === 3));
+      return data.rounds.some(
+        r => String(r.roundId) === String(round1Id) && (r.state === ROUND_STATE.Settled || r.state === ROUND_STATE.Tied),
+      );
     }, 30_000);
     expect(settledIndexed, "Round 1 not indexed by Ponder").toBe(true);
   });
@@ -209,7 +212,9 @@ test.describe("Multi-round succession", () => {
     // Wait for Ponder to index
     const settledIndexed = await waitForPonderIndexed(async () => {
       const data = await getContentById(contentId!);
-      return data.rounds.some(r => String(r.roundId) === String(round2Id) && (r.state === 1 || r.state === 3));
+      return data.rounds.some(
+        r => String(r.roundId) === String(round2Id) && (r.state === ROUND_STATE.Settled || r.state === ROUND_STATE.Tied),
+      );
     }, 30_000);
     expect(settledIndexed, "Round 2 not indexed by Ponder").toBe(true);
   });
@@ -220,7 +225,7 @@ test.describe("Multi-round succession", () => {
     const data = await getContentById(contentId!);
 
     // Should have at least 2 settled/tied rounds
-    const terminalRounds = data.rounds.filter(r => r.state === 1 || r.state === 3);
+    const terminalRounds = data.rounds.filter(r => r.state === ROUND_STATE.Settled || r.state === ROUND_STATE.Tied);
     expect(terminalRounds.length).toBeGreaterThanOrEqual(2);
 
     // Verify round IDs are distinct

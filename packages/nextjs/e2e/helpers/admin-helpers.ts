@@ -21,6 +21,7 @@ import "./fetch-shim";
 import { PONDER_URL } from "./ponder-url";
 import { E2E_RPC_URL } from "./service-urls";
 import { deriveAcceptedTlockTargetRound, deriveDrandRoundRevealableAtSeconds } from "./tlockRuntime";
+import { ROUND_STATE } from "@rateloop/contracts/protocol";
 import { createTlockVoteCommit, packVoteRoundContext } from "@rateloop/contracts/voting";
 
 const ZERO_BYTES32 = `0x${"0".repeat(64)}` as const;
@@ -38,9 +39,6 @@ const ESTIMATED_TX_GAS_BUFFER = 300_000n;
 const DIRECT_VOTE_COMMIT_ATTEMPTS = 3;
 const DEFAULT_UP_PREDICTION_BPS = 8_000;
 const DEFAULT_DOWN_PREDICTION_BPS = 2_000;
-const ROUND_STATE_OPEN = 0;
-const ROUND_STATE_SETTLED = 1;
-const ROUND_STATE_TIED = 3;
 const SETTLE_ROUND_ABI = [
   {
     name: "settleRound",
@@ -519,7 +517,7 @@ async function resolveTlockCommitRuntime(
   if (currentRoundId > 0n && currentRoundId === commitRoundId) {
     const round = await readRoundAtBlock(votingEngineAddress, contentId, currentRoundId, latestBlock.blockTag);
     const parsedRound = parseRound(round);
-    if (parsedRound?.state === 0 && parsedRound.startTime > 0n) {
+    if (parsedRound?.state === ROUND_STATE.Open && parsedRound.startTime > 0n) {
       roundStartTimeSeconds = Number(parsedRound.startTime);
     }
   }
@@ -660,7 +658,7 @@ async function isDirectCommitRoundOpen(
 
   const round = await readRoundAtBlock(contractAddress, contentId, roundId, blockTag);
   const parsedRound = parseRound(round);
-  return parsedRound?.state === 0 && parsedRound.startTime > 0n;
+  return parsedRound?.state === ROUND_STATE.Open && parsedRound.startTime > 0n;
 }
 
 async function ensureDirectCommitRoundOpen(
@@ -1804,11 +1802,11 @@ export async function settleRoundDirect(
   for (let attempt = 0; attempt < 2; attempt++) {
     const ok = await sendTx(fromAddress, contractAddress, data);
     const state = await readRoundStateLatest(contractAddress, BigInt(contentId), BigInt(roundId));
-    if (state === ROUND_STATE_SETTLED || state === ROUND_STATE_TIED) {
+    if (state === ROUND_STATE.Settled || state === ROUND_STATE.Tied) {
       return true;
     }
     if (!ok) return false;
-    if (state === ROUND_STATE_OPEN && attempt === 0) {
+    if (state === ROUND_STATE.Open && attempt === 0) {
       console.log("[settleRoundDirect] RBTS seed captured; submitting final settlement transaction");
       continue;
     }
@@ -2162,7 +2160,7 @@ export async function getActiveRoundId(contentId: number | bigint, contractAddre
 
   const stateHex = "0x" + json.result.slice(66, 130);
   const state = parseInt(stateHex, 16);
-  return state === 0 ? currentRoundId : 0n;
+  return state === ROUND_STATE.Open ? currentRoundId : 0n;
 }
 
 /**

@@ -1,3 +1,4 @@
+import { ROUND_STATE } from "@rateloop/contracts/protocol";
 import { submitContentDirect } from "../helpers/admin-helpers";
 import { ANVIL_ACCOUNTS } from "../helpers/anvil-accounts";
 import { CONTRACT_ADDRESSES } from "../helpers/contracts";
@@ -76,7 +77,7 @@ test.describe("Round cancellation", () => {
         const { items } = await getContentList({ status: "all", limit: 50 });
         for (const item of items.slice(0, 10)) {
           const data = await ponderGet(`/content/${item.id}`);
-          const cancelledRound = data.rounds?.find((r: { state: number }) => r.state === 2);
+          const cancelledRound = data.rounds?.find((r: { state: number }) => r.state === ROUND_STATE.Cancelled);
           if (cancelledRound) {
             foundCancelled = true;
             break;
