@@ -286,6 +286,23 @@ async function prepareAsk(params: {
     prepared.transactionPlan && typeof prepared.transactionPlan === "object" && !Array.isArray(prepared.transactionPlan)
       ? (prepared.transactionPlan as JsonObject)
       : null;
+  const calls = Array.isArray(transactionPlan?.calls) ? transactionPlan.calls : [];
+  if (calls.length === 0) {
+    await updateAgentAskHandoffStatus({
+      chainId: params.chainId,
+      expectedDraftRevision: handoff.draftRevision,
+      handoffId: params.handoffId,
+      operationKey,
+      payloadHash,
+      preparedDraftRevision: handoff.draftRevision,
+      status: "failed",
+      transactionPlan,
+      walletAddress: params.walletAddress,
+    });
+    throw new AgentAskHandoffError(
+      "RateLoop ask did not return an executable transaction plan. Review the draft and try again.",
+    );
+  }
 
   await updateAgentAskHandoffStatus({
     chainId: params.chainId,
@@ -325,13 +342,13 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ha
       const chainId = resolvePrepareChainId(handoff, requestedChainId);
       assertHandoffCanPrepare(handoff);
       if (handoff.walletAddress && handoff.walletAddress.toLowerCase() !== walletAddress.toLowerCase()) {
-        return NextResponse.json({ error: "Connected wallet does not match this handoff." }, { status: 403 });
+        throw new AgentAskHandoffError("Connected wallet does not match this handoff.", 403);
       }
       if (handoff.status === "prepared") {
         if (handoff.preparedDraftRevision !== handoff.draftRevision) {
-          return NextResponse.json(
-            { error: "Prepared transaction plan is stale. Review the saved draft and prepare again." },
-            { status: 409 },
+          throw new AgentAskHandoffError(
+            "Prepared transaction plan is stale. Review the saved draft and prepare again.",
+            409,
           );
         }
         const assets = await listAgentAskHandoffAssets(handoff.id);
