@@ -2,10 +2,11 @@ import type { RoundState } from "@rateloop/contracts/protocol";
 import type { ProfileSelfReportAudienceContext, TargetAudience } from "@rateloop/node-utils/profileSelfReport";
 import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 import scaffoldConfig from "~~/scaffold.config";
+import { isLocalE2EProductionBuildEnabled } from "~~/utils/env/e2eProduction";
 import { resolvePonderUrlValue } from "~~/utils/env/ponderUrl";
 
 const isProduction = process.env.NODE_ENV === "production";
-const allowLocalE2EProductionBuild = process.env.NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD === "true";
+const allowLocalE2EProductionBuild = isLocalE2EProductionBuildEnabled();
 const NEXT_PUBLIC_PONDER_URL = process.env.NEXT_PUBLIC_PONDER_URL?.trim() || undefined;
 const PONDER_METADATA_SYNC_TOKEN = process.env.PONDER_METADATA_SYNC_TOKEN?.trim() || undefined;
 

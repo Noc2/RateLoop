@@ -13,6 +13,7 @@ import {
   parseX402QuestionRequest as parseSharedX402QuestionRequest,
   toCanonicalQuestionPayload as toSharedCanonicalQuestionPayload,
 } from "@rateloop/agents/x402-question-payload";
+import { isLocalE2EProductionBuildEnabled } from "~~/utils/env/e2eProduction";
 
 export {
   X402_MIN_NONZERO_CONFIDENTIALITY_BOND,
@@ -44,8 +45,7 @@ function serverX402QuestionParserOptions(): X402QuestionParserOptions {
       normalizeOrigin(process.env.NEXT_PUBLIC_APP_URL),
       normalizeOrigin(process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null),
     ].filter((origin): origin is string => Boolean(origin)),
-    allowLocalhostAttachmentOrigins:
-      process.env.NODE_ENV !== "production" || process.env.NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD === "true",
+    allowLocalhostAttachmentOrigins: process.env.NODE_ENV !== "production" || isLocalE2EProductionBuildEnabled(),
     questionMetadataBaseUrl: process.env.NEXT_PUBLIC_PONDER_URL ?? process.env.NEXT_PUBLIC_APP_URL,
   };
 }
