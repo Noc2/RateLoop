@@ -7,7 +7,10 @@ export type JsonObject = Record<string, unknown>;
 
 export type AgentQuestionConfidentialityExample = {
   visibility?: "public" | "gated";
-  disclosurePolicy?: "after_settlement" | "private_until_settlement" | "private_forever";
+  disclosurePolicy?:
+    | "after_settlement"
+    | "private_until_settlement"
+    | "private_forever";
   bond?: {
     amount?: string | number | bigint;
     asset?: "LREP" | "lrep" | "USDC" | "usdc" | string;
@@ -34,24 +37,7 @@ export type AgentAskExample = {
   bounty: {
     amount: string | number | bigint;
     asset?: "USDC" | "usdc" | string;
-    bountyEligibility?:
-      | 0
-      | 2
-      | 4
-      | 6
-      | 8
-      | 10
-      | 12
-      | 14
-      | 130
-      | 132
-      | 134
-      | 136
-      | 138
-      | 140
-      | 142
-      | string
-      | number;
+    bountyEligibility?: 0 | 8 | string | number;
     bountyStartBy?: string | number | bigint;
     bountyWindowSeconds?: string | number | bigint;
     feedbackWindowSeconds?: string | number | bigint;

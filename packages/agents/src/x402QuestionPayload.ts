@@ -1,6 +1,4 @@
 import {
-  BOUNTY_ELIGIBILITY_CREDENTIAL_MASK,
-  BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG,
   DEFAULT_ROUND_CONFIG,
   MIN_NONZERO_CONFIDENTIALITY_BOND,
   WORLD_CHAIN_USDC_BY_CHAIN_ID,
@@ -41,6 +39,7 @@ const QUESTION_DETAILS_PATH_PATTERN = /^\/api\/attachments\/details\/det_[A-Za-z
 const IMAGE_ATTACHMENT_PATH_PATTERN = /^\/api\/attachments\/images\/(att_[A-Za-z0-9_-]{16,80})\.webp$/;
 const IMAGE_ATTACHMENT_SHA256_FRAGMENT_PATTERN = /^#sha256=0x([a-fA-F0-9]{64})$/;
 const RATELOOP_PRODUCTION_ORIGINS = ["https://www.rateloop.ai", "https://rateloop.ai"] as const;
+const X402_BOUNTY_ELIGIBILITY_PROOF_OF_HUMAN = 8;
 
 export class X402QuestionInputError extends Error {
   readonly status = 400;
@@ -599,12 +598,7 @@ function normalizeChainId(value: unknown, fallbackChainId?: number): number {
 
 function isSupportedBountyEligibility(value: number): boolean {
   if (!Number.isSafeInteger(value) || value < 0 || value > 255) return false;
-  if ((value & ~(BOUNTY_ELIGIBILITY_CREDENTIAL_MASK | BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG)) !== 0) {
-    return false;
-  }
-
-  const credentialMask = value & BOUNTY_ELIGIBILITY_CREDENTIAL_MASK;
-  return credentialMask === 0 ? value === 0 : true;
+  return value === 0 || value === X402_BOUNTY_ELIGIBILITY_PROOF_OF_HUMAN;
 }
 
 function normalizeBounty(value: unknown): X402QuestionPayload["bounty"] {
@@ -659,7 +653,7 @@ function normalizeBounty(value: unknown): X402QuestionPayload["bounty"] {
   }
   if (!isSupportedBountyEligibility(bountyEligibility)) {
     throw new X402QuestionInputError(
-      "bounty.bountyEligibility must be 0 or a supported credential bitmask: 2 Selfie Check, 4 Passport, 8 Proof of Human, add values to allow any selected credential, and add 128 to require a recent recheck.",
+      "bounty.bountyEligibility must be 0 for everyone or 8 for Proof of Human.",
     );
   }
   assertSupportedX402BundleBounty({

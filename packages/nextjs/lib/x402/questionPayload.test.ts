@@ -700,7 +700,7 @@ test("buildX402QuestionOperation binds bounty eligibility into the payload hash"
       ...VALID_REQUEST,
       bounty: {
         ...VALID_REQUEST.bounty,
-        bountyEligibility: "4",
+        bountyEligibility: "8",
       },
     }),
   );
@@ -789,30 +789,32 @@ test("parseX402QuestionRequest accepts bundle payouts with multiple settled roun
   assert.equal(payload.bounty.requiredSettledRounds, 2n);
 });
 
-test("parseX402QuestionRequest accepts multi-credential bounty scopes with recent recheck", () => {
+test("parseX402QuestionRequest accepts Proof of Human bounty scope", () => {
   const payload = parseX402QuestionRequest({
     ...VALID_REQUEST,
     bounty: {
       ...VALID_REQUEST.bounty,
-      bountyEligibility: "140",
+      bountyEligibility: "8",
     },
   });
 
-  assert.equal(payload.bounty.bountyEligibility, 140);
+  assert.equal(payload.bounty.bountyEligibility, 8);
 });
 
 test("parseX402QuestionRequest rejects unsupported bounty scopes", () => {
-  assert.throws(
-    () =>
-      parseX402QuestionRequest({
-        ...VALID_REQUEST,
-        bounty: {
-          ...VALID_REQUEST.bounty,
-          bountyEligibility: "1",
-        },
-      }),
-    /bountyEligibility must be 0 or a supported credential bitmask/,
-  );
+  for (const bountyEligibility of ["1", "4", "140"]) {
+    assert.throws(
+      () =>
+        parseX402QuestionRequest({
+          ...VALID_REQUEST,
+          bounty: {
+            ...VALID_REQUEST.bounty,
+            bountyEligibility,
+          },
+        }),
+      /bountyEligibility must be 0 for everyone or 8 for Proof of Human/,
+    );
+  }
 });
 
 test("parseX402QuestionRequest rejects bundle payouts without a start-by deadline", () => {

@@ -270,7 +270,7 @@ context unless the ask explicitly uses RateLoop-hosted gated context.
 
 For ranked-option bundles, `requiredSettledRounds` is the number of completed bundle round sets to fund. Each round set requires every question in the bundle to settle once, and eligible voters claim each completed set separately.
 
-`bountyEligibility` defaults to `0` for everyone. Everyone can still answer; the field only scopes which revealed answers can qualify for the bounty payout. It is a bitmask: `2` Selfie Check, `4` Passport, `8` Proof of Human. Add bits to allow any selected credential, for example `12` for Passport or Proof of Human, and add `128` to require a recent recheck, for example `140` for Passport or Proof of Human plus recent recheck. Agent results expose both `answerScopes.allAnswers` and `answerScopes.bountyEligibleAnswers`.
+`bountyEligibility` defaults to `0` for everyone. Everyone can still answer; the field only scopes which revealed answers can qualify for the bounty payout. For the World ID v3 launch, use `8` for Proof of Human. Agent results expose both `answerScopes.allAnswers` and `answerScopes.bountyEligibleAnswers`.
 
 For ask flows, start with `dryRun: true` / `mode: "dry_run"` to validate the payload and receive a deterministic
 synthetic result without a wallet signature, payment authorization, transaction plan, callback registration, or on-chain

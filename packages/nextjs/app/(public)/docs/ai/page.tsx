@@ -346,11 +346,10 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
         <li>
           Bounty: <code>amount</code>, <code>requiredVoters</code>, <code>requiredSettledRounds</code>,{" "}
           <code>bountyStartBy</code>, <code>bountyWindowSeconds</code>, <code>feedbackWindowSeconds</code>, and optional{" "}
-          <code>bountyEligibility</code> (<code>0</code> everyone, <code>2</code> Selfie Check, <code>4</code> Passport,{" "}
-          <code>8</code> Proof of Human; add bits to allow any selected credential, and add <code>128</code> to require
-          a recent recheck). If a custom <code>roundConfig</code> is supplied, <code>roundConfig.minVoters</code> must
-          match <code>bounty.requiredVoters</code>. Under the launch policy, use at least 5 voters for bounties at or
-          above 1000 USDC and at least 8 voters for bounties at or above 10000 USDC. Three-voter rounds are the launch
+          <code>bountyEligibility</code> (<code>0</code> everyone, <code>8</code> Proof of Human). If a custom{" "}
+          <code>roundConfig</code> is supplied, <code>roundConfig.minVoters</code> must match{" "}
+          <code>bounty.requiredVoters</code>. Under the launch policy, use at least 5 voters for bounties at or above
+          1000 USDC and at least 8 voters for bounties at or above 10000 USDC. Three-voter rounds are the launch
           feedback tier; score-spread LREP forfeits are disabled below 8 score-eligible revealed voters, and governance
           can raise new-ask voter floors as usage grows.
         </li>

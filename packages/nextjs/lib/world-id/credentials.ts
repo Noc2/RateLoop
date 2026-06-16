@@ -3,7 +3,6 @@ import { type Hex, concatHex, getAddress, numberToHex, stringToHex } from "viem"
 export const WORLD_CREDENTIAL_SELFIE = 1;
 export const WORLD_CREDENTIAL_PASSPORT = 2;
 export const WORLD_CREDENTIAL_PROOF_OF_HUMAN = 3;
-export const WORLD_ID_V4_SELFIE_ENABLED = process.env.NEXT_PUBLIC_WORLD_ID_ENABLE_V4_SELFIE === "true";
 
 export type WorldCredentialKind =
   | typeof WORLD_CREDENTIAL_SELFIE
@@ -44,7 +43,7 @@ export const WORLD_CREDENTIAL_BOUNTY_OPTIONS = WORLD_CREDENTIAL_OPTIONS.filter(o
 );
 
 export function isWorldCredentialEnabledForBountyUi(kind: WorldCredentialKind): boolean {
-  return kind !== WORLD_CREDENTIAL_SELFIE || WORLD_ID_V4_SELFIE_ENABLED;
+  return kind === WORLD_CREDENTIAL_PROOF_OF_HUMAN;
 }
 
 export function isWorldCredentialKind(value: number): value is WorldCredentialKind {

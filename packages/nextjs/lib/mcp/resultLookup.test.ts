@@ -369,7 +369,7 @@ test("rateloop_get_result applies bundle bounty eligibility when loading eligibl
             allocatedAmount: "1000000",
             asset: 1,
             bountyClosesAt: "2000",
-            bountyEligibility: 12,
+            bountyEligibility: 8,
             bountyEligibilityDataHash: `0x${"0".repeat(64)}`,
             bountyOpensAt: "1000",
             claimedAmount: "0",
@@ -431,7 +431,7 @@ test("rateloop_get_result applies bundle bounty eligibility when loading eligibl
           verified: false,
         },
         worldCredentials: {
-          activeMask: address.toLowerCase() === `0x${"a".repeat(40)}` ? 4 : 0,
+          activeMask: address.toLowerCase() === `0x${"a".repeat(40)}` ? 8 : 0,
           freshRecheckMask: 0,
           kinds: {},
         },
@@ -463,7 +463,7 @@ test("rateloop_get_result applies bundle bounty eligibility when loading eligibl
     contentId: "789",
     roundId: "2",
   });
-  assert.equal(result.answerScopes?.bountyEligibleAnswers?.policy?.mode, 12);
+  assert.equal(result.answerScopes?.bountyEligibleAnswers?.policy?.mode, 8);
   assert.equal(result.answerScopes?.bountyEligibleAnswers?.distribution?.up?.share, 1);
 });
 

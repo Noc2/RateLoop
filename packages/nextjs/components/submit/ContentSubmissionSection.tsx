@@ -138,7 +138,6 @@ import {
   isInsufficientFundsError,
   isWalletRpcOverloadedError,
 } from "~~/lib/transactionErrors";
-import { WORLD_ID_PRESENCE_RECHECK_WINDOW_SECONDS } from "~~/lib/world-id/proofExpiry";
 import { containsBlockedUrl } from "~~/utils/contentFilter";
 import { sanitizeExternalUrl } from "~~/utils/externalUrl";
 import { notification } from "~~/utils/scaffold-eth";
@@ -173,8 +172,6 @@ const MONEY_FIELD_LABEL_CLASS = "label-text flex h-6 min-w-0 items-center gap-1.
 const MONEY_FIELD_CONTROL_CLASS = "h-12 w-full min-w-0";
 const SECONDS_PER_MINUTE = 60;
 const SECONDS_PER_HOUR = 60 * SECONDS_PER_MINUTE;
-const RECENT_RECHECK_WINDOW_MINUTES = WORLD_ID_PRESENCE_RECHECK_WINDOW_SECONDS / SECONDS_PER_MINUTE;
-const RECENT_RECHECK_TOOLTIP_TEXT = `Voters must refresh this credential within ${RECENT_RECHECK_WINDOW_MINUTES} minutes before voting for their answer to qualify for the bounty.`;
 const MIN_HUMAN_RESPONSE_WINDOW_MINUTES = 20;
 const QUESTION_DETAILS_PREVIEW_WORDS = 32;
 const ROUND_RESPONSE_WINDOW_PRESETS = [
@@ -637,7 +634,6 @@ export function ContentSubmissionSection() {
   const [rewardRequiredVoters, setRewardRequiredVoters] = useState("3");
   const [rewardRequiredRounds, setRewardRequiredRounds] = useState("1");
   const [bountyEligibility, setBountyEligibility] = useState(BOUNTY_ELIGIBILITY_OPEN);
-  const [bountyRequiresRecentRecheck, setBountyRequiresRecentRecheck] = useState(false);
   const [bountyWindowPreset, setBountyWindowPreset] = useState<BountyWindowPreset>(DEFAULT_BOUNTY_WINDOW_PRESET);
   const [customBountyWindowAmount, setCustomBountyWindowAmount] = useState(DEFAULT_CUSTOM_BOUNTY_WINDOW_AMOUNT);
   const [customBountyWindowUnit, setCustomBountyWindowUnit] = useState<BountyWindowUnit>(
@@ -1489,7 +1485,7 @@ export function ContentSubmissionSection() {
   const rewardExpiryError = bountyStepAttempted ? rewardExpiryValidationError : null;
   const rewardStartByError = bountyStepAttempted ? rewardStartByValidationError : null;
   const selectedBountyEligibility = {
-    mode: buildBountyEligibility(bountyEligibility, bountyRequiresRecentRecheck),
+    mode: buildBountyEligibility(bountyEligibility, false),
   };
   const selectedFeedbackBonusAmount = parseFeedbackBonusAmount(feedbackBonusAmount);
   const selectedFeedbackBonusAssetId =
@@ -2901,7 +2897,6 @@ export function ContentSubmissionSection() {
       setRewardRequiredVoters("3");
       setRewardRequiredRounds("1");
       setBountyEligibility(BOUNTY_ELIGIBILITY_OPEN);
-      setBountyRequiresRecentRecheck(false);
       setBountyWindowPreset(DEFAULT_BOUNTY_WINDOW_PRESET);
       setCustomBountyWindowAmount(DEFAULT_CUSTOM_BOUNTY_WINDOW_AMOUNT);
       setCustomBountyWindowUnit(DEFAULT_CUSTOM_BOUNTY_WINDOW_UNIT);
@@ -3415,7 +3410,6 @@ export function ContentSubmissionSection() {
               checked={bountyEligibility === BOUNTY_ELIGIBILITY_OPEN}
               onChange={() => {
                 setBountyEligibility(BOUNTY_ELIGIBILITY_OPEN);
-                setBountyRequiresRecentRecheck(false);
               }}
             />
             <span className="font-medium">Everyone</span>
@@ -3438,9 +3432,6 @@ export function ContentSubmissionSection() {
                       ? bountyEligibility | option.bit
                       : bountyEligibility & ~option.bit;
                     setBountyEligibility(nextEligibility);
-                    if (nextEligibility === BOUNTY_ELIGIBILITY_OPEN) {
-                      setBountyRequiresRecentRecheck(false);
-                    }
                   }}
                 />
                 <span className="font-medium">{option.label}</span>
@@ -3448,27 +3439,6 @@ export function ContentSubmissionSection() {
             );
           })}
         </div>
-        <label
-          className={`mt-3 flex items-center justify-between gap-3 rounded-lg px-3 py-3 text-sm transition-colors ${
-            bountyEligibility === BOUNTY_ELIGIBILITY_OPEN
-              ? "choice-row-inactive opacity-60"
-              : "choice-row-inactive cursor-pointer"
-          }`}
-        >
-          <span className="min-w-0">
-            <span className="inline-flex items-center gap-1.5 font-medium text-base-content">
-              Require recent recheck
-              <InfoTooltip text={RECENT_RECHECK_TOOLTIP_TEXT} />
-            </span>
-          </span>
-          <input
-            type="checkbox"
-            className="toggle toggle-primary"
-            checked={bountyEligibility !== BOUNTY_ELIGIBILITY_OPEN && bountyRequiresRecentRecheck}
-            disabled={bountyEligibility === BOUNTY_ELIGIBILITY_OPEN}
-            onChange={event => setBountyRequiresRecentRecheck(event.target.checked)}
-          />
-        </label>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">

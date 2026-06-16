@@ -1,9 +1,7 @@
 import { BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG } from "@rateloop/contracts/protocol";
 import {
   WORLD_CREDENTIAL_BOUNTY_OPTIONS,
-  WORLD_CREDENTIAL_PASSPORT,
   WORLD_CREDENTIAL_PROOF_OF_HUMAN,
-  WORLD_CREDENTIAL_SELFIE,
   type WorldCredentialKind,
   getWorldCredentialOption,
   isWorldCredentialKind,
@@ -12,16 +10,9 @@ import {
 export { BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG };
 
 export const BOUNTY_ELIGIBILITY_OPEN = 0;
-const BOUNTY_ELIGIBILITY_SELFIE = 1 << WORLD_CREDENTIAL_SELFIE;
-export const BOUNTY_ELIGIBILITY_PASSPORT = 1 << WORLD_CREDENTIAL_PASSPORT;
 export const BOUNTY_ELIGIBILITY_VERIFIED_HUMAN = 1 << WORLD_CREDENTIAL_PROOF_OF_HUMAN;
-const BOUNTY_ELIGIBILITY_CREDENTIAL_MASK =
-  BOUNTY_ELIGIBILITY_SELFIE | BOUNTY_ELIGIBILITY_PASSPORT | BOUNTY_ELIGIBILITY_VERIFIED_HUMAN;
-const BOUNTY_ELIGIBILITY_KINDS: WorldCredentialKind[] = [
-  WORLD_CREDENTIAL_SELFIE,
-  WORLD_CREDENTIAL_PASSPORT,
-  WORLD_CREDENTIAL_PROOF_OF_HUMAN,
-];
+const BOUNTY_ELIGIBILITY_CREDENTIAL_MASK = BOUNTY_ELIGIBILITY_VERIFIED_HUMAN;
+const BOUNTY_ELIGIBILITY_KINDS: WorldCredentialKind[] = [WORLD_CREDENTIAL_PROOF_OF_HUMAN];
 
 export const BOUNTY_ELIGIBILITY_CREDENTIAL_OPTIONS: Array<{
   bit: number;
@@ -49,25 +40,25 @@ export function getBountyEligibilityKinds(value: number): WorldCredentialKind[] 
 }
 
 function bountyEligibilityRequiresRecentRecheck(value: number): boolean {
-  return (value & BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG) !== 0 && getBountyEligibilityCredentialMask(value) !== 0;
+  void value;
+  return false;
 }
 
 export function buildBountyEligibility(credentialMask: number, requireRecentRecheck: boolean): number {
+  void requireRecentRecheck;
   const supportedMask = credentialMask & BOUNTY_ELIGIBILITY_CREDENTIAL_MASK;
   if (supportedMask === BOUNTY_ELIGIBILITY_OPEN) return BOUNTY_ELIGIBILITY_OPEN;
-  return supportedMask | (requireRecentRecheck ? BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG : 0);
+  return supportedMask;
 }
 
 export function isSupportedBountyEligibility(value: number): boolean {
   if (!Number.isSafeInteger(value) || value < 0 || value > 0xff) return false;
 
-  const unsupportedBits = value & ~(BOUNTY_ELIGIBILITY_CREDENTIAL_MASK | BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG);
+  const unsupportedBits = value & ~BOUNTY_ELIGIBILITY_CREDENTIAL_MASK;
   if (unsupportedBits !== 0) return false;
 
   const credentialMask = getBountyEligibilityCredentialMask(value);
-  if (credentialMask === BOUNTY_ELIGIBILITY_OPEN) {
-    return (value & BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG) === 0;
-  }
+  if (credentialMask === BOUNTY_ELIGIBILITY_OPEN) return value === BOUNTY_ELIGIBILITY_OPEN;
   return getBountyEligibilityKinds(value).every(isWorldCredentialKind);
 }
 

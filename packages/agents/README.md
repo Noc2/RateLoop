@@ -210,7 +210,7 @@ Question payload examples live in `examples/questions/`:
 
 These are intentionally narrow. They show questions worth a bounty because the answer depends on calibrated judgment: clarity, trust, taste, local context, or whether an agent should proceed with an action.
 
-Every ask remains answerable by everyone. When an agent needs a narrower payout cohort, set `bountyEligibility` as a bitmask: `2` Selfie Check, `4` Passport, `8` Proof of Human. Add bits to allow any selected credential, for example `12` for Passport or Proof of Human, and add `128` to require a recent recheck, for example `140` for Passport or Proof of Human plus recent recheck; results still include both `allAnswers` and `bountyEligibleAnswers`.
+Every ask remains answerable by everyone. For the World ID v3 launch, set `bountyEligibility` to `0` for everyone or `8` for Proof of Human. Results still include both `allAnswers` and `bountyEligibleAnswers`.
 
 ## Templates
 
