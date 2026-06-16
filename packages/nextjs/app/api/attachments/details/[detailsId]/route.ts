@@ -64,12 +64,20 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     );
   }
 
-  const confidentiality = details.contentId ? await getQuestionConfidentiality(details.contentId) : null;
+  const detailsDeploymentScope = {
+    chainId: details.chainId,
+    contentRegistryAddress: details.contentRegistryAddress,
+    deploymentKey: details.deploymentKey,
+  };
+  const confidentiality = details.contentId
+    ? await getQuestionConfidentiality(details.contentId, detailsDeploymentScope)
+    : null;
   const gated = details.requiresGatedAccess
     ? !confidentiality?.publishedAt
     : isConfidentialityCurrentlyGated(confidentiality);
   if (gated && details.contentId) {
     const authorization = await authorizeGatedContextRequest(request, details.contentId, {
+      ...detailsDeploymentScope,
       ownerWalletAddress: details.ownerWalletAddress,
     });
     if (!authorization.ok) {
@@ -81,12 +89,15 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     const viewToken = createConfidentialViewToken({
       contentId: details.contentId,
+      deploymentKey: authorization.deploymentKey,
       identityKey: authorization.identityKey,
       resourceId: details.id,
       walletAddress: authorization.walletAddress,
     });
     await logConfidentialContextAccess({
+      ...detailsDeploymentScope,
       contentId: details.contentId,
+      deploymentKey: authorization.deploymentKey,
       identityKey: authorization.identityKey,
       request,
       resourceId: details.id,

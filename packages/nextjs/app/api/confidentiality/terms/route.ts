@@ -83,6 +83,7 @@ export async function GET(request: NextRequest) {
 
   const accepted = await hasConfidentialityTermsAcceptance({
     contentId: normalized.payload.contentId,
+    deploymentKey: serverPayload.payload.deploymentKey,
     payloadHash: hashConfidentialityTermsPayload(serverPayload.payload),
     walletAddress: normalized.payload.normalizedAddress,
   });

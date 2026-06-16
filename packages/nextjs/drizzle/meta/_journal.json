@@ -78,6 +78,13 @@
       "when": 1781276106000,
       "tag": "0010_confidentiality_private_forever_default",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1781279706000,
+      "tag": "0011_confidentiality_deployment_scope",
+      "breakpoints": true
     }
   ]
 }

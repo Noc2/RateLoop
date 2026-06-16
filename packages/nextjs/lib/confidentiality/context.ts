@@ -34,6 +34,7 @@ import {
   questionConfidentiality,
 } from "~~/lib/db/schema";
 import { getPrimaryServerTargetNetwork, getServerRpcOverrides } from "~~/lib/env/server";
+import { resolveContentDeploymentScope } from "~~/lib/protocolDeployment";
 import { isValidWalletAddress, normalizeWalletAddress } from "~~/lib/watchlist/contentWatch";
 import { ponderApi } from "~~/services/ponder/client";
 
@@ -54,6 +55,7 @@ export type ResourceKind = "image" | "details";
 export interface ConfidentialityTermsPayload {
   contentHash: `0x${string}` | null;
   contentId: string;
+  deploymentKey: string;
   detailsHash: `0x${string}` | null;
   identityKey: `0x${string}` | null;
   mediaTupleHash: `0x${string}` | null;
@@ -73,6 +75,18 @@ type ConfidentialityMetadataInput = {
 };
 
 type StoredConfidentiality = typeof questionConfidentiality.$inferSelect;
+
+export type ConfidentialityDeploymentScope = {
+  chainId: number | null;
+  contentRegistryAddress: `0x${string}` | null;
+  deploymentKey: string;
+};
+
+type ConfidentialityDeploymentScopeInput = {
+  chainId?: number | null;
+  contentRegistryAddress?: string | null;
+  deploymentKey?: string | null;
+};
 
 type DeployedContract = {
   address: Address;
@@ -144,6 +158,48 @@ const CONFIDENTIALITY_ESCROW_LOG_ROOT_ABI = [
     stateMutability: "nonpayable",
   },
 ] as const satisfies Abi;
+
+function normalizeDeploymentKey(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim().toLowerCase() : null;
+}
+
+function normalizeDeploymentAddress(value: unknown): `0x${string}` | null {
+  return typeof value === "string" && isAddress(value) ? (value.toLowerCase() as `0x${string}`) : null;
+}
+
+function normalizeDeploymentChainId(value: unknown) {
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : null;
+}
+
+export function resolveCurrentConfidentialityDeploymentScope(): ConfidentialityDeploymentScope | null {
+  const targetNetwork = getPrimaryServerTargetNetwork();
+  if (!targetNetwork) return null;
+  const scope = resolveContentDeploymentScope(targetNetwork.id);
+  if (!scope) return null;
+  return {
+    chainId: scope.chainId,
+    contentRegistryAddress: scope.contentRegistryAddress,
+    deploymentKey: scope.deploymentKey,
+  };
+}
+
+function resolveConfidentialityDeploymentScope(
+  input: ConfidentialityDeploymentScopeInput = {},
+): ConfidentialityDeploymentScope | null {
+  const deploymentKey = normalizeDeploymentKey(input.deploymentKey);
+  if (deploymentKey) {
+    const currentScope = resolveCurrentConfidentialityDeploymentScope();
+    const matchesCurrentScope = currentScope?.deploymentKey === deploymentKey;
+    return {
+      chainId: normalizeDeploymentChainId(input.chainId) ?? (matchesCurrentScope ? currentScope.chainId : null),
+      contentRegistryAddress:
+        normalizeDeploymentAddress(input.contentRegistryAddress) ??
+        (matchesCurrentScope ? currentScope.contentRegistryAddress : null),
+      deploymentKey,
+    };
+  }
+  return resolveCurrentConfidentialityDeploymentScope();
+}
 
 const PRIVATE_KEY_PATTERN = /^0x[0-9a-fA-F]{64}$/;
 
@@ -224,12 +280,15 @@ function parseMetadataConfidentiality(value: unknown): {
 
 export function normalizeConfidentialityTermsInput(
   body: Record<string, unknown>,
+  options: ConfidentialityDeploymentScopeInput = {},
 ): { ok: true; payload: ConfidentialityTermsPayload } | { ok: false; error: string } {
   if (!body.address || typeof body.address !== "string" || !isValidWalletAddress(body.address)) {
     return { ok: false, error: "Invalid wallet address" };
   }
   const contentId = normalizeContentId(body.contentId);
   if (!contentId) return { ok: false, error: "Invalid content id" };
+  const deploymentScope = resolveConfidentialityDeploymentScope(options);
+  if (!deploymentScope) return { ok: false, error: "Confidentiality deployment is not configured" };
 
   const termsVersion =
     typeof body.termsVersion === "string" && body.termsVersion.trim()
@@ -244,6 +303,7 @@ export function normalizeConfidentialityTermsInput(
     payload: {
       contentHash: normalizeOptionalBytes32(body.contentHash),
       contentId,
+      deploymentKey: deploymentScope.deploymentKey,
       detailsHash: normalizeOptionalBytes32(body.detailsHash),
       identityKey: normalizeIdentityKey(body.identityKey),
       mediaTupleHash: normalizeOptionalBytes32(body.mediaTupleHash),
@@ -258,14 +318,17 @@ export function normalizeConfidentialityTermsInput(
 
 export async function buildServerConfidentialityTermsPayload(
   body: Record<string, unknown>,
+  options: ConfidentialityDeploymentScopeInput = {},
 ): Promise<
   | { ok: true; payload: ConfidentialityTermsPayload; record: StoredConfidentiality }
   | { ok: false; error: string; status: number }
 > {
-  const normalized = normalizeConfidentialityTermsInput(body);
+  const normalized = normalizeConfidentialityTermsInput(body, options);
   if (!normalized.ok) return { ...normalized, status: 400 };
 
-  const record = await getQuestionConfidentiality(normalized.payload.contentId);
+  const record = await getQuestionConfidentiality(normalized.payload.contentId, {
+    deploymentKey: normalized.payload.deploymentKey,
+  });
   if (!record?.gated) {
     return { ok: false, status: 404, error: "Confidential context metadata unavailable" };
   }
@@ -278,6 +341,7 @@ export async function buildServerConfidentialityTermsPayload(
     payload: {
       ...normalized.payload,
       contentHash: normalizeOptionalBytes32(record.contentHash),
+      deploymentKey: record.deploymentKey ?? normalized.payload.deploymentKey,
       detailsHash: normalizeOptionalBytes32(record.detailsHash),
       identityKey: null,
       mediaTupleHash: normalizeOptionalBytes32(record.mediaTupleHash),
@@ -291,6 +355,7 @@ export function hashConfidentialityTermsPayload(payload: ConfidentialityTermsPay
   return hashSignedActionPayload([
     payload.normalizedAddress,
     payload.identityKey ?? "",
+    payload.deploymentKey,
     payload.contentId,
     payload.questionMetadataHash ?? "",
     payload.contentHash ?? "",
@@ -343,22 +408,36 @@ export function isConfidentialityCurrentlyGated(record: StoredConfidentiality | 
   return Boolean(record?.gated && !record.publishedAt);
 }
 
-export async function getQuestionConfidentiality(contentId: string) {
+export async function getQuestionConfidentiality(contentId: string, options: ConfidentialityDeploymentScopeInput = {}) {
+  const normalizedContentId = normalizeContentId(contentId);
+  const deploymentScope = resolveConfidentialityDeploymentScope(options);
+  if (!normalizedContentId || !deploymentScope) return null;
+
   const [record] = await db
     .select()
     .from(questionConfidentiality)
-    .where(eq(questionConfidentiality.contentId, contentId))
+    .where(
+      and(
+        eq(questionConfidentiality.deploymentKey, deploymentScope.deploymentKey),
+        eq(questionConfidentiality.contentId, normalizedContentId),
+      ),
+    )
     .limit(1);
   return record ?? null;
 }
 
 export async function upsertQuestionConfidentialityFromMetadata(params: {
+  chainId?: number | null;
   contentId: string;
+  contentRegistryAddress?: string | null;
+  deploymentKey?: string | null;
   metadata: ConfidentialityMetadataInput | null;
   questionMetadataHash?: string | null;
 }) {
   const contentId = normalizeContentId(params.contentId);
   if (!contentId || !params.metadata || typeof params.metadata !== "object" || Array.isArray(params.metadata)) return;
+  const deploymentScope = resolveConfidentialityDeploymentScope(params);
+  if (!deploymentScope) return;
 
   const metadata = params.metadata as Record<string, unknown>;
   const confidentiality = parseMetadataConfidentiality(metadata.confidentiality);
@@ -368,8 +447,11 @@ export async function upsertQuestionConfidentialityFromMetadata(params: {
     .values({
       bondAmount: confidentiality.bondAmount,
       bondAsset: confidentiality.bondAsset,
+      chainId: deploymentScope.chainId,
       contentHash: normalizeOptionalBytes32(params.metadata.contentHash),
       contentId,
+      contentRegistryAddress: deploymentScope.contentRegistryAddress,
+      deploymentKey: deploymentScope.deploymentKey,
       detailsHash: normalizeOptionalBytes32(params.metadata.detailsHash),
       disclosurePolicy: confidentiality.disclosurePolicy,
       gated: confidentiality.gated,
@@ -382,11 +464,13 @@ export async function upsertQuestionConfidentialityFromMetadata(params: {
       updatedAt: now,
     })
     .onConflictDoUpdate({
-      target: questionConfidentiality.contentId,
+      target: [questionConfidentiality.deploymentKey, questionConfidentiality.contentId],
       set: {
         bondAmount: confidentiality.bondAmount,
         bondAsset: confidentiality.bondAsset,
+        chainId: deploymentScope.chainId,
         contentHash: normalizeOptionalBytes32(params.metadata.contentHash),
+        contentRegistryAddress: deploymentScope.contentRegistryAddress,
         detailsHash: normalizeOptionalBytes32(params.metadata.detailsHash),
         disclosurePolicy: confidentiality.disclosurePolicy,
         gated: confidentiality.gated,
@@ -400,13 +484,20 @@ export async function upsertQuestionConfidentialityFromMetadata(params: {
 }
 
 export async function hasConfidentialityTermsAcceptance(params: {
+  chainId?: number | null;
+  contentRegistryAddress?: string | null;
   contentId: string;
+  deploymentKey?: string | null;
   payloadHash?: string;
   termsDocHash?: string;
   termsVersion?: string;
   walletAddress: `0x${string}`;
 }) {
+  const deploymentScope = resolveConfidentialityDeploymentScope(params);
+  if (!deploymentScope) return false;
+
   const commonConditions = [
+    eq(confidentialityTermsAcceptances.deploymentKey, deploymentScope.deploymentKey),
     eq(confidentialityTermsAcceptances.walletAddress, params.walletAddress),
     eq(confidentialityTermsAcceptances.contentId, params.contentId),
     eq(confidentialityTermsAcceptances.termsVersion, params.termsVersion ?? CONFIDENTIALITY_TERMS_VERSION),
@@ -431,12 +522,16 @@ export async function recordConfidentialityTermsAcceptance(params: {
 }) {
   const acceptedAt = params.acceptedAt ?? new Date();
   const payloadHash = hashConfidentialityTermsPayload(params.payload);
+  const deploymentScope = resolveConfidentialityDeploymentScope({ deploymentKey: params.payload.deploymentKey });
   await db
     .insert(confidentialityTermsAcceptances)
     .values({
       acceptedAt,
+      chainId: deploymentScope?.chainId ?? null,
       contentId: params.payload.contentId,
+      contentRegistryAddress: deploymentScope?.contentRegistryAddress ?? null,
       contentHash: params.payload.contentHash,
+      deploymentKey: params.payload.deploymentKey,
       detailsHash: params.payload.detailsHash,
       identityKey: params.payload.identityKey,
       mediaTupleHash: params.payload.mediaTupleHash,
@@ -450,6 +545,7 @@ export async function recordConfidentialityTermsAcceptance(params: {
     })
     .onConflictDoUpdate({
       target: [
+        confidentialityTermsAcceptances.deploymentKey,
         confidentialityTermsAcceptances.walletAddress,
         confidentialityTermsAcceptances.contentId,
         confidentialityTermsAcceptances.termsVersion,
@@ -651,8 +747,13 @@ function isOwnerWalletAddress(walletAddress: `0x${string}`, ownerWalletAddress: 
 export async function authorizeGatedContextRequest(
   request: NextRequest,
   contentId: string,
-  options: { ownerWalletAddress?: string | null } = {},
+  options: { ownerWalletAddress?: string | null } & ConfidentialityDeploymentScopeInput = {},
 ) {
+  const deploymentScope = resolveConfidentialityDeploymentScope(options);
+  if (!deploymentScope) {
+    return { ok: false as const, status: 503, error: "Confidentiality deployment is not configured" };
+  }
+
   const address = request.nextUrl.searchParams.get("address");
   if (!address || !isValidWalletAddress(address)) {
     return { ok: false as const, status: 401, error: "Signed wallet session required" };
@@ -671,12 +772,16 @@ export async function authorizeGatedContextRequest(
   if (isOwnerWalletAddress(walletAddress, options.ownerWalletAddress)) {
     return {
       ok: true as const,
+      deploymentKey: deploymentScope.deploymentKey,
       identityKey: null,
       walletAddress,
     };
   }
 
-  const serverPayload = await buildServerConfidentialityTermsPayload({ address: walletAddress, contentId });
+  const serverPayload = await buildServerConfidentialityTermsPayload(
+    { address: walletAddress, contentId },
+    deploymentScope,
+  );
   if (!serverPayload.ok) {
     return { ok: false as const, status: serverPayload.status, error: serverPayload.error };
   }
@@ -684,6 +789,7 @@ export async function authorizeGatedContextRequest(
   if (
     !(await hasConfidentialityTermsAcceptance({
       contentId,
+      deploymentKey: deploymentScope.deploymentKey,
       payloadHash: hashConfidentialityTermsPayload(serverPayload.payload),
       walletAddress,
     }))
@@ -721,6 +827,7 @@ export async function authorizeGatedContextRequest(
 
   return {
     ok: true as const,
+    deploymentKey: deploymentScope.deploymentKey,
     identityKey: viewer.identityKey,
     walletAddress,
   };
@@ -747,18 +854,30 @@ function hashIpAddress(request: NextRequest) {
 
 export function createConfidentialViewToken(params: {
   contentId: string;
+  deploymentKey: string;
   identityKey: string | null;
   resourceId: string;
   walletAddress: `0x${string}`;
 }) {
   const viewId = randomBytes(16).toString("hex");
   return createHmac("sha256", getConfidentialitySecret())
-    .update([params.identityKey ?? params.walletAddress, params.contentId, params.resourceId, viewId].join("\n"))
+    .update(
+      [
+        params.identityKey ?? params.walletAddress,
+        params.deploymentKey,
+        params.contentId,
+        params.resourceId,
+        viewId,
+      ].join("\n"),
+    )
     .digest("hex");
 }
 
 export async function logConfidentialContextAccess(params: {
+  chainId?: number | null;
+  contentRegistryAddress?: string | null;
   contentId: string;
+  deploymentKey?: string | null;
   identityKey: string | null;
   request: NextRequest;
   resourceId: string;
@@ -767,8 +886,13 @@ export async function logConfidentialContextAccess(params: {
   walletAddress: `0x${string}`;
 }) {
   if (!RESOURCE_ID_PATTERN.test(params.resourceId)) return;
+  const deploymentScope = resolveConfidentialityDeploymentScope(params);
+  if (!deploymentScope) return;
   await db.insert(confidentialContextAccessLogs).values({
+    chainId: deploymentScope.chainId,
     contentId: params.contentId,
+    contentRegistryAddress: deploymentScope.contentRegistryAddress,
+    deploymentKey: deploymentScope.deploymentKey,
     identityKey: params.identityKey,
     ipHash: hashIpAddress(params.request),
     resourceId: params.resourceId,
@@ -782,6 +906,8 @@ export async function logConfidentialContextAccess(params: {
 export async function publishConfidentialContextAfterSettlement(params: { contentIds: string[]; settledAt?: Date }) {
   const contentIds = [...new Set(params.contentIds.map(normalizeContentId).filter((id): id is string => Boolean(id)))];
   if (contentIds.length === 0) return { published: 0 };
+  const deploymentScope = resolveCurrentConfidentialityDeploymentScope();
+  if (!deploymentScope) return { published: 0 };
 
   const now = params.settledAt ?? new Date();
   let published = 0;
@@ -791,6 +917,7 @@ export async function publishConfidentialContextAfterSettlement(params: { conten
       .set({ publishedAt: now, updatedAt: now })
       .where(
         and(
+          eq(questionConfidentiality.deploymentKey, deploymentScope.deploymentKey),
           eq(questionConfidentiality.contentId, contentId),
           eq(questionConfidentiality.gated, true),
           eq(questionConfidentiality.disclosurePolicy, "after_settlement"),
@@ -832,11 +959,14 @@ async function lookupSettledAtForConfidentialContent(contentId: string) {
 export async function findDueConfidentialDisclosureContent(params: { limit?: number; scanLimit?: number } = {}) {
   const limit = normalizePositiveLimit(params.limit, 100, 500);
   const scanLimit = normalizePositiveLimit(params.scanLimit, Math.max(limit * 10, 500), 5_000);
+  const deploymentScope = resolveCurrentConfidentialityDeploymentScope();
+  if (!deploymentScope) return { checked: 0, due: [], errors: [] };
   const candidates = await db
     .select({ contentId: questionConfidentiality.contentId })
     .from(questionConfidentiality)
     .where(
       and(
+        eq(questionConfidentiality.deploymentKey, deploymentScope.deploymentKey),
         eq(questionConfidentiality.gated, true),
         eq(questionConfidentiality.disclosurePolicy, "after_settlement"),
         isNull(questionConfidentiality.publishedAt),

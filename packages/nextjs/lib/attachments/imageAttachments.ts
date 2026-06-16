@@ -31,6 +31,12 @@ const DEFAULT_ORPHAN_SWEEP_LIMIT = 100;
 
 type ImageAttachmentStatus = "uploading" | "processing" | "approved" | "blocked" | "failed" | "deleted";
 
+type ImageAttachmentDeploymentScope = {
+  chainId?: number | null;
+  contentRegistryAddress?: string | null;
+  deploymentKey?: string | null;
+};
+
 export type UploaderIdentity =
   | {
       kind: "wallet";
@@ -1145,12 +1151,14 @@ export async function markImagesRequireGatedAccess(params: {
   return marked;
 }
 
-export async function attachImagesToContent(params: {
-  agentId?: string | null;
-  contentId: string;
-  imageUrls: readonly string[];
-  ownerWalletAddress?: string | null;
-}) {
+export async function attachImagesToContent(
+  params: ImageAttachmentDeploymentScope & {
+    agentId?: string | null;
+    contentId: string;
+    imageUrls: readonly string[];
+    ownerWalletAddress?: string | null;
+  },
+) {
   const attachmentIds = [
     ...new Set(params.imageUrls.map(parseAttachmentIdFromImageUrl).filter((id): id is string => Boolean(id))),
   ];
@@ -1165,7 +1173,10 @@ export async function attachImagesToContent(params: {
     const [updated] = await db
       .update(questionImageAttachments)
       .set({
+        chainId: params.chainId ?? null,
         contentId: params.contentId,
+        contentRegistryAddress: params.contentRegistryAddress ?? null,
+        deploymentKey: params.deploymentKey ?? null,
         updatedAt,
       })
       .where(

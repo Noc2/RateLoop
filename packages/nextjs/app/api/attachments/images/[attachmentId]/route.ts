@@ -77,13 +77,21 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     });
   }
 
-  const confidentiality = attachment.contentId ? await getQuestionConfidentiality(attachment.contentId) : null;
+  const attachmentDeploymentScope = {
+    chainId: attachment.chainId,
+    contentRegistryAddress: attachment.contentRegistryAddress,
+    deploymentKey: attachment.deploymentKey,
+  };
+  const confidentiality = attachment.contentId
+    ? await getQuestionConfidentiality(attachment.contentId, attachmentDeploymentScope)
+    : null;
   const gated = attachment.requiresGatedAccess
     ? !confidentiality?.publishedAt
     : isConfidentialityCurrentlyGated(confidentiality);
   const gatedAuth =
     gated && attachment.contentId
       ? await authorizeGatedContextRequest(request, attachment.contentId, {
+          ...attachmentDeploymentScope,
           ownerWalletAddress: attachment.ownerWalletAddress,
         })
       : null;
@@ -104,12 +112,15 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       const viewedAt = new Date();
       const viewToken = createConfidentialViewToken({
         contentId: attachment.contentId,
+        deploymentKey: gatedAuth.deploymentKey,
         identityKey: gatedAuth.identityKey,
         resourceId: attachment.id,
         walletAddress: gatedAuth.walletAddress,
       });
       await logConfidentialContextAccess({
+        ...attachmentDeploymentScope,
         contentId: attachment.contentId,
+        deploymentKey: gatedAuth.deploymentKey,
         identityKey: gatedAuth.identityKey,
         request,
         resourceId: attachment.id,
@@ -171,12 +182,15 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const viewedAt = new Date();
     const viewToken = createConfidentialViewToken({
       contentId: attachment.contentId,
+      deploymentKey: gatedAuth.deploymentKey,
       identityKey: gatedAuth.identityKey,
       resourceId: attachment.id,
       walletAddress: gatedAuth.walletAddress,
     });
     await logConfidentialContextAccess({
+      ...attachmentDeploymentScope,
       contentId: attachment.contentId,
+      deploymentKey: gatedAuth.deploymentKey,
       identityKey: gatedAuth.identityKey,
       request,
       resourceId: attachment.id,

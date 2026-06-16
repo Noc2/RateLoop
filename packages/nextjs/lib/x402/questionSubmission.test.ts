@@ -138,6 +138,7 @@ async function insertQuestionImageAttachment(params: {
 const TEST_CONFIG = {
   chainId: 480,
   contentRegistryAddress: "0x0000000000000000000000000000000000000011" as const,
+  contentRegistryDeploymentKey: "480:0x0000000000000000000000000000000000000011",
   feedbackBonusEscrowAddress: "0x0000000000000000000000000000000000000012" as const,
   lrepAddress: "0x0000000000000000000000000000000000000016" as const,
   questionRewardPoolEscrowAddress: "0x0000000000000000000000000000000000000013" as const,

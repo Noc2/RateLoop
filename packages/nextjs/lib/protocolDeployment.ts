@@ -17,6 +17,12 @@ export interface ProtocolDeploymentScope {
   deploymentKey: string;
 }
 
+export interface ContentDeploymentScope {
+  chainId: number;
+  contentRegistryAddress: `0x${string}`;
+  deploymentKey: string;
+}
+
 function normalizeRequiredAddress(value: unknown): `0x${string}` | null {
   if (typeof value !== "string" || !isAddress(value) || value.toLowerCase() === ZERO_ADDRESS) {
     return null;
@@ -35,6 +41,27 @@ export function buildProtocolDeploymentKey(params: {
     params.contentRegistryAddress.toLowerCase(),
     params.feedbackRegistryAddress.toLowerCase(),
   ].join(":");
+}
+
+export function buildContentDeploymentKey(params: { chainId: number; contentRegistryAddress: `0x${string}` }) {
+  return [String(params.chainId), params.contentRegistryAddress.toLowerCase()].join(":");
+}
+
+export function resolveContentDeploymentScope(chainId: number): ContentDeploymentScope | null {
+  const contractsForChain = deployments[chainId];
+  const contentRegistryAddress = normalizeRequiredAddress(contractsForChain?.ContentRegistry?.address);
+  if (!contentRegistryAddress) {
+    return null;
+  }
+
+  return {
+    chainId,
+    contentRegistryAddress,
+    deploymentKey: buildContentDeploymentKey({
+      chainId,
+      contentRegistryAddress,
+    }),
+  };
 }
 
 export function resolveProtocolDeploymentScope(chainId: number): ProtocolDeploymentScope | null {

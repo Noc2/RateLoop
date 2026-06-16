@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { createHash } from "crypto";
 import { and, eq } from "drizzle-orm";
 import { GATED_CONTEXT_SIGNED_READ_SESSION_COOKIE_NAME, verifySignedReadSession } from "~~/lib/auth/signedReadSessions";
-import { confidentialityEpochForDate } from "~~/lib/confidentiality/context";
+import {
+  confidentialityEpochForDate,
+  resolveCurrentConfidentialityDeploymentScope,
+} from "~~/lib/confidentiality/context";
 import { db } from "~~/lib/db";
 import { confidentialContextAccessLogs, confidentialityBreachReports, confidentialityLogRoots } from "~~/lib/db/schema";
 import { isJsonObjectBody, jsonBodyErrorResponse, parseJsonBody } from "~~/lib/http/jsonBody";
@@ -145,6 +148,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Signed reporter session required" }, { status: 401 });
   }
 
+  const deploymentScope = resolveCurrentConfidentialityDeploymentScope();
+  if (!deploymentScope) {
+    return NextResponse.json({ error: "Confidentiality deployment is not configured" }, { status: 503 });
+  }
+
   const viewTokenResult = readOptionalViewToken(body.viewToken);
   if (!viewTokenResult.ok) {
     return NextResponse.json({ error: "Invalid view token" }, { status: 400 });
@@ -168,6 +176,7 @@ export async function POST(request: NextRequest) {
     .where(
       and(
         eq(confidentialContextAccessLogs.viewToken, viewTokenResult.viewToken),
+        eq(confidentialContextAccessLogs.deploymentKey, deploymentScope.deploymentKey),
         eq(confidentialContextAccessLogs.contentId, contentId),
         eq(confidentialContextAccessLogs.identityKey, accusedIdentityKey),
       ),
@@ -206,6 +215,7 @@ export async function POST(request: NextRequest) {
   const evidenceArtifact = {
     schemaVersion: BREACH_EVIDENCE_SCHEMA_VERSION,
     contentId,
+    deploymentKey: deploymentScope.deploymentKey,
     accusedIdentityKey,
     reporter,
     createdAt: now.toISOString(),
@@ -258,7 +268,10 @@ export async function POST(request: NextRequest) {
     .values({
       accessLogId: accessLog.id,
       accusedIdentityKey,
+      chainId: deploymentScope.chainId,
       contentId,
+      contentRegistryAddress: deploymentScope.contentRegistryAddress,
+      deploymentKey: deploymentScope.deploymentKey,
       createdAt: now,
       epoch,
       evidenceHash,

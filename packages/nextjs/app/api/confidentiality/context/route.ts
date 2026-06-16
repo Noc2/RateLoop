@@ -48,7 +48,13 @@ export async function GET(request: NextRequest) {
         sha256: questionDetails.sha256,
       })
       .from(questionDetails)
-      .where(and(eq(questionDetails.contentId, normalized.payload.contentId), eq(questionDetails.status, "approved"))),
+      .where(
+        and(
+          eq(questionDetails.deploymentKey, normalized.payload.deploymentKey),
+          eq(questionDetails.contentId, normalized.payload.contentId),
+          eq(questionDetails.status, "approved"),
+        ),
+      ),
     db
       .select({
         id: questionImageAttachments.id,
@@ -59,6 +65,7 @@ export async function GET(request: NextRequest) {
       .where(
         and(
           eq(questionImageAttachments.contentId, normalized.payload.contentId),
+          eq(questionImageAttachments.deploymentKey, normalized.payload.deploymentKey),
           eq(questionImageAttachments.status, "approved"),
         ),
       ),
@@ -68,6 +75,7 @@ export async function GET(request: NextRequest) {
     .map(row => normalizeOwnerAddress(row.ownerWalletAddress))
     .find(owner => owner === normalized.payload.normalizedAddress);
   const authorization = await authorizeGatedContextRequest(request, normalized.payload.contentId, {
+    deploymentKey: normalized.payload.deploymentKey,
     ownerWalletAddress: matchingOwner,
   });
   if (!authorization.ok) {

@@ -36,6 +36,12 @@ const BLOCKED_MODERATION_CATEGORIES = new Set([
 
 type QuestionDetailsStatus = "approved" | "blocked" | "failed" | "deleted";
 
+type QuestionDetailsDeploymentScope = {
+  chainId?: number | null;
+  contentRegistryAddress?: string | null;
+  deploymentKey?: string | null;
+};
+
 export type QuestionDetailsUploaderIdentity =
   | {
       kind: "wallet";
@@ -496,12 +502,14 @@ export async function createQuestionDetailsFromText(params: CreateQuestionDetail
   return uploadResult({ details: created, requestUrl: params.requestUrl });
 }
 
-export async function attachQuestionDetailsToContent(params: {
-  agentId?: string | null;
-  contentId: string;
-  detailsUrl: string;
-  ownerWalletAddress?: string | null;
-}) {
+export async function attachQuestionDetailsToContent(
+  params: QuestionDetailsDeploymentScope & {
+    agentId?: string | null;
+    contentId: string;
+    detailsUrl: string;
+    ownerWalletAddress?: string | null;
+  },
+) {
   const detailsId = parseQuestionDetailsIdFromDetailsUrl(params.detailsUrl);
   if (!detailsId) return false;
 
@@ -523,7 +531,10 @@ export async function attachQuestionDetailsToContent(params: {
   const [updated] = await db
     .update(questionDetails)
     .set({
+      chainId: params.chainId ?? null,
       contentId: params.contentId,
+      contentRegistryAddress: params.contentRegistryAddress ?? null,
+      deploymentKey: params.deploymentKey ?? null,
       updatedAt,
     })
     .where(and(eq(questionDetails.id, detailsId), eq(questionDetails.status, "approved"), identityPredicate))

@@ -65,13 +65,23 @@ function sha256Hash(value: string) {
   return `0x${createHash("sha256").update(value).digest("hex")}`;
 }
 
+function currentDeploymentScope() {
+  const scope = confidentiality.resolveCurrentConfidentialityDeploymentScope();
+  assert.ok(scope);
+  return scope;
+}
+
 async function insertRootedAccess(params: { anchored?: boolean } = {}) {
   const viewedAt = new Date("2026-06-11T14:30:00.000Z");
   const epoch = confidentiality.confidentialityEpochForDate(viewedAt);
+  const scope = currentDeploymentScope();
   const [accessLog] = await dbModule.db
     .insert(dbSchema.confidentialContextAccessLogs)
     .values({
+      chainId: scope.chainId,
       contentId: CONTENT_ID,
+      contentRegistryAddress: scope.contentRegistryAddress,
+      deploymentKey: scope.deploymentKey,
       identityKey: IDENTITY_KEY,
       resourceId: "det_private001",
       resourceKind: "details",
@@ -258,8 +268,12 @@ test("breach reports require a matching view token", async () => {
 });
 
 test("breach reports reject view tokens that do not match the accused confidential access", async () => {
+  const scope = currentDeploymentScope();
   await dbModule.db.insert(dbSchema.confidentialContextAccessLogs).values({
+    chainId: scope.chainId,
     contentId: CONTENT_ID,
+    contentRegistryAddress: scope.contentRegistryAddress,
+    deploymentKey: scope.deploymentKey,
     identityKey: IDENTITY_KEY,
     resourceId: "det_private001",
     resourceKind: "details",

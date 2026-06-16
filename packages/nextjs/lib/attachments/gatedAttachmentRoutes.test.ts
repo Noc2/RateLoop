@@ -15,6 +15,7 @@ import {
   CONFIDENTIALITY_TERMS_VERSION,
   __setConfidentialityOnchainGateForTests,
   recordConfidentialityTermsAcceptance,
+  resolveCurrentConfidentialityDeploymentScope,
   upsertQuestionConfidentialityFromMetadata,
 } from "~~/lib/confidentiality/context";
 import { __setDatabaseResourcesForTests, db, dbClient } from "~~/lib/db";
@@ -42,6 +43,12 @@ const IDENTITY_KEY = `0x${"a".repeat(64)}` as const;
 
 let tempDir: string | null = null;
 
+function currentDeploymentScope() {
+  const scope = resolveCurrentConfidentialityDeploymentScope();
+  assert.ok(scope);
+  return scope;
+}
+
 function restoreEnv(name: keyof NodeJS.ProcessEnv, value: string | undefined) {
   if (value === undefined) {
     delete env[name];
@@ -51,8 +58,12 @@ function restoreEnv(name: keyof NodeJS.ProcessEnv, value: string | undefined) {
 }
 
 async function seedGatedConfidentiality() {
+  const scope = currentDeploymentScope();
   await upsertQuestionConfidentialityFromMetadata({
+    chainId: scope.chainId,
     contentId: CONTENT_ID,
+    contentRegistryAddress: scope.contentRegistryAddress,
+    deploymentKey: scope.deploymentKey,
     metadata: {
       confidentiality: {
         bond: { amount: "0", asset: "LREP" },
@@ -65,9 +76,13 @@ async function seedGatedConfidentiality() {
 
 async function seedGatedDetails() {
   const now = new Date("2026-06-11T12:00:00.000Z");
+  const scope = currentDeploymentScope();
   await db.insert(questionDetails).values({
     id: DETAILS_ID,
+    chainId: scope.chainId,
     contentId: CONTENT_ID,
+    contentRegistryAddress: scope.contentRegistryAddress,
+    deploymentKey: scope.deploymentKey,
     uploaderKind: "wallet",
     ownerWalletAddress: WALLET,
     sizeBytes: new TextEncoder().encode(DETAILS_TEXT).byteLength,
@@ -82,13 +97,17 @@ async function seedGatedDetails() {
 
 async function seedGatedImage() {
   const now = new Date("2026-06-11T12:00:00.000Z");
+  const scope = currentDeploymentScope();
   const attachmentDir = path.join(tempDir!, "question-attachments", ATTACHMENT_ID);
   await mkdir(attachmentDir, { recursive: true });
   await writeFile(path.join(attachmentDir, "image.webp"), ONE_PIXEL_PNG);
 
   await db.insert(questionImageAttachments).values({
     id: ATTACHMENT_ID,
+    chainId: scope.chainId,
     contentId: CONTENT_ID,
+    contentRegistryAddress: scope.contentRegistryAddress,
+    deploymentKey: scope.deploymentKey,
     uploaderKind: "wallet",
     ownerWalletAddress: WALLET,
     normalizedBlobPathname: `local://question-attachments/${ATTACHMENT_ID}/image.webp`,
@@ -110,12 +129,14 @@ async function buildSignedGatedContextCookie(walletAddress: `0x${string}` = WALL
 }
 
 async function acceptTermsAndBuildCookie(nonce: string, walletAddress: `0x${string}` = RATER_WALLET) {
+  const scope = currentDeploymentScope();
   await recordConfidentialityTermsAcceptance({
     acceptedAt: new Date("2026-06-11T12:01:00.000Z"),
     nonce,
     payload: {
       contentHash: null,
       contentId: CONTENT_ID,
+      deploymentKey: scope.deploymentKey,
       detailsHash: null,
       identityKey: null,
       mediaTupleHash: null,
@@ -256,6 +277,37 @@ test("gated details still require terms acceptance for signed non-owner sessions
 test("gated context manifest returns authorized private attachment fetch URLs", async () => {
   await seedGatedDetails();
   await seedGatedImage();
+  const now = new Date("2026-06-11T12:02:00.000Z");
+  await db.insert(questionDetails).values({
+    id: "det_legacygatedetail1",
+    contentId: CONTENT_ID,
+    deploymentKey: "31337:0x0000000000000000000000000000000000000001",
+    uploaderKind: "wallet",
+    ownerWalletAddress: RATER_WALLET,
+    sizeBytes: 6,
+    sha256: createHash("sha256").update("legacy").digest("hex"),
+    normalizedText: "legacy",
+    status: "approved",
+    moderationStatus: "approved",
+    createdAt: now,
+    updatedAt: now,
+  });
+  await db.insert(questionImageAttachments).values({
+    id: "att_legacygateimage1",
+    contentId: CONTENT_ID,
+    deploymentKey: "31337:0x0000000000000000000000000000000000000001",
+    uploaderKind: "wallet",
+    ownerWalletAddress: RATER_WALLET,
+    normalizedBlobPathname: `local://question-attachments/${ATTACHMENT_ID}/image.webp`,
+    originalFilename: "legacy.png",
+    mimeType: "image/webp",
+    sizeBytes: ONE_PIXEL_PNG.length,
+    sha256: "b".repeat(64),
+    status: "approved",
+    moderationStatus: "approved",
+    createdAt: now,
+    updatedAt: now,
+  });
 
   const requestUrl = `https://www.rateloop.ai/api/confidentiality/context?contentId=${CONTENT_ID}&address=${WALLET}`;
   const denied = await getGatedContext(new NextRequest(requestUrl));

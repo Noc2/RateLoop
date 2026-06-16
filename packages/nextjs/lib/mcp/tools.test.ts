@@ -182,9 +182,14 @@ async function insertBudgetReservation(params: { agentId?: string; operationKey?
 
 async function insertGatedContextAttachments(contentId = RATING_CONTENT_ID) {
   const now = new Date("2026-06-11T10:00:00.000Z");
+  const contentRegistryAddress = deployedContracts[31337].ContentRegistry.address.toLowerCase();
+  const deploymentKey = `31337:${contentRegistryAddress}`;
   await dbClient.execute({
     sql: `
       INSERT INTO question_confidentiality (
+        deployment_key,
+        chain_id,
+        content_registry_address,
         content_id,
         gated,
         bond_asset,
@@ -198,8 +203,8 @@ async function insertGatedContextAttachments(contentId = RATING_CONTENT_ID) {
         created_at,
         updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT (content_id) DO UPDATE SET
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT (deployment_key, content_id) DO UPDATE SET
         gated = excluded.gated,
         bond_asset = excluded.bond_asset,
         bond_amount = excluded.bond_amount,
@@ -212,6 +217,9 @@ async function insertGatedContextAttachments(contentId = RATING_CONTENT_ID) {
         updated_at = excluded.updated_at
     `,
     args: [
+      deploymentKey,
+      31337,
+      contentRegistryAddress,
       contentId,
       true,
       "USDC",
@@ -230,6 +238,9 @@ async function insertGatedContextAttachments(contentId = RATING_CONTENT_ID) {
     sql: `
       INSERT INTO question_details (
         id,
+        deployment_key,
+        chain_id,
+        content_registry_address,
         uploader_kind,
         owner_wallet_address,
         agent_id,
@@ -243,10 +254,13 @@ async function insertGatedContextAttachments(contentId = RATING_CONTENT_ID) {
         created_at,
         updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
     args: [
       "det_mcpcontextdetail01",
+      deploymentKey,
+      31337,
+      contentRegistryAddress,
       "wallet",
       AGENT.walletAddress,
       null,
@@ -265,6 +279,9 @@ async function insertGatedContextAttachments(contentId = RATING_CONTENT_ID) {
     sql: `
       INSERT INTO question_image_attachments (
         id,
+        deployment_key,
+        chain_id,
+        content_registry_address,
         uploader_kind,
         owner_wallet_address,
         agent_id,
@@ -279,10 +296,13 @@ async function insertGatedContextAttachments(contentId = RATING_CONTENT_ID) {
         created_at,
         updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
     args: [
       "att_mcpcontextimage01",
+      deploymentKey,
+      31337,
+      contentRegistryAddress,
       "wallet",
       AGENT.walletAddress,
       null,

@@ -38,9 +38,12 @@ function restoreEnv(name: keyof NodeJS.ProcessEnv, value: string | undefined) {
 }
 
 function termsPayload(): ConfidentialityTermsPayload {
+  const deploymentScope = confidentiality.resolveCurrentConfidentialityDeploymentScope();
+  assert.ok(deploymentScope);
   return {
     contentHash: `0x${"1".repeat(64)}`,
     contentId: CONTENT_ID,
+    deploymentKey: deploymentScope.deploymentKey,
     detailsHash: `0x${"2".repeat(64)}`,
     identityKey: IDENTITY_KEY,
     mediaTupleHash: `0x${"3".repeat(64)}`,
@@ -393,12 +396,14 @@ test("authorizes accepted signed sessions and logs gated context access", async 
 
   const viewToken = confidentiality.createConfidentialViewToken({
     contentId: CONTENT_ID,
+    deploymentKey: authorization.deploymentKey,
     identityKey: authorization.identityKey,
     resourceId,
     walletAddress: authorization.walletAddress,
   });
   await confidentiality.logConfidentialContextAccess({
     contentId: CONTENT_ID,
+    deploymentKey: authorization.deploymentKey,
     identityKey: authorization.identityKey,
     request,
     resourceId,

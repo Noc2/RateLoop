@@ -41,6 +41,7 @@ import {
   getServerTargetNetworkById,
   getX402UsdcAddressOverride,
 } from "~~/lib/env/server";
+import { resolveContentDeploymentScope } from "~~/lib/protocolDeployment";
 import {
   getContentRegistrySubmissionRewardMinimum,
   getSubmissionRewardCoverageMinimum,
@@ -753,6 +754,7 @@ type X402QuestionSubmissionTestOverrides = {
 type X402QuestionSubmissionConfig = {
   chainId: number;
   contentRegistryAddress: Address;
+  contentRegistryDeploymentKey: string;
   feedbackBonusEscrowAddress?: Address;
   lrepAddress?: Address;
   questionRewardPoolEscrowAddress: Address;
@@ -1082,12 +1084,19 @@ export function resolveX402QuestionConfig(chainId: number): X402QuestionSubmissi
     throw new X402QuestionConfigError("x402 question submissions require World Chain or World Chain Sepolia USDC.");
   }
 
-  const contentRegistryAddress = getSharedDeploymentAddress(chainId, "ContentRegistry");
+  const contentDeploymentScope = resolveContentDeploymentScope(chainId);
+  const contentRegistryAddress =
+    contentDeploymentScope?.contentRegistryAddress ?? getSharedDeploymentAddress(chainId, "ContentRegistry");
   const feedbackBonusEscrowAddress = getSharedDeploymentAddress(chainId, "FeedbackBonusEscrow");
   const lrepAddress = getSharedDeploymentAddress(chainId, "LoopReputation");
   const questionRewardPoolEscrowAddress = getSharedDeploymentAddress(chainId, "QuestionRewardPoolEscrow");
   const x402QuestionSubmitterAddress = getSharedDeploymentAddress(chainId, "X402QuestionSubmitter");
-  if (!contentRegistryAddress || !questionRewardPoolEscrowAddress || !x402QuestionSubmitterAddress) {
+  if (
+    !contentDeploymentScope ||
+    !contentRegistryAddress ||
+    !questionRewardPoolEscrowAddress ||
+    !x402QuestionSubmitterAddress
+  ) {
     throw new X402QuestionConfigError("RateLoop contracts are not deployed for the requested chain.");
   }
 
@@ -1099,6 +1108,7 @@ export function resolveX402QuestionConfig(chainId: number): X402QuestionSubmissi
   return {
     chainId,
     contentRegistryAddress,
+    contentRegistryDeploymentKey: contentDeploymentScope.deploymentKey,
     ...(feedbackBonusEscrowAddress ? { feedbackBonusEscrowAddress } : {}),
     ...(lrepAddress ? { lrepAddress } : {}),
     questionRewardPoolEscrowAddress,
@@ -2226,7 +2236,10 @@ function matchConfirmedSubmissionPlan(params: {
 
 async function attachSubmittedQuestionDetails(params: {
   agentId?: string | null;
+  chainId: number;
   contentIds: readonly bigint[];
+  contentRegistryAddress: Address;
+  deploymentKey: string;
   ownerWalletAddress: Address;
   submittedDetails: readonly SubmittedQuestionDetails[];
 }) {
@@ -2236,7 +2249,10 @@ async function attachSubmittedQuestionDetails(params: {
     if (!allowedContentIds.has(contentId)) continue;
     await attachQuestionDetailsToContent({
       agentId: params.agentId,
+      chainId: params.chainId,
       contentId,
+      contentRegistryAddress: params.contentRegistryAddress,
+      deploymentKey: params.deploymentKey,
       detailsUrl: details.detailsUrl,
       ownerWalletAddress: params.ownerWalletAddress,
     });
@@ -2245,7 +2261,10 @@ async function attachSubmittedQuestionDetails(params: {
 
 async function attachSubmittedQuestionImages(params: {
   agentId?: string | null;
+  chainId: number;
   contentIds: readonly bigint[];
+  contentRegistryAddress: Address;
+  deploymentKey: string;
   ownerWalletAddress: Address;
   submittedContents: readonly SubmittedQuestionContent[];
 }) {
@@ -2255,7 +2274,10 @@ async function attachSubmittedQuestionImages(params: {
     if (!allowedContentIds.has(contentId) || content.imageUrls.length === 0) continue;
     await attachImagesToContent({
       agentId: params.agentId,
+      chainId: params.chainId,
       contentId,
+      contentRegistryAddress: params.contentRegistryAddress,
+      deploymentKey: params.deploymentKey,
       imageUrls: content.imageUrls,
       ownerWalletAddress: params.ownerWalletAddress,
     });
@@ -2264,7 +2286,10 @@ async function attachSubmittedQuestionImages(params: {
 
 async function attachStoredQuestionAttachments(params: {
   agentId?: string | null;
+  chainId: number;
   contentIds: readonly bigint[];
+  contentRegistryAddress: Address;
+  deploymentKey: string;
   ownerWalletAddress: Address;
   receipt: StoredWalletSubmissionPlanReceipt | null;
 }) {
@@ -2279,7 +2304,10 @@ async function attachStoredQuestionAttachments(params: {
     if (attachment.detailsUrl && attachment.detailsHash !== ZERO_BYTES32) {
       await attachQuestionDetailsToContent({
         agentId: params.agentId,
+        chainId: params.chainId,
         contentId: contentIdString,
+        contentRegistryAddress: params.contentRegistryAddress,
+        deploymentKey: params.deploymentKey,
         detailsUrl: attachment.detailsUrl,
         ownerWalletAddress: params.ownerWalletAddress,
       });
@@ -2287,7 +2315,10 @@ async function attachStoredQuestionAttachments(params: {
     if (attachment.imageUrls.length > 0) {
       await attachImagesToContent({
         agentId: params.agentId,
+        chainId: params.chainId,
         contentId: contentIdString,
+        contentRegistryAddress: params.contentRegistryAddress,
+        deploymentKey: params.deploymentKey,
         imageUrls: attachment.imageUrls,
         ownerWalletAddress: params.ownerWalletAddress,
       });
@@ -2296,7 +2327,10 @@ async function attachStoredQuestionAttachments(params: {
 }
 
 async function syncSubmittedQuestionMetadata(params: {
+  chainId: number;
   contentIds: readonly bigint[];
+  contentRegistryAddress: Address;
+  deploymentKey: string;
   receipt: StoredWalletSubmissionPlanReceipt | null;
 }) {
   const metadata = params.receipt?.questionMetadata ?? [];
@@ -2319,7 +2353,10 @@ async function syncSubmittedQuestionMetadata(params: {
   await Promise.all(
     entries.map(entry =>
       upsertQuestionConfidentialityFromMetadata({
+        chainId: params.chainId,
         contentId: entry.contentId,
+        contentRegistryAddress: params.contentRegistryAddress,
+        deploymentKey: params.deploymentKey,
         metadata: entry.questionMetadata as Record<string, unknown> | null,
         questionMetadataHash: entry.questionMetadataHash,
       }),
@@ -3302,24 +3339,36 @@ export async function confirmAgentWalletQuestionSubmissionRequest(params: {
   const planReceipt = parseStoredSubmissionPlanReceipt(record.paymentReceipt);
   await attachSubmittedQuestionDetails({
     agentId: planReceipt?.agentId,
+    chainId: config.chainId,
     contentIds,
+    contentRegistryAddress: config.contentRegistryAddress,
+    deploymentKey: config.contentRegistryDeploymentKey,
     ownerWalletAddress: record.payerAddress as Address,
     submittedDetails,
   });
   await attachSubmittedQuestionImages({
     agentId: planReceipt?.agentId,
+    chainId: config.chainId,
     contentIds,
+    contentRegistryAddress: config.contentRegistryAddress,
+    deploymentKey: config.contentRegistryDeploymentKey,
     ownerWalletAddress: record.payerAddress as Address,
     submittedContents,
   });
   await attachStoredQuestionAttachments({
     agentId: planReceipt?.agentId,
+    chainId: config.chainId,
     contentIds,
+    contentRegistryAddress: config.contentRegistryAddress,
+    deploymentKey: config.contentRegistryDeploymentKey,
     ownerWalletAddress: record.payerAddress as Address,
     receipt: planReceipt,
   });
   await syncSubmittedQuestionMetadata({
+    chainId: config.chainId,
     contentIds,
+    contentRegistryAddress: config.contentRegistryAddress,
+    deploymentKey: config.contentRegistryDeploymentKey,
     receipt: planReceipt,
   });
 

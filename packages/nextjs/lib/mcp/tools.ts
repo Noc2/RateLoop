@@ -121,6 +121,7 @@ import {
   hasConfidentialityTermsAcceptance,
   hashConfidentialityTermsPayload,
   recordConfidentialityTermsAcceptance,
+  resolveCurrentConfidentialityDeploymentScope,
 } from "~~/lib/confidentiality/context";
 import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
 import { db } from "~~/lib/db";
@@ -1451,19 +1452,28 @@ async function listAuthenticatedGatedContextUrls(params: {
   walletAddress: Address;
 }) {
   const origin = toolOrigin(params.requestUrl);
+  const deploymentScope = resolveCurrentConfidentialityDeploymentScope();
+  if (!deploymentScope) return [];
 
   try {
     const [detailsRows, imageRows] = await Promise.all([
       db
         .select({ id: questionDetails.id, sha256: questionDetails.sha256 })
         .from(questionDetails)
-        .where(and(eq(questionDetails.contentId, params.contentId), eq(questionDetails.status, "approved"))),
+        .where(
+          and(
+            eq(questionDetails.deploymentKey, deploymentScope.deploymentKey),
+            eq(questionDetails.contentId, params.contentId),
+            eq(questionDetails.status, "approved"),
+          ),
+        ),
       db
         .select({ id: questionImageAttachments.id, sha256: questionImageAttachments.sha256 })
         .from(questionImageAttachments)
         .where(
           and(
             eq(questionImageAttachments.contentId, params.contentId),
+            eq(questionImageAttachments.deploymentKey, deploymentScope.deploymentKey),
             eq(questionImageAttachments.status, "approved"),
           ),
         ),
@@ -1552,6 +1562,7 @@ async function buildRatingGatedContextInfo(params: {
   try {
     termsAccepted = await hasConfidentialityTermsAcceptance({
       contentId: params.contentId,
+      deploymentKey: termsPayload.deploymentKey,
       payloadHash,
       termsVersion: termsPayload.termsVersion,
       walletAddress: termsPayload.normalizedAddress,
@@ -1636,6 +1647,7 @@ async function acceptConfidentialityTerms(args: JsonObject, agent?: McpAgentAuth
   const payloadHash = hashConfidentialityTermsPayload(payload);
   const existingAccepted = await hasConfidentialityTermsAcceptance({
     contentId: payload.contentId,
+    deploymentKey: payload.deploymentKey,
     payloadHash,
     termsVersion: payload.termsVersion,
     walletAddress: payload.normalizedAddress,

@@ -328,6 +328,9 @@ export const questionImageAttachments = pgTable(
     agentId: text("agent_id"),
     clientRequestId: text("client_request_id"),
     operationKey: text("operation_key"),
+    deploymentKey: text("deployment_key"),
+    chainId: integer("chain_id"),
+    contentRegistryAddress: text("content_registry_address"),
     contentId: text("content_id"),
     requiresGatedAccess: boolean("requires_gated_access").notNull().default(false),
     originalBlobPathname: text("original_blob_pathname"),
@@ -364,6 +367,10 @@ export const questionImageAttachments = pgTable(
     ),
     operationIdx: index("question_image_attachments_operation_idx").on(table.operationKey),
     contentIdx: index("question_image_attachments_content_idx").on(table.contentId),
+    deploymentContentIdx: index("question_image_attachments_deployment_content_idx").on(
+      table.deploymentKey,
+      table.contentId,
+    ),
   }),
 );
 
@@ -378,6 +385,9 @@ export const questionDetails = pgTable(
     ownerWalletAddress: text("owner_wallet_address"),
     agentId: text("agent_id"),
     clientRequestId: text("client_request_id"),
+    deploymentKey: text("deployment_key"),
+    chainId: integer("chain_id"),
+    contentRegistryAddress: text("content_registry_address"),
     contentId: text("content_id"),
     requiresGatedAccess: boolean("requires_gated_access").notNull().default(false),
     sizeBytes: integer("size_bytes").notNull().default(0),
@@ -404,6 +414,7 @@ export const questionDetails = pgTable(
     ),
     clientRequestIdx: index("question_details_client_request_idx").on(table.clientRequestId),
     contentIdx: index("question_details_content_idx").on(table.contentId),
+    deploymentContentIdx: index("question_details_deployment_content_idx").on(table.deploymentKey, table.contentId),
   }),
 );
 
@@ -413,7 +424,10 @@ export type NewQuestionDetails = typeof questionDetails.$inferInsert;
 export const questionConfidentiality = pgTable(
   "question_confidentiality",
   {
-    contentId: text("content_id").primaryKey(),
+    deploymentKey: text("deployment_key"),
+    chainId: integer("chain_id"),
+    contentRegistryAddress: text("content_registry_address"),
+    contentId: text("content_id").notNull(),
     gated: boolean("gated").notNull().default(false),
     bondAsset: text("bond_asset"),
     bondAmount: text("bond_amount").notNull().default("0"),
@@ -427,7 +441,20 @@ export const questionConfidentiality = pgTable(
     updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }).notNull(),
   },
   table => ({
+    deploymentContentUnique: uniqueIndex("question_confidentiality_deployment_content_unique").on(
+      table.deploymentKey,
+      table.contentId,
+    ),
+    deploymentContentIdx: index("question_confidentiality_deployment_content_idx").on(
+      table.deploymentKey,
+      table.contentId,
+    ),
     gatedPublishedIdx: index("question_confidentiality_gated_published_idx").on(table.gated, table.publishedAt),
+    deploymentGatedPublishedIdx: index("question_confidentiality_deployment_gated_published_idx").on(
+      table.deploymentKey,
+      table.gated,
+      table.publishedAt,
+    ),
     disclosureIdx: index("question_confidentiality_disclosure_idx").on(table.disclosurePolicy, table.publishedAt),
   }),
 );
@@ -441,6 +468,9 @@ export const confidentialityTermsAcceptances = pgTable(
     id: serial("id").primaryKey(),
     walletAddress: text("wallet_address").notNull(),
     identityKey: text("identity_key"),
+    deploymentKey: text("deployment_key"),
+    chainId: integer("chain_id"),
+    contentRegistryAddress: text("content_registry_address"),
     contentId: text("content_id").notNull(),
     termsVersion: text("terms_version").notNull(),
     termsDocHash: text("terms_doc_hash").notNull(),
@@ -454,10 +484,16 @@ export const confidentialityTermsAcceptances = pgTable(
     acceptedAt: timestamp("accepted_at", { mode: "date", withTimezone: true }).notNull(),
   },
   table => ({
-    walletContentTermsUnique: uniqueIndex("confidentiality_terms_wallet_content_terms_unique").on(
+    deploymentWalletContentTermsUnique: uniqueIndex("confidentiality_terms_deployment_wallet_content_terms_unique").on(
+      table.deploymentKey,
       table.walletAddress,
       table.contentId,
       table.termsVersion,
+    ),
+    deploymentContentIdentityIdx: index("confidentiality_terms_deployment_content_identity_idx").on(
+      table.deploymentKey,
+      table.contentId,
+      table.identityKey,
     ),
     contentIdentityIdx: index("confidentiality_terms_content_identity_idx").on(table.contentId, table.identityKey),
     payloadHashIdx: index("confidentiality_terms_payload_hash_idx").on(table.payloadHash),
@@ -473,6 +509,9 @@ export const confidentialContextAccessLogs = pgTable(
     id: serial("id").primaryKey(),
     identityKey: text("identity_key"),
     walletAddress: text("wallet_address").notNull(),
+    deploymentKey: text("deployment_key"),
+    chainId: integer("chain_id"),
+    contentRegistryAddress: text("content_registry_address"),
     contentId: text("content_id").notNull(),
     resourceId: text("resource_id").notNull(),
     resourceKind: text("resource_kind").notNull(),
@@ -482,7 +521,17 @@ export const confidentialContextAccessLogs = pgTable(
   },
   table => ({
     contentViewedIdx: index("confidential_access_content_viewed_idx").on(table.contentId, table.viewedAt),
+    deploymentContentViewedIdx: index("confidential_access_deployment_content_viewed_idx").on(
+      table.deploymentKey,
+      table.contentId,
+      table.viewedAt,
+    ),
     identityContentIdx: index("confidential_access_identity_content_idx").on(table.identityKey, table.contentId),
+    deploymentIdentityContentIdx: index("confidential_access_deployment_identity_content_idx").on(
+      table.deploymentKey,
+      table.identityKey,
+      table.contentId,
+    ),
     viewTokenUnique: uniqueIndex("confidential_access_view_token_unique").on(table.viewToken),
   }),
 );
@@ -496,6 +545,9 @@ export const confidentialityBreachReports = pgTable(
     id: serial("id").primaryKey(),
     reporter: text("reporter").notNull(),
     accusedIdentityKey: text("accused_identity_key").notNull(),
+    deploymentKey: text("deployment_key"),
+    chainId: integer("chain_id"),
+    contentRegistryAddress: text("content_registry_address"),
     contentId: text("content_id").notNull(),
     evidenceUrl: text("evidence_url"),
     evidenceHash: text("evidence_hash").notNull(),
@@ -508,6 +560,11 @@ export const confidentialityBreachReports = pgTable(
   },
   table => ({
     contentStatusIdx: index("confidentiality_breach_content_status_idx").on(table.contentId, table.status),
+    deploymentContentStatusIdx: index("confidentiality_breach_deployment_content_status_idx").on(
+      table.deploymentKey,
+      table.contentId,
+      table.status,
+    ),
     accusedStatusIdx: index("confidentiality_breach_accused_status_idx").on(table.accusedIdentityKey, table.status),
   }),
 );

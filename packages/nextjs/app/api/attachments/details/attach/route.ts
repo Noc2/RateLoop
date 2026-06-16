@@ -15,6 +15,7 @@ import {
 import { upsertQuestionConfidentialityFromMetadata } from "~~/lib/confidentiality/context";
 import { getServerRpcOverrides, getServerTargetNetworkById } from "~~/lib/env/server";
 import { isJsonObjectBody, jsonBodyErrorResponse, parseJsonBody } from "~~/lib/http/jsonBody";
+import { resolveContentDeploymentScope } from "~~/lib/protocolDeployment";
 import { normalizeContentId, normalizeWalletAddress } from "~~/lib/watchlist/contentWatch";
 import { ponderApi } from "~~/services/ponder/client";
 import { checkRateLimit } from "~~/utils/rateLimit";
@@ -179,12 +180,16 @@ function readImageAttachments(value: unknown): ImageAttachmentInput[] {
 
 function resolveDetailsAttachContext(chainId: number) {
   const targetNetwork = getServerTargetNetworkById(chainId);
-  const contentRegistryAddress = getSharedDeploymentAddress(chainId, "ContentRegistry");
+  const deploymentScope = resolveContentDeploymentScope(chainId);
+  const contentRegistryAddress =
+    deploymentScope?.contentRegistryAddress ?? getSharedDeploymentAddress(chainId, "ContentRegistry");
   const rpcUrl = targetNetwork ? (getServerRpcOverrides()[chainId] ?? targetNetwork.rpcUrls.default.http[0]) : null;
-  if (!targetNetwork || !contentRegistryAddress || !rpcUrl) return null;
+  if (!targetNetwork || !deploymentScope || !contentRegistryAddress || !rpcUrl) return null;
   const overrides = getDetailsAttachRouteTestOverrides();
   return {
+    chainId: deploymentScope.chainId,
     contentRegistryAddress,
+    deploymentKey: deploymentScope.deploymentKey,
     publicClient: (overrides?.createPublicClient ?? createPublicClient)({
       chain: targetNetwork,
       transport: http(rpcUrl),
@@ -432,7 +437,10 @@ export async function POST(request: NextRequest) {
     if (!submitter) continue;
     if (
       await attachQuestionDetailsToContent({
+        chainId: context.chainId,
         contentId: detail.contentId,
+        contentRegistryAddress: context.contentRegistryAddress,
+        deploymentKey: context.deploymentKey,
         detailsUrl: detail.detailsUrl,
         ownerWalletAddress: normalizeWalletAddress(submitter),
       })
@@ -444,7 +452,10 @@ export async function POST(request: NextRequest) {
   let imagesAttached = 0;
   for (const proof of imageProofs.values()) {
     imagesAttached += await attachImagesToContent({
+      chainId: context.chainId,
       contentId: proof.contentId,
+      contentRegistryAddress: context.contentRegistryAddress,
+      deploymentKey: context.deploymentKey,
       imageUrls: proof.imageUrls,
       ownerWalletAddress: normalizeWalletAddress(proof.submitter),
     });
@@ -455,7 +466,10 @@ export async function POST(request: NextRequest) {
     const verifiedImageUrls = await gatedImageUrlsVerifiedBySubmitter(requestedImage.imageUrls, proof);
     if (verifiedImageUrls.length === 0) continue;
     imagesAttached += await attachImagesToContent({
+      chainId: context.chainId,
       contentId: requestedImage.contentId,
+      contentRegistryAddress: context.contentRegistryAddress,
+      deploymentKey: context.deploymentKey,
       imageUrls: verifiedImageUrls,
       ownerWalletAddress: normalizeWalletAddress(proof.submitter),
     });
@@ -479,7 +493,10 @@ export async function POST(request: NextRequest) {
     await Promise.all(
       verifiedMetadata.map(entry =>
         upsertQuestionConfidentialityFromMetadata({
+          chainId: context.chainId,
           contentId: entry.contentId,
+          contentRegistryAddress: context.contentRegistryAddress,
+          deploymentKey: context.deploymentKey,
           metadata: entry.questionMetadata as Record<string, unknown> | null,
           questionMetadataHash: entry.questionMetadataHash,
         }),
