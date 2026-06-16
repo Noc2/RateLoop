@@ -1115,7 +1115,7 @@ abstract contract VotingTestBase is Test, ContentSubmissionTestBase {
         bool isUp,
         bytes32 salt,
         uint256 contentId
-    ) private view returns (TestCommitArtifacts memory) {
+    ) private pure returns (TestCommitArtifacts memory) {
         artifacts.ciphertext = _testCiphertext(isUp, salt, contentId, artifacts.targetRound, artifacts.drandChainHash);
         artifacts.commitHash = _commitHash(
             isUp,
