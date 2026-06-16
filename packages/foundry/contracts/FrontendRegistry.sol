@@ -26,6 +26,8 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     using SafeERC20 for IERC20;
     using SafeCast for uint256;
 
+    error HistoricalFeeCreditor();
+
     // --- Access Control Roles ---
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
     bytes32 public constant GOVERNANCE_ROLE = keccak256("GOVERNANCE_ROLE");
@@ -585,6 +587,11 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     /// @notice Revoke fee creditor role
     /// @param creditor The address to revoke the role from
     function removeFeeCreditor(address creditor) external onlyRole(GOVERNANCE_ROLE) {
+        address creditorEngine = feeCreditorVotingEngine[creditor];
+        if (creditor != feeCreditor && creditorEngine != address(0) && feeCreditorForEngine[creditorEngine] == creditor)
+        {
+            revert HistoricalFeeCreditor();
+        }
         if (creditor == feeCreditor) {
             feeCreditor = address(0);
             emit FeeCreditorUpdated(creditor, address(0));

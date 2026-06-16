@@ -3371,6 +3371,9 @@ contract RoundIntegrationTest is VotingTestBase {
             frontendReg.hasRole(frontendReg.FEE_CREDITOR_ROLE(), address(rewardDistributor)),
             "historical distributor should stay authorized"
         );
+        vm.prank(owner);
+        vm.expectRevert(FrontendRegistry.HistoricalFeeCreditor.selector);
+        frontendReg.removeFeeCreditor(address(rewardDistributor));
 
         uint256 feesBefore = frontendReg.getAccumulatedFees(frontendOp);
 
