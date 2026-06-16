@@ -892,14 +892,14 @@ test("reconstructDeploymentExportFromBroadcast requires Sepolia test-account min
   );
 });
 
-test("reconstructDeploymentExportFromBroadcast exports optional mock World ID verifier", () => {
+test("reconstructDeploymentExportFromBroadcast exports optional mock World ID router", () => {
   const { transactions, receipts } = completeBroadcast();
-  const mockVerifier = address(700);
+  const mockRouter = address(700);
   const hash = nextTxHash(transactions);
   transactions.push({
     transactionType: "CREATE",
-    contractName: "MockWorldIDVerifier",
-    contractAddress: mockVerifier,
+    contractName: "MockWorldIDRouter",
+    contractAddress: mockRouter,
     transaction: { from: fixtureDeployer },
     hash,
   });
@@ -911,8 +911,8 @@ test("reconstructDeploymentExportFromBroadcast exports optional mock World ID ve
   );
 
   assert.equal(
-    deploymentAt(deploymentExport, mockVerifier),
-    "MockWorldIDVerifier"
+    deploymentAt(deploymentExport, mockRouter),
+    "MockWorldIDRouter"
   );
   assert.equal(deploymentExport.deploymentBlockNumber, 201);
 });

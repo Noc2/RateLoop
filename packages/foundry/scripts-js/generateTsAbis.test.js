@@ -461,13 +461,13 @@ describe("pruneNonLocalGeneratedContractsToDeploymentExports", () => {
   test("drops stale non-local contracts absent from a completed deployment export", () => {
     const generatedContracts = {
       31337: {
-        MockWorldIDVerifier: { address: "0xlocal" },
+        MockWorldIDRouter: { address: "0xlocal" },
       },
       4801: {
         ContentRegistry: {
           address: "0x0000000000000000000000000000000000000001",
         },
-        MockWorldIDVerifier: {
+        MockWorldIDRouter: {
           address: "0x0000000000000000000000000000000000000002",
         },
       },
@@ -482,7 +482,7 @@ describe("pruneNonLocalGeneratedContractsToDeploymentExports", () => {
       }),
       {
         31337: {
-          MockWorldIDVerifier: { address: "0xlocal" },
+          MockWorldIDRouter: { address: "0xlocal" },
         },
         4801: {
           ContentRegistry: {

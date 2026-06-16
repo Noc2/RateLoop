@@ -4,12 +4,9 @@ Options:
   --network <network>   Specify the network (default: localhost)
   --keystore <name>     Specify the live-network keystore account to use (bypasses selection prompt)
   --resume              Resume a partial broadcast for the current network + account
-  --world-id-staging-canary
-                        Deploy World Chain mainnet with the World ID staging verifier
   --help, -h           Show this help message
 Examples:
   yarn deploy --network worldchainSepolia --keystore my-account --resume
-  yarn deploy --network worldchain --world-id-staging-canary --keystore my-account
   yarn deploy --network worldchain --keystore my-account
   yarn deploy
   `;
@@ -25,12 +22,7 @@ const SLOW_BROADCAST_NETWORKS = new Set(["worldchainSepolia", "worldchain"]);
 export const DEFAULT_WORLDCHAIN_DEPLOY_COMPUTE_UNITS_PER_SECOND = "25";
 export const DEFAULT_WORLDCHAIN_DEPLOY_RPC_TIMEOUT_SECONDS = "120";
 export const DEFAULT_WORLDCHAIN_DEPLOY_BROADCAST_TIMEOUT_SECONDS = "300";
-export const WORLD_ID_STAGING_VERIFIER_ADDRESS =
-  "0x703a6316c975DEabF30b637c155edD53e24657DB";
-export const RATELOOP_MAINNET_CANARY_ENV = "RATELOOP_MAINNET_CANARY";
-export const WORLD_ID_V4_VERIFIER_ADDRESS_ENV = "WORLD_ID_V4_VERIFIER_ADDRESS";
 export const RATELOOP_DEPLOYMENT_PROFILE_ENV = "RATELOOP_DEPLOYMENT_PROFILE";
-export const MAINNET_CANARY_DEPLOYMENT_PROFILE = "mainnet-canary";
 export const PRODUCTION_DEPLOYMENT_PROFILE = "production";
 export const DEFAULT_DEPLOYMENT_PROFILE = "default";
 
@@ -48,7 +40,6 @@ export function parseDeployArgs(args) {
   let network = "localhost";
   let keystoreArg = null;
   let resume = false;
-  let worldIdStagingCanary = false;
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -59,7 +50,6 @@ export function parseDeployArgs(args) {
         network,
         keystoreArg,
         resume,
-        worldIdStagingCanary,
       };
     }
 
@@ -77,11 +67,6 @@ export function parseDeployArgs(args) {
 
     if (arg === "--resume") {
       resume = true;
-      continue;
-    }
-
-    if (arg === "--world-id-staging-canary") {
-      worldIdStagingCanary = true;
       continue;
     }
 
@@ -104,18 +89,11 @@ export function parseDeployArgs(args) {
     );
   }
 
-  if (worldIdStagingCanary && network !== "worldchain") {
-    throw new Error(
-      "--world-id-staging-canary is only supported with --network worldchain."
-    );
-  }
-
   return {
     showHelp: false,
     network,
     keystoreArg,
     resume,
-    worldIdStagingCanary,
   };
 }
 
@@ -160,53 +138,11 @@ export function buildDeployFlowFlags(network, env = process.env) {
   ].join(" ");
 }
 
-export function buildWorldIdStagingCanaryEnv(env = process.env) {
-  const existingVerifier = env[WORLD_ID_V4_VERIFIER_ADDRESS_ENV]?.trim();
-  if (
-    existingVerifier &&
-    existingVerifier.toLowerCase() !==
-      WORLD_ID_STAGING_VERIFIER_ADDRESS.toLowerCase()
-  ) {
-    throw new Error(
-      `--world-id-staging-canary requires ${WORLD_ID_V4_VERIFIER_ADDRESS_ENV} to be unset or ${WORLD_ID_STAGING_VERIFIER_ADDRESS}. Received: ${existingVerifier}`
-    );
-  }
-
-  return {
-    [RATELOOP_MAINNET_CANARY_ENV]: "true",
-    [WORLD_ID_V4_VERIFIER_ADDRESS_ENV]: WORLD_ID_STAGING_VERIFIER_ADDRESS,
-  };
-}
-
-export function buildDeploymentProfileEnv(
-  { network, worldIdStagingCanary },
-  env = process.env
-) {
-  const expectedProfile = worldIdStagingCanary
-    ? MAINNET_CANARY_DEPLOYMENT_PROFILE
-    : network === "worldchain"
+export function buildDeploymentProfileEnv({ network }, env = process.env) {
+  const expectedProfile = network === "worldchain"
     ? PRODUCTION_DEPLOYMENT_PROFILE
     : DEFAULT_DEPLOYMENT_PROFILE;
   const existingProfile = env[RATELOOP_DEPLOYMENT_PROFILE_ENV]?.trim();
-
-  if (
-    worldIdStagingCanary &&
-    existingProfile &&
-    existingProfile !== expectedProfile
-  ) {
-    throw new Error(
-      `--world-id-staging-canary requires ${RATELOOP_DEPLOYMENT_PROFILE_ENV} to be unset or ${expectedProfile}. Received: ${existingProfile}`
-    );
-  }
-
-  if (
-    !worldIdStagingCanary &&
-    existingProfile === MAINNET_CANARY_DEPLOYMENT_PROFILE
-  ) {
-    throw new Error(
-      `${RATELOOP_DEPLOYMENT_PROFILE_ENV}=${MAINNET_CANARY_DEPLOYMENT_PROFILE} requires --world-id-staging-canary.`
-    );
-  }
 
   return {
     [RATELOOP_DEPLOYMENT_PROFILE_ENV]: existingProfile || expectedProfile,

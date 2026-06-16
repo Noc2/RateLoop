@@ -38,7 +38,7 @@ const DIRECT_DEPLOYMENT_NAMES = new Set([
   "ClusterPayoutOracle",
   "LaunchDistributionPool",
   "AdvisoryVoteRecorder",
-  "MockWorldIDVerifier",
+  "MockWorldIDRouter",
 ]);
 
 const TREASURY_LREP_AMOUNT = 25_000_000n * 1_000_000n;

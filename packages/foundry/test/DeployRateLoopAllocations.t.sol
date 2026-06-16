@@ -1,44 +1,28 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import { Test } from "forge-std/Test.sol";
-import { TimelockController } from "@openzeppelin/contracts/governance/TimelockController.sol";
-import { DeployRateLoop } from "../script/Deploy.s.sol";
-import { LaunchDistributionPool } from "../contracts/LaunchDistributionPool.sol";
-import { LoopReputation } from "../contracts/LoopReputation.sol";
-import { RaterRegistry } from "../contracts/RaterRegistry.sol";
-import { MockERC20 } from "../contracts/mocks/MockERC20.sol";
-import { MockWorldIDVerifier } from "../contracts/mocks/MockWorldIDVerifier.sol";
-import { IRaterIdentityRegistry } from "../contracts/interfaces/IRaterIdentityRegistry.sol";
+import {Test} from "forge-std/Test.sol";
+import {TimelockController} from "@openzeppelin/contracts/governance/TimelockController.sol";
+import {DeployRateLoop} from "../script/Deploy.s.sol";
+import {LaunchDistributionPool} from "../contracts/LaunchDistributionPool.sol";
+import {LoopReputation} from "../contracts/LoopReputation.sol";
+import {RaterRegistry} from "../contracts/RaterRegistry.sol";
+import {MockERC20} from "../contracts/mocks/MockERC20.sol";
+import {MockWorldIDRouter} from "../contracts/mocks/MockWorldIDRouter.sol";
+import {MockWorldIDVerifier} from "../contracts/mocks/MockWorldIDVerifier.sol";
+import {IRaterIdentityRegistry} from "../contracts/interfaces/IRaterIdentityRegistry.sol";
 
 contract DeployRateLoopHarness is DeployRateLoop {
     function worldIdActionHash(string memory action) external pure returns (uint256) {
         return uint256(keccak256(bytes(action)));
     }
 
-    function resolveWorldIdVerifierCandidate(address verifier, bool requireLiveCode) external view returns (address) {
-        return _resolveWorldIdVerifierCandidate(verifier, requireLiveCode);
+    function worldIdExternalNullifierHash(string memory appId, string memory action) external pure returns (uint256) {
+        return _worldIdExternalNullifierHash(appId, action);
     }
 
-    function resolveWorldIdVerifierAddressForChain(bool isLocalDev, bool hasOverride, address verifierOverride)
-        external
-        view
-        returns (address)
-    {
-        return _resolveWorldIdVerifierAddressForChain(isLocalDev, hasOverride, verifierOverride);
-    }
-
-    function resolveWorldIdVerifierAddressForChain(
-        bool isLocalDev,
-        bool hasOverride,
-        address verifierOverride,
-        bool mainnetCanary
-    ) external view returns (address) {
-        return _resolveWorldIdVerifierAddressForChain(isLocalDev, hasOverride, verifierOverride, mainnetCanary);
-    }
-
-    function shouldDeployWorldIdMockVerifier(bool isLocalDev, address resolvedVerifier) external pure returns (bool) {
-        return _shouldDeployWorldIdMockVerifier(isLocalDev, resolvedVerifier);
+    function resolveWorldIdRouterAddress(bool isLocalDev) external view returns (address) {
+        return _resolveWorldIdRouterAddress(isLocalDev);
     }
 
     function treasuryMintAmountForChain(uint256 chainId) external pure returns (uint256) {
@@ -73,39 +57,21 @@ contract DeployRateLoopHarness is DeployRateLoop {
         _seedLegacyContributorHumanCredentials(raterRegistry);
     }
 
-    function worldChainWorldIdV4Verifier() external pure returns (address) {
-        return WORLD_CHAIN_WORLD_ID_V4_VERIFIER;
+    function worldChainMainnetWorldIdRouter() external pure returns (address) {
+        return WORLD_CHAIN_MAINNET_WORLD_ID_ROUTER;
     }
 
-    function worldChainWorldIdV4StagingVerifier() external pure returns (address) {
-        return WORLD_CHAIN_WORLD_ID_V4_STAGING_VERIFIER;
+    function worldChainSepoliaWorldIdRouter() external pure returns (address) {
+        return WORLD_CHAIN_SEPOLIA_WORLD_ID_ROUTER;
     }
 
-    function resolveWorldIdDeployConfig(address verifier)
+    function resolveWorldIdDeployConfig(bool isLocalDev, address router)
         external
         view
-        returns (
-            address resolvedVerifier,
-            uint64 rpId,
-            uint256 credentialAction,
-            uint256 presenceAction,
-            uint64 credentialTtl,
-            uint64 presenceTtl,
-            uint64 issuerSchemaId,
-            uint256 credentialGenesisIssuedAtMin
-        )
+        returns (address resolvedRouter, bytes32 scope, uint256 externalNullifierHash, uint64 credentialTtl)
     {
-        WorldIdDeployConfig memory config = _resolveWorldIdDeployConfig(verifier);
-        return (
-            config.verifier,
-            config.rpId,
-            config.credentialAction,
-            config.presenceAction,
-            config.credentialTtl,
-            config.presenceTtl,
-            config.issuerSchemaId,
-            config.credentialGenesisIssuedAtMin
-        );
+        WorldIdDeployConfig memory config = _resolveWorldIdDeployConfig(isLocalDev, router);
+        return (config.router, config.scope, config.externalNullifierHash, config.credentialTtl);
     }
 
     function validateUsdcToken(address token) external view {
@@ -324,196 +290,67 @@ contract DeployRateLoopAllocationsTest is Test {
         );
     }
 
-    function test_WorldIdVerifierCandidateDisablesMissingBundledVerifier() public {
+    function test_WorldIdExternalNullifierHashMatchesLegacyDerivation() public {
         DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
+        string memory appId = "app_staging_rateloop";
+        string memory action = "rateloop-human-credential-v1";
+        uint256 appIdHash = uint256(keccak256(bytes(appId))) >> 8;
+        uint256 expected = uint256(keccak256(abi.encodePacked(appIdHash, action))) >> 8;
 
-        assertEq(deployScript.resolveWorldIdVerifierCandidate(address(0xBEEF), false), address(0));
+        assertEq(deployScript.worldIdExternalNullifierHash(appId, action), expected);
     }
 
-    function test_WorldIdVerifierCandidateRejectsMissingExplicitOverride() public {
-        DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
-        address missingVerifier = address(0xBEEF);
-
-        vm.expectRevert(abi.encodeWithSelector(DeployRateLoop.WorldIdVerifierHasNoCode.selector, missingVerifier));
-        deployScript.resolveWorldIdVerifierCandidate(missingVerifier, true);
-    }
-
-    function test_WorldIdVerifierCandidateAcceptsLiveVerifier() public {
-        DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
-        MockWorldIDVerifier verifier = new MockWorldIDVerifier();
-
-        assertEq(deployScript.resolveWorldIdVerifierCandidate(address(verifier), false), address(verifier));
-        assertEq(deployScript.resolveWorldIdVerifierCandidate(address(verifier), true), address(verifier));
-    }
-
-    function test_WorldChainSepoliaDoesNotDeployMockWhenBundledVerifierIsMissing() public {
-        DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
-        vm.chainId(4801);
-
-        address resolvedVerifier = deployScript.resolveWorldIdVerifierAddressForChain(false, false, address(0));
-
-        assertEq(resolvedVerifier, address(0));
-        assertFalse(deployScript.shouldDeployWorldIdMockVerifier(false, resolvedVerifier));
-    }
-
-    function test_WorldChainSepoliaUsesLiveVerifierOverrideInsteadOfMock() public {
-        DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
-        MockWorldIDVerifier verifier = new MockWorldIDVerifier();
-        vm.chainId(4801);
-
-        address resolvedVerifier = deployScript.resolveWorldIdVerifierAddressForChain(false, true, address(verifier));
-
-        assertEq(resolvedVerifier, address(verifier));
-        assertFalse(deployScript.shouldDeployWorldIdMockVerifier(false, resolvedVerifier));
-    }
-
-    function test_LocalDevDeploysMockVerifier() public {
+    function test_LocalDevDefersWorldIdRouterToMockDeploy() public {
         DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
         vm.chainId(31337);
 
-        address resolvedVerifier = deployScript.resolveWorldIdVerifierAddressForChain(true, false, address(0));
-
-        assertEq(resolvedVerifier, address(0));
-        assertTrue(deployScript.shouldDeployWorldIdMockVerifier(true, resolvedVerifier));
+        assertEq(deployScript.resolveWorldIdRouterAddress(true), address(0));
     }
 
-    function test_WorldChainMainnetRequiresBundledVerifierCode() public {
+    function test_WorldChainMainnetRequiresWorldIdRouterCode() public {
         DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
-        address bundledVerifier = deployScript.worldChainWorldIdV4Verifier();
+        address router = deployScript.worldChainMainnetWorldIdRouter();
+        vm.setEnv("WORLD_ID_ROUTER_ADDRESS", vm.toString(address(0)));
         vm.chainId(480);
 
-        vm.expectRevert(abi.encodeWithSelector(DeployRateLoop.WorldIdVerifierHasNoCode.selector, bundledVerifier));
-        deployScript.resolveWorldIdVerifierAddressForChain(false, false, address(0));
+        vm.expectRevert(abi.encodeWithSelector(DeployRateLoop.WorldIdRouterHasNoCode.selector, router));
+        deployScript.resolveWorldIdRouterAddress(false);
     }
 
-    function test_WorldChainMainnetUsesBundledVerifierWhenCodeExists() public {
+    function test_WorldChainMainnetUsesCanonicalWorldIdRouterWhenCodeExists() public {
         DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
-        MockWorldIDVerifier verifier = new MockWorldIDVerifier();
-        address bundledVerifier = deployScript.worldChainWorldIdV4Verifier();
-        vm.etch(bundledVerifier, address(verifier).code);
+        MockWorldIDRouter routerCode = new MockWorldIDRouter();
+        address router = deployScript.worldChainMainnetWorldIdRouter();
+        vm.setEnv("WORLD_ID_ROUTER_ADDRESS", vm.toString(address(0)));
+        vm.etch(router, address(routerCode).code);
         vm.chainId(480);
 
-        assertEq(deployScript.resolveWorldIdVerifierAddressForChain(false, false, address(0), false), bundledVerifier);
+        assertEq(deployScript.resolveWorldIdRouterAddress(false), router);
     }
 
-    function test_WorldChainMainnetRejectsVerifierOverrideWithoutCanary() public {
+    function test_WorldChainSepoliaAcceptsLiveWorldIdRouterOverride() public {
         DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
-        MockWorldIDVerifier verifier = new MockWorldIDVerifier();
-        vm.chainId(480);
+        MockWorldIDRouter router = new MockWorldIDRouter();
+        vm.setEnv("WORLD_ID_ROUTER_ADDRESS", vm.toString(address(router)));
+        vm.chainId(4801);
 
-        vm.expectRevert(
-            abi.encodeWithSelector(DeployRateLoop.MainnetWorldIdVerifierOverrideNotAllowed.selector, address(verifier))
-        );
-        deployScript.resolveWorldIdVerifierAddressForChain(false, true, address(verifier));
+        assertEq(deployScript.resolveWorldIdRouterAddress(false), address(router));
     }
 
-    function test_WorldChainMainnetRejectsStagingVerifierOverrideWithoutCanary() public {
+    function test_WorldIdDeployConfigKeepsLegacyRouterScopeAndExternalNullifier() public {
         DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
-        address stagingVerifier = deployScript.worldChainWorldIdV4StagingVerifier();
-        vm.chainId(480);
+        MockWorldIDRouter router = new MockWorldIDRouter();
+        string memory appId = "app_staging_rateloop";
+        string memory action = "rateloop-human-credential-v1";
+        vm.setEnv("NEXT_PUBLIC_WORLD_ID_APP_ID", appId);
 
-        vm.expectRevert(
-            abi.encodeWithSelector(DeployRateLoop.MainnetWorldIdVerifierOverrideNotAllowed.selector, stagingVerifier)
-        );
-        deployScript.resolveWorldIdVerifierAddressForChain(false, true, stagingVerifier, false);
-    }
+        (address resolvedRouter, bytes32 scope, uint256 externalNullifierHash, uint64 credentialTtl) =
+            deployScript.resolveWorldIdDeployConfig(false, address(router));
 
-    function test_WorldChainMainnetCanaryUsesStagingVerifierWhenCodeExists() public {
-        DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
-        MockWorldIDVerifier verifier = new MockWorldIDVerifier();
-        address stagingVerifier = deployScript.worldChainWorldIdV4StagingVerifier();
-        vm.etch(stagingVerifier, address(verifier).code);
-        vm.chainId(480);
-
-        assertEq(deployScript.resolveWorldIdVerifierAddressForChain(false, false, address(0), true), stagingVerifier);
-    }
-
-    function test_WorldChainMainnetCanaryAcceptsStagingVerifierOverride() public {
-        DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
-        MockWorldIDVerifier verifier = new MockWorldIDVerifier();
-        address stagingVerifier = deployScript.worldChainWorldIdV4StagingVerifier();
-        vm.etch(stagingVerifier, address(verifier).code);
-        vm.chainId(480);
-
-        assertEq(
-            deployScript.resolveWorldIdVerifierAddressForChain(false, true, stagingVerifier, true), stagingVerifier
-        );
-    }
-
-    function test_WorldChainMainnetCanaryRejectsNonStagingVerifierOverride() public {
-        DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
-        MockWorldIDVerifier verifier = new MockWorldIDVerifier();
-        vm.chainId(480);
-
-        vm.expectRevert(
-            abi.encodeWithSelector(DeployRateLoop.MainnetWorldIdVerifierOverrideNotAllowed.selector, address(verifier))
-        );
-        deployScript.resolveWorldIdVerifierAddressForChain(false, true, address(verifier), true);
-    }
-
-    function test_WorldChainMainnetCanaryRequiresStagingVerifierCode() public {
-        DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
-        address stagingVerifier = deployScript.worldChainWorldIdV4StagingVerifier();
-        vm.chainId(480);
-
-        vm.expectRevert(abi.encodeWithSelector(DeployRateLoop.WorldIdVerifierHasNoCode.selector, stagingVerifier));
-        deployScript.resolveWorldIdVerifierAddressForChain(false, false, address(0), true);
-    }
-
-    function test_WorldChainMainnetNeverDeploysMockVerifier() public {
-        DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
-        vm.chainId(480);
-
-        assertFalse(deployScript.shouldDeployWorldIdMockVerifier(false, address(0)));
-    }
-
-    function test_WorldIdDeployConfigDisablesAllFieldsWithoutVerifier() public {
-        DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
-
-        (
-            address verifier,
-            uint64 rpId,
-            uint256 credentialAction,
-            uint256 presenceAction,
-            uint64 credentialTtl,
-            uint64 presenceTtl,
-            uint64 issuerSchemaId,
-            uint256 credentialGenesisIssuedAtMin
-        ) = deployScript.resolveWorldIdDeployConfig(address(0));
-
-        assertEq(verifier, address(0));
-        assertEq(rpId, 0);
-        assertEq(credentialAction, 0);
-        assertEq(presenceAction, 0);
-        assertEq(credentialTtl, 0);
-        assertEq(presenceTtl, 0);
-        assertEq(issuerSchemaId, 0);
-        assertEq(credentialGenesisIssuedAtMin, 0);
-    }
-
-    function test_WorldIdDeployConfigKeepsConfiguredFieldsWithVerifier() public {
-        DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
-        MockWorldIDVerifier verifier = new MockWorldIDVerifier();
-
-        (
-            address resolvedVerifier,
-            uint64 rpId,
-            uint256 credentialAction,
-            uint256 presenceAction,
-            uint64 credentialTtl,
-            uint64 presenceTtl,
-            uint64 issuerSchemaId,
-            uint256 credentialGenesisIssuedAtMin
-        ) = deployScript.resolveWorldIdDeployConfig(address(verifier));
-
-        assertEq(resolvedVerifier, address(verifier));
-        assertEq(rpId, 1);
-        assertEq(credentialAction, uint256(keccak256(bytes("rateloop-human-credential-v1"))));
-        assertEq(presenceAction, uint256(keccak256(bytes("rateloop-human-presence-v1"))));
+        assertEq(resolvedRouter, address(router));
+        assertEq(scope, keccak256(bytes(action)));
+        assertEq(externalNullifierHash, deployScript.worldIdExternalNullifierHash(appId, action));
         assertEq(credentialTtl, 365 days);
-        assertEq(presenceTtl, 15 minutes);
-        assertEq(issuerSchemaId, 1);
-        assertEq(credentialGenesisIssuedAtMin, 0);
     }
 
     function test_RaterRegistryDeployHandoffLeavesWorldIdV4ConfigMutable() public {

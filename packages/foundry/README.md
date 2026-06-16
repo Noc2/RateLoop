@@ -54,17 +54,11 @@ for an older Sepolia proxy unless a separate migration/backfill is provided for 
 `ContentRegistry.submissionMediaValidator()` exposes the gated-submission validator selectors before the deployment is
 treated as ready.
 
-For a temporary World Chain mainnet canary that uses World ID staging on chain `480`, run:
-
-```bash
-yarn deploy --network worldchain --world-id-staging-canary --keystore <name>
-```
-
-That wrapper sets `RATELOOP_MAINNET_CANARY=true`, stamps generated deployment JSON with
-`RATELOOP_DEPLOYMENT_PROFILE=mainnet-canary`, and selects the World ID staging verifier
-`0x703a6316c975DEabF30b637c155edD53e24657DB`. The default
-`yarn deploy --network worldchain --keystore <name>` path remains production-only and uses
-`0x00000000009E00F9FE82CfeeBB4556686da094d7`.
+World Chain deploys default to legacy World ID 3.0 Orb verification. The deploy script resolves the canonical
+World ID router for chain `480` or `4801`, derives the external nullifier from
+`NEXT_PUBLIC_WORLD_ID_APP_ID` and `NEXT_PUBLIC_WORLD_ID_CREDENTIAL_ACTION`, and fails pre-broadcast if the live router
+has no code. World ID 4.0 Proof-of-Human remains governance-configurable on `RaterRegistry`, but production deploys do
+not depend on a v4 verifier until that path is tested end-to-end.
 
 ## Configuration
 
@@ -75,22 +69,16 @@ Create a `.env` file (see `.env.example`):
 | `ALCHEMY_API_KEY`                              | Optional RPC provider key for testnet/mainnet deploys                                                                                                                       |
 | `WORLDCHAIN_RPC_URL`                           | Optional World Chain mainnet RPC override for live deploys                                                                                                                  |
 | `WORLDCHAIN_SEPOLIA_RPC_URL`                   | Optional World Chain Sepolia RPC override for live deploys                                                                                                                  |
-| `NEXT_PUBLIC_WORLD_ID_APP_ID`                  | World ID app ID used by RaterRegistry deploys                                                                                                                               |
-| `NEXT_PUBLIC_WORLD_ID_CREDENTIAL_ACTION`       | World ID v4 credential action; defaults to `rateloop-human-credential-v1`                                                                                                   |
-| `NEXT_PUBLIC_WORLD_ID_PRESENCE_ACTION`         | World ID v4 fresh-presence/recheck action; defaults to `rateloop-human-presence-v1`                                                                                         |
-| `WORLD_ID_V4_VERIFIER_ADDRESS`                 | Optional explicit World Chain Sepolia v4 verifier override; nonzero overrides must have code. Mainnet rejects overrides other than the verifier selected by the deploy mode |
-| `RATELOOP_MAINNET_CANARY`                      | Internal deploy-script guard for the World Chain mainnet canary staging verifier; prefer `--world-id-staging-canary` instead of setting manually                            |
-| `RATELOOP_DEPLOYMENT_PROFILE`                  | Deployment artifact profile stamp; the deploy wrapper sets `production` for normal World Chain mainnet and `mainnet-canary` for the canary flag                             |
-| `WORLD_ID_V4_RP_ID`                            | Numeric World ID relying-party ID from the Developer Portal                                                                                                                 |
-| `WORLD_ID_V4_ISSUER_SCHEMA_ID`                 | World ID v4 issuer schema ID accepted by the deployment                                                                                                                     |
-| `WORLD_ID_V4_CREDENTIAL_GENESIS_ISSUED_AT_MIN` | Optional v4 credential genesis issuance lower bound; defaults to `0`                                                                                                        |
+| `NEXT_PUBLIC_WORLD_ID_APP_ID`                  | World ID app ID used to derive the legacy v3 external nullifier                                                                                                             |
+| `NEXT_PUBLIC_WORLD_ID_CREDENTIAL_ACTION`       | World ID credential action; defaults to `rateloop-human-credential-v1`                                                                                                      |
+| `WORLD_ID_ROUTER_ADDRESS`                      | Optional explicit World ID v3 router override; nonzero live-network overrides must have code                                                                                |
+| `WORLD_ID_EXTERNAL_NULLIFIER_HASH`             | Optional explicit v3 external nullifier hash override; leave unset to derive from app ID and action                                                                         |
+| `RATELOOP_DEPLOYMENT_PROFILE`                  | Deployment artifact profile stamp; the deploy wrapper sets `production` for World Chain mainnet and `default` elsewhere                                                    |
 | `ETHERSCAN_API_KEY`                            | Optional explorer API key for Etherscan-compatible networks                                                                                                                 |
 
-World Chain mainnet (`480`) resolves the bundled production World ID v4 verifier by default and fails pre-broadcast if
-that verifier has no code. With `--world-id-staging-canary`, mainnet resolves the World ID staging verifier instead and
-fails pre-broadcast if that verifier has no code. World Chain Sepolia (`4801`) tries an explicit live override first, then the bundled address;
-if neither has code, `yarn deploy --network worldchainSepolia` automatically deploys `MockWorldIDVerifier`, wires it
-into `RaterRegistry`, and exports it in `deployments/4801.json`.
+World Chain mainnet (`480`) resolves router `0x17B354dD2595411ff79041f930e491A4Df39A278` by default. World Chain
+Sepolia (`4801`) resolves router `0x57f928158C3EE7CDad1e4D8642503c4D0201f611` by default. Localhost deploys create
+`MockWorldIDRouter`, wire it into `RaterRegistry`, and export it in the local deployment JSON.
 
 Localhost deploys use the standard Anvil private key directly, so `yarn deploy` does not need a keystore password
 when deploying to `localhost`.
@@ -108,7 +96,7 @@ contracts/
 ├── CategoryRegistry.sol         # Content category management
 ├── ProfileRegistry.sol          # User reputation & metadata
 ├── FrontendRegistry.sol         # Frontend operator fee tracking
-├── RaterRegistry.sol            # Rater profiles, delegation, World ID v4 credentials, and fresh user-presence rechecks
+├── RaterRegistry.sol            # Rater profiles, delegation, World ID v3 proof-of-human, and governed v4 upgrade hook
 ├── LoopReputation.sol           # LREP token (governance and reputation)
 ├── LaunchDistributionPool.sol   # Anchor-gated earned rater rewards with verified full-cap unlocks, plus verification, referral, and legacy rewards
 ├── ClusterPayoutOracle.sol      # Governance-managed challengeable roots proposed by bonded frontend operators

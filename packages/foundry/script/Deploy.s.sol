@@ -25,15 +25,14 @@ import { X402QuestionSubmitter } from "../contracts/X402QuestionSubmitter.sol";
 import { LaunchDistributionPool } from "../contracts/LaunchDistributionPool.sol";
 import { ClusterPayoutOracle } from "../contracts/ClusterPayoutOracle.sol";
 import { MockERC20 } from "../contracts/mocks/MockERC20.sol";
-import { MockWorldIDVerifier } from "../contracts/mocks/MockWorldIDVerifier.sol";
+import { MockWorldIDRouter } from "../contracts/mocks/MockWorldIDRouter.sol";
 import { RateLoopGovernor } from "../contracts/governance/RateLoopGovernor.sol";
 
 /// @notice Fresh RateLoop deployment script for World Chain.
 /// @dev Rater identity is resolved through RaterRegistry; no separate proof-of-personhood token is deployed.
 contract DeployRateLoop is ScaffoldETHDeploy {
     error UnsupportedWorldChain(uint256 chainId);
-    error WorldIdVerifierHasNoCode(address verifier);
-    error MainnetWorldIdVerifierOverrideNotAllowed(address verifier);
+    error WorldIdRouterHasNoCode(address router);
     uint256 public constant TIMELOCK_MIN_DELAY = 2 days;
 
     uint256 public constant TOTAL_SUPPLY_CAP = 100_000_000 * 1e6;
@@ -47,16 +46,12 @@ contract DeployRateLoop is ScaffoldETHDeploy {
 
     address internal constant WORLD_CHAIN_MAINNET_USDC = 0x79A02482A880bCE3F13e09Da970dC34db4CD24d1;
     address internal constant WORLD_CHAIN_SEPOLIA_USDC = 0x66145f38cBAC35Ca6F1Dfb4914dF98F1614aeA88;
-    address internal constant WORLD_CHAIN_WORLD_ID_V4_VERIFIER = 0x00000000009E00F9FE82CfeeBB4556686da094d7;
-    address internal constant WORLD_CHAIN_WORLD_ID_V4_STAGING_VERIFIER = 0x703a6316c975DEabF30b637c155edD53e24657DB;
-    string internal constant WORLD_ID_V4_VERIFIER_ADDRESS_ENV = "WORLD_ID_V4_VERIFIER_ADDRESS";
-    string internal constant RATELOOP_MAINNET_CANARY_ENV = "RATELOOP_MAINNET_CANARY";
+    address internal constant WORLD_CHAIN_MAINNET_WORLD_ID_ROUTER = 0x17B354dD2595411ff79041f930e491A4Df39A278;
+    address internal constant WORLD_CHAIN_SEPOLIA_WORLD_ID_ROUTER = 0x57f928158C3EE7CDad1e4D8642503c4D0201f611;
+    string internal constant WORLD_ID_ROUTER_ADDRESS_ENV = "WORLD_ID_ROUTER_ADDRESS";
     uint64 internal constant WORLD_ID_CREDENTIAL_TTL_SECONDS = 365 days;
-    uint64 internal constant WORLD_ID_PRESENCE_TTL_SECONDS = 15 minutes;
-    uint64 internal constant DEFAULT_WORLD_ID_V4_RP_ID = 1;
-    uint64 internal constant DEFAULT_WORLD_ID_ISSUER_SCHEMA_ID = 1;
     string internal constant DEFAULT_WORLD_ID_ACTION = "rateloop-human-credential-v1";
-    string internal constant DEFAULT_WORLD_ID_PRESENCE_ACTION = "rateloop-human-presence-v1";
+    string internal constant LOCAL_WORLD_ID_APP_ID = "app_staging_rateloop_local";
     uint64 public constant LEGACY_CONTRIBUTOR_HUMAN_TTL_SECONDS = WORLD_ID_CREDENTIAL_TTL_SECONDS;
 
     // DRAND-1 (2026-05-21 testnet-readiness audit): per-chain drand `(chainHash, genesisTime,
@@ -75,14 +70,10 @@ contract DeployRateLoop is ScaffoldETHDeploy {
     uint64 internal constant TESTNET_DRAND_PERIOD = 3;
 
     struct WorldIdDeployConfig {
-        address verifier;
-        uint64 rpId;
-        uint256 credentialAction;
-        uint256 presenceAction;
+        address router;
+        bytes32 scope;
+        uint256 externalNullifierHash;
         uint64 credentialTtl;
-        uint64 presenceTtl;
-        uint64 issuerSchemaId;
-        uint256 credentialGenesisIssuedAtMin;
     }
 
     function _preBroadcastChecks() internal view override {
@@ -91,7 +82,7 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         }
         if (block.chainid == 480 || block.chainid == 4801) {
             _validateUsdcToken(_resolveWorldChainUsdcAddress());
-            _resolveWorldIdVerifierAddress(false);
+            _resolveWorldIdRouterAddress(false);
         }
     }
 
@@ -196,19 +187,16 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         );
         RoundRewardDistributor rewardDistributor = RoundRewardDistributor(address(rewardDistributorProxy));
 
-        MockWorldIDVerifier worldIdMockVerifier;
-        address worldIdVerifierAddress = _resolveWorldIdVerifierAddress(isLocalDev);
-        bool deployWorldIdMockVerifier = _shouldDeployWorldIdMockVerifier(isLocalDev, worldIdVerifierAddress);
-        if (deployWorldIdMockVerifier) {
-            worldIdMockVerifier = new MockWorldIDVerifier();
-            worldIdVerifierAddress = address(worldIdMockVerifier);
-            console.log("MockWorldIDVerifier deployed at:", worldIdVerifierAddress);
-        } else if (worldIdVerifierAddress == address(0)) {
-            console.log("World ID v4 verifier unavailable; deploying with World ID verifier disabled");
+        MockWorldIDRouter worldIdMockRouter;
+        address worldIdRouterAddress = _resolveWorldIdRouterAddress(isLocalDev);
+        if (isLocalDev) {
+            worldIdMockRouter = new MockWorldIDRouter();
+            worldIdRouterAddress = address(worldIdMockRouter);
+            console.log("MockWorldIDRouter deployed at:", worldIdRouterAddress);
         } else {
-            console.log("World ID v4 verifier resolved at:", worldIdVerifierAddress);
+            console.log("World ID router resolved at:", worldIdRouterAddress);
         }
-        WorldIdDeployConfig memory worldIdConfig = _resolveWorldIdDeployConfig(worldIdVerifierAddress);
+        WorldIdDeployConfig memory worldIdConfig = _resolveWorldIdDeployConfig(isLocalDev, worldIdRouterAddress);
 
         address usdcTokenAddress;
         MockERC20 localUsdcToken;
@@ -223,34 +211,19 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         }
 
         CategoryRegistry categoryRegistry = new CategoryRegistry(deployer, governance);
-        RaterRegistry raterRegistryImpl = new RaterRegistry(
-            deployer,
-            governance,
-            worldIdConfig.verifier,
-            worldIdConfig.rpId,
-            worldIdConfig.credentialAction,
-            worldIdConfig.presenceAction,
-            worldIdConfig.credentialTtl,
-            worldIdConfig.presenceTtl,
-            worldIdConfig.issuerSchemaId,
-            worldIdConfig.credentialGenesisIssuedAtMin
-        );
+        RaterRegistry raterRegistryImpl = new RaterRegistry(deployer, governance, address(0), 0, 0, 0, 0, 0, 0, 0);
         TransparentUpgradeableProxy raterRegistryProxy = new TransparentUpgradeableProxy(
             address(raterRegistryImpl),
             governance,
             abi.encodeCall(
-                RaterRegistry.initialize,
+                RaterRegistry.initializeWithWorldIdV3,
                 (
                     deployer,
                     governance,
-                    worldIdConfig.verifier,
-                    worldIdConfig.rpId,
-                    worldIdConfig.credentialAction,
-                    worldIdConfig.presenceAction,
-                    worldIdConfig.credentialTtl,
-                    worldIdConfig.presenceTtl,
-                    worldIdConfig.issuerSchemaId,
-                    worldIdConfig.credentialGenesisIssuedAtMin
+                    worldIdConfig.router,
+                    worldIdConfig.scope,
+                    worldIdConfig.externalNullifierHash,
+                    worldIdConfig.credentialTtl
                 )
             )
         );
@@ -499,8 +472,8 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         deployments.push(Deployment("ClusterPayoutOracle", address(clusterPayoutOracle)));
         deployments.push(Deployment("RaterRegistry", address(raterRegistryProxy)));
         deployments.push(Deployment("RaterRegistryProxyAdmin", _proxyAdmin(address(raterRegistryProxy))));
-        if (address(worldIdMockVerifier) != address(0)) {
-            deployments.push(Deployment("MockWorldIDVerifier", address(worldIdMockVerifier)));
+        if (address(worldIdMockRouter) != address(0)) {
+            deployments.push(Deployment("MockWorldIDRouter", address(worldIdMockRouter)));
         }
         deployments.push(Deployment("LaunchDistributionPool", address(launchDistributionPool)));
         deployments.push(Deployment("AdvisoryVoteRecorder", address(advisoryVoteRecorder)));
@@ -527,10 +500,9 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         console.log("CategoryRegistry:", address(categoryRegistry));
         console.log("ClusterPayoutOracle:", address(clusterPayoutOracle));
         console.log("RaterRegistry:", address(raterRegistry));
-        console.log("World ID v4 Verifier:", worldIdConfig.verifier);
-        console.log("World ID RP ID:", worldIdConfig.rpId);
-        console.log("World ID Credential Action:", worldIdConfig.credentialAction);
-        console.log("World ID Presence Action:", worldIdConfig.presenceAction);
+        console.log("World ID Router:", worldIdConfig.router);
+        console.logBytes32(worldIdConfig.scope);
+        console.log("World ID External Nullifier Hash:", worldIdConfig.externalNullifierHash);
         console.log("LaunchDistributionPool:", address(launchDistributionPool));
         console.log("AdvisoryVoteRecorder:", address(advisoryVoteRecorder));
         console.log("Governance:", governance);
@@ -600,70 +572,28 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         }
     }
 
-    function _resolveWorldIdVerifierAddress(bool isLocalDev) internal view returns (address) {
-        bool hasOverride = vm.envExists(WORLD_ID_V4_VERIFIER_ADDRESS_ENV);
-        address verifierOverride = hasOverride ? vm.envOr(WORLD_ID_V4_VERIFIER_ADDRESS_ENV, address(0)) : address(0);
-        return
-            _resolveWorldIdVerifierAddressForChain(isLocalDev, hasOverride, verifierOverride, _isMainnetCanaryEnabled());
+    function _resolveWorldIdRouterAddress(bool isLocalDev) internal view returns (address) {
+        if (isLocalDev) return address(0);
+        address router = vm.envOr(WORLD_ID_ROUTER_ADDRESS_ENV, address(0));
+        if (router == address(0)) {
+            if (block.chainid == 480) router = WORLD_CHAIN_MAINNET_WORLD_ID_ROUTER;
+            else if (block.chainid == 4801) router = WORLD_CHAIN_SEPOLIA_WORLD_ID_ROUTER;
+            else revert UnsupportedWorldChain(block.chainid);
+        }
+        if (router.code.length == 0) revert WorldIdRouterHasNoCode(router);
+        return router;
     }
 
-    function _resolveWorldIdVerifierAddressForChain(bool isLocalDev, bool hasOverride, address verifierOverride)
+    function _resolveWorldIdDeployConfig(bool isLocalDev, address router)
         internal
         view
-        returns (address)
+        returns (WorldIdDeployConfig memory config)
     {
-        return
-            _resolveWorldIdVerifierAddressForChain(isLocalDev, hasOverride, verifierOverride, _isMainnetCanaryEnabled());
-    }
-
-    function _resolveWorldIdVerifierAddressForChain(
-        bool isLocalDev,
-        bool hasOverride,
-        address verifierOverride,
-        bool mainnetCanary
-    ) internal view returns (address) {
-        if (isLocalDev) return address(0);
-        if (block.chainid == 480) {
-            address expectedVerifier =
-                mainnetCanary ? WORLD_CHAIN_WORLD_ID_V4_STAGING_VERIFIER : WORLD_CHAIN_WORLD_ID_V4_VERIFIER;
-            if (hasOverride && verifierOverride != expectedVerifier) {
-                revert MainnetWorldIdVerifierOverrideNotAllowed(verifierOverride);
-            }
-            return _resolveWorldIdVerifierCandidate(expectedVerifier, true);
-        }
-        if (block.chainid == 4801) {
-            address verifier = hasOverride ? verifierOverride : WORLD_CHAIN_WORLD_ID_V4_VERIFIER;
-            return _resolveWorldIdVerifierCandidate(verifier, hasOverride);
-        }
-        revert UnsupportedWorldChain(block.chainid);
-    }
-
-    function _isMainnetCanaryEnabled() internal view returns (bool) {
-        return vm.envOr(RATELOOP_MAINNET_CANARY_ENV, false);
-    }
-
-    function _resolveWorldIdVerifierCandidate(address verifier, bool requireLiveCode) internal view returns (address) {
-        if (verifier == address(0)) return address(0);
-        if (verifier.code.length > 0) return verifier;
-        if (requireLiveCode) revert WorldIdVerifierHasNoCode(verifier);
-        return address(0);
-    }
-
-    function _shouldDeployWorldIdMockVerifier(bool isLocalDev, address) internal pure returns (bool) {
-        return isLocalDev;
-    }
-
-    function _resolveWorldIdDeployConfig(address verifier) internal view returns (WorldIdDeployConfig memory config) {
-        config.verifier = verifier;
-        if (verifier == address(0)) return config;
-
-        config.rpId = _resolveWorldIdRpId();
-        config.credentialAction = _resolveWorldIdCredentialAction();
-        config.presenceAction = _resolveWorldIdPresenceAction();
+        config.router = router;
+        string memory action = _resolveWorldIdAction();
+        config.scope = keccak256(bytes(action));
+        config.externalNullifierHash = _resolveWorldIdExternalNullifierHash(isLocalDev, action);
         config.credentialTtl = WORLD_ID_CREDENTIAL_TTL_SECONDS;
-        config.presenceTtl = WORLD_ID_PRESENCE_TTL_SECONDS;
-        config.issuerSchemaId = _resolveWorldIdIssuerSchemaId();
-        config.credentialGenesisIssuedAtMin = _resolveWorldIdCredentialGenesisIssuedAtMin();
     }
 
     /// @notice Per-chain drand `(chainHash, genesisTime, period)` resolver. Mainnet (480) and local dev
@@ -677,28 +607,31 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         return (MAINNET_DRAND_CHAIN_HASH, MAINNET_DRAND_GENESIS_TIME, MAINNET_DRAND_PERIOD);
     }
 
-    function _resolveWorldIdRpId() internal view returns (uint64) {
-        return uint64(vm.envOr("WORLD_ID_V4_RP_ID", uint256(DEFAULT_WORLD_ID_V4_RP_ID)));
+    function _resolveWorldIdAction() internal view returns (string memory) {
+        return vm.envOr("NEXT_PUBLIC_WORLD_ID_CREDENTIAL_ACTION", DEFAULT_WORLD_ID_ACTION);
     }
 
-    function _resolveWorldIdCredentialAction() internal view returns (uint256) {
-        string memory action = vm.envOr("NEXT_PUBLIC_WORLD_ID_CREDENTIAL_ACTION", DEFAULT_WORLD_ID_ACTION);
-        return uint256(keccak256(bytes(action)));
+    function _resolveWorldIdExternalNullifierHash(bool isLocalDev, string memory action)
+        internal
+        view
+        returns (uint256)
+    {
+        uint256 overrideHash = vm.envOr("WORLD_ID_EXTERNAL_NULLIFIER_HASH", uint256(0));
+        if (overrideHash != 0) return overrideHash;
+
+        string memory appId = isLocalDev
+            ? vm.envOr("NEXT_PUBLIC_WORLD_ID_APP_ID", LOCAL_WORLD_ID_APP_ID)
+            : vm.envString("NEXT_PUBLIC_WORLD_ID_APP_ID");
+        return _worldIdExternalNullifierHash(appId, action);
     }
 
-    function _resolveWorldIdPresenceAction() internal view returns (uint256) {
-        return
-            uint256(
-                keccak256(bytes(vm.envOr("NEXT_PUBLIC_WORLD_ID_PRESENCE_ACTION", DEFAULT_WORLD_ID_PRESENCE_ACTION)))
-            );
+    function _worldIdExternalNullifierHash(string memory appId, string memory action) internal pure returns (uint256) {
+        uint256 appIdHash = _hashToField(bytes(appId));
+        return _hashToField(abi.encodePacked(appIdHash, action));
     }
 
-    function _resolveWorldIdIssuerSchemaId() internal view returns (uint64) {
-        return uint64(vm.envOr("WORLD_ID_V4_ISSUER_SCHEMA_ID", uint256(DEFAULT_WORLD_ID_ISSUER_SCHEMA_ID)));
-    }
-
-    function _resolveWorldIdCredentialGenesisIssuedAtMin() internal view returns (uint256) {
-        return vm.envOr("WORLD_ID_V4_CREDENTIAL_GENESIS_ISSUED_AT_MIN", uint256(0));
+    function _hashToField(bytes memory value) internal pure returns (uint256) {
+        return uint256(keccak256(value)) >> 8;
     }
 
     function _renounceRaterRegistryDeployerRoles(RaterRegistry raterRegistry, address temporaryDeployer) internal {
