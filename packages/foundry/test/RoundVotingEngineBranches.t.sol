@@ -28,10 +28,20 @@ contract MockAdvisoryLaunchDistributionPool {
     RaterRegistry public immutable raterRegistry;
     uint16 public maxUnverifiedCreditsPerRound;
     uint256 public advisoryRecordCallCount;
+    address public roundClusterReadyAtSource;
+    mapping(address => bool) public authorizedCallers;
 
     constructor(uint16 cap, address raterRegistry_) {
         raterRegistry = RaterRegistry(raterRegistry_);
         maxUnverifiedCreditsPerRound = cap;
+    }
+
+    function setAuthorizedCaller(address caller, bool authorized) external {
+        authorizedCallers[caller] = authorized;
+    }
+
+    function setRoundClusterReadyAtSource(address source) external {
+        roundClusterReadyAtSource = source;
     }
 
     function setMaxUnverifiedCreditsPerRound(uint16 cap) external {
@@ -304,6 +314,14 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
     function tearDown() public {
         _restoreVotingTestCheckpoint();
+    }
+
+    function _setMockAdvisoryLaunchPool(uint16 cap) internal returns (MockAdvisoryLaunchDistributionPool launchPool) {
+        launchPool = new MockAdvisoryLaunchDistributionPool(cap, address(mockRaterIdentityRegistry));
+        launchPool.setAuthorizedCaller(address(rewardDistributor), true);
+        launchPool.setRoundClusterReadyAtSource(address(engine));
+        vm.prank(owner);
+        ProtocolConfig(protocolConfigAddress).setLaunchDistributionPool(address(launchPool));
     }
 
     function test_SetRoleRotatesPauser() public {
@@ -1628,10 +1646,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
     }
 
     function test_AdvisoryLaunchCreditSkipsRawBannedDelegateAtClaim() public {
-        MockAdvisoryLaunchDistributionPool launchPool =
-            new MockAdvisoryLaunchDistributionPool(3, address(mockRaterIdentityRegistry));
-        vm.prank(owner);
-        ProtocolConfig(protocolConfigAddress).setLaunchDistributionPool(address(launchPool));
+        MockAdvisoryLaunchDistributionPool launchPool = _setMockAdvisoryLaunchPool(3);
 
         mockRaterIdentityRegistry.mint(voter5, 55);
         vm.prank(voter5);
@@ -1669,10 +1684,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
     }
 
     function test_AdvisoryLaunchCreditSkipsBannedHolderAtClaim() public {
-        MockAdvisoryLaunchDistributionPool launchPool =
-            new MockAdvisoryLaunchDistributionPool(3, address(mockRaterIdentityRegistry));
-        vm.prank(owner);
-        ProtocolConfig(protocolConfigAddress).setLaunchDistributionPool(address(launchPool));
+        MockAdvisoryLaunchDistributionPool launchPool = _setMockAdvisoryLaunchPool(3);
 
         mockRaterIdentityRegistry.mint(voter5, 55);
         vm.prank(voter5);
@@ -4236,10 +4248,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
     }
 
     function test_AdvisoryVoteCapsUnverifiedCommitsFromLaunchPolicy() public {
-        MockAdvisoryLaunchDistributionPool launchPool =
-            new MockAdvisoryLaunchDistributionPool(1, address(mockRaterIdentityRegistry));
-        vm.prank(owner);
-        ProtocolConfig(protocolConfigAddress).setLaunchDistributionPool(address(launchPool));
+        _setMockAdvisoryLaunchPool(1);
 
         uint256 contentId = _submitContent();
         _openStakedRound(voter4, contentId, "advisory-unverified-cap-open");
@@ -4268,10 +4277,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
     }
 
     function test_VerifiedAdvisoryVoteBypassesUnverifiedCommitCap() public {
-        MockAdvisoryLaunchDistributionPool launchPool =
-            new MockAdvisoryLaunchDistributionPool(1, address(mockRaterIdentityRegistry));
-        vm.prank(owner);
-        ProtocolConfig(protocolConfigAddress).setLaunchDistributionPool(address(launchPool));
+        _setMockAdvisoryLaunchPool(1);
 
         uint256 contentId = _submitContent();
         _openStakedRound(voter4, contentId, "advisory-verified-cap-open");

@@ -269,7 +269,7 @@ contract LaunchDistributionPool is
     /// @notice M-Oracle-1: configure the authoritative round source-readiness oracle (the
     ///         RoundVotingEngine). Must be set before the cluster oracle is enabled.
     function setRoundClusterReadyAtSource(address newSource) external onlyOwner {
-        if (newSource == address(0) || newSource.code.length == 0) revert InvalidAddress();
+        if (newSource == address(0)) revert InvalidAddress();
         _validateRoundClusterReadyAtSource(newSource, address(raterRegistry));
         roundClusterReadyAtSource = IRoundClusterReadyAtSource(newSource);
         emit RoundClusterReadyAtSourceUpdated(newSource);
@@ -995,12 +995,14 @@ contract LaunchDistributionPool is
         (bool revealGraceOk,) = _revealGracePeriodView(protocolConfig);
         if (!readyAtOk || !roundCoreOk || !revealGraceOk) revert InvalidAddress();
         try ILaunchReadySourceProtocolConfig(protocolConfig).launchDistributionPool() returns (address configuredPool) {
-            if (configuredPool != address(this)) revert InvalidAddress();
+            if (configuredPool != address(0) && configuredPool != address(this)) revert InvalidAddress();
         } catch {
             revert InvalidAddress();
         }
         try ILaunchReadySourceProtocolConfig(protocolConfig).raterRegistry() returns (address configuredRegistry) {
-            if (configuredRegistry != expectedRaterRegistry) revert InvalidAddress();
+            if (configuredRegistry != expectedRaterRegistry && configuredRegistry != address(raterRegistry)) {
+                revert InvalidAddress();
+            }
         } catch {
             revert InvalidAddress();
         }

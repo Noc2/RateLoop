@@ -320,10 +320,18 @@ contract LaunchDistributionPoolTest is Test {
         vm.prank(alice);
         vm.expectRevert(LaunchDistributionPool.InvalidAddress.selector);
         pool.claimVerifiedBonus(address(0));
+
+        config.setRaterRegistry(address(replacementRegistry));
+        replacementRegistry.seedHumanCredential(
+            alice, uint64(block.timestamp + 30 days), bytes32("replacement-alice"), bytes32("evidence")
+        );
+
+        vm.prank(alice);
+        assertGt(pool.claimVerifiedBonus(address(0)), 0);
     }
 
     function test_RaterRegistryCanMoveBeforeProtocolConfigAdoptsPool() public {
-        MockLaunchProtocolConfig config = new MockLaunchProtocolConfig(address(registry), address(0xBEEF));
+        MockLaunchProtocolConfig config = new MockLaunchProtocolConfig(address(registry), address(0));
         pool.setRoundClusterReadyAtSource(address(new MockConfiguredClusterSource(address(config))));
 
         RaterRegistry replacementRegistry = new RaterRegistry(
@@ -338,7 +346,9 @@ contract LaunchDistributionPoolTest is Test {
             WORLD_ID_V4_ISSUER_SCHEMA_ID,
             WORLD_ID_V4_CREDENTIAL_GENESIS_ISSUED_AT_MIN
         );
+        config.setRaterRegistry(address(replacementRegistry));
         pool.setRaterRegistry(address(replacementRegistry));
+        config.setLaunchDistributionPool(address(pool));
         replacementRegistry.seedHumanCredential(
             alice, uint64(block.timestamp + 30 days), bytes32("replacement-alice"), bytes32("evidence")
         );

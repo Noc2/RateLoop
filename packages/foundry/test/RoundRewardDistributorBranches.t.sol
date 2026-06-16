@@ -21,9 +21,19 @@ contract MockRevertingLaunchDistributionPool {
     error LaunchCreditRejected();
 
     RaterRegistry public immutable raterRegistry;
+    address public roundClusterReadyAtSource;
+    mapping(address => bool) public authorizedCallers;
 
     constructor(RaterRegistry raterRegistry_) {
         raterRegistry = raterRegistry_;
+    }
+
+    function setAuthorizedCaller(address caller, bool authorized) external {
+        authorizedCallers[caller] = authorized;
+    }
+
+    function setRoundClusterReadyAtSource(address source) external {
+        roundClusterReadyAtSource = source;
     }
 
     function launchAnchorCredentialAgeSeconds() external pure returns (uint32) {
@@ -254,6 +264,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         lrepToken.approve(address(launchPool), launchPool.TOTAL_POOL_AMOUNT());
         launchPool.depositPool(launchPool.TOTAL_POOL_AMOUNT());
         config.setRaterRegistry(address(raterRegistry));
+        launchPool.setRoundClusterReadyAtSource(address(votingEngine));
         config.setLaunchDistributionPool(address(launchPool));
 
         lrepToken.mint(owner, 1_000_000e6);
@@ -847,6 +858,8 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         bytes32 voter1CommitKey =
             keccak256(abi.encodePacked(voter1, _voterCommitHash(votingEngine, contentId, roundId, voter1)));
         MockRevertingLaunchDistributionPool revertingLaunchPool = new MockRevertingLaunchDistributionPool(raterRegistry);
+        revertingLaunchPool.setAuthorizedCaller(address(rewardDistributor), true);
+        revertingLaunchPool.setRoundClusterReadyAtSource(address(votingEngine));
 
         ProtocolConfig config = ProtocolConfig(address(votingEngine.protocolConfig()));
         vm.prank(owner);
