@@ -62,7 +62,7 @@ if (!built.canonicalJson || built.roundSnapshotCount === 0) {
   );
 }
 
-await writeFile(out, `${built.canonicalJson}\n`, "utf8");
+await writeFile(out, built.canonicalJson, "utf8");
 console.log(
   JSON.stringify({
     out,

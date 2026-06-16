@@ -37,7 +37,7 @@ export async function materializeCorrelationArtifactCanonicalJson(
 
   await mkdir(storage.outputDir, { recursive: true });
   const filename = `${artifactHash}.json`;
-  await writeFile(path.join(storage.outputDir, filename), `${canonical}\n`, "utf8");
+  await writeFile(path.join(storage.outputDir, filename), canonical, "utf8");
 
   return {
     artifactHash,
