@@ -520,6 +520,7 @@ function assertHandoffChainSubmitReady(chainId: number) {
     if (error instanceof X402QuestionConfigError) {
       throw new AgentAskHandoffError(
         `Chain ${chainId} is not available for browser handoffs on this server: ${error.message}`,
+        error.status,
       );
     }
     throw error;

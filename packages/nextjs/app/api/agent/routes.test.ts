@@ -834,9 +834,9 @@ test("agent ask handoff route rejects chains unavailable on this server", async 
   );
   const body = (await response.json()) as Record<string, unknown>;
 
-  assert.equal(response.status, 400);
-  assert.equal(body.code, "invalid_arguments");
-  assert.equal(body.retryable, false);
+  assert.equal(response.status, 503);
+  assert.equal(body.code, "service_unavailable");
+  assert.equal(body.retryable, true);
   assert.match(String(body.message), /Chain 480 is not available for browser handoffs/);
   assert.match(String(body.message), /Chain 480 is not configured for this server/);
 });

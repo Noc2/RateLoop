@@ -72,7 +72,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ha
       }
       const confirmsFeedbackBonus = handoff.status === "feedback_bonus_prepared";
       if (!handoff.operationKey || (handoff.status !== "prepared" && !confirmsFeedbackBonus)) {
-        return NextResponse.json({ error: "Prepare this handoff before completing it." }, { status: 400 });
+        throw new AgentAskHandoffError("Prepare this handoff before completing it.");
       }
 
       const result = (await callPublicRateLoopMcpTool({

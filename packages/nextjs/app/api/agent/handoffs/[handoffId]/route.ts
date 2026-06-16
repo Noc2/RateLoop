@@ -41,7 +41,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ han
     handler: async () => {
       const token = readHandoffTokenFromHeaders(request.headers);
       if (!token) {
-        return NextResponse.json({ error: "handoff token is required." }, { status: 400 });
+        throw new AgentAskHandoffError("handoff token is required.");
       }
 
       const handoff = await loadAgentAskHandoffByToken({ handoffId, token });
