@@ -1,6 +1,8 @@
 import { writeFile } from "node:fs/promises";
 import { parseArgs } from "node:util";
 import { buildConfiguredCorrelationSnapshotArtifactForCandidates } from "./correlation-artifact-builder.js";
+import { areCorrelationCandidatesPonderFresh } from "./correlation-ponder-freshness.js";
+import { publicClient } from "./client.js";
 import { createLogger } from "./logger.js";
 
 const { values } = parseArgs({
@@ -10,6 +12,7 @@ const { values } = parseArgs({
     "content-id": { type: "string" },
     "round-id": { type: "string" },
     out: { type: "string" },
+    "skip-ponder-freshness": { type: "boolean", default: false },
   },
 });
 
@@ -44,15 +47,27 @@ const out = values.out;
 if (!out) throw new Error("--out is required");
 
 const logger = createLogger(process.env.LOG_FORMAT === "text" ? "text" : "json");
+const candidates = [
+  {
+    domain: requirePositiveNumber(values.domain, "--domain"),
+    rewardPoolId: requireNonNegativeBigInt(values["reward-pool-id"], "--reward-pool-id"),
+    contentId: requirePositiveBigInt(values["content-id"], "--content-id"),
+    roundId: requirePositiveBigInt(values["round-id"], "--round-id"),
+  },
+];
+
+if (values["skip-ponder-freshness"]) {
+  logger.warn(
+    "Skipping Ponder freshness gate; use only for manual recovery when Ponder is known stale",
+  );
+} else if (!(await areCorrelationCandidatesPonderFresh(publicClient, candidates, logger))) {
+  throw new Error(
+    "Ponder freshness check failed. Wait for indexing or pass --skip-ponder-freshness for manual ops.",
+  );
+}
+
 const built = await buildConfiguredCorrelationSnapshotArtifactForCandidates(
-  [
-    {
-      domain: requirePositiveNumber(values.domain, "--domain"),
-      rewardPoolId: requireNonNegativeBigInt(values["reward-pool-id"], "--reward-pool-id"),
-      contentId: requirePositiveBigInt(values["content-id"], "--content-id"),
-      roundId: requirePositiveBigInt(values["round-id"], "--round-id"),
-    },
-  ],
+  candidates,
   logger,
 );
 

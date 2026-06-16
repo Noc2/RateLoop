@@ -574,7 +574,7 @@ function loadConfig() {
         errors,
       );
       const defaultChainScanPerTick = String(
-        Math.max(1, Math.ceil(maxCandidates / reconciliationEveryTicks)),
+        Math.max(10, Math.ceil(maxCandidates / reconciliationEveryTicks)),
       );
       return {
         enabled: parseBooleanEnv(

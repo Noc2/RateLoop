@@ -451,7 +451,7 @@ async function discoverKeeperWorkCandidates(
     enabled: false,
     reconciliationEveryTicks: 1,
     maxCandidates: 500,
-    chainScanPerTick: 5,
+    chainScanPerTick: 10,
   };
 
   keeperWorkDiscoveryTick += 1;
@@ -473,7 +473,7 @@ async function discoverKeeperWorkCandidates(
       const chainBatch = await scanBoundedChainContentIds(
         publicClient,
         registryAddr,
-        Number(discoveryConfig.chainScanPerTick ?? 5),
+        Number(discoveryConfig.chainScanPerTick ?? 10),
       );
       if (chainBatch.length > 0) {
         discovery = {
