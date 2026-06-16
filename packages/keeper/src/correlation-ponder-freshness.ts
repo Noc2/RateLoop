@@ -9,7 +9,7 @@ const PONDER_FETCH_TIMEOUT_MS = 15_000;
 const PONDER_JSON_MAX_BYTES = 5_000_000;
 
 interface PonderRoundListResponse {
-  items?: Array<{ roundId?: unknown; revealedCount?: unknown; state?: unknown }>;
+  items?: Array<{ roundId?: unknown; revealedCount?: unknown; voteCount?: unknown; state?: unknown }>;
 }
 
 function parseBigInt(value: unknown): bigint | null {
@@ -46,7 +46,7 @@ async function fetchPonderRoundSnapshot(
   ponderBaseUrl: string,
   contentId: bigint,
   roundId: bigint,
-): Promise<{ revealedCount: bigint; state: number } | null> {
+): Promise<{ revealedCount: bigint; voteCount: bigint; state: number } | null> {
   const url = new URL("/rounds", ponderBaseUrl);
   url.searchParams.set("contentId", contentId.toString());
   url.searchParams.set("roundId", roundId.toString());
@@ -57,11 +57,18 @@ async function fetchPonderRoundSnapshot(
     return null;
   }
   const revealedCount = parseBigInt(match.revealedCount);
+  const voteCount = parseBigInt(match.voteCount);
   const state = typeof match.state === "number" ? match.state : Number(match.state);
-  if (revealedCount === null || revealedCount < 0n || !Number.isFinite(state)) {
+  if (
+    revealedCount === null ||
+    revealedCount < 0n ||
+    voteCount === null ||
+    voteCount < 0n ||
+    !Number.isFinite(state)
+  ) {
     return null;
   }
-  return { revealedCount, state };
+  return { revealedCount, voteCount, state };
 }
 
 export async function areCorrelationCandidatesPonderFresh(
@@ -122,6 +129,15 @@ export async function areCorrelationCandidatesPonderFresh(
           ponderRevealedCount: ponderRound.revealedCount.toString(),
         },
       );
+      return false;
+    }
+    if (ponderRound.voteCount < chainRound.voteCount) {
+      logger.debug("Deferring correlation artifact build until Ponder reflects vote count", {
+        contentId: candidate.contentId.toString(),
+        roundId: candidate.roundId.toString(),
+        chainVoteCount: chainRound.voteCount.toString(),
+        ponderVoteCount: ponderRound.voteCount.toString(),
+      });
       return false;
     }
   }
