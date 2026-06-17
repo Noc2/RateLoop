@@ -12,12 +12,12 @@ import { useGlobalState } from "~~/services/store/store";
 import { thirdwebClient } from "~~/services/thirdweb/client";
 import { createLocalTestWallet } from "~~/services/thirdweb/localTestWallet";
 import { RATELOOP_E2E_TEST_WALLET_PRIVATE_KEY_STORAGE_KEY } from "~~/services/thirdweb/testWalletStorage";
-import { isLocalE2EProductionBuildEnabled, isLocalE2EWalletBridgeEnabled } from "~~/utils/env/e2eProduction";
+import { isLocalE2EWalletBridgeEnabled } from "~~/utils/env/e2eProduction";
 import { publicEnv } from "~~/utils/env/public";
 import { NETWORKS_EXTRA_DATA } from "~~/utils/scaffold-eth";
 
 const LOCAL_TEST_CHAIN_ID = 31337;
-const allowLocalE2EProductionBuild = isLocalE2EProductionBuildEnabled();
+const allowLocalE2EProductionBuild = process.env.NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD === "true";
 
 function isLocalTestWalletEnabled() {
   if (typeof window === "undefined") {

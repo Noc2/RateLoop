@@ -47,6 +47,7 @@ export const CONFIDENTIALITY_BOND_ASSET_LREP = 0;
 export const CONFIDENTIALITY_BOND_ASSET_USDC = 1;
 export const CONFIDENTIALITY_FLAG_PRIVATE_FOREVER = 1;
 const E2E_CONFIDENTIALITY_NEXUS_BOND_AMOUNT = 1_000_000n;
+const E2E_CONTENT_DEPLOYMENT_KEY = `${foundry.id}:${CONTRACT_ADDRESSES.ContentRegistry.toLowerCase()}`;
 
 type AnvilAccount = (typeof ANVIL_ACCOUNTS)[keyof typeof ANVIL_ACCOUNTS];
 
@@ -350,6 +351,9 @@ export async function upsertQuestionConfidentialityForE2E({
   await pool.query(
     `
       insert into question_confidentiality (
+        deployment_key,
+        chain_id,
+        content_registry_address,
         content_id,
         gated,
         bond_asset,
@@ -360,8 +364,10 @@ export async function upsertQuestionConfidentialityForE2E({
         created_at,
         updated_at
       )
-      values ($1, true, $2, $3, $4, null, $5, now(), now())
-      on conflict (content_id) do update set
+      values ($1, $2, $3, $4, true, $5, $6, $7, null, $8, now(), now())
+      on conflict (deployment_key, content_id) do update set
+        chain_id = excluded.chain_id,
+        content_registry_address = excluded.content_registry_address,
         gated = excluded.gated,
         bond_asset = excluded.bond_asset,
         bond_amount = excluded.bond_amount,
@@ -370,7 +376,16 @@ export async function upsertQuestionConfidentialityForE2E({
         details_hash = excluded.details_hash,
         updated_at = now()
     `,
-    [contentId, bondAsset, bondAmount, disclosurePolicy, detailsHash ?? null],
+    [
+      E2E_CONTENT_DEPLOYMENT_KEY,
+      foundry.id,
+      CONTRACT_ADDRESSES.ContentRegistry.toLowerCase(),
+      contentId,
+      bondAsset,
+      bondAmount,
+      disclosurePolicy,
+      detailsHash ?? null,
+    ],
   );
 }
 
