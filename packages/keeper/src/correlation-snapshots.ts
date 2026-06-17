@@ -825,7 +825,9 @@ async function publishAutomaticCorrelationSnapshots(
     return preflight.result;
   }
 
-  if (!(await areCorrelationCandidatesPonderFresh(publicClient, candidates, logger))) {
+  if (!(await areCorrelationCandidatesPonderFresh(publicClient, candidates, logger, {
+    ponderNowSeconds: options.ponderNowSeconds,
+  }))) {
     return preflight.result;
   }
 

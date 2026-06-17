@@ -57,19 +57,23 @@ const candidates = [
   },
 ];
 
+const latestBlock = await publicClient.getBlock({ blockTag: "latest" });
+const ponderNowSeconds =
+  values.now !== undefined ? requireNonNegativeBigInt(values.now, "--now") : latestBlock.timestamp;
+
 if (values["skip-ponder-freshness"]) {
   logger.warn(
     "Skipping Ponder freshness gate; use only for manual recovery when Ponder is known stale",
   );
-} else if (!(await areCorrelationCandidatesPonderFresh(publicClient, candidates, logger))) {
+} else if (
+  !(await areCorrelationCandidatesPonderFresh(publicClient, candidates, logger, {
+    ponderNowSeconds,
+  }))
+) {
   throw new Error(
     "Ponder freshness check failed. Wait for indexing or pass --skip-ponder-freshness for manual ops.",
   );
 }
-
-const latestBlock = await publicClient.getBlock({ blockTag: "latest" });
-const ponderNowSeconds =
-  values.now !== undefined ? requireNonNegativeBigInt(values.now, "--now") : latestBlock.timestamp;
 
 const built = await buildConfiguredCorrelationSnapshotArtifactForCandidates(candidates, logger, {
   ponderNowSeconds,
