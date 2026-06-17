@@ -329,6 +329,13 @@ test("treats exhausted free transactions as eligible for self-funded fallback", 
   );
 });
 
+test("treats rejected thirdweb sponsored execution as eligible for self-funded fallback", () => {
+  assert.equal(
+    isThirdwebSelfFundedFallbackEligibleError(new Error('tw_execute error: {"message":"Bad Request"}\nStatus: 400')),
+    true,
+  );
+});
+
 test("ignores unrelated thirdweb submit failures", () => {
   assert.equal(isThirdwebSponsorshipDeniedError(new Error("User rejected the request.")), false);
 });
@@ -381,6 +388,19 @@ test("allows self-funded fallback when sponsored free transactions are exhausted
       error: new Error(
         'Error executing 7702 transaction: {"reason":"Free transactions used up. Add ETH to continue."}',
       ),
+      executionMode: "sponsored_7702",
+      hasReservedFreeTransaction: false,
+    }),
+    true,
+  );
+});
+
+test("allows self-funded fallback when thirdweb sponsored execution is rejected before broadcast", () => {
+  assert.equal(
+    shouldAttemptSelfFundedThirdwebFallback({
+      activeWalletId: "inApp",
+      chainId: 480,
+      error: new Error('tw_execute error: {"message":"Bad Request"}\nStatus: 400\nCode: UNKNOWN'),
       executionMode: "sponsored_7702",
       hasReservedFreeTransaction: false,
     }),

@@ -3,6 +3,7 @@ import {
   isFreeTransactionExhaustedError,
   isInsufficientFundsError,
   isThirdwebBundlerInfrastructureError,
+  isThirdwebSponsoredExecutionRejectedError,
   isUnsupportedRpcMethodError,
   isUserRejectedTransactionError,
   isWalletRpcOverloadedError,
@@ -74,6 +75,18 @@ test("ignores unrelated user operation errors", () => {
   const error = new Error("thirdweb_getUserOperationGasPrice error: user rejected the request");
 
   assert.equal(isThirdwebBundlerInfrastructureError(error), false);
+});
+
+test("detects rejected thirdweb sponsored execution requests", () => {
+  const error = new Error('tw_execute error: {"message":"Bad Request"}\nStatus: 400\nCode: UNKNOWN');
+
+  assert.equal(isThirdwebSponsoredExecutionRejectedError(error), true);
+});
+
+test("ignores user-rejected thirdweb execution requests", () => {
+  const error = new Error("tw_execute error: User rejected the request.\nStatus: 400");
+
+  assert.equal(isThirdwebSponsoredExecutionRejectedError(error), false);
 });
 
 test("detects unsupported RPC method errors from nested wallet responses", () => {

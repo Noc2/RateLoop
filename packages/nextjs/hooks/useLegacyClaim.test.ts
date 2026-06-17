@@ -142,3 +142,19 @@ test("formats decoded legacy claim reverts", () => {
     "There is no legacy LREP left to claim for this wallet right now.",
   );
 });
+
+test("formats sponsored legacy claim gas fallback failures", () => {
+  assert.equal(
+    getLegacyClaimTransactionErrorMessage(
+      new Error("Sponsored legacy claim failed and the eligible legacy wallet has no ETH for self-funded gas."),
+    ),
+    "Sponsored gas could not complete this legacy claim. Add ETH to the eligible legacy wallet, then retry.",
+  );
+});
+
+test("formats thirdweb sponsored legacy claim rejections", () => {
+  assert.equal(
+    getLegacyClaimTransactionErrorMessage(new Error('tw_execute error: {"message":"Bad Request"}\nStatus: 400')),
+    "thirdweb could not sponsor this legacy claim. Add ETH to the eligible legacy wallet and retry, or try again in a moment.",
+  );
+});

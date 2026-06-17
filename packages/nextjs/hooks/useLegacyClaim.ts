@@ -20,6 +20,7 @@ import {
 } from "~~/hooks/useThirdwebSponsoredSubmitCalls";
 import { getClaimPreflightErrorMessage } from "~~/lib/claimTransactionFeedback";
 import type { LegacyClaimLookupResult } from "~~/lib/legacy-claim/lookup";
+import { isInsufficientFundsError, isThirdwebSponsoredExecutionRejectedError } from "~~/lib/transactionErrors";
 import { createThirdwebInAppWallet, isThirdwebInAppWalletId, thirdwebClient } from "~~/services/thirdweb/client";
 import { notification } from "~~/utils/scaffold-eth";
 
@@ -97,6 +98,14 @@ export function getLegacyClaimTransactionErrorMessage(error: unknown, fallbackMe
 
   if (/InvalidAmount/i.test(message)) {
     return "The legacy claim amount is invalid for the active claim root.";
+  }
+
+  if (isInsufficientFundsError(error) || /eligible legacy wallet has no ETH/i.test(message)) {
+    return "Sponsored gas could not complete this legacy claim. Add ETH to the eligible legacy wallet, then retry.";
+  }
+
+  if (isThirdwebSponsoredExecutionRejectedError(error)) {
+    return "thirdweb could not sponsor this legacy claim. Add ETH to the eligible legacy wallet and retry, or try again in a moment.";
   }
 
   return fallbackMessage;
@@ -187,6 +196,7 @@ function shouldRetryTemporaryLegacyClaimAsEoa(error: unknown) {
   const text = getErrorText(error).toLowerCase();
   return (
     isThirdwebSponsorshipDeniedError(error) ||
+    isThirdwebSponsoredExecutionRejectedError(error) ||
     text.includes("temporary sponsored legacy claim wallet does not match") ||
     text.includes("bundler") ||
     text.includes("paymaster") ||
@@ -396,6 +406,14 @@ export function useLegacyClaim() {
         } catch (error) {
           if (!shouldRetryTemporaryLegacyClaimAsEoa(error)) {
             throw error;
+          }
+          const claimOwnerNativeBalance = await publicClient.getBalance({ address: claimOwnerAddress });
+          if (claimOwnerNativeBalance <= 0n) {
+            const fallbackError = new Error(
+              "Sponsored legacy claim failed and the eligible legacy wallet has no ETH for self-funded gas.",
+            );
+            (fallbackError as Error & { cause?: unknown }).cause = error;
+            throw fallbackError;
           }
           await submitTemporaryLegacyClaim("eoa");
         }

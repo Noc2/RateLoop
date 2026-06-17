@@ -88,6 +88,27 @@ export function isThirdwebBundlerInfrastructureError(error: unknown) {
   return isThirdwebBundlerError && isTransientInfrastructureError;
 }
 
+export function isThirdwebSponsoredExecutionRejectedError(error: unknown) {
+  const haystack = getTransactionErrorText(error).toLowerCase();
+  const isThirdwebSponsoredExecution =
+    haystack.includes("tw_execute error") ||
+    haystack.includes("error executing 7702 transaction") ||
+    haystack.includes("pm_sponsoruseroperation") ||
+    haystack.includes("transaction not sponsored") ||
+    haystack.includes("bundler.thirdweb.com");
+  const isRejectedRequest =
+    haystack.includes("status: 400") ||
+    haystack.includes("status 400") ||
+    haystack.includes("400 (bad request)") ||
+    haystack.includes("bad request") ||
+    haystack.includes("transaction not sponsored") ||
+    haystack.includes("paymaster") ||
+    haystack.includes("useroperation") ||
+    haystack.includes("userop");
+
+  return isThirdwebSponsoredExecution && isRejectedRequest && !isUserRejectedTransactionError(error);
+}
+
 export function isWalletRpcOverloadedError(error: unknown) {
   const haystack = getTransactionErrorText(error).toLowerCase();
 

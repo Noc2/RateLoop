@@ -23,7 +23,11 @@ import {
   hasMissingEip7702DelegationImplementation,
 } from "~~/lib/thirdweb/eip7702Delegation";
 import { buildFreeTransactionOperationKey } from "~~/lib/thirdweb/freeTransactionOperation";
-import { isFreeTransactionExhaustedError, isThirdwebBundlerInfrastructureError } from "~~/lib/transactionErrors";
+import {
+  isFreeTransactionExhaustedError,
+  isThirdwebBundlerInfrastructureError,
+  isThirdwebSponsoredExecutionRejectedError,
+} from "~~/lib/transactionErrors";
 import {
   createThirdwebInAppWallet,
   currentThirdwebWalletMatchesWagmiAddress,
@@ -195,7 +199,11 @@ export function isThirdwebSponsorshipDeniedError(error: unknown) {
 }
 
 export function isThirdwebSelfFundedFallbackEligibleError(error: unknown) {
-  return isThirdwebSponsorshipDeniedError(error) || isFreeTransactionExhaustedError(error);
+  return (
+    isThirdwebSponsorshipDeniedError(error) ||
+    isFreeTransactionExhaustedError(error) ||
+    isThirdwebSponsoredExecutionRejectedError(error)
+  );
 }
 
 export function shouldAttemptSelfFundedThirdwebFallback(params: {
