@@ -24,6 +24,13 @@ export function jsonBig(c: Context, data: unknown, status?: number) {
   return status === undefined ? c.json(payload) : c.json(payload, status as any);
 }
 
+export function humanVerifiedCommitQuorumMet(
+  humanVerifiedCommitCount: number,
+  minVoters: number | null | undefined,
+): boolean {
+  return humanVerifiedCommitCount >= Math.max(minVoters ?? 0, 3);
+}
+
 export function parseBigIntList(value: string | undefined, max = 50) {
   if (!value) return [];
 
@@ -413,8 +420,10 @@ function formatRoundSummary(row: {
     // Sticky legacy flag (count > 0); prefer humanVerifiedCommitQuorumMet.
     hasHumanVerifiedCommit: row.hasHumanVerifiedCommit,
     humanVerifiedCommitCount: row.humanVerifiedCommitCount,
-    humanVerifiedCommitQuorumMet:
-      row.humanVerifiedCommitCount >= Math.max(row.minVoters, 3),
+    humanVerifiedCommitQuorumMet: humanVerifiedCommitQuorumMet(
+      row.humanVerifiedCommitCount,
+      row.minVoters,
+    ),
     lastCommitRevealableAfter: row.lastCommitRevealableAfter,
     revealGracePeriod: row.revealGracePeriod,
     scoreSpreadEconomics: {

@@ -42,7 +42,7 @@ import {
 import { getFollowStatsMap } from "../follow-utils.js";
 import { resolvePonderProtocolDeploymentMetadata } from "../../protocol-deployment.js";
 import type { ApiApp } from "../shared.js";
-import { attachOpenRoundSummary, jsonBig, parseBigIntList, resolveApiNowSeconds } from "../shared.js";
+import { attachOpenRoundSummary, humanVerifiedCommitQuorumMet, jsonBig, parseBigIntList, resolveApiNowSeconds } from "../shared.js";
 import {
   confidentialityContentSelectFields,
   formatConfidentialContent,
@@ -1427,7 +1427,13 @@ export function registerContentRoutes(app: ApiApp) {
         contentWithBundle,
         includeTargetAudience === true,
       ),
-      rounds,
+      rounds: rounds.map(roundRow => ({
+        ...roundRow,
+        humanVerifiedCommitQuorumMet: humanVerifiedCommitQuorumMet(
+          roundRow.humanVerifiedCommitCount,
+          roundRow.minVoters,
+        ),
+      })),
       ratings,
       audienceContext,
     });
@@ -1530,8 +1536,10 @@ export function registerContentRoutes(app: ApiApp) {
     return jsonBig(c, {
       items: items.map(item => ({
         ...formatConfidentialContentPreview(item),
-        humanVerifiedCommitQuorumMet:
-          item.humanVerifiedCommitCount >= Math.max(item.minVoters ?? 0, 3),
+        humanVerifiedCommitQuorumMet: humanVerifiedCommitQuorumMet(
+          item.humanVerifiedCommitCount,
+          item.minVoters,
+        ),
       })),
       total: countResult?.count ?? 0,
       limit,
