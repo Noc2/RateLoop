@@ -9,6 +9,20 @@ const originalTrustedHeaders = process.env.RATE_LIMIT_TRUSTED_IP_HEADERS;
 const originalVercel = process.env.VERCEL;
 const originalRateLoopE2EProductionBuild = process.env.RATELOOP_E2E_PRODUCTION_BUILD;
 const originalNextPublicRateLoopE2EProductionBuild = process.env.NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD;
+const RATE_LIMIT_MISCONFIGURED_ERROR = {
+  code: "service_unavailable",
+  message: "Rate limiting is misconfigured",
+  recoverWith: "configure_rate_limiting",
+  retryable: true,
+  status: 503,
+};
+const RATE_LIMIT_UNAVAILABLE_ERROR = {
+  code: "service_unavailable",
+  message: "Rate limiting is unavailable",
+  recoverWith: "retry_later",
+  retryable: true,
+  status: 503,
+};
 
 env.DATABASE_URL = "memory:";
 
@@ -160,7 +174,7 @@ test("checkRateLimit fails closed in production when no trusted client IP can be
   );
 
   assert.equal(response?.status, 503);
-  assert.deepEqual(await response?.json(), { error: "Rate limiting is misconfigured" });
+  assert.deepEqual(await response?.json(), RATE_LIMIT_MISCONFIGURED_ERROR);
 });
 
 test("checkRateLimit fails closed for localhost production requests without explicit local-e2e mode", async () => {
@@ -173,7 +187,7 @@ test("checkRateLimit fails closed for localhost production requests without expl
   );
 
   assert.equal(response?.status, 503);
-  assert.deepEqual(await response?.json(), { error: "Rate limiting is misconfigured" });
+  assert.deepEqual(await response?.json(), RATE_LIMIT_MISCONFIGURED_ERROR);
 });
 
 test("checkRateLimit accepts localhost production requests in explicit local-e2e mode", async () => {
@@ -248,7 +262,7 @@ test("checkRateLimit fails closed when the backing store is unavailable in produ
   );
 
   assert.equal(response?.status, 503);
-  assert.deepEqual(await response?.json(), { error: "Rate limiting is unavailable" });
+  assert.deepEqual(await response?.json(), RATE_LIMIT_UNAVAILABLE_ERROR);
 });
 
 test("checkRateLimit can fail open for opted-in endpoints when the backing store is unavailable", async () => {
