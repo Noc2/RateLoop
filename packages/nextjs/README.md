@@ -116,7 +116,7 @@ Key environment variables (see `.env.example` for the full list):
 Notes:
 
 - Browser RPC reads prefer `NEXT_PUBLIC_RPC_URL_<chainId>` overrides first, then `NEXT_PUBLIC_ALCHEMY_API_KEY`, then the chain's default public RPC list.
-- The target-network parser accepts local Foundry plus World Chain Sepolia and mainnet: `31337`, `4801`, and `480`. Production builds use the committed World Chain mainnet default in `.env.production` unless Vercel/system env config overrides `NEXT_PUBLIC_TARGET_NETWORKS`.
+- The target-network parser accepts local Foundry plus World Chain Sepolia and mainnet: `31337`, `4801`, and `480`. Production builds use the committed World Chain Sepolia default (`4801`) in `.env.production` unless Vercel/system env config overrides `NEXT_PUBLIC_TARGET_NETWORKS`.
 - The Wallet settings tab uses thirdweb's BuyWidget to add native ETH for World Chain gas. Configure the thirdweb client ID's allowed domains for the production and preview origins that will render `/settings#wallet`.
 - The Identity settings tab uses World ID v3 legacy proofs by default. The connected wallet submits the proof directly to `RaterRegistry.attestHumanCredentialWithProof`, where the World ID router checks it on-chain before any credential exists. The v4 proof parser and contract hook remain available for a future governance upgrade behind `NEXT_PUBLIC_WORLD_ID_PROOF_MODE`.
 - Bounties can stay open to everyone or require Proof of Human. Passport, Selfie Check, and recent-recheck bounty scopes are hidden for the v3 launch.

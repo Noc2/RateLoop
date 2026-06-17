@@ -29,7 +29,7 @@ const sdkDocsHref = "https://github.com/Noc2/RateLoop/tree/main/packages/sdk";
 const agentsExamplesHref = "https://github.com/Noc2/RateLoop/tree/main/packages/agents/examples/questions";
 
 const askPayloadExample = `{
-  "chainId": 480,
+  "chainId": 4801,
   "clientRequestId": "design-review-2026-05-05-001",
   "walletAddress": "0x1111111111111111111111111111111111111111",
   "paymentMode": "wallet_calls",
@@ -57,7 +57,7 @@ const askPayloadExample = `{
   "maxPaymentAmount": "4500000",
   "question": {
     "title": "Is this generated product concept clear enough to test?",
-    "imageUrls": ["https://www.rateloop.ai/uploads/example-generated-concept.webp"],
+    "imageUrls": ["https://www.rateloop.ai/api/attachments/images/example-generated-concept.webp"],
     "categoryId": "5",
     "tags": ["agent", "design", "generated-context"],
     "templateId": "generic_rating"
