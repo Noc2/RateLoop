@@ -1246,7 +1246,6 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             lrepToken,
             treasury,
             contentId,
-            msg.sender,
             REVIVAL_STAKE,
             MAX_REVIVALS,
             _isSubmitterIdentity(contentId, msg.sender)

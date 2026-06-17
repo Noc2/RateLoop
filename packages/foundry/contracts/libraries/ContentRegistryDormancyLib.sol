@@ -50,7 +50,6 @@ library ContentRegistryDormancyLib {
         IERC20 lrepToken,
         address treasury,
         uint256 contentId,
-        address reviver,
         uint256 revivalStake,
         uint8 maxRevivals,
         bool isSubmitter
@@ -65,6 +64,7 @@ library ContentRegistryDormancyLib {
         require(block.timestamp <= dormantKeyReleasableAt[contentId]);
 
         require(treasury != address(0));
+        address reviver = msg.sender;
         lrepToken.safeTransferFrom(reviver, treasury, revivalStake);
 
         content.status = ContentRegistryTypes.ContentStatus.Active;
