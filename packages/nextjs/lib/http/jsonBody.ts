@@ -5,7 +5,7 @@ export type JsonObjectBody = Record<string, unknown>;
 const DEFAULT_JSON_BODY_MAX_BYTES = 128 * 1024;
 export const JSON_BODY_TOO_LARGE = Symbol("json_body_too_large");
 
-function requestErrorEnvelope(params: {
+export function apiErrorEnvelope(params: {
   code: string;
   message: string;
   recoverWith: string;
@@ -53,7 +53,7 @@ export function isJsonObjectBody(body: unknown): body is JsonObjectBody {
 
 export function jsonBodyErrorResponse(body: unknown, message = "Request body must be valid JSON.") {
   if (body === JSON_BODY_TOO_LARGE) {
-    const normalized = requestErrorEnvelope({
+    const normalized = apiErrorEnvelope({
       code: "request_entity_too_large",
       message: "Request body is too large.",
       recoverWith: "reduce_payload_size",
@@ -62,7 +62,7 @@ export function jsonBodyErrorResponse(body: unknown, message = "Request body mus
     });
     return NextResponse.json(normalized, { status: normalized.status });
   }
-  const normalized = requestErrorEnvelope({
+  const normalized = apiErrorEnvelope({
     code: "invalid_request",
     message,
     recoverWith: "fix_request_body",

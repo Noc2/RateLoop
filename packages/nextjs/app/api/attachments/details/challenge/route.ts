@@ -6,7 +6,7 @@ import {
   normalizeQuestionDetailsUploadChallengeInput,
 } from "~~/lib/auth/questionDetailsChallenge";
 import { issueSignedActionChallenge } from "~~/lib/auth/signedActions";
-import { isJsonObjectBody, jsonBodyErrorResponse, parseJsonBody } from "~~/lib/http/jsonBody";
+import { apiErrorEnvelope, isJsonObjectBody, jsonBodyErrorResponse, parseJsonBody } from "~~/lib/http/jsonBody";
 import { checkRateLimit } from "~~/utils/rateLimit";
 
 const RATE_LIMIT = { limit: 20, windowMs: 60_000 };
@@ -20,7 +20,14 @@ export async function POST(request: NextRequest) {
 
   const normalized = normalizeQuestionDetailsUploadChallengeInput(body);
   if (!normalized.ok) {
-    return NextResponse.json({ error: normalized.error }, { status: 400 });
+    const error = apiErrorEnvelope({
+      code: "invalid_request",
+      message: normalized.error,
+      recoverWith: "fix_request_body",
+      retryable: false,
+      status: 400,
+    });
+    return NextResponse.json(error, { status: error.status });
   }
 
   const limited = await checkRateLimit(request, RATE_LIMIT, {

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse, after } from "next/server";
-import { JSON_BODY_TOO_LARGE, parseJsonBody } from "~~/lib/http/jsonBody";
+import { JSON_BODY_TOO_LARGE, apiErrorEnvelope, parseJsonBody } from "~~/lib/http/jsonBody";
 import { McpAuthError, authenticateMcpRequest, buildMcpAuthChallenge } from "~~/lib/mcp/auth";
 import { MCP_TOOLS, callRateLoopMcpTool, getMcpToolRequiredScope, normalizeToolError } from "~~/lib/mcp/tools";
 import { checkRateLimit, resolveRateLimitSubject } from "~~/utils/rateLimit";
@@ -150,19 +150,33 @@ function toolErrorResult(error: unknown) {
 }
 
 function authErrorResponse(error: McpAuthError, request: Request) {
-  return NextResponse.json(
-    { error: error.message },
-    {
-      headers: {
-        ...corsHeaders(request),
-        "WWW-Authenticate": buildMcpAuthChallenge({
-          metadataUrl: metadataUrl(request),
-          scope: error.requiredScope,
-        }),
-      },
-      status: error.status,
+  const body =
+    error.status === 503
+      ? apiErrorEnvelope({
+          code: "service_unavailable",
+          message: error.message,
+          recoverWith: "configure_agent_auth",
+          retryable: true,
+          status: error.status,
+        })
+      : apiErrorEnvelope({
+          code: "transport_auth_required",
+          message: error.message,
+          recoverWith: error.status === 403 ? "grant_required_scope" : "provide_bearer_token",
+          retryable: false,
+          status: error.status,
+        });
+
+  return NextResponse.json(body, {
+    headers: {
+      ...corsHeaders(request),
+      "WWW-Authenticate": buildMcpAuthChallenge({
+        metadataUrl: metadataUrl(request),
+        scope: error.requiredScope,
+      }),
     },
-  );
+    status: body.status,
+  });
 }
 
 export async function OPTIONS(request: NextRequest) {

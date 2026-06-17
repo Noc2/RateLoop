@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createHash } from "crypto";
 import { dbClient } from "~~/lib/db";
+import { apiErrorEnvelope } from "~~/lib/http/jsonBody";
 import { isLocalE2EProductionBuildEnabled } from "~~/utils/env/e2eProduction";
 
 /**
@@ -208,7 +209,14 @@ export async function checkRateLimit(
 ): Promise<NextResponse | null> {
   const trustedClientIp = getTrustedClientIp(request);
   if (process.env.NODE_ENV === "production" && !trustedClientIp) {
-    return NextResponse.json({ error: "Rate limiting is misconfigured" }, { status: 503 });
+    const error = apiErrorEnvelope({
+      code: "service_unavailable",
+      message: "Rate limiting is misconfigured",
+      recoverWith: "configure_rate_limiting",
+      retryable: true,
+      status: 503,
+    });
+    return NextResponse.json(error, { status: error.status });
   }
 
   const now = Date.now();
@@ -239,11 +247,18 @@ export async function checkRateLimit(
     const requestCount = Number(result.rows[0]?.request_count ?? 0);
     if (requestCount > config.limit) {
       const retryAfter = Math.max(1, Math.ceil((expiresAt - now) / 1000));
+      const error = apiErrorEnvelope({
+        code: "rate_limit_exceeded",
+        message: "Too many requests",
+        recoverWith: "retry_after_delay",
+        retryable: true,
+        status: 429,
+      });
 
-      return NextResponse.json(
-        { error: "Too many requests" },
-        { status: 429, headers: { "Retry-After": String(retryAfter) } },
-      );
+      return NextResponse.json(error, {
+        status: error.status,
+        headers: { "Retry-After": String(retryAfter) },
+      });
     }
   } catch (error) {
     console.warn(
@@ -252,7 +267,14 @@ export async function checkRateLimit(
     );
 
     if (process.env.NODE_ENV === "production" && !options.allowOnStoreUnavailable) {
-      return NextResponse.json({ error: "Rate limiting is unavailable" }, { status: 503 });
+      const error = apiErrorEnvelope({
+        code: "service_unavailable",
+        message: "Rate limiting is unavailable",
+        recoverWith: "retry_later",
+        retryable: true,
+        status: 503,
+      });
+      return NextResponse.json(error, { status: error.status });
     }
   }
 
