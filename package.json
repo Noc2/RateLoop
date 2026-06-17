@@ -59,6 +59,7 @@
     "precommit": "lint-staged",
     "start": "yarn workspace @rateloop/nextjs dev",
     "test": "yarn foundry:test",
+    "test:all": "yarn foundry:test && yarn test:ts",
     "test:node": "node scripts/run-node-tests.mjs scripts packages/foundry/scripts-js",
     "foundry:generate-ts-abis:test": "node scripts/run-node-tests.mjs packages/foundry/scripts-js/generateTsAbis.test.js",
     "vercel": "yarn workspace @rateloop/nextjs vercel",
