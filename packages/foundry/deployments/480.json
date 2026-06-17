@@ -31,6 +31,6 @@
   "0xFF9748FAD06c48ef597C1564DFA51bf015c3fafd": "LoopReputation",
   "deploymentBlockNumber": 31173380,
   "deploymentComplete": "true",
-  "deploymentProfile": "production",
+  "deploymentProfile": "mainnet-canary",
   "networkName": "worldchain"
 }
