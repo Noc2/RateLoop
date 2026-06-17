@@ -1,4 +1,4 @@
-name: World Chain Mainnet Canary Readiness
+name: World Chain Mainnet Readiness
 
 on:
   push:
@@ -28,5 +28,5 @@ jobs:
         with:
           node-version: "24"
 
-      - name: Offline canary readiness checks
-        run: node scripts/check-worldchain-mainnet-readiness.mjs --canary
+      - name: Offline production readiness checks
+        run: node scripts/check-worldchain-mainnet-readiness.mjs --production
