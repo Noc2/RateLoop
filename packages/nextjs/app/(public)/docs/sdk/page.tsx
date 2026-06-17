@@ -12,11 +12,12 @@ const agentMcpRatingExample = `import { createRateLoopAgentClient } from "@ratel
 import { buildCommitVoteParams } from "@rateloop/sdk/vote";
 
 const agent = createRateLoopAgentClient({
-  apiBaseUrl: "https://www.rateloop.ai",
+  apiBaseUrl: "https://ponder.rateloop.ai", // hosted reads (Ponder indexer)
+  mcpApiUrl: "https://www.rateloop.ai/api/mcp/public", // MCP lives on the Next.js app
 });
 
 const context = await agent.getRatingContext({
-  chainId: 480,
+  chainId: 4801, // World Chain Sepolia (testnet). Production mainnet is 480.
   contentId: "42",
   walletAddress: "0xYourWallet",
 });
@@ -44,7 +45,7 @@ const commit = await buildCommitVoteParams({
 });
 
 const prepared = await agent.prepareRatingTransactions({
-  chainId: 480,
+  chainId: 4801, // World Chain Sepolia (testnet). Production mainnet is 480.
   contentId: "42",
   walletAddress: "0xYourWallet",
   roundId: commit.roundId,
@@ -153,7 +154,7 @@ import { buildCommitVoteParams } from "@rateloop/sdk/vote";`}</code>
       <p>Create a client once, then use its hosted read surface wherever your app needs indexed protocol data.</p>
       <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
         <code>{`const rateloop = createRateLoopClient({
-  apiBaseUrl: "https://www.rateloop.ai",
+  apiBaseUrl: "https://ponder.rateloop.ai",
   frontendCode: "0x1234567890123456789012345678901234567890",
 });
 
@@ -170,6 +171,12 @@ const participationStatus = await rateloop.read.getRaterParticipationStatus(
   "0xAgentOrRaterWallet",
 );`}</code>
       </pre>
+      <p>
+        Point <code>apiBaseUrl</code> at your Ponder indexer (<code>https://ponder.rateloop.ai</code> or{" "}
+        <code>NEXT_PUBLIC_PONDER_URL</code>). Agent MCP and browser handoffs use the Next.js origin (
+        <code>https://www.rateloop.ai</code>). Examples use Sepolia chain ID <code>4801</code>; production mainnet is{" "}
+        <code>480</code>.
+      </p>
 
       <h2>Rating Vote Integration</h2>
       <p>
