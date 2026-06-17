@@ -134,7 +134,9 @@ Only drop the old schema if you are certain it contains no data you need.
 **`humanVerifiedCommitCount` backfill:** After deploying schema changes that add
 `humanVerifiedCommitCount`, existing Postgres rows default to `0`. Either run a full
 Ponder reindex, or backfill from indexed vote rows before relying on keeper
-`reveal_failed` hints:
+`reveal_failed` hints or dormancy pre-filters on Railway / production:
+
+**Required before mainnet keeper cutover** if the indexer DB was created before the HRC column shipped. Without backfill, `/keeper/work` may omit dormant rounds and `reveal_failed` candidates even though on-chain state is correct.
 
 ```sql
 UPDATE "<schema>"."round" AS r
