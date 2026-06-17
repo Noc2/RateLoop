@@ -31,7 +31,6 @@ library RoundRevealLib {
     error HashMismatch();
     error NotEnoughVotes();
     error RevealGraceActive();
-    error RbtsSeedUnavailable();
 
     event RbtsSeedCaptured(uint256 indexed contentId, uint256 indexed roundId, bytes32 entropy);
 
