@@ -1,25 +1,27 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { getFreeTransactionAllowanceDisplayState } from "./freeTransactionAllowanceDisplay";
+import { defineChain } from "thirdweb";
 import { useActiveWalletChain } from "thirdweb/react";
-import { getAddress } from "viem";
-import { Address } from "viem";
+import { type Address, formatEther, getAddress } from "viem";
 import { hardhat } from "viem/chains";
 import { useAccount } from "wagmi";
 import { ArrowLeftOnRectangleIcon, CheckIcon, ClipboardDocumentIcon, Cog6ToothIcon } from "@heroicons/react/24/outline";
 import { BlockieAvatar } from "~~/components/scaffold-eth";
 import { FaucetTrigger } from "~~/components/scaffold-eth/FaucetTrigger";
 import { ClaimRewardsButton } from "~~/components/shared/ClaimRewardsButton";
+import { useWalletFunding } from "~~/components/shared/WalletFundingProvider";
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import { useCopyToClipboard } from "~~/hooks/scaffold-eth";
 import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import { useFreeTransactionAllowance } from "~~/hooks/useFreeTransactionAllowance";
-import { shouldShowFreeTransactionAllowance } from "~~/hooks/useGasBalanceStatus";
+import { shouldShowFreeTransactionAllowance, useGasBalanceStatus } from "~~/hooks/useGasBalanceStatus";
 import { useRateLoopDisconnect } from "~~/hooks/useRateLoopDisconnect";
 import { useVoterAccuracy } from "~~/hooks/useVoterAccuracy";
 import { resolveWalletExecutionChainId, useWalletExecutionCapabilities } from "~~/hooks/useWalletExecutionCapabilities";
 import { useWalletSummaryData } from "~~/hooks/useWalletSummaryData";
 import { AVATAR_WIN_RATE_TOOLTIP } from "~~/lib/profile/winRateTooltip";
+import { getDefaultUsdcAddress, getDefaultUsdcDisplayName } from "~~/lib/questionRewardPools";
 import { isENS } from "~~/utils/scaffold-eth/common";
 
 type AddressInfoDropdownProps = {
@@ -39,9 +41,22 @@ const getMenuItemClass = (showText: boolean) =>
     ? "flex items-center justify-start gap-3 px-3 py-2.5 rounded-xl transition-colors text-base-content/60 hover:text-base-content hover:bg-base-200 w-full text-base font-medium"
     : "flex items-center justify-start gap-3 px-4 py-3 rounded-xl transition-colors text-base-content/60 hover:text-base-content hover:bg-base-200 w-full text-base font-medium";
 
+const DEFAULT_ETH_TOP_UP_AMOUNT = "1";
+const DEFAULT_USDC_TOP_UP_AMOUNT = "10";
+const FUNDING_PRESET_OPTIONS: [number, number, number] = [5, 10, 20];
+
 function formatLrepAmount(value: bigint | null | undefined) {
   if (value == null) return "—";
   return (Number(value) / 1e6).toLocaleString(undefined, { maximumFractionDigits: 0 });
+}
+
+export function formatEthAmount(value: bigint | null | undefined) {
+  if (value == null) return "—";
+  const formatted = Number(formatEther(value));
+  return formatted.toLocaleString(undefined, {
+    maximumFractionDigits: formatted >= 1 ? 4 : 6,
+    minimumFractionDigits: 0,
+  });
 }
 
 export function formatUsdcAmount(value: bigint | null | undefined) {
@@ -182,18 +197,72 @@ function WalletSummaryDetails({
   winRateClassName: string;
 }) {
   const [isClientMounted, setIsClientMounted] = useState(false);
+  const { targetNetwork } = useTargetNetwork();
+  const { openWalletFunding } = useWalletFunding();
   const { activeVotes, earliestReveal, hasPendingReveals, liquidBalance, summary, usdcBalance } =
     useWalletSummaryData(address);
+  const thirdwebTargetChain = useMemo(() => defineChain(targetNetwork), [targetNetwork]);
+  const usdcAddress = getDefaultUsdcAddress(targetNetwork.id);
+  const usdcDisplayName = getDefaultUsdcDisplayName(targetNetwork.id);
+  const {
+    canSponsorTransactions,
+    canShowFreeTransactionAllowance,
+    freeTransactionRemaining,
+    freeTransactionVerified,
+    hasResolvedNativeBalance,
+    isAwaitingFreeTransactionAllowance,
+    nativeBalanceValue,
+    nativeTokenSymbol,
+  } = useGasBalanceStatus({ includeExternalSendCalls: true });
 
   useEffect(() => {
     setIsClientMounted(true);
   }, []);
+
+  const shouldShowNativeFundingBalance =
+    isClientMounted &&
+    targetNetwork.id !== hardhat.id &&
+    hasResolvedNativeBalance &&
+    !isAwaitingFreeTransactionAllowance &&
+    (!canSponsorTransactions ||
+      (canShowFreeTransactionAllowance && freeTransactionVerified && freeTransactionRemaining <= 0));
+
+  const handleOpenEthFunding = useCallback(() => {
+    openWalletFunding({
+      amount: DEFAULT_ETH_TOP_UP_AMOUNT,
+      asset: "ETH",
+      buttonLabel: `Add ${nativeTokenSymbol}`,
+      chain: thirdwebTargetChain,
+      description: `Fund this wallet with native ${nativeTokenSymbol} for ${targetNetwork.name} gas costs.`,
+      presetOptions: FUNDING_PRESET_OPTIONS,
+      receiverAddress: address as `0x${string}`,
+      title: `Add ${nativeTokenSymbol}`,
+    });
+  }, [address, nativeTokenSymbol, openWalletFunding, targetNetwork.name, thirdwebTargetChain]);
+
+  const handleOpenUsdcFunding = useCallback(() => {
+    if (!usdcAddress) return;
+
+    openWalletFunding({
+      amount: DEFAULT_USDC_TOP_UP_AMOUNT,
+      asset: "USDC",
+      buttonLabel: "Add USDC",
+      chain: thirdwebTargetChain,
+      description: `Fund this wallet with ${usdcDisplayName} for bounties and agent access.`,
+      presetOptions: FUNDING_PRESET_OPTIONS,
+      receiverAddress: address as `0x${string}`,
+      title: `Add ${usdcDisplayName}`,
+      tokenAddress: usdcAddress,
+      unavailableMessage: "USDC is not configured for this network.",
+    });
+  }, [address, openWalletFunding, thirdwebTargetChain, usdcAddress, usdcDisplayName]);
 
   const totalStakedMicro = isClientMounted ? (summary?.totalStakedMicro ?? 0n) : 0n;
   const showStaked = isClientMounted && (totalStakedMicro > 0n || activeVotes.length > 0);
   const submissionStakedMicro = isClientMounted ? (summary?.submissionStakedMicro ?? 0n) : 0n;
   const frontendStakedMicro = isClientMounted ? (summary?.frontendStakedMicro ?? 0n) : 0n;
   const votingStakedMicro = isClientMounted ? (summary?.votingStakedMicro ?? 0n) : 0n;
+  const interactiveBalanceClassName = `appearance-none border-0 bg-transparent p-0 ${balanceClassName} rounded-md underline-offset-2 transition-colors hover:text-base-content hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/70 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:no-underline`;
 
   const stakeParts: string[] = [];
   if (submissionStakedMicro > 0n) {
@@ -219,10 +288,29 @@ function WalletSummaryDetails({
         <span className="tabular-nums">{formatLrepAmount(isClientMounted ? liquidBalance : null)}</span>{" "}
         <span className="text-base-content/52">LREP</span>
       </div>
-      <div className={balanceClassName}>
+      {shouldShowNativeFundingBalance ? (
+        <button
+          type="button"
+          className={interactiveBalanceClassName}
+          onClick={handleOpenEthFunding}
+          aria-label={`Add ${nativeTokenSymbol}`}
+          title={`Add ${nativeTokenSymbol}`}
+        >
+          <span className="tabular-nums">{formatEthAmount(nativeBalanceValue)}</span>{" "}
+          <span className="text-base-content/52">{nativeTokenSymbol}</span>
+        </button>
+      ) : null}
+      <button
+        type="button"
+        className={interactiveBalanceClassName}
+        disabled={!usdcAddress}
+        onClick={handleOpenUsdcFunding}
+        aria-label={`Add ${usdcDisplayName}`}
+        title={usdcAddress ? `Add ${usdcDisplayName}` : "USDC is not configured for this network"}
+      >
         <span className="tabular-nums">{formatUsdcAmount(isClientMounted ? usdcBalance : null)}</span>{" "}
         <span className="text-base-content/52">USDC</span>
-      </div>
+      </button>
       {showStaked ? (
         <div className={stakeClassName}>
           <span className="tabular-nums">{formatLrepAmount(totalStakedMicro)}</span>
