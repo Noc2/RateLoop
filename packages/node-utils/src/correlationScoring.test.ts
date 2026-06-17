@@ -3,11 +3,14 @@ import test from "node:test";
 import { concat, keccak256, type Address, type Hex } from "viem";
 import {
   BPS_DENOMINATOR,
+  MAX_CORRELATION_VOTE_PAGES,
   PAYOUT_DOMAIN_LAUNCH_CREDIT,
   PAYOUT_DOMAIN_PUBLIC_RATING,
   PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD,
   PAYOUT_DOMAIN_QUESTION_REWARD,
   correlationParameterHash,
+  correlationVoteScanPageBudget,
+  correlationVotesPathForDomain,
   defaultCorrelationScoringParams,
   merkleProof,
   merkleRoot,
@@ -619,4 +622,16 @@ test("scoreRoundPayoutWeights rejects invalid parameters", () => {
   }
 
   assert.equal(BPS_DENOMINATOR, 10_000n);
+});
+
+test("correlation vote pagination helpers route by domain and scale scan budget", () => {
+  assert.equal(correlationVotesPathForDomain(PAYOUT_DOMAIN_PUBLIC_RATING), "/correlation/rating-round-votes");
+  assert.equal(
+    correlationVotesPathForDomain(PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD),
+    "/correlation/bundle-round-votes",
+  );
+  assert.equal(correlationVotesPathForDomain(PAYOUT_DOMAIN_QUESTION_REWARD), "/correlation/round-votes");
+  assert.equal(correlationVoteScanPageBudget(0), 50);
+  assert.equal(correlationVoteScanPageBudget(49_000), 99);
+  assert.equal(MAX_CORRELATION_VOTE_PAGES, 51);
 });

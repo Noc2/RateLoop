@@ -13,6 +13,11 @@ export const PAYOUT_DOMAIN_QUESTION_REWARD = 1;
 export const PAYOUT_DOMAIN_LAUNCH_CREDIT = 2;
 export const PAYOUT_DOMAIN_PUBLIC_RATING = 3;
 export const PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD = 4;
+export const CORRELATION_VOTE_PAGE_SIZE = 1_000;
+export const MAX_CORRELATION_VOTE_PAGES = 51;
+export const BASE_CORRELATION_VOTE_SCAN_PAGES = 50;
+export const MAX_CORRELATION_VOTE_SCAN_PAGE_BUDGET = 200;
+export const PONDER_HTTP_FETCH_TIMEOUT_MS = 15_000;
 export const CORRELATION_CANONICAL_JSON_VERSION = "rateloop-canonical-json-v1";
 export const CORRELATION_ELIGIBILITY_SPEC_VERSION =
   "rateloop-correlation-eligibility-v1";
@@ -23,6 +28,25 @@ export const PAYOUT_WEIGHT_DOMAIN = keccak256(
 );
 export const BPS_DENOMINATOR = 10_000n;
 export const NEUTRAL_SURPRISE_BPS = 10_000;
+
+export function correlationVotesPathForDomain(domain: number): string {
+  if (domain === PAYOUT_DOMAIN_PUBLIC_RATING) {
+    return "/correlation/rating-round-votes";
+  }
+  if (domain === PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD) {
+    return "/correlation/bundle-round-votes";
+  }
+  return "/correlation/round-votes";
+}
+
+export function correlationVoteScanPageBudget(eligibleOffset: number): number {
+  return Math.min(
+    MAX_CORRELATION_VOTE_SCAN_PAGE_BUDGET,
+    BASE_CORRELATION_VOTE_SCAN_PAGES +
+      Math.ceil(Math.max(0, eligibleOffset) / CORRELATION_VOTE_PAGE_SIZE),
+  );
+}
+
 const FLAT_BASE_WEIGHT = 10_000n;
 const RATING_EVIDENCE_BASE_UNIT = 1_000_000n;
 const RATING_EVIDENCE_STAKE_BONUS_CAP = 10_000_000n;
