@@ -122,3 +122,29 @@ test("getDefaultUsdcAddress uses local MockERC20 before World Chain defaults", (
     }
   }
 });
+
+test("getDefaultUsdcAddress rejects conflicting public USDC overrides", () => {
+  const env = process.env as Record<string, string | undefined>;
+  const originalUsdc = env.NEXT_PUBLIC_USDC_ADDRESS;
+  const originalX402 = env.NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS;
+
+  try {
+    env.NEXT_PUBLIC_USDC_ADDRESS = "0x0000000000000000000000000000000000000001";
+    env.NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS = "0x0000000000000000000000000000000000000002";
+    assert.throws(
+      () => getDefaultUsdcAddress(31337),
+      /NEXT_PUBLIC_USDC_ADDRESS and NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS must match/,
+    );
+  } finally {
+    if (originalUsdc === undefined) {
+      delete env.NEXT_PUBLIC_USDC_ADDRESS;
+    } else {
+      env.NEXT_PUBLIC_USDC_ADDRESS = originalUsdc;
+    }
+    if (originalX402 === undefined) {
+      delete env.NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS;
+    } else {
+      env.NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS = originalX402;
+    }
+  }
+});
