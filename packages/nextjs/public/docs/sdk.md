@@ -190,7 +190,8 @@ import { createRateLoopAgentClient } from "@rateloop/sdk/agent";
 import { buildCommitVoteParams } from "@rateloop/sdk/vote";
 
 const agent = createRateLoopAgentClient({
-  apiBaseUrl: "https://www.rateloop.ai",
+  apiBaseUrl: "https://ponder.rateloop.ai",
+  mcpApiUrl: "https://www.rateloop.ai/api/mcp/public",
 });
 
 let context = await agent.getRatingContext({
