@@ -2310,6 +2310,21 @@ contract ClusterPayoutOracleTest is Test {
         oracle.proposeRoundPayoutSnapshot(input);
     }
 
+    function test_ChallengedRoundPayoutSnapshotDirectReproposalRevertsSnapshotExistsWithLiveParent() public {
+        _proposeDefaultCorrelationEpoch(1, keccak256("cluster-root"), keccak256("epoch-artifact"));
+
+        IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
+        oracle.proposeRoundPayoutSnapshot(input);
+        bytes32 snapshotKey =
+            oracle.roundPayoutSnapshotKey(input.domain, input.rewardPoolId, input.contentId, input.roundId);
+        _challengeRoundPayoutSnapshot(snapshotKey, keccak256("challenge-round"));
+
+        input.weightRoot = keccak256("replacement-weight-root");
+        input.artifactURI = "ipfs://round-replacement";
+        vm.expectRevert(ClusterPayoutOracle.SnapshotExists.selector);
+        oracle.proposeRoundPayoutSnapshot(input);
+    }
+
     function test_StaleProposedRoundPayoutSnapshotCanBeReplacedAfterParentReproposal() public {
         bytes32 firstArtifact = keccak256("epoch-artifact");
         _proposeDefaultCorrelationEpoch(1, keccak256("cluster-root"), firstArtifact);

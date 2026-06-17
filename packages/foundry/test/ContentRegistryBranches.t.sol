@@ -13,6 +13,7 @@ import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol"
 import { RaterRegistry } from "../contracts/RaterRegistry.sol";
 import { LoopReputation } from "../contracts/LoopReputation.sol";
 import { ContentRegistryTypes } from "../contracts/libraries/ContentRegistryTypes.sol";
+import { ContentRegistryRatingSnapshotLib } from "../contracts/libraries/ContentRegistryRatingSnapshotLib.sol";
 import { RoundLib } from "../contracts/libraries/RoundLib.sol";
 import { RatingLib } from "../contracts/libraries/RatingLib.sol";
 import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
@@ -3132,7 +3133,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
 
         uint256 replacementRoundId = replacementEngine.nextRoundIdForContent(1);
         vm.expectEmit(true, true, false, true, address(registry));
-        emit ContentRegistry.RatingReviewPending(1, replacementRoundId, 5000, 2, 1, block.timestamp);
+        emit ContentRegistryRatingSnapshotLib.RatingReviewPending(1, replacementRoundId, 5000, 2, 1, block.timestamp);
         vm.prank(address(replacementEngine));
         registry.recordPendingRatingSettlement(1, replacementRoundId, 5000, 2, 1);
 
@@ -3293,7 +3294,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
 
         // Sanity: the canonical (replacement) engine can still record pending settlement.
         vm.expectEmit(true, true, false, true, address(registry));
-        emit ContentRegistry.RatingReviewPending(freshContentId, 1, 5000, 1, 0, block.timestamp);
+        emit ContentRegistryRatingSnapshotLib.RatingReviewPending(freshContentId, 1, 5000, 1, 0, block.timestamp);
         vm.prank(address(replacementEngine));
         registry.recordPendingRatingSettlement(freshContentId, 1, 5000, 1, 0);
     }

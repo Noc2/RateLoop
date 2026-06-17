@@ -45,7 +45,9 @@ Several production contracts run close to the limit. As of June 2026 local check
 
 Treat new features on these contracts as size-sensitive: prefer library extraction or split contracts before adding bytecode.
 
-**Deploy profile vs default profile:** `yarn workspace @rateloop/foundry check:sizes` and live deploys use the Foundry **deploy** profile (`FOUNDRY_PROFILE=deploy`). A plain `forge build` with the default profile can produce oversize bytecode for `ContentRegistry`, `LaunchDistributionPool`, and `QuestionRewardPoolEscrow` even when deploy-profile artifacts pass EIP-170. Do not use default-profile build artifacts for size gates or production deploys.
+**Deploy profile vs default profile:** `yarn workspace @rateloop/foundry check:sizes` and live deploys use the Foundry **deploy** profile (`FOUNDRY_PROFILE=deploy`). A plain `forge build` with the default profile can produce oversize bytecode for `RoundVotingEngine`, `LaunchDistributionPool`, `QuestionRewardPoolEscrow`, and `ContentRegistry` even when deploy-profile artifacts pass EIP-170. Do not use default-profile build artifacts for size gates or production deploys.
+
+**Settlement side effects:** `RoundSettlementSideEffectsLib` records pending public-rating settlements in a try/catch. A failed side effect emits `SettlementSideEffectFailed` but still completes settlement; operators must monitor logs and manually call `recordPendingRatingSettlement` (or repoint/retry tooling) when that event appears.
 
 On World Chain mainnet and World Chain Sepolia, deploys use a Foundry keystore selected via `--keystore <name>` and skip Forge's
 auto-verification flow. Verify those contracts manually with
