@@ -150,6 +150,8 @@ yarn workspace @rateloop/agents wallet
 yarn workspace @rateloop/agents local-ask --file packages/agents/examples/questions/landing-pitch-review.json
 ```
 
+Production mainnet uses chain `480` (`NEXT_PUBLIC_TARGET_NETWORKS=480` in `.env.production`). Local signer examples and `examples/questions/*.json` default to Sepolia (`4801`) so funded test wallets stay on testnet USDC.
+
 The local signer never prints the private key. `RATELOOP_LOCAL_SIGNER_PRIVATE_KEY` exists only for short-lived CI or
 ephemeral test wallets; avoid putting long-lived funded keys in shell history, committed `.env` files, or shared logs.
 If the ask payload already contains `walletAddress`, `local-ask` refuses to continue unless it matches the loaded signer.
