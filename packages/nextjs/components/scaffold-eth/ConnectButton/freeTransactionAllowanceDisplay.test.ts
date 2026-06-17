@@ -1,5 +1,5 @@
 import React from "react";
-import { FreeTransactionAllowanceDisplay, formatUsdcAmount } from "./AddressInfoDropdown";
+import { FreeTransactionAllowanceDisplay, formatEthAmount, formatUsdcAmount } from "./AddressInfoDropdown";
 import { getFreeTransactionAllowanceDisplayState } from "./freeTransactionAllowanceDisplay";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
@@ -32,6 +32,12 @@ test("navbar USDC balance rounds to cents", () => {
   assert.equal(formatUsdcAmount(999_999n), "1.00");
   assert.equal(formatUsdcAmount(25_000_000n), "25");
   assert.equal(formatUsdcAmount(null), "—");
+});
+
+test("navbar ETH balance uses compact precision", () => {
+  assert.equal(formatEthAmount(1_234_567_890_000_000_000n), "1.2346");
+  assert.equal(formatEthAmount(123_456_789_000_000n), "0.000123");
+  assert.equal(formatEthAmount(null), "—");
 });
 
 test("free transaction verification prompt omits the free tx suffix", () => {
