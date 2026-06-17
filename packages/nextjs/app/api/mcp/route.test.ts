@@ -198,6 +198,16 @@ test("missing bearer tokens receive an MCP auth challenge with resource metadata
   );
 });
 
+test("MCP POST rejects disallowed Origin when allowlist is configured", async () => {
+  env.RATELOOP_MCP_ALLOWED_ORIGINS = "https://rateloop.ai";
+  const { response, body } = await postJson(
+    { jsonrpc: "2.0", id: 1, method: "initialize", params: {} },
+    { origin: "https://evil.example" },
+  );
+  assert.equal(response.status, 403);
+  assert.equal(body.code, "origin_not_allowed");
+});
+
 test("post-initialize methods reject missing MCP-Protocol-Version", async () => {
   const { body, response } = await postJson({
     id: 2,

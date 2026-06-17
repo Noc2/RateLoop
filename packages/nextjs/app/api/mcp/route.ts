@@ -187,13 +187,20 @@ export async function OPTIONS(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
+  const error = apiErrorEnvelope({
+    code: "method_not_allowed",
+    message: "SSE streams are not enabled for this RateLoop MCP release. Use POST JSON-RPC calls over streamable HTTP.",
+    recoverWith: "use_post_json_rpc",
+    retryable: false,
+    status: 405,
+  });
   return NextResponse.json(
     {
+      ...error,
       allowedMethods: ["POST", "OPTIONS"],
-      error: "SSE streams are not enabled for this RateLoop MCP release. Use POST JSON-RPC calls over streamable HTTP.",
       supportedTransports: ["streamable-http"],
     },
-    { headers: { ...corsHeaders(request), Allow: "POST, OPTIONS" }, status: 405 },
+    { headers: { ...corsHeaders(request), Allow: "POST, OPTIONS" }, status: error.status },
   );
 }
 
@@ -206,7 +213,14 @@ export async function DELETE(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   if (!originAllowed(request)) {
-    return NextResponse.json({ error: "Origin is not allowed for this MCP server." }, { status: 403 });
+    const error = apiErrorEnvelope({
+      code: "origin_not_allowed",
+      message: "Origin is not allowed for this MCP server.",
+      recoverWith: "use_allowed_origin_or_server_integration",
+      retryable: false,
+      status: 403,
+    });
+    return NextResponse.json(error, { status: error.status });
   }
 
   const limited = await checkRateLimit(request, RATE_LIMIT, { allowOnStoreUnavailable: false });
