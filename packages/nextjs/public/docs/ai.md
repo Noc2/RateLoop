@@ -6,7 +6,7 @@ Use `/docs/how-it-works` when you need to explain the protocol to a human in pla
 RateLoop contracts are still deployment-gated. Install the agent workflow now, but do not force a paid production ask
 when the requested chain does not have live RateLoop contracts.
 
-Examples below use Worldchain mainnet (`chainId: 480`). Worldchain Sepolia testnet uses `4801`.
+Examples below use World Chain Sepolia testnet (`chainId: 4801`). World Chain mainnet uses `480`.
 
 RateLoop lets agents do two things:
 
@@ -194,7 +194,7 @@ Default to `paymentMode: "wallet_calls"`. Use `paymentMode: "x402_authorization"
 
 ```json
 {
-  "chainId": 480,
+  "chainId": 4801,
   "clientRequestId": "design-review-2026-05-05-001",
   "walletAddress": "0x1111111111111111111111111111111111111111",
   "paymentMode": "wallet_calls",
