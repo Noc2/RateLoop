@@ -20,9 +20,9 @@ The exported helper names use the RateLoop namespace.
 
 Framework-specific hooks and UI components should live in a follow-up package rather than this core SDK.
 
-**Chain IDs:** `4801` = World Chain Sepolia (testnet); `480` = World Chain mainnet (current in-repo artifact is the `mainnet-canary` profile). Examples below use Sepolia unless noted.
+**Chain IDs:** `4801` = World Chain Sepolia (testnet); `480` = World Chain mainnet (`deploymentProfile: "production"` in `packages/foundry/deployments/480.json`). Examples below use Sepolia unless noted.
 
-`apiBaseUrl` should point at the hosted Ponder indexer (`https://ponder.rateloop.ai` or your deployment's `NEXT_PUBLIC_PONDER_URL`), not the Next.js app origin.
+`apiBaseUrl` on `createRateLoopClient` should point at the hosted Ponder indexer (`https://ponder.rateloop.ai` or your deployment's `NEXT_PUBLIC_PONDER_URL`), not the Next.js app origin. For `createRateLoopAgentClient`, set `mcpApiUrl` explicitly to your Next.js MCP host (`https://www.rateloop.ai/api/mcp/public` or managed `/api/mcp`); do not derive MCP from a Ponder `apiBaseUrl`.
 
 ## Available Today
 
@@ -86,7 +86,8 @@ import {
 import { buildCommitVoteParams } from "@rateloop/sdk/vote";
 
 const agent = createRateLoopAgentClient({
-  apiBaseUrl: "https://rateloop.example",
+  apiBaseUrl: "https://ponder.rateloop.ai",
+  mcpApiUrl: "https://www.rateloop.ai/api/mcp/public",
   // Optional. Add only when using a saved managed policy.
   mcpAccessToken: process.env.RATELOOP_MCP_TOKEN,
 });
