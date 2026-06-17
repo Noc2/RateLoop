@@ -62,6 +62,10 @@ function getPublicUsdcAddressOverride(): `0x${string}` | undefined {
   return normalizeAddress(process.env.NEXT_PUBLIC_USDC_ADDRESS);
 }
 
+function getPublicX402UsdcAddressOverride(): `0x${string}` | undefined {
+  return normalizeAddress(process.env.NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS);
+}
+
 function getDeployedContractAddress(chainId: number, contractName: string): `0x${string}` | undefined {
   const deployedAddress = (contracts?.[chainId]?.[contractName] as { address?: string } | undefined)?.address;
   return normalizeAddress(deployedAddress);
@@ -113,6 +117,7 @@ export function getConfiguredFeedbackRegistryAddress(chainId: number): `0x${stri
 export function getDefaultUsdcAddress(chainId: number): `0x${string}` | undefined {
   return (
     getPublicUsdcAddressOverride() ??
+    getPublicX402UsdcAddressOverride() ??
     getDeployedContractAddress(chainId, LOCAL_MOCK_USDC_CONTRACT_NAME) ??
     WORLD_CHAIN_USDC_BY_CHAIN_ID[chainId]
   );
