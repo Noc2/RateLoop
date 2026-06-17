@@ -4,6 +4,8 @@ import { createRateLoopClient } from "./client";
 import { RateLoopApiError, RateLoopSdkError } from "./errors";
 import { createRateLoopReadClient } from "./read";
 
+// Fixtures use https://api.rateloop.ai as an arbitrary HTTPS origin; production reads should use the hosted Ponder indexer (https://ponder.rateloop.ai).
+
 test("createRateLoopClient exposes a read client with normalized base URL", () => {
   const client = createRateLoopClient({
     apiBaseUrl: "https://api.rateloop.ai///",
