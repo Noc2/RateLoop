@@ -31,14 +31,14 @@ yarn foundry:test # Run test suite
 
 Run `yarn workspace @rateloop/foundry check:sizes` (or `make check-contract-sizes` after `forge build`) to verify deployed bytecode stays at or below the 24,576 byte limit.
 
-Several production contracts run close to the limit. As of June 2026 local checks:
+Several production contracts run close to the limit. Run `make check-contract-sizes DEPLOY_PROFILE=deploy` for current numbers. As of June 2026 deploy-profile checks:
 
 | Contract | Size (B) | Headroom (B) |
 | --- | --- | --- |
-| `ContentRegistry` | 24,394 | 182 |
 | `LaunchDistributionPool` | 24,538 | 38 |
+| `ContentRegistry` | 24,387 | 189 |
 | `QuestionRewardPoolEscrow` | 24,424 | 152 |
-| `RoundVotingEngine` | 24,562 | 14 |
+| `RoundVotingEngine` | 23,911 | 665 |
 | `RaterRegistry` | 22,900 | 1,676 |
 
 `ContentRegistry.repointPendingRatingClusterPayoutOracle` is exposed via a thin `CONFIG_ROLE` wrapper; dormancy lifecycle helpers live in `ContentRegistryDormancyLib` to preserve EIP-170 headroom.
@@ -47,7 +47,7 @@ Treat new features on these contracts as size-sensitive: prefer library extracti
 
 **Deploy profile vs default profile:** `yarn workspace @rateloop/foundry check:sizes` and live deploys use the Foundry **deploy** profile (`FOUNDRY_PROFILE=deploy`). A plain `forge build` with the default profile can produce oversize bytecode for `RoundVotingEngine`, `LaunchDistributionPool`, `QuestionRewardPoolEscrow`, and `ContentRegistry` even when deploy-profile artifacts pass EIP-170. Do not use default-profile build artifacts for size gates or production deploys.
 
-**Settlement side effects:** `RoundSettlementSideEffectsLib` records pending public-rating settlements in a try/catch. A failed side effect emits `SettlementSideEffectFailed` but still completes settlement; operators must monitor logs and manually call `recordPendingRatingSettlement` (or repoint/retry tooling) when that event appears.
+**Settlement side effects:** `RoundSettlementSideEffectsLib` records pending public-rating settlements in a try/catch. A failed side effect emits `SettlementSideEffectFailed` but still completes settlement; operators must monitor logs and manually call `recordPendingRatingSettlement` (or repoint/retry tooling) when that event appears. Index or alert on `SettlementSideEffectFailed` from `RoundVotingEngine` in production before mainnet launch.
 
 On World Chain mainnet and World Chain Sepolia, deploys use a Foundry keystore selected via `--keystore <name>` and skip Forge's
 auto-verification flow. Verify those contracts manually with
