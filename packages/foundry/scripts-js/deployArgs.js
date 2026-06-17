@@ -139,9 +139,10 @@ export function buildDeployFlowFlags(network, env = process.env) {
 }
 
 export function buildDeploymentProfileEnv({ network }, env = process.env) {
-  const expectedProfile = network === "worldchain"
-    ? PRODUCTION_DEPLOYMENT_PROFILE
-    : DEFAULT_DEPLOYMENT_PROFILE;
+  const expectedProfile =
+    network === "worldchain"
+      ? PRODUCTION_DEPLOYMENT_PROFILE
+      : DEFAULT_DEPLOYMENT_PROFILE;
   const existingProfile = env[RATELOOP_DEPLOYMENT_PROFILE_ENV]?.trim();
 
   return {

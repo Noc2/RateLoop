@@ -507,7 +507,7 @@ describe("ContentRegistry ABI exports", () => {
       "contracts",
       "src",
       "abis",
-      "ContentRegistryAbi.ts",
+      "ContentRegistryAbi.ts"
     );
     const source = readFileSync(abiPath, "utf8");
     for (const symbol of [

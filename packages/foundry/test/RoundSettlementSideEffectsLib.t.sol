@@ -6,16 +6,7 @@ import { ContentRegistry } from "../contracts/ContentRegistry.sol";
 import { RoundSettlementSideEffectsLib } from "../contracts/libraries/RoundSettlementSideEffectsLib.sol";
 
 contract RevertingPendingRatingRegistry {
-    function recordPendingRatingSettlement(
-        uint256,
-        uint256,
-        uint16,
-        uint64,
-        uint64
-    )
-        external
-        pure
-    {
+    function recordPendingRatingSettlement(uint256, uint256, uint16, uint64, uint64) external pure {
         revert("rating side effect blocked");
     }
 }
@@ -26,14 +17,9 @@ contract RoundSettlementSideEffectsLibTest is Test {
 
         vm.expectEmit(true, true, true, true);
         emit RoundSettlementSideEffectsLib.SettlementSideEffectFailed(
-            42,
-            7,
-            address(revertingRegistry),
-            RoundSettlementSideEffectsLib.SideEffectFailureStage.RatingStateUpdate
+            42, 7, address(revertingRegistry), RoundSettlementSideEffectsLib.SideEffectFailureStage.RatingStateUpdate
         );
 
-        RoundSettlementSideEffectsLib.recordSettlement(
-            ContentRegistry(address(revertingRegistry)), 42, 7, 5000, 2, 1
-        );
+        RoundSettlementSideEffectsLib.recordSettlement(ContentRegistry(address(revertingRegistry)), 42, 7, 5000, 2, 1);
     }
 }

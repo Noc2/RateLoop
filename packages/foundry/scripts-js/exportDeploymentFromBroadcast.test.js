@@ -219,9 +219,7 @@ function assertRejectsTamperedCompletion(mutator, expectedLabel) {
   );
 }
 
-function completeBroadcast({
-  treasuryMint = treasuryMintAmount,
-} = {}) {
+function completeBroadcast({ treasuryMint = treasuryMintAmount } = {}) {
   const transactions = [];
   const receipts = [];
   let nextAddress = 1;
@@ -868,10 +866,7 @@ test("reconstructDeploymentExportFromBroadcast exports optional mock World ID ro
     "worldchainSepolia"
   );
 
-  assert.equal(
-    deploymentAt(deploymentExport, mockRouter),
-    "MockWorldIDRouter"
-  );
+  assert.equal(deploymentAt(deploymentExport, mockRouter), "MockWorldIDRouter");
   assert.equal(deploymentExport.deploymentBlockNumber, 201);
 });
 

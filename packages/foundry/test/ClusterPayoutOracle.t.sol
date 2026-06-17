@@ -2210,7 +2210,8 @@ contract ClusterPayoutOracleTest is Test {
     }
 
     function test_FinalizedRoundPayoutSnapshotRejectAllowedPostVetoWhenConsumerViewReverts() public {
-        RevertingConsumedRoundPayoutSnapshotConsumer revertingConsumer = new RevertingConsumedRoundPayoutSnapshotConsumer();
+        RevertingConsumedRoundPayoutSnapshotConsumer revertingConsumer =
+            new RevertingConsumedRoundPayoutSnapshotConsumer();
         oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_QUESTION_REWARD(), address(revertingConsumer));
 
         oracle.proposeCorrelationEpoch(
@@ -2242,7 +2243,8 @@ contract ClusterPayoutOracleTest is Test {
     }
 
     function test_FinalizedRoundPayoutSnapshotReproposalAllowedWhenConsumerViewReverts() public {
-        RevertingConsumedRoundPayoutSnapshotConsumer revertingConsumer = new RevertingConsumedRoundPayoutSnapshotConsumer();
+        RevertingConsumedRoundPayoutSnapshotConsumer revertingConsumer =
+            new RevertingConsumedRoundPayoutSnapshotConsumer();
         oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_QUESTION_REWARD(), address(revertingConsumer));
 
         bytes32 firstArtifact = keccak256("epoch-artifact");
@@ -2271,7 +2273,8 @@ contract ClusterPayoutOracleTest is Test {
     }
 
     function test_FinalizedRoundPayoutSnapshotReproposalWithLiveParentWhenConsumerViewReverts() public {
-        RevertingConsumedRoundPayoutSnapshotConsumer revertingConsumer = new RevertingConsumedRoundPayoutSnapshotConsumer();
+        RevertingConsumedRoundPayoutSnapshotConsumer revertingConsumer =
+            new RevertingConsumedRoundPayoutSnapshotConsumer();
         oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_QUESTION_REWARD(), address(revertingConsumer));
 
         bytes32 firstArtifact = keccak256("epoch-artifact");
