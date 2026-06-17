@@ -2296,6 +2296,20 @@ contract ClusterPayoutOracleTest is Test {
         assertEq(replacement.artifactHash, firstArtifact);
     }
 
+    /// @dev M9: direct reproposal of a Proposed round payout snapshot is blocked while the
+    ///      parent correlation epoch remains live (Proposed/Finalized, not rejected).
+    function test_ProposedRoundPayoutSnapshotDirectReproposalRevertsSnapshotExistsWithLiveParent() public {
+        _proposeDefaultCorrelationEpoch(1, keccak256("cluster-root"), keccak256("epoch-artifact"));
+
+        IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
+        oracle.proposeRoundPayoutSnapshot(input);
+
+        input.weightRoot = keccak256("replacement-weight-root");
+        input.artifactURI = "ipfs://round-replacement";
+        vm.expectRevert(ClusterPayoutOracle.SnapshotExists.selector);
+        oracle.proposeRoundPayoutSnapshot(input);
+    }
+
     function test_StaleProposedRoundPayoutSnapshotCanBeReplacedAfterParentReproposal() public {
         bytes32 firstArtifact = keccak256("epoch-artifact");
         _proposeDefaultCorrelationEpoch(1, keccak256("cluster-root"), firstArtifact);
