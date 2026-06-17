@@ -287,6 +287,15 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         uint256 rewardPoolId
     );
     event QuestionBundleContentLinked(uint256 indexed bundleId, uint256 indexed contentId, uint256 indexed bundleIndex);
+    event ContentDormant(uint256 indexed contentId);
+    event ContentRevived(uint256 indexed contentId, address indexed reviver);
+    event DormantSubmissionKeyReleased(uint256 indexed contentId, bytes32 indexed submissionKey);
+    event PendingRatingClusterPayoutOracleRepointed(
+        uint256 indexed contentId,
+        uint256 indexed roundId,
+        address indexed oldClusterPayoutOracle,
+        address newClusterPayoutOracle
+    );
     event RatingUpdated(uint256 indexed contentId, uint256 oldRating, uint256 newRating);
     event RatingStateUpdated(
         uint256 indexed contentId,
