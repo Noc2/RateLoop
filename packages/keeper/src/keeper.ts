@@ -48,6 +48,7 @@ import {
   parseTlockCiphertextMetadata,
 } from "@rateloop/contracts/voting";
 import { buildCommitKey } from "@rateloop/contracts/votingCore";
+import { PONDER_HTTP_FETCH_TIMEOUT_MS } from "@rateloop/node-utils/correlationScoring";
 import {
   type CommitData,
   type RoundData,
@@ -125,7 +126,7 @@ const MAX_CLEANUP_BATCHES_PER_TICK = 4;
 const REVEAL_FAILED_GRACE_MULTIPLIER = 24n;
 const MAX_CLEANUP_COMPLETED = 5000;
 const MAX_CLEANUP_QUEUE = 2000;
-const PONDER_FETCH_TIMEOUT_MS = 15_000;
+const PONDER_FETCH_TIMEOUT_MS = PONDER_HTTP_FETCH_TIMEOUT_MS;
 const INDEXED_CIPHERTEXT_PAGE_SIZE = 200;
 const MAX_INDEXED_CIPHERTEXT_PAGES = 6;
 const cleanupQueue = new Map<string, CleanupCursor>();
