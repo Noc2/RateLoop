@@ -752,7 +752,12 @@ export function registerCorrelationRoutes(app: ApiApp) {
       .limit(1);
 
     if (!bundle || bundle.failed || bundle.refunded) {
-      return jsonBig(c, { excludedVotes: [], items: [], roundContext: null });
+      return jsonBig(c, {
+        excludedVotes: [],
+        items: [],
+        roundContext: null,
+        truncated: false,
+      });
     }
 
     const bundleRounds = await db
@@ -771,7 +776,12 @@ export function registerCorrelationRoutes(app: ApiApp) {
       .orderBy(asc(questionBundleRound.bundleIndex));
 
     if (bundleRounds.length < bundle.questionCount) {
-      return jsonBig(c, { excludedVotes: [], items: [], roundContext: null });
+      return jsonBig(c, {
+        excludedVotes: [],
+        items: [],
+        roundContext: null,
+        truncated: false,
+      });
     }
 
     const firstBundleRound =
@@ -794,59 +804,60 @@ export function registerCorrelationRoutes(app: ApiApp) {
         ? roundConditions[0]!
         : or(...roundConditions);
 
-    const rows = await db
-      .select({
-        contentId: vote.contentId,
-        roundId: vote.roundId,
-        account: vote.identityHolder,
-        voter: vote.voter,
-        identityKey: vote.identityKey,
-        commitKey: vote.commitKey,
-        isUp: vote.isUp,
-        stake: vote.stake,
-        epochIndex: vote.epochIndex,
-        revealWeight: vote.rbtsWeight,
-        baseWeight: sql<bigint>`10000`,
-        verifiedHuman: sql<boolean>`case when ${raterHumanCredential.rater} is not null then true else false end`,
-        historicalVoteCount: sql<number>`case when coalesce(${voterStats.totalSettledVotes}, 0) > 0 then coalesce(${voterStats.totalSettledVotes}, 0) - 1 else 0 end`,
-        commitBlockNumber: vote.commitBlockNumber,
-        commitLogIndex: vote.commitLogIndex,
-        voteId: vote.id,
-      })
-      .from(vote)
-      .innerJoin(
-        round,
-        and(
-          eq(round.contentId, vote.contentId),
-          eq(round.roundId, vote.roundId),
-        ),
-      )
-      .innerJoin(content, eq(content.id, vote.contentId))
-      .leftJoin(voterStats, eq(voterStats.voter, vote.identityHolder))
-      .leftJoin(
-        raterHumanCredential,
-        and(
-          eq(raterHumanCredential.rater, vote.identityHolder),
-          eq(raterHumanCredential.verified, true),
-          eq(raterHumanCredential.revoked, false),
-          sql`(
+    const loadVoteRows = (scanLimit: number, scanOffset: number) =>
+      db
+        .select({
+          contentId: vote.contentId,
+          roundId: vote.roundId,
+          account: vote.identityHolder,
+          voter: vote.voter,
+          identityKey: vote.identityKey,
+          commitKey: vote.commitKey,
+          isUp: vote.isUp,
+          stake: vote.stake,
+          epochIndex: vote.epochIndex,
+          revealWeight: vote.rbtsWeight,
+          baseWeight: sql<bigint>`10000`,
+          verifiedHuman: sql<boolean>`case when ${raterHumanCredential.rater} is not null then true else false end`,
+          historicalVoteCount: sql<number>`case when coalesce(${voterStats.totalSettledVotes}, 0) > 0 then coalesce(${voterStats.totalSettledVotes}, 0) - 1 else 0 end`,
+          commitBlockNumber: vote.commitBlockNumber,
+          commitLogIndex: vote.commitLogIndex,
+          voteId: vote.id,
+        })
+        .from(vote)
+        .innerJoin(
+          round,
+          and(
+            eq(round.contentId, vote.contentId),
+            eq(round.roundId, vote.roundId),
+          ),
+        )
+        .innerJoin(content, eq(content.id, vote.contentId))
+        .leftJoin(voterStats, eq(voterStats.voter, vote.identityHolder))
+        .leftJoin(
+          raterHumanCredential,
+          and(
+            eq(raterHumanCredential.rater, vote.identityHolder),
+            eq(raterHumanCredential.verified, true),
+            eq(raterHumanCredential.revoked, false),
+            sql`(
             ${raterHumanCredential.expiresAt} = 0
             or ${raterHumanCredential.expiresAt} > coalesce(${round.settledAt}, ${round.startTime})
           )`,
-        ),
-      )
-      .where(
-        and(
-          roundFilter,
-          eq(vote.revealed, true),
-          eq(round.state, ROUND_STATE.Settled),
-          sql`${vote.identityKey} is not null`,
-          sql`${vote.identityHolder} is not null`,
-          sql`${vote.identityKey} != ${zeroHash}`,
-          sql`${vote.identityHolder} != ${bundle.funder}`,
-          sql`${vote.identityKey} != ${bundle.funderIdentityKey}`,
-          sql`${vote.identityHolder} != ${content.submitter}`,
-          sql`(
+          ),
+        )
+        .where(
+          and(
+            roundFilter,
+            eq(vote.revealed, true),
+            eq(round.state, ROUND_STATE.Settled),
+            sql`${vote.identityKey} is not null`,
+            sql`${vote.identityHolder} is not null`,
+            sql`${vote.identityKey} != ${zeroHash}`,
+            sql`${vote.identityHolder} != ${bundle.funder}`,
+            sql`${vote.identityKey} != ${bundle.funderIdentityKey}`,
+            sql`${vote.identityHolder} != ${content.submitter}`,
+            sql`(
             ${bundle.bountyWindowSeconds} = 0
             or (
               ${bundle.bountyClosesAt} != 0
@@ -855,9 +866,9 @@ export function registerCorrelationRoutes(app: ApiApp) {
               and coalesce(${vote.committedAt}, ${vote.revealedAt}, 0) <= ${bundle.bountyClosesAt}
             )
           )`,
-          or(
-            sql`(${bundle.bountyEligibility} & ${BOUNTY_ELIGIBILITY_CREDENTIAL_MASK}) = 0`,
-            sql`(
+            or(
+              sql`(${bundle.bountyEligibility} & ${BOUNTY_ELIGIBILITY_CREDENTIAL_MASK}) = 0`,
+              sql`(
               (${bundle.bountyEligibility} & ${BOUNTY_ELIGIBILITY_CREDENTIAL_MASK}) > 0
               and (
                 ${vote.credentialMask}
@@ -872,42 +883,63 @@ export function registerCorrelationRoutes(app: ApiApp) {
                 ) != 0
               )
             )`,
-            and(
-              sql`(${bundle.bountyEligibility} & ${BOUNTY_ELIGIBILITY_PROOF_OF_HUMAN}) != 0`,
-              sql`(${bundle.bountyEligibility} & ${BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG}) = 0`,
-              sql`${raterHumanCredential.rater} is not null`,
+              and(
+                sql`(${bundle.bountyEligibility} & ${BOUNTY_ELIGIBILITY_PROOF_OF_HUMAN}) != 0`,
+                sql`(${bundle.bountyEligibility} & ${BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG}) = 0`,
+                sql`${raterHumanCredential.rater} is not null`,
+              ),
             ),
           ),
-        ),
-      )
-      .orderBy(
-        asc(vote.commitBlockNumber),
-        asc(vote.commitLogIndex),
-        asc(vote.id),
-      );
+        )
+        .orderBy(
+          asc(vote.commitBlockNumber),
+          asc(vote.commitLogIndex),
+          asc(vote.id),
+        )
+        .limit(scanLimit)
+        .offset(scanOffset);
 
-    type BundleVoteRow = (typeof rows)[number];
+    type BundleVoteRow = Awaited<ReturnType<typeof loadVoteRows>>[number];
     const completedByIdentity = new Map<
       string,
       { firstVote: BundleVoteRow | null; bundleIndexes: Set<number> }
     >();
-    for (const row of rows) {
-      const bundleIndex = roundKeyToBundleIndex.get(
-        `${row.contentId.toString()}-${row.roundId.toString()}`,
-      );
-      if (bundleIndex === undefined) continue;
-      const account = row.account ?? row.voter;
-      const identityKey = row.identityKey ?? zeroHash;
-      const key = `${identityKey.toLowerCase()}:${account.toLowerCase()}`;
-      const entry = completedByIdentity.get(key) ?? {
-        firstVote: null,
-        bundleIndexes: new Set<number>(),
-      };
-      entry.bundleIndexes.add(bundleIndex);
-      if (bundleIndex === 0 && entry.firstVote === null) {
-        entry.firstVote = row;
+    let scanOffset = 0;
+    let endedNaturally = false;
+    const scanPageBudget = correlationVoteScanPageBudget(
+      offset * Number(bundle.questionCount),
+    );
+    for (let page = 0; page < scanPageBudget; page += 1) {
+      const rows = await loadVoteRows(CORRELATION_VOTE_PAGE_SIZE, scanOffset);
+      for (const row of rows) {
+        const bundleIndex = roundKeyToBundleIndex.get(
+          `${row.contentId.toString()}-${row.roundId.toString()}`,
+        );
+        if (bundleIndex === undefined) continue;
+        const account = row.account ?? row.voter;
+        const identityKey = row.identityKey ?? zeroHash;
+        const key = `${identityKey.toLowerCase()}:${account.toLowerCase()}`;
+        const entry = completedByIdentity.get(key) ?? {
+          firstVote: null,
+          bundleIndexes: new Set<number>(),
+        };
+        entry.bundleIndexes.add(bundleIndex);
+        if (bundleIndex === 0 && entry.firstVote === null) {
+          entry.firstVote = row;
+        }
+        completedByIdentity.set(key, entry);
       }
-      completedByIdentity.set(key, entry);
+      scanOffset += rows.length;
+      if (rows.length < CORRELATION_VOTE_PAGE_SIZE) {
+        endedNaturally = true;
+        break;
+      }
+    }
+    if (!endedNaturally) {
+      const probeRows = await loadVoteRows(1, scanOffset);
+      if (probeRows.length === 0) {
+        endedNaturally = true;
+      }
     }
 
     const firstVotes = [...completedByIdentity.values()]
@@ -939,13 +971,19 @@ export function registerCorrelationRoutes(app: ApiApp) {
         items.push(formatted.item);
       }
       eligibleSeen += 1;
-      if (items.length >= limit) break;
     }
+
+    const truncated = isCorrelationVoteScanTruncated({
+      endedNaturally,
+      eligibleSeen,
+      offset,
+    });
 
     return jsonBig(c, {
       excludedVotes,
       items,
       roundContext,
+      truncated,
     });
   });
 

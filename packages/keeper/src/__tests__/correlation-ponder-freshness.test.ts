@@ -99,7 +99,7 @@ describe("areCorrelationCandidatesPonderFresh", () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = String(input);
       if (url.includes("/correlation/round-votes")) {
-        return new Response(JSON.stringify({ items: fullPage }), {
+        return new Response(JSON.stringify({ items: fullPage, truncated: true }), {
           status: 200,
           headers: { "content-type": "application/json" },
         });
@@ -123,6 +123,37 @@ describe("areCorrelationCandidatesPonderFresh", () => {
     expect(fresh).toBe(false);
     expect(
       fetchMock.mock.calls.some(call => String(call[0]).includes("/correlation/round-votes")),
+    ).toBe(true);
+  });
+
+  it("defers when bundle-round-votes pagination is truncated", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes("/correlation/bundle-round-votes")) {
+        return new Response(JSON.stringify({ items: [], truncated: true }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return mockRoundSnapshot("3", "3");
+    });
+    mockReadRound.mockResolvedValue({
+      state: ROUND_STATE.Settled,
+      revealedCount: 3n,
+      voteCount: 3n,
+    });
+
+    const { areCorrelationCandidatesPonderFresh } = await import("../correlation-ponder-freshness.js");
+    const logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    const fresh = await areCorrelationCandidatesPonderFresh(
+      {} as never,
+      [{ domain: PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD, rewardPoolId: 5n, contentId: 42n, roundId: 7n }],
+      logger,
+    );
+
+    expect(fresh).toBe(false);
+    expect(
+      fetchMock.mock.calls.some(call => String(call[0]).includes("/correlation/bundle-round-votes")),
     ).toBe(true);
   });
 
