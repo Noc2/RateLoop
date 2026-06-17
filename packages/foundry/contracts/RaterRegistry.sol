@@ -149,7 +149,9 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
     uint64 public worldIdV4IssuerSchemaId;
     uint256 public worldIdV4CredentialGenesisIssuedAtMin;
     bool public worldIdV4VerifierConfigFrozen;
+    // slither-disable-next-line constable-states
     uint256 public worldIdV4PresenceAction;
+    // slither-disable-next-line constable-states
     uint64 public worldIdV4PresenceTtl;
     bool public worldIdV4PresenceConfigFrozen;
     mapping(uint8 => mapping(bytes32 => bool)) private _usedWorldCredentialProof;
