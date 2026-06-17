@@ -497,9 +497,12 @@ describe("pruneNonLocalGeneratedContractsToDeploymentExports", () => {
 describe("ContentRegistry ABI exports", () => {
   test("includes repoint and dormancy events required by indexers", async () => {
     const { readFileSync } = await import("node:fs");
-    const { join } = await import("node:path");
+    const { dirname, join } = await import("node:path");
+    const { fileURLToPath } = await import("node:url");
+    const scriptDir = dirname(fileURLToPath(import.meta.url));
     const abiPath = join(
-      process.cwd(),
+      scriptDir,
+      "..",
       "..",
       "contracts",
       "src",
