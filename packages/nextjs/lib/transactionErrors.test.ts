@@ -4,6 +4,7 @@ import {
   isInsufficientFundsError,
   isThirdwebBundlerInfrastructureError,
   isUnsupportedRpcMethodError,
+  isUserRejectedTransactionError,
   isWalletRpcOverloadedError,
 } from "./transactionErrors";
 import assert from "node:assert/strict";
@@ -84,4 +85,22 @@ test("detects unsupported RPC method errors from nested wallet responses", () =>
   };
 
   assert.equal(isUnsupportedRpcMethodError(error), true);
+});
+
+test("detects user-rejected wallet transaction errors from verbose viem messages", () => {
+  const error = {
+    shortMessage: "User rejected the request.",
+    details: "MetaMask Tx Signature: User denied transaction signature.",
+  };
+
+  assert.equal(isUserRejectedTransactionError(error), true);
+});
+
+test("does not classify unrelated transaction failures as user rejection", () => {
+  const error = {
+    shortMessage: "The contract function reverted.",
+    details: "Error: InvalidCredential()",
+  };
+
+  assert.equal(isUserRejectedTransactionError(error), false);
 });

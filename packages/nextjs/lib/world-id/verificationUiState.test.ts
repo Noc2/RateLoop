@@ -2,10 +2,12 @@ import {
   WORLD_ID_INVALID_CREDENTIAL_MESSAGE,
   WORLD_ID_NULLIFIER_ALREADY_ASSIGNED_MESSAGE,
   WORLD_ID_RATE_LIMITED_MESSAGE,
+  WORLD_ID_WALLET_TRANSACTION_CANCELLED_MESSAGE,
   type WorldIdVerificationStep,
   formatWorldIdError,
   getWorldIdCredentialAttestationErrorMessage,
   getWorldIdRequestPanelState,
+  isWorldIdCredentialAttestationRejectedError,
 } from "./verificationUiState";
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -52,6 +54,15 @@ test("formats stale wallet connector errors as reconnect guidance", () => {
   );
 });
 
+test("formats user-rejected wallet signatures without exposing request arguments", () => {
+  const error = new Error(
+    "User rejected the request. Request Arguments: from: 0x7726D7Cb007f56512F52f700013884595fc27e31 to: 0xd5feC5936306651A916d4066BAc6B39bc2FB3FC1 data: 0xffbe1221 Details: MetaMask Tx Signature: User denied transaction signature.",
+  );
+
+  assert.equal(isWorldIdCredentialAttestationRejectedError(error), true);
+  assert.equal(getWorldIdCredentialAttestationErrorMessage(error), WORLD_ID_WALLET_TRANSACTION_CANCELLED_MESSAGE);
+});
+
 test("derives QR-first request states", () => {
   assertStep({}, "idle");
   assertStep({ isPreparing: true }, "preparing");
@@ -69,6 +80,8 @@ test("derives retryable terminal states", () => {
   const cancelled = getWorldIdRequestPanelState({ isError: true, errorCode: "user_rejected" });
   assert.equal(cancelled.step, "cancelled");
   assert.equal(cancelled.canRetry, true);
+  assert.equal(cancelled.title, "Verification cancelled");
+  assert.equal(cancelled.detail, "The wallet transaction was cancelled before the credential was recorded.");
 
   const failed = getWorldIdRequestPanelState({ isError: true, errorCode: "invalid_rp_signature" });
   assert.equal(failed.step, "error");

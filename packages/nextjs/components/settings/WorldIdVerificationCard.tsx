@@ -54,6 +54,7 @@ import {
   formatWorldIdError,
   getWorldIdCredentialAttestationErrorMessage,
   getWorldIdRequestPanelState,
+  isWorldIdCredentialAttestationRejectedError,
 } from "~~/lib/world-id/verificationUiState";
 import { notification } from "~~/utils/scaffold-eth";
 
@@ -501,6 +502,7 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
         }
       } catch (error) {
         const message = getWorldIdCredentialAttestationErrorMessage(error);
+        setWorldIdErrorCode(isWorldIdCredentialAttestationRejectedError(error) ? "user_rejected" : "generic_error");
         setVerificationState({ status: "error", message });
         throw new Error(message);
       }
@@ -753,9 +755,14 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
         status: "error",
         message,
       });
-      setWorldIdErrorCode(isWorldIdProofExpiredError(error) ? "timeout" : "generic_error");
+      const errorCode = isWorldIdProofExpiredError(error)
+        ? "timeout"
+        : isWorldIdCredentialAttestationRejectedError(error)
+          ? "user_rejected"
+          : "generic_error";
+      setWorldIdErrorCode(errorCode);
       reportRequestDiagnostic(diagnosticPhase === "create_request" ? "request_create_failed" : "request_exception", {
-        errorCode: isWorldIdProofExpiredError(error) ? "timeout" : "generic_error",
+        errorCode,
         message: getWorldIdErrorMessage(error),
       });
     } finally {

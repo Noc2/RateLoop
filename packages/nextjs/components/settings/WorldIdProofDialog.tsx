@@ -37,6 +37,7 @@ import {
   formatWorldIdError,
   getWorldIdCredentialAttestationErrorMessage,
   getWorldIdRequestPanelState,
+  isWorldIdCredentialAttestationRejectedError,
 } from "~~/lib/world-id/verificationUiState";
 import { notification } from "~~/utils/scaffold-eth";
 
@@ -336,11 +337,16 @@ export function WorldIdProofDialog({ address, kind, onClose, onSuccess, open, pu
     } catch (error) {
       if (activeRequestRef.current !== requestId || abortController.signal.aborted) return;
       const nextMessage = getWorldIdCredentialAttestationErrorMessage(error);
+      const nextErrorCode = isWorldIdProofExpiredError(error)
+        ? "timeout"
+        : isWorldIdCredentialAttestationRejectedError(error)
+          ? "user_rejected"
+          : "generic_error";
       setStatus("error");
       setMessage(nextMessage);
-      setErrorCode(isWorldIdProofExpiredError(error) ? "timeout" : "generic_error");
+      setErrorCode(nextErrorCode);
       reportRequestDiagnostic(diagnosticPhase === "create_request" ? "request_create_failed" : "request_exception", {
-        errorCode: isWorldIdProofExpiredError(error) ? "timeout" : "generic_error",
+        errorCode: nextErrorCode,
         message: getWorldIdErrorMessage(error),
       });
     } finally {

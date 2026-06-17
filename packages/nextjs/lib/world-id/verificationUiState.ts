@@ -1,3 +1,5 @@
+import { isUserRejectedTransactionError } from "~~/lib/transactionErrors";
+
 export type WorldIdVerificationStep =
   | "idle"
   | "preparing"
@@ -42,6 +44,9 @@ export const WORLD_ID_RATE_LIMITED_MESSAGE =
 export const WORLD_ID_INVALID_CREDENTIAL_MESSAGE =
   "This World ID proof expired or is no longer valid for the connected wallet. Try again with a fresh World ID request.";
 
+export const WORLD_ID_WALLET_TRANSACTION_CANCELLED_MESSAGE =
+  "You cancelled the wallet transaction. No World ID credential was recorded.";
+
 const WALLET_SESSION_RECONNECTING_MESSAGE =
   "Your wallet session is still reconnecting. Wait a moment, then try verifying again. If this keeps happening, disconnect and sign in again.";
 
@@ -77,11 +82,25 @@ function getErrorText(error: unknown) {
   return "";
 }
 
+export function isWorldIdCredentialAttestationRejectedError(error: unknown) {
+  const message = getErrorText(error);
+
+  return (
+    isUserRejectedTransactionError(error) ||
+    message === WORLD_ID_WALLET_TRANSACTION_CANCELLED_MESSAGE ||
+    message.toLowerCase().includes("transaction cancelled")
+  );
+}
+
 export function getWorldIdCredentialAttestationErrorMessage(
   error: unknown,
   fallback = "World ID credential attestation failed.",
 ) {
   const message = getErrorText(error);
+
+  if (isWorldIdCredentialAttestationRejectedError(error)) {
+    return WORLD_ID_WALLET_TRANSACTION_CANCELLED_MESSAGE;
+  }
 
   if (message.includes("NullifierAlreadyAssigned")) {
     return WORLD_ID_NULLIFIER_ALREADY_ASSIGNED_MESSAGE;
@@ -140,7 +159,9 @@ export function getWorldIdRequestPanelState(input: WorldIdRequestStateInput): Wo
     return {
       canCancel: false,
       canRetry: true,
-      detail: `World ID returned ${formatWorldIdError(errorCode)}.`,
+      detail: isCancelled
+        ? "The wallet transaction was cancelled before the credential was recorded."
+        : `World ID returned ${formatWorldIdError(errorCode)}.`,
       step: isExpired ? "expired" : isCancelled ? "cancelled" : "error",
       title: isExpired ? "Request expired" : isCancelled ? "Verification cancelled" : "Verification failed",
     };

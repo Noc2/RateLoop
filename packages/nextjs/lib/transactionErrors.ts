@@ -58,6 +58,18 @@ export function isUnsupportedRpcMethodError(error: unknown) {
   return haystack.includes("this request method is not supported");
 }
 
+export function isUserRejectedTransactionError(error: unknown) {
+  const haystack = getTransactionErrorText(error).toLowerCase();
+
+  return (
+    haystack.includes("user rejected the request") ||
+    haystack.includes("user denied transaction signature") ||
+    haystack.includes("denied transaction signature") ||
+    haystack.includes("rejected transaction") ||
+    haystack.includes("transaction was rejected")
+  );
+}
+
 export function isThirdwebBundlerInfrastructureError(error: unknown) {
   const haystack = getTransactionErrorText(error).toLowerCase();
   const isThirdwebBundlerError =
