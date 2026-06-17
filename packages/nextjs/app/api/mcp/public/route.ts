@@ -183,7 +183,10 @@ export async function POST(request: NextRequest) {
   }
 
   const limited = await checkRateLimit(request, RATE_LIMIT);
-  if (limited) return limited;
+  if (limited) {
+    const envelope = (await limited.json()) as Parameters<typeof jsonRpcApiError>[1];
+    return jsonRpcApiError(null, envelope, request, corsHeaders);
+  }
 
   const parsedBody = await parseJsonBody(request, { maxBytes: MCP_JSON_BODY_MAX_BYTES });
   if (parsedBody === JSON_BODY_TOO_LARGE) {
