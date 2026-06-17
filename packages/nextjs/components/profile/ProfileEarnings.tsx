@@ -124,7 +124,6 @@ export function ProfileEarnings({
             <EarningsMetric
               label="Bounties"
               value={`${formatUsdAmount(bountyUsdc)} / ${formatLrepAmount(bountyLrep)} LREP`}
-              detail="Claimed question and bundle bounties"
             />
             <EarningsMetric
               label="Feedback Bonuses"
