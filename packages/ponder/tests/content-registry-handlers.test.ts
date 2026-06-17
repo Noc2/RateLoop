@@ -1091,4 +1091,67 @@ describe("ContentRegistry ponder handlers", () => {
       ]),
     );
   });
+
+  it("bumps lastActivityAt when DormantSubmissionKeyReleased is emitted", async () => {
+    const { db, updateCalls } = createDb(undefined, {
+      contentRecord: { id: 1n, status: 1, lastActivityAt: 50n },
+    });
+    const registeredHandlers = await loadHandlers();
+    const handler = registeredHandlers.get("ContentRegistry:DormantSubmissionKeyReleased");
+    expect(handler).toBeDefined();
+
+    await handler!({
+      event: { args: { contentId: 1n }, block: { number: 3n, timestamp: 300n } },
+      context: {
+        client: { readContract: vi.fn() },
+        contracts: { ContentRegistry: { address: "0x000000000000000000000000000000000000c0de" } },
+        db,
+      },
+    });
+
+    expect(updateCalls).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          table: "content",
+          values: expect.objectContaining({ lastActivityAt: 300n }),
+        }),
+      ]),
+    );
+  });
+
+  it("bumps lastActivityAt when PendingRatingClusterPayoutOracleRepointed is emitted", async () => {
+    const { db, updateCalls } = createDb(undefined, {
+      contentRecord: { id: 1n, status: 0, lastActivityAt: 100n },
+    });
+    const registeredHandlers = await loadHandlers();
+    const handler = registeredHandlers.get(
+      "ContentRegistry:PendingRatingClusterPayoutOracleRepointed",
+    );
+    expect(handler).toBeDefined();
+
+    await handler!({
+      event: {
+        args: {
+          contentId: 1n,
+          oldOracle: "0x1111111111111111111111111111111111111111",
+          newOracle: "0x2222222222222222222222222222222222222222",
+        },
+        block: { number: 4n, timestamp: 400n },
+      },
+      context: {
+        client: { readContract: vi.fn() },
+        contracts: { ContentRegistry: { address: "0x000000000000000000000000000000000000c0de" } },
+        db,
+      },
+    });
+
+    expect(updateCalls).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          table: "content",
+          values: expect.objectContaining({ lastActivityAt: 400n }),
+        }),
+      ]),
+    );
+  });
 });
