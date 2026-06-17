@@ -134,6 +134,14 @@ groups:
         labels: { severity: warn }
 ```
 
+### Settlement side-effect failures (`SettlementSideEffectFailed`)
+
+Round settlement completes even when `RoundSettlementSideEffectsLib` cannot record the pending public-rating update in `ContentRegistry`. The engine emits `SettlementSideEffectFailed(contentId, roundId, registry, stage)` on-chain; there is no automatic retry.
+
+**Monitor:** index or alert on `SettlementSideEffectFailed` from `RoundVotingEngine` (topic `keccak256("SettlementSideEffectFailed(uint256,uint256,address,uint8)")`). Any emission is actionable — rating/index state may lag until repaired.
+
+**Remediate:** call `ContentRegistry.recordPendingRatingSettlement(contentId, roundId, ratingBps, settledRounds)` with the settled round's rating inputs, or use repoint/retry operator tooling. See `packages/foundry/README.md` (Settlement side effects) and `RoundIntegration.t.sol:test_SettlementSideEffectFailure_DoesNotBlockSettlement`.
+
 When `KEEPER_FRONTEND_FEE_ENABLED=true`, the same worker prioritizes a bounded cursor through recent settled rounds for the configured frontend/operator, then backfills older settled rounds so historical `RoundRewardDistributor.claimFrontendFee(...)` claims do not age out of automation. It can also drive the two-step registry withdrawal: it completes a matured `FrontendRegistry.completeFeeWithdrawal()` first, then moves newly accrued fees into the next pending bucket with `requestFeeWithdrawal()`. Requested amounts stay slashable for the registry's 21-day `FEE_WITHDRAWAL_DELAY` before they can be completed.
 
 When `KEEPER_CORRELATION_SNAPSHOTS_ENABLED=true`, the worker checks that the keeper wallet resolves through `FrontendRegistry.authorizedSnapshotFrontend(...)` to an eligible frontend operator only when a missing/rejected proposal slot actually needs a proposal. The keeper wallet can be the registered frontend wallet itself, or a separate operational wallet assigned by that frontend operator. The worker proposes missing correlation epoch and round payout roots from the keeper wallet and finalizes already-proposed roots after the challenge window. In `auto` mode it first preflights on-chain status so already-proposed/finalized snapshots do not rebuild artifacts, then asks Ponder for settled USDC bounty rounds only when proposal data is needed, builds deterministic payout weights with `@rateloop/node-utils/correlationScoring` (question-reward weights use a surprise-weighted base weight in `[10_000, 20_000]` bps; launch-credit weights stay flat), stores the public artifact, and publishes the roots. In `file` mode it reads the same artifact shape from `KEEPER_CORRELATION_SNAPSHOT_ARTIFACT_PATH`.
@@ -154,7 +162,7 @@ Historical round cleanup discovery (`discoverCleanupCandidate`) runs on every pr
 
 ### Dormancy: Ponder pre-filter vs on-chain `markDormant`
 
-Ponder `/keeper/work` applies SQL pre-filters (bundle guards, open-round checks, `lastActivityAt`) before returning dormant candidates. The keeper still re-reads `ContentRegistry.contents` and calls `markDormant` only when its local pre-check passes; the contract gates on `dormancyAnchorAt` and rejects bundled content. Benign extra `markDormant` attempts are expected when Ponder and chain state diverge slightly — failed broadcasts are skipped via gas estimation without spending gas.
+Ponder `/keeper/work` applies SQL pre-filters (bundle guards, `isDormancyBlocked`-aligned open-round quorum checks, `lastActivityAt`) before returning dormant candidates. The keeper still re-reads `ContentRegistry.contents` and calls `markDormant` only when its local pre-check passes; the contract gates on `dormancyAnchorAt` and rejects bundled content. Benign extra `markDormant` attempts are expected when Ponder and chain state diverge slightly — failed broadcasts are skipped via gas estimation without spending gas.
 
 ## Project Structure
 
