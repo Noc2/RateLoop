@@ -188,6 +188,7 @@ export async function loadConfiguredCorrelationSnapshotCandidates(
 }
 
 interface CorrelationArtifactBuildOptions {
+  correlationEpochId?: bigint;
   ponderNowSeconds?: bigint;
 }
 
@@ -243,7 +244,7 @@ export async function buildConfiguredCorrelationSnapshotArtifactForCandidates(
       rewardPoolId: candidate.rewardPoolId.toString(),
       contentId: candidate.contentId.toString(),
       roundId: candidate.roundId.toString(),
-      correlationEpochId: candidate.roundId.toString(),
+      correlationEpochId: (options.correlationEpochId ?? candidate.roundId).toString(),
       rawEligibleVoters: scored.rawEligibleVoters,
       effectiveParticipantUnits: scored.effectiveParticipantUnits,
       totalClaimWeight: scored.totalClaimWeight.toString(),
@@ -496,23 +497,29 @@ function buildPublicEpochs(
 
   return [...byEpoch.entries()]
     .sort(([left], [right]) => bigintCompare(BigInt(left), BigInt(right)))
-    .map(([epochId, epochRounds]) => ({
-      epochId,
-      fromRoundId: epochId,
-      toRoundId: epochId,
-      clusterRoot: hashJson(
-        epochRounds.map((round) => ({
-          domain: round.domain,
-          rewardPoolId: round.rewardPoolId,
-          contentId: round.contentId,
-          roundId: round.roundId,
-          weightRoot: round.weightRoot,
-          reasonRoot: round.reasonRoot,
-        })),
-      ),
-      parameterHash,
-      roundSnapshotCount: epochRounds.length,
-    }));
+    .map(([epochId, epochRounds]) => {
+      const roundIds = epochRounds.map((round) => BigInt(round.roundId));
+      const fromRoundId = roundIds.reduce((min, value) => (value < min ? value : min));
+      const toRoundId = roundIds.reduce((max, value) => (value > max ? value : max));
+
+      return {
+        epochId,
+        fromRoundId: fromRoundId.toString(),
+        toRoundId: toRoundId.toString(),
+        clusterRoot: hashJson(
+          epochRounds.map((round) => ({
+            domain: round.domain,
+            rewardPoolId: round.rewardPoolId,
+            contentId: round.contentId,
+            roundId: round.roundId,
+            weightRoot: round.weightRoot,
+            reasonRoot: round.reasonRoot,
+          })),
+        ),
+        parameterHash,
+        roundSnapshotCount: epochRounds.length,
+      };
+    });
 }
 
 async function fetchRoundCandidateWindow(

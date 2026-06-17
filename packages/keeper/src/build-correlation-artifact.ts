@@ -10,6 +10,7 @@ const { values } = parseArgs({
     domain: { type: "string" },
     "reward-pool-id": { type: "string" },
     "content-id": { type: "string" },
+    "correlation-epoch-id": { type: "string" },
     "round-id": { type: "string" },
     out: { type: "string" },
     "skip-ponder-freshness": { type: "boolean", default: false },
@@ -76,6 +77,10 @@ if (values["skip-ponder-freshness"]) {
 }
 
 const built = await buildConfiguredCorrelationSnapshotArtifactForCandidates(candidates, logger, {
+  correlationEpochId:
+    values["correlation-epoch-id"] !== undefined
+      ? requirePositiveBigInt(values["correlation-epoch-id"], "--correlation-epoch-id")
+      : undefined,
   ponderNowSeconds,
 });
 
