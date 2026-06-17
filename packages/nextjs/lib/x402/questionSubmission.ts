@@ -64,8 +64,8 @@ import {
   type X402QuestionOperation,
   type X402QuestionPayload,
   X402_SUBMISSION_REWARD_ASSET_USDC,
+  X402_USDC_BY_CHAIN_ID,
   X402_USDC_DECIMALS,
-  X402_WORLD_CHAIN_USDC_BY_CHAIN_ID,
   assertSupportedX402BundleBounty,
   buildX402QuestionOperation,
 } from "~~/lib/x402/questionPayload";
@@ -1077,11 +1077,11 @@ export function resolveX402QuestionConfig(chainId: number): X402QuestionSubmissi
   }
 
   const usdcAddress =
-    getX402UsdcAddressOverride() ??
+    getX402UsdcAddressOverride(chainId) ??
     getSharedDeploymentAddress(chainId, "MockERC20") ??
-    X402_WORLD_CHAIN_USDC_BY_CHAIN_ID[chainId];
+    X402_USDC_BY_CHAIN_ID[chainId];
   if (!usdcAddress || !isAddress(usdcAddress)) {
-    throw new X402QuestionConfigError("x402 question submissions require World Chain or World Chain Sepolia USDC.");
+    throw new X402QuestionConfigError("x402 question submissions require a configured USDC address for this chain.");
   }
 
   const contentDeploymentScope = resolveContentDeploymentScope(chainId);

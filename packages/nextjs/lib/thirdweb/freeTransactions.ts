@@ -1,4 +1,5 @@
 import deployedContracts from "@rateloop/contracts/deployedContracts";
+import { USDC_BY_CHAIN_ID } from "@rateloop/contracts/protocol";
 import { and, eq, sql } from "drizzle-orm";
 import "server-only";
 import {
@@ -8,6 +9,7 @@ import {
   type Hex,
   createPublicClient,
   decodeFunctionData,
+  erc20Abi,
   getAddress,
   http,
   isAddress,
@@ -138,7 +140,7 @@ const MAX_CONTENT_TAGS_LENGTH = 256;
 const FREE_TRANSACTION_RESERVATION_TTL_MS = 5 * 60_000;
 const FREE_TRANSACTION_IDEMPOTENCY_WINDOW_MS = 2 * 60_000;
 const EMPTY_DETAILS_HASH = `0x${"0".repeat(64)}`;
-const ALLOWED_APPROVE_TOKEN_NAMES = new Set(["LoopReputation", "MockERC20"]);
+const ALLOWED_APPROVE_TOKEN_NAMES = new Set(["LoopReputation", "MockERC20", "USDC"]);
 const USER_OPERATION_RECEIPT_EVENT_ABI = parseAbi([
   "event UserOperationEvent(bytes32 indexed userOpHash, address indexed sender, address indexed paymaster, uint256 nonce, bool success, uint256 actualGasCost, uint256 actualGasUsed)",
 ]);
@@ -424,6 +426,22 @@ function getContractsByAddress(chainId: number): Map<string, { name: string; add
         { name, address: contract.address, abi: contract.abi },
       ]),
   );
+}
+
+function getKnownUsdcContractForCall(
+  chainId: number,
+  address: Address,
+): { name: string; address: Address; abi: Abi } | undefined {
+  const usdcAddress = USDC_BY_CHAIN_ID[chainId];
+  if (!usdcAddress || usdcAddress.toLowerCase() !== address.toLowerCase()) {
+    return undefined;
+  }
+
+  return {
+    name: "USDC",
+    address: usdcAddress,
+    abi: erc20Abi,
+  };
 }
 
 function decodeContentRegistryCallData(data: Hex) {
@@ -1322,7 +1340,7 @@ async function validateSponsoredCalls(
       return { ok: false, debugCode: "unsupported_operation" };
     }
 
-    const contract = contractsByAddress.get(call.to.toLowerCase());
+    const contract = contractsByAddress.get(call.to.toLowerCase()) ?? getKnownUsdcContractForCall(chainId, call.to);
     if (!contract) {
       return { ok: false, debugCode: "target_not_allowlisted" };
     }
@@ -1450,7 +1468,8 @@ function isUnmeteredFrontendRegistrationOperation(chainId: number, calls: readon
   }
 
   const contractsByAddress = getContractsByAddress(chainId);
-  const approvalContract = contractsByAddress.get(calls[0].to.toLowerCase());
+  const approvalContract =
+    contractsByAddress.get(calls[0].to.toLowerCase()) ?? getKnownUsdcContractForCall(chainId, calls[0].to);
   const registerContract = contractsByAddress.get(calls[1].to.toLowerCase());
   if (
     !approvalContract ||

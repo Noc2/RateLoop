@@ -39,7 +39,7 @@ import {
 import { thirdwebClient } from "~~/services/thirdweb/client";
 import { notification } from "~~/utils/scaffold-eth";
 
-const WORLD_CHAIN_MAINNET_CHAIN_ID = 480;
+const LOCAL_FOUNDRY_CHAIN_ID = 31337;
 const DEFAULT_FUNDING_AMOUNT_USDC = "10";
 const DEFAULT_PER_ASK_CAP_ATOMIC = 2_000_000n;
 const DEFAULT_AGENT_SCOPES = ["rateloop:ask", "rateloop:rate", "rateloop:read", "rateloop:quote", "rateloop:balance"];
@@ -210,15 +210,15 @@ export function AgentSubmissionPanel() {
     ? parsePositiveAtomicAmount(selectedPolicy.perAskLimitAtomic, DEFAULT_PER_ASK_CAP_ATOMIC)
     : (policyFormPerAskCapAtomic ?? DEFAULT_PER_ASK_CAP_ATOMIC);
   const canUseThirdwebFunding = Boolean(
-    thirdwebClient && agentWalletAddress && usdcAddress && targetNetwork.id === WORLD_CHAIN_MAINNET_CHAIN_ID,
+    thirdwebClient && agentWalletAddress && usdcAddress && targetNetwork.id !== LOCAL_FOUNDRY_CHAIN_ID,
   );
   const fundingUnavailableMessage = !agentWalletAddress
     ? "Enter a valid agent wallet before funding it here."
     : !thirdwebClient
       ? "Direct funding appears after thirdweb is configured for this deployment."
-      : targetNetwork.id === WORLD_CHAIN_MAINNET_CHAIN_ID
-        ? "World Chain USDC is not configured for this network."
-        : "Switch to World Chain mainnet to buy World Chain USDC here. On local networks, use the faucet from your wallet menu.";
+      : !usdcAddress
+        ? "USDC is not configured for this network."
+        : "Direct USDC funding is available on live deployments. On local networks, use the faucet from your wallet menu.";
 
   useEffect(() => {
     setPolicyForm(prev => {
@@ -268,7 +268,7 @@ export function AgentSubmissionPanel() {
       return;
     }
     if (!usdcAddress) {
-      notification.error("World Chain USDC is not configured for this network.");
+      notification.error("USDC is not configured for this network.");
       return;
     }
     const amount = parseSubmissionRewardAmount(transferAmount);
@@ -840,13 +840,13 @@ export function AgentSubmissionPanel() {
                   buttonLabel="Add USDC"
                   chain={thirdwebTargetChain}
                   client={thirdwebClient}
-                  description="Fund this agent wallet with World Chain USDC."
+                  description={`Fund this agent wallet with ${usdcDisplayName}.`}
                   onSuccess={() => void refetchBalance()}
                   presetOptions={[5, 10, 20]}
                   receiverAddress={agentWalletAddress}
                   showThirdwebBranding={false}
                   theme="dark"
-                  title="Add World Chain USDC"
+                  title={`Add ${usdcDisplayName}`}
                   tokenAddress={usdcAddress}
                   tokenEditable={false}
                 />

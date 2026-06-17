@@ -58,7 +58,7 @@ type ContentRoundConfigLike =
   | readonly unknown[];
 
 const FRONTEND_FEE_PERCENT = DEFAULT_REWARD_POOL_FRONTEND_FEE_BPS / 100;
-const BOUNTY_AMOUNT_TOOLTIP = `Paid in USDC on World Chain. Qualified claims reserve ${FRONTEND_FEE_PERCENT}% for the eligible frontend operator; the rest goes to eligible revealed voters after payout roots finalize.`;
+const BOUNTY_AMOUNT_TOOLTIP = `Paid in USDC on the active network. Qualified claims reserve ${FRONTEND_FEE_PERCENT}% for the eligible frontend operator; the rest goes to eligible revealed voters after payout roots finalize.`;
 const REQUIRED_VOTERS_TOOLTIP = `Matches the question's settlement voters so every qualifying round can count toward this bounty. Bounty floors: ${protocolDocFacts.bountyParticipantFloorsLabel}.`;
 const SETTLED_ROUNDS_TOOLTIP = `How many qualifying settled rounds must complete before the bounty is filled. USDC payouts then wait on finalized payout roots: ${protocolDocFacts.usdcBountyPayoutMinimumDelayLabel} minimum, normally up to ${protocolDocFacts.usdcBountyPayoutHappyPathMaxDelayLabel} on the happy path.`;
 const BOUNTY_WINDOW_TOOLTIP = `Bounty eligibility opens with the first private round and uses this window duration. The quick fund flow uses the same duration as the start-by deadline. ${protocolDocFacts.usdcBountyPayoutTimingTooltip}`;
@@ -234,7 +234,7 @@ export function FundQuestionModal({ contentId, roundConfig, title, onClose, onCr
       }
 
       if (!usdcAddress) {
-        notification.error("World Chain USDC is not configured for this network.");
+        notification.error("USDC is not configured for this network.");
         return;
       }
 
@@ -307,7 +307,7 @@ export function FundQuestionModal({ contentId, roundConfig, title, onClose, onCr
         });
         await waitForTransactionReceipt(wagmiConfig, { hash: authorizationHash });
 
-        notification.success(`Bounty funded with ${formatUsdAmount(parsedAmount)}. Paid in USDC on World Chain.`);
+        notification.success(`Bounty funded with ${formatUsdAmount(parsedAmount)}. Paid in USDC.`);
         onCreated?.();
         onClose();
         return;
@@ -361,7 +361,7 @@ export function FundQuestionModal({ contentId, roundConfig, title, onClose, onCr
       });
       await waitForTransactionReceipt(wagmiConfig, { hash: rewardPoolHash });
 
-      notification.success(`Bounty funded with ${formatUsdAmount(parsedAmount)}. Paid in USDC on World Chain.`);
+      notification.success(`Bounty funded with ${formatUsdAmount(parsedAmount)}. Paid in USDC.`);
       onCreated?.();
       onClose();
     } catch (error) {

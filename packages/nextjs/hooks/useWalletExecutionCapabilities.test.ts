@@ -53,11 +53,11 @@ test("resolveWalletExecutionMode treats in-app EOA fallback as direct transactio
       supportedChain: true,
       thirdwebSponsorshipMode: null,
     }),
-    "direct_worldchain",
+    "direct_evm",
   );
 });
 
-test("resolveWalletExecutionMode keeps unsupported external wallets on direct worldchain transactions", () => {
+test("resolveWalletExecutionMode keeps unsupported external wallets on direct EVM transactions", () => {
   assert.equal(
     resolveWalletExecutionMode({
       hasSendCalls: true,
@@ -65,7 +65,7 @@ test("resolveWalletExecutionMode keeps unsupported external wallets on direct wo
       supportedChain: false,
       thirdwebSponsorshipMode: null,
     }),
-    "direct_worldchain",
+    "direct_evm",
   );
 });
 

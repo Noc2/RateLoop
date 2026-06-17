@@ -148,7 +148,7 @@ test("does not await self-funded reconnect after wallet falls back to direct tra
       canUseFreeTransactions: false,
       chainId: 31337,
       connectorId: "in-app-wallet",
-      executionMode: "direct_worldchain",
+      executionMode: "direct_evm",
       freeTransactionAllowanceResolved: true,
       includeExternalSendCalls: true,
       isThirdwebInApp: true,

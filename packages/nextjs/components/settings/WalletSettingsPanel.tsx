@@ -3,7 +3,6 @@
 import { defineChain } from "thirdweb";
 import { BuyWidget } from "thirdweb/react";
 import { formatEther, isAddress } from "viem";
-import { worldchain } from "viem/chains";
 import { useAccount, useBalance } from "wagmi";
 import { ArrowsRightLeftIcon, WalletIcon } from "@heroicons/react/24/outline";
 import { DelegationSection } from "~~/components/profile/DelegationSection";
@@ -12,10 +11,9 @@ import { useRateLoopSwitchNetwork } from "~~/hooks/useRateLoopSwitchNetwork";
 import { useWalletSummaryData } from "~~/hooks/useWalletSummaryData";
 import { thirdwebClient } from "~~/services/thirdweb/client";
 
-const WORLD_CHAIN_MAINNET_CHAIN_ID = 480;
+const LOCAL_FOUNDRY_CHAIN_ID = 31337;
 const DEFAULT_ETH_TOP_UP_AMOUNT = "1";
 const ETH_TOP_UP_PRESET_OPTIONS: [number, number, number] = [5, 10, 20];
-const THIRDWEB_WORLD_CHAIN = defineChain(worldchain);
 
 function formatEthBalance(value: bigint | undefined) {
   if (value === undefined) return "Loading...";
@@ -67,8 +65,9 @@ export function WalletSettingsPanel({ address }: { address?: string }) {
   const { switchToChain, switchingChainId } = useRateLoopSwitchNetwork();
   const walletAddress = address && isAddress(address) ? (address as `0x${string}`) : undefined;
   const nativeBalanceChainId = chain?.id ?? targetNetwork.id;
-  const targetIsWorldChain = targetNetwork.id === WORLD_CHAIN_MAINNET_CHAIN_ID;
-  const connectedToWorldChain = chain?.id === WORLD_CHAIN_MAINNET_CHAIN_ID;
+  const targetSupportsEthTopUp = targetNetwork.id !== LOCAL_FOUNDRY_CHAIN_ID;
+  const connectedToTargetNetwork = chain?.id === targetNetwork.id;
+  const thirdwebTargetChain = defineChain(targetNetwork);
   const { lrepBalance, usdcBalance } = useWalletSummaryData(walletAddress);
   const { data: ethBalance } = useBalance({
     address: walletAddress,
@@ -77,14 +76,14 @@ export function WalletSettingsPanel({ address }: { address?: string }) {
       enabled: Boolean(walletAddress && nativeBalanceChainId),
     },
   });
-  const canUseEthTopUp = Boolean(thirdwebClient && walletAddress && targetIsWorldChain && connectedToWorldChain);
+  const canUseEthTopUp = Boolean(thirdwebClient && walletAddress && targetSupportsEthTopUp && connectedToTargetNetwork);
 
   const unavailableMessage = !thirdwebClient
     ? "ETH top-up is unavailable until thirdweb is configured for this deployment."
-    : !targetIsWorldChain
-      ? "ETH top-up is available on World Chain mainnet deployments."
-      : !connectedToWorldChain
-        ? "Switch to World Chain mainnet to buy ETH for gas."
+    : !targetSupportsEthTopUp
+      ? "ETH top-up is available on live deployments."
+      : !connectedToTargetNetwork
+        ? `Switch to ${targetNetwork.name} to buy ETH for gas.`
         : "Connect a wallet to buy ETH for gas.";
 
   return (
@@ -97,19 +96,19 @@ export function WalletSettingsPanel({ address }: { address?: string }) {
           </div>
           <h2 className="mt-3 text-3xl font-semibold text-base-content sm:text-4xl">Gas And Wallet Funding</h2>
           <p className="mt-3 max-w-2xl text-base leading-relaxed text-base-content/65">
-            RateLoop uses World Chain. External wallets need a small native ETH balance for transaction fees, while
-            bounties and agent asks still use LREP or World Chain USDC.
+            RateLoop uses the configured target network. External wallets need a small native ETH balance for
+            transaction fees, while bounties and agent asks use LREP or USDC.
           </p>
 
-          {targetIsWorldChain && !connectedToWorldChain ? (
+          {targetSupportsEthTopUp && !connectedToTargetNetwork ? (
             <button
               type="button"
               className="btn btn-primary mt-5 gap-2"
-              disabled={switchingChainId === WORLD_CHAIN_MAINNET_CHAIN_ID}
-              onClick={() => void switchToChain(WORLD_CHAIN_MAINNET_CHAIN_ID)}
+              disabled={switchingChainId === targetNetwork.id}
+              onClick={() => void switchToChain(targetNetwork.id)}
             >
               <ArrowsRightLeftIcon className="h-5 w-5" />
-              {switchingChainId === WORLD_CHAIN_MAINNET_CHAIN_ID ? "Switching..." : "Switch to World Chain"}
+              {switchingChainId === targetNetwork.id ? "Switching..." : `Switch to ${targetNetwork.name}`}
             </button>
           ) : null}
 
@@ -140,9 +139,9 @@ export function WalletSettingsPanel({ address }: { address?: string }) {
               amount={DEFAULT_ETH_TOP_UP_AMOUNT}
               amountEditable
               buttonLabel="Add ETH"
-              chain={THIRDWEB_WORLD_CHAIN}
+              chain={thirdwebTargetChain}
               client={thirdwebClient}
-              description="Fund your connected wallet with native ETH for World Chain gas costs."
+              description={`Fund your connected wallet with native ETH for ${targetNetwork.name} gas costs.`}
               presetOptions={ETH_TOP_UP_PRESET_OPTIONS}
               receiverAddress={walletAddress}
               showThirdwebBranding={false}

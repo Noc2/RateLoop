@@ -483,7 +483,7 @@ test("does not await self-funded reconnect after in-app wallets fall back to dir
       canUseFreeTransactions: false,
       chainId: 31337,
       connectorId: "in-app-wallet",
-      executionMode: "direct_worldchain",
+      executionMode: "direct_evm",
       freeTransactionAllowanceResolved: true,
     }),
     false,

@@ -37,7 +37,7 @@ import {
 import { getSharedDeploymentAddress } from "@rateloop/contracts/deployments";
 import {
   CONFIDENTIALITY_FLAG_PRIVATE_FOREVER,
-  WORLD_CHAIN_USDC_BY_CHAIN_ID,
+  USDC_BY_CHAIN_ID,
 } from "@rateloop/contracts/protocol";
 import type {
   AskHumansRequest,
@@ -73,7 +73,7 @@ const DEFAULT_SCRYPT_PARAMS = {
   r: 8,
 };
 
-const X402_USDC_BY_CHAIN_ID: Record<number, Address> = WORLD_CHAIN_USDC_BY_CHAIN_ID;
+const X402_USDC_BY_CHAIN_ID: Record<number, Address> = USDC_BY_CHAIN_ID;
 const X402_PRIMARY_TYPE = "ReceiveWithAuthorization";
 const X402_AUTHORIZATION_FIELDS = [
   { name: "from", type: "address" },

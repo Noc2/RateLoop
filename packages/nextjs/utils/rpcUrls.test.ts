@@ -7,10 +7,14 @@ import {
 } from "./rpcUrls";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { worldchainSepolia } from "viem/chains";
+import { baseSepolia, worldchainSepolia } from "viem/chains";
 
 test("buildAlchemyHttpUrl returns the expected World Chain Sepolia RPC", () => {
   assert.equal(buildAlchemyHttpUrl(4801, "test-key"), "https://worldchain-sepolia.g.alchemy.com/v2/test-key");
+});
+
+test("buildAlchemyHttpUrl returns the expected Base Sepolia RPC", () => {
+  assert.equal(buildAlchemyHttpUrl(84532, "test-key"), "https://base-sepolia.g.alchemy.com/v2/test-key");
 });
 
 test("buildAlchemyHttpUrl ignores unsupported scaffold-era networks", () => {
@@ -19,16 +23,16 @@ test("buildAlchemyHttpUrl ignores unsupported scaffold-era networks", () => {
 
 test("getPreferredHttpRpcUrls prioritizes overrides before Alchemy and defaults", () => {
   assert.deepEqual(
-    getPreferredHttpRpcUrls(worldchainSepolia, {
+    getPreferredHttpRpcUrls(baseSepolia, {
       alchemyApiKey: "alchemy-key",
       rpcOverrides: {
-        [worldchainSepolia.id]: "https://rpc.example.com",
+        [baseSepolia.id]: "https://rpc.example.com",
       },
     }),
     [
       "https://rpc.example.com",
-      "https://worldchain-sepolia.g.alchemy.com/v2/alchemy-key",
-      "https://worldchain-sepolia.g.alchemy.com/public",
+      "https://base-sepolia.g.alchemy.com/v2/alchemy-key",
+      ...baseSepolia.rpcUrls.default.http,
     ],
   );
 });

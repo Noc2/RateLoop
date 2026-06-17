@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
       return createDeniedResponse(decision.reason);
     }
 
-    if (requestSummary.chainId === 480) {
+    if (requestSummary.chainId === 480 || requestSummary.chainId === 8453) {
       console.info("[thirdweb-verifier] approved mainnet request", requestSummary);
     }
 

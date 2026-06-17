@@ -4,6 +4,7 @@ import {
   type X402QuestionParserOptions,
   type X402QuestionPayload,
   X402_SUBMISSION_REWARD_ASSET_USDC,
+  X402_USDC_BY_CHAIN_ID,
   X402_USDC_DECIMALS,
   X402_WORLD_CHAIN_USDC_BY_CHAIN_ID,
   assertSupportedX402BundleBounty,
@@ -15,6 +16,7 @@ import { isLocalE2EProductionBuildEnabled } from "~~/utils/env/e2eProduction";
 export {
   X402_SUBMISSION_REWARD_ASSET_USDC,
   X402_USDC_DECIMALS,
+  X402_USDC_BY_CHAIN_ID,
   X402_WORLD_CHAIN_USDC_BY_CHAIN_ID,
   X402QuestionInputError,
   assertSupportedX402BundleBounty,

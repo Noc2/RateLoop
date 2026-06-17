@@ -21,6 +21,12 @@ export const NETWORKS_EXTRA_DATA: Record<string, ChainAttributes> = {
   [chains.mainnet.id]: {
     color: "#ff8b9e",
   },
+  [chains.base.id]: {
+    color: "#0052FF",
+  },
+  [chains.baseSepolia.id]: {
+    color: "#31A1FF",
+  },
   [chains.worldchain.id]: {
     color: "#FCFF52",
   },

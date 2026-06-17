@@ -49,7 +49,7 @@ type FundFeedbackBonusModalProps = {
 };
 
 const FRONTEND_FEE_PERCENT = DEFAULT_REWARD_POOL_FRONTEND_FEE_BPS / 100;
-const FEEDBACK_BONUS_AMOUNT_TOOLTIP = `Paid in LREP or USDC on World Chain. Awarded feedback reserves ${FRONTEND_FEE_PERCENT}% for the eligible frontend operator; the rest goes to selected revealed raters after settlement.`;
+const FEEDBACK_BONUS_AMOUNT_TOOLTIP = `Paid in LREP or USDC on the active network. Awarded feedback reserves ${FRONTEND_FEE_PERCENT}% for the eligible frontend operator; the rest goes to selected revealed raters after settlement.`;
 const FEEDBACK_WINDOW_TOOLTIP =
   "Sets the requested feedback close for this active round. Awarders still get at least 24 hours after the round settles to decide payouts.";
 

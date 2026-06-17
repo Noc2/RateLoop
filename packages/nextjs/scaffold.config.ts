@@ -19,7 +19,7 @@ const scaffoldConfig = {
   // The interval at which your front-end polls the RPC servers for new data (it has no effect if you only target the local network (default is 4000))
   pollingInterval: DEFAULT_POLLING_INTERVAL,
   // Your Alchemy API key — get one at https://dashboard.alchemyapi.io
-  // Optional on World Chain because public RPCs are available.
+  // Optional on supported chains with public RPCs, but recommended for production reliability.
   alchemyApiKey: publicEnv.alchemyApiKey,
   // If you want to use a different RPC for a specific network, you can add it here.
   // The key is the chain ID, and the value is the HTTP RPC URL

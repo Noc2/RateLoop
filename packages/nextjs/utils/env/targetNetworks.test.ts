@@ -21,15 +21,26 @@ test("World Chain mainnet is an available production target", () => {
   assert.equal(network.id, chains.worldchain.id);
 });
 
+test("Base mainnet and Base Sepolia are available targets", () => {
+  const networks = resolveTargetNetworks(`${chains.baseSepolia.id},${chains.base.id}`, {
+    production: true,
+  });
+
+  assert.deepEqual(
+    networks.map(network => network.id),
+    [chains.baseSepolia.id, chains.base.id],
+  );
+});
+
 test("production builds can explicitly opt into the local Foundry chain", () => {
-  const networks = resolveTargetNetworks(`${chains.foundry.id},${chains.worldchain.id}`, {
+  const networks = resolveTargetNetworks(`${chains.foundry.id},${chains.base.id}`, {
     allowFoundryInProduction: true,
     production: true,
   });
 
   assert.deepEqual(
     networks.map(network => network.id),
-    [chains.foundry.id, chains.worldchain.id],
+    [chains.foundry.id, chains.base.id],
   );
 });
 
@@ -63,12 +74,12 @@ test("target network parsing rejects chain IDs with non-numeric suffixes", () =>
 });
 
 test("configured RPC overrides become the preferred browser transport for target chains", () => {
-  const [network] = resolveTargetNetworks(`${chains.worldchainSepolia.id}`, {
+  const [network] = resolveTargetNetworks(`${chains.baseSepolia.id}`, {
     production: false,
     rpcOverrides: {
-      [chains.worldchainSepolia.id]: "https://4801.rpc.thirdweb.com/client-id",
+      [chains.baseSepolia.id]: "https://84532.rpc.thirdweb.com/client-id",
     },
   });
 
-  assert.equal(network.rpcUrls.default.http[0], "https://4801.rpc.thirdweb.com/client-id");
+  assert.equal(network.rpcUrls.default.http[0], "https://84532.rpc.thirdweb.com/client-id");
 });

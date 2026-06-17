@@ -1,7 +1,7 @@
 import {
   DEFAULT_ROUND_CONFIG,
   MIN_NONZERO_CONFIDENTIALITY_BOND,
-  WORLD_CHAIN_USDC_BY_CHAIN_ID,
+  USDC_BY_CHAIN_ID,
   requiredQuestionRewardParticipants,
 } from "@rateloop/contracts/protocol";
 import { normalizeTargetAudience } from "@rateloop/node-utils/profileSelfReport";
@@ -21,7 +21,9 @@ import {
 } from "./questionSpecs";
 import { findAgentResultTemplate } from "./templates";
 
-export const X402_WORLD_CHAIN_USDC_BY_CHAIN_ID = WORLD_CHAIN_USDC_BY_CHAIN_ID;
+export const X402_USDC_BY_CHAIN_ID = USDC_BY_CHAIN_ID;
+/** @deprecated Use `X402_USDC_BY_CHAIN_ID`. */
+export const X402_WORLD_CHAIN_USDC_BY_CHAIN_ID = X402_USDC_BY_CHAIN_ID;
 export const X402_SUBMISSION_REWARD_ASSET_USDC = 1;
 export const X402_USDC_DECIMALS = 6;
 export const X402_MIN_NONZERO_CONFIDENTIALITY_BOND = MIN_NONZERO_CONFIDENTIALITY_BOND;

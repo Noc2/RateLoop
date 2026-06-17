@@ -102,7 +102,7 @@ test("getConfiguredQuestionRewardPoolEscrowAddress rejects mismatched production
   }
 });
 
-test("getDefaultUsdcAddress uses local MockERC20 before World Chain defaults", () => {
+test("getDefaultUsdcAddress uses local MockERC20 before canonical USDC defaults", () => {
   const env = process.env as Record<string, string | undefined>;
   const originalOverride = env.NEXT_PUBLIC_USDC_ADDRESS;
   assert.ok(contracts);
@@ -113,12 +113,32 @@ test("getDefaultUsdcAddress uses local MockERC20 before World Chain defaults", (
     delete env.NEXT_PUBLIC_USDC_ADDRESS;
     assert.equal(getDefaultUsdcAddress(31337)?.toLowerCase(), localMockUsdcAddress.toLowerCase());
     assert.equal(getDefaultUsdcDisplayName(31337), "Mock USDC");
+    assert.equal(getDefaultUsdcDisplayName(480), "USDC");
     assert.equal(getDefaultUsdcAddress(480), "0x79A02482A880bCE3F13e09Da970dC34db4CD24d1");
+    assert.equal(getDefaultUsdcAddress(84532), "0x036CbD53842c5426634e7929541eC2318f3dCF7e");
   } finally {
     if (originalOverride === undefined) {
       delete env.NEXT_PUBLIC_USDC_ADDRESS;
     } else {
       env.NEXT_PUBLIC_USDC_ADDRESS = originalOverride;
+    }
+  }
+});
+
+test("getDefaultUsdcAddress supports chain-scoped public USDC overrides", () => {
+  const env = process.env as Record<string, string | undefined>;
+  const originalUsdc = env.NEXT_PUBLIC_USDC_ADDRESS_84532;
+  const override = "0x0000000000000000000000000000000000000003";
+
+  try {
+    env.NEXT_PUBLIC_USDC_ADDRESS_84532 = override;
+    assert.equal(getDefaultUsdcAddress(84532), override);
+    assert.equal(getDefaultUsdcAddress(8453), "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913");
+  } finally {
+    if (originalUsdc === undefined) {
+      delete env.NEXT_PUBLIC_USDC_ADDRESS_84532;
+    } else {
+      env.NEXT_PUBLIC_USDC_ADDRESS_84532 = originalUsdc;
     }
   }
 });
@@ -133,7 +153,7 @@ test("getDefaultUsdcAddress rejects conflicting public USDC overrides", () => {
     env.NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS = "0x0000000000000000000000000000000000000002";
     assert.throws(
       () => getDefaultUsdcAddress(31337),
-      /NEXT_PUBLIC_USDC_ADDRESS and NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS must match/,
+      /NEXT_PUBLIC_USDC_ADDRESS_31337 and NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS_31337 must match/,
     );
   } finally {
     if (originalUsdc === undefined) {

@@ -1623,7 +1623,7 @@ export function ContentSubmissionSection() {
       return {
         title: "Need bounty funds",
         message:
-          "Every question needs a funded bounty before it can be submitted. Add LREP or World Chain USDC to this wallet, then continue.",
+          "Every question needs a funded bounty before it can be submitted. Add LREP or USDC to this wallet, then continue.",
       };
     }
 
@@ -4094,7 +4094,7 @@ export function ContentSubmissionSection() {
               <div className={MONEY_FIELD_LABEL_CLASS}>
                 <label htmlFor="submission-feedback-bonus-amount">Amount</label>
                 <InfoTooltip
-                  text="Feedback Bonuses can use LREP or World Chain USDC. The selected awarder later chooses which eligible feedback to pay."
+                  text="Feedback Bonuses can use LREP or USDC. The selected awarder later chooses which eligible feedback to pay."
                   className="text-base-content/45"
                 />
               </div>

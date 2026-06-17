@@ -2,6 +2,8 @@ import type { Chain } from "viem";
 
 const RPC_CHAIN_NAMES: Record<number, string> = {
   1: "eth-mainnet",
+  8453: "base-mainnet",
+  84532: "base-sepolia",
   480: "worldchain-mainnet",
   4801: "worldchain-sepolia",
 };

@@ -128,6 +128,8 @@ export function resolveServerTargetNetworks(
       RPC_OVERRIDES,
       resolveRpcOverrides({
         31337: readEnv("NEXT_PUBLIC_RPC_URL_31337"),
+        84532: readEnv("NEXT_PUBLIC_RPC_URL_84532"),
+        8453: readEnv("NEXT_PUBLIC_RPC_URL_8453"),
         4801: readEnv("NEXT_PUBLIC_RPC_URL_4801"),
         480: readEnv("NEXT_PUBLIC_RPC_URL_480"),
       }),
@@ -162,6 +164,8 @@ export function getServerRpcOverrides(): Partial<Record<number, string>> {
     RPC_OVERRIDES,
     resolveRpcOverrides({
       31337: readEnv("NEXT_PUBLIC_RPC_URL_31337"),
+      84532: readEnv("NEXT_PUBLIC_RPC_URL_84532"),
+      8453: readEnv("NEXT_PUBLIC_RPC_URL_8453"),
       4801: readEnv("NEXT_PUBLIC_RPC_URL_4801"),
       480: readEnv("NEXT_PUBLIC_RPC_URL_480"),
     }),
@@ -219,10 +223,21 @@ export function getThirdwebServerVerifierSecret(): string | undefined {
   return readEnv("THIRDWEB_SERVER_VERIFIER_SECRET");
 }
 
-export function getX402UsdcAddressOverride(): `0x${string}` | undefined {
-  const publicUsdc = readEnv("NEXT_PUBLIC_USDC_ADDRESS")?.trim();
-  const publicX402Usdc = readEnv("NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS")?.trim();
-  const serverUsdc = readEnv("RATELOOP_X402_USDC_ADDRESS")?.trim();
+function readChainScopedEnv(name: string, chainId: number | undefined): string | undefined {
+  return chainId === undefined ? undefined : readEnv(`${name}_${chainId}`);
+}
+
+export function getX402UsdcAddressOverride(chainId?: number): `0x${string}` | undefined {
+  const publicUsdc = (
+    readChainScopedEnv("NEXT_PUBLIC_USDC_ADDRESS", chainId) ?? readEnv("NEXT_PUBLIC_USDC_ADDRESS")
+  )?.trim();
+  const publicX402Usdc = (
+    readChainScopedEnv("NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS", chainId) ??
+    readEnv("NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS")
+  )?.trim();
+  const serverUsdc = (
+    readChainScopedEnv("RATELOOP_X402_USDC_ADDRESS", chainId) ?? readEnv("RATELOOP_X402_USDC_ADDRESS")
+  )?.trim();
   const normalizedPublic = publicUsdc?.startsWith("0x") ? (publicUsdc.toLowerCase() as `0x${string}`) : undefined;
   const normalizedPublicX402 = publicX402Usdc?.startsWith("0x")
     ? (publicX402Usdc.toLowerCase() as `0x${string}`)
@@ -235,12 +250,12 @@ export function getX402UsdcAddressOverride(): `0x${string}` | undefined {
   const unique = [...new Set(configured)];
   if (unique.length > 1) {
     throw new Error(
-      "NEXT_PUBLIC_USDC_ADDRESS, NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS, and RATELOOP_X402_USDC_ADDRESS must match when multiple are set.",
+      "NEXT_PUBLIC_USDC_ADDRESS, NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS, and RATELOOP_X402_USDC_ADDRESS must match when multiple are set for the same chain.",
     );
   }
   if (normalizedServer && !normalizedPublic && !normalizedPublicX402) {
     throw new Error(
-      "RATELOOP_X402_USDC_ADDRESS requires NEXT_PUBLIC_USDC_ADDRESS or NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS for browser parity.",
+      "RATELOOP_X402_USDC_ADDRESS requires NEXT_PUBLIC_USDC_ADDRESS or NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS for browser parity on the same chain.",
     );
   }
   return normalizedServer ?? normalizedPublicX402 ?? normalizedPublic;

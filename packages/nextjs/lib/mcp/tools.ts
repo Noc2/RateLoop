@@ -443,7 +443,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       readOnlyHint: false,
     },
     description:
-      "Advanced raw wallet-call flow. Prepare a paid human-feedback ask and return wallet transaction calls or an EIP-3009 World Chain USDC authorization request; normal chat agents should create a handoff link instead.",
+      "Advanced raw wallet-call flow. Prepare a paid human-feedback ask and return wallet transaction calls or an EIP-3009 USDC authorization request; normal chat agents should create a handoff link instead.",
     inputSchema: agentAskHumansInputSchema,
     name: "rateloop_ask_humans",
     outputSchema: agentAskHumansOutputSchema,
@@ -2848,7 +2848,8 @@ function buildDryRunOperationBody(params: {
 
 function buildDryRunOperationFromArgs(args: JsonObject): JsonObject {
   const rawOperationKey = typeof args.operationKey === "string" ? args.operationKey.trim() : "";
-  const chainId = Number.parseInt(String(args.chainId ?? "4801"), 10);
+  const defaultDryRunChainId = 84532;
+  const chainId = Number.parseInt(String(args.chainId ?? String(defaultDryRunChainId)), 10);
   const clientRequestId =
     typeof args.clientRequestId === "string" && args.clientRequestId.trim()
       ? args.clientRequestId.trim()
@@ -2856,11 +2857,11 @@ function buildDryRunOperationFromArgs(args: JsonObject): JsonObject {
   const operationKey = /^0x[a-fA-F0-9]{64}$/.test(rawOperationKey)
     ? rawOperationKey.toLowerCase()
     : `0x${createHash("sha256")
-        .update(`rateloop:dry-run:${Number.isSafeInteger(chainId) ? chainId : 4801}:${clientRequestId}`)
+        .update(`rateloop:dry-run:${Number.isSafeInteger(chainId) ? chainId : defaultDryRunChainId}:${clientRequestId}`)
         .digest("hex")}`;
 
   return {
-    chainId: Number.isSafeInteger(chainId) ? chainId : 4801,
+    chainId: Number.isSafeInteger(chainId) ? chainId : defaultDryRunChainId,
     clientRequestId,
     contentId: null,
     contentIds: [],

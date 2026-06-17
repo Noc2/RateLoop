@@ -13,7 +13,7 @@ import {
   supportsThirdwebInAppExecutionCapabilities,
 } from "~~/services/thirdweb/client";
 
-export type WalletExecutionMode = "sponsored_7702" | "self_funded_7702" | "fee_currency" | "direct_worldchain";
+export type WalletExecutionMode = "sponsored_7702" | "self_funded_7702" | "fee_currency" | "direct_evm";
 
 export function resolveWalletExecutionMode(params: {
   hasSendCalls: boolean;
@@ -30,16 +30,16 @@ export function resolveWalletExecutionMode(params: {
   }
 
   if (params.isThirdwebInApp) {
-    return "direct_worldchain";
+    return "direct_evm";
   }
 
   if (params.supportedChain) {
     // External wallets may expose `sendCalls`, but hardware-backed accounts
-    // can still reject the EIP-7702 upgrade path. Keep them on plain World Chain txs.
+    // can still reject the EIP-7702 upgrade path. Keep them on plain EVM txs.
     return "fee_currency";
   }
 
-  return "direct_worldchain";
+  return "direct_evm";
 }
 
 export function resolveWalletExecutionChainId(

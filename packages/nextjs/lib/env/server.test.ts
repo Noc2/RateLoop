@@ -13,10 +13,14 @@ import { afterEach, test } from "node:test";
 const env = process.env as Record<string, string | undefined>;
 const originalDatabaseUrl = env.DATABASE_URL;
 const originalPublicRpcUrl4801 = env.NEXT_PUBLIC_RPC_URL_4801;
+const originalPublicRpcUrl84532 = env.NEXT_PUBLIC_RPC_URL_84532;
 const originalVercelEnv = env.VERCEL_ENV;
 const originalPublicUsdc = env.NEXT_PUBLIC_USDC_ADDRESS;
+const originalPublicUsdc84532 = env.NEXT_PUBLIC_USDC_ADDRESS_84532;
 const originalPublicX402Usdc = env.NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS;
+const originalPublicX402Usdc84532 = env.NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS_84532;
 const originalServerX402Usdc = env.RATELOOP_X402_USDC_ADDRESS;
+const originalServerX402Usdc84532 = env.RATELOOP_X402_USDC_ADDRESS_84532;
 
 afterEach(() => {
   if (originalDatabaseUrl === undefined) {
@@ -31,6 +35,12 @@ afterEach(() => {
     env.NEXT_PUBLIC_RPC_URL_4801 = originalPublicRpcUrl4801;
   }
 
+  if (originalPublicRpcUrl84532 === undefined) {
+    delete env.NEXT_PUBLIC_RPC_URL_84532;
+  } else {
+    env.NEXT_PUBLIC_RPC_URL_84532 = originalPublicRpcUrl84532;
+  }
+
   if (originalVercelEnv === undefined) {
     delete env.VERCEL_ENV;
   } else {
@@ -43,16 +53,34 @@ afterEach(() => {
     env.NEXT_PUBLIC_USDC_ADDRESS = originalPublicUsdc;
   }
 
+  if (originalPublicUsdc84532 === undefined) {
+    delete env.NEXT_PUBLIC_USDC_ADDRESS_84532;
+  } else {
+    env.NEXT_PUBLIC_USDC_ADDRESS_84532 = originalPublicUsdc84532;
+  }
+
   if (originalPublicX402Usdc === undefined) {
     delete env.NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS;
   } else {
     env.NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS = originalPublicX402Usdc;
   }
 
+  if (originalPublicX402Usdc84532 === undefined) {
+    delete env.NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS_84532;
+  } else {
+    env.NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS_84532 = originalPublicX402Usdc84532;
+  }
+
   if (originalServerX402Usdc === undefined) {
     delete env.RATELOOP_X402_USDC_ADDRESS;
   } else {
     env.RATELOOP_X402_USDC_ADDRESS = originalServerX402Usdc;
+  }
+
+  if (originalServerX402Usdc84532 === undefined) {
+    delete env.RATELOOP_X402_USDC_ADDRESS_84532;
+  } else {
+    env.RATELOOP_X402_USDC_ADDRESS_84532 = originalServerX402Usdc84532;
   }
 });
 
@@ -155,9 +183,11 @@ test("resolveServerTargetNetworks returns null for invalid production values", (
 
 test("getServerRpcOverrides includes public per-chain RPC overrides", () => {
   env.NEXT_PUBLIC_RPC_URL_4801 = "https://4801.rpc.thirdweb.com/client-id/";
+  env.NEXT_PUBLIC_RPC_URL_84532 = "https://84532.rpc.thirdweb.com/client-id/";
 
   assert.deepEqual(getServerRpcOverrides(), {
     4801: "https://4801.rpc.thirdweb.com/client-id",
+    84532: "https://84532.rpc.thirdweb.com/client-id",
   });
 });
 
@@ -209,4 +239,13 @@ test("getX402UsdcAddressOverride returns the shared address when all vars match"
   env.NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS = shared;
   env.RATELOOP_X402_USDC_ADDRESS = shared;
   assert.equal(getX402UsdcAddressOverride(), shared.toLowerCase());
+});
+
+test("getX402UsdcAddressOverride supports chain-scoped Base USDC overrides", () => {
+  const shared = "0x036CbD53842c5426634e7929541eC2318f3dCF7e";
+  env.NEXT_PUBLIC_USDC_ADDRESS_84532 = shared;
+  env.NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS_84532 = shared;
+  env.RATELOOP_X402_USDC_ADDRESS_84532 = shared;
+  assert.equal(getX402UsdcAddressOverride(84532), shared.toLowerCase());
+  assert.equal(getX402UsdcAddressOverride(4801), undefined);
 });

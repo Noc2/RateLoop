@@ -205,6 +205,14 @@ test("getThirdwebWalletSmartAccountOptions exposes Sepolia smart account options
   assert.equal(getThirdwebWalletSmartAccountOptions(480), undefined);
 });
 
+test("getThirdwebWalletSmartAccountOptions exposes Base Sepolia smart account options", () => {
+  const smartAccount = getThirdwebWalletSmartAccountOptions(84532, { sponsorshipMode: "self-funded" });
+
+  assert.equal(smartAccount?.chain.id, 84532);
+  assert.equal(smartAccount && "sponsorGas" in smartAccount ? smartAccount.sponsorGas : undefined, false);
+  assert.equal(getThirdwebWalletSmartAccountOptions(8453), undefined);
+});
+
 test("getThirdwebWallets keeps wallet auth inside in-app wallet when no branded injected wallet exists", () => {
   const wallets = getThirdwebWallets(480, {
     ethereum: {

@@ -1,7 +1,7 @@
 "use client";
 
 import { ContentRegistryAbi, FeedbackBonusEscrowAbi, QuestionRewardPoolEscrowAbi } from "@rateloop/contracts/abis";
-import { MIN_NONZERO_CONFIDENTIALITY_BOND, WORLD_CHAIN_USDC_BY_CHAIN_ID } from "@rateloop/contracts/protocol";
+import { MIN_NONZERO_CONFIDENTIALITY_BOND, USDC_BY_CHAIN_ID } from "@rateloop/contracts/protocol";
 import { isAddress, parseUnits } from "viem";
 import { contracts } from "~~/utils/scaffold-eth/contract";
 
@@ -58,11 +58,19 @@ function normalizeAddress(value: string | undefined): `0x${string}` | undefined 
   return trimmed && isAddress(trimmed) ? (trimmed as `0x${string}`) : undefined;
 }
 
-function getPublicUsdcAddressOverride(): `0x${string}` | undefined {
+function getPublicUsdcAddressOverride(chainId?: number): `0x${string}` | undefined {
+  if (chainId === 84532) return normalizeAddress(process.env.NEXT_PUBLIC_USDC_ADDRESS_84532);
+  if (chainId === 8453) return normalizeAddress(process.env.NEXT_PUBLIC_USDC_ADDRESS_8453);
+  if (chainId === 4801) return normalizeAddress(process.env.NEXT_PUBLIC_USDC_ADDRESS_4801);
+  if (chainId === 480) return normalizeAddress(process.env.NEXT_PUBLIC_USDC_ADDRESS_480);
   return normalizeAddress(process.env.NEXT_PUBLIC_USDC_ADDRESS);
 }
 
-function getPublicX402UsdcAddressOverride(): `0x${string}` | undefined {
+function getPublicX402UsdcAddressOverride(chainId?: number): `0x${string}` | undefined {
+  if (chainId === 84532) return normalizeAddress(process.env.NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS_84532);
+  if (chainId === 8453) return normalizeAddress(process.env.NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS_8453);
+  if (chainId === 4801) return normalizeAddress(process.env.NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS_4801);
+  if (chainId === 480) return normalizeAddress(process.env.NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS_480);
   return normalizeAddress(process.env.NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS);
 }
 
@@ -114,23 +122,25 @@ export function getConfiguredFeedbackRegistryAddress(chainId: number): `0x${stri
   return getDeployedContractAddress(chainId, "FeedbackRegistry");
 }
 
-function assertMatchingPublicUsdcOverrides(): void {
-  const usdc = getPublicUsdcAddressOverride();
-  const x402 = getPublicX402UsdcAddressOverride();
+function assertMatchingPublicUsdcOverrides(chainId: number): void {
+  const usdc = getPublicUsdcAddressOverride(chainId);
+  const x402 = getPublicX402UsdcAddressOverride(chainId);
   if (usdc && x402 && usdc.toLowerCase() !== x402.toLowerCase()) {
     throw new Error(
-      "NEXT_PUBLIC_USDC_ADDRESS and NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS must match when both are set.",
+      `NEXT_PUBLIC_USDC_ADDRESS_${chainId} and NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS_${chainId} must match when both are set.`,
     );
   }
 }
 
 export function getDefaultUsdcAddress(chainId: number): `0x${string}` | undefined {
-  assertMatchingPublicUsdcOverrides();
+  assertMatchingPublicUsdcOverrides(chainId);
   return (
+    getPublicUsdcAddressOverride(chainId) ??
+    getPublicX402UsdcAddressOverride(chainId) ??
     getPublicUsdcAddressOverride() ??
     getPublicX402UsdcAddressOverride() ??
     getDeployedContractAddress(chainId, LOCAL_MOCK_USDC_CONTRACT_NAME) ??
-    WORLD_CHAIN_USDC_BY_CHAIN_ID[chainId]
+    USDC_BY_CHAIN_ID[chainId]
   );
 }
 
@@ -139,11 +149,11 @@ export function getDefaultLrepAddress(chainId: number): `0x${string}` | undefine
 }
 
 export function getDefaultUsdcDisplayName(chainId: number): string {
-  if (!getPublicUsdcAddressOverride() && getDeployedContractAddress(chainId, LOCAL_MOCK_USDC_CONTRACT_NAME)) {
+  if (!getPublicUsdcAddressOverride(chainId) && getDeployedContractAddress(chainId, LOCAL_MOCK_USDC_CONTRACT_NAME)) {
     return "Mock USDC";
   }
 
-  return "World Chain USDC";
+  return "USDC";
 }
 
 export function parseUsdRewardPoolAmount(value: string): bigint | null {

@@ -687,7 +687,7 @@ export const agentAskHumansInputSchema = {
     paymentMode: {
       default: "wallet_calls",
       description:
-        "wallet_calls returns approve/reserve/submit transactions. eip3009_usdc_authorization returns an EIP-3009 World Chain USDC authorization request, then ordered reserve/submit transactions after signature. x402_authorization is accepted as a legacy compatibility alias.",
+        "wallet_calls returns approve/reserve/submit transactions. eip3009_usdc_authorization returns an EIP-3009 USDC authorization request, then ordered reserve/submit transactions after signature. x402_authorization is accepted as a legacy compatibility alias.",
       enum: ["wallet_calls", "eip3009_usdc_authorization", "x402_authorization"],
       type: "string",
     },
