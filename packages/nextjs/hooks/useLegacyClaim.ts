@@ -20,7 +20,11 @@ import {
 } from "~~/hooks/useThirdwebSponsoredSubmitCalls";
 import { getClaimPreflightErrorMessage } from "~~/lib/claimTransactionFeedback";
 import type { LegacyClaimLookupResult } from "~~/lib/legacy-claim/lookup";
-import { isInsufficientFundsError, isThirdwebSponsoredExecutionRejectedError } from "~~/lib/transactionErrors";
+import {
+  isInsufficientFundsError,
+  isThirdwebSponsoredExecutionRejectedError,
+  isUserRejectedTransactionError,
+} from "~~/lib/transactionErrors";
 import { createThirdwebInAppWallet, isThirdwebInAppWalletId, thirdwebClient } from "~~/services/thirdweb/client";
 import { notification } from "~~/utils/scaffold-eth";
 
@@ -192,14 +196,32 @@ async function connectTemporaryLegacyClaimAccount(params: {
   return account;
 }
 
-function shouldRetryTemporaryLegacyClaimAsEoa(error: unknown) {
+function createLegacyClaimSelfFundedGasError(cause: unknown) {
+  const error = new Error(
+    "Sponsored legacy claim failed and the eligible legacy wallet has no ETH for self-funded gas.",
+  );
+  (error as Error & { cause?: unknown }).cause = cause;
+  return error;
+}
+
+export function shouldRetryLegacySponsoredClaimAsEoa(error: unknown) {
+  if (isUserRejectedTransactionError(error)) {
+    return false;
+  }
+
   const text = getErrorText(error).toLowerCase();
   return (
     isThirdwebSponsorshipDeniedError(error) ||
     isThirdwebSponsoredExecutionRejectedError(error) ||
     text.includes("temporary sponsored legacy claim wallet does not match") ||
     text.includes("bundler") ||
+    text.includes("bad request") ||
+    text.includes("failed to fetch") ||
+    text.includes("load failed") ||
     text.includes("paymaster") ||
+    text.includes("thirdweb batch calls") ||
+    text.includes("unexpected end of json") ||
+    text.includes("unexpected token") ||
     text.includes("useroperation") ||
     text.includes("userop")
   );
@@ -404,16 +426,13 @@ export function useLegacyClaim() {
         try {
           await submitTemporaryLegacyClaim("sponsored");
         } catch (error) {
-          if (!shouldRetryTemporaryLegacyClaimAsEoa(error)) {
+          console.error("Sponsored legacy claim to recipient failed:", error);
+          if (!shouldRetryLegacySponsoredClaimAsEoa(error)) {
             throw error;
           }
           const claimOwnerNativeBalance = await publicClient.getBalance({ address: claimOwnerAddress });
           if (claimOwnerNativeBalance <= 0n) {
-            const fallbackError = new Error(
-              "Sponsored legacy claim failed and the eligible legacy wallet has no ETH for self-funded gas.",
-            );
-            (fallbackError as Error & { cause?: unknown }).cause = error;
-            throw fallbackError;
+            throw createLegacyClaimSelfFundedGasError(error);
           }
           await submitTemporaryLegacyClaim("eoa");
         }
@@ -455,31 +474,71 @@ export function useLegacyClaim() {
     }
 
     if (canUseSponsoredLegacyClaim) {
-      if (!launchDistributionPoolInfo) {
+      const client = thirdwebClient;
+      if (!launchDistributionPoolInfo || !publicClient || !client) {
         notification.error("Legacy claim contract is unavailable right now.");
         return;
       }
 
+      const submitSelfFundedLegacyClaim = async (cause: unknown) => {
+        const claimOwnerNativeBalance = await publicClient.getBalance({ address: claimOwnerAddress });
+        if (claimOwnerNativeBalance <= 0n) {
+          throw createLegacyClaimSelfFundedGasError(cause);
+        }
+
+        const account = await connectTemporaryLegacyClaimAccount({
+          chainId: targetNetwork.id,
+          claimAddress: claimOwnerAddress,
+          mode: "eoa",
+        });
+        const contract = getContract({
+          abi: launchDistributionPoolInfo.abi as Abi,
+          address: launchDistributionPoolInfo.address as `0x${string}`,
+          chain: defineChain(targetNetwork.id),
+          client,
+        });
+        const transaction = prepareContractCall({
+          contract,
+          method: "function claimLegacyContributorAllocation(uint256 allocation, bytes32[] proof) returns (uint256)",
+          params: writeArgs,
+        });
+
+        return sendAndConfirmTransaction({
+          account,
+          transaction,
+        });
+      };
+
       setIsSponsoredClaiming(true);
       try {
-        await publicClient?.simulateContract({
+        await publicClient.simulateContract({
           abi: launchDistributionPoolInfo.abi as Abi,
           account: activeExecutionAddress,
           address: launchDistributionPoolInfo.address as `0x${string}`,
           args: writeArgs as any,
           functionName: "claimLegacyContributorAllocation",
         });
-        await executeSponsoredCalls(
-          [
-            {
-              abi: launchDistributionPoolInfo.abi as Abi,
-              address: launchDistributionPoolInfo.address as `0x${string}`,
-              args: writeArgs as any,
-              functionName: "claimLegacyContributorAllocation",
-            },
-          ],
-          { action: "Claim legacy LREP" },
-        );
+
+        try {
+          await executeSponsoredCalls(
+            [
+              {
+                abi: launchDistributionPoolInfo.abi as Abi,
+                address: launchDistributionPoolInfo.address as `0x${string}`,
+                args: writeArgs as any,
+                functionName: "claimLegacyContributorAllocation",
+              },
+            ],
+            { action: "Claim legacy LREP" },
+          );
+        } catch (error) {
+          console.error("Sponsored legacy claim failed:", error);
+          if (!shouldRetryLegacySponsoredClaimAsEoa(error)) {
+            throw error;
+          }
+          await submitSelfFundedLegacyClaim(error);
+        }
+
         await refetchOnChainState(claimableAmount);
       } catch (error) {
         notification.error(getLegacyClaimTransactionErrorMessage(error));

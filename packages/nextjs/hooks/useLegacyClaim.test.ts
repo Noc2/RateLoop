@@ -2,6 +2,7 @@ import {
   LEGACY_CLAIM_ALLOW_IN_APP_SPONSORSHIP_SYNC,
   getLegacyClaimTransactionErrorMessage,
   shouldInspectLegacyAdminClaim,
+  shouldRetryLegacySponsoredClaimAsEoa,
   shouldUseLegacyAdminClaim,
   shouldUseSponsoredLegacyClaim,
 } from "./useLegacyClaim";
@@ -157,4 +158,13 @@ test("formats thirdweb sponsored legacy claim rejections", () => {
     getLegacyClaimTransactionErrorMessage(new Error('tw_execute error: {"message":"Bad Request"}\nStatus: 400')),
     "thirdweb could not sponsor this legacy claim. Add ETH to the eligible legacy wallet and retry, or try again in a moment.",
   );
+});
+
+test("retries opaque thirdweb legacy claim bundler failures as self-funded EOA sends", () => {
+  assert.equal(shouldRetryLegacySponsoredClaimAsEoa(new SyntaxError("Unexpected end of JSON input")), true);
+  assert.equal(shouldRetryLegacySponsoredClaimAsEoa(new Error('tw_execute error: {"message":"Bad Request"}')), true);
+});
+
+test("does not retry legacy sponsored claims after the user rejects a wallet prompt", () => {
+  assert.equal(shouldRetryLegacySponsoredClaimAsEoa(new Error("User rejected the request.")), false);
 });
