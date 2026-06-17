@@ -568,29 +568,11 @@ export function StakeSelector({
                   {amount.toLocaleString(undefined, { maximumFractionDigits: 1 })}
                   <span className={metricUnitClassName}>{symbol}</span>
                   {isCapacityLimited && (
-                    <span
-                      className="tooltip tooltip-top ml-2 inline-block cursor-help align-middle"
-                      data-tip={`Max per rater for this ${contentLabel}: ${maxByCapacity} ${symbol} remaining (10 limit per round)`}
-                      role="img"
-                      aria-label={`Max per rater for this ${contentLabel}: ${maxByCapacity} ${symbol} remaining (10 limit per round)`}
-                    >
-                      <svg
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        className="opacity-60"
-                        aria-hidden="true"
-                      >
-                        <circle cx="12" cy="12" r="10" />
-                        <path d="M12 16v-4" />
-                        <path d="M12 8h.01" />
-                      </svg>
-                    </span>
+                    <InfoTooltip
+                      text={`Max per rater for this ${contentLabel}: ${maxByCapacity} ${symbol} remaining (10 limit per round)`}
+                      position="top"
+                      className="ml-2 align-middle"
+                    />
                   )}
                 </p>
               </div>
