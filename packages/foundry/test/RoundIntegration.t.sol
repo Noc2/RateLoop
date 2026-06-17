@@ -2854,9 +2854,7 @@ contract RoundIntegrationTest is VotingTestBase {
         vm.recordLogs();
         _settleAfterRbtsSeed(votingEngine, contentId, roundId);
 
-        bytes32 failureTopic = keccak256(
-            "SettlementSideEffectFailed(uint256,uint256,address,uint8)"
-        );
+        bytes32 failureTopic = keccak256("SettlementSideEffectFailed(uint256,uint256,address,uint8)");
         Vm.Log[] memory logs = vm.getRecordedLogs();
         bool sawFailure;
         for (uint256 i = 0; i < logs.length; i++) {
