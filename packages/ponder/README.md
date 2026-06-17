@@ -37,6 +37,7 @@ Within the package directory, additional scripts are available:
 | Variable                                   | Description                                                                                                                 |
 | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
 | `PONDER_NETWORK`                           | Active network: `hardhat`, `worldchainSepolia`, or `worldchain`                                                             |
+| `PONDER_CHAIN_ID`                          | Optional explicit chain ID; must match `PONDER_NETWORK` when both are set. Used by `yarn ponder:start` for protocol deployment keys and Postgres schema selection when unset defaults from the network name |
 | `PONDER_RPC_URL_31337`                     | RPC URL for local Hardhat/Anvil chain                                                                                       |
 | `PONDER_RPC_URL_4801`                      | RPC URL for World Chain Sepolia                                                                                             |
 | `PONDER_RPC_URL_480`                       | RPC URL for World Chain mainnet                                                                                             |
@@ -142,7 +143,7 @@ SET human_verified_commit_count = COALESCE(v.count, 0),
 FROM (
   SELECT content_id, round_id, COUNT(*)::integer AS count
   FROM "<schema>"."vote"
-  WHERE human_credential = true AND committed_at > 0
+  WHERE (credential_mask & 8) != 0 AND committed_at > 0
   GROUP BY content_id, round_id
 ) AS v
 WHERE r.content_id = v.content_id AND r.round_id = v.round_id;
