@@ -22,6 +22,8 @@ Framework-specific hooks and UI components should live in a follow-up package ra
 
 **Chain IDs:** `4801` = World Chain Sepolia (testnet); `480` = World Chain mainnet (current in-repo artifact is the `mainnet-canary` profile). Examples below use Sepolia unless noted.
 
+`apiBaseUrl` should point at the hosted Ponder indexer (`https://ponder.rateloop.ai` or your deployment's `NEXT_PUBLIC_PONDER_URL`), not the Next.js app origin.
+
 ## Available Today
 
 - client config normalization via `createRateLoopClient(...)`
@@ -38,7 +40,7 @@ import { createRateLoopClient } from "@rateloop/sdk";
 import { buildCommitVoteParams } from "@rateloop/sdk/vote";
 
 const rateloop = createRateLoopClient({
-  apiBaseUrl: "https://api.rateloop.ai",
+  apiBaseUrl: process.env.PONDER_URL ?? "https://ponder.rateloop.ai",
   frontendCode: "0x1234567890123456789012345678901234567890",
 });
 

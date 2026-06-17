@@ -105,6 +105,8 @@ export interface RateLoopRoundItem {
   submitter: `0x${string}` | null;
   categoryId: string | null;
   hasHumanVerifiedCommit?: boolean;
+  humanVerifiedCommitCount?: number;
+  humanVerifiedCommitQuorumMet?: boolean;
   [key: string]: unknown;
 }
 
