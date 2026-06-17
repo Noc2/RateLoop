@@ -1,22 +1,18 @@
 import {
-  type X402QuestionRoundConfig as QuestionRoundConfig,
   X402QuestionInputError,
   type X402QuestionOperation,
   type X402QuestionParserOptions,
   type X402QuestionPayload,
-  X402_MIN_NONZERO_CONFIDENTIALITY_BOND,
   X402_SUBMISSION_REWARD_ASSET_USDC,
   X402_USDC_DECIMALS,
   X402_WORLD_CHAIN_USDC_BY_CHAIN_ID,
   assertSupportedX402BundleBounty,
   buildX402QuestionOperation as buildSharedX402QuestionOperation,
   parseX402QuestionRequest as parseSharedX402QuestionRequest,
-  toCanonicalQuestionPayload as toSharedCanonicalQuestionPayload,
 } from "@rateloop/agents/x402-question-payload";
 import { isLocalE2EProductionBuildEnabled } from "~~/utils/env/e2eProduction";
 
 export {
-  X402_MIN_NONZERO_CONFIDENTIALITY_BOND,
   X402_SUBMISSION_REWARD_ASSET_USDC,
   X402_USDC_DECIMALS,
   X402_WORLD_CHAIN_USDC_BY_CHAIN_ID,
@@ -24,7 +20,7 @@ export {
   assertSupportedX402BundleBounty,
 };
 
-export type { QuestionRoundConfig, X402QuestionOperation, X402QuestionPayload };
+export type { X402QuestionOperation, X402QuestionPayload };
 
 function normalizeOrigin(value: string | null | undefined) {
   const trimmed = value?.trim();
@@ -52,10 +48,6 @@ function serverX402QuestionParserOptions(): X402QuestionParserOptions {
 
 export function parseX402QuestionRequest(value: unknown, fallbackChainId?: number): X402QuestionPayload {
   return parseSharedX402QuestionRequest(value, fallbackChainId, serverX402QuestionParserOptions());
-}
-
-export function toCanonicalQuestionPayload(payload: X402QuestionPayload) {
-  return toSharedCanonicalQuestionPayload(payload, serverX402QuestionParserOptions());
 }
 
 export function buildX402QuestionOperation(payload: X402QuestionPayload): X402QuestionOperation {

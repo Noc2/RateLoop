@@ -12,7 +12,7 @@ export type WorldCredentialKind =
 export type WorldIdCredentialIdentifier = "face" | "passport" | "proof_of_human";
 export type WorldIdProofPurpose = "credential" | "presence";
 
-export const WORLD_CREDENTIAL_OPTIONS: Array<{
+const WORLD_CREDENTIAL_OPTIONS: Array<{
   id: WorldCredentialKind;
   identifier: WorldIdCredentialIdentifier;
   label: string;
@@ -62,7 +62,7 @@ function buildPackedSignal(prefix: string, address: string, kind: WorldCredentia
   return concatHex([stringToHex(prefix), getAddress(address) as Hex, numberToHex(kind, { size: 1 })]);
 }
 
-export function buildWorldCredentialSignal(address: string, kind: WorldCredentialKind): Hex {
+function buildWorldCredentialSignal(address: string, kind: WorldCredentialKind): Hex {
   if (kind === WORLD_CREDENTIAL_PROOF_OF_HUMAN) {
     return getAddress(address) as Hex;
   }
@@ -70,7 +70,7 @@ export function buildWorldCredentialSignal(address: string, kind: WorldCredentia
   return buildPackedSignal("rateloop-world-credential-v1", address, kind);
 }
 
-export function buildWorldPresenceSignal(address: string, kind: WorldCredentialKind): Hex {
+function buildWorldPresenceSignal(address: string, kind: WorldCredentialKind): Hex {
   return buildPackedSignal("rateloop-world-presence-v1", address, kind);
 }
 

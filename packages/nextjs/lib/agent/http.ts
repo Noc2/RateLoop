@@ -39,7 +39,7 @@ type PublicAgentRouteOptions = {
   request: NextRequest;
 };
 
-export { JSON_BODY_TOO_LARGE, isJsonObjectBody, jsonBodyErrorResponse, parseJsonBody } from "~~/lib/http/jsonBody";
+export { isJsonObjectBody, jsonBodyErrorResponse, parseJsonBody } from "~~/lib/http/jsonBody";
 
 function metadataUrl(request: Request) {
   return new URL("/.well-known/oauth-protected-resource", request.url).toString();

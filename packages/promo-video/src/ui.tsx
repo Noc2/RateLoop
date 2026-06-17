@@ -226,15 +226,6 @@ export const FieldRow = ({
   );
 };
 
-const THUMB_PATH =
-  "M1 21h4V9H1v12zM23 10c0-1.1-.9-2-2-2h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L14.17 1 7.59 7.59C7.22 7.95 7 8.45 7 9v10c0 1.1.9 2 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-2z";
-
-export const ThumbIcon = ({ up, size = 30, color }: { up: boolean; size?: number; color: string }) => (
-  <svg viewBox="0 0 24 24" width={size} height={size} style={{ transform: up ? undefined : "rotate(180deg)" }}>
-    <path d={THUMB_PATH} fill={color} />
-  </svg>
-);
-
 export const LockIcon = ({ size = 22, open = false, color }: { size?: number; open?: boolean; color: string }) => (
   <svg viewBox="0 0 24 24" width={size} height={size}>
     <rect x="5" y="10" width="14" height="10" rx="2" fill={color} />
@@ -251,14 +242,3 @@ export const CheckIcon = ({ size = 24, color }: { size?: number; color: string }
     <path d="M4 12.5 9.5 18 20 6.5" stroke={color} strokeWidth="3" fill="none" strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 );
-
-/** Counts a number up with the entrance easing. */
-export const useCountUp = (startFrame: number, to: number, durationInFrames = 40) => {
-  const frame = useCurrentFrame();
-  return Math.round(
-    interpolate(frame, [startFrame, startFrame + durationInFrames], [0, to], {
-      extrapolateLeft: "clamp",
-      extrapolateRight: "clamp",
-    }),
-  );
-};

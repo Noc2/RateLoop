@@ -1,1 +1,0 @@
-export const MAX_CONTENT_DESCRIPTION_LENGTH = 280;

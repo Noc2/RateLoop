@@ -3207,7 +3207,6 @@ __metadata:
   resolution: "@rateloop/contracts@workspace:packages/contracts"
   dependencies:
     "@types/node": ^20.10.7
-    buffer: ^6.0.3
     tlock-js: ^0.9.0
     tsx: ^4.21.0
     typescript: ~5.8.2

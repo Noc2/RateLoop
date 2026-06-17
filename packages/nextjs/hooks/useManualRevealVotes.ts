@@ -110,7 +110,7 @@ function normalizeCommitData(rawCommit: unknown): CommitData {
   };
 }
 
-export type RevealReceiptRevertResolution = "already-revealed" | "round-closed" | "reverted";
+type RevealReceiptRevertResolution = "already-revealed" | "round-closed" | "reverted";
 
 /**
  * A receipt-level revert carries no revert reason, so it must not be assumed benign.

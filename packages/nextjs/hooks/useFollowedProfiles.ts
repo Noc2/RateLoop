@@ -46,7 +46,7 @@ function normalizeFollowItems(items: FollowedProfileItem[]) {
   }));
 }
 
-export async function fetchFollowedProfiles(address?: string): Promise<PonderFollowResponse> {
+async function fetchFollowedProfiles(address?: string): Promise<PonderFollowResponse> {
   const normalizedAddress = address?.toLowerCase();
   if (!normalizedAddress) return EMPTY_FOLLOWED_RESPONSE;
 

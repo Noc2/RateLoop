@@ -26,7 +26,7 @@ type V4ProofResponse = {
   expires_at_min: number;
 };
 
-export type WorldIdLegacyOnchainProof = {
+type WorldIdLegacyOnchainProof = {
   protocolVersion: "3.0";
   root: bigint;
   nullifierHash: bigint;
@@ -35,7 +35,7 @@ export type WorldIdLegacyOnchainProof = {
   signalHash: string;
 };
 
-export type WorldIdV4OnchainProof = {
+type WorldIdV4OnchainProof = {
   protocolVersion: "4.0";
   nullifierHash: bigint;
   proof: WorldIdV4ProofTuple;
@@ -46,7 +46,7 @@ export type WorldIdV4OnchainProof = {
   expiresAtMin: number;
 };
 
-export type WorldIdOnchainProof = WorldIdLegacyOnchainProof | WorldIdV4OnchainProof;
+type WorldIdOnchainProof = WorldIdLegacyOnchainProof | WorldIdV4OnchainProof;
 
 function isLegacyResponse(response: unknown): response is LegacyProofResponse {
   if (!response || typeof response !== "object") {

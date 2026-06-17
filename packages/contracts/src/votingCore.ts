@@ -1,4 +1,4 @@
-import { Buffer } from "buffer";
+import { Buffer } from "node:buffer";
 import { encodePacked, hexToString, keccak256, type Address } from "viem";
 import { USER_PREDICTION_BPS, USER_PREDICTION_PERCENT } from "./protocol";
 

@@ -99,7 +99,7 @@ export function getHandoffWebMcpNextAction(state: HandoffWebMcpState) {
   return "Review the ask details in the browser.";
 }
 
-export function summarizeHandoffWebMcpStatus(state: HandoffWebMcpState) {
+function summarizeHandoffWebMcpStatus(state: HandoffWebMcpState) {
   return {
     bountyLabel: state.bountyLabel,
     canSaveDraft: state.canSaveDraft,

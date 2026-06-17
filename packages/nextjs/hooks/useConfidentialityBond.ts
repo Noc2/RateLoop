@@ -51,7 +51,7 @@ export function getConfiguredConfidentialityEscrowAddress(chainId: number): Addr
   );
 }
 
-export function dispatchConfidentialityBondPosted(contentId: bigint, identityKey?: string | null) {
+function dispatchConfidentialityBondPosted(contentId: bigint, identityKey?: string | null) {
   if (typeof window === "undefined") return;
   window.dispatchEvent(
     new CustomEvent(CONFIDENTIALITY_BOND_POSTED_EVENT, {

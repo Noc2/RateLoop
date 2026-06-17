@@ -17,7 +17,7 @@ export interface ProtocolDeploymentScope {
   deploymentKey: string;
 }
 
-export interface ContentDeploymentScope {
+interface ContentDeploymentScope {
   chainId: number;
   contentRegistryAddress: `0x${string}`;
   deploymentKey: string;
@@ -31,7 +31,7 @@ function normalizeRequiredAddress(value: unknown): `0x${string}` | null {
   return value.toLowerCase() as `0x${string}`;
 }
 
-export function buildProtocolDeploymentKey(params: {
+function buildProtocolDeploymentKey(params: {
   chainId: number;
   contentRegistryAddress: `0x${string}`;
   feedbackRegistryAddress: `0x${string}`;
@@ -43,7 +43,7 @@ export function buildProtocolDeploymentKey(params: {
   ].join(":");
 }
 
-export function buildContentDeploymentKey(params: { chainId: number; contentRegistryAddress: `0x${string}` }) {
+function buildContentDeploymentKey(params: { chainId: number; contentRegistryAddress: `0x${string}` }) {
   return [String(params.chainId), params.contentRegistryAddress.toLowerCase()].join(":");
 }
 

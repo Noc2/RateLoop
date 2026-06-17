@@ -20,7 +20,7 @@ export interface ViewerRewardStatus {
   hasPendingFeedbackBonus: boolean;
 }
 
-export function getViewerRewardStatusesQueryKey(voters?: readonly string[], contentIds?: readonly bigint[]) {
+function getViewerRewardStatusesQueryKey(voters?: readonly string[], contentIds?: readonly bigint[]) {
   return [
     "viewerRewardStatuses",
     voters?.join(",") ?? null,

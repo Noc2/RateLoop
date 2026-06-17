@@ -1,6 +1,6 @@
 export const PREPARING_ROUND_VOTE_MESSAGE = "Preparing vote. Try again in a moment.";
 
-export const DEFAULT_OPEN_STAKED_ROUND_RETRY_DELAYS_MS = [250, 500, 1_000, 1_500] as const;
+const DEFAULT_OPEN_STAKED_ROUND_RETRY_DELAYS_MS = [250, 500, 1_000, 1_500] as const;
 
 type OpenableStakedRoundRuntime = {
   requiresOpenRound: boolean;

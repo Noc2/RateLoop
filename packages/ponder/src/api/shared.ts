@@ -118,7 +118,7 @@ export function getEstimatedRevealFailedTime(
   );
 }
 
-export function isRevealFailedEligibleRound(row: {
+function isRevealFailedEligibleRound(row: {
   minVoters: number;
   voteCount: number;
   revealedCount: number;

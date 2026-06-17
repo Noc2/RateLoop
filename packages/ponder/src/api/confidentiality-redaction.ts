@@ -72,7 +72,7 @@ export function readQuestionMetadataConfidentiality(value: unknown): ContentConf
   };
 }
 
-export function rowConfidentialityState(record: Record<string, unknown>): ContentConfidentialityState {
+function rowConfidentialityState(record: Record<string, unknown>): ContentConfidentialityState {
   const metadataState = readQuestionMetadataConfidentiality(parseStoredJson(record.questionMetadata as string | null));
   const rowGated = record.gated === true || metadataState?.visibility === "gated";
   const publishedAt =

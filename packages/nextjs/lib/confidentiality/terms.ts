@@ -11,7 +11,7 @@ export type ConfidentialityTermsBlock =
   | { readonly type: "quote"; readonly text: string }
   | { readonly type: "list"; readonly items: readonly string[] };
 
-export type ConfidentialityTermsSection = {
+type ConfidentialityTermsSection = {
   readonly heading: string;
   readonly blocks: readonly ConfidentialityTermsBlock[];
 };
@@ -94,7 +94,7 @@ export const CONFIDENTIALITY_TERMS_SECTIONS = [
   },
 ] as const satisfies readonly ConfidentialityTermsSection[];
 
-export const CONFIDENTIALITY_TERMS_OPERATOR_NOTICE =
+const CONFIDENTIALITY_TERMS_OPERATOR_NOTICE =
   "For operator-specific service terms and privacy disclosures, review the Terms of Service and Privacy Notice.";
 export const CONFIDENTIALITY_TERMS_OPERATOR_NOTICE_PREFIX =
   "For operator-specific service terms and privacy disclosures, review the ";

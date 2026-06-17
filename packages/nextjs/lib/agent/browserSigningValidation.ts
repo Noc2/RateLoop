@@ -12,7 +12,7 @@ const X402_AUTHORIZATION_FIELDS = [
   { name: "nonce", type: "bytes32" },
 ] as const;
 
-export type BrowserX402Authorization = {
+type BrowserX402Authorization = {
   from: Address;
   nonce: Hex;
   to: Address;
@@ -21,7 +21,7 @@ export type BrowserX402Authorization = {
   value: string;
 };
 
-export type BrowserX402TypedData = {
+type BrowserX402TypedData = {
   domain: {
     chainId: number;
     name: "USDC";

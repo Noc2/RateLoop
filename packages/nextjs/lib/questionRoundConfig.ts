@@ -7,7 +7,7 @@ export type QuestionRoundConfig = {
   maxVoters: bigint;
 };
 
-export type SerializedQuestionRoundConfig = {
+type SerializedQuestionRoundConfig = {
   epochDuration: string;
   maxDuration: string;
   minVoters: string;

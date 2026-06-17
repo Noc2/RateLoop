@@ -30,7 +30,7 @@ import { writeContractAndConfirm } from "./keeper.js";
 import { readRoundLifecycleState } from "./contract-reads.js";
 import { getRevertReason } from "./revert-utils.js";
 
-export interface CorrelationSnapshotPublishOptions {
+interface CorrelationSnapshotPublishOptions {
   ponderNowSeconds?: bigint;
 }
 

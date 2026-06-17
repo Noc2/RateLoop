@@ -1,6 +1,6 @@
 const DEFAULT_SUBMISSION_SAFETY_MARGIN_SECONDS = 30;
 const WORLD_ID_CREDENTIAL_EXPIRES_AT_MIN_OFFSET_SECONDS = 365 * 24 * 60 * 60;
-export const WORLD_ID_PRESENCE_RECHECK_WINDOW_SECONDS = 15 * 60;
+const WORLD_ID_PRESENCE_RECHECK_WINDOW_SECONDS = 15 * 60;
 
 export const WORLD_ID_PROOF_EXPIRED_MESSAGE =
   "This World ID proof expired before the on-chain attestation could be submitted. Try again and approve the wallet transaction promptly.";

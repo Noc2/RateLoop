@@ -1,6 +1,6 @@
 import { put } from "@vercel/blob/client";
 
-export const IMAGE_ATTACHMENT_HANDLE_UPLOAD_URL = "/api/attachments/images/upload";
+const IMAGE_ATTACHMENT_HANDLE_UPLOAD_URL = "/api/attachments/images/upload";
 
 type ImageUploadTokenResponse = {
   clientToken?: unknown;

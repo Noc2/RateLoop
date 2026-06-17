@@ -1,8 +1,8 @@
 import { type Address, type Hex, parseSignature } from "viem";
 
-export const WALLET_SIGNATURE_VALIDITY_SECONDS = 30 * 60;
+const WALLET_SIGNATURE_VALIDITY_SECONDS = 30 * 60;
 
-export type Eip3009SignatureParts = {
+type Eip3009SignatureParts = {
   r: Hex;
   s: Hex;
   v: number;

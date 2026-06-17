@@ -1,12 +1,12 @@
 import type { ReactNode } from "react";
 import { TexFormula } from "~~/components/docs/TexFormula";
 
-export type FormulaRow = {
+type FormulaRow = {
   label: string;
   tex: string;
 };
 
-export type WhereEntry = {
+type WhereEntry = {
   /** Inline TeX for the symbol, e.g. "k_i". */
   symbol: string;
   meaning: ReactNode;

@@ -1,7 +1,7 @@
 type JsonObject = Record<string, unknown>;
 
-export const WEBMCP_TOOL_NAME_PATTERN = /^[A-Za-z0-9_.-]{1,128}$/;
-export const WEBMCP_MAX_DESCRIPTION_LENGTH = 2_000;
+const WEBMCP_TOOL_NAME_PATTERN = /^[A-Za-z0-9_.-]{1,128}$/;
+const WEBMCP_MAX_DESCRIPTION_LENGTH = 2_000;
 
 export type WebMcpToolAnnotations = {
   readOnlyHint?: boolean;
@@ -32,7 +32,7 @@ export type WebMcpDocument = {
   };
 };
 
-export type RegisterWebMcpToolsOptions = {
+type RegisterWebMcpToolsOptions = {
   document?: WebMcpDocument | null;
   exposedTo?: string[];
   onError?: (error: unknown) => void;

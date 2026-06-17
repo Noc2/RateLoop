@@ -1,4 +1,4 @@
-export type GovernanceReputationGateState = "loading" | "error" | "zero-lrep" | "ready";
+type GovernanceReputationGateState = "loading" | "error" | "zero-lrep" | "ready";
 
 export function getGovernanceReputationGateState({
   hasAddress,

@@ -21,9 +21,9 @@ import {
 } from "~~/lib/vote/confidentialContext";
 import { notification } from "~~/utils/scaffold-eth";
 
-export type ConfidentialContextGateChildren = ReactNode | ((params: { walletAddress?: string }) => ReactNode);
+type ConfidentialContextGateChildren = ReactNode | ((params: { walletAddress?: string }) => ReactNode);
 
-export function renderConfidentialGateChildren(children: ConfidentialContextGateChildren, walletAddress?: string) {
+function renderConfidentialGateChildren(children: ConfidentialContextGateChildren, walletAddress?: string) {
   return typeof children === "function" ? children({ walletAddress }) : children;
 }
 
@@ -109,7 +109,7 @@ function ConfidentialContextTermsDialog({
   );
 }
 
-export function PrivateContextBadge({ compact = false }: { compact?: boolean }) {
+function PrivateContextBadge({ compact = false }: { compact?: boolean }) {
   return (
     <span
       className={`inline-flex items-center gap-1 rounded-md bg-warning/15 font-semibold text-warning ${
@@ -134,7 +134,7 @@ function ConfidentialBondRequirementChip({ compact = false, label }: { compact?:
   );
 }
 
-export function ConfidentialContextBadges({
+function ConfidentialContextBadges({
   compact = false,
   item,
   showBondRequirement = true,

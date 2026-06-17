@@ -37,7 +37,7 @@ type ImageAttachmentDeploymentScope = {
   deploymentKey?: string | null;
 };
 
-export type UploaderIdentity =
+type UploaderIdentity =
   | {
       kind: "wallet";
       ownerWalletAddress: `0x${string}`;
@@ -60,7 +60,7 @@ type CreatePendingImageAttachmentParams = {
   uploader: UploaderIdentity;
 };
 
-export type CreateImageAttachmentFromBufferParams = {
+type CreateImageAttachmentFromBufferParams = {
   attachmentId: string;
   buffer: Buffer;
   clientRequestId?: string | null;
@@ -72,7 +72,7 @@ export type CreateImageAttachmentFromBufferParams = {
   uploader: UploaderIdentity;
 };
 
-export type ImageAttachmentUploadResult = {
+type ImageAttachmentUploadResult = {
   attachmentId: string;
   error: string | null;
   height: number | null;
@@ -100,7 +100,7 @@ type ImageAttachmentBlobDependencies = {
   putBlob: typeof putBlob;
 };
 
-export type ImageUploadQuotaSubjectKind = "agent" | "wallet" | "handoff_ip";
+type ImageUploadQuotaSubjectKind = "agent" | "wallet" | "handoff_ip";
 
 export class ImageUploadQuotaError extends Error {
   readonly status = 429;
@@ -172,7 +172,7 @@ function readPositiveIntegerEnv(name: string, fallback: number) {
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-export function getImageUploadDailyQuotaConfig(subjectKind: ImageUploadQuotaSubjectKind) {
+function getImageUploadDailyQuotaConfig(subjectKind: ImageUploadQuotaSubjectKind) {
   if (subjectKind === "handoff_ip") {
     return {
       byteLimit: readPositiveIntegerEnv(
@@ -331,7 +331,7 @@ export function assertSupportedImageSignature(buffer: Buffer, mimeType: string) 
   throw new Error("Image signature does not match the declared content type.");
 }
 
-export function normalizeImageProcessingError(error: unknown) {
+function normalizeImageProcessingError(error: unknown) {
   const message = error instanceof Error ? error.message : "";
   if (
     /\bVips(?:Jpeg|Png|Webp)\b/i.test(message) ||

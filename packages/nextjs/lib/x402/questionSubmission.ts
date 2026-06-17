@@ -208,7 +208,7 @@ type SubmittedRewardAttachment = StoredQuestionRewardTerms & {
   submitter: Address;
 };
 
-export type AgentWalletTransactionPhase =
+type AgentWalletTransactionPhase =
   | "approve_usdc"
   | "reserve_submission"
   | "submit_question"
@@ -217,7 +217,7 @@ export type AgentWalletTransactionPhase =
   | "approve_feedback_bonus_usdc"
   | "create_feedback_bonus_pool";
 
-export type AgentWalletTransactionCall = {
+type AgentWalletTransactionCall = {
   data: Hex;
   description: string;
   functionName: string;
@@ -277,7 +277,7 @@ type StoredFeedbackBonusRequest = {
   transactionHashes?: Hex[];
 };
 
-export type AgentFeedbackBonusTransactionPlan = {
+type AgentFeedbackBonusTransactionPlan = {
   amount: string;
   asset: FeedbackBonusAsset;
   awarder: Address;

@@ -2,13 +2,12 @@ import { getQuestionReferenceValidationError } from "~~/lib/questionReferences";
 import { containsBlockedText } from "~~/utils/contentFilter";
 
 export {
-  MAX_QUESTION_LENGTH,
   findBlockedContentTags,
   getContentTagValidationError,
   getContentTitleValidationError,
 } from "@rateloop/node-utils/submissionValidation";
 
-export const MAX_CONTENT_DESCRIPTION_LENGTH = 280;
+const MAX_CONTENT_DESCRIPTION_LENGTH = 280;
 
 export function getContentDescriptionValidationError(value: string): string | null {
   if (value.length > MAX_CONTENT_DESCRIPTION_LENGTH) {

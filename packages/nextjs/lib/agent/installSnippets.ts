@@ -93,7 +93,7 @@ export type AgentInstallSnippet = {
   readonly text: string;
 };
 
-export type AgentInstallTarget = {
+type AgentInstallTarget = {
   readonly ariaLabel: string;
   readonly name: string;
   readonly recommended: readonly AgentInstallSnippetKind[];

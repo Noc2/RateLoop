@@ -6,8 +6,6 @@ import {
   EXPERTISE_OPTIONS,
   type ExpertiseArea,
   HYBRID_OVERSIGHT_OPTIONS,
-  LANGUAGE_OPTIONS,
-  type LanguageCode,
   type ProfileRole,
   type ProfileSelfReport,
   RATER_TYPE,
@@ -16,25 +14,6 @@ import {
   TEAM_TYPE_OPTIONS,
   formatRaterTypeName,
 } from "@rateloop/node-utils/profileSelfReport";
-
-const PROFILE_LANGUAGE_LABELS: Record<LanguageCode, string> = {
-  ar: "Arabic",
-  de: "German",
-  en: "English",
-  es: "Spanish",
-  fr: "French",
-  hi: "Hindi",
-  id: "Indonesian",
-  it: "Italian",
-  ja: "Japanese",
-  ko: "Korean",
-  nl: "Dutch",
-  other: "Other",
-  pl: "Polish",
-  pt: "Portuguese",
-  tr: "Turkish",
-  zh: "Chinese",
-};
 
 const PROFILE_ROLE_LABELS: Record<ProfileRole, string> = {
   creator: "Creator",
@@ -372,10 +351,6 @@ export const PROFILE_COUNTRY_OPTIONS = supportedRegionCodes()
   .sort((a, b) => a.label.localeCompare(b.label));
 
 export const PROFILE_AGE_GROUP_OPTIONS = AGE_GROUP_OPTIONS.map(value => ({ label: value, value }));
-export const PROFILE_LANGUAGE_OPTIONS = LANGUAGE_OPTIONS.map(value => ({
-  label: PROFILE_LANGUAGE_LABELS[value],
-  value,
-}));
 export const PROFILE_ROLE_OPTIONS = ROLE_OPTIONS.map(value => ({ label: PROFILE_ROLE_LABELS[value], value }));
 export const PROFILE_EXPERTISE_OPTIONS = EXPERTISE_OPTIONS.map(value => ({
   label: PROFILE_EXPERTISE_LABELS[value],

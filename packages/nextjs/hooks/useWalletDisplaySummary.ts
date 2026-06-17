@@ -157,7 +157,7 @@ export function persistWalletDisplaySummarySnapshot(
   }
 }
 
-export function clearPersistedWalletDisplaySummarySnapshot(address: string | undefined, chainId?: number) {
+function clearPersistedWalletDisplaySummarySnapshot(address: string | undefined, chainId?: number) {
   if (!address || typeof window === "undefined") return;
 
   try {

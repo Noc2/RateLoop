@@ -43,7 +43,7 @@ type QuestionDetailsDeploymentScope = {
   deploymentKey?: string | null;
 };
 
-export type QuestionDetailsUploaderIdentity =
+type QuestionDetailsUploaderIdentity =
   | {
       kind: "wallet";
       ownerWalletAddress: `0x${string}`;
@@ -55,7 +55,7 @@ export type QuestionDetailsUploaderIdentity =
       agentId: string;
     };
 
-export type CreateQuestionDetailsFromTextParams = {
+type CreateQuestionDetailsFromTextParams = {
   clientRequestId?: string | null;
   detailsId: string;
   requestUrl: string;
@@ -81,7 +81,7 @@ type OpenAiModerationResponse = {
   results?: OpenAiModerationResult[];
 };
 
-export type QuestionDetailsUploadResult = {
+type QuestionDetailsUploadResult = {
   detailsHash: `0x${string}` | null;
   detailsId: string;
   detailsUrl: string | null;

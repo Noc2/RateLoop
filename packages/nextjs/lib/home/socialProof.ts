@@ -5,7 +5,7 @@ export type LandingSocialProofStats = {
   totalFeedbackBonusesPaid?: string;
 };
 
-export type LandingSocialProofItem = {
+type LandingSocialProofItem = {
   value: string;
   label: string;
 };

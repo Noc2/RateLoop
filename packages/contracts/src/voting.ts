@@ -1,4 +1,4 @@
-import { Buffer } from "buffer";
+import { Buffer } from "node:buffer";
 import { hexToString, keccak256, stringToHex, type Address } from "viem";
 import {
   bpsToPredictionPercent,

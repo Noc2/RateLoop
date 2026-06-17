@@ -34,7 +34,7 @@ export function getSubmissionErrorMessage(error: unknown): string {
   );
 }
 
-export function isUnknownEmptyRevertError(error: unknown): boolean {
+function isUnknownEmptyRevertError(error: unknown): boolean {
   const message = getSubmissionErrorMessage(error);
   const normalized = message.toLowerCase();
   return (

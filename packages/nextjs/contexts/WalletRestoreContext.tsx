@@ -5,7 +5,7 @@ import { getAccount, watchAccount } from "@wagmi/core";
 import { useActiveAccount } from "thirdweb/react";
 import { wagmiConfig } from "~~/services/web3/wagmiConfig";
 
-export type WalletAutoConnectStatus = "pending" | "syncing" | "settled" | "disabled" | "error";
+type WalletAutoConnectStatus = "pending" | "syncing" | "settled" | "disabled" | "error";
 
 type WalletRestoreContextValue = {
   autoConnectStatus: WalletAutoConnectStatus;

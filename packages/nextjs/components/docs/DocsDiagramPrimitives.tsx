@@ -73,14 +73,6 @@ export function DiagramNode({
   );
 }
 
-export function StepNumber({ children }: { children: ReactNode }) {
-  return (
-    <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-base-content/[0.08] font-mono text-xs font-bold text-base-content/75">
-      {children}
-    </span>
-  );
-}
-
 export function MiniPill({ children, accent = "neutral" }: { children: ReactNode; accent?: DiagramAccent }) {
   const style = { "--diagram-accent": getDiagramAccentColor(accent) } as CSSProperties;
 

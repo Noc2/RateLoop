@@ -187,7 +187,7 @@ export async function loadConfiguredCorrelationSnapshotCandidates(
   return candidates;
 }
 
-export interface CorrelationArtifactBuildOptions {
+interface CorrelationArtifactBuildOptions {
   ponderNowSeconds?: bigint;
 }
 

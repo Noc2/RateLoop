@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-export type JsonObjectBody = Record<string, unknown>;
+type JsonObjectBody = Record<string, unknown>;
 
 const DEFAULT_JSON_BODY_MAX_BYTES = 128 * 1024;
 export const JSON_BODY_TOO_LARGE = Symbol("json_body_too_large");

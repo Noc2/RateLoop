@@ -16,7 +16,7 @@ interface RoundRevealedBreakdownProps {
   stacked?: boolean;
 }
 
-export interface RoundStatMetric {
+interface RoundStatMetric {
   label: string;
   value: string;
   tooltip: string;
