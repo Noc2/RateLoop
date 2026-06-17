@@ -144,9 +144,6 @@ function toolErrorResult(error: unknown) {
 }
 
 export function OPTIONS(request: NextRequest) {
-  if (!originAllowed(request)) {
-    return new Response(null, { status: 403 });
-  }
   return new Response(null, { headers: corsHeaders(request), status: 204 });
 }
 
