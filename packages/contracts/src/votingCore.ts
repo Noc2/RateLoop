@@ -1,4 +1,3 @@
-import { Buffer } from "node:buffer";
 import { encodePacked, hexToString, keccak256, type Address } from "viem";
 import { USER_PREDICTION_BPS, USER_PREDICTION_PERCENT } from "./protocol";
 
@@ -254,7 +253,32 @@ export function buildCommitKey(
   return keccak256(encodePacked(["address", "bytes32"], [voter, commitHash]));
 }
 
-function decodeAgeArmor(armored: string): Buffer | null {
+function base64ToBytes(value: string): Uint8Array | null {
+  if (typeof globalThis.atob !== "function") {
+    return null;
+  }
+
+  try {
+    const binary = globalThis.atob(value);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes;
+  } catch {
+    return null;
+  }
+}
+
+function asciiBytesToString(bytes: Uint8Array): string {
+  let value = "";
+  for (const byte of bytes) {
+    value += String.fromCharCode(byte);
+  }
+  return value;
+}
+
+function decodeAgeArmor(armored: string): Uint8Array | null {
   const trimmed = armored.trim();
   if (
     !trimmed.startsWith(AGE_ARMOR_HEADER) ||
@@ -282,11 +306,11 @@ function decodeAgeArmor(armored: string): Buffer | null {
     return null;
   }
 
-  return Buffer.from(payload, "base64");
+  return base64ToBytes(payload.replace(/\s+/gu, ""));
 }
 
 function readAsciiLine(
-  payload: Buffer,
+  payload: Uint8Array,
   cursor: number,
 ): { line: string; nextCursor: number } | null {
   if (cursor >= payload.length) return null;
@@ -313,7 +337,7 @@ function readAsciiLine(
   }
 
   return {
-    line: payload.subarray(cursor, end).toString("binary"),
+    line: asciiBytesToString(payload.subarray(cursor, end)),
     nextCursor,
   };
 }
