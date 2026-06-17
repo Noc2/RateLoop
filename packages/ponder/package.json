@@ -22,7 +22,7 @@
   "dependencies": {
     "@rateloop/contracts": "workspace:*",
     "@rateloop/node-utils": "workspace:*",
-    "hono": "~4.12.21",
+    "hono": "4.12.25",
     "pg": "^8.11.3",
     "ponder": "^1.0.0",
     "viem": "2.39.0"
