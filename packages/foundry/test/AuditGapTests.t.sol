@@ -102,6 +102,7 @@ contract AuditGapTests is VotingTestBase {
 
         // Wire up
         registry.setVotingEngine(address(votingEngine));
+        registry.setProtocolConfig(address(votingEngine.protocolConfig()));
         MockCategoryRegistry mockCategoryRegistry = new MockCategoryRegistry();
         mockCategoryRegistry.seedDefaultTestCategories();
         registry.setCategoryRegistry(address(mockCategoryRegistry));
@@ -110,6 +111,12 @@ contract AuditGapTests is VotingTestBase {
         ProtocolConfig(address(votingEngine.protocolConfig())).setCategoryRegistry(address(mockCategoryRegistry));
         ProtocolConfig(address(votingEngine.protocolConfig())).setTreasury(treasury);
         ProtocolConfig(address(votingEngine.protocolConfig())).setFrontendRegistry(address(frontendRegistry));
+        _setTlockDrandConfig(
+            ProtocolConfig(address(votingEngine.protocolConfig())),
+            DEFAULT_DRAND_CHAIN_HASH,
+            DEFAULT_DRAND_GENESIS_TIME,
+            DEFAULT_DRAND_PERIOD
+        );
         _setTlockRoundConfig(ProtocolConfig(address(votingEngine.protocolConfig())), EPOCH_DURATION, 7 days, 3, 100);
 
         // Mint LREP to test users
@@ -123,8 +130,6 @@ contract AuditGapTests is VotingTestBase {
         vm.startPrank(frontend);
         lrepToken.approve(address(frontendRegistry), 1_000e6);
         frontendRegistry.register();
-        vm.stopPrank();
-
         vm.stopPrank();
     }
 
