@@ -1,7 +1,11 @@
 import type { PublicClient } from "viem";
 import {
+  CORRELATION_VOTE_PAGE_SIZE,
+  MAX_CORRELATION_VOTE_PAGES,
   PAYOUT_DOMAIN_PUBLIC_RATING,
   PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD,
+  PONDER_HTTP_FETCH_TIMEOUT_MS,
+  correlationVotesPathForDomain,
 } from "@rateloop/node-utils/correlationScoring";
 import { ROUND_STATE } from "@rateloop/contracts/protocol";
 import { config } from "./config.js";
@@ -9,10 +13,10 @@ import { readRound } from "./contract-reads.js";
 import type { CorrelationRoundCandidate } from "./correlation-artifact-builder.js";
 import type { Logger } from "./logger.js";
 
-const PONDER_FETCH_TIMEOUT_MS = 15_000;
+const PONDER_FETCH_TIMEOUT_MS = PONDER_HTTP_FETCH_TIMEOUT_MS;
 const PONDER_JSON_MAX_BYTES = 5_000_000;
-const VOTE_PAGE_SIZE = 1_000;
-const MAX_VOTE_PAGES = 50;
+const VOTE_PAGE_SIZE = CORRELATION_VOTE_PAGE_SIZE;
+const MAX_VOTE_PAGES = MAX_CORRELATION_VOTE_PAGES;
 
 interface PonderRoundListResponse {
   items?: Array<{ roundId?: unknown; revealedCount?: unknown; voteCount?: unknown; state?: unknown }>;
@@ -20,16 +24,7 @@ interface PonderRoundListResponse {
 
 interface PonderCorrelationRoundVotesResponse {
   items?: unknown[];
-}
-
-function correlationVotesPathForDomain(domain: number): string {
-  if (domain === PAYOUT_DOMAIN_PUBLIC_RATING) {
-    return "/correlation/rating-round-votes";
-  }
-  if (domain === PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD) {
-    return "/correlation/bundle-round-votes";
-  }
-  return "/correlation/round-votes";
+  truncated?: boolean;
 }
 
 function buildCorrelationVotesUrl(
@@ -140,6 +135,9 @@ async function fetchPonderCorrelationEligibleVoteIndexing(
     );
     const response = await fetchPonderJsonOptional<PonderCorrelationRoundVotesResponse>(url);
     if (response === null) {
+      return null;
+    }
+    if (response.truncated) {
       return null;
     }
     const items = response.items ?? [];

@@ -26,6 +26,11 @@ import {
 } from "ponder:schema";
 import type { ApiApp } from "../shared.js";
 import { jsonBig, resolveApiNowSeconds } from "../shared.js";
+import {
+  CORRELATION_VOTE_PAGE_SIZE,
+  correlationVoteScanPageBudget,
+  isCorrelationVoteScanTruncated,
+} from "../correlation-vote-scan.js";
 import { safeBigInt, safeLimit, safeOffset } from "../utils.js";
 import { addressIdentityKey } from "../../identity-keys.js";
 
@@ -43,8 +48,6 @@ const BASE_RATE_WINDOW_ROUNDS = 100;
 const BASE_RATE_MIN_BPS = 500;
 const BASE_RATE_MAX_BPS = 9500;
 const BASE_RATE_NEUTRAL_BPS = 5000;
-const VOTE_SCAN_PAGE_SIZE = 1_000;
-const MAX_VOTE_SCAN_PAGES = 50;
 
 const HEX32_PATTERN = /^0x[a-fA-F0-9]{64}$/;
 
@@ -652,9 +655,11 @@ export function registerCorrelationRoutes(app: ApiApp) {
     >[] = [];
     let eligibleSeen = 0;
     let scanOffset = 0;
+    let endedNaturally = false;
     let banState: ActiveCorrelationIdentityBanState | null = null;
-    for (let page = 0; page < MAX_VOTE_SCAN_PAGES; page += 1) {
-      const rows = await loadVoteRows(VOTE_SCAN_PAGE_SIZE, scanOffset);
+    const scanPageBudget = correlationVoteScanPageBudget(offset);
+    for (let page = 0; page < scanPageBudget; page += 1) {
+      const rows = await loadVoteRows(CORRELATION_VOTE_PAGE_SIZE, scanOffset);
       if (banState === null && rows.length > 0) {
         banState = await loadActiveCorrelationIdentityBanState(nowSeconds);
       }
@@ -670,8 +675,18 @@ export function registerCorrelationRoutes(app: ApiApp) {
         eligibleSeen += 1;
       }
       scanOffset += rows.length;
-      if (rows.length < VOTE_SCAN_PAGE_SIZE) break;
+      if (rows.length < CORRELATION_VOTE_PAGE_SIZE) {
+        endedNaturally = true;
+        break;
+      }
     }
+    const truncated = isCorrelationVoteScanTruncated({
+      endedNaturally,
+      eligibleSeen,
+      offset,
+      itemsLength: items.length,
+      limit,
+    });
 
     const roundContext = await getRoundContext(contentId, roundId);
 
@@ -679,6 +694,7 @@ export function registerCorrelationRoutes(app: ApiApp) {
       excludedVotes,
       items,
       roundContext,
+      truncated,
     });
   });
 
@@ -1005,9 +1021,11 @@ export function registerCorrelationRoutes(app: ApiApp) {
     >[] = [];
     let eligibleSeen = 0;
     let scanOffset = 0;
+    let endedNaturally = false;
     let banState: ActiveCorrelationIdentityBanState | null = null;
-    for (let page = 0; page < MAX_VOTE_SCAN_PAGES; page += 1) {
-      const rows = await loadVoteRows(VOTE_SCAN_PAGE_SIZE, scanOffset);
+    const scanPageBudget = correlationVoteScanPageBudget(offset);
+    for (let page = 0; page < scanPageBudget; page += 1) {
+      const rows = await loadVoteRows(CORRELATION_VOTE_PAGE_SIZE, scanOffset);
       if (banState === null && rows.length > 0) {
         banState = await loadActiveCorrelationIdentityBanState(nowSeconds);
       }
@@ -1023,14 +1041,25 @@ export function registerCorrelationRoutes(app: ApiApp) {
         eligibleSeen += 1;
       }
       scanOffset += rows.length;
-      if (rows.length < VOTE_SCAN_PAGE_SIZE) break;
+      if (rows.length < CORRELATION_VOTE_PAGE_SIZE) {
+        endedNaturally = true;
+        break;
+      }
     }
+    const truncated = isCorrelationVoteScanTruncated({
+      endedNaturally,
+      eligibleSeen,
+      offset,
+      itemsLength: items.length,
+      limit,
+    });
 
     const roundContext = await getRoundContext(contentId, roundId);
     return jsonBig(c, {
       excludedVotes,
       items,
       roundContext,
+      truncated,
     });
   });
 

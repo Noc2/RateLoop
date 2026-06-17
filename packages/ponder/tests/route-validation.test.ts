@@ -3747,6 +3747,73 @@ describe("registerKeeperRoutes", () => {
     });
   });
 
+  it("requires keeper work token in production when PONDER_KEEPER_WORK_TOKEN is unset", async () => {
+    const previousNodeEnv = process.env.NODE_ENV;
+    const previousToken = process.env.PONDER_KEEPER_WORK_TOKEN;
+    process.env.NODE_ENV = "production";
+    delete process.env.PONDER_KEEPER_WORK_TOKEN;
+
+    try {
+      mockPonderModules([]);
+      const { registerKeeperRoutes } = await import(
+        "../src/api/routes/keeper-routes.js"
+      );
+      const app = new Hono();
+      registerKeeperRoutes(app);
+
+      const response = await app.request(
+        "http://localhost/keeper/work?now=100&dormancyPeriod=60&limit=5",
+      );
+
+      expect(response.status).toBe(503);
+      await expect(response.json()).resolves.toEqual({
+        error: "PONDER_KEEPER_WORK_TOKEN is required in production.",
+      });
+    } finally {
+      process.env.NODE_ENV = previousNodeEnv;
+      if (previousToken === undefined) {
+        delete process.env.PONDER_KEEPER_WORK_TOKEN;
+      } else {
+        process.env.PONDER_KEEPER_WORK_TOKEN = previousToken;
+      }
+    }
+  });
+
+  it("rejects invalid keeper work bearer tokens in production", async () => {
+    const previousNodeEnv = process.env.NODE_ENV;
+    const previousToken = process.env.PONDER_KEEPER_WORK_TOKEN;
+    process.env.NODE_ENV = "production";
+    process.env.PONDER_KEEPER_WORK_TOKEN = "expected-token";
+
+    try {
+      mockPonderModules([]);
+      const { registerKeeperRoutes } = await import(
+        "../src/api/routes/keeper-routes.js"
+      );
+      const app = new Hono();
+      registerKeeperRoutes(app);
+
+      const response = await app.request(
+        "http://localhost/keeper/work?now=100&dormancyPeriod=60&limit=5",
+        {
+          headers: { authorization: "Bearer wrong-token" },
+        },
+      );
+
+      expect(response.status).toBe(401);
+      await expect(response.json()).resolves.toEqual({
+        error: "Invalid keeper work token.",
+      });
+    } finally {
+      process.env.NODE_ENV = previousNodeEnv;
+      if (previousToken === undefined) {
+        delete process.env.PONDER_KEEPER_WORK_TOKEN;
+      } else {
+        process.env.PONDER_KEEPER_WORK_TOKEN = previousToken;
+      }
+    }
+  });
+
   it("returns keeper work candidates as JSON-safe strings", async () => {
     mockPonderModules(
       [{ contentId: 9n, roundId: 2n, reason: "settle" }],

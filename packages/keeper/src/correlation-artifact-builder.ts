@@ -1,8 +1,12 @@
 import {
+  CORRELATION_VOTE_PAGE_SIZE,
+  MAX_CORRELATION_VOTE_PAGES,
   PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD,
   PAYOUT_DOMAIN_PUBLIC_RATING,
   PAYOUT_DOMAIN_QUESTION_REWARD,
+  PONDER_HTTP_FETCH_TIMEOUT_MS,
   correlationParameterHash,
+  correlationVotesPathForDomain,
   defaultCorrelationScoringParams,
   merkleProof,
   scoreRoundPayoutWeights,
@@ -40,6 +44,7 @@ interface VoteResponse {
   excludedVotes?: unknown[];
   items?: unknown[];
   roundContext?: unknown;
+  truncated?: boolean;
 }
 
 interface RoundVotesPage {
@@ -136,10 +141,10 @@ interface PublicPayoutWeight {
   reasons: readonly string[];
 }
 
-const VOTE_PAGE_SIZE = 1_000;
-const PONDER_FETCH_TIMEOUT_MS = 5_000;
+const PONDER_FETCH_TIMEOUT_MS = PONDER_HTTP_FETCH_TIMEOUT_MS;
 const PONDER_JSON_MAX_BYTES = 5_000_000;
-const MAX_VOTE_PAGES_PER_ROUND = 50;
+const VOTE_PAGE_SIZE = CORRELATION_VOTE_PAGE_SIZE;
+const MAX_VOTE_PAGES_PER_ROUND = MAX_CORRELATION_VOTE_PAGES;
 const CANDIDATE_FINGERPRINT_VERSION = "rateloop-correlation-candidates-v1";
 const HEX32_PATTERN = /^0x[a-fA-F0-9]{64}$/;
 const loggedAutomaticArtifactHashes = new Set<string>();
@@ -602,14 +607,7 @@ async function fetchRoundVotes(
   let trailingBaseRateUpBps: number | null = null;
   for (let page = 0; page < MAX_VOTE_PAGES_PER_ROUND; page += 1) {
     const offset = page * VOTE_PAGE_SIZE;
-    const url = new URL(
-      candidate.domain === PAYOUT_DOMAIN_PUBLIC_RATING
-        ? "/correlation/rating-round-votes"
-        : candidate.domain === PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD
-          ? "/correlation/bundle-round-votes"
-          : "/correlation/round-votes",
-      ponderBaseUrl,
-    );
+    const url = new URL(correlationVotesPathForDomain(candidate.domain), ponderBaseUrl);
     if (candidate.domain !== PAYOUT_DOMAIN_PUBLIC_RATING) {
       url.searchParams.set("rewardPoolId", candidate.rewardPoolId.toString());
     }
@@ -621,6 +619,11 @@ async function fetchRoundVotes(
       url.searchParams.set("now", ponderNowSeconds.toString());
     }
     const response = await fetchJson<VoteResponse>(url);
+    if (response.truncated) {
+      throw new Error(
+        `Ponder truncated correlation votes for rewardPoolId=${candidate.rewardPoolId} contentId=${candidate.contentId} roundId=${candidate.roundId} offset=${offset}`,
+      );
+    }
     const items = response.items ?? [];
     if (items.length > VOTE_PAGE_SIZE) {
       throw new Error(
