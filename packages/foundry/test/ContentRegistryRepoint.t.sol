@@ -158,6 +158,23 @@ contract ContentRegistryRepointTest is VotingTestBase {
         registry.repointPendingRatingClusterPayoutOracle(contentId, roundId, address(replacementOracle));
     }
 
+    function test_RepointPendingRatingClusterPayoutOracle_RevertsWhenNewOracleEqualsOldOracle() public {
+        uint256 contentId = _submitTestContent();
+        uint256 roundId = 1;
+
+        ClusterPayoutOracle originalOracle = _deployClusterPayoutOracle(address(registry));
+
+        vm.prank(owner);
+        protocolConfig.setClusterPayoutOracle(address(originalOracle));
+
+        vm.prank(address(votingEngine));
+        registry.recordPendingRatingSettlement(contentId, roundId, 5000, 2, 1);
+
+        vm.prank(owner);
+        vm.expectRevert(ContentRegistryRatingSnapshotLib.InvalidState.selector);
+        registry.repointPendingRatingClusterPayoutOracle(contentId, roundId, address(originalOracle));
+    }
+
     function test_RepointPendingRatingClusterPayoutOracle_RevertsForNonConfigRole() public {
         uint256 contentId = _submitTestContent();
         uint256 roundId = 1;
