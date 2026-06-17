@@ -8,8 +8,9 @@ import {
   getProfileSelfReportTaxonomy,
   normalizeTargetAudience,
 } from "@rateloop/node-utils/profileSelfReport";
-import { type Address, type Hex, isAddress } from "viem";
-import { useAccount, useConfig } from "wagmi";
+import { defineChain } from "thirdweb";
+import { type Address, type Hex, erc20Abi, isAddress } from "viem";
+import { useAccount, useConfig, useReadContract } from "wagmi";
 import { getPublicClient, sendTransaction, waitForTransactionReceipt } from "wagmi/actions";
 import {
   ArrowPathIcon,
@@ -26,11 +27,16 @@ import {
 } from "@heroicons/react/24/outline";
 import { RateLoopConnectButton } from "~~/components/scaffold-eth";
 import { AppPageShell } from "~~/components/shared/AppPageShell";
+import { BountyFundingWarning } from "~~/components/shared/BountyFundingWarning";
+import { GasBalanceWarning, shouldShowGasWarningTransactionCostsLink } from "~~/components/shared/GasBalanceWarning";
 import { GradientActionButton, getGradientActionMotion } from "~~/components/shared/GradientAction";
+import { useWalletFunding } from "~~/components/shared/WalletFundingProvider";
 import { surfaceSectionHeadingClassName } from "~~/components/shared/sectionHeading";
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import { useTermsAcceptance } from "~~/contexts/TermsAcceptanceContext";
 import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
+import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
+import { useGasBalanceStatus } from "~~/hooks/useGasBalanceStatus";
 import { useRateLoopSwitchNetwork } from "~~/hooks/useRateLoopSwitchNetwork";
 import { useTransactionStatusToast } from "~~/hooks/useTransactionStatusToast";
 import { useWalletMessageSigner } from "~~/hooks/useWalletMessageSigner";
@@ -45,6 +51,8 @@ import {
   type FeedbackBonusAsset,
   formatFeedbackBonusAmount,
   formatSubmissionRewardAmount,
+  getDefaultUsdcAddress,
+  getDefaultUsdcDisplayName,
   parseFeedbackBonusAmount,
   parseSubmissionRewardAmount,
 } from "~~/lib/questionRewardPools";
@@ -223,6 +231,9 @@ const SECONDS_PER_MINUTE = 60;
 const EMPTY_DETAILS_HASH = `0x${"0".repeat(64)}` as Hex;
 const SINGLE_QUESTION_SUBMISSION_SELECTOR = "0x774922ea";
 const BUNDLE_QUESTION_SUBMISSION_SELECTOR = "0x4bef7869";
+const DEFAULT_ETH_TOP_UP_AMOUNT = "1";
+const DEFAULT_USDC_TOP_UP_AMOUNT = "10";
+const FUNDING_PRESET_OPTIONS: [number, number, number] = [5, 10, 20];
 
 const BOUNTY_AMOUNT_TOOLTIP =
   "USDC amount funded from the connected wallet when the ask is submitted. Use up to 6 decimal places.";
@@ -1503,6 +1514,23 @@ function readDraftBountyLabel(form: DraftForm | null, handoff: Handoff | null) {
   return draftAmount ? `${draftAmount} USDC` : readBounty(handoff);
 }
 
+function readDraftBountyAmountAtomic(form: DraftForm | null, handoff: Handoff | null) {
+  const draftAmount = form?.bountyAmount.trim();
+  if (draftAmount) return parseSubmissionRewardAmount(draftAmount);
+  return readBountyAmountAtomic(handoff);
+}
+
+function readDraftFeedbackBonusUsdcAmountAtomic(form: DraftForm | null, handoff: Handoff | null) {
+  if (!form) {
+    const summary = readFeedbackBonusSummary(handoff);
+    return summary?.asset === "usdc" ? summary.amount : 0n;
+  }
+  if (form.feedbackBonusAmount === null || form.feedbackBonusAsset !== "usdc") return 0n;
+
+  const draftAmount = form.feedbackBonusAmount.trim();
+  return draftAmount ? (parseFeedbackBonusAmount(draftAmount) ?? 0n) : 0n;
+}
+
 function readDraftFeedbackBonusLabel(form: DraftForm | null, handoff: Handoff | null) {
   const draftAmount = form?.feedbackBonusAmount?.trim();
   if (draftAmount && form?.feedbackBonusAsset) {
@@ -1574,7 +1602,18 @@ function canPrepareHandoffStatus(status: string | undefined) {
 export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
   const wagmiConfig = useConfig();
   const { address, chain, chainId } = useAccount();
+  const { targetNetwork } = useTargetNetwork();
+  const { openWalletFunding } = useWalletFunding();
+  const thirdwebTargetChain = useMemo(() => defineChain(targetNetwork), [targetNetwork]);
   const { signMessageAsync, isPending: isSigningMessage } = useWalletMessageSigner({ address });
+  const { freeTransactionRemaining, freeTransactionVerified, isMissingGasBalance, nativeTokenSymbol } =
+    useGasBalanceStatus({
+      includeExternalSendCalls: true,
+    });
+  const showGasWarningTransactionCostsLink = shouldShowGasWarningTransactionCostsLink({
+    freeTransactionRemaining,
+    freeTransactionVerified,
+  });
   const { switchToChain, switchingChainId } = useRateLoopSwitchNetwork();
   const { dismiss: dismissTransactionStatusToast, showSubmitting: showTransactionSubmittingToast } =
     useTransactionStatusToast();
@@ -1689,6 +1728,24 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
   const hasTransactionPlan = Boolean(handoff?.transactionPlan?.calls?.length);
   const connectedChainId = chain?.id ?? chainId ?? null;
   const handoffChainId = handoff?.chainId ?? null;
+  const handoffFundingChainId = handoffChainId ?? targetNetwork.id;
+  const fundingWalletAddress =
+    address && isAddress(address, { strict: false }) ? (address as `0x${string}`) : undefined;
+  const usdcAddress = getDefaultUsdcAddress(handoffFundingChainId);
+  const usdcDisplayName = getDefaultUsdcDisplayName(handoffFundingChainId);
+  const {
+    data: usdcBalanceRaw,
+    isLoading: isUsdcBalanceLoading,
+    refetch: refetchUsdcBalance,
+  } = useReadContract({
+    address: usdcAddress,
+    abi: erc20Abi,
+    functionName: "balanceOf",
+    args: fundingWalletAddress ? [fundingWalletAddress] : undefined,
+    query: {
+      enabled: Boolean(fundingWalletAddress && usdcAddress),
+    },
+  });
   const needsChainSwitch = Boolean(handoffChainId && connectedChainId && connectedChainId !== handoffChainId);
   const isBusy = isPreparing || isExecuting || isSigningMessage || isSavingDraft || switchingChainId !== null;
   const isDraftEditable = Boolean(handoff && (handoff.status === "pending" || handoff.status === "failed"));
@@ -1719,6 +1776,47 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
   const hasQuestionBundle = (draftForm?.questions.length ?? questionSummaries.length) > 1;
   const feedbackBonusSummary = readFeedbackBonusSummary(handoff);
   const feedbackBonusDraftLabel = readDraftFeedbackBonusLabel(draftForm, handoff);
+  const draftBountyAmountAtomic = readDraftBountyAmountAtomic(draftForm, handoff) ?? 0n;
+  const draftFeedbackBonusUsdcAmountAtomic = readDraftFeedbackBonusUsdcAmountAtomic(draftForm, handoff);
+  const requiredHandoffUsdcAmount = isFeedbackBonusStep
+    ? draftFeedbackBonusUsdcAmountAtomic
+    : draftBountyAmountAtomic + draftFeedbackBonusUsdcAmountAtomic;
+  const hasResolvedHandoffUsdcBalance =
+    Boolean(fundingWalletAddress && usdcAddress) && !isUsdcBalanceLoading && usdcBalanceRaw !== undefined;
+  const handoffUsdcBalance = typeof usdcBalanceRaw === "bigint" ? usdcBalanceRaw : 0n;
+  const hasInsufficientHandoffUsdc =
+    hasResolvedHandoffUsdcBalance && requiredHandoffUsdcAmount > 0n && handoffUsdcBalance < requiredHandoffUsdcAmount;
+  const handleOpenEthFunding = useCallback(() => {
+    if (!fundingWalletAddress) return;
+
+    openWalletFunding({
+      amount: DEFAULT_ETH_TOP_UP_AMOUNT,
+      asset: "ETH",
+      buttonLabel: `Add ${nativeTokenSymbol}`,
+      chain: thirdwebTargetChain,
+      description: `Fund this wallet with native ${nativeTokenSymbol} for ${targetNetwork.name} gas costs.`,
+      presetOptions: FUNDING_PRESET_OPTIONS,
+      receiverAddress: fundingWalletAddress,
+      title: `Add ${nativeTokenSymbol}`,
+    });
+  }, [fundingWalletAddress, nativeTokenSymbol, openWalletFunding, targetNetwork.name, thirdwebTargetChain]);
+  const handleOpenUsdcFunding = useCallback(() => {
+    if (!fundingWalletAddress || !usdcAddress) return;
+
+    openWalletFunding({
+      amount: DEFAULT_USDC_TOP_UP_AMOUNT,
+      asset: "USDC",
+      buttonLabel: "Add USDC",
+      chain: thirdwebTargetChain,
+      description: `Fund this wallet with ${usdcDisplayName} for this handoff.`,
+      onSuccess: () => void refetchUsdcBalance(),
+      presetOptions: FUNDING_PRESET_OPTIONS,
+      receiverAddress: fundingWalletAddress,
+      title: `Add ${usdcDisplayName}`,
+      tokenAddress: usdcAddress,
+      unavailableMessage: "USDC is not configured for this network.",
+    });
+  }, [fundingWalletAddress, openWalletFunding, refetchUsdcBalance, thirdwebTargetChain, usdcAddress, usdcDisplayName]);
   const showMissingFeedbackBonusNotice = Boolean(
     handoff && !hasQuestionBundle && !feedbackBonusSummary && !isFeedbackBonusStep && !isTerminalStatus,
   );
@@ -2521,6 +2619,44 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
               <p className="surface-card-nested mt-4 rounded-lg p-3 text-sm text-warning">
                 This handoff is on chain {handoff.chainId}. Your wallet is on chain {connectedChainId}.
               </p>
+            ) : null}
+            {isMissingGasBalance ? (
+              <div className="mt-4">
+                <GasBalanceWarning
+                  actionDisabled={!fundingWalletAddress}
+                  actionLabel={`Add ${nativeTokenSymbol}`}
+                  nativeTokenSymbol={nativeTokenSymbol}
+                  onAction={handleOpenEthFunding}
+                  showTransactionCostsLink={showGasWarningTransactionCostsLink}
+                />
+              </div>
+            ) : null}
+            {hasInsufficientHandoffUsdc ? (
+              <div className="mt-4">
+                <BountyFundingWarning
+                  actionDisabled={!fundingWalletAddress || !usdcAddress}
+                  actionLabel="Add USDC"
+                  title={isFeedbackBonusStep ? `Need ${usdcDisplayName} for funding` : "Need bounty funds"}
+                  message={
+                    isFeedbackBonusStep
+                      ? `This handoff needs ${formatSubmissionRewardAmount(
+                          requiredHandoffUsdcAmount,
+                          "usdc",
+                        )} to fund the Feedback Bonus. Your wallet has ${formatSubmissionRewardAmount(
+                          handoffUsdcBalance,
+                          "usdc",
+                        )}.`
+                      : `This handoff needs ${formatSubmissionRewardAmount(
+                          requiredHandoffUsdcAmount,
+                          "usdc",
+                        )} before it can be submitted. Your wallet has ${formatSubmissionRewardAmount(
+                          handoffUsdcBalance,
+                          "usdc",
+                        )}.`
+                  }
+                  onAction={handleOpenUsdcFunding}
+                />
+              </div>
             ) : null}
             {failedImageUploadMessage ? (
               <div className="surface-card-nested mt-4 rounded-lg border border-error/20 bg-error/10 p-3 text-sm text-error">
