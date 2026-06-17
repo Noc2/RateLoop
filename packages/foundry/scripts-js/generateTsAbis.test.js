@@ -497,7 +497,10 @@ describe("pruneNonLocalGeneratedContractsToDeploymentExports", () => {
 describe("ContentRegistry ABI exports", () => {
   test("includes repoint and dormancy events required by indexers", async () => {
     const { readFileSync } = await import("node:fs");
-    const abiUrl = new URL("../../contracts/src/abis/ContentRegistryAbi.ts", import.meta.url);
+    const abiUrl = new URL(
+      "../../contracts/src/abis/ContentRegistryAbi.ts",
+      import.meta.url
+    );
     const source = readFileSync(abiUrl, "utf8");
     for (const symbol of [
       "repointPendingRatingClusterPayoutOracle",
