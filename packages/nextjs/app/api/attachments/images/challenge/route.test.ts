@@ -43,7 +43,11 @@ test("image upload challenge reports missing production Blob configuration befor
 
   assert.equal(response.status, 503);
   assert.deepEqual(await response.json(), {
-    error: "Image uploads are not configured. Set BLOB_READ_WRITE_TOKEN in the deployment environment.",
+    code: "service_unavailable",
+    message: "Image uploads are not configured. Set BLOB_READ_WRITE_TOKEN in the deployment environment.",
+    recoverWith: "retry_later_or_contact_operator",
+    retryable: true,
+    status: 503,
   });
 });
 
@@ -55,6 +59,10 @@ test("image upload challenge reports invalid production Blob configuration befor
 
   assert.equal(response.status, 503);
   assert.deepEqual(await response.json(), {
-    error: "Image uploads are misconfigured. Set BLOB_READ_WRITE_TOKEN to a Vercel Blob read-write token.",
+    code: "service_unavailable",
+    message: "Image uploads are misconfigured. Set BLOB_READ_WRITE_TOKEN to a Vercel Blob read-write token.",
+    recoverWith: "retry_later_or_contact_operator",
+    retryable: true,
+    status: 503,
   });
 });
