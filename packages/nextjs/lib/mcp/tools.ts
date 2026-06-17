@@ -2848,7 +2848,7 @@ function buildDryRunOperationBody(params: {
 
 function buildDryRunOperationFromArgs(args: JsonObject): JsonObject {
   const rawOperationKey = typeof args.operationKey === "string" ? args.operationKey.trim() : "";
-  const chainId = Number.parseInt(String(args.chainId ?? "480"), 10);
+  const chainId = Number.parseInt(String(args.chainId ?? "4801"), 10);
   const clientRequestId =
     typeof args.clientRequestId === "string" && args.clientRequestId.trim()
       ? args.clientRequestId.trim()
@@ -2856,11 +2856,11 @@ function buildDryRunOperationFromArgs(args: JsonObject): JsonObject {
   const operationKey = /^0x[a-fA-F0-9]{64}$/.test(rawOperationKey)
     ? rawOperationKey.toLowerCase()
     : `0x${createHash("sha256")
-        .update(`rateloop:dry-run:${Number.isSafeInteger(chainId) ? chainId : 480}:${clientRequestId}`)
+        .update(`rateloop:dry-run:${Number.isSafeInteger(chainId) ? chainId : 4801}:${clientRequestId}`)
         .digest("hex")}`;
 
   return {
-    chainId: Number.isSafeInteger(chainId) ? chainId : 480,
+    chainId: Number.isSafeInteger(chainId) ? chainId : 4801,
     clientRequestId,
     contentId: null,
     contentIds: [],
