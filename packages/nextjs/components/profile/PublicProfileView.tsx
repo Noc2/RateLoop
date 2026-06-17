@@ -90,6 +90,8 @@ const DEFAULT_AVATAR_ACCENT_HEX = "#359eee";
 const CONFIDENTIALITY_SANCTION_INDEXER_NOTICE =
   "The public indexer has not reported an active confidentiality sanction for this profile.";
 
+type LaunchRewardsStatus = PonderRaterParticipationStatusResponse["launchRewards"];
+
 function truncateAddress(address: string) {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
@@ -116,23 +118,35 @@ function formatSanctionExpiry(value: string | null | undefined) {
   return date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 
-function formatLaunchEligibility(rewardStatus: PonderRaterParticipationStatusResponse["launchRewards"]) {
+function formatLaunchEligibility(rewardStatus: LaunchRewardsStatus) {
   if (rewardStatus.eligible) {
     return `${rewardStatus.rewardedRatingCount}/${rewardStatus.qualifyingRatingCount} launch reward slots paid`;
   }
   if (rewardStatus.qualifyingRatingCount > 0) {
     return `${rewardStatus.qualifyingRatingCount} qualifying ratings recorded`;
   }
-  return "No launch reward credits recorded yet";
+  return null;
 }
 
-function formatLaunchCapSummary(rewardStatus: PonderRaterParticipationStatusResponse["launchRewards"]) {
+function formatLaunchCapSummary(rewardStatus: LaunchRewardsStatus) {
   const activeCap = formatLrepString(rewardStatus.launchCap);
   const fullCap = formatLrepString(rewardStatus.fullLaunchCap);
   if (rewardStatus.fullCapUnlocked || rewardStatus.unlockableLaunchCap === "0") {
     return `${activeCap} LREP cap`;
   }
   return `${activeCap} / ${fullCap} LREP cap`;
+}
+
+export function formatLaunchRewardDetail(rewardStatus: LaunchRewardsStatus) {
+  const launchEligibility = formatLaunchEligibility(rewardStatus);
+  if (rewardStatus.fullCapUnlocked || rewardStatus.unlockableLaunchCap === "0") {
+    return launchEligibility;
+  }
+
+  const unlockableLaunchCap = formatLrepString(rewardStatus.unlockableLaunchCap);
+  return launchEligibility
+    ? `${launchEligibility}; verify to unlock ${unlockableLaunchCap} LREP`
+    : `Verify to unlock ${unlockableLaunchCap} LREP`;
 }
 
 function getUrlHost(url: string) {
@@ -836,6 +850,7 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
   const summary = profileDetail?.profile ?? null;
   const social = profileDetail?.social ?? { followerCount: 0, followingCount: 0 };
   const rewardStatus = rewardStatusQuery.data;
+  const launchRewardDetail = rewardStatus ? formatLaunchRewardDetail(rewardStatus.launchRewards) : null;
   const confidentialitySanction =
     rewardStatus?.confidentialitySanction ?? profileDetail?.confidentialitySanction ?? null;
   const dailyStreak = useVoterStreak(normalizedAddress);
@@ -1612,20 +1627,14 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
                       </Link>
                     ) : null}
                   </div>
-                  <div className="mt-1 text-sm text-base-content/55">Counts as a launch anchor when active</div>
                 </div>
 
                 <div className="surface-card-nested rounded-2xl px-4 py-3">
                   <div className="text-sm text-base-content/60">Launch Reward Progress</div>
                   <div className="mt-1 text-xl font-semibold">{formatLaunchCapSummary(rewardStatus.launchRewards)}</div>
-                  <div className="mt-1 text-sm text-base-content/55">
-                    {rewardStatus.launchRewards.fullCapUnlocked ||
-                    rewardStatus.launchRewards.unlockableLaunchCap === "0"
-                      ? formatLaunchEligibility(rewardStatus.launchRewards)
-                      : `${formatLaunchEligibility(rewardStatus.launchRewards)}; verify to unlock ${formatLrepString(
-                          rewardStatus.launchRewards.unlockableLaunchCap,
-                        )} LREP`}
-                  </div>
+                  {launchRewardDetail ? (
+                    <div className="mt-1 text-sm text-base-content/55">{launchRewardDetail}</div>
+                  ) : null}
                 </div>
               </div>
             </>
