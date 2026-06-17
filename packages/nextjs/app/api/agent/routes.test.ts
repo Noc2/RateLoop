@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { after, before, beforeEach, test } from "node:test";
 import { privateKeyToAccount } from "viem/accounts";
+import { getAgentGeneratedImagesJsonBudgetBytes } from "~~/lib/auth/imageUploadChallenge.shared";
 
 const env = process.env as Record<string, string | undefined>;
 const originalAgents = env.RATELOOP_MCP_AGENTS;
@@ -737,7 +738,7 @@ test("agent asks route rejects oversized JSON bodies", async () => {
     new NextRequest("https://rateloop.ai/api/agent/asks", {
       body: "{}",
       headers: new Headers({
-        "content-length": String(16 * 1024 * 1024 + 1),
+        "content-length": String(getAgentGeneratedImagesJsonBudgetBytes() + 1),
         "content-type": "application/json",
       }),
       method: "POST",

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getAgentGeneratedImagesJsonBudgetBytes } from "~~/lib/auth/imageUploadChallenge.shared";
 import { JSON_BODY_TOO_LARGE, apiErrorEnvelope, parseJsonBody } from "~~/lib/http/jsonBody";
 import { jsonRpcApiError } from "~~/lib/mcp/jsonRpcErrors";
 import { PUBLIC_MCP_TOOLS, callPublicRateLoopMcpTool, normalizeToolError } from "~~/lib/mcp/tools";
@@ -10,7 +11,7 @@ export const maxDuration = 300;
 
 const DEFAULT_MCP_PROTOCOL_VERSION = "2025-11-25";
 const SUPPORTED_MCP_PROTOCOL_VERSIONS = new Set(["2025-06-18", DEFAULT_MCP_PROTOCOL_VERSION]);
-const MCP_JSON_BODY_MAX_BYTES = 16 * 1024 * 1024;
+const MCP_JSON_BODY_MAX_BYTES = getAgentGeneratedImagesJsonBudgetBytes();
 const RATE_LIMIT = { limit: 120, windowMs: 60_000 };
 
 type JsonRpcRequest = {

@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { ROUND_STATE } from "@rateloop/contracts/protocol";
 import assert from "node:assert/strict";
 import { after, before, beforeEach, test } from "node:test";
+import { getAgentGeneratedImagesJsonBudgetBytes } from "~~/lib/auth/imageUploadChallenge.shared";
 
 const env = process.env as Record<string, string | undefined>;
 const originalAgents = env.RATELOOP_MCP_AGENTS;
@@ -389,7 +390,7 @@ test("public MCP tools/list excludes managed-only balance tool", async () => {
 
 test("MCP routes reject oversized JSON-RPC bodies", async () => {
   const oversizedHeaders = {
-    "content-length": String(16 * 1024 * 1024 + 1),
+    "content-length": String(getAgentGeneratedImagesJsonBudgetBytes() + 1),
     "content-type": "application/json",
   };
   const managedResponse = await route.POST(

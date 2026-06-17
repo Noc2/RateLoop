@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse, after } from "next/server";
+import { getAgentGeneratedImagesJsonBudgetBytes } from "~~/lib/auth/imageUploadChallenge.shared";
 import {
   MCP_SCOPES,
   type McpAgentAuth,
@@ -170,5 +171,5 @@ export function agentRouteErrorResponse(
 
 export const AGENT_READ_RATE_LIMIT = { limit: 120, windowMs: 60_000 } satisfies AgentRouteRateLimit;
 export const AGENT_WRITE_RATE_LIMIT = { limit: 30, windowMs: 60_000 } satisfies AgentRouteRateLimit;
-export const AGENT_JSON_BODY_MAX_BYTES = 16 * 1024 * 1024;
+export const AGENT_JSON_BODY_MAX_BYTES = getAgentGeneratedImagesJsonBudgetBytes();
 export { MCP_SCOPES };
