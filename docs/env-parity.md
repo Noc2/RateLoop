@@ -6,7 +6,7 @@ Cross-package reference for env names that refer to the same on-chain value, E2E
 
 | Chain ID | Network | Deployment artifact | Profile |
 | --- | --- | --- | --- |
-| `4801` | World Chain Sepolia | `packages/foundry/deployments/4801.json` | testnet |
+| `4801` | World Chain Sepolia | `packages/foundry/deployments/4801.json` | `default` |
 | `480` | World Chain mainnet | `packages/foundry/deployments/480.json` | `mainnet-canary` or `production` (see artifact `deploymentProfile`) |
 | `31337` | Local Foundry / Anvil | gitignored local deploy | local |
 
@@ -22,11 +22,12 @@ World Chain USDC defaults are in `@rateloop/contracts` (`WORLD_CHAIN_USDC_BY_CHA
 | Package / surface | Env var | Role |
 | --- | --- | --- |
 | Next.js browser | `NEXT_PUBLIC_USDC_ADDRESS` | Browser-side USDC bounty reads and approvals |
+| Next.js browser (x402 alias) | `NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS` | x402-aligned browser USDC override; accepted alongside `NEXT_PUBLIC_USDC_ADDRESS` in `getDefaultUsdcAddress()` |
 | Next.js server (x402) | `RATELOOP_X402_USDC_ADDRESS` | Server-side x402 bounty planning and submission |
 | Agents local signer | `RATELOOP_LOCAL_SIGNER_USDC_ADDRESS` | Trusted USDC override before signing EIP-3009 typed data |
 | Agents local signer (alias) | `RATELOOP_X402_USDC_ADDRESS` | Same as above; accepted alias in `localSigner.ts` |
 
-Next.js throws when **both** `NEXT_PUBLIC_USDC_ADDRESS` and `RATELOOP_X402_USDC_ADDRESS` are set and differ (`lib/env/server.ts`). Server x402 resolution accepts either variable when only one is set; set both to the same address in production to keep browser bounty reads aligned with server submission.
+Next.js throws when **both** `NEXT_PUBLIC_USDC_ADDRESS` and `RATELOOP_X402_USDC_ADDRESS` are set and differ (`lib/env/server.ts`). Browser `getDefaultUsdcAddress()` prefers `NEXT_PUBLIC_USDC_ADDRESS`, then `NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS`; set both public browser vars to the same address when co-locating with server `RATELOOP_X402_USDC_ADDRESS`. Server x402 resolution accepts `RATELOOP_X402_USDC_ADDRESS` or `NEXT_PUBLIC_USDC_ADDRESS` when only one is set.
 
 ### Keeper / Ponder shared secrets
 
@@ -44,7 +45,7 @@ Local Playwright suites can opt into production-style behavior (localhost attach
 | `RATELOOP_E2E_PRODUCTION_BUILD` | Next.js server | `isLocalE2EProductionBuildEnabled()` |
 | `NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD` | Next.js browser | `isLocalE2EProductionBuildEnabled()` |
 
-Either flag set to `"true"` enables the mode. CI E2E workflows set both. Some paths still read `NEXT_PUBLIC_*` only (see audit L1); prefer setting both for local full-stack E2E.
+Either flag set to `"true"` enables the mode. CI E2E workflows set both. Core Next.js paths use `isLocalE2EProductionBuildEnabled()` and honor either flag; set both for local full-stack E2E and Playwright CI parity.
 
 Related: `RATELOOP_E2E_WALLET_BRIDGE` and hostname checks in `isLocalE2EWalletBridgeEnabled()` for the local test wallet bridge component.
 
