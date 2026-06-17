@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { JSON_BODY_TOO_LARGE, parseJsonBody } from "~~/lib/http/jsonBody";
+import { JSON_BODY_TOO_LARGE, apiErrorEnvelope, parseJsonBody } from "~~/lib/http/jsonBody";
+import { jsonRpcApiError } from "~~/lib/mcp/jsonRpcErrors";
 import { PUBLIC_MCP_TOOLS, callPublicRateLoopMcpTool, normalizeToolError } from "~~/lib/mcp/tools";
 import { checkRateLimit, resolveRateLimitSubject } from "~~/utils/rateLimit";
 
@@ -149,20 +150,38 @@ export function OPTIONS(request: NextRequest) {
 }
 
 export function GET(request: NextRequest) {
+  const error = apiErrorEnvelope({
+    code: "method_not_allowed",
+    message:
+      "SSE streams are not enabled for this RateLoop public MCP release. Use POST JSON-RPC calls over streamable HTTP.",
+    recoverWith: "use_post_json_rpc",
+    retryable: false,
+    status: 405,
+  });
   return NextResponse.json(
     {
+      ...error,
       allowedMethods: ["POST", "OPTIONS"],
-      error:
-        "SSE streams are not enabled for this RateLoop public MCP release. Use POST JSON-RPC calls over streamable HTTP.",
       supportedTransports: ["streamable-http"],
     },
-    { headers: { ...corsHeaders(request), Allow: "POST, OPTIONS" }, status: 405 },
+    { headers: { ...corsHeaders(request), Allow: "POST, OPTIONS" }, status: error.status },
   );
 }
 
 export async function POST(request: NextRequest) {
   if (!originAllowed(request)) {
-    return jsonRpcError(null, -32000, "Origin is not allowed.", request);
+    return jsonRpcApiError(
+      null,
+      apiErrorEnvelope({
+        code: "origin_not_allowed",
+        message: "Origin is not allowed for this MCP server.",
+        recoverWith: "use_allowed_origin_or_server_integration",
+        retryable: false,
+        status: 403,
+      }),
+      request,
+      corsHeaders,
+    );
   }
 
   const limited = await checkRateLimit(request, RATE_LIMIT);
