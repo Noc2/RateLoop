@@ -1,7 +1,10 @@
 import Link from "next/link";
 
 interface GasBalanceWarningProps {
+  actionDisabled?: boolean;
+  actionLabel?: string;
   nativeTokenSymbol: string;
+  onAction?: () => void;
   showTransactionCostsLink?: boolean;
 }
 
@@ -12,7 +15,13 @@ export function shouldShowGasWarningTransactionCostsLink(params: {
   return params.freeTransactionVerified && params.freeTransactionRemaining <= 0;
 }
 
-export function GasBalanceWarning({ nativeTokenSymbol, showTransactionCostsLink = false }: GasBalanceWarningProps) {
+export function GasBalanceWarning({
+  actionDisabled,
+  actionLabel,
+  nativeTokenSymbol,
+  onAction,
+  showTransactionCostsLink = false,
+}: GasBalanceWarningProps) {
   return (
     <div className="rounded-lg bg-error p-4 text-error-content">
       <p className="mb-2 text-base font-medium">Need {nativeTokenSymbol} for gas</p>
@@ -34,6 +43,16 @@ export function GasBalanceWarning({ nativeTokenSymbol, showTransactionCostsLink 
           </>
         ) : null}
       </p>
+      {actionLabel && onAction ? (
+        <button
+          type="button"
+          className="btn btn-sm mt-3 border-error-content/30 bg-error-content text-error hover:border-error-content/50 hover:bg-error-content/90"
+          disabled={actionDisabled}
+          onClick={onAction}
+        >
+          {actionLabel}
+        </button>
+      ) : null}
     </div>
   );
 }

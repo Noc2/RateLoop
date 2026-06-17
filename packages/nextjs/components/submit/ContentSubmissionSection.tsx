@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { RoundVotingEngineAbi } from "@rateloop/contracts/abis";
@@ -10,6 +10,7 @@ import {
   normalizeTargetAudience,
 } from "@rateloop/node-utils/profileSelfReport";
 import { useQuery } from "@tanstack/react-query";
+import { defineChain } from "thirdweb";
 import { decodeEventLog, isAddress, toHex } from "viem";
 import { useAccount, useConfig, useReadContract } from "wagmi";
 import { getPublicClient, readContract, waitForTransactionReceipt, writeContract } from "wagmi/actions";
@@ -24,6 +25,7 @@ import { ContentEmbed } from "~~/components/content/ContentEmbed";
 import { BountyFundingWarning } from "~~/components/shared/BountyFundingWarning";
 import { GasBalanceWarning, shouldShowGasWarningTransactionCostsLink } from "~~/components/shared/GasBalanceWarning";
 import { GradientActionButton, getGradientActionMotion } from "~~/components/shared/GradientAction";
+import { useWalletFunding } from "~~/components/shared/WalletFundingProvider";
 import { surfaceSectionHeadingClassName } from "~~/components/shared/sectionHeading";
 import { ImageAttachmentUploader } from "~~/components/submit/ImageAttachmentUploader";
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
@@ -105,6 +107,7 @@ import {
   formatSubmissionRewardAmount,
   getConfiguredFeedbackBonusEscrowAddress,
   getDefaultUsdcAddress,
+  getDefaultUsdcDisplayName,
   parseConfidentialityBondAmount,
   parseFeedbackBonusAmount,
   parseSubmissionRewardAmount,
@@ -173,6 +176,9 @@ const MONEY_FIELD_CONTROL_CLASS = "h-12 w-full min-w-0";
 const SECONDS_PER_MINUTE = 60;
 const SECONDS_PER_HOUR = 60 * SECONDS_PER_MINUTE;
 const MIN_HUMAN_RESPONSE_WINDOW_MINUTES = 20;
+const DEFAULT_ETH_TOP_UP_AMOUNT = "1";
+const DEFAULT_USDC_TOP_UP_AMOUNT = "10";
+const FUNDING_PRESET_OPTIONS: [number, number, number] = [5, 10, 20];
 const QUESTION_DETAILS_PREVIEW_WORDS = 32;
 const ROUND_RESPONSE_WINDOW_PRESETS = [
   { id: "2m", label: "2m", minutes: 2 },
@@ -570,6 +576,8 @@ export function ContentSubmissionSection() {
   const wagmiConfig = useConfig();
   const { address: connectedAddress } = useAccount();
   const { targetNetwork } = useTargetNetwork();
+  const { openWalletFunding } = useWalletFunding();
+  const thirdwebTargetChain = useMemo(() => defineChain(targetNetwork), [targetNetwork]);
   const localE2ETestWalletClient = useLocalE2ETestWalletClient(connectedAddress, targetNetwork.id);
   const {
     canSponsorTransactions,
@@ -1556,9 +1564,40 @@ export function ContentSubmissionSection() {
             ? "A high max voters per round can dilute the per-voter payout if participation is high; use it when broader input matters more than payout density."
             : "These settings give a clear payout target for a small qualifying round.";
   const usdcAddress = getDefaultUsdcAddress(targetNetwork.id);
+  const usdcDisplayName = getDefaultUsdcDisplayName(targetNetwork.id);
   const rewardTokenAddress = rewardAsset === "lrep" ? lrepAddress : usdcAddress;
   const feedbackBonusTokenAddress = feedbackBonusAsset === "lrep" ? lrepAddress : usdcAddress;
   const feedbackBonusEscrowAddress = getConfiguredFeedbackBonusEscrowAddress(targetNetwork.id);
+  const handleOpenEthFunding = useCallback(() => {
+    if (!connectedAddress) return;
+
+    openWalletFunding({
+      amount: DEFAULT_ETH_TOP_UP_AMOUNT,
+      asset: "ETH",
+      buttonLabel: `Add ${nativeTokenSymbol}`,
+      chain: thirdwebTargetChain,
+      description: `Fund this wallet with native ${nativeTokenSymbol} for ${targetNetwork.name} gas costs.`,
+      presetOptions: FUNDING_PRESET_OPTIONS,
+      receiverAddress: connectedAddress as `0x${string}`,
+      title: `Add ${nativeTokenSymbol}`,
+    });
+  }, [connectedAddress, nativeTokenSymbol, openWalletFunding, targetNetwork.name, thirdwebTargetChain]);
+  const handleOpenUsdcFunding = useCallback(() => {
+    if (!connectedAddress || !usdcAddress) return;
+
+    openWalletFunding({
+      amount: DEFAULT_USDC_TOP_UP_AMOUNT,
+      asset: "USDC",
+      buttonLabel: "Add USDC",
+      chain: thirdwebTargetChain,
+      description: `Fund this wallet with ${usdcDisplayName} for bounties and feedback bonuses.`,
+      presetOptions: FUNDING_PRESET_OPTIONS,
+      receiverAddress: connectedAddress as `0x${string}`,
+      title: `Add ${usdcDisplayName}`,
+      tokenAddress: usdcAddress,
+      unavailableMessage: usdcAddress ? undefined : "USDC is not configured for this network.",
+    });
+  }, [connectedAddress, openWalletFunding, thirdwebTargetChain, usdcAddress, usdcDisplayName]);
   const { data: lrepBalance, isLoading: isLrepBalanceLoading } = useReadContract({
     address: lrepAddress,
     abi: ERC20_APPROVAL_ABI,
@@ -1621,6 +1660,7 @@ export function ContentSubmissionSection() {
 
     if (submissionStep === "question" && hasNoSupportedBountyFunds) {
       return {
+        actionAsset: "USDC" as const,
         title: "Need bounty funds",
         message:
           "Every question needs a funded bounty before it can be submitted. Add LREP or USDC to this wallet, then continue.",
@@ -1629,6 +1669,7 @@ export function ContentSubmissionSection() {
 
     if (submissionStep !== "question" && rewardAsset === "lrep" && hasInsufficientSelectedBountyFunds) {
       return {
+        actionAsset: null,
         title: "Need LREP for bounty",
         message: `You need ${formatSubmissionRewardAmount(
           selectedRewardAmount,
@@ -1639,6 +1680,7 @@ export function ContentSubmissionSection() {
 
     if (hasInsufficientFeedbackBonusFunds) {
       return {
+        actionAsset: feedbackBonusAsset === "usdc" ? ("USDC" as const) : null,
         title: `Need ${selectedFeedbackBonusAssetLabel} for funding`,
         message: `You need ${formatFeedbackBonusAmount(
           requiredSelectedFeedbackBonusBalance,
@@ -1651,6 +1693,7 @@ export function ContentSubmissionSection() {
 
     if (submissionStep !== "question" && hasInsufficientSelectedBountyFunds) {
       return {
+        actionAsset: "USDC" as const,
         title: "Need USDC for bounty",
         message: `You need ${formatSubmissionRewardAmount(
           selectedRewardAmount,
@@ -1661,6 +1704,14 @@ export function ContentSubmissionSection() {
 
     return null;
   })();
+  const bountyFundingWarningAction =
+    bountyFundingWarning?.actionAsset === "USDC"
+      ? {
+          actionDisabled: !connectedAddress || !usdcAddress,
+          actionLabel: "Add USDC",
+          onAction: handleOpenUsdcFunding,
+        }
+      : {};
   const { refetch: refetchNextContentId } = useScaffoldReadContract({
     contractName: "ContentRegistry",
     functionName: "nextContentId",
@@ -4695,12 +4746,19 @@ export function ContentSubmissionSection() {
                 {prohibitedContentNotice}
                 {isMissingGasBalance ? (
                   <GasBalanceWarning
+                    actionDisabled={!connectedAddress}
+                    actionLabel={`Add ${nativeTokenSymbol}`}
                     nativeTokenSymbol={nativeTokenSymbol}
+                    onAction={handleOpenEthFunding}
                     showTransactionCostsLink={showGasWarningTransactionCostsLink}
                   />
                 ) : null}
                 {bountyFundingWarning ? (
-                  <BountyFundingWarning title={bountyFundingWarning.title} message={bountyFundingWarning.message} />
+                  <BountyFundingWarning
+                    title={bountyFundingWarning.title}
+                    message={bountyFundingWarning.message}
+                    {...bountyFundingWarningAction}
+                  />
                 ) : null}
                 {activeQuestionIndex > 0 ? (
                   <button type="button" onClick={handleGoToPreviousQuestion} className="btn btn-ghost w-full gap-2">
@@ -4722,12 +4780,19 @@ export function ContentSubmissionSection() {
                 {bountyInsightsCard}
                 {isMissingGasBalance ? (
                   <GasBalanceWarning
+                    actionDisabled={!connectedAddress}
+                    actionLabel={`Add ${nativeTokenSymbol}`}
                     nativeTokenSymbol={nativeTokenSymbol}
+                    onAction={handleOpenEthFunding}
                     showTransactionCostsLink={showGasWarningTransactionCostsLink}
                   />
                 ) : null}
                 {bountyFundingWarning ? (
-                  <BountyFundingWarning title={bountyFundingWarning.title} message={bountyFundingWarning.message} />
+                  <BountyFundingWarning
+                    title={bountyFundingWarning.title}
+                    message={bountyFundingWarning.message}
+                    {...bountyFundingWarningAction}
+                  />
                 ) : null}
                 {bountyActions}
               </div>
@@ -4739,12 +4804,19 @@ export function ContentSubmissionSection() {
                 {feedbackBonusInsightsCard}
                 {isMissingGasBalance ? (
                   <GasBalanceWarning
+                    actionDisabled={!connectedAddress}
+                    actionLabel={`Add ${nativeTokenSymbol}`}
                     nativeTokenSymbol={nativeTokenSymbol}
+                    onAction={handleOpenEthFunding}
                     showTransactionCostsLink={showGasWarningTransactionCostsLink}
                   />
                 ) : null}
                 {bountyFundingWarning ? (
-                  <BountyFundingWarning title={bountyFundingWarning.title} message={bountyFundingWarning.message} />
+                  <BountyFundingWarning
+                    title={bountyFundingWarning.title}
+                    message={bountyFundingWarning.message}
+                    {...bountyFundingWarningAction}
+                  />
                 ) : null}
                 {feedbackBonusActions}
               </div>
