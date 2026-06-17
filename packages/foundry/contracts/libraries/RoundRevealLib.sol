@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import { Blockhash } from "@openzeppelin/contracts/utils/Blockhash.sol";
-import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
+import {Blockhash} from "@openzeppelin/contracts/utils/Blockhash.sol";
+import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
-import { RobustBtsMath } from "./RobustBtsMath.sol";
-import { RoundLib } from "./RoundLib.sol";
-import { RewardMath } from "./RewardMath.sol";
-import { TlockVoteLib } from "./TlockVoteLib.sol";
-import { VotePreflightLib } from "./VotePreflightLib.sol";
+import {RobustBtsMath} from "./RobustBtsMath.sol";
+import {RoundLib} from "./RoundLib.sol";
+import {RewardMath} from "./RewardMath.sol";
+import {TlockVoteLib} from "./TlockVoteLib.sol";
+import {VotePreflightLib} from "./VotePreflightLib.sol";
 
 /// @title RoundRevealLib
 /// @notice Shared reveal accounting extracted from RoundVotingEngine to reduce runtime size.
@@ -275,16 +275,16 @@ library RoundRevealLib {
         mapping(uint256 => mapping(uint256 => bytes32)) storage roundRbtsSeedEntropy,
         uint256 contentId,
         uint256 roundId
-    ) external returns (bytes32 settlementEntropy) {
+    ) external returns (bytes32 settlementEntropy, bool ready) {
         settlementEntropy = roundRbtsSeedEntropy[contentId][roundId];
         uint256 seedWord = uint256(settlementEntropy);
-        if (seedWord < RBTS_SEED_BLOCK_FLAG) return settlementEntropy;
+        if (seedWord < RBTS_SEED_BLOCK_FLAG) return (settlementEntropy, true);
 
         uint256 seedBlock = uint64(seedWord);
         if (block.number <= seedBlock) revert RevealGraceActive();
         if (block.number > seedBlock + RBTS_SEED_EXPIRY_BLOCKS) {
-            emit RbtsSeedCaptured(contentId, roundId, bytes32(0));
-            return bytes32(0);
+            _refreshRbtsSeedBlock(roundRbtsSeedEntropy, contentId, roundId, seedWord);
+            return (bytes32(0), false);
         }
         bytes32 seedBlockhash = Blockhash.blockHash(seedBlock);
         if (seedBlockhash == bytes32(0)) revert RevealGraceActive();
@@ -300,7 +300,7 @@ library RoundRevealLib {
             )
         );
         emit RbtsSeedCaptured(contentId, roundId, settlementEntropy);
-        return settlementEntropy;
+        return (settlementEntropy, true);
     }
 
     function _effectiveStake(uint64 stakeAmount, uint8 epochIndex) private pure returns (uint64) {
@@ -319,6 +319,18 @@ library RoundRevealLib {
                 | (uint256(block.number.toUint64()) << RBTS_SEED_ORIGINAL_BLOCK_SHIFT)
                 | uint256(block.number.toUint64())
         );
+        roundRbtsSeedEntropy[contentId][roundId] = seedBlockMarker;
+        emit RbtsSeedCaptured(contentId, roundId, seedBlockMarker);
+    }
+
+    function _refreshRbtsSeedBlock(
+        mapping(uint256 => mapping(uint256 => bytes32)) storage roundRbtsSeedEntropy,
+        uint256 contentId,
+        uint256 roundId,
+        uint256 previousMarker
+    ) private {
+        bytes32 seedBlockMarker =
+            bytes32((previousMarker & ~RBTS_SEED_BLOCK_MASK) | uint256(block.number.toUint64()));
         roundRbtsSeedEntropy[contentId][roundId] = seedBlockMarker;
         emit RbtsSeedCaptured(contentId, roundId, seedBlockMarker);
     }
