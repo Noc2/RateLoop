@@ -1243,14 +1243,13 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             submissionKeyUsed,
             dormancyAnchorAt,
             dormantKeyReleasableAt,
-            lrepToken,
-            treasury,
             contentId,
             msg.sender,
-            REVIVAL_STAKE,
             MAX_REVIVALS,
             _isSubmitterIdentity(contentId, msg.sender)
         );
+        require(treasury != address(0));
+        lrepToken.safeTransferFrom(msg.sender, treasury, REVIVAL_STAKE);
     }
 
     /// @notice Release a dormant content key after the exclusive revival window expires.
