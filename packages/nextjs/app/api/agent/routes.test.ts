@@ -164,7 +164,7 @@ function questionPayload(clientRequestId: string, params: { chainId?: number } =
       bountyWindowSeconds: "1200",
       feedbackWindowSeconds: "1200",
     },
-    chainId: params.chainId ?? 480,
+    chainId: params.chainId ?? 4801,
     clientRequestId,
     question: {
       categoryId: "5",
@@ -187,7 +187,7 @@ async function seedManagedAskAudit(params: {
   operationKey?: `0x${string}`;
 }) {
   const operationKey = params.operationKey ?? OPERATION_KEY;
-  const chainId = params.chainId ?? 480;
+  const chainId = params.chainId ?? 4801;
   const now = new Date("2026-04-23T12:00:00.000Z");
   const contentId = params.contentId ?? null;
 
@@ -903,7 +903,7 @@ test("agent ask handoff route rejects chains unavailable on this server", async 
   const response = await handoffsRoute.POST(
     makePublicPost("https://rateloop.ai/api/agent/handoffs", {
       request: {
-        ...questionPayload("agent-handoff-unsupported-chain"),
+        ...questionPayload("agent-handoff-unsupported-chain", { chainId: 480 }),
         maxPaymentAmount: "1500000",
       },
       ttlMs: 300000,
@@ -2033,7 +2033,7 @@ test("agent confirm route accepts tokenless operation confirmations", async () =
 
 test("agent status route returns not_found without treating it as a transport error", async () => {
   const response = await asksByClientRoute.GET(
-    makeGet("https://rateloop.ai/api/agent/asks/by-client-request?chainId=480&clientRequestId=missing"),
+    makeGet("https://rateloop.ai/api/agent/asks/by-client-request?chainId=4801&clientRequestId=missing"),
   );
   const body = (await response.json()) as Record<string, unknown>;
 
@@ -2245,7 +2245,9 @@ test("agent audit by client request route resolves the same managed ask", async 
   await seedManagedAskAudit({ clientRequestId: "audit-client-http" });
 
   const response = await asksByClientAuditRoute.GET(
-    makeGet("https://rateloop.ai/api/agent/asks/by-client-request/audit?chainId=480&clientRequestId=audit-client-http"),
+    makeGet(
+      "https://rateloop.ai/api/agent/asks/by-client-request/audit?chainId=4801&clientRequestId=audit-client-http",
+    ),
   );
   const body = (await response.json()) as {
     clientRequestId: string;
@@ -2471,7 +2473,7 @@ test("agent status route includes live ask guidance for underfunded open markets
 
 test("agent results route returns the pending result package before settlement", async () => {
   const response = await resultsByClientRoute.GET(
-    makeGet("https://rateloop.ai/api/agent/results/by-client-request?chainId=480&clientRequestId=missing"),
+    makeGet("https://rateloop.ai/api/agent/results/by-client-request?chainId=4801&clientRequestId=missing"),
   );
   const body = (await response.json()) as Record<string, unknown>;
 
@@ -2529,7 +2531,7 @@ test("agent results routes accept contentId for bundle lookups", async () => {
 
   const byClientResponse = await resultsByClientRoute.GET(
     makeGet(
-      "https://rateloop.ai/api/agent/results/by-client-request?chainId=480&clientRequestId=bundle-result-http&contentId=99",
+      "https://rateloop.ai/api/agent/results/by-client-request?chainId=4801&clientRequestId=bundle-result-http&contentId=99",
     ),
   );
   const byClientBody = (await byClientResponse.json()) as {
