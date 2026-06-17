@@ -305,7 +305,7 @@ capital. Settlement-layer security needs at least one deterrent whose value is e
 the USDC challenge bond) are deliberately excluded from settlement weight. The
 confidentiality lane (USDC bonds) and the frontend fee (USDC) are the exceptions, but all
 settlement _penalties_ are LREP. Arguably testnet-acceptable today; a genuine flaw for the
-mainnet the canary runbook is steering toward.
+first World Chain mainnet production launch.
 
 **H3 — Peer prediction without ground truth: a weighted-majority coalition controls
 the verdict and most peer benchmarks, making ≥8-voter collusion profitable.** _(Collusion
@@ -529,12 +529,12 @@ sharpens the collusion analysis:
   be backed by reputation or staking for high-value jobs. A RateLoop adapter fits,
   but only after the protocol defines an explicit binding-acceptance tier with value
   caps, counterparty exclusions, and minimum round economics.
-- **World ID v4 is now concrete enough to be an operational launch gate.** World docs
+- **World ID v4 is concrete enough to be a future migration gate.** World docs
   list the production and staging World Chain `WorldIDVerifier` proxies and the v4
   `verify` ABI that RateLoop's `IWorldIDVerifier` mirrors. The same docs recommend
   upgradeable verification logic for integrations because World ID versions change.
-  RateLoop's current canary runbook correctly treats the production verifier ABI and
-  live proof path as a pre-launch gate, not a deploy-time address swap.
+  RateLoop should treat the production verifier ABI and live proof path as a
+  pre-v4-enablement gate, not a deploy-time address swap.
 - **Fresh agent-security research reinforces the prompt-injection caveat for AI
   raters.** A June 2026 agentic prompt-injection study finds automated indirect
   injections remain a credible, model-dependent threat for agents operating on
@@ -606,7 +606,7 @@ stake-weighting, voter apathy, and credential rental all erode.
    exact commit, Foundry profile, compiler/optimizer config, ABIs, storage-layout
    snapshots, contract-size output, deployment artifact profile, chain `480` start
    blocks, World ID verifier address and ABI/proof smoke test, Ponder schema/start
-   state, keeper config hash, oracle artifact base URL, and the canary-to-production
+   state, keeper config hash, oracle artifact base URL, and the production state
    reset checklist. This is cheap now and makes the first incident or external review
    dramatically less ambiguous.
 6. **Keep EIP-170 margins release-blocking.** The latest check passes, but the tightest
@@ -614,8 +614,8 @@ stake-weighting, voter apathy, and credential rental all erode.
    70 bytes, `RaterRegistry` 89, `LaunchDistributionPool` 118). Treat any mainnet-bound
    code change that moves those numbers as a deploy blocker until `make check-contract-sizes`
    is green under the deploy profile.
-7. **Run a real World ID v4 production proof before public launch.** The canary runbook's
-   ABI warning should become a hard launch checklist item: verify the exact production
+7. **Run a real World ID v4 production proof before enabling v4.** The ABI warning
+   should become a hard migration checklist item: verify the exact production
    proxy, selector, argument order, proof array shape, nullifier behavior, issuer schema,
    RP id, action hash, and expiry fields against the deployed `RaterRegistry` path. If
    any of those differ, redeploy before real users earn credentials.
@@ -667,8 +667,8 @@ RobustBtsMath, RewardMath, TlockVoteLib, RatingMath, VotePreflightLib, QuestionR
 ConfidentialityEscrow, RaterRegistry, ClusterPayoutOracle, FrontendRegistry, LaunchDistributionPool,
 RateLoopGovernor, ProtocolConfig, Deploy.s.sol; public docs `how-it-works.md`, `ai.md`, `sdk.md`,
 whitepaper `sections.ts`; internal `private-context-plan-2026-06.md`, `use-cases-2026-06.md`,
-`agent-to-agent-acceptance-oracle-2026-06.md`, `mainnet-canary-deployment.md`,
-`repo-audit-2026-06-15.md`, `repo-audit-2026-06-16.md`).
+`agent-to-agent-acceptance-oracle-2026-06.md`, `repo-audit-2026-06-15.md`,
+`repo-audit-2026-06-16.md`).
 
 External (selected): Witkowski & Parkes, _A Robust BTS for Small Populations_ (AAAI 2012);
 Radanovic & Faltings, _RBTS for Non-Binary Signals_ (AAAI 2013); Gao, Wright & Leyton-Brown,

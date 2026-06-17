@@ -7,7 +7,7 @@ Cross-package reference for env names that refer to the same on-chain value, E2E
 | Chain ID | Network | Deployment artifact | Profile |
 | --- | --- | --- | --- |
 | `4801` | World Chain Sepolia | `packages/foundry/deployments/4801.json` | `default` |
-| `480` | World Chain mainnet | `packages/foundry/deployments/480.json` | `mainnet-canary` or `production` (see artifact `deploymentProfile`) |
+| `480` | World Chain mainnet | `packages/foundry/deployments/480.json` | `production` |
 | `31337` | Local Foundry / Anvil | gitignored local deploy | local |
 
 ## USDC address aliases

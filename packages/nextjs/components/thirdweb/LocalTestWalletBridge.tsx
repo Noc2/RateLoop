@@ -17,6 +17,7 @@ import { publicEnv } from "~~/utils/env/public";
 import { NETWORKS_EXTRA_DATA } from "~~/utils/scaffold-eth";
 
 const LOCAL_TEST_CHAIN_ID = 31337;
+const LOCAL_TEST_WALLET_CONNECT_TIMEOUT_MS = 5_000;
 const allowLocalE2EProductionBuild = process.env.NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD === "true";
 
 function isLocalTestWalletEnabled() {
@@ -37,6 +38,22 @@ function getLocalTestWalletPrivateKey() {
   }
 
   return window.localStorage.getItem(RATELOOP_E2E_TEST_WALLET_PRIVATE_KEY_STORAGE_KEY)?.trim() || null;
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timeout = window.setTimeout(() => reject(new Error(message)), timeoutMs);
+    promise.then(
+      value => {
+        window.clearTimeout(timeout);
+        resolve(value);
+      },
+      error => {
+        window.clearTimeout(timeout);
+        reject(error);
+      },
+    );
+  });
 }
 
 function LocalTestWalletBridgeRunner({
@@ -97,7 +114,11 @@ function LocalTestWalletBridgeRunner({
 
       try {
         if (!thirdwebConnected) {
-          await connect(wallet);
+          await withTimeout(
+            connect(wallet),
+            LOCAL_TEST_WALLET_CONNECT_TIMEOUT_MS,
+            "Timed out connecting local test wallet to thirdweb",
+          );
           thirdwebConnected = true;
         }
       } catch (error) {

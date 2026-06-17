@@ -10,6 +10,7 @@ const { values } = parseArgs({
     domain: { type: "string" },
     "reward-pool-id": { type: "string" },
     "content-id": { type: "string" },
+    "correlation-epoch-id": { type: "string" },
     "round-id": { type: "string" },
     out: { type: "string" },
     "skip-ponder-freshness": { type: "boolean", default: false },
@@ -17,7 +18,10 @@ const { values } = parseArgs({
   },
 });
 
-function requirePositiveBigInt(value: string | undefined, label: string): bigint {
+function requirePositiveBigInt(
+  value: string | undefined,
+  label: string,
+): bigint {
   if (!value || !/^\d+$/u.test(value)) {
     throw new Error(`${label} must be a positive integer`);
   }
@@ -26,14 +30,20 @@ function requirePositiveBigInt(value: string | undefined, label: string): bigint
   return parsed;
 }
 
-function requireNonNegativeBigInt(value: string | undefined, label: string): bigint {
+function requireNonNegativeBigInt(
+  value: string | undefined,
+  label: string,
+): bigint {
   if (!value || !/^\d+$/u.test(value)) {
     throw new Error(`${label} must be a non-negative integer`);
   }
   return BigInt(value);
 }
 
-function requirePositiveNumber(value: string | undefined, label: string): number {
+function requirePositiveNumber(
+  value: string | undefined,
+  label: string,
+): number {
   if (!value || !/^\d+$/u.test(value)) {
     throw new Error(`${label} must be a positive integer`);
   }
@@ -47,11 +57,16 @@ function requirePositiveNumber(value: string | undefined, label: string): number
 const out = values.out;
 if (!out) throw new Error("--out is required");
 
-const logger = createLogger(process.env.LOG_FORMAT === "text" ? "text" : "json");
+const logger = createLogger(
+  process.env.LOG_FORMAT === "text" ? "text" : "json",
+);
 const candidates = [
   {
     domain: requirePositiveNumber(values.domain, "--domain"),
-    rewardPoolId: requireNonNegativeBigInt(values["reward-pool-id"], "--reward-pool-id"),
+    rewardPoolId: requireNonNegativeBigInt(
+      values["reward-pool-id"],
+      "--reward-pool-id",
+    ),
     contentId: requirePositiveBigInt(values["content-id"], "--content-id"),
     roundId: requirePositiveBigInt(values["round-id"], "--round-id"),
   },
@@ -59,25 +74,43 @@ const candidates = [
 
 const latestBlock = await publicClient.getBlock({ blockTag: "latest" });
 const ponderNowSeconds =
-  values.now !== undefined ? requireNonNegativeBigInt(values.now, "--now") : latestBlock.timestamp;
+  values.now !== undefined
+    ? requireNonNegativeBigInt(values.now, "--now")
+    : latestBlock.timestamp;
 
 if (values["skip-ponder-freshness"]) {
   logger.warn(
     "Skipping Ponder freshness gate; use only for manual recovery when Ponder is known stale",
   );
 } else if (
-  !(await areCorrelationCandidatesPonderFresh(publicClient, candidates, logger, {
-    ponderNowSeconds,
-  }))
+  !(await areCorrelationCandidatesPonderFresh(
+    publicClient,
+    candidates,
+    logger,
+    {
+      ponderNowSeconds,
+    },
+  ))
 ) {
   throw new Error(
     "Ponder freshness check failed. Wait for indexing or pass --skip-ponder-freshness for manual ops.",
   );
 }
 
-const built = await buildConfiguredCorrelationSnapshotArtifactForCandidates(candidates, logger, {
-  ponderNowSeconds,
-});
+const built = await buildConfiguredCorrelationSnapshotArtifactForCandidates(
+  candidates,
+  logger,
+  {
+    correlationEpochId:
+      values["correlation-epoch-id"] !== undefined
+        ? requirePositiveBigInt(
+            values["correlation-epoch-id"],
+            "--correlation-epoch-id",
+          )
+        : undefined,
+    ponderNowSeconds,
+  },
+);
 
 if (!built.canonicalJson || built.roundSnapshotCount === 0) {
   throw new Error(

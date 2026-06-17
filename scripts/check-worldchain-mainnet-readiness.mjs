@@ -23,16 +23,8 @@ const WORLDCHAIN_DEPLOYMENT_ARTIFACT = "packages/foundry/deployments/480.json";
 const WORLDCHAIN_USDC = "0x79A02482A880bCE3F13e09Da970dC34db4CD24d1";
 const WORLD_ID_PRODUCTION_VERIFIER =
   "0x00000000009E00F9FE82CfeeBB4556686da094d7";
-const WORLD_ID_STAGING_VERIFIER = "0x703a6316c975DEabF30b637c155edD53e24657DB";
 const WORLD_ID_VERIFIER_SELECTOR = "0x40340c44";
-const DEPLOYMENT_PROFILE_BY_MODE = {
-  production: "production",
-  canary: "mainnet-canary",
-};
-const WORLD_ID_VERIFIER_BY_MODE = {
-  production: WORLD_ID_PRODUCTION_VERIFIER,
-  canary: WORLD_ID_STAGING_VERIFIER,
-};
+const WORLDCHAIN_DEPLOYMENT_PROFILE = "production";
 
 function isAddress(value) {
   return typeof value === "string" && ADDRESS_RE.test(value);
@@ -68,7 +60,6 @@ export function validateOfflineReadiness({
   deploymentJson,
   deployedContractsSource,
   envProductionSource = "",
-  expectedMode = "production",
   protocolSource,
 }) {
   const checks = [];
@@ -78,8 +69,6 @@ export function validateOfflineReadiness({
     deployedContractsSource,
     WORLDCHAIN_CHAIN_ID,
   );
-  const expectedDeploymentProfile = DEPLOYMENT_PROFILE_BY_MODE[expectedMode];
-
   addCheck(
     checks,
     failures,
@@ -95,8 +84,8 @@ export function validateOfflineReadiness({
   addCheck(
     checks,
     failures,
-    deploymentJson.deploymentProfile === expectedDeploymentProfile,
-    `deployment artifact profile is ${expectedDeploymentProfile}`,
+    deploymentJson.deploymentProfile === WORLDCHAIN_DEPLOYMENT_PROFILE,
+    `deployment artifact profile is ${WORLDCHAIN_DEPLOYMENT_PROFILE}`,
   );
   addCheck(
     checks,
@@ -149,38 +138,36 @@ export function validateOfflineReadiness({
     protocolSource.includes(`480: "${WORLDCHAIN_USDC}"`),
     "Next.js default USDC address is configured for World Chain mainnet",
   );
-  if (expectedMode === "production") {
-    addCheck(
-      checks,
-      failures,
-      envSourceHasAssignment(
-        envProductionSource,
-        "NEXT_PUBLIC_TARGET_NETWORKS",
-        "480",
-      ),
-      "Next.js production env targets World Chain mainnet",
-    );
-    addCheck(
-      checks,
-      failures,
-      envSourceHasAssignment(
-        envProductionSource,
-        "NEXT_PUBLIC_WORLD_ID_ENVIRONMENT",
-        "production",
-      ),
-      "Next.js production env uses production World ID",
-    );
-    addCheck(
-      checks,
-      failures,
-      envSourceHasAssignment(
-        envProductionSource,
-        "NEXT_PUBLIC_WORLD_ID_PROOF_MODE",
-        "legacy",
-      ),
-      "Next.js production env requests legacy World ID proofs",
-    );
-  }
+  addCheck(
+    checks,
+    failures,
+    envSourceHasAssignment(
+      envProductionSource,
+      "NEXT_PUBLIC_TARGET_NETWORKS",
+      "480",
+    ),
+    "Next.js production env targets World Chain mainnet",
+  );
+  addCheck(
+    checks,
+    failures,
+    envSourceHasAssignment(
+      envProductionSource,
+      "NEXT_PUBLIC_WORLD_ID_ENVIRONMENT",
+      "production",
+    ),
+    "Next.js production env uses production World ID",
+  );
+  addCheck(
+    checks,
+    failures,
+    envSourceHasAssignment(
+      envProductionSource,
+      "NEXT_PUBLIC_WORLD_ID_PROOF_MODE",
+      "legacy",
+    ),
+    "Next.js production env requests legacy World ID proofs",
+  );
 
   return { ok: failures.length === 0, checks, failures };
 }
@@ -234,7 +221,6 @@ async function rpc(rpcUrl, method, params = []) {
 export async function validateLiveReadiness({
   appUrl,
   deploymentJson,
-  expectedMode = "production",
   ponderUrl,
   requireTargets = false,
   rpcUrl,
@@ -242,7 +228,6 @@ export async function validateLiveReadiness({
   const checks = [];
   const failures = [];
   const deploymentAddresses = buildDeploymentAddressMap(deploymentJson);
-  const expectedVerifier = WORLD_ID_VERIFIER_BY_MODE[expectedMode];
 
   if (rpcUrl) {
     try {
@@ -331,7 +316,7 @@ export async function validateLiveReadiness({
       }
 
       const raterRegistry = deploymentAddresses.get("RaterRegistry");
-      if (raterRegistry && expectedVerifier) {
+      if (raterRegistry) {
         const verifierResult = await rpc(rpcUrl, "eth_call", [
           { to: raterRegistry, data: WORLD_ID_VERIFIER_SELECTOR },
           "latest",
@@ -340,8 +325,9 @@ export async function validateLiveReadiness({
         addCheck(
           checks,
           failures,
-          normalizeAddress(verifier) === normalizeAddress(expectedVerifier),
-          `RaterRegistry World ID verifier is ${expectedVerifier}`,
+          normalizeAddress(verifier) ===
+            normalizeAddress(WORLD_ID_PRODUCTION_VERIFIER),
+          `RaterRegistry World ID verifier is ${WORLD_ID_PRODUCTION_VERIFIER}`,
         );
       }
     } catch (error) {
@@ -433,14 +419,13 @@ export async function validateLiveReadiness({
 }
 
 function parseArgs(argv) {
-  const canary = argv.includes("--canary");
-  const production = argv.includes("--production");
-  if (canary && production) {
-    throw new Error("Use only one of --canary or --production.");
+  if (argv.includes("--canary")) {
+    throw new Error(
+      "World Chain mainnet canary readiness is no longer supported. Use --production.",
+    );
   }
 
   return {
-    expectedMode: canary ? "canary" : "production",
     live: argv.includes("--live"),
     json: argv.includes("--json"),
     requireLiveTargets: argv.includes("--require-live-targets"),
@@ -484,10 +469,9 @@ async function main() {
   }
   const offlineResult = validateOfflineReadiness({
     ...offlineInputs,
-    expectedMode: args.expectedMode,
   });
   printResult(
-    `World Chain mainnet ${args.expectedMode} offline readiness`,
+    "World Chain mainnet production offline readiness",
     offlineResult,
     args.json,
   );
@@ -497,13 +481,12 @@ async function main() {
     liveResult = await validateLiveReadiness({
       appUrl: process.env.WORLDCHAIN_APP_URL,
       deploymentJson: offlineInputs.deploymentJson,
-      expectedMode: args.expectedMode,
       ponderUrl: process.env.WORLDCHAIN_PONDER_URL,
       requireTargets: args.requireLiveTargets,
       rpcUrl: process.env.WORLDCHAIN_RPC_URL,
     });
     printResult(
-      `World Chain mainnet ${args.expectedMode} live readiness`,
+      "World Chain mainnet production live readiness",
       liveResult,
       args.json,
     );

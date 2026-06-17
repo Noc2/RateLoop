@@ -224,10 +224,10 @@ When `mcpApiUrl` is unset, agent client derives MCP from `apiBaseUrl` → `{apiB
 ### L-N6 — SDK README mainnet profile label stale
 
 **Severity:** Low  
-**Status:** Open  
+**Status:** Resolved
 **Paths:** `packages/sdk/README.md:23`, `packages/foundry/deployments/480.json`
 
-README says mainnet artifact is `mainnet-canary` profile; `480.json` has `"deploymentProfile": "production"`.
+Mainnet profile references now consistently point at the production deployment profile.
 
 ---
 

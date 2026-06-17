@@ -109,30 +109,17 @@ test("validateOfflineReadiness accepts synchronized production mainnet artifacts
   assert.deepEqual(result.failures, []);
 });
 
-test("validateOfflineReadiness accepts synchronized canary mainnet artifacts", () => {
+test("validateOfflineReadiness rejects non-production mainnet artifacts", () => {
   const result = validateOfflineReadiness({
-    deploymentJson: makeDeploymentJson({ deploymentProfile: "mainnet-canary" }),
+    deploymentJson: makeDeploymentJson({ deploymentProfile: "staging" }),
     deployedContractsSource: makeGeneratedContractsSource(),
-    expectedMode: "canary",
-    protocolSource,
-  });
-
-  assert.equal(result.ok, true);
-  assert.deepEqual(result.failures, []);
-});
-
-test("validateOfflineReadiness rejects production artifacts when canary is expected", () => {
-  const result = validateOfflineReadiness({
-    deploymentJson: makeDeploymentJson(),
-    deployedContractsSource: makeGeneratedContractsSource(),
-    expectedMode: "canary",
     protocolSource,
   });
 
   assert.equal(result.ok, false);
   assert(
     result.failures.some((message) =>
-      message.includes("deployment artifact profile is mainnet-canary"),
+      message.includes("deployment artifact profile is production"),
     ),
   );
 });

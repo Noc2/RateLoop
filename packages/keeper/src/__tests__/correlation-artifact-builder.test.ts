@@ -242,6 +242,67 @@ describe("automatic correlation artifact builder", () => {
     );
   });
 
+  it("can build a targeted artifact with a custom epoch id and source round bounds", async () => {
+    mockConfig();
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(input.toString());
+      if (url.pathname === "/correlation/round-votes") {
+        return jsonResponse({
+          items: [
+            {
+              account: "0x0000000000000000000000000000000000000001",
+              identityKey: `0x${"a".repeat(64)}`,
+              commitKey: `0x${"b".repeat(64)}`,
+              isUp: true,
+              stake: "10000000",
+              epochIndex: 0,
+              revealWeight: "10000",
+              verifiedHuman: true,
+              historicalVoteCount: 12,
+              features: [`identity:0x${"a".repeat(64)}`],
+            },
+          ],
+        });
+      }
+      return new Response("not found", { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { buildConfiguredCorrelationSnapshotArtifactForCandidates } =
+      await import("../correlation-artifact-builder.js");
+    const logger = {
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    };
+
+    const result =
+      await buildConfiguredCorrelationSnapshotArtifactForCandidates(
+        [
+          {
+            domain: 1,
+            rewardPoolId: 7n,
+            contentId: 9n,
+            roundId: 2n,
+          },
+        ],
+        logger,
+        { correlationEpochId: 1_000_000_009n },
+      );
+
+    expect(result.artifact.correlationEpochs?.[0]).toMatchObject({
+      epochId: "1000000009",
+      fromRoundId: "2",
+      toRoundId: "2",
+    });
+    expect(result.artifact.roundPayoutSnapshots?.[0]).toMatchObject({
+      contentId: "9",
+      roundId: "2",
+      correlationEpochId: "1000000009",
+    });
+  });
+
   it("publishes targeted vote exclusions in the stored artifact", async () => {
     mockConfig();
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
@@ -851,9 +912,10 @@ describe("automatic correlation artifact builder", () => {
       vi.doMock(
         "@rateloop/node-utils/correlationScoring",
         async (importOriginal) => {
-          const actual = await importOriginal<
-            typeof import("@rateloop/node-utils/correlationScoring")
-          >();
+          const actual =
+            await importOriginal<
+              typeof import("@rateloop/node-utils/correlationScoring")
+            >();
           return {
             ...actual,
             CORRELATION_VOTE_PAGE_SIZE: 1,

@@ -144,6 +144,15 @@ export function buildDeploymentProfileEnv({ network }, env = process.env) {
       ? PRODUCTION_DEPLOYMENT_PROFILE
       : DEFAULT_DEPLOYMENT_PROFILE;
   const existingProfile = env[RATELOOP_DEPLOYMENT_PROFILE_ENV]?.trim();
+  if (
+    network === "worldchain" &&
+    existingProfile &&
+    existingProfile !== PRODUCTION_DEPLOYMENT_PROFILE
+  ) {
+    throw new Error(
+      `${RATELOOP_DEPLOYMENT_PROFILE_ENV} must be ${PRODUCTION_DEPLOYMENT_PROFILE} for World Chain mainnet deployments.`
+    );
+  }
 
   return {
     [RATELOOP_DEPLOYMENT_PROFILE_ENV]: existingProfile || expectedProfile,

@@ -1123,6 +1123,12 @@ export function reconstructDeploymentExportFromBroadcast(
   networkName,
   { deploymentProfile = resolveDeploymentProfile(networkName) } = {}
 ) {
+  if (networkName === "worldchain" && deploymentProfile !== "production") {
+    throw new Error(
+      "World Chain mainnet deployment exports must use deploymentProfile=production"
+    );
+  }
+
   const transactions = broadcastData.transactions || [];
   const receipts = broadcastData.receipts || [];
   const receiptByHash = buildReceiptByTransactionHash(receipts);
@@ -1193,6 +1199,11 @@ export function reconstructDeploymentExportFromBroadcast(
 
 export function resolveDeploymentProfile(networkName, env = process.env) {
   const value = env[RATELOOP_DEPLOYMENT_PROFILE_ENV]?.trim();
+  if (networkName === "worldchain" && value && value !== "production") {
+    throw new Error(
+      `${RATELOOP_DEPLOYMENT_PROFILE_ENV} must be production for World Chain mainnet deployment exports`
+    );
+  }
   return (
     value ||
     DEFAULT_DEPLOYMENT_PROFILE_BY_NETWORK[networkName] ||

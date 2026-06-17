@@ -365,6 +365,8 @@ export async function attachOpenRoundSummary<T extends { id: bigint }>(
 }
 
 export function formatRoundSummary(row: {
+  id?: string;
+  contentId?: bigint;
   roundId: bigint;
   state: number;
   voteCount: number;
@@ -383,7 +385,16 @@ export function formatRoundSummary(row: {
   downEvidence: bigint;
   settledRounds: number;
   lowSince: bigint;
+  ratingReviewStatus?: number;
+  ratingReviewReferenceRatingBps?: number | null;
+  ratingReviewRawUpEvidence?: bigint | null;
+  ratingReviewRawDownEvidence?: bigint | null;
+  ratingReviewSnapshotDigest?: `0x${string}` | null;
+  ratingReviewUpdatedAt?: bigint | null;
+  upWins?: boolean | null;
+  losingPool?: bigint | null;
   startTime: bigint | null;
+  settledAt?: bigint | null;
   epochDuration: number;
   maxDuration: number;
   minVoters: number;
@@ -394,6 +405,8 @@ export function formatRoundSummary(row: {
   revealGracePeriod: bigint | null;
 }) {
   return {
+    id: row.id,
+    contentId: row.contentId,
     roundId: row.roundId,
     state: row.state,
     voteCount: row.voteCount,
@@ -412,7 +425,16 @@ export function formatRoundSummary(row: {
     downEvidence: row.downEvidence,
     settledRounds: row.settledRounds,
     lowSince: row.lowSince,
+    ratingReviewStatus: row.ratingReviewStatus,
+    ratingReviewReferenceRatingBps: row.ratingReviewReferenceRatingBps,
+    ratingReviewRawUpEvidence: row.ratingReviewRawUpEvidence,
+    ratingReviewRawDownEvidence: row.ratingReviewRawDownEvidence,
+    ratingReviewSnapshotDigest: row.ratingReviewSnapshotDigest,
+    ratingReviewUpdatedAt: row.ratingReviewUpdatedAt,
+    upWins: row.upWins,
+    losingPool: row.losingPool,
     startTime: row.startTime,
+    settledAt: row.settledAt,
     epochDuration: row.epochDuration,
     maxDuration: row.maxDuration,
     minVoters: row.minVoters,

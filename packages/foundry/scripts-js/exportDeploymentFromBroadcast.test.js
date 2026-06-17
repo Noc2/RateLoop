@@ -821,29 +821,33 @@ test("reconstructDeploymentExportFromBroadcast accepts full treasury mint on wor
   assert.equal(deploymentExport.networkName, "worldchain");
 });
 
-test("reconstructDeploymentExportFromBroadcast preserves explicit deployment profile", () => {
+test("reconstructDeploymentExportFromBroadcast rejects non-production worldchain profiles", () => {
   const { transactions, receipts } = completeBroadcast({
     treasuryMint: treasuryMintAmount,
   });
 
-  const deploymentExport = reconstructDeploymentExportFromBroadcast(
-    { transactions, receipts },
-    "worldchain",
-    { deploymentProfile: "mainnet-canary" }
+  assert.throws(
+    () =>
+      reconstructDeploymentExportFromBroadcast(
+        { transactions, receipts },
+        "worldchain",
+        { deploymentProfile: "staging" }
+      ),
+    /must use deploymentProfile=production/
   );
-
-  assert.equal(deploymentExport.deploymentComplete, "true");
-  assert.equal(deploymentExport.deploymentProfile, "mainnet-canary");
-  assert.equal(deploymentExport.networkName, "worldchain");
 });
 
-test("resolveDeploymentProfile uses env override then network defaults", () => {
-  assert.equal(
-    resolveDeploymentProfile("worldchain", {
-      RATELOOP_DEPLOYMENT_PROFILE: "mainnet-canary",
-    }),
-    "mainnet-canary"
+test("resolveDeploymentProfile rejects non-production worldchain env overrides", () => {
+  assert.throws(
+    () =>
+      resolveDeploymentProfile("worldchain", {
+        RATELOOP_DEPLOYMENT_PROFILE: "staging",
+      }),
+    /must be production/
   );
+});
+
+test("resolveDeploymentProfile uses network defaults", () => {
   assert.equal(resolveDeploymentProfile("worldchain", {}), "production");
   assert.equal(resolveDeploymentProfile("worldchainSepolia", {}), "default");
 });

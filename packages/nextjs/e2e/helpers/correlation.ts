@@ -31,6 +31,7 @@ const SNAPSHOT_STATUS_CHALLENGED = 2;
 const SNAPSHOT_STATUS_FINALIZED = 3;
 export const CORRELATION_E2E_STAKE = 10_000_000n;
 const FRONTEND_STAKE = 1_000_000_000n;
+const E2E_CORRELATION_EPOCH_OFFSET = 1_000_000_000n;
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const REPO_ROOT = path.resolve(process.cwd(), "../..");
 
@@ -193,12 +194,18 @@ export async function publishAndFinalizeCorrelationSnapshotsWithKeeper(
     args: [],
   });
 
-  const artifactPath = await writeTargetedCorrelationArtifact(rewardPoolId, contentId, roundId);
+  const correlationEpochId = E2E_CORRELATION_EPOCH_OFFSET + contentId;
+  const artifactPath = await writeTargetedCorrelationArtifact(
+    rewardPoolId,
+    contentId,
+    roundId,
+    correlationEpochId,
+  );
   correlationKeeper = startCorrelationSnapshotKeeper(artifactPath);
-  await waitForCorrelationEpochStatus(roundId, [SNAPSHOT_STATUS_PROPOSED, SNAPSHOT_STATUS_FINALIZED]);
+  await waitForCorrelationEpochStatus(correlationEpochId, [SNAPSHOT_STATUS_PROPOSED, SNAPSHOT_STATUS_FINALIZED]);
 
   await evmIncreaseTime(Number(challengeWindow) + 1);
-  await waitForCorrelationEpochStatus(roundId, [SNAPSHOT_STATUS_FINALIZED]);
+  await waitForCorrelationEpochStatus(correlationEpochId, [SNAPSHOT_STATUS_FINALIZED]);
 
   const snapshotKey = await getRoundPayoutSnapshotKey(rewardPoolId, contentId, roundId);
   await waitForRoundPayoutSnapshotStatus(snapshotKey, [SNAPSHOT_STATUS_PROPOSED, SNAPSHOT_STATUS_FINALIZED]);
@@ -346,13 +353,20 @@ async function writeTargetedCorrelationArtifact(
   rewardPoolId: bigint,
   contentId: bigint,
   roundId: bigint,
+  correlationEpochId: bigint,
 ) {
   const artifactPath = path.join(
     tmpdir(),
     `rateloop-correlation-${process.pid}-${Date.now()}-${randomUUID()}.json`,
   );
   try {
-    await runKeeperArtifactBuilder(artifactPath, rewardPoolId, contentId, roundId);
+    await runKeeperArtifactBuilder(
+      artifactPath,
+      rewardPoolId,
+      contentId,
+      roundId,
+      correlationEpochId,
+    );
   } catch (error) {
     await unlink(artifactPath).catch(() => {});
     throw error;
@@ -365,6 +379,7 @@ async function runKeeperArtifactBuilder(
   rewardPoolId: bigint,
   contentId: bigint,
   roundId: bigint,
+  correlationEpochId: bigint,
 ) {
   const child = spawn(
     "yarn",
@@ -378,6 +393,8 @@ async function runKeeperArtifactBuilder(
       rewardPoolId.toString(),
       "--content-id",
       contentId.toString(),
+      "--correlation-epoch-id",
+      correlationEpochId.toString(),
       "--round-id",
       roundId.toString(),
       "--out",

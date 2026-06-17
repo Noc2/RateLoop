@@ -113,6 +113,21 @@ test("buildDeploymentProfileEnv defaults worldchain to production", () => {
   );
 });
 
+test("buildDeploymentProfileEnv rejects non-production worldchain profile overrides", () => {
+  assert.throws(
+    () =>
+      buildDeploymentProfileEnv(
+        {
+          network: "worldchain",
+        },
+        {
+          [RATELOOP_DEPLOYMENT_PROFILE_ENV]: "staging",
+        }
+      ),
+    /must be production/
+  );
+});
+
 test("buildDeploymentProfileEnv defaults non-mainnet deployments to default", () => {
   assert.deepEqual(
     buildDeploymentProfileEnv({
