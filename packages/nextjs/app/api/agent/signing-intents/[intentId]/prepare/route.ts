@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import {
+  AGENT_JSON_BODY_MAX_BYTES,
   AGENT_WRITE_RATE_LIMIT,
   agentRouteErrorResponse,
   handlePublicAgentRoute,
@@ -17,7 +18,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ in
 
   return handlePublicAgentRoute({
     handler: async () => {
-      const body = await parseJsonBody(request);
+      const body = await parseJsonBody(request, { maxBytes: AGENT_JSON_BODY_MAX_BYTES });
       if (!isJsonObjectBody(body)) return jsonBodyErrorResponse(body);
 
       const { paymentAuthorization, token, walletAddress } = body as {

@@ -61,11 +61,20 @@ async function sha256Hex(file: File) {
 }
 
 async function readJson<T>(response: Response): Promise<T> {
-  const json = (await response.json().catch(() => null)) as T | { error?: string } | null;
+  const json = (await response.json().catch(() => null)) as
+    | T
+    | { error?: string; message?: string }
+    | null;
   if (!response.ok) {
-    throw new Error(
-      json && typeof json === "object" && "error" in json && json.error ? json.error : "Image upload failed.",
-    );
+    const message =
+      json && typeof json === "object"
+        ? typeof json.message === "string" && json.message.trim()
+          ? json.message
+          : typeof json.error === "string" && json.error.trim()
+            ? json.error
+            : "Image upload failed."
+        : "Image upload failed.";
+    throw new Error(message);
   }
   return json as T;
 }

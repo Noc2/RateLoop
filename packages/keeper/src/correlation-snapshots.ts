@@ -41,7 +41,7 @@ const STATUS = {
   Finalized: 3,
   Rejected: 4,
 } as const;
-const ARTIFACT_FETCH_TIMEOUT_MS = 5_000;
+const ARTIFACT_FETCH_TIMEOUT_MS = 15_000;
 const ARTIFACT_MAX_BYTES = 10_000_000;
 
 interface CorrelationSnapshotPublisherResult {

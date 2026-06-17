@@ -1034,4 +1034,61 @@ describe("ContentRegistry ponder handlers", () => {
       ]),
     );
   });
+
+  it("marks content dormant when ContentDormant is emitted", async () => {
+    const { db, updateCalls } = createDb(undefined, {
+      contentRecord: { id: 1n, status: 0 },
+    });
+    const registeredHandlers = await loadHandlers();
+    const handler = registeredHandlers.get("ContentRegistry:ContentDormant");
+    expect(handler).toBeDefined();
+
+    await handler!({
+      event: { args: { contentId: 1n }, block: { number: 1n, timestamp: 100n } },
+      context: {
+        client: { readContract: vi.fn() },
+        contracts: { ContentRegistry: { address: "0x000000000000000000000000000000000000c0de" } },
+        db,
+      },
+    });
+
+    expect(updateCalls).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          table: "content",
+          values: expect.objectContaining({ status: 1 }),
+        }),
+      ]),
+    );
+  });
+
+  it("revives dormant content when ContentRevived is emitted", async () => {
+    const { db, updateCalls } = createDb(undefined, {
+      contentRecord: { id: 1n, status: 1 },
+    });
+    const registeredHandlers = await loadHandlers();
+    const handler = registeredHandlers.get("ContentRegistry:ContentRevived");
+    expect(handler).toBeDefined();
+
+    await handler!({
+      event: {
+        args: { contentId: 1n, reviver: "0x1111111111111111111111111111111111111111" },
+        block: { number: 2n, timestamp: 200n },
+      },
+      context: {
+        client: { readContract: vi.fn() },
+        contracts: { ContentRegistry: { address: "0x000000000000000000000000000000000000c0de" } },
+        db,
+      },
+    });
+
+    expect(updateCalls).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          table: "content",
+          values: expect.objectContaining({ status: 0, lastActivityAt: 200n }),
+        }),
+      ]),
+    );
+  });
 });

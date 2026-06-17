@@ -432,6 +432,20 @@ ponder.on("ContentRegistry:ContentRevived", async ({ event, context }) => {
   });
 });
 
+ponder.on("ContentRegistry:DormantSubmissionKeyReleased", async ({ event, context }) => {
+  const { contentId } = event.args;
+  await context.db.update(content, { id: contentId }).set({
+    lastActivityAt: event.block.timestamp,
+  });
+});
+
+ponder.on("ContentRegistry:PendingRatingClusterPayoutOracleRepointed", async ({ event, context }) => {
+  const { contentId } = event.args;
+  await context.db.update(content, { id: contentId }).set({
+    lastActivityAt: event.block.timestamp,
+  });
+});
+
 ponder.on("ContentRegistry:ContentCancelled", async ({ event, context }) => {
   const { contentId } = event.args;
   await context.db.update(content, { id: contentId }).set({

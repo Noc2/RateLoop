@@ -125,7 +125,7 @@ const MAX_CLEANUP_BATCHES_PER_TICK = 4;
 const REVEAL_FAILED_GRACE_MULTIPLIER = 24n;
 const MAX_CLEANUP_COMPLETED = 5000;
 const MAX_CLEANUP_QUEUE = 2000;
-const PONDER_FETCH_TIMEOUT_MS = 5_000;
+const PONDER_FETCH_TIMEOUT_MS = 15_000;
 const INDEXED_CIPHERTEXT_PAGE_SIZE = 200;
 const MAX_INDEXED_CIPHERTEXT_PAGES = 6;
 const cleanupQueue = new Map<string, CleanupCursor>();
@@ -566,6 +566,12 @@ async function fetchKeeperWorkFromPonder(
   const baseUrl = config.ponderBaseUrl;
   if (!baseUrl) return null;
 
+  const isProduction = process.env.NODE_ENV === "production";
+  const keeperWorkToken = process.env.PONDER_KEEPER_WORK_TOKEN?.trim();
+  if (isProduction && !keeperWorkToken) {
+    throw new Error("PONDER_KEEPER_WORK_TOKEN is required in production");
+  }
+
   const url = new URL("/keeper/work", baseUrl);
   url.searchParams.set("now", now.toString());
   url.searchParams.set("dormancyPeriod", dormancyPeriod.toString());
@@ -580,7 +586,6 @@ async function fetchKeeperWorkFromPonder(
 
   try {
     const headers: Record<string, string> = {};
-    const keeperWorkToken = process.env.PONDER_KEEPER_WORK_TOKEN?.trim();
     if (keeperWorkToken) {
       headers.authorization = `Bearer ${keeperWorkToken}`;
     }
@@ -598,6 +603,9 @@ async function fetchKeeperWorkFromPonder(
     return discovery;
   } catch (err: unknown) {
     incrementCounter("keeper_work_discovery_ponder_failures_total");
+    if (isProduction) {
+      throw err instanceof Error ? err : new Error(getRevertReason(err));
+    }
     logger.warn("Falling back to chain keeper work discovery", {
       error: getRevertReason(err),
     });

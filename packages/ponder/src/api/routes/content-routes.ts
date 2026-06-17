@@ -1507,6 +1507,8 @@ export function registerContentRoutes(app: ApiApp) {
         url: content.url,
         submitter: content.submitter,
         categoryId: content.categoryId,
+        hasHumanVerifiedCommit: round.hasHumanVerifiedCommit,
+        humanVerifiedCommitCount: round.humanVerifiedCommitCount,
       })
       .from(round)
       .leftJoin(content, eq(round.contentId, content.id))
@@ -1526,7 +1528,11 @@ export function registerContentRoutes(app: ApiApp) {
       .where(where);
 
     return jsonBig(c, {
-      items: items.map(item => formatConfidentialContentPreview(item)),
+      items: items.map(item => ({
+        ...formatConfidentialContentPreview(item),
+        humanVerifiedCommitQuorumMet:
+          item.humanVerifiedCommitCount >= Math.max(item.minVoters ?? 0, 3),
+      })),
       total: countResult?.count ?? 0,
       limit,
       offset,

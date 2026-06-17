@@ -146,7 +146,9 @@ When the keeper's metrics server is enabled, it serves hash-named artifact files
 
 ### Work discovery liveness
 
-With `KEEPER_WORK_DISCOVERY_PONDER_ENABLED=true` (default), most ticks ask Ponder for up to `KEEPER_WORK_DISCOVERY_MAX_CANDIDATES` urgent items (open rounds, cleanup hints, dormancy, Feedback Bonus forfeits). Content outside that capped set would otherwise wait until the next full chain reconciliation (`KEEPER_WORK_DISCOVERY_RECONCILE_EVERY_TICKS`, default 120 ticks). Each Ponder tick also advances a bounded chain scan: `KEEPER_WORK_DISCOVERY_CHAIN_SCAN_PER_TICK` content IDs from a rotating cursor (default `max(10, ceil(500/120)) = 10`), so every registered content ID is visited periodically even when Ponder prioritization is saturated.
+With `KEEPER_WORK_DISCOVERY_PONDER_ENABLED=true` (default), most ticks ask Ponder for up to `KEEPER_WORK_DISCOVERY_MAX_CANDIDATES` urgent items **per category** (open rounds, cleanup hints, dormancy, Feedback Bonus forfeits — up to ~4× the limit per response). Content outside those capped sets would otherwise wait until the next full chain reconciliation (`KEEPER_WORK_DISCOVERY_RECONCILE_EVERY_TICKS`, default 120 ticks). Each Ponder tick also advances a bounded chain scan: `KEEPER_WORK_DISCOVERY_CHAIN_SCAN_PER_TICK` content IDs from a rotating cursor (default `max(10, ceil(500/120)) = 10`), so every registered content ID is visited periodically even when Ponder prioritization is saturated.
+
+In production, set matching `PONDER_KEEPER_WORK_TOKEN` on Ponder and the keeper. The keeper fails the tick when Ponder rejects `/keeper/work` auth in production instead of silently falling back to chain enumeration.
 
 Historical round cleanup discovery (`discoverCleanupCandidate`) runs on every processed content ID, not only on reconciliation ticks. Ponder may still surface cleanup hints via `/keeper/work`; the keeper also walks one historical round per content per tick on-chain.
 
