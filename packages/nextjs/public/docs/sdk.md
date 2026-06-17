@@ -2,7 +2,7 @@
 
 RateLoop exposes SDK, MCP, and JSON routes so agents can quote, submit, fund, track, and read paid human feedback rounds.
 
-Chain ID examples use Worldchain mainnet (`480`). Worldchain Sepolia testnet uses `4801`; see the SDK package README for the full network legend.
+Chain ID examples use World Chain Sepolia testnet (`4801`). World Chain mainnet uses `480`; see the SDK package README for the full network legend.
 
 ## Use The SDK When
 
@@ -51,7 +51,7 @@ POST /api/agent/handoffs
 
 Return the `handoffUrl` to the user. The page handles wallet connection, generated-image upload signatures, ask preparation, transaction execution, and confirmation.
 
-For browser-only signing without a full handoff page, create a signing intent via `POST /api/agent/signing-intents` and send the user to `/agent/sign/{intentId}#token=…` (token in the URL fragment, not query string). Prepare and complete via the signing-intent routes with the `x-rateloop-signing-intent-token` header.
+For browser-only signing without a full handoff page, create a signing intent via `POST /api/agent/signing-intents` and send the user to `/agent/sign/{intentId}#token=…` (token in the URL fragment, not query string). Read the intent with GET and the `x-rateloop-signing-intent-token` header. Prepare and complete via the signing-intent routes with JSON body `token`.
 
 Use the local signer CLI instead when the agent controls a funded encrypted wallet.
 
@@ -131,7 +131,7 @@ Use this shape after a successful quote. USDC amounts are atomic units, so `2500
 
 ```json
 {
-  "chainId": 480,
+  "chainId": 4801,
   "clientRequestId": "design-review-2026-05-05-001",
   "walletAddress": "0x1111111111111111111111111111111111111111",
   "paymentMode": "wallet_calls",
@@ -159,7 +159,7 @@ Use this shape after a successful quote. USDC amounts are atomic units, so `2500
     "title": "Is this generated product concept clear enough to test?",
     "detailsUrl": "https://www.rateloop.ai/api/attachments/details/det_example",
     "detailsHash": "0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-    "imageUrls": ["https://www.rateloop.ai/uploads/example-generated-concept.webp"],
+    "imageUrls": ["https://www.rateloop.ai/api/attachments/images/att_example.webp#sha256=0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"],
     "categoryId": "5",
     "tags": ["agent", "design", "generated-context"],
     "templateId": "feature_acceptance_test",
@@ -194,20 +194,20 @@ const agent = createRateLoopAgentClient({
 });
 
 let context = await agent.getRatingContext({
-  chainId: 480,
+  chainId: 4801,
   contentId: "42",
   walletAddress: "0xYourWallet",
 });
 
 if (context.content?.contextAccess === "gated") {
   const termsChallenge = await agent.acceptConfidentialityTerms({
-    chainId: 480,
+    chainId: 4801,
     contentId: "42",
     walletAddress: "0xYourWallet",
   });
   // Ask the rating wallet to sign termsChallenge.message.
   const acceptedTerms = await agent.acceptConfidentialityTerms({
-    chainId: 480,
+    chainId: 4801,
     challengeId: termsChallenge.challengeId ?? undefined,
     contentId: "42",
     signature: "0xWalletSignature",
@@ -215,7 +215,7 @@ if (context.content?.contextAccess === "gated") {
   });
   // Use acceptedTerms.signedReadSession?.cookieHeader when fetching gatedContext.urls.
   context = await agent.getRatingContext({
-    chainId: 480,
+    chainId: 4801,
     contentId: "42",
     walletAddress: "0xYourWallet",
   });
@@ -244,7 +244,7 @@ const commit = await buildCommitVoteParams({
 });
 
 const prepared = await agent.prepareRatingTransactions({
-  chainId: 480,
+  chainId: 4801,
   contentId: "42",
   walletAddress: "0xYourWallet",
   roundId: commit.roundId,
