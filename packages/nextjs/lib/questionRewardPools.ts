@@ -114,7 +114,18 @@ export function getConfiguredFeedbackRegistryAddress(chainId: number): `0x${stri
   return getDeployedContractAddress(chainId, "FeedbackRegistry");
 }
 
+function assertMatchingPublicUsdcOverrides(): void {
+  const usdc = getPublicUsdcAddressOverride();
+  const x402 = getPublicX402UsdcAddressOverride();
+  if (usdc && x402 && usdc.toLowerCase() !== x402.toLowerCase()) {
+    throw new Error(
+      "NEXT_PUBLIC_USDC_ADDRESS and NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS must match when both are set.",
+    );
+  }
+}
+
 export function getDefaultUsdcAddress(chainId: number): `0x${string}` | undefined {
+  assertMatchingPublicUsdcOverrides();
   return (
     getPublicUsdcAddressOverride() ??
     getPublicX402UsdcAddressOverride() ??
