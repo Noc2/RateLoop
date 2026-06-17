@@ -19,7 +19,7 @@ the few runtime values that are intentionally not hard-coded. Browser handoff We
 the default headless path:
 
 - RateLoop origin, usually `https://www.rateloop.ai`
-- funded World Chain `walletAddress` for browser signing, or permission to generate a local encrypted signer and fund that address
+- funded Base Sepolia `walletAddress` for browser signing, or permission to generate a local encrypted signer and fund that address
 - public context URL, YouTube video context, or image context you can upload to RateLoop
 - optional extra image bytes for local mockups, screenshots, and generated images
 - USDC bounty, `maxPaymentAmount`, `requiredVoters`, `requiredSettledRounds`, `bountyStartBy`, `bountyWindowSeconds`, `feedbackWindowSeconds`, and optional payout-only `bountyEligibility`
@@ -91,11 +91,11 @@ yarn agents:ask --dry-run --file packages/agents/examples/questions/landing-pitc
 
 Dry runs use `dryRun: true` and `mode: "dry_run"` under the hood. They validate category, template, bounty, wallet shape,
 and budget fields, then return a synthetic settled result. They do not reserve managed budget, register callbacks, create
-image attachments, request a USDC authorization, return a transaction plan, or touch World Chain mainnet.
+image attachments, request a USDC authorization, return a transaction plan, or touch live chains.
 
 ## First Funded Ask
 
-1. Fund the user wallet or local signer wallet with World Chain Sepolia USDC.
+1. Fund the user wallet or local signer wallet with Base Sepolia USDC for testnet asks.
 2. Keep generated/local image bytes for `generatedImages` when browser handoff visual context is needed.
 3. Run `sandbox` or `ask --dry-run`, then quote with `rateloop_quote_question` before reserving spend.
 4. For a human wallet, call `rateloop_create_ask_handoff_link` with the same ask payload and optional `generatedImages`, then share the returned `/agent/handoff/{handoffId}#token=...` URL.
@@ -142,15 +142,15 @@ Use an encrypted keystore for persistent wallets:
 ```bash
 export RATELOOP_LOCAL_SIGNER_KEYSTORE_PATH="$HOME/.rateloop/local-signer.json"
 export RATELOOP_LOCAL_SIGNER_KEYSTORE_PASSWORD="$(security find-generic-password -a rateloop-local-signer -w)"
-export RATELOOP_RPC_URL="https://worldchain-sepolia.g.alchemy.com/public"
-export RATELOOP_CHAIN_ID=4801
+export RATELOOP_RPC_URL="https://sepolia.base.org"
+export RATELOOP_CHAIN_ID=84532
 
 yarn workspace @rateloop/agents wallet --generate
 yarn workspace @rateloop/agents wallet
 yarn workspace @rateloop/agents local-ask --file packages/agents/examples/questions/landing-pitch-review.json
 ```
 
-Production mainnet uses chain `480` (`NEXT_PUBLIC_TARGET_NETWORKS=480` in `.env.production`). Local signer examples and `examples/questions/*.json` default to Sepolia (`4801`) so funded test wallets stay on testnet USDC.
+Production mainnet uses chain `8453` (`NEXT_PUBLIC_TARGET_NETWORKS=8453` in `.env.production`). Local signer examples and `examples/questions/*.json` should default to Base Sepolia (`84532`) so funded test wallets stay on testnet USDC.
 
 The local signer never prints the private key. `RATELOOP_LOCAL_SIGNER_PRIVATE_KEY` exists only for short-lived CI or
 ephemeral test wallets; avoid putting long-lived funded keys in shell history, committed `.env` files, or shared logs.

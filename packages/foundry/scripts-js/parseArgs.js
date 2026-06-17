@@ -17,6 +17,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 config({ path: join(__dirname, "..", ".env") });
 
 const NETWORK_RPC_OVERRIDE_ENV = {
+  baseSepolia: "BASE_SEPOLIA_RPC_URL",
+  base: "BASE_RPC_URL",
   worldchainSepolia: "WORLDCHAIN_SEPOLIA_RPC_URL",
   worldchain: "WORLDCHAIN_RPC_URL",
 };

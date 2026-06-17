@@ -1,6 +1,6 @@
 {
   "clientRequestId": "proposal-review-demo",
-  "chainId": 4801,
+  "chainId": 84532,
   "templateId": "proposal_review",
   "maxPaymentAmount": "1000000",
   "bounty": {

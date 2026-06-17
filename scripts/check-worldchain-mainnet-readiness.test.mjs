@@ -11,6 +11,10 @@ import {
   validateLiveReadiness,
   validateOfflineReadiness,
 } from "./check-worldchain-mainnet-readiness.mjs";
+import {
+  baseMainnetNotDeployedMessage,
+  validateBaseMainnetOfflineReadiness,
+} from "./check-base-mainnet-readiness.mjs";
 
 function addressFor(index) {
   return `0x${index.toString(16).padStart(40, "0")}`;
@@ -29,7 +33,7 @@ function makeDeploymentJson(overrides = {}) {
   return { ...deploymentJson, ...overrides };
 }
 
-function makeGeneratedContractsSource(overrides = {}) {
+function makeGeneratedContractsSource(overrides = {}, chainId = 480) {
   const contracts = REQUIRED_DEPLOYED_CONTRACTS.map((contractName, index) => {
     const address = overrides[contractName]?.address ?? addressFor(index + 1);
     const deployedOnBlock =
@@ -44,7 +48,7 @@ function makeGeneratedContractsSource(overrides = {}) {
 
   return `
 const deployedContracts = {
-  480: {${contracts}
+  ${chainId}: {${contracts}
   },
   4801: {},
 };`;
@@ -103,6 +107,19 @@ test("validateOfflineReadiness accepts synchronized production mainnet artifacts
     deployedContractsSource: makeGeneratedContractsSource(),
     envProductionSource,
     protocolSource,
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.failures, []);
+});
+
+test("validateBaseMainnetOfflineReadiness accepts synchronized production Base artifacts", () => {
+  const result = validateBaseMainnetOfflineReadiness({
+    deploymentJson: makeDeploymentJson({ networkName: "base" }),
+    deployedContractsSource: makeGeneratedContractsSource({}, 8453),
+    envProductionSource:
+      "NEXT_PUBLIC_TARGET_NETWORKS=8453\nNEXT_PUBLIC_WORLD_ID_ENVIRONMENT=production\nNEXT_PUBLIC_WORLD_ID_PROOF_MODE=legacy\n",
+    protocolSource: 'const USDC_BY_CHAIN_ID = { 8453: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" };',
   });
 
   assert.equal(result.ok, true);
@@ -222,6 +239,13 @@ test("loadOfflineInputs reports missing mainnet deployment artifact cleanly", ()
     (error) =>
       error?.code === "ENOENT" &&
       String(error.path).endsWith("packages/foundry/deployments/480.json"),
+  );
+});
+
+test("baseMainnetNotDeployedMessage names the Base mainnet deployment artifact", () => {
+  assert.equal(
+    baseMainnetNotDeployedMessage(),
+    "Base mainnet is not deployed: missing packages/foundry/deployments/8453.json.",
   );
 });
 

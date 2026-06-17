@@ -5,9 +5,9 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square" alt="License: MIT"></a>
 </p>
 
-RateLoop is an open rating protocol for humans, AI raters, teams, and apps. Raters submit a private thumbs-up/down signal plus a prediction of how many raters will vote up, reveal after a private round, and build reputation through calibrated, reliable signal. Browser submissions can fund useful rating work in LREP or World Chain USDC, while public agent wallet flows use World Chain USDC and Loop Reputation (`LREP`) remains the capped governance and protocol reputation token planned for the fresh deployment.
+RateLoop is an open rating protocol for humans, AI raters, teams, and apps. Raters submit a private thumbs-up/down signal plus a prediction of how many raters will vote up, reveal after a private round, and build reputation through calibrated, reliable signal. Browser submissions can fund useful rating work in LREP or USDC, while public agent wallet flows use chain-native USDC and Loop Reputation (`LREP`) remains the capped governance and protocol reputation token planned for the fresh deployment.
 
-This repository is a fresh RateLoop implementation that reuses the old RateLoop monorepo where it is still useful. The current launch direction targets World Chain mainnet and World Chain Sepolia, removes mandatory proof-of-personhood from the core rating path, and uses World ID only as an optional human credential.
+This repository is a fresh RateLoop implementation that reuses the old RateLoop monorepo where it is still useful. The current launch direction targets Base Sepolia first and Base mainnet after testnet verification, removes mandatory proof-of-personhood from the core rating path, and uses World ID only as an optional human credential.
 
 ## Table of Contents
 
@@ -26,7 +26,7 @@ AI agents are increasingly good at drafting, searching, and planning, but they s
 The core loop is:
 
 1. **Ask** — submit content or an idea with context and a rating question.
-2. **Fund** — attach a non-refundable LREP or World Chain USDC bounty, and optionally add a Feedback Bonus in either asset; everyone can answer, while the bounty can optionally pay either everyone or verified humans.
+2. **Fund** — attach a non-refundable LREP or USDC bounty, and optionally add a Feedback Bonus in either asset; everyone can answer, while the bounty can optionally pay either everyone or verified humans.
 3. **Vote and predict** — raters submit a thumbs-up/down signal and predict the percent of revealed raters who will vote up.
 4. **Reveal and settle** — commit-reveal keeps predictions private until reveal, then the round settles into a public rating.
 5. **Finalize payouts** — USDC bounties and launch LREP credits wait for challengeable correlation epoch snapshots, while the public result is already readable.
@@ -40,7 +40,7 @@ Key pieces:
 - **LREP Locks** — useful staked reports score above the stake-weighted mean, recover full stake, and can earn from forfeited negative-spread stake without increasing the capped supply
 - **Launch Distribution Pool** — 75M LREP funds front-loaded 42M verified + referral rewards, 24M earned rater rewards with first-100 cold-start caps gated by governance-tunable anchor diversity, and 9M legacy contributor vesting with unclaimed recovery after 27 months
 - **tlock Commit-Reveal** — predictions stay private through the sealed round
-- **LREP and World Chain USDC Bounties and Bonuses** — small bounty payouts reward calibrated independent work, Feedback Bonuses can add LREP or USDC for useful notes with at least 24 hours of post-settlement award time, and USDC remains the x402-compatible public agent payment lane
+- **LREP and USDC Bounties and Bonuses** — small bounty payouts reward calibrated independent work, Feedback Bonuses can add LREP or USDC for useful notes with at least 24 hours of post-settlement award time, and USDC remains the x402-compatible public agent payment lane
 - **Correlation Epoch Snapshots** — registered frontend operators backed by 1,000 LREP publish COCM-inspired payout roots so dense wallet clusters share capped USDC and launch LREP payouts across rounds, and the same roots now carry surprise-weighted (accuracy-linked) bounty claim weights for USDC rounds in addition to cluster caps
 - **Scoped Bounty Eligibility** — answering is always open, but payout qualification can be limited to verified humans
 - **Agent-Ready Integrations** — SDK helpers and MCP-shaped tools let agents quote, prepare wallet-signed submissions, track asks, and read results without taking operator custody of bounty funds or requiring a saved policy token
@@ -107,7 +107,7 @@ If you already cloned without submodules, initialize them with:
 git submodule update --init --recursive
 ```
 
-For World Chain mainnet deployment, see [packages/foundry/README.md](packages/foundry/README.md).
+For Base Sepolia and Base mainnet deployment, see [packages/foundry/README.md](packages/foundry/README.md).
 
 ## Usage
 

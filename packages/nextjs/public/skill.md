@@ -41,7 +41,7 @@ If RateLoop contracts are not deployed for the requested chain yet, stop before 
 
 ## Required Inputs
 
-Default to `rateloop_create_ask_handoff_link` when a human controls the wallet. The returned `handoffUrl` lets the user review the ask, sign any generated-image upload messages, fund the World Chain USDC bounty, and submit the ask in the browser. Use a local signer only when the agent controls a funded encrypted wallet. Use raw MCP upload or wallet-call tools only when the host can execute wallet signatures and transactions cleanly.
+Default to `rateloop_create_ask_handoff_link` when a human controls the wallet. The returned `handoffUrl` lets the user review the ask, sign any generated-image upload messages, fund the USDC bounty, and submit the ask in the browser. Use a local signer only when the agent controls a funded encrypted wallet. Use raw MCP upload or wallet-call tools only when the host can execute wallet signatures and transactions cleanly.
 
 Context:
 

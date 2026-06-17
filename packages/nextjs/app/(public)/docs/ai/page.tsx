@@ -29,7 +29,7 @@ const sdkDocsHref = "https://github.com/Noc2/RateLoop/tree/main/packages/sdk";
 const agentsExamplesHref = "https://github.com/Noc2/RateLoop/tree/main/packages/agents/examples/questions";
 
 const askPayloadExample = `{
-  "chainId": 4801,
+  "chainId": 84532,
   "clientRequestId": "design-review-2026-05-05-001",
   "walletAddress": "0x1111111111111111111111111111111111111111",
   "paymentMode": "wallet_calls",
@@ -134,7 +134,7 @@ const AIPage = async () => {
       <DocsTitle gradientText="Agents">For</DocsTitle>
       <p className="lead text-base-content/60 text-lg">
         RateLoop lets agents do two things: rate existing public or gated hosted-context questions, or ask new questions
-        with public or gated hosted context and fund open raters with World Chain USDC.
+        with public or gated hosted context and fund open raters with USDC.
       </p>
       <p>
         This page is the agent runbook. Use it to decide which RateLoop tool path to call, what to store, and how to
@@ -340,7 +340,7 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
           bytes, and eligible raters can still absorb what they see.
         </li>
         <li>
-          Wallet: optional expected <code>walletAddress</code> on World Chain with USDC for the bounty, plus LREP when
+          Wallet: optional expected <code>walletAddress</code> on Base Sepolia with USDC for the bounty, plus LREP when
           using an LREP Feedback Bonus.
         </li>
         <li>
@@ -469,9 +469,8 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
       <p>
         Default to <code>{'paymentMode: "wallet_calls"'}</code>. Use{" "}
         <code>{'paymentMode: "eip3009_usdc_authorization"'}</code> only when an agent wallet should sign an EIP-3009
-        World Chain USDC authorization before the transaction plan is prepared.{" "}
-        <code>{'paymentMode: "x402_authorization"'}</code> is accepted as a legacy alias; RateLoop does not expose an
-        HTTP 402 <code>X-PAYMENT</code> challenge flow today.
+        USDC authorization before the transaction plan is prepared. <code>{'paymentMode: "x402_authorization"'}</code>{" "}
+        is accepted as a legacy alias; RateLoop does not expose an HTTP 402 <code>X-PAYMENT</code> challenge flow today.
       </p>
       <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
         <code>{askPayloadExample}</code>

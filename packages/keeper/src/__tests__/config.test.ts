@@ -419,6 +419,15 @@ describe("keeper config", () => {
     expect(config.contracts.advisoryVoteRecorder).toBe(chain4801!.AdvisoryVoteRecorder.address);
   });
 
+  it("recognizes Base Sepolia but requires shared deployment artifacts before keeper startup", async () => {
+    await expect(
+      loadKeeperConfig({
+        CHAIN_ID: "84532",
+        RPC_URL: "https://sepolia.base.org",
+      }),
+    ).rejects.toThrow("Missing shared deployment artifact for RoundVotingEngine on chain 84532");
+  });
+
   it("prefers local hardhat contract env values over shared deployment artifacts", async () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const localVotingEngine = "0x196dBCBb54b8ec4958c959D8949EBFE87aC2Aaaf";

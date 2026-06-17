@@ -24,7 +24,12 @@ import {
 } from "@rateloop/contracts/deployments";
 import { httpWithGetLogsBlockRange } from "./src/rpcTransport";
 
-type PonderNetworkName = "worldchainSepolia" | "hardhat" | "worldchain";
+type PonderNetworkName =
+  | "baseSepolia"
+  | "base"
+  | "worldchainSepolia"
+  | "hardhat"
+  | "worldchain";
 
 const isProduction = process.env.NODE_ENV === "production";
 
@@ -37,6 +42,18 @@ const NETWORKS: Record<
     pollingInterval: number;
   }
 > = {
+  baseSepolia: {
+    chainId: 84532,
+    defaultRpcUrl: "https://sepolia.base.org",
+    maxGetLogsBlockRange: 1_000,
+    pollingInterval: 5_000,
+  },
+  base: {
+    chainId: 8453,
+    defaultRpcUrl: "https://mainnet.base.org",
+    maxGetLogsBlockRange: 1_000,
+    pollingInterval: 5_000,
+  },
   worldchainSepolia: {
     chainId: 4801,
     defaultRpcUrl: "https://worldchain-sepolia.g.alchemy.com/public",
@@ -56,14 +73,12 @@ const NETWORKS: Record<
   },
 };
 
+const SUPPORTED_PONDER_NETWORKS = Object.keys(NETWORKS).join(", ");
+
 function isPonderNetworkName(
   value: string | undefined,
 ): value is PonderNetworkName {
-  return (
-    value === "worldchainSepolia" ||
-    value === "hardhat" ||
-    value === "worldchain"
-  );
+  return value !== undefined && value in NETWORKS;
 }
 
 function getActiveNetwork(): PonderNetworkName {
@@ -72,7 +87,7 @@ function getActiveNetwork(): PonderNetworkName {
   if (!value) {
     if (isProduction) {
       throw new Error(
-        "Missing PONDER_NETWORK. Set it to hardhat, worldchainSepolia, or worldchain.",
+        `Missing PONDER_NETWORK. Set it to one of: ${SUPPORTED_PONDER_NETWORKS}.`,
       );
     }
 
@@ -81,7 +96,7 @@ function getActiveNetwork(): PonderNetworkName {
 
   if (!isPonderNetworkName(value)) {
     throw new Error(
-      `Unsupported PONDER_NETWORK "${value}". Use hardhat, worldchainSepolia, or worldchain.`,
+      `Unsupported PONDER_NETWORK "${value}". Use one of: ${SUPPORTED_PONDER_NETWORKS}.`,
     );
   }
 

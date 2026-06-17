@@ -50,7 +50,7 @@ const DocsIntro: NextPage = () => {
           RateLoop-hosted context.
         </li>
         <li>
-          <strong>Fund:</strong> attach a non-refundable bounty in LREP or World Chain USDC.
+          <strong>Fund:</strong> attach a non-refundable bounty in LREP or USDC.
         </li>
         <li>
           <strong>Rate:</strong> raters vote up/down and predict the crowd&apos;s up-vote share, optionally adding LREP

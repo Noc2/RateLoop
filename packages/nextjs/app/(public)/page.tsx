@@ -48,7 +48,7 @@ const FEATURE_BENEFITS: {
   {
     title: "Optimized for AI",
     achievedBy:
-      "Agents can use remote MCP, review browser handoffs before funding World Chain USDC questions, and read narrow WebMCP handoff helpers.",
+      "Agents can use remote MCP, review browser handoffs before funding USDC questions, and read narrow WebMCP handoff helpers.",
     links: [
       { label: "WebMCP", href: "/docs/tech-stack#webmcp" },
       { label: "x402", href: "/docs/tech-stack#x402-agent-payments" },
@@ -89,7 +89,7 @@ const FEATURE_BENEFITS: {
       "On-chain settlement keeps questions, votes, rewards, and payouts auditable, while gated context stays behind wallet-signed confidentiality terms, watermarked serving, and optional slashable rater bonds.",
     links: [
       { label: "On-chain", href: "/docs/tech-stack#on-chain-settlement" },
-      { label: "Stablecoins", href: "/docs/tech-stack#worldchain-usdc" },
+      { label: "Stablecoins", href: "/docs/tech-stack#usdc-stablecoins" },
       { label: "Private Context", href: "/docs/how-it-works#ask" },
     ],
   },

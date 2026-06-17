@@ -2,7 +2,7 @@
 
 RateLoop exposes SDK, MCP, and JSON routes so agents can quote, submit, fund, track, and read paid human feedback rounds.
 
-Chain ID examples use World Chain Sepolia testnet (`4801`). World Chain mainnet uses `480`; see the SDK package README for the full network legend.
+Chain ID examples use Base Sepolia testnet (`84532`). Base mainnet uses `8453`; see the SDK package README for the full network legend.
 
 ## Use The SDK When
 
@@ -131,7 +131,7 @@ Use this shape after a successful quote. USDC amounts are atomic units, so `2500
 
 ```json
 {
-  "chainId": 4801,
+  "chainId": 84532,
   "clientRequestId": "design-review-2026-05-05-001",
   "walletAddress": "0x1111111111111111111111111111111111111111",
   "paymentMode": "wallet_calls",
@@ -195,20 +195,20 @@ const agent = createRateLoopAgentClient({
 });
 
 let context = await agent.getRatingContext({
-  chainId: 4801,
+  chainId: 84532,
   contentId: "42",
   walletAddress: "0xYourWallet",
 });
 
 if (context.content?.contextAccess === "gated") {
   const termsChallenge = await agent.acceptConfidentialityTerms({
-    chainId: 4801,
+    chainId: 84532,
     contentId: "42",
     walletAddress: "0xYourWallet",
   });
   // Ask the rating wallet to sign termsChallenge.message.
   const acceptedTerms = await agent.acceptConfidentialityTerms({
-    chainId: 4801,
+    chainId: 84532,
     challengeId: termsChallenge.challengeId ?? undefined,
     contentId: "42",
     signature: "0xWalletSignature",
@@ -216,7 +216,7 @@ if (context.content?.contextAccess === "gated") {
   });
   // Use acceptedTerms.signedReadSession?.cookieHeader when fetching gatedContext.urls.
   context = await agent.getRatingContext({
-    chainId: 4801,
+    chainId: 84532,
     contentId: "42",
     walletAddress: "0xYourWallet",
   });
@@ -245,7 +245,7 @@ const commit = await buildCommitVoteParams({
 });
 
 const prepared = await agent.prepareRatingTransactions({
-  chainId: 4801,
+  chainId: 84532,
   contentId: "42",
   walletAddress: "0xYourWallet",
   roundId: commit.roundId,

@@ -5,7 +5,7 @@ RateLoop turns one focused public or RateLoop-hosted gated question into a paid,
 ## Flow
 
 1. An agent or person submits a bounded question with a public context URL, YouTube video, image context uploaded to RateLoop, or RateLoop-hosted private context that unlocks only after wallet-signed confidentiality acceptance. Agents can upload generated or local image bytes before asking.
-2. The asker funds a non-refundable bounty in LREP or World Chain USDC.
+2. The asker funds a non-refundable bounty in LREP or USDC.
 3. Open raters privately vote up/down, predict the crowd's up-vote share, and choose whether to add LREP stake during a blind voting phase.
 4. Votes are revealed after the blind commit-reveal window.
 5. The round settles publicly on-chain, making the result and public rating readable. Three-rater rounds are the launch feedback tier and can still settle as sparse feedback, but LREP score-spread forfeits need at least 8 score-eligible revealed voters before they turn on. Governance can raise new-round voter floors as usage grows.

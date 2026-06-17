@@ -19,7 +19,7 @@ type DrandChain = ReturnType<ChainClient["chain"]>;
 const KEEPER_TLOCK_USER_AGENT = "rateloop-keeper";
 const ENABLE_LEGACY_TLOCK_JS_TESTNET_ENV =
   "KEEPER_ENABLE_LEGACY_TLOCK_JS_TESTNET";
-const WORLDCHAIN_MAINNET_CHAIN_ID = 480;
+const MAINNET_DEPLOYMENT_CHAIN_IDS = new Set([480, 8453]);
 
 export const MAINNET_QUICKNET_CHAIN_HASH =
   "52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971";
@@ -91,11 +91,11 @@ function configuredChainId(): number | null {
 
 function assertDeploymentDrandChain(normalized: string): void {
   if (
-    configuredChainId() === WORLDCHAIN_MAINNET_CHAIN_ID &&
+    MAINNET_DEPLOYMENT_CHAIN_IDS.has(configuredChainId() ?? 0) &&
     normalized !== MAINNET_QUICKNET_CHAIN_HASH
   ) {
     throw new Error(
-      `World Chain mainnet keeper requires drand quicknet chain hash 0x${MAINNET_QUICKNET_CHAIN_HASH}; got 0x${normalized}.`,
+      `Mainnet keeper deployments require drand quicknet chain hash 0x${MAINNET_QUICKNET_CHAIN_HASH}; got 0x${normalized}.`,
     );
   }
 }

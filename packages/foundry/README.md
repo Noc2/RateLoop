@@ -49,21 +49,20 @@ Treat new features on these contracts as size-sensitive: prefer library extracti
 
 **Settlement side effects:** `RoundSettlementSideEffectsLib` records pending public-rating settlements in a try/catch. A failed side effect emits `SettlementSideEffectFailed` but still completes settlement; operators must monitor logs and manually call `recordPendingRatingSettlement` (or repoint/retry tooling) when that event appears. Index or alert on `SettlementSideEffectFailed` from `RoundVotingEngine` in production before mainnet launch.
 
-On World Chain mainnet and World Chain Sepolia, deploys use a Foundry keystore selected via `--keystore <name>` and skip Forge's
-auto-verification flow. Verify those contracts manually with
-`make verify-blockscout NETWORK=<worldchain|worldchainSepolia> CONTRACT_ADDRESS=0x... CONTRACT_NAME=MyContract`.
+On Base mainnet and Base Sepolia, deploys use a Foundry keystore selected via `--keystore <name>`. Forge can use
+Basescan verification when `BASESCAN_API_KEY` is set.
 
-The World Chain Sepolia flow is a fresh deployment flow: `script/Deploy.s.sol` creates new proxies and exports a new
-`deployments/4801.json`. Do not use the current `ContentRegistry` implementation as an in-place upgrade for an older
-Sepolia proxy unless a separate migration/backfill is provided for `submissionMediaValidator` and
+The Base Sepolia flow is the first fresh deployment flow: `script/Deploy.s.sol` creates new proxies and exports a new
+`deployments/84532.json`. Do not use the current `ContentRegistry` implementation as an in-place upgrade for an older
+proxy unless a separate migration/backfill is provided for `submissionMediaValidator` and
 `questionBundleRoundObserverByContent`. Do not use the current `RaterRegistry` implementation as an in-place upgrade
-for an older Sepolia proxy unless a separate migration/backfill is provided for the `_identityBanSource` to
-`_identityBanSources` slot-32 retype. The `worldchain-sepolia:check -- --live` readiness probe verifies the deployed
+for an older proxy unless a separate migration/backfill is provided for the `_identityBanSource` to
+`_identityBanSources` slot-32 retype. The `base-sepolia:check -- --live` readiness probe verifies the deployed
 `ContentRegistry.submissionMediaValidator()` exposes the gated-submission validator selectors before the deployment is
-treated as ready.
+treated as ready. After Base Sepolia passes, deploy Base mainnet and run `base:check -- --live`.
 
-World Chain deploys default to legacy World ID 3.0 Orb verification. The deploy script resolves the canonical
-World ID router for chain `480` or `4801`, derives the external nullifier from
+Base and World Chain deploys default to legacy World ID 3.0 Orb verification. The deploy script resolves the canonical
+World ID router for chain `8453`, `84532`, `480`, or `4801`, derives the external nullifier from
 `NEXT_PUBLIC_WORLD_ID_APP_ID` and `NEXT_PUBLIC_WORLD_ID_CREDENTIAL_ACTION`, and fails pre-broadcast if the live router
 has no code. World ID 4.0 Proof-of-Human remains governance-configurable on `RaterRegistry`, but production deploys do
 not depend on a v4 verifier until that path is tested end-to-end.
@@ -75,18 +74,22 @@ Create a `.env` file (see `.env.example`):
 | Variable                                       | Description                                                                                                                                                                 |
 | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `ALCHEMY_API_KEY`                              | Optional RPC provider key for testnet/mainnet deploys                                                                                                                       |
+| `BASE_RPC_URL`                                 | Optional Base mainnet RPC override for live deploys                                                                                                                         |
+| `BASE_SEPOLIA_RPC_URL`                         | Optional Base Sepolia RPC override for live deploys                                                                                                                         |
 | `WORLDCHAIN_RPC_URL`                           | Optional World Chain mainnet RPC override for live deploys                                                                                                                  |
 | `WORLDCHAIN_SEPOLIA_RPC_URL`                   | Optional World Chain Sepolia RPC override for live deploys                                                                                                                  |
 | `NEXT_PUBLIC_WORLD_ID_APP_ID`                  | World ID app ID used to derive the legacy v3 external nullifier                                                                                                             |
 | `NEXT_PUBLIC_WORLD_ID_CREDENTIAL_ACTION`       | World ID credential action; defaults to `rateloop-human-credential-v1`                                                                                                      |
 | `WORLD_ID_ROUTER_ADDRESS`                      | Optional explicit World ID v3 router override; nonzero live-network overrides must have code                                                                                |
 | `WORLD_ID_EXTERNAL_NULLIFIER_HASH`             | Optional explicit v3 external nullifier hash override; leave unset to derive from app ID and action                                                                         |
-| `RATELOOP_DEPLOYMENT_PROFILE`                  | Deployment artifact profile stamp; the deploy wrapper sets `production` for World Chain mainnet and `default` elsewhere                                                    |
+| `RATELOOP_DEPLOYMENT_PROFILE`                  | Deployment artifact profile stamp; the deploy wrapper sets `production` for Base/World Chain mainnet and `default` elsewhere                                                |
 | `ETHERSCAN_API_KEY`                            | Optional explorer API key for Etherscan-compatible networks                                                                                                                 |
+| `BASESCAN_API_KEY`                             | Optional Basescan API key for Base and Base Sepolia verification                                                                                                            |
 
-World Chain mainnet (`480`) resolves router `0x17B354dD2595411ff79041f930e491A4Df39A278` by default. World Chain
-Sepolia (`4801`) resolves router `0x57f928158C3EE7CDad1e4D8642503c4D0201f611` by default. Localhost deploys create
-`MockWorldIDRouter`, wire it into `RaterRegistry`, and export it in the local deployment JSON.
+Base mainnet (`8453`) resolves router `0xBCC7e5910178AFFEEeBA573ba6903E9869594163` by default. Base Sepolia (`84532`)
+resolves router `0x42FF98C4E85212a5D31358ACbFe76a621b50fC02` by default. World Chain mainnet (`480`) and World Chain
+Sepolia (`4801`) remain supported legacy deploy targets. Localhost deploys create `MockWorldIDRouter`, wire it into
+`RaterRegistry`, and export it in the local deployment JSON.
 
 Localhost deploys use the standard Anvil private key directly, so `yarn deploy` does not need a keystore password
 when deploying to `localhost`.

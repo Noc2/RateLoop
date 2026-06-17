@@ -1,33 +1,40 @@
 # Environment parity matrix
 
-Cross-package reference for env names that refer to the same on-chain value, E2E toggles, and contract-address prefixes. Live supported chains (`480`, `4801`, `31337`) default from `@rateloop/contracts` deployment artifacts; overrides are for local Anvil or unsupported chains unless noted.
+Cross-package reference for env names that refer to the same on-chain value, E2E toggles, and contract-address prefixes. Live supported chains (`8453`, `84532`, `480`, `4801`, `31337`) default from `@rateloop/contracts` deployment artifacts; overrides are for local Anvil or unsupported chains unless noted.
 
 ## Chain IDs
 
 | Chain ID | Network | Deployment artifact | Profile |
 | --- | --- | --- | --- |
+| `84532` | Base Sepolia | `packages/foundry/deployments/84532.json` | `default` |
+| `8453` | Base mainnet | `packages/foundry/deployments/8453.json` | `production` |
 | `4801` | World Chain Sepolia | `packages/foundry/deployments/4801.json` | `default` |
 | `480` | World Chain mainnet | `packages/foundry/deployments/480.json` | `production` |
 | `31337` | Local Foundry / Anvil | gitignored local deploy | local |
 
 ## USDC address aliases
 
-World Chain USDC defaults are in `@rateloop/contracts` (`WORLD_CHAIN_USDC_BY_CHAIN_ID`):
+USDC defaults are in `@rateloop/contracts` (`USDC_BY_CHAIN_ID`). Chain-scoped env overrides use the same suffix as the chain ID.
 
 | Chain | Default USDC |
 | --- | --- |
+| `84532` | `0x036CbD53842c5426634e7929541eC2318f3dCF7e` |
+| `8453` | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` |
 | `480` | `0x79A02482A880bCE3F13e09Da970dC34db4CD24d1` |
 | `4801` | `0x66145f38cBAC35Ca6F1Dfb4914dF98F1614aeA88` |
 
 | Package / surface | Env var | Role |
 | --- | --- | --- |
 | Next.js browser | `NEXT_PUBLIC_USDC_ADDRESS` | Browser-side USDC bounty reads and approvals |
+| Next.js browser | `NEXT_PUBLIC_USDC_ADDRESS_<chainId>` | Chain-scoped browser-side USDC bounty reads and approvals |
 | Next.js browser (x402 alias) | `NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS` | x402-aligned browser USDC override; accepted alongside `NEXT_PUBLIC_USDC_ADDRESS` in `getDefaultUsdcAddress()` |
+| Next.js browser (x402 alias) | `NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS_<chainId>` | Chain-scoped x402-aligned browser USDC override |
 | Next.js server (x402) | `RATELOOP_X402_USDC_ADDRESS` | Server-side x402 bounty planning and submission |
+| Next.js server (x402) | `RATELOOP_X402_USDC_ADDRESS_<chainId>` | Chain-scoped server-side x402 bounty planning and submission |
 | Agents local signer | `RATELOOP_LOCAL_SIGNER_USDC_ADDRESS` | Trusted USDC override before signing EIP-3009 typed data |
 | Agents local signer (alias) | `RATELOOP_X402_USDC_ADDRESS` | Same as above; accepted alias in `localSigner.ts` |
 
-Next.js throws when **any two or more** of `NEXT_PUBLIC_USDC_ADDRESS`, `NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS`, and `RATELOOP_X402_USDC_ADDRESS` disagree (`lib/env/server.ts`). Browser `getDefaultUsdcAddress()` throws when the two public vars disagree. Set all three to the same address when overriding USDC. Server x402 resolution requires at least one public browser var when `RATELOOP_X402_USDC_ADDRESS` is set.
+Next.js throws when **any two or more** of the matching public/server USDC variables disagree for the same chain (`lib/env/server.ts`). Browser `getDefaultUsdcAddress()` throws when the two public vars disagree. Set all three matching variables to the same address when overriding USDC. Server x402 resolution requires at least one public browser var when `RATELOOP_X402_USDC_ADDRESS` or `RATELOOP_X402_USDC_ADDRESS_<chainId>` is set.
 
 ## Ponder URL and RPC aliases
 
@@ -35,6 +42,8 @@ Next.js throws when **any two or more** of `NEXT_PUBLIC_USDC_ADDRESS`, `NEXT_PUB
 | --- | --- | --- |
 | Next.js browser + server reads | `NEXT_PUBLIC_PONDER_URL` | Hosted Ponder indexer for `/content`, `/rounds`, etc. (required in production) |
 | Keeper | `PONDER_BASE_URL` | Same indexer host for `/keeper/work` and correlation vote routes |
+| Ponder indexer | `PONDER_RPC_URL_8453` | Base mainnet RPC for indexing |
+| Ponder indexer | `PONDER_RPC_URL_84532` | Base Sepolia RPC for indexing |
 | Ponder indexer | `PONDER_RPC_URL_480` | World Chain mainnet RPC for indexing |
 | Ponder indexer | `PONDER_RPC_URL_4801` | World Chain Sepolia RPC for indexing |
 | Ponder indexer | `PONDER_RPC_URL_31337` | Local Anvil RPC for indexing |

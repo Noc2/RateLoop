@@ -17,7 +17,7 @@ const worldIdIdkitHref = "https://docs.world.org/world-id/idkit/integrate";
 const worldIdOnchainHref = "https://docs.world.org/world-id/idkit/onchain-verification";
 const btsHref = "https://www.science.org/doi/10.1126/science.1102081";
 const robustBtsHref = "https://doi.org/10.1609/aaai.v26i1.8261";
-const circleWorldChainUsdcHref = "https://www.circle.com/multi-chain-usdc/worldchain";
+const circleBaseUsdcHref = "https://www.circle.com/multi-chain-usdc/base";
 const gitcoinCocmHref =
   "https://gitcoin.co/blog/leveling-the-field-how-connection-oriented-cluster-matching-strengthens-quadratic-funding#the-solution-connection-oriented-cluster-matching-cocm";
 const cocmPaperHref = "https://papers.ssrn.com/sol3/papers.cfm?abstract_id=4311507";
@@ -26,7 +26,7 @@ const surprisinglyPopularHref = "https://www.nature.com/articles/nature21054";
 export const metadata = {
   title: "Tech Stack | RateLoop Docs",
   description:
-    "The protocol terms behind RateLoop: EIP-3009 USDC authorization, MCP, WebMCP browser tools, World ID proof-of-human credentials, Robust Bayesian Truth Serum reports, LREP staking, and World Chain settlement.",
+    "The protocol terms behind RateLoop: EIP-3009 USDC authorization, MCP, WebMCP browser tools, World ID proof-of-human credentials, Robust Bayesian Truth Serum reports, LREP staking, and Base settlement.",
 } satisfies Metadata;
 
 const TechStackPage: NextPage = () => {
@@ -45,7 +45,7 @@ const TechStackPage: NextPage = () => {
         </a>{" "}
         is an open payment standard built around HTTP <code>402 Payment Required</code>. RateLoop does not currently
         return HTTP 402 challenges, <code>PaymentRequirements</code>, or <code>X-PAYMENT</code> responses. Its live
-        agent wallet lane is an EIP-3009 <code>ReceiveWithAuthorization</code> signature over World Chain USDC.
+        agent wallet lane is an EIP-3009 <code>ReceiveWithAuthorization</code> signature over USDC.
       </p>
       <p>
         Agents should prefer <code>{'paymentMode: "eip3009_usdc_authorization"'}</code>. RateLoop still accepts{" "}
@@ -173,8 +173,8 @@ const TechStackPage: NextPage = () => {
       <h2 id="bounties">Surprise-Weighted Bounties</h2>
       <p>
         Bounties are attached when an asker submits a question. They are separate from LREP stake settlement and can be
-        funded in LREP or World Chain USDC. Eligible revealed raters claim them after qualified rounds, so useful
-        prediction work can be paid even when the rating outcome is contested.
+        funded in LREP or USDC. Eligible revealed raters claim them after qualified rounds, so useful prediction work
+        can be paid even when the rating outcome is contested.
       </p>
       <p>
         Equal-weight bounty rounds give one claim-weight unit to each eligible revealed rater. USDC bounty rounds can
@@ -305,12 +305,11 @@ const TechStackPage: NextPage = () => {
         state is auditable from the chain.
       </p>
 
-      <h2 id="worldchain-usdc">World Chain USDC And Stablecoins</h2>
+      <h2 id="usdc-stablecoins">USDC And Stablecoins</h2>
       <p>
-        RateLoop uses World Chain USDC for agent-friendly bounty funding, EIP-3009 authorization, and stablecoin
-        Feedback Bonuses. LREP Feedback Bonuses use the same wallet-call path as LREP bounties. Circle lists USDC on
-        World Chain as native ERC-20 USDC, and World Chain keeps the payment path EVM-compatible and low-cost for small
-        human-feedback jobs.
+        RateLoop uses USDC for agent-friendly bounty funding, EIP-3009 authorization, and stablecoin Feedback Bonuses.
+        LREP Feedback Bonuses use the same wallet-call path as LREP bounties. Circle lists USDC on Base as native ERC-20
+        USDC, and Base keeps the payment path EVM-compatible and low-cost for small human-feedback jobs.
       </p>
 
       <h2>Research References</h2>
@@ -343,7 +342,7 @@ const TechStackPage: NextPage = () => {
           <a href={cocmPaperHref}>Connection-Oriented Cluster Matching paper</a>
         </li>
         <li>
-          Circle: <a href={circleWorldChainUsdcHref}>USDC on World Chain</a>
+          Circle: <a href={circleBaseUsdcHref}>USDC on Base</a>
         </li>
       </ul>
 

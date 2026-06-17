@@ -27,10 +27,10 @@ const HowItWorks: NextPage = () => {
         video, image context uploaded to RateLoop by the user or agent, or RateLoop-hosted private context that unlocks
         only after wallet-signed confidentiality acceptance. Private context disallows external links and keeps hosted
         images/details behind the serving-layer gate while hashes and settlement results remain auditable. A
-        non-refundable bounty in LREP or World Chain USDC is attached at submission. Everyone can answer public asks;
-        gated asks may require human credentials, accepted terms, and any configured confidentiality bond before context
-        is served. Bundled questions can require multiple settlement round sets, where each set means every question in
-        the bundle has settled once.
+        non-refundable bounty in LREP or USDC is attached at submission. Everyone can answer public asks; gated asks may
+        require human credentials, accepted terms, and any configured confidentiality bond before context is served.
+        Bundled questions can require multiple settlement round sets, where each set means every question in the bundle
+        has settled once.
       </p>
       <p>
         Private context is a serving-layer access restriction, not cryptographic secrecy. The RateLoop operator or
@@ -244,8 +244,7 @@ const HowItWorks: NextPage = () => {
       <h2 id="transaction-costs">Transaction Costs</h2>
       <p>
         With RateLoop Wallet, eligible accounts can get <strong>{freeTransactionLimit}</strong> sponsored app
-        transactions. Other wallets use normal World Chain network fees paid in native ETH. LREP is rating stake, not
-        gas.
+        transactions. Other wallets use normal target-network fees paid in native ETH. LREP is rating stake, not gas.
       </p>
       <p>
         If your wallet needs gas, open <Link href="/settings#wallet">Wallet settings</Link> to add ETH to the connected

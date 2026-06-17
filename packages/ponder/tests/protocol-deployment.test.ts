@@ -50,6 +50,43 @@ describe("Ponder protocol deployment metadata", () => {
     );
   });
 
+  it("resolves Base Sepolia deployment keys from matching chain-scoped env", () => {
+    const contentRegistryAddress = "0x1000000000000000000000000000000000000001";
+    const feedbackRegistryAddress = "0x1000000000000000000000000000000000000002";
+    const metadata = resolvePonderProtocolDeploymentMetadata({
+      PONDER_NETWORK: "baseSepolia",
+      PONDER_CHAIN_ID: "84532",
+      PONDER_CONTENT_REGISTRY_ADDRESS: contentRegistryAddress,
+      PONDER_FEEDBACK_REGISTRY_ADDRESS: feedbackRegistryAddress,
+      DATABASE_SCHEMA: "rateloop_ponder_base_sepolia",
+    });
+
+    expect(metadata).toEqual({
+      configured: true,
+      network: "baseSepolia",
+      chainId: 84532,
+      contentRegistryAddress,
+      feedbackRegistryAddress,
+      deploymentKey: buildPonderProtocolDeploymentKey({
+        chainId: 84532,
+        contentRegistryAddress,
+        feedbackRegistryAddress,
+      }),
+      databaseSchema: "rateloop_ponder_base_sepolia",
+    });
+  });
+
+  it("rejects explicit Base chain ids that do not match the configured network", () => {
+    expect(() =>
+      resolvePonderProtocolDeploymentMetadata({
+        PONDER_NETWORK: "base",
+        PONDER_CHAIN_ID: "84532",
+        PONDER_CONTENT_REGISTRY_ADDRESS: "0x1000000000000000000000000000000000000001",
+        PONDER_FEEDBACK_REGISTRY_ADDRESS: "0x1000000000000000000000000000000000000002",
+      }),
+    ).toThrow("PONDER_CHAIN_ID 84532 does not match PONDER_NETWORK base (8453).");
+  });
+
   it("rejects explicit chain ids that do not match the configured network", () => {
     expect(() =>
       resolvePonderProtocolDeploymentMetadata({

@@ -267,6 +267,22 @@ test("warns when Keeper points at local Ponder for a different chain", () => {
   assert.match(warning ?? "", /Ponder is configured for hardhat \(chain 31337\)/);
 });
 
+test("uses Base network ids in Keeper/Ponder alignment warnings", () => {
+  const warning = getDevStackNetworkAlignmentWarning({
+    keeperEnabled: true,
+    keeperEnv: {
+      CHAIN_ID: "8453",
+      PONDER_BASE_URL: "http://localhost:42069",
+    },
+    ponderEnv: {
+      PONDER_NETWORK: "baseSepolia",
+    },
+  });
+
+  assert.match(warning ?? "", /Keeper is configured for chain 8453/);
+  assert.match(warning ?? "", /Ponder is configured for baseSepolia \(chain 84532\)/);
+});
+
 test("does not warn when Keeper and local Ponder target the same chain", () => {
   assert.equal(
     getDevStackNetworkAlignmentWarning({

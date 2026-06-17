@@ -3,6 +3,8 @@ import { isAddress, zeroAddress } from "viem";
 
 export const PONDER_NETWORK_CHAIN_IDS: Record<string, number> = {
   hardhat: 31337,
+  baseSepolia: 84532,
+  base: 8453,
   worldchainSepolia: 4801,
   worldchain: 480,
 };

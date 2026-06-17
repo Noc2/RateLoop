@@ -8,6 +8,10 @@ import {
   validateLiveReadiness,
   validateOfflineReadiness,
 } from "./check-worldchain-sepolia-readiness.mjs";
+import {
+  BASE_SEPOLIA_READINESS_CONFIG,
+  baseSepoliaNotDeployedMessage,
+} from "./check-base-sepolia-readiness.mjs";
 
 function addressFor(index) {
   return `0x${index.toString(16).padStart(40, "0")}`;
@@ -25,7 +29,7 @@ function makeDeploymentJson(overrides = {}) {
   return { ...deploymentJson, ...overrides };
 }
 
-function makeGeneratedContractsSource(overrides = {}) {
+function makeGeneratedContractsSource(overrides = {}, chainId = 4801) {
   const contracts = REQUIRED_DEPLOYED_CONTRACTS.map((contractName, index) => {
     const address = overrides[contractName]?.address ?? addressFor(index + 1);
     const deployedOnBlock =
@@ -40,7 +44,7 @@ function makeGeneratedContractsSource(overrides = {}) {
 
   return `
 const deployedContracts = {
-  4801: {${contracts}
+  ${chainId}: {${contracts}
   },
   31337: {},
 };`;
@@ -165,6 +169,20 @@ test("validateOfflineReadiness accepts synchronized Sepolia deployment artifacts
   assert.deepEqual(result.failures, []);
 });
 
+test("validateOfflineReadiness accepts synchronized Base Sepolia deployment artifacts", () => {
+  const result = validateOfflineReadiness(
+    {
+      deploymentJson: makeDeploymentJson({ networkName: "baseSepolia" }),
+      deployedContractsSource: makeGeneratedContractsSource({}, 84532),
+      protocolSource: 'const USDC_BY_CHAIN_ID = { 84532: "0x036CbD53842c5426634e7929541eC2318f3dCF7e" };',
+    },
+    BASE_SEPOLIA_READINESS_CONFIG,
+  );
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.failures, []);
+});
+
 test("validateOfflineReadiness rejects stale generated contract addresses", () => {
   const result = validateOfflineReadiness({
     deploymentJson: makeDeploymentJson(),
@@ -267,6 +285,26 @@ test("validateLiveReadiness fails closed when required live targets are missing"
     result.failures.some((message) =>
       message.includes("WORLDCHAIN_SEPOLIA_APP_URL"),
     ),
+  );
+});
+
+test("validateLiveReadiness reports Base Sepolia env names when required live targets are missing", async () => {
+  const result = await validateLiveReadiness({
+    deploymentJson: makeDeploymentJson({ networkName: "baseSepolia" }),
+    readinessConfig: BASE_SEPOLIA_READINESS_CONFIG,
+    requireTargets: true,
+  });
+
+  assert.equal(result.ok, false);
+  assert(result.failures.some((message) => message.includes("BASE_SEPOLIA_RPC_URL")));
+  assert(result.failures.some((message) => message.includes("BASE_SEPOLIA_PONDER_URL")));
+  assert(result.failures.some((message) => message.includes("BASE_SEPOLIA_APP_URL")));
+});
+
+test("baseSepoliaNotDeployedMessage names the Base Sepolia deployment artifact", () => {
+  assert.equal(
+    baseSepoliaNotDeployedMessage(),
+    "Base Sepolia is not deployed: missing packages/foundry/deployments/84532.json.",
   );
 });
 

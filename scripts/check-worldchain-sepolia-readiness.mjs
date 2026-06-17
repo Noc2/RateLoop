@@ -8,6 +8,18 @@ const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
 const WORLDCHAIN_SEPOLIA_CHAIN_ID = 4801;
 const WORLDCHAIN_SEPOLIA_CHAIN_ID_HEX = "0x12c1";
 const WORLDCHAIN_SEPOLIA_USDC = "0x66145f38cBAC35Ca6F1Dfb4914dF98F1614aeA88";
+export const WORLDCHAIN_SEPOLIA_READINESS_CONFIG = {
+  appEnvName: "WORLDCHAIN_SEPOLIA_APP_URL",
+  chainId: WORLDCHAIN_SEPOLIA_CHAIN_ID,
+  chainIdHex: WORLDCHAIN_SEPOLIA_CHAIN_ID_HEX,
+  deploymentPath: "packages/foundry/deployments/4801.json",
+  label: "World Chain Sepolia",
+  networkName: "worldchainSepolia",
+  ponderEnvName: "WORLDCHAIN_SEPOLIA_PONDER_URL",
+  ponderStatusKey: "worldchainSepolia",
+  rpcEnvName: "WORLDCHAIN_SEPOLIA_RPC_URL",
+  usdc: WORLDCHAIN_SEPOLIA_USDC,
+};
 const EIP1967_IMPLEMENTATION_SLOT =
   "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc";
 const SUBMISSION_MEDIA_VALIDATOR_SELECTOR = "0x738dbaa0";
@@ -140,7 +152,7 @@ function extractBalancedObject(source, openBraceIndex) {
 
 export function parseGeneratedContractsForChain(
   source,
-  chainId = WORLDCHAIN_SEPOLIA_CHAIN_ID,
+  chainId = WORLDCHAIN_SEPOLIA_READINESS_CONFIG.chainId,
 ) {
   const marker = `  ${chainId}: {`;
   const start = source.indexOf(marker);
@@ -185,19 +197,20 @@ export function validateOfflineReadiness({
   deploymentJson,
   deployedContractsSource,
   protocolSource,
-}) {
+}, readinessConfig = WORLDCHAIN_SEPOLIA_READINESS_CONFIG) {
   const checks = [];
   const failures = [];
   const deploymentAddresses = buildDeploymentAddressMap(deploymentJson);
   const generatedContracts = parseGeneratedContractsForChain(
     deployedContractsSource,
+    readinessConfig.chainId,
   );
 
   addCheck(
     checks,
     failures,
-    deploymentJson.networkName === "worldchainSepolia",
-    "deployment artifact targets worldchainSepolia",
+    deploymentJson.networkName === readinessConfig.networkName,
+    `deployment artifact targets ${readinessConfig.networkName}`,
   );
   addCheck(
     checks,
@@ -219,7 +232,7 @@ export function validateOfflineReadiness({
       checks,
       failures,
       isAddress(deploymentAddress),
-      `${contractName} has an address in packages/foundry/deployments/4801.json`,
+      `${contractName} has an address in ${readinessConfig.deploymentPath}`,
     );
 
     const generated = generatedContracts.get(contractName);
@@ -253,18 +266,18 @@ export function validateOfflineReadiness({
   addCheck(
     checks,
     failures,
-    protocolSource.includes(`4801: "${WORLDCHAIN_SEPOLIA_USDC}"`),
-    "Next.js default USDC address is configured for World Chain Sepolia",
+    protocolSource.includes(`${readinessConfig.chainId}: "${readinessConfig.usdc}"`),
+    `Next.js default USDC address is configured for ${readinessConfig.label}`,
   );
 
   return { ok: failures.length === 0, checks, failures };
 }
 
-function loadOfflineInputs(root = repoRoot) {
+export function loadOfflineInputs(root = repoRoot, readinessConfig = WORLDCHAIN_SEPOLIA_READINESS_CONFIG) {
   return {
     deploymentJson: JSON.parse(
       readFileSync(
-        join(root, "packages/foundry/deployments/4801.json"),
+        join(root, readinessConfig.deploymentPath),
         "utf8",
       ),
     ),
@@ -380,6 +393,7 @@ export async function validateLiveReadiness({
   appUrl,
   deploymentJson,
   ponderUrl,
+  readinessConfig = WORLDCHAIN_SEPOLIA_READINESS_CONFIG,
   requireTargets = false,
   rpcUrl,
 }) {
@@ -393,8 +407,8 @@ export async function validateLiveReadiness({
       addCheck(
         checks,
         failures,
-        String(chainId).toLowerCase() === WORLDCHAIN_SEPOLIA_CHAIN_ID_HEX,
-        `RPC reports World Chain Sepolia chainId ${WORLDCHAIN_SEPOLIA_CHAIN_ID}`,
+        String(chainId).toLowerCase() === readinessConfig.chainIdHex,
+        `RPC reports ${readinessConfig.label} chainId ${readinessConfig.chainId}`,
       );
 
       for (const contractName of REQUIRED_DEPLOYED_CONTRACTS) {
@@ -486,7 +500,7 @@ export async function validateLiveReadiness({
       checks,
       failures,
       !requireTargets,
-      "live RPC probe skipped because WORLDCHAIN_SEPOLIA_RPC_URL is unset",
+      `live RPC probe skipped because ${readinessConfig.rpcEnvName} is unset`,
     );
   }
 
@@ -502,7 +516,7 @@ export async function validateLiveReadiness({
       );
       if (response.ok) {
         const status = await response.json().catch(() => null);
-        const blockNumber = status?.worldchainSepolia?.block?.number;
+        const blockNumber = status?.[readinessConfig.ponderStatusKey]?.block?.number;
         addCheck(
           checks,
           failures,
@@ -524,7 +538,7 @@ export async function validateLiveReadiness({
       checks,
       failures,
       !requireTargets,
-      "live Ponder probe skipped because WORLDCHAIN_SEPOLIA_PONDER_URL is unset",
+      `live Ponder probe skipped because ${readinessConfig.ponderEnvName} is unset`,
     );
   }
 
@@ -553,7 +567,7 @@ export async function validateLiveReadiness({
       checks,
       failures,
       !requireTargets,
-      "live app probe skipped because WORLDCHAIN_SEPOLIA_APP_URL is unset",
+      `live app probe skipped because ${readinessConfig.appEnvName} is unset`,
     );
   }
 

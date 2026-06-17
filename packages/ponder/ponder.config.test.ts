@@ -98,6 +98,8 @@ const VALID_ENV = {
 };
 
 function getExpectedProbeChainId(env: Record<string, string | undefined>) {
+  if (env.PONDER_NETWORK === "base") return 8453;
+  if (env.PONDER_NETWORK === "baseSepolia") return 84532;
   if (env.PONDER_NETWORK === "worldchain") return 480;
   if (env.PONDER_NETWORK === "hardhat") return 31337;
   if (env.PONDER_NETWORK === "worldchainSepolia") return 4801;
@@ -266,6 +268,27 @@ describe("ponder config", () => {
     await expect(loadPonderConfig()).rejects.toThrow(
       `Missing shared deployment artifact for ${missingSepoliaPonderContracts[0]} on chain 4801`,
     );
+  }, PONDER_CONFIG_TEST_TIMEOUT_MS);
+
+  it("recognizes Base Sepolia but requires shared deployment artifacts before indexing it", async () => {
+    vi.doMock("@rateloop/contracts/deployments", async importOriginal => {
+      const actual = await importOriginal<typeof DeploymentsModule>();
+
+      return {
+        ...actual,
+        getSharedDeploymentAddress: (chainId: number, contractName: string) =>
+          chainId === 84532 ? undefined : actual.getSharedDeploymentAddress(chainId, contractName),
+        getSharedDeploymentStartBlock: (chainId: number, contractName: string) =>
+          chainId === 84532 ? undefined : actual.getSharedDeploymentStartBlock(chainId, contractName),
+      };
+    });
+
+    await expect(
+      loadPonderConfig({
+        PONDER_NETWORK: "baseSepolia",
+        PONDER_RPC_URL_84532: "https://sepolia.base.org",
+      }),
+    ).rejects.toThrow("Missing shared deployment artifact for ContentRegistry on chain 84532");
   }, PONDER_CONFIG_TEST_TIMEOUT_MS);
 
   it(

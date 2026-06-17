@@ -12,6 +12,8 @@ const PROTOCOL_DEPLOYMENT_DATABASE_SCHEMA_PREFIX = "rateloop_deployment_";
 const DEPRECATED_STATIC_RAILWAY_SCHEMAS = new Set(["rateloop_ponder_worldchain_canary"]);
 const DEFAULT_PONDER_DATABASE_SCHEMA_BY_NETWORK = {
   hardhat: "rateloop_ponder_hardhat",
+  baseSepolia: "rateloop_ponder_base_sepolia",
+  base: "rateloop_ponder_base",
   worldchainSepolia: "rateloop_ponder_worldchain_sepolia",
   worldchain: "rateloop_ponder_worldchain",
 };

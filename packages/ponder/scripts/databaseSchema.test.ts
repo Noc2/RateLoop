@@ -20,6 +20,13 @@ describe("Ponder database schema launcher", () => {
     expect(result.source).toBe("default");
   });
 
+  test("uses Base-specific default schemas", () => {
+    expect(resolvePonderDatabaseSchema({ PONDER_NETWORK: "baseSepolia" }).schema).toBe(
+      "rateloop_ponder_base_sepolia",
+    );
+    expect(resolvePonderDatabaseSchema({ PONDER_NETWORK: "base" }).schema).toBe("rateloop_ponder_base");
+  });
+
   test("avoids the legacy generic ponder schema with a network-specific schema", () => {
     const result = resolvePonderDatabaseSchema({
       DATABASE_SCHEMA: "ponder",
@@ -80,12 +87,12 @@ describe("Ponder database schema launcher", () => {
   test("rejects explicit chain ids that conflict with the configured network", () => {
     expect(() =>
       protocolDeploymentKeyFromEnv({
-        PONDER_NETWORK: "hardhat",
-        PONDER_CHAIN_ID: "4801",
+        PONDER_NETWORK: "baseSepolia",
+        PONDER_CHAIN_ID: "8453",
         PONDER_CONTENT_REGISTRY_ADDRESS: "0x1000000000000000000000000000000000000001",
         PONDER_FEEDBACK_REGISTRY_ADDRESS: "0x1000000000000000000000000000000000000002",
       }),
-    ).toThrow("PONDER_CHAIN_ID 4801 does not match PONDER_NETWORK hardhat (31337).");
+    ).toThrow("PONDER_CHAIN_ID 8453 does not match PONDER_NETWORK baseSepolia (84532).");
   });
 
   test("honors a custom DATABASE_SCHEMA", () => {
