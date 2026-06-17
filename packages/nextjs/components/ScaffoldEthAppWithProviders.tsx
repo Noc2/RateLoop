@@ -14,6 +14,7 @@ import { RateLoopWalletProviders } from "~~/components/RateLoopWalletProviders";
 import { RouteScopedNotifiers } from "~~/components/RouteScopedNotifiers";
 import { ReferralAttributionCapture } from "~~/components/referrals/ReferralAttributionCapture";
 import { FaucetTrigger } from "~~/components/scaffold-eth/FaucetTrigger";
+import { WalletFundingProvider } from "~~/components/shared/WalletFundingProvider";
 import { RATE_ROUTE } from "~~/constants/routes";
 import { MobileHeaderVisibilityProvider } from "~~/contexts/MobileHeaderVisibilityContext";
 import { OptimisticVoteProvider } from "~~/contexts/OptimisticVoteContext";
@@ -90,7 +91,9 @@ export const ScaffoldEthAppWithProviders = ({
       </Suspense>
       <TermsAcceptanceProvider>
         <OptimisticVoteProvider>
-          <ScaffoldEthApp>{children}</ScaffoldEthApp>
+          <WalletFundingProvider>
+            <ScaffoldEthApp>{children}</ScaffoldEthApp>
+          </WalletFundingProvider>
         </OptimisticVoteProvider>
         <TermsAcceptanceModal />
       </TermsAcceptanceProvider>
