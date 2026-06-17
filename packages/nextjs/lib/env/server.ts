@@ -221,13 +221,29 @@ export function getThirdwebServerVerifierSecret(): string | undefined {
 
 export function getX402UsdcAddressOverride(): `0x${string}` | undefined {
   const publicUsdc = readEnv("NEXT_PUBLIC_USDC_ADDRESS")?.trim();
+  const publicX402Usdc = readEnv("NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS")?.trim();
   const serverUsdc = readEnv("RATELOOP_X402_USDC_ADDRESS")?.trim();
   const normalizedPublic = publicUsdc?.startsWith("0x") ? (publicUsdc.toLowerCase() as `0x${string}`) : undefined;
+  const normalizedPublicX402 = publicX402Usdc?.startsWith("0x")
+    ? (publicX402Usdc.toLowerCase() as `0x${string}`)
+    : undefined;
   const normalizedServer = serverUsdc?.startsWith("0x") ? (serverUsdc.toLowerCase() as `0x${string}`) : undefined;
-  if (normalizedPublic && normalizedServer && normalizedPublic !== normalizedServer) {
-    throw new Error("NEXT_PUBLIC_USDC_ADDRESS and RATELOOP_X402_USDC_ADDRESS must match when both are set.");
+
+  const configured = [normalizedPublic, normalizedPublicX402, normalizedServer].filter(
+    (value): value is `0x${string}` => value !== undefined,
+  );
+  const unique = [...new Set(configured)];
+  if (unique.length > 1) {
+    throw new Error(
+      "NEXT_PUBLIC_USDC_ADDRESS, NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS, and RATELOOP_X402_USDC_ADDRESS must match when multiple are set.",
+    );
   }
-  return normalizedServer ?? normalizedPublic;
+  if (normalizedServer && !normalizedPublic && !normalizedPublicX402) {
+    throw new Error(
+      "RATELOOP_X402_USDC_ADDRESS requires NEXT_PUBLIC_USDC_ADDRESS or NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS for browser parity.",
+    );
+  }
+  return normalizedServer ?? normalizedPublicX402 ?? normalizedPublic;
 }
 
 export function getFreeTransactionLimit(): number {
