@@ -318,6 +318,8 @@ function makeHarness(options: {
   ponderAvailable?: boolean;
   ponderCommits?: Record<string, CommitData>;
   onChainLogs?: { vote?: unknown[]; advisory?: unknown[] };
+  commitRevealDataErrorFor?: readonly `0x${string}`[];
+  revealVoteErrorFor?: readonly `0x${string}`[];
   settleRoundResultState?: RoundStateValue;
   estimateContractGas?: (args: { functionName: string }) => Promise<bigint>;
 }) {
@@ -337,6 +339,8 @@ function makeHarness(options: {
   const dormancyEligible = options.dormancyEligible ?? false;
   const commitKeys = options.commitKeys ?? [];
   const commits = options.commits ?? {};
+  const commitRevealDataErrorFor = new Set(options.commitRevealDataErrorFor ?? []);
+  const revealVoteErrorFor = new Set(options.revealVoteErrorFor ?? []);
   const advisoryCommitKeys = options.advisoryCommitKeys ?? [];
   const advisoryCommitCores = options.advisoryCommitCores ?? {};
   const advisoryCommits = options.advisoryCommits ?? {};
@@ -420,6 +424,9 @@ function makeHarness(options: {
           case "getRoundCommitKey":
             return commitKeys[Number(args[2])] ?? zeroHash;
           case "commitRevealData":
+            if (commitRevealDataErrorFor.has(String(args[2]) as `0x${string}`)) {
+              throw new Error("RPC read failed");
+            }
             return tupleResults
               ? toCommitRevealTuple(
                   commits[String(args[2])] ??
@@ -527,6 +534,9 @@ function makeHarness(options: {
 
         if (functionName === "revealVoteByCommitKey") {
           const commitKey = String(args[2]);
+          if (revealVoteErrorFor.has(commitKey as `0x${string}`)) {
+            throw new Error("transaction underpriced");
+          }
           const commit = commits[commitKey];
           if (!commit || commit.revealed) {
             throw new Error("AlreadyRevealed");
@@ -1864,6 +1874,95 @@ describe("resolveRounds", () => {
     expect(logger.warn).toHaveBeenCalledWith(
       "All drand relays unavailable; retrying next tick",
       expect.objectContaining({ commitKey: COMMIT_KEY_1 }),
+    );
+  });
+
+  it("does not finalize reveal-failed when commit reveal data is unreadable", async () => {
+    timelockDecrypt.mockResolvedValue(makePlaintext(true, 1));
+
+    const round = makeRound({
+      state: 0,
+      voteCount: 3n,
+      revealedCount: 2n,
+    });
+    const { publicClient, walletClient } = makeHarness({
+      activeRoundId: 1n,
+      latestRoundId: 1n,
+      round,
+      commitKeys: [COMMIT_KEY_1],
+      commits: {
+        [COMMIT_KEY_1]: makeCommit({ revealableAfter: 100n }),
+      },
+      commitRevealDataErrorFor: [COMMIT_KEY_1],
+      revealGracePeriod: 60n,
+      lastCommitRevealableAfter: 100n,
+      now: 610_000n,
+    });
+    const logger = makeLogger();
+
+    const result = await resolveRounds(
+      publicClient as any,
+      walletClient as any,
+      {} as any,
+      { address: ACCOUNT } as any,
+      logger as any,
+    );
+
+    expect(result.roundsRevealFailedFinalized).toBe(0);
+    expect(walletClient.writeContract).not.toHaveBeenCalledWith(
+      expect.objectContaining({ functionName: "finalizeRevealFailedRound" }),
+    );
+    expect(logger.warn).toHaveBeenCalledWith(
+      "Skipping reveal-failed finalization; reveal pipeline was unhealthy this tick",
+      expect.objectContaining({ contentId: "1", roundId: 1 }),
+    );
+  });
+
+  it("does not finalize reveal-failed when reveal submission fails transiently", async () => {
+    timelockDecrypt.mockResolvedValue(makePlaintext(true, 1));
+
+    const round = makeRound({
+      state: 0,
+      voteCount: 3n,
+      revealedCount: 2n,
+    });
+    const { publicClient, walletClient } = makeHarness({
+      activeRoundId: 1n,
+      latestRoundId: 1n,
+      round,
+      commitKeys: [COMMIT_KEY_1],
+      commits: {
+        [COMMIT_KEY_1]: makeCommit({ revealableAfter: 100n }),
+      },
+      revealVoteErrorFor: [COMMIT_KEY_1],
+      revealGracePeriod: 60n,
+      lastCommitRevealableAfter: 100n,
+      now: 610_000n,
+    });
+    const logger = makeLogger();
+
+    const result = await resolveRounds(
+      publicClient as any,
+      walletClient as any,
+      {} as any,
+      { address: ACCOUNT } as any,
+      logger as any,
+    );
+
+    expect(result.roundsRevealFailedFinalized).toBe(0);
+    expect(walletClient.writeContract).not.toHaveBeenCalledWith(
+      expect.objectContaining({ functionName: "finalizeRevealFailedRound" }),
+    );
+    expect(logger.warn).toHaveBeenCalledWith(
+      "Failed to reveal vote",
+      expect.objectContaining({
+        commitKey: COMMIT_KEY_1,
+        error: "transaction underpriced",
+      }),
+    );
+    expect(logger.warn).toHaveBeenCalledWith(
+      "Skipping reveal-failed finalization; reveal pipeline was unhealthy this tick",
+      expect.objectContaining({ contentId: "1", roundId: 1 }),
     );
   });
 
