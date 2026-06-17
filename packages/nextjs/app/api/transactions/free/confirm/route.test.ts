@@ -140,7 +140,13 @@ test("free transaction confirm route fails closed when the rate limit store is u
   );
 
   assert.equal(response.status, 503);
-  assert.deepEqual(await response.json(), { error: "Rate limiting is unavailable" });
+  assert.deepEqual(await response.json(), {
+    code: "service_unavailable",
+    message: "Rate limiting is unavailable",
+    recoverWith: "retry_later",
+    retryable: true,
+    status: 503,
+  });
 });
 
 test("free transaction confirm route fails closed when the quota store is unavailable", async () => {
