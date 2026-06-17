@@ -706,7 +706,7 @@ test("signing intent helpers use direct browser-handoff routes", async () => {
           expiresAt: "2026-04-30T12:00:00.000Z",
           id: "asi_test",
           signingUrl:
-            "https://rateloop.example/agent/sign/asi_test?token=secret",
+            "https://rateloop.example/agent/sign/asi_test#token=secret",
           status: "pending",
         });
       }
@@ -793,7 +793,7 @@ test("signing intent helpers use direct browser-handoff routes", async () => {
   ]);
   assert.equal(
     createResponse.signingUrl,
-    "https://rateloop.example/agent/sign/asi_test?token=secret",
+    "https://rateloop.example/agent/sign/asi_test#token=secret",
   );
   assert.equal(readResponse.id, "asi_test");
   assert.equal(prepareResponse.operationKey, `0x${"67".repeat(32)}`);
