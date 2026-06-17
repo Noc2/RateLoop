@@ -28,8 +28,6 @@ Run these from the monorepo root unless noted otherwise:
 | `yarn workspace @rateloop/nextjs format`           | Format frontend code with Prettier                                                         |
 | `yarn workspace @rateloop/nextjs db:generate`      | Generate Drizzle migrations                                                                |
 | `yarn workspace @rateloop/nextjs db:push`          | Apply migrations to the configured database                                                |
-
-**Production deploy:** Run `db:push` (or apply SQL migrations) on the Neon app database before shipping signing-intent changes. Migration `0012_agent_signing_intent_prepared_artifacts.sql` adds `transaction_plan` and `x402_authorization_request` columns required for browser signing reload.
 | `yarn workspace @rateloop/nextjs db:studio`        | Open the Drizzle studio UI                                                                 |
 | `yarn workspace @rateloop/nextjs whitepaper`       | Generate the whitepaper PDF                                                                |
 | `yarn workspace @rateloop/nextjs demo:record`      | Record the short Playwright product demo video                                             |
@@ -39,7 +37,9 @@ Run these from the monorepo root unless noted otherwise:
 | `yarn workspace @rateloop/nextjs e2e:full`         | Run the full local Playwright suite, including keeper coverage                             |
 | `yarn e2e:ui`                                      | Run E2E tests with interactive Playwright UI                                               |
 
-CI runs smoke, app, responsive, accessibility, lifecycle, and keeper-backed suites separately on pushes and PRs. The scheduled workflow also runs browser-compatibility and mobile suites, so `yarn e2e` is only the default Chromium app pass.
+**Production deploy:** Run `db:push` (or apply SQL migrations) on the Neon app database before shipping signing-intent changes. Migration `0012_agent_signing_intent_prepared_artifacts.sql` adds `transaction_plan` and `x402_authorization_request` columns required for browser signing reload.
+
+CI runs smoke, app, responsive, accessibility, lifecycle, and keeper-backed suites separately on pushes and PRs.
 
 ## Demo Recorder
 
@@ -131,7 +131,7 @@ Notes:
 - No core contract address env vars are needed for supported chains. The frontend reads core deployment metadata from `@rateloop/contracts` and fails fast if `NEXT_PUBLIC_TARGET_NETWORKS` includes a chain without those definitions. Rollout contracts such as question reward pools can use their documented env fallbacks until generated metadata catches up.
 - In production, the intended setup is one Railway Postgres service with separate logical databases for Ponder and Next.js.
 - If your Postgres provider terminates TLS with a private or self-signed chain, append `uselibpqcompat=true&sslmode=require` to `DATABASE_URL` to opt out of the app's default `verify-full` normalization.
-- For local development, `yarn dev:db` and `yarn dev:stack` manage a Docker Postgres container when `DATABASE_URL` points to localhost. `yarn dev:stack` only runs `db:push` automatically for local databases; non-local databases require a manual `yarn workspace @rateloop/nextjs db:push` or the explicit `RATELOOP_DEV_STACK_ALLOW_REMOTE_DB_PUSH=1` opt-in.
+- For local development, `yarn dev:db` and `yarn dev:stack` manage a Docker Postgres container when `DATABASE_URL` points to localhost. `yarn dev:stack` only runs `db:push` automatically for local databases; non-local databases require a manual `yarn workspace @rateloop/nextjs db:push` or `yarn dev:stack --allow-remote-db-push`.
 - On Next.js 15, `NextRequest.ip` is not reliably populated. On non-Vercel production hosts you must configure `RATE_LIMIT_TRUSTED_IP_HEADERS` to the header(s) your hosting proxy overwrites. Vercel auto-trusts `x-real-ip`, and localhost shortcuts are only enabled for development or explicit local production-style E2E builds. Protected API routes fail closed when no trusted client IP can be derived or when the rate-limit store is unavailable.
 - The free transaction quota is enforced by the thirdweb server verifier route at `/api/thirdweb/verify-transaction`. Configure the same secret in thirdweb’s dashboard and in `THIRDWEB_SERVER_VERIFIER_SECRET`.
 - The old x402 question route has been removed. Paid agent asks use ordered wallet calls or native x402-style USDC authorizations that fund protocol escrow directly; no legacy RateLoop executor, custody path, saved policy token, or separate service fee is part of the default ask flow. USDC-funded asks do not require identity verification.

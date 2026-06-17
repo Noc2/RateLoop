@@ -96,7 +96,7 @@
     "e2e:ci:app": "yarn workspace @rateloop/nextjs e2e:ci:app",
     "e2e:ci:full": "yarn workspace @rateloop/nextjs e2e:ci:full",
     "e2e:ui": "yarn workspace @rateloop/nextjs e2e:ui",
-    "test:ts": "yarn build:workspace-deps && yarn contracts:check-types && yarn node-utils:check-types && yarn sdk:check-types && yarn ponder:check-types && yarn agents:check-types && yarn keeper:check-types && yarn test:node && yarn contracts:test && yarn node-utils:test && yarn sdk:test && yarn next:test && yarn workspace @rateloop/keeper test && yarn workspace @rateloop/agents test && yarn workspace @rateloop/ponder test"
+    "test:ts": "yarn build:workspace-deps && yarn contracts:check-types && yarn node-utils:check-types && yarn sdk:check-types && yarn ponder:check-types && yarn agents:check-types && yarn keeper:check-types && yarn test:node && yarn contracts:test && yarn node-utils:test && yarn sdk:test && yarn next:test && yarn next:check-types && yarn workspace @rateloop/keeper test && yarn workspace @rateloop/agents test && yarn workspace @rateloop/ponder test"
   },
   "devDependencies": {
     "husky": "~9.1.6",
