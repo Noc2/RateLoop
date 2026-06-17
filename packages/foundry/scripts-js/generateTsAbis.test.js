@@ -100,7 +100,7 @@ test("processAllDeployments tracks proxy addresses for latest broadcast freshnes
           },
         ],
         receipts: [{ transactionHash: "0xproxy", blockNumber: "0x65" }],
-      }),
+      })
     );
 
     const { latestBroadcastDeploymentAddresses } =
@@ -108,9 +108,9 @@ test("processAllDeployments tracks proxy addresses for latest broadcast freshnes
 
     assert.equal(
       latestBroadcastDeploymentAddresses[4801].has(
-        "0x0000000000000000000000000000000000000004",
+        "0x0000000000000000000000000000000000000004"
       ),
-      true,
+      true
     );
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
@@ -127,9 +127,9 @@ describe("assertFreshTargetDeployment", () => {
           { 480: { ContentRegistry: { address: "0ximplementation" } } },
           {},
           {},
-          { 480: 200 },
+          { 480: 200 }
         ),
-      /not marked complete/,
+      /not marked complete/
     );
   });
 
@@ -149,9 +149,9 @@ describe("assertFreshTargetDeployment", () => {
               networkName: "worldchain",
             },
           },
-          { 480: 200 },
+          { 480: 200 }
         ),
-      /missing required contracts/,
+      /missing required contracts/
     );
   });
 
@@ -168,9 +168,9 @@ describe("assertFreshTargetDeployment", () => {
           {},
           {},
           { 480: deploymentExport },
-          { 480: 200 },
+          { 480: 200 }
         ),
-      /missing required contracts: FeedbackRegistry/,
+      /missing required contracts: FeedbackRegistry/
     );
   });
 
@@ -187,9 +187,9 @@ describe("assertFreshTargetDeployment", () => {
           {},
           {},
           { 480: deploymentExport },
-          { 480: 200 },
+          { 480: 200 }
         ),
-      /missing required contracts: ConfidentialityEscrow/,
+      /missing required contracts: ConfidentialityEscrow/
     );
   });
 
@@ -206,9 +206,9 @@ describe("assertFreshTargetDeployment", () => {
           {},
           {},
           { 480: deploymentExport },
-          { 480: 200 },
+          { 480: 200 }
         ),
-      /missing proxy admin entries: RaterRegistryProxyAdmin/,
+      /missing proxy admin entries: RaterRegistryProxyAdmin/
     );
   });
 
@@ -225,9 +225,9 @@ describe("assertFreshTargetDeployment", () => {
           {},
           {},
           { 480: deploymentExport },
-          { 480: 200 },
+          { 480: 200 }
         ),
-      /missing proxy admin entries: ConfidentialityEscrowProxyAdmin/,
+      /missing proxy admin entries: ConfidentialityEscrowProxyAdmin/
     );
   });
 
@@ -246,9 +246,9 @@ describe("assertFreshTargetDeployment", () => {
             480: new Map([
               ["0x000000000000000000000000000000000000000e", "RaterRegistry"],
             ]),
-          },
+          }
         ),
-      /maps proxy-backed contracts to implementation CREATE addresses: RaterRegistry/,
+      /maps proxy-backed contracts to implementation CREATE addresses: RaterRegistry/
     );
   });
 
@@ -270,9 +270,9 @@ describe("assertFreshTargetDeployment", () => {
                 "ConfidentialityEscrow",
               ],
             ]),
-          },
+          }
         ),
-      /maps proxy-backed contracts to implementation CREATE addresses: ConfidentialityEscrow/,
+      /maps proxy-backed contracts to implementation CREATE addresses: ConfidentialityEscrow/
     );
   });
 
@@ -285,9 +285,9 @@ describe("assertFreshTargetDeployment", () => {
           {},
           {},
           { 480: REQUIRED_WORLD_CHAIN_EXPORT },
-          { 480: 201 },
+          { 480: 201 }
         ),
-      /older than the latest broadcast deployment/,
+      /older than the latest broadcast deployment/
     );
   });
 
@@ -304,10 +304,10 @@ describe("assertFreshTargetDeployment", () => {
           480: new Set(
             Object.entries(REQUIRED_WORLD_CHAIN_EXPORT)
               .filter(([address]) => address.startsWith("0x"))
-              .map(([address]) => address.toLowerCase()),
+              .map(([address]) => address.toLowerCase())
           ),
-        },
-      ),
+        }
+      )
     );
   });
 
@@ -319,8 +319,8 @@ describe("assertFreshTargetDeployment", () => {
         {},
         {},
         { 480: REQUIRED_WORLD_CHAIN_EXPORT },
-        { 480: 200 },
-      ),
+        { 480: 200 }
+      )
     );
   });
 
@@ -333,9 +333,9 @@ describe("assertFreshTargetDeployment", () => {
           { 480: { ContentRegistry: { address: "0ximplementation" } } },
           {},
           {},
-          { 480: 200 },
+          { 480: 200 }
         ),
-      /chainId 480 is not marked complete/,
+      /chainId 480 is not marked complete/
     );
   });
 
@@ -348,9 +348,9 @@ describe("assertFreshTargetDeployment", () => {
           {},
           { 480: { ContentRegistry: { address: "0xstale" } } },
           {},
-          {},
+          {}
         ),
-      /chainId 480 is not marked complete/,
+      /chainId 480 is not marked complete/
     );
   });
 
@@ -362,8 +362,8 @@ describe("assertFreshTargetDeployment", () => {
         { 480: { ContentRegistry: { address: "0xproxy" } } },
         {},
         { 480: REQUIRED_WORLD_CHAIN_EXPORT },
-        { 480: 200 },
-      ),
+        { 480: 200 }
+      )
     );
   });
 
@@ -375,8 +375,8 @@ describe("assertFreshTargetDeployment", () => {
         { 31337: { ContentRegistry: { address: "0xlocal" } } },
         {},
         {},
-        { 31337: 200 },
-      ),
+        { 31337: 200 }
+      )
     );
   });
 });
@@ -393,7 +393,7 @@ describe("filterGeneratedContractsForDeployTarget", () => {
       }),
       {
         480: { ContentRegistry: { address: "0xworldchain" } },
-      },
+      }
     );
   });
 
@@ -406,7 +406,7 @@ describe("filterGeneratedContractsForDeployTarget", () => {
 
     assert.deepEqual(
       filterGeneratedContractsForDeployTarget(generatedContracts),
-      generatedContracts,
+      generatedContracts
     );
   });
 });
@@ -432,9 +432,9 @@ describe("assertSharedDeploymentArtifactsSynced", () => {
               deploymentComplete: "true",
             },
           },
-          { hasArtifact: () => true },
+          { hasArtifact: () => true }
         ),
-      /LaunchDistributionPool: shared 0x0000000000000000000000000000000000000001, deployment 0x0000000000000000000000000000000000000002/,
+      /LaunchDistributionPool: shared 0x0000000000000000000000000000000000000001, deployment 0x0000000000000000000000000000000000000002/
     );
   });
 
@@ -457,8 +457,8 @@ describe("assertSharedDeploymentArtifactsSynced", () => {
             deploymentComplete: "true",
           },
         },
-        { hasArtifact: () => true },
-      ),
+        { hasArtifact: () => true }
+      )
     );
   });
 });
@@ -495,7 +495,7 @@ describe("pruneNonLocalGeneratedContractsToDeploymentExports", () => {
             address: "0x0000000000000000000000000000000000000001",
           },
         },
-      },
+      }
     );
   });
 });
@@ -505,9 +505,9 @@ describe("ContentRegistry ABI exports", () => {
     const source = readFileSync(
       new URL(
         "../../contracts/src/abis/ContentRegistryAbi.ts",
-        import.meta.url,
+        import.meta.url
       ),
-      "utf8",
+      "utf8"
     );
     for (const symbol of [
       "repointPendingRatingClusterPayoutOracle",
