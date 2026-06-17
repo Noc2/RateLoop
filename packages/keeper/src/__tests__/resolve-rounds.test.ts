@@ -2281,7 +2281,7 @@ describe("resolveRounds", () => {
         { address: ACCOUNT } as any,
         logger as any,
       ),
-    ).rejects.toThrow(/Could not connect to chain: connection refused/);
+    ).rejects.toThrow(/Keeper work discovery failed: connection refused/);
     expect(walletClient.writeContract).not.toHaveBeenCalled();
   });
 });

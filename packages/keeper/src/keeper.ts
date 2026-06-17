@@ -1111,12 +1111,12 @@ export async function resolveRounds(
   const result: KeeperResult = emptyResult();
 
   // --- Discover work candidates ---
-  // Like the block-time read above, a total chain outage here is a fatal whole-tick
+  // Like the block-time read above, a total discovery outage here is a fatal whole-tick
   // failure: propagate it so recordRun is not called and the tick is counted as an
-  // error. Ponder-side discovery failures already fall back to chain enumeration
-  // inside discoverKeeperWorkCandidates (fetchKeeperWorkFromPonder returns null), so
-  // only the on-chain nextContentId read can throw here. Per-round failures further
-  // down keep their partial-failure semantics.
+  // error. Non-production Ponder failures fall back to chain enumeration inside
+  // discoverKeeperWorkCandidates; production Ponder auth/HTTP errors and missing
+  // PONDER_KEEPER_WORK_TOKEN throw. Per-round failures further down keep their
+  // partial-failure semantics.
   let discovery: KeeperWorkDiscovery;
   try {
     discovery = await discoverKeeperWorkCandidates(
@@ -1127,7 +1127,7 @@ export async function resolveRounds(
     );
   } catch (err) {
     throw new Error(
-      `Could not connect to chain: ${err instanceof Error ? err.message : String(err)}`,
+      `Keeper work discovery failed: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
 
