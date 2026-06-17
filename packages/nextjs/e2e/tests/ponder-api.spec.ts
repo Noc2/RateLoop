@@ -92,14 +92,6 @@ test.describe("Ponder API endpoints", () => {
     expect(Array.isArray(data.items)).toBe(true);
   });
 
-  test("GET /submission-stakes returns stake count", async () => {
-    const submitter = ANVIL_ACCOUNTS.account2.address.toLowerCase();
-    const data = await ponderGet(`/submission-stakes?submitter=${submitter}`);
-    expect(data).toHaveProperty("activeCount");
-    expect(data).toHaveProperty("submitter");
-    expect(data.submitter).toBe(submitter);
-  });
-
   test("GET /balance-history returns transfer structure", async () => {
     const address = ANVIL_ACCOUNTS.account2.address.toLowerCase();
     const data = await ponderGet(`/balance-history?address=${address}&limit=5`);

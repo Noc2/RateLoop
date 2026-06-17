@@ -1038,11 +1038,6 @@ export interface PonderFeaturedTodayItem {
   featuredReason: string;
 }
 
-export interface PonderSubmissionStakes {
-  activeCount: number;
-  submitter: string;
-}
-
 export interface PonderVotingStakes {
   activeStake: string;
   activeCount: number;
@@ -1698,10 +1693,6 @@ export const ponderApi = {
       voter,
       limit,
     });
-  },
-
-  getSubmissionStakes(submitter: string) {
-    return ponderGet<PonderSubmissionStakes>("/submission-stakes", { submitter });
   },
 
   getVotingStakes(voter: string) {
