@@ -1936,6 +1936,7 @@ async function _revealCommits(
       } catch (err: unknown) {
         const reason = getRevertReason(err);
         if (!isExpectedRevert(reason)) {
+          infrastructureFailure = true;
           logger.warn("Failed to reveal vote", {
             contentId: contentId.toString(),
             roundId: roundId.toString(),
@@ -1945,6 +1946,7 @@ async function _revealCommits(
         }
       }
     } catch (err: unknown) {
+      infrastructureFailure = true;
       logger.debug("Error processing commit", {
         contentId: contentId.toString(),
         roundId: roundId.toString(),
