@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { defineChain } from "thirdweb";
-import { BuyWidget } from "thirdweb/react";
 import { erc20Abi, isAddress } from "viem";
 import { useAccount, useConfig, useReadContract, useWriteContract } from "wagmi";
 import { waitForTransactionReceipt } from "wagmi/actions";
@@ -18,6 +17,7 @@ import {
   WalletIcon,
 } from "@heroicons/react/24/outline";
 import { GradientActionButton, getGradientActionMotion } from "~~/components/shared/GradientAction";
+import { useWalletFunding } from "~~/components/shared/WalletFundingProvider";
 import { surfaceSectionHeadingClassName } from "~~/components/shared/sectionHeading";
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import { DOCS_AI_ROUTE } from "~~/constants/routes";
@@ -159,6 +159,7 @@ export function AgentSubmissionPanel() {
   const wagmiConfig = useConfig();
   const { address } = useAccount();
   const { targetNetwork } = useTargetNetwork();
+  const { openWalletFunding } = useWalletFunding();
   const { copyToClipboard, isCopiedToClipboard } = useCopyToClipboard({ successDurationMs: 1500 });
   const { writeContractAsync } = useWriteContract();
   const [isTransferringUsdc, setIsTransferringUsdc] = useState(false);
@@ -242,6 +243,39 @@ export function AgentSubmissionPanel() {
     },
     [copyToClipboard],
   );
+
+  const handleOpenAgentUsdcFunding = useCallback(() => {
+    if (!agentWalletAddress) {
+      notification.warning("Enter a valid agent wallet before funding it.");
+      return;
+    }
+    if (!usdcAddress) {
+      notification.error("USDC is not configured for this network.");
+      return;
+    }
+
+    openWalletFunding({
+      amount: DEFAULT_FUNDING_AMOUNT_USDC,
+      asset: "USDC",
+      buttonLabel: "Add USDC",
+      chain: thirdwebTargetChain,
+      description: `Fund this agent wallet with ${usdcDisplayName}.`,
+      onSuccess: () => void refetchBalance(),
+      presetOptions: [5, 10, 20],
+      receiverAddress: agentWalletAddress,
+      title: `Add ${usdcDisplayName}`,
+      tokenAddress: usdcAddress,
+      unavailableMessage: fundingUnavailableMessage,
+    });
+  }, [
+    agentWalletAddress,
+    fundingUnavailableMessage,
+    openWalletFunding,
+    refetchBalance,
+    thirdwebTargetChain,
+    usdcAddress,
+    usdcDisplayName,
+  ]);
 
   const handleLoadManagedAgentPolicies = useCallback(async () => {
     if (!address || agentPolicies.hasReadSession || agentPolicies.isReadSessionBusy) return;
@@ -723,12 +757,26 @@ export function AgentSubmissionPanel() {
             <p className="mt-2 break-words font-mono text-sm">{agentWalletAddress ?? "0x..."}</p>
           </div>
           <div className="surface-card-nested rounded-lg p-4">
-            <div className="flex items-center gap-2 text-sm font-medium text-base-content/60">
-              <CpuChipIcon className="h-4 w-4" />
-              <span>{usdcDisplayName}</span>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 text-sm font-medium text-base-content/60">
+                  <CpuChipIcon className="h-4 w-4" />
+                  <span>{usdcDisplayName}</span>
+                </div>
+                <p className="mt-2 text-lg font-semibold">{formatUsdc(balance)}</p>
+                <p className="mt-1 text-sm text-base-content/55">
+                  Required per ask: {formatUsdc(requiredPerAskFunding)}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="btn btn-outline btn-xs shrink-0"
+                disabled={!canUseThirdwebFunding}
+                onClick={handleOpenAgentUsdcFunding}
+              >
+                Add USDC
+              </button>
             </div>
-            <p className="mt-2 text-lg font-semibold">{formatUsdc(balance)}</p>
-            <p className="mt-1 text-sm text-base-content/55">Required per ask: {formatUsdc(requiredPerAskFunding)}</p>
           </div>
           <div className="surface-card-nested rounded-lg p-4">
             <div className="flex items-center gap-2 text-sm font-medium text-base-content/60">
@@ -832,29 +880,23 @@ export function AgentSubmissionPanel() {
               </p>
             </div>
 
-            <div className="min-w-0">
-              {canUseThirdwebFunding && thirdwebClient && agentWalletAddress && usdcAddress ? (
-                <BuyWidget
-                  amount={DEFAULT_FUNDING_AMOUNT_USDC}
-                  amountEditable
-                  buttonLabel="Add USDC"
-                  chain={thirdwebTargetChain}
-                  client={thirdwebClient}
-                  description={`Fund this agent wallet with ${usdcDisplayName}.`}
-                  onSuccess={() => void refetchBalance()}
-                  presetOptions={[5, 10, 20]}
-                  receiverAddress={agentWalletAddress}
-                  showThirdwebBranding={false}
-                  theme="dark"
-                  title={`Add ${usdcDisplayName}`}
-                  tokenAddress={usdcAddress}
-                  tokenEditable={false}
-                />
-              ) : (
-                <div className="surface-card-nested rounded-lg p-4">
-                  <p className="text-sm leading-relaxed text-base-content/65">{fundingUnavailableMessage}</p>
-                </div>
-              )}
+            <div className="surface-card-nested rounded-lg p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm leading-relaxed text-base-content/65">
+                  Add {usdcDisplayName} directly to the configured agent wallet when it needs more ask budget.
+                </p>
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm shrink-0"
+                  disabled={!canUseThirdwebFunding}
+                  onClick={handleOpenAgentUsdcFunding}
+                >
+                  Add USDC
+                </button>
+              </div>
+              {!canUseThirdwebFunding ? (
+                <p className="mt-3 text-sm leading-relaxed text-base-content/60">{fundingUnavailableMessage}</p>
+              ) : null}
             </div>
           </div>
         </div>
