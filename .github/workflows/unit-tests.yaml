@@ -38,6 +38,8 @@ jobs:
         run: |
           make generate-abis-only
           git diff --exit-code ../contracts/src/abis ../contracts/src/deployedContracts.ts
+      - name: Run generateTsAbis parity tests
+        run: yarn foundry:generate-ts-abis:test
 
   foundry:
     runs-on: ubuntu-latest
