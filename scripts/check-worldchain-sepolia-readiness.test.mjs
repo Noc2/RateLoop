@@ -48,8 +48,6 @@ const deployedContracts = {
 
 const protocolSource =
   'const WORLD_CHAIN_USDC_BY_CHAIN_ID = { 4801: "0x66145f38cBAC35Ca6F1Dfb4914dF98F1614aeA88" };';
-const envProductionSource =
-  "NEXT_PUBLIC_TARGET_NETWORKS=4801\nNEXT_PUBLIC_WORLD_ID_PROOF_MODE=legacy\n";
 const EIP1967_IMPLEMENTATION_SLOT =
   "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc";
 
@@ -143,7 +141,6 @@ test("validateOfflineReadiness flags a contract whose deployedOnBlock is missing
   const result = validateOfflineReadiness({
     deploymentJson: makeDeploymentJson(),
     deployedContractsSource,
-    envProductionSource,
     protocolSource,
   });
 
@@ -161,7 +158,6 @@ test("validateOfflineReadiness accepts synchronized Sepolia deployment artifacts
   const result = validateOfflineReadiness({
     deploymentJson: makeDeploymentJson(),
     deployedContractsSource: makeGeneratedContractsSource(),
-    envProductionSource,
     protocolSource,
   });
 
@@ -177,7 +173,6 @@ test("validateOfflineReadiness rejects stale generated contract addresses", () =
         address: "0xffffffffffffffffffffffffffffffffffffffff",
       },
     }),
-    envProductionSource,
     protocolSource,
   });
 
@@ -193,7 +188,6 @@ test("validateOfflineReadiness rejects missing World Chain Sepolia USDC config",
   const result = validateOfflineReadiness({
     deploymentJson: makeDeploymentJson(),
     deployedContractsSource: makeGeneratedContractsSource(),
-    envProductionSource,
     protocolSource: "const WORLD_CHAIN_USDC_BY_CHAIN_ID = {};",
   });
 
@@ -211,7 +205,6 @@ test("validateOfflineReadiness rejects missing x402 submitter deployment", () =>
   const result = validateOfflineReadiness({
     deploymentJson,
     deployedContractsSource: makeGeneratedContractsSource(),
-    envProductionSource,
     protocolSource,
   });
 
@@ -233,7 +226,6 @@ test("validateOfflineReadiness rejects missing confidentiality escrow deployment
   const result = validateOfflineReadiness({
     deploymentJson,
     deployedContractsSource: makeGeneratedContractsSource(),
-    envProductionSource,
     protocolSource,
   });
 
@@ -241,40 +233,6 @@ test("validateOfflineReadiness rejects missing confidentiality escrow deployment
   assert(
     result.failures.some((message) =>
       message.includes("ConfidentialityEscrow has an address"),
-    ),
-  );
-});
-
-test("validateOfflineReadiness rejects non-Sepolia production target network", () => {
-  const result = validateOfflineReadiness({
-    deploymentJson: makeDeploymentJson(),
-    deployedContractsSource: makeGeneratedContractsSource(),
-    envProductionSource:
-      "NEXT_PUBLIC_TARGET_NETWORKS=480\nNEXT_PUBLIC_WORLD_ID_PROOF_MODE=legacy\n",
-    protocolSource,
-  });
-
-  assert.equal(result.ok, false);
-  assert(
-    result.failures.some((message) =>
-      message.includes("production env targets World Chain Sepolia"),
-    ),
-  );
-});
-
-test("validateOfflineReadiness rejects v4 World ID proof mode for Sepolia v3 deploys", () => {
-  const result = validateOfflineReadiness({
-    deploymentJson: makeDeploymentJson(),
-    deployedContractsSource: makeGeneratedContractsSource(),
-    envProductionSource:
-      "NEXT_PUBLIC_TARGET_NETWORKS=4801\nNEXT_PUBLIC_WORLD_ID_PROOF_MODE=v4\n",
-    protocolSource,
-  });
-
-  assert.equal(result.ok, false);
-  assert(
-    result.failures.some((message) =>
-      message.includes("production env requests legacy World ID proofs"),
     ),
   );
 });

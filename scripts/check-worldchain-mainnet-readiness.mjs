@@ -54,6 +54,12 @@ function parseAddressResult(result) {
   return `0x${result.slice(-40)}`;
 }
 
+function envSourceHasAssignment(source, key, expectedValue) {
+  return source
+    .split(/\r?\n/)
+    .some((line) => line.trim() === `${key}=${expectedValue}`);
+}
+
 export function mainnetNotDeployedMessage() {
   return `World Chain mainnet is not deployed: missing ${WORLDCHAIN_DEPLOYMENT_ARTIFACT}.`;
 }
@@ -61,6 +67,7 @@ export function mainnetNotDeployedMessage() {
 export function validateOfflineReadiness({
   deploymentJson,
   deployedContractsSource,
+  envProductionSource = "",
   expectedMode = "production",
   protocolSource,
 }) {
@@ -142,6 +149,38 @@ export function validateOfflineReadiness({
     protocolSource.includes(`480: "${WORLDCHAIN_USDC}"`),
     "Next.js default USDC address is configured for World Chain mainnet",
   );
+  if (expectedMode === "production") {
+    addCheck(
+      checks,
+      failures,
+      envSourceHasAssignment(
+        envProductionSource,
+        "NEXT_PUBLIC_TARGET_NETWORKS",
+        "480",
+      ),
+      "Next.js production env targets World Chain mainnet",
+    );
+    addCheck(
+      checks,
+      failures,
+      envSourceHasAssignment(
+        envProductionSource,
+        "NEXT_PUBLIC_WORLD_ID_ENVIRONMENT",
+        "production",
+      ),
+      "Next.js production env uses production World ID",
+    );
+    addCheck(
+      checks,
+      failures,
+      envSourceHasAssignment(
+        envProductionSource,
+        "NEXT_PUBLIC_WORLD_ID_PROOF_MODE",
+        "legacy",
+      ),
+      "Next.js production env requests legacy World ID proofs",
+    );
+  }
 
   return { ok: failures.length === 0, checks, failures };
 }
@@ -152,6 +191,10 @@ export function loadOfflineInputs(root = repoRoot) {
     deploymentJson: JSON.parse(readFileSync(deploymentPath, "utf8")),
     deployedContractsSource: readFileSync(
       join(root, "packages/contracts/src/deployedContracts.ts"),
+      "utf8",
+    ),
+    envProductionSource: readFileSync(
+      join(root, "packages/nextjs/.env.production"),
       "utf8",
     ),
     protocolSource: readFileSync(

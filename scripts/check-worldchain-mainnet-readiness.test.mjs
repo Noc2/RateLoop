@@ -52,6 +52,8 @@ const deployedContracts = {
 
 const protocolSource =
   'const WORLD_CHAIN_USDC_BY_CHAIN_ID = { 480: "0x79A02482A880bCE3F13e09Da970dC34db4CD24d1" };';
+const envProductionSource =
+  "NEXT_PUBLIC_TARGET_NETWORKS=480\nNEXT_PUBLIC_WORLD_ID_ENVIRONMENT=production\nNEXT_PUBLIC_WORLD_ID_PROOF_MODE=legacy\n";
 const EIP1967_IMPLEMENTATION_SLOT =
   "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc";
 const WORLD_ID_PRODUCTION_VERIFIER =
@@ -99,6 +101,7 @@ test("validateOfflineReadiness accepts synchronized production mainnet artifacts
   const result = validateOfflineReadiness({
     deploymentJson: makeDeploymentJson(),
     deployedContractsSource: makeGeneratedContractsSource(),
+    envProductionSource,
     protocolSource,
   });
 
@@ -142,6 +145,7 @@ test("validateOfflineReadiness rejects stale generated contract addresses", () =
         address: "0xffffffffffffffffffffffffffffffffffffffff",
       },
     }),
+    envProductionSource,
     protocolSource,
   });
 
@@ -157,6 +161,7 @@ test("validateOfflineReadiness rejects missing mainnet USDC config", () => {
   const result = validateOfflineReadiness({
     deploymentJson: makeDeploymentJson(),
     deployedContractsSource: makeGeneratedContractsSource(),
+    envProductionSource,
     protocolSource: "const WORLD_CHAIN_USDC_BY_CHAIN_ID = {};",
   });
 
@@ -174,6 +179,7 @@ test("validateOfflineReadiness rejects missing x402 submitter deployment", () =>
   const result = validateOfflineReadiness({
     deploymentJson,
     deployedContractsSource: makeGeneratedContractsSource(),
+    envProductionSource,
     protocolSource,
   });
 
@@ -181,6 +187,40 @@ test("validateOfflineReadiness rejects missing x402 submitter deployment", () =>
   assert(
     result.failures.some((message) =>
       message.includes("X402QuestionSubmitter has an address"),
+    ),
+  );
+});
+
+test("validateOfflineReadiness rejects non-mainnet production target network", () => {
+  const result = validateOfflineReadiness({
+    deploymentJson: makeDeploymentJson(),
+    deployedContractsSource: makeGeneratedContractsSource(),
+    envProductionSource:
+      "NEXT_PUBLIC_TARGET_NETWORKS=4801\nNEXT_PUBLIC_WORLD_ID_ENVIRONMENT=production\nNEXT_PUBLIC_WORLD_ID_PROOF_MODE=legacy\n",
+    protocolSource,
+  });
+
+  assert.equal(result.ok, false);
+  assert(
+    result.failures.some((message) =>
+      message.includes("production env targets World Chain mainnet"),
+    ),
+  );
+});
+
+test("validateOfflineReadiness rejects staging World ID for production mainnet", () => {
+  const result = validateOfflineReadiness({
+    deploymentJson: makeDeploymentJson(),
+    deployedContractsSource: makeGeneratedContractsSource(),
+    envProductionSource:
+      "NEXT_PUBLIC_TARGET_NETWORKS=480\nNEXT_PUBLIC_WORLD_ID_ENVIRONMENT=staging\nNEXT_PUBLIC_WORLD_ID_PROOF_MODE=legacy\n",
+    protocolSource,
+  });
+
+  assert.equal(result.ok, false);
+  assert(
+    result.failures.some((message) =>
+      message.includes("production env uses production World ID"),
     ),
   );
 });
