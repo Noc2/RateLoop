@@ -158,11 +158,13 @@ With `KEEPER_WORK_DISCOVERY_PONDER_ENABLED=true` (default), most ticks ask Ponde
 
 In production, set matching `PONDER_KEEPER_WORK_TOKEN` on Ponder and the keeper. The keeper fails the tick when Ponder rejects `/keeper/work` auth in production instead of silently falling back to chain enumeration.
 
+Ponder `/keeper/work` `reason` fields (`settle`, `reveal`, `dormant`, etc.) are telemetry for operators and metrics only. The keeper unions candidate IDs from Ponder but re-derives round actions from on-chain state before broadcasting transactions.
+
 Historical round cleanup discovery (`discoverCleanupCandidate`) runs on every processed content ID, not only on reconciliation ticks. Ponder may still surface cleanup hints via `/keeper/work`; the keeper also walks one historical round per content per tick on-chain.
 
 ### Dormancy: Ponder pre-filter vs on-chain `markDormant`
 
-Ponder `/keeper/work` applies SQL pre-filters (bundle guards, `isDormancyBlocked`-aligned open-round quorum checks, `lastActivityAt`) before returning dormant candidates. The keeper still re-reads `ContentRegistry.contents` and calls `markDormant` only when its local pre-check passes; the contract gates on `dormancyAnchorAt` and rejects bundled content. Benign extra `markDormant` attempts are expected when Ponder and chain state diverge slightly — failed broadcasts are skipped via gas estimation without spending gas.
+Ponder `/keeper/work` applies SQL pre-filters (bundle guards, `isDormancyBlocked`-aligned open-round quorum checks, `lastActivityAt`) before returning dormant candidates. The keeper still re-reads `ContentRegistry.contents` and calls `markDormant` only when its local pre-check passes; the contract gates on `dormancyAnchorAt` (not indexed in Ponder) and rejects bundled content. Vote commits bump Ponder `lastActivityAt` but do not move `dormancyAnchorAt`. Benign extra `markDormant` attempts are expected when Ponder and chain state diverge slightly — failed broadcasts are skipped via gas estimation without spending gas.
 
 ## Project Structure
 
