@@ -364,7 +364,7 @@ export async function attachOpenRoundSummary<T extends { id: bigint }>(
   });
 }
 
-function formatRoundSummary(row: {
+export function formatRoundSummary(row: {
   roundId: bigint;
   state: number;
   voteCount: number;

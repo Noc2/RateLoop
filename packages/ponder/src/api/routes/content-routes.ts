@@ -42,7 +42,14 @@ import {
 import { getFollowStatsMap } from "../follow-utils.js";
 import { resolvePonderProtocolDeploymentMetadata } from "../../protocol-deployment.js";
 import type { ApiApp } from "../shared.js";
-import { attachOpenRoundSummary, humanVerifiedCommitQuorumMet, jsonBig, parseBigIntList, resolveApiNowSeconds } from "../shared.js";
+import {
+  attachOpenRoundSummary,
+  formatRoundSummary,
+  humanVerifiedCommitQuorumMet,
+  jsonBig,
+  parseBigIntList,
+  resolveApiNowSeconds,
+} from "../shared.js";
 import {
   confidentialityContentSelectFields,
   formatConfidentialContent,
@@ -1427,13 +1434,7 @@ export function registerContentRoutes(app: ApiApp) {
         contentWithBundle,
         includeTargetAudience === true,
       ),
-      rounds: rounds.map(roundRow => ({
-        ...roundRow,
-        humanVerifiedCommitQuorumMet: humanVerifiedCommitQuorumMet(
-          roundRow.humanVerifiedCommitCount,
-          roundRow.minVoters,
-        ),
-      })),
+      rounds: rounds.map(roundRow => formatRoundSummary(roundRow)),
       ratings,
       audienceContext,
     });
@@ -1593,21 +1594,6 @@ export function registerContentRoutes(app: ApiApp) {
       total: countResult?.count ?? 0,
       limit,
       offset,
-    });
-  });
-
-  app.get("/submission-stakes", async (c) => {
-    const submitter = c.req.query("submitter");
-    if (!submitter) {
-      return c.json({ error: "submitter parameter required" }, 400);
-    }
-    if (!isValidAddress(submitter)) {
-      return c.json({ error: "Invalid submitter address" }, 400);
-    }
-
-    return jsonBig(c, {
-      activeCount: 0,
-      submitter: submitter.toLowerCase(),
     });
   });
 
