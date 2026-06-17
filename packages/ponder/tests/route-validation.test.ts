@@ -3914,6 +3914,28 @@ describe("registerKeeperRoutes", () => {
     expect(serializedSelect).toContain("greatest");
     expect(queryBuilders[0]?.from).toHaveBeenCalled();
   });
+
+  it("matches isDormancyBlocked quorum for dormant content candidates", async () => {
+    const { queryBuilders } = mockPonderModules([], [[], [], []]);
+    const { registerKeeperRoutes } = await import(
+      "../src/api/routes/keeper-routes.js"
+    );
+    const app = new Hono();
+    registerKeeperRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/keeper/work?now=100&dormancyPeriod=60&limit=5",
+    );
+
+    expect(response.status).toBe(200);
+    const serializedWhere = serializeExpression(
+      queryBuilders[2]?.where.mock.calls[0]?.[0],
+    );
+    expect(serializedWhere).toContain("round.revealedCount");
+    expect(serializedWhere).toContain("round.minVoters");
+    expect(serializedWhere).toContain("round.humanVerifiedCommitCount");
+    expect(serializedWhere).not.toContain("greatest");
+  });
 });
 
 describe("registerDiscoveryRoutes", () => {

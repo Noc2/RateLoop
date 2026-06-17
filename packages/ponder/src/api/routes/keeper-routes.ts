@@ -55,6 +55,7 @@ export function registerKeeperRoutes(app: ApiApp) {
     }
 
     const revealQuorum = sql<number>`greatest(${round.minVoters}, 3)`;
+    // Dormancy blocking mirrors RoundVotingReadLib.isDormancyBlocked (minVoters, not revealQuorum).
     const roundExpired = sql<boolean>`
       ${round.startTime} is not null
       and ${round.startTime} > 0
@@ -139,6 +140,13 @@ export function registerKeeperRoutes(app: ApiApp) {
               and ${round.state} = ${ROUND_STATE.Open}
               and ${round.voteCount} > 0
               and ${round.totalStake} > 0
+              and (
+                ${round.revealedCount} >= ${round.minVoters}
+                or (
+                  ${round.voteCount} >= ${round.minVoters}
+                  and ${round.humanVerifiedCommitCount} >= ${round.minVoters}
+                )
+              )
           )`,
         ),
       )
