@@ -27,7 +27,19 @@ World Chain USDC defaults are in `@rateloop/contracts` (`WORLD_CHAIN_USDC_BY_CHA
 | Agents local signer | `RATELOOP_LOCAL_SIGNER_USDC_ADDRESS` | Trusted USDC override before signing EIP-3009 typed data |
 | Agents local signer (alias) | `RATELOOP_X402_USDC_ADDRESS` | Same as above; accepted alias in `localSigner.ts` |
 
-Next.js throws when **both** `NEXT_PUBLIC_USDC_ADDRESS` and `RATELOOP_X402_USDC_ADDRESS` are set and differ (`lib/env/server.ts`). Browser `getDefaultUsdcAddress()` prefers `NEXT_PUBLIC_USDC_ADDRESS`, then `NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS`; set both public browser vars to the same address when co-locating with server `RATELOOP_X402_USDC_ADDRESS`. Server x402 resolution accepts `RATELOOP_X402_USDC_ADDRESS` or `NEXT_PUBLIC_USDC_ADDRESS` when only one is set.
+Next.js throws when **any two or more** of `NEXT_PUBLIC_USDC_ADDRESS`, `NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS`, and `RATELOOP_X402_USDC_ADDRESS` disagree (`lib/env/server.ts`). Browser `getDefaultUsdcAddress()` throws when the two public vars disagree. Set all three to the same address when overriding USDC. Server x402 resolution requires at least one public browser var when `RATELOOP_X402_USDC_ADDRESS` is set.
+
+## Ponder URL and RPC aliases
+
+| Package / surface | Env var | Role |
+| --- | --- | --- |
+| Next.js browser + server reads | `NEXT_PUBLIC_PONDER_URL` | Hosted Ponder indexer for `/content`, `/rounds`, etc. (required in production) |
+| Keeper | `PONDER_BASE_URL` | Same indexer host for `/keeper/work` and correlation vote routes |
+| Ponder indexer | `PONDER_RPC_URL_480` | World Chain mainnet RPC for indexing |
+| Ponder indexer | `PONDER_RPC_URL_4801` | World Chain Sepolia RPC for indexing |
+| Ponder indexer | `PONDER_RPC_URL_31337` | Local Anvil RPC for indexing |
+
+E2E and `yarn dev:stack` should set `NEXT_PUBLIC_PONDER_URL` and `PONDER_BASE_URL` to the same origin (for example `http://localhost:42069`). Agent MCP, attachments, and browser handoffs use the Next.js app origin (`NEXT_PUBLIC_APP_URL` / `www.rateloop.ai`), not Ponder.
 
 ### Keeper / Ponder shared secrets
 
