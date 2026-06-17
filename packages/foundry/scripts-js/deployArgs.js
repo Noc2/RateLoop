@@ -6,22 +6,30 @@ Options:
   --resume              Resume a partial broadcast for the current network + account
   --help, -h           Show this help message
 Examples:
-  yarn deploy --network worldchainSepolia --keystore my-account --resume
-  yarn deploy --network worldchain --keystore my-account
+  yarn deploy --network baseSepolia --keystore my-account --resume
+  yarn deploy --network base --keystore my-account
   yarn deploy
   `;
 
 const SUPPORTED_DEPLOY_NETWORKS = new Set([
   "localhost",
+  "baseSepolia",
+  "base",
   "worldchainSepolia",
   "worldchain",
 ]);
 
-const SLOW_BROADCAST_NETWORKS = new Set(["worldchainSepolia", "worldchain"]);
+const SLOW_BROADCAST_NETWORKS = new Set([
+  "baseSepolia",
+  "base",
+  "worldchainSepolia",
+  "worldchain",
+]);
+const PRODUCTION_DEPLOY_NETWORKS = new Set(["base", "worldchain"]);
 
-export const DEFAULT_WORLDCHAIN_DEPLOY_COMPUTE_UNITS_PER_SECOND = "25";
-export const DEFAULT_WORLDCHAIN_DEPLOY_RPC_TIMEOUT_SECONDS = "120";
-export const DEFAULT_WORLDCHAIN_DEPLOY_BROADCAST_TIMEOUT_SECONDS = "300";
+export const DEFAULT_LIVE_DEPLOY_COMPUTE_UNITS_PER_SECOND = "25";
+export const DEFAULT_LIVE_DEPLOY_RPC_TIMEOUT_SECONDS = "120";
+export const DEFAULT_LIVE_DEPLOY_BROADCAST_TIMEOUT_SECONDS = "300";
 export const RATELOOP_DEPLOYMENT_PROFILE_ENV = "RATELOOP_DEPLOYMENT_PROFILE";
 export const PRODUCTION_DEPLOYMENT_PROFILE = "production";
 export const DEFAULT_DEPLOYMENT_PROFILE = "default";
@@ -113,18 +121,30 @@ export function buildDeployFlowFlags(network, env = process.env) {
 
   const computeUnitsPerSecond = envValue(
     env,
-    "WORLDCHAIN_DEPLOY_COMPUTE_UNITS_PER_SECOND",
-    DEFAULT_WORLDCHAIN_DEPLOY_COMPUTE_UNITS_PER_SECOND
+    "RATELOOP_LIVE_DEPLOY_COMPUTE_UNITS_PER_SECOND",
+    envValue(
+      env,
+      "WORLDCHAIN_DEPLOY_COMPUTE_UNITS_PER_SECOND",
+      DEFAULT_LIVE_DEPLOY_COMPUTE_UNITS_PER_SECOND
+    )
   );
   const rpcTimeoutSeconds = envValue(
     env,
-    "WORLDCHAIN_DEPLOY_RPC_TIMEOUT_SECONDS",
-    DEFAULT_WORLDCHAIN_DEPLOY_RPC_TIMEOUT_SECONDS
+    "RATELOOP_LIVE_DEPLOY_RPC_TIMEOUT_SECONDS",
+    envValue(
+      env,
+      "WORLDCHAIN_DEPLOY_RPC_TIMEOUT_SECONDS",
+      DEFAULT_LIVE_DEPLOY_RPC_TIMEOUT_SECONDS
+    )
   );
   const broadcastTimeoutSeconds = envValue(
     env,
-    "WORLDCHAIN_DEPLOY_BROADCAST_TIMEOUT_SECONDS",
-    DEFAULT_WORLDCHAIN_DEPLOY_BROADCAST_TIMEOUT_SECONDS
+    "RATELOOP_LIVE_DEPLOY_BROADCAST_TIMEOUT_SECONDS",
+    envValue(
+      env,
+      "WORLDCHAIN_DEPLOY_BROADCAST_TIMEOUT_SECONDS",
+      DEFAULT_LIVE_DEPLOY_BROADCAST_TIMEOUT_SECONDS
+    )
   );
 
   return [
@@ -139,18 +159,17 @@ export function buildDeployFlowFlags(network, env = process.env) {
 }
 
 export function buildDeploymentProfileEnv({ network }, env = process.env) {
-  const expectedProfile =
-    network === "worldchain"
-      ? PRODUCTION_DEPLOYMENT_PROFILE
-      : DEFAULT_DEPLOYMENT_PROFILE;
+  const expectedProfile = PRODUCTION_DEPLOY_NETWORKS.has(network)
+    ? PRODUCTION_DEPLOYMENT_PROFILE
+    : DEFAULT_DEPLOYMENT_PROFILE;
   const existingProfile = env[RATELOOP_DEPLOYMENT_PROFILE_ENV]?.trim();
   if (
-    network === "worldchain" &&
+    PRODUCTION_DEPLOY_NETWORKS.has(network) &&
     existingProfile &&
     existingProfile !== PRODUCTION_DEPLOYMENT_PROFILE
   ) {
     throw new Error(
-      `${RATELOOP_DEPLOYMENT_PROFILE_ENV} must be ${PRODUCTION_DEPLOYMENT_PROFILE} for World Chain mainnet deployments.`
+      `${RATELOOP_DEPLOYMENT_PROFILE_ENV} must be ${PRODUCTION_DEPLOYMENT_PROFILE} for mainnet deployments.`
     );
   }
 

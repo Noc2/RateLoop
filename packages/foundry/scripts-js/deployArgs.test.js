@@ -23,13 +23,13 @@ test("parseDeployArgs reads supported options", () => {
   assert.deepEqual(
     parseDeployArgs([
       "--network",
-      "worldchainSepolia",
+      "baseSepolia",
       "--keystore",
       "deployer",
     ]),
     {
       showHelp: false,
-      network: "worldchainSepolia",
+      network: "baseSepolia",
       keystoreArg: "deployer",
       resume: false,
     }
@@ -79,19 +79,31 @@ test("parseDeployArgs rejects networks unsupported by the deploy script", () => 
   );
 });
 
-test("buildDeployFlowFlags leaves non-World Chain deploys unchanged", () => {
+test("buildDeployFlowFlags leaves local deploys unchanged", () => {
   assert.equal(buildDeployFlowFlags("localhost", {}), "");
 });
 
-test("buildDeployFlowFlags throttles World Chain deploys", () => {
+test("buildDeployFlowFlags throttles live deploys", () => {
+  assert.equal(isSlowBroadcastNetwork("baseSepolia"), true);
   assert.equal(isSlowBroadcastNetwork("worldchainSepolia"), true);
   assert.equal(
-    buildDeployFlowFlags("worldchainSepolia", {}),
+    buildDeployFlowFlags("baseSepolia", {}),
     "--slow --compute-units-per-second 25 --rpc-timeout 120 --timeout 300"
   );
 });
 
-test("buildDeployFlowFlags accepts World Chain throttle overrides", () => {
+test("buildDeployFlowFlags accepts neutral live throttle overrides", () => {
+  assert.equal(
+    buildDeployFlowFlags("base", {
+      RATELOOP_LIVE_DEPLOY_COMPUTE_UNITS_PER_SECOND: "10",
+      RATELOOP_LIVE_DEPLOY_RPC_TIMEOUT_SECONDS: "180",
+      RATELOOP_LIVE_DEPLOY_BROADCAST_TIMEOUT_SECONDS: "600",
+    }),
+    "--slow --compute-units-per-second 10 --rpc-timeout 180 --timeout 600"
+  );
+});
+
+test("buildDeployFlowFlags accepts legacy World Chain throttle overrides", () => {
   assert.equal(
     buildDeployFlowFlags("worldchain", {
       WORLDCHAIN_DEPLOY_COMPUTE_UNITS_PER_SECOND: "10",
@@ -102,10 +114,10 @@ test("buildDeployFlowFlags accepts World Chain throttle overrides", () => {
   );
 });
 
-test("buildDeploymentProfileEnv defaults worldchain to production", () => {
+test("buildDeploymentProfileEnv defaults mainnets to production", () => {
   assert.deepEqual(
     buildDeploymentProfileEnv({
-      network: "worldchain",
+      network: "base",
     }),
     {
       [RATELOOP_DEPLOYMENT_PROFILE_ENV]: PRODUCTION_DEPLOYMENT_PROFILE,
@@ -113,12 +125,12 @@ test("buildDeploymentProfileEnv defaults worldchain to production", () => {
   );
 });
 
-test("buildDeploymentProfileEnv rejects non-production worldchain profile overrides", () => {
+test("buildDeploymentProfileEnv rejects non-production mainnet profile overrides", () => {
   assert.throws(
     () =>
       buildDeploymentProfileEnv(
         {
-          network: "worldchain",
+          network: "base",
         },
         {
           [RATELOOP_DEPLOYMENT_PROFILE_ENV]: "staging",
@@ -131,7 +143,7 @@ test("buildDeploymentProfileEnv rejects non-production worldchain profile overri
 test("buildDeploymentProfileEnv defaults non-mainnet deployments to default", () => {
   assert.deepEqual(
     buildDeploymentProfileEnv({
-      network: "worldchainSepolia",
+      network: "baseSepolia",
     }),
     {
       [RATELOOP_DEPLOYMENT_PROFILE_ENV]: DEFAULT_DEPLOYMENT_PROFILE,

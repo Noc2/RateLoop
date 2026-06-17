@@ -32,6 +32,12 @@ contract ScaffoldETHDeploy is Script {
         if (chainId == 480) {
             return "worldchain";
         }
+        if (chainId == 84532) {
+            return "baseSepolia";
+        }
+        if (chainId == 8453) {
+            return "base";
+        }
 
         return "";
     }

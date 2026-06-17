@@ -28,10 +28,10 @@ import { MockERC20 } from "../contracts/mocks/MockERC20.sol";
 import { MockWorldIDRouter } from "../contracts/mocks/MockWorldIDRouter.sol";
 import { RateLoopGovernor } from "../contracts/governance/RateLoopGovernor.sol";
 
-/// @notice Fresh RateLoop deployment script for World Chain.
+/// @notice Fresh RateLoop deployment script for supported EVM chains.
 /// @dev Rater identity is resolved through RaterRegistry; no separate proof-of-personhood token is deployed.
 contract DeployRateLoop is ScaffoldETHDeploy {
-    error UnsupportedWorldChain(uint256 chainId);
+    error UnsupportedDeploymentChain(uint256 chainId);
     error WorldIdRouterHasNoCode(address router);
     uint256 public constant TIMELOCK_MIN_DELAY = 2 days;
 
@@ -45,8 +45,12 @@ contract DeployRateLoop is ScaffoldETHDeploy {
 
     address internal constant WORLD_CHAIN_MAINNET_USDC = 0x79A02482A880bCE3F13e09Da970dC34db4CD24d1;
     address internal constant WORLD_CHAIN_SEPOLIA_USDC = 0x66145f38cBAC35Ca6F1Dfb4914dF98F1614aeA88;
+    address internal constant BASE_MAINNET_USDC = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
+    address internal constant BASE_SEPOLIA_USDC = 0x036CbD53842c5426634e7929541eC2318f3dCF7e;
     address internal constant WORLD_CHAIN_MAINNET_WORLD_ID_ROUTER = 0x17B354dD2595411ff79041f930e491A4Df39A278;
     address internal constant WORLD_CHAIN_SEPOLIA_WORLD_ID_ROUTER = 0x57f928158C3EE7CDad1e4D8642503c4D0201f611;
+    address internal constant BASE_MAINNET_WORLD_ID_ROUTER = 0xBCC7e5910178AFFEEeBA573ba6903E9869594163;
+    address internal constant BASE_SEPOLIA_WORLD_ID_ROUTER = 0x42FF98C4E85212a5D31358ACbFe76a621b50fC02;
     string internal constant WORLD_ID_ROUTER_ADDRESS_ENV = "WORLD_ID_ROUTER_ADDRESS";
     uint64 internal constant WORLD_ID_CREDENTIAL_TTL_SECONDS = 365 days;
     string internal constant DEFAULT_WORLD_ID_ACTION = "rateloop-human-credential-v1";
@@ -76,11 +80,11 @@ contract DeployRateLoop is ScaffoldETHDeploy {
     }
 
     function _preBroadcastChecks() internal view override {
-        if (block.chainid != 31337 && block.chainid != 480 && block.chainid != 4801) {
-            revert UnsupportedWorldChain(block.chainid);
+        if (!_isSupportedDeploymentChain(block.chainid)) {
+            revert UnsupportedDeploymentChain(block.chainid);
         }
-        if (block.chainid == 480 || block.chainid == 4801) {
-            _validateUsdcToken(_resolveWorldChainUsdcAddress());
+        if (!isLocalDevChain(block.chainid)) {
+            _validateUsdcToken(_resolveUsdcAddress());
             _resolveWorldIdRouterAddress(false);
         }
     }
@@ -204,7 +208,7 @@ contract DeployRateLoop is ScaffoldETHDeploy {
             usdcTokenAddress = address(localUsdcToken);
             console.log("Mock USDC deployed at:", usdcTokenAddress);
         } else {
-            usdcTokenAddress = _resolveWorldChainUsdcAddress();
+            usdcTokenAddress = _resolveUsdcAddress();
             _validateUsdcToken(usdcTokenAddress);
             console.log("Circle USDC resolved at:", usdcTokenAddress);
         }
@@ -553,10 +557,20 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         return address(uint160(uint256(vm.load(proxy, ERC1967_ADMIN_SLOT))));
     }
 
-    function _resolveWorldChainUsdcAddress() internal view returns (address) {
+    function _isSupportedDeploymentChain(uint256 chainId) internal pure returns (bool) {
+        return isLocalDevChain(chainId) || chainId == 480 || chainId == 4801 || chainId == 8453 || chainId == 84532;
+    }
+
+    function isLocalDevChain(uint256 chainId) internal pure returns (bool) {
+        return chainId == 31337;
+    }
+
+    function _resolveUsdcAddress() internal view returns (address) {
+        if (block.chainid == 8453) return BASE_MAINNET_USDC;
+        if (block.chainid == 84532) return BASE_SEPOLIA_USDC;
         if (block.chainid == 480) return WORLD_CHAIN_MAINNET_USDC;
         if (block.chainid == 4801) return WORLD_CHAIN_SEPOLIA_USDC;
-        revert UnsupportedWorldChain(block.chainid);
+        revert UnsupportedDeploymentChain(block.chainid);
     }
 
     function _validateUsdcToken(address token) internal view {
@@ -572,9 +586,11 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         if (isLocalDev) return address(0);
         address router = vm.envOr(WORLD_ID_ROUTER_ADDRESS_ENV, address(0));
         if (router == address(0)) {
-            if (block.chainid == 480) router = WORLD_CHAIN_MAINNET_WORLD_ID_ROUTER;
+            if (block.chainid == 8453) router = BASE_MAINNET_WORLD_ID_ROUTER;
+            else if (block.chainid == 84532) router = BASE_SEPOLIA_WORLD_ID_ROUTER;
+            else if (block.chainid == 480) router = WORLD_CHAIN_MAINNET_WORLD_ID_ROUTER;
             else if (block.chainid == 4801) router = WORLD_CHAIN_SEPOLIA_WORLD_ID_ROUTER;
-            else revert UnsupportedWorldChain(block.chainid);
+            else revert UnsupportedDeploymentChain(block.chainid);
         }
         if (router.code.length == 0) revert WorldIdRouterHasNoCode(router);
         return router;
@@ -592,14 +608,13 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         config.credentialTtl = WORLD_ID_CREDENTIAL_TTL_SECONDS;
     }
 
-    /// @notice Per-chain drand `(chainHash, genesisTime, period)` resolver. Mainnet (480) and local dev
-    ///         (31337) use the mainnet `quicknet` defaults from ProtocolConfig; testnet (4801) commits to
-    ///         `quicknet-t`.
+    /// @notice Per-chain drand `(chainHash, genesisTime, period)` resolver. Mainnets and local dev
+    ///         use the mainnet `quicknet` defaults from ProtocolConfig; testnets commit to `quicknet-t`.
     function _resolveDrandConfig() internal view returns (bytes32 chainHash, uint64 genesisTime, uint64 period) {
-        if (block.chainid == 4801) {
+        if (block.chainid == 4801 || block.chainid == 84532) {
             return (TESTNET_DRAND_CHAIN_HASH, TESTNET_DRAND_GENESIS_TIME, TESTNET_DRAND_PERIOD);
         }
-        // chainId 480 (mainnet) and 31337 (local dev) use the same mainnet `quicknet` chain hash.
+        // Mainnet deployments and 31337 local dev use the same mainnet `quicknet` chain hash.
         return (MAINNET_DRAND_CHAIN_HASH, MAINNET_DRAND_GENESIS_TIME, MAINNET_DRAND_PERIOD);
     }
 

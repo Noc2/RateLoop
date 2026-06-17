@@ -806,22 +806,22 @@ test("reconstructDeploymentExportFromBroadcast maps proxies and proxy admins", (
   );
 });
 
-test("reconstructDeploymentExportFromBroadcast accepts full treasury mint on worldchain", () => {
+test("reconstructDeploymentExportFromBroadcast accepts full treasury mint on base mainnet", () => {
   const { transactions, receipts } = completeBroadcast({
     treasuryMint: treasuryMintAmount,
   });
 
   const deploymentExport = reconstructDeploymentExportFromBroadcast(
     { transactions, receipts },
-    "worldchain"
+    "base"
   );
 
   assert.equal(deploymentExport.deploymentComplete, "true");
   assert.equal(deploymentExport.deploymentProfile, "production");
-  assert.equal(deploymentExport.networkName, "worldchain");
+  assert.equal(deploymentExport.networkName, "base");
 });
 
-test("reconstructDeploymentExportFromBroadcast rejects non-production worldchain profiles", () => {
+test("reconstructDeploymentExportFromBroadcast rejects non-production mainnet profiles", () => {
   const { transactions, receipts } = completeBroadcast({
     treasuryMint: treasuryMintAmount,
   });
@@ -830,17 +830,17 @@ test("reconstructDeploymentExportFromBroadcast rejects non-production worldchain
     () =>
       reconstructDeploymentExportFromBroadcast(
         { transactions, receipts },
-        "worldchain",
+        "base",
         { deploymentProfile: "staging" }
       ),
     /must use deploymentProfile=production/
   );
 });
 
-test("resolveDeploymentProfile rejects non-production worldchain env overrides", () => {
+test("resolveDeploymentProfile rejects non-production mainnet env overrides", () => {
   assert.throws(
     () =>
-      resolveDeploymentProfile("worldchain", {
+      resolveDeploymentProfile("base", {
         RATELOOP_DEPLOYMENT_PROFILE: "staging",
       }),
     /must be production/
@@ -848,6 +848,8 @@ test("resolveDeploymentProfile rejects non-production worldchain env overrides",
 });
 
 test("resolveDeploymentProfile uses network defaults", () => {
+  assert.equal(resolveDeploymentProfile("base", {}), "production");
+  assert.equal(resolveDeploymentProfile("baseSepolia", {}), "default");
   assert.equal(resolveDeploymentProfile("worldchain", {}), "production");
   assert.equal(resolveDeploymentProfile("worldchainSepolia", {}), "default");
 });
