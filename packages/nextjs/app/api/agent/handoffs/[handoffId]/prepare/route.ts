@@ -11,6 +11,7 @@ import {
   updateAgentAskHandoffStatus,
 } from "~~/lib/agent/handoffs";
 import {
+  AGENT_JSON_BODY_MAX_BYTES,
   AGENT_WRITE_RATE_LIMIT,
   handlePublicAgentRoute,
   isJsonObjectBody,
@@ -331,7 +332,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ha
 
   return handlePublicAgentRoute({
     handler: async () => {
-      const body = await parseJsonBody(request, { maxBytes: 16 * 1024 * 1024 });
+      const body = await parseJsonBody(request, { maxBytes: AGENT_JSON_BODY_MAX_BYTES });
       if (!isJsonObjectBody(body)) return jsonBodyErrorResponse(body);
 
       const token = readToken((body as { token?: unknown }).token);
