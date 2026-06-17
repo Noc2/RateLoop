@@ -119,9 +119,7 @@ contract ContentRegistryRepointTest is VotingTestBase {
     function _submitTestContent() internal returns (uint256 contentId) {
         vm.startPrank(submitter);
         lrepToken.approve(address(registry), 10e6);
-        _submitContentWithReservation(
-            registry, "https://example.com/repoint-test", "goal", "goal", "tags", 0
-        );
+        _submitContentWithReservation(registry, "https://example.com/repoint-test", "goal", "goal", "tags", 0);
         vm.stopPrank();
         contentId = 1;
     }

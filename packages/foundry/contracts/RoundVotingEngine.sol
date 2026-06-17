@@ -1,31 +1,31 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {IERC20Permit} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol";
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
+import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import { ReentrancyGuardTransient } from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { IERC20Permit } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol";
+import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
-import {ContentRegistry} from "./ContentRegistry.sol";
-import {ProtocolConfig} from "./ProtocolConfig.sol";
-import {RoundLib} from "./libraries/RoundLib.sol";
-import {RatingLib} from "./libraries/RatingLib.sol";
-import {RoundSettlementSideEffectsLib} from "./libraries/RoundSettlementSideEffectsLib.sol";
-import {RoundSettlementDistributionLib} from "./libraries/RoundSettlementDistributionLib.sol";
-import {ContentRegistryTypes} from "./libraries/ContentRegistryTypes.sol";
-import {RoundCleanupLib} from "./libraries/RoundCleanupLib.sol";
-import {RoundCreationLib} from "./libraries/RoundCreationLib.sol";
-import {RoundRevealLib} from "./libraries/RoundRevealLib.sol";
-import {RoundVotingReadLib} from "./libraries/RoundVotingReadLib.sol";
-import {TokenTransferLib} from "./libraries/TokenTransferLib.sol";
-import {VotePreflightLib} from "./libraries/VotePreflightLib.sol";
-import {IFrontendRegistry} from "./interfaces/IFrontendRegistry.sol";
-import {IRaterIdentityRegistry} from "./interfaces/IRaterIdentityRegistry.sol";
-import {IRoundVotingEngine} from "./interfaces/IRoundVotingEngine.sol";
-import {IRoundVotingCommitReveal} from "./interfaces/IRoundVotingCommitReveal.sol";
-import {IRoundVotingSettlement} from "./interfaces/IRoundVotingSettlement.sol";
+import { ContentRegistry } from "./ContentRegistry.sol";
+import { ProtocolConfig } from "./ProtocolConfig.sol";
+import { RoundLib } from "./libraries/RoundLib.sol";
+import { RatingLib } from "./libraries/RatingLib.sol";
+import { RoundSettlementSideEffectsLib } from "./libraries/RoundSettlementSideEffectsLib.sol";
+import { RoundSettlementDistributionLib } from "./libraries/RoundSettlementDistributionLib.sol";
+import { ContentRegistryTypes } from "./libraries/ContentRegistryTypes.sol";
+import { RoundCleanupLib } from "./libraries/RoundCleanupLib.sol";
+import { RoundCreationLib } from "./libraries/RoundCreationLib.sol";
+import { RoundRevealLib } from "./libraries/RoundRevealLib.sol";
+import { RoundVotingReadLib } from "./libraries/RoundVotingReadLib.sol";
+import { TokenTransferLib } from "./libraries/TokenTransferLib.sol";
+import { VotePreflightLib } from "./libraries/VotePreflightLib.sol";
+import { IFrontendRegistry } from "./interfaces/IFrontendRegistry.sol";
+import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol";
+import { IRoundVotingEngine } from "./interfaces/IRoundVotingEngine.sol";
+import { IRoundVotingCommitReveal } from "./interfaces/IRoundVotingCommitReveal.sol";
+import { IRoundVotingSettlement } from "./interfaces/IRoundVotingSettlement.sol";
 
 /// @title RoundVotingEngine
 /// @notice Per-content round-based parimutuel voting with keeper-assisted/self-reveal and epoch-weighted rewards.
@@ -503,8 +503,8 @@ contract RoundVotingEngine is
         bytes32 r,
         bytes32 s
     ) external nonReentrant whenNotPaused {
-        try IERC20Permit(address(lrepToken)).permit(msg.sender, address(this), stakeAmount, permitDeadline, v, r, s) {}
-            catch {}
+        try IERC20Permit(address(lrepToken)).permit(msg.sender, address(this), stakeAmount, permitDeadline, v, r, s) { }
+            catch { }
         _commitVote(
             msg.sender,
             contentId,
@@ -813,7 +813,7 @@ contract RoundVotingEngine is
         if (holder != address(0) && address(identityRegistry) != address(0)) {
             try identityRegistry.credentialStatusBits(holder) returns (uint8 activeMask, uint8 freshMask) {
                 return (activeMask, freshMask);
-            } catch {}
+            } catch { }
         }
         if (hasActiveHumanCredential) {
             credentialMask = uint8(1 << 3);

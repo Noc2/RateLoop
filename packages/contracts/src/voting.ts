@@ -1,4 +1,3 @@
-import { Buffer } from "node:buffer";
 import { hexToString, keccak256, stringToHex, type Address } from "viem";
 import {
   bpsToPredictionPercent,
@@ -284,7 +283,7 @@ async function createTlockVoteArtifacts(
         );
   const armored = await encryptFn(
     targetRound,
-    Buffer.from(encodeRbtsVotePlaintext(isUp, predictedUpBps, salt)),
+    encodeRbtsVotePlaintext(isUp, predictedUpBps, salt),
     client,
   );
   const ciphertext = stringToHex(armored) as VoteCiphertext;
