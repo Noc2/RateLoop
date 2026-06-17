@@ -44,6 +44,9 @@ contract AuditGapTests is VotingTestBase {
     uint256 public constant STAKE = 10e6;
     uint256 public constant EPOCH_DURATION = 10 minutes;
 
+    /// @dev Inherits `VotingTestBase` for round helpers but keeps a local `setUp()` that
+    ///      deploys its own proxy graph. When changing `VotingTestBase` wiring, update this
+    ///      fixture too — tests do not use the base `setUp()`.
     function setUp() public {
         vm.warp(1000);
         vm.roll(100);
