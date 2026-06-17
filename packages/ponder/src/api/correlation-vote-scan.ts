@@ -7,11 +7,6 @@ export function isCorrelationVoteScanTruncated(params: {
   endedNaturally: boolean;
   eligibleSeen: number;
   offset: number;
-  itemsLength: number;
-  limit: number;
 }): boolean {
-  return (
-    !params.endedNaturally &&
-    (params.eligibleSeen < params.offset || params.itemsLength < params.limit)
-  );
+  return !params.endedNaturally || params.eligibleSeen < params.offset;
 }

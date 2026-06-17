@@ -680,12 +680,16 @@ export function registerCorrelationRoutes(app: ApiApp) {
         break;
       }
     }
+    if (!endedNaturally) {
+      const probeRows = await loadVoteRows(1, scanOffset);
+      if (probeRows.length === 0) {
+        endedNaturally = true;
+      }
+    }
     const truncated = isCorrelationVoteScanTruncated({
       endedNaturally,
       eligibleSeen,
       offset,
-      itemsLength: items.length,
-      limit,
     });
 
     const roundContext = await getRoundContext(contentId, roundId);
@@ -1046,12 +1050,16 @@ export function registerCorrelationRoutes(app: ApiApp) {
         break;
       }
     }
+    if (!endedNaturally) {
+      const probeRows = await loadVoteRows(1, scanOffset);
+      if (probeRows.length === 0) {
+        endedNaturally = true;
+      }
+    }
     const truncated = isCorrelationVoteScanTruncated({
       endedNaturally,
       eligibleSeen,
       offset,
-      itemsLength: items.length,
-      limit,
     });
 
     const roundContext = await getRoundContext(contentId, roundId);
