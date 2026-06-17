@@ -64,6 +64,8 @@ const YOUR_VOTE_TOOLTIP =
   "Thumbs up means you think this content is useful for the question; thumbs down means it is unhelpful, broken, misleading, or unsafe.";
 const EXPECTED_CROWD_TOOLTIP =
   "Your forecast of what share of revealed raters will choose thumbs up this round. This forecast helps determine rewards; it is separate from your own thumbs up/down vote.";
+export const STAKE_AMOUNT_TOOLTIP =
+  "Stake is optional LREP you put behind your vote. It represents your conviction in this rating and can affect rewards or losses after settlement.";
 export const RATING_TOOLTIP =
   "Rating is N/A until this content has at least one settled round. After settlement, it uses the settled community score converted from the protocol's 0-100 scale to a 0-10 display.";
 const metricLabelClassName =
@@ -563,7 +565,10 @@ export function StakeSelector({
 
             <div className="mb-3 px-1">
               <div className="mb-4">
-                <p className={metricLabelClassName}>Stake amount</p>
+                <p className={metricLabelClassName}>
+                  <span>Stake amount</span>
+                  <InfoTooltip text={STAKE_AMOUNT_TOOLTIP} position="bottom" />
+                </p>
                 <p className={metricValueClassName}>
                   {amount.toLocaleString(undefined, { maximumFractionDigits: 1 })}
                   <span className={metricUnitClassName}>{symbol}</span>

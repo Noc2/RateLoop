@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   RATING_TOOLTIP,
+  STAKE_AMOUNT_TOOLTIP,
   canStakeSelectorRequestWorldIdProof,
   getInitialPredictedUpPercent,
   getNextStakeSelectorAmount,
@@ -149,4 +150,10 @@ test("rating tooltip explains unrated and settled rating states", () => {
   assert.match(RATING_TOOLTIP, /N\/A until/i);
   assert.match(RATING_TOOLTIP, /settled round/i);
   assert.match(RATING_TOOLTIP, /0-10 display/i);
+});
+
+test("stake amount tooltip explains conviction and settlement effects", () => {
+  assert.match(STAKE_AMOUNT_TOOLTIP, /optional LREP/i);
+  assert.match(STAKE_AMOUNT_TOOLTIP, /conviction/i);
+  assert.match(STAKE_AMOUNT_TOOLTIP, /settlement/i);
 });
