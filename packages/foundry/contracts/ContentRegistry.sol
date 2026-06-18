@@ -1,27 +1,27 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
-import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
-import { ReentrancyGuardTransient } from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
-import { ICategoryRegistry } from "./interfaces/ICategoryRegistry.sol";
-import { IClusterPayoutOracle } from "./interfaces/IClusterPayoutOracle.sol";
-import { IRoundVotingEngine } from "./interfaces/IRoundVotingEngine.sol";
-import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol";
-import { IConfidentialityEscrow } from "./interfaces/IConfidentialityEscrow.sol";
-import { RoundLib } from "./libraries/RoundLib.sol";
-import { RatingLib } from "./libraries/RatingLib.sol";
-import { ContentRegistryDormancyLib } from "./libraries/ContentRegistryDormancyLib.sol";
-import { ContentRegistryRewardLib } from "./libraries/ContentRegistryRewardLib.sol";
-import { ContentRegistryRatingSnapshotLib } from "./libraries/ContentRegistryRatingSnapshotLib.sol";
-import { ContentRegistryTypes } from "./libraries/ContentRegistryTypes.sol";
-import { ProtocolConfig } from "./ProtocolConfig.sol";
-import { SubmissionMediaValidator } from "./SubmissionMediaValidator.sol";
-import { SubmissionMediaValidatorFactory } from "./SubmissionMediaValidatorFactory.sol";
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
+import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
+import {ICategoryRegistry} from "./interfaces/ICategoryRegistry.sol";
+import {IClusterPayoutOracle} from "./interfaces/IClusterPayoutOracle.sol";
+import {IRoundVotingEngine} from "./interfaces/IRoundVotingEngine.sol";
+import {IRaterIdentityRegistry} from "./interfaces/IRaterIdentityRegistry.sol";
+import {IConfidentialityEscrow} from "./interfaces/IConfidentialityEscrow.sol";
+import {RoundLib} from "./libraries/RoundLib.sol";
+import {RatingLib} from "./libraries/RatingLib.sol";
+import {ContentRegistryDormancyLib} from "./libraries/ContentRegistryDormancyLib.sol";
+import {ContentRegistryRewardLib} from "./libraries/ContentRegistryRewardLib.sol";
+import {ContentRegistryRatingSnapshotLib} from "./libraries/ContentRegistryRatingSnapshotLib.sol";
+import {ContentRegistryTypes} from "./libraries/ContentRegistryTypes.sol";
+import {ProtocolConfig} from "./ProtocolConfig.sol";
+import {SubmissionMediaValidator} from "./SubmissionMediaValidator.sol";
+import {SubmissionMediaValidatorFactory} from "./SubmissionMediaValidatorFactory.sol";
 
 interface IQuestionRewardPoolEscrow {
     function createSubmissionRewardPoolFromRegistry(
@@ -100,6 +100,8 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     uint256 internal constant SUBMISSION_REWARD_PARTICIPANT_UNIT = 10_000;
     uint256 internal constant MIN_SUBMISSION_REWARD_SETTLED_ROUNDS = 1;
     uint256 internal constant MAX_QUESTION_BUNDLE_COUNT = 10;
+    uint8 internal constant PAYOUT_DOMAIN_QUESTION_REWARD = 1;
+    uint8 internal constant PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD = 4;
     bytes32 internal constant QUESTION_CONTEXT_DOMAIN = keccak256("rateloop-question-context-v5");
     bytes32 internal constant QUESTION_REVEAL_DOMAIN = keccak256("rateloop-question-reveal-v8");
     bytes32 internal constant QUESTION_BUNDLE_ITEM_DOMAIN = keccak256("rateloop-question-bundle-item-v5");
@@ -478,9 +480,34 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         }
         if (!_validQuestionRewardPoolEscrow(_questionRewardPoolEscrow)) revert InvalidState();
         if (questionRewardPoolEscrow == _questionRewardPoolEscrow) return;
+        _validateConfiguredClusterPayoutOracleQuestionRewardConsumers(_questionRewardPoolEscrow);
         if (questionRewardPoolEscrow != address(0) && !paused()) revert InvalidState();
         questionRewardPoolEscrow = _questionRewardPoolEscrow;
         emit QuestionRewardPoolEscrowUpdated(_questionRewardPoolEscrow);
+    }
+
+    function _validateConfiguredClusterPayoutOracleQuestionRewardConsumers(address expectedEscrow) private view {
+        address currentProtocolConfig = address(protocolConfig);
+        if (currentProtocolConfig == address(0)) return;
+
+        address oracle;
+        try ProtocolConfig(currentProtocolConfig).clusterPayoutOracle() returns (address configuredOracle) {
+            oracle = configuredOracle;
+        } catch {
+            revert InvalidState();
+        }
+        if (oracle == address(0)) return;
+
+        _requireClusterPayoutOracleConsumer(oracle, PAYOUT_DOMAIN_QUESTION_REWARD, expectedEscrow);
+        _requireClusterPayoutOracleConsumer(oracle, PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD, expectedEscrow);
+    }
+
+    function _requireClusterPayoutOracleConsumer(address oracle, uint8 domain, address expectedConsumer) private view {
+        try IClusterPayoutOracle(oracle).roundPayoutSnapshotConsumer(domain) returns (address consumer) {
+            if (consumer != expectedConsumer) revert InvalidState();
+        } catch {
+            revert InvalidState();
+        }
     }
 
     /// @notice Set the treasury address that receives slashed stakes (can only be called by TREASURY_ROLE).
@@ -866,7 +893,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         bool gated
     ) internal view returns (SubmissionMetadata memory metadata) {
         submissionMediaValidator.validateContextSubmission(contextUrl, imageUrls, videoUrl, title, tags, gated);
-        metadata = SubmissionMetadata({ url: contextUrl, title: title, tags: tags, categoryId: categoryId });
+        metadata = SubmissionMetadata({url: contextUrl, title: title, tags: tags, categoryId: categoryId});
         require(address(categoryRegistry) != address(0));
     }
 
@@ -1206,7 +1233,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         internal
         pure
         returns (IConfidentialityEscrow.ConfidentialityConfig memory confidentiality)
-    { }
+    {}
 
     function _emitContentMediaSubmitted(
         uint256 contentId,
@@ -1675,7 +1702,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     function _engineHasDormancyBlockingRound(address engine, uint256 contentId) internal view returns (bool) {
         try IRoundVotingEngine(engine).isDormancyBlocked(contentId) returns (bool blocked) {
             return blocked;
-        } catch { }
+        } catch {}
 
         return _engineHasOpenRound(engine, contentId);
     }

@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import { Test } from "forge-std/Test.sol";
-import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
-import { FrontendRegistry } from "../contracts/FrontendRegistry.sol";
-import { IConfidentialityEscrow } from "../contracts/interfaces/IConfidentialityEscrow.sol";
-import { IRaterIdentityRegistry } from "../contracts/interfaces/IRaterIdentityRegistry.sol";
-import { RatingLib } from "../contracts/libraries/RatingLib.sol";
-import { RoundLib } from "../contracts/libraries/RoundLib.sol";
-import { MockRaterIdentityRegistry } from "./mocks/MockRaterIdentityRegistry.sol";
-import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
-import { deployInitializedProtocolConfig } from "./helpers/VotingTestHelpers.sol";
+import {Test} from "forge-std/Test.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {ProtocolConfig} from "../contracts/ProtocolConfig.sol";
+import {FrontendRegistry} from "../contracts/FrontendRegistry.sol";
+import {IConfidentialityEscrow} from "../contracts/interfaces/IConfidentialityEscrow.sol";
+import {IRaterIdentityRegistry} from "../contracts/interfaces/IRaterIdentityRegistry.sol";
+import {RatingLib} from "../contracts/libraries/RatingLib.sol";
+import {RoundLib} from "../contracts/libraries/RoundLib.sol";
+import {MockRaterIdentityRegistry} from "./mocks/MockRaterIdentityRegistry.sol";
+import {MockCategoryRegistry} from "../contracts/mocks/MockCategoryRegistry.sol";
+import {deployInitializedProtocolConfig} from "./helpers/VotingTestHelpers.sol";
 
 contract MockRewardDistributorForConfig {
     bytes32 public constant RATELOOP_REWARD_DISTRIBUTOR_MARKER = keccak256("rateloop.round-reward-distributor.v1");
@@ -25,10 +25,10 @@ contract MockRewardDistributorForConfig {
         if (votingEngine_.code.length != 0) {
             try MockVotingEngineForConfig(votingEngine_).registry() returns (address registry_) {
                 registry = registry_;
-            } catch { }
+            } catch {}
             try MockVotingEngineForConfig(votingEngine_).lrepToken() returns (address lrepToken_) {
                 lrepToken = lrepToken_;
-            } catch { }
+            } catch {}
         }
     }
 }
@@ -43,7 +43,7 @@ contract MockRewardDistributorWithClaimStateForConfig is MockRewardDistributorFo
     }
 }
 
-contract MockRewardDistributorWithoutEngineForConfig { }
+contract MockRewardDistributorWithoutEngineForConfig {}
 
 contract MockRewardDistributorWithoutClaimStateForConfig {
     bytes32 public constant RATELOOP_REWARD_DISTRIBUTOR_MARKER = keccak256("rateloop.round-reward-distributor.v1");
@@ -56,10 +56,10 @@ contract MockRewardDistributorWithoutClaimStateForConfig {
         if (votingEngine_.code.length != 0) {
             try MockVotingEngineForConfig(votingEngine_).registry() returns (address registry_) {
                 registry = registry_;
-            } catch { }
+            } catch {}
             try MockVotingEngineForConfig(votingEngine_).lrepToken() returns (address lrepToken_) {
                 lrepToken = lrepToken_;
-            } catch { }
+            } catch {}
         }
     }
 }
@@ -90,6 +90,28 @@ contract MockVotingEngineForConfig {
         returns (address registry_, address lrepToken_, address protocolConfig_)
     {
         return (registry, lrepToken, protocolConfig);
+    }
+}
+
+contract MockContentRegistryForConfig {
+    address public questionRewardPoolEscrow;
+
+    function setQuestionRewardPoolEscrow(address escrow) external {
+        questionRewardPoolEscrow = escrow;
+    }
+}
+
+contract MockQuestionRewardPoolEscrowForConfig {
+    address public registry;
+    address public votingEngine;
+
+    constructor(address registry_, address votingEngine_) {
+        registry = registry_;
+        votingEngine = votingEngine_;
+    }
+
+    function questionRewardPoolEscrowConfigShape() external view returns (address registry_, address votingEngine_) {
+        return (registry, votingEngine);
     }
 }
 
@@ -142,7 +164,10 @@ contract MockLaunchDistributionPoolForConfig {
 
 contract MockClusterPayoutOracleForConfig {
     address internal launchConsumer;
+    address internal questionRewardConsumer;
     address internal publicRatingConsumer;
+    address internal questionBundleRewardConsumer;
+    address public frontendRegistry;
 
     constructor(address launchConsumer_) {
         launchConsumer = launchConsumer_;
@@ -152,8 +177,20 @@ contract MockClusterPayoutOracleForConfig {
         launchConsumer = launchConsumer_;
     }
 
+    function setQuestionRewardConsumer(address questionRewardConsumer_) external {
+        questionRewardConsumer = questionRewardConsumer_;
+    }
+
     function setPublicRatingConsumer(address publicRatingConsumer_) external {
         publicRatingConsumer = publicRatingConsumer_;
+    }
+
+    function setQuestionBundleRewardConsumer(address questionBundleRewardConsumer_) external {
+        questionBundleRewardConsumer = questionBundleRewardConsumer_;
+    }
+
+    function setFrontendRegistry(address frontendRegistry_) external {
+        frontendRegistry = frontendRegistry_;
     }
 
     function roundPayoutSnapshotKey(uint8 domain, uint256 rewardPoolId, uint256 contentId, uint256 roundId)
@@ -169,8 +206,10 @@ contract MockClusterPayoutOracleForConfig {
     }
 
     function roundPayoutSnapshotConsumer(uint8 domain) external view returns (address) {
+        if (domain == 1) return questionRewardConsumer;
         if (domain == 2) return launchConsumer;
         if (domain == 3) return publicRatingConsumer;
+        if (domain == 4) return questionBundleRewardConsumer;
         return address(0);
     }
 }
@@ -398,7 +437,22 @@ contract ProtocolConfigBranchesTest is Test {
     );
 
     function _newRewardEngine(ProtocolConfig config) internal returns (address) {
-        return address(new MockVotingEngineForConfig(address(config), address(this), MOCK_LREP));
+        MockContentRegistryForConfig contentRegistry = new MockContentRegistryForConfig();
+        return address(new MockVotingEngineForConfig(address(config), address(contentRegistry), MOCK_LREP));
+    }
+
+    function _newRewardEngineWithQuestionEscrow(ProtocolConfig config)
+        internal
+        returns (
+            address engine,
+            MockContentRegistryForConfig contentRegistry,
+            MockQuestionRewardPoolEscrowForConfig escrow
+        )
+    {
+        contentRegistry = new MockContentRegistryForConfig();
+        engine = address(new MockVotingEngineForConfig(address(config), address(contentRegistry), MOCK_LREP));
+        escrow = new MockQuestionRewardPoolEscrowForConfig(address(contentRegistry), engine);
+        contentRegistry.setQuestionRewardPoolEscrow(address(escrow));
     }
 
     function test_DrandConfig_UsesInitializerValues() public {
@@ -525,6 +579,40 @@ contract ProtocolConfigBranchesTest is Test {
 
         vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
         config.setFrontendRegistry(invalidRegistry);
+    }
+
+    function test_SetFrontendRegistry_RequiresConfiguredOracleRegistryAlignment() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+        MockFrontendRegistryForConfig frontend = new MockFrontendRegistryForConfig();
+        MockFrontendRegistryForConfig staleFrontend = new MockFrontendRegistryForConfig();
+        MockClusterPayoutOracleForConfig oracle = new MockClusterPayoutOracleForConfig(address(0));
+
+        oracle.setFrontendRegistry(address(staleFrontend));
+        config.setClusterPayoutOracle(address(oracle));
+
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.setFrontendRegistry(address(frontend));
+
+        oracle.setFrontendRegistry(address(frontend));
+        config.setFrontendRegistry(address(frontend));
+        assertEq(config.frontendRegistry(), address(frontend));
+    }
+
+    function test_SetClusterPayoutOracle_RequiresConfiguredFrontendRegistryAlignment() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+        MockFrontendRegistryForConfig frontend = new MockFrontendRegistryForConfig();
+        MockFrontendRegistryForConfig staleFrontend = new MockFrontendRegistryForConfig();
+        MockClusterPayoutOracleForConfig oracle = new MockClusterPayoutOracleForConfig(address(0));
+
+        config.setFrontendRegistry(address(frontend));
+        oracle.setFrontendRegistry(address(staleFrontend));
+
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.setClusterPayoutOracle(address(oracle));
+
+        oracle.setFrontendRegistry(address(frontend));
+        config.setClusterPayoutOracle(address(oracle));
+        assertEq(config.clusterPayoutOracle(), address(oracle));
     }
 
     function test_SetCategoryRegistry_ValidatesIntegration() public {
@@ -722,6 +810,60 @@ contract ProtocolConfigBranchesTest is Test {
         pinnedOracle.setPublicRatingConsumer(contentRegistry);
         config.setClusterPayoutOracle(address(pinnedOracle));
         assertEq(config.clusterPayoutOracle(), address(pinnedOracle));
+    }
+
+    function test_SetClusterPayoutOracle_RequiresPinnedQuestionRewardConsumersAfterRewardDistributorConfigured()
+        public
+    {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+        (address engine, MockContentRegistryForConfig contentRegistry, MockQuestionRewardPoolEscrowForConfig escrow) =
+            _newRewardEngineWithQuestionEscrow(config);
+        address distributor = address(new MockRewardDistributorForConfig(engine));
+        MockClusterPayoutOracleForConfig oracle = new MockClusterPayoutOracleForConfig(address(0));
+
+        config.setRewardDistributor(distributor);
+        oracle.setPublicRatingConsumer(address(contentRegistry));
+        oracle.setQuestionRewardConsumer(address(escrow));
+
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.setClusterPayoutOracle(address(oracle));
+
+        oracle.setQuestionBundleRewardConsumer(address(escrow));
+        config.setClusterPayoutOracle(address(oracle));
+        assertEq(config.clusterPayoutOracle(), address(oracle));
+    }
+
+    function test_SetRewardDistributor_RequiresPinnedQuestionRewardConsumersAfterOracleConfigured() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+        (address engine, MockContentRegistryForConfig contentRegistry, MockQuestionRewardPoolEscrowForConfig escrow) =
+            _newRewardEngineWithQuestionEscrow(config);
+        address distributor = address(new MockRewardDistributorForConfig(engine));
+        MockClusterPayoutOracleForConfig oracle = new MockClusterPayoutOracleForConfig(address(0));
+
+        oracle.setPublicRatingConsumer(address(contentRegistry));
+        oracle.setQuestionRewardConsumer(address(escrow));
+        config.setClusterPayoutOracle(address(oracle));
+
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.setRewardDistributor(distributor);
+
+        oracle.setQuestionBundleRewardConsumer(address(escrow));
+        config.setRewardDistributor(distributor);
+        assertTrue(config.isRewardDistributorForEngine(distributor, engine));
+    }
+
+    function test_SetClusterPayoutOracle_AllowsRewardDistributorWithZeroQuestionRewardEscrow() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+        address engine = _newRewardEngine(config);
+        address contentRegistry = MockVotingEngineForConfig(engine).registry();
+        address distributor = address(new MockRewardDistributorForConfig(engine));
+        MockClusterPayoutOracleForConfig oracle = new MockClusterPayoutOracleForConfig(address(0));
+
+        config.setRewardDistributor(distributor);
+        oracle.setPublicRatingConsumer(contentRegistry);
+        config.setClusterPayoutOracle(address(oracle));
+
+        assertEq(config.clusterPayoutOracle(), address(oracle));
     }
 
     function test_SetClusterPayoutOracle_AllowsBootstrapBeforeRewardDistributor() public {
@@ -1209,6 +1351,32 @@ contract ProtocolConfigBranchesTest is Test {
         assertEq(config.rewardDistributor(), replacementDistributor);
         assertTrue(config.isRewardDistributorForEngine(replacementDistributor, engine));
         assertEq(frontend.feeCreditorForEngine(engine), address(0));
+    }
+
+    function test_ReplaceRevokedRewardDistributor_RequiresConfiguredQuestionRewardConsumers() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+
+        (address engine, MockContentRegistryForConfig contentRegistry, MockQuestionRewardPoolEscrowForConfig escrow) =
+            _newRewardEngineWithQuestionEscrow(config);
+        address firstDistributor = address(new MockRewardDistributorWithClaimStateForConfig(engine, false));
+        address replacementDistributor = address(new MockRewardDistributorWithClaimStateForConfig(engine, false));
+        MockClusterPayoutOracleForConfig oracle = new MockClusterPayoutOracleForConfig(address(0));
+
+        oracle.setPublicRatingConsumer(address(contentRegistry));
+        oracle.setQuestionRewardConsumer(address(escrow));
+        oracle.setQuestionBundleRewardConsumer(address(escrow));
+        config.setRewardDistributor(firstDistributor);
+        config.setClusterPayoutOracle(address(oracle));
+        config.revokeRewardDistributor(firstDistributor);
+
+        oracle.setQuestionBundleRewardConsumer(address(0xBEEF));
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.replaceRevokedRewardDistributor(firstDistributor, replacementDistributor);
+
+        oracle.setQuestionBundleRewardConsumer(address(escrow));
+        config.replaceRevokedRewardDistributor(firstDistributor, replacementDistributor);
+
+        assertTrue(config.isRewardDistributorForEngine(replacementDistributor, engine));
     }
 
     function test_ReplaceRevokedRewardDistributor_AllowsRealFrontendRegistryRotationAfterReplacement() public {

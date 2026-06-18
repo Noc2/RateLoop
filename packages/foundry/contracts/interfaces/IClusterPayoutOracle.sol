@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
+import {IFrontendRegistry} from "./IFrontendRegistry.sol";
+
 interface IClusterPayoutOracle {
     enum SnapshotStatus {
         None,
@@ -86,6 +88,8 @@ interface IClusterPayoutOracle {
     ///         governance setters to verify a new oracle is configured for the consuming contract
     ///         before repointing (L-Oracle-B).
     function roundPayoutSnapshotConsumer(uint8 domain) external view returns (address);
+
+    function frontendRegistry() external view returns (IFrontendRegistry);
 
     function roundPayoutSnapshotConsumerFor(uint8 domain, uint256 rewardPoolId, uint256 contentId, uint256 roundId)
         external

@@ -1,25 +1,33 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
-import { IAdvisoryVoteRecorder } from "./interfaces/IAdvisoryVoteRecorder.sol";
-import { IRoundRewardDistributor } from "./interfaces/IRoundRewardDistributor.sol";
-import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol";
-import { ILaunchDistributionPool, IRoundClusterReadyAtSource } from "./interfaces/ILaunchDistributionPool.sol";
-import { IClusterPayoutOracle } from "./interfaces/IClusterPayoutOracle.sol";
-import { IFrontendRegistry } from "./interfaces/IFrontendRegistry.sol";
-import { ICategoryRegistry } from "./interfaces/ICategoryRegistry.sol";
-import { IConfidentialityEscrow } from "./interfaces/IConfidentialityEscrow.sol";
-import { RaterRegistry } from "./RaterRegistry.sol";
-import { RoundLib } from "./libraries/RoundLib.sol";
-import { RatingLib } from "./libraries/RatingLib.sol";
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import {IAdvisoryVoteRecorder} from "./interfaces/IAdvisoryVoteRecorder.sol";
+import {IRoundRewardDistributor} from "./interfaces/IRoundRewardDistributor.sol";
+import {IRaterIdentityRegistry} from "./interfaces/IRaterIdentityRegistry.sol";
+import {ILaunchDistributionPool, IRoundClusterReadyAtSource} from "./interfaces/ILaunchDistributionPool.sol";
+import {IClusterPayoutOracle} from "./interfaces/IClusterPayoutOracle.sol";
+import {IFrontendRegistry} from "./interfaces/IFrontendRegistry.sol";
+import {ICategoryRegistry} from "./interfaces/ICategoryRegistry.sol";
+import {IConfidentialityEscrow} from "./interfaces/IConfidentialityEscrow.sol";
+import {RaterRegistry} from "./RaterRegistry.sol";
+import {RoundLib} from "./libraries/RoundLib.sol";
+import {RatingLib} from "./libraries/RatingLib.sol";
 
 interface IRewardDistributorVotingEngineShape {
     function rewardDistributorConfigShape()
         external
         view
         returns (address registry_, address lrepToken_, address protocolConfig_);
+}
+
+interface IQuestionRewardRegistryShape {
+    function questionRewardPoolEscrow() external view returns (address);
+}
+
+interface IQuestionRewardPoolEscrowShape {
+    function questionRewardPoolEscrowConfigShape() external view returns (address registry_, address votingEngine_);
 }
 
 /// @title ProtocolConfig
@@ -36,8 +44,10 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     uint16 internal constant MAX_BUNDLE_COMPATIBLE_MIN_VOTER_CAP = 100;
     uint16 internal constant MAX_CREATOR_ROUND_VOTERS = 200;
     uint32 internal constant MIN_ROUND_DURATION_FLOOR = 20 seconds;
+    uint8 internal constant PAYOUT_DOMAIN_QUESTION_REWARD = 1;
     uint8 internal constant PAYOUT_DOMAIN_LAUNCH_CREDIT = 2;
     uint8 internal constant PAYOUT_DOMAIN_PUBLIC_RATING = 3;
+    uint8 internal constant PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD = 4;
     bytes32 internal constant RATELOOP_REWARD_DISTRIBUTOR_MARKER = keccak256("rateloop.round-reward-distributor.v1");
 
     error InvalidAddress();
@@ -257,6 +267,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         address previousNewEngine = rewardDistributorVotingEngine[newValue];
         if (previousNewEngine != address(0) && previousNewEngine != engine) revert InvalidConfig();
         _validateRewardDistributorIntegrations(newValue, engine);
+        _validateConfiguredClusterPayoutOracleRewardConsumers(newValue, engine);
 
         rewardDistributorVotingEngine[newValue] = engine;
         rewardDistributorForVotingEngine[engine] = newValue;
@@ -497,6 +508,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         address engine = _readRewardDistributorVotingEngine(value);
         if (_readRewardDistributorClaimAccountingStarted(value)) revert InvalidConfig();
         _validateRewardDistributorIntegrations(value, engine);
+        _validateConfiguredClusterPayoutOracleRewardConsumers(value, engine);
         if (advisoryVoteRecorder != address(0)) _validateAdvisoryVoteRecorderForEngine(advisoryVoteRecorder, engine);
         address previousForEngine = rewardDistributorForVotingEngine[engine];
         if (previousForEngine != address(0) && previousForEngine != value) revert InvalidConfig();
@@ -594,6 +606,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     function _setFrontendRegistry(address value) internal {
         if (value == address(0)) revert InvalidAddress();
         _validateFrontendRegistry(value);
+        _validateConfiguredClusterPayoutOracleFrontendRegistry(value);
         frontendRegistry = value;
         emit FrontendRegistryUpdated(value);
     }
@@ -601,7 +614,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     function _setCategoryRegistry(address value) internal {
         if (value == address(0)) revert InvalidAddress();
         if (value.code.length == 0) revert InvalidAddress();
-        try ICategoryRegistry(value).isCategory(0) returns (bool) { }
+        try ICategoryRegistry(value).isCategory(0) returns (bool) {}
         catch {
             revert InvalidConfig();
         }
@@ -664,7 +677,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         } catch {
             revert InvalidConfig();
         }
-        try RaterRegistry(value).getHumanCredential(address(0)) returns (RaterRegistry.HumanCredential memory) { }
+        try RaterRegistry(value).getHumanCredential(address(0)) returns (RaterRegistry.HumanCredential memory) {}
         catch {
             revert InvalidConfig();
         }
@@ -691,7 +704,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
 
     function _validateLaunchDistributionPool(address value) internal view {
         if (value.code.length == 0) revert InvalidAddress();
-        try ILaunchDistributionPool(value).launchAnchorCredentialAgeSeconds() returns (uint32) { }
+        try ILaunchDistributionPool(value).launchAnchorCredentialAgeSeconds() returns (uint32) {}
         catch {
             revert InvalidConfig();
         }
@@ -708,11 +721,11 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
 
     function _validateClusterPayoutOracle(address value) internal view {
         if (value.code.length == 0) revert InvalidAddress();
-        try IClusterPayoutOracle(value).roundPayoutSnapshotKey(0, 0, 0, 0) returns (bytes32) { }
+        try IClusterPayoutOracle(value).roundPayoutSnapshotKey(0, 0, 0, 0) returns (bytes32) {}
         catch {
             revert InvalidConfig();
         }
-        try IClusterPayoutOracle(value).roundPayoutSnapshotProposedAt(0, 0, 0, 0) returns (uint64) { }
+        try IClusterPayoutOracle(value).roundPayoutSnapshotProposedAt(0, 0, 0, 0) returns (uint64) {}
         catch {
             revert InvalidConfig();
         }
@@ -723,8 +736,9 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         }
         address distributor = rewardDistributor;
         if (distributor != address(0)) {
-            _validateClusterPayoutOraclePublicRatingConsumer(value, distributor);
+            _validateClusterPayoutOracleRewardConsumers(value, distributor, rewardDistributorVotingEngine[distributor]);
         }
+        _validateClusterPayoutOracleFrontendRegistry(value, frontendRegistry);
     }
 
     function _validateConfidentialityEscrow(address value) internal view {
@@ -751,15 +765,15 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         }
         try IConfidentialityEscrow(value).confidentialityConfig(0) returns (
             IConfidentialityEscrow.ConfidentialityConfig memory
-        ) { }
+        ) {}
         catch {
             revert InvalidConfig();
         }
-        try IConfidentialityEscrow(value).hasActiveBond(0, bytes32(0)) returns (bool) { }
+        try IConfidentialityEscrow(value).hasActiveBond(0, bytes32(0)) returns (bool) {}
         catch {
             revert InvalidConfig();
         }
-        try IConfidentialityEscrow(value).hasConfidentialityNexus(0, bytes32(0)) returns (bool) { }
+        try IConfidentialityEscrow(value).hasConfidentialityNexus(0, bytes32(0)) returns (bool) {}
         catch {
             revert InvalidConfig();
         }
@@ -787,13 +801,72 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         }
     }
 
-    function _validateClusterPayoutOraclePublicRatingConsumer(address oracle, address distributor) internal view {
+    function _validateConfiguredClusterPayoutOracleRewardConsumers(address distributor, address engine) internal view {
+        address oracle = clusterPayoutOracle;
+        if (oracle == address(0)) return;
+        _validateClusterPayoutOracleRewardConsumers(oracle, distributor, engine);
+    }
+
+    function _validateClusterPayoutOracleRewardConsumers(address oracle, address distributor, address engine)
+        internal
+        view
+    {
         address contentRegistry = _readRewardDistributorRegistry(distributor);
         if (contentRegistry == address(0)) revert InvalidConfig();
-        try IClusterPayoutOracle(oracle).roundPayoutSnapshotConsumer(PAYOUT_DOMAIN_PUBLIC_RATING) returns (
-            address consumer
+        _validateClusterPayoutOracleConsumer(oracle, PAYOUT_DOMAIN_PUBLIC_RATING, contentRegistry);
+
+        address questionRewardEscrow = _readQuestionRewardPoolEscrow(contentRegistry);
+        if (questionRewardEscrow == address(0)) return;
+        _validateQuestionRewardPoolEscrowShape(questionRewardEscrow, contentRegistry, engine);
+        _validateClusterPayoutOracleConsumer(oracle, PAYOUT_DOMAIN_QUESTION_REWARD, questionRewardEscrow);
+        _validateClusterPayoutOracleConsumer(oracle, PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD, questionRewardEscrow);
+    }
+
+    function _validateClusterPayoutOracleConsumer(address oracle, uint8 domain, address expectedConsumer)
+        internal
+        view
+    {
+        try IClusterPayoutOracle(oracle).roundPayoutSnapshotConsumer(domain) returns (address consumer) {
+            if (consumer != expectedConsumer) revert InvalidConfig();
+        } catch {
+            revert InvalidConfig();
+        }
+    }
+
+    function _readQuestionRewardPoolEscrow(address contentRegistry) internal view returns (address escrow) {
+        if (contentRegistry.code.length == 0) revert InvalidConfig();
+        try IQuestionRewardRegistryShape(contentRegistry).questionRewardPoolEscrow() returns (address registryEscrow) {
+            return registryEscrow;
+        } catch {
+            revert InvalidConfig();
+        }
+    }
+
+    function _validateQuestionRewardPoolEscrowShape(address escrow, address contentRegistry, address engine)
+        internal
+        view
+    {
+        if (engine == address(0)) revert InvalidConfig();
+        if (escrow.code.length == 0) revert InvalidConfig();
+        try IQuestionRewardPoolEscrowShape(escrow).questionRewardPoolEscrowConfigShape() returns (
+            address registry_, address votingEngine_
         ) {
-            if (consumer != contentRegistry) revert InvalidConfig();
+            if (registry_ != contentRegistry || votingEngine_ != engine) revert InvalidConfig();
+        } catch {
+            revert InvalidConfig();
+        }
+    }
+
+    function _validateConfiguredClusterPayoutOracleFrontendRegistry(address registry) internal view {
+        address oracle = clusterPayoutOracle;
+        if (oracle == address(0)) return;
+        _validateClusterPayoutOracleFrontendRegistry(oracle, registry);
+    }
+
+    function _validateClusterPayoutOracleFrontendRegistry(address oracle, address registry) internal view {
+        if (registry == address(0)) return;
+        try IClusterPayoutOracle(oracle).frontendRegistry() returns (IFrontendRegistry oracleRegistry) {
+            if (address(oracleRegistry) != registry) revert InvalidConfig();
         } catch {
             revert InvalidConfig();
         }
@@ -817,11 +890,11 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
 
     function _validateFrontendRegistry(address value) internal view {
         if (value.code.length == 0) revert InvalidAddress();
-        try IFrontendRegistry(value).STAKE_AMOUNT() returns (uint256) { }
+        try IFrontendRegistry(value).STAKE_AMOUNT() returns (uint256) {}
         catch {
             revert InvalidConfig();
         }
-        try IFrontendRegistry(value).getFrontendInfo(address(this)) returns (address, uint256, bool, bool) { }
+        try IFrontendRegistry(value).getFrontendInfo(address(this)) returns (address, uint256, bool, bool) {}
         catch {
             revert InvalidConfig();
         }
@@ -846,22 +919,22 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
             _validateAdvisoryVoteRecorderForEngine(value, rewardDistributorVotingEngine[configuredRewardDistributor]);
         }
 
-        try recorder.advisoryCommitKeyByRater(0, 0, address(this)) returns (bytes32) { }
+        try recorder.advisoryCommitKeyByRater(0, 0, address(this)) returns (bytes32) {}
         catch {
             revert InvalidConfig();
         }
 
-        try recorder.advisoryCommitKeyByIdentity(0, 0, bytes32(0)) returns (bytes32) { }
+        try recorder.advisoryCommitKeyByIdentity(0, 0, bytes32(0)) returns (bytes32) {}
         catch {
             revert InvalidConfig();
         }
 
-        try recorder.lastAdvisoryVoteTimestamp(0, address(this)) returns (uint256) { }
+        try recorder.lastAdvisoryVoteTimestamp(0, address(this)) returns (uint256) {}
         catch {
             revert InvalidConfig();
         }
 
-        try recorder.lastAdvisoryVoteTimestampByIdentity(0, bytes32(0)) returns (uint256) { }
+        try recorder.lastAdvisoryVoteTimestampByIdentity(0, bytes32(0)) returns (uint256) {}
         catch {
             revert InvalidConfig();
         }
