@@ -11,7 +11,7 @@ import {
 } from "@rateloop/contracts/abis";
 import { canonicalJsonHash } from "@rateloop/node-utils/json";
 import type { Address, Hex } from "viem";
-import { zeroAddress } from "viem";
+import { BaseError, ContractFunctionRevertedError, zeroAddress } from "viem";
 import type { Logger } from "./logger.js";
 import { config } from "./config.js";
 import {
@@ -128,6 +128,13 @@ interface CorrelationEpochSnapshotSummary {
 interface RoundPayoutProposalSummary {
   status: number;
   finalizedAt: bigint;
+}
+
+interface RoundPayoutSnapshotSource {
+  domain: number;
+  rewardPoolId: string | number | bigint;
+  contentId: string | number | bigint;
+  roundId: string | number | bigint;
 }
 
 interface AutomaticCorrelationSnapshotPublishContext {
@@ -316,27 +323,50 @@ async function readCorrelationEpochSnapshotSummary(
   };
 }
 
-async function readRoundPayoutProposalSummary(
+async function readRoundPayoutSnapshotSummary(
   publicClient: PublicClient,
-  snapshotKey: `0x${string}`,
+  source: RoundPayoutSnapshotSource,
 ): Promise<RoundPayoutProposalSummary> {
-  const proposal = (await publicClient.readContract({
-    address: config.contracts.clusterPayoutOracle,
-    abi: ClusterPayoutOracleStatusReadAbi,
-    functionName: "roundPayoutProposal",
-    args: [snapshotKey],
-  })) as { snapshot?: { status?: unknown; finalizedAt?: unknown } };
+  const rewardPoolId = normalizeBigIntValue(source.rewardPoolId);
+  const contentId = normalizeBigIntValue(source.contentId);
+  const roundId = normalizeBigIntValue(source.roundId);
+  if (rewardPoolId === null || contentId === null || roundId === null) {
+    throw new Error("Round payout snapshot source contains invalid identifiers");
+  }
 
-  const finalizedAt = proposal.snapshot?.finalizedAt;
-  const finalizedAtValue = normalizeBigIntString(finalizedAt);
+  try {
+    const snapshot = (await publicClient.readContract({
+      address: config.contracts.clusterPayoutOracle,
+      abi: ClusterPayoutOracleAbi,
+      functionName: "getRoundPayoutSnapshot",
+      args: [source.domain, rewardPoolId, contentId, roundId],
+    })) as { status?: unknown; finalizedAt?: unknown };
+
+    const finalizedAt = snapshot.finalizedAt;
+    const finalizedAtValue = normalizeBigIntString(finalizedAt);
+    return {
+      status: normalizeNumber(snapshot.status) ?? STATUS.None,
+      finalizedAt:
+        typeof finalizedAt === "bigint"
+          ? finalizedAt
+          : finalizedAtValue !== null
+            ? BigInt(finalizedAtValue)
+            : 0n,
+    };
+  } catch (error) {
+    if (isSnapshotNotFoundError(error)) {
+      return { status: STATUS.None, finalizedAt: 0n };
+    }
+    throw error;
+  }
+}
+
+function artifactSnapshotSource(snapshot: RoundPayoutSnapshotArtifact): RoundPayoutSnapshotSource {
   return {
-    status: normalizeNumber(proposal.snapshot?.status) ?? STATUS.None,
-    finalizedAt:
-      typeof finalizedAt === "bigint"
-        ? finalizedAt
-        : finalizedAtValue !== null
-          ? BigInt(finalizedAtValue)
-          : 0n,
+    domain: snapshot.domain,
+    rewardPoolId: snapshot.rewardPoolId,
+    contentId: snapshot.contentId,
+    roundId: snapshot.roundId,
   };
 }
 
@@ -669,6 +699,11 @@ function normalizeBigIntString(value: unknown): string | null {
   return null;
 }
 
+function normalizeBigIntValue(value: unknown): bigint | null {
+  const normalized = normalizeBigIntString(value);
+  return normalized === null ? null : BigInt(normalized);
+}
+
 function normalizeNumber(value: unknown): number | null {
   if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) return value;
   if (typeof value === "bigint" && value >= 0n && value <= BigInt(Number.MAX_SAFE_INTEGER)) return Number(value);
@@ -677,6 +712,22 @@ function normalizeNumber(value: unknown): number | null {
     return Number.isSafeInteger(parsed) ? parsed : null;
   }
   return null;
+}
+
+function isSnapshotNotFoundError(error: unknown): boolean {
+  if (error instanceof BaseError) {
+    const reverted = error.walk(
+      candidate => candidate instanceof ContractFunctionRevertedError,
+    ) as ContractFunctionRevertedError | null;
+    if (reverted?.data?.errorName === "SnapshotNotFound") return true;
+  }
+
+  const candidate = error as { data?: { errorName?: unknown }; message?: unknown; shortMessage?: unknown };
+  return (
+    candidate?.data?.errorName === "SnapshotNotFound" ||
+    (typeof candidate?.message === "string" && candidate.message.includes("SnapshotNotFound")) ||
+    (typeof candidate?.shortMessage === "string" && candidate.shortMessage.includes("SnapshotNotFound"))
+  );
 }
 
 async function applyFinalizedRatingSnapshotsFromArtifact(
@@ -702,9 +753,9 @@ async function applyFinalizedRatingSnapshotsFromArtifact(
     let status: number = STATUS.None;
     let finalizedAt = 0n;
     try {
-      const existing = await readRoundPayoutProposalSummary(
+      const existing = await readRoundPayoutSnapshotSummary(
         publicClient,
-        snapshotKey,
+        artifactSnapshotSource(snapshot),
       );
       status = existing.status;
       finalizedAt = existing.finalizedAt;
@@ -967,10 +1018,20 @@ async function publishAutomaticCorrelationSnapshots(
     return preflight.result;
   }
 
-  const cachedArtifact = await readCachedCorrelationArtifact(
-    fingerprint,
-    logger,
-  );
+  const cachedArtifact = preflight.hasRejectedRoundSnapshots
+    ? null
+    : await readCachedCorrelationArtifact(
+        fingerprint,
+        logger,
+      );
+  if (preflight.hasRejectedRoundSnapshots) {
+    logger.debug(
+      "Skipping cached automatic correlation snapshot artifact after rejected round payout snapshot",
+      {
+        candidateFingerprint: fingerprint,
+      },
+    );
+  }
   let built = cachedArtifact
     ? await restoreConfiguredCorrelationSnapshotArtifactFromCanonicalJson(
         cachedArtifact.canonicalJson,
@@ -1049,9 +1110,11 @@ async function preflightAutomaticCorrelationSnapshots(
   result: CorrelationSnapshotPublisherResult;
   needsArtifactBuild: boolean;
   rejectedEpochIds: Set<string>;
+  hasRejectedRoundSnapshots: boolean;
 }> {
   const result = emptyResult();
   let needsArtifactBuild = false;
+  let hasRejectedRoundSnapshots = false;
   const rejectedEpochIds = new Set<string>();
   const epochFinalizedById = new Map<string, boolean>();
 
@@ -1123,18 +1186,16 @@ async function preflightAutomaticCorrelationSnapshots(
       ],
     });
 
-    let roundStatus: number = STATUS.None;
-    try {
-      const existingRound = await readRoundPayoutProposalSummary(
-        publicClient,
-        snapshotKey,
-      );
-      roundStatus = existingRound.status;
-    } catch {
-      roundStatus = STATUS.None;
-    }
+    const existingRound = await readRoundPayoutSnapshotSummary(
+      publicClient,
+      candidate,
+    );
+    const roundStatus = existingRound.status;
 
     if (roundStatus === STATUS.None || roundStatus === STATUS.Rejected) {
+      if (roundStatus === STATUS.Rejected) {
+        hasRejectedRoundSnapshots = true;
+      }
       if (
         await roundSnapshotSourceReady(
           publicClient,
@@ -1179,7 +1240,7 @@ async function preflightAutomaticCorrelationSnapshots(
     }
   }
 
-  return { result, needsArtifactBuild, rejectedEpochIds };
+  return { result, needsArtifactBuild, rejectedEpochIds, hasRejectedRoundSnapshots };
 }
 
 async function publishCorrelationSnapshotArtifact(
@@ -1357,13 +1418,17 @@ async function publishCorrelationSnapshotArtifact(
 
     let status: number = STATUS.None;
     try {
-      const existing = await readRoundPayoutProposalSummary(
+      const existing = await readRoundPayoutSnapshotSummary(
         publicClient,
-        snapshotKey,
+        artifactSnapshotSource(snapshot),
       );
       status = existing.status;
-    } catch {
-      status = STATUS.None;
+    } catch (error) {
+      logger.warn("Skipping round payout snapshot because status could not be read", {
+        snapshotKey,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      continue;
     }
 
     if (status === STATUS.None || status === STATUS.Rejected) {
