@@ -7,6 +7,7 @@
     "build:workspace-deps": "yarn workspace @rateloop/node-utils build:dist && yarn workspace @rateloop/contracts build",
     "check-types": "yarn build:workspace-deps && tsc --noEmit",
     "start": "yarn build:workspace-deps && tsx src/index.ts",
+    "start:built-workspace-deps": "tsx src/index.ts",
     "dev": "yarn build:workspace-deps && tsx watch src/index.ts",
     "build:correlation-artifact": "tsx src/build-correlation-artifact.ts",
     "verify:correlation-artifact": "tsx src/correlation-artifact-verifier.ts",
