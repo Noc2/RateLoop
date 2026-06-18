@@ -9,7 +9,10 @@ const MAX_PONDER_DATABASE_SCHEMA_LENGTH = 45;
 const RAILWAY_DATABASE_SCHEMA_PREFIX = "railway_";
 const PROTOCOL_DEPLOYMENT_DATABASE_SCHEMA_PREFIX = "rateloop_deployment_";
 /** Shared static schemas that collide with Ponder app identity after upgrades. */
-const DEPRECATED_STATIC_RAILWAY_SCHEMAS = new Set(["rateloop_ponder_worldchain_canary"]);
+const DEPRECATED_STATIC_RAILWAY_SCHEMAS = new Set([
+  "rateloop_ponder_base_sepolia_canary",
+  "rateloop_ponder_worldchain_canary",
+]);
 const DEFAULT_PONDER_DATABASE_SCHEMA_BY_NETWORK = {
   hardhat: "rateloop_ponder_hardhat",
   baseSepolia: "rateloop_ponder_base_sepolia",
