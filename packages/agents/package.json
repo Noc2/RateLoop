@@ -97,7 +97,7 @@
     "status": "tsx src/cli.ts status",
     "templates": "tsx src/cli.ts templates",
     "wallet": "tsx src/cli.ts wallet",
-    "test": "yarn workspace @rateloop/node-utils build:dist && vitest run",
+    "test": "yarn build && vitest run",
     "test:watch": "vitest"
   },
   "publishConfig": {
