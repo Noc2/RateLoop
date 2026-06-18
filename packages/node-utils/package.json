@@ -1,49 +1,118 @@
 {
   "name": "@rateloop/node-utils",
-  "version": "0.0.1",
-  "private": true,
+  "version": "0.1.0",
   "type": "module",
+  "description": "Shared Node.js utilities for RateLoop services and public agent packages",
+  "homepage": "https://github.com/Noc2/RateLoop/tree/main/packages/node-utils",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Noc2/RateLoop.git",
+    "directory": "packages/node-utils"
+  },
+  "bugs": {
+    "url": "https://github.com/Noc2/RateLoop/issues"
+  },
+  "keywords": [
+    "rateloop",
+    "node",
+    "utilities",
+    "profile",
+    "moderation"
+  ],
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/esm/index.d.ts",
+  "files": [
+    "dist"
+  ],
   "exports": {
-    "./contentModeration": "./src/contentModeration.ts",
-    "./correlationScoring": "./src/correlationScoring.ts",
-    "./identityKeys": "./src/identityKeys.ts",
-    "./json": "./src/json.ts",
-    "./keystore": "./src/keystore.ts",
-    "./profileSelfReport": "./src/profileSelfReport.ts",
-    "./submissionValidation": "./src/submissionValidation.ts",
-    "./x402QuestionFields": "./src/x402QuestionFields.ts"
+    ".": {
+      "types": "./dist/esm/index.d.ts",
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js"
+    },
+    "./contentModeration": {
+      "types": "./dist/esm/contentModeration.d.ts",
+      "import": "./dist/esm/contentModeration.js",
+      "require": "./dist/cjs/contentModeration.js"
+    },
+    "./correlationScoring": {
+      "types": "./dist/esm/correlationScoring.d.ts",
+      "import": "./dist/esm/correlationScoring.js",
+      "require": "./dist/cjs/correlationScoring.js"
+    },
+    "./identityKeys": {
+      "types": "./dist/esm/identityKeys.d.ts",
+      "import": "./dist/esm/identityKeys.js",
+      "require": "./dist/cjs/identityKeys.js"
+    },
+    "./json": {
+      "types": "./dist/esm/json.d.ts",
+      "import": "./dist/esm/json.js",
+      "require": "./dist/cjs/json.js"
+    },
+    "./keystore": {
+      "types": "./dist/esm/keystore.d.ts",
+      "import": "./dist/esm/keystore.js",
+      "require": "./dist/cjs/keystore.js"
+    },
+    "./profileSelfReport": {
+      "types": "./dist/esm/profileSelfReport.d.ts",
+      "import": "./dist/esm/profileSelfReport.js",
+      "require": "./dist/cjs/profileSelfReport.js"
+    },
+    "./submissionValidation": {
+      "types": "./dist/esm/submissionValidation.d.ts",
+      "import": "./dist/esm/submissionValidation.js",
+      "require": "./dist/cjs/submissionValidation.js"
+    },
+    "./x402QuestionFields": {
+      "types": "./dist/esm/x402QuestionFields.d.ts",
+      "import": "./dist/esm/x402QuestionFields.js",
+      "require": "./dist/cjs/x402QuestionFields.js"
+    }
   },
   "typesVersions": {
     "*": {
       "contentModeration": [
-        "src/contentModeration.ts"
+        "dist/esm/contentModeration.d.ts"
       ],
       "correlationScoring": [
-        "src/correlationScoring.ts"
+        "dist/esm/correlationScoring.d.ts"
       ],
       "identityKeys": [
-        "src/identityKeys.ts"
+        "dist/esm/identityKeys.d.ts"
       ],
       "json": [
-        "src/json.ts"
+        "dist/esm/json.d.ts"
       ],
       "keystore": [
-        "src/keystore.ts"
+        "dist/esm/keystore.d.ts"
       ],
       "profileSelfReport": [
-        "src/profileSelfReport.ts"
+        "dist/esm/profileSelfReport.d.ts"
       ],
       "submissionValidation": [
-        "src/submissionValidation.ts"
+        "dist/esm/submissionValidation.d.ts"
       ],
       "x402QuestionFields": [
-        "src/x402QuestionFields.ts"
+        "dist/esm/x402QuestionFields.d.ts"
+      ],
+      "*": [
+        "dist/esm/index.d.ts"
       ]
     }
   },
   "scripts": {
+    "build": "node ../../scripts/clean-package-dist.mjs && yarn build:dist",
+    "build:dist": "tsc -p tsconfig.json && node ../../scripts/fix-esm-extensions.mjs dist/esm && tsc -p tsconfig.cjs.json && node ../../scripts/write-cjs-package-json.mjs dist/cjs",
+    "prepack": "yarn build",
     "test": "node ../../scripts/run-node-tests.mjs src",
     "check-types": "tsc --noEmit"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   },
   "dependencies": {
     "viem": "2.39.0"

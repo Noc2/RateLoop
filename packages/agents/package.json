@@ -86,8 +86,8 @@
   },
   "scripts": {
     "ask": "tsx src/cli.ts ask",
-    "build": "node ../../scripts/clean-package-dist.mjs && tsc -p tsconfig.json && node ../../scripts/fix-esm-extensions.mjs dist/esm && tsc -p tsconfig.cjs.json && node ../../scripts/write-cjs-package-json.mjs dist/cjs",
-    "check-types": "tsc --noEmit",
+    "build": "yarn workspace @rateloop/node-utils build:dist && node ../../scripts/clean-package-dist.mjs && tsc -p tsconfig.json && node ../../scripts/fix-esm-extensions.mjs dist/esm && tsc -p tsconfig.cjs.json && node ../../scripts/write-cjs-package-json.mjs dist/cjs",
+    "check-types": "yarn workspace @rateloop/node-utils build:dist && tsc --noEmit",
     "lint:questions": "tsx src/cli.ts lint",
     "local-ask": "tsx src/cli.ts local-ask",
     "prepack": "yarn build",
@@ -97,7 +97,7 @@
     "status": "tsx src/cli.ts status",
     "templates": "tsx src/cli.ts templates",
     "wallet": "tsx src/cli.ts wallet",
-    "test": "vitest run",
+    "test": "yarn workspace @rateloop/node-utils build:dist && vitest run",
     "test:watch": "vitest"
   },
   "publishConfig": {

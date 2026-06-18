@@ -9,6 +9,11 @@ const releasePackages = [
     internalDependencies: {},
   },
   {
+    name: "@rateloop/node-utils",
+    path: "packages/node-utils/package.json",
+    internalDependencies: {},
+  },
+  {
     name: "@rateloop/sdk",
     path: "packages/sdk/package.json",
     internalDependencies: {
@@ -20,10 +25,12 @@ const releasePackages = [
     path: "packages/agents/package.json",
     internalDependencies: {
       "@rateloop/contracts": "workspace:*",
+      "@rateloop/node-utils": "workspace:*",
       "@rateloop/sdk": "workspace:*",
     },
   },
 ];
+const releasePackageNames = new Set(releasePackages.map(pkg => pkg.name));
 
 function readJson(path) {
   return JSON.parse(readFileSync(path, "utf8"));
@@ -66,6 +73,22 @@ test("public npm packages are ready for the 0.1.0 provenance publish gate", () =
         manifest.dependencies?.[dependencyName],
         expectedRange,
         `${pkg.name} depends on ${dependencyName} through the workspace protocol`,
+      );
+    }
+
+    for (const [dependencyName, dependencyRange] of Object.entries(manifest.dependencies ?? {})) {
+      if (!String(dependencyRange).startsWith("workspace:")) continue;
+
+      assert.ok(
+        releasePackageNames.has(dependencyName),
+        `${pkg.name} has public workspace dependency ${dependencyName}; add it to releasePackages or remove it from the public package`,
+      );
+      const dependencyPackage = releasePackages.find(candidate => candidate.name === dependencyName);
+      assert.ok(dependencyPackage, `${dependencyName} release metadata is present`);
+      assert.notEqual(
+        readJson(dependencyPackage.path).private,
+        true,
+        `${pkg.name} public dependency ${dependencyName} must be publishable`,
       );
     }
   }

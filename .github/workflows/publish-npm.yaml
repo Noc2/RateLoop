@@ -55,6 +55,7 @@ jobs:
 
       - name: Run package tests
         run: |
+          yarn node-utils:test
           yarn contracts:test
           yarn sdk:test
           yarn workspace @rateloop/agents test
@@ -62,6 +63,7 @@ jobs:
       - name: Pack packages
         run: |
           mkdir -p "$RUNNER_TEMP/rateloop-npm"
+          yarn workspace @rateloop/node-utils pack --out "$RUNNER_TEMP/rateloop-npm/rateloop-node-utils.tgz"
           yarn workspace @rateloop/contracts pack --out "$RUNNER_TEMP/rateloop-npm/rateloop-contracts.tgz"
           yarn workspace @rateloop/sdk pack --out "$RUNNER_TEMP/rateloop-npm/rateloop-sdk.tgz"
           yarn workspace @rateloop/agents pack --out "$RUNNER_TEMP/rateloop-npm/rateloop-agents.tgz"
@@ -82,5 +84,6 @@ jobs:
           fi
 
           npm publish "$RUNNER_TEMP/rateloop-npm/rateloop-contracts.tgz" "${publish_args[@]}"
+          npm publish "$RUNNER_TEMP/rateloop-npm/rateloop-node-utils.tgz" "${publish_args[@]}"
           npm publish "$RUNNER_TEMP/rateloop-npm/rateloop-sdk.tgz" "${publish_args[@]}"
           npm publish "$RUNNER_TEMP/rateloop-npm/rateloop-agents.tgz" "${publish_args[@]}"
