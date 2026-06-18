@@ -59,6 +59,10 @@ async function readNotificationPreferences(
     settlingSoonDay: body?.settlingSoonDay ?? DEFAULT_NOTIFICATION_PREFERENCES.settlingSoonDay,
     followedSubmission: body?.followedSubmission ?? DEFAULT_NOTIFICATION_PREFERENCES.followedSubmission,
     followedResolution: body?.followedResolution ?? DEFAULT_NOTIFICATION_PREFERENCES.followedResolution,
+    contextNowPublic: body?.contextNowPublic ?? DEFAULT_NOTIFICATION_PREFERENCES.contextNowPublic,
+    breachReported: body?.breachReported ?? DEFAULT_NOTIFICATION_PREFERENCES.breachReported,
+    cohortBreachAnnouncement:
+      body?.cohortBreachAnnouncement ?? DEFAULT_NOTIFICATION_PREFERENCES.cohortBreachAnnouncement,
   };
 }
 

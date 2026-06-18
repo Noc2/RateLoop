@@ -34,6 +34,9 @@ export function normalizeNotificationPreferencesInput(body: Record<string, unkno
     settlingSoonDay: body.settlingSoonDay,
     followedSubmission: body.followedSubmission,
     followedResolution: body.followedResolution,
+    contextNowPublic: body.contextNowPublic,
+    breachReported: body.breachReported,
+    cohortBreachAnnouncement: body.cohortBreachAnnouncement,
   };
 
   for (const [key, value] of Object.entries(flags)) {
@@ -51,6 +54,9 @@ export function normalizeNotificationPreferencesInput(body: Record<string, unkno
       settlingSoonDay: body.settlingSoonDay as boolean,
       followedSubmission: body.followedSubmission as boolean,
       followedResolution: body.followedResolution as boolean,
+      contextNowPublic: body.contextNowPublic as boolean,
+      breachReported: body.breachReported as boolean,
+      cohortBreachAnnouncement: body.cohortBreachAnnouncement as boolean,
     },
   };
 }
@@ -63,6 +69,9 @@ export function hashNotificationPreferencesPayload(payload: NotificationPreferen
     payload.settlingSoonDay ? "1" : "0",
     payload.followedSubmission ? "1" : "0",
     payload.followedResolution ? "1" : "0",
+    payload.contextNowPublic ? "1" : "0",
+    payload.breachReported ? "1" : "0",
+    payload.cohortBreachAnnouncement ? "1" : "0",
   ]);
 }
 

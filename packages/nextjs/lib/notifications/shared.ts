@@ -4,6 +4,9 @@ export interface NotificationPreferencesState {
   settlingSoonDay: boolean;
   followedSubmission: boolean;
   followedResolution: boolean;
+  contextNowPublic: boolean;
+  breachReported: boolean;
+  cohortBreachAnnouncement: boolean;
 }
 
 export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferencesState = {
@@ -12,4 +15,7 @@ export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferencesState = {
   settlingSoonDay: true,
   followedSubmission: true,
   followedResolution: true,
+  contextNowPublic: true,
+  breachReported: true,
+  cohortBreachAnnouncement: true,
 };

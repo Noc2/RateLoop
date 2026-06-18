@@ -30,6 +30,9 @@ export async function getNotificationPreferences(walletAddress: `0x${string}`): 
     settlingSoonDay: item.settlingSoonDay,
     followedSubmission: item.followedSubmission,
     followedResolution: item.followedResolution,
+    contextNowPublic: item.contextNowPublic,
+    breachReported: item.breachReported,
+    cohortBreachAnnouncement: item.cohortBreachAnnouncement,
   };
 }
 
@@ -50,6 +53,9 @@ export async function upsertNotificationPreferences(
       settlingSoonDay: payload.settlingSoonDay,
       followedSubmission: payload.followedSubmission,
       followedResolution: payload.followedResolution,
+      contextNowPublic: payload.contextNowPublic,
+      breachReported: payload.breachReported,
+      cohortBreachAnnouncement: payload.cohortBreachAnnouncement,
       updatedAt: now,
     })
     .onConflictDoUpdate({
@@ -60,6 +66,9 @@ export async function upsertNotificationPreferences(
         settlingSoonDay: payload.settlingSoonDay,
         followedSubmission: payload.followedSubmission,
         followedResolution: payload.followedResolution,
+        contextNowPublic: payload.contextNowPublic,
+        breachReported: payload.breachReported,
+        cohortBreachAnnouncement: payload.cohortBreachAnnouncement,
         updatedAt: now,
       },
     });
@@ -70,5 +79,8 @@ export async function upsertNotificationPreferences(
     settlingSoonDay: payload.settlingSoonDay,
     followedSubmission: payload.followedSubmission,
     followedResolution: payload.followedResolution,
+    contextNowPublic: payload.contextNowPublic,
+    breachReported: payload.breachReported,
+    cohortBreachAnnouncement: payload.cohortBreachAnnouncement,
   };
 }

@@ -168,6 +168,9 @@ test.describe("Next.js API routes", () => {
     const session = await createNotificationPreferencesReadSession(account.address.toLowerCase(), account.signMessage);
     expect(session.body).toHaveProperty("roundResolved");
     expect(session.body).toHaveProperty("settlingSoonHour");
+    expect(session.body).toHaveProperty("contextNowPublic");
+    expect(session.body).toHaveProperty("breachReported");
+    expect(session.body).toHaveProperty("cohortBreachAnnouncement");
 
     const authorizedRes = await fetch(
       `${BASE_URL}/api/notifications/preferences?address=${account.address.toLowerCase()}`,
@@ -202,6 +205,9 @@ test.describe("Next.js API routes", () => {
       settlingSoonDay: false,
       followedSubmission: true,
       followedResolution: false,
+      contextNowPublic: false,
+      breachReported: true,
+      cohortBreachAnnouncement: false,
     };
 
     const update = await updateNotificationPreferences(address, account.signMessage, nextPreferences);

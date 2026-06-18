@@ -10,8 +10,10 @@ import { HUMAN_SIGN_IN_LABEL } from "~~/lib/home/humanSignInRoute";
 import { type EmailNotificationSettingsPayload } from "~~/lib/notifications/emailShared";
 import { notification } from "~~/utils/scaffold-eth";
 
-const NOTIFICATION_OPTIONS: {
-  key: keyof NotificationPreferences;
+type EmailNotificationPreferenceKey = keyof Omit<EmailNotificationSettingsPayload, "email">;
+
+const EMAIL_NOTIFICATION_OPTIONS: {
+  key: EmailNotificationPreferenceKey;
   label: string;
   description: string;
 }[] = [
@@ -39,6 +41,29 @@ const NOTIFICATION_OPTIONS: {
     key: "followedResolution",
     label: "Followed curator outcomes",
     description: "Notify when a followed curator has a round resolve.",
+  },
+];
+
+const IN_APP_NOTIFICATION_OPTIONS: {
+  key: keyof NotificationPreferences;
+  label: string;
+  description: string;
+}[] = [
+  ...EMAIL_NOTIFICATION_OPTIONS,
+  {
+    key: "contextNowPublic",
+    label: "Private context became public",
+    description: "Notify when gated context for tracked content is disclosed publicly.",
+  },
+  {
+    key: "breachReported",
+    label: "Confidentiality breach reported",
+    description: "Notify when breach evidence is filed for confidential context access.",
+  },
+  {
+    key: "cohortBreachAnnouncement",
+    label: "Cohort breach announcement",
+    description: "Notify when a cohort-level confidentiality breach announcement is published.",
   },
 ];
 
@@ -302,7 +327,7 @@ export function NotificationSettingsPanel({
         </div>
 
         <div className="space-y-3">
-          {NOTIFICATION_OPTIONS.map(option => (
+          {IN_APP_NOTIFICATION_OPTIONS.map(option => (
             <NotificationPreferenceToggle
               key={option.key}
               label={option.label}
@@ -355,7 +380,7 @@ export function NotificationSettingsPanel({
           </div>
 
           <div className="space-y-3">
-            {NOTIFICATION_OPTIONS.map(option => (
+            {EMAIL_NOTIFICATION_OPTIONS.map(option => (
               <NotificationPreferenceToggle
                 key={`email-${option.key}`}
                 label={option.label}
