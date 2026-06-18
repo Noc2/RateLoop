@@ -20,6 +20,7 @@ import {
   thirdwebClient,
   usesThirdwebInAppEip7702Execution,
 } from "~~/services/thirdweb/client";
+import { RATELOOP_E2E_TEST_WALLET_PRIVATE_KEY_STORAGE_KEY } from "~~/services/thirdweb/testWalletStorage";
 import { notification } from "~~/utils/scaffold-eth";
 
 export const FREE_TRANSACTION_ALLOWANCE_QUERY_KEY = ["free-transactions"] as const;
@@ -51,6 +52,18 @@ function getClientFreeTransactionEnvironmentScope() {
     return window.location.origin;
   } catch {
     return undefined;
+  }
+}
+
+function hasLocalE2ETestWalletSession() {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  try {
+    return Boolean(window.localStorage.getItem(RATELOOP_E2E_TEST_WALLET_PRIVATE_KEY_STORAGE_KEY)?.trim());
+  } catch {
+    return false;
   }
 }
 
@@ -199,6 +212,7 @@ export function getFreeTransactionAllowanceIdentityAddress(params: {
 
 export function useFreeTransactionAllowance(options: FreeTransactionAllowanceOptions = {}) {
   const allowInAppSponsorshipSync = options.allowInAppSponsorshipSync ?? true;
+  const canSyncInAppSponsorship = allowInAppSponsorshipSync && !hasLocalE2ETestWalletSession();
   const { address, chain } = useAccount();
   const activeWallet = useActiveWallet();
   const activeWalletChain = useActiveWalletChain();
@@ -342,7 +356,7 @@ export function useFreeTransactionAllowance(options: FreeTransactionAllowanceOpt
   ]);
 
   useEffect(() => {
-    if (!allowInAppSponsorshipSync || !isCurrentInAppWallet || !resolvedChainId) {
+    if (!canSyncInAppSponsorship || !isCurrentInAppWallet || !resolvedChainId) {
       return;
     }
 
@@ -356,11 +370,11 @@ export function useFreeTransactionAllowance(options: FreeTransactionAllowanceOpt
     }
 
     setStoredThirdwebSponsorshipMode(desiredSponsorshipMode);
-  }, [allowInAppSponsorshipSync, desiredSponsorshipMode, isCurrentInAppWallet, resolvedChainId, shouldUseEoaWallet]);
+  }, [canSyncInAppSponsorship, desiredSponsorshipMode, isCurrentInAppWallet, resolvedChainId, shouldUseEoaWallet]);
 
   useEffect(() => {
     if (
-      !allowInAppSponsorshipSync ||
+      !canSyncInAppSponsorship ||
       !thirdwebClient ||
       !address ||
       !resolvedChainId ||
@@ -411,7 +425,7 @@ export function useFreeTransactionAllowance(options: FreeTransactionAllowanceOpt
   }, [
     activeWallet,
     address,
-    allowInAppSponsorshipSync,
+    canSyncInAppSponsorship,
     desiredSponsorshipMode,
     isCurrentInAppWallet,
     resolvedChainId,
@@ -421,7 +435,7 @@ export function useFreeTransactionAllowance(options: FreeTransactionAllowanceOpt
 
   useEffect(() => {
     if (
-      !allowInAppSponsorshipSync ||
+      !canSyncInAppSponsorship ||
       !thirdwebClient ||
       !address ||
       !resolvedChainId ||
@@ -467,7 +481,7 @@ export function useFreeTransactionAllowance(options: FreeTransactionAllowanceOpt
   }, [
     activeWallet,
     address,
-    allowInAppSponsorshipSync,
+    canSyncInAppSponsorship,
     isCurrentInAppWallet,
     resolvedChainId,
     setActiveWallet,
