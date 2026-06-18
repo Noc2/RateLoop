@@ -7,7 +7,8 @@ import {
   keccak256,
   parseAbi,
 } from "viem";
-import { mainnetClient, timelockEncrypt } from "tlock-js";
+import { timelockEncrypt } from "tlock-js";
+import { createTlockClientForDrandConfig } from "./tlockClient.js";
 import { deriveTlockCommitTargetRound } from "./tlockTargetRound.js";
 
 function usage() {
@@ -174,7 +175,11 @@ plaintext[2] = predictedUpBps >> 8;
 plaintext[3] = predictedUpBps & 0xff;
 Buffer.from(salt.slice(2), "hex").copy(plaintext, 4);
 
-const client = mainnetClient();
+const { client, spec: tlockChain } = createTlockClientForDrandConfig({
+  drandChainHash,
+  drandGenesisTime,
+  drandPeriod,
+});
 const chainInfo = await client.chain().info();
 const liveDrandChainHash = `0x${chainInfo.hash}`;
 if (
@@ -183,7 +188,7 @@ if (
   BigInt(chainInfo.period) !== drandPeriod
 ) {
   throw new Error(
-    `On-chain drand config (${drandChainHash}, ${drandGenesisTime}, ${drandPeriod}) does not match tlock-js mainnet chain (${liveDrandChainHash}, ${chainInfo.genesis_time}, ${chainInfo.period})`
+    `On-chain drand config (${drandChainHash}, ${drandGenesisTime}, ${drandPeriod}) does not match tlock-js ${tlockChain.name} chain (${liveDrandChainHash}, ${chainInfo.genesis_time}, ${chainInfo.period})`
   );
 }
 const armored = await timelockEncrypt(Number(targetRound), plaintext, client);
