@@ -11,6 +11,7 @@ import { ROUND_STATE } from "@rateloop/contracts/protocol";
 import { config } from "./config.js";
 import { readRound } from "./contract-reads.js";
 import type { CorrelationRoundCandidate } from "./correlation-artifact-builder.js";
+import { readBoundedResponseText } from "./bounded-response.js";
 import type { Logger } from "./logger.js";
 
 const PONDER_FETCH_TIMEOUT_MS = PONDER_HTTP_FETCH_TIMEOUT_MS;
@@ -63,19 +64,8 @@ async function fetchPonderJson<T>(url: URL): Promise<T> {
   if (!response.ok) {
     throw new Error(`Ponder request failed: ${url.pathname} ${response.status}`);
   }
-  const contentLengthHeader = response.headers.get("content-length");
-  if (contentLengthHeader) {
-    const declaredLength = Number.parseInt(contentLengthHeader, 10);
-    if (
-      Number.isFinite(declaredLength) &&
-      declaredLength > PONDER_JSON_MAX_BYTES
-    ) {
-      throw new Error(
-        `Ponder response too large: ${declaredLength} > ${PONDER_JSON_MAX_BYTES} bytes`,
-      );
-    }
-  }
-  return (await response.json()) as T;
+  const body = await readBoundedResponseText(response, PONDER_JSON_MAX_BYTES, "Ponder");
+  return JSON.parse(body) as T;
 }
 
 async function fetchPonderJsonOptional<T>(url: URL): Promise<T | null> {

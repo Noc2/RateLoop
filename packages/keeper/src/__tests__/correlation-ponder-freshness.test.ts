@@ -25,6 +25,24 @@ function mockRoundSnapshot(revealedCount: string, voteCount: string) {
   );
 }
 
+function oversizedChunkedJsonResponse(totalBytes = 5_000_001) {
+  let sent = 0;
+  return new Response(
+    new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (sent >= totalBytes) {
+          controller.close();
+          return;
+        }
+        const size = Math.min(64 * 1024, totalBytes - sent);
+        sent += size;
+        controller.enqueue(new Uint8Array(size).fill(0x20));
+      },
+    }),
+    { status: 200, headers: { "content-type": "application/json" } },
+  );
+}
+
 describe("areCorrelationCandidatesPonderFresh", () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -91,6 +109,38 @@ describe("areCorrelationCandidatesPonderFresh", () => {
     expect(logger.debug).toHaveBeenCalledWith(
       "Deferring correlation artifact build until Ponder reflects vote count",
       expect.objectContaining({ chainVoteCount: "3", ponderVoteCount: "2" }),
+    );
+  });
+
+  it("defers when a chunked Ponder response exceeds the byte cap", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes("/rounds")) {
+        return oversizedChunkedJsonResponse();
+      }
+      return new Response(JSON.stringify({ items: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    });
+    mockReadRound.mockResolvedValue({
+      state: ROUND_STATE.Settled,
+      revealedCount: 3n,
+      voteCount: 3n,
+    });
+
+    const { areCorrelationCandidatesPonderFresh } = await import("../correlation-ponder-freshness.js");
+    const logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    const fresh = await areCorrelationCandidatesPonderFresh(
+      {} as never,
+      [{ domain: 1, rewardPoolId: 5n, contentId: 42n, roundId: 7n }],
+      logger,
+    );
+
+    expect(fresh).toBe(false);
+    expect(logger.debug).toHaveBeenCalledWith(
+      "Deferring correlation artifact build until Ponder indexes round",
+      expect.objectContaining({ contentId: "42", roundId: "7" }),
     );
   });
 

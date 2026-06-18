@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { PAYOUT_DOMAIN_PUBLIC_RATING } from "@rateloop/node-utils/correlationScoring";
 import { verifyCorrelationArtifact } from "./correlation-artifact-verifier.js";
 import { resolveAllowedArtifactUri } from "./artifact-uri.js";
+import { readBoundedResponseText } from "./bounded-response.js";
 import type { Account, Chain, PublicClient, WalletClient } from "viem";
 import {
   ClusterPayoutOracleAbi,
@@ -440,13 +441,11 @@ async function readArtifactCanonicalJson(uri: string): Promise<string | null> {
     signal: AbortSignal.timeout(ARTIFACT_FETCH_TIMEOUT_MS),
   });
   if (!response.ok) return null;
-  const contentLength = response.headers.get("content-length");
-  if (contentLength) {
-    const declared = Number.parseInt(contentLength, 10);
-    if (Number.isFinite(declared) && declared > ARTIFACT_MAX_BYTES) return null;
+  try {
+    return await readBoundedResponseText(response, ARTIFACT_MAX_BYTES, "Artifact");
+  } catch {
+    return null;
   }
-  const body = await response.text();
-  return Buffer.byteLength(body, "utf8") <= ARTIFACT_MAX_BYTES ? body : null;
 }
 
 function ratingSnapshotWithWeights(

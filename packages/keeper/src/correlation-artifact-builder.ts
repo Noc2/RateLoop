@@ -23,6 +23,7 @@ import {
   type Hex,
 } from "viem";
 import { config } from "./config.js";
+import { readBoundedResponseText } from "./bounded-response.js";
 import {
   canonicalJson,
   materializeCorrelationArtifactCanonicalJson,
@@ -691,53 +692,9 @@ async function fetchJson<T>(url: URL): Promise<T> {
       `Ponder request failed: ${url.pathname} ${response.status}`,
     );
   }
-  const contentLengthHeader = response.headers.get("content-length");
-  if (contentLengthHeader) {
-    const declaredLength = Number.parseInt(contentLengthHeader, 10);
-    if (
-      Number.isFinite(declaredLength) &&
-      declaredLength > PONDER_JSON_MAX_BYTES
-    ) {
-      throw new Error(
-        `Ponder response too large: ${declaredLength} > ${PONDER_JSON_MAX_BYTES} bytes`,
-      );
-    }
-  }
   return JSON.parse(
-    await readResponseBody(response, PONDER_JSON_MAX_BYTES),
+    await readBoundedResponseText(response, PONDER_JSON_MAX_BYTES, "Ponder"),
   ) as T;
-}
-
-async function readResponseBody(
-  response: Response,
-  maxBytes: number,
-): Promise<string> {
-  if (!response.body) {
-    throw new Error("Ponder response body is not readable");
-  }
-  const chunks: Uint8Array[] = [];
-  let totalBytes = 0;
-  const reader = response.body.getReader();
-
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    if (!value) continue;
-    totalBytes += value.byteLength;
-    if (totalBytes > maxBytes) {
-      await reader.cancel().catch(() => undefined);
-      throw new Error(`Ponder response exceeded ${maxBytes} bytes during read`);
-    }
-    chunks.push(value);
-  }
-
-  const combined = new Uint8Array(totalBytes);
-  let offset = 0;
-  for (const chunk of chunks) {
-    combined.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return new TextDecoder().decode(combined);
 }
 
 function parseCandidate(value: unknown): CorrelationRoundCandidate {
