@@ -1,5 +1,4 @@
 import {
-  isSuccessfulCallsStatus,
   isThirdwebSelfFundedFallbackEligibleError,
   isThirdwebSponsorshipDeniedError,
   shouldAttemptSelfFundedThirdwebFallback,
@@ -22,13 +21,6 @@ import {
   hasMissingEip7702DelegationImplementation,
 } from "~~/lib/thirdweb/eip7702Delegation";
 import { thirdwebWalletAddressMatchesWagmiAddress } from "~~/services/thirdweb/client";
-
-test("waits for successful wallet call batches", () => {
-  assert.equal(isSuccessfulCallsStatus({ status: "success" } as never), true);
-  assert.equal(isSuccessfulCallsStatus({ status: "pending" } as never), false);
-  assert.equal(isSuccessfulCallsStatus({ status: "failure" } as never), false);
-  assert.equal(isSuccessfulCallsStatus({ status: undefined } as never), false);
-});
 
 test("detects EIP-7702 delegations with missing implementations", () => {
   const implementation = "0x3e515544f8d8293b0a353e10ff3b7ca03b52f35b";

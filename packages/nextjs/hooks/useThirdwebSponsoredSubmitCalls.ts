@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { defineChain, prepareTransaction } from "thirdweb";
 import { useActiveAccount, useActiveWallet, useActiveWalletChain, useSetActiveWallet } from "thirdweb/react";
 import { sendAndConfirmCalls } from "thirdweb/wallets/eip5792";
-import { type Abi, type Address, type GetCallsStatusReturnType, type Hex, encodeFunctionData } from "viem";
+import { type Abi, type Address, type Hex, encodeFunctionData } from "viem";
 import { useAccount, usePublicClient, useSendCallsSync } from "wagmi";
 import {
   FREE_TRANSACTION_ALLOWANCE_QUERY_KEY,
@@ -266,10 +266,6 @@ export function shouldAwaitSelfFundedSubmitCalls(params: {
 
 export function shouldIgnorePostTransactionFallbackWalletSyncError(callStatus: string | undefined) {
   return callStatus === "success";
-}
-
-export function isSuccessfulCallsStatus(callsStatus: GetCallsStatusReturnType) {
-  return callsStatus.status === "success";
 }
 
 export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmitCallsOptions = {}) {
@@ -539,7 +535,7 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
           connector,
           forceAtomic: options.atomicRequired ?? true,
           pollingInterval: 1_000,
-          status: isSuccessfulCallsStatus,
+          status: "success",
           throwOnFailure: true,
           timeout: 120_000,
         } as never);
