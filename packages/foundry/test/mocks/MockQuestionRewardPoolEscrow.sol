@@ -50,6 +50,10 @@ contract MockQuestionRewardPoolEscrow {
         return (registry, votingEngine);
     }
 
+    function supportsRoundPayoutSnapshotDomain(uint8 domain) external pure returns (bool) {
+        return domain == 1 || domain == 4;
+    }
+
     function createSubmissionRewardPoolFromRegistry(
         uint256 contentId,
         address funder,

@@ -131,6 +131,10 @@ contract ContentRegistryRepointTest is VotingTestBase {
         vm.startPrank(owner);
         oracle = new ClusterPayoutOracle(owner, address(frontend), address(usdc));
         oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_PUBLIC_RATING(), ratingConsumer);
+        oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_QUESTION_REWARD(), registry.questionRewardPoolEscrow());
+        oracle.setRoundPayoutSnapshotConsumer(
+            oracle.PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD(), registry.questionRewardPoolEscrow()
+        );
         vm.stopPrank();
     }
 
@@ -171,6 +175,33 @@ contract ContentRegistryRepointTest is VotingTestBase {
         vm.prank(owner);
         vm.expectRevert(ContentRegistryRatingSnapshotLib.InvalidState.selector);
         registry.repointPendingRatingClusterPayoutOracle(contentId, roundId, address(originalOracle));
+    }
+
+    function test_RepointPendingRatingClusterPayoutOracle_RevertsWhenReplacementSnapshotExists() public {
+        uint256 contentId = _submitTestContent();
+        uint256 roundId = 1;
+
+        ClusterPayoutOracle originalOracle = _deployClusterPayoutOracle(address(registry));
+        ClusterPayoutOracle replacementOracle = _deployClusterPayoutOracle(address(registry));
+
+        vm.prank(owner);
+        protocolConfig.setClusterPayoutOracle(address(originalOracle));
+
+        vm.prank(address(votingEngine));
+        registry.recordPendingRatingSettlement(contentId, roundId, 5000, 2, 1);
+
+        vm.mockCall(
+            address(replacementOracle),
+            abi.encodeWithSignature(
+                "roundPayoutSnapshotProposedAt(uint8,uint256,uint256,uint256)", 3, 0, contentId, roundId
+            ),
+            abi.encode(uint64(1))
+        );
+
+        vm.prank(owner);
+        vm.expectRevert(ContentRegistryRatingSnapshotLib.InvalidState.selector);
+        registry.repointPendingRatingClusterPayoutOracle(contentId, roundId, address(replacementOracle));
+        vm.clearMockedCalls();
     }
 
     function test_RepointPendingRatingClusterPayoutOracle_RevertsForNonConfigRole() public {

@@ -103,8 +103,10 @@ library ContentRegistryRatingSnapshotLib {
 
         IClusterPayoutOracle oracle = IClusterPayoutOracle(newOracle);
         try oracle.roundPayoutSnapshotProposedAt(PAYOUT_DOMAIN_PUBLIC_RATING, 0, contentId, roundId) returns (
-            uint64
-        ) { }
+            uint64 proposedAt
+        ) {
+            if (proposedAt != 0) revert InvalidState();
+        }
         catch {
             revert InvalidState();
         }

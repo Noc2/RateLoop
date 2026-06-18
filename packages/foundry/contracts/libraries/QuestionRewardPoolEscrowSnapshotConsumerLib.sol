@@ -37,8 +37,10 @@ library QuestionRewardPoolEscrowSnapshotConsumerLib {
         require(newOracle != oldOracle, "Oracle unchanged");
         IClusterPayoutOracle oracle = IClusterPayoutOracle(newOracle);
         try oracle.roundPayoutSnapshotProposedAt(payoutDomain, rewardPoolId, rewardPool.contentId, 0) returns (
-            uint64
-        ) { }
+            uint64 proposedAt
+        ) {
+            require(proposedAt == 0, "Oracle snapshot exists");
+        }
         catch {
             revert("Invalid oracle");
         }
@@ -71,7 +73,9 @@ library QuestionRewardPoolEscrowSnapshotConsumerLib {
         require(newOracle != address(0) && newOracle.code.length != 0, "Invalid oracle");
         require(newOracle != oldOracle, "Oracle unchanged");
         IClusterPayoutOracle oracle = IClusterPayoutOracle(newOracle);
-        try oracle.roundPayoutSnapshotProposedAt(payoutDomain, bundleId, bundleId, 1) returns (uint64) { }
+        try oracle.roundPayoutSnapshotProposedAt(payoutDomain, bundleId, bundleId, 1) returns (uint64 proposedAt) {
+            require(proposedAt == 0, "Oracle snapshot exists");
+        }
         catch {
             revert("Invalid oracle");
         }

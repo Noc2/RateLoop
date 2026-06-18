@@ -1355,6 +1355,35 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         );
     }
 
+    function testGovernanceCannotRepointQuestionBundleClusterOracleWithExistingSnapshot() public {
+        _enableClusterPayoutOracle();
+        uint256[] memory contentIds = _submitBundleQuestions();
+        uint256 bundleId = _createSubmissionBundle(contentIds, funder, REWARD_ASSET_USDC, REWARD_POOL_AMOUNT, 3);
+
+        address[] memory voters = _threeVoters();
+        bool[] memory directions = _directions(true, true, false);
+        uint256 firstRoundId = _settleRoundWithoutBundleSync(voters, contentIds[0], directions);
+        uint256 secondRoundId = _settleRoundWithoutBundleSync(voters, contentIds[1], directions);
+        _recordBundleRoundSetTerminals(contentIds, firstRoundId, secondRoundId);
+        rewardPoolEscrow.syncQuestionBundleTerminals(bundleId, 10);
+
+        IClusterPayoutOracle.PayoutWeight memory payoutWeight =
+            _bundlePayoutWeight(bundleId, 0, contentIds[0], firstRoundId, 0);
+        ClusterPayoutOracle replacementOracle = _newEligibleClusterPayoutOracle();
+        replacementOracle.setOracleConfig(1 hours, 5e6, address(this));
+        replacementOracle.setRoundPayoutSnapshotConsumer(
+            replacementOracle.PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD(), address(rewardPoolEscrow)
+        );
+        bytes32 root = replacementOracle.payoutWeightLeaf(payoutWeight);
+        _finalizeBundleClusterPayoutSnapshotWithRoot(
+            replacementOracle, bundleId, 0, 3, 30_000, payoutWeight.effectiveWeight, root
+        );
+
+        vm.prank(owner);
+        vm.expectRevert("Oracle snapshot exists");
+        rewardPoolEscrow.repointQuestionBundleClusterPayoutOracle(bundleId, address(replacementOracle));
+    }
+
     function testGovernanceCannotRepointQuestionBundleClusterOracleToWrongConsumer() public {
         _enableClusterPayoutOracle();
         uint256[] memory contentIds = _submitBundleQuestions();
