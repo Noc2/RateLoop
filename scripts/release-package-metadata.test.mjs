@@ -36,6 +36,10 @@ function readJson(path) {
   return JSON.parse(readFileSync(path, "utf8"));
 }
 
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 test("public npm packages are ready for the 0.1.0 provenance publish gate", () => {
   for (const pkg of releasePackages) {
     const manifest = readJson(pkg.path);
@@ -110,4 +114,39 @@ test("npm publish workflow uses GitHub OIDC provenance and publishes in dependen
   assert.ok(contractsIndex > -1, "contracts tarball is published");
   assert.ok(sdkIndex > contractsIndex, "sdk is published after contracts");
   assert.ok(agentsIndex > sdkIndex, "agents is published after sdk");
+});
+
+test("package-local builds refresh public workspace dependencies before compiling", () => {
+  for (const pkg of releasePackages) {
+    const manifest = readJson(pkg.path);
+    const workspaceDependencies = Object.entries(manifest.dependencies ?? {})
+      .filter(([, range]) => String(range).startsWith("workspace:"))
+      .map(([name]) => name);
+
+    if (workspaceDependencies.length === 0) continue;
+
+    const buildWorkspaceDepsScript = manifest.scripts?.["build:workspace-deps"] ?? "";
+    assert.ok(
+      buildWorkspaceDepsScript,
+      `${pkg.name} declares build:workspace-deps for public workspace dependencies`,
+    );
+    assert.match(
+      manifest.scripts?.build ?? "",
+      /^yarn build:workspace-deps && /,
+      `${pkg.name} build refreshes workspace dependencies first`,
+    );
+    assert.match(
+      manifest.scripts?.["check-types"] ?? "",
+      /^yarn build:workspace-deps && /,
+      `${pkg.name} type-check refreshes workspace dependencies first`,
+    );
+
+    for (const dependencyName of workspaceDependencies) {
+      assert.match(
+        buildWorkspaceDepsScript,
+        new RegExp(`yarn workspace ${escapeRegExp(dependencyName)} build(?=\\s|$|:)`),
+        `${pkg.name} builds ${dependencyName} before compiling`,
+      );
+    }
+  }
 });

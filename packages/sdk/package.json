@@ -97,10 +97,11 @@
     }
   },
   "scripts": {
-    "build": "node ../../scripts/clean-package-dist.mjs && tsc -p tsconfig.json && node ../../scripts/fix-esm-extensions.mjs dist/esm && tsc -p tsconfig.cjs.json && node ../../scripts/write-cjs-package-json.mjs dist/cjs",
-    "check-types": "tsc --noEmit",
+    "build:workspace-deps": "yarn workspace @rateloop/contracts build",
+    "build": "yarn build:workspace-deps && node ../../scripts/clean-package-dist.mjs && tsc -p tsconfig.json && node ../../scripts/fix-esm-extensions.mjs dist/esm && tsc -p tsconfig.cjs.json && node ../../scripts/write-cjs-package-json.mjs dist/cjs",
+    "check-types": "yarn build:workspace-deps && tsc --noEmit",
     "prepack": "yarn build",
-    "test": "node ../../scripts/run-node-tests.mjs src"
+    "test": "yarn build:workspace-deps && node ../../scripts/run-node-tests.mjs src"
   },
   "publishConfig": {
     "access": "public",
