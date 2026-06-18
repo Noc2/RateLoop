@@ -43,9 +43,10 @@ not for the mainnet claim**, and given a severity by design impact. 39 strengths
 > `recordConfidentialityNexusForRegistry`; the ABI-parity CI job installs workspace
 > deps before `generate-abis-only`; scheduled live readiness is skipped when live RPC
 > env is absent; and discovery serializers use each round's indexed
-> `revealGracePeriod`. `node scripts/check-worldchain-sepolia-readiness.mjs` passes
-> offline. `node scripts/check-worldchain-mainnet-readiness.mjs --production`
-> correctly fails until the first chain `480` production artifact exists.
+> `revealGracePeriod`. `node scripts/check-base-sepolia-readiness.mjs` is the
+> active offline preflight for the next rollout.
+> `node scripts/check-base-mainnet-readiness.mjs` is expected to fail until the
+> first chain `8453` production artifact exists.
 > Remaining pre-mainnet work: small-round verdict economics, LREP value circularity,
 > confidentiality evidence anchoring, x402 local/server validation drift, governed
 > full-stack engine-rotation runbook, World ID production live-proof/ABI validation,
@@ -305,7 +306,7 @@ capital. Settlement-layer security needs at least one deterrent whose value is e
 the USDC challenge bond) are deliberately excluded from settlement weight. The
 confidentiality lane (USDC bonds) and the frontend fee (USDC) are the exceptions, but all
 settlement _penalties_ are LREP. Arguably testnet-acceptable today; a genuine flaw for the
-first World Chain mainnet production launch.
+first Base mainnet production launch.
 
 **H3 — Peer prediction without ground truth: a weighted-majority coalition controls
 the verdict and most peer benchmarks, making ≥8-voter collusion profitable.** _(Collusion
@@ -600,20 +601,21 @@ stake-weighting, voter apathy, and credential rental all erode.
    view-token evidence bound to a published breach artifact hash. The mainnet operational
    gate that remains is provisioning and verifying the production anchor key/role.
 
-**Operational launch gates for the first World Chain mainnet deployment:**
+**Operational launch gates for the first Base deployment path:**
 
 5. **Freeze a public deployment evidence bundle before production traffic.** Include the
    exact commit, Foundry profile, compiler/optimizer config, ABIs, storage-layout
-   snapshots, contract-size output, deployment artifact profile, chain `480` start
-   blocks, World ID verifier address and ABI/proof smoke test, Ponder schema/start
-   state, keeper config hash, oracle artifact base URL, and the production state
-   reset checklist. This is cheap now and makes the first incident or external review
-   dramatically less ambiguous.
+   snapshots, contract-size output, deployment artifact profile, chain `84532`
+   Base Sepolia start blocks, the eventual chain `8453` Base mainnet start blocks
+   only when promoted, World ID verifier address and ABI/proof smoke test, Ponder
+   schema/start state, keeper config hash, oracle artifact base URL, and the
+   production state reset checklist. This is cheap now and makes the first incident
+   or external review dramatically less ambiguous.
 6. **Keep EIP-170 margins release-blocking.** The latest check passes, but the tightest
    contracts have only double-digit to low-triple-byte headroom (`QuestionRewardPoolEscrow`
    70 bytes, `RaterRegistry` 89, `LaunchDistributionPool` 118). Treat any mainnet-bound
-   code change that moves those numbers as a deploy blocker until `make check-contract-sizes`
-   is green under the deploy profile.
+   code change that moves those numbers as a deploy blocker until
+   `yarn workspace @rateloop/foundry check:sizes` is green under the deploy profile.
 7. **Run a real World ID v4 production proof before enabling v4.** The ABI warning
    should become a hard migration checklist item: verify the exact production
    proxy, selector, argument order, proof array shape, nullifier behavior, issuer schema,
