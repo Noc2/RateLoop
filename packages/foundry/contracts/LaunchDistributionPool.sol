@@ -22,11 +22,7 @@ interface ILaunchReadySourceProtocolConfig {
 
 /// @title LaunchDistributionPool
 /// @notice Holds the 75M LREP launch allocation and releases it through verified/referral, earned, and legacy paths.
-contract LaunchDistributionPool is
-    ILaunchDistributionPool,
-    Ownable,
-    ReentrancyGuardTransient
-{
+contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyGuardTransient {
     using SafeERC20 for IERC20;
     using SafeCast for uint256;
 
