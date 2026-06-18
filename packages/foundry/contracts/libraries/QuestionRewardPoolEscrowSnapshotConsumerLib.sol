@@ -154,7 +154,7 @@ library QuestionRewardPoolEscrowSnapshotConsumerLib {
         RewardPool storage rewardPool = rewardPools[rewardPoolId];
         if (
             rewardPool.id == 0 || rewardPool.refunded || rewardPool.contentId != contentId
-                || rewardPoolClusterPayoutOracle[rewardPool.id] == address(0) || roundId < rewardPool.startRoundId
+                || msg.sender != rewardPoolClusterPayoutOracle[rewardPool.id] || roundId < rewardPool.startRoundId
         ) return 0;
         (,,, uint48 readyAt) = votingEngine.roundLifecycleState(contentId, roundId);
         return readyAt;
@@ -191,7 +191,7 @@ library QuestionRewardPoolEscrowSnapshotConsumerLib {
         if (contentId != bundleId || roundId == 0) return 0;
         BundleReward storage bundle = bundleRewards[bundleId];
         if (
-            bundle.id == 0 || bundle.refunded || bundleRewardClusterPayoutOracle[bundleId] == address(0)
+            bundle.id == 0 || bundle.refunded || msg.sender != bundleRewardClusterPayoutOracle[bundleId]
                 || roundId > bundle.requiredSettledRounds
         ) return 0;
         if (

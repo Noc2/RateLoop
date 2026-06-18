@@ -816,7 +816,7 @@ library QuestionRewardPoolEscrowQualificationLib {
         (,,, uint48 readyAt) = votingEngine.roundLifecycleState(contentId, roundId);
         require(readyAt != 0, "Cluster source pending");
         uint64 proposedAt = oracle.roundPayoutSnapshotProposedAt(payoutDomain, rewardPoolId, contentId, roundId);
-        require(proposedAt >= readyAt && proposedAt > pinnedAt, "Cluster source stale");
+        require(proposedAt >= readyAt && proposedAt >= pinnedAt, "Cluster source stale");
     }
 
     function _finalizedSnapshotWithinVetoWindow(
@@ -858,7 +858,7 @@ library QuestionRewardPoolEscrowQualificationLib {
             .roundPayoutSnapshotProposedAt(payoutDomain, rewardPool.id, rewardPool.contentId, roundId) returns (
             uint64 proposedAt
         ) {
-            return proposedAt >= readyAt && proposedAt > pinnedAt;
+            return proposedAt >= readyAt && proposedAt >= pinnedAt;
         } catch {
             return false;
         }

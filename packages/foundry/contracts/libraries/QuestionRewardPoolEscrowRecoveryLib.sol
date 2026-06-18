@@ -100,7 +100,7 @@ library QuestionRewardPoolEscrowRecoveryLib {
         uint64 pinnedAt = rewardPoolClusterPayoutOraclePinnedAt[rewardPoolId];
         require(pinnedAt != 0, "Oracle not pinned");
         require(
-            oracle.roundPayoutSnapshotProposedAt(payoutDomain, rewardPoolId, rewardPool.contentId, roundId) > pinnedAt,
+            oracle.roundPayoutSnapshotProposedAt(payoutDomain, rewardPoolId, rewardPool.contentId, roundId) >= pinnedAt,
             "Cluster source stale"
         );
         bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(payoutDomain, rewardPoolId, rewardPool.contentId, roundId);

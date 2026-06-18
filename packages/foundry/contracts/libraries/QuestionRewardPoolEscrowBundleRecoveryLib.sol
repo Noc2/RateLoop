@@ -172,7 +172,7 @@ library QuestionRewardPoolEscrowBundleRecoveryLib {
         uint64 pinnedAt = bundleRewardClusterPayoutOraclePinnedAt[bundleId];
         require(pinnedAt != 0, "Oracle not pinned");
         uint64 proposedAt = oracle.roundPayoutSnapshotProposedAt(payoutDomain, bundleId, bundleId, snapshotRoundId);
-        require(proposedAt >= sourceReadyAt && proposedAt > pinnedAt, "Cluster source stale");
+        require(proposedAt >= sourceReadyAt && proposedAt >= pinnedAt, "Cluster source stale");
 
         reopenedRecoveredBundleRoundSet[bundleId][roundSetIndex] = true;
 

@@ -758,6 +758,14 @@ describe("correlation snapshot publisher", () => {
         args: [ACCOUNT],
       }),
     );
+    expect(publisher.readContract).toHaveBeenCalledWith(
+      expect.objectContaining({
+        address: SNAPSHOT_CONSUMER,
+        functionName: "roundPayoutSnapshotSourceReadyAt",
+        account: ORACLE,
+        args: [1, 7n, 9n, 2n],
+      }),
+    );
     expect(publisher.logger.debug).toHaveBeenCalledWith(
       "Correlation snapshot proposer authorization confirmed",
       expect.objectContaining({

@@ -1380,6 +1380,18 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         IClusterPayoutOracle.PayoutWeight memory staleSecondSetWeight =
             _bundlePayoutWeight(bundleId, 1, contentIds[0], secondSetRoundA, 0);
         bytes32 staleSecondSetRoot = replacementOracle.payoutWeightLeaf(staleSecondSetWeight);
+        vm.expectRevert(ClusterPayoutOracle.SourceNotReady.selector);
+        replacementOracle.proposeCorrelationEpoch(
+            2,
+            2,
+            2,
+            keccak256(abi.encode("bundle-cluster-root", bundleId, uint256(1))),
+            keccak256("params"),
+            keccak256("epoch-artifact"),
+            "ipfs://bundle-epoch",
+            _bundleEpochSources(bundleId, 2)
+        );
+
         vm.mockCall(
             address(rewardPoolEscrow),
             abi.encodeWithSelector(
@@ -1411,6 +1423,8 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         );
 
         rewardPoolEscrow.syncQuestionBundleTerminals(bundleId, 10);
+        assertEq(rewardPoolEscrow.roundPayoutSnapshotSourceReadyAt(4, bundleId, bundleId, 2), 0);
+        vm.prank(address(replacementOracle));
         assertGt(rewardPoolEscrow.roundPayoutSnapshotSourceReadyAt(4, bundleId, bundleId, 2), 0);
         assertEq(
             rewardPoolEscrow.claimableQuestionBundleRewardWithPayoutWeight(
@@ -5009,7 +5023,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertGt(reward, 0);
     }
 
-    function testRepointedRewardPoolRejectsSnapshotProposedBeforePin() public {
+    function testReplacementRewardPoolOracleCannotPreSquatBeforeRepointAndSameBlockPostPinCanClaim() public {
         _enableClusterPayoutOracle();
         uint256 contentId = _submitQuestion("");
         uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
@@ -5023,28 +5037,68 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
         IClusterPayoutOracle.PayoutWeight memory payoutWeight =
             _clusterPayoutWeight(rewardPoolId, contentId, roundId, 0);
-        _finalizeClusterPayoutSnapshotWithRoot(
-            replacementOracle,
-            rewardPoolId,
-            contentId,
-            roundId,
-            3,
-            30_000,
-            payoutWeight.effectiveWeight,
-            replacementOracle.payoutWeightLeaf(payoutWeight)
+        bytes32 weightRoot = replacementOracle.payoutWeightLeaf(payoutWeight);
+
+        vm.expectRevert(ClusterPayoutOracle.SourceNotReady.selector);
+        replacementOracle.proposeCorrelationEpoch(
+            uint64(roundId),
+            uint64(roundId),
+            uint64(roundId),
+            keccak256(abi.encode("cluster-root", roundId)),
+            keccak256("params"),
+            keccak256("epoch-artifact"),
+            "ipfs://epoch",
+            _questionEpochSources(rewardPoolId, contentId, roundId)
         );
 
         vm.prank(owner);
         rewardPoolEscrow.repointRewardPoolClusterPayoutOracle(rewardPoolId, address(replacementOracle));
 
-        assertEq(
-            rewardPoolEscrow.claimableQuestionRewardWithPayoutWeight(
-                rewardPoolId, roundId, voter1, payoutWeight, new bytes32[](0)
-            ),
-            0
+        uint256 pinnedBlockTime = block.timestamp;
+        replacementOracle.proposeCorrelationEpoch(
+            uint64(roundId),
+            uint64(roundId),
+            uint64(roundId),
+            keccak256(abi.encode("cluster-root", roundId)),
+            keccak256("params"),
+            keccak256("epoch-artifact"),
+            "ipfs://epoch",
+            _questionEpochSources(rewardPoolId, contentId, roundId)
         );
-        vm.expectRevert("Cluster source stale");
-        rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
+        replacementOracle.proposeRoundPayoutSnapshot(
+            IClusterPayoutOracle.RoundPayoutSnapshotInput({
+                domain: replacementOracle.PAYOUT_DOMAIN_QUESTION_REWARD(),
+                rewardPoolId: rewardPoolId,
+                contentId: contentId,
+                roundId: roundId,
+                correlationEpochId: uint64(roundId),
+                rawEligibleVoters: 3,
+                effectiveParticipantUnits: 30_000,
+                totalClaimWeight: payoutWeight.effectiveWeight,
+                weightRoot: weightRoot,
+                reasonRoot: keccak256("reason-root"),
+                artifactHash: keccak256("epoch-artifact"),
+                artifactURI: "ipfs://round"
+            })
+        );
+        assertEq(
+            replacementOracle.roundPayoutSnapshotProposedAt(
+                replacementOracle.PAYOUT_DOMAIN_QUESTION_REWARD(), rewardPoolId, contentId, roundId
+            ),
+            pinnedBlockTime
+        );
+
+        bytes32 snapshotKey = replacementOracle.roundPayoutSnapshotKey(
+            replacementOracle.PAYOUT_DOMAIN_QUESTION_REWARD(), rewardPoolId, contentId, roundId
+        );
+        vm.warp(pinnedBlockTime + uint256(replacementOracle.challengeWindow()) + 1);
+        replacementOracle.finalizeCorrelationEpoch(uint64(roundId));
+        replacementOracle.finalizeRoundPayoutSnapshot(snapshotKey);
+
+        vm.prank(voter1);
+        uint256 reward =
+            rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId, payoutWeight, new bytes32[](0));
+        assertGt(reward, 0);
     }
 
     function testClusterClaimableQuestionRewardWithPayoutWeightPreviewsUnqualifiedRound() public {

@@ -495,6 +495,7 @@ async function roundSnapshotSourceReady(
       address: consumer,
       abi: QuestionRewardPoolEscrowAbi,
       functionName: "roundPayoutSnapshotSourceReadyAt",
+      account: config.contracts.clusterPayoutOracle,
       args: [
         snapshot.domain,
         BigInt(snapshot.rewardPoolId),

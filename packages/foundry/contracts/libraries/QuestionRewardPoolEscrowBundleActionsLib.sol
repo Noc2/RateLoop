@@ -1700,7 +1700,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         pure
         returns (bool)
     {
-        return proposedAt >= sourceReadyAt && proposedAt > pinnedAt;
+        return proposedAt >= sourceReadyAt && proposedAt >= pinnedAt;
     }
 
     function _finalizedSnapshotWithinVetoWindow(
