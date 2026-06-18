@@ -461,6 +461,43 @@ contract ConfidentialityEscrowTest is VotingTestBase {
         assertTrue(replacementRegistry.isIdentityKeyBanned(replacementCredentialKey));
     }
 
+    function testTrackedOldEngineCanCommitGatedVoteAfterVotingEngineRotation() public {
+        uint256 contentId = _submitGatedQuestion("old-engine-gated-commit-after-rotation", 0);
+        uint8 provider = uint8(RaterRegistry.HumanCredentialProvider.SeededHuman);
+
+        vm.prank(voter1);
+        engine.openRound(contentId);
+        _commitVoteWithoutOpeningRound(voter1, contentId, true);
+        uint256 roundId = engine.currentRoundId(contentId);
+
+        RoundVotingEngine replacementEngine = _deployReplacementVotingEngine();
+        _rotateRegistryVotingEngine(replacementEngine);
+
+        assertEq(registry.votingEngine(), address(replacementEngine));
+        assertTrue(registry.isVotingEngineAuthorizedForConfidentialityNexus(contentId, address(engine)));
+        assertFalse(confidentialityEscrow.hasConfidentialityNexus(provider, VOTER2_ANCHOR));
+
+        _commitVoteWithoutOpeningRound(voter2, contentId, false);
+
+        assertTrue(confidentialityEscrow.hasConfidentialityNexus(provider, VOTER2_ANCHOR));
+        (, RoundLib.RoundState state, uint16 voteCount,, uint64 totalStake,,,) = engine.roundCore(contentId, roundId);
+        assertEq(uint256(state), uint256(RoundLib.RoundState.Open));
+        assertEq(voteCount, 2);
+        assertEq(totalStake, uint64(2 * STAKE));
+    }
+
+    function testOldEngineCannotRecordGatedNexusForUntrackedContentAfterRotation() public {
+        uint256 contentId = _submitGatedQuestion("untracked-old-engine-after-rotation", 0);
+        RoundVotingEngine replacementEngine = _deployReplacementVotingEngine();
+        _rotateRegistryVotingEngine(replacementEngine);
+
+        assertFalse(registry.isVotingEngineAuthorizedForConfidentialityNexus(contentId, address(engine)));
+
+        vm.prank(address(engine));
+        vm.expectRevert("Not voting engine");
+        confidentialityEscrow.recordConfidentialityNexusForRegistry(contentId, voter1, address(raterRegistry));
+    }
+
     function testZeroBondGatedOpenRoundRecordsBanNexus() public {
         uint256 contentId = _submitGatedQuestion("zero-bond-open-nexus", 0);
         uint8 provider = uint8(RaterRegistry.HumanCredentialProvider.SeededHuman);
@@ -925,6 +962,28 @@ contract ConfidentialityEscrowTest is VotingTestBase {
         vm.startPrank(voter);
         lrepToken.approve(address(confidentialityEscrow), 1_000e6);
         identityKey = confidentialityEscrow.postBond(contentId);
+        vm.stopPrank();
+    }
+
+    function _deployReplacementVotingEngine() internal returns (RoundVotingEngine replacementEngine) {
+        replacementEngine = RoundVotingEngine(
+            address(
+                new ERC1967Proxy(
+                    address(new RoundVotingEngine()),
+                    abi.encodeCall(
+                        RoundVotingEngine.initialize,
+                        (owner, address(lrepToken), address(registry), address(protocolConfig))
+                    )
+                )
+            )
+        );
+    }
+
+    function _rotateRegistryVotingEngine(RoundVotingEngine replacementEngine) internal {
+        vm.startPrank(owner);
+        registry.pause();
+        registry.setVotingEngine(address(replacementEngine));
+        registry.unpause();
         vm.stopPrank();
     }
 

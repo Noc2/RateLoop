@@ -1280,12 +1280,36 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         if (callerGeneration < contentSettlementEngineGeneration[contentId]) revert OnlyVotingEngine();
     }
 
+    function _authorizeActivityCallback(uint256 contentId) private view returns (uint256 callerGeneration) {
+        callerGeneration = votingEngineCallbackGeneration[msg.sender];
+        if (callerGeneration == 0) revert OnlyVotingEngine();
+        if (msg.sender == votingEngine) return callerGeneration;
+        if (contentRoundTrackingEngine[contentId] != msg.sender) revert OnlyVotingEngine();
+        if (callerGeneration < contentSettlementEngineGeneration[contentId]) revert OnlyVotingEngine();
+        if (!_engineHasOpenRound(msg.sender, contentId)) revert OnlyVotingEngine();
+    }
+
+    function isVotingEngineAuthorizedForConfidentialityNexus(uint256 contentId, address engine)
+        external
+        view
+        returns (bool)
+    {
+        uint256 callerGeneration = votingEngineCallbackGeneration[engine];
+        if (callerGeneration == 0) return false;
+        ContentRegistryTypes.Content storage c = contents[contentId];
+        if (c.id == 0 || c.status != ContentRegistryTypes.ContentStatus.Active) return false;
+        if (engine == votingEngine) return true;
+        if (contentRoundTrackingEngine[contentId] != engine) return false;
+        if (callerGeneration < contentSettlementEngineGeneration[contentId]) return false;
+        return _engineHasOpenRound(engine, contentId);
+    }
+
     /// @notice Called by VotingEngine to update raw activity timestamp after commits.
     /// @dev Vote commits refresh UI-facing activity without extending the dormancy window.
     ///      Stamps the per-content generation so any pre-existing older-engine grants are
     ///      shut out from this content by the per-content callback generation.
     function updateActivity(uint256 contentId) external nonReentrant {
-        uint256 callerGeneration = _authorizeCurrentEngineCallback();
+        uint256 callerGeneration = _authorizeActivityCallback(contentId);
 
         address trackedEngine = contentRoundTrackingEngine[contentId];
         if (trackedEngine != address(0) && trackedEngine != msg.sender && _engineHasOpenRound(trackedEngine, contentId))
