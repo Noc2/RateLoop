@@ -273,6 +273,15 @@ contract ClusterPayoutOracleTest is Test {
         oracle.setRoundPayoutSnapshotConsumer(questionRewardDomain, address(0xBEEF));
     }
 
+    function test_SetRoundPayoutSnapshotConsumerRejectsUnsupportedDomain() public {
+        UnsupportedRoundPayoutSnapshotConsumer unsupportedConsumer = new UnsupportedRoundPayoutSnapshotConsumer();
+        uint8 publicRatingDomain = oracle.PAYOUT_DOMAIN_PUBLIC_RATING();
+        assertFalse(unsupportedConsumer.supportsRoundPayoutSnapshotDomain(publicRatingDomain));
+
+        vm.expectRevert(ClusterPayoutOracle.InvalidAddress.selector);
+        oracle.setRoundPayoutSnapshotConsumer(publicRatingDomain, address(unsupportedConsumer));
+    }
+
     function test_SetFrontendRegistryRejectsInvalidConfig() public {
         vm.expectRevert(ClusterPayoutOracle.InvalidAddress.selector);
         oracle.setFrontendRegistry(address(0));
@@ -582,6 +591,43 @@ contract ClusterPayoutOracleTest is Test {
             oracle.getRoundPayoutSnapshot(oracle.PAYOUT_DOMAIN_PUBLIC_RATING(), 0, 42, 3);
         assertEq(uint8(snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Finalized));
         assertEq(snapshot.totalClaimWeight, 1_000_000);
+    }
+
+    function test_PublicRatingFinalizedSnapshotCannotBeAutoReplacedWhileUnconsumed() public {
+        oracle.proposeCorrelationEpoch(
+            1,
+            1,
+            20,
+            keccak256("cluster-root"),
+            keccak256("params"),
+            keccak256("epoch-artifact"),
+            "ipfs://epoch",
+            _ratingEpochSources(42, 3)
+        );
+
+        IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
+        input.domain = oracle.PAYOUT_DOMAIN_PUBLIC_RATING();
+        input.rewardPoolId = 0;
+        input.contentId = 42;
+        input.roundId = 3;
+        input.rawEligibleVoters = 1;
+        input.effectiveParticipantUnits = 10_000;
+        input.totalClaimWeight = 1_000_000;
+        input.weightRoot = keccak256("rating-leaf");
+        input.reasonRoot = keccak256("rating-reason-root");
+
+        oracle.proposeRoundPayoutSnapshot(input);
+        bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(oracle.PAYOUT_DOMAIN_PUBLIC_RATING(), 0, 42, 3);
+
+        vm.warp(2 hours + 2);
+        oracle.finalizeCorrelationEpoch(1);
+        oracle.finalizeRoundPayoutSnapshot(snapshotKey);
+
+        input.weightRoot = keccak256("replacement-rating-leaf");
+        input.reasonRoot = keccak256("replacement-rating-reason-root");
+        input.artifactURI = "ipfs://rating-round-replacement";
+        vm.expectRevert(ClusterPayoutOracle.SnapshotExists.selector);
+        oracle.proposeRoundPayoutSnapshot(input);
     }
 
     function test_PublicRatingRoundSnapshotRejectsZeroClaimWeight() public {
@@ -2611,6 +2657,8 @@ contract MockFrontendRegistry {
 contract MockRoundPayoutSnapshotConsumer {
     bool internal consumed;
     uint64 internal sourceReadyAt = 1; // default to "ready since unix-epoch second 1" so tests opt-in
+    bool internal supportsAllDomains = true;
+    mapping(uint8 => bool) internal supportedDomains;
 
     function setConsumed(bool value) external {
         consumed = value;
@@ -2620,8 +2668,20 @@ contract MockRoundPayoutSnapshotConsumer {
         sourceReadyAt = value;
     }
 
+    function setSupportsAllDomains(bool value) external {
+        supportsAllDomains = value;
+    }
+
+    function setSupportedDomain(uint8 domain, bool value) external {
+        supportedDomains[domain] = value;
+    }
+
     function isRoundPayoutSnapshotConsumed(uint8, uint256, uint256, uint256) external view returns (bool) {
         return consumed;
+    }
+
+    function supportsRoundPayoutSnapshotDomain(uint8 domain) external view returns (bool) {
+        return supportsAllDomains || supportedDomains[domain];
     }
 
     function roundPayoutSnapshotSourceReadyAt(uint8, uint256, uint256, uint256) external view returns (uint64) {
@@ -2630,8 +2690,26 @@ contract MockRoundPayoutSnapshotConsumer {
 }
 
 contract RevertingConsumedRoundPayoutSnapshotConsumer {
+    function supportsRoundPayoutSnapshotDomain(uint8) external pure returns (bool) {
+        return true;
+    }
+
     function isRoundPayoutSnapshotConsumed(uint8, uint256, uint256, uint256) external pure returns (bool) {
         revert("consumer view reverts");
+    }
+
+    function roundPayoutSnapshotSourceReadyAt(uint8, uint256, uint256, uint256) external pure returns (uint64) {
+        return 1;
+    }
+}
+
+contract UnsupportedRoundPayoutSnapshotConsumer {
+    function supportsRoundPayoutSnapshotDomain(uint8) external pure returns (bool) {
+        return false;
+    }
+
+    function isRoundPayoutSnapshotConsumed(uint8, uint256, uint256, uint256) external pure returns (bool) {
+        return false;
     }
 
     function roundPayoutSnapshotSourceReadyAt(uint8, uint256, uint256, uint256) external pure returns (uint64) {

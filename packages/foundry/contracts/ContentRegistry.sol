@@ -1395,6 +1395,10 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         return appliedRatingSnapshotDigest[contentId][roundId] != bytes32(0);
     }
 
+    function supportsRoundPayoutSnapshotDomain(uint8 domain) external pure returns (bool) {
+        return domain == 3;
+    }
+
     function roundPayoutSnapshotSourceReadyAt(uint8 domain, uint256 rewardPoolId, uint256 contentId, uint256 roundId)
         external
         view

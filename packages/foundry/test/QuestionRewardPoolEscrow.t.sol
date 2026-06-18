@@ -82,6 +82,10 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     /// @dev M-Oracle-1: stub so the test contract can act as a question-reward consumer in the
     ///      "different consumer" test paths. Returns 1 (always-ready) to advance past the oracle's
     ///      source-readiness gate, letting downstream qualify/cluster-mismatch defenses run.
+    function supportsRoundPayoutSnapshotDomain(uint8 domain) external pure returns (bool) {
+        return domain == 1 || domain == 4;
+    }
+
     function roundPayoutSnapshotSourceReadyAt(uint8, uint256, uint256, uint256) external pure returns (uint64) {
         return 1;
     }

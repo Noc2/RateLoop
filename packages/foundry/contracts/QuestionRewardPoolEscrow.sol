@@ -1299,6 +1299,10 @@ contract QuestionRewardPoolEscrow is
         return roundSnapshots[rewardPoolId][roundId];
     }
 
+    function supportsRoundPayoutSnapshotDomain(uint8 domain) external pure returns (bool) {
+        return domain == PAYOUT_DOMAIN_QUESTION_REWARD || domain == PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD;
+    }
+
     function isRoundPayoutSnapshotConsumed(uint8 domain, uint256 rewardPoolId, uint256 contentId, uint256 roundId)
         external
         view

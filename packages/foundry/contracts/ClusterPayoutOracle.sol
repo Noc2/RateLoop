@@ -225,6 +225,13 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
     function setRoundPayoutSnapshotConsumer(uint8 domain, address consumer) external onlyRole(CONFIG_ROLE) {
         if (!_isPayoutDomain(domain)) revert InvalidSnapshot();
         if (consumer == address(0) || consumer.code.length == 0) revert InvalidAddress();
+        bool supportsDomain;
+        try IRoundPayoutSnapshotConsumer(consumer).supportsRoundPayoutSnapshotDomain(domain) returns (bool supported) {
+            supportsDomain = supported;
+        } catch {
+            revert InvalidAddress();
+        }
+        if (!supportsDomain) revert InvalidAddress();
         roundPayoutSnapshotConsumer[domain] = consumer;
         emit RoundPayoutSnapshotConsumerUpdated(domain, consumer);
     }
@@ -444,6 +451,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
                 if (existing.snapshot.status == SnapshotStatus.Finalized) {
                     (bool consumed, bool consumedKnown) = _roundPayoutSnapshotConsumptionStatus(existing);
                     if (consumedKnown && consumed) revert SnapshotConsumed();
+                    if (existing.snapshot.domain == PAYOUT_DOMAIN_PUBLIC_RATING) revert SnapshotExists();
                     _rejectStaleRoundPayoutSnapshot(snapshotKey, existing);
                 } else {
                     revert SnapshotExists();

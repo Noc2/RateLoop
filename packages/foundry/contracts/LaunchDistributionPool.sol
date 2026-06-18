@@ -928,6 +928,10 @@ contract LaunchDistributionPool is
         return _claimableLegacyContributorAllocation(account, allocation);
     }
 
+    function supportsRoundPayoutSnapshotDomain(uint8 domain) external pure returns (bool) {
+        return domain == PAYOUT_DOMAIN_LAUNCH_CREDIT;
+    }
+
     function isRoundPayoutSnapshotConsumed(uint8 domain, uint256 rewardPoolId, uint256 contentId, uint256 roundId)
         external
         view

@@ -2,6 +2,8 @@
 pragma solidity ^0.8.34;
 
 interface IRoundPayoutSnapshotConsumer {
+    function supportsRoundPayoutSnapshotDomain(uint8 domain) external view returns (bool);
+
     function isRoundPayoutSnapshotConsumed(uint8 domain, uint256 rewardPoolId, uint256 contentId, uint256 roundId)
         external
         view

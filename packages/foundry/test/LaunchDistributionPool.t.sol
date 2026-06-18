@@ -163,6 +163,10 @@ contract LaunchDistributionPoolTest is Test {
     ///      "different consumer" test paths. Returns 1 (always-ready) to advance past the
     ///      source-readiness gate; the downstream finalize then exercises the consumer-mismatch
     ///      path that those tests target.
+    function supportsRoundPayoutSnapshotDomain(uint8 domain) external pure returns (bool) {
+        return domain == 2;
+    }
+
     function roundPayoutSnapshotSourceReadyAt(uint8, uint256, uint256, uint256) external pure returns (uint64) {
         return 1;
     }
