@@ -7,7 +7,7 @@ import { parseX402QuestionRequest } from "~~/lib/x402/questionPayload";
 
 type JsonObject = Record<string, unknown>;
 
-type AgentSigningIntentStatus = "pending" | "prepared" | "submitted" | "failed" | "expired";
+type AgentSigningIntentStatus = "pending" | "prepared" | "feedback_bonus_prepared" | "submitted" | "failed" | "expired";
 
 type AgentSigningIntentRecord = {
   chainId: number | null;
@@ -220,6 +220,19 @@ function readX402AuthorizationRequest(body: JsonObject): JsonObject | null {
   return request && typeof request === "object" && !Array.isArray(request) ? (request as JsonObject) : null;
 }
 
+function readFeedbackBonusTransactionPlan(body: JsonObject): JsonObject | null {
+  const feedbackBonus =
+    body.feedbackBonus && typeof body.feedbackBonus === "object" && !Array.isArray(body.feedbackBonus)
+      ? (body.feedbackBonus as JsonObject)
+      : null;
+  if (!feedbackBonus || feedbackBonus.status !== "awaiting_wallet_signature") return null;
+  return feedbackBonus.transactionPlan &&
+    typeof feedbackBonus.transactionPlan === "object" &&
+    !Array.isArray(feedbackBonus.transactionPlan)
+    ? (feedbackBonus.transactionPlan as JsonObject)
+    : null;
+}
+
 function signingIntentResponse(intent: AgentSigningIntentRecord, extras: JsonObject = {}) {
   return {
     chainId: intent.chainId,
@@ -362,7 +375,7 @@ export async function prepareAgentSigningIntent(params: {
   if (intent.walletAddress && intent.walletAddress.toLowerCase() !== walletAddress.toLowerCase()) {
     throw new McpToolError("Connected wallet does not match this signing intent.", 403);
   }
-  if (intent.status === "prepared" && hasPreparedSigningArtifacts(intent)) {
+  if ((intent.status === "prepared" || intent.status === "feedback_bonus_prepared") && hasPreparedSigningArtifacts(intent)) {
     return signingIntentResponse(intent);
   }
 
@@ -476,7 +489,8 @@ export async function completeAgentSigningIntent(params: {
   if (intent.status === "submitted") {
     return signingIntentResponse(intent);
   }
-  if (!intent.operationKey) {
+  const confirmsFeedbackBonus = intent.status === "feedback_bonus_prepared";
+  if (!intent.operationKey || (intent.status !== "prepared" && !confirmsFeedbackBonus)) {
     throw new McpToolError("Prepare this signing intent before completing it.");
   }
   const transactionHashes = parseTransactionHashes(params.transactionHashes);
@@ -487,21 +501,40 @@ export async function completeAgentSigningIntent(params: {
         operationKey: intent.operationKey,
         transactionHashes,
       },
-      name: "rateloop_confirm_ask_transactions",
+      name: confirmsFeedbackBonus ? "rateloop_confirm_feedback_bonus_transactions" : "rateloop_confirm_ask_transactions",
     })) as JsonObject;
-    const status = body.status === "submitted" ? "submitted" : "prepared";
+    const feedbackBonusTransactionPlan = confirmsFeedbackBonus ? null : readFeedbackBonusTransactionPlan(body);
+    const status = feedbackBonusTransactionPlan
+      ? "feedback_bonus_prepared"
+      : body.status === "submitted"
+        ? "submitted"
+        : "prepared";
+    const storedTransactionHashes = confirmsFeedbackBonus ? [...intent.transactionHashes, ...transactionHashes] : transactionHashes;
     const now = nowDate();
     await dbClient.execute({
       sql: `
         UPDATE agent_signing_intents
         SET status = ?,
             transaction_hashes = ?,
+            transaction_plan = ?,
             error = NULL,
             completed_at = CASE WHEN ? = 'submitted' THEN ? ELSE completed_at END,
             updated_at = ?
         WHERE id = ?
       `,
-      args: [status, JSON.stringify(transactionHashes), status, now, now, intent.id],
+      args: [
+        status,
+        JSON.stringify(storedTransactionHashes),
+        feedbackBonusTransactionPlan
+          ? JSON.stringify(feedbackBonusTransactionPlan)
+          : intent.transactionPlan
+            ? JSON.stringify(intent.transactionPlan)
+            : null,
+        status,
+        now,
+        now,
+        intent.id,
+      ],
     });
 
     return signingIntentResponse(
@@ -509,10 +542,18 @@ export async function completeAgentSigningIntent(params: {
         ...intent,
         completedAt: status === "submitted" ? now : intent.completedAt,
         status,
-        transactionHashes,
+        transactionHashes: storedTransactionHashes,
+        transactionPlan: feedbackBonusTransactionPlan ?? intent.transactionPlan,
         updatedAt: now,
       },
-      body,
+      {
+        ...body,
+        nextAction:
+          status === "feedback_bonus_prepared"
+            ? "Execute the Feedback Bonus transactionPlan.calls in the connected wallet, then confirm transaction hashes."
+            : undefined,
+        status,
+      },
     );
   } catch (error) {
     const now = nowDate();
