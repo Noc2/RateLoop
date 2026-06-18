@@ -163,6 +163,7 @@ Rotating `ContentRegistry.setVotingEngine` or `FrontendRegistry.setVotingEngine`
 4. Call `ContentRegistry.setVotingEngine` and `FrontendRegistry.setVotingEngine`; re-bind the frontend fee creditor.
 5. Repoint pinned oracle consumers for in-flight payout work:
    - `QuestionRewardPoolEscrow.repointRewardPoolClusterPayoutOracle`
+   - `QuestionRewardPoolEscrow.repointQuestionBundleClusterPayoutOracle`
    - `ContentRegistry.repointPendingRatingClusterPayoutOracle` for pending public-rating settlements
    - `LaunchDistributionPool.rescueStalePendingEarnedRaterCredit` (launch credits)
 6. Update off-chain X402 submitter escrow pointers and any keeper/indexer wiring.

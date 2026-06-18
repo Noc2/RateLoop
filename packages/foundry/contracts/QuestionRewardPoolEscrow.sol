@@ -11,7 +11,7 @@ import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import {ContentRegistry} from "./ContentRegistry.sol";
 import {RoundVotingEngine} from "./RoundVotingEngine.sol";
 import {ProtocolConfig} from "./ProtocolConfig.sol";
-import {Eip3009Authorization, IReceiveWithAuthorizationToken} from "./interfaces/IEip3009.sol";
+import {Eip3009Authorization} from "./interfaces/IEip3009.sol";
 import {IClusterPayoutOracle} from "./interfaces/IClusterPayoutOracle.sol";
 import {IRaterIdentityRegistry} from "./interfaces/IRaterIdentityRegistry.sol";
 import {IRaterRegistryStatus} from "./interfaces/IRaterRegistryStatus.sol";
@@ -32,6 +32,7 @@ import {QuestionRewardPoolEscrowPoolActionsLib} from "./libraries/QuestionReward
 import {QuestionRewardPoolEscrowSnapshotConsumerLib} from "./libraries/QuestionRewardPoolEscrowSnapshotConsumerLib.sol";
 import {QuestionRewardPoolEscrowTransferLib} from "./libraries/QuestionRewardPoolEscrowTransferLib.sol";
 import {QuestionRewardPoolEscrowWindowLib} from "./libraries/QuestionRewardPoolEscrowWindowLib.sol";
+import {TokenTransferLib} from "./libraries/TokenTransferLib.sol";
 import {
     RewardPool,
     RoundSnapshot,
@@ -235,6 +236,9 @@ contract QuestionRewardPoolEscrow is
         bytes32 weightRoot
     );
     event QuestionBundleClusterPayoutOracleSnapshotted(uint256 indexed bundleId, address indexed clusterPayoutOracle);
+    event QuestionBundleClusterPayoutOracleRepointed(
+        uint256 indexed bundleId, address indexed oldClusterPayoutOracle, address indexed newClusterPayoutOracle
+    );
     event QuestionBundleRewardClaimed(
         uint256 indexed bundleId,
         uint256 indexed roundSetIndex,
@@ -339,7 +343,7 @@ contract QuestionRewardPoolEscrow is
             "Bad nonce"
         );
 
-        uint256 fundedAmount = _receiveUsdcAuthorization(authorization);
+        uint256 fundedAmount = TokenTransferLib.receiveWithAuthorization(usdcToken, authorization);
         CreateRewardPoolParams memory createParams = CreateRewardPoolParams({
             contentId: params.contentId,
             funder: authorization.from,
@@ -632,28 +636,6 @@ contract QuestionRewardPoolEscrow is
         _snapshotRewardPoolClusterPayoutOracle(rewardPoolId, asset);
     }
 
-    function _receiveUsdcAuthorization(Eip3009Authorization calldata authorization)
-        private
-        returns (uint256 receivedAmount)
-    {
-        uint256 balanceBefore = usdcToken.balanceOf(address(this));
-        // slither-disable-next-line reentrancy-balance
-        IReceiveWithAuthorizationToken(address(usdcToken))
-            .receiveWithAuthorization(
-                authorization.from,
-                authorization.to,
-                authorization.value,
-                authorization.validAfter,
-                authorization.validBefore,
-                authorization.nonce,
-                authorization.v,
-                authorization.r,
-                authorization.s
-            );
-        receivedAmount = usdcToken.balanceOf(address(this)) - balanceBefore;
-        require(receivedAmount == authorization.value, "Bad token");
-    }
-
     function _snapshotRewardPoolClusterPayoutOracle(uint256 rewardPoolId, uint8 asset) private {
         QuestionRewardPoolEscrowPoolActionsLib.snapshotRewardPoolClusterPayoutOracle(
             rewardPoolClusterPayoutOracle, votingEngine, rewardPoolId, asset, address(this)
@@ -670,6 +652,20 @@ contract QuestionRewardPoolEscrow is
             PAYOUT_DOMAIN_QUESTION_REWARD,
             address(this),
             rewardPoolId,
+            newOracle
+        );
+    }
+
+    function repointQuestionBundleClusterPayoutOracle(uint256 bundleId, address newOracle)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
+        QuestionRewardPoolEscrowSnapshotConsumerLib.repointBundle(
+            bundleRewards,
+            bundleRewardClusterPayoutOracle,
+            PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD,
+            address(this),
+            bundleId,
             newOracle
         );
     }

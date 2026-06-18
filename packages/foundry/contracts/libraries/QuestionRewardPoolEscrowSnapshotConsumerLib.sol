@@ -16,6 +16,9 @@ library QuestionRewardPoolEscrowSnapshotConsumerLib {
     event RewardPoolClusterPayoutOracleRepointed(
         uint256 indexed rewardPoolId, address indexed oldClusterPayoutOracle, address indexed newClusterPayoutOracle
     );
+    event QuestionBundleClusterPayoutOracleRepointed(
+        uint256 indexed bundleId, address indexed oldClusterPayoutOracle, address indexed newClusterPayoutOracle
+    );
 
     function repoint(
         mapping(uint256 => RewardPool) storage rewardPools,
@@ -46,6 +49,39 @@ library QuestionRewardPoolEscrowSnapshotConsumerLib {
         }
         rewardPoolClusterPayoutOracle[rewardPoolId] = newOracle;
         emit RewardPoolClusterPayoutOracleRepointed(rewardPoolId, oldOracle, newOracle);
+    }
+
+    function repointBundle(
+        mapping(uint256 => BundleReward) storage bundleRewards,
+        mapping(uint256 => address) storage bundleRewardClusterPayoutOracle,
+        uint8 payoutDomain,
+        address expectedConsumer,
+        uint256 bundleId,
+        address newOracle
+    ) external {
+        BundleReward storage bundle = bundleRewards[bundleId];
+        require(bundle.id != 0, "Bundle not found");
+        require(!bundle.refunded, "Bundle refunded");
+        require(
+            bundle.completedRoundSets == 0 && bundle.claimedAmount == 0 && bundle.pendingRecoveredRoundSets == 0,
+            "Bundle already consumed"
+        );
+        address oldOracle = bundleRewardClusterPayoutOracle[bundleId];
+        require(oldOracle != address(0), "Oracle not pinned");
+        require(newOracle != address(0) && newOracle.code.length != 0, "Invalid oracle");
+        require(newOracle != oldOracle, "Oracle unchanged");
+        IClusterPayoutOracle oracle = IClusterPayoutOracle(newOracle);
+        try oracle.roundPayoutSnapshotProposedAt(payoutDomain, bundleId, bundleId, 1) returns (uint64) { }
+        catch {
+            revert("Invalid oracle");
+        }
+        try oracle.roundPayoutSnapshotConsumer(payoutDomain) returns (address consumer) {
+            require(consumer == expectedConsumer, "Oracle consumer mismatch");
+        } catch {
+            revert("Invalid oracle");
+        }
+        bundleRewardClusterPayoutOracle[bundleId] = newOracle;
+        emit QuestionBundleClusterPayoutOracleRepointed(bundleId, oldOracle, newOracle);
     }
 
     function isConsumed(
