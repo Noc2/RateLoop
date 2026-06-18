@@ -51,12 +51,12 @@ function renderGradientLetters(value: string) {
     .join("");
 }
 
-function renderRateLoopWord() {
-  return `<span style="color:${EMAIL_TEXT};">Rate</span>${renderGradientLetters("Loop")}`;
-}
-
 function renderHighlightedText(value: string, options: { highlightEmail?: boolean } = {}) {
-  const pattern = options.highlightEmail ? /\b(RateLoop|email)\b/gi : /\bRateLoop\b/g;
+  if (!options.highlightEmail) {
+    return escapeHtml(value);
+  }
+
+  const pattern = /\bemail\b/gi;
   let cursor = 0;
   let html = "";
 
@@ -64,7 +64,7 @@ function renderHighlightedText(value: string, options: { highlightEmail?: boolea
     const matchedText = match[0];
     const index = match.index ?? 0;
     html += escapeHtml(value.slice(cursor, index));
-    html += matchedText.toLowerCase() === "rateloop" ? renderRateLoopWord() : renderGradientLetters(matchedText);
+    html += renderGradientLetters(matchedText);
     cursor = index + matchedText.length;
   }
 
@@ -96,27 +96,9 @@ export function buildRateLoopEmailHtml(params: RateLoopEmailTemplateParams) {
                   <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">
                     <tr>
                       <td
-                        width="34"
-                        height="34"
-                        bgcolor="${EMAIL_BLUE}"
-                        style="width:34px; height:34px; border-radius:999px; background:${EMAIL_SPECTRUM_GRADIENT}; padding:3px; box-shadow:0 0 0 1px rgba(245,245,245,0.1);"
-                        aria-label="RateLoop logo"
+                        style="color:${EMAIL_TEXT}; font-family:Arial, Helvetica, sans-serif; font-size:26px; line-height:1; font-weight:700; letter-spacing:0;"
                       >
-                        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="28" height="28" style="border-collapse:collapse; width:28px; height:28px;">
-                          <tr>
-                            <td
-                              width="28"
-                              height="28"
-                              bgcolor="${EMAIL_BG}"
-                              style="width:28px; height:28px; border-radius:999px; background:${EMAIL_BG};"
-                            ></td>
-                          </tr>
-                        </table>
-                      </td>
-                      <td
-                        style="padding-left:12px; color:${EMAIL_TEXT}; font-family:Arial, Helvetica, sans-serif; font-size:26px; line-height:1; font-weight:700; letter-spacing:0;"
-                      >
-                        ${renderRateLoopWord()}
+                        RateLoop
                         <div style="margin-top:5px; color:${EMAIL_MUTED_LABEL}; font-size:11px; line-height:1.2; font-weight:700; letter-spacing:0.8px; text-transform:uppercase;">
                           Level Up Your Agent
                         </div>
