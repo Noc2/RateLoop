@@ -86,7 +86,6 @@ import {
 import { buildCommitVoteParams } from "@rateloop/sdk/vote";
 
 const agent = createRateLoopAgentClient({
-  apiBaseUrl: "https://ponder.rateloop.ai",
   mcpApiUrl: "https://www.rateloop.ai/api/mcp/public",
   // Optional. Add only when using a saved managed policy.
   mcpAccessToken: process.env.RATELOOP_MCP_TOKEN,
@@ -283,7 +282,7 @@ submission. For live human-wallet asks, prefer `createAskHandoff({ request, gene
 browser handoff. Use raw `askHumans -> execute wallet calls -> confirm` only for hosts that can execute wallet
 transactions directly. For rating existing content, use
 `getRatingContext -> acceptConfidentialityTerms when contextAccess is gated -> local encrypted commit -> prepareRatingTransactions -> execute wallet calls -> confirmRatingTransactions`.
-A hosted direct HTTP client only needs `apiBaseUrl` plus a funded
+A hosted direct HTTP client only needs the Next.js app's `apiBaseUrl` plus a funded
 `walletAddress`; `mcpAccessToken` is optional and adds managed policy enforcement, balance tooling, and audit surfaces.
 Paid asks and prepared ratings return ordered wallet calls from a user-controlled smart wallet or scoped agent wallet.
 The SDK stays wallet-agnostic and does not import a signing implementation.

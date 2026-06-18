@@ -12,7 +12,6 @@ const agentMcpRatingExample = `import { createRateLoopAgentClient } from "@ratel
 import { buildCommitVoteParams } from "@rateloop/sdk/vote";
 
 const agent = createRateLoopAgentClient({
-  apiBaseUrl: "https://ponder.rateloop.ai", // hosted reads (Ponder indexer)
   mcpApiUrl: "https://www.rateloop.ai/api/mcp/public", // MCP lives on the Next.js app
 });
 
