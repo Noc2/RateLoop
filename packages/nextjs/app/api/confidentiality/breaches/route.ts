@@ -84,10 +84,20 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Invalid content id" }, { status: 400 });
   }
 
+  const deploymentScope = resolveCurrentConfidentialityDeploymentScope();
+  if (!deploymentScope) {
+    return NextResponse.json({ error: "Confidentiality deployment is not configured" }, { status: 503 });
+  }
+
   const rows = await db
     .select()
     .from(confidentialityBreachReports)
-    .where(eq(confidentialityBreachReports.contentId, contentId))
+    .where(
+      and(
+        eq(confidentialityBreachReports.deploymentKey, deploymentScope.deploymentKey),
+        eq(confidentialityBreachReports.contentId, contentId),
+      ),
+    )
     .limit(50);
 
   return NextResponse.json({

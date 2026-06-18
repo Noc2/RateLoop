@@ -210,10 +210,14 @@ test("breach reports reject caller-supplied evidenceHash values that do not matc
 
 test("breach artifact routes reject stored proof bytes that do not match evidenceHash", async () => {
   const now = new Date("2026-06-12T12:00:00.000Z");
+  const scope = currentDeploymentScope();
   await dbModule.db.insert(dbSchema.confidentialityBreachReports).values({
     accusedIdentityKey: IDENTITY_KEY,
+    chainId: scope.chainId,
     contentId: CONTENT_ID,
+    contentRegistryAddress: scope.contentRegistryAddress,
     createdAt: now,
+    deploymentKey: scope.deploymentKey,
     evidenceHash: EVIDENCE_HASH,
     proof: JSON.stringify({ schemaVersion: "legacy-or-tampered" }),
     reporter: REPORTER,
@@ -234,6 +238,50 @@ test("breach artifact routes reject stored proof bytes that do not match evidenc
   const body = (await listResponse.json()) as { reports: Array<{ evidenceArtifactUrl: string | null }> };
   assert.equal(listResponse.status, 200);
   assert.equal(body.reports[0]?.evidenceArtifactUrl, null);
+});
+
+test("breach listings only return reports for the current deployment", async () => {
+  const now = new Date("2026-06-12T12:00:00.000Z");
+  const scope = currentDeploymentScope();
+  await dbModule.db.insert(dbSchema.confidentialityBreachReports).values([
+    {
+      accusedIdentityKey: IDENTITY_KEY,
+      chainId: scope.chainId,
+      contentId: CONTENT_ID,
+      contentRegistryAddress: scope.contentRegistryAddress,
+      createdAt: now,
+      deploymentKey: scope.deploymentKey,
+      evidenceHash: sha256Hash(JSON.stringify({ schemaVersion: "current" })),
+      proof: JSON.stringify({ schemaVersion: "current" }),
+      reporter: REPORTER,
+      status: "reported",
+      updatedAt: now,
+    },
+    {
+      accusedIdentityKey: IDENTITY_KEY,
+      chainId: scope.chainId,
+      contentId: CONTENT_ID,
+      contentRegistryAddress: "0x2222222222222222222222222222222222222222",
+      createdAt: now,
+      deploymentKey: `${scope.chainId}:0x2222222222222222222222222222222222222222`,
+      evidenceHash: sha256Hash(JSON.stringify({ schemaVersion: "other" })),
+      proof: JSON.stringify({ schemaVersion: "other" }),
+      reporter: REPORTER,
+      status: "reported",
+      updatedAt: now,
+    },
+  ]);
+
+  const listResponse = await breachesRoute.GET(
+    new NextRequest(`https://rateloop.ai/api/confidentiality/breaches?contentId=${CONTENT_ID}`),
+  );
+  const body = (await listResponse.json()) as { reports: Array<{ id: number }> };
+
+  assert.equal(listResponse.status, 200);
+  assert.deepEqual(
+    body.reports.map(report => report.id),
+    [1],
+  );
 });
 
 test("breach reports require an anchored log root before publishing evidence", async () => {
