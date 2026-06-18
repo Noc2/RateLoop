@@ -73,6 +73,10 @@ test("shared deployment helpers return local-chain addresses", () => {
     getSharedDeploymentAddress(31337, "QuestionRewardPoolEscrow"),
     localChain.QuestionRewardPoolEscrow.address,
   );
+  assert.equal(
+    getSharedDeploymentAddress(31337, "ConfidentialityEscrow"),
+    localChain.ConfidentialityEscrow.address,
+  );
 });
 
 test("shared deployment helpers expose the chain start block and prefer contract-specific blocks when present", () => {

@@ -94,8 +94,8 @@ test("World Chain Sepolia deployment metadata includes production-required contr
   assert.deepEqual(missingContracts, []);
 });
 
-test("Base Sepolia deployment metadata includes production-required contracts", () => {
-  const missingContracts = listMissingRequiredTargetContracts([84532], deployedContracts);
+test("local and Base Sepolia deployment metadata includes production-required contracts", () => {
+  const missingContracts = listMissingRequiredTargetContracts([31337, 84532], deployedContracts);
 
   assert.deepEqual(missingContracts, []);
 });

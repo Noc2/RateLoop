@@ -1325,12 +1325,12 @@ export const QuestionRewardPoolEscrowAbi = [
     "inputs": [],
     "outputs": [
       {
-        "name": "registry_",
+        "name": "",
         "type": "address",
         "internalType": "address"
       },
       {
-        "name": "votingEngine_",
+        "name": "",
         "type": "address",
         "internalType": "address"
       }
@@ -2903,21 +2903,5 @@ export const QuestionRewardPoolEscrowAbi = [
     "type": "error",
     "name": "RewardPoolCursorNeedsAdvance",
     "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "SafeCastOverflowedUintDowncast",
-    "inputs": [
-      {
-        "name": "bits",
-        "type": "uint8",
-        "internalType": "uint8"
-      },
-      {
-        "name": "value",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ]
   }
 ] as const;
