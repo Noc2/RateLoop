@@ -65,8 +65,9 @@ export function DelegationSection() {
   const normalizedDelegateInput = delegateInput.trim();
   const isValidAddress = normalizedDelegateInput.length > 0 && isAddress(normalizedDelegateInput);
   const isSelfAddress = normalizedDelegateInput.toLowerCase() === address?.toLowerCase();
+  const isLrepBalanceLoading = !!address && typeof lrepBalance !== "bigint";
   const lrepBalanceMicro = typeof lrepBalance === "bigint" ? lrepBalance : 0n;
-  const formattedBalance = formatLrepAmount(lrepBalanceMicro, 6);
+  const formattedBalance = isLrepBalanceLoading ? "Loading..." : formatLrepAmount(lrepBalanceMicro, 6);
 
   const normalizedTransferAddress = transferAddressInput.trim();
   const parsedTransferAmount = useMemo(() => parseLrepAmount(transferAmountInput), [transferAmountInput]);
@@ -75,8 +76,10 @@ export function DelegationSection() {
   const isTransferSelfAddress = normalizedTransferAddress.toLowerCase() === address?.toLowerCase();
   const isTransferZeroAddress = normalizedTransferAddress.toLowerCase() === ZERO_ADDRESS.toLowerCase();
   const isValidTransferAmount = parsedTransferAmount !== null && parsedTransferAmount > 0n;
-  const exceedsTransferBalance = parsedTransferAmount !== null && parsedTransferAmount > lrepBalanceMicro;
+  const exceedsTransferBalance =
+    !isLrepBalanceLoading && parsedTransferAmount !== null && parsedTransferAmount > lrepBalanceMicro;
   const canSubmitTransfer =
+    !isLrepBalanceLoading &&
     isValidTransferAddress &&
     !isTransferZeroAddress &&
     !isTransferSelfAddress &&
@@ -149,6 +152,10 @@ export function DelegationSection() {
       setTransferError("Enter a valid amount");
       return;
     }
+    if (isLrepBalanceLoading) {
+      setTransferError("LREP balance is still loading");
+      return;
+    }
     if (exceedsTransferBalance) {
       setTransferError("Amount exceeds your balance");
       return;
@@ -179,7 +186,7 @@ export function DelegationSection() {
       </h3>
 
       <div className="space-y-1 text-base text-base-content/60">
-        <p>Balance {formattedBalance} LREP</p>
+        <p aria-live="polite">Balance {formattedBalance} LREP</p>
         {address ? <p className="font-mono text-sm break-all">Connected wallet {address}</p> : null}
       </div>
 
@@ -238,7 +245,7 @@ export function DelegationSection() {
                 setTransferError(null);
               }
             }}
-            disabled={isTransferPending || lrepBalanceMicro === 0n}
+            disabled={isTransferPending || isLrepBalanceLoading || lrepBalanceMicro === 0n}
           >
             Max
           </button>
