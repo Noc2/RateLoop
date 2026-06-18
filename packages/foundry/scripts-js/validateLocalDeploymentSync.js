@@ -93,14 +93,24 @@ export function readGeneratedAddress(source, chainId, contractName) {
   return normalizeAddress(match?.[2]);
 }
 
-export function findDeploymentMismatches({ deploymentJson, deployedContractsSource, chainId, contractNames }) {
+export function findDeploymentMismatches({
+  deploymentJson,
+  deployedContractsSource,
+  chainId,
+  contractNames,
+}) {
   const artifactAddresses = buildDeploymentNameToAddress(deploymentJson);
   const mismatches = [];
 
   for (const contractName of contractNames) {
     const artifactAddress = artifactAddresses.get(contractName);
-    const generatedAddress = readGeneratedAddress(deployedContractsSource, chainId, contractName);
-    if (!artifactAddress || !generatedAddress || artifactAddress === generatedAddress) continue;
+    const generatedAddress = readGeneratedAddress(
+      deployedContractsSource,
+      chainId,
+      contractName,
+    );
+    if (artifactAddress === generatedAddress) continue;
+    if (!artifactAddress && !generatedAddress) continue;
 
     mismatches.push({
       contractName,
@@ -113,9 +123,15 @@ export function findDeploymentMismatches({ deploymentJson, deployedContractsSour
 }
 
 function main() {
-  const [deploymentJsonPath, deployedContractsPath, chainIdArg, ...contractNames] = process.argv.slice(2);
+  const [deploymentJsonPath, deployedContractsPath, chainIdArg, ...contractNames] =
+    process.argv.slice(2);
   const chainId = Number.parseInt(chainIdArg ?? "", 10);
-  if (!deploymentJsonPath || !deployedContractsPath || !Number.isSafeInteger(chainId) || contractNames.length === 0) {
+  if (
+    !deploymentJsonPath ||
+    !deployedContractsPath ||
+    !Number.isSafeInteger(chainId) ||
+    contractNames.length === 0
+  ) {
     console.error(
       "Usage: node scripts-js/validateLocalDeploymentSync.js <deployment-json> <deployedContracts.ts> <chain-id> <contract> [contract...]",
     );
@@ -133,13 +149,19 @@ function main() {
 
   if (mismatches.length === 0) return;
 
-  console.error("ERROR: Local deployment artifact is stale relative to packages/contracts/src/deployedContracts.ts.");
+  console.error(
+    "ERROR: Local deployment artifact is stale relative to packages/contracts/src/deployedContracts.ts.",
+  );
   for (const mismatch of mismatches) {
+    const artifactAddress = mismatch.artifactAddress ?? "missing";
+    const generatedAddress = mismatch.generatedAddress ?? "missing";
     console.error(
-      `  ${mismatch.contractName}: ${mismatch.artifactAddress} in deployment artifact, ${mismatch.generatedAddress} in generated contracts`,
+      `  ${mismatch.contractName}: ${artifactAddress} in deployment artifact, ${generatedAddress} in generated contracts`,
     );
   }
-  console.error("Refresh the local deployment artifacts before running the seed script.");
+  console.error(
+    "Refresh the local deployment artifacts before running the seed script.",
+  );
   process.exit(1);
 }
 

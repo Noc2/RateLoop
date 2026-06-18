@@ -57,6 +57,7 @@ SEED_DEPLOYMENT_CONTRACTS=(
   "ContentRegistry"
   "QuestionRewardPoolEscrow"
   "FeedbackBonusEscrow"
+  "ConfidentialityEscrow"
   "MockERC20"
   "RoundVotingEngine"
   "CategoryRegistry"
