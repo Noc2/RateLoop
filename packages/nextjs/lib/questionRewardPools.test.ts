@@ -10,6 +10,31 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { contracts } from "~~/utils/scaffold-eth/contract";
 
+const PUBLIC_USDC_ENV_KEYS = [
+  "NEXT_PUBLIC_USDC_ADDRESS",
+  "NEXT_PUBLIC_USDC_ADDRESS_84532",
+  "NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS",
+  "NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS_84532",
+] as const;
+
+function snapshotPublicUsdcEnv(env: Record<string, string | undefined>) {
+  return Object.fromEntries(PUBLIC_USDC_ENV_KEYS.map(key => [key, env[key]]));
+}
+
+function restorePublicUsdcEnv(
+  env: Record<string, string | undefined>,
+  snapshot: Partial<Record<(typeof PUBLIC_USDC_ENV_KEYS)[number], string | undefined>>,
+) {
+  for (const key of PUBLIC_USDC_ENV_KEYS) {
+    const value = snapshot[key];
+    if (value === undefined) {
+      delete env[key];
+    } else {
+      env[key] = value;
+    }
+  }
+}
+
 test("parseUsdRewardPoolAmount accepts plain decimal USDC amounts", () => {
   assert.equal(parseUsdRewardPoolAmount("10"), 10_000_000n);
   assert.equal(parseUsdRewardPoolAmount("1234.56"), 1_234_560_000n);
@@ -151,10 +176,7 @@ test("getDefaultUsdcAddress rejects conflicting public USDC overrides", () => {
   try {
     env.NEXT_PUBLIC_USDC_ADDRESS = "0x0000000000000000000000000000000000000001";
     env.NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS = "0x0000000000000000000000000000000000000002";
-    assert.throws(
-      () => getDefaultUsdcAddress(31337),
-      /NEXT_PUBLIC_USDC_ADDRESS_31337 and NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS_31337 must match/,
-    );
+    assert.throws(() => getDefaultUsdcAddress(31337), /Effective public USDC overrides for chain 31337 must match/);
   } finally {
     if (originalUsdc === undefined) {
       delete env.NEXT_PUBLIC_USDC_ADDRESS;
@@ -166,5 +188,35 @@ test("getDefaultUsdcAddress rejects conflicting public USDC overrides", () => {
     } else {
       env.NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS = originalX402;
     }
+  }
+});
+
+test("getDefaultUsdcAddress rejects scoped public USDC against unscoped public x402 fallback", () => {
+  const env = process.env as Record<string, string | undefined>;
+  const snapshot = snapshotPublicUsdcEnv(env);
+
+  try {
+    for (const key of PUBLIC_USDC_ENV_KEYS) delete env[key];
+    env.NEXT_PUBLIC_USDC_ADDRESS_84532 = "0x0000000000000000000000000000000000000001";
+    env.NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS = "0x0000000000000000000000000000000000000002";
+
+    assert.throws(() => getDefaultUsdcAddress(84532), /Effective public USDC overrides for chain 84532 must match/);
+  } finally {
+    restorePublicUsdcEnv(env, snapshot);
+  }
+});
+
+test("getDefaultUsdcAddress rejects unscoped public USDC against scoped public x402 fallback", () => {
+  const env = process.env as Record<string, string | undefined>;
+  const snapshot = snapshotPublicUsdcEnv(env);
+
+  try {
+    for (const key of PUBLIC_USDC_ENV_KEYS) delete env[key];
+    env.NEXT_PUBLIC_USDC_ADDRESS = "0x0000000000000000000000000000000000000001";
+    env.NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS_84532 = "0x0000000000000000000000000000000000000002";
+
+    assert.throws(() => getDefaultUsdcAddress(84532), /Effective public USDC overrides for chain 84532 must match/);
+  } finally {
+    restorePublicUsdcEnv(env, snapshot);
   }
 });
