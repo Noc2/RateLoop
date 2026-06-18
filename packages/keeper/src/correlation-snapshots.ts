@@ -120,6 +120,16 @@ interface SnapshotProposerAuthorization {
   frontendOperator?: Address;
 }
 
+interface CorrelationEpochSnapshotSummary {
+  status: number;
+  clusterRoot: `0x${string}` | null;
+}
+
+interface RoundPayoutProposalSummary {
+  status: number;
+  finalizedAt: bigint;
+}
+
 interface AutomaticCorrelationSnapshotPublishContext {
   candidateFingerprint?: `0x${string}`;
   rejectedEpochIds?: ReadonlySet<string>;
@@ -180,6 +190,80 @@ const ContentRegistryRatingSnapshotAbi = [
   },
 ] as const;
 
+const ClusterPayoutOracleStatusReadAbi = [
+  {
+    type: "function",
+    name: "correlationEpochSnapshot",
+    stateMutability: "view",
+    inputs: [{ name: "epochId", type: "uint64" }],
+    outputs: [
+      {
+        name: "",
+        type: "tuple",
+        components: [
+          { name: "epochId", type: "uint64" },
+          { name: "fromRoundId", type: "uint64" },
+          { name: "toRoundId", type: "uint64" },
+          { name: "proposedAt", type: "uint64" },
+          { name: "challengeWindowAtProposal", type: "uint64" },
+          { name: "finalizedAt", type: "uint64" },
+          { name: "proposer", type: "address" },
+          { name: "frontendOperator", type: "address" },
+          { name: "challenger", type: "address" },
+          { name: "clusterRoot", type: "bytes32" },
+          { name: "parameterHash", type: "bytes32" },
+          { name: "artifactHash", type: "bytes32" },
+          { name: "artifactURI", type: "string" },
+          { name: "status", type: "uint8" },
+          { name: "bond", type: "uint256" },
+        ],
+      },
+    ],
+  },
+  {
+    type: "function",
+    name: "roundPayoutProposal",
+    stateMutability: "view",
+    inputs: [{ name: "snapshotKey", type: "bytes32" }],
+    outputs: [
+      {
+        name: "",
+        type: "tuple",
+        components: [
+          {
+            name: "snapshot",
+            type: "tuple",
+            components: [
+              { name: "snapshotKey", type: "bytes32" },
+              { name: "domain", type: "uint8" },
+              { name: "correlationEpochId", type: "uint64" },
+              { name: "finalizedAt", type: "uint64" },
+              { name: "rawEligibleVoters", type: "uint32" },
+              { name: "effectiveParticipantUnits", type: "uint32" },
+              { name: "rewardPoolId", type: "uint256" },
+              { name: "contentId", type: "uint256" },
+              { name: "roundId", type: "uint256" },
+              { name: "totalClaimWeight", type: "uint256" },
+              { name: "weightRoot", type: "bytes32" },
+              { name: "reasonRoot", type: "bytes32" },
+              { name: "status", type: "uint8" },
+            ],
+          },
+          { name: "proposedAt", type: "uint64" },
+          { name: "challengeWindowAtProposal", type: "uint64" },
+          { name: "consumer", type: "address" },
+          { name: "proposer", type: "address" },
+          { name: "frontendOperator", type: "address" },
+          { name: "challenger", type: "address" },
+          { name: "artifactHash", type: "bytes32" },
+          { name: "artifactURI", type: "string" },
+          { name: "bond", type: "uint256" },
+        ],
+      },
+    ],
+  },
+] as const;
+
 function rejectedAutomaticCorrelationCandidateKey(
   epochId: string,
   candidateFingerprint: `0x${string}`,
@@ -205,10 +289,7 @@ function rememberRejectedAutomaticCorrelationCandidate(
   );
 }
 
-function readCorrelationEpochClusterRoot(
-  snapshot: unknown,
-): `0x${string}` | null {
-  const clusterRoot = (snapshot as { clusterRoot?: unknown }).clusterRoot;
+function normalizeClusterRoot(clusterRoot: unknown): `0x${string}` | null {
   if (
     typeof clusterRoot === "string" &&
     /^0x[0-9a-f]{64}$/iu.test(clusterRoot)
@@ -216,6 +297,47 @@ function readCorrelationEpochClusterRoot(
     return clusterRoot.toLowerCase() as `0x${string}`;
   }
   return null;
+}
+
+async function readCorrelationEpochSnapshotSummary(
+  publicClient: PublicClient,
+  epochId: bigint,
+): Promise<CorrelationEpochSnapshotSummary> {
+  const snapshot = (await publicClient.readContract({
+    address: config.contracts.clusterPayoutOracle,
+    abi: ClusterPayoutOracleStatusReadAbi,
+    functionName: "correlationEpochSnapshot",
+    args: [epochId],
+  })) as { status?: unknown; clusterRoot?: unknown };
+
+  return {
+    status: normalizeNumber(snapshot.status) ?? STATUS.None,
+    clusterRoot: normalizeClusterRoot(snapshot.clusterRoot),
+  };
+}
+
+async function readRoundPayoutProposalSummary(
+  publicClient: PublicClient,
+  snapshotKey: `0x${string}`,
+): Promise<RoundPayoutProposalSummary> {
+  const proposal = (await publicClient.readContract({
+    address: config.contracts.clusterPayoutOracle,
+    abi: ClusterPayoutOracleStatusReadAbi,
+    functionName: "roundPayoutProposal",
+    args: [snapshotKey],
+  })) as { snapshot?: { status?: unknown; finalizedAt?: unknown } };
+
+  const finalizedAt = proposal.snapshot?.finalizedAt;
+  const finalizedAtValue = normalizeBigIntString(finalizedAt);
+  return {
+    status: normalizeNumber(proposal.snapshot?.status) ?? STATUS.None,
+    finalizedAt:
+      typeof finalizedAt === "bigint"
+        ? finalizedAt
+        : finalizedAtValue !== null
+          ? BigInt(finalizedAtValue)
+          : 0n,
+  };
 }
 
 async function readSnapshotProposerAuthorization(
@@ -580,14 +702,12 @@ async function applyFinalizedRatingSnapshotsFromArtifact(
     let status: number = STATUS.None;
     let finalizedAt = 0n;
     try {
-      const existing = await publicClient.readContract({
-        address: config.contracts.clusterPayoutOracle,
-        abi: ClusterPayoutOracleAbi,
-        functionName: "roundPayoutProposal",
-        args: [snapshotKey],
-      });
-      status = Number(existing.snapshot.status);
-      finalizedAt = BigInt(existing.snapshot.finalizedAt);
+      const existing = await readRoundPayoutProposalSummary(
+        publicClient,
+        snapshotKey,
+      );
+      status = existing.status;
+      finalizedAt = existing.finalizedAt;
     } catch {
       continue;
     }
@@ -941,13 +1061,11 @@ async function preflightAutomaticCorrelationSnapshots(
     let epochFinalized = epochFinalizedById.get(epochKey);
 
     if (epochFinalized === undefined) {
-      const existingEpoch = await publicClient.readContract({
-        address: config.contracts.clusterPayoutOracle,
-        abi: ClusterPayoutOracleAbi,
-        functionName: "correlationEpochSnapshot",
-        args: [epochId],
-      });
-      const epochStatus = Number(existingEpoch.status);
+      const existingEpoch = await readCorrelationEpochSnapshotSummary(
+        publicClient,
+        epochId,
+      );
+      const epochStatus = existingEpoch.status;
       epochFinalized = epochStatus === STATUS.Finalized;
 
       if (epochStatus === STATUS.None || epochStatus === STATUS.Rejected) {
@@ -1007,13 +1125,11 @@ async function preflightAutomaticCorrelationSnapshots(
 
     let roundStatus: number = STATUS.None;
     try {
-      const existingRound = await publicClient.readContract({
-        address: config.contracts.clusterPayoutOracle,
-        abi: ClusterPayoutOracleAbi,
-        functionName: "roundPayoutProposal",
-        args: [snapshotKey],
-      });
-      roundStatus = Number(existingRound.snapshot.status);
+      const existingRound = await readRoundPayoutProposalSummary(
+        publicClient,
+        snapshotKey,
+      );
+      roundStatus = existingRound.status;
     } catch {
       roundStatus = STATUS.None;
     }
@@ -1102,20 +1218,17 @@ async function publishCorrelationSnapshotArtifact(
 
   for (const epoch of artifact.correlationEpochs ?? []) {
     const epochId = BigInt(epoch.epochId);
-    const existing = await publicClient.readContract({
-      address: config.contracts.clusterPayoutOracle,
-      abi: ClusterPayoutOracleAbi,
-      functionName: "correlationEpochSnapshot",
-      args: [epochId],
-    });
-    const status = Number(existing.status);
+    const existing = await readCorrelationEpochSnapshotSummary(
+      publicClient,
+      epochId,
+    );
+    const status = existing.status;
     if (status === STATUS.None || status === STATUS.Rejected) {
       if (status === STATUS.Rejected && automaticContext.candidateFingerprint) {
         const rejectedEpochId = epochId.toString();
-        const rejectedClusterRoot = readCorrelationEpochClusterRoot(existing);
         if (
           automaticContext.rejectedEpochIds?.has(rejectedEpochId) &&
-          rejectedClusterRoot === epoch.clusterRoot.toLowerCase()
+          existing.clusterRoot === epoch.clusterRoot.toLowerCase()
         ) {
           rememberRejectedAutomaticCorrelationCandidate(
             rejectedEpochId,
@@ -1244,13 +1357,11 @@ async function publishCorrelationSnapshotArtifact(
 
     let status: number = STATUS.None;
     try {
-      const existing = await publicClient.readContract({
-        address: config.contracts.clusterPayoutOracle,
-        abi: ClusterPayoutOracleAbi,
-        functionName: "roundPayoutProposal",
-        args: [snapshotKey],
-      });
-      status = Number(existing.snapshot.status);
+      const existing = await readRoundPayoutProposalSummary(
+        publicClient,
+        snapshotKey,
+      );
+      status = existing.status;
     } catch {
       status = STATUS.None;
     }
