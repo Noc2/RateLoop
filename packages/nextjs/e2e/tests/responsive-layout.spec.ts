@@ -56,10 +56,22 @@ async function expectRouteControls(page: Page, path: string, width: number): Pro
   }
 
   if (path === "/") {
+    const heroHeading = main.getByRole("heading", { name: /Level Up Your\s+Agent/i }).first();
     await expectNavigationForViewport(page, width);
-    await expect(main.getByRole("heading", { name: /Level Up Your\s+Agent/i }).first()).toBeVisible({
+    await expect(heroHeading).toBeVisible({
       timeout: 15_000,
     });
+    if (width <= 390) {
+      const [headingBox, viewportHeight] = await Promise.all([
+        heroHeading.boundingBox(),
+        page.evaluate(() => window.innerHeight),
+      ]);
+      expect(headingBox, "Landing hero headline should be measurable in the initial mobile viewport").not.toBeNull();
+      expect(
+        Math.ceil((headingBox?.y ?? Number.POSITIVE_INFINITY) + (headingBox?.height ?? 0)),
+        "Landing hero headline should fit in the initial mobile viewport",
+      ).toBeLessThanOrEqual(viewportHeight);
+    }
     return;
   }
 
@@ -202,10 +214,9 @@ test.describe("Responsive layout", () => {
       metrics.surfaceOverflowX,
       "Desktop feed surface should not clip the first content headline horizontally",
     ).toBe("visible");
-    expect(
-      metrics.surfaceOverflowY,
-      "Desktop feed surface should not clip the first content headline vertically",
-    ).toBe("visible");
+    expect(metrics.surfaceOverflowY, "Desktop feed surface should not clip the first content headline vertically").toBe(
+      "visible",
+    );
 
     if (!metrics.canScroll) return;
 

@@ -255,13 +255,13 @@ export default async function LandingPage() {
   const socialProofItems = await getLandingPageSocialProofItems();
 
   return (
-    <div className="flex flex-col items-center grow px-4 pt-8 pb-16 sm:pt-12 lg:pt-16">
+    <div className="flex flex-col items-center grow px-4 pt-4 pb-16 sm:pt-12 lg:pt-16">
       <div className="relative w-full max-w-6xl flex flex-col items-center">
         {/* Hero: stacked on mobile, side animation on large screens */}
         <div className="relative z-0 flex w-full flex-col lg:min-h-[34rem] lg:items-center lg:justify-center xl:min-h-[38rem]">
           {/* Animation: Hawig orb implementation, positioned as a side visual on large screens */}
           <div
-            className="relative z-0 -mx-6 w-[min(64rem,118vw)] self-center lg:pointer-events-none lg:absolute lg:bottom-[-4rem] lg:left-auto lg:right-[-14rem] lg:top-[-3rem] lg:w-[58rem] lg:-translate-y-6 xl:bottom-[-5rem] xl:right-[-18rem] xl:top-[-4rem] xl:w-[68rem] xl:-translate-y-8"
+            className="relative z-0 w-[min(28rem,84vw)] self-center sm:w-[min(44rem,94vw)] lg:pointer-events-none lg:absolute lg:bottom-[-4rem] lg:left-auto lg:right-[-14rem] lg:top-[-3rem] lg:w-[58rem] lg:-translate-y-6 xl:bottom-[-5rem] xl:right-[-18rem] xl:top-[-4rem] xl:w-[68rem] xl:-translate-y-8"
             aria-hidden="true"
           >
             <OrbAnimation />
