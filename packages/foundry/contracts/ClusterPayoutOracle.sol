@@ -75,7 +75,6 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         uint64 fromRoundId;
         uint64 toRoundId;
         uint64 proposedAt;
-        uint64 challengeWindowAtProposal;
         uint64 finalizedAt;
         address proposer;
         address frontendOperator;
@@ -92,7 +91,6 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
     struct RoundPayoutProposal {
         RoundPayoutSnapshot snapshot;
         uint64 proposedAt;
-        uint64 challengeWindowAtProposal;
         address consumer;
         address proposer;
         address frontendOperator;
@@ -287,7 +285,6 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
             fromRoundId: fromRoundId,
             toRoundId: toRoundId,
             proposedAt: block.timestamp.toUint64(),
-            challengeWindowAtProposal: challengeWindow,
             finalizedAt: 0,
             proposer: msg.sender,
             frontendOperator: frontendOperator,
@@ -319,7 +316,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         CorrelationEpochSnapshot storage snapshot = correlationEpochSnapshots[epochId];
         if (snapshot.status == SnapshotStatus.None) revert SnapshotNotFound();
         if (snapshot.status != SnapshotStatus.Proposed) revert SnapshotNotFinalizable();
-        if (block.timestamp >= _challengeDeadline(snapshot.proposedAt, snapshot.challengeWindowAtProposal)) {
+        if (block.timestamp >= uint256(snapshot.proposedAt) + uint256(challengeWindow)) {
             revert SnapshotNotFinalizable();
         }
         _requireDisinterestedChallenger(
@@ -341,7 +338,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         if (snapshot.status == SnapshotStatus.Challenged) revert SnapshotChallenged();
         if (
             snapshot.status != SnapshotStatus.Proposed
-                || block.timestamp < _challengeDeadline(snapshot.proposedAt, snapshot.challengeWindowAtProposal)
+                || block.timestamp < uint256(snapshot.proposedAt) + uint256(challengeWindow)
         ) {
             revert SnapshotNotFinalizable();
         }
@@ -506,7 +503,6 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
                 status: SnapshotStatus.Proposed
             }),
             proposedAt: block.timestamp.toUint64(),
-            challengeWindowAtProposal: challengeWindow,
             consumer: consumer,
             proposer: msg.sender,
             frontendOperator: frontendOperator,
@@ -545,7 +541,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         if (!_isLiveCorrelationEpoch(proposal.correlationEpochDigest, proposal.snapshot.correlationEpochId)) {
             revert SnapshotNotFinalizable();
         }
-        if (block.timestamp >= _challengeDeadline(proposal.proposedAt, proposal.challengeWindowAtProposal)) {
+        if (block.timestamp >= uint256(proposal.proposedAt) + uint256(challengeWindow)) {
             revert SnapshotNotFinalizable();
         }
         _requireDisinterestedChallenger(
@@ -567,7 +563,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         if (proposal.snapshot.status == SnapshotStatus.Challenged) revert SnapshotChallenged();
         if (
             proposal.snapshot.status != SnapshotStatus.Proposed
-                || block.timestamp < _challengeDeadline(proposal.proposedAt, proposal.challengeWindowAtProposal)
+                || block.timestamp < uint256(proposal.proposedAt) + uint256(challengeWindow)
         ) {
             revert SnapshotNotFinalizable();
         }
@@ -737,10 +733,6 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         uint256 balanceBefore = challengeBondToken.balanceOf(address(this));
         challengeBondToken.safeTransferFrom(challenger, address(this), bond);
         if (challengeBondToken.balanceOf(address(this)) - balanceBefore != bond) revert InvalidBond();
-    }
-
-    function _challengeDeadline(uint64 proposedAt, uint64 window) private pure returns (uint256) {
-        return uint256(proposedAt) + uint256(window);
     }
 
     function correlationEpochSnapshot(uint64 epochId) external view returns (CorrelationEpochSnapshot memory) {
