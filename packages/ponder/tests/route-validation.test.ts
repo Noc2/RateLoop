@@ -791,6 +791,97 @@ describe("registerContentRoutes", () => {
     }
   });
 
+  it("uses the Base Sepolia default schema for metadata sync writes", async () => {
+    const originalDatabaseUrl = process.env.DATABASE_URL;
+    const originalNodeEnv = process.env.NODE_ENV;
+    const originalPonderNetwork = process.env.PONDER_NETWORK;
+    const originalDatabaseSchema = process.env.DATABASE_SCHEMA;
+    const originalRateloopSchema = process.env.RATELOOP_PONDER_DATABASE_SCHEMA;
+    const originalAllowOpen = process.env.PONDER_METADATA_SYNC_ALLOW_OPEN;
+    const query = vi.fn(async () => ({ rowCount: 1 }));
+    vi.doMock("pg", () => ({
+      Pool: vi.fn(function MockPool() {
+        return { query };
+      }),
+    }));
+    process.env.DATABASE_URL = "postgres://localhost/rateloop";
+    process.env.NODE_ENV = "test";
+    process.env.PONDER_NETWORK = "baseSepolia";
+    process.env.PONDER_METADATA_SYNC_ALLOW_OPEN = "true";
+    delete process.env.DATABASE_SCHEMA;
+    delete process.env.RATELOOP_PONDER_DATABASE_SCHEMA;
+
+    try {
+      mockPonderModules([]);
+      const { registerContentRoutes } = await import(
+        "../src/api/routes/content-routes.js"
+      );
+
+      const app = new Hono();
+      registerContentRoutes(app);
+      const questionMetadata = {
+        schemaVersion: "rateloop.question.v3",
+        title: "Public-safe Base Sepolia title",
+      };
+      const questionMetadataHash = canonicalJsonHash(questionMetadata);
+      const deployment = resolvePonderProtocolDeploymentMetadata();
+      expect(deployment).not.toBeNull();
+
+      const response = await app.request("http://localhost/question-metadata", {
+        body: JSON.stringify({
+          deploymentKey: deployment?.deploymentKey,
+          metadata: [
+            {
+              contentId: "42",
+              questionMetadata,
+              questionMetadataHash,
+              resultSpecHash: `0x${"3".repeat(64)}`,
+            },
+          ],
+        }),
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      });
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({ updated: 1, skipped: 0 });
+      expect(query).toHaveBeenCalledTimes(1);
+      const [sqlText] = query.mock.calls[0]!;
+      expect(sqlText).toContain('"rateloop_ponder_base_sepolia"."content"');
+    } finally {
+      if (originalDatabaseUrl === undefined) {
+        delete process.env.DATABASE_URL;
+      } else {
+        process.env.DATABASE_URL = originalDatabaseUrl;
+      }
+      if (originalNodeEnv === undefined) {
+        delete process.env.NODE_ENV;
+      } else {
+        process.env.NODE_ENV = originalNodeEnv;
+      }
+      if (originalPonderNetwork === undefined) {
+        delete process.env.PONDER_NETWORK;
+      } else {
+        process.env.PONDER_NETWORK = originalPonderNetwork;
+      }
+      if (originalDatabaseSchema === undefined) {
+        delete process.env.DATABASE_SCHEMA;
+      } else {
+        process.env.DATABASE_SCHEMA = originalDatabaseSchema;
+      }
+      if (originalRateloopSchema === undefined) {
+        delete process.env.RATELOOP_PONDER_DATABASE_SCHEMA;
+      } else {
+        process.env.RATELOOP_PONDER_DATABASE_SCHEMA = originalRateloopSchema;
+      }
+      if (originalAllowOpen === undefined) {
+        delete process.env.PONDER_METADATA_SYNC_ALLOW_OPEN;
+      } else {
+        process.env.PONDER_METADATA_SYNC_ALLOW_OPEN = originalAllowOpen;
+      }
+    }
+  });
+
   it("rejects metadata sync writes for a different deployment key", async () => {
     const originalDatabaseUrl = process.env.DATABASE_URL;
     const originalNodeEnv = process.env.NODE_ENV;

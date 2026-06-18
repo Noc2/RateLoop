@@ -77,6 +77,8 @@ const BYTES32_PATTERN = /^0x[a-fA-F0-9]{64}$/;
 const SCHEMA_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const DEFAULT_PONDER_DATABASE_SCHEMA_BY_NETWORK: Record<string, string> = {
   hardhat: "rateloop_ponder_hardhat",
+  baseSepolia: "rateloop_ponder_base_sepolia",
+  base: "rateloop_ponder_base",
   worldchain: "rateloop_ponder_worldchain",
   worldchainSepolia: "rateloop_ponder_worldchain_sepolia",
 };
