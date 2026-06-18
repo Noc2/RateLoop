@@ -32,6 +32,20 @@ export function hasCompleteHumanSignInSession(params: {
   return Boolean(params.address && params.chainId === params.targetChainId);
 }
 
+export function getHumanPostSignInRoute({
+  lrepBalance,
+  postSignInRoute,
+}: {
+  lrepBalance: bigint;
+  postSignInRoute?: string | null;
+}) {
+  if (lrepBalance === 0n) {
+    return getHumanSignInRoute({ lrepBalance });
+  }
+
+  return postSignInRoute ?? getHumanSignInRoute({ lrepBalance });
+}
+
 export function HumanSignInButton({
   children,
   className,
@@ -54,7 +68,7 @@ export function HumanSignInButton({
     contractName: REPUTATION_CONTRACT_NAME,
     functionName: "balanceOf",
     args: [address],
-    query: { enabled: !!address && !postSignInRoute },
+    query: { enabled: !!address },
   });
   const resolvedLrepBalance = typeof lrepBalance === "bigint" ? lrepBalance : undefined;
 
@@ -63,19 +77,13 @@ export function HumanSignInButton({
       return false;
     }
 
-    if (postSignInRoute) {
-      setShouldRouteAfterSignIn(false);
-      router.push(postSignInRoute);
-      return true;
-    }
-
     if (resolvedLrepBalance === undefined) {
       setShouldRouteAfterSignIn(true);
       return true;
     }
 
     setShouldRouteAfterSignIn(false);
-    router.push(getHumanSignInRoute({ lrepBalance: resolvedLrepBalance }));
+    router.push(getHumanPostSignInRoute({ lrepBalance: resolvedLrepBalance, postSignInRoute }));
     return true;
   }, [address, postSignInRoute, resolvedChainId, resolvedLrepBalance, router, targetNetwork.id]);
 
