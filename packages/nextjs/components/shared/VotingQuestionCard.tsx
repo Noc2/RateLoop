@@ -62,11 +62,11 @@ const RATING_GUIDANCE_TEXT =
 const RATING_REVIEW_PENDING_TOOLTIP = "Waiting for the correlation snapshot before publishing the final rating.";
 const RATING_REVIEW_STATUS_PENDING = 1;
 const REWARD_POOL_TOOLTIP_TEXT =
-  "This question's bounty is shown in USD and backed by USDC on World Chain. Eligible revealed raters can claim from it in qualified rounds, with 3% reserved for the eligible frontend operator.";
+  "This question's bounty is shown in USD and backed by USDC on the active network. Eligible revealed raters can claim from it in qualified rounds, with 3% reserved for the eligible frontend operator.";
 const LREP_REWARD_POOL_TOOLTIP_TEXT =
-  "This question's bounty is funded in LREP on World Chain. Eligible revealed raters can claim from it in qualified rounds, with 3% reserved for the eligible frontend operator.";
+  "This question's bounty is funded in LREP on the active network. Eligible revealed raters can claim from it in qualified rounds, with 3% reserved for the eligible frontend operator.";
 const MIXED_REWARD_POOL_TOOLTIP_TEXT =
-  "This question's bounty includes multiple assets on World Chain. Eligible revealed raters can claim from qualified rounds, with 3% reserved for the eligible frontend operator.";
+  "This question's bounty includes multiple assets on the active network. Eligible revealed raters can claim from qualified rounds, with 3% reserved for the eligible frontend operator.";
 const FEEDBACK_BONUS_TOOLTIP_TEXT =
   "Feedback Bonuses are optional rewards for useful rater feedback. Awarded feedback pays raters after settlement, with 3% reserved for the eligible frontend operator.";
 const LREP_FEEDBACK_BONUS_TOOLTIP_TEXT =
@@ -302,7 +302,7 @@ function RewardAmountDisplay({
   );
 }
 
-function getRewardPoolDisplay(amount: bigint, currency: RewardPoolCurrency | undefined) {
+export function getRewardPoolDisplay(amount: bigint, currency: RewardPoolCurrency | undefined) {
   if (currency === "LREP") {
     return {
       amountLabel: formatSubmissionRewardAmount(amount, "lrep"),

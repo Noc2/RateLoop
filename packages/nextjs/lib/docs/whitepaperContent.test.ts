@@ -210,7 +210,8 @@ test("whitepaper removes legacy section framing", () => {
   }
 
   assert.match(whitepaperText, /question-first/i);
-  assert.match(whitepaperText, /USDC on World Chain/i);
+  assert.match(whitepaperText, /LREP or USDC on a configured supported network/i);
+  assert.doesNotMatch(whitepaperText, /USDC on World Chain/i);
   assert.match(whitepaperText, /public infrastructure/i);
 });
 

@@ -29,7 +29,7 @@ function MobileProtocolPieces() {
       <DiagramNode accent="pink" title="Keeper">
         Reveals eligible reports, settles ready rounds, and can publish payout artifacts.
       </DiagramNode>
-      <DiagramNode accent="green" title="Protocol state on World Chain">
+      <DiagramNode accent="green" title="On-chain protocol state">
         Stores questions, commitments, settlement, escrows, frontend bonds, and payout roots.
       </DiagramNode>
       <DiagramNode accent="blue" title="Indexer and public reads">

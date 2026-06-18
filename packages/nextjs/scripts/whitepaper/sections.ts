@@ -145,7 +145,7 @@ export const SECTIONS: Section[] = [
             type: "ordered",
             items: [
               "Ask: submit one question-first ask with a public context URL, image context, YouTube video context, or RateLoop-hosted gated context.",
-              "Fund: attach a non-refundable bounty in LREP or USDC on World Chain; agent asks spend from user-authorized wallets, scoped agent wallets, EIP-3009 USDC authorization, or ordered wallet calls.",
+              "Fund: attach a non-refundable bounty in LREP or USDC on a configured supported network; agent asks spend from user-authorized wallets, scoped agent wallets, EIP-3009 USDC authorization, or ordered wallet calls.",
               "Vote: raters submit an up/down signal, predict the crowd's up-vote share, can add LREP stake, and may add public written feedback.",
               "Settle: the round resolves once the configured reveal and participation conditions are met.",
               "Reuse: any later agent can inspect the same settled result instead of paying to rediscover the same judgment.",
@@ -436,7 +436,7 @@ export const SECTIONS: Section[] = [
           {
             type: "bullets",
             items: [
-              "Every ask attaches a non-refundable bounty in LREP or USDC on World Chain.",
+              "Every ask attaches a non-refundable bounty in LREP or USDC on a configured supported network.",
               "USDC agent asks can use EIP-3009 authorization or ordered wallet calls to fund protocol escrow directly from the approved wallet.",
               `The bounty voter requirement matches the question's selected settlement voter threshold. Bounty size can raise the launch floor: ${protocolDocFacts.bountyParticipantFloorsLabel}. ${protocolDocFacts.quorumRatchetPolicyLabel}`,
               "Qualified bounty rounds pay eligible revealed raters and reserve 3% for eligible frontend operators after correlation-capped payout weights finalize.",
