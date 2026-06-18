@@ -486,6 +486,32 @@ contract ConfidentialityEscrowTest is VotingTestBase {
         assertEq(totalStake, uint64(2 * STAKE));
     }
 
+    function testTrackedOldEngineTerminalRoundReleasesBondAfterVotingEngineRotation() public {
+        uint256 contentId = _submitGatedQuestion("old-engine-bond-release-after-rotation", 1e6);
+        bytes32 identityKey = _postLrepBond(contentId, voter1);
+
+        vm.prank(voter1);
+        engine.openRound(contentId);
+        uint256 roundId = engine.currentRoundId(contentId);
+        _commitVoteWithoutOpeningRound(voter1, contentId, true);
+
+        RoundVotingEngine replacementEngine = _deployReplacementVotingEngine();
+        _rotateRegistryVotingEngine(replacementEngine);
+
+        assertEq(registry.votingEngine(), address(replacementEngine));
+        assertEq(registry.trackedVotingEngine(contentId), address(engine));
+        assertEq(replacementEngine.currentRoundId(contentId), 0);
+
+        vm.warp(block.timestamp + 30 days);
+        engine.cancelExpiredRound(contentId, roundId);
+
+        uint256 beforeBalance = lrepToken.balanceOf(voter1);
+        confidentialityEscrow.releaseBond(contentId, identityKey);
+
+        assertEq(lrepToken.balanceOf(voter1), beforeBalance + 1e6);
+        assertFalse(confidentialityEscrow.hasActiveBond(contentId, identityKey));
+    }
+
     function testOldEngineCannotRecordGatedNexusForUntrackedContentAfterRotation() public {
         uint256 contentId = _submitGatedQuestion("untracked-old-engine-after-rotation", 0);
         RoundVotingEngine replacementEngine = _deployReplacementVotingEngine();

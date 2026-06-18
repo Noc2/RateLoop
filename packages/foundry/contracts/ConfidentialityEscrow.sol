@@ -526,7 +526,12 @@ contract ConfidentialityEscrow is
     }
 
     function _currentRoundTerminal(uint256 contentId) private view returns (bool) {
-        address engine = registry.votingEngine();
+        address trackedEngine = _trackedVotingEngine(contentId);
+        if (trackedEngine != address(0)) return _engineRoundTerminal(trackedEngine, contentId);
+        return _engineRoundTerminal(registry.votingEngine(), contentId);
+    }
+
+    function _engineRoundTerminal(address engine, uint256 contentId) private view returns (bool) {
         if (engine == address(0)) return false;
         try IConfidentialityRoundState(engine).currentRoundId(contentId) returns (uint256 roundId) {
             if (roundId == 0) return false;
@@ -547,12 +552,17 @@ contract ConfidentialityEscrow is
     function _isAuthorizedNexusVotingEngine(uint256 contentId) private view returns (bool) {
         address currentEngine = registry.votingEngine();
         if (msg.sender == currentEngine) return true;
+        address trackedEngine = _trackedVotingEngine(contentId);
+        return trackedEngine == msg.sender && _engineHasOpenRound(msg.sender, contentId);
+    }
+
+    function _trackedVotingEngine(uint256 contentId) private view returns (address) {
         try IConfidentialityEngineTrackingRegistry(address(registry)).trackedVotingEngine(contentId) returns (
             address trackedEngine
         ) {
-            return trackedEngine == msg.sender && _engineHasOpenRound(msg.sender, contentId);
+            return trackedEngine;
         } catch {
-            return false;
+            return address(0);
         }
     }
 
