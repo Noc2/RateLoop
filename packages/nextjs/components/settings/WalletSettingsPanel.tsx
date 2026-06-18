@@ -200,7 +200,7 @@ export function WalletSettingsPanel({ address }: { address?: string }) {
               label="Address"
               testId="wallet-snapshot-address"
               value={walletAddress ?? "Not connected"}
-              valueClassName="break-all font-mono text-xs leading-5 text-base-content/80"
+              valueClassName="break-all tabular-nums"
             />
             <WalletSnapshotRow
               label="ETH"

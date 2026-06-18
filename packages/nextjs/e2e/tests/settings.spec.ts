@@ -82,6 +82,25 @@ test.describe("Settings page", () => {
     await expect(page.getByTestId("wallet-snapshot-eth")).toContainText("ETH");
     await expect(page.getByTestId("wallet-snapshot-lrep")).toContainText("LREP");
     await expect(page.getByTestId("wallet-snapshot-usdc")).toContainText("USDC");
+
+    const walletAddressValueStyle = await page.getByTestId("wallet-snapshot-address").evaluate(element => {
+      const style = window.getComputedStyle(element);
+      return {
+        color: style.color,
+        fontSize: style.fontSize,
+        fontWeight: style.fontWeight,
+      };
+    });
+    const ethValueStyle = await page.getByTestId("wallet-snapshot-eth").evaluate(element => {
+      const style = window.getComputedStyle(element);
+      return {
+        color: style.color,
+        fontSize: style.fontSize,
+        fontWeight: style.fontWeight,
+      };
+    });
+    expect(walletAddressValueStyle).toEqual(ethValueStyle);
+
     await expect(page.getByRole("heading", { name: "Top Up Network Fees" })).toHaveCount(0);
     await expect(page.getByTestId("eth-top-up-panel")).toBeVisible();
     await expect(page.getByText("ETH covers World Chain gas", { exact: false })).toHaveCount(0);
