@@ -540,7 +540,7 @@ function mockPonderModules<T>(result: T, additionalResults: unknown[] = []) {
 }
 
 afterEach(() => {
-  vi.unmock("../src/api/shared.js");
+  vi.doUnmock("../src/api/shared.js");
   vi.resetModules();
   vi.restoreAllMocks();
   vi.clearAllMocks();
