@@ -3113,6 +3113,58 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         replacementEngine.openRound(1);
     }
 
+    function test_SetVotingEngine_OldEngineCannotCommitFirstVoteIntoEmptyTrackedRoundAfterRotation() public {
+        vm.startPrank(submitter);
+        lrepToken.approve(address(registry), 10e6);
+        _submitContentWithReservation(registry, "https://example.com/tracked-empty-engine", "goal", "goal", "tags", 0);
+        vm.stopPrank();
+
+        _commit(voter1, 1, true);
+        uint256 firstRoundId = RoundEngineReadHelpers.activeRoundId(votingEngine, 1);
+
+        vm.warp(T0 + 7 days + 1);
+        votingEngine.cancelExpiredRound(1, firstRoundId);
+        _openRoundForTest(votingEngine, 1, voter2);
+        uint256 staleEmptyRoundId = RoundEngineReadHelpers.activeRoundId(votingEngine, 1);
+        assertEq(staleEmptyRoundId, firstRoundId + 1);
+        assertEq(registry.trackedVotingEngine(1), address(votingEngine));
+
+        bytes32 salt = keccak256("stale-empty-post-rotation");
+        TestCommitArtifacts memory staleCommit =
+            _buildTestCommitArtifacts(address(votingEngine), voter3, true, salt, 1);
+        assertEq(staleCommit.roundId, staleEmptyRoundId);
+
+        RoundVotingEngine replacementEngine = _deployReplacementVotingEngine();
+        vm.startPrank(owner);
+        registry.pause();
+        registry.setVotingEngine(address(replacementEngine));
+        registry.unpause();
+        vm.stopPrank();
+
+        vm.startPrank(voter3);
+        lrepToken.approve(address(votingEngine), STAKE);
+        vm.expectRevert(RoundVotingEngine.RoundNotOpen.selector);
+        votingEngine.commitVote(
+            1,
+            _roundContext(staleCommit.roundId, staleCommit.roundReferenceRatingBps),
+            staleCommit.targetRound,
+            staleCommit.drandChainHash,
+            staleCommit.commitHash,
+            staleCommit.ciphertext,
+            STAKE,
+            address(0)
+        );
+        vm.stopPrank();
+
+        RoundLib.Round memory staleRound = RoundEngineReadHelpers.round(votingEngine, 1, staleEmptyRoundId);
+        assertEq(staleRound.voteCount, 0);
+        assertEq(staleRound.totalStake, 0);
+
+        vm.prank(voter3);
+        replacementEngine.openRound(1);
+        assertEq(RoundEngineReadHelpers.activeRoundId(replacementEngine, 1), staleEmptyRoundId + 1);
+    }
+
     function test_SetVotingEngine_OldEngineCanSettleAfterReplacementSettlement() public {
         vm.startPrank(submitter);
         lrepToken.approve(address(registry), 10e6);

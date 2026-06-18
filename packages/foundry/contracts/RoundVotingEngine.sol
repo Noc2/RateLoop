@@ -548,6 +548,9 @@ contract RoundVotingEngine is
         // Round must be Open and not expired
         if (!RoundLib.acceptsVotes(round, roundCfg.maxDuration)) revert RoundNotOpen();
         if (round.thresholdReachedAt != 0) revert ThresholdReached();
+        if (round.voteCount == 0 && round.totalStake == 0 && registry.votingEngine() != address(this)) {
+            revert RoundNotOpen();
+        }
 
         IRaterIdentityRegistry roundRaterRegistry = _getRoundRaterRegistry(contentId, roundId);
         IRaterIdentityRegistry.ResolvedRater memory resolved = VotePreflightLib.validateVoterContentRecordNexus(
