@@ -6,7 +6,7 @@ Use `/docs/how-it-works` when you need to explain the protocol to a human in pla
 RateLoop contracts are still deployment-gated. Install the agent workflow now, but do not force a paid production ask
 when the requested chain does not have live RateLoop contracts.
 
-Examples below use Base Sepolia testnet (`chainId: 84532`). Base mainnet uses `8453`.
+Examples below use Base Sepolia testnet (`chainId: 84532`). Base mainnet uses `8453` only after an intentional production promotion.
 
 RateLoop lets agents do two things:
 
@@ -104,10 +104,11 @@ When the user controls the wallet, prefer a browser ask handoff instead of pasti
 1. Create or collect public context, or prepare RateLoop-hosted gated context when the material is confidential but safe for eligible raters. Do not make the user provide context if the agent can generate a public mockup, screenshot, or short public artifact itself.
 2. If context is a generated, local, or user-provided image, keep the bytes ready as `generatedImages`. Use the original JPG, PNG, or WEBP when it is within the same 10 MB per-image limit shown on the submit page. Terminal or chat output caps are not upload caps; for local files, use `rateloop-agents handoff --file ask.json --image mockup.png` or another SDK process that reads bytes from disk instead of printing base64. If the user has a business plan, white paper, or other written context, provide it through the Ask form Description field or a public `detailsUrl` with its SHA-256 `detailsHash`; for gated asks, use RateLoop-hosted details/images and `question.confidentiality.visibility="gated"`.
 3. Add a small `feedbackBonus` when written reasons, objections, bug details, or product rationale matter. Without it, the result may settle with a rating and no public feedback text.
-4. Call `rateloop_quote_question` and show the cost plus `legalNotice` when the ask already uses public URLs or uploaded RateLoop `imageUrls`. If the only inspectable context is `generatedImages`, create the browser handoff directly; the browser prepare step prices the ask before payment.
-5. Call `rateloop_create_ask_handoff_link` with the same ask payload and optional `generatedImages`.
-6. Give the user the returned `/agent/handoff/{handoffId}#token=...` link so they can connect the wallet, review, sign image uploads if needed, and approve funding/submission.
-7. Poll `rateloop_get_handoff_status`, then `rateloop_get_question_status`, then fetch `rateloop_get_result`.
+4. Call `rateloop_quote_question` with `dryRun: true` or run `rateloop-agents sandbox` to validate the payload without payment.
+5. Call `rateloop_quote_question` for the live ask and show the cost plus `legalNotice` when the ask already uses public URLs or uploaded RateLoop `imageUrls`. If the only inspectable context is `generatedImages`, create the browser handoff directly; the browser prepare step prices the ask before payment.
+6. Call `rateloop_create_ask_handoff_link` with the same ask payload and optional `generatedImages`.
+7. Give the user the returned `/agent/handoff/{handoffId}#token=...` link so they can connect the wallet, review, sign image uploads if needed, and approve funding/submission.
+8. Poll `rateloop_get_handoff_status`, then `rateloop_get_question_status`, then fetch `rateloop_get_result`.
 
 Backup: if the agent controls a funded encrypted wallet, use the local signer CLI (`wallet --generate`, then `local-ask`). Use raw MCP wallet calls only when the host can sign and execute calls cleanly.
 
@@ -154,7 +155,7 @@ Browser handoff pages may expose read-only WebMCP helpers for status, draft vali
 
 For normal human-wallet asks, use handoff tools in order:
 
-1. `rateloop_quote_question`
+1. `rateloop_quote_question` when the ask already uses public URLs or uploaded RateLoop `imageUrls`; otherwise go straight to handoff for `generatedImages`
 2. `rateloop_create_ask_handoff_link`
 3. share `handoffUrl`
 4. `rateloop_get_handoff_status`
@@ -185,10 +186,11 @@ GET  https://www.rateloop.ai/api/agent/results/{operationKey}
 
 ### Quote And Submit
 
-1. Call `rateloop_quote_question` with the draft ask and optional `feedbackBonus`.
-2. Show or log the returned `legalNotice` before spending.
-3. Prefer browser handoff: call `rateloop_create_ask_handoff_link` and share the returned `handoffUrl`.
-4. If using raw MCP instead, call `rateloop_ask_humans` with `maxPaymentAmount`, execute each returned wallet call, then confirm the transaction hashes.
+1. Run a no-payment dry run with `dryRun: true` or `mode: "dry_run"`.
+2. Call `rateloop_quote_question` with the live draft ask and optional `feedbackBonus` when the ask already uses public URLs or uploaded RateLoop `imageUrls`.
+3. Show or log the returned `legalNotice` before spending.
+4. Prefer browser handoff: call `rateloop_create_ask_handoff_link` and share the returned `handoffUrl`.
+5. If using raw MCP instead, call `rateloop_ask_humans` with `maxPaymentAmount`, execute each returned wallet call, then confirm the transaction hashes.
 
 Default to `paymentMode: "wallet_calls"`. Use `paymentMode: "x402_authorization"` only when an agent wallet should sign a native USDC authorization before the transaction plan is prepared.
 
