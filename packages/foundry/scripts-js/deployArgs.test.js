@@ -8,6 +8,7 @@ import {
   buildDeployFlowFlags,
   isSlowBroadcastNetwork,
   parseDeployArgs,
+  resolveEtherscanVerification,
 } from "./deployArgs.js";
 
 test("parseDeployArgs returns defaults with no options", () => {
@@ -21,12 +22,7 @@ test("parseDeployArgs returns defaults with no options", () => {
 
 test("parseDeployArgs reads supported options", () => {
   assert.deepEqual(
-    parseDeployArgs([
-      "--network",
-      "baseSepolia",
-      "--keystore",
-      "deployer",
-    ]),
+    parseDeployArgs(["--network", "baseSepolia", "--keystore", "deployer"]),
     {
       showHelp: false,
       network: "baseSepolia",
@@ -147,6 +143,42 @@ test("buildDeploymentProfileEnv defaults non-mainnet deployments to default", ()
     }),
     {
       [RATELOOP_DEPLOYMENT_PROFILE_ENV]: DEFAULT_DEPLOYMENT_PROFILE,
+    }
+  );
+});
+
+test("resolveEtherscanVerification skips when the required API key env is missing", () => {
+  assert.deepEqual(
+    resolveEtherscanVerification({
+      etherscanConfig: {
+        key: "${BASESCAN_API_KEY}",
+        url: "https://api-sepolia.basescan.org/api",
+      },
+      env: {},
+    }),
+    {
+      verifyFlags: "",
+      reason: "missing-api-key",
+      requiredApiKeyEnv: "BASESCAN_API_KEY",
+    }
+  );
+});
+
+test("resolveEtherscanVerification enables verification when the required API key env is present", () => {
+  assert.deepEqual(
+    resolveEtherscanVerification({
+      etherscanConfig: {
+        key: "${BASESCAN_API_KEY}",
+        url: "https://api-sepolia.basescan.org/api",
+      },
+      env: {
+        BASESCAN_API_KEY: "abc123",
+      },
+    }),
+    {
+      verifyFlags: "--verify",
+      reason: "enabled",
+      requiredApiKeyEnv: "BASESCAN_API_KEY",
     }
   );
 });

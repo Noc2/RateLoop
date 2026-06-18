@@ -18,7 +18,7 @@ const DEFAULT_DEPLOYMENT_PROFILE_BY_NETWORK = {
 const PRODUCTION_NETWORK_NAMES = new Set(
   Object.entries(DEFAULT_DEPLOYMENT_PROFILE_BY_NETWORK)
     .filter(([, profile]) => profile === "production")
-    .map(([network]) => network),
+    .map(([network]) => network)
 );
 const DEFAULT_DEPLOYMENT_PROFILE = "default";
 const RATELOOP_DEPLOYMENT_PROFILE_ENV = "RATELOOP_DEPLOYMENT_PROFILE";
@@ -1131,7 +1131,10 @@ export function reconstructDeploymentExportFromBroadcast(
   networkName,
   { deploymentProfile = resolveDeploymentProfile(networkName) } = {}
 ) {
-  if (PRODUCTION_NETWORK_NAMES.has(networkName) && deploymentProfile !== "production") {
+  if (
+    PRODUCTION_NETWORK_NAMES.has(networkName) &&
+    deploymentProfile !== "production"
+  ) {
     throw new Error(
       `${networkName} deployment exports must use deploymentProfile=production`
     );
@@ -1207,7 +1210,11 @@ export function reconstructDeploymentExportFromBroadcast(
 
 export function resolveDeploymentProfile(networkName, env = process.env) {
   const value = env[RATELOOP_DEPLOYMENT_PROFILE_ENV]?.trim();
-  if (PRODUCTION_NETWORK_NAMES.has(networkName) && value && value !== "production") {
+  if (
+    PRODUCTION_NETWORK_NAMES.has(networkName) &&
+    value &&
+    value !== "production"
+  ) {
     throw new Error(
       `${RATELOOP_DEPLOYMENT_PROFILE_ENV} must be production for mainnet deployment exports`
     );

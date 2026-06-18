@@ -10,6 +10,7 @@ import {
   buildDeployFlowFlags,
   isSlowBroadcastNetwork,
   parseDeployArgs,
+  resolveEtherscanVerification,
 } from "./deployArgs.js";
 import { selectOrCreateKeystore } from "./selectOrCreateKeystore.js";
 
@@ -205,12 +206,19 @@ if (network !== "localhost") {
       const tomlString = readFileSync(foundryTomlPath, "utf-8");
       const parsedToml = parse(tomlString);
       const etherscanConfig = parsedToml.etherscan?.[network];
+      const verification = resolveEtherscanVerification({
+        etherscanConfig,
+        env: process.env,
+      });
 
-      if (etherscanConfig) {
-        process.env.VERIFY_FLAGS = "--verify";
+      process.env.VERIFY_FLAGS = verification.verifyFlags;
+      if (verification.reason === "enabled") {
         console.log(`\n🔍 Verification: using Etherscan-compatible API`);
+      } else if (verification.reason === "missing-api-key") {
+        console.log(
+          `\n⚠️  Skipping auto-verification for ${network}: ${verification.requiredApiKeyEnv} is not set`
+        );
       } else {
-        process.env.VERIFY_FLAGS = "";
         console.log(
           `\n⚠️  No explorer config for '${network}' — skipping verification`
         );

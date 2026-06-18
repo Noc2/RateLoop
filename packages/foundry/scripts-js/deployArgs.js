@@ -33,6 +33,7 @@ export const DEFAULT_LIVE_DEPLOY_BROADCAST_TIMEOUT_SECONDS = "300";
 export const RATELOOP_DEPLOYMENT_PROFILE_ENV = "RATELOOP_DEPLOYMENT_PROFILE";
 export const PRODUCTION_DEPLOYMENT_PROFILE = "production";
 export const DEFAULT_DEPLOYMENT_PROFILE = "default";
+const ENV_INTERPOLATION_RE = /^\$\{([A-Z0-9_]+)\}$/;
 
 function readOptionValue(args, index, optionName) {
   const value = args[index + 1];
@@ -175,5 +176,33 @@ export function buildDeploymentProfileEnv({ network }, env = process.env) {
 
   return {
     [RATELOOP_DEPLOYMENT_PROFILE_ENV]: existingProfile || expectedProfile,
+  };
+}
+
+export function resolveEtherscanVerification({
+  etherscanConfig,
+  env = process.env,
+}) {
+  if (!etherscanConfig) {
+    return {
+      verifyFlags: "",
+      reason: "missing-explorer-config",
+    };
+  }
+
+  const rawKey = String(etherscanConfig.key ?? "").trim();
+  const requiredApiKeyEnv = rawKey.match(ENV_INTERPOLATION_RE)?.[1] ?? null;
+  if (requiredApiKeyEnv && !env[requiredApiKeyEnv]?.trim()) {
+    return {
+      verifyFlags: "",
+      reason: "missing-api-key",
+      requiredApiKeyEnv,
+    };
+  }
+
+  return {
+    verifyFlags: "--verify",
+    reason: "enabled",
+    requiredApiKeyEnv,
   };
 }
