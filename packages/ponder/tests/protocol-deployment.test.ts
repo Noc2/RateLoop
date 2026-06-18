@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { getSharedDeploymentAddress } from "@rateloop/contracts/deployments";
 import {
   buildPonderProtocolDeploymentKey,
   resolvePonderProtocolDeploymentMetadata,
@@ -50,14 +51,23 @@ describe("Ponder protocol deployment metadata", () => {
     );
   });
 
-  it("resolves Base Sepolia deployment keys from matching chain-scoped env", () => {
-    const contentRegistryAddress = "0x1000000000000000000000000000000000000001";
-    const feedbackRegistryAddress = "0x1000000000000000000000000000000000000002";
+  it("resolves Base Sepolia deployment keys from shared artifacts over stale env", () => {
+    const staleContentRegistryAddress = "0x1000000000000000000000000000000000000001";
+    const staleFeedbackRegistryAddress = "0x1000000000000000000000000000000000000002";
+    const contentRegistryAddress = getSharedDeploymentAddress(84532, "ContentRegistry")?.toLowerCase() as
+      | `0x${string}`
+      | undefined;
+    const feedbackRegistryAddress = getSharedDeploymentAddress(84532, "FeedbackRegistry")?.toLowerCase() as
+      | `0x${string}`
+      | undefined;
+    expect(contentRegistryAddress).toBeDefined();
+    expect(feedbackRegistryAddress).toBeDefined();
+
     const metadata = resolvePonderProtocolDeploymentMetadata({
       PONDER_NETWORK: "baseSepolia",
       PONDER_CHAIN_ID: "84532",
-      PONDER_CONTENT_REGISTRY_ADDRESS: contentRegistryAddress,
-      PONDER_FEEDBACK_REGISTRY_ADDRESS: feedbackRegistryAddress,
+      PONDER_CONTENT_REGISTRY_ADDRESS: staleContentRegistryAddress,
+      PONDER_FEEDBACK_REGISTRY_ADDRESS: staleFeedbackRegistryAddress,
       DATABASE_SCHEMA: "rateloop_ponder_base_sepolia",
     });
 
@@ -65,12 +75,12 @@ describe("Ponder protocol deployment metadata", () => {
       configured: true,
       network: "baseSepolia",
       chainId: 84532,
-      contentRegistryAddress,
-      feedbackRegistryAddress,
+      contentRegistryAddress: contentRegistryAddress!,
+      feedbackRegistryAddress: feedbackRegistryAddress!,
       deploymentKey: buildPonderProtocolDeploymentKey({
         chainId: 84532,
-        contentRegistryAddress,
-        feedbackRegistryAddress,
+        contentRegistryAddress: contentRegistryAddress!,
+        feedbackRegistryAddress: feedbackRegistryAddress!,
       }),
       databaseSchema: "rateloop_ponder_base_sepolia",
     });
