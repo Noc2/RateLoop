@@ -13,6 +13,8 @@ import { ClusterPayoutOracle } from "../contracts/ClusterPayoutOracle.sol";
 import { IClusterPayoutOracle } from "../contracts/interfaces/IClusterPayoutOracle.sol";
 import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
 import { QuestionRewardPoolEscrow } from "../contracts/QuestionRewardPoolEscrow.sol";
+import { QuestionRewardPoolEscrowBundleActionsLib } from
+    "../contracts/libraries/QuestionRewardPoolEscrowBundleActionsLib.sol";
 import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
 import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
 import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
@@ -7485,6 +7487,38 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
         vm.prank(voter1);
         assertGt(rewardPoolEscrow.claimQuestionBundleReward(bundleId, 0), 0);
+    }
+
+    function testBundleRefund_CompleteClusterRoundSetWaitsForFinalizedSnapshot() public {
+        ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
+        uint256[] memory contentIds = _submitBundleQuestions();
+        uint256 bundleId = _createSubmissionBundle(contentIds, funder, REWARD_ASSET_USDC, REWARD_POOL_AMOUNT, 3);
+        uint256 bountyClosesAt = block.timestamp + 30 days;
+
+        address[] memory voters = _threeVoters();
+        bool[] memory directions = _directions(true, true, false);
+        uint256 firstRoundId = _settleRoundWithoutBundleSync(voters, contentIds[0], directions);
+        _settleRoundWithoutBundleSync(voters, contentIds[1], directions);
+        rewardPoolEscrow.syncQuestionBundleTerminals(bundleId, 10);
+
+        vm.warp(bountyClosesAt + BUNDLE_REFUND_GRACE + 1);
+        vm.expectRevert(QuestionRewardPoolEscrowBundleActionsLib.BundleClusterPayoutSnapshotPending.selector);
+        rewardPoolEscrow.refundQuestionBundleReward(bundleId);
+
+        IClusterPayoutOracle.PayoutWeight memory payoutWeight =
+            _bundlePayoutWeight(bundleId, 0, contentIds[0], firstRoundId, 0);
+        bytes32 root = oracle.payoutWeightLeaf(payoutWeight);
+        _finalizeBundleClusterPayoutSnapshotWithRoot(
+            oracle, bundleId, 0, 3, 30_000, payoutWeight.effectiveWeight, root
+        );
+
+        assertEq(rewardPoolEscrow.refundQuestionBundleReward(bundleId), 0);
+        assertGt(
+            rewardPoolEscrow.claimableQuestionBundleRewardWithPayoutWeight(
+                bundleId, 0, voter1, payoutWeight, new bytes32[](0)
+            ),
+            0
+        );
     }
 
     function testBundleRefundSyncsUnobservedTerminalRoundSetBeforeSweep() public {
