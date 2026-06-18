@@ -46,6 +46,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
     ///      rotations bounded so a bad config cannot price honest challengers out.
     uint256 public constant MAX_CHALLENGE_BOND = 100e6;
     uint256 public constant MAX_CORRELATION_EPOCH_SOURCES = 256;
+    uint256 public constant MAX_ARTIFACT_URI_LENGTH = 2048;
     /// @dev Window after a round payout snapshot is finalized during which the arbiter can still
     ///      reject it, even if a consumer has already paid one or more claims against the cached
     ///      merkle root. Existing paid leaves stay paid (the consumer flips a `qualified` /
@@ -250,9 +251,11 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         string calldata artifactURI,
         CorrelationEpochSourceRef[] calldata sourceRefs
     ) external payable {
+        uint256 artifactURILength = bytes(artifactURI).length;
         if (
             epochId == 0 || toRoundId < fromRoundId || clusterRoot == bytes32(0) || parameterHash == bytes32(0)
-                || artifactHash == bytes32(0)
+                || artifactHash == bytes32(0) || artifactURILength == 0
+                || artifactURILength > MAX_ARTIFACT_URI_LENGTH
         ) {
             revert InvalidSnapshot();
         }
@@ -973,9 +976,11 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
     }
 
     function _validateRoundPayoutInput(RoundPayoutSnapshotInput calldata input) private pure {
+        uint256 artifactURILength = bytes(input.artifactURI).length;
         if (
             !_isPayoutDomain(input.domain) || input.contentId == 0 || input.roundId == 0
-                || input.correlationEpochId == 0 || input.artifactHash == bytes32(0)
+                || input.correlationEpochId == 0 || input.artifactHash == bytes32(0) || artifactURILength == 0
+                || artifactURILength > MAX_ARTIFACT_URI_LENGTH
                 || input.effectiveParticipantUnits > uint256(input.rawEligibleVoters) * BPS_DENOMINATOR
         ) {
             revert InvalidSnapshot();

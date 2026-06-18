@@ -211,6 +211,36 @@ contract ClusterPayoutOracleTest is Test {
         );
     }
 
+    function test_ProposeCorrelationEpochRejectsEmptyArtifactURI() public {
+        vm.expectRevert(ClusterPayoutOracle.InvalidSnapshot.selector);
+        oracle.proposeCorrelationEpoch(
+            1,
+            1,
+            20,
+            keccak256("cluster-root"),
+            keccak256("params"),
+            keccak256("epoch-artifact"),
+            "",
+            _defaultEpochSources()
+        );
+    }
+
+    function test_ProposeCorrelationEpochRejectsOverlongArtifactURI() public {
+        string memory artifactURI = new string(oracle.MAX_ARTIFACT_URI_LENGTH() + 1);
+
+        vm.expectRevert(ClusterPayoutOracle.InvalidSnapshot.selector);
+        oracle.proposeCorrelationEpoch(
+            1,
+            1,
+            20,
+            keccak256("cluster-root"),
+            keccak256("params"),
+            keccak256("epoch-artifact"),
+            artifactURI,
+            _defaultEpochSources()
+        );
+    }
+
     function test_ProposeRoundPayoutSnapshotRejectsZeroArtifactHash() public {
         oracle.proposeCorrelationEpoch(
             1,
@@ -227,6 +257,48 @@ contract ClusterPayoutOracleTest is Test {
 
         IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
         input.artifactHash = bytes32(0);
+
+        vm.expectRevert(ClusterPayoutOracle.InvalidSnapshot.selector);
+        oracle.proposeRoundPayoutSnapshot(input);
+    }
+
+    function test_ProposeRoundPayoutSnapshotRejectsEmptyArtifactURI() public {
+        oracle.proposeCorrelationEpoch(
+            1,
+            1,
+            20,
+            keccak256("cluster-root"),
+            keccak256("params"),
+            keccak256("epoch-artifact"),
+            "ipfs://epoch",
+            _defaultEpochSources()
+        );
+        vm.warp(2 hours + 2);
+        oracle.finalizeCorrelationEpoch(1);
+
+        IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
+        input.artifactURI = "";
+
+        vm.expectRevert(ClusterPayoutOracle.InvalidSnapshot.selector);
+        oracle.proposeRoundPayoutSnapshot(input);
+    }
+
+    function test_ProposeRoundPayoutSnapshotRejectsOverlongArtifactURI() public {
+        oracle.proposeCorrelationEpoch(
+            1,
+            1,
+            20,
+            keccak256("cluster-root"),
+            keccak256("params"),
+            keccak256("epoch-artifact"),
+            "ipfs://epoch",
+            _defaultEpochSources()
+        );
+        vm.warp(2 hours + 2);
+        oracle.finalizeCorrelationEpoch(1);
+
+        IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
+        input.artifactURI = new string(oracle.MAX_ARTIFACT_URI_LENGTH() + 1);
 
         vm.expectRevert(ClusterPayoutOracle.InvalidSnapshot.selector);
         oracle.proposeRoundPayoutSnapshot(input);
