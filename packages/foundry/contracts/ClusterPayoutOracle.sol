@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import { AccessControl } from "@openzeppelin/contracts/access/AccessControl.sol";
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import { MerkleProof } from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
-import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
-import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import { IClusterPayoutOracle } from "./interfaces/IClusterPayoutOracle.sol";
-import { IFrontendRegistry } from "./interfaces/IFrontendRegistry.sol";
-import { IRoundPayoutSnapshotConsumer } from "./interfaces/IRoundPayoutSnapshotConsumer.sol";
+import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {MerkleProof} from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
+import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {IClusterPayoutOracle} from "./interfaces/IClusterPayoutOracle.sol";
+import {IFrontendRegistry} from "./interfaces/IFrontendRegistry.sol";
+import {IRoundPayoutSnapshotConsumer} from "./interfaces/IRoundPayoutSnapshotConsumer.sol";
 
 /// @title ClusterPayoutOracle
 /// @notice Optimistic oracle for correlation epoch snapshots and per-round effective weights.
@@ -75,6 +75,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         uint64 fromRoundId;
         uint64 toRoundId;
         uint64 proposedAt;
+        uint64 challengeWindowAtProposal;
         uint64 finalizedAt;
         address proposer;
         address frontendOperator;
@@ -85,12 +86,14 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         string artifactURI;
         SnapshotStatus status;
         uint256 bond;
+        uint256 challengeBondAtProposal;
         address proposalTimeSnapshotProposer;
     }
 
     struct RoundPayoutProposal {
         RoundPayoutSnapshot snapshot;
         uint64 proposedAt;
+        uint64 challengeWindowAtProposal;
         address consumer;
         address proposer;
         address frontendOperator;
@@ -100,6 +103,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         // Accumulates challenge bonds posted against this proposal (paid out to proposer on
         // dismissal, to challenger on rejection). Zero after finalize / reject.
         uint256 bond;
+        uint256 challengeBondAtProposal;
         bytes32 correlationEpochDigest;
         address proposalTimeSnapshotProposer;
     }
@@ -285,6 +289,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
             fromRoundId: fromRoundId,
             toRoundId: toRoundId,
             proposedAt: block.timestamp.toUint64(),
+            challengeWindowAtProposal: challengeWindow,
             finalizedAt: 0,
             proposer: msg.sender,
             frontendOperator: frontendOperator,
@@ -295,6 +300,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
             artifactURI: artifactURI,
             status: SnapshotStatus.Proposed,
             bond: 0,
+            challengeBondAtProposal: challengeBond,
             proposalTimeSnapshotProposer: proposalTimeSnapshotProposer
         });
 
@@ -316,13 +322,13 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         CorrelationEpochSnapshot storage snapshot = correlationEpochSnapshots[epochId];
         if (snapshot.status == SnapshotStatus.None) revert SnapshotNotFound();
         if (snapshot.status != SnapshotStatus.Proposed) revert SnapshotNotFinalizable();
-        if (block.timestamp >= uint256(snapshot.proposedAt) + uint256(challengeWindow)) {
+        if (block.timestamp >= _challengeDeadline(snapshot.proposedAt, snapshot.challengeWindowAtProposal)) {
             revert SnapshotNotFinalizable();
         }
         _requireDisinterestedChallenger(
             msg.sender, snapshot.proposer, snapshot.frontendOperator, snapshot.proposalTimeSnapshotProposer
         );
-        uint256 bond = challengeBond;
+        uint256 bond = snapshot.challengeBondAtProposal;
         // CEI: write state before pulling the bond so a malicious bond token cannot
         // observe a half-applied challenge mid-call.
         snapshot.status = SnapshotStatus.Challenged;
@@ -338,7 +344,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         if (snapshot.status == SnapshotStatus.Challenged) revert SnapshotChallenged();
         if (
             snapshot.status != SnapshotStatus.Proposed
-                || block.timestamp < uint256(snapshot.proposedAt) + uint256(challengeWindow)
+                || block.timestamp < _challengeDeadline(snapshot.proposedAt, snapshot.challengeWindowAtProposal)
         ) {
             revert SnapshotNotFinalizable();
         }
@@ -503,6 +509,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
                 status: SnapshotStatus.Proposed
             }),
             proposedAt: block.timestamp.toUint64(),
+            challengeWindowAtProposal: challengeWindow,
             consumer: consumer,
             proposer: msg.sender,
             frontendOperator: frontendOperator,
@@ -510,6 +517,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
             artifactHash: input.artifactHash,
             artifactURI: input.artifactURI,
             bond: 0,
+            challengeBondAtProposal: challengeBond,
             correlationEpochDigest: correlationEpochDigest,
             proposalTimeSnapshotProposer: proposalTimeSnapshotProposer
         });
@@ -541,13 +549,13 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         if (!_isLiveCorrelationEpoch(proposal.correlationEpochDigest, proposal.snapshot.correlationEpochId)) {
             revert SnapshotNotFinalizable();
         }
-        if (block.timestamp >= uint256(proposal.proposedAt) + uint256(challengeWindow)) {
+        if (block.timestamp >= _challengeDeadline(proposal.proposedAt, proposal.challengeWindowAtProposal)) {
             revert SnapshotNotFinalizable();
         }
         _requireDisinterestedChallenger(
             msg.sender, proposal.proposer, proposal.frontendOperator, proposal.proposalTimeSnapshotProposer
         );
-        uint256 bond = challengeBond;
+        uint256 bond = proposal.challengeBondAtProposal;
         // CEI: write state before pulling the bond so a malicious bond token cannot
         // observe a half-applied challenge mid-call.
         proposal.snapshot.status = SnapshotStatus.Challenged;
@@ -563,7 +571,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         if (proposal.snapshot.status == SnapshotStatus.Challenged) revert SnapshotChallenged();
         if (
             proposal.snapshot.status != SnapshotStatus.Proposed
-                || block.timestamp < uint256(proposal.proposedAt) + uint256(challengeWindow)
+                || block.timestamp < _challengeDeadline(proposal.proposedAt, proposal.challengeWindowAtProposal)
         ) {
             revert SnapshotNotFinalizable();
         }
@@ -1077,6 +1085,10 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
             || domain == PAYOUT_DOMAIN_PUBLIC_RATING || domain == PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD;
     }
 
+    function _challengeDeadline(uint64 proposedAt, uint64 window) private pure returns (uint256) {
+        return uint256(proposedAt) + uint256(window);
+    }
+
     function _requireCurrentCorrelationEpoch(bytes32 expectedDigest, uint64 epochId) private view {
         if (!_isCurrentCorrelationEpoch(expectedDigest, epochId)) revert SnapshotNotFinalizable();
     }
@@ -1170,21 +1182,21 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         } catch {
             revert InvalidAddress();
         }
-        try IFrontendRegistry(newFrontendRegistry).isEligible(address(0)) returns (bool) { }
+        try IFrontendRegistry(newFrontendRegistry).isEligible(address(0)) returns (bool) {}
         catch {
             revert InvalidAddress();
         }
-        try IFrontendRegistry(newFrontendRegistry).authorizedSnapshotFrontend(address(0)) returns (address) { }
+        try IFrontendRegistry(newFrontendRegistry).authorizedSnapshotFrontend(address(0)) returns (address) {}
         catch {
             revert InvalidAddress();
         }
-        try IFrontendRegistry(newFrontendRegistry).snapshotProposerForFrontend(address(0)) returns (address) { }
+        try IFrontendRegistry(newFrontendRegistry).snapshotProposerForFrontend(address(0)) returns (address) {}
         catch {
             revert InvalidAddress();
         }
         try IFrontendRegistry(newFrontendRegistry).isAuthorizedSnapshotProposer(address(0), address(0)) returns (
             bool
-        ) { }
+        ) {}
         catch {
             revert InvalidAddress();
         }
