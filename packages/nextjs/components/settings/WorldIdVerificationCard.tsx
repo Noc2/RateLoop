@@ -55,6 +55,7 @@ import {
   getWorldIdCredentialAttestationErrorMessage,
   getWorldIdRequestPanelState,
   isWorldIdCredentialAttestationRejectedError,
+  isWorldIdCredentialAttestationWalletSessionError,
 } from "~~/lib/world-id/verificationUiState";
 import { notification } from "~~/utils/scaffold-eth";
 
@@ -502,7 +503,13 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
         }
       } catch (error) {
         const message = getWorldIdCredentialAttestationErrorMessage(error);
-        setWorldIdErrorCode(isWorldIdCredentialAttestationRejectedError(error) ? "user_rejected" : "generic_error");
+        setWorldIdErrorCode(
+          isWorldIdCredentialAttestationRejectedError(error)
+            ? "user_rejected"
+            : isWorldIdCredentialAttestationWalletSessionError(error)
+              ? "wallet_session_expired"
+              : "generic_error",
+        );
         setVerificationState({ status: "error", message });
         throw new Error(message);
       }

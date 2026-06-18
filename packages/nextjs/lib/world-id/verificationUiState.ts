@@ -47,8 +47,10 @@ export const WORLD_ID_INVALID_CREDENTIAL_MESSAGE =
 export const WORLD_ID_WALLET_TRANSACTION_CANCELLED_MESSAGE =
   "You cancelled the wallet transaction. No World ID credential was recorded.";
 
-const WALLET_SESSION_RECONNECTING_MESSAGE =
+export const WORLD_ID_WALLET_SESSION_RECONNECTING_MESSAGE =
   "Your wallet session is still reconnecting. Wait a moment, then try verifying again. If this keeps happening, disconnect and sign in again.";
+
+const WORLD_ID_WALLET_SESSION_ERROR_CODE = "wallet_session_expired";
 
 function getErrorText(error: unknown) {
   if (typeof error === "string") {
@@ -92,6 +94,19 @@ export function isWorldIdCredentialAttestationRejectedError(error: unknown) {
   );
 }
 
+export function isWorldIdCredentialAttestationWalletSessionError(error: unknown) {
+  const message = getErrorText(error).toLowerCase();
+
+  return (
+    message.includes("connection.connector.getchainid is not a function") ||
+    message.includes("your wallet session is still reconnecting") ||
+    message.includes("no auth token found when signing message") ||
+    message.includes("no auth token found when signing transaction") ||
+    message.includes("no auth token found when signing typed data") ||
+    message.includes("no auth token provided and no stored auth token found")
+  );
+}
+
 export function getWorldIdCredentialAttestationErrorMessage(
   error: unknown,
   fallback = "World ID credential attestation failed.",
@@ -120,11 +135,8 @@ export function getWorldIdCredentialAttestationErrorMessage(
     return WORLD_ID_RATE_LIMITED_MESSAGE;
   }
 
-  if (
-    message.includes("connection.connector.getChainId is not a function") ||
-    message.includes("Your wallet session is still reconnecting")
-  ) {
-    return WALLET_SESSION_RECONNECTING_MESSAGE;
+  if (isWorldIdCredentialAttestationWalletSessionError(error)) {
+    return WORLD_ID_WALLET_SESSION_RECONNECTING_MESSAGE;
   }
 
   return message || fallback;
@@ -155,15 +167,24 @@ export function getWorldIdRequestPanelState(input: WorldIdRequestStateInput): Wo
     const errorCode = input.errorCode ?? "generic_error";
     const isExpired = errorCode === "timeout";
     const isCancelled = errorCode === "cancelled" || errorCode === "user_rejected";
+    const isWalletSessionExpired = errorCode === WORLD_ID_WALLET_SESSION_ERROR_CODE;
 
     return {
       canCancel: false,
       canRetry: true,
-      detail: isCancelled
-        ? "The wallet transaction was cancelled before the credential was recorded."
-        : `World ID returned ${formatWorldIdError(errorCode)}.`,
+      detail: isWalletSessionExpired
+        ? "Your wallet session expired before the credential transaction could be signed. Disconnect and sign in again, then retry."
+        : isCancelled
+          ? "The wallet transaction was cancelled before the credential was recorded."
+          : `World ID returned ${formatWorldIdError(errorCode)}.`,
       step: isExpired ? "expired" : isCancelled ? "cancelled" : "error",
-      title: isExpired ? "Request expired" : isCancelled ? "Verification cancelled" : "Verification failed",
+      title: isExpired
+        ? "Request expired"
+        : isCancelled
+          ? "Verification cancelled"
+          : isWalletSessionExpired
+            ? "Wallet session expired"
+            : "Verification failed",
     };
   }
 

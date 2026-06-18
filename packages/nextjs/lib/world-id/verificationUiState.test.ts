@@ -2,6 +2,7 @@ import {
   WORLD_ID_INVALID_CREDENTIAL_MESSAGE,
   WORLD_ID_NULLIFIER_ALREADY_ASSIGNED_MESSAGE,
   WORLD_ID_RATE_LIMITED_MESSAGE,
+  WORLD_ID_WALLET_SESSION_RECONNECTING_MESSAGE,
   WORLD_ID_WALLET_TRANSACTION_CANCELLED_MESSAGE,
   type WorldIdVerificationStep,
   formatWorldIdError,
@@ -50,7 +51,16 @@ test("formats RPC rate-limit errors as retry guidance", () => {
 test("formats stale wallet connector errors as reconnect guidance", () => {
   assert.equal(
     getWorldIdCredentialAttestationErrorMessage("connection.connector.getChainId is not a function"),
-    "Your wallet session is still reconnecting. Wait a moment, then try verifying again. If this keeps happening, disconnect and sign in again.",
+    WORLD_ID_WALLET_SESSION_RECONNECTING_MESSAGE,
+  );
+});
+
+test("formats thirdweb missing auth-token signer errors as reconnect guidance", () => {
+  assert.equal(
+    getWorldIdCredentialAttestationErrorMessage(
+      "An unknown RPC error occurred. Details: No auth token found when signing message Version: viem@2.39.0",
+    ),
+    WORLD_ID_WALLET_SESSION_RECONNECTING_MESSAGE,
   );
 });
 
@@ -86,4 +96,16 @@ test("derives retryable terminal states", () => {
   const failed = getWorldIdRequestPanelState({ isError: true, errorCode: "invalid_rp_signature" });
   assert.equal(failed.step, "error");
   assert.equal(failed.canRetry, true);
+
+  const walletSessionExpired = getWorldIdRequestPanelState({
+    isError: true,
+    errorCode: "wallet_session_expired",
+  });
+  assert.equal(walletSessionExpired.step, "error");
+  assert.equal(walletSessionExpired.canRetry, true);
+  assert.equal(walletSessionExpired.title, "Wallet session expired");
+  assert.equal(
+    walletSessionExpired.detail,
+    "Your wallet session expired before the credential transaction could be signed. Disconnect and sign in again, then retry.",
+  );
 });
