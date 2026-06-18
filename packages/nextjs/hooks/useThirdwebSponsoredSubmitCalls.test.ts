@@ -9,6 +9,7 @@ import {
   shouldPreferSponsoredBatchCalls,
   shouldPreferSponsoredSubmitCalls,
   shouldRetryThirdwebBundlerError,
+  shouldUseExternalWalletSendCalls,
   shouldUseSelfFundedBatchCalls,
   shouldUseUnmeteredSponsoredBatchCalls,
 } from "./useThirdwebSponsoredSubmitCalls";
@@ -173,6 +174,56 @@ test("uses self-funded batch calls for active external wallets with atomic sendC
     shouldUseSelfFundedBatchCalls({
       activeWalletId: "io.metamask",
       chainId: 4801,
+      connectorId: "io.metamask",
+      executionMode: "fee_currency",
+      hasSendCalls: true,
+      supportsAtomicBatchCalls: false,
+    }),
+    false,
+  );
+});
+
+test("uses wagmi sendCalls for atomic external wallets even when the thirdweb active wallet is stale", () => {
+  assert.equal(
+    shouldUseExternalWalletSendCalls({
+      chainId: 84532,
+      connectorId: "io.metamask",
+      executionMode: "fee_currency",
+      hasSendCalls: true,
+      supportsAtomicBatchCalls: true,
+    }),
+    true,
+  );
+
+  assert.equal(
+    shouldUseSelfFundedBatchCalls({
+      activeWalletId: "com.coinbase.wallet",
+      chainId: 84532,
+      connectorId: "io.metamask",
+      executionMode: "fee_currency",
+      hasSendCalls: true,
+      supportsAtomicBatchCalls: true,
+    }),
+    true,
+  );
+});
+
+test("does not route in-app or non-atomic wallets through external wallet sendCalls", () => {
+  assert.equal(
+    shouldUseExternalWalletSendCalls({
+      chainId: 84532,
+      connectorId: "in-app-wallet",
+      executionMode: "fee_currency",
+      hasSendCalls: true,
+      isThirdwebInApp: true,
+      supportsAtomicBatchCalls: true,
+    }),
+    false,
+  );
+
+  assert.equal(
+    shouldUseExternalWalletSendCalls({
+      chainId: 84532,
       connectorId: "io.metamask",
       executionMode: "fee_currency",
       hasSendCalls: true,

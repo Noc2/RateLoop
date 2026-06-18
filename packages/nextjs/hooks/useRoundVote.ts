@@ -650,11 +650,7 @@ export function useRoundVote() {
       let submittedVote: Awaited<ReturnType<typeof buildFreshRoundVotePlan>> | null = null;
 
       if (!useDirectLocalE2EWrites && canUseSponsoredBatchCalls) {
-        const permitSignature =
-          !isZeroStakeVote && currentAllowance < requestedStakeWei
-            ? await signPermitForVote(requestedStakeWei)
-            : undefined;
-        const freshVote = await buildFreshRoundVotePlan(currentAllowance, permitSignature);
+        const freshVote = await buildFreshRoundVotePlan(currentAllowance);
         await executeContractCallBatch(freshVote.plan.calls, {
           action: "vote",
           atomicRequired: true,
@@ -662,11 +658,7 @@ export function useRoundVote() {
         });
         submittedVote = freshVote;
       } else if (!useDirectLocalE2EWrites && canUseSelfFundedBatchCalls) {
-        const permitSignature =
-          !isZeroStakeVote && currentAllowance < requestedStakeWei
-            ? await signPermitForVote(requestedStakeWei)
-            : undefined;
-        const freshVote = await buildFreshRoundVotePlan(currentAllowance, permitSignature);
+        const freshVote = await buildFreshRoundVotePlan(currentAllowance);
         await executeContractCallBatch(freshVote.plan.calls, {
           action: "vote",
           atomicRequired: true,

@@ -5,8 +5,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { defineChain, prepareTransaction } from "thirdweb";
 import { useActiveAccount, useActiveWallet, useActiveWalletChain, useSetActiveWallet } from "thirdweb/react";
 import { sendAndConfirmCalls } from "thirdweb/wallets/eip5792";
-import { type Abi, type Hex, encodeFunctionData } from "viem";
-import { useAccount, usePublicClient } from "wagmi";
+import { type Abi, type Address, type Hex, encodeFunctionData } from "viem";
+import { useAccount, usePublicClient, useSendCallsSync } from "wagmi";
 import {
   FREE_TRANSACTION_ALLOWANCE_QUERY_KEY,
   useFreeTransactionAllowance,
@@ -150,7 +150,7 @@ export function shouldUseSelfFundedBatchCalls(params: {
 }) {
   const isInAppSelfFunded =
     shouldExpectSponsoredThirdwebBatchCalls(params) && params.executionMode === "self_funded_7702";
-  const isExternalSelfFunded =
+  const isThirdwebExternalSelfFunded =
     params.executionMode === "fee_currency" &&
     params.hasSendCalls === true &&
     typeof params.activeWalletId === "string" &&
@@ -160,7 +160,26 @@ export function shouldUseSelfFundedBatchCalls(params: {
     typeof params.chainId === "number" &&
     supportsThirdwebExecutionCapabilities(params.chainId);
 
-  return isInAppSelfFunded || isExternalSelfFunded;
+  return isInAppSelfFunded || isThirdwebExternalSelfFunded || shouldUseExternalWalletSendCalls(params);
+}
+
+export function shouldUseExternalWalletSendCalls(params: {
+  chainId: number | undefined;
+  connectorId: string | undefined;
+  executionMode: WalletExecutionMode;
+  hasSendCalls?: boolean;
+  isThirdwebInApp?: boolean;
+  supportsAtomicBatchCalls?: boolean;
+}) {
+  return (
+    params.executionMode === "fee_currency" &&
+    params.hasSendCalls === true &&
+    params.isThirdwebInApp !== true &&
+    params.supportsAtomicBatchCalls === true &&
+    typeof params.connectorId === "string" &&
+    typeof params.chainId === "number" &&
+    supportsThirdwebExecutionCapabilities(params.chainId)
+  );
 }
 
 export function shouldUseUnmeteredSponsoredBatchCalls(params: {
@@ -253,6 +272,7 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
   const { syncWalletToWagmi } = useThirdwebWagmiSync();
   const statusToast = useTransactionStatusToast();
   const { address, chainId: wagmiChainId, connector } = useAccount();
+  const { sendCallsSyncAsync } = useSendCallsSync();
   const freeTransactionAllowance = useFreeTransactionAllowance({ allowInAppSponsorshipSync });
   const { executionMode, hasSendCalls, isThirdwebInApp, supportsAtomicBatchCalls } = useWalletExecutionCapabilities();
   const chainId = resolveWalletExecutionChainId(wagmiChainId, activeWalletChain?.id);
@@ -300,6 +320,19 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
         supportsAtomicBatchCalls,
       }),
     [activeWalletId, chainId, connector?.id, executionMode, hasSendCalls, isThirdwebInApp, supportsAtomicBatchCalls],
+  );
+
+  const prefersExternalWalletBatchCalls = useMemo(
+    () =>
+      shouldUseExternalWalletSendCalls({
+        chainId,
+        connectorId: connector?.id,
+        executionMode,
+        hasSendCalls,
+        isThirdwebInApp,
+        supportsAtomicBatchCalls,
+      }),
+    [chainId, connector?.id, executionMode, hasSendCalls, isThirdwebInApp, supportsAtomicBatchCalls],
   );
 
   const shouldInspectSponsoredDelegation = Boolean(
@@ -360,14 +393,19 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
         isThirdwebInApp,
       }),
   );
-  const canUseSelfFundedBatchCalls = Boolean(
+  const canUseThirdwebSelfFundedBatchCalls = Boolean(
     thirdwebClient &&
       activeWallet &&
       activeWalletMatchesWagmiAddress &&
       typeof chainId === "number" &&
       hasSendCalls &&
-      prefersSelfFundedBatchCalls,
+      prefersSelfFundedBatchCalls &&
+      (!activeWalletId || isThirdwebInApp || activeWalletId === connector?.id),
   );
+  const canUseExternalWalletSelfFundedBatchCalls = Boolean(
+    typeof address === "string" && connector && typeof chainId === "number" && prefersExternalWalletBatchCalls,
+  );
+  const canUseSelfFundedBatchCalls = canUseThirdwebSelfFundedBatchCalls || canUseExternalWalletSelfFundedBatchCalls;
   const isAwaitingSponsoredSubmitCalls =
     expectsSponsoredBatchCalls &&
     !hasBrokenSponsoredDelegation &&
@@ -417,6 +455,16 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
       const sponsorshipMode = options.sponsorshipMode ?? "sponsored";
       const allowUnmeteredSponsoredCalls = options.allowUnmeteredSponsoredCalls ?? false;
       const allowSelfFundedFallback = options.allowSelfFundedFallback ?? true;
+      const canUseExternalWalletPath =
+        sponsorshipMode === "self-funded" &&
+        canUseExternalWalletSelfFundedBatchCalls &&
+        !canUseThirdwebSelfFundedBatchCalls;
+      const canUseThirdwebPath =
+        sponsorshipMode === "sponsored"
+          ? allowUnmeteredSponsoredCalls
+            ? canUseUnmeteredSponsoredSubmitCalls
+            : canUseSponsoredSubmitCalls
+          : canUseThirdwebSelfFundedBatchCalls;
       const canUseRequestedMode =
         sponsorshipMode === "sponsored"
           ? allowUnmeteredSponsoredCalls
@@ -424,15 +472,20 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
             : canUseSponsoredSubmitCalls
           : canUseSelfFundedBatchCalls;
 
-      if (client && activeWallet && typeof chainId === "number" && !activeWalletMatchesWagmiAddress) {
+      if (
+        !canUseExternalWalletPath &&
+        client &&
+        activeWallet &&
+        typeof chainId === "number" &&
+        !activeWalletMatchesWagmiAddress
+      ) {
         throw new Error("Wallet reconnecting. Retry in a moment.");
       }
 
-      if (!client || !activeWallet || typeof chainId !== "number" || !canUseRequestedMode) {
-        throw new Error("Thirdweb batch calls are unavailable.");
+      if (typeof chainId !== "number" || !canUseRequestedMode) {
+        throw new Error("Batch calls are unavailable.");
       }
 
-      const chain = defineChain(chainId);
       const encodedCalls = calls.map(call => ({
         data:
           call.data ??
@@ -444,6 +497,11 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
         to: call.address,
         ...(typeof call.value !== "undefined" ? { value: call.value } : {}),
       }));
+      if (!canUseExternalWalletPath && (!client || !activeWallet || !canUseThirdwebPath)) {
+        throw new Error("Thirdweb batch calls are unavailable.");
+      }
+
+      const chain = defineChain(chainId);
       const shouldConfirmSponsoredUsage =
         sponsorshipMode === "sponsored" && freeTransactionAllowance.canUseFreeTransactions;
       const operationKey =
@@ -458,15 +516,34 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
               sender: address,
             })
           : null;
-      const preparedCalls = encodedCalls.map(call =>
-        prepareTransaction({
-          chain,
-          client,
-          data: call.data,
-          to: call.to,
-          ...(typeof call.value !== "undefined" ? { value: call.value } : {}),
-        }),
-      );
+      const sendCallsWithExternalWallet = async () => {
+        if (!address || !connector) {
+          throw new Error("Wallet reconnecting. Retry in a moment.");
+        }
+
+        return sendCallsSyncAsync({
+          account: address as Address,
+          calls: encodedCalls,
+          chainId,
+          connector,
+          forceAtomic: options.atomicRequired ?? true,
+          pollingInterval: 1_000,
+          status: "success",
+          throwOnFailure: true,
+          timeout: 120_000,
+        } as never);
+      };
+      const preparedCalls = canUseExternalWalletPath
+        ? []
+        : encodedCalls.map(call =>
+            prepareTransaction({
+              chain,
+              client: client!,
+              data: call.data,
+              to: call.to,
+              ...(typeof call.value !== "undefined" ? { value: call.value } : {}),
+            }),
+          );
       const sendCallsWithWallet = async (wallet: NonNullable<typeof activeWallet>) =>
         retryThirdwebBundlerOperation(() =>
           sendAndConfirmCalls({
@@ -479,10 +556,10 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
         if (
           sponsorshipMode !== "sponsored" ||
           !allowUnmeteredSponsoredCalls ||
-          !isThirdwebInAppWalletId(activeWallet.id) ||
+          !isThirdwebInAppWalletId(activeWallet!.id) ||
           executionMode === "sponsored_7702"
         ) {
-          return activeWallet;
+          return activeWallet!;
         }
 
         const sponsoredWallet = createThirdwebInAppWallet(chainId, {
@@ -491,7 +568,7 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
 
         await sponsoredWallet.autoConnect({
           chain,
-          client,
+          client: client!,
         });
 
         return sponsoredWallet;
@@ -502,11 +579,12 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
           statusToast.showSubmitting({ action: options.action ?? "transaction" });
         }
 
-        const walletForSend = await getSponsoredWalletForUnmeteredCall();
-        const result = await sendCallsWithWallet(walletForSend);
+        const result = canUseExternalWalletPath
+          ? await sendCallsWithExternalWallet()
+          : await sendCallsWithWallet(await getSponsoredWalletForUnmeteredCall());
 
         if (result.status !== "success") {
-          const error = new Error("Sponsored calls failed.");
+          const error = new Error("Batch calls failed.");
           (error as Error & { callsStatus?: typeof result }).callsStatus = result;
           throw error;
         }
@@ -535,6 +613,7 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
         if (
           allowSelfFundedFallback &&
           sponsorshipMode === "sponsored" &&
+          activeWallet &&
           shouldAttemptSelfFundedThirdwebFallback({
             activeWalletId: activeWallet.id,
             chainId,
@@ -553,7 +632,7 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
 
             await fallbackWallet.autoConnect({
               chain,
-              client,
+              client: client!,
             });
 
             const fallbackResult = await sendCallsWithWallet(fallbackWallet);
@@ -595,14 +674,18 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
       activeWallet,
       activeWalletMatchesWagmiAddress,
       address,
+      canUseExternalWalletSelfFundedBatchCalls,
       canUseSelfFundedBatchCalls,
       canUseSponsoredSubmitCalls,
+      canUseThirdwebSelfFundedBatchCalls,
       canUseUnmeteredSponsoredSubmitCalls,
       chainId,
+      connector,
       executionMode,
       freeTransactionAllowance.canUseFreeTransactions,
       postFreeTransactionMutation,
       queryClient,
+      sendCallsSyncAsync,
       setActiveWallet,
       statusToast,
       syncWalletToWagmi,

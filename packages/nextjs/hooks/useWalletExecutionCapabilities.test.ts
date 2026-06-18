@@ -2,6 +2,7 @@ import {
   resolveWalletCapabilitiesForChain,
   resolveWalletExecutionChainId,
   resolveWalletExecutionMode,
+  shouldQueryExternalWalletCapabilities,
   shouldQueryWalletCapabilities,
   walletCapabilitiesSupportAtomicBatch,
   walletCapabilitiesSupportPaymasterService,
@@ -113,6 +114,48 @@ test("shouldQueryWalletCapabilities enables capability probing for batch-capable
       chainId: undefined,
       supportedChain: true,
       walletId: "inApp",
+    }),
+    false,
+  );
+});
+
+test("shouldQueryExternalWalletCapabilities probes connected external wallets on supported chains", () => {
+  assert.equal(
+    shouldQueryExternalWalletCapabilities({
+      chainId: 84532,
+      connectorId: "io.metamask",
+      isThirdwebInApp: false,
+      supportedChain: true,
+    }),
+    true,
+  );
+
+  assert.equal(
+    shouldQueryExternalWalletCapabilities({
+      chainId: 84532,
+      connectorId: "in-app-wallet",
+      isThirdwebInApp: true,
+      supportedChain: true,
+    }),
+    false,
+  );
+
+  assert.equal(
+    shouldQueryExternalWalletCapabilities({
+      chainId: undefined,
+      connectorId: "io.metamask",
+      isThirdwebInApp: false,
+      supportedChain: true,
+    }),
+    false,
+  );
+
+  assert.equal(
+    shouldQueryExternalWalletCapabilities({
+      chainId: 31337,
+      connectorId: "io.metamask",
+      isThirdwebInApp: false,
+      supportedChain: false,
     }),
     false,
   );

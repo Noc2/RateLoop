@@ -1,9 +1,14 @@
 "use client";
 
 import { useMemo } from "react";
-import { useActiveAccount, useActiveWallet, useActiveWalletChain, useCapabilities } from "thirdweb/react";
+import {
+  useActiveAccount,
+  useActiveWallet,
+  useActiveWalletChain,
+  useCapabilities as useThirdwebCapabilities,
+} from "thirdweb/react";
 import type { GetCapabilitiesResult } from "thirdweb/wallets/eip5792";
-import { useAccount } from "wagmi";
+import { useAccount, useCapabilities as useWagmiCapabilities } from "wagmi";
 import {
   currentThirdwebWalletMatchesWagmiAddress,
   getThirdwebWalletSponsorshipMode,
@@ -112,11 +117,25 @@ export function shouldQueryWalletCapabilities(params: {
   );
 }
 
+export function shouldQueryExternalWalletCapabilities(params: {
+  chainId: number | undefined;
+  connectorId: string | undefined;
+  isThirdwebInApp: boolean;
+  supportedChain: boolean;
+}) {
+  return (
+    !params.isThirdwebInApp &&
+    typeof params.chainId === "number" &&
+    typeof params.connectorId === "string" &&
+    params.supportedChain
+  );
+}
+
 export function useWalletExecutionCapabilities() {
   const wallet = useActiveWallet();
   const thirdwebAccount = useActiveAccount();
   const activeWalletChain = useActiveWalletChain();
-  const { address, chainId: wagmiChainId } = useAccount();
+  const { address, chainId: wagmiChainId, connector } = useAccount();
   const chainId = resolveWalletExecutionChainId(wagmiChainId, activeWalletChain?.id);
   const supportedChain = supportsThirdwebExecutionCapabilities(chainId);
   const supportsInAppExecution = supportsThirdwebInAppExecutionCapabilities(chainId);
@@ -148,16 +167,35 @@ export function useWalletExecutionCapabilities() {
     supportedChain: isThirdwebInAppWallet ? supportsInAppExecution : supportedChain,
     walletId,
   });
-  const { data: capabilities } = useCapabilities({
+  const { data: capabilities } = useThirdwebCapabilities({
     chainId,
     queryOptions: {
       enabled: shouldQueryCapabilities,
       retry: 0,
     },
   });
+  const shouldQueryExternalCapabilities = shouldQueryExternalWalletCapabilities({
+    chainId,
+    connectorId: connector?.id,
+    isThirdwebInApp: isThirdwebInAppWallet,
+    supportedChain,
+  });
+  const { data: externalCapabilities } = useWagmiCapabilities({
+    chainId,
+    connector,
+    query: {
+      enabled: shouldQueryExternalCapabilities,
+      retry: 0,
+    },
+  });
 
   return useMemo(() => {
-    const activeCapabilities = resolveWalletCapabilitiesForChain(capabilities, chainId);
+    const thirdwebCapabilities = resolveWalletCapabilitiesForChain(capabilities, chainId);
+    const wagmiCapabilities = resolveWalletCapabilitiesForChain(
+      externalCapabilities as GetCapabilitiesResult | undefined,
+      chainId,
+    );
+    const activeCapabilities = thirdwebCapabilities ?? wagmiCapabilities;
     const walletAccount = wallet?.getAccount();
     const activeThirdwebAccountMatchesWallet = currentThirdwebWalletMatchesWagmiAddress({
       activeThirdwebAccountAddress,
@@ -166,7 +204,11 @@ export function useWalletExecutionCapabilities() {
     });
     const resolvedThirdwebAccountSendCalls =
       activeThirdwebAccountMatchesWallet || !walletAccount?.address ? activeThirdwebAccountSendCalls : undefined;
-    const hasSendCalls = Boolean(walletAccount?.sendCalls ?? resolvedThirdwebAccountSendCalls);
+    const hasSendCalls = Boolean(
+      walletAccount?.sendCalls ??
+        resolvedThirdwebAccountSendCalls ??
+        walletCapabilitiesSupportAtomicBatch(wagmiCapabilities),
+    );
     const isThirdwebInApp = isThirdwebInAppWallet;
     const walletExecutionSupported = isThirdwebInApp ? supportsInAppExecution : supportedChain;
     const thirdwebSponsorshipMode = isThirdwebInApp ? getThirdwebWalletSponsorshipMode(wallet) : null;
@@ -195,6 +237,7 @@ export function useWalletExecutionCapabilities() {
     activeThirdwebAccountAddress,
     activeThirdwebAccountSendCalls,
     chainId,
+    externalCapabilities,
     isThirdwebInAppWallet,
     supportedChain,
     supportsInAppExecution,
