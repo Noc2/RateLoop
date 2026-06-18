@@ -30,6 +30,12 @@ export const REQUIRED_SUBMISSION_MEDIA_VALIDATOR_SELECTORS = [
   "0x6b974e07", // validateSubmissionDetails(string,bytes32,bool)
 ];
 
+export function buildPonderUrl(baseUrl, path) {
+  const normalizedBase = baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
+  const normalizedPath = path.replace(/^\/+/u, "");
+  return new URL(normalizedPath, normalizedBase);
+}
+
 export const REQUIRED_DEPLOYED_CONTRACTS = [
   "AdvisoryVoteRecorder",
   "CategoryRegistry",
@@ -784,7 +790,7 @@ export async function validateLiveReadiness({
 
   if (ponderUrl) {
     try {
-      const statusUrl = new URL("/status", ponderUrl);
+      const statusUrl = buildPonderUrl(ponderUrl, "/status");
       const response = await fetchWithTimeout(statusUrl);
       addCheck(
         checks,

@@ -7,6 +7,7 @@ import {
   REQUIRED_SELECTOR_CHECKS,
   REQUIRED_SUBMISSION_MEDIA_VALIDATOR_SELECTORS,
   buildDeploymentAddressMap,
+  buildPonderUrl,
   parseGeneratedContractsForChain,
   validateLiveReadiness,
   validateOfflineReadiness,
@@ -169,6 +170,17 @@ const deployedContracts = {
     undefined,
   );
   assert.equal(contracts.get("CategoryRegistry").deployedOnBlock, 222);
+});
+
+test("buildPonderUrl preserves path-prefixed Ponder base URLs", () => {
+  assert.equal(
+    buildPonderUrl("https://ponder.example.test/indexer", "/status").toString(),
+    "https://ponder.example.test/indexer/status",
+  );
+  assert.equal(
+    buildPonderUrl("https://ponder.example.test/indexer/", "rounds").toString(),
+    "https://ponder.example.test/indexer/rounds",
+  );
 });
 
 test("ProtocolConfig is required but not marked as Ponder-indexed", () => {

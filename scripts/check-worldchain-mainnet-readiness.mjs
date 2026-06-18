@@ -6,6 +6,7 @@ import {
   REQUIRED_DEPLOYED_CONTRACTS,
   REQUIRED_SELECTOR_CHECKS,
   REQUIRED_SUBMISSION_MEDIA_VALIDATOR_SELECTORS,
+  buildPonderUrl,
   buildDeploymentAddressMap,
   bytecodeContainsSelector,
   getSelectorProbeCode,
@@ -350,7 +351,7 @@ export async function validateLiveReadiness({
 
   if (ponderUrl) {
     try {
-      const statusUrl = new URL("/status", ponderUrl);
+      const statusUrl = buildPonderUrl(ponderUrl, "/status");
       const response = await fetchWithTimeout(statusUrl);
       addCheck(
         checks,

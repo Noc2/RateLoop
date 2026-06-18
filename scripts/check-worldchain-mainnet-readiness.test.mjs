@@ -4,6 +4,7 @@ import {
   REQUIRED_ADDRESS_WIRING_CHECKS,
   REQUIRED_DEPLOYED_CONTRACTS,
   buildDeploymentAddressMap,
+  buildPonderUrl,
   parseGeneratedContractsForChain,
 } from "./check-worldchain-sepolia-readiness.mjs";
 import {
@@ -275,6 +276,13 @@ test("baseMainnetNotDeployedMessage names the Base mainnet deployment artifact",
   assert.equal(
     baseMainnetNotDeployedMessage(),
     "Base mainnet is not deployed: missing packages/foundry/deployments/8453.json.",
+  );
+});
+
+test("shared Ponder URL builder preserves path-prefixed mainnet readiness URLs", () => {
+  assert.equal(
+    buildPonderUrl("https://ponder.example.test/indexer", "/status").toString(),
+    "https://ponder.example.test/indexer/status",
   );
 });
 

@@ -47,9 +47,11 @@ describe("areCorrelationCandidatesPonderFresh", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     mockReadRound.mockReset();
+    mockConfig.ponderBaseUrl = "https://ponder.test";
   });
 
   it("queries Ponder with roundId and limit=1", async () => {
+    mockConfig.ponderBaseUrl = "https://ponder.test/indexer";
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = String(input);
       if (url.includes("/correlation/round-votes")) {
@@ -76,8 +78,14 @@ describe("areCorrelationCandidatesPonderFresh", () => {
 
     expect(fresh).toBe(true);
     const requestUrl = String(fetchMock.mock.calls[0]?.[0]);
+    expect(requestUrl).toContain("/indexer/rounds");
     expect(requestUrl).toContain("roundId=7");
     expect(requestUrl).toContain("limit=1");
+    expect(
+      fetchMock.mock.calls.some(call =>
+        String(call[0]).includes("/indexer/correlation/round-votes"),
+      ),
+    ).toBe(true);
   });
 
   it("defers when Ponder vote count lags chain", async () => {

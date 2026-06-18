@@ -13,6 +13,7 @@ import { readRound } from "./contract-reads.js";
 import type { CorrelationRoundCandidate } from "./correlation-artifact-builder.js";
 import { readBoundedResponseText } from "./bounded-response.js";
 import type { Logger } from "./logger.js";
+import { buildPonderUrl } from "./ponder-url.js";
 
 const PONDER_FETCH_TIMEOUT_MS = PONDER_HTTP_FETCH_TIMEOUT_MS;
 const PONDER_JSON_MAX_BYTES = 5_000_000;
@@ -35,7 +36,7 @@ function buildCorrelationVotesUrl(
   offset: number,
   ponderNowSeconds?: bigint,
 ): URL {
-  const url = new URL(correlationVotesPathForDomain(candidate.domain), ponderBaseUrl);
+  const url = buildPonderUrl(ponderBaseUrl, correlationVotesPathForDomain(candidate.domain));
   if (candidate.domain !== PAYOUT_DOMAIN_PUBLIC_RATING) {
     url.searchParams.set("rewardPoolId", candidate.rewardPoolId.toString());
   }
@@ -81,7 +82,7 @@ async function fetchPonderRoundSnapshot(
   contentId: bigint,
   roundId: bigint,
 ): Promise<{ revealedCount: bigint; voteCount: bigint; state: number } | null> {
-  const url = new URL("/rounds", ponderBaseUrl);
+  const url = buildPonderUrl(ponderBaseUrl, "/rounds");
   url.searchParams.set("contentId", contentId.toString());
   url.searchParams.set("roundId", roundId.toString());
   url.searchParams.set("limit", "1");

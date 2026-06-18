@@ -618,6 +618,7 @@ describe("resolveRounds", () => {
     mockConfig.feedbackBonusForfeits.minAgeSeconds = 60;
     mockConfig.contracts.feedbackBonusEscrow = FEEDBACK_BONUS_ESCROW;
     mockConfig.cleanupBatchSize = 25;
+    mockConfig.ponderBaseUrl = "https://ponder.example.test";
     resetKeeperStateForTests();
   });
 
@@ -672,6 +673,50 @@ describe("resolveRounds", () => {
         args: [1n],
       }),
     );
+  });
+
+  it("preserves path-prefixed Ponder URLs for keeper work discovery", async () => {
+    mockConfig.keeperWorkDiscovery.enabled = true;
+    mockConfig.ponderBaseUrl = "https://ponder.example.test/indexer";
+
+    const round = makeRound({
+      state: 1,
+      voteCount: 0n,
+      revealedCount: 0n,
+    });
+    const { publicClient, walletClient } = makeHarness({
+      activeRoundId: 0n,
+      latestRoundId: 0n,
+      round,
+      dormancyEligible: true,
+      now: 3_000_000n,
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(input.toString());
+      expect(url.pathname).toBe("/indexer/keeper/work");
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          openRounds: [],
+          cleanupRounds: [],
+          dormantContent: [{ contentId: "1", reason: "dormant" }],
+        }),
+      };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const logger = makeLogger();
+
+    const result = await resolveRounds(
+      publicClient as any,
+      walletClient as any,
+      {} as any,
+      { address: ACCOUNT } as any,
+      logger as any,
+    );
+
+    expect(result.contentMarkedDormant).toBe(1);
+    expect(fetchMock).toHaveBeenCalledOnce();
   });
 
   it("merges a bounded chain content scan with Ponder keeper work candidates", async () => {

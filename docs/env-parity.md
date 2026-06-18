@@ -52,7 +52,7 @@ Next.js throws when **any two or more** of the matching public/server USDC varia
 | Ponder indexer | `PONDER_RPC_URL_4801` | World Chain Sepolia RPC for indexing |
 | Ponder indexer | `PONDER_RPC_URL_31337` | Local Anvil RPC for indexing |
 
-E2E and `yarn dev:stack` should set `NEXT_PUBLIC_PONDER_URL` and `PONDER_BASE_URL` to the same origin (for example `http://localhost:42069`). Agent MCP, attachments, and browser handoffs use the Next.js app origin (`NEXT_PUBLIC_APP_URL` / `www.rateloop.ai`), not Ponder.
+E2E and `yarn dev:stack` should point `NEXT_PUBLIC_PONDER_URL` and `PONDER_BASE_URL` at the same Ponder base URL, including any path prefix (for example `http://localhost:42069` or `https://example.com/ponder`). Agent MCP, attachments, and browser handoffs use the Next.js app origin (`NEXT_PUBLIC_APP_URL` / `www.rateloop.ai`), not Ponder.
 
 ### Keeper / Ponder shared secrets
 

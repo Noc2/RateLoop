@@ -64,6 +64,7 @@ import {
 import { config } from "./config.js";
 import type { Logger } from "./logger.js";
 import { incrementCounter, setGauge } from "./metrics.js";
+import { buildPonderUrl } from "./ponder-url.js";
 import { getRevertReason, isExpectedRevert } from "./revert-utils.js";
 
 // --- Types ---
@@ -573,7 +574,7 @@ async function fetchKeeperWorkFromPonder(
     throw new Error("PONDER_KEEPER_WORK_TOKEN is required in production");
   }
 
-  const url = new URL("/keeper/work", baseUrl);
+  const url = buildPonderUrl(baseUrl, "/keeper/work");
   url.searchParams.set("now", now.toString());
   url.searchParams.set("dormancyPeriod", dormancyPeriod.toString());
   url.searchParams.set(
@@ -873,7 +874,7 @@ async function fetchIndexedCiphertextsForRound(params: {
     const path = params.kind === "vote" ? "/votes" : "/advisory-votes";
     const indexedCiphertexts: IndexedCiphertextMap = new Map();
     for (let page = 0; page < MAX_INDEXED_CIPHERTEXT_PAGES; page++) {
-      const url = new URL(path, config.ponderBaseUrl);
+      const url = buildPonderUrl(config.ponderBaseUrl, path);
       url.searchParams.set("contentId", params.contentId.toString());
       url.searchParams.set("roundId", params.roundId.toString());
       url.searchParams.set("limit", String(INDEXED_CIPHERTEXT_PAGE_SIZE));
