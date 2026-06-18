@@ -14,7 +14,6 @@ import {
     IRoundClusterReadyAtSource,
     IRevealGraceConfig
 } from "./interfaces/ILaunchDistributionPool.sol";
-import { IRoundPayoutSnapshotConsumer } from "./interfaces/IRoundPayoutSnapshotConsumer.sol";
 
 interface ILaunchReadySourceProtocolConfig {
     function launchDistributionPool() external view returns (address);
@@ -25,7 +24,6 @@ interface ILaunchReadySourceProtocolConfig {
 /// @notice Holds the 75M LREP launch allocation and releases it through verified/referral, earned, and legacy paths.
 contract LaunchDistributionPool is
     ILaunchDistributionPool,
-    IRoundPayoutSnapshotConsumer,
     Ownable,
     ReentrancyGuardTransient
 {
@@ -238,7 +236,7 @@ contract LaunchDistributionPool is
 
     function transferOwnership(address newOwner) public override onlyOwner {
         if (newOwner != governance) revert InvalidAddress();
-        super.transferOwnership(newOwner);
+        _transferOwnership(newOwner);
     }
 
     function renounceOwnership() public pure override {
@@ -928,8 +926,10 @@ contract LaunchDistributionPool is
         return _claimableLegacyContributorAllocation(account, allocation);
     }
 
-    function supportsRoundPayoutSnapshotDomain(uint8 domain) external pure returns (bool) {
-        return domain == PAYOUT_DOMAIN_LAUNCH_CREDIT;
+    function supportsRoundPayoutSnapshotDomain(uint8 domain) external pure returns (bool supported) {
+        assembly {
+            supported := eq(domain, 2)
+        }
     }
 
     function isRoundPayoutSnapshotConsumed(uint8 domain, uint256 rewardPoolId, uint256 contentId, uint256 roundId)

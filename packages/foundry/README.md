@@ -29,16 +29,16 @@ yarn foundry:test # Run test suite
 
 ## Contract size limits (EIP-170)
 
-Run `yarn workspace @rateloop/foundry check:sizes` from the monorepo root to verify deployed bytecode stays at or below the 24,576 byte limit. The root `make` wrapper exposes the same check as `make check-contract-sizes`.
+Run `yarn workspace @rateloop/foundry check:sizes` from the monorepo root to verify deployed bytecode stays at or below the 24,576 byte limit. From `packages/foundry`, the same check is available as `make check-contract-sizes`.
 
 Several production contracts run close to the limit. Run `yarn workspace @rateloop/foundry check:sizes` for current numbers. As of June 2026 deploy-profile checks:
 
 | Contract | Size (B) | Headroom (B) |
 | --- | --- | --- |
-| `LaunchDistributionPool` | 24,538 | 38 |
-| `ContentRegistry` | 24,452 | 124 |
-| `QuestionRewardPoolEscrow` | 24,424 | 152 |
-| `RoundVotingEngine` | 23,911 | 665 |
+| `LaunchDistributionPool` | 24,561 | 15 |
+| `ContentRegistry` | 24,509 | 67 |
+| `QuestionRewardPoolEscrow` | 24,503 | 73 |
+| `RoundVotingEngine` | 24,092 | 484 |
 | `RaterRegistry` | 22,900 | 1,676 |
 
 `ContentRegistry.repointPendingRatingClusterPayoutOracle` is exposed via a thin `CONFIG_ROLE` wrapper; dormancy lifecycle helpers live in `ContentRegistryDormancyLib` to preserve EIP-170 headroom.
