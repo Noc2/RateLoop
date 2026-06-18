@@ -3037,33 +3037,20 @@ contract RoundIntegrationTest is VotingTestBase {
         assertEq(rewardDistributor.roundFrontendClaimedAmount(contentId, roundId), frontendPool);
     }
 
-    function test_ClaimFrontendFee_UnconfiguredFeeCreditorRevertsAndPreservesClaim() public {
+    function test_ClaimFrontendFee_ActiveFeeCreditorRemovalRevertsAndClaimSurvives() public {
         (FrontendRegistry frontendReg, address frontendOp) = _setupFrontendRegistry();
         (uint256 contentId, uint256 roundId) = _settleRoundWithFrontend(frontendOp);
 
         vm.prank(owner);
+        vm.expectRevert(FrontendRegistry.HistoricalFeeCreditor.selector);
         frontendReg.removeFeeCreditor(address(rewardDistributor));
 
         (uint256 fee,,,) = rewardDistributor.previewFrontendFee(contentId, roundId, frontendOp);
-        uint256 treasuryBalanceBefore = lrepToken.balanceOf(treasury);
 
-        vm.expectRevert(RoundRewardDistributor.FrontendFeeCreditorNotConfigured.selector);
         _claimFrontendFeeAsOperator(contentId, roundId, frontendOp);
 
-        assertFalse(
-            rewardDistributor.frontendFeeClaimed(contentId, roundId, frontendOp), "claim should remain retryable"
-        );
-        assertEq(
-            rewardDistributor.roundFrontendClaimedAmount(contentId, roundId), 0, "claim accounting should not advance"
-        );
-        assertEq(frontendReg.getAccumulatedFees(frontendOp), 0, "failed registry credit should not accrue fees");
-        assertEq(lrepToken.balanceOf(treasury), treasuryBalanceBefore, "fee should not route to protocol");
-
-        vm.prank(owner);
-        frontendReg.addFeeCreditor(address(rewardDistributor));
-        _claimFrontendFeeAsOperator(contentId, roundId, frontendOp);
-
-        assertEq(frontendReg.getAccumulatedFees(frontendOp), fee, "retry should credit frontend after rotation");
+        assertTrue(rewardDistributor.frontendFeeClaimed(contentId, roundId, frontendOp), "claim should succeed");
+        assertEq(frontendReg.getAccumulatedFees(frontendOp), fee, "active creditor should still credit frontend");
     }
 
     function test_ClaimFrontendFee_ReplacementDistributorRequiresFrontendRotation() public {

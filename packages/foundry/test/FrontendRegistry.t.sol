@@ -1147,9 +1147,8 @@ contract FrontendRegistryTest is Test {
         address newVotingEngine = address(new MockVotingEngine(lrepToken, address(protocolConfig)));
 
         vm.prank(admin);
-        registry.removeFeeCreditor(feeCreditor);
-
-        vm.prank(admin);
+        vm.expectEmit(true, true, true, true);
+        emit FrontendRegistry.FeeCreditorUpdated(feeCreditor, address(0));
         vm.expectEmit(true, true, true, true);
         emit FrontendRegistry.VotingEngineUpdated(newVotingEngine);
         registry.setVotingEngine(newVotingEngine);
@@ -1233,9 +1232,25 @@ contract FrontendRegistryTest is Test {
         assertEq(lrepToken.balanceOf(admin), adminBalanceBefore + STAKE / 2);
     }
 
+    function test_RemoveFeeCreditor_RevertsForActiveMappedCreditor() public {
+        assertEq(registry.feeCreditor(), feeCreditor);
+        assertEq(registry.feeCreditorForEngine(address(votingEngine)), feeCreditor);
+        assertTrue(registry.hasRole(registry.FEE_CREDITOR_ROLE(), feeCreditor));
+
+        vm.prank(admin);
+        vm.expectRevert(FrontendRegistry.HistoricalFeeCreditor.selector);
+        registry.removeFeeCreditor(feeCreditor);
+
+        assertEq(registry.feeCreditor(), feeCreditor);
+        assertEq(registry.feeCreditorForEngine(address(votingEngine)), feeCreditor);
+        assertTrue(registry.hasRole(registry.FEE_CREDITOR_ROLE(), feeCreditor));
+    }
+
     function test_AddAndRemoveFeeCreditor() public {
         address newCreditor = address(new MockRewardDistributor(address(votingEngine)));
+        address replacementCreditor = address(new MockRewardDistributor(address(votingEngine)));
         protocolConfig.setRewardDistributorForEngine(newCreditor, address(votingEngine), true);
+        protocolConfig.setRewardDistributorForEngine(replacementCreditor, address(votingEngine), true);
 
         vm.startPrank(admin);
         registry.addFeeCreditor(newCreditor);
@@ -1258,13 +1273,23 @@ contract FrontendRegistryTest is Test {
         uint256 lrepFees = registry.getAccumulatedFees(frontend1);
         assertEq(lrepFees, 100e6);
 
-        // Removing the new creditor revokes its authorization too.
         vm.prank(admin);
-        registry.removeFeeCreditor(newCreditor);
+        registry.addFeeCreditor(replacementCreditor);
 
         vm.prank(newCreditor);
         vm.expectRevert();
         registry.creditFees(frontend1, 100e6);
+
+        // Removing a displaced creditor is allowed once it no longer anchors an engine mapping.
+        vm.prank(admin);
+        registry.removeFeeCreditor(newCreditor);
+
+        assertFalse(registry.hasRole(registry.FEE_CREDITOR_ROLE(), newCreditor));
+        assertEq(registry.feeCreditor(), replacementCreditor);
+
+        vm.prank(admin);
+        vm.expectRevert(FrontendRegistry.HistoricalFeeCreditor.selector);
+        registry.removeFeeCreditor(replacementCreditor);
     }
 
     function test_AddFeeCreditor_RejectsEOA() public {

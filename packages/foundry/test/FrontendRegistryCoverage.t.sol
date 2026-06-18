@@ -669,12 +669,14 @@ contract FrontendRegistryCoverageTest is Test {
         registry.removeFeeCreditor(feeCreditor);
     }
 
-    function test_RemoveFeeCreditor_ClearsSingleton() public {
+    function test_RemoveFeeCreditor_RevertsForActiveMappedCreditor() public {
         vm.prank(admin);
+        vm.expectRevert(FrontendRegistry.HistoricalFeeCreditor.selector);
         registry.removeFeeCreditor(feeCreditor);
 
-        assertFalse(registry.hasRole(registry.FEE_CREDITOR_ROLE(), feeCreditor));
-        assertEq(registry.feeCreditor(), address(0));
+        assertTrue(registry.hasRole(registry.FEE_CREDITOR_ROLE(), feeCreditor));
+        assertEq(registry.feeCreditor(), feeCreditor);
+        assertEq(registry.feeCreditorForEngine(address(votingEngine)), feeCreditor);
     }
 
     function test_GrantRoleExtraFeeCreditor_CannotCreditFees() public {

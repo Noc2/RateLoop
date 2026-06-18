@@ -588,8 +588,7 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     /// @param creditor The address to revoke the role from
     function removeFeeCreditor(address creditor) external onlyRole(GOVERNANCE_ROLE) {
         address creditorEngine = feeCreditorVotingEngine[creditor];
-        if (creditor != feeCreditor && creditorEngine != address(0) && feeCreditorForEngine[creditorEngine] == creditor)
-        {
+        if (creditorEngine != address(0) && feeCreditorForEngine[creditorEngine] == creditor) {
             revert HistoricalFeeCreditor();
         }
         if (creditor == feeCreditor) {
