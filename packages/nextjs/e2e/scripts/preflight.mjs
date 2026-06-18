@@ -1,7 +1,6 @@
 #!/usr/bin/env node
-
-import { execFileSync } from "node:child_process";
 import { buildE2EServiceUrl } from "../service-url.mjs";
+import { execFileSync } from "node:child_process";
 
 const E2E_BASE_URL = process.env.E2E_BASE_URL?.trim() || "http://localhost:3000";
 const E2E_RPC_URL = process.env.E2E_RPC_URL?.trim() || "http://127.0.0.1:8545";
@@ -35,7 +34,7 @@ const services = [
 if (process.env.REQUIRE_E2E_KEEPER === "1" || process.argv.includes("--require-keeper")) {
   services.push({
     name: "Keeper (settlement service)",
-    url: new URL("/health", E2E_KEEPER_URL).toString(),
+    url: buildE2EServiceUrl(E2E_KEEPER_URL, "/health"),
     hint: "yarn keeper:dev",
   });
 }
