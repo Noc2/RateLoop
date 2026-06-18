@@ -1,6 +1,6 @@
 # Environment parity matrix
 
-Cross-package reference for env names that refer to the same on-chain value, E2E toggles, and contract-address prefixes. Live supported chains (`8453`, `84532`, `480`, `4801`, `31337`) default from `@rateloop/contracts` deployment artifacts; overrides are for local Anvil or unsupported chains unless noted.
+Cross-package reference for env names that refer to the same on-chain value, E2E toggles, and contract-address prefixes. Supported non-local chains (`8453`, `84532`, `480`, `4801`) default from `@rateloop/contracts` deployment artifacts; Keeper address overrides are local `31337` only unless noted.
 
 ## Chain IDs
 
@@ -95,7 +95,7 @@ test-only forever and never fund it on Base mainnet.
 
 ## Contract address prefix map
 
-Shared deployments live in `packages/contracts/src/deployedContracts.ts`. Package-specific env names override artifacts only on local `31337` or unsupported chains.
+Shared deployments live in `packages/contracts/src/deployedContracts.ts`. Keeper address env names override artifacts only on local `31337`; non-local Keeper deployments require shared contract artifacts.
 
 | Contract | Keeper | Ponder | Next.js (when overridden) |
 | --- | --- | --- | --- |
