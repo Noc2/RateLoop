@@ -52,9 +52,9 @@ contract RateLoopGovernor is
     uint256 public constant MAX_PROPOSAL_THRESHOLD = MINIMUM_QUORUM;
     /// @notice Highest quorum numerator governance may set, preventing quorum self-bricking.
     uint256 public constant MAX_QUORUM_NUMERATOR = 20;
-    /// @notice Highest voting delay governance may set (~1 week on World Chain's 2s block clock).
+    /// @notice Highest voting delay governance may set (~1 week on the Base/World Chain 2s block clock).
     uint48 public constant MAX_VOTING_DELAY_BLOCKS = 302_400;
-    /// @notice Voting period bounds governance may set (~1 day to ~30 days on World Chain's 2s block clock).
+    /// @notice Voting period bounds governance may set (~1 day to ~30 days on the Base/World Chain 2s block clock).
     uint32 public constant MIN_VOTING_PERIOD_BLOCKS = 43_200;
     uint32 public constant MAX_VOTING_PERIOD_BLOCKS = 1_296_000;
     /// @notice Hard cap to keep quorum evaluation bounded and proposals cheap to evaluate.
@@ -64,9 +64,10 @@ contract RateLoopGovernor is
     ///      protocol-pool rotations without exhausting the slot before circulating supply growth
     ///      pushes dynamic quorum out of reach.
     uint256 public constant MAX_EXCLUDED_HOLDERS = 64;
-    /// @notice Minimum blocks a proposer must wait between successful proposals (~1 day on World Chain's 2s block clock).
+    /// @notice Minimum blocks a proposer must wait between successful proposals (~1 day on the Base/World Chain 2s block clock).
     uint256 public constant PROPOSAL_COOLDOWN_BLOCKS = 43_200;
-    /// @notice World Chain block time used to convert governance block windows into LREP lock seconds.
+    /// @notice Two-second block time used to convert governance block windows into LREP lock seconds.
+    /// @dev The getter keeps the historical World Chain name for ABI compatibility.
     uint256 public constant WORLD_CHAIN_BLOCK_TIME_SECONDS = 2;
     bytes10 private constant PROPOSER_SUFFIX_MARKER = "#proposer=";
     uint256 private constant PROPOSER_SUFFIX_MARKER_LENGTH = 10;
@@ -94,8 +95,8 @@ contract RateLoopGovernor is
     constructor(IVotes _reputationToken, TimelockController _timelock, address[] memory excludedHolders)
         Governor("RateLoopGovernor")
         GovernorSettings(
-            43_200, // Voting delay: ~1 day on World Chain's 2s block clock
-            302_400, // Voting period: ~1 week on World Chain's 2s block clock
+            43_200, // Voting delay: ~1 day on the Base/World Chain 2s block clock
+            302_400, // Voting period: ~1 week on the Base/World Chain 2s block clock
             BOOTSTRAP_PROPOSAL_THRESHOLD
         )
         GovernorVotes(_reputationToken)

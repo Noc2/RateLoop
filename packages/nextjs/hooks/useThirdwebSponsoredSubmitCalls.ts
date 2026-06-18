@@ -47,7 +47,7 @@ type ThirdwebContractCall = {
   value?: bigint;
 };
 
-export type ThirdwebBatchSponsorshipMode = "sponsored" | "self-funded";
+type ThirdwebBatchSponsorshipMode = "sponsored" | "self-funded";
 
 type ExecuteContractCallBatchOptions = {
   allowSelfFundedFallback?: boolean;

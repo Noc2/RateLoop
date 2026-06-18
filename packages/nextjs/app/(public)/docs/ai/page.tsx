@@ -57,7 +57,7 @@ const askPayloadExample = `{
   "maxPaymentAmount": "4500000",
   "question": {
     "title": "Is this generated product concept clear enough to test?",
-    "imageUrls": ["https://www.rateloop.ai/api/attachments/images/example-generated-concept.webp"],
+    "imageUrls": ["https://www.rateloop.ai/api/attachments/images/att_abcdefghijklmnop.webp#sha256=0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"],
     "categoryId": "5",
     "tags": ["agent", "design", "generated-context"],
     "templateId": "generic_rating"

@@ -49,6 +49,22 @@ contract DeployRateLoopHarness is DeployRateLoop {
         return WORLD_CHAIN_SEPOLIA_WORLD_ID_ROUTER;
     }
 
+    function baseMainnetWorldIdRouter() external pure returns (address) {
+        return BASE_MAINNET_WORLD_ID_ROUTER;
+    }
+
+    function baseSepoliaWorldIdRouter() external pure returns (address) {
+        return BASE_SEPOLIA_WORLD_ID_ROUTER;
+    }
+
+    function resolveUsdcAddress() external view returns (address) {
+        return _resolveUsdcAddress();
+    }
+
+    function resolveDrandConfig() external view returns (bytes32 chainHash, uint64 genesisTime, uint64 period) {
+        return _resolveDrandConfig();
+    }
+
     function resolveWorldIdDeployConfig(bool isLocalDev, address router)
         external
         view
@@ -283,6 +299,28 @@ contract DeployRateLoopAllocationsTest is Test {
         assertEq(deployScript.resolveWorldIdRouterAddress(false), router);
     }
 
+    function test_BaseMainnetUsesCanonicalWorldIdRouterWhenCodeExists() public {
+        DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
+        MockWorldIDRouter routerCode = new MockWorldIDRouter();
+        address router = deployScript.baseMainnetWorldIdRouter();
+        vm.setEnv("WORLD_ID_ROUTER_ADDRESS", vm.toString(address(0)));
+        vm.etch(router, address(routerCode).code);
+        vm.chainId(8453);
+
+        assertEq(deployScript.resolveWorldIdRouterAddress(false), router);
+    }
+
+    function test_BaseSepoliaUsesCanonicalWorldIdRouterWhenCodeExists() public {
+        DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
+        MockWorldIDRouter routerCode = new MockWorldIDRouter();
+        address router = deployScript.baseSepoliaWorldIdRouter();
+        vm.setEnv("WORLD_ID_ROUTER_ADDRESS", vm.toString(address(0)));
+        vm.etch(router, address(routerCode).code);
+        vm.chainId(84532);
+
+        assertEq(deployScript.resolveWorldIdRouterAddress(false), router);
+    }
+
     function test_WorldChainSepoliaAcceptsLiveWorldIdRouterOverride() public {
         DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
         MockWorldIDRouter router = new MockWorldIDRouter();
@@ -290,6 +328,34 @@ contract DeployRateLoopAllocationsTest is Test {
         vm.chainId(4801);
 
         assertEq(deployScript.resolveWorldIdRouterAddress(false), address(router));
+    }
+
+    function test_BaseDeploysResolveCanonicalUsdcAddresses() public {
+        DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
+
+        vm.chainId(84532);
+        assertEq(deployScript.resolveUsdcAddress(), 0x036CbD53842c5426634e7929541eC2318f3dCF7e);
+
+        vm.chainId(8453);
+        assertEq(deployScript.resolveUsdcAddress(), 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913);
+    }
+
+    function test_BaseDeploysResolveExpectedDrandNetworks() public {
+        DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
+
+        vm.chainId(84532);
+        (bytes32 baseSepoliaHash, uint64 baseSepoliaGenesis, uint64 baseSepoliaPeriod) =
+            deployScript.resolveDrandConfig();
+        assertEq(baseSepoliaHash, 0xcc9c398442737cbd141526600919edd69f1d6f9b4adb67e4d912fbc64341a9a5);
+        assertEq(baseSepoliaGenesis, 1_689_232_296);
+        assertEq(baseSepoliaPeriod, 3);
+
+        vm.chainId(8453);
+        (bytes32 baseMainnetHash, uint64 baseMainnetGenesis, uint64 baseMainnetPeriod) =
+            deployScript.resolveDrandConfig();
+        assertEq(baseMainnetHash, 0x52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971);
+        assertEq(baseMainnetGenesis, 1_692_803_367);
+        assertEq(baseMainnetPeriod, 3);
     }
 
     function test_WorldIdDeployConfigKeepsLegacyRouterScopeAndExternalNullifier() public {

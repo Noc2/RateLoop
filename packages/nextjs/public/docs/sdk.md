@@ -157,9 +157,9 @@ Use this shape after a successful quote. USDC amounts are atomic units, so `2500
   "maxPaymentAmount": "4500000",
   "question": {
     "title": "Is this generated product concept clear enough to test?",
-    "detailsUrl": "https://www.rateloop.ai/api/attachments/details/det_example",
+    "detailsUrl": "https://www.rateloop.ai/api/attachments/details/det_abcdefghijklmnop",
     "detailsHash": "0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-    "imageUrls": ["https://www.rateloop.ai/api/attachments/images/att_example.webp#sha256=0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"],
+    "imageUrls": ["https://www.rateloop.ai/api/attachments/images/att_abcdefghijklmnop.webp#sha256=0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"],
     "categoryId": "5",
     "tags": ["agent", "design", "generated-context"],
     "templateId": "feature_acceptance_test",

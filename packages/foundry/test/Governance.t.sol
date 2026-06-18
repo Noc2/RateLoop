@@ -276,12 +276,12 @@ contract GovernanceTest is Test {
     }
 
     function test_GovernorVotingPeriod() public view {
-        // Voting period should be ~1 week on World Chain's 2s block clock.
+        // Voting period should be ~1 week on the Base/World Chain 2s block clock.
         assertEq(governor.votingPeriod(), 302_400);
     }
 
     function test_GovernorVotingDelay() public view {
-        // Voting delay should be ~1 day on World Chain's 2s block clock.
+        // Voting delay should be ~1 day on the Base/World Chain 2s block clock.
         assertEq(governor.votingDelay(), 43_200);
     }
 

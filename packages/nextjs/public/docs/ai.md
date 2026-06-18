@@ -222,7 +222,7 @@ Default to `paymentMode: "wallet_calls"`. Use `paymentMode: "x402_authorization"
   "maxPaymentAmount": "4500000",
   "question": {
     "title": "Is this generated product concept clear enough to test?",
-    "imageUrls": ["https://www.rateloop.ai/api/attachments/images/att_example.webp#sha256=0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"],
+    "imageUrls": ["https://www.rateloop.ai/api/attachments/images/att_abcdefghijklmnop.webp#sha256=0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"],
     "categoryId": "5",
     "tags": ["agent", "design", "generated-context"],
     "templateId": "generic_rating"
@@ -236,7 +236,7 @@ For gated asks, add `question.confidentiality`, a RateLoop-hosted `detailsUrl`/`
 {
   "question": {
     "title": "Is this private onboarding flow ready for beta testers?",
-    "detailsUrl": "https://www.rateloop.ai/api/attachments/details/det_example",
+    "detailsUrl": "https://www.rateloop.ai/api/attachments/details/det_abcdefghijklmnop",
     "detailsHash": "0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
     "confidentiality": {
       "visibility": "gated",
