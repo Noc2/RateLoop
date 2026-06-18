@@ -143,14 +143,9 @@ contract MockLaunchDistributionPoolForConfig {
 contract MockClusterPayoutOracleForConfig {
     address internal launchConsumer;
     address internal publicRatingConsumer;
-    address public frontendRegistry;
 
     constructor(address launchConsumer_) {
         launchConsumer = launchConsumer_;
-    }
-
-    function setFrontendRegistry(address frontendRegistry_) external {
-        frontendRegistry = frontendRegistry_;
     }
 
     function setLaunchConsumer(address launchConsumer_) external {
@@ -532,22 +527,6 @@ contract ProtocolConfigBranchesTest is Test {
         config.setFrontendRegistry(invalidRegistry);
     }
 
-    function test_SetFrontendRegistry_RequiresConfiguredOracleRegistryAlignment() public {
-        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
-        MockFrontendRegistryForConfig frontend = new MockFrontendRegistryForConfig();
-        MockFrontendRegistryForConfig replacementFrontend = new MockFrontendRegistryForConfig();
-        MockClusterPayoutOracleForConfig oracle = new MockClusterPayoutOracleForConfig(address(0));
-
-        oracle.setFrontendRegistry(address(frontend));
-        config.setClusterPayoutOracle(address(oracle));
-
-        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
-        config.setFrontendRegistry(address(replacementFrontend));
-
-        config.setFrontendRegistry(address(frontend));
-        assertEq(config.frontendRegistry(), address(frontend));
-    }
-
     function test_SetCategoryRegistry_ValidatesIntegration() public {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
         MockCategoryRegistry categoryRegistry = new MockCategoryRegistry();
@@ -651,24 +630,6 @@ contract ProtocolConfigBranchesTest is Test {
         config.setClusterPayoutOracle(address(oracle));
 
         assertEq(config.clusterPayoutOracle(), address(oracle));
-    }
-
-    function test_SetClusterPayoutOracle_RequiresConfiguredFrontendRegistryAlignment() public {
-        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
-        MockFrontendRegistryForConfig frontend = new MockFrontendRegistryForConfig();
-        MockFrontendRegistryForConfig staleFrontend = new MockFrontendRegistryForConfig();
-        MockClusterPayoutOracleForConfig mismatchedOracle = new MockClusterPayoutOracleForConfig(address(0));
-        MockClusterPayoutOracleForConfig pinnedOracle = new MockClusterPayoutOracleForConfig(address(0));
-
-        config.setFrontendRegistry(address(frontend));
-        mismatchedOracle.setFrontendRegistry(address(staleFrontend));
-        pinnedOracle.setFrontendRegistry(address(frontend));
-
-        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
-        config.setClusterPayoutOracle(address(mismatchedOracle));
-
-        config.setClusterPayoutOracle(address(pinnedOracle));
-        assertEq(config.clusterPayoutOracle(), address(pinnedOracle));
     }
 
     function test_SetClusterPayoutOracle_RequiresPinnedLaunchConsumerAfterLaunchPoolConfigured() public {

@@ -594,7 +594,6 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     function _setFrontendRegistry(address value) internal {
         if (value == address(0)) revert InvalidAddress();
         _validateFrontendRegistry(value);
-        _validateConfiguredClusterPayoutOracleFrontendRegistry(value);
         frontendRegistry = value;
         emit FrontendRegistryUpdated(value);
     }
@@ -717,7 +716,6 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         catch {
             revert InvalidConfig();
         }
-        _validateClusterPayoutOracleFrontendRegistry(value, frontendRegistry);
         address launchPool = launchDistributionPool;
         if (launchPool != address(0)) {
             _validateClusterPayoutOracleLaunchConsumer(value, launchPool);
@@ -726,21 +724,6 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         address distributor = rewardDistributor;
         if (distributor != address(0)) {
             _validateClusterPayoutOraclePublicRatingConsumer(value, distributor);
-        }
-    }
-
-    function _validateConfiguredClusterPayoutOracleFrontendRegistry(address registry) internal view {
-        address oracle = clusterPayoutOracle;
-        if (oracle == address(0)) return;
-        _validateClusterPayoutOracleFrontendRegistry(oracle, registry);
-    }
-
-    function _validateClusterPayoutOracleFrontendRegistry(address oracle, address registry) internal view {
-        if (registry == address(0)) return;
-        try IClusterPayoutOracle(oracle).frontendRegistry() returns (IFrontendRegistry oracleRegistry) {
-            if (address(oracleRegistry) != registry) revert InvalidConfig();
-        } catch {
-            revert InvalidConfig();
         }
     }
 
