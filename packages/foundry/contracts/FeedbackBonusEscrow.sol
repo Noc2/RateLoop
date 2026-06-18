@@ -20,6 +20,10 @@ import { IRaterRegistryStatus } from "./interfaces/IRaterRegistryStatus.sol";
 import { RoundLib } from "./libraries/RoundLib.sol";
 import { TokenTransferLib } from "./libraries/TokenTransferLib.sol";
 
+interface IFeedbackRegistryVotingEngineShape {
+    function votingEngine() external view returns (address);
+}
+
 /// @title FeedbackBonusEscrow
 /// @notice Holds optional LREP or USDC bonuses for useful rater feedback and pays awarded feedback hashes after a round ends.
 contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, PausableUpgradeable, ReentrancyGuardTransient {
@@ -78,11 +82,14 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
     mapping(uint256 => FeedbackBonusPool) public feedbackBonusPools;
     mapping(uint256 => mapping(bytes32 => bool)) public identityKeyAwarded;
     mapping(uint256 => mapping(bytes32 => bool)) public feedbackHashAwarded;
+    mapping(uint256 => address) public feedbackRegistrySnapshot;
+    address public legacyFeedbackRegistry;
+    uint256 public legacyFeedbackRegistryPoolIdUpperBound;
 
     /// @dev Reserved storage gap for future upgrades. Mirrors the pattern used by every other
     ///      upgradeable contract in this protocol so new state can be added without colliding
     ///      with inherited OpenZeppelin storage.
-    uint256[49] private __gap;
+    uint256[46] private __gap;
 
     event FeedbackBonusPoolCreated(
         uint256 indexed poolId,
@@ -279,6 +286,7 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
         }
 
         poolId = nextFeedbackBonusPoolId++;
+        feedbackRegistrySnapshot[poolId] = address(feedbackRegistry);
         feedbackBonusPools[poolId] = FeedbackBonusPool({
             id: poolId.toUint64(),
             contentId: contentId.toUint64(),
@@ -333,8 +341,8 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
             !identityKeyAwarded[poolId][identityKey] && !identityKeyAwarded[poolId][awardIdentityKey],
             "Rater already awarded"
         );
-        uint256 feedbackPublishedAt =
-            feedbackRegistry.awardableFeedbackPublishedAt(pool.contentId, pool.roundId, commitKey, feedbackHash);
+        uint256 feedbackPublishedAt = _feedbackRegistryForPool(poolId)
+            .awardableFeedbackPublishedAt(pool.contentId, pool.roundId, commitKey, feedbackHash);
         require(feedbackPublishedAt != 0, "Feedback not revealed");
         require(feedbackPublishedAt <= pool.feedbackClosesAt, "Feedback not timely");
 
@@ -486,9 +494,52 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
     }
 
     function _setFeedbackRegistry(address feedbackRegistry_) internal {
-        require(feedbackRegistry_ != address(0) && feedbackRegistry_.code.length != 0, "Invalid feedback registry");
+        _validateFeedbackRegistry(feedbackRegistry_);
+        address currentFeedbackRegistry = address(feedbackRegistry);
+        if (
+            currentFeedbackRegistry != address(0) && feedbackRegistry_ != currentFeedbackRegistry
+                && legacyFeedbackRegistry == address(0)
+        ) {
+            legacyFeedbackRegistry = currentFeedbackRegistry;
+            legacyFeedbackRegistryPoolIdUpperBound = nextFeedbackBonusPoolId;
+        }
         feedbackRegistry = IFeedbackRegistry(feedbackRegistry_);
         emit FeedbackRegistryUpdated(feedbackRegistry_);
+    }
+
+    function _validateFeedbackRegistry(address registryAddress) private view {
+        require(registryAddress != address(0) && registryAddress.code.length != 0, "Invalid feedback registry");
+        try IFeedbackRegistry(registryAddress).isAwardableFeedback(0, 0, bytes32(0), bytes32(0)) returns (
+            bool awardable
+        ) {
+            awardable;
+        } catch {
+            revert("Invalid feedback registry");
+        }
+        try IFeedbackRegistry(registryAddress).awardableFeedbackPublishedAt(0, 0, bytes32(0), bytes32(0)) returns (
+            uint256 publishedAt
+        ) {
+            publishedAt;
+        } catch {
+            revert("Invalid feedback registry");
+        }
+        try IFeedbackRegistryVotingEngineShape(registryAddress).votingEngine() returns (address registryVotingEngine) {
+            require(registryVotingEngine == address(votingEngine), "Invalid feedback registry");
+        } catch {
+            revert("Invalid feedback registry");
+        }
+    }
+
+    function _feedbackRegistryForPool(uint256 poolId) private view returns (IFeedbackRegistry registryForPool) {
+        address registryAddress = feedbackRegistrySnapshot[poolId];
+        if (registryAddress == address(0)) {
+            if (legacyFeedbackRegistry != address(0) && poolId < legacyFeedbackRegistryPoolIdUpperBound) {
+                registryAddress = legacyFeedbackRegistry;
+            } else {
+                registryAddress = address(feedbackRegistry);
+            }
+        }
+        registryForPool = IFeedbackRegistry(registryAddress);
     }
 
     function _requireTargetRound(uint256 contentId, uint256 roundId) internal view {

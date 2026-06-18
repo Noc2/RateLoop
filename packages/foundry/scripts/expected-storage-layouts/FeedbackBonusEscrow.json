@@ -69,6 +69,24 @@
     {
       "slot": 11,
       "offset": 0,
+      "label": "feedbackRegistrySnapshot",
+      "type": "t_mapping(t_uint256,t_address)"
+    },
+    {
+      "slot": 12,
+      "offset": 0,
+      "label": "legacyFeedbackRegistry",
+      "type": "t_address"
+    },
+    {
+      "slot": 13,
+      "offset": 0,
+      "label": "legacyFeedbackRegistryPoolIdUpperBound",
+      "type": "t_uint256"
+    },
+    {
+      "slot": 14,
+      "offset": 0,
       "label": "__gap",
       "type": "t_array(t_uint256)"
     }
@@ -83,8 +101,8 @@
     {
       "id": "t_array(t_uint256)",
       "encoding": "inplace",
-      "label": "uint256[49]",
-      "numberOfBytes": "1568",
+      "label": "uint256[46]",
+      "numberOfBytes": "1472",
       "base": "t_uint256"
     },
     {
@@ -136,6 +154,14 @@
       "numberOfBytes": "32",
       "key": "t_bytes32",
       "value": "t_bool"
+    },
+    {
+      "id": "t_mapping(t_uint256,t_address)",
+      "encoding": "mapping",
+      "label": "mapping(uint256 => address)",
+      "numberOfBytes": "32",
+      "key": "t_uint256",
+      "value": "t_address"
     },
     {
       "id": "t_mapping(t_uint256,t_mapping(t_bytes32,t_bool))",

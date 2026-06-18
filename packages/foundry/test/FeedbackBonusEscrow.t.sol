@@ -116,6 +116,16 @@ contract FeedbackRaterRegistryStatusMock {
     }
 }
 
+contract FeedbackRegistryNoVotingEngineShapeMock {
+    function isAwardableFeedback(uint256, uint256, bytes32, bytes32) external pure returns (bool) {
+        return false;
+    }
+
+    function awardableFeedbackPublishedAt(uint256, uint256, bytes32, bytes32) external pure returns (uint256) {
+        return 0;
+    }
+}
+
 contract FeedbackBonusEscrowTest is VotingTestBase {
     LoopReputation public lrepToken;
     ContentRegistry public registry;
@@ -347,6 +357,45 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
 
         assertEq(recipientAmount, 10e6);
         assertEq(usdc.balanceOf(voter1), 1_010e6);
+    }
+
+    function testExistingFeedbackBonusPoolUsesSnapshotAfterEscrowFeedbackRegistryRotation() public {
+        uint256 contentId = _submitQuestion("");
+        uint256 poolId = _createFeedbackBonusPool(contentId);
+        (uint256 roundId, bytes32[] memory commitKeys) =
+            _settleRoundWithPublishedFeedback(_threeVoters(), contentId, _directions(true, true, false), address(0));
+        FeedbackRegistry replacementFeedbackRegistry = _deployFeedbackRegistry(address(votingEngine));
+
+        vm.prank(owner);
+        feedbackBonusEscrow.setFeedbackRegistry(address(replacementFeedbackRegistry));
+
+        assertEq(feedbackBonusEscrow.feedbackRegistrySnapshot(poolId), address(feedbackRegistry));
+        assertEq(address(feedbackBonusEscrow.feedbackRegistry()), address(replacementFeedbackRegistry));
+        assertTrue(feedbackRegistry.isAwardableFeedback(contentId, roundId, commitKeys[0], FEEDBACK_HASH));
+        assertFalse(replacementFeedbackRegistry.isAwardableFeedback(contentId, roundId, commitKeys[0], FEEDBACK_HASH));
+
+        vm.prank(funder);
+        uint256 recipientAmount = feedbackBonusEscrow.awardFeedbackBonus(poolId, voter1, FEEDBACK_HASH, 10e6);
+
+        assertEq(recipientAmount, 10e6);
+        assertEq(usdc.balanceOf(voter1), 1_010e6);
+    }
+
+    function testSetFeedbackRegistryRejectsMismatchedVotingEngineShape() public {
+        RoundVotingEngine replacementEngine = _deployReplacementEngine();
+        FeedbackRegistry mismatchedFeedbackRegistry = _deployFeedbackRegistry(address(replacementEngine));
+
+        vm.prank(owner);
+        vm.expectRevert("Invalid feedback registry");
+        feedbackBonusEscrow.setFeedbackRegistry(address(mismatchedFeedbackRegistry));
+    }
+
+    function testSetFeedbackRegistryRejectsRegistryWithoutVotingEngineShape() public {
+        FeedbackRegistryNoVotingEngineShapeMock fakeFeedbackRegistry = new FeedbackRegistryNoVotingEngineShapeMock();
+
+        vm.prank(owner);
+        vm.expectRevert("Invalid feedback registry");
+        feedbackBonusEscrow.setFeedbackRegistry(address(fakeFeedbackRegistry));
     }
 
     function testReplacementFeedbackStackCanCreatePoolsAfterEngineRotation() public {
@@ -1343,6 +1392,16 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
                         RoundVotingEngine.initialize,
                         (owner, address(lrepToken), address(registry), address(protocolConfig))
                     )
+                )
+            )
+        );
+    }
+
+    function _deployFeedbackRegistry(address engine) internal returns (FeedbackRegistry deployedFeedbackRegistry) {
+        deployedFeedbackRegistry = FeedbackRegistry(
+            address(
+                new ERC1967Proxy(
+                    address(new FeedbackRegistry()), abi.encodeCall(FeedbackRegistry.initialize, (owner, owner, engine))
                 )
             )
         );
