@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { get } from "@vercel/blob";
-import sharp from "sharp";
 import {
   getImageAttachment,
   isLocalImageAttachmentPathname,
   readLocalImageAttachment,
 } from "~~/lib/attachments/imageAttachments";
+import { watermarkConfidentialImage } from "~~/lib/attachments/imageWatermark";
 import {
   authorizeGatedContextRequest,
   createConfidentialViewToken,
@@ -29,29 +29,6 @@ const GATED_IMAGE_HEADERS = {
   "X-Content-Type-Options": "nosniff",
   "X-Robots-Tag": "noindex, noimageindex",
 };
-
-async function watermarkImage(buffer: Buffer, params: { timestamp: Date; viewToken: string; walletAddress: string }) {
-  const label = `${params.walletAddress.slice(0, 6)}...${params.walletAddress.slice(-4)} ${params.timestamp.toISOString()}`;
-  const token = params.viewToken.slice(0, 12);
-  const metadata = await sharp(buffer).metadata();
-  const imageWidth = Math.max(1, metadata.width ?? 1200);
-  const imageHeight = Math.max(1, metadata.height ?? 160);
-  const overlayWidth = Math.min(1200, imageWidth);
-  const overlayHeight = Math.min(160, imageHeight);
-  const labelFontSize = Math.max(1, Math.min(34, Math.floor(overlayHeight * 0.28)));
-  const tokenFontSize = Math.max(1, Math.min(28, Math.floor(overlayHeight * 0.22)));
-  const overlay = Buffer.from(`
-    <svg width="${overlayWidth}" height="${overlayHeight}" viewBox="0 0 ${overlayWidth} ${overlayHeight}" xmlns="http://www.w3.org/2000/svg">
-      <rect x="0" y="0" width="${overlayWidth}" height="${overlayHeight}" fill="rgba(0,0,0,0.42)"/>
-      <text x="${Math.max(1, Math.floor(overlayWidth * 0.03))}" y="${Math.max(1, Math.floor(overlayHeight * 0.4))}" fill="rgba(255,255,255,0.92)" font-family="Arial, sans-serif" font-size="${labelFontSize}" font-weight="700">${label}</text>
-      <text x="${Math.max(1, Math.floor(overlayWidth * 0.03))}" y="${Math.max(1, Math.floor(overlayHeight * 0.72))}" fill="rgba(255,255,255,0.76)" font-family="Arial, sans-serif" font-size="${tokenFontSize}">view ${token}</text>
-    </svg>
-  `);
-  return sharp(buffer)
-    .composite([{ input: overlay, gravity: "southeast" }])
-    .webp({ quality: 86 })
-    .toBuffer();
-}
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ attachmentId: string }> }) {
   const { attachmentId: image } = await params;
@@ -129,7 +106,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         walletAddress: gatedAuth.walletAddress,
       });
       return new NextResponse(
-        await watermarkImage(result.buffer, { timestamp: viewedAt, viewToken, walletAddress: gatedAuth.walletAddress }),
+        await watermarkConfidentialImage(result.buffer, {
+          timestamp: viewedAt,
+          viewToken,
+          walletAddress: gatedAuth.walletAddress,
+        }),
         {
           headers: {
             ...GATED_IMAGE_HEADERS,
@@ -199,7 +180,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       walletAddress: gatedAuth.walletAddress,
     });
     return new NextResponse(
-      await watermarkImage(buffer, { timestamp: viewedAt, viewToken, walletAddress: gatedAuth.walletAddress }),
+      await watermarkConfidentialImage(buffer, {
+        timestamp: viewedAt,
+        viewToken,
+        walletAddress: gatedAuth.walletAddress,
+      }),
       {
         headers: {
           ...GATED_IMAGE_HEADERS,
