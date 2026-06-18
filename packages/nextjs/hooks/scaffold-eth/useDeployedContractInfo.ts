@@ -10,6 +10,8 @@ import {
   contracts,
 } from "~~/utils/scaffold-eth/contract";
 
+const LOCAL_DEVELOPMENT_CHAIN_ID = 31337;
+
 type DeployedContractData<TContractName extends ContractName> = {
   data: Contract<TContractName> | undefined;
   isLoading: boolean;
@@ -32,17 +34,24 @@ export function useDeployedContractInfo<TContractName extends ContractName>(
   const deployedContract = contracts?.[selectedNetwork.id]?.[contractName as ContractName] as Contract<TContractName>;
   const [status, setStatus] = useState<ContractCodeStatus>(ContractCodeStatus.LOADING);
   const publicClient = usePublicClient({ chainId: selectedNetwork.id });
+  const shouldVerifyContractCode = selectedNetwork.id === LOCAL_DEVELOPMENT_CHAIN_ID;
 
   useEffect(() => {
     const checkContractDeployment = async () => {
       try {
-        if (!isMounted() || !publicClient) return;
-
         if (!deployedContract) {
           setStatus(ContractCodeStatus.NOT_FOUND);
           return;
         }
 
+        if (!shouldVerifyContractCode) {
+          setStatus(ContractCodeStatus.DEPLOYED);
+          return;
+        }
+
+        if (!isMounted() || !publicClient) return;
+
+        setStatus(ContractCodeStatus.LOADING);
         const code = await publicClient.getBytecode({
           address: deployedContract.address,
         });
@@ -60,7 +69,7 @@ export function useDeployedContractInfo<TContractName extends ContractName>(
     };
 
     checkContractDeployment();
-  }, [isMounted, contractName, deployedContract, publicClient]);
+  }, [isMounted, contractName, deployedContract, publicClient, shouldVerifyContractCode]);
 
   return {
     data: status === ContractCodeStatus.DEPLOYED ? deployedContract : undefined,
