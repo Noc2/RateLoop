@@ -22,14 +22,6 @@ interface IRewardDistributorVotingEngineShape {
         returns (address registry_, address lrepToken_, address protocolConfig_);
 }
 
-interface IQuestionRewardRegistryShape {
-    function questionRewardPoolEscrow() external view returns (address);
-}
-
-interface IQuestionRewardPoolEscrowShape {
-    function questionRewardPoolEscrowConfigShape() external view returns (address registry_, address votingEngine_);
-}
-
 /// @title ProtocolConfig
 /// @notice Governance-controlled configuration and address book for RoundVotingEngine.
 /// @dev Upgradeable behind a transparent proxy, so storage layout must remain stable across future upgrades.
@@ -44,10 +36,8 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     uint16 internal constant MAX_BUNDLE_COMPATIBLE_MIN_VOTER_CAP = 100;
     uint16 internal constant MAX_CREATOR_ROUND_VOTERS = 200;
     uint32 internal constant MIN_ROUND_DURATION_FLOOR = 20 seconds;
-    uint8 internal constant PAYOUT_DOMAIN_QUESTION_REWARD = 1;
     uint8 internal constant PAYOUT_DOMAIN_LAUNCH_CREDIT = 2;
     uint8 internal constant PAYOUT_DOMAIN_PUBLIC_RATING = 3;
-    uint8 internal constant PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD = 4;
     bytes32 internal constant RATELOOP_REWARD_DISTRIBUTOR_MARKER = keccak256("rateloop.round-reward-distributor.v1");
 
     error InvalidAddress();
@@ -267,7 +257,6 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         address previousNewEngine = rewardDistributorVotingEngine[newValue];
         if (previousNewEngine != address(0) && previousNewEngine != engine) revert InvalidConfig();
         _validateRewardDistributorIntegrations(newValue, engine);
-        _validateConfiguredClusterPayoutOracleRewardConsumers(newValue, engine);
 
         rewardDistributorVotingEngine[newValue] = engine;
         rewardDistributorForVotingEngine[engine] = newValue;
@@ -508,7 +497,6 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         address engine = _readRewardDistributorVotingEngine(value);
         if (_readRewardDistributorClaimAccountingStarted(value)) revert InvalidConfig();
         _validateRewardDistributorIntegrations(value, engine);
-        _validateConfiguredClusterPayoutOracleRewardConsumers(value, engine);
         if (advisoryVoteRecorder != address(0)) _validateAdvisoryVoteRecorderForEngine(advisoryVoteRecorder, engine);
         address previousForEngine = rewardDistributorForVotingEngine[engine];
         if (previousForEngine != address(0) && previousForEngine != value) revert InvalidConfig();
@@ -737,7 +725,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         }
         address distributor = rewardDistributor;
         if (distributor != address(0)) {
-            _validateClusterPayoutOracleRewardConsumers(value, distributor, rewardDistributorVotingEngine[distributor]);
+            _validateClusterPayoutOraclePublicRatingConsumer(value, distributor);
         }
     }
 
@@ -816,61 +804,13 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         }
     }
 
-    function _validateConfiguredClusterPayoutOracleRewardConsumers(address distributor, address engine) internal view {
-        address oracle = clusterPayoutOracle;
-        if (oracle == address(0)) return;
-        _validateClusterPayoutOracleRewardConsumers(oracle, distributor, engine);
-    }
-
-    function _validateClusterPayoutOracleRewardConsumers(address oracle, address distributor, address engine)
-        internal
-        view
-    {
+    function _validateClusterPayoutOraclePublicRatingConsumer(address oracle, address distributor) internal view {
         address contentRegistry = _readRewardDistributorRegistry(distributor);
         if (contentRegistry == address(0)) revert InvalidConfig();
-        _validateClusterPayoutOraclePublicRatingConsumer(oracle, contentRegistry);
-        address questionRewardEscrow = _readQuestionRewardPoolEscrow(contentRegistry);
-        if (questionRewardEscrow == address(0)) return;
-        _validateQuestionRewardPoolEscrowShape(questionRewardEscrow, contentRegistry, engine);
-        _validateClusterPayoutOracleConsumer(oracle, PAYOUT_DOMAIN_QUESTION_REWARD, questionRewardEscrow);
-        _validateClusterPayoutOracleConsumer(oracle, PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD, questionRewardEscrow);
-    }
-
-    function _validateClusterPayoutOraclePublicRatingConsumer(address oracle, address contentRegistry) internal view {
         try IClusterPayoutOracle(oracle).roundPayoutSnapshotConsumer(PAYOUT_DOMAIN_PUBLIC_RATING) returns (
             address consumer
         ) {
             if (consumer != contentRegistry) revert InvalidConfig();
-        } catch {
-            revert InvalidConfig();
-        }
-    }
-
-    function _validateClusterPayoutOracleConsumer(address oracle, uint8 domain, address expectedConsumer) internal view {
-        try IClusterPayoutOracle(oracle).roundPayoutSnapshotConsumer(domain) returns (address consumer) {
-            if (consumer != expectedConsumer) revert InvalidConfig();
-        } catch {
-            revert InvalidConfig();
-        }
-    }
-
-    function _readQuestionRewardPoolEscrow(address contentRegistry) internal view returns (address escrow) {
-        try IQuestionRewardRegistryShape(contentRegistry).questionRewardPoolEscrow() returns (address configuredEscrow) {
-            return configuredEscrow;
-        } catch {
-            revert InvalidConfig();
-        }
-    }
-
-    function _validateQuestionRewardPoolEscrowShape(address escrow, address contentRegistry, address engine)
-        internal
-        view
-    {
-        if (escrow.code.length == 0 || engine == address(0)) revert InvalidConfig();
-        try IQuestionRewardPoolEscrowShape(escrow).questionRewardPoolEscrowConfigShape() returns (
-            address registry_, address votingEngine_
-        ) {
-            if (registry_ != contentRegistry || votingEngine_ != engine) revert InvalidConfig();
         } catch {
             revert InvalidConfig();
         }

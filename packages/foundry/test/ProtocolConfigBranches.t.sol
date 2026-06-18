@@ -93,28 +93,6 @@ contract MockVotingEngineForConfig {
     }
 }
 
-contract MockContentRegistryForConfig {
-    address public questionRewardPoolEscrow;
-
-    function setQuestionRewardPoolEscrow(address escrow) external {
-        questionRewardPoolEscrow = escrow;
-    }
-}
-
-contract MockQuestionRewardPoolEscrowForConfig {
-    address internal immutable registry;
-    address internal immutable votingEngine;
-
-    constructor(address registry_, address votingEngine_) {
-        registry = registry_;
-        votingEngine = votingEngine_;
-    }
-
-    function questionRewardPoolEscrowConfigShape() external view returns (address registry_, address votingEngine_) {
-        return (registry, votingEngine);
-    }
-}
-
 contract MockFrontendRegistryForConfig {
     mapping(address => address) public feeCreditorForEngine;
 
@@ -163,10 +141,8 @@ contract MockLaunchDistributionPoolForConfig {
 }
 
 contract MockClusterPayoutOracleForConfig {
-    address internal questionRewardConsumer;
     address internal launchConsumer;
     address internal publicRatingConsumer;
-    address internal questionBundleRewardConsumer;
     address public frontendRegistry;
 
     constructor(address launchConsumer_) {
@@ -177,20 +153,12 @@ contract MockClusterPayoutOracleForConfig {
         frontendRegistry = frontendRegistry_;
     }
 
-    function setQuestionRewardConsumer(address questionRewardConsumer_) external {
-        questionRewardConsumer = questionRewardConsumer_;
-    }
-
     function setLaunchConsumer(address launchConsumer_) external {
         launchConsumer = launchConsumer_;
     }
 
     function setPublicRatingConsumer(address publicRatingConsumer_) external {
         publicRatingConsumer = publicRatingConsumer_;
-    }
-
-    function setQuestionBundleRewardConsumer(address questionBundleRewardConsumer_) external {
-        questionBundleRewardConsumer = questionBundleRewardConsumer_;
     }
 
     function roundPayoutSnapshotKey(uint8 domain, uint256 rewardPoolId, uint256 contentId, uint256 roundId)
@@ -206,10 +174,8 @@ contract MockClusterPayoutOracleForConfig {
     }
 
     function roundPayoutSnapshotConsumer(uint8 domain) external view returns (address) {
-        if (domain == 1) return questionRewardConsumer;
         if (domain == 2) return launchConsumer;
         if (domain == 3) return publicRatingConsumer;
-        if (domain == 4) return questionBundleRewardConsumer;
         return address(0);
     }
 }
@@ -437,12 +403,7 @@ contract ProtocolConfigBranchesTest is Test {
     );
 
     function _newRewardEngine(ProtocolConfig config) internal returns (address) {
-        MockContentRegistryForConfig registry = new MockContentRegistryForConfig();
-        address engine = address(new MockVotingEngineForConfig(address(config), address(registry), MOCK_LREP));
-        MockQuestionRewardPoolEscrowForConfig escrow =
-            new MockQuestionRewardPoolEscrowForConfig(address(registry), engine);
-        registry.setQuestionRewardPoolEscrow(address(escrow));
-        return engine;
+        return address(new MockVotingEngineForConfig(address(config), address(this), MOCK_LREP));
     }
 
     function test_DrandConfig_UsesInitializerValues() public {
@@ -788,7 +749,6 @@ contract ProtocolConfigBranchesTest is Test {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
         address engine = _newRewardEngine(config);
         address contentRegistry = MockVotingEngineForConfig(engine).registry();
-        address questionRewardEscrow = MockContentRegistryForConfig(contentRegistry).questionRewardPoolEscrow();
         address distributor = address(new MockRewardDistributorForConfig(engine));
         MockClusterPayoutOracleForConfig mismatchedOracle = new MockClusterPayoutOracleForConfig(address(0));
         MockClusterPayoutOracleForConfig pinnedOracle = new MockClusterPayoutOracleForConfig(address(0));
@@ -799,55 +759,8 @@ contract ProtocolConfigBranchesTest is Test {
         config.setClusterPayoutOracle(address(mismatchedOracle));
 
         pinnedOracle.setPublicRatingConsumer(contentRegistry);
-        pinnedOracle.setQuestionRewardConsumer(questionRewardEscrow);
-        pinnedOracle.setQuestionBundleRewardConsumer(questionRewardEscrow);
         config.setClusterPayoutOracle(address(pinnedOracle));
         assertEq(config.clusterPayoutOracle(), address(pinnedOracle));
-    }
-
-    function test_SetClusterPayoutOracle_RequiresPinnedQuestionRewardConsumersAfterRewardDistributorConfigured()
-        public
-    {
-        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
-        address engine = _newRewardEngine(config);
-        address contentRegistry = MockVotingEngineForConfig(engine).registry();
-        address questionRewardEscrow = MockContentRegistryForConfig(contentRegistry).questionRewardPoolEscrow();
-        address distributor = address(new MockRewardDistributorForConfig(engine));
-        MockClusterPayoutOracleForConfig oracle = new MockClusterPayoutOracleForConfig(address(0));
-
-        config.setRewardDistributor(distributor);
-        oracle.setPublicRatingConsumer(contentRegistry);
-
-        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
-        config.setClusterPayoutOracle(address(oracle));
-
-        oracle.setQuestionRewardConsumer(questionRewardEscrow);
-        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
-        config.setClusterPayoutOracle(address(oracle));
-
-        oracle.setQuestionBundleRewardConsumer(questionRewardEscrow);
-        config.setClusterPayoutOracle(address(oracle));
-        assertEq(config.clusterPayoutOracle(), address(oracle));
-    }
-
-    function test_SetRewardDistributor_RequiresPinnedQuestionRewardConsumersAfterOracleConfigured() public {
-        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
-        address engine = _newRewardEngine(config);
-        address contentRegistry = MockVotingEngineForConfig(engine).registry();
-        address questionRewardEscrow = MockContentRegistryForConfig(contentRegistry).questionRewardPoolEscrow();
-        address distributor = address(new MockRewardDistributorForConfig(engine));
-        MockClusterPayoutOracleForConfig oracle = new MockClusterPayoutOracleForConfig(address(0));
-
-        oracle.setPublicRatingConsumer(contentRegistry);
-        oracle.setQuestionRewardConsumer(questionRewardEscrow);
-        config.setClusterPayoutOracle(address(oracle));
-
-        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
-        config.setRewardDistributor(distributor);
-
-        oracle.setQuestionBundleRewardConsumer(questionRewardEscrow);
-        config.setRewardDistributor(distributor);
-        assertEq(config.rewardDistributor(), distributor);
     }
 
     function test_SetClusterPayoutOracle_AllowsBootstrapBeforeRewardDistributor() public {
