@@ -3071,8 +3071,8 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.stopPrank();
 
         uint16 ratingBefore = registry.getRating(1);
+        assertEq(registry.trackedVotingEngine(1), address(votingEngine));
         vm.prank(address(votingEngine));
-        vm.expectRevert(ContentRegistry.OnlyVotingEngine.selector);
         registry.updateActivity(1);
 
         _warpPastTlockRevealTime(block.timestamp + 1 hours);
