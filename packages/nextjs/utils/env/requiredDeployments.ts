@@ -1,3 +1,5 @@
+import { isAddress, zeroAddress } from "viem";
+
 type DeploymentDefinitions = Record<number, Record<string, unknown> | undefined>;
 
 const REQUIRED_TARGET_CONTRACTS = [
@@ -13,9 +15,19 @@ const REQUIRED_TARGET_CONTRACTS = [
   "AdvisoryVoteRecorder",
   "RaterRegistry",
   "QuestionRewardPoolEscrow",
+  "FeedbackBonusEscrow",
+  "FeedbackRegistry",
+  "ConfidentialityEscrow",
   "ClusterPayoutOracle",
   "X402QuestionSubmitter",
 ] as const;
+
+function hasValidDeploymentAddress(deployment: unknown): boolean {
+  if (!deployment || typeof deployment !== "object") return false;
+
+  const address = (deployment as { address?: unknown }).address;
+  return typeof address === "string" && isAddress(address) && address.toLowerCase() !== zeroAddress;
+}
 
 export function listMissingRequiredTargetContracts(
   chainIds: readonly number[],
@@ -27,7 +39,7 @@ export function listMissingRequiredTargetContracts(
     if (!chainDeployments) return [];
 
     return requiredContracts
-      .filter(contractName => chainDeployments[contractName] === undefined)
+      .filter(contractName => !hasValidDeploymentAddress(chainDeployments[contractName]))
       .map(contractName => `${chainId}:${contractName}`);
   });
 }

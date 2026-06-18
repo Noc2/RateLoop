@@ -4,6 +4,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
+function deployment(index: number) {
+  return { address: `0x${index.toString(16).padStart(40, "0")}` };
+}
+
 test("browser-facing public env modules avoid computed process.env access", () => {
   const browserEnvModules = [
     new URL("./public.ts", import.meta.url),
@@ -26,13 +30,13 @@ test("required deployment helper reports missing contract definitions per target
     [31337, 480],
     {
       31337: {
-        ContentRegistry: {},
-        HumanReputation: {},
-        ProtocolConfig: {},
+        ContentRegistry: deployment(1),
+        HumanReputation: deployment(2),
+        ProtocolConfig: deployment(3),
       },
       480: {
-        ContentRegistry: {},
-        ProtocolConfig: {},
+        ContentRegistry: deployment(4),
+        ProtocolConfig: deployment(5),
       },
     },
     ["ContentRegistry", "LoopReputation"],
@@ -44,15 +48,15 @@ test("required deployment helper reports missing contract definitions per target
 test("default required deployment list fails closed for core app contracts", () => {
   const missingContracts = listMissingRequiredTargetContracts([480], {
     480: {
-      CategoryRegistry: {},
-      ContentRegistry: {},
-      FrontendRegistry: {},
-      LaunchDistributionPool: {},
-      ProfileRegistry: {},
-      ProtocolConfig: {},
-      RaterRegistry: {},
-      RoundRewardDistributor: {},
-      RoundVotingEngine: {},
+      CategoryRegistry: deployment(1),
+      ContentRegistry: deployment(2),
+      FrontendRegistry: deployment(3),
+      LaunchDistributionPool: deployment(4),
+      ProfileRegistry: deployment(5),
+      ProtocolConfig: deployment(6),
+      RaterRegistry: deployment(7),
+      RoundRewardDistributor: deployment(8),
+      RoundVotingEngine: deployment(9),
     },
   });
 
@@ -60,13 +64,38 @@ test("default required deployment list fails closed for core app contracts", () 
     "480:LoopReputation",
     "480:AdvisoryVoteRecorder",
     "480:QuestionRewardPoolEscrow",
+    "480:FeedbackBonusEscrow",
+    "480:FeedbackRegistry",
+    "480:ConfidentialityEscrow",
     "480:ClusterPayoutOracle",
     "480:X402QuestionSubmitter",
   ]);
 });
 
+test("required deployment helper treats malformed contract entries as missing", () => {
+  const missingContracts = listMissingRequiredTargetContracts(
+    [84532],
+    {
+      84532: {
+        ContentRegistry: {},
+        FrontendRegistry: { address: "not-an-address" },
+        LoopReputation: { address: "0x0000000000000000000000000000000000000000" },
+      },
+    },
+    ["ContentRegistry", "FrontendRegistry", "LoopReputation"],
+  );
+
+  assert.deepEqual(missingContracts, ["84532:ContentRegistry", "84532:FrontendRegistry", "84532:LoopReputation"]);
+});
+
 test("World Chain Sepolia deployment metadata includes production-required contracts", () => {
   const missingContracts = listMissingRequiredTargetContracts([4801], deployedContracts);
+
+  assert.deepEqual(missingContracts, []);
+});
+
+test("Base Sepolia deployment metadata includes production-required contracts", () => {
+  const missingContracts = listMissingRequiredTargetContracts([84532], deployedContracts);
 
   assert.deepEqual(missingContracts, []);
 });
