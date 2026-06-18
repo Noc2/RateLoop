@@ -9,7 +9,6 @@ const chain84532 = sharedDeployments[84532];
 const chain4801 = sharedDeployments[4801];
 const chain480 = sharedDeployments[480];
 const chain31337 = sharedDeployments[31337];
-const itWithBaseSepoliaArtifacts = chain84532 ? it : it.skip;
 const itWithWorldChainArtifacts = chain480 ? it : it.skip;
 const itWithWorldChainSepoliaFeedbackBonusEscrowArtifact =
   chain4801?.FeedbackBonusEscrow ? it : it.skip;
@@ -38,6 +37,11 @@ const LOCAL_VOTING_ENGINE = chain31337?.RoundVotingEngine?.address ?? "0x0000000
 const LOCAL_CONTENT_REGISTRY = chain31337?.ContentRegistry?.address ?? "0x0000000000000000000000000000000000000000";
 const LOCAL_ADVISORY_VOTE_RECORDER =
   chain31337?.AdvisoryVoteRecorder?.address ?? "0x5555555555555555555555555555555555555555";
+
+function requireBaseSepoliaDeployment() {
+  expect(chain84532).toBeDefined();
+  return chain84532!;
+}
 
 async function loadKeeperConfig(
   overrides: Record<string, string | undefined> = {},
@@ -421,7 +425,8 @@ describe("keeper config", () => {
     expect(config.contracts.advisoryVoteRecorder).toBe(chain4801!.AdvisoryVoteRecorder.address);
   });
 
-  itWithBaseSepoliaArtifacts("derives Base Sepolia contract addresses from shared deployment artifacts", async () => {
+  it("derives Base Sepolia contract addresses from shared deployment artifacts", async () => {
+    const baseSepolia = requireBaseSepoliaDeployment();
     const { config } = await loadKeeperConfig(
       {
         CHAIN_ID: "84532",
@@ -432,9 +437,9 @@ describe("keeper config", () => {
 
     expect(config.chainId).toBe(84532);
     expect(config.chainName).toBe("Base Sepolia");
-    expect(config.contracts.votingEngine).toBe(chain84532!.RoundVotingEngine.address);
-    expect(config.contracts.contentRegistry).toBe(chain84532!.ContentRegistry.address);
-    expect(config.contracts.advisoryVoteRecorder).toBe(chain84532!.AdvisoryVoteRecorder.address);
+    expect(config.contracts.votingEngine).toBe(baseSepolia.RoundVotingEngine.address);
+    expect(config.contracts.contentRegistry).toBe(baseSepolia.ContentRegistry.address);
+    expect(config.contracts.advisoryVoteRecorder).toBe(baseSepolia.AdvisoryVoteRecorder.address);
   });
 
   it("prefers local hardhat contract env values over shared deployment artifacts", async () => {
@@ -488,6 +493,27 @@ describe("keeper config", () => {
       );
     },
   );
+
+  it("rejects stale live ClusterPayoutOracle env values when shared deployment artifacts exist", async () => {
+    requireBaseSepoliaDeployment();
+
+    await expect(
+      loadKeeperConfig(
+        {
+          CHAIN_ID: "84532",
+          CLUSTER_PAYOUT_ORACLE_ADDRESS:
+            "0x196dBCBb54b8ec4958c959D8949EBFE87aC2Aaaf",
+        },
+        [
+          "VOTING_ENGINE_ADDRESS",
+          "CONTENT_REGISTRY_ADDRESS",
+          "ADVISORY_VOTE_RECORDER_ADDRESS",
+        ],
+      ),
+    ).rejects.toThrow(
+      "conflicts with ClusterPayoutOracle from shared deployment artifacts",
+    );
+  });
 
   it("rejects live env-only contract addresses when no shared deployment artifact exists for the chain", async () => {
     await expect(

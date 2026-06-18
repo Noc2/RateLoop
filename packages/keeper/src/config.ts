@@ -540,6 +540,7 @@ function loadConfig() {
         contractName: "ClusterPayoutOracle",
         errors,
         warnings,
+        rejectLiveMismatch: true,
       }),
       feedbackBonusEscrow: resolveOptionalContractAddress({
         chainId,
