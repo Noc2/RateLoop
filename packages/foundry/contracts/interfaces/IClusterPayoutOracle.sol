@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
+import { IFrontendRegistry } from "./IFrontendRegistry.sol";
+
 interface IClusterPayoutOracle {
     enum SnapshotStatus {
         None,
@@ -96,6 +98,8 @@ interface IClusterPayoutOracle {
         external
         view
         returns (uint64);
+
+    function frontendRegistry() external view returns (IFrontendRegistry);
 
     function roundPayoutSnapshotProposalDigest(bytes32 snapshotKey) external view returns (bytes32);
 
