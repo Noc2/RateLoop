@@ -2,11 +2,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 const ORACLE = "0x2222222222222222222222222222222222222222" as const;
 
-function mockConfig() {
+function mockConfig(ponderBaseUrl = "http://ponder.local") {
   vi.doMock("../config.js", () => ({
     config: {
       chainId: 31337,
-      ponderBaseUrl: "http://ponder.local",
+      ponderBaseUrl,
       contracts: {
         clusterPayoutOracle: ORACLE,
       },
@@ -64,6 +64,85 @@ afterEach(() => {
 });
 
 describe("automatic correlation artifact builder", () => {
+  it("preserves path-prefixed Ponder URLs for automatic candidate and vote fetches", async () => {
+    mockConfig("https://ponder.example.test/indexer");
+    const voteItem = (index: number, isUp = true) => ({
+      account: `0x${index.toString(16).padStart(40, "0")}`,
+      identityKey: `0x${index.toString(16).repeat(64)}`,
+      commitKey: `0x${(index + 10).toString(16).repeat(64)}`,
+      isUp,
+      stake: "10000000",
+      epochIndex: 0,
+      revealWeight: "10000",
+      verifiedHuman: true,
+      historicalVoteCount: 12,
+      features: [`identity:0x${index.toString(16).repeat(64)}`],
+    });
+    const seenPathnames: string[] = [];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(input.toString());
+      seenPathnames.push(url.pathname);
+      const route = url.pathname.replace(/^\/indexer/u, "");
+      if (route === "/correlation/round-candidates") {
+        return jsonResponse({
+          items: [{ rewardPoolId: "7", contentId: "9", roundId: "2" }],
+        });
+      }
+      if (route === "/correlation/bundle-round-candidates") {
+        return jsonResponse({
+          items: [
+            { domain: 4, rewardPoolId: "11", contentId: "11", roundId: "2" },
+          ],
+        });
+      }
+      if (route === "/correlation/rating-round-candidates") {
+        return jsonResponse({
+          items: [
+            { domain: 3, rewardPoolId: "0", contentId: "13", roundId: "2" },
+          ],
+        });
+      }
+      if (route === "/correlation/round-votes") {
+        expect(url.searchParams.get("rewardPoolId")).toBe("7");
+        return jsonResponse({ items: [voteItem(1)] });
+      }
+      if (route === "/correlation/bundle-round-votes") {
+        expect(url.searchParams.get("rewardPoolId")).toBe("11");
+        return jsonResponse({ items: [voteItem(2)] });
+      }
+      if (route === "/correlation/rating-round-votes") {
+        expect(url.searchParams.has("rewardPoolId")).toBe(false);
+        return jsonResponse({ items: [voteItem(3)] });
+      }
+      return new Response("not found", { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { buildConfiguredCorrelationSnapshotArtifact } = await import(
+      "../correlation-artifact-builder.js"
+    );
+    const logger = {
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    };
+
+    const artifact = await buildConfiguredCorrelationSnapshotArtifact(logger);
+
+    expect(artifact.roundPayoutSnapshots).toHaveLength(3);
+    expect(seenPathnames).toEqual(
+      expect.arrayContaining([
+        "/indexer/correlation/round-candidates",
+        "/indexer/correlation/bundle-round-candidates",
+        "/indexer/correlation/rating-round-candidates",
+        "/indexer/correlation/round-votes",
+        "/indexer/correlation/bundle-round-votes",
+        "/indexer/correlation/rating-round-votes",
+      ]),
+    );
+  });
+
   it("builds a deterministic stored artifact from Ponder candidates and votes", async () => {
     mockConfig();
     const fetchMock = vi.fn(

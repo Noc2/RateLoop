@@ -36,6 +36,7 @@ import type {
   RoundPayoutSnapshotArtifact,
 } from "./correlation-snapshots.js";
 import type { Logger } from "./logger.js";
+import { buildPonderUrl } from "./ponder-url.js";
 
 interface CandidateResponse {
   items?: unknown[];
@@ -547,7 +548,7 @@ async function fetchRoundCandidateWindow(
   for (const pathname of endpoints) {
     for (let offset = 0; candidates.length < targetCount * endpoints.length; ) {
       const limit = Math.min(targetCount, 200);
-      const url = new URL(pathname, ponderBaseUrl);
+      const url = buildPonderUrl(ponderBaseUrl, pathname);
       url.searchParams.set("limit", String(limit));
       url.searchParams.set("offset", String(offset));
       const response = await fetchJson<CandidateResponse>(url);
@@ -625,9 +626,9 @@ async function fetchRoundVotes(
   let trailingBaseRateUpBps: number | null = null;
   for (let page = 0; page < MAX_VOTE_PAGES_PER_ROUND; page += 1) {
     const offset = page * VOTE_PAGE_SIZE;
-    const url = new URL(
-      correlationVotesPathForDomain(candidate.domain),
+    const url = buildPonderUrl(
       ponderBaseUrl,
+      correlationVotesPathForDomain(candidate.domain),
     );
     if (candidate.domain !== PAYOUT_DOMAIN_PUBLIC_RATING) {
       url.searchParams.set("rewardPoolId", candidate.rewardPoolId.toString());
