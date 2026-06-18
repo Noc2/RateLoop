@@ -22,6 +22,25 @@ const VIEWPORTS = [
 
 const ROUTES = ["/", "/rate", "/ask", "/governance", "/docs", "/legal"];
 const WALLET_ROUTES = new Set(["/rate", "/ask", "/governance"]);
+const BETA_NOTICE_DISMISSED_STORAGE_KEY = "rateloop:beta-notice-dismissed";
+
+async function dismissBetaNotice(page: Page): Promise<void> {
+  await page.addInitScript(key => {
+    try {
+      window.localStorage.setItem(key, "true");
+    } catch {
+      // localStorage may be unavailable in some test contexts; the test still runs.
+    }
+  }, BETA_NOTICE_DISMISSED_STORAGE_KEY);
+
+  await page.evaluate(key => {
+    try {
+      window.localStorage.setItem(key, "true");
+    } catch {
+      // localStorage may be unavailable in some test contexts; the test still runs.
+    }
+  }, BETA_NOTICE_DISMISSED_STORAGE_KEY);
+}
 
 async function expectNavigationForViewport(page: Page, width: number): Promise<void> {
   const sidebar = page.locator("aside").first();
@@ -108,6 +127,10 @@ async function expectRouteControls(page: Page, path: string, width: number): Pro
 }
 
 test.describe("Responsive layout", () => {
+  test.beforeEach(async ({ connectedPage: page }) => {
+    await dismissBetaNotice(page);
+  });
+
   for (const viewport of VIEWPORTS) {
     test(`key routes stay usable without horizontal overflow at ${viewport.name}`, async ({ connectedPage: page }) => {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
