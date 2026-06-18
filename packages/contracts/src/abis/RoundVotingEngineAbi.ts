@@ -663,6 +663,30 @@ export const RoundVotingEngineAbi = [
   },
   {
     "type": "function",
+    "name": "pendingRatingSettlementReplay",
+    "inputs": [
+      {
+        "name": "contentId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "roundId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "previewCommitContext",
     "inputs": [
       {
@@ -883,6 +907,30 @@ export const RoundVotingEngineAbi = [
     "outputs": [
       {
         "name": "settled",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "replayPendingRatingSettlement",
+    "inputs": [
+      {
+        "name": "contentId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "roundId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "recorded",
         "type": "bool",
         "internalType": "bool"
       }
