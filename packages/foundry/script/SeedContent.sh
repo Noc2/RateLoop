@@ -7,7 +7,9 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEPLOY_JSON="$SCRIPT_DIR/../deployments/31337.json"
+DEPLOYED_CONTRACTS_TS="$SCRIPT_DIR/../../contracts/src/deployedContracts.ts"
 CATEGORY_ID_RESOLVER="$SCRIPT_DIR/../scripts-js/resolveCategoryId.js"
+DEPLOYMENT_SYNC_VALIDATOR="$SCRIPT_DIR/../scripts-js/validateLocalDeploymentSync.js"
 PONDER_ENV="$SCRIPT_DIR/../../ponder/.env.local"
 
 RPC="http://127.0.0.1:8545"
@@ -49,6 +51,18 @@ if ! cast chain-id --rpc-url "$RPC" > /dev/null 2>&1; then
   echo "Skipping seed: localhost RPC not available"
   exit 0
 fi
+
+SEED_DEPLOYMENT_CONTRACTS=(
+  "LoopReputation"
+  "ContentRegistry"
+  "QuestionRewardPoolEscrow"
+  "FeedbackBonusEscrow"
+  "MockERC20"
+  "RoundVotingEngine"
+  "CategoryRegistry"
+)
+
+node "$DEPLOYMENT_SYNC_VALIDATOR" "$DEPLOY_JSON" "$DEPLOYED_CONTRACTS_TS" 31337 "${SEED_DEPLOYMENT_CONTRACTS[@]}"
 
 # Read contract addresses from deployment file. Foundry may rewrite JSON spacing,
 # so parse the artifact instead of grepping for a specific pretty-printed shape.
