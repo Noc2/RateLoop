@@ -205,11 +205,10 @@ test("getThirdwebWalletSmartAccountOptions exposes Sepolia smart account options
   assert.equal(getThirdwebWalletSmartAccountOptions(480), undefined);
 });
 
-test("getThirdwebWalletSmartAccountOptions exposes Base Sepolia smart account options", () => {
+test("getThirdwebWalletSmartAccountOptions omits Base Sepolia because it uses EIP-7702", () => {
   const smartAccount = getThirdwebWalletSmartAccountOptions(84532, { sponsorshipMode: "self-funded" });
 
-  assert.equal(smartAccount?.chain.id, 84532);
-  assert.equal(smartAccount && "sponsorGas" in smartAccount ? smartAccount.sponsorGas : undefined, false);
+  assert.equal(smartAccount, undefined);
   assert.equal(getThirdwebWalletSmartAccountOptions(8453), undefined);
 });
 

@@ -5,6 +5,7 @@ RateLoop's next live rollout is a fresh Base deployment path. Test on Base Sepol
 ## Implemented improvements
 
 - External wallets now get a direct wagmi capability probe for EIP-5792 batch support. This covers Base Sepolia and Base mainnet wallets whose `wallet_getCapabilities` result is visible through wagmi even if the thirdweb active-wallet bridge is stale.
+- Thirdweb in-app wallets use EIP-7702 on Base Sepolia and Base mainnet so the execution sender stays aligned with the Google/email wallet's EOA for sender-bound flows such as legacy allocation claims.
 - Self-funded external wallet batches can execute through wagmi `sendCallsSync`, so MetaMask/Base Account style wallets can use `wallet_sendCalls` for atomic Base batches instead of falling back to separate `approve` and action transactions.
 - Batched voting no longer asks for an LREP permit signature first. If allowance is low, the batched path submits `LoopReputation.approve(votingEngine, amount)` and `RoundVotingEngine.commitVote(...)` together as one atomic wallet batch.
 - Thirdweb in-app wallets keep the sponsored/self-funded thirdweb path, including the existing verifier allowlist for `approve + commitVote` and the current free-transaction accounting.

@@ -18,13 +18,10 @@ test("thirdweb in-app wallets use sponsored EIP-4337 mode on World Chain Sepolia
   });
 });
 
-test("thirdweb in-app wallets use sponsored EIP-4337 mode on Base Sepolia", () => {
+test("thirdweb in-app wallets use sponsored EIP-7702 mode on Base Sepolia", () => {
   assert.deepEqual(getThirdwebWalletExecutionMode(84532), {
-    mode: "EIP4337",
-    smartAccount: {
-      chain: defineChain(84532),
-      sponsorGas: true,
-    },
+    mode: "EIP7702",
+    sponsorGas: true,
   });
 });
 
@@ -40,10 +37,10 @@ test("World Chain Sepolia supports in-app execution without using EIP-7702", () 
   assert.equal(usesThirdwebInAppEip7702Execution(4801), false);
 });
 
-test("Base Sepolia supports in-app execution without using EIP-7702", () => {
+test("Base Sepolia supports in-app EIP-7702 execution", () => {
   assert.equal(supportsThirdwebExecutionCapabilities(84532), true);
   assert.equal(supportsThirdwebInAppExecutionCapabilities(84532), true);
-  assert.equal(usesThirdwebInAppEip7702Execution(84532), false);
+  assert.equal(usesThirdwebInAppEip7702Execution(84532), true);
 });
 
 test("thirdweb in-app wallets use sponsored EIP-7702 mode on World Chain mainnet", () => {

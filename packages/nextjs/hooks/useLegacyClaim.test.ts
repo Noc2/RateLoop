@@ -165,6 +165,15 @@ test("retries opaque thirdweb legacy claim bundler failures as self-funded EOA s
   assert.equal(shouldRetryLegacySponsoredClaimAsEoa(new Error('tw_execute error: {"message":"Bad Request"}')), true);
 });
 
+test("retries temporary sponsored legacy claim wallet mismatches as EOA sends", () => {
+  assert.equal(
+    shouldRetryLegacySponsoredClaimAsEoa(
+      new Error("Temporary sponsored legacy claim wallet does not match the eligible legacy account."),
+    ),
+    true,
+  );
+});
+
 test("does not retry legacy sponsored claims after the user rejects a wallet prompt", () => {
   assert.equal(shouldRetryLegacySponsoredClaimAsEoa(new Error("User rejected the request.")), false);
 });
