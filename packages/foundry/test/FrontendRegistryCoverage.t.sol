@@ -679,19 +679,36 @@ contract FrontendRegistryCoverageTest is Test {
         assertEq(registry.feeCreditorForEngine(address(votingEngine)), feeCreditor);
     }
 
-    function test_GrantRoleExtraFeeCreditor_CannotCreditFees() public {
-        _registerFrontend(frontend1);
+    function test_GrantRoleExtraFeeCreditor_Reverts() public {
         address extraCreditor = address(new MockRewardDistributor_FR(address(votingEngine)));
         bytes32 feeCreditorRole = registry.FEE_CREDITOR_ROLE();
 
         vm.prank(admin);
+        vm.expectRevert(FrontendRegistry.FeeCreditorRoleManagedInternally.selector);
         registry.grantRole(feeCreditorRole, extraCreditor);
-        assertTrue(registry.hasRole(feeCreditorRole, extraCreditor));
-        assertEq(registry.feeCreditor(), feeCreditor);
+        assertFalse(registry.hasRole(feeCreditorRole, extraCreditor));
+    }
 
-        vm.prank(extraCreditor);
-        vm.expectRevert("Unauthorized fee creditor");
-        registry.creditFees(frontend1, 100e6);
+    function test_RevokeRoleMappedFeeCreditor_Reverts() public {
+        bytes32 feeCreditorRole = registry.FEE_CREDITOR_ROLE();
+
+        vm.prank(admin);
+        vm.expectRevert(FrontendRegistry.FeeCreditorRoleManagedInternally.selector);
+        registry.revokeRole(feeCreditorRole, feeCreditor);
+
+        assertTrue(registry.hasRole(feeCreditorRole, feeCreditor));
+        assertEq(registry.feeCreditorForEngine(address(votingEngine)), feeCreditor);
+    }
+
+    function test_RenounceRoleMappedFeeCreditor_Reverts() public {
+        bytes32 feeCreditorRole = registry.FEE_CREDITOR_ROLE();
+
+        vm.prank(feeCreditor);
+        vm.expectRevert(FrontendRegistry.FeeCreditorRoleManagedInternally.selector);
+        registry.renounceRole(feeCreditorRole, feeCreditor);
+
+        assertTrue(registry.hasRole(feeCreditorRole, feeCreditor));
+        assertEq(registry.feeCreditorForEngine(address(votingEngine)), feeCreditor);
     }
 
     function test_AddFeeCreditor_AdminWithoutGovernance_Reverts() public {

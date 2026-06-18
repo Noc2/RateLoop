@@ -27,6 +27,7 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     using SafeCast for uint256;
 
     error HistoricalFeeCreditor();
+    error FeeCreditorRoleManagedInternally();
 
     // --- Access Control Roles ---
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
@@ -152,6 +153,21 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
 
         lrepToken = IERC20(_lrepToken);
         confiscationRecipient = _governance;
+    }
+
+    function grantRole(bytes32 role, address account) public override {
+        if (role == FEE_CREDITOR_ROLE) revert FeeCreditorRoleManagedInternally();
+        super.grantRole(role, account);
+    }
+
+    function revokeRole(bytes32 role, address account) public override {
+        if (role == FEE_CREDITOR_ROLE) revert FeeCreditorRoleManagedInternally();
+        super.revokeRole(role, account);
+    }
+
+    function renounceRole(bytes32 role, address callerConfirmation) public override {
+        if (role == FEE_CREDITOR_ROLE) revert FeeCreditorRoleManagedInternally();
+        super.renounceRole(role, callerConfirmation);
     }
 
     // --- View Functions ---

@@ -1345,6 +1345,11 @@ export const FrontendRegistryAbi = [
   },
   {
     "type": "error",
+    "name": "FeeCreditorRoleManagedInternally",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "FrontendExitPending",
     "inputs": []
   },

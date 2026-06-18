@@ -10315,6 +10315,11 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "error",
+          name: "FeeCreditorRoleManagedInternally",
+          inputs: [],
+        },
+        {
+          type: "error",
           name: "FrontendExitPending",
           inputs: [],
         },
@@ -45766,6 +45771,11 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "error",
+          name: "FeeCreditorRoleManagedInternally",
+          inputs: [],
+        },
+        {
+          type: "error",
           name: "FrontendExitPending",
           inputs: [],
         },
@@ -75958,6 +75968,11 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "bytes32",
             },
           ],
+        },
+        {
+          type: "error",
+          name: "FeeCreditorRoleManagedInternally",
+          inputs: [],
         },
         {
           type: "error",
@@ -106490,6 +106505,11 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "bytes32",
             },
           ],
+        },
+        {
+          type: "error",
+          name: "FeeCreditorRoleManagedInternally",
+          inputs: [],
         },
         {
           type: "error",
