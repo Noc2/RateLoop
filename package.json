@@ -74,6 +74,7 @@
     "base-sepolia:check": "node scripts/check-base-sepolia-readiness.mjs",
     "worldchain:check": "node scripts/check-worldchain-mainnet-readiness.mjs",
     "worldchain-sepolia:check": "node scripts/check-worldchain-sepolia-readiness.mjs",
+    "base-sepolia:e2e-wallet": "yarn workspace @rateloop/nextjs e2e:wallet:base-sepolia",
     "yeet": "node scripts/yeet-pr.mjs",
     "ponder:dev": "yarn workspace @rateloop/ponder dev",
     "ponder:dev:ui": "yarn workspace @rateloop/ponder dev:ui",

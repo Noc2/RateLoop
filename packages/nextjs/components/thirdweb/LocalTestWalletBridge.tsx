@@ -11,14 +11,22 @@ import scaffoldConfig from "~~/scaffold.config";
 import { useGlobalState } from "~~/services/store/store";
 import { thirdwebClient } from "~~/services/thirdweb/client";
 import { createLocalTestWallet } from "~~/services/thirdweb/localTestWallet";
-import { RATELOOP_E2E_TEST_WALLET_PRIVATE_KEY_STORAGE_KEY } from "~~/services/thirdweb/testWalletStorage";
+import {
+  RATELOOP_E2E_TEST_WALLET_CHAIN_ID_STORAGE_KEY,
+  RATELOOP_E2E_TEST_WALLET_PRIVATE_KEY_STORAGE_KEY,
+} from "~~/services/thirdweb/testWalletStorage";
 import { isLocalE2EWalletBridgeEnabled } from "~~/utils/env/e2eProduction";
 import { publicEnv } from "~~/utils/env/public";
-import { NETWORKS_EXTRA_DATA } from "~~/utils/scaffold-eth";
+import { type ChainWithAttributes, NETWORKS_EXTRA_DATA } from "~~/utils/scaffold-eth";
 
-const LOCAL_TEST_CHAIN_ID = 31337;
+const DEFAULT_LOCAL_TEST_CHAIN_ID = foundry.id;
 const LOCAL_TEST_WALLET_CONNECT_TIMEOUT_MS = 5_000;
 const allowLocalE2EProductionBuild = process.env.NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD === "true";
+
+type LocalTestWalletConfig = {
+  chainId: number;
+  privateKey: string;
+};
 
 function isLocalTestWalletEnabled() {
   if (typeof window === "undefined") {
@@ -32,12 +40,43 @@ function isLocalTestWalletEnabled() {
   });
 }
 
-function getLocalTestWalletPrivateKey() {
+function parseLocalTestChainId(value: string | null | undefined): number {
+  const chainId = Number(value);
+
+  if (!Number.isSafeInteger(chainId) || chainId <= 0) {
+    return DEFAULT_LOCAL_TEST_CHAIN_ID;
+  }
+
+  return chainId;
+}
+
+function getConfiguredTargetNetwork(chainId: number): ChainWithAttributes | null {
+  const network = scaffoldConfig.targetNetworks.find(targetNetwork => targetNetwork.id === chainId);
+
+  if (!network) {
+    return null;
+  }
+
+  return {
+    ...network,
+    ...NETWORKS_EXTRA_DATA[chainId],
+  };
+}
+
+function getLocalTestWalletConfig(): LocalTestWalletConfig | null {
   if (!isLocalTestWalletEnabled() || !thirdwebClient) {
     return null;
   }
 
-  return window.localStorage.getItem(RATELOOP_E2E_TEST_WALLET_PRIVATE_KEY_STORAGE_KEY)?.trim() || null;
+  const privateKey = window.localStorage.getItem(RATELOOP_E2E_TEST_WALLET_PRIVATE_KEY_STORAGE_KEY)?.trim();
+  if (!privateKey) {
+    return null;
+  }
+
+  return {
+    chainId: parseLocalTestChainId(window.localStorage.getItem(RATELOOP_E2E_TEST_WALLET_CHAIN_ID_STORAGE_KEY)),
+    privateKey,
+  };
 }
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
@@ -57,9 +96,11 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string)
 }
 
 function LocalTestWalletBridgeRunner({
+  chainId,
   client,
   privateKey,
 }: {
+  chainId: number;
   client: NonNullable<typeof thirdwebClient>;
   privateKey: string;
 }) {
@@ -73,17 +114,21 @@ function LocalTestWalletBridgeRunner({
   const thirdwebTargetChain = useMemo(() => defineChain(targetNetwork), [targetNetwork]);
 
   useEffect(() => {
-    if (targetNetwork.id !== LOCAL_TEST_CHAIN_ID) {
-      const localTestNetwork =
-        scaffoldConfig.targetNetworks.find(network => network.id === LOCAL_TEST_CHAIN_ID) ?? foundry;
-      setTargetNetwork({
-        ...localTestNetwork,
-        ...NETWORKS_EXTRA_DATA[LOCAL_TEST_CHAIN_ID],
-      });
+    if (targetNetwork.id !== chainId) {
+      const localTestNetwork = getConfiguredTargetNetwork(chainId);
+      if (!localTestNetwork) {
+        console.error("Local test wallet chain is not configured as a target network", {
+          chainId,
+          targetNetworks: scaffoldConfig.targetNetworks.map(network => network.id),
+        });
+        return;
+      }
+
+      setTargetNetwork(localTestNetwork);
       return;
     }
 
-    if (thirdwebTargetChain.id !== LOCAL_TEST_CHAIN_ID) {
+    if (thirdwebTargetChain.id !== chainId) {
       return;
     }
 
@@ -144,6 +189,7 @@ function LocalTestWalletBridgeRunner({
   }, [
     activeThirdwebAccount?.address,
     address,
+    chainId,
     client,
     connect,
     privateKey,
@@ -157,15 +203,17 @@ function LocalTestWalletBridgeRunner({
 }
 
 export function LocalTestWalletBridge() {
-  const [privateKey, setPrivateKey] = useState<string | null>(null);
+  const [config, setConfig] = useState<LocalTestWalletConfig | null>(null);
 
   useEffect(() => {
-    setPrivateKey(getLocalTestWalletPrivateKey());
+    setConfig(getLocalTestWalletConfig());
   }, []);
 
-  if (!privateKey || !thirdwebClient) {
+  if (!config || !thirdwebClient) {
     return null;
   }
 
-  return <LocalTestWalletBridgeRunner client={thirdwebClient} privateKey={privateKey} />;
+  return (
+    <LocalTestWalletBridgeRunner chainId={config.chainId} client={thirdwebClient} privateKey={config.privateKey} />
+  );
 }

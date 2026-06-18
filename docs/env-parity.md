@@ -74,6 +74,25 @@ Either flag set to `"true"` enables the mode. CI E2E workflows set both. Core Ne
 
 Related: `RATELOOP_E2E_WALLET_BRIDGE` and hostname checks in `isLocalE2EWalletBridgeEnabled()` for the local test wallet bridge component.
 
+### Base Sepolia E2E wallet
+
+Use `yarn base-sepolia:e2e-wallet generate` to create a disposable Base Sepolia wallet for automated local
+production-style browser testing. The command writes `.env.base-sepolia-e2e-wallet.local`, which is ignored by the
+repo-wide `.env.*` rule, and prints only the address to fund.
+
+The local browser wallet bridge is still localhost-only. To exercise Base Sepolia writes through the app, run the
+frontend locally with `NEXT_PUBLIC_TARGET_NETWORKS=84532`, `RATELOOP_E2E_PRODUCTION_BUILD=true`, and
+`NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD=true`, then seed the page with:
+
+| Storage key                            | Value                                                       |
+| -------------------------------------- | ----------------------------------------------------------- |
+| `rateloop:e2e-test-wallet-private-key` | `BASE_SEPOLIA_E2E_PRIVATE_KEY` from the ignored wallet file |
+| `rateloop:e2e-test-wallet-chain-id`    | `84532`                                                     |
+| `rateloop:e2e-rpc-url`                 | Base Sepolia RPC URL                                        |
+
+Use `yarn base-sepolia:e2e-wallet balances` after funding to verify ETH, USDC, and LREP. Treat this wallet as
+test-only forever and never fund it on Base mainnet.
+
 ## Contract address prefix map
 
 Shared deployments live in `packages/contracts/src/deployedContracts.ts`. Package-specific env names override artifacts only on local `31337` or unsupported chains.

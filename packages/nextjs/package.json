@@ -42,6 +42,7 @@
     "e2e:firefox": "playwright test --config e2e/playwright.config.ts --project=compat-firefox",
     "e2e:webkit": "playwright test --config e2e/playwright.config.ts --project=compat-webkit",
     "e2e:ui": "playwright test --config e2e/playwright.config.ts --ui",
+    "e2e:wallet:base-sepolia": "node e2e/scripts/base-sepolia-wallet.mjs",
     "e2e:preflight": "node e2e/scripts/preflight.mjs",
     "e2e:reset": "bash e2e/scripts/reset-chain.sh"
   },

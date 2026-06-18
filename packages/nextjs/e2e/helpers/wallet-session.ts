@@ -1,19 +1,27 @@
-import type { Page } from "@playwright/test";
 import { TERMS_ACCEPTED_KEY, TERMS_VERSION } from "../../constants/termsAcceptance";
 import {
   RATELOOP_E2E_RPC_URL_STORAGE_KEY,
+  RATELOOP_E2E_TEST_WALLET_CHAIN_ID_STORAGE_KEY,
   RATELOOP_E2E_TEST_WALLET_PRIVATE_KEY_STORAGE_KEY,
 } from "../../services/thirdweb/testWalletStorage";
 import { WALLET_STATE_EXACT_KEYS, WALLET_STATE_PREFIXES } from "../../services/thirdweb/walletStateCleanup";
 import { E2E_RPC_URL } from "./service-urls";
+import type { Page } from "@playwright/test";
 
 type WalletSessionStorageEntry = readonly [string, string];
 
-function getWalletSessionStorageEntries(privateKey: string, rpcUrl: string): WalletSessionStorageEntry[] {
+const DEFAULT_E2E_CHAIN_ID = 31337;
+
+function getWalletSessionStorageEntries(
+  privateKey: string,
+  rpcUrl: string,
+  chainId: number = DEFAULT_E2E_CHAIN_ID,
+): WalletSessionStorageEntry[] {
   return [
     [RATELOOP_E2E_TEST_WALLET_PRIVATE_KEY_STORAGE_KEY, privateKey],
+    [RATELOOP_E2E_TEST_WALLET_CHAIN_ID_STORAGE_KEY, String(chainId)],
     [RATELOOP_E2E_RPC_URL_STORAGE_KEY, rpcUrl],
-    ["thirdweb:active-chain", JSON.stringify({ id: 31337 })],
+    ["thirdweb:active-chain", JSON.stringify({ id: chainId })],
     [
       TERMS_ACCEPTED_KEY,
       JSON.stringify({
@@ -43,8 +51,8 @@ function getWalletSessionStorageEntries(privateKey: string, rpcUrl: string): Wal
  *
  * Must run BEFORE any page navigation (via page.addInitScript).
  */
-function seedWalletSessionScript(privateKey: string, rpcUrl: string): string {
-  const storageEntries = getWalletSessionStorageEntries(privateKey, rpcUrl);
+function seedWalletSessionScript(privateKey: string, rpcUrl: string, chainId: number = DEFAULT_E2E_CHAIN_ID): string {
+  const storageEntries = getWalletSessionStorageEntries(privateKey, rpcUrl, chainId);
 
   return `
     const walletStateExactKeys = ${JSON.stringify(WALLET_STATE_EXACT_KEYS)};
@@ -81,10 +89,10 @@ function seedWalletSessionScript(privateKey: string, rpcUrl: string): string {
 export async function setupWallet(
   page: Page,
   privateKey: string,
-  options: { bootstrap?: boolean } = {},
+  options: { bootstrap?: boolean; chainId?: number; rpcUrl?: string } = {},
 ): Promise<void> {
-  const { bootstrap = true } = options;
-  await page.addInitScript(seedWalletSessionScript(privateKey, E2E_RPC_URL));
+  const { bootstrap = true, chainId = DEFAULT_E2E_CHAIN_ID, rpcUrl = E2E_RPC_URL } = options;
+  await page.addInitScript(seedWalletSessionScript(privateKey, rpcUrl, chainId));
 
   if (bootstrap && page.url() === "about:blank") {
     await page.goto("/", { waitUntil: "domcontentloaded" });
@@ -92,7 +100,13 @@ export async function setupWallet(
 }
 
 /** Replace the injected local wallet session after a page has already loaded. */
-export async function swapWalletSession(page: Page, privateKey: string): Promise<void> {
+export async function swapWalletSession(
+  page: Page,
+  privateKey: string,
+  options: { chainId?: number; rpcUrl?: string } = {},
+): Promise<void> {
+  const { chainId = DEFAULT_E2E_CHAIN_ID, rpcUrl = E2E_RPC_URL } = options;
+
   await page.evaluate(
     ({ exactKeys, prefixes, storageEntries }) => {
       const exactKeySet = new Set<string>(exactKeys);
@@ -123,7 +137,7 @@ export async function swapWalletSession(page: Page, privateKey: string): Promise
     {
       exactKeys: [...WALLET_STATE_EXACT_KEYS],
       prefixes: [...WALLET_STATE_PREFIXES],
-      storageEntries: getWalletSessionStorageEntries(privateKey, E2E_RPC_URL),
+      storageEntries: getWalletSessionStorageEntries(privateKey, rpcUrl, chainId),
     },
   );
 }

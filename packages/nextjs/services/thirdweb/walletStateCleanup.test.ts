@@ -1,5 +1,6 @@
 import {
   RATELOOP_E2E_RPC_URL_STORAGE_KEY,
+  RATELOOP_E2E_TEST_WALLET_CHAIN_ID_STORAGE_KEY,
   RATELOOP_E2E_TEST_WALLET_PRIVATE_KEY_STORAGE_KEY,
 } from "./testWalletStorage";
 import { clearWalletState } from "./walletStateCleanup";
@@ -31,6 +32,7 @@ function createStorage(initialValues: Record<string, string>) {
 test("clearWalletState removes thirdweb, wagmi, and local E2E test wallet state", () => {
   const storage = createStorage({
     [RATELOOP_E2E_TEST_WALLET_PRIVATE_KEY_STORAGE_KEY]: "0xabc",
+    [RATELOOP_E2E_TEST_WALLET_CHAIN_ID_STORAGE_KEY]: "84532",
     [RATELOOP_E2E_RPC_URL_STORAGE_KEY]: "http://127.0.0.1:8545",
     "thirdweb:active-chain": JSON.stringify({ id: 31337 }),
     "wagmi.store": "{}",
@@ -40,6 +42,7 @@ test("clearWalletState removes thirdweb, wagmi, and local E2E test wallet state"
   clearWalletState(storage as Storage);
 
   assert.equal(storage.getItem(RATELOOP_E2E_TEST_WALLET_PRIVATE_KEY_STORAGE_KEY), null);
+  assert.equal(storage.getItem(RATELOOP_E2E_TEST_WALLET_CHAIN_ID_STORAGE_KEY), null);
   assert.equal(storage.getItem(RATELOOP_E2E_RPC_URL_STORAGE_KEY), null);
   assert.equal(storage.getItem("thirdweb:active-chain"), null);
   assert.equal(storage.getItem("wagmi.store"), null);
