@@ -36,6 +36,10 @@ import {
   getDefaultUsdcDisplayName,
   parseSubmissionRewardAmount,
 } from "~~/lib/questionRewardPools";
+import {
+  getThirdwebWalletFundingUnavailableMessage,
+  supportsThirdwebWalletFunding,
+} from "~~/lib/thirdweb/walletFunding";
 import { thirdwebClient } from "~~/services/thirdweb/client";
 import { notification } from "~~/utils/scaffold-eth";
 
@@ -210,8 +214,13 @@ export function AgentSubmissionPanel() {
   const requiredPerAskFunding = selectedPolicy
     ? parsePositiveAtomicAmount(selectedPolicy.perAskLimitAtomic, DEFAULT_PER_ASK_CAP_ATOMIC)
     : (policyFormPerAskCapAtomic ?? DEFAULT_PER_ASK_CAP_ATOMIC);
+  const targetSupportsThirdwebFunding = supportsThirdwebWalletFunding(targetNetwork.id);
   const canUseThirdwebFunding = Boolean(
-    thirdwebClient && agentWalletAddress && usdcAddress && targetNetwork.id !== LOCAL_FOUNDRY_CHAIN_ID,
+    thirdwebClient &&
+      agentWalletAddress &&
+      usdcAddress &&
+      targetNetwork.id !== LOCAL_FOUNDRY_CHAIN_ID &&
+      targetSupportsThirdwebFunding,
   );
   const fundingUnavailableMessage = !agentWalletAddress
     ? "Enter a valid agent wallet before funding it here."
@@ -219,7 +228,13 @@ export function AgentSubmissionPanel() {
       ? "Direct funding appears after thirdweb is configured for this deployment."
       : !usdcAddress
         ? "USDC is not configured for this network."
-        : "Direct USDC funding is available on live deployments. On local networks, use the faucet from your wallet menu.";
+        : !targetSupportsThirdwebFunding
+          ? getThirdwebWalletFundingUnavailableMessage({
+              asset: "USDC",
+              chainId: targetNetwork.id,
+              chainName: targetNetwork.name,
+            })
+          : "Direct USDC funding is available on live deployments. On local networks, use the faucet from your wallet menu.";
 
   useEffect(() => {
     setPolicyForm(prev => {

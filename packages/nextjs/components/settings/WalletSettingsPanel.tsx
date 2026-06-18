@@ -11,6 +11,10 @@ import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import { useRateLoopSwitchNetwork } from "~~/hooks/useRateLoopSwitchNetwork";
 import { useWalletSummaryData } from "~~/hooks/useWalletSummaryData";
 import { getDefaultUsdcAddress, getDefaultUsdcDisplayName } from "~~/lib/questionRewardPools";
+import {
+  getThirdwebWalletFundingUnavailableMessage,
+  supportsThirdwebWalletFunding,
+} from "~~/lib/thirdweb/walletFunding";
 import { thirdwebClient } from "~~/services/thirdweb/client";
 
 const LOCAL_FOUNDRY_CHAIN_ID = 31337;
@@ -74,6 +78,7 @@ export function WalletSettingsPanel({ address }: { address?: string }) {
   const walletAddress = address && isAddress(address) ? (address as `0x${string}`) : undefined;
   const nativeBalanceChainId = chain?.id ?? targetNetwork.id;
   const targetSupportsEthTopUp = targetNetwork.id !== LOCAL_FOUNDRY_CHAIN_ID;
+  const targetSupportsThirdwebFunding = supportsThirdwebWalletFunding(targetNetwork.id);
   const connectedToTargetNetwork = chain?.id === targetNetwork.id;
   const thirdwebTargetChain = defineChain(targetNetwork);
   const usdcAddress = getDefaultUsdcAddress(targetNetwork.id);
@@ -86,27 +91,50 @@ export function WalletSettingsPanel({ address }: { address?: string }) {
       enabled: Boolean(walletAddress && nativeBalanceChainId),
     },
   });
-  const canUseEthTopUp = Boolean(thirdwebClient && walletAddress && targetSupportsEthTopUp && connectedToTargetNetwork);
+  const canUseEthTopUp = Boolean(
+    thirdwebClient &&
+      walletAddress &&
+      targetSupportsEthTopUp &&
+      targetSupportsThirdwebFunding &&
+      connectedToTargetNetwork,
+  );
   const canUseUsdcTopUp = Boolean(
-    thirdwebClient && walletAddress && usdcAddress && targetSupportsEthTopUp && connectedToTargetNetwork,
+    thirdwebClient &&
+      walletAddress &&
+      usdcAddress &&
+      targetSupportsEthTopUp &&
+      targetSupportsThirdwebFunding &&
+      connectedToTargetNetwork,
   );
 
   const ethUnavailableMessage = !thirdwebClient
     ? "ETH top-up is unavailable until thirdweb is configured for this deployment."
     : !targetSupportsEthTopUp
       ? "ETH top-up is available on live deployments."
-      : !connectedToTargetNetwork
-        ? `Switch to ${targetNetwork.name} to buy ETH for gas.`
-        : "Connect a wallet to buy ETH for gas.";
+      : !targetSupportsThirdwebFunding
+        ? getThirdwebWalletFundingUnavailableMessage({
+            asset: "ETH",
+            chainId: targetNetwork.id,
+            chainName: targetNetwork.name,
+          })
+        : !connectedToTargetNetwork
+          ? `Switch to ${targetNetwork.name} to buy ETH for gas.`
+          : "Connect a wallet to buy ETH for gas.";
   const usdcUnavailableMessage = !thirdwebClient
     ? "USDC top-up is unavailable until thirdweb is configured for this deployment."
     : !targetSupportsEthTopUp
       ? "USDC top-up is available on live deployments."
       : !usdcAddress
         ? "USDC is not configured for this network."
-        : !connectedToTargetNetwork
-          ? `Switch to ${targetNetwork.name} to buy USDC.`
-          : "Connect a wallet to buy USDC.";
+        : !targetSupportsThirdwebFunding
+          ? getThirdwebWalletFundingUnavailableMessage({
+              asset: "USDC",
+              chainId: targetNetwork.id,
+              chainName: targetNetwork.name,
+            })
+          : !connectedToTargetNetwork
+            ? `Switch to ${targetNetwork.name} to buy USDC.`
+            : "Connect a wallet to buy USDC.";
 
   const handleOpenEthFunding = useCallback(() => {
     if (!walletAddress) return;

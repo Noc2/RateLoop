@@ -4,13 +4,17 @@ import { type ReactNode, createContext, useCallback, useContext, useEffect, useM
 import { createPortal } from "react-dom";
 import { BuyWidget } from "thirdweb/react";
 import { XMarkIcon } from "@heroicons/react/24/outline";
+import {
+  getThirdwebWalletFundingUnavailableMessage,
+  supportsThirdwebWalletFunding,
+} from "~~/lib/thirdweb/walletFunding";
 import { thirdwebClient } from "~~/services/thirdweb/client";
 
 type BuyWidgetProps = React.ComponentProps<typeof BuyWidget>;
 
-export type WalletFundingAsset = "ETH" | "USDC";
+type WalletFundingAsset = "ETH" | "USDC";
 
-export type WalletFundingRequest = {
+type WalletFundingRequest = {
   amount: string;
   asset: WalletFundingAsset;
   buttonLabel?: string;
@@ -64,6 +68,18 @@ export function WalletFundingProvider({ children }: { children: ReactNode }) {
     void request?.onSuccess?.();
   }, [request]);
 
+  const canRenderBuyWidget = Boolean(request && thirdwebClient && supportsThirdwebWalletFunding(request.chain.id));
+  const unavailableMessage = request
+    ? !thirdwebClient
+      ? (request.unavailableMessage ?? "Funding is unavailable until thirdweb is configured.")
+      : getThirdwebWalletFundingUnavailableMessage({
+          asset: request.asset,
+          chainId: request.chain.id,
+          chainName: request.chain.name,
+          fallbackMessage: request.unavailableMessage,
+        })
+    : null;
+
   const modal =
     isMounted && request
       ? createPortal(
@@ -88,7 +104,7 @@ export function WalletFundingProvider({ children }: { children: ReactNode }) {
               >
                 <XMarkIcon className="h-5 w-5" />
               </button>
-              {thirdwebClient ? (
+              {canRenderBuyWidget && thirdwebClient ? (
                 <BuyWidget
                   amount={request.amount}
                   amountEditable
@@ -108,9 +124,7 @@ export function WalletFundingProvider({ children }: { children: ReactNode }) {
               ) : (
                 <div className="surface-card rounded-2xl p-6">
                   <h2 className="text-2xl font-semibold text-base-content">{request.title}</h2>
-                  <p className="mt-3 text-sm leading-relaxed text-base-content/65">
-                    {request.unavailableMessage ?? "Funding is unavailable until thirdweb is configured."}
-                  </p>
+                  <p className="mt-3 text-sm leading-relaxed text-base-content/65">{unavailableMessage}</p>
                 </div>
               )}
             </div>
