@@ -261,6 +261,56 @@ test("attaches approved wallet details to a submitted content id by normalized o
   assert.equal(stored?.contentId, "42");
 });
 
+test("keeps approved details bound to the original content and deployment scope", async () => {
+  const result = await createApprovedQuestionDetails({
+    detailsId: "det_relinkguarddetail",
+    ownerWalletAddress: WALLET,
+    text: "Details that should stay with their first question",
+  });
+  assert.equal(result.status, "approved");
+  assert.ok(result.detailsUrl);
+
+  const deploymentScope = {
+    chainId: 31337,
+    contentRegistryAddress: "0x0000000000000000000000000000000000000001",
+    deploymentKey: "31337:0x0000000000000000000000000000000000000001",
+  };
+
+  const firstAttach = await attachQuestionDetailsToContent({
+    ...deploymentScope,
+    contentId: "42",
+    detailsUrl: result.detailsUrl,
+    ownerWalletAddress: WALLET,
+  });
+  const idempotentAttach = await attachQuestionDetailsToContent({
+    ...deploymentScope,
+    contentId: "42",
+    detailsUrl: result.detailsUrl,
+    ownerWalletAddress: WALLET,
+  });
+  const crossContentAttach = await attachQuestionDetailsToContent({
+    ...deploymentScope,
+    contentId: "43",
+    detailsUrl: result.detailsUrl,
+    ownerWalletAddress: WALLET,
+  });
+  const crossDeploymentAttach = await attachQuestionDetailsToContent({
+    ...deploymentScope,
+    contentId: "42",
+    deploymentKey: "31337:0x0000000000000000000000000000000000000002",
+    detailsUrl: result.detailsUrl,
+    ownerWalletAddress: WALLET,
+  });
+
+  assert.equal(firstAttach, true);
+  assert.equal(idempotentAttach, true);
+  assert.equal(crossContentAttach, false);
+  assert.equal(crossDeploymentAttach, false);
+  const stored = await getQuestionDetails("det_relinkguarddetail");
+  assert.equal(stored?.contentId, "42");
+  assert.equal(stored?.deploymentKey, deploymentScope.deploymentKey);
+});
+
 test("attaches approved agent details to a submitted content id by agent id", async () => {
   const result = await createApprovedQuestionDetails({
     agentId: "agent-1",

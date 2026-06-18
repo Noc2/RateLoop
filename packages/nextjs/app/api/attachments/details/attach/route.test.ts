@@ -198,6 +198,31 @@ test("attaches gated details and images with content submission proof", async ()
     args: [imageId],
   });
   assert.equal(image.rows[0]?.content_id, "123");
+
+  installReceipt([
+    buildContentSubmittedLog({
+      address: contentRegistryAddress,
+      contentId: 124n,
+      submitter: SUBMITTER,
+    }),
+  ]);
+
+  const relinkResponse = await POST(
+    makeRequest({
+      chainId: CHAIN_ID,
+      details: [{ contentId: "124", detailsHash, detailsUrl }],
+      transactionHashes: [TRANSACTION_HASH],
+    }),
+  );
+  const relinkBody = await relinkResponse.json();
+
+  assert.equal(relinkResponse.status, 200);
+  assert.equal(relinkBody.attached, 0);
+  const relinkedDetails = await dbClient.execute({
+    sql: "SELECT content_id FROM question_details WHERE id = ?",
+    args: [detailsId],
+  });
+  assert.equal(relinkedDetails.rows[0]?.content_id, "123");
 });
 
 test("does not attach public details from content submission proof alone", async () => {

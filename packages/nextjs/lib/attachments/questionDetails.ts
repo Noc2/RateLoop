@@ -1,5 +1,5 @@
 import { createHash } from "crypto";
-import { and, eq, or } from "drizzle-orm";
+import { and, eq, isNull, or } from "drizzle-orm";
 import "server-only";
 import {
   MAX_QUESTION_DETAILS_TEXT_BYTES,
@@ -42,6 +42,20 @@ type QuestionDetailsDeploymentScope = {
   contentRegistryAddress?: string | null;
   deploymentKey?: string | null;
 };
+
+function questionDetailsSameDeploymentScopePredicate(scope: QuestionDetailsDeploymentScope) {
+  return and(
+    scope.deploymentKey
+      ? eq(questionDetails.deploymentKey, scope.deploymentKey)
+      : isNull(questionDetails.deploymentKey),
+    scope.chainId === undefined || scope.chainId === null
+      ? isNull(questionDetails.chainId)
+      : eq(questionDetails.chainId, scope.chainId),
+    scope.contentRegistryAddress
+      ? eq(questionDetails.contentRegistryAddress, scope.contentRegistryAddress)
+      : isNull(questionDetails.contentRegistryAddress),
+  );
+}
 
 type QuestionDetailsUploaderIdentity =
   | {
@@ -531,7 +545,17 @@ export async function attachQuestionDetailsToContent(
       deploymentKey: params.deploymentKey ?? null,
       updatedAt,
     })
-    .where(and(eq(questionDetails.id, detailsId), eq(questionDetails.status, "approved"), identityPredicate))
+    .where(
+      and(
+        eq(questionDetails.id, detailsId),
+        eq(questionDetails.status, "approved"),
+        identityPredicate,
+        or(
+          isNull(questionDetails.contentId),
+          and(eq(questionDetails.contentId, params.contentId), questionDetailsSameDeploymentScopePredicate(params)),
+        ),
+      ),
+    )
     .returning({ id: questionDetails.id });
   return Boolean(updated);
 }
