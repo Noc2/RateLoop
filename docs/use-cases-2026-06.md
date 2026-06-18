@@ -168,7 +168,7 @@ LinkedIn + corporate-email role verification, not its NDA; its buyers pay ~$60â€
 for *proven roles*, and Wynter is a $16M-ARR bootstrapped business on exactly that). Re-rate to
 ~7 when consistency screening + verified attribute tiers ship; ~7.5â€“8 if role attestation
 (zkTLS LinkedIn/work-email per the audience plan) lands. Consumer representativeness of the
-World App rater base remains the structural cap.
+Base-compatible rater base remains the structural cap.
 
 ### 6. Agent-to-agent work acceptance oracle (PMF 6, speculative)
 
@@ -186,7 +186,7 @@ this stays advisory-only.
 ### 7. Rating layer for AI-written fact-checks and community notes (PMF 5.5)
 
 Unchanged: AI bots write ~half of submitted Community Notes and unpaid human *rater* capacity is
-the binding constraint; a paid, World ID-gated, BTS-scored rating crowd is a near-exact workload
+the binding constraint; a paid, optionally World ID-credentialed, BTS-scored rating crowd is a near-exact workload
 match validated by the wisdom-of-crowds fact-checking literature. Still capped by a small,
 concentrated buyer set. Fast AI rounds add a pre-screen tier for note operators. Best treated as
 a flagship demonstration vertical and rater-supply seed, not a volume business.

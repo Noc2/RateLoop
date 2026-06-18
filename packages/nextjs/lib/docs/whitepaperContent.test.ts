@@ -205,6 +205,7 @@ test("whitepaper removes legacy section framing", () => {
     /RateLoop & AI/i,
     /Rating Research Basis/i,
     /decentralized content curation protocol/i,
+    /World Chain clock/i,
   ]) {
     assert.doesNotMatch(whitepaperText, stalePhrase);
   }

@@ -205,7 +205,7 @@ later proxy upgrade. The real physics under it:
 - drand quicknet period 3s, and the config already enforces
   `drandPeriod ≤ minEpochDuration`; the tlock target lands at epoch end + ≤2
   periods (≤6s).
-- World Chain ~2s blocks; commits must land inside the epoch, so the epoch must
+- Base-compatible ~2s blocks; commits must land inside the epoch, so the epoch must
   comfortably exceed (rater arrival + commit tx inclusion) — with a push-notified
   standing pool, ~10s of margin suffices.
 - Frontend fallback constants now advertise the 20s floor, while human-facing
