@@ -19,7 +19,8 @@ const PONDER_PORT_RELEASE_TIMEOUT_MS = 10_000;
 const PONDER_PORT_RELEASE_POLL_MS = 250;
 const PONDER_PORT_CHECK_TIMEOUT_MS = 500;
 const DEFAULT_DEV_RAW_SCRIPT = "dev:raw";
-const PONDER_PORT_FALLBACK_PATTERN = /\bPort (\d{1,5}) was in use, trying port (\d{1,5})\b/g;
+const PONDER_PORT_FALLBACK_PATTERN =
+  /\bPort (\d{1,5}) was in use, trying port (\d{1,5})\b/g;
 const PONDER_SERVER_TRANSITION_PATTERN =
   /\b(Hot reload|Using PGlite database at|Port \d{1,5} was in use, trying port \d{1,5}|Started listening on port \d{1,5})\b/;
 
@@ -38,14 +39,21 @@ function isLocalHardhatRpc(env = process.env) {
 }
 
 function isRecoverableLocalReset(output, env = process.env) {
-  return isLocalHardhatRpc(env) && output.includes("BlockNotFoundError") && output.includes("could not be found");
+  return (
+    isLocalHardhatRpc(env) &&
+    output.includes("BlockNotFoundError") &&
+    output.includes("could not be found")
+  );
 }
 
 export function getRecoveryReason(output, env = process.env) {
   if (output.includes(PONDER_SHUTDOWN_ERROR_MARKER)) {
     return "stuck Ponder database shutdown state";
   }
-  if (output.includes(PONDER_CLOSED_PGLITE_MARKER) || output.includes("PGlite is closed")) {
+  if (
+    output.includes(PONDER_CLOSED_PGLITE_MARKER) ||
+    output.includes("PGlite is closed")
+  ) {
     return "closed PGlite database handle";
   }
   if (output.includes(PONDER_PORT_FALLBACK_MARKER)) {
@@ -54,7 +62,8 @@ export function getRecoveryReason(output, env = process.env) {
 
   const hasWalRecovery = output.includes("InitWalRecovery");
   const hasPgliteAbort =
-    output.includes("RuntimeError: Aborted()") && output.includes("@electric-sql/pglite");
+    output.includes("RuntimeError: Aborted()") &&
+    output.includes("@electric-sql/pglite");
   if (hasWalRecovery || hasPgliteAbort) {
     return "corrupted PGlite state";
   }
@@ -71,7 +80,8 @@ export function shouldResetPglite(output, env = process.env) {
     reason === "stuck Ponder database shutdown state" ||
     reason === "closed PGlite database handle" ||
     reason === "Ponder moved off the configured port" ||
-    reason === "stale local Ponder sync state after the hardhat/anvil chain was reset"
+    reason ===
+      "stale local Ponder sync state after the hardhat/anvil chain was reset"
   );
 }
 
@@ -79,12 +89,24 @@ export function shouldRecover(output, env = process.env) {
   return getRecoveryReason(output, env) !== null;
 }
 
-function resolvePonderStatusUrl(env = process.env) {
-  const rawUrl = env.PONDER_STATUS_URL ?? env.NEXT_PUBLIC_PONDER_URL ?? DEFAULT_PONDER_URL;
+export function resolvePonderStatusUrl(env = process.env) {
+  const rawStatusUrl = env.PONDER_STATUS_URL?.trim();
+  if (rawStatusUrl) {
+    try {
+      return new URL(rawStatusUrl);
+    } catch {
+      return null;
+    }
+  }
+
+  const rawUrl = env.NEXT_PUBLIC_PONDER_URL?.trim() || DEFAULT_PONDER_URL;
 
   try {
     const url = new URL(rawUrl);
-    url.pathname = "/status";
+    const basePath = url.pathname.endsWith("/")
+      ? url.pathname
+      : `${url.pathname}/`;
+    url.pathname = `${basePath}status`;
     url.search = "";
     url.hash = "";
     return url;
@@ -124,7 +146,10 @@ function shouldPollPonderStatus(statusUrl, env = process.env) {
 
 async function fetchStatusText(statusUrl) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), SHUTDOWN_STATUS_TIMEOUT_MS);
+  const timeout = setTimeout(
+    () => controller.abort(),
+    SHUTDOWN_STATUS_TIMEOUT_MS,
+  );
 
   try {
     const response = await fetch(statusUrl, { signal: controller.signal });
@@ -142,7 +167,9 @@ function wait(ms) {
 }
 
 function getLocalPort(statusUrl) {
-  const port = Number(statusUrl.port || (statusUrl.protocol === "https:" ? 443 : 80));
+  const port = Number(
+    statusUrl.port || (statusUrl.protocol === "https:" ? 443 : 80),
+  );
   return Number.isInteger(port) && port > 0 ? port : null;
 }
 
@@ -152,7 +179,8 @@ function canConnectToLocalPort(statusUrl) {
 
   return new Promise((resolve) => {
     let settled = false;
-    const host = statusUrl.hostname === "localhost" ? "127.0.0.1" : statusUrl.hostname;
+    const host =
+      statusUrl.hostname === "localhost" ? "127.0.0.1" : statusUrl.hostname;
     const socket = createConnection({ host, port });
 
     const finish = (canConnect) => {
@@ -227,7 +255,13 @@ function runDevRaw({ scriptName = resolveDevRawScript() } = {}) {
     };
 
     const requestRecoveryStop = (message, marker) => {
-      if (recoveryStopRequested || shutdownRequested || child.exitCode !== null || child.signalCode !== null) return;
+      if (
+        recoveryStopRequested ||
+        shutdownRequested ||
+        child.exitCode !== null ||
+        child.signalCode !== null
+      )
+        return;
 
       recoveryStopRequested = true;
       appendOutput(`${message}${marker}\n`);
@@ -279,9 +313,16 @@ function runDevRaw({ scriptName = resolveDevRawScript() } = {}) {
     let monitorInFlight = false;
     const monitor = shouldPollPonderStatus(baseStatusUrl, process.env)
       ? setInterval(async () => {
-          if (monitorInFlight || shutdownRequested || child.exitCode !== null || child.signalCode !== null) return;
+          if (
+            monitorInFlight ||
+            shutdownRequested ||
+            child.exitCode !== null ||
+            child.signalCode !== null
+          )
+            return;
           if (!hasActivePonderServer || !baseStatusUrl) return;
-          if (Date.now() - lastServerTransitionAt < SHUTDOWN_STATUS_GRACE_MS) return;
+          if (Date.now() - lastServerTransitionAt < SHUTDOWN_STATUS_GRACE_MS)
+            return;
 
           const statusUrl = baseStatusUrl;
 
@@ -353,12 +394,19 @@ async function main() {
       `\nWarning: Detected ${recoveryReason}. Resetting packages/ponder/.ponder/pglite and retrying once...\n`,
     );
   } else {
-    console.warn(`\nWarning: Detected ${recoveryReason}. Retrying Ponder once...\n`);
+    console.warn(
+      `\nWarning: Detected ${recoveryReason}. Retrying Ponder once...\n`,
+    );
   }
 
-  const releasedPort = await waitForPonderPortRelease(resolvePonderStatusUrl(process.env), process.env);
+  const releasedPort = await waitForPonderPortRelease(
+    resolvePonderStatusUrl(process.env),
+    process.env,
+  );
   if (!releasedPort) {
-    console.warn("\nWarning: Ponder port is still occupied after recovery stop; retrying anyway...\n");
+    console.warn(
+      "\nWarning: Ponder port is still occupied after recovery stop; retrying anyway...\n",
+    );
   }
 
   const secondRun = await runDevRaw({ scriptName });
