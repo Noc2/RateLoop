@@ -4121,6 +4121,44 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "supportsRoundPayoutSnapshotDomain",
+          inputs: [
+            {
+              name: "domain",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "pure",
+        },
+        {
+          type: "function",
+          name: "trackedVotingEngine",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "treasury",
           inputs: [],
           outputs: [
@@ -16456,6 +16494,25 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "supportsRoundPayoutSnapshotDomain",
+          inputs: [
+            {
+              name: "domain",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "pure",
+        },
+        {
+          type: "function",
           name: "syncBundleQuestionTerminal",
           inputs: [
             {
@@ -17665,6 +17722,8 @@ const deployedContracts: GenericContractsDeclaration = {
         isRoundPayoutSnapshotConsumed:
           "contracts/interfaces/IRoundPayoutSnapshotConsumer.sol",
         roundPayoutSnapshotSourceReadyAt:
+          "contracts/interfaces/IRoundPayoutSnapshotConsumer.sol",
+        supportsRoundPayoutSnapshotDomain:
           "contracts/interfaces/IRoundPayoutSnapshotConsumer.sol",
       },
       deployedOnBlock: 31173296,
@@ -26404,6 +26463,25 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "supportsRoundPayoutSnapshotDomain",
+          inputs: [
+            {
+              name: "domain",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
+          outputs: [
+            {
+              name: "supported",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "pure",
+        },
+        {
+          type: "function",
           name: "sweepExpiredLegacyContributorAllocationToTreasury",
           inputs: [],
           outputs: [
@@ -27433,10 +27511,6 @@ const deployedContracts: GenericContractsDeclaration = {
           "contracts/interfaces/ILaunchDistributionPool.sol",
         vestedLegacyContributorAllocation:
           "contracts/interfaces/ILaunchDistributionPool.sol",
-        isRoundPayoutSnapshotConsumed:
-          "contracts/interfaces/IRoundPayoutSnapshotConsumer.sol",
-        roundPayoutSnapshotSourceReadyAt:
-          "contracts/interfaces/IRoundPayoutSnapshotConsumer.sol",
         owner: "lib/openzeppelin-contracts/contracts/access/Ownable.sol",
         renounceOwnership:
           "lib/openzeppelin-contracts/contracts/access/Ownable.sol",
@@ -27930,6 +28004,11 @@ const deployedContracts: GenericContractsDeclaration = {
                   internalType: "uint64",
                 },
                 {
+                  name: "challengeWindowAtProposal",
+                  type: "uint64",
+                  internalType: "uint64",
+                },
+                {
                   name: "finalizedAt",
                   type: "uint64",
                   internalType: "uint64",
@@ -27976,6 +28055,11 @@ const deployedContracts: GenericContractsDeclaration = {
                 },
                 {
                   name: "bond",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "challengeBondAtProposal",
                   type: "uint256",
                   internalType: "uint256",
                 },
@@ -28954,6 +29038,11 @@ const deployedContracts: GenericContractsDeclaration = {
                   internalType: "uint64",
                 },
                 {
+                  name: "challengeWindowAtProposal",
+                  type: "uint64",
+                  internalType: "uint64",
+                },
+                {
                   name: "consumer",
                   type: "address",
                   internalType: "address",
@@ -28985,6 +29074,11 @@ const deployedContracts: GenericContractsDeclaration = {
                 },
                 {
                   name: "bond",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "challengeBondAtProposal",
                   type: "uint256",
                   internalType: "uint256",
                 },
@@ -29998,6 +30092,7 @@ const deployedContracts: GenericContractsDeclaration = {
       inheritedFunctions: {
         FINALIZATION_VETO_WINDOW:
           "contracts/interfaces/IClusterPayoutOracle.sol",
+        frontendRegistry: "contracts/interfaces/IClusterPayoutOracle.sol",
         getRoundPayoutSnapshot: "contracts/interfaces/IClusterPayoutOracle.sol",
         isRoundPayoutSnapshotFinalized:
           "contracts/interfaces/IClusterPayoutOracle.sol",
@@ -39322,6 +39417,44 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "bool",
               internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "supportsRoundPayoutSnapshotDomain",
+          inputs: [
+            {
+              name: "domain",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "pure",
+        },
+        {
+          type: "function",
+          name: "trackedVotingEngine",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
             },
           ],
           stateMutability: "view",
@@ -50005,6 +50138,25 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "supportsRoundPayoutSnapshotDomain",
+          inputs: [
+            {
+              name: "domain",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "pure",
+        },
+        {
+          type: "function",
           name: "syncBundleQuestionTerminal",
           inputs: [
             {
@@ -51214,6 +51366,8 @@ const deployedContracts: GenericContractsDeclaration = {
         isRoundPayoutSnapshotConsumed:
           "contracts/interfaces/IRoundPayoutSnapshotConsumer.sol",
         roundPayoutSnapshotSourceReadyAt:
+          "contracts/interfaces/IRoundPayoutSnapshotConsumer.sol",
+        supportsRoundPayoutSnapshotDomain:
           "contracts/interfaces/IRoundPayoutSnapshotConsumer.sol",
       },
       deployedOnBlock: 30541777,
@@ -53670,6 +53824,11 @@ const deployedContracts: GenericContractsDeclaration = {
                   internalType: "uint64",
                 },
                 {
+                  name: "challengeWindowAtProposal",
+                  type: "uint64",
+                  internalType: "uint64",
+                },
+                {
                   name: "finalizedAt",
                   type: "uint64",
                   internalType: "uint64",
@@ -53716,6 +53875,11 @@ const deployedContracts: GenericContractsDeclaration = {
                 },
                 {
                   name: "bond",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "challengeBondAtProposal",
                   type: "uint256",
                   internalType: "uint256",
                 },
@@ -54694,6 +54858,11 @@ const deployedContracts: GenericContractsDeclaration = {
                   internalType: "uint64",
                 },
                 {
+                  name: "challengeWindowAtProposal",
+                  type: "uint64",
+                  internalType: "uint64",
+                },
+                {
                   name: "consumer",
                   type: "address",
                   internalType: "address",
@@ -54725,6 +54894,11 @@ const deployedContracts: GenericContractsDeclaration = {
                 },
                 {
                   name: "bond",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "challengeBondAtProposal",
                   type: "uint256",
                   internalType: "uint256",
                 },
@@ -55738,6 +55912,7 @@ const deployedContracts: GenericContractsDeclaration = {
       inheritedFunctions: {
         FINALIZATION_VETO_WINDOW:
           "contracts/interfaces/IClusterPayoutOracle.sol",
+        frontendRegistry: "contracts/interfaces/IClusterPayoutOracle.sol",
         getRoundPayoutSnapshot: "contracts/interfaces/IClusterPayoutOracle.sol",
         isRoundPayoutSnapshotFinalized:
           "contracts/interfaces/IClusterPayoutOracle.sol",
@@ -61880,6 +62055,25 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "supportsRoundPayoutSnapshotDomain",
+          inputs: [
+            {
+              name: "domain",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
+          outputs: [
+            {
+              name: "supported",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "pure",
+        },
+        {
+          type: "function",
           name: "sweepExpiredLegacyContributorAllocationToTreasury",
           inputs: [],
           outputs: [
@@ -62909,10 +63103,6 @@ const deployedContracts: GenericContractsDeclaration = {
           "contracts/interfaces/ILaunchDistributionPool.sol",
         vestedLegacyContributorAllocation:
           "contracts/interfaces/ILaunchDistributionPool.sol",
-        isRoundPayoutSnapshotConsumed:
-          "contracts/interfaces/IRoundPayoutSnapshotConsumer.sol",
-        roundPayoutSnapshotSourceReadyAt:
-          "contracts/interfaces/IRoundPayoutSnapshotConsumer.sol",
         owner: "lib/openzeppelin-contracts/contracts/access/Ownable.sol",
         renounceOwnership:
           "lib/openzeppelin-contracts/contracts/access/Ownable.sol",
@@ -69273,6 +69463,44 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "bool",
               internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "supportsRoundPayoutSnapshotDomain",
+          inputs: [
+            {
+              name: "domain",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "pure",
+        },
+        {
+          type: "function",
+          name: "trackedVotingEngine",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
             },
           ],
           stateMutability: "view",
@@ -79956,6 +80184,25 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "supportsRoundPayoutSnapshotDomain",
+          inputs: [
+            {
+              name: "domain",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "pure",
+        },
+        {
+          type: "function",
           name: "syncBundleQuestionTerminal",
           inputs: [
             {
@@ -81165,6 +81412,8 @@ const deployedContracts: GenericContractsDeclaration = {
         isRoundPayoutSnapshotConsumed:
           "contracts/interfaces/IRoundPayoutSnapshotConsumer.sol",
         roundPayoutSnapshotSourceReadyAt:
+          "contracts/interfaces/IRoundPayoutSnapshotConsumer.sol",
+        supportsRoundPayoutSnapshotDomain:
           "contracts/interfaces/IRoundPayoutSnapshotConsumer.sol",
       },
       deployedOnBlock: 40,
@@ -90875,6 +91124,25 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "supportsRoundPayoutSnapshotDomain",
+          inputs: [
+            {
+              name: "domain",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
+          outputs: [
+            {
+              name: "supported",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "pure",
+        },
+        {
+          type: "function",
           name: "sweepExpiredLegacyContributorAllocationToTreasury",
           inputs: [],
           outputs: [
@@ -91904,10 +92172,6 @@ const deployedContracts: GenericContractsDeclaration = {
           "contracts/interfaces/ILaunchDistributionPool.sol",
         vestedLegacyContributorAllocation:
           "contracts/interfaces/ILaunchDistributionPool.sol",
-        isRoundPayoutSnapshotConsumed:
-          "contracts/interfaces/IRoundPayoutSnapshotConsumer.sol",
-        roundPayoutSnapshotSourceReadyAt:
-          "contracts/interfaces/IRoundPayoutSnapshotConsumer.sol",
         owner: "lib/openzeppelin-contracts/contracts/access/Ownable.sol",
         renounceOwnership:
           "lib/openzeppelin-contracts/contracts/access/Ownable.sol",
@@ -92401,6 +92665,11 @@ const deployedContracts: GenericContractsDeclaration = {
                   internalType: "uint64",
                 },
                 {
+                  name: "challengeWindowAtProposal",
+                  type: "uint64",
+                  internalType: "uint64",
+                },
+                {
                   name: "finalizedAt",
                   type: "uint64",
                   internalType: "uint64",
@@ -92447,6 +92716,11 @@ const deployedContracts: GenericContractsDeclaration = {
                 },
                 {
                   name: "bond",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "challengeBondAtProposal",
                   type: "uint256",
                   internalType: "uint256",
                 },
@@ -93425,6 +93699,11 @@ const deployedContracts: GenericContractsDeclaration = {
                   internalType: "uint64",
                 },
                 {
+                  name: "challengeWindowAtProposal",
+                  type: "uint64",
+                  internalType: "uint64",
+                },
+                {
                   name: "consumer",
                   type: "address",
                   internalType: "address",
@@ -93456,6 +93735,11 @@ const deployedContracts: GenericContractsDeclaration = {
                 },
                 {
                   name: "bond",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "challengeBondAtProposal",
                   type: "uint256",
                   internalType: "uint256",
                 },
@@ -94469,6 +94753,7 @@ const deployedContracts: GenericContractsDeclaration = {
       inheritedFunctions: {
         FINALIZATION_VETO_WINDOW:
           "contracts/interfaces/IClusterPayoutOracle.sol",
+        frontendRegistry: "contracts/interfaces/IClusterPayoutOracle.sol",
         getRoundPayoutSnapshot: "contracts/interfaces/IClusterPayoutOracle.sol",
         isRoundPayoutSnapshotFinalized:
           "contracts/interfaces/IClusterPayoutOracle.sol",
@@ -99561,6 +99846,44 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "bool",
               internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "supportsRoundPayoutSnapshotDomain",
+          inputs: [
+            {
+              name: "domain",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "pure",
+        },
+        {
+          type: "function",
+          name: "trackedVotingEngine",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
             },
           ],
           stateMutability: "view",
@@ -111902,6 +112225,25 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "supportsRoundPayoutSnapshotDomain",
+          inputs: [
+            {
+              name: "domain",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "pure",
+        },
+        {
+          type: "function",
           name: "syncBundleQuestionTerminal",
           inputs: [
             {
@@ -113111,6 +113453,8 @@ const deployedContracts: GenericContractsDeclaration = {
         isRoundPayoutSnapshotConsumed:
           "contracts/interfaces/IRoundPayoutSnapshotConsumer.sol",
         roundPayoutSnapshotSourceReadyAt:
+          "contracts/interfaces/IRoundPayoutSnapshotConsumer.sol",
+        supportsRoundPayoutSnapshotDomain:
           "contracts/interfaces/IRoundPayoutSnapshotConsumer.sol",
       },
       deployedOnBlock: 42997400,
@@ -121850,6 +122194,25 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "supportsRoundPayoutSnapshotDomain",
+          inputs: [
+            {
+              name: "domain",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
+          outputs: [
+            {
+              name: "supported",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "pure",
+        },
+        {
+          type: "function",
           name: "sweepExpiredLegacyContributorAllocationToTreasury",
           inputs: [],
           outputs: [
@@ -122879,10 +123242,6 @@ const deployedContracts: GenericContractsDeclaration = {
           "contracts/interfaces/ILaunchDistributionPool.sol",
         vestedLegacyContributorAllocation:
           "contracts/interfaces/ILaunchDistributionPool.sol",
-        isRoundPayoutSnapshotConsumed:
-          "contracts/interfaces/IRoundPayoutSnapshotConsumer.sol",
-        roundPayoutSnapshotSourceReadyAt:
-          "contracts/interfaces/IRoundPayoutSnapshotConsumer.sol",
         owner: "lib/openzeppelin-contracts/contracts/access/Ownable.sol",
         renounceOwnership:
           "lib/openzeppelin-contracts/contracts/access/Ownable.sol",
@@ -123376,6 +123735,11 @@ const deployedContracts: GenericContractsDeclaration = {
                   internalType: "uint64",
                 },
                 {
+                  name: "challengeWindowAtProposal",
+                  type: "uint64",
+                  internalType: "uint64",
+                },
+                {
                   name: "finalizedAt",
                   type: "uint64",
                   internalType: "uint64",
@@ -123422,6 +123786,11 @@ const deployedContracts: GenericContractsDeclaration = {
                 },
                 {
                   name: "bond",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "challengeBondAtProposal",
                   type: "uint256",
                   internalType: "uint256",
                 },
@@ -124400,6 +124769,11 @@ const deployedContracts: GenericContractsDeclaration = {
                   internalType: "uint64",
                 },
                 {
+                  name: "challengeWindowAtProposal",
+                  type: "uint64",
+                  internalType: "uint64",
+                },
+                {
                   name: "consumer",
                   type: "address",
                   internalType: "address",
@@ -124431,6 +124805,11 @@ const deployedContracts: GenericContractsDeclaration = {
                 },
                 {
                   name: "bond",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "challengeBondAtProposal",
                   type: "uint256",
                   internalType: "uint256",
                 },
@@ -125444,6 +125823,7 @@ const deployedContracts: GenericContractsDeclaration = {
       inheritedFunctions: {
         FINALIZATION_VETO_WINDOW:
           "contracts/interfaces/IClusterPayoutOracle.sol",
+        frontendRegistry: "contracts/interfaces/IClusterPayoutOracle.sol",
         getRoundPayoutSnapshot: "contracts/interfaces/IClusterPayoutOracle.sol",
         isRoundPayoutSnapshotFinalized:
           "contracts/interfaces/IClusterPayoutOracle.sol",

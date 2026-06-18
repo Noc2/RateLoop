@@ -480,6 +480,11 @@ export const ClusterPayoutOracleAbi = [
             "internalType": "uint64"
           },
           {
+            "name": "challengeWindowAtProposal",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
             "name": "finalizedAt",
             "type": "uint64",
             "internalType": "uint64"
@@ -526,6 +531,11 @@ export const ClusterPayoutOracleAbi = [
           },
           {
             "name": "bond",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "challengeBondAtProposal",
             "type": "uint256",
             "internalType": "uint256"
           },
@@ -1501,6 +1511,11 @@ export const ClusterPayoutOracleAbi = [
             "internalType": "uint64"
           },
           {
+            "name": "challengeWindowAtProposal",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
             "name": "consumer",
             "type": "address",
             "internalType": "address"
@@ -1532,6 +1547,11 @@ export const ClusterPayoutOracleAbi = [
           },
           {
             "name": "bond",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "challengeBondAtProposal",
             "type": "uint256",
             "internalType": "uint256"
           },

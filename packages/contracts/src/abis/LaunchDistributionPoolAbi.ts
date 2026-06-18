@@ -1912,6 +1912,25 @@ export const LaunchDistributionPoolAbi = [
   },
   {
     "type": "function",
+    "name": "supportsRoundPayoutSnapshotDomain",
+    "inputs": [
+      {
+        "name": "domain",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "supported",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "pure"
+  },
+  {
+    "type": "function",
     "name": "sweepExpiredLegacyContributorAllocationToTreasury",
     "inputs": [],
     "outputs": [
