@@ -260,9 +260,23 @@ export async function fetchPonderJson<T>(
   return request;
 }
 
-function getExpectedPonderDeploymentScope() {
+type ExpectedPonderDeploymentScope = {
+  deploymentKey: string;
+};
+
+function normalizeDeploymentKey(value: string | null | undefined) {
+  const deploymentKey = value?.trim().toLowerCase();
+  return deploymentKey ? deploymentKey : null;
+}
+
+function getDefaultExpectedPonderDeploymentScope(): ExpectedPonderDeploymentScope | null {
   const chainId = scaffoldConfig.targetNetworks[0]?.id;
   return typeof chainId === "number" ? resolveProtocolDeploymentScope(chainId) : null;
+}
+
+function getExpectedPonderDeploymentScope(deploymentKey?: string | null): ExpectedPonderDeploymentScope | null {
+  const explicitDeploymentKey = normalizeDeploymentKey(deploymentKey);
+  return explicitDeploymentKey ? { deploymentKey: explicitDeploymentKey } : getDefaultExpectedPonderDeploymentScope();
 }
 
 function isPonderDeploymentMetadata(value: unknown): value is PonderDeploymentMetadata {
@@ -362,7 +376,10 @@ export async function isPonderAvailable(): Promise<boolean> {
   return (await getPonderAvailabilityStatus()).available;
 }
 
-async function checkPonderAvailabilityDirect(ponderUrl: string): Promise<PonderAvailabilityStatus> {
+async function checkPonderAvailabilityDirect(
+  ponderUrl: string,
+  expectedDeployment = getDefaultExpectedPonderDeploymentScope(),
+): Promise<PonderAvailabilityStatus> {
   try {
     const healthResponse = await fetch(`${ponderUrl}/health`, {
       signal: AbortSignal.timeout(HEALTH_CHECK_TIMEOUT),
@@ -371,7 +388,6 @@ async function checkPonderAvailabilityDirect(ponderUrl: string): Promise<PonderA
       return { available: false, reason: "health_check_failed" };
     }
 
-    const expectedDeployment = getExpectedPonderDeploymentScope();
     if (!expectedDeployment) {
       return { available: false, reason: "deployment_unconfigured" };
     }
@@ -440,8 +456,11 @@ export function invalidatePonderCache(options?: { clearLastKnownGood?: boolean }
   }
 }
 
-async function assertPonderAvailableForDeployment() {
-  const status = await getPonderAvailabilityStatus();
+async function assertPonderAvailableForDeployment(expectedDeploymentKey?: string | null) {
+  const explicitDeploymentKey = normalizeDeploymentKey(expectedDeploymentKey);
+  const status = explicitDeploymentKey
+    ? await checkPonderAvailabilityDirect(getRequiredPonderUrl(), { deploymentKey: explicitDeploymentKey })
+    : await getPonderAvailabilityStatus();
   if (!status.available) {
     throw new Error(`Ponder is unavailable for this deployment: ${status.reason ?? "unknown"}`);
   }
@@ -461,8 +480,12 @@ export async function ponderGet<T>(path: string, params?: Record<string, string 
   return fetchPonderJson<T>(url);
 }
 
-async function ponderPost<T>(path: string, body: unknown): Promise<T> {
-  await assertPonderAvailableForDeployment();
+async function ponderPost<T>(
+  path: string,
+  body: unknown,
+  options?: { expectedDeploymentKey?: string | null },
+): Promise<T> {
+  await assertPonderAvailableForDeployment(options?.expectedDeploymentKey);
   const url = new URL(`${getRequiredPonderUrl()}${path}`);
   const response = await fetch(url, {
     body: JSON.stringify(body),
@@ -1505,12 +1528,16 @@ export const ponderApi = {
     });
   },
 
-  syncQuestionMetadata(metadata: PonderQuestionMetadataItem[]) {
-    const deployment = getExpectedPonderDeploymentScope();
-    return ponderPost<PonderQuestionMetadataSyncResponse>("/question-metadata", {
-      deploymentKey: deployment?.deploymentKey ?? null,
-      metadata,
-    });
+  syncQuestionMetadata(metadata: PonderQuestionMetadataItem[], options?: { deploymentKey?: string | null }) {
+    const deployment = getExpectedPonderDeploymentScope(options?.deploymentKey);
+    return ponderPost<PonderQuestionMetadataSyncResponse>(
+      "/question-metadata",
+      {
+        deploymentKey: deployment?.deploymentKey ?? null,
+        metadata,
+      },
+      { expectedDeploymentKey: deployment?.deploymentKey },
+    );
   },
 
   getQuestionMetadata(questionMetadataHash: string) {

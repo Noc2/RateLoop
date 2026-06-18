@@ -41,7 +41,7 @@ import {
   getServerTargetNetworkById,
   getX402UsdcAddressOverride,
 } from "~~/lib/env/server";
-import { resolveContentDeploymentScope } from "~~/lib/protocolDeployment";
+import { resolveContentDeploymentScope, resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 import {
   getContentRegistrySubmissionRewardMinimum,
   getSubmissionRewardCoverageMinimum,
@@ -2363,7 +2363,8 @@ async function syncSubmittedQuestionMetadata(params: {
     ),
   );
   try {
-    await ponderApi.syncQuestionMetadata(entries);
+    const ponderDeploymentKey = resolveProtocolDeploymentScope(params.chainId)?.deploymentKey ?? null;
+    await ponderApi.syncQuestionMetadata(entries, { deploymentKey: ponderDeploymentKey });
   } catch (error) {
     if (process.env.NODE_ENV === "production") {
       console.warn("Unable to sync x402 question metadata to Ponder.", error);

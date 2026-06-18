@@ -15,7 +15,7 @@ import {
 import { upsertQuestionConfidentialityFromMetadata } from "~~/lib/confidentiality/context";
 import { getServerRpcOverrides, getServerTargetNetworkById } from "~~/lib/env/server";
 import { isJsonObjectBody, jsonBodyErrorResponse, parseJsonBody } from "~~/lib/http/jsonBody";
-import { resolveContentDeploymentScope } from "~~/lib/protocolDeployment";
+import { resolveContentDeploymentScope, resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 import { normalizeContentId, normalizeWalletAddress } from "~~/lib/watchlist/contentWatch";
 import { ponderApi } from "~~/services/ponder/client";
 import { checkRateLimit } from "~~/utils/rateLimit";
@@ -503,7 +503,8 @@ export async function POST(request: NextRequest) {
       ),
     );
     try {
-      const result = await ponderApi.syncQuestionMetadata(verifiedMetadata);
+      const ponderDeploymentKey = resolveProtocolDeploymentScope(context.chainId)?.deploymentKey ?? null;
+      const result = await ponderApi.syncQuestionMetadata(verifiedMetadata, { deploymentKey: ponderDeploymentKey });
       metadataIndexed = result.updated;
       metadataSkipped += result.skipped;
       if (result.errors.length > 0) {

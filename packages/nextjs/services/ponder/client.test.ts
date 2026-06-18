@@ -11,13 +11,16 @@ import { test } from "node:test";
 import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 
 const TEST_PONDER_DEPLOYMENT = resolveProtocolDeploymentScope(31337);
+const BASE_SEPOLIA_PONDER_DEPLOYMENT = resolveProtocolDeploymentScope(84532);
 
 function isPonderPreflightUrl(url: string) {
   return /\/(?:health|deployment)$/.test(url);
 }
 
-function healthyPonderPreflightResponse(url: string): Response | null {
-  assert.ok(TEST_PONDER_DEPLOYMENT);
+function healthyPonderPreflightResponseForDeployment(
+  url: string,
+  deployment: NonNullable<ReturnType<typeof resolveProtocolDeploymentScope>>,
+): Response | null {
   if (url.endsWith("/health")) {
     return new Response("ok", { status: 200 });
   }
@@ -25,16 +28,21 @@ function healthyPonderPreflightResponse(url: string): Response | null {
     return new Response(
       JSON.stringify({
         configured: true,
-        chainId: TEST_PONDER_DEPLOYMENT.chainId,
-        contentRegistryAddress: TEST_PONDER_DEPLOYMENT.contentRegistryAddress,
-        feedbackRegistryAddress: TEST_PONDER_DEPLOYMENT.feedbackRegistryAddress,
-        deploymentKey: TEST_PONDER_DEPLOYMENT.deploymentKey,
+        chainId: deployment.chainId,
+        contentRegistryAddress: deployment.contentRegistryAddress,
+        feedbackRegistryAddress: deployment.feedbackRegistryAddress,
+        deploymentKey: deployment.deploymentKey,
       }),
       { status: 200, headers: { "content-type": "application/json" } },
     );
   }
 
   return null;
+}
+
+function healthyPonderPreflightResponse(url: string): Response | null {
+  assert.ok(TEST_PONDER_DEPLOYMENT);
+  return healthyPonderPreflightResponseForDeployment(url, TEST_PONDER_DEPLOYMENT);
 }
 
 test("resolvePonderUrl uses the local default outside production", () => {
@@ -338,6 +346,55 @@ test("ponderApi.syncQuestionMetadata preflights deployment and sends the expecte
   } finally {
     globalThis.fetch = originalFetch;
     invalidatePonderCache();
+  }
+
+  assert.match(requestedUrls[0] ?? "", /\/health$/);
+  assert.match(requestedUrls[1] ?? "", /\/deployment$/);
+  assert.match(requestedUrls[2] ?? "", /\/question-metadata$/);
+  const postedDeploymentKey = (postedBody as Record<string, unknown> | null)?.deploymentKey;
+  assert.equal(postedDeploymentKey, expectedDeploymentKey);
+});
+
+test("ponderApi.syncQuestionMetadata can preflight an explicit deployment key", async () => {
+  const originalFetch = globalThis.fetch;
+  assert.ok(BASE_SEPOLIA_PONDER_DEPLOYMENT);
+  const expectedDeploymentKey = BASE_SEPOLIA_PONDER_DEPLOYMENT.deploymentKey;
+  const requestedUrls: string[] = [];
+  let postedBody: Record<string, unknown> | null = null;
+
+  globalThis.fetch = (async (input, init) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    requestedUrls.push(url);
+    const preflightResponse = healthyPonderPreflightResponseForDeployment(url, BASE_SEPOLIA_PONDER_DEPLOYMENT);
+    if (preflightResponse) return preflightResponse;
+    postedBody = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+    return new Response(JSON.stringify({ updated: 1, skipped: 0, errors: [] }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    invalidatePonderCache({ clearLastKnownGood: true });
+
+    const result = await ponderApi.syncQuestionMetadata(
+      [
+        {
+          contentId: "42",
+          questionMetadata: { schemaVersion: "rateloop.question.v3", title: "Question" },
+          questionMetadataHash: `0x${"2".repeat(64)}`,
+          questionMetadataUri: `https://rateloop.ai/question-metadata/0x${"2".repeat(64)}`,
+          resultSpecHash: `0x${"3".repeat(64)}`,
+          targetAudience: null,
+        },
+      ],
+      { deploymentKey: expectedDeploymentKey },
+    );
+
+    assert.equal(result.updated, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+    invalidatePonderCache({ clearLastKnownGood: true });
   }
 
   assert.match(requestedUrls[0] ?? "", /\/health$/);

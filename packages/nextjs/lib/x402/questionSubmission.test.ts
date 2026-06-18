@@ -11,6 +11,7 @@ import {
 } from "viem";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testMemory";
+import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 import { CONFIDENTIALITY_FLAG_PRIVATE_FOREVER } from "~~/lib/questionSubmissionCommitment";
 import { X402QuestionInputError, type X402QuestionPayload } from "~~/lib/x402/questionPayload";
 import {
@@ -26,6 +27,7 @@ import {
   preparePermissionlessWalletQuestionSubmissionRequest,
   x402QuestionSubmissionRecordBody,
 } from "~~/lib/x402/questionSubmission";
+import { ponderApi } from "~~/services/ponder/client";
 
 const env = process.env as Record<string, string | undefined>;
 const originalDatabaseUrl = env.DATABASE_URL;
@@ -1026,10 +1028,23 @@ test("confirmAgentWalletQuestionSubmissionRequest attaches approved question det
       ]),
   });
 
-  await confirmAgentWalletQuestionSubmissionRequest({
-    operationKey: record.operationKey,
-    transactionHashes: [transactionHash],
-  });
+  const protocolDeployment = resolveProtocolDeploymentScope(payload.chainId);
+  assert.ok(protocolDeployment);
+  const originalSyncQuestionMetadata = ponderApi.syncQuestionMetadata;
+  const syncCalls: Parameters<typeof ponderApi.syncQuestionMetadata>[] = [];
+  ponderApi.syncQuestionMetadata = async (...args) => {
+    syncCalls.push(args);
+    return { errors: [], requested: 1, skipped: 0, updated: 1 };
+  };
+
+  try {
+    await confirmAgentWalletQuestionSubmissionRequest({
+      operationKey: record.operationKey,
+      transactionHashes: [transactionHash],
+    });
+  } finally {
+    ponderApi.syncQuestionMetadata = originalSyncQuestionMetadata;
+  }
 
   const result = await dbClient.execute({
     sql: "SELECT content_id FROM question_details WHERE id = ?",
@@ -1041,6 +1056,8 @@ test("confirmAgentWalletQuestionSubmissionRequest attaches approved question det
     args: [imageId],
   });
   assert.equal(imageResult.rows[0]?.content_id, "123");
+  assert.equal(syncCalls.length, 1);
+  assert.equal(syncCalls[0]?.[1]?.deploymentKey, protocolDeployment.deploymentKey);
 });
 
 test("confirmAgentWalletQuestionSubmissionRequest links gated native x402 attachments from stored receipt", async () => {

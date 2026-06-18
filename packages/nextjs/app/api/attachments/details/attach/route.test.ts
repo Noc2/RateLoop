@@ -8,6 +8,8 @@ import { type Address, type Hex, encodeAbiParameters, encodeEventTopics } from "
 import { setDetailsAttachRouteTestOverrides } from "~~/lib/attachments/detailsAttachRouteTestOverrides";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testMemory";
+import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
+import { ponderApi } from "~~/services/ponder/client";
 import { __setRateLimitStoreForTests } from "~~/utils/rateLimit";
 
 const CHAIN_ID = 31337;
@@ -47,6 +49,35 @@ function buildContentSubmittedLog(params: {
         categoryId: 5n,
         contentId: params.contentId,
         submitter: params.submitter,
+      },
+    }).filter((topic): topic is Hex => !!topic),
+  };
+}
+
+function buildQuestionContentAnchoredLog(params: {
+  address: Address;
+  contentId: bigint;
+  mediaType?: number;
+  questionMetadataHash: Hex;
+  resultSpecHash: Hex;
+}) {
+  return {
+    address: params.address,
+    data: encodeAbiParameters(
+      [
+        { name: "mediaIndex", type: "uint256" },
+        { name: "url", type: "string" },
+        { name: "questionMetadataHash", type: "bytes32" },
+        { name: "resultSpecHash", type: "bytes32" },
+      ],
+      [0n, "", params.questionMetadataHash, params.resultSpecHash],
+    ),
+    topics: encodeEventTopics({
+      abi: ContentRegistryAbi,
+      eventName: "QuestionContentAnchored",
+      args: {
+        contentId: params.contentId,
+        mediaType: params.mediaType ?? 0,
       },
     }).filter((topic): topic is Hex => !!topic),
   };
@@ -223,6 +254,63 @@ test("attaches gated details and images with content submission proof", async ()
     args: [detailsId],
   });
   assert.equal(relinkedDetails.rows[0]?.content_id, "123");
+});
+
+test("syncs verified question metadata with the protocol deployment key", async () => {
+  const contentRegistryAddress = getSharedDeploymentAddress(CHAIN_ID, "ContentRegistry");
+  const protocolDeployment = resolveProtocolDeploymentScope(CHAIN_ID);
+  assert.ok(contentRegistryAddress);
+  assert.ok(protocolDeployment);
+
+  const questionMetadataHash = `0x${"8".repeat(64)}` as const;
+  const resultSpecHash = `0x${"9".repeat(64)}` as const;
+  installReceipt([
+    buildContentSubmittedLog({
+      address: contentRegistryAddress,
+      contentId: 123n,
+      submitter: SUBMITTER,
+    }),
+    buildQuestionContentAnchoredLog({
+      address: MEDIA_VALIDATOR,
+      contentId: 123n,
+      questionMetadataHash,
+      resultSpecHash,
+    }),
+  ]);
+
+  const originalSyncQuestionMetadata = ponderApi.syncQuestionMetadata;
+  const syncCalls: Parameters<typeof ponderApi.syncQuestionMetadata>[] = [];
+  ponderApi.syncQuestionMetadata = async (...args) => {
+    syncCalls.push(args);
+    return { errors: [], requested: 1, skipped: 0, updated: 1 };
+  };
+
+  try {
+    const response = await POST(
+      makeRequest({
+        chainId: CHAIN_ID,
+        metadata: [
+          {
+            contentId: "123",
+            questionMetadata: null,
+            questionMetadataHash,
+            resultSpecHash,
+            targetAudience: null,
+          },
+        ],
+        transactionHashes: [TRANSACTION_HASH],
+      }),
+    );
+    const body = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(body.metadataIndexed, 1);
+  } finally {
+    ponderApi.syncQuestionMetadata = originalSyncQuestionMetadata;
+  }
+
+  assert.equal(syncCalls.length, 1);
+  assert.equal(syncCalls[0]?.[1]?.deploymentKey, protocolDeployment.deploymentKey);
 });
 
 test("does not attach public details from content submission proof alone", async () => {
