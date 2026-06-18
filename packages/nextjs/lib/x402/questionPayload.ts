@@ -6,7 +6,6 @@ import {
   X402_SUBMISSION_REWARD_ASSET_USDC,
   X402_USDC_BY_CHAIN_ID,
   X402_USDC_DECIMALS,
-  X402_WORLD_CHAIN_USDC_BY_CHAIN_ID,
   assertSupportedX402BundleBounty,
   buildX402QuestionOperation as buildSharedX402QuestionOperation,
   parseX402QuestionRequest as parseSharedX402QuestionRequest,
@@ -17,7 +16,6 @@ export {
   X402_SUBMISSION_REWARD_ASSET_USDC,
   X402_USDC_DECIMALS,
   X402_USDC_BY_CHAIN_ID,
-  X402_WORLD_CHAIN_USDC_BY_CHAIN_ID,
   X402QuestionInputError,
   assertSupportedX402BundleBounty,
 };

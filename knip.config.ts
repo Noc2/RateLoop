@@ -60,6 +60,10 @@ const config: KnipConfig = {
       ],
       project: ["ponder.config*.ts", "scripts/**/*.{js,mjs,cjs,ts,tsx}", "src/**/*.ts"],
     },
+    "packages/promo-video": {
+      entry: ["remotion.config.ts", "scripts/**/*.{js,mjs,cjs,ts,tsx}", "src/index.ts"],
+      project: ["scripts/**/*.{js,mjs,cjs,ts,tsx}", "src/**/*.{ts,tsx}"],
+    },
     "packages/sdk": {
       entry: [...testEntries],
       ignoreDependencies: ["tsx"],
