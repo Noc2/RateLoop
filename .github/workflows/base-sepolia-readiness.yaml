@@ -1,0 +1,47 @@
+name: Base Sepolia Readiness
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  schedule:
+    - cron: "45 6 * * 1"
+  workflow_dispatch:
+    inputs:
+      live:
+        description: Run live RPC, Ponder, and app probes when environment variables are configured
+        required: false
+        default: "false"
+
+permissions:
+  contents: read
+
+jobs:
+  readiness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      BASE_SEPOLIA_APP_URL: ${{ vars.BASE_SEPOLIA_APP_URL }}
+      BASE_SEPOLIA_PONDER_URL: ${{ vars.BASE_SEPOLIA_PONDER_URL }}
+      BASE_SEPOLIA_RPC_URL: ${{ secrets.BASE_SEPOLIA_RPC_URL }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          submodules: true
+
+      - name: Setup node env
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+
+      - name: Offline readiness checks
+        run: node scripts/check-base-sepolia-readiness.mjs
+
+      - name: Live readiness probes
+        if: (github.event_name == 'workflow_dispatch' && github.event.inputs.live == 'true') || (github.event_name == 'schedule' && env.BASE_SEPOLIA_RPC_URL != '' && env.BASE_SEPOLIA_PONDER_URL != '' && env.BASE_SEPOLIA_APP_URL != '')
+        run: node scripts/check-base-sepolia-readiness.mjs --live --require-live-targets

@@ -1,0 +1,39 @@
+name: Base Mainnet Readiness
+
+on:
+  workflow_dispatch:
+    inputs:
+      live:
+        description: Run live RPC, Ponder, and app probes when environment variables are configured
+        required: false
+        default: "false"
+
+permissions:
+  contents: read
+
+jobs:
+  readiness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      BASE_APP_URL: ${{ vars.BASE_APP_URL }}
+      BASE_PONDER_URL: ${{ vars.BASE_PONDER_URL }}
+      BASE_RPC_URL: ${{ secrets.BASE_RPC_URL }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          submodules: true
+
+      - name: Setup node env
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+
+      - name: Offline production readiness checks
+        run: node scripts/check-base-mainnet-readiness.mjs
+
+      - name: Live readiness probes
+        if: github.event.inputs.live == 'true'
+        run: node scripts/check-base-mainnet-readiness.mjs --live --require-live-targets

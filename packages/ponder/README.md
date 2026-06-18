@@ -36,9 +36,11 @@ Within the package directory, additional scripts are available:
 
 | Variable                                   | Description                                                                                                                 |
 | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
-| `PONDER_NETWORK`                           | Active network: `hardhat`, `worldchainSepolia`, or `worldchain`                                                             |
+| `PONDER_NETWORK`                           | Active network: `hardhat`, `baseSepolia`, `base`, `worldchainSepolia`, or `worldchain`                                      |
 | `PONDER_CHAIN_ID`                          | Optional explicit chain ID; must match `PONDER_NETWORK` when both are set. Used by `yarn ponder:start` for protocol deployment keys and Postgres schema selection when unset defaults from the network name |
 | `PONDER_RPC_URL_31337`                     | RPC URL for local Hardhat/Anvil chain                                                                                       |
+| `PONDER_RPC_URL_84532`                     | RPC URL for Base Sepolia                                                                                                    |
+| `PONDER_RPC_URL_8453`                      | RPC URL for Base mainnet                                                                                                    |
 | `PONDER_RPC_URL_4801`                      | RPC URL for World Chain Sepolia                                                                                             |
 | `PONDER_RPC_URL_480`                       | RPC URL for World Chain mainnet                                                                                             |
 | `PONDER_CONTENT_REGISTRY_ADDRESS` etc.     | Local Hardhat address overrides; fallback addresses when the active chain has no shared deployment in `@rateloop/contracts` |
@@ -55,8 +57,9 @@ For live supported chains, Ponder treats `@rateloop/contracts` as the source of 
 For local Hardhat/Anvil, Ponder prefers the address env values generated into `packages/ponder/.env.local` so a fresh
 `yarn deploy` does not need machine-specific addresses committed to the shared deployment artifact. After `yarn deploy`,
 the Foundry deployment script refreshes `packages/ponder/.env.local` to match the deployment target. Local deploys set
-`PONDER_NETWORK=hardhat`; live deploys such as
-`yarn deploy --network worldchainSepolia --keystore <name>` set the matching live network.
+`PONDER_NETWORK=hardhat`. The next live rollout starts on Base Sepolia: set `PONDER_NETWORK=baseSepolia` with
+`PONDER_RPC_URL_84532`, then move to `PONDER_NETWORK=base` with `PONDER_RPC_URL_8453` only after Base mainnet is
+intentionally promoted. World Chain live networks remain supported as `worldchainSepolia` and `worldchain`.
 
 In production, `yarn ponder:start` launches Ponder with an explicit Postgres schema. On Railway, the
 launcher uses `RAILWAY_DEPLOYMENT_ID`, matching Ponder's zero-downtime deployment model and keeping new
