@@ -497,6 +497,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         address engine = _readRewardDistributorVotingEngine(value);
         if (_readRewardDistributorClaimAccountingStarted(value)) revert InvalidConfig();
         _validateRewardDistributorIntegrations(value, engine);
+        if (advisoryVoteRecorder != address(0)) _validateAdvisoryVoteRecorderForEngine(advisoryVoteRecorder, engine);
         address previousForEngine = rewardDistributorForVotingEngine[engine];
         if (previousForEngine != address(0) && previousForEngine != value) revert InvalidConfig();
         rewardDistributorVotingEngine[value] = engine;
@@ -836,6 +837,15 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
             revert InvalidConfig();
         }
 
+        address recorderEngine = _readAdvisoryVoteRecorderEngine(recorder);
+        address recorderRegistry = _readAdvisoryVoteRecorderRegistry(recorder);
+        _validateAdvisoryVoteRecorderEngineShape(recorderEngine, recorderRegistry);
+
+        address configuredRewardDistributor = rewardDistributor;
+        if (configuredRewardDistributor != address(0)) {
+            _validateAdvisoryVoteRecorderForEngine(value, rewardDistributorVotingEngine[configuredRewardDistributor]);
+        }
+
         try recorder.advisoryCommitKeyByRater(0, 0, address(this)) returns (bytes32) { }
         catch {
             revert InvalidConfig();
@@ -853,6 +863,52 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
 
         try recorder.lastAdvisoryVoteTimestampByIdentity(0, bytes32(0)) returns (uint256) { }
         catch {
+            revert InvalidConfig();
+        }
+    }
+
+    function _validateAdvisoryVoteRecorderForEngine(address value, address expectedEngine) internal view {
+        if (expectedEngine == address(0)) revert InvalidConfig();
+        IAdvisoryVoteRecorder recorder = IAdvisoryVoteRecorder(value);
+        address recorderEngine = _readAdvisoryVoteRecorderEngine(recorder);
+        if (recorderEngine != expectedEngine) revert InvalidConfig();
+        _validateAdvisoryVoteRecorderEngineShape(recorderEngine, _readAdvisoryVoteRecorderRegistry(recorder));
+    }
+
+    function _readAdvisoryVoteRecorderEngine(IAdvisoryVoteRecorder recorder)
+        internal
+        view
+        returns (address recorderEngine)
+    {
+        try recorder.votingEngine() returns (address engine) {
+            recorderEngine = engine;
+            if (recorderEngine == address(0) || recorderEngine.code.length == 0) revert InvalidConfig();
+        } catch {
+            revert InvalidConfig();
+        }
+    }
+
+    function _readAdvisoryVoteRecorderRegistry(IAdvisoryVoteRecorder recorder)
+        internal
+        view
+        returns (address recorderRegistry)
+    {
+        try recorder.registry() returns (address registry_) {
+            recorderRegistry = registry_;
+            if (recorderRegistry == address(0)) revert InvalidConfig();
+        } catch {
+            revert InvalidConfig();
+        }
+    }
+
+    function _validateAdvisoryVoteRecorderEngineShape(address recorderEngine, address recorderRegistry) internal view {
+        try IRewardDistributorVotingEngineShape(recorderEngine).rewardDistributorConfigShape() returns (
+            address engineRegistry, address engineLrepToken, address engineConfig
+        ) {
+            if (engineConfig != address(this)) revert InvalidConfig();
+            if (engineRegistry == address(0) || engineLrepToken == address(0)) revert InvalidConfig();
+            if (recorderRegistry != engineRegistry) revert InvalidConfig();
+        } catch {
             revert InvalidConfig();
         }
     }

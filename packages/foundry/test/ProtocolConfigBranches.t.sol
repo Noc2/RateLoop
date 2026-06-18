@@ -252,16 +252,36 @@ contract MockRaterRegistryWithEscrowForConfig is MockRaterIdentityRegistry {
 
 contract MockAdvisoryVoteRecorderForConfig {
     address internal recorderProtocolConfig;
+    address internal recorderVotingEngine;
+    address internal recorderRegistry;
     bool internal revertProtocolConfig;
 
     constructor(address protocolConfig_, bool revertProtocolConfig_) {
+        address registry_ = address(0xCAFE);
+        address lrepToken_ = address(0xBEEF);
+        address votingEngine_ = address(new MockVotingEngineForConfig(protocolConfig_, registry_, lrepToken_));
         recorderProtocolConfig = protocolConfig_;
+        recorderVotingEngine = votingEngine_;
+        recorderRegistry = registry_;
         revertProtocolConfig = revertProtocolConfig_;
+    }
+
+    function setEngineShape(address votingEngine_, address registry_) external {
+        recorderVotingEngine = votingEngine_;
+        recorderRegistry = registry_;
     }
 
     function protocolConfig() external view returns (address) {
         if (revertProtocolConfig) revert("mock protocol config");
         return recorderProtocolConfig;
+    }
+
+    function votingEngine() external view returns (address) {
+        return recorderVotingEngine;
+    }
+
+    function registry() external view returns (address) {
+        return recorderRegistry;
     }
 
     function advisoryCommitKeyByRater(uint256, uint256, address) external pure returns (bytes32) {
@@ -799,6 +819,47 @@ contract ProtocolConfigBranchesTest is Test {
 
         vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
         config.setAdvisoryVoteRecorder(advisoryVoteRecorder);
+    }
+
+    function test_SetAdvisoryVoteRecorder_RejectsRegistryMismatchedToEngine() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+        address engine = address(new MockVotingEngineForConfig(address(config), address(0xCAFE), MOCK_LREP));
+        MockAdvisoryVoteRecorderForConfig advisoryVoteRecorder =
+            new MockAdvisoryVoteRecorderForConfig(address(config), false);
+        advisoryVoteRecorder.setEngineShape(engine, address(0xBEEF));
+
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.setAdvisoryVoteRecorder(address(advisoryVoteRecorder));
+    }
+
+    function test_SetAdvisoryVoteRecorder_RejectsConfiguredRewardDistributorEngineMismatch() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+        address engine = _newRewardEngine(config);
+        address distributor = address(new MockRewardDistributorForConfig(engine));
+        config.setRewardDistributor(distributor);
+
+        address otherEngine = address(new MockVotingEngineForConfig(address(config), address(this), MOCK_LREP));
+        MockAdvisoryVoteRecorderForConfig advisoryVoteRecorder =
+            new MockAdvisoryVoteRecorderForConfig(address(config), false);
+        advisoryVoteRecorder.setEngineShape(otherEngine, address(this));
+
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.setAdvisoryVoteRecorder(address(advisoryVoteRecorder));
+    }
+
+    function test_SetRewardDistributor_RejectsPreconfiguredAdvisoryRecorderEngineMismatch() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+        address recorderEngine = address(new MockVotingEngineForConfig(address(config), address(this), MOCK_LREP));
+        MockAdvisoryVoteRecorderForConfig advisoryVoteRecorder =
+            new MockAdvisoryVoteRecorderForConfig(address(config), false);
+        advisoryVoteRecorder.setEngineShape(recorderEngine, address(this));
+        config.setAdvisoryVoteRecorder(address(advisoryVoteRecorder));
+
+        address distributorEngine = _newRewardEngine(config);
+        address distributor = address(new MockRewardDistributorForConfig(distributorEngine));
+
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.setRewardDistributor(distributor);
     }
 
     function test_SetAdvisoryVoteRecorder_RejectsRevertingProtocolConfig() public {
