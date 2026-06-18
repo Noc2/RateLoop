@@ -4231,9 +4231,13 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
         // 5) Honest voter can now claim. The recovery flags are consumed during qualification.
         bytes32[] memory proof = new bytes32[](0);
+        uint256 preview = rewardPoolEscrow.claimableQuestionRewardWithPayoutWeight(
+            rewardPoolId, roundId, voter1, honestWeight, proof
+        );
+        assertGt(preview, 0);
         vm.prank(voter1);
         uint256 paid = rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId, honestWeight, proof);
-        assertGt(paid, 0);
+        assertEq(paid, preview);
         assertFalse(rewardPoolEscrow.reopenedRecoveredRound(rewardPoolId, roundId));
         assertFalse(rewardPoolEscrow.rejectedRecoveredRound(rewardPoolId, roundId));
 
@@ -4434,9 +4438,14 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.prank(owner);
         rewardPoolEscrow.reopenRecoveredSnapshotRound(rewardPoolId, roundId);
 
+        bytes32[] memory proof = new bytes32[](0);
+        uint256 preview = rewardPoolEscrow.claimableQuestionRewardWithPayoutWeight(
+            rewardPoolId, roundId, voter1, replacementWeight, proof
+        );
+        assertGt(preview, 0);
         vm.prank(voter1);
-        uint256 paid = rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId, replacementWeight, new bytes32[](0));
-        assertGt(paid, 0);
+        uint256 paid = rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId, replacementWeight, proof);
+        assertEq(paid, preview);
         RoundSnapshot memory replacementSnapshot = rewardPoolEscrow.getRoundSnapshot(rewardPoolId, roundId);
         assertTrue(replacementSnapshot.qualified);
         assertEq(replacementSnapshot.allocation, 60e6, "reopened round keeps recovered allocation");
