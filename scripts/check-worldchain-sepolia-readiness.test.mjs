@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   PONDER_INDEXED_CONTRACTS,
+  REQUIRED_ADDRESS_WIRING_CHECKS,
   REQUIRED_DEPLOYED_CONTRACTS,
+  REQUIRED_SELECTOR_CHECKS,
+  REQUIRED_SUBMISSION_MEDIA_VALIDATOR_SELECTORS,
   buildDeploymentAddressMap,
   parseGeneratedContractsForChain,
   validateLiveReadiness,
@@ -57,6 +60,43 @@ const EIP1967_IMPLEMENTATION_SLOT =
 
 function encodeStorageAddress(address) {
   return `0x${address.toLowerCase().replace(/^0x/, "").padStart(64, "0")}`;
+}
+
+function encodeAddressWords(...addresses) {
+  return `0x${addresses.map(address => address.toLowerCase().replace(/^0x/, "").padStart(64, "0")).join("")}`;
+}
+
+function encodeAddressCallData(selector, addresses = []) {
+  return `${selector}${addresses.map(address => address.toLowerCase().replace(/^0x/, "").padStart(64, "0")).join("")}`;
+}
+
+function selectorBytecode() {
+  return `0x${[
+    ...REQUIRED_SELECTOR_CHECKS.flatMap(check => check.selectors),
+    ...REQUIRED_SUBMISSION_MEDIA_VALIDATOR_SELECTORS,
+  ]
+    .map(selector => selector.slice(2))
+    .join("")}`;
+}
+
+function handleWiringCall(call, deploymentAddresses, overrides = {}) {
+  for (const check of REQUIRED_ADDRESS_WIRING_CHECKS) {
+    const to = deploymentAddresses.get(check.contractName);
+    const argumentAddresses = (check.arguments ?? []).map(contractName => deploymentAddresses.get(contractName));
+    if (!to || argumentAddresses.some(address => !address)) continue;
+    const expectedData = encodeAddressCallData(check.selector, argumentAddresses);
+    if (call.to !== to || call.data.toLowerCase() !== expectedData.toLowerCase()) continue;
+
+    if (check.selector === "0xe1b361ac") {
+      return encodeAddressWords(
+        overrides["QuestionRewardPoolEscrow registry"] ?? deploymentAddresses.get("ContentRegistry"),
+        overrides["QuestionRewardPoolEscrow votingEngine"] ?? deploymentAddresses.get("RoundVotingEngine"),
+      );
+    }
+
+    return encodeAddressWords(overrides[check.label] ?? deploymentAddresses.get(check.expectedContractName));
+  }
+  return undefined;
 }
 
 function mockRpc(handler) {
@@ -337,6 +377,8 @@ test("validateLiveReadiness rejects live bytecode missing confidentiality select
       ) {
         return encodeStorageAddress(addressFor(777));
       }
+      const wiringResult = handleWiringCall(params[0], deploymentAddresses);
+      if (wiringResult) return wiringResult;
       throw new Error(`Unexpected eth_call ${JSON.stringify(params[0])}`);
     }
     if (method === "eth_getStorageAt") {
@@ -444,6 +486,57 @@ test("validateLiveReadiness rejects live bytecode missing confidentiality select
         message.includes(
           "ContentRegistry submissionMediaValidator authorizedEmitter is ContentRegistry",
         ),
+      ),
+    );
+  } finally {
+    restoreFetch();
+  }
+});
+
+test("validateLiveReadiness rejects live deployment wiring mismatches", async () => {
+  const deploymentJson = makeDeploymentJson();
+  const deploymentAddresses = buildDeploymentAddressMap(deploymentJson);
+  const contentRegistryAddress = deploymentAddresses.get("ContentRegistry");
+  const submissionMediaValidatorAddress = addressFor(102);
+  const restoreFetch = mockRpc((method, params) => {
+    if (method === "eth_chainId") return "0x12c1";
+    if (method === "eth_call") {
+      if (
+        params[0].to === contentRegistryAddress &&
+        params[0].data === "0x738dbaa0"
+      ) {
+        return encodeStorageAddress(submissionMediaValidatorAddress);
+      }
+      if (
+        params[0].to === submissionMediaValidatorAddress &&
+        params[0].data === "0xb717bbbd"
+      ) {
+        return encodeStorageAddress(contentRegistryAddress);
+      }
+      const wiringResult = handleWiringCall(params[0], deploymentAddresses, {
+        "ProtocolConfig rewardDistributor": addressFor(777),
+      });
+      if (wiringResult) return wiringResult;
+      throw new Error(`Unexpected eth_call ${JSON.stringify(params[0])}`);
+    }
+    if (method === "eth_getStorageAt") {
+      assert.equal(params[1], EIP1967_IMPLEMENTATION_SLOT);
+      return encodeStorageAddress(addressFor(0));
+    }
+    if (method === "eth_getCode") return selectorBytecode();
+    throw new Error(`Unexpected RPC method ${method}`);
+  });
+
+  try {
+    const result = await validateLiveReadiness({
+      deploymentJson,
+      rpcUrl: "https://rpc.example",
+    });
+
+    assert.equal(result.ok, false);
+    assert(
+      result.failures.some((message) =>
+        message.includes("ProtocolConfig rewardDistributor points to RoundRewardDistributor deployment"),
       ),
     );
   } finally {

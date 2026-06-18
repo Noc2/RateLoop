@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  REQUIRED_ADDRESS_WIRING_CHECKS,
   REQUIRED_DEPLOYED_CONTRACTS,
   buildDeploymentAddressMap,
   parseGeneratedContractsForChain,
@@ -65,6 +66,34 @@ const WORLD_ID_PRODUCTION_VERIFIER =
 
 function encodeStorageAddress(address) {
   return `0x${address.toLowerCase().replace(/^0x/, "").padStart(64, "0")}`;
+}
+
+function encodeAddressWords(...addresses) {
+  return `0x${addresses.map(address => address.toLowerCase().replace(/^0x/, "").padStart(64, "0")).join("")}`;
+}
+
+function encodeAddressCallData(selector, addresses = []) {
+  return `${selector}${addresses.map(address => address.toLowerCase().replace(/^0x/, "").padStart(64, "0")).join("")}`;
+}
+
+function handleWiringCall(call, deploymentAddresses, overrides = {}) {
+  for (const check of REQUIRED_ADDRESS_WIRING_CHECKS) {
+    const to = deploymentAddresses.get(check.contractName);
+    const argumentAddresses = (check.arguments ?? []).map(contractName => deploymentAddresses.get(contractName));
+    if (!to || argumentAddresses.some(address => !address)) continue;
+    const expectedData = encodeAddressCallData(check.selector, argumentAddresses);
+    if (call.to !== to || call.data.toLowerCase() !== expectedData.toLowerCase()) continue;
+
+    if (check.selector === "0xe1b361ac") {
+      return encodeAddressWords(
+        overrides["QuestionRewardPoolEscrow registry"] ?? deploymentAddresses.get("ContentRegistry"),
+        overrides["QuestionRewardPoolEscrow votingEngine"] ?? deploymentAddresses.get("RoundVotingEngine"),
+      );
+    }
+
+    return encodeAddressWords(overrides[check.label] ?? deploymentAddresses.get(check.expectedContractName));
+  }
+  return undefined;
 }
 
 function mockRpc(handler) {
@@ -314,6 +343,8 @@ test("validateLiveReadiness rejects mainnet bytecode missing required selectors 
       ) {
         return encodeStorageAddress(WORLD_ID_PRODUCTION_VERIFIER);
       }
+      const wiringResult = handleWiringCall(params[0], deploymentAddresses);
+      if (wiringResult) return wiringResult;
       throw new Error(`Unexpected eth_call ${JSON.stringify(params[0])}`);
     }
     if (method === "eth_getStorageAt") {

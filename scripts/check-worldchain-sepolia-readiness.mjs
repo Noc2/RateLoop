@@ -24,6 +24,7 @@ const EIP1967_IMPLEMENTATION_SLOT =
   "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc";
 const SUBMISSION_MEDIA_VALIDATOR_SELECTOR = "0x738dbaa0";
 const SUBMISSION_MEDIA_VALIDATOR_AUTHORIZED_EMITTER_SELECTOR = "0xb717bbbd";
+const ADDRESS_WORD_RE = /^[a-fA-F0-9]{64}$/;
 export const REQUIRED_SUBMISSION_MEDIA_VALIDATOR_SELECTORS = [
   "0x6773a34f", // validateContextSubmission(string,string[],string,string,string,bool)
   "0x6b974e07", // validateSubmissionDetails(string,bytes32,bool)
@@ -115,6 +116,192 @@ export const REQUIRED_SELECTOR_CHECKS = [
       "0x6a951316", // setRole(bytes32,address,bool)
       "0x706f3d41", // roundConfidentialityEscrowSnapshotWord(uint256,uint256)
     ],
+  },
+];
+
+export const REQUIRED_ADDRESS_WIRING_CHECKS = [
+  {
+    contractName: "ContentRegistry",
+    selector: "0x19c90f6d", // votingEngine()
+    expectedContractName: "RoundVotingEngine",
+    label: "ContentRegistry votingEngine",
+  },
+  {
+    contractName: "ContentRegistry",
+    selector: "0x3cd4049c", // questionRewardPoolEscrow()
+    expectedContractName: "QuestionRewardPoolEscrow",
+    label: "ContentRegistry questionRewardPoolEscrow",
+  },
+  {
+    contractName: "ContentRegistry",
+    selector: "0xf5efbb4f", // protocolConfig()
+    expectedContractName: "ProtocolConfig",
+    label: "ContentRegistry protocolConfig",
+  },
+  {
+    contractName: "QuestionRewardPoolEscrow",
+    selector: "0xe1b361ac", // questionRewardPoolEscrowConfigShape()
+    expectedContractName: "ContentRegistry",
+    label: "QuestionRewardPoolEscrow registry",
+    outputIndex: 0,
+  },
+  {
+    contractName: "QuestionRewardPoolEscrow",
+    selector: "0xe1b361ac", // questionRewardPoolEscrowConfigShape()
+    expectedContractName: "RoundVotingEngine",
+    label: "QuestionRewardPoolEscrow votingEngine",
+    outputIndex: 1,
+  },
+  {
+    contractName: "FeedbackBonusEscrow",
+    selector: "0x7b103999", // registry()
+    expectedContractName: "ContentRegistry",
+    label: "FeedbackBonusEscrow registry",
+  },
+  {
+    contractName: "FeedbackBonusEscrow",
+    selector: "0x19c90f6d", // votingEngine()
+    expectedContractName: "RoundVotingEngine",
+    label: "FeedbackBonusEscrow votingEngine",
+  },
+  {
+    contractName: "FeedbackBonusEscrow",
+    selector: "0xf9a3b6e1", // feedbackRegistry()
+    expectedContractName: "FeedbackRegistry",
+    label: "FeedbackBonusEscrow feedbackRegistry",
+  },
+  {
+    contractName: "FeedbackRegistry",
+    selector: "0x19c90f6d", // votingEngine()
+    expectedContractName: "RoundVotingEngine",
+    label: "FeedbackRegistry votingEngine",
+  },
+  {
+    contractName: "ProtocolConfig",
+    selector: "0xd5011d75", // confidentialityEscrow()
+    expectedContractName: "ConfidentialityEscrow",
+    label: "ProtocolConfig confidentialityEscrow",
+  },
+  {
+    contractName: "ProtocolConfig",
+    selector: "0x53b86ffb", // raterRegistry()
+    expectedContractName: "RaterRegistry",
+    label: "ProtocolConfig raterRegistry",
+  },
+  {
+    contractName: "ProtocolConfig",
+    selector: "0xc940f190", // frontendRegistry()
+    expectedContractName: "FrontendRegistry",
+    label: "ProtocolConfig frontendRegistry",
+  },
+  {
+    contractName: "ProtocolConfig",
+    selector: "0xacc2166a", // rewardDistributor()
+    expectedContractName: "RoundRewardDistributor",
+    label: "ProtocolConfig rewardDistributor",
+  },
+  {
+    contractName: "ProtocolConfig",
+    selector: "0x1ba71c58", // clusterPayoutOracle()
+    expectedContractName: "ClusterPayoutOracle",
+    label: "ProtocolConfig clusterPayoutOracle",
+  },
+  {
+    contractName: "ProtocolConfig",
+    selector: "0xa79660de", // advisoryVoteRecorder()
+    expectedContractName: "AdvisoryVoteRecorder",
+    label: "ProtocolConfig advisoryVoteRecorder",
+  },
+  {
+    contractName: "ProtocolConfig",
+    selector: "0xced2665e", // launchDistributionPool()
+    expectedContractName: "LaunchDistributionPool",
+    label: "ProtocolConfig launchDistributionPool",
+  },
+  {
+    contractName: "ConfidentialityEscrow",
+    selector: "0x7b103999", // registry()
+    expectedContractName: "ContentRegistry",
+    label: "ConfidentialityEscrow registry",
+  },
+  {
+    contractName: "ConfidentialityEscrow",
+    selector: "0xf5efbb4f", // protocolConfig()
+    expectedContractName: "ProtocolConfig",
+    label: "ConfidentialityEscrow protocolConfig",
+  },
+  {
+    contractName: "RaterRegistry",
+    selector: "0xd5011d75", // confidentialityEscrow()
+    expectedContractName: "ConfidentialityEscrow",
+    label: "RaterRegistry confidentialityEscrow",
+  },
+  {
+    contractName: "FrontendRegistry",
+    selector: "0x19c90f6d", // votingEngine()
+    expectedContractName: "RoundVotingEngine",
+    label: "FrontendRegistry votingEngine",
+  },
+  {
+    contractName: "FrontendRegistry",
+    selector: "0x8ea89ffb", // feeCreditorForEngine(address)
+    expectedContractName: "RoundRewardDistributor",
+    label: "FrontendRegistry feeCreditorForEngine(RoundVotingEngine)",
+    arguments: ["RoundVotingEngine"],
+  },
+  {
+    contractName: "RoundRewardDistributor",
+    selector: "0x7b103999", // registry()
+    expectedContractName: "ContentRegistry",
+    label: "RoundRewardDistributor registry",
+  },
+  {
+    contractName: "RoundRewardDistributor",
+    selector: "0x19c90f6d", // votingEngine()
+    expectedContractName: "RoundVotingEngine",
+    label: "RoundRewardDistributor votingEngine",
+  },
+  {
+    contractName: "RoundVotingEngine",
+    selector: "0xf5efbb4f", // protocolConfig()
+    expectedContractName: "ProtocolConfig",
+    label: "RoundVotingEngine protocolConfig",
+  },
+  {
+    contractName: "ClusterPayoutOracle",
+    selector: "0xc940f190", // frontendRegistry()
+    expectedContractName: "FrontendRegistry",
+    label: "ClusterPayoutOracle frontendRegistry",
+  },
+  {
+    contractName: "LaunchDistributionPool",
+    selector: "0x53b86ffb", // raterRegistry()
+    expectedContractName: "RaterRegistry",
+    label: "LaunchDistributionPool raterRegistry",
+  },
+  {
+    contractName: "LaunchDistributionPool",
+    selector: "0x1ba71c58", // clusterPayoutOracle()
+    expectedContractName: "ClusterPayoutOracle",
+    label: "LaunchDistributionPool clusterPayoutOracle",
+  },
+  {
+    contractName: "ProfileRegistry",
+    selector: "0x53b86ffb", // raterRegistry()
+    expectedContractName: "RaterRegistry",
+    label: "ProfileRegistry raterRegistry",
+  },
+  {
+    contractName: "X402QuestionSubmitter",
+    selector: "0x7b103999", // registry()
+    expectedContractName: "ContentRegistry",
+    label: "X402QuestionSubmitter registry",
+  },
+  {
+    contractName: "X402QuestionSubmitter",
+    selector: "0x3cd4049c", // questionRewardPoolEscrow()
+    expectedContractName: "QuestionRewardPoolEscrow",
+    label: "X402QuestionSubmitter questionRewardPoolEscrow",
   },
 ];
 
@@ -329,6 +516,45 @@ function parseStorageAddress(value) {
     : address;
 }
 
+function parseAddressWords(value) {
+  if (typeof value !== "string" || !value.startsWith("0x")) return [];
+  const hex = value.slice(2);
+  if (hex.length === 0 || hex.length % 64 !== 0) return [];
+
+  const addresses = [];
+  for (let index = 0; index < hex.length; index += 64) {
+    const word = hex.slice(index, index + 64);
+    if (!ADDRESS_WORD_RE.test(word)) return [];
+    const address = `0x${word.slice(-40)}`;
+    addresses.push(
+      address === "0x0000000000000000000000000000000000000000"
+        ? undefined
+        : address,
+    );
+  }
+  return addresses;
+}
+
+function parseAddressResult(value, outputIndex = 0) {
+  return parseAddressWords(value)[outputIndex];
+}
+
+function encodeAddressArgument(value) {
+  return value.toLowerCase().replace(/^0x/, "").padStart(64, "0");
+}
+
+function buildAddressCallData(selector, argumentAddresses = []) {
+  return `${selector}${argumentAddresses.map(encodeAddressArgument).join("")}`;
+}
+
+function sameAddress(left, right) {
+  return (
+    typeof left === "string" &&
+    typeof right === "string" &&
+    left.toLowerCase() === right.toLowerCase()
+  );
+}
+
 export function bytecodeContainsSelector(code, selector) {
   return (
     typeof code === "string" &&
@@ -389,6 +615,51 @@ export async function getSubmissionMediaValidatorAuthorizedEmitter(
   );
 }
 
+export async function getAddressWiringValue(
+  rpcUrl,
+  deploymentAddresses,
+  wiringCheck,
+) {
+  const address = deploymentAddresses.get(wiringCheck.contractName);
+  if (!address) return undefined;
+  const argumentAddresses = (wiringCheck.arguments ?? []).map((contractName) =>
+    deploymentAddresses.get(contractName),
+  );
+  if (argumentAddresses.some((value) => !isAddress(value))) return undefined;
+  const result = await rpc(rpcUrl, "eth_call", [
+    {
+      to: address,
+      data: buildAddressCallData(wiringCheck.selector, argumentAddresses),
+    },
+    "latest",
+  ]);
+  return parseAddressResult(result, wiringCheck.outputIndex ?? 0);
+}
+
+async function validateLiveDeploymentWiring({
+  checks,
+  deploymentAddresses,
+  failures,
+  rpcUrl,
+}) {
+  for (const wiringCheck of REQUIRED_ADDRESS_WIRING_CHECKS) {
+    const expectedAddress = deploymentAddresses.get(
+      wiringCheck.expectedContractName,
+    );
+    const actualAddress = await getAddressWiringValue(
+      rpcUrl,
+      deploymentAddresses,
+      wiringCheck,
+    );
+    addCheck(
+      checks,
+      failures,
+      sameAddress(actualAddress, expectedAddress),
+      `${wiringCheck.label} points to ${wiringCheck.expectedContractName} deployment`,
+    );
+  }
+}
+
 export async function validateLiveReadiness({
   appUrl,
   deploymentJson,
@@ -440,6 +711,13 @@ export async function validateLiveReadiness({
           );
         }
       }
+
+      await validateLiveDeploymentWiring({
+        checks,
+        deploymentAddresses,
+        failures,
+        rpcUrl,
+      });
 
       const contentRegistryAddress = deploymentAddresses.get("ContentRegistry");
       if (contentRegistryAddress) {
