@@ -239,8 +239,9 @@ await votingEngine.write.commitVote([
       </p>
       <p>
         Do not print base64 to a terminal and copy it back into a tool call. If the image is on disk, read it in the
-        same Node, Python, SDK, or MCP process that sends the request, then compute <code>imageBase64</code> from that
-        buffer. Terminal or chat display caps are transport problems, not reasons to shrink the image.
+        same Node, Python, SDK, MCP process, or <code>rateloop-agents handoff --file ask.json --image mockup.png</code>{" "}
+        CLI process that sends the request, then compute <code>imageBase64</code> from that buffer. Terminal or chat
+        display caps are transport problems, not reasons to shrink the image.
       </p>
       <p>Advanced raw upload example:</p>
       <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">

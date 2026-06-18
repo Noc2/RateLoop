@@ -6,6 +6,7 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRateLoopAgentClient } from "@rateloop/sdk/agent";
 import { loadAgentsRuntimeConfig } from "./config";
+import { readHandoffGeneratedImageFiles } from "./handoffImages";
 import {
   askHumansWithLocalSigner,
   generateLocalSignerWallet,
@@ -16,8 +17,10 @@ import {
 } from "./localSigner";
 import { listAgentResultTemplates } from "./templates";
 import { lintAgentAskRequest, summarizeLintFindings } from "./questions/lint";
+import type { QuestionLintFinding } from "./questions/types";
 
-type CliOptions = Record<string, string | boolean>;
+type CliOptionValue = string | boolean | string[];
+type CliOptions = Record<string, CliOptionValue>;
 const DRY_RUN_WALLET_ADDRESS = "0x000000000000000000000000000000000000dEaD";
 
 function findPackageRoot(startDir: string) {
@@ -63,6 +66,15 @@ function redactSensitive(value: unknown): unknown {
   );
 }
 
+function setOption(options: CliOptions, key: string, value: string | boolean) {
+  const existing = options[key];
+  if (existing === undefined) {
+    options[key] = value;
+    return;
+  }
+  options[key] = Array.isArray(existing) ? [...existing, String(value)] : [String(existing), String(value)];
+}
+
 function parseArgs(args: string[]): { command: string; options: CliOptions } {
   const [command = "help", ...rest] = args;
   const options: CliOptions = {};
@@ -76,11 +88,11 @@ function parseArgs(args: string[]): { command: string; options: CliOptions } {
     const key = token.slice(2);
     const next = rest[index + 1];
     if (!next || next.startsWith("--")) {
-      options[key] = true;
+      setOption(options, key, true);
       continue;
     }
 
-    options[key] = next;
+    setOption(options, key, next);
     index++;
   }
 
@@ -93,6 +105,34 @@ function requireString(options: CliOptions, name: string): string {
     throw new Error(`--${name} is required`);
   }
   return value;
+}
+
+function readStringList(options: CliOptions, ...names: string[]): string[] {
+  return names.flatMap(name => {
+    const value = options[name];
+    if (typeof value === "string") return [value];
+    if (Array.isArray(value)) return value;
+    return [];
+  });
+}
+
+function readOptionalPositiveInteger(options: CliOptions, name: string): number | undefined {
+  const value = options[name];
+  if (value === undefined) return undefined;
+  if (typeof value !== "string") {
+    throw new Error(`--${name} must be a positive integer`);
+  }
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+    throw new Error(`--${name} must be a positive integer`);
+  }
+  return parsed;
+}
+
+function singleValueOptions(options: CliOptions): Record<string, string | boolean | undefined> {
+  return Object.fromEntries(
+    Object.entries(options).map(([key, value]) => [key, Array.isArray(value) ? value[value.length - 1] : value]),
+  );
 }
 
 function readPaymentMode(options: CliOptions) {
@@ -165,6 +205,7 @@ function usage() {
   yarn workspace @rateloop/agents quote --file packages/agents/examples/questions/landing-pitch-review.json
   yarn workspace @rateloop/agents ask --dry-run --file packages/agents/examples/questions/landing-pitch-review.json
   yarn workspace @rateloop/agents ask --file packages/agents/examples/questions/landing-pitch-review.json
+  yarn workspace @rateloop/agents handoff --file ask.json --image mockup.png
   export RATELOOP_LOCAL_SIGNER_KEYSTORE_PASSWORD=<load-from-secret-store>
   yarn workspace @rateloop/agents wallet --generate --keystore ~/.rateloop/local-signer.json
   yarn workspace @rateloop/agents wallet
@@ -221,6 +262,15 @@ function withDryRunOptions(payload: unknown, options: CliOptions, walletAddress:
       typeof record.walletAddress === "string" && record.walletAddress.trim() ? record.walletAddress : configuredWallet,
     ...(typeof options["client-request-id"] === "string" ? { clientRequestId: options["client-request-id"] } : {}),
   };
+}
+
+function shouldKeepHandoffFinding(finding: QuestionLintFinding, hasGeneratedImages: boolean) {
+  if (!hasGeneratedImages) return true;
+  return !(
+    finding.level === "error" &&
+    finding.path === "question.contextUrl" &&
+    finding.message === "Context URL, image URL, or video URL is required."
+  );
 }
 
 async function main() {
@@ -294,8 +344,32 @@ async function main() {
       return;
     }
 
+    case "handoff": {
+      const config = loadAgentsRuntimeConfig();
+      const agent = createAgentClient();
+      const rawPayload = await readJsonFile(requireString(options, "file"));
+      const payload = withConfiguredWalletAddress(rawPayload, config.agentWalletAddress);
+      const generatedImages = await readHandoffGeneratedImageFiles(readStringList(options, "image", "generated-image"));
+      const findings = lintAgentAskRequest(payload).filter(finding =>
+        shouldKeepHandoffFinding(finding, generatedImages.length > 0),
+      );
+      if (findings.some(finding => finding.level === "error")) {
+        printJson({ findings, ...summarizeLintFindings(findings) });
+        process.exitCode = 1;
+        return;
+      }
+      printJson(
+        await agent.createAskHandoff({
+          generatedImages,
+          request: payload as never,
+          ttlMs: readOptionalPositiveInteger(options, "ttl-ms"),
+        }),
+      );
+      return;
+    }
+
     case "wallet": {
-      const localSignerConfig = loadLocalSignerConfig(options);
+      const localSignerConfig = loadLocalSignerConfig(singleValueOptions(options));
       if (options.generate) {
         const generated = await generateLocalSignerWallet(localSignerConfig, { overwrite: Boolean(options.overwrite) });
         printJson({
@@ -320,7 +394,7 @@ async function main() {
 
     case "local-ask": {
       const agent = createAgentClient();
-      const localSignerConfig = loadLocalSignerConfig(options);
+      const localSignerConfig = loadLocalSignerConfig(singleValueOptions(options));
       const wallet = await loadLocalSignerWallet(localSignerConfig);
       const payload = await readJsonFile(requireString(options, "file"));
       const payloadWithWallet = withLocalSignerWallet(payload, wallet.account.address);

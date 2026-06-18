@@ -537,7 +537,7 @@ export const agentCreateAskHandoffInputSchema = {
     ...agentAskInputBaseProperties,
     generatedImages: {
       description:
-        "Optional generated/local image bytes to stage into the browser handoff. Uses the same JPG, PNG, and WEBP limit as the submit page: 10 MB per image, with the MCP JSON body limit applying to the aggregate base64 request. RateLoop fully decodes these bytes before returning a link, so corrupt or truncated images are rejected synchronously. Use this instead of raw public image-upload challenges for normal chat flows, and pass bytes from file-backed tooling rather than copied terminal output.",
+        "Optional generated/local image bytes to stage into the browser handoff. Uses the same JPG, PNG, and WEBP limit as the submit page: 10 MB per image, with the MCP JSON body limit applying to the aggregate base64 request. RateLoop fully decodes these bytes before returning a link, so corrupt or truncated images are rejected synchronously. Use this instead of raw public image-upload challenges for normal chat flows, and pass bytes from file-backed tooling such as rateloop-agents handoff --file ask.json --image mockup.png rather than copied terminal output.",
       items: agentHandoffGeneratedImageInputSchema,
       maxItems: 4,
       type: "array",

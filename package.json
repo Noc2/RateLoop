@@ -83,6 +83,7 @@
     "ponder:check-types": "yarn workspace @rateloop/ponder check-types",
     "agents:ask": "yarn workspace @rateloop/agents ask",
     "agents:check-types": "yarn workspace @rateloop/agents check-types",
+    "agents:handoff": "yarn workspace @rateloop/agents handoff",
     "agents:lint": "yarn build:workspace-deps && yarn workspace @rateloop/agents lint:questions",
     "agents:quote": "yarn workspace @rateloop/agents quote",
     "agents:result": "yarn workspace @rateloop/agents result",

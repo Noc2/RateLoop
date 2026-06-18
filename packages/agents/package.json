@@ -88,6 +88,7 @@
     "ask": "tsx src/cli.ts ask",
     "build": "yarn workspace @rateloop/node-utils build:dist && node ../../scripts/clean-package-dist.mjs && tsc -p tsconfig.json && node ../../scripts/fix-esm-extensions.mjs dist/esm && tsc -p tsconfig.cjs.json && node ../../scripts/write-cjs-package-json.mjs dist/cjs",
     "check-types": "yarn workspace @rateloop/node-utils build:dist && tsc --noEmit",
+    "handoff": "tsx src/cli.ts handoff",
     "lint:questions": "tsx src/cli.ts lint",
     "local-ask": "tsx src/cli.ts local-ask",
     "prepack": "yarn build",

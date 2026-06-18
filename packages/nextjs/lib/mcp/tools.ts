@@ -345,7 +345,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       readOnlyHint: false,
     },
     description:
-      "Create a browser handoff link for normal human-wallet asks. Use this for public URL, YouTube, generated/local image, or gated RateLoop-hosted private context; share the returned handoffUrl with the user. generatedImages use the same under-10 MB JPG/PNG/WEBP per-image limit as the submit page and are decoded before the link is returned, so corrupt image bytes fail synchronously. Pass image bytes from file-backed tooling; do not shrink an image just because terminal or chat output cannot display its base64. Do not ask users to paste raw wallet signatures.",
+      "Create a browser handoff link for normal human-wallet asks. Use this for public URL, YouTube, generated/local image, or gated RateLoop-hosted private context; share the returned handoffUrl with the user. generatedImages use the same under-10 MB JPG/PNG/WEBP per-image limit as the submit page and are decoded before the link is returned, so corrupt image bytes fail synchronously. Pass image bytes from file-backed tooling; do not shrink an image just because terminal or chat output cannot display its base64. If your host cannot pass under-limit bytes without printing base64, use the file-backed rateloop-agents handoff --file ask.json --image mockup.png CLI or an SDK process. Do not ask users to paste raw wallet signatures.",
     inputSchema: agentCreateAskHandoffInputSchema,
     name: "rateloop_create_ask_handoff_link",
     outputSchema: agentAskHandoffOutputSchema,

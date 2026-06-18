@@ -11,6 +11,13 @@ export {
 } from "./questionSpecs";
 export type { AgentQuestionConfidentialityInput, AgentQuestionSpecInput } from "./questionSpecs";
 export {
+  MAX_HANDOFF_GENERATED_IMAGE_BYTES,
+  MAX_HANDOFF_GENERATED_IMAGES,
+  readHandoffGeneratedImageFile,
+  readHandoffGeneratedImageFiles,
+} from "./handoffImages";
+export type { HandoffGeneratedImage } from "./handoffImages";
+export {
   AGENT_RESULT_TEMPLATES,
   findAgentResultTemplate,
   getAgentResultTemplate,

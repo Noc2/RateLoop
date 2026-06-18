@@ -6,7 +6,7 @@ This package is for the moment an agent should ask instead of guess. The default
 
 1. create or collect public context
 2. keep generated/local image bytes for `generatedImages` when needed
-3. quote before spending
+3. quote before spending when the ask already has public URLs or uploaded RateLoop image URLs
 4. hand a human wallet a browser handoff link, or use a local signer for agent-controlled wallets
 5. poll handoff status, then question status, or wait for a callback
 6. read the structured result and store the public URL
@@ -54,6 +54,7 @@ yarn agents:sandbox --file packages/agents/examples/questions/landing-pitch-revi
 # Quote through MCP, then prefer a browser handoff link for funded user wallets.
 export RATELOOP_AGENT_WALLET_ADDRESS=0x...
 yarn agents:quote --file packages/agents/examples/questions/landing-pitch-review.json
+yarn agents:handoff --file ask.json --image mockup.png
 
 # Local signer path for Codex-like agents that can hold an encrypted keystore.
 export RATELOOP_LOCAL_SIGNER_KEYSTORE_PASSWORD="$(security find-generic-password -a rateloop-local-signer -w)"
@@ -77,6 +78,7 @@ For published-package installs, the same commands are available through the `rat
 ```bash
 npx rateloop-agents sandbox --file packages/agents/examples/questions/landing-pitch-review.json
 npx rateloop-agents quote --file packages/agents/examples/questions/landing-pitch-review.json
+npx rateloop-agents handoff --file ask.json --image mockup.png
 ```
 
 ## First No-Payment Run
@@ -97,8 +99,8 @@ image attachments, request a USDC authorization, return a transaction plan, or t
 
 1. Fund the user wallet or local signer wallet with Base Sepolia USDC for testnet asks.
 2. Keep generated/local image bytes for `generatedImages` when browser handoff visual context is needed.
-3. Run `sandbox` or `ask --dry-run`, then quote with `rateloop_quote_question` before reserving spend.
-4. For a human wallet, call `rateloop_create_ask_handoff_link` with the same ask payload and optional `generatedImages`, then share the returned `/agent/handoff/{handoffId}#token=...` URL.
+3. Run `sandbox` or `ask --dry-run`, then quote with `rateloop_quote_question` when the ask already uses public URLs or uploaded RateLoop `imageUrls`.
+4. For a human wallet, call `rateloop_create_ask_handoff_link` with the same ask payload and optional `generatedImages`, then share the returned `/agent/handoff/{handoffId}#token=...` URL. For generated-image-only handoffs, create the handoff directly; the browser prepare step prices the ask before payment.
 5. For an agent-controlled wallet, run `local-ask` with the encrypted local signer.
 6. Use raw MCP `rateloop_ask_humans` wallet calls only when the host can execute or present them cleanly.
 7. Poll `rateloop_get_handoff_status`, then `rateloop_get_question_status`, then read `rateloop_get_result` after settlement.
@@ -118,7 +120,18 @@ Do not send plaintext rating direction, predicted crowd share, or salt to hosted
 
 For mockups, screenshots, generated images, or design options in the normal human-wallet flow, pass image bytes as
 `generatedImages` to `rateloop_create_ask_handoff_link`; the browser handoff signs, uploads, moderates, and attaches the
-approved RateLoop image URLs before funding the ask. Managed bearer-token agents can call `rateloop_upload_image`
+approved RateLoop image URLs before funding the ask. JPG, PNG, and WEBP images may be up to 10 MB each. Do not resize a
+readable image merely because base64 would be too large to print in a terminal or chat transcript.
+
+For local files, prefer the file-backed CLI path so image bytes never pass through terminal output:
+
+```bash
+yarn workspace @rateloop/agents handoff --file ask.json --image mockup.png
+# Repeat --image for up to four generated/local images.
+```
+
+The `handoff` command reads each file from disk, computes `sha256` and `sizeBytes`, base64-encodes the buffer inside the
+Node process, and prints only the handoff response. Managed bearer-token agents can call `rateloop_upload_image`
 directly. Public wallet-mode raw uploads use `rateloop_prepare_image_upload`, a wallet signature, then
 `rateloop_upload_image` only when the host can present wallet signing cleanly. The Ask page provides the same moderated
 upload path and is the fallback when chat-based wallet message signing would be too clunky.

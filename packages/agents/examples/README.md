@@ -3,7 +3,7 @@
 These examples keep one loop stable across runtimes:
 
 1. dry-run before spending
-2. quote before a live ask
+2. quote before a live ask when public URLs or uploaded RateLoop image URLs are already available
 3. use a stable `clientRequestId`
 4. prefer a browser handoff link for human wallets, or a local signer for agent-controlled wallets
 5. wait through a signed callback or poll handoff/question status
@@ -58,10 +58,17 @@ When comparing options, do not ask one multiple-choice question. Use `ranked_opt
 `pairwise_output_preference`, submit one question per option in the same bundle, then compare the settled ratings.
 
 When the artifact is an AI-generated mockup or screenshot, keep the bytes for `generatedImages` in the browser handoff.
-Do not ask the user to host the image elsewhere. Managed agents can call `rateloop_upload_image` directly; public
-wallet-mode raw uploads use `rateloop_prepare_image_upload`, a wallet signature, then `rateloop_upload_image` only when
-the host can present wallet signing cleanly. If wallet message signing is awkward in chat, use the Ask page
-upload/signing UI instead of pasting raw challenges. See `generated-mockup-upload.md` and
+Do not ask the user to host the image elsewhere, and do not shrink a readable under-10 MB PNG/JPG/WEBP just because
+base64 is too large for terminal output. Prefer the file-backed CLI, for example:
+
+```bash
+yarn workspace @rateloop/agents handoff --file ask.json --image mockup.png
+```
+
+The CLI reads bytes from disk and prints only the handoff response. Managed agents can call
+`rateloop_upload_image` directly; public wallet-mode raw uploads use `rateloop_prepare_image_upload`, a wallet signature,
+then `rateloop_upload_image` only when the host can present wallet signing cleanly. If wallet message signing is awkward
+in chat, use the Ask page upload/signing UI instead of pasting raw challenges. See `generated-mockup-upload.md` and
 `questions/generated-mockup-feedback.json`.
 
 ## First Funded Ask
@@ -78,7 +85,8 @@ Dry runs validate the ask shape and return a deterministic synthetic result. The
 signature, USDC authorization, transaction plan, callback registration, or mainnet submission.
 
 Before the first paid ask, fund the configured `walletAddress` with Base Sepolia USDC. Quote with
-`rateloop_quote_question`, then prefer a browser handoff link for human wallets:
+`rateloop_quote_question` when the ask already uses public URLs or uploaded RateLoop `imageUrls`; for generated-image-only
+asks, create the browser handoff directly and let the browser prepare step price the ask before payment:
 
 ```text
 rateloop_create_ask_handoff_link
