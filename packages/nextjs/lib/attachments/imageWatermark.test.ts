@@ -3,12 +3,27 @@ import { test } from "node:test";
 import sharp from "sharp";
 import {
   buildConfidentialImageWatermarkOverlaySvg,
+  buildConfidentialImageWatermarkText,
   watermarkConfidentialImage,
 } from "~~/lib/attachments/imageWatermark";
 
 const WALLET = "0x1234567890abcdef1234567890abcdef12345678";
 const VIEW_TOKEN = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
 const TIMESTAMP = new Date("2026-06-18T14:25:38.000Z");
+
+test("confidential image watermark text explains private logged access", () => {
+  assert.deepEqual(
+    buildConfidentialImageWatermarkText({
+      timestamp: TIMESTAMP,
+      viewToken: VIEW_TOKEN,
+      walletAddress: WALLET,
+    }),
+    {
+      label: "PRIVATE VIEW 0X1234...5678 2026-06-18T14:25:38.000Z",
+      token: "ACCESS LOGGED VIEW ABCDEF123456",
+    },
+  );
+});
 
 test("confidential image watermark overlay uses vector glyphs instead of runtime fonts", () => {
   const overlay = buildConfidentialImageWatermarkOverlaySvg({

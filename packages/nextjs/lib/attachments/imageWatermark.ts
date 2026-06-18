@@ -108,6 +108,21 @@ function buildGlyphPath(value: string, x: number, y: number, glyphHeight: number
   return commands.join("");
 }
 
+export function buildConfidentialImageWatermarkText(params: {
+  timestamp: Date;
+  viewToken: string;
+  walletAddress: string;
+}) {
+  const viewer = `${params.walletAddress.slice(0, 6)}...${params.walletAddress.slice(-4)}`.toUpperCase();
+  const timestamp = params.timestamp.toISOString();
+  const viewCode = params.viewToken.slice(0, 12).toUpperCase();
+
+  return {
+    label: `PRIVATE VIEW ${viewer} ${timestamp}`,
+    token: `ACCESS LOGGED VIEW ${viewCode}`,
+  };
+}
+
 export function buildConfidentialImageWatermarkOverlaySvg(params: {
   imageHeight: number;
   imageWidth: number;
@@ -119,8 +134,7 @@ export function buildConfidentialImageWatermarkOverlaySvg(params: {
   const overlayHeight = Math.min(160, Math.max(1, params.imageHeight));
   const paddingX = Math.max(1, Math.floor(overlayWidth * 0.03));
   const maxTextWidth = Math.max(1, overlayWidth - paddingX * 2);
-  const label = `${params.walletAddress.slice(0, 6)}...${params.walletAddress.slice(-4)} ${params.timestamp.toISOString()}`;
-  const token = `view ${params.viewToken.slice(0, 12)}`;
+  const { label, token } = buildConfidentialImageWatermarkText(params);
   const labelGlyphHeight = fitGlyphHeight(
     label,
     Math.max(1, Math.min(34, Math.floor(overlayHeight * 0.28))),
