@@ -34,6 +34,10 @@ interface IConfidentialityRoundState {
         );
 }
 
+interface IConfidentialityEngineTrackingRegistry {
+    function isContentRoundTrackingEngine(uint256 contentId, address engine) external view returns (bool);
+}
+
 /// @title ConfidentialityEscrow
 /// @notice Holds per-rater confidentiality bonds for gated question context.
 contract ConfidentialityEscrow is
@@ -305,7 +309,7 @@ contract ConfidentialityEscrow is
     function recordConfidentialityNexusForRegistry(uint256 contentId, address holder, address registryAddress)
         external
     {
-        if (!registry.isVotingEngineAuthorizedForConfidentialityNexus(contentId, msg.sender)) {
+        if (!_isAuthorizedNexusVotingEngine(contentId)) {
             revert("Not voting engine");
         }
         _recordConfidentialityNexus(contentId, holder, msg.sender, registryAddress);
@@ -532,6 +536,33 @@ contract ConfidentialityEscrow is
                 if (state == RoundLib.RoundState.Open && voteCount == 0 && totalStake == 0) return true;
                 return state == RoundLib.RoundState.Settled || state == RoundLib.RoundState.Cancelled
                     || state == RoundLib.RoundState.Tied || state == RoundLib.RoundState.RevealFailed;
+            } catch {
+                return false;
+            }
+        } catch {
+            return false;
+        }
+    }
+
+    function _isAuthorizedNexusVotingEngine(uint256 contentId) private view returns (bool) {
+        address currentEngine = registry.votingEngine();
+        if (msg.sender == currentEngine) return true;
+        try IConfidentialityEngineTrackingRegistry(address(registry)).isContentRoundTrackingEngine(
+            contentId, msg.sender
+        ) returns (bool tracked) {
+            return tracked && _engineHasOpenRound(msg.sender, contentId);
+        } catch {
+            return false;
+        }
+    }
+
+    function _engineHasOpenRound(address engine, uint256 contentId) private view returns (bool) {
+        try IConfidentialityRoundState(engine).currentRoundId(contentId) returns (uint256 roundId) {
+            if (roundId == 0) return false;
+            try IConfidentialityRoundState(engine).roundCore(contentId, roundId) returns (
+                uint48, RoundLib.RoundState state, uint16 voteCount, uint16, uint64 totalStake, uint48, uint48
+            ) {
+                return state == RoundLib.RoundState.Open && voteCount != 0 && totalStake != 0;
             } catch {
                 return false;
             }
