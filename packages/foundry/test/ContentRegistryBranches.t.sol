@@ -3130,8 +3130,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         assertEq(registry.trackedVotingEngine(1), address(votingEngine));
 
         bytes32 salt = keccak256("stale-empty-post-rotation");
-        TestCommitArtifacts memory staleCommit =
-            _buildTestCommitArtifacts(address(votingEngine), voter3, true, salt, 1);
+        TestCommitArtifacts memory staleCommit = _buildTestCommitArtifacts(address(votingEngine), voter3, true, salt, 1);
         assertEq(staleCommit.roundId, staleEmptyRoundId);
 
         RoundVotingEngine replacementEngine = _deployReplacementVotingEngine();
