@@ -13,8 +13,6 @@ interface RateLoopEmailTemplateParams {
 const EMAIL_BG = "#050505";
 const EMAIL_TEXT = "#f5f5f5";
 const EMAIL_PRIMARY = "#f5f5f5";
-const EMAIL_PRIMARY_HALO = "rgba(245,245,245,0.12)";
-const EMAIL_PRIMARY_TEXT = "#050505";
 const EMAIL_SURFACE_TOP = "#181818";
 const EMAIL_SURFACE_BOTTOM = "#101010";
 const EMAIL_SURFACE_GLOW = "rgba(245,245,245,0.08)";
@@ -23,6 +21,13 @@ const EMAIL_MUTED_LABEL = "rgba(245,245,245,0.58)";
 const EMAIL_FOOTER = "rgba(139,133,142,0.92)";
 const EMAIL_BORDER = "rgba(245,245,245,0.1)";
 const EMAIL_SHADOW = "rgba(5,4,8,0.42)";
+const EMAIL_BLUE = "#359EEE";
+const EMAIL_GREEN = "#03CEA4";
+const EMAIL_YELLOW = "#FFC43D";
+const EMAIL_PINK = "#EF476F";
+const EMAIL_SPECTRUM_GRADIENT = `linear-gradient(90deg, ${EMAIL_BLUE}, ${EMAIL_GREEN}, ${EMAIL_YELLOW}, ${EMAIL_PINK})`;
+const EMAIL_ACTION_INNER_GRADIENT = "linear-gradient(180deg, rgba(24,24,24,0.98), rgba(16,16,16,0.96))";
+const EMAIL_GRADIENT_TEXT_COLORS = [EMAIL_BLUE, EMAIL_GREEN, EMAIL_YELLOW, EMAIL_PINK];
 
 function escapeHtml(value: string) {
   return value
@@ -33,13 +38,47 @@ function escapeHtml(value: string) {
     .replace(/'/g, "&#39;");
 }
 
+function renderGradientLetters(value: string) {
+  return Array.from(value)
+    .map((char, index) => {
+      if (char === " ") {
+        return " ";
+      }
+
+      const color = EMAIL_GRADIENT_TEXT_COLORS[index % EMAIL_GRADIENT_TEXT_COLORS.length];
+      return `<span style="color:${color};">${escapeHtml(char)}</span>`;
+    })
+    .join("");
+}
+
+function renderRateLoopWord() {
+  return `<span style="color:${EMAIL_TEXT};">Rate</span>${renderGradientLetters("Loop")}`;
+}
+
+function renderHighlightedText(value: string, options: { highlightEmail?: boolean } = {}) {
+  const pattern = options.highlightEmail ? /\b(RateLoop|email)\b/gi : /\bRateLoop\b/g;
+  let cursor = 0;
+  let html = "";
+
+  for (const match of value.matchAll(pattern)) {
+    const matchedText = match[0];
+    const index = match.index ?? 0;
+    html += escapeHtml(value.slice(cursor, index));
+    html += matchedText.toLowerCase() === "rateloop" ? renderRateLoopWord() : renderGradientLetters(matchedText);
+    cursor = index + matchedText.length;
+  }
+
+  html += escapeHtml(value.slice(cursor));
+  return html;
+}
+
 export function buildRateLoopEmailHtml(params: RateLoopEmailTemplateParams) {
-  const safeTitle = escapeHtml(params.title);
-  const safeBody = escapeHtml(params.body);
+  const titleHtml = renderHighlightedText(params.title, { highlightEmail: true });
+  const bodyHtml = renderHighlightedText(params.body);
   const safeCtaLabel = escapeHtml(params.ctaLabel);
   const safeCtaHref = escapeHtml(params.ctaHref);
   const safeEyebrow = escapeHtml(params.eyebrow ?? "RATELOOP NOTIFICATIONS");
-  const safeFooterNote = escapeHtml(
+  const footerNoteHtml = renderHighlightedText(
     params.footerNote ?? "You are receiving this email because you signed up for RateLoop email notifications.",
   );
   const safeFooterLinkLabel = params.footerLinkLabel ? escapeHtml(params.footerLinkLabel) : null;
@@ -57,14 +96,30 @@ export function buildRateLoopEmailHtml(params: RateLoopEmailTemplateParams) {
                   <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">
                     <tr>
                       <td
-                        width="14"
-                        height="14"
-                        style="width:14px; height:14px; border-radius:999px; background:${EMAIL_PRIMARY}; box-shadow:0 0 0 4px ${EMAIL_PRIMARY_HALO};"
-                      ></td>
-                      <td
-                        style="padding-left:10px; color:${EMAIL_TEXT}; font-family:Arial, Helvetica, sans-serif; font-size:26px; line-height:1; font-weight:700; letter-spacing:-0.4px;"
+                        width="34"
+                        height="34"
+                        bgcolor="${EMAIL_BLUE}"
+                        style="width:34px; height:34px; border-radius:999px; background:${EMAIL_SPECTRUM_GRADIENT}; padding:3px; box-shadow:0 0 0 1px rgba(245,245,245,0.1);"
+                        aria-label="RateLoop logo"
                       >
-                        RateLoop
+                        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="28" height="28" style="border-collapse:collapse; width:28px; height:28px;">
+                          <tr>
+                            <td
+                              width="28"
+                              height="28"
+                              bgcolor="${EMAIL_BG}"
+                              style="width:28px; height:28px; border-radius:999px; background:${EMAIL_BG};"
+                            ></td>
+                          </tr>
+                        </table>
+                      </td>
+                      <td
+                        style="padding-left:12px; color:${EMAIL_TEXT}; font-family:Arial, Helvetica, sans-serif; font-size:26px; line-height:1; font-weight:700; letter-spacing:0;"
+                      >
+                        ${renderRateLoopWord()}
+                        <div style="margin-top:5px; color:${EMAIL_MUTED_LABEL}; font-size:11px; line-height:1.2; font-weight:700; letter-spacing:0.8px; text-transform:uppercase;">
+                          Level Up Your Agent
+                        </div>
                       </td>
                     </tr>
                   </table>
@@ -78,94 +133,123 @@ export function buildRateLoopEmailHtml(params: RateLoopEmailTemplateParams) {
                       linear-gradient(180deg, ${EMAIL_SURFACE_TOP} 0%, ${EMAIL_SURFACE_BOTTOM} 100%);
                     border:1px solid ${EMAIL_BORDER};
                     border-radius:28px;
-                    padding:36px 34px 30px;
+                    padding:0;
                     box-shadow:0 24px 54px ${EMAIL_SHADOW};
+                    overflow:hidden;
                   "
                 >
-                  <div style="margin:0 0 14px; color:${EMAIL_PRIMARY}; font-size:12px; font-weight:700; letter-spacing:2px; text-transform:uppercase;">
-                    ${safeEyebrow}
-                  </div>
-                  <h1 style="margin:0 0 16px; color:${EMAIL_TEXT}; font-family:Arial, Helvetica, sans-serif; font-size:34px; line-height:1.12; font-weight:700;">
-                    ${safeTitle}
-                  </h1>
-                  <p style="margin:0 0 28px; color:${EMAIL_MUTED_TEXT}; font-family:Arial, Helvetica, sans-serif; font-size:18px; line-height:1.65;">
-                    ${safeBody}
-                  </p>
-                  <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse; margin:0 0 28px;">
+                  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse; width:100%;">
                     <tr>
-                      <td
-                        align="center"
-                        style="
-                          border-radius:999px;
-                          background:${EMAIL_PRIMARY};
-                          box-shadow:0 14px 30px rgba(245,245,245,0.12);
-                        "
-                      >
-                        <a
-                          href="${safeCtaHref}"
-                          style="
-                            display:inline-block;
-                            padding:14px 24px;
-                            color:${EMAIL_PRIMARY_TEXT};
-                            font-family:Arial, Helvetica, sans-serif;
-                            font-size:16px;
-                            font-weight:700;
-                            text-decoration:none;
-                          "
-                        >
-                          ${safeCtaLabel}
-                        </a>
-                      </td>
+                      <td width="25%" height="4" bgcolor="${EMAIL_BLUE}" style="height:4px; background:${EMAIL_BLUE}; font-size:0; line-height:0;"></td>
+                      <td width="25%" height="4" bgcolor="${EMAIL_GREEN}" style="height:4px; background:${EMAIL_GREEN}; font-size:0; line-height:0;"></td>
+                      <td width="25%" height="4" bgcolor="${EMAIL_YELLOW}" style="height:4px; background:${EMAIL_YELLOW}; font-size:0; line-height:0;"></td>
+                      <td width="25%" height="4" bgcolor="${EMAIL_PINK}" style="height:4px; background:${EMAIL_PINK}; font-size:0; line-height:0;"></td>
                     </tr>
                   </table>
-                  <div
-                    style="
-                      margin:0 0 22px;
-                      padding:18px 20px;
-                      background:${EMAIL_BG};
-                      border:1px solid ${EMAIL_BORDER};
-                      border-radius:18px;
-                    "
-                  >
-                    <p style="margin:0 0 10px; color:${EMAIL_MUTED_LABEL}; font-family:Arial, Helvetica, sans-serif; font-size:13px; line-height:1.6;">
-                      ${safeLinkIntro}
+                  <div style="padding:36px 34px 30px;">
+                    <div style="margin:0 0 14px; color:${EMAIL_PRIMARY}; font-size:12px; font-weight:700; letter-spacing:2px; text-transform:uppercase;">
+                      ${safeEyebrow}
+                    </div>
+                    <h1 style="margin:0 0 16px; color:${EMAIL_TEXT}; font-family:Arial, Helvetica, sans-serif; font-size:34px; line-height:1.12; font-weight:700;">
+                      ${titleHtml}
+                    </h1>
+                    <p style="margin:0 0 28px; color:${EMAIL_MUTED_TEXT}; font-family:Arial, Helvetica, sans-serif; font-size:18px; line-height:1.65;">
+                      ${bodyHtml}
                     </p>
-                    <a
-                      href="${safeCtaHref}"
-                      style="
-                        color:${EMAIL_PRIMARY};
-                        font-family:Arial, Helvetica, sans-serif;
-                        font-size:14px;
-                        line-height:1.7;
-                        text-decoration:underline;
-                        word-break:break-all;
-                      "
-                    >
-                      ${safeCtaHref}
-                    </a>
-                  </div>
-                  <div style="padding-top:18px; border-top:1px solid ${EMAIL_BORDER}; color:${EMAIL_FOOTER}; font-family:Arial, Helvetica, sans-serif; font-size:13px; line-height:1.6;">
-                    ${safeFooterNote}
-                    ${
-                      safeFooterLinkHref && safeFooterLinkLabel
-                        ? `
-                      <div style="margin-top:10px;">
-                        <a
-                          href="${safeFooterLinkHref}"
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:separate; margin:0 0 28px;">
+                      <tr>
+                        <td
+                          align="center"
+                          bgcolor="${EMAIL_BLUE}"
                           style="
-                            color:${EMAIL_PRIMARY};
-                            font-family:Arial, Helvetica, sans-serif;
-                            font-size:13px;
-                            line-height:1.6;
-                            text-decoration:underline;
+                            border-radius:10px;
+                            background:${EMAIL_SPECTRUM_GRADIENT};
+                            padding:2px;
+                            box-shadow:0 0 0 1px rgba(245,245,245,0.08), 0 18px 36px rgba(0,0,0,0.32);
                           "
                         >
-                          ${safeFooterLinkLabel}
-                        </a>
-                      </div>
-                    `
-                        : ""
-                    }
+                          <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:separate;">
+                            <tr>
+                              <td
+                                align="center"
+                                bgcolor="${EMAIL_SURFACE_BOTTOM}"
+                                style="
+                                  border-radius:8px;
+                                  background:${EMAIL_ACTION_INNER_GRADIENT};
+                                  box-shadow:inset 0 1px 0 rgba(245,245,245,0.08);
+                                "
+                              >
+                                <a
+                                  href="${safeCtaHref}"
+                                  style="
+                                    display:inline-block;
+                                    padding:14px 22px;
+                                    color:${EMAIL_TEXT};
+                                    font-family:Arial, Helvetica, sans-serif;
+                                    font-size:16px;
+                                    font-weight:700;
+                                    line-height:1;
+                                    text-decoration:none;
+                                  "
+                                >
+                                  ${safeCtaLabel}
+                                </a>
+                              </td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+                    </table>
+                    <div
+                      style="
+                        margin:0 0 22px;
+                        padding:18px 20px;
+                        background:${EMAIL_BG};
+                        border:1px solid ${EMAIL_BORDER};
+                        border-left:4px solid ${EMAIL_GREEN};
+                        border-radius:18px;
+                      "
+                    >
+                      <p style="margin:0 0 10px; color:${EMAIL_MUTED_LABEL}; font-family:Arial, Helvetica, sans-serif; font-size:13px; line-height:1.6;">
+                        ${safeLinkIntro}
+                      </p>
+                      <a
+                        href="${safeCtaHref}"
+                        style="
+                          color:${EMAIL_PRIMARY};
+                          font-family:Arial, Helvetica, sans-serif;
+                          font-size:14px;
+                          line-height:1.7;
+                          text-decoration:underline;
+                          word-break:break-all;
+                        "
+                      >
+                        ${safeCtaHref}
+                      </a>
+                    </div>
+                    <div style="padding-top:18px; border-top:1px solid ${EMAIL_BORDER}; color:${EMAIL_FOOTER}; font-family:Arial, Helvetica, sans-serif; font-size:13px; line-height:1.6;">
+                      ${footerNoteHtml}
+                      ${
+                        safeFooterLinkHref && safeFooterLinkLabel
+                          ? `
+                        <div style="margin-top:10px;">
+                          <a
+                            href="${safeFooterLinkHref}"
+                            style="
+                              color:${EMAIL_PRIMARY};
+                              font-family:Arial, Helvetica, sans-serif;
+                              font-size:13px;
+                              line-height:1.6;
+                              text-decoration:underline;
+                            "
+                          >
+                            ${safeFooterLinkLabel}
+                          </a>
+                        </div>
+                      `
+                          : ""
+                      }
+                    </div>
                   </div>
                 </td>
               </tr>

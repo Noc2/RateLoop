@@ -13,10 +13,17 @@ test("buildRateLoopEmailHtml includes the branded header, button, and fallback l
     footerLinkHref: "https://info.rateloop.ai/api/notifications/email/unsubscribe?token=unsubscribe-token",
   });
 
-  assert.match(html, />\s*RateLoop\s*</);
+  assert.match(html, /Rate<\/span><span style="color:#359EEE;">L/);
+  assert.doesNotMatch(html, /<img\b/i);
+  assert.match(html, /aria-label="RateLoop logo"/);
   assert.match(html, /Email verification/);
-  assert.match(html, /Verify your email/);
-  assert.match(html, /background:#f5f5f5/);
+  assert.match(html, /Verify your <span style="color:#359EEE;">e/);
+  assert.match(html, /#359EEE/);
+  assert.match(html, /#03CEA4/);
+  assert.match(html, /#FFC43D/);
+  assert.match(html, /#EF476F/);
+  assert.match(html, /linear-gradient\(90deg, #359EEE, #03CEA4, #FFC43D, #EF476F\)/);
+  assert.match(html, /Level Up Your Agent/);
   assert.match(html, />\s*Verify email\s*</);
   assert.match(html, /If the button does not work, open this link manually:/);
   assert.match(html, /Unsubscribe from these emails/);
