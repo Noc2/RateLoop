@@ -35,7 +35,7 @@ interface IConfidentialityRoundState {
 }
 
 interface IConfidentialityEngineTrackingRegistry {
-    function contentRoundTrackingEngine(uint256 contentId) external view returns (address);
+    function trackedVotingEngine(uint256 contentId) external view returns (address);
 }
 
 /// @title ConfidentialityEscrow
@@ -547,7 +547,7 @@ contract ConfidentialityEscrow is
     function _isAuthorizedNexusVotingEngine(uint256 contentId) private view returns (bool) {
         address currentEngine = registry.votingEngine();
         if (msg.sender == currentEngine) return true;
-        try IConfidentialityEngineTrackingRegistry(address(registry)).contentRoundTrackingEngine(contentId) returns (
+        try IConfidentialityEngineTrackingRegistry(address(registry)).trackedVotingEngine(contentId) returns (
             address trackedEngine
         ) {
             return trackedEngine == msg.sender && _engineHasOpenRound(msg.sender, contentId);
