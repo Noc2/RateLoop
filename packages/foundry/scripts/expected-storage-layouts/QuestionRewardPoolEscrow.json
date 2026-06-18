@@ -135,47 +135,59 @@
     {
       "slot": 22,
       "offset": 0,
+      "label": "rewardPoolClusterPayoutOraclePinnedAt",
+      "type": "t_mapping(t_uint256,t_uint64)"
+    },
+    {
+      "slot": 23,
+      "offset": 0,
+      "label": "bundleRewardClusterPayoutOraclePinnedAt",
+      "type": "t_mapping(t_uint256,t_uint64)"
+    },
+    {
+      "slot": 24,
+      "offset": 0,
       "label": "bundleQuestionTerminalSyncCursor",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_uint256))"
     },
     {
-      "slot": 23,
+      "slot": 25,
       "offset": 0,
       "label": "rejectedRecoveredRound",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_bool))"
     },
     {
-      "slot": 24,
+      "slot": 26,
       "offset": 0,
       "label": "reopenedRecoveredRound",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_bool))"
     },
     {
-      "slot": 25,
+      "slot": 27,
       "offset": 0,
       "label": "qualifiedQuestionRewardClaimants",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_mapping(t_bytes32,t_mapping(t_bytes32,t_bool))))"
     },
     {
-      "slot": 26,
+      "slot": 28,
       "offset": 0,
       "label": "qualifiedBundleRoundSetClaimants",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_mapping(t_bytes32,t_bool)))"
     },
     {
-      "slot": 27,
+      "slot": 29,
       "offset": 0,
       "label": "rejectedRecoveredBundleRoundSet",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_bool))"
     },
     {
-      "slot": 28,
+      "slot": 30,
       "offset": 0,
       "label": "reopenedRecoveredBundleRoundSet",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_bool))"
     },
     {
-      "slot": 29,
+      "slot": 31,
       "offset": 0,
       "label": "__gap",
       "type": "t_array(t_uint256)"
@@ -198,8 +210,8 @@
     {
       "id": "t_array(t_uint256)",
       "encoding": "inplace",
-      "label": "uint256[44]",
-      "numberOfBytes": "1408",
+      "label": "uint256[42]",
+      "numberOfBytes": "1344",
       "base": "t_uint256"
     },
     {

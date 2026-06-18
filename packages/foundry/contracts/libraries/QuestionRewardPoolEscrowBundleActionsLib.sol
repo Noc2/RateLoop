@@ -36,6 +36,15 @@ library QuestionRewardPoolEscrowBundleActionsLib {
 
     error BundleClusterPayoutSnapshotPending();
 
+    struct BundleRefundParams {
+        ContentRegistry registry;
+        RoundVotingEngine votingEngine;
+        IERC20 lrepToken;
+        IERC20 usdcToken;
+        uint8 payoutDomain;
+        uint256 bundleId;
+    }
+
     uint256 internal constant MIN_REQUIRED_VOTERS = 3;
     uint256 internal constant MAX_REQUIRED_SETTLED_ROUNDS = 16;
     uint256 internal constant BPS_SCALE = 10_000;
@@ -197,6 +206,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
 
     function snapshotBundleClusterPayoutOracle(
         mapping(uint256 => address) storage bundleRewardClusterPayoutOracle,
+        mapping(uint256 => uint64) storage bundleRewardClusterPayoutOraclePinnedAt,
         RoundVotingEngine votingEngine,
         uint256 bundleId,
         uint8 payoutDomain,
@@ -212,6 +222,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             revert("Invalid oracle");
         }
         bundleRewardClusterPayoutOracle[bundleId] = clusterPayoutOracle;
+        bundleRewardClusterPayoutOraclePinnedAt[bundleId] = uint64(block.timestamp);
         emit QuestionBundleClusterPayoutOracleSnapshotted(bundleId, clusterPayoutOracle);
     }
 
@@ -322,6 +333,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         mapping(uint256 => mapping(uint256 => mapping(uint256 => uint64))) storage bundleRoundIds,
         mapping(uint256 => mapping(uint256 => BundleRoundSetSnapshot)) storage bundleRoundSetSnapshots,
         mapping(uint256 => address) storage bundleRewardClusterPayoutOracle,
+        mapping(uint256 => uint64) storage bundleRewardClusterPayoutOraclePinnedAt,
         mapping(uint256 => mapping(uint256 => uint256)) storage bundleQuestionTerminalSyncCursor,
         mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) storage qualifiedBundleRoundSetClaimants,
         mapping(uint256 => uint256) storage contentBundleId,
@@ -357,6 +369,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             bundleRoundIds,
             bundleRoundSetSnapshots,
             bundleRewardClusterPayoutOracle,
+            bundleRewardClusterPayoutOraclePinnedAt,
             bundleQuestionTerminalSyncCursor,
             qualifiedBundleRoundSetClaimants,
             registry,
@@ -375,6 +388,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         mapping(uint256 => mapping(uint256 => mapping(uint256 => uint64))) storage bundleRoundIds,
         mapping(uint256 => mapping(uint256 => BundleRoundSetSnapshot)) storage bundleRoundSetSnapshots,
         mapping(uint256 => address) storage bundleRewardClusterPayoutOracle,
+        mapping(uint256 => uint64) storage bundleRewardClusterPayoutOraclePinnedAt,
         mapping(uint256 => mapping(uint256 => uint256)) storage bundleQuestionTerminalSyncCursor,
         mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) storage qualifiedBundleRoundSetClaimants,
         mapping(uint256 => uint256) storage contentBundleId,
@@ -393,6 +407,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             bundleRoundIds,
             bundleRoundSetSnapshots,
             bundleRewardClusterPayoutOracle,
+            bundleRewardClusterPayoutOraclePinnedAt,
             bundleQuestionTerminalSyncCursor,
             qualifiedBundleRoundSetClaimants,
             contentBundleId,
@@ -413,6 +428,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         mapping(uint256 => mapping(uint256 => mapping(uint256 => uint64))) storage bundleRoundIds,
         mapping(uint256 => mapping(uint256 => BundleRoundSetSnapshot)) storage bundleRoundSetSnapshots,
         mapping(uint256 => address) storage bundleRewardClusterPayoutOracle,
+        mapping(uint256 => uint64) storage bundleRewardClusterPayoutOraclePinnedAt,
         mapping(uint256 => mapping(uint256 => uint256)) storage bundleQuestionTerminalSyncCursor,
         mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) storage bundleRoundSetRewardClaimed,
         mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) storage qualifiedBundleRoundSetClaimants,
@@ -436,6 +452,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             bundleRoundIds,
             bundleRoundSetSnapshots,
             bundleRewardClusterPayoutOracle,
+            bundleRewardClusterPayoutOraclePinnedAt,
             bundleQuestionTerminalSyncCursor,
             qualifiedBundleRoundSetClaimants,
             registry,
@@ -598,6 +615,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         mapping(uint256 => mapping(uint256 => mapping(uint256 => uint64))) storage bundleRoundIds,
         mapping(uint256 => mapping(uint256 => BundleRoundSetSnapshot)) storage bundleRoundSetSnapshots,
         mapping(uint256 => address) storage bundleRewardClusterPayoutOracle,
+        mapping(uint256 => uint64) storage bundleRewardClusterPayoutOraclePinnedAt,
         mapping(uint256 => mapping(uint256 => uint256)) storage bundleQuestionTerminalSyncCursor,
         mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) storage qualifiedBundleRoundSetClaimants,
         ContentRegistry registry,
@@ -621,6 +639,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             bundleRoundIds,
             bundleRoundSetSnapshots,
             bundleRewardClusterPayoutOracle,
+            bundleRewardClusterPayoutOraclePinnedAt,
             bundleQuestionTerminalSyncCursor,
             qualifiedBundleRoundSetClaimants,
             registry,
@@ -715,18 +734,14 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         mapping(uint256 => mapping(uint256 => mapping(uint256 => uint64))) storage bundleRoundIds,
         mapping(uint256 => mapping(uint256 => BundleRoundSetSnapshot)) storage bundleRoundSetSnapshots,
         mapping(uint256 => address) storage bundleRewardClusterPayoutOracle,
+        mapping(uint256 => uint64) storage bundleRewardClusterPayoutOraclePinnedAt,
         mapping(uint256 => mapping(uint256 => uint256)) storage bundleQuestionTerminalSyncCursor,
         mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) storage qualifiedBundleRoundSetClaimants,
         mapping(uint256 => uint256) storage contentBundleId,
         mapping(uint256 => uint256) storage contentBundleIndex,
-        ContentRegistry registry,
-        RoundVotingEngine votingEngine,
-        IERC20 lrepToken,
-        IERC20 usdcToken,
-        uint8 payoutDomain,
-        uint256 bundleId
+        BundleRefundParams memory params
     ) external returns (uint256 refundAmount) {
-        BundleReward storage bundle = _getExistingBundleReward(bundleRewards, bundleId);
+        BundleReward storage bundle = _getExistingBundleReward(bundleRewards, params.bundleId);
         require(!bundle.refunded, "Already refunded");
         uint64 refundClock = QuestionRewardPoolEscrowWindowLib.bundleRefundClock(bundle);
         require(refundClock != 0 && block.timestamp > refundClock, "Bundle active");
@@ -738,15 +753,16 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             bundleRoundIds,
             bundleRoundSetSnapshots,
             bundleRewardClusterPayoutOracle,
+            bundleRewardClusterPayoutOraclePinnedAt,
             bundleQuestionTerminalSyncCursor,
             qualifiedBundleRoundSetClaimants,
             contentBundleId,
             contentBundleIndex,
-            registry,
-            votingEngine,
-            votingEngine.protocolConfig(),
-            payoutDomain,
-            bundleId,
+            params.registry,
+            params.votingEngine,
+            params.votingEngine.protocolConfig(),
+            params.payoutDomain,
+            params.bundleId,
             BUNDLE_REFUND_SYNC_ROUND_LIMIT
         );
         require(syncComplete, "Sync pending");
@@ -757,20 +773,21 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             bundleRoundIds,
             bundleRoundSetSnapshots,
             bundleRewardClusterPayoutOracle,
+            bundleRewardClusterPayoutOraclePinnedAt,
             bundleQuestionTerminalSyncCursor,
             qualifiedBundleRoundSetClaimants,
-            registry,
-            votingEngine,
-            votingEngine.protocolConfig(),
-            payoutDomain,
-            bundleId,
+            params.registry,
+            params.votingEngine,
+            params.votingEngine.protocolConfig(),
+            params.payoutDomain,
+            params.bundleId,
             bundle
         );
         if (bundleRoundSetQualificationPending) revert BundleClusterPayoutSnapshotPending();
         require(bundle.pendingRecoveredRoundSets == 0);
         if (bundle.completedRoundSets != 0) {
             QuestionRewardPoolEscrowBundleLib.requireCleanupComplete(
-                bundleQuestions, bundleRoundIds, votingEngine, bundleId, bundle.completedRoundSets
+                bundleQuestions, bundleRoundIds, params.votingEngine, params.bundleId, bundle.completedRoundSets
             );
             if (bundle.claimDeadline == 0) {
                 bundle.claimDeadline = uint64(block.timestamp);
@@ -783,16 +800,24 @@ library QuestionRewardPoolEscrowBundleActionsLib {
 
         bundle.refunded = true;
         if (bundle.nonRefundable) {
-            address treasury = votingEngine.protocolConfig().treasury();
+            address treasury = params.votingEngine.protocolConfig().treasury();
             QuestionRewardPoolEscrowTransferLib.transferResidue(
-                _rewardToken(lrepToken, usdcToken, bundle.asset), true, bundle.funder, treasury, refundAmount
+                _rewardToken(params.lrepToken, params.usdcToken, bundle.asset),
+                true,
+                bundle.funder,
+                treasury,
+                refundAmount
             );
-            emit QuestionBundleRewardForfeited(bundleId, treasury, refundAmount);
+            emit QuestionBundleRewardForfeited(params.bundleId, treasury, refundAmount);
         } else {
             QuestionRewardPoolEscrowTransferLib.transferResidue(
-                _rewardToken(lrepToken, usdcToken, bundle.asset), false, bundle.funder, address(0), refundAmount
+                _rewardToken(params.lrepToken, params.usdcToken, bundle.asset),
+                false,
+                bundle.funder,
+                address(0),
+                refundAmount
             );
-            emit QuestionBundleRewardRefunded(bundleId, bundle.funder, refundAmount);
+            emit QuestionBundleRewardRefunded(params.bundleId, bundle.funder, refundAmount);
         }
     }
 
@@ -858,6 +883,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         mapping(uint256 => mapping(uint256 => mapping(uint256 => uint64))) storage bundleRoundIds,
         mapping(uint256 => mapping(uint256 => BundleRoundSetSnapshot)) storage bundleRoundSetSnapshots,
         mapping(uint256 => address) storage bundleRewardClusterPayoutOracle,
+        mapping(uint256 => uint64) storage bundleRewardClusterPayoutOraclePinnedAt,
         mapping(uint256 => mapping(uint256 => uint256)) storage bundleQuestionTerminalSyncCursor,
         mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) storage qualifiedBundleRoundSetClaimants,
         mapping(uint256 => uint256) storage contentBundleId,
@@ -905,6 +931,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             bundleRoundIds,
             bundleRoundSetSnapshots,
             bundleRewardClusterPayoutOracle,
+            bundleRewardClusterPayoutOraclePinnedAt,
             bundleQuestionTerminalSyncCursor,
             qualifiedBundleRoundSetClaimants,
             registry,
@@ -982,6 +1009,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         mapping(uint256 => mapping(uint256 => mapping(uint256 => uint64))) storage bundleRoundIds,
         mapping(uint256 => mapping(uint256 => BundleRoundSetSnapshot)) storage bundleRoundSetSnapshots,
         mapping(uint256 => address) storage bundleRewardClusterPayoutOracle,
+        mapping(uint256 => uint64) storage bundleRewardClusterPayoutOraclePinnedAt,
         mapping(uint256 => mapping(uint256 => uint256)) storage bundleQuestionTerminalSyncCursor,
         mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) storage qualifiedBundleRoundSetClaimants,
         ContentRegistry registry,
@@ -1005,6 +1033,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             bundleRoundIds,
             bundleRoundSetSnapshots,
             bundleRewardClusterPayoutOracle,
+            bundleRewardClusterPayoutOraclePinnedAt,
             bundleQuestionTerminalSyncCursor,
             qualifiedBundleRoundSetClaimants,
             registry,
@@ -1026,6 +1055,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         mapping(uint256 => mapping(uint256 => mapping(uint256 => uint64))) storage bundleRoundIds,
         mapping(uint256 => mapping(uint256 => BundleRoundSetSnapshot)) storage bundleRoundSetSnapshots,
         mapping(uint256 => address) storage bundleRewardClusterPayoutOracle,
+        mapping(uint256 => uint64) storage bundleRewardClusterPayoutOraclePinnedAt,
         mapping(uint256 => mapping(uint256 => uint256)) storage bundleQuestionTerminalSyncCursor,
         mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) storage qualifiedBundleRoundSetClaimants,
         ContentRegistry registry,
@@ -1081,6 +1111,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
                 bundleQuestions,
                 bundleRoundIds,
                 bundleRewardClusterPayoutOracle,
+                bundleRewardClusterPayoutOraclePinnedAt,
                 votingEngine,
                 bundleId,
                 roundSetIndex,
@@ -1628,6 +1659,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             )
         ) storage bundleRoundIds,
         mapping(uint256 => address) storage bundleRewardClusterPayoutOracle,
+        mapping(uint256 => uint64) storage bundleRewardClusterPayoutOraclePinnedAt,
         RoundVotingEngine votingEngine,
         uint256 bundleId,
         uint256 roundSetIndex,
@@ -1635,6 +1667,8 @@ library QuestionRewardPoolEscrowBundleActionsLib {
     ) private view returns (IClusterPayoutOracle.RoundPayoutSnapshot memory payoutSnapshot, bool ready) {
         address oracleAddr = bundleRewardClusterPayoutOracle[bundleId];
         require(oracleAddr != address(0), "Oracle not pinned");
+        uint64 pinnedAt = bundleRewardClusterPayoutOraclePinnedAt[bundleId];
+        require(pinnedAt != 0, "Oracle not pinned");
         IClusterPayoutOracle oracle = IClusterPayoutOracle(oracleAddr);
         uint256 snapshotRoundId = _bundleSnapshotRoundId(roundSetIndex);
         try oracle.getRoundPayoutSnapshot(payoutDomain, bundleId, bundleId, snapshotRoundId) returns (
@@ -1650,12 +1684,23 @@ library QuestionRewardPoolEscrowBundleActionsLib {
                 ready = sourceReadyAt != 0
                     && oracle.roundPayoutSnapshotConsumerFor(payoutDomain, bundleId, bundleId, snapshotRoundId)
                         == address(this)
-                    && oracle.roundPayoutSnapshotProposedAt(payoutDomain, bundleId, bundleId, snapshotRoundId)
-                        >= sourceReadyAt;
+                    && _payoutSnapshotProposedAfterPin(
+                        oracle.roundPayoutSnapshotProposedAt(payoutDomain, bundleId, bundleId, snapshotRoundId),
+                        sourceReadyAt,
+                        pinnedAt
+                    );
             }
         } catch {
             ready = false;
         }
+    }
+
+    function _payoutSnapshotProposedAfterPin(uint64 proposedAt, uint64 sourceReadyAt, uint64 pinnedAt)
+        private
+        pure
+        returns (bool)
+    {
+        return proposedAt >= sourceReadyAt && proposedAt > pinnedAt;
     }
 
     function _finalizedSnapshotWithinVetoWindow(

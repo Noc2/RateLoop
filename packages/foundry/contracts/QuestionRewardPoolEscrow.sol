@@ -1,38 +1,40 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
-import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
-import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
+import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
+import { ReentrancyGuardTransient } from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
-import {ContentRegistry} from "./ContentRegistry.sol";
-import {RoundVotingEngine} from "./RoundVotingEngine.sol";
-import {ProtocolConfig} from "./ProtocolConfig.sol";
-import {Eip3009Authorization} from "./interfaces/IEip3009.sol";
-import {IClusterPayoutOracle} from "./interfaces/IClusterPayoutOracle.sol";
-import {IRaterIdentityRegistry} from "./interfaces/IRaterIdentityRegistry.sol";
-import {IRaterRegistryStatus} from "./interfaces/IRaterRegistryStatus.sol";
-import {IRoundPayoutSnapshotConsumer} from "./interfaces/IRoundPayoutSnapshotConsumer.sol";
-import {RoundLib} from "./libraries/RoundLib.sol";
-import {QuestionRewardPoolEscrowBundleActionsLib} from "./libraries/QuestionRewardPoolEscrowBundleActionsLib.sol";
-import {QuestionRewardPoolEscrowBundlePreviewLib} from "./libraries/QuestionRewardPoolEscrowBundlePreviewLib.sol";
+import { ContentRegistry } from "./ContentRegistry.sol";
+import { RoundVotingEngine } from "./RoundVotingEngine.sol";
+import { ProtocolConfig } from "./ProtocolConfig.sol";
+import { Eip3009Authorization } from "./interfaces/IEip3009.sol";
+import { IClusterPayoutOracle } from "./interfaces/IClusterPayoutOracle.sol";
+import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol";
+import { IRaterRegistryStatus } from "./interfaces/IRaterRegistryStatus.sol";
+import { IRoundPayoutSnapshotConsumer } from "./interfaces/IRoundPayoutSnapshotConsumer.sol";
+import { RoundLib } from "./libraries/RoundLib.sol";
+import { QuestionRewardPoolEscrowBundleActionsLib } from "./libraries/QuestionRewardPoolEscrowBundleActionsLib.sol";
+import { QuestionRewardPoolEscrowBundlePreviewLib } from "./libraries/QuestionRewardPoolEscrowBundlePreviewLib.sol";
 import {
     QuestionRewardPoolEscrowClaimLib,
     EqualShareInputs,
     WeightedShareInputs,
     ClaimableQuestionRewardParams
 } from "./libraries/QuestionRewardPoolEscrowClaimLib.sol";
-import {QuestionRewardPoolEscrowQualificationLib} from "./libraries/QuestionRewardPoolEscrowQualificationLib.sol";
-import {QuestionRewardPoolEscrowRecoveryLib} from "./libraries/QuestionRewardPoolEscrowRecoveryLib.sol";
-import {QuestionRewardPoolEscrowBundleRecoveryLib} from "./libraries/QuestionRewardPoolEscrowBundleRecoveryLib.sol";
-import {QuestionRewardPoolEscrowPoolActionsLib} from "./libraries/QuestionRewardPoolEscrowPoolActionsLib.sol";
-import {QuestionRewardPoolEscrowSnapshotConsumerLib} from "./libraries/QuestionRewardPoolEscrowSnapshotConsumerLib.sol";
-import {QuestionRewardPoolEscrowTransferLib} from "./libraries/QuestionRewardPoolEscrowTransferLib.sol";
-import {QuestionRewardPoolEscrowWindowLib} from "./libraries/QuestionRewardPoolEscrowWindowLib.sol";
-import {TokenTransferLib} from "./libraries/TokenTransferLib.sol";
+import { QuestionRewardPoolEscrowQualificationLib } from "./libraries/QuestionRewardPoolEscrowQualificationLib.sol";
+import { QuestionRewardPoolEscrowRecoveryLib } from "./libraries/QuestionRewardPoolEscrowRecoveryLib.sol";
+import { QuestionRewardPoolEscrowBundleRecoveryLib } from "./libraries/QuestionRewardPoolEscrowBundleRecoveryLib.sol";
+import { QuestionRewardPoolEscrowPoolActionsLib } from "./libraries/QuestionRewardPoolEscrowPoolActionsLib.sol";
+import {
+    QuestionRewardPoolEscrowSnapshotConsumerLib
+} from "./libraries/QuestionRewardPoolEscrowSnapshotConsumerLib.sol";
+import { QuestionRewardPoolEscrowTransferLib } from "./libraries/QuestionRewardPoolEscrowTransferLib.sol";
+import { QuestionRewardPoolEscrowWindowLib } from "./libraries/QuestionRewardPoolEscrowWindowLib.sol";
+import { TokenTransferLib } from "./libraries/TokenTransferLib.sol";
 import {
     RewardPool,
     RoundSnapshot,
@@ -44,7 +46,7 @@ import {
     CreateSubmissionBundleParams,
     BOUNTY_ELIGIBILITY_OPEN
 } from "./libraries/QuestionRewardPoolEscrowTypes.sol";
-import {QuestionRewardPoolEscrowVoterLib} from "./libraries/QuestionRewardPoolEscrowVoterLib.sol";
+import { QuestionRewardPoolEscrowVoterLib } from "./libraries/QuestionRewardPoolEscrowVoterLib.sol";
 
 /// @title QuestionRewardPoolEscrow
 /// @notice Holds per-question USDC bounties and pays equal per-round rewards to revealed voters.
@@ -100,6 +102,8 @@ contract QuestionRewardPoolEscrow is
     uint16 public defaultFrontendFeeBps;
     mapping(uint256 => address) private rewardPoolClusterPayoutOracle;
     mapping(uint256 => address) private bundleRewardClusterPayoutOracle;
+    mapping(uint256 => uint64) private rewardPoolClusterPayoutOraclePinnedAt;
+    mapping(uint256 => uint64) private bundleRewardClusterPayoutOraclePinnedAt;
     mapping(uint256 => mapping(uint256 => uint256)) private bundleQuestionTerminalSyncCursor;
     // FE-1 (audit 2026-05-20-followup): track rounds whose finalized snapshot was rejected and
     // whose allocation was returned via `recoverRejectedSnapshotRound`. Required so any caller
@@ -583,6 +587,7 @@ contract QuestionRewardPoolEscrow is
         );
         QuestionRewardPoolEscrowBundleActionsLib.snapshotBundleClusterPayoutOracle(
             bundleRewardClusterPayoutOracle,
+            bundleRewardClusterPayoutOraclePinnedAt,
             votingEngine,
             rewardPoolId,
             PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD,
@@ -638,7 +643,12 @@ contract QuestionRewardPoolEscrow is
 
     function _snapshotRewardPoolClusterPayoutOracle(uint256 rewardPoolId, uint8 asset) private {
         QuestionRewardPoolEscrowPoolActionsLib.snapshotRewardPoolClusterPayoutOracle(
-            rewardPoolClusterPayoutOracle, votingEngine, rewardPoolId, asset, address(this)
+            rewardPoolClusterPayoutOracle,
+            rewardPoolClusterPayoutOraclePinnedAt,
+            votingEngine,
+            rewardPoolId,
+            asset,
+            address(this)
         );
     }
 
@@ -649,6 +659,7 @@ contract QuestionRewardPoolEscrow is
         QuestionRewardPoolEscrowSnapshotConsumerLib.repoint(
             rewardPools,
             rewardPoolClusterPayoutOracle,
+            rewardPoolClusterPayoutOraclePinnedAt,
             PAYOUT_DOMAIN_QUESTION_REWARD,
             address(this),
             rewardPoolId,
@@ -663,6 +674,7 @@ contract QuestionRewardPoolEscrow is
         QuestionRewardPoolEscrowSnapshotConsumerLib.repointBundle(
             bundleRewards,
             bundleRewardClusterPayoutOracle,
+            bundleRewardClusterPayoutOraclePinnedAt,
             PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD,
             address(this),
             bundleId,
@@ -687,6 +699,7 @@ contract QuestionRewardPoolEscrow is
             rewardPoolPayerIdentity,
             rewardPoolPayerIdentityKey,
             rewardPoolClusterPayoutOracle,
+            rewardPoolClusterPayoutOraclePinnedAt,
             votingEngine,
             rewardPool,
             QuestionRewardPoolEscrowQualificationLib.AdvanceCursorParams({
@@ -982,6 +995,7 @@ contract QuestionRewardPoolEscrow is
             rewardPools,
             roundSnapshots,
             rewardPoolClusterPayoutOracle,
+            rewardPoolClusterPayoutOraclePinnedAt,
             rejectedRecoveredRound,
             reopenedRecoveredRound,
             rewardPoolId,
@@ -997,6 +1011,7 @@ contract QuestionRewardPoolEscrow is
             bundleRoundIds,
             bundleRoundSetSnapshots,
             bundleRewardClusterPayoutOracle,
+            bundleRewardClusterPayoutOraclePinnedAt,
             rejectedRecoveredBundleRoundSet,
             reopenedRecoveredBundleRoundSet,
             qualifiedBundleRoundSetClaimants,
@@ -1045,6 +1060,7 @@ contract QuestionRewardPoolEscrow is
             bundleRoundIds,
             bundleRoundSetSnapshots,
             bundleRewardClusterPayoutOracle,
+            bundleRewardClusterPayoutOraclePinnedAt,
             bundleQuestionTerminalSyncCursor,
             qualifiedBundleRoundSetClaimants,
             contentBundleId,
@@ -1069,6 +1085,7 @@ contract QuestionRewardPoolEscrow is
             bundleRoundIds,
             bundleRoundSetSnapshots,
             bundleRewardClusterPayoutOracle,
+            bundleRewardClusterPayoutOraclePinnedAt,
             bundleQuestionTerminalSyncCursor,
             qualifiedBundleRoundSetClaimants,
             contentBundleId,
@@ -1116,6 +1133,7 @@ contract QuestionRewardPoolEscrow is
             bundleRoundIds,
             bundleRoundSetSnapshots,
             bundleRewardClusterPayoutOracle,
+            bundleRewardClusterPayoutOraclePinnedAt,
             bundleQuestionTerminalSyncCursor,
             bundleRoundSetRewardClaimed,
             qualifiedBundleRoundSetClaimants,
@@ -1141,6 +1159,7 @@ contract QuestionRewardPoolEscrow is
             bundleRoundIds,
             bundleRoundSetSnapshots,
             bundleRewardClusterPayoutOracle,
+            bundleRewardClusterPayoutOraclePinnedAt,
             bundleQuestionTerminalSyncCursor,
             qualifiedBundleRoundSetClaimants,
             rejectedRecoveredBundleRoundSet,
@@ -1211,16 +1230,19 @@ contract QuestionRewardPoolEscrow is
             bundleRoundIds,
             bundleRoundSetSnapshots,
             bundleRewardClusterPayoutOracle,
+            bundleRewardClusterPayoutOraclePinnedAt,
             bundleQuestionTerminalSyncCursor,
             qualifiedBundleRoundSetClaimants,
             contentBundleId,
             contentBundleIndex,
-            registry,
-            votingEngine,
-            lrepToken,
-            usdcToken,
-            PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD,
-            bundleId
+            QuestionRewardPoolEscrowBundleActionsLib.BundleRefundParams({
+                registry: registry,
+                votingEngine: votingEngine,
+                lrepToken: lrepToken,
+                usdcToken: usdcToken,
+                payoutDomain: PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD,
+                bundleId: bundleId
+            })
         );
     }
 
@@ -1275,6 +1297,7 @@ contract QuestionRewardPoolEscrow is
             rewardPoolPayerIdentity,
             rewardPoolPayerIdentityKey,
             rewardPoolClusterPayoutOracle,
+            rewardPoolClusterPayoutOraclePinnedAt,
             votingEngine,
             votingEngine.protocolConfig(),
             payoutWeight,
@@ -1457,6 +1480,7 @@ contract QuestionRewardPoolEscrow is
                 rewardPoolPayerIdentity,
                 rewardPoolPayerIdentityKey,
                 rewardPoolClusterPayoutOracle,
+                rewardPoolClusterPayoutOraclePinnedAt,
                 votingEngine,
                 rewardPool,
                 rewardPoolId,
@@ -1615,5 +1639,5 @@ contract QuestionRewardPoolEscrow is
         rejectedRecoveredRound[rewardPoolId][roundId] = false;
     }
 
-    uint256[44] private __gap;
+    uint256[42] private __gap;
 }

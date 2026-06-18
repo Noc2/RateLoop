@@ -128,6 +128,7 @@ library QuestionRewardPoolEscrowQualificationLib {
         mapping(uint256 => address) storage rewardPoolPayerIdentity,
         mapping(uint256 => bytes32) storage rewardPoolPayerIdentityKey,
         mapping(uint256 => address) storage rewardPoolClusterPayoutOracle,
+        mapping(uint256 => uint64) storage rewardPoolClusterPayoutOraclePinnedAt,
         RoundVotingEngine votingEngine,
         RewardPool storage rewardPool,
         AdvanceCursorParams memory params
@@ -143,6 +144,7 @@ library QuestionRewardPoolEscrowQualificationLib {
                 rewardPoolPayerIdentity,
                 rewardPoolPayerIdentityKey,
                 rewardPoolClusterPayoutOracle,
+                rewardPoolClusterPayoutOraclePinnedAt,
                 votingEngine,
                 rewardPool,
                 nextRoundToEvaluate,
@@ -279,6 +281,7 @@ library QuestionRewardPoolEscrowQualificationLib {
         mapping(uint256 => address) storage rewardPoolPayerIdentity,
         mapping(uint256 => bytes32) storage rewardPoolPayerIdentityKey,
         mapping(uint256 => address) storage rewardPoolClusterPayoutOracle,
+        mapping(uint256 => uint64) storage rewardPoolClusterPayoutOraclePinnedAt,
         RoundVotingEngine votingEngine,
         RewardPool storage rewardPool,
         uint256 rewardPoolId,
@@ -315,7 +318,13 @@ library QuestionRewardPoolEscrowQualificationLib {
         require(cleanupRemaining == 0, "Cleanup pending");
 
         IClusterPayoutOracle.RoundPayoutSnapshot memory payoutSnapshot = _finalizedQuestionPayoutSnapshot(
-            rewardPoolClusterPayoutOracle, votingEngine, rewardPoolId, rewardPool.contentId, roundId, payoutDomain
+            rewardPoolClusterPayoutOracle,
+            rewardPoolClusterPayoutOraclePinnedAt,
+            votingEngine,
+            rewardPoolId,
+            rewardPool.contentId,
+            roundId,
+            payoutDomain
         );
         require(payoutSnapshot.rawEligibleVoters == baseRawEligibleVoters, "Cluster snapshot mismatch");
         bytes32 clusterSnapshotDigest = IClusterPayoutOracle(
@@ -404,6 +413,7 @@ library QuestionRewardPoolEscrowQualificationLib {
         mapping(uint256 => address) storage rewardPoolPayerIdentity,
         mapping(uint256 => bytes32) storage rewardPoolPayerIdentityKey,
         mapping(uint256 => address) storage rewardPoolClusterPayoutOracle,
+        mapping(uint256 => uint64) storage rewardPoolClusterPayoutOraclePinnedAt,
         RoundVotingEngine votingEngine,
         RewardPool storage rewardPool,
         uint256 roundId,
@@ -424,6 +434,7 @@ library QuestionRewardPoolEscrowQualificationLib {
             rewardPoolPayerIdentity,
             rewardPoolPayerIdentityKey,
             rewardPoolClusterPayoutOracle,
+            rewardPoolClusterPayoutOraclePinnedAt,
             votingEngine,
             rewardPool,
             roundId,
@@ -435,6 +446,7 @@ library QuestionRewardPoolEscrowQualificationLib {
         mapping(uint256 => address) storage rewardPoolPayerIdentity,
         mapping(uint256 => bytes32) storage rewardPoolPayerIdentityKey,
         mapping(uint256 => address) storage rewardPoolClusterPayoutOracle,
+        mapping(uint256 => uint64) storage rewardPoolClusterPayoutOraclePinnedAt,
         RoundVotingEngine votingEngine,
         RewardPool storage rewardPool,
         uint256 roundId,
@@ -456,6 +468,7 @@ library QuestionRewardPoolEscrowQualificationLib {
                 rewardPoolPayerIdentity,
                 rewardPoolPayerIdentityKey,
                 rewardPoolClusterPayoutOracle,
+                rewardPoolClusterPayoutOraclePinnedAt,
                 votingEngine,
                 rewardPool,
                 roundId,
@@ -483,6 +496,7 @@ library QuestionRewardPoolEscrowQualificationLib {
         mapping(uint256 => address) storage rewardPoolPayerIdentity,
         mapping(uint256 => bytes32) storage rewardPoolPayerIdentityKey,
         mapping(uint256 => address) storage rewardPoolClusterPayoutOracle,
+        mapping(uint256 => uint64) storage rewardPoolClusterPayoutOraclePinnedAt,
         RoundVotingEngine votingEngine,
         RewardPool storage rewardPool,
         uint256 roundId,
@@ -492,6 +506,7 @@ library QuestionRewardPoolEscrowQualificationLib {
             rewardPoolPayerIdentity,
             rewardPoolPayerIdentityKey,
             rewardPoolClusterPayoutOracle,
+            rewardPoolClusterPayoutOraclePinnedAt,
             votingEngine,
             rewardPool,
             roundId,
@@ -511,7 +526,12 @@ library QuestionRewardPoolEscrowQualificationLib {
                     || payoutSnapshot.rawEligibleVoters != rawEligibleVoters
                     || !_questionPayoutSnapshotConsumerMatches(clusterPayoutOracle, rewardPool, roundId, payoutDomain)
                     || !_questionPayoutSnapshotSourceReady(
-                        clusterPayoutOracle, votingEngine, rewardPool, roundId, payoutDomain
+                        clusterPayoutOracle,
+                        rewardPoolClusterPayoutOraclePinnedAt,
+                        votingEngine,
+                        rewardPool,
+                        roundId,
+                        payoutDomain
                     )
             ) {
                 return (false, false, 0);
@@ -704,6 +724,7 @@ library QuestionRewardPoolEscrowQualificationLib {
         mapping(uint256 => address) storage rewardPoolPayerIdentity,
         mapping(uint256 => bytes32) storage rewardPoolPayerIdentityKey,
         mapping(uint256 => address) storage rewardPoolClusterPayoutOracle,
+        mapping(uint256 => uint64) storage rewardPoolClusterPayoutOraclePinnedAt,
         RoundVotingEngine votingEngine,
         RewardPool storage rewardPool,
         uint256 roundId,
@@ -748,7 +769,12 @@ library QuestionRewardPoolEscrowQualificationLib {
                 return (roundSettled, false, rawEligibleVoters, 0, 0, settledAt);
             }
             if (!_questionPayoutSnapshotSourceReady(
-                    clusterPayoutOracle, votingEngine, rewardPool, roundId, payoutDomain
+                    clusterPayoutOracle,
+                    rewardPoolClusterPayoutOraclePinnedAt,
+                    votingEngine,
+                    rewardPool,
+                    roundId,
+                    payoutDomain
                 )) {
                 return (roundSettled, false, rawEligibleVoters, 0, 0, settledAt);
             }
@@ -770,6 +796,7 @@ library QuestionRewardPoolEscrowQualificationLib {
 
     function _finalizedQuestionPayoutSnapshot(
         mapping(uint256 => address) storage rewardPoolClusterPayoutOracle,
+        mapping(uint256 => uint64) storage rewardPoolClusterPayoutOraclePinnedAt,
         RoundVotingEngine votingEngine,
         uint256 rewardPoolId,
         uint256 contentId,
@@ -777,6 +804,8 @@ library QuestionRewardPoolEscrowQualificationLib {
         uint8 payoutDomain
     ) private view returns (IClusterPayoutOracle.RoundPayoutSnapshot memory payoutSnapshot) {
         address clusterPayoutOracle = _clusterPayoutOracleAddress(rewardPoolClusterPayoutOracle, rewardPoolId);
+        uint64 pinnedAt = rewardPoolClusterPayoutOraclePinnedAt[rewardPoolId];
+        require(pinnedAt != 0, "Oracle not pinned");
         IClusterPayoutOracle oracle = IClusterPayoutOracle(clusterPayoutOracle);
         payoutSnapshot = oracle.getRoundPayoutSnapshot(payoutDomain, rewardPoolId, contentId, roundId);
         require(payoutSnapshot.status == IClusterPayoutOracle.SnapshotStatus.Finalized, "Cluster snapshot pending");
@@ -786,10 +815,8 @@ library QuestionRewardPoolEscrowQualificationLib {
         );
         (,,, uint48 readyAt) = votingEngine.roundLifecycleState(contentId, roundId);
         require(readyAt != 0, "Cluster source pending");
-        require(
-            oracle.roundPayoutSnapshotProposedAt(payoutDomain, rewardPoolId, contentId, roundId) >= readyAt,
-            "Cluster source stale"
-        );
+        uint64 proposedAt = oracle.roundPayoutSnapshotProposedAt(payoutDomain, rewardPoolId, contentId, roundId);
+        require(proposedAt >= readyAt && proposedAt > pinnedAt, "Cluster source stale");
     }
 
     function _finalizedSnapshotWithinVetoWindow(
@@ -817,6 +844,7 @@ library QuestionRewardPoolEscrowQualificationLib {
 
     function _questionPayoutSnapshotSourceReady(
         address clusterPayoutOracle,
+        mapping(uint256 => uint64) storage rewardPoolClusterPayoutOraclePinnedAt,
         RoundVotingEngine votingEngine,
         RewardPool storage rewardPool,
         uint256 roundId,
@@ -824,11 +852,13 @@ library QuestionRewardPoolEscrowQualificationLib {
     ) private view returns (bool) {
         (,,, uint48 readyAt) = votingEngine.roundLifecycleState(rewardPool.contentId, roundId);
         if (readyAt == 0) return false;
+        uint64 pinnedAt = rewardPoolClusterPayoutOraclePinnedAt[rewardPool.id];
+        if (pinnedAt == 0) return false;
         try IClusterPayoutOracle(clusterPayoutOracle)
             .roundPayoutSnapshotProposedAt(payoutDomain, rewardPool.id, rewardPool.contentId, roundId) returns (
             uint64 proposedAt
         ) {
-            return proposedAt >= readyAt;
+            return proposedAt >= readyAt && proposedAt > pinnedAt;
         } catch {
             return false;
         }

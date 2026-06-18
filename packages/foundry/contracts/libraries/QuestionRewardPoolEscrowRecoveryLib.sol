@@ -72,6 +72,7 @@ library QuestionRewardPoolEscrowRecoveryLib {
         mapping(uint256 => RewardPool) storage rewardPools,
         mapping(uint256 => mapping(uint256 => RoundSnapshot)) storage roundSnapshots,
         mapping(uint256 => address) storage rewardPoolClusterPayoutOracle,
+        mapping(uint256 => uint64) storage rewardPoolClusterPayoutOraclePinnedAt,
         mapping(uint256 => mapping(uint256 => bool)) storage rejectedRecoveredRound,
         mapping(uint256 => mapping(uint256 => bool)) storage reopenedRecoveredRound,
         uint256 rewardPoolId,
@@ -96,6 +97,12 @@ library QuestionRewardPoolEscrowRecoveryLib {
         );
         IClusterPayoutOracle.RoundPayoutSnapshot memory newSnapshot =
             oracle.getRoundPayoutSnapshot(payoutDomain, rewardPoolId, rewardPool.contentId, roundId);
+        uint64 pinnedAt = rewardPoolClusterPayoutOraclePinnedAt[rewardPoolId];
+        require(pinnedAt != 0, "Oracle not pinned");
+        require(
+            oracle.roundPayoutSnapshotProposedAt(payoutDomain, rewardPoolId, rewardPool.contentId, roundId) > pinnedAt,
+            "Cluster source stale"
+        );
         bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(payoutDomain, rewardPoolId, rewardPool.contentId, roundId);
         bytes32 newSnapshotDigest = oracle.roundPayoutSnapshotProposalDigest(snapshotKey);
         require(!oracle.rejectedRoundPayoutSnapshotDigests(snapshotKey, newSnapshotDigest), "Snapshot payload rejected");

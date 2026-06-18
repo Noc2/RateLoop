@@ -126,6 +126,7 @@ library QuestionRewardPoolEscrowPoolActionsLib {
 
     function snapshotRewardPoolClusterPayoutOracle(
         mapping(uint256 => address) storage rewardPoolClusterPayoutOracle,
+        mapping(uint256 => uint64) storage rewardPoolClusterPayoutOraclePinnedAt,
         RoundVotingEngine votingEngine,
         uint256 rewardPoolId,
         uint8 asset,
@@ -143,6 +144,7 @@ library QuestionRewardPoolEscrowPoolActionsLib {
             revert("Invalid oracle");
         }
         rewardPoolClusterPayoutOracle[rewardPoolId] = clusterPayoutOracle;
+        rewardPoolClusterPayoutOraclePinnedAt[rewardPoolId] = uint64(block.timestamp);
         emit RewardPoolClusterPayoutOracleSnapshotted(rewardPoolId, clusterPayoutOracle);
     }
 

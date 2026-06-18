@@ -22,6 +22,7 @@ library QuestionRewardPoolEscrowBundleRecoveryLib {
         mapping(uint256 => mapping(uint256 => mapping(uint256 => uint64))) storage bundleRoundIds,
         mapping(uint256 => mapping(uint256 => BundleRoundSetSnapshot)) storage bundleRoundSetSnapshots,
         mapping(uint256 => address) storage bundleRewardClusterPayoutOracle,
+        mapping(uint256 => uint64) storage bundleRewardClusterPayoutOraclePinnedAt,
         mapping(uint256 => mapping(uint256 => bool)) storage rejectedRecoveredBundleRoundSet,
         mapping(uint256 => mapping(uint256 => bool)) storage reopenedRecoveredBundleRoundSet,
         mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) storage qualifiedBundleRoundSetClaimants,
@@ -37,6 +38,7 @@ library QuestionRewardPoolEscrowBundleRecoveryLib {
                 bundleRoundIds,
                 bundleRoundSetSnapshots,
                 bundleRewardClusterPayoutOracle,
+                bundleRewardClusterPayoutOraclePinnedAt,
                 rejectedRecoveredBundleRoundSet,
                 reopenedRecoveredBundleRoundSet,
                 votingEngine,
@@ -131,6 +133,7 @@ library QuestionRewardPoolEscrowBundleRecoveryLib {
         mapping(uint256 => mapping(uint256 => mapping(uint256 => uint64))) storage bundleRoundIds,
         mapping(uint256 => mapping(uint256 => BundleRoundSetSnapshot)) storage bundleRoundSetSnapshots,
         mapping(uint256 => address) storage bundleRewardClusterPayoutOracle,
+        mapping(uint256 => uint64) storage bundleRewardClusterPayoutOraclePinnedAt,
         mapping(uint256 => mapping(uint256 => bool)) storage rejectedRecoveredBundleRoundSet,
         mapping(uint256 => mapping(uint256 => bool)) storage reopenedRecoveredBundleRoundSet,
         RoundVotingEngine votingEngine,
@@ -166,10 +169,10 @@ library QuestionRewardPoolEscrowBundleRecoveryLib {
             oracle.roundPayoutSnapshotConsumerFor(payoutDomain, bundleId, bundleId, snapshotRoundId) == address(this),
             "Cluster consumer mismatch"
         );
-        require(
-            oracle.roundPayoutSnapshotProposedAt(payoutDomain, bundleId, bundleId, snapshotRoundId) >= sourceReadyAt,
-            "Cluster source stale"
-        );
+        uint64 pinnedAt = bundleRewardClusterPayoutOraclePinnedAt[bundleId];
+        require(pinnedAt != 0, "Oracle not pinned");
+        uint64 proposedAt = oracle.roundPayoutSnapshotProposedAt(payoutDomain, bundleId, bundleId, snapshotRoundId);
+        require(proposedAt >= sourceReadyAt && proposedAt > pinnedAt, "Cluster source stale");
 
         reopenedRecoveredBundleRoundSet[bundleId][roundSetIndex] = true;
 
@@ -183,6 +186,7 @@ library QuestionRewardPoolEscrowBundleRecoveryLib {
         mapping(uint256 => mapping(uint256 => mapping(uint256 => uint64))) storage bundleRoundIds,
         mapping(uint256 => mapping(uint256 => BundleRoundSetSnapshot)) storage bundleRoundSetSnapshots,
         mapping(uint256 => address) storage bundleRewardClusterPayoutOracle,
+        mapping(uint256 => uint64) storage bundleRewardClusterPayoutOraclePinnedAt,
         mapping(uint256 => mapping(uint256 => uint256)) storage bundleQuestionTerminalSyncCursor,
         mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) storage qualifiedBundleRoundSetClaimants,
         mapping(uint256 => mapping(uint256 => bool)) storage rejectedRecoveredBundleRoundSet,
@@ -203,6 +207,7 @@ library QuestionRewardPoolEscrowBundleRecoveryLib {
             bundleRoundIds,
             bundleRoundSetSnapshots,
             bundleRewardClusterPayoutOracle,
+            bundleRewardClusterPayoutOraclePinnedAt,
             bundleQuestionTerminalSyncCursor,
             qualifiedBundleRoundSetClaimants,
             registry,

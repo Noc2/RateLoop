@@ -23,6 +23,7 @@ library QuestionRewardPoolEscrowSnapshotConsumerLib {
     function repoint(
         mapping(uint256 => RewardPool) storage rewardPools,
         mapping(uint256 => address) storage rewardPoolClusterPayoutOracle,
+        mapping(uint256 => uint64) storage rewardPoolClusterPayoutOraclePinnedAt,
         uint8 payoutDomain,
         address expectedConsumer,
         uint256 rewardPoolId,
@@ -40,8 +41,7 @@ library QuestionRewardPoolEscrowSnapshotConsumerLib {
             uint64 proposedAt
         ) {
             require(proposedAt == 0, "Oracle snapshot exists");
-        }
-        catch {
+        } catch {
             revert("Invalid oracle");
         }
         try oracle.roundPayoutSnapshotConsumer(payoutDomain) returns (address consumer) {
@@ -50,12 +50,14 @@ library QuestionRewardPoolEscrowSnapshotConsumerLib {
             revert("Invalid oracle");
         }
         rewardPoolClusterPayoutOracle[rewardPoolId] = newOracle;
+        rewardPoolClusterPayoutOraclePinnedAt[rewardPoolId] = uint64(block.timestamp);
         emit RewardPoolClusterPayoutOracleRepointed(rewardPoolId, oldOracle, newOracle);
     }
 
     function repointBundle(
         mapping(uint256 => BundleReward) storage bundleRewards,
         mapping(uint256 => address) storage bundleRewardClusterPayoutOracle,
+        mapping(uint256 => uint64) storage bundleRewardClusterPayoutOraclePinnedAt,
         uint8 payoutDomain,
         address expectedConsumer,
         uint256 bundleId,
@@ -75,8 +77,7 @@ library QuestionRewardPoolEscrowSnapshotConsumerLib {
         IClusterPayoutOracle oracle = IClusterPayoutOracle(newOracle);
         try oracle.roundPayoutSnapshotProposedAt(payoutDomain, bundleId, bundleId, 1) returns (uint64 proposedAt) {
             require(proposedAt == 0, "Oracle snapshot exists");
-        }
-        catch {
+        } catch {
             revert("Invalid oracle");
         }
         try oracle.roundPayoutSnapshotConsumer(payoutDomain) returns (address consumer) {
@@ -85,6 +86,7 @@ library QuestionRewardPoolEscrowSnapshotConsumerLib {
             revert("Invalid oracle");
         }
         bundleRewardClusterPayoutOracle[bundleId] = newOracle;
+        bundleRewardClusterPayoutOraclePinnedAt[bundleId] = uint64(block.timestamp);
         emit QuestionBundleClusterPayoutOracleRepointed(bundleId, oldOracle, newOracle);
     }
 

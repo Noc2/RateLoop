@@ -1,25 +1,25 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {VotingTestBase} from "./helpers/VotingTestHelpers.sol";
-import {ContentRegistry} from "../contracts/ContentRegistry.sol";
-import {LoopReputation} from "../contracts/LoopReputation.sol";
-import {FrontendRegistry} from "../contracts/FrontendRegistry.sol";
-import {MockCategoryRegistry} from "../contracts/mocks/MockCategoryRegistry.sol";
-import {MockERC20} from "../contracts/mocks/MockERC20.sol";
-import {ClusterPayoutOracle} from "../contracts/ClusterPayoutOracle.sol";
-import {IClusterPayoutOracle} from "../contracts/interfaces/IClusterPayoutOracle.sol";
-import {ProtocolConfig} from "../contracts/ProtocolConfig.sol";
-import {QuestionRewardPoolEscrow} from "../contracts/QuestionRewardPoolEscrow.sol";
+import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
+import { VotingTestBase } from "./helpers/VotingTestHelpers.sol";
+import { ContentRegistry } from "../contracts/ContentRegistry.sol";
+import { LoopReputation } from "../contracts/LoopReputation.sol";
+import { FrontendRegistry } from "../contracts/FrontendRegistry.sol";
+import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
+import { MockERC20 } from "../contracts/mocks/MockERC20.sol";
+import { ClusterPayoutOracle } from "../contracts/ClusterPayoutOracle.sol";
+import { IClusterPayoutOracle } from "../contracts/interfaces/IClusterPayoutOracle.sol";
+import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
+import { QuestionRewardPoolEscrow } from "../contracts/QuestionRewardPoolEscrow.sol";
 import {
     QuestionRewardPoolEscrowBundleActionsLib
 } from "../contracts/libraries/QuestionRewardPoolEscrowBundleActionsLib.sol";
-import {RoundRewardDistributor} from "../contracts/RoundRewardDistributor.sol";
-import {RoundVotingEngine} from "../contracts/RoundVotingEngine.sol";
-import {RoundEngineReadHelpers} from "./helpers/RoundEngineReadHelpers.sol";
-import {RoundLib} from "../contracts/libraries/RoundLib.sol";
+import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
+import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
+import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
+import { RoundLib } from "../contracts/libraries/RoundLib.sol";
 import {
     AuthorizedRewardPoolParams,
     BOUNTY_ELIGIBILITY_PASSPORT,
@@ -27,11 +27,11 @@ import {
     BOUNTY_ELIGIBILITY_VERIFIED_HUMAN,
     RoundSnapshot
 } from "../contracts/libraries/QuestionRewardPoolEscrowTypes.sol";
-import {TlockVoteLib} from "../contracts/libraries/TlockVoteLib.sol";
-import {Eip3009Authorization} from "../contracts/interfaces/IEip3009.sol";
-import {X402QuestionSubmitter} from "../contracts/X402QuestionSubmitter.sol";
-import {MockQuestionRewardPoolEscrow} from "./mocks/MockQuestionRewardPoolEscrow.sol";
-import {MockRaterIdentityRegistry} from "./mocks/MockRaterIdentityRegistry.sol";
+import { TlockVoteLib } from "../contracts/libraries/TlockVoteLib.sol";
+import { Eip3009Authorization } from "../contracts/interfaces/IEip3009.sol";
+import { X402QuestionSubmitter } from "../contracts/X402QuestionSubmitter.sol";
+import { MockQuestionRewardPoolEscrow } from "./mocks/MockQuestionRewardPoolEscrow.sol";
+import { MockRaterIdentityRegistry } from "./mocks/MockRaterIdentityRegistry.sol";
 
 contract QuestionRewardPoolEscrowTest is VotingTestBase {
     LoopReputation public lrepToken;
@@ -1039,7 +1039,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
     function testRefundableRewardPoolAmountUsesQuestionSelectedVoterCap() public {
         RoundLib.RoundConfig memory roundConfig =
-            RoundLib.RoundConfig({epochDuration: 10 minutes, maxDuration: 1 hours, minVoters: 3, maxVoters: 4});
+            RoundLib.RoundConfig({ epochDuration: 10 minutes, maxDuration: 1 hours, minVoters: 3, maxVoters: 4 });
         uint256 contentId = _submitQuestionWithRoundConfig("small-cap", roundConfig);
 
         uint256 fundedAmount = 4 * 10_000;
@@ -1051,7 +1051,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
     function testRewardPoolRejectsRequiredVotersAboveSettlementVoters() public {
         RoundLib.RoundConfig memory roundConfig =
-            RoundLib.RoundConfig({epochDuration: 10 minutes, maxDuration: 1 hours, minVoters: 3, maxVoters: 4});
+            RoundLib.RoundConfig({ epochDuration: 10 minutes, maxDuration: 1 hours, minVoters: 3, maxVoters: 4 });
         uint256 contentId = _submitQuestionWithRoundConfig("impossible-cap", roundConfig);
 
         vm.startPrank(funder);
@@ -1067,7 +1067,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             address(registry),
             abi.encodeWithSelector(ContentRegistry.getContentRoundConfig.selector, contentId),
             abi.encode(
-                RoundLib.RoundConfig({epochDuration: 10 minutes, maxDuration: 1 hours, minVoters: 3, maxVoters: 201})
+                RoundLib.RoundConfig({ epochDuration: 10 minutes, maxDuration: 1 hours, minVoters: 3, maxVoters: 201 })
             )
         );
 
@@ -1350,6 +1350,71 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertGt(
             rewardPoolEscrow.claimableQuestionBundleRewardWithPayoutWeight(
                 bundleId, 0, voter1, payoutWeight, new bytes32[](0)
+            ),
+            0
+        );
+    }
+
+    function testRepointedQuestionBundleRejectsSnapshotProposedBeforePinForSecondRoundSet() public {
+        _enableClusterPayoutOracle();
+        uint256[] memory contentIds = _submitBundleQuestions();
+        uint256 bundleId = _createSubmissionBundle(contentIds, funder, REWARD_ASSET_USDC, REWARD_POOL_AMOUNT, 3, 2);
+
+        address[] memory voters = _threeVoters();
+        bool[] memory directions = _directions(true, true, false);
+        uint256 firstSetRoundA = _settleRoundWithoutBundleSync(voters, contentIds[0], directions);
+        uint256 firstSetRoundB = _settleRoundWithoutBundleSync(voters, contentIds[1], directions);
+        vm.warp(block.timestamp + 24 hours + 1);
+        uint256 secondSetRoundA = _settleRoundWithoutBundleSync(voters, contentIds[0], directions);
+        uint256 secondSetRoundB = _settleRoundWithoutBundleSync(voters, contentIds[1], directions);
+        _recordBundleRoundSetTerminals(contentIds, firstSetRoundA, firstSetRoundB);
+        _recordBundleRoundSetTerminals(contentIds, secondSetRoundA, secondSetRoundB);
+        rewardPoolEscrow.syncQuestionBundleTerminals(bundleId, 10);
+
+        ClusterPayoutOracle replacementOracle = _newEligibleClusterPayoutOracle();
+        replacementOracle.setOracleConfig(1 hours, 5e6, address(this));
+        replacementOracle.setRoundPayoutSnapshotConsumer(
+            replacementOracle.PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD(), address(rewardPoolEscrow)
+        );
+
+        IClusterPayoutOracle.PayoutWeight memory staleSecondSetWeight =
+            _bundlePayoutWeight(bundleId, 1, contentIds[0], secondSetRoundA, 0);
+        bytes32 staleSecondSetRoot = replacementOracle.payoutWeightLeaf(staleSecondSetWeight);
+        vm.mockCall(
+            address(rewardPoolEscrow),
+            abi.encodeWithSelector(
+                rewardPoolEscrow.roundPayoutSnapshotSourceReadyAt.selector, uint8(4), bundleId, bundleId, uint256(2)
+            ),
+            abi.encode(uint64(block.timestamp))
+        );
+        _finalizeBundleClusterPayoutSnapshotWithRoot(
+            replacementOracle, bundleId, 1, 3, 30_000, staleSecondSetWeight.effectiveWeight, staleSecondSetRoot
+        );
+        vm.clearMockedCalls();
+
+        vm.prank(owner);
+        rewardPoolEscrow.repointQuestionBundleClusterPayoutOracle(bundleId, address(replacementOracle));
+
+        IClusterPayoutOracle.PayoutWeight memory freshFirstSetWeight =
+            _bundlePayoutWeight(bundleId, 0, contentIds[0], firstSetRoundA, 0);
+        bytes32 freshFirstSetRoot = replacementOracle.payoutWeightLeaf(freshFirstSetWeight);
+        _finalizeBundleClusterPayoutSnapshotWithRoot(
+            replacementOracle, bundleId, 0, 3, 30_000, freshFirstSetWeight.effectiveWeight, freshFirstSetRoot
+        );
+
+        rewardPoolEscrow.syncQuestionBundleTerminals(bundleId, 10);
+        assertGt(
+            rewardPoolEscrow.claimableQuestionBundleRewardWithPayoutWeight(
+                bundleId, 0, voter1, freshFirstSetWeight, new bytes32[](0)
+            ),
+            0
+        );
+
+        rewardPoolEscrow.syncQuestionBundleTerminals(bundleId, 10);
+        assertGt(rewardPoolEscrow.roundPayoutSnapshotSourceReadyAt(4, bundleId, bundleId, 2), 0);
+        assertEq(
+            rewardPoolEscrow.claimableQuestionBundleRewardWithPayoutWeight(
+                bundleId, 1, voter1, staleSecondSetWeight, new bytes32[](0)
             ),
             0
         );
@@ -4944,6 +5009,44 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertGt(reward, 0);
     }
 
+    function testRepointedRewardPoolRejectsSnapshotProposedBeforePin() public {
+        _enableClusterPayoutOracle();
+        uint256 contentId = _submitQuestion("");
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
+
+        ClusterPayoutOracle replacementOracle = _newEligibleClusterPayoutOracle();
+        replacementOracle.setOracleConfig(1 hours, 5e6, address(this));
+        replacementOracle.setRoundPayoutSnapshotConsumer(
+            replacementOracle.PAYOUT_DOMAIN_QUESTION_REWARD(), address(rewardPoolEscrow)
+        );
+
+        IClusterPayoutOracle.PayoutWeight memory payoutWeight =
+            _clusterPayoutWeight(rewardPoolId, contentId, roundId, 0);
+        _finalizeClusterPayoutSnapshotWithRoot(
+            replacementOracle,
+            rewardPoolId,
+            contentId,
+            roundId,
+            3,
+            30_000,
+            payoutWeight.effectiveWeight,
+            replacementOracle.payoutWeightLeaf(payoutWeight)
+        );
+
+        vm.prank(owner);
+        rewardPoolEscrow.repointRewardPoolClusterPayoutOracle(rewardPoolId, address(replacementOracle));
+
+        assertEq(
+            rewardPoolEscrow.claimableQuestionRewardWithPayoutWeight(
+                rewardPoolId, roundId, voter1, payoutWeight, new bytes32[](0)
+            ),
+            0
+        );
+        vm.expectRevert("Cluster source stale");
+        rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
+    }
+
     function testClusterClaimableQuestionRewardWithPayoutWeightPreviewsUnqualifiedRound() public {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
         uint256 contentId = _submitQuestion("");
@@ -8055,7 +8158,7 @@ contract MockBundleFrontendRegistry {
     mapping(address => FrontendInfo) public frontends;
 
     function setFrontend(address frontend, address operator, bool eligible, bool canClaim) external {
-        frontends[frontend] = FrontendInfo({operator: operator, eligible: eligible, canClaim: canClaim});
+        frontends[frontend] = FrontendInfo({ operator: operator, eligible: eligible, canClaim: canClaim });
     }
 
     function STAKE_AMOUNT() external pure returns (uint256) {
