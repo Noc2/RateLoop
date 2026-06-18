@@ -53,22 +53,6 @@ interface IQuestionRewardPoolEscrow {
     ) external returns (uint256 rewardPoolId);
 }
 
-interface IRoundVotingEngineCoreView {
-    function roundCore(uint256 contentId, uint256 roundId)
-        external
-        view
-        returns (
-            uint48 startTime,
-            RoundLib.RoundState state,
-            uint16 voteCount,
-            uint16 revealedCount,
-            uint64 totalStake,
-            uint48 thresholdReachedAt,
-            uint48 settledAt,
-            uint8 upWins
-        );
-}
-
 /// @title ContentRegistry
 /// @notice Manages content lifecycle: submission → active → dormant → revived / cancelled.
 /// @dev Stores only a metadata hash on-chain; full URL/question details are emitted in events.
@@ -500,7 +484,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
 
     /// @notice Set the treasury address that receives slashed stakes (can only be called by TREASURY_ROLE).
     function setTreasury(address _treasury) external onlyRole(TREASURY_ROLE) {
-        if (_treasury == address(0)) revert InvalidState();
+        require(_treasury != address(0));
         treasury = _treasury;
     }
 
@@ -1281,10 +1265,8 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
 
     // --- VotingEngine callbacks ---
 
-    function _authorizeCurrentEngineCallback() private view returns (uint256 callerGeneration) {
-        if (msg.sender != votingEngine) revert OnlyVotingEngine();
-        callerGeneration = votingEngineCallbackGeneration[msg.sender];
-        if (callerGeneration == 0) revert OnlyVotingEngine();
+    function _authorizeCurrentEngineCallback() private view {
+        if (msg.sender != votingEngine || votingEngineCallbackGeneration[msg.sender] == 0) revert OnlyVotingEngine();
     }
 
     function _authorizeSettlementCallback(uint256 contentId) private view returns (uint256 callerGeneration) {
@@ -1295,29 +1277,12 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         if (callerGeneration < contentSettlementEngineGeneration[contentId]) revert OnlyVotingEngine();
     }
 
-    function _authorizePendingRatingSettlementCallback(uint256 contentId, uint256 roundId)
-        private
-        view
-        returns (uint256 callerGeneration)
-    {
-        callerGeneration = votingEngineCallbackGeneration[msg.sender];
-        if (callerGeneration == 0) revert OnlyVotingEngine();
-        if (msg.sender == votingEngine) return callerGeneration;
-
-        address trackedEngine = contentRoundTrackingEngine[contentId];
-        if (trackedEngine == msg.sender && callerGeneration >= contentSettlementEngineGeneration[contentId]) {
-            return callerGeneration;
+    function trackedVotingEngine(uint256 contentId) external view returns (address engine) {
+        assembly ("memory-safe") {
+            mstore(0x00, contentId)
+            mstore(0x20, contentRoundTrackingEngine.slot)
+            engine := sload(keccak256(0x00, 0x40))
         }
-
-        (, RoundLib.RoundState roundState, uint16 voteCount,, uint64 totalStake,, uint48 settledAt,) =
-            IRoundVotingEngineCoreView(msg.sender).roundCore(contentId, roundId);
-        if (roundState != RoundLib.RoundState.Settled || settledAt == 0 || voteCount == 0 || totalStake == 0) {
-            revert OnlyVotingEngine();
-        }
-    }
-
-    function trackedVotingEngine(uint256 contentId) external view returns (address) {
-        return contentRoundTrackingEngine[contentId];
     }
 
     /// @notice Called by VotingEngine to update raw activity timestamp after commits.
@@ -1334,9 +1299,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         }
         contentRoundTrackingEngine[contentId] = msg.sender;
         contents[contentId].lastActivityAt = uint48(block.timestamp);
-        if (callerGeneration > contentSettlementEngineGeneration[contentId]) {
-            contentSettlementEngineGeneration[contentId] = callerGeneration;
-        }
+        contentSettlementEngineGeneration[contentId] = callerGeneration;
     }
 
     function nextVotingRoundId(uint256 contentId) external view returns (uint256) {
@@ -1371,26 +1334,24 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         uint64 upEvidence,
         uint64 downEvidence
     ) external {
-        uint256 callerGeneration = _authorizePendingRatingSettlementCallback(contentId, roundId);
-
-        ContentRegistryTypes.Content storage c = contents[contentId];
-        require(c.id != 0);
-        c.lastActivityAt = uint48(block.timestamp);
-        dormancyAnchorAt[contentId] = block.timestamp;
-        if (callerGeneration > contentSettlementEngineGeneration[contentId]) {
-            contentSettlementEngineGeneration[contentId] = callerGeneration;
-        }
-
-        ContentRegistryRatingSnapshotLib.recordPendingRatingSettlement(
-            pendingRatingSettlement[contentId][roundId],
-            msg.sender,
-            protocolConfig,
-            contentId,
-            roundId,
-            referenceRatingBps,
-            upEvidence,
-            downEvidence,
-            uint48(block.timestamp)
+        require(
+            ContentRegistryRatingSnapshotLib.recordPendingRatingSettlement(
+                votingEngineCallbackGeneration,
+                contentRoundTrackingEngine,
+                contentSettlementEngineGeneration,
+                latestVotingRoundId,
+                contents[contentId],
+                dormancyAnchorAt,
+                pendingRatingSettlement[contentId][roundId],
+                votingEngine,
+                protocolConfig,
+                contentId,
+                roundId,
+                referenceRatingBps,
+                upEvidence,
+                downEvidence,
+                block.timestamp
+            )
         );
     }
 
@@ -1429,8 +1390,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         view
         returns (bool)
     {
-        if (domain != 3 || rewardPoolId != 0) return false;
-        return appliedRatingSnapshotDigest[contentId][roundId] != bytes32(0);
+        return domain == 3 && rewardPoolId == 0 && appliedRatingSnapshotDigest[contentId][roundId] != bytes32(0);
     }
 
     function supportsRoundPayoutSnapshotDomain(uint8 domain) external pure returns (bool) {
@@ -1720,10 +1680,8 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
 
     function _engineHasOpenRound(address engine, uint256 contentId) internal view returns (bool) {
         uint256 activeRoundId = IRoundVotingEngine(engine).currentRoundId(contentId);
-        if (activeRoundId == 0) return false;
-
         (, RoundLib.RoundState roundState, uint16 voteCount,, uint64 totalStake,,,) =
-            IRoundVotingEngineCoreView(engine).roundCore(contentId, activeRoundId);
+            IRoundVotingEngine(engine).roundCore(contentId, activeRoundId);
         return roundState == RoundLib.RoundState.Open && voteCount != 0 && totalStake != 0;
     }
 

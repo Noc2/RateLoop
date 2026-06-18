@@ -66,27 +66,54 @@ library ContentRegistryRatingSnapshotLib {
     }
 
     function recordPendingRatingSettlement(
+        mapping(address => uint256) storage votingEngineCallbackGeneration,
+        mapping(uint256 => address) storage contentRoundTrackingEngine,
+        mapping(uint256 => uint256) storage contentSettlementEngineGeneration,
+        mapping(uint256 => uint256) storage latestVotingRoundId,
+        ContentRegistryTypes.Content storage content,
+        mapping(uint256 => uint256) storage dormancyAnchorAt,
         ContentRegistryTypes.PendingRatingSettlement storage pending,
-        address votingEngine,
+        address currentVotingEngine,
         ProtocolConfig protocolConfig,
         uint256 contentId,
         uint256 roundId,
         uint16 referenceRatingBps,
         uint64 upEvidence,
         uint64 downEvidence,
-        uint48 readyAt
-    ) external {
-        if (pending.exists) return;
+        uint256 readyAt
+    ) external returns (bool authorized) {
+        address caller = msg.sender;
+        uint256 callerGeneration = votingEngineCallbackGeneration[caller];
+        if (callerGeneration == 0) return false;
+        if (caller != currentVotingEngine && roundId > latestVotingRoundId[contentId]) {
+            if (
+                contentRoundTrackingEngine[contentId] != caller
+                    || callerGeneration < contentSettlementEngineGeneration[contentId]
+            ) {
+                return false;
+            }
+        }
 
-        pending.votingEngine = votingEngine;
+        require(content.id != 0);
+        uint48 readyAt48 = uint48(readyAt);
+        content.lastActivityAt = readyAt48;
+        dormancyAnchorAt[contentId] = readyAt;
+        if (caller == currentVotingEngine) {
+            contentSettlementEngineGeneration[contentId] = callerGeneration;
+        }
+
+        if (pending.exists) return true;
+
+        pending.votingEngine = caller;
         pending.clusterPayoutOracle = protocolConfig.clusterPayoutOracle();
         pending.upEvidence = upEvidence;
         pending.downEvidence = downEvidence;
-        pending.readyAt = readyAt;
+        pending.readyAt = readyAt48;
         pending.referenceRatingBps = referenceRatingBps;
         pending.exists = true;
 
-        emit RatingReviewPending(contentId, roundId, referenceRatingBps, upEvidence, downEvidence, readyAt);
+        emit RatingReviewPending(contentId, roundId, referenceRatingBps, upEvidence, downEvidence, readyAt48);
+        return true;
     }
 
     function repointPendingRatingClusterPayoutOracle(

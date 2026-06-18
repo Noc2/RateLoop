@@ -3272,7 +3272,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         registry.recordPendingRatingSettlement(1, 2, 5000, 1, 0);
 
         vm.prank(address(votingEngine));
-        vm.expectRevert(ContentRegistry.OnlyVotingEngine.selector);
+        vm.expectRevert();
         registry.recordPendingRatingSettlement(2, 1, 5000, 1, 0);
     }
 
@@ -3387,7 +3387,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.stopPrank();
 
         vm.prank(address(votingEngine));
-        vm.expectRevert(ContentRegistry.OnlyVotingEngine.selector);
+        vm.expectRevert();
         registry.recordPendingRatingSettlement(freshContentId, 1, 5000, 1, 0);
 
         // Sanity: the canonical (replacement) engine can still record pending settlement.
@@ -3415,7 +3415,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         registry.updateActivity(1);
 
         vm.prank(address(votingEngine));
-        vm.expectRevert(ContentRegistry.OnlyVotingEngine.selector);
+        vm.expectRevert();
         registry.recordPendingRatingSettlement(1, 1, 5000, 1, 0);
     }
 
