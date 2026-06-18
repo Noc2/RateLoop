@@ -1295,6 +1295,27 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         if (callerGeneration < contentSettlementEngineGeneration[contentId]) revert OnlyVotingEngine();
     }
 
+    function _authorizePendingRatingSettlementCallback(uint256 contentId, uint256 roundId)
+        private
+        view
+        returns (uint256 callerGeneration)
+    {
+        callerGeneration = votingEngineCallbackGeneration[msg.sender];
+        if (callerGeneration == 0) revert OnlyVotingEngine();
+        if (msg.sender == votingEngine) return callerGeneration;
+
+        address trackedEngine = contentRoundTrackingEngine[contentId];
+        if (trackedEngine == msg.sender && callerGeneration >= contentSettlementEngineGeneration[contentId]) {
+            return callerGeneration;
+        }
+
+        (, RoundLib.RoundState roundState, uint16 voteCount,, uint64 totalStake,, uint48 settledAt,) =
+            IRoundVotingEngineCoreView(msg.sender).roundCore(contentId, roundId);
+        if (roundState != RoundLib.RoundState.Settled || settledAt == 0 || voteCount == 0 || totalStake == 0) {
+            revert OnlyVotingEngine();
+        }
+    }
+
     function trackedVotingEngine(uint256 contentId) external view returns (address) {
         return contentRoundTrackingEngine[contentId];
     }
@@ -1350,13 +1371,15 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         uint64 upEvidence,
         uint64 downEvidence
     ) external {
-        uint256 callerGeneration = _authorizeSettlementCallback(contentId);
+        uint256 callerGeneration = _authorizePendingRatingSettlementCallback(contentId, roundId);
 
         ContentRegistryTypes.Content storage c = contents[contentId];
         require(c.id != 0);
         c.lastActivityAt = uint48(block.timestamp);
         dormancyAnchorAt[contentId] = block.timestamp;
-        contentSettlementEngineGeneration[contentId] = callerGeneration;
+        if (callerGeneration > contentSettlementEngineGeneration[contentId]) {
+            contentSettlementEngineGeneration[contentId] = callerGeneration;
+        }
 
         ContentRegistryRatingSnapshotLib.recordPendingRatingSettlement(
             pendingRatingSettlement[contentId][roundId],

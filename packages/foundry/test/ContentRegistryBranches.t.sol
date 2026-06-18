@@ -3246,7 +3246,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             uint8(RoundEngineReadHelpers.round(votingEngine, 1, roundId).state), uint8(RoundLib.RoundState.Settled)
         );
 
-        vm.warp(T0 + 30 days + 30 minutes);
+        vm.warp(block.timestamp + 30 days + 30 minutes);
         registry.markDormant(1);
         (,,,,, ContentRegistryTypes.ContentStatus status,,,,) = registry.contents(1);
         assertEq(uint256(status), uint256(ContentRegistryTypes.ContentStatus.Dormant));

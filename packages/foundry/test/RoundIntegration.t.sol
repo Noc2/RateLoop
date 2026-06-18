@@ -2891,6 +2891,50 @@ contract RoundIntegrationTest is VotingTestBase {
         assertGt(registry.roundPayoutSnapshotSourceReadyAt(3, 0, contentId, roundId), 0);
     }
 
+    function test_SettlementSideEffectFailure_CanReplayAfterEngineRotation() public {
+        uint256 contentId = _submitContent();
+
+        address[] memory voters = new address[](3);
+        voters[0] = voter1;
+        voters[1] = voter2;
+        voters[2] = voter3;
+        bool[] memory dirs = new bool[](3);
+        dirs[0] = true;
+        dirs[1] = true;
+        dirs[2] = false;
+
+        _commitAllThenReveal(voters, contentId, dirs, STAKE);
+        uint256 roundId = _getActiveOrLatestRoundId(contentId);
+
+        vm.mockCallRevert(
+            address(registry),
+            abi.encodeWithSelector(ContentRegistry.recordPendingRatingSettlement.selector),
+            abi.encodeWithSignature("Error(string)", "rating side effect blocked")
+        );
+        _settleAfterRbtsSeed(votingEngine, contentId, roundId);
+
+        assertTrue(votingEngine.pendingRatingSettlementReplay(contentId, roundId));
+        assertEq(registry.roundPayoutSnapshotSourceReadyAt(3, 0, contentId, roundId), 0);
+
+        vm.clearMockedCalls();
+        RoundVotingEngine replacementEngine = _deployReplacementVotingEngine();
+
+        vm.startPrank(owner);
+        registry.pause();
+        registry.setVotingEngine(address(replacementEngine));
+        registry.unpause();
+        vm.stopPrank();
+
+        vm.prank(address(replacementEngine));
+        registry.updateActivity(contentId);
+        assertEq(registry.trackedVotingEngine(contentId), address(replacementEngine));
+
+        assertTrue(votingEngine.replayPendingRatingSettlement(contentId, roundId));
+
+        assertFalse(votingEngine.pendingRatingSettlementReplay(contentId, roundId));
+        assertGt(registry.roundPayoutSnapshotSourceReadyAt(3, 0, contentId, roundId), 0);
+    }
+
     // =========================================================================
     // O(1) SETTLEMENT — FRONTEND FEE CLAIMING
     // =========================================================================
