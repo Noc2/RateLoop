@@ -42,8 +42,14 @@ test("governance action composer exposes confidentiality breach proposal templat
 test("governance action composer hides standalone voting engine rotations", () => {
   const templates = getGovernanceActionTemplateSummaries();
 
-  assert.equal(templates.some(template => template.id === "frontend-set-voting-engine"), false);
-  assert.equal(templates.some(template => template.id === "content-set-voting-engine"), false);
+  assert.equal(
+    templates.some(template => template.id === "frontend-set-voting-engine"),
+    false,
+  );
+  assert.equal(
+    templates.some(template => template.id === "content-set-voting-engine"),
+    false,
+  );
   assert.equal(
     templates.some(
       template =>
