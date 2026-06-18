@@ -3,7 +3,9 @@ pragma solidity ^0.8.34;
 
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { IRoundVotingEngine } from "../interfaces/IRoundVotingEngine.sol";
 import { ContentRegistryTypes } from "./ContentRegistryTypes.sol";
+import { RoundLib } from "./RoundLib.sol";
 
 /// @title ContentRegistryDormancyLib
 /// @notice Dormancy lifecycle helpers extracted from ContentRegistry for EIP-170 headroom.
@@ -22,13 +24,13 @@ library ContentRegistryDormancyLib {
         uint256 contentId,
         uint256 dormancyPeriod,
         uint256 dormantExclusiveRevivalPeriod,
-        bool hasDormancyBlockingRound,
+        bool blocksDormancy,
         bool isBundleMember
     ) external {
         require(content.id != 0);
         require(content.status == ContentRegistryTypes.ContentStatus.Active);
         require(block.timestamp > dormancyAnchorAt[contentId] + dormancyPeriod);
-        require(!hasDormancyBlockingRound);
+        require(!blocksDormancy);
         require(!isBundleMember);
 
         content.status = ContentRegistryTypes.ContentStatus.Dormant;
@@ -98,5 +100,35 @@ library ContentRegistryDormancyLib {
         delete dormantKeyReleasableAt[contentId];
 
         emit DormantSubmissionKeyReleased(contentId, submissionKey);
+    }
+
+    function hasDormancyBlockingRound(address trackedEngine, address currentEngine, uint256 contentId)
+        external
+        view
+        returns (bool)
+    {
+        if (trackedEngine != address(0) && _engineHasDormancyBlockingRound(trackedEngine, contentId)) return true;
+        return currentEngine != trackedEngine && _engineHasDormancyBlockingRound(currentEngine, contentId);
+    }
+
+    function engineHasOpenRound(address engine, uint256 contentId) external view returns (bool) {
+        return _engineHasOpenRound(engine, contentId);
+    }
+
+    function _engineHasDormancyBlockingRound(address engine, uint256 contentId) private view returns (bool) {
+        if (engine == address(0)) return false;
+        try IRoundVotingEngine(engine).isDormancyBlocked(contentId) returns (bool blocked) {
+            return blocked;
+        } catch {}
+
+        return _engineHasOpenRound(engine, contentId);
+    }
+
+    function _engineHasOpenRound(address engine, uint256 contentId) private view returns (bool) {
+        if (engine == address(0)) return false;
+        uint256 activeRoundId = IRoundVotingEngine(engine).currentRoundId(contentId);
+        (, RoundLib.RoundState roundState, uint16 voteCount,, uint64 totalStake,,,) =
+            IRoundVotingEngine(engine).roundCore(contentId, activeRoundId);
+        return roundState == RoundLib.RoundState.Open && voteCount != 0 && totalStake != 0;
     }
 }

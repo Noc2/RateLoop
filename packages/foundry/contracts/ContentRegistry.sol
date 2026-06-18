@@ -6,8 +6,6 @@ import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/acce
 import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import {ICategoryRegistry} from "./interfaces/ICategoryRegistry.sol";
 import {IClusterPayoutOracle} from "./interfaces/IClusterPayoutOracle.sol";
 import {IRoundVotingEngine} from "./interfaces/IRoundVotingEngine.sol";
@@ -53,20 +51,10 @@ interface IQuestionRewardPoolEscrow {
     ) external returns (uint256 rewardPoolId);
 }
 
-interface IContentRegistryVotingEngineShape {
-    function rewardDistributorConfigShape()
-        external
-        view
-        returns (address registry_, address lrepToken_, address protocolConfig_);
-}
-
 /// @title ContentRegistry
 /// @notice Manages content lifecycle: submission → active → dormant → revived / cancelled.
 /// @dev Stores only a metadata hash on-chain; full URL/question details are emitted in events.
 contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpgradeable, ReentrancyGuardTransient {
-    using SafeERC20 for IERC20;
-    using SafeCast for uint256;
-
     error OnlyVotingEngine();
     error ActiveRoundOnPreviousEngine();
     error InvalidState();
@@ -434,14 +422,31 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
 
     function _requireEngineShape(address engine, address expectedConfig) private view {
         _requireEngineProtocolConfig(engine, expectedConfig);
-        try IContentRegistryVotingEngineShape(engine).rewardDistributorConfigShape() returns (
-            address registry_, address lrepToken_, address protocolConfig_
-        ) {
-            if (registry_ != address(this) || lrepToken_ != address(lrepToken) || protocolConfig_ != expectedConfig) {
-                revert InvalidState();
+        address expectedRegistry = address(this);
+        address expectedLrep = address(lrepToken);
+        assembly ("memory-safe") {
+            let ptr := mload(0x40)
+            mstore(ptr, shl(224, 0x4983399e))
+            if iszero(staticcall(gas(), engine, ptr, 4, ptr, 0x60)) {
+                mstore(0, shl(224, 0xbaf3f0f7))
+                revert(0, 4)
             }
-        } catch {
-            revert InvalidState();
+            if iszero(eq(returndatasize(), 0x60)) {
+                mstore(0, shl(224, 0xbaf3f0f7))
+                revert(0, 4)
+            }
+            if iszero(eq(and(mload(ptr), 0xffffffffffffffffffffffffffffffffffffffff), expectedRegistry)) {
+                mstore(0, shl(224, 0xbaf3f0f7))
+                revert(0, 4)
+            }
+            if iszero(eq(and(mload(add(ptr, 0x20)), 0xffffffffffffffffffffffffffffffffffffffff), expectedLrep)) {
+                mstore(0, shl(224, 0xbaf3f0f7))
+                revert(0, 4)
+            }
+            if iszero(eq(and(mload(add(ptr, 0x40)), 0xffffffffffffffffffffffffffffffffffffffff), expectedConfig)) {
+                mstore(0, shl(224, 0xbaf3f0f7))
+                revert(0, 4)
+            }
         }
     }
 
@@ -504,8 +509,10 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
 
     /// @notice Set the treasury address that receives slashed stakes (can only be called by TREASURY_ROLE).
     function setTreasury(address _treasury) external onlyRole(TREASURY_ROLE) {
-        require(_treasury != address(0));
-        treasury = _treasury;
+        assembly ("memory-safe") {
+            if iszero(_treasury) { revert(0, 0) }
+            sstore(treasury.slot, _treasury)
+        }
     }
 
     // --- Content Lifecycle ---
@@ -537,8 +544,8 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             submitter: msg.sender,
             submitterIdentity: submitterIdentity,
             submitterIdentityKey: submitterIdentityKey,
-            reservedAt: block.timestamp.toUint48(),
-            expiresAt: (block.timestamp + SUBMISSION_RESERVATION_PERIOD).toUint48()
+            reservedAt: uint48(block.timestamp),
+            expiresAt: uint48(block.timestamp + SUBMISSION_RESERVATION_PERIOD)
         });
 
         emit SubmissionReserved(msg.sender, revealCommitment, block.timestamp + SUBMISSION_RESERVATION_PERIOD);
@@ -747,7 +754,11 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     }
 
     function questionBundleRoundObserver(uint256 contentId) external view returns (address bundleRewardPoolEscrow) {
-        bundleRewardPoolEscrow = questionBundleRoundObserverByContent[contentId];
+        assembly ("memory-safe") {
+            mstore(0, contentId)
+            mstore(0x20, questionBundleRoundObserverByContent.slot)
+            bundleRewardPoolEscrow := sload(keccak256(0, 0x40))
+        }
     }
 
     /// @notice Submit a question with a context link, image evidence, or video evidence.
@@ -1101,6 +1112,9 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         uint256 bundleId
     ) internal returns (uint256 contentId) {
         contentId = nextContentId++;
+        assembly ("memory-safe") {
+            if or(gt(contentId, 0xffffffffffffffff), gt(resolvedCategoryId, 0xffffffffffffffff)) { revert(0, 0) }
+        }
         contentSubmissionKey[contentId] = submissionKey;
         if (submitterIdentity == address(0) || submitterIdentityKey == bytes32(0)) {
             (submitterIdentity, submitterIdentityKey) = _snapshotSubmitterIdentity(submitter);
@@ -1109,16 +1123,16 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         contentSubmitterIdentityKey[contentId] = submitterIdentityKey;
         contentRoundConfig[contentId] = roundConfig;
         contents[contentId] = ContentRegistryTypes.Content({
-            id: contentId.toUint64(),
+            id: uint64(contentId),
             contentHash: contentHash,
             submitter: submitter,
-            createdAt: block.timestamp.toUint48(),
-            lastActivityAt: block.timestamp.toUint48(),
+            createdAt: uint48(block.timestamp),
+            lastActivityAt: uint48(block.timestamp),
             status: ContentRegistryTypes.ContentStatus.Active,
             dormantCount: 0,
             reviver: address(0),
             rating: 50,
-            categoryId: resolvedCategoryId.toUint64()
+            categoryId: uint64(resolvedCategoryId)
         });
         if (bundleId != 0) {
             contentBundleId[contentId] = bundleId;
@@ -1313,8 +1327,10 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         uint256 callerGeneration = _authorizeSettlementCallback(contentId);
 
         address trackedEngine = contentRoundTrackingEngine[contentId];
-        if (trackedEngine != address(0) && trackedEngine != msg.sender && _engineHasOpenRound(trackedEngine, contentId))
-        {
+        if (
+            trackedEngine != address(0) && trackedEngine != msg.sender
+                && ContentRegistryDormancyLib.engineHasOpenRound(trackedEngine, contentId)
+        ) {
             revert ActiveRoundOnPreviousEngine();
         }
         contentRoundTrackingEngine[contentId] = msg.sender;
@@ -1323,8 +1339,11 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     }
 
     function nextVotingRoundId(uint256 contentId) external view returns (uint256) {
-        unchecked {
-            return latestVotingRoundId[contentId] + 1;
+        assembly ("memory-safe") {
+            mstore(0, contentId)
+            mstore(0x20, latestVotingRoundId.slot)
+            mstore(0, add(sload(keccak256(0, 0x40)), 1))
+            return(0, 0x20)
         }
     }
 
@@ -1335,8 +1354,10 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         require(c.id != 0 && c.status == ContentRegistryTypes.ContentStatus.Active);
 
         address trackedEngine = contentRoundTrackingEngine[contentId];
-        if (trackedEngine != address(0) && trackedEngine != msg.sender && _engineHasOpenRound(trackedEngine, contentId))
-        {
+        if (
+            trackedEngine != address(0) && trackedEngine != msg.sender
+                && ContentRegistryDormancyLib.engineHasOpenRound(trackedEngine, contentId)
+        ) {
             revert ActiveRoundOnPreviousEngine();
         }
 
@@ -1423,11 +1444,23 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         view
         returns (bool)
     {
-        return domain == 3 && rewardPoolId == 0 && appliedRatingSnapshotDigest[contentId][roundId] != bytes32(0);
+        assembly ("memory-safe") {
+            mstore(0, contentId)
+            mstore(0x20, appliedRatingSnapshotDigest.slot)
+            let contentSlot := keccak256(0, 0x40)
+            mstore(0, roundId)
+            mstore(0x20, contentSlot)
+            let consumed := iszero(iszero(sload(keccak256(0, 0x40))))
+            mstore(0, and(and(eq(domain, 3), iszero(rewardPoolId)), consumed))
+            return(0, 0x20)
+        }
     }
 
     function supportsRoundPayoutSnapshotDomain(uint8 domain) external pure returns (bool) {
-        return domain == 3;
+        assembly ("memory-safe") {
+            mstore(0, eq(domain, 3))
+            return(0, 0x20)
+        }
     }
 
     function roundPayoutSnapshotSourceReadyAt(uint8 domain, uint256 rewardPoolId, uint256 contentId, uint256 roundId)
@@ -1450,8 +1483,13 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     }
 
     function isContentActive(uint256 contentId) external view returns (bool) {
-        ContentRegistryTypes.Content storage c = contents[contentId];
-        return c.id != 0 && uint8(c.status) == 0;
+        assembly ("memory-safe") {
+            mstore(0, contentId)
+            mstore(0x20, contents.slot)
+            let contentSlot := keccak256(0, 0x40)
+            mstore(0, and(iszero(iszero(sload(contentSlot))), iszero(and(sload(add(contentSlot, 3)), 0xff))))
+            return(0, 0x20)
+        }
     }
 
     function _computeRevealCommitment(
@@ -1697,25 +1735,9 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     }
 
     function _hasDormancyBlockingRound(uint256 contentId) internal view returns (bool) {
-        address trackedEngine = contentRoundTrackingEngine[contentId];
-        if (trackedEngine != address(0) && _engineHasDormancyBlockingRound(trackedEngine, contentId)) return true;
-        address currentEngine = votingEngine;
-        return currentEngine != trackedEngine && _engineHasDormancyBlockingRound(currentEngine, contentId);
-    }
-
-    function _engineHasDormancyBlockingRound(address engine, uint256 contentId) internal view returns (bool) {
-        try IRoundVotingEngine(engine).isDormancyBlocked(contentId) returns (bool blocked) {
-            return blocked;
-        } catch {}
-
-        return _engineHasOpenRound(engine, contentId);
-    }
-
-    function _engineHasOpenRound(address engine, uint256 contentId) internal view returns (bool) {
-        uint256 activeRoundId = IRoundVotingEngine(engine).currentRoundId(contentId);
-        (, RoundLib.RoundState roundState, uint16 voteCount,, uint64 totalStake,,,) =
-            IRoundVotingEngine(engine).roundCore(contentId, activeRoundId);
-        return roundState == RoundLib.RoundState.Open && voteCount != 0 && totalStake != 0;
+        return ContentRegistryDormancyLib.hasDormancyBlockingRound(
+            contentRoundTrackingEngine[contentId], votingEngine, contentId
+        );
     }
 
     function _getInitialConfidenceMass() internal view returns (uint256) {

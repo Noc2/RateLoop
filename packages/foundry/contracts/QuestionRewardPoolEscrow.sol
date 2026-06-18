@@ -6,7 +6,6 @@ import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/ac
 import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 import { ReentrancyGuardTransient } from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
 import { ContentRegistry } from "./ContentRegistry.sol";
 import { RoundVotingEngine } from "./RoundVotingEngine.sol";
@@ -58,8 +57,6 @@ contract QuestionRewardPoolEscrow is
     ReentrancyGuardTransient,
     IRoundPayoutSnapshotConsumer
 {
-    using SafeCast for uint256;
-
     bytes32 internal constant CONFIG_ROLE = keccak256("CONFIG_ROLE");
     bytes32 internal constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 
@@ -289,11 +286,15 @@ contract QuestionRewardPoolEscrow is
         votingEngine = RoundVotingEngine(votingEngine_);
         raterRegistry = IRaterIdentityRegistry(raterRegistry_);
         nextRewardPoolId = 1;
-        defaultFrontendFeeBps = DEFAULT_FRONTEND_FEE_BPS.toUint16();
+        defaultFrontendFeeBps = uint16(DEFAULT_FRONTEND_FEE_BPS);
     }
 
-    function questionRewardPoolEscrowConfigShape() external view returns (address registry_, address votingEngine_) {
-        return (address(registry), address(votingEngine));
+    function questionRewardPoolEscrowConfigShape() external view returns (address, address) {
+        assembly ("memory-safe") {
+            mstore(0, sload(registry.slot))
+            mstore(0x20, sload(votingEngine.slot))
+            return(0, 0x40)
+        }
     }
 
     /// @notice Create a reward pool with the default open-eligibility policy.
@@ -421,32 +422,6 @@ contract QuestionRewardPoolEscrow is
         uint8 bountyEligibility
     ) external nonReentrant whenNotPaused returns (uint256 rewardPoolId) {
         require(bountyKind == 1 || bountyKind == 2, "Bad bounty kind");
-        rewardPoolId = _createPurposeRewardPool(
-            contentId,
-            amount,
-            requiredVoters,
-            relatedRoundId,
-            reasonHash,
-            bountyStartBy,
-            bountyWindowSeconds,
-            feedbackWindowSeconds,
-            bountyKind,
-            bountyEligibility
-        );
-    }
-
-    function _createPurposeRewardPool(
-        uint256 contentId,
-        uint256 amount,
-        uint256 requiredVoters,
-        uint256 relatedRoundId,
-        bytes32 reasonHash,
-        uint256 bountyStartBy,
-        uint256 bountyWindowSeconds,
-        uint256 feedbackWindowSeconds,
-        uint8 bountyKind,
-        uint8 bountyEligibility
-    ) private returns (uint256 rewardPoolId) {
         _requireCurrentRegistryEscrow();
         CreateRewardPoolParams memory params = CreateRewardPoolParams({
             contentId: contentId,
@@ -525,34 +500,6 @@ contract QuestionRewardPoolEscrow is
         uint256 feedbackWindowSeconds,
         uint8 bountyEligibility
     ) external nonReentrant whenNotPaused returns (uint256 rewardPoolId) {
-        return _createSubmissionBundleFromRegistry(
-            bundleId,
-            contentIds,
-            funder,
-            asset,
-            amount,
-            requiredCompleters,
-            requiredSettledRounds,
-            bountyStartBy,
-            bountyWindowSeconds,
-            feedbackWindowSeconds,
-            bountyEligibility
-        );
-    }
-
-    function _createSubmissionBundleFromRegistry(
-        uint256 bundleId,
-        uint256[] calldata contentIds,
-        address funder,
-        uint8 asset,
-        uint256 amount,
-        uint256 requiredCompleters,
-        uint256 requiredSettledRounds,
-        uint256 bountyStartBy,
-        uint256 bountyWindowSeconds,
-        uint256 feedbackWindowSeconds,
-        uint8 bountyEligibility
-    ) internal returns (uint256 rewardPoolId) {
         require(msg.sender == address(registry), "Only registry");
         _requireRegistryVotingEngine();
         require(funder != address(0), "Invalid funder");
@@ -1318,7 +1265,10 @@ contract QuestionRewardPoolEscrow is
     }
 
     function supportsRoundPayoutSnapshotDomain(uint8 domain) external pure returns (bool) {
-        return domain == PAYOUT_DOMAIN_QUESTION_REWARD || domain == PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD;
+        assembly ("memory-safe") {
+            mstore(0, or(eq(domain, 1), eq(domain, 4)))
+            return(0, 0x20)
+        }
     }
 
     function isRoundPayoutSnapshotConsumed(uint8 domain, uint256 rewardPoolId, uint256 contentId, uint256 roundId)
@@ -1411,12 +1361,29 @@ contract QuestionRewardPoolEscrow is
     }
 
     function _requireRegistryVotingEngine() internal view {
-        if (registry.votingEngine() != address(votingEngine)) revert();
+        address registryAddress = address(registry);
+        address expectedEngine = address(votingEngine);
+        assembly ("memory-safe") {
+            let ptr := mload(0x40)
+            mstore(ptr, shl(224, 0x19c90f6d))
+            if iszero(staticcall(gas(), registryAddress, ptr, 4, ptr, 32)) { revert(0, 0) }
+            if iszero(eq(and(mload(ptr), 0xffffffffffffffffffffffffffffffffffffffff), expectedEngine)) {
+                revert(0, 0)
+            }
+        }
     }
 
     function _requireCurrentRegistryEscrow() internal view {
         _requireRegistryVotingEngine();
-        if (registry.questionRewardPoolEscrow() != address(this)) revert();
+        address registryAddress = address(registry);
+        assembly ("memory-safe") {
+            let ptr := mload(0x40)
+            mstore(ptr, shl(224, 0x3cd4049c))
+            if iszero(staticcall(gas(), registryAddress, ptr, 4, ptr, 32)) { revert(0, 0) }
+            if iszero(eq(and(mload(ptr), 0xffffffffffffffffffffffffffffffffffffffff), address())) {
+                revert(0, 0)
+            }
+        }
     }
 
     function _getExistingRewardPool(uint256 rewardPoolId) internal view returns (RewardPool storage rewardPool) {
