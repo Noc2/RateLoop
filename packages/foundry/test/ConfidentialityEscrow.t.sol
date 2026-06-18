@@ -574,6 +574,17 @@ contract ConfidentialityEscrowTest is VotingTestBase {
         confidentialityEscrow.recordAccessNexus(contentId, voter1);
     }
 
+    function testRecordConfidentialityNexusForRegistryRevertsWhenPaused() public {
+        uint256 contentId = _submitGatedQuestion("zero-bond-engine-paused", 0);
+
+        vm.prank(owner);
+        confidentialityEscrow.setPaused(true);
+
+        vm.expectRevert();
+        vm.prank(address(engine));
+        confidentialityEscrow.recordConfidentialityNexusForRegistry(contentId, voter1, address(raterRegistry));
+    }
+
     function testPublishLogRootRequiresRecorderRoleAndEmitsArtifactAnchor() public {
         string memory epoch = "2026-06-15";
         string memory artifactUri = "https://rateloop.ai/api/confidentiality/log-roots/2026-06-15/artifact";

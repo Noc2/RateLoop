@@ -308,6 +308,7 @@ contract ConfidentialityEscrow is
 
     function recordConfidentialityNexusForRegistry(uint256 contentId, address holder, address registryAddress)
         external
+        whenNotPaused
     {
         if (!_isAuthorizedNexusVotingEngine(contentId)) {
             revert("Not voting engine");
