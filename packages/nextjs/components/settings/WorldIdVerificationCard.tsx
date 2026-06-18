@@ -309,34 +309,38 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
     };
   }, []);
 
-  const refreshLaunchReads = useCallback(async () => {
-    await Promise.all([
-      refetchHasActiveCredential(),
-      refetchVerifiedBonusClaimed(),
-      refetchCurrentVerifiedBonus(),
-      refetchReferralEarnings(),
-      refetchRaterLaunchCap(),
-      refetchRaterFullLaunchCap(),
-      refetchRaterFullLaunchCapUnlocked(),
-      refetchLrepBalance(),
-    ]);
-    await refreshWalletBalances(walletAddress);
-  }, [
-    refetchCurrentVerifiedBonus,
-    refetchHasActiveCredential,
-    refetchLrepBalance,
-    refetchRaterFullLaunchCap,
-    refetchRaterFullLaunchCapUnlocked,
-    refetchRaterLaunchCap,
-    refetchReferralEarnings,
-    refetchVerifiedBonusClaimed,
-    refreshWalletBalances,
-    walletAddress,
-  ]);
+  const refreshLaunchReads = useCallback(
+    async (options?: { lrepCreditMicro?: bigint }) => {
+      const walletRefresh = refreshWalletBalances(walletAddress, options);
+      await Promise.all([
+        walletRefresh,
+        refetchHasActiveCredential(),
+        refetchVerifiedBonusClaimed(),
+        refetchCurrentVerifiedBonus(),
+        refetchReferralEarnings(),
+        refetchRaterLaunchCap(),
+        refetchRaterFullLaunchCap(),
+        refetchRaterFullLaunchCapUnlocked(),
+        refetchLrepBalance(),
+      ]);
+    },
+    [
+      refetchCurrentVerifiedBonus,
+      refetchHasActiveCredential,
+      refetchLrepBalance,
+      refetchRaterFullLaunchCap,
+      refetchRaterFullLaunchCapUnlocked,
+      refetchRaterLaunchCap,
+      refetchReferralEarnings,
+      refetchVerifiedBonusClaimed,
+      refreshWalletBalances,
+      walletAddress,
+    ],
+  );
 
   const claimVerifiedLaunchBonusIfAvailable = useCallback(async () => {
     if (!walletAddress) {
-      return false;
+      return undefined;
     }
 
     const [latestVerifiedBonusClaimedResult, latestVerifiedBonusResult] = await Promise.all([
@@ -348,7 +352,7 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
       typeof latestVerifiedBonusResult.data === "bigint" ? latestVerifiedBonusResult.data : undefined;
 
     if (latestVerifiedBonusClaimed || latestVerifiedBonus === undefined || latestVerifiedBonus <= 0n) {
-      return false;
+      return undefined;
     }
 
     const verifiedBonusReferrer = hasInvalidReferral ? zeroAddress : claimReferrer;
@@ -367,8 +371,8 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
       clearStoredReferralAttribution();
       setReferralInput("");
     }
-    notification.success("Launch bonus claimed.");
-    return true;
+    notification.success("Launch bonus claimed. Your LREP balance is updating and may take a few seconds to refresh.");
+    return latestVerifiedBonus;
   }, [
     claimReferrer,
     claimVerifiedBonus,
@@ -379,10 +383,11 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
   ]);
 
   const handleClaimVerifiedBonus = useCallback(async () => {
+    let claimedVerifiedBonus: bigint | undefined;
     try {
-      await claimVerifiedLaunchBonusIfAvailable();
+      claimedVerifiedBonus = await claimVerifiedLaunchBonusIfAvailable();
     } finally {
-      await refreshLaunchReads();
+      await refreshLaunchReads({ lrepCreditMicro: claimedVerifiedBonus });
     }
   }, [claimVerifiedLaunchBonusIfAvailable, refreshLaunchReads]);
 
@@ -424,6 +429,7 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
         throw new Error(message);
       }
 
+      let claimedVerifiedBonus: bigint | undefined;
       try {
         const parsedProof = parseWorldIdProof(idkitResponse, {
           expectedAction: requestContext.action,
@@ -473,7 +479,7 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
         }
 
         try {
-          await claimVerifiedLaunchBonusIfAvailable();
+          claimedVerifiedBonus = await claimVerifiedLaunchBonusIfAvailable();
         } catch {
           // Verification succeeded even if the follow-up launch bonus claim needs a retry.
         }
@@ -514,7 +520,7 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
         throw new Error(message);
       }
 
-      await refreshLaunchReads();
+      return claimedVerifiedBonus;
     },
     [
       activeEarnedRaterCap,
@@ -526,7 +532,6 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
       hasWorldIdLegacyAttestFunction,
       hasWorldIdV4AttestFunction,
       raterFullLaunchCapUnlocked,
-      refreshLaunchReads,
       signal,
       unlockFullEarnedRaterCap,
       walletAddress,
@@ -536,7 +541,7 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
   );
 
   const handleSuccess = useCallback(
-    async (result: IDKitResult) => {
+    async (result: IDKitResult, options?: { lrepCreditMicro?: bigint }) => {
       const nullifier =
         "session_id" in result
           ? result.session_id
@@ -544,7 +549,7 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
       const verifiedAt = new Date().toISOString();
       setVerificationState({ status: "verified", nullifier, verifiedAt });
       setOpen(false);
-      await refreshLaunchReads();
+      await refreshLaunchReads(options);
 
       try {
         localStorage.setItem(
@@ -657,12 +662,12 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
         setIsAwaitingWorldIdApproval(false);
         setIsSubmittingWorldIdCredential(true);
         try {
-          await handleVerify(localMock.result, requestContext);
+          const claimedVerifiedBonus = await handleVerify(localMock.result, requestContext);
           if (activeWorldIdRequestRef.current !== requestId || abortController.signal.aborted) {
             return;
           }
 
-          await handleSuccess(localMock.result);
+          await handleSuccess(localMock.result, { lrepCreditMicro: claimedVerifiedBonus });
         } finally {
           if (activeWorldIdRequestRef.current === requestId) {
             setIsSubmittingWorldIdCredential(false);
@@ -741,12 +746,12 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
       setIsSubmittingWorldIdCredential(true);
       diagnosticPhase = "submit_onchain";
       try {
-        await handleVerify(completion.result, requestContext);
+        const claimedVerifiedBonus = await handleVerify(completion.result, requestContext);
         if (activeWorldIdRequestRef.current !== requestId || abortController.signal.aborted) {
           return;
         }
 
-        await handleSuccess(completion.result);
+        await handleSuccess(completion.result, { lrepCreditMicro: claimedVerifiedBonus });
       } finally {
         if (activeWorldIdRequestRef.current === requestId) {
           setIsSubmittingWorldIdCredential(false);
