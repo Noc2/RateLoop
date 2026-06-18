@@ -22,7 +22,7 @@ import {
   restoreEmailNotificationSubscription,
   upsertEmailNotificationSettings,
 } from "~~/lib/notifications/emailSettings";
-import { resolveNotificationEmailAppUrl } from "~~/lib/notifications/emailUrls";
+import { buildNotificationEmailVerifyUrl, resolveNotificationEmailAppUrl } from "~~/lib/notifications/emailUrls";
 import {
   isResendConfigured,
   isResendDeliveryError,
@@ -188,11 +188,9 @@ export async function PUT(request: NextRequest) {
             { status: 503 },
           );
         }
-        const verifyUrl = new URL("/api/notifications/email/verify", appUrl);
-        verifyUrl.searchParams.set("token", verificationToken);
         await sendNotificationVerificationEmail({
           email: payload.email,
-          verifyUrl: verifyUrl.toString(),
+          verifyUrl: buildNotificationEmailVerifyUrl({ appUrl, token: verificationToken }),
         });
         verificationSent = true;
       }

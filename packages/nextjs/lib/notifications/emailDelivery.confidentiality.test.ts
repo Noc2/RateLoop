@@ -189,6 +189,7 @@ after(() => {
 });
 
 test("notification emails redact gated titles and descriptions before delivery", async () => {
+  env.APP_URL = "https://www.rateloop.ai/rateloop";
   const result = await emailDelivery.deliverNotificationEmails();
 
   assert.equal(result.sent, 2);
@@ -199,6 +200,8 @@ test("notification emails redact gated titles and descriptions before delivery",
     assert.ok(!email.text.includes(SECRET_DESCRIPTION));
     assert.ok(!email.html.includes(SECRET_TITLE));
     assert.ok(!email.html.includes(SECRET_DESCRIPTION));
+    assert.ok(email.text.includes("https://www.rateloop.ai/rateloop/"));
+    assert.ok(email.html.includes("https://www.rateloop.ai/rateloop/"));
   }
   assert.ok(sentEmails.some(email => email.text.includes("Private RateLoop question")));
 });

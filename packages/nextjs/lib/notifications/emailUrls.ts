@@ -1,5 +1,6 @@
 import { resolveAppUrl } from "../env/server";
 import { createHmac, timingSafeEqual } from "crypto";
+import { buildAppRelativeUrl } from "~~/lib/url/appRelative";
 import { isLocalE2EProductionBuildEnabled } from "~~/utils/env/e2eProduction";
 
 interface ResolveNotificationEmailAppUrlOptions {
@@ -34,7 +35,7 @@ export function buildNotificationSettingsRedirectUrl(
     return null;
   }
 
-  const url = new URL("/settings", appUrl);
+  const url = buildAppRelativeUrl(appUrl, "/settings");
   url.searchParams.set("tab", "notifications");
   url.searchParams.set("email", options.status);
   return url;
@@ -107,7 +108,7 @@ export function buildNotificationEmailUnsubscribeUrl(args: {
   email: string;
   secret: string;
 }) {
-  const url = new URL("/api/notifications/email/unsubscribe", args.appUrl);
+  const url = buildAppRelativeUrl(args.appUrl, "/api/notifications/email/unsubscribe");
   url.searchParams.set(
     "token",
     buildNotificationEmailUnsubscribeToken(
@@ -118,5 +119,11 @@ export function buildNotificationEmailUnsubscribeUrl(args: {
       args.secret,
     ),
   );
+  return url.toString();
+}
+
+export function buildNotificationEmailVerifyUrl(args: { appUrl: string; token: string }) {
+  const url = buildAppRelativeUrl(args.appUrl, "/api/notifications/email/verify");
+  url.searchParams.set("token", args.token);
   return url.toString();
 }

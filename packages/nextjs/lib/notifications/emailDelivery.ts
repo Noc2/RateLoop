@@ -9,6 +9,7 @@ import { buildRateLoopEmailHtml } from "~~/lib/notifications/emailTemplate";
 import { buildNotificationEmailUnsubscribeUrl } from "~~/lib/notifications/emailUrls";
 import { isResendConfigured, sendResendEmail } from "~~/lib/notifications/resend";
 import { pickSettlingSoonNotification } from "~~/lib/notifications/settlingSoon";
+import { buildAppRelativeUrl } from "~~/lib/url/appRelative";
 import { isPonderAvailable, isPonderConfigured, ponderGet } from "~~/services/ponder/client";
 
 type DeliverySubscription = typeof notificationEmailSubscriptions.$inferSelect;
@@ -217,13 +218,13 @@ function getDisplayName(address: string, profileName: string | null) {
 }
 
 function getAbsoluteVoteUrl(contentId: string, appUrl: string) {
-  const url = new URL(RATE_ROUTE, appUrl);
+  const url = buildAppRelativeUrl(appUrl, RATE_ROUTE);
   url.searchParams.set("content", contentId);
   return url.toString();
 }
 
 function getAbsoluteGovernanceUrl(appUrl: string) {
-  return new URL("/governance", appUrl).toString();
+  return buildAppRelativeUrl(appUrl, "/governance").toString();
 }
 
 function getAbsoluteRoundResolvedUrl(

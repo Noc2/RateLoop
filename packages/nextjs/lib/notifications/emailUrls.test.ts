@@ -1,6 +1,7 @@
 import {
   buildNotificationEmailUnsubscribeToken,
   buildNotificationEmailUnsubscribeUrl,
+  buildNotificationEmailVerifyUrl,
   buildNotificationSettingsRedirectUrl,
   resolveNotificationEmailAppUrl,
   verifyNotificationEmailUnsubscribeToken,
@@ -121,6 +122,17 @@ test("buildNotificationSettingsRedirectUrl returns the configured app URL in pro
   assert.equal(url?.toString(), "https://www.rateloop.ai/settings?tab=notifications&email=verified");
 });
 
+test("buildNotificationSettingsRedirectUrl preserves configured app URL path prefixes", () => {
+  const url = buildNotificationSettingsRedirectUrl({
+    requestOrigin: "https://evil.example",
+    fallbackAppUrl: "https://www.rateloop.ai/rateloop",
+    production: true,
+    status: "verified",
+  });
+
+  assert.equal(url?.toString(), "https://www.rateloop.ai/rateloop/settings?tab=notifications&email=verified");
+});
+
 test("buildNotificationSettingsRedirectUrl returns null when no safe base URL is available", () => {
   assert.equal(
     buildNotificationSettingsRedirectUrl({
@@ -190,4 +202,23 @@ test("buildNotificationEmailUnsubscribeUrl includes the signed token", () => {
     walletAddress: "0x1234567890abcdef1234567890abcdef12345678",
     email: "alice@example.com",
   });
+});
+
+test("buildNotificationEmailUnsubscribeUrl preserves configured app URL path prefixes", () => {
+  const url = buildNotificationEmailUnsubscribeUrl({
+    appUrl: "https://www.rateloop.ai/rateloop",
+    walletAddress: "0x1234567890abcdef1234567890abcdef12345678",
+    email: "alice@example.com",
+    secret: "notification-secret",
+  });
+
+  const parsed = new URL(url);
+  assert.equal(parsed.origin + parsed.pathname, "https://www.rateloop.ai/rateloop/api/notifications/email/unsubscribe");
+});
+
+test("buildNotificationEmailVerifyUrl preserves configured app URL path prefixes", () => {
+  assert.equal(
+    buildNotificationEmailVerifyUrl({ appUrl: "https://www.rateloop.ai/rateloop", token: "verify-token" }),
+    "https://www.rateloop.ai/rateloop/api/notifications/email/verify?token=verify-token",
+  );
 });
