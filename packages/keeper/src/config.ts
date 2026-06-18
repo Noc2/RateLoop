@@ -91,7 +91,11 @@ function readOptionalUrlEnv(
     if (isProduction && options.rejectLocalhostInProduction && isLocalhost) {
       errors.push(`${name} must not point to localhost in production`);
     }
-    if (isProduction && options.requireHttpsInProduction && url.protocol !== "https:") {
+    if (
+      isProduction &&
+      options.requireHttpsInProduction &&
+      url.protocol !== "https:"
+    ) {
       errors.push(`${name} must be an HTTPS URL in production`);
     }
   } catch {
@@ -165,11 +169,18 @@ function readPositiveIntEnvWithOptionalEnvFallback(
   errors: string[],
 ): number {
   const value = readEnv(name);
-  if (value) return parseIntegerEnv(name, value, "positive", Number(fallback), errors);
+  if (value)
+    return parseIntegerEnv(name, value, "positive", Number(fallback), errors);
 
   const fallbackEnvValue = readEnv(fallbackEnvName);
   if (fallbackEnvValue) {
-    return parseIntegerEnv(fallbackEnvName, fallbackEnvValue, "positive", Number(fallback), errors);
+    return parseIntegerEnv(
+      fallbackEnvName,
+      fallbackEnvValue,
+      "positive",
+      Number(fallback),
+      errors,
+    );
   }
 
   return parseIntegerEnv(name, fallback, "positive", Number(fallback), errors);
@@ -282,6 +293,7 @@ function resolveOptionalContractAddress(params: {
   errors: string[];
   warnings: string[];
   rejectLiveMismatch?: boolean;
+  requireSharedArtifact?: boolean;
 }): `0x${string}` {
   const {
     chainId,
@@ -290,9 +302,24 @@ function resolveOptionalContractAddress(params: {
     errors,
     warnings,
     rejectLiveMismatch,
+    requireSharedArtifact,
   } = params;
   const sharedAddress = getSharedArtifactAddress(chainId, contractName);
   const envValue = readEnv(envName);
+
+  if (
+    requireSharedArtifact &&
+    chainId !== LOCAL_HARDHAT_CHAIN_ID &&
+    !sharedAddress
+  ) {
+    if (envValue && !isAddress(envValue)) {
+      errors.push(`${envName} must be a valid address`);
+    }
+    errors.push(
+      `Missing shared deployment artifact for ${contractName} on chain ${chainId}; ${envName} cannot be used as an env-only live override when the related keeper feature is enabled. Refresh @rateloop/contracts deployedContracts.ts or disable the feature.`,
+    );
+    return zeroAddress;
+  }
 
   if (envValue) {
     if (!isAddress(envValue)) {
@@ -400,6 +427,11 @@ function loadConfig() {
     false,
     "KEEPER_FRONTEND_FEE_ENABLED",
   );
+  const feedbackBonusForfeitsEnabled = parseBooleanEnv(
+    readEnv("KEEPER_FEEDBACK_BONUS_FORFEITS_ENABLED"),
+    true,
+    "KEEPER_FEEDBACK_BONUS_FORFEITS_ENABLED",
+  );
   const correlationSnapshotsEnabled = parseBooleanEnv(
     readEnv("KEEPER_CORRELATION_SNAPSHOTS_ENABLED"),
     false,
@@ -438,7 +470,8 @@ function loadConfig() {
     correlationSnapshotArtifactStorageMode === "file" &&
     Boolean(correlationSnapshotArtifactPublicBaseUrl);
   const metricsBindAddress =
-    readEnv("METRICS_BIND_ADDRESS") || (shouldExposeFileArtifacts ? "0.0.0.0" : "127.0.0.1");
+    readEnv("METRICS_BIND_ADDRESS") ||
+    (shouldExposeFileArtifacts ? "0.0.0.0" : "127.0.0.1");
   const metricsAuthToken = readEnv("METRICS_AUTH_TOKEN") || null;
   const keeperDatabaseUrl = readOptionalPostgresUrlEnv(
     "KEEPER_DATABASE_URL",
@@ -509,7 +542,8 @@ function loadConfig() {
     // Network
     rpcUrl: requireUrlEnv("RPC_URL", errors),
     chainId,
-    chainName: CHAIN_NAMES[chainId] || readEnv("CHAIN_NAME") || `Chain ${chainId}`,
+    chainName:
+      CHAIN_NAMES[chainId] || readEnv("CHAIN_NAME") || `Chain ${chainId}`,
 
     // Contracts
     contracts: {
@@ -541,6 +575,7 @@ function loadConfig() {
         errors,
         warnings,
         rejectLiveMismatch: true,
+        requireSharedArtifact: correlationSnapshotsEnabled,
       }),
       feedbackBonusEscrow: resolveOptionalContractAddress({
         chainId,
@@ -549,6 +584,7 @@ function loadConfig() {
         errors,
         warnings,
         rejectLiveMismatch: true,
+        requireSharedArtifact: feedbackBonusForfeitsEnabled,
       }),
     },
 
@@ -595,11 +631,7 @@ function loadConfig() {
       };
     })(),
     feedbackBonusForfeits: {
-      enabled: parseBooleanEnv(
-        readEnv("KEEPER_FEEDBACK_BONUS_FORFEITS_ENABLED"),
-        true,
-        "KEEPER_FEEDBACK_BONUS_FORFEITS_ENABLED",
-      ),
+      enabled: feedbackBonusForfeitsEnabled,
       maxPoolsPerTick: readNonNegativeIntEnv(
         "KEEPER_FEEDBACK_BONUS_FORFEITS_PER_TICK",
         "25",
@@ -720,7 +752,10 @@ function loadConfig() {
     if (isProduction && !keeperDatabaseUrl) {
       errors.push("KEEPER_DATABASE_URL is required in production");
     }
-    if (correlationSnapshotMode === "file" && !correlationSnapshotArtifactPath) {
+    if (
+      correlationSnapshotMode === "file" &&
+      !correlationSnapshotArtifactPath
+    ) {
       errors.push(
         "KEEPER_CORRELATION_SNAPSHOT_ARTIFACT_PATH is required when KEEPER_CORRELATION_SNAPSHOTS_ENABLED=true and KEEPER_CORRELATION_SNAPSHOTS_MODE=file",
       );
@@ -767,7 +802,8 @@ function loadConfig() {
   if (
     loadedConfig.metricsEnabled &&
     !isLoopbackBindAddress(loadedConfig.metricsBindAddress) &&
-    (!loadedConfig.metricsAuthToken || loadedConfig.metricsAuthToken.length < 16)
+    (!loadedConfig.metricsAuthToken ||
+      loadedConfig.metricsAuthToken.length < 16)
   ) {
     errors.push(
       "METRICS_AUTH_TOKEN (>= 16 chars) is required when METRICS_BIND_ADDRESS is non-loopback",

@@ -1,10 +1,18 @@
 import path from "node:path";
 import deployedContracts from "@rateloop/contracts/deployedContracts";
+import { getSharedDeploymentAddress as actualGetSharedDeploymentAddress } from "@rateloop/contracts/deployments";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 type DeploymentChain = Record<string, { address: `0x${string}` }>;
+type SharedDeploymentAddressResolver = (
+  chainId: number,
+  contractName: string,
+) => `0x${string}` | undefined;
 
-const sharedDeployments = deployedContracts as Record<number, DeploymentChain | undefined>;
+const sharedDeployments = deployedContracts as Record<
+  number,
+  DeploymentChain | undefined
+>;
 const chain84532 = sharedDeployments[84532];
 const chain4801 = sharedDeployments[4801];
 const chain480 = sharedDeployments[480];
@@ -16,13 +24,21 @@ const ORIGINAL_ENV = { ...process.env };
 const VALID_ENV = {
   RPC_URL: "https://rpc.example.com",
   CHAIN_ID: "31337",
-  VOTING_ENGINE_ADDRESS: chain31337?.RoundVotingEngine?.address ?? "0x1111111111111111111111111111111111111111",
-  CONTENT_REGISTRY_ADDRESS: chain31337?.ContentRegistry?.address ?? "0x2222222222222222222222222222222222222222",
+  VOTING_ENGINE_ADDRESS:
+    chain31337?.RoundVotingEngine?.address ??
+    "0x1111111111111111111111111111111111111111",
+  CONTENT_REGISTRY_ADDRESS:
+    chain31337?.ContentRegistry?.address ??
+    "0x2222222222222222222222222222222222222222",
   ADVISORY_VOTE_RECORDER_ADDRESS:
-    chain31337?.AdvisoryVoteRecorder?.address ?? "0x5555555555555555555555555555555555555555",
+    chain31337?.AdvisoryVoteRecorder?.address ??
+    "0x5555555555555555555555555555555555555555",
   ROUND_REWARD_DISTRIBUTOR_ADDRESS:
-    chain31337?.RoundRewardDistributor?.address ?? "0x3333333333333333333333333333333333333333",
-  FRONTEND_REGISTRY_ADDRESS: chain31337?.FrontendRegistry?.address ?? "0x4444444444444444444444444444444444444444",
+    chain31337?.RoundRewardDistributor?.address ??
+    "0x3333333333333333333333333333333333333333",
+  FRONTEND_REGISTRY_ADDRESS:
+    chain31337?.FrontendRegistry?.address ??
+    "0x4444444444444444444444444444444444444444",
   PONDER_BASE_URL: "https://ponder.example.com",
   KEYSTORE_ACCOUNT: "keeper",
   KEYSTORE_PASSWORD: "secret",
@@ -33,10 +49,15 @@ const VALID_ENV = {
   METRICS_AUTH_TOKEN: "",
   PORT: "",
 };
-const LOCAL_VOTING_ENGINE = chain31337?.RoundVotingEngine?.address ?? "0x0000000000000000000000000000000000000000";
-const LOCAL_CONTENT_REGISTRY = chain31337?.ContentRegistry?.address ?? "0x0000000000000000000000000000000000000000";
+const LOCAL_VOTING_ENGINE =
+  chain31337?.RoundVotingEngine?.address ??
+  "0x0000000000000000000000000000000000000000";
+const LOCAL_CONTENT_REGISTRY =
+  chain31337?.ContentRegistry?.address ??
+  "0x0000000000000000000000000000000000000000";
 const LOCAL_ADVISORY_VOTE_RECORDER =
-  chain31337?.AdvisoryVoteRecorder?.address ?? "0x5555555555555555555555555555555555555555";
+  chain31337?.AdvisoryVoteRecorder?.address ??
+  "0x5555555555555555555555555555555555555555";
 
 function requireBaseSepoliaDeployment() {
   expect(chain84532).toBeDefined();
@@ -46,8 +67,16 @@ function requireBaseSepoliaDeployment() {
 async function loadKeeperConfig(
   overrides: Record<string, string | undefined> = {},
   removals: string[] = [],
+  getSharedDeploymentAddress?: SharedDeploymentAddressResolver,
 ) {
   vi.resetModules();
+  if (getSharedDeploymentAddress) {
+    vi.doMock("@rateloop/contracts/deployments", () => ({
+      getSharedDeploymentAddress,
+    }));
+  } else {
+    vi.doUnmock("@rateloop/contracts/deployments");
+  }
   process.env = {
     ...ORIGINAL_ENV,
     ...VALID_ENV,
@@ -64,6 +93,7 @@ async function loadKeeperConfig(
 afterEach(() => {
   process.env = { ...ORIGINAL_ENV };
   vi.restoreAllMocks();
+  vi.doUnmock("@rateloop/contracts/deployments");
   vi.resetModules();
 });
 
@@ -85,7 +115,8 @@ describe("keeper config", () => {
 
   it("loads an optional keeper persistence database URL", async () => {
     const { config } = await loadKeeperConfig({
-      KEEPER_DATABASE_URL: "postgresql://postgres:postgres@postgres.railway.internal:5432/railway",
+      KEEPER_DATABASE_URL:
+        "postgresql://postgres:postgres@postgres.railway.internal:5432/railway",
     });
 
     expect(config.persistence.databaseUrl).toBe(
@@ -98,7 +129,9 @@ describe("keeper config", () => {
       loadKeeperConfig({
         KEEPER_DATABASE_URL: "https://postgres.example.com/railway",
       }),
-    ).rejects.toThrow("KEEPER_DATABASE_URL must use the postgres:// or postgresql:// scheme");
+    ).rejects.toThrow(
+      "KEEPER_DATABASE_URL must use the postgres:// or postgresql:// scheme",
+    );
   });
 
   it("ignores stale CHAIN_NAME overrides for known chain ids", async () => {
@@ -132,7 +165,9 @@ describe("keeper config", () => {
         },
         ["KEYSTORE_PASSWORD"],
       ),
-    ).rejects.toThrow("KEYSTORE_PASSWORD is required when KEYSTORE_ACCOUNT is configured without KEEPER_PRIVATE_KEY");
+    ).rejects.toThrow(
+      "KEYSTORE_PASSWORD is required when KEYSTORE_ACCOUNT is configured without KEEPER_PRIVATE_KEY",
+    );
   });
 
   it("allows a private key to override an incomplete keystore account", async () => {
@@ -187,7 +222,9 @@ describe("keeper config", () => {
 
     expect(config.dormancyPeriod).toBe(30n * 24n * 60n * 60n);
     expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining("below the on-chain ContentRegistry.DORMANCY_PERIOD"),
+      expect.stringContaining(
+        "below the on-chain ContentRegistry.DORMANCY_PERIOD",
+      ),
     );
   });
 
@@ -212,9 +249,9 @@ describe("keeper config", () => {
   });
 
   it("requires a Ponder API base URL", async () => {
-    await expect(
-      loadKeeperConfig({}, ["PONDER_BASE_URL"]),
-    ).rejects.toThrow("PONDER_BASE_URL is required");
+    await expect(loadKeeperConfig({}, ["PONDER_BASE_URL"])).rejects.toThrow(
+      "PONDER_BASE_URL is required",
+    );
   });
 
   it("rejects an invalid Ponder API base URL", async () => {
@@ -231,7 +268,9 @@ describe("keeper config", () => {
         NODE_ENV: "production",
         PONDER_BASE_URL: "http://localhost:42069",
       }),
-    ).rejects.toThrow("PONDER_BASE_URL must not point to localhost in production");
+    ).rejects.toThrow(
+      "PONDER_BASE_URL must not point to localhost in production",
+    );
 
     await expect(
       loadKeeperConfig({
@@ -243,17 +282,57 @@ describe("keeper config", () => {
 
   it.each([
     ["CHAIN_ID", "4801abc", "CHAIN_ID must be a positive integer"],
-    ["KEEPER_INTERVAL_MS", "30000ms", "KEEPER_INTERVAL_MS must be a positive integer"],
-    ["KEEPER_STARTUP_JITTER_MS", "0ms", "KEEPER_STARTUP_JITTER_MS must be a non-negative integer"],
-    ["KEEPER_CLEANUP_BATCH_SIZE", "25items", "KEEPER_CLEANUP_BATCH_SIZE must be a positive integer"],
-    ["KEEPER_FEEDBACK_BONUS_FORFEITS_PER_TICK", "25items", "KEEPER_FEEDBACK_BONUS_FORFEITS_PER_TICK must be a non-negative integer"],
-    ["KEEPER_FEEDBACK_BONUS_FORFEIT_MIN_AGE_SECONDS", "60seconds", "KEEPER_FEEDBACK_BONUS_FORFEIT_MIN_AGE_SECONDS must be a non-negative integer"],
-    ["KEEPER_FRONTEND_FEE_RECENT_ROUNDS_PER_TICK", "50rounds", "KEEPER_FRONTEND_FEE_RECENT_ROUNDS_PER_TICK must be a non-negative integer"],
-    ["KEEPER_FRONTEND_FEE_BACKFILL_ROUNDS_PER_TICK", "50rounds", "KEEPER_FRONTEND_FEE_BACKFILL_ROUNDS_PER_TICK must be a non-negative integer"],
-    ["MAX_GAS_PER_TX", "2000000gas", "MAX_GAS_PER_TX must be a positive integer"],
+    [
+      "KEEPER_INTERVAL_MS",
+      "30000ms",
+      "KEEPER_INTERVAL_MS must be a positive integer",
+    ],
+    [
+      "KEEPER_STARTUP_JITTER_MS",
+      "0ms",
+      "KEEPER_STARTUP_JITTER_MS must be a non-negative integer",
+    ],
+    [
+      "KEEPER_CLEANUP_BATCH_SIZE",
+      "25items",
+      "KEEPER_CLEANUP_BATCH_SIZE must be a positive integer",
+    ],
+    [
+      "KEEPER_FEEDBACK_BONUS_FORFEITS_PER_TICK",
+      "25items",
+      "KEEPER_FEEDBACK_BONUS_FORFEITS_PER_TICK must be a non-negative integer",
+    ],
+    [
+      "KEEPER_FEEDBACK_BONUS_FORFEIT_MIN_AGE_SECONDS",
+      "60seconds",
+      "KEEPER_FEEDBACK_BONUS_FORFEIT_MIN_AGE_SECONDS must be a non-negative integer",
+    ],
+    [
+      "KEEPER_FRONTEND_FEE_RECENT_ROUNDS_PER_TICK",
+      "50rounds",
+      "KEEPER_FRONTEND_FEE_RECENT_ROUNDS_PER_TICK must be a non-negative integer",
+    ],
+    [
+      "KEEPER_FRONTEND_FEE_BACKFILL_ROUNDS_PER_TICK",
+      "50rounds",
+      "KEEPER_FRONTEND_FEE_BACKFILL_ROUNDS_PER_TICK must be a non-negative integer",
+    ],
+    [
+      "MAX_GAS_PER_TX",
+      "2000000gas",
+      "MAX_GAS_PER_TX must be a positive integer",
+    ],
     ["METRICS_PORT", "9090http", "METRICS_PORT must be a positive integer"],
-    ["DORMANCY_PERIOD", "2592000s", "DORMANCY_PERIOD must be a positive integer"],
-    ["MIN_GAS_BALANCE_WEI", "10000000000000000wei", "MIN_GAS_BALANCE_WEI must be a non-negative integer"],
+    [
+      "DORMANCY_PERIOD",
+      "2592000s",
+      "DORMANCY_PERIOD must be a positive integer",
+    ],
+    [
+      "MIN_GAS_BALANCE_WEI",
+      "10000000000000000wei",
+      "MIN_GAS_BALANCE_WEI must be a non-negative integer",
+    ],
   ])("rejects trailing junk in %s", async (name, value, message) => {
     await expect(
       loadKeeperConfig({
@@ -325,7 +404,9 @@ describe("keeper config", () => {
       loadKeeperConfig({
         KEEPER_FEEDBACK_BONUS_FORFEITS_ENABLED: "sometimes",
       }),
-    ).rejects.toThrow("KEEPER_FEEDBACK_BONUS_FORFEITS_ENABLED must be a boolean-like value");
+    ).rejects.toThrow(
+      "KEEPER_FEEDBACK_BONUS_FORFEITS_ENABLED must be a boolean-like value",
+    );
 
     await expect(
       loadKeeperConfig({
@@ -366,9 +447,11 @@ describe("keeper config", () => {
       KEEPER_CORRELATION_SNAPSHOTS_ENABLED: "true",
       KEEPER_CORRELATION_SNAPSHOTS_MODE: "auto",
       KEEPER_CORRELATION_ARTIFACT_STORAGE: "file",
-      KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL: "https://artifacts.example.com/rateloop/",
+      KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL:
+        "https://artifacts.example.com/rateloop/",
       PONDER_BASE_URL: "https://ponder.example.com",
-      CLUSTER_PAYOUT_ORACLE_ADDRESS: "0x6666666666666666666666666666666666666666",
+      CLUSTER_PAYOUT_ORACLE_ADDRESS:
+        "0x6666666666666666666666666666666666666666",
     });
 
     expect(config.metricsBindAddress).toBe("0.0.0.0");
@@ -380,7 +463,9 @@ describe("keeper config", () => {
       loadKeeperConfig({
         METRICS_BIND_ADDRESS: "0.0.0.0",
       }),
-    ).rejects.toThrow("METRICS_AUTH_TOKEN (>= 16 chars) is required when METRICS_BIND_ADDRESS is non-loopback");
+    ).rejects.toThrow(
+      "METRICS_AUTH_TOKEN (>= 16 chars) is required when METRICS_BIND_ADDRESS is non-loopback",
+    );
   });
 
   it("derives local contract addresses from shared deployment artifacts", async () => {
@@ -388,41 +473,68 @@ describe("keeper config", () => {
       {
         CHAIN_ID: "31337",
       },
-      ["VOTING_ENGINE_ADDRESS", "CONTENT_REGISTRY_ADDRESS", "ADVISORY_VOTE_RECORDER_ADDRESS"],
+      [
+        "VOTING_ENGINE_ADDRESS",
+        "CONTENT_REGISTRY_ADDRESS",
+        "ADVISORY_VOTE_RECORDER_ADDRESS",
+      ],
     );
 
     expect(config.contracts.votingEngine).toBe(LOCAL_VOTING_ENGINE);
     expect(config.contracts.contentRegistry).toBe(LOCAL_CONTENT_REGISTRY);
-    expect(config.contracts.advisoryVoteRecorder).toBe(LOCAL_ADVISORY_VOTE_RECORDER);
-  });
-
-  itWithWorldChainArtifacts("derives World Chain mainnet contract addresses from shared deployment artifacts", async () => {
-    const { config } = await loadKeeperConfig(
-      {
-        CHAIN_ID: "480",
-      },
-      ["VOTING_ENGINE_ADDRESS", "CONTENT_REGISTRY_ADDRESS", "ADVISORY_VOTE_RECORDER_ADDRESS"],
+    expect(config.contracts.advisoryVoteRecorder).toBe(
+      LOCAL_ADVISORY_VOTE_RECORDER,
     );
-
-    expect(config.chainId).toBe(480);
-    expect(config.chainName).toBe("World Chain");
-    expect(config.contracts.votingEngine).toBe(chain480!.RoundVotingEngine.address);
-    expect(config.contracts.contentRegistry).toBe(chain480!.ContentRegistry.address);
   });
+
+  itWithWorldChainArtifacts(
+    "derives World Chain mainnet contract addresses from shared deployment artifacts",
+    async () => {
+      const { config } = await loadKeeperConfig(
+        {
+          CHAIN_ID: "480",
+        },
+        [
+          "VOTING_ENGINE_ADDRESS",
+          "CONTENT_REGISTRY_ADDRESS",
+          "ADVISORY_VOTE_RECORDER_ADDRESS",
+        ],
+      );
+
+      expect(config.chainId).toBe(480);
+      expect(config.chainName).toBe("World Chain");
+      expect(config.contracts.votingEngine).toBe(
+        chain480!.RoundVotingEngine.address,
+      );
+      expect(config.contracts.contentRegistry).toBe(
+        chain480!.ContentRegistry.address,
+      );
+    },
+  );
 
   it("derives World Chain Sepolia contract addresses from shared deployment artifacts", async () => {
     const { config } = await loadKeeperConfig(
       {
         CHAIN_ID: "4801",
       },
-      ["VOTING_ENGINE_ADDRESS", "CONTENT_REGISTRY_ADDRESS", "ADVISORY_VOTE_RECORDER_ADDRESS"],
+      [
+        "VOTING_ENGINE_ADDRESS",
+        "CONTENT_REGISTRY_ADDRESS",
+        "ADVISORY_VOTE_RECORDER_ADDRESS",
+      ],
     );
 
     expect(config.chainId).toBe(4801);
     expect(config.chainName).toBe("World Chain Sepolia");
-    expect(config.contracts.votingEngine).toBe(chain4801!.RoundVotingEngine.address);
-    expect(config.contracts.contentRegistry).toBe(chain4801!.ContentRegistry.address);
-    expect(config.contracts.advisoryVoteRecorder).toBe(chain4801!.AdvisoryVoteRecorder.address);
+    expect(config.contracts.votingEngine).toBe(
+      chain4801!.RoundVotingEngine.address,
+    );
+    expect(config.contracts.contentRegistry).toBe(
+      chain4801!.ContentRegistry.address,
+    );
+    expect(config.contracts.advisoryVoteRecorder).toBe(
+      chain4801!.AdvisoryVoteRecorder.address,
+    );
   });
 
   it("derives Base Sepolia contract addresses from shared deployment artifacts", async () => {
@@ -432,21 +544,32 @@ describe("keeper config", () => {
         CHAIN_ID: "84532",
         RPC_URL: "https://sepolia.base.org",
       },
-      ["VOTING_ENGINE_ADDRESS", "CONTENT_REGISTRY_ADDRESS", "ADVISORY_VOTE_RECORDER_ADDRESS"],
+      [
+        "VOTING_ENGINE_ADDRESS",
+        "CONTENT_REGISTRY_ADDRESS",
+        "ADVISORY_VOTE_RECORDER_ADDRESS",
+      ],
     );
 
     expect(config.chainId).toBe(84532);
     expect(config.chainName).toBe("Base Sepolia");
-    expect(config.contracts.votingEngine).toBe(baseSepolia.RoundVotingEngine.address);
-    expect(config.contracts.contentRegistry).toBe(baseSepolia.ContentRegistry.address);
-    expect(config.contracts.advisoryVoteRecorder).toBe(baseSepolia.AdvisoryVoteRecorder.address);
+    expect(config.contracts.votingEngine).toBe(
+      baseSepolia.RoundVotingEngine.address,
+    );
+    expect(config.contracts.contentRegistry).toBe(
+      baseSepolia.ContentRegistry.address,
+    );
+    expect(config.contracts.advisoryVoteRecorder).toBe(
+      baseSepolia.AdvisoryVoteRecorder.address,
+    );
   });
 
   it("prefers local hardhat contract env values over shared deployment artifacts", async () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const localVotingEngine = "0x196dBCBb54b8ec4958c959D8949EBFE87aC2Aaaf";
     const localContentRegistry = "0x82Dc47734901ee7d4f4232f398752cB9Dd5dACcC";
-    const localAdvisoryVoteRecorder = "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa";
+    const localAdvisoryVoteRecorder =
+      "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa";
     const { config } = await loadKeeperConfig({
       CHAIN_ID: "31337",
       VOTING_ENGINE_ADDRESS: localVotingEngine,
@@ -456,21 +579,34 @@ describe("keeper config", () => {
 
     expect(config.contracts.votingEngine).toBe(localVotingEngine);
     expect(config.contracts.contentRegistry).toBe(localContentRegistry);
-    expect(config.contracts.advisoryVoteRecorder).toBe(localAdvisoryVoteRecorder);
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("Using VOTING_ENGINE_ADDRESS"));
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("Using CONTENT_REGISTRY_ADDRESS"));
+    expect(config.contracts.advisoryVoteRecorder).toBe(
+      localAdvisoryVoteRecorder,
+    );
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining("Using VOTING_ENGINE_ADDRESS"),
+    );
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining("Using CONTENT_REGISTRY_ADDRESS"),
+    );
   });
 
-  itWithWorldChainArtifacts("rejects stale live contract env values when shared deployment artifacts exist", async () => {
-    await expect(
-      loadKeeperConfig({
-        CHAIN_ID: "480",
-        VOTING_ENGINE_ADDRESS: "0x196dBCBb54b8ec4958c959D8949EBFE87aC2Aaaf",
-        CONTENT_REGISTRY_ADDRESS: "0x82Dc47734901ee7d4f4232f398752cB9Dd5dACcC",
-        ADVISORY_VOTE_RECORDER_ADDRESS: "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa",
-      }),
-    ).rejects.toThrow("conflicts with RoundVotingEngine from shared deployment artifacts");
-  });
+  itWithWorldChainArtifacts(
+    "rejects stale live contract env values when shared deployment artifacts exist",
+    async () => {
+      await expect(
+        loadKeeperConfig({
+          CHAIN_ID: "480",
+          VOTING_ENGINE_ADDRESS: "0x196dBCBb54b8ec4958c959D8949EBFE87aC2Aaaf",
+          CONTENT_REGISTRY_ADDRESS:
+            "0x82Dc47734901ee7d4f4232f398752cB9Dd5dACcC",
+          ADVISORY_VOTE_RECORDER_ADDRESS:
+            "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa",
+        }),
+      ).rejects.toThrow(
+        "conflicts with RoundVotingEngine from shared deployment artifacts",
+      );
+    },
+  );
 
   itWithWorldChainSepoliaFeedbackBonusEscrowArtifact(
     "rejects stale live FeedbackBonusEscrow env values when shared deployment artifacts exist",
@@ -515,15 +651,83 @@ describe("keeper config", () => {
     );
   });
 
+  it("rejects env-only live ClusterPayoutOracle addresses when correlation snapshots are enabled", async () => {
+    requireBaseSepoliaDeployment();
+    const getSharedDeploymentAddress: SharedDeploymentAddressResolver = (
+      chainId,
+      contractName,
+    ) =>
+      chainId === 84532 && contractName === "ClusterPayoutOracle"
+        ? undefined
+        : actualGetSharedDeploymentAddress(chainId, contractName);
+
+    await expect(
+      loadKeeperConfig(
+        {
+          CHAIN_ID: "84532",
+          RPC_URL: "https://sepolia.base.org",
+          KEEPER_CORRELATION_SNAPSHOTS_ENABLED: "true",
+          KEEPER_CORRELATION_SNAPSHOTS_MODE: "file",
+          KEEPER_CORRELATION_SNAPSHOT_ARTIFACT_PATH:
+            "./correlation-snapshots.json",
+          CLUSTER_PAYOUT_ORACLE_ADDRESS:
+            "0x6666666666666666666666666666666666666666",
+        },
+        [
+          "VOTING_ENGINE_ADDRESS",
+          "CONTENT_REGISTRY_ADDRESS",
+          "ADVISORY_VOTE_RECORDER_ADDRESS",
+        ],
+        getSharedDeploymentAddress,
+      ),
+    ).rejects.toThrow(
+      "CLUSTER_PAYOUT_ORACLE_ADDRESS cannot be used as an env-only live override",
+    );
+  });
+
+  it("rejects env-only live FeedbackBonusEscrow addresses when forfeits are enabled", async () => {
+    requireBaseSepoliaDeployment();
+    const getSharedDeploymentAddress: SharedDeploymentAddressResolver = (
+      chainId,
+      contractName,
+    ) =>
+      chainId === 84532 && contractName === "FeedbackBonusEscrow"
+        ? undefined
+        : actualGetSharedDeploymentAddress(chainId, contractName);
+
+    await expect(
+      loadKeeperConfig(
+        {
+          CHAIN_ID: "84532",
+          RPC_URL: "https://sepolia.base.org",
+          KEEPER_FEEDBACK_BONUS_FORFEITS_ENABLED: "true",
+          FEEDBACK_BONUS_ESCROW_ADDRESS:
+            "0x7777777777777777777777777777777777777777",
+        },
+        [
+          "VOTING_ENGINE_ADDRESS",
+          "CONTENT_REGISTRY_ADDRESS",
+          "ADVISORY_VOTE_RECORDER_ADDRESS",
+        ],
+        getSharedDeploymentAddress,
+      ),
+    ).rejects.toThrow(
+      "FEEDBACK_BONUS_ESCROW_ADDRESS cannot be used as an env-only live override",
+    );
+  });
+
   it("rejects live env-only contract addresses when no shared deployment artifact exists for the chain", async () => {
     await expect(
       loadKeeperConfig({
         CHAIN_ID: "999999",
         VOTING_ENGINE_ADDRESS: "0x196dBCBb54b8ec4958c959D8949EBFE87aC2Aaaf",
         CONTENT_REGISTRY_ADDRESS: "0x82Dc47734901ee7d4f4232f398752cB9Dd5dACcC",
-        ADVISORY_VOTE_RECORDER_ADDRESS: "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa",
+        ADVISORY_VOTE_RECORDER_ADDRESS:
+          "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa",
       }),
-    ).rejects.toThrow("Missing shared deployment artifact for RoundVotingEngine on chain 999999");
+    ).rejects.toThrow(
+      "Missing shared deployment artifact for RoundVotingEngine on chain 999999",
+    );
   });
 
   it("loads hosted frontend fee sweep settings from the environment", async () => {
@@ -565,7 +769,8 @@ describe("keeper config", () => {
       KEEPER_CORRELATION_SNAPSHOTS_ENABLED: "true",
       KEEPER_CORRELATION_SNAPSHOTS_MODE: "file",
       KEEPER_CORRELATION_SNAPSHOT_ARTIFACT_PATH: "./correlation-snapshots.json",
-      CLUSTER_PAYOUT_ORACLE_ADDRESS: "0x6666666666666666666666666666666666666666",
+      CLUSTER_PAYOUT_ORACLE_ADDRESS:
+        "0x6666666666666666666666666666666666666666",
     });
 
     expect(config.correlationSnapshots).toEqual(
@@ -591,11 +796,13 @@ describe("keeper config", () => {
       KEEPER_CORRELATION_SNAPSHOTS_ENABLED: "true",
       KEEPER_CORRELATION_SNAPSHOTS_MODE: "auto",
       KEEPER_CORRELATION_ARTIFACT_STORAGE: "file",
-      KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL: "https://artifacts.example.com/rateloop/",
+      KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL:
+        "https://artifacts.example.com/rateloop/",
       KEEPER_CORRELATION_SNAPSHOT_STORAGE_DIR: "/tmp/rateloop-correlation",
       KEEPER_CORRELATION_SNAPSHOT_MAX_ROUNDS_PER_TICK: "7",
       PONDER_BASE_URL: "https://ponder.example.com",
-      CLUSTER_PAYOUT_ORACLE_ADDRESS: "0x6666666666666666666666666666666666666666",
+      CLUSTER_PAYOUT_ORACLE_ADDRESS:
+        "0x6666666666666666666666666666666666666666",
     });
 
     expect(config.correlationSnapshots).toEqual(
@@ -619,7 +826,8 @@ describe("keeper config", () => {
         {
           KEEPER_CORRELATION_SNAPSHOTS_ENABLED: "true",
           KEEPER_CORRELATION_SNAPSHOTS_MODE: "auto",
-          CLUSTER_PAYOUT_ORACLE_ADDRESS: "0x6666666666666666666666666666666666666666",
+          CLUSTER_PAYOUT_ORACLE_ADDRESS:
+            "0x6666666666666666666666666666666666666666",
         },
         ["PONDER_BASE_URL"],
       ),
@@ -636,7 +844,8 @@ describe("keeper config", () => {
           KEEPER_CORRELATION_SNAPSHOTS_MODE: "auto",
           KEEPER_CORRELATION_ARTIFACT_STORAGE: "file",
           PONDER_BASE_URL: "https://ponder.example.com",
-          CLUSTER_PAYOUT_ORACLE_ADDRESS: "0x6666666666666666666666666666666666666666",
+          CLUSTER_PAYOUT_ORACLE_ADDRESS:
+            "0x6666666666666666666666666666666666666666",
         },
         ["KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL"],
       ),
@@ -651,9 +860,11 @@ describe("keeper config", () => {
         KEEPER_CORRELATION_SNAPSHOTS_ENABLED: "true",
         KEEPER_CORRELATION_SNAPSHOTS_MODE: "auto",
         KEEPER_CORRELATION_ARTIFACT_STORAGE: "file",
-        KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL: "http://artifacts.example.com/rateloop/",
+        KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL:
+          "http://artifacts.example.com/rateloop/",
         PONDER_BASE_URL: "https://ponder.example.com",
-        CLUSTER_PAYOUT_ORACLE_ADDRESS: "0x6666666666666666666666666666666666666666",
+        CLUSTER_PAYOUT_ORACLE_ADDRESS:
+          "0x6666666666666666666666666666666666666666",
       }),
     ).rejects.toThrow(
       "KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL must be an HTTPS URL when auto correlation snapshots use file artifact storage",
