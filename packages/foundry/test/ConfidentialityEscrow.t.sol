@@ -474,7 +474,7 @@ contract ConfidentialityEscrowTest is VotingTestBase {
         _rotateRegistryVotingEngine(replacementEngine);
 
         assertEq(registry.votingEngine(), address(replacementEngine));
-        assertTrue(registry.isContentRoundTrackingEngine(contentId, address(engine)));
+        assertEq(registry.contentRoundTrackingEngine(contentId), address(engine));
         assertFalse(confidentialityEscrow.hasConfidentialityNexus(provider, VOTER2_ANCHOR));
 
         _commitVoteWithoutOpeningRound(voter2, contentId, false);
@@ -491,7 +491,7 @@ contract ConfidentialityEscrowTest is VotingTestBase {
         RoundVotingEngine replacementEngine = _deployReplacementVotingEngine();
         _rotateRegistryVotingEngine(replacementEngine);
 
-        assertFalse(registry.isContentRoundTrackingEngine(contentId, address(engine)));
+        assertEq(registry.contentRoundTrackingEngine(contentId), address(0));
 
         vm.prank(address(engine));
         vm.expectRevert("Not voting engine");

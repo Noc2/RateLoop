@@ -202,7 +202,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     mapping(uint256 => uint256) internal dormancyAnchorAt;
 
     /// @notice Voting engine whose current round may still need to block dormancy for this content.
-    mapping(uint256 => address) internal contentRoundTrackingEngine;
+    mapping(uint256 => address) public contentRoundTrackingEngine;
     /// @notice Latest globally allocated voting round id per content, shared across engine rotations.
     mapping(uint256 => uint256) internal latestVotingRoundId;
 
@@ -1278,10 +1278,6 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         if (msg.sender == votingEngine) return callerGeneration;
         if (contentRoundTrackingEngine[contentId] != msg.sender) revert OnlyVotingEngine();
         if (callerGeneration < contentSettlementEngineGeneration[contentId]) revert OnlyVotingEngine();
-    }
-
-    function isContentRoundTrackingEngine(uint256 contentId, address engine) external view returns (bool) {
-        return contentRoundTrackingEngine[contentId] == engine;
     }
 
     /// @notice Called by VotingEngine to update raw activity timestamp after commits.
