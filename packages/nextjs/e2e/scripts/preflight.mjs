@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { execFileSync } from "node:child_process";
+import { buildE2EServiceUrl } from "../service-url.mjs";
 
 const E2E_BASE_URL = process.env.E2E_BASE_URL?.trim() || "http://localhost:3000";
 const E2E_RPC_URL = process.env.E2E_RPC_URL?.trim() || "http://127.0.0.1:8545";
@@ -26,7 +27,7 @@ const services = [
   },
   {
     name: "Ponder (indexer API)",
-    url: new URL("/content?limit=1", PONDER_URL).toString(),
+    url: buildE2EServiceUrl(PONDER_URL, "/content?limit=1"),
     hint: "yarn ponder:dev",
   },
 ];

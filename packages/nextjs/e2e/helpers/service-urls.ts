@@ -1,3 +1,5 @@
+export { buildE2EServiceUrl } from "../service-url.mjs";
+
 export const E2E_BASE_URL = process.env.E2E_BASE_URL?.trim() || "http://localhost:3000";
 
 export const DEFAULT_E2E_RPC_URL = "http://127.0.0.1:8545";

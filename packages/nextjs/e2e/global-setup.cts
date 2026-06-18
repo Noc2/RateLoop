@@ -5,7 +5,13 @@
 import { resolve } from "path";
 import { execFileSync, execSync } from "child_process";
 import { ensureBaselineSeedData } from "./helpers/baseline-seed";
-import { E2E_BASE_URL, E2E_KEEPER_HEALTH_URL, E2E_RPC_URL, PONDER_URL } from "./helpers/service-urls";
+import {
+  E2E_BASE_URL,
+  E2E_KEEPER_HEALTH_URL,
+  E2E_RPC_URL,
+  PONDER_URL,
+  buildE2EServiceUrl,
+} from "./helpers/service-urls";
 
 const SERVICES = [
   {
@@ -23,7 +29,7 @@ const SERVICES = [
   },
   {
     name: "Ponder (indexer)",
-    url: new URL("/content?limit=1", PONDER_URL).toString(),
+    url: buildE2EServiceUrl(PONDER_URL, "/content?limit=1"),
     hint: "yarn ponder:dev",
   },
 ];
