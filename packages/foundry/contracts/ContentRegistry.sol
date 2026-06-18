@@ -1350,9 +1350,22 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
                 referenceRatingBps,
                 upEvidence,
                 downEvidence,
-                block.timestamp
+                _pendingRatingSettlementReadyAt(msg.sender, contentId, roundId)
             )
         );
+    }
+
+    function _pendingRatingSettlementReadyAt(address engine, uint256 contentId, uint256 roundId)
+        private
+        view
+        returns (uint256)
+    {
+        try IRoundVotingEngine(engine).roundCore(contentId, roundId) returns (
+            uint48, RoundLib.RoundState, uint16, uint16, uint64, uint48, uint48 settledAt, uint8
+        ) {
+            if (settledAt != 0) return uint256(settledAt);
+        } catch {}
+        return block.timestamp;
     }
 
     function applyRatingPayoutSnapshot(

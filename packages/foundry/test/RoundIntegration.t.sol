@@ -2880,15 +2880,18 @@ contract RoundIntegrationTest is VotingTestBase {
         uint16 referenceRatingBps = _roundReferenceRatingBpsForRound(votingEngine, contentId, roundId);
         uint64 upEvidence = _roundRatingUpEvidence(votingEngine, contentId, roundId);
         uint64 downEvidence = _roundRatingDownEvidence(votingEngine, contentId, roundId);
+        (,,,,,, uint48 settledAt,) = votingEngine.roundCore(contentId, roundId);
+        vm.warp(uint256(settledAt) + 30 days + 1);
 
         vm.expectEmit(true, true, false, true, address(registry));
         emit ContentRegistryRatingSnapshotLib.RatingReviewPending(
-            contentId, roundId, referenceRatingBps, upEvidence, downEvidence, block.timestamp
+            contentId, roundId, referenceRatingBps, upEvidence, downEvidence, settledAt
         );
         assertTrue(votingEngine.replayPendingRatingSettlement(contentId, roundId));
 
         assertFalse(votingEngine.pendingRatingSettlementReplay(contentId, roundId));
         assertGt(registry.roundPayoutSnapshotSourceReadyAt(3, 0, contentId, roundId), 0);
+        registry.markDormant(contentId);
     }
 
     function test_SettlementSideEffectFailure_CanReplayAfterEngineRotation() public {
