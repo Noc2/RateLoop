@@ -53,6 +53,13 @@ interface IQuestionRewardPoolEscrow {
     ) external returns (uint256 rewardPoolId);
 }
 
+interface IContentRegistryVotingEngineShape {
+    function rewardDistributorConfigShape()
+        external
+        view
+        returns (address registry_, address lrepToken_, address protocolConfig_);
+}
+
 /// @title ContentRegistry
 /// @notice Manages content lifecycle: submission → active → dormant → revived / cancelled.
 /// @dev Stores only a metadata hash on-chain; full URL/question details are emitted in events.
@@ -387,7 +394,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         if (votingEngine == _votingEngine) return;
         if (votingEngine != address(0) && !paused()) revert InvalidState();
         address currentProtocolConfig = address(protocolConfig);
-        if (currentProtocolConfig != address(0)) _requireEngineProtocolConfig(_votingEngine, currentProtocolConfig);
+        if (currentProtocolConfig != address(0)) _requireEngineShape(_votingEngine, currentProtocolConfig);
         uint256 nextGeneration;
         unchecked {
             nextGeneration = votingEngineGeneration + 1;
@@ -422,6 +429,19 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
                 mstore(0, shl(224, 0xbaf3f0f7))
                 revert(0, 4)
             }
+        }
+    }
+
+    function _requireEngineShape(address engine, address expectedConfig) private view {
+        _requireEngineProtocolConfig(engine, expectedConfig);
+        try IContentRegistryVotingEngineShape(engine).rewardDistributorConfigShape() returns (
+            address registry_, address lrepToken_, address protocolConfig_
+        ) {
+            if (registry_ != address(this) || lrepToken_ != address(lrepToken) || protocolConfig_ != expectedConfig) {
+                revert InvalidState();
+            }
+        } catch {
+            revert InvalidState();
         }
     }
 

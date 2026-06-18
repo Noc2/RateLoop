@@ -23,6 +23,14 @@ import {VotingTestBase} from "./helpers/VotingTestHelpers.sol";
 
 contract InvalidQuestionRewardPoolEscrowForRegistry {}
 
+contract ProtocolOnlyVotingEngineForRegistry {
+    address public protocolConfig;
+
+    constructor(address protocolConfig_) {
+        protocolConfig = protocolConfig_;
+    }
+}
+
 contract MockClusterPayoutOracleForRegistry {
     mapping(uint8 => address) public roundPayoutSnapshotConsumer;
 
@@ -3094,6 +3102,18 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         );
         registry.pause();
         vm.expectRevert();
+        registry.setVotingEngine(address(replacementEngine));
+        registry.unpause();
+        vm.stopPrank();
+    }
+
+    function test_SetVotingEngine_RejectsProtocolOnlyEngineShape() public {
+        ProtocolOnlyVotingEngineForRegistry replacementEngine =
+            new ProtocolOnlyVotingEngineForRegistry(address(registry.protocolConfig()));
+
+        vm.startPrank(owner);
+        registry.pause();
+        vm.expectRevert(ContentRegistry.InvalidState.selector);
         registry.setVotingEngine(address(replacementEngine));
         registry.unpause();
         vm.stopPrank();
