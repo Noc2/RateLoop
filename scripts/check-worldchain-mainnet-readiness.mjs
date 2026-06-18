@@ -6,6 +6,7 @@ import {
   REQUIRED_DEPLOYED_CONTRACTS,
   REQUIRED_SELECTOR_CHECKS,
   REQUIRED_SUBMISSION_MEDIA_VALIDATOR_SELECTORS,
+  buildReadinessUrl,
   buildPonderUrl,
   buildDeploymentAddressMap,
   bytecodeContainsSelector,
@@ -390,7 +391,7 @@ export async function validateLiveReadiness({
   if (appUrl) {
     for (const path of ["/", "/ask", "/docs/ai", "/api/agent/templates"]) {
       try {
-        const response = await fetchWithTimeout(new URL(path, appUrl));
+        const response = await fetchWithTimeout(buildReadinessUrl(appUrl, path));
         addCheck(
           checks,
           failures,

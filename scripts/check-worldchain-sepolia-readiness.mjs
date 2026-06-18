@@ -30,10 +30,14 @@ export const REQUIRED_SUBMISSION_MEDIA_VALIDATOR_SELECTORS = [
   "0x6b974e07", // validateSubmissionDetails(string,bytes32,bool)
 ];
 
-export function buildPonderUrl(baseUrl, path) {
+export function buildReadinessUrl(baseUrl, path) {
   const normalizedBase = baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
   const normalizedPath = path.replace(/^\/+/u, "");
   return new URL(normalizedPath, normalizedBase);
+}
+
+export function buildPonderUrl(baseUrl, path) {
+  return buildReadinessUrl(baseUrl, path);
 }
 
 export const REQUIRED_DEPLOYED_CONTRACTS = [
@@ -829,7 +833,7 @@ export async function validateLiveReadiness({
   if (appUrl) {
     for (const path of ["/", "/ask", "/docs/ai", "/api/agent/templates"]) {
       try {
-        const response = await fetchWithTimeout(new URL(path, appUrl));
+        const response = await fetchWithTimeout(buildReadinessUrl(appUrl, path));
         addCheck(
           checks,
           failures,

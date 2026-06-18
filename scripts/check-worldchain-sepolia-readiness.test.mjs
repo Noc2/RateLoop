@@ -8,6 +8,7 @@ import {
   REQUIRED_SUBMISSION_MEDIA_VALIDATOR_SELECTORS,
   buildDeploymentAddressMap,
   buildPonderUrl,
+  buildReadinessUrl,
   parseGeneratedContractsForChain,
   validateLiveReadiness,
   validateOfflineReadiness,
@@ -351,6 +352,43 @@ test("validateLiveReadiness reports Base Sepolia env names when required live ta
   assert(result.failures.some((message) => message.includes("BASE_SEPOLIA_RPC_URL")));
   assert(result.failures.some((message) => message.includes("BASE_SEPOLIA_PONDER_URL")));
   assert(result.failures.some((message) => message.includes("BASE_SEPOLIA_APP_URL")));
+});
+
+test("buildReadinessUrl preserves path-prefixed app readiness URLs", () => {
+  assert.equal(
+    buildReadinessUrl("https://app.example.test/rateloop", "/ask").toString(),
+    "https://app.example.test/rateloop/ask",
+  );
+  assert.equal(
+    buildReadinessUrl("https://app.example.test/rateloop/", "/").toString(),
+    "https://app.example.test/rateloop/",
+  );
+});
+
+test("validateLiveReadiness preserves path-prefixed app probe URLs", async () => {
+  const previousFetch = globalThis.fetch;
+  const requestedUrls = [];
+  globalThis.fetch = async (url) => {
+    requestedUrls.push(url.toString());
+    return new Response("ok", { status: 200 });
+  };
+
+  try {
+    const result = await validateLiveReadiness({
+      appUrl: "https://app.example.test/base-sepolia",
+      deploymentJson: makeDeploymentJson(),
+    });
+
+    assert.equal(result.ok, true);
+    assert.deepEqual(requestedUrls, [
+      "https://app.example.test/base-sepolia/",
+      "https://app.example.test/base-sepolia/ask",
+      "https://app.example.test/base-sepolia/docs/ai",
+      "https://app.example.test/base-sepolia/api/agent/templates",
+    ]);
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
 });
 
 test("baseSepoliaNotDeployedMessage names the Base Sepolia deployment artifact", () => {

@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   REQUIRED_ADDRESS_WIRING_CHECKS,
   REQUIRED_DEPLOYED_CONTRACTS,
+  buildReadinessUrl,
   buildDeploymentAddressMap,
   buildPonderUrl,
   parseGeneratedContractsForChain,
@@ -286,6 +287,13 @@ test("shared Ponder URL builder preserves path-prefixed mainnet readiness URLs",
   );
 });
 
+test("shared readiness URL builder preserves path-prefixed mainnet app URLs", () => {
+  assert.equal(
+    buildReadinessUrl("https://app.example.test/rateloop", "/docs/ai").toString(),
+    "https://app.example.test/rateloop/docs/ai",
+  );
+});
+
 test("validateLiveReadiness can skip missing targets for ad-hoc local use", async () => {
   const result = await validateLiveReadiness({
     deploymentJson: makeDeploymentJson(),
@@ -313,6 +321,32 @@ test("validateLiveReadiness fails closed when required live targets are missing"
   assert(
     result.failures.some((message) => message.includes("WORLDCHAIN_APP_URL")),
   );
+});
+
+test("validateLiveReadiness preserves path-prefixed mainnet app probe URLs", async () => {
+  const previousFetch = globalThis.fetch;
+  const requestedUrls = [];
+  globalThis.fetch = async (url) => {
+    requestedUrls.push(url.toString());
+    return new Response("ok", { status: 200 });
+  };
+
+  try {
+    const result = await validateLiveReadiness({
+      appUrl: "https://app.example.test/mainnet",
+      deploymentJson: makeDeploymentJson(),
+    });
+
+    assert.equal(result.ok, true);
+    assert.deepEqual(requestedUrls, [
+      "https://app.example.test/mainnet/",
+      "https://app.example.test/mainnet/ask",
+      "https://app.example.test/mainnet/docs/ai",
+      "https://app.example.test/mainnet/api/agent/templates",
+    ]);
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
 });
 
 test("validateLiveReadiness rejects mainnet bytecode missing required selectors and validator emitter", async () => {
