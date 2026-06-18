@@ -21,12 +21,13 @@ library RoundSettlementSideEffectsLib {
         uint16 referenceRatingBps,
         uint64 upEvidence,
         uint64 downEvidence
-    ) external {
+    ) external returns (bool recorded) {
         // Canonical public rating movement waits for the correlation snapshot so correlated
         // wallet clusters cannot move the visible rating by raw headcount. Settlement records
         // the raw evidence as pending; anyone can later apply the finalized adjusted weights.
-        try registry.recordPendingRatingSettlement(contentId, roundId, referenceRatingBps, upEvidence, downEvidence) { }
-        catch {
+        try registry.recordPendingRatingSettlement(contentId, roundId, referenceRatingBps, upEvidence, downEvidence) {
+            recorded = true;
+        } catch {
             emit SettlementSideEffectFailed(
                 contentId, roundId, address(registry), SideEffectFailureStage.RatingStateUpdate
             );

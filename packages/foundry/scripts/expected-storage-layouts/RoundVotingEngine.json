@@ -417,6 +417,12 @@
     {
       "slot": 69,
       "offset": 0,
+      "label": "pendingRatingSettlementReplay",
+      "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_bool))"
+    },
+    {
+      "slot": 70,
+      "offset": 0,
       "label": "__gap",
       "type": "t_array(t_uint256)"
     }
@@ -438,8 +444,8 @@
     {
       "id": "t_array(t_uint256)",
       "encoding": "inplace",
-      "label": "uint256[16]",
-      "numberOfBytes": "512",
+      "label": "uint256[15]",
+      "numberOfBytes": "480",
       "base": "t_uint256"
     },
     {

@@ -9,6 +9,7 @@ import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
 import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
 import { RaterRegistry } from "../contracts/RaterRegistry.sol";
 import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
+import { ContentRegistryRatingSnapshotLib } from "../contracts/libraries/ContentRegistryRatingSnapshotLib.sol";
 import { RoundLib } from "../contracts/libraries/RoundLib.sol";
 import { RatingLib } from "../contracts/libraries/RatingLib.sol";
 import { RewardMath } from "../contracts/libraries/RewardMath.sol";
@@ -2828,9 +2829,11 @@ contract RoundIntegrationTest is VotingTestBase {
             uint256(RoundLib.RoundState.Settled),
             "Settlement side effects should not block settlement"
         );
+        assertFalse(votingEngine.pendingRatingSettlementReplay(contentId, roundId));
+        assertGt(registry.roundPayoutSnapshotSourceReadyAt(3, 0, contentId, roundId), 0);
     }
 
-    function test_SettlementSideEffectFailure_DoesNotBlockSettlement() public {
+    function test_SettlementSideEffectFailure_CanReplayPendingRatingSettlement() public {
         uint256 contentId = _submitContent();
 
         address[] memory voters = new address[](3);
@@ -2870,6 +2873,22 @@ contract RoundIntegrationTest is VotingTestBase {
             uint256(RoundLib.RoundState.Settled),
             "Settlement should succeed even when rating side effect fails"
         );
+        assertTrue(votingEngine.pendingRatingSettlementReplay(contentId, roundId));
+        assertEq(registry.roundPayoutSnapshotSourceReadyAt(3, 0, contentId, roundId), 0);
+
+        vm.clearMockedCalls();
+        uint16 referenceRatingBps = _roundReferenceRatingBpsForRound(votingEngine, contentId, roundId);
+        uint64 upEvidence = _roundRatingUpEvidence(votingEngine, contentId, roundId);
+        uint64 downEvidence = _roundRatingDownEvidence(votingEngine, contentId, roundId);
+
+        vm.expectEmit(true, true, false, true, address(registry));
+        emit ContentRegistryRatingSnapshotLib.RatingReviewPending(
+            contentId, roundId, referenceRatingBps, upEvidence, downEvidence, block.timestamp
+        );
+        assertTrue(votingEngine.replayPendingRatingSettlement(contentId, roundId));
+
+        assertFalse(votingEngine.pendingRatingSettlementReplay(contentId, roundId));
+        assertGt(registry.roundPayoutSnapshotSourceReadyAt(3, 0, contentId, roundId), 0);
     }
 
     // =========================================================================

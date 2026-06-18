@@ -115,6 +115,8 @@ contract RoundVotingEngine is
     //     advisory sampling can bind to the finalized engine seed. Fresh deployments only.
     //   * Post-2026-05-29: `roundAdvisoryVoteRecorderSnapshot` inserted after
     //     `roundRaterRegistrySnapshot` so recorder rotation does not affect open rounds.
+    //   * Post-2026-06-18: `pendingRatingSettlementReplay` inserted before the storage gap
+    //     so transient pending-rating side-effect failures have a bounded replay path.
     //
     // CI runbook: any future change to the order or type of state variables in this contract
     // must run OZ `validateUpgrade` against the previous implementation before any non-31337
@@ -916,6 +918,22 @@ contract RoundVotingEngine is
         );
     }
 
+    /// @notice Retry a pending-rating settlement record that failed during round settlement.
+    /// @dev Permissionless because the target registry still authenticates `msg.sender` as this
+    ///      engine, and the registry-side record operation is idempotent once pending state exists.
+    function replayPendingRatingSettlement(uint256 contentId, uint256 roundId)
+        external
+        nonReentrant
+        returns (bool recorded)
+    {
+        require(pendingRatingSettlementReplay[contentId][roundId], "no pending replay");
+        if (rounds[contentId][roundId].state != RoundLib.RoundState.Settled) revert RoundNotSettledOrTied();
+        recorded = _recordPendingRatingSettlement(contentId, roundId);
+        if (recorded) {
+            delete pendingRatingSettlementReplay[contentId][roundId];
+        }
+    }
+
     // =========================================================================
     // ROUND EXPIRY
     // =========================================================================
@@ -1076,14 +1094,9 @@ contract RoundVotingEngine is
             accountedLrepBalance -= treasuryPaid;
         }
 
-        RoundSettlementSideEffectsLib.recordSettlement(
-            registry,
-            contentId,
-            roundId,
-            _getRoundReferenceRatingBps(contentId, roundId),
-            roundRatingUpEvidence[contentId][roundId],
-            roundRatingDownEvidence[contentId][roundId]
-        );
+        if (!_recordPendingRatingSettlement(contentId, roundId)) {
+            pendingRatingSettlementReplay[contentId][roundId] = true;
+        }
         _notifyBundleRoundTerminal(contentId, roundId, true);
         emit RbtsRewardsScored(
             contentId,
@@ -1119,6 +1132,17 @@ contract RoundVotingEngine is
     function _settlementCallerIncentive(uint256 forfeitedPool) internal pure returns (uint256 incentive) {
         incentive = forfeitedPool * SETTLEMENT_CALLER_INCENTIVE_BPS / 10_000;
         if (incentive > SETTLEMENT_CALLER_INCENTIVE_MAX) incentive = SETTLEMENT_CALLER_INCENTIVE_MAX;
+    }
+
+    function _recordPendingRatingSettlement(uint256 contentId, uint256 roundId) internal returns (bool recorded) {
+        recorded = RoundSettlementSideEffectsLib.recordSettlement(
+            registry,
+            contentId,
+            roundId,
+            _getRoundReferenceRatingBps(contentId, roundId),
+            roundRatingUpEvidence[contentId][roundId],
+            roundRatingDownEvidence[contentId][roundId]
+        );
     }
 
     // =========================================================================
@@ -1896,6 +1920,9 @@ contract RoundVotingEngine is
     mapping(uint256 => mapping(uint256 => uint8)) internal roundContentDormantCountSnapshot;
     mapping(uint256 => mapping(uint256 => address)) internal roundConfidentialityEscrowSnapshot;
 
+    /// @notice Tracks pending-rating settlement records that reverted during settlement.
+    mapping(uint256 contentId => mapping(uint256 roundId => bool)) public pendingRatingSettlementReplay;
+
     // --- Storage gap reserved for future upgrades ---
-    uint256[16] private __gap;
+    uint256[15] private __gap;
 }

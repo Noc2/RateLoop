@@ -20,6 +20,10 @@ contract RoundSettlementSideEffectsLibTest is Test {
             42, 7, address(revertingRegistry), RoundSettlementSideEffectsLib.SideEffectFailureStage.RatingStateUpdate
         );
 
-        RoundSettlementSideEffectsLib.recordSettlement(ContentRegistry(address(revertingRegistry)), 42, 7, 5000, 2, 1);
+        assertFalse(
+            RoundSettlementSideEffectsLib.recordSettlement(
+                ContentRegistry(address(revertingRegistry)), 42, 7, 5000, 2, 1
+            )
+        );
     }
 }
