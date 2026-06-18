@@ -494,6 +494,13 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         cfg = _validateRoundConfig(epochDuration, maxDuration, minVoters, maxVoters, roundConfigBounds);
     }
 
+    function validateQuestionRewardConsumers(address expectedEscrow) external view {
+        address oracle = clusterPayoutOracle;
+        if (oracle == address(0)) return;
+        _validateClusterPayoutOracleConsumer(oracle, PAYOUT_DOMAIN_QUESTION_REWARD, expectedEscrow);
+        _validateClusterPayoutOracleConsumer(oracle, PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD, expectedEscrow);
+    }
+
     function isRewardDistributor(address value) external view returns (bool) {
         return rewardDistributorAuthorized[value];
     }

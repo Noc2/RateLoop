@@ -1403,6 +1403,19 @@ export const ProtocolConfigAbi = [
   },
   {
     "type": "function",
+    "name": "validateQuestionRewardConsumers",
+    "inputs": [
+      {
+        "name": "expectedEscrow",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "validateRoundConfig",
     "inputs": [
       {

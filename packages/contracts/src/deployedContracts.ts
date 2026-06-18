@@ -12490,6 +12490,19 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "validateQuestionRewardConsumers",
+          inputs: [
+            {
+              name: "expectedEscrow",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "validateRoundConfig",
           inputs: [
             {
@@ -47792,6 +47805,19 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "validateQuestionRewardConsumers",
+          inputs: [
+            {
+              name: "expectedEscrow",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "validateRoundConfig",
           inputs: [
             {
@@ -77834,6 +77860,19 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "address",
             },
           ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "validateQuestionRewardConsumers",
+          inputs: [
+            {
+              name: "expectedEscrow",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [],
           stateMutability: "view",
         },
         {
@@ -108217,6 +108256,19 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "address",
             },
           ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "validateQuestionRewardConsumers",
+          inputs: [
+            {
+              name: "expectedEscrow",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [],
           stateMutability: "view",
         },
         {
