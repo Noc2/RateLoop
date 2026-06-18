@@ -938,11 +938,11 @@ test("agent signing intent completion funds feedback bonus after submitting the 
     }),
   );
   const createBody = (await createResponse.json()) as Record<string, unknown>;
+  assert.equal(createResponse.status, 200, JSON.stringify(createBody));
   const intentId = String(createBody.id);
   const signingUrl = new URL(String(createBody.signingUrl));
   const token = new URLSearchParams(signingUrl.hash.replace(/^#/, "")).get("token");
 
-  assert.equal(createResponse.status, 200);
   assert.ok(token);
 
   const prepareResponse = await signingIntentPrepareRoute.POST(
@@ -990,10 +990,7 @@ test("agent signing intent completion funds feedback bonus after submitting the 
   assert.equal(completeBonusResponse.status, 200);
   assert.equal(completeBonusBody.status, "submitted");
   assert.deepEqual(completeBonusBody.transactionHashes, [askHash, feedbackHash]);
-  assert.equal(
-    ((completeBonusBody.feedbackBonus as Record<string, unknown>) ?? {}).status,
-    "funded",
-  );
+  assert.equal(((completeBonusBody.feedbackBonus as Record<string, unknown>) ?? {}).status, "funded");
   assert.deepEqual(confirmedFeedbackBonus, [{ operationKey: OPERATION_KEY, transactionHashes: [feedbackHash] }]);
 });
 

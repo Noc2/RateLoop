@@ -220,6 +220,13 @@ function readX402AuthorizationRequest(body: JsonObject): JsonObject | null {
   return request && typeof request === "object" && !Array.isArray(request) ? (request as JsonObject) : null;
 }
 
+function stripSigningIntentOnlyValidationFields(requestBody: JsonObject) {
+  if (!("feedbackBonus" in requestBody)) return requestBody;
+  const cloned = structuredClone(requestBody) as JsonObject;
+  delete cloned.feedbackBonus;
+  return cloned;
+}
+
 function readFeedbackBonusTransactionPlan(body: JsonObject): JsonObject | null {
   const feedbackBonus =
     body.feedbackBonus && typeof body.feedbackBonus === "object" && !Array.isArray(body.feedbackBonus)
@@ -277,7 +284,7 @@ function hasPreparedSigningArtifacts(intent: AgentSigningIntentRecord) {
 
 export async function createAgentSigningIntent(params: { origin: string; requestBody: unknown; ttlMs?: number }) {
   const requestBody = asJsonObject(params.requestBody);
-  const payload = parseX402QuestionRequest(requestBody);
+  const payload = parseX402QuestionRequest(stripSigningIntentOnlyValidationFields(requestBody));
   if (requestBody.maxPaymentAmount === undefined || requestBody.maxPaymentAmount === null) {
     throw new McpToolError("maxPaymentAmount is required for browser signing links.");
   }
@@ -375,7 +382,10 @@ export async function prepareAgentSigningIntent(params: {
   if (intent.walletAddress && intent.walletAddress.toLowerCase() !== walletAddress.toLowerCase()) {
     throw new McpToolError("Connected wallet does not match this signing intent.", 403);
   }
-  if ((intent.status === "prepared" || intent.status === "feedback_bonus_prepared") && hasPreparedSigningArtifacts(intent)) {
+  if (
+    (intent.status === "prepared" || intent.status === "feedback_bonus_prepared") &&
+    hasPreparedSigningArtifacts(intent)
+  ) {
     return signingIntentResponse(intent);
   }
 
@@ -501,7 +511,9 @@ export async function completeAgentSigningIntent(params: {
         operationKey: intent.operationKey,
         transactionHashes,
       },
-      name: confirmsFeedbackBonus ? "rateloop_confirm_feedback_bonus_transactions" : "rateloop_confirm_ask_transactions",
+      name: confirmsFeedbackBonus
+        ? "rateloop_confirm_feedback_bonus_transactions"
+        : "rateloop_confirm_ask_transactions",
     })) as JsonObject;
     const feedbackBonusTransactionPlan = confirmsFeedbackBonus ? null : readFeedbackBonusTransactionPlan(body);
     const status = feedbackBonusTransactionPlan
@@ -509,7 +521,9 @@ export async function completeAgentSigningIntent(params: {
       : body.status === "submitted"
         ? "submitted"
         : "prepared";
-    const storedTransactionHashes = confirmsFeedbackBonus ? [...intent.transactionHashes, ...transactionHashes] : transactionHashes;
+    const storedTransactionHashes = confirmsFeedbackBonus
+      ? [...intent.transactionHashes, ...transactionHashes]
+      : transactionHashes;
     const now = nowDate();
     await dbClient.execute({
       sql: `
