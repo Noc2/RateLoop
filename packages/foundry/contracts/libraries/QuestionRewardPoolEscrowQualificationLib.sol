@@ -501,8 +501,9 @@ library QuestionRewardPoolEscrowQualificationLib {
         if (rawEligibleVoters < rewardPool.requiredVoters) return (true, false, rawEligibleVoters);
 
         address clusterPayoutOracle = _clusterPayoutOracleAddress(rewardPoolClusterPayoutOracle, rewardPool.id);
-        try IClusterPayoutOracle(clusterPayoutOracle)
-            .getRoundPayoutSnapshot(payoutDomain, rewardPool.id, rewardPool.contentId, roundId) returns (
+        IClusterPayoutOracle oracle = IClusterPayoutOracle(clusterPayoutOracle);
+
+        try oracle.getRoundPayoutSnapshot(payoutDomain, rewardPool.id, rewardPool.contentId, roundId) returns (
             IClusterPayoutOracle.RoundPayoutSnapshot memory payoutSnapshot
         ) {
             if (
@@ -524,6 +525,7 @@ library QuestionRewardPoolEscrowQualificationLib {
             canQualify = rawEligibleVoters >= rewardPool.requiredVoters && effectiveParticipantUnits >= effectiveFloor
                 && payoutSnapshot.totalClaimWeight > 0;
             if (canQualify) canQualify = _previewRoundAllocation(rewardPool, false, 0) >= effectiveParticipantUnits;
+            if (!canQualify && _finalizedSnapshotWithinVetoWindow(oracle, payoutSnapshot)) return (false, false, 0);
             return (true, canQualify, effectiveParticipantUnits);
         } catch {
             return (false, false, 0);
@@ -788,6 +790,13 @@ library QuestionRewardPoolEscrowQualificationLib {
             oracle.roundPayoutSnapshotProposedAt(payoutDomain, rewardPoolId, contentId, roundId) >= readyAt,
             "Cluster source stale"
         );
+    }
+
+    function _finalizedSnapshotWithinVetoWindow(
+        IClusterPayoutOracle oracle,
+        IClusterPayoutOracle.RoundPayoutSnapshot memory payoutSnapshot
+    ) private view returns (bool) {
+        return block.timestamp <= uint256(payoutSnapshot.finalizedAt) + uint256(oracle.FINALIZATION_VETO_WINDOW());
     }
 
     function _questionPayoutSnapshotConsumerMatches(

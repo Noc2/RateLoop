@@ -3878,10 +3878,55 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
         uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
         _finalizeClusterPayoutSnapshot(oracle, rewardPoolId, contentId, roundId, 3, 20_000, 1);
+        IClusterPayoutOracle.RoundPayoutSnapshot memory payoutSnapshot =
+            oracle.getRoundPayoutSnapshot(1, rewardPoolId, contentId, roundId);
 
         (uint256 skipped, uint256 nextRoundToEvaluate) = rewardPoolEscrow.advanceQualificationCursor(rewardPoolId, 1);
+        assertEq(skipped, 0);
+        assertEq(nextRoundToEvaluate, roundId);
+
+        vm.warp(uint256(payoutSnapshot.finalizedAt) + uint256(oracle.FINALIZATION_VETO_WINDOW()));
+        (skipped, nextRoundToEvaluate) = rewardPoolEscrow.advanceQualificationCursor(rewardPoolId, 1);
+        assertEq(skipped, 0);
+        assertEq(nextRoundToEvaluate, roundId);
+
+        vm.warp(uint256(payoutSnapshot.finalizedAt) + uint256(oracle.FINALIZATION_VETO_WINDOW()) + 1);
+        (skipped, nextRoundToEvaluate) = rewardPoolEscrow.advanceQualificationCursor(rewardPoolId, 1);
         assertEq(skipped, 1);
         assertEq(nextRoundToEvaluate, roundId + 1);
+    }
+
+    function testClusterRewardPoolCanSkipFinalizedEmptySnapshotAfterVetoWindow() public {
+        ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
+        uint256 contentId = _submitQuestion("");
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+
+        uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
+        _finalizeClusterPayoutSnapshotWithRoot(oracle, rewardPoolId, contentId, roundId, 3, 0, 0, bytes32(0));
+        IClusterPayoutOracle.RoundPayoutSnapshot memory payoutSnapshot =
+            oracle.getRoundPayoutSnapshot(1, rewardPoolId, contentId, roundId);
+
+        vm.expectRevert("Too few eligible voters");
+        rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
+
+        (uint256 skipped, uint256 nextRoundToEvaluate) = rewardPoolEscrow.advanceQualificationCursor(rewardPoolId, 1);
+        assertEq(skipped, 0);
+        assertEq(nextRoundToEvaluate, roundId);
+
+        vm.warp(uint256(payoutSnapshot.finalizedAt) + uint256(oracle.FINALIZATION_VETO_WINDOW()));
+        (skipped, nextRoundToEvaluate) = rewardPoolEscrow.advanceQualificationCursor(rewardPoolId, 1);
+        assertEq(skipped, 0);
+        assertEq(nextRoundToEvaluate, roundId);
+
+        vm.warp(uint256(payoutSnapshot.finalizedAt) + uint256(oracle.FINALIZATION_VETO_WINDOW()) + 1);
+        (skipped, nextRoundToEvaluate) = rewardPoolEscrow.advanceQualificationCursor(rewardPoolId, 1);
+        assertEq(skipped, 1);
+        assertEq(nextRoundToEvaluate, roundId + 1);
+
+        RoundSnapshot memory skippedSnapshot = rewardPoolEscrow.getRoundSnapshot(rewardPoolId, roundId);
+        assertFalse(skippedSnapshot.qualified);
+        assertEq(skippedSnapshot.allocation, 0);
+        assertFalse(rewardPoolEscrow.isRoundPayoutSnapshotConsumed(1, rewardPoolId, contentId, roundId));
     }
 
     function testClusterRewardPoolCanSkipFinalizedEmptySnapshot() public {
@@ -7539,9 +7584,19 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         IClusterPayoutOracle.PayoutWeight memory payoutWeight =
             _bundlePayoutWeight(bundleId, 0, contentIds[0], firstRoundId, 0);
         bytes32 root = oracle.payoutWeightLeaf(payoutWeight);
-        _finalizeBundleClusterPayoutSnapshotWithRoot(oracle, bundleId, 0, 3, 20_000, payoutWeight.effectiveWeight, root);
-
         vm.warp(bountyClosesAt + BUNDLE_REFUND_GRACE + 1);
+        _finalizeBundleClusterPayoutSnapshotWithRoot(oracle, bundleId, 0, 3, 20_000, payoutWeight.effectiveWeight, root);
+        IClusterPayoutOracle.RoundPayoutSnapshot memory payoutSnapshot =
+            oracle.getRoundPayoutSnapshot(oracle.PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD(), bundleId, bundleId, 1);
+
+        vm.expectRevert(QuestionRewardPoolEscrowBundleActionsLib.BundleClusterPayoutSnapshotPending.selector);
+        rewardPoolEscrow.refundQuestionBundleReward(bundleId);
+
+        vm.warp(uint256(payoutSnapshot.finalizedAt) + uint256(oracle.FINALIZATION_VETO_WINDOW()));
+        vm.expectRevert(QuestionRewardPoolEscrowBundleActionsLib.BundleClusterPayoutSnapshotPending.selector);
+        rewardPoolEscrow.refundQuestionBundleReward(bundleId);
+
+        vm.warp(uint256(payoutSnapshot.finalizedAt) + uint256(oracle.FINALIZATION_VETO_WINDOW()) + 1);
         uint256 treasuryBalanceBefore = usdc.balanceOf(treasury);
         uint256 refundAmount = rewardPoolEscrow.refundQuestionBundleReward(bundleId);
 
@@ -7562,9 +7617,19 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         _settleRoundWithoutBundleSync(voters, contentIds[1], directions);
         rewardPoolEscrow.syncQuestionBundleTerminals(bundleId, 10);
 
-        _finalizeBundleClusterPayoutSnapshotWithRoot(oracle, bundleId, 0, 3, 0, 0, bytes32(0));
-
         vm.warp(bountyClosesAt + BUNDLE_REFUND_GRACE + 1);
+        _finalizeBundleClusterPayoutSnapshotWithRoot(oracle, bundleId, 0, 3, 0, 0, bytes32(0));
+        IClusterPayoutOracle.RoundPayoutSnapshot memory payoutSnapshot =
+            oracle.getRoundPayoutSnapshot(oracle.PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD(), bundleId, bundleId, 1);
+
+        vm.expectRevert(QuestionRewardPoolEscrowBundleActionsLib.BundleClusterPayoutSnapshotPending.selector);
+        rewardPoolEscrow.refundQuestionBundleReward(bundleId);
+
+        vm.warp(uint256(payoutSnapshot.finalizedAt) + uint256(oracle.FINALIZATION_VETO_WINDOW()));
+        vm.expectRevert(QuestionRewardPoolEscrowBundleActionsLib.BundleClusterPayoutSnapshotPending.selector);
+        rewardPoolEscrow.refundQuestionBundleReward(bundleId);
+
+        vm.warp(uint256(payoutSnapshot.finalizedAt) + uint256(oracle.FINALIZATION_VETO_WINDOW()) + 1);
         uint256 treasuryBalanceBefore = usdc.balanceOf(treasury);
         uint256 refundAmount = rewardPoolEscrow.refundQuestionBundleReward(bundleId);
 

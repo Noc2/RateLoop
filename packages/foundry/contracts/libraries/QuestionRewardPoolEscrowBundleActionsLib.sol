@@ -1088,6 +1088,8 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             );
             if (!snapshotReady) return true;
             require(payoutSnapshot.rawEligibleVoters == completerCount, "Cluster snapshot mismatch");
+            address oracleAddr = bundleRewardClusterPayoutOracle[bundleId];
+            IClusterPayoutOracle oracle = IClusterPayoutOracle(oracleAddr);
             effectiveParticipantUnits = payoutSnapshot.effectiveParticipantUnits;
             totalClaimWeight = payoutSnapshot.totalClaimWeight;
             uint256 minEffectiveUnits =
@@ -1097,6 +1099,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
                     || totalClaimWeight == 0
             ) {
                 if (recovered) return false;
+                if (_finalizedSnapshotWithinVetoWindow(oracle, payoutSnapshot)) return true;
                 QuestionRewardPoolEscrowBundleLib.resetRoundSet(
                     bundleQuestions,
                     bundleQuestionRecordedRounds,
@@ -1107,10 +1110,8 @@ library QuestionRewardPoolEscrowBundleActionsLib {
                 );
                 return false;
             }
-            address oracleAddr = bundleRewardClusterPayoutOracle[bundleId];
             clusterWeightRoot = payoutSnapshot.weightRoot;
-            clusterSnapshotDigest =
-                IClusterPayoutOracle(oracleAddr).roundPayoutSnapshotProposalDigest(payoutSnapshot.snapshotKey);
+            clusterSnapshotDigest = oracle.roundPayoutSnapshotProposalDigest(payoutSnapshot.snapshotKey);
             correlationEpochId = payoutSnapshot.correlationEpochId;
         }
 
@@ -1655,6 +1656,13 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         } catch {
             ready = false;
         }
+    }
+
+    function _finalizedSnapshotWithinVetoWindow(
+        IClusterPayoutOracle oracle,
+        IClusterPayoutOracle.RoundPayoutSnapshot memory payoutSnapshot
+    ) private view returns (bool) {
+        return block.timestamp <= uint256(payoutSnapshot.finalizedAt) + uint256(oracle.FINALIZATION_VETO_WINDOW());
     }
 
     function _bundlePayoutSnapshotSourceReadyAt(
