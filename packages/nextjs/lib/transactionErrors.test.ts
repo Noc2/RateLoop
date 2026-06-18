@@ -4,6 +4,8 @@ import {
   isInsufficientFundsError,
   isThirdwebBundlerInfrastructureError,
   isThirdwebSponsoredExecutionRejectedError,
+  isTransactionRelayAuthorizationError,
+  isTransactionRelayTimeoutError,
   isUnsupportedRpcMethodError,
   isUserRejectedTransactionError,
   isWalletRpcOverloadedError,
@@ -87,6 +89,24 @@ test("ignores user-rejected thirdweb execution requests", () => {
   const error = new Error("tw_execute error: User rejected the request.\nStatus: 400");
 
   assert.equal(isThirdwebSponsoredExecutionRejectedError(error), false);
+});
+
+test("detects transaction relay authorization failures", () => {
+  const error = {
+    message: "Failed to load resource: the server responded with a status of 401 ()",
+    cause: { details: "Unauthorized" },
+  };
+
+  assert.equal(isTransactionRelayAuthorizationError(error), true);
+});
+
+test("detects MetaMask transaction relay timeouts", () => {
+  const error = {
+    code: -32603,
+    message: "Transaction relay error - FAILED_TIMEOUT",
+  };
+
+  assert.equal(isTransactionRelayTimeoutError(error), true);
 });
 
 test("detects unsupported RPC method errors from nested wallet responses", () => {

@@ -3,9 +3,9 @@
 import { useEffect, useId, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useAccount, useConfig, useWriteContract } from "wagmi";
-import { waitForTransactionReceipt } from "wagmi/actions";
 import { XMarkIcon } from "@heroicons/react/24/outline";
 import { GradientActionButton, getGradientActionMotion } from "~~/components/shared/GradientAction";
+import { useTargetNetwork, useTransactor } from "~~/hooks/scaffold-eth";
 import type { ContentFeedbackBonusPool, ContentFeedbackItem } from "~~/lib/feedback/types";
 import {
   FEEDBACK_BONUS_ESCROW_ABI,
@@ -14,6 +14,15 @@ import {
   getConfiguredFeedbackBonusEscrowAddress,
   parseFeedbackBonusAmount,
 } from "~~/lib/questionRewardPools";
+import {
+  getGasBalanceErrorMessage,
+  isFreeTransactionExhaustedError,
+  isInsufficientFundsError,
+  isTransactionRelayAuthorizationError,
+  isTransactionRelayTimeoutError,
+  isUserRejectedTransactionError,
+  isWalletRpcOverloadedError,
+} from "~~/lib/transactionErrors";
 import { notification } from "~~/utils/scaffold-eth";
 
 type AwardFeedbackBonusModalProps = {
@@ -63,10 +72,20 @@ function getPoolAsset(pool: ContentFeedbackBonusPool): FeedbackBonusAsset {
   return pool.asset === 0 ? "lrep" : "usdc";
 }
 
+function getDefaultTransactionErrorMessage(error: unknown) {
+  return (
+    (error as { shortMessage?: string; message?: string } | undefined)?.shortMessage ||
+    (error as { shortMessage?: string; message?: string } | undefined)?.message ||
+    "Failed to award this Feedback Bonus"
+  );
+}
+
 export function AwardFeedbackBonusModal({ item, pools, onAwarded, onClose }: AwardFeedbackBonusModalProps) {
   const wagmiConfig = useConfig();
   const { address, chain } = useAccount();
   const { writeContractAsync } = useWriteContract();
+  const writeTx = useTransactor();
+  const { targetNetwork } = useTargetNetwork();
   const amountInputId = useId();
   const poolInputId = useId();
   const [isMounted, setIsMounted] = useState(false);
@@ -74,7 +93,8 @@ export function AwardFeedbackBonusModal({ item, pools, onAwarded, onClose }: Awa
   const [amount, setAmount] = useState(() => getDefaultAwardAmount(pools));
   const [isAwarding, setIsAwarding] = useState(false);
 
-  const chainId = chain?.id ?? wagmiConfig.chains[0]?.id ?? 0;
+  const chainId = targetNetwork.id ?? wagmiConfig.chains[0]?.id ?? 0;
+  const walletOnTargetNetwork = chain?.id === chainId;
   const escrowAddress = useMemo(() => getConfiguredFeedbackBonusEscrowAddress(chainId), [chainId]);
   const selectedPool = useMemo(
     () => pools.find(pool => pool.id === selectedPoolId) ?? pools[0] ?? null,
@@ -94,7 +114,9 @@ export function AwardFeedbackBonusModal({ item, pools, onAwarded, onClose }: Awa
       : parsedAmount > remainingAmount
         ? `This pool has ${formatFeedbackBonusAmount(remainingAmount, selectedAsset)} left.`
         : null;
-  const canAward = Boolean(address && escrowAddress && selectedPool && feedbackHash && parsedAmount && !amountError);
+  const canAward = Boolean(
+    address && walletOnTargetNetwork && escrowAddress && selectedPool && feedbackHash && parsedAmount && !amountError,
+  );
 
   useEffect(() => {
     setSelectedPoolId(pools[0]?.id ?? "");
@@ -117,6 +139,10 @@ export function AwardFeedbackBonusModal({ item, pools, onAwarded, onClose }: Awa
       notification.info("Connect the awarder wallet to pay this Feedback Bonus.");
       return;
     }
+    if (!walletOnTargetNetwork) {
+      notification.error(`Switch your wallet to ${targetNetwork.name} to award this Feedback Bonus.`);
+      return;
+    }
     if (!escrowAddress) {
       notification.error("Feedback Bonus payouts are not deployed on this network yet.");
       return;
@@ -132,23 +158,49 @@ export function AwardFeedbackBonusModal({ item, pools, onAwarded, onClose }: Awa
 
     setIsAwarding(true);
     try {
-      const hash = await writeContractAsync({
-        address: escrowAddress,
-        abi: FEEDBACK_BONUS_ESCROW_ABI,
-        functionName: "awardFeedbackBonus",
-        args: [BigInt(selectedPool.id), item.authorAddress, feedbackHash, parsedAmount],
-      });
-      await waitForTransactionReceipt(wagmiConfig, { hash });
+      const hash = await writeTx(
+        () =>
+          writeContractAsync({
+            address: escrowAddress,
+            abi: FEEDBACK_BONUS_ESCROW_ABI,
+            functionName: "awardFeedbackBonus",
+            args: [BigInt(selectedPool.id), item.authorAddress, feedbackHash, parsedAmount],
+            chainId: chainId as any,
+          } as any),
+        {
+          action: "Award Feedback Bonus",
+          suppressErrorToast: true,
+          suppressSuccessToast: true,
+        },
+      );
+      if (!hash) {
+        throw new Error("Feedback Bonus award transaction was not submitted.");
+      }
 
       notification.success(`Awarded ${formatFeedbackBonusAmount(parsedAmount, selectedAsset)} Feedback Bonus.`);
       onAwarded?.();
       onClose();
     } catch (error) {
-      notification.error(
-        (error as { shortMessage?: string; message?: string } | undefined)?.shortMessage ||
-          (error as { shortMessage?: string; message?: string } | undefined)?.message ||
-          "Failed to award this Feedback Bonus",
-      );
+      if (isUserRejectedTransactionError(error)) {
+        notification.info("Award transaction rejected in your wallet.");
+      } else if (isTransactionRelayTimeoutError(error)) {
+        notification.error(
+          "The wallet relay timed out before returning a transaction hash. Refresh feedback in a moment; if it is not marked Awarded, retry or use a self-funded wallet.",
+          { duration: 9000 },
+        );
+        onAwarded?.();
+      } else if (isTransactionRelayAuthorizationError(error)) {
+        notification.error(
+          "The wallet relay did not authorize this award. Retry once; if it repeats, use a self-funded wallet or add gas to this wallet.",
+          { duration: 8000 },
+        );
+      } else if (isFreeTransactionExhaustedError(error) || isInsufficientFundsError(error)) {
+        notification.error(getGasBalanceErrorMessage(targetNetwork.nativeCurrency.symbol));
+      } else if (isWalletRpcOverloadedError(error)) {
+        notification.error("The wallet RPC is overloaded. Wait a moment, then retry.");
+      } else {
+        notification.error(getDefaultTransactionErrorMessage(error));
+      }
     } finally {
       setIsAwarding(false);
     }
@@ -252,6 +304,11 @@ export function AwardFeedbackBonusModal({ item, pools, onAwarded, onClose }: Awa
           {!escrowAddress ? (
             <p className="rounded-lg bg-warning/10 p-3 text-sm text-warning">
               Feedback Bonus payouts are not available on this network yet.
+            </p>
+          ) : null}
+          {address && !walletOnTargetNetwork ? (
+            <p className="rounded-lg bg-warning/10 p-3 text-sm text-warning">
+              Switch your wallet to {targetNetwork.name} to award from this pool.
             </p>
           ) : null}
         </div>

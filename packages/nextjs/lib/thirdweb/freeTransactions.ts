@@ -1436,7 +1436,7 @@ async function validateSponsoredCalls(
         }
         return { ok: false, debugCode: "unsupported_operation" };
       case "FeedbackBonusEscrow":
-        if (functionName === "createFeedbackBonusPoolWithAsset") {
+        if (functionName === "createFeedbackBonusPoolWithAsset" || functionName === "awardFeedbackBonus") {
           continue;
         }
         return { ok: false, debugCode: "unsupported_operation" };

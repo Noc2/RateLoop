@@ -776,6 +776,7 @@ test("supported sponsored operation families are allowlisted", async () => {
         WALLET,
       ]),
     ],
+    [encodeCall(feedbackBonusEscrowContract, "awardFeedbackBonus", [1n, WALLET, `0x${"7".repeat(64)}`, 1_000_000n])],
     [encodeCall(lrepContract, "approve", [votingEngineContract.address, 1_000_000n]), voteCall("0x08")],
     [encodeCall(contentRegistryContract, "cancelReservedSubmission", [`0x${"2".repeat(64)}`])],
     [submitQuestionWithRewardCall()],

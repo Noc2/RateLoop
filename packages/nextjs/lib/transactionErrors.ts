@@ -109,6 +109,30 @@ export function isThirdwebSponsoredExecutionRejectedError(error: unknown) {
   return isThirdwebSponsoredExecution && isRejectedRequest && !isUserRejectedTransactionError(error);
 }
 
+export function isTransactionRelayAuthorizationError(error: unknown) {
+  const haystack = getTransactionErrorText(error).toLowerCase();
+
+  return (
+    haystack.includes("status of 401") ||
+    haystack.includes("status: 401") ||
+    haystack.includes("status 401") ||
+    haystack.includes("401 (unauthorized)") ||
+    haystack.includes("unauthorized") ||
+    haystack.includes("transaction not sponsored") ||
+    haystack.includes("transactions are not sponsored right now")
+  );
+}
+
+export function isTransactionRelayTimeoutError(error: unknown) {
+  const haystack = getTransactionErrorText(error).toLowerCase();
+
+  return (
+    haystack.includes("failed_timeout") ||
+    haystack.includes("transaction relay error") ||
+    haystack.includes("relay timed out")
+  );
+}
+
 export function isWalletRpcOverloadedError(error: unknown) {
   const haystack = getTransactionErrorText(error).toLowerCase();
 
