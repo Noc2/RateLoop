@@ -69,11 +69,14 @@ function resolveProtocolAddress(
 ) {
   const envAddress = normalizeRequiredAddress(readEnv(env, envKey));
   const sharedAddress = normalizeRequiredAddress(getSharedDeploymentAddress(chainId, contractName));
-  if (readEnv(env, "PONDER_NETWORK") === "hardhat") {
+  const network = readEnv(env, "PONDER_NETWORK");
+  const allowLocalEnvAddress =
+    network === "hardhat" || (network === undefined && chainId === PONDER_NETWORK_CHAIN_IDS.hardhat);
+  if (allowLocalEnvAddress) {
     return envAddress ?? sharedAddress;
   }
 
-  return sharedAddress ?? envAddress;
+  return sharedAddress;
 }
 
 export function resolvePonderProtocolDeploymentMetadata(

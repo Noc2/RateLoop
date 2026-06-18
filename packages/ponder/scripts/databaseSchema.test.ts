@@ -1,6 +1,7 @@
 import {
   DEFAULT_PONDER_DATABASE_SCHEMA,
   buildPonderStartArgs,
+  buildProtocolDeploymentKey,
   hasSchemaFlag,
   protocolDeploymentKeyFromEnv,
   schemaFromProtocolDeploymentKey,
@@ -81,6 +82,37 @@ describe("Ponder database schema launcher", () => {
 
     expect(result.schema).toBe(schemaFromProtocolDeploymentKey(deploymentKey));
     expect(result.schema).toMatch(/^rateloop_deployment_[a-f0-9]{16}$/);
+    expect(result.source).toBe("RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY");
+  });
+
+  test("does not derive live protocol deployment schemas from PONDER address overrides", () => {
+    const env = {
+      PONDER_NETWORK: "baseSepolia",
+      PONDER_CONTENT_REGISTRY_ADDRESS: "0x1000000000000000000000000000000000000001",
+      PONDER_FEEDBACK_REGISTRY_ADDRESS: "0x1000000000000000000000000000000000000002",
+    };
+
+    expect(protocolDeploymentKeyFromEnv(env)).toBeUndefined();
+    const result = resolvePonderDatabaseSchema(env);
+    expect(result.schema).toBe("rateloop_ponder_base_sepolia");
+    expect(result.source).toBe("default");
+  });
+
+  test("derives local protocol deployment schemas from hardhat address overrides", () => {
+    const env = {
+      PONDER_CHAIN_ID: "31337",
+      PONDER_CONTENT_REGISTRY_ADDRESS: "0x1000000000000000000000000000000000000001",
+      PONDER_FEEDBACK_REGISTRY_ADDRESS: "0x1000000000000000000000000000000000000002",
+    };
+    const deploymentKey = buildProtocolDeploymentKey({
+      chainId: 31337,
+      contentRegistryAddress: env.PONDER_CONTENT_REGISTRY_ADDRESS,
+      feedbackRegistryAddress: env.PONDER_FEEDBACK_REGISTRY_ADDRESS,
+    });
+
+    expect(protocolDeploymentKeyFromEnv(env)).toBe(deploymentKey);
+    const result = resolvePonderDatabaseSchema(env);
+    expect(result.schema).toBe(schemaFromProtocolDeploymentKey(deploymentKey));
     expect(result.source).toBe("RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY");
   });
 

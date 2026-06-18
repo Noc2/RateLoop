@@ -62,6 +62,11 @@ export function buildProtocolDeploymentKey({ chainId, contentRegistryAddress, fe
   ].join(":");
 }
 
+function canDeriveProtocolDeploymentKeyFromEnvAddresses(env, chainId) {
+  const ponderNetwork = readEnv(env, "PONDER_NETWORK");
+  return ponderNetwork === "hardhat" || (ponderNetwork === undefined && chainId === PONDER_NETWORK_CHAIN_IDS.hardhat);
+}
+
 export function protocolDeploymentKeyFromEnv(env = process.env) {
   const explicitKey = readEnv(env, "RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY")
     ?? readEnv(env, "RATELOOP_PROTOCOL_DEPLOYMENT_KEY");
@@ -70,7 +75,14 @@ export function protocolDeploymentKeyFromEnv(env = process.env) {
   const chainId = resolveChainId(env);
   const contentRegistryAddress = normalizeAddress(readEnv(env, "PONDER_CONTENT_REGISTRY_ADDRESS"));
   const feedbackRegistryAddress = normalizeAddress(readEnv(env, "PONDER_FEEDBACK_REGISTRY_ADDRESS"));
-  if (!chainId || !contentRegistryAddress || !feedbackRegistryAddress) return undefined;
+  if (
+    !chainId ||
+    !contentRegistryAddress ||
+    !feedbackRegistryAddress ||
+    !canDeriveProtocolDeploymentKeyFromEnvAddresses(env, chainId)
+  ) {
+    return undefined;
+  }
 
   return buildProtocolDeploymentKey({
     chainId,

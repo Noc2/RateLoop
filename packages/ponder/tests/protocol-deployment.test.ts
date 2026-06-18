@@ -51,6 +51,30 @@ describe("Ponder protocol deployment metadata", () => {
     );
   });
 
+  it("allows local deployment keys from explicit hardhat chain ids without a network name", () => {
+    const contentRegistryAddress = "0x1000000000000000000000000000000000000001";
+    const feedbackRegistryAddress = "0x1000000000000000000000000000000000000002";
+    const metadata = resolvePonderProtocolDeploymentMetadata({
+      PONDER_CHAIN_ID: "31337",
+      PONDER_CONTENT_REGISTRY_ADDRESS: contentRegistryAddress,
+      PONDER_FEEDBACK_REGISTRY_ADDRESS: feedbackRegistryAddress,
+    });
+
+    expect(metadata).toEqual({
+      configured: true,
+      network: null,
+      chainId: 31337,
+      contentRegistryAddress,
+      feedbackRegistryAddress,
+      deploymentKey: buildPonderProtocolDeploymentKey({
+        chainId: 31337,
+        contentRegistryAddress,
+        feedbackRegistryAddress,
+      }),
+      databaseSchema: null,
+    });
+  });
+
   it("resolves Base Sepolia deployment keys from shared artifacts over stale env", () => {
     const staleContentRegistryAddress = "0x1000000000000000000000000000000000000001";
     const staleFeedbackRegistryAddress = "0x1000000000000000000000000000000000000002";
@@ -84,6 +108,16 @@ describe("Ponder protocol deployment metadata", () => {
       }),
       databaseSchema: "rateloop_ponder_base_sepolia",
     });
+  });
+
+  it("does not configure unknown live chains from env-only contract addresses", () => {
+    expect(
+      resolvePonderProtocolDeploymentMetadata({
+        PONDER_CHAIN_ID: "999999",
+        PONDER_CONTENT_REGISTRY_ADDRESS: "0x1000000000000000000000000000000000000001",
+        PONDER_FEEDBACK_REGISTRY_ADDRESS: "0x1000000000000000000000000000000000000002",
+      }),
+    ).toBeNull();
   });
 
   it("rejects explicit Base chain ids that do not match the configured network", () => {
