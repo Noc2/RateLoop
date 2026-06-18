@@ -4,9 +4,8 @@ This directory holds the [Certora Prover](https://docs.certora.com/) workspace f
 the RateLoop contracts. It runs from `packages/foundry` so `foundry.toml`,
 `remappings.txt`, `contracts/`, and `lib/` resolve naturally.
 
-The phased rollout, target properties, and non-goals live in
-[`docs/testing/certora.md`](../../../docs/testing/certora.md). This README only
-covers how to run what is wired up today.
+The current formal-verification notes live in this workspace and the repo audit docs under
+[`docs`](../../../docs). This README covers how to run what is wired up today.
 
 ## Layout
 
@@ -140,7 +139,7 @@ yarn foundry:certora:check
     `claimCancelledRoundRefund` reverts on Open and on Settled rounds (refunds only in
     terminal-but-not-settled states). Lifecycle monotonicity and single-use refund stay
     deferred — see `RoundVotingEngineLifecycle.spec` and
-    `docs/testing/certora-security-findings.md` for the via_ir tooling reasons.
+    the repo audit docs for the via_ir tooling reasons.
   - Phase 4 (`question-reward-escrow.conf`) — **authored, proof deferred**: the spec
     (a refunded reward pool rejects claims) compiles and type-checks, but the solver run
     exceeds certora-cli's 15-minute no-output window on this 1,490-line + 11-library
@@ -176,9 +175,8 @@ yarn foundry:certora:check
     accumulators are monotone (no clawback/underflow). Full `claimed <= pool` upper bound
     deferred (needs the engine score-weight model). See `certora-round3-plan.md`.
   - Verified under certora-cli 8.13.1 / solc 0.8.35 ("No errors found by Prover!").
-  - See [`docs/testing/certora-followup.md`](../../../docs/testing/certora-followup.md)
-    for the phase plan and [`certora-security-findings.md`](../../../docs/testing/certora-security-findings.md)
-    for verification results and deferral reasons.
+  - See the repo audit docs under [`docs`](../../../docs) for the phase plan, verification results,
+    and deferral reasons.
 - `.certora_internal/` (prover scratch output) is git-ignored.
 - `RatingMath`'s logit/sigmoid paths use PRBMath `SD59x18` (`exp`/`ln`) and are out
   of scope for Phase 1; only its integer helpers are wrapped here.

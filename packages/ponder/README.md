@@ -67,8 +67,8 @@ app builds from colliding with older Ponder app metadata. Outside Railway, the l
 protocol deployment key from the active chain's `ContentRegistry` and `FeedbackRegistry` addresses, so a
 contract redeploy automatically indexes into a fresh schema even if content IDs restart. If neither value
 is available and `DATABASE_SCHEMA` is unset or still set to the generic legacy `ponder` value, the launcher
-uses network-specific defaults such as `rateloop_ponder_worldchain_sepolia`. To force a specific schema, set
-`RATELOOP_PONDER_DATABASE_SCHEMA` to a unique value such as `rateloop_ponder_worldchain_sepolia_v2`.
+uses network-specific defaults such as `rateloop_ponder_base_sepolia`. To force a specific schema, set
+`RATELOOP_PONDER_DATABASE_SCHEMA` to a unique value such as `rateloop_ponder_base_sepolia_v2`.
 
 When the keeper publishes correlation payout artifacts with `KEEPER_CORRELATION_ARTIFACT_STORAGE=file`, set
 `PAYOUT_ARTIFACT_HTTPS_ALLOWLIST` to the same public HTTPS prefix as the keeper's
@@ -128,7 +128,7 @@ Routes `/health` and `/status` are reserved by Ponder.
 Ponder app`, make sure the service uses `yarn start` (via `packages/ponder/railway.toml` or
 `yarn ponder:start`) so the launcher injects a deployment-scoped schema. When
 `RAILWAY_DEPLOYMENT_ID` is set, the launcher automatically ignores deprecated static overrides such
-as `rateloop_ponder_worldchain_canary` and uses `railway_<deployment_id>` instead. Remove that
+as `rateloop_ponder_base_sepolia_canary` and uses `railway_<deployment_id>` instead. Remove that
 static value from Railway env vars so future deploys stay on the deployment-scoped schema. For
 non-Railway deployments without shared deployment artifacts, set
 `RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY` or `RATELOOP_PONDER_DATABASE_SCHEMA` to a fresh value.
