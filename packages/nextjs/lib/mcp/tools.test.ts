@@ -926,6 +926,21 @@ test("public operation-key lookups reject managed ask records", async () => {
   );
 });
 
+test("managed operation lookups reject malformed chain ids", async () => {
+  await assert.rejects(
+    () =>
+      callRateLoopMcpTool({
+        agent: AGENT,
+        arguments: {
+          chainId: "480abc",
+          clientRequestId: "mcp:managed-client-request",
+        },
+        name: "rateloop_get_question_status",
+      }),
+    /Provide operationKey or both chainId and clientRequestId/,
+  );
+});
+
 test("public operation-key confirms reject records with managed reservations", async () => {
   await insertX402SubmissionRecord({ mode: "permissionless-wallet-plan" });
   await insertBudgetReservation();

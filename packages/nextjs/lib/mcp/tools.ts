@@ -111,6 +111,7 @@ import {
   BOUNTY_ELIGIBILITY_VERIFIED_HUMAN,
   getBountyEligibilityCredentialMask,
 } from "~~/lib/bountyEligibility";
+import { parsePositiveIntegerChainId } from "~~/lib/chainId";
 import {
   CONFIDENTIALITY_TERMS_ACTION,
   CONFIDENTIALITY_TERMS_CHALLENGE_TITLE,
@@ -2511,9 +2512,9 @@ async function resolveManagedOperationKey(args: JsonObject, agent: McpAgentAuth)
     return operationKey as `0x${string}`;
   }
 
-  const chainId = Number.parseInt(String(args.chainId ?? ""), 10);
+  const chainId = parsePositiveIntegerChainId(args.chainId);
   const clientRequestId = typeof args.clientRequestId === "string" ? args.clientRequestId.trim() : "";
-  if (!Number.isSafeInteger(chainId) || chainId <= 0 || !clientRequestId) {
+  if (chainId === null || !clientRequestId) {
     throw new McpToolError("Provide operationKey or both chainId and clientRequestId.");
   }
 
@@ -2538,9 +2539,9 @@ async function resolvePublicOperationKey(args: JsonObject): Promise<`0x${string}
     return operationKey as `0x${string}`;
   }
 
-  const chainId = Number.parseInt(String(args.chainId ?? ""), 10);
+  const chainId = parsePositiveIntegerChainId(args.chainId);
   const clientRequestId = typeof args.clientRequestId === "string" ? args.clientRequestId.trim() : "";
-  if (!Number.isSafeInteger(chainId) || chainId <= 0 || !clientRequestId) {
+  if (chainId === null || !clientRequestId) {
     throw new McpToolError("Provide operationKey or chainId, clientRequestId, and walletAddress.");
   }
   const walletAddress = parsePublicWalletAddress(args);
@@ -2596,9 +2597,9 @@ function publicCallbackAgentIdFromRecord(record: Awaited<ReturnType<typeof getX4
 }
 
 function publicCallbackAgentIdFromBody(body: JsonObject) {
-  const chainId = typeof body.chainId === "number" ? body.chainId : Number(body.chainId);
+  const chainId = parsePositiveIntegerChainId(body.chainId);
   const walletAddress = typeof body.payerAddress === "string" ? body.payerAddress : "";
-  if (!Number.isSafeInteger(chainId) || chainId <= 0 || !isAddress(walletAddress)) return null;
+  if (chainId === null || !isAddress(walletAddress)) return null;
   return publicWebhookAgentId({ chainId, walletAddress });
 }
 
@@ -2856,19 +2857,17 @@ function buildDryRunOperationBody(params: {
 function buildDryRunOperationFromArgs(args: JsonObject): JsonObject {
   const rawOperationKey = typeof args.operationKey === "string" ? args.operationKey.trim() : "";
   const defaultDryRunChainId = 84532;
-  const chainId = Number.parseInt(String(args.chainId ?? String(defaultDryRunChainId)), 10);
+  const chainId = parsePositiveIntegerChainId(args.chainId ?? String(defaultDryRunChainId)) ?? defaultDryRunChainId;
   const clientRequestId =
     typeof args.clientRequestId === "string" && args.clientRequestId.trim()
       ? args.clientRequestId.trim()
       : "dry-run-client-request";
   const operationKey = /^0x[a-fA-F0-9]{64}$/.test(rawOperationKey)
     ? rawOperationKey.toLowerCase()
-    : `0x${createHash("sha256")
-        .update(`rateloop:dry-run:${Number.isSafeInteger(chainId) ? chainId : defaultDryRunChainId}:${clientRequestId}`)
-        .digest("hex")}`;
+    : `0x${createHash("sha256").update(`rateloop:dry-run:${chainId}:${clientRequestId}`).digest("hex")}`;
 
   return {
-    chainId: Number.isSafeInteger(chainId) ? chainId : defaultDryRunChainId,
+    chainId,
     clientRequestId,
     contentId: null,
     contentIds: [],

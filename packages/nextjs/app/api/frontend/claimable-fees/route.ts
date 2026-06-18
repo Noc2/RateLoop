@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAddress } from "viem";
+import { parsePositiveIntegerChainId } from "~~/lib/chainId";
 import { getPrimaryServerTargetNetwork, getServerTargetNetworkById } from "~~/lib/env/server";
 import { listClaimableFrontendFeeRounds } from "~~/lib/frontendFees/server";
 import { checkRateLimit } from "~~/utils/rateLimit";
@@ -23,12 +24,12 @@ export async function GET(request: NextRequest) {
   }
 
   const fallbackChainId = getPrimaryServerTargetNetwork()?.id;
-  const parsedChainId = chainIdRaw ? Number.parseInt(chainIdRaw, 10) : fallbackChainId;
-  if (!Number.isFinite(parsedChainId)) {
+  const parsedChainId = chainIdRaw === null ? fallbackChainId : parsePositiveIntegerChainId(chainIdRaw);
+  if (parsedChainId === null || parsedChainId === undefined) {
     return NextResponse.json({ error: "Valid chainId is required" }, { status: 400 });
   }
 
-  if (!getServerTargetNetworkById(parsedChainId!)) {
+  if (!getServerTargetNetworkById(parsedChainId)) {
     return NextResponse.json({ error: "Unsupported chainId" }, { status: 400 });
   }
 
@@ -36,7 +37,7 @@ export async function GET(request: NextRequest) {
   const offset = Math.max(parseInt(request.nextUrl.searchParams.get("offset") ?? "0") || 0, 0);
 
   try {
-    const result = await listClaimableFrontendFeeRounds(frontend, { chainId: parsedChainId!, limit, offset });
+    const result = await listClaimableFrontendFeeRounds(frontend, { chainId: parsedChainId, limit, offset });
     return NextResponse.json(result);
   } catch (error) {
     console.error("Failed to fetch claimable frontend fees:", error);

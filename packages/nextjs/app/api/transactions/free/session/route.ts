@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { buildUnavailableFreeTransactionSummary, isFreeTransactionStoreUnavailableError } from "./fallback";
 import { isAddress } from "viem";
+import { parsePositiveIntegerChainId } from "~~/lib/chainId";
 import { getPrimaryServerTargetNetwork, getServerTargetNetworkById } from "~~/lib/env/server";
 import { getFreeTransactionAllowanceSummary } from "~~/lib/thirdweb/freeTransactions";
 import { checkRateLimit } from "~~/utils/rateLimit";
@@ -17,23 +18,23 @@ export async function GET(request: NextRequest) {
 
   const chainIdRaw = request.nextUrl.searchParams.get("chainId");
   const fallbackChainId = getPrimaryServerTargetNetwork()?.id;
-  const parsedChainId = chainIdRaw ? Number.parseInt(chainIdRaw, 10) : fallbackChainId;
+  const parsedChainId = chainIdRaw === null ? fallbackChainId : parsePositiveIntegerChainId(chainIdRaw);
 
   if (!address || !isAddress(address)) {
     return NextResponse.json({ error: "Invalid address" }, { status: 400 });
   }
 
-  if (!Number.isFinite(parsedChainId)) {
+  if (parsedChainId === null || parsedChainId === undefined) {
     return NextResponse.json({ error: "Invalid chain" }, { status: 400 });
   }
-  if (!getServerTargetNetworkById(parsedChainId!)) {
+  if (!getServerTargetNetworkById(parsedChainId)) {
     return NextResponse.json({ error: "Unsupported chain" }, { status: 400 });
   }
 
   try {
     const summary = await getFreeTransactionAllowanceSummary({
       address,
-      chainId: parsedChainId!,
+      chainId: parsedChainId,
     });
 
     return NextResponse.json(summary);
@@ -43,7 +44,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(
         buildUnavailableFreeTransactionSummary({
           address,
-          chainId: parsedChainId!,
+          chainId: parsedChainId,
         }),
       );
     }
@@ -52,7 +53,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(
       buildUnavailableFreeTransactionSummary({
         address,
-        chainId: parsedChainId!,
+        chainId: parsedChainId,
       }),
     );
   }

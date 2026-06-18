@@ -12,6 +12,7 @@ import {
   getQuestionDetails,
   parseQuestionDetailsIdFromDetailsUrl,
 } from "~~/lib/attachments/questionDetails";
+import { parsePositiveIntegerChainId } from "~~/lib/chainId";
 import { upsertQuestionConfidentialityFromMetadata } from "~~/lib/confidentiality/context";
 import { getServerRpcOverrides, getServerTargetNetworkById } from "~~/lib/env/server";
 import { isJsonObjectBody, jsonBodyErrorResponse, parseJsonBody } from "~~/lib/http/jsonBody";
@@ -94,8 +95,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 function readChainId(value: unknown) {
-  const chainId = typeof value === "number" ? value : Number.parseInt(String(value ?? ""), 10);
-  return Number.isSafeInteger(chainId) && chainId > 0 ? chainId : null;
+  return parsePositiveIntegerChainId(value);
 }
 
 function readTransactionHashes(payload: DetailsAttachRequest): Hex[] {

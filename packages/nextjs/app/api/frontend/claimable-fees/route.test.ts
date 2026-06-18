@@ -122,3 +122,16 @@ test("frontend claimable fees route rejects unsupported chain ids", async () => 
     error: "Unsupported chainId",
   });
 });
+
+test("frontend claimable fees route rejects malformed chain ids", async () => {
+  const response = await route.GET(
+    makeRequest(
+      `/api/frontend/claimable-fees?frontend=${encodeURIComponent(TEST_FRONTEND)}&chainId=${TEST_CHAIN_ID}abc&limit=10&offset=0`,
+    ),
+  );
+
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), {
+    error: "Valid chainId is required",
+  });
+});

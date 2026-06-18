@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { encodeAbiParameters, getAddress, isHex, keccak256, stringToHex } from "viem";
+import { parsePositiveIntegerChainId } from "~~/lib/chainId";
 import type { ContentFeedbackType } from "~~/lib/feedback/types";
 
 const CONTENT_FEEDBACK_HASH_DOMAIN = "rateloop.content-feedback.v1";
@@ -36,13 +37,8 @@ export function normalizeContentFeedbackHashMetadata(input: {
   clientNonce?: unknown;
   feedbackHash?: unknown;
 }): { ok: true; metadata: ContentFeedbackHashMetadata } | { ok: false; error: string } {
-  const chainId =
-    typeof input.chainId === "number"
-      ? input.chainId
-      : typeof input.chainId === "string"
-        ? Number.parseInt(input.chainId, 10)
-        : Number.NaN;
-  if (!Number.isSafeInteger(chainId) || chainId <= 0) {
+  const chainId = parsePositiveIntegerChainId(input.chainId);
+  if (chainId === null) {
     return { ok: false, error: "Invalid chainId" };
   }
 

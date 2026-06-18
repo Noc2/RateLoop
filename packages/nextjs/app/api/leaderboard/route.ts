@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAddress } from "viem";
+import { parsePositiveIntegerChainId } from "~~/lib/chainId";
 import { getPrimaryServerTargetNetwork, getServerTargetNetworkById } from "~~/lib/env/server";
 import {
   getVoterLeaderboardSnapshot,
@@ -50,11 +51,11 @@ export async function GET(request: NextRequest) {
     );
     const chainIdRaw = request.nextUrl.searchParams.get("chainId");
     const fallbackChainId = getPrimaryServerTargetNetwork()?.id;
-    const parsedChainId = chainIdRaw ? Number.parseInt(chainIdRaw, 10) : fallbackChainId;
-    if (!Number.isFinite(parsedChainId)) {
+    const parsedChainId = chainIdRaw === null ? fallbackChainId : parsePositiveIntegerChainId(chainIdRaw);
+    if (parsedChainId === null || parsedChainId === undefined) {
       return NextResponse.json({ error: "Valid chainId is required" }, { status: 400 });
     }
-    if (!getServerTargetNetworkById(parsedChainId!)) {
+    if (!getServerTargetNetworkById(parsedChainId)) {
       return NextResponse.json({ error: "Unsupported chainId" }, { status: 400 });
     }
     const includeAddressParam = request.nextUrl.searchParams.get("includeAddress");
@@ -66,7 +67,7 @@ export async function GET(request: NextRequest) {
     const ponderAvailable = await isPonderAvailable();
     if (!ponderAvailable) {
       if (canFallbackToIncludedAddress) {
-        return buildIncludedAddressFallback(includeAddress, parsedChainId!);
+        return buildIncludedAddressFallback(includeAddress, parsedChainId);
       }
 
       return NextResponse.json(
@@ -77,7 +78,7 @@ export async function GET(request: NextRequest) {
 
     try {
       const snapshot = await getVoterLeaderboardSnapshot({
-        chainId: parsedChainId!,
+        chainId: parsedChainId,
       });
       const selection = await resolveVoterLeaderboardSelection(
         snapshot,
@@ -86,10 +87,10 @@ export async function GET(request: NextRequest) {
           limit,
         },
         {
-          readBalances: addresses => readLrepBalances(addresses, { chainId: parsedChainId! }),
+          readBalances: addresses => readLrepBalances(addresses, { chainId: parsedChainId }),
         },
       );
-      const profiles = await readProfileRegistryProfiles(selection.selectedAddresses, { chainId: parsedChainId! });
+      const profiles = await readProfileRegistryProfiles(selection.selectedAddresses, { chainId: parsedChainId });
       const entries = selection.selectedAddresses.map(address => ({
         rank: selection.ranks[address] ?? 0,
         address,
@@ -106,7 +107,7 @@ export async function GET(request: NextRequest) {
     } catch (e) {
       if (canFallbackToIncludedAddress) {
         console.warn("Ponder token-holder discovery failed, using included-address fallback");
-        return buildIncludedAddressFallback(includeAddress, parsedChainId!);
+        return buildIncludedAddressFallback(includeAddress, parsedChainId);
       }
 
       console.warn("Ponder token-holder discovery failed:", e);

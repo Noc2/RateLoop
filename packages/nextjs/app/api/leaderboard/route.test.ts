@@ -83,3 +83,12 @@ test("leaderboard route rejects unsupported chain ids", async () => {
     error: "Unsupported chainId",
   });
 });
+
+test("leaderboard route rejects malformed chain ids", async () => {
+  const response = await route.GET(makeRequest(`/api/leaderboard?limit=10&chainId=${TEST_CHAIN_ID}abc`));
+
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), {
+    error: "Valid chainId is required",
+  });
+});

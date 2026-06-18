@@ -6,6 +6,7 @@ import {
   handlePublicAgentRoute,
   hasAgentBearerToken,
 } from "~~/lib/agent/http";
+import { parsePositiveIntegerChainId } from "~~/lib/chainId";
 import { callPublicRateLoopMcpTool, callRateLoopMcpTool } from "~~/lib/mcp/tools";
 
 export const runtime = "nodejs";
@@ -13,7 +14,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
-  const chainId = Number.parseInt(searchParams.get("chainId") ?? "", 10);
+  const chainId = parsePositiveIntegerChainId(searchParams.get("chainId"));
   const clientRequestId = searchParams.get("clientRequestId")?.trim() ?? "";
   const walletAddress = searchParams.get("walletAddress")?.trim() ?? "";
 

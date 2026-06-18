@@ -25,6 +25,7 @@ import {
   normalizeImageUploadChallengeInput,
 } from "~~/lib/auth/imageUploadChallenge";
 import { issueSignedActionChallenge } from "~~/lib/auth/signedActions";
+import { parsePositiveIntegerChainId } from "~~/lib/chainId";
 import { callPublicRateLoopMcpTool } from "~~/lib/mcp/tools";
 
 type JsonObject = Record<string, unknown>;
@@ -48,8 +49,8 @@ function readWalletAddress(value: unknown): Address {
 }
 
 function readChainId(value: unknown): number {
-  const chainId = typeof value === "number" ? value : Number.parseInt(String(value ?? ""), 10);
-  if (!Number.isSafeInteger(chainId) || chainId <= 0) {
+  const chainId = parsePositiveIntegerChainId(value);
+  if (chainId === null) {
     throw new AgentAskHandoffError("chainId is required and must be a positive integer.");
   }
   return chainId;

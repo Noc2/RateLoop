@@ -3,6 +3,7 @@ import { isAddress } from "viem";
 import { normalizeAvatarAccentHex } from "~~/lib/avatar/avatarAccent";
 import { renderLogoRingAvatarSvg } from "~~/lib/avatar/logoRingAvatar";
 import { getReputationAvatarPayload } from "~~/lib/avatar/server";
+import { parsePositiveIntegerChainId } from "~~/lib/chainId";
 import { getPrimaryServerTargetNetwork, getServerTargetNetworkById } from "~~/lib/env/server";
 import { checkRateLimit } from "~~/utils/rateLimit";
 
@@ -26,16 +27,16 @@ export async function GET(request: NextRequest) {
 
   const chainIdRaw = request.nextUrl.searchParams.get("chainId");
   const fallbackChainId = getPrimaryServerTargetNetwork()?.id;
-  const parsedChainId = chainIdRaw ? Number.parseInt(chainIdRaw, 10) : fallbackChainId;
-  if (!Number.isFinite(parsedChainId)) {
+  const parsedChainId = chainIdRaw === null ? fallbackChainId : parsePositiveIntegerChainId(chainIdRaw);
+  if (parsedChainId === null || parsedChainId === undefined) {
     return NextResponse.json({ error: "Valid chainId is required" }, { status: 400 });
   }
-  if (!getServerTargetNetworkById(parsedChainId!)) {
+  if (!getServerTargetNetworkById(parsedChainId)) {
     return NextResponse.json({ error: "Unsupported chainId" }, { status: 400 });
   }
 
   const payload = await getReputationAvatarPayload(address, {
-    chainId: parsedChainId!,
+    chainId: parsedChainId,
     cacheKey: request.nextUrl.searchParams.get("v"),
   });
   const size = parseRequestedSize(request.nextUrl.searchParams.get("size"));

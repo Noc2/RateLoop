@@ -85,3 +85,14 @@ test("reputation avatar route rejects unsupported chain ids", async () => {
     error: "Unsupported chainId",
   });
 });
+
+test("reputation avatar route rejects malformed chain ids", async () => {
+  const response = await route.GET(
+    makeRequest(`/api/reputation-avatar?address=${encodeURIComponent(TEST_ADDRESS)}&chainId=480abc`),
+  );
+
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), {
+    error: "Valid chainId is required",
+  });
+});
