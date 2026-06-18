@@ -13,8 +13,9 @@ import { ClusterPayoutOracle } from "../contracts/ClusterPayoutOracle.sol";
 import { IClusterPayoutOracle } from "../contracts/interfaces/IClusterPayoutOracle.sol";
 import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
 import { QuestionRewardPoolEscrow } from "../contracts/QuestionRewardPoolEscrow.sol";
-import { QuestionRewardPoolEscrowBundleActionsLib } from
-    "../contracts/libraries/QuestionRewardPoolEscrowBundleActionsLib.sol";
+import {
+    QuestionRewardPoolEscrowBundleActionsLib
+} from "../contracts/libraries/QuestionRewardPoolEscrowBundleActionsLib.sol";
 import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
 import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
 import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
@@ -7512,9 +7513,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         IClusterPayoutOracle.PayoutWeight memory payoutWeight =
             _bundlePayoutWeight(bundleId, 0, contentIds[0], firstRoundId, 0);
         bytes32 root = oracle.payoutWeightLeaf(payoutWeight);
-        _finalizeBundleClusterPayoutSnapshotWithRoot(
-            oracle, bundleId, 0, 3, 30_000, payoutWeight.effectiveWeight, root
-        );
+        _finalizeBundleClusterPayoutSnapshotWithRoot(oracle, bundleId, 0, 3, 30_000, payoutWeight.effectiveWeight, root);
 
         assertEq(rewardPoolEscrow.refundQuestionBundleReward(bundleId), 0);
         assertGt(
@@ -7523,6 +7522,55 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             ),
             0
         );
+    }
+
+    function testBundleRefund_BelowFloorClusterRoundSetDoesNotPinFunds() public {
+        ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
+        uint256[] memory contentIds = _submitBundleQuestions();
+        uint256 bundleId = _createSubmissionBundle(contentIds, funder, REWARD_ASSET_USDC, REWARD_POOL_AMOUNT, 3);
+        uint256 bountyClosesAt = block.timestamp + 30 days;
+
+        address[] memory voters = _threeVoters();
+        bool[] memory directions = _directions(true, true, false);
+        uint256 firstRoundId = _settleRoundWithoutBundleSync(voters, contentIds[0], directions);
+        _settleRoundWithoutBundleSync(voters, contentIds[1], directions);
+        rewardPoolEscrow.syncQuestionBundleTerminals(bundleId, 10);
+
+        IClusterPayoutOracle.PayoutWeight memory payoutWeight =
+            _bundlePayoutWeight(bundleId, 0, contentIds[0], firstRoundId, 0);
+        bytes32 root = oracle.payoutWeightLeaf(payoutWeight);
+        _finalizeBundleClusterPayoutSnapshotWithRoot(oracle, bundleId, 0, 3, 20_000, payoutWeight.effectiveWeight, root);
+
+        vm.warp(bountyClosesAt + BUNDLE_REFUND_GRACE + 1);
+        uint256 treasuryBalanceBefore = usdc.balanceOf(treasury);
+        uint256 refundAmount = rewardPoolEscrow.refundQuestionBundleReward(bundleId);
+
+        assertGt(refundAmount, 0);
+        assertEq(usdc.balanceOf(treasury), treasuryBalanceBefore + refundAmount);
+        assertEq(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, voter1), 0);
+    }
+
+    function testBundleRefund_EmptyClusterRoundSetDoesNotPinFunds() public {
+        ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
+        uint256[] memory contentIds = _submitBundleQuestions();
+        uint256 bundleId = _createSubmissionBundle(contentIds, funder, REWARD_ASSET_USDC, REWARD_POOL_AMOUNT, 3);
+        uint256 bountyClosesAt = block.timestamp + 30 days;
+
+        address[] memory voters = _threeVoters();
+        bool[] memory directions = _directions(true, true, false);
+        _settleRoundWithoutBundleSync(voters, contentIds[0], directions);
+        _settleRoundWithoutBundleSync(voters, contentIds[1], directions);
+        rewardPoolEscrow.syncQuestionBundleTerminals(bundleId, 10);
+
+        _finalizeBundleClusterPayoutSnapshotWithRoot(oracle, bundleId, 0, 3, 0, 0, bytes32(0));
+
+        vm.warp(bountyClosesAt + BUNDLE_REFUND_GRACE + 1);
+        uint256 treasuryBalanceBefore = usdc.balanceOf(treasury);
+        uint256 refundAmount = rewardPoolEscrow.refundQuestionBundleReward(bundleId);
+
+        assertGt(refundAmount, 0);
+        assertEq(usdc.balanceOf(treasury), treasuryBalanceBefore + refundAmount);
+        assertEq(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, voter1), 0);
     }
 
     function testBundleRefundSyncsUnobservedTerminalRoundSetBeforeSweep() public {

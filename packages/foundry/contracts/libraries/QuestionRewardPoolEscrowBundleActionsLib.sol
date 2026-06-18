@@ -1092,11 +1092,21 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             totalClaimWeight = payoutSnapshot.totalClaimWeight;
             uint256 minEffectiveUnits =
                 bundle.requiredCompleters > MIN_REQUIRED_VOTERS ? bundle.requiredCompleters : MIN_REQUIRED_VOTERS;
-            require(
-                completerCount >= bundle.requiredCompleters
-                    && effectiveParticipantUnits >= minEffectiveUnits * BPS_SCALE && totalClaimWeight > 0,
-                "Too few eligible voters"
-            );
+            if (
+                completerCount < bundle.requiredCompleters || effectiveParticipantUnits < minEffectiveUnits * BPS_SCALE
+                    || totalClaimWeight == 0
+            ) {
+                if (recovered) return false;
+                QuestionRewardPoolEscrowBundleLib.resetRoundSet(
+                    bundleQuestions,
+                    bundleQuestionRecordedRounds,
+                    bundleRoundIds,
+                    bundleQuestionTerminalSyncCursor,
+                    bundleId,
+                    roundSetIndex
+                );
+                return false;
+            }
             address oracleAddr = bundleRewardClusterPayoutOracle[bundleId];
             clusterWeightRoot = payoutSnapshot.weightRoot;
             clusterSnapshotDigest =
@@ -1631,7 +1641,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         ) {
             payoutSnapshot = snapshot;
             ready = snapshot.status == IClusterPayoutOracle.SnapshotStatus.Finalized
-                && snapshot.weightRoot != bytes32(0) && snapshot.totalClaimWeight > 0;
+                && (snapshot.totalClaimWeight == 0 || snapshot.weightRoot != bytes32(0));
             if (ready) {
                 uint64 sourceReadyAt = _bundlePayoutSnapshotSourceReadyAt(
                     bundleQuestions, bundleRoundIds, votingEngine, bundleId, roundSetIndex
