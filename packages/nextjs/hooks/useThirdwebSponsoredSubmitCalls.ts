@@ -47,7 +47,7 @@ type ThirdwebContractCall = {
   value?: bigint;
 };
 
-type ThirdwebBatchSponsorshipMode = "sponsored" | "self-funded";
+export type ThirdwebBatchSponsorshipMode = "sponsored" | "self-funded";
 
 type ExecuteContractCallBatchOptions = {
   allowSelfFundedFallback?: boolean;
@@ -180,6 +180,13 @@ export function shouldUseExternalWalletSendCalls(params: {
     typeof params.chainId === "number" &&
     supportsThirdwebExecutionCapabilities(params.chainId)
   );
+}
+
+export function shouldRouteBatchThroughExternalWallet(params: {
+  canUseExternalWalletSelfFundedBatchCalls: boolean;
+  sponsorshipMode: ThirdwebBatchSponsorshipMode;
+}) {
+  return params.sponsorshipMode === "self-funded" && params.canUseExternalWalletSelfFundedBatchCalls;
 }
 
 export function shouldUseUnmeteredSponsoredBatchCalls(params: {
@@ -455,10 +462,10 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
       const sponsorshipMode = options.sponsorshipMode ?? "sponsored";
       const allowUnmeteredSponsoredCalls = options.allowUnmeteredSponsoredCalls ?? false;
       const allowSelfFundedFallback = options.allowSelfFundedFallback ?? true;
-      const canUseExternalWalletPath =
-        sponsorshipMode === "self-funded" &&
-        canUseExternalWalletSelfFundedBatchCalls &&
-        !canUseThirdwebSelfFundedBatchCalls;
+      const canUseExternalWalletPath = shouldRouteBatchThroughExternalWallet({
+        canUseExternalWalletSelfFundedBatchCalls,
+        sponsorshipMode,
+      });
       const canUseThirdwebPath =
         sponsorshipMode === "sponsored"
           ? allowUnmeteredSponsoredCalls

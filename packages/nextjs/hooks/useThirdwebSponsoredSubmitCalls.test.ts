@@ -9,6 +9,7 @@ import {
   shouldPreferSponsoredBatchCalls,
   shouldPreferSponsoredSubmitCalls,
   shouldRetryThirdwebBundlerError,
+  shouldRouteBatchThroughExternalWallet,
   shouldUseExternalWalletSendCalls,
   shouldUseSelfFundedBatchCalls,
   shouldUseUnmeteredSponsoredBatchCalls,
@@ -205,6 +206,24 @@ test("uses wagmi sendCalls for atomic external wallets even when the thirdweb ac
       supportsAtomicBatchCalls: true,
     }),
     true,
+  );
+});
+
+test("routes self-funded external wallet batches through the wagmi connector path", () => {
+  assert.equal(
+    shouldRouteBatchThroughExternalWallet({
+      canUseExternalWalletSelfFundedBatchCalls: true,
+      sponsorshipMode: "self-funded",
+    }),
+    true,
+  );
+
+  assert.equal(
+    shouldRouteBatchThroughExternalWallet({
+      canUseExternalWalletSelfFundedBatchCalls: true,
+      sponsorshipMode: "sponsored",
+    }),
+    false,
   );
 });
 
