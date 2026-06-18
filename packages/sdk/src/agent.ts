@@ -318,7 +318,10 @@ export interface RateLoopAgentWalletTransactionCall {
   phase?:
     | "approve_usdc"
     | "approve_lrep"
+    | "approve_feedback_bonus_lrep"
+    | "approve_feedback_bonus_usdc"
     | "commit_rating"
+    | "create_feedback_bonus_pool"
     | "open_round"
     | "record_advisory_vote"
     | "reserve_submission"

@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import {
   ContentRegistryAbi,
+  FeedbackBonusEscrowAbi,
   X402QuestionSubmitterAbi,
 } from "@rateloop/contracts/abis";
 import {
@@ -23,6 +24,7 @@ import {
   buildLocalQuestionCanonicalPayload,
   loadLocalSignerConfig,
   signX402AuthorizationRequest,
+  validateLocalSignerFeedbackBonusTransactionPlan,
   validateLocalSignerTransactionPlan,
   withLocalSignerWallet,
 } from "../localSigner.js";
@@ -33,7 +35,9 @@ import {
 import type {
   AskHumansRequest,
   AskHumansResponse,
+  QuestionStatusResponse,
   RateLoopAgentClient,
+  RateLoopAgentWalletTransactionCall,
 } from "@rateloop/sdk/agent";
 
 const PRIVATE_KEY =
@@ -46,7 +50,13 @@ const CONTENT_REGISTRY_ADDRESS =
   "0x00000000000000000000000000000000000000dd" as const;
 const QUESTION_REWARD_ESCROW_ADDRESS =
   "0x00000000000000000000000000000000000000ee" as const;
+const FEEDBACK_BONUS_ESCROW_ADDRESS =
+  "0x00000000000000000000000000000000000000fb" as const;
+const LREP_ADDRESS = "0x00000000000000000000000000000000000000aa" as const;
 const X402_AMOUNT = "1500000";
+const FEEDBACK_BONUS_AMOUNT = "2000000";
+const FEEDBACK_BONUS_CONTENT_ID = "123";
+const FEEDBACK_BONUS_ROUND_ID = "1";
 const CLIENT_REQUEST_ID = "local-signer-test";
 const QUESTION_CONTEXT_URL = "https://example.com/context";
 const QUESTION_TITLE = "Should this agent proceed?";
@@ -769,6 +779,98 @@ function walletCallsResponse(
   };
 }
 
+function feedbackBonusClosesAt() {
+  return (BOUNTY_START_BY + FEEDBACK_WINDOW_SECONDS).toString();
+}
+
+function feedbackBonusAskPayload(
+  overrides: Partial<NonNullable<AskHumansRequest["feedbackBonus"]>> = {},
+): AskHumansRequest {
+  const payload = askPayload();
+  payload.maxPaymentAmount = (
+    BigInt(X402_AMOUNT) + BigInt(FEEDBACK_BONUS_AMOUNT)
+  ).toString();
+  payload.feedbackBonus = {
+    amount: FEEDBACK_BONUS_AMOUNT,
+    asset: "USDC",
+    awarder: account.address,
+    feedbackClosesAt: feedbackBonusClosesAt(),
+    ...overrides,
+  };
+  return payload;
+}
+
+function feedbackBonusQuestionStatus(params: {
+  asset?: "USDC" | "LREP";
+  calls?: RateLoopAgentWalletTransactionCall[];
+  state?: Record<string, unknown>;
+} = {}): QuestionStatusResponse {
+  const asset = params.asset ?? "USDC";
+  const tokenAddress = asset === "LREP" ? LREP_ADDRESS : X402_USDC_ADDRESS;
+  const assetId = asset === "LREP" ? 0 : 1;
+  const amount = String(params.state?.amount ?? FEEDBACK_BONUS_AMOUNT);
+  const awarder = String(params.state?.awarder ?? account.address);
+  const feedbackClosesAt = String(
+    params.state?.feedbackClosesAt ?? feedbackBonusClosesAt(),
+  );
+  const calls =
+    params.calls ??
+    [
+      {
+        data: encodeFunctionData({
+          abi: erc20Abi,
+          args: [FEEDBACK_BONUS_ESCROW_ADDRESS, BigInt(amount)],
+          functionName: "approve",
+        }),
+        phase:
+          asset === "LREP"
+            ? "approve_feedback_bonus_lrep"
+            : "approve_feedback_bonus_usdc",
+        to: tokenAddress,
+        value: "0",
+      },
+      {
+        data: encodeFunctionData({
+          abi: FeedbackBonusEscrowAbi,
+          args: [
+            BigInt(FEEDBACK_BONUS_CONTENT_ID),
+            BigInt(FEEDBACK_BONUS_ROUND_ID),
+            assetId,
+            BigInt(amount),
+            BigInt(feedbackClosesAt),
+            awarder,
+          ],
+          functionName: "createFeedbackBonusPoolWithAsset",
+        }),
+        phase: "create_feedback_bonus_pool",
+        to: FEEDBACK_BONUS_ESCROW_ADDRESS,
+        value: "0",
+      },
+    ];
+
+  return {
+    chainId: 480,
+    contentId: FEEDBACK_BONUS_CONTENT_ID,
+    feedbackBonus: {
+      amount,
+      asset,
+      awarder,
+      contentId: FEEDBACK_BONUS_CONTENT_ID,
+      feedbackClosesAt,
+      roundId: FEEDBACK_BONUS_ROUND_ID,
+      status: "awaiting_wallet_signature",
+      transactionPlan: {
+        calls,
+        requiresOrderedExecution: true,
+      },
+      ...params.state,
+    },
+    operationKey: expectedOperationKey(),
+    payerAddress: account.address,
+    status: "submitted",
+  };
+}
+
 function x402CallsResponse(
   overrides: Partial<AskHumansResponse> = {},
   questionMetadataBaseUrl?: string,
@@ -816,6 +918,8 @@ function x402CallsResponse(
 function validationConfig() {
   return {
     contentRegistryAddress: CONTENT_REGISTRY_ADDRESS,
+    feedbackBonusEscrowAddress: FEEDBACK_BONUS_ESCROW_ADDRESS,
+    lrepAddress: LREP_ADDRESS,
     questionRewardPoolEscrowAddress: QUESTION_REWARD_ESCROW_ADDRESS,
     usdcAddress: X402_USDC_ADDRESS,
     x402QuestionSubmitterAddress: X402_SUBMITTER_ADDRESS,
@@ -1167,6 +1271,126 @@ describe("local signer", () => {
     });
 
     expect(calls).toHaveLength(2);
+  });
+
+  it("validates USDC Feedback Bonus transaction plans before execution", () => {
+    const calls = validateLocalSignerFeedbackBonusTransactionPlan({
+      accountAddress: account.address,
+      confirmed: feedbackBonusQuestionStatus(),
+      config: validationConfig(),
+      expectedChainId: 480,
+      expectedPayload: feedbackBonusAskPayload(),
+      operationKey: expectedOperationKey(),
+    });
+
+    expect(calls).toHaveLength(2);
+  });
+
+  it("validates LREP Feedback Bonus transaction plans before execution", () => {
+    const calls = validateLocalSignerFeedbackBonusTransactionPlan({
+      accountAddress: account.address,
+      confirmed: feedbackBonusQuestionStatus({ asset: "LREP" }),
+      config: validationConfig(),
+      expectedChainId: 480,
+      expectedPayload: feedbackBonusAskPayload({ asset: "LREP" }),
+      operationKey: expectedOperationKey(),
+    });
+
+    expect(calls).toHaveLength(2);
+  });
+
+  it("rejects Feedback Bonus plans whose approve spender is not the escrow", () => {
+    const status = feedbackBonusQuestionStatus();
+    const calls = status.feedbackBonus!.transactionPlan!.calls!;
+    const tamperedCalls = [
+      {
+        ...calls[0]!,
+        data: encodeFunctionData({
+          abi: erc20Abi,
+          args: [QUESTION_REWARD_ESCROW_ADDRESS, BigInt(FEEDBACK_BONUS_AMOUNT)],
+          functionName: "approve",
+        }),
+      },
+      calls[1]!,
+    ];
+
+    expect(() =>
+      validateLocalSignerFeedbackBonusTransactionPlan({
+        accountAddress: account.address,
+        confirmed: feedbackBonusQuestionStatus({ calls: tamperedCalls }),
+        config: validationConfig(),
+        expectedChainId: 480,
+        expectedPayload: feedbackBonusAskPayload(),
+        operationKey: expectedOperationKey(),
+      }),
+    ).toThrow(/approve spender must be the configured RateLoop escrow/);
+  });
+
+  it("rejects Feedback Bonus plans whose create call targets another contract", () => {
+    const status = feedbackBonusQuestionStatus();
+    const calls = status.feedbackBonus!.transactionPlan!.calls!;
+
+    expect(() =>
+      validateLocalSignerFeedbackBonusTransactionPlan({
+        accountAddress: account.address,
+        confirmed: feedbackBonusQuestionStatus({
+          calls: [
+            calls[0]!,
+            { ...calls[1]!, to: QUESTION_REWARD_ESCROW_ADDRESS },
+          ],
+        }),
+        config: validationConfig(),
+        expectedChainId: 480,
+        expectedPayload: feedbackBonusAskPayload(),
+        operationKey: expectedOperationKey(),
+      }),
+    ).toThrow(/to must be/);
+  });
+
+  it("rejects Feedback Bonus plans whose asset, awarder, or phase differs from the ask", () => {
+    expect(() =>
+      validateLocalSignerFeedbackBonusTransactionPlan({
+        accountAddress: account.address,
+        confirmed: feedbackBonusQuestionStatus({ asset: "LREP" }),
+        config: validationConfig(),
+        expectedChainId: 480,
+        expectedPayload: feedbackBonusAskPayload(),
+        operationKey: expectedOperationKey(),
+      }),
+    ).toThrow(/asset does not match/);
+
+    expect(() =>
+      validateLocalSignerFeedbackBonusTransactionPlan({
+        accountAddress: account.address,
+        confirmed: feedbackBonusQuestionStatus({
+          state: {
+            awarder: "0x00000000000000000000000000000000000000b0",
+          },
+        }),
+        config: validationConfig(),
+        expectedChainId: 480,
+        expectedPayload: feedbackBonusAskPayload(),
+        operationKey: expectedOperationKey(),
+      }),
+    ).toThrow(/feedbackBonus.awarder/);
+
+    const status = feedbackBonusQuestionStatus();
+    const calls = status.feedbackBonus!.transactionPlan!.calls!;
+    expect(() =>
+      validateLocalSignerFeedbackBonusTransactionPlan({
+        accountAddress: account.address,
+        confirmed: feedbackBonusQuestionStatus({
+          calls: [
+            { ...calls[0]!, phase: "approve_usdc" },
+            calls[1]!,
+          ],
+        }),
+        config: validationConfig(),
+        expectedChainId: 480,
+        expectedPayload: feedbackBonusAskPayload(),
+        operationKey: expectedOperationKey(),
+      }),
+    ).toThrow(/phase must be approve_feedback_bonus_usdc/);
   });
 
   it("rejects transaction plans whose submission calldata differs from the ask payload", () => {

@@ -104,6 +104,10 @@ function readPaymentMode(options: CliOptions) {
 }
 
 function printLocalAskProgress(event: LocalAskProgress) {
+  const planLabel =
+    "plan" in event && event.plan === "feedback_bonus"
+      ? "feedbackBonus.transactionPlan"
+      : "transactionPlan";
   switch (event.type) {
     case "ask_submitted":
       console.error(`RateLoop ask prepared: ${event.response.operationKey ?? "operation pending"}`);
@@ -115,13 +119,13 @@ function printLocalAskProgress(event: LocalAskProgress) {
       console.error(`RateLoop EIP-3009 USDC ask prepared: ${event.response.operationKey ?? "operation pending"}`);
       return;
     case "transaction_sent":
-      console.error(`Sent transactionPlan.calls[${event.index}]${event.phase ? ` (${event.phase})` : ""}: ${event.hash}`);
+      console.error(`Sent ${planLabel}.calls[${event.index}]${event.phase ? ` (${event.phase})` : ""}: ${event.hash}`);
       return;
     case "transaction_confirmed":
-      console.error(`Receipt confirmed for transactionPlan.calls[${event.index}]: ${event.hash}`);
+      console.error(`Receipt confirmed for ${planLabel}.calls[${event.index}]: ${event.hash}`);
       return;
     case "transactions_confirmed":
-      console.error(`Confirmed hashes with RateLoop: ${event.response.operationKey ?? "operation pending"}`);
+      console.error(`Confirmed ${planLabel} hashes with RateLoop: ${event.response.operationKey ?? "operation pending"}`);
       return;
   }
 }

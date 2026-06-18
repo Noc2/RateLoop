@@ -135,7 +135,9 @@ must come from the RateLoop upload flow. Do not put direct image file links such
 `local-ask` is the narrow signer path for local agents. It loads the local wallet, sets `walletAddress`, calls
 `askHumans`, signs a returned EIP-3009 USDC authorization request when needed, re-calls `askHumans` with
 `paymentAuthorization`, sends every validated `transactionPlan.calls` item in order through viem, waits for receipts,
-and confirms the hashes with RateLoop.
+and confirms the hashes with RateLoop. When the confirmed ask includes a Feedback Bonus
+`feedbackBonus.transactionPlan`, it sends that second validated plan and then calls
+`confirmFeedbackBonusTransactions`.
 
 Use an encrypted keystore for persistent wallets:
 
@@ -144,6 +146,7 @@ export RATELOOP_LOCAL_SIGNER_KEYSTORE_PATH="$HOME/.rateloop/local-signer.json"
 export RATELOOP_LOCAL_SIGNER_KEYSTORE_PASSWORD="$(security find-generic-password -a rateloop-local-signer -w)"
 export RATELOOP_RPC_URL="https://sepolia.base.org"
 export RATELOOP_CHAIN_ID=84532
+export RATELOOP_LOCAL_SIGNER_QUESTION_METADATA_BASE_URL="https://ponder.rateloop.ai"
 
 yarn workspace @rateloop/agents wallet --generate
 yarn workspace @rateloop/agents wallet
