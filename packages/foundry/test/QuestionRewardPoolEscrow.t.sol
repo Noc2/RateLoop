@@ -1434,6 +1434,60 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         );
     }
 
+    function testReplacementQuestionBundleOracleCannotPreSquatBeforeRepointAndCanProposeAfterPin() public {
+        _enableClusterPayoutOracle();
+        uint256[] memory contentIds = _submitBundleQuestions();
+        uint256 bundleId = _createSubmissionBundle(contentIds, funder, REWARD_ASSET_USDC, REWARD_POOL_AMOUNT, 3);
+
+        address[] memory voters = _threeVoters();
+        bool[] memory directions = _directions(true, true, false);
+        uint256 firstRoundId = _settleRoundWithoutBundleSync(voters, contentIds[0], directions);
+        uint256 secondRoundId = _settleRoundWithoutBundleSync(voters, contentIds[1], directions);
+        _recordBundleRoundSetTerminals(contentIds, firstRoundId, secondRoundId);
+        rewardPoolEscrow.syncQuestionBundleTerminals(bundleId, 10);
+
+        IClusterPayoutOracle.PayoutWeight memory payoutWeight =
+            _bundlePayoutWeight(bundleId, 0, contentIds[0], firstRoundId, 0);
+        ClusterPayoutOracle replacementOracle = _newEligibleClusterPayoutOracle();
+        replacementOracle.setOracleConfig(1 hours, 5e6, address(this));
+        replacementOracle.setRoundPayoutSnapshotConsumer(
+            replacementOracle.PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD(), address(rewardPoolEscrow)
+        );
+        bytes32 root = replacementOracle.payoutWeightLeaf(payoutWeight);
+
+        vm.expectRevert(ClusterPayoutOracle.SourceNotReady.selector);
+        replacementOracle.proposeCorrelationEpoch(
+            1,
+            1,
+            1,
+            keccak256(abi.encode("bundle-cluster-root", bundleId, uint256(0))),
+            keccak256("params"),
+            keccak256("epoch-artifact"),
+            "ipfs://bundle-epoch",
+            _bundleEpochSources(bundleId, 1)
+        );
+
+        assertEq(rewardPoolEscrow.roundPayoutSnapshotSourceReadyAt(4, bundleId, bundleId, 1), 0);
+
+        vm.prank(owner);
+        rewardPoolEscrow.repointQuestionBundleClusterPayoutOracle(bundleId, address(replacementOracle));
+
+        vm.prank(address(replacementOracle));
+        assertGt(rewardPoolEscrow.roundPayoutSnapshotSourceReadyAt(4, bundleId, bundleId, 1), 0);
+
+        _finalizeBundleClusterPayoutSnapshotWithRoot(
+            replacementOracle, bundleId, 0, 3, 30_000, payoutWeight.effectiveWeight, root
+        );
+
+        rewardPoolEscrow.syncQuestionBundleTerminals(bundleId, 10);
+        assertGt(
+            rewardPoolEscrow.claimableQuestionBundleRewardWithPayoutWeight(
+                bundleId, 0, voter1, payoutWeight, new bytes32[](0)
+            ),
+            0
+        );
+    }
+
     function testGovernanceCannotRepointQuestionBundleClusterOracleWithExistingSnapshot() public {
         _enableClusterPayoutOracle();
         uint256[] memory contentIds = _submitBundleQuestions();
@@ -1454,9 +1508,18 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             replacementOracle.PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD(), address(rewardPoolEscrow)
         );
         bytes32 root = replacementOracle.payoutWeightLeaf(payoutWeight);
+
+        vm.mockCall(
+            address(rewardPoolEscrow),
+            abi.encodeWithSelector(
+                rewardPoolEscrow.roundPayoutSnapshotSourceReadyAt.selector, uint8(4), bundleId, bundleId, uint256(1)
+            ),
+            abi.encode(uint64(block.timestamp))
+        );
         _finalizeBundleClusterPayoutSnapshotWithRoot(
             replacementOracle, bundleId, 0, 3, 30_000, payoutWeight.effectiveWeight, root
         );
+        vm.clearMockedCalls();
 
         vm.prank(owner);
         vm.expectRevert("Oracle snapshot exists");

@@ -12,6 +12,26 @@ import { RoundLib } from "../contracts/libraries/RoundLib.sol";
 import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
 import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
 
+contract MockClusterPayoutOracleForGameTheory {
+    mapping(uint8 => address) public roundPayoutSnapshotConsumer;
+
+    function setRoundPayoutSnapshotConsumer(uint8 domain, address consumer) external {
+        roundPayoutSnapshotConsumer[domain] = consumer;
+    }
+
+    function roundPayoutSnapshotKey(uint8 domain, uint256 rewardPoolId, uint256 contentId, uint256 roundId)
+        external
+        pure
+        returns (bytes32)
+    {
+        return keccak256(abi.encode(domain, rewardPoolId, contentId, roundId));
+    }
+
+    function roundPayoutSnapshotProposedAt(uint8, uint256, uint256, uint256) external pure returns (uint64) {
+        return 0;
+    }
+}
+
 /// @title Game-Theory Improvement Tests (tlock commit-reveal, epoch-weighted rewards)
 /// @notice Integration tests verifying the tlock commit-reveal flow with epoch weighting:
 ///         1. Epoch-1 (blind) = 100% weight (10000 BPS), epoch-2+ (informed) = 25% weight (2500 BPS)
@@ -166,6 +186,19 @@ contract GameTheoryImprovementsTest is VotingTestBase {
         _settleAfterRbtsSeed(engine, contentId, roundId);
     }
 
+    function _installPublicRatingClusterPayoutOracle() internal returns (MockClusterPayoutOracleForGameTheory oracle) {
+        oracle = new MockClusterPayoutOracleForGameTheory();
+        oracle.setRoundPayoutSnapshotConsumer(3, address(registry));
+        address questionRewardPoolEscrow = registry.questionRewardPoolEscrow();
+        if (questionRewardPoolEscrow != address(0)) {
+            oracle.setRoundPayoutSnapshotConsumer(1, questionRewardPoolEscrow);
+            oracle.setRoundPayoutSnapshotConsumer(4, questionRewardPoolEscrow);
+        }
+        address protocolConfig = address(engine.protocolConfig());
+        vm.prank(owner);
+        ProtocolConfig(protocolConfig).setClusterPayoutOracle(address(oracle));
+    }
+
     function _settleWeightedTieBoundary(uint256 earlyDownStake)
         internal
         returns (RoundLib.Round memory revealed, RoundLib.Round memory settled)
@@ -240,12 +273,15 @@ contract GameTheoryImprovementsTest is VotingTestBase {
         // thresholdReachedAt was set when the 4th vote was revealed (minVoters = 4)
         assertGt(round.thresholdReachedAt, 0, "threshold reached");
 
+        MockClusterPayoutOracleForGameTheory oracle = _installPublicRatingClusterPayoutOracle();
+
         _settle(cid, roundId);
 
         RoundLib.Round memory settled = RoundEngineReadHelpers.round(engine, cid, roundId);
         assertEq(uint256(settled.state), uint256(RoundLib.RoundState.Settled), "Round settled");
         assertFalse(settled.upWins, "DOWN wins despite raw UP majority - epoch weighting prevails");
         assertEq(registry.getRating(cid), 5_000, "public rating waits for correlation snapshot");
+        vm.prank(address(oracle));
         assertGt(
             registry.roundPayoutSnapshotSourceReadyAt(3, 0, cid, roundId),
             0,

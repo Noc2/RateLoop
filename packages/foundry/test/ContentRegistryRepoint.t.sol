@@ -6,6 +6,7 @@ import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy
 import { ContentRegistry } from "../contracts/ContentRegistry.sol";
 import { ContentRegistryRatingSnapshotLib } from "../contracts/libraries/ContentRegistryRatingSnapshotLib.sol";
 import { ClusterPayoutOracle } from "../contracts/ClusterPayoutOracle.sol";
+import { IClusterPayoutOracle } from "../contracts/interfaces/IClusterPayoutOracle.sol";
 import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
 import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
 import { LoopReputation } from "../contracts/LoopReputation.sol";
@@ -131,11 +132,32 @@ contract ContentRegistryRepointTest is VotingTestBase {
         vm.startPrank(owner);
         oracle = new ClusterPayoutOracle(owner, address(frontend), address(usdc));
         oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_PUBLIC_RATING(), ratingConsumer);
-        oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_QUESTION_REWARD(), registry.questionRewardPoolEscrow());
+        oracle.setRoundPayoutSnapshotConsumer(
+            oracle.PAYOUT_DOMAIN_QUESTION_REWARD(), registry.questionRewardPoolEscrow()
+        );
         oracle.setRoundPayoutSnapshotConsumer(
             oracle.PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD(), registry.questionRewardPoolEscrow()
         );
         vm.stopPrank();
+    }
+
+    function _ratingEpochSources(uint256 contentId, uint256 roundId)
+        internal
+        pure
+        returns (IClusterPayoutOracle.CorrelationEpochSourceRef[] memory sources)
+    {
+        sources = new IClusterPayoutOracle.CorrelationEpochSourceRef[](1);
+        sources[0] = IClusterPayoutOracle.CorrelationEpochSourceRef({
+            domain: 3, rewardPoolId: 0, contentId: contentId, roundId: roundId
+        });
+    }
+
+    function _mockRatingSourceReady(uint256 contentId, uint256 roundId) internal {
+        vm.mockCall(
+            address(votingEngine),
+            abi.encodeWithSelector(votingEngine.roundLifecycleState.selector, contentId, roundId),
+            abi.encode(uint256(0), uint256(0), uint256(0), uint48(block.timestamp))
+        );
     }
 
     function test_RepointPendingRatingClusterPayoutOracle_UpdatesPinnedOracle() public {
@@ -158,6 +180,62 @@ contract ContentRegistryRepointTest is VotingTestBase {
 
         vm.prank(owner);
         registry.repointPendingRatingClusterPayoutOracle(contentId, roundId, address(replacementOracle));
+    }
+
+    function test_RepointPendingRatingClusterPayoutOracle_BlocksReplacementPreSquatUntilPinned() public {
+        uint256 contentId = _submitTestContent();
+        uint256 roundId = 1;
+
+        ClusterPayoutOracle originalOracle = _deployClusterPayoutOracle(address(registry));
+        ClusterPayoutOracle replacementOracle = _deployClusterPayoutOracle(address(registry));
+
+        vm.prank(owner);
+        protocolConfig.setClusterPayoutOracle(address(originalOracle));
+
+        vm.prank(address(votingEngine));
+        registry.recordPendingRatingSettlement(contentId, roundId, 5000, 2, 1);
+        _mockRatingSourceReady(contentId, roundId);
+
+        vm.prank(address(originalOracle));
+        assertGt(registry.roundPayoutSnapshotSourceReadyAt(3, 0, contentId, roundId), 0);
+        vm.prank(address(replacementOracle));
+        assertEq(registry.roundPayoutSnapshotSourceReadyAt(3, 0, contentId, roundId), 0);
+
+        vm.prank(owner);
+        vm.expectRevert(ClusterPayoutOracle.SourceNotReady.selector);
+        replacementOracle.proposeCorrelationEpoch(
+            1,
+            uint64(roundId),
+            uint64(roundId),
+            keccak256(abi.encode("public-rating-cluster-root", roundId)),
+            keccak256("params"),
+            keccak256("epoch-artifact"),
+            "ipfs://rating-epoch",
+            _ratingEpochSources(contentId, roundId)
+        );
+
+        vm.prank(owner);
+        registry.repointPendingRatingClusterPayoutOracle(contentId, roundId, address(replacementOracle));
+
+        vm.prank(address(originalOracle));
+        assertEq(registry.roundPayoutSnapshotSourceReadyAt(3, 0, contentId, roundId), 0);
+        vm.prank(address(replacementOracle));
+        assertGt(registry.roundPayoutSnapshotSourceReadyAt(3, 0, contentId, roundId), 0);
+
+        vm.prank(owner);
+        replacementOracle.proposeCorrelationEpoch(
+            1,
+            uint64(roundId),
+            uint64(roundId),
+            keccak256(abi.encode("public-rating-cluster-root", roundId)),
+            keccak256("params"),
+            keccak256("epoch-artifact"),
+            "ipfs://rating-epoch",
+            _ratingEpochSources(contentId, roundId)
+        );
+        assertGt(replacementOracle.correlationEpochSnapshot(1).proposedAt, 0);
+
+        vm.clearMockedCalls();
     }
 
     function test_RepointPendingRatingClusterPayoutOracle_RevertsWhenNewOracleEqualsOldOracle() public {

@@ -152,6 +152,31 @@ contract MockEip2935History {
     }
 }
 
+contract MockClusterPayoutOracleForRoundVotingEngine {
+    mapping(uint8 => address) public roundPayoutSnapshotConsumer;
+    address public frontendRegistry;
+
+    constructor(address frontendRegistry_) {
+        frontendRegistry = frontendRegistry_;
+    }
+
+    function setRoundPayoutSnapshotConsumer(uint8 domain, address consumer) external {
+        roundPayoutSnapshotConsumer[domain] = consumer;
+    }
+
+    function roundPayoutSnapshotKey(uint8 domain, uint256 rewardPoolId, uint256 contentId, uint256 roundId)
+        external
+        pure
+        returns (bytes32)
+    {
+        return keccak256(abi.encode(domain, rewardPoolId, contentId, roundId));
+    }
+
+    function roundPayoutSnapshotProposedAt(uint8, uint256, uint256, uint256) external pure returns (uint64) {
+        return 0;
+    }
+}
+
 // =========================================================================
 // TEST CONTRACT
 // =========================================================================
@@ -322,6 +347,21 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         launchPool.setRoundClusterReadyAtSource(address(engine));
         vm.prank(owner);
         ProtocolConfig(protocolConfigAddress).setLaunchDistributionPool(address(launchPool));
+    }
+
+    function _installPublicRatingClusterPayoutOracle()
+        internal
+        returns (MockClusterPayoutOracleForRoundVotingEngine oracle)
+    {
+        oracle = new MockClusterPayoutOracleForRoundVotingEngine(address(frontendRegistry));
+        oracle.setRoundPayoutSnapshotConsumer(3, address(registry));
+        address questionRewardPoolEscrow = registry.questionRewardPoolEscrow();
+        if (questionRewardPoolEscrow != address(0)) {
+            oracle.setRoundPayoutSnapshotConsumer(1, questionRewardPoolEscrow);
+            oracle.setRoundPayoutSnapshotConsumer(4, questionRewardPoolEscrow);
+        }
+        vm.prank(owner);
+        ProtocolConfig(protocolConfigAddress).setClusterPayoutOracle(address(oracle));
     }
 
     function test_SetRoleRotatesPauser() public {
@@ -1268,8 +1308,10 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         engine.replayBundleObserverNotify(contentId, roundId);
     }
 
-    function _assertPendingRatingReview(uint256 contentId, uint256 roundId, address expectedEngine) internal view {
+    function _assertPendingRatingReview(uint256 contentId, uint256 roundId, address expectedEngine) internal {
         expectedEngine;
+        address oracle = ProtocolConfig(protocolConfigAddress).clusterPayoutOracle();
+        vm.prank(oracle);
         assertGt(
             registry.roundPayoutSnapshotSourceReadyAt(3, 0, contentId, roundId),
             0,
@@ -1320,6 +1362,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertEq(rewardWeight, 0, "reward weight starts empty");
         assertEq(forfeitedPool, 0, "forfeited pool starts empty");
 
+        _installPublicRatingClusterPayoutOracle();
         _settleRoundAfterRbtsSeed(contentId, roundId);
 
         assertEq(registry.getRating(contentId), 5_000, "public rating waits for correlation snapshot");
@@ -2039,6 +2082,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         engine.revealVoteByCommitKey(contentId, roundId, ck1, true, 5_750, s1);
         engine.revealVoteByCommitKey(contentId, roundId, ck2, false, 7_250, s2);
         engine.revealVoteByCommitKey(contentId, roundId, ck3, true, 6_500, s3);
+        _installPublicRatingClusterPayoutOracle();
         _settleRoundAfterRbtsSeed(contentId, roundId);
 
         assertEq(registry.getRating(contentId), 5_000, "public rating waits for correlation snapshot");

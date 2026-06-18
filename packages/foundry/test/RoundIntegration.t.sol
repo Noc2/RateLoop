@@ -16,15 +16,37 @@ import { RewardMath } from "../contracts/libraries/RewardMath.sol";
 import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
 import { RoundSettlementSideEffectsLib } from "../contracts/libraries/RoundSettlementSideEffectsLib.sol";
 import { LoopReputation } from "../contracts/LoopReputation.sol";
+import { ClusterPayoutOracle } from "../contracts/ClusterPayoutOracle.sol";
 import { FrontendRegistry } from "../contracts/FrontendRegistry.sol";
 import { IFrontendRegistry } from "../contracts/interfaces/IFrontendRegistry.sol";
 import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
+import { MockERC20 } from "../contracts/mocks/MockERC20.sol";
 
 contract MockRoundIntegrationGovernor {
     address public immutable reputationToken;
 
     constructor(address reputationToken_) {
         reputationToken = reputationToken_;
+    }
+}
+
+contract MockRoundIntegrationFrontendRegistry {
+    uint256 public constant STAKE_AMOUNT = 1_000e6;
+
+    function isEligible(address frontend) external pure returns (bool) {
+        return frontend != address(0);
+    }
+
+    function authorizedSnapshotFrontend(address proposer) external pure returns (address frontend) {
+        return proposer == address(0) ? address(0) : proposer;
+    }
+
+    function snapshotProposerForFrontend(address) external pure returns (address) {
+        return address(0);
+    }
+
+    function isAuthorizedSnapshotProposer(address frontend, address proposer) external pure returns (bool) {
+        return frontend != address(0) && frontend == proposer;
     }
 }
 
@@ -38,6 +60,7 @@ contract RoundIntegrationTest is VotingTestBase {
     RoundVotingEngine public votingEngine;
     RoundRewardDistributor public rewardDistributor;
     RaterRegistry public raterRegistry;
+    ClusterPayoutOracle public clusterPayoutOracle;
 
     address public owner = address(1);
     address public submitter = address(2);
@@ -216,6 +239,35 @@ contract RoundIntegrationTest is VotingTestBase {
     // =========================================================================
     // HELPERS
     // =========================================================================
+
+    function _deployRoundIntegrationClusterPayoutOracle() internal returns (ClusterPayoutOracle oracle) {
+        MockERC20 usdc = new MockERC20("USD Coin", "USDC", 6);
+        MockRoundIntegrationFrontendRegistry frontendRegistry = new MockRoundIntegrationFrontendRegistry();
+        oracle = new ClusterPayoutOracle(owner, address(frontendRegistry), address(usdc));
+        vm.startPrank(owner);
+        oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_PUBLIC_RATING(), address(registry));
+        address questionRewardPoolEscrow = registry.questionRewardPoolEscrow();
+        if (questionRewardPoolEscrow != address(0)) {
+            oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_QUESTION_REWARD(), questionRewardPoolEscrow);
+            oracle.setRoundPayoutSnapshotConsumer(
+                oracle.PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD(), questionRewardPoolEscrow
+            );
+        }
+        vm.stopPrank();
+    }
+
+    function _installRoundIntegrationClusterPayoutOracle() internal {
+        clusterPayoutOracle = _deployRoundIntegrationClusterPayoutOracle();
+        address protocolConfig = address(votingEngine.protocolConfig());
+        vm.prank(owner);
+        ProtocolConfig(protocolConfig).setClusterPayoutOracle(address(clusterPayoutOracle));
+    }
+
+    function _assertPublicRatingSourceReadyForPinnedOracle(uint256 contentId, uint256 roundId) internal {
+        assertEq(registry.roundPayoutSnapshotSourceReadyAt(3, 0, contentId, roundId), 0);
+        vm.prank(address(clusterPayoutOracle));
+        assertGt(registry.roundPayoutSnapshotSourceReadyAt(3, 0, contentId, roundId), 0);
+    }
 
     function _submitContent() internal returns (uint256 contentId) {
         contentId = _submitContentWithoutOpeningRound();
@@ -2812,6 +2864,7 @@ contract RoundIntegrationTest is VotingTestBase {
 
     function test_SettlementSideEffectsSucceed() public {
         uint256 contentId = _submitContent();
+        _installRoundIntegrationClusterPayoutOracle();
 
         address[] memory voters = new address[](3);
         voters[0] = voter1;
@@ -2830,7 +2883,7 @@ contract RoundIntegrationTest is VotingTestBase {
             "Settlement side effects should not block settlement"
         );
         assertFalse(votingEngine.pendingRatingSettlementReplay(contentId, roundId));
-        assertGt(registry.roundPayoutSnapshotSourceReadyAt(3, 0, contentId, roundId), 0);
+        _assertPublicRatingSourceReadyForPinnedOracle(contentId, roundId);
     }
 
     function test_SettlementSideEffectFailure_CanReplayPendingRatingSettlement() public {
@@ -2877,6 +2930,7 @@ contract RoundIntegrationTest is VotingTestBase {
         assertEq(registry.roundPayoutSnapshotSourceReadyAt(3, 0, contentId, roundId), 0);
 
         vm.clearMockedCalls();
+        _installRoundIntegrationClusterPayoutOracle();
         uint16 referenceRatingBps = _roundReferenceRatingBpsForRound(votingEngine, contentId, roundId);
         uint64 upEvidence = _roundRatingUpEvidence(votingEngine, contentId, roundId);
         uint64 downEvidence = _roundRatingDownEvidence(votingEngine, contentId, roundId);
@@ -2890,7 +2944,7 @@ contract RoundIntegrationTest is VotingTestBase {
         assertTrue(votingEngine.replayPendingRatingSettlement(contentId, roundId));
 
         assertFalse(votingEngine.pendingRatingSettlementReplay(contentId, roundId));
-        assertGt(registry.roundPayoutSnapshotSourceReadyAt(3, 0, contentId, roundId), 0);
+        _assertPublicRatingSourceReadyForPinnedOracle(contentId, roundId);
         registry.markDormant(contentId);
     }
 
@@ -2920,6 +2974,7 @@ contract RoundIntegrationTest is VotingTestBase {
         assertEq(registry.roundPayoutSnapshotSourceReadyAt(3, 0, contentId, roundId), 0);
 
         vm.clearMockedCalls();
+        _installRoundIntegrationClusterPayoutOracle();
         RoundVotingEngine replacementEngine = _deployReplacementVotingEngine();
 
         vm.startPrank(owner);
@@ -2935,7 +2990,7 @@ contract RoundIntegrationTest is VotingTestBase {
         assertTrue(votingEngine.replayPendingRatingSettlement(contentId, roundId));
 
         assertFalse(votingEngine.pendingRatingSettlementReplay(contentId, roundId));
-        assertGt(registry.roundPayoutSnapshotSourceReadyAt(3, 0, contentId, roundId), 0);
+        _assertPublicRatingSourceReadyForPinnedOracle(contentId, roundId);
     }
 
     // =========================================================================
