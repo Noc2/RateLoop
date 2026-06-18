@@ -58,7 +58,7 @@ describe("Ponder database schema launcher", () => {
     expect(result.ignoredLegacyDatabaseSchema).toBe(true);
   });
 
-  test("uses Railway deployment IDs before protocol deployment keys", () => {
+  test("uses protocol deployment keys before Railway deployment IDs", () => {
     const deploymentKey =
       "4801:0x1000000000000000000000000000000000000001:0x1000000000000000000000000000000000000002";
     const result = resolvePonderDatabaseSchema({
@@ -67,8 +67,8 @@ describe("Ponder database schema launcher", () => {
       RAILWAY_DEPLOYMENT_ID: "123e4567-e89b-12d3-a456-426614174000",
     });
 
-    expect(result.schema).toBe("railway_123e4567_e89b_12d3_a456_426614174000");
-    expect(result.source).toBe("RAILWAY_DEPLOYMENT_ID");
+    expect(result.schema).toBe(schemaFromProtocolDeploymentKey(deploymentKey));
+    expect(result.source).toBe("RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY");
   });
 
   test("uses protocol deployment keys when Railway deployment IDs are unavailable", () => {
