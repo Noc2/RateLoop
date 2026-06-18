@@ -26,6 +26,8 @@ import { notification } from "~~/utils/scaffold-eth";
 
 type JsonRecord = Record<string, unknown>;
 
+const RESERVED_SUBMISSION_REVEAL_WAIT_MS = 3_000;
+
 type SigningIntent = {
   chainId: number | null;
   clientRequestId: string | null;
@@ -42,6 +44,7 @@ type SigningIntent = {
     calls?: Array<{
       data?: string;
       description?: string;
+      functionName?: string;
       id?: string;
       phase?: string;
       to?: string;
@@ -71,6 +74,16 @@ function shortAddress(value: string | null | undefined) {
 
 function delay(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function getPostCallDelayMs(call: NonNullable<NonNullable<SigningIntent["transactionPlan"]>["calls"]>[number]) {
+  const waitAfterMs = Number.isFinite(call.waitAfterMs) ? Math.max(0, call.waitAfterMs ?? 0) : 0;
+  const isReserveSubmission =
+    call.functionName === "reserveSubmission" ||
+    call.phase === "reserve_submission" ||
+    call.id === "reserve-submission";
+
+  return isReserveSubmission ? Math.max(waitAfterMs, RESERVED_SUBMISSION_REVEAL_WAIT_MS) : waitAfterMs;
 }
 
 function readToken() {
@@ -390,8 +403,9 @@ export function BrowserSigningPage({ intentId }: { intentId: string }) {
         setSteps(current =>
           current.map((step, stepIndex) => (stepIndex === index ? { ...step, hash, status: "confirmed" } : step)),
         );
-        if (call.waitAfterMs && call.waitAfterMs > 0) {
-          await delay(call.waitAfterMs);
+        const delayMs = getPostCallDelayMs(call);
+        if (delayMs > 0) {
+          await delay(delayMs);
         }
       }
 

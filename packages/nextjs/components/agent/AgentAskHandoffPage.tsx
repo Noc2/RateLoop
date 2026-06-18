@@ -78,6 +78,8 @@ const ShareModal = dynamic(() => import("~~/components/submit/ShareModal").then(
   ssr: false,
 });
 
+const RESERVED_SUBMISSION_REVEAL_WAIT_MS = 3_000;
+
 type JsonRecord = Record<string, unknown>;
 
 type HandoffAsset = {
@@ -97,6 +99,7 @@ type HandoffTransactionPlan = {
   calls?: Array<{
     data?: string;
     description?: string;
+    functionName?: string;
     id?: string;
     phase?: string;
     to?: string;
@@ -648,6 +651,16 @@ function shortAddress(value: string | null | undefined) {
 
 function delay(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function getPostCallDelayMs(call: NonNullable<HandoffTransactionPlan["calls"]>[number]) {
+  const waitAfterMs = Number.isFinite(call.waitAfterMs) ? Math.max(0, call.waitAfterMs ?? 0) : 0;
+  const isReserveSubmission =
+    call.functionName === "reserveSubmission" ||
+    call.phase === "reserve_submission" ||
+    call.id === "reserve-submission";
+
+  return isReserveSubmission ? Math.max(waitAfterMs, RESERVED_SUBMISSION_REVEAL_WAIT_MS) : waitAfterMs;
 }
 
 function readToken() {
@@ -2404,8 +2417,9 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
             const hash = await sendTransaction(wagmiConfig, { chainId: handoffChainId, data, to, value });
             hashes.push(hash);
             await waitForTransactionReceipt(wagmiConfig, { chainId: handoffChainId, hash });
-            if (call.waitAfterMs && call.waitAfterMs > 0) {
-              await delay(call.waitAfterMs);
+            const delayMs = getPostCallDelayMs(call);
+            if (delayMs > 0) {
+              await delay(delayMs);
             }
           }
 

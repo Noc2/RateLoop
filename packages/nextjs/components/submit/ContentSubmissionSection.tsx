@@ -147,6 +147,8 @@ import { notification } from "~~/utils/scaffold-eth";
 
 const ShareModal = dynamic(() => import("~~/components/submit/ShareModal").then(m => m.ShareModal), { ssr: false });
 
+const RESERVED_SUBMISSION_REVEAL_WAIT_MS = 3_000;
+
 type MediaMode = "images" | "video";
 type ContextVisibility = "public" | "gated";
 type ConfidentialityDisclosurePolicy = "after_settlement" | "private_forever";
@@ -2686,7 +2688,7 @@ export function ContentSubmissionSection() {
 
       // ContentRegistry enforces a minimum reservation age before reveal.
       // Give the next block timestamp enough room to advance before the reveal submit.
-      await new Promise(resolve => setTimeout(resolve, 1_100));
+      await new Promise(resolve => setTimeout(resolve, RESERVED_SUBMISSION_REVEAL_WAIT_MS));
 
       if (canUseBatchedSubmitCalls) {
         const callsResult = await executeSponsoredCalls(

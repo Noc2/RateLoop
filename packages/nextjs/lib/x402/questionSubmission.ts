@@ -71,7 +71,7 @@ import {
 } from "~~/lib/x402/questionPayload";
 import { ponderApi } from "~~/services/ponder/client";
 
-const RESERVED_SUBMISSION_WAIT_MS = 1_100;
+const RESERVED_SUBMISSION_WAIT_MS = 3_000;
 const TX_RECEIPT_TIMEOUT_MS = 180_000;
 const MAX_X402_AUTHORIZATION_VALIDITY_SECONDS = 24n * 60n * 60n;
 const FEEDBACK_BONUS_ASSET_LREP = 0;
