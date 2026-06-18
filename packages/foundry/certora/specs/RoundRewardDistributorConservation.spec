@@ -75,7 +75,7 @@ rule dustFinalizationNeverDecreasesClaimedAmount(
 // FrontendFeeDust, :914). Targeted at the three public mutators rather than written as one
 // parametric rule over every method: a free parametric rule over this via_ir, struct-heavy
 // contract yields a spurious counterexample from an unreachable havoc prestate (the known
-// auto-finder artifact documented in certora-security-findings.md), even though every real
+// auto-finder artifact documented in docs/testing/certora-security-findings.md), even though every real
 // write only adds. The targeted rules below verify cleanly.
 rule claimFrontendFeeNeverDecreasesClaimedAmount(
     env e, uint256 contentId, uint256 roundId, address frontend, uint256 c, uint256 r
@@ -91,7 +91,7 @@ rule claimFrontendFeeNeverDecreasesClaimedAmount(
 // below — but it first runs the _processFrontendFeeDustBatch loop over the sorted-frontend
 // array, whose deep internal calls hit the via_ir auto-finder instrumentation gap and
 // produce a spurious "decrease" counterexample from an unreachable havoc state (the artifact
-// documented in certora-security-findings.md). Covering the underlying writer directly keeps
+// documented in docs/testing/certora-security-findings.md). Covering the underlying writer directly keeps
 // the proof sound without that false positive.
 rule finalizeProcessedFrontendFeeDustNeverDecreasesClaimedAmount(
     env e, uint256 contentId, uint256 roundId, uint256 c, uint256 r

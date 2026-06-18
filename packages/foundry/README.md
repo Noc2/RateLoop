@@ -129,10 +129,11 @@ scripts-js/                      # JS helpers for deployment & account managemen
 
 The upgradeable control-plane contracts are deployed behind **transparent upgradeable proxies** and use
 `AccessControlUpgradeable` for role-based permissions: `ContentRegistry`, `RoundVotingEngine`,
-`RoundRewardDistributor`, `ProtocolConfig`, `FrontendRegistry`, `ProfileRegistry`, `QuestionRewardPoolEscrow`, and
-`FeedbackBonusEscrow`. Token, identity, participation, governance, and helper contracts are intentionally
-non-upgradeable. For upgradeable implementation contracts, storage layout must be preserved across upgrades — never
-reorder, remove, or change types of existing storage variables.
+`RoundRewardDistributor`, `ProtocolConfig`, `FrontendRegistry`, `ProfileRegistry`, `RaterRegistry`,
+`QuestionRewardPoolEscrow`, `FeedbackBonusEscrow`, `FeedbackRegistry`, and `ConfidentialityEscrow`. Token, payout
+oracle, participation, governance, media-validator, submitter, and helper contracts are intentionally non-upgradeable.
+For upgradeable implementation contracts, storage layout must be preserved across upgrades — never reorder, remove, or
+change types of existing storage variables.
 
 Compiled ABIs and deployed addresses are generated into `packages/contracts/src/` and consumed via the `@rateloop/contracts` workspace package.
 
@@ -147,7 +148,7 @@ Rotating `ContentRegistry.setVotingEngine` or `FrontendRegistry.setVotingEngine`
 | Contract | Entrypoint | Footgun |
 | --- | --- | --- |
 | `ContentRegistry` | `setVotingEngine` | In-flight rounds on the previous engine may still settle; fresh content routes through the new engine. Pending public-rating settlements pin both `votingEngine` and `clusterPayoutOracle`. |
-| `FrontendRegistry` | `setVotingEngine` | Clears the fee creditor until `initializeFeeCreditor` is called again for the new reward distributor. |
+| `FrontendRegistry` | `setVotingEngine` | Clears the fee creditor until `addFeeCreditor` binds the new reward distributor; `initializeFeeCreditor` is deploy-time only. |
 
 **Contracts that pin engine at init (no governed rotation today)**
 
@@ -160,7 +161,7 @@ Rotating `ContentRegistry.setVotingEngine` or `FrontendRegistry.setVotingEngine`
 1. Pause affected registries and escrows.
 2. Deploy the replacement voting engine, reward distributor, and any escrow stacks bound to the new engine.
 3. Rewire `ProtocolConfig.setRewardDistributor` (use `replaceRevokedRewardDistributor` when replacing a revoked distributor on the same engine).
-4. Call `ContentRegistry.setVotingEngine` and `FrontendRegistry.setVotingEngine`; re-bind the frontend fee creditor.
+4. Call `ContentRegistry.setVotingEngine` and `FrontendRegistry.setVotingEngine`; re-bind the frontend fee creditor with `FrontendRegistry.addFeeCreditor`.
 5. Repoint pinned oracle consumers for in-flight payout work:
    - `QuestionRewardPoolEscrow.repointRewardPoolClusterPayoutOracle`
    - `QuestionRewardPoolEscrow.repointQuestionBundleClusterPayoutOracle`

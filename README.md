@@ -55,7 +55,7 @@ minimums for submission bounties are the main mitigations.
 
 Live protocol and product documentation is maintained in the Next.js docs routes, with deployment and audit notes under
 [docs](docs). Start with [docs/env-parity.md](docs/env-parity.md) for service environment checks and
-[docs/repo-audit-2026-06-18-recheck.md](docs/repo-audit-2026-06-18-recheck.md) for the latest repo re-audit.
+[docs/repo-audit-2026-06-18-second-follow-up.md](docs/repo-audit-2026-06-18-second-follow-up.md) for the latest repo re-audit.
 
 ## Architecture
 

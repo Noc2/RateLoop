@@ -72,7 +72,6 @@
     "world-id:e2e:local": "yarn workspace @rateloop/nextjs e2e:world-id:local",
     "base:check": "node scripts/check-base-mainnet-readiness.mjs",
     "base-sepolia:check": "node scripts/check-base-sepolia-readiness.mjs",
-    "worldchain:check": "node scripts/check-worldchain-mainnet-readiness.mjs",
     "worldchain-sepolia:check": "node scripts/check-worldchain-sepolia-readiness.mjs",
     "base-sepolia:e2e-wallet": "yarn workspace @rateloop/nextjs e2e:wallet:base-sepolia",
     "yeet": "node scripts/yeet-pr.mjs",
