@@ -27,7 +27,14 @@ const EMAIL_YELLOW = "#FFC43D";
 const EMAIL_PINK = "#EF476F";
 const EMAIL_SPECTRUM_GRADIENT = `linear-gradient(90deg, ${EMAIL_BLUE}, ${EMAIL_GREEN}, ${EMAIL_YELLOW}, ${EMAIL_PINK})`;
 const EMAIL_ACTION_INNER_GRADIENT = "linear-gradient(180deg, rgba(24,24,24,0.98), rgba(16,16,16,0.96))";
-const EMAIL_GRADIENT_TEXT_COLORS = [EMAIL_BLUE, EMAIL_GREEN, EMAIL_YELLOW, EMAIL_PINK];
+const EMAIL_GRADIENT_TEXT_STYLE = [
+  `color:${EMAIL_TEXT}`,
+  `background:${EMAIL_SPECTRUM_GRADIENT}`,
+  "-webkit-background-clip:text",
+  "background-clip:text",
+  "-webkit-text-fill-color:transparent",
+  "display:inline-block",
+].join("; ");
 
 function escapeHtml(value: string) {
   return value
@@ -38,17 +45,9 @@ function escapeHtml(value: string) {
     .replace(/'/g, "&#39;");
 }
 
-function renderGradientLetters(value: string) {
-  return Array.from(value)
-    .map((char, index) => {
-      if (char === " ") {
-        return " ";
-      }
-
-      const color = EMAIL_GRADIENT_TEXT_COLORS[index % EMAIL_GRADIENT_TEXT_COLORS.length];
-      return `<span style="color:${color};">${escapeHtml(char)}</span>`;
-    })
-    .join("");
+function renderGradientText(value: string) {
+  const safeValue = escapeHtml(value);
+  return `<!--[if mso]><span style="color:${EMAIL_TEXT};">${safeValue}</span><![endif]--><!--[if !mso]><!--><span style="${EMAIL_GRADIENT_TEXT_STYLE};">${safeValue}</span><!--<![endif]-->`;
 }
 
 function renderHighlightedText(value: string, options: { highlightEmail?: boolean } = {}) {
@@ -64,7 +63,7 @@ function renderHighlightedText(value: string, options: { highlightEmail?: boolea
     const matchedText = match[0];
     const index = match.index ?? 0;
     html += escapeHtml(value.slice(cursor, index));
-    html += renderGradientLetters(matchedText);
+    html += renderGradientText(matchedText);
     cursor = index + matchedText.length;
   }
 

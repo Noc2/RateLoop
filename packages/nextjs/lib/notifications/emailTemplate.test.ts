@@ -18,7 +18,12 @@ test("buildRateLoopEmailHtml includes the branded header, button, and fallback l
   assert.doesNotMatch(html, /aria-label="RateLoop logo"/);
   assert.doesNotMatch(html, /Rate<\/span><span style="color:#359EEE;">L/);
   assert.match(html, /Email verification/);
-  assert.match(html, /Verify your <span style="color:#359EEE;">e/);
+  assert.match(html, /Verify your <!--\[if mso\]><span style="color:#f5f5f5;">email<\/span><!\[endif\]-->/);
+  assert.match(html, /background:linear-gradient\(90deg, #359EEE, #03CEA4, #FFC43D, #EF476F\)/);
+  assert.match(html, /-webkit-background-clip:text/);
+  assert.match(html, /background-clip:text/);
+  assert.match(html, /-webkit-text-fill-color:transparent/);
+  assert.doesNotMatch(html, /<span style="color:#359EEE;">e<\/span>/);
   assert.match(html, /#359EEE/);
   assert.match(html, /#03CEA4/);
   assert.match(html, /#FFC43D/);
