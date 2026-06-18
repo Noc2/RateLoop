@@ -63,7 +63,7 @@ library QuestionRewardPoolEscrowSnapshotConsumerLib {
         require(bundle.id != 0, "Bundle not found");
         require(!bundle.refunded, "Bundle refunded");
         require(
-            bundle.completedRoundSets == 0 && bundle.claimedAmount == 0 && bundle.pendingRecoveredRoundSets == 0,
+            bundle.claimedAmount == 0 && bundle.completedRoundSets == bundle.pendingRecoveredRoundSets,
             "Bundle already consumed"
         );
         address oldOracle = bundleRewardClusterPayoutOracle[bundleId];
