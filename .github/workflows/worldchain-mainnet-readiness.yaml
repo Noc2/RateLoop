@@ -1,4 +1,4 @@
-name: World Chain Mainnet Readiness
+name: Legacy World Chain Mainnet Readiness (Retired)
 
 on:
   workflow_dispatch:
@@ -7,20 +7,12 @@ permissions:
   contents: read
 
 jobs:
-  readiness:
+  retired:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          submodules: true
-
-      - name: Setup node env
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: "24"
-
-      - name: Offline production readiness checks
-        run: node scripts/check-worldchain-mainnet-readiness.mjs --production
+      - name: Retired Base-first rollout notice
+        run: |
+          echo "World Chain mainnet readiness is retired for the Base-first rollout."
+          echo "Use Base Sepolia readiness first; promote Base mainnet intentionally after verification."
