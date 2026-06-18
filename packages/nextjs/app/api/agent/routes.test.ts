@@ -753,7 +753,7 @@ test("agent signing intent routes create and prepare browser handoff asks", asyn
   installAskOverrides();
 
   const createResponse = await signingIntentsRoute.POST(
-    makePublicPost("https://rateloop.ai/api/agent/signing-intents", {
+    makePublicPost("https://rateloop.ai/rateloop/api/agent/signing-intents", {
       request: {
         ...questionPayload("browser-handoff"),
         maxPaymentAmount: "1500000",
@@ -773,6 +773,7 @@ test("agent signing intent routes create and prepare browser handoff asks", asyn
   assert.equal(createResponse.status, 200);
   assert.match(intentId, /^asi_/);
   assert.ok(token);
+  assert.match(signingUrl.pathname, /^\/rateloop\/agent\/sign\/asi_/);
   assert.equal(signingUrl.searchParams.get("token"), null);
   assert.equal(createBody.status, "pending");
 
@@ -1147,7 +1148,7 @@ test("agent ask handoff route uploads signed generated images before preparing a
     },
   };
   const createResponse = await handoffsRoute.POST(
-    makePublicPost("https://rateloop.ai/api/agent/handoffs", {
+    makePublicPost("https://rateloop.ai/rateloop/api/agent/handoffs", {
       generatedImages: [
         {
           filename: "concept.png",
@@ -1162,14 +1163,16 @@ test("agent ask handoff route uploads signed generated images before preparing a
     }),
   );
   const createBody = (await createResponse.json()) as Record<string, unknown>;
+  assert.equal(createResponse.status, 200, JSON.stringify(createBody));
   const handoffId = String(createBody.handoffId);
-  const token = new URLSearchParams(new URL(String(createBody.handoffUrl)).hash.replace(/^#/, "")).get("token");
+  const handoffUrl = new URL(String(createBody.handoffUrl));
+  const token = new URLSearchParams(handoffUrl.hash.replace(/^#/, "")).get("token");
 
-  assert.equal(createResponse.status, 200);
+  assert.match(handoffUrl.pathname, /^\/rateloop\/agent\/handoff\/ahf_/);
   assert.ok(token);
 
   const patchResponse = await handoffRoute.PATCH(
-    makePublicPatch(`https://rateloop.ai/api/agent/handoffs/${handoffId}`, {
+    makePublicPatch(`https://rateloop.ai/rateloop/api/agent/handoffs/${handoffId}`, {
       requestBody: {
         ...handoffRequest,
         question: {
@@ -1184,7 +1187,7 @@ test("agent ask handoff route uploads signed generated images before preparing a
   assert.equal(patchResponse.status, 200);
 
   const challengeResponse = await handoffPrepareRoute.POST(
-    makePublicPost(`https://rateloop.ai/api/agent/handoffs/${handoffId}/prepare`, {
+    makePublicPost(`https://rateloop.ai/rateloop/api/agent/handoffs/${handoffId}/prepare`, {
       chainId: HANDOFF_CHAIN_ID,
       token,
       walletAddress: account.address,
@@ -1201,7 +1204,7 @@ test("agent ask handoff route uploads signed generated images before preparing a
 
   const signature = await account.signMessage({ message: String(challenge.message) });
   const prepareResponse = await handoffPrepareRoute.POST(
-    makePublicPost(`https://rateloop.ai/api/agent/handoffs/${handoffId}/prepare`, {
+    makePublicPost(`https://rateloop.ai/rateloop/api/agent/handoffs/${handoffId}/prepare`, {
       chainId: HANDOFF_CHAIN_ID,
       imageSignatures: [
         {
@@ -1224,12 +1227,18 @@ test("agent ask handoff route uploads signed generated images before preparing a
   assert.equal(prepareResponse.status, 200);
   assert.equal(prepareBody.status, "prepared");
   assert.equal(prepareBody.assets?.[0]?.status, "uploaded");
-  assert.match(String(prepareBody.assets?.[0]?.imageUrl), /^https:\/\/rateloop\.ai\/api\/attachments\/images\/att_/);
+  assert.match(
+    String(prepareBody.assets?.[0]?.imageUrl),
+    /^https:\/\/rateloop\.ai\/rateloop\/api\/attachments\/images\/att_/,
+  );
   assert.equal(prepareBody.transactionPlan?.calls?.length, 1);
   const payload = preparedPayload as {
     questions: Array<{ imageUrls: string[]; videoUrl?: string }>;
   };
-  assert.match(String(payload.questions[0]?.imageUrls[0]), /^https:\/\/rateloop\.ai\/api\/attachments\/images\/att_/);
+  assert.match(
+    String(payload.questions[0]?.imageUrls[0]),
+    /^https:\/\/rateloop\.ai\/rateloop\/api\/attachments\/images\/att_/,
+  );
   assert.equal(payload.questions[0]?.videoUrl || undefined, undefined);
 });
 

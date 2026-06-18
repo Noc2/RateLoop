@@ -1,6 +1,6 @@
 import { isLocalE2EProductionBuildEnabled } from "~~/utils/env/e2eProduction";
 
-const IMAGE_ATTACHMENT_PATH_PATTERN = /^\/api\/attachments\/images\/(att_[A-Za-z0-9_-]{16,80})\.webp$/;
+const IMAGE_ATTACHMENT_PATH_PATTERN = /^(?:\/.*)?\/api\/attachments\/images\/(att_[A-Za-z0-9_-]{16,80})\.webp$/;
 const IMAGE_ATTACHMENT_SHA256_FRAGMENT_PATTERN = /^#sha256=0x([a-fA-F0-9]{64})$/;
 const WALLET_ADDRESS_PATTERN = /^0x[a-fA-F0-9]{40}$/;
 

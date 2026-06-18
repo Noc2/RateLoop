@@ -3,6 +3,7 @@ import "server-only";
 import { type Address, type Hex, isAddress } from "viem";
 import { dbClient } from "~~/lib/db";
 import { McpToolError, callPublicRateLoopMcpTool } from "~~/lib/mcp/tools";
+import { buildAppRelativeUrl } from "~~/lib/url/appRelative";
 import { parseX402QuestionRequest } from "~~/lib/x402/questionPayload";
 
 type JsonObject = Record<string, unknown>;
@@ -139,14 +140,14 @@ function rowToIntent(row: Record<string, unknown> | undefined): AgentSigningInte
   };
 }
 
-function signingUrl(params: { intentId: string; origin: string; token: string }) {
+function signingUrl(params: { appBaseUrl: string; intentId: string; token: string }) {
   // C-1 (2026-05-22 audit): place the bearer token in the URL fragment instead of
   // the query string. Fragments are not sent in HTTP request lines, are not logged
   // by intermediate proxies, are not leaked through the Referer header on any
   // outbound navigation, and are not indexed by analytics that scrape query
   // parameters. The browser still retains them in history, but every other leak
   // vector goes away. The signing page reads the token from window.location.hash.
-  const url = new URL(`/agent/sign/${params.intentId}`, params.origin);
+  const url = buildAppRelativeUrl(params.appBaseUrl, `/agent/sign/${params.intentId}`);
   url.hash = `token=${encodeURIComponent(params.token)}`;
   return url.toString();
 }
@@ -262,7 +263,7 @@ function hasPreparedSigningArtifacts(intent: AgentSigningIntentRecord) {
   return readTransactionPlanFromBody({ transactionPlan: intent.transactionPlan }).calls.length > 0;
 }
 
-export async function createAgentSigningIntent(params: { origin: string; requestBody: unknown; ttlMs?: number }) {
+export async function createAgentSigningIntent(params: { appBaseUrl: string; requestBody: unknown; ttlMs?: number }) {
   const requestBody = asJsonObject(params.requestBody);
   const payload = parseX402QuestionRequest(requestBody);
   if (requestBody.maxPaymentAmount === undefined || requestBody.maxPaymentAmount === null) {
@@ -334,7 +335,7 @@ export async function createAgentSigningIntent(params: { origin: string; request
   };
 
   return signingIntentResponse(intent, {
-    signingUrl: signingUrl({ intentId: id, origin: params.origin, token }),
+    signingUrl: signingUrl({ appBaseUrl: params.appBaseUrl, intentId: id, token }),
   });
 }
 

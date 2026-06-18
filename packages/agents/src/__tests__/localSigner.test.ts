@@ -65,6 +65,8 @@ const UPLOADED_IMAGE_URL_A =
   "https://www.rateloop.ai/api/attachments/images/att_aaaaaaaaaaaaaaaa.webp#sha256=0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const UPLOADED_IMAGE_URL_B =
   "https://www.rateloop.ai/api/attachments/images/att_bbbbbbbbbbbbbbbb.webp#sha256=0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+const UPLOADED_IMAGE_URL_PREFIXED =
+  "https://www.rateloop.ai/rateloop/api/attachments/images/att_cccccccccccccccc.webp#sha256=0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
 const QUESTION_METADATA_BASE_URL = "https://ponder.rateloop.ai";
 const BOUNTY_START_BY = 1_893_456_000n;
 const BOUNTY_WINDOW_SECONDS = 1_200n;
@@ -1937,5 +1939,22 @@ describe("local signer media canonicalization", () => {
       UPLOADED_IMAGE_URL_A,
       UPLOADED_IMAGE_URL_B,
     ]);
+  });
+
+  it("accepts path-prefixed RateLoop image attachment URLs", () => {
+    const base = askPayload();
+    const parsed = parseX402QuestionRequest(
+      {
+        ...base,
+        question: {
+          ...base.question,
+          contextUrl: undefined,
+          imageUrls: [UPLOADED_IMAGE_URL_PREFIXED],
+        },
+      },
+      480,
+    );
+
+    expect(parsed.questions[0].imageUrls).toEqual([UPLOADED_IMAGE_URL_PREFIXED]);
   });
 });

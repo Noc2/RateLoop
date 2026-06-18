@@ -9,11 +9,13 @@ import {
   parseJsonBody,
 } from "~~/lib/agent/http";
 import { ImageUploadQuotaError } from "~~/lib/attachments/imageAttachments";
+import { resolveRequestAppBaseUrl } from "~~/lib/url/appRelative";
 import { resolveRateLimitSubject } from "~~/utils/rateLimit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
+const HANDOFFS_ROUTE_PATH = "/api/agent/handoffs";
 
 function readTtlMs(value: unknown) {
   if (value === undefined || value === null || value === "") return undefined;
@@ -22,7 +24,7 @@ function readTtlMs(value: unknown) {
 }
 
 export async function POST(request: NextRequest) {
-  const origin = new URL(request.url).origin;
+  const appBaseUrl = resolveRequestAppBaseUrl(request.url, HANDOFFS_ROUTE_PATH);
 
   return handlePublicAgentRoute({
     handler: async () => {
@@ -36,8 +38,8 @@ export async function POST(request: NextRequest) {
 
       try {
         return await createAgentAskHandoff({
+          appBaseUrl,
           generatedImages: (body as { generatedImages?: unknown }).generatedImages,
-          origin,
           rateLimitSubjectId: resolveRateLimitSubject(request),
           requestBody,
           ttlMs: readTtlMs((body as { ttlMs?: unknown }).ttlMs),

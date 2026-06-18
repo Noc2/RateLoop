@@ -138,6 +138,7 @@ import {
   updateMcpBudgetReservation,
 } from "~~/lib/mcp/budget";
 import { buildQuestionSubmissionKey } from "~~/lib/questionSubmissionCommitment";
+import { buildAppRelativeUrl, resolveRequestAppBaseUrl } from "~~/lib/url/appRelative";
 import { resolveRoundVoteRuntime } from "~~/lib/vote/roundVoteRuntime";
 import { type RoundVoteContractCall, buildRoundVoteTransactionPlan } from "~~/lib/vote/roundVoteTransactionPlan";
 import {
@@ -708,9 +709,9 @@ function handoffRequestArgs(args: JsonObject): JsonObject {
   return requestArgs;
 }
 
-function toolOrigin(requestUrl: string | undefined) {
+function toolAppBaseUrl(requestUrl: string | undefined) {
   try {
-    return new URL(toolRequestUrl(requestUrl, true)).origin;
+    return resolveRequestAppBaseUrl(toolRequestUrl(requestUrl, true), "/api/mcp/public");
   } catch {
     return "https://www.rateloop.ai";
   }
@@ -718,8 +719,8 @@ function toolOrigin(requestUrl: string | undefined) {
 
 async function createAskHandoffLink(args: JsonObject, requestUrl: string | undefined, rateLimitSubjectId?: string) {
   return createAgentAskHandoff({
+    appBaseUrl: toolAppBaseUrl(requestUrl),
     generatedImages: args.generatedImages,
-    origin: toolOrigin(requestUrl),
     rateLimitSubjectId,
     requestBody: handoffRequestArgs(args),
     ttlMs: typeof args.ttlMs === "number" ? args.ttlMs : undefined,
@@ -1451,7 +1452,7 @@ async function listAuthenticatedGatedContextUrls(params: {
   requestUrl?: string;
   walletAddress: Address;
 }) {
-  const origin = toolOrigin(params.requestUrl);
+  const appBaseUrl = toolAppBaseUrl(params.requestUrl);
   const deploymentScope = resolveCurrentConfidentialityDeploymentScope();
   if (!deploymentScope) return [];
 
@@ -1486,13 +1487,19 @@ async function listAuthenticatedGatedContextUrls(params: {
           kind: "details" as const,
           resourceId: row.id,
           sha256: row.sha256 ? `0x${row.sha256}` : null,
-          url: gatedContextFetchUrl(`${origin}/api/attachments/details/${row.id}`, params.walletAddress),
+          url: gatedContextFetchUrl(
+            buildAppRelativeUrl(appBaseUrl, `/api/attachments/details/${row.id}`).toString(),
+            params.walletAddress,
+          ),
         })),
       ...imageRows
         .sort((left, right) => left.id.localeCompare(right.id))
         .map(row => {
           const hash = row.sha256 ? `0x${row.sha256}` : null;
-          const url = gatedContextFetchUrl(`${origin}/api/attachments/images/${row.id}.webp`, params.walletAddress);
+          const url = gatedContextFetchUrl(
+            buildAppRelativeUrl(appBaseUrl, `/api/attachments/images/${row.id}.webp`).toString(),
+            params.walletAddress,
+          );
           return {
             kind: "image" as const,
             resourceId: row.id,

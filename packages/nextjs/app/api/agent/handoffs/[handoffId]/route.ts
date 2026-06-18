@@ -17,6 +17,7 @@ import {
   jsonBodyErrorResponse,
   parseJsonBody,
 } from "~~/lib/agent/http";
+import { resolveRequestAppBaseUrl } from "~~/lib/url/appRelative";
 
 type JsonObject = Record<string, unknown>;
 
@@ -70,8 +71,8 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ h
         handoff,
         requestBody,
         validationImageUrls: buildAgentAskHandoffValidationImageUrls({
+          appBaseUrl: resolveRequestAppBaseUrl(request.url, `/api/agent/handoffs/${handoffId}`),
           assets,
-          origin: new URL(request.url).origin,
         }),
       });
 

@@ -8,9 +8,11 @@ import {
   parseJsonBody,
 } from "~~/lib/agent/http";
 import { createAgentSigningIntent } from "~~/lib/agent/signingIntents";
+import { resolveRequestAppBaseUrl } from "~~/lib/url/appRelative";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+const SIGNING_INTENTS_ROUTE_PATH = "/api/agent/signing-intents";
 
 function readTtlMs(value: unknown) {
   if (value === undefined || value === null || value === "") return undefined;
@@ -19,7 +21,7 @@ function readTtlMs(value: unknown) {
 }
 
 export async function POST(request: NextRequest) {
-  const origin = new URL(request.url).origin;
+  const appBaseUrl = resolveRequestAppBaseUrl(request.url, SIGNING_INTENTS_ROUTE_PATH);
 
   return handlePublicAgentRoute({
     handler: async () => {
@@ -32,7 +34,7 @@ export async function POST(request: NextRequest) {
         : Object.fromEntries(Object.entries(body).filter(([key]) => key !== "ttlMs"));
 
       return createAgentSigningIntent({
-        origin,
+        appBaseUrl,
         requestBody,
         ttlMs: readTtlMs((body as { ttlMs?: unknown }).ttlMs),
       });

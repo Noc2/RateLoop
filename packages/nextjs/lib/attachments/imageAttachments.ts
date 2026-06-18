@@ -13,6 +13,7 @@ import { assertGatedAttachmentSchemaReady } from "~~/lib/attachments/uploadError
 import { MAX_SUBMISSION_IMAGE_URLS } from "~~/lib/contentMedia";
 import { db, dbPool } from "~~/lib/db";
 import { type QuestionImageAttachment, questionImageAttachments } from "~~/lib/db/schema";
+import { buildAppRelativeUrl, resolveApiRequestAppBaseUrl } from "~~/lib/url/appRelative";
 
 const IMAGE_ATTACHMENT_ROUTE_PREFIX = "/api/attachments/images";
 const IMAGE_ATTACHMENT_PUBLIC_EXTENSION = "webp";
@@ -429,7 +430,8 @@ function resolveLocalImageAttachmentPathname(pathname: string) {
 }
 
 export function getAttachmentImageUrl(requestUrl: string, attachmentId: string, sha256?: string | null) {
-  const url = new URL(getAttachmentImagePath(attachmentId), getConfiguredAttachmentBaseUrl() ?? requestUrl);
+  const appBaseUrl = getConfiguredAttachmentBaseUrl() ?? resolveApiRequestAppBaseUrl(requestUrl);
+  const url = buildAppRelativeUrl(appBaseUrl, getAttachmentImagePath(attachmentId));
   const digest = sha256?.trim().toLowerCase();
   if (digest) url.hash = `sha256=0x${digest}`;
   return url.toString();

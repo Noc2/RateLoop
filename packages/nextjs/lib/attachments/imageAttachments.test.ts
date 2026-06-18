@@ -63,6 +63,10 @@ test("builds RateLoop upload image URLs with a webp extension", () => {
     getAttachmentImageUrl("https://www.rateloop.ai/ask", "att_abcdefghijklmnop", "a".repeat(64)),
     `https://www.rateloop.ai/api/attachments/images/att_abcdefghijklmnop.webp#sha256=0x${"a".repeat(64)}`,
   );
+  assert.equal(
+    getAttachmentImageUrl("https://www.rateloop.ai/rateloop/api/mcp/public", "att_abcdefghijklmnop", "a".repeat(64)),
+    `https://www.rateloop.ai/rateloop/api/attachments/images/att_abcdefghijklmnop.webp#sha256=0x${"a".repeat(64)}`,
+  );
 });
 
 test("creates random image attachment ids with the public upload prefix", () => {
@@ -74,6 +78,12 @@ test("parses RateLoop attachment ids from public upload image URLs", () => {
   assert.equal(
     parseAttachmentIdFromImageUrl(
       `https://www.rateloop.ai/api/attachments/images/att_abcdefghijklmnop.webp#sha256=0x${"a".repeat(64)}`,
+    ),
+    "att_abcdefghijklmnop",
+  );
+  assert.equal(
+    parseAttachmentIdFromImageUrl(
+      `https://www.rateloop.ai/rateloop/api/attachments/images/att_abcdefghijklmnop.webp#sha256=0x${"a".repeat(64)}`,
     ),
     "att_abcdefghijklmnop",
   );
@@ -706,7 +716,7 @@ test("limits daily image upload quota by byte count", async () => {
 test("validates uploaded RateLoop image ownership before submission", async () => {
   const now = new Date();
   const sha256 = "a".repeat(64);
-  const imageUrl = `https://www.rateloop.ai/api/attachments/images/att_abcdefghijklmnop.webp#sha256=0x${sha256}`;
+  const imageUrl = `https://www.rateloop.ai/rateloop/api/attachments/images/att_abcdefghijklmnop.webp#sha256=0x${sha256}`;
   await db.insert(questionImageAttachments).values({
     id: "att_abcdefghijklmnop",
     uploaderKind: "wallet",

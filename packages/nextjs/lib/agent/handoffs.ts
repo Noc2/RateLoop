@@ -9,6 +9,7 @@ import {
 } from "~~/lib/attachments/imageAttachments";
 import { getMaxImageUploadSizeBytes, isSupportedImageUploadMimeType } from "~~/lib/auth/imageUploadChallenge.shared";
 import { dbClient } from "~~/lib/db";
+import { buildAppRelativeUrl } from "~~/lib/url/appRelative";
 import { parseX402QuestionRequest } from "~~/lib/x402/questionPayload";
 import { X402QuestionConfigError, resolveX402QuestionConfig } from "~~/lib/x402/questionSubmission";
 
@@ -316,14 +317,14 @@ function rowToAsset(row: Record<string, unknown>): AgentAskHandoffAssetRecord {
   };
 }
 
-function handoffUrl(params: { handoffId: string; origin: string; token: string }) {
-  const url = new URL(`/agent/handoff/${params.handoffId}`, params.origin);
+function handoffUrl(params: { appBaseUrl: string; handoffId: string; token: string }) {
+  const url = buildAppRelativeUrl(params.appBaseUrl, `/agent/handoff/${params.handoffId}`);
   url.hash = `token=${encodeURIComponent(params.token)}`;
   return url.toString();
 }
 
-function assetImageUrl(origin: string, attachmentId: string, sha256: string) {
-  const url = new URL(`/api/attachments/images/${attachmentId}.webp`, origin);
+function assetImageUrl(appBaseUrl: string, attachmentId: string, sha256: string) {
+  const url = buildAppRelativeUrl(appBaseUrl, `/api/attachments/images/${attachmentId}.webp`);
   url.hash = `sha256=0x${sha256.toLowerCase()}`;
   return url.toString();
 }
@@ -542,10 +543,12 @@ function assertHandoffChainSubmitReady(chainId: number) {
 }
 
 export function buildAgentAskHandoffValidationImageUrls(params: {
+  appBaseUrl: string;
   assets: AgentAskHandoffAssetRecord[];
-  origin: string;
 }) {
-  return params.assets.map(asset => asset.imageUrl ?? assetImageUrl(params.origin, asset.attachmentId, asset.sha256));
+  return params.assets.map(
+    asset => asset.imageUrl ?? assetImageUrl(params.appBaseUrl, asset.attachmentId, asset.sha256),
+  );
 }
 
 export function normalizeAgentAskHandoffRequestBody(params: {
@@ -704,8 +707,8 @@ export function buildAgentAskHandoffResponse(params: {
 }
 
 export async function createAgentAskHandoff(params: {
+  appBaseUrl: string;
   generatedImages?: unknown;
-  origin: string;
   rateLimitSubjectId?: string;
   requestBody: unknown;
   ttlMs?: number;
@@ -732,7 +735,7 @@ export async function createAgentAskHandoff(params: {
     attachmentId: createImageAttachmentId(),
     id: randomAssetId(),
   }));
-  const validationImageUrls = assets.map(asset => assetImageUrl(params.origin, asset.attachmentId, asset.sha256));
+  const validationImageUrls = assets.map(asset => assetImageUrl(params.appBaseUrl, asset.attachmentId, asset.sha256));
   const normalized = normalizeAgentAskHandoffRequestBody({ requestBody, validationImageUrls });
 
   await assertAgentAskHandoffDraftSchemaReady();
@@ -819,7 +822,7 @@ export async function createAgentAskHandoff(params: {
     ...buildAgentAskHandoffResponse({ assets: storedAssets, handoff }),
     handoffId: id,
     handoffToken: token,
-    handoffUrl: handoffUrl({ handoffId: id, origin: params.origin, token }),
+    handoffUrl: handoffUrl({ appBaseUrl: params.appBaseUrl, handoffId: id, token }),
     nextAction: "Share handoffUrl with the user. Do not ask the user to paste raw wallet signatures.",
     resultTool: "rateloop_get_result",
     statusTool: "rateloop_get_handoff_status",
