@@ -28,6 +28,12 @@ async function getContentSecurityPolicy() {
   return csp as string;
 }
 
+async function getGlobalHeaderValue(key: string) {
+  const headers = typeof nextConfig.headers === "function" ? await nextConfig.headers() : [];
+  const globalHeaders = headers.find(header => header.source === "/(.*)")?.headers ?? [];
+  return globalHeaders.find(header => header.key === key)?.value;
+}
+
 test("connect-src allows Vercel Blob browser upload API requests", async () => {
   const csp = await getContentSecurityPolicy();
   const connectSrc = csp
@@ -38,4 +44,11 @@ test("connect-src allows Vercel Blob browser upload API requests", async () => {
   assert.ok(connectSrc);
   assert.match(connectSrc, /(?:^|\s)https:\/\/vercel\.com(?:\s|$)/);
   assert.match(connectSrc, /(?:^|\s)https:\/\/\*\.blob\.vercel-storage\.com(?:\s|$)/);
+});
+
+test("permissions policy only advertises browser-recognized directives", async () => {
+  const permissionsPolicy = await getGlobalHeaderValue("Permissions-Policy");
+
+  assert.equal(permissionsPolicy, "camera=(), microphone=(), geolocation=()");
+  assert.doesNotMatch(permissionsPolicy ?? "", /(?:^|,\s*)tools=/);
 });
