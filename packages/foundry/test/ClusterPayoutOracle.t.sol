@@ -2318,7 +2318,9 @@ contract ClusterPayoutOracleTest is Test {
         assertEq(replacement.artifactHash, replacementArtifact);
     }
 
-    function test_FinalizedRoundPayoutSnapshotReproposalWithLiveParentWhenConsumerViewReverts() public {
+    function test_FinalizedRoundPayoutSnapshotReproposalWithLiveParentRevertsSnapshotExistsWhenConsumerViewReverts()
+        public
+    {
         RevertingConsumedRoundPayoutSnapshotConsumer revertingConsumer =
             new RevertingConsumedRoundPayoutSnapshotConsumer();
         oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_QUESTION_REWARD(), address(revertingConsumer));
@@ -2338,11 +2340,53 @@ contract ClusterPayoutOracleTest is Test {
         input.artifactHash = firstArtifact;
         input.artifactURI = "ipfs://round-v2-live-parent";
         input.weightRoot = keccak256("replacement-weight-root");
+        vm.expectRevert(ClusterPayoutOracle.SnapshotExists.selector);
+        oracle.proposeRoundPayoutSnapshot(input);
+    }
+
+    function test_FinalizedRoundPayoutSnapshotReproposalWithLiveParentRevertsSnapshotExistsWhenUnconsumed() public {
+        bytes32 firstArtifact = keccak256("epoch-artifact");
+        _proposeDefaultCorrelationEpoch(1, keccak256("cluster-root"), firstArtifact);
+        vm.warp(2 hours + 2);
+        oracle.finalizeCorrelationEpoch(1);
+
+        IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
+        oracle.proposeRoundPayoutSnapshot(input);
+        bytes32 snapshotKey =
+            oracle.roundPayoutSnapshotKey(input.domain, input.rewardPoolId, input.contentId, input.roundId);
+        vm.warp(block.timestamp + 2 hours + 1);
+        oracle.finalizeRoundPayoutSnapshot(snapshotKey);
+        bytes32 originalDigest = oracle.roundPayoutSnapshotProposalDigest(snapshotKey);
+
+        input.artifactURI = "ipfs://round-v2-live-parent";
+        input.weightRoot = keccak256("replacement-weight-root");
+        vm.expectRevert(ClusterPayoutOracle.SnapshotExists.selector);
         oracle.proposeRoundPayoutSnapshot(input);
 
-        ClusterPayoutOracle.RoundPayoutProposal memory replacement = oracle.roundPayoutProposal(snapshotKey);
-        assertEq(uint8(replacement.snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Proposed));
-        assertEq(replacement.artifactHash, firstArtifact);
+        assertFalse(oracle.rejectedRoundPayoutSnapshotDigests(snapshotKey, originalDigest));
+        ClusterPayoutOracle.RoundPayoutProposal memory original = oracle.roundPayoutProposal(snapshotKey);
+        assertEq(uint8(original.snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Finalized));
+        assertEq(original.snapshot.weightRoot, keccak256("leaf"));
+    }
+
+    function test_FinalizedRoundPayoutSnapshotReproposalWithLiveParentRevertsSnapshotConsumedWhenConsumed() public {
+        bytes32 firstArtifact = keccak256("epoch-artifact");
+        _proposeDefaultCorrelationEpoch(1, keccak256("cluster-root"), firstArtifact);
+        vm.warp(2 hours + 2);
+        oracle.finalizeCorrelationEpoch(1);
+
+        IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
+        oracle.proposeRoundPayoutSnapshot(input);
+        bytes32 snapshotKey =
+            oracle.roundPayoutSnapshotKey(input.domain, input.rewardPoolId, input.contentId, input.roundId);
+        vm.warp(block.timestamp + 2 hours + 1);
+        oracle.finalizeRoundPayoutSnapshot(snapshotKey);
+
+        questionConsumer.setConsumed(true);
+        input.artifactURI = "ipfs://round-v2-live-parent";
+        input.weightRoot = keccak256("replacement-weight-root");
+        vm.expectRevert(ClusterPayoutOracle.SnapshotConsumed.selector);
+        oracle.proposeRoundPayoutSnapshot(input);
     }
 
     /// @dev M9: direct reproposal of a Proposed round payout snapshot is blocked while the
