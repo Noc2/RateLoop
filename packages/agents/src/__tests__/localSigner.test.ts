@@ -1245,6 +1245,40 @@ describe("local signer", () => {
     expect(calls).toHaveLength(3);
   });
 
+  it("uses chain-scoped USDC aliases when validating local signer plans", () => {
+    const unscopedUsdcAddress =
+      "0x0000000000000000000000000000000000000123" as const;
+    const config = loadLocalSignerConfig({}, {
+      RATELOOP_X402_USDC_ADDRESS: unscopedUsdcAddress,
+      RATELOOP_X402_USDC_ADDRESS_480: X402_USDC_ADDRESS,
+    } as NodeJS.ProcessEnv);
+
+    const calls = validateLocalSignerTransactionPlan({
+      accountAddress: account.address,
+      ask: walletCallsResponse({}, QUESTION_METADATA_BASE_URL),
+      config: {
+        ...validationConfig(),
+        usdcAddress: config.usdcAddress,
+        usdcAddressesByChain: config.usdcAddressesByChain,
+      },
+      expectedBountyAmount: BigInt(X402_AMOUNT),
+      expectedChainId: 480,
+      expectedPayload: askPayload(),
+    });
+
+    expect(calls).toHaveLength(3);
+  });
+
+  it("rejects disagreeing chain-scoped USDC aliases", () => {
+    expect(() =>
+      loadLocalSignerConfig({}, {
+        RATELOOP_LOCAL_SIGNER_USDC_ADDRESS_480: X402_USDC_ADDRESS,
+        RATELOOP_X402_USDC_ADDRESS_480:
+          "0x0000000000000000000000000000000000000123",
+      } as NodeJS.ProcessEnv),
+    ).toThrow(/must match when both are set/);
+  });
+
   it("rejects server metadata bases that differ from the local signer pin", () => {
     expect(() =>
       validateLocalSignerTransactionPlan({

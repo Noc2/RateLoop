@@ -66,6 +66,7 @@ import {
 
 type CliOptions = Record<string, string | boolean | undefined>;
 type JsonRecord = Record<string, unknown>;
+type ChainScopedAddressOverrides = Partial<Record<number, Address>>;
 
 const KEYSTORE_VERSION = 3;
 const DEFAULT_SCRYPT_PARAMS = {
@@ -129,6 +130,7 @@ type LocalSignerConfig = {
   receiptTimeoutMs: number;
   rpcUrl?: string;
   usdcAddress?: Address;
+  usdcAddressesByChain?: ChainScopedAddressOverrides;
   x402QuestionSubmitterAddress?: Address;
 };
 
@@ -256,6 +258,7 @@ type TransactionPlanValidationConfig = Pick<
   | "questionMetadataBaseUrlPinned"
   | "questionRewardPoolEscrowAddress"
   | "usdcAddress"
+  | "usdcAddressesByChain"
   | "x402QuestionSubmitterAddress"
 >;
 
@@ -403,6 +406,62 @@ function parseOptionalAddress(
     throw new Error(`${name} must be an EVM address.`);
   }
   return value as Address;
+}
+
+function parseOptionalAddressAlias(
+  primaryValue: string | undefined,
+  primaryName: string,
+  aliasValue: string | undefined,
+  aliasName: string,
+): Address | undefined {
+  const primary = parseOptionalAddress(primaryValue, primaryName);
+  const alias = parseOptionalAddress(aliasValue, aliasName);
+  if (primary && alias && !sameAddress(primary, alias)) {
+    throw new Error(
+      `${primaryName} and ${aliasName} must match when both are set.`,
+    );
+  }
+  return primary ?? alias;
+}
+
+function parseChainScopedAddressAliases(
+  env: NodeJS.ProcessEnv,
+  primaryName: string,
+  aliasName: string,
+): ChainScopedAddressOverrides {
+  const addressesByChain: Record<number, Address> = {};
+  const namesByChain: Record<number, string> = {};
+
+  for (const baseName of [primaryName, aliasName]) {
+    const prefix = `${baseName}_`;
+    for (const [rawName, rawValue] of Object.entries(env)) {
+      if (!rawName.startsWith(prefix)) continue;
+      const suffix = rawName.slice(prefix.length);
+      if (!/^\d+$/.test(suffix)) continue;
+
+      const chainId = Number(suffix);
+      if (!Number.isSafeInteger(chainId) || chainId <= 0) {
+        throw new Error(`${rawName} must use a positive safe integer chain id.`);
+      }
+
+      const address = parseOptionalAddress(
+        typeof rawValue === "string" ? rawValue.trim() : undefined,
+        rawName,
+      );
+      if (!address) continue;
+
+      const existingAddress = addressesByChain[chainId];
+      if (existingAddress && !sameAddress(existingAddress, address)) {
+        throw new Error(
+          `${namesByChain[chainId]} and ${rawName} must match when both are set.`,
+        );
+      }
+      addressesByChain[chainId] = address;
+      namesByChain[chainId] = namesByChain[chainId] ?? rawName;
+    }
+  }
+
+  return addressesByChain;
 }
 
 function parseQuestionMetadataBaseUrl(
@@ -1015,10 +1074,11 @@ function assertX402AuthorizationMatchesMessage(
 }
 
 function resolveConfiguredUsdcAddress(
-  config: Pick<LocalSignerConfig, "usdcAddress">,
+  config: Pick<LocalSignerConfig, "usdcAddress" | "usdcAddressesByChain">,
   chainId: number,
 ): Address | undefined {
   return (
+    config.usdcAddressesByChain?.[chainId] ??
     config.usdcAddress ??
     getSharedDeploymentAddress(chainId, "MockERC20") ??
     X402_USDC_BY_CHAIN_ID[chainId]
@@ -3056,6 +3116,7 @@ export function loadLocalSignerConfig(
     optionString(options, "keystore-password") ??
     (passwordEnvName ? envString(env, passwordEnvName) : undefined) ??
     envString(env, "RATELOOP_LOCAL_SIGNER_KEYSTORE_PASSWORD");
+  const usdcAddressOption = optionString(options, "usdc-address");
 
   return {
     chainId: parsePositiveInteger(
@@ -3113,12 +3174,21 @@ export function loadLocalSignerConfig(
       ) ?? 120_000,
     rpcUrl:
       optionString(options, "rpc-url") ?? envString(env, "RATELOOP_RPC_URL"),
-    usdcAddress: parseOptionalAddress(
-      optionString(options, "usdc-address") ??
-        envString(env, "RATELOOP_LOCAL_SIGNER_USDC_ADDRESS") ??
-        envString(env, "RATELOOP_X402_USDC_ADDRESS"),
-      "RATELOOP_LOCAL_SIGNER_USDC_ADDRESS",
-    ),
+    usdcAddress: usdcAddressOption
+      ? parseOptionalAddress(usdcAddressOption, "usdc-address")
+      : parseOptionalAddressAlias(
+          envString(env, "RATELOOP_LOCAL_SIGNER_USDC_ADDRESS"),
+          "RATELOOP_LOCAL_SIGNER_USDC_ADDRESS",
+          envString(env, "RATELOOP_X402_USDC_ADDRESS"),
+          "RATELOOP_X402_USDC_ADDRESS",
+        ),
+    usdcAddressesByChain: usdcAddressOption
+      ? {}
+      : parseChainScopedAddressAliases(
+          env,
+          "RATELOOP_LOCAL_SIGNER_USDC_ADDRESS",
+          "RATELOOP_X402_USDC_ADDRESS",
+        ),
     x402QuestionSubmitterAddress: parseOptionalAddress(
       optionString(options, "x402-submitter-address") ??
         envString(env, "RATELOOP_LOCAL_SIGNER_X402_SUBMITTER_ADDRESS") ??

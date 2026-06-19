@@ -188,6 +188,9 @@ cp packages/agents/.env.example packages/agents/.env
 | `RATELOOP_RPC_URL`                                          | RPC URL used by `local-ask` to send returned transaction plan calls                                                      |
 | `RATELOOP_CHAIN_ID`                                         | Optional chain guard; `local-ask` refuses mismatched RPCs                                                                |
 | `RATELOOP_LOCAL_SIGNER_USDC_ADDRESS`                        | Optional trusted USDC override used to validate EIP-3009 typed-data before signing                                       |
+| `RATELOOP_LOCAL_SIGNER_USDC_ADDRESS_<chainId>`              | Chain-scoped trusted USDC override; preferred when one agent environment can target multiple chains                      |
+| `RATELOOP_X402_USDC_ADDRESS`                                | Alias for `RATELOOP_LOCAL_SIGNER_USDC_ADDRESS` when validating EIP-3009 typed-data before signing                       |
+| `RATELOOP_X402_USDC_ADDRESS_<chainId>`                      | Chain-scoped alias for `RATELOOP_LOCAL_SIGNER_USDC_ADDRESS_<chainId>`                                                    |
 | `RATELOOP_LOCAL_SIGNER_X402_SUBMITTER_ADDRESS`              | Optional trusted submitter override used to validate EIP-3009 authorization recipients; the variable name is legacy      |
 | `RATELOOP_X402_QUESTION_SUBMITTER_ADDRESS`                  | Alias for `RATELOOP_LOCAL_SIGNER_X402_SUBMITTER_ADDRESS` when validating EIP-3009 authorization recipients               |
 | `RATELOOP_LOCAL_SIGNER_CONTENT_REGISTRY_ADDRESS`            | Optional trusted ContentRegistry override used to validate wallet-call transaction plans                                 |

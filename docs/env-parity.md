@@ -35,9 +35,11 @@ USDC defaults are in `@rateloop/contracts` (`USDC_BY_CHAIN_ID`). Chain-scoped en
 | Next.js server (x402) | `RATELOOP_X402_USDC_ADDRESS` | Server-side x402 bounty planning and submission |
 | Next.js server (x402) | `RATELOOP_X402_USDC_ADDRESS_<chainId>` | Chain-scoped server-side x402 bounty planning and submission |
 | Agents local signer | `RATELOOP_LOCAL_SIGNER_USDC_ADDRESS` | Trusted USDC override before signing EIP-3009 typed data |
+| Agents local signer | `RATELOOP_LOCAL_SIGNER_USDC_ADDRESS_<chainId>` | Chain-scoped trusted USDC override before signing EIP-3009 typed data |
 | Agents local signer (alias) | `RATELOOP_X402_USDC_ADDRESS` | Same as above; accepted alias in `localSigner.ts` |
+| Agents local signer (alias) | `RATELOOP_X402_USDC_ADDRESS_<chainId>` | Chain-scoped alias accepted by `localSigner.ts` |
 
-Next.js throws when **any two or more** of the matching public/server USDC variables disagree for the same chain (`lib/env/server.ts`). Browser `getDefaultUsdcAddress()` throws when the two public vars disagree. Set all three matching variables to the same address when overriding USDC. Server x402 resolution requires at least one public browser var when `RATELOOP_X402_USDC_ADDRESS` or `RATELOOP_X402_USDC_ADDRESS_<chainId>` is set.
+Next.js throws when **any two or more** of the matching public/server USDC variables disagree for the same chain (`lib/env/server.ts`). Browser `getDefaultUsdcAddress()` throws when the two public vars disagree. Agents `local-ask` throws when the local-signer USDC name and x402 alias disagree for the same scope. Set all matching variables to the same address when overriding USDC. Server x402 resolution requires at least one public browser var when `RATELOOP_X402_USDC_ADDRESS` or `RATELOOP_X402_USDC_ADDRESS_<chainId>` is set.
 
 ## Ponder URL and RPC aliases
 
