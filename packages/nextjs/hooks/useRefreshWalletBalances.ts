@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback } from "react";
+import type { QueryClient } from "@tanstack/react-query";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import { applyWalletDisplayLiquidCredit, resetWalletDisplaySummaryCache } from "~~/hooks/useWalletDisplaySummary";
@@ -8,6 +9,19 @@ import { applyWalletDisplayLiquidCredit, resetWalletDisplaySummaryCache } from "
 type RefreshWalletBalancesOptions = {
   lrepCreditMicro?: bigint;
 };
+
+const ACTIVE_WALLET_READ_QUERY_KEYS = [["balance"], ["readContract"], ["readContracts"]] as const;
+
+export async function refreshActiveWalletReadQueries(queryClient: QueryClient) {
+  await Promise.all(
+    ACTIVE_WALLET_READ_QUERY_KEYS.map(queryKey =>
+      queryClient.invalidateQueries({
+        queryKey,
+        refetchType: "active",
+      }),
+    ),
+  );
+}
 
 export function useRefreshWalletBalances() {
   const queryClient = useQueryClient();
@@ -20,10 +34,7 @@ export function useRefreshWalletBalances() {
         applyWalletDisplayLiquidCredit(queryClient, address, targetNetwork.id, lrepCreditMicro);
       }
 
-      await queryClient.invalidateQueries({
-        queryKey: ["readContract"],
-        refetchType: "active",
-      });
+      await refreshActiveWalletReadQueries(queryClient);
 
       if (lrepCreditMicro <= 0n) {
         resetWalletDisplaySummaryCache(queryClient, address, targetNetwork.id);

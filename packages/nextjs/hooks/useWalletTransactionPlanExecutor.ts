@@ -1,10 +1,12 @@
 "use client";
 
 import { useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import type { GetCallsStatusReturnType, Hex } from "viem";
 import { useAccount, useConfig, useSendCallsSync } from "wagmi";
 import { sendTransaction, waitForTransactionReceipt } from "wagmi/actions";
 import { getPollingIntervalForChainId } from "~~/config/shared";
+import { refreshActiveWalletReadQueries } from "~~/hooks/useRefreshWalletBalances";
 import { useWalletExecutionCapabilities } from "~~/hooks/useWalletExecutionCapabilities";
 import {
   type NormalizedWalletTransactionPlanCall,
@@ -47,6 +49,7 @@ function getTransactionStatusPollingInterval(chainId: number | undefined) {
 
 export function useWalletTransactionPlanExecutor() {
   const wagmiConfig = useConfig();
+  const queryClient = useQueryClient();
   const { address, connector } = useAccount();
   const { sendCallsSyncAsync } = useSendCallsSync();
   const { hasSendCalls, isThirdwebInApp, supportsAtomicBatchCalls } = useWalletExecutionCapabilities();
@@ -155,9 +158,10 @@ export function useWalletTransactionPlanExecutor() {
         }
       }
 
+      void refreshActiveWalletReadQueries(queryClient);
       return hashes;
     },
-    [address, canUseAtomicWalletSendCalls, connector, executeSequentialCall, sendCallsSyncAsync],
+    [address, canUseAtomicWalletSendCalls, connector, executeSequentialCall, queryClient, sendCallsSyncAsync],
   );
 
   return {

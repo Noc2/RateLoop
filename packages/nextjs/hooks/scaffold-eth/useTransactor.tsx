@@ -5,6 +5,7 @@ import { getPublicClient } from "wagmi/actions";
 import { SendTransactionMutate } from "wagmi/query";
 import { TransactionStatusCallout } from "~~/components/shared/TransactionStatusCallout";
 import { FREE_TRANSACTION_ALLOWANCE_QUERY_KEY } from "~~/hooks/useFreeTransactionAllowance";
+import { refreshActiveWalletReadQueries } from "~~/hooks/useRefreshWalletBalances";
 import { TRANSACTION_CONFIRMING_STATUS, getSubmittingTransactionStatus } from "~~/lib/ui/transactionStatusCopy";
 import scaffoldConfig from "~~/scaffold.config";
 import { AllowedChainIds, getBlockExplorerTxLink, notification } from "~~/utils/scaffold-eth";
@@ -186,6 +187,7 @@ export const useTransactor = (_walletClient?: WalletClient): TransactionFunc => 
         });
       }
 
+      void refreshActiveWalletReadQueries(queryClient);
       if (!options?.suppressSuccessToast) {
         notification.success(
           <TxnNotification message="Transaction completed successfully!" blockExplorerLink={blockExplorerTxURL} />,

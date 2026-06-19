@@ -12,6 +12,7 @@ import {
   FREE_TRANSACTION_ALLOWANCE_QUERY_KEY,
   useFreeTransactionAllowance,
 } from "~~/hooks/useFreeTransactionAllowance";
+import { refreshActiveWalletReadQueries } from "~~/hooks/useRefreshWalletBalances";
 import { useThirdwebWagmiSync } from "~~/hooks/useThirdwebWagmiSync";
 import { useTransactionStatusToast } from "~~/hooks/useTransactionStatusToast";
 import {
@@ -637,6 +638,7 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
           }
         }
 
+        void refreshActiveWalletReadQueries(queryClient);
         return result;
       } catch (error) {
         if (
@@ -684,6 +686,7 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
               console.error("Self-funded fallback transaction succeeded, but wallet sync failed:", syncError);
             }
 
+            void refreshActiveWalletReadQueries(queryClient);
             return fallbackResult;
           } catch (fallbackError) {
             error = fallbackError;
