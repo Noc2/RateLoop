@@ -4,6 +4,11 @@
 - Commit independent fixes separately. Before pushing, review the changed files and group commits by concern instead of bundling unrelated fixes together.
 - When the user asks to publish finished work, commit the intended fixes and push the current branch after verification passes.
 
+## Production contract deployment notes
+
+- RateLoop smart contracts are already deployed in production on Base mainnet. Treat the deployed contract stack as durable production infrastructure: do not plan or suggest redeploying contracts for routine configuration, environment, indexing, UI, keeper, or operator issues.
+- Only consider a production contract redeploy for a significant contract-level defect or larger incident where governance/admin actions, service rewiring, environment updates, or off-chain fixes are insufficient. If redeploy is on the table, spell out why the problem cannot be solved against the existing deployment first.
+
 ## Governance rotation notes
 
 - Rotating `ContentRegistry.setVotingEngine` alone is insufficient: escrows pin the engine at initialization and reject new work with `"Stale engine"` until a full replacement stack is deployed and rewired (`QuestionRewardPoolEscrow`, `FeedbackBonusEscrow`, `FeedbackRegistry`, fee creditor on `FrontendRegistry`, and X402 submitter escrow pointers as applicable).
