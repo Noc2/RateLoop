@@ -291,9 +291,6 @@ contract DeployRateLoop is ScaffoldETHDeploy {
             )
         );
         FeedbackBonusEscrow feedbackBonusEscrow = FeedbackBonusEscrow(address(feedbackBonusEscrowProxy));
-        X402QuestionSubmitter x402QuestionSubmitter = new X402QuestionSubmitter(
-            registry, usdcTokenAddress, address(questionRewardPoolEscrow), address(feedbackBonusEscrow), governance
-        );
         if (!isLocalDev) {
             feedbackRegistry.renounceRole(feedbackRegistry.CONFIG_ROLE(), deployer);
         }
@@ -308,6 +305,9 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         registry.setQuestionRewardPoolEscrow(address(questionRewardPoolEscrow));
         registry.unpause();
         registry.setCategoryRegistry(address(categoryRegistry));
+        X402QuestionSubmitter x402QuestionSubmitter = new X402QuestionSubmitter(
+            registry, usdcTokenAddress, address(questionRewardPoolEscrow), address(feedbackBonusEscrow), governance
+        );
         registry.grantRole(keccak256("X402_GATEWAY_ROLE"), address(x402QuestionSubmitter));
 
         protocolConfig.setRewardDistributor(address(rewardDistributor));

@@ -12,6 +12,12 @@ import {Eip3009Authorization, IReceiveWithAuthorizationToken} from "./interfaces
 import {IConfidentialityEscrow} from "./interfaces/IConfidentialityEscrow.sol";
 import {RoundLib} from "./libraries/RoundLib.sol";
 
+interface IFeedbackBonusEscrowConfigShape {
+    function registry() external view returns (ContentRegistry);
+    function usdcToken() external view returns (IERC20);
+    function votingEngine() external view returns (address);
+}
+
 contract X402QuestionSubmitter is Ownable, ReentrancyGuardTransient {
     using SafeERC20 for IERC20;
 
@@ -58,6 +64,7 @@ contract X402QuestionSubmitter is Ownable, ReentrancyGuardTransient {
         registry = _registry;
         usdcToken = IERC20(_usdcToken);
         questionRewardPoolEscrow = _questionRewardPoolEscrow;
+        if (_feedbackBonusEscrow != address(0)) _requireFeedbackBonusEscrowShape(_feedbackBonusEscrow);
         feedbackBonusEscrow = _feedbackBonusEscrow;
     }
 
@@ -68,7 +75,7 @@ contract X402QuestionSubmitter is Ownable, ReentrancyGuardTransient {
     }
 
     function setFeedbackBonusEscrow(address newEscrow) external onlyOwner {
-        require(newEscrow != address(0), "Invalid escrow");
+        _requireFeedbackBonusEscrowShape(newEscrow);
         _setFeedbackBonusEscrow(newEscrow);
     }
 
@@ -631,6 +638,34 @@ contract X402QuestionSubmitter is Ownable, ReentrancyGuardTransient {
         address previousEscrow = questionRewardPoolEscrow;
         questionRewardPoolEscrow = newEscrow;
         emit QuestionRewardPoolEscrowUpdated(previousEscrow, newEscrow);
+    }
+
+    function _feedbackBonusEscrowConfigMatches(address candidate) private view returns (bool) {
+        IFeedbackBonusEscrowConfigShape escrow = IFeedbackBonusEscrowConfigShape(candidate);
+
+        try escrow.registry() returns (ContentRegistry escrowRegistry) {
+            if (address(escrowRegistry) != address(registry)) return false;
+        } catch {
+            return false;
+        }
+
+        try escrow.usdcToken() returns (IERC20 escrowUsdcToken) {
+            if (address(escrowUsdcToken) != address(usdcToken)) return false;
+        } catch {
+            return false;
+        }
+
+        try escrow.votingEngine() returns (address escrowVotingEngine) {
+            return escrowVotingEngine == registry.votingEngine();
+        } catch {
+            return false;
+        }
+    }
+
+    function _requireFeedbackBonusEscrowShape(address newEscrow) private view {
+        require(newEscrow != address(0), "Invalid escrow");
+        require(newEscrow.code.length != 0, "Invalid escrow");
+        require(_feedbackBonusEscrowConfigMatches(newEscrow), "Stale escrow");
     }
 
     function _setFeedbackBonusEscrow(address newEscrow) private {

@@ -35,6 +35,20 @@ import {X402QuestionSubmitter} from "../contracts/X402QuestionSubmitter.sol";
 import {MockQuestionRewardPoolEscrow} from "./mocks/MockQuestionRewardPoolEscrow.sol";
 import {MockRaterIdentityRegistry} from "./mocks/MockRaterIdentityRegistry.sol";
 
+contract InvalidFeedbackBonusEscrowForX402 { }
+
+contract MismatchedFeedbackBonusEscrowForX402 {
+    ContentRegistry public registry;
+    MockERC20 public usdcToken;
+    address public votingEngine;
+
+    constructor(ContentRegistry registry_, MockERC20 usdcToken_, address votingEngine_) {
+        registry = registry_;
+        usdcToken = usdcToken_;
+        votingEngine = votingEngine_;
+    }
+}
+
 contract QuestionRewardPoolEscrowTest is VotingTestBase {
     LoopReputation public lrepToken;
     ContentRegistry public registry;
@@ -6090,6 +6104,45 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         x402QuestionSubmitter.setQuestionRewardPoolEscrow(address(replacementEscrow));
 
         assertEq(x402QuestionSubmitter.questionRewardPoolEscrow(), address(rewardPoolEscrow));
+    }
+
+    function testX402QuestionSubmitterOwnerCanSetFeedbackBonusEscrow() public {
+        FeedbackBonusEscrow feedbackEscrow = _deployFeedbackBonusEscrow();
+
+        vm.prank(owner);
+        vm.expectEmit(true, true, false, true);
+        emit X402QuestionSubmitter.FeedbackBonusEscrowUpdated(address(0), address(feedbackEscrow));
+        x402QuestionSubmitter.setFeedbackBonusEscrow(address(feedbackEscrow));
+
+        assertEq(x402QuestionSubmitter.feedbackBonusEscrow(), address(feedbackEscrow));
+    }
+
+    function testX402QuestionSubmitterRejectsInvalidFeedbackBonusEscrowShape() public {
+        InvalidFeedbackBonusEscrowForX402 invalidEscrow = new InvalidFeedbackBonusEscrowForX402();
+
+        vm.prank(owner);
+        vm.expectRevert(bytes("Stale escrow"));
+        x402QuestionSubmitter.setFeedbackBonusEscrow(address(invalidEscrow));
+
+        assertEq(x402QuestionSubmitter.feedbackBonusEscrow(), address(0));
+    }
+
+    function testX402QuestionSubmitterRejectsMismatchedFeedbackBonusEscrowShape() public {
+        MismatchedFeedbackBonusEscrowForX402 mismatchedEscrow =
+            new MismatchedFeedbackBonusEscrowForX402(registry, usdc, address(0xBEEF));
+
+        vm.prank(owner);
+        vm.expectRevert(bytes("Stale escrow"));
+        x402QuestionSubmitter.setFeedbackBonusEscrow(address(mismatchedEscrow));
+
+        assertEq(x402QuestionSubmitter.feedbackBonusEscrow(), address(0));
+    }
+
+    function testX402QuestionSubmitterConstructorRejectsInvalidFeedbackBonusEscrowShape() public {
+        InvalidFeedbackBonusEscrowForX402 invalidEscrow = new InvalidFeedbackBonusEscrowForX402();
+
+        vm.expectRevert(bytes("Stale escrow"));
+        new X402QuestionSubmitter(registry, address(usdc), address(rewardPoolEscrow), address(invalidEscrow), owner);
     }
 
     function testX402QuestionSubmissionRejectsOldEscrowNonceAfterRefreshBeforeUsdcAuthorization() public {
