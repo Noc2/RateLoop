@@ -1451,7 +1451,16 @@ export function registerContentRoutes(app: ApiApp) {
     const offset = safeOffset(c.req.query("offset"));
     if (Number.isNaN(offset)) return c.json({ error: "Invalid offset" }, 400);
 
-    const conditions = [];
+    const conditions: SqlCondition[] = [
+      buildAllowedContentCondition({
+        canonicalUrl: content.canonicalUrl,
+        description: content.description,
+        tags: content.tags,
+        title: content.title,
+        url: content.url,
+        urlHost: content.urlHost,
+      }),
+    ];
     if (contentId) {
       const parsed = safeBigInt(contentId);
       if (parsed === null) return c.json({ error: "Invalid contentId" }, 400);
@@ -1826,7 +1835,19 @@ export function registerContentRoutes(app: ApiApp) {
       })
       .from(content)
       .leftJoin(category, eq(content.categoryId, category.id))
-      .where(eq(content.submitter, address))
+      .where(
+        and(
+          eq(content.submitter, address),
+          buildAllowedContentCondition({
+            canonicalUrl: content.canonicalUrl,
+            description: content.description,
+            tags: content.tags,
+            title: content.title,
+            url: content.url,
+            urlHost: content.urlHost,
+          }),
+        ),
+      )
       .orderBy(desc(content.createdAt))
       .limit(6);
 

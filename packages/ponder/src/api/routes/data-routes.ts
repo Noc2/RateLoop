@@ -53,6 +53,7 @@ import {
   confidentialityContentSelectFields,
   formatConfidentialContentPreview,
 } from "../confidentiality-redaction.js";
+import { buildAllowedContentCondition } from "../moderation.js";
 import { getFollowStatsMap } from "../follow-utils.js";
 import {
   BASE_RATER_MULTIPLIER_BPS,
@@ -434,7 +435,19 @@ export function registerDataRoutes(app: ApiApp) {
       })
       .from(questionBundleQuestion)
       .leftJoin(content, eq(questionBundleQuestion.contentId, content.id))
-      .where(eq(questionBundleQuestion.bundleId, bundleId))
+      .where(
+        and(
+          eq(questionBundleQuestion.bundleId, bundleId),
+          buildAllowedContentCondition({
+            canonicalUrl: content.canonicalUrl,
+            description: content.description,
+            tags: content.tags,
+            title: content.title,
+            url: content.url,
+            urlHost: content.urlHost,
+          }),
+        ),
+      )
       .orderBy(asc(questionBundleQuestion.bundleIndex));
 
     const rounds = await db

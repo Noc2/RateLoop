@@ -1578,6 +1578,8 @@ describe("registerContentRoutes", () => {
 
     expect(serialized).toContain("round.contentId");
     expect(serialized).toContain("round.roundId");
+    expect(serialized).toContain("content.urlHost");
+    expect(serialized).toContain("content.canonicalUrl");
   });
 
   it("rejects invalid round submitter filters before querying the database", async () => {
@@ -1621,6 +1623,55 @@ describe("registerContentRoutes", () => {
     expect(serialized).toContain("content.submitter");
     expect(serialized).toContain("0x0000000000000000000000000000000000000001");
     expect(serialized).toContain("round.state");
+    expect(serialized).toContain("content.urlHost");
+    expect(serialized).toContain("content.canonicalUrl");
+  });
+
+  it("adds moderation predicates to profile recent submissions", async () => {
+    const { queryBuilders } = mockPonderModules(
+      [{ address: "0x0000000000000000000000000000000000000001" }],
+      [
+        [{ count: 0 }],
+        [{ count: 0 }],
+        [{ total: 0n }],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+      ],
+    );
+    mockSharedModule();
+    const { registerContentRoutes } = await import(
+      "../src/api/routes/content-routes.js"
+    );
+
+    const app = new Hono();
+    registerContentRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/profile/0x0000000000000000000000000000000000000001",
+    );
+
+    expect(response.status).toBe(200);
+
+    const serialized = queryBuilders
+      .flatMap(builder =>
+        builder.where.mock.calls.map(([value]) => serializeExpression(value)),
+      )
+      .find(
+        value =>
+          value.includes("content.submitter") &&
+          value.includes("content.urlHost"),
+      );
+    expect(serialized).toBeDefined();
+    expect(serialized).toContain("content.submitter");
+    expect(serialized).toContain("content.urlHost");
+    expect(serialized).toContain("content.canonicalUrl");
   });
 
   it("redacts gated undisclosed context from round previews", async () => {
@@ -2071,6 +2122,31 @@ describe("registerDataRoutes", () => {
     });
     expect(body.questions[0]).not.toHaveProperty("gated");
     expect(body.questions[0]).not.toHaveProperty("questionMetadata");
+  });
+
+  it("adds moderation predicates to question bundle previews", async () => {
+    const { queryBuilders } = mockPonderModules(
+      [{ id: 7n }],
+      [[], [], []],
+    );
+    const { registerDataRoutes } = await import(
+      "../src/api/routes/data-routes.js"
+    );
+
+    const app = new Hono();
+    registerDataRoutes(app);
+
+    const response = await app.request("http://localhost/question-bundles/7");
+
+    expect(response.status).toBe(200);
+
+    const questionsBuilder = queryBuilders[1]!;
+    const serialized = serializeExpression(
+      questionsBuilder.where.mock.calls[0]?.[0],
+    );
+    expect(serialized).toContain("questionBundleQuestion.bundleId");
+    expect(serialized).toContain("content.urlHost");
+    expect(serialized).toContain("content.canonicalUrl");
   });
 
   it("rejects invalid feedback bonus pool awarder filters before querying the database", async () => {
