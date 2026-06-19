@@ -11,7 +11,7 @@ import {
 import { defineChain } from "thirdweb";
 import { type Address, type Hex, erc20Abi, isAddress } from "viem";
 import { useAccount, useConfig, useReadContract } from "wagmi";
-import { getPublicClient, sendTransaction, waitForTransactionReceipt } from "wagmi/actions";
+import { getPublicClient } from "wagmi/actions";
 import {
   ArrowPathIcon,
   ChatBubbleLeftRightIcon,
@@ -40,6 +40,7 @@ import { useGasBalanceStatus } from "~~/hooks/useGasBalanceStatus";
 import { useRateLoopSwitchNetwork } from "~~/hooks/useRateLoopSwitchNetwork";
 import { useTransactionStatusToast } from "~~/hooks/useTransactionStatusToast";
 import { useWalletMessageSigner } from "~~/hooks/useWalletMessageSigner";
+import { useWalletTransactionPlanExecutor } from "~~/hooks/useWalletTransactionPlanExecutor";
 import { buildCleanHandoffLocationPath, readHandoffTokenFromLocation } from "~~/lib/agent/handoffLocation";
 import { createQuestionDetailsId, questionDetailsSha256Hex } from "~~/lib/attachments/browserQuestionDetails";
 import {
@@ -647,10 +648,6 @@ function sameAddress(left: string | undefined | null, right: string | undefined 
 
 function shortAddress(value: string | null | undefined) {
   return value ? `${value.slice(0, 6)}...${value.slice(-4)}` : "Not set";
-}
-
-function delay(ms: number) {
-  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 function getPostCallDelayMs(call: NonNullable<HandoffTransactionPlan["calls"]>[number]) {
@@ -1630,6 +1627,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
   const { switchToChain, switchingChainId } = useRateLoopSwitchNetwork();
   const { dismiss: dismissTransactionStatusToast, showSubmitting: showTransactionSubmittingToast } =
     useTransactionStatusToast();
+  const { executeWalletTransactionPlan } = useWalletTransactionPlanExecutor();
   const { requireAcceptance } = useTermsAcceptance();
   const [token] = useState(readToken);
   const [handoff, setHandoff] = useState<Handoff | null>(null);
@@ -2409,19 +2407,12 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
             );
           }
 
-          const hashes: Hex[] = [];
-          for (const [index, call] of calls.entries()) {
-            const to = normalizeAddress(call.to, `transactionPlan.calls[${index}].to`);
-            const data = normalizeHex(call.data ?? "0x", `transactionPlan.calls[${index}].data`);
-            const value = assertZeroValue(call.value, `transactionPlan.calls[${index}].value`);
-            const hash = await sendTransaction(wagmiConfig, { chainId: handoffChainId, data, to, value });
-            hashes.push(hash);
-            await waitForTransactionReceipt(wagmiConfig, { chainId: handoffChainId, hash });
-            const delayMs = getPostCallDelayMs(call);
-            if (delayMs > 0) {
-              await delay(delayMs);
-            }
-          }
+          const hashes = await executeWalletTransactionPlan({
+            calls,
+            chainId: handoffChainId,
+            getPostCallDelayMs,
+            requiresOrderedExecution: currentHandoff.transactionPlan?.requiresOrderedExecution,
+          });
 
           const response = await fetch(`/api/agent/handoffs/${handoffId}/complete`, {
             body: JSON.stringify({ token, transactionHashes: hashes }),
@@ -2475,6 +2466,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
       connectedChainId,
       connectedMismatch,
       dismissTransactionStatusToast,
+      executeWalletTransactionPlan,
       handoffId,
       showTransactionSubmittingToast,
       switchToChain,

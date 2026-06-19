@@ -1,0 +1,62 @@
+import {
+  createWalletTransactionPlanExecutionSegments,
+  isWalletSendCallsUnsupportedError,
+  normalizeWalletTransactionPlanCalls,
+} from "./walletTransactionPlan";
+import assert from "node:assert/strict";
+import test from "node:test";
+
+const TEST_ADDRESS = "0x0000000000000000000000000000000000000001";
+
+test("createWalletTransactionPlanExecutionSegments batches adjacent calls without post-call delays", () => {
+  const calls = normalizeWalletTransactionPlanCalls([
+    { data: "0x01", to: TEST_ADDRESS },
+    { data: "0x02", to: TEST_ADDRESS },
+  ]);
+
+  const segments = createWalletTransactionPlanExecutionSegments(calls);
+
+  assert.equal(segments.length, 1);
+  assert.equal(segments[0]?.batchable, true);
+  assert.deepEqual(
+    segments[0]?.calls.map(call => call.index),
+    [0, 1],
+  );
+});
+
+test("createWalletTransactionPlanExecutionSegments isolates calls with post-call delays", () => {
+  const calls = normalizeWalletTransactionPlanCalls(
+    [
+      { data: "0x01", functionName: "reserveSubmission", to: TEST_ADDRESS },
+      { data: "0x02", to: TEST_ADDRESS },
+      { data: "0x03", to: TEST_ADDRESS },
+    ],
+    {
+      getPostCallDelayMs: call => (call.functionName === "reserveSubmission" ? 3_000 : 0),
+    },
+  );
+
+  const segments = createWalletTransactionPlanExecutionSegments(calls);
+
+  assert.equal(segments.length, 2);
+  assert.deepEqual(
+    segments.map(segment => segment.batchable),
+    [false, true],
+  );
+  assert.deepEqual(
+    segments.map(segment => segment.calls.map(call => call.index)),
+    [[0], [1, 2]],
+  );
+});
+
+test("normalizeWalletTransactionPlanCalls rejects nonzero value calls", () => {
+  assert.throws(
+    () => normalizeWalletTransactionPlanCalls([{ data: "0x", to: TEST_ADDRESS, value: "1" }]),
+    /transactionPlan\.calls\[0\]\.value must be zero/,
+  );
+});
+
+test("isWalletSendCallsUnsupportedError recognizes unsupported batch methods without matching rejection", () => {
+  assert.equal(isWalletSendCallsUnsupportedError(new Error("wallet_sendCalls method not found")), true);
+  assert.equal(isWalletSendCallsUnsupportedError(new Error("User rejected the request")), false);
+});

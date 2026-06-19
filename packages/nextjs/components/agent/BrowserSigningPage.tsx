@@ -2,9 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { type Address, type Hex, isAddress } from "viem";
-import { useAccount, useConfig, useSignTypedData } from "wagmi";
-import { sendTransaction, waitForTransactionReceipt } from "wagmi/actions";
+import { useAccount, useSignTypedData } from "wagmi";
 import {
   ArrowPathIcon,
   CheckCircleIcon,
@@ -17,6 +15,7 @@ import { AppPageShell } from "~~/components/shared/AppPageShell";
 import { surfaceSectionHeadingClassName } from "~~/components/shared/sectionHeading";
 import { DOCS_AI_ROUTE } from "~~/constants/routes";
 import { useRateLoopSwitchNetwork } from "~~/hooks/useRateLoopSwitchNetwork";
+import { useWalletTransactionPlanExecutor } from "~~/hooks/useWalletTransactionPlanExecutor";
 import {
   readBrowserSigningBountyAmount,
   validateBrowserX402AuthorizationRequest,
@@ -72,10 +71,6 @@ function shortAddress(value: string | null | undefined) {
   return value ? `${value.slice(0, 6)}...${value.slice(-4)}` : "Not set";
 }
 
-function delay(ms: number) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-
 function getPostCallDelayMs(call: NonNullable<NonNullable<SigningIntent["transactionPlan"]>["calls"]>[number]) {
   const waitAfterMs = Number.isFinite(call.waitAfterMs) ? Math.max(0, call.waitAfterMs ?? 0) : 0;
   const isReserveSubmission =
@@ -129,26 +124,6 @@ function readBounty(intent: SigningIntent | null) {
   return `${whole.toString()}${fractional ? `.${fractional}` : ""} USDC`;
 }
 
-function normalizeHex(value: unknown, field: string): Hex {
-  if (typeof value !== "string" || !/^0x([a-fA-F0-9]{2})*$/.test(value)) {
-    throw new Error(`${field} must be hex data.`);
-  }
-  return value as Hex;
-}
-
-function normalizeAddress(value: unknown, field: string): Address {
-  if (typeof value !== "string" || !isAddress(value, { strict: false })) {
-    throw new Error(`${field} must be an EVM address.`);
-  }
-  return value as Address;
-}
-
-function assertZeroValue(value: unknown, field: string) {
-  if (value === undefined || value === null || value === "" || value === "0" || value === 0 || value === 0n) return 0n;
-  if (typeof value === "string" && /^0x0+$/i.test(value)) return 0n;
-  throw new Error(`${field} must be zero.`);
-}
-
 // C-2 (2026-05-22 audit): decode the two ERC-20 selectors most commonly seen here
 // (transfer, approve) so the user can see who/how-much before signing. The page
 // also shows raw calldata, but humans skim — a decoded "approve(spender=0x.., amount=..)"
@@ -198,10 +173,10 @@ function readResponseError(value: unknown, fallback: string) {
 }
 
 export function BrowserSigningPage({ intentId }: { intentId: string }) {
-  const wagmiConfig = useConfig();
   const { address, chain } = useAccount();
   const { signTypedDataAsync, isPending: isSigningTypedData } = useSignTypedData();
   const { switchToChain, switchingChainId } = useRateLoopSwitchNetwork();
+  const { executeWalletTransactionPlan } = useWalletTransactionPlanExecutor();
   // WS-1 (2026-05-21 repo audit): the `token` is the bearer credential for this signing intent.
   // Leaving it in the URL leaks it through browser history, the Referer header on any
   // cross-origin navigation, server access logs, and any analytics script allowed by CSP.
@@ -370,7 +345,6 @@ export function BrowserSigningPage({ intentId }: { intentId: string }) {
 
     setIsExecuting(true);
     setError(null);
-    const hashes: Hex[] = [];
     const nextSteps: ExecutionStep[] = intent.transactionPlan.calls.map(call => ({
       label: call.description || call.phase || call.id || "Wallet call",
       status: "pending",
@@ -385,29 +359,22 @@ export function BrowserSigningPage({ intentId }: { intentId: string }) {
       // Coerce null -> undefined for wagmi; binding chainId makes viem re-assert
       // the live wallet chain per call instead of trusting the pre-loop switch.
       const intentChainId = intent.chainId ?? undefined;
-      for (const [index, call] of intent.transactionPlan.calls.entries()) {
-        const to = normalizeAddress(call.to, `transactionPlan.calls[${index}].to`);
-        const data = normalizeHex(call.data ?? "0x", `transactionPlan.calls[${index}].data`);
-        const value = assertZeroValue(call.value, `transactionPlan.calls[${index}].value`);
-        // Bind every call to the intent's chain. Without an explicit chainId,
-        // wagmi/viem skip the live eth_chainId assertion, so a switch that the
-        // wallet silently ignored (or the user reverted) would broadcast these
-        // approve + escrow-funding calls on the wrong chain. Passing chainId
-        // makes viem throw ChainMismatchError instead of misfiring.
-        const hash = await sendTransaction(wagmiConfig, { chainId: intentChainId, data, to, value });
-        hashes.push(hash);
-        setSteps(current =>
-          current.map((step, stepIndex) => (stepIndex === index ? { ...step, hash, status: "sent" } : step)),
-        );
-        await waitForTransactionReceipt(wagmiConfig, { chainId: intentChainId, hash });
-        setSteps(current =>
-          current.map((step, stepIndex) => (stepIndex === index ? { ...step, hash, status: "confirmed" } : step)),
-        );
-        const delayMs = getPostCallDelayMs(call);
-        if (delayMs > 0) {
-          await delay(delayMs);
-        }
-      }
+      const hashes = await executeWalletTransactionPlan({
+        calls: intent.transactionPlan.calls,
+        chainId: intentChainId,
+        getPostCallDelayMs,
+        onCallConfirmed: ({ hash, index }) => {
+          setSteps(current =>
+            current.map((step, stepIndex) => (stepIndex === index ? { ...step, hash, status: "confirmed" } : step)),
+          );
+        },
+        onCallSent: ({ hash, index }) => {
+          setSteps(current =>
+            current.map((step, stepIndex) => (stepIndex === index ? { ...step, hash, status: "sent" } : step)),
+          );
+        },
+        requiresOrderedExecution: intent.transactionPlan.requiresOrderedExecution,
+      });
 
       const response = await fetch(`/api/agent/signing-intents/${intentId}/complete`, {
         body: JSON.stringify({ token, transactionHashes: hashes }),
@@ -423,7 +390,7 @@ export function BrowserSigningPage({ intentId }: { intentId: string }) {
     } finally {
       setIsExecuting(false);
     }
-  }, [address, chain?.id, connectedMismatch, intent, intentId, switchToChain, token, wagmiConfig]);
+  }, [address, chain?.id, connectedMismatch, executeWalletTransactionPlan, intent, intentId, switchToChain, token]);
 
   return (
     <AppPageShell contentClassName="space-y-5" paddingTopClassName="pt-6">
