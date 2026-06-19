@@ -5,7 +5,7 @@ This note proposes good first questions to ask on the production RateLoop deploy
 1. Seed the public feed with real examples that people can vote on.
 2. Collect product feedback about positioning, onboarding, trust, buyer use cases, and rater motivation.
 
-The strongest pattern is a short public ask with one binary judgment, a specific artifact to inspect, and an optional feedback bonus asking voters to explain the reason for their vote.
+The strongest pattern is a short public ask with one binary judgment, a specific artifact to inspect, and a description that explains the voting criteria and, when useful, invites optional additional feedback.
 
 ## Research Signals
 
@@ -25,7 +25,7 @@ Use this shape for the first RateLoop-about-RateLoop asks:
 - **Anchor each vote to a concrete artifact.** Use the homepage, `/ask`, `/docs/ai`, a screenshot, a short scenario, or a specific result page.
 - **Prefer observable present/past behavior over future promises.** "Have you had this problem in the last 30 days?" is better than "Would you use this someday?"
 - **Make UP and DOWN obvious.** A voter should know what an upvote means without reading your mind.
-- **Use feedback bonuses for reasons.** The vote decides the aggregate signal; the feedback text should ask "what was confusing, missing, or compelling?"
+- **Use the description for feedback guidance.** RateLoop does not have a separate feedback-prompt field today. The description should define UP/DOWN and can add one short sentence inviting optional notes about what was confusing, missing, or compelling.
 - **Keep early asks public and non-sensitive.** These are examples for the public feed, so avoid confidential strategy, undisclosed metrics, private roadmaps, or security-sensitive operational details.
 - **Use a small, consistent launch tier.** For initial seed activity, use 3 to 5 required voters, a low USDC bounty, and an optional feedback bonus on the questions where the "why" matters.
 
@@ -57,20 +57,20 @@ Use tags such as `rateloop`, `dogfood`, `homepage`, `onboarding`, `trust`, `agen
 
 These are the best first public asks because they produce example content and product learning at the same time.
 
-| Priority | Question title | Context | Category/tags | What this learns | Feedback prompt |
+| Priority | Question title | Context | Category/tags | What this learns | Description note |
 | --- | --- | --- | --- | --- | --- |
-| 1 | After reading the homepage, is RateLoop's core value clear enough to explain in one sentence? | `https://www.rateloop.ai/` | Design or Text; `rateloop,homepage,positioning` | Whether the first impression explains the product | If you voted down, what phrase or missing example caused the confusion? |
-| 2 | Does the homepage make it obvious who should ask the first RateLoop question? | Homepage | Products; `rateloop,homepage,audience` | Whether the buyer persona is legible | Which user type did you think this was for? |
-| 3 | After reading `/docs/ai`, would an AI-agent builder know when to ask RateLoop instead of running another LLM judge? | `https://www.rateloop.ai/docs/ai` | AI Answers; `rateloop,agent,docs,llm-judge` | Whether the agent positioning lands | What example would make the agent use case clearer? |
-| 4 | Is the RateLoop voting mechanism explanation clear enough to understand why voters predict the crowd share? | `/docs/how-it-works` or whitepaper excerpt | Text; `rateloop,voting,trust,docs` | Whether prediction-plus-vote is understandable | What part of the mechanism still feels unclear? |
-| 5 | Would you trust a settled RateLoop result as advisory input for a low-stakes product decision? | Short scenario: choose between two landing-page variants or accept/reject generated copy | Products; `rateloop,trust,decision-support` | Whether the trust promise is credible for low-risk decisions | What would need to be true before you trusted the result more? |
-| 6 | Does the `/ask` flow look clear enough to fund a first 1 USDC test question? | `https://www.rateloop.ai/ask` or screenshot | Software; `rateloop,ask-flow,wallet,onboarding` | Whether the first paid ask is approachable | What step would make you hesitate before funding? |
-| 7 | Is "ask humans when an agent should not guess" a compelling product promise? | Homepage or `/docs/ai` | Products; `rateloop,agent,positioning` | Whether the core tagline is strong | If you voted up, what use case came to mind first? |
-| 8 | Have you personally had a situation in the last 30 days where outside judgment on AI output would have helped? | Scenario examples: source check, safety review, design choice, send/no-send | AI Answers; `rateloop,agent,use-case` | Concrete user pain, not hypothetical usage | Describe the situation in one sentence if you can. |
-| 9 | Would a 3 to 5 rater RateLoop round be enough signal to choose between two low-stakes landing-page variants? | Simple A/B scenario | Design; `rateloop,creative-testing,landing-page` | Whether small rounds feel sufficient for creative pretesting | What decision would require more raters? |
-| 10 | Is a feedback bonus for useful written notes easy to understand from the current UI/docs? | `/ask` or relevant docs | Software; `rateloop,feedback-bonus,rater` | Whether the feedback bonus concept is legible | What would make you more likely to leave a useful note? |
-| 11 | Would Base wallet setup be acceptable friction for a first product-feedback ask? | `/ask` payment/wallet step or short screenshot | Software; `rateloop,base,wallet,activation` | Whether chain UX is a blocker | What funding/signing step seems most likely to stop you? |
-| 12 | After viewing a settled result page, is the output actionable enough for an asker to decide what to do next? | Use the first settled RateLoop result URL once available | Software; `rateloop,result-page,actionability` | Whether the result page is useful, not only interesting | What additional summary would help you act on the result? |
+| 1 | After reading the homepage, is RateLoop's core value clear enough to explain in one sentence? | `https://www.rateloop.ai/` | Design or Text; `rateloop,homepage,positioning` | Whether the first impression explains the product | Define UP as "clear enough to explain back." Invite optional notes on the phrase or missing example that affected the vote. |
+| 2 | Does the homepage make it obvious who should ask the first RateLoop question? | Homepage | Products; `rateloop,homepage,audience` | Whether the buyer persona is legible | Define UP as "a first-time visitor can identify the intended asker." Invite optional notes on which user type the page seems built for. |
+| 3 | After reading `/docs/ai`, would an AI-agent builder know when to ask RateLoop instead of running another LLM judge? | `https://www.rateloop.ai/docs/ai` | AI Answers; `rateloop,agent,docs,llm-judge` | Whether the agent positioning lands | Define UP as "the doc gives a concrete escalation moment." Invite optional notes on the missing example that would make it clearer. |
+| 4 | Is the RateLoop voting mechanism explanation clear enough to understand why voters predict the crowd share? | `/docs/how-it-works` or whitepaper excerpt | Text; `rateloop,voting,trust,docs` | Whether prediction-plus-vote is understandable | Define UP as "the prediction step makes sense after reading." Invite optional notes on the mechanism detail that remains unclear. |
+| 5 | Would you trust a settled RateLoop result as advisory input for a low-stakes product decision? | Short scenario: choose between two landing-page variants or accept/reject generated copy | Products; `rateloop,trust,decision-support` | Whether the trust promise is credible for low-risk decisions | Define UP as "credible enough for advisory use, not final settlement." Invite optional notes on what would increase trust. |
+| 6 | Does the `/ask` flow look clear enough to fund a first 1 USDC test question? | `https://www.rateloop.ai/ask` or screenshot | Software; `rateloop,ask-flow,wallet,onboarding` | Whether the first paid ask is approachable | Define UP as "you can see the next action before funding." Invite optional notes on the step that would cause hesitation. |
+| 7 | Is "ask humans when an agent should not guess" a compelling product promise? | Homepage or `/docs/ai` | Products; `rateloop,agent,positioning` | Whether the core tagline is strong | Define UP as "the promise makes you want an example." Invite optional notes on the first use case that comes to mind. |
+| 8 | Have you personally had a situation in the last 30 days where outside judgment on AI output would have helped? | Scenario examples: source check, safety review, design choice, send/no-send | AI Answers; `rateloop,agent,use-case` | Concrete user pain, not hypothetical usage | Define UP as "yes, a real recent situation." Invite optional notes with a one-sentence description if the voter is comfortable sharing. |
+| 9 | Would a 3 to 5 rater RateLoop round be enough signal to choose between two low-stakes landing-page variants? | Simple A/B scenario | Design; `rateloop,creative-testing,landing-page` | Whether small rounds feel sufficient for creative pretesting | Define UP as "enough for low-stakes iteration." Invite optional notes on what decision would require more raters. |
+| 10 | Is a feedback bonus for useful written notes easy to understand from the current UI/docs? | `/ask` or relevant docs | Software; `rateloop,feedback-bonus,rater` | Whether the feedback bonus concept is legible | Define UP as "you understand why and how useful notes can be rewarded." Invite optional notes on what would make writing feedback feel worthwhile. |
+| 11 | Would Base wallet setup be acceptable friction for a first product-feedback ask? | `/ask` payment/wallet step or short screenshot | Software; `rateloop,base,wallet,activation` | Whether chain UX is a blocker | Define UP as "the wallet step would not stop a first test." Invite optional notes on the funding or signing step that feels riskiest. |
+| 12 | After viewing a settled result page, is the output actionable enough for an asker to decide what to do next? | Use the first settled RateLoop result URL once available | Software; `rateloop,result-page,actionability` | Whether the result page is useful, not only interesting | Define UP as "the result suggests a next action." Invite optional notes on the summary or evidence that would make it more actionable. |
 
 ## Product Feedback Question Bank
 
@@ -211,7 +211,7 @@ Use this structure when submitting the first questions:
   "question": {
     "templateId": "generic_rating",
     "title": "After reading the homepage, is RateLoop's core value clear enough to explain in one sentence?",
-    "description": "Review the linked RateLoop homepage. Vote UP only if a first-time visitor would understand what RateLoop is for and could explain the core value in one sentence. Vote DOWN if the page is interesting but still unclear, too abstract, or missing a concrete first action.",
+    "description": "Review the linked RateLoop homepage. Vote UP only if a first-time visitor would understand what RateLoop is for and could explain the core value in one sentence. Vote DOWN if the page is interesting but still unclear, too abstract, or missing a concrete first action. If you leave optional feedback, mention the phrase or missing example that most affected your vote.",
     "contextUrl": "https://www.rateloop.ai/",
     "categoryId": "7",
     "tags": ["rateloop", "dogfood", "homepage", "positioning"]
@@ -221,17 +221,17 @@ Use this structure when submitting the first questions:
 
 Adjust the category per question. Use `Text` for docs/copy, `Software` for flow and wallet questions, `Design` for layout/visual feedback, `AI Answers` for agent and source-check questions, and `Products` for pricing/use-case/value questions.
 
-## Feedback Prompts to Reuse
+## Description Notes to Reuse
 
-Add one of these to the description when using a feedback bonus:
+There is no separate feedback-prompt field today. Fold one short note into the existing question description when additional feedback would be useful:
 
-- If you voted DOWN, what single change would most improve this page?
-- What phrase, concept, or step was most confusing?
-- What use case came to mind first?
-- What would make you trust the result more?
-- What would make you more likely to ask your first question?
-- What would make you more likely to vote and leave a note?
-- If this seems useful, what exact decision would you use it for?
+- If you leave optional feedback, mention the single change that would most improve this page.
+- If you leave optional feedback, mention the phrase, concept, or step that was most confusing.
+- If you leave optional feedback, mention the first use case that came to mind.
+- If you leave optional feedback, mention what would make you trust the result more.
+- If you leave optional feedback, mention what would make you more likely to ask your first question.
+- If you leave optional feedback, mention what would make you more likely to vote and leave a note.
+- If this seems useful, optional feedback can name the exact decision you would use it for.
 
 ## Interpretation Notes
 
