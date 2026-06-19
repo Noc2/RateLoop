@@ -22,6 +22,14 @@ test("detects insufficient funds from nested viem errors", () => {
   assert.equal(isInsufficientFundsError(error), true);
 });
 
+test("detects Base insufficient funds errors with have and want amounts", () => {
+  const error = {
+    shortMessage: "insufficient funds for gas * price + value: have 0 want 9076914000000",
+  };
+
+  assert.equal(isInsufficientFundsError(error), true);
+});
+
 test("detects account-abstraction prefund errors as insufficient gas", () => {
   const error = new Error(
     "eth_sendUserOperation error: UserOperation reverted during simulation with reason: AA21 didn't pay prefund",

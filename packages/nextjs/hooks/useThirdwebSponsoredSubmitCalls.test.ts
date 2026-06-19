@@ -439,6 +439,7 @@ test("skips self-funded fallback when a reserved free transaction was denied spo
       chainId: 480,
       error: new Error('Error executing 7702 transaction: {"reason":"Transaction not sponsored."}'),
       executionMode: "sponsored_7702",
+      hasNativeGasBalance: true,
       hasReservedFreeTransaction: true,
     }),
     false,
@@ -452,9 +453,24 @@ test("allows self-funded fallback when sponsorship denial is unrelated to a rese
       chainId: 480,
       error: new Error('Error executing 7702 transaction: {"reason":"Transaction not sponsored."}'),
       executionMode: "sponsored_7702",
+      hasNativeGasBalance: true,
       hasReservedFreeTransaction: false,
     }),
     true,
+  );
+});
+
+test("skips self-funded fallback when the in-app wallet has no native gas", () => {
+  assert.equal(
+    shouldAttemptSelfFundedThirdwebFallback({
+      activeWalletId: "inApp",
+      chainId: 480,
+      error: new Error('Error executing 7702 transaction: {"reason":"Transaction not sponsored."}'),
+      executionMode: "sponsored_7702",
+      hasNativeGasBalance: false,
+      hasReservedFreeTransaction: false,
+    }),
+    false,
   );
 });
 
@@ -467,6 +483,7 @@ test("allows self-funded fallback when sponsored free transactions are exhausted
         'Error executing 7702 transaction: {"reason":"Free transactions used up. Add ETH to continue."}',
       ),
       executionMode: "sponsored_7702",
+      hasNativeGasBalance: true,
       hasReservedFreeTransaction: false,
     }),
     true,
@@ -480,6 +497,7 @@ test("allows self-funded fallback when thirdweb sponsored execution is rejected 
       chainId: 480,
       error: new Error('tw_execute error: {"message":"Bad Request"}\nStatus: 400\nCode: UNKNOWN'),
       executionMode: "sponsored_7702",
+      hasNativeGasBalance: true,
       hasReservedFreeTransaction: false,
     }),
     true,
@@ -495,6 +513,7 @@ test("allows self-funded fallback for wagmi in-app wallet ids when sponsored fre
         'Error executing 7702 transaction: {"reason":"Free transactions used up. Add ETH to continue."}',
       ),
       executionMode: "sponsored_7702",
+      hasNativeGasBalance: true,
       hasReservedFreeTransaction: false,
     }),
     true,

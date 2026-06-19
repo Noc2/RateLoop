@@ -6,7 +6,7 @@ import { defineChain, prepareTransaction } from "thirdweb";
 import { useActiveAccount, useActiveWallet, useActiveWalletChain, useSetActiveWallet } from "thirdweb/react";
 import { sendAndConfirmCalls } from "thirdweb/wallets/eip5792";
 import { type Abi, type Address, type GetCallsStatusReturnType, type Hex, encodeFunctionData } from "viem";
-import { useAccount, usePublicClient, useSendCallsSync } from "wagmi";
+import { useAccount, useBalance, usePublicClient, useSendCallsSync } from "wagmi";
 import {
   FREE_TRANSACTION_ALLOWANCE_QUERY_KEY,
   useFreeTransactionAllowance,
@@ -237,12 +237,14 @@ export function shouldAttemptSelfFundedThirdwebFallback(params: {
   chainId: number | undefined;
   error: unknown;
   executionMode: WalletExecutionMode;
+  hasNativeGasBalance: boolean;
   hasReservedFreeTransaction: boolean;
 }) {
   return (
     isThirdwebInAppWalletId(params.activeWalletId) &&
     params.executionMode === "sponsored_7702" &&
     typeof params.chainId === "number" &&
+    params.hasNativeGasBalance &&
     !params.hasReservedFreeTransaction &&
     isThirdwebSelfFundedFallbackEligibleError(params.error)
   );
@@ -287,6 +289,13 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
   const freeTransactionAllowance = useFreeTransactionAllowance({ allowInAppSponsorshipSync });
   const { executionMode, hasSendCalls, isThirdwebInApp, supportsAtomicBatchCalls } = useWalletExecutionCapabilities();
   const chainId = resolveWalletExecutionChainId(wagmiChainId, activeWalletChain?.id);
+  const { data: nativeBalance } = useBalance({
+    address,
+    chainId,
+    query: {
+      enabled: typeof address === "string" && typeof chainId === "number",
+    },
+  });
   const publicClient = usePublicClient({ chainId });
   const usesInAppEip7702Execution = usesThirdwebInAppEip7702Execution(chainId);
   const activeWalletAccountAddress = activeWallet?.getAccount()?.address;
@@ -527,6 +536,7 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
               sender: address,
             })
           : null;
+      const hasNativeGasBalance = (nativeBalance?.value ?? 0n) > 0n;
       const sendCallsWithExternalWallet = async () => {
         if (!address || !connector) {
           throw new Error("Wallet reconnecting. Retry in a moment.");
@@ -630,6 +640,7 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
             chainId,
             error,
             executionMode,
+            hasNativeGasBalance,
             // A locally derived operation key only identifies the payload shape.
             // The actual free-tx reservation happens server-side in the verifier,
             // and the client has no reliable signal that one was created here.
@@ -694,6 +705,7 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
       connector,
       executionMode,
       freeTransactionAllowance.canUseFreeTransactions,
+      nativeBalance?.value,
       postFreeTransactionMutation,
       queryClient,
       sendCallsSyncAsync,

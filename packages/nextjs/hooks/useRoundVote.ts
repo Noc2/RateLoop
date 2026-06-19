@@ -34,7 +34,11 @@ import {
 import { fetchConfidentialityTermsStatus } from "~~/lib/confidentiality/clientTermsStatus";
 import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
 import { DEFAULT_VOTING_CONFIG, type VotingConfig } from "~~/lib/contracts/roundVotingEngine";
-import { getGasBalanceErrorMessage, isFreeTransactionExhaustedError } from "~~/lib/transactionErrors";
+import {
+  getGasBalanceErrorMessage,
+  isFreeTransactionExhaustedError,
+  isInsufficientFundsError,
+} from "~~/lib/transactionErrors";
 import {
   getAdvisoryVoteUnavailableMessage,
   parseAdvisoryCommitAvailability,
@@ -773,6 +777,10 @@ export function useRoundVote() {
       console.error("Round vote commit failed:", e);
       if (isFreeTransactionExhaustedError(e)) {
         setError("Free transactions used up. Add ETH to continue.");
+        return false;
+      }
+      if (isInsufficientFundsError(e)) {
+        setError(getGasBalanceErrorMessage(nativeTokenSymbol, { canSponsorTransactions }));
         return false;
       }
       const parsedError = getParsedErrorWithAllAbis(e, targetNetwork.id as any);
