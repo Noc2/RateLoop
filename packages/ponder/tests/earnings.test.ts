@@ -58,6 +58,7 @@ function mockEarningsModules(resultsByCall: unknown[][] = []) {
     eq: (...args: unknown[]) => ({ kind: "eq", args }),
     gte: (...args: unknown[]) => ({ kind: "gte", args }),
     lt: (...args: unknown[]) => ({ kind: "lt", args }),
+    or: (...args: unknown[]) => ({ kind: "or", args }),
     sql: (strings: TemplateStringsArray, ...values: unknown[]) => ({
       kind: "sql",
       strings: [...strings],
@@ -65,7 +66,15 @@ function mockEarningsModules(resultsByCall: unknown[][] = []) {
     }),
   }));
   vi.doMock("ponder:schema", () => ({
-    content: { id: "content.id", title: "content.title" },
+    content: {
+      canonicalUrl: "content.canonicalUrl",
+      description: "content.description",
+      id: "content.id",
+      tags: "content.tags",
+      title: "content.title",
+      url: "content.url",
+      urlHost: "content.urlHost",
+    },
     feedbackBonusAward: {
       asset: "feedbackBonusAward.asset",
       awardedAt: "feedbackBonusAward.awardedAt",
@@ -188,6 +197,30 @@ describe("getProfileEarningsSummary", () => {
 });
 
 describe("getRecentProfileEarnings", () => {
+  it("applies moderation to content-backed earning titles", async () => {
+    const { queries } = mockEarningsModules();
+    const { getRecentProfileEarnings } = await import("../src/api/earnings.js");
+
+    await getRecentProfileEarnings(ADDRESS, 20);
+
+    const questionRewardWhere = serializeExpression(queries[0]!.wheres);
+    expect(questionRewardWhere).toContain("questionRewardPoolClaim.claimant");
+    expect(questionRewardWhere).toContain("content.title");
+    expect(questionRewardWhere).toContain("content.description");
+    expect(questionRewardWhere).toContain("content.urlHost");
+
+    const bundleRewardWhere = serializeExpression(queries[1]!.wheres);
+    expect(bundleRewardWhere).not.toContain("content.title");
+
+    const feedbackBonusWhere = serializeExpression(queries[2]!.wheres);
+    expect(feedbackBonusWhere).toContain("feedbackBonusAward.recipient");
+    expect(feedbackBonusWhere).toContain("content.title");
+
+    const roundRewardWhere = serializeExpression(queries[3]!.wheres);
+    expect(roundRewardWhere).toContain("rewardClaim.voter");
+    expect(roundRewardWhere).toContain("content.title");
+  });
+
   it("left-joins content so launch rows without content still itemize", async () => {
     const { queries } = mockEarningsModules([
       [],

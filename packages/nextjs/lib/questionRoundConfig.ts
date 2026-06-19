@@ -35,6 +35,15 @@ export const DEFAULT_QUESTION_ROUND_CONFIG: QuestionRoundConfig = {
   maxVoters: BigInt(DEFAULT_ROUND_CONFIG.maxVoters),
 };
 
+export const PURE_AGENT_FAST_ROUND_PRESET_ID = "pure_agent_fast";
+
+export const PURE_AGENT_FAST_QUESTION_ROUND_CONFIG: QuestionRoundConfig = {
+  epochDuration: 60n,
+  maxDuration: 60n,
+  minVoters: 3n,
+  maxVoters: 3n,
+};
+
 export const DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS: QuestionRoundConfigBounds = {
   minEpochDuration: 20,
   maxEpochDuration: 30 * 24 * 60 * 60,
