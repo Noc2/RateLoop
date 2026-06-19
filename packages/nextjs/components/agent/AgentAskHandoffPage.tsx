@@ -1565,12 +1565,6 @@ function normalizeAddress(value: unknown, field: string): Address {
   return value as Address;
 }
 
-function assertZeroValue(value: unknown, field: string) {
-  if (value === undefined || value === null || value === "" || value === "0" || value === 0 || value === 0n) return 0n;
-  if (typeof value === "string" && /^0x0+$/i.test(value)) return 0n;
-  throw new Error(`${field} must be zero.`);
-}
-
 function findHandoffQuestionSubmissionCall(calls: HandoffTransactionPlan["calls"]) {
   for (const [index, call] of (calls ?? []).entries()) {
     const data = normalizeHex(call.data ?? "0x", `transactionPlan.calls[${index}].data`);
