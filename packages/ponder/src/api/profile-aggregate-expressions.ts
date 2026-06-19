@@ -1,5 +1,6 @@
 import { sql } from "ponder";
 import { content, rewardClaim, vote } from "ponder:schema";
+import { buildAllowedContentCondition } from "./moderation.js";
 
 export function profileTotalVotesExpr(addressExpr: unknown) {
   return sql<number>`(
@@ -11,7 +12,19 @@ export function profileTotalVotesExpr(addressExpr: unknown) {
 }
 
 export function profileTotalContentExpr(addressExpr: unknown) {
-  return sql<number>`(select count(*) from ${content} where ${content.submitter} = ${addressExpr})`;
+  return sql<number>`(
+    select count(*)
+    from ${content}
+    where ${content.submitter} = ${addressExpr}
+      and ${buildAllowedContentCondition({
+        canonicalUrl: content.canonicalUrl,
+        description: content.description,
+        tags: content.tags,
+        title: content.title,
+        url: content.url,
+        urlHost: content.urlHost,
+      })}
+  )`;
 }
 
 export function profileTotalRewardsClaimedExpr(addressExpr: unknown) {
