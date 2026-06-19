@@ -471,6 +471,27 @@ test("validateLiveReadiness rejects live bytecode missing confidentiality select
     assert(
       result.failures.some((message) =>
         message.includes(
+          "X402QuestionSubmitter bytecode contains selector 0x2248a6e6",
+        ),
+      ),
+    );
+    assert(
+      result.failures.some((message) =>
+        message.includes(
+          "X402QuestionSubmitter bytecode contains selector 0x834f6ea9",
+        ),
+      ),
+    );
+    assert(
+      result.failures.some((message) =>
+        message.includes(
+          "X402QuestionSubmitter bytecode contains selector 0x8de79fb5",
+        ),
+      ),
+    );
+    assert(
+      result.failures.some((message) =>
+        message.includes(
           "ContentRegistry implementation bytecode contains selector 0x774922ea",
         ),
       ),
@@ -565,6 +586,7 @@ test("validateLiveReadiness rejects live deployment wiring mismatches", async ()
       }
       const wiringResult = handleWiringCall(params[0], deploymentAddresses, {
         "ProtocolConfig rewardDistributor": addressFor(777),
+        "X402QuestionSubmitter feedbackBonusEscrow": addressFor(778),
       });
       if (wiringResult) return wiringResult;
       throw new Error(`Unexpected eth_call ${JSON.stringify(params[0])}`);
@@ -587,6 +609,11 @@ test("validateLiveReadiness rejects live deployment wiring mismatches", async ()
     assert(
       result.failures.some((message) =>
         message.includes("ProtocolConfig rewardDistributor points to RoundRewardDistributor deployment"),
+      ),
+    );
+    assert(
+      result.failures.some((message) =>
+        message.includes("X402QuestionSubmitter feedbackBonusEscrow points to FeedbackBonusEscrow deployment"),
       ),
     );
   } finally {

@@ -98,6 +98,9 @@ export const REQUIRED_SELECTOR_CHECKS = [
     selectors: [
       "0x1c2fa657", // computeX402QuestionPaymentNonce with confidentiality config
       "0x61b030bc", // submitQuestionWithX402Payment with confidentiality config
+      "0x2248a6e6", // submitQuestionWithX402OneShotPayment without confidentiality config
+      "0x834f6ea9", // submitQuestionWithX402OneShotPayment with confidentiality config
+      "0x8de79fb5", // feedbackBonusEscrow()
     ],
   },
   {
@@ -312,6 +315,12 @@ export const REQUIRED_ADDRESS_WIRING_CHECKS = [
     selector: "0x3cd4049c", // questionRewardPoolEscrow()
     expectedContractName: "QuestionRewardPoolEscrow",
     label: "X402QuestionSubmitter questionRewardPoolEscrow",
+  },
+  {
+    contractName: "X402QuestionSubmitter",
+    selector: "0x8de79fb5", // feedbackBonusEscrow()
+    expectedContractName: "FeedbackBonusEscrow",
+    label: "X402QuestionSubmitter feedbackBonusEscrow",
   },
 ];
 
