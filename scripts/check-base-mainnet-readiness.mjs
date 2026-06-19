@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  addBasePreconfirmationEnvChecks,
   loadOfflineInputs,
   validateLiveReadiness,
   validateOfflineReadiness,
@@ -40,7 +41,9 @@ function addCheck(result, ok, message) {
 }
 
 function envSourceHasAssignment(source, key, expectedValue) {
-  return source.split(/\r?\n/).some(line => line.trim() === `${key}=${expectedValue}`);
+  return source
+    .split(/\r?\n/)
+    .some((line) => line.trim() === `${key}=${expectedValue}`);
 }
 
 function printResult(title, result, json = false) {
@@ -60,7 +63,10 @@ export function baseMainnetNotDeployedMessage() {
 }
 
 export function validateBaseMainnetOfflineReadiness(inputs) {
-  const result = validateOfflineReadiness(inputs, BASE_MAINNET_READINESS_CONFIG);
+  const result = validateOfflineReadiness(
+    inputs,
+    BASE_MAINNET_READINESS_CONFIG,
+  );
 
   addCheck(
     result,
@@ -69,19 +75,39 @@ export function validateBaseMainnetOfflineReadiness(inputs) {
   );
   addCheck(
     result,
-    envSourceHasAssignment(inputs.envProductionSource ?? "", "NEXT_PUBLIC_TARGET_NETWORKS", "8453"),
+    envSourceHasAssignment(
+      inputs.envProductionSource ?? "",
+      "NEXT_PUBLIC_TARGET_NETWORKS",
+      "8453",
+    ),
     "Next.js production env targets Base mainnet",
   );
   addCheck(
     result,
-    envSourceHasAssignment(inputs.envProductionSource ?? "", "NEXT_PUBLIC_WORLD_ID_ENVIRONMENT", "production"),
+    envSourceHasAssignment(
+      inputs.envProductionSource ?? "",
+      "NEXT_PUBLIC_WORLD_ID_ENVIRONMENT",
+      "production",
+    ),
     "Next.js production env uses production World ID",
   );
   addCheck(
     result,
-    envSourceHasAssignment(inputs.envProductionSource ?? "", "NEXT_PUBLIC_WORLD_ID_PROOF_MODE", "legacy"),
+    envSourceHasAssignment(
+      inputs.envProductionSource ?? "",
+      "NEXT_PUBLIC_WORLD_ID_PROOF_MODE",
+      "legacy",
+    ),
     "Next.js production env requests legacy World ID proofs",
   );
+  addBasePreconfirmationEnvChecks({
+    chainId: BASE_MAINNET_READINESS_CONFIG.chainId,
+    checks: result.checks,
+    envSource: inputs.envProductionSource,
+    failures: result.failures,
+    sourceLabel: "Next.js production env",
+  });
+  result.ok = result.failures.length === 0;
 
   return result;
 }
@@ -89,7 +115,10 @@ export function validateBaseMainnetOfflineReadiness(inputs) {
 function loadBaseMainnetOfflineInputs(root = repoRoot) {
   return {
     ...loadOfflineInputs(root, BASE_MAINNET_READINESS_CONFIG),
-    envProductionSource: readFileSync(join(root, "packages/nextjs/.env.production"), "utf8"),
+    envProductionSource: readFileSync(
+      join(root, "packages/nextjs/.env.production"),
+      "utf8",
+    ),
   };
 }
 
@@ -99,7 +128,10 @@ async function main() {
   try {
     offlineInputs = loadBaseMainnetOfflineInputs();
   } catch (error) {
-    if (error?.code === "ENOENT" && error.path?.endsWith(BASE_MAINNET_READINESS_CONFIG.deploymentPath)) {
+    if (
+      error?.code === "ENOENT" &&
+      error.path?.endsWith(BASE_MAINNET_READINESS_CONFIG.deploymentPath)
+    ) {
       console.error(baseMainnetNotDeployedMessage());
       process.exit(1);
       return;
@@ -108,7 +140,11 @@ async function main() {
   }
 
   const offlineResult = validateBaseMainnetOfflineReadiness(offlineInputs);
-  printResult("Base mainnet production offline readiness", offlineResult, args.json);
+  printResult(
+    "Base mainnet production offline readiness",
+    offlineResult,
+    args.json,
+  );
 
   let liveResult = { ok: true, checks: [], failures: [] };
   if (args.live) {
@@ -120,7 +156,18 @@ async function main() {
       requireTargets: args.requireLiveTargets,
       rpcUrl: process.env.BASE_RPC_URL,
     });
-    printResult("Base mainnet production live readiness", liveResult, args.json);
+    addBasePreconfirmationEnvChecks({
+      chainId: BASE_MAINNET_READINESS_CONFIG.chainId,
+      checks: liveResult.checks,
+      failures: liveResult.failures,
+      sourceLabel: "live environment",
+    });
+    liveResult.ok = liveResult.failures.length === 0;
+    printResult(
+      "Base mainnet production live readiness",
+      liveResult,
+      args.json,
+    );
   }
 
   if (!offlineResult.ok || !liveResult.ok) {

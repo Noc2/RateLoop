@@ -6,6 +6,7 @@ import {
   REQUIRED_DEPLOYED_CONTRACTS,
   REQUIRED_SELECTOR_CHECKS,
   REQUIRED_SUBMISSION_MEDIA_VALIDATOR_SELECTORS,
+  addBasePreconfirmationEnvChecks,
   buildDeploymentAddressMap,
   buildPonderUrl,
   buildReadinessUrl,
@@ -65,38 +66,52 @@ function encodeStorageAddress(address) {
 }
 
 function encodeAddressWords(...addresses) {
-  return `0x${addresses.map(address => address.toLowerCase().replace(/^0x/, "").padStart(64, "0")).join("")}`;
+  return `0x${addresses.map((address) => address.toLowerCase().replace(/^0x/, "").padStart(64, "0")).join("")}`;
 }
 
 function encodeAddressCallData(selector, addresses = []) {
-  return `${selector}${addresses.map(address => address.toLowerCase().replace(/^0x/, "").padStart(64, "0")).join("")}`;
+  return `${selector}${addresses.map((address) => address.toLowerCase().replace(/^0x/, "").padStart(64, "0")).join("")}`;
 }
 
 function selectorBytecode() {
   return `0x${[
-    ...REQUIRED_SELECTOR_CHECKS.flatMap(check => check.selectors),
+    ...REQUIRED_SELECTOR_CHECKS.flatMap((check) => check.selectors),
     ...REQUIRED_SUBMISSION_MEDIA_VALIDATOR_SELECTORS,
   ]
-    .map(selector => selector.slice(2))
+    .map((selector) => selector.slice(2))
     .join("")}`;
 }
 
 function handleWiringCall(call, deploymentAddresses, overrides = {}) {
   for (const check of REQUIRED_ADDRESS_WIRING_CHECKS) {
     const to = deploymentAddresses.get(check.contractName);
-    const argumentAddresses = (check.arguments ?? []).map(contractName => deploymentAddresses.get(contractName));
-    if (!to || argumentAddresses.some(address => !address)) continue;
-    const expectedData = encodeAddressCallData(check.selector, argumentAddresses);
-    if (call.to !== to || call.data.toLowerCase() !== expectedData.toLowerCase()) continue;
+    const argumentAddresses = (check.arguments ?? []).map((contractName) =>
+      deploymentAddresses.get(contractName),
+    );
+    if (!to || argumentAddresses.some((address) => !address)) continue;
+    const expectedData = encodeAddressCallData(
+      check.selector,
+      argumentAddresses,
+    );
+    if (
+      call.to !== to ||
+      call.data.toLowerCase() !== expectedData.toLowerCase()
+    )
+      continue;
 
     if (check.selector === "0xe1b361ac") {
       return encodeAddressWords(
-        overrides["QuestionRewardPoolEscrow registry"] ?? deploymentAddresses.get("ContentRegistry"),
-        overrides["QuestionRewardPoolEscrow votingEngine"] ?? deploymentAddresses.get("RoundVotingEngine"),
+        overrides["QuestionRewardPoolEscrow registry"] ??
+          deploymentAddresses.get("ContentRegistry"),
+        overrides["QuestionRewardPoolEscrow votingEngine"] ??
+          deploymentAddresses.get("RoundVotingEngine"),
       );
     }
 
-    return encodeAddressWords(overrides[check.label] ?? deploymentAddresses.get(check.expectedContractName));
+    return encodeAddressWords(
+      overrides[check.label] ??
+        deploymentAddresses.get(check.expectedContractName),
+    );
   }
   return undefined;
 }
@@ -227,7 +242,8 @@ test("validateOfflineReadiness accepts synchronized Base Sepolia deployment arti
     {
       deploymentJson: makeDeploymentJson({ networkName: "baseSepolia" }),
       deployedContractsSource: makeGeneratedContractsSource({}, 84532),
-      protocolSource: 'const USDC_BY_CHAIN_ID = { 84532: "0x036CbD53842c5426634e7929541eC2318f3dCF7e" };',
+      protocolSource:
+        'const USDC_BY_CHAIN_ID = { 84532: "0x036CbD53842c5426634e7929541eC2318f3dCF7e" };',
     },
     BASE_SEPOLIA_READINESS_CONFIG,
   );
@@ -349,9 +365,36 @@ test("validateLiveReadiness reports Base Sepolia env names when required live ta
   });
 
   assert.equal(result.ok, false);
-  assert(result.failures.some((message) => message.includes("BASE_SEPOLIA_RPC_URL")));
-  assert(result.failures.some((message) => message.includes("BASE_SEPOLIA_PONDER_URL")));
-  assert(result.failures.some((message) => message.includes("BASE_SEPOLIA_APP_URL")));
+  assert(
+    result.failures.some((message) => message.includes("BASE_SEPOLIA_RPC_URL")),
+  );
+  assert(
+    result.failures.some((message) =>
+      message.includes("BASE_SEPOLIA_PONDER_URL"),
+    ),
+  );
+  assert(
+    result.failures.some((message) => message.includes("BASE_SEPOLIA_APP_URL")),
+  );
+});
+
+test("addBasePreconfirmationEnvChecks reports Base Sepolia generic RPC requirements", () => {
+  const checks = [];
+  const failures = [];
+
+  addBasePreconfirmationEnvChecks({
+    chainId: BASE_SEPOLIA_READINESS_CONFIG.chainId,
+    checks,
+    env: {
+      NEXT_PUBLIC_USE_BASE_PRECONF_RPC: "true",
+    },
+    failures,
+    sourceLabel: "test environment",
+  });
+
+  assert(
+    failures.some((message) => message.includes("NEXT_PUBLIC_RPC_URL_84532")),
+  );
 });
 
 test("buildReadinessUrl preserves path-prefixed app readiness URLs", () => {
@@ -608,12 +651,16 @@ test("validateLiveReadiness rejects live deployment wiring mismatches", async ()
     assert.equal(result.ok, false);
     assert(
       result.failures.some((message) =>
-        message.includes("ProtocolConfig rewardDistributor points to RoundRewardDistributor deployment"),
+        message.includes(
+          "ProtocolConfig rewardDistributor points to RoundRewardDistributor deployment",
+        ),
       ),
     );
     assert(
       result.failures.some((message) =>
-        message.includes("X402QuestionSubmitter feedbackBonusEscrow points to FeedbackBonusEscrow deployment"),
+        message.includes(
+          "X402QuestionSubmitter feedbackBonusEscrow points to FeedbackBonusEscrow deployment",
+        ),
       ),
     );
   } finally {

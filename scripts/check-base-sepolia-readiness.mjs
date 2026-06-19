@@ -1,5 +1,6 @@
 import { fileURLToPath } from "node:url";
 import {
+  addBasePreconfirmationEnvChecks,
   loadOfflineInputs,
   validateLiveReadiness,
   validateOfflineReadiness,
@@ -48,7 +49,10 @@ async function main() {
   try {
     offlineInputs = loadOfflineInputs(undefined, BASE_SEPOLIA_READINESS_CONFIG);
   } catch (error) {
-    if (error?.code === "ENOENT" && error.path?.endsWith(BASE_SEPOLIA_READINESS_CONFIG.deploymentPath)) {
+    if (
+      error?.code === "ENOENT" &&
+      error.path?.endsWith(BASE_SEPOLIA_READINESS_CONFIG.deploymentPath)
+    ) {
       console.error(baseSepoliaNotDeployedMessage());
       process.exit(1);
       return;
@@ -56,7 +60,10 @@ async function main() {
     throw error;
   }
 
-  const offlineResult = validateOfflineReadiness(offlineInputs, BASE_SEPOLIA_READINESS_CONFIG);
+  const offlineResult = validateOfflineReadiness(
+    offlineInputs,
+    BASE_SEPOLIA_READINESS_CONFIG,
+  );
   printResult("Base Sepolia offline readiness", offlineResult, args.json);
 
   let liveResult = { ok: true, checks: [], failures: [] };
@@ -69,6 +76,13 @@ async function main() {
       requireTargets: args.requireLiveTargets,
       rpcUrl: process.env.BASE_SEPOLIA_RPC_URL,
     });
+    addBasePreconfirmationEnvChecks({
+      chainId: BASE_SEPOLIA_READINESS_CONFIG.chainId,
+      checks: liveResult.checks,
+      failures: liveResult.failures,
+      sourceLabel: "live environment",
+    });
+    liveResult.ok = liveResult.failures.length === 0;
     printResult("Base Sepolia live readiness", liveResult, args.json);
   }
 

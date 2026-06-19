@@ -333,6 +333,73 @@ function addCheck(checks, failures, ok, message) {
   if (!ok) failures.push(message);
 }
 
+function readEnvAssignment(source, key) {
+  for (const line of source.split(/\r?\n/)) {
+    const trimmedLine = line.trim();
+    if (!trimmedLine || trimmedLine.startsWith("#")) {
+      continue;
+    }
+
+    const match = /^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/u.exec(trimmedLine);
+    if (match?.[1] !== key) {
+      continue;
+    }
+
+    return match[2].trim().replace(/^(['"])(.*)\1$/u, "$2");
+  }
+
+  return undefined;
+}
+
+function readEnvValue({ env, envSource }, key) {
+  const sourceValue =
+    typeof envSource === "string"
+      ? readEnvAssignment(envSource, key)
+      : undefined;
+  return sourceValue ?? env?.[key]?.trim();
+}
+
+export function addBasePreconfirmationEnvChecks({
+  chainId,
+  checks,
+  env = process.env,
+  envSource,
+  failures,
+  sourceLabel = "environment",
+}) {
+  const browserPreconfEnvName = `NEXT_PUBLIC_BASE_PRECONF_RPC_URL_${chainId}`;
+  const serverPreconfEnvName = `RATELOOP_SERVER_BASE_PRECONF_RPC_URL_${chainId}`;
+  const rpcEnvName = `NEXT_PUBLIC_RPC_URL_${chainId}`;
+  const browserPreconfEnabled =
+    readEnvValue({ env, envSource }, "NEXT_PUBLIC_USE_BASE_PRECONF_RPC") ===
+    "true";
+  const serverPreconfEnabled =
+    readEnvValue({ env, envSource }, "RATELOOP_SERVER_USE_BASE_PRECONF_RPC") ===
+    "true";
+
+  addCheck(
+    checks,
+    failures,
+    !readEnvValue({ env, envSource }, browserPreconfEnvName),
+    `${sourceLabel} does not configure removed ${browserPreconfEnvName}`,
+  );
+  addCheck(
+    checks,
+    failures,
+    !readEnvValue({ env, envSource }, serverPreconfEnvName),
+    `${sourceLabel} does not configure removed ${serverPreconfEnvName}`,
+  );
+
+  if (browserPreconfEnabled || serverPreconfEnabled) {
+    addCheck(
+      checks,
+      failures,
+      Boolean(readEnvValue({ env, envSource }, rpcEnvName)),
+      `${sourceLabel} reuses ${rpcEnvName} for Base preconfirmation`,
+    );
+  }
+}
+
 export function buildDeploymentAddressMap(deploymentJson) {
   const byName = new Map();
   for (const [key, value] of Object.entries(deploymentJson)) {
@@ -399,11 +466,10 @@ export function parseGeneratedContractsForChain(
   return contracts;
 }
 
-export function validateOfflineReadiness({
-  deploymentJson,
-  deployedContractsSource,
-  protocolSource,
-}, readinessConfig = WORLDCHAIN_SEPOLIA_READINESS_CONFIG) {
+export function validateOfflineReadiness(
+  { deploymentJson, deployedContractsSource, protocolSource },
+  readinessConfig = WORLDCHAIN_SEPOLIA_READINESS_CONFIG,
+) {
   const checks = [];
   const failures = [];
   const deploymentAddresses = buildDeploymentAddressMap(deploymentJson);
@@ -472,20 +538,22 @@ export function validateOfflineReadiness({
   addCheck(
     checks,
     failures,
-    protocolSource.includes(`${readinessConfig.chainId}: "${readinessConfig.usdc}"`),
+    protocolSource.includes(
+      `${readinessConfig.chainId}: "${readinessConfig.usdc}"`,
+    ),
     `Next.js default USDC address is configured for ${readinessConfig.label}`,
   );
 
   return { ok: failures.length === 0, checks, failures };
 }
 
-export function loadOfflineInputs(root = repoRoot, readinessConfig = WORLDCHAIN_SEPOLIA_READINESS_CONFIG) {
+export function loadOfflineInputs(
+  root = repoRoot,
+  readinessConfig = WORLDCHAIN_SEPOLIA_READINESS_CONFIG,
+) {
   return {
     deploymentJson: JSON.parse(
-      readFileSync(
-        join(root, readinessConfig.deploymentPath),
-        "utf8",
-      ),
+      readFileSync(join(root, readinessConfig.deploymentPath), "utf8"),
     ),
     deployedContractsSource: readFileSync(
       join(root, "packages/contracts/src/deployedContracts.ts"),
@@ -813,7 +881,8 @@ export async function validateLiveReadiness({
       );
       if (response.ok) {
         const status = await response.json().catch(() => null);
-        const blockNumber = status?.[readinessConfig.ponderStatusKey]?.block?.number;
+        const blockNumber =
+          status?.[readinessConfig.ponderStatusKey]?.block?.number;
         addCheck(
           checks,
           failures,
@@ -842,7 +911,9 @@ export async function validateLiveReadiness({
   if (appUrl) {
     for (const path of ["/", "/ask", "/docs/ai", "/api/agent/templates"]) {
       try {
-        const response = await fetchWithTimeout(buildReadinessUrl(appUrl, path));
+        const response = await fetchWithTimeout(
+          buildReadinessUrl(appUrl, path),
+        );
         addCheck(
           checks,
           failures,
