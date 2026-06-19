@@ -13,9 +13,10 @@ Follow-up non-redeploy fixes after this recheck:
 - M-4 and M-5 documentation gaps for `requiresAtomicExecution` were fixed by `0501c8e1` (`docs(agent): document atomic wallet plan requirements`).
 - M-6 direct HTTP Feedback Bonus guidance was fixed by `a376faf3` (`docs(agent): align direct feedback bonus guidance`).
 - M-3 server confirmation RPC selection now ignores the public browser preconfirmation toggle unless the server-only opt-in is set. L-1 production preconfirmation env wording was clarified by `65ad89d5` (`docs(env): clarify production preconfirmation rpc config`).
+- M-1 Base Sepolia now gates one-shot x402 Feedback Bonus support off for the known stale submitter deployment until staging is refreshed.
 - L-2 stale review/audit docs were marked historical by `ceb48ce4` (`docs(review): mark stale transaction ux findings`).
 
-M-1 remains the deployment-bound Base Sepolia staging mismatch. It does not require a Base mainnet redeploy.
+The remaining deployment-bound work is a Base Sepolia staging refresh for parity. It does not require a Base mainnet redeploy.
 
 ## Contract Redeploy Posture
 

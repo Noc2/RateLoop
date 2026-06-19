@@ -2137,6 +2137,38 @@ test("prepareNativeX402QuestionSubmissionRequest one-shots USDC Feedback Bonus f
   assert.equal(record?.bountyAmount, "1000000");
 });
 
+test("prepareNativeX402QuestionSubmissionRequest gates stale Base Sepolia one-shot Feedback Bonus submitter", async () => {
+  const payload = { ...buildPayload("native-x402-stale-sepolia-one-shot-feedback-bonus"), chainId: 84532 };
+  const walletAddress = "0x00000000000000000000000000000000000000aa" as const;
+  const feedbackBonus = {
+    amount: 2_000_000n,
+    asset: "USDC" as const,
+    awarder: walletAddress,
+    feedbackClosesAt: getFeedbackBonusClosesAt(payload),
+  };
+
+  setDefaultTestOverrides({
+    buildNativeX402QuestionSubmissionPlan: undefined as never,
+    resolveX402QuestionConfig: () => ({
+      ...TEST_CONFIG,
+      chainId: 84532,
+      x402OneShotFeedbackBonusSupported: false,
+      x402QuestionSubmitterAddress: "0x24AB19e0D8052DEc62bEc59e986e336adc4721F3",
+    }),
+  });
+
+  await assert.rejects(
+    prepareNativeX402QuestionSubmissionRequest({
+      agentId: "native-agent",
+      feedbackBonus,
+      paymentAuthorization: { signature: `0x${"1".repeat(64)}${"3".repeat(64)}1b` },
+      payload,
+      walletAddress,
+    }),
+    /USDC Feedback Bonus one-shot submissions are not enabled for this chain deployment/,
+  );
+});
+
 test("preparePermissionlessNativeX402QuestionSubmissionRequest preserves pending callback on signed follow-up", async () => {
   const payload = buildPayload("native-x402-webhook-followup");
   const walletAddress = "0x00000000000000000000000000000000000000aa" as const;

@@ -79,6 +79,8 @@ const FEEDBACK_BONUS_ASSET_USDC = 1;
 const QUESTION_CONTEXT_DOMAIN = keccak256(toBytes("rateloop-question-context-v5"));
 const ZERO_BYTES32 = `0x${"0".repeat(64)}` as const;
 const ZERO_ADDRESS = `0x${"0".repeat(40)}` as const;
+const BASE_SEPOLIA_STALE_X402_SUBMITTER_ADDRESS =
+  "0x24ab19e0d8052dec62bec59e986e336adc4721f3" as const satisfies Lowercase<Address>;
 type FeedbackBonusAsset = "LREP" | "USDC";
 
 function questionDetailsTuple(question: Pick<X402QuestionPayload["questions"][number], "detailsHash" | "detailsUrl">) {
@@ -391,6 +393,17 @@ function x402NativePaymentAmount(
 
 function shouldUseOneShotX402Payment(feedbackBonus: X402FeedbackBonusRequest | null | undefined) {
   return feedbackBonus?.asset === "USDC" && feedbackBonus.amount > 0n;
+}
+
+function supportsX402OneShotFeedbackBonus(config: {
+  chainId: number;
+  x402QuestionSubmitterAddress?: Address;
+}): boolean {
+  return !(
+    config.chainId === 84532 &&
+    config.x402QuestionSubmitterAddress &&
+    normalizedAddress(config.x402QuestionSubmitterAddress) === BASE_SEPOLIA_STALE_X402_SUBMITTER_ADDRESS
+  );
 }
 
 function oneShotFeedbackBonusTerms(feedbackBonus: X402FeedbackBonusRequest | null | undefined): X402FeedbackBonusTerms {
@@ -799,6 +812,7 @@ type X402QuestionSubmissionConfig = {
   rpcUrl: string;
   targetNetwork: NonNullable<ReturnType<typeof getPrimaryServerTargetNetwork>>;
   usdcAddress: Address;
+  x402OneShotFeedbackBonusSupported?: boolean;
   x402QuestionSubmitterAddress?: Address;
 };
 
@@ -1330,6 +1344,10 @@ export function resolveX402QuestionConfig(chainId: number): X402QuestionSubmissi
     rpcUrl,
     targetNetwork,
     usdcAddress,
+    x402OneShotFeedbackBonusSupported: supportsX402OneShotFeedbackBonus({
+      chainId,
+      x402QuestionSubmitterAddress,
+    }),
     x402QuestionSubmitterAddress,
   };
 }
@@ -1909,6 +1927,11 @@ async function buildNativeX402QuestionSubmissionPlan(params: {
   const oneShot = shouldUseOneShotX402Payment(params.feedbackBonus);
   if (oneShot && !params.config.feedbackBonusEscrowAddress) {
     throw new X402QuestionConfigError("USDC Feedback Bonus one-shot submissions require the escrow deployment.");
+  }
+  if (oneShot && params.config.x402OneShotFeedbackBonusSupported === false) {
+    throw new X402QuestionConfigError(
+      "USDC Feedback Bonus one-shot submissions are not enabled for this chain deployment.",
+    );
   }
 
   const inputAuthorization = normalizeNativeX402AuthorizationInput(params.paymentAuthorization);
