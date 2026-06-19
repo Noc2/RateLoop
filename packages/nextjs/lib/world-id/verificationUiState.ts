@@ -50,7 +50,19 @@ export const WORLD_ID_WALLET_TRANSACTION_CANCELLED_MESSAGE =
 export const WORLD_ID_WALLET_SESSION_RECONNECTING_MESSAGE =
   "Your wallet session is still reconnecting. Wait a moment, then try verifying again. If this keeps happening, disconnect and sign in again.";
 
+export const WORLD_ID_SIMULATOR_MAINNET_MESSAGE =
+  "World ID simulator proofs cannot be verified on mainnet. Use the production World App, or switch to staging/local for simulator testing.";
+
 const WORLD_ID_WALLET_SESSION_ERROR_CODE = "wallet_session_expired";
+
+function isWorldIdAttestationCallMessage(message: string) {
+  return (
+    message.includes("attestHumanCredentialWithProof") ||
+    message.includes("attestHumanCredentialWithV4Proof") ||
+    message.includes("attestWorldCredentialWithV4Proof") ||
+    message.includes("attestHumanPresenceWithV4Proof")
+  );
+}
 
 function getErrorText(error: unknown) {
   if (typeof error === "string") {
@@ -121,14 +133,16 @@ export function getWorldIdCredentialAttestationErrorMessage(
     return WORLD_ID_NULLIFIER_ALREADY_ASSIGNED_MESSAGE;
   }
 
-  if (
-    message.includes("InvalidCredential") &&
-    (message.includes("attestHumanCredentialWithProof") ||
-      message.includes("attestHumanCredentialWithV4Proof") ||
-      message.includes("attestWorldCredentialWithV4Proof") ||
-      message.includes("attestHumanPresenceWithV4Proof"))
-  ) {
+  if (message.includes("InvalidCredential") && isWorldIdAttestationCallMessage(message)) {
     return WORLD_ID_INVALID_CREDENTIAL_MESSAGE;
+  }
+
+  if (
+    isWorldIdAttestationCallMessage(message) &&
+    (message.includes('Unable to decode signature "0xddae3b71"') ||
+      message.includes("with the following signature:\n0xddae3b71"))
+  ) {
+    return WORLD_ID_SIMULATOR_MAINNET_MESSAGE;
   }
 
   if (message.includes("Request exceeds defined limit") || message.includes("Request is being rate limited")) {

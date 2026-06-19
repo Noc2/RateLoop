@@ -2,6 +2,7 @@ import {
   WORLD_ID_INVALID_CREDENTIAL_MESSAGE,
   WORLD_ID_NULLIFIER_ALREADY_ASSIGNED_MESSAGE,
   WORLD_ID_RATE_LIMITED_MESSAGE,
+  WORLD_ID_SIMULATOR_MAINNET_MESSAGE,
   WORLD_ID_WALLET_SESSION_RECONNECTING_MESSAGE,
   WORLD_ID_WALLET_TRANSACTION_CANCELLED_MESSAGE,
   type WorldIdVerificationStep,
@@ -36,6 +37,22 @@ test("formats invalid World ID credential reverts as fresh retry guidance", () =
       'The contract function "attestHumanCredentialWithV4Proof" reverted. Error: InvalidCredential()',
     ),
     WORLD_ID_INVALID_CREDENTIAL_MESSAGE,
+  );
+});
+
+test("formats undecoded simulator attestation reverts without exposing calldata", () => {
+  assert.equal(
+    getWorldIdCredentialAttestationErrorMessage(`The contract function "attestHumanCredentialWithProof" reverted with the following signature:
+0xddae3b71
+
+Unable to decode signature "0xddae3b71" as it was not found on the provided ABI.
+
+Contract Call:
+address: 0xD7A1438B804b743E6b6380e3d35f7b959AccC846
+function: attestHumanCredentialWithProof(uint256 root, uint256 nullifierHash, uint256[8] proof)
+args: (15992582637272022841415542526126544069447960985046091853324146113900759160198, 159201932605672928816277191628172059222804142735175732786812802493826536661, ["1903753567318180413205778348319911610335891186947236314583765363725710261177"])
+sender: 0xfa9605A2c38a0B4f16f689FDD07B63F295b86d1C`),
+    WORLD_ID_SIMULATOR_MAINNET_MESSAGE,
   );
 });
 
