@@ -2,6 +2,19 @@
 
 Reviewed `main` at `82e2487a` after the Base preconfirmation, batching, pure-agent fast round, one-shot x402, public docs, ABI regeneration, and contract-size follow-up commits.
 
+Remediation status after the non-redeploy fix pass on June 19, 2026:
+
+- H-1 remains intentionally open because it requires Base Sepolia/Base mainnet smart-contract redeployment and artifact refresh.
+- H-2 and M-1 were fixed by `79a7e6d8` (`fix(agent): complete browser x402 signing intents`).
+- H-3 and M-2 were fixed by `4e5abd15` (`fix(agent): make feedback bonus confirmation retryable`).
+- M-3 was fixed by `b797863b` (`fix(agent): require atomic feedback bonus batches`).
+- M-4 was fixed by `a348d958` (`docs(agent): split direct ask feedback bonus guidance`).
+- L-1 was fixed by `7feb8f14` (`fix(agent): allow lrep feedback bonus schema`).
+- L-2 was fixed by `7dba8d5a` (`fix(contracts): validate x402 feedback bonus escrow`).
+- L-3 was fixed by `f7cf1112` (`docs(env): clarify base rpc provider roles`).
+- L-5 was fixed by `be990852` (`fix(agent): remove unused handoff helper`).
+- L-4 remains a size-headroom guardrail rather than a correctness bug; `yarn workspace @rateloop/foundry check:sizes` is still the required gate and remained green after the contract hardening pass.
+
 Scope:
 
 - Contracts touched by one-shot x402 funding and feedback bonuses.
