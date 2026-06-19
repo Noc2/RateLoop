@@ -43,7 +43,7 @@ test("resolveTlockChainSpec rejects the legacy tlock-js testnet hash", () => {
         drandGenesisTime: 1_651_677_099n,
         drandPeriod: 3n,
       }),
-    /Unsupported drand chain/,
+    /Unsupported drand chain/
   );
 });
 
@@ -55,6 +55,6 @@ test("resolveTlockChainSpec rejects a timing tuple that does not match the chain
         drandGenesisTime: MAINNET_QUICKNET.genesisTime,
         drandPeriod: QUICKNET_T.period,
       }),
-    /does not match supported quicknet-t config/,
+    /does not match supported quicknet-t config/
   );
 });

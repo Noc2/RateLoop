@@ -119,7 +119,7 @@ library ContentRegistryDormancyLib {
         if (engine == address(0)) return false;
         try IRoundVotingEngine(engine).isDormancyBlocked(contentId) returns (bool blocked) {
             return blocked;
-        } catch {}
+        } catch { }
 
         return _engineHasOpenRound(engine, contentId);
     }

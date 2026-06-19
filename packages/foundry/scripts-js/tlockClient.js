@@ -25,8 +25,12 @@ export const QUICKNET_T = {
 const SUPPORTED_TLOCK_CHAINS = [MAINNET_QUICKNET, QUICKNET_T];
 
 function normalizeDrandChainHash(value) {
-  const normalized = String(value ?? "").trim().toLowerCase();
-  const stripped = normalized.startsWith("0x") ? normalized.slice(2) : normalized;
+  const normalized = String(value ?? "")
+    .trim()
+    .toLowerCase();
+  const stripped = normalized.startsWith("0x")
+    ? normalized.slice(2)
+    : normalized;
   if (!/^[0-9a-f]{64}$/.test(stripped)) {
     throw new Error("Invalid drand chain hash");
   }
@@ -40,16 +44,22 @@ function assertDrandTimingMatches(spec, drandGenesisTime, drandPeriod) {
     return;
   }
   throw new Error(
-    `On-chain drand config (0x${spec.chainHash}, ${genesisTime}, ${period}) does not match supported ${spec.name} config (0x${spec.chainHash}, ${spec.genesisTime}, ${spec.period})`,
+    `On-chain drand config (0x${spec.chainHash}, ${genesisTime}, ${period}) does not match supported ${spec.name} config (0x${spec.chainHash}, ${spec.genesisTime}, ${spec.period})`
   );
 }
 
-export function resolveTlockChainSpec({ drandChainHash, drandGenesisTime, drandPeriod }) {
+export function resolveTlockChainSpec({
+  drandChainHash,
+  drandGenesisTime,
+  drandPeriod,
+}) {
   const normalizedHash = normalizeDrandChainHash(drandChainHash);
-  const spec = SUPPORTED_TLOCK_CHAINS.find(chain => chain.chainHash === normalizedHash);
+  const spec = SUPPORTED_TLOCK_CHAINS.find(
+    (chain) => chain.chainHash === normalizedHash
+  );
   if (!spec) {
     throw new Error(
-      `Unsupported drand chain 0x${normalizedHash}. Update generateTlockCommit.js before seeding votes for this deployment.`,
+      `Unsupported drand chain 0x${normalizedHash}. Update generateTlockCommit.js before seeding votes for this deployment.`
     );
   }
   assertDrandTimingMatches(spec, drandGenesisTime, drandPeriod);
@@ -73,6 +83,7 @@ function createCustomTlockClient(spec) {
 
 export function createTlockClientForDrandConfig(config) {
   const spec = resolveTlockChainSpec(config);
-  const client = spec === MAINNET_QUICKNET ? mainnetClient() : createCustomTlockClient(spec);
+  const client =
+    spec === MAINNET_QUICKNET ? mainnetClient() : createCustomTlockClient(spec);
   return { client, spec };
 }

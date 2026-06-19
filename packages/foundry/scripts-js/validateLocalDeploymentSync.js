@@ -4,7 +4,9 @@ import { fileURLToPath } from "url";
 const ADDRESS_PATTERN = /^0x[0-9a-fA-F]{40}$/;
 
 function normalizeAddress(value) {
-  return typeof value === "string" && ADDRESS_PATTERN.test(value) ? value.toLowerCase() : undefined;
+  return typeof value === "string" && ADDRESS_PATTERN.test(value)
+    ? value.toLowerCase()
+    : undefined;
 }
 
 function escapeRegExp(value) {
@@ -72,7 +74,8 @@ export function extractGeneratedChainBlock(source, chainId) {
       depth++;
     } else if (char === "}") {
       depth--;
-      if (depth === 0) return source.slice(match.index + match[0].lastIndexOf("{"), index + 1);
+      if (depth === 0)
+        return source.slice(match.index + match[0].lastIndexOf("{"), index + 1);
     }
   }
 
@@ -84,10 +87,9 @@ export function readGeneratedAddress(source, chainId, contractName) {
   if (!chainBlock) return undefined;
 
   const contractPattern = new RegExp(
-    `(^|\\n)\\s*${escapeRegExp(contractName)}\\s*:\\s*{\\s*address\\s*:\\s*"(${ADDRESS_PATTERN.source.slice(
-      1,
-      -1,
-    )})"`,
+    `(^|\\n)\\s*${escapeRegExp(
+      contractName
+    )}\\s*:\\s*{\\s*address\\s*:\\s*"(${ADDRESS_PATTERN.source.slice(1, -1)})"`
   );
   const match = contractPattern.exec(chainBlock);
   return normalizeAddress(match?.[2]);
@@ -107,7 +109,7 @@ export function findDeploymentMismatches({
     const generatedAddress = readGeneratedAddress(
       deployedContractsSource,
       chainId,
-      contractName,
+      contractName
     );
     if (artifactAddress === generatedAddress) continue;
     if (!artifactAddress && !generatedAddress) continue;
@@ -123,8 +125,12 @@ export function findDeploymentMismatches({
 }
 
 function main() {
-  const [deploymentJsonPath, deployedContractsPath, chainIdArg, ...contractNames] =
-    process.argv.slice(2);
+  const [
+    deploymentJsonPath,
+    deployedContractsPath,
+    chainIdArg,
+    ...contractNames
+  ] = process.argv.slice(2);
   const chainId = Number.parseInt(chainIdArg ?? "", 10);
   if (
     !deploymentJsonPath ||
@@ -133,7 +139,7 @@ function main() {
     contractNames.length === 0
   ) {
     console.error(
-      "Usage: node scripts-js/validateLocalDeploymentSync.js <deployment-json> <deployedContracts.ts> <chain-id> <contract> [contract...]",
+      "Usage: node scripts-js/validateLocalDeploymentSync.js <deployment-json> <deployedContracts.ts> <chain-id> <contract> [contract...]"
     );
     process.exit(2);
   }
@@ -150,17 +156,17 @@ function main() {
   if (mismatches.length === 0) return;
 
   console.error(
-    "ERROR: Local deployment artifact is stale relative to packages/contracts/src/deployedContracts.ts.",
+    "ERROR: Local deployment artifact is stale relative to packages/contracts/src/deployedContracts.ts."
   );
   for (const mismatch of mismatches) {
     const artifactAddress = mismatch.artifactAddress ?? "missing";
     const generatedAddress = mismatch.generatedAddress ?? "missing";
     console.error(
-      `  ${mismatch.contractName}: ${artifactAddress} in deployment artifact, ${generatedAddress} in generated contracts`,
+      `  ${mismatch.contractName}: ${artifactAddress} in deployment artifact, ${generatedAddress} in generated contracts`
     );
   }
   console.error(
-    "Refresh the local deployment artifacts before running the seed script.",
+    "Refresh the local deployment artifacts before running the seed script."
   );
   process.exit(1);
 }

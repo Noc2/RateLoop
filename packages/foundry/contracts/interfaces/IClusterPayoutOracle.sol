@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import {IFrontendRegistry} from "./IFrontendRegistry.sol";
+import { IFrontendRegistry } from "./IFrontendRegistry.sol";
 
 interface IClusterPayoutOracle {
     enum SnapshotStatus {

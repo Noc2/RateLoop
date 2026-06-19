@@ -13,7 +13,7 @@ const otherChainAddress = "0x3000000000000000000000000000000000000003";
 
 function generatedContractsSource(
   address = artifactAddress,
-  extraLocalContracts = "",
+  extraLocalContracts = ""
 ) {
   return `
 export default {
@@ -53,16 +53,19 @@ test("buildDeploymentNameToAddress reads name-to-object deployment exports", () 
 test("readGeneratedAddress extracts the requested chain address only", () => {
   assert.equal(
     readGeneratedAddress(generatedContractsSource(), 31337, "LoopReputation"),
-    artifactAddress,
+    artifactAddress
   );
   assert.equal(
     readGeneratedAddress(generatedContractsSource(), 84532, "LoopReputation"),
-    otherChainAddress,
+    otherChainAddress
   );
 });
 
 test("extractGeneratedChainBlock returns undefined when the chain is absent", () => {
-  assert.equal(extractGeneratedChainBlock(generatedContractsSource(), 8453), undefined);
+  assert.equal(
+    extractGeneratedChainBlock(generatedContractsSource(), 8453),
+    undefined
+  );
 });
 
 test("findDeploymentMismatches reports stale local deployment artifacts", () => {
@@ -110,7 +113,7 @@ test("findDeploymentMismatches reports generated contracts missing from deployme
     },
     deployedContractsSource: generatedContractsSource(
       artifactAddress,
-      `ConfidentialityEscrow: { address: "${generatedAddress}", abi: [] },`,
+      `ConfidentialityEscrow: { address: "${generatedAddress}", abi: [] },`
     ),
     chainId: 31337,
     contractNames: ["ConfidentialityEscrow"],
@@ -143,7 +146,7 @@ test("findDeploymentMismatches accepts matching addresses case-insensitively", (
       [mixedCaseAddress]: "LoopReputation",
     },
     deployedContractsSource: generatedContractsSource(
-      mixedCaseAddress.toLowerCase(),
+      mixedCaseAddress.toLowerCase()
     ),
     chainId: 31337,
     contractNames: ["LoopReputation"],

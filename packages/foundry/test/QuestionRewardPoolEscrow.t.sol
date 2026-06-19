@@ -5159,8 +5159,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         replacementOracle.finalizeRoundPayoutSnapshot(snapshotKey);
 
         vm.prank(voter1);
-        uint256 reward =
-            rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId, payoutWeight, new bytes32[](0));
+        uint256 reward = rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId, payoutWeight, new bytes32[](0));
         assertGt(reward, 0);
     }
 
