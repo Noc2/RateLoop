@@ -8,6 +8,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, beforeEach, test } from "node:test";
+import { getImageAttachmentVariantPathname, readLocalImageAttachment } from "~~/lib/attachments/imageAttachments";
 import { getSignedReadSessionCookie, issueSignedReadSession } from "~~/lib/auth/signedReadSessions";
 import {
   CONFIDENTIALITY_TERMS_DOC_HASH,
@@ -34,7 +35,9 @@ const originalConfidentialitySecret = env.RATELOOP_CONFIDENTIALITY_SECRET;
 const originalLocalImageDir = env.RATELOOP_LOCAL_IMAGE_ATTACHMENT_DIR;
 
 const ATTACHMENT_ID = "att_routegateimage01";
+const PUBLIC_ATTACHMENT_ID = "att_routepublicimg01";
 const CONTENT_ID = "42";
+const PUBLIC_CONTENT_ID = "43";
 const DETAILS_ID = "det_routegatedetail01";
 const DETAILS_TEXT = "Sensitive unreleased positioning copy.";
 const WALLET = "0x1234567890abcdef1234567890abcdef12345678" as const;
@@ -115,6 +118,33 @@ async function seedGatedImage() {
     mimeType: "image/webp",
     sizeBytes: ONE_PIXEL_PNG.length,
     sha256: "a".repeat(64),
+    status: "approved",
+    moderationStatus: "approved",
+    createdAt: now,
+    updatedAt: now,
+  });
+}
+
+async function seedPublicImage() {
+  const now = new Date("2026-06-11T12:00:00.000Z");
+  const scope = currentDeploymentScope();
+  const attachmentDir = path.join(tempDir!, "question-attachments", PUBLIC_ATTACHMENT_ID);
+  await mkdir(attachmentDir, { recursive: true });
+  await writeFile(path.join(attachmentDir, "image.webp"), ONE_PIXEL_PNG);
+
+  await db.insert(questionImageAttachments).values({
+    id: PUBLIC_ATTACHMENT_ID,
+    chainId: scope.chainId,
+    contentId: PUBLIC_CONTENT_ID,
+    contentRegistryAddress: scope.contentRegistryAddress,
+    deploymentKey: scope.deploymentKey,
+    uploaderKind: "wallet",
+    ownerWalletAddress: WALLET,
+    normalizedBlobPathname: `local://question-attachments/${PUBLIC_ATTACHMENT_ID}/image.webp`,
+    originalFilename: "public-mockup.png",
+    mimeType: "image/webp",
+    sizeBytes: ONE_PIXEL_PNG.length,
+    sha256: "b".repeat(64),
     status: "approved",
     moderationStatus: "approved",
     createdAt: now,
@@ -415,6 +445,23 @@ test("unlinked public details are not served before submission", async () => {
   });
   assert.equal(details.status, 404);
   assert.equal(details.headers.get("cache-control"), "private, no-store");
+});
+
+test("public images serve and backfill requested display variants", async () => {
+  await seedPublicImage();
+  const normalizedPathname = `local://question-attachments/${PUBLIC_ATTACHMENT_ID}/image.webp`;
+  const feedPathname = getImageAttachmentVariantPathname(normalizedPathname, "feed");
+  assert.equal(await readLocalImageAttachment(feedPathname), null);
+
+  const response = await getImage(
+    new NextRequest(`https://www.rateloop.ai/api/attachments/images/${PUBLIC_ATTACHMENT_ID}.webp?variant=feed`),
+    { params: Promise.resolve({ attachmentId: `${PUBLIC_ATTACHMENT_ID}.webp` }) },
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("content-type"), "image/webp");
+  assert.ok((await response.arrayBuffer()).byteLength > 0);
+  assert.ok(await readLocalImageAttachment(feedPathname));
 });
 
 test("gated images require accepted wallet sessions and return watermarked no-store bytes", async () => {

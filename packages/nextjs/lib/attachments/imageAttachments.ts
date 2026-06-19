@@ -9,6 +9,10 @@ import {
   parseAttachmentIdFromUploadedImageUrl,
   parseUploadedImageAttachmentUrlDigest,
 } from "~~/lib/attachments/imageAttachmentUrls";
+import {
+  DEFAULT_IMAGE_ATTACHMENT_VARIANT,
+  type ImageAttachmentVariant,
+} from "~~/lib/attachments/imageAttachmentVariants";
 import { assertGatedAttachmentSchemaReady } from "~~/lib/attachments/uploadErrors";
 import { MAX_SUBMISSION_IMAGE_URLS } from "~~/lib/contentMedia";
 import { db, dbPool } from "~~/lib/db";
@@ -131,6 +135,10 @@ export function __setImageAttachmentBlobTestOverridesForTests(
 const OPENAI_MODERATION_MODEL = "omni-moderation-latest";
 const MAX_INPUT_PIXELS = 28_000_000;
 const NORMALIZED_IMAGE_QUALITY = 88;
+const RESIZED_IMAGE_VARIANT_CONFIGS = {
+  feed: { maxWidth: 960, quality: 82 },
+  preview: { maxWidth: 480, quality: 74 },
+} as const satisfies Record<Exclude<ImageAttachmentVariant, "full">, { maxWidth: number; quality: number }>;
 const BLOCKED_MODERATION_CATEGORIES = new Set([
   "sexual/minors",
   "sexual",
@@ -360,6 +368,10 @@ function getAttachmentImagePath(attachmentId: string) {
   return `${IMAGE_ATTACHMENT_ROUTE_PREFIX}/${attachmentId}.${IMAGE_ATTACHMENT_PUBLIC_EXTENSION}`;
 }
 
+function getImageAttachmentFilename(variant: ImageAttachmentVariant = DEFAULT_IMAGE_ATTACHMENT_VARIANT) {
+  return variant === DEFAULT_IMAGE_ATTACHMENT_VARIANT ? "image.webp" : `image-${variant}.webp`;
+}
+
 function getConfiguredAttachmentBaseUrl() {
   const rawValue =
     process.env.APP_URL?.trim() ||
@@ -408,8 +420,34 @@ function getLocalImageAttachmentStorageRoot() {
   );
 }
 
-function getLocalImageAttachmentPathname(attachmentId: string) {
-  return `${LOCAL_IMAGE_ATTACHMENT_URI_PREFIX}${LOCAL_IMAGE_ATTACHMENT_STORAGE_PREFIX}/${attachmentId}/image.webp`;
+function getLocalImageAttachmentPathname(
+  attachmentId: string,
+  variant: ImageAttachmentVariant = DEFAULT_IMAGE_ATTACHMENT_VARIANT,
+) {
+  return `${LOCAL_IMAGE_ATTACHMENT_URI_PREFIX}${LOCAL_IMAGE_ATTACHMENT_STORAGE_PREFIX}/${attachmentId}/${getImageAttachmentFilename(variant)}`;
+}
+
+function getBlobImageAttachmentPathname(
+  attachmentId: string,
+  variant: ImageAttachmentVariant = DEFAULT_IMAGE_ATTACHMENT_VARIANT,
+) {
+  return `${LOCAL_IMAGE_ATTACHMENT_STORAGE_PREFIX}/${attachmentId}/${getImageAttachmentFilename(variant)}`;
+}
+
+export function getImageAttachmentVariantPathname(
+  normalizedBlobPathname: string,
+  variant: ImageAttachmentVariant = DEFAULT_IMAGE_ATTACHMENT_VARIANT,
+) {
+  if (variant === DEFAULT_IMAGE_ATTACHMENT_VARIANT) return normalizedBlobPathname;
+  return normalizedBlobPathname.replace(/\/image\.webp$/, `/${getImageAttachmentFilename(variant)}`);
+}
+
+function getImageAttachmentStoredPathnames(normalizedBlobPathname: string) {
+  return [
+    normalizedBlobPathname,
+    getImageAttachmentVariantPathname(normalizedBlobPathname, "feed"),
+    getImageAttachmentVariantPathname(normalizedBlobPathname, "preview"),
+  ];
 }
 
 function resolveLocalImageAttachmentPathname(pathname: string) {
@@ -533,8 +571,51 @@ async function readBlobBuffer(pathname: string) {
   };
 }
 
-async function putLocalNormalizedImage(attachmentId: string, buffer: Buffer) {
-  const pathname = getLocalImageAttachmentPathname(attachmentId);
+type ProcessedImageAttachment = {
+  data: Buffer;
+  info: { height: number; width: number };
+  variant: ImageAttachmentVariant;
+};
+
+type ProcessedImageAttachmentSet = {
+  full: ProcessedImageAttachment;
+  variants: ProcessedImageAttachment[];
+};
+
+async function buildResizedImageVariant(buffer: Buffer, variant: Exclude<ImageAttachmentVariant, "full">) {
+  const config = RESIZED_IMAGE_VARIANT_CONFIGS[variant];
+  const resized = await sharp(buffer, { limitInputPixels: MAX_INPUT_PIXELS })
+    .rotate()
+    .resize({ fit: "inside", width: config.maxWidth, withoutEnlargement: true })
+    .webp({ quality: config.quality })
+    .toBuffer({ resolveWithObject: true });
+  return {
+    data: resized.data,
+    info: { height: resized.info.height, width: resized.info.width },
+    variant,
+  } satisfies ProcessedImageAttachment;
+}
+
+async function buildProcessedImageAttachmentSet(buffer: Buffer): Promise<ProcessedImageAttachmentSet> {
+  const normalized = await sharp(buffer, { limitInputPixels: MAX_INPUT_PIXELS })
+    .rotate()
+    .webp({ quality: NORMALIZED_IMAGE_QUALITY })
+    .toBuffer({ resolveWithObject: true });
+  return {
+    full: {
+      data: normalized.data,
+      info: { height: normalized.info.height, width: normalized.info.width },
+      variant: DEFAULT_IMAGE_ATTACHMENT_VARIANT,
+    },
+    variants: await Promise.all([
+      buildResizedImageVariant(normalized.data, "feed"),
+      buildResizedImageVariant(normalized.data, "preview"),
+    ]),
+  };
+}
+
+async function putLocalImageAttachmentVariant(attachmentId: string, variant: ImageAttachmentVariant, buffer: Buffer) {
+  const pathname = getLocalImageAttachmentPathname(attachmentId, variant);
   const filePath = resolveLocalImageAttachmentPathname(pathname);
   if (!filePath) {
     throw new Error("Invalid local image attachment path.");
@@ -546,6 +627,79 @@ async function putLocalNormalizedImage(attachmentId: string, buffer: Buffer) {
     pathname,
     url: null,
   };
+}
+
+async function putLocalProcessedImages(attachmentId: string, images: ProcessedImageAttachmentSet) {
+  const full = await putLocalImageAttachmentVariant(attachmentId, images.full.variant, images.full.data);
+  for (const image of images.variants) {
+    await putLocalImageAttachmentVariant(attachmentId, image.variant, image.data);
+  }
+  return full;
+}
+
+async function putBlobProcessedImages(
+  attachmentId: string,
+  images: ProcessedImageAttachmentSet,
+  writeBlob: ImageAttachmentBlobDependencies["putBlob"],
+) {
+  let full: { pathname: string; url: string | null } | null = null;
+  for (const image of [images.full, ...images.variants]) {
+    const stored = await writeBlob(getBlobImageAttachmentPathname(attachmentId, image.variant), image.data, {
+      access: "private",
+      allowOverwrite: true,
+      cacheControlMaxAge: 60 * 60 * 24 * 30,
+      contentType: "image/webp",
+    });
+    if (image.variant === DEFAULT_IMAGE_ATTACHMENT_VARIANT) {
+      full = { pathname: stored.pathname, url: stored.url };
+    }
+  }
+  if (!full) {
+    throw new Error("Image processing did not write the normalized image.");
+  }
+  return full;
+}
+
+async function putBlobImageAttachmentVariant(
+  attachmentId: string,
+  image: ProcessedImageAttachment,
+  writeBlob: ImageAttachmentBlobDependencies["putBlob"],
+) {
+  const stored = await writeBlob(getBlobImageAttachmentPathname(attachmentId, image.variant), image.data, {
+    access: "private",
+    allowOverwrite: true,
+    cacheControlMaxAge: 60 * 60 * 24 * 30,
+    contentType: "image/webp",
+  });
+  return { pathname: stored.pathname, url: stored.url };
+}
+
+export async function backfillImageAttachmentVariant(params: {
+  attachmentId: string;
+  normalizedBlobPathname: string;
+  variant: Exclude<ImageAttachmentVariant, "full">;
+}) {
+  const targetPathname = getImageAttachmentVariantPathname(params.normalizedBlobPathname, params.variant);
+  if (targetPathname === params.normalizedBlobPathname) return null;
+
+  if (isLocalImageAttachmentPathname(params.normalizedBlobPathname)) {
+    const existing = await readLocalImageAttachment(targetPathname);
+    if (existing) return targetPathname;
+    const full = await readLocalImageAttachment(params.normalizedBlobPathname);
+    if (!full) return null;
+    const image = await buildResizedImageVariant(full.buffer, params.variant);
+    await putLocalImageAttachmentVariant(params.attachmentId, params.variant, image.data);
+    return targetPathname;
+  }
+
+  const { getBlob: readBlob, putBlob: writeBlob } = getImageAttachmentBlobDependencies();
+  const existing = await readBlob(targetPathname, { access: "private", useCache: false });
+  if (existing?.statusCode === 200) return targetPathname;
+
+  const { buffer } = await readBlobBuffer(params.normalizedBlobPathname);
+  const image = await buildResizedImageVariant(buffer, params.variant);
+  const stored = await putBlobImageAttachmentVariant(params.attachmentId, image, writeBlob);
+  return stored.pathname;
 }
 
 async function moderateImage(buffer: Buffer): Promise<ModerationDecision> {
@@ -643,7 +797,7 @@ async function processImageAttachmentBuffer(params: {
   contentType: string;
   expectedSha256: string | null;
   originalBlobPathname: string;
-  saveNormalizedImage: (buffer: Buffer) => Promise<{ pathname: string; url: string | null }>;
+  saveProcessedImages: (images: ProcessedImageAttachmentSet) => Promise<{ pathname: string; url: string | null }>;
 }) {
   try {
     assertSupportedImageSignature(params.buffer, params.contentType);
@@ -653,18 +807,15 @@ async function processImageAttachmentBuffer(params: {
       throw new Error("Image hash does not match the signed upload challenge.");
     }
 
-    let normalized: { data: Buffer; info: { height: number; width: number } };
+    let images: ProcessedImageAttachmentSet;
     try {
-      normalized = await sharp(params.buffer, { limitInputPixels: MAX_INPUT_PIXELS })
-        .rotate()
-        .webp({ quality: NORMALIZED_IMAGE_QUALITY })
-        .toBuffer({ resolveWithObject: true });
+      images = await buildProcessedImageAttachmentSet(params.buffer);
     } catch (error) {
       throw new Error(normalizeImageProcessingError(error));
     }
-    const normalizedSha256 = createHash("sha256").update(normalized.data).digest("hex");
-    const normalizedBlob = await params.saveNormalizedImage(normalized.data);
-    const moderation = await moderateImage(normalized.data);
+    const normalizedSha256 = createHash("sha256").update(images.full.data).digest("hex");
+    const normalizedBlob = await params.saveProcessedImages(images);
+    const moderation = await moderateImage(images.full.data);
     const status: ImageAttachmentStatus = moderation.status === "approved" ? "approved" : "blocked";
     const completedAt = nowDate();
 
@@ -674,9 +825,9 @@ async function processImageAttachmentBuffer(params: {
         normalizedBlobPathname: normalizedBlob.pathname,
         normalizedBlobUrl: normalizedBlob.url,
         mimeType: "image/webp",
-        sizeBytes: normalized.data.length,
-        width: normalized.info.width,
-        height: normalized.info.height,
+        sizeBytes: images.full.data.length,
+        width: images.full.info.width,
+        height: images.full.info.height,
         sha256: normalizedSha256,
         status,
         moderationStatus: moderation.status,
@@ -821,11 +972,10 @@ export async function sweepOrphanedImageAttachments(
     if (!row) continue;
 
     const pathnames = [
-      ...new Set(
-        [row.original_blob_pathname, row.normalized_blob_pathname].filter((pathname): pathname is string =>
-          Boolean(pathname),
-        ),
-      ),
+      ...new Set([
+        ...(row.original_blob_pathname ? [row.original_blob_pathname] : []),
+        ...(row.normalized_blob_pathname ? getImageAttachmentStoredPathnames(row.normalized_blob_pathname) : []),
+      ]),
     ];
     for (const pathname of pathnames) {
       await deleteStoredImage(pathname);
@@ -876,13 +1026,7 @@ export async function processCompletedImageUpload(params: {
       contentType: params.contentType,
       expectedSha256: attachment.sha256,
       originalBlobPathname: params.blobPathname,
-      saveNormalizedImage: normalizedBuffer =>
-        writeBlob(`question-attachments/${params.attachmentId}/image.webp`, normalizedBuffer, {
-          access: "private",
-          allowOverwrite: true,
-          cacheControlMaxAge: 60 * 60 * 24 * 30,
-          contentType: "image/webp",
-        }),
+      saveProcessedImages: images => putBlobProcessedImages(params.attachmentId, images, writeBlob),
     });
   } catch (error) {
     await markImageAttachmentProcessingFailed({
@@ -921,7 +1065,7 @@ export async function processCompletedLocalImageUpload(params: {
     contentType: params.contentType,
     expectedSha256: attachment.sha256,
     originalBlobPathname: localOriginalPathname,
-    saveNormalizedImage: normalizedBuffer => putLocalNormalizedImage(params.attachmentId, normalizedBuffer),
+    saveProcessedImages: images => putLocalProcessedImages(params.attachmentId, images),
   });
 }
 
@@ -1000,19 +1144,10 @@ export async function createImageAttachmentFromBuffer(
     contentType: params.mimeType,
     expectedSha256: attachment.sha256,
     originalBlobPathname,
-    saveNormalizedImage: normalizedBuffer =>
+    saveProcessedImages: images =>
       getImageAttachmentUploadMode() === "local"
-        ? putLocalNormalizedImage(params.attachmentId, normalizedBuffer)
-        : getImageAttachmentBlobDependencies().putBlob(
-            `question-attachments/${params.attachmentId}/image.webp`,
-            normalizedBuffer,
-            {
-              access: "private",
-              allowOverwrite: true,
-              cacheControlMaxAge: 60 * 60 * 24 * 30,
-              contentType: "image/webp",
-            },
-          ),
+        ? putLocalProcessedImages(params.attachmentId, images)
+        : putBlobProcessedImages(params.attachmentId, images, getImageAttachmentBlobDependencies().putBlob),
   });
 
   const completedAttachment = await getImageAttachment(params.attachmentId);

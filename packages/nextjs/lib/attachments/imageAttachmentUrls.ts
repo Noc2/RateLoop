@@ -1,3 +1,4 @@
+import { parseImageAttachmentVariant } from "~~/lib/attachments/imageAttachmentVariants";
 import { isLocalE2EProductionBuildEnabled } from "~~/utils/env/e2eProduction";
 
 const IMAGE_ATTACHMENT_PATH_PATTERN = /^(?:\/.*)?\/api\/attachments\/images\/(att_[A-Za-z0-9_-]{16,80})\.webp$/;
@@ -104,10 +105,19 @@ function parseUploadedImageAttachmentUrl(
   }
 }
 
-function hasOnlyOptionalAddressSearchParam(parsed: URL) {
+function hasOnlyOptionalImageFetchSearchParams(parsed: URL) {
   if (!parsed.search) return true;
   const params = parsed.searchParams;
-  return params.size === 1 && WALLET_ADDRESS_PATTERN.test(params.get("address") ?? "");
+  if (params.size > 2) return false;
+  for (const key of params.keys()) {
+    if (key !== "address" && key !== "variant") return false;
+  }
+  const addresses = params.getAll("address");
+  if (addresses.length > 1 || (addresses.length === 1 && !WALLET_ADDRESS_PATTERN.test(addresses[0] ?? ""))) {
+    return false;
+  }
+  const variants = params.getAll("variant");
+  return variants.length <= 1 && (variants.length === 0 || parseImageAttachmentVariant(variants[0]) !== null);
 }
 
 function parseUploadedImageAttachmentFetchUrl(
@@ -121,7 +131,7 @@ function parseUploadedImageAttachmentFetchUrl(
 
     const match = parsed.pathname.match(IMAGE_ATTACHMENT_PATH_PATTERN);
     if (!match) return null;
-    if (!hasOnlyOptionalAddressSearchParam(parsed)) return null;
+    if (!hasOnlyOptionalImageFetchSearchParams(parsed)) return null;
     const digestMatch = parsed.hash.match(IMAGE_ATTACHMENT_SHA256_FRAGMENT_PATTERN);
     if (!digestMatch) return null;
 

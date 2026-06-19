@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { get } from "@vercel/blob";
+import { parseImageAttachmentVariant } from "~~/lib/attachments/imageAttachmentVariants";
 import {
+  backfillImageAttachmentVariant,
   getImageAttachment,
+  getImageAttachmentVariantPathname,
   isLocalImageAttachmentPathname,
   readLocalImageAttachment,
 } from "~~/lib/attachments/imageAttachments";
@@ -23,12 +26,17 @@ function parseImageParam(value: string) {
   return match?.[1] ?? null;
 }
 
+function isMissingBlobResult(result: Awaited<ReturnType<typeof get>> | null) {
+  return !result || (result as { statusCode?: number }).statusCode === 404;
+}
+
 const GATED_IMAGE_HEADERS = {
   "Cache-Control": "private, no-store",
   "Content-Type": "image/webp",
   "X-Content-Type-Options": "nosniff",
   "X-Robots-Tag": "noindex, noimageindex",
 };
+const PUBLIC_IMAGE_CACHE_CONTROL = "public, max-age=300, must-revalidate";
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ attachmentId: string }> }) {
   const { attachmentId: image } = await params;
@@ -41,6 +49,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   if (!attachment || attachment.status !== "approved" || !attachment.normalizedBlobPathname) {
     return new NextResponse("Not found", { status: 404 });
   }
+  const requestedVariant = parseImageAttachmentVariant(request.nextUrl.searchParams.get("variant"));
+  if (!requestedVariant) {
+    return new NextResponse("Invalid image variant", { status: 400 });
+  }
+  const servedBlobPathname = getImageAttachmentVariantPathname(attachment.normalizedBlobPathname, requestedVariant);
 
   if (!attachment.contentId) {
     return new NextResponse("Not found", {
@@ -80,7 +93,16 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   }
 
   if (isLocalImageAttachmentPathname(attachment.normalizedBlobPathname)) {
-    const result = await readLocalImageAttachment(attachment.normalizedBlobPathname);
+    let result = await readLocalImageAttachment(servedBlobPathname);
+    if (!result && requestedVariant !== "full") {
+      const backfilledPathname = await backfillImageAttachmentVariant({
+        attachmentId,
+        normalizedBlobPathname: attachment.normalizedBlobPathname,
+        variant: requestedVariant,
+      }).catch(() => null);
+      result = backfilledPathname ? await readLocalImageAttachment(backfilledPathname) : null;
+    }
+    result ??= await readLocalImageAttachment(attachment.normalizedBlobPathname);
     if (!result) {
       return new NextResponse("Not found", { status: 404 });
     }
@@ -125,7 +147,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         status: 304,
         headers: {
           ETag: result.etag,
-          "Cache-Control": "public, max-age=300, must-revalidate",
+          "Cache-Control": PUBLIC_IMAGE_CACHE_CONTROL,
         },
       });
     }
@@ -135,15 +157,26 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         "Content-Type": "image/webp",
         "X-Content-Type-Options": "nosniff",
         ETag: result.etag,
-        "Cache-Control": "public, max-age=300, must-revalidate",
+        "Cache-Control": PUBLIC_IMAGE_CACHE_CONTROL,
       },
     });
   }
 
-  const result = await get(attachment.normalizedBlobPathname, {
+  let result = await get(servedBlobPathname, {
     access: "private",
     ifNoneMatch: gated ? undefined : (request.headers.get("if-none-match") ?? undefined),
   });
+  if (isMissingBlobResult(result) && requestedVariant !== "full") {
+    const backfilledPathname = await backfillImageAttachmentVariant({
+      attachmentId,
+      normalizedBlobPathname: attachment.normalizedBlobPathname,
+      variant: requestedVariant,
+    }).catch(() => null);
+    result = await get(backfilledPathname ?? attachment.normalizedBlobPathname, {
+      access: "private",
+      ifNoneMatch: gated ? undefined : (request.headers.get("if-none-match") ?? undefined),
+    });
+  }
   if (!result) {
     return new NextResponse("Not found", { status: 404 });
   }
@@ -153,9 +186,12 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       status: 304,
       headers: {
         ETag: result.blob.etag,
-        "Cache-Control": "public, max-age=300, must-revalidate",
+        "Cache-Control": PUBLIC_IMAGE_CACHE_CONTROL,
       },
     });
+  }
+  if (result.statusCode !== 200 || !result.stream) {
+    return new NextResponse("Not found", { status: 404 });
   }
 
   if (gated && gatedAuth?.ok && attachment.contentId) {
@@ -199,7 +235,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       "Content-Type": "image/webp",
       "X-Content-Type-Options": "nosniff",
       ETag: result.blob.etag,
-      "Cache-Control": "public, max-age=300, must-revalidate",
+      "Cache-Control": PUBLIC_IMAGE_CACHE_CONTROL,
     },
   });
 }
