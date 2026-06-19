@@ -1855,15 +1855,6 @@ test("prepareNativeX402QuestionSubmissionRequest returns an authorization reques
         calls: signature
           ? [
               {
-                data: `0x${"a".repeat(8)}` as const,
-                description: "Reserve submission",
-                functionName: "reserveSubmission",
-                id: "reserve-submission",
-                phase: "reserve_submission",
-                to: TEST_CONFIG.contentRegistryAddress,
-                value: "0",
-              },
-              {
                 data: `0x${"b".repeat(8)}` as const,
                 description: "Submit x402 question",
                 functionName: "submitQuestionWithX402Payment",
@@ -1966,7 +1957,7 @@ test("prepareNativeX402QuestionSubmissionRequest returns an authorization reques
     transactionPlan: { calls: unknown[] };
   };
   assert.equal(signedBody.nextAction, "submit_x402_transaction");
-  assert.equal(signedBody.transactionPlan.calls.length, 2);
+  assert.equal(signedBody.transactionPlan.calls.length, 1);
 
   const permissionlessPayload = buildPayload("native-x402-public");
   const permissionless = await preparePermissionlessNativeX402QuestionSubmissionRequest({
@@ -2011,7 +2002,67 @@ test("prepareNativeX402QuestionSubmissionRequest returns an authorization reques
     transactionPlan: { calls: unknown[] };
   };
   assert.equal(reusedPermissionlessBody.nextAction, "submit_x402_transaction");
-  assert.equal(reusedPermissionlessBody.transactionPlan.calls.length, 2);
+  assert.equal(reusedPermissionlessBody.transactionPlan.calls.length, 1);
+});
+
+test("prepareNativeX402QuestionSubmissionRequest one-shots USDC Feedback Bonus funding", async () => {
+  const payload = buildPayload("native-x402-one-shot-feedback-bonus");
+  const walletAddress = "0x00000000000000000000000000000000000000aa" as const;
+  const feedbackBonus = {
+    amount: 2_000_000n,
+    asset: "USDC" as const,
+    awarder: walletAddress,
+    feedbackClosesAt: getFeedbackBonusClosesAt(payload),
+  };
+  const readFunctions: string[] = [];
+
+  setDefaultTestOverrides({
+    buildNativeX402QuestionSubmissionPlan: undefined as never,
+    createPublicQuestionClient: () =>
+      ({
+        readContract: async ({ functionName }: { functionName: string }) => {
+          readFunctions.push(functionName);
+          if (functionName === "protocolConfig") return "0x0000000000000000000000000000000000000020";
+          if (functionName === "minSubmissionUsdcPool") return 0n;
+          if (functionName === "config") return { maxVoters: payload.roundConfig.maxVoters };
+          if (functionName === "validateRoundConfig") return undefined;
+          if (functionName === "submissionKeyUsed") return false;
+          if (functionName === "computeX402QuestionOneShotPaymentNonce") return `0x${"6".repeat(64)}`;
+          throw new Error(`Unexpected readContract call: ${functionName}`);
+        },
+      }) as never,
+  });
+
+  const prepared = await prepareNativeX402QuestionSubmissionRequest({
+    agentId: "native-agent",
+    feedbackBonus,
+    paymentAuthorization: { signature: `0x${"1".repeat(64)}${"3".repeat(64)}1b` },
+    payload,
+    walletAddress,
+  });
+  const body = prepared.body as {
+    payment: { amount: string; bountyAmount: string };
+    transactionPlan: { calls: Array<{ functionName: string; id: string }> };
+    x402AuthorizationRequest: { authorization: { nonce: string; value: string } };
+  };
+
+  assert.equal(prepared.status, 202);
+  assert.equal(body.payment.amount, "3000000");
+  assert.equal(body.payment.bountyAmount, "1000000");
+  assert.equal(body.x402AuthorizationRequest.authorization.value, "3000000");
+  assert.equal(body.x402AuthorizationRequest.authorization.nonce, `0x${"6".repeat(64)}`);
+  assert.equal(body.transactionPlan.calls.length, 1);
+  assert.equal(body.transactionPlan.calls[0]?.functionName, "submitQuestionWithX402OneShotPayment");
+  assert.equal(body.transactionPlan.calls[0]?.id, "submit-x402-one-shot-question");
+  assert.ok(readFunctions.includes("computeX402QuestionOneShotPaymentNonce"));
+  assert.equal(readFunctions.includes("computeX402QuestionPaymentNonce"), false);
+
+  const record = await getX402QuestionSubmissionByClientRequest({
+    chainId: payload.chainId,
+    clientRequestId: payload.clientRequestId,
+  });
+  assert.equal(record?.paymentAmount, "3000000");
+  assert.equal(record?.bountyAmount, "1000000");
 });
 
 test("preparePermissionlessNativeX402QuestionSubmissionRequest preserves pending callback on signed follow-up", async () => {

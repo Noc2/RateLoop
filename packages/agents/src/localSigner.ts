@@ -86,6 +86,104 @@ const X402_AUTHORIZATION_FIELDS = [
   { name: "validBefore", type: "uint256" },
   { name: "nonce", type: "bytes32" },
 ] as const;
+const X402QuestionSubmitterOneShotAbi = [
+  {
+    inputs: [
+      { name: "contextUrl", type: "string" },
+      { name: "imageUrls", type: "string[]" },
+      { name: "videoUrl", type: "string" },
+      { name: "title", type: "string" },
+      { name: "tags", type: "string" },
+      { name: "categoryId", type: "uint256" },
+      {
+        components: [
+          { name: "detailsUrl", type: "string" },
+          { name: "detailsHash", type: "bytes32" },
+        ],
+        name: "details",
+        type: "tuple",
+      },
+      { name: "salt", type: "bytes32" },
+      {
+        components: [
+          { name: "asset", type: "uint8" },
+          { name: "amount", type: "uint256" },
+          { name: "requiredVoters", type: "uint256" },
+          { name: "requiredSettledRounds", type: "uint256" },
+          { name: "bountyStartBy", type: "uint256" },
+          { name: "bountyWindowSeconds", type: "uint256" },
+          { name: "feedbackWindowSeconds", type: "uint256" },
+          { name: "bountyEligibility", type: "uint8" },
+        ],
+        name: "rewardTerms",
+        type: "tuple",
+      },
+      {
+        components: [
+          { name: "epochDuration", type: "uint32" },
+          { name: "maxDuration", type: "uint32" },
+          { name: "minVoters", type: "uint16" },
+          { name: "maxVoters", type: "uint16" },
+        ],
+        name: "roundConfig",
+        type: "tuple",
+      },
+      {
+        components: [
+          { name: "questionMetadataHash", type: "bytes32" },
+          { name: "resultSpecHash", type: "bytes32" },
+        ],
+        name: "spec",
+        type: "tuple",
+      },
+      {
+        components: [
+          { name: "gated", type: "bool" },
+          { name: "bondAsset", type: "uint8" },
+          { name: "bondAmount", type: "uint64" },
+          { name: "flags", type: "uint8" },
+        ],
+        name: "confidentiality",
+        type: "tuple",
+      },
+      {
+        components: [
+          { name: "amount", type: "uint256" },
+          { name: "feedbackClosesAt", type: "uint256" },
+          { name: "awarder", type: "address" },
+        ],
+        name: "feedbackBonusTerms",
+        type: "tuple",
+      },
+      {
+        components: [
+          { name: "from", type: "address" },
+          { name: "to", type: "address" },
+          { name: "value", type: "uint256" },
+          { name: "validAfter", type: "uint256" },
+          { name: "validBefore", type: "uint256" },
+          { name: "nonce", type: "bytes32" },
+          { name: "v", type: "uint8" },
+          { name: "r", type: "bytes32" },
+          { name: "s", type: "bytes32" },
+        ],
+        name: "paymentAuthorization",
+        type: "tuple",
+      },
+    ],
+    name: "submitQuestionWithX402OneShotPayment",
+    outputs: [
+      { name: "contentId", type: "uint256" },
+      { name: "feedbackBonusPoolId", type: "uint256" },
+    ],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+] as const;
+const LocalX402QuestionSubmitterAbi = [
+  ...X402QuestionSubmitterAbi,
+  ...X402QuestionSubmitterOneShotAbi,
+] as const;
 /**
  * Sanity cap on EIP-3009 authorization lifetimes. The RateLoop server
  * proposes validBefore, so without a cap a compromised or buggy server could
@@ -113,6 +211,9 @@ const QUESTION_BUNDLE_REVEAL_DOMAIN = keccak256(
 );
 const X402_QUESTION_PAYMENT_DOMAIN = keccak256(
   stringToHex("rateloop-x402-question-payment-v3"),
+);
+const X402_QUESTION_ONE_SHOT_PAYMENT_DOMAIN = keccak256(
+  stringToHex("rateloop-x402-question-one-shot-payment-v4"),
 );
 type LocalSignerConfig = {
   chainId?: number;
@@ -1632,6 +1733,44 @@ function buildExpectedLocalSignerQuestionPlan(params: {
   };
 }
 
+function buildX402QuestionSubmissionPayloadHash(question: LocalQuestionSubmission): Hex {
+  return keccak256(
+    encodeAbiParameters(
+      [
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "uint256" },
+        { type: "bytes32" },
+      ],
+      [
+        keccak256(stringToHex(question.contextUrl)),
+        buildX402StringArrayHash(question.imageUrls),
+        keccak256(stringToHex(question.videoUrl)),
+        keccak256(stringToHex(question.detailsUrl)),
+        question.detailsHash,
+        keccak256(stringToHex(question.title)),
+        keccak256(stringToHex(question.tags)),
+        question.categoryId,
+        question.salt,
+      ],
+    ),
+  );
+}
+
+function buildFeedbackBonusTermsHash(feedbackBonus: ExpectedLocalSignerFeedbackBonus): Hex {
+  return keccak256(
+    encodeAbiParameters(
+      [{ type: "uint256" }, { type: "uint256" }, { type: "address" }],
+      [feedbackBonus.amount, feedbackBonus.feedbackClosesAt, feedbackBonus.awarder],
+    ),
+  );
+}
+
 function buildX402QuestionPaymentNonce(params: {
   chainId: number;
   contentRegistryAddress: Address;
@@ -1648,32 +1787,6 @@ function buildX402QuestionPaymentNonce(params: {
   if (!params.x402Authorization.from || !params.x402Authorization.to) {
     throw new Error("x402 authorization payer and payee are required.");
   }
-  const submissionPayloadHash = keccak256(
-    encodeAbiParameters(
-      [
-        { type: "bytes32" },
-        { type: "bytes32" },
-        { type: "bytes32" },
-        { type: "bytes32" },
-        { type: "bytes32" },
-        { type: "bytes32" },
-        { type: "bytes32" },
-        { type: "uint256" },
-        { type: "bytes32" },
-      ],
-      [
-        keccak256(stringToHex(params.question.contextUrl)),
-        buildX402StringArrayHash(params.question.imageUrls),
-        keccak256(stringToHex(params.question.videoUrl)),
-        keccak256(stringToHex(params.question.detailsUrl)),
-        params.question.detailsHash,
-        keccak256(stringToHex(params.question.title)),
-        keccak256(stringToHex(params.question.tags)),
-        params.question.categoryId,
-        params.question.salt,
-      ],
-    ),
-  );
   return keccak256(
     encodeAbiParameters(
       [
@@ -1714,10 +1827,83 @@ function buildX402QuestionPaymentNonce(params: {
           params.x402Authorization.validBefore,
           "paymentAuthorization.validBefore",
         ),
-        submissionPayloadHash,
+        buildX402QuestionSubmissionPayloadHash(params.question),
         buildRewardTermsHash(params.rewardTerms),
         buildRoundConfigHash(params.roundConfig),
         buildQuestionConfidentialityHash(params.question.confidentiality),
+        params.question.spec.questionMetadataHash,
+        params.question.spec.resultSpecHash,
+      ],
+    ),
+  );
+}
+
+function buildX402QuestionOneShotPaymentNonce(params: {
+  chainId: number;
+  contentRegistryAddress: Address;
+  feedbackBonus: ExpectedLocalSignerFeedbackBonus;
+  feedbackBonusEscrowAddress: Address;
+  question: LocalQuestionSubmission;
+  questionRewardPoolEscrowAddress: Address;
+  rewardTerms: LocalRewardTerms;
+  roundConfig: LocalQuestionRoundConfig;
+  x402Authorization: Pick<
+    X402Authorization,
+    "from" | "to" | "validAfter" | "validBefore" | "value"
+  >;
+  x402QuestionSubmitterAddress: Address;
+}): Hex {
+  if (!params.x402Authorization.from || !params.x402Authorization.to) {
+    throw new Error("x402 authorization payer and payee are required.");
+  }
+  return keccak256(
+    encodeAbiParameters(
+      [
+        { type: "bytes32" },
+        { type: "uint256" },
+        { type: "address" },
+        { type: "address" },
+        { type: "address" },
+        { type: "address" },
+        { type: "address" },
+        { type: "address" },
+        { type: "uint256" },
+        { type: "uint256" },
+        { type: "uint256" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+      ],
+      [
+        X402_QUESTION_ONE_SHOT_PAYMENT_DOMAIN,
+        BigInt(params.chainId),
+        params.contentRegistryAddress,
+        params.questionRewardPoolEscrowAddress,
+        params.feedbackBonusEscrowAddress,
+        params.x402QuestionSubmitterAddress,
+        params.x402Authorization.from,
+        params.x402Authorization.to,
+        normalizeBigInt(
+          params.x402Authorization.value,
+          "paymentAuthorization.value",
+        ),
+        normalizeBigInt(
+          params.x402Authorization.validAfter,
+          "paymentAuthorization.validAfter",
+        ),
+        normalizeBigInt(
+          params.x402Authorization.validBefore,
+          "paymentAuthorization.validBefore",
+        ),
+        buildX402QuestionSubmissionPayloadHash(params.question),
+        buildRewardTermsHash(params.rewardTerms),
+        buildRoundConfigHash(params.roundConfig),
+        buildQuestionConfidentialityHash(params.question.confidentiality),
+        buildFeedbackBonusTermsHash(params.feedbackBonus),
         params.question.spec.questionMetadataHash,
         params.question.spec.resultSpecHash,
       ],
@@ -1783,7 +1969,7 @@ function decodedCall(
     | typeof erc20Abi
     | typeof ContentRegistryAbi
     | typeof FeedbackBonusEscrowAbi
-    | typeof X402QuestionSubmitterAbi,
+    | typeof LocalX402QuestionSubmitterAbi,
   fieldName: string,
 ) {
   try {
@@ -2004,6 +2190,34 @@ function assertQuestionConfidentiality(
     readStructField(value, "flags", 3, fieldName),
     questionConfidentialityFlags(expected),
     `${fieldName}.flags`,
+  );
+}
+
+function assertFeedbackBonusTerms(
+  value: unknown,
+  expected: ExpectedLocalSignerFeedbackBonus | null | undefined,
+  fieldName: string,
+) {
+  if (!expected) {
+    throw new Error(`${fieldName} requires a Feedback Bonus in the local signer ask payload.`);
+  }
+  if (expected.asset !== "USDC") {
+    throw new Error(`${fieldName}.asset must be USDC for one-shot x402 funding.`);
+  }
+  assertEqualBigInt(
+    readStructField(value, "amount", 0, fieldName),
+    expected.amount,
+    `${fieldName}.amount`,
+  );
+  assertEqualBigInt(
+    readStructField(value, "feedbackClosesAt", 1, fieldName),
+    expected.feedbackClosesAt,
+    `${fieldName}.feedbackClosesAt`,
+  );
+  assertEqualAddress(
+    readStructField(value, "awarder", 2, fieldName),
+    expected.awarder,
+    `${fieldName}.awarder`,
   );
 }
 
@@ -2279,8 +2493,10 @@ function validateSubmitX402QuestionCall(params: {
   accountAddress: Address;
   call: RateLoopAgentWalletTransactionCall;
   contentRegistryAddress: Address;
+  expectedFeedbackBonus?: ExpectedLocalSignerFeedbackBonus | null;
   expectedPaymentAuthorization: X402Authorization;
   expectedPlan: ExpectedLocalSignerQuestionPlan;
+  feedbackBonusEscrowAddress?: Address;
   index: number;
   questionRewardPoolEscrowAddress: Address;
   responseChainId: number;
@@ -2294,12 +2510,23 @@ function validateSubmitX402QuestionCall(params: {
   });
   const decoded = decodedCall(
     data,
-    X402QuestionSubmitterAbi,
+    LocalX402QuestionSubmitterAbi,
     `transactionPlan.calls[${params.index}]`,
   );
-  if (decoded.functionName !== "submitQuestionWithX402Payment") {
+  const oneShot = decoded.functionName === "submitQuestionWithX402OneShotPayment";
+  if (decoded.functionName !== "submitQuestionWithX402Payment" && !oneShot) {
     throw new Error(
-      `transactionPlan.calls[${params.index}] must call submitQuestionWithX402Payment.`,
+      `transactionPlan.calls[${params.index}] must call submitQuestionWithX402Payment or submitQuestionWithX402OneShotPayment.`,
+    );
+  }
+  if (oneShot && params.expectedFeedbackBonus?.asset !== "USDC") {
+    throw new Error(
+      `transactionPlan.calls[${params.index}] one-shot x402 submissions require a USDC Feedback Bonus in the local signer ask payload.`,
+    );
+  }
+  if (!oneShot && params.expectedFeedbackBonus?.asset === "USDC") {
+    throw new Error(
+      `transactionPlan.calls[${params.index}] must call submitQuestionWithX402OneShotPayment for USDC Feedback Bonus funding.`,
     );
   }
   if (params.expectedPlan.isBundleSubmission) {
@@ -2368,7 +2595,14 @@ function validateSubmitX402QuestionCall(params: {
     params.expectedPlan.primaryQuestion.confidentiality,
     `transactionPlan.calls[${params.index}].confidentiality`,
   );
-  const authorization = decoded.args?.[12];
+  if (oneShot) {
+    assertFeedbackBonusTerms(
+      args[12],
+      params.expectedFeedbackBonus,
+      `transactionPlan.calls[${params.index}].feedbackBonusTerms`,
+    );
+  }
+  const authorization = decoded.args?.[oneShot ? 13 : 12];
   if (!authorization || typeof authorization !== "object") {
     throw new Error(
       `transactionPlan.calls[${params.index}].paymentAuthorization is required.`,
@@ -2406,10 +2640,10 @@ function validateSubmitX402QuestionCall(params: {
     normalizeBigInt(
       readStructField(parsed, "value", 2, authorizationFieldName),
       "paymentAuthorization.value",
-    ) !== params.expectedPlan.rewardTerms.amount
+    ) !== params.expectedPlan.rewardTerms.amount + (oneShot ? params.expectedFeedbackBonus!.amount : 0n)
   ) {
     throw new Error(
-      `transactionPlan.calls[${params.index}] x402 authorization.value must equal the requested bounty.`,
+      `transactionPlan.calls[${params.index}] x402 authorization.value must equal the requested payment amount.`,
     );
   }
   const decodedAuthorization: X402Authorization = {
@@ -2438,16 +2672,32 @@ function validateSubmitX402QuestionCall(params: {
       `${authorizationFieldName}.value`,
     ).toString(),
   };
-  const expectedNonce = buildX402QuestionPaymentNonce({
-    chainId: params.responseChainId,
-    contentRegistryAddress: params.contentRegistryAddress,
-    question: params.expectedPlan.primaryQuestion,
-    questionRewardPoolEscrowAddress: params.questionRewardPoolEscrowAddress,
-    rewardTerms: params.expectedPlan.rewardTerms,
-    roundConfig: params.expectedPlan.roundConfig,
-    x402Authorization: decodedAuthorization,
-    x402QuestionSubmitterAddress: params.x402QuestionSubmitterAddress,
-  });
+  const expectedNonce = oneShot
+    ? buildX402QuestionOneShotPaymentNonce({
+        chainId: params.responseChainId,
+        contentRegistryAddress: params.contentRegistryAddress,
+        feedbackBonus: params.expectedFeedbackBonus!,
+        feedbackBonusEscrowAddress: requireConfiguredAddress(
+          params.feedbackBonusEscrowAddress,
+          "FeedbackBonusEscrow",
+        ),
+        question: params.expectedPlan.primaryQuestion,
+        questionRewardPoolEscrowAddress: params.questionRewardPoolEscrowAddress,
+        rewardTerms: params.expectedPlan.rewardTerms,
+        roundConfig: params.expectedPlan.roundConfig,
+        x402Authorization: decodedAuthorization,
+        x402QuestionSubmitterAddress: params.x402QuestionSubmitterAddress,
+      })
+    : buildX402QuestionPaymentNonce({
+        chainId: params.responseChainId,
+        contentRegistryAddress: params.contentRegistryAddress,
+        question: params.expectedPlan.primaryQuestion,
+        questionRewardPoolEscrowAddress: params.questionRewardPoolEscrowAddress,
+        rewardTerms: params.expectedPlan.rewardTerms,
+        roundConfig: params.expectedPlan.roundConfig,
+        x402Authorization: decodedAuthorization,
+        x402QuestionSubmitterAddress: params.x402QuestionSubmitterAddress,
+      });
   assertEqualBytes32(
     decodedAuthorization.nonce,
     expectedNonce,
@@ -2563,7 +2813,7 @@ function validatePaymentMetadata(params: {
     normalizeBigInt(payment.amount, "payment.amount") !== params.expectedAmount
   ) {
     throw new Error(
-      "RateLoop transaction plan payment.amount must equal the requested bounty amount.",
+      "RateLoop transaction plan payment.amount must equal the requested payment amount.",
     );
   }
 }
@@ -2862,6 +3112,10 @@ export function validateLocalSignerTransactionPlan(params: {
       "Expected bounty amount must match the local signer ask payload.",
     );
   }
+  const expectedFeedbackBonus = normalizeLocalSignerFeedbackBonus(
+    params.expectedPayload,
+    params.accountAddress,
+  );
   if (
     normalizeOperationKey(
       params.ask.operationKey,
@@ -2935,9 +3189,9 @@ export function validateLocalSignerTransactionPlan(params: {
   }
 
   if (paymentMode === "x402_authorization") {
-    if (calls.length !== 2) {
+    if (calls.length !== 1) {
       throw new Error(
-        "x402_authorization transaction plans must contain reserve and submit calls.",
+        "x402_authorization transaction plans must contain exactly one submit call.",
       );
     }
     const x402QuestionSubmitterAddress = requireConfiguredAddress(
@@ -2951,6 +3205,16 @@ export function validateLocalSignerTransactionPlan(params: {
       ),
       "QuestionRewardPoolEscrow",
     );
+    const feedbackBonusEscrowAddress =
+      expectedFeedbackBonus?.asset === "USDC"
+        ? requireConfiguredAddress(
+            resolveConfiguredFeedbackBonusEscrowAddress(
+              params.config,
+              responseChainId,
+            ),
+            "FeedbackBonusEscrow",
+          )
+        : undefined;
     if (!params.expectedPaymentAuthorization?.signature) {
       throw new Error(
         "x402_authorization transaction plans require the exact signed local x402 authorization.",
@@ -2958,23 +3222,21 @@ export function validateLocalSignerTransactionPlan(params: {
     }
     validatePaymentMetadata({
       ask: params.ask,
-      expectedAmount: params.expectedBountyAmount,
+      expectedAmount:
+        params.expectedBountyAmount +
+        (expectedFeedbackBonus?.asset === "USDC" ? expectedFeedbackBonus.amount : 0n),
       expectedSpender: x402QuestionSubmitterAddress,
       usdcAddress,
     });
-    validateReserveSubmissionCall({
-      call: calls[0]!,
-      contentRegistryAddress,
-      expectedRevealCommitment: expectedPlan.revealCommitment,
-      index: 0,
-    });
     validateSubmitX402QuestionCall({
       accountAddress: params.accountAddress,
-      call: calls[1]!,
+      call: calls[0]!,
       contentRegistryAddress,
+      expectedFeedbackBonus,
       expectedPaymentAuthorization: params.expectedPaymentAuthorization,
       expectedPlan,
-      index: 1,
+      feedbackBonusEscrowAddress,
+      index: 0,
       questionRewardPoolEscrowAddress,
       responseChainId,
       x402QuestionSubmitterAddress,
@@ -3476,6 +3738,10 @@ export async function askHumansWithLocalSigner(params: {
   }
   assertProductionQuestionMetadataBaseUrlPinned(params.config);
   const maxPaymentCap = assertWithinMaxPaymentAmount(baseAsk);
+  const expectedFeedbackBonus = normalizeLocalSignerFeedbackBonus(
+    baseAsk,
+    params.account.address,
+  );
 
   const initialAsk = await params.agent.askHumans(baseAsk);
   params.onProgress?.({ response: initialAsk, type: "ask_submitted" });
@@ -3540,25 +3806,52 @@ export async function askHumansWithLocalSigner(params: {
       resolveConfiguredX402SubmitterAddress(params.config, baseAsk.chainId),
       "X402QuestionSubmitter",
     );
-    const expectedNonce = buildX402QuestionPaymentNonce({
-      chainId: baseAsk.chainId,
-      contentRegistryAddress,
-      question: expectedPlan.primaryQuestion,
-      questionRewardPoolEscrowAddress,
-      rewardTerms: expectedPlan.rewardTerms,
-      roundConfig: expectedPlan.roundConfig,
-      x402Authorization: pendingAuthorization,
-      x402QuestionSubmitterAddress,
-    });
+    const feedbackBonusEscrowAddress =
+      expectedFeedbackBonus?.asset === "USDC"
+        ? requireConfiguredAddress(
+            resolveConfiguredFeedbackBonusEscrowAddress(
+              params.config,
+              baseAsk.chainId,
+            ),
+            "FeedbackBonusEscrow",
+          )
+        : undefined;
+    const expectedPaymentAmount =
+      normalizeBigInt(baseAsk.bounty.amount, "ask payload bounty.amount") +
+      (expectedFeedbackBonus?.asset === "USDC" ? expectedFeedbackBonus.amount : 0n);
+    const expectedNonce =
+      expectedFeedbackBonus?.asset === "USDC"
+        ? buildX402QuestionOneShotPaymentNonce({
+            chainId: baseAsk.chainId,
+            contentRegistryAddress,
+            feedbackBonus: expectedFeedbackBonus,
+            feedbackBonusEscrowAddress: requireConfiguredAddress(
+              feedbackBonusEscrowAddress,
+              "FeedbackBonusEscrow",
+            ),
+            question: expectedPlan.primaryQuestion,
+            questionRewardPoolEscrowAddress,
+            rewardTerms: expectedPlan.rewardTerms,
+            roundConfig: expectedPlan.roundConfig,
+            x402Authorization: pendingAuthorization,
+            x402QuestionSubmitterAddress,
+          })
+        : buildX402QuestionPaymentNonce({
+            chainId: baseAsk.chainId,
+            contentRegistryAddress,
+            question: expectedPlan.primaryQuestion,
+            questionRewardPoolEscrowAddress,
+            rewardTerms: expectedPlan.rewardTerms,
+            roundConfig: expectedPlan.roundConfig,
+            x402Authorization: pendingAuthorization,
+            x402QuestionSubmitterAddress,
+          });
     const paymentAuthorization = await signX402AuthorizationRequest(
       params.account,
       initialAsk.x402AuthorizationRequest,
       {
         expectedChainId: baseAsk.chainId,
-        expectedAmount: normalizeBigInt(
-          baseAsk.bounty.amount,
-          "ask payload bounty.amount",
-        ),
+        expectedAmount: expectedPaymentAmount,
         expectedNonce,
         expectedUsdcAddress: resolveConfiguredUsdcAddress(
           params.config,
@@ -3618,10 +3911,6 @@ export async function askHumansWithLocalSigner(params: {
     type: "transactions_confirmed",
   });
 
-  const expectedFeedbackBonus = normalizeLocalSignerFeedbackBonus(
-    baseAsk,
-    params.account.address,
-  );
   let confirmed = askConfirmed;
   let feedbackBonusConfirmed: QuestionStatusResponse | undefined;
   let feedbackBonusTransactions: LocalTransactionExecutionSummary | undefined;

@@ -308,6 +308,10 @@ to the paying wallet on that chain. Managed-token asks can include webhook field
 When an agent wallet should sign USDC authorization typed data before RateLoop prepares the submit transaction, use
 `paymentMode: "eip3009_usdc_authorization"`. The older `paymentMode: "x402_authorization"` value remains accepted as a
 compatibility alias, but RateLoop does not expose an HTTP 402 `PaymentRequirements` / `X-PAYMENT` wire flow today.
+Native EIP-3009 asks return one submit transaction after the authorization is signed. If a single-question ask includes a
+USDC `feedbackBonus`, the authorization value is bounty plus bonus and the submit transaction one-shots both protocol
+escrow funding and Feedback Bonus pool creation; LREP Feedback Bonuses still require the separate wallet-call funding
+plan after the question is confirmed.
 
 Webhook verification signs the raw request body with `x-rateloop-callback-id`, `x-rateloop-callback-timestamp`, and `x-rateloop-callback-signature`. Use `handleOnce` with an atomic replay store for non-idempotent handlers. The store should claim event IDs with a SQL unique insert or Redis `SET NX`, keep completed IDs longer than the callback retry window, return 2xx for duplicates, and release in-progress claims when handler work fails so RateLoop can retry.
 

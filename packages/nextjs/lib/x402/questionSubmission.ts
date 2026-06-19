@@ -78,6 +78,7 @@ const FEEDBACK_BONUS_ASSET_LREP = 0;
 const FEEDBACK_BONUS_ASSET_USDC = 1;
 const QUESTION_CONTEXT_DOMAIN = keccak256(toBytes("rateloop-question-context-v5"));
 const ZERO_BYTES32 = `0x${"0".repeat(64)}` as const;
+const ZERO_ADDRESS = `0x${"0".repeat(40)}` as const;
 type FeedbackBonusAsset = "LREP" | "USDC";
 
 function questionDetailsTuple(question: Pick<X402QuestionPayload["questions"][number], "detailsHash" | "detailsUrl">) {
@@ -256,6 +257,12 @@ export type X402FeedbackBonusRequest = {
   feedbackClosesAt: bigint;
 };
 
+type X402FeedbackBonusTerms = {
+  amount: bigint;
+  feedbackClosesAt: bigint;
+  awarder: Address;
+};
+
 type StoredFeedbackBonusStatus =
   | "requested"
   | "pending_question_confirmation"
@@ -368,6 +375,36 @@ function feedbackBonusAssetId(asset: FeedbackBonusAsset) {
 
 function feedbackBonusTokenAddress(config: X402QuestionSubmissionConfig, asset: FeedbackBonusAsset): Address | null {
   return asset === "LREP" ? (config.lrepAddress ?? null) : config.usdcAddress;
+}
+
+function feedbackBonusUsdcPaymentAmount(feedbackBonus: X402FeedbackBonusRequest | null | undefined) {
+  return feedbackBonus?.asset === "USDC" ? feedbackBonus.amount : 0n;
+}
+
+function x402NativePaymentAmount(
+  payload: X402QuestionPayload,
+  feedbackBonus: X402FeedbackBonusRequest | null | undefined,
+) {
+  return payload.bounty.amount + feedbackBonusUsdcPaymentAmount(feedbackBonus);
+}
+
+function shouldUseOneShotX402Payment(feedbackBonus: X402FeedbackBonusRequest | null | undefined) {
+  return feedbackBonus?.asset === "USDC" && feedbackBonus.amount > 0n;
+}
+
+function oneShotFeedbackBonusTerms(feedbackBonus: X402FeedbackBonusRequest | null | undefined): X402FeedbackBonusTerms {
+  if (!feedbackBonus || !shouldUseOneShotX402Payment(feedbackBonus)) {
+    return {
+      amount: 0n,
+      awarder: ZERO_ADDRESS,
+      feedbackClosesAt: 0n,
+    };
+  }
+  return {
+    amount: feedbackBonus.amount,
+    awarder: feedbackBonus.awarder,
+    feedbackClosesAt: feedbackBonus.feedbackClosesAt,
+  };
 }
 
 function buildQuestionContentHash(question: X402QuestionPayload["questions"][number]): Hex {
@@ -863,6 +900,91 @@ const X402QuestionSubmitterAbi = [
   },
   {
     inputs: [
+      {
+        components: [
+          { name: "url", type: "string" },
+          { name: "title", type: "string" },
+          { name: "tags", type: "string" },
+          { name: "categoryId", type: "uint256" },
+        ],
+        name: "metadata",
+        type: "tuple",
+      },
+      { name: "imageUrls", type: "string[]" },
+      { name: "videoUrl", type: "string" },
+      {
+        components: [
+          { name: "detailsUrl", type: "string" },
+          { name: "detailsHash", type: "bytes32" },
+        ],
+        name: "details",
+        type: "tuple",
+      },
+      { name: "salt", type: "bytes32" },
+      {
+        components: [
+          { name: "asset", type: "uint8" },
+          { name: "amount", type: "uint256" },
+          { name: "requiredVoters", type: "uint256" },
+          { name: "requiredSettledRounds", type: "uint256" },
+          { name: "bountyStartBy", type: "uint256" },
+          { name: "bountyWindowSeconds", type: "uint256" },
+          { name: "feedbackWindowSeconds", type: "uint256" },
+          { name: "bountyEligibility", type: "uint8" },
+        ],
+        name: "rewardTerms",
+        type: "tuple",
+      },
+      {
+        components: [
+          { name: "epochDuration", type: "uint32" },
+          { name: "maxDuration", type: "uint32" },
+          { name: "minVoters", type: "uint16" },
+          { name: "maxVoters", type: "uint16" },
+        ],
+        name: "roundConfig",
+        type: "tuple",
+      },
+      {
+        components: [
+          { name: "questionMetadataHash", type: "bytes32" },
+          { name: "resultSpecHash", type: "bytes32" },
+        ],
+        name: "spec",
+        type: "tuple",
+      },
+      {
+        components: [
+          { name: "gated", type: "bool" },
+          { name: "bondAsset", type: "uint8" },
+          { name: "bondAmount", type: "uint64" },
+          { name: "flags", type: "uint8" },
+        ],
+        name: "confidentiality",
+        type: "tuple",
+      },
+      {
+        components: [
+          { name: "amount", type: "uint256" },
+          { name: "feedbackClosesAt", type: "uint256" },
+          { name: "awarder", type: "address" },
+        ],
+        name: "feedbackBonusTerms",
+        type: "tuple",
+      },
+      { name: "payer", type: "address" },
+      { name: "payee", type: "address" },
+      { name: "value", type: "uint256" },
+      { name: "validAfter", type: "uint256" },
+      { name: "validBefore", type: "uint256" },
+    ],
+    name: "computeX402QuestionOneShotPaymentNonce",
+    outputs: [{ name: "", type: "bytes32" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
       { name: "contextUrl", type: "string" },
       { name: "imageUrls", type: "string[]" },
       { name: "videoUrl", type: "string" },
@@ -938,6 +1060,98 @@ const X402QuestionSubmitterAbi = [
     ],
     name: "submitQuestionWithX402Payment",
     outputs: [{ name: "contentId", type: "uint256" }],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      { name: "contextUrl", type: "string" },
+      { name: "imageUrls", type: "string[]" },
+      { name: "videoUrl", type: "string" },
+      { name: "title", type: "string" },
+      { name: "tags", type: "string" },
+      { name: "categoryId", type: "uint256" },
+      {
+        components: [
+          { name: "detailsUrl", type: "string" },
+          { name: "detailsHash", type: "bytes32" },
+        ],
+        name: "details",
+        type: "tuple",
+      },
+      { name: "salt", type: "bytes32" },
+      {
+        components: [
+          { name: "asset", type: "uint8" },
+          { name: "amount", type: "uint256" },
+          { name: "requiredVoters", type: "uint256" },
+          { name: "requiredSettledRounds", type: "uint256" },
+          { name: "bountyStartBy", type: "uint256" },
+          { name: "bountyWindowSeconds", type: "uint256" },
+          { name: "feedbackWindowSeconds", type: "uint256" },
+          { name: "bountyEligibility", type: "uint8" },
+        ],
+        name: "rewardTerms",
+        type: "tuple",
+      },
+      {
+        components: [
+          { name: "epochDuration", type: "uint32" },
+          { name: "maxDuration", type: "uint32" },
+          { name: "minVoters", type: "uint16" },
+          { name: "maxVoters", type: "uint16" },
+        ],
+        name: "roundConfig",
+        type: "tuple",
+      },
+      {
+        components: [
+          { name: "questionMetadataHash", type: "bytes32" },
+          { name: "resultSpecHash", type: "bytes32" },
+        ],
+        name: "spec",
+        type: "tuple",
+      },
+      {
+        components: [
+          { name: "gated", type: "bool" },
+          { name: "bondAsset", type: "uint8" },
+          { name: "bondAmount", type: "uint64" },
+          { name: "flags", type: "uint8" },
+        ],
+        name: "confidentiality",
+        type: "tuple",
+      },
+      {
+        components: [
+          { name: "amount", type: "uint256" },
+          { name: "feedbackClosesAt", type: "uint256" },
+          { name: "awarder", type: "address" },
+        ],
+        name: "feedbackBonusTerms",
+        type: "tuple",
+      },
+      {
+        components: [
+          { name: "from", type: "address" },
+          { name: "to", type: "address" },
+          { name: "value", type: "uint256" },
+          { name: "validAfter", type: "uint256" },
+          { name: "validBefore", type: "uint256" },
+          { name: "nonce", type: "bytes32" },
+          { name: "v", type: "uint8" },
+          { name: "r", type: "bytes32" },
+          { name: "s", type: "bytes32" },
+        ],
+        name: "paymentAuthorization",
+        type: "tuple",
+      },
+    ],
+    name: "submitQuestionWithX402OneShotPayment",
+    outputs: [
+      { name: "contentId", type: "uint256" },
+      { name: "feedbackBonusPoolId", type: "uint256" },
+    ],
     stateMutability: "nonpayable",
     type: "function",
   },
@@ -1680,6 +1894,7 @@ function buildNativeX402TypedData(params: {
 async function buildNativeX402QuestionSubmissionPlan(params: {
   agentId?: string | null;
   config: X402QuestionSubmissionConfig;
+  feedbackBonus?: X402FeedbackBonusRequest | null;
   payload: X402QuestionPayload;
   paymentAuthorization?: NativeX402PaymentAuthorizationInput | null;
   walletAddress: Address;
@@ -1689,6 +1904,10 @@ async function buildNativeX402QuestionSubmissionPlan(params: {
   }
   if (!params.config.x402QuestionSubmitterAddress) {
     throw new X402QuestionConfigError("EIP-3009 USDC question submissions require the submitter deployment.");
+  }
+  const oneShot = shouldUseOneShotX402Payment(params.feedbackBonus);
+  if (oneShot && !params.config.feedbackBonusEscrowAddress) {
+    throw new X402QuestionConfigError("USDC Feedback Bonus one-shot submissions require the escrow deployment.");
   }
 
   const inputAuthorization = normalizeNativeX402AuthorizationInput(params.paymentAuthorization);
@@ -1724,33 +1943,59 @@ async function buildNativeX402QuestionSubmissionPlan(params: {
     submitter: params.walletAddress,
   });
   const question = context.primaryQuestion;
+  const feedbackBonusTerms = oneShotFeedbackBonusTerms(params.feedbackBonus);
+  const paymentAmount = x402NativePaymentAmount(params.payload, params.feedbackBonus);
 
-  const computedNonce = (await publicClient.readContract({
-    address: params.config.x402QuestionSubmitterAddress,
-    abi: X402QuestionSubmitterAbi,
-    functionName: "computeX402QuestionPaymentNonce",
-    args: [
-      {
-        categoryId: question.categoryId,
-        tags: question.tags,
-        title: question.title,
-        url: question.contextUrl,
-      },
-      question.imageUrls,
-      question.videoUrl,
-      questionDetailsTuple(question),
-      question.salt,
-      context.rewardTerms,
-      context.roundConfigAbi,
-      question.spec,
-      questionConfidentialityConfig(question),
-      params.walletAddress,
-      params.config.x402QuestionSubmitterAddress,
-      params.payload.bounty.amount,
-      validAfter,
-      validBefore,
-    ],
-  })) as Hex;
+  const nonceMetadata = {
+    categoryId: question.categoryId,
+    tags: question.tags,
+    title: question.title,
+    url: question.contextUrl,
+  } as const;
+  const computedNonce = oneShot
+    ? ((await publicClient.readContract({
+        address: params.config.x402QuestionSubmitterAddress,
+        abi: X402QuestionSubmitterAbi,
+        functionName: "computeX402QuestionOneShotPaymentNonce",
+        args: [
+          nonceMetadata,
+          question.imageUrls,
+          question.videoUrl,
+          questionDetailsTuple(question),
+          question.salt,
+          context.rewardTerms,
+          context.roundConfigAbi,
+          question.spec,
+          questionConfidentialityConfig(question),
+          feedbackBonusTerms,
+          params.walletAddress,
+          params.config.x402QuestionSubmitterAddress,
+          paymentAmount,
+          validAfter,
+          validBefore,
+        ],
+      })) as Hex)
+    : ((await publicClient.readContract({
+        address: params.config.x402QuestionSubmitterAddress,
+        abi: X402QuestionSubmitterAbi,
+        functionName: "computeX402QuestionPaymentNonce",
+        args: [
+          nonceMetadata,
+          question.imageUrls,
+          question.videoUrl,
+          questionDetailsTuple(question),
+          question.salt,
+          context.rewardTerms,
+          context.roundConfigAbi,
+          question.spec,
+          questionConfidentialityConfig(question),
+          params.walletAddress,
+          params.config.x402QuestionSubmitterAddress,
+          paymentAmount,
+          validAfter,
+          validBefore,
+        ],
+      })) as Hex);
   if (inputAuthorization.nonce && inputAuthorization.nonce.toLowerCase() !== computedNonce.toLowerCase()) {
     throw new X402QuestionConflictError("paymentAuthorization.nonce does not match the RateLoop EIP-3009 ask payload.");
   }
@@ -1763,8 +2008,8 @@ async function buildNativeX402QuestionSubmissionPlan(params: {
   ) {
     throw new X402QuestionConflictError("paymentAuthorization.to must be the RateLoop EIP-3009 submitter.");
   }
-  if (inputAuthorization.value && BigInt(inputAuthorization.value) !== params.payload.bounty.amount) {
-    throw new X402QuestionConflictError("paymentAuthorization.value must equal the bounty amount.");
+  if (inputAuthorization.value && BigInt(inputAuthorization.value) !== paymentAmount) {
+    throw new X402QuestionConflictError("paymentAuthorization.value must equal the EIP-3009 payment amount.");
   }
 
   const authorization: NativeX402PaymentAuthorization = {
@@ -1774,59 +2019,69 @@ async function buildNativeX402QuestionSubmissionPlan(params: {
     to: params.config.x402QuestionSubmitterAddress,
     validAfter: validAfter.toString(),
     validBefore: validBefore.toString(),
-    value: params.payload.bounty.amount.toString(),
+    value: paymentAmount.toString(),
   };
   const calls: AgentWalletTransactionCall[] = authorization.signature
     ? (() => {
         const signatureParts = getEip3009SignatureParts(authorization.signature);
+        const paymentAuthorization = {
+          from: authorization.from,
+          nonce: authorization.nonce,
+          to: authorization.to,
+          validAfter: BigInt(authorization.validAfter),
+          validBefore: BigInt(authorization.validBefore),
+          value: BigInt(authorization.value),
+          v: signatureParts.v,
+          r: signatureParts.r,
+          s: signatureParts.s,
+        } as const;
         return [
           {
-            data: encodeFunctionData({
-              abi: ContentRegistryAbi,
-              functionName: "reserveSubmission",
-              args: [context.revealCommitment],
-            }),
-            description: "Reserve the deterministic question commitment from the wallet signer",
-            functionName: "reserveSubmission",
-            id: "reserve-submission",
-            phase: "reserve_submission",
-            to: params.config.contentRegistryAddress,
-            value: "0",
-            waitAfterMs: RESERVED_SUBMISSION_WAIT_MS,
-          },
-          {
-            data: encodeFunctionData({
-              abi: X402QuestionSubmitterAbi,
-              functionName: "submitQuestionWithX402Payment",
-              args: [
-                question.contextUrl,
-                question.imageUrls,
-                question.videoUrl,
-                question.title,
-                question.tags,
-                question.categoryId,
-                questionDetailsTuple(question),
-                question.salt,
-                context.rewardTerms,
-                context.roundConfigAbi,
-                question.spec,
-                questionConfidentialityConfig(question),
-                {
-                  from: authorization.from,
-                  nonce: authorization.nonce,
-                  to: authorization.to,
-                  validAfter: BigInt(authorization.validAfter),
-                  validBefore: BigInt(authorization.validBefore),
-                  value: BigInt(authorization.value),
-                  v: signatureParts.v,
-                  r: signatureParts.r,
-                  s: signatureParts.s,
-                },
-              ],
-            }),
-            description: "Submit the question and fund protocol escrow with the signed EIP-3009 USDC authorization",
-            functionName: "submitQuestionWithX402Payment",
-            id: "submit-x402-question",
+            data: oneShot
+              ? encodeFunctionData({
+                  abi: X402QuestionSubmitterAbi,
+                  functionName: "submitQuestionWithX402OneShotPayment",
+                  args: [
+                    question.contextUrl,
+                    question.imageUrls,
+                    question.videoUrl,
+                    question.title,
+                    question.tags,
+                    question.categoryId,
+                    questionDetailsTuple(question),
+                    question.salt,
+                    context.rewardTerms,
+                    context.roundConfigAbi,
+                    question.spec,
+                    questionConfidentialityConfig(question),
+                    feedbackBonusTerms,
+                    paymentAuthorization,
+                  ],
+                })
+              : encodeFunctionData({
+                  abi: X402QuestionSubmitterAbi,
+                  functionName: "submitQuestionWithX402Payment",
+                  args: [
+                    question.contextUrl,
+                    question.imageUrls,
+                    question.videoUrl,
+                    question.title,
+                    question.tags,
+                    question.categoryId,
+                    questionDetailsTuple(question),
+                    question.salt,
+                    context.rewardTerms,
+                    context.roundConfigAbi,
+                    question.spec,
+                    questionConfidentialityConfig(question),
+                    paymentAuthorization,
+                  ],
+                }),
+            description: oneShot
+              ? "Submit the question, fund protocol escrow, and attach the USDC Feedback Bonus with the signed EIP-3009 authorization"
+              : "Submit the question and fund protocol escrow with the signed EIP-3009 USDC authorization",
+            functionName: oneShot ? "submitQuestionWithX402OneShotPayment" : "submitQuestionWithX402Payment",
+            id: oneShot ? "submit-x402-one-shot-question" : "submit-x402-question",
             phase: "submit_x402_question",
             to: params.config.x402QuestionSubmitterAddress,
             value: "0",
@@ -1841,7 +2096,7 @@ async function buildNativeX402QuestionSubmissionPlan(params: {
     chainId: params.payload.chainId,
     operationKey: operation.operationKey,
     payment: {
-      amount: params.payload.bounty.amount.toString(),
+      amount: paymentAmount.toString(),
       asset: "USDC",
       bountyAmount: params.payload.bounty.amount.toString(),
       decimals: X402_USDC_DECIMALS,
@@ -2100,6 +2355,36 @@ function readFeedbackBonusPoolCreated(
   }
 
   return null;
+}
+
+function assertFeedbackBonusPoolMatchesRequest(params: {
+  contentId: string;
+  createdPool: NonNullable<ReturnType<typeof readFeedbackBonusPoolCreated>>;
+  expectedRoundId?: string | null;
+  feedbackBonus: StoredFeedbackBonusRequest;
+  funderAddress: Address;
+}) {
+  if (params.createdPool.contentId !== params.contentId) {
+    throw new X402QuestionConflictError("Confirmed Feedback Bonus pool does not match the submitted question.");
+  }
+  if (params.expectedRoundId && params.createdPool.roundId !== params.expectedRoundId) {
+    throw new X402QuestionConflictError("Confirmed Feedback Bonus round does not match the prepared round.");
+  }
+  if (params.createdPool.funder.toLowerCase() !== params.funderAddress.toLowerCase()) {
+    throw new X402QuestionConflictError("Confirmed Feedback Bonus funder does not match the payer wallet.");
+  }
+  if (params.createdPool.amount !== params.feedbackBonus.amount) {
+    throw new X402QuestionConflictError("Confirmed Feedback Bonus amount does not match the requested amount.");
+  }
+  if (params.createdPool.asset !== params.feedbackBonus.asset) {
+    throw new X402QuestionConflictError("Confirmed Feedback Bonus asset does not match the requested asset.");
+  }
+  if (params.createdPool.awarder.toLowerCase() !== params.feedbackBonus.awarder.toLowerCase()) {
+    throw new X402QuestionConflictError("Confirmed Feedback Bonus awarder does not match the requested awarder.");
+  }
+  if (params.createdPool.feedbackClosesAt !== params.feedbackBonus.feedbackClosesAt) {
+    throw new X402QuestionConflictError("Confirmed Feedback Bonus close time does not match the request.");
+  }
 }
 
 function bundleCompleterCount(expectedRewardTerms: StoredQuestionRewardTerms): string {
@@ -2906,27 +3191,13 @@ export async function confirmFeedbackBonusQuestionSubmissionRequest(params: {
   if (!createdPool) {
     throw new X402QuestionConflictError("Confirmed transactions did not create a Feedback Bonus pool.");
   }
-  if (createdPool.contentId !== record.contentId) {
-    throw new X402QuestionConflictError("Confirmed Feedback Bonus pool does not match the submitted question.");
-  }
-  if (createdPool.roundId !== feedbackBonus.roundId) {
-    throw new X402QuestionConflictError("Confirmed Feedback Bonus round does not match the prepared round.");
-  }
-  if (createdPool.funder.toLowerCase() !== record.payerAddress.toLowerCase()) {
-    throw new X402QuestionConflictError("Confirmed Feedback Bonus funder does not match the payer wallet.");
-  }
-  if (createdPool.amount !== feedbackBonus.amount) {
-    throw new X402QuestionConflictError("Confirmed Feedback Bonus amount does not match the requested amount.");
-  }
-  if (createdPool.asset !== feedbackBonus.asset) {
-    throw new X402QuestionConflictError("Confirmed Feedback Bonus asset does not match the requested asset.");
-  }
-  if (createdPool.awarder.toLowerCase() !== feedbackBonus.awarder.toLowerCase()) {
-    throw new X402QuestionConflictError("Confirmed Feedback Bonus awarder does not match the requested awarder.");
-  }
-  if (createdPool.feedbackClosesAt !== feedbackBonus.feedbackClosesAt) {
-    throw new X402QuestionConflictError("Confirmed Feedback Bonus close time does not match the request.");
-  }
+  assertFeedbackBonusPoolMatchesRequest({
+    contentId: record.contentId,
+    createdPool,
+    expectedRoundId: feedbackBonus.roundId,
+    feedbackBonus,
+    funderAddress: record.payerAddress as Address,
+  });
 
   await updateStoredFeedbackBonusReceipt({
     operationKey: params.operationKey,
@@ -3239,6 +3510,7 @@ async function prepareNativeQuestionSubmissionRequest(params: {
   const plan = await dependencies.buildNativeX402QuestionSubmissionPlan({
     agentId: params.agentId,
     config,
+    feedbackBonus: params.feedbackBonus,
     payload: params.payload,
     paymentAuthorization: params.paymentAuthorization ?? storedAuthorization,
     walletAddress: params.walletAddress,
@@ -3306,6 +3578,7 @@ export async function confirmAgentWalletQuestionSubmissionRequest(params: {
   const mediaValidatorAddress = await resolveSubmissionMediaValidator(publicClient, config.contentRegistryAddress);
   const walletAddress = record.payerAddress.toLowerCase();
   const bundleContentLinks: SubmittedBundleContentLink[] = [];
+  let createdFeedbackBonusPool: ReturnType<typeof readFeedbackBonusPoolCreated> | null = null;
   const rewardAttachments: SubmittedRewardAttachment[] = [];
   const roundConfigsByContentId = new Map<string, SubmittedRoundConfig>();
   const submittedContents: SubmittedQuestionContent[] = [];
@@ -3318,6 +3591,10 @@ export async function confirmAgentWalletQuestionSubmissionRequest(params: {
     submittedContents.push(...result.submittedContents);
     submittedDetails.push(...result.submittedDetails);
     rewardAttachments.push(...result.rewardAttachments);
+    if (config.feedbackBonusEscrowAddress) {
+      createdFeedbackBonusPool =
+        readFeedbackBonusPoolCreated(receipt, config.feedbackBonusEscrowAddress) ?? createdFeedbackBonusPool;
+    }
     for (const [contentId, roundConfig] of result.roundConfigsByContentId.entries()) {
       roundConfigsByContentId.set(contentId, roundConfig);
     }
@@ -3382,6 +3659,29 @@ export async function confirmAgentWalletQuestionSubmissionRequest(params: {
     status: "submitted",
     transactionHashes: params.transactionHashes,
   });
+  if (createdFeedbackBonusPool) {
+    const feedbackBonus = planReceipt?.feedbackBonus;
+    if (!feedbackBonus) {
+      throw new X402QuestionConflictError("Confirmed submission created an unexpected Feedback Bonus pool.");
+    }
+    const contentId = contentIds[0];
+    if (contentId === undefined || contentIds.length !== 1) {
+      throw new X402QuestionConflictError("Confirmed Feedback Bonus pool requires a single submitted question.");
+    }
+    assertFeedbackBonusPoolMatchesRequest({
+      contentId: contentId.toString(),
+      createdPool: createdFeedbackBonusPool,
+      feedbackBonus,
+      funderAddress: record.payerAddress as Address,
+    });
+    await updateStoredFeedbackBonusReceipt({
+      operationKey: params.operationKey,
+      poolId: createdFeedbackBonusPool.poolId,
+      roundId: createdFeedbackBonusPool.roundId,
+      status: "funded",
+      transactionHashes: params.transactionHashes,
+    });
+  }
   const updatedRecord = await getX402QuestionSubmissionByOperationKey(params.operationKey);
   return {
     body: normalizeSubmittedRecordBody(updatedRecord ?? record),

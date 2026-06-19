@@ -137,6 +137,100 @@ const X402QuestionSubmitterSubmitWithConfidentialityAbi =
       item.name === "submitQuestionWithX402Payment" &&
       item.inputs.length === 13,
   ) as Abi;
+const X402QuestionSubmitterOneShotSubmitWithConfidentialityAbi = [
+  {
+    inputs: [
+      { name: "contextUrl", type: "string" },
+      { name: "imageUrls", type: "string[]" },
+      { name: "videoUrl", type: "string" },
+      { name: "title", type: "string" },
+      { name: "tags", type: "string" },
+      { name: "categoryId", type: "uint256" },
+      {
+        components: [
+          { name: "detailsUrl", type: "string" },
+          { name: "detailsHash", type: "bytes32" },
+        ],
+        name: "details",
+        type: "tuple",
+      },
+      { name: "salt", type: "bytes32" },
+      {
+        components: [
+          { name: "asset", type: "uint8" },
+          { name: "amount", type: "uint256" },
+          { name: "requiredVoters", type: "uint256" },
+          { name: "requiredSettledRounds", type: "uint256" },
+          { name: "bountyStartBy", type: "uint256" },
+          { name: "bountyWindowSeconds", type: "uint256" },
+          { name: "feedbackWindowSeconds", type: "uint256" },
+          { name: "bountyEligibility", type: "uint8" },
+        ],
+        name: "rewardTerms",
+        type: "tuple",
+      },
+      {
+        components: [
+          { name: "epochDuration", type: "uint32" },
+          { name: "maxDuration", type: "uint32" },
+          { name: "minVoters", type: "uint16" },
+          { name: "maxVoters", type: "uint16" },
+        ],
+        name: "roundConfig",
+        type: "tuple",
+      },
+      {
+        components: [
+          { name: "questionMetadataHash", type: "bytes32" },
+          { name: "resultSpecHash", type: "bytes32" },
+        ],
+        name: "spec",
+        type: "tuple",
+      },
+      {
+        components: [
+          { name: "gated", type: "bool" },
+          { name: "bondAsset", type: "uint8" },
+          { name: "bondAmount", type: "uint64" },
+          { name: "flags", type: "uint8" },
+        ],
+        name: "confidentiality",
+        type: "tuple",
+      },
+      {
+        components: [
+          { name: "amount", type: "uint256" },
+          { name: "feedbackClosesAt", type: "uint256" },
+          { name: "awarder", type: "address" },
+        ],
+        name: "feedbackBonusTerms",
+        type: "tuple",
+      },
+      {
+        components: [
+          { name: "from", type: "address" },
+          { name: "to", type: "address" },
+          { name: "value", type: "uint256" },
+          { name: "validAfter", type: "uint256" },
+          { name: "validBefore", type: "uint256" },
+          { name: "nonce", type: "bytes32" },
+          { name: "v", type: "uint8" },
+          { name: "r", type: "bytes32" },
+          { name: "s", type: "bytes32" },
+        ],
+        name: "paymentAuthorization",
+        type: "tuple",
+      },
+    ],
+    name: "submitQuestionWithX402OneShotPayment",
+    outputs: [
+      { name: "contentId", type: "uint256" },
+      { name: "feedbackBonusPoolId", type: "uint256" },
+    ],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+] as Abi;
 
 type TestX402AuthorizationRequest = {
   authorization: Record<string, string>;
@@ -644,6 +738,94 @@ function x402PaymentNonceForPayload(payload: AskHumansRequest, from = account.ad
   );
 }
 
+function x402OneShotPaymentNonceForPayload(payload: AskHumansRequest, from = account.address) {
+  const canonical = buildLocalQuestionCanonicalPayload(payload, 480);
+  const question = canonical.questions[0];
+  if (!question) throw new Error("Missing canonical question.");
+  const feedbackBonus = payload.feedbackBonus;
+  if (!feedbackBonus) throw new Error("Missing feedback bonus.");
+  const submissionPayloadHash = keccak256(
+    encodeAbiParameters(
+      [
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "uint256" },
+        { type: "bytes32" },
+      ],
+      [
+        keccak256(stringToHex(question.contextUrl)),
+        x402StringArrayHash(question.imageUrls),
+        keccak256(stringToHex(question.videoUrl)),
+        keccak256(stringToHex(question.detailsUrl)),
+        question.detailsHash as Hex,
+        keccak256(stringToHex(question.title)),
+        keccak256(stringToHex(question.tags.join(","))),
+        BigInt(question.categoryId),
+        saltForPayload(payload),
+      ],
+    ),
+  );
+  const feedbackBonusTermsHash = keccak256(
+    encodeAbiParameters(
+      [{ type: "uint256" }, { type: "uint256" }, { type: "address" }],
+      [
+        BigInt(String(feedbackBonus.amount)),
+        BigInt(String(feedbackBonus.feedbackClosesAt)),
+        String(feedbackBonus.awarder) as `0x${string}`,
+      ],
+    ),
+  );
+  return keccak256(
+    encodeAbiParameters(
+      [
+        { type: "bytes32" },
+        { type: "uint256" },
+        { type: "address" },
+        { type: "address" },
+        { type: "address" },
+        { type: "address" },
+        { type: "address" },
+        { type: "address" },
+        { type: "uint256" },
+        { type: "uint256" },
+        { type: "uint256" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+      ],
+      [
+        keccak256(stringToHex("rateloop-x402-question-one-shot-payment-v4")),
+        480n,
+        CONTENT_REGISTRY_ADDRESS,
+        QUESTION_REWARD_ESCROW_ADDRESS,
+        FEEDBACK_BONUS_ESCROW_ADDRESS,
+        X402_SUBMITTER_ADDRESS,
+        from,
+        X402_SUBMITTER_ADDRESS,
+        BigInt(X402_AMOUNT) + BigInt(FEEDBACK_BONUS_AMOUNT),
+        BigInt(X402_VALID_AFTER),
+        BigInt(X402_VALID_BEFORE),
+        submissionPayloadHash,
+        rewardTermsHash(),
+        roundConfigHash(),
+        ZERO_CONFIDENTIALITY_HASH,
+        feedbackBonusTermsHash,
+        question.questionMetadataHash as Hex,
+        question.resultSpecHash as Hex,
+      ],
+    ),
+  );
+}
+
 function reserveSubmissionData(revealCommitment = expectedRevealCommitment()) {
   return encodeFunctionData({
     abi: ContentRegistryAbi,
@@ -712,6 +894,45 @@ function submitX402QuestionData(
   });
 }
 
+function submitX402OneShotQuestionData(payload = feedbackBonusAskPayload()) {
+  const signature = parseSignature(TEST_SIGNATURE);
+  const totalAmount = BigInt(X402_AMOUNT) + BigInt(FEEDBACK_BONUS_AMOUNT);
+  return encodeFunctionData({
+    abi: X402QuestionSubmitterOneShotSubmitWithConfidentialityAbi,
+    args: [
+      QUESTION_CONTEXT_URL,
+      [],
+      "",
+      QUESTION_TITLE,
+      QUESTION_TAG,
+      1n,
+      EMPTY_DETAILS,
+      saltForPayload(payload),
+      rewardTerms(BigInt(X402_AMOUNT)),
+      roundConfig(),
+      questionSpec(),
+      ZERO_CONFIDENTIALITY_CONFIG,
+      {
+        amount: BigInt(FEEDBACK_BONUS_AMOUNT),
+        awarder: account.address,
+        feedbackClosesAt: BigInt(feedbackBonusClosesAt()),
+      },
+      {
+        from: account.address,
+        nonce: x402OneShotPaymentNonceForPayload(payload),
+        r: signature.r,
+        s: signature.s,
+        to: X402_SUBMITTER_ADDRESS,
+        v: Number(signature.v ?? BigInt(signature.yParity + 27)),
+        validAfter: BigInt(X402_VALID_AFTER),
+        validBefore: BigInt(X402_VALID_BEFORE),
+        value: totalAmount,
+      },
+    ],
+    functionName: "submitQuestionWithX402OneShotPayment",
+  });
+}
+
 function signedX402Authorization(
   overrides: Partial<
     Record<
@@ -724,6 +945,15 @@ function signedX402Authorization(
     ...x402AuthorizationRequest().authorization,
     ...overrides,
     signature: TEST_SIGNATURE,
+  };
+}
+
+function signedOneShotX402Authorization(payload = feedbackBonusAskPayload()) {
+  return {
+    ...x402AuthorizationRequest().authorization,
+    nonce: x402OneShotPaymentNonceForPayload(payload),
+    signature: TEST_SIGNATURE,
+    value: (BigInt(X402_AMOUNT) + BigInt(FEEDBACK_BONUS_AMOUNT)).toString(),
   };
 }
 
@@ -893,18 +1123,46 @@ function x402CallsResponse(
     transactionPlan: {
       calls: [
         {
-          data: reserveSubmissionData(
-            expectedRevealCommitment(questionMetadataBaseUrl),
-          ),
-          phase: "reserve_submission",
-          to: CONTENT_REGISTRY_ADDRESS,
-          value: "0",
-        },
-        {
           data: submitX402QuestionData(
             BigInt(X402_AMOUNT),
             questionMetadataBaseUrl,
           ),
+          phase: "submit_x402_question",
+          to: X402_SUBMITTER_ADDRESS,
+          value: "0",
+        },
+      ],
+      requiresOrderedExecution: true,
+    },
+    wallet: { address: account.address, fundingMode: "x402_authorization" },
+    ...overrides,
+  };
+}
+
+function x402OneShotCallsResponse(
+  payload = feedbackBonusAskPayload(),
+  overrides: Partial<AskHumansResponse> = {},
+): AskHumansResponse {
+  return {
+    chainId: 480,
+    operationKey: operationKeyFor(payload),
+    payment: {
+      amount: (BigInt(X402_AMOUNT) + BigInt(FEEDBACK_BONUS_AMOUNT)).toString(),
+      asset: "USDC",
+      bountyAmount: X402_AMOUNT,
+      feedbackBonusAmount: FEEDBACK_BONUS_AMOUNT,
+      feedbackBonusAsset: "USDC",
+      spender: X402_SUBMITTER_ADDRESS,
+      tokenAddress: X402_USDC_ADDRESS,
+      totalAmount: (BigInt(X402_AMOUNT) + BigInt(FEEDBACK_BONUS_AMOUNT)).toString(),
+    },
+    paymentMode: "x402_authorization",
+    payloadHash: payloadHashFor(payload),
+    status: "awaiting_wallet_signature",
+    transactionPlan: {
+      calls: [
+        {
+          data: submitX402OneShotQuestionData(payload),
           phase: "submit_x402_question",
           to: X402_SUBMITTER_ADDRESS,
           value: "0",
@@ -1306,7 +1564,22 @@ describe("local signer", () => {
       expectedPayload: askPayload(),
     });
 
-    expect(calls).toHaveLength(2);
+    expect(calls).toHaveLength(1);
+  });
+
+  it("validates one-shot x402 plans with USDC Feedback Bonus funding", () => {
+    const payload = feedbackBonusAskPayload();
+    const calls = validateLocalSignerTransactionPlan({
+      accountAddress: account.address,
+      ask: x402OneShotCallsResponse(payload),
+      config: validationConfig(),
+      expectedBountyAmount: BigInt(X402_AMOUNT),
+      expectedChainId: 480,
+      expectedPaymentAuthorization: signedOneShotX402Authorization(payload),
+      expectedPayload: payload,
+    });
+
+    expect(calls).toHaveLength(1);
   });
 
   it("validates USDC Feedback Bonus transaction plans before execution", () => {
@@ -1589,9 +1862,8 @@ describe("local signer", () => {
       transactionPlan: {
         ...x402CallsResponse().transactionPlan,
         calls: [
-          x402CallsResponse().transactionPlan!.calls![0]!,
           {
-            ...x402CallsResponse().transactionPlan!.calls![1]!,
+            ...x402CallsResponse().transactionPlan!.calls![0]!,
             data: reserveSubmissionData(),
           },
         ],

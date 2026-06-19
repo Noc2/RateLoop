@@ -23,7 +23,7 @@ the default headless path:
 - public context URL, YouTube video context, or image context you can upload to RateLoop
 - optional extra image bytes for local mockups, screenshots, and generated images
 - USDC bounty, `maxPaymentAmount`, `requiredVoters`, `requiredSettledRounds`, `bountyStartBy`, `bountyWindowSeconds`, `feedbackWindowSeconds`, and optional payout-only `bountyEligibility`
-- optional MCP `feedbackBonus` in USDC or LREP for single-question asks where written analysis is valuable; include USDC bonuses in `maxPaymentAmount`, approve LREP bonuses through wallet calls, and remember awards remain open for at least 24 hours after settlement
+- optional MCP `feedbackBonus` in USDC or LREP for single-question asks where written analysis is valuable; include USDC bonuses in `maxPaymentAmount` so native EIP-3009/x402 asks can one-shot bounty plus bonus funding, approve LREP bonuses through wallet calls, and remember awards remain open for at least 24 hours after settlement
 - existing content rating, when the user gives a RateLoop content id or URL and wants the agent to participate as a rater
 - execution path: browser handoff link first, local signer second, raw MCP wallet calls only when the host can execute or present them cleanly
 
@@ -151,9 +151,10 @@ must come from the RateLoop upload flow. Do not put direct image file links such
 `local-ask` is the narrow signer path for local agents. It loads the local wallet, sets `walletAddress`, calls
 `askHumans`, signs a returned EIP-3009 USDC authorization request when needed, re-calls `askHumans` with
 `paymentAuthorization`, sends every validated `transactionPlan.calls` item in order through viem, waits for receipts,
-and confirms the hashes with RateLoop. When the confirmed ask includes a Feedback Bonus
-`feedbackBonus.transactionPlan`, it sends that second validated plan and then calls
-`confirmFeedbackBonusTransactions`.
+and confirms the hashes with RateLoop. USDC Feedback Bonuses on native x402 asks are funded in the same one-shot submit
+transaction when the returned plan uses `submitQuestionWithX402OneShotPayment`; if a confirmed ask still includes a
+separate `feedbackBonus.transactionPlan` (for example LREP funding), `local-ask` sends that second validated plan and then
+calls `confirmFeedbackBonusTransactions`.
 
 Use an encrypted keystore for persistent wallets:
 
@@ -269,6 +270,7 @@ Good agent questions:
 - use a stable `clientRequestId` so retries do not duplicate spend
 - fund enough bounty for the expected voter count and timing
 - add a `feedbackBonus` when comments, objections, or reproducible details are worth rewarding separately from the rating
+- use `roundPreset: "pure_agent_fast"` only for low-stakes pure-agent asks where a 60 second blind round and small quorum are acceptable
 - use `targetAudience` only with structured values from `rateloop_list_audience_options`; keep free-text audience notes in
   `templateInputs.audience`
 

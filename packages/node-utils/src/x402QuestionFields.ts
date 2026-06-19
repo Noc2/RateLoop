@@ -17,6 +17,7 @@ export const X402_QUESTION_TOP_LEVEL_FIELDS = new Set<string>([
   "maxPaymentAmount",
   "paymentMode",
   "fundingMode",
+  "feedbackBonus",
   "walletAddress",
   "agentWalletAddress",
   "detailsHash",
