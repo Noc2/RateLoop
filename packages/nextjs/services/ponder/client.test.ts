@@ -5,6 +5,7 @@ import {
   isPonderAvailable,
   ponderApi,
   resolvePonderUrl,
+  shouldBypassPonderAvailabilityPreflightForConfig,
 } from "./client";
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -67,6 +68,44 @@ test("resolvePonderUrl disables localhost URLs in production without crashing mo
 
 test("resolvePonderUrl can allow localhost URLs for local production-style E2E", () => {
   assert.equal(resolvePonderUrl("http://localhost:42069", true, true), "http://localhost:42069");
+});
+
+test("shouldBypassPonderAvailabilityPreflightForConfig only bypasses local E2E loopback URLs", () => {
+  assert.equal(
+    shouldBypassPonderAvailabilityPreflightForConfig({
+      localE2EProductionBuild: true,
+      ponderUrl: "http://127.0.0.1:42069",
+    }),
+    true,
+  );
+  assert.equal(
+    shouldBypassPonderAvailabilityPreflightForConfig({
+      localE2EProductionBuild: true,
+      ponderUrl: "http://localhost:42069",
+    }),
+    true,
+  );
+  assert.equal(
+    shouldBypassPonderAvailabilityPreflightForConfig({
+      localE2EProductionBuild: true,
+      ponderUrl: "https://ponder.example.com",
+    }),
+    false,
+  );
+  assert.equal(
+    shouldBypassPonderAvailabilityPreflightForConfig({
+      localE2EProductionBuild: false,
+      ponderUrl: "http://127.0.0.1:42069",
+    }),
+    false,
+  );
+  assert.equal(
+    shouldBypassPonderAvailabilityPreflightForConfig({
+      localE2EProductionBuild: true,
+      ponderUrl: null,
+    }),
+    false,
+  );
 });
 
 test("isPonderAvailable proxies browser health checks through Next", async () => {

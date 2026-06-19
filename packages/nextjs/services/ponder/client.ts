@@ -9,6 +9,7 @@ const isProduction = process.env.NODE_ENV === "production";
 const allowLocalE2EProductionBuild = isLocalE2EProductionBuildEnabled();
 const NEXT_PUBLIC_PONDER_URL = process.env.NEXT_PUBLIC_PONDER_URL?.trim() || undefined;
 const PONDER_METADATA_SYNC_TOKEN = process.env.PONDER_METADATA_SYNC_TOKEN?.trim() || undefined;
+const LOOPBACK_PONDER_HOSTNAMES = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
 export function resolvePonderUrl(
   rawValue: string | undefined,
@@ -28,6 +29,29 @@ function getConfiguredPonderUrl(): string | null {
 
 export function isPonderConfigured(): boolean {
   return getConfiguredPonderUrl() !== null;
+}
+
+export function shouldBypassPonderAvailabilityPreflightForConfig(params: {
+  localE2EProductionBuild: boolean;
+  ponderUrl: string | null;
+}): boolean {
+  if (!params.localE2EProductionBuild || !params.ponderUrl) return false;
+
+  let url: URL;
+  try {
+    url = new URL(params.ponderUrl);
+  } catch {
+    return false;
+  }
+
+  return url.protocol === "http:" && LOOPBACK_PONDER_HOSTNAMES.has(url.hostname);
+}
+
+export function shouldBypassPonderAvailabilityPreflight(): boolean {
+  return shouldBypassPonderAvailabilityPreflightForConfig({
+    localE2EProductionBuild: allowLocalE2EProductionBuild,
+    ponderUrl: getConfiguredPonderUrl(),
+  });
 }
 
 function getRequiredPonderUrl(): string {
@@ -348,6 +372,9 @@ export async function getPonderAvailabilityStatus(): Promise<PonderAvailabilityS
   if (!ponderUrl) {
     return { available: false, reason: "not_configured" };
   }
+  if (shouldBypassPonderAvailabilityPreflight()) {
+    return getBypassedPonderAvailabilityStatus();
+  }
 
   if (cachedAvailabilityStatus !== null && Date.now() < cacheExpiry) {
     return cachedAvailabilityStatus;
@@ -457,6 +484,10 @@ export function invalidatePonderCache(options?: { clearLastKnownGood?: boolean }
 }
 
 async function assertPonderAvailableForDeployment(expectedDeploymentKey?: string | null) {
+  if (shouldBypassPonderAvailabilityPreflight()) {
+    return getBypassedPonderAvailabilityStatus(expectedDeploymentKey);
+  }
+
   const explicitDeploymentKey = normalizeDeploymentKey(expectedDeploymentKey);
   const status = explicitDeploymentKey
     ? await checkPonderAvailabilityDirect(getRequiredPonderUrl(), { deploymentKey: explicitDeploymentKey })
@@ -465,6 +496,21 @@ async function assertPonderAvailableForDeployment(expectedDeploymentKey?: string
     throw new Error(`Ponder is unavailable for this deployment: ${status.reason ?? "unknown"}`);
   }
   return status;
+}
+
+function getBypassedPonderAvailabilityStatus(expectedDeploymentKey?: string | null): PonderAvailabilityStatus {
+  const deploymentKey =
+    normalizeDeploymentKey(expectedDeploymentKey) ?? getDefaultExpectedPonderDeploymentScope()?.deploymentKey;
+
+  return {
+    available: true,
+    ...(deploymentKey
+      ? {
+          expectedDeploymentKey: deploymentKey,
+          ponderDeploymentKey: deploymentKey,
+        }
+      : {}),
+  };
 }
 
 export async function ponderGet<T>(path: string, params?: Record<string, string | undefined>): Promise<T> {
