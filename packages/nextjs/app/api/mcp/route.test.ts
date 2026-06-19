@@ -304,7 +304,10 @@ test("tools/list accepts supported MCP-Protocol-Version and returns tool annotat
     properties?: Record<string, unknown>;
   };
   const askSchema = toolByName.get("rateloop_ask_humans")?.inputSchema as {
-    properties?: { mode?: { enum?: string[] } };
+    properties?: {
+      feedbackBonus?: { properties?: { asset?: { enum?: string[] } } };
+      mode?: { enum?: string[] };
+    };
   };
   const askOutputSchema = toolByName.get("rateloop_ask_humans")?.outputSchema as {
     properties?: { pollAfterMs?: { type?: unknown } };
@@ -332,6 +335,7 @@ test("tools/list accepts supported MCP-Protocol-Version and returns tool annotat
   };
   assert.ok(quoteSchema.properties?.walletAddress);
   assert.deepEqual(askSchema.properties?.mode?.enum, ["dry_run"]);
+  assert.deepEqual(askSchema.properties?.feedbackBonus?.properties?.asset?.enum, ["USDC", "usdc", "LREP", "lrep"]);
   assert.deepEqual(askOutputSchema.properties?.pollAfterMs?.type, ["integer", "null"]);
   assert.ok(statusSchema.properties?.walletAddress);
   assert.ok(statusSchema.properties?.dryRun);

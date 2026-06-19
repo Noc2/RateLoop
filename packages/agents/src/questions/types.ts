@@ -48,6 +48,12 @@ export type AgentAskExample = {
   };
   chainId?: number;
   clientRequestId: string;
+  feedbackBonus?: {
+    amount: string | number | bigint;
+    asset?: "USDC" | "usdc" | "LREP" | "lrep" | string;
+    awarder?: string;
+    feedbackClosesAt?: string | number | bigint;
+  };
   maxPaymentAmount?: string | number | bigint;
   question?: AgentQuestionExample;
   questions?: AgentQuestionExample[];

@@ -261,7 +261,7 @@ const agentFeedbackBonusInputSchema = {
     amount: atomicAmountSchema,
     asset: {
       default: "USDC",
-      enum: ["USDC", "usdc"],
+      enum: ["USDC", "usdc", "LREP", "lrep"],
       type: "string",
     },
     awarder: {
