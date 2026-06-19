@@ -10,6 +10,8 @@ const RPC_CHAIN_NAMES: Record<number, string> = {
 
 type RpcPreferenceOptions = {
   alchemyApiKey?: string;
+  basePreconfRpcOverrides?: Partial<Record<number, string>>;
+  preferBasePreconfRpc?: boolean;
   rpcOverrides?: Partial<Record<number, string>>;
 };
 
@@ -64,6 +66,17 @@ function uniqueHttpUrls(values: Array<string | undefined>) {
     .filter((value, index, allValues): value is string => Boolean(value) && allValues.indexOf(value) === index);
 }
 
+export function isBasePreconfRpcChain(chain: Chain) {
+  return (
+    (chain.id === 8453 || chain.id === 84532) &&
+    chain.rpcUrls.default.http.some(url => /https:\/\/(?:mainnet|sepolia)-preconf\.base\.org\/?$/i.test(url))
+  );
+}
+
+function isBasePreconfRpcUrl(value: string) {
+  return /https:\/\/(?:mainnet|sepolia)-preconf\.base\.org\/?$/i.test(value);
+}
+
 export function buildAlchemyHttpUrl(chainId: number, alchemyApiKey?: string) {
   const apiKey = alchemyApiKey?.trim();
   if (!apiKey) {
@@ -79,6 +92,17 @@ export function buildAlchemyHttpUrl(chainId: number, alchemyApiKey?: string) {
 }
 
 export function getPreferredHttpRpcUrls(chain: Chain, options: RpcPreferenceOptions = {}) {
+  if (options.preferBasePreconfRpc && isBasePreconfRpcChain(chain)) {
+    const preconfDefaults = chain.rpcUrls.default.http.filter(isBasePreconfRpcUrl);
+
+    return uniqueHttpUrls([
+      options.basePreconfRpcOverrides?.[chain.id],
+      ...preconfDefaults,
+      options.rpcOverrides?.[chain.id],
+      buildAlchemyHttpUrl(chain.id, options.alchemyApiKey),
+    ]);
+  }
+
   return uniqueHttpUrls([
     options.rpcOverrides?.[chain.id],
     buildAlchemyHttpUrl(chain.id, options.alchemyApiKey),

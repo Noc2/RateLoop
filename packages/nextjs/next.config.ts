@@ -36,12 +36,18 @@ const rpcOverrides = mergeRpcOverrides(
     480: process.env.NEXT_PUBLIC_RPC_URL_480,
   }),
 );
+const basePreconfRpcOverrides = resolveRpcOverrides({
+  84532: process.env.NEXT_PUBLIC_BASE_PRECONF_RPC_URL_84532,
+  8453: process.env.NEXT_PUBLIC_BASE_PRECONF_RPC_URL_8453,
+});
 const targetNetworks = resolveTargetNetworks(process.env.NEXT_PUBLIC_TARGET_NETWORKS, {
   alchemyApiKey: process.env.NEXT_PUBLIC_ALCHEMY_API_KEY,
   allowFoundryInProduction: allowLocalE2EProductionBuild,
+  basePreconfRpcOverrides,
   production: !isDev,
   fallback: targetNetworksFallback,
   rpcOverrides,
+  useBasePreconfRpc: process.env.NEXT_PUBLIC_USE_BASE_PRECONF_RPC === "true",
 });
 
 function toOrigin(value: string): string | undefined {

@@ -32,6 +32,65 @@ test("Base mainnet and Base Sepolia are available targets", () => {
   );
 });
 
+test("Base targets use standard RPC metadata until preconfirmation RPC is enabled", () => {
+  const networks = resolveTargetNetworks(`${chains.baseSepolia.id},${chains.base.id}`, {
+    production: true,
+  });
+
+  assert.deepEqual(
+    networks.map(network => network.rpcUrls.default.http[0]),
+    [chains.baseSepolia.rpcUrls.default.http[0], chains.base.rpcUrls.default.http[0]],
+  );
+});
+
+test("Base targets can opt into Flashblocks preconfirmation RPC metadata", () => {
+  const networks = resolveTargetNetworks(`${chains.baseSepolia.id},${chains.base.id}`, {
+    production: true,
+    useBasePreconfRpc: true,
+  });
+
+  assert.deepEqual(
+    networks.map(network => network.rpcUrls.default.http[0]),
+    ["https://sepolia-preconf.base.org", "https://mainnet-preconf.base.org"],
+  );
+});
+
+test("dedicated Base preconfirmation RPC overrides are preferred ahead of generic RPC fallbacks", () => {
+  const [network] = resolveTargetNetworks(`${chains.baseSepolia.id}`, {
+    basePreconfRpcOverrides: {
+      [chains.baseSepolia.id]: "https://base-sepolia-preconf.example.com",
+    },
+    production: false,
+    rpcOverrides: {
+      [chains.baseSepolia.id]: "https://84532.rpc.thirdweb.com/client-id",
+    },
+    useBasePreconfRpc: true,
+  });
+
+  assert.deepEqual(network.rpcUrls.default.http, [
+    "https://base-sepolia-preconf.example.com",
+    "https://sepolia-preconf.base.org",
+    "https://84532.rpc.thirdweb.com/client-id",
+  ]);
+});
+
+test("generic Base RPC overrides stay preferred when preconfirmation RPC is not enabled", () => {
+  const [network] = resolveTargetNetworks(`${chains.baseSepolia.id}`, {
+    basePreconfRpcOverrides: {
+      [chains.baseSepolia.id]: "https://base-sepolia-preconf.example.com",
+    },
+    production: false,
+    rpcOverrides: {
+      [chains.baseSepolia.id]: "https://84532.rpc.thirdweb.com/client-id",
+    },
+  });
+
+  assert.deepEqual(network.rpcUrls.default.http.slice(0, 2), [
+    "https://84532.rpc.thirdweb.com/client-id",
+    chains.baseSepolia.rpcUrls.default.http[0],
+  ]);
+});
+
 test("production builds can explicitly opt into the local Foundry chain", () => {
   const networks = resolveTargetNetworks(`${chains.foundry.id},${chains.base.id}`, {
     allowFoundryInProduction: true,

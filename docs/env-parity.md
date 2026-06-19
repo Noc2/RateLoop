@@ -4,13 +4,13 @@ Cross-package reference for env names that refer to the same on-chain value, E2E
 
 ## Chain IDs
 
-| Chain ID | Network | Deployment artifact | Profile |
-| --- | --- | --- | --- |
-| `84532` | Base Sepolia | `packages/foundry/deployments/84532.json` | `default` |
-| `8453` | Base mainnet | `packages/foundry/deployments/8453.json` | `production` |
-| `4801` | World Chain Sepolia | `packages/foundry/deployments/4801.json` | `default` |
-| `480` | World Chain mainnet | `packages/foundry/deployments/480.json` | `production` |
-| `31337` | Local Foundry / Anvil | gitignored local deploy | local |
+| Chain ID | Network               | Deployment artifact                       | Profile      |
+| -------- | --------------------- | ----------------------------------------- | ------------ |
+| `84532`  | Base Sepolia          | `packages/foundry/deployments/84532.json` | `default`    |
+| `8453`   | Base mainnet          | `packages/foundry/deployments/8453.json`  | `production` |
+| `4801`   | World Chain Sepolia   | `packages/foundry/deployments/4801.json`  | `default`    |
+| `480`    | World Chain mainnet   | `packages/foundry/deployments/480.json`   | `production` |
+| `31337`  | Local Foundry / Anvil | gitignored local deploy                   | local        |
 
 `packages/nextjs/.env.production` targets `NEXT_PUBLIC_TARGET_NETWORKS=8453` for the Base mainnet production
 deployment. Base Sepolia validation should override the target to `84532` explicitly.
@@ -19,56 +19,63 @@ deployment. Base Sepolia validation should override the target to `84532` explic
 
 USDC defaults are in `@rateloop/contracts` (`USDC_BY_CHAIN_ID`). Chain-scoped env overrides use the same suffix as the chain ID.
 
-| Chain | Default USDC |
-| --- | --- |
+| Chain   | Default USDC                                 |
+| ------- | -------------------------------------------- |
 | `84532` | `0x036CbD53842c5426634e7929541eC2318f3dCF7e` |
-| `8453` | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` |
-| `480` | `0x79A02482A880bCE3F13e09Da970dC34db4CD24d1` |
-| `4801` | `0x66145f38cBAC35Ca6F1Dfb4914dF98F1614aeA88` |
+| `8453`  | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` |
+| `480`   | `0x79A02482A880bCE3F13e09Da970dC34db4CD24d1` |
+| `4801`  | `0x66145f38cBAC35Ca6F1Dfb4914dF98F1614aeA88` |
 
-| Package / surface | Env var | Role |
-| --- | --- | --- |
-| Next.js browser | `NEXT_PUBLIC_USDC_ADDRESS` | Browser-side USDC bounty reads and approvals |
-| Next.js browser | `NEXT_PUBLIC_USDC_ADDRESS_<chainId>` | Chain-scoped browser-side USDC bounty reads and approvals |
-| Next.js browser (x402 alias) | `NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS` | x402-aligned browser USDC override; accepted alongside `NEXT_PUBLIC_USDC_ADDRESS` in `getDefaultUsdcAddress()` |
-| Next.js browser (x402 alias) | `NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS_<chainId>` | Chain-scoped x402-aligned browser USDC override |
-| Next.js server (x402) | `RATELOOP_X402_USDC_ADDRESS` | Server-side x402 bounty planning and submission |
-| Next.js server (x402) | `RATELOOP_X402_USDC_ADDRESS_<chainId>` | Chain-scoped server-side x402 bounty planning and submission |
-| Agents local signer | `RATELOOP_LOCAL_SIGNER_USDC_ADDRESS` | Trusted USDC override before signing EIP-3009 typed data |
-| Agents local signer | `RATELOOP_LOCAL_SIGNER_USDC_ADDRESS_<chainId>` | Chain-scoped trusted USDC override before signing EIP-3009 typed data |
-| Agents local signer (alias) | `RATELOOP_X402_USDC_ADDRESS` | Same as above; accepted alias in `localSigner.ts` |
-| Agents local signer (alias) | `RATELOOP_X402_USDC_ADDRESS_<chainId>` | Chain-scoped alias accepted by `localSigner.ts` |
+| Package / surface            | Env var                                            | Role                                                                                                           |
+| ---------------------------- | -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Next.js browser              | `NEXT_PUBLIC_USDC_ADDRESS`                         | Browser-side USDC bounty reads and approvals                                                                   |
+| Next.js browser              | `NEXT_PUBLIC_USDC_ADDRESS_<chainId>`               | Chain-scoped browser-side USDC bounty reads and approvals                                                      |
+| Next.js browser (x402 alias) | `NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS`           | x402-aligned browser USDC override; accepted alongside `NEXT_PUBLIC_USDC_ADDRESS` in `getDefaultUsdcAddress()` |
+| Next.js browser (x402 alias) | `NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS_<chainId>` | Chain-scoped x402-aligned browser USDC override                                                                |
+| Next.js server (x402)        | `RATELOOP_X402_USDC_ADDRESS`                       | Server-side x402 bounty planning and submission                                                                |
+| Next.js server (x402)        | `RATELOOP_X402_USDC_ADDRESS_<chainId>`             | Chain-scoped server-side x402 bounty planning and submission                                                   |
+| Agents local signer          | `RATELOOP_LOCAL_SIGNER_USDC_ADDRESS`               | Trusted USDC override before signing EIP-3009 typed data                                                       |
+| Agents local signer          | `RATELOOP_LOCAL_SIGNER_USDC_ADDRESS_<chainId>`     | Chain-scoped trusted USDC override before signing EIP-3009 typed data                                          |
+| Agents local signer (alias)  | `RATELOOP_X402_USDC_ADDRESS`                       | Same as above; accepted alias in `localSigner.ts`                                                              |
+| Agents local signer (alias)  | `RATELOOP_X402_USDC_ADDRESS_<chainId>`             | Chain-scoped alias accepted by `localSigner.ts`                                                                |
 
 Next.js throws when **any two or more** of the matching public/server USDC variables disagree for the same chain (`lib/env/server.ts`). Browser `getDefaultUsdcAddress()` throws when the two public vars disagree. Agents `local-ask` throws when the local-signer USDC name and x402 alias disagree for the same scope. Set all matching variables to the same address when overriding USDC. Server x402 resolution requires at least one public browser var when `RATELOOP_X402_USDC_ADDRESS` or `RATELOOP_X402_USDC_ADDRESS_<chainId>` is set.
 
 ## Ponder URL and RPC aliases
 
-| Package / surface | Env var | Role |
-| --- | --- | --- |
-| Next.js browser + server reads | `NEXT_PUBLIC_PONDER_URL` | Hosted Ponder indexer for `/content`, `/rounds`, etc. (required in production) |
-| Keeper | `PONDER_BASE_URL` | Same indexer host for `/keeper/work` and correlation vote routes |
-| Ponder indexer | `PONDER_RPC_URL_8453` | Base mainnet RPC for indexing |
-| Ponder indexer | `PONDER_RPC_URL_84532` | Base Sepolia RPC for indexing |
-| Ponder indexer | `PONDER_RPC_URL_480` | World Chain mainnet RPC for indexing |
-| Ponder indexer | `PONDER_RPC_URL_4801` | World Chain Sepolia RPC for indexing |
-| Ponder indexer | `PONDER_RPC_URL_31337` | Local Anvil RPC for indexing |
+| Package / surface                    | Env var                                  | Role                                                                                       |
+| ------------------------------------ | ---------------------------------------- | ------------------------------------------------------------------------------------------ |
+| Next.js browser + server reads       | `NEXT_PUBLIC_PONDER_URL`                 | Hosted Ponder indexer for `/content`, `/rounds`, etc. (required in production)             |
+| Next.js browser writes/receipt reads | `NEXT_PUBLIC_RPC_URL_8453`               | Base mainnet generic browser RPC override and fallback                                     |
+| Next.js browser writes/receipt reads | `NEXT_PUBLIC_RPC_URL_84532`              | Base Sepolia generic browser RPC override and fallback                                     |
+| Next.js browser writes/receipt reads | `NEXT_PUBLIC_USE_BASE_PRECONF_RPC`       | Set to `true` on Vercel to opt into Base Flashblocks/preconfirmation RPC metadata          |
+| Next.js browser writes/receipt reads | `NEXT_PUBLIC_BASE_PRECONF_RPC_URL_8453`  | Dedicated Base mainnet Flashblocks/preconfirmation RPC override for Vercel transaction UX  |
+| Next.js browser writes/receipt reads | `NEXT_PUBLIC_BASE_PRECONF_RPC_URL_84532` | Dedicated Base Sepolia Flashblocks/preconfirmation RPC override for staging transaction UX |
+| Keeper                               | `PONDER_BASE_URL`                        | Same indexer host for `/keeper/work` and correlation vote routes                           |
+| Ponder indexer                       | `PONDER_RPC_URL_8453`                    | Base mainnet RPC for indexing                                                              |
+| Ponder indexer                       | `PONDER_RPC_URL_84532`                   | Base Sepolia RPC for indexing                                                              |
+| Ponder indexer                       | `PONDER_RPC_URL_480`                     | World Chain mainnet RPC for indexing                                                       |
+| Ponder indexer                       | `PONDER_RPC_URL_4801`                    | World Chain Sepolia RPC for indexing                                                       |
+| Ponder indexer                       | `PONDER_RPC_URL_31337`                   | Local Anvil RPC for indexing                                                               |
 
 E2E and `yarn dev:stack` should point `NEXT_PUBLIC_PONDER_URL` and `PONDER_BASE_URL` at the same Ponder base URL, including any path prefix (for example `http://localhost:42069` or `https://example.com/ponder`). Agent MCP, attachments, and browser handoffs use the Next.js app origin (`NEXT_PUBLIC_APP_URL` / `www.rateloop.ai`), not Ponder.
 
+The deployed Next.js frontend can use Base Flashblocks/preconfirmation RPCs to make wallet progress appear quickly after a user confirms. Enable that only on the frontend with `NEXT_PUBLIC_USE_BASE_PRECONF_RPC=true`; when the dedicated preconfirmation RPC env var is empty, the frontend falls back to Base's public preconfirmation endpoint before ordinary browser RPC fallbacks. Ponder and Keeper should use ordinary sealed-block RPCs for canonical indexing and automation.
+
 ### Keeper / Ponder shared secrets
 
-| Package | Variable | Purpose |
-| --- | --- | --- |
-| Keeper | `PONDER_KEEPER_WORK_TOKEN` | Bearer token for Ponder `GET /keeper/work` (must match Ponder) |
-| Ponder | `PONDER_KEEPER_WORK_TOKEN` | Required in production for `/keeper/work` |
+| Package | Variable                   | Purpose                                                        |
+| ------- | -------------------------- | -------------------------------------------------------------- |
+| Keeper  | `PONDER_KEEPER_WORK_TOKEN` | Bearer token for Ponder `GET /keeper/work` (must match Ponder) |
+| Ponder  | `PONDER_KEEPER_WORK_TOKEN` | Required in production for `/keeper/work`                      |
 
 ## E2E production-build flags
 
 Local Playwright suites can opt into production-style behavior (localhost attachment origins, wallet bridge, rate-limit bypass) without a production deploy.
 
-| Env var | Package | Checked by |
-| --- | --- | --- |
-| `RATELOOP_E2E_PRODUCTION_BUILD` | Next.js server | `isLocalE2EProductionBuildEnabled()` |
+| Env var                                     | Package         | Checked by                           |
+| ------------------------------------------- | --------------- | ------------------------------------ |
+| `RATELOOP_E2E_PRODUCTION_BUILD`             | Next.js server  | `isLocalE2EProductionBuildEnabled()` |
 | `NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD` | Next.js browser | `isLocalE2EProductionBuildEnabled()` |
 
 Either flag set to `"true"` enables the mode. CI E2E workflows set both. Core Next.js paths use `isLocalE2EProductionBuildEnabled()` and honor either flag; set both for local full-stack E2E and Playwright CI parity.
@@ -98,32 +105,32 @@ test-only forever and never fund it on Base mainnet.
 
 Shared deployments live in `packages/contracts/src/deployedContracts.ts`. Keeper address env names override artifacts only on local `31337`; non-local Keeper deployments require shared contract artifacts.
 
-| Contract | Keeper | Ponder | Next.js (when overridden) |
-| --- | --- | --- | --- |
-| `ContentRegistry` | `CONTENT_REGISTRY_ADDRESS` | `PONDER_CONTENT_REGISTRY_ADDRESS` | — |
-| `RoundVotingEngine` | `VOTING_ENGINE_ADDRESS` | `PONDER_ROUND_VOTING_ENGINE_ADDRESS` | — |
-| `RoundRewardDistributor` | `ROUND_REWARD_DISTRIBUTOR_ADDRESS` | `PONDER_ROUND_REWARD_DISTRIBUTOR_ADDRESS` | — |
-| `QuestionRewardPoolEscrow` | — | `PONDER_QUESTION_REWARD_POOL_ESCROW_ADDRESS` | `NEXT_PUBLIC_QUESTION_REWARD_POOL_ESCROW_ADDRESS` |
-| `FeedbackBonusEscrow` | `FEEDBACK_BONUS_ESCROW_ADDRESS` | `PONDER_FEEDBACK_BONUS_ESCROW_ADDRESS` | — |
-| `FeedbackRegistry` | — | `PONDER_FEEDBACK_REGISTRY_ADDRESS` | — |
-| `CategoryRegistry` | — | `PONDER_CATEGORY_REGISTRY_ADDRESS` | — |
-| `ProfileRegistry` | — | `PONDER_PROFILE_REGISTRY_ADDRESS` | — |
-| `FrontendRegistry` | `FRONTEND_REGISTRY_ADDRESS` | `PONDER_FRONTEND_REGISTRY_ADDRESS` | — |
-| `LoopReputation` | — | `PONDER_LREP_ADDRESS` | — |
-| `LaunchDistributionPool` | — | `PONDER_LAUNCH_DISTRIBUTION_POOL_ADDRESS` | — |
-| `ClusterPayoutOracle` | `CLUSTER_PAYOUT_ORACLE_ADDRESS` | `PONDER_CLUSTER_PAYOUT_ORACLE_ADDRESS` | — |
-| `AdvisoryVoteRecorder` | `ADVISORY_VOTE_RECORDER_ADDRESS` | `PONDER_ADVISORY_VOTE_RECORDER_ADDRESS` | — |
-| `RaterRegistry` | — | `PONDER_RATER_REGISTRY_ADDRESS` | — |
-| `ConfidentialityEscrow` | — | `PONDER_CONFIDENTIALITY_ESCROW_ADDRESS` | — |
+| Contract                   | Keeper                             | Ponder                                       | Next.js (when overridden)                         |
+| -------------------------- | ---------------------------------- | -------------------------------------------- | ------------------------------------------------- |
+| `ContentRegistry`          | `CONTENT_REGISTRY_ADDRESS`         | `PONDER_CONTENT_REGISTRY_ADDRESS`            | —                                                 |
+| `RoundVotingEngine`        | `VOTING_ENGINE_ADDRESS`            | `PONDER_ROUND_VOTING_ENGINE_ADDRESS`         | —                                                 |
+| `RoundRewardDistributor`   | `ROUND_REWARD_DISTRIBUTOR_ADDRESS` | `PONDER_ROUND_REWARD_DISTRIBUTOR_ADDRESS`    | —                                                 |
+| `QuestionRewardPoolEscrow` | —                                  | `PONDER_QUESTION_REWARD_POOL_ESCROW_ADDRESS` | `NEXT_PUBLIC_QUESTION_REWARD_POOL_ESCROW_ADDRESS` |
+| `FeedbackBonusEscrow`      | `FEEDBACK_BONUS_ESCROW_ADDRESS`    | `PONDER_FEEDBACK_BONUS_ESCROW_ADDRESS`       | —                                                 |
+| `FeedbackRegistry`         | —                                  | `PONDER_FEEDBACK_REGISTRY_ADDRESS`           | —                                                 |
+| `CategoryRegistry`         | —                                  | `PONDER_CATEGORY_REGISTRY_ADDRESS`           | —                                                 |
+| `ProfileRegistry`          | —                                  | `PONDER_PROFILE_REGISTRY_ADDRESS`            | —                                                 |
+| `FrontendRegistry`         | `FRONTEND_REGISTRY_ADDRESS`        | `PONDER_FRONTEND_REGISTRY_ADDRESS`           | —                                                 |
+| `LoopReputation`           | —                                  | `PONDER_LREP_ADDRESS`                        | —                                                 |
+| `LaunchDistributionPool`   | —                                  | `PONDER_LAUNCH_DISTRIBUTION_POOL_ADDRESS`    | —                                                 |
+| `ClusterPayoutOracle`      | `CLUSTER_PAYOUT_ORACLE_ADDRESS`    | `PONDER_CLUSTER_PAYOUT_ORACLE_ADDRESS`       | —                                                 |
+| `AdvisoryVoteRecorder`     | `ADVISORY_VOTE_RECORDER_ADDRESS`   | `PONDER_ADVISORY_VOTE_RECORDER_ADDRESS`      | —                                                 |
+| `RaterRegistry`            | —                                  | `PONDER_RATER_REGISTRY_ADDRESS`              | —                                                 |
+| `ConfidentialityEscrow`    | —                                  | `PONDER_CONFIDENTIALITY_ESCROW_ADDRESS`      | —                                                 |
 
 Keeper and Ponder reject conflicting live-chain overrides when shared artifacts are present.
 
 ## Agent x402 submitter aliases
 
-| Env var | Package | Role |
-| --- | --- | --- |
-| `RATELOOP_LOCAL_SIGNER_X402_SUBMITTER_ADDRESS` | Agents | Trusted EIP-3009 authorization recipient before signing |
-| `RATELOOP_X402_QUESTION_SUBMITTER_ADDRESS` | Agents | Alias for the same submitter override in `localSigner.ts` |
+| Env var                                        | Package | Role                                                      |
+| ---------------------------------------------- | ------- | --------------------------------------------------------- |
+| `RATELOOP_LOCAL_SIGNER_X402_SUBMITTER_ADDRESS` | Agents  | Trusted EIP-3009 authorization recipient before signing   |
+| `RATELOOP_X402_QUESTION_SUBMITTER_ADDRESS`     | Agents  | Alias for the same submitter override in `localSigner.ts` |
 
 ## RaterRegistry follow counter storage drift
 

@@ -12,8 +12,10 @@ import { afterEach, test } from "node:test";
 
 const env = process.env as Record<string, string | undefined>;
 const originalDatabaseUrl = env.DATABASE_URL;
+const originalBasePreconfRpcUrl84532 = env.NEXT_PUBLIC_BASE_PRECONF_RPC_URL_84532;
 const originalPublicRpcUrl4801 = env.NEXT_PUBLIC_RPC_URL_4801;
 const originalPublicRpcUrl84532 = env.NEXT_PUBLIC_RPC_URL_84532;
+const originalUseBasePreconfRpc = env.NEXT_PUBLIC_USE_BASE_PRECONF_RPC;
 const originalVercelEnv = env.VERCEL_ENV;
 const originalPublicUsdc = env.NEXT_PUBLIC_USDC_ADDRESS;
 const originalPublicUsdc84532 = env.NEXT_PUBLIC_USDC_ADDRESS_84532;
@@ -35,10 +37,22 @@ afterEach(() => {
     env.NEXT_PUBLIC_RPC_URL_4801 = originalPublicRpcUrl4801;
   }
 
+  if (originalBasePreconfRpcUrl84532 === undefined) {
+    delete env.NEXT_PUBLIC_BASE_PRECONF_RPC_URL_84532;
+  } else {
+    env.NEXT_PUBLIC_BASE_PRECONF_RPC_URL_84532 = originalBasePreconfRpcUrl84532;
+  }
+
   if (originalPublicRpcUrl84532 === undefined) {
     delete env.NEXT_PUBLIC_RPC_URL_84532;
   } else {
     env.NEXT_PUBLIC_RPC_URL_84532 = originalPublicRpcUrl84532;
+  }
+
+  if (originalUseBasePreconfRpc === undefined) {
+    delete env.NEXT_PUBLIC_USE_BASE_PRECONF_RPC;
+  } else {
+    env.NEXT_PUBLIC_USE_BASE_PRECONF_RPC = originalUseBasePreconfRpc;
   }
 
   if (originalVercelEnv === undefined) {
@@ -179,6 +193,20 @@ test("resolveServerTargetNetworks does not auto-fallback on Vercel preview produ
 
 test("resolveServerTargetNetworks returns null for invalid production values", () => {
   assert.equal(resolveServerTargetNetworks("not-a-chain", true), null);
+});
+
+test("resolveServerTargetNetworks honors Base preconfirmation RPC env opt-in", () => {
+  env.NEXT_PUBLIC_USE_BASE_PRECONF_RPC = "true";
+  env.NEXT_PUBLIC_BASE_PRECONF_RPC_URL_84532 = "https://base-sepolia-preconf.example.com/";
+  env.NEXT_PUBLIC_RPC_URL_84532 = "https://84532.rpc.thirdweb.com/client-id/";
+
+  const networks = resolveServerTargetNetworks("84532", true);
+
+  assert.deepEqual(networks?.[0]?.rpcUrls.default.http, [
+    "https://base-sepolia-preconf.example.com",
+    "https://sepolia-preconf.base.org",
+    "https://84532.rpc.thirdweb.com/client-id",
+  ]);
 });
 
 test("getServerRpcOverrides includes public per-chain RPC overrides", () => {

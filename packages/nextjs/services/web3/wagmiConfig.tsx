@@ -2,8 +2,10 @@ import { wagmiConnectors } from "./wagmiConnectors";
 import { Chain, createClient, fallback, http } from "viem";
 import { foundry, hardhat, mainnet } from "viem/chains";
 import { createConfig, createStorage } from "wagmi";
+import { getPollingIntervalForChainId } from "~~/config/shared";
 import scaffoldConfig, { ScaffoldConfig } from "~~/scaffold.config";
 import { WAGMI_STORAGE_KEY, wagmiPersistentStorage } from "~~/services/web3/wagmiStorage";
+import { getPreferredHttpRpcUrls, isBasePreconfRpcChain } from "~~/utils/rpcUrls";
 import { getAlchemyHttpUrl } from "~~/utils/scaffold-eth";
 
 const { targetNetworks } = scaffoldConfig;
@@ -41,15 +43,25 @@ export const wagmiConfig = createConfig({
     storage: wagmiPersistentStorage,
   }),
   client: ({ chain }) => {
-    const rpcUrls = [rpcOverrides?.[chain.id], getAlchemyHttpUrl(chain.id)].filter(
-      (value, index, values): value is string => Boolean(value) && values.indexOf(value) === index,
-    );
+    const rpcUrls = getPreferredHttpRpcUrls(chain, {
+      alchemyApiKey: scaffoldConfig.alchemyApiKey,
+      basePreconfRpcOverrides: scaffoldConfig.basePreconfRpcOverrides,
+      preferBasePreconfRpc: scaffoldConfig.useBasePreconfRpc,
+      rpcOverrides,
+    });
+    const usesBasePreconfirmation = Boolean(scaffoldConfig.useBasePreconfRpc && isBasePreconfRpcChain(chain));
     const rpcFallbacks = rpcUrls.length > 0 ? rpcUrls.map(url => http(url)) : [http()];
 
     return createClient({
       chain,
       transport: fallback(rpcFallbacks),
-      ...(chain.id !== (hardhat as Chain).id ? { pollingInterval: scaffoldConfig.pollingInterval } : {}),
+      ...(chain.id !== (hardhat as Chain).id
+        ? {
+            pollingInterval: getPollingIntervalForChainId(chain.id, scaffoldConfig.pollingInterval, {
+              preconfirmation: usesBasePreconfirmation,
+            }),
+          }
+        : {}),
     });
   },
 });

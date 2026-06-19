@@ -1,13 +1,14 @@
 import {
   buildAlchemyHttpUrl,
   getPreferredHttpRpcUrls,
+  isBasePreconfRpcChain,
   mergeRpcOverrides,
   resolveRpcOverrides,
   withPreferredHttpRpcUrls,
 } from "./rpcUrls";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { baseSepolia, worldchainSepolia } from "viem/chains";
+import { baseSepolia, baseSepoliaPreconf, worldchainSepolia } from "viem/chains";
 
 test("buildAlchemyHttpUrl returns the expected World Chain Sepolia RPC", () => {
   assert.equal(buildAlchemyHttpUrl(4801, "test-key"), "https://worldchain-sepolia.g.alchemy.com/v2/test-key");
@@ -33,6 +34,35 @@ test("getPreferredHttpRpcUrls prioritizes overrides before Alchemy and defaults"
       "https://rpc.example.com",
       "https://base-sepolia.g.alchemy.com/v2/alchemy-key",
       ...baseSepolia.rpcUrls.default.http,
+    ],
+  );
+});
+
+test("getPreferredHttpRpcUrls keeps Base preconfirmation URLs ahead of generic Alchemy defaults", () => {
+  assert.equal(isBasePreconfRpcChain(baseSepoliaPreconf), true);
+  assert.deepEqual(
+    getPreferredHttpRpcUrls(baseSepoliaPreconf, { alchemyApiKey: "alchemy-key", preferBasePreconfRpc: true }),
+    ["https://sepolia-preconf.base.org", "https://base-sepolia.g.alchemy.com/v2/alchemy-key"],
+  );
+});
+
+test("getPreferredHttpRpcUrls prefers dedicated Base preconfirmation RPC overrides before generic RPC fallbacks", () => {
+  assert.deepEqual(
+    getPreferredHttpRpcUrls(baseSepoliaPreconf, {
+      alchemyApiKey: "alchemy-key",
+      basePreconfRpcOverrides: {
+        [baseSepoliaPreconf.id]: "https://base-sepolia-preconf.example.com",
+      },
+      preferBasePreconfRpc: true,
+      rpcOverrides: {
+        [baseSepoliaPreconf.id]: "https://84532.rpc.thirdweb.com/client-id",
+      },
+    }),
+    [
+      "https://base-sepolia-preconf.example.com",
+      "https://sepolia-preconf.base.org",
+      "https://84532.rpc.thirdweb.com/client-id",
+      "https://base-sepolia.g.alchemy.com/v2/alchemy-key",
     ],
   );
 });

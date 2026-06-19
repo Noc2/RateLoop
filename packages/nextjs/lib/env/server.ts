@@ -134,13 +134,19 @@ export function resolveServerTargetNetworks(
         480: readEnv("NEXT_PUBLIC_RPC_URL_480"),
       }),
     );
+    const basePreconfRpcOverrides = resolveRpcOverrides({
+      84532: readEnv("NEXT_PUBLIC_BASE_PRECONF_RPC_URL_84532"),
+      8453: readEnv("NEXT_PUBLIC_BASE_PRECONF_RPC_URL_8453"),
+    });
 
     return resolveTargetNetworks(rawValue, {
       alchemyApiKey: readEnv("NEXT_PUBLIC_ALCHEMY_API_KEY"),
+      basePreconfRpcOverrides,
       production,
       fallback: !production || allowFoundryInProduction ? DEFAULT_DEV_TARGET_NETWORKS : undefined,
       allowFoundryInProduction,
       rpcOverrides,
+      useBasePreconfRpc: readEnv("NEXT_PUBLIC_USE_BASE_PRECONF_RPC") === "true",
     });
   } catch {
     return null;

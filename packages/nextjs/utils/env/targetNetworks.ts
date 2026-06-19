@@ -9,7 +9,14 @@ export const AVAILABLE_TARGET_NETWORKS = {
   [chains.worldchainSepolia.id]: chains.worldchainSepolia,
 } as const satisfies Record<number, chains.Chain>;
 
-export type SupportedTargetNetwork = (typeof AVAILABLE_TARGET_NETWORKS)[keyof typeof AVAILABLE_TARGET_NETWORKS];
+const BASE_PRECONF_TARGET_NETWORKS = {
+  [chains.base.id]: chains.basePreconf,
+  [chains.baseSepolia.id]: chains.baseSepoliaPreconf,
+} as const satisfies Partial<Record<number, chains.Chain>>;
+
+export type SupportedTargetNetwork =
+  | (typeof AVAILABLE_TARGET_NETWORKS)[keyof typeof AVAILABLE_TARGET_NETWORKS]
+  | (typeof BASE_PRECONF_TARGET_NETWORKS)[keyof typeof BASE_PRECONF_TARGET_NETWORKS];
 
 export const DEFAULT_DEV_TARGET_NETWORKS = `${chains.foundry.id}`;
 
@@ -38,7 +45,9 @@ export function resolveTargetNetworks(
     fallback?: string;
     allowFoundryInProduction?: boolean;
     alchemyApiKey?: string;
+    basePreconfRpcOverrides?: Partial<Record<number, string>>;
     rpcOverrides?: Partial<Record<number, string>>;
+    useBasePreconfRpc?: boolean;
   },
 ): [SupportedTargetNetwork, ...SupportedTargetNetwork[]] {
   const resolvedValue = rawValue?.trim() || options.fallback;
@@ -54,7 +63,10 @@ export function resolveTargetNetworks(
   }
 
   const targetNetworks = targetNetworkIds.map(chainId => {
-    const network = AVAILABLE_TARGET_NETWORKS[chainId as keyof typeof AVAILABLE_TARGET_NETWORKS];
+    const network =
+      (options.useBasePreconfRpc
+        ? BASE_PRECONF_TARGET_NETWORKS[chainId as keyof typeof BASE_PRECONF_TARGET_NETWORKS]
+        : undefined) ?? AVAILABLE_TARGET_NETWORKS[chainId as keyof typeof AVAILABLE_TARGET_NETWORKS];
 
     if (!network) {
       throw new Error(
@@ -64,6 +76,8 @@ export function resolveTargetNetworks(
 
     return withPreferredHttpRpcUrls(network, {
       alchemyApiKey: options.alchemyApiKey,
+      basePreconfRpcOverrides: options.basePreconfRpcOverrides,
+      preferBasePreconfRpc: options.useBasePreconfRpc,
       rpcOverrides: options.rpcOverrides,
     });
   });
