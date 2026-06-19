@@ -7,7 +7,8 @@ import {
   resolveVoterLeaderboardSelection,
 } from "~~/lib/governance/voterLeaderboardSnapshot";
 import { readLrepBalances, readProfileRegistryProfiles } from "~~/lib/profileRegistry/server";
-import { isPonderAvailable } from "~~/services/ponder/client";
+import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
+import { ponderApi } from "~~/services/ponder/client";
 import { checkRateLimit } from "~~/utils/rateLimit";
 
 const RATE_LIMIT = { limit: 60, windowMs: 60_000 };
@@ -62,23 +63,20 @@ export async function GET(request: NextRequest) {
     const includeAddress =
       includeAddressParam && isAddress(includeAddressParam) ? includeAddressParam.toLowerCase() : null;
     const canFallbackToIncludedAddress = includeAddress !== null && limit === 1;
-
-    // Try Ponder first for complete holder discovery.
-    const ponderAvailable = await isPonderAvailable();
-    if (!ponderAvailable) {
+    const deployment = resolveProtocolDeploymentScope(parsedChainId);
+    if (!deployment) {
       if (canFallbackToIncludedAddress) {
         return buildIncludedAddressFallback(includeAddress, parsedChainId);
       }
 
-      return NextResponse.json(
-        { error: "Leaderboard is temporarily unavailable while the indexer is offline" },
-        { status: 503 },
-      );
+      return NextResponse.json({ error: "Leaderboard deployment is not configured for this chain" }, { status: 503 });
     }
 
+    // Try Ponder first for complete holder discovery.
     try {
       const snapshot = await getVoterLeaderboardSnapshot({
         chainId: parsedChainId,
+        listTokenHolders: () => ponderApi.getAllTokenHolders({ deploymentKey: deployment.deploymentKey }),
       });
       const selection = await resolveVoterLeaderboardSelection(
         snapshot,

@@ -443,6 +443,46 @@ test("ponderApi.syncQuestionMetadata can preflight an explicit deployment key", 
   assert.equal(postedDeploymentKey, expectedDeploymentKey);
 });
 
+test("ponderApi.getAllTokenHolders can preflight an explicit deployment key", async () => {
+  const originalFetch = globalThis.fetch;
+  assert.ok(BASE_SEPOLIA_PONDER_DEPLOYMENT);
+  const expectedDeploymentKey = BASE_SEPOLIA_PONDER_DEPLOYMENT.deploymentKey;
+  const requestedUrls: string[] = [];
+
+  globalThis.fetch = (async input => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    requestedUrls.push(url);
+    const preflightResponse = healthyPonderPreflightResponseForDeployment(url, BASE_SEPOLIA_PONDER_DEPLOYMENT);
+    if (preflightResponse) return preflightResponse;
+
+    return new Response(
+      JSON.stringify({
+        items: [{ address: "0x1234567890abcdef1234567890abcdef12345678", firstSeenAt: "1000" }],
+        limit: 200,
+        offset: 0,
+        total: 1,
+      }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
+  }) as typeof fetch;
+
+  try {
+    invalidatePonderCache({ clearLastKnownGood: true });
+
+    const result = await ponderApi.getAllTokenHolders({ deploymentKey: expectedDeploymentKey });
+
+    assert.equal(result.length, 1);
+    assert.equal(result[0]?.address, "0x1234567890abcdef1234567890abcdef12345678");
+  } finally {
+    globalThis.fetch = originalFetch;
+    invalidatePonderCache({ clearLastKnownGood: true });
+  }
+
+  assert.match(requestedUrls[0] ?? "", /\/health$/);
+  assert.match(requestedUrls[1] ?? "", /\/deployment$/);
+  assert.match(requestedUrls[2] ?? "", /\/token-holders\?/);
+});
+
 test("ponderApi.getContentWindow respects hasMore when search totals are omitted", async () => {
   const originalGetContent = ponderApi.getContent;
   let callCount = 0;

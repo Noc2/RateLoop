@@ -513,8 +513,12 @@ function getBypassedPonderAvailabilityStatus(expectedDeploymentKey?: string | nu
   };
 }
 
-export async function ponderGet<T>(path: string, params?: Record<string, string | undefined>): Promise<T> {
-  await assertPonderAvailableForDeployment();
+export async function ponderGet<T>(
+  path: string,
+  params?: Record<string, string | undefined>,
+  options?: { expectedDeploymentKey?: string | null },
+): Promise<T> {
+  await assertPonderAvailableForDeployment(options?.expectedDeploymentKey);
   const url = new URL(`${getRequiredPonderUrl()}${path}`);
   if (params) {
     for (const [key, value] of Object.entries(params)) {
@@ -1744,20 +1748,25 @@ export const ponderApi = {
     });
   },
 
-  getTokenHolders(params?: { limit?: string; offset?: string }) {
-    return ponderGet<PonderTokenHoldersResponse>("/token-holders", params);
+  getTokenHolders(params?: { limit?: string; offset?: string }, options?: { deploymentKey?: string | null }) {
+    return ponderGet<PonderTokenHoldersResponse>("/token-holders", params, {
+      expectedDeploymentKey: options?.deploymentKey,
+    });
   },
 
   getFrontend(address: string) {
     return ponderGet<{ frontend: PonderFrontend }>(`/frontend/${address}`);
   },
 
-  async getAllTokenHolders() {
+  async getAllTokenHolders(options?: { deploymentKey?: string | null }) {
     return getAllPages(offset =>
-      ponderApi.getTokenHolders({
-        limit: String(PONDER_PAGE_LIMIT),
-        offset: String(offset),
-      }),
+      ponderApi.getTokenHolders(
+        {
+          limit: String(PONDER_PAGE_LIMIT),
+          offset: String(offset),
+        },
+        options,
+      ),
     );
   },
 
