@@ -548,11 +548,18 @@ test.describe("Mobile viewport (phone)", () => {
       };
     });
 
-    expect(layout.buttonBottom).toBeLessThanOrEqual(layout.dockTop - 1);
+    expect(layout.buttonBottom).toBeLessThanOrEqual(layout.dockTop - 44);
     expect(layout.buttonTopmost).toBe(true);
 
     await showMore.click();
     await expect(page.locator('article[aria-current="true"] button:has-text("Show Less")').first()).toBeVisible();
+    await expect(page.getByRole("dialog", { name: /^Share / })).toBeHidden();
+
+    await page.locator('[data-testid="vote-mobile-dock"]').getByRole("button", { name: "Share content" }).click();
+    const shareDialog = page.getByRole("dialog", { name: /^Share / }).first();
+    await expect(shareDialog).toBeVisible();
+    await shareDialog.getByRole("button", { name: "Close share dialog" }).click();
+    await expect(shareDialog).toBeHidden();
   });
 
   test("mobile voting dock keeps rating orb raised above equal action circles", async ({ connectedPage: page }) => {

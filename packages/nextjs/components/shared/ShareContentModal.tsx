@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { type PointerEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { CheckIcon, ClipboardIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { GradientActionButton } from "~~/components/shared/GradientAction";
@@ -36,17 +36,28 @@ export function ShareContentModal({
 }: ShareContentModalProps) {
   const { copyToClipboard, isCopiedToClipboard: copied } = useCopyToClipboard({ successDurationMs: 2000 });
   const [isMounted, setIsMounted] = useState(false);
+  const closeModal = useCallback(() => {
+    onClose();
+  }, [onClose]);
+  const handleClosePointerDown = useCallback(
+    (event: PointerEvent<HTMLButtonElement>) => {
+      event.preventDefault();
+      event.stopPropagation();
+      closeModal();
+    },
+    [closeModal],
+  );
 
   // Close on Escape key
   useEffect(() => {
     setIsMounted(true);
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") closeModal();
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
+  }, [closeModal]);
 
   const shareDetails = useMemo(() => {
     if (typeof window === "undefined") return { ratingLabel: null, url: "" };
@@ -97,14 +108,17 @@ export function ShareContentModal({
       <button
         type="button"
         className="absolute inset-0 cursor-default bg-black/40 backdrop-blur-sm"
-        aria-label="Close share dialog"
-        onClick={onClose}
+        aria-label="Dismiss share dialog"
+        onClick={closeModal}
+        onPointerDown={handleClosePointerDown}
       />
       <div className="relative z-10 max-h-[calc(100svh-1rem)] w-full max-w-md overflow-y-auto rounded-t-2xl bg-base-200 p-6 shadow-2xl sm:rounded-2xl">
         <button
-          onClick={onClose}
-          className="btn btn-sm btn-circle btn-ghost absolute right-3 top-3 text-base-content/70 hover:text-base-content"
-          aria-label="Close"
+          type="button"
+          onClick={closeModal}
+          onPointerDown={handleClosePointerDown}
+          className="btn btn-sm btn-circle btn-ghost absolute right-3 top-3 z-20 text-base-content/70 hover:text-base-content"
+          aria-label="Close share dialog"
         >
           <XMarkIcon className="h-5 w-5" />
         </button>
