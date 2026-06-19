@@ -16,6 +16,9 @@ const originalBasePreconfRpcUrl84532 = env.NEXT_PUBLIC_BASE_PRECONF_RPC_URL_8453
 const originalPublicRpcUrl4801 = env.NEXT_PUBLIC_RPC_URL_4801;
 const originalPublicRpcUrl84532 = env.NEXT_PUBLIC_RPC_URL_84532;
 const originalUseBasePreconfRpc = env.NEXT_PUBLIC_USE_BASE_PRECONF_RPC;
+const originalServerBasePreconfRpcUrl84532 = env.RATELOOP_SERVER_BASE_PRECONF_RPC_URL_84532;
+const originalServerBasePreconfRpcUrl8453 = env.RATELOOP_SERVER_BASE_PRECONF_RPC_URL_8453;
+const originalServerUseBasePreconfRpc = env.RATELOOP_SERVER_USE_BASE_PRECONF_RPC;
 const originalVercelEnv = env.VERCEL_ENV;
 const originalPublicUsdc = env.NEXT_PUBLIC_USDC_ADDRESS;
 const originalPublicUsdc84532 = env.NEXT_PUBLIC_USDC_ADDRESS_84532;
@@ -53,6 +56,24 @@ afterEach(() => {
     delete env.NEXT_PUBLIC_USE_BASE_PRECONF_RPC;
   } else {
     env.NEXT_PUBLIC_USE_BASE_PRECONF_RPC = originalUseBasePreconfRpc;
+  }
+
+  if (originalServerBasePreconfRpcUrl84532 === undefined) {
+    delete env.RATELOOP_SERVER_BASE_PRECONF_RPC_URL_84532;
+  } else {
+    env.RATELOOP_SERVER_BASE_PRECONF_RPC_URL_84532 = originalServerBasePreconfRpcUrl84532;
+  }
+
+  if (originalServerBasePreconfRpcUrl8453 === undefined) {
+    delete env.RATELOOP_SERVER_BASE_PRECONF_RPC_URL_8453;
+  } else {
+    env.RATELOOP_SERVER_BASE_PRECONF_RPC_URL_8453 = originalServerBasePreconfRpcUrl8453;
+  }
+
+  if (originalServerUseBasePreconfRpc === undefined) {
+    delete env.RATELOOP_SERVER_USE_BASE_PRECONF_RPC;
+  } else {
+    env.RATELOOP_SERVER_USE_BASE_PRECONF_RPC = originalServerUseBasePreconfRpc;
   }
 
   if (originalVercelEnv === undefined) {
@@ -195,15 +216,30 @@ test("resolveServerTargetNetworks returns null for invalid production values", (
   assert.equal(resolveServerTargetNetworks("not-a-chain", true), null);
 });
 
-test("resolveServerTargetNetworks honors Base preconfirmation RPC env opt-in", () => {
+test("resolveServerTargetNetworks ignores public Base preconfirmation browser opt-in", () => {
   env.NEXT_PUBLIC_USE_BASE_PRECONF_RPC = "true";
   env.NEXT_PUBLIC_BASE_PRECONF_RPC_URL_84532 = "https://base-sepolia-preconf.example.com/";
   env.NEXT_PUBLIC_RPC_URL_84532 = "https://84532.rpc.thirdweb.com/client-id/";
 
   const networks = resolveServerTargetNetworks("84532", true);
+  const serverRpcUrls: readonly string[] = networks?.[0]?.rpcUrls.default.http ?? [];
+
+  assert.equal(serverRpcUrls[0], "https://84532.rpc.thirdweb.com/client-id");
+  assert.equal(serverRpcUrls.includes("https://base-sepolia-preconf.example.com"), false);
+  assert.equal(serverRpcUrls.includes("https://sepolia-preconf.base.org"), false);
+});
+
+test("resolveServerTargetNetworks honors explicit server Base preconfirmation RPC opt-in", () => {
+  env.NEXT_PUBLIC_USE_BASE_PRECONF_RPC = "true";
+  env.NEXT_PUBLIC_BASE_PRECONF_RPC_URL_84532 = "https://browser-base-sepolia-preconf.example.com/";
+  env.NEXT_PUBLIC_RPC_URL_84532 = "https://84532.rpc.thirdweb.com/client-id/";
+  env.RATELOOP_SERVER_USE_BASE_PRECONF_RPC = "true";
+  env.RATELOOP_SERVER_BASE_PRECONF_RPC_URL_84532 = "https://server-base-sepolia-preconf.example.com/";
+
+  const networks = resolveServerTargetNetworks("84532", true);
 
   assert.deepEqual(networks?.[0]?.rpcUrls.default.http, [
-    "https://base-sepolia-preconf.example.com",
+    "https://server-base-sepolia-preconf.example.com",
     "https://sepolia-preconf.base.org",
     "https://84532.rpc.thirdweb.com/client-id",
   ]);
