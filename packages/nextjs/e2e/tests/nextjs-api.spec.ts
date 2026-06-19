@@ -4,6 +4,7 @@ import { E2E_BASE_URL } from "../helpers/service-urls";
 import { expect, test } from "@playwright/test";
 
 const BASE_URL = E2E_BASE_URL;
+const LOCAL_CHAIN_ID = 31337;
 
 /**
  * Next.js API route tests.
@@ -287,9 +288,10 @@ test.describe("Next.js API routes", () => {
     const account = privateKeyToAccount(ANVIL_ACCOUNTS.account2.privateKey as `0x${string}`);
     const session = await createNotificationPreferencesReadSession(account.address.toLowerCase(), account.signMessage);
 
-    const res = await fetch(`${BASE_URL}/api/watchlist/content?address=${account.address.toLowerCase()}`, {
-      headers: { cookie: session.cookie },
-    });
+    const watchlistUrl = new URL(`${BASE_URL}/api/watchlist/content`);
+    watchlistUrl.searchParams.set("address", account.address.toLowerCase());
+    watchlistUrl.searchParams.set("chainId", String(LOCAL_CHAIN_ID));
+    const res = await fetch(watchlistUrl, { headers: { cookie: session.cookie } });
 
     expect(res.status).toBe(401);
   });
