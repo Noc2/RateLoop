@@ -299,25 +299,34 @@ function mockPonderModules<T>(result: T, additionalResults: unknown[] = []) {
     },
     feedbackBonusPool: {
       asset: "feedbackBonusPool.asset",
+      awardedAmount: "feedbackBonusPool.awardedAmount",
+      awardCount: "feedbackBonusPool.awardCount",
       awardDeadline: "feedbackBonusPool.awardDeadline",
       awarder: "feedbackBonusPool.awarder",
       contentId: "feedbackBonusPool.contentId",
       feedbackClosesAt: "feedbackBonusPool.feedbackClosesAt",
+      frontendAwardedAmount: "feedbackBonusPool.frontendAwardedAmount",
       forfeited: "feedbackBonusPool.forfeited",
       forfeitedAmount: "feedbackBonusPool.forfeitedAmount",
       fundedAmount: "feedbackBonusPool.fundedAmount",
       id: "feedbackBonusPool.id",
       remainingAmount: "feedbackBonusPool.remainingAmount",
       roundId: "feedbackBonusPool.roundId",
+      voterAwardedAmount: "feedbackBonusPool.voterAwardedAmount",
     },
     questionRewardPool: {
       asset: "questionRewardPool.asset",
       allocatedAmount: "questionRewardPool.allocatedAmount",
+      bountyEligibilityDataHash: "questionRewardPool.bountyEligibilityDataHash",
       claimedAmount: "questionRewardPool.claimedAmount",
       contentId: "questionRewardPool.contentId",
       createdAt: "questionRewardPool.createdAt",
       bountyClosesAt: "questionRewardPool.bountyClosesAt",
       bountyEligibility: "questionRewardPool.bountyEligibility",
+      bountyStartBy: "questionRewardPool.bountyStartBy",
+      bountyWindowSeconds: "questionRewardPool.bountyWindowSeconds",
+      feedbackClosesAt: "questionRewardPool.feedbackClosesAt",
+      frontendClaimedAmount: "questionRewardPool.frontendClaimedAmount",
       funder: "questionRewardPool.funder",
       funderIdentityKey: "questionRewardPool.funderIdentityKey",
       fundedAmount: "questionRewardPool.fundedAmount",
@@ -329,6 +338,7 @@ function mockPonderModules<T>(result: T, additionalResults: unknown[] = []) {
       requiredSettledRounds: "questionRewardPool.requiredSettledRounds",
       startRoundId: "questionRewardPool.startRoundId",
       unallocatedAmount: "questionRewardPool.unallocatedAmount",
+      voterClaimedAmount: "questionRewardPool.voterClaimedAmount",
     },
     questionBundleClaim: {
       amount: "questionBundleClaim.amount",
@@ -544,6 +554,53 @@ afterEach(() => {
   vi.resetModules();
   vi.restoreAllMocks();
   vi.clearAllMocks();
+});
+
+describe("shared API helpers", () => {
+  it("keeps feedback bonus close time distinct from award deadline", async () => {
+    const { db } = mockPonderModules(
+      [],
+      [
+        [
+          {
+            contentId: 1n,
+            asset: 1,
+            poolCount: 1,
+            activePoolCount: 1,
+            expiredPoolCount: 0,
+            totalFundedAmount: 1_000_000n,
+            totalRemainingAmount: 1_000_000n,
+            activeRemainingAmount: 1_000_000n,
+            expiredRemainingAmount: 0n,
+            totalAwardedAmount: 0n,
+            totalVoterAwardedAmount: 0n,
+            totalFrontendAwardedAmount: 0n,
+            totalForfeitedAmount: 0n,
+            awardCount: 0,
+            nextFeedbackAwardDeadline: 220n,
+            nextFeedbackClosesAt: 150n,
+          },
+        ],
+        [],
+        [],
+      ],
+    );
+    const { attachOpenRoundSummary } = await import("../src/api/shared.js");
+
+    const [item] = await attachOpenRoundSummary(
+      [{ id: 1n, title: "Feedback question", url: "https://example.com" }],
+      100n,
+    );
+
+    const feedbackBonusSelect = db.select.mock.calls[1]?.[0] as
+      | Record<string, unknown>
+      | undefined;
+    expect(
+      serializeExpression(feedbackBonusSelect?.nextFeedbackClosesAt),
+    ).toContain("feedbackBonusPool.feedbackClosesAt");
+    expect(item?.feedbackBonusSummary.nextFeedbackClosesAt).toBe(150n);
+    expect(item?.feedbackBonusSummary.nextFeedbackAwardDeadline).toBe(220n);
+  });
 });
 
 function mockSharedModule() {

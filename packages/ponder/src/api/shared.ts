@@ -272,7 +272,7 @@ export async function attachOpenRoundSummary<T extends { id: bigint }>(
       totalForfeitedAmount: sql<bigint>`coalesce(sum(${feedbackBonusPool.forfeitedAmount}), 0)`,
       awardCount: sql<number>`coalesce(sum(${feedbackBonusPool.awardCount}), 0)`,
       nextFeedbackAwardDeadline: sql<bigint | null>`min(case when ${feedbackBonusPool.forfeited} = false and ${feedbackBonusPool.remainingAmount} > 0 and ${feedbackBonusPool.awardDeadline} >= ${nowSeconds} then ${feedbackBonusPool.awardDeadline} else null end)`,
-      nextFeedbackClosesAt: sql<bigint | null>`min(case when ${feedbackBonusPool.forfeited} = false and ${feedbackBonusPool.remainingAmount} > 0 and ${feedbackBonusPool.awardDeadline} >= ${nowSeconds} then ${feedbackBonusPool.awardDeadline} else null end)`,
+      nextFeedbackClosesAt: sql<bigint | null>`min(case when ${feedbackBonusPool.forfeited} = false and ${feedbackBonusPool.remainingAmount} > 0 and ${feedbackBonusPool.feedbackClosesAt} > ${nowSeconds} then ${feedbackBonusPool.feedbackClosesAt} else null end)`,
     })
     .from(feedbackBonusPool)
     .where(inArray(feedbackBonusPool.contentId, contentIds))
@@ -597,11 +597,11 @@ function formatFeedbackBonusSummaryRows(rows: FeedbackBonusSummaryRow[]) {
     awardCount: rows.reduce((sum, row) => sum + toNumberValue(row.awardCount), 0),
     hasActiveFeedbackBonus: activePoolCount > 0,
     nextFeedbackAwardDeadline: rows.reduce(
-      (next, row) => minNullableTimestamp(next, row.nextFeedbackAwardDeadline ?? row.nextFeedbackClosesAt),
+      (next, row) => minNullableTimestamp(next, row.nextFeedbackAwardDeadline ?? null),
       null as bigint | null,
     ),
     nextFeedbackClosesAt: rows.reduce(
-      (next, row) => minNullableTimestamp(next, row.nextFeedbackAwardDeadline ?? row.nextFeedbackClosesAt),
+      (next, row) => minNullableTimestamp(next, row.nextFeedbackClosesAt),
       null as bigint | null,
     ),
   };
