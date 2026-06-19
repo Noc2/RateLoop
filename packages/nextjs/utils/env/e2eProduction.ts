@@ -5,7 +5,15 @@ type E2EProductionEnv = {
 
 const LOCALHOST_HOSTNAMES = new Set(["localhost", "127.0.0.1", "::1"]);
 
-export function isLocalE2EProductionBuildEnabled(env: E2EProductionEnv = process.env as E2EProductionEnv): boolean {
+function readStaticE2EProductionEnv(): E2EProductionEnv {
+  // Next inlines browser env only for static process.env.NEXT_PUBLIC_* reads.
+  return {
+    RATELOOP_E2E_PRODUCTION_BUILD: process.env.RATELOOP_E2E_PRODUCTION_BUILD,
+    NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD: process.env.NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD,
+  };
+}
+
+export function isLocalE2EProductionBuildEnabled(env: E2EProductionEnv = readStaticE2EProductionEnv()): boolean {
   return env.RATELOOP_E2E_PRODUCTION_BUILD === "true" || env.NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD === "true";
 }
 

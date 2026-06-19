@@ -22,6 +22,30 @@ test("enables local production-style E2E from the public client flag", () => {
   );
 });
 
+test("reads the default local production-style E2E flag from static process env", () => {
+  const previousServerFlag = process.env.RATELOOP_E2E_PRODUCTION_BUILD;
+  const previousPublicFlag = process.env.NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD;
+
+  try {
+    delete process.env.RATELOOP_E2E_PRODUCTION_BUILD;
+    process.env.NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD = "true";
+
+    assert.equal(isLocalE2EProductionBuildEnabled(), true);
+  } finally {
+    if (previousServerFlag === undefined) {
+      delete process.env.RATELOOP_E2E_PRODUCTION_BUILD;
+    } else {
+      process.env.RATELOOP_E2E_PRODUCTION_BUILD = previousServerFlag;
+    }
+
+    if (previousPublicFlag === undefined) {
+      delete process.env.NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD;
+    } else {
+      process.env.NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD = previousPublicFlag;
+    }
+  }
+});
+
 test("stays disabled when neither E2E opt-in flag is set", () => {
   assert.equal(
     isLocalE2EProductionBuildEnabled({
