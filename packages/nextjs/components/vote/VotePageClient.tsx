@@ -729,6 +729,7 @@ const HomeInner = () => {
     isOpen: boolean;
     initialIsUp: boolean;
     contentId: bigint;
+    chainId?: number | null;
     questionTitle: string;
     categoryId: bigint;
     currentRating: number | null;
@@ -745,6 +746,7 @@ const HomeInner = () => {
     isOpen: false,
     initialIsUp: true,
     contentId: 0n,
+    chainId: null,
     questionTitle: "",
     categoryId: 0n,
     currentRating: null,
@@ -1309,6 +1311,7 @@ const HomeInner = () => {
         isOpen: true,
         initialIsUp: isUp,
         contentId: item.id,
+        chainId: item.chainId ?? null,
         questionTitle: item.question?.trim() || item.title,
         categoryId: item.categoryId,
         currentRating: getVisibleContentRating(item),
@@ -1357,6 +1360,7 @@ const HomeInner = () => {
         isOpen: true,
         initialIsUp: true,
         contentId: 1n,
+        chainId: null,
         questionTitle: "Responsive layout check",
         categoryId: 1n,
         currentRating: 64,
@@ -2178,6 +2182,7 @@ const HomeInner = () => {
         <StakeSelector
           isOpen={stakeModal.isOpen}
           contentId={stakeModal.contentId}
+          chainId={stakeModal.chainId}
           questionTitle={stakeModal.questionTitle}
           categoryId={stakeModal.categoryId}
           currentRating={stakeModal.currentRating}

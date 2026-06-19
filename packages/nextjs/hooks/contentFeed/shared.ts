@@ -56,6 +56,9 @@ export type RewardPoolDisplayCurrency = "LREP" | "USD" | "MIXED";
 
 export interface ContentItem {
   id: bigint;
+  chainId?: number | null;
+  contentRegistryAddress?: string | null;
+  deploymentKey?: string | null;
   url: string;
   media: ContentMediaItem[];
   contextAccess?: "public" | "gated" | string;
@@ -360,6 +363,9 @@ export function getInactiveContentVotingMessage(status?: ContentStatus): string 
 export function mapContentItem(
   item: {
     id: string;
+    chainId?: number | string | null;
+    contentRegistryAddress?: string | null;
+    deploymentKey?: string | null;
     url?: string | null;
     media?: Array<{
       index?: number;
@@ -595,6 +601,7 @@ export function mapContentItem(
       : undefined;
   const ratingSettledRounds = Math.max(0, item.ratingSettledRounds ?? mappedOpenRound?.settledRounds ?? 0);
   const displayedRating = item.rating;
+  const chainId = Number(item.chainId);
   const url = item.url ?? "";
   const media = (item.media ?? [])
     .filter(mediaItem => mediaItem.url)
@@ -608,6 +615,9 @@ export function mapContentItem(
 
   return {
     id: BigInt(item.id),
+    chainId: Number.isSafeInteger(chainId) && chainId > 0 ? chainId : null,
+    contentRegistryAddress: item.contentRegistryAddress ?? null,
+    deploymentKey: item.deploymentKey ?? null,
     url,
     media: media.length > 0 ? media : buildFallbackMediaItems(url),
     contextAccess: item.contextAccess ?? "public",

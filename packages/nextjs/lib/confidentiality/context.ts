@@ -33,7 +33,7 @@ import {
   confidentialityTermsAcceptances,
   questionConfidentiality,
 } from "~~/lib/db/schema";
-import { getPrimaryServerTargetNetwork, getServerRpcOverrides } from "~~/lib/env/server";
+import { getServerRpcOverrides, getServerTargetNetworkById } from "~~/lib/env/server";
 import { resolveContentDeploymentScope } from "~~/lib/protocolDeployment";
 import { isValidWalletAddress, normalizeWalletAddress } from "~~/lib/watchlist/contentWatch";
 import { ponderApi } from "~~/services/ponder/client";
@@ -168,14 +168,18 @@ function normalizeDeploymentAddress(value: unknown): `0x${string}` | null {
 }
 
 function normalizeDeploymentChainId(value: unknown) {
-  return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : null;
+  const parsed =
+    typeof value === "number"
+      ? value
+      : typeof value === "string" && /^\d+$/.test(value.trim())
+        ? Number(value.trim())
+        : Number.NaN;
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
-export function resolveCurrentConfidentialityDeploymentScope(): ConfidentialityDeploymentScope | null {
-  const targetNetwork = getPrimaryServerTargetNetwork();
-  if (!targetNetwork) return null;
-  const scope = resolveContentDeploymentScope(targetNetwork.id);
-  if (!scope) return null;
+function toConfidentialityDeploymentScope(
+  scope: NonNullable<ReturnType<typeof resolveContentDeploymentScope>>,
+): ConfidentialityDeploymentScope {
   return {
     chainId: scope.chainId,
     contentRegistryAddress: scope.contentRegistryAddress,
@@ -183,21 +187,37 @@ export function resolveCurrentConfidentialityDeploymentScope(): ConfidentialityD
   };
 }
 
-function resolveConfidentialityDeploymentScope(
+function getConfiguredConfidentialityDeploymentScopes(): ConfidentialityDeploymentScope[] {
+  return Object.keys(deployedContracts as unknown as DeployedContractsMap)
+    .map(chainId => Number(chainId))
+    .filter(chainId => Number.isSafeInteger(chainId) && chainId > 0 && Boolean(getServerTargetNetworkById(chainId)))
+    .map(chainId => resolveContentDeploymentScope(chainId))
+    .filter((scope): scope is NonNullable<ReturnType<typeof resolveContentDeploymentScope>> => Boolean(scope))
+    .map(toConfidentialityDeploymentScope);
+}
+
+export function resolveCurrentConfidentialityDeploymentScope(): ConfidentialityDeploymentScope | null {
+  const scopes = getConfiguredConfidentialityDeploymentScopes();
+  return scopes.length === 1 ? scopes[0] : null;
+}
+
+export function resolveConfidentialityDeploymentScope(
   input: ConfidentialityDeploymentScopeInput = {},
 ): ConfidentialityDeploymentScope | null {
+  const chainId = normalizeDeploymentChainId(input.chainId);
+  const contentRegistryAddress = normalizeDeploymentAddress(input.contentRegistryAddress);
   const deploymentKey = normalizeDeploymentKey(input.deploymentKey);
-  if (deploymentKey) {
-    const currentScope = resolveCurrentConfidentialityDeploymentScope();
-    const matchesCurrentScope = currentScope?.deploymentKey === deploymentKey;
-    return {
-      chainId: normalizeDeploymentChainId(input.chainId) ?? (matchesCurrentScope ? currentScope.chainId : null),
-      contentRegistryAddress:
-        normalizeDeploymentAddress(input.contentRegistryAddress) ??
-        (matchesCurrentScope ? currentScope.contentRegistryAddress : null),
-      deploymentKey,
-    };
+
+  if (chainId || contentRegistryAddress || deploymentKey) {
+    const matchingScopes = getConfiguredConfidentialityDeploymentScopes().filter(scope => {
+      if (chainId && scope.chainId !== chainId) return false;
+      if (contentRegistryAddress && scope.contentRegistryAddress !== contentRegistryAddress) return false;
+      if (deploymentKey && scope.deploymentKey !== deploymentKey) return false;
+      return true;
+    });
+    return matchingScopes.length === 1 ? matchingScopes[0] : null;
   }
+
   return resolveCurrentConfidentialityDeploymentScope();
 }
 
@@ -287,7 +307,13 @@ export function normalizeConfidentialityTermsInput(
   }
   const contentId = normalizeContentId(body.contentId);
   if (!contentId) return { ok: false, error: "Invalid content id" };
-  const deploymentScope = resolveConfidentialityDeploymentScope(options);
+  const deploymentScope = resolveConfidentialityDeploymentScope({
+    chainId: options.chainId ?? normalizeDeploymentChainId(body.chainId),
+    contentRegistryAddress:
+      options.contentRegistryAddress ??
+      (typeof body.contentRegistryAddress === "string" ? body.contentRegistryAddress : null),
+    deploymentKey: options.deploymentKey ?? (typeof body.deploymentKey === "string" ? body.deploymentKey : null),
+  });
   if (!deploymentScope) return { ok: false, error: "Confidentiality deployment is not configured" };
 
   const termsVersion =
@@ -581,9 +607,18 @@ function normalizeBytes32OrNull(value: unknown): `0x${string}` | null {
   return isBytes32Hex(value) && value !== zeroHash ? (value.toLowerCase() as `0x${string}`) : null;
 }
 
-function getContractsForPrimaryServerNetwork() {
-  const targetNetwork = getPrimaryServerTargetNetwork();
+function getContractsForConfidentialityDeploymentScope(deploymentScope: ConfidentialityDeploymentScope) {
+  const targetNetwork =
+    typeof deploymentScope.chainId === "number" ? getServerTargetNetworkById(deploymentScope.chainId) : null;
   if (!targetNetwork) return null;
+  const contentScope = resolveContentDeploymentScope(targetNetwork.id);
+  if (
+    !contentScope ||
+    contentScope.deploymentKey !== deploymentScope.deploymentKey ||
+    contentScope.contentRegistryAddress !== deploymentScope.contentRegistryAddress
+  ) {
+    return null;
+  }
   const contracts = (deployedContracts as unknown as DeployedContractsMap)[targetNetwork.id];
   return { contracts, targetNetwork };
 }
@@ -623,8 +658,9 @@ function parseResolvedConfidentialityViewer(value: unknown): ResolvedConfidentia
 
 async function defaultResolveViewer(
   walletAddress: `0x${string}`,
+  deploymentScope: ConfidentialityDeploymentScope,
 ): Promise<GateReadResult<ResolvedConfidentialityViewer>> {
-  const context = getContractsForPrimaryServerNetwork();
+  const context = getContractsForConfidentialityDeploymentScope(deploymentScope);
   const raterRegistry = context?.contracts?.RaterRegistry;
   if (!context || !raterRegistry) {
     return { ok: false, error: "Confidentiality identity registry is not configured" };
@@ -644,8 +680,11 @@ async function defaultResolveViewer(
   }
 }
 
-async function defaultIsIdentityKeyBanned(identityKey: `0x${string}`): Promise<GateReadResult<boolean>> {
-  const context = getContractsForPrimaryServerNetwork();
+async function defaultIsIdentityKeyBanned(
+  identityKey: `0x${string}`,
+  deploymentScope: ConfidentialityDeploymentScope,
+): Promise<GateReadResult<boolean>> {
+  const context = getContractsForConfidentialityDeploymentScope(deploymentScope);
   const raterRegistry = context?.contracts?.RaterRegistry;
   if (!context || !raterRegistry) {
     return { ok: false, error: "Confidentiality identity registry is not configured" };
@@ -665,8 +704,10 @@ async function defaultIsIdentityKeyBanned(identityKey: `0x${string}`): Promise<G
   }
 }
 
-async function resolveConfiguredConfidentialityEscrow(): Promise<GateReadResult<Address>> {
-  const context = getContractsForPrimaryServerNetwork();
+async function resolveConfiguredConfidentialityEscrow(
+  deploymentScope: ConfidentialityDeploymentScope,
+): Promise<GateReadResult<Address>> {
+  const context = getContractsForConfidentialityDeploymentScope(deploymentScope);
   const protocolConfig = context?.contracts?.ProtocolConfig;
   if (!context || !protocolConfig) {
     return { ok: false, error: "ProtocolConfig is not configured for confidentiality checks" };
@@ -691,14 +732,15 @@ async function resolveConfiguredConfidentialityEscrow(): Promise<GateReadResult<
 
 async function defaultHasActiveBond(params: {
   contentId: string;
+  deploymentScope: ConfidentialityDeploymentScope;
   identityKey: `0x${string}`;
 }): Promise<GateReadResult<boolean>> {
-  const context = getContractsForPrimaryServerNetwork();
+  const context = getContractsForConfidentialityDeploymentScope(params.deploymentScope);
   if (!context) {
     return { ok: false, error: "Confidentiality bond network is not configured" };
   }
 
-  const escrow = await resolveConfiguredConfidentialityEscrow();
+  const escrow = await resolveConfiguredConfidentialityEscrow(params.deploymentScope);
   if (!escrow.ok) return escrow;
 
   try {
@@ -715,21 +757,31 @@ async function defaultHasActiveBond(params: {
   }
 }
 
-async function resolveViewerForGatedContext(walletAddress: `0x${string}`) {
+async function resolveViewerForGatedContext(
+  walletAddress: `0x${string}`,
+  deploymentScope: ConfidentialityDeploymentScope,
+) {
   if (confidentialityGateOverrideForTests) {
     return { ok: true as const, value: await confidentialityGateOverrideForTests.resolveViewer(walletAddress) };
   }
-  return defaultResolveViewer(walletAddress);
+  return defaultResolveViewer(walletAddress, deploymentScope);
 }
 
-async function isIdentityKeyBannedForGatedContext(identityKey: `0x${string}`) {
+async function isIdentityKeyBannedForGatedContext(
+  identityKey: `0x${string}`,
+  deploymentScope: ConfidentialityDeploymentScope,
+) {
   if (confidentialityGateOverrideForTests) {
     return { ok: true as const, value: await confidentialityGateOverrideForTests.isIdentityKeyBanned(identityKey) };
   }
-  return defaultIsIdentityKeyBanned(identityKey);
+  return defaultIsIdentityKeyBanned(identityKey, deploymentScope);
 }
 
-async function hasActiveBondForGatedContext(params: { contentId: string; identityKey: `0x${string}` }) {
+async function hasActiveBondForGatedContext(params: {
+  contentId: string;
+  deploymentScope: ConfidentialityDeploymentScope;
+  identityKey: `0x${string}`;
+}) {
   if (confidentialityGateOverrideForTests) {
     return { ok: true as const, value: await confidentialityGateOverrideForTests.hasActiveBond(params) };
   }
@@ -797,7 +849,7 @@ export async function authorizeGatedContextRequest(
     return { ok: false as const, status: 403, error: "Confidentiality terms acceptance required" };
   }
 
-  const resolvedViewer = await resolveViewerForGatedContext(walletAddress);
+  const resolvedViewer = await resolveViewerForGatedContext(walletAddress, deploymentScope);
   if (!resolvedViewer.ok) {
     return { ok: false as const, status: 503, error: resolvedViewer.error };
   }
@@ -807,7 +859,7 @@ export async function authorizeGatedContextRequest(
     return { ok: false as const, status: 403, error: "Active human credential required" };
   }
 
-  const banned = await isIdentityKeyBannedForGatedContext(viewer.identityKey);
+  const banned = await isIdentityKeyBannedForGatedContext(viewer.identityKey, deploymentScope);
   if (!banned.ok) {
     return { ok: false as const, status: 503, error: banned.error };
   }
@@ -816,7 +868,11 @@ export async function authorizeGatedContextRequest(
   }
 
   if (isPositiveBondAmount(serverPayload.record.bondAmount)) {
-    const bond = await hasActiveBondForGatedContext({ contentId, identityKey: viewer.identityKey });
+    const bond = await hasActiveBondForGatedContext({
+      contentId,
+      deploymentScope,
+      identityKey: viewer.identityKey,
+    });
     if (!bond.ok) {
       return { ok: false as const, status: 503, error: bond.error };
     }
@@ -1092,7 +1148,8 @@ async function publishConfidentialityLogRootAnchor(params: {
     throw new Error("RATELOOP_CONFIDENTIALITY_LOG_ROOT_ANCHOR_PRIVATE_KEY must be a 32-byte hex private key.");
   }
 
-  const context = getContractsForPrimaryServerNetwork();
+  const deploymentScope = resolveCurrentConfidentialityDeploymentScope();
+  const context = deploymentScope ? getContractsForConfidentialityDeploymentScope(deploymentScope) : null;
   const confidentialityEscrow = context?.contracts?.ConfidentialityEscrow;
   if (!context || !confidentialityEscrow) {
     throw new Error("ConfidentialityEscrow is not configured for log-root anchoring.");

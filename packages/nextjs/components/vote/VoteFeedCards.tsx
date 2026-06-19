@@ -432,7 +432,10 @@ function UnlockedContentMediaCarousel({
 }) {
   const privateContext = isPrivateContextMetadata(item);
   const manifestQuery = useGatedContextManifest({
+    chainId: item.chainId,
     contentId: item.id,
+    contentRegistryAddress: item.contentRegistryAddress,
+    deploymentKey: item.deploymentKey,
     enabled: privateContext && Boolean(walletAddress),
     walletAddress,
   });
@@ -538,7 +541,10 @@ function GatedQuestionDescription({
 }) {
   const privateContext = isPrivateContextMetadata(item);
   const manifestQuery = useGatedContextManifest({
+    chainId: item.chainId,
     contentId: item.id,
+    contentRegistryAddress: item.contentRegistryAddress,
+    deploymentKey: item.deploymentKey,
     enabled: privateContext && Boolean(walletAddress),
     walletAddress,
   });

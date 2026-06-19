@@ -17,6 +17,14 @@ export function useConfidentialContextAccessBlocker(item: ContentItem | null | u
   const gated = isPrivateContextMetadata(item ?? null);
   const isOwnContent = Boolean(item?.isOwnContent);
   const contentId = item?.id ?? 0n;
+  const confidentialityScope = useMemo(
+    () => ({
+      chainId: item?.chainId ?? undefined,
+      contentRegistryAddress: item?.contentRegistryAddress ?? undefined,
+      deploymentKey: item?.deploymentKey ?? undefined,
+    }),
+    [item?.chainId, item?.contentRegistryAddress, item?.deploymentKey],
+  );
   const bondRequirement = useMemo(
     () => getConfidentialityBondRequirement(item?.confidentiality),
     [item?.confidentiality],
@@ -36,7 +44,7 @@ export function useConfidentialContextAccessBlocker(item: ContentItem | null | u
 
     let cancelled = false;
     setIsCheckingTerms(true);
-    fetchConfidentialityTermsStatus(address, contentId)
+    fetchConfidentialityTermsStatus(address, contentId, confidentialityScope)
       .then(status => {
         if (!cancelled) {
           setAccepted(status.accepted);
@@ -56,14 +64,21 @@ export function useConfidentialContextAccessBlocker(item: ContentItem | null | u
     return () => {
       cancelled = true;
     };
-  }, [address, contentId, gated, isOwnContent]);
+  }, [address, confidentialityScope, contentId, gated, isOwnContent]);
 
   useEffect(() => {
     if (!gated || isOwnContent || typeof window === "undefined") return;
 
     const handleAccepted = (event: Event) => {
       const detail = event instanceof CustomEvent ? event.detail : null;
-      if (detail?.contentId === contentId.toString()) {
+      const detailRecord = detail && typeof detail === "object" ? (detail as Record<string, unknown>) : null;
+      const matchingContent = detailRecord?.contentId === contentId.toString();
+      const matchingDeployment =
+        !item?.deploymentKey ||
+        (typeof detailRecord?.deploymentKey === "string" &&
+          detailRecord.deploymentKey.toLowerCase() === item.deploymentKey.toLowerCase());
+      const matchingChain = typeof item?.chainId !== "number" || detailRecord?.chainId === item.chainId;
+      if (matchingContent && matchingDeployment && matchingChain) {
         setAccepted(true);
         setHasCheckedTerms(true);
       }
@@ -73,7 +88,7 @@ export function useConfidentialContextAccessBlocker(item: ContentItem | null | u
     return () => {
       window.removeEventListener(CONFIDENTIALITY_ACCEPTED_EVENT, handleAccepted);
     };
-  }, [contentId, gated, isOwnContent]);
+  }, [contentId, gated, isOwnContent, item?.chainId, item?.deploymentKey]);
 
   const bond = useConfidentialityBond({
     bondRequirement,

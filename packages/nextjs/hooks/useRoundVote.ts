@@ -139,8 +139,8 @@ function withLocalE2ETlockRuntime(runtime: RoundVoteCommitRuntime): RoundVoteCom
   };
 }
 
-async function hasAcceptedConfidentialityTerms(address: string, contentId: bigint) {
-  const status = await fetchConfidentialityTermsStatus(address, contentId);
+async function hasAcceptedConfidentialityTerms(address: string, contentId: bigint, chainId: number) {
+  const status = await fetchConfidentialityTermsStatus(address, contentId, { chainId });
   return status.accepted;
 }
 
@@ -241,7 +241,7 @@ export function useRoundVote() {
       const bondRequirement = getConfidentialityBondRequirement(confidentiality);
       let hasAcceptedTerms = false;
       try {
-        hasAcceptedTerms = await hasAcceptedConfidentialityTerms(address, contentId);
+        hasAcceptedTerms = await hasAcceptedConfidentialityTerms(address, contentId, targetNetwork.id);
       } catch (termsError) {
         console.warn("[round-vote] failed to check confidentiality terms before commit.", {
           contentId: contentId.toString(),

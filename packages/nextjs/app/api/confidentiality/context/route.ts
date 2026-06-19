@@ -34,7 +34,10 @@ export async function GET(request: NextRequest) {
 
   const normalized = normalizeConfidentialityTermsInput({
     address: address ?? undefined,
+    chainId: request.nextUrl.searchParams.get("chainId") ?? undefined,
     contentId: contentId ?? undefined,
+    contentRegistryAddress: request.nextUrl.searchParams.get("contentRegistryAddress") ?? undefined,
+    deploymentKey: request.nextUrl.searchParams.get("deploymentKey") ?? undefined,
   });
   if (!normalized.ok) {
     return NextResponse.json({ error: normalized.error }, { status: 400 });

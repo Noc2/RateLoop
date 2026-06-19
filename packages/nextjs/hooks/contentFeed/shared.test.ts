@@ -198,6 +198,7 @@ test("mapContentItem marks linked submitter addresses as own content", () => {
 test("mapContentItem preserves private-context metadata for feed gates", () => {
   const item = mapContentItem({
     categoryId: "1",
+    chainId: 8453,
     confidentiality: {
       bondAmount: "0",
       disclosurePolicy: "after_settlement",
@@ -205,8 +206,10 @@ test("mapContentItem preserves private-context metadata for feed gates", () => {
       visibility: "gated",
     },
     contentHash: "hash-private",
+    contentRegistryAddress: "0x1111111111111111111111111111111111111111",
     contextAccess: "gated",
     contextVisibility: "gated",
+    deploymentKey: "8453:0x1111111111111111111111111111111111111111",
     description: "",
     id: "7",
     rating: 50,
@@ -219,6 +222,9 @@ test("mapContentItem preserves private-context metadata for feed gates", () => {
   assert.equal(item.contextAccess, "gated");
   assert.equal(item.contextVisibility, "gated");
   assert.equal(item.confidentiality?.visibility, "gated");
+  assert.equal(item.chainId, 8453);
+  assert.equal(item.contentRegistryAddress, "0x1111111111111111111111111111111111111111");
+  assert.equal(item.deploymentKey, "8453:0x1111111111111111111111111111111111111111");
 });
 
 test("mapContentItem keeps neutral protocol rating hidden until a round settles", () => {

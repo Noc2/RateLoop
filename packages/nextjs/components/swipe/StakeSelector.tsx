@@ -38,6 +38,7 @@ import { notification } from "~~/utils/scaffold-eth";
 interface StakeSelectorProps {
   isOpen: boolean;
   contentId: bigint;
+  chainId?: number | null;
   questionTitle?: string;
   categoryId?: bigint;
   currentRating?: number | null;
@@ -153,6 +154,7 @@ export function getInitialPredictedUpPercent(initialIsUp?: boolean) {
 export function StakeSelector({
   isOpen,
   contentId,
+  chainId,
   questionTitle,
   categoryId,
   currentRating,
@@ -277,7 +279,7 @@ export function StakeSelector({
 
     let cancelled = false;
     setIsCheckingConfidentialTerms(true);
-    fetchConfidentialityTermsStatus(address, contentId)
+    fetchConfidentialityTermsStatus(address, contentId, { chainId })
       .then(status => {
         if (!cancelled) {
           setHasAcceptedConfidentialTerms(status.accepted);
@@ -297,7 +299,7 @@ export function StakeSelector({
     return () => {
       cancelled = true;
     };
-  }, [address, contentId, isOpen, privateContext]);
+  }, [address, chainId, contentId, isOpen, privateContext]);
 
   useEffect(() => {
     if (!isOpen || !bountyRequirement) return;

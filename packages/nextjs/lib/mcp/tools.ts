@@ -122,7 +122,7 @@ import {
   hasConfidentialityTermsAcceptance,
   hashConfidentialityTermsPayload,
   recordConfidentialityTermsAcceptance,
-  resolveCurrentConfidentialityDeploymentScope,
+  resolveConfidentialityDeploymentScope,
 } from "~~/lib/confidentiality/context";
 import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
 import { db } from "~~/lib/db";
@@ -1425,13 +1425,19 @@ function contentContextAccess(content: PonderContentItem): "public" | "gated" {
 }
 
 async function buildConfidentialityTermsInput(params: {
+  chainId?: number | null;
   contentId: string;
+  contentRegistryAddress?: string | null;
+  deploymentKey?: string | null;
   termsVersion?: string;
   walletAddress: Address;
 }) {
   const serverPayload = await buildServerConfidentialityTermsPayload({
     address: params.walletAddress,
+    chainId: params.chainId,
     contentId: params.contentId,
+    contentRegistryAddress: params.contentRegistryAddress,
+    deploymentKey: params.deploymentKey,
     termsVersion: params.termsVersion,
   });
 
@@ -1449,12 +1455,19 @@ function gatedContextFetchUrl(baseUrl: string, walletAddress: Address) {
 }
 
 async function listAuthenticatedGatedContextUrls(params: {
+  chainId?: number | null;
   contentId: string;
+  contentRegistryAddress?: string | null;
+  deploymentKey?: string | null;
   requestUrl?: string;
   walletAddress: Address;
 }) {
   const appBaseUrl = toolAppBaseUrl(params.requestUrl);
-  const deploymentScope = resolveCurrentConfidentialityDeploymentScope();
+  const deploymentScope = resolveConfidentialityDeploymentScope({
+    chainId: params.chainId,
+    contentRegistryAddress: params.contentRegistryAddress,
+    deploymentKey: params.deploymentKey,
+  });
   if (!deploymentScope) return [];
 
   try {
@@ -1534,13 +1547,19 @@ async function issueGatedContextReadSession(walletAddress: `0x${string}`) {
 }
 
 async function buildGatedContextFetchInfo(params: {
+  chainId?: number | null;
   contentId: string;
+  contentRegistryAddress?: string | null;
+  deploymentKey?: string | null;
   requestUrl?: string;
   signedReadSession?: Awaited<ReturnType<typeof issueGatedContextReadSession>> | null;
   walletAddress: Address;
 }) {
   const urls = await listAuthenticatedGatedContextUrls({
+    chainId: params.chainId,
     contentId: params.contentId,
+    contentRegistryAddress: params.contentRegistryAddress,
+    deploymentKey: params.deploymentKey,
     requestUrl: params.requestUrl,
     walletAddress: params.walletAddress,
   });
@@ -1564,7 +1583,15 @@ async function buildRatingGatedContextInfo(params: {
   requestUrl?: string;
   walletAddress: Address;
 }) {
-  const termsPayload = await buildConfidentialityTermsInput(params);
+  const confidentialityScope = {
+    chainId: params.content.chainId,
+    contentRegistryAddress: params.content.contentRegistryAddress,
+    deploymentKey: params.content.deploymentKey,
+  };
+  const termsPayload = await buildConfidentialityTermsInput({
+    ...params,
+    ...confidentialityScope,
+  });
   const payloadHash = hashConfidentialityTermsPayload(termsPayload);
   let termsAccepted = false;
   try {
@@ -1582,6 +1609,7 @@ async function buildRatingGatedContextInfo(params: {
   return {
     acceptTermsTool: "rateloop_accept_confidentiality_terms",
     fetch: await buildGatedContextFetchInfo({
+      ...confidentialityScope,
       contentId: params.contentId,
       requestUrl: params.requestUrl,
       walletAddress: params.walletAddress,

@@ -176,6 +176,18 @@ function GateCopy({ children, title, variant }: { children: ReactNode; title: st
   );
 }
 
+function confidentialContextEventMatchesItem(detail: unknown, item: ContentItem) {
+  if (!detail || typeof detail !== "object") return false;
+  const record = detail as Record<string, unknown>;
+  if (record.contentId !== item.id.toString()) return false;
+  if (item.deploymentKey) {
+    if (typeof record.deploymentKey !== "string") return false;
+    if (record.deploymentKey.toLowerCase() !== item.deploymentKey.toLowerCase()) return false;
+  }
+  if (typeof item.chainId === "number" && record.chainId !== item.chainId) return false;
+  return true;
+}
+
 export function ConfidentialContextGate({
   children,
   item,
@@ -206,6 +218,14 @@ export function ConfidentialContextGate({
     contentId: item.id,
     enabled: gated && accepted && !isOwnContent,
   });
+  const confidentialityScope = useMemo(
+    () => ({
+      chainId: item.chainId ?? undefined,
+      contentRegistryAddress: item.contentRegistryAddress ?? undefined,
+      deploymentKey: item.deploymentKey ?? undefined,
+    }),
+    [item.chainId, item.contentRegistryAddress, item.deploymentKey],
+  );
   const delegationLink = useThirdwebRaterDelegationLink({
     enabled: gated && accepted && !isOwnContent,
   });
@@ -214,13 +234,13 @@ export function ConfidentialContextGate({
     setAccepted(false);
     setHasReadSession(false);
     setOwnerSessionReady(false);
-  }, [address, item.id]);
+  }, [address, item.id, item.chainId, item.deploymentKey]);
 
   useEffect(() => {
     if (!gated || typeof window === "undefined") return;
     const handleAccepted = (event: Event) => {
       const detail = event instanceof CustomEvent ? event.detail : null;
-      if (detail?.contentId === item.id.toString()) {
+      if (confidentialContextEventMatchesItem(detail, item)) {
         setAccepted(true);
         setHasReadSession(true);
       }
@@ -229,13 +249,13 @@ export function ConfidentialContextGate({
     return () => {
       window.removeEventListener(CONFIDENTIALITY_ACCEPTED_EVENT, handleAccepted);
     };
-  }, [gated, item.id]);
+  }, [gated, item]);
 
   useEffect(() => {
     if (!gated || !address || isOwnContent) return;
     let cancelled = false;
     setIsCheckingTerms(true);
-    fetchConfidentialityTermsStatus(address, item.id)
+    fetchConfidentialityTermsStatus(address, item.id, confidentialityScope)
       .then(status => {
         if (!cancelled) {
           setAccepted(status.accepted);
@@ -249,7 +269,7 @@ export function ConfidentialContextGate({
     return () => {
       cancelled = true;
     };
-  }, [address, gated, isOwnContent, item.id]);
+  }, [address, confidentialityScope, gated, isOwnContent, item.id]);
 
   useEffect(() => {
     if (!gated || !isOwnContent || !address) return;
@@ -277,14 +297,14 @@ export function ConfidentialContextGate({
 
     const handleOwnerSessionConfirmed = (event: Event) => {
       const detail = event instanceof CustomEvent ? event.detail : null;
-      if (detail?.contentId === item.id.toString()) setOwnerSessionReady(true);
+      if (confidentialContextEventMatchesItem(detail, item)) setOwnerSessionReady(true);
     };
 
     window.addEventListener(CONFIDENTIALITY_OWNER_SESSION_CONFIRMED_EVENT, handleOwnerSessionConfirmed);
     return () => {
       window.removeEventListener(CONFIDENTIALITY_OWNER_SESSION_CONFIRMED_EVENT, handleOwnerSessionConfirmed);
     };
-  }, [gated, isOwnContent, item.id]);
+  }, [gated, isOwnContent, item]);
 
   const acceptTerms = async () => {
     if (!address) {
@@ -295,8 +315,11 @@ export function ConfidentialContextGate({
     try {
       const payload = {
         address,
+        chainId: confidentialityScope.chainId,
         contentHash: item.contentHash,
         contentId: item.id.toString(),
+        contentRegistryAddress: confidentialityScope.contentRegistryAddress,
+        deploymentKey: confidentialityScope.deploymentKey,
         detailsHash: item.detailsHash ?? undefined,
         questionMetadataHash: item.questionMetadataHash ?? undefined,
       };
@@ -332,7 +355,11 @@ export function ConfidentialContextGate({
       if (typeof window !== "undefined") {
         window.dispatchEvent(
           new CustomEvent(CONFIDENTIALITY_ACCEPTED_EVENT, {
-            detail: { contentId: item.id.toString() },
+            detail: {
+              chainId: confidentialityScope.chainId,
+              contentId: item.id.toString(),
+              deploymentKey: confidentialityScope.deploymentKey,
+            },
           }),
         );
       }
@@ -355,7 +382,11 @@ export function ConfidentialContextGate({
       if (typeof window !== "undefined") {
         window.dispatchEvent(
           new CustomEvent(CONFIDENTIALITY_OWNER_SESSION_CONFIRMED_EVENT, {
-            detail: { contentId: item.id.toString() },
+            detail: {
+              chainId: confidentialityScope.chainId,
+              contentId: item.id.toString(),
+              deploymentKey: confidentialityScope.deploymentKey,
+            },
           }),
         );
       }

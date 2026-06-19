@@ -113,6 +113,7 @@ export function useContentFeed(voterAddress?: string, options: UseContentFeedOpt
         const eventSubmitter = args.submitter || "";
         return {
           id: args.contentId,
+          chainId: targetNetwork.id,
           url: args.url ?? "",
           media: buildFallbackMediaItems(args.url),
           question: args.title,
@@ -143,7 +144,7 @@ export function useContentFeed(voterAddress?: string, options: UseContentFeedOpt
         };
       })
       .filter((item): item is ContentItem => item !== null);
-  }, [events, ownSubmitterAddressSet]);
+  }, [events, ownSubmitterAddressSet, targetNetwork.id]);
 
   const filteredRpcFeed = useMemo(() => {
     const items = filterModeratedContentItems(
@@ -210,7 +211,13 @@ export function useContentFeed(voterAddress?: string, options: UseContentFeedOpt
           limit: String(limit),
           offset: String(offset),
         });
-        const feed = response.items.map(item => mapContentItem(item, voterAddress, normalizedOwnSubmitterAddresses));
+        const feed = response.items.map(item =>
+          mapContentItem(
+            { ...item, chainId: item.chainId ?? targetNetwork.id },
+            voterAddress,
+            normalizedOwnSubmitterAddresses,
+          ),
+        );
         return {
           feed,
           totalContent: response.total ?? offset + feed.length + (response.hasMore ? 1 : 0),
@@ -219,7 +226,13 @@ export function useContentFeed(voterAddress?: string, options: UseContentFeedOpt
       }
 
       const items = await ponderApi.getAllContent(params);
-      const feed = items.map(item => mapContentItem(item, voterAddress, normalizedOwnSubmitterAddresses));
+      const feed = items.map(item =>
+        mapContentItem(
+          { ...item, chainId: item.chainId ?? targetNetwork.id },
+          voterAddress,
+          normalizedOwnSubmitterAddresses,
+        ),
+      );
       return {
         feed,
         totalContent: feed.length,

@@ -19,7 +19,10 @@ export type GatedContextManifest = {
 };
 
 type UseGatedContextManifestParams = {
+  chainId?: number | null;
   contentId: bigint;
+  contentRegistryAddress?: string | null;
+  deploymentKey?: string | null;
   enabled?: boolean;
   walletAddress?: string;
 };
@@ -29,12 +32,43 @@ async function readError(response: Response) {
   return body?.error || "Private context is not available.";
 }
 
-export function useGatedContextManifest({ contentId, enabled = true, walletAddress }: UseGatedContextManifestParams) {
+function appendScopeParams(
+  params: URLSearchParams,
+  scope: Pick<UseGatedContextManifestParams, "chainId" | "contentRegistryAddress" | "deploymentKey">,
+) {
+  if (typeof scope.chainId === "number" && Number.isSafeInteger(scope.chainId) && scope.chainId > 0) {
+    params.set("chainId", String(scope.chainId));
+  }
+  if (scope.contentRegistryAddress?.trim()) {
+    params.set("contentRegistryAddress", scope.contentRegistryAddress.trim());
+  }
+  if (scope.deploymentKey?.trim()) {
+    params.set("deploymentKey", scope.deploymentKey.trim());
+  }
+}
+
+export function useGatedContextManifest({
+  chainId,
+  contentId,
+  contentRegistryAddress,
+  deploymentKey,
+  enabled = true,
+  walletAddress,
+}: UseGatedContextManifestParams) {
   const contentIdParam = contentId.toString();
   const normalizedWalletAddress = walletAddress?.trim().toLowerCase();
+  const normalizedDeploymentKey = deploymentKey?.trim().toLowerCase() ?? "";
+  const normalizedContentRegistryAddress = contentRegistryAddress?.trim().toLowerCase() ?? "";
 
   return useQuery({
-    queryKey: ["gatedContextManifest", contentIdParam, normalizedWalletAddress ?? ""],
+    queryKey: [
+      "gatedContextManifest",
+      chainId ?? null,
+      normalizedDeploymentKey,
+      normalizedContentRegistryAddress,
+      contentIdParam,
+      normalizedWalletAddress ?? "",
+    ],
     queryFn: async (): Promise<GatedContextManifest> => {
       if (!walletAddress) throw new Error("Wallet address required.");
 
@@ -42,6 +76,7 @@ export function useGatedContextManifest({ contentId, enabled = true, walletAddre
         address: walletAddress,
         contentId: contentIdParam,
       });
+      appendScopeParams(params, { chainId, contentRegistryAddress, deploymentKey });
       const response = await fetch(`/api/confidentiality/context?${params.toString()}`, {
         credentials: "include",
       });

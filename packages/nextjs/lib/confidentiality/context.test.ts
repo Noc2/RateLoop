@@ -9,6 +9,7 @@ const originalNodeEnv = env.NODE_ENV;
 const originalConfidentialitySecret = env.RATELOOP_CONFIDENTIALITY_SECRET;
 const originalLogRootAnchorPrivateKey = env.RATELOOP_CONFIDENTIALITY_LOG_ROOT_ANCHOR_PRIVATE_KEY;
 const originalAppUrl = env.APP_URL;
+const originalTargetNetworks = env.NEXT_PUBLIC_TARGET_NETWORKS;
 
 env.DATABASE_URL = "memory:";
 env.NODE_ENV = "test";
@@ -157,6 +158,30 @@ after(() => {
   restoreEnv("RATELOOP_CONFIDENTIALITY_SECRET", originalConfidentialitySecret);
   restoreEnv("RATELOOP_CONFIDENTIALITY_LOG_ROOT_ANCHOR_PRIVATE_KEY", originalLogRootAnchorPrivateKey);
   restoreEnv("APP_URL", originalAppUrl);
+  restoreEnv("NEXT_PUBLIC_TARGET_NETWORKS", originalTargetNetworks);
+});
+
+test("resolves explicit confidentiality deployment scopes when multiple target networks are configured", () => {
+  const previousTargetNetworks = env.NEXT_PUBLIC_TARGET_NETWORKS;
+  env.NEXT_PUBLIC_TARGET_NETWORKS = "8453,84532";
+  try {
+    assert.equal(confidentiality.resolveCurrentConfidentialityDeploymentScope(), null);
+
+    const baseScope = confidentiality.resolveConfidentialityDeploymentScope({ chainId: 8453 });
+    assert.equal(baseScope?.chainId, 8453);
+    assert.match(baseScope?.deploymentKey ?? "", /^8453:/);
+
+    const baseScopeByKey = confidentiality.resolveConfidentialityDeploymentScope({
+      deploymentKey: baseScope?.deploymentKey,
+    });
+    assert.deepEqual(baseScopeByKey, baseScope);
+
+    const sepoliaScope = confidentiality.resolveConfidentialityDeploymentScope({ chainId: "84532" } as any);
+    assert.equal(sepoliaScope?.chainId, 84532);
+    assert.match(sepoliaScope?.deploymentKey ?? "", /^84532:/);
+  } finally {
+    restoreEnv("NEXT_PUBLIC_TARGET_NETWORKS", previousTargetNetworks);
+  }
 });
 
 test("upserts gated metadata and flips disclosure after settlement", async () => {

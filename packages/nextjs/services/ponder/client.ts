@@ -1,6 +1,6 @@
 import type { RoundState } from "@rateloop/contracts/protocol";
 import type { ProfileSelfReportAudienceContext, TargetAudience } from "@rateloop/node-utils/profileSelfReport";
-import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
+import { resolveContentDeploymentScope, resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 import scaffoldConfig from "~~/scaffold.config";
 import { isLocalE2EProductionBuildEnabled } from "~~/utils/env/e2eProduction";
 import { resolvePonderUrlValue } from "~~/utils/env/ponderUrl";
@@ -298,6 +298,26 @@ function getDefaultExpectedPonderDeploymentScope(): ExpectedPonderDeploymentScop
   return typeof chainId === "number" ? resolveProtocolDeploymentScope(chainId) : null;
 }
 
+function getDefaultExpectedContentDeploymentScope() {
+  const chainId = scaffoldConfig.targetNetworks[0]?.id;
+  return typeof chainId === "number" ? resolveContentDeploymentScope(chainId) : null;
+}
+
+function withDefaultContentDeploymentScope<T extends PonderContentItem>(item: T): T {
+  const deployment = getDefaultExpectedContentDeploymentScope();
+  if (!deployment) return item;
+  return {
+    ...item,
+    chainId: item.chainId ?? deployment.chainId,
+    contentRegistryAddress: item.contentRegistryAddress ?? deployment.contentRegistryAddress,
+    deploymentKey: item.deploymentKey ?? deployment.deploymentKey,
+  };
+}
+
+function withDefaultContentDeploymentScopes<T extends PonderContentItem>(items: T[]): T[] {
+  return items.map(withDefaultContentDeploymentScope);
+}
+
 function getExpectedPonderDeploymentScope(deploymentKey?: string | null): ExpectedPonderDeploymentScope | null {
   const explicitDeploymentKey = normalizeDeploymentKey(deploymentKey);
   return explicitDeploymentKey ? { deploymentKey: explicitDeploymentKey } : getDefaultExpectedPonderDeploymentScope();
@@ -558,7 +578,10 @@ async function ponderPost<T>(
 
 export interface PonderContentItem {
   id: string; // bigint serialized as string
+  chainId?: number;
   contentId?: string;
+  contentRegistryAddress?: string;
+  deploymentKey?: string;
   question?: string;
   link?: string | null;
   submitter: string;
@@ -1563,12 +1586,16 @@ async function getAllPages<TItem>(
 }
 
 export const ponderApi = {
-  getContent(params?: PonderContentQuery) {
-    return ponderGet<PonderContentResponse>("/content", params);
+  async getContent(params?: PonderContentQuery) {
+    const response = await ponderGet<PonderContentResponse>("/content", params);
+    return {
+      ...response,
+      items: withDefaultContentDeploymentScopes(response.items),
+    };
   },
 
-  getContentById(id: string, options?: { includeTargetAudience?: boolean }) {
-    return ponderGet<{
+  async getContentById(id: string, options?: { includeTargetAudience?: boolean }) {
+    const response = await ponderGet<{
       audienceContext: ProfileSelfReportAudienceContext;
       content: PonderContentItem;
       rounds: any[];
@@ -1576,6 +1603,10 @@ export const ponderApi = {
     }>(`/content/${id}`, {
       includeTargetAudience: options?.includeTargetAudience ? "1" : undefined,
     });
+    return {
+      ...response,
+      content: withDefaultContentDeploymentScope(response.content),
+    };
   },
 
   syncQuestionMetadata(metadata: PonderQuestionMetadataItem[], options?: { deploymentKey?: string | null }) {

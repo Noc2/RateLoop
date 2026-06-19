@@ -61,7 +61,10 @@ export async function GET(request: NextRequest) {
 
   const normalized = normalizeConfidentialityTermsInput({
     address: address ?? undefined,
+    chainId: request.nextUrl.searchParams.get("chainId") ?? undefined,
     contentId: contentId ?? undefined,
+    contentRegistryAddress: request.nextUrl.searchParams.get("contentRegistryAddress") ?? undefined,
+    deploymentKey: request.nextUrl.searchParams.get("deploymentKey") ?? undefined,
   });
   if (!normalized.ok) {
     return NextResponse.json({ error: normalized.error }, { status: 400 });
@@ -69,7 +72,10 @@ export async function GET(request: NextRequest) {
 
   const serverPayload = await buildServerConfidentialityTermsPayload({
     address: normalized.payload.normalizedAddress,
+    chainId: request.nextUrl.searchParams.get("chainId") ?? undefined,
     contentId: normalized.payload.contentId,
+    contentRegistryAddress: request.nextUrl.searchParams.get("contentRegistryAddress") ?? undefined,
+    deploymentKey: normalized.payload.deploymentKey,
   });
   if (!serverPayload.ok) {
     return NextResponse.json({ error: serverPayload.error }, { status: serverPayload.status });
