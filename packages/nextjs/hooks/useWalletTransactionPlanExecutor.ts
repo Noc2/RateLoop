@@ -100,7 +100,7 @@ export function useWalletTransactionPlanExecutor() {
               })),
               chainId: options.chainId,
               connector,
-              forceAtomic: options.requiresOrderedExecution ?? true,
+              forceAtomic: true,
               pollingInterval: 1_000,
               status: isSuccessfulCallsStatus,
               throwOnFailure: true,
