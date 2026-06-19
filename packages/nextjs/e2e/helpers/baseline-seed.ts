@@ -16,7 +16,7 @@ import { E2E_RPC_URL } from "./service-urls";
 
 const SUBMIT_STAKE = BigInt(10e6);
 const VOTE_STAKE = BigInt(5e6);
-const DEFAULT_EPOCH_DURATION_SECONDS = 20 * 60;
+const DEFAULT_EPOCH_DURATION_SECONDS = 2 * 60 * 60;
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const BASELINE_SETTLED_CONTENT_TITLE = "Should this support agent approve the refund?";
 const CATEGORY_REGISTRY_ABI = [
