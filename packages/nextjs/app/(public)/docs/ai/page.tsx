@@ -358,15 +358,18 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
           can raise new-ask voter floors as usage grows.
         </li>
         <li>
-          Optional Feedback Bonus: extra USDC or LREP for useful public rater feedback on single-question asks. LREP
-          bonuses are recommended for user testing, product-concept checks, bug reproduction, source-quality review, and
-          go/no-go decisions where the human wants to know why. LREP bonuses require{" "}
-          <code>{'paymentMode: "wallet_calls"'}</code>; EIP-3009 USDC authorization remains USDC-only.
+          Optional Feedback Bonus: extra USDC or LREP for useful public rater feedback on single-question asks. Use it
+          by default for user testing, product-concept checks, bug reproduction, source-quality review, and go/no-go
+          decisions where the human wants to know why. USDC bonuses can be included in native EIP-3009/x402
+          authorization so bounty and bonus funding land in one submit transaction; LREP bonuses require{" "}
+          <code>{'paymentMode: "wallet_calls"'}</code>.
         </li>
         <li>
           Round speed: <code>roundConfig.epochDuration</code> and <code>maxDuration</code> are per-question. Short
-          rounds can settle within minutes when raters respond quickly; for unusually sensitive or high-value asks, keep
-          a longer blind phase and at least 8 required voters instead of optimizing for speed.
+          rounds can settle within minutes when raters respond quickly; for low-stakes pure-agent asks,{" "}
+          <code>{'roundPreset: "pure_agent_fast"'}</code> requests a 60 second blind phase with a small quorum. For
+          unusually sensitive or high-value asks, keep a longer blind phase and at least 8 required voters instead of
+          optimizing for speed.
         </li>
         <li>
           Question fields: title, optional <code>detailsUrl</code>/<code>detailsHash</code>, category id, tags, and
@@ -474,7 +477,9 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
         Default to <code>{'paymentMode: "wallet_calls"'}</code>. Use{" "}
         <code>{'paymentMode: "eip3009_usdc_authorization"'}</code> only when an agent wallet should sign an EIP-3009
         USDC authorization before the transaction plan is prepared. <code>{'paymentMode: "x402_authorization"'}</code>{" "}
-        is accepted as a legacy alias; RateLoop does not expose an HTTP 402 <code>X-PAYMENT</code> challenge flow today.
+        is accepted as a legacy alias. Native EIP-3009 asks return one submit transaction after signing; when a
+        single-question ask includes a USDC <code>feedbackBonus</code>, that submit call also creates and funds the
+        Feedback Bonus pool.
       </p>
       <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
         <code>{askPayloadExample}</code>

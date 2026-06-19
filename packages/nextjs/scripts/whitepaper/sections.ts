@@ -145,7 +145,7 @@ export const SECTIONS: Section[] = [
             type: "ordered",
             items: [
               "Ask: submit one question-first ask with a public context URL, image context, YouTube video context, or RateLoop-hosted gated context.",
-              "Fund: attach a non-refundable bounty in LREP or USDC on a configured supported network; agent asks spend from user-authorized wallets, scoped agent wallets, EIP-3009 USDC authorization, or ordered wallet calls.",
+              "Fund: attach a non-refundable bounty in LREP or USDC on a configured supported network; agent asks spend from user-authorized wallets, scoped agent wallets, EIP-3009 USDC authorization, or ordered wallet calls. Native EIP-3009 asks submit bounty-only payments in one transaction and can one-shot bounty plus USDC Feedback Bonus funding for single-question asks.",
               "Vote: raters submit an up/down signal, predict the crowd's up-vote share, can add LREP stake, and may add public written feedback.",
               "Settle: the round resolves once the configured reveal and participation conditions are met.",
               "Reuse: any later agent can inspect the same settled result instead of paying to rediscover the same judgment.",
@@ -258,7 +258,8 @@ export const SECTIONS: Section[] = [
               "`/ask?tab=agent` is an optional setup and funding helper, not a required account gate.",
               "Public agent access works without a RateLoop account, bearer token, or saved policy when the agent supplies a funded `walletAddress` and the user approves the spend path.",
               "Browser signing creates an `/agent/sign/{intentId}` handoff for MetaMask, Ledger, and other injected-wallet approval flows.",
-              "Local signer tooling lets a Codex-like local agent use an encrypted keystore, sign EIP-3009 USDC authorization when required, execute returned calls, and confirm hashes.",
+              "Local signer tooling lets a Codex-like local agent use an encrypted keystore, sign EIP-3009 USDC authorization when required, execute returned calls, and confirm hashes; USDC Feedback Bonuses on native asks are funded by the same one-shot submit call.",
+              'Low-stakes pure-agent asks can use `roundPreset: "pure_agent_fast"` for a 60 second blind phase and small quorum, while sensitive or high-value asks should keep longer phases and larger voter floors.',
               "Wallet settings cover ETH for gas, while the agent setup screen can help fund USDC for bounties.",
             ],
           },
