@@ -17,7 +17,7 @@ import { DOCS_AI_ROUTE } from "~~/constants/routes";
 import { useRateLoopSwitchNetwork } from "~~/hooks/useRateLoopSwitchNetwork";
 import { useWalletTransactionPlanExecutor } from "~~/hooks/useWalletTransactionPlanExecutor";
 import {
-  readBrowserSigningBountyAmount,
+  readBrowserSigningExpectedX402Amount,
   validateBrowserX402AuthorizationRequest,
 } from "~~/lib/agent/browserSigningValidation";
 import { getConfiguredX402QuestionSubmitterAddress, getDefaultUsdcAddress } from "~~/lib/questionRewardPools";
@@ -292,7 +292,7 @@ export function BrowserSigningPage({ intentId }: { intentId: string }) {
           throw new Error("Cannot validate x402 authorization without a configured RateLoop x402 submitter.");
         }
         const { authorization, typedData } = validateBrowserX402AuthorizationRequest({
-          expectedAmount: readBrowserSigningBountyAmount(intent.requestBody),
+          expectedAmount: readBrowserSigningExpectedX402Amount(intent.requestBody),
           expectedChainId: intent.chainId,
           expectedSubmitterAddress,
           expectedUsdcAddress,

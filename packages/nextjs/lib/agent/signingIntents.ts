@@ -256,11 +256,16 @@ function signingIntentPrepareExtras(body: JsonObject): JsonObject {
   return extras;
 }
 
-function hasPreparedSigningArtifacts(intent: AgentSigningIntentRecord) {
+function hasPreparedSigningArtifacts(
+  intent: AgentSigningIntentRecord,
+  params: { paymentAuthorization?: unknown } = {},
+) {
+  const hasExecutablePlan = readTransactionPlanFromBody({ transactionPlan: intent.transactionPlan }).calls.length > 0;
   if (intent.paymentMode === "x402_authorization") {
-    return intent.x402AuthorizationRequest !== null;
+    if (hasExecutablePlan) return true;
+    return params.paymentAuthorization === undefined && intent.x402AuthorizationRequest !== null;
   }
-  return readTransactionPlanFromBody({ transactionPlan: intent.transactionPlan }).calls.length > 0;
+  return hasExecutablePlan;
 }
 
 export async function createAgentSigningIntent(params: { appBaseUrl: string; requestBody: unknown; ttlMs?: number }) {
@@ -363,7 +368,7 @@ export async function prepareAgentSigningIntent(params: {
   if (intent.walletAddress && intent.walletAddress.toLowerCase() !== walletAddress.toLowerCase()) {
     throw new McpToolError("Connected wallet does not match this signing intent.", 403);
   }
-  if (intent.status === "prepared" && hasPreparedSigningArtifacts(intent)) {
+  if (intent.status === "prepared" && hasPreparedSigningArtifacts(intent, params)) {
     return signingIntentResponse(intent);
   }
 
@@ -385,7 +390,7 @@ export async function prepareAgentSigningIntent(params: {
     const now = nowDate();
     const prepareError =
       intent.paymentMode === "x402_authorization"
-        ? x402AuthorizationRequest
+        ? x402AuthorizationRequest || calls.length > 0
           ? null
           : "RateLoop ask did not return an x402 authorization request. Review the draft and try again."
         : calls.length > 0

@@ -828,6 +828,123 @@ test("agent signing intent routes create and prepare browser handoff asks", asyn
   assert.equal((readAfterPrepareBody.transactionPlan as { calls: unknown[] }).calls.length, 1);
 });
 
+test("agent signing intent x402 prepare forwards signed authorizations", async () => {
+  let prepareCalls = 0;
+  let forwardedAuthorization: unknown;
+  installAskOverrides({
+    preparePermissionlessNativeX402QuestionSubmissionRequest: async params => {
+      prepareCalls += 1;
+      forwardedAuthorization = params.paymentAuthorization;
+      const payment = {
+        amount: "1000000",
+        asset: "USDC",
+        bountyAmount: "1000000",
+        decimals: 6,
+        spender: "0x0000000000000000000000000000000000000002",
+        tokenAddress: "0x0000000000000000000000000000000000000001",
+      };
+      if (!params.paymentAuthorization) {
+        return {
+          body: {
+            chainId: params.payload.chainId,
+            clientRequestId: params.payload.clientRequestId,
+            operationKey: OPERATION_KEY,
+            payment,
+            paymentMode: "x402_authorization",
+            paymentScheme: "eip3009_usdc_authorization",
+            status: "awaiting_wallet_signature",
+            transactionPlan: null,
+            wallet: { address: params.walletAddress, fundingMode: "x402_authorization" },
+            x402AuthorizationRequest: {
+              authorization: {
+                from: params.walletAddress,
+                nonce: `0x${"3".repeat(64)}`,
+                to: "0x0000000000000000000000000000000000000002",
+                validAfter: "0",
+                validBefore: "1762000000",
+                value: "1000000",
+              },
+              typedData: { primaryType: "ReceiveWithAuthorization" },
+            },
+          },
+          status: 202,
+        };
+      }
+      return {
+        body: {
+          chainId: params.payload.chainId,
+          clientRequestId: params.payload.clientRequestId,
+          operationKey: OPERATION_KEY,
+          payment,
+          paymentMode: "x402_authorization",
+          paymentScheme: "eip3009_usdc_authorization",
+          status: "awaiting_wallet_signature",
+          transactionPlan: {
+            calls: [{ id: "submit-x402-question", to: "0x0000000000000000000000000000000000000002" }],
+            requiresOrderedExecution: true,
+          },
+          wallet: { address: params.walletAddress, fundingMode: "x402_authorization" },
+        },
+        status: 202,
+      };
+    },
+  });
+
+  const createResponse = await signingIntentsRoute.POST(
+    makePublicPost("https://rateloop.ai/api/agent/signing-intents", {
+      request: {
+        ...questionPayload("browser-x402"),
+        maxPaymentAmount: "1500000",
+        paymentMode: "eip3009_usdc_authorization",
+        signatureMode: "browser_link",
+      },
+    }),
+  );
+  const createBody = (await createResponse.json()) as Record<string, unknown>;
+  const intentId = String(createBody.id);
+  const signingUrl = new URL(String(createBody.signingUrl));
+  const token = new URLSearchParams(signingUrl.hash.replace(/^#/, "")).get("token");
+  assert.ok(token);
+
+  const prepareResponse = await signingIntentPrepareRoute.POST(
+    makePublicPost(`https://rateloop.ai/api/agent/signing-intents/${intentId}/prepare`, {
+      token,
+      walletAddress: "0x00000000000000000000000000000000000000aa",
+    }),
+    { params: Promise.resolve({ intentId }) },
+  );
+  const prepareBody = (await prepareResponse.json()) as Record<string, unknown>;
+  assert.equal(prepareResponse.status, 200);
+  assert.equal(prepareBody.transactionPlan, null);
+  const authorizationRequest = prepareBody.x402AuthorizationRequest as {
+    authorization: { value: string };
+  };
+  assert.equal(authorizationRequest.authorization.value, "1000000");
+
+  const paymentAuthorization = {
+    from: "0x00000000000000000000000000000000000000aa",
+    nonce: `0x${"3".repeat(64)}`,
+    signature: `0x${"4".repeat(130)}`,
+    to: "0x0000000000000000000000000000000000000002",
+    validAfter: "0",
+    validBefore: "1762000000",
+    value: "1000000",
+  };
+  const signedPrepareResponse = await signingIntentPrepareRoute.POST(
+    makePublicPost(`https://rateloop.ai/api/agent/signing-intents/${intentId}/prepare`, {
+      paymentAuthorization,
+      token,
+      walletAddress: "0x00000000000000000000000000000000000000aa",
+    }),
+    { params: Promise.resolve({ intentId }) },
+  );
+  const signedPrepareBody = (await signedPrepareResponse.json()) as Record<string, unknown>;
+  assert.equal(signedPrepareResponse.status, 200);
+  assert.equal(prepareCalls, 2);
+  assert.deepEqual(forwardedAuthorization, paymentAuthorization);
+  assert.equal((signedPrepareBody.transactionPlan as { calls: unknown[] }).calls.length, 1);
+});
+
 test("agent signing intent prepare fails when MCP returns an empty transaction plan", async () => {
   installAskOverrides({
     preparePermissionlessWalletQuestionSubmissionRequest: async params => ({

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   readBrowserSigningBountyAmount,
+  readBrowserSigningExpectedX402Amount,
   validateBrowserX402AuthorizationRequest,
 } from "~~/lib/agent/browserSigningValidation";
 
@@ -68,6 +69,22 @@ test("validateBrowserX402AuthorizationRequest accepts exact RateLoop EIP-3009 ty
   assert.equal(result.authorization.value, amount);
   assert.equal(result.typedData.domain.verifyingContract, usdc);
   assert.equal(readBrowserSigningBountyAmount({ bounty: { amount } }), amount);
+  assert.equal(readBrowserSigningExpectedX402Amount({ bounty: { amount } }), amount);
+  assert.equal(
+    readBrowserSigningExpectedX402Amount({
+      bounty: { amount },
+      feedbackBonus: { amount: "500000", asset: "USDC" },
+    }),
+    "2000000",
+  );
+  assert.throws(
+    () =>
+      readBrowserSigningExpectedX402Amount({
+        bounty: { amount },
+        feedbackBonus: { amount: "500000", asset: "LREP" },
+      }),
+    /LREP Feedback Bonuses require wallet_calls/,
+  );
 });
 
 test("validateBrowserX402AuthorizationRequest rejects non-EIP-3009 typed data", () => {
@@ -97,7 +114,7 @@ test("validateBrowserX402AuthorizationRequest rejects wrong contracts and amount
   );
   assert.throws(
     () => validate(authorizationRequest({ authorization: { value: "1500001" }, message: { value: "1500001" } })),
-    /value must equal the requested bounty amount/,
+    /value must equal the requested x402 payment amount/,
   );
   assert.throws(
     () =>

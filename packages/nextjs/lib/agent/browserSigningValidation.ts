@@ -190,6 +190,22 @@ export function readBrowserSigningBountyAmount(requestBody: JsonRecord | null | 
   return normalizeUintString(requestBody.bounty.amount, "bounty.amount");
 }
 
+export function readBrowserSigningExpectedX402Amount(requestBody: JsonRecord | null | undefined) {
+  const bountyAmount = BigInt(readBrowserSigningBountyAmount(requestBody));
+  const feedbackBonus = isRecord(requestBody?.feedbackBonus) ? requestBody.feedbackBonus : null;
+  if (!feedbackBonus) return bountyAmount.toString();
+
+  const rawAsset = typeof feedbackBonus.asset === "string" ? feedbackBonus.asset.trim().toUpperCase() : "USDC";
+  if (rawAsset === "LREP") {
+    throw new Error("LREP Feedback Bonuses require wallet_calls funding mode.");
+  }
+  if (rawAsset !== "USDC") {
+    throw new Error("feedbackBonus.asset must be USDC for x402 authorization.");
+  }
+
+  return (bountyAmount + BigInt(normalizeUintString(feedbackBonus.amount, "feedbackBonus.amount"))).toString();
+}
+
 export function validateBrowserX402AuthorizationRequest(params: {
   expectedAmount: string | bigint | number;
   expectedChainId: number;
@@ -220,7 +236,7 @@ export function validateBrowserX402AuthorizationRequest(params: {
     throw new Error("EIP-3009 authorization.to must be the configured RateLoop submitter.");
   }
   if (authorization.value !== normalizeUintString(params.expectedAmount, "expected EIP-3009 amount")) {
-    throw new Error("EIP-3009 authorization.value must equal the requested bounty amount.");
+    throw new Error("EIP-3009 authorization.value must equal the requested x402 payment amount.");
   }
   if (BigInt(authorization.validBefore) <= BigInt(authorization.validAfter)) {
     throw new Error("EIP-3009 authorization.validBefore must be greater than validAfter.");
