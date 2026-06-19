@@ -102,7 +102,7 @@ after(() => {
 
 test("watchlist session route fails open when the rate limit store is unavailable", async () => {
   const response = await watchlistSessionRoute.GET(
-    makeRequest(`/api/watchlist/content/session?address=${encodeURIComponent(TEST_ADDRESS)}`),
+    makeRequest(`/api/watchlist/content/session?address=${encodeURIComponent(TEST_ADDRESS)}&chainId=${TEST_CHAIN_ID}`),
   );
 
   assert.equal(response.status, 200);

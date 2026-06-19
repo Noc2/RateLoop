@@ -4,11 +4,12 @@ import { RATE_ROUTE } from "~~/constants/routes";
 import { getQuestionConfidentiality, isConfidentialityCurrentlyGated } from "~~/lib/confidentiality/context";
 import { db, dbClient } from "~~/lib/db";
 import { notificationEmailDeliveries, notificationEmailSubscriptions, watchedContent } from "~~/lib/db/schema";
-import { getNotificationDeliverySecret, getOptionalAppUrl } from "~~/lib/env/server";
+import { getNotificationDeliverySecret, getOptionalAppUrl, getPrimaryServerTargetNetwork } from "~~/lib/env/server";
 import { buildRateLoopEmailHtml } from "~~/lib/notifications/emailTemplate";
 import { buildNotificationEmailUnsubscribeUrl } from "~~/lib/notifications/emailUrls";
 import { isResendConfigured, sendResendEmail } from "~~/lib/notifications/resend";
 import { pickSettlingSoonNotification } from "~~/lib/notifications/settlingSoon";
+import { resolveContentDeploymentScope } from "~~/lib/protocolDeployment";
 import { buildAppRelativeUrl } from "~~/lib/url/appRelative";
 import { isPonderAvailable, isPonderConfigured, ponderGet } from "~~/services/ponder/client";
 
@@ -71,6 +72,9 @@ const PRIVATE_CONTEXT_EMAIL_DESCRIPTION =
 interface EmailCandidate {
   walletAddress: string;
   email: string;
+  deploymentKey: string;
+  chainId: number;
+  contentRegistryAddress: `0x${string}`;
   eventKey: string;
   eventType: string;
   contentId?: string;
@@ -159,12 +163,22 @@ async function getActiveSubscriptions(): Promise<DeliverySubscription[]> {
 }
 
 async function getWatchedContentIds(walletAddress: string) {
+  const deployment = getNotificationContentDeployment();
+  if (!deployment) return [];
+
   const rows = await db
     .select({ contentId: watchedContent.contentId })
     .from(watchedContent)
-    .where(eq(watchedContent.walletAddress, walletAddress));
+    .where(
+      and(eq(watchedContent.walletAddress, walletAddress), eq(watchedContent.deploymentKey, deployment.deploymentKey)),
+    );
 
   return rows.map(row => row.contentId);
+}
+
+function getNotificationContentDeployment() {
+  const targetNetwork = getPrimaryServerTargetNetwork();
+  return targetNetwork ? resolveContentDeploymentScope(targetNetwork.id) : null;
 }
 
 async function getNotificationEvents(walletAddress: string): Promise<NotificationEventResponse> {
@@ -174,7 +188,10 @@ async function getNotificationEvents(walletAddress: string): Promise<Notificatio
   });
 }
 
-async function redactGatedNotificationEvents(events: NotificationEventResponse): Promise<NotificationEventResponse> {
+async function redactGatedNotificationEvents(
+  events: NotificationEventResponse,
+  deployment: NonNullable<ReturnType<typeof getNotificationContentDeployment>>,
+): Promise<NotificationEventResponse> {
   const contentIds = [
     ...new Set(
       [
@@ -190,7 +207,7 @@ async function redactGatedNotificationEvents(events: NotificationEventResponse):
   const gatedIds = new Set<string>();
   await Promise.all(
     contentIds.map(async contentId => {
-      const confidentiality = await getQuestionConfidentiality(contentId);
+      const confidentiality = await getQuestionConfidentiality(contentId, deployment);
       if (isConfidentialityCurrentlyGated(confidentiality)) gatedIds.add(contentId);
     }),
   );
@@ -239,6 +256,7 @@ function buildCandidates(
   subscription: DeliverySubscription,
   events: NotificationEventResponse,
   appUrl: string,
+  deployment: NonNullable<ReturnType<typeof getNotificationContentDeployment>>,
 ): EmailCandidate[] {
   const candidates = new Map<string, EmailCandidate>();
   const nowSeconds = Math.floor(Date.now() / 1000);
@@ -246,7 +264,7 @@ function buildCandidates(
   if (subscription.roundResolved) {
     for (const item of events.trackedResolutions) {
       const source = item.source ?? "voted";
-      const eventKey = `round-resolved:${subscription.walletAddress}:${item.contentId}:${item.roundId}`;
+      const eventKey = `${deployment.deploymentKey}:round-resolved:${subscription.walletAddress}:${item.contentId}:${item.roundId}`;
       const bodyPrefix =
         source === "watched"
           ? "A watched round resolved"
@@ -262,6 +280,9 @@ function buildCandidates(
       candidates.set(eventKey, {
         walletAddress: subscription.walletAddress,
         email: subscription.email,
+        deploymentKey: deployment.deploymentKey,
+        chainId: deployment.chainId,
+        contentRegistryAddress: deployment.contentRegistryAddress,
         eventKey,
         eventType: "round_resolved",
         contentId: item.contentId,
@@ -282,10 +303,13 @@ function buildCandidates(
   });
 
   if (settlingSoonSummary) {
-    const eventKey = `settling-${settlingSoonSummary.kind}:${subscription.walletAddress}:${settlingSoonSummary.itemIds.join(",")}`;
+    const eventKey = `${deployment.deploymentKey}:settling-${settlingSoonSummary.kind}:${subscription.walletAddress}:${settlingSoonSummary.itemIds.join(",")}`;
     candidates.set(eventKey, {
       walletAddress: subscription.walletAddress,
       email: subscription.email,
+      deploymentKey: deployment.deploymentKey,
+      chainId: deployment.chainId,
+      contentRegistryAddress: deployment.contentRegistryAddress,
       eventKey,
       eventType: settlingSoonSummary.kind === "hour" ? "settling_soon_hour" : "settling_soon_day",
       contentId: settlingSoonSummary.contentId,
@@ -300,11 +324,14 @@ function buildCandidates(
 
   if (subscription.followedSubmission) {
     for (const item of events.followedSubmissions) {
-      const eventKey = `followed-submission:${subscription.walletAddress}:${item.contentId}:${item.createdAt}`;
+      const eventKey = `${deployment.deploymentKey}:followed-submission:${subscription.walletAddress}:${item.contentId}:${item.createdAt}`;
       const displayName = getDisplayName(item.submitter, item.profileName);
       candidates.set(eventKey, {
         walletAddress: subscription.walletAddress,
         email: subscription.email,
+        deploymentKey: deployment.deploymentKey,
+        chainId: deployment.chainId,
+        contentRegistryAddress: deployment.contentRegistryAddress,
         eventKey,
         eventType: "followed_submission",
         contentId: item.contentId,
@@ -317,12 +344,15 @@ function buildCandidates(
 
   if (subscription.followedResolution) {
     for (const item of events.followedResolutions) {
-      const eventKey = `followed-resolution:${subscription.walletAddress}:${item.contentId}:${item.roundId}:${item.settledAt ?? ""}`;
+      const eventKey = `${deployment.deploymentKey}:followed-resolution:${subscription.walletAddress}:${item.contentId}:${item.roundId}:${item.settledAt ?? ""}`;
       const displayName = getDisplayName(item.voter, item.profileName);
       const action = item.outcome === "won" ? "won" : item.outcome === "lost" ? "lost" : "resolved";
       candidates.set(eventKey, {
         walletAddress: subscription.walletAddress,
         email: subscription.email,
+        deploymentKey: deployment.deploymentKey,
+        chainId: deployment.chainId,
+        contentRegistryAddress: deployment.contentRegistryAddress,
         eventKey,
         eventType: "followed_resolution",
         contentId: item.contentId,
@@ -368,16 +398,22 @@ async function reservePendingDelivery(candidate: EmailCandidate) {
       INSERT INTO notification_email_deliveries (
         wallet_address,
         email,
+        deployment_key,
+        chain_id,
+        content_registry_address,
         event_key,
         event_type,
         content_id,
         status,
         delivered_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(event_key) DO UPDATE SET
         wallet_address = excluded.wallet_address,
         email = excluded.email,
+        deployment_key = excluded.deployment_key,
+        chain_id = excluded.chain_id,
+        content_registry_address = excluded.content_registry_address,
         event_type = excluded.event_type,
         content_id = excluded.content_id,
         status = excluded.status
@@ -387,6 +423,9 @@ async function reservePendingDelivery(candidate: EmailCandidate) {
     args: [
       candidate.walletAddress,
       candidate.email,
+      candidate.deploymentKey,
+      candidate.chainId,
+      candidate.contentRegistryAddress,
       candidate.eventKey,
       candidate.eventType,
       candidate.contentId ?? null,
@@ -472,6 +511,10 @@ async function sendCandidate(candidate: EmailCandidate, appUrl: string) {
 export async function deliverNotificationEmails() {
   await ensureNotificationEmailDeliveriesTable();
   const appUrl = getRequiredNotificationAppUrl();
+  const deployment = getNotificationContentDeployment();
+  if (!deployment) {
+    throw new Error("Notification delivery deployment is not configured");
+  }
 
   const subscriptions = await getActiveSubscriptions();
   const result = {
@@ -485,8 +528,11 @@ export async function deliverNotificationEmails() {
   for (const subscription of subscriptions) {
     let candidates: EmailCandidate[];
     try {
-      const events = await redactGatedNotificationEvents(await getNotificationEvents(subscription.walletAddress));
-      candidates = buildCandidates(subscription, events, appUrl);
+      const events = await redactGatedNotificationEvents(
+        await getNotificationEvents(subscription.walletAddress),
+        deployment,
+      );
+      candidates = buildCandidates(subscription, events, appUrl, deployment);
     } catch (error) {
       console.error("Failed to prepare notification email candidates:", subscription.walletAddress, error);
       result.failed += 1;

@@ -41,6 +41,7 @@ interface UseSignedCollectionConfig<TItem, TId, TExtraReason extends string = ne
   emptyResponse: SignedCollectionResponse<TItem>;
   sessionPath: string;
   collectionPath: string;
+  readSearchParams?: URLSearchParams;
   challengePath: string;
   signMessageAsync: (args: { message: string }) => Promise<`0x${string}`>;
   getItemKey: (item: TItem) => string;
@@ -80,8 +81,11 @@ async function readResponseBody<T>(response: Response, fallbackError: string): P
 async function getSignedCollectionSessionStatus(
   sessionPath: string,
   address: string,
+  readSearchParams?: URLSearchParams,
 ): Promise<SignedCollectionSessionStatus> {
-  const sessionRes = await fetch(`${sessionPath}?address=${encodeURIComponent(address)}`);
+  const searchParams = new URLSearchParams(readSearchParams);
+  searchParams.set("address", address);
+  const sessionRes = await fetch(`${sessionPath}?${searchParams.toString()}`);
   const sessionBody = await readResponseBody<{
     hasSession?: boolean;
     hasReadSession?: boolean;
@@ -97,17 +101,19 @@ async function getSignedCollectionSessionStatus(
 async function readSignedCollection<TItem>(
   config: Pick<
     UseSignedCollectionConfig<TItem, string>,
-    "autoRead" | "collectionPath" | "emptyResponse" | "sessionPath" | "signMessageAsync"
+    "autoRead" | "collectionPath" | "emptyResponse" | "sessionPath" | "signMessageAsync" | "readSearchParams"
   >,
   address: string,
 ): Promise<{
   response: SignedCollectionResponse<TItem>;
   sessionStatus: SignedCollectionSessionStatus;
 }> {
-  const sessionStatus = await getSignedCollectionSessionStatus(config.sessionPath, address);
+  const sessionStatus = await getSignedCollectionSessionStatus(config.sessionPath, address, config.readSearchParams);
 
   if (sessionStatus.hasReadSession) {
-    const response = await fetch(`${config.collectionPath}?address=${encodeURIComponent(address)}`);
+    const searchParams = new URLSearchParams(config.readSearchParams);
+    searchParams.set("address", address);
+    const response = await fetch(`${config.collectionPath}?${searchParams.toString()}`);
     const body = await readResponseBody<Partial<SignedCollectionResponse<TItem>>>(
       response,
       "Failed to fetch collection",
@@ -131,7 +137,9 @@ async function readSignedCollection<TItem>(
 
   await ensurePrivateAccountReadSession(address, config.signMessageAsync);
 
-  const response = await fetch(`${config.collectionPath}?address=${encodeURIComponent(address)}`);
+  const searchParams = new URLSearchParams(config.readSearchParams);
+  searchParams.set("address", address);
+  const response = await fetch(`${config.collectionPath}?${searchParams.toString()}`);
   const body = await readResponseBody<Partial<SignedCollectionResponse<TItem>>>(response, "Failed to fetch collection");
 
   return {
@@ -166,7 +174,7 @@ export function useSignedCollection<TItem, TId, TExtraReason extends string = ne
         return { hasReadSession: false, hasWriteSession: false };
       }
 
-      return getSignedCollectionSessionStatus(config.sessionPath, config.address);
+      return getSignedCollectionSessionStatus(config.sessionPath, config.address, config.readSearchParams);
     },
     enabled: Boolean(config.address),
     staleTime: 30_000,
@@ -288,7 +296,8 @@ export function useSignedCollection<TItem, TId, TExtraReason extends string = ne
         setOptimisticState(normalizedId, !currentlySelected);
         const canUseWriteSession =
           hasWriteSession ||
-          (await getSignedCollectionSessionStatus(config.sessionPath, config.address)).hasWriteSession;
+          (await getSignedCollectionSessionStatus(config.sessionPath, config.address, config.readSearchParams))
+            .hasWriteSession;
         if (canUseWriteSession && !hasWriteSession) {
           setHasWriteSession(true);
         }

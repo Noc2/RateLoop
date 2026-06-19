@@ -30,6 +30,7 @@ const WRITE_RATE_LIMIT = { limit: 20, windowMs: 60_000 };
 type WatchlistWriteBody = {
   address?: string;
   contentId?: string | number | bigint;
+  chainId?: string | number | bigint;
   signature?: `0x${string}`;
   challengeId?: string;
 };
@@ -89,7 +90,13 @@ async function handleWatchlistWrite(
 
     await params.mutate(payload);
     return maybeIssueSignedCollectionWriteSession(
-      NextResponse.json({ ok: true, watched: params.watched, contentId: payload.contentId }),
+      NextResponse.json({
+        ok: true,
+        watched: params.watched,
+        contentId: payload.contentId,
+        chainId: payload.deployment.chainId,
+        deploymentKey: payload.deployment.deploymentKey,
+      }),
       {
         hasWriteSession: writeAccess.hasWriteSession,
         walletAddress: payload.normalizedAddress,
@@ -104,13 +111,17 @@ async function handleWatchlistWrite(
 
 export async function GET(request: NextRequest) {
   const address = request.nextUrl.searchParams.get("address");
+  const chainId = request.nextUrl.searchParams.get("chainId");
   const limited = await checkRateLimit(request, READ_RATE_LIMIT, {
-    extraKeyParts: [typeof address === "string" ? address : undefined],
+    extraKeyParts: [typeof address === "string" ? address : undefined, chainId ?? undefined],
   });
   if (limited) return limited;
 
   try {
-    const normalized = normalizeWatchlistReadInput({ address: typeof address === "string" ? address : undefined });
+    const normalized = normalizeWatchlistReadInput({
+      address: typeof address === "string" ? address : undefined,
+      chainId: chainId ?? undefined,
+    });
     if (!normalized.ok) {
       return NextResponse.json({ error: normalized.error }, { status: 400 });
     }
@@ -125,7 +136,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Signed read required" }, { status: 401 });
     }
 
-    const items = await listWatchedContent(normalized.payload.normalizedAddress);
+    const items = await listWatchedContent(normalized.payload.normalizedAddress, normalized.payload.deployment);
     return NextResponse.json({ items, count: items.length });
   } catch (error) {
     console.error("Error fetching watched content:", error);
@@ -140,7 +151,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await parseJsonBody(request);
     if (!isJsonObjectBody(body)) return jsonBodyErrorResponse(body, "Invalid JSON body");
-    const { address, signature, challengeId } = body as Record<string, unknown> & {
+    const { address, signature, challengeId, chainId } = body as Record<string, unknown> & {
       signature?: `0x${string}`;
       challengeId?: string;
     };
@@ -148,7 +159,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing or invalid fields" }, { status: 400 });
     }
 
-    const normalized = normalizeWatchlistReadInput({ address: typeof address === "string" ? address : undefined });
+    const normalized = normalizeWatchlistReadInput({
+      address: typeof address === "string" ? address : undefined,
+      chainId: typeof chainId === "string" || typeof chainId === "number" ? chainId : undefined,
+    });
     if (!normalized.ok) {
       return NextResponse.json({ error: normalized.error }, { status: 400 });
     }
@@ -173,7 +187,7 @@ export async function POST(request: NextRequest) {
       return challengeFailure;
     }
 
-    const items = await listWatchedContent(payload.normalizedAddress);
+    const items = await listWatchedContent(payload.normalizedAddress, payload.deployment);
     return createSignedCollectionReadResponse(payload.normalizedAddress, "watchlist", { items, count: items.length });
   } catch (error) {
     console.error("Error fetching watched content:", error);
@@ -187,7 +201,7 @@ export async function PUT(request: NextRequest) {
     watched: true,
     logMessage: "Error watching content:",
     responseError: "Failed to watch content",
-    mutate: payload => addWatchedContent(payload.normalizedAddress, payload.contentId),
+    mutate: payload => addWatchedContent(payload.normalizedAddress, payload.contentId, payload.deployment),
   });
 }
 
@@ -197,6 +211,6 @@ export async function DELETE(request: NextRequest) {
     watched: false,
     logMessage: "Error unwatching content:",
     responseError: "Failed to unwatch content",
-    mutate: payload => removeWatchedContent(payload.normalizedAddress, payload.contentId),
+    mutate: payload => removeWatchedContent(payload.normalizedAddress, payload.contentId, payload.deployment),
   });
 }

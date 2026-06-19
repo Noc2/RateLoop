@@ -6,10 +6,11 @@ import { expect, test } from "@playwright/test";
 const BASE_URL = E2E_BASE_URL;
 const WATCHLIST_READ_COOKIE = "rateloop_watchlist_read_session";
 const WATCHLIST_WRITE_COOKIE = "rateloop_watchlist_write_session";
+const CHAIN_ID = 31337;
 
 test.describe("Watchlist API routes", () => {
   async function getReadSessionStatus(address: string, cookie?: string) {
-    const res = await fetch(`${BASE_URL}/api/watchlist/content/session?address=${address}`, {
+    const res = await fetch(`${BASE_URL}/api/watchlist/content/session?address=${address}&chainId=${CHAIN_ID}`, {
       headers: cookie ? { cookie } : undefined,
     });
     expect(res.status).toBe(200);
@@ -20,7 +21,7 @@ test.describe("Watchlist API routes", () => {
     const res = await fetch(`${BASE_URL}/api/watchlist/content/challenge`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ address, intent: "read" }),
+      body: JSON.stringify({ address, chainId: CHAIN_ID, intent: "read" }),
     });
     expect(res.status).toBe(200);
     return res.json() as Promise<{ challengeId: string; message: string; expiresAt: string }>;
@@ -30,7 +31,7 @@ test.describe("Watchlist API routes", () => {
     const res = await fetch(`${BASE_URL}/api/watchlist/content/challenge`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ address, contentId, action }),
+      body: JSON.stringify({ address, contentId, chainId: CHAIN_ID, action }),
     });
     expect(res.status).toBe(200);
     return res.json() as Promise<{ challengeId: string; message: string; expiresAt: string }>;
@@ -49,11 +50,11 @@ test.describe("Watchlist API routes", () => {
         ...(cookie ? { cookie } : {}),
       },
       body: cookie
-        ? JSON.stringify({ address, contentId })
+        ? JSON.stringify({ address, contentId, chainId: CHAIN_ID })
         : await (async () => {
             const challenge = await issueChallenge(address, contentId, "watch");
             const signature = await account.signMessage({ message: challenge.message });
-            return JSON.stringify({ address, contentId, signature, challengeId: challenge.challengeId });
+            return JSON.stringify({ address, contentId, chainId: CHAIN_ID, signature, challengeId: challenge.challengeId });
           })(),
     });
     expect(res.status).toBe(200);
@@ -73,7 +74,7 @@ test.describe("Watchlist API routes", () => {
     const res = await fetch(`${BASE_URL}/api/watchlist/content`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ address, signature, challengeId: challenge.challengeId }),
+      body: JSON.stringify({ address, chainId: CHAIN_ID, signature, challengeId: challenge.challengeId }),
     });
     expect(res.status).toBe(200);
 
@@ -99,11 +100,11 @@ test.describe("Watchlist API routes", () => {
         ...(cookie ? { cookie } : {}),
       },
       body: cookie
-        ? JSON.stringify({ address, contentId })
+        ? JSON.stringify({ address, contentId, chainId: CHAIN_ID })
         : await (async () => {
             const challenge = await issueChallenge(address, contentId, "unwatch");
             const signature = await account.signMessage({ message: challenge.message });
-            return JSON.stringify({ address, contentId, signature, challengeId: challenge.challengeId });
+            return JSON.stringify({ address, contentId, chainId: CHAIN_ID, signature, challengeId: challenge.challengeId });
           })(),
     });
     expect(res.status).toBe(200);
@@ -125,7 +126,7 @@ test.describe("Watchlist API routes", () => {
     expect(unsignedSession.hasReadSession).toBe(false);
     expect(unsignedSession.hasWriteSession).toBe(false);
 
-    const unauthenticatedRes = await fetch(`${BASE_URL}/api/watchlist/content?address=${address}`);
+    const unauthenticatedRes = await fetch(`${BASE_URL}/api/watchlist/content?address=${address}&chainId=${CHAIN_ID}`);
     expect(unauthenticatedRes.status).toBe(401);
 
     const initial = await createReadSession(address, account);
@@ -149,7 +150,7 @@ test.describe("Watchlist API routes", () => {
     const secondWatch = await watchContent(address, secondContentId, account, combinedCookie);
     expect(secondWatch.body).toMatchObject({ ok: true, watched: true, contentId: secondContentId });
 
-    const listRes = await fetch(`${BASE_URL}/api/watchlist/content?address=${address}`, {
+    const listRes = await fetch(`${BASE_URL}/api/watchlist/content?address=${address}&chainId=${CHAIN_ID}`, {
       headers: { cookie: combinedCookie },
     });
     expect(listRes.status).toBe(200);
@@ -170,7 +171,7 @@ test.describe("Watchlist API routes", () => {
     const removed = await unwatchContent(address, secondContentId, account, combinedCookie);
     expect(removed.body).toMatchObject({ ok: true, watched: false, contentId: secondContentId });
 
-    const afterDeleteRes = await fetch(`${BASE_URL}/api/watchlist/content?address=${address}`, {
+    const afterDeleteRes = await fetch(`${BASE_URL}/api/watchlist/content?address=${address}&chainId=${CHAIN_ID}`, {
       headers: { cookie: combinedCookie },
     });
     expect(afterDeleteRes.status).toBe(200);
@@ -190,14 +191,14 @@ test.describe("Watchlist API routes", () => {
     const watchRes = await fetch(`${BASE_URL}/api/watchlist/content`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ address, contentId, signature, challengeId: challenge.challengeId }),
+      body: JSON.stringify({ address, contentId, chainId: CHAIN_ID, signature, challengeId: challenge.challengeId }),
     });
     expect(watchRes.status).toBe(200);
 
     const replayRes = await fetch(`${BASE_URL}/api/watchlist/content`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ address, contentId, signature, challengeId: challenge.challengeId }),
+      body: JSON.stringify({ address, contentId, chainId: CHAIN_ID, signature, challengeId: challenge.challengeId }),
     });
     expect(replayRes.status).toBe(409);
 
@@ -210,6 +211,7 @@ test.describe("Watchlist API routes", () => {
       body: JSON.stringify({
         address,
         contentId,
+        chainId: CHAIN_ID,
         signature: mismatchSignature,
         challengeId: mismatchChallenge.challengeId,
       }),
@@ -235,7 +237,7 @@ test.describe("Watchlist API routes", () => {
         "Content-Type": "application/json",
         cookie,
       },
-      body: JSON.stringify({ address, contentId: "32" }),
+      body: JSON.stringify({ address, contentId: "32", chainId: CHAIN_ID }),
     });
     expect(authorizedRes.status).toBe(200);
 
@@ -245,7 +247,7 @@ test.describe("Watchlist API routes", () => {
         "Content-Type": "application/json",
         cookie,
       },
-      body: JSON.stringify({ address: otherAddress, contentId: "33" }),
+      body: JSON.stringify({ address: otherAddress, contentId: "33", chainId: CHAIN_ID }),
     });
     expect(unauthorizedRes.status).toBe(401);
   });
@@ -256,9 +258,12 @@ test.describe("Watchlist API routes", () => {
     const otherAccount = privateKeyToAccount(generatePrivateKey());
     const session = await createReadSession(account.address.toLowerCase(), account);
 
-    const authorizedRes = await fetch(`${BASE_URL}/api/watchlist/content?address=${account.address.toLowerCase()}`, {
-      headers: { cookie: session.cookie },
-    });
+    const authorizedRes = await fetch(
+      `${BASE_URL}/api/watchlist/content?address=${account.address.toLowerCase()}&chainId=${CHAIN_ID}`,
+      {
+        headers: { cookie: session.cookie },
+      },
+    );
     expect(authorizedRes.status).toBe(200);
 
     const authorizedSession = await getReadSessionStatus(account.address.toLowerCase(), session.cookie);
@@ -268,7 +273,7 @@ test.describe("Watchlist API routes", () => {
     expect(otherSession.hasSession).toBe(false);
 
     const unauthorizedRes = await fetch(
-      `${BASE_URL}/api/watchlist/content?address=${otherAccount.address.toLowerCase()}`,
+      `${BASE_URL}/api/watchlist/content?address=${otherAccount.address.toLowerCase()}&chainId=${CHAIN_ID}`,
       {
         headers: { cookie: session.cookie },
       },

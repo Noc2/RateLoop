@@ -92,6 +92,13 @@
       "when": 1781283306000,
       "tag": "0012_agent_signing_intent_prepared_artifacts",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1781286906000,
+      "tag": "0013_watchlist_notifications_deployment_scope",
+      "breakpoints": true
     }
   ]
 }

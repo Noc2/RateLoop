@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import { type FollowedProfileItem, useFollowedProfiles } from "~~/hooks/useFollowedProfiles";
 import { usePageVisibility } from "~~/hooks/usePageVisibility";
 import { usePonderQuery } from "~~/hooks/usePonderQuery";
@@ -22,6 +23,7 @@ interface UseDiscoverSignalsOptions {
 
 export function useDiscoverSignals(address?: string, options?: UseDiscoverSignalsOptions) {
   const isPageVisible = usePageVisibility();
+  const { targetNetwork } = useTargetNetwork();
   const watchlistAddress = options?.watchedItems ? undefined : address;
   const followsAddress = options?.followedItems ? undefined : address;
   const { watchedItems: hookWatchedItems, isLoading: watchedLoading } = useWatchedContent(watchlistAddress, {
@@ -41,7 +43,7 @@ export function useDiscoverSignals(address?: string, options?: UseDiscoverSignal
   );
 
   const { data, isLoading } = usePonderQuery<PonderDiscoverSignalsResponse, PonderDiscoverSignalsResponse>({
-    queryKey: ["discoverSignals", address, watchedParam, followedParam],
+    queryKey: ["discoverSignals", address, targetNetwork.id, watchedParam, followedParam],
     enabled: Boolean(address) && hasTrackedSignals,
     ponderFn: async () => {
       if (!address) return EMPTY_DISCOVER_SIGNALS;

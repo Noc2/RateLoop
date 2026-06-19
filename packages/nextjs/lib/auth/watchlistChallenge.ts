@@ -1,5 +1,12 @@
 import { buildSignedActionMessage, hashSignedActionPayload } from "~~/lib/auth/signedActions";
-import { isValidWalletAddress, normalizeContentId, normalizeWalletAddress } from "~~/lib/watchlist/contentWatch";
+import { getServerTargetNetworkById } from "~~/lib/env/server";
+import { resolveContentDeploymentScope } from "~~/lib/protocolDeployment";
+import {
+  type WatchlistDeploymentScope,
+  isValidWalletAddress,
+  normalizeContentId,
+  normalizeWalletAddress,
+} from "~~/lib/watchlist/contentWatch";
 
 export const WATCH_CONTENT_ACTION = "watch-content";
 export const UNWATCH_CONTENT_ACTION = "unwatch-content";
@@ -9,15 +16,38 @@ export const WATCHLIST_CHALLENGE_TITLE = "RateLoop watchlist authorization";
 interface WatchlistChallengeInput {
   address?: string;
   contentId?: string | number | bigint;
+  chainId?: string | number | bigint;
 }
 
 export interface NormalizedWatchlistChallengePayload {
   normalizedAddress: `0x${string}`;
   contentId: string;
+  deployment: WatchlistDeploymentScope;
 }
 
 interface NormalizedWatchlistReadPayload {
   normalizedAddress: `0x${string}`;
+  deployment: WatchlistDeploymentScope;
+}
+
+function normalizeWatchlistChainId(value: WatchlistChallengeInput["chainId"]): number | null {
+  const raw =
+    typeof value === "number" || typeof value === "bigint"
+      ? String(value)
+      : typeof value === "string"
+        ? value.trim()
+        : "";
+  if (!/^\d+$/.test(raw)) return null;
+  const chainId = Number(raw);
+  return Number.isSafeInteger(chainId) && chainId > 0 ? chainId : null;
+}
+
+function resolveWatchlistDeploymentScope(value: WatchlistChallengeInput["chainId"]) {
+  const chainId = normalizeWatchlistChainId(value);
+  if (chainId === null || !getServerTargetNetworkById(chainId)) {
+    return null;
+  }
+  return resolveContentDeploymentScope(chainId);
 }
 
 export function normalizeWatchlistChallengeInput(
@@ -31,37 +61,57 @@ export function normalizeWatchlistChallengeInput(
   if (!contentId) {
     return { ok: false, error: "Missing or invalid contentId" };
   }
-
-  return {
-    ok: true,
-    payload: {
-      normalizedAddress: normalizeWalletAddress(input.address),
-      contentId,
-    },
-  };
-}
-
-export function hashWatchlistChallengePayload(payload: NormalizedWatchlistChallengePayload): string {
-  return hashSignedActionPayload([`contentId:${payload.contentId}`]);
-}
-
-export function normalizeWatchlistReadInput(
-  input: Pick<WatchlistChallengeInput, "address">,
-): { ok: true; payload: NormalizedWatchlistReadPayload } | { ok: false; error: string } {
-  if (!input.address || !isValidWalletAddress(input.address)) {
-    return { ok: false, error: "Invalid wallet address" };
+  const deployment = resolveWatchlistDeploymentScope(input.chainId);
+  if (!deployment) {
+    return { ok: false, error: "Missing or unsupported chainId" };
   }
 
   return {
     ok: true,
     payload: {
       normalizedAddress: normalizeWalletAddress(input.address),
+      contentId,
+      deployment,
+    },
+  };
+}
+
+export function hashWatchlistChallengePayload(payload: NormalizedWatchlistChallengePayload): string {
+  return hashSignedActionPayload([
+    `chainId:${payload.deployment.chainId}`,
+    `deploymentKey:${payload.deployment.deploymentKey}`,
+    `contentRegistry:${payload.deployment.contentRegistryAddress}`,
+    `contentId:${payload.contentId}`,
+  ]);
+}
+
+export function normalizeWatchlistReadInput(
+  input: Pick<WatchlistChallengeInput, "address" | "chainId">,
+): { ok: true; payload: NormalizedWatchlistReadPayload } | { ok: false; error: string } {
+  if (!input.address || !isValidWalletAddress(input.address)) {
+    return { ok: false, error: "Invalid wallet address" };
+  }
+  const deployment = resolveWatchlistDeploymentScope(input.chainId);
+  if (!deployment) {
+    return { ok: false, error: "Missing or unsupported chainId" };
+  }
+
+  return {
+    ok: true,
+    payload: {
+      normalizedAddress: normalizeWalletAddress(input.address),
+      deployment,
     },
   };
 }
 
 export function hashWatchlistReadPayload(payload: NormalizedWatchlistReadPayload): string {
-  return hashSignedActionPayload([payload.normalizedAddress]);
+  return hashSignedActionPayload([
+    payload.normalizedAddress,
+    `chainId:${payload.deployment.chainId}`,
+    `deploymentKey:${payload.deployment.deploymentKey}`,
+    `contentRegistry:${payload.deployment.contentRegistryAddress}`,
+  ]);
 }
 
 export function buildWatchlistChallengeMessage(params: {

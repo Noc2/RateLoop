@@ -17,6 +17,7 @@ export async function GET(request: NextRequest) {
 
   const normalized = normalizeWatchlistReadInput({
     address: typeof address === "string" ? address : undefined,
+    chainId: request.nextUrl.searchParams.get("chainId") ?? undefined,
   });
   if (!normalized.ok) {
     return NextResponse.json({ error: normalized.error }, { status: 400 });

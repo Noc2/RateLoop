@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { after, before, beforeEach, test } from "node:test";
-import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
+import { resolveContentDeploymentScope, resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 
 const env = process.env as Record<string, string | undefined>;
 const originalAppUrl = env.APP_URL;
@@ -32,6 +32,7 @@ let emailDelivery: EmailDeliveryModule;
 let ponderClient: PonderClientModule;
 let sentEmails: Array<{ subject: string; text: string; html: string }> = [];
 const TEST_PONDER_DEPLOYMENT = resolveProtocolDeploymentScope(31337);
+const TEST_CONTENT_DEPLOYMENT = resolveContentDeploymentScope(31337)!;
 
 function restoreEnv(name: keyof NodeJS.ProcessEnv, value: string | undefined) {
   if (value === undefined) {
@@ -162,6 +163,9 @@ beforeEach(async () => {
   await dbModule.db.insert(dbSchema.watchedContent).values({
     walletAddress: WALLET,
     contentId: CONTENT_ID,
+    deploymentKey: TEST_CONTENT_DEPLOYMENT.deploymentKey,
+    chainId: TEST_CONTENT_DEPLOYMENT.chainId,
+    contentRegistryAddress: TEST_CONTENT_DEPLOYMENT.contentRegistryAddress,
     createdAt: now,
   });
   await confidentiality.upsertQuestionConfidentialityFromMetadata({
@@ -204,4 +208,13 @@ test("notification emails redact gated titles and descriptions before delivery",
     assert.ok(email.html.includes("https://www.rateloop.ai/rateloop/"));
   }
   assert.ok(sentEmails.some(email => email.text.includes("Private RateLoop question")));
+
+  const deliveryRows = await dbModule.db.select().from(dbSchema.notificationEmailDeliveries);
+  assert.equal(deliveryRows.length, 2);
+  for (const row of deliveryRows) {
+    assert.equal(row.deploymentKey, TEST_CONTENT_DEPLOYMENT.deploymentKey);
+    assert.equal(row.chainId, TEST_CONTENT_DEPLOYMENT.chainId);
+    assert.equal(row.contentRegistryAddress, TEST_CONTENT_DEPLOYMENT.contentRegistryAddress);
+    assert.match(row.eventKey, new RegExp(`^${TEST_CONTENT_DEPLOYMENT.deploymentKey}:`));
+  }
 });

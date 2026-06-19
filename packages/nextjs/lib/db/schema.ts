@@ -73,13 +73,26 @@ export const watchedContent = pgTable(
   "watched_content",
   {
     id: serial("id").primaryKey(),
+    deploymentKey: text("deployment_key"),
+    chainId: integer("chain_id"),
+    contentRegistryAddress: text("content_registry_address"),
     walletAddress: text("wallet_address").notNull(),
     contentId: text("content_id").notNull(),
     createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull(),
   },
   table => ({
-    walletContentUnique: uniqueIndex("watched_content_wallet_content_unique").on(table.walletAddress, table.contentId),
+    legacyWalletContentUnique: uniqueIndex("watched_content_legacy_wallet_content_unique")
+      .on(table.walletAddress, table.contentId)
+      .where(sql`${table.deploymentKey} IS NULL`),
+    deploymentWalletContentUnique: uniqueIndex("watched_content_deployment_wallet_content_unique")
+      .on(table.deploymentKey, table.walletAddress, table.contentId)
+      .where(sql`${table.deploymentKey} IS NOT NULL`),
     walletCreatedAtIdx: index("watched_content_wallet_created_at_idx").on(table.walletAddress, table.createdAt),
+    deploymentWalletCreatedAtIdx: index("watched_content_deployment_wallet_created_at_idx").on(
+      table.deploymentKey,
+      table.walletAddress,
+      table.createdAt,
+    ),
   }),
 );
 
@@ -182,6 +195,9 @@ export const notificationEmailDeliveries = pgTable(
     id: serial("id").primaryKey(),
     walletAddress: text("wallet_address").notNull(),
     email: text("email").notNull(),
+    deploymentKey: text("deployment_key"),
+    chainId: integer("chain_id"),
+    contentRegistryAddress: text("content_registry_address"),
     eventKey: text("event_key").notNull(),
     eventType: text("event_type").notNull(),
     contentId: text("content_id"),
@@ -190,6 +206,10 @@ export const notificationEmailDeliveries = pgTable(
   },
   table => ({
     eventKeyUnique: uniqueIndex("notification_email_deliveries_event_key_unique").on(table.eventKey),
+    deploymentContentIdx: index("notification_email_deliveries_deployment_content_idx").on(
+      table.deploymentKey,
+      table.contentId,
+    ),
   }),
 );
 

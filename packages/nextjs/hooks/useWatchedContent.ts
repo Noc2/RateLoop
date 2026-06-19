@@ -1,6 +1,8 @@
 "use client";
 
+import { useMemo } from "react";
 import { useSignMessage } from "wagmi";
+import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import {
   type SignedCollectionReadAccessResult,
   type SignedCollectionResponse,
@@ -27,42 +29,50 @@ const EMPTY_WATCHED_RESPONSE: WatchedContentResponse = { items: [], count: 0 };
 
 export function useWatchedContent(address?: string, options?: UseWatchedContentOptions) {
   const { signMessageAsync } = useSignMessage();
+  const { targetNetwork } = useTargetNetwork();
   const autoRead = options?.autoRead ?? false;
+  const chainId = targetNetwork.id;
+  const readSearchParams = useMemo(() => new URLSearchParams({ chainId: String(chainId) }), [chainId]);
   const { items, itemKeys, isLoading, hasReadSession, toggleItem, requestReadAccess, isPending } = useSignedCollection<
     WatchedContentItem,
     bigint
   >({
     address,
     autoRead,
-    queryKey: ["watchedContent", address],
+    queryKey: ["watchedContent", address, chainId],
     emptyResponse: EMPTY_WATCHED_RESPONSE,
     sessionPath: "/api/watchlist/content/session",
     collectionPath: "/api/watchlist/content",
+    readSearchParams,
     challengePath: "/api/watchlist/content/challenge",
     signMessageAsync,
     getItemKey: item => item.contentId,
     normalizeId: contentId => contentId.toString(),
     createOptimisticItem: contentId => ({ contentId, createdAt: new Date().toISOString() }),
-    buildReadChallengeRequest: walletAddress => ({ address: walletAddress, intent: "read" }),
+    buildReadChallengeRequest: walletAddress => ({ address: walletAddress, chainId, intent: "read" }),
     buildSignedReadRequest: (walletAddress, challengeId, signature) => ({
       address: walletAddress,
+      chainId,
       signature,
       challengeId,
     }),
     buildWriteChallengeRequest: (walletAddress, contentId, currentlySelected) => ({
       address: walletAddress,
       contentId,
+      chainId,
       action: currentlySelected ? "unwatch" : "watch",
     }),
     buildSignedWriteRequest: (walletAddress, contentId, _currentlySelected, challengeId, signature) => ({
       address: walletAddress,
       contentId,
+      chainId,
       signature,
       challengeId,
     }),
     buildSessionWriteRequest: (walletAddress, contentId) => ({
       address: walletAddress,
       contentId,
+      chainId,
     }),
   });
 

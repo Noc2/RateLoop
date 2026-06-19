@@ -27,12 +27,14 @@ export async function POST(request: NextRequest) {
     const challengeBody = body as {
       address?: string;
       contentId?: string | number | bigint;
+      chainId?: string | number | bigint;
       action?: "watch" | "unwatch";
       intent?: "read";
     };
     const limited = await checkRateLimit(request, RATE_LIMIT, {
       extraKeyParts: [
         typeof challengeBody.address === "string" ? challengeBody.address : undefined,
+        challengeBody.chainId === undefined ? undefined : String(challengeBody.chainId),
         challengeBody.intent ?? challengeBody.action,
       ],
     });
