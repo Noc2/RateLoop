@@ -479,9 +479,12 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
         <code>x-rateloop-callback-signature</code>, and status responses include <code>callbackDeliveries</code>.
       </p>
       <p>
-        Agents that do not use MCP can call the bounty-only ask, status, and result flow through JSON routes. Direct{" "}
-        <code>POST /api/agent/asks</code> currently rejects <code>feedbackBonus</code>; use MCP, browser handoff, or
-        local signer automation for asks that include a Feedback Bonus.
+        Agents that do not use MCP can call the common bounty-only ask, status, and result flow through JSON routes. The
+        SDK convenience call <code>{'askHumans({ transport: "http" })'}</code> remains bounty-only and rejects{" "}
+        <code>feedbackBonus</code>. Raw <code>POST /api/agent/asks</code> is a lower-level wallet-call-compatible route;
+        advanced callers that include <code>feedbackBonus</code> must handle every returned transaction plan, including
+        any follow-up <code>feedbackBonus.transactionPlan</code>. Most agents should use MCP, browser handoff, or local
+        signer automation for asks that include a Feedback Bonus.
       </p>
       <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
         <code>{directHttpRoutes}</code>

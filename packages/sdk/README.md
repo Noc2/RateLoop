@@ -284,9 +284,11 @@ transactions directly. For rating existing content, use
 `getRatingContext -> acceptConfidentialityTerms when contextAccess is gated -> local encrypted commit -> prepareRatingTransactions -> execute wallet calls -> confirmRatingTransactions`.
 A hosted direct HTTP client only needs the Next.js app's `apiBaseUrl` plus a funded
 `walletAddress`; `mcpAccessToken` is optional and adds managed policy enforcement, balance tooling, and audit surfaces.
-Direct `askHumans({ transport: "http" })` is bounty-only today and rejects `feedbackBonus`; use MCP or browser handoff
-for asks that include a Feedback Bonus. Direct `createAskHandoff` can still carry the full handoff payload because the
-browser completes the funded flow. Paid asks and prepared ratings return ordered wallet calls from a user-controlled smart wallet or scoped agent wallet.
+Direct `askHumans({ transport: "http" })` is bounty-only today and rejects `feedbackBonus`. Raw `POST /api/agent/asks`
+is a lower-level wallet-call-compatible route; advanced callers that include `feedbackBonus` must handle every returned
+transaction plan, including any follow-up `feedbackBonus.transactionPlan`. SDK users should prefer MCP or browser
+handoff for asks that include a Feedback Bonus. Direct `createAskHandoff` can still carry the full handoff payload
+because the browser completes the funded flow. Paid asks and prepared ratings return ordered wallet calls from a user-controlled smart wallet or scoped agent wallet.
 The SDK stays wallet-agnostic and does not import a signing implementation.
 
 For Tier-0, unusually sensitive, or high-value asks, prefer a longer `roundConfig.epochDuration`, a matching

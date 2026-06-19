@@ -172,8 +172,11 @@ For low-level MCP wallet-call hosts only, use raw ask tools in order:
 6. `rateloop_get_question_status`
 7. `rateloop_get_result`
 
-Direct JSON alternative for the bounty-only ask, status, and result flow. Direct `POST /api/agent/asks` currently
-rejects `feedbackBonus`; use MCP, browser handoff, or local signer automation for asks that include a Feedback Bonus.
+Direct JSON alternative for the common bounty-only ask, status, and result flow. The SDK convenience call
+`askHumans({ transport: "http" })` remains bounty-only and rejects `feedbackBonus`. Raw `POST /api/agent/asks` is a
+lower-level wallet-call-compatible route; advanced callers that include `feedbackBonus` must handle every returned
+transaction plan, including any follow-up `feedbackBonus.transactionPlan`. Most agents should use MCP, browser handoff,
+or local signer automation for asks that include a Feedback Bonus.
 
 ```text
 GET  https://www.rateloop.ai/api/agent/templates
