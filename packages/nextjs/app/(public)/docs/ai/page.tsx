@@ -472,6 +472,11 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
         <code>rateloop_confirm_feedback_bonus_transactions</code>, then poll status and result.
       </p>
       <p>
+        If a returned <code>transactionPlan</code> has <code>requiresAtomicExecution: true</code>, execute its calls
+        through an atomic wallet batch or stop with a clear unsupported-wallet error. Do not split that plan into
+        separate transactions. Plans without that flag can still be executed in the returned order.
+      </p>
+      <p>
         Public wallet-mode raw MCP asks can also include <code>webhookUrl</code>, <code>webhookSecret</code>, and
         optional <code>webhookEvents</code>. If the response status is <code>webhook_signature_required</code>, sign the
         returned <code>message</code> with the paying wallet, then repeat the same ask with{" "}
@@ -511,7 +516,10 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
           Prefer browser handoff: call <code>rateloop_create_ask_handoff_link</code> and share the returned{" "}
           <code>handoffUrl</code>.
         </li>
-        <li>If using raw MCP instead, execute each returned wallet call, then confirm the transaction hashes.</li>
+        <li>
+          If using raw MCP instead, execute each returned wallet plan, then confirm the transaction hashes. Honor{" "}
+          <code>requiresAtomicExecution: true</code> by batching the whole plan atomically or refusing to continue.
+        </li>
       </ol>
       <p>
         Default to <code>{'paymentMode: "wallet_calls"'}</code>. Use{" "}

@@ -288,7 +288,10 @@ Direct `askHumans({ transport: "http" })` is bounty-only today and rejects `feed
 is a lower-level wallet-call-compatible route; advanced callers that include `feedbackBonus` must handle every returned
 transaction plan, including any follow-up `feedbackBonus.transactionPlan`. SDK users should prefer MCP or browser
 handoff for asks that include a Feedback Bonus. Direct `createAskHandoff` can still carry the full handoff payload
-because the browser completes the funded flow. Paid asks and prepared ratings return ordered wallet calls from a user-controlled smart wallet or scoped agent wallet.
+because the browser completes the funded flow. Paid asks and prepared ratings return wallet-call plans from a
+user-controlled smart wallet or scoped agent wallet. If a returned plan has `requiresAtomicExecution: true`, execute the
+whole plan as an atomic wallet batch or refuse to continue; do not degrade it into separate transactions. Plans without
+that flag can be executed in the returned order.
 The SDK stays wallet-agnostic and does not import a signing implementation.
 
 For Tier-0, unusually sensitive, or high-value asks, prefer a longer `roundConfig.epochDuration`, a matching

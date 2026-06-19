@@ -156,6 +156,11 @@ transaction when the returned plan uses `submitQuestionWithX402OneShotPayment`; 
 separate `feedbackBonus.transactionPlan` (for example LREP funding), `local-ask` sends that second validated plan and then
 calls `confirmFeedbackBonusTransactions`.
 
+`local-ask` is a trusted automation exception to the browser wallet rule: browser and low-level wallet hosts must honor
+`requiresAtomicExecution: true` with an atomic batch or stop. The local signer may submit validated calls sequentially
+because it controls the wallet and recovery loop. If the second call of an `approve + createFeedbackBonusPoolWithAsset`
+plan fails, retry the same operation or revoke the exact escrow allowance before abandoning it.
+
 Use an encrypted keystore for persistent wallets:
 
 ```bash

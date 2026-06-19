@@ -172,6 +172,10 @@ For low-level MCP wallet-call hosts only, use raw ask tools in order:
 6. `rateloop_get_question_status`
 7. `rateloop_get_result`
 
+If a returned `transactionPlan` has `requiresAtomicExecution: true`, execute its calls through an atomic wallet batch
+or stop with a clear unsupported-wallet error. Do not split that plan into separate transactions. Plans without that flag
+can still be executed in the returned order.
+
 Direct JSON alternative for the common bounty-only ask, status, and result flow. The SDK convenience call
 `askHumans({ transport: "http" })` remains bounty-only and rejects `feedbackBonus`. Raw `POST /api/agent/asks` is a
 lower-level wallet-call-compatible route; advanced callers that include `feedbackBonus` must handle every returned
@@ -229,7 +233,7 @@ Direct ask JSON payload without Feedback Bonus:
 2. Call `rateloop_quote_question` with the live draft ask. Include optional `feedbackBonus` only on MCP or browser handoff flows when the ask already uses public URLs or uploaded RateLoop `imageUrls`.
 3. Show or log the returned `legalNotice` before spending.
 4. Prefer browser handoff: call `rateloop_create_ask_handoff_link` and share the returned `handoffUrl`.
-5. If using raw MCP instead, call `rateloop_ask_humans` with `maxPaymentAmount`, execute each returned wallet call, then confirm the transaction hashes.
+5. If using raw MCP instead, call `rateloop_ask_humans` with `maxPaymentAmount`, execute each returned wallet plan, then confirm the transaction hashes. Honor `requiresAtomicExecution: true` by batching the whole plan atomically or refusing to continue.
 
 Default to `paymentMode: "wallet_calls"`. Use `paymentMode: "eip3009_usdc_authorization"` only when an agent wallet should sign a native USDC authorization before the transaction plan is prepared. The legacy `paymentMode: "x402_authorization"` alias is still accepted. Native EIP-3009 asks return one submit transaction after signing; when a single-question ask includes a USDC `feedbackBonus`, that submit call also creates and funds the Feedback Bonus pool.
 
