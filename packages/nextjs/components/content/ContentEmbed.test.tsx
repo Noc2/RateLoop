@@ -24,7 +24,7 @@ test("ContentEmbed renders uploaded question images as lightbox triggers when en
   assert.match(html, /cursor-zoom-in/);
   assert.match(
     html,
-    /src="https:\/\/www\.rateloop\.ai\/api\/attachments\/images\/att_abcdefghijklmnop\.webp#sha256=0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"/,
+    /src="https:\/\/www\.rateloop\.ai\/api\/attachments\/images\/att_abcdefghijklmnop\.webp\?variant=feed#sha256=0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"/,
   );
   assert.doesNotMatch(html, /<a\b/);
 });
@@ -36,7 +36,7 @@ test("ContentEmbed renders gated uploaded image fetch URLs as images", () => {
 
   assert.match(
     html,
-    /src="https:\/\/www\.rateloop\.ai\/api\/attachments\/images\/att_abcdefghijklmnop\.webp\?address=0x1234567890abcdef1234567890abcdef12345678#sha256=0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"/,
+    /src="https:\/\/www\.rateloop\.ai\/api\/attachments\/images\/att_abcdefghijklmnop\.webp\?address=0x1234567890abcdef1234567890abcdef12345678&amp;variant=feed#sha256=0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"/,
   );
   assert.doesNotMatch(html, /<a\b/);
 });

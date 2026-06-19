@@ -44,6 +44,7 @@ import { useWalletMessageSigner } from "~~/hooks/useWalletMessageSigner";
 import { useWalletRpcRecovery } from "~~/hooks/useWalletRpcRecovery";
 import { type AgentQuestionSpecInput, buildQuestionSpecHashes } from "~~/lib/agent/questionSpecs";
 import { createQuestionDetailsId, questionDetailsSha256Hex } from "~~/lib/attachments/browserQuestionDetails";
+import { withImageAttachmentVariantUrl } from "~~/lib/attachments/imageAttachmentVariants";
 import {
   MAX_QUESTION_DETAILS_TEXT_LENGTH,
   getQuestionDetailsTextSizeBytes,
@@ -4484,10 +4485,11 @@ export function ContentSubmissionSection() {
                               </div>
                             ) : (
                               <img
-                                src={imageUrl}
+                                src={withImageAttachmentVariantUrl(imageUrl, "preview")}
                                 alt={`Uploaded image ${index + 1}`}
                                 className="h-14 w-20 rounded-md object-cover"
                                 loading="lazy"
+                                decoding="async"
                               />
                             )}
                             <div className="min-w-0 flex-1">

@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { GenericLinkCard } from "./embeds";
 import { ContentImageLightbox } from "~~/components/shared/ContentImageLightbox";
 import { ExternalLinkBehaviorProvider, SafeExternalLink } from "~~/components/shared/SafeExternalLink";
+import { withImageAttachmentVariantUrl } from "~~/lib/attachments/imageAttachmentVariants";
 import { isUploadedImageFetchUrl } from "~~/lib/contentMedia";
 import { detectPlatform } from "~~/utils/platforms";
 
@@ -104,11 +105,14 @@ export function ContentEmbed({
   if (isUploadedImageFetchUrl(url)) {
     const imageAlt = title || "Question media";
     const imageClassName = `h-full w-full ${imageFit === "contain" ? "object-contain" : "object-cover"}`;
+    const feedImageUrl = withImageAttachmentVariantUrl(url, "feed");
+    const fullImageUrl = withImageAttachmentVariantUrl(url, "full");
 
     if (enableImageLightbox) {
       return (
         <ContentImageLightbox
-          src={url}
+          src={feedImageUrl}
+          fullSrc={fullImageUrl}
           alt={imageAlt}
           imageClassName={imageClassName}
           loading={isActive ? "eager" : "lazy"}
@@ -119,7 +123,15 @@ export function ContentEmbed({
       );
     }
 
-    const image = <img src={url} alt={imageAlt} className={imageClassName} loading={isActive ? "eager" : "lazy"} />;
+    const image = (
+      <img
+        src={feedImageUrl}
+        alt={imageAlt}
+        className={imageClassName}
+        loading={isActive ? "eager" : "lazy"}
+        decoding="async"
+      />
+    );
 
     if (imageLinkUrl?.trim()) {
       return (

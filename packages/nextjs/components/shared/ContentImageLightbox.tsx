@@ -16,6 +16,7 @@ const FOCUSABLE_SELECTOR = [
 interface ContentImageLightboxProps {
   src: string;
   alt: string;
+  fullSrc?: string;
   loading?: "eager" | "lazy";
   triggerLabel?: string;
   modalLabel?: string;
@@ -33,6 +34,7 @@ function getFocusableElements(container: HTMLElement | null) {
 export function ContentImageLightbox({
   src,
   alt,
+  fullSrc,
   loading = "lazy",
   triggerLabel = "Open image",
   modalLabel = "Image preview",
@@ -121,7 +123,7 @@ export function ContentImageLightbox({
 
       <div className="flex h-full w-full items-center justify-center" onClick={event => event.stopPropagation()}>
         <img
-          src={src}
+          src={fullSrc ?? src}
           alt={alt}
           className={`max-h-full max-w-full rounded-lg border border-white/10 bg-black object-contain shadow-[0_24px_80px_rgba(0,0,0,0.64)] ${modalImageClassName}`.trim()}
         />
@@ -140,7 +142,7 @@ export function ContentImageLightbox({
         aria-label={triggerLabel}
         className="group relative block h-full w-full cursor-zoom-in overflow-hidden bg-base-100 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/80 focus-visible:ring-offset-2 focus-visible:ring-offset-base-200"
       >
-        <img src={src} alt={alt} className={imageClassName} loading={loading} />
+        <img src={src} alt={alt} className={imageClassName} loading={loading} decoding="async" />
         <span
           aria-hidden="true"
           className="pointer-events-none absolute bottom-3 right-3 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-black/60 text-white/90 opacity-0 shadow-lg backdrop-blur transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
