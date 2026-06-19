@@ -60,7 +60,7 @@ Next.js throws when **any two or more** of the matching public/server USDC varia
 
 E2E and `yarn dev:stack` should point `NEXT_PUBLIC_PONDER_URL` and `PONDER_BASE_URL` at the same Ponder base URL, including any path prefix (for example `http://localhost:42069` or `https://example.com/ponder`). Agent MCP, attachments, and browser handoffs use the Next.js app origin (`NEXT_PUBLIC_APP_URL` / `www.rateloop.ai`), not Ponder.
 
-The deployed Next.js frontend can use Base Flashblocks/preconfirmation RPCs to make wallet progress appear quickly after a user confirms. Enable that only on the frontend with `NEXT_PUBLIC_USE_BASE_PRECONF_RPC=true`; when the dedicated preconfirmation RPC env var is empty, the frontend falls back to Base's public preconfirmation endpoint before ordinary browser RPC fallbacks. Ponder and Keeper should use ordinary sealed-block RPCs for canonical indexing and automation.
+The deployed Next.js frontend can use Base Flashblocks/preconfirmation RPCs to make wallet progress appear quickly after a user confirms. Enable that only on the frontend with `NEXT_PUBLIC_USE_BASE_PRECONF_RPC=true`; when the dedicated preconfirmation RPC env var is empty, the frontend falls back to Base's public preconfirmation endpoint before ordinary browser RPC fallbacks. Ponder and Keeper should use ordinary sealed-block RPCs for canonical indexing and automation. Thirdweb client and verifier env vars configure wallet, top-up, and sponsorship behavior; do not treat them as the canonical indexer RPC or the Flashblocks/preconfirmation provider by default.
 
 ### Keeper / Ponder shared secrets
 

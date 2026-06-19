@@ -77,11 +77,11 @@ contracts  (shared)  → ABIs + deployed addresses for apps/services
 node-utils (shared)  → keystore and other reusable Node helpers
 sdk        (shared)  → hosted read client + vote/frontend integration helpers
 ponder     (index)   → REST API at localhost:42069
-nextjs     (frontend)→ reads contracts via thirdweb, wagmi, and the Ponder API
+nextjs     (frontend)→ reads contracts via configured browser RPCs, wagmi, and the Ponder API
 keeper     (service) → settles rounds, cleans up reveals, marks dormant asks, publishes frontend-backed correlation payout snapshots
 ```
 
-Built with Next.js, Foundry, Ponder, thirdweb, wagmi, viem, Drizzle ORM, and PostgreSQL.
+Built with Next.js, Foundry, Ponder, thirdweb wallet/sponsorship tooling, wagmi, viem, Drizzle ORM, and PostgreSQL.
 
 ## Install
 
