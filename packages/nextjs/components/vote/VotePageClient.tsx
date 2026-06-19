@@ -118,6 +118,10 @@ const SEARCH_SORT_OPTIONS: { value: SearchSortOption; label: string }[] = [
 const FEED_PAGE_SIZE = 6;
 const FOR_YOU_CANDIDATE_PAGE_MULTIPLIER = 6;
 const FEED_PREFETCH_BUFFER = 6;
+const E2E_OPEN_STAKE_SELECTOR_EVENT = "rateloop:e2e-open-stake-selector";
+const E2E_LOCAL_HOSTNAMES = new Set(["localhost", "127.0.0.1", "::1"]);
+const stakeSelectorE2EHarnessEnabled =
+  process.env.NODE_ENV !== "production" || process.env.NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD === "true";
 const MOBILE_VOTE_DOCK_RESERVED_SPACE_PX = 152;
 const CONTENT_INTENT_PROMPT_MS = 1_400;
 const MIN_COUNTED_STAKE_MICRO = 1_000_000n;
@@ -1337,6 +1341,38 @@ const HomeInner = () => {
     clearVoteError();
     setStakeModal(prev => ({ ...prev, isOpen: false }));
   };
+
+  useEffect(() => {
+    if (
+      !stakeSelectorE2EHarnessEnabled ||
+      typeof window === "undefined" ||
+      !E2E_LOCAL_HOSTNAMES.has(window.location.hostname)
+    ) {
+      return;
+    }
+
+    const handleOpenStakeSelector = () => {
+      clearVoteError();
+      setStakeModal({
+        isOpen: true,
+        initialIsUp: true,
+        contentId: 1n,
+        questionTitle: "Responsive layout check",
+        categoryId: 1n,
+        currentRating: 64,
+        bountyEligibility: null,
+        confidentiality: null,
+        contextAccess: "public",
+        contextVisibility: "public",
+        roundConfig: null,
+        openRound: null,
+        voteItemSnapshot: null,
+      });
+    };
+
+    window.addEventListener(E2E_OPEN_STAKE_SELECTOR_EVENT, handleOpenStakeSelector);
+    return () => window.removeEventListener(E2E_OPEN_STAKE_SELECTOR_EVENT, handleOpenStakeSelector);
+  }, [clearVoteError]);
 
   const replaceVoteLocation = useCallback((update: { contentId?: bigint | null; categoryHash?: string | null }) => {
     const nextUrl = buildVoteLocation(window.location.href, update);

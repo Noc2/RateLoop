@@ -1,7 +1,6 @@
 import { type Page, expect, test } from "../fixtures/wallet";
 import { openAdvancedQuestionSettings } from "../helpers/ask-form";
 import { expectNoHorizontalOverflow, expectNoNextErrorOverlay } from "../helpers/layout";
-import { ensureVoteableContent } from "../helpers/voteable-content";
 import {
   FEED_EMPTY_STATE_RE,
   VOTE_DOWN_BUTTON_NAME,
@@ -23,6 +22,7 @@ const VIEWPORTS = [
 const ROUTES = ["/", "/rate", "/ask", "/governance", "/docs", "/legal"];
 const WALLET_ROUTES = new Set(["/rate", "/ask", "/governance"]);
 const BETA_NOTICE_DISMISSED_STORAGE_KEY = "rateloop:beta-notice-dismissed";
+const E2E_OPEN_STAKE_SELECTOR_EVENT = "rateloop:e2e-open-stake-selector";
 
 async function dismissBetaNotice(page: Page): Promise<void> {
   await page.addInitScript(key => {
@@ -159,10 +159,7 @@ test.describe("Responsive layout", () => {
     await gotoWithRetry(page, "/rate", { ensureWalletConnected: true, timeout: 45_000 });
     await waitForFeedLoaded(page, 30_000);
 
-    const canVote = await ensureVoteableContent(page);
-    test.skip(!canVote, "No voteable content is available in this seeded E2E run.");
-
-    await page.getByRole("button", { name: VOTE_UP_BUTTON_NAME }).click();
+    await page.evaluate(eventName => window.dispatchEvent(new Event(eventName)), E2E_OPEN_STAKE_SELECTOR_EVENT);
 
     const dialog = page.getByRole("dialog").first();
     await expect(dialog).toBeVisible({ timeout: 5_000 });
@@ -221,10 +218,8 @@ test.describe("Responsive layout", () => {
     expect(metrics, "Vote desktop feed should expose the scroll frame and surface").not.toBeNull();
     if (!metrics) return;
 
-    if (!metrics.hasSurface) {
-      test.skip(true, "Vote feed did not render a card surface to verify side padding");
-      return;
-    }
+    expect(metrics.hasSurface, "Vote feed should render a card surface to verify side padding").toBe(true);
+    if (!metrics.hasSurface) return;
 
     expect(metrics.leftPadding, "Desktop feed should keep visible side padding around the card").toBeGreaterThanOrEqual(
       12,
