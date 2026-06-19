@@ -1437,7 +1437,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         assertEq(snapshottedConfig.maxVoters, roundConfig.maxVoters);
     }
 
-    function test_SubmitQuestionWithRewardAndRoundConfig_RejectsRequiredVotersAboveSettlementVoters() public {
+    function test_SubmitQuestionWithRewardAndRoundConfig_ForwardsRequiredVotersAboveSettlementVoters() public {
         string memory contextUrl = "https://example.com/impossible-round";
         string memory title = "Can this bounty ever qualify?";
         string memory description = "The requested reward voter count exceeds the settlement threshold.";
@@ -1464,8 +1464,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             contextUrl, imageUrls, "", title, description, tags, categoryId, salt, submitter, rewardTerms, roundConfig
         );
         vm.warp(block.timestamp + 1);
-        vm.expectRevert();
-        registry.submitQuestionWithRewardAndRoundConfig(
+        uint256 id = registry.submitQuestionWithRewardAndRoundConfig(
             contextUrl,
             imageUrls,
             "",
@@ -1479,9 +1478,16 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             _defaultQuestionSpec()
         );
         vm.stopPrank();
+
+        RoundLib.RoundConfig memory storedConfig = registry.getContentRoundConfig(id);
+        assertEq(storedConfig.minVoters, roundConfig.minVoters);
+        assertEq(storedConfig.maxVoters, roundConfig.maxVoters);
+        assertEq(mockQuestionRewardPoolEscrow.lastContentId(), id);
+        assertEq(mockQuestionRewardPoolEscrow.lastRequiredVoters(), rewardTerms.requiredVoters);
+        assertEq(mockQuestionRewardPoolEscrow.lastRequiredSettledRounds(), rewardTerms.requiredSettledRounds);
     }
 
-    function test_SubmitQuestionWithRewardAndRoundConfig_RejectsRequiredVotersBelowSettlementVoters() public {
+    function test_SubmitQuestionWithRewardAndRoundConfig_ForwardsRequiredVotersBelowSettlementVoters() public {
         string memory contextUrl = "https://example.com/underpaid-round";
         string memory title = "Can this bounty underpay a settled result?";
         string memory description = "The settlement threshold exceeds the reward voter count.";
@@ -1508,8 +1514,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             contextUrl, imageUrls, "", title, description, tags, categoryId, salt, submitter, rewardTerms, roundConfig
         );
         vm.warp(block.timestamp + 1);
-        vm.expectRevert();
-        registry.submitQuestionWithRewardAndRoundConfig(
+        uint256 id = registry.submitQuestionWithRewardAndRoundConfig(
             contextUrl,
             imageUrls,
             "",
@@ -1523,6 +1528,13 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             _defaultQuestionSpec()
         );
         vm.stopPrank();
+
+        RoundLib.RoundConfig memory storedConfig = registry.getContentRoundConfig(id);
+        assertEq(storedConfig.minVoters, roundConfig.minVoters);
+        assertEq(storedConfig.maxVoters, roundConfig.maxVoters);
+        assertEq(mockQuestionRewardPoolEscrow.lastContentId(), id);
+        assertEq(mockQuestionRewardPoolEscrow.lastRequiredVoters(), rewardTerms.requiredVoters);
+        assertEq(mockQuestionRewardPoolEscrow.lastRequiredSettledRounds(), rewardTerms.requiredSettledRounds);
     }
 
     function test_SubmitQuestionWithRoundConfig_BindsReservationToSelectedConfig() public {
