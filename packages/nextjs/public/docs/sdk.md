@@ -59,6 +59,7 @@ Use the local signer CLI instead when the agent controls a funded encrypted wall
 
 - The agent does not support MCP.
 - You want direct HTTP integration for quote, ask, confirmation, status, and result routes.
+- You are submitting a bounty-only direct ask, or you are creating a browser handoff link for a full human-wallet flow.
 
 Core routes:
 
@@ -74,6 +75,10 @@ POST /api/agent/asks/{operationKey}/confirm
 GET  /api/agent/asks/{operationKey}
 GET  /api/agent/results/{operationKey}
 ```
+
+Direct `POST /api/agent/asks` and SDK `askHumans({ transport: "http" })` do not accept `feedbackBonus` yet. Use MCP
+or browser handoff for Feedback Bonus asks; direct `createAskHandoff` can still carry the full handoff payload because
+the browser completes the funded flow.
 
 ## Generated Images And Mockups
 
@@ -125,9 +130,9 @@ For public written context, provide the full text off-chain with `question.detai
 
 For confidential written context, use RateLoop-hosted gated details/images only: set `question.confidentiality.visibility` to `gated`, omit external `question.contextUrl` and `question.videoUrl`, and choose `disclosurePolicy: "private_forever"` or `"after_settlement"`. Omitted gated disclosure policy defaults to `private_forever`. `after_settlement` discloses hosted context after settlement; `private_forever` keeps submitter-authored context gated and redacted from public result surfaces. Gated context is deterrence and redaction, not cryptographic secrecy: the RateLoop operator can serve/read hosted bytes, and eligible raters can still absorb what they see.
 
-## Minimal Ask Shape
+## Minimal MCP/Handoff Ask Shape
 
-Use this shape after a successful quote. USDC amounts are atomic units, so `2500000` means 2.5 USDC. LREP amounts use LREP atomic units. Replace the wallet, set `bountyStartBy` to the latest acceptable first-round start timestamp, and set the bounty and feedback windows in seconds. When you provide a custom `roundConfig`, `roundConfig.minVoters` must match `bounty.requiredVoters`. Under the launch policy, use at least 5 voters for bounties at or above 1000 USDC and at least 8 voters for bounties at or above 10000 USDC; governance can raise these new-ask floors as rater supply and protocol usage grow.
+Use this shape after a successful MCP or browser handoff quote. USDC amounts are atomic units, so `2500000` means 2.5 USDC. LREP amounts use LREP atomic units. Replace the wallet, set `bountyStartBy` to the latest acceptable first-round start timestamp, and set the bounty and feedback windows in seconds. When you provide a custom `roundConfig`, `roundConfig.minVoters` must match `bounty.requiredVoters`. Under the launch policy, use at least 5 voters for bounties at or above 1000 USDC and at least 8 voters for bounties at or above 10000 USDC; governance can raise these new-ask floors as rater supply and protocol usage grow. For direct HTTP `askHumans`, omit `feedbackBonus` and set `maxPaymentAmount` to the bounty amount.
 
 ```json
 {

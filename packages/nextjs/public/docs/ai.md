@@ -172,7 +172,8 @@ For low-level MCP wallet-call hosts only, use raw ask tools in order:
 6. `rateloop_get_question_status`
 7. `rateloop_get_result`
 
-Direct JSON alternative for the bounty ask, status, and result flow. Use MCP for the optional Feedback Bonus flow until direct JSON bonus support is documented.
+Direct JSON alternative for the bounty-only ask, status, and result flow. Direct `POST /api/agent/asks` currently
+rejects `feedbackBonus`; use MCP, browser handoff, or local signer automation for asks that include a Feedback Bonus.
 
 ```text
 GET  https://www.rateloop.ai/api/agent/templates
@@ -184,15 +185,52 @@ GET  https://www.rateloop.ai/api/agent/asks/{operationKey}
 GET  https://www.rateloop.ai/api/agent/results/{operationKey}
 ```
 
+Direct ask JSON payload without Feedback Bonus:
+
+```json
+{
+  "chainId": 8453,
+  "clientRequestId": "direct-http-bounty-2026-05-05-001",
+  "walletAddress": "0x1111111111111111111111111111111111111111",
+  "paymentMode": "wallet_calls",
+  "bounty": {
+    "amount": "2500000",
+    "asset": "USDC",
+    "requiredVoters": "5",
+    "requiredSettledRounds": "1",
+    "bountyStartBy": "1893456000",
+    "bountyWindowSeconds": "1200",
+    "feedbackWindowSeconds": "1200",
+    "bountyEligibility": "0"
+  },
+  "roundConfig": {
+    "epochDuration": "1200",
+    "maxDuration": "7200",
+    "minVoters": "5",
+    "maxVoters": "50"
+  },
+  "maxPaymentAmount": "2500000",
+  "question": {
+    "title": "Is this generated product concept clear enough to test?",
+    "contextUrl": "https://example.com/public-product-concept",
+    "categoryId": "5",
+    "tags": ["agent", "design", "generated-context"],
+    "templateId": "generic_rating"
+  }
+}
+```
+
 ### Quote And Submit
 
 1. Run a no-payment dry run with `dryRun: true` or `mode: "dry_run"`.
-2. Call `rateloop_quote_question` with the live draft ask and optional `feedbackBonus` when the ask already uses public URLs or uploaded RateLoop `imageUrls`.
+2. Call `rateloop_quote_question` with the live draft ask. Include optional `feedbackBonus` only on MCP or browser handoff flows when the ask already uses public URLs or uploaded RateLoop `imageUrls`.
 3. Show or log the returned `legalNotice` before spending.
 4. Prefer browser handoff: call `rateloop_create_ask_handoff_link` and share the returned `handoffUrl`.
 5. If using raw MCP instead, call `rateloop_ask_humans` with `maxPaymentAmount`, execute each returned wallet call, then confirm the transaction hashes.
 
 Default to `paymentMode: "wallet_calls"`. Use `paymentMode: "eip3009_usdc_authorization"` only when an agent wallet should sign a native USDC authorization before the transaction plan is prepared. The legacy `paymentMode: "x402_authorization"` alias is still accepted. Native EIP-3009 asks return one submit transaction after signing; when a single-question ask includes a USDC `feedbackBonus`, that submit call also creates and funds the Feedback Bonus pool.
+
+MCP/browser handoff payload with Feedback Bonus:
 
 ```json
 {

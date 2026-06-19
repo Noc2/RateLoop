@@ -64,6 +64,37 @@ const askPayloadExample = `{
   }
 }`;
 
+const directHttpAskPayloadExample = `{
+  "chainId": 8453,
+  "clientRequestId": "direct-http-bounty-2026-05-05-001",
+  "walletAddress": "0x1111111111111111111111111111111111111111",
+  "paymentMode": "wallet_calls",
+  "bounty": {
+    "amount": "2500000",
+    "asset": "USDC",
+    "requiredVoters": "5",
+    "requiredSettledRounds": "1",
+    "bountyStartBy": "1893456000",
+    "bountyWindowSeconds": "1200",
+    "feedbackWindowSeconds": "1200",
+    "bountyEligibility": "0"
+  },
+  "roundConfig": {
+    "epochDuration": "1200",
+    "maxDuration": "7200",
+    "minVoters": "5",
+    "maxVoters": "50"
+  },
+  "maxPaymentAmount": "2500000",
+  "question": {
+    "title": "Is this generated product concept clear enough to test?",
+    "contextUrl": "https://example.com/public-product-concept",
+    "categoryId": "5",
+    "tags": ["agent", "design", "generated-context"],
+    "templateId": "generic_rating"
+  }
+}`;
+
 function formatDirectHttpRoutes(origin: string) {
   const normalizedOrigin = origin.replace(/\/$/, "");
   return directHttpEndpoints
@@ -448,11 +479,16 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
         <code>x-rateloop-callback-signature</code>, and status responses include <code>callbackDeliveries</code>.
       </p>
       <p>
-        Agents that do not use MCP can call the bounty ask, status, and result flow through JSON routes. Use MCP for the
-        optional Feedback Bonus flow until direct JSON bonus support is documented.
+        Agents that do not use MCP can call the bounty-only ask, status, and result flow through JSON routes. Direct{" "}
+        <code>POST /api/agent/asks</code> currently rejects <code>feedbackBonus</code>; use MCP, browser handoff, or
+        local signer automation for asks that include a Feedback Bonus.
       </p>
       <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
         <code>{directHttpRoutes}</code>
+      </pre>
+      <p>Direct ask JSON payload without Feedback Bonus:</p>
+      <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
+        <code>{directHttpAskPayloadExample}</code>
       </pre>
 
       <h3 id="ask-submit">Quote And Submit</h3>
@@ -461,8 +497,9 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
           Run a no-payment dry run with <code>{"dryRun: true"}</code> or <code>{'mode: "dry_run"'}</code>.
         </li>
         <li>
-          Call <code>rateloop_quote_question</code> with the live draft ask and optional <code>feedbackBonus</code> when
-          the ask already uses public URLs or uploaded RateLoop <code>imageUrls</code>.
+          Call <code>rateloop_quote_question</code> with the live draft ask. Include optional <code>feedbackBonus</code>{" "}
+          only on MCP or browser handoff flows when the ask already uses public URLs or uploaded RateLoop{" "}
+          <code>imageUrls</code>.
         </li>
         <li>
           Show or log the returned <code>legalNotice</code> before spending.
@@ -481,6 +518,7 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
         single-question ask includes a USDC <code>feedbackBonus</code>, that submit call also creates and funds the
         Feedback Bonus pool.
       </p>
+      <p>MCP/browser handoff payload with Feedback Bonus:</p>
       <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
         <code>{askPayloadExample}</code>
       </pre>

@@ -14,9 +14,9 @@ This package is for the moment an agent should ask instead of guess. The default
 ## Accountless Public Flow
 
 Agents do not need the operator to create a RateLoop account for the default public path. A chat-hosted agent should start
-from the For Agents docs at `/docs/ai`, connect to the public MCP endpoint or direct HTTP routes, and ask the user for
-the few runtime values that are intentionally not hard-coded. Browser handoff WebMCP helpers are read-only; remote MCP is
-the default headless path:
+from the For Agents docs at `/docs/ai`, connect to the public MCP endpoint or direct bounty-only HTTP routes, and ask the
+user for the few runtime values that are intentionally not hard-coded. Browser handoff WebMCP helpers are read-only;
+remote MCP is the default headless path:
 
 - RateLoop origin, usually `https://www.rateloop.ai`
 - funded Base mainnet `walletAddress` for production browser signing, or Base Sepolia funding when practicing on staging
