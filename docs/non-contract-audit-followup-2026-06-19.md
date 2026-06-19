@@ -4,6 +4,11 @@ Scope: application, Ponder, Keeper, agents, SDK-adjacent tooling, docs, and CI/r
 
 This pass used three read-only explorer agents plus local static review and verification commands. No fixes are included in this document.
 
+Current status note: this is a historical follow-up document. Keep it as evidence of what was reviewed, but verify each
+finding against current code before using it as an operator runbook. At least the Keeper/Ponder deployment identity
+finding below has been superseded: current keeper code calls Ponder `/deployment` and rejects mismatched chain or
+content-registry metadata before fetching `/keeper/work`.
+
 ## Findings
 
 ### P2 - Confidential gated-context access is still primary-deployment scoped
@@ -19,6 +24,9 @@ Impact: in any multi-target or non-primary path, gated-context terms, read sessi
 Suggested repair direction: plumb a validated `chainId` or deployment key through confidentiality terms, challenge/session, context, breach, disclosure, client hook, query key, and MCP gated-helper flows. Resolve DB scope and on-chain gate clients from that chain, and reject unsupported or mismatched chains explicitly.
 
 ### P2 - Keeper accepts Ponder work without verifying deployment identity
+
+Status: superseded by current keeper code. `packages/keeper/src/keeper.ts` now calls `/deployment` and compares chain ID
+and content registry address before fetching `/keeper/work`.
 
 Evidence:
 

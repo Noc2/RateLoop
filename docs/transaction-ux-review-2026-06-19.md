@@ -2,9 +2,15 @@
 
 Reviewed `main` at `82e2487a` after the Base preconfirmation, batching, pure-agent fast round, one-shot x402, public docs, ABI regeneration, and contract-size follow-up commits.
 
+Current status note: this is a historical implementation review, not the current redeploy runbook. Use the remediation
+ledger below and `docs/transaction-ux-recheck-2026-06-19.md` for current status. Base mainnet metadata has since been
+refreshed; do not treat the historical H-1 body as a reason for a routine Base mainnet redeploy. The remaining
+deployment-bound issue from that family is Base Sepolia staging fidelity, or gating one-shot x402 Feedback Bonus support
+off on `84532` until staging is refreshed.
+
 Remediation status after the non-redeploy fix pass on June 19, 2026:
 
-- H-1 remains intentionally open because it requires Base Sepolia/Base mainnet smart-contract redeployment and artifact refresh.
+- Historical H-1 is superseded for Base mainnet after the mainnet deployment metadata refresh. Base Sepolia still needs a staging refresh or app/tooling gating before it can validate one-shot x402 Feedback Bonus flows.
 - H-2 and M-1 were fixed by `79a7e6d8` (`fix(agent): complete browser x402 signing intents`).
 - H-3 and M-2 were fixed by `4e5abd15` (`fix(agent): make feedback bonus confirmation retryable`).
 - M-3 was fixed by `b797863b` (`fix(agent): require atomic feedback bonus batches`).
@@ -32,9 +38,9 @@ Severity guide:
 
 No direct on-chain fund theft or nonce-replay issue was found in the new x402 contract path. The nonce binding, USDC amount checks, stale question reward escrow check, residual balance checks, and downstream escrow reverts look sound.
 
-The main release blockers are off-chain and deployment consistency issues:
+At the time of this review, the main release blockers were off-chain and deployment consistency issues:
 
-1. Generated ABIs advertise one-shot x402 functions at existing Base submitter addresses before those addresses are redeployed.
+1. Generated ABIs advertised one-shot x402 functions at existing Base submitter addresses before those addresses were refreshed.
 2. Browser x402 signing intents can drop the signed EIP-3009 authorization on the second prepare call.
 3. One-shot Feedback Bonus confirmation can mark the ask submitted before persisting the funded bonus pool metadata.
 
@@ -55,8 +61,8 @@ The app/package can plan calls against selectors that the currently recorded Bas
 
 Suggested fix:
 
-- Treat this as a redeploy gate: Base Sepolia first, then Base mainnet.
-- Refresh `packages/foundry/deployments/84532.json`, `packages/foundry/deployments/8453.json`, and `packages/contracts/src/deployedContracts.ts` from the actual deployments.
+- Current status: do not redeploy Base mainnet solely for this historical finding. Base mainnet metadata has been refreshed; Base Sepolia remains the stale staging boundary.
+- Refresh `packages/foundry/deployments/84532.json` and generated `@rateloop/contracts` artifacts from a refreshed Base Sepolia deployment, or gate the one-shot x402 Feedback Bonus path off on `84532`.
 - Add a readiness check that calls `feedbackBonusEscrow()` or validates the one-shot selector on the deployed submitter before publishing docs/ABI for live chains.
 
 Regression coverage:
@@ -303,7 +309,7 @@ Parallel contract review also checked deploy-profile build/size behavior with te
 
 ## Recommended Fix Order
 
-1. Redeploy and regenerate Base Sepolia artifacts, then mainnet artifacts, or gate the one-shot ABI/docs until redeploy is complete.
+1. Refresh/regenerate Base Sepolia artifacts, or gate the one-shot ABI/docs on `84532` until staging is refreshed. Do not treat Base mainnet redeploy as routine follow-up for this historical issue.
 2. Fix browser x402 two-step prepare and expected amount validation together.
 3. Make one-shot confirmation and Feedback Bonus receipt persistence atomic or repairable.
 4. Harden handoff completion idempotency across ask and bonus phases.
