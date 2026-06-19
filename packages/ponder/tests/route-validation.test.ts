@@ -348,6 +348,7 @@ function mockPonderModules<T>(result: T, additionalResults: unknown[] = []) {
       frontendFee: "questionBundleClaim.frontendFee",
       grossAmount: "questionBundleClaim.grossAmount",
       id: "questionBundleClaim.id",
+      identityKey: "questionBundleClaim.identityKey",
       roundSetIndex: "questionBundleClaim.roundSetIndex",
     },
     questionBundleQuestion: {
@@ -600,6 +601,52 @@ describe("shared API helpers", () => {
     ).toContain("feedbackBonusPool.feedbackClosesAt");
     expect(item?.feedbackBonusSummary.nextFeedbackClosesAt).toBe(150n);
     expect(item?.feedbackBonusSummary.nextFeedbackAwardDeadline).toBe(220n);
+  });
+});
+
+describe("question bundle claim candidates", () => {
+  it("excludes bundle round sets already claimed by the voter identity", async () => {
+    const { queryBuilder } = mockPonderModules([
+      {
+        bundleId: 7n,
+        roundSetIndex: 0,
+        asset: 1,
+        correlationWeightRoot: null,
+        payoutWeightRoot: null,
+        payoutArtifactHash: null,
+        payoutArtifactUri: null,
+      },
+    ]);
+    const { registerDataRoutes } = await import(
+      "../src/api/routes/data-routes.js"
+    );
+
+    const app = new Hono();
+    registerDataRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/question-bundle-claim-candidates?voter=0x0000000000000000000000000000000000000001",
+    );
+
+    expect(response.status).toBe(200);
+
+    const leftJoinExpressions = queryBuilder.leftJoin.mock.calls.map(call =>
+      serializeExpression(call),
+    );
+    expect(
+      leftJoinExpressions.some(
+        join =>
+          join.includes("questionBundleClaim.bundleId") &&
+          join.includes("questionBundleClaim.roundSetIndex") &&
+          join.includes("questionBundleClaim.identityKey"),
+      ),
+    ).toBe(true);
+
+    const serializedWhere = serializeExpression(
+      queryBuilder.where.mock.calls[0]?.[0],
+    );
+    expect(serializedWhere).toContain("questionBundleClaim.id");
+    expect(serializedWhere).toContain("is null");
   });
 });
 

@@ -555,11 +555,23 @@ export function registerDataRoutes(app: ApiApp) {
           eq(vote.revealed, true),
         ),
       )
+      .leftJoin(
+        questionBundleClaim,
+        and(
+          eq(questionBundleClaim.bundleId, questionBundleReward.id),
+          eq(
+            questionBundleClaim.roundSetIndex,
+            questionBundleRoundSet.roundSetIndex,
+          ),
+          eq(questionBundleClaim.identityKey, vote.identityKey),
+        ),
+      )
       .where(
         and(
           eq(questionBundleReward.failed, false),
           eq(questionBundleReward.refunded, false),
           sql`${questionBundleRoundSet.claimedCount} < ${questionBundleReward.requiredCompleters}`,
+          sql`${questionBundleClaim.id} is null`,
           // L-1: the bundle endpoint previously applied no window filter, while the on-chain bundle
           // claim enforces the per-vote bounty window (committedWithinBountyWindow via BundleLib).
           // Gate only on the *activated* bundle window (bountyOpensAt/bountyClosesAt). Unlike a pool,
