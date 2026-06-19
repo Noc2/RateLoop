@@ -40,6 +40,34 @@ test("buildAgentFastLaneGuidance estimates bounty and speed from round terms", (
   assert.deepEqual(guidance.warnings, []);
 });
 
+test("buildAgentFastLaneGuidance keeps pure-agent fast presets sub-minute plus settlement buffer", () => {
+  const guidance = buildAgentFastLaneGuidance({
+    bounty: {
+      amount: 1_000_000n,
+      asset: "USDC",
+      bountyStartBy: 0n,
+      bountyWindowSeconds: 0n,
+      bountyEligibility: 0,
+      feedbackWindowSeconds: 0n,
+      requiredSettledRounds: 1n,
+      requiredVoters: 3n,
+    },
+    questionCount: 1,
+    roundConfig: {
+      epochDuration: 60n,
+      maxDuration: 60n,
+      maxVoters: 3n,
+      minVoters: 3n,
+    },
+    nowSeconds: 1_700_000_000,
+  });
+
+  assert.equal(guidance.speed, "fast");
+  assert.equal(guidance.estimatedTimeToResultSeconds, 120);
+  assert.equal(guidance.estimatedResultAt, 1_700_000_120);
+  assert.equal(guidance.expectedResponse.healthyTargetVoters, "3");
+});
+
 test("buildAgentFastLaneGuidance warns on slow underfunded asks", () => {
   const guidance = buildAgentFastLaneGuidance({
     bounty: {

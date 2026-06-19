@@ -59,6 +59,17 @@ export type X402QuestionRoundConfig = {
   maxVoters: bigint;
 };
 
+export const X402_PURE_AGENT_FAST_ROUND_PRESET_ID = "pure_agent_fast" as const;
+
+export type X402QuestionRoundPresetId = typeof X402_PURE_AGENT_FAST_ROUND_PRESET_ID;
+
+export const X402_PURE_AGENT_FAST_ROUND_CONFIG = {
+  epochDuration: 60n,
+  maxDuration: 60n,
+  minVoters: 3n,
+  maxVoters: 3n,
+} satisfies X402QuestionRoundConfig;
+
 export type SerializedX402QuestionRoundConfig = {
   epochDuration: string;
   maxDuration: string;
@@ -685,9 +696,55 @@ function defaultRoundConfig(requiredVoters: bigint): X402QuestionRoundConfig {
   };
 }
 
-function normalizeRoundConfig(value: unknown, requiredVoters: bigint): X402QuestionRoundConfig {
+function normalizeRoundPreset(value: unknown): X402QuestionRoundPresetId | null {
+  if (value === undefined || value === null || value === "") return null;
+  if (typeof value !== "string") {
+    throw new X402QuestionInputError("question.roundPreset must be a string.");
+  }
+
+  const normalized = value.trim().replace(/[-\s]+/g, "_").toLowerCase();
+  if (!normalized || normalized === "default" || normalized === "standard") return null;
+  if (normalized === X402_PURE_AGENT_FAST_ROUND_PRESET_ID || normalized === "agent_fast") {
+    return X402_PURE_AGENT_FAST_ROUND_PRESET_ID;
+  }
+
+  throw new X402QuestionInputError("question.roundPreset must be pure_agent_fast or default.");
+}
+
+function roundConfigFromPreset(
+  preset: X402QuestionRoundPresetId,
+  requiredVoters: bigint,
+): X402QuestionRoundConfig {
+  switch (preset) {
+    case X402_PURE_AGENT_FAST_ROUND_PRESET_ID: {
+      const minVoters =
+        requiredVoters > X402_PURE_AGENT_FAST_ROUND_CONFIG.minVoters
+          ? requiredVoters
+          : X402_PURE_AGENT_FAST_ROUND_CONFIG.minVoters;
+      const maxVoters =
+        minVoters > X402_PURE_AGENT_FAST_ROUND_CONFIG.maxVoters
+          ? minVoters
+          : X402_PURE_AGENT_FAST_ROUND_CONFIG.maxVoters;
+      return {
+        ...X402_PURE_AGENT_FAST_ROUND_CONFIG,
+        minVoters,
+        maxVoters,
+      };
+    }
+  }
+}
+
+function normalizeRoundConfig(
+  value: unknown,
+  requiredVoters: bigint,
+  presetValue?: unknown,
+): X402QuestionRoundConfig {
+  const preset = normalizeRoundPreset(presetValue);
   if (value === undefined || value === null) {
-    return defaultRoundConfig(requiredVoters);
+    return preset ? roundConfigFromPreset(preset, requiredVoters) : defaultRoundConfig(requiredVoters);
+  }
+  if (preset) {
+    throw new X402QuestionInputError("question.roundPreset cannot be combined with question.roundConfig.");
   }
   if (!isObject(value)) {
     throw new X402QuestionInputError("question.roundConfig must be an object.");
@@ -848,7 +905,11 @@ export function parseX402QuestionRequest(
 
   const firstQuestion = isObject(rawQuestions[0]) ? rawQuestions[0] : {};
   const bounty = normalizeBounty(value.bounty);
-  const roundConfig = normalizeRoundConfig(value.roundConfig ?? firstQuestion.roundConfig, bounty.requiredVoters);
+  const roundConfig = normalizeRoundConfig(
+    value.roundConfig ?? firstQuestion.roundConfig,
+    bounty.requiredVoters,
+    value.roundPreset ?? firstQuestion.roundPreset,
+  );
   const topLevelTemplateInputs = normalizeTemplateInputs(value.templateInputs, "templateInputs");
   const topLevelTemplateVersion =
     value.templateVersion === undefined || value.templateVersion === null

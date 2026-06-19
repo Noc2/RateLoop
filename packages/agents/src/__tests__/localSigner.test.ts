@@ -1805,6 +1805,39 @@ describe("local signer round config alignment", () => {
     });
   });
 
+  it("expands the pure-agent fast round preset into a contract-safe round config", () => {
+    const canonical = buildLocalQuestionCanonicalPayload(
+      fiveVoterAskPayload({
+        roundPreset: "pure_agent_fast",
+      }),
+      480,
+    );
+
+    expect(canonical.roundConfig).toEqual({
+      epochDuration: "60",
+      maxDuration: "60",
+      minVoters: "5",
+      maxVoters: "5",
+    });
+  });
+
+  it("rejects ambiguous round presets combined with explicit round config", () => {
+    expect(() =>
+      buildLocalQuestionCanonicalPayload(
+        fiveVoterAskPayload({
+          roundConfig: {
+            epochDuration: "1200",
+            maxDuration: "1200",
+            maxVoters: "100",
+            minVoters: "5",
+          },
+          roundPreset: "pure_agent_fast",
+        }),
+        480,
+      ),
+    ).toThrow(/roundPreset cannot be combined with question\.roundConfig/);
+  });
+
   it("binds gated confidentiality into the canonical payload", () => {
     const canonical = buildLocalQuestionCanonicalPayload(
       fiveVoterAskPayload({

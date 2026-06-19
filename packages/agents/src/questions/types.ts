@@ -27,6 +27,8 @@ export type AgentQuestionExample = {
   detailsUrl?: string;
   tags: string[] | string;
   imageUrls?: string[];
+  roundConfig?: Record<string, string | number | bigint>;
+  roundPreset?: "pure_agent_fast" | "default" | string;
   videoUrl?: string;
   templateId?: string;
   templateInputs?: JsonValue;
@@ -50,6 +52,7 @@ export type AgentAskExample = {
   question?: AgentQuestionExample;
   questions?: AgentQuestionExample[];
   roundConfig?: Record<string, string | number | bigint>;
+  roundPreset?: "pure_agent_fast" | "default" | string;
   templateId?: string;
   templateInputs?: JsonValue;
   templateVersion?: number;

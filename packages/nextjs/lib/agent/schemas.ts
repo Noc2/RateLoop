@@ -160,6 +160,13 @@ const agentQuestionConfidentialityInputSchema = {
   type: "object",
 } satisfies JsonSchema;
 
+const agentRoundPresetInputSchema = {
+  description:
+    "Optional named timing preset. Use pure_agent_fast for low-stakes agent-only review rounds: 60s epoch, 60s max duration, and the bounty's required voter count.",
+  enum: ["pure_agent_fast", "default"],
+  type: "string",
+} satisfies JsonSchema;
+
 const agentQuestionInputSchema = {
   additionalProperties: true,
   properties: {
@@ -192,6 +199,7 @@ const agentQuestionInputSchema = {
       minItems: 1,
       type: ["array", "string"],
     },
+    roundPreset: agentRoundPresetInputSchema,
     targetAudience: targetAudienceInputSchema,
     title: { description: "Question title shown to voters.", type: "string" },
     videoUrl: {
@@ -494,6 +502,7 @@ const agentAskInputBaseProperties = {
       "Optional LREP or USDC pool for useful public feedback from revealed raters. LREP requires wallet_calls funding mode; EIP-3009 USDC authorization remains USDC-only. Currently supported for single-question asks.",
   },
   roundConfig: agentRoundConfigInputSchema,
+  roundPreset: agentRoundPresetInputSchema,
   ...templateSelectorSchema.properties,
 } satisfies JsonSchema;
 

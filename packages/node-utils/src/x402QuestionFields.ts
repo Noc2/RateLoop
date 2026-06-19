@@ -7,6 +7,7 @@ export const X402_QUESTION_TOP_LEVEL_FIELDS = new Set<string>([
   "questions",
   "question",
   "roundConfig",
+  "roundPreset",
   "bounty",
   "templateId",
   "templateInputs",
