@@ -1753,6 +1753,14 @@ export function registerDataRoutes(app: ApiApp) {
           eq(round.state, ROUND_STATE.Settled),
           sql`${vote.roundId} >= ${questionRewardPool.startRoundId}`,
           sql`${questionRewardPoolClaim.id} is null`,
+          buildAllowedContentCondition({
+            canonicalUrl: content.canonicalUrl,
+            description: content.description,
+            tags: content.tags,
+            title: content.title,
+            url: content.url,
+            urlHost: content.urlHost,
+          }),
           // L-1: mirror the on-chain per-vote bounty-window bound enforced by claimQuestionReward
           // (committedWithinBountyWindow), so votes whose commit/reveal fell outside the window are
           // not surfaced as candidates (their claim would revert). Same predicate as the

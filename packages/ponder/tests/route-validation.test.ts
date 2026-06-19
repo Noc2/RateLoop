@@ -2990,6 +2990,8 @@ describe("registerDataRoutes", () => {
     expect(serialized).toContain("round.state");
     expect(serialized).toContain("questionRewardPool.startRoundId");
     expect(serialized).toContain("questionRewardPoolClaim.id");
+    expect(serialized).toContain("content.urlHost");
+    expect(serialized).toContain("content.canonicalUrl");
     const joinExpressions = queryBuilder.leftJoin.mock.calls.map((call) =>
       serializeExpression(call),
     );
