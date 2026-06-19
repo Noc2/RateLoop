@@ -1,25 +1,25 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
-import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
-import { ReentrancyGuardTransient } from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { ICategoryRegistry } from "./interfaces/ICategoryRegistry.sol";
-import { IClusterPayoutOracle } from "./interfaces/IClusterPayoutOracle.sol";
-import { IRoundVotingEngine } from "./interfaces/IRoundVotingEngine.sol";
-import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol";
-import { IConfidentialityEscrow } from "./interfaces/IConfidentialityEscrow.sol";
-import { RoundLib } from "./libraries/RoundLib.sol";
-import { RatingLib } from "./libraries/RatingLib.sol";
-import { ContentRegistryDormancyLib } from "./libraries/ContentRegistryDormancyLib.sol";
-import { ContentRegistryRewardLib } from "./libraries/ContentRegistryRewardLib.sol";
-import { ContentRegistryRatingSnapshotLib } from "./libraries/ContentRegistryRatingSnapshotLib.sol";
-import { ContentRegistryTypes } from "./libraries/ContentRegistryTypes.sol";
-import { ProtocolConfig } from "./ProtocolConfig.sol";
-import { SubmissionMediaValidator } from "./SubmissionMediaValidator.sol";
-import { SubmissionMediaValidatorFactory } from "./SubmissionMediaValidatorFactory.sol";
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
+import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {ICategoryRegistry} from "./interfaces/ICategoryRegistry.sol";
+import {IClusterPayoutOracle} from "./interfaces/IClusterPayoutOracle.sol";
+import {IRoundVotingEngine} from "./interfaces/IRoundVotingEngine.sol";
+import {IRaterIdentityRegistry} from "./interfaces/IRaterIdentityRegistry.sol";
+import {IConfidentialityEscrow} from "./interfaces/IConfidentialityEscrow.sol";
+import {RoundLib} from "./libraries/RoundLib.sol";
+import {RatingLib} from "./libraries/RatingLib.sol";
+import {ContentRegistryDormancyLib} from "./libraries/ContentRegistryDormancyLib.sol";
+import {ContentRegistryRewardLib} from "./libraries/ContentRegistryRewardLib.sol";
+import {ContentRegistryRatingSnapshotLib} from "./libraries/ContentRegistryRatingSnapshotLib.sol";
+import {ContentRegistryTypes} from "./libraries/ContentRegistryTypes.sol";
+import {ProtocolConfig} from "./ProtocolConfig.sol";
+import {SubmissionMediaValidator} from "./SubmissionMediaValidator.sol";
+import {SubmissionMediaValidatorFactory} from "./SubmissionMediaValidatorFactory.sol";
 
 interface IQuestionRewardPoolEscrow {
     function createSubmissionRewardPoolFromRegistry(
@@ -825,8 +825,6 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         address submitter,
         IConfidentialityEscrow.ConfidentialityConfig memory confidentiality
     ) public onlyRole(X402_GATEWAY_ROLE) nonReentrant whenNotPaused returns (uint256 contentId) {
-        require(submitter != address(0));
-        require(rewardTerms.asset == SUBMISSION_REWARD_ASSET_USDC);
         SubmissionMetadata memory metadata = _validatedContextSubmissionMetadata(
             contextUrl, imageUrls, videoUrl, title, tags, categoryId, confidentiality.gated
         );
@@ -905,7 +903,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         bool gated
     ) internal view returns (SubmissionMetadata memory metadata) {
         submissionMediaValidator.validateContextSubmission(contextUrl, imageUrls, videoUrl, title, tags, gated);
-        metadata = SubmissionMetadata({ url: contextUrl, title: title, tags: tags, categoryId: categoryId });
+        metadata = SubmissionMetadata({url: contextUrl, title: title, tags: tags, categoryId: categoryId});
         require(address(categoryRegistry) != address(0));
     }
 
@@ -980,21 +978,25 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         _validateSubmissionReward(rewardTerms);
         require(rewardTerms.requiredVoters == roundConfig.minVoters);
 
-        bytes32 revealCommitment = _computeRevealCommitment(
-            submissionKey,
-            mediaHash,
-            metadata.title,
-            metadata.tags,
-            details,
-            metadata.categoryId,
-            salt,
-            submitter,
-            rewardTerms,
-            roundConfig,
-            spec,
-            confidentialityHash
-        );
-        pending = _consumeReservedSubmission(revealCommitment, submitter);
+        if (submitter == msg.sender) {
+            bytes32 revealCommitment = _computeRevealCommitment(
+                submissionKey,
+                mediaHash,
+                metadata.title,
+                metadata.tags,
+                details,
+                metadata.categoryId,
+                salt,
+                submitter,
+                rewardTerms,
+                roundConfig,
+                spec,
+                confidentialityHash
+            );
+            pending = _consumeReservedSubmission(revealCommitment, submitter);
+        } else {
+            (pending.submitterIdentity, pending.submitterIdentityKey) = _snapshotSubmitterIdentity(submitter);
+        }
         submissionKeyUsed[submissionKey] = true;
     }
 
@@ -1008,7 +1010,6 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         require(block.timestamp <= pending.expiresAt);
         require(block.timestamp >= pending.reservedAt + RESERVED_SUBMISSION_MIN_AGE);
         (address submitterIdentity, bytes32 submitterIdentityKey) = _pendingSubmitterIdentity(pending);
-        _requireSubmitterIdentityNotBanned(pending.submitter, submitterIdentity, submitterIdentityKey);
         _requireReservedSubmitterIdentityCurrent(pending, submitterIdentity, submitterIdentityKey);
 
         delete pendingSubmissions[reservationKey];
@@ -1136,6 +1137,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         if (submitterIdentity == address(0) || submitterIdentityKey == bytes32(0)) {
             (submitterIdentity, submitterIdentityKey) = _snapshotSubmitterIdentity(submitter);
         }
+        _requireSubmitterIdentityNotBanned(submitter, submitterIdentity, submitterIdentityKey);
         getSubmitterIdentity[contentId] = submitterIdentity;
         contentSubmitterIdentityKey[contentId] = submitterIdentityKey;
         contentRoundConfig[contentId] = roundConfig;
@@ -1262,7 +1264,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         internal
         pure
         returns (IConfidentialityEscrow.ConfidentialityConfig memory confidentiality)
-    { }
+    {}
 
     function _emitContentMediaSubmitted(
         uint256 contentId,
@@ -1435,7 +1437,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             uint48, RoundLib.RoundState, uint16, uint16, uint64, uint48, uint48 settledAt, uint8
         ) {
             if (settledAt != 0) return uint256(settledAt);
-        } catch { }
+        } catch {}
         return block.timestamp;
     }
 

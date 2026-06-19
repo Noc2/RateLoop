@@ -1,46 +1,75 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
-import { ReentrancyGuardTransient } from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
 
-import { ContentRegistry } from "./ContentRegistry.sol";
-import { Eip3009Authorization, IReceiveWithAuthorizationToken } from "./interfaces/IEip3009.sol";
-import { IConfidentialityEscrow } from "./interfaces/IConfidentialityEscrow.sol";
-import { RoundLib } from "./libraries/RoundLib.sol";
+import {ContentRegistry} from "./ContentRegistry.sol";
+import {FeedbackBonusEscrow} from "./FeedbackBonusEscrow.sol";
+import {Eip3009Authorization, IReceiveWithAuthorizationToken} from "./interfaces/IEip3009.sol";
+import {IConfidentialityEscrow} from "./interfaces/IConfidentialityEscrow.sol";
+import {RoundLib} from "./libraries/RoundLib.sol";
 
 contract X402QuestionSubmitter is Ownable, ReentrancyGuardTransient {
     using SafeERC20 for IERC20;
 
     uint8 internal constant REWARD_ASSET_USDC = 1;
     bytes32 internal constant X402_QUESTION_PAYMENT_DOMAIN = keccak256("rateloop-x402-question-payment-v3");
+    bytes32 internal constant X402_QUESTION_ONE_SHOT_PAYMENT_DOMAIN =
+        keccak256("rateloop-x402-question-one-shot-payment-v4");
+
+    struct FeedbackBonusTerms {
+        uint256 amount;
+        uint256 feedbackClosesAt;
+        address awarder;
+    }
 
     ContentRegistry public immutable registry;
     IERC20 public immutable usdcToken;
     address public questionRewardPoolEscrow;
+    address public feedbackBonusEscrow;
 
     event X402QuestionSubmitted(
         uint256 indexed contentId, address indexed submitter, bytes32 indexed paymentNonce, uint256 amount
     );
+    event X402FeedbackBonusAttached(
+        uint256 indexed contentId,
+        uint256 indexed feedbackBonusPoolId,
+        address indexed funder,
+        uint256 amount,
+        uint256 feedbackClosesAt,
+        address awarder
+    );
     event QuestionRewardPoolEscrowUpdated(address indexed previousEscrow, address indexed currentEscrow);
+    event FeedbackBonusEscrowUpdated(address indexed previousEscrow, address indexed currentEscrow);
 
-    constructor(ContentRegistry _registry, address _usdcToken, address _questionRewardPoolEscrow, address initialOwner)
-        Ownable(initialOwner)
-    {
+    constructor(
+        ContentRegistry _registry,
+        address _usdcToken,
+        address _questionRewardPoolEscrow,
+        address _feedbackBonusEscrow,
+        address initialOwner
+    ) Ownable(initialOwner) {
         require(address(_registry) != address(0), "Invalid registry");
         require(_usdcToken != address(0), "Invalid USDC");
         require(_questionRewardPoolEscrow != address(0), "Invalid escrow");
         registry = _registry;
         usdcToken = IERC20(_usdcToken);
         questionRewardPoolEscrow = _questionRewardPoolEscrow;
+        feedbackBonusEscrow = _feedbackBonusEscrow;
     }
 
     function setQuestionRewardPoolEscrow(address newEscrow) external onlyOwner {
         require(newEscrow != address(0), "Invalid escrow");
         require(registry.questionRewardPoolEscrow() == newEscrow, "Stale escrow");
         _setQuestionRewardPoolEscrow(newEscrow);
+    }
+
+    function setFeedbackBonusEscrow(address newEscrow) external onlyOwner {
+        require(newEscrow != address(0), "Invalid escrow");
+        _setFeedbackBonusEscrow(newEscrow);
     }
 
     /// @notice Recover ERC-20 tokens accidentally sent to this contract.
@@ -77,7 +106,7 @@ contract X402QuestionSubmitter is Ownable, ReentrancyGuardTransient {
             rewardTerms,
             roundConfig,
             spec,
-            IConfidentialityEscrow.ConfidentialityConfig({ gated: false, bondAsset: 0, bondAmount: 0, flags: 0 }),
+            IConfidentialityEscrow.ConfidentialityConfig({gated: false, bondAsset: 0, bondAmount: 0, flags: 0}),
             paymentAuthorization
         );
     }
@@ -110,6 +139,73 @@ contract X402QuestionSubmitter is Ownable, ReentrancyGuardTransient {
             roundConfig,
             spec,
             confidentiality,
+            paymentAuthorization
+        );
+    }
+
+    function submitQuestionWithX402OneShotPayment(
+        string memory contextUrl,
+        string[] memory imageUrls,
+        string memory videoUrl,
+        string memory title,
+        string memory tags,
+        uint256 categoryId,
+        ContentRegistry.SubmissionDetails memory details,
+        bytes32 salt,
+        ContentRegistry.SubmissionRewardTerms memory rewardTerms,
+        RoundLib.RoundConfig memory roundConfig,
+        ContentRegistry.QuestionSpecCommitment memory spec,
+        FeedbackBonusTerms memory feedbackBonusTerms,
+        Eip3009Authorization calldata paymentAuthorization
+    ) external nonReentrant returns (uint256 contentId, uint256 feedbackBonusPoolId) {
+        return _submitQuestionWithX402OneShotPayment(
+            contextUrl,
+            imageUrls,
+            videoUrl,
+            title,
+            tags,
+            categoryId,
+            details,
+            salt,
+            rewardTerms,
+            roundConfig,
+            spec,
+            IConfidentialityEscrow.ConfidentialityConfig({gated: false, bondAsset: 0, bondAmount: 0, flags: 0}),
+            feedbackBonusTerms,
+            paymentAuthorization
+        );
+    }
+
+    function submitQuestionWithX402OneShotPayment(
+        string memory contextUrl,
+        string[] memory imageUrls,
+        string memory videoUrl,
+        string memory title,
+        string memory tags,
+        uint256 categoryId,
+        ContentRegistry.SubmissionDetails memory details,
+        bytes32 salt,
+        ContentRegistry.SubmissionRewardTerms memory rewardTerms,
+        RoundLib.RoundConfig memory roundConfig,
+        ContentRegistry.QuestionSpecCommitment memory spec,
+        IConfidentialityEscrow.ConfidentialityConfig memory confidentiality,
+        FeedbackBonusTerms memory feedbackBonusTerms,
+        Eip3009Authorization calldata paymentAuthorization
+    ) public nonReentrant returns (uint256 contentId, uint256 feedbackBonusPoolId) {
+        return _submitQuestionWithX402OneShotPayment(
+            contextUrl,
+            imageUrls,
+            videoUrl,
+            title,
+            tags,
+            categoryId,
+            details,
+            salt,
+            rewardTerms,
+            roundConfig,
+            spec,
+            confidentiality,
+            feedbackBonusTerms,
             paymentAuthorization
         );
     }
@@ -192,6 +288,120 @@ contract X402QuestionSubmitter is Ownable, ReentrancyGuardTransient {
             confidentiality
         );
 
+        require(usdcToken.balanceOf(address(this)) == balanceBefore, "Residual token");
+        emit X402QuestionSubmitted(
+            contentId, paymentAuthorization.from, paymentAuthorization.nonce, paymentAuthorization.value
+        );
+    }
+
+    function _submitQuestionWithX402OneShotPayment(
+        string memory contextUrl,
+        string[] memory imageUrls,
+        string memory videoUrl,
+        string memory title,
+        string memory tags,
+        uint256 categoryId,
+        ContentRegistry.SubmissionDetails memory details,
+        bytes32 salt,
+        ContentRegistry.SubmissionRewardTerms memory rewardTerms,
+        RoundLib.RoundConfig memory roundConfig,
+        ContentRegistry.QuestionSpecCommitment memory spec,
+        IConfidentialityEscrow.ConfidentialityConfig memory confidentiality,
+        FeedbackBonusTerms memory feedbackBonusTerms,
+        Eip3009Authorization calldata paymentAuthorization
+    ) internal returns (uint256 contentId, uint256 feedbackBonusPoolId) {
+        require(rewardTerms.asset == REWARD_ASSET_USDC, "USDC required");
+        uint256 totalAmount = rewardTerms.amount + feedbackBonusTerms.amount;
+        require(paymentAuthorization.from != address(0), "Invalid payer");
+        require(paymentAuthorization.to == address(this), "Bad payee");
+        require(paymentAuthorization.value == totalAmount, "Bad amount");
+        require(
+            paymentAuthorization.nonce
+                == computeX402QuestionOneShotPaymentNonce(
+                    ContentRegistry.SubmissionMetadata({
+                        url: contextUrl, title: title, tags: tags, categoryId: categoryId
+                    }),
+                    imageUrls,
+                    videoUrl,
+                    details,
+                    salt,
+                    rewardTerms,
+                    roundConfig,
+                    spec,
+                    confidentiality,
+                    feedbackBonusTerms,
+                    paymentAuthorization.from,
+                    paymentAuthorization.to,
+                    paymentAuthorization.value,
+                    paymentAuthorization.validAfter,
+                    paymentAuthorization.validBefore
+                ),
+            "Bad nonce"
+        );
+
+        require(registry.questionRewardPoolEscrow() == questionRewardPoolEscrow, "Stale escrow");
+        address configuredFeedbackEscrow = feedbackBonusEscrow;
+        if (feedbackBonusTerms.amount != 0) {
+            require(configuredFeedbackEscrow != address(0), "Feedback escrow unset");
+        }
+
+        uint256 balanceBefore = usdcToken.balanceOf(address(this));
+        // slither-disable-next-line reentrancy-balance
+        IReceiveWithAuthorizationToken(address(usdcToken))
+            .receiveWithAuthorization(
+                paymentAuthorization.from,
+                paymentAuthorization.to,
+                paymentAuthorization.value,
+                paymentAuthorization.validAfter,
+                paymentAuthorization.validBefore,
+                paymentAuthorization.nonce,
+                paymentAuthorization.v,
+                paymentAuthorization.r,
+                paymentAuthorization.s
+            );
+        uint256 receivedAmount = usdcToken.balanceOf(address(this)) - balanceBefore;
+        require(receivedAmount == paymentAuthorization.value, "Bad token");
+        usdcToken.forceApprove(questionRewardPoolEscrow, rewardTerms.amount);
+
+        contentId = registry.submitQuestionFromX402Gateway(
+            contextUrl,
+            imageUrls,
+            videoUrl,
+            title,
+            tags,
+            categoryId,
+            details,
+            salt,
+            rewardTerms,
+            roundConfig,
+            spec,
+            paymentAuthorization.from,
+            confidentiality
+        );
+
+        if (feedbackBonusTerms.amount != 0) {
+            uint256 roundId = registry.nextVotingRoundId(contentId);
+            usdcToken.forceApprove(configuredFeedbackEscrow, feedbackBonusTerms.amount);
+            feedbackBonusPoolId = FeedbackBonusEscrow(configuredFeedbackEscrow)
+                .createFeedbackBonusPoolFromGateway(
+                    contentId,
+                    roundId,
+                    feedbackBonusTerms.amount,
+                    feedbackBonusTerms.feedbackClosesAt,
+                    feedbackBonusTerms.awarder,
+                    paymentAuthorization.from
+                );
+            emit X402FeedbackBonusAttached(
+                contentId,
+                feedbackBonusPoolId,
+                paymentAuthorization.from,
+                feedbackBonusTerms.amount,
+                feedbackBonusTerms.feedbackClosesAt,
+                feedbackBonusTerms.awarder
+            );
+        }
+
+        require(usdcToken.balanceOf(address(this)) == balanceBefore, "Residual token");
         emit X402QuestionSubmitted(
             contentId, paymentAuthorization.from, paymentAuthorization.nonce, paymentAuthorization.value
         );
@@ -221,7 +431,7 @@ contract X402QuestionSubmitter is Ownable, ReentrancyGuardTransient {
             rewardTerms,
             roundConfig,
             spec,
-            IConfidentialityEscrow.ConfidentialityConfig({ gated: false, bondAsset: 0, bondAmount: 0, flags: 0 }),
+            IConfidentialityEscrow.ConfidentialityConfig({gated: false, bondAsset: 0, bondAmount: 0, flags: 0}),
             payer,
             payee,
             value,
@@ -262,6 +472,82 @@ contract X402QuestionSubmitter is Ownable, ReentrancyGuardTransient {
                 _hashRewardTerms(rewardTerms),
                 _hashRoundConfig(roundConfig),
                 _hashConfidentiality(confidentiality),
+                spec.questionMetadataHash,
+                spec.resultSpecHash
+            )
+        );
+    }
+
+    function computeX402QuestionOneShotPaymentNonce(
+        ContentRegistry.SubmissionMetadata memory metadata,
+        string[] memory imageUrls,
+        string memory videoUrl,
+        ContentRegistry.SubmissionDetails memory details,
+        bytes32 salt,
+        ContentRegistry.SubmissionRewardTerms memory rewardTerms,
+        RoundLib.RoundConfig memory roundConfig,
+        ContentRegistry.QuestionSpecCommitment memory spec,
+        FeedbackBonusTerms memory feedbackBonusTerms,
+        address payer,
+        address payee,
+        uint256 value,
+        uint256 validAfter,
+        uint256 validBefore
+    ) public view returns (bytes32) {
+        return computeX402QuestionOneShotPaymentNonce(
+            metadata,
+            imageUrls,
+            videoUrl,
+            details,
+            salt,
+            rewardTerms,
+            roundConfig,
+            spec,
+            IConfidentialityEscrow.ConfidentialityConfig({gated: false, bondAsset: 0, bondAmount: 0, flags: 0}),
+            feedbackBonusTerms,
+            payer,
+            payee,
+            value,
+            validAfter,
+            validBefore
+        );
+    }
+
+    function computeX402QuestionOneShotPaymentNonce(
+        ContentRegistry.SubmissionMetadata memory metadata,
+        string[] memory imageUrls,
+        string memory videoUrl,
+        ContentRegistry.SubmissionDetails memory details,
+        bytes32 salt,
+        ContentRegistry.SubmissionRewardTerms memory rewardTerms,
+        RoundLib.RoundConfig memory roundConfig,
+        ContentRegistry.QuestionSpecCommitment memory spec,
+        IConfidentialityEscrow.ConfidentialityConfig memory confidentiality,
+        FeedbackBonusTerms memory feedbackBonusTerms,
+        address payer,
+        address payee,
+        uint256 value,
+        uint256 validAfter,
+        uint256 validBefore
+    ) public view returns (bytes32) {
+        return keccak256(
+            abi.encode(
+                X402_QUESTION_ONE_SHOT_PAYMENT_DOMAIN,
+                block.chainid,
+                address(registry),
+                questionRewardPoolEscrow,
+                feedbackBonusEscrow,
+                address(this),
+                payer,
+                payee,
+                value,
+                validAfter,
+                validBefore,
+                _hashSubmissionPayload(metadata, imageUrls, videoUrl, details, salt),
+                _hashRewardTerms(rewardTerms),
+                _hashRoundConfig(roundConfig),
+                _hashConfidentiality(confidentiality),
+                _hashFeedbackBonusTerms(feedbackBonusTerms),
                 spec.questionMetadataHash,
                 spec.resultSpecHash
             )
@@ -323,6 +609,12 @@ contract X402QuestionSubmitter is Ownable, ReentrancyGuardTransient {
         );
     }
 
+    function _hashFeedbackBonusTerms(FeedbackBonusTerms memory feedbackBonusTerms) private pure returns (bytes32) {
+        return keccak256(
+            abi.encode(feedbackBonusTerms.amount, feedbackBonusTerms.feedbackClosesAt, feedbackBonusTerms.awarder)
+        );
+    }
+
     function _hashStringArray(string[] memory values) private pure returns (bytes32) {
         bytes32[] memory valueHashes = new bytes32[](values.length);
         for (uint256 i = 0; i < values.length;) {
@@ -339,5 +631,12 @@ contract X402QuestionSubmitter is Ownable, ReentrancyGuardTransient {
         address previousEscrow = questionRewardPoolEscrow;
         questionRewardPoolEscrow = newEscrow;
         emit QuestionRewardPoolEscrowUpdated(previousEscrow, newEscrow);
+    }
+
+    function _setFeedbackBonusEscrow(address newEscrow) private {
+        require(newEscrow != address(0), "Invalid escrow");
+        address previousEscrow = feedbackBonusEscrow;
+        feedbackBonusEscrow = newEscrow;
+        emit FeedbackBonusEscrowUpdated(previousEscrow, newEscrow);
     }
 }

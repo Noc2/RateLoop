@@ -1,25 +1,27 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
-import { VotingTestBase } from "./helpers/VotingTestHelpers.sol";
-import { ContentRegistry } from "../contracts/ContentRegistry.sol";
-import { LoopReputation } from "../contracts/LoopReputation.sol";
-import { FrontendRegistry } from "../contracts/FrontendRegistry.sol";
-import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
-import { MockERC20 } from "../contracts/mocks/MockERC20.sol";
-import { ClusterPayoutOracle } from "../contracts/ClusterPayoutOracle.sol";
-import { IClusterPayoutOracle } from "../contracts/interfaces/IClusterPayoutOracle.sol";
-import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
-import { QuestionRewardPoolEscrow } from "../contracts/QuestionRewardPoolEscrow.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {VotingTestBase} from "./helpers/VotingTestHelpers.sol";
+import {ContentRegistry} from "../contracts/ContentRegistry.sol";
+import {LoopReputation} from "../contracts/LoopReputation.sol";
+import {FrontendRegistry} from "../contracts/FrontendRegistry.sol";
+import {FeedbackBonusEscrow} from "../contracts/FeedbackBonusEscrow.sol";
+import {FeedbackRegistry} from "../contracts/FeedbackRegistry.sol";
+import {MockCategoryRegistry} from "../contracts/mocks/MockCategoryRegistry.sol";
+import {MockERC20} from "../contracts/mocks/MockERC20.sol";
+import {ClusterPayoutOracle} from "../contracts/ClusterPayoutOracle.sol";
+import {IClusterPayoutOracle} from "../contracts/interfaces/IClusterPayoutOracle.sol";
+import {ProtocolConfig} from "../contracts/ProtocolConfig.sol";
+import {QuestionRewardPoolEscrow} from "../contracts/QuestionRewardPoolEscrow.sol";
 import {
     QuestionRewardPoolEscrowBundleActionsLib
 } from "../contracts/libraries/QuestionRewardPoolEscrowBundleActionsLib.sol";
-import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
-import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
-import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
-import { RoundLib } from "../contracts/libraries/RoundLib.sol";
+import {RoundRewardDistributor} from "../contracts/RoundRewardDistributor.sol";
+import {RoundVotingEngine} from "../contracts/RoundVotingEngine.sol";
+import {RoundEngineReadHelpers} from "./helpers/RoundEngineReadHelpers.sol";
+import {RoundLib} from "../contracts/libraries/RoundLib.sol";
 import {
     AuthorizedRewardPoolParams,
     BOUNTY_ELIGIBILITY_PASSPORT,
@@ -27,11 +29,11 @@ import {
     BOUNTY_ELIGIBILITY_VERIFIED_HUMAN,
     RoundSnapshot
 } from "../contracts/libraries/QuestionRewardPoolEscrowTypes.sol";
-import { TlockVoteLib } from "../contracts/libraries/TlockVoteLib.sol";
-import { Eip3009Authorization } from "../contracts/interfaces/IEip3009.sol";
-import { X402QuestionSubmitter } from "../contracts/X402QuestionSubmitter.sol";
-import { MockQuestionRewardPoolEscrow } from "./mocks/MockQuestionRewardPoolEscrow.sol";
-import { MockRaterIdentityRegistry } from "./mocks/MockRaterIdentityRegistry.sol";
+import {TlockVoteLib} from "../contracts/libraries/TlockVoteLib.sol";
+import {Eip3009Authorization} from "../contracts/interfaces/IEip3009.sol";
+import {X402QuestionSubmitter} from "../contracts/X402QuestionSubmitter.sol";
+import {MockQuestionRewardPoolEscrow} from "./mocks/MockQuestionRewardPoolEscrow.sol";
+import {MockRaterIdentityRegistry} from "./mocks/MockRaterIdentityRegistry.sol";
 
 contract QuestionRewardPoolEscrowTest is VotingTestBase {
     LoopReputation public lrepToken;
@@ -224,7 +226,8 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         registry.setProtocolConfig(address(protocolConfig));
         registry.setCategoryRegistry(address(mockCategoryRegistry));
         registry.setQuestionRewardPoolEscrow(address(rewardPoolEscrow));
-        x402QuestionSubmitter = new X402QuestionSubmitter(registry, address(usdc), address(rewardPoolEscrow), owner);
+        x402QuestionSubmitter =
+            new X402QuestionSubmitter(registry, address(usdc), address(rewardPoolEscrow), address(0), owner);
         registry.grantRole(keccak256("X402_GATEWAY_ROLE"), address(x402QuestionSubmitter));
 
         frontendRegistry.setVotingEngine(address(votingEngine));
@@ -1039,7 +1042,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
     function testRefundableRewardPoolAmountUsesQuestionSelectedVoterCap() public {
         RoundLib.RoundConfig memory roundConfig =
-            RoundLib.RoundConfig({ epochDuration: 10 minutes, maxDuration: 1 hours, minVoters: 3, maxVoters: 4 });
+            RoundLib.RoundConfig({epochDuration: 10 minutes, maxDuration: 1 hours, minVoters: 3, maxVoters: 4});
         uint256 contentId = _submitQuestionWithRoundConfig("small-cap", roundConfig);
 
         uint256 fundedAmount = 4 * 10_000;
@@ -1051,7 +1054,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
     function testRewardPoolRejectsRequiredVotersAboveSettlementVoters() public {
         RoundLib.RoundConfig memory roundConfig =
-            RoundLib.RoundConfig({ epochDuration: 10 minutes, maxDuration: 1 hours, minVoters: 3, maxVoters: 4 });
+            RoundLib.RoundConfig({epochDuration: 10 minutes, maxDuration: 1 hours, minVoters: 3, maxVoters: 4});
         uint256 contentId = _submitQuestionWithRoundConfig("impossible-cap", roundConfig);
 
         vm.startPrank(funder);
@@ -1067,7 +1070,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             address(registry),
             abi.encodeWithSelector(ContentRegistry.getContentRoundConfig.selector, contentId),
             abi.encode(
-                RoundLib.RoundConfig({ epochDuration: 10 minutes, maxDuration: 1 hours, minVoters: 3, maxVoters: 201 })
+                RoundLib.RoundConfig({epochDuration: 10 minutes, maxDuration: 1 hours, minVoters: 3, maxVoters: 201})
             )
         );
 
@@ -5883,7 +5886,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertEq(usdc.balanceOf(agentWallet), agentBalanceBefore - question.rewardTerms.amount);
     }
 
-    function testX402QuestionSubmissionRequiresReservationBeforeUsdcAuthorization() public {
+    function testX402QuestionSubmissionDoesNotRequireReservationBeforeUsdcAuthorization() public {
         address agentWallet = _x402AgentWallet();
         X402TestQuestion memory question = _x402TestQuestion();
         Eip3009Authorization memory authorization = _x402Authorization(agentWallet, question);
@@ -5895,8 +5898,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         uint256 agentBalanceBefore = usdc.balanceOf(agentWallet);
         uint256 nextContentIdBefore = registry.nextContentId();
 
-        vm.expectRevert();
-        x402QuestionSubmitter.submitQuestionWithX402Payment(
+        uint256 contentId = x402QuestionSubmitter.submitQuestionWithX402Payment(
             question.contextUrl,
             question.imageUrls,
             "",
@@ -5911,13 +5913,14 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             authorization
         );
 
-        assertFalse(usdc.authorizationState(agentWallet, authorization.nonce));
-        assertEq(registry.nextContentId(), nextContentIdBefore);
-        assertEq(usdc.balanceOf(address(rewardPoolEscrow)), escrowBalanceBefore);
-        assertEq(usdc.balanceOf(agentWallet), agentBalanceBefore);
+        assertTrue(usdc.authorizationState(agentWallet, authorization.nonce));
+        assertEq(contentId, nextContentIdBefore);
+        assertEq(registry.nextContentId(), nextContentIdBefore + 1);
+        assertEq(usdc.balanceOf(address(rewardPoolEscrow)), escrowBalanceBefore + question.rewardTerms.amount);
+        assertEq(usdc.balanceOf(agentWallet), agentBalanceBefore - question.rewardTerms.amount);
     }
 
-    function testX402QuestionSubmissionRejectsTooNewReservationBeforeUsdcAuthorization() public {
+    function testX402QuestionSubmissionIgnoresTooNewReservationBeforeUsdcAuthorization() public {
         address agentWallet = _x402AgentWallet();
         X402TestQuestion memory question = _x402TestQuestion();
         Eip3009Authorization memory authorization = _x402Authorization(agentWallet, question);
@@ -5931,8 +5934,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
         _reserveX402Question(agentWallet, question);
 
-        vm.expectRevert();
-        x402QuestionSubmitter.submitQuestionWithX402Payment(
+        uint256 contentId = x402QuestionSubmitter.submitQuestionWithX402Payment(
             question.contextUrl,
             question.imageUrls,
             "",
@@ -5947,10 +5949,11 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             authorization
         );
 
-        assertFalse(usdc.authorizationState(agentWallet, authorization.nonce));
-        assertEq(registry.nextContentId(), nextContentIdBefore);
-        assertEq(usdc.balanceOf(address(rewardPoolEscrow)), escrowBalanceBefore);
-        assertEq(usdc.balanceOf(agentWallet), agentBalanceBefore);
+        assertTrue(usdc.authorizationState(agentWallet, authorization.nonce));
+        assertEq(contentId, nextContentIdBefore);
+        assertEq(registry.nextContentId(), nextContentIdBefore + 1);
+        assertEq(usdc.balanceOf(address(rewardPoolEscrow)), escrowBalanceBefore + question.rewardTerms.amount);
+        assertEq(usdc.balanceOf(agentWallet), agentBalanceBefore - question.rewardTerms.amount);
     }
 
     function testX402QuestionSubmissionRejectsStaleEscrowBeforeUsdcAuthorization() public {
@@ -6171,6 +6174,63 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertTrue(usdc.authorizationState(agentWallet, authorization.nonce));
         assertEq(usdc.balanceOf(address(rewardPoolEscrow)), escrowBalanceBefore + question.rewardTerms.amount);
         assertEq(usdc.balanceOf(agentWallet), agentBalanceBefore - question.rewardTerms.amount);
+    }
+
+    function testX402OneShotPaymentCreatesQuestionRewardAndFeedbackBonus() public {
+        address agentWallet = _x402AgentWallet();
+        X402TestQuestion memory question = _x402TestQuestion();
+        FeedbackBonusEscrow feedbackEscrow = _deployFeedbackBonusEscrow();
+
+        vm.prank(owner);
+        x402QuestionSubmitter.setFeedbackBonusEscrow(address(feedbackEscrow));
+
+        X402QuestionSubmitter.FeedbackBonusTerms memory feedbackTerms = X402QuestionSubmitter.FeedbackBonusTerms({
+            amount: 25e6, feedbackClosesAt: block.timestamp + 7 days, awarder: agentWallet
+        });
+        Eip3009Authorization memory authorization = _x402OneShotAuthorization(agentWallet, question, feedbackTerms);
+
+        usdc.mint(agentWallet, authorization.value);
+        uint256 rewardEscrowBalanceBefore = usdc.balanceOf(address(rewardPoolEscrow));
+        uint256 feedbackEscrowBalanceBefore = usdc.balanceOf(address(feedbackEscrow));
+        uint256 agentBalanceBefore = usdc.balanceOf(agentWallet);
+        uint256 nextContentIdBefore = registry.nextContentId();
+
+        (uint256 contentId, uint256 feedbackBonusPoolId) = x402QuestionSubmitter.submitQuestionWithX402OneShotPayment(
+            question.contextUrl,
+            question.imageUrls,
+            "",
+            question.title,
+            question.tags,
+            CATEGORY_ID,
+            _emptySubmissionDetails(),
+            question.salt,
+            question.rewardTerms,
+            question.roundConfig,
+            question.spec,
+            feedbackTerms,
+            authorization
+        );
+
+        assertTrue(usdc.authorizationState(agentWallet, authorization.nonce));
+        assertEq(contentId, nextContentIdBefore);
+        assertEq(registry.getSubmitterIdentity(contentId), agentWallet);
+        assertEq(usdc.balanceOf(address(rewardPoolEscrow)), rewardEscrowBalanceBefore + question.rewardTerms.amount);
+        assertEq(usdc.balanceOf(address(feedbackEscrow)), feedbackEscrowBalanceBefore + feedbackTerms.amount);
+        assertEq(usdc.balanceOf(agentWallet), agentBalanceBefore - authorization.value);
+        assertEq(usdc.balanceOf(address(x402QuestionSubmitter)), 0);
+
+        (
+            uint64 storedId,
+            uint64 storedContentId,
+            uint64 storedRoundId,,
+            address storedFunder,,,,,,,
+            uint256 fundedAmount,,,,
+        ) = feedbackEscrow.feedbackBonusPools(feedbackBonusPoolId);
+        assertEq(storedId, feedbackBonusPoolId);
+        assertEq(storedContentId, contentId);
+        assertEq(storedRoundId, 1);
+        assertEq(storedFunder, agentWallet);
+        assertEq(fundedAmount, feedbackTerms.amount);
     }
 
     function testX402QuestionSubmissionRejectsShortReceipt() public {
@@ -6622,6 +6682,36 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         );
     }
 
+    function _deployFeedbackBonusEscrow() internal returns (FeedbackBonusEscrow feedbackEscrow) {
+        FeedbackRegistry feedbackRegistry = FeedbackRegistry(
+            address(
+                new ERC1967Proxy(
+                    address(new FeedbackRegistry()),
+                    abi.encodeCall(FeedbackRegistry.initialize, (owner, owner, address(votingEngine)))
+                )
+            )
+        );
+        feedbackEscrow = FeedbackBonusEscrow(
+            address(
+                new ERC1967Proxy(
+                    address(new FeedbackBonusEscrow()),
+                    abi.encodeCall(
+                        FeedbackBonusEscrow.initialize,
+                        (
+                            owner,
+                            address(lrepToken),
+                            address(usdc),
+                            address(registry),
+                            address(votingEngine),
+                            address(raterIdentityRegistry),
+                            address(feedbackRegistry)
+                        )
+                    )
+                )
+            )
+        );
+    }
+
     function _reserveX402Question(address agentWallet, X402TestQuestion memory question)
         internal
         returns (bytes32 revealCommitment)
@@ -6680,6 +6770,46 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
                 agentWallet,
                 address(x402QuestionSubmitter),
                 question.rewardTerms.amount,
+                validAfter,
+                validBefore
+            ),
+            v: 27,
+            r: bytes32(0),
+            s: bytes32(0)
+        });
+        _signAuthorization(authorization, X402_AGENT_KEY);
+    }
+
+    function _x402OneShotAuthorization(
+        address agentWallet,
+        X402TestQuestion memory question,
+        X402QuestionSubmitter.FeedbackBonusTerms memory feedbackTerms
+    ) internal view returns (Eip3009Authorization memory authorization) {
+        uint256 validAfter = block.timestamp - 1;
+        uint256 validBefore = block.timestamp + 30 minutes;
+        uint256 value = question.rewardTerms.amount + feedbackTerms.amount;
+        ContentRegistry.SubmissionMetadata memory metadata = ContentRegistry.SubmissionMetadata({
+            url: question.contextUrl, title: question.title, tags: question.tags, categoryId: CATEGORY_ID
+        });
+        authorization = Eip3009Authorization({
+            from: agentWallet,
+            to: address(x402QuestionSubmitter),
+            value: value,
+            validAfter: validAfter,
+            validBefore: validBefore,
+            nonce: x402QuestionSubmitter.computeX402QuestionOneShotPaymentNonce(
+                metadata,
+                question.imageUrls,
+                "",
+                _emptySubmissionDetails(),
+                question.salt,
+                question.rewardTerms,
+                question.roundConfig,
+                question.spec,
+                feedbackTerms,
+                agentWallet,
+                address(x402QuestionSubmitter),
+                value,
                 validAfter,
                 validBefore
             ),
@@ -8274,7 +8404,7 @@ contract MockBundleFrontendRegistry {
     mapping(address => FrontendInfo) public frontends;
 
     function setFrontend(address frontend, address operator, bool eligible, bool canClaim) external {
-        frontends[frontend] = FrontendInfo({ operator: operator, eligible: eligible, canClaim: canClaim });
+        frontends[frontend] = FrontendInfo({operator: operator, eligible: eligible, canClaim: canClaim});
     }
 
     function STAKE_AMOUNT() external pure returns (uint256) {
