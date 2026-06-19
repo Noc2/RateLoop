@@ -246,7 +246,7 @@ Slower perceived confirmations, but no safety issue.
 
 Suggested fix:
 
-- Confirm Vercel production sets `NEXT_PUBLIC_USE_BASE_PRECONF_RPC=true` and optionally `NEXT_PUBLIC_BASE_PRECONF_RPC_URL_8453`.
+- Confirm Vercel production sets `NEXT_PUBLIC_USE_BASE_PRECONF_RPC=true` and that `NEXT_PUBLIC_RPC_URL_8453` points at a Flashblocks-capable provider.
 - If checked-in production env is meant to be deploy-ready, add the flag there. If not, document that Vercel dashboard env is authoritative.
 
 ### L-2: Review and audit docs contain superseded findings

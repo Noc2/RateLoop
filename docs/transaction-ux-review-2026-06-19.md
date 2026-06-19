@@ -238,7 +238,7 @@ Evidence:
 
 - `packages/nextjs/.env.example:16` still gives a thirdweb RPC URL as the generic `NEXT_PUBLIC_RPC_URL_*` example.
 - `README.md:80` says Next.js reads contracts via thirdweb, wagmi, and Ponder.
-- Newer docs correctly separate generic browser RPCs from `NEXT_PUBLIC_BASE_PRECONF_RPC_URL_*` and keep Ponder/Keeper on sealed-block RPCs.
+- Newer docs correctly require configured Base browser RPCs for preconfirmation and keep Ponder/Keeper on sealed-block RPCs.
 
 Impact:
 
@@ -247,7 +247,7 @@ This can confuse deployment operators into thinking the thirdweb RPC is the prec
 Suggested fix:
 
 - Make `.env.example` provider-neutral for generic browser RPCs.
-- Point Flashblocks users at `NEXT_PUBLIC_USE_BASE_PRECONF_RPC=true` plus `NEXT_PUBLIC_BASE_PRECONF_RPC_URL_8453` / `84532`.
+- Point Flashblocks users at `NEXT_PUBLIC_USE_BASE_PRECONF_RPC=true` plus Flashblocks-capable `NEXT_PUBLIC_RPC_URL_8453` / `84532`.
 - Clarify thirdweb's role as wallet/top-up/sponsorship config, not canonical indexing or preconfirmation by default.
 
 ### L-4: `ContentRegistry` deploy bytecode has only 7 bytes of headroom
