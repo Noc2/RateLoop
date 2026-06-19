@@ -122,6 +122,9 @@ function normalizeArtifactUri(uri: string): string | null {
   if (value.startsWith("https://")) {
     return isAllowedHttpsArtifactUrl(value) ? value : null;
   }
+  if (value.startsWith("http://")) {
+    return isAllowedLocalHttpArtifactUrl(value) ? value : null;
+  }
   if (value.startsWith("ipfs://")) {
     const gatewayUri = `https://ipfs.io/ipfs/${value.slice("ipfs://".length)}`;
     return isAllowedHttpsArtifactUrl(gatewayUri) ? gatewayUri : null;
@@ -179,6 +182,33 @@ function isAllowedHttpsArtifactUrl(value: string): boolean {
     const artifactPath = stripTrailingSlash(artifactUrl.pathname);
     return artifactPath === allowedPath || artifactPath.startsWith(`${allowedPath}/`);
   });
+}
+
+function isAllowedLocalHttpArtifactUrl(value: string): boolean {
+  if (!shouldAllowLocalHttpArtifacts()) return false;
+
+  let artifactUrl: URL;
+  try {
+    artifactUrl = new URL(value);
+  } catch {
+    return false;
+  }
+  if (artifactUrl.protocol !== "http:") return false;
+  if (artifactUrl.username || artifactUrl.password) return false;
+
+  return (
+    artifactUrl.hostname === "localhost" ||
+    artifactUrl.hostname === "127.0.0.1" ||
+    artifactUrl.hostname === "[::1]"
+  );
+}
+
+function shouldAllowLocalHttpArtifacts(): boolean {
+  return (
+    process.env.PONDER_NETWORK === "hardhat" ||
+    process.env.RATELOOP_E2E_PRODUCTION_BUILD === "true" ||
+    process.env.NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD === "true"
+  );
 }
 
 function stripTrailingSlash(value: string): string {

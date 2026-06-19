@@ -63,8 +63,12 @@ async function loadHandlers() {
 
 afterEach(() => {
   handlers.clear();
+  delete process.env.PONDER_NETWORK;
+  delete process.env.RATELOOP_E2E_PRODUCTION_BUILD;
+  delete process.env.NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD;
   vi.resetModules();
   vi.clearAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe("ClusterPayoutOracle ponder handlers", () => {
@@ -184,6 +188,63 @@ describe("ClusterPayoutOracle ponder handlers", () => {
         canonicalJson: expect.any(String),
         firstSeenAt: 1_800n,
         lastFetchedAt: 1_800n,
+      }),
+    });
+  });
+
+  it("caches verified loopback HTTP payout artifacts in hardhat", async () => {
+    const publicArtifact = {
+      artifactVersion: "rateloop-correlation-artifact-v2",
+      roundPayoutSnapshots: [],
+    };
+    const artifactHash = canonicalJsonHash(publicArtifact);
+    const artifactURI = "http://127.0.0.1:9091/correlation-artifacts/test.json";
+    process.env.PONDER_NETWORK = "hardhat";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        return new Response(JSON.stringify(publicArtifact), {
+          headers: { "content-type": "application/json" },
+          status: 200,
+        });
+      }),
+    );
+    const { db, inserts } = createDb();
+    const registeredHandlers = await loadHandlers();
+
+    await registeredHandlers.get("ClusterPayoutOracle:RoundPayoutSnapshotProposed")!({
+      event: {
+        args: {
+          snapshotKey: `0x${"d".repeat(64)}`,
+          domain: 1n,
+          rewardPoolId: 7n,
+          contentId: 9n,
+          roundId: 2n,
+          correlationEpochId: 1n,
+          proposer: "0x00000000000000000000000000000000000000f1",
+          rawEligibleVoters: 0n,
+          effectiveParticipantUnits: 0n,
+          totalClaimWeight: 0n,
+          weightRoot: `0x${"0".repeat(64)}`,
+          reasonRoot: `0x${"0".repeat(64)}`,
+          artifactHash,
+          artifactURI,
+        },
+        block: { number: 11n, timestamp: 1_800n },
+      },
+      context: { db },
+    });
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      artifactURI,
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    expect(inserts).toContainEqual({
+      table: "payoutArtifactCache",
+      values: expect.objectContaining({
+        artifactHash,
+        artifactUri: artifactURI,
+        canonicalJson: expect.any(String),
       }),
     });
   });

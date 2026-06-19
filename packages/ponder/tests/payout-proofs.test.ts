@@ -88,6 +88,9 @@ function mockArtifactFetch() {
 
 afterEach(() => {
   delete process.env.PAYOUT_ARTIFACT_HTTPS_ALLOWLIST;
+  delete process.env.PONDER_NETWORK;
+  delete process.env.RATELOOP_E2E_PRODUCTION_BUILD;
+  delete process.env.NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD;
   vi.unstubAllGlobals();
   vi.resetModules();
 });
@@ -248,6 +251,47 @@ describe("payout artifact proof resolution", () => {
       }),
     ).resolves.toEqual(expect.objectContaining({ proof: [] }));
     expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it("fetches loopback HTTP artifacts only in hardhat or E2E environments", async () => {
+    const fetchMock = mockArtifactFetch();
+    let { resolveQuestionPayoutProof } = await loadResolver();
+
+    await expect(
+      resolveQuestionPayoutProof({
+        ...proofParams,
+        artifactUri: "http://127.0.0.1:9091/correlation-artifacts/test.json",
+      }),
+    ).resolves.toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    process.env.PONDER_NETWORK = "hardhat";
+    ({ resolveQuestionPayoutProof } = await loadResolver());
+
+    await expect(
+      resolveQuestionPayoutProof({
+        ...proofParams,
+        artifactUri: "http://127.0.0.1:9091/correlation-artifacts/test.json",
+      }),
+    ).resolves.toEqual(expect.objectContaining({ proof: [] }));
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://127.0.0.1:9091/correlation-artifacts/test.json",
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+  });
+
+  it("rejects non-loopback HTTP artifact URLs in hardhat", async () => {
+    const fetchMock = mockArtifactFetch();
+    process.env.PONDER_NETWORK = "hardhat";
+    const { resolveQuestionPayoutProof } = await loadResolver();
+
+    await expect(
+      resolveQuestionPayoutProof({
+        ...proofParams,
+        artifactUri: "http://artifacts.example.com/rateloop/0xabc.json",
+      }),
+    ).resolves.toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("rejects HTTPS host suffix confusion", async () => {
