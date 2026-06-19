@@ -4,8 +4,8 @@ RateLoop's production deployment boundary is Base mainnet, with Base Sepolia use
 
 ## Implemented improvements
 
-- Deployed Base frontends can enable viem's Flashblocks/preconfirmation chain metadata with `NEXT_PUBLIC_USE_BASE_PRECONF_RPC=true`. Dedicated `NEXT_PUBLIC_BASE_PRECONF_RPC_URL_8453` and `NEXT_PUBLIC_BASE_PRECONF_RPC_URL_84532` values are preferred first, then Base's public preconfirmation endpoints, then the ordinary `NEXT_PUBLIC_RPC_URL_<chainId>` fallback.
-- Base frontend clients poll preconfirmation RPCs at 500ms, and ordinary Base RPCs at 1s instead of the global 30s UI interval. Preconfirmation RPCs improve perceived speed, while mined receipts and Ponder indexing remain the source of truth for completed RateLoop state.
+- Deployed Base frontends can enable viem's Flashblocks/preconfirmation chain metadata with `NEXT_PUBLIC_USE_BASE_PRECONF_RPC=true`. Dedicated `NEXT_PUBLIC_BASE_PRECONF_RPC_URL_8453` and `NEXT_PUBLIC_BASE_PRECONF_RPC_URL_84532` values are preferred first, then configured ordinary browser RPCs, Alchemy, Base's standard public RPCs, and finally Base's public preconfirmation endpoints as the last fallback.
+- Base frontend clients poll preconfirmation RPCs at 2s, and ordinary Base RPCs at 5s instead of the global 30s UI interval. Preconfirmation RPCs improve perceived speed, while mined receipts and Ponder indexing remain the source of truth for completed RateLoop state.
 - External wallets now get a direct wagmi capability probe for EIP-5792 batch support. This covers Base Sepolia and Base mainnet wallets whose `wallet_getCapabilities` result is visible through wagmi even if the thirdweb active-wallet bridge is stale.
 - Thirdweb in-app wallets use EIP-7702 on Base Sepolia and Base mainnet so the execution sender stays aligned with the Google/email wallet's EOA for sender-bound flows such as legacy allocation claims.
 - Self-funded external wallet batches can execute through wagmi `sendCallsSync`, so MetaMask/Base Account style wallets can use `wallet_sendCalls` for atomic Base batches instead of falling back to separate `approve` and action transactions.
@@ -28,7 +28,7 @@ RateLoop's production deployment boundary is Base mainnet, with Base Sepolia use
 
 ## Base Sepolia test checklist
 
-1. Set `NEXT_PUBLIC_USE_BASE_PRECONF_RPC=true` and set `NEXT_PUBLIC_BASE_PRECONF_RPC_URL_84532` to a Base Sepolia Flashblocks/preconfirmation RPC, or confirm the default `https://sepolia-preconf.base.org` public endpoint is acceptable for the test run.
+1. Set `NEXT_PUBLIC_USE_BASE_PRECONF_RPC=true` and set `NEXT_PUBLIC_BASE_PRECONF_RPC_URL_84532` to a Base Sepolia Flashblocks/preconfirmation RPC. If no dedicated preconfirmation RPC is configured, the browser will prefer ordinary RPC fallbacks before the public `https://sepolia-preconf.base.org` endpoint.
 2. Keep Ponder and Keeper on sealed-block RPCs such as `PONDER_RPC_URL_84532`; they should not index against preconfirmed state.
 3. Connect an external wallet on chain `84532` and confirm the app resolves atomic batch support.
 4. Submit a direct wallet-call question with a USDC bounty. Expected: reserve confirmation, then one atomic batch for approval plus submit.

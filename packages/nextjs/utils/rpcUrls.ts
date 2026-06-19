@@ -1,4 +1,5 @@
 import type { Chain } from "viem";
+import { base, baseSepolia } from "viem/chains";
 
 const RPC_CHAIN_NAMES: Record<number, string> = {
   1: "eth-mainnet",
@@ -77,6 +78,18 @@ function isBasePreconfRpcUrl(value: string) {
   return /https:\/\/(?:mainnet|sepolia)-preconf\.base\.org\/?$/i.test(value);
 }
 
+function getBaseStandardHttpRpcUrls(chainId: number) {
+  if (chainId === base.id) {
+    return base.rpcUrls.default.http;
+  }
+
+  if (chainId === baseSepolia.id) {
+    return baseSepolia.rpcUrls.default.http;
+  }
+
+  return [];
+}
+
 export function buildAlchemyHttpUrl(chainId: number, alchemyApiKey?: string) {
   const apiKey = alchemyApiKey?.trim();
   if (!apiKey) {
@@ -97,9 +110,10 @@ export function getPreferredHttpRpcUrls(chain: Chain, options: RpcPreferenceOpti
 
     return uniqueHttpUrls([
       options.basePreconfRpcOverrides?.[chain.id],
-      ...preconfDefaults,
       options.rpcOverrides?.[chain.id],
       buildAlchemyHttpUrl(chain.id, options.alchemyApiKey),
+      ...getBaseStandardHttpRpcUrls(chain.id),
+      ...preconfDefaults,
     ]);
   }
 

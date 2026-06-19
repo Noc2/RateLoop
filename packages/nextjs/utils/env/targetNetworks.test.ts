@@ -43,15 +43,18 @@ test("Base targets use standard RPC metadata until preconfirmation RPC is enable
   );
 });
 
-test("Base targets can opt into Flashblocks preconfirmation RPC metadata", () => {
+test("Base targets can opt into Flashblocks metadata while keeping public preconfirmation as the last RPC fallback", () => {
   const networks = resolveTargetNetworks(`${chains.baseSepolia.id},${chains.base.id}`, {
     production: true,
     useBasePreconfRpc: true,
   });
 
   assert.deepEqual(
-    networks.map(network => network.rpcUrls.default.http[0]),
-    ["https://sepolia-preconf.base.org", "https://mainnet-preconf.base.org"],
+    networks.map(network => network.rpcUrls.default.http),
+    [
+      [...chains.baseSepolia.rpcUrls.default.http, "https://sepolia-preconf.base.org"],
+      [...chains.base.rpcUrls.default.http, "https://mainnet-preconf.base.org"],
+    ],
   );
 });
 
@@ -69,8 +72,9 @@ test("dedicated Base preconfirmation RPC overrides are preferred ahead of generi
 
   assert.deepEqual(network.rpcUrls.default.http, [
     "https://base-sepolia-preconf.example.com",
-    "https://sepolia-preconf.base.org",
     "https://84532.rpc.thirdweb.com/client-id",
+    ...chains.baseSepolia.rpcUrls.default.http,
+    "https://sepolia-preconf.base.org",
   ]);
 });
 
