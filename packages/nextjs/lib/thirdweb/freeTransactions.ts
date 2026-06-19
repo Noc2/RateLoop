@@ -35,6 +35,7 @@ import {
   getServerEnvironmentScope,
   getServerRpcOverrides,
   getServerTargetNetworkById,
+  getX402UsdcAddressOverride,
 } from "~~/lib/env/server";
 import { findBlockedContentTags, getContentTitleValidationError } from "~~/lib/moderation/submissionValidation";
 import { buildFreeTransactionOperationKey } from "~~/lib/thirdweb/freeTransactionOperation";
@@ -432,14 +433,14 @@ function getKnownUsdcContractForCall(
   chainId: number,
   address: Address,
 ): { name: string; address: Address; abi: Abi } | undefined {
-  const usdcAddress = USDC_BY_CHAIN_ID[chainId];
+  const usdcAddress = getX402UsdcAddressOverride(chainId) ?? USDC_BY_CHAIN_ID[chainId];
   if (!usdcAddress || usdcAddress.toLowerCase() !== address.toLowerCase()) {
     return undefined;
   }
 
   return {
     name: "USDC",
-    address: usdcAddress,
+    address: getAddress(usdcAddress),
     abi: erc20Abi,
   };
 }

@@ -9,6 +9,7 @@ const originalAppEnv = env.APP_ENV;
 const originalDatabaseUrl = env.DATABASE_URL;
 const originalFreeTransactionLimit = env.FREE_TRANSACTION_LIMIT;
 const originalNodeEnv = env.NODE_ENV;
+const originalNextPublicUsdcAddress31337 = env.NEXT_PUBLIC_USDC_ADDRESS_31337;
 const originalTargetNetworks = env.NEXT_PUBLIC_TARGET_NETWORKS;
 
 env.APP_ENV = "test";
@@ -76,6 +77,10 @@ const rewardDistributorContract = contractsForChain.RoundRewardDistributor;
 const votingEngineContract = contractsForChain.RoundVotingEngine;
 const arbitraryTokenContract = {
   address: "0x9999999999999999999999999999999999999999" as const,
+  abi: parseAbi(["function approve(address spender, uint256 amount) returns (bool)"]),
+};
+const configuredUsdcContract = {
+  address: "0x7777777777777777777777777777777777777777" as const,
   abi: parseAbi(["function approve(address spender, uint256 amount) returns (bool)"]),
 };
 const APPROVED_IMAGE_ID = "att_sponsoredimage01";
@@ -439,6 +444,12 @@ after(() => {
     delete env.NODE_ENV;
   } else {
     env.NODE_ENV = originalNodeEnv;
+  }
+
+  if (originalNextPublicUsdcAddress31337 === undefined) {
+    delete env.NEXT_PUBLIC_USDC_ADDRESS_31337;
+  } else {
+    env.NEXT_PUBLIC_USDC_ADDRESS_31337 = originalNextPublicUsdcAddress31337;
   }
 
   if (originalTargetNetworks === undefined) {
@@ -868,6 +879,25 @@ test("keeps non-registration frontend approvals behind identity verification", a
   assert.equal(decision.isAllowed, false);
   if (decision.isAllowed) return;
   assert.equal(decision.debugCode, "missing_rater_identity");
+});
+
+test("allows sponsorship for the configured chain-scoped USDC address", async () => {
+  const previousUsdcOverride = env.NEXT_PUBLIC_USDC_ADDRESS_31337;
+  env.NEXT_PUBLIC_USDC_ADDRESS_31337 = configuredUsdcContract.address;
+
+  try {
+    const decision = await freeTransactions.evaluateFreeTransactionAllowance(
+      buildRequest([encodeCall(configuredUsdcContract, "approve", [rewardEscrowContract.address, 10n])]) as never,
+    );
+
+    assert.equal(decision.isAllowed, true);
+  } finally {
+    if (previousUsdcOverride === undefined) {
+      delete env.NEXT_PUBLIC_USDC_ADDRESS_31337;
+    } else {
+      env.NEXT_PUBLIC_USDC_ADDRESS_31337 = previousUsdcOverride;
+    }
+  }
 });
 
 test("validates sponsored ContentRegistry submit question media", async () => {
