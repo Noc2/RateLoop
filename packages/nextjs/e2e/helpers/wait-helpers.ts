@@ -301,11 +301,25 @@ export async function cycleVoteFeedForVisible(
       return true;
     }
 
+    const emptyStateVisible = await page
+      .getByText(FEED_EMPTY_STATE_RE)
+      .first()
+      .isVisible()
+      .catch(() => false);
+    if (emptyStateVisible) {
+      return false;
+    }
+
     if (step === maxSteps) {
       break;
     }
 
     const activeCard = page.locator('article[aria-current="true"]').first();
+    const activeCardVisible = await activeCard.isVisible({ timeout: 1_000 }).catch(() => false);
+    if (!activeCardVisible) {
+      return false;
+    }
+
     const previousIndex = await activeCard.getAttribute("data-feed-card-index", { timeout: 1_000 }).catch(() => null);
 
     await activeCard.focus({ timeout: 1_000 }).catch(() => undefined);
