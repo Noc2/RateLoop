@@ -151,6 +151,30 @@ const TEST_CONFIG = {
   x402QuestionSubmitterAddress: "0x0000000000000000000000000000000000000015" as const,
 };
 
+function createPlanningPublicClient() {
+  return {
+    readContract: async ({ functionName }: { functionName: string }) => {
+      switch (functionName) {
+        case "submissionMediaValidator":
+          return TEST_CONFIG.submissionMediaValidatorAddress;
+        case "protocolConfig":
+          return "0x0000000000000000000000000000000000000018" as const;
+        case "minSubmissionLrepPool":
+        case "minSubmissionUsdcPool":
+          return 1_000_000n;
+        case "config":
+          return { maxVoters: 100n };
+        case "validateRoundConfig":
+          return undefined;
+        case "submissionKeyUsed":
+          return false;
+        default:
+          throw new Error(`Unexpected readContract call: ${functionName}`);
+      }
+    },
+  } as never;
+}
+
 function setDefaultTestOverrides(
   overrides: NonNullable<Parameters<typeof __setX402QuestionSubmissionTestOverridesForTests>[0]> = {},
 ) {
@@ -559,6 +583,49 @@ test("prepareAgentWalletQuestionSubmissionRequest stores a direct wallet plan wi
   assert.equal(record?.status, "awaiting_wallet_signature");
   assert.equal(record?.payerAddress, walletAddress);
   assert.equal(record?.paymentAmount, payload.bounty.amount.toString());
+});
+
+test("prepareAgentWalletQuestionSubmissionRequest plans LREP bounty wallet calls", async () => {
+  setDefaultTestOverrides({
+    buildAgentWalletQuestionSubmissionPlan: undefined as never,
+    createPublicQuestionClient: () => createPlanningPublicClient(),
+  });
+  const basePayload = buildPayload("wallet-plan-lrep-bounty");
+  const payload = {
+    ...basePayload,
+    bounty: { ...basePayload.bounty, asset: "LREP" as const },
+  };
+  const walletAddress = "0x00000000000000000000000000000000000000aa" as const;
+
+  const prepared = await prepareAgentWalletQuestionSubmissionRequest({
+    agentId: "agent-wallet",
+    payload,
+    walletAddress,
+  });
+  const body = prepared.body as {
+    payment: { asset: string; tokenAddress: string };
+    transactionPlan: { calls: Array<{ data: Hex; functionName: string; id: string; phase: string; to: string }> };
+  };
+
+  assert.equal(prepared.status, 202);
+  assert.equal(body.payment.asset, "LREP");
+  assert.equal(body.payment.tokenAddress, TEST_CONFIG.lrepAddress);
+  assert.equal(body.transactionPlan.calls[0]?.id, "approve-lrep");
+  assert.equal(body.transactionPlan.calls[0]?.phase, "approve_lrep");
+  assert.equal(body.transactionPlan.calls[0]?.to, TEST_CONFIG.lrepAddress);
+
+  const submitCall = body.transactionPlan.calls.find(
+    call => call.functionName === "submitQuestionWithRewardAndRoundConfig",
+  );
+  assert.ok(submitCall);
+  const decoded = decodeFunctionData({
+    abi: ContentRegistryAbi,
+    data: submitCall.data,
+  });
+  assert.equal(decoded.functionName, "submitQuestionWithRewardAndRoundConfig");
+  const submitArgs = decoded.args as readonly unknown[];
+  const rewardTerms = submitArgs[8] as { 0?: bigint | number; asset?: bigint | number };
+  assert.equal(Number(rewardTerms.asset ?? rewardTerms[0]), 0);
 });
 
 test("prepareAgentWalletQuestionSubmissionRequest stores optional feedback bonus metadata", async () => {
@@ -1904,6 +1971,26 @@ test("prepareNativeX402QuestionSubmissionRequest rejects overlong validBefore be
   assert.equal(record, null);
 });
 
+test("prepareNativeX402QuestionSubmissionRequest rejects LREP bounties", async () => {
+  const basePayload = buildPayload("native-x402-lrep-bounty");
+  const payload = {
+    ...basePayload,
+    bounty: { ...basePayload.bounty, asset: "LREP" as const },
+  };
+  const walletAddress = "0x00000000000000000000000000000000000000aa" as const;
+
+  await assert.rejects(
+    () =>
+      prepareNativeX402QuestionSubmissionRequest({
+        agentId: "native-agent",
+        payload,
+        walletAddress,
+      }),
+    (error: unknown) =>
+      error instanceof X402QuestionInputError && error.message === "LREP bounties require wallet_calls funding mode.",
+  );
+});
+
 test("prepareNativeX402QuestionSubmissionRequest returns an authorization request before signature", async () => {
   const payload = buildPayload("native-x402-plan");
   const walletAddress = "0x00000000000000000000000000000000000000aa" as const;
@@ -2149,6 +2236,7 @@ test("prepareNativeX402QuestionSubmissionRequest gates stale Base Sepolia one-sh
 
   setDefaultTestOverrides({
     buildNativeX402QuestionSubmissionPlan: undefined as never,
+    createPublicQuestionClient: () => createPlanningPublicClient(),
     resolveX402QuestionConfig: () => ({
       ...TEST_CONFIG,
       chainId: 84532,

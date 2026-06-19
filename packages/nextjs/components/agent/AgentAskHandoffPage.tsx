@@ -50,8 +50,10 @@ import {
 } from "~~/lib/attachments/questionDetails.shared";
 import {
   type FeedbackBonusAsset,
+  type SubmissionRewardAsset,
   formatFeedbackBonusAmount,
   formatSubmissionRewardAmount,
+  getDefaultLrepAddress,
   getDefaultUsdcAddress,
   getDefaultUsdcDisplayName,
   parseFeedbackBonusAmount,
@@ -200,6 +202,7 @@ type DraftQuestionForm = {
 
 type DraftForm = {
   bountyAmount: string;
+  bountyAsset: SubmissionRewardAsset;
   feedbackBonusAmount: string | null;
   feedbackBonusAsset: FeedbackBonusAsset | null;
   questions: DraftQuestionForm[];
@@ -238,6 +241,7 @@ const SINGLE_QUESTION_SUBMISSION_SELECTOR = "0x774922ea";
 const BUNDLE_QUESTION_SUBMISSION_SELECTOR = "0x4bef7869";
 const DEFAULT_ETH_TOP_UP_AMOUNT = "1";
 const DEFAULT_USDC_TOP_UP_AMOUNT = "10";
+const DEFAULT_FEEDBACK_BONUS_AMOUNT = "2";
 const FUNDING_PRESET_OPTIONS: [number, number, number] = [5, 10, 20];
 
 const BOUNTY_AMOUNT_TOOLTIP =
@@ -1031,10 +1035,10 @@ function readBountyRequiredVoters(handoff: Handoff | null) {
   return readPositiveBigInt(bounty.requiredVoters);
 }
 
-function readFeedbackBonusUsdcAmountAtomic(requestBody: JsonRecord) {
-  if (!isJsonRecord(requestBody.feedbackBonus)) return 0n;
-  if (readFeedbackBonusAsset(requestBody.feedbackBonus) !== "usdc") return 0n;
-  return readPositiveBigInt(requestBody.feedbackBonus.amount) ?? 0n;
+function readBountyAsset(handoff: Handoff | null): SubmissionRewardAsset {
+  const bounty = handoff?.requestBody?.bounty;
+  if (!isJsonRecord(bounty)) return "usdc";
+  return readString(bounty.asset).toUpperCase() === "LREP" ? "lrep" : "usdc";
 }
 
 function readFeedbackBonusAsset(feedbackBonus: JsonRecord): FeedbackBonusAsset {
@@ -1054,9 +1058,9 @@ function readFeedbackBonusSummary(handoff: Handoff | null) {
   };
 }
 
-function formatUsdcInput(value: bigint | null) {
+function formatSubmissionRewardInput(value: bigint | null, asset: SubmissionRewardAsset) {
   if (value === null) return "";
-  return formatSubmissionRewardAmount(value, "usdc").replace(/ USDC$/, "");
+  return formatSubmissionRewardAmount(value, asset).replace(asset === "lrep" ? / LREP$/ : / USDC$/, "");
 }
 
 function formatFeedbackBonusInput(value: bigint | null, asset: FeedbackBonusAsset) {
@@ -1116,8 +1120,10 @@ function createDraftForm(handoff: Handoff): DraftForm {
   const roundSettings = readRoundSettings(handoff);
   const questions = readQuestionSummaries(handoff);
   const feedbackBonusSummary = readFeedbackBonusSummary(handoff);
+  const bountyAsset = readBountyAsset(handoff);
   return {
-    bountyAmount: formatUsdcInput(readBountyAmountAtomic(handoff)),
+    bountyAmount: formatSubmissionRewardInput(readBountyAmountAtomic(handoff), bountyAsset),
+    bountyAsset,
     feedbackBonusAmount: feedbackBonusSummary
       ? formatFeedbackBonusInput(feedbackBonusSummary.amount, feedbackBonusSummary.asset)
       : null,
@@ -1426,22 +1432,26 @@ async function buildDraftRequestBody(
   requestBody.bounty = {
     ...(isJsonRecord(requestBody.bounty) ? requestBody.bounty : {}),
     amount: bountyAmount.toString(),
-    asset: "USDC",
+    asset: form.bountyAsset === "lrep" ? "LREP" : "USDC",
     requiredVoters: minVoters.toString(),
   };
-  let feedbackBonusUsdcAmount = readFeedbackBonusUsdcAmountAtomic(requestBody);
-  if (form.feedbackBonusAmount !== null && isJsonRecord(requestBody.feedbackBonus)) {
+  let feedbackBonusUsdcAmount = 0n;
+  if (form.feedbackBonusAmount !== null) {
     const feedbackBonusAmount = parseFeedbackBonusAmount(form.feedbackBonusAmount);
     if (feedbackBonusAmount === null) {
       throw new Error("Feedback Bonus must be a positive amount with up to 6 decimals.");
     }
-    const feedbackBonusAsset = form.feedbackBonusAsset ?? readFeedbackBonusAsset(requestBody.feedbackBonus);
+    const feedbackBonusAsset =
+      form.feedbackBonusAsset ??
+      (isJsonRecord(requestBody.feedbackBonus) ? readFeedbackBonusAsset(requestBody.feedbackBonus) : "usdc");
     requestBody.feedbackBonus = {
-      ...requestBody.feedbackBonus,
+      ...(isJsonRecord(requestBody.feedbackBonus) ? requestBody.feedbackBonus : {}),
       amount: feedbackBonusAmount.toString(),
       asset: feedbackBonusAsset === "lrep" ? "LREP" : "USDC",
     };
     feedbackBonusUsdcAmount = feedbackBonusAsset === "usdc" ? feedbackBonusAmount : 0n;
+  } else {
+    delete requestBody.feedbackBonus;
   }
   requestBody.maxPaymentAmount = (bountyAmount + feedbackBonusUsdcAmount).toString();
   requestBody.roundConfig = {
@@ -1517,18 +1527,35 @@ function readSubmittedContentForShare(handoff: Handoff | null, ask: unknown): Su
 
 function readBounty(handoff: Handoff | null) {
   const amount = readBountyAmountAtomic(handoff);
-  return amount === null ? "Unknown bounty" : formatSubmissionRewardAmount(amount, "usdc");
+  return amount === null ? "Unknown bounty" : formatSubmissionRewardAmount(amount, readBountyAsset(handoff));
 }
 
 function readDraftBountyLabel(form: DraftForm | null, handoff: Handoff | null) {
   const draftAmount = form?.bountyAmount.trim();
-  return draftAmount ? `${draftAmount} USDC` : readBounty(handoff);
+  if (draftAmount && form?.bountyAsset) {
+    return `${draftAmount} ${form.bountyAsset === "lrep" ? "LREP" : "USDC"}`;
+  }
+  return readBounty(handoff);
 }
 
 function readDraftBountyAmountAtomic(form: DraftForm | null, handoff: Handoff | null) {
   const draftAmount = form?.bountyAmount.trim();
   if (draftAmount) return parseSubmissionRewardAmount(draftAmount);
   return readBountyAmountAtomic(handoff);
+}
+
+function readDraftBountyAsset(form: DraftForm | null, handoff: Handoff | null): SubmissionRewardAsset {
+  return form?.bountyAsset ?? readBountyAsset(handoff);
+}
+
+function readDraftBountyLrepAmountAtomic(form: DraftForm | null, handoff: Handoff | null) {
+  if (readDraftBountyAsset(form, handoff) !== "lrep") return 0n;
+  return readDraftBountyAmountAtomic(form, handoff) ?? 0n;
+}
+
+function readDraftBountyUsdcAmountAtomic(form: DraftForm | null, handoff: Handoff | null) {
+  if (readDraftBountyAsset(form, handoff) !== "usdc") return 0n;
+  return readDraftBountyAmountAtomic(form, handoff) ?? 0n;
 }
 
 function readDraftFeedbackBonusUsdcAmountAtomic(form: DraftForm | null, handoff: Handoff | null) {
@@ -1737,8 +1764,18 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
   const handoffFundingChainId = handoffChainId ?? targetNetwork.id;
   const fundingWalletAddress =
     address && isAddress(address, { strict: false }) ? (address as `0x${string}`) : undefined;
+  const lrepAddress = getDefaultLrepAddress(handoffFundingChainId);
   const usdcAddress = getDefaultUsdcAddress(handoffFundingChainId);
   const usdcDisplayName = getDefaultUsdcDisplayName(handoffFundingChainId);
+  const { data: lrepBalanceRaw, isLoading: isLrepBalanceLoading } = useReadContract({
+    address: lrepAddress,
+    abi: erc20Abi,
+    functionName: "balanceOf",
+    args: fundingWalletAddress ? [fundingWalletAddress] : undefined,
+    query: {
+      enabled: Boolean(fundingWalletAddress && lrepAddress),
+    },
+  });
   const {
     data: usdcBalanceRaw,
     isLoading: isUsdcBalanceLoading,
@@ -1782,11 +1819,24 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
   const hasQuestionBundle = (draftForm?.questions.length ?? questionSummaries.length) > 1;
   const feedbackBonusSummary = readFeedbackBonusSummary(handoff);
   const feedbackBonusDraftLabel = readDraftFeedbackBonusLabel(draftForm, handoff);
-  const draftBountyAmountAtomic = readDraftBountyAmountAtomic(draftForm, handoff) ?? 0n;
+  const draftBountyLrepAmountAtomic = readDraftBountyLrepAmountAtomic(draftForm, handoff);
+  const draftBountyUsdcAmountAtomic = readDraftBountyUsdcAmountAtomic(draftForm, handoff);
   const draftFeedbackBonusUsdcAmountAtomic = readDraftFeedbackBonusUsdcAmountAtomic(draftForm, handoff);
+  const draftFeedbackBonusLrepAmountAtomic =
+    draftForm?.feedbackBonusAmount !== null && draftForm?.feedbackBonusAsset === "lrep"
+      ? (parseFeedbackBonusAmount(draftForm.feedbackBonusAmount.trim()) ?? 0n)
+      : 0n;
+  const requiredHandoffLrepAmount = isFeedbackBonusStep
+    ? draftFeedbackBonusLrepAmountAtomic
+    : draftBountyLrepAmountAtomic + draftFeedbackBonusLrepAmountAtomic;
   const requiredHandoffUsdcAmount = isFeedbackBonusStep
     ? draftFeedbackBonusUsdcAmountAtomic
-    : draftBountyAmountAtomic + draftFeedbackBonusUsdcAmountAtomic;
+    : draftBountyUsdcAmountAtomic + draftFeedbackBonusUsdcAmountAtomic;
+  const hasResolvedHandoffLrepBalance =
+    Boolean(fundingWalletAddress && lrepAddress) && !isLrepBalanceLoading && lrepBalanceRaw !== undefined;
+  const handoffLrepBalance = typeof lrepBalanceRaw === "bigint" ? lrepBalanceRaw : 0n;
+  const hasInsufficientHandoffLrep =
+    hasResolvedHandoffLrepBalance && requiredHandoffLrepAmount > 0n && handoffLrepBalance < requiredHandoffLrepAmount;
   const hasResolvedHandoffUsdcBalance =
     Boolean(fundingWalletAddress && usdcAddress) && !isUsdcBalanceLoading && usdcBalanceRaw !== undefined;
   const handoffUsdcBalance = typeof usdcBalanceRaw === "bigint" ? usdcBalanceRaw : 0n;
@@ -1823,9 +1873,6 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
       unavailableMessage: "USDC is not configured for this network.",
     });
   }, [fundingWalletAddress, openWalletFunding, refetchUsdcBalance, thirdwebTargetChain, usdcAddress, usdcDisplayName]);
-  const showMissingFeedbackBonusNotice = Boolean(
-    handoff && !hasQuestionBundle && !feedbackBonusSummary && !isFeedbackBonusStep && !isTerminalStatus,
-  );
   const hasImageContext = Boolean(handoff?.assets?.length);
   const privateContextCount =
     draftForm?.questions.filter(question => question.confidentiality.visibility === "gated").length ??
@@ -1962,6 +2009,43 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     [updateDraftField],
   );
 
+  const updateDraftBountyAsset = useCallback((asset: SubmissionRewardAsset) => {
+    setDraftForm(current => {
+      if (!current) return current;
+      const parsedAmount = parseSubmissionRewardAmount(current.bountyAmount);
+      return {
+        ...current,
+        bountyAmount: parsedAmount === null ? current.bountyAmount : formatSubmissionRewardInput(parsedAmount, asset),
+        bountyAsset: asset,
+      };
+    });
+    setDraftError(null);
+  }, []);
+
+  const enableDraftFeedbackBonus = useCallback(() => {
+    setDraftForm(current => {
+      if (!current || current.feedbackBonusAmount !== null) return current;
+      return {
+        ...current,
+        feedbackBonusAmount: DEFAULT_FEEDBACK_BONUS_AMOUNT,
+        feedbackBonusAsset: "usdc",
+      };
+    });
+    setDraftError(null);
+  }, []);
+
+  const disableDraftFeedbackBonus = useCallback(() => {
+    setDraftForm(current => {
+      if (!current || current.feedbackBonusAmount === null) return current;
+      return {
+        ...current,
+        feedbackBonusAmount: null,
+        feedbackBonusAsset: null,
+      };
+    });
+    setDraftError(null);
+  }, []);
+
   const updateDraftFeedbackBonusAmount = useCallback(
     (value: string) => {
       const normalizedValue = normalizeUsdcAmountInput(value);
@@ -1984,7 +2068,9 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     setDraftForm(current => {
       if (!current) return current;
       const parsedAmount = parseSubmissionRewardAmount(current.bountyAmount);
-      return parsedAmount === null ? current : { ...current, bountyAmount: formatUsdcInput(parsedAmount) };
+      return parsedAmount === null
+        ? current
+        : { ...current, bountyAmount: formatSubmissionRewardInput(parsedAmount, current.bountyAsset) };
     });
   }, []);
 
@@ -2633,6 +2719,30 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                 />
               </div>
             ) : null}
+            {hasInsufficientHandoffLrep ? (
+              <div className="mt-4">
+                <BountyFundingWarning
+                  title={isFeedbackBonusStep ? "Need LREP for funding" : "Need bounty funds"}
+                  message={
+                    isFeedbackBonusStep
+                      ? `This handoff needs ${formatSubmissionRewardAmount(
+                          requiredHandoffLrepAmount,
+                          "lrep",
+                        )} to fund the Feedback Bonus. Your wallet has ${formatSubmissionRewardAmount(
+                          handoffLrepBalance,
+                          "lrep",
+                        )}.`
+                      : `This handoff needs ${formatSubmissionRewardAmount(
+                          requiredHandoffLrepAmount,
+                          "lrep",
+                        )} before it can be submitted. Your wallet has ${formatSubmissionRewardAmount(
+                          handoffLrepBalance,
+                          "lrep",
+                        )}.`
+                  }
+                />
+              </div>
+            ) : null}
             {hasInsufficientHandoffUsdc ? (
               <div className="mt-4">
                 <BountyFundingWarning
@@ -2669,19 +2779,6 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                     <p className="mt-1 text-error/80">{failedImageUploadMessage}</p>
                     <p className="mt-1 text-error/80">
                       Ask the agent for a fresh handoff link with a regenerated or re-exported image.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            ) : null}
-            {showMissingFeedbackBonusNotice ? (
-              <div className="surface-card-nested mt-4 rounded-lg p-3 text-sm text-warning">
-                <div className="flex items-start gap-2">
-                  <ExclamationTriangleIcon className="mt-0.5 h-5 w-5 shrink-0" />
-                  <div>
-                    <p className="font-semibold">You may get a rating without written reasons.</p>
-                    <p className="mt-1 text-warning/80">
-                      Ask the agent to include a Feedback Bonus before submitting if explanations matter.
                     </p>
                   </div>
                 </div>
@@ -2922,11 +3019,13 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                       <select
                         id="agent-ask-bounty-asset"
                         className={`select select-bordered ${MONEY_FIELD_CONTROL_CLASS} bg-base-100`}
-                        disabled
-                        value="USDC"
+                        disabled={!canEditDraft}
+                        value={draftForm?.bountyAsset ?? readBountyAsset(handoff)}
                         aria-label="Bounty asset"
+                        onChange={event => updateDraftBountyAsset(event.target.value as SubmissionRewardAsset)}
                       >
-                        <option value="USDC">USDC</option>
+                        <option value="lrep">LREP</option>
+                        <option value="usdc">USDC</option>
                       </select>
                       <input
                         id="agent-ask-bounty-amount"
@@ -2941,16 +3040,44 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                   </div>
                 </div>
 
-                {draftForm?.feedbackBonusAmount !== null ? (
-                  <div className="space-y-3">
-                    <p className="flex items-center gap-1.5 text-base font-medium text-base-content">
-                      Feedback Bonus
-                      <InfoTooltip
-                        text={FEEDBACK_BONUS_AMOUNT_TOOLTIP}
-                        position="top"
-                        className="text-base-content/45"
-                      />
+                <div className="space-y-3">
+                  <p className="flex items-center gap-1.5 text-base font-medium text-base-content">
+                    Feedback Bonus
+                    <InfoTooltip text={FEEDBACK_BONUS_AMOUNT_TOOLTIP} position="top" className="text-base-content/45" />
+                  </p>
+                  <div className="grid grid-cols-2 gap-2 sm:max-w-md">
+                    <button
+                      type="button"
+                      aria-pressed={draftForm?.feedbackBonusAmount === null}
+                      className={`btn btn-sm ${draftForm?.feedbackBonusAmount === null ? "btn-primary" : "btn-outline"}`}
+                      disabled={!canEditDraft}
+                      onClick={disableDraftFeedbackBonus}
+                    >
+                      No bonus
+                    </button>
+                    <button
+                      type="button"
+                      aria-pressed={draftForm?.feedbackBonusAmount !== null}
+                      className={`btn btn-sm ${draftForm?.feedbackBonusAmount !== null ? "btn-primary" : "btn-outline"}`}
+                      disabled={!canEditDraft || hasQuestionBundle}
+                      onClick={() => {
+                        if (hasQuestionBundle) {
+                          notification.info("Feedback Bonuses can be added to single-question handoffs.");
+                          return;
+                        }
+                        enableDraftFeedbackBonus();
+                      }}
+                    >
+                      Add bonus
+                    </button>
+                  </div>
+                  {hasQuestionBundle ? (
+                    <p className="rounded-lg bg-warning/10 p-3 text-sm text-warning">
+                      Feedback Bonuses are per question and round. Browser handoffs support them for single-question
+                      asks first.
                     </p>
+                  ) : null}
+                  {draftForm?.feedbackBonusAmount !== null ? (
                     <div>
                       <div className={MONEY_FIELD_LABEL_ROW_CLASS}>
                         <label htmlFor="agent-ask-feedback-bonus-asset" className={MONEY_FIELD_LABEL_CLASS}>
@@ -2982,8 +3109,8 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                         />
                       </div>
                     </div>
-                  </div>
-                ) : null}
+                  ) : null}
+                </div>
 
                 <div>
                   <div className="flex items-center gap-2 text-sm font-semibold text-base-content/75">

@@ -63,6 +63,7 @@ import {
   X402QuestionInputError,
   type X402QuestionOperation,
   type X402QuestionPayload,
+  X402_SUBMISSION_REWARD_ASSET_LREP,
   X402_SUBMISSION_REWARD_ASSET_USDC,
   X402_USDC_BY_CHAIN_ID,
   X402_USDC_DECIMALS,
@@ -76,12 +77,14 @@ const TX_RECEIPT_TIMEOUT_MS = 180_000;
 const MAX_X402_AUTHORIZATION_VALIDITY_SECONDS = 24n * 60n * 60n;
 const FEEDBACK_BONUS_ASSET_LREP = 0;
 const FEEDBACK_BONUS_ASSET_USDC = 1;
+const SUBMISSION_REWARD_DECIMALS = 6;
 const QUESTION_CONTEXT_DOMAIN = keccak256(toBytes("rateloop-question-context-v5"));
 const ZERO_BYTES32 = `0x${"0".repeat(64)}` as const;
 const ZERO_ADDRESS = `0x${"0".repeat(40)}` as const;
 const BASE_SEPOLIA_STALE_X402_SUBMITTER_ADDRESS =
   "0x24ab19e0d8052dec62bec59e986e336adc4721f3" as const satisfies Lowercase<Address>;
 type FeedbackBonusAsset = "LREP" | "USDC";
+type SubmissionRewardAsset = X402QuestionPayload["bounty"]["asset"];
 
 function questionDetailsTuple(question: Pick<X402QuestionPayload["questions"][number], "detailsHash" | "detailsUrl">) {
   return {
@@ -212,6 +215,7 @@ type SubmittedRewardAttachment = StoredQuestionRewardTerms & {
 };
 
 type AgentWalletTransactionPhase =
+  | "approve_lrep"
   | "approve_usdc"
   | "reserve_submission"
   | "submit_question"
@@ -237,7 +241,7 @@ type AgentWalletQuestionSubmissionPlan = {
   operationKey: `0x${string}`;
   payment: {
     amount: string;
-    asset: "USDC";
+    asset: SubmissionRewardAsset;
     bountyAmount: string;
     decimals: number;
     spender: Address;
@@ -377,6 +381,17 @@ function feedbackBonusAssetId(asset: FeedbackBonusAsset) {
 }
 
 function feedbackBonusTokenAddress(config: X402QuestionSubmissionConfig, asset: FeedbackBonusAsset): Address | null {
+  return asset === "LREP" ? (config.lrepAddress ?? null) : config.usdcAddress;
+}
+
+function submissionRewardAssetId(asset: SubmissionRewardAsset) {
+  return asset === "LREP" ? X402_SUBMISSION_REWARD_ASSET_LREP : X402_SUBMISSION_REWARD_ASSET_USDC;
+}
+
+function submissionRewardTokenAddress(
+  config: X402QuestionSubmissionConfig,
+  asset: SubmissionRewardAsset,
+): Address | null {
   return asset === "LREP" ? (config.lrepAddress ?? null) : config.usdcAddress;
 }
 
@@ -1426,10 +1441,11 @@ async function assertBountyMeetsProtocolMinimum(params: {
     abi: ContentRegistryAbi,
     functionName: "protocolConfig",
   })) as Address;
+  const minimumFunction = params.payload.bounty.asset === "LREP" ? "minSubmissionLrepPool" : "minSubmissionUsdcPool";
   const minimum = (await params.publicClient.readContract({
     address: protocolConfigAddress,
     abi: ProtocolConfigAbi,
-    functionName: "minSubmissionUsdcPool",
+    functionName: minimumFunction,
   })) as bigint;
   const protocolRoundConfig = (await params.publicClient.readContract({
     address: protocolConfigAddress,
@@ -1444,7 +1460,7 @@ async function assertBountyMeetsProtocolMinimum(params: {
 
   if (params.payload.bounty.amount < submissionMinimum) {
     throw new X402QuestionConflictError(
-      `Bounty is below the on-chain USDC minimum (${submissionMinimum.toString()} atomic units).`,
+      `Bounty is below the on-chain ${params.payload.bounty.asset} minimum (${submissionMinimum.toString()} atomic units).`,
     );
   }
 
@@ -1610,8 +1626,9 @@ function buildQuestionSubmissionCallContext(params: {
       videoUrl: submittedQuestion.videoUrl,
     };
   });
+  const rewardAsset = submissionRewardAssetId(params.payload.bounty.asset);
   const rewardTerms = {
-    asset: X402_SUBMISSION_REWARD_ASSET_USDC,
+    asset: rewardAsset,
     amount: params.payload.bounty.amount,
     requiredVoters: params.payload.bounty.requiredVoters,
     requiredSettledRounds: params.payload.bounty.requiredSettledRounds,
@@ -1632,7 +1649,7 @@ function buildQuestionSubmissionCallContext(params: {
     ? buildQuestionBundleSubmissionRevealCommitment({
         questions,
         rewardAmount: params.payload.bounty.amount,
-        rewardAsset: X402_SUBMISSION_REWARD_ASSET_USDC,
+        rewardAsset,
         requiredSettledRounds: params.payload.bounty.requiredSettledRounds,
         requiredVoters: params.payload.bounty.requiredVoters,
         bountyStartBy: params.payload.bounty.bountyStartBy,
@@ -1649,7 +1666,7 @@ function buildQuestionSubmissionCallContext(params: {
         imageUrls: primaryQuestion.imageUrls,
         questionMetadataHash: primaryQuestion.spec.questionMetadataHash,
         rewardAmount: params.payload.bounty.amount,
-        rewardAsset: X402_SUBMISSION_REWARD_ASSET_USDC,
+        rewardAsset,
         requiredSettledRounds: params.payload.bounty.requiredSettledRounds,
         requiredVoters: params.payload.bounty.requiredVoters,
         resultSpecHash: primaryQuestion.spec.resultSpecHash,
@@ -1731,6 +1748,11 @@ async function buildAgentWalletQuestionSubmissionPlan(params: {
     submissionKeys: preflight.submissionKeys,
     submitter: params.walletAddress,
   });
+  const rewardTokenAddress = submissionRewardTokenAddress(params.config, params.payload.bounty.asset);
+  if (!rewardTokenAddress) {
+    throw new X402QuestionConfigError(`${params.payload.bounty.asset} is not deployed for bounty funding.`);
+  }
+  const rewardAssetLabel = params.payload.bounty.asset;
   const submitDescription =
     params.payload.questions.length > 1
       ? `Submit ${params.payload.questions.length} question bundle and fund protocol escrow`
@@ -1744,11 +1766,11 @@ async function buildAgentWalletQuestionSubmissionPlan(params: {
           functionName: "approve",
           args: [params.config.questionRewardPoolEscrowAddress, params.payload.bounty.amount],
         }),
-        description: "Approve protocol escrow to pull the exact USDC bounty amount",
+        description: `Approve protocol escrow to pull the exact ${rewardAssetLabel} bounty amount`,
         functionName: "approve",
-        id: "approve-usdc",
-        phase: "approve_usdc",
-        to: params.config.usdcAddress,
+        id: `approve-${rewardAssetLabel.toLowerCase()}`,
+        phase: rewardAssetLabel === "LREP" ? "approve_lrep" : "approve_usdc",
+        to: rewardTokenAddress,
         value: "0",
       },
       {
@@ -1783,11 +1805,11 @@ async function buildAgentWalletQuestionSubmissionPlan(params: {
     operationKey: operation.operationKey,
     payment: {
       amount: params.payload.bounty.amount.toString(),
-      asset: "USDC",
+      asset: rewardAssetLabel,
       bountyAmount: params.payload.bounty.amount.toString(),
-      decimals: X402_USDC_DECIMALS,
+      decimals: SUBMISSION_REWARD_DECIMALS,
       spender: params.config.questionRewardPoolEscrowAddress,
-      tokenAddress: params.config.usdcAddress,
+      tokenAddress: rewardTokenAddress,
     },
     payloadHash: operation.payloadHash,
     questionCount: params.payload.questions.length,
@@ -1918,6 +1940,9 @@ async function buildNativeX402QuestionSubmissionPlan(params: {
   paymentAuthorization?: NativeX402PaymentAuthorizationInput | null;
   walletAddress: Address;
 }): Promise<NativeX402QuestionSubmissionPlan> {
+  if (params.payload.bounty.asset !== "USDC") {
+    throw new X402QuestionInputError("LREP bounties require wallet_calls funding mode.");
+  }
   if (params.payload.questions.length !== 1) {
     throw new X402QuestionConflictError("EIP-3009 USDC authorization currently supports single-question asks only.");
   }

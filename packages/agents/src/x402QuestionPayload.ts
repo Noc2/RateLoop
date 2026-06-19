@@ -24,11 +24,12 @@ import { findAgentResultTemplate } from "./templates";
 export const X402_USDC_BY_CHAIN_ID = USDC_BY_CHAIN_ID;
 /** @deprecated Use `X402_USDC_BY_CHAIN_ID`. */
 export const X402_WORLD_CHAIN_USDC_BY_CHAIN_ID = X402_USDC_BY_CHAIN_ID;
+export const X402_SUBMISSION_REWARD_ASSET_LREP = 0;
 export const X402_SUBMISSION_REWARD_ASSET_USDC = 1;
 export const X402_USDC_DECIMALS = 6;
 export const X402_MIN_NONZERO_CONFIDENTIALITY_BOND = MIN_NONZERO_CONFIDENTIALITY_BOND;
 
-const X402_DEFAULT_SUBMISSION_BOUNTY_USDC = 1_000_000n;
+const X402_DEFAULT_SUBMISSION_BOUNTY = 1_000_000n;
 const X402_MIN_REWARD_POOL_REQUIRED_VOTERS = 3n;
 const X402_MIN_REWARD_POOL_SETTLED_ROUNDS = 1n;
 const X402_MAX_QUESTION_BUNDLE_COUNT = 10;
@@ -83,7 +84,7 @@ export type X402QuestionPayload = {
   questions: X402QuestionItemPayload[];
   roundConfig: X402QuestionRoundConfig;
   bounty: {
-    asset: "USDC";
+    asset: "LREP" | "USDC";
     amount: bigint;
     requiredVoters: bigint;
     requiredSettledRounds: bigint;
@@ -620,8 +621,8 @@ function normalizeBounty(value: unknown): X402QuestionPayload["bounty"] {
   }
 
   const asset = readOptionalString(value.asset).toUpperCase() || "USDC";
-  if (asset !== "USDC") {
-    throw new X402QuestionInputError("Only USDC bounties are supported for agent question submissions.");
+  if (asset !== "USDC" && asset !== "LREP") {
+    throw new X402QuestionInputError("bounty.asset must be USDC or LREP.");
   }
 
   const amount = parsePositiveAtomicAmount(value.amount, "bounty.amount");
@@ -655,8 +656,8 @@ function normalizeBounty(value: unknown): X402QuestionPayload["bounty"] {
       `bounty.requiredSettledRounds must be at least ${X402_MIN_REWARD_POOL_SETTLED_ROUNDS}.`,
     );
   }
-  if (amount < X402_DEFAULT_SUBMISSION_BOUNTY_USDC) {
-    throw new X402QuestionInputError("bounty.amount must be at least 1000000 atomic USDC.");
+  if (amount < X402_DEFAULT_SUBMISSION_BOUNTY) {
+    throw new X402QuestionInputError("bounty.amount must be at least 1000000 atomic units.");
   }
   if (amount < requiredVoters * requiredSettledRounds) {
     throw new X402QuestionInputError("bounty.amount is too small for the selected voter requirements.");
@@ -675,7 +676,7 @@ function normalizeBounty(value: unknown): X402QuestionPayload["bounty"] {
   });
 
   return {
-    asset: "USDC",
+    asset,
     amount,
     requiredVoters,
     requiredSettledRounds,

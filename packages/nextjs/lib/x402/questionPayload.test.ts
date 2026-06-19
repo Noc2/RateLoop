@@ -769,15 +769,13 @@ test("buildX402QuestionOperation is stable for equivalent payloads", () => {
   assert.equal(first.payloadHash, second.payloadHash);
 });
 
-test("parseX402QuestionRequest rejects non-USDC agent bounties", () => {
-  assert.throws(
-    () =>
-      parseX402QuestionRequest({
-        ...VALID_REQUEST,
-        bounty: { ...VALID_REQUEST.bounty, asset: "LREP" },
-      }),
-    X402QuestionInputError,
-  );
+test("parseX402QuestionRequest accepts LREP agent bounties for wallet-call submissions", () => {
+  const payload = parseX402QuestionRequest({
+    ...VALID_REQUEST,
+    bounty: { ...VALID_REQUEST.bounty, asset: "LREP" },
+  });
+
+  assert.equal(payload.bounty.asset, "LREP");
 });
 
 test("parseX402QuestionRequest accepts bundle payouts with multiple settled rounds", () => {
