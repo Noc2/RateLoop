@@ -38,15 +38,11 @@ test("getPreferredHttpRpcUrls prioritizes overrides before Alchemy and defaults"
   );
 });
 
-test("getPreferredHttpRpcUrls keeps configured Base RPCs ahead of public preconfirmation fallbacks", () => {
+test("getPreferredHttpRpcUrls keeps Base preconfirmation URLs ahead of generic Alchemy defaults", () => {
   assert.equal(isBasePreconfRpcChain(baseSepoliaPreconf), true);
   assert.deepEqual(
     getPreferredHttpRpcUrls(baseSepoliaPreconf, { alchemyApiKey: "alchemy-key", preferBasePreconfRpc: true }),
-    [
-      "https://base-sepolia.g.alchemy.com/v2/alchemy-key",
-      ...baseSepolia.rpcUrls.default.http,
-      "https://sepolia-preconf.base.org",
-    ],
+    ["https://sepolia-preconf.base.org", "https://base-sepolia.g.alchemy.com/v2/alchemy-key"],
   );
 });
 
@@ -64,10 +60,9 @@ test("getPreferredHttpRpcUrls prefers dedicated Base preconfirmation RPC overrid
     }),
     [
       "https://base-sepolia-preconf.example.com",
+      "https://sepolia-preconf.base.org",
       "https://84532.rpc.thirdweb.com/client-id",
       "https://base-sepolia.g.alchemy.com/v2/alchemy-key",
-      ...baseSepolia.rpcUrls.default.http,
-      "https://sepolia-preconf.base.org",
     ],
   );
 });

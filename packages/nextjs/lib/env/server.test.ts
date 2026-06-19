@@ -9,7 +9,6 @@ import {
 } from "./server";
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
-import { baseSepolia } from "viem/chains";
 
 const env = process.env as Record<string, string | undefined>;
 const originalDatabaseUrl = env.DATABASE_URL;
@@ -241,9 +240,8 @@ test("resolveServerTargetNetworks honors explicit server Base preconfirmation RP
 
   assert.deepEqual(networks?.[0]?.rpcUrls.default.http, [
     "https://server-base-sepolia-preconf.example.com",
-    "https://84532.rpc.thirdweb.com/client-id",
-    ...baseSepolia.rpcUrls.default.http,
     "https://sepolia-preconf.base.org",
+    "https://84532.rpc.thirdweb.com/client-id",
   ]);
 });
 
