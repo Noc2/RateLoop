@@ -460,6 +460,7 @@ test("public images serve and backfill requested display variants", async () => 
 
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("content-type"), "image/webp");
+  assert.equal(response.headers.get("cache-control"), "public, max-age=31536000, immutable");
   assert.ok((await response.arrayBuffer()).byteLength > 0);
   assert.ok(await readLocalImageAttachment(feedPathname));
 });

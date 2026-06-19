@@ -36,7 +36,7 @@ const GATED_IMAGE_HEADERS = {
   "X-Content-Type-Options": "nosniff",
   "X-Robots-Tag": "noindex, noimageindex",
 };
-const PUBLIC_IMAGE_CACHE_CONTROL = "public, max-age=300, must-revalidate";
+const PUBLIC_IMAGE_CACHE_CONTROL = "public, max-age=31536000, immutable";
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ attachmentId: string }> }) {
   const { attachmentId: image } = await params;
