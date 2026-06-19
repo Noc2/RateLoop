@@ -309,6 +309,31 @@ export function normalizeContentFeedbackCountsInput(value: unknown): string[] {
   return Array.from(seen);
 }
 
+export function normalizeOptionalContentFeedbackChainId(
+  value: unknown,
+): { ok: true; chainId: number | undefined } | { ok: false; error: string } {
+  if (value === undefined || value === null || value === "") {
+    return { ok: true, chainId: undefined };
+  }
+
+  const raw =
+    typeof value === "number" || typeof value === "bigint"
+      ? String(value)
+      : typeof value === "string"
+        ? value.trim()
+        : "";
+  if (!/^\d+$/.test(raw)) {
+    return { ok: false, error: "Missing or unsupported chainId" };
+  }
+
+  const chainId = Number(raw);
+  if (!Number.isSafeInteger(chainId) || chainId <= 0 || !getServerTargetNetworkById(chainId)) {
+    return { ok: false, error: "Missing or unsupported chainId" };
+  }
+
+  return { ok: true, chainId };
+}
+
 function createContentFeedbackTimestamp(nowMs = Date.now()): Date {
   return new Date(Math.floor(nowMs / 1000) * 1000);
 }

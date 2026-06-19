@@ -5,12 +5,12 @@ import {
   hashContentFeedbackPayload,
 } from "~~/lib/auth/contentFeedbackChallenge";
 import { issueSignedActionChallenge } from "~~/lib/auth/signedActions";
-import { getPrimaryServerTargetNetwork } from "~~/lib/env/server";
 import {
   ContentFeedbackVoterEligibilityError,
   assertContentFeedbackVoterEligibility,
   buildContentFeedbackChallengePayload,
   normalizeContentFeedbackInput,
+  normalizeOptionalContentFeedbackChainId,
   resolveContentFeedbackDeploymentScope,
   resolveContentFeedbackRoundContext,
 } from "~~/lib/feedback/contentFeedback";
@@ -36,6 +36,7 @@ export async function POST(request: NextRequest) {
       feedbackType?: unknown;
       body?: unknown;
       sourceUrl?: unknown;
+      chainId?: unknown;
     };
     // WS-6 (2026-05-21 repo audit): fail-closed when the rate-limit store is unavailable.
     // The downstream `issueSignedActionChallenge` writes to the same store anyway, so an
@@ -51,16 +52,16 @@ export async function POST(request: NextRequest) {
     if (!normalized.ok) {
       return NextResponse.json({ error: normalized.error }, { status: 400 });
     }
-    const targetNetwork = getPrimaryServerTargetNetwork();
-    if (!targetNetwork) {
-      return NextResponse.json({ error: "Feedback chain is not configured" }, { status: 503 });
+    const normalizedChain = normalizeOptionalContentFeedbackChainId(body.chainId);
+    if (!normalizedChain.ok) {
+      return NextResponse.json({ error: normalizedChain.error }, { status: 400 });
     }
-    const deployment = resolveContentFeedbackDeploymentScope(targetNetwork.id);
+    const deployment = resolveContentFeedbackDeploymentScope(normalizedChain.chainId);
     if (!deployment) {
       return NextResponse.json({ error: "Feedback deployment is not configured" }, { status: 503 });
     }
 
-    const context = await resolveContentFeedbackRoundContext(normalized.payload.contentId, targetNetwork.id);
+    const context = await resolveContentFeedbackRoundContext(normalized.payload.contentId, deployment.chainId);
     const roundId = context.openRoundId;
     if (!roundId || context.currentRoundId !== roundId) {
       return NextResponse.json({ error: "Feedback is only open while voting is active" }, { status: 409 });
@@ -71,7 +72,7 @@ export async function POST(request: NextRequest) {
         contentId: normalized.payload.contentId,
         roundId,
         address: normalized.payload.normalizedAddress,
-        chainId: targetNetwork.id,
+        chainId: deployment.chainId,
       });
     } catch (error) {
       if (error instanceof ContentFeedbackVoterEligibilityError) {
@@ -84,7 +85,7 @@ export async function POST(request: NextRequest) {
     }
 
     const challengePayload = buildContentFeedbackChallengePayload(normalized.payload, {
-      chainId: targetNetwork.id,
+      chainId: deployment.chainId,
       roundId,
       clientNonce: createContentFeedbackNonce(),
       deployment,

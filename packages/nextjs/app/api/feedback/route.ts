@@ -22,6 +22,7 @@ import {
   normalizeContentFeedbackInput,
   normalizeContentFeedbackListInput,
   normalizeContentFeedbackTxHash,
+  normalizeOptionalContentFeedbackChainId,
   resolveContentFeedbackDeploymentScope,
   resolveContentFeedbackRoundContext,
 } from "~~/lib/feedback/contentFeedback";
@@ -35,9 +36,14 @@ const WRITE_RATE_LIMIT = { limit: 20, windowMs: 60_000 };
 export async function GET(request: NextRequest) {
   const contentIdParam = request.nextUrl.searchParams.get("contentId");
   const address = request.nextUrl.searchParams.get("address");
+  const chainIdParam = request.nextUrl.searchParams.get("chainId");
   const limited = await checkRateLimit(request, READ_RATE_LIMIT, {
     allowOnStoreUnavailable: true,
-    extraKeyParts: [typeof address === "string" ? address : undefined, contentIdParam ?? undefined],
+    extraKeyParts: [
+      typeof address === "string" ? address : undefined,
+      contentIdParam ?? undefined,
+      chainIdParam ?? undefined,
+    ],
   });
   if (limited) return limited;
 
@@ -49,13 +55,17 @@ export async function GET(request: NextRequest) {
     if (!normalized.ok) {
       return NextResponse.json({ error: normalized.error }, { status: 400 });
     }
+    const normalizedChain = normalizeOptionalContentFeedbackChainId(chainIdParam);
+    if (!normalizedChain.ok) {
+      return NextResponse.json({ error: normalizedChain.error }, { status: 400 });
+    }
 
     const requestedViewerAddress = normalized.payload.normalizedAddress;
-    const deployment = resolveContentFeedbackDeploymentScope();
+    const deployment = resolveContentFeedbackDeploymentScope(normalizedChain.chainId);
     if (!deployment) {
       return NextResponse.json({ error: "Feedback deployment is not configured" }, { status: 503 });
     }
-    const context = await resolveContentFeedbackRoundContext(normalized.payload.contentId);
+    const context = await resolveContentFeedbackRoundContext(normalized.payload.contentId, deployment.chainId);
     const result = await listContentFeedback({
       deploymentKey: deployment.deploymentKey,
       contentId: normalized.payload.contentId,

@@ -98,9 +98,10 @@ export function useContentFeedback(contentId: bigint | string | number | null | 
   const writeTx = useTransactor(localE2ETestWalletClient);
   const normalizedContentId = useMemo(() => normalizeContentId(contentId), [contentId]);
   const normalizedAddress = address?.toLowerCase();
+  const chainId = targetNetwork.id;
   const queryKey = useMemo(
-    () => ["contentFeedback", normalizedContentId ?? "none", normalizedAddress ?? "anonymous"] as const,
-    [normalizedAddress, normalizedContentId],
+    () => ["contentFeedback", normalizedContentId ?? "none", normalizedAddress ?? "anonymous", chainId] as const,
+    [chainId, normalizedAddress, normalizedContentId],
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -223,7 +224,7 @@ export function useContentFeedback(contentId: bigint | string | number | null | 
     queryFn: async () => {
       if (!normalizedContentId) return EMPTY_FEEDBACK_RESPONSE;
 
-      const params = new URLSearchParams({ contentId: normalizedContentId });
+      const params = new URLSearchParams({ contentId: normalizedContentId, chainId: String(chainId) });
       if (address) {
         params.set("address", address);
       }
@@ -254,6 +255,7 @@ export function useContentFeedback(contentId: bigint | string | number | null | 
             body: JSON.stringify({
               address,
               contentId: normalizedContentId,
+              chainId,
               feedbackType: input.feedbackType,
               body: input.body,
               sourceUrl: input.sourceUrl,
@@ -330,7 +332,7 @@ export function useContentFeedback(contentId: bigint | string | number | null | 
         setIsSubmitting(false);
       }
     },
-    [address, normalizedContentId, publishFeedbackOnchain, queryClient, queryKey, signMessageAsync],
+    [address, chainId, normalizedContentId, publishFeedbackOnchain, queryClient, queryKey, signMessageAsync],
   );
 
   const feedback = feedbackQuery.data ?? EMPTY_FEEDBACK_RESPONSE;

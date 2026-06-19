@@ -199,6 +199,19 @@ test("normalizes structured feedback input", () => {
   });
 });
 
+test("normalizes optional content feedback chain ids", () => {
+  const omitted = contentFeedback.normalizeOptionalContentFeedbackChainId(undefined);
+  assert.deepEqual(omitted, { ok: true, chainId: undefined });
+
+  const configured = contentFeedback.normalizeOptionalContentFeedbackChainId(String(CHAIN_ID));
+  assert.deepEqual(configured, { ok: true, chainId: CHAIN_ID });
+
+  const malformed = contentFeedback.normalizeOptionalContentFeedbackChainId(`${CHAIN_ID}abc`);
+  assert.equal(malformed.ok, false);
+  if (malformed.ok) return;
+  assert.equal(malformed.error, "Missing or unsupported chainId");
+});
+
 test("normalizes feature testing feedback types", () => {
   const normalized = contentFeedback.normalizeContentFeedbackInput({
     address: WALLET,
