@@ -125,6 +125,10 @@ function readBounty(intent: SigningIntent | null) {
   return `${whole.toString()}${fractional ? `.${fractional}` : ""} USDC`;
 }
 
+function isFeedbackBonusSigningStep(intent: SigningIntent | null) {
+  return intent?.status === "feedback_bonus_prepared";
+}
+
 // C-2 (2026-05-22 audit): decode the two ERC-20 selectors most commonly seen here
 // (transfer, approve) so the user can see who/how-much before signing. The page
 // also shows raw calldata, but humans skim — a decoded "approve(spender=0x.., amount=..)"
@@ -202,12 +206,20 @@ export function BrowserSigningPage({ intentId }: { intentId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [steps, setSteps] = useState<ExecutionStep[]>([]);
 
+  const isFeedbackBonusStep = isFeedbackBonusSigningStep(intent);
   const isTerminalStatus = intent?.status === "expired" || intent?.status === "submitted";
   const connectedMismatch = Boolean(intent?.walletAddress && address && !sameAddress(intent.walletAddress, address));
   const hasTransactionPlan = Boolean(intent?.transactionPlan?.calls?.length);
   const needsChainSwitch = Boolean(intent?.chainId && chain?.id && chain.id !== intent.chainId);
   const canPrepare = Boolean(
-    token && address && intent && !connectedMismatch && !isPreparing && !isExecuting && !isTerminalStatus,
+    token &&
+      address &&
+      intent &&
+      !connectedMismatch &&
+      !isFeedbackBonusStep &&
+      !isPreparing &&
+      !isExecuting &&
+      !isTerminalStatus,
   );
   const canExecute = Boolean(
     address && intent && hasTransactionPlan && !connectedMismatch && !isExecuting && !isTerminalStatus,
@@ -331,7 +343,8 @@ export function BrowserSigningPage({ intentId }: { intentId: string }) {
   ]);
 
   const handleExecute = useCallback(async () => {
-    if (!intent?.transactionPlan?.calls?.length) {
+    const preparedIntent = intent;
+    if (!preparedIntent?.transactionPlan?.calls?.length) {
       notification.error("Prepare this ask before executing wallet calls.");
       return;
     }
@@ -346,47 +359,74 @@ export function BrowserSigningPage({ intentId }: { intentId: string }) {
 
     setIsExecuting(true);
     setError(null);
-    const nextSteps: ExecutionStep[] = intent.transactionPlan.calls.map(call => ({
-      label: call.description || call.phase || call.id || "Wallet call",
-      status: "pending",
-    }));
-    setSteps(nextSteps);
 
     try {
-      if (intent.chainId && chain?.id !== intent.chainId) {
-        await switchToChain(intent.chainId);
+      let currentIntent: SigningIntent = preparedIntent;
+      let completedBonusStep = false;
+
+      while (true) {
+        const transactionPlan = currentIntent.transactionPlan;
+        const calls = transactionPlan?.calls ?? [];
+        if (calls.length === 0) {
+          throw new Error("Prepared transaction plan is empty.");
+        }
+
+        setSteps(
+          calls.map(call => ({
+            label: call.description || call.phase || call.id || "Wallet call",
+            status: "pending",
+          })),
+        );
+
+        if (currentIntent.chainId && chain?.id !== currentIntent.chainId) {
+          await switchToChain(currentIntent.chainId);
+        }
+
+        // Coerce null -> undefined for wagmi; binding chainId makes viem re-assert
+        // the live wallet chain per call instead of trusting the pre-loop switch.
+        const intentChainId = currentIntent.chainId ?? undefined;
+        const hashes = await executeWalletTransactionPlan({
+          calls,
+          chainId: intentChainId,
+          getPostCallDelayMs,
+          onCallConfirmed: ({ hash, index }) => {
+            setSteps(current =>
+              current.map((step, stepIndex) => (stepIndex === index ? { ...step, hash, status: "confirmed" } : step)),
+            );
+          },
+          onCallSent: ({ hash, index }) => {
+            setSteps(current =>
+              current.map((step, stepIndex) => (stepIndex === index ? { ...step, hash, status: "sent" } : step)),
+            );
+          },
+          requiresAtomicExecution: transactionPlan?.requiresAtomicExecution,
+          requiresOrderedExecution: transactionPlan?.requiresOrderedExecution,
+        });
+
+        const response = await fetch(`/api/agent/signing-intents/${intentId}/complete`, {
+          body: JSON.stringify({ token, transactionHashes: hashes }),
+          headers: { "content-type": "application/json" },
+          method: "POST",
+        });
+        const body = (await response.json()) as SigningIntent | { message?: string; error?: string };
+        if (!response.ok) throw new Error(readResponseError(body, "Failed to confirm RateLoop ask."));
+        const nextIntent = body as SigningIntent;
+        setIntent(nextIntent);
+
+        if (isFeedbackBonusSigningStep(nextIntent)) {
+          if (!nextIntent.transactionPlan?.calls?.length) {
+            throw new Error("RateLoop returned a Feedback Bonus step without wallet calls.");
+          }
+          completedBonusStep = true;
+          currentIntent = nextIntent;
+          continue;
+        }
+
+        notification.success(
+          completedBonusStep ? "Ask submitted and Feedback Bonus funded." : "Ask submitted to RateLoop.",
+        );
+        break;
       }
-
-      // Coerce null -> undefined for wagmi; binding chainId makes viem re-assert
-      // the live wallet chain per call instead of trusting the pre-loop switch.
-      const intentChainId = intent.chainId ?? undefined;
-      const hashes = await executeWalletTransactionPlan({
-        calls: intent.transactionPlan.calls,
-        chainId: intentChainId,
-        getPostCallDelayMs,
-        onCallConfirmed: ({ hash, index }) => {
-          setSteps(current =>
-            current.map((step, stepIndex) => (stepIndex === index ? { ...step, hash, status: "confirmed" } : step)),
-          );
-        },
-        onCallSent: ({ hash, index }) => {
-          setSteps(current =>
-            current.map((step, stepIndex) => (stepIndex === index ? { ...step, hash, status: "sent" } : step)),
-          );
-        },
-        requiresAtomicExecution: intent.transactionPlan.requiresAtomicExecution,
-        requiresOrderedExecution: intent.transactionPlan.requiresOrderedExecution,
-      });
-
-      const response = await fetch(`/api/agent/signing-intents/${intentId}/complete`, {
-        body: JSON.stringify({ token, transactionHashes: hashes }),
-        headers: { "content-type": "application/json" },
-        method: "POST",
-      });
-      const body = (await response.json()) as SigningIntent | { message?: string; error?: string };
-      if (!response.ok) throw new Error(readResponseError(body, "Failed to confirm RateLoop ask."));
-      setIntent(body as SigningIntent);
-      notification.success("Ask submitted to RateLoop.");
     } catch (executeError) {
       setError(executeError instanceof Error ? executeError.message : "Failed to execute wallet calls.");
     } finally {
@@ -497,7 +537,7 @@ export function BrowserSigningPage({ intentId }: { intentId: string }) {
                   type="button"
                   onClick={() => void handleExecute()}
                 >
-                  {isExecuting ? "Submitting..." : "Submit"}
+                  {isExecuting ? "Submitting..." : isFeedbackBonusStep ? "Fund Bonus" : "Submit"}
                 </button>
               </div>
             </div>
