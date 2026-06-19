@@ -61,7 +61,7 @@ export interface RateLoopAgentQuestionConfidentiality {
 }
 
 export interface RateLoopAgentBounty {
-  asset?: "USDC" | string;
+  asset?: "LREP" | "USDC" | "lrep" | "usdc" | string;
   amount: string | number | bigint;
   /** Must match roundConfig.minVoters when a custom roundConfig is supplied. */
   requiredVoters?: string | number | bigint;
@@ -75,7 +75,7 @@ export interface RateLoopAgentBounty {
 
 export interface RateLoopAgentFeedbackBonus {
   amount: string | number | bigint;
-  asset?: "USDC" | string;
+  asset?: "LREP" | "USDC" | "lrep" | "usdc" | string;
   awarder?: `0x${string}` | string;
   /** Requested feedback close. Awards remain payable until at least 24h after settlement. */
   feedbackClosesAt?: string | number | bigint;

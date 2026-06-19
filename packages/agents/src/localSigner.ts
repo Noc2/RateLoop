@@ -193,6 +193,7 @@ const LocalX402QuestionSubmitterAbi = [
 const MAX_X402_AUTHORIZATION_VALIDITY_SECONDS = 24n * 60n * 60n;
 const FEEDBACK_BONUS_ASSET_LREP = 0;
 const FEEDBACK_BONUS_ASSET_USDC = 1;
+const X402_SUBMISSION_REWARD_ASSET_LREP = 0;
 const X402_SUBMISSION_REWARD_ASSET_USDC = 1;
 const QUESTION_CONTEXT_DOMAIN = keccak256(
   stringToHex("rateloop-question-context-v5"),
@@ -370,6 +371,7 @@ type LocalSignerAgentClient = Pick<
   Partial<Pick<RateLoopAgentClient, "confirmFeedbackBonusTransactions">>;
 
 type LocalFeedbackBonusAsset = "USDC" | "LREP";
+type LocalSubmissionRewardAsset = X402QuestionPayload["bounty"]["asset"];
 
 type ExpectedLocalSignerFeedbackBonus = {
   amount: bigint;
@@ -396,7 +398,7 @@ type LocalQuestionPayload = Omit<X402QuestionPayload, "questions"> & {
 
 type LocalRewardTerms = {
   amount: bigint;
-  asset: typeof X402_SUBMISSION_REWARD_ASSET_USDC;
+  asset: typeof X402_SUBMISSION_REWARD_ASSET_LREP | typeof X402_SUBMISSION_REWARD_ASSET_USDC;
   bountyStartBy: bigint;
   bountyWindowSeconds: bigint;
   bountyEligibility: number;
@@ -681,9 +683,9 @@ function parseMaxPaymentAmount(value: unknown): bigint {
   return BigInt(raw);
 }
 
-function feedbackBonusUsdcAmount(request: AskHumansRequest): bigint {
+function feedbackBonusPaymentAmount(request: AskHumansRequest): bigint {
   const bonus = request.feedbackBonus;
-  if (!bonus || bonus.asset?.toUpperCase() !== "USDC") return 0n;
+  if (!bonus) return 0n;
   return normalizeBigInt(bonus.amount, "feedbackBonus.amount");
 }
 
@@ -701,6 +703,20 @@ function feedbackBonusAssetId(
   asset: LocalFeedbackBonusAsset,
 ): ExpectedLocalSignerFeedbackBonus["assetId"] {
   return asset === "LREP" ? FEEDBACK_BONUS_ASSET_LREP : FEEDBACK_BONUS_ASSET_USDC;
+}
+
+function submissionRewardAssetId(
+  asset: LocalSubmissionRewardAsset,
+): LocalRewardTerms["asset"] {
+  return asset === "LREP"
+    ? X402_SUBMISSION_REWARD_ASSET_LREP
+    : X402_SUBMISSION_REWARD_ASSET_USDC;
+}
+
+function submissionRewardAssetLabel(
+  assetId: LocalRewardTerms["asset"],
+): LocalSubmissionRewardAsset {
+  return assetId === X402_SUBMISSION_REWARD_ASSET_LREP ? "LREP" : "USDC";
 }
 
 function normalizeLocalSignerFeedbackBonus(
@@ -754,7 +770,7 @@ function assertWithinMaxPaymentAmount(request: AskHumansRequest): bigint {
   }
   const cap = parseMaxPaymentAmount(request.maxPaymentAmount);
   const total =
-    normalizeBigInt(request.bounty.amount, "bounty.amount") + feedbackBonusUsdcAmount(request);
+    normalizeBigInt(request.bounty.amount, "bounty.amount") + feedbackBonusPaymentAmount(request);
   if (total > cap) {
     throw new Error("Quoted payment exceeds maxPaymentAmount.");
   }
@@ -1667,7 +1683,7 @@ function buildExpectedLocalSignerQuestionPlan(params: {
   const operation = buildLocalQuestionOperation(payload);
   const rewardTerms = {
     amount: payload.bounty.amount,
-    asset: X402_SUBMISSION_REWARD_ASSET_USDC,
+    asset: submissionRewardAssetId(payload.bounty.asset),
     bountyStartBy: payload.bounty.bountyStartBy,
     bountyWindowSeconds: payload.bounty.bountyWindowSeconds,
     bountyEligibility: payload.bounty.bountyEligibility,
@@ -2076,13 +2092,14 @@ function assertRewardTerms(
   if (!value || typeof value !== "object") {
     throw new Error(`${fieldName} is required.`);
   }
-  if (
-    normalizeBigInt(
-      readStructField(value, "asset", 0, fieldName),
-      `${fieldName}.asset`,
-    ) !== 1n
-  ) {
-    throw new Error(`${fieldName}.asset must be USDC.`);
+  const actualAsset = normalizeBigInt(
+    readStructField(value, "asset", 0, fieldName),
+    `${fieldName}.asset`,
+  );
+  if (actualAsset !== BigInt(expected.asset)) {
+    throw new Error(
+      `${fieldName}.asset must be ${submissionRewardAssetLabel(expected.asset)}.`,
+    );
   }
   assertEqualBigInt(
     readStructField(value, "amount", 1, fieldName),
@@ -2780,8 +2797,9 @@ function validateSubmitX402QuestionCall(params: {
 function validatePaymentMetadata(params: {
   ask: AskHumansResponse;
   expectedAmount: bigint;
+  expectedAsset: LocalSubmissionRewardAsset;
   expectedSpender: Address;
-  usdcAddress: Address;
+  expectedToken: Address;
 }) {
   const payment = params.ask.payment;
   if (!payment) {
@@ -2791,11 +2809,16 @@ function validatePaymentMetadata(params: {
     !payment.tokenAddress ||
     !sameAddress(
       normalizeAddress(payment.tokenAddress, "payment.tokenAddress"),
-      params.usdcAddress,
+      params.expectedToken,
     )
   ) {
     throw new Error(
-      "RateLoop transaction plan payment.tokenAddress must be the configured USDC token.",
+      `RateLoop transaction plan payment.tokenAddress must be the configured ${params.expectedAsset} token.`,
+    );
+  }
+  if (payment.asset !== undefined && payment.asset !== params.expectedAsset) {
+    throw new Error(
+      `RateLoop transaction plan payment.asset must be ${params.expectedAsset}.`,
     );
   }
   if (
@@ -3149,7 +3172,7 @@ export function validateLocalSignerTransactionPlan(params: {
   if (paymentMode === "wallet_calls") {
     if (calls.length !== 3) {
       throw new Error(
-        "wallet_calls transaction plans must contain approve, reserve, and submit calls.",
+        "wallet_calls transaction plans must contain reserve, approve, and submit calls.",
       );
     }
     const escrowAddress = requireConfiguredAddress(
@@ -3159,24 +3182,36 @@ export function validateLocalSignerTransactionPlan(params: {
       ),
       "QuestionRewardPoolEscrow",
     );
+    const expectedBountyAsset = submissionRewardAssetLabel(
+      expectedPlan.rewardTerms.asset,
+    );
+    const rewardTokenAddress =
+      expectedBountyAsset === "LREP"
+        ? requireConfiguredAddress(
+            resolveConfiguredLrepAddress(params.config, responseChainId),
+            "LoopReputation",
+          )
+        : usdcAddress;
     validatePaymentMetadata({
       ask: params.ask,
       expectedAmount: params.expectedBountyAmount,
+      expectedAsset: expectedBountyAsset,
       expectedSpender: escrowAddress,
-      usdcAddress,
-    });
-    validateApproveCall({
-      call: calls[0]!,
-      expectedAmount: params.expectedBountyAmount,
-      expectedPhase: "approve_usdc",
-      expectedSpender: escrowAddress,
-      expectedToken: usdcAddress,
-      index: 0,
+      expectedToken: rewardTokenAddress,
     });
     validateReserveSubmissionCall({
-      call: calls[1]!,
+      call: calls[0]!,
       contentRegistryAddress,
       expectedRevealCommitment: expectedPlan.revealCommitment,
+      index: 0,
+    });
+    validateApproveCall({
+      call: calls[1]!,
+      expectedAmount: params.expectedBountyAmount,
+      expectedPhase:
+        expectedBountyAsset === "LREP" ? "approve_lrep" : "approve_usdc",
+      expectedSpender: escrowAddress,
+      expectedToken: rewardTokenAddress,
       index: 1,
     });
     validateSubmitQuestionCall({
@@ -3189,6 +3224,9 @@ export function validateLocalSignerTransactionPlan(params: {
   }
 
   if (paymentMode === "x402_authorization") {
+    if (expectedPlan.rewardTerms.asset !== X402_SUBMISSION_REWARD_ASSET_USDC) {
+      throw new Error("x402_authorization transaction plans require USDC bounties.");
+    }
     if (calls.length !== 1) {
       throw new Error(
         "x402_authorization transaction plans must contain exactly one submit call.",
@@ -3225,8 +3263,9 @@ export function validateLocalSignerTransactionPlan(params: {
       expectedAmount:
         params.expectedBountyAmount +
         (expectedFeedbackBonus?.asset === "USDC" ? expectedFeedbackBonus.amount : 0n),
+      expectedAsset: "USDC",
       expectedSpender: x402QuestionSubmitterAddress,
-      usdcAddress,
+      expectedToken: usdcAddress,
     });
     validateSubmitX402QuestionCall({
       accountAddress: params.accountAddress,

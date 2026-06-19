@@ -243,11 +243,12 @@ type TestX402AuthorizationRequest = {
 };
 
 const BYTES32_ONE = `0x${"1".repeat(64)}` as const;
+type TestSubmissionRewardAsset = "USDC" | "LREP";
 
-function rewardTerms(amount = BigInt(X402_AMOUNT)) {
+function rewardTerms(amount = BigInt(X402_AMOUNT), asset: TestSubmissionRewardAsset = "USDC") {
   return {
     amount,
-    asset: 1,
+    asset: asset === "LREP" ? 0 : 1,
     bountyStartBy: BOUNTY_START_BY,
     bountyWindowSeconds: BOUNTY_WINDOW_SECONDS,
     bountyEligibility: 0,
@@ -515,6 +516,38 @@ function rewardTermsHash() {
   );
 }
 
+function rewardTermsHashForPayload(payload: AskHumansRequest) {
+  const canonical = buildLocalQuestionCanonicalPayload(payload, 480);
+  const terms = rewardTerms(
+    BigInt(canonical.bounty.amount),
+    canonical.bounty.asset === "LREP" ? "LREP" : "USDC",
+  );
+  return keccak256(
+    encodeAbiParameters(
+      [
+        { type: "uint8" },
+        { type: "uint256" },
+        { type: "uint256" },
+        { type: "uint256" },
+        { type: "uint256" },
+        { type: "uint256" },
+        { type: "uint256" },
+        { type: "uint8" },
+      ],
+      [
+        terms.asset,
+        terms.amount,
+        terms.requiredVoters,
+        terms.requiredSettledRounds,
+        terms.bountyStartBy,
+        terms.bountyWindowSeconds,
+        terms.feedbackWindowSeconds,
+        terms.bountyEligibility,
+      ],
+    ),
+  );
+}
+
 function roundConfigHash() {
   return keccak256(
     encodeAbiParameters(
@@ -580,6 +613,51 @@ function expectedRevealCommitment(questionMetadataBaseUrl?: string) {
         roundConfigHash(),
         spec.questionMetadataHash,
         spec.resultSpecHash,
+        ZERO_CONFIDENTIALITY_HASH,
+      ],
+    ),
+  );
+}
+
+function revealCommitmentForPayload(payload: AskHumansRequest) {
+  const canonical = buildLocalQuestionCanonicalPayload(payload, 480);
+  const question = canonical.questions[0];
+  if (!question) throw new Error("Missing canonical question.");
+  return keccak256(
+    encodeAbiParameters(
+      [
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "uint256" },
+        { type: "bytes32" },
+        { type: "address" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+      ],
+      [
+        QUESTION_REVEAL_DOMAIN,
+        submissionKeyForPayload(payload),
+        submissionMediaHash(question.imageUrls, question.videoUrl),
+        keccak256(
+          encodeAbiParameters(
+            [{ type: "string" }, { type: "string" }],
+            [question.title, question.tags.join(",")],
+          ),
+        ),
+        submissionDetailsHashFor(question.detailsUrl, question.detailsHash as Hex),
+        BigInt(question.categoryId),
+        saltForPayload(payload),
+        account.address,
+        rewardTermsHashForPayload(payload),
+        roundConfigHash(),
+        question.questionMetadataHash as Hex,
+        question.resultSpecHash as Hex,
         ZERO_CONFIDENTIALITY_HASH,
       ],
     ),
@@ -858,6 +936,42 @@ function submitQuestionData(
   });
 }
 
+function submitQuestionDataForPayload(payload: AskHumansRequest) {
+  const canonical = buildLocalQuestionCanonicalPayload(payload, 480);
+  const question = canonical.questions[0];
+  if (!question) throw new Error("Missing canonical question.");
+  const asset = canonical.bounty.asset === "LREP" ? "LREP" : "USDC";
+  return encodeFunctionData({
+    abi: ContentRegistrySubmitQuestionWithConfidentialityAbi,
+    args: [
+      question.contextUrl,
+      question.imageUrls,
+      question.videoUrl,
+      question.title,
+      question.tags.join(","),
+      BigInt(question.categoryId),
+      {
+        detailsHash: question.detailsHash as Hex,
+        detailsUrl: question.detailsUrl,
+      },
+      saltForPayload(payload),
+      rewardTerms(BigInt(canonical.bounty.amount), asset),
+      {
+        epochDuration: Number(canonical.roundConfig.epochDuration),
+        maxDuration: Number(canonical.roundConfig.maxDuration),
+        maxVoters: Number(canonical.roundConfig.maxVoters),
+        minVoters: Number(canonical.roundConfig.minVoters),
+      },
+      {
+        questionMetadataHash: question.questionMetadataHash as Hex,
+        resultSpecHash: question.resultSpecHash as Hex,
+      },
+      ZERO_CONFIDENTIALITY_CONFIG,
+    ],
+    functionName: "submitQuestionWithRewardAndRoundConfig",
+  });
+}
+
 function submitX402QuestionData(
   amount = BigInt(X402_AMOUNT),
   questionMetadataBaseUrl?: string,
@@ -977,6 +1091,14 @@ function walletCallsResponse(
     transactionPlan: {
       calls: [
         {
+          data: reserveSubmissionData(
+            expectedRevealCommitment(questionMetadataBaseUrl),
+          ),
+          phase: "reserve_submission",
+          to: CONTENT_REGISTRY_ADDRESS,
+          value: "0",
+        },
+        {
           data: encodeFunctionData({
             abi: erc20Abi,
             args: [QUESTION_REWARD_ESCROW_ADDRESS, BigInt(X402_AMOUNT)],
@@ -987,18 +1109,58 @@ function walletCallsResponse(
           value: "0",
         },
         {
-          data: reserveSubmissionData(
-            expectedRevealCommitment(questionMetadataBaseUrl),
+          data: submitQuestionData(
+            BigInt(X402_AMOUNT),
+            questionMetadataBaseUrl,
           ),
+          phase: "submit_question",
+          to: CONTENT_REGISTRY_ADDRESS,
+          value: "0",
+        },
+      ],
+      requiresOrderedExecution: true,
+    },
+    wallet: { address: account.address, fundingMode: "agent_wallet" },
+    ...overrides,
+  };
+}
+
+function lrepWalletCallsResponse(
+  payload: AskHumansRequest,
+  overrides: Partial<AskHumansResponse> = {},
+): AskHumansResponse {
+  return {
+    chainId: 480,
+    operationKey: operationKeyFor(payload),
+    payment: {
+      amount: X402_AMOUNT,
+      asset: "LREP",
+      spender: QUESTION_REWARD_ESCROW_ADDRESS,
+      tokenAddress: LREP_ADDRESS,
+    },
+    paymentMode: "wallet_calls",
+    payloadHash: payloadHashFor(payload),
+    status: "awaiting_wallet_signature",
+    transactionPlan: {
+      calls: [
+        {
+          data: reserveSubmissionData(revealCommitmentForPayload(payload)),
           phase: "reserve_submission",
           to: CONTENT_REGISTRY_ADDRESS,
           value: "0",
         },
         {
-          data: submitQuestionData(
-            BigInt(X402_AMOUNT),
-            questionMetadataBaseUrl,
-          ),
+          data: encodeFunctionData({
+            abi: erc20Abi,
+            args: [QUESTION_REWARD_ESCROW_ADDRESS, BigInt(X402_AMOUNT)],
+            functionName: "approve",
+          }),
+          phase: "approve_lrep",
+          to: LREP_ADDRESS,
+          value: "0",
+        },
+        {
+          data: submitQuestionDataForPayload(payload),
           phase: "submit_question",
           to: CONTENT_REGISTRY_ADDRESS,
           value: "0",
@@ -1460,6 +1622,26 @@ describe("local signer", () => {
     expect(calls).toHaveLength(3);
   });
 
+  it("validates LREP bounty wallet-call transaction plans before execution", () => {
+    const payload = {
+      ...askPayload(),
+      bounty: {
+        ...askPayload().bounty,
+        asset: "LREP" as const,
+      },
+    };
+    const calls = validateLocalSignerTransactionPlan({
+      accountAddress: account.address,
+      ask: lrepWalletCallsResponse(payload),
+      config: validationConfig(),
+      expectedBountyAmount: BigInt(X402_AMOUNT),
+      expectedChainId: 480,
+      expectedPayload: payload,
+    });
+
+    expect(calls).toHaveLength(3);
+  });
+
   it("uses the server metadata base when validating local signer ask hashes", () => {
     const calls = validateLocalSignerTransactionPlan({
       accountAddress: account.address,
@@ -1755,11 +1937,11 @@ describe("local signer", () => {
           transactionPlan: {
             ...walletCallsResponse().transactionPlan,
             calls: [
-              walletCallsResponse().transactionPlan!.calls![0]!,
               {
-                ...walletCallsResponse().transactionPlan!.calls![1]!,
+                ...walletCallsResponse().transactionPlan!.calls![0]!,
                 data: reserveSubmissionData(BYTES32_ONE),
               },
+              walletCallsResponse().transactionPlan!.calls![1]!,
               walletCallsResponse().transactionPlan!.calls![2]!,
             ],
             requiresOrderedExecution: true,
@@ -1795,11 +1977,12 @@ describe("local signer", () => {
       transactionPlan: {
         ...walletCallsResponse().transactionPlan,
         calls: [
+          walletCallsResponse().transactionPlan!.calls![0]!,
           {
-            ...walletCallsResponse().transactionPlan!.calls![0]!,
+            ...walletCallsResponse().transactionPlan!.calls![1]!,
             to: "0x00000000000000000000000000000000000000ff",
           },
-          ...walletCallsResponse().transactionPlan!.calls!.slice(1),
+          walletCallsResponse().transactionPlan!.calls![2]!,
         ],
         requiresOrderedExecution: true,
       },
@@ -1819,15 +2002,16 @@ describe("local signer", () => {
       transactionPlan: {
         ...walletCallsResponse().transactionPlan,
         calls: [
+          walletCallsResponse().transactionPlan!.calls![0]!,
           {
-            ...walletCallsResponse().transactionPlan!.calls![0]!,
+            ...walletCallsResponse().transactionPlan!.calls![1]!,
             data: encodeFunctionData({
               abi: erc20Abi,
               args: [QUESTION_REWARD_ESCROW_ADDRESS, BigInt(X402_AMOUNT) + 1n],
               functionName: "approve",
             }),
           },
-          ...walletCallsResponse().transactionPlan!.calls!.slice(1),
+          walletCallsResponse().transactionPlan!.calls![2]!,
         ],
         requiresOrderedExecution: true,
       },

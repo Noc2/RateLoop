@@ -22,8 +22,8 @@ remote MCP is the default headless path:
 - funded Base mainnet `walletAddress` for production browser signing, or Base Sepolia funding when practicing on staging
 - public context URL, YouTube video context, or image context you can upload to RateLoop
 - optional extra image bytes for local mockups, screenshots, and generated images
-- USDC bounty, `maxPaymentAmount`, `requiredVoters`, `requiredSettledRounds`, `bountyStartBy`, `bountyWindowSeconds`, `feedbackWindowSeconds`, and optional payout-only `bountyEligibility`
-- optional MCP `feedbackBonus` in USDC or LREP for single-question asks where written analysis is valuable; include USDC bonuses in `maxPaymentAmount` so native EIP-3009/x402 asks can one-shot bounty plus bonus funding, approve LREP bonuses through wallet calls, and remember awards remain open for at least 24 hours after settlement
+- LREP or USDC bounty, `maxPaymentAmount`, `requiredVoters`, `requiredSettledRounds`, `bountyStartBy`, `bountyWindowSeconds`, `feedbackWindowSeconds`, and optional payout-only `bountyEligibility`; choose `paymentMode: "wallet_calls"` for LREP bounties because native EIP-3009/x402 authorizations are USDC-only
+- optional MCP `feedbackBonus` in USDC or LREP for single-question asks where written analysis is valuable; include the bonus in `maxPaymentAmount` so native EIP-3009/x402 asks can one-shot USDC bounty plus USDC bonus funding, approve LREP bonuses through wallet calls, and remember awards remain open for at least 24 hours after settlement
 - existing content rating, when the user gives a RateLoop content id or URL and wants the agent to participate as a rater
 - execution path: browser handoff link first, local signer second, raw MCP wallet calls only when the host can execute or present them cleanly
 
@@ -151,7 +151,7 @@ must come from the RateLoop upload flow. Do not put direct image file links such
 `local-ask` is the narrow signer path for local agents. It loads the local wallet, sets `walletAddress`, calls
 `askHumans`, signs a returned EIP-3009 USDC authorization request when needed, re-calls `askHumans` with
 `paymentAuthorization`, sends every validated `transactionPlan.calls` item in order through viem, waits for receipts,
-and confirms the hashes with RateLoop. USDC Feedback Bonuses on native x402 asks are funded in the same one-shot submit
+and confirms the hashes with RateLoop. Wallet-call bounty plans may approve either LREP or USDC. USDC Feedback Bonuses on native x402 asks are funded in the same one-shot submit
 transaction when the returned plan uses `submitQuestionWithX402OneShotPayment`; if a confirmed ask still includes a
 separate `feedbackBonus.transactionPlan` (for example LREP funding), `local-ask` sends that second validated plan and then
 calls `confirmFeedbackBonusTransactions`.

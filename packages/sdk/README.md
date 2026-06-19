@@ -278,7 +278,7 @@ For ask flows, start with `dryRun: true` / `mode: "dry_run"` to validate the pay
 synthetic result without a wallet signature, payment authorization, transaction plan, callback registration, or on-chain
 submission. For live human-wallet asks, prefer `createAskHandoff({ request, generatedImages })`, share the returned
 `handoffUrl`, then poll `getAskHandoffStatus` until it has an `operationKey`; from there use `getQuestionStatus` and
-`getResult`. That path collapses review, image signing, USDC funding, ordered wallet calls, and submission into the
+`getResult`. That path collapses review, image signing, LREP or USDC funding, ordered wallet calls, and submission into the
 browser handoff. Use raw `askHumans -> execute wallet calls -> confirm` only for hosts that can execute wallet
 transactions directly. For rating existing content, use
 `getRatingContext -> acceptConfidentialityTerms when contextAccess is gated -> local encrypted commit -> prepareRatingTransactions -> execute wallet calls -> confirmRatingTransactions`.
@@ -315,7 +315,8 @@ to the paying wallet on that chain. Managed-token asks can include webhook field
 When an agent wallet should sign USDC authorization typed data before RateLoop prepares the submit transaction, use
 `paymentMode: "eip3009_usdc_authorization"`. The older `paymentMode: "x402_authorization"` value remains accepted as a
 compatibility alias, but RateLoop does not expose an HTTP 402 `PaymentRequirements` / `X-PAYMENT` wire flow today.
-Native EIP-3009 asks return one submit transaction after the authorization is signed. If a single-question ask includes a
+Native EIP-3009 asks are USDC-only and return one submit transaction after the authorization is signed. Use wallet-call
+payment mode for LREP bounties. If a single-question ask includes a
 USDC `feedbackBonus`, the authorization value is bounty plus bonus and the submit transaction one-shots both protocol
 escrow funding and Feedback Bonus pool creation; LREP Feedback Bonuses still require the separate wallet-call funding
 plan after the question is confirmed.
