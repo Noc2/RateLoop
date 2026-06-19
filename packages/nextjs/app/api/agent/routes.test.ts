@@ -2002,6 +2002,20 @@ test("agent ask handoff route funds feedback bonus after submitting the ask", as
     "Execute the Feedback Bonus transactionPlan.calls in the connected wallet, then confirm transaction hashes.",
   );
 
+  const retryAskResponse = await handoffCompleteRoute.POST(
+    makePublicPost(`https://rateloop.ai/api/agent/handoffs/${handoffId}/complete`, {
+      token,
+      transactionHashes: [askHash],
+    }),
+    { params: Promise.resolve({ handoffId }) },
+  );
+  const retryAskBody = (await retryAskResponse.json()) as Record<string, unknown>;
+
+  assert.equal(retryAskResponse.status, 200);
+  assert.equal(retryAskBody.status, "feedback_bonus_prepared");
+  assert.deepEqual(retryAskBody.transactionHashes, [askHash]);
+  assert.deepEqual(confirmedFeedbackBonus, []);
+
   const feedbackHash = `0x${"5".repeat(64)}` as const;
   const completeBonusResponse = await handoffCompleteRoute.POST(
     makePublicPost(`https://rateloop.ai/api/agent/handoffs/${handoffId}/complete`, {

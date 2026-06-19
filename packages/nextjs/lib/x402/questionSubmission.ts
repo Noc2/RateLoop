@@ -2387,6 +2387,50 @@ function assertFeedbackBonusPoolMatchesRequest(params: {
   }
 }
 
+function submittedRecordContentIds(record: X402QuestionSubmissionRecord) {
+  const storedContentIds = parseStoredContentIds(record.contentIds);
+  if (storedContentIds.length > 0) return storedContentIds;
+  return record.contentId ? [record.contentId] : [];
+}
+
+function assertConfirmedFeedbackBonusPool(params: {
+  contentIds: Array<string | bigint>;
+  createdPool: NonNullable<ReturnType<typeof readFeedbackBonusPoolCreated>>;
+  expectedRoundId?: string | null;
+  feedbackBonus: StoredFeedbackBonusRequest | undefined;
+  funderAddress: Address;
+}) {
+  const { feedbackBonus } = params;
+  if (!feedbackBonus) {
+    throw new X402QuestionConflictError("Confirmed submission created an unexpected Feedback Bonus pool.");
+  }
+  const contentId = params.contentIds[0];
+  if (contentId === undefined || params.contentIds.length !== 1) {
+    throw new X402QuestionConflictError("Confirmed Feedback Bonus pool requires a single submitted question.");
+  }
+  assertFeedbackBonusPoolMatchesRequest({
+    contentId: contentId.toString(),
+    createdPool: params.createdPool,
+    expectedRoundId: params.expectedRoundId,
+    feedbackBonus,
+    funderAddress: params.funderAddress,
+  });
+}
+
+async function storeConfirmedFeedbackBonusPool(params: {
+  createdPool: NonNullable<ReturnType<typeof readFeedbackBonusPoolCreated>>;
+  operationKey: `0x${string}`;
+  transactionHashes: Hex[];
+}) {
+  await updateStoredFeedbackBonusReceipt({
+    operationKey: params.operationKey,
+    poolId: params.createdPool.poolId,
+    roundId: params.createdPool.roundId,
+    status: "funded",
+    transactionHashes: params.transactionHashes,
+  });
+}
+
 function bundleCompleterCount(expectedRewardTerms: StoredQuestionRewardTerms): string {
   return (BigInt(expectedRewardTerms.requiredVoters) * BigInt(expectedRewardTerms.requiredSettledRounds)).toString();
 }
@@ -3553,6 +3597,51 @@ function assertTransactionHashes(value: Hex[]) {
   }
 }
 
+async function repairSubmittedFeedbackBonusReceipt(params: {
+  dependencies: ReturnType<typeof getQuestionSubmissionDependencies>;
+  record: X402QuestionSubmissionRecord;
+}) {
+  const planReceipt = parseStoredSubmissionPlanReceipt(params.record.paymentReceipt);
+  const feedbackBonus = planReceipt?.feedbackBonus;
+  if (!feedbackBonus || feedbackBonus.status === "funded" || feedbackBonus.poolId) {
+    return params.record;
+  }
+  if (!params.record.payerAddress || !isAddress(params.record.payerAddress)) {
+    return params.record;
+  }
+  const transactionHashes = parseStoredTransactionHashes(params.record.transactionHashes);
+  if (transactionHashes.length === 0) {
+    return params.record;
+  }
+
+  const config = params.dependencies.resolveX402QuestionConfig(params.record.chainId);
+  if (!config.feedbackBonusEscrowAddress) {
+    return params.record;
+  }
+  const publicClient = params.dependencies.createPublicQuestionClient(config);
+  let createdPool: ReturnType<typeof readFeedbackBonusPoolCreated> | null = null;
+  for (const hash of transactionHashes) {
+    const receipt = await params.dependencies.waitForSuccessfulReceipt(publicClient, hash);
+    createdPool = readFeedbackBonusPoolCreated(receipt, config.feedbackBonusEscrowAddress) ?? createdPool;
+  }
+  if (!createdPool) {
+    return params.record;
+  }
+
+  assertConfirmedFeedbackBonusPool({
+    contentIds: submittedRecordContentIds(params.record),
+    createdPool,
+    feedbackBonus,
+    funderAddress: params.record.payerAddress as Address,
+  });
+  await storeConfirmedFeedbackBonusPool({
+    createdPool,
+    operationKey: params.record.operationKey,
+    transactionHashes,
+  });
+  return (await getX402QuestionSubmissionByOperationKey(params.record.operationKey)) ?? params.record;
+}
+
 export async function confirmAgentWalletQuestionSubmissionRequest(params: {
   operationKey: `0x${string}`;
   transactionHashes: Hex[];
@@ -3564,8 +3653,9 @@ export async function confirmAgentWalletQuestionSubmissionRequest(params: {
     throw new X402QuestionConflictError("Agent wallet submission plan was not found.");
   }
   if (record.status === "submitted") {
+    const repairedRecord = await repairSubmittedFeedbackBonusReceipt({ dependencies, record });
     return {
-      body: normalizeSubmittedRecordBody(record),
+      body: normalizeSubmittedRecordBody(repairedRecord),
       status: 200,
     };
   }
@@ -3615,6 +3705,14 @@ export async function confirmAgentWalletQuestionSubmissionRequest(params: {
     walletAddress: walletAddress as Lowercase<Address>,
   });
   const planReceipt = parseStoredSubmissionPlanReceipt(record.paymentReceipt);
+  if (createdFeedbackBonusPool) {
+    assertConfirmedFeedbackBonusPool({
+      contentIds,
+      createdPool: createdFeedbackBonusPool,
+      feedbackBonus: planReceipt?.feedbackBonus,
+      funderAddress: record.payerAddress as Address,
+    });
+  }
   await attachSubmittedQuestionDetails({
     agentId: planReceipt?.agentId,
     chainId: config.chainId,
@@ -3660,25 +3758,9 @@ export async function confirmAgentWalletQuestionSubmissionRequest(params: {
     transactionHashes: params.transactionHashes,
   });
   if (createdFeedbackBonusPool) {
-    const feedbackBonus = planReceipt?.feedbackBonus;
-    if (!feedbackBonus) {
-      throw new X402QuestionConflictError("Confirmed submission created an unexpected Feedback Bonus pool.");
-    }
-    const contentId = contentIds[0];
-    if (contentId === undefined || contentIds.length !== 1) {
-      throw new X402QuestionConflictError("Confirmed Feedback Bonus pool requires a single submitted question.");
-    }
-    assertFeedbackBonusPoolMatchesRequest({
-      contentId: contentId.toString(),
+    await storeConfirmedFeedbackBonusPool({
       createdPool: createdFeedbackBonusPool,
-      feedbackBonus,
-      funderAddress: record.payerAddress as Address,
-    });
-    await updateStoredFeedbackBonusReceipt({
       operationKey: params.operationKey,
-      poolId: createdFeedbackBonusPool.poolId,
-      roundId: createdFeedbackBonusPool.roundId,
-      status: "funded",
       transactionHashes: params.transactionHashes,
     });
   }

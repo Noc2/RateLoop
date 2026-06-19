@@ -55,6 +55,11 @@ function readFeedbackBonusTransactionPlan(result: JsonObject): JsonObject | null
   return readJsonObject(feedbackBonus.transactionPlan);
 }
 
+function isAlreadyStoredHashRepeat(storedHashes: readonly Hex[], transactionHashes: readonly Hex[]) {
+  const stored = new Set(storedHashes.map(hash => hash.toLowerCase()));
+  return transactionHashes.every(hash => stored.has(hash.toLowerCase()));
+}
+
 export async function POST(request: NextRequest, context: { params: Promise<{ handoffId: string }> }) {
   const { handoffId } = await context.params;
 
@@ -73,6 +78,15 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ha
       const confirmsFeedbackBonus = handoff.status === "feedback_bonus_prepared";
       if (!handoff.operationKey || (handoff.status !== "prepared" && !confirmsFeedbackBonus)) {
         throw new AgentAskHandoffError("Prepare this handoff before completing it.");
+      }
+      if (confirmsFeedbackBonus && isAlreadyStoredHashRepeat(handoff.transactionHashes, transactionHashes)) {
+        const assets = await listAgentAskHandoffAssets(handoff.id);
+        return {
+          ...buildAgentAskHandoffResponse({ assets, handoff, includeImageData: true }),
+          nextAction:
+            "Execute the Feedback Bonus transactionPlan.calls in the connected wallet, then confirm transaction hashes.",
+          publicUrl: null,
+        };
       }
 
       const result = (await callPublicRateLoopMcpTool({

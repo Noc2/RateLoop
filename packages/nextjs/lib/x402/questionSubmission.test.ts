@@ -1374,6 +1374,68 @@ test("confirmFeedbackBonusQuestionSubmissionRequest verifies and stores the fund
   assert.deepEqual(body.feedbackBonus.transactionHashes, [feedbackHash]);
 });
 
+test("confirmAgentWalletQuestionSubmissionRequest repairs submitted one-shot Feedback Bonus metadata", async () => {
+  const payload = buildPayload("wallet-feedback-bonus-repair");
+  const walletAddress = "0x00000000000000000000000000000000000000aa" as const;
+  const submitHash = `0x${"a".repeat(64)}` as const;
+  await prepareAgentWalletQuestionSubmissionRequest({
+    agentId: "agent-wallet",
+    feedbackBonus: {
+      amount: 2_000_000n,
+      asset: "USDC",
+      awarder: walletAddress,
+      feedbackClosesAt: getFeedbackBonusClosesAt(payload),
+    },
+    payload,
+    walletAddress,
+  });
+  const record = await getX402QuestionSubmissionByClientRequest({
+    chainId: payload.chainId,
+    clientRequestId: payload.clientRequestId,
+  });
+  assert.ok(record);
+  const now = new Date();
+  await dbClient.execute({
+    sql: `
+      UPDATE x402_question_submissions
+      SET status = 'submitted',
+          content_id = ?,
+          content_ids = ?,
+          transaction_hashes = ?,
+          submitted_at = ?,
+          updated_at = ?
+      WHERE operation_key = ?
+    `,
+    args: ["123", JSON.stringify(["123"]), JSON.stringify([submitHash]), now, now, record.operationKey],
+  });
+
+  setDefaultTestOverrides({
+    waitForSuccessfulReceipt: async (_publicClient, hash) =>
+      buildReceipt(hash, [
+        buildFeedbackBonusPoolCreatedLog({
+          amount: 2_000_000n,
+          awarder: walletAddress,
+          contentId: 123n,
+          feedbackClosesAt: getFeedbackBonusClosesAt(payload),
+          poolId: 55n,
+          roundId: 1n,
+        }),
+      ]),
+  });
+
+  const repaired = await confirmAgentWalletQuestionSubmissionRequest({
+    operationKey: record.operationKey,
+    transactionHashes: [submitHash],
+  });
+  const body = repaired.body as {
+    feedbackBonus: { poolId: string; status: string; transactionHashes: string[] };
+  };
+
+  assert.equal(body.feedbackBonus.status, "funded");
+  assert.equal(body.feedbackBonus.poolId, "55");
+  assert.deepEqual(body.feedbackBonus.transactionHashes, [submitHash]);
+});
+
 test("confirmFeedbackBonusQuestionSubmissionRequest rejects a pool for the wrong round", async () => {
   const payload = buildPayload("wallet-feedback-bonus-wrong-round");
   const walletAddress = "0x00000000000000000000000000000000000000aa" as const;
