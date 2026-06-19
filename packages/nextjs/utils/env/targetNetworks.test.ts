@@ -46,20 +46,38 @@ test("Base targets use standard RPC metadata until preconfirmation RPC is enable
 test("Base targets can opt into Flashblocks preconfirmation RPC metadata", () => {
   const networks = resolveTargetNetworks(`${chains.baseSepolia.id},${chains.base.id}`, {
     production: true,
+    rpcOverrides: {
+      [chains.baseSepolia.id]: "https://84532.rpc.thirdweb.com/client-id",
+      [chains.base.id]: "https://8453.rpc.thirdweb.com/client-id",
+    },
     useBasePreconfRpc: true,
   });
 
   assert.deepEqual(
     networks.map(network => network.rpcUrls.default.http[0]),
-    ["https://sepolia-preconf.base.org", "https://mainnet-preconf.base.org"],
+    ["https://84532.rpc.thirdweb.com/client-id", "https://8453.rpc.thirdweb.com/client-id"],
+  );
+  assert.deepEqual(
+    networks.map(
+      network => (network as { experimental_preconfirmationTime?: number }).experimental_preconfirmationTime,
+    ),
+    [200, 200],
   );
 });
 
-test("dedicated Base preconfirmation RPC overrides are preferred ahead of generic RPC fallbacks", () => {
+test("Base preconfirmation opt-in requires generic RPC overrides", () => {
+  assert.throws(
+    () =>
+      resolveTargetNetworks(`${chains.baseSepolia.id}`, {
+        production: false,
+        useBasePreconfRpc: true,
+      }),
+    /NEXT_PUBLIC_RPC_URL_84532/,
+  );
+});
+
+test("generic Base RPC overrides are reused when preconfirmation RPC is enabled", () => {
   const [network] = resolveTargetNetworks(`${chains.baseSepolia.id}`, {
-    basePreconfRpcOverrides: {
-      [chains.baseSepolia.id]: "https://base-sepolia-preconf.example.com",
-    },
     production: false,
     rpcOverrides: {
       [chains.baseSepolia.id]: "https://84532.rpc.thirdweb.com/client-id",
@@ -67,18 +85,11 @@ test("dedicated Base preconfirmation RPC overrides are preferred ahead of generi
     useBasePreconfRpc: true,
   });
 
-  assert.deepEqual(network.rpcUrls.default.http, [
-    "https://base-sepolia-preconf.example.com",
-    "https://sepolia-preconf.base.org",
-    "https://84532.rpc.thirdweb.com/client-id",
-  ]);
+  assert.deepEqual(network.rpcUrls.default.http, ["https://84532.rpc.thirdweb.com/client-id"]);
 });
 
 test("generic Base RPC overrides stay preferred when preconfirmation RPC is not enabled", () => {
   const [network] = resolveTargetNetworks(`${chains.baseSepolia.id}`, {
-    basePreconfRpcOverrides: {
-      [chains.baseSepolia.id]: "https://base-sepolia-preconf.example.com",
-    },
     production: false,
     rpcOverrides: {
       [chains.baseSepolia.id]: "https://84532.rpc.thirdweb.com/client-id",

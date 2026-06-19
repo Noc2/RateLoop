@@ -45,7 +45,6 @@ export const wagmiConfig = createConfig({
   client: ({ chain }) => {
     const rpcUrls = getPreferredHttpRpcUrls(chain, {
       alchemyApiKey: scaffoldConfig.alchemyApiKey,
-      basePreconfRpcOverrides: scaffoldConfig.basePreconfRpcOverrides,
       preferBasePreconfRpc: scaffoldConfig.useBasePreconfRpc,
       rpcOverrides,
     });

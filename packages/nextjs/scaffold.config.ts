@@ -6,7 +6,6 @@ export type BaseConfig = {
   targetNetworks: readonly [SupportedTargetNetwork, ...SupportedTargetNetwork[]];
   pollingInterval: number;
   alchemyApiKey?: string;
-  basePreconfRpcOverrides?: Partial<Record<number, string>>;
   rpcOverrides?: Partial<Record<number, string>>;
   useBasePreconfRpc?: boolean;
   walletConnectProjectId?: string;
@@ -23,8 +22,6 @@ const scaffoldConfig = {
   // Your Alchemy API key — get one at https://dashboard.alchemyapi.io
   // Optional on supported chains with public RPCs, but recommended for production reliability.
   alchemyApiKey: publicEnv.alchemyApiKey,
-  // Optional Base Flashblocks/preconfirmation RPC overrides.
-  basePreconfRpcOverrides: publicEnv.basePreconfRpcOverrides,
   // If you want to use a different RPC for a specific network, you can add it here.
   // The key is the chain ID, and the value is the HTTP RPC URL
   rpcOverrides: publicEnv.rpcOverrides,

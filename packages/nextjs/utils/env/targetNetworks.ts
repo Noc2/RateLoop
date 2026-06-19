@@ -45,7 +45,6 @@ export function resolveTargetNetworks(
     fallback?: string;
     allowFoundryInProduction?: boolean;
     alchemyApiKey?: string;
-    basePreconfRpcOverrides?: Partial<Record<number, string>>;
     rpcOverrides?: Partial<Record<number, string>>;
     useBasePreconfRpc?: boolean;
   },
@@ -76,7 +75,6 @@ export function resolveTargetNetworks(
 
     return withPreferredHttpRpcUrls(network, {
       alchemyApiKey: options.alchemyApiKey,
-      basePreconfRpcOverrides: options.basePreconfRpcOverrides,
       preferBasePreconfRpc: options.useBasePreconfRpc,
       rpcOverrides: options.rpcOverrides,
     });

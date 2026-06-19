@@ -22,8 +22,6 @@ function isLocalhostUrl(value: string): boolean {
 // accessed with static property reads.
 const rawPublicEnv = {
   alchemyApiKey: optionalEnv(process.env.NEXT_PUBLIC_ALCHEMY_API_KEY),
-  basePreconfRpcUrl84532: optionalEnv(process.env.NEXT_PUBLIC_BASE_PRECONF_RPC_URL_84532),
-  basePreconfRpcUrl8453: optionalEnv(process.env.NEXT_PUBLIC_BASE_PRECONF_RPC_URL_8453),
   enableRpcFallback: optionalEnv(process.env.NEXT_PUBLIC_ENABLE_RPC_FALLBACK),
   frontendCode: optionalEnv(process.env.NEXT_PUBLIC_FRONTEND_CODE),
   localE2EProductionBuild:
@@ -51,10 +49,6 @@ const rpcOverrides = mergeRpcOverrides(
     480: rawPublicEnv.rpcUrl480,
   }),
 );
-const basePreconfRpcOverrides = resolveRpcOverrides({
-  84532: rawPublicEnv.basePreconfRpcUrl84532,
-  8453: rawPublicEnv.basePreconfRpcUrl8453,
-});
 const useBasePreconfRpc = rawPublicEnv.useBasePreconfRpc === "true";
 
 function requireUrl(name: string, value: string | undefined, fallback?: string): string {
@@ -83,7 +77,6 @@ const allowLocalE2EProductionBuild = rawPublicEnv.localE2EProductionBuild === "t
 const targetNetworks = resolveTargetNetworks(rawPublicEnv.targetNetworks, {
   alchemyApiKey: rawPublicEnv.alchemyApiKey,
   allowFoundryInProduction: allowLocalE2EProductionBuild,
-  basePreconfRpcOverrides,
   production: isProduction,
   fallback: !isProduction || allowLocalE2EProductionBuild ? DEFAULT_DEV_TARGET_NETWORKS : undefined,
   rpcOverrides,
@@ -124,7 +117,6 @@ export const publicEnv = {
   isProduction,
   targetNetworks,
   alchemyApiKey: rawPublicEnv.alchemyApiKey,
-  basePreconfRpcOverrides,
   rpcOverrides,
   useBasePreconfRpc,
   thirdwebClientId: rawPublicEnv.thirdwebClientId,

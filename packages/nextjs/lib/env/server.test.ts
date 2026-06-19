@@ -12,12 +12,9 @@ import { afterEach, test } from "node:test";
 
 const env = process.env as Record<string, string | undefined>;
 const originalDatabaseUrl = env.DATABASE_URL;
-const originalBasePreconfRpcUrl84532 = env.NEXT_PUBLIC_BASE_PRECONF_RPC_URL_84532;
 const originalPublicRpcUrl4801 = env.NEXT_PUBLIC_RPC_URL_4801;
 const originalPublicRpcUrl84532 = env.NEXT_PUBLIC_RPC_URL_84532;
 const originalUseBasePreconfRpc = env.NEXT_PUBLIC_USE_BASE_PRECONF_RPC;
-const originalServerBasePreconfRpcUrl84532 = env.RATELOOP_SERVER_BASE_PRECONF_RPC_URL_84532;
-const originalServerBasePreconfRpcUrl8453 = env.RATELOOP_SERVER_BASE_PRECONF_RPC_URL_8453;
 const originalServerUseBasePreconfRpc = env.RATELOOP_SERVER_USE_BASE_PRECONF_RPC;
 const originalVercelEnv = env.VERCEL_ENV;
 const originalPublicUsdc = env.NEXT_PUBLIC_USDC_ADDRESS;
@@ -40,12 +37,6 @@ afterEach(() => {
     env.NEXT_PUBLIC_RPC_URL_4801 = originalPublicRpcUrl4801;
   }
 
-  if (originalBasePreconfRpcUrl84532 === undefined) {
-    delete env.NEXT_PUBLIC_BASE_PRECONF_RPC_URL_84532;
-  } else {
-    env.NEXT_PUBLIC_BASE_PRECONF_RPC_URL_84532 = originalBasePreconfRpcUrl84532;
-  }
-
   if (originalPublicRpcUrl84532 === undefined) {
     delete env.NEXT_PUBLIC_RPC_URL_84532;
   } else {
@@ -56,18 +47,6 @@ afterEach(() => {
     delete env.NEXT_PUBLIC_USE_BASE_PRECONF_RPC;
   } else {
     env.NEXT_PUBLIC_USE_BASE_PRECONF_RPC = originalUseBasePreconfRpc;
-  }
-
-  if (originalServerBasePreconfRpcUrl84532 === undefined) {
-    delete env.RATELOOP_SERVER_BASE_PRECONF_RPC_URL_84532;
-  } else {
-    env.RATELOOP_SERVER_BASE_PRECONF_RPC_URL_84532 = originalServerBasePreconfRpcUrl84532;
-  }
-
-  if (originalServerBasePreconfRpcUrl8453 === undefined) {
-    delete env.RATELOOP_SERVER_BASE_PRECONF_RPC_URL_8453;
-  } else {
-    env.RATELOOP_SERVER_BASE_PRECONF_RPC_URL_8453 = originalServerBasePreconfRpcUrl8453;
   }
 
   if (originalServerUseBasePreconfRpc === undefined) {
@@ -218,31 +197,34 @@ test("resolveServerTargetNetworks returns null for invalid production values", (
 
 test("resolveServerTargetNetworks ignores public Base preconfirmation browser opt-in", () => {
   env.NEXT_PUBLIC_USE_BASE_PRECONF_RPC = "true";
-  env.NEXT_PUBLIC_BASE_PRECONF_RPC_URL_84532 = "https://base-sepolia-preconf.example.com/";
   env.NEXT_PUBLIC_RPC_URL_84532 = "https://84532.rpc.thirdweb.com/client-id/";
 
   const networks = resolveServerTargetNetworks("84532", true);
   const serverRpcUrls: readonly string[] = networks?.[0]?.rpcUrls.default.http ?? [];
 
   assert.equal(serverRpcUrls[0], "https://84532.rpc.thirdweb.com/client-id");
-  assert.equal(serverRpcUrls.includes("https://base-sepolia-preconf.example.com"), false);
   assert.equal(serverRpcUrls.includes("https://sepolia-preconf.base.org"), false);
 });
 
 test("resolveServerTargetNetworks honors explicit server Base preconfirmation RPC opt-in", () => {
   env.NEXT_PUBLIC_USE_BASE_PRECONF_RPC = "true";
-  env.NEXT_PUBLIC_BASE_PRECONF_RPC_URL_84532 = "https://browser-base-sepolia-preconf.example.com/";
   env.NEXT_PUBLIC_RPC_URL_84532 = "https://84532.rpc.thirdweb.com/client-id/";
   env.RATELOOP_SERVER_USE_BASE_PRECONF_RPC = "true";
-  env.RATELOOP_SERVER_BASE_PRECONF_RPC_URL_84532 = "https://server-base-sepolia-preconf.example.com/";
 
   const networks = resolveServerTargetNetworks("84532", true);
 
-  assert.deepEqual(networks?.[0]?.rpcUrls.default.http, [
-    "https://server-base-sepolia-preconf.example.com",
-    "https://sepolia-preconf.base.org",
-    "https://84532.rpc.thirdweb.com/client-id",
-  ]);
+  assert.deepEqual(networks?.[0]?.rpcUrls.default.http, ["https://84532.rpc.thirdweb.com/client-id"]);
+  assert.equal(
+    (networks?.[0] as { experimental_preconfirmationTime?: number } | undefined)?.experimental_preconfirmationTime,
+    200,
+  );
+});
+
+test("resolveServerTargetNetworks returns null when server Base preconfirmation has no generic RPC override", () => {
+  env.RATELOOP_SERVER_USE_BASE_PRECONF_RPC = "true";
+  delete env.NEXT_PUBLIC_RPC_URL_84532;
+
+  assert.equal(resolveServerTargetNetworks("84532", true), null);
 });
 
 test("getServerRpcOverrides includes public per-chain RPC overrides", () => {

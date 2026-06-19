@@ -10,10 +10,11 @@ const RPC_CHAIN_NAMES: Record<number, string> = {
 
 type RpcPreferenceOptions = {
   alchemyApiKey?: string;
-  basePreconfRpcOverrides?: Partial<Record<number, string>>;
   preferBasePreconfRpc?: boolean;
   rpcOverrides?: Partial<Record<number, string>>;
 };
+
+const BASE_PRECONF_CHAIN_IDS = new Set([8453, 84532]);
 
 function normalizeHttpUrl(value: string, name = "RPC URL") {
   const trimmedValue = value.trim();
@@ -67,14 +68,14 @@ function uniqueHttpUrls(values: Array<string | undefined>) {
 }
 
 export function isBasePreconfRpcChain(chain: Chain) {
-  return (
-    (chain.id === 8453 || chain.id === 84532) &&
-    chain.rpcUrls.default.http.some(url => /https:\/\/(?:mainnet|sepolia)-preconf\.base\.org\/?$/i.test(url))
-  );
-}
+  const experimentalPreconfirmationTime = (chain as { experimental_preconfirmationTime?: unknown })
+    .experimental_preconfirmationTime;
 
-function isBasePreconfRpcUrl(value: string) {
-  return /https:\/\/(?:mainnet|sepolia)-preconf\.base\.org\/?$/i.test(value);
+  return (
+    BASE_PRECONF_CHAIN_IDS.has(chain.id) &&
+    typeof experimentalPreconfirmationTime === "number" &&
+    Number.isFinite(experimentalPreconfirmationTime)
+  );
 }
 
 export function buildAlchemyHttpUrl(chainId: number, alchemyApiKey?: string) {
@@ -92,19 +93,22 @@ export function buildAlchemyHttpUrl(chainId: number, alchemyApiKey?: string) {
 }
 
 export function getPreferredHttpRpcUrls(chain: Chain, options: RpcPreferenceOptions = {}) {
-  if (options.preferBasePreconfRpc && isBasePreconfRpcChain(chain)) {
-    const preconfDefaults = chain.rpcUrls.default.http.filter(isBasePreconfRpcUrl);
+  const configuredRpcOverride = options.rpcOverrides?.[chain.id];
 
-    return uniqueHttpUrls([
-      options.basePreconfRpcOverrides?.[chain.id],
-      ...preconfDefaults,
-      options.rpcOverrides?.[chain.id],
-      buildAlchemyHttpUrl(chain.id, options.alchemyApiKey),
-    ]);
+  if (options.preferBasePreconfRpc && isBasePreconfRpcChain(chain)) {
+    const preferredRpcUrls = uniqueHttpUrls([configuredRpcOverride]);
+
+    if (preferredRpcUrls.length === 0) {
+      throw new Error(
+        `NEXT_PUBLIC_USE_BASE_PRECONF_RPC requires NEXT_PUBLIC_RPC_URL_${chain.id} to point at a Flashblocks-capable RPC.`,
+      );
+    }
+
+    return preferredRpcUrls;
   }
 
   return uniqueHttpUrls([
-    options.rpcOverrides?.[chain.id],
+    configuredRpcOverride,
     buildAlchemyHttpUrl(chain.id, options.alchemyApiKey),
     ...chain.rpcUrls.default.http,
   ]);

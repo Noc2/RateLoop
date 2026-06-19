@@ -135,14 +135,9 @@ export function resolveServerTargetNetworks(
       }),
     );
     const serverUseBasePreconfRpc = readEnv("RATELOOP_SERVER_USE_BASE_PRECONF_RPC") === "true";
-    const basePreconfRpcOverrides = resolveRpcOverrides({
-      84532: readEnv("RATELOOP_SERVER_BASE_PRECONF_RPC_URL_84532"),
-      8453: readEnv("RATELOOP_SERVER_BASE_PRECONF_RPC_URL_8453"),
-    });
 
     return resolveTargetNetworks(rawValue, {
       alchemyApiKey: readEnv("NEXT_PUBLIC_ALCHEMY_API_KEY"),
-      basePreconfRpcOverrides,
       production,
       fallback: !production || allowFoundryInProduction ? DEFAULT_DEV_TARGET_NETWORKS : undefined,
       allowFoundryInProduction,
