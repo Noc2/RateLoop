@@ -28,6 +28,7 @@ import { GradientActionButton, getGradientActionMotion } from "~~/components/sha
 import { useWalletFunding } from "~~/components/shared/WalletFundingProvider";
 import { surfaceSectionHeadingClassName } from "~~/components/shared/sectionHeading";
 import { ImageAttachmentUploader } from "~~/components/submit/ImageAttachmentUploader";
+import { DurationInput } from "~~/components/ui/DurationInput";
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import { serializeTags } from "~~/constants/categories";
 import { useTermsAcceptance } from "~~/contexts/TermsAcceptanceContext";
@@ -79,6 +80,7 @@ import {
 import { MAX_QUESTION_LENGTH } from "~~/lib/contentTitle";
 import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
 import { protocolDocFacts } from "~~/lib/docs/protocolFacts";
+import { formatHumanDuration } from "~~/lib/humanDuration";
 import {
   findBlockedContentTags,
   getContentTagValidationError,
@@ -117,7 +119,6 @@ import {
   DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS,
   MAX_QUESTION_BUNDLE_ROUND_VOTERS,
   QUESTION_ROUND_MAX_EPOCH_COUNT,
-  formatDurationLabel,
   getQuestionRoundMaxDurationForEpoch,
   isQuestionRoundMaxDurationValidForEpoch,
   questionRoundConfigToAbi,
@@ -183,15 +184,15 @@ const DEFAULT_USDC_TOP_UP_AMOUNT = "10";
 const FUNDING_PRESET_OPTIONS: [number, number, number] = [5, 10, 20];
 const QUESTION_DETAILS_PREVIEW_WORDS = 32;
 const ROUND_RESPONSE_WINDOW_PRESETS = [
-  { id: "2m", label: "2m", minutes: 2 },
-  { id: "5m", label: "5m", minutes: 5 },
-  { id: "20m", label: "20m", minutes: 20 },
-  { id: "1h", label: "1h", minutes: 60 },
-  { id: "24h", label: "24h", minutes: 24 * 60 },
-  { id: "3d", label: "3d", minutes: 3 * 24 * 60 },
-  { id: "7d", label: "7d", minutes: 7 * 24 * 60 },
-  { id: "14d", label: "14d", minutes: 14 * 24 * 60 },
-  { id: "30d", label: "30d", minutes: 30 * 24 * 60 },
+  { id: "2m", label: "2 min", minutes: 2 },
+  { id: "5m", label: "5 min", minutes: 5 },
+  { id: "20m", label: "20 min", minutes: 20 },
+  { id: "1h", label: "1 hour", minutes: 60 },
+  { id: "24h", label: "1 day", minutes: 24 * 60 },
+  { id: "3d", label: "3 days", minutes: 3 * 24 * 60 },
+  { id: "7d", label: "7 days", minutes: 7 * 24 * 60 },
+  { id: "14d", label: "14 days", minutes: 14 * 24 * 60 },
+  { id: "30d", label: "30 days", minutes: 30 * 24 * 60 },
 ] as const;
 const TARGET_AUDIENCE_TAXONOMY = getProfileSelfReportTaxonomy().targetAudience;
 const COUNTRY_CODE_PATTERN = /^[A-Z]{2}$/;
@@ -1310,6 +1311,16 @@ export function ContentSubmissionSection() {
       clampRoundMaxDurationForBlindMinutes(parseWholeNumberInput(normalizedValue));
     }
   };
+  const updateRoundMaxDurationMinutesInput = (value: string) => {
+    const normalizedValue = normalizeWholeNumberInput(value);
+    if (normalizedValue === null) {
+      return;
+    }
+
+    setRoundConfigTouched(true);
+    setRoundMaxDurationOverridden(true);
+    setRoundMaxDurationMinutes(normalizedValue);
+  };
   const clampRoundBlindMinutesInput = () => {
     const clampedBlindMinutes = clampWholeNumberInput(
       roundBlindMinutes,
@@ -1318,6 +1329,13 @@ export function ContentSubmissionSection() {
     );
     setRoundBlindMinutes(clampedBlindMinutes);
     clampRoundMaxDurationForBlindMinutes(parseWholeNumberInput(clampedBlindMinutes));
+  };
+  const clampRoundMaxDurationMinutesInput = () => {
+    setRoundConfigTouched(true);
+    setRoundMaxDurationOverridden(true);
+    setRoundMaxDurationMinutes(current =>
+      clampWholeNumberInput(current, roundMaxDurationMinuteBounds.min, roundMaxDurationMinuteBounds.max),
+    );
   };
   const selectedRoundConfig = useMemo(
     () => ({
@@ -1334,12 +1352,12 @@ export function ContentSubmissionSection() {
     const minVoters = Number(selectedRoundConfig.minVoters);
     const maxVoters = Number(selectedRoundConfig.maxVoters);
     if (epochDuration < roundConfigBounds.minEpochDuration || epochDuration > roundConfigBounds.maxEpochDuration) {
-      return `Blind phase must be ${formatDurationLabel(roundConfigBounds.minEpochDuration)}-${formatDurationLabel(
+      return `Blind phase must be ${formatHumanDuration(roundConfigBounds.minEpochDuration)}-${formatHumanDuration(
         roundConfigBounds.maxEpochDuration,
       )}.`;
     }
     if (maxDuration < roundConfigBounds.minRoundDuration || maxDuration > roundConfigBounds.maxRoundDuration) {
-      return `Max duration must be ${formatDurationLabel(roundConfigBounds.minRoundDuration)}-${formatDurationLabel(
+      return `Max duration must be ${formatHumanDuration(roundConfigBounds.minRoundDuration)}-${formatHumanDuration(
         roundConfigBounds.maxRoundDuration,
       )}.`;
     }
@@ -1347,7 +1365,7 @@ export function ContentSubmissionSection() {
       return "Max duration must be at least the blind response window.";
     }
     if (!isQuestionRoundMaxDurationValidForEpoch(epochDuration, maxDuration)) {
-      return `Max duration can span at most ${QUESTION_ROUND_MAX_EPOCH_COUNT.toLocaleString()} blind phases; choose ${formatDurationLabel(
+      return `Max duration can span at most ${QUESTION_ROUND_MAX_EPOCH_COUNT.toLocaleString()} blind phases; choose ${formatHumanDuration(
         roundMaxDurationMinuteBounds.max * SECONDS_PER_MINUTE,
       )} or less for this blind phase.`;
     }
@@ -3311,13 +3329,13 @@ export function ContentSubmissionSection() {
     "Governance sets the allowed range. Bounty timing defaults follow the selected round duration.";
   const blindPhaseTooltipText = [
     "How long answers stay hidden before the result can be revealed and settled.",
-    `Current min: ${formatDurationLabel(roundBlindMinuteBounds.min * SECONDS_PER_MINUTE)}.`,
-    `Current max: ${formatDurationLabel(roundBlindMinuteBounds.max * SECONDS_PER_MINUTE)}.`,
+    `Current min: ${formatHumanDuration(roundBlindMinuteBounds.min * SECONDS_PER_MINUTE)}.`,
+    `Current max: ${formatHumanDuration(roundBlindMinuteBounds.max * SECONDS_PER_MINUTE)}.`,
   ].join(" ");
   const maxDurationTooltipText = [
     "How long the round can stay open before it expires without settlement.",
-    `Current min: ${formatDurationLabel(roundMaxDurationMinuteBounds.min * SECONDS_PER_MINUTE)}.`,
-    `Current max: ${formatDurationLabel(
+    `Current min: ${formatHumanDuration(roundMaxDurationMinuteBounds.min * SECONDS_PER_MINUTE)}.`,
+    `Current max: ${formatHumanDuration(
       roundMaxDurationMinuteBounds.max * SECONDS_PER_MINUTE,
     )} for the selected blind phase.`,
   ].join(" ");
@@ -3579,7 +3597,7 @@ export function ContentSubmissionSection() {
             <span className="label-text">Blind response window</span>
             <InfoTooltip text={blindPhaseTooltipText} />
           </div>
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             {ROUND_RESPONSE_WINDOW_PRESETS.map(option => (
               <button
                 key={option.id}
@@ -3594,25 +3612,17 @@ export function ContentSubmissionSection() {
               </button>
             ))}
           </div>
-          <label
-            className={`mt-2 input input-bordered flex items-center gap-2 bg-base-100 ${
-              bountyStepAttempted && roundConfigValidationError ? "input-error" : ""
-            }`}
-          >
-            <input
-              type="number"
-              min={roundBlindMinuteBounds.min}
-              max={roundBlindMinuteBounds.max}
-              step={1}
-              inputMode="numeric"
-              value={roundBlindMinutes}
-              onChange={e => updateRoundBlindMinutesInput(e.target.value)}
-              onBlur={clampRoundBlindMinutesInput}
-              className="grow bg-transparent"
-              aria-label="Custom blind response window"
-            />
-            <span className="text-sm font-semibold text-base-content/50">min</span>
-          </label>
+          <DurationInput
+            id="round-blind-response-window"
+            valueMinutes={roundBlindMinutes}
+            minMinutes={roundBlindMinuteBounds.min}
+            maxMinutes={roundBlindMinuteBounds.max}
+            onChangeMinutes={updateRoundBlindMinutesInput}
+            onBlur={clampRoundBlindMinutesInput}
+            invalid={bountyStepAttempted && Boolean(roundConfigValidationError)}
+            ariaLabel="Custom blind response window"
+            className="mt-2"
+          />
         </div>
       </div>
       {bountyStepAttempted && rewardRequiredVotersError ? (
@@ -3684,38 +3694,17 @@ export function ContentSubmissionSection() {
                   </label>
                   <InfoTooltip text={maxDurationTooltipText} />
                 </div>
-                <input
+                <DurationInput
                   id="round-max-duration-minutes"
-                  type="number"
-                  min={roundMaxDurationMinuteBounds.min}
-                  max={roundMaxDurationMinuteBounds.max}
-                  step={1}
-                  inputMode="numeric"
-                  value={roundMaxDurationMinutes}
-                  onChange={e => {
-                    const normalizedValue = normalizeWholeNumberInput(e.target.value);
-                    if (normalizedValue !== null) {
-                      setRoundConfigTouched(true);
-                      setRoundMaxDurationOverridden(true);
-                      setRoundMaxDurationMinutes(normalizedValue);
-                    }
-                  }}
-                  onBlur={() => {
-                    setRoundConfigTouched(true);
-                    setRoundMaxDurationOverridden(true);
-                    setRoundMaxDurationMinutes(current =>
-                      clampWholeNumberInput(
-                        current,
-                        roundMaxDurationMinuteBounds.min,
-                        roundMaxDurationMinuteBounds.max,
-                      ),
-                    );
-                  }}
-                  className={`input input-bordered bg-base-100 ${
-                    bountyStepAttempted && roundConfigValidationError ? "input-error" : ""
-                  }`}
+                  valueMinutes={roundMaxDurationMinutes}
+                  minMinutes={roundMaxDurationMinuteBounds.min}
+                  maxMinutes={roundMaxDurationMinuteBounds.max}
+                  onChangeMinutes={updateRoundMaxDurationMinutesInput}
+                  onBlur={clampRoundMaxDurationMinutesInput}
+                  invalid={bountyStepAttempted && Boolean(roundConfigValidationError)}
+                  ariaLabel="Max duration"
+                  summarySuffix="for selected blind window"
                 />
-                <span className="mt-1 text-xs font-semibold text-base-content/50">minutes</span>
               </div>
 
               <div className="space-y-2 sm:col-span-2">
@@ -3743,7 +3732,7 @@ export function ContentSubmissionSection() {
                 </div>
                 {!bountyStartByOverridden ? (
                   <p className="text-sm text-base-content/60">
-                    Current deadline: {formatDurationLabel((effectiveBountyStartByWindowSeconds ?? 0) || 0)} (
+                    Current deadline: {formatHumanDuration((effectiveBountyStartByWindowSeconds ?? 0) || 0)} (
                     {estimatedBountyStartByLabel})
                   </p>
                 ) : (
@@ -3863,7 +3852,7 @@ export function ContentSubmissionSection() {
                 </div>
                 {!bountyWindowOverridden ? (
                   <p className="text-sm text-base-content/60">
-                    Current window: {formatDurationLabel((effectiveBountyWindowSeconds ?? 0) || 0)}
+                    Current window: {formatHumanDuration((effectiveBountyWindowSeconds ?? 0) || 0)}
                   </p>
                 ) : (
                   <div className="space-y-2">
