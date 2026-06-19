@@ -8,6 +8,11 @@ import { createRateLoopAgentClient } from "@rateloop/sdk/agent";
 import { loadAgentsRuntimeConfig } from "./config";
 import { readHandoffGeneratedImageFiles } from "./handoffImages";
 import {
+  createAskHandoffWithStagedImageUploads,
+  inlineHandoffGeneratedImage,
+  shouldStageHandoffImageUploads,
+} from "./handoffUpload";
+import {
   askHumansWithLocalSigner,
   generateLocalSignerWallet,
   loadLocalSignerConfig,
@@ -29,7 +34,9 @@ function findPackageRoot(startDir: string) {
     const packageJsonPath = resolve(current, "package.json");
     if (existsSync(packageJsonPath)) {
       try {
-        const manifest = JSON.parse(readFileSync(packageJsonPath, "utf8")) as { name?: unknown };
+        const manifest = JSON.parse(readFileSync(packageJsonPath, "utf8")) as {
+          name?: unknown;
+        };
         if (manifest.name === "@rateloop/agents") {
           return current;
         }
@@ -46,7 +53,9 @@ function findPackageRoot(startDir: string) {
   return resolve(startDir, "..");
 }
 
-const packageRoot = findPackageRoot(fileURLToPath(new URL(".", import.meta.url)));
+const packageRoot = findPackageRoot(
+  fileURLToPath(new URL(".", import.meta.url)),
+);
 
 function printJson(value: unknown) {
   console.log(JSON.stringify(value, null, 2));
@@ -72,7 +81,9 @@ function setOption(options: CliOptions, key: string, value: string | boolean) {
     options[key] = value;
     return;
   }
-  options[key] = Array.isArray(existing) ? [...existing, String(value)] : [String(existing), String(value)];
+  options[key] = Array.isArray(existing)
+    ? [...existing, String(value)]
+    : [String(existing), String(value)];
 }
 
 function parseArgs(args: string[]): { command: string; options: CliOptions } {
@@ -108,7 +119,7 @@ function requireString(options: CliOptions, name: string): string {
 }
 
 function readStringList(options: CliOptions, ...names: string[]): string[] {
-  return names.flatMap(name => {
+  return names.flatMap((name) => {
     const value = options[name];
     if (typeof value === "string") return [value];
     if (Array.isArray(value)) return value;
@@ -116,7 +127,10 @@ function readStringList(options: CliOptions, ...names: string[]): string[] {
   });
 }
 
-function readOptionalPositiveInteger(options: CliOptions, name: string): number | undefined {
+function readOptionalPositiveInteger(
+  options: CliOptions,
+  name: string,
+): number | undefined {
   const value = options[name];
   if (value === undefined) return undefined;
   if (typeof value !== "string") {
@@ -129,9 +143,14 @@ function readOptionalPositiveInteger(options: CliOptions, name: string): number 
   return parsed;
 }
 
-function singleValueOptions(options: CliOptions): Record<string, string | boolean | undefined> {
+function singleValueOptions(
+  options: CliOptions,
+): Record<string, string | boolean | undefined> {
   return Object.fromEntries(
-    Object.entries(options).map(([key, value]) => [key, Array.isArray(value) ? value[value.length - 1] : value]),
+    Object.entries(options).map(([key, value]) => [
+      key,
+      Array.isArray(value) ? value[value.length - 1] : value,
+    ]),
   );
 }
 
@@ -139,8 +158,14 @@ function readPaymentMode(options: CliOptions) {
   const value = options["payment-mode"];
   if (value === undefined) return undefined;
   if (value === "wallet_calls" || value === "x402_authorization") return value;
-  if (value === "eip3009_usdc_authorization" || value === "eip3009_authorization") return "x402_authorization";
-  throw new Error("--payment-mode must be wallet_calls, eip3009_usdc_authorization, or x402_authorization");
+  if (
+    value === "eip3009_usdc_authorization" ||
+    value === "eip3009_authorization"
+  )
+    return "x402_authorization";
+  throw new Error(
+    "--payment-mode must be wallet_calls, eip3009_usdc_authorization, or x402_authorization",
+  );
 }
 
 function printLocalAskProgress(event: LocalAskProgress) {
@@ -150,22 +175,32 @@ function printLocalAskProgress(event: LocalAskProgress) {
       : "transactionPlan";
   switch (event.type) {
     case "ask_submitted":
-      console.error(`RateLoop ask prepared: ${event.response.operationKey ?? "operation pending"}`);
+      console.error(
+        `RateLoop ask prepared: ${event.response.operationKey ?? "operation pending"}`,
+      );
       return;
     case "x402_signed":
       console.error("Signed EIP-3009 USDC authorization.");
       return;
     case "x402_resubmitted":
-      console.error(`RateLoop EIP-3009 USDC ask prepared: ${event.response.operationKey ?? "operation pending"}`);
+      console.error(
+        `RateLoop EIP-3009 USDC ask prepared: ${event.response.operationKey ?? "operation pending"}`,
+      );
       return;
     case "transaction_sent":
-      console.error(`Sent ${planLabel}.calls[${event.index}]${event.phase ? ` (${event.phase})` : ""}: ${event.hash}`);
+      console.error(
+        `Sent ${planLabel}.calls[${event.index}]${event.phase ? ` (${event.phase})` : ""}: ${event.hash}`,
+      );
       return;
     case "transaction_confirmed":
-      console.error(`Receipt confirmed for ${planLabel}.calls[${event.index}]: ${event.hash}`);
+      console.error(
+        `Receipt confirmed for ${planLabel}.calls[${event.index}]: ${event.hash}`,
+      );
       return;
     case "transactions_confirmed":
-      console.error(`Confirmed ${planLabel} hashes with RateLoop: ${event.response.operationKey ?? "operation pending"}`);
+      console.error(
+        `Confirmed ${planLabel} hashes with RateLoop: ${event.response.operationKey ?? "operation pending"}`,
+      );
       return;
   }
 }
@@ -173,7 +208,9 @@ function printLocalAskProgress(event: LocalAskProgress) {
 async function readJsonFile(path: string) {
   const candidates = [
     resolve(path),
-    path.startsWith("packages/agents/") ? resolve(packageRoot, path.replace(/^packages\/agents\//, "")) : null,
+    path.startsWith("packages/agents/")
+      ? resolve(packageRoot, path.replace(/^packages\/agents\//, ""))
+      : null,
   ].filter((candidate): candidate is string => Boolean(candidate));
 
   let lastError: unknown;
@@ -192,8 +229,8 @@ async function listExampleQuestionFiles() {
   const questionDir = resolve(packageRoot, "examples", "questions");
   const entries = await readdir(questionDir, { withFileTypes: true });
   return entries
-    .filter(entry => entry.isFile() && entry.name.endsWith(".json"))
-    .map(entry => `packages/agents/examples/questions/${entry.name}`)
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
+    .map((entry) => `packages/agents/examples/questions/${entry.name}`)
     .sort();
 }
 
@@ -236,8 +273,16 @@ function createAgentClient() {
   });
 }
 
-function withConfiguredWalletAddress(payload: unknown, walletAddress: string | undefined) {
-  if (!walletAddress || !payload || typeof payload !== "object" || Array.isArray(payload)) {
+function withConfiguredWalletAddress(
+  payload: unknown,
+  walletAddress: string | undefined,
+) {
+  if (
+    !walletAddress ||
+    !payload ||
+    typeof payload !== "object" ||
+    Array.isArray(payload)
+  ) {
     return payload;
   }
   const record = payload as Record<string, unknown>;
@@ -246,25 +291,39 @@ function withConfiguredWalletAddress(payload: unknown, walletAddress: string | u
     : { ...record, walletAddress };
 }
 
-function withDryRunOptions(payload: unknown, options: CliOptions, walletAddress: string | undefined) {
+function withDryRunOptions(
+  payload: unknown,
+  options: CliOptions,
+  walletAddress: string | undefined,
+) {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     return payload;
   }
 
   const configuredWallet = walletAddress ?? DRY_RUN_WALLET_ADDRESS;
-  const record = withConfiguredWalletAddress(payload, configuredWallet) as Record<string, unknown>;
+  const record = withConfiguredWalletAddress(
+    payload,
+    configuredWallet,
+  ) as Record<string, unknown>;
 
   return {
     ...record,
     dryRun: true,
     mode: "dry_run",
     walletAddress:
-      typeof record.walletAddress === "string" && record.walletAddress.trim() ? record.walletAddress : configuredWallet,
-    ...(typeof options["client-request-id"] === "string" ? { clientRequestId: options["client-request-id"] } : {}),
+      typeof record.walletAddress === "string" && record.walletAddress.trim()
+        ? record.walletAddress
+        : configuredWallet,
+    ...(typeof options["client-request-id"] === "string"
+      ? { clientRequestId: options["client-request-id"] }
+      : {}),
   };
 }
 
-function shouldKeepHandoffFinding(finding: QuestionLintFinding, hasGeneratedImages: boolean) {
+function shouldKeepHandoffFinding(
+  finding: QuestionLintFinding,
+  hasGeneratedImages: boolean,
+) {
   if (!hasGeneratedImages) return true;
   return !(
     finding.level === "error" &&
@@ -282,8 +341,11 @@ async function main() {
       return;
 
     case "lint": {
-      const explicitFile = typeof options.file === "string" ? options.file : null;
-      const files = explicitFile ? [explicitFile] : await listExampleQuestionFiles();
+      const explicitFile =
+        typeof options.file === "string" ? options.file : null;
+      const files = explicitFile
+        ? [explicitFile]
+        : await listExampleQuestionFiles();
       const results = [];
 
       for (const file of files) {
@@ -308,7 +370,11 @@ async function main() {
         printJson({ files: results });
       }
 
-      if (results.some(result => result.findings.some(finding => finding.level === "error"))) {
+      if (
+        results.some((result) =>
+          result.findings.some((finding) => finding.level === "error"),
+        )
+      ) {
         process.exitCode = 1;
       }
       return;
@@ -335,7 +401,7 @@ async function main() {
           ? withDryRunOptions(rawPayload, options, config.agentWalletAddress)
           : withConfiguredWalletAddress(rawPayload, config.agentWalletAddress);
       const findings = lintAgentAskRequest(payload);
-      if (findings.some(finding => finding.level === "error")) {
+      if (findings.some((finding) => finding.level === "error")) {
         printJson({ findings, ...summarizeLintFindings(findings) });
         process.exitCode = 1;
         return;
@@ -348,30 +414,46 @@ async function main() {
       const config = loadAgentsRuntimeConfig();
       const agent = createAgentClient();
       const rawPayload = await readJsonFile(requireString(options, "file"));
-      const payload = withConfiguredWalletAddress(rawPayload, config.agentWalletAddress);
-      const generatedImages = await readHandoffGeneratedImageFiles(readStringList(options, "image", "generated-image"));
-      const findings = lintAgentAskRequest(payload).filter(finding =>
+      const payload = withConfiguredWalletAddress(
+        rawPayload,
+        config.agentWalletAddress,
+      );
+      const generatedImages = await readHandoffGeneratedImageFiles(
+        readStringList(options, "image", "generated-image"),
+      );
+      const findings = lintAgentAskRequest(payload).filter((finding) =>
         shouldKeepHandoffFinding(finding, generatedImages.length > 0),
       );
-      if (findings.some(finding => finding.level === "error")) {
+      if (findings.some((finding) => finding.level === "error")) {
         printJson({ findings, ...summarizeLintFindings(findings) });
         process.exitCode = 1;
         return;
       }
       printJson(
-        await agent.createAskHandoff({
-          generatedImages,
-          request: payload as never,
-          ttlMs: readOptionalPositiveInteger(options, "ttl-ms"),
-        }),
+        shouldStageHandoffImageUploads(generatedImages)
+          ? await createAskHandoffWithStagedImageUploads({
+              config,
+              generatedImages,
+              request: payload,
+              ttlMs: readOptionalPositiveInteger(options, "ttl-ms"),
+            })
+          : await agent.createAskHandoff({
+              generatedImages: generatedImages.map(inlineHandoffGeneratedImage),
+              request: payload as never,
+              ttlMs: readOptionalPositiveInteger(options, "ttl-ms"),
+            }),
       );
       return;
     }
 
     case "wallet": {
-      const localSignerConfig = loadLocalSignerConfig(singleValueOptions(options));
+      const localSignerConfig = loadLocalSignerConfig(
+        singleValueOptions(options),
+      );
       if (options.generate) {
-        const generated = await generateLocalSignerWallet(localSignerConfig, { overwrite: Boolean(options.overwrite) });
+        const generated = await generateLocalSignerWallet(localSignerConfig, {
+          overwrite: Boolean(options.overwrite),
+        });
         printJson({
           address: generated.account.address,
           keystorePath: generated.keystorePath,
@@ -386,7 +468,9 @@ async function main() {
         source: wallet.source,
         warnings:
           wallet.source === "private-key"
-            ? ["Loaded RATELOOP_LOCAL_SIGNER_PRIVATE_KEY. Prefer an encrypted keystore for persistent agent wallets."]
+            ? [
+                "Loaded RATELOOP_LOCAL_SIGNER_PRIVATE_KEY. Prefer an encrypted keystore for persistent agent wallets.",
+              ]
             : [],
       });
       return;
@@ -394,12 +478,17 @@ async function main() {
 
     case "local-ask": {
       const agent = createAgentClient();
-      const localSignerConfig = loadLocalSignerConfig(singleValueOptions(options));
+      const localSignerConfig = loadLocalSignerConfig(
+        singleValueOptions(options),
+      );
       const wallet = await loadLocalSignerWallet(localSignerConfig);
       const payload = await readJsonFile(requireString(options, "file"));
-      const payloadWithWallet = withLocalSignerWallet(payload, wallet.account.address);
+      const payloadWithWallet = withLocalSignerWallet(
+        payload,
+        wallet.account.address,
+      );
       const findings = lintAgentAskRequest(payloadWithWallet);
-      if (findings.some(finding => finding.level === "error")) {
+      if (findings.some((finding) => finding.level === "error")) {
         printJson({ findings, ...summarizeLintFindings(findings) });
         process.exitCode = 1;
         return;
@@ -420,7 +509,9 @@ async function main() {
           walletSource: wallet.source,
           warnings:
             wallet.source === "private-key"
-              ? ["Loaded RATELOOP_LOCAL_SIGNER_PRIVATE_KEY. Prefer an encrypted keystore for persistent agent wallets."]
+              ? [
+                  "Loaded RATELOOP_LOCAL_SIGNER_PRIVATE_KEY. Prefer an encrypted keystore for persistent agent wallets.",
+                ]
               : [],
         }),
       );
@@ -432,10 +523,22 @@ async function main() {
       const agent = createAgentClient();
       printJson(
         await agent.getQuestionStatus({
-          chainId: typeof options["chain-id"] === "string" ? Number(options["chain-id"]) : undefined,
-          clientRequestId: typeof options["client-request-id"] === "string" ? options["client-request-id"] : undefined,
-          operationKey: typeof options["operation-key"] === "string" ? options["operation-key"] : undefined,
-          walletAddress: typeof options["wallet-address"] === "string" ? options["wallet-address"] : config.agentWalletAddress,
+          chainId:
+            typeof options["chain-id"] === "string"
+              ? Number(options["chain-id"])
+              : undefined,
+          clientRequestId:
+            typeof options["client-request-id"] === "string"
+              ? options["client-request-id"]
+              : undefined,
+          operationKey:
+            typeof options["operation-key"] === "string"
+              ? options["operation-key"]
+              : undefined,
+          walletAddress:
+            typeof options["wallet-address"] === "string"
+              ? options["wallet-address"]
+              : config.agentWalletAddress,
         }),
       );
       return;
@@ -446,11 +549,26 @@ async function main() {
       const agent = createAgentClient();
       printJson(
         await agent.getResult({
-          chainId: typeof options["chain-id"] === "string" ? Number(options["chain-id"]) : undefined,
-          clientRequestId: typeof options["client-request-id"] === "string" ? options["client-request-id"] : undefined,
-          contentId: typeof options["content-id"] === "string" ? options["content-id"] : undefined,
-          operationKey: typeof options["operation-key"] === "string" ? options["operation-key"] : undefined,
-          walletAddress: typeof options["wallet-address"] === "string" ? options["wallet-address"] : config.agentWalletAddress,
+          chainId:
+            typeof options["chain-id"] === "string"
+              ? Number(options["chain-id"])
+              : undefined,
+          clientRequestId:
+            typeof options["client-request-id"] === "string"
+              ? options["client-request-id"]
+              : undefined,
+          contentId:
+            typeof options["content-id"] === "string"
+              ? options["content-id"]
+              : undefined,
+          operationKey:
+            typeof options["operation-key"] === "string"
+              ? options["operation-key"]
+              : undefined,
+          walletAddress:
+            typeof options["wallet-address"] === "string"
+              ? options["wallet-address"]
+              : config.agentWalletAddress,
         }),
       );
       return;
@@ -462,7 +580,7 @@ async function main() {
   }
 }
 
-main().catch(error => {
+main().catch((error) => {
   console.error(error instanceof Error ? error.message : String(error));
   process.exitCode = 1;
 });

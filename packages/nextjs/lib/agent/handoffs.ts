@@ -61,7 +61,7 @@ export type AgentAskHandoffAssetRecord = {
   originalFilename: string;
   sha256: string;
   sizeBytes: number;
-  status: "staged" | "uploaded" | "failed";
+  status: "uploading" | "staged" | "uploaded" | "failed";
   updatedAt: Date;
 };
 
@@ -69,6 +69,13 @@ type CreateHandoffImageInput = {
   dataUrl?: unknown;
   filename?: unknown;
   imageBase64?: unknown;
+  mimeType?: unknown;
+  sha256?: unknown;
+  sizeBytes?: unknown;
+};
+
+type CreateHandoffImageUploadInput = {
+  filename?: unknown;
   mimeType?: unknown;
   sha256?: unknown;
   sizeBytes?: unknown;
@@ -218,13 +225,29 @@ function readRequiredString(value: unknown, fieldName: string) {
   return stringValue;
 }
 
-function readPositiveSizeBytes(value: unknown, fallback: number) {
+function readPositiveSizeBytes(value: unknown, fallback: number, fieldName = "generatedImages[].sizeBytes") {
   if (value === undefined || value === null || value === "") return fallback;
   const parsed = Number(value);
   if (!Number.isSafeInteger(parsed) || parsed <= 0) {
-    throw new AgentAskHandoffError("generatedImages[].sizeBytes must be a positive integer.");
+    throw new AgentAskHandoffError(`${fieldName} must be a positive integer.`);
   }
   return parsed;
+}
+
+function readRequiredPositiveSizeBytes(value: unknown, fieldName: string) {
+  const parsed = readPositiveSizeBytes(value, 0, fieldName);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+    throw new AgentAskHandoffError(`${fieldName} must be a positive integer.`);
+  }
+  return parsed;
+}
+
+function readSha256(value: unknown, fieldName: string) {
+  const rawValue = readRequiredString(value, fieldName).toLowerCase();
+  if (!/^[a-f0-9]{64}$/.test(rawValue)) {
+    throw new AgentAskHandoffError(`${fieldName} must be a lowercase SHA-256 hash.`);
+  }
+  return rawValue;
 }
 
 function parseStoredJson(value: string): JsonObject {
@@ -453,6 +476,30 @@ function normalizeGeneratedImage(input: CreateHandoffImageInput, index: number) 
   };
 }
 
+function normalizeGeneratedImageUpload(input: CreateHandoffImageUploadInput, index: number) {
+  const filename = readRequiredString(input.filename, `generatedImageUploads[${index}].filename`).slice(0, 180);
+  const mimeType = readRequiredString(input.mimeType, `generatedImageUploads[${index}].mimeType`).toLowerCase();
+  if (!isSupportedImageUploadMimeType(mimeType)) {
+    throw new AgentAskHandoffError(
+      `generatedImageUploads[${index}].mimeType must be image/jpeg, image/png, or image/webp.`,
+    );
+  }
+  const sizeBytes = readRequiredPositiveSizeBytes(input.sizeBytes, `generatedImageUploads[${index}].sizeBytes`);
+  if (sizeBytes > getMaxImageUploadSizeBytes()) {
+    throw new AgentAskHandoffError(
+      `generatedImageUploads[${index}] exceeds the maximum image upload size of ${getMaxImageUploadSizeBytes()} bytes.`,
+    );
+  }
+
+  return {
+    filename,
+    imageBase64: "",
+    mimeType,
+    sha256: readSha256(input.sha256, `generatedImageUploads[${index}].sha256`),
+    sizeBytes,
+  };
+}
+
 function readGeneratedImages(value: unknown) {
   if (value === undefined || value === null) return [];
   if (!Array.isArray(value)) {
@@ -462,6 +509,19 @@ function readGeneratedImages(value: unknown) {
     throw new AgentAskHandoffError("generatedImages supports at most four images.");
   }
   return value.map((entry, index) => normalizeGeneratedImage(asJsonObject(entry, `generatedImages[${index}]`), index));
+}
+
+function readGeneratedImageUploads(value: unknown) {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value)) {
+    throw new AgentAskHandoffError("generatedImageUploads must be an array.");
+  }
+  if (value.length > 4) {
+    throw new AgentAskHandoffError("generatedImageUploads supports at most four images.");
+  }
+  return value.map((entry, index) =>
+    normalizeGeneratedImageUpload(asJsonObject(entry, `generatedImageUploads[${index}]`), index),
+  );
 }
 
 async function assertGeneratedImagesProcessable(images: ReturnType<typeof readGeneratedImages>): Promise<void> {
@@ -644,9 +704,13 @@ export function buildAgentAskHandoffResponse(params: {
   includeImageData?: boolean;
 }) {
   const failedAsset = params.assets.find(asset => asset.status === "failed");
+  const uploadingAsset = params.assets.find(asset => asset.status === "uploading");
   const nextAction = (() => {
     if (params.handoff.status === "failed" && failedAsset) {
       return "Image upload failed. Ask the agent for a fresh handoff link with a regenerated or re-exported image.";
+    }
+    if (uploadingAsset) {
+      return "Image upload is still staging. Poll rateloop_get_handoff_status before sharing or preparing the handoff.";
     }
     if (params.handoff.status === "failed") {
       return "Review the handoff error, save any needed draft changes, then retry preparation or ask the agent for a fresh link.";
@@ -672,7 +736,8 @@ export function buildAgentAskHandoffResponse(params: {
   return {
     assets: params.assets.map(asset => ({
       attachmentId: asset.attachmentId,
-      dataUrl: params.includeImageData ? `data:${asset.mimeType};base64,${asset.imageBase64}` : undefined,
+      dataUrl:
+        params.includeImageData && asset.imageBase64 ? `data:${asset.mimeType};base64,${asset.imageBase64}` : undefined,
       error: asset.error,
       filename: asset.originalFilename,
       id: asset.id,
@@ -709,6 +774,7 @@ export function buildAgentAskHandoffResponse(params: {
 export async function createAgentAskHandoff(params: {
   appBaseUrl: string;
   generatedImages?: unknown;
+  generatedImageUploads?: unknown;
   rateLimitSubjectId?: string;
   requestBody: unknown;
   ttlMs?: number;
@@ -717,8 +783,15 @@ export async function createAgentAskHandoff(params: {
   assertWalletCallsPaymentMode(requestBody);
 
   const generatedImages = readGeneratedImages(params.generatedImages);
+  const generatedImageUploads = readGeneratedImageUploads(params.generatedImageUploads);
+  if (generatedImages.length > 0 && generatedImageUploads.length > 0) {
+    throw new AgentAskHandoffError("Use generatedImages or generatedImageUploads, not both.");
+  }
   await assertGeneratedImagesProcessable(generatedImages);
-  const totalStagingBytes = generatedImages.reduce((sum, image) => sum + image.sizeBytes, 0);
+  const totalStagingBytes = [...generatedImages, ...generatedImageUploads].reduce(
+    (sum, image) => sum + image.sizeBytes,
+    0,
+  );
   if (params.rateLimitSubjectId && totalStagingBytes > 0) {
     await reserveImageUploadDailyQuotas({
       sizeBytes: totalStagingBytes,
@@ -730,11 +803,20 @@ export async function createAgentAskHandoff(params: {
   const now = nowDate();
   const ttlMs = Math.min(Math.max(params.ttlMs ?? DEFAULT_HANDOFF_TTL_MS, 60_000), PUBLIC_HANDOFF_MAX_TTL_MS);
   const expiresAt = new Date(now.getTime() + ttlMs);
-  const assets = generatedImages.map(image => ({
-    ...image,
-    attachmentId: createImageAttachmentId(),
-    id: randomAssetId(),
-  }));
+  const assets = [
+    ...generatedImages.map(image => ({
+      ...image,
+      attachmentId: createImageAttachmentId(),
+      id: randomAssetId(),
+      status: "staged" as const,
+    })),
+    ...generatedImageUploads.map(image => ({
+      ...image,
+      attachmentId: createImageAttachmentId(),
+      id: randomAssetId(),
+      status: "uploading" as const,
+    })),
+  ];
   const validationImageUrls = assets.map(asset => assetImageUrl(params.appBaseUrl, asset.attachmentId, asset.sha256));
   const normalized = normalizeAgentAskHandoffRequestBody({ requestBody, validationImageUrls });
 
@@ -804,7 +886,7 @@ export async function createAgentAskHandoff(params: {
         asset.id,
         id,
         asset.attachmentId,
-        "staged",
+        asset.status,
         asset.filename,
         asset.mimeType,
         asset.sizeBytes,
@@ -823,10 +905,89 @@ export async function createAgentAskHandoff(params: {
     handoffId: id,
     handoffToken: token,
     handoffUrl: handoffUrl({ appBaseUrl: params.appBaseUrl, handoffId: id, token }),
-    nextAction: "Share handoffUrl with the user. Do not ask the user to paste raw wallet signatures.",
+    nextAction:
+      generatedImageUploads.length > 0
+        ? "Upload each staged image through the handoff asset upload route, then share handoffUrl with the user."
+        : "Share handoffUrl with the user. Do not ask the user to paste raw wallet signatures.",
     resultTool: "rateloop_get_result",
     statusTool: "rateloop_get_handoff_status",
   };
+}
+
+export async function loadAgentAskHandoffAssetUploadTarget(params: {
+  assetId: string;
+  handoffId: string;
+  token: string;
+}) {
+  const handoff = await loadAgentAskHandoffByToken({ handoffId: params.handoffId, token: params.token });
+  if (handoff.status === "submitted") {
+    throw new AgentAskHandoffError("Handoff ask has already been submitted.", 409);
+  }
+
+  const assets = await listAgentAskHandoffAssets(handoff.id);
+  const asset = assets.find(candidate => candidate.id === params.assetId || candidate.attachmentId === params.assetId);
+  if (!asset) {
+    throw new AgentAskHandoffError("Handoff image asset was not found.", 404);
+  }
+  if (asset.status !== "uploading") {
+    throw new AgentAskHandoffError(`Handoff image asset cannot be uploaded from status ${asset.status}.`, 409);
+  }
+
+  return { asset, handoff };
+}
+
+export async function stageAgentAskHandoffAssetUpload(params: {
+  assetId: string;
+  buffer: Buffer;
+  contentType?: string | null;
+  handoffId: string;
+}) {
+  const assets = await listAgentAskHandoffAssets(params.handoffId);
+  const asset = assets.find(candidate => candidate.id === params.assetId || candidate.attachmentId === params.assetId);
+  if (!asset) {
+    throw new AgentAskHandoffError("Handoff image asset was not found.", 404);
+  }
+  if (asset.status !== "uploading") {
+    throw new AgentAskHandoffError(`Handoff image asset cannot be staged from status ${asset.status}.`, 409);
+  }
+  if (params.contentType && params.contentType.toLowerCase() !== asset.mimeType) {
+    throw new AgentAskHandoffError("Uploaded image content type does not match the staged handoff metadata.");
+  }
+
+  const image = normalizeGeneratedImage(
+    {
+      filename: asset.originalFilename,
+      imageBase64: params.buffer.toString("base64"),
+      mimeType: asset.mimeType,
+      sha256: asset.sha256,
+      sizeBytes: asset.sizeBytes,
+    },
+    0,
+  );
+  await assertGeneratedImagesProcessable([image]);
+
+  const now = nowDate();
+  const result = await dbClient.execute({
+    sql: `
+      UPDATE agent_ask_handoff_assets
+      SET status = 'staged',
+          mime_type = ?,
+          size_bytes = ?,
+          sha256 = ?,
+          image_base64 = ?,
+          error = NULL,
+          updated_at = ?
+      WHERE id = ?
+        AND handoff_id = ?
+        AND status = 'uploading'
+    `,
+    args: [image.mimeType, image.sizeBytes, image.sha256, image.imageBase64, now, asset.id, params.handoffId],
+  });
+  if (result.rowCount === 0) {
+    throw new AgentAskHandoffError("Handoff image asset changed before upload staging completed.", 409);
+  }
+
+  return { ...asset, ...image, status: "staged" as const, updatedAt: now };
 }
 
 export async function updateAgentAskHandoffStatus(params: {

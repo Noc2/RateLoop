@@ -34,11 +34,16 @@ export async function POST(request: NextRequest) {
       const hasWrappedRequest = "request" in body;
       const requestBody = hasWrappedRequest
         ? (body as { request?: unknown }).request
-        : Object.fromEntries(Object.entries(body).filter(([key]) => key !== "generatedImages" && key !== "ttlMs"));
+        : Object.fromEntries(
+            Object.entries(body).filter(
+              ([key]) => key !== "generatedImages" && key !== "generatedImageUploads" && key !== "ttlMs",
+            ),
+          );
 
       try {
         return await createAgentAskHandoff({
           appBaseUrl,
+          generatedImageUploads: (body as { generatedImageUploads?: unknown }).generatedImageUploads,
           generatedImages: (body as { generatedImages?: unknown }).generatedImages,
           rateLimitSubjectId: resolveRateLimitSubject(request),
           requestBody,

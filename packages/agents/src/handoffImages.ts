@@ -5,7 +5,10 @@ import { basename, extname, resolve } from "node:path";
 export const MAX_HANDOFF_GENERATED_IMAGE_BYTES = 10 * 1024 * 1024;
 export const MAX_HANDOFF_GENERATED_IMAGES = 4;
 
-const MIME_BY_EXTENSION: Record<string, "image/jpeg" | "image/png" | "image/webp"> = {
+const MIME_BY_EXTENSION: Record<
+  string,
+  "image/jpeg" | "image/png" | "image/webp"
+> = {
   ".jpeg": "image/jpeg",
   ".jpg": "image/jpeg",
   ".png": "image/png",
@@ -20,7 +23,15 @@ export type HandoffGeneratedImage = {
   sizeBytes: number;
 };
 
-function detectImageMimeType(path: string, buffer: Buffer): HandoffGeneratedImage["mimeType"] {
+export type HandoffGeneratedImageFile = HandoffGeneratedImage & {
+  buffer: Buffer;
+  path: string;
+};
+
+function detectImageMimeType(
+  path: string,
+  buffer: Buffer,
+): HandoffGeneratedImage["mimeType"] {
   if (
     buffer.length >= 8 &&
     buffer[0] === 0x89 &&
@@ -35,7 +46,12 @@ function detectImageMimeType(path: string, buffer: Buffer): HandoffGeneratedImag
     return "image/png";
   }
 
-  if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
+  if (
+    buffer.length >= 3 &&
+    buffer[0] === 0xff &&
+    buffer[1] === 0xd8 &&
+    buffer[2] === 0xff
+  ) {
     return "image/jpeg";
   }
 
@@ -50,10 +66,14 @@ function detectImageMimeType(path: string, buffer: Buffer): HandoffGeneratedImag
   const extensionMime = MIME_BY_EXTENSION[extname(path).toLowerCase()];
   if (extensionMime) return extensionMime;
 
-  throw new Error(`Unsupported image type for ${path}. Use a PNG, JPG, JPEG, or WEBP file.`);
+  throw new Error(
+    `Unsupported image type for ${path}. Use a PNG, JPG, JPEG, or WEBP file.`,
+  );
 }
 
-export async function readHandoffGeneratedImageFile(path: string): Promise<HandoffGeneratedImage> {
+export async function readHandoffGeneratedImageFile(
+  path: string,
+): Promise<HandoffGeneratedImageFile> {
   const resolvedPath = resolve(path);
   const buffer = await readFile(resolvedPath);
   if (buffer.length <= 0) {
@@ -66,17 +86,23 @@ export async function readHandoffGeneratedImageFile(path: string): Promise<Hando
   }
 
   return {
+    buffer,
     filename: basename(resolvedPath),
     imageBase64: buffer.toString("base64"),
     mimeType: detectImageMimeType(path, buffer),
+    path: resolvedPath,
     sha256: createHash("sha256").update(buffer).digest("hex"),
     sizeBytes: buffer.length,
   };
 }
 
-export async function readHandoffGeneratedImageFiles(paths: readonly string[]): Promise<HandoffGeneratedImage[]> {
+export async function readHandoffGeneratedImageFiles(
+  paths: readonly string[],
+): Promise<HandoffGeneratedImageFile[]> {
   if (paths.length > MAX_HANDOFF_GENERATED_IMAGES) {
-    throw new Error(`generatedImages supports at most ${MAX_HANDOFF_GENERATED_IMAGES} images.`);
+    throw new Error(
+      `generatedImages supports at most ${MAX_HANDOFF_GENERATED_IMAGES} images.`,
+    );
   }
-  return Promise.all(paths.map(path => readHandoffGeneratedImageFile(path)));
+  return Promise.all(paths.map((path) => readHandoffGeneratedImageFile(path)));
 }

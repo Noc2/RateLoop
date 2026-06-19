@@ -59,7 +59,8 @@ When comparing options, do not ask one multiple-choice question. Use `ranked_opt
 
 When the artifact is an AI-generated mockup or screenshot, keep the bytes for `generatedImages` in the browser handoff.
 Do not ask the user to host the image elsewhere, and do not shrink a readable under-10 MB PNG/JPG/WEBP just because
-base64 is too large for terminal output. Prefer the file-backed CLI, for example:
+base64 is too large for terminal output. Prefer the file-backed CLI, which stages larger local files through the handoff
+upload route, for example:
 
 ```bash
 yarn workspace @rateloop/agents handoff --file ask.json --image mockup.png

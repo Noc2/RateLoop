@@ -26,13 +26,15 @@ describe("handoff generated image files", () => {
     const path = await writeTempFile("mockup.png", ONE_PIXEL_PNG);
     const image = await readHandoffGeneratedImageFile(path);
 
-    expect(image).toEqual({
+    expect(image).toMatchObject({
       filename: "mockup.png",
       imageBase64: ONE_PIXEL_PNG.toString("base64"),
       mimeType: "image/png",
+      path,
       sha256: createHash("sha256").update(ONE_PIXEL_PNG).digest("hex"),
       sizeBytes: ONE_PIXEL_PNG.length,
     });
+    expect(image.buffer).toEqual(ONE_PIXEL_PNG);
   });
 
   it("supports repeated image file inputs", async () => {
@@ -47,8 +49,13 @@ describe("handoff generated image files", () => {
   });
 
   it("rejects files above the RateLoop per-image upload limit", async () => {
-    const path = await writeTempFile("too-large.png", Buffer.alloc(MAX_HANDOFF_GENERATED_IMAGE_BYTES + 1, 1));
+    const path = await writeTempFile(
+      "too-large.png",
+      Buffer.alloc(MAX_HANDOFF_GENERATED_IMAGE_BYTES + 1, 1),
+    );
 
-    await expect(readHandoffGeneratedImageFile(path)).rejects.toThrow(/exceeds RateLoop's .* byte generated-image limit/);
+    await expect(readHandoffGeneratedImageFile(path)).rejects.toThrow(
+      /exceeds RateLoop's .* byte generated-image limit/,
+    );
   });
 });

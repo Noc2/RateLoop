@@ -130,6 +130,9 @@ yarn workspace @rateloop/agents handoff --file ask.json --image mockup.png
 # Repeat --image for up to four generated/local images.
 ```
 
+For larger local files, the CLI creates the handoff from image metadata first and then uploads the file bytes through a
+handoff-scoped blob staging route, so under-limit screenshots and mockups do not have to fit inside one JSON body.
+
 The `handoff` command reads each file from disk, computes `sha256` and `sizeBytes`, base64-encodes the buffer inside the
 Node process, and prints only the handoff response. Managed bearer-token agents can call `rateloop_upload_image`
 directly. Public wallet-mode raw uploads use `rateloop_prepare_image_upload`, a wallet signature, then

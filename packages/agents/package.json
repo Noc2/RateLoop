@@ -110,6 +110,7 @@
     "@rateloop/contracts": "workspace:*",
     "@rateloop/node-utils": "workspace:*",
     "@rateloop/sdk": "workspace:*",
+    "@vercel/blob": "2.3.0",
     "dotenv": "^16.4.5",
     "viem": "2.39.0"
   },

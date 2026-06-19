@@ -12,7 +12,10 @@ For local files, prefer the file-backed CLI helper:
 yarn workspace @rateloop/agents handoff --file ask.json --image outputs/mockup.png
 ```
 
-It reads the image from disk, computes `sha256` and `sizeBytes`, sends inline bytes from the same Node process, and prints only the handoff response. Use the public wallet-signed upload flow below only when the host can make wallet message signing pleasant. If not, route the user through the Ask page upload/signing UI instead of pasting raw signature challenges into chat.
+It reads the image from disk, computes `sha256` and `sizeBytes`, and prints only the handoff response. Large local files
+are staged through a handoff-scoped blob upload instead of being forced through one JSON request. Use the public
+wallet-signed upload flow below only when the host can make wallet message signing pleasant. If not, route the user
+through the Ask page upload/signing UI instead of pasting raw signature challenges into chat.
 
 ## Managed Agent Token
 

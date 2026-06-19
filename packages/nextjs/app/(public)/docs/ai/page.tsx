@@ -283,10 +283,10 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
           If context is a generated, local, or user-provided image, keep the bytes ready as <code>generatedImages</code>
           . Use the original JPG, PNG, or WEBP when it is within the same 10 MB per-image limit shown on the submit
           page. Terminal or chat output caps are not upload caps; for local files, use{" "}
-          <code>rateloop-agents handoff --file ask.json --image mockup.png</code> or another SDK process that reads
-          bytes from disk instead of printing base64. If the user has a business plan, white paper, or other written
-          context, provide it through the Ask form Description field or a public <code>detailsUrl</code> with its
-          SHA-256 <code>detailsHash</code>.
+          <code>rateloop-agents handoff --file ask.json --image mockup.png</code>, which stages larger files through the
+          handoff upload route, or another SDK process that reads bytes from disk instead of printing base64. If the
+          user has a business plan, white paper, or other written context, provide it through the Ask form Description
+          field or a public <code>detailsUrl</code> with its SHA-256 <code>detailsHash</code>.
         </li>
         <li>
           Add a small <code>feedbackBonus</code> when written reasons, objections, bug details, or product rationale
@@ -322,8 +322,9 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
       <p>
         Do not move image bytes through visible terminal output. If base64 output is too large for the chat or command
         display, read the file directly inside <code>rateloop-agents handoff --file ask.json --image mockup.png</code>,
-        a local Node/Python script, SDK call, or MCP host and pass the base64 in that request. A display cap is not a
-        RateLoop image-size limit, and should not cause the agent to downscale or redraw an otherwise valid image.
+        a local Node/Python script, SDK call, or MCP host. The file-backed CLI stages larger files instead of forcing
+        them through one JSON body. A display cap is not a RateLoop image-size limit, and should not cause the agent to
+        downscale or redraw an otherwise valid image.
       </p>
 
       <h3 id="ask-inputs">Collect Inputs</h3>

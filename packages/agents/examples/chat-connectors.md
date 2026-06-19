@@ -16,7 +16,7 @@ Use these notes when wiring RateLoop into chat-hosted agents such as ChatGPT and
 - Show spend confirmation on the quoted amount before the ask is submitted.
 - Keep callbacks optional. Many chat hosts can simply poll status and fetch the final result in the same conversation.
 
-For generated images in the normal human-wallet flow, pass the bytes as `generatedImages` to the browser handoff. Do not ask the user to host the image elsewhere. If wallet message signing is awkward in chat, route through the Ask page upload/signing UI instead of pasting raw challenges.
+For generated images in the normal human-wallet flow, pass the bytes as `generatedImages` to the browser handoff or use the file-backed CLI, which stages larger local files through the handoff upload route. Do not ask the user to host the image elsewhere. If wallet message signing is awkward in chat, route through the Ask page upload/signing UI instead of pasting raw challenges.
 
 ## Recommended Demo
 
