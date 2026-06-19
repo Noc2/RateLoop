@@ -235,7 +235,7 @@ Direct ask JSON payload without Feedback Bonus:
 4. Prefer browser handoff: call `rateloop_create_ask_handoff_link` and share the returned `handoffUrl`.
 5. If using raw MCP instead, call `rateloop_ask_humans` with `maxPaymentAmount`, execute each returned wallet plan, then confirm the transaction hashes. Honor `requiresAtomicExecution: true` by batching the whole plan atomically or refusing to continue.
 
-Default to `paymentMode: "wallet_calls"`. Use `paymentMode: "eip3009_usdc_authorization"` only when an agent wallet should sign a native USDC authorization before the transaction plan is prepared. The legacy `paymentMode: "x402_authorization"` alias is still accepted. Native EIP-3009 asks return one submit transaction after signing; when a single-question ask includes a USDC `feedbackBonus`, that submit call also creates and funds the Feedback Bonus pool.
+Browser handoffs auto-prefer `paymentMode: "eip3009_usdc_authorization"` for eligible single-question USDC asks, including USDC Feedback Bonuses. That flow asks the user for a USDC authorization signature, then returns one submit transaction; with a USDC `feedbackBonus`, the submit call also creates and funds the Feedback Bonus pool. Use `paymentMode: "wallet_calls"` for LREP bounties, LREP Feedback Bonuses, bundled asks, or hosts that need raw approve/reserve/submit wallet calls. The legacy `paymentMode: "x402_authorization"` alias is still accepted.
 
 MCP/browser handoff payload with Feedback Bonus:
 
@@ -244,7 +244,7 @@ MCP/browser handoff payload with Feedback Bonus:
   "chainId": 8453,
   "clientRequestId": "design-review-2026-05-05-001",
   "walletAddress": "0x1111111111111111111111111111111111111111",
-  "paymentMode": "wallet_calls",
+  "paymentMode": "eip3009_usdc_authorization",
   "bounty": {
     "amount": "2500000",
     "asset": "USDC",

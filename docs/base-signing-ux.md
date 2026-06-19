@@ -23,7 +23,7 @@ RateLoop's production deployment boundary is Base mainnet, with Base Sepolia use
 - Staked vote with low allowance and atomic batching available: one wallet batch confirmation for `approve + commitVote`.
 - Staked vote when the round must be opened first: one `openRound` confirmation, then one vote batch confirmation. This remains two phases because the vote runtime is anchored after the round exists.
 - Direct wallet-call question submit with bounty: reservation remains separate, then `approve + submitQuestion` can batch. The reservation wait is intentional protocol behavior for the public direct path.
-- Native EIP-3009/x402 question submit with bounty: one wallet signature for the USDC authorization, then one submit transaction.
+- Browser handoff or native EIP-3009/x402 question submit with an eligible USDC bounty: one wallet signature for the USDC authorization, then one submit transaction.
 - Native EIP-3009/x402 question submit with bounty and a USDC Feedback Bonus: one wallet signature for the total USDC authorization, then one one-shot submit transaction that funds both pools. LREP Feedback Bonus funding still uses the separate wallet-call pool flow.
 
 ## Base Sepolia test checklist

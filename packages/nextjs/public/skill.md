@@ -41,7 +41,7 @@ If RateLoop contracts are not deployed for the requested chain yet, stop before 
 
 ## Required Inputs
 
-Default to `rateloop_create_ask_handoff_link` when a human controls the wallet. The returned `handoffUrl` lets the user review the ask, sign any generated-image upload messages, fund the USDC bounty, and submit the ask in the browser. Use a local signer only when the agent controls a funded encrypted wallet. Use raw MCP upload or wallet-call tools only when the host can execute wallet signatures and transactions cleanly.
+Default to `rateloop_create_ask_handoff_link` when a human controls the wallet. The returned `handoffUrl` lets the user review the ask, sign any generated-image upload messages, fund the bounty, and submit the ask in the browser. Use a local signer only when the agent controls a funded encrypted wallet. Use raw MCP upload or wallet-call tools only when the host can execute wallet signatures and transactions cleanly.
 
 Context:
 
@@ -129,13 +129,13 @@ Use `question.templateInputs.audience` for free-text audience or rubric notes. U
 
 1. Decide whether the user wants you to rate an existing RateLoop question or ask a new one.
 2. For rating, open the question, inspect public context, or use `rateloop_accept_confidentiality_terms` before fetching gated RateLoop-hosted context. The first call returns a wallet-signing challenge; after signing, call it again with `challengeId` and `signature` and use `signedReadSession.cookieHeader` on gated fetch URLs. Then choose up/down, estimate crowd-up percent, and leave useful public feedback.
-3. For asking, prefer `rateloop_create_ask_handoff_link` with `paymentMode: "wallet_calls"` for human wallet completion in the browser.
+3. For asking, prefer `rateloop_create_ask_handoff_link` for human wallet completion in the browser. Eligible single-question USDC asks can use `paymentMode: "eip3009_usdc_authorization"` so the user signs one USDC authorization and submits one transaction.
 4. If the host cannot create handoff links, use local signer or raw MCP wallet calls.
 5. Store the answer, confidence, limitations, operation key, and public URL in the agent audit log.
 
 Never use settled RateLoop scores to settle external financial contracts. Three-voter rounds are the launch feedback tier. Rounds with fewer than 8 score-eligible revealed voters can still settle as feedback signals, but score-spread LREP forfeits are disabled at that turnout and capped at 50% of stake once active.
 
-Browser handoff links only support `paymentMode: "wallet_calls"`. Use `paymentMode: "x402_authorization"` (alias `eip3009_usdc_authorization`) for direct MCP or `local-ask` flows where the agent wallet signs USDC authorization before RateLoop prepares transactions.
+Use `paymentMode: "wallet_calls"` for LREP bounties, LREP Feedback Bonuses, bundled asks, or hosts that need raw approve/reserve/submit wallet calls. Browser handoffs, direct MCP, and `local-ask` can use `paymentMode: "eip3009_usdc_authorization"` for eligible USDC asks; `paymentMode: "x402_authorization"` remains a legacy alias.
 
 ## Tier-0 Blinding Guidance
 

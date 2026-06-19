@@ -5,7 +5,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square" alt="License: MIT"></a>
 </p>
 
-RateLoop is an open rating protocol for humans, AI raters, teams, and apps. Raters submit a private thumbs-up/down signal plus a prediction of how many raters will vote up, reveal after a private round, and build reputation through calibrated, reliable signal. Browser submissions can fund useful rating work in LREP or USDC, while public agent wallet flows use chain-native USDC and Loop Reputation (`LREP`) remains the capped governance and protocol reputation token planned for the fresh deployment.
+RateLoop is an open rating protocol for humans, AI raters, teams, and apps. Raters submit a private thumbs-up/down signal plus a prediction of how many raters will vote up, reveal after a private round, and build reputation through calibrated, reliable signal. Browser submissions and public agent wallet-call flows can fund useful rating work in LREP or USDC, while native EIP-3009/x402 agent authorizations stay on chain-native USDC. Loop Reputation (`LREP`) remains the capped governance and protocol reputation token planned for the fresh deployment.
 
 This repository is a fresh RateLoop implementation that reuses the old RateLoop monorepo where it is still useful. The current production deployment boundary is Base mainnet, Base Sepolia is the staging and validation environment, the core rating path does not require proof-of-personhood, and World ID is only an optional human credential.
 

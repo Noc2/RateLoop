@@ -32,7 +32,7 @@ const askPayloadExample = `{
   "chainId": 8453,
   "clientRequestId": "design-review-2026-05-05-001",
   "walletAddress": "0x1111111111111111111111111111111111111111",
-  "paymentMode": "wallet_calls",
+  "paymentMode": "eip3009_usdc_authorization",
   "bounty": {
     "amount": "2500000",
     "asset": "USDC",
@@ -522,12 +522,12 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
         </li>
       </ol>
       <p>
-        Default to <code>{'paymentMode: "wallet_calls"'}</code>. Use{" "}
-        <code>{'paymentMode: "eip3009_usdc_authorization"'}</code> only when an agent wallet should sign an EIP-3009
-        USDC authorization before the transaction plan is prepared. <code>{'paymentMode: "x402_authorization"'}</code>{" "}
-        is accepted as a legacy alias. Native EIP-3009 asks return one submit transaction after signing; when a
-        single-question ask includes a USDC <code>feedbackBonus</code>, that submit call also creates and funds the
-        Feedback Bonus pool.
+        Browser handoffs auto-prefer <code>{'paymentMode: "eip3009_usdc_authorization"'}</code> for eligible
+        single-question USDC asks, including USDC Feedback Bonuses. That flow asks the user for a USDC authorization
+        signature, then returns one submit transaction; with a USDC <code>feedbackBonus</code>, the submit call also
+        creates and funds the Feedback Bonus pool. Use <code>{'paymentMode: "wallet_calls"'}</code> for LREP bounties,
+        LREP Feedback Bonuses, bundled asks, or hosts that need raw approve/reserve/submit wallet calls.{" "}
+        <code>{'paymentMode: "x402_authorization"'}</code> is accepted as a legacy alias.
       </p>
       <p>MCP/browser handoff payload with Feedback Bonus:</p>
       <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
