@@ -824,7 +824,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         QuestionSpecCommitment memory spec,
         address submitter,
         IConfidentialityEscrow.ConfidentialityConfig memory confidentiality
-    ) public onlyRole(X402_GATEWAY_ROLE) nonReentrant whenNotPaused returns (uint256 contentId) {
+    ) external onlyRole(X402_GATEWAY_ROLE) nonReentrant whenNotPaused returns (uint256 contentId) {
         SubmissionMetadata memory metadata = _validatedContextSubmissionMetadata(
             contextUrl, imageUrls, videoUrl, title, tags, categoryId, confidentiality.gated
         );
@@ -976,7 +976,6 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         // reveal hash carries caller-supplied randomness.
         require(salt != bytes32(0));
         _validateSubmissionReward(rewardTerms);
-        require(rewardTerms.requiredVoters == roundConfig.minVoters);
 
         if (submitter == msg.sender) {
             bytes32 revealCommitment = _computeRevealCommitment(
