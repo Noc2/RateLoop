@@ -1,7 +1,7 @@
 import "./fetch-shim";
 import { spawn, type ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { unlink } from "node:fs/promises";
+import { rm, unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
@@ -34,6 +34,9 @@ const FRONTEND_STAKE = 1_000_000_000n;
 const E2E_CORRELATION_EPOCH_OFFSET = 1_000_000_000n;
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const REPO_ROOT = path.resolve(process.cwd(), "../..");
+const CORRELATION_ARTIFACT_PORT = 9091;
+const CORRELATION_ARTIFACT_ROUTE_PREFIX = "/correlation-artifacts";
+const correlationArtifactStorageDirectory = path.join(tmpdir(), `rateloop-correlation-artifacts-${process.pid}`);
 
 export const correlationPublicClient = createPublicClient({
   chain: foundry,
@@ -321,9 +324,12 @@ export async function stopCorrelationSnapshotKeeper() {
     });
   }
   if (artifactPath) await unlink(artifactPath).catch(() => {});
+  await rm(correlationArtifactStorageDirectory, { recursive: true, force: true }).catch(() => {});
 }
 
 function correlationKeeperEnvOverrides(artifactPath?: string) {
+  const publishFileArtifact = Boolean(artifactPath);
+
   return {
     CHAIN_ID: "31337",
     RPC_URL: E2E_RPC_URL,
@@ -336,9 +342,14 @@ function correlationKeeperEnvOverrides(artifactPath?: string) {
     KEEPER_CORRELATION_SNAPSHOTS_ENABLED: "true",
     KEEPER_CORRELATION_SNAPSHOTS_MODE: artifactPath ? "file" : "auto",
     KEEPER_CORRELATION_SNAPSHOT_ARTIFACT_PATH: artifactPath,
-    KEEPER_CORRELATION_ARTIFACT_STORAGE: "data-uri",
+    KEEPER_CORRELATION_ARTIFACT_STORAGE: publishFileArtifact ? "file" : "data-uri",
+    KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL: publishFileArtifact
+      ? `http://127.0.0.1:${CORRELATION_ARTIFACT_PORT}${CORRELATION_ARTIFACT_ROUTE_PREFIX}`
+      : undefined,
+    KEEPER_CORRELATION_SNAPSHOT_STORAGE_DIR: publishFileArtifact ? correlationArtifactStorageDirectory : undefined,
     KEEPER_CORRELATION_SNAPSHOT_MAX_ROUNDS_PER_TICK: "20",
-    METRICS_ENABLED: "false",
+    METRICS_ENABLED: publishFileArtifact ? "true" : "false",
+    METRICS_PORT: String(CORRELATION_ARTIFACT_PORT),
     LOG_FORMAT: "json",
     MAX_GAS_PER_TX: "30000000",
     ADVISORY_VOTE_RECORDER_ADDRESS: CONTRACT_ADDRESSES.AdvisoryVoteRecorder,
@@ -498,12 +509,8 @@ export async function readRoundPayoutArtifact(rewardPoolId: bigint, contentId: b
     args: [snapshotKey],
   });
   const artifactUri = proposal.artifactURI;
-  expect(artifactUri, "round payout proposal should carry an artifact URI").toMatch(
-    /^data:application\/json;base64,/,
-  );
-
-  const encoded = artifactUri.slice("data:application/json;base64,".length);
-  const artifact = JSON.parse(Buffer.from(encoded, "base64").toString("utf8"));
+  expect(artifactUri, "round payout proposal should carry an artifact URI").toBeTruthy();
+  const artifact = await readCorrelationArtifact(artifactUri);
   const snapshot = artifact.roundPayoutSnapshots?.find(
     (item: { rewardPoolId?: string; contentId?: string; roundId?: string }) =>
       item.rewardPoolId === rewardPoolId.toString() &&
@@ -512,4 +519,19 @@ export async function readRoundPayoutArtifact(rewardPoolId: bigint, contentId: b
   );
   expect(snapshot, "artifact should include the finalized round payout snapshot").toBeTruthy();
   return snapshot as CorrelationRoundPayoutArtifact;
+}
+
+async function readCorrelationArtifact(artifactUri: string): Promise<{
+  roundPayoutSnapshots?: Array<{ rewardPoolId?: string; contentId?: string; roundId?: string }>;
+}> {
+  if (artifactUri.startsWith("data:")) {
+    const encoded = artifactUri.slice(artifactUri.indexOf(",") + 1);
+    return JSON.parse(Buffer.from(encoded, "base64").toString("utf8"));
+  }
+
+  const response = await fetch(artifactUri, { headers: { accept: "application/json" } });
+  expect(response.ok, `artifact fetch failed for ${artifactUri}`).toBe(true);
+  return (await response.json()) as {
+    roundPayoutSnapshots?: Array<{ rewardPoolId?: string; contentId?: string; roundId?: string }>;
+  };
 }
