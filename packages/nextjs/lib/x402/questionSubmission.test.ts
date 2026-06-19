@@ -610,9 +610,12 @@ test("prepareAgentWalletQuestionSubmissionRequest plans LREP bounty wallet calls
   assert.equal(prepared.status, 202);
   assert.equal(body.payment.asset, "LREP");
   assert.equal(body.payment.tokenAddress, TEST_CONFIG.lrepAddress);
-  assert.equal(body.transactionPlan.calls[0]?.id, "approve-lrep");
-  assert.equal(body.transactionPlan.calls[0]?.phase, "approve_lrep");
-  assert.equal(body.transactionPlan.calls[0]?.to, TEST_CONFIG.lrepAddress);
+  assert.equal(body.transactionPlan.calls.length, 3);
+  assert.equal(body.transactionPlan.calls[0]?.id, "reserve-submission");
+  assert.equal(body.transactionPlan.calls[0]?.phase, "reserve_submission");
+  assert.equal(body.transactionPlan.calls[1]?.id, "approve-lrep");
+  assert.equal(body.transactionPlan.calls[1]?.phase, "approve_lrep");
+  assert.equal(body.transactionPlan.calls[1]?.to, TEST_CONFIG.lrepAddress);
 
   const submitCall = body.transactionPlan.calls.find(
     call => call.functionName === "submitQuestionWithRewardAndRoundConfig",

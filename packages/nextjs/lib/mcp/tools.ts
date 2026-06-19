@@ -808,8 +808,8 @@ function feedbackBonusAmount(feedbackBonus: X402FeedbackBonusRequest | null) {
   return feedbackBonus?.amount ?? 0n;
 }
 
-function feedbackBonusUsdcPaymentAmount(feedbackBonus: X402FeedbackBonusRequest | null) {
-  return feedbackBonus?.asset === "USDC" ? feedbackBonus.amount : 0n;
+function feedbackBonusPaymentCapAmount(feedbackBonus: X402FeedbackBonusRequest | null) {
+  return feedbackBonus?.amount ?? 0n;
 }
 
 function buildFeedbackBonusGuidance(feedbackBonus: X402FeedbackBonusRequest | null, payload: X402QuestionPayload) {
@@ -847,13 +847,15 @@ function applyFeedbackBonusPaymentFields(body: JsonObject, feedbackBonus: X402Fe
   const payment = body.payment as JsonObject;
   const bountyAmount = parseAtomicAmount(payment.bountyAmount ?? payment.amount, "payment.amount");
   const feedbackAmount = feedbackBonusAmount(feedbackBonus);
+  const paymentAsset = typeof payment.asset === "string" ? payment.asset.toUpperCase() : "USDC";
+  const sameAssetFeedbackAmount = feedbackBonus.asset === paymentAsset ? feedbackAmount : 0n;
   return {
     ...body,
     payment: {
       ...payment,
       feedbackBonusAmount: feedbackAmount.toString(),
       feedbackBonusAsset: feedbackBonus.asset,
-      totalAmount: (bountyAmount + (feedbackBonus.asset === "USDC" ? feedbackAmount : 0n)).toString(),
+      totalAmount: (bountyAmount + sameAssetFeedbackAmount).toString(),
     },
   };
 }
@@ -2658,7 +2660,10 @@ function formatQuoteResult(
   options: { feedbackBonus?: X402FeedbackBonusRequest | null; walletPolicyRequired?: boolean } = {},
 ) {
   const feedbackBonus = options.feedbackBonus ?? null;
-  const totalAmount = params.paymentAmount + feedbackBonusUsdcPaymentAmount(feedbackBonus);
+  const bountyAsset = payload.bounty.asset;
+  const sameAssetFeedbackBonusAmount = feedbackBonus?.asset === bountyAsset ? feedbackBonus.amount : 0n;
+  const totalAmount = params.paymentAmount + sameAssetFeedbackBonusAmount;
+  const tokenAddress = bountyAsset === "LREP" ? (config.lrepAddress ?? null) : config.usdcAddress;
   return {
     canSubmit: true,
     fastLane: buildAgentFastLaneGuidance({
@@ -2672,13 +2677,13 @@ function formatQuoteResult(
     operationKey: params.operation.operationKey,
     payment: {
       amount: totalAmount.toString(),
-      asset: "USDC",
+      asset: bountyAsset,
       bountyAmount: payload.bounty.amount.toString(),
       decimals: X402_USDC_DECIMALS,
       feedbackBonusAmount: feedbackBonusAmount(feedbackBonus).toString(),
       feedbackBonusAsset: feedbackBonus?.asset ?? null,
       spender: config.questionRewardPoolEscrowAddress,
-      tokenAddress: config.usdcAddress,
+      tokenAddress,
       totalAmount: totalAmount.toString(),
     },
     payloadHash: params.operation.payloadHash,
@@ -3300,7 +3305,7 @@ export async function callPublicRateLoopMcpTool(params: {
             ownerWalletAddress: walletAddress,
             payload: permissionlessPayload,
           });
-      const totalPaymentAmount = quote.paymentAmount + feedbackBonusUsdcPaymentAmount(feedbackBonus);
+      const totalPaymentAmount = quote.paymentAmount + feedbackBonusPaymentCapAmount(feedbackBonus);
       const maxPaymentAmount = parseMaxPaymentAmount(args.maxPaymentAmount);
       if (totalPaymentAmount > maxPaymentAmount) {
         throw new McpToolError("Quoted payment exceeds maxPaymentAmount.");
@@ -3609,7 +3614,7 @@ export async function callRateLoopMcpTool(params: {
         questionCount: payload.questions.length,
         roundConfig: payload.roundConfig,
       });
-      const totalPaymentAmount = quote.paymentAmount + feedbackBonusUsdcPaymentAmount(feedbackBonus);
+      const totalPaymentAmount = quote.paymentAmount + feedbackBonusPaymentCapAmount(feedbackBonus);
       const maxPaymentAmount = parseMaxPaymentAmount(args.maxPaymentAmount);
       if (totalPaymentAmount > maxPaymentAmount) {
         throw new McpToolError("Quoted payment exceeds maxPaymentAmount.");

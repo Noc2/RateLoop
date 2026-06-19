@@ -7,6 +7,7 @@ import {
   buildAskBodyWithUploadedHandoffImages,
   listAgentAskHandoffAssets,
   loadAgentAskHandoffByToken,
+  parseAgentAskHandoffPaymentMode,
   updateAgentAskHandoffAsset,
   updateAgentAskHandoffStatus,
 } from "~~/lib/agent/handoffs";
@@ -95,6 +96,14 @@ function readImageSignatures(value: unknown): ImageSignatureInput[] {
   });
 }
 
+function readPaymentAuthorization(value: unknown): JsonObject | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new AgentAskHandoffError("paymentAuthorization must be an object.");
+  }
+  return value as JsonObject;
+}
+
 function wait(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -107,6 +116,22 @@ function readResultString(result: JsonObject, field: string) {
 function readApprovedImageUrl(result: JsonObject) {
   const imageUrl = readResultString(result, "imageUrl");
   return readResultString(result, "status") === "approved" && imageUrl ? imageUrl : null;
+}
+
+function readTransactionPlanFromResult(result: JsonObject) {
+  const transactionPlan =
+    result.transactionPlan && typeof result.transactionPlan === "object" && !Array.isArray(result.transactionPlan)
+      ? (result.transactionPlan as JsonObject)
+      : null;
+  return {
+    calls: Array.isArray(transactionPlan?.calls) ? transactionPlan.calls : [],
+    transactionPlan,
+  };
+}
+
+function readX402AuthorizationRequest(result: JsonObject) {
+  const request = result.x402AuthorizationRequest;
+  return request && typeof request === "object" && !Array.isArray(request) ? (request as JsonObject) : null;
 }
 
 function throwForTerminalImageUploadStatus(result: JsonObject): never | null {
@@ -263,6 +288,7 @@ async function uploadSignedImages(params: {
 async function prepareAsk(params: {
   chainId: number;
   handoffId: string;
+  paymentAuthorization?: JsonObject;
   requestUrl: string;
   token: string;
   walletAddress: Address;
@@ -273,10 +299,12 @@ async function prepareAsk(params: {
     ...buildAskBodyWithUploadedHandoffImages({ assets, handoff }),
     chainId: params.chainId,
   };
+  const paymentMode = params.paymentAuthorization ? "x402_authorization" : handoff.paymentMode;
   const prepared = (await callPublicRateLoopMcpTool({
     arguments: {
       ...askBody,
-      paymentMode: "wallet_calls",
+      ...(params.paymentAuthorization ? { paymentAuthorization: params.paymentAuthorization } : {}),
+      paymentMode,
       walletAddress: params.walletAddress,
     },
     name: "rateloop_ask_humans",
@@ -284,26 +312,32 @@ async function prepareAsk(params: {
   })) as JsonObject;
   const operationKey = typeof prepared.operationKey === "string" ? prepared.operationKey : null;
   const payloadHash = typeof prepared.payloadHash === "string" ? prepared.payloadHash : null;
-  const transactionPlan =
-    prepared.transactionPlan && typeof prepared.transactionPlan === "object" && !Array.isArray(prepared.transactionPlan)
-      ? (prepared.transactionPlan as JsonObject)
-      : null;
-  const calls = Array.isArray(transactionPlan?.calls) ? transactionPlan.calls : [];
-  if (calls.length === 0) {
+  const { calls, transactionPlan } = readTransactionPlanFromResult(prepared);
+  const x402AuthorizationRequest = readX402AuthorizationRequest(prepared);
+  const preparedPaymentMode = parseAgentAskHandoffPaymentMode(prepared.paymentMode, paymentMode);
+  const prepareError =
+    preparedPaymentMode === "x402_authorization"
+      ? x402AuthorizationRequest || calls.length > 0
+        ? null
+        : "RateLoop ask did not return an EIP-3009 authorization request. Review the draft and try again."
+      : calls.length > 0
+        ? null
+        : "RateLoop ask did not return an executable transaction plan. Review the draft and try again.";
+  if (prepareError) {
     await updateAgentAskHandoffStatus({
       chainId: params.chainId,
+      error: prepareError,
       expectedDraftRevision: handoff.draftRevision,
       handoffId: params.handoffId,
       operationKey,
       payloadHash,
+      paymentMode: preparedPaymentMode,
       preparedDraftRevision: handoff.draftRevision,
       status: "failed",
       transactionPlan,
       walletAddress: params.walletAddress,
     });
-    throw new AgentAskHandoffError(
-      "RateLoop ask did not return an executable transaction plan. Review the draft and try again.",
-    );
+    throw new AgentAskHandoffError(prepareError);
   }
 
   await updateAgentAskHandoffStatus({
@@ -312,6 +346,7 @@ async function prepareAsk(params: {
     handoffId: params.handoffId,
     operationKey,
     payloadHash,
+    paymentMode: preparedPaymentMode,
     preparedDraftRevision: handoff.draftRevision,
     status: "prepared",
     transactionPlan,
@@ -324,7 +359,11 @@ async function prepareAsk(params: {
     ...buildAgentAskHandoffResponse({ assets: updatedAssets, handoff: updatedHandoff, includeImageData: true }),
     ask: prepared,
     confirmUrl: `/api/agent/handoffs/${encodeURIComponent(params.handoffId)}/complete`,
-    nextAction: "Execute transactionPlan.calls in the connected wallet, then confirm transaction hashes.",
+    nextAction:
+      x402AuthorizationRequest && calls.length === 0
+        ? "Sign the EIP-3009 USDC authorization in the connected wallet, then prepare the handoff again with paymentAuthorization."
+        : "Execute transactionPlan.calls in the connected wallet, then confirm transaction hashes.",
+    x402AuthorizationRequest,
   };
 }
 
@@ -340,6 +379,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ha
       const walletAddress = readWalletAddress((body as { walletAddress?: unknown }).walletAddress);
       const requestedChainId = readChainId((body as { chainId?: unknown }).chainId);
       const imageSignatures = readImageSignatures((body as { imageSignatures?: unknown }).imageSignatures);
+      const paymentAuthorization = readPaymentAuthorization(
+        (body as { paymentAuthorization?: unknown }).paymentAuthorization,
+      );
       const handoff = await loadAgentAskHandoffByToken({ handoffId, token });
       const chainId = resolvePrepareChainId(handoff, requestedChainId);
       assertHandoffCanPrepare(handoff);
@@ -395,7 +437,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ha
         });
       }
 
-      return prepareAsk({ chainId, handoffId, requestUrl: request.url, token, walletAddress });
+      return prepareAsk({ chainId, handoffId, paymentAuthorization, requestUrl: request.url, token, walletAddress });
     },
     rateLimit: AGENT_WRITE_RATE_LIMIT,
     request,

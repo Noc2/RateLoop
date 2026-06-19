@@ -336,6 +336,7 @@ function quoteOverrides() {
     resolveX402QuestionConfig: () =>
       ({
         feedbackBonusEscrowAddress: "0x0000000000000000000000000000000000000003",
+        lrepAddress: "0x0000000000000000000000000000000000000004",
         questionRewardPoolEscrowAddress: "0x0000000000000000000000000000000000000002",
         usdcAddress: "0x0000000000000000000000000000000000000001",
       }) as never,
@@ -1568,6 +1569,33 @@ test("managed quote and ask reject wallet overrides outside the scoped agent wal
       }),
     /does not match the scoped MCP agent wallet/i,
   );
+});
+
+test("rateloop_quote_question labels LREP bounty payment metadata", async () => {
+  __setMcpToolTestOverridesForTests({
+    getMcpAgentBudgetSummary: async () => managedBudgetSummary(),
+    ...quoteOverrides(),
+  });
+
+  const body = (await callRateLoopMcpTool({
+    agent: AGENT,
+    arguments: askArguments({
+      bounty: {
+        ...askArguments().bounty,
+        asset: "LREP",
+      },
+      maxPaymentAmount: "1000000",
+    }),
+    name: "rateloop_quote_question",
+  })) as {
+    payment: { amount: string; asset: string; bountyAmount: string; tokenAddress: string; totalAmount: string };
+  };
+
+  assert.equal(body.payment.asset, "LREP");
+  assert.equal(body.payment.amount, "1000000");
+  assert.equal(body.payment.bountyAmount, "1000000");
+  assert.equal(body.payment.totalAmount, "1000000");
+  assert.equal(body.payment.tokenAddress, "0x0000000000000000000000000000000000000004");
 });
 
 test("rateloop_ask_humans rejects bundle members outside the agent category allowlist", async () => {

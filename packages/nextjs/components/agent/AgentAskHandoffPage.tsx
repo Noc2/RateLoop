@@ -10,7 +10,7 @@ import {
 } from "@rateloop/node-utils/profileSelfReport";
 import { defineChain } from "thirdweb";
 import { type Address, type Hex, erc20Abi, isAddress } from "viem";
-import { useAccount, useConfig, useReadContract } from "wagmi";
+import { useAccount, useConfig, useReadContract, useSignTypedData } from "wagmi";
 import { getPublicClient } from "wagmi/actions";
 import {
   ArrowPathIcon,
@@ -42,6 +42,10 @@ import { useRateLoopSwitchNetwork } from "~~/hooks/useRateLoopSwitchNetwork";
 import { useTransactionStatusToast } from "~~/hooks/useTransactionStatusToast";
 import { useWalletMessageSigner } from "~~/hooks/useWalletMessageSigner";
 import { useWalletTransactionPlanExecutor } from "~~/hooks/useWalletTransactionPlanExecutor";
+import {
+  readBrowserSigningExpectedX402Amount,
+  validateBrowserX402AuthorizationRequest,
+} from "~~/lib/agent/browserSigningValidation";
 import { buildCleanHandoffLocationPath, readHandoffTokenFromLocation } from "~~/lib/agent/handoffLocation";
 import { createQuestionDetailsId, questionDetailsSha256Hex } from "~~/lib/attachments/browserQuestionDetails";
 import {
@@ -55,6 +59,7 @@ import {
   type SubmissionRewardAsset,
   formatFeedbackBonusAmount,
   formatSubmissionRewardAmount,
+  getConfiguredX402QuestionSubmitterAddress,
   getDefaultLrepAddress,
   getDefaultUsdcAddress,
   getDefaultUsdcDisplayName,
@@ -126,7 +131,7 @@ type Handoff = {
   operationKey: string | null;
   originalRequestBody?: JsonRecord;
   payloadHash: string | null;
-  paymentMode: "wallet_calls";
+  paymentMode: "wallet_calls" | "x402_authorization";
   preparedDraftRevision?: number | null;
   publicUrl?: string | null;
   requestBody?: JsonRecord;
@@ -135,6 +140,7 @@ type Handoff = {
   transactionPlan?: HandoffTransactionPlan | null;
   updatedAt?: string;
   walletAddress: string | null;
+  x402AuthorizationRequest?: JsonRecord | null;
 };
 
 type UploadChallenge = {
@@ -1436,7 +1442,7 @@ async function buildDraftRequestBody(
     asset: form.bountyAsset === "lrep" ? "LREP" : "USDC",
     requiredVoters: minVoters.toString(),
   };
-  let feedbackBonusUsdcAmount = 0n;
+  let feedbackBonusPaymentAmount = 0n;
   if (form.feedbackBonusAmount !== null) {
     const feedbackBonusAmount = parseFeedbackBonusAmount(form.feedbackBonusAmount);
     if (feedbackBonusAmount === null) {
@@ -1450,11 +1456,11 @@ async function buildDraftRequestBody(
       amount: feedbackBonusAmount.toString(),
       asset: feedbackBonusAsset === "lrep" ? "LREP" : "USDC",
     };
-    feedbackBonusUsdcAmount = feedbackBonusAsset === "usdc" ? feedbackBonusAmount : 0n;
+    feedbackBonusPaymentAmount = feedbackBonusAmount;
   } else {
     delete requestBody.feedbackBonus;
   }
-  requestBody.maxPaymentAmount = (bountyAmount + feedbackBonusUsdcAmount).toString();
+  requestBody.maxPaymentAmount = (bountyAmount + feedbackBonusPaymentAmount).toString();
   requestBody.roundConfig = {
     epochDuration: blindSeconds.toString(),
     maxDuration: maxDurationSeconds.toString(),
@@ -1639,6 +1645,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
   const { openWalletFunding } = useWalletFunding();
   const thirdwebTargetChain = useMemo(() => defineChain(targetNetwork), [targetNetwork]);
   const { signMessageAsync, isPending: isSigningMessage } = useWalletMessageSigner({ address });
+  const { signTypedDataAsync, isPending: isSigningTypedData } = useSignTypedData();
   const { freeTransactionRemaining, freeTransactionVerified, isMissingGasBalance, nativeTokenSymbol } =
     useGasBalanceStatus({
       includeExternalSendCalls: true,
@@ -1791,7 +1798,8 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     },
   });
   const needsChainSwitch = Boolean(handoffChainId && connectedChainId && connectedChainId !== handoffChainId);
-  const isBusy = isPreparing || isExecuting || isSigningMessage || isSavingDraft || switchingChainId !== null;
+  const isBusy =
+    isPreparing || isExecuting || isSigningMessage || isSigningTypedData || isSavingDraft || switchingChainId !== null;
   const isDraftEditable = Boolean(handoff && (handoff.status === "pending" || handoff.status === "failed"));
   const canEditDraft = Boolean(isDraftEditable && !isBusy);
   const canSaveDraft = Boolean(handoff && draftForm && isDraftEditable && hasUnsavedDraft && !isBusy);
@@ -1974,14 +1982,20 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
   }, [webMcpState]);
 
   const postPrepare = useCallback(
-    async (imageSignatures?: Array<{ assetId: string; challengeId: string; signature: Hex }>) => {
+    async (
+      options: {
+        imageSignatures?: Array<{ assetId: string; challengeId: string; signature: Hex }>;
+        paymentAuthorization?: JsonRecord;
+      } = {},
+    ) => {
       if (!address) throw new Error("Connect a wallet before preparing this ask.");
       if (!connectedChainId) throw new Error("Connect a supported network before preparing this ask.");
       const prepareChainId = handoff?.chainId ?? connectedChainId;
       const response = await fetch(`/api/agent/handoffs/${handoffId}/prepare`, {
         body: JSON.stringify({
           chainId: prepareChainId,
-          imageSignatures,
+          imageSignatures: options.imageSignatures,
+          paymentAuthorization: options.paymentAuthorization,
           token,
           walletAddress: address,
         }),
@@ -2395,7 +2409,45 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
               current.map(step => (step.assetId === challenge.assetId ? { ...step, status: "signed" } : step)),
             );
           }
-          prepared = await postPrepare(imageSignatures);
+          prepared = await postPrepare({ imageSignatures });
+        }
+
+        const authorizationRequest = prepared.x402AuthorizationRequest;
+        const calls = prepared.transactionPlan?.calls ?? [];
+        if (authorizationRequest && calls.length === 0) {
+          const expectedChainId = prepared.chainId ?? handoff?.chainId ?? connectedChainId;
+          if (!expectedChainId) {
+            throw new Error("Handoff is missing a chainId.");
+          }
+          const expectedUsdcAddress = getDefaultUsdcAddress(expectedChainId);
+          if (!expectedUsdcAddress) {
+            throw new Error("Cannot validate x402 authorization without a configured USDC token.");
+          }
+          const expectedSubmitterAddress = getConfiguredX402QuestionSubmitterAddress(expectedChainId);
+          if (!expectedSubmitterAddress) {
+            throw new Error("Cannot validate x402 authorization without a configured RateLoop x402 submitter.");
+          }
+          const requestBody = prepared.requestBody ?? handoff?.requestBody ?? null;
+          const { authorization, typedData } = validateBrowserX402AuthorizationRequest({
+            expectedAmount: readBrowserSigningExpectedX402Amount(requestBody),
+            expectedChainId,
+            expectedSubmitterAddress,
+            expectedUsdcAddress,
+            expectedWalletAddress: address,
+            request: authorizationRequest,
+          });
+          const signature = await signTypedDataAsync({
+            domain: typedData.domain,
+            message: typedData.message,
+            primaryType: typedData.primaryType,
+            types: typedData.types,
+          });
+          prepared = await postPrepare({
+            paymentAuthorization: {
+              ...authorization,
+              signature,
+            },
+          });
         }
 
         setHandoff(prepared);
@@ -2415,9 +2467,12 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
       connectedMismatch,
       dismissTransactionStatusToast,
       hasUnsavedDraft,
+      handoff?.chainId,
+      handoff?.requestBody,
       postPrepare,
       showTransactionSubmittingToast,
       signMessageAsync,
+      signTypedDataAsync,
     ],
   );
 
@@ -2610,7 +2665,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
   const submitLabel = (() => {
     if (isSavingDraft) return "Saving...";
     if (switchingChainId !== null) return "Switching...";
-    if (isPreparing || isSigningMessage) return "Preparing...";
+    if (isPreparing || isSigningMessage || isSigningTypedData) return "Preparing...";
     if (isFeedbackBonusStep) return isExecuting ? "Funding..." : "Fund Bonus";
     return isExecuting ? "Submitting..." : "Submit";
   })();

@@ -338,6 +338,7 @@ function installQuoteOverrides() {
     }),
     resolveX402QuestionConfig: () =>
       ({
+        feedbackBonusEscrowAddress: "0x0000000000000000000000000000000000000003",
         questionRewardPoolEscrowAddress: "0x0000000000000000000000000000000000000002",
         usdcAddress: "0x0000000000000000000000000000000000000001",
       }) as never,
@@ -496,6 +497,7 @@ function installAskOverrides(overrides: McpToolTestOverrides = {}) {
       }) as never,
     resolveX402QuestionConfig: () =>
       ({
+        feedbackBonusEscrowAddress: "0x0000000000000000000000000000000000000003",
         questionRewardPoolEscrowAddress: "0x0000000000000000000000000000000000000002",
         usdcAddress: "0x0000000000000000000000000000000000000001",
       }) as never,
@@ -1515,6 +1517,7 @@ test("agent ask handoff route uploads signed generated images before preparing a
   const handoffRequest = {
     ...handoffQuestionPayload("agent-handoff-upload-image"),
     maxPaymentAmount: "1500000",
+    paymentMode: "wallet_calls",
     question: {
       categoryId: "5",
       description: "Would this make you want to learn more?",
@@ -1744,6 +1747,7 @@ test("agent ask handoff route prepares and completes no-image wallet-call asks",
       request: {
         ...handoffQuestionPayload("agent-handoff-no-image"),
         maxPaymentAmount: "1500000",
+        paymentMode: "wallet_calls",
       },
       ttlMs: 300000,
     }),
@@ -1785,6 +1789,153 @@ test("agent ask handoff route prepares and completes no-image wallet-call asks",
   assert.equal(completeResponse.status, 200);
   assert.equal(completeBody.status, "submitted");
   assert.deepEqual(completeBody.transactionHashes, [`0x${"4".repeat(64)}`]);
+});
+
+test("agent ask handoff route defaults eligible USDC asks to EIP-3009 authorization", async () => {
+  let prepareCalls = 0;
+  let forwardedAuthorization: unknown;
+  installAskOverrides({
+    preparePermissionlessNativeX402QuestionSubmissionRequest: async params => {
+      prepareCalls += 1;
+      forwardedAuthorization = params.paymentAuthorization;
+      const paymentAmount = (
+        params.payload.bounty.amount + (params.feedbackBonus?.asset === "USDC" ? params.feedbackBonus.amount : 0n)
+      ).toString();
+      const payment = {
+        amount: paymentAmount,
+        asset: "USDC",
+        bountyAmount: params.payload.bounty.amount.toString(),
+        decimals: 6,
+        spender: "0x0000000000000000000000000000000000000002",
+        tokenAddress: "0x0000000000000000000000000000000000000001",
+      };
+      if (!params.paymentAuthorization) {
+        return {
+          body: {
+            chainId: params.payload.chainId,
+            clientRequestId: params.payload.clientRequestId,
+            operationKey: OPERATION_KEY,
+            payment,
+            paymentMode: "x402_authorization",
+            paymentScheme: "eip3009_usdc_authorization",
+            status: "awaiting_wallet_signature",
+            transactionPlan: null,
+            wallet: { address: params.walletAddress, fundingMode: "x402_authorization" },
+            x402AuthorizationRequest: {
+              authorization: {
+                from: params.walletAddress,
+                nonce: `0x${"3".repeat(64)}`,
+                to: "0x0000000000000000000000000000000000000002",
+                validAfter: "0",
+                validBefore: "1762000000",
+                value: paymentAmount,
+              },
+              typedData: { primaryType: "ReceiveWithAuthorization" },
+            },
+          },
+          status: 202,
+        };
+      }
+      return {
+        body: {
+          chainId: params.payload.chainId,
+          clientRequestId: params.payload.clientRequestId,
+          operationKey: OPERATION_KEY,
+          payment,
+          paymentMode: "x402_authorization",
+          paymentScheme: "eip3009_usdc_authorization",
+          status: "awaiting_wallet_signature",
+          transactionPlan: {
+            calls: [
+              {
+                functionName: "submitQuestionWithX402OneShotPayment",
+                id: "submit-x402-one-shot-question",
+                to: "0x0000000000000000000000000000000000000002",
+              },
+            ],
+            requiresOrderedExecution: true,
+          },
+          wallet: { address: params.walletAddress, fundingMode: "x402_authorization" },
+        },
+        status: 202,
+      };
+    },
+  });
+
+  const createResponse = await handoffsRoute.POST(
+    makePublicPost("https://rateloop.ai/api/agent/handoffs", {
+      request: {
+        ...handoffQuestionPayload("agent-handoff-x402-default"),
+        feedbackBonus: {
+          amount: "2000000",
+          asset: "USDC",
+        },
+        maxPaymentAmount: "3000000",
+      },
+      ttlMs: 300000,
+    }),
+  );
+  const createBody = (await createResponse.json()) as Record<string, unknown>;
+  const handoffId = String(createBody.handoffId);
+  const token = new URLSearchParams(new URL(String(createBody.handoffUrl)).hash.replace(/^#/, "")).get("token");
+
+  assert.equal(createResponse.status, 200, JSON.stringify(createBody));
+  assert.equal(createBody.paymentMode, "x402_authorization");
+  assert.ok(token);
+
+  const prepareResponse = await handoffPrepareRoute.POST(
+    makePublicPost(`https://rateloop.ai/api/agent/handoffs/${handoffId}/prepare`, {
+      chainId: HANDOFF_CHAIN_ID,
+      token,
+      walletAddress: "0x00000000000000000000000000000000000000aa",
+    }),
+    { params: Promise.resolve({ handoffId }) },
+  );
+  const prepareBody = (await prepareResponse.json()) as Record<string, unknown>;
+  const authorizationRequest = prepareBody.x402AuthorizationRequest as { authorization: { value: string } };
+
+  assert.equal(prepareResponse.status, 200, JSON.stringify(prepareBody));
+  assert.equal(prepareBody.status, "prepared");
+  assert.equal(prepareBody.paymentMode, "x402_authorization");
+  assert.equal(prepareBody.transactionPlan, null);
+  assert.equal(authorizationRequest.authorization.value, "3000000");
+
+  const statusResponse = await handoffRoute.GET(
+    makePublicGet(`https://rateloop.ai/api/agent/handoffs/${handoffId}`, {
+      "x-rateloop-handoff-token": token,
+    }),
+    { params: Promise.resolve({ handoffId }) },
+  );
+  const statusBody = (await statusResponse.json()) as Record<string, unknown>;
+  assert.equal(statusResponse.status, 200);
+  assert.match(String(statusBody.nextAction), /sign the EIP-3009 USDC authorization/);
+
+  const paymentAuthorization = {
+    from: "0x00000000000000000000000000000000000000aa",
+    nonce: `0x${"3".repeat(64)}`,
+    signature: `0x${"4".repeat(130)}`,
+    to: "0x0000000000000000000000000000000000000002",
+    validAfter: "0",
+    validBefore: "1762000000",
+    value: "3000000",
+  };
+  const signedPrepareResponse = await handoffPrepareRoute.POST(
+    makePublicPost(`https://rateloop.ai/api/agent/handoffs/${handoffId}/prepare`, {
+      chainId: HANDOFF_CHAIN_ID,
+      paymentAuthorization,
+      token,
+      walletAddress: "0x00000000000000000000000000000000000000aa",
+    }),
+    { params: Promise.resolve({ handoffId }) },
+  );
+  const signedPrepareBody = (await signedPrepareResponse.json()) as Record<string, unknown>;
+  const transactionPlan = signedPrepareBody.transactionPlan as { calls: Array<Record<string, unknown>> };
+
+  assert.equal(signedPrepareResponse.status, 200, JSON.stringify(signedPrepareBody));
+  assert.equal(prepareCalls, 2);
+  assert.deepEqual(forwardedAuthorization, paymentAuthorization);
+  assert.equal(transactionPlan.calls.length, 1);
+  assert.equal(transactionPlan.calls[0]?.functionName, "submitQuestionWithX402OneShotPayment");
 });
 
 test("agent ask handoff route rejects prepare requests on the wrong chain", async () => {
@@ -1841,6 +1992,7 @@ test("agent ask handoff route rejects prepare requests on the wrong chain", asyn
 
 test("agent ask handoff route saves edited drafts before prepare", async () => {
   let preparedPayload: unknown = null;
+  let preparedFeedbackBonus: unknown = null;
   installAskOverrides({
     preflightX402QuestionSubmission: async params => ({
       operation: {
@@ -1854,6 +2006,7 @@ test("agent ask handoff route saves edited drafts before prepare", async () => {
     }),
     preparePermissionlessWalletQuestionSubmissionRequest: async params => {
       preparedPayload = params.payload;
+      preparedFeedbackBonus = params.feedbackBonus;
       return {
         body: {
           chainId: params.payload.chainId,
@@ -1861,15 +2014,26 @@ test("agent ask handoff route saves edited drafts before prepare", async () => {
           operationKey: OPERATION_KEY,
           payment: {
             amount: params.payload.bounty.amount.toString(),
-            asset: "USDC",
+            asset: params.payload.bounty.asset,
             bountyAmount: params.payload.bounty.amount.toString(),
             decimals: 6,
             spender: "0x0000000000000000000000000000000000000002",
-            tokenAddress: "0x0000000000000000000000000000000000000001",
+            tokenAddress:
+              params.payload.bounty.asset === "LREP"
+                ? "0x0000000000000000000000000000000000000003"
+                : "0x0000000000000000000000000000000000000001",
           },
           status: "awaiting_wallet_signature",
           transactionPlan: {
-            calls: [{ id: "approve-usdc", to: "0x0000000000000000000000000000000000000001" }],
+            calls: [
+              {
+                id: params.payload.bounty.asset === "LREP" ? "approve-lrep" : "approve-usdc",
+                to:
+                  params.payload.bounty.asset === "LREP"
+                    ? "0x0000000000000000000000000000000000000003"
+                    : "0x0000000000000000000000000000000000000001",
+              },
+            ],
             requiresOrderedExecution: true,
           },
           wallet: { address: params.walletAddress, fundingMode: "permissionless_wallet" },
@@ -1882,15 +2046,21 @@ test("agent ask handoff route saves edited drafts before prepare", async () => {
   const originalRequest = {
     ...handoffQuestionPayload("agent-handoff-editable"),
     maxPaymentAmount: "1000000",
+    paymentMode: "wallet_calls",
   };
   const editedRequest = {
     ...originalRequest,
     bounty: {
       ...originalRequest.bounty,
       amount: "2500000",
+      asset: "LREP",
       requiredVoters: "4",
     },
-    maxPaymentAmount: "2500000",
+    feedbackBonus: {
+      amount: "2000000",
+      asset: "USDC",
+    },
+    maxPaymentAmount: "4500000",
     question: {
       ...originalRequest.question,
       description: "Edited after the agent handoff.",
@@ -1940,7 +2110,10 @@ test("agent ask handoff route saves edited drafts before prepare", async () => {
   assert.equal(patchBody.status, "pending");
   assert.equal(patchBody.draftRevision, 1);
   assert.equal(patchBody.editedByUser, true);
-  assert.equal(patchRequestBody.maxPaymentAmount, "2500000");
+  assert.equal(patchRequestBody.maxPaymentAmount, "4500000");
+  assert.equal((patchRequestBody.bounty as Record<string, unknown>).asset, "LREP");
+  assert.equal((patchRequestBody.feedbackBonus as Record<string, unknown>).amount, "2000000");
+  assert.equal((patchRequestBody.feedbackBonus as Record<string, unknown>).asset, "USDC");
   assert.equal(patchQuestion.title, "Edited pitch interest");
   assert.equal(patchOriginalQuestion.title, "Pitch interest");
 
@@ -1954,10 +2127,11 @@ test("agent ask handoff route saves edited drafts before prepare", async () => {
   );
   const prepareBody = (await prepareResponse.json()) as Record<string, unknown>;
   const payload = preparedPayload as {
-    bounty: { amount: bigint; requiredVoters: bigint };
+    bounty: { amount: bigint; asset: "LREP" | "USDC"; requiredVoters: bigint };
     questions: Array<{ detailsHash: string; detailsUrl: string; tagList: string[]; title: string }>;
     roundConfig: { epochDuration: bigint; maxDuration: bigint; maxVoters: bigint; minVoters: bigint };
   };
+  const feedbackBonus = preparedFeedbackBonus as { amount: bigint; asset: "LREP" | "USDC" };
 
   assert.equal(prepareResponse.status, 200);
   assert.equal(prepareBody.status, "prepared");
@@ -1968,7 +2142,10 @@ test("agent ask handoff route saves edited drafts before prepare", async () => {
   assert.equal(payload.questions[0]?.detailsHash, `0x${"a".repeat(64)}`);
   assert.deepEqual(payload.questions[0]?.tagList, ["agents", "running"]);
   assert.equal(payload.bounty.amount, 2_500_000n);
+  assert.equal(payload.bounty.asset, "LREP");
   assert.equal(payload.bounty.requiredVoters, 4n);
+  assert.equal(feedbackBonus.amount, 2_000_000n);
+  assert.equal(feedbackBonus.asset, "USDC");
   assert.equal(payload.roundConfig.epochDuration, 600n);
   assert.equal(payload.roundConfig.maxDuration, 7200n);
   assert.equal(payload.roundConfig.minVoters, 4n);
@@ -1981,6 +2158,7 @@ test("agent ask handoff route blocks draft edits after prepare", async () => {
   const originalRequest = {
     ...handoffQuestionPayload("agent-handoff-edit-blocked"),
     maxPaymentAmount: "1500000",
+    paymentMode: "wallet_calls",
   };
   const createResponse = await handoffsRoute.POST(
     makePublicPost("https://rateloop.ai/api/agent/handoffs", {
@@ -2128,6 +2306,7 @@ test("agent ask handoff route funds feedback bonus after submitting the ask", as
           asset: "USDC",
         },
         maxPaymentAmount: "3000000",
+        paymentMode: "wallet_calls",
       },
       ttlMs: 300000,
     }),

@@ -15,6 +15,8 @@ import { X402QuestionConfigError, resolveX402QuestionConfig } from "~~/lib/x402/
 
 type JsonObject = Record<string, unknown>;
 
+export type AgentAskHandoffPaymentMode = "wallet_calls" | "x402_authorization";
+
 export type AgentAskHandoffStatus =
   | "pending"
   | "awaiting_image_signatures"
@@ -38,7 +40,7 @@ export type AgentAskHandoffRecord = {
   operationKey: `0x${string}` | null;
   originalRequestBody: JsonObject;
   payloadHash: string | null;
-  paymentMode: "wallet_calls";
+  paymentMode: AgentAskHandoffPaymentMode;
   preparedDraftRevision: number | null;
   requestBody: JsonObject;
   status: AgentAskHandoffStatus;
@@ -217,6 +219,58 @@ function readOptionalString(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function readOptionalUppercaseString(value: unknown) {
+  return readOptionalString(value).toUpperCase();
+}
+
+export function parseAgentAskHandoffPaymentMode(
+  value: unknown,
+  defaultMode: AgentAskHandoffPaymentMode = "wallet_calls",
+): AgentAskHandoffPaymentMode {
+  const paymentMode = readOptionalString(value);
+  if (!paymentMode) return defaultMode;
+  if (paymentMode === "wallet_calls" || paymentMode === "agent_wallet") return "wallet_calls";
+  if (
+    paymentMode === "eip3009_usdc_authorization" ||
+    paymentMode === "eip3009_authorization" ||
+    paymentMode === "x402_authorization" ||
+    paymentMode === "native_x402" ||
+    paymentMode === "x402"
+  ) {
+    return "x402_authorization";
+  }
+  throw new AgentAskHandoffError(
+    "paymentMode must be wallet_calls, eip3009_usdc_authorization, or x402_authorization.",
+  );
+}
+
+function feedbackBonusForcesWalletCalls(requestBody: JsonObject) {
+  const feedbackBonus = requestBody.feedbackBonus;
+  if (!feedbackBonus || typeof feedbackBonus !== "object" || Array.isArray(feedbackBonus)) return false;
+  return readOptionalUppercaseString((feedbackBonus as JsonObject).asset) === "LREP";
+}
+
+function defaultAgentAskHandoffPaymentMode(params: {
+  parsed: ReturnType<typeof parseX402QuestionRequest>;
+  requestBody: JsonObject;
+}): AgentAskHandoffPaymentMode {
+  return params.parsed.bounty.asset === "USDC" &&
+    params.parsed.questions.length === 1 &&
+    !feedbackBonusForcesWalletCalls(params.requestBody)
+    ? "x402_authorization"
+    : "wallet_calls";
+}
+
+function resolveAgentAskHandoffPaymentMode(params: {
+  parsed: ReturnType<typeof parseX402QuestionRequest>;
+  requestBody: JsonObject;
+}) {
+  return parseAgentAskHandoffPaymentMode(
+    params.requestBody.paymentMode ?? params.requestBody.fundingMode,
+    defaultAgentAskHandoffPaymentMode(params),
+  );
+}
+
 function readRequiredString(value: unknown, fieldName: string) {
   const stringValue = readOptionalString(value);
   if (!stringValue) {
@@ -299,7 +353,7 @@ function rowToHandoff(row: Record<string, unknown> | undefined): AgentAskHandoff
     operationKey: typeof row.operation_key === "string" ? (row.operation_key as `0x${string}`) : null,
     originalRequestBody: parseStoredJson(String(row.original_request_body ?? row.request_body)),
     payloadHash: typeof row.payload_hash === "string" ? row.payload_hash : null,
-    paymentMode: "wallet_calls",
+    paymentMode: parseAgentAskHandoffPaymentMode(row.payment_mode),
     preparedDraftRevision:
       row.prepared_draft_revision === null || row.prepared_draft_revision === undefined
         ? null
@@ -581,13 +635,6 @@ function stripHandoffOnlyValidationFields(requestBody: JsonObject) {
   return cloned;
 }
 
-function assertWalletCallsPaymentMode(requestBody: JsonObject) {
-  const paymentMode = readOptionalString(requestBody.paymentMode ?? requestBody.fundingMode) || "wallet_calls";
-  if (paymentMode !== "wallet_calls") {
-    throw new AgentAskHandoffError("Browser handoff links currently support paymentMode=wallet_calls.");
-  }
-}
-
 function assertHandoffChainSubmitReady(chainId: number) {
   try {
     resolveX402QuestionConfig(chainId);
@@ -617,19 +664,20 @@ export function normalizeAgentAskHandoffRequestBody(params: {
   validationImageUrls?: string[];
 }) {
   const requestBody = asJsonObject(params.requestBody, params.fieldName ?? "Handoff request body");
-  assertWalletCallsPaymentMode(requestBody);
 
   const validationBody = stripHandoffOnlyValidationFields(
     cloneWithImageUrls(requestBody, params.validationImageUrls ?? []),
   );
   const parsed = parseX402QuestionRequest(validationBody);
   assertHandoffChainSubmitReady(parsed.chainId);
+  const paymentMode = resolveAgentAskHandoffPaymentMode({ parsed, requestBody });
   const walletAddress = readOptionalAddress(
     requestBody.walletAddress ?? requestBody.agentWalletAddress,
     "walletAddress",
   );
 
   return {
+    paymentMode,
     parsed,
     requestBody,
     walletAddress,
@@ -721,6 +769,9 @@ export function buildAgentAskHandoffResponse(params: {
     if (params.handoff.status === "submitted") {
       return "Use resultTool or the public result URL to inspect the submitted ask.";
     }
+    if (params.handoff.status === "prepared" && !params.handoff.transactionPlan) {
+      return "Open the handoff page and continue preparation to sign the EIP-3009 USDC authorization.";
+    }
     if (params.handoff.status === "prepared" || params.handoff.status === "feedback_bonus_prepared") {
       return "Execute the returned transactionPlan.calls in the connected wallet, then confirm the transaction hashes.";
     }
@@ -780,7 +831,6 @@ export async function createAgentAskHandoff(params: {
   ttlMs?: number;
 }) {
   const requestBody = asJsonObject(params.requestBody, "Handoff request body");
-  assertWalletCallsPaymentMode(requestBody);
 
   const generatedImages = readGeneratedImages(params.generatedImages);
   const generatedImageUploads = readGeneratedImageUploads(params.generatedImageUploads);
@@ -851,7 +901,7 @@ export async function createAgentAskHandoff(params: {
       "pending",
       normalized.parsed.chainId,
       normalized.parsed.clientRequestId,
-      "wallet_calls",
+      normalized.paymentMode,
       normalized.walletAddress,
       JSON.stringify(requestBody),
       JSON.stringify(requestBody),
@@ -997,6 +1047,7 @@ export async function updateAgentAskHandoffStatus(params: {
   handoffId: string;
   operationKey?: string | null;
   payloadHash?: string | null;
+  paymentMode?: AgentAskHandoffPaymentMode;
   preparedDraftRevision?: number | null;
   status: AgentAskHandoffStatus;
   transactionHashes?: Hex[];
@@ -1012,6 +1063,7 @@ export async function updateAgentAskHandoffStatus(params: {
       SET status = ?,
           chain_id = COALESCE(?, chain_id),
           wallet_address = COALESCE(?, wallet_address),
+          payment_mode = COALESCE(?, payment_mode),
           operation_key = COALESCE(?, operation_key),
           payload_hash = COALESCE(?, payload_hash),
           prepared_draft_revision = COALESCE(?, prepared_draft_revision),
@@ -1028,6 +1080,7 @@ export async function updateAgentAskHandoffStatus(params: {
       params.status,
       params.chainId ?? null,
       params.walletAddress ?? null,
+      params.paymentMode ?? null,
       params.operationKey ?? null,
       params.payloadHash ?? null,
       params.preparedDraftRevision ?? null,
@@ -1083,6 +1136,7 @@ export async function updateAgentAskHandoffDraft(params: {
       SET status = 'pending',
           chain_id = ?,
           client_request_id = ?,
+          payment_mode = ?,
           wallet_address = ?,
           request_body = ?,
           draft_revision = draft_revision + 1,
@@ -1100,6 +1154,7 @@ export async function updateAgentAskHandoffDraft(params: {
     args: [
       normalized.parsed.chainId,
       normalized.parsed.clientRequestId,
+      normalized.paymentMode,
       normalized.walletAddress,
       JSON.stringify(normalized.requestBody),
       now,

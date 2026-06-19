@@ -1762,19 +1762,6 @@ async function buildAgentWalletQuestionSubmissionPlan(params: {
     calls: [
       {
         data: encodeFunctionData({
-          abi: erc20Abi,
-          functionName: "approve",
-          args: [params.config.questionRewardPoolEscrowAddress, params.payload.bounty.amount],
-        }),
-        description: `Approve protocol escrow to pull the exact ${rewardAssetLabel} bounty amount`,
-        functionName: "approve",
-        id: `approve-${rewardAssetLabel.toLowerCase()}`,
-        phase: rewardAssetLabel === "LREP" ? "approve_lrep" : "approve_usdc",
-        to: rewardTokenAddress,
-        value: "0",
-      },
-      {
-        data: encodeFunctionData({
           abi: ContentRegistryAbi,
           functionName: "reserveSubmission",
           args: [context.revealCommitment],
@@ -1786,6 +1773,19 @@ async function buildAgentWalletQuestionSubmissionPlan(params: {
         to: params.config.contentRegistryAddress,
         value: "0",
         waitAfterMs: RESERVED_SUBMISSION_WAIT_MS,
+      },
+      {
+        data: encodeFunctionData({
+          abi: erc20Abi,
+          functionName: "approve",
+          args: [params.config.questionRewardPoolEscrowAddress, params.payload.bounty.amount],
+        }),
+        description: `Approve protocol escrow to pull the exact ${rewardAssetLabel} bounty amount`,
+        functionName: "approve",
+        id: `approve-${rewardAssetLabel.toLowerCase()}`,
+        phase: rewardAssetLabel === "LREP" ? "approve_lrep" : "approve_usdc",
+        to: rewardTokenAddress,
+        value: "0",
       },
       {
         data: encodeFunctionData({

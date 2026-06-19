@@ -6,7 +6,7 @@ const profileSelfReportTaxonomy = getProfileSelfReportTaxonomy();
 const targetAudienceTaxonomy = profileSelfReportTaxonomy.targetAudience;
 
 const atomicAmountSchema = {
-  description: "Atomic USDC amount as a base-10 integer string.",
+  description: "Atomic token amount as a base-10 integer string.",
   pattern: "^\\d+$",
   type: "string",
 };
@@ -552,14 +552,16 @@ export const agentCreateAskHandoffInputSchema = {
       type: "array",
     },
     maxPaymentAmount: {
-      description: "Maximum total bounty spend in atomic USDC.",
+      description:
+        "Maximum total payment spend in atomic units for the selected funding mode. Native x402 payments are USDC-only; wallet-call bounties may use LREP or USDC.",
       pattern: "^\\d+$",
       type: "string",
     },
     paymentMode: {
-      default: "wallet_calls",
-      description: "Browser handoff links currently support wallet_calls.",
-      enum: ["wallet_calls"],
+      default: "eip3009_usdc_authorization",
+      description:
+        "Browser handoffs auto-prefer EIP-3009 USDC authorization for eligible single-question USDC asks so the user signs a USDC authorization and submits one transaction. Use wallet_calls for LREP bounties, LREP Feedback Bonuses, or bundled asks.",
+      enum: ["wallet_calls", "eip3009_usdc_authorization", "x402_authorization"],
       type: "string",
     },
     request: {
@@ -623,6 +625,7 @@ export const agentAskHandoffOutputSchema = {
     id: { type: "string" },
     nextAction: { type: "string" },
     operationKey: { type: ["string", "null"] },
+    paymentMode: { enum: ["wallet_calls", "x402_authorization"], type: "string" },
     originalRequestBody: {
       additionalProperties: true,
       description: "The immutable ask request originally created by the agent.",
@@ -643,6 +646,7 @@ export const agentAskHandoffOutputSchema = {
     transactionPlan: { type: ["object", "null"] },
     updatedAt: { type: "string" },
     walletAddress: { type: ["string", "null"] },
+    x402AuthorizationRequest: { type: ["object", "null"] },
   },
   required: ["status"],
   type: "object",
@@ -669,7 +673,8 @@ export const agentAskHumansInputSchema = {
   properties: {
     ...agentAskInputBaseProperties,
     maxPaymentAmount: {
-      description: "Maximum total bounty spend in atomic USDC.",
+      description:
+        "Maximum total payment spend in atomic units for the selected funding mode. Native x402 payments are USDC-only; wallet-call bounties may use LREP or USDC.",
       pattern: "^\\d+$",
       type: "string",
     },
