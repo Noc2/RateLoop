@@ -39,6 +39,19 @@ test("QuestionDescription prefers custom labels and fetched question titles", ()
   assert.doesNotMatch(html, /Fallback title/);
 });
 
+test("QuestionDescription can render a shorter preview before expansion", () => {
+  const html = renderToStaticMarkup(
+    <QuestionDescription
+      description="One two three four five six seven eight nine ten eleven twelve"
+      previewWordLimit={5}
+    />,
+  ).replace(/\s+/g, " ");
+
+  assert.match(html, /One two three four five\.\.\./);
+  assert.doesNotMatch(html, /six seven/);
+  assert.match(html, /Show More/);
+});
+
 test("readQuestionDetailsResponseText rejects oversized details by content length", async () => {
   const response = new Response("small", {
     headers: {

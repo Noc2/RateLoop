@@ -37,6 +37,7 @@ const ShareContentModal = dynamic(
 );
 const LAPTOP_VOTE_CARD_MEDIA_QUERY = "(min-width: 1024px) and (max-width: 1535px)";
 const MOBILE_VOTE_CARD_MEDIA_QUERY = "(max-width: 767px)";
+const MOBILE_DESCRIPTION_PREVIEW_WORDS = 18;
 const CONTENT_INTENT_INTERACTIVE_SELECTOR =
   "a[href],button,input,select,textarea,summary,iframe,[role='button'],[role='link']";
 
@@ -529,12 +530,14 @@ function UnlockedContentMediaCarousel({
 function GatedQuestionDescription({
   className,
   description,
+  isMobileViewport,
   item,
   referencedContentById,
   walletAddress,
 }: {
   className?: string;
   description: string;
+  isMobileViewport?: boolean;
   item: ContentItem;
   referencedContentById?: ReadonlyMap<string, QuestionReferenceContentSummary>;
   walletAddress?: string;
@@ -560,6 +563,7 @@ function GatedQuestionDescription({
           : item.detailsUrl
       }
       referencedContentById={referencedContentById}
+      previewWordLimit={isMobileViewport ? MOBILE_DESCRIPTION_PREVIEW_WORDS : undefined}
       className={className}
     />
   );
@@ -647,6 +651,7 @@ function FeedContentMetaCard({
   const questionDescription = (walletAddress?: string) => (
     <GatedQuestionDescription
       description={description}
+      isMobileViewport={isMobileViewport}
       item={item}
       referencedContentById={referencedContentById}
       className="text-base leading-relaxed text-base-content/85"

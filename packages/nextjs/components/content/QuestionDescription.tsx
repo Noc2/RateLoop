@@ -18,6 +18,7 @@ type QuestionDescriptionProps = {
   detailsHash?: string | null;
   detailsUrl?: string | null;
   referencedContentById?: ReadonlyMap<string, QuestionReferenceContentSummary>;
+  previewWordLimit?: number;
   className?: string;
 };
 
@@ -25,11 +26,14 @@ const DETAILS_FETCH_TIMEOUT_MS = 10_000;
 const DESCRIPTION_PREVIEW_WORDS = 32;
 
 function getDescriptionPreviewText(value: string, wordLimit = DESCRIPTION_PREVIEW_WORDS) {
+  const normalizedWordLimit = Number.isFinite(wordLimit)
+    ? Math.max(1, Math.floor(wordLimit))
+    : DESCRIPTION_PREVIEW_WORDS;
   const words = value.trim().split(/\s+/).filter(Boolean);
-  if (words.length <= wordLimit) {
+  if (words.length <= normalizedWordLimit) {
     return words.join(" ");
   }
-  return `${words.slice(0, wordLimit).join(" ")}...`;
+  return `${words.slice(0, normalizedWordLimit).join(" ")}...`;
 }
 
 function getReferenceLabel(
@@ -116,6 +120,7 @@ export function QuestionDescription({
   detailsHash,
   detailsUrl,
   referencedContentById,
+  previewWordLimit,
   className,
 }: QuestionDescriptionProps) {
   const [detailsText, setDetailsText] = React.useState<string | null>(null);
@@ -124,7 +129,7 @@ export function QuestionDescription({
   const [isExpanded, setIsExpanded] = React.useState(false);
   const hasDetails = Boolean(detailsUrl);
   const baseText = detailsText ?? description.trim();
-  const previewText = getDescriptionPreviewText(baseText);
+  const previewText = getDescriptionPreviewText(baseText, previewWordLimit);
   const displayText = isExpanded ? baseText : previewText;
   const parsed = parseQuestionReferences(displayText);
   const canExpand = Boolean(baseText && (isExpanded || baseText !== previewText || (hasDetails && !detailsText)));
