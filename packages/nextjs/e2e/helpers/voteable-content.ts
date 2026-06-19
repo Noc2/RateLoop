@@ -2,6 +2,7 @@ import { approveLREP, submitContentDirect, waitForPonderIndexed, waitForPonderIn
 import { ANVIL_ACCOUNTS } from "./anvil-accounts";
 import { CONTRACT_ADDRESSES } from "./contracts";
 import { getContentList } from "./ponder-api";
+import type { ContentListParams } from "./ponder-api";
 import { findVoteableContent, gotoWithRetry, waitForFeedLoaded } from "./wait-helpers";
 import type { Page } from "@playwright/test";
 
@@ -24,7 +25,7 @@ type EnsureVoteableContentDeps = {
   approveLREP: typeof approveLREP;
   submitContentDirect: typeof submitContentDirect;
   waitForPonderIndexed: typeof waitForPonderIndexed;
-  getContentList: (params: { status: "all"; limit: number }) => Promise<{ items: ContentListItem[] }>;
+  getContentList: (params: ContentListParams) => Promise<{ items: ContentListItem[] }>;
   findVoteableContent: typeof findVoteableContent;
   gotoWithRetry: typeof gotoWithRetry;
   waitForFeedLoaded: typeof waitForFeedLoaded;
@@ -43,7 +44,7 @@ const defaultDeps: EnsureVoteableContentDeps = {
 };
 
 function createFallbackContentUrl(uniqueId: string, attempt: number): string {
-  return `https://www.youtube.com/watch?v=responsive${uniqueId}${attempt}`;
+  return `https://example.com/rateloop-responsive-vote-${uniqueId}-${attempt}`;
 }
 
 export async function createFreshVoteableContent(
@@ -61,7 +62,7 @@ export async function createFreshVoteableContent(
   if (!approved) return null;
 
   const submitted = await submitContentDirect(
-    `https://www.youtube.com/watch?v=vote${uniqueId}`,
+    `https://example.com/rateloop-vote-${uniqueId}`,
     title,
     "Fresh deterministic content for UI vote transaction coverage.",
     "Technology,Testing,Video",
@@ -78,7 +79,9 @@ export async function createFreshVoteableContent(
   const indexed = await waitForPonderIndexedAfterSync(
     async () => {
       const { items } = await getContentList({ search: title, status: "all", limit: 5 });
-      const match = items.find(item => item.title === title && item.submitter.toLowerCase() === submitter.toLowerCase());
+      const match = items.find(
+        item => item.title === title && item.submitter.toLowerCase() === submitter.toLowerCase(),
+      );
       contentId = match?.id ?? null;
       return Boolean(contentId);
     },
@@ -121,6 +124,9 @@ export async function ensureVoteableContentWithDeps(
       1,
       submitter,
       CONTRACT_ADDRESSES.ContentRegistry,
+      undefined,
+      undefined,
+      FRESH_VOTEABLE_ROUND_CONFIG,
     );
     if (!submitted) {
       continue;
@@ -141,10 +147,29 @@ export async function ensureVoteableContentWithDeps(
       "ensureVoteableContent",
     );
     if (!indexed || !indexedContentId) {
-      return false;
+      continue;
+    }
+    const contentId = indexedContentId;
+
+    const requestedContentReady = await waitForPonderIndexedAfterSync(
+      async () => {
+        const { items } = await deps.getContentList({
+          contentIds: [contentId],
+          status: "all",
+          limit: 1,
+          voteable: true,
+        });
+        return items.some(item => item.id === contentId && item.submitter.toLowerCase() === submitter.toLowerCase());
+      },
+      60_000,
+      2_000,
+      "ensureVoteableContent:requested-content",
+    );
+    if (!requestedContentReady) {
+      continue;
     }
 
-    await deps.gotoWithRetry(page, `/rate?content=${indexedContentId}`, {
+    await deps.gotoWithRetry(page, `/rate?content=${contentId}`, {
       ensureWalletConnected: true,
       timeout: 45_000,
     });
@@ -155,7 +180,9 @@ export async function ensureVoteableContentWithDeps(
       .waitFor({ state: "visible", timeout: 30_000 })
       .catch(() => undefined);
 
-    return deps.findVoteableContent(page);
+    if (await deps.findVoteableContent(page)) {
+      return true;
+    }
   }
 
   return false;

@@ -5,7 +5,7 @@ export const VOTE_UP_BUTTON_NAME = /^Vote (?:thumbs )?up\b/i;
 export const VOTE_DOWN_BUTTON_NAME = /^Vote (?:thumbs )?down\b/i;
 const PREDICT_BUTTON_NAME = /^(?:Predict final rating|Predict)\b/i;
 export const FEED_EMPTY_STATE_RE =
-  /No questions have been asked yet|No content found|No content is trending right now|No recent questions are available right now|No live rounds look meaningfully contested right now|No funded USD bounties are available right now|No open rounds look close to settlement right now|You aren't watching any content yet|Sign in to view watched content|You haven't voted on any content yet|Sign in to view your votes|You haven't asked any questions yet|Sign in to view your questions|No 0 LREP votes are available right now|Sign in to view 0 LREP votes|Follow a few curators to turn this into a live feed|Sign in to view activity from curators you follow/i;
+  /No questions have been asked yet|No content found|This content could not be shown|No content is trending right now|No recent questions are available right now|No live rounds look meaningfully contested right now|No funded USD bounties are available right now|No open rounds look close to settlement right now|You aren't watching any content yet|Sign in to view watched content|You haven't voted on any content yet|Sign in to view your votes|You haven't asked any questions yet|Sign in to view your questions|No 0 LREP votes are available right now|Sign in to view 0 LREP votes|Follow a few curators to turn this into a live feed|Sign in to view activity from curators you follow/i;
 
 const RETRIABLE_GOTO_ERROR_PATTERNS = [
   /ERR_ABORTED/i,
@@ -223,7 +223,9 @@ export async function waitForFeedLoaded(page: Page, timeout = 15_000): Promise<v
       }
 
       await page.reload({ waitUntil: "domcontentloaded", timeout: effectiveTimeout });
-      await page.waitForLoadState("networkidle", { timeout: Math.min(effectiveTimeout, 10_000) }).catch(() => undefined);
+      await page
+        .waitForLoadState("networkidle", { timeout: Math.min(effectiveTimeout, 10_000) })
+        .catch(() => undefined);
     }
   }
 

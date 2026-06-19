@@ -96,18 +96,36 @@ export async function getContentById(
 /**
  * Fetch content list with optional filters.
  */
-export async function getContentList(
-  params: { status?: string; sortBy?: string; limit?: number; categoryId?: string; search?: string } = {},
-  baseURL = PONDER_URL,
-): Promise<{ items: ContentItem[]; total: number | null; hasMore: boolean }> {
+export type ContentListParams = {
+  status?: string;
+  sortBy?: string;
+  limit?: number;
+  categoryId?: string;
+  search?: string;
+  contentIds?: readonly (string | number | bigint)[];
+  voteable?: boolean;
+};
+
+export function buildContentListPath(params: ContentListParams = {}): string {
   const searchParams = new URLSearchParams();
   if (params.status) searchParams.set("status", params.status);
   if (params.sortBy) searchParams.set("sortBy", params.sortBy);
   if (params.limit) searchParams.set("limit", String(params.limit));
   if (params.categoryId) searchParams.set("categoryId", params.categoryId);
   if (params.search) searchParams.set("search", params.search);
+  if (params.contentIds && params.contentIds.length > 0) {
+    searchParams.set("contentIds", params.contentIds.map(contentId => contentId.toString()).join(","));
+  }
+  if (params.voteable !== undefined) searchParams.set("voteable", params.voteable ? "1" : "0");
 
-  const res = await fetchWithRetry(`${baseURL}/content?${searchParams}`);
+  return `/content?${searchParams}`;
+}
+
+export async function getContentList(
+  params: ContentListParams = {},
+  baseURL = PONDER_URL,
+): Promise<{ items: ContentItem[]; total: number | null; hasMore: boolean }> {
+  const res = await fetchWithRetry(`${baseURL}${buildContentListPath(params)}`);
   if (!res.ok) throw new Error(`GET /content returned ${res.status}`);
   return res.json();
 }
