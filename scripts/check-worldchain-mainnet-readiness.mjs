@@ -27,6 +27,8 @@ const WORLD_ID_PRODUCTION_VERIFIER =
   "0x00000000009E00F9FE82CfeeBB4556686da094d7";
 const WORLD_ID_VERIFIER_SELECTOR = "0x40340c44";
 const WORLDCHAIN_DEPLOYMENT_PROFILE = "production";
+export const WORLDCHAIN_MAINNET_READINESS_RETIRED_NOTICE =
+  "World Chain mainnet readiness is retired for the Base production deployment. Use `yarn base:check` or `yarn base-mainnet:check` for production changes and `yarn base-sepolia:check` for staging validation.";
 
 function isAddress(value) {
   return typeof value === "string" && ADDRESS_RE.test(value);
@@ -420,83 +422,9 @@ export async function validateLiveReadiness({
   return { ok: failures.length === 0, checks, failures };
 }
 
-function parseArgs(argv) {
-  if (argv.includes("--canary")) {
-    throw new Error(
-      "World Chain mainnet canary readiness is no longer supported. Use --production.",
-    );
-  }
-
-  return {
-    live: argv.includes("--live"),
-    json: argv.includes("--json"),
-    requireLiveTargets: argv.includes("--require-live-targets"),
-  };
-}
-
-function printResult(title, result, json = false) {
-  if (json) {
-    console.log(JSON.stringify({ title, ...result }, null, 2));
-    return;
-  }
-
-  console.log(`\n${title}`);
-  for (const check of result.checks) {
-    console.log(`${check.ok ? "PASS" : "FAIL"} ${check.message}`);
-  }
-}
-
 async function main() {
-  let args;
-  try {
-    args = parseArgs(process.argv.slice(2));
-  } catch (error) {
-    console.error(error instanceof Error ? error.message : String(error));
-    process.exit(1);
-  }
-
-  let offlineInputs;
-  try {
-    offlineInputs = loadOfflineInputs();
-  } catch (error) {
-    if (
-      error?.code === "ENOENT" &&
-      error.path?.endsWith(WORLDCHAIN_DEPLOYMENT_ARTIFACT)
-    ) {
-      console.error(mainnetNotDeployedMessage());
-      process.exit(1);
-      return;
-    }
-    throw error;
-  }
-  const offlineResult = validateOfflineReadiness({
-    ...offlineInputs,
-  });
-  printResult(
-    "World Chain mainnet production offline readiness",
-    offlineResult,
-    args.json,
-  );
-
-  let liveResult = { ok: true, checks: [], failures: [] };
-  if (args.live) {
-    liveResult = await validateLiveReadiness({
-      appUrl: process.env.WORLDCHAIN_APP_URL,
-      deploymentJson: offlineInputs.deploymentJson,
-      ponderUrl: process.env.WORLDCHAIN_PONDER_URL,
-      requireTargets: args.requireLiveTargets,
-      rpcUrl: process.env.WORLDCHAIN_RPC_URL,
-    });
-    printResult(
-      "World Chain mainnet production live readiness",
-      liveResult,
-      args.json,
-    );
-  }
-
-  if (!offlineResult.ok || !liveResult.ok) {
-    process.exitCode = 1;
-  }
+  console.error(WORLDCHAIN_MAINNET_READINESS_RETIRED_NOTICE);
+  process.exitCode = 1;
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

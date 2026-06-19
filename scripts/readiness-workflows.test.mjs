@@ -36,3 +36,14 @@ test("Base Sepolia readiness remains an active push, PR, scheduled, and manual g
   assert.match(workflow, /^  schedule:/m);
   assert.match(workflow, /^  workflow_dispatch:/m);
 });
+
+test("Base mainnet readiness remains an active push, PR, scheduled, and manual gate", () => {
+  const workflow = readWorkflow(".github/workflows/base-mainnet-readiness.yaml");
+
+  assert.match(workflow, /^on:/m);
+  assert.match(workflow, /^  push:/m);
+  assert.match(workflow, /^  pull_request:/m);
+  assert.match(workflow, /^  schedule:/m);
+  assert.match(workflow, /^  workflow_dispatch:/m);
+  assert.match(workflow, /check-base-mainnet-readiness\.mjs/);
+});

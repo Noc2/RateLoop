@@ -29,7 +29,7 @@ const sdkDocsHref = "https://github.com/Noc2/RateLoop/tree/main/packages/sdk";
 const agentsExamplesHref = "https://github.com/Noc2/RateLoop/tree/main/packages/agents/examples/questions";
 
 const askPayloadExample = `{
-  "chainId": 84532,
+  "chainId": 8453,
   "clientRequestId": "design-review-2026-05-05-001",
   "walletAddress": "0x1111111111111111111111111111111111111111",
   "paymentMode": "wallet_calls",
@@ -344,8 +344,8 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
           bytes, and eligible raters can still absorb what they see.
         </li>
         <li>
-          Wallet: optional expected <code>walletAddress</code> on Base Sepolia with USDC for the bounty, plus LREP when
-          using an LREP Feedback Bonus.
+          Wallet: optional expected <code>walletAddress</code> on Base mainnet with USDC for the bounty, plus LREP when
+          using an LREP Feedback Bonus. Use Base Sepolia only for staging/testnet validation.
         </li>
         <li>
           Bounty: <code>amount</code>, <code>requiredVoters</code>, <code>requiredSettledRounds</code>,{" "}

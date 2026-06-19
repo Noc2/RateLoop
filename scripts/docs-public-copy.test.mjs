@@ -39,9 +39,10 @@ test("active public docs avoid stale World Chain and mandatory credential copy",
   }
 });
 
-test("static public docs keep Base mainnet gated behind promotion", () => {
+test("static public docs identify Base mainnet production and Base Sepolia staging", () => {
   for (const [file, content] of Object.entries(publicDocs)) {
-    assert.doesNotMatch(content, /Base mainnet uses `8453`(?! only after)/, file);
+    assert.match(content, /Base mainnet.*8453|8453.*Base mainnet/i, file);
+    assert.match(content, /Base Sepolia.*84532|84532.*Base Sepolia/i, file);
   }
 });
 

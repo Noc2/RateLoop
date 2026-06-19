@@ -52,14 +52,15 @@ Treat new features on these contracts as size-sensitive: prefer library extracti
 On Base mainnet and Base Sepolia, deploys use a Foundry keystore selected via `--keystore <name>`. Forge can use
 Basescan verification when `BASESCAN_API_KEY` is set.
 
-The Base Sepolia flow is the first fresh deployment flow: `script/Deploy.s.sol` creates new proxies and exports a new
-`deployments/84532.json`. Do not use the current `ContentRegistry` implementation as an in-place upgrade for an older
-proxy unless a separate migration/backfill is provided for `submissionMediaValidator` and
-`questionBundleRoundObserverByContent`. Do not use the current `RaterRegistry` implementation as an in-place upgrade
-for an older proxy unless a separate migration/backfill is provided for the `_identityBanSource` to
-`_identityBanSources` slot-32 retype. The `base-sepolia:check -- --live` readiness probe verifies the deployed
-`ContentRegistry.submissionMediaValidator()` exposes the gated-submission validator selectors before the deployment is
-treated as ready. After Base Sepolia passes, deploy Base mainnet and run `base:check -- --live`.
+Base mainnet is the current production deployment boundary and its contract addresses should be preserved by default.
+Use Base Sepolia for fresh deployment validation before any future production contract or integration change. Do not use
+the current `ContentRegistry` implementation as an in-place upgrade for an older proxy unless a separate
+migration/backfill is provided for `submissionMediaValidator` and `questionBundleRoundObserverByContent`. Do not use the
+current `RaterRegistry` implementation as an in-place upgrade for an older proxy unless a separate migration/backfill is
+provided for the `_identityBanSource` to `_identityBanSources` slot-32 retype. The `base-sepolia:check -- --live`
+readiness probe verifies the deployed `ContentRegistry.submissionMediaValidator()` exposes the gated-submission
+validator selectors before staging is treated as ready. For production wiring or environment changes, run
+`base:check -- --live` or `base-mainnet:check -- --live` against the existing Base mainnet deployment.
 
 Base and World Chain deploys default to legacy World ID 3.0 Orb verification. The deploy script resolves the canonical
 World ID router for chain `8453`, `84532`, `480`, or `4801`, derives the external nullifier from
