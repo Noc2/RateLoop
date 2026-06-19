@@ -32,6 +32,7 @@ import { GasBalanceWarning, shouldShowGasWarningTransactionCostsLink } from "~~/
 import { GradientActionButton, getGradientActionMotion } from "~~/components/shared/GradientAction";
 import { useWalletFunding } from "~~/components/shared/WalletFundingProvider";
 import { surfaceSectionHeadingClassName } from "~~/components/shared/sectionHeading";
+import { DurationInput } from "~~/components/ui/DurationInput";
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import { useTermsAcceptance } from "~~/contexts/TermsAcceptanceContext";
 import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
@@ -48,6 +49,7 @@ import {
   getQuestionDetailsTextSizeBytes,
   normalizeQuestionDetailsText,
 } from "~~/lib/attachments/questionDetails.shared";
+import { formatHumanDuration } from "~~/lib/humanDuration";
 import {
   type FeedbackBonusAsset,
   type SubmissionRewardAsset,
@@ -64,7 +66,6 @@ import {
   DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS,
   QUESTION_ROUND_MAX_EPOCH_COUNT,
   type QuestionRoundConfigBounds,
-  formatDurationLabel,
   getQuestionRoundMaxDurationForEpoch,
   isQuestionRoundMaxDurationValidForEpoch,
 } from "~~/lib/questionRoundConfig";
@@ -1257,13 +1258,13 @@ function getEffectiveBlindMinutes(value: string, bounds: QuestionRoundConfigBoun
 }
 
 function getBlindMinutesTooltip(bounds: QuestionRoundConfigBounds): string {
-  return `Private response window before reveal/open voting. Must be ${formatDurationLabel(
+  return `Private response window before reveal/open voting. Must be ${formatHumanDuration(
     bounds.minEpochDuration,
-  )}-${formatDurationLabel(bounds.maxEpochDuration)}.`;
+  )}-${formatHumanDuration(bounds.maxEpochDuration)}.`;
 }
 
 function getMaxMinutesTooltip(bounds: QuestionRoundConfigBounds): string {
-  return `Total round duration. It must be at least the blind window, no more than ${formatDurationLabel(
+  return `Total round duration. It must be at least the blind window, no more than ${formatHumanDuration(
     bounds.maxRoundDuration,
   )}, and can span at most ${QUESTION_ROUND_MAX_EPOCH_COUNT.toLocaleString()} blind phases.`;
 }
@@ -1402,7 +1403,7 @@ async function buildDraftRequestBody(
     Number(blindSeconds) > roundConfigBounds.maxEpochDuration
   ) {
     throw new Error(
-      `Blind phase must be ${formatDurationLabel(roundConfigBounds.minEpochDuration)}-${formatDurationLabel(
+      `Blind phase must be ${formatHumanDuration(roundConfigBounds.minEpochDuration)}-${formatHumanDuration(
         roundConfigBounds.maxEpochDuration,
       )}.`,
     );
@@ -1412,9 +1413,9 @@ async function buildDraftRequestBody(
     Number(maxDurationSeconds) > roundConfigBounds.maxRoundDuration
   ) {
     throw new Error(
-      `Max duration must be ${formatDurationLabel(
+      `Max duration must be ${formatHumanDuration(
         roundConfigBounds.minRoundDuration,
-      )}-${formatDurationLabel(roundConfigBounds.maxRoundDuration)}.`,
+      )}-${formatHumanDuration(roundConfigBounds.maxRoundDuration)}.`,
     );
   }
   if (!isQuestionRoundMaxDurationValidForEpoch(Number(blindSeconds), Number(maxDurationSeconds))) {
@@ -3120,38 +3121,35 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                   <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
                     <div className="form-control">
                       <DraftFieldLabel htmlFor="agent-ask-round-blind-minutes" tooltip={blindMinutesTooltip}>
-                        Blind minutes
+                        Blind response window
                       </DraftFieldLabel>
-                      <input
+                      <DurationInput
                         id="agent-ask-round-blind-minutes"
-                        type="number"
-                        className="input input-bordered mt-1 w-full"
+                        className="mt-1"
                         disabled={!canEditDraft}
-                        inputMode="numeric"
-                        min={roundBlindMinuteBounds.min}
-                        max={roundBlindMinuteBounds.max}
-                        step={1}
-                        value={draftForm?.roundBlindMinutes ?? ""}
+                        valueMinutes={draftForm?.roundBlindMinutes ?? ""}
+                        minMinutes={roundBlindMinuteBounds.min}
+                        maxMinutes={roundBlindMinuteBounds.max}
                         onBlur={() => clampDraftWholeNumberField("roundBlindMinutes")}
-                        onChange={event => updateDraftWholeNumberField("roundBlindMinutes", event.target.value)}
+                        onChangeMinutes={value => updateDraftWholeNumberField("roundBlindMinutes", value)}
+                        ariaLabel="Blind response window"
                       />
                     </div>
                     <div className="form-control">
                       <DraftFieldLabel htmlFor="agent-ask-round-max-minutes" tooltip={maxMinutesTooltip}>
-                        Max minutes
+                        Total round duration
                       </DraftFieldLabel>
-                      <input
+                      <DurationInput
                         id="agent-ask-round-max-minutes"
-                        type="number"
-                        className="input input-bordered mt-1 w-full"
+                        className="mt-1"
                         disabled={!canEditDraft}
-                        inputMode="numeric"
-                        min={draftRoundMaxDurationMinuteBounds.min}
-                        max={draftRoundMaxDurationMinuteBounds.max}
-                        step={1}
-                        value={draftForm?.roundMaxDurationMinutes ?? ""}
+                        valueMinutes={draftForm?.roundMaxDurationMinutes ?? ""}
+                        minMinutes={draftRoundMaxDurationMinuteBounds.min}
+                        maxMinutes={draftRoundMaxDurationMinuteBounds.max}
                         onBlur={() => clampDraftWholeNumberField("roundMaxDurationMinutes")}
-                        onChange={event => updateDraftWholeNumberField("roundMaxDurationMinutes", event.target.value)}
+                        onChangeMinutes={value => updateDraftWholeNumberField("roundMaxDurationMinutes", value)}
+                        ariaLabel="Total round duration"
+                        summarySuffix="for selected blind window"
                       />
                     </div>
                     <div className="form-control">
