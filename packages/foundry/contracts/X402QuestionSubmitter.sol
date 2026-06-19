@@ -295,6 +295,9 @@ contract X402QuestionSubmitter is Ownable, ReentrancyGuardTransient {
             confidentiality
         );
 
+        // The external entrypoints are nonReentrant; this asserts the gateway swept
+        // the exact authorization into the configured protocol escrow.
+        // slither-disable-next-line reentrancy-balance
         require(usdcToken.balanceOf(address(this)) == balanceBefore, "Residual token");
         emit X402QuestionSubmitted(
             contentId, paymentAuthorization.from, paymentAuthorization.nonce, paymentAuthorization.value
@@ -408,6 +411,9 @@ contract X402QuestionSubmitter is Ownable, ReentrancyGuardTransient {
             );
         }
 
+        // The external entrypoints are nonReentrant; this asserts the gateway swept
+        // the exact authorization into the configured protocol escrows.
+        // slither-disable-next-line reentrancy-balance
         require(usdcToken.balanceOf(address(this)) == balanceBefore, "Residual token");
         emit X402QuestionSubmitted(
             contentId, paymentAuthorization.from, paymentAuthorization.nonce, paymentAuthorization.value
