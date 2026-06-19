@@ -14,7 +14,7 @@ import {
 import { ANVIL_ACCOUNTS, DEPLOYER } from "../helpers/anvil-accounts";
 import { newE2EContext } from "../helpers/browser-context";
 import { CONTRACT_ADDRESSES } from "../helpers/contracts";
-import { gotoWithRetry } from "../helpers/wait-helpers";
+import { gotoWithRetry, waitForVisibleWithReload } from "../helpers/wait-helpers";
 import { setupWallet } from "../helpers/wallet-session";
 import { RATING_REVIEW_STATUS_PENDING, getContentById, getContentList, ponderGet } from "../helpers/ponder-api";
 import { expect, test } from "@playwright/test";
@@ -181,8 +181,9 @@ test.describe("Settlement lifecycle", () => {
     const main = page.locator("main");
     await expect(main.getByText(/Voting performance/i)).toBeVisible({ timeout: 15_000 });
     await expect(main.getByText(/Recent votes/i).first()).toBeVisible({ timeout: 10_000 });
-    await expect(main.getByRole("link", { name: `Content #${newContentId}` }).first()).toBeVisible({
-      timeout: 45_000,
+    await waitForVisibleWithReload(page, () => main.getByRole("link", { name: `Content #${newContentId}` }), {
+      attempts: 3,
+      timeout: 20_000,
     });
 
     await context.close();
