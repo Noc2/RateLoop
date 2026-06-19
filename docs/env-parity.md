@@ -12,9 +12,8 @@ Cross-package reference for env names that refer to the same on-chain value, E2E
 | `480` | World Chain mainnet | `packages/foundry/deployments/480.json` | `production` |
 | `31337` | Local Foundry / Anvil | gitignored local deploy | local |
 
-`packages/nextjs/.env.production` currently targets `NEXT_PUBLIC_TARGET_NETWORKS=84532` for the Base Sepolia
-production-style test deployment. Change that tracked default to `8453` only in the Base mainnet promotion commit that
-adds `packages/foundry/deployments/8453.json` and follows a verified Base Sepolia stack.
+`packages/nextjs/.env.production` targets `NEXT_PUBLIC_TARGET_NETWORKS=8453` for the Base mainnet production
+deployment. Base Sepolia validation should override the target to `84532` explicitly.
 
 ## USDC address aliases
 
