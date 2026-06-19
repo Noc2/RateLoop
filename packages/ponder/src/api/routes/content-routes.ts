@@ -1576,6 +1576,14 @@ export function registerContentRoutes(app: ApiApp) {
     const where = and(
       eq(content.submitter, submitterAddress),
       eq(round.state, ROUND_STATE.Settled),
+      buildAllowedContentCondition({
+        canonicalUrl: content.canonicalUrl,
+        description: content.description,
+        tags: content.tags,
+        title: content.title,
+        url: content.url,
+        urlHost: content.urlHost,
+      }),
     );
 
     const items = await db
@@ -1723,7 +1731,19 @@ export function registerContentRoutes(app: ApiApp) {
     const [contentSummary] = await db
       .select({ count: sql<number>`count(*)` })
       .from(content)
-      .where(eq(content.submitter, address));
+      .where(
+        and(
+          eq(content.submitter, address),
+          buildAllowedContentCondition({
+            canonicalUrl: content.canonicalUrl,
+            description: content.description,
+            tags: content.tags,
+            title: content.title,
+            url: content.url,
+            urlHost: content.urlHost,
+          }),
+        ),
+      );
 
     const [rewardSummary] = await db
       .select({
