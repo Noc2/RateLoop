@@ -300,6 +300,7 @@ type AgentFeedbackBonusTransactionPlan = {
     spender: Address;
     tokenAddress: Address;
   };
+  requiresAtomicExecution: true;
   requiresOrderedExecution: true;
   roundId: string;
   walletAddress: Address;
@@ -3144,6 +3145,7 @@ export async function prepareFeedbackBonusQuestionSubmissionRequest(params: {
       spender: config.feedbackBonusEscrowAddress,
       tokenAddress,
     },
+    requiresAtomicExecution: true,
     requiresOrderedExecution: true,
     roundId: roundId.toString(),
     walletAddress,
@@ -3168,6 +3170,7 @@ export async function prepareFeedbackBonusQuestionSubmissionRequest(params: {
         status: "awaiting_wallet_signature",
         transactionPlan: {
           calls: plan.calls,
+          requiresAtomicExecution: plan.requiresAtomicExecution,
           requiresOrderedExecution: plan.requiresOrderedExecution,
         },
       },
@@ -3175,6 +3178,7 @@ export async function prepareFeedbackBonusQuestionSubmissionRequest(params: {
       status: "awaiting_wallet_signature",
       transactionPlan: {
         calls: plan.calls,
+        requiresAtomicExecution: plan.requiresAtomicExecution,
         requiresOrderedExecution: plan.requiresOrderedExecution,
       },
       wallet: {

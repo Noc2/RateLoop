@@ -107,6 +107,7 @@ type HandoffTransactionPlan = {
     value?: string;
     waitAfterMs?: number;
   }>;
+  requiresAtomicExecution?: boolean;
   requiresOrderedExecution?: boolean;
 };
 
@@ -2411,6 +2412,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
             calls,
             chainId: handoffChainId,
             getPostCallDelayMs,
+            requiresAtomicExecution: currentHandoff.transactionPlan?.requiresAtomicExecution,
             requiresOrderedExecution: currentHandoff.transactionPlan?.requiresOrderedExecution,
           });
 

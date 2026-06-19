@@ -1677,14 +1677,24 @@ test("prepareFeedbackBonusQuestionSubmissionRequest targets first round before a
     operationKey: record.operationKey,
   });
   const body = prepared.body as {
-    feedbackBonus: { asset: string; roundId: string; status: string };
-    transactionPlan: { calls: Array<{ functionName: string; to: string }> };
+    feedbackBonus: {
+      asset: string;
+      roundId: string;
+      status: string;
+      transactionPlan: { requiresAtomicExecution: boolean };
+    };
+    transactionPlan: {
+      calls: Array<{ functionName: string; to: string }>;
+      requiresAtomicExecution: boolean;
+    };
   };
 
   assert.equal(prepared.status, 202);
   assert.equal(body.feedbackBonus.asset, "LREP");
   assert.equal(body.feedbackBonus.status, "awaiting_wallet_signature");
   assert.equal(body.feedbackBonus.roundId, "1");
+  assert.equal(body.feedbackBonus.transactionPlan.requiresAtomicExecution, true);
+  assert.equal(body.transactionPlan.requiresAtomicExecution, true);
   assert.equal(body.transactionPlan.calls[0]?.to, TEST_CONFIG.lrepAddress);
   assert.equal(body.transactionPlan.calls[1]?.functionName, "createFeedbackBonusPoolWithAsset");
 

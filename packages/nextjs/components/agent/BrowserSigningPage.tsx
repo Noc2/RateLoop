@@ -50,6 +50,7 @@ type SigningIntent = {
       value?: string;
       waitAfterMs?: number;
     }>;
+    requiresAtomicExecution?: boolean;
     requiresOrderedExecution?: boolean;
   } | null;
   wallet?: { address?: string; note?: string };
@@ -373,6 +374,7 @@ export function BrowserSigningPage({ intentId }: { intentId: string }) {
             current.map((step, stepIndex) => (stepIndex === index ? { ...step, hash, status: "sent" } : step)),
           );
         },
+        requiresAtomicExecution: intent.transactionPlan.requiresAtomicExecution,
         requiresOrderedExecution: intent.transactionPlan.requiresOrderedExecution,
       });
 

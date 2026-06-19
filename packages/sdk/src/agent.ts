@@ -336,6 +336,7 @@ export interface RateLoopAgentWalletTransactionCall {
 
 export interface RateLoopAgentWalletTransactionPlan {
   calls?: RateLoopAgentWalletTransactionCall[];
+  requiresAtomicExecution?: boolean;
   requiresOrderedExecution?: boolean;
   [key: string]: unknown;
 }

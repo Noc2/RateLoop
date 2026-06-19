@@ -1118,6 +1118,7 @@ const ratingTransactionPlanOutputSchema = {
       },
       type: "array",
     },
+    requiresAtomicExecution: { type: "boolean" },
     requiresOrderedExecution: { type: "boolean" },
   },
   required: ["calls", "requiresOrderedExecution"],

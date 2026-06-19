@@ -26,6 +26,12 @@ export type WalletTransactionPlanExecutionSegment<TCall extends WalletTransactio
     calls: Array<NormalizedWalletTransactionPlanCall<TCall>>;
   };
 
+export function walletTransactionPlanAtomicBatchRequiredError() {
+  return new Error(
+    "This transaction plan requires an atomic wallet batch. Connect a wallet with wallet_sendCalls atomic batch support or request a non-atomic plan.",
+  );
+}
+
 function normalizeHex(value: unknown, field: string): Hex {
   if (typeof value !== "string" || !/^0x([a-fA-F0-9]{2})*$/.test(value)) {
     throw new Error(`${field} must be hex data.`);
@@ -89,6 +95,13 @@ export function createWalletTransactionPlanExecutionSegments<TCall extends Walle
 
   flushBatchableCalls();
   return segments;
+}
+
+export function segmentRequiresAtomicWalletBatch(
+  segment: WalletTransactionPlanExecutionSegment,
+  options: { requiresAtomicExecution?: boolean } = {},
+) {
+  return options.requiresAtomicExecution === true && segment.batchable;
 }
 
 export function isWalletSendCallsUnsupportedError(error: unknown) {

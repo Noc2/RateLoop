@@ -11,6 +11,8 @@ import {
   createWalletTransactionPlanExecutionSegments,
   isWalletSendCallsUnsupportedError,
   normalizeWalletTransactionPlanCalls,
+  segmentRequiresAtomicWalletBatch,
+  walletTransactionPlanAtomicBatchRequiredError,
 } from "~~/lib/agent/walletTransactionPlan";
 
 function delay(ms: number) {
@@ -77,6 +79,7 @@ export function useWalletTransactionPlanExecutor() {
       getPostCallDelayMs?: (call: TCall) => number;
       onCallConfirmed?: (params: { call: TCall; hash: Hex | undefined; index: number }) => void;
       onCallSent?: (params: { call: TCall; hash: Hex | undefined; index: number }) => void;
+      requiresAtomicExecution?: boolean;
       requiresOrderedExecution?: boolean;
     }) => {
       const hashes: Hex[] = [];
@@ -120,7 +123,12 @@ export function useWalletTransactionPlanExecutor() {
             if (!isWalletSendCallsUnsupportedError(error)) {
               throw error;
             }
+            if (segmentRequiresAtomicWalletBatch(segment, options)) {
+              throw walletTransactionPlanAtomicBatchRequiredError();
+            }
           }
+        } else if (segmentRequiresAtomicWalletBatch(segment, options)) {
+          throw walletTransactionPlanAtomicBatchRequiredError();
         }
 
         for (const call of segment.calls) {

@@ -10,6 +10,7 @@ RateLoop's production deployment boundary is Base mainnet, with Base Sepolia use
 - Thirdweb in-app wallets use EIP-7702 on Base Sepolia and Base mainnet so the execution sender stays aligned with the Google/email wallet's EOA for sender-bound flows such as legacy allocation claims.
 - Self-funded external wallet batches can execute through wagmi `sendCallsSync`, so MetaMask/Base Account style wallets can use `wallet_sendCalls` for atomic Base batches instead of falling back to separate `approve` and action transactions.
 - Agent handoff and browser signing pages segment `transactionPlan.calls`, preserve reservation/explicit wait phases, and batch adjacent zero-delay calls through `wallet_sendCalls` when an external wallet reports atomic batch support.
+- Feedback Bonus wallet-call plans mark their adjacent `approve + createFeedbackBonusPoolWithAsset` calls as requiring atomic execution. Browser wallet flows stop with a clear unsupported-wallet message instead of degrading that pair into separate transactions; trusted local signer automation still validates and submits its server-returned calls in order.
 - Native EIP-3009/x402 ask submission uses the x402 submitter as the gateway, so bounty-only asks no longer need a separate reservation transaction. When a single-question ask includes a USDC Feedback Bonus, the signed authorization covers bounty plus bonus and `submitQuestionWithX402OneShotPayment` funds both protocol escrow and the Feedback Bonus pool in one submit transaction.
 - Batched voting no longer asks for an LREP permit signature first. If allowance is low, the batched path submits `LoopReputation.approve(votingEngine, amount)` and `RoundVotingEngine.commitVote(...)` together as one atomic wallet batch.
 - Thirdweb in-app wallets keep the sponsored/self-funded thirdweb path, including the existing verifier allowlist for `approve + commitVote` and the current free-transaction accounting.
@@ -34,7 +35,7 @@ RateLoop's production deployment boundary is Base mainnet, with Base Sepolia use
 6. Add a USDC Feedback Bonus to the native EIP-3009/x402 ask. Expected: the authorization value is bounty plus bonus, the plan has one `submitQuestionWithX402OneShotPayment` call, and status shows the Feedback Bonus as funded after `rateloop_confirm_ask_transactions`.
 7. Vote with an account that has LREP but no voting-engine allowance. Expected: no permit signature prompt; the wallet shows one batch containing approval and vote.
 8. Repeat with thirdweb in-app login. Expected: sponsored execution remains available where the free-transaction verifier allows the call set.
-9. Repeat failures with a wallet that does not report atomic support. Expected: the app falls back to the older direct transaction path instead of pretending batching is available.
+9. Repeat failures with a wallet that does not report atomic support. Expected: ordinary ordered plans fall back to the older direct transaction path, while atomic-required Feedback Bonus batches stop with an unsupported-wallet message instead of splitting the protected pair.
 
 ## Deferred options
 

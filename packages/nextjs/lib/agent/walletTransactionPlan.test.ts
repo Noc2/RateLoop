@@ -2,6 +2,7 @@ import {
   createWalletTransactionPlanExecutionSegments,
   isWalletSendCallsUnsupportedError,
   normalizeWalletTransactionPlanCalls,
+  segmentRequiresAtomicWalletBatch,
 } from "./walletTransactionPlan";
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -47,6 +48,25 @@ test("createWalletTransactionPlanExecutionSegments isolates calls with post-call
     segments.map(segment => segment.calls.map(call => call.index)),
     [[0], [1, 2]],
   );
+});
+
+test("segmentRequiresAtomicWalletBatch only gates batchable atomic-required segments", () => {
+  const segments = createWalletTransactionPlanExecutionSegments(
+    normalizeWalletTransactionPlanCalls(
+      [
+        { data: "0x01", functionName: "reserveSubmission", to: TEST_ADDRESS },
+        { data: "0x02", to: TEST_ADDRESS },
+        { data: "0x03", to: TEST_ADDRESS },
+      ],
+      {
+        getPostCallDelayMs: call => (call.functionName === "reserveSubmission" ? 3_000 : 0),
+      },
+    ),
+  );
+
+  assert.equal(segmentRequiresAtomicWalletBatch(segments[0]!, { requiresAtomicExecution: true }), false);
+  assert.equal(segmentRequiresAtomicWalletBatch(segments[1]!, { requiresAtomicExecution: true }), true);
+  assert.equal(segmentRequiresAtomicWalletBatch(segments[1]!, { requiresAtomicExecution: false }), false);
 });
 
 test("normalizeWalletTransactionPlanCalls rejects nonzero value calls", () => {
