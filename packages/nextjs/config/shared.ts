@@ -1,6 +1,6 @@
 export const DEFAULT_POLLING_INTERVAL = 30_000;
 export const BASE_POLLING_INTERVAL = 1_000;
-export const BASE_PRECONF_POLLING_INTERVAL = 500;
+export const BASE_PRECONF_POLLING_INTERVAL = 200;
 
 export const RPC_OVERRIDES = {} as const satisfies Partial<Record<number, string>>;
 

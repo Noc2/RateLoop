@@ -4,6 +4,7 @@ import { useCallback } from "react";
 import type { GetCallsStatusReturnType, Hex } from "viem";
 import { useAccount, useConfig, useSendCallsSync } from "wagmi";
 import { sendTransaction, waitForTransactionReceipt } from "wagmi/actions";
+import { getPollingIntervalForChainId } from "~~/config/shared";
 import { useWalletExecutionCapabilities } from "~~/hooks/useWalletExecutionCapabilities";
 import {
   type NormalizedWalletTransactionPlanCall,
@@ -14,6 +15,7 @@ import {
   segmentRequiresAtomicWalletBatch,
   walletTransactionPlanAtomicBatchRequiredError,
 } from "~~/lib/agent/walletTransactionPlan";
+import scaffoldConfig from "~~/scaffold.config";
 
 function delay(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -33,6 +35,14 @@ function pushUniqueHash(hashes: Hex[], hash: Hex | undefined) {
   if (hash && !hashes.includes(hash)) {
     hashes.push(hash);
   }
+}
+
+function getTransactionStatusPollingInterval(chainId: number | undefined) {
+  return typeof chainId === "number"
+    ? getPollingIntervalForChainId(chainId, 1_000, {
+        preconfirmation: scaffoldConfig.useBasePreconfRpc,
+      })
+    : 1_000;
 }
 
 export function useWalletTransactionPlanExecutor() {
@@ -63,7 +73,11 @@ export function useWalletTransactionPlanExecutor() {
       });
       pushUniqueHash(options.hashes, hash);
       options.onCallSent?.({ call: call.call, hash, index: call.index });
-      await waitForTransactionReceipt(wagmiConfig, { chainId: options.chainId, hash });
+      await waitForTransactionReceipt(wagmiConfig, {
+        chainId: options.chainId,
+        hash,
+        pollingInterval: getTransactionStatusPollingInterval(options.chainId),
+      });
       options.onCallConfirmed?.({ call: call.call, hash, index: call.index });
       if (call.postCallDelayMs > 0) {
         await delay(call.postCallDelayMs);
@@ -104,7 +118,7 @@ export function useWalletTransactionPlanExecutor() {
               chainId: options.chainId,
               connector,
               forceAtomic: true,
-              pollingInterval: 1_000,
+              pollingInterval: getTransactionStatusPollingInterval(options.chainId),
               status: isSuccessfulCallsStatus,
               throwOnFailure: true,
               timeout: 120_000,

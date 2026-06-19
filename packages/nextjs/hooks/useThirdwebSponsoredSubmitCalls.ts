@@ -7,6 +7,7 @@ import { useActiveAccount, useActiveWallet, useActiveWalletChain, useSetActiveWa
 import { sendAndConfirmCalls } from "thirdweb/wallets/eip5792";
 import { type Abi, type Address, type GetCallsStatusReturnType, type Hex, encodeFunctionData } from "viem";
 import { useAccount, useBalance, usePublicClient, useSendCallsSync } from "wagmi";
+import { getPollingIntervalForChainId } from "~~/config/shared";
 import {
   FREE_TRANSACTION_ALLOWANCE_QUERY_KEY,
   useFreeTransactionAllowance,
@@ -28,6 +29,7 @@ import {
   isThirdwebBundlerInfrastructureError,
   isThirdwebSponsoredExecutionRejectedError,
 } from "~~/lib/transactionErrors";
+import scaffoldConfig from "~~/scaffold.config";
 import {
   createThirdwebInAppWallet,
   currentThirdwebWalletMatchesWagmiAddress,
@@ -68,6 +70,12 @@ const THIRDWEB_BUNDLER_UNAVAILABLE_MESSAGE =
 
 function wait(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function getTransactionStatusPollingInterval(chainId: number) {
+  return getPollingIntervalForChainId(chainId, 1_000, {
+    preconfirmation: scaffoldConfig.useBasePreconfRpc,
+  });
 }
 
 export function shouldRetryThirdwebBundlerError(error: unknown, attemptIndex: number) {
@@ -548,7 +556,7 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
           chainId,
           connector,
           forceAtomic: options.atomicRequired ?? true,
-          pollingInterval: 1_000,
+          pollingInterval: getTransactionStatusPollingInterval(chainId),
           status: isSuccessfulCallsStatus,
           throwOnFailure: true,
           timeout: 120_000,

@@ -13,6 +13,7 @@ test("Base chains use the Flashblocks polling interval", () => {
 });
 
 test("Base preconfirmation clients use the tighter polling interval", () => {
+  assert.equal(BASE_PRECONF_POLLING_INTERVAL, 200);
   assert.equal(
     getPollingIntervalForChainId(8453, DEFAULT_POLLING_INTERVAL, { preconfirmation: true }),
     BASE_PRECONF_POLLING_INTERVAL,
