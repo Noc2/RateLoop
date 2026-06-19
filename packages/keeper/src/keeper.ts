@@ -119,6 +119,12 @@ interface KeeperWorkDiscovery {
   dormantContent: KeeperWorkContentCandidate[];
   feedbackBonusForfeits: KeeperWorkFeedbackBonusForfeitCandidate[];
 }
+interface PonderDeploymentMetadata {
+  chainId?: unknown;
+  contentRegistryAddress?: unknown;
+  feedbackRegistryAddress?: unknown;
+  deploymentKey?: unknown;
+}
 
 const MAX_CLEANUP_BATCHES_PER_TICK = 4;
 // Keep in sync with RoundCleanupLib.REVEAL_FAILED_GRACE_MULTIPLIER (design review
@@ -136,6 +142,7 @@ const cleanupDiscoveryRoundByContent = new Map<bigint, bigint>();
 let keeperWorkDiscoveryTick = 0;
 // Rotating cursor for bounded chain content scans on Ponder discovery ticks.
 let chainReconciliationContentCursor = 1n;
+let verifiedPonderDeploymentCacheKey: string | null = null;
 
 function emptyResult(): KeeperResult {
   return {
@@ -161,6 +168,7 @@ export function resetKeeperStateForTests(): void {
   cleanupDiscoveryRoundByContent.clear();
   keeperWorkDiscoveryTick = 0;
   chainReconciliationContentCursor = 1n;
+  verifiedPonderDeploymentCacheKey = null;
   decryptFailureCount.clear();
   resetTlockClientCacheForTests();
   lastBlockTimestampS = null;
@@ -559,6 +567,70 @@ async function discoverKeeperWorkCandidates(
   return discovery;
 }
 
+function normalizePonderDeploymentAddress(value: unknown): string | null {
+  return typeof value === "string" && /^0x[0-9a-fA-F]{40}$/.test(value)
+    ? value.toLowerCase()
+    : null;
+}
+
+function normalizePonderDeploymentChainId(value: unknown): number | null {
+  const parsed = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function expectedPonderDeploymentCacheKey(baseUrl: string) {
+  return [baseUrl, config.chainId, config.contracts.contentRegistry.toLowerCase()].join("|");
+}
+
+async function assertPonderDeploymentMatchesKeeper(
+  baseUrl: string,
+  headers: Record<string, string>,
+): Promise<void> {
+  const cacheKey = expectedPonderDeploymentCacheKey(baseUrl);
+  if (verifiedPonderDeploymentCacheKey === cacheKey) return;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), PONDER_FETCH_TIMEOUT_MS);
+  try {
+    const response = await fetch(buildPonderUrl(baseUrl, "/deployment"), {
+      headers,
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      throw new Error(`Ponder deployment request failed: ${response.status}`);
+    }
+
+    const deployment = (await response.json()) as PonderDeploymentMetadata;
+    const ponderChainId = normalizePonderDeploymentChainId(deployment.chainId);
+    const ponderContentRegistry = normalizePonderDeploymentAddress(
+      deployment.contentRegistryAddress,
+    );
+    const expectedContentRegistry = config.contracts.contentRegistry.toLowerCase();
+    const mismatches: string[] = [];
+
+    if (ponderChainId !== config.chainId) {
+      mismatches.push(`chainId=${ponderChainId ?? "unknown"} expected ${config.chainId}`);
+    }
+    if (ponderContentRegistry !== expectedContentRegistry) {
+      mismatches.push(
+        `contentRegistryAddress=${ponderContentRegistry ?? "unknown"} expected ${expectedContentRegistry}`,
+      );
+    }
+
+    if (mismatches.length > 0) {
+      const deploymentKey =
+        typeof deployment.deploymentKey === "string" && deployment.deploymentKey.trim()
+          ? ` (${deployment.deploymentKey.trim().toLowerCase()})`
+          : "";
+      throw new Error(`Ponder deployment does not match keeper config${deploymentKey}: ${mismatches.join(", ")}`);
+    }
+
+    verifiedPonderDeploymentCacheKey = cacheKey;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 async function fetchKeeperWorkFromPonder(
   now: bigint,
   dormancyPeriod: bigint,
@@ -591,6 +663,7 @@ async function fetchKeeperWorkFromPonder(
     if (keeperWorkToken) {
       headers.authorization = `Bearer ${keeperWorkToken}`;
     }
+    await assertPonderDeploymentMatchesKeeper(baseUrl, headers);
     const response = await fetch(url, { headers, signal: controller.signal });
     if (!response.ok) {
       throw new Error(`Ponder keeper work request failed: ${response.status}`);

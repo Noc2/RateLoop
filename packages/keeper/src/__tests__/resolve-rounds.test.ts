@@ -26,6 +26,7 @@ const {
   httpChainClient,
 } = vi.hoisted(() => ({
   mockConfig: {
+    chainId: 31337,
     contracts: {
       votingEngine: "0x1111111111111111111111111111111111111111",
       contentRegistry: "0x2222222222222222222222222222222222222222",
@@ -129,6 +130,16 @@ function makeLogger() {
     warn: vi.fn(),
     error: vi.fn(),
     debug: vi.fn(),
+  };
+}
+
+function matchingPonderDeployment() {
+  return {
+    configured: true,
+    chainId: mockConfig.chainId,
+    contentRegistryAddress: mockConfig.contracts.contentRegistry,
+    feedbackRegistryAddress: "0x8888888888888888888888888888888888888888",
+    deploymentKey: `${mockConfig.chainId}:${mockConfig.contracts.contentRegistry.toLowerCase()}:0x8888888888888888888888888888888888888888`,
   };
 }
 
@@ -639,6 +650,13 @@ describe("resolveRounds", () => {
     });
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(input.toString());
+      if (url.pathname === "/deployment") {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => matchingPonderDeployment(),
+        };
+      }
       expect(url.pathname).toBe("/keeper/work");
       expect(url.searchParams.get("feedbackBonusForfeitMinAge")).toBe("60");
       return {
@@ -666,13 +684,69 @@ describe("resolveRounds", () => {
     expect(publicClient.readContract).toHaveBeenCalledWith(
       expect.objectContaining({ functionName: "nextContentId" }),
     );
-    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(walletClient.writeContract).toHaveBeenCalledWith(
       expect.objectContaining({
         functionName: "markDormant",
         args: [1n],
       }),
     );
+  });
+
+  it("fails closed in production when Ponder deployment metadata does not match", async () => {
+    mockConfig.keeperWorkDiscovery.enabled = true;
+
+    const round = makeRound({
+      state: 1,
+      voteCount: 0n,
+      revealedCount: 0n,
+    });
+    const { publicClient, walletClient } = makeHarness({
+      activeRoundId: 0n,
+      latestRoundId: 0n,
+      round,
+      now: 3_000_000n,
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(input.toString());
+      expect(url.pathname).toBe("/deployment");
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          ...matchingPonderDeployment(),
+          chainId: 84532,
+          contentRegistryAddress: "0x9999999999999999999999999999999999999999",
+        }),
+      };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const logger = makeLogger();
+    const originalNodeEnv = process.env.NODE_ENV;
+    const originalKeeperWorkToken = process.env.PONDER_KEEPER_WORK_TOKEN;
+    process.env.NODE_ENV = "production";
+    process.env.PONDER_KEEPER_WORK_TOKEN = "test-token";
+
+    try {
+      await expect(
+        resolveRounds(
+          publicClient as any,
+          walletClient as any,
+          {} as any,
+          { address: ACCOUNT } as any,
+          logger as any,
+        ),
+      ).rejects.toThrow(/Ponder deployment does not match keeper config/);
+    } finally {
+      process.env.NODE_ENV = originalNodeEnv;
+      if (originalKeeperWorkToken === undefined) {
+        delete process.env.PONDER_KEEPER_WORK_TOKEN;
+      } else {
+        process.env.PONDER_KEEPER_WORK_TOKEN = originalKeeperWorkToken;
+      }
+    }
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(walletClient.writeContract).not.toHaveBeenCalled();
   });
 
   it("preserves path-prefixed Ponder URLs for keeper work discovery", async () => {
@@ -693,6 +767,13 @@ describe("resolveRounds", () => {
     });
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(input.toString());
+      if (url.pathname === "/indexer/deployment") {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => matchingPonderDeployment(),
+        };
+      }
       expect(url.pathname).toBe("/indexer/keeper/work");
       return {
         ok: true,
@@ -716,7 +797,7 @@ describe("resolveRounds", () => {
     );
 
     expect(result.contentMarkedDormant).toBe(1);
-    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("merges a bounded chain content scan with Ponder keeper work candidates", async () => {
@@ -768,15 +849,26 @@ describe("resolveRounds", () => {
         throw new Error(`Unexpected readContract(${functionName})`);
       },
     );
-    const fetchMock = vi.fn(async () => ({
-      ok: true,
-      status: 200,
-      json: async () => ({
-        openRounds: [],
-        cleanupRounds: [],
-        dormantContent: [{ contentId: "99", reason: "dormant" }],
-      }),
-    }));
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(input.toString());
+      if (url.pathname === "/deployment") {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => matchingPonderDeployment(),
+        };
+      }
+      expect(url.pathname).toBe("/keeper/work");
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          openRounds: [],
+          cleanupRounds: [],
+          dormantContent: [{ contentId: "99", reason: "dormant" }],
+        }),
+      };
+    });
     vi.stubGlobal("fetch", fetchMock);
     const logger = makeLogger();
 
@@ -815,6 +907,13 @@ describe("resolveRounds", () => {
     });
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(input.toString());
+      if (url.pathname === "/deployment") {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => matchingPonderDeployment(),
+        };
+      }
       expect(url.pathname).toBe("/keeper/work");
       return {
         ok: true,
@@ -877,25 +976,36 @@ describe("resolveRounds", () => {
         return 100n;
       },
     });
-    const fetchMock = vi.fn(async () => ({
-      ok: true,
-      status: 200,
-      json: async () => ({
-        openRounds: [],
-        cleanupRounds: [],
-        dormantContent: [],
-        feedbackBonusForfeits: [
-          {
-            poolId: "7",
-            contentId: "9",
-            roundId: "2",
-            awardDeadline: "2999900",
-            remainingAmount: "1000000",
-            reason: "feedback_bonus_forfeit",
-          },
-        ],
-      }),
-    }));
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(input.toString());
+      if (url.pathname === "/deployment") {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => matchingPonderDeployment(),
+        };
+      }
+      expect(url.pathname).toBe("/keeper/work");
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          openRounds: [],
+          cleanupRounds: [],
+          dormantContent: [],
+          feedbackBonusForfeits: [
+            {
+              poolId: "7",
+              contentId: "9",
+              roundId: "2",
+              awardDeadline: "2999900",
+              remainingAmount: "1000000",
+              reason: "feedback_bonus_forfeit",
+            },
+          ],
+        }),
+      };
+    });
     vi.stubGlobal("fetch", fetchMock);
     const logger = makeLogger();
 
