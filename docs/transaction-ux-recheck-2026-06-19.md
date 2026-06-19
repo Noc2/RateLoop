@@ -4,6 +4,19 @@ Reviewed `main` at `d084fd9907347f9a6ee320b7cc0d10ab70bc035c` after the Base mai
 
 This pass was review-only. No app, agent, SDK, keeper, indexer, or smart-contract implementation files were changed. The only output from this pass is this findings document.
 
+## Remediation Status
+
+Follow-up non-redeploy fixes after this recheck:
+
+- H-1 browser signing Feedback Bonus continuation was fixed by `b4548237` (`fix(agent): continue browser signing feedback bonus funding`).
+- M-2 readiness coverage was fixed by `f222668c` (`fix(readiness): verify x402 one-shot support`).
+- M-4 and M-5 documentation gaps for `requiresAtomicExecution` were fixed by `0501c8e1` (`docs(agent): document atomic wallet plan requirements`).
+- M-6 direct HTTP Feedback Bonus guidance was fixed by `a376faf3` (`docs(agent): align direct feedback bonus guidance`).
+- M-3 and L-1 production preconfirmation env wording were clarified by `65ad89d5` (`docs(env): clarify production preconfirmation rpc config`). A future server-only canonical RPC split can still harden this at runtime.
+- L-2 stale review/audit docs were marked historical by `ceb48ce4` (`docs(review): mark stale transaction ux findings`).
+
+M-1 remains the deployment-bound Base Sepolia staging mismatch. It does not require a Base mainnet redeploy.
+
 ## Contract Redeploy Posture
 
 No finding below requires a Base mainnet smart-contract redeploy. The current Base mainnet artifacts point at the refreshed `X402QuestionSubmitter` address, and the focused x402 contract tests still pass.
