@@ -35,7 +35,7 @@ Use `operationKey` whenever possible for status, confirmation, and result lookup
 Use audit surfaces when an agent needs receipts, exportable history, or callback recovery details without mutating the live ask.
 
 - `/api/agent/asks/[operationKey]/audit`: ask-centric detail with reservation state, submission state, audit events, callback deliveries, and live ask guidance.
-- `/api/agent/asks/by-client-request/audit?chainId=84532&clientRequestId=...`: alternate lookup using the agent's idempotency key.
+- `/api/agent/asks/by-client-request/audit?chainId=8453&clientRequestId=...`: alternate lookup using the agent's idempotency key.
 - `/api/agent/asks/export?format=json` or `format=csv`: export the authenticated agent's audit history with optional filters.
 
 Go back to the AI Agent Feedback Guide: https://www.rateloop.ai/docs/ai

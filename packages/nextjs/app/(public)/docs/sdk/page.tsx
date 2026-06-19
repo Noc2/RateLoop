@@ -16,7 +16,7 @@ const agent = createRateLoopAgentClient({
 });
 
 const context = await agent.getRatingContext({
-  chainId: 84532, // Base Sepolia (testnet); use 8453 only after intentional Base mainnet promotion.
+  chainId: 8453, // Base mainnet production; use 84532 for Base Sepolia staging/testnet validation.
   contentId: "42",
   walletAddress: "0xYourWallet",
 });
@@ -44,7 +44,7 @@ const commit = await buildCommitVoteParams({
 });
 
 const prepared = await agent.prepareRatingTransactions({
-  chainId: 84532, // Base Sepolia (testnet); use 8453 only after intentional Base mainnet promotion.
+  chainId: 8453, // Base mainnet production; use 84532 for Base Sepolia staging/testnet validation.
   contentId: "42",
   walletAddress: "0xYourWallet",
   roundId: commit.roundId,
@@ -173,9 +173,8 @@ const participationStatus = await rateloop.read.getRaterParticipationStatus(
       <p>
         Point <code>apiBaseUrl</code> at your Ponder indexer (<code>https://ponder.rateloop.ai</code> or{" "}
         <code>NEXT_PUBLIC_PONDER_URL</code>). Agent MCP and browser handoffs use the Next.js origin (
-        <code>https://www.rateloop.ai</code>). Chain IDs: <code>84532</code> is Base Sepolia (testnet);{" "}
-        <code>8453</code> is Base mainnet after an intentional production promotion. Examples use Base Sepolia unless
-        noted.
+        <code>https://www.rateloop.ai</code>). Chain IDs: <code>8453</code> is Base mainnet production;{" "}
+        <code>84532</code> is Base Sepolia staging/testnet validation.
       </p>
 
       <h2>Rating Vote Integration</h2>

@@ -20,7 +20,7 @@ The exported helper names use the RateLoop namespace.
 
 Framework-specific hooks and UI components should live in a follow-up package rather than this core SDK.
 
-**Chain IDs:** `84532` = Base Sepolia (testnet); `8453` = Base mainnet after an intentional production promotion. Examples below use Base Sepolia unless noted.
+**Chain IDs:** `8453` = Base mainnet production; `84532` = Base Sepolia staging/testnet. Examples below use Base mainnet unless noted.
 
 `apiBaseUrl` on `createRateLoopClient` should point at the hosted Ponder indexer (`https://ponder.rateloop.ai` or your deployment's `NEXT_PUBLIC_PONDER_URL`), not the Next.js app origin. For `createRateLoopAgentClient`, set `mcpApiUrl` explicitly to your Next.js MCP host (`https://www.rateloop.ai/api/mcp/public` or managed `/api/mcp`); do not derive MCP from a Ponder `apiBaseUrl`.
 
@@ -95,7 +95,7 @@ const walletAddress = "0xYourFundedAgentWallet";
 
 const quote = await agent.quoteQuestion({
   clientRequestId: "launch-check-1",
-  chainId: 84532,
+  chainId: 8453,
   bounty: {
     amount: "1000000",
     requiredVoters: "3",
@@ -118,7 +118,7 @@ const quote = await agent.quoteQuestion({
 });
 
 const dryRun = await agent.askHumans({
-  chainId: 84532,
+  chainId: 8453,
   clientRequestId: "launch-check-1-dry-run",
   dryRun: true,
   mode: "dry_run",
@@ -145,7 +145,7 @@ const dryRun = await agent.askHumans({
 });
 
 const ask = await agent.askHumans({
-  chainId: 84532,
+  chainId: 8453,
   clientRequestId: "launch-check-1",
   maxPaymentAmount: quote.payment?.amount ?? "1000000",
   bounty: {
@@ -175,19 +175,19 @@ const status = await agent.getQuestionStatus({
 const result = await agent.getResult({ operationKey: status.operationKey });
 
 let ratingContext = await agent.getRatingContext({
-  chainId: 84532,
+  chainId: 8453,
   contentId: "42",
   walletAddress,
 });
 
 if (ratingContext.content?.contextAccess === "gated") {
   await agent.acceptConfidentialityTerms({
-    chainId: 84532,
+    chainId: 8453,
     contentId: "42",
     walletAddress,
   });
   ratingContext = await agent.getRatingContext({
-    chainId: 84532,
+    chainId: 8453,
     contentId: "42",
     walletAddress,
   });
@@ -225,7 +225,7 @@ const encryptedCommit = await buildCommitVoteParams({
 });
 
 const preparedRating = await agent.prepareRatingTransactions({
-  chainId: 84532,
+  chainId: 8453,
   contentId: "42",
   walletAddress,
   roundId: encryptedCommit.roundId,

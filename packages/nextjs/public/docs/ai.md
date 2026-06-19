@@ -6,7 +6,7 @@ Use `/docs/how-it-works` when you need to explain the protocol to a human in pla
 RateLoop contracts are still deployment-gated. Install the agent workflow now, but do not force a paid production ask
 when the requested chain does not have live RateLoop contracts.
 
-Examples below use Base Sepolia testnet (`chainId: 84532`). Base mainnet uses `8453` only after an intentional production promotion.
+Examples below use Base mainnet production (`chainId: 8453`). Use Base Sepolia (`84532`) only for staging/testnet validation.
 
 RateLoop lets agents do two things:
 
@@ -116,7 +116,7 @@ Backup: if the agent controls a funded encrypted wallet, use the local signer CL
 
 - Public context: use `question.contextUrl` for a public page, `question.videoUrl` for YouTube, or pass generated/local/user image bytes as `generatedImages` to the browser handoff. Longer written details belong in `question.detailsUrl` plus `question.detailsHash` when the agent hosts them, or in the browser Ask form Description field when the user reviews the ask. Do not ask the user to host generated images elsewhere.
 - Gated context: set `question.confidentiality.visibility` to `gated`, use only RateLoop-hosted images or details, omit `question.contextUrl` and `question.videoUrl`, choose `disclosurePolicy: "private_forever"` or `"after_settlement"`, and keep any confidentiality bond in atomic LREP or USDC units. Use `0` for no bond; nonzero bonds must be at least `1000000` atomic units. Omitted disclosure policy defaults to `private_forever`. `after_settlement` discloses hosted context after settlement; `private_forever` keeps submitter-authored hosted context gated and redacted from public result surfaces. Gated context is deterrence and redaction, not cryptographic secrecy: the RateLoop operator can serve/read hosted bytes, and eligible raters can still absorb what they see.
-- Wallet: optional expected `walletAddress` on Base Sepolia with USDC for the bounty, plus LREP when using an LREP Feedback Bonus.
+- Wallet: optional expected `walletAddress` on Base mainnet with USDC for the bounty, plus LREP when using an LREP Feedback Bonus; use Base Sepolia only for staging/testnet validation.
 - Bounty: `amount`, `requiredVoters`, `requiredSettledRounds`, `bountyStartBy`, `bountyWindowSeconds`, `feedbackWindowSeconds`, and optional `bountyEligibility` (`0` everyone, `8` Proof of Human). If a custom `roundConfig` is supplied, `roundConfig.minVoters` must match `bounty.requiredVoters`. Under the launch policy, use at least 5 voters for bounties at or above 1000 USDC and at least 8 voters for bounties at or above 10000 USDC. Three-voter rounds are the launch feedback tier; score-spread LREP forfeits are disabled below 8 score-eligible revealed voters, and governance can raise new-ask voter floors as usage grows.
 - Optional Feedback Bonus: extra USDC or LREP for useful public rater feedback on single-question asks. Use it by default for user testing, product-concept checks, bug reproduction, source-quality review, and go/no-go decisions where the human wants to know why. LREP bonuses require `paymentMode: "wallet_calls"`; `x402_authorization` remains USDC-only.
 - Round speed: `roundConfig.epochDuration` and `maxDuration` are per-question. Short rounds can settle within minutes when raters respond quickly; for unusually sensitive or high-value asks, keep a longer blind phase and at least 8 required voters instead of optimizing for speed.
@@ -196,7 +196,7 @@ Default to `paymentMode: "wallet_calls"`. Use `paymentMode: "x402_authorization"
 
 ```json
 {
-  "chainId": 84532,
+  "chainId": 8453,
   "clientRequestId": "design-review-2026-05-05-001",
   "walletAddress": "0x1111111111111111111111111111111111111111",
   "paymentMode": "wallet_calls",

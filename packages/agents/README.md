@@ -19,7 +19,7 @@ the few runtime values that are intentionally not hard-coded. Browser handoff We
 the default headless path:
 
 - RateLoop origin, usually `https://www.rateloop.ai`
-- funded Base Sepolia `walletAddress` for browser signing, or permission to generate a local encrypted signer and fund that address
+- funded Base mainnet `walletAddress` for production browser signing, or Base Sepolia funding when practicing on staging
 - public context URL, YouTube video context, or image context you can upload to RateLoop
 - optional extra image bytes for local mockups, screenshots, and generated images
 - USDC bounty, `maxPaymentAmount`, `requiredVoters`, `requiredSettledRounds`, `bountyStartBy`, `bountyWindowSeconds`, `feedbackWindowSeconds`, and optional payout-only `bountyEligibility`
@@ -97,7 +97,7 @@ image attachments, request a USDC authorization, return a transaction plan, or t
 
 ## First Funded Ask
 
-1. Fund the user wallet or local signer wallet with Base Sepolia USDC for testnet asks.
+1. Fund the user wallet with Base mainnet USDC for production asks, or fund a staging/local signer wallet with Base Sepolia USDC for testnet asks.
 2. Keep generated/local image bytes for `generatedImages` when browser handoff visual context is needed.
 3. Run `sandbox` or `ask --dry-run`, then quote with `rateloop_quote_question` when the ask already uses public URLs or uploaded RateLoop `imageUrls`.
 4. For a human wallet, call `rateloop_create_ask_handoff_link` with the same ask payload and optional `generatedImages`, then share the returned `/agent/handoff/{handoffId}#token=...` URL. For generated-image-only handoffs, create the handoff directly; the browser prepare step prices the ask before payment.
@@ -166,7 +166,7 @@ yarn workspace @rateloop/agents wallet
 yarn workspace @rateloop/agents local-ask --file packages/agents/examples/questions/landing-pitch-review.json
 ```
 
-The next live rollout uses Base Sepolia (`84532`). Base mainnet (`8453`) should be treated as a future production promotion after the Base Sepolia stack is verified end to end. Local signer examples and `examples/questions/*.json` should default to Base Sepolia so funded test wallets stay on testnet USDC.
+Production asks use Base mainnet (`8453`). Local signer examples and `examples/questions/*.json` should continue to default to Base Sepolia (`84532`) so generated test wallets stay on testnet USDC.
 
 The local signer never prints the private key. `RATELOOP_LOCAL_SIGNER_PRIVATE_KEY` exists only for short-lived CI or
 ephemeral test wallets; avoid putting long-lived funded keys in shell history, committed `.env` files, or shared logs.

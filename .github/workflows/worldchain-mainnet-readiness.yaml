@@ -14,5 +14,5 @@ jobs:
     steps:
       - name: Retired Base-first rollout notice
         run: |
-          echo "World Chain mainnet readiness is retired for the Base-first rollout."
-          echo "Use Base Sepolia readiness first; promote Base mainnet intentionally after verification."
+          echo "World Chain mainnet readiness is retired for the Base production deployment."
+          echo "Use Base mainnet readiness for production changes and Base Sepolia readiness for staging validation."

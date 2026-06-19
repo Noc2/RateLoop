@@ -1,6 +1,6 @@
 # Base signing UX plan
 
-RateLoop's next live rollout is a fresh Base deployment path. Test on Base Sepolia first, and only promote to Base mainnet after the Sepolia stack is verified end to end. The smart contracts are not deployed in production, so this is the right window to validate wallet UX before creating a mainnet boundary.
+RateLoop's production deployment boundary is Base mainnet, with Base Sepolia used for staging and validation before future production changes. This note captures the wallet UX checks that should keep passing on both Base environments.
 
 ## Implemented improvements
 

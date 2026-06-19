@@ -29,9 +29,8 @@ For local `31337`, address vars override the shared artifact so a fresh Anvil de
 machine-specific local addresses. For any non-local chain, publish the deployment through `@rateloop/contracts` instead
 of relying on Keeper address env overrides.
 
-The next live rollout starts on Base Sepolia. Run Keeper with `CHAIN_ID=84532`, a Base Sepolia `RPC_URL`, and the matching
-Base Sepolia `PONDER_BASE_URL` until the testnet stack is verified end to end. Use `CHAIN_ID=8453` only after the Base
-mainnet deployment artifact is intentionally promoted.
+Run production Keeper with `CHAIN_ID=8453`, a Base mainnet `RPC_URL`, and the matching Base mainnet `PONDER_BASE_URL`.
+Use `CHAIN_ID=84532` with Base Sepolia RPC/Ponder URLs for staging and validation before future production changes.
 
 | Variable                                          | Default                                                             | Description                                                                                                        |
 | ------------------------------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |

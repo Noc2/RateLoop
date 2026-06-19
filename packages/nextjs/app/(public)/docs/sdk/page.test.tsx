@@ -8,14 +8,13 @@ const { renderToStaticMarkup } = require("react-dom/server") as {
   renderToStaticMarkup: (element: React.ReactElement) => string;
 };
 
-test("SDK docs keep Base mainnet gated behind intentional promotion", async () => {
+test("SDK docs identify Base mainnet as production and Base Sepolia as staging", async () => {
   (globalThis as typeof globalThis & { React: typeof React }).React = React;
   const { default: SdkPage } = await import("./page");
   const html = renderToStaticMarkup(<SdkPage />).replace(/\s+/g, " ");
 
-  assert.doesNotMatch(html, /Production mainnet is 8453/);
-  assert.doesNotMatch(html, /production mainnet is 8453/);
-  assert.match(html, /84532.+Base Sepolia \(testnet\)/i);
-  assert.match(html, /8453.+Base mainnet after an intentional production promotion/i);
-  assert.match(html, /Examples use Base Sepolia unless noted/i);
+  assert.match(html, /chainId:\s*8453/i);
+  assert.match(html, /8453.+Base mainnet production/i);
+  assert.match(html, /84532.+Base Sepolia staging\/testnet validation/i);
+  assert.doesNotMatch(html, /intentional production promotion/i);
 });

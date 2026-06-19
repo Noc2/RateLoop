@@ -57,9 +57,9 @@ For live supported chains, Ponder treats `@rateloop/contracts` as the source of 
 For local Hardhat/Anvil, Ponder prefers the address env values generated into `packages/ponder/.env.local` so a fresh
 `yarn deploy` does not need machine-specific addresses committed to the shared deployment artifact. After `yarn deploy`,
 the Foundry deployment script refreshes `packages/ponder/.env.local` to match the deployment target. Local deploys set
-`PONDER_NETWORK=hardhat`. The next live rollout starts on Base Sepolia: set `PONDER_NETWORK=baseSepolia` with
-`PONDER_RPC_URL_84532`, then move to `PONDER_NETWORK=base` with `PONDER_RPC_URL_8453` only after Base mainnet is
-intentionally promoted. World Chain live networks remain supported as `worldchainSepolia` and `worldchain`.
+`PONDER_NETWORK=hardhat`. Run production indexing with `PONDER_NETWORK=base` and `PONDER_RPC_URL_8453`; use
+`PONDER_NETWORK=baseSepolia` with `PONDER_RPC_URL_84532` for staging and validation before future production changes.
+World Chain live networks remain supported as `worldchainSepolia` and `worldchain`.
 
 In production, `yarn ponder:start` launches Ponder with an explicit Postgres schema. On Railway, the
 launcher uses `RAILWAY_DEPLOYMENT_ID`, matching Ponder's zero-downtime deployment model and keeping new
