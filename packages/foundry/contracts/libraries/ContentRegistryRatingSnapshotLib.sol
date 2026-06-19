@@ -96,8 +96,10 @@ library ContentRegistryRatingSnapshotLib {
 
         require(content.id != 0);
         if (readyAt > type(uint48).max) revert InvalidState();
-        // aderyn-fp-next-line(unsafe-casting)
-        uint48 readyAt48 = uint48(readyAt);
+        uint48 readyAt48;
+        assembly ("memory-safe") {
+            readyAt48 := readyAt
+        }
         content.lastActivityAt = readyAt48;
         dormancyAnchorAt[contentId] = readyAt;
         if (caller == currentVotingEngine) {

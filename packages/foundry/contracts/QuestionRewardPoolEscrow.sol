@@ -62,7 +62,7 @@ contract QuestionRewardPoolEscrow is
 
     uint256 internal constant MIN_REQUIRED_SETTLED_ROUNDS = 1;
     uint256 internal constant BPS_SCALE = 10_000;
-    uint256 internal constant DEFAULT_FRONTEND_FEE_BPS = 300;
+    uint16 internal constant DEFAULT_FRONTEND_FEE_BPS = 300;
     /// @notice Grace period voters have after bountyClosesAt to claim on a still-claimable bundle
     ///         before a third party can sweep the remainder back to the funder.
     uint256 internal constant BUNDLE_CLAIM_GRACE = 7 days;
@@ -286,8 +286,7 @@ contract QuestionRewardPoolEscrow is
         votingEngine = RoundVotingEngine(votingEngine_);
         raterRegistry = IRaterIdentityRegistry(raterRegistry_);
         nextRewardPoolId = 1;
-        // aderyn-fp-next-line(unsafe-casting)
-        defaultFrontendFeeBps = uint16(DEFAULT_FRONTEND_FEE_BPS);
+        defaultFrontendFeeBps = DEFAULT_FRONTEND_FEE_BPS;
     }
 
     function questionRewardPoolEscrowConfigShape() external view returns (address, address) {
@@ -1344,11 +1343,12 @@ contract QuestionRewardPoolEscrow is
         RewardPool storage rewardPool = rewardPools[rewardPoolId];
         if (rewardPool.id == 0 || rewardPool.refunded || rewardPool.claimDeadline == 0) return 0;
         uint256 eligibleAt = uint256(rewardPool.claimDeadline) + BUNDLE_CLAIM_GRACE;
+        uint64 refundEligibleAt;
         assembly ("memory-safe") {
             if gt(eligibleAt, 0xffffffffffffffff) { revert(0, 0) }
+            refundEligibleAt := eligibleAt
         }
-        // aderyn-fp-next-line(unsafe-casting)
-        return uint64(eligibleAt);
+        return refundEligibleAt;
     }
 
     function getQuestionBundleEligibility(uint256 bundleId)

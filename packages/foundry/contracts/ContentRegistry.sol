@@ -540,14 +540,21 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         // a credential between reserve and reveal, attributing the submission to a different
         // identity than they had at reservation.
         (address submitterIdentity, bytes32 submitterIdentityKey) = _snapshotSubmitterIdentity(msg.sender);
+        uint256 reservedAt256 = block.timestamp;
+        uint256 expiresAt256 = reservedAt256 + SUBMISSION_RESERVATION_PERIOD;
+        uint48 reservedAt;
+        uint48 expiresAt;
+        assembly ("memory-safe") {
+            if gt(expiresAt256, 0xffffffffffff) { revert(0, 0) }
+            reservedAt := reservedAt256
+            expiresAt := expiresAt256
+        }
         pendingSubmissions[key] = PendingSubmission({
             submitter: msg.sender,
             submitterIdentity: submitterIdentity,
             submitterIdentityKey: submitterIdentityKey,
-            // aderyn-fp-next-line(unsafe-casting)
-            reservedAt: uint48(block.timestamp),
-            // aderyn-fp-next-line(unsafe-casting)
-            expiresAt: uint48(block.timestamp + SUBMISSION_RESERVATION_PERIOD)
+            reservedAt: reservedAt,
+            expiresAt: expiresAt
         });
 
         emit SubmissionReserved(msg.sender, revealCommitment, block.timestamp + SUBMISSION_RESERVATION_PERIOD);
@@ -1114,21 +1121,26 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         uint256 bundleId
     ) internal returns (uint256 contentId) {
         contentId = nextContentId++;
+        uint256 submittedAt256 = block.timestamp;
+        uint48 submittedAt;
+        uint64 contentId64;
+        uint64 categoryId64;
         assembly ("memory-safe") {
             if or(gt(contentId, 0xffffffffffffffff), gt(resolvedCategoryId, 0xffffffffffffffff)) { revert(0, 0) }
+            if gt(submittedAt256, 0xffffffffffff) { revert(0, 0) }
+            submittedAt := submittedAt256
+            contentId64 := contentId
+            categoryId64 := resolvedCategoryId
         }
         contentSubmissionKey[contentId] = submissionKey;
         if (submitterIdentity == address(0) || submitterIdentityKey == bytes32(0)) {
             (submitterIdentity, submitterIdentityKey) = _snapshotSubmitterIdentity(submitter);
         }
-        // aderyn-fp-next-line(unsafe-casting)
-        uint48 submittedAt = uint48(block.timestamp);
         getSubmitterIdentity[contentId] = submitterIdentity;
         contentSubmitterIdentityKey[contentId] = submitterIdentityKey;
         contentRoundConfig[contentId] = roundConfig;
         contents[contentId] = ContentRegistryTypes.Content({
-            // aderyn-fp-next-line(unsafe-casting)
-            id: uint64(contentId),
+            id: contentId64,
             contentHash: contentHash,
             submitter: submitter,
             createdAt: submittedAt,
@@ -1137,8 +1149,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             dormantCount: 0,
             reviver: address(0),
             rating: 50,
-            // aderyn-fp-next-line(unsafe-casting)
-            categoryId: uint64(resolvedCategoryId)
+            categoryId: categoryId64
         });
         if (bundleId != 0) {
             contentBundleId[contentId] = bundleId;
@@ -1148,11 +1159,12 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         );
         RatingLib.RatingState storage ratingState = _ratingState[contentId];
         uint256 initialConfidenceMass = _getInitialConfidenceMass();
+        uint128 confidenceMass;
         assembly ("memory-safe") {
             if gt(initialConfidenceMass, 0xffffffffffffffffffffffffffffffff) { revert(0, 0) }
+            confidenceMass := initialConfidenceMass
         }
-        // aderyn-fp-next-line(unsafe-casting)
-        ratingState.confidenceMass = uint128(initialConfidenceMass);
+        ratingState.confidenceMass = confidenceMass;
         ratingState.ratingBps = RatingLib.DEFAULT_RATING_BPS;
         ratingState.conservativeRatingBps = RatingLib.DEFAULT_RATING_BPS;
         contentSlashConfigSnapshot[contentId] = _getCurrentSlashConfig();
@@ -1345,8 +1357,13 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             revert ActiveRoundOnPreviousEngine();
         }
         contentRoundTrackingEngine[contentId] = msg.sender;
-        // aderyn-fp-next-line(unsafe-casting)
-        contents[contentId].lastActivityAt = uint48(block.timestamp);
+        uint256 activityAt256 = block.timestamp;
+        uint48 activityAt;
+        assembly ("memory-safe") {
+            if gt(activityAt256, 0xffffffffffff) { revert(0, 0) }
+            activityAt := activityAt256
+        }
+        contents[contentId].lastActivityAt = activityAt;
         contentSettlementEngineGeneration[contentId] = callerGeneration;
     }
 
@@ -1428,8 +1445,12 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         IClusterPayoutOracle.PayoutWeight[] calldata payoutWeights,
         bytes32[][] calldata proofs
     ) external {
-        // aderyn-fp-next-line(unsafe-casting)
-        uint48 appliedAt = uint48(block.timestamp);
+        uint256 appliedAt256 = block.timestamp;
+        uint48 appliedAt;
+        assembly ("memory-safe") {
+            if gt(appliedAt256, 0xffffffffffff) { revert(0, 0) }
+            appliedAt := appliedAt256
+        }
         ContentRegistryRatingSnapshotLib.applyRatingPayoutSnapshot(
             pendingRatingSettlement[contentId][roundId],
             contents[contentId],
@@ -1495,8 +1516,14 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
 
     function getRating(uint256 contentId) external view returns (uint16) {
         uint16 ratingBps = _ratingState[contentId].ratingBps;
-        // aderyn-fp-next-line(unsafe-casting)
-        if (ratingBps == 0) return uint16(uint256(contents[contentId].rating) * 100);
+        if (ratingBps == 0) {
+            uint256 fallbackRating = uint256(contents[contentId].rating) * 100;
+            uint16 fallbackRatingBps;
+            assembly ("memory-safe") {
+                fallbackRatingBps := fallbackRating
+            }
+            return fallbackRatingBps;
+        }
         return ratingBps;
     }
 
