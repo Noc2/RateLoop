@@ -483,6 +483,78 @@ test.describe("Mobile viewport (phone)", () => {
     expect(layout.activeContextCenterTopmost).toBe(true);
   });
 
+  test("mobile description preview keeps Show More above the voting dock", async ({ connectedPage: page }) => {
+    await gotoWithRetry(page, "/rate", { ensureWalletConnected: true });
+    await waitForFeedLoaded(page);
+
+    const scrollToNextCard = async () => {
+      const targetIndex = await page.evaluate(() => {
+        const scroller = document.querySelector<HTMLElement>('[data-mobile-header-scroll-source="true"]');
+        const activeArticle = document.querySelector<HTMLElement>('article[aria-current="true"]');
+        if (!scroller || !activeArticle) {
+          throw new Error("Missing mobile feed scroller or active article");
+        }
+
+        const activeIndex = Number(activeArticle.getAttribute("data-feed-card-index") ?? -1);
+        const targetArticle = document.querySelector<HTMLElement>(`article[data-feed-card-index="${activeIndex + 1}"]`);
+        if (!targetArticle) return activeIndex;
+
+        const previousScrollBehavior = scroller.style.scrollBehavior;
+        scroller.style.scrollBehavior = "auto";
+        scroller.scrollTop = targetArticle.offsetTop - 12;
+        scroller.dispatchEvent(new Event("scroll", { bubbles: true }));
+        scroller.style.scrollBehavior = previousScrollBehavior;
+
+        return activeIndex + 1;
+      });
+
+      await expect
+        .poll(
+          () =>
+            page.evaluate(() =>
+              Number(document.querySelector<HTMLElement>('article[aria-current="true"]')?.dataset.feedCardIndex ?? -1),
+            ),
+          { timeout: 3_000 },
+        )
+        .toBe(targetIndex);
+    };
+
+    let showMore = page.locator('article[aria-current="true"] button:has-text("Show More")').first();
+    for (let attempt = 0; attempt < 6 && (await showMore.count()) === 0; attempt += 1) {
+      await scrollToNextCard();
+      showMore = page.locator('article[aria-current="true"] button:has-text("Show More")').first();
+    }
+
+    await expect(showMore).toBeVisible({ timeout: 5_000 });
+
+    const layout = await showMore.evaluate(button => {
+      const activeArticle = document.querySelector<HTMLElement>('article[aria-current="true"]');
+      const mobileDock = document.querySelector<HTMLElement>('[data-testid="vote-mobile-dock"]');
+      if (!activeArticle || !mobileDock) {
+        throw new Error("Missing active article or mobile voting dock");
+      }
+
+      const buttonRect = button.getBoundingClientRect();
+      const dockRect = mobileDock.getBoundingClientRect();
+      const topElement = document.elementFromPoint(
+        buttonRect.left + buttonRect.width / 2,
+        buttonRect.top + buttonRect.height / 2,
+      );
+
+      return {
+        buttonBottom: buttonRect.bottom,
+        buttonTopmost: topElement === button || button.contains(topElement),
+        dockTop: dockRect.top,
+      };
+    });
+
+    expect(layout.buttonBottom).toBeLessThanOrEqual(layout.dockTop - 1);
+    expect(layout.buttonTopmost).toBe(true);
+
+    await showMore.click();
+    await expect(page.locator('article[aria-current="true"] button:has-text("Show Less")').first()).toBeVisible();
+  });
+
   test("mobile voting dock keeps rating orb raised above equal action circles", async ({ connectedPage: page }) => {
     await gotoWithRetry(page, "/rate", { ensureWalletConnected: true });
     await waitForFeedLoaded(page);
