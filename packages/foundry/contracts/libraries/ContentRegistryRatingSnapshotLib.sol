@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
+import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import { IClusterPayoutOracle } from "../interfaces/IClusterPayoutOracle.sol";
 import { IRoundVotingEngine } from "../interfaces/IRoundVotingEngine.sol";
 import { ProtocolConfig } from "../ProtocolConfig.sol";
@@ -13,6 +14,8 @@ import { RoundLib } from "./RoundLib.sol";
 /// @title ContentRegistryRatingSnapshotLib
 /// @notice Validates finalized rating payout snapshots and computes the resulting rating state.
 library ContentRegistryRatingSnapshotLib {
+    using SafeCast for uint256;
+
     error InvalidState();
 
     event RatingSnapshotApplied(
@@ -95,7 +98,7 @@ library ContentRegistryRatingSnapshotLib {
         }
 
         require(content.id != 0);
-        uint48 readyAt48 = uint48(readyAt);
+        uint48 readyAt48 = readyAt.toUint48();
         content.lastActivityAt = readyAt48;
         dormancyAnchorAt[contentId] = readyAt;
         if (caller == currentVotingEngine) {
@@ -133,8 +136,7 @@ library ContentRegistryRatingSnapshotLib {
             uint64 proposedAt
         ) {
             if (proposedAt != 0) revert InvalidState();
-        }
-        catch {
+        } catch {
             revert InvalidState();
         }
         try oracle.roundPayoutSnapshotConsumer(PAYOUT_DOMAIN_PUBLIC_RATING) returns (address consumer) {

@@ -1,25 +1,26 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
-import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
-import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {ICategoryRegistry} from "./interfaces/ICategoryRegistry.sol";
-import {IClusterPayoutOracle} from "./interfaces/IClusterPayoutOracle.sol";
-import {IRoundVotingEngine} from "./interfaces/IRoundVotingEngine.sol";
-import {IRaterIdentityRegistry} from "./interfaces/IRaterIdentityRegistry.sol";
-import {IConfidentialityEscrow} from "./interfaces/IConfidentialityEscrow.sol";
-import {RoundLib} from "./libraries/RoundLib.sol";
-import {RatingLib} from "./libraries/RatingLib.sol";
-import {ContentRegistryDormancyLib} from "./libraries/ContentRegistryDormancyLib.sol";
-import {ContentRegistryRewardLib} from "./libraries/ContentRegistryRewardLib.sol";
-import {ContentRegistryRatingSnapshotLib} from "./libraries/ContentRegistryRatingSnapshotLib.sol";
-import {ContentRegistryTypes} from "./libraries/ContentRegistryTypes.sol";
-import {ProtocolConfig} from "./ProtocolConfig.sol";
-import {SubmissionMediaValidator} from "./SubmissionMediaValidator.sol";
-import {SubmissionMediaValidatorFactory} from "./SubmissionMediaValidatorFactory.sol";
+import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
+import { ReentrancyGuardTransient } from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
+import { ICategoryRegistry } from "./interfaces/ICategoryRegistry.sol";
+import { IClusterPayoutOracle } from "./interfaces/IClusterPayoutOracle.sol";
+import { IRoundVotingEngine } from "./interfaces/IRoundVotingEngine.sol";
+import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol";
+import { IConfidentialityEscrow } from "./interfaces/IConfidentialityEscrow.sol";
+import { RoundLib } from "./libraries/RoundLib.sol";
+import { RatingLib } from "./libraries/RatingLib.sol";
+import { ContentRegistryDormancyLib } from "./libraries/ContentRegistryDormancyLib.sol";
+import { ContentRegistryRewardLib } from "./libraries/ContentRegistryRewardLib.sol";
+import { ContentRegistryRatingSnapshotLib } from "./libraries/ContentRegistryRatingSnapshotLib.sol";
+import { ContentRegistryTypes } from "./libraries/ContentRegistryTypes.sol";
+import { ProtocolConfig } from "./ProtocolConfig.sol";
+import { SubmissionMediaValidator } from "./SubmissionMediaValidator.sol";
+import { SubmissionMediaValidatorFactory } from "./SubmissionMediaValidatorFactory.sol";
 
 interface IQuestionRewardPoolEscrow {
     function createSubmissionRewardPoolFromRegistry(
@@ -55,6 +56,8 @@ interface IQuestionRewardPoolEscrow {
 /// @notice Manages content lifecycle: submission → active → dormant → revived / cancelled.
 /// @dev Stores only a metadata hash on-chain; full URL/question details are emitted in events.
 contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpgradeable, ReentrancyGuardTransient {
+    using SafeCast for uint256;
+
     error OnlyVotingEngine();
     error ActiveRoundOnPreviousEngine();
     error InvalidState();
@@ -544,8 +547,8 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             submitter: msg.sender,
             submitterIdentity: submitterIdentity,
             submitterIdentityKey: submitterIdentityKey,
-            reservedAt: uint48(block.timestamp),
-            expiresAt: uint48(block.timestamp + SUBMISSION_RESERVATION_PERIOD)
+            reservedAt: block.timestamp.toUint48(),
+            expiresAt: (block.timestamp + SUBMISSION_RESERVATION_PERIOD).toUint48()
         });
 
         emit SubmissionReserved(msg.sender, revealCommitment, block.timestamp + SUBMISSION_RESERVATION_PERIOD);
@@ -896,7 +899,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         bool gated
     ) internal view returns (SubmissionMetadata memory metadata) {
         submissionMediaValidator.validateContextSubmission(contextUrl, imageUrls, videoUrl, title, tags, gated);
-        metadata = SubmissionMetadata({url: contextUrl, title: title, tags: tags, categoryId: categoryId});
+        metadata = SubmissionMetadata({ url: contextUrl, title: title, tags: tags, categoryId: categoryId });
         require(address(categoryRegistry) != address(0));
     }
 
@@ -1112,27 +1115,25 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         uint256 bundleId
     ) internal returns (uint256 contentId) {
         contentId = nextContentId++;
-        assembly ("memory-safe") {
-            if or(gt(contentId, 0xffffffffffffffff), gt(resolvedCategoryId, 0xffffffffffffffff)) { revert(0, 0) }
-        }
         contentSubmissionKey[contentId] = submissionKey;
         if (submitterIdentity == address(0) || submitterIdentityKey == bytes32(0)) {
             (submitterIdentity, submitterIdentityKey) = _snapshotSubmitterIdentity(submitter);
         }
+        uint48 submittedAt = block.timestamp.toUint48();
         getSubmitterIdentity[contentId] = submitterIdentity;
         contentSubmitterIdentityKey[contentId] = submitterIdentityKey;
         contentRoundConfig[contentId] = roundConfig;
         contents[contentId] = ContentRegistryTypes.Content({
-            id: uint64(contentId),
+            id: contentId.toUint64(),
             contentHash: contentHash,
             submitter: submitter,
-            createdAt: uint48(block.timestamp),
-            lastActivityAt: uint48(block.timestamp),
+            createdAt: submittedAt,
+            lastActivityAt: submittedAt,
             status: ContentRegistryTypes.ContentStatus.Active,
             dormantCount: 0,
             reviver: address(0),
             rating: 50,
-            categoryId: uint64(resolvedCategoryId)
+            categoryId: resolvedCategoryId.toUint64()
         });
         if (bundleId != 0) {
             contentBundleId[contentId] = bundleId;
@@ -1141,7 +1142,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             contentId, roundConfig.epochDuration, roundConfig.maxDuration, roundConfig.minVoters, roundConfig.maxVoters
         );
         RatingLib.RatingState storage ratingState = _ratingState[contentId];
-        ratingState.confidenceMass = uint128(_getInitialConfidenceMass());
+        ratingState.confidenceMass = _getInitialConfidenceMass().toUint128();
         ratingState.ratingBps = RatingLib.DEFAULT_RATING_BPS;
         ratingState.conservativeRatingBps = RatingLib.DEFAULT_RATING_BPS;
         contentSlashConfigSnapshot[contentId] = _getCurrentSlashConfig();
@@ -1239,7 +1240,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         internal
         pure
         returns (IConfidentialityEscrow.ConfidentialityConfig memory confidentiality)
-    {}
+    { }
 
     function _emitContentMediaSubmitted(
         uint256 contentId,
@@ -1334,7 +1335,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             revert ActiveRoundOnPreviousEngine();
         }
         contentRoundTrackingEngine[contentId] = msg.sender;
-        contents[contentId].lastActivityAt = uint48(block.timestamp);
+        contents[contentId].lastActivityAt = block.timestamp.toUint48();
         contentSettlementEngineGeneration[contentId] = callerGeneration;
     }
 
@@ -1343,6 +1344,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             mstore(0, contentId)
             mstore(0x20, latestVotingRoundId.slot)
             mstore(0, add(sload(keccak256(0, 0x40)), 1))
+            // aderyn-fp-next-line(yul-return)
             return(0, 0x20)
         }
     }
@@ -1405,7 +1407,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             uint48, RoundLib.RoundState, uint16, uint16, uint64, uint48, uint48 settledAt, uint8
         ) {
             if (settledAt != 0) return uint256(settledAt);
-        } catch {}
+        } catch { }
         return block.timestamp;
     }
 
@@ -1425,7 +1427,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             roundId,
             payoutWeights,
             proofs,
-            uint48(block.timestamp)
+            block.timestamp.toUint48()
         );
     }
 
@@ -1452,6 +1454,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             mstore(0x20, contentSlot)
             let consumed := iszero(iszero(sload(keccak256(0, 0x40))))
             mstore(0, and(and(eq(domain, 3), iszero(rewardPoolId)), consumed))
+            // aderyn-fp-next-line(yul-return)
             return(0, 0x20)
         }
     }
@@ -1459,6 +1462,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     function supportsRoundPayoutSnapshotDomain(uint8 domain) external pure returns (bool) {
         assembly ("memory-safe") {
             mstore(0, eq(domain, 3))
+            // aderyn-fp-next-line(yul-return)
             return(0, 0x20)
         }
     }
@@ -1478,7 +1482,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
 
     function getRating(uint256 contentId) external view returns (uint16) {
         uint16 ratingBps = _ratingState[contentId].ratingBps;
-        if (ratingBps == 0) return uint16(uint256(contents[contentId].rating) * 100);
+        if (ratingBps == 0) return (uint256(contents[contentId].rating) * 100).toUint16();
         return ratingBps;
     }
 
@@ -1488,6 +1492,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             mstore(0x20, contents.slot)
             let contentSlot := keccak256(0, 0x40)
             mstore(0, and(iszero(iszero(sload(contentSlot))), iszero(and(sload(add(contentSlot, 3)), 0xff))))
+            // aderyn-fp-next-line(yul-return)
             return(0, 0x20)
         }
     }

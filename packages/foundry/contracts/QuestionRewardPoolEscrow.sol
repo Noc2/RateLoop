@@ -6,6 +6,7 @@ import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/ac
 import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 import { ReentrancyGuardTransient } from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
 import { ContentRegistry } from "./ContentRegistry.sol";
 import { RoundVotingEngine } from "./RoundVotingEngine.sol";
@@ -57,6 +58,8 @@ contract QuestionRewardPoolEscrow is
     ReentrancyGuardTransient,
     IRoundPayoutSnapshotConsumer
 {
+    using SafeCast for uint256;
+
     bytes32 internal constant CONFIG_ROLE = keccak256("CONFIG_ROLE");
     bytes32 internal constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 
@@ -286,13 +289,14 @@ contract QuestionRewardPoolEscrow is
         votingEngine = RoundVotingEngine(votingEngine_);
         raterRegistry = IRaterIdentityRegistry(raterRegistry_);
         nextRewardPoolId = 1;
-        defaultFrontendFeeBps = uint16(DEFAULT_FRONTEND_FEE_BPS);
+        defaultFrontendFeeBps = DEFAULT_FRONTEND_FEE_BPS.toUint16();
     }
 
     function questionRewardPoolEscrowConfigShape() external view returns (address, address) {
         assembly ("memory-safe") {
             mstore(0, sload(registry.slot))
             mstore(0x20, sload(votingEngine.slot))
+            // aderyn-fp-next-line(yul-return)
             return(0, 0x40)
         }
     }
@@ -1267,6 +1271,7 @@ contract QuestionRewardPoolEscrow is
     function supportsRoundPayoutSnapshotDomain(uint8 domain) external pure returns (bool) {
         assembly ("memory-safe") {
             mstore(0, or(eq(domain, 1), eq(domain, 4)))
+            // aderyn-fp-next-line(yul-return)
             return(0, 0x20)
         }
     }
@@ -1340,7 +1345,7 @@ contract QuestionRewardPoolEscrow is
     function rewardPoolRefundEligibleAt(uint256 rewardPoolId) external view returns (uint64) {
         RewardPool storage rewardPool = rewardPools[rewardPoolId];
         if (rewardPool.id == 0 || rewardPool.refunded || rewardPool.claimDeadline == 0) return 0;
-        return uint64(uint256(rewardPool.claimDeadline) + BUNDLE_CLAIM_GRACE);
+        return (uint256(rewardPool.claimDeadline) + BUNDLE_CLAIM_GRACE).toUint64();
     }
 
     function getQuestionBundleEligibility(uint256 bundleId)
