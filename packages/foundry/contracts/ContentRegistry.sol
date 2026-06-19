@@ -1,25 +1,25 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
-import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
-import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {ICategoryRegistry} from "./interfaces/ICategoryRegistry.sol";
-import {IClusterPayoutOracle} from "./interfaces/IClusterPayoutOracle.sol";
-import {IRoundVotingEngine} from "./interfaces/IRoundVotingEngine.sol";
-import {IRaterIdentityRegistry} from "./interfaces/IRaterIdentityRegistry.sol";
-import {IConfidentialityEscrow} from "./interfaces/IConfidentialityEscrow.sol";
-import {RoundLib} from "./libraries/RoundLib.sol";
-import {RatingLib} from "./libraries/RatingLib.sol";
-import {ContentRegistryDormancyLib} from "./libraries/ContentRegistryDormancyLib.sol";
-import {ContentRegistryRewardLib} from "./libraries/ContentRegistryRewardLib.sol";
-import {ContentRegistryRatingSnapshotLib} from "./libraries/ContentRegistryRatingSnapshotLib.sol";
-import {ContentRegistryTypes} from "./libraries/ContentRegistryTypes.sol";
-import {ProtocolConfig} from "./ProtocolConfig.sol";
-import {SubmissionMediaValidator} from "./SubmissionMediaValidator.sol";
-import {SubmissionMediaValidatorFactory} from "./SubmissionMediaValidatorFactory.sol";
+import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
+import { ReentrancyGuardTransient } from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { ICategoryRegistry } from "./interfaces/ICategoryRegistry.sol";
+import { IClusterPayoutOracle } from "./interfaces/IClusterPayoutOracle.sol";
+import { IRoundVotingEngine } from "./interfaces/IRoundVotingEngine.sol";
+import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol";
+import { IConfidentialityEscrow } from "./interfaces/IConfidentialityEscrow.sol";
+import { RoundLib } from "./libraries/RoundLib.sol";
+import { RatingLib } from "./libraries/RatingLib.sol";
+import { ContentRegistryDormancyLib } from "./libraries/ContentRegistryDormancyLib.sol";
+import { ContentRegistryRewardLib } from "./libraries/ContentRegistryRewardLib.sol";
+import { ContentRegistryRatingSnapshotLib } from "./libraries/ContentRegistryRatingSnapshotLib.sol";
+import { ContentRegistryTypes } from "./libraries/ContentRegistryTypes.sol";
+import { ProtocolConfig } from "./ProtocolConfig.sol";
+import { SubmissionMediaValidator } from "./SubmissionMediaValidator.sol";
+import { SubmissionMediaValidatorFactory } from "./SubmissionMediaValidatorFactory.sol";
 
 interface IQuestionRewardPoolEscrow {
     function createSubmissionRewardPoolFromRegistry(
@@ -903,7 +903,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         bool gated
     ) internal view returns (SubmissionMetadata memory metadata) {
         submissionMediaValidator.validateContextSubmission(contextUrl, imageUrls, videoUrl, title, tags, gated);
-        metadata = SubmissionMetadata({url: contextUrl, title: title, tags: tags, categoryId: categoryId});
+        metadata = SubmissionMetadata({ url: contextUrl, title: title, tags: tags, categoryId: categoryId });
         require(address(categoryRegistry) != address(0));
     }
 
@@ -1263,7 +1263,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         internal
         pure
         returns (IConfidentialityEscrow.ConfidentialityConfig memory confidentiality)
-    {}
+    { }
 
     function _emitContentMediaSubmitted(
         uint256 contentId,
@@ -1436,7 +1436,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             uint48, RoundLib.RoundState, uint16, uint16, uint64, uint48, uint48 settledAt, uint8
         ) {
             if (settledAt != 0) return uint256(settledAt);
-        } catch {}
+        } catch { }
         return block.timestamp;
     }
 

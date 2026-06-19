@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
+import { ReentrancyGuardTransient } from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
 
-import {ContentRegistry} from "./ContentRegistry.sol";
-import {FeedbackBonusEscrow} from "./FeedbackBonusEscrow.sol";
-import {Eip3009Authorization, IReceiveWithAuthorizationToken} from "./interfaces/IEip3009.sol";
-import {IConfidentialityEscrow} from "./interfaces/IConfidentialityEscrow.sol";
-import {RoundLib} from "./libraries/RoundLib.sol";
+import { ContentRegistry } from "./ContentRegistry.sol";
+import { FeedbackBonusEscrow } from "./FeedbackBonusEscrow.sol";
+import { Eip3009Authorization, IReceiveWithAuthorizationToken } from "./interfaces/IEip3009.sol";
+import { IConfidentialityEscrow } from "./interfaces/IConfidentialityEscrow.sol";
+import { RoundLib } from "./libraries/RoundLib.sol";
 
 interface IFeedbackBonusEscrowConfigShape {
     function registry() external view returns (ContentRegistry);
@@ -113,7 +113,7 @@ contract X402QuestionSubmitter is Ownable, ReentrancyGuardTransient {
             rewardTerms,
             roundConfig,
             spec,
-            IConfidentialityEscrow.ConfidentialityConfig({gated: false, bondAsset: 0, bondAmount: 0, flags: 0}),
+            IConfidentialityEscrow.ConfidentialityConfig({ gated: false, bondAsset: 0, bondAmount: 0, flags: 0 }),
             paymentAuthorization
         );
     }
@@ -177,7 +177,7 @@ contract X402QuestionSubmitter is Ownable, ReentrancyGuardTransient {
             rewardTerms,
             roundConfig,
             spec,
-            IConfidentialityEscrow.ConfidentialityConfig({gated: false, bondAsset: 0, bondAmount: 0, flags: 0}),
+            IConfidentialityEscrow.ConfidentialityConfig({ gated: false, bondAsset: 0, bondAmount: 0, flags: 0 }),
             feedbackBonusTerms,
             paymentAuthorization
         );
@@ -438,7 +438,7 @@ contract X402QuestionSubmitter is Ownable, ReentrancyGuardTransient {
             rewardTerms,
             roundConfig,
             spec,
-            IConfidentialityEscrow.ConfidentialityConfig({gated: false, bondAsset: 0, bondAmount: 0, flags: 0}),
+            IConfidentialityEscrow.ConfidentialityConfig({ gated: false, bondAsset: 0, bondAmount: 0, flags: 0 }),
             payer,
             payee,
             value,
@@ -510,7 +510,7 @@ contract X402QuestionSubmitter is Ownable, ReentrancyGuardTransient {
             rewardTerms,
             roundConfig,
             spec,
-            IConfidentialityEscrow.ConfidentialityConfig({gated: false, bondAsset: 0, bondAmount: 0, flags: 0}),
+            IConfidentialityEscrow.ConfidentialityConfig({ gated: false, bondAsset: 0, bondAmount: 0, flags: 0 }),
             feedbackBonusTerms,
             payer,
             payee,
