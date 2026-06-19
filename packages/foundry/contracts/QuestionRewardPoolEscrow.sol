@@ -6,7 +6,6 @@ import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/ac
 import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 import { ReentrancyGuardTransient } from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
 import { ContentRegistry } from "./ContentRegistry.sol";
 import { RoundVotingEngine } from "./RoundVotingEngine.sol";
@@ -58,8 +57,6 @@ contract QuestionRewardPoolEscrow is
     ReentrancyGuardTransient,
     IRoundPayoutSnapshotConsumer
 {
-    using SafeCast for uint256;
-
     bytes32 internal constant CONFIG_ROLE = keccak256("CONFIG_ROLE");
     bytes32 internal constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 
@@ -289,7 +286,8 @@ contract QuestionRewardPoolEscrow is
         votingEngine = RoundVotingEngine(votingEngine_);
         raterRegistry = IRaterIdentityRegistry(raterRegistry_);
         nextRewardPoolId = 1;
-        defaultFrontendFeeBps = DEFAULT_FRONTEND_FEE_BPS.toUint16();
+        // aderyn-fp-next-line(unsafe-casting)
+        defaultFrontendFeeBps = uint16(DEFAULT_FRONTEND_FEE_BPS);
     }
 
     function questionRewardPoolEscrowConfigShape() external view returns (address, address) {
@@ -1345,7 +1343,12 @@ contract QuestionRewardPoolEscrow is
     function rewardPoolRefundEligibleAt(uint256 rewardPoolId) external view returns (uint64) {
         RewardPool storage rewardPool = rewardPools[rewardPoolId];
         if (rewardPool.id == 0 || rewardPool.refunded || rewardPool.claimDeadline == 0) return 0;
-        return (uint256(rewardPool.claimDeadline) + BUNDLE_CLAIM_GRACE).toUint64();
+        uint256 eligibleAt = uint256(rewardPool.claimDeadline) + BUNDLE_CLAIM_GRACE;
+        assembly ("memory-safe") {
+            if gt(eligibleAt, 0xffffffffffffffff) { revert(0, 0) }
+        }
+        // aderyn-fp-next-line(unsafe-casting)
+        return uint64(eligibleAt);
     }
 
     function getQuestionBundleEligibility(uint256 bundleId)

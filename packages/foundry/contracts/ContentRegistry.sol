@@ -6,7 +6,6 @@ import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/ac
 import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 import { ReentrancyGuardTransient } from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import { ICategoryRegistry } from "./interfaces/ICategoryRegistry.sol";
 import { IClusterPayoutOracle } from "./interfaces/IClusterPayoutOracle.sol";
 import { IRoundVotingEngine } from "./interfaces/IRoundVotingEngine.sol";
@@ -56,8 +55,6 @@ interface IQuestionRewardPoolEscrow {
 /// @notice Manages content lifecycle: submission → active → dormant → revived / cancelled.
 /// @dev Stores only a metadata hash on-chain; full URL/question details are emitted in events.
 contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpgradeable, ReentrancyGuardTransient {
-    using SafeCast for uint256;
-
     error OnlyVotingEngine();
     error ActiveRoundOnPreviousEngine();
     error InvalidState();
@@ -547,8 +544,10 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             submitter: msg.sender,
             submitterIdentity: submitterIdentity,
             submitterIdentityKey: submitterIdentityKey,
-            reservedAt: block.timestamp.toUint48(),
-            expiresAt: (block.timestamp + SUBMISSION_RESERVATION_PERIOD).toUint48()
+            // aderyn-fp-next-line(unsafe-casting)
+            reservedAt: uint48(block.timestamp),
+            // aderyn-fp-next-line(unsafe-casting)
+            expiresAt: uint48(block.timestamp + SUBMISSION_RESERVATION_PERIOD)
         });
 
         emit SubmissionReserved(msg.sender, revealCommitment, block.timestamp + SUBMISSION_RESERVATION_PERIOD);
@@ -1115,16 +1114,21 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         uint256 bundleId
     ) internal returns (uint256 contentId) {
         contentId = nextContentId++;
+        assembly ("memory-safe") {
+            if or(gt(contentId, 0xffffffffffffffff), gt(resolvedCategoryId, 0xffffffffffffffff)) { revert(0, 0) }
+        }
         contentSubmissionKey[contentId] = submissionKey;
         if (submitterIdentity == address(0) || submitterIdentityKey == bytes32(0)) {
             (submitterIdentity, submitterIdentityKey) = _snapshotSubmitterIdentity(submitter);
         }
-        uint48 submittedAt = block.timestamp.toUint48();
+        // aderyn-fp-next-line(unsafe-casting)
+        uint48 submittedAt = uint48(block.timestamp);
         getSubmitterIdentity[contentId] = submitterIdentity;
         contentSubmitterIdentityKey[contentId] = submitterIdentityKey;
         contentRoundConfig[contentId] = roundConfig;
         contents[contentId] = ContentRegistryTypes.Content({
-            id: contentId.toUint64(),
+            // aderyn-fp-next-line(unsafe-casting)
+            id: uint64(contentId),
             contentHash: contentHash,
             submitter: submitter,
             createdAt: submittedAt,
@@ -1133,7 +1137,8 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             dormantCount: 0,
             reviver: address(0),
             rating: 50,
-            categoryId: resolvedCategoryId.toUint64()
+            // aderyn-fp-next-line(unsafe-casting)
+            categoryId: uint64(resolvedCategoryId)
         });
         if (bundleId != 0) {
             contentBundleId[contentId] = bundleId;
@@ -1142,7 +1147,12 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             contentId, roundConfig.epochDuration, roundConfig.maxDuration, roundConfig.minVoters, roundConfig.maxVoters
         );
         RatingLib.RatingState storage ratingState = _ratingState[contentId];
-        ratingState.confidenceMass = _getInitialConfidenceMass().toUint128();
+        uint256 initialConfidenceMass = _getInitialConfidenceMass();
+        assembly ("memory-safe") {
+            if gt(initialConfidenceMass, 0xffffffffffffffffffffffffffffffff) { revert(0, 0) }
+        }
+        // aderyn-fp-next-line(unsafe-casting)
+        ratingState.confidenceMass = uint128(initialConfidenceMass);
         ratingState.ratingBps = RatingLib.DEFAULT_RATING_BPS;
         ratingState.conservativeRatingBps = RatingLib.DEFAULT_RATING_BPS;
         contentSlashConfigSnapshot[contentId] = _getCurrentSlashConfig();
@@ -1335,7 +1345,8 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             revert ActiveRoundOnPreviousEngine();
         }
         contentRoundTrackingEngine[contentId] = msg.sender;
-        contents[contentId].lastActivityAt = block.timestamp.toUint48();
+        // aderyn-fp-next-line(unsafe-casting)
+        contents[contentId].lastActivityAt = uint48(block.timestamp);
         contentSettlementEngineGeneration[contentId] = callerGeneration;
     }
 
@@ -1417,6 +1428,8 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         IClusterPayoutOracle.PayoutWeight[] calldata payoutWeights,
         bytes32[][] calldata proofs
     ) external {
+        // aderyn-fp-next-line(unsafe-casting)
+        uint48 appliedAt = uint48(block.timestamp);
         ContentRegistryRatingSnapshotLib.applyRatingPayoutSnapshot(
             pendingRatingSettlement[contentId][roundId],
             contents[contentId],
@@ -1427,7 +1440,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             roundId,
             payoutWeights,
             proofs,
-            block.timestamp.toUint48()
+            appliedAt
         );
     }
 
@@ -1482,7 +1495,8 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
 
     function getRating(uint256 contentId) external view returns (uint16) {
         uint16 ratingBps = _ratingState[contentId].ratingBps;
-        if (ratingBps == 0) return (uint256(contents[contentId].rating) * 100).toUint16();
+        // aderyn-fp-next-line(unsafe-casting)
+        if (ratingBps == 0) return uint16(uint256(contents[contentId].rating) * 100);
         return ratingBps;
     }
 
