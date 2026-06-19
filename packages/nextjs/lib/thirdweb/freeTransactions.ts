@@ -1416,7 +1416,8 @@ async function validateSponsoredCalls(
         if (
           functionName === "claimCancelledRoundRefund" ||
           functionName === "commitVote" ||
-          functionName === "commitVoteWithPermit"
+          functionName === "commitVoteWithPermit" ||
+          functionName === "openRound"
         ) {
           continue;
         }
