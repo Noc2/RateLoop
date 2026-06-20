@@ -1,4 +1,8 @@
 import { getProfileSelfReportTaxonomy } from "@rateloop/node-utils/profileSelfReport";
+import {
+  GENERATED_IMAGE_DISPLAY_GUIDANCE_SENTENCE,
+  IMAGE_DISPLAY_GUIDANCE_SENTENCE,
+} from "~~/lib/attachments/imageDisplayGuidance";
 
 type JsonSchema = Record<string, unknown>;
 
@@ -187,8 +191,7 @@ const agentQuestionInputSchema = {
       type: "string",
     },
     imageUrls: {
-      description:
-        "Image URLs returned by RateLoop image upload for public mockups, screenshots, or generated visuals. External .jpg/.png/.webp URLs are rejected for direct submissions. For human-wallet local/generated images, prefer rateloop_create_ask_handoff_link with generatedImages.",
+      description: `Image URLs returned by RateLoop image upload for public mockups, screenshots, or generated visuals. External .jpg/.png/.webp URLs are rejected for direct submissions. For human-wallet local/generated images, prefer rateloop_create_ask_handoff_link with generatedImages. ${IMAGE_DISPLAY_GUIDANCE_SENTENCE}`,
       items: { type: "string" },
       type: "array",
     },
@@ -406,7 +409,7 @@ export const agentUploadImageInputSchema = {
       type: "string",
     },
     imageBase64: {
-      description: "Base64-encoded raw image bytes. Use this when uploading an AI-generated mockup directly.",
+      description: `Base64-encoded raw image bytes. Use this when uploading an AI-generated mockup directly. ${GENERATED_IMAGE_DISPLAY_GUIDANCE_SENTENCE}`,
       type: "string",
     },
     signature: {
@@ -516,8 +519,7 @@ const agentHandoffGeneratedImageInputSchema = {
     },
     filename: { description: "Generated or local image filename, such as generated-mockup.png.", type: "string" },
     imageBase64: {
-      description:
-        "Base64-encoded raw image bytes staged for browser wallet upload. Use the original under-10 MB JPG, PNG, or WEBP and read bytes directly from disk or memory; do not shrink images because a chat or terminal display capped base64 output.",
+      description: `Base64-encoded raw image bytes staged for browser wallet upload. Use the original under-10 MB JPG, PNG, or WEBP and read bytes directly from disk or memory; do not shrink images because a chat or terminal display capped base64 output. ${GENERATED_IMAGE_DISPLAY_GUIDANCE_SENTENCE}`,
       type: "string",
     },
     mimeType: {
@@ -545,8 +547,7 @@ export const agentCreateAskHandoffInputSchema = {
   properties: {
     ...agentAskInputBaseProperties,
     generatedImages: {
-      description:
-        "Optional generated/local image bytes to stage into the browser handoff. Uses the same JPG, PNG, and WEBP limit as the submit page: 10 MB per image, with the MCP JSON body limit applying to the aggregate base64 request. RateLoop fully decodes these bytes before returning a link, so corrupt or truncated images are rejected synchronously. Use this instead of raw public image-upload challenges for normal chat flows, and pass bytes from file-backed tooling such as rateloop-agents handoff --file ask.json --image mockup.png rather than copied terminal output.",
+      description: `Optional generated/local image bytes to stage into the browser handoff. Uses the same JPG, PNG, and WEBP limit as the submit page: 10 MB per image, with the MCP JSON body limit applying to the aggregate base64 request. RateLoop fully decodes these bytes before returning a link, so corrupt or truncated images are rejected synchronously. Use this instead of raw public image-upload challenges for normal chat flows, and pass bytes from file-backed tooling such as rateloop-agents handoff --file ask.json --image mockup.png rather than copied terminal output. ${GENERATED_IMAGE_DISPLAY_GUIDANCE_SENTENCE}`,
       items: agentHandoffGeneratedImageInputSchema,
       maxItems: 4,
       type: "array",

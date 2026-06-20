@@ -13,6 +13,7 @@ import {
   DEFAULT_IMAGE_ATTACHMENT_VARIANT,
   type ImageAttachmentVariant,
 } from "~~/lib/attachments/imageAttachmentVariants";
+import { IMAGE_DISPLAY_GUIDANCE_SENTENCE } from "~~/lib/attachments/imageDisplayGuidance";
 import { assertGatedAttachmentSchemaReady } from "~~/lib/attachments/uploadErrors";
 import { MAX_SUBMISSION_IMAGE_URLS } from "~~/lib/contentMedia";
 import { db, dbPool } from "~~/lib/db";
@@ -1085,7 +1086,7 @@ function imageAttachmentUploadResult(params: {
     moderationStatus: params.attachment.moderationStatus,
     nextAction:
       params.attachment.status === "approved"
-        ? "Use imageUrl in question.imageUrls when calling rateloop_quote_question and rateloop_ask_humans."
+        ? `Use imageUrl in question.imageUrls when calling rateloop_quote_question and rateloop_ask_humans. ${IMAGE_DISPLAY_GUIDANCE_SENTENCE}`
         : "Inspect status and error before using this attachment in question.imageUrls.",
     status: params.attachment.status as ImageAttachmentStatus,
     width: params.attachment.width,

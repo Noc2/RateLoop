@@ -52,6 +52,23 @@ test("QuestionDescription can render a shorter preview before expansion", () => 
   assert.match(html, /Show More/);
 });
 
+test("QuestionDescription can keep the preview toggle adjacent to clamped mobile text", () => {
+  const html = renderToStaticMarkup(
+    <QuestionDescription
+      description="One two three four five six seven eight nine ten eleven twelve"
+      previewLayout="inline-toggle"
+      previewWordLimit={5}
+      className="text-base leading-relaxed"
+    />,
+  ).replace(/\s+/g, " ");
+
+  assert.match(html, /flex min-w-0 items-baseline gap-2/);
+  assert.match(html, /line-clamp-1/);
+  assert.match(html, /whitespace-nowrap/);
+  assert.match(html, /One two three four five\.\.\./);
+  assert.match(html, /Show More/);
+});
+
 test("readQuestionDetailsResponseText rejects oversized details by content length", async () => {
   const response = new Response("small", {
     headers: {

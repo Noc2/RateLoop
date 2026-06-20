@@ -19,6 +19,7 @@ type QuestionDescriptionProps = {
   detailsUrl?: string | null;
   referencedContentById?: ReadonlyMap<string, QuestionReferenceContentSummary>;
   previewWordLimit?: number;
+  previewLayout?: "default" | "inline-toggle";
   className?: string;
 };
 
@@ -121,6 +122,7 @@ export function QuestionDescription({
   detailsUrl,
   referencedContentById,
   previewWordLimit,
+  previewLayout = "default",
   className,
 }: QuestionDescriptionProps) {
   const [detailsText, setDetailsText] = React.useState<string | null>(null);
@@ -133,6 +135,8 @@ export function QuestionDescription({
   const displayText = isExpanded ? baseText : previewText;
   const parsed = parseQuestionReferences(displayText);
   const canExpand = Boolean(baseText && (isExpanded || baseText !== previewText || (hasDetails && !detailsText)));
+  const shouldRenderToggle = hasDetails || canExpand;
+  const useInlineTogglePreview = previewLayout === "inline-toggle" && !isExpanded && displayText && shouldRenderToggle;
 
   const loadDetails = React.useCallback(async () => {
     if (!detailsUrl) return;
@@ -181,41 +185,59 @@ export function QuestionDescription({
     setIsExpanded(previous => !previous);
   };
 
+  const renderDescriptionSegments = () =>
+    parsed.segments.map((segment, index) => {
+      if (segment.type === "text") {
+        return segment.text;
+      }
+
+      const summary = referencedContentById?.get(segment.contentId);
+      const label = getReferenceLabel(segment.contentId, segment.label, summary);
+
+      return (
+        <Link
+          key={`${segment.contentId}-${index}`}
+          href={buildRateContentHref(segment.contentId)}
+          aria-label={`Rate related question: ${label}`}
+          className="inline-flex max-w-full items-center align-baseline rounded-md border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-left text-sm font-semibold leading-snug text-primary transition-colors hover:border-primary/50 hover:bg-primary/15 hover:text-primary-focus"
+        >
+          <span className="min-w-0 break-words">{label}</span>
+        </Link>
+      );
+    });
+
+  const toggleButton = (
+    <button
+      type="button"
+      onClick={handleToggleDetails}
+      className="text-sm font-semibold text-primary transition-colors hover:text-primary-focus disabled:text-primary/60"
+      disabled={isLoadingDetails}
+      aria-expanded={isExpanded}
+    >
+      {isExpanded ? "Show Less" : isLoadingDetails ? "Loading..." : "Show More"}
+    </button>
+  );
+
+  if (useInlineTogglePreview) {
+    const previewClassName = `${className ?? ""} min-w-0 flex-1 line-clamp-1`.trim();
+
+    return (
+      <div className="space-y-2">
+        <div className="flex min-w-0 items-baseline gap-2">
+          <p className={previewClassName}>{renderDescriptionSegments()}</p>
+          <span className="shrink-0 whitespace-nowrap">{toggleButton}</span>
+        </div>
+        {detailsError ? <p className="text-sm text-error">{detailsError}</p> : null}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-2">
-      {displayText ? (
-        <p className={className}>
-          {parsed.segments.map((segment, index) => {
-            if (segment.type === "text") {
-              return segment.text;
-            }
-
-            const summary = referencedContentById?.get(segment.contentId);
-            const label = getReferenceLabel(segment.contentId, segment.label, summary);
-
-            return (
-              <Link
-                key={`${segment.contentId}-${index}`}
-                href={buildRateContentHref(segment.contentId)}
-                aria-label={`Rate related question: ${label}`}
-                className="inline-flex max-w-full items-center align-baseline rounded-md border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-left text-sm font-semibold leading-snug text-primary transition-colors hover:border-primary/50 hover:bg-primary/15 hover:text-primary-focus"
-              >
-                <span className="min-w-0 break-words">{label}</span>
-              </Link>
-            );
-          })}
-        </p>
-      ) : null}
-      {hasDetails || canExpand ? (
+      {displayText ? <p className={className}>{renderDescriptionSegments()}</p> : null}
+      {shouldRenderToggle ? (
         <div className="space-y-2">
-          <button
-            type="button"
-            onClick={handleToggleDetails}
-            className="text-sm font-semibold text-primary transition-colors hover:text-primary-focus"
-            disabled={isLoadingDetails}
-          >
-            {isExpanded ? "Show Less" : isLoadingDetails ? "Loading..." : "Show More"}
-          </button>
+          {toggleButton}
           {detailsError ? <p className="text-sm text-error">{detailsError}</p> : null}
         </div>
       ) : null}
