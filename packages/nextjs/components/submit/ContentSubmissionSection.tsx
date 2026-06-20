@@ -45,6 +45,7 @@ import { useWalletRpcRecovery } from "~~/hooks/useWalletRpcRecovery";
 import { type AgentQuestionSpecInput, buildQuestionSpecHashes } from "~~/lib/agent/questionSpecs";
 import { createQuestionDetailsId, questionDetailsSha256Hex } from "~~/lib/attachments/browserQuestionDetails";
 import { withImageAttachmentVariantUrl } from "~~/lib/attachments/imageAttachmentVariants";
+import { IMAGE_UPLOAD_CONTEXT_HINT } from "~~/lib/attachments/imageDisplayGuidance";
 import {
   MAX_QUESTION_DETAILS_TEXT_LENGTH,
   getQuestionDetailsTextSizeBytes,
@@ -159,8 +160,7 @@ const PRIVATE_FOREVER_DISCLOSURE_POLICY = "private_forever" satisfies Confidenti
 const MEDIA_URL_CONFIG = {
   contextPlaceholder: "Paste a source link, or add media context below",
   videoPlaceholder: "Paste a YouTube URL, e.g. https://youtube.com/watch?v=...",
-  imageHint:
-    "Add at least one image when there is no context link. Upload up to four JPG, PNG, or WEBP files for RateLoop-hosted, moderated image context. Landscape images fit the voting content area best; aim for 16:9 and at least 1280x720 px.",
+  imageHint: IMAGE_UPLOAD_CONTEXT_HINT,
   videoHint: "Add one YouTube link as public video context. Standard landscape videos fit the content area best.",
 };
 
@@ -1622,6 +1622,7 @@ export function ContentSubmissionSection() {
   const { data: lrepBalance, isLoading: isLrepBalanceLoading } = useReadContract({
     address: lrepAddress,
     abi: ERC20_APPROVAL_ABI,
+    chainId: targetNetwork.id,
     functionName: "balanceOf",
     args: connectedAddress ? [connectedAddress] : undefined,
     query: {
@@ -1631,6 +1632,7 @@ export function ContentSubmissionSection() {
   const { data: usdcBalance, isLoading: isUsdcBalanceLoading } = useReadContract({
     address: usdcAddress,
     abi: ERC20_APPROVAL_ABI,
+    chainId: targetNetwork.id,
     functionName: "balanceOf",
     args: connectedAddress ? [connectedAddress] : undefined,
     query: {
@@ -2210,16 +2212,19 @@ export function ContentSubmissionSection() {
         readContract(wagmiConfig, {
           address: registryAddress,
           abi: QUESTION_SUBMISSION_ABI,
+          chainId: targetNetwork.id,
           functionName: "questionRewardPoolEscrow",
         }) as Promise<`0x${string}`>,
         readContract(wagmiConfig, {
           address: registryAddress,
           abi: QUESTION_SUBMISSION_ABI,
+          chainId: targetNetwork.id,
           functionName: "lrepToken",
         }) as Promise<`0x${string}`>,
         readContract(wagmiConfig, {
           address: registryAddress,
           abi: QUESTION_SUBMISSION_ABI,
+          chainId: targetNetwork.id,
           functionName: "votingEngine",
         }) as Promise<`0x${string}`>,
       ])) as readonly [`0x${string}`, `0x${string}`, `0x${string}`];
@@ -2283,6 +2288,7 @@ export function ContentSubmissionSection() {
       const rewardBalance = (await readContract(wagmiConfig, {
         address: verifiedRewardTokenAddress,
         abi: ERC20_APPROVAL_ABI,
+        chainId: targetNetwork.id,
         functionName: "balanceOf",
         args: [submitterAddress],
       })) as bigint;
@@ -2307,6 +2313,7 @@ export function ContentSubmissionSection() {
         const feedbackBonusBalance = (await readContract(wagmiConfig, {
           address: feedbackBonusTokenAddress,
           abi: ERC20_APPROVAL_ABI,
+          chainId: targetNetwork.id,
           functionName: "balanceOf",
           args: [submitterAddress],
         })) as bigint;
@@ -2658,7 +2665,7 @@ export function ContentSubmissionSection() {
         );
 
         if (cancelTxHash) {
-          await waitForTransactionReceipt(wagmiConfig, { hash: cancelTxHash });
+          await waitForTransactionReceipt(wagmiConfig, { chainId: targetNetwork.id, hash: cancelTxHash });
         }
       };
 
@@ -2695,7 +2702,7 @@ export function ContentSubmissionSection() {
         );
 
         if (reserveTxHash) {
-          await waitForTransactionReceipt(wagmiConfig, { hash: reserveTxHash });
+          await waitForTransactionReceipt(wagmiConfig, { chainId: targetNetwork.id, hash: reserveTxHash });
         }
 
         return reserveTxHash ?? null;
@@ -2759,6 +2766,7 @@ export function ContentSubmissionSection() {
         const approveWrite = {
           address: verifiedRewardTokenAddress,
           abi: ERC20_APPROVAL_ABI,
+          chainId: targetNetwork.id,
           functionName: "approve",
           args: [rewardEscrowAddress, selectedRewardAmount],
         } as const;
@@ -2772,7 +2780,7 @@ export function ContentSubmissionSection() {
             );
 
         if (approveTxHash) {
-          await waitForTransactionReceipt(wagmiConfig, { hash: approveTxHash });
+          await waitForTransactionReceipt(wagmiConfig, { chainId: targetNetwork.id, hash: approveTxHash });
         }
         const approveNonce = await getSubmittedTransactionNonce(approveTxHash);
 
@@ -2780,12 +2788,14 @@ export function ContentSubmissionSection() {
           ? ({
               address: registryAddress,
               abi: QUESTION_SUBMISSION_ABI,
+              chainId: targetNetwork.id,
               functionName: "submitQuestionBundleWithRewardAndRoundConfig",
               args: [contractBundleQuestions, rewardTerms, roundConfigAbi],
             } as const)
           : ({
               address: registryAddress,
               abi: QUESTION_SUBMISSION_ABI,
+              chainId: targetNetwork.id,
               functionName: "submitQuestionWithRewardAndRoundConfig",
               args: [
                 onChainPrimaryQuestion.contextUrl,
@@ -2812,7 +2822,10 @@ export function ContentSubmissionSection() {
             );
 
         if (submitTxHash) {
-          const submitReceipt = await waitForTransactionReceipt(wagmiConfig, { hash: submitTxHash });
+          const submitReceipt = await waitForTransactionReceipt(wagmiConfig, {
+            chainId: targetNetwork.id,
+            hash: submitTxHash,
+          });
           submittedContentIds = extractSubmittedContentIds(submitReceipt.logs);
           submissionTransactionHashes = [submitTxHash];
         }
@@ -2844,6 +2857,7 @@ export function ContentSubmissionSection() {
           const currentFeedbackRoundId = (await readContract(wagmiConfig, {
             address: verifiedVotingEngineAddress,
             abi: RoundVotingEngineAbi,
+            chainId: targetNetwork.id,
             functionName: "currentRoundId",
             args: [primarySubmittedContentId],
           })) as bigint;
@@ -2852,12 +2866,14 @@ export function ContentSubmissionSection() {
           const feedbackApproveWrite = {
             address: feedbackBonusTokenAddress,
             abi: ERC20_APPROVAL_ABI,
+            chainId: targetNetwork.id,
             functionName: "approve",
             args: [feedbackBonusEscrowAddress, selectedFeedbackBonusAmount],
           } as const;
           const feedbackPoolWrite = {
             address: feedbackBonusEscrowAddress,
             abi: FEEDBACK_BONUS_ESCROW_ABI,
+            chainId: targetNetwork.id,
             functionName: "createFeedbackBonusPoolWithAsset",
             args: [
               primarySubmittedContentId,
@@ -2882,7 +2898,7 @@ export function ContentSubmissionSection() {
               : await writeContract(wagmiConfig, await prepareDirectWalletWrite(feedbackApproveWrite));
 
             if (feedbackApproveTxHash) {
-              await waitForTransactionReceipt(wagmiConfig, { hash: feedbackApproveTxHash });
+              await waitForTransactionReceipt(wagmiConfig, { chainId: targetNetwork.id, hash: feedbackApproveTxHash });
             }
             const feedbackApproveNonce = await getSubmittedTransactionNonce(feedbackApproveTxHash);
 
@@ -2896,7 +2912,7 @@ export function ContentSubmissionSection() {
                 );
 
             if (feedbackPoolTxHash) {
-              await waitForTransactionReceipt(wagmiConfig, { hash: feedbackPoolTxHash });
+              await waitForTransactionReceipt(wagmiConfig, { chainId: targetNetwork.id, hash: feedbackPoolTxHash });
             }
             feedbackBonusFunded = true;
           }
@@ -4480,17 +4496,19 @@ export function ContentSubmissionSection() {
                             }`}
                           >
                             {privateContextEnabled ? (
-                              <div className="flex h-14 w-20 shrink-0 items-center justify-center rounded-md bg-base-200 text-base-content/60">
+                              <div className="flex h-14 w-24 shrink-0 items-center justify-center rounded-md bg-base-200 text-base-content/60">
                                 <LockClosedIcon className="h-5 w-5" aria-hidden="true" />
                               </div>
                             ) : (
-                              <img
-                                src={withImageAttachmentVariantUrl(imageUrl, "preview")}
-                                alt={`Uploaded image ${index + 1}`}
-                                className="h-14 w-20 rounded-md object-cover"
-                                loading="lazy"
-                                decoding="async"
-                              />
+                              <div className="flex h-14 w-24 shrink-0 items-center justify-center overflow-hidden rounded-md bg-black">
+                                <img
+                                  src={withImageAttachmentVariantUrl(imageUrl, "preview")}
+                                  alt={`Uploaded image ${index + 1}`}
+                                  className="h-full w-full object-contain"
+                                  loading="lazy"
+                                  decoding="async"
+                                />
+                              </div>
                             )}
                             <div className="min-w-0 flex-1">
                               <p className="text-sm font-medium text-base-content">Uploaded image {index + 1}</p>

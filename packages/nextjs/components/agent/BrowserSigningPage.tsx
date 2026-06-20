@@ -20,7 +20,12 @@ import {
   readBrowserSigningExpectedX402Amount,
   validateBrowserX402AuthorizationRequest,
 } from "~~/lib/agent/browserSigningValidation";
-import { getConfiguredX402QuestionSubmitterAddress, getDefaultUsdcAddress } from "~~/lib/questionRewardPools";
+import {
+  type SubmissionRewardAsset,
+  formatSubmissionRewardAmount,
+  getConfiguredX402QuestionSubmitterAddress,
+  getDefaultUsdcAddress,
+} from "~~/lib/questionRewardPools";
 import { notification } from "~~/utils/scaffold-eth";
 
 type JsonRecord = Record<string, unknown>;
@@ -114,15 +119,16 @@ function readBounty(intent: SigningIntent | null) {
   if (!bounty || typeof bounty !== "object" || Array.isArray(bounty)) return "Unknown bounty";
   const amount = (bounty as JsonRecord).amount;
   if (typeof amount !== "string" && typeof amount !== "number") return "Unknown bounty";
+  const assetRaw = (bounty as JsonRecord).asset;
+  const asset: SubmissionRewardAsset =
+    typeof assetRaw === "string" && assetRaw.trim().toLowerCase() === "lrep" ? "lrep" : "usdc";
   let atomic: bigint;
   try {
     atomic = BigInt(amount);
   } catch {
     return "Unknown bounty";
   }
-  const whole = atomic / 1_000_000n;
-  const fractional = (atomic % 1_000_000n).toString().padStart(6, "0").replace(/0+$/, "");
-  return `${whole.toString()}${fractional ? `.${fractional}` : ""} USDC`;
+  return formatSubmissionRewardAmount(atomic, asset);
 }
 
 function isFeedbackBonusSigningStep(intent: SigningIntent | null) {

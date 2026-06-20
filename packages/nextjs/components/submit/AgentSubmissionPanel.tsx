@@ -161,7 +161,7 @@ function shortOperationKey(value: AgentAskSummary["operationKey"]) {
 
 export function AgentSubmissionPanel() {
   const wagmiConfig = useConfig();
-  const { address } = useAccount();
+  const { address, chain } = useAccount();
   const { targetNetwork } = useTargetNetwork();
   const { openWalletFunding } = useWalletFunding();
   const { copyToClipboard, isCopiedToClipboard } = useCopyToClipboard({ successDurationMs: 1500 });
@@ -176,6 +176,8 @@ export function AgentSubmissionPanel() {
   const [generatedMcpConfig, setGeneratedMcpConfig] = useState<string | null>(null);
   const usdcAddress = getDefaultUsdcAddress(targetNetwork.id);
   const usdcDisplayName = getDefaultUsdcDisplayName(targetNetwork.id);
+  const connectedChainId = chain?.id ?? null;
+  const isConnectedToTargetChain = Boolean(address && connectedChainId === targetNetwork.id);
   const thirdwebTargetChain = useMemo(() => defineChain(targetNetwork), [targetNetwork]);
   const { categories, isLoading: categoriesLoading } = useCategoryRegistry();
   const allCategoryIds = useMemo(() => categories.map(category => category.id.toString()), [categories]);
@@ -204,6 +206,7 @@ export function AgentSubmissionPanel() {
   const { data: balanceRaw, refetch: refetchBalance } = useReadContract({
     address: usdcAddress,
     abi: erc20Abi,
+    chainId: targetNetwork.id,
     functionName: "balanceOf",
     args: agentWalletAddress ? [agentWalletAddress] : undefined,
     query: { enabled: Boolean(agentWalletAddress && usdcAddress) },
@@ -320,6 +323,10 @@ export function AgentSubmissionPanel() {
       notification.error("USDC is not configured for this network.");
       return;
     }
+    if (connectedChainId !== targetNetwork.id) {
+      notification.error(`Switch your wallet to ${targetNetwork.name} before transferring USDC.`);
+      return;
+    }
     const amount = parseSubmissionRewardAmount(transferAmount);
     if (!amount) {
       notification.warning("Enter a positive USDC amount with up to 6 decimals.");
@@ -331,10 +338,11 @@ export function AgentSubmissionPanel() {
       const transferHash = await writeContractAsync({
         address: usdcAddress,
         abi: erc20Abi,
+        chainId: targetNetwork.id,
         functionName: "transfer",
         args: [agentWalletAddress, amount],
       });
-      await waitForTransactionReceipt(wagmiConfig, { hash: transferHash });
+      await waitForTransactionReceipt(wagmiConfig, { chainId: targetNetwork.id, hash: transferHash });
       await refetchBalance();
       notification.success(`Transferred ${formatUsdc(amount)} to the agent wallet.`);
     } catch (error) {
@@ -350,7 +358,10 @@ export function AgentSubmissionPanel() {
     address,
     agentWalletAddress,
     agentWalletMatchesConnectedWallet,
+    connectedChainId,
     refetchBalance,
+    targetNetwork.id,
+    targetNetwork.name,
     transferAmount,
     usdcAddress,
     wagmiConfig,
@@ -878,6 +889,7 @@ export function AgentSubmissionPanel() {
                     !address ||
                     !agentWalletAddress ||
                     !usdcAddress ||
+                    !isConnectedToTargetChain ||
                     agentWalletMatchesConnectedWallet ||
                     isTransferringUsdc
                   }
@@ -891,7 +903,9 @@ export function AgentSubmissionPanel() {
               <p className="mt-3 text-sm text-base-content/60">
                 {agentWalletMatchesConnectedWallet
                   ? "The connected wallet already matches the agent wallet."
-                  : "Sends USDC from the connected wallet to the configured agent wallet."}
+                  : address && !isConnectedToTargetChain
+                    ? `Switch to ${targetNetwork.name} before transferring USDC.`
+                    : "Sends USDC from the connected wallet to the configured agent wallet."}
               </p>
             </div>
 

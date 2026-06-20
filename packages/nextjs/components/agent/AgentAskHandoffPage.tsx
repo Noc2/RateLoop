@@ -48,6 +48,7 @@ import {
 } from "~~/lib/agent/browserSigningValidation";
 import { buildCleanHandoffLocationPath, readHandoffTokenFromLocation } from "~~/lib/agent/handoffLocation";
 import { createQuestionDetailsId, questionDetailsSha256Hex } from "~~/lib/attachments/browserQuestionDetails";
+import { IMAGE_PREVIEW_FIT_HINT } from "~~/lib/attachments/imageDisplayGuidance";
 import {
   MAX_QUESTION_DETAILS_TEXT_LENGTH,
   getQuestionDetailsTextSizeBytes,
@@ -1778,6 +1779,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
   const { data: lrepBalanceRaw, isLoading: isLrepBalanceLoading } = useReadContract({
     address: lrepAddress,
     abi: erc20Abi,
+    chainId: handoffFundingChainId,
     functionName: "balanceOf",
     args: fundingWalletAddress ? [fundingWalletAddress] : undefined,
     query: {
@@ -1791,6 +1793,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
   } = useReadContract({
     address: usdcAddress,
     abi: erc20Abi,
+    chainId: handoffFundingChainId,
     functionName: "balanceOf",
     args: fundingWalletAddress ? [fundingWalletAddress] : undefined,
     query: {
@@ -3254,16 +3257,19 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
               <div className="flex items-center gap-2">
                 <PhotoIcon className="h-5 w-5 text-base-content/60" />
                 <h2 className="text-lg font-semibold">Images</h2>
+                <InfoTooltip text={IMAGE_PREVIEW_FIT_HINT} />
               </div>
               <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {handoff.assets.map(asset => (
                   <div key={asset.id} className="overflow-hidden rounded-lg border border-base-300/70 bg-base-100">
                     {asset.dataUrl || asset.imageUrl ? (
-                      <img
-                        alt={asset.filename ?? "RateLoop handoff image"}
-                        className="aspect-video w-full object-cover"
-                        src={asset.dataUrl ?? asset.imageUrl ?? ""}
-                      />
+                      <div className="flex aspect-video w-full items-center justify-center bg-black">
+                        <img
+                          alt={asset.filename ?? "RateLoop handoff image"}
+                          className="h-full w-full object-contain"
+                          src={asset.dataUrl ?? asset.imageUrl ?? ""}
+                        />
+                      </div>
                     ) : (
                       <div className="flex aspect-video items-center justify-center bg-base-200 text-sm text-base-content/50">
                         Image pending

@@ -4,7 +4,7 @@ import { useCallback, useMemo, useState } from "react";
 import { FeedbackRegistryAbi, RoundVotingEngineAbi } from "@rateloop/contracts/abis";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { type Address, encodePacked, keccak256, zeroHash } from "viem";
-import { useConfig, usePublicClient, useSignMessage, useWriteContract } from "wagmi";
+import { useAccount, useConfig, usePublicClient, useSignMessage, useWriteContract } from "wagmi";
 import { waitForTransactionReceipt } from "wagmi/actions";
 import { useTransactor } from "~~/hooks/scaffold-eth";
 import { useLocalE2ETestWalletClient } from "~~/hooks/scaffold-eth/useLocalE2ETestWalletClient";
@@ -92,6 +92,7 @@ export function useContentFeedback(contentId: bigint | string | number | null | 
   const { signMessageAsync } = useSignMessage();
   const { writeContractAsync } = useWriteContract();
   const wagmiConfig = useConfig();
+  const { chain } = useAccount();
   const { targetNetwork } = useTargetNetwork();
   const publicClient = usePublicClient({ chainId: targetNetwork.id });
   const localE2ETestWalletClient = useLocalE2ETestWalletClient(address as Address | undefined, targetNetwork.id);
@@ -140,6 +141,9 @@ export function useContentFeedback(contentId: bigint | string | number | null | 
       if (!normalizedContentId) return null;
       const feedbackRegistryAddress = getConfiguredFeedbackRegistryAddress(targetNetwork.id);
       if (!feedbackRegistryAddress) return null;
+      if (!localE2ETestWalletClient && chain?.id !== targetNetwork.id) {
+        throw new Error(`Switch your wallet to ${targetNetwork.name} before publishing feedback.`);
+      }
 
       const commitKey = await resolveCommitKey(params.roundId, params.commitHash);
       if (!commitKey) {
@@ -170,6 +174,7 @@ export function useContentFeedback(contentId: bigint | string | number | null | 
         const request = {
           address: feedbackRegistryAddress,
           abi: FeedbackRegistryAbi,
+          chainId: targetNetwork.id,
           functionName: "publishFeedback",
           args: [
             BigInt(normalizedContentId),
@@ -199,7 +204,7 @@ export function useContentFeedback(contentId: bigint | string | number | null | 
         throw error;
       }
       try {
-        await waitForTransactionReceipt(wagmiConfig, { hash: txHash });
+        await waitForTransactionReceipt(wagmiConfig, { chainId: targetNetwork.id, hash: txHash });
       } catch (error) {
         if (!(await hasAlreadyPublishedFeedback())) {
           throw error;
@@ -208,11 +213,13 @@ export function useContentFeedback(contentId: bigint | string | number | null | 
       return { commitKey, txHash };
     },
     [
+      chain?.id,
       localE2ETestWalletClient,
       normalizedContentId,
       publicClient,
       resolveCommitKey,
       targetNetwork.id,
+      targetNetwork.name,
       wagmiConfig,
       writeContractAsync,
       writeTx,
