@@ -96,6 +96,9 @@ const VALID_ENV = {
   PONDER_RATER_REGISTRY_ADDRESS: chain4801?.RaterRegistry?.address ?? "0xdddddddddddddddddddddddddddddddddddddddd",
   PONDER_CONTENT_REGISTRY_START_BLOCK: String(expectedContentRegistryStartBlock),
 };
+const LIVE_CONTRACT_ENV_REMOVALS = Object.keys(VALID_ENV).filter(
+  key => key.startsWith("PONDER_") && key !== "PONDER_NETWORK" && !key.startsWith("PONDER_RPC_URL_"),
+);
 
 function getExpectedProbeChainId(env: Record<string, string | undefined>) {
   if (env.PONDER_NETWORK === "base") return 8453;
@@ -289,6 +292,37 @@ describe("ponder config", () => {
         PONDER_RPC_URL_84532: "https://sepolia.base.org",
       }),
     ).rejects.toThrow("Missing shared deployment artifact for ContentRegistry on chain 84532");
+  }, PONDER_CONFIG_TEST_TIMEOUT_MS);
+
+  it("treats blank live RPC placeholders as unset in non-production", async () => {
+    const { default: config } = await loadPonderConfig(
+      {
+        PONDER_NETWORK: "baseSepolia",
+        PONDER_RPC_URL_84532: "",
+      },
+      LIVE_CONTRACT_ENV_REMOVALS,
+    );
+    const loadedConfig = config as any;
+
+    expect(loadedConfig.networks.baseSepolia.chainId).toBe(84532);
+    await vi.waitFor(() => {
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        "https://sepolia.base.org",
+        expect.objectContaining({ method: "POST" }),
+      );
+    });
+  }, PONDER_CONFIG_TEST_TIMEOUT_MS);
+
+  it("names malformed RPC env values in the startup error", async () => {
+    await expect(
+      loadPonderConfig(
+        {
+          PONDER_NETWORK: "baseSepolia",
+          PONDER_RPC_URL_84532: "not a url",
+        },
+        LIVE_CONTRACT_ENV_REMOVALS,
+      ),
+    ).rejects.toThrow("PONDER_RPC_URL_84532 must be a valid URL.");
   }, PONDER_CONFIG_TEST_TIMEOUT_MS);
 
   it(

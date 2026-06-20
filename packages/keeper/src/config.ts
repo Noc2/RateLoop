@@ -35,6 +35,7 @@ function parseBooleanEnv(
   value: string | undefined,
   fallback: boolean,
   label: string,
+  errors: string[],
 ): boolean {
   if (value === undefined) {
     return fallback;
@@ -44,7 +45,8 @@ function parseBooleanEnv(
   if (["1", "true", "yes", "on"].includes(normalized)) return true;
   if (["0", "false", "no", "off"].includes(normalized)) return false;
 
-  throw new Error(`${label} must be a boolean-like value`);
+  errors.push(`${label} must be a boolean-like value`);
+  return fallback;
 }
 
 function requireUrlEnv(name: string, errors: string[]): string {
@@ -426,16 +428,19 @@ function loadConfig() {
     readEnv("KEEPER_FRONTEND_FEE_ENABLED"),
     false,
     "KEEPER_FRONTEND_FEE_ENABLED",
+    errors,
   );
   const feedbackBonusForfeitsEnabled = parseBooleanEnv(
     readEnv("KEEPER_FEEDBACK_BONUS_FORFEITS_ENABLED"),
     true,
     "KEEPER_FEEDBACK_BONUS_FORFEITS_ENABLED",
+    errors,
   );
   const correlationSnapshotsEnabled = parseBooleanEnv(
     readEnv("KEEPER_CORRELATION_SNAPSHOTS_ENABLED"),
     false,
     "KEEPER_CORRELATION_SNAPSHOTS_ENABLED",
+    errors,
   );
   const correlationSnapshotArtifactPath = readEnv(
     "KEEPER_CORRELATION_SNAPSHOT_ARTIFACT_PATH",
@@ -561,6 +566,13 @@ function loadConfig() {
         errors,
         warnings,
       }),
+      feedbackRegistry: resolveContractAddress({
+        chainId,
+        envName: "FEEDBACK_REGISTRY_ADDRESS",
+        contractName: "FeedbackRegistry",
+        errors,
+        warnings,
+      }),
       advisoryVoteRecorder: resolveContractAddress({
         chainId,
         envName: "ADVISORY_VOTE_RECORDER_ADDRESS",
@@ -620,6 +632,7 @@ function loadConfig() {
           readEnv("KEEPER_WORK_DISCOVERY_PONDER_ENABLED"),
           true,
           "KEEPER_WORK_DISCOVERY_PONDER_ENABLED",
+          errors,
         ),
         reconciliationEveryTicks,
         maxCandidates,
@@ -687,6 +700,7 @@ function loadConfig() {
       readEnv("METRICS_ENABLED"),
       true,
       "METRICS_ENABLED",
+      errors,
     ),
 
     // Logging
@@ -718,6 +732,7 @@ function loadConfig() {
         readEnv("KEEPER_FRONTEND_FEE_WITHDRAW"),
         true,
         "KEEPER_FRONTEND_FEE_WITHDRAW",
+        errors,
       ),
       contracts: frontendFeeContracts,
     },

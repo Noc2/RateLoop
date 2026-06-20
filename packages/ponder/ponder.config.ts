@@ -146,7 +146,7 @@ function probeRpcConnectivity(rpcUrl: string, expectedChainId: number, envKey: s
 function getRpcUrl(network: PonderNetworkName): string {
   const { chainId, defaultRpcUrl } = NETWORKS[network];
   const key = `PONDER_RPC_URL_${chainId}`;
-  const value = process.env[key] ?? (!isProduction ? defaultRpcUrl : undefined);
+  const value = readEnv(key) ?? (!isProduction ? defaultRpcUrl : undefined);
 
   if (!value) {
     throw new Error(`Missing ${key} for ${network}.`);
@@ -163,7 +163,7 @@ function getRpcUrl(network: PonderNetworkName): string {
       throw new Error(`${key} must not point to localhost in production.`);
     }
   } catch (error) {
-    if (error instanceof Error) {
+    if (error instanceof Error && error.message.includes("localhost")) {
       throw error;
     }
 

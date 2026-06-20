@@ -380,6 +380,17 @@ describe("keeper config", () => {
     ).rejects.toThrow("METRICS_ENABLED must be a boolean-like value");
   });
 
+  it("aggregates invalid boolean values with other config errors", async () => {
+    await expect(
+      loadKeeperConfig(
+        {
+          METRICS_ENABLED: "disabled",
+        },
+        ["RPC_URL"],
+      ),
+    ).rejects.toThrow(/Invalid keeper configuration:\n- RPC_URL is required\n- METRICS_ENABLED must be a boolean-like value/);
+  });
+
   it("loads feedback bonus forfeit sweep settings from the environment", async () => {
     const localFeedbackBonusEscrow =
       chain31337?.FeedbackBonusEscrow?.address ??

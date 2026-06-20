@@ -151,69 +151,81 @@ export async function areCorrelationCandidatesPonderFresh(
   }
 
   const engine = config.contracts.votingEngine;
-  const seen = new Set<string>();
+  const checkedRounds = new Map<string, { requiresEligibleVoteIndexing: boolean }>();
+  const checkedEligibleVotes = new Set<string>();
   for (const candidate of candidates) {
-    const key = `${candidate.contentId}:${candidate.roundId}`;
-    if (seen.has(key)) {
-      continue;
-    }
-    seen.add(key);
+    const roundKey = `${candidate.contentId}:${candidate.roundId}`;
+    let roundFreshness = checkedRounds.get(roundKey);
 
-    const chainRound = await readRound(
-      publicClient,
-      engine,
-      candidate.contentId,
-      candidate.roundId,
-    );
-    const ponderRound = await fetchPonderRoundSnapshot(
-      config.ponderBaseUrl,
-      candidate.contentId,
-      candidate.roundId,
-    );
-    if (ponderRound === null) {
-      logger.debug("Deferring correlation artifact build until Ponder indexes round", {
-        contentId: candidate.contentId.toString(),
-        roundId: candidate.roundId.toString(),
-      });
-      return false;
-    }
-    if (
-      chainRound.state === ROUND_STATE.Settled &&
-      ponderRound.state !== ROUND_STATE.Settled
-    ) {
-      logger.debug("Deferring correlation artifact build until Ponder marks round settled", {
-        contentId: candidate.contentId.toString(),
-        roundId: candidate.roundId.toString(),
-        chainState: chainRound.state,
-        ponderState: ponderRound.state,
-      });
-      return false;
-    }
-    if (ponderRound.revealedCount < chainRound.revealedCount) {
-      logger.debug(
-        "Deferring correlation artifact build until Ponder reflects revealed vote count",
-        {
+    if (!roundFreshness) {
+      const chainRound = await readRound(
+        publicClient,
+        engine,
+        candidate.contentId,
+        candidate.roundId,
+      );
+      const ponderRound = await fetchPonderRoundSnapshot(
+        config.ponderBaseUrl,
+        candidate.contentId,
+        candidate.roundId,
+      );
+      if (ponderRound === null) {
+        logger.debug("Deferring correlation artifact build until Ponder indexes round", {
           contentId: candidate.contentId.toString(),
           roundId: candidate.roundId.toString(),
-          chainRevealedCount: chainRound.revealedCount.toString(),
-          ponderRevealedCount: ponderRound.revealedCount.toString(),
-        },
-      );
-      return false;
+        });
+        return false;
+      }
+      if (
+        chainRound.state === ROUND_STATE.Settled &&
+        ponderRound.state !== ROUND_STATE.Settled
+      ) {
+        logger.debug("Deferring correlation artifact build until Ponder marks round settled", {
+          contentId: candidate.contentId.toString(),
+          roundId: candidate.roundId.toString(),
+          chainState: chainRound.state,
+          ponderState: ponderRound.state,
+        });
+        return false;
+      }
+      if (ponderRound.revealedCount < chainRound.revealedCount) {
+        logger.debug(
+          "Deferring correlation artifact build until Ponder reflects revealed vote count",
+          {
+            contentId: candidate.contentId.toString(),
+            roundId: candidate.roundId.toString(),
+            chainRevealedCount: chainRound.revealedCount.toString(),
+            ponderRevealedCount: ponderRound.revealedCount.toString(),
+          },
+        );
+        return false;
+      }
+      if (ponderRound.voteCount < chainRound.voteCount) {
+        logger.debug("Deferring correlation artifact build until Ponder reflects vote count", {
+          contentId: candidate.contentId.toString(),
+          roundId: candidate.roundId.toString(),
+          chainVoteCount: chainRound.voteCount.toString(),
+          ponderVoteCount: ponderRound.voteCount.toString(),
+        });
+        return false;
+      }
+
+      roundFreshness = {
+        requiresEligibleVoteIndexing: chainRound.state === ROUND_STATE.Settled && chainRound.revealedCount > 0n,
+      };
+      checkedRounds.set(roundKey, roundFreshness);
     }
-    if (ponderRound.voteCount < chainRound.voteCount) {
-      logger.debug("Deferring correlation artifact build until Ponder reflects vote count", {
-        contentId: candidate.contentId.toString(),
-        roundId: candidate.roundId.toString(),
-        chainVoteCount: chainRound.voteCount.toString(),
-        ponderVoteCount: ponderRound.voteCount.toString(),
-      });
-      return false;
-    }
-    if (
-      chainRound.state === ROUND_STATE.Settled &&
-      chainRound.revealedCount > 0n
-    ) {
+
+    if (roundFreshness.requiresEligibleVoteIndexing) {
+      const eligibleVoteKey = [
+        candidate.domain,
+        candidate.rewardPoolId.toString(),
+        candidate.contentId.toString(),
+        candidate.roundId.toString(),
+      ].join(":");
+      if (checkedEligibleVotes.has(eligibleVoteKey)) continue;
+      checkedEligibleVotes.add(eligibleVoteKey);
+
       const eligibleIndexing = await fetchPonderCorrelationEligibleVoteIndexing(
         config.ponderBaseUrl,
         candidate,

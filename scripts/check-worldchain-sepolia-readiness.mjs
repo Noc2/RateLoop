@@ -40,6 +40,23 @@ export function buildPonderUrl(baseUrl, path) {
   return buildReadinessUrl(baseUrl, path);
 }
 
+function normalizeReadinessAddress(value) {
+  return typeof value === "string" && isAddress(value)
+    ? value.toLowerCase()
+    : null;
+}
+
+function expectedPonderDeploymentKey(readinessConfig, deploymentAddresses) {
+  const contentRegistryAddress = deploymentAddresses.get("ContentRegistry");
+  const feedbackRegistryAddress = deploymentAddresses.get("FeedbackRegistry");
+  if (!contentRegistryAddress || !feedbackRegistryAddress) return null;
+  return [
+    String(readinessConfig.chainId),
+    contentRegistryAddress.toLowerCase(),
+    feedbackRegistryAddress.toLowerCase(),
+  ].join(":");
+}
+
 export const REQUIRED_DEPLOYED_CONTRACTS = [
   "AdvisoryVoteRecorder",
   "CategoryRegistry",
@@ -890,6 +907,59 @@ export async function validateLiveReadiness({
           "Ponder has indexed at or beyond the deployment block",
         );
       }
+
+      const deploymentUrl = buildPonderUrl(ponderUrl, "/deployment");
+      const deploymentResponse = await fetchWithTimeout(deploymentUrl);
+      addCheck(
+        checks,
+        failures,
+        deploymentResponse.ok,
+        `Ponder /deployment returns HTTP ${deploymentResponse.status}`,
+      );
+      if (deploymentResponse.ok) {
+        const deployment = await deploymentResponse.json().catch(() => null);
+        const contentRegistryAddress = deploymentAddresses.get("ContentRegistry");
+        const feedbackRegistryAddress = deploymentAddresses.get("FeedbackRegistry");
+        const expectedDeploymentKey = expectedPonderDeploymentKey(readinessConfig, deploymentAddresses);
+        const ponderChainId =
+          typeof deployment?.chainId === "number"
+            ? deployment.chainId
+            : typeof deployment?.chainId === "string"
+              ? Number(deployment.chainId)
+              : NaN;
+        const ponderContentRegistry = normalizeReadinessAddress(deployment?.contentRegistryAddress);
+        const ponderFeedbackRegistry = normalizeReadinessAddress(deployment?.feedbackRegistryAddress);
+        const ponderDeploymentKey =
+          typeof deployment?.deploymentKey === "string" && deployment.deploymentKey.trim()
+            ? deployment.deploymentKey.trim().toLowerCase()
+            : null;
+        addCheck(
+          checks,
+          failures,
+          ponderChainId === readinessConfig.chainId,
+          `Ponder deployment reports ${readinessConfig.label} chainId ${readinessConfig.chainId}`,
+        );
+        addCheck(
+          checks,
+          failures,
+          Boolean(contentRegistryAddress) &&
+            ponderContentRegistry === contentRegistryAddress.toLowerCase(),
+          "Ponder deployment ContentRegistry matches deployment artifact",
+        );
+        addCheck(
+          checks,
+          failures,
+          Boolean(feedbackRegistryAddress) &&
+            ponderFeedbackRegistry === feedbackRegistryAddress.toLowerCase(),
+          "Ponder deployment FeedbackRegistry matches deployment artifact",
+        );
+        addCheck(
+          checks,
+          failures,
+          Boolean(expectedDeploymentKey) && ponderDeploymentKey === expectedDeploymentKey,
+          "Ponder deployment key matches deployment artifact",
+        );
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       addCheck(
@@ -929,6 +999,40 @@ export async function validateLiveReadiness({
           `app route ${path} probe failed: ${message}`,
         );
       }
+    }
+
+    try {
+      const response = await fetchWithTimeout(
+        buildReadinessUrl(appUrl, "/api/ponder/availability"),
+      );
+      addCheck(
+        checks,
+        failures,
+        response.status < 500,
+        "app route /api/ponder/availability returns below HTTP 500",
+      );
+      if (response.status < 500) {
+        const body = await response.json().catch(() => null);
+        const expectedDeploymentKey = expectedPonderDeploymentKey(readinessConfig, deploymentAddresses);
+        const appExpectedDeploymentKey =
+          typeof body?.expectedDeploymentKey === "string" && body.expectedDeploymentKey.trim()
+            ? body.expectedDeploymentKey.trim().toLowerCase()
+            : null;
+        addCheck(
+          checks,
+          failures,
+          Boolean(expectedDeploymentKey) && appExpectedDeploymentKey === expectedDeploymentKey,
+          `app expects ${readinessConfig.label} Ponder deployment`,
+        );
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      addCheck(
+        checks,
+        failures,
+        false,
+        `app route /api/ponder/availability probe failed: ${message}`,
+      );
     }
   } else {
     addCheck(

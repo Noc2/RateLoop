@@ -290,6 +290,53 @@ describe("areCorrelationCandidatesPonderFresh", () => {
     ).toBe(true);
   });
 
+  it("checks eligible vote indexing per domain for candidates sharing content and round", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes("/correlation/rating-round-votes")) {
+        return new Response(JSON.stringify({ items: [{}] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.includes("/correlation/bundle-round-votes")) {
+        return new Response(JSON.stringify({ items: [], truncated: true }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.includes("/rounds")) {
+        return mockRoundSnapshot("1", "1");
+      }
+      return new Response(JSON.stringify({ error: "bad request" }), { status: 400 });
+    });
+    mockReadRound.mockResolvedValue({
+      state: ROUND_STATE.Settled,
+      revealedCount: 1n,
+      voteCount: 1n,
+    });
+
+    const { areCorrelationCandidatesPonderFresh } = await import("../correlation-ponder-freshness.js");
+    const logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    const fresh = await areCorrelationCandidatesPonderFresh(
+      {} as never,
+      [
+        { domain: PAYOUT_DOMAIN_PUBLIC_RATING, rewardPoolId: 0n, contentId: 3n, roundId: 1n },
+        { domain: PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD, rewardPoolId: 12n, contentId: 3n, roundId: 1n },
+      ],
+      logger,
+    );
+
+    expect(fresh).toBe(false);
+    expect(mockReadRound).toHaveBeenCalledOnce();
+    expect(
+      fetchMock.mock.calls.some(call => String(call[0]).includes("/correlation/rating-round-votes")),
+    ).toBe(true);
+    expect(
+      fetchMock.mock.calls.some(call => String(call[0]).includes("/correlation/bundle-round-votes")),
+    ).toBe(true);
+  });
+
   it("passes when all revealed votes are correlation-excluded but indexing is complete", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = String(input);

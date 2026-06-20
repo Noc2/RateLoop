@@ -579,7 +579,20 @@ function normalizePonderDeploymentChainId(value: unknown): number | null {
 }
 
 function expectedPonderDeploymentCacheKey(baseUrl: string) {
-  return [baseUrl, config.chainId, config.contracts.contentRegistry.toLowerCase()].join("|");
+  return [
+    baseUrl,
+    config.chainId,
+    config.contracts.contentRegistry.toLowerCase(),
+    config.contracts.feedbackRegistry.toLowerCase(),
+  ].join("|");
+}
+
+function expectedPonderDeploymentKey() {
+  return [
+    String(config.chainId),
+    config.contracts.contentRegistry.toLowerCase(),
+    config.contracts.feedbackRegistry.toLowerCase(),
+  ].join(":");
 }
 
 async function assertPonderDeploymentMatchesKeeper(
@@ -605,7 +618,16 @@ async function assertPonderDeploymentMatchesKeeper(
     const ponderContentRegistry = normalizePonderDeploymentAddress(
       deployment.contentRegistryAddress,
     );
+    const ponderFeedbackRegistry = normalizePonderDeploymentAddress(
+      deployment.feedbackRegistryAddress,
+    );
+    const ponderDeploymentKey =
+      typeof deployment.deploymentKey === "string" && deployment.deploymentKey.trim()
+        ? deployment.deploymentKey.trim().toLowerCase()
+        : null;
     const expectedContentRegistry = config.contracts.contentRegistry.toLowerCase();
+    const expectedFeedbackRegistry = config.contracts.feedbackRegistry.toLowerCase();
+    const expectedDeploymentKey = expectedPonderDeploymentKey();
     const mismatches: string[] = [];
 
     if (ponderChainId !== config.chainId) {
@@ -616,12 +638,19 @@ async function assertPonderDeploymentMatchesKeeper(
         `contentRegistryAddress=${ponderContentRegistry ?? "unknown"} expected ${expectedContentRegistry}`,
       );
     }
+    if (ponderFeedbackRegistry !== expectedFeedbackRegistry) {
+      mismatches.push(
+        `feedbackRegistryAddress=${ponderFeedbackRegistry ?? "unknown"} expected ${expectedFeedbackRegistry}`,
+      );
+    }
+    if (ponderDeploymentKey !== expectedDeploymentKey) {
+      mismatches.push(
+        `deploymentKey=${ponderDeploymentKey ?? "unknown"} expected ${expectedDeploymentKey}`,
+      );
+    }
 
     if (mismatches.length > 0) {
-      const deploymentKey =
-        typeof deployment.deploymentKey === "string" && deployment.deploymentKey.trim()
-          ? ` (${deployment.deploymentKey.trim().toLowerCase()})`
-          : "";
+      const deploymentKey = ponderDeploymentKey ? ` (${ponderDeploymentKey})` : "";
       throw new Error(`Ponder deployment does not match keeper config${deploymentKey}: ${mismatches.join(", ")}`);
     }
 
@@ -944,6 +973,7 @@ async function fetchIndexedCiphertextsForRound(params: {
   }
 
   try {
+    await assertPonderDeploymentMatchesKeeper(config.ponderBaseUrl, {});
     const path = params.kind === "vote" ? "/votes" : "/advisory-votes";
     const indexedCiphertexts: IndexedCiphertextMap = new Map();
     for (let page = 0; page < MAX_INDEXED_CIPHERTEXT_PAGES; page++) {

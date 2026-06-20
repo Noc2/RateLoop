@@ -82,6 +82,15 @@ function selectorBytecode() {
     .join("")}`;
 }
 
+function expectedDeploymentKeyFor(deploymentJson, chainId = 4801) {
+  const deploymentAddresses = buildDeploymentAddressMap(deploymentJson);
+  return [
+    String(chainId),
+    deploymentAddresses.get("ContentRegistry").toLowerCase(),
+    deploymentAddresses.get("FeedbackRegistry").toLowerCase(),
+  ].join(":");
+}
+
 function handleWiringCall(call, deploymentAddresses, overrides = {}) {
   for (const check of REQUIRED_ADDRESS_WIRING_CHECKS) {
     const to = deploymentAddresses.get(check.contractName);
@@ -411,15 +420,23 @@ test("buildReadinessUrl preserves path-prefixed app readiness URLs", () => {
 test("validateLiveReadiness preserves path-prefixed app probe URLs", async () => {
   const previousFetch = globalThis.fetch;
   const requestedUrls = [];
+  const deploymentJson = makeDeploymentJson();
   globalThis.fetch = async (url) => {
-    requestedUrls.push(url.toString());
+    const urlString = url.toString();
+    requestedUrls.push(urlString);
+    if (urlString.endsWith("/api/ponder/availability")) {
+      return new Response(
+        JSON.stringify({ expectedDeploymentKey: expectedDeploymentKeyFor(deploymentJson) }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }
     return new Response("ok", { status: 200 });
   };
 
   try {
     const result = await validateLiveReadiness({
       appUrl: "https://app.example.test/base-sepolia",
-      deploymentJson: makeDeploymentJson(),
+      deploymentJson,
     });
 
     assert.equal(result.ok, true);
@@ -428,7 +445,60 @@ test("validateLiveReadiness preserves path-prefixed app probe URLs", async () =>
       "https://app.example.test/base-sepolia/ask",
       "https://app.example.test/base-sepolia/docs/ai",
       "https://app.example.test/base-sepolia/api/agent/templates",
+      "https://app.example.test/base-sepolia/api/ponder/availability",
     ]);
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
+test("validateLiveReadiness rejects stale Ponder deployment metadata", async () => {
+  const previousFetch = globalThis.fetch;
+  const deploymentJson = makeDeploymentJson();
+  const deploymentAddresses = buildDeploymentAddressMap(deploymentJson);
+  globalThis.fetch = async (url) => {
+    const urlString = url.toString();
+    if (urlString.endsWith("/status")) {
+      return new Response(
+        JSON.stringify({
+          worldchainSepolia: {
+            block: { number: deploymentJson.deploymentBlockNumber },
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }
+    if (urlString.endsWith("/deployment")) {
+      return new Response(
+        JSON.stringify({
+          chainId: 4801,
+          contentRegistryAddress: deploymentAddresses.get("ContentRegistry"),
+          feedbackRegistryAddress: addressFor(900),
+          deploymentKey: `${4801}:${deploymentAddresses.get("ContentRegistry").toLowerCase()}:${addressFor(900).toLowerCase()}`,
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }
+    throw new Error(`Unexpected fetch ${urlString}`);
+  };
+
+  try {
+    const result = await validateLiveReadiness({
+      deploymentJson,
+      ponderUrl: "https://ponder.example.test/indexer",
+    });
+
+    assert.equal(result.ok, false);
+    assert(
+      result.failures.some((message) =>
+        message.includes("Ponder deployment FeedbackRegistry matches deployment artifact"),
+      ),
+    );
+    assert(
+      result.failures.some((message) =>
+        message.includes("Ponder deployment key matches deployment artifact"),
+      ),
+    );
   } finally {
     globalThis.fetch = previousFetch;
   }

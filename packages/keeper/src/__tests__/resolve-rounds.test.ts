@@ -13,6 +13,8 @@ const QUESTION_REWARD_POOL_ESCROW =
   "0x6666666666666666666666666666666666666666" as const;
 const FEEDBACK_BONUS_ESCROW =
   "0x7777777777777777777777777777777777777777" as const;
+const FEEDBACK_REGISTRY =
+  "0x8888888888888888888888888888888888888888" as const;
 const TOO_EARLY_TLOCK_ERROR =
   "It's too early to decrypt the ciphertext - decryptable at round 27013021";
 const zeroHash = `0x${"0".repeat(64)}` as const;
@@ -30,6 +32,7 @@ const {
     contracts: {
       votingEngine: "0x1111111111111111111111111111111111111111",
       contentRegistry: "0x2222222222222222222222222222222222222222",
+      feedbackRegistry: "0x8888888888888888888888888888888888888888",
       advisoryVoteRecorder: "0x5555555555555555555555555555555555555555",
       feedbackBonusEscrow: "0x7777777777777777777777777777777777777777",
     },
@@ -138,9 +141,13 @@ function matchingPonderDeployment() {
     configured: true,
     chainId: mockConfig.chainId,
     contentRegistryAddress: mockConfig.contracts.contentRegistry,
-    feedbackRegistryAddress: "0x8888888888888888888888888888888888888888",
-    deploymentKey: `${mockConfig.chainId}:${mockConfig.contracts.contentRegistry.toLowerCase()}:0x8888888888888888888888888888888888888888`,
+    feedbackRegistryAddress: mockConfig.contracts.feedbackRegistry,
+    deploymentKey: `${mockConfig.chainId}:${mockConfig.contracts.contentRegistry.toLowerCase()}:${mockConfig.contracts.feedbackRegistry.toLowerCase()}`,
   };
+}
+
+function countNonDeploymentFetches(fetchMock: { mock: { calls: Array<[RequestInfo | URL, ...unknown[]]> } }) {
+  return fetchMock.mock.calls.filter(([input]) => !new URL(input.toString()).pathname.endsWith("/deployment")).length;
 }
 
 function makeRound({
@@ -357,9 +364,17 @@ function makeHarness(options: {
   const advisoryCommits = options.advisoryCommits ?? {};
   const round = options.round;
 
-  const fetchMock = vi.fn(async () => {
+  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
     if (options.ponderAvailable === false) {
       throw new Error("fetch failed");
+    }
+    const url = new URL(input.toString());
+    if (url.pathname.endsWith("/deployment")) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => matchingPonderDeployment(),
+      };
     }
     const items = Object.entries(options.ponderCommits ?? commits).map(
       ([commitKey, commit]) => ({
@@ -737,6 +752,62 @@ describe("resolveRounds", () => {
           logger as any,
         ),
       ).rejects.toThrow(/Ponder deployment does not match keeper config/);
+    } finally {
+      process.env.NODE_ENV = originalNodeEnv;
+      if (originalKeeperWorkToken === undefined) {
+        delete process.env.PONDER_KEEPER_WORK_TOKEN;
+      } else {
+        process.env.PONDER_KEEPER_WORK_TOKEN = originalKeeperWorkToken;
+      }
+    }
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(walletClient.writeContract).not.toHaveBeenCalled();
+  });
+
+  it("fails closed in production when Ponder FeedbackRegistry metadata does not match", async () => {
+    mockConfig.keeperWorkDiscovery.enabled = true;
+
+    const round = makeRound({
+      state: 1,
+      voteCount: 0n,
+      revealedCount: 0n,
+    });
+    const { publicClient, walletClient } = makeHarness({
+      activeRoundId: 0n,
+      latestRoundId: 0n,
+      round,
+      now: 3_000_000n,
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(input.toString());
+      expect(url.pathname).toBe("/deployment");
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          ...matchingPonderDeployment(),
+          feedbackRegistryAddress: "0x9999999999999999999999999999999999999999",
+          deploymentKey: `${mockConfig.chainId}:${mockConfig.contracts.contentRegistry.toLowerCase()}:0x9999999999999999999999999999999999999999`,
+        }),
+      };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const logger = makeLogger();
+    const originalNodeEnv = process.env.NODE_ENV;
+    const originalKeeperWorkToken = process.env.PONDER_KEEPER_WORK_TOKEN;
+    process.env.NODE_ENV = "production";
+    process.env.PONDER_KEEPER_WORK_TOKEN = "test-token";
+
+    try {
+      await expect(
+        resolveRounds(
+          publicClient as any,
+          walletClient as any,
+          {} as any,
+          { address: ACCOUNT } as any,
+          logger as any,
+        ),
+      ).rejects.toThrow(/feedbackRegistryAddress=.* expected/);
     } finally {
       process.env.NODE_ENV = originalNodeEnv;
       if (originalKeeperWorkToken === undefined) {
@@ -1130,7 +1201,7 @@ describe("resolveRounds", () => {
     expect(commits[COMMIT_KEY_1].revealed).toBe(true);
     expect(commits[COMMIT_KEY_2].revealed).toBe(true);
     expect(round.state).toBe(1);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(countNonDeploymentFetches(fetchMock)).toBe(1);
   });
 
   it("does not count RBTS seed capture as terminal settlement", async () => {
@@ -1247,6 +1318,13 @@ describe("resolveRounds", () => {
     });
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(input.toString());
+      if (url.pathname === "/deployment") {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => matchingPonderDeployment(),
+        };
+      }
       const offset = url.searchParams.get("offset");
       return {
         ok: true,
@@ -1283,7 +1361,7 @@ describe("resolveRounds", () => {
     expect(
       fetchMock.mock.calls.map(([input]) =>
         new URL(input.toString()).searchParams.get("offset"),
-      ),
+      ).filter((offset): offset is string => offset !== null),
     ).toEqual(["0", "200"]);
     expect(walletClient.writeContract).toHaveBeenCalledWith(
       expect.objectContaining({ functionName: "revealVoteByCommitKey" }),
@@ -1311,6 +1389,13 @@ describe("resolveRounds", () => {
     // ever returning a short page.
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(input.toString());
+      if (url.pathname === "/deployment") {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => matchingPonderDeployment(),
+        };
+      }
       const offset = Number(url.searchParams.get("offset"));
       return {
         ok: true,
@@ -1334,7 +1419,7 @@ describe("resolveRounds", () => {
     );
 
     expect(result.votesRevealed).toBe(0);
-    expect(fetchMock).toHaveBeenCalledTimes(6);
+    expect(countNonDeploymentFetches(fetchMock)).toBe(6);
     expect(logger.warn).toHaveBeenCalledWith(
       "Indexed ciphertext page limit reached; commits beyond the limit fall back to on-chain logs",
       expect.objectContaining({
