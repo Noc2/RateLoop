@@ -546,8 +546,10 @@ async function fetchRoundCandidateWindow(
     "/correlation/rating-round-candidates",
   ];
   for (const pathname of endpoints) {
-    for (let offset = 0; candidates.length < targetCount * endpoints.length; ) {
-      const limit = Math.min(targetCount, 200);
+    const endpointCandidates: CorrelationRoundCandidate[] = [];
+    for (let offset = 0; endpointCandidates.length < targetCount; ) {
+      const remaining = targetCount - endpointCandidates.length;
+      const limit = Math.min(remaining, 200);
       const url = buildPonderUrl(ponderBaseUrl, pathname);
       url.searchParams.set("limit", String(limit));
       url.searchParams.set("offset", String(offset));
@@ -558,12 +560,13 @@ async function fetchRoundCandidateWindow(
           `Ponder returned too many correlation candidates: ${items.length} > ${limit}`,
         );
       }
-      candidates.push(...items.map(parseCandidate));
+      endpointCandidates.push(...items.map(parseCandidate));
       if (items.length < limit) {
         break;
       }
       offset += items.length;
     }
+    candidates.push(...endpointCandidates);
   }
   return candidates.sort(compareCandidates).slice(0, targetCount);
 }

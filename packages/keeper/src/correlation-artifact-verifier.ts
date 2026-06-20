@@ -1,9 +1,11 @@
 import { readFile } from "node:fs/promises";
 import {
+  PAYOUT_DOMAIN_PUBLIC_RATING,
   correlationParameterHash,
   defaultCorrelationScoringParams,
   merkleProof,
   scoreRoundPayoutWeights,
+  scoreRoundRatingWeights,
   type CorrelationScoringParams,
   type CorrelationVoteInput,
 } from "@rateloop/node-utils/correlationScoring";
@@ -192,9 +194,10 @@ function readRoundSnapshot(
     `${label}.domain`,
     errors,
   );
-  const rewardPoolId = readPositiveBigInt(
+  const rewardPoolId = readRewardPoolId(
     record.rewardPoolId,
     `${label}.rewardPoolId`,
+    domain,
     errors,
   );
   const contentId = readPositiveBigInt(
@@ -329,6 +332,18 @@ function readEligibleVote(
           `${label}.revealWeight`,
           errors,
         );
+  const stake =
+    record.stake === undefined || record.stake === null
+      ? null
+      : readNonNegativeBigInt(record.stake, `${label}.stake`, errors);
+  const epochIndex =
+    record.epochIndex === undefined || record.epochIndex === null
+      ? null
+      : readNonNegativeInteger(
+          record.epochIndex,
+          `${label}.epochIndex`,
+          errors,
+        );
   if (!account || !identityKey || !commitKey || historicalVoteCount === null) {
     return null;
   }
@@ -341,6 +356,8 @@ function readEligibleVote(
     features,
     isUp: typeof record.isUp === "boolean" ? record.isUp : null,
     revealWeight,
+    stake,
+    epochIndex,
   };
 }
 
@@ -356,9 +373,10 @@ function readPayoutWeight(
     `${label}.domain`,
     errors,
   );
-  const rewardPoolId = readPositiveBigInt(
+  const rewardPoolId = readRewardPoolId(
     record.rewardPoolId,
     `${label}.rewardPoolId`,
+    domain,
     errors,
   );
   const contentId = readPositiveBigInt(
@@ -457,17 +475,27 @@ function verifyRoundSnapshot(
   const label = `round ${round.contentId.toString()}/${round.roundId.toString()}`;
   let scored: ReturnType<typeof scoreRoundPayoutWeights>;
   try {
-    scored = scoreRoundPayoutWeights({
-      chainId,
-      oracleAddress,
-      domain: round.domain,
-      rewardPoolId: round.rewardPoolId,
-      contentId: round.contentId,
-      roundId: round.roundId,
-      votes: round.eligibleVotes,
-      trailingBaseRateUpBps: round.trailingBaseRateUpBps,
-      params,
-    });
+    scored =
+      round.domain === PAYOUT_DOMAIN_PUBLIC_RATING
+        ? scoreRoundRatingWeights({
+            chainId,
+            oracleAddress,
+            contentId: round.contentId,
+            roundId: round.roundId,
+            votes: round.eligibleVotes,
+            params,
+          })
+        : scoreRoundPayoutWeights({
+            chainId,
+            oracleAddress,
+            domain: round.domain,
+            rewardPoolId: round.rewardPoolId,
+            contentId: round.contentId,
+            roundId: round.roundId,
+            votes: round.eligibleVotes,
+            trailingBaseRateUpBps: round.trailingBaseRateUpBps,
+            params,
+          });
   } catch (error) {
     errors.push(
       `${label}: ${error instanceof Error ? error.message : String(error)}`,
@@ -722,6 +750,31 @@ function readPositiveBigInt(
 ): bigint | null {
   const parsed = parseBigIntLike(value);
   if (parsed === null || parsed <= 0n) {
+    errors.push(`${label} must be a positive integer`);
+    return null;
+  }
+  return parsed;
+}
+
+function readRewardPoolId(
+  value: unknown,
+  label: string,
+  domain: number | null,
+  errors: string[],
+): bigint | null {
+  const parsed = parseBigIntLike(value);
+  if (parsed === null || parsed < 0n) {
+    errors.push(`${label} must be a non-negative integer`);
+    return null;
+  }
+  if (domain === PAYOUT_DOMAIN_PUBLIC_RATING) {
+    if (parsed !== 0n) {
+      errors.push(`${label} must be 0 for public-rating snapshots`);
+      return null;
+    }
+    return parsed;
+  }
+  if (parsed <= 0n) {
     errors.push(`${label} must be a positive integer`);
     return null;
   }

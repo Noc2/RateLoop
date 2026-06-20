@@ -610,12 +610,76 @@ describe("automatic correlation artifact builder", () => {
       roundId: "2",
       rawEligibleVoters: 1,
     });
+    const { verifyCorrelationArtifact } = await import(
+      "../correlation-artifact-verifier.js"
+    );
+    expect(verifyCorrelationArtifact(publicArtifact)).toMatchObject({
+      ok: true,
+      roundSnapshotCount: 1,
+      epochCount: 1,
+      errors: [],
+    });
     expect(
       fetchMock.mock.calls.some(
         ([input]) =>
           new URL(input.toString()).pathname === "/correlation/round-votes",
       ),
     ).toBe(false);
+  });
+
+  it("fetches supplemental candidate endpoints even when question candidates fill the window", async () => {
+    mockConfig();
+    const seenPathnames: string[] = [];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(input.toString());
+      seenPathnames.push(url.pathname);
+      if (url.pathname === "/correlation/round-candidates") {
+        return jsonResponse({
+          items: Array.from({ length: 6 }, (_, index) => ({
+            rewardPoolId: String(index + 1),
+            contentId: String(index + 10),
+            roundId: "4",
+          })),
+        });
+      }
+      if (url.pathname === "/correlation/bundle-round-candidates") {
+        return jsonResponse({
+          items: [
+            { domain: 4, rewardPoolId: "70", contentId: "70", roundId: "4" },
+          ],
+        });
+      }
+      if (url.pathname === "/correlation/rating-round-candidates") {
+        return jsonResponse({
+          items: [
+            { domain: 3, rewardPoolId: "0", contentId: "80", roundId: "4" },
+          ],
+        });
+      }
+      return new Response("round votes should not be requested", {
+        status: 500,
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { buildConfiguredCorrelationSnapshotArtifact } = await import(
+      "../correlation-artifact-builder.js"
+    );
+    const logger = {
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    };
+
+    await buildConfiguredCorrelationSnapshotArtifact(logger);
+
+    expect(seenPathnames).toContain("/correlation/round-candidates");
+    expect(seenPathnames).toContain("/correlation/bundle-round-candidates");
+    expect(seenPathnames).toContain("/correlation/rating-round-candidates");
+    expect(seenPathnames.some((pathname) => pathname.endsWith("-votes"))).toBe(
+      false,
+    );
   });
 
   it("builds non-flat surprise-weighted baseWeights for a non-uniform round", async () => {
