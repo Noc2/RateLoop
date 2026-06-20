@@ -9,7 +9,7 @@ import {
 } from "./client";
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
+import { resolveContentDeploymentScope, resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 
 const TEST_PONDER_DEPLOYMENT = resolveProtocolDeploymentScope(31337);
 const BASE_SEPOLIA_PONDER_DEPLOYMENT = resolveProtocolDeploymentScope(84532);
@@ -483,12 +483,61 @@ test("ponderApi.getAllTokenHolders can preflight an explicit deployment key", as
   assert.match(requestedUrls[2] ?? "", /\/token-holders\?/);
 });
 
+test("ponderApi.getContent can preflight and stamp an explicit chain deployment", async () => {
+  const originalFetch = globalThis.fetch;
+  assert.ok(BASE_SEPOLIA_PONDER_DEPLOYMENT);
+  const contentDeployment = resolveContentDeploymentScope(BASE_SEPOLIA_PONDER_DEPLOYMENT.chainId);
+  assert.ok(contentDeployment);
+  const expectedDeploymentKey = BASE_SEPOLIA_PONDER_DEPLOYMENT.deploymentKey;
+  const requestedUrls: string[] = [];
+
+  globalThis.fetch = (async input => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    requestedUrls.push(url);
+    const preflightResponse = healthyPonderPreflightResponseForDeployment(url, BASE_SEPOLIA_PONDER_DEPLOYMENT);
+    if (preflightResponse) return preflightResponse;
+
+    return new Response(
+      JSON.stringify({
+        items: [{ id: "42", question: "Scoped question" }],
+        limit: 50,
+        offset: 0,
+        total: 1,
+        hasMore: false,
+      }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
+  }) as typeof fetch;
+
+  try {
+    invalidatePonderCache({ clearLastKnownGood: true });
+
+    const result = await ponderApi.getContent(undefined, {
+      chainId: BASE_SEPOLIA_PONDER_DEPLOYMENT.chainId,
+      deploymentKey: expectedDeploymentKey,
+    });
+
+    assert.equal(result.items[0]?.chainId, BASE_SEPOLIA_PONDER_DEPLOYMENT.chainId);
+    assert.equal(result.items[0]?.contentRegistryAddress, contentDeployment.contentRegistryAddress);
+    assert.equal(result.items[0]?.deploymentKey, contentDeployment.deploymentKey);
+  } finally {
+    globalThis.fetch = originalFetch;
+    invalidatePonderCache({ clearLastKnownGood: true });
+  }
+
+  assert.match(requestedUrls[0] ?? "", /\/health$/);
+  assert.match(requestedUrls[1] ?? "", /\/deployment$/);
+  assert.match(requestedUrls[2] ?? "", /\/content$/);
+});
+
 test("ponderApi.getContentWindow respects hasMore when search totals are omitted", async () => {
   const originalGetContent = ponderApi.getContent;
   let callCount = 0;
+  const seenOptions: unknown[] = [];
 
-  ponderApi.getContent = async () => {
+  ponderApi.getContent = async (_params, options) => {
     callCount += 1;
+    seenOptions.push(options);
 
     if (callCount === 1) {
       return {
@@ -510,11 +559,18 @@ test("ponderApi.getContentWindow respects hasMore when search totals are omitted
   };
 
   try {
-    const response = await ponderApi.getContentWindow({ limit: "250", search: "rateloop" });
+    const response = await ponderApi.getContentWindow(
+      { limit: "250", search: "rateloop" },
+      { chainId: 84532, deploymentKey: "84532:content:feedback" },
+    );
 
     assert.equal(response.items.length, 250);
     assert.equal(response.total, null);
     assert.equal(response.hasMore, true);
+    assert.deepEqual(seenOptions, [
+      { chainId: 84532, deploymentKey: "84532:content:feedback" },
+      { chainId: 84532, deploymentKey: "84532:content:feedback" },
+    ]);
   } finally {
     ponderApi.getContent = originalGetContent;
   }

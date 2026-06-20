@@ -2101,6 +2101,7 @@ const HomeInner = () => {
               <VotingQuestionCard
                 contentId={mobileVoteDockItem.id}
                 categoryId={mobileVoteDockItem.categoryId}
+                chainId={mobileVoteDockItem.chainId}
                 questionTitle={mobileVoteDockItem.question || mobileVoteDockItem.title}
                 currentRating={getVisibleContentRating(mobileVoteDockItem)}
                 ratingReviewStatus={mobileVoteDockItem.ratingReviewStatus}

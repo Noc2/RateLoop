@@ -2,9 +2,11 @@
 
 import { useMemo } from "react";
 import { useAccount } from "wagmi";
+import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import { buildClaimableQuestionRewardCandidateVoters } from "~~/hooks/useClaimableQuestionRewards";
 import { useDelegation } from "~~/hooks/useDelegation";
 import { usePonderQuery } from "~~/hooks/usePonderQuery";
+import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 import { ponderApi } from "~~/services/ponder/client";
 
 export interface ViewerRewardStatus {
@@ -20,9 +22,14 @@ export interface ViewerRewardStatus {
   hasPendingFeedbackBonus: boolean;
 }
 
-function getViewerRewardStatusesQueryKey(voters?: readonly string[], contentIds?: readonly bigint[]) {
+function getViewerRewardStatusesQueryKey(
+  deploymentKey: string,
+  voters?: readonly string[],
+  contentIds?: readonly bigint[],
+) {
   return [
     "viewerRewardStatuses",
+    deploymentKey,
     voters?.join(",") ?? null,
     contentIds?.map(contentId => contentId.toString()).join(",") ?? null,
   ] as const;
@@ -51,6 +58,7 @@ function normalizeContentIds(contentIds: readonly bigint[]) {
 
 export function useViewerRewardStatuses(contentIds: readonly bigint[], enabled = true) {
   const { address } = useAccount();
+  const { targetNetwork } = useTargetNetwork();
   const normalizedAddress = address?.toLowerCase();
   const { delegateTo, delegateOf, isLoading: delegationLoading } = useDelegation(normalizedAddress);
   const normalizedContentIds = useMemo(() => normalizeContentIds(contentIds), [contentIds]);
@@ -68,14 +76,22 @@ export function useViewerRewardStatuses(contentIds: readonly bigint[], enabled =
     () => normalizedContentIds.map(contentId => contentId.toString()).join(","),
     [normalizedContentIds],
   );
+  const ponderDeploymentKey = useMemo(
+    () => resolveProtocolDeploymentScope(targetNetwork.id)?.deploymentKey ?? `missing:${targetNetwork.id}`,
+    [targetNetwork.id],
+  );
 
   const { data, isLoading, refetch } = usePonderQuery({
-    queryKey: getViewerRewardStatusesQueryKey(candidateVoters, normalizedContentIds),
+    queryKey: getViewerRewardStatusesQueryKey(ponderDeploymentKey, candidateVoters, normalizedContentIds),
     ponderFn: async () => {
       if (!voterQuery || !contentIdsQuery) return { items: [] };
-      return ponderApi.getViewerRewardStatuses({ voters: voterQuery, contentIds: contentIdsQuery });
+      return ponderApi.getViewerRewardStatuses(
+        { voters: voterQuery, contentIds: contentIdsQuery },
+        { chainId: targetNetwork.id, deploymentKey: ponderDeploymentKey },
+      );
     },
     rpcFn: async () => ({ items: [] }),
+    availabilityDeploymentKey: ponderDeploymentKey,
     enabled: enabled && candidateVoters.length > 0 && normalizedContentIds.length > 0 && !delegationLoading,
     staleTime: 30_000,
   });

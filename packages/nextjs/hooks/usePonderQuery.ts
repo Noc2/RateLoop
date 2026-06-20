@@ -5,6 +5,8 @@ import { invalidatePonderCache, isPonderAvailable, isPonderRateLimitError } from
 
 interface UsePonderQueryOptions<TPonder, TRpc> {
   queryKey: readonly unknown[];
+  /** Deployment key that the configured Ponder endpoint must report before this query uses it. */
+  availabilityDeploymentKey?: string | null;
   /** Fetch data from Ponder API */
   ponderFn: () => Promise<TPonder>;
   /** Fetch data from RPC as fallback */
@@ -42,6 +44,7 @@ interface PonderQueryResult<T> {
  */
 export function usePonderQuery<TPonder, TRpc>({
   queryKey,
+  availabilityDeploymentKey,
   ponderFn,
   rpcFn,
   rpcEnabled = true,
@@ -53,7 +56,7 @@ export function usePonderQuery<TPonder, TRpc>({
   return useQuery({
     queryKey: ["ponder-fallback", ...queryKey],
     queryFn: async (): Promise<PonderQueryResult<TPonder | TRpc>> => {
-      const available = await isPonderAvailable();
+      const available = await isPonderAvailable(availabilityDeploymentKey);
 
       if (available) {
         try {

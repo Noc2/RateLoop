@@ -8,6 +8,7 @@ import { getPublicClient, readContract, waitForTransactionReceipt } from "wagmi/
 import { XMarkIcon } from "@heroicons/react/24/outline";
 import { GradientActionButton, getGradientActionMotion } from "~~/components/shared/GradientAction";
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
+import { useRateLoopSwitchNetwork } from "~~/hooks/useRateLoopSwitchNetwork";
 import {
   BOUNTY_WINDOW_PRESETS,
   type BountyWindowPreset,
@@ -38,9 +39,10 @@ import {
   getDefaultSignatureDeadline,
   getSignatureParts,
 } from "~~/lib/walletSignatures";
-import { notification } from "~~/utils/scaffold-eth";
+import { getTargetNetworks, notification } from "~~/utils/scaffold-eth";
 
 type FundFeedbackBonusModalProps = {
+  contentChainId?: number | null;
   contentId: bigint;
   roundId: bigint;
   title: string;
@@ -72,11 +74,19 @@ function FeedbackBonusFieldLabel({
   );
 }
 
-export function FundFeedbackBonusModal({ contentId, roundId, title, onClose, onCreated }: FundFeedbackBonusModalProps) {
+export function FundFeedbackBonusModal({
+  contentChainId,
+  contentId,
+  roundId,
+  title,
+  onClose,
+  onCreated,
+}: FundFeedbackBonusModalProps) {
   const wagmiConfig = useConfig();
   const { address, chain } = useAccount();
   const { writeContractAsync } = useWriteContract();
   const { signTypedDataAsync } = useSignTypedData();
+  const { switchToChain, switchingChainId } = useRateLoopSwitchNetwork();
   const [isMounted, setIsMounted] = useState(false);
   const amountInputId = useId();
   const awarderInputId = useId();
@@ -91,7 +101,10 @@ export function FundFeedbackBonusModal({ contentId, roundId, title, onClose, onC
   );
   const [isFunding, setIsFunding] = useState(false);
 
-  const chainId = chain?.id ?? wagmiConfig.chains[0]?.id ?? 0;
+  const chainId = contentChainId ?? chain?.id ?? wagmiConfig.chains[0]?.id ?? 0;
+  const targetChain = useMemo(() => getTargetNetworks().find(network => network.id === chainId), [chainId]);
+  const targetChainName = targetChain?.name ?? `chain ${chainId}`;
+  const isWrongFundingChain = Boolean(address && chainId && chain?.id !== chainId);
   const escrowAddress = useMemo(() => getConfiguredFeedbackBonusEscrowAddress(chainId), [chainId]);
   const fallbackUsdcAddress = useMemo(() => getDefaultUsdcAddress(chainId), [chainId]);
   const fallbackLrepAddress = useMemo(() => getDefaultLrepAddress(chainId), [chainId]);
@@ -126,7 +139,8 @@ export function FundFeedbackBonusModal({ contentId, roundId, title, onClose, onC
       parsedAmount &&
       selectedAwarderAddress &&
       hasActiveRound &&
-      hasValidFeedbackWindow,
+      hasValidFeedbackWindow &&
+      !isWrongFundingChain,
   );
 
   useEffect(() => {
@@ -148,6 +162,10 @@ export function FundFeedbackBonusModal({ contentId, roundId, title, onClose, onC
   const handleFundFeedbackBonus = async () => {
     if (!address) {
       notification.error("Connect your wallet to fund a Feedback Bonus.");
+      return;
+    }
+    if (isWrongFundingChain) {
+      notification.error(`Switch your wallet to ${targetChainName} before funding this Feedback Bonus.`);
       return;
     }
     if (!escrowAddress) {
@@ -204,6 +222,7 @@ export function FundFeedbackBonusModal({ contentId, roundId, title, onClose, onC
           const validAfter = 0n;
           const validBefore = getDefaultSignatureDeadline();
           const nonce = (await readContract(wagmiConfig, {
+            chainId: chainId as any,
             address: escrowAddress,
             abi: FEEDBACK_BONUS_ESCROW_ABI,
             functionName: "computeFeedbackBonusAuthorizationNonce",
@@ -225,6 +244,7 @@ export function FundFeedbackBonusModal({ contentId, roundId, title, onClose, onC
           );
           const signatureParts = getSignatureParts(signature);
           authorizationHash = await writeContractAsync({
+            chainId: chainId as any,
             address: escrowAddress,
             abi: FEEDBACK_BONUS_ESCROW_ABI,
             functionName: "createFeedbackBonusPoolWithAuthorization",
@@ -241,7 +261,7 @@ export function FundFeedbackBonusModal({ contentId, roundId, title, onClose, onC
               },
             ],
           });
-          await waitForTransactionReceipt(wagmiConfig, { hash: authorizationHash });
+          await waitForTransactionReceipt(wagmiConfig, { chainId: chainId as any, hash: authorizationHash });
 
           notification.success(`Feedback Bonus funded with ${formatFeedbackBonusAmount(parsedAmount, asset)}.`);
           onCreated?.();
@@ -255,6 +275,7 @@ export function FundFeedbackBonusModal({ contentId, roundId, title, onClose, onC
 
       const readTokenAllowance = async () =>
         (await readContract(wagmiConfig, {
+          chainId: chainId as any,
           address: tokenAddress,
           abi: ERC20_APPROVAL_ABI,
           functionName: "allowance",
@@ -265,12 +286,13 @@ export function FundFeedbackBonusModal({ contentId, roundId, title, onClose, onC
 
       if (initialAllowance < parsedAmount) {
         const approveHash = await writeContractAsync({
+          chainId: chainId as any,
           address: tokenAddress,
           abi: ERC20_APPROVAL_ABI,
           functionName: "approve",
           args: [escrowAddress, parsedAmount],
         });
-        await waitForTransactionReceipt(wagmiConfig, { hash: approveHash });
+        await waitForTransactionReceipt(wagmiConfig, { chainId: chainId as any, hash: approveHash });
 
         const allowanceAfterApprove = await readTokenAllowance();
         if (allowanceAfterApprove < parsedAmount) {
@@ -281,12 +303,13 @@ export function FundFeedbackBonusModal({ contentId, roundId, title, onClose, onC
       }
 
       const feedbackBonusHash = await writeContractAsync({
+        chainId: chainId as any,
         address: escrowAddress,
         abi: FEEDBACK_BONUS_ESCROW_ABI,
         functionName: "createFeedbackBonusPoolWithAsset",
         args: [contentId, roundId, selectedAssetId, parsedAmount, feedbackClosesAt, selectedAwarderAddress],
       });
-      await waitForTransactionReceipt(wagmiConfig, { hash: feedbackBonusHash });
+      await waitForTransactionReceipt(wagmiConfig, { chainId: chainId as any, hash: feedbackBonusHash });
 
       notification.success(`Feedback Bonus funded with ${formatFeedbackBonusAmount(parsedAmount, asset)}.`);
       onCreated?.();
@@ -334,8 +357,20 @@ export function FundFeedbackBonusModal({ contentId, roundId, title, onClose, onC
           Feedback Bonuses reward useful written feedback from revealed raters after this round settles. The award
           decision window stays open for at least 24 hours after settlement.
         </p>
-
         <div className="mt-5 grid gap-4">
+          {isWrongFundingChain ? (
+            <div className="rounded-lg bg-warning/10 p-3 text-sm text-warning">
+              <p>Switch your wallet to {targetChainName} to fund this Feedback Bonus.</p>
+              <button
+                type="button"
+                className="btn btn-sm btn-outline mt-2"
+                disabled={switchingChainId === chainId}
+                onClick={() => void switchToChain(chainId)}
+              >
+                {switchingChainId === chainId ? "Switching..." : `Switch to ${targetChainName}`}
+              </button>
+            </div>
+          ) : null}
           <div className="form-control">
             <FeedbackBonusFieldLabel htmlFor={amountInputId} tooltip={FEEDBACK_BONUS_AMOUNT_TOOLTIP}>
               Feedback Bonus amount

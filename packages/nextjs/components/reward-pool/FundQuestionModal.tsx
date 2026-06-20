@@ -8,6 +8,7 @@ import { getPublicClient, readContract, waitForTransactionReceipt } from "wagmi/
 import { XMarkIcon } from "@heroicons/react/24/outline";
 import { GradientActionButton, getGradientActionMotion } from "~~/components/shared/GradientAction";
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
+import { useRateLoopSwitchNetwork } from "~~/hooks/useRateLoopSwitchNetwork";
 import {
   BOUNTY_WINDOW_PRESETS,
   type BountyWindowPreset,
@@ -40,9 +41,10 @@ import {
   getDefaultSignatureDeadline,
   getSignatureParts,
 } from "~~/lib/walletSignatures";
-import { notification } from "~~/utils/scaffold-eth";
+import { getTargetNetworks, notification } from "~~/utils/scaffold-eth";
 
 type FundQuestionModalProps = {
+  contentChainId?: number | null;
   contentId: bigint;
   roundConfig?: ContentRoundConfigLike | null;
   title: string;
@@ -89,11 +91,19 @@ function BountyFieldLabel({ htmlFor, children, tooltip }: { htmlFor: string; chi
   );
 }
 
-export function FundQuestionModal({ contentId, roundConfig, title, onClose, onCreated }: FundQuestionModalProps) {
+export function FundQuestionModal({
+  contentChainId,
+  contentId,
+  roundConfig,
+  title,
+  onClose,
+  onCreated,
+}: FundQuestionModalProps) {
   const wagmiConfig = useConfig();
   const { address, chain } = useAccount();
   const { writeContractAsync } = useWriteContract();
   const { signTypedDataAsync } = useSignTypedData();
+  const { switchToChain, switchingChainId } = useRateLoopSwitchNetwork();
   const [isMounted, setIsMounted] = useState(false);
   const amountInputId = useId();
   const requiredVotersInputId = useId();
@@ -110,7 +120,10 @@ export function FundQuestionModal({ contentId, roundConfig, title, onClose, onCr
   );
   const [isFunding, setIsFunding] = useState(false);
 
-  const chainId = chain?.id ?? wagmiConfig.chains[0]?.id ?? 0;
+  const chainId = contentChainId ?? chain?.id ?? wagmiConfig.chains[0]?.id ?? 0;
+  const targetChain = useMemo(() => getTargetNetworks().find(network => network.id === chainId), [chainId]);
+  const targetChainName = targetChain?.name ?? `chain ${chainId}`;
+  const isWrongFundingChain = Boolean(address && chainId && chain?.id !== chainId);
   const contentRegistryAddress = useMemo(() => getConfiguredContentRegistryAddress(chainId), [chainId]);
   const escrowAddress = useMemo(() => getConfiguredQuestionRewardPoolEscrowAddress(chainId), [chainId]);
   const fallbackUsdcAddress = useMemo(() => getDefaultUsdcAddress(chainId), [chainId]);
@@ -135,7 +148,8 @@ export function FundQuestionModal({ contentId, roundConfig, title, onClose, onCr
       voterCount >= MIN_REWARD_POOL_REQUIRED_VOTERS &&
       (requiredVoterFloor === null || voterCount >= requiredVoterFloor) &&
       settledRounds >= MIN_REWARD_POOL_SETTLED_ROUNDS &&
-      hasValidBountyWindow,
+      hasValidBountyWindow &&
+      !isWrongFundingChain,
   );
 
   useEffect(() => {
@@ -151,6 +165,7 @@ export function FundQuestionModal({ contentId, roundConfig, title, onClose, onCr
     }
     let cancelled = false;
     void readContract(wagmiConfig, {
+      chainId: chainId as any,
       address: contentRegistryAddress,
       abi: QUESTION_SUBMISSION_ABI,
       functionName: "getContentRoundConfig",
@@ -170,7 +185,7 @@ export function FundQuestionModal({ contentId, roundConfig, title, onClose, onCr
     return () => {
       cancelled = true;
     };
-  }, [contentId, contentRegistryAddress, roundConfig, wagmiConfig]);
+  }, [chainId, contentId, contentRegistryAddress, roundConfig, wagmiConfig]);
 
   useEffect(() => {
     setIsMounted(true);
@@ -186,6 +201,10 @@ export function FundQuestionModal({ contentId, roundConfig, title, onClose, onCr
   const handleFundQuestion = async () => {
     if (!address) {
       notification.error("Connect your wallet to fund this question.");
+      return;
+    }
+    if (isWrongFundingChain) {
+      notification.error(`Switch your wallet to ${targetChainName} before funding this question.`);
       return;
     }
     if (!escrowAddress) {
@@ -220,6 +239,7 @@ export function FundQuestionModal({ contentId, roundConfig, title, onClose, onCr
       const usdcAddress = fallbackUsdcAddress;
       try {
         const registryEscrowAddress = (await readContract(wagmiConfig, {
+          chainId: chainId as any,
           address: contentRegistryAddress,
           abi: QUESTION_SUBMISSION_ABI,
           functionName: "questionRewardPoolEscrow",
@@ -268,6 +288,7 @@ export function FundQuestionModal({ contentId, roundConfig, title, onClose, onCr
         const validAfter = 0n;
         const validBefore = getDefaultSignatureDeadline();
         const nonce = (await readContract(wagmiConfig, {
+          chainId: chainId as any,
           address: escrowAddress,
           abi: QUESTION_REWARD_POOL_ESCROW_ABI,
           functionName: "computeRewardPoolAuthorizationNonce",
@@ -289,6 +310,7 @@ export function FundQuestionModal({ contentId, roundConfig, title, onClose, onCr
         );
         const signatureParts = getSignatureParts(signature);
         authorizationHash = await writeContractAsync({
+          chainId: chainId as any,
           address: escrowAddress,
           abi: QUESTION_REWARD_POOL_ESCROW_ABI,
           functionName: "createRewardPoolWithAuthorization",
@@ -305,7 +327,7 @@ export function FundQuestionModal({ contentId, roundConfig, title, onClose, onCr
             },
           ],
         });
-        await waitForTransactionReceipt(wagmiConfig, { hash: authorizationHash });
+        await waitForTransactionReceipt(wagmiConfig, { chainId: chainId as any, hash: authorizationHash });
 
         notification.success(`Bounty funded with ${formatUsdAmount(parsedAmount)}. Paid in USDC.`);
         onCreated?.();
@@ -318,6 +340,7 @@ export function FundQuestionModal({ contentId, roundConfig, title, onClose, onCr
 
       const readUsdcAllowance = async () =>
         (await readContract(wagmiConfig, {
+          chainId: chainId as any,
           address: usdcAddress,
           abi: ERC20_APPROVAL_ABI,
           functionName: "allowance",
@@ -328,12 +351,13 @@ export function FundQuestionModal({ contentId, roundConfig, title, onClose, onCr
 
       if (initialAllowance < parsedAmount) {
         const approveHash = await writeContractAsync({
+          chainId: chainId as any,
           address: usdcAddress,
           abi: ERC20_APPROVAL_ABI,
           functionName: "approve",
           args: [escrowAddress, parsedAmount],
         });
-        await waitForTransactionReceipt(wagmiConfig, { hash: approveHash });
+        await waitForTransactionReceipt(wagmiConfig, { chainId: chainId as any, hash: approveHash });
 
         // M-5 (2026-05-22 audit): re-read the allowance after waiting on the approval so
         // any concurrent spender that consumed it cannot turn the subsequent
@@ -346,6 +370,7 @@ export function FundQuestionModal({ contentId, roundConfig, title, onClose, onCr
         }
       }
       const rewardPoolHash = await writeContractAsync({
+        chainId: chainId as any,
         address: escrowAddress,
         abi: QUESTION_REWARD_POOL_ESCROW_ABI,
         functionName: "createRewardPool",
@@ -359,7 +384,7 @@ export function FundQuestionModal({ contentId, roundConfig, title, onClose, onCr
           bountyWindowSecondsValue,
         ],
       });
-      await waitForTransactionReceipt(wagmiConfig, { hash: rewardPoolHash });
+      await waitForTransactionReceipt(wagmiConfig, { chainId: chainId as any, hash: rewardPoolHash });
 
       notification.success(`Bounty funded with ${formatUsdAmount(parsedAmount)}. Paid in USDC.`);
       onCreated?.();
@@ -408,8 +433,20 @@ export function FundQuestionModal({ contentId, roundConfig, title, onClose, onCr
           up to {protocolDocFacts.usdcBountyPayoutHappyPathMaxDelayLabel} when both oracle layers still need to
           finalize.
         </p>
-
         <div className="mt-5 grid gap-4">
+          {isWrongFundingChain ? (
+            <div className="rounded-lg bg-warning/10 p-3 text-sm text-warning">
+              <p>Switch your wallet to {targetChainName} to fund this question.</p>
+              <button
+                type="button"
+                className="btn btn-sm btn-outline mt-2"
+                disabled={switchingChainId === chainId}
+                onClick={() => void switchToChain(chainId)}
+              >
+                {switchingChainId === chainId ? "Switching..." : `Switch to ${targetChainName}`}
+              </button>
+            </div>
+          ) : null}
           <div className="form-control">
             <BountyFieldLabel htmlFor={amountInputId} tooltip={BOUNTY_AMOUNT_TOOLTIP}>
               Bounty amount

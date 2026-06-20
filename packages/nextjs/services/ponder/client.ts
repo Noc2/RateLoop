@@ -287,6 +287,11 @@ export async function fetchPonderJson<T>(
 type ExpectedPonderDeploymentScope = {
   deploymentKey: string;
 };
+type ExpectedContentDeploymentScope = NonNullable<ReturnType<typeof resolveContentDeploymentScope>>;
+type PonderDeploymentOptions = {
+  chainId?: number | null;
+  deploymentKey?: string | null;
+};
 
 function normalizeDeploymentKey(value: string | null | undefined) {
   const deploymentKey = value?.trim().toLowerCase();
@@ -303,8 +308,16 @@ function getDefaultExpectedContentDeploymentScope() {
   return typeof chainId === "number" ? resolveContentDeploymentScope(chainId) : null;
 }
 
-function withDefaultContentDeploymentScope<T extends PonderContentItem>(item: T): T {
-  const deployment = getDefaultExpectedContentDeploymentScope();
+function getExpectedContentDeploymentScope(chainId?: number | null): ExpectedContentDeploymentScope | null {
+  return typeof chainId === "number"
+    ? resolveContentDeploymentScope(chainId)
+    : getDefaultExpectedContentDeploymentScope();
+}
+
+function withContentDeploymentScope<T extends PonderContentItem>(
+  item: T,
+  deployment: ExpectedContentDeploymentScope | null,
+): T {
   if (!deployment) return item;
   return {
     ...item,
@@ -314,13 +327,19 @@ function withDefaultContentDeploymentScope<T extends PonderContentItem>(item: T)
   };
 }
 
-function withDefaultContentDeploymentScopes<T extends PonderContentItem>(items: T[]): T[] {
-  return items.map(withDefaultContentDeploymentScope);
+function withContentDeploymentScopes<T extends PonderContentItem>(
+  items: T[],
+  deployment: ExpectedContentDeploymentScope | null,
+): T[] {
+  return items.map(item => withContentDeploymentScope(item, deployment));
 }
 
-function getExpectedPonderDeploymentScope(deploymentKey?: string | null): ExpectedPonderDeploymentScope | null {
-  const explicitDeploymentKey = normalizeDeploymentKey(deploymentKey);
-  return explicitDeploymentKey ? { deploymentKey: explicitDeploymentKey } : getDefaultExpectedPonderDeploymentScope();
+function getExpectedPonderDeploymentScope(options?: PonderDeploymentOptions): ExpectedPonderDeploymentScope | null {
+  const chainDeployment = typeof options?.chainId === "number" ? resolveProtocolDeploymentScope(options.chainId) : null;
+  const explicitDeploymentKey = normalizeDeploymentKey(options?.deploymentKey);
+  return explicitDeploymentKey
+    ? { deploymentKey: explicitDeploymentKey }
+    : (chainDeployment ?? getDefaultExpectedPonderDeploymentScope());
 }
 
 function isPonderDeploymentMetadata(value: unknown): value is PonderDeploymentMetadata {
@@ -387,13 +406,19 @@ async function fetchPonderDeploymentMetadata(ponderUrl: string): Promise<PonderD
   return { deployment: null, transient: true };
 }
 
-export async function getPonderAvailabilityStatus(): Promise<PonderAvailabilityStatus> {
+export async function getPonderAvailabilityStatus(
+  expectedDeploymentKey?: string | null,
+): Promise<PonderAvailabilityStatus> {
   const ponderUrl = getConfiguredPonderUrl();
   if (!ponderUrl) {
     return { available: false, reason: "not_configured" };
   }
+  const explicitDeploymentKey = normalizeDeploymentKey(expectedDeploymentKey);
   if (shouldBypassPonderAvailabilityPreflight()) {
-    return getBypassedPonderAvailabilityStatus();
+    return getBypassedPonderAvailabilityStatus(explicitDeploymentKey);
+  }
+  if (explicitDeploymentKey) {
+    return checkPonderAvailabilityDirect(ponderUrl, { deploymentKey: explicitDeploymentKey });
   }
 
   if (cachedAvailabilityStatus !== null && Date.now() < cacheExpiry) {
@@ -419,8 +444,8 @@ export async function getPonderAvailabilityStatus(): Promise<PonderAvailabilityS
   return availabilityPromise;
 }
 
-export async function isPonderAvailable(): Promise<boolean> {
-  return (await getPonderAvailabilityStatus()).available;
+export async function isPonderAvailable(expectedDeploymentKey?: string | null): Promise<boolean> {
+  return (await getPonderAvailabilityStatus(expectedDeploymentKey)).available;
 }
 
 async function checkPonderAvailabilityDirect(
@@ -1586,31 +1611,41 @@ async function getAllPages<TItem>(
 }
 
 export const ponderApi = {
-  async getContent(params?: PonderContentQuery) {
-    const response = await ponderGet<PonderContentResponse>("/content", params);
+  async getContent(params?: PonderContentQuery, options?: PonderDeploymentOptions) {
+    const deployment = getExpectedPonderDeploymentScope(options);
+    const contentDeployment = getExpectedContentDeploymentScope(options?.chainId);
+    const response = await ponderGet<PonderContentResponse>("/content", params, {
+      expectedDeploymentKey: deployment?.deploymentKey,
+    });
     return {
       ...response,
-      items: withDefaultContentDeploymentScopes(response.items),
+      items: withContentDeploymentScopes(response.items, contentDeployment),
     };
   },
 
-  async getContentById(id: string, options?: { includeTargetAudience?: boolean }) {
+  async getContentById(id: string, options?: { includeTargetAudience?: boolean } & PonderDeploymentOptions) {
+    const deployment = getExpectedPonderDeploymentScope(options);
+    const contentDeployment = getExpectedContentDeploymentScope(options?.chainId);
     const response = await ponderGet<{
       audienceContext: ProfileSelfReportAudienceContext;
       content: PonderContentItem;
       rounds: any[];
       ratings: PonderRatingChange[];
-    }>(`/content/${id}`, {
-      includeTargetAudience: options?.includeTargetAudience ? "1" : undefined,
-    });
+    }>(
+      `/content/${id}`,
+      {
+        includeTargetAudience: options?.includeTargetAudience ? "1" : undefined,
+      },
+      { expectedDeploymentKey: deployment?.deploymentKey },
+    );
     return {
       ...response,
-      content: withDefaultContentDeploymentScope(response.content),
+      content: withContentDeploymentScope(response.content, contentDeployment),
     };
   },
 
   syncQuestionMetadata(metadata: PonderQuestionMetadataItem[], options?: { deploymentKey?: string | null }) {
-    const deployment = getExpectedPonderDeploymentScope(options?.deploymentKey);
+    const deployment = getExpectedPonderDeploymentScope({ deploymentKey: options?.deploymentKey });
     return ponderPost<PonderQuestionMetadataSyncResponse>(
       "/question-metadata",
       {
@@ -1625,7 +1660,7 @@ export const ponderApi = {
     return ponderGet<PonderQuestionMetadataResponse>(`/question-metadata/${questionMetadataHash}`);
   },
 
-  async getContentWindow(params?: PonderContentQuery) {
+  async getContentWindow(params?: PonderContentQuery, options?: PonderDeploymentOptions) {
     const requestedLimit = Number(params?.limit ?? PONDER_PAGE_LIMIT);
     const safeRequestedLimit = Number.isFinite(requestedLimit)
       ? Math.max(1, Math.floor(requestedLimit))
@@ -1638,11 +1673,14 @@ export const ponderApi = {
 
     while (items.length < safeRequestedLimit) {
       const remaining = safeRequestedLimit - items.length;
-      const page = await ponderApi.getContent({
-        ...params,
-        limit: String(Math.min(PONDER_PAGE_LIMIT, remaining)),
-        offset: String(offset),
-      });
+      const page = await ponderApi.getContent(
+        {
+          ...params,
+          limit: String(Math.min(PONDER_PAGE_LIMIT, remaining)),
+          offset: String(offset),
+        },
+        options,
+      );
 
       items.push(...page.items);
       total = page.total;
@@ -1693,13 +1731,16 @@ export const ponderApi = {
     );
   },
 
-  async getAllContent(params?: Omit<PonderContentQuery, "limit" | "offset">) {
+  async getAllContent(params?: Omit<PonderContentQuery, "limit" | "offset">, options?: PonderDeploymentOptions) {
     return getAllPages(offset =>
-      ponderApi.getContent({
-        ...params,
-        limit: String(PONDER_PAGE_LIMIT),
-        offset: String(offset),
-      }),
+      ponderApi.getContent(
+        {
+          ...params,
+          limit: String(PONDER_PAGE_LIMIT),
+          offset: String(offset),
+        },
+        options,
+      ),
     );
   },
 
@@ -1926,8 +1967,11 @@ export const ponderApi = {
     return ponderGet<PonderVoteCooldownsResponse>("/vote-cooldowns", params);
   },
 
-  getViewerRewardStatuses(params: { voters: string; contentIds?: string }) {
-    return ponderGet<PonderViewerRewardStatusesResponse>("/viewer-reward-statuses", params);
+  getViewerRewardStatuses(params: { voters: string; contentIds?: string }, options?: PonderDeploymentOptions) {
+    const deployment = getExpectedPonderDeploymentScope(options);
+    return ponderGet<PonderViewerRewardStatusesResponse>("/viewer-reward-statuses", params, {
+      expectedDeploymentKey: deployment?.deploymentKey,
+    });
   },
 
   getQuestionRewardClaimCandidates(voter: string, params?: { limit?: string; offset?: string }) {

@@ -20,6 +20,7 @@ import { usePageVisibility } from "~~/hooks/usePageVisibility";
 import { usePonderAvailability } from "~~/hooks/usePonderAvailability";
 import { usePonderQuery } from "~~/hooks/usePonderQuery";
 import { buildFallbackMediaItems } from "~~/lib/contentMedia";
+import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 import { ponderApi } from "~~/services/ponder/client";
 import { publicEnv } from "~~/utils/env/public";
 
@@ -32,7 +33,11 @@ export type { ContentItem } from "~~/hooks/contentFeed/shared";
 export function useContentFeed(voterAddress?: string, options: UseContentFeedOptions = {}) {
   const { targetNetwork } = useTargetNetwork();
   const rpcFallbackEnabled = publicEnv.rpcFallbackEnabled;
-  const ponderAvailable = usePonderAvailability(rpcFallbackEnabled);
+  const ponderDeploymentKey = useMemo(
+    () => resolveProtocolDeploymentScope(targetNetwork.id)?.deploymentKey ?? `missing:${targetNetwork.id}`,
+    [targetNetwork.id],
+  );
+  const ponderAvailable = usePonderAvailability(rpcFallbackEnabled, ponderDeploymentKey);
   const rpcFallbackActive = rpcFallbackEnabled && ponderAvailable === false;
   const isPageVisible = usePageVisibility();
   const categoryId = options.categoryId;
@@ -173,6 +178,7 @@ export function useContentFeed(voterAddress?: string, options: UseContentFeedOpt
     queryKey: [
       "contentFeed",
       targetNetwork.id,
+      ponderDeploymentKey,
       voterAddress,
       ownSubmitterAddressesKey,
       sortBy,
@@ -206,11 +212,14 @@ export function useContentFeed(voterAddress?: string, options: UseContentFeedOpt
       };
 
       if (limit !== undefined) {
-        const response = await ponderApi.getContentWindow({
-          ...params,
-          limit: String(limit),
-          offset: String(offset),
-        });
+        const response = await ponderApi.getContentWindow(
+          {
+            ...params,
+            limit: String(limit),
+            offset: String(offset),
+          },
+          { chainId: targetNetwork.id, deploymentKey: ponderDeploymentKey },
+        );
         const feed = response.items.map(item =>
           mapContentItem(
             { ...item, chainId: item.chainId ?? targetNetwork.id },
@@ -225,7 +234,10 @@ export function useContentFeed(voterAddress?: string, options: UseContentFeedOpt
         };
       }
 
-      const items = await ponderApi.getAllContent(params);
+      const items = await ponderApi.getAllContent(params, {
+        chainId: targetNetwork.id,
+        deploymentKey: ponderDeploymentKey,
+      });
       const feed = items.map(item =>
         mapContentItem(
           { ...item, chainId: item.chainId ?? targetNetwork.id },
@@ -245,6 +257,7 @@ export function useContentFeed(voterAddress?: string, options: UseContentFeedOpt
       hasMore: rpcTotalContent > offset + pagedRpcFeed.length,
     }),
     rpcEnabled: rpcFallbackEnabled,
+    availabilityDeploymentKey: ponderDeploymentKey,
     enabled,
     staleTime: 15_000,
     refetchInterval: isPageVisible ? 30_000 : false,

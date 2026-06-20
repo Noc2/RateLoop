@@ -73,6 +73,7 @@ export function VoteSignalRail({
           <VotingQuestionCard
             contentId={primaryItem.id}
             categoryId={primaryItem.categoryId}
+            chainId={primaryItem.chainId}
             questionTitle={primaryItem.question || primaryItem.title}
             currentRating={getVisibleContentRating(primaryItem)}
             ratingReviewStatus={primaryItem.ratingReviewStatus}

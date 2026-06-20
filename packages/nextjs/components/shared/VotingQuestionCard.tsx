@@ -28,6 +28,7 @@ import { resolveVotingQuestionCardDisplayError } from "~~/lib/vote/votingQuestio
 interface VotingQuestionCardProps {
   contentId: bigint;
   categoryId: bigint;
+  chainId?: number | null;
   questionTitle?: string;
   currentRating: number | null;
   ratingReviewStatus?: number | string | null;
@@ -505,6 +506,7 @@ export function VotingQuestionContextDetails({
  */
 export function VotingQuestionCard({
   contentId,
+  chainId,
   questionTitle,
   currentRating,
   ratingReviewStatus,
@@ -971,6 +973,7 @@ export function VotingQuestionCard({
 
         {showFundQuestionModal ? (
           <FundQuestionModal
+            contentChainId={chainId}
             contentId={contentId}
             roundConfig={roundConfig}
             title={fundQuestionTitle}
@@ -979,6 +982,7 @@ export function VotingQuestionCard({
         ) : null}
         {showFundFeedbackBonusModal ? (
           <FundFeedbackBonusModal
+            contentChainId={chainId}
             contentId={contentId}
             roundId={roundId}
             title={fundQuestionTitle}
@@ -1081,6 +1085,7 @@ export function VotingQuestionCard({
 
       {showFundQuestionModal ? (
         <FundQuestionModal
+          contentChainId={chainId}
           contentId={contentId}
           roundConfig={roundConfig}
           title={fundQuestionTitle}
@@ -1089,6 +1094,7 @@ export function VotingQuestionCard({
       ) : null}
       {showFundFeedbackBonusModal ? (
         <FundFeedbackBonusModal
+          contentChainId={chainId}
           contentId={contentId}
           roundId={roundId}
           title={fundQuestionTitle}
