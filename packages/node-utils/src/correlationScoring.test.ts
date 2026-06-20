@@ -625,12 +625,22 @@ test("scoreRoundPayoutWeights rejects invalid parameters", () => {
 });
 
 test("correlation vote pagination helpers route by domain and scale scan budget", () => {
-  assert.equal(correlationVotesPathForDomain(PAYOUT_DOMAIN_PUBLIC_RATING), "/correlation/rating-round-votes");
+  assert.equal(
+    correlationVotesPathForDomain(PAYOUT_DOMAIN_PUBLIC_RATING),
+    "/correlation/rating-round-votes",
+  );
+  assert.equal(
+    correlationVotesPathForDomain(PAYOUT_DOMAIN_LAUNCH_CREDIT),
+    "/correlation/launch-round-votes",
+  );
   assert.equal(
     correlationVotesPathForDomain(PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD),
     "/correlation/bundle-round-votes",
   );
-  assert.equal(correlationVotesPathForDomain(PAYOUT_DOMAIN_QUESTION_REWARD), "/correlation/round-votes");
+  assert.equal(
+    correlationVotesPathForDomain(PAYOUT_DOMAIN_QUESTION_REWARD),
+    "/correlation/round-votes",
+  );
   assert.equal(correlationVoteScanPageBudget(0), 50);
   assert.equal(correlationVoteScanPageBudget(49_000), 99);
   assert.equal(MAX_CORRELATION_VOTE_PAGES, 51);

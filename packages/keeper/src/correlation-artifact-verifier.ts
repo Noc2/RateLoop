@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import {
+  PAYOUT_DOMAIN_LAUNCH_CREDIT,
   PAYOUT_DOMAIN_PUBLIC_RATING,
   correlationParameterHash,
   defaultCorrelationScoringParams,
@@ -10,7 +11,16 @@ import {
   type CorrelationVoteInput,
 } from "@rateloop/node-utils/correlationScoring";
 import { canonicalJsonHash } from "@rateloop/node-utils/json";
-import { getAddress, isAddress, isHex, type Address, type Hex } from "viem";
+import {
+  getAddress,
+  isAddress,
+  isHex,
+  zeroHash,
+  type Address,
+  type Hex,
+} from "viem";
+
+const BPS_DENOMINATOR = 10_000n;
 
 interface VerificationResult {
   ok: boolean;
@@ -613,6 +623,41 @@ function verifyRoundSnapshot(
       `${label}: payoutWeights length ${round.payoutWeights.length} != ${scored.leaves.length}`,
     );
   }
+  if (round.domain === PAYOUT_DOMAIN_LAUNCH_CREDIT) {
+    verifyLaunchCreditSnapshotShape(round, label, errors);
+  }
+}
+
+function verifyLaunchCreditSnapshotShape(
+  round: NormalizedRoundSnapshot,
+  label: string,
+  errors: string[],
+) {
+  if (round.rewardPoolId !== 0n) {
+    errors.push(`${label}: launch-credit rewardPoolId must be 0`);
+  }
+  for (const [index, vote] of round.eligibleVotes.entries()) {
+    if (vote.identityKey.toLowerCase() !== zeroHash) {
+      errors.push(
+        `${label}: launch-credit eligibleVotes[${index}].identityKey must be zero`,
+      );
+    }
+  }
+  for (const [index, payout] of round.payoutWeights.entries()) {
+    const weightLabel = `${label}: launch-credit payoutWeights[${index}]`;
+    if (payout.identityKey.toLowerCase() !== zeroHash) {
+      errors.push(`${weightLabel}.identityKey must be zero`);
+    }
+    if (payout.baseWeight !== BPS_DENOMINATOR) {
+      errors.push(`${weightLabel}.baseWeight must be 10000`);
+    }
+    if (
+      payout.effectiveWeight <= 0n ||
+      payout.effectiveWeight > BPS_DENOMINATOR
+    ) {
+      errors.push(`${weightLabel}.effectiveWeight must be in (0, 10000]`);
+    }
+  }
 }
 
 function verifyEpochs(
@@ -767,9 +812,16 @@ function readRewardPoolId(
     errors.push(`${label} must be a non-negative integer`);
     return null;
   }
-  if (domain === PAYOUT_DOMAIN_PUBLIC_RATING) {
+  if (
+    domain === PAYOUT_DOMAIN_PUBLIC_RATING ||
+    domain === PAYOUT_DOMAIN_LAUNCH_CREDIT
+  ) {
     if (parsed !== 0n) {
-      errors.push(`${label} must be 0 for public-rating snapshots`);
+      const domainLabel =
+        domain === PAYOUT_DOMAIN_PUBLIC_RATING
+          ? "public-rating"
+          : "launch-credit";
+      errors.push(`${label} must be 0 for ${domainLabel} snapshots`);
       return null;
     }
     return parsed;

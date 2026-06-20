@@ -142,7 +142,7 @@ Compiled ABIs and deployed addresses are generated into `packages/contracts/src/
 
 ### Launch-credit anchor bans
 
-Launch-credit payout roots are optimistic public artifacts. Before proposing a `ClusterPayoutOracle` root for launch credits, or before allowing one to finalize, operators should recompute the current `LaunchDistributionPool` verified-human anchor state for every pending credit and omit or challenge credits whose current anchors no longer satisfy the configured `launchRewardPolicy.minVerifiedHumans`.
+Launch-credit payout roots are optimistic public artifacts. Before proposing a `ClusterPayoutOracle` root for launch credits, or before allowing one to finalize, operators should recompute the current `LaunchDistributionPool` verified-human anchor state for every pending credit and omit or challenge credits whose current anchors no longer satisfy the configured `launchRewardPolicy.minVerifiedHumans`. The keeper's automatic correlation snapshot builder does this through Ponder's launch-credit candidate/vote endpoints, and `yarn workspace @rateloop/keeper verify:correlation-artifact <artifact.json>` enforces the domain-2 `rewardPoolId=0`, zero-identity-key, flat-weight contract shape for manual artifacts.
 
 When governance bans a verified-human anchor, scan pending launch-credit artifacts for that anchor before proposing or accepting a root. If the fraud is tied to the rater, ban the rater before finalization so the pending credit finalizes to zero through the existing banned-rater path.
 

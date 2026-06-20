@@ -1,6 +1,7 @@
 import {
   CORRELATION_VOTE_PAGE_SIZE,
   MAX_CORRELATION_VOTE_PAGES,
+  PAYOUT_DOMAIN_LAUNCH_CREDIT,
   PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD,
   PAYOUT_DOMAIN_PUBLIC_RATING,
   PAYOUT_DOMAIN_QUESTION_REWARD,
@@ -542,6 +543,7 @@ async function fetchRoundCandidateWindow(
   const targetCount = maxRoundsPerTick + 1;
   const endpoints = [
     "/correlation/round-candidates",
+    "/correlation/launch-round-candidates",
     "/correlation/bundle-round-candidates",
     "/correlation/rating-round-candidates",
   ];
@@ -633,7 +635,10 @@ async function fetchRoundVotes(
       ponderBaseUrl,
       correlationVotesPathForDomain(candidate.domain),
     );
-    if (candidate.domain !== PAYOUT_DOMAIN_PUBLIC_RATING) {
+    if (
+      candidate.domain !== PAYOUT_DOMAIN_PUBLIC_RATING &&
+      candidate.domain !== PAYOUT_DOMAIN_LAUNCH_CREDIT
+    ) {
       url.searchParams.set("rewardPoolId", candidate.rewardPoolId.toString());
     }
     url.searchParams.set("contentId", candidate.contentId.toString());
@@ -715,6 +720,9 @@ function parseCandidateDomain(value: unknown) {
   const parsed = parseBigInt(value);
   if (parsed === BigInt(PAYOUT_DOMAIN_PUBLIC_RATING)) {
     return PAYOUT_DOMAIN_PUBLIC_RATING;
+  }
+  if (parsed === BigInt(PAYOUT_DOMAIN_LAUNCH_CREDIT)) {
+    return PAYOUT_DOMAIN_LAUNCH_CREDIT;
   }
   if (parsed === BigInt(PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD)) {
     return PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD;

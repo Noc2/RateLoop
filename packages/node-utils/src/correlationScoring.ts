@@ -33,6 +33,9 @@ export function correlationVotesPathForDomain(domain: number): string {
   if (domain === PAYOUT_DOMAIN_PUBLIC_RATING) {
     return "/correlation/rating-round-votes";
   }
+  if (domain === PAYOUT_DOMAIN_LAUNCH_CREDIT) {
+    return "/correlation/launch-round-votes";
+  }
   if (domain === PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD) {
     return "/correlation/bundle-round-votes";
   }

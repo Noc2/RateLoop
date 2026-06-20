@@ -65,6 +65,8 @@ Impact: if governance bans an anchor after a pending credit is staged, an invali
 
 Fix direction: off-chain only. Add a launch-credit artifact verifier/challenger check that recomputes current anchor validity from indexed/on-chain state and fails or omits pending credits whose current anchors no longer satisfy `launchRewardPolicy.minVerifiedHumans`.
 
+Implementation status: addressed off-chain by indexing pending launch credits, adding Ponder launch-credit candidate/vote endpoints that recompute current anchor eligibility, and tightening the keeper artifact verifier for domain-2 contract shape.
+
 ### P3 - Correlation candidate fetching can skip later candidate domains under backlog
 
 The keeper fetches candidates from question-pool, bundle-pool, and public-rating endpoints, but it uses one global candidate count while paging through endpoints:

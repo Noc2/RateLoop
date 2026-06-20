@@ -4,6 +4,7 @@ import {
   ROUND_STATE,
 } from "@rateloop/contracts/protocol";
 import {
+  PAYOUT_DOMAIN_LAUNCH_CREDIT,
   PAYOUT_DOMAIN_PUBLIC_RATING,
   PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD,
   PAYOUT_DOMAIN_QUESTION_REWARD,
@@ -14,6 +15,8 @@ import { db } from "ponder:api";
 import {
   content,
   correlationEpochSnapshot,
+  launchEarnedRaterCredit,
+  launchRewardPolicyState,
   questionBundleRound,
   questionBundleReward,
   questionRewardPool,
@@ -40,6 +43,10 @@ const SNAPSHOT_STATUS_REJECTED = 4;
 const RATING_REVIEW_STATUS_PENDING = 1;
 const BOUNTY_ELIGIBILITY_PROOF_OF_HUMAN = 0x08;
 const HUMAN_CREDENTIAL_PROVIDER_NONE = 0;
+const HUMAN_CREDENTIAL_PROVIDER_WORLD_ID = 1;
+const HUMAN_CREDENTIAL_PROVIDER_WORLD_ID_V4 = 2;
+const DEFAULT_LAUNCH_MIN_VERIFIED_HUMANS = 1;
+const DEFAULT_LAUNCH_MIN_ANCHOR_CREDENTIAL_AGE_SECONDS = 7 * 24 * 60 * 60;
 
 // Trailing base-rate window for surprise-weighted bounty claim weights: the most recent
 // settled rounds strictly preceding the requested round in lexicographic
@@ -62,15 +69,37 @@ function normalizeString(value: unknown): string | null {
 }
 
 function credentialIdentityKey(provider: number, nullifierHash: `0x${string}`) {
-  if (
-    provider === HUMAN_CREDENTIAL_PROVIDER_NONE ||
-    nullifierHash === zeroHash
-  )
+  if (provider === HUMAN_CREDENTIAL_PROVIDER_NONE || nullifierHash === zeroHash)
     return zeroHash;
   return keccak256(
     encodeAbiParameters(
       [{ type: "string" }, { type: "uint8" }, { type: "bytes32" }],
       ["rateloop.human-identity-v1", provider, nullifierHash],
+    ),
+  );
+}
+
+function launchHumanIdentityKey(
+  provider: number,
+  nullifierHash: `0x${string}`,
+) {
+  if (provider === HUMAN_CREDENTIAL_PROVIDER_NONE || nullifierHash === zeroHash)
+    return zeroHash;
+  if (
+    provider === HUMAN_CREDENTIAL_PROVIDER_WORLD_ID ||
+    provider === HUMAN_CREDENTIAL_PROVIDER_WORLD_ID_V4
+  ) {
+    return keccak256(
+      encodeAbiParameters(
+        [{ type: "string" }, { type: "bytes32" }],
+        ["rateloop.launch-world-id-human-v1", nullifierHash],
+      ),
+    );
+  }
+  return keccak256(
+    encodeAbiParameters(
+      [{ type: "uint8" }, { type: "bytes32" }],
+      [provider, nullifierHash],
     ),
   );
 }
@@ -82,6 +111,7 @@ function identityBanSourceKey(provider: number, nullifierHash: `0x${string}`) {
 type ActiveCorrelationIdentityBanState = {
   addressIdentityKeys: Set<string>;
   identityKeys: Set<string>;
+  launchIdentityKeys: Set<string>;
 };
 
 async function loadActiveCorrelationIdentityBanState(
@@ -104,6 +134,7 @@ async function loadActiveCorrelationIdentityBanState(
     );
 
   const identityKeys = new Set<string>();
+  const launchIdentityKeys = new Set<string>();
   const sourceKeys = new Set<string>();
   const nullifierHashes: `0x${string}`[] = [];
   const seenNullifierHashes = new Set<string>();
@@ -113,6 +144,9 @@ async function loadActiveCorrelationIdentityBanState(
     const provider = Number(ban.provider);
     const identityKey = credentialIdentityKey(provider, nullifierHash);
     if (identityKey !== zeroHash) identityKeys.add(identityKey.toLowerCase());
+    const launchIdentityKey = launchHumanIdentityKey(provider, nullifierHash);
+    if (launchIdentityKey !== zeroHash)
+      launchIdentityKeys.add(launchIdentityKey.toLowerCase());
     sourceKeys.add(identityBanSourceKey(provider, nullifierHash));
     if (!seenNullifierHashes.has(nullifierHash)) {
       seenNullifierHashes.add(nullifierHash);
@@ -146,7 +180,7 @@ async function loadActiveCorrelationIdentityBanState(
     }
   }
 
-  return { addressIdentityKeys, identityKeys };
+  return { addressIdentityKeys, identityKeys, launchIdentityKeys };
 }
 
 function questionMetadataRef(
@@ -324,6 +358,160 @@ function formatCorrelationVoteRow(
   };
 }
 
+type LaunchCreditRow = {
+  rater: `0x${string}`;
+  commitKey: `0x${string}`;
+  historicalVoteCount: number;
+  raterVerified: boolean | null;
+  raterRevoked: boolean | null;
+  raterCredentialExpiresAt: bigint | null;
+};
+
+type LaunchAnchorVoteRow = {
+  account: `0x${string}` | null;
+  voter: `0x${string}`;
+  provider: number | null;
+  nullifierHash: `0x${string}` | null;
+  verified: boolean | null;
+  revoked: boolean | null;
+  verifiedAt: bigint | null;
+  expiresAt: bigint | null;
+};
+
+function isActiveRoundHumanCredential(
+  credential: {
+    verified: boolean | null;
+    revoked: boolean | null;
+    expiresAt: bigint | null;
+  },
+  roundStartTime: bigint,
+) {
+  return (
+    credential.verified === true &&
+    credential.revoked !== true &&
+    credential.expiresAt !== null &&
+    credential.expiresAt > roundStartTime
+  );
+}
+
+function collectCurrentLaunchAnchorFeatures(args: {
+  anchorRows: readonly LaunchAnchorVoteRow[];
+  banState: ActiveCorrelationIdentityBanState;
+  minAnchorCredentialAgeSeconds: number;
+  rewardRecipient: `0x${string}`;
+  roundStartTime: bigint;
+  submitter: `0x${string}`;
+}) {
+  const anchors: string[] = [];
+  const seenAnchors = new Set<string>();
+  const rewardRecipient = args.rewardRecipient.toLowerCase();
+  const submitter = args.submitter.toLowerCase();
+  const minCredentialAge = BigInt(args.minAnchorCredentialAgeSeconds);
+  for (const row of args.anchorRows) {
+    const account = row.account ?? row.voter;
+    const normalizedAccount = account.toLowerCase();
+    if (
+      normalizedAccount === rewardRecipient ||
+      normalizedAccount === submitter
+    )
+      continue;
+    if (
+      !isActiveRoundHumanCredential(
+        {
+          verified: row.verified,
+          revoked: row.revoked,
+          expiresAt: row.expiresAt,
+        },
+        args.roundStartTime,
+      ) ||
+      row.verifiedAt === null ||
+      row.provider === null
+    ) {
+      continue;
+    }
+    const nullifierHash = normalizeHex32(row.nullifierHash);
+    if (nullifierHash === null || nullifierHash === zeroHash) continue;
+    if (row.verifiedAt + minCredentialAge > args.roundStartTime) continue;
+
+    const anchorId = launchHumanIdentityKey(row.provider, nullifierHash);
+    if (anchorId === zeroHash) continue;
+    if (args.banState.launchIdentityKeys.has(anchorId.toLowerCase())) continue;
+    if (
+      args.banState.addressIdentityKeys.has(
+        addressIdentityKey(account).toLowerCase(),
+      )
+    ) {
+      continue;
+    }
+    const normalizedAnchorId = anchorId.toLowerCase();
+    if (seenAnchors.has(normalizedAnchorId)) continue;
+    seenAnchors.add(normalizedAnchorId);
+    anchors.push(`launch-anchor:${normalizedAnchorId}`);
+  }
+  return anchors.sort();
+}
+
+function formatLaunchCreditRow(args: {
+  anchorFeatures: readonly string[];
+  banState: ActiveCorrelationIdentityBanState;
+  credit: LaunchCreditRow;
+  minVerifiedHumans: number;
+  roundStartTime: bigint;
+}) {
+  const excludedReasons: string[] = [];
+  if (
+    args.banState.addressIdentityKeys.has(
+      addressIdentityKey(args.credit.rater).toLowerCase(),
+    )
+  ) {
+    excludedReasons.push("rater_address_banned");
+  }
+  if (args.anchorFeatures.length < args.minVerifiedHumans) {
+    excludedReasons.push("launch_anchor_threshold");
+  }
+
+  if (excludedReasons.length > 0) {
+    return {
+      excludedVote: {
+        account: args.credit.rater,
+        identityKey: zeroHash,
+        commitKey: args.credit.commitKey,
+        cooldownSeconds: null,
+        profileUpdatedAt: null,
+        reasons: excludedReasons,
+        roundOpenTime: args.roundStartTime.toString(),
+      },
+      item: null,
+    };
+  }
+
+  return {
+    excludedVote: null,
+    item: {
+      account: args.credit.rater,
+      voter: args.credit.rater,
+      identityKey: zeroHash,
+      commitKey: args.credit.commitKey,
+      isUp: null,
+      stake: null,
+      epochIndex: null,
+      revealWeight: null,
+      baseWeight: 10_000n,
+      verifiedHuman: isActiveRoundHumanCredential(
+        {
+          verified: args.credit.raterVerified,
+          revoked: args.credit.raterRevoked,
+          expiresAt: args.credit.raterCredentialExpiresAt,
+        },
+        args.roundStartTime,
+      ),
+      historicalVoteCount: args.credit.historicalVoteCount,
+      payoutEligible: true,
+      features: args.anchorFeatures,
+    },
+  };
+}
+
 export function registerCorrelationRoutes(app: ApiApp) {
   app.get("/correlation/round-candidates", async (c) => {
     const limit = safeLimit(c.req.query("limit"), 50, 200);
@@ -385,6 +573,65 @@ export function registerCorrelationRoutes(app: ApiApp) {
         ),
       )
       .orderBy(desc(round.roundId), asc(questionRewardPool.id))
+      .limit(limit)
+      .offset(offset);
+
+    return jsonBig(c, { items: rows });
+  });
+
+  app.get("/correlation/launch-round-candidates", async (c) => {
+    const limit = safeLimit(c.req.query("limit"), 50, 200);
+    const offset = safeOffset(c.req.query("offset"));
+    if (Number.isNaN(offset)) return c.json({ error: "Invalid offset" }, 400);
+
+    const rows = await db
+      .select({
+        domain: sql<number>`${PAYOUT_DOMAIN_LAUNCH_CREDIT}`,
+        rewardPoolId: sql<bigint>`0`,
+        contentId: launchEarnedRaterCredit.contentId,
+        roundId: launchEarnedRaterCredit.roundId,
+        pendingCreditCount: sql<number>`count(*)`,
+        snapshotStatus: roundPayoutSnapshot.status,
+      })
+      .from(launchEarnedRaterCredit)
+      .innerJoin(
+        round,
+        and(
+          eq(round.contentId, launchEarnedRaterCredit.contentId),
+          eq(round.roundId, launchEarnedRaterCredit.roundId),
+        ),
+      )
+      .leftJoin(
+        roundPayoutSnapshot,
+        and(
+          eq(roundPayoutSnapshot.domain, PAYOUT_DOMAIN_LAUNCH_CREDIT),
+          eq(roundPayoutSnapshot.rewardPoolId, 0n),
+          eq(roundPayoutSnapshot.contentId, launchEarnedRaterCredit.contentId),
+          eq(roundPayoutSnapshot.roundId, launchEarnedRaterCredit.roundId),
+        ),
+      )
+      .where(
+        and(
+          eq(launchEarnedRaterCredit.pending, true),
+          eq(launchEarnedRaterCredit.finalized, false),
+          eq(launchEarnedRaterCredit.cancelled, false),
+          eq(round.state, ROUND_STATE.Settled),
+          or(
+            sql`${roundPayoutSnapshot.id} is null`,
+            eq(roundPayoutSnapshot.status, SNAPSHOT_STATUS_PROPOSED),
+            eq(roundPayoutSnapshot.status, SNAPSHOT_STATUS_REJECTED),
+          ),
+        ),
+      )
+      .groupBy(
+        launchEarnedRaterCredit.contentId,
+        launchEarnedRaterCredit.roundId,
+        roundPayoutSnapshot.status,
+      )
+      .orderBy(
+        desc(launchEarnedRaterCredit.roundId),
+        asc(launchEarnedRaterCredit.contentId),
+      )
       .limit(limit)
       .offset(offset);
 
@@ -692,6 +939,174 @@ export function registerCorrelationRoutes(app: ApiApp) {
       offset,
     });
 
+    const roundContext = await getRoundContext(contentId, roundId);
+
+    return jsonBig(c, {
+      excludedVotes,
+      items,
+      roundContext,
+      truncated,
+    });
+  });
+
+  app.get("/correlation/launch-round-votes", async (c) => {
+    const contentId = validPositiveBigIntParam(c.req.query("contentId"));
+    const roundId = validPositiveBigIntParam(c.req.query("roundId"));
+    const limit = safeLimit(c.req.query("limit"), 500, 1000);
+    const offset = safeOffset(c.req.query("offset"));
+
+    if (contentId === null || roundId === null) {
+      return c.json(
+        { error: "contentId and roundId must be positive integers" },
+        400,
+      );
+    }
+    if (Number.isNaN(offset)) return c.json({ error: "Invalid offset" }, 400);
+    const nowSeconds = resolveApiNowSeconds(c.req.query("now"));
+    if (nowSeconds === null) {
+      return c.json({ error: "now must be a non-negative integer" }, 400);
+    }
+
+    const [roundRow] = await db
+      .select({
+        startTime: round.startTime,
+        submitter: content.submitter,
+      })
+      .from(round)
+      .innerJoin(content, eq(content.id, round.contentId))
+      .where(
+        and(
+          eq(round.contentId, contentId),
+          eq(round.roundId, roundId),
+          eq(round.state, ROUND_STATE.Settled),
+          sql`${round.startTime} is not null`,
+        ),
+      )
+      .limit(1);
+
+    if (!roundRow || roundRow.startTime === null) {
+      return jsonBig(c, {
+        excludedVotes: [],
+        items: [],
+        roundContext: null,
+        truncated: false,
+      });
+    }
+
+    const [launchPolicy] = await db
+      .select()
+      .from(launchRewardPolicyState)
+      .where(eq(launchRewardPolicyState.id, "current"))
+      .limit(1);
+    const minVerifiedHumans =
+      launchPolicy?.minVerifiedHumans ?? DEFAULT_LAUNCH_MIN_VERIFIED_HUMANS;
+    const minAnchorCredentialAgeSeconds =
+      launchPolicy?.minAnchorCredentialAgeSeconds ??
+      DEFAULT_LAUNCH_MIN_ANCHOR_CREDENTIAL_AGE_SECONDS;
+
+    const [creditRows, anchorRows] = await Promise.all([
+      db
+        .select({
+          rater: launchEarnedRaterCredit.rater,
+          commitKey: launchEarnedRaterCredit.commitKey,
+          historicalVoteCount: sql<number>`case when coalesce(${voterStats.totalSettledVotes}, 0) > 0 then coalesce(${voterStats.totalSettledVotes}, 0) - 1 else 0 end`,
+          raterVerified: raterHumanCredential.verified,
+          raterRevoked: raterHumanCredential.revoked,
+          raterCredentialExpiresAt: raterHumanCredential.expiresAt,
+        })
+        .from(launchEarnedRaterCredit)
+        .leftJoin(
+          voterStats,
+          eq(voterStats.voter, launchEarnedRaterCredit.rater),
+        )
+        .leftJoin(
+          raterHumanCredential,
+          eq(raterHumanCredential.rater, launchEarnedRaterCredit.rater),
+        )
+        .where(
+          and(
+            eq(launchEarnedRaterCredit.contentId, contentId),
+            eq(launchEarnedRaterCredit.roundId, roundId),
+            eq(launchEarnedRaterCredit.pending, true),
+            eq(launchEarnedRaterCredit.finalized, false),
+            eq(launchEarnedRaterCredit.cancelled, false),
+          ),
+        )
+        .orderBy(
+          asc(launchEarnedRaterCredit.updatedAt),
+          asc(launchEarnedRaterCredit.commitKey),
+        ),
+      db
+        .select({
+          account: vote.identityHolder,
+          voter: vote.voter,
+          provider: raterHumanCredential.provider,
+          nullifierHash: raterHumanCredential.nullifierHash,
+          verified: raterHumanCredential.verified,
+          revoked: raterHumanCredential.revoked,
+          verifiedAt: raterHumanCredential.verifiedAt,
+          expiresAt: raterHumanCredential.expiresAt,
+        })
+        .from(vote)
+        .leftJoin(
+          raterHumanCredential,
+          eq(raterHumanCredential.rater, vote.identityHolder),
+        )
+        .where(
+          and(
+            eq(vote.contentId, contentId),
+            eq(vote.roundId, roundId),
+            eq(vote.revealed, true),
+          ),
+        )
+        .orderBy(
+          asc(vote.commitBlockNumber),
+          asc(vote.commitLogIndex),
+          asc(vote.id),
+        ),
+    ]);
+
+    const banState =
+      creditRows.length > 0 || anchorRows.length > 0
+        ? await loadActiveCorrelationIdentityBanState(nowSeconds)
+        : {
+            addressIdentityKeys: new Set<string>(),
+            identityKeys: new Set<string>(),
+            launchIdentityKeys: new Set<string>(),
+          };
+    const items: ReturnType<typeof formatLaunchCreditRow>["item"][] = [];
+    const excludedVotes: NonNullable<
+      ReturnType<typeof formatLaunchCreditRow>["excludedVote"]
+    >[] = [];
+    let eligibleSeen = 0;
+
+    for (const credit of creditRows as LaunchCreditRow[]) {
+      const anchorFeatures = collectCurrentLaunchAnchorFeatures({
+        anchorRows: anchorRows as LaunchAnchorVoteRow[],
+        banState,
+        minAnchorCredentialAgeSeconds,
+        rewardRecipient: credit.rater,
+        roundStartTime: roundRow.startTime,
+        submitter: roundRow.submitter,
+      });
+      const formatted = formatLaunchCreditRow({
+        anchorFeatures,
+        banState,
+        credit,
+        minVerifiedHumans,
+        roundStartTime: roundRow.startTime,
+      });
+      if (formatted.excludedVote) {
+        excludedVotes.push(formatted.excludedVote);
+        continue;
+      }
+      if (formatted.item && eligibleSeen >= offset && items.length < limit) {
+        items.push(formatted.item);
+      }
+      eligibleSeen += 1;
+    }
+
+    const truncated = eligibleSeen > offset + items.length;
     const roundContext = await getRoundContext(contentId, roundId);
 
     return jsonBig(c, {

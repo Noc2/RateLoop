@@ -999,6 +999,7 @@ export const launchRewardPolicyState = onchainTable(
     eligibilityRatingCount: t.integer().notNull(),
     rewardingRatingCount: t.integer().notNull(),
     unverifiedEarnedRaterCapBps: t.integer().notNull(),
+    minAnchorCredentialAgeSeconds: t.integer().notNull(),
     requireNoPendingCleanup: t.boolean().notNull(),
     updatedAt: t.bigint().notNull(),
   }),
@@ -1037,6 +1038,33 @@ export const launchRaterRewardProgress = onchainTable(
     payoutEligibleIdx: index().on(table.payoutEligible),
     latestCreditedAtIdx: index().on(table.latestCreditedAt),
     latestPaidAtIdx: index().on(table.latestPaidAt),
+  }),
+);
+
+export const launchEarnedRaterCredit = onchainTable(
+  "launch_earned_rater_credit",
+  (t) => ({
+    id: t.text().primaryKey(), // `${contentId}-${roundId}-${commitKey}`
+    rater: t.hex().notNull(),
+    contentId: t.bigint().notNull(),
+    roundId: t.bigint().notNull(),
+    commitKey: t.hex().notNull(),
+    scoreBps: t.integer().notNull(),
+    pending: t.boolean().notNull(),
+    finalized: t.boolean().notNull(),
+    cancelled: t.boolean().notNull(),
+    effectiveCreditBps: t.bigint(),
+    qualifyingCreditBps: t.bigint(),
+    recordedAt: t.bigint().notNull(),
+    finalizedAt: t.bigint(),
+    cancelledAt: t.bigint(),
+    updatedAt: t.bigint().notNull(),
+  }),
+  (table) => ({
+    raterIdx: index().on(table.rater),
+    roundIdx: index().on(table.contentId, table.roundId),
+    pendingIdx: index().on(table.pending),
+    finalizedIdx: index().on(table.finalized),
   }),
 );
 

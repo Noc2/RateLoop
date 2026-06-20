@@ -1,6 +1,7 @@
 import { ponder } from "ponder:registry";
 import {
   globalStats,
+  launchEarnedRaterCredit,
   launchRaterRewardProgress,
   launchRewardPolicyState,
   profile,
@@ -8,6 +9,14 @@ import {
 } from "ponder:schema";
 
 const CURRENT_LAUNCH_REWARD_POLICY_ID = "current";
+
+function launchCreditId(
+  contentId: bigint,
+  roundId: bigint,
+  commitKey: `0x${string}`,
+) {
+  return `${contentId.toString()}-${roundId.toString()}-${commitKey.toLowerCase()}`;
+}
 
 function buildLaunchProgressDefaults(rater: `0x${string}`, timestamp: bigint) {
   return {
@@ -151,6 +160,9 @@ ponder.on(
         eligibilityRatingCount: Number(policy.eligibilityRatingCount),
         rewardingRatingCount: Number(policy.rewardingRatingCount),
         unverifiedEarnedRaterCapBps: Number(policy.unverifiedEarnedRaterCapBps),
+        minAnchorCredentialAgeSeconds: Number(
+          policy.minAnchorCredentialAgeSeconds,
+        ),
         requireNoPendingCleanup: policy.requireNoPendingCleanup,
         updatedAt: event.block.timestamp,
       })
@@ -163,6 +175,9 @@ ponder.on(
         eligibilityRatingCount: Number(policy.eligibilityRatingCount),
         rewardingRatingCount: Number(policy.rewardingRatingCount),
         unverifiedEarnedRaterCapBps: Number(policy.unverifiedEarnedRaterCapBps),
+        minAnchorCredentialAgeSeconds: Number(
+          policy.minAnchorCredentialAgeSeconds,
+        ),
         requireNoPendingCleanup: policy.requireNoPendingCleanup,
         updatedAt: event.block.timestamp,
       });
@@ -322,6 +337,42 @@ ponder.on(
     const { rater, contentId, roundId, commitKey, scoreBps } = event.args;
 
     await context.db
+      .insert(launchEarnedRaterCredit)
+      .values({
+        id: launchCreditId(contentId, roundId, commitKey),
+        rater,
+        contentId,
+        roundId,
+        commitKey,
+        scoreBps: Number(scoreBps),
+        pending: true,
+        finalized: false,
+        cancelled: false,
+        effectiveCreditBps: null,
+        qualifyingCreditBps: null,
+        recordedAt: event.block.timestamp,
+        finalizedAt: null,
+        cancelledAt: null,
+        updatedAt: event.block.timestamp,
+      })
+      .onConflictDoUpdate({
+        rater,
+        contentId,
+        roundId,
+        commitKey,
+        scoreBps: Number(scoreBps),
+        pending: true,
+        finalized: false,
+        cancelled: false,
+        effectiveCreditBps: null,
+        qualifyingCreditBps: null,
+        recordedAt: event.block.timestamp,
+        finalizedAt: null,
+        cancelledAt: null,
+        updatedAt: event.block.timestamp,
+      });
+
+    await context.db
       .insert(launchRaterRewardProgress)
       .values({
         ...buildLaunchProgressDefaults(rater, event.block.timestamp),
@@ -354,6 +405,39 @@ ponder.on(
     } = event.args;
 
     await context.db
+      .insert(launchEarnedRaterCredit)
+      .values({
+        id: launchCreditId(contentId, roundId, commitKey),
+        rater,
+        contentId,
+        roundId,
+        commitKey,
+        scoreBps: 0,
+        pending: false,
+        finalized: true,
+        cancelled: false,
+        effectiveCreditBps,
+        qualifyingCreditBps,
+        recordedAt: event.block.timestamp,
+        finalizedAt: event.block.timestamp,
+        cancelledAt: null,
+        updatedAt: event.block.timestamp,
+      })
+      .onConflictDoUpdate({
+        rater,
+        contentId,
+        roundId,
+        commitKey,
+        pending: false,
+        finalized: true,
+        cancelled: false,
+        effectiveCreditBps,
+        qualifyingCreditBps,
+        finalizedAt: event.block.timestamp,
+        updatedAt: event.block.timestamp,
+      });
+
+    await context.db
       .insert(launchRaterRewardProgress)
       .values({
         ...buildLaunchProgressDefaults(rater, event.block.timestamp),
@@ -375,6 +459,81 @@ ponder.on(
             : row.latestCreditedAt,
         updatedAt: event.block.timestamp,
       }));
+  },
+);
+
+ponder.on(
+  "LaunchDistributionPool:StalePendingEarnedRaterCreditCancelled",
+  async ({ event, context }) => {
+    const { rater, contentId, roundId, commitKey } = event.args;
+
+    await context.db
+      .insert(launchEarnedRaterCredit)
+      .values({
+        id: launchCreditId(contentId, roundId, commitKey),
+        rater,
+        contentId,
+        roundId,
+        commitKey,
+        scoreBps: 0,
+        pending: false,
+        finalized: false,
+        cancelled: true,
+        effectiveCreditBps: null,
+        qualifyingCreditBps: null,
+        recordedAt: event.block.timestamp,
+        finalizedAt: null,
+        cancelledAt: event.block.timestamp,
+        updatedAt: event.block.timestamp,
+      })
+      .onConflictDoUpdate({
+        rater,
+        contentId,
+        roundId,
+        commitKey,
+        pending: false,
+        cancelled: true,
+        cancelledAt: event.block.timestamp,
+        updatedAt: event.block.timestamp,
+      });
+  },
+);
+
+ponder.on(
+  "LaunchDistributionPool:StalePendingEarnedRaterCreditRescued",
+  async ({ event, context }) => {
+    const { rater, contentId, roundId, commitKey } = event.args;
+
+    await context.db
+      .insert(launchEarnedRaterCredit)
+      .values({
+        id: launchCreditId(contentId, roundId, commitKey),
+        rater,
+        contentId,
+        roundId,
+        commitKey,
+        scoreBps: 0,
+        pending: true,
+        finalized: false,
+        cancelled: false,
+        effectiveCreditBps: null,
+        qualifyingCreditBps: null,
+        recordedAt: event.block.timestamp,
+        finalizedAt: null,
+        cancelledAt: null,
+        updatedAt: event.block.timestamp,
+      })
+      .onConflictDoUpdate({
+        rater,
+        contentId,
+        roundId,
+        commitKey,
+        pending: true,
+        finalized: false,
+        cancelled: false,
+        cancelledAt: null,
+        updatedAt: event.block.timestamp,
+      });
   },
 );
 

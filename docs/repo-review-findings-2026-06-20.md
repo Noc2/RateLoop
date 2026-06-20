@@ -10,7 +10,7 @@ This pass used four read-only explorer agents plus local source review and verif
 
 ## Remediation Status
 
-A follow-up implementation pass addressed the app chain-binding, Keeper/Ponder deployment identity, live readiness, sample-command, and operator-runbook items without changing deployed contract bytecode. The launch-credit item remains an off-chain artifact and challenge-process mitigation for the current production contract stack.
+A follow-up implementation pass addressed the app chain-binding, Keeper/Ponder deployment identity, live readiness, sample-command, operator-runbook, and launch-credit artifact-guard items without changing deployed contract bytecode.
 
 ## Verification
 

@@ -45,6 +45,7 @@ function fullVotePageResponse() {
 
 function isSupplementalCandidateEndpoint(pathname: string) {
   return (
+    pathname === "/correlation/launch-round-candidates" ||
     pathname === "/correlation/bundle-round-candidates" ||
     pathname === "/correlation/rating-round-candidates"
   );
@@ -95,6 +96,13 @@ describe("automatic correlation artifact builder", () => {
           ],
         });
       }
+      if (route === "/correlation/launch-round-candidates") {
+        return jsonResponse({
+          items: [
+            { domain: 2, rewardPoolId: "0", contentId: "15", roundId: "2" },
+          ],
+        });
+      }
       if (route === "/correlation/rating-round-candidates") {
         return jsonResponse({
           items: [
@@ -109,6 +117,22 @@ describe("automatic correlation artifact builder", () => {
       if (route === "/correlation/bundle-round-votes") {
         expect(url.searchParams.get("rewardPoolId")).toBe("11");
         return jsonResponse({ items: [voteItem(2)] });
+      }
+      if (route === "/correlation/launch-round-votes") {
+        expect(url.searchParams.has("rewardPoolId")).toBe(false);
+        return jsonResponse({
+          items: [
+            {
+              ...voteItem(4),
+              identityKey: `0x${"0".repeat(64)}`,
+              isUp: null,
+              revealWeight: null,
+              stake: null,
+              epochIndex: null,
+              features: [`launch-anchor:0x${"4".repeat(64)}`],
+            },
+          ],
+        });
       }
       if (route === "/correlation/rating-round-votes") {
         expect(url.searchParams.has("rewardPoolId")).toBe(false);
@@ -130,13 +154,15 @@ describe("automatic correlation artifact builder", () => {
 
     const artifact = await buildConfiguredCorrelationSnapshotArtifact(logger);
 
-    expect(artifact.roundPayoutSnapshots).toHaveLength(3);
+    expect(artifact.roundPayoutSnapshots).toHaveLength(4);
     expect(seenPathnames).toEqual(
       expect.arrayContaining([
         "/indexer/correlation/round-candidates",
+        "/indexer/correlation/launch-round-candidates",
         "/indexer/correlation/bundle-round-candidates",
         "/indexer/correlation/rating-round-candidates",
         "/indexer/correlation/round-votes",
+        "/indexer/correlation/launch-round-votes",
         "/indexer/correlation/bundle-round-votes",
         "/indexer/correlation/rating-round-votes",
       ]),
@@ -469,6 +495,9 @@ describe("automatic correlation artifact builder", () => {
       if (url.pathname === "/correlation/round-candidates") {
         return jsonResponse({ items: [] });
       }
+      if (url.pathname === "/correlation/launch-round-candidates") {
+        return jsonResponse({ items: [] });
+      }
       if (url.pathname === "/correlation/bundle-round-candidates") {
         return jsonResponse({
           items: [
@@ -552,6 +581,9 @@ describe("automatic correlation artifact builder", () => {
       if (url.pathname === "/correlation/bundle-round-candidates") {
         return jsonResponse({ items: [] });
       }
+      if (url.pathname === "/correlation/launch-round-candidates") {
+        return jsonResponse({ items: [] });
+      }
       if (url.pathname === "/correlation/rating-round-candidates") {
         return jsonResponse({
           items: [
@@ -627,6 +659,103 @@ describe("automatic correlation artifact builder", () => {
     ).toBe(false);
   });
 
+  it("routes launch-credit candidates to the launch vote endpoint and verifies contract shape", async () => {
+    mockConfig();
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(input.toString());
+      if (url.pathname === "/correlation/round-candidates") {
+        return jsonResponse({ items: [] });
+      }
+      if (url.pathname === "/correlation/bundle-round-candidates") {
+        return jsonResponse({ items: [] });
+      }
+      if (url.pathname === "/correlation/rating-round-candidates") {
+        return jsonResponse({ items: [] });
+      }
+      if (url.pathname === "/correlation/launch-round-candidates") {
+        return jsonResponse({
+          items: [
+            { domain: "2", rewardPoolId: "0", contentId: "9", roundId: "2" },
+          ],
+        });
+      }
+      if (url.pathname === "/correlation/launch-round-votes") {
+        expect(url.searchParams.has("rewardPoolId")).toBe(false);
+        expect(url.searchParams.get("contentId")).toBe("9");
+        expect(url.searchParams.get("roundId")).toBe("2");
+        return jsonResponse({
+          items: [
+            {
+              account: "0x0000000000000000000000000000000000000001",
+              identityKey: `0x${"0".repeat(64)}`,
+              commitKey: `0x${"b".repeat(64)}`,
+              isUp: null,
+              stake: null,
+              epochIndex: null,
+              revealWeight: null,
+              verifiedHuman: true,
+              historicalVoteCount: 12,
+              features: [`launch-anchor:0x${"a".repeat(64)}`],
+            },
+          ],
+        });
+      }
+      if (url.pathname === "/correlation/round-votes") {
+        return new Response("wrong endpoint", { status: 500 });
+      }
+      return new Response("not found", { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { buildConfiguredCorrelationSnapshotArtifact } = await import(
+      "../correlation-artifact-builder.js"
+    );
+    const logger = {
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    };
+
+    const artifact = await buildConfiguredCorrelationSnapshotArtifact(logger);
+    const publicArtifact = parseDataUri(
+      artifact.roundPayoutSnapshots![0]!.artifactURI,
+    );
+    const snapshot = publicArtifact.roundPayoutSnapshots[0];
+
+    expect(snapshot).toMatchObject({
+      domain: 2,
+      rewardPoolId: "0",
+      contentId: "9",
+      roundId: "2",
+      rawEligibleVoters: 1,
+    });
+    const { verifyCorrelationArtifact } = await import(
+      "../correlation-artifact-verifier.js"
+    );
+    expect(verifyCorrelationArtifact(publicArtifact)).toMatchObject({
+      ok: true,
+      roundSnapshotCount: 1,
+      epochCount: 1,
+      errors: [],
+    });
+
+    const tamperedArtifact = structuredClone(publicArtifact);
+    tamperedArtifact.roundPayoutSnapshots[0].eligibleVotes[0].identityKey = `0x${"c".repeat(64)}`;
+    expect(verifyCorrelationArtifact(tamperedArtifact)).toMatchObject({
+      ok: false,
+      errors: expect.arrayContaining([
+        expect.stringContaining("launch-credit eligibleVotes[0].identityKey"),
+      ]),
+    });
+    expect(
+      fetchMock.mock.calls.some(
+        ([input]) =>
+          new URL(input.toString()).pathname === "/correlation/round-votes",
+      ),
+    ).toBe(false);
+  });
+
   it("fetches supplemental candidate endpoints even when question candidates fill the window", async () => {
     mockConfig();
     const seenPathnames: string[] = [];
@@ -646,6 +775,13 @@ describe("automatic correlation artifact builder", () => {
         return jsonResponse({
           items: [
             { domain: 4, rewardPoolId: "70", contentId: "70", roundId: "4" },
+          ],
+        });
+      }
+      if (url.pathname === "/correlation/launch-round-candidates") {
+        return jsonResponse({
+          items: [
+            { domain: 2, rewardPoolId: "0", contentId: "75", roundId: "4" },
           ],
         });
       }
@@ -675,6 +811,7 @@ describe("automatic correlation artifact builder", () => {
     await buildConfiguredCorrelationSnapshotArtifact(logger);
 
     expect(seenPathnames).toContain("/correlation/round-candidates");
+    expect(seenPathnames).toContain("/correlation/launch-round-candidates");
     expect(seenPathnames).toContain("/correlation/bundle-round-candidates");
     expect(seenPathnames).toContain("/correlation/rating-round-candidates");
     expect(seenPathnames.some((pathname) => pathname.endsWith("-votes"))).toBe(
@@ -944,7 +1081,7 @@ describe("automatic correlation artifact builder", () => {
     const artifact = await buildConfiguredCorrelationSnapshotArtifact(logger);
 
     expect(artifact).toEqual({});
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
     expect(logger.warn).toHaveBeenCalledWith(
       "Skipping automatic correlation epoch because one round exceeds maxRoundsPerTick",
       expect.objectContaining({
