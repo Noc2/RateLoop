@@ -19,7 +19,7 @@ import {
 } from "@rateloop/contracts";
 import { packVoteRoundContext } from "@rateloop/contracts/votingCore";
 
-const contentRegistry = getSharedDeploymentAddress(84532, "ContentRegistry");
+const contentRegistry = getSharedDeploymentAddress(8453, "ContentRegistry");
 const roundContext = packVoteRoundContext(1n, 5000);
 ```
 

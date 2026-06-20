@@ -140,6 +140,12 @@ Compiled ABIs and deployed addresses are generated into `packages/contracts/src/
 
 ## Governance Runbooks
 
+### Launch-credit anchor bans
+
+Launch-credit payout roots are optimistic public artifacts. Before proposing a `ClusterPayoutOracle` root for launch credits, or before allowing one to finalize, operators should recompute the current `LaunchDistributionPool` verified-human anchor state for every pending credit and omit or challenge credits whose current anchors no longer satisfy the configured `launchRewardPolicy.minVerifiedHumans`.
+
+When governance bans a verified-human anchor, scan pending launch-credit artifacts for that anchor before proposing or accepting a root. If the fraud is tied to the rater, ban the rater before finalization so the pending credit finalizes to zero through the existing banned-rater path.
+
 ### Voting engine rotation
 
 Rotating `ContentRegistry.setVotingEngine` or `FrontendRegistry.setVotingEngine` alone does **not** migrate the full protocol stack. Several contracts pin the voting engine at initialization and reject callbacks from a replacement engine with `"Stale engine"` until a coordinated replacement is deployed and rewired.

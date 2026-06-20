@@ -11,7 +11,7 @@ Brief description of the changes in this PR.
 Describe how you tested your changes:
 
 - [ ] Foundry tests pass (`yarn foundry:test`)
-- [ ] Contract size gate passes (`make check-contract-sizes`)
+- [ ] Contract size gate passes (`yarn workspace @rateloop/foundry check:sizes`)
 - [ ] Lint passes (`yarn next:lint`)
 - [ ] Type check passes (`yarn next:check-types`)
 - [ ] Base Sepolia readiness passes (`yarn base-sepolia:check`) when staging deployment/env wiring changed
