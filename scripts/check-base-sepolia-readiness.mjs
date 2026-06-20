@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { dirname, isAbsolute, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   addBasePreconfirmationEnvChecks,
@@ -5,6 +7,9 @@ import {
   validateLiveReadiness,
   validateOfflineReadiness,
 } from "./check-worldchain-sepolia-readiness.mjs";
+
+const scriptDir = dirname(fileURLToPath(import.meta.url));
+const repoRoot = dirname(scriptDir);
 
 export const BASE_SEPOLIA_READINESS_CONFIG = {
   appEnvName: "BASE_SEPOLIA_APP_URL",
@@ -39,15 +44,70 @@ function printResult(title, result, json = false) {
   }
 }
 
+function addCheck(result, ok, message) {
+  result.checks.push({ ok, message });
+  if (!ok) result.failures.push(message);
+  result.ok = result.failures.length === 0;
+}
+
+function envSourceHasAssignment(source, key, expectedValue) {
+  return source
+    .split(/\r?\n/)
+    .some((line) => line.trim() === `${key}=${expectedValue}`);
+}
+
 export function baseSepoliaNotDeployedMessage() {
   return `Base Sepolia is not deployed: missing ${BASE_SEPOLIA_READINESS_CONFIG.deploymentPath}.`;
+}
+
+function readOptionalEnvFile(root, filePath) {
+  if (!filePath) return null;
+  const resolvedPath = isAbsolute(filePath)
+    ? filePath
+    : resolve(root, filePath);
+  return readFileSync(resolvedPath, "utf8");
+}
+
+function loadBaseSepoliaOfflineInputs(root = repoRoot) {
+  return {
+    ...loadOfflineInputs(root, BASE_SEPOLIA_READINESS_CONFIG),
+    appEnvSource: readOptionalEnvFile(
+      root,
+      process.env.BASE_SEPOLIA_NEXT_ENV_FILE,
+    ),
+  };
+}
+
+export function validateBaseSepoliaOfflineReadiness(inputs) {
+  const result = validateOfflineReadiness(
+    inputs,
+    BASE_SEPOLIA_READINESS_CONFIG,
+  );
+  const appEnvSource = inputs.appEnvSource ?? "";
+
+  addCheck(
+    result,
+    appEnvSource.trim().length > 0,
+    "Base Sepolia Next.js env source is configured via BASE_SEPOLIA_NEXT_ENV_FILE",
+  );
+  addCheck(
+    result,
+    envSourceHasAssignment(
+      appEnvSource,
+      "NEXT_PUBLIC_TARGET_NETWORKS",
+      "84532",
+    ),
+    "Next.js staging env targets Base Sepolia",
+  );
+
+  return result;
 }
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   let offlineInputs;
   try {
-    offlineInputs = loadOfflineInputs(undefined, BASE_SEPOLIA_READINESS_CONFIG);
+    offlineInputs = loadBaseSepoliaOfflineInputs();
   } catch (error) {
     if (
       error?.code === "ENOENT" &&
@@ -60,10 +120,7 @@ async function main() {
     throw error;
   }
 
-  const offlineResult = validateOfflineReadiness(
-    offlineInputs,
-    BASE_SEPOLIA_READINESS_CONFIG,
-  );
+  const offlineResult = validateBaseSepoliaOfflineReadiness(offlineInputs);
   printResult("Base Sepolia offline readiness", offlineResult, args.json);
 
   let liveResult = { ok: true, checks: [], failures: [] };

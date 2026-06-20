@@ -5,8 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { ConfidentialityEscrowAbi, RaterRegistryConfidentialityAbi } from "@rateloop/contracts/abis";
 import { useQueryClient } from "@tanstack/react-query";
 import { Abi, Address, encodeFunctionData, formatUnits, isAddress, parseUnits } from "viem";
-import { useAccount, useConfig, useReadContract } from "wagmi";
-import { waitForTransactionReceipt } from "wagmi/actions";
+import { useAccount, useReadContract } from "wagmi";
 import { ArrowsRightLeftIcon } from "@heroicons/react/24/outline";
 import { surfaceSectionHeadingClassName } from "~~/components/shared/sectionHeading";
 import { useDeployedContractInfo, useScaffoldReadContract } from "~~/hooks/scaffold-eth";
@@ -852,7 +851,6 @@ export function getGovernanceActionTemplateSummaries() {
 export function GovernanceActionComposer() {
   const queryClient = useQueryClient();
   const { address } = useAccount();
-  const wagmiConfig = useConfig();
   const searchParams = useSearchParams();
   const {
     governorAddress,
@@ -1117,8 +1115,6 @@ export function GovernanceActionComposer() {
         });
 
         if (!txHash) return;
-
-        await waitForTransactionReceipt(wagmiConfig, { hash: txHash });
       } else {
         const txHash = await writeContractAsync({
           address: targetContract.address,

@@ -24,7 +24,7 @@ RateLoop's production deployment boundary is Base mainnet, with Base Sepolia use
 - Staked vote when the round must be opened first: one `openRound` confirmation, then one vote batch confirmation. This remains two phases because the vote runtime is anchored after the round exists.
 - Direct wallet-call question submit with bounty: reservation remains separate, then `approve + submitQuestion` can batch. The reservation wait is intentional protocol behavior for the public direct path.
 - Browser handoff or native EIP-3009/x402 question submit with an eligible USDC bounty: one wallet signature for the USDC authorization, then one submit transaction.
-- Native EIP-3009/x402 question submit with bounty and a USDC Feedback Bonus: one wallet signature for the total USDC authorization, then one one-shot submit transaction that funds both pools. LREP Feedback Bonus funding still uses the separate wallet-call pool flow.
+- Native EIP-3009/x402 question submit with bounty and a USDC Feedback Bonus: once the staging submitter supports the current one-shot path, one wallet signature for the total USDC authorization, then one one-shot submit transaction that funds both pools. LREP Feedback Bonus funding still uses the separate wallet-call pool flow.
 
 ## Base Sepolia test checklist
 
@@ -33,7 +33,7 @@ RateLoop's production deployment boundary is Base mainnet, with Base Sepolia use
 3. Connect an external wallet on chain `84532` and confirm the app resolves atomic batch support.
 4. Submit a direct wallet-call question with a USDC bounty. Expected: reserve confirmation, then one atomic batch for approval plus submit.
 5. Submit a native EIP-3009/x402 question with a USDC bounty. Expected: one USDC authorization signature, then one submit transaction without a reservation transaction.
-6. Add a USDC Feedback Bonus to the native EIP-3009/x402 ask. Expected: the authorization value is bounty plus bonus, the plan has one `submitQuestionWithX402OneShotPayment` call, and status shows the Feedback Bonus as funded after `rateloop_confirm_ask_transactions`.
+6. Add a USDC Feedback Bonus to the native EIP-3009/x402 ask while Base Sepolia still points at the stale staging submitter. Expected: the one-shot Feedback Bonus path is blocked with the staging-submitters message. After the Base Sepolia submitter is refreshed, this same step should produce one `submitQuestionWithX402OneShotPayment` call and status should show the Feedback Bonus as funded after `rateloop_confirm_ask_transactions`.
 7. Vote with an account that has LREP but no voting-engine allowance. Expected: no permit signature prompt; the wallet shows one batch containing approval and vote.
 8. Repeat with thirdweb in-app login. Expected: sponsored execution remains available where the free-transaction verifier allows the call set.
 9. Repeat failures with a wallet that does not report atomic support. Expected: ordinary ordered plans fall back to the older direct transaction path, while atomic-required Feedback Bonus batches stop with an unsupported-wallet message instead of splitting the protected pair.

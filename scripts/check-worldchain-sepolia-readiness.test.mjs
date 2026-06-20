@@ -17,6 +17,7 @@ import {
 import {
   BASE_SEPOLIA_READINESS_CONFIG,
   baseSepoliaNotDeployedMessage,
+  validateBaseSepoliaOfflineReadiness,
 } from "./check-base-sepolia-readiness.mjs";
 
 function addressFor(index) {
@@ -261,6 +262,36 @@ test("validateOfflineReadiness accepts synchronized Base Sepolia deployment arti
   assert.deepEqual(result.failures, []);
 });
 
+test("validateBaseSepoliaOfflineReadiness accepts a staging app env that targets Base Sepolia", () => {
+  const result = validateBaseSepoliaOfflineReadiness({
+    deploymentJson: makeDeploymentJson({ networkName: "baseSepolia" }),
+    deployedContractsSource: makeGeneratedContractsSource({}, 84532),
+    protocolSource:
+      'const USDC_BY_CHAIN_ID = { 84532: "0x036CbD53842c5426634e7929541eC2318f3dCF7e" };',
+    appEnvSource: "NEXT_PUBLIC_TARGET_NETWORKS=84532\n",
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.failures, []);
+});
+
+test("validateBaseSepoliaOfflineReadiness rejects a staging app env that targets Base mainnet", () => {
+  const result = validateBaseSepoliaOfflineReadiness({
+    deploymentJson: makeDeploymentJson({ networkName: "baseSepolia" }),
+    deployedContractsSource: makeGeneratedContractsSource({}, 84532),
+    protocolSource:
+      'const USDC_BY_CHAIN_ID = { 84532: "0x036CbD53842c5426634e7929541eC2318f3dCF7e" };',
+    appEnvSource: "NEXT_PUBLIC_TARGET_NETWORKS=8453\n",
+  });
+
+  assert.equal(result.ok, false);
+  assert(
+    result.failures.some((message) =>
+      message.includes("Next.js staging env targets Base Sepolia"),
+    ),
+  );
+});
+
 test("validateOfflineReadiness rejects stale generated contract addresses", () => {
   const result = validateOfflineReadiness({
     deploymentJson: makeDeploymentJson(),
@@ -426,7 +457,9 @@ test("validateLiveReadiness preserves path-prefixed app probe URLs", async () =>
     requestedUrls.push(urlString);
     if (urlString.endsWith("/api/ponder/availability")) {
       return new Response(
-        JSON.stringify({ expectedDeploymentKey: expectedDeploymentKeyFor(deploymentJson) }),
+        JSON.stringify({
+          expectedDeploymentKey: expectedDeploymentKeyFor(deploymentJson),
+        }),
         { status: 200, headers: { "content-type": "application/json" } },
       );
     }
@@ -491,7 +524,9 @@ test("validateLiveReadiness rejects stale Ponder deployment metadata", async () 
     assert.equal(result.ok, false);
     assert(
       result.failures.some((message) =>
-        message.includes("Ponder deployment FeedbackRegistry matches deployment artifact"),
+        message.includes(
+          "Ponder deployment FeedbackRegistry matches deployment artifact",
+        ),
       ),
     );
     assert(

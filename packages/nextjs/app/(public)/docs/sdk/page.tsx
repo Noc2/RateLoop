@@ -183,7 +183,7 @@ const participationStatus = await rateloop.read.getRaterParticipationStatus(
         <a href={referenceAppSourceHref} target="_blank" rel="noopener noreferrer" className="link link-primary">
           reference app
         </a>{" "}
-        uses. The host app still decides how to approve LREP stake and submit the commit transaction. In the redeployed
+        uses. The host app still decides how to approve LREP stake and submit the commit transaction. In the current
         tlock model, commit helpers thread the reveal target round and drand chain hash through the call so the
         contracts can enforce the metadata bindings on-chain.
       </p>

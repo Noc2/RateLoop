@@ -103,8 +103,8 @@ export function ManualRevealPage() {
             </div>
             <p className="max-w-2xl text-base-content/75">
               This fallback keeps the keeper-assisted/self-reveal path available if automatic reveal looks delayed. The
-              redeployed contracts still validate commit metadata on-chain, but honest decryptability remains an
-              off-chain check.
+              current contracts still validate commit metadata on-chain, but honest decryptability remains an off-chain
+              check.
             </p>
           </div>
           <div className="surface-card rounded-lg px-4 py-3 min-w-44">
