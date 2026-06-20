@@ -536,6 +536,9 @@ test.describe("Mobile viewport (phone)", () => {
 
       const buttonRect = button.getBoundingClientRect();
       const dockRect = mobileDock.getBoundingClientRect();
+      const previewRow = button.closest("div");
+      const previewParagraph = previewRow?.querySelector("p");
+      const previewParagraphRect = previewParagraph?.getBoundingClientRect();
       const topElement = document.elementFromPoint(
         buttonRect.left + buttonRect.width / 2,
         buttonRect.top + buttonRect.height / 2,
@@ -543,16 +546,34 @@ test.describe("Mobile viewport (phone)", () => {
 
       return {
         buttonBottom: buttonRect.bottom,
+        buttonTop: buttonRect.top,
         buttonTopmost: topElement === button || button.contains(topElement),
         dockTop: dockRect.top,
+        previewParagraphBottom: previewParagraphRect?.bottom ?? 0,
+        previewParagraphTop: previewParagraphRect?.top ?? 0,
       };
     });
 
     expect(layout.buttonBottom).toBeLessThanOrEqual(layout.dockTop - 44);
+    expect(layout.buttonTop).toBeLessThanOrEqual(layout.previewParagraphBottom + 8);
+    expect(layout.buttonBottom).toBeGreaterThanOrEqual(layout.previewParagraphTop - 8);
     expect(layout.buttonTopmost).toBe(true);
 
     await showMore.click();
-    await expect(page.locator('article[aria-current="true"] button:has-text("Show Less")').first()).toBeVisible();
+    const showLess = page.locator('article[aria-current="true"] button:has-text("Show Less")').first();
+    await expect(showLess).toBeVisible();
+    const expandedLayout = await showLess.evaluate(button => {
+      const buttonRect = button.getBoundingClientRect();
+      const topElement = document.elementFromPoint(
+        buttonRect.left + buttonRect.width / 2,
+        buttonRect.top + buttonRect.height / 2,
+      );
+
+      return {
+        buttonTopmost: topElement === button || button.contains(topElement),
+      };
+    });
+    expect(expandedLayout.buttonTopmost).toBe(true);
     await expect(page.getByRole("dialog", { name: /^Share / })).toBeHidden();
 
     await page.locator('[data-testid="vote-mobile-dock"]').getByRole("button", { name: "Share content" }).click();

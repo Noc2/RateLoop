@@ -185,7 +185,7 @@ export function QuestionDescription({
     setIsExpanded(previous => !previous);
   };
 
-  const renderDescriptionSegments = () =>
+  const renderDescriptionSegments = ({ linkReferences = true } = {}) =>
     parsed.segments.map((segment, index) => {
       if (segment.type === "text") {
         return segment.text;
@@ -193,6 +193,9 @@ export function QuestionDescription({
 
       const summary = referencedContentById?.get(segment.contentId);
       const label = getReferenceLabel(segment.contentId, segment.label, summary);
+      if (!linkReferences) {
+        return label;
+      }
 
       return (
         <Link
@@ -224,7 +227,7 @@ export function QuestionDescription({
     return (
       <div className="space-y-2">
         <div className="flex min-w-0 items-baseline gap-2">
-          <p className={previewClassName}>{renderDescriptionSegments()}</p>
+          <p className={previewClassName}>{renderDescriptionSegments({ linkReferences: false })}</p>
           <span className="shrink-0 whitespace-nowrap">{toggleButton}</span>
         </div>
         {detailsError ? <p className="text-sm text-error">{detailsError}</p> : null}

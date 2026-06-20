@@ -69,6 +69,33 @@ test("QuestionDescription can keep the preview toggle adjacent to clamped mobile
   assert.match(html, /Show More/);
 });
 
+test("QuestionDescription inline preview renders references as plain labels until expanded", () => {
+  const html = renderToStaticMarkup(
+    <QuestionDescription
+      description="Compare [[question:42]] before rating this longer prompt text with more supporting context"
+      previewLayout="inline-toggle"
+      previewWordLimit={5}
+    />,
+  ).replace(/\s+/g, " ");
+
+  assert.match(html, /Question #42/);
+  assert.doesNotMatch(html, /href="\/rate\?content=42"/);
+  assert.match(html, /Show More/);
+});
+
+test("QuestionDescription inline preview still renders details-only toggle", () => {
+  const html = renderToStaticMarkup(
+    <QuestionDescription
+      description=""
+      detailsUrl="https://rateloop.ai/api/attachments/details/det_5AGUshsagKf6qq6hUWV-s3Bh"
+      previewLayout="inline-toggle"
+    />,
+  ).replace(/\s+/g, " ");
+
+  assert.match(html, /Show More/);
+  assert.doesNotMatch(html, /line-clamp-1/);
+});
+
 test("readQuestionDetailsResponseText rejects oversized details by content length", async () => {
   const response = new Response("small", {
     headers: {

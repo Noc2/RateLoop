@@ -52,6 +52,7 @@ import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
 import { FOLLOWED_CURATOR_TOAST_ID } from "~~/lib/notifications/followedActivity";
 import { extractQuestionReferenceIds } from "~~/lib/questionReferences";
 import { replaceUrlPreservingHistoryState } from "~~/lib/ui/browserHistory";
+import { getVisualViewportBottom, resolveMobileDockReservedSpace } from "~~/lib/ui/mobileDockReservedSpace";
 import { getAdvisoryVoteUnavailableMessage } from "~~/lib/vote/advisoryVoteAvailability";
 import { orderBundleMembersInFeed } from "~~/lib/vote/bundleFeedOrder";
 import { formatVoteCooldownRemaining, getVoteCooldownRemainingSeconds } from "~~/lib/vote/cooldown";
@@ -1113,12 +1114,17 @@ const HomeInner = () => {
 
     let frameId = 0;
     let resizeObserver: ResizeObserver | null = null;
+    const visualViewport = window.visualViewport;
 
     const measureDockSpace = () => {
-      const nextReservedSpace = Math.max(
-        MOBILE_VOTE_DOCK_RESERVED_SPACE_PX,
-        Math.ceil(window.innerHeight - dockNode.getBoundingClientRect().top),
-      );
+      const nextReservedSpace = resolveMobileDockReservedSpace({
+        dockTop: dockNode.getBoundingClientRect().top,
+        minimumReservedSpace: MOBILE_VOTE_DOCK_RESERVED_SPACE_PX,
+        viewportBottom: getVisualViewportBottom({
+          innerHeight: window.innerHeight,
+          visualViewport,
+        }),
+      });
       setMobileDockReservedSpace(current => (current === nextReservedSpace ? current : nextReservedSpace));
     };
 
@@ -1135,6 +1141,8 @@ const HomeInner = () => {
 
     requestDockMeasurement();
     window.addEventListener("resize", requestDockMeasurement);
+    visualViewport?.addEventListener("resize", requestDockMeasurement);
+    visualViewport?.addEventListener("scroll", requestDockMeasurement);
 
     if (typeof ResizeObserver !== "undefined") {
       resizeObserver = new ResizeObserver(requestDockMeasurement);
@@ -1146,6 +1154,8 @@ const HomeInner = () => {
         window.cancelAnimationFrame(frameId);
       }
       window.removeEventListener("resize", requestDockMeasurement);
+      visualViewport?.removeEventListener("resize", requestDockMeasurement);
+      visualViewport?.removeEventListener("scroll", requestDockMeasurement);
       resizeObserver?.disconnect();
     };
   }, [primaryItem?.id]);
