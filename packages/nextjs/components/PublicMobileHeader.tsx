@@ -3,12 +3,14 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Address } from "viem";
+import { useAccount } from "wagmi";
 import { Bars3Icon } from "@heroicons/react/24/outline";
 import { HeaderBrand, HeaderMenuLinks, closeDetailsMenu } from "~~/components/Header";
-import { HumanSignInButton } from "~~/components/shared/HumanSignInButton";
+import { RateLoopConnectButton } from "~~/components/scaffold-eth";
+import { AddressInfoDropdown } from "~~/components/scaffold-eth/ConnectButton/AddressInfoDropdown";
 import { ASK_ROUTE, GOVERNANCE_ROUTE, RATE_ROUTE } from "~~/constants/routes";
 import { useOutsideClick } from "~~/hooks/scaffold-eth";
-import { HUMAN_SIGN_IN_DISCOVER_ROUTE, HUMAN_SIGN_IN_LABEL } from "~~/lib/home/humanSignInRoute";
 
 const publicNavLinks = [
   { href: RATE_ROUTE, label: "Discover", heavy: true },
@@ -20,17 +22,23 @@ const publicNavLinks = [
 const MOBILE_HEADER_SCROLL_DELTA = 12;
 const MOBILE_HEADER_HIDE_OFFSET = 72;
 
-export function PublicSignInButton({ className = "" }: { className?: string }) {
+function PublicMobileMenuLinks() {
+  const { address } = useAccount();
+
   return (
-    <HumanSignInButton
-      className={className}
-      data-testid="public-auth-connect-button"
-      gradientMotion="idle"
-      gradientSize="sm"
-      postSignInRoute={HUMAN_SIGN_IN_DISCOVER_ROUTE}
-    >
-      {HUMAN_SIGN_IN_LABEL}
-    </HumanSignInButton>
+    <>
+      <HeaderMenuLinks />
+      {address ? (
+        <>
+          <li className="divider my-1" />
+          <AddressInfoDropdown
+            address={address as Address}
+            displayName={`${address.slice(0, 6)}...${address.slice(-4)}`}
+            menuItemsOnly
+          />
+        </>
+      ) : null}
+    </>
   );
 }
 
@@ -108,7 +116,7 @@ export function PublicMobileHeader() {
               onClick={closeMenu}
             >
               <Suspense>
-                <HeaderMenuLinks />
+                <PublicMobileMenuLinks />
               </Suspense>
             </ul>
           </details>
@@ -128,7 +136,7 @@ export function PublicMobileHeader() {
           ))}
         </nav>
 
-        <PublicSignInButton />
+        <RateLoopConnectButton compact />
       </div>
     </header>
   );

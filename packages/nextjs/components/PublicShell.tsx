@@ -2,8 +2,9 @@ import { Suspense } from "react";
 import { BetaNoticeBanner } from "~~/components/BetaNoticeBanner";
 import { FooterLinks } from "~~/components/FooterLinks";
 import { HeaderBrand, HeaderMenuLinks, HeaderSearchBar } from "~~/components/Header";
-import { PublicMobileHeader, PublicSignInButton } from "~~/components/PublicMobileHeader";
+import { PublicMobileHeader } from "~~/components/PublicMobileHeader";
 import { ReferralAttributionCapture } from "~~/components/referrals/ReferralAttributionCapture";
+import { RateLoopConnectButton } from "~~/components/scaffold-eth";
 
 function PublicDesktopSidebar() {
   return (
@@ -21,7 +22,7 @@ function PublicDesktopSidebar() {
       </nav>
       <div className="mt-auto flex w-full shrink-0 flex-col items-stretch gap-2 border-t border-[color:var(--rateloop-shell-border-strong)] px-2.5 pt-4">
         <div className="flex w-full justify-stretch">
-          <PublicSignInButton />
+          <RateLoopConnectButton inlineMenu />
         </div>
       </div>
     </aside>
