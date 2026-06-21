@@ -36,7 +36,7 @@ test("ponder availability route reports a healthy indexer", async () => {
   try {
     invalidatePonderCache();
 
-    const response = await GET();
+    const response = await GET(new Request("http://localhost/api/ponder/availability"));
     const body = await response.json();
 
     assert.equal(response.status, 200);
@@ -104,7 +104,7 @@ test("ponder availability route reports an offline indexer", async () => {
   try {
     invalidatePonderCache();
 
-    const response = await GET();
+    const response = await GET(new Request("http://localhost/api/ponder/availability"));
     const body = await response.json();
 
     assert.equal(response.status, 200);
@@ -141,7 +141,7 @@ test("ponder availability route rejects deployment mismatches", async () => {
   try {
     invalidatePonderCache();
 
-    const response = await GET();
+    const response = await GET(new Request("http://localhost/api/ponder/availability"));
     const body = await response.json();
 
     assert.equal(response.status, 200);
