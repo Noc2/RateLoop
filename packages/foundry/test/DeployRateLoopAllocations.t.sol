@@ -321,13 +321,15 @@ contract DeployRateLoopAllocationsTest is Test {
         assertEq(deployScript.resolveWorldIdRouterAddress(false), router);
     }
 
-    function test_WorldChainSepoliaAcceptsLiveWorldIdRouterOverride() public {
+    function test_WorldChainSepoliaUsesCanonicalWorldIdRouterWhenCodeExists() public {
         DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
-        MockWorldIDRouter router = new MockWorldIDRouter();
-        vm.setEnv("WORLD_ID_ROUTER_ADDRESS", vm.toString(address(router)));
+        MockWorldIDRouter routerCode = new MockWorldIDRouter();
+        address router = deployScript.worldChainSepoliaWorldIdRouter();
+        vm.setEnv("WORLD_ID_ROUTER_ADDRESS", vm.toString(address(0)));
+        vm.etch(router, address(routerCode).code);
         vm.chainId(4801);
 
-        assertEq(deployScript.resolveWorldIdRouterAddress(false), address(router));
+        assertEq(deployScript.resolveWorldIdRouterAddress(false), router);
     }
 
     function test_BaseDeploysResolveCanonicalUsdcAddresses() public {
