@@ -1102,8 +1102,7 @@ function readRoundSettings(handoff: Handoff | null): RoundSettings {
       ? PURE_AGENT_FAST_QUESTION_ROUND_CONFIG
       : DEFAULT_QUESTION_ROUND_CONFIG;
   const requiredVoters = readBountyRequiredVoters(handoff);
-  const minVoters =
-    requiredVoters ?? readFirstPositiveBigInt(source, ["minVoters"], presetConfig.minVoters);
+  const minVoters = requiredVoters ?? readFirstPositiveBigInt(source, ["minVoters"], presetConfig.minVoters);
   const maxVoters = readFirstPositiveBigInt(source, ["maxVoters"], presetConfig.maxVoters);
 
   return {
