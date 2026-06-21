@@ -583,6 +583,30 @@ test("protocol data reads preflight an explicit deployment key", async () => {
         headers: { "content-type": "application/json" },
       });
     }
+    if (url.includes("/voting-stakes")) {
+      return new Response(JSON.stringify({ activeStake: "0", activeCount: 0 }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    if (url.includes("/voter-streak")) {
+      return new Response(
+        JSON.stringify({
+          bestDailyStreak: 0,
+          currentDailyStreak: 0,
+          lastActiveDate: null,
+          lastMilestoneDay: 0,
+          milestones: [],
+          nextMilestone: null,
+          nextMilestoneBaseBonus: null,
+          totalActiveDays: 0,
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        },
+      );
+    }
 
     return new Response(
       JSON.stringify({
@@ -615,6 +639,8 @@ test("protocol data reads preflight an explicit deployment key", async () => {
       undefined,
       options,
     );
+    await ponderApi.getVotingStakes("0x1234567890abcdef1234567890abcdef12345678", options);
+    await ponderApi.getVoterStreak("0x1234567890abcdef1234567890abcdef12345678", options);
   } finally {
     globalThis.fetch = originalFetch;
     invalidatePonderCache({ clearLastKnownGood: true });
@@ -633,6 +659,8 @@ test("protocol data reads preflight an explicit deployment key", async () => {
       "/vote-cooldowns",
       "/question-reward-claim-candidates",
       "/question-bundle-claim-candidates",
+      "/voting-stakes",
+      "/voter-streak",
     ],
   );
 });

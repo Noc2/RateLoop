@@ -8,6 +8,7 @@ process.env.DATABASE_URL = "memory:";
 type ContentFeedbackModule = typeof import("./contentFeedback");
 type NormalizedContentFeedbackInput = import("./contentFeedback").NormalizedContentFeedbackInput;
 type ContentFeedbackRoundContext = import("./contentFeedback").ContentFeedbackRoundContext;
+type PonderContentFeedbackItem = import("~~/services/ponder/client").PonderContentFeedbackItem;
 type PonderFeedbackBonusAward = import("~~/services/ponder/client").PonderFeedbackBonusAward;
 type PonderFeedbackBonusPool = import("~~/services/ponder/client").PonderFeedbackBonusPool;
 type PonderRoundItem = import("~~/services/ponder/client").PonderRoundItem;
@@ -90,6 +91,35 @@ function buildVoteItem(params: { contentId: string; roundId: string; voter: stri
     roundStartTime: null,
     roundState: ROUND_STATE.Open,
     roundUpWins: null,
+  };
+}
+
+function buildProtocolFeedbackItem(params: {
+  id: string;
+  contentId: string;
+  roundId: string;
+  author?: string;
+  feedbackHash?: string;
+  body?: string;
+  feedbackType?: string;
+}): PonderContentFeedbackItem {
+  return {
+    id: params.id,
+    contentId: params.contentId,
+    roundId: params.roundId,
+    commitKey: `0x${"22".repeat(32)}`,
+    author: params.author ?? WALLET,
+    feedbackHash: params.feedbackHash ?? `0x${params.id.padStart(64, "0").slice(0, 64)}`,
+    committedAt: "1000",
+    commitTxHash: `0x${"33".repeat(32)}`,
+    revealed: true,
+    feedbackType: params.feedbackType ?? "concern",
+    body: params.body ?? "Protocol feedback body",
+    sourceUrl: null,
+    clientNonce: null,
+    revealedAt: "1001",
+    revealTxHash: `0x${"55".repeat(32)}`,
+    updatedAt: "1002",
   };
 }
 
@@ -531,6 +561,49 @@ test("accepts feedback eligibility from on-chain advisory votes", async () => {
   assert.equal(observedChainId, CHAIN_ID);
 });
 
+test("accepts feedback eligibility from on-chain fallback when indexed vote lookup fails", async () => {
+  let fallbackCalled = false;
+  contentFeedback.__setContentFeedbackVoteEligibilityTestOverridesForTests({
+    getVotes: async () => {
+      throw new Error("Ponder unavailable");
+    },
+    hasOnchainFeedbackEligibleVote: async params => {
+      fallbackCalled = true;
+      return params.contentId === "16" && params.roundId === "3" && params.address === WALLET;
+    },
+  });
+
+  await assert.doesNotReject(() =>
+    contentFeedback.assertContentFeedbackVoterEligibility({
+      address: WALLET,
+      chainId: CHAIN_ID,
+      contentId: "16",
+      roundId: "3",
+    }),
+  );
+  assert.equal(fallbackCalled, true);
+});
+
+test("rejects feedback eligibility when indexed lookup fails and no on-chain fallback vote exists", async () => {
+  contentFeedback.__setContentFeedbackVoteEligibilityTestOverridesForTests({
+    getVotes: async () => {
+      throw new Error("Ponder unavailable");
+    },
+    hasOnchainFeedbackEligibleVote: async () => false,
+  });
+
+  await assert.rejects(
+    () =>
+      contentFeedback.assertContentFeedbackVoterEligibility({
+        address: WALLET,
+        chainId: CHAIN_ID,
+        contentId: "17",
+        roundId: "4",
+      }),
+    contentFeedback.ContentFeedbackVoterEligibilityError,
+  );
+});
+
 test("rejects feedback eligibility when neither indexed nor advisory votes exist", async () => {
   contentFeedback.__setContentFeedbackVoteEligibilityTestOverridesForTests({
     getVotes: async () => buildVotesResponse([]),
@@ -645,6 +718,76 @@ test("scopes local feedback rows by protocol deployment", async () => {
   assert.equal(secondResult.items[0]?.body, "Second deployment feedback should not see the old deployment row.");
   assert.equal(firstCounts["12"], 1);
   assert.equal(secondExisting?.body, "Second deployment feedback should not see the old deployment row.");
+});
+
+test("feedback counts merge protocol-indexed rows without double-counting local mirrors", async () => {
+  const activeContext = contentFeedback.buildContentFeedbackRoundContext([{ roundId: "7", state: ROUND_STATE.Open }]);
+  const contextByContentId = new Map([
+    ["21", activeContext],
+    ["22", activeContext],
+    ["23", activeContext],
+  ]);
+  const localOnlyPayload = contentFeedback.normalizeContentFeedbackInput({
+    address: WALLET,
+    contentId: "21",
+    feedbackType: "concern",
+    body: "Local-only feedback.",
+  });
+  const duplicatePayload = contentFeedback.normalizeContentFeedbackInput({
+    address: WALLET,
+    contentId: "22",
+    feedbackType: "concern",
+    body: "Mirrored feedback.",
+  });
+  assert.equal(localOnlyPayload.ok, true);
+  assert.equal(duplicatePayload.ok, true);
+  if (!localOnlyPayload.ok || !duplicatePayload.ok) return;
+
+  await contentFeedback.addContentFeedback(
+    prepareFeedback(localOnlyPayload.payload, activeContext, TEST_DEPLOYMENT_A),
+    activeContext,
+  );
+  const duplicateItem = await contentFeedback.addContentFeedback(
+    prepareFeedback(duplicatePayload.payload, activeContext, TEST_DEPLOYMENT_A),
+    activeContext,
+  );
+  assert.ok(duplicateItem.feedbackHash);
+
+  contentFeedback.__setContentFeedbackVoteEligibilityTestOverridesForTests({
+    getContentFeedback: async params => ({
+      items:
+        params.contentId === "22"
+          ? [
+              buildProtocolFeedbackItem({
+                id: "22",
+                contentId: "22",
+                roundId: "7",
+                feedbackHash: duplicateItem.feedbackHash!,
+                body: "Mirrored feedback.",
+              }),
+            ]
+          : params.contentId === "23"
+            ? [buildProtocolFeedbackItem({ id: "23", contentId: "23", roundId: "7" })]
+            : [],
+      total: 1,
+      limit: 100,
+      offset: 0,
+      hasMore: false,
+    }),
+  });
+
+  const counts = await contentFeedback.listContentFeedbackCounts({
+    chainId: TEST_DEPLOYMENT_A.chainId,
+    deploymentKey: TEST_DEPLOYMENT_A.deploymentKey,
+    contentIds: ["21", "22", "23"],
+    contextByContentId,
+  });
+
+  assert.deepEqual(counts, {
+    "21": 1,
+    "22": 1,
+    "23": 1,
+  });
 });
 
 test("terminal round feedback becomes public", async () => {

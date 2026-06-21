@@ -1882,8 +1882,15 @@ export const ponderApi = {
     });
   },
 
-  getVotingStakes(voter: string) {
-    return ponderGet<PonderVotingStakes>("/voting-stakes", { voter });
+  getVotingStakes(voter: string, options?: PonderDeploymentOptions) {
+    const deployment = getExpectedPonderDeploymentScope(options);
+    return ponderGet<PonderVotingStakes>(
+      "/voting-stakes",
+      { voter },
+      {
+        expectedDeploymentKey: deployment?.deploymentKey,
+      },
+    );
   },
 
   getBalanceHistory(address: string, limit?: string) {
@@ -2137,7 +2144,14 @@ export const ponderApi = {
     );
   },
 
-  getVoterStreak(voter: string) {
-    return ponderGet<PonderVoterStreak>("/voter-streak", { voter });
+  getVoterStreak(voter: string, options?: PonderDeploymentOptions) {
+    const deployment = getExpectedPonderDeploymentScope(options);
+    return ponderGet<PonderVoterStreak>(
+      "/voter-streak",
+      { voter },
+      {
+        expectedDeploymentKey: deployment?.deploymentKey,
+      },
+    );
   },
 };

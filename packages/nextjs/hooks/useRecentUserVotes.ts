@@ -17,8 +17,13 @@ export function getRecentUserVotesQueryKey(voter?: string, chainId?: number, dep
   return ["ponder-fallback", "recentUserVotes", chainId ?? null, deploymentKey ?? null, normalizeVoter(voter)] as const;
 }
 
-export function invalidateRecentUserVotes(queryClient: QueryClient, voter?: string, chainId?: number) {
-  return queryClient.invalidateQueries({ queryKey: getRecentUserVotesQueryKey(voter, chainId) });
+export function invalidateRecentUserVotes(
+  queryClient: QueryClient,
+  voter?: string,
+  chainId?: number,
+  deploymentKey?: string | null,
+) {
+  return queryClient.invalidateQueries({ queryKey: getRecentUserVotesQueryKey(voter, chainId, deploymentKey) });
 }
 
 export function useRecentUserVotes(voter?: string) {

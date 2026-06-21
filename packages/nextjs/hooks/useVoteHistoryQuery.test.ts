@@ -42,5 +42,11 @@ test("buildRpcVoteHistory classifies settled, cancelled, tied, and reveal-failed
 });
 
 test("getVoteHistoryQueryKey scopes cache entries by chain", () => {
-  assert.deepEqual(getVoteHistoryQueryKey("0xAbC", 4801), ["ponder-fallback", "voteHistory", 4801, "0xabc"]);
+  assert.deepEqual(getVoteHistoryQueryKey("0xAbC", 4801, "4801:deployment"), [
+    "ponder-fallback",
+    "voteHistory",
+    4801,
+    "4801:deployment",
+    "0xabc",
+  ]);
 });

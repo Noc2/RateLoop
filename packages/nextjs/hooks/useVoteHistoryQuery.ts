@@ -22,8 +22,8 @@ function normalizeVoter(voter?: string) {
   return voter?.toLowerCase() ?? null;
 }
 
-export function getVoteHistoryQueryKey(voter?: string, chainId?: number) {
-  return ["ponder-fallback", "voteHistory", chainId ?? null, normalizeVoter(voter)] as const;
+export function getVoteHistoryQueryKey(voter?: string, chainId?: number, deploymentKey?: string | null) {
+  return ["ponder-fallback", "voteHistory", chainId ?? null, deploymentKey ?? null, normalizeVoter(voter)] as const;
 }
 
 type VoteHistoryEvent = {

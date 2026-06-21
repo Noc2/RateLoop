@@ -100,6 +100,7 @@ type DeployedContractsMap = Record<number, Record<string, DeployedContractRecord
 type FeedbackVoteEligibilityTestOverrides = {
   getAllRounds?: typeof ponderApi.getAllRounds;
   getContentById?: typeof ponderApi.getContentById;
+  getContentFeedback?: typeof ponderApi.getContentFeedback;
   getFeedbackBonusAwards?: typeof ponderApi.getFeedbackBonusAwards;
   getFeedbackBonusPools?: typeof ponderApi.getFeedbackBonusPools;
   getVotes?: typeof ponderApi.getVotes;
@@ -764,24 +765,35 @@ export async function assertContentFeedbackVoterEligibility(params: FeedbackVote
   }
 
   const deployment = resolveContentFeedbackDeploymentScope(params.chainId);
-  const votes = await (feedbackVoteEligibilityTestOverrides?.getVotes ?? ponderApi.getVotes)(
-    {
-      voter: params.address,
+  let hasVote = false;
+  try {
+    const votes = await (feedbackVoteEligibilityTestOverrides?.getVotes ?? ponderApi.getVotes)(
+      {
+        voter: params.address,
+        contentId: params.contentId,
+        roundId: params.roundId,
+        limit: "1",
+      },
+      {
+        chainId: deployment?.chainId ?? params.chainId,
+        deploymentKey: deployment?.deploymentKey,
+      },
+    );
+    hasVote = votes.items.some(
+      vote =>
+        String(vote.contentId) === params.contentId &&
+        String(vote.roundId) === params.roundId &&
+        normalizeWalletAddress(vote.voter) === params.address,
+    );
+  } catch (error) {
+    console.warn("[content-feedback] Unable to verify indexed feedback eligibility; trying on-chain fallback.", {
+      address: params.address,
+      chainId: params.chainId,
       contentId: params.contentId,
+      error,
       roundId: params.roundId,
-      limit: "1",
-    },
-    {
-      chainId: deployment?.chainId ?? params.chainId,
-      deploymentKey: deployment?.deploymentKey,
-    },
-  );
-  const hasVote = votes.items.some(
-    vote =>
-      String(vote.contentId) === params.contentId &&
-      String(vote.roundId) === params.roundId &&
-      normalizeWalletAddress(vote.voter) === params.address,
-  );
+    });
+  }
   if (!hasVote) {
     const hasOnchainVote = await (
       feedbackVoteEligibilityTestOverrides?.hasOnchainFeedbackEligibleVote ?? hasOnchainFeedbackEligibleVote
@@ -907,12 +919,13 @@ async function listProtocolContentFeedback(params: {
   deploymentKey: string;
   viewerAddress?: `0x${string}` | null;
 }): Promise<ContentFeedbackItem[]> {
-  if (!isPonderConfigured()) {
+  const getContentFeedback = feedbackVoteEligibilityTestOverrides?.getContentFeedback;
+  if (!getContentFeedback && !isPonderConfigured()) {
     return [];
   }
 
   try {
-    const response = await ponderApi.getContentFeedback(
+    const response = await (getContentFeedback ?? ponderApi.getContentFeedback)(
       {
         contentId: params.contentId,
         limit: String(CONTENT_FEEDBACK_LIST_LIMIT),
@@ -1059,7 +1072,7 @@ function contentFeedbackItemKey(item: ContentFeedbackItem) {
   return item.feedbackHash?.toLowerCase() ?? String(item.id);
 }
 
-function mergeContentFeedbackItems(protocolItems: ContentFeedbackItem[], localItems: ContentFeedbackItem[]) {
+function dedupeContentFeedbackItems(protocolItems: ContentFeedbackItem[], localItems: ContentFeedbackItem[]) {
   const byKey = new Map<string, ContentFeedbackItem>();
   for (const item of protocolItems) {
     byKey.set(contentFeedbackItemKey(item), item);
@@ -1071,7 +1084,11 @@ function mergeContentFeedbackItems(protocolItems: ContentFeedbackItem[], localIt
     }
   }
 
-  return Array.from(byKey.values())
+  return Array.from(byKey.values());
+}
+
+function mergeContentFeedbackItems(protocolItems: ContentFeedbackItem[], localItems: ContentFeedbackItem[]) {
+  return dedupeContentFeedbackItems(protocolItems, localItems)
     .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
     .slice(0, CONTENT_FEEDBACK_LIST_LIMIT);
 }
@@ -1274,28 +1291,23 @@ export async function listContentFeedback(params: {
 }
 
 export async function listContentFeedbackCounts(params: {
+  chainId?: number;
   deploymentKey?: string;
   contentIds: string[];
   contextByContentId: Map<string, ContentFeedbackRoundContext>;
 }): Promise<Record<string, number>> {
-  const deploymentKey = params.deploymentKey ?? requireContentFeedbackDeploymentScope().deploymentKey;
+  const deployment = requireContentFeedbackDeploymentScope(params.chainId);
+  const deploymentKey = params.deploymentKey ?? deployment.deploymentKey;
+  const chainId = params.chainId ?? deployment.chainId;
   const counts = Object.fromEntries(params.contentIds.map(contentId => [contentId, 0]));
   if (params.contentIds.length === 0) {
     return counts;
   }
 
-  let rows: Array<{
-    contentId: string;
-    moderationStatus: string;
-    publishedAt: Date | null;
-  }>;
+  let rows: FeedbackRow[];
   try {
     rows = await db
-      .select({
-        contentId: contentFeedback.contentId,
-        moderationStatus: contentFeedback.moderationStatus,
-        publishedAt: contentFeedback.publishedAt,
-      })
+      .select()
       .from(contentFeedback)
       .where(
         and(
@@ -1306,17 +1318,32 @@ export async function listContentFeedbackCounts(params: {
       );
   } catch (error) {
     if (isContentFeedbackStorageUnavailableError(error)) {
-      return counts;
+      rows = [];
+    } else {
+      throw error;
     }
-    throw error;
   }
 
+  const localItemsByContentId = new Map<string, ContentFeedbackItem[]>();
   for (const row of rows) {
-    if (row.moderationStatus !== APPROVED_MODERATION_STATUS) continue;
     const context = params.contextByContentId.get(row.contentId);
-    if (!context || !isFeedbackPublic(row)) continue;
-    counts[row.contentId] = (counts[row.contentId] ?? 0) + 1;
+    if (!context) continue;
+    const item = mapFeedbackRow(row, { context });
+    if (!item?.isPublic) continue;
+    localItemsByContentId.set(row.contentId, [...(localItemsByContentId.get(row.contentId) ?? []), item]);
   }
+
+  await Promise.all(
+    params.contentIds.map(async contentId => {
+      const protocolItems = await listProtocolContentFeedback({
+        chainId,
+        contentId,
+        deploymentKey,
+      });
+      const localItems = localItemsByContentId.get(contentId) ?? [];
+      counts[contentId] = dedupeContentFeedbackItems(protocolItems, localItems).filter(item => item.isPublic).length;
+    }),
+  );
 
   return counts;
 }

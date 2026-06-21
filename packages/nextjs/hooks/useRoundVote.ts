@@ -34,6 +34,7 @@ import {
 import { fetchConfidentialityTermsStatus } from "~~/lib/confidentiality/clientTermsStatus";
 import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
 import { DEFAULT_VOTING_CONFIG, type VotingConfig } from "~~/lib/contracts/roundVotingEngine";
+import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 import {
   getGasBalanceErrorMessage,
   isFreeTransactionExhaustedError,
@@ -732,6 +733,8 @@ export function useRoundVote() {
         votingEngineAddress,
       });
       void queryClient.invalidateQueries({ queryKey: FREE_TRANSACTION_ALLOWANCE_QUERY_KEY });
+      const deployment = resolveProtocolDeploymentScope(targetNetwork.id);
+      const deploymentKey = deployment?.deploymentKey ?? null;
 
       if (!submittedPlan.isAdvisoryVote) {
         queryClient.setQueryData<WalletDisplaySummary | undefined>(
@@ -754,7 +757,7 @@ export function useRoundVote() {
         queryClient.setQueryData<{
           data: { activeStaked: number; activeCount: number; totalVotingStake: number };
           source: string;
-        }>(getVotingStakesQueryKey(address, targetNetwork.id), old => {
+        }>(getVotingStakesQueryKey(address, targetNetwork.id, deploymentKey), old => {
           if (!old?.data) return old;
           const added = Number(submittedStakeWei) / 1e6;
           return {
@@ -767,9 +770,9 @@ export function useRoundVote() {
           };
         });
       }
-      queryClient.invalidateQueries({ queryKey: getVotingStakesQueryKey(address, targetNetwork.id) });
-      queryClient.invalidateQueries({ queryKey: getRecentUserVotesQueryKey(address, targetNetwork.id) });
-      queryClient.invalidateQueries({ queryKey: getVoteHistoryQueryKey(address, targetNetwork.id) });
+      queryClient.invalidateQueries({ queryKey: getVotingStakesQueryKey(address, targetNetwork.id, deploymentKey) });
+      queryClient.invalidateQueries({ queryKey: getRecentUserVotesQueryKey(address, targetNetwork.id, deploymentKey) });
+      queryClient.invalidateQueries({ queryKey: getVoteHistoryQueryKey(address, targetNetwork.id, deploymentKey) });
 
       return true;
     } catch (e: any) {

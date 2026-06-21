@@ -1,7 +1,10 @@
 "use client";
 
+import { useMemo } from "react";
+import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import { usePageVisibility } from "~~/hooks/usePageVisibility";
 import { usePonderQuery } from "~~/hooks/usePonderQuery";
+import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 import { type PonderVoterStreak, ponderApi } from "~~/services/ponder/client";
 
 const EMPTY_STREAK: PonderVoterStreak = {
@@ -15,23 +18,38 @@ const EMPTY_STREAK: PonderVoterStreak = {
   nextMilestoneBaseBonus: null,
 };
 
+function normalizeAddress(address?: string) {
+  return address?.toLowerCase() ?? null;
+}
+
+export function getVoterStreakQueryKey(address?: string, chainId?: number, deploymentKey?: string | null) {
+  return ["ponder-fallback", "voterStreak", chainId ?? null, deploymentKey ?? null, normalizeAddress(address)] as const;
+}
+
 /**
  * Fetches daily voting streak data from Ponder API.
  */
 export function useVoterStreak(address?: string): PonderVoterStreak | null {
+  const { targetNetwork } = useTargetNetwork();
   const isPageVisible = usePageVisibility();
+  const normalizedAddress = normalizeAddress(address) ?? undefined;
+  const deployment = useMemo(() => resolveProtocolDeploymentScope(targetNetwork.id), [targetNetwork.id]);
 
   const { data } = usePonderQuery<PonderVoterStreak, PonderVoterStreak>({
-    queryKey: ["voterStreak", address],
+    queryKey: ["voterStreak", targetNetwork.id, deployment?.deploymentKey ?? null, normalizedAddress],
+    availabilityDeploymentKey: deployment?.deploymentKey,
     ponderFn: async () => {
-      if (!address) {
+      if (!normalizedAddress) {
         return EMPTY_STREAK;
       }
 
-      return ponderApi.getVoterStreak(address);
+      return ponderApi.getVoterStreak(normalizedAddress, {
+        chainId: targetNetwork.id,
+        deploymentKey: deployment?.deploymentKey,
+      });
     },
     rpcFn: async () => EMPTY_STREAK,
-    enabled: Boolean(address),
+    enabled: Boolean(normalizedAddress),
     staleTime: 30_000,
     refetchInterval: isPageVisible ? 60_000 : false,
   });

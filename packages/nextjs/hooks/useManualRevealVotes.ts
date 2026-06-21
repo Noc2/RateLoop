@@ -20,6 +20,7 @@ import { invalidateRecentUserVotes, useRecentUserVotes } from "~~/hooks/useRecen
 import { useUnixTime } from "~~/hooks/useUnixTime";
 import { getVoteHistoryQueryKey } from "~~/hooks/useVoteHistoryQuery";
 import { getVotingStakesQueryKey } from "~~/hooks/useVotingStakes";
+import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 import { getSubmittingTransactionMessage } from "~~/lib/ui/transactionStatusCopy";
 import type { PonderVoteItem } from "~~/services/ponder/client";
 import { CommitData } from "~~/types/votingTypes";
@@ -542,11 +543,13 @@ export function useManualRevealVotes(voter?: Address) {
   const waitingVotes = useMemo(() => votes.filter(vote => !vote.isReady), [votes]);
 
   const refresh = useCallback(async () => {
+    const deployment = resolveProtocolDeploymentScope(targetNetwork.id);
+    const deploymentKey = deployment?.deploymentKey ?? null;
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ["manualRevealVotesOnchain", targetNetwork.id, normalizedVoter] }),
-      invalidateRecentUserVotes(queryClient, voter, targetNetwork.id),
-      queryClient.invalidateQueries({ queryKey: getVotingStakesQueryKey(voter, targetNetwork.id) }),
-      queryClient.invalidateQueries({ queryKey: getVoteHistoryQueryKey(voter, targetNetwork.id) }),
+      invalidateRecentUserVotes(queryClient, voter, targetNetwork.id, deploymentKey),
+      queryClient.invalidateQueries({ queryKey: getVotingStakesQueryKey(voter, targetNetwork.id, deploymentKey) }),
+      queryClient.invalidateQueries({ queryKey: getVoteHistoryQueryKey(voter, targetNetwork.id, deploymentKey) }),
     ]);
   }, [normalizedVoter, queryClient, targetNetwork.id, voter]);
 

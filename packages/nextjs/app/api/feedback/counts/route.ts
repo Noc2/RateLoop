@@ -40,6 +40,7 @@ export async function GET(request: NextRequest) {
       ),
     );
     const counts = await listContentFeedbackCounts({
+      chainId: deployment.chainId,
       deploymentKey: deployment.deploymentKey,
       contentIds,
       contextByContentId: new Map(contextEntries),

@@ -1,8 +1,10 @@
 "use client";
 
+import { useMemo } from "react";
 import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import { usePageVisibility } from "~~/hooks/usePageVisibility";
 import { usePonderQuery } from "~~/hooks/usePonderQuery";
+import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 import { ponderApi } from "~~/services/ponder/client";
 
 interface VotingStakes {
@@ -20,8 +22,14 @@ function normalizeAddress(address?: string) {
   return address?.toLowerCase() ?? null;
 }
 
-export function getVotingStakesQueryKey(address?: string, chainId?: number) {
-  return ["ponder-fallback", "votingStakes", chainId ?? null, normalizeAddress(address)] as const;
+export function getVotingStakesQueryKey(address?: string, chainId?: number, deploymentKey?: string | null) {
+  return [
+    "ponder-fallback",
+    "votingStakes",
+    chainId ?? null,
+    deploymentKey ?? null,
+    normalizeAddress(address),
+  ] as const;
 }
 
 /**
@@ -32,11 +40,16 @@ export function useVotingStakes(address?: string): VotingStakes {
   const { targetNetwork } = useTargetNetwork();
   const isPageVisible = usePageVisibility();
   const normalizedAddress = normalizeAddress(address) ?? undefined;
+  const deployment = useMemo(() => resolveProtocolDeploymentScope(targetNetwork.id), [targetNetwork.id]);
   const { data: result } = usePonderQuery({
-    queryKey: ["votingStakes", targetNetwork.id, normalizedAddress],
+    queryKey: ["votingStakes", targetNetwork.id, deployment?.deploymentKey ?? null, normalizedAddress],
+    availabilityDeploymentKey: deployment?.deploymentKey,
     ponderFn: async () => {
       if (!normalizedAddress) return EMPTY;
-      const data = await ponderApi.getVotingStakes(normalizedAddress);
+      const data = await ponderApi.getVotingStakes(normalizedAddress, {
+        chainId: targetNetwork.id,
+        deploymentKey: deployment?.deploymentKey,
+      });
       const active = Number(data.activeStake) / 1e6;
       const count = data.activeCount;
       return { activeStaked: active, activeCount: count, totalVotingStake: active };
