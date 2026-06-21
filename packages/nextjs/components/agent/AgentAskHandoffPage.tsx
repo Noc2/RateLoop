@@ -70,6 +70,8 @@ import {
 import {
   DEFAULT_QUESTION_ROUND_CONFIG,
   DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS,
+  PURE_AGENT_FAST_QUESTION_ROUND_CONFIG,
+  PURE_AGENT_FAST_ROUND_PRESET_ID,
   QUESTION_ROUND_MAX_EPOCH_COUNT,
   type QuestionRoundConfigBounds,
   getQuestionRoundMaxDurationForEpoch,
@@ -722,6 +724,15 @@ function readFirstPositiveBigInt(source: JsonRecord | null, keys: string[], fall
   return fallback;
 }
 
+function normalizeRoundPreset(value: unknown) {
+  const rawValue = readString(value);
+  if (!rawValue) return "";
+  const normalized = rawValue.replace(/[-\s]+/g, "_").toLowerCase();
+  return normalized === PURE_AGENT_FAST_ROUND_PRESET_ID || normalized === "agent_fast"
+    ? PURE_AGENT_FAST_ROUND_PRESET_ID
+    : "";
+}
+
 function readQuestionRecords(handoff: Handoff | null): JsonRecord[] {
   const requestBody = handoff?.requestBody;
   if (!requestBody) return [];
@@ -1084,21 +1095,27 @@ function readRoundSettings(handoff: Handoff | null): RoundSettings {
     : isJsonRecord(firstQuestion?.roundConfig)
       ? firstQuestion.roundConfig
       : null;
+  const presetConfig =
+    !source &&
+    (normalizeRoundPreset(requestBody?.roundPreset) === PURE_AGENT_FAST_ROUND_PRESET_ID ||
+      normalizeRoundPreset(firstQuestion?.roundPreset) === PURE_AGENT_FAST_ROUND_PRESET_ID)
+      ? PURE_AGENT_FAST_QUESTION_ROUND_CONFIG
+      : DEFAULT_QUESTION_ROUND_CONFIG;
   const requiredVoters = readBountyRequiredVoters(handoff);
   const minVoters =
-    requiredVoters ?? readFirstPositiveBigInt(source, ["minVoters"], DEFAULT_QUESTION_ROUND_CONFIG.minVoters);
-  const maxVoters = readFirstPositiveBigInt(source, ["maxVoters"], DEFAULT_QUESTION_ROUND_CONFIG.maxVoters);
+    requiredVoters ?? readFirstPositiveBigInt(source, ["minVoters"], presetConfig.minVoters);
+  const maxVoters = readFirstPositiveBigInt(source, ["maxVoters"], presetConfig.maxVoters);
 
   return {
     epochDuration: readFirstPositiveBigInt(
       source,
       ["epochDuration", "blindPhaseSeconds", "blindSeconds"],
-      DEFAULT_QUESTION_ROUND_CONFIG.epochDuration,
+      presetConfig.epochDuration,
     ),
     maxDuration: readFirstPositiveBigInt(
       source,
       ["maxDuration", "maxDurationSeconds", "deadlineSeconds"],
-      DEFAULT_QUESTION_ROUND_CONFIG.maxDuration,
+      presetConfig.maxDuration,
     ),
     maxVoters: maxVoters < minVoters ? minVoters : maxVoters,
     minVoters,
@@ -1318,6 +1335,8 @@ async function applyDraftQuestion(
     tags,
     title,
   };
+  delete nextQuestion.roundConfig;
+  delete nextQuestion.roundPreset;
   const contextUrl = draft.contextUrl.trim();
   const videoUrl = draft.videoUrl.trim();
   const templateId = draft.templateId.trim();
@@ -1468,6 +1487,7 @@ async function buildDraftRequestBody(
     maxVoters: maxVoters.toString(),
     minVoters: minVoters.toString(),
   };
+  delete requestBody.roundPreset;
 
   if (Array.isArray(requestBody.questions)) {
     const nextQuestions = [];

@@ -10,6 +10,7 @@ import {
   questionRewardPoolClaim,
   rewardClaim,
 } from "ponder:schema";
+import { buildAllowedContentCondition } from "./moderation.js";
 
 type EarningsAssetFilter = "all" | "lrep" | "usdc";
 type EarningsSourceFilter = "all" | "bounty" | "feedback" | "round" | "launch";
@@ -78,6 +79,15 @@ interface EarningsLeaderboardItem extends ProfileEarningsSummary {
 
 const REWARD_ASSET_LREP = 0;
 const REWARD_ASSET_USDC = 1;
+
+const allowedJoinedContentCondition = buildAllowedContentCondition({
+  canonicalUrl: content.canonicalUrl,
+  description: content.description,
+  tags: content.tags,
+  title: content.title,
+  url: content.url,
+  urlHost: content.urlHost,
+});
 
 export function parseEarningsAssetFilter(value: string | undefined): EarningsAssetFilter | null {
   if (!value || value === "all") return "all";
@@ -311,7 +321,7 @@ export async function getRecentProfileEarnings(address: `0x${string}`, limit: nu
       .from(questionRewardPoolClaim)
       .innerJoin(questionRewardPool, eq(questionRewardPoolClaim.rewardPoolId, questionRewardPool.id))
       .innerJoin(content, eq(questionRewardPoolClaim.contentId, content.id))
-      .where(eq(questionRewardPoolClaim.claimant, address))
+      .where(and(eq(questionRewardPoolClaim.claimant, address), allowedJoinedContentCondition))
       .orderBy(desc(questionRewardPoolClaim.claimedAt))
       .limit(sourceLimit),
     db
@@ -355,7 +365,7 @@ export async function getRecentProfileEarnings(address: `0x${string}`, limit: nu
       })
       .from(feedbackBonusAward)
       .innerJoin(content, eq(feedbackBonusAward.contentId, content.id))
-      .where(eq(feedbackBonusAward.recipient, address))
+      .where(and(eq(feedbackBonusAward.recipient, address), allowedJoinedContentCondition))
       .orderBy(desc(feedbackBonusAward.awardedAt))
       .limit(sourceLimit),
     // Round rewards and launch-pool bonuses both live in rewardClaim. Launch rows often carry
@@ -385,6 +395,7 @@ export async function getRecentProfileEarnings(address: `0x${string}`, limit: nu
           eq(rewardClaim.voter, address),
           sql`${rewardClaim.source} in ('round', 'launch')`,
           sql`${rewardClaim.lrepReward} > 0`,
+          allowedJoinedContentCondition,
         ),
       )
       .orderBy(desc(rewardClaim.claimedAt))
