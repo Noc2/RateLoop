@@ -9,10 +9,10 @@ import {
   PRODUCTION_REDEPLOY_CONFIRMATION_ENV,
   buildDeploymentProfileEnv,
   buildDeployFlowFlags,
-  getProductionDeployChainId,
   isProductionDeployNetwork,
   isSlowBroadcastNetwork,
   parseDeployArgs,
+  readProductionDeploymentArtifact,
   resolveEtherscanVerification,
   validateProductionRedeployConfirmation,
 } from "./deployArgs.js";
@@ -89,36 +89,23 @@ function clearKeystoreEnvForLocalDeploy() {
   delete process.env.ETH_PASSWORD;
 }
 
-function readProductionDeploymentArtifact(networkName) {
-  const chainId = getProductionDeployChainId(networkName);
-  if (!chainId) return null;
-
-  const deploymentPath = join(
-    __dirname,
-    "..",
-    "deployments",
-    `${chainId}.json`,
-  );
-  if (!existsSync(deploymentPath)) {
-    return null;
-  }
-
-  return JSON.parse(readFileSync(deploymentPath, "utf-8"));
-}
-
 function validateProductionDeployGuard() {
   if (!isProductionDeployNetwork(network)) {
     return;
   }
 
   try {
+    const confirmation =
+      productionRedeployConfirmation ??
+      process.env[PRODUCTION_REDEPLOY_CONFIRMATION_ENV];
     validateProductionRedeployConfirmation({
       network,
       deploymentJson: readProductionDeploymentArtifact(network),
-      confirmation:
-        productionRedeployConfirmation ??
-        process.env[PRODUCTION_REDEPLOY_CONFIRMATION_ENV],
+      confirmation,
     });
+    if (confirmation) {
+      process.env[PRODUCTION_REDEPLOY_CONFIRMATION_ENV] = confirmation;
+    }
   } catch (error) {
     console.error(`\n❌ Error: ${error.message}`);
     process.exit(1);

@@ -87,17 +87,30 @@ const targetNetworkIds = targetNetworks.map(network => network.id);
 const deployedContractsByChain = deployedContracts as Record<number, Record<string, unknown> | undefined>;
 const missingDeployments = targetNetworkIds.filter(chainId => deployedContractsByChain[chainId] === undefined);
 
+function deploymentMetadataRecoveryHint(chainIds: number[]) {
+  if (chainIds.includes(8453)) {
+    return "For Base mainnet, restore the existing production deployment metadata/contracts package and run yarn base-mainnet:check. For staging or new networks, deploy contracts before enabling them.";
+  }
+
+  return "For staging or new networks, deploy contracts before enabling them.";
+}
+
 if (missingDeployments.length > 0) {
   throw new Error(
-    `Missing deployed contract definitions for chain IDs: ${missingDeployments.join(", ")}. Run yarn deploy for those chains before enabling them.`,
+    `Missing deployed contract definitions for chain IDs: ${missingDeployments.join(", ")}. ${deploymentMetadataRecoveryHint(missingDeployments)}`,
   );
 }
 
 const missingRequiredContracts = listMissingRequiredTargetContracts(targetNetworkIds, deployedContractsByChain);
 
 if (missingRequiredContracts.length > 0) {
+  const missingContractChainIds = [
+    ...new Set(
+      missingRequiredContracts.map(entry => Number(entry.split(":")[0])).filter(chainId => Number.isInteger(chainId)),
+    ),
+  ];
   throw new Error(
-    `Missing required deployed contract definitions for target networks: ${missingRequiredContracts.join(", ")}. Run yarn deploy for those chains before enabling them.`,
+    `Missing required deployed contract definitions for target networks: ${missingRequiredContracts.join(", ")}. ${deploymentMetadataRecoveryHint(missingContractChainIds)}`,
   );
 }
 

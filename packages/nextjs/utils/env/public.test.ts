@@ -115,3 +115,11 @@ test("public env source no longer exposes an undeployed-network bypass", () => {
     assert.doesNotMatch(source, /NEXT_PUBLIC_ALLOW_UNDEPLOYED_TARGET_NETWORKS/);
   }
 });
+
+test("public env production metadata guidance avoids routine Base mainnet redeploys", () => {
+  const publicEnvSource = readFileSync(new URL("./public.ts", import.meta.url), "utf8");
+
+  assert.match(publicEnvSource, /restore the existing production deployment metadata\/contracts package/);
+  assert.match(publicEnvSource, /yarn base-mainnet:check/);
+  assert.doesNotMatch(publicEnvSource, /Run yarn deploy for those chains before enabling them/);
+});

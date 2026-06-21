@@ -107,6 +107,14 @@ const activeNetwork = getActiveNetwork();
 const activeChainId = NETWORKS[activeNetwork].chainId;
 let warnedAboutHardhatStartBlocks = false;
 
+function sharedDeploymentRecoveryHint() {
+  if (activeChainId === 8453) {
+    return "Restore the existing Base mainnet deployment artifact/contracts package and run `yarn base-mainnet:check` before starting Ponder.";
+  }
+
+  return "For staging or new networks, run `yarn deploy --network <network>` to refresh shared deployments before starting Ponder.";
+}
+
 function readEnv(key: string): string | undefined {
   const value = process.env[key]?.trim();
   return value ? value : undefined;
@@ -204,7 +212,7 @@ function resolveAddress(key: string, contractName: string): `0x${string}` {
     }
 
     throw new Error(
-      `Missing ${key}. Run \`yarn deploy --network <network>\` to sync Ponder addresses for ${activeNetwork}.`,
+      `Missing ${key}. ${sharedDeploymentRecoveryHint()}`,
     );
   }
 
@@ -231,7 +239,7 @@ function resolveAddress(key: string, contractName: string): `0x${string}` {
    * The frontend, keeper, and indexer must agree on the same shared deployment artifacts.
    */
   throw new Error(
-    `Missing shared deployment artifact for ${contractName} on chain ${activeChainId}. Run \`yarn deploy --network <network>\` to refresh shared deployments before starting Ponder for ${activeNetwork}.`,
+    `Missing shared deployment artifact for ${contractName} on chain ${activeChainId}. ${sharedDeploymentRecoveryHint()}`,
   );
 }
 
@@ -281,7 +289,7 @@ function resolveOptionalAddress(
   if (sharedAddress) return sharedAddress;
 
   throw new Error(
-    `Missing optional shared deployment artifact for ${contractName} on chain ${activeChainId}. Run \`yarn deploy --network <network>\` to refresh shared deployments before starting Ponder for ${activeNetwork}.`,
+    `Missing optional shared deployment artifact for ${contractName} on chain ${activeChainId}. ${sharedDeploymentRecoveryHint()}`,
   );
 }
 

@@ -291,7 +291,32 @@ describe("ponder config", () => {
         PONDER_NETWORK: "baseSepolia",
         PONDER_RPC_URL_84532: "https://sepolia.base.org",
       }),
-    ).rejects.toThrow("Missing shared deployment artifact for ContentRegistry on chain 84532");
+    ).rejects.toThrow(
+      /Missing shared deployment artifact for ContentRegistry on chain 84532.*yarn deploy --network <network>/,
+    );
+  }, PONDER_CONFIG_TEST_TIMEOUT_MS);
+
+  it("points missing Base mainnet artifacts at restoration instead of routine redeploy", async () => {
+    vi.doMock("@rateloop/contracts/deployments", async importOriginal => {
+      const actual = await importOriginal<typeof DeploymentsModule>();
+
+      return {
+        ...actual,
+        getSharedDeploymentAddress: (chainId: number, contractName: string) =>
+          chainId === 8453 ? undefined : actual.getSharedDeploymentAddress(chainId, contractName),
+        getSharedDeploymentStartBlock: (chainId: number, contractName: string) =>
+          chainId === 8453 ? undefined : actual.getSharedDeploymentStartBlock(chainId, contractName),
+      };
+    });
+
+    await expect(
+      loadPonderConfig({
+        PONDER_NETWORK: "base",
+        PONDER_RPC_URL_8453: "https://mainnet.base.org",
+      }),
+    ).rejects.toThrow(
+      /Missing shared deployment artifact for ContentRegistry on chain 8453.*Restore the existing Base mainnet deployment artifact.*yarn base-mainnet:check/,
+    );
   }, PONDER_CONFIG_TEST_TIMEOUT_MS);
 
   it("treats blank live RPC placeholders as unset in non-production", async () => {

@@ -13,8 +13,9 @@ Cross-package reference for env names that refer to the same on-chain value, E2E
 | `31337`  | Local Foundry / Anvil | gitignored local deploy                   | local        |
 
 `packages/nextjs/.env.production` targets `NEXT_PUBLIC_TARGET_NETWORKS=8453` for the Base mainnet production
-deployment. Base Sepolia validation should override the target to `84532` explicitly; CI uses
-`docs/testing/base-sepolia-next-env.fixture` via `BASE_SEPOLIA_NEXT_ENV_FILE` for that offline readiness check.
+deployment. Base Sepolia validation should override the target to `84532` explicitly; the bare
+`yarn base-sepolia:check` command defaults to `docs/testing/base-sepolia-next-env.fixture` for that offline
+readiness check, and `BASE_SEPOLIA_NEXT_ENV_FILE` can point at a different staging env file when needed.
 
 ## USDC address aliases
 

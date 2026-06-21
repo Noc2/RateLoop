@@ -16,7 +16,9 @@ import {
 } from "./check-worldchain-sepolia-readiness.mjs";
 import {
   BASE_SEPOLIA_READINESS_CONFIG,
+  DEFAULT_BASE_SEPOLIA_NEXT_ENV_FILE,
   baseSepoliaNotDeployedMessage,
+  resolveBaseSepoliaNextEnvFilePath,
   validateBaseSepoliaOfflineReadiness,
 } from "./check-base-sepolia-readiness.mjs";
 
@@ -273,6 +275,19 @@ test("validateBaseSepoliaOfflineReadiness accepts a staging app env that targets
 
   assert.equal(result.ok, true);
   assert.deepEqual(result.failures, []);
+});
+
+test("Base Sepolia readiness defaults to the committed staging env fixture", () => {
+  assert.equal(
+    resolveBaseSepoliaNextEnvFilePath({}),
+    DEFAULT_BASE_SEPOLIA_NEXT_ENV_FILE,
+  );
+  assert.equal(
+    resolveBaseSepoliaNextEnvFilePath({
+      BASE_SEPOLIA_NEXT_ENV_FILE: "custom.env",
+    }),
+    "custom.env",
+  );
 });
 
 test("validateBaseSepoliaOfflineReadiness rejects a staging app env that targets Base mainnet", () => {

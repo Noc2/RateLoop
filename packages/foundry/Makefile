@@ -1,4 +1,4 @@
-.PHONY: build deploy deploy-and-generate-abis generate-abis get-address account chain compile compile-all flatten fork format lint test verify verify-blockscout slither aderyn certora certora-check certora-mutate coverage check-contract-sizes check-storage-layouts snapshot-storage-layouts
+.PHONY: build guard-production-deploy deploy deploy-and-generate-abis generate-abis get-address account chain compile compile-all flatten fork format lint test verify verify-blockscout slither aderyn certora certora-check certora-mutate coverage check-contract-sizes check-storage-layouts snapshot-storage-layouts
 
 TEST_ARGS ?=
 COVERAGE_ARGS ?=
@@ -23,6 +23,9 @@ fork: setup-anvil-wallet
 	anvil --fork-url ${FORK_URL} --chain-id 31337 $(LOCALHOST_EVM_SIZE_FLAGS)
 
 # Deploy the contracts
+guard-production-deploy:
+	@node scripts-js/checkProductionDeployGuard.js
+
 deploy:
 	@if [ ! -f "script/Deploy.s.sol" ]; then \
 		echo "Error: Deploy script 'script/Deploy.s.sol' not found"; \
@@ -32,6 +35,7 @@ deploy:
 		env -u ETH_KEYSTORE_ACCOUNT -u ETH_KEYSTORE -u ETH_PASSWORD \
 			FOUNDRY_PROFILE=$(DEPLOY_PROFILE) forge script script/Deploy.s.sol --tc DeployScript --rpc-url localhost --private-key $(LOCALHOST_DEPLOYER_PRIVATE_KEY) --broadcast --ffi --slow --non-interactive $(LOCALHOST_EVM_SIZE_FLAGS) $(RESUME_FLAG); \
 	else \
+		$(MAKE) guard-production-deploy || exit 1; \
 		FOUNDRY_PROFILE=$(DEPLOY_PROFILE) forge script script/Deploy.s.sol --tc DeployScript --rpc-url $(RPC_URL) --account $(ETH_KEYSTORE_ACCOUNT) --broadcast --ffi --gas-estimate-multiplier 200 $(DEPLOY_SCRIPT_IGNORED_ERROR_CODE_FLAGS) --non-interactive $(DEPLOY_FLOW_FLAGS) $(RESUME_FLAG) $(VERIFY_FLAGS); \
 	fi
 
@@ -41,7 +45,7 @@ deploy:
 # is invoked with parallel jobs, `generate-abis` must still wait for the fresh
 # broadcast/deployments JSON written by `deploy`. Rebuild the shared package so
 # consumers that import package exports see the regenerated deployment metadata.
-deploy-and-generate-abis: check-contract-sizes
+deploy-and-generate-abis: guard-production-deploy check-contract-sizes
 	$(MAKE) deploy
 	node scripts-js/exportDeploymentFromBroadcast.js
 	$(MAKE) generate-abis

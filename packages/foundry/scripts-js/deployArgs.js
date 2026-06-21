@@ -1,3 +1,7 @@
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
 export const DEPLOY_HELP_TEXT = `
 Usage: yarn deploy [options]
 Options:
@@ -41,6 +45,7 @@ export const PRODUCTION_REDEPLOY_CONFIRMATION_ENV =
 export const PRODUCTION_DEPLOYMENT_PROFILE = "production";
 export const DEFAULT_DEPLOYMENT_PROFILE = "default";
 const ENV_INTERPOLATION_RE = /^\$\{([A-Z0-9_]+)\}$/;
+const foundryPackageRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 function readOptionValue(args, index, optionName) {
   const value = args[index + 1];
@@ -205,6 +210,17 @@ export function isProductionDeployNetwork(network) {
 
 export function getProductionDeployChainId(network) {
   return PRODUCTION_DEPLOY_CHAIN_IDS[network] ?? null;
+}
+
+export function readProductionDeploymentArtifact(network, rootDir = foundryPackageRoot) {
+  const chainId = getProductionDeployChainId(network);
+  if (!chainId) return null;
+  const deploymentPath = join(rootDir, "deployments", `${chainId}.json`);
+  if (!existsSync(deploymentPath)) {
+    return null;
+  }
+
+  return JSON.parse(readFileSync(deploymentPath, "utf8"));
 }
 
 export function buildProductionRedeployConfirmationToken({

@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
   DEFAULT_DEPLOYMENT_PROFILE,
@@ -13,6 +14,7 @@ import {
   buildProductionRedeployConfirmationToken,
   isSlowBroadcastNetwork,
   parseDeployArgs,
+  readProductionDeploymentArtifact,
   resolveEtherscanVerification,
   validateProductionRedeployConfirmation,
 } from "./deployArgs.js";
@@ -20,6 +22,10 @@ import {
 const parseArgsScript = fileURLToPath(
   new URL("./parseArgs.js", import.meta.url),
 );
+const checkProductionDeployGuardScript = fileURLToPath(
+  new URL("./checkProductionDeployGuard.js", import.meta.url),
+);
+const makefilePath = fileURLToPath(new URL("../Makefile", import.meta.url));
 
 test("parseDeployArgs returns defaults with no options", () => {
   assert.deepEqual(parseDeployArgs([]), {
@@ -297,6 +303,73 @@ test("deploy wrapper rejects production redeploys before keystore selection", ()
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /production contracts are already deployed/);
   assert.doesNotMatch(result.stdout, /Keystore/);
+});
+
+test("direct make deploy guard rejects production redeploys without confirmation", () => {
+  const result = spawnSync(process.execPath, [checkProductionDeployGuardScript], {
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      DEPLOY_TARGET_NETWORK: "base",
+      RPC_URL: "https://base.example.invalid",
+    },
+  });
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /production contracts are already deployed/);
+});
+
+test("direct make deploy guard accepts the current production artifact token", () => {
+  const deployment = readProductionDeploymentArtifact("base");
+  const token = buildProductionRedeployConfirmationToken({
+    chainId: 8453,
+    deploymentBlockNumber: deployment.deploymentBlockNumber,
+  });
+  const result = spawnSync(process.execPath, [checkProductionDeployGuardScript], {
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      DEPLOY_TARGET_NETWORK: "base",
+      RATELOOP_CONFIRM_PRODUCTION_REDEPLOY: token,
+      RPC_URL: "https://base.example.invalid",
+    },
+  });
+
+  assert.equal(result.status, 0);
+});
+
+test("direct make deploy guard rejects raw live RPC URLs without target network", () => {
+  const result = spawnSync(process.execPath, [checkProductionDeployGuardScript], {
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      DEPLOY_TARGET_NETWORK: "",
+      RPC_URL: "https://base.example.invalid",
+    },
+  });
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /Refusing live make deploy without DEPLOY_TARGET_NETWORK/);
+});
+
+test("direct make deploy guard allows explicit staging targets", () => {
+  const result = spawnSync(process.execPath, [checkProductionDeployGuardScript], {
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      DEPLOY_TARGET_NETWORK: "baseSepolia",
+      RPC_URL: "https://base-sepolia.example.invalid",
+    },
+  });
+
+  assert.equal(result.status, 0);
+});
+
+test("Make live deploys run the production guard before Forge work", () => {
+  const makefile = readFileSync(makefilePath, "utf8");
+  assert.match(makefile, /guard-production-deploy:\n\t@node scripts-js\/checkProductionDeployGuard\.js/);
+  assert.match(makefile, /deploy-and-generate-abis: guard-production-deploy check-contract-sizes/);
+  assert.match(makefile, /\$\(MAKE\) guard-production-deploy \|\| exit 1; \\\n\t\tFOUNDRY_PROFILE=.*forge script/s);
 });
 
 test("resolveEtherscanVerification skips when the required API key env is missing", () => {

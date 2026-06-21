@@ -10,6 +10,8 @@ import {
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = dirname(scriptDir);
+export const DEFAULT_BASE_SEPOLIA_NEXT_ENV_FILE =
+  "docs/testing/base-sepolia-next-env.fixture";
 
 export const BASE_SEPOLIA_READINESS_CONFIG = {
   appEnvName: "BASE_SEPOLIA_APP_URL",
@@ -68,12 +70,16 @@ function readOptionalEnvFile(root, filePath) {
   return readFileSync(resolvedPath, "utf8");
 }
 
+export function resolveBaseSepoliaNextEnvFilePath(env = process.env) {
+  return env.BASE_SEPOLIA_NEXT_ENV_FILE?.trim() || DEFAULT_BASE_SEPOLIA_NEXT_ENV_FILE;
+}
+
 function loadBaseSepoliaOfflineInputs(root = repoRoot) {
   return {
     ...loadOfflineInputs(root, BASE_SEPOLIA_READINESS_CONFIG),
     appEnvSource: readOptionalEnvFile(
       root,
-      process.env.BASE_SEPOLIA_NEXT_ENV_FILE,
+      resolveBaseSepoliaNextEnvFilePath(),
     ),
   };
 }
@@ -88,7 +94,7 @@ export function validateBaseSepoliaOfflineReadiness(inputs) {
   addCheck(
     result,
     appEnvSource.trim().length > 0,
-    "Base Sepolia Next.js env source is configured via BASE_SEPOLIA_NEXT_ENV_FILE",
+    "Base Sepolia Next.js env source is configured",
   );
   addCheck(
     result,
