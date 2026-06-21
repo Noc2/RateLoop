@@ -38,7 +38,15 @@ test("getClaimableQuestionRewardsQueryKey keeps linked claim discovery scoped by
       "claimableQuestionRewards",
       "0xabcdef0000000000000000000000000000000001,0xabcdef0000000000000000000000000000000002",
       480,
+      null,
     ],
+  );
+});
+
+test("getClaimableQuestionRewardsQueryKey scopes linked claim discovery by deployment key", () => {
+  assert.deepEqual(
+    getClaimableQuestionRewardsQueryKey(["0xabcdef0000000000000000000000000000000001"], 8453, "base-mainnet"),
+    ["claimableQuestionRewards", "0xabcdef0000000000000000000000000000000001", 8453, "base-mainnet"],
   );
 });
 
