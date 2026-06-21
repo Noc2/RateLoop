@@ -9,6 +9,8 @@ export const content = onchainTable(
   (t) => ({
     id: t.bigint().primaryKey(),
     submitter: t.hex().notNull(),
+    submitterIdentity: t.hex(),
+    submitterIdentityKey: t.hex(),
     contentHash: t.hex().notNull(),
     questionMetadataHash: t.hex(),
     questionMetadata: t.text(),
@@ -75,6 +77,8 @@ export const content = onchainTable(
   }),
   (table) => ({
     submitterIdx: index().on(table.submitter),
+    submitterIdentityIdx: index().on(table.submitterIdentity),
+    submitterIdentityKeyIdx: index().on(table.submitterIdentityKey),
     categoryIdx: index().on(table.categoryId),
     bundleIdx: index().on(table.bundleId),
     targetAudienceAgeGroupsIdx: index().on(table.targetAudienceAgeGroups),

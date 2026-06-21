@@ -15,6 +15,9 @@ const handlers = new Map<string, RegisteredHandler>();
 const REGISTRY_ADDRESS = "0x000000000000000000000000000000000000c0de";
 const VALIDATOR_ADDRESS = "0x000000000000000000000000000000000000beef";
 const SUBMITTER_ADDRESS = "0x0000000000000000000000000000000000000001";
+const SUBMITTER_IDENTITY_ADDRESS =
+  "0x00000000000000000000000000000000000000aa";
+const SUBMITTER_IDENTITY_KEY = `0x${"4".repeat(64)}`;
 const CONTENT_REGISTRY_ABI = vi.hoisted(
   () =>
     [
@@ -42,6 +45,32 @@ const CONTENT_REGISTRY_ABI = vi.hoisted(
           { name: "questionMetadataHash", type: "bytes32", indexed: false },
           { name: "resultSpecHash", type: "bytes32", indexed: false },
         ],
+      },
+      {
+        type: "function",
+        name: "contentSubmitterIdentityKey",
+        stateMutability: "view",
+        inputs: [{ name: "", type: "uint256" }],
+        outputs: [{ name: "", type: "bytes32" }],
+      },
+      {
+        type: "function",
+        name: "getContentRoundConfig",
+        stateMutability: "view",
+        inputs: [{ name: "contentId", type: "uint256" }],
+        outputs: [
+          { name: "epochDuration", type: "uint32" },
+          { name: "maxDuration", type: "uint32" },
+          { name: "minVoters", type: "uint16" },
+          { name: "maxVoters", type: "uint16" },
+        ],
+      },
+      {
+        type: "function",
+        name: "getSubmitterIdentity",
+        stateMutability: "view",
+        inputs: [{ name: "", type: "uint256" }],
+        outputs: [{ name: "", type: "address" }],
       },
       {
         type: "function",
@@ -242,6 +271,40 @@ function questionContentAnchoredLog(params: {
   };
 }
 
+function createContentRegistryReadContract(
+  options: {
+    roundConfig?: {
+      epochDuration: number;
+      maxDuration: number;
+      minVoters: number;
+      maxVoters: number;
+    };
+    submissionMediaValidator?: string;
+    submitterIdentity?: string;
+    submitterIdentityKey?: string;
+  } = {},
+) {
+  return vi.fn(async ({ functionName }: { functionName: string }) => {
+    if (functionName === "contentSubmitterIdentityKey") {
+      return options.submitterIdentityKey ?? SUBMITTER_IDENTITY_KEY;
+    }
+    if (functionName === "getSubmitterIdentity") {
+      return options.submitterIdentity ?? SUBMITTER_IDENTITY_ADDRESS;
+    }
+    if (functionName === "submissionMediaValidator") {
+      return options.submissionMediaValidator ?? VALIDATOR_ADDRESS;
+    }
+    return (
+      options.roundConfig ?? {
+        epochDuration: 600,
+        maxDuration: 7200,
+        minVoters: 5,
+        maxVoters: 50,
+      }
+    );
+  });
+}
+
 async function loadHandlers() {
   handlers.clear();
   await import("../src/ContentRegistry.js");
@@ -257,12 +320,7 @@ afterEach(() => {
 describe("ContentRegistry ponder handlers", () => {
   it("indexes selected round config when content is submitted", async () => {
     const { db, insertCalls } = createDb();
-    const readContract = vi.fn(async () => ({
-      epochDuration: 600,
-      maxDuration: 7200,
-      minVoters: 5,
-      maxVoters: 50,
-    }));
+    const readContract = createContentRegistryReadContract();
 
     const registeredHandlers = await loadHandlers();
     const handler = registeredHandlers.get("ContentRegistry:ContentSubmitted");
@@ -302,11 +360,25 @@ describe("ContentRegistry ponder handlers", () => {
       args: [7n],
       functionName: "getContentRoundConfig",
     });
+    expect(readContract).toHaveBeenCalledWith({
+      abi: CONTENT_REGISTRY_ABI,
+      address: REGISTRY_ADDRESS,
+      args: [7n],
+      functionName: "getSubmitterIdentity",
+    });
+    expect(readContract).toHaveBeenCalledWith({
+      abi: CONTENT_REGISTRY_ABI,
+      address: REGISTRY_ADDRESS,
+      args: [7n],
+      functionName: "contentSubmitterIdentityKey",
+    });
     expect(insertCalls).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           table: "content",
           values: expect.objectContaining({
+            submitterIdentity: SUBMITTER_IDENTITY_ADDRESS,
+            submitterIdentityKey: SUBMITTER_IDENTITY_KEY,
             roundEpochDuration: 600,
             roundMaxDuration: 7200,
             roundMinVoters: 5,
@@ -371,17 +443,7 @@ describe("ContentRegistry ponder handlers", () => {
     const { db, insertCalls, updateCalls } = createDb();
     const imageUrl =
       "https://www.rateloop.ai/api/attachments/images/att_abcdefghijklmnop.webp#sha256=0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
-    const readContract = vi.fn(
-      async ({ functionName }: { functionName: string }) =>
-        functionName === "submissionMediaValidator"
-          ? VALIDATOR_ADDRESS
-          : {
-              epochDuration: 600,
-              maxDuration: 7200,
-              minVoters: 5,
-              maxVoters: 50,
-            },
-    );
+    const readContract = createContentRegistryReadContract();
     const getTransactionReceipt = vi.fn(async () => ({
       logs: [
         contentSubmittedLog(7n, 10),
@@ -483,12 +545,7 @@ describe("ContentRegistry ponder handlers", () => {
         },
       },
     );
-    const readContract = vi.fn(async () => ({
-      epochDuration: 600,
-      maxDuration: 7200,
-      minVoters: 5,
-      maxVoters: 50,
-    }));
+    const readContract = createContentRegistryReadContract();
     const registeredHandlers = await loadHandlers();
     const handler = registeredHandlers.get("ContentRegistry:ContentSubmitted");
 
@@ -631,12 +688,7 @@ describe("ContentRegistry ponder handlers", () => {
 
   it("applies bundle links that arrive before content submission", async () => {
     const { db, insertCalls, updateCalls } = createDb(null);
-    const readContract = vi.fn(async () => ({
-      epochDuration: 600,
-      maxDuration: 7200,
-      minVoters: 5,
-      maxVoters: 50,
-    }));
+    const readContract = createContentRegistryReadContract();
     const registeredHandlers = await loadHandlers();
     const linkHandler = registeredHandlers.get(
       "ContentRegistry:QuestionBundleContentLinked",

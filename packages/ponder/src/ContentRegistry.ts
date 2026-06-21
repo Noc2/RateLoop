@@ -65,6 +65,31 @@ async function readContentRoundConfigAtEventBlock(
   });
 }
 
+async function readContentSubmitterIdentityAtEventBlock(
+  context: Parameters<Parameters<typeof ponder.on>[1]>[0]["context"],
+  contentId: bigint,
+) {
+  const [submitterIdentity, submitterIdentityKey] = await Promise.all([
+    context.client.readContract({
+      abi: ContentRegistryAbi,
+      address: contentRegistryAddress(context),
+      functionName: "getSubmitterIdentity",
+      args: [contentId],
+    }),
+    context.client.readContract({
+      abi: ContentRegistryAbi,
+      address: contentRegistryAddress(context),
+      functionName: "contentSubmitterIdentityKey",
+      args: [contentId],
+    }),
+  ]);
+
+  return {
+    submitterIdentity: submitterIdentity.toLowerCase() as `0x${string}`,
+    submitterIdentityKey: submitterIdentityKey.toLowerCase() as `0x${string}`,
+  };
+}
+
 async function readSubmissionMediaValidatorAddress(
   context: Parameters<Parameters<typeof ponder.on>[1]>[0]["context"],
 ) {
@@ -249,20 +274,19 @@ ponder.on("ContentRegistry:ContentSubmitted", async ({ event, context }) => {
     categoryId,
   } = event.args;
   const canonicalUrl = getCanonicalUrlParts(url);
-  const roundConfig = await readContentRoundConfigAtEventBlock(
-    context,
-    contentId,
-  );
-  const bundleQuestion = await findBundleQuestionByContentId(
-    context,
-    contentId,
-  );
+  const [roundConfig, submitterIdentity, bundleQuestion] = await Promise.all([
+    readContentRoundConfigAtEventBlock(context, contentId),
+    readContentSubmitterIdentityAtEventBlock(context, contentId),
+    findBundleQuestionByContentId(context, contentId),
+  ]);
 
   await context.db
     .insert(content)
     .values({
       id: contentId,
       submitter,
+      submitterIdentity: submitterIdentity.submitterIdentity,
+      submitterIdentityKey: submitterIdentity.submitterIdentityKey,
       contentHash,
       gated: false,
       confidentialityBondAmount: 0n,

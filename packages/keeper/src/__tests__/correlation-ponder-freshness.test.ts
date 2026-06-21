@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ROUND_STATE } from "@rateloop/contracts/protocol";
-import { PAYOUT_DOMAIN_PUBLIC_RATING, PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD } from "@rateloop/node-utils/correlationScoring";
+import {
+  PAYOUT_DOMAIN_LAUNCH_CREDIT,
+  PAYOUT_DOMAIN_PUBLIC_RATING,
+  PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD,
+} from "@rateloop/node-utils/correlationScoring";
 
 const mockReadRound = vi.fn();
 const mockConfig = {
@@ -213,6 +217,48 @@ describe("areCorrelationCandidatesPonderFresh", () => {
     expect(
       fetchMock.mock.calls.some(call => String(call[0]).includes("/correlation/bundle-round-votes")),
     ).toBe(true);
+  });
+
+  it("logs Ponder launch drift conflicts with the 409 reason", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes("/correlation/launch-round-votes")) {
+        return new Response(
+          JSON.stringify({
+            error:
+              "Identity ban state changed after a pending credit was recorded; use a manually verified artifact.",
+            reason: "launch_identity_ban_drift",
+          }),
+          { status: 409, headers: { "content-type": "application/json" } },
+        );
+      }
+      return mockRoundSnapshot("1", "1");
+    });
+    mockReadRound.mockResolvedValue({
+      state: ROUND_STATE.Settled,
+      revealedCount: 1n,
+      voteCount: 1n,
+    });
+
+    const { areCorrelationCandidatesPonderFresh } = await import("../correlation-ponder-freshness.js");
+    const logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    const fresh = await areCorrelationCandidatesPonderFresh(
+      {} as never,
+      [{ domain: PAYOUT_DOMAIN_LAUNCH_CREDIT, rewardPoolId: 0n, contentId: 9n, roundId: 2n }],
+      logger,
+    );
+
+    expect(fresh).toBe(false);
+    expect(logger.warn).toHaveBeenCalledWith(
+      "Deferring correlation artifact build because Ponder rejected correlation-eligible vote reconstruction",
+      expect.objectContaining({
+        contentId: "9",
+        domain: PAYOUT_DOMAIN_LAUNCH_CREDIT,
+        ponderReason: "launch_identity_ban_drift",
+        ponderStatus: 409,
+        roundId: "2",
+      }),
+    );
   });
 
   it("uses rating-round-votes for public-rating candidates without rewardPoolId", async () => {

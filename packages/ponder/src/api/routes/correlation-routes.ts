@@ -9,7 +9,7 @@ import {
   PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD,
   PAYOUT_DOMAIN_QUESTION_REWARD,
 } from "@rateloop/node-utils/correlationScoring";
-import { encodeAbiParameters, keccak256, zeroHash } from "viem";
+import { encodeAbiParameters, keccak256, zeroAddress, zeroHash } from "viem";
 import { and, asc, desc, eq, inArray, or, sql } from "ponder";
 import { db } from "ponder:api";
 import {
@@ -57,9 +57,16 @@ const BASE_RATE_MAX_BPS = 9500;
 const BASE_RATE_NEUTRAL_BPS = 5000;
 
 const HEX32_PATTERN = /^0x[a-fA-F0-9]{64}$/;
+const ADDRESS_PATTERN = /^0x[a-fA-F0-9]{40}$/;
 
 function normalizeHex32(value: unknown): `0x${string}` | null {
   return typeof value === "string" && HEX32_PATTERN.test(value)
+    ? (value.toLowerCase() as `0x${string}`)
+    : null;
+}
+
+function normalizeAddress(value: unknown): `0x${string}` | null {
+  return typeof value === "string" && ADDRESS_PATTERN.test(value)
     ? (value.toLowerCase() as `0x${string}`)
     : null;
 }
@@ -112,7 +119,11 @@ type ActiveCorrelationIdentityBanState = {
   addressIdentityKeys: Set<string>;
   identityKeys: Set<string>;
   launchIdentityKeys: Set<string>;
-  latestUpdatedAt: bigint | null;
+};
+
+type CorrelationIdentityBanSource = {
+  provider: number;
+  nullifierHash: `0x${string}`;
 };
 
 async function loadActiveCorrelationIdentityBanState(
@@ -122,7 +133,6 @@ async function loadActiveCorrelationIdentityBanState(
     .select({
       provider: raterIdentityBan.provider,
       nullifierHash: raterIdentityBan.nullifierHash,
-      updatedAt: raterIdentityBan.updatedAt,
     })
     .from(raterIdentityBan)
     .where(
@@ -140,11 +150,7 @@ async function loadActiveCorrelationIdentityBanState(
   const sourceKeys = new Set<string>();
   const nullifierHashes: `0x${string}`[] = [];
   const seenNullifierHashes = new Set<string>();
-  let latestUpdatedAt: bigint | null = null;
   for (const ban of activeBans) {
-    if (latestUpdatedAt === null || ban.updatedAt > latestUpdatedAt) {
-      latestUpdatedAt = ban.updatedAt;
-    }
     const nullifierHash = normalizeHex32(ban.nullifierHash);
     if (nullifierHash === null) continue;
     const provider = Number(ban.provider);
@@ -186,7 +192,64 @@ async function loadActiveCorrelationIdentityBanState(
     }
   }
 
-  return { addressIdentityKeys, identityKeys, launchIdentityKeys, latestUpdatedAt };
+  return { addressIdentityKeys, identityKeys, launchIdentityKeys };
+}
+
+function collectLaunchIdentityBanSources(
+  credits: readonly LaunchCreditRow[],
+  anchors: readonly LaunchAnchorVoteRow[],
+) {
+  const sources: CorrelationIdentityBanSource[] = [];
+  const seen = new Set<string>();
+  const addSource = (
+    provider: number | null | undefined,
+    value: `0x${string}` | null | undefined,
+  ) => {
+    if (provider === null || provider === undefined) return;
+    const nullifierHash = normalizeHex32(value);
+    if (nullifierHash === null || nullifierHash === zeroHash) return;
+    const key = identityBanSourceKey(provider, nullifierHash);
+    if (seen.has(key)) return;
+    seen.add(key);
+    sources.push({ provider, nullifierHash });
+  };
+
+  for (const credit of credits) {
+    addSource(credit.raterCredentialProvider, credit.raterCredentialNullifierHash);
+  }
+  for (const anchor of anchors) {
+    addSource(anchor.provider, anchor.nullifierHash);
+  }
+
+  return sources;
+}
+
+async function loadLatestRelevantIdentityBanUpdatedAt(
+  sources: readonly CorrelationIdentityBanSource[],
+  updatedAfter: bigint,
+) {
+  if (sources.length === 0) return null;
+  const sourcePredicates = sources.map((source) =>
+    and(
+      eq(raterIdentityBan.provider, source.provider),
+      eq(raterIdentityBan.nullifierHash, source.nullifierHash),
+    ),
+  );
+  const [latestBan] = await db
+    .select({ updatedAt: raterIdentityBan.updatedAt })
+    .from(raterIdentityBan)
+    .where(
+      and(
+        sql`${raterIdentityBan.updatedAt} > ${updatedAfter}`,
+        sourcePredicates.length === 1
+          ? sourcePredicates[0]!
+          : or(...sourcePredicates),
+      ),
+    )
+    .orderBy(desc(raterIdentityBan.updatedAt))
+    .limit(1);
+
+  return latestBan?.updatedAt ?? null;
 }
 
 function questionMetadataRef(
@@ -371,6 +434,8 @@ type LaunchCreditRow = {
   historicalVoteCount: number;
   raterVerified: boolean | null;
   raterRevoked: boolean | null;
+  raterCredentialProvider: number | null;
+  raterCredentialNullifierHash: `0x${string}` | null;
   raterCredentialExpiresAt: bigint | null;
   raterCredentialUpdatedAt: bigint | null;
 };
@@ -410,18 +475,21 @@ function collectCurrentLaunchAnchorFeatures(args: {
   rewardRecipient: `0x${string}`;
   roundStartTime: bigint;
   submitter: `0x${string}`;
+  submitterIdentity: `0x${string}`;
 }) {
   const anchors: string[] = [];
   const seenAnchors = new Set<string>();
   const rewardRecipient = args.rewardRecipient.toLowerCase();
   const submitter = args.submitter.toLowerCase();
+  const submitterIdentity = args.submitterIdentity.toLowerCase();
   const minCredentialAge = BigInt(args.minAnchorCredentialAgeSeconds);
   for (const row of args.anchorRows) {
     const account = row.account ?? row.voter;
     const normalizedAccount = account.toLowerCase();
     if (
       normalizedAccount === rewardRecipient ||
-      normalizedAccount === submitter
+      normalizedAccount === submitter ||
+      normalizedAccount === submitterIdentity
     )
       continue;
     if (
@@ -980,6 +1048,7 @@ export function registerCorrelationRoutes(app: ApiApp) {
       .select({
         startTime: round.startTime,
         submitter: content.submitter,
+        submitterIdentity: content.submitterIdentity,
       })
       .from(round)
       .innerJoin(content, eq(content.id, round.contentId))
@@ -1000,6 +1069,17 @@ export function registerCorrelationRoutes(app: ApiApp) {
         roundContext: null,
         truncated: false,
       });
+    }
+    const submitterIdentity = normalizeAddress(roundRow.submitterIdentity);
+    if (submitterIdentity === null || submitterIdentity === zeroAddress) {
+      return c.json(
+        {
+          error:
+            "Submitter identity is not indexed for this launch round; rebuild or backfill Ponder before publishing the artifact.",
+          reason: "launch_submitter_identity_unavailable",
+        },
+        409,
+      );
     }
 
     const [launchPolicy] = await db
@@ -1022,6 +1102,8 @@ export function registerCorrelationRoutes(app: ApiApp) {
           historicalVoteCount: sql<number>`case when coalesce(${voterStats.totalSettledVotes}, 0) > 0 then coalesce(${voterStats.totalSettledVotes}, 0) - 1 else 0 end`,
           raterVerified: raterHumanCredential.verified,
           raterRevoked: raterHumanCredential.revoked,
+          raterCredentialProvider: raterHumanCredential.provider,
+          raterCredentialNullifierHash: raterHumanCredential.nullifierHash,
           raterCredentialExpiresAt: raterHumanCredential.expiresAt,
           raterCredentialUpdatedAt: raterHumanCredential.updatedAt,
         })
@@ -1085,7 +1167,6 @@ export function registerCorrelationRoutes(app: ApiApp) {
             addressIdentityKeys: new Set<string>(),
             identityKeys: new Set<string>(),
             launchIdentityKeys: new Set<string>(),
-            latestUpdatedAt: null,
           };
     const typedCreditRows = creditRows as LaunchCreditRow[];
     const typedAnchorRows = anchorRows as LaunchAnchorVoteRow[];
@@ -1144,11 +1225,14 @@ export function registerCorrelationRoutes(app: ApiApp) {
         409,
       );
     }
-    if (
-      earliestRecordedAt !== null &&
-      banState.latestUpdatedAt !== null &&
-      banState.latestUpdatedAt > earliestRecordedAt
-    ) {
+    const latestRelevantIdentityBanUpdatedAt =
+      earliestRecordedAt === null
+        ? null
+        : await loadLatestRelevantIdentityBanUpdatedAt(
+            collectLaunchIdentityBanSources(typedCreditRows, typedAnchorRows),
+            earliestRecordedAt,
+          );
+    if (latestRelevantIdentityBanUpdatedAt !== null) {
       return c.json(
         {
           error:
@@ -1172,6 +1256,7 @@ export function registerCorrelationRoutes(app: ApiApp) {
         rewardRecipient: credit.rater,
         roundStartTime: roundRow.startTime,
         submitter: roundRow.submitter,
+        submitterIdentity,
       });
       const formatted = formatLaunchCreditRow({
         anchorFeatures,

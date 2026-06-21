@@ -125,6 +125,8 @@ function mockPonderModules<T>(result: T, additionalResults: unknown[] = []) {
       ratingUpEvidence: "content.ratingUpEvidence",
       status: "content.status",
       submitter: "content.submitter",
+      submitterIdentity: "content.submitterIdentity",
+      submitterIdentityKey: "content.submitterIdentityKey",
       tags: "content.tags",
       targetAudience: "content.targetAudience",
       questionMetadata: "content.questionMetadata",
@@ -3328,6 +3330,7 @@ describe("registerCorrelationRoutes", () => {
         {
           startTime: 1000n,
           submitter: "0x0000000000000000000000000000000000009999",
+          submitterIdentity: "0x0000000000000000000000000000000000009999",
         },
       ],
       [
@@ -3410,12 +3413,134 @@ describe("registerCorrelationRoutes", () => {
     expect(body.truncated).toBe(false);
   });
 
+  it("fails closed when launch submitter identity is not indexed", async () => {
+    mockPonderModules(
+      [
+        {
+          startTime: 1000n,
+          submitter: "0x0000000000000000000000000000000000009999",
+          submitterIdentity: null,
+        },
+      ],
+      [
+        [
+          {
+            id: "current",
+            minVerifiedHumans: 1,
+            minAnchorCredentialAgeSeconds: 10,
+            updatedAt: 900n,
+          },
+        ],
+      ],
+    );
+    const { registerCorrelationRoutes } = await import(
+      "../src/api/routes/correlation-routes.js"
+    );
+
+    const app = new Hono();
+    registerCorrelationRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/correlation/launch-round-votes?contentId=9&roundId=2&limit=1&offset=0&now=1300",
+    );
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      reason: "launch_submitter_identity_unavailable",
+    });
+  });
+
+  it("does not count the submitter identity holder as a launch anchor", async () => {
+    const rawSubmitter = "0x0000000000000000000000000000000000009999";
+    const submitterIdentity = "0x00000000000000000000000000000000000000aa";
+    mockPonderModules(
+      [
+        {
+          startTime: 1000n,
+          submitter: rawSubmitter,
+          submitterIdentity,
+        },
+      ],
+      [
+        [
+          {
+            id: "current",
+            minVerifiedHumans: 1,
+            minAnchorCredentialAgeSeconds: 10,
+            updatedAt: 1100n,
+          },
+        ],
+        [
+          {
+            rater: "0x0000000000000000000000000000000000000001",
+            commitKey: `0x${"b".repeat(64)}`,
+            recordedAt: 1200n,
+            historicalVoteCount: 4,
+            raterVerified: true,
+            raterRevoked: false,
+            raterCredentialExpiresAt: 2000n,
+            raterCredentialUpdatedAt: 1100n,
+          },
+        ],
+        [
+          {
+            account: submitterIdentity,
+            voter: submitterIdentity,
+            provider: 1,
+            nullifierHash: `0x${"a".repeat(64)}`,
+            verified: true,
+            revoked: false,
+            verifiedAt: 100n,
+            expiresAt: 2000n,
+            credentialUpdatedAt: 1100n,
+          },
+        ],
+        [],
+        [
+          {
+            questionMetadataHash: `0x${"2".repeat(64)}`,
+            questionMetadataUri: "ipfs://question",
+            resultSpecHash: `0x${"3".repeat(64)}`,
+            settledAt: 1500n,
+          },
+        ],
+        [],
+      ],
+    );
+    const { registerCorrelationRoutes } = await import(
+      "../src/api/routes/correlation-routes.js"
+    );
+
+    const app = new Hono();
+    registerCorrelationRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/correlation/launch-round-votes?contentId=9&roundId=2&limit=1&offset=0&now=1300",
+    );
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.items).toEqual([]);
+    expect(body.excludedVotes).toEqual([
+      {
+        account: "0x0000000000000000000000000000000000000001",
+        identityKey: `0x${"0".repeat(64)}`,
+        commitKey: `0x${"b".repeat(64)}`,
+        cooldownSeconds: null,
+        profileUpdatedAt: null,
+        reasons: ["launch_anchor_threshold"],
+        roundOpenTime: "1000",
+      },
+    ]);
+  });
+
   it("fails closed when launch policy changed after pending credit record time", async () => {
     mockPonderModules(
       [
         {
           startTime: 1000n,
           submitter: "0x0000000000000000000000000000000000009999",
+          submitterIdentity: "0x0000000000000000000000000000000000009999",
         },
       ],
       [
@@ -3469,6 +3594,147 @@ describe("registerCorrelationRoutes", () => {
     expect(response.status).toBe(409);
     await expect(response.json()).resolves.toMatchObject({
       reason: "launch_policy_drift",
+    });
+  });
+
+  it("fails closed when a relevant inactive launch ban changed after credit record time", async () => {
+    const nullifierHash = `0x${"9".repeat(64)}` as const;
+    const { queryBuilders } = mockPonderModules(
+      [
+        {
+          startTime: 1000n,
+          submitter: "0x0000000000000000000000000000000000009999",
+          submitterIdentity: "0x0000000000000000000000000000000000009999",
+        },
+      ],
+      [
+        [
+          {
+            id: "current",
+            minVerifiedHumans: 1,
+            minAnchorCredentialAgeSeconds: 10,
+            updatedAt: 1100n,
+          },
+        ],
+        [
+          {
+            rater: "0x0000000000000000000000000000000000000001",
+            commitKey: `0x${"b".repeat(64)}`,
+            recordedAt: 1200n,
+            historicalVoteCount: 4,
+            raterVerified: true,
+            raterRevoked: false,
+            raterCredentialProvider: 2,
+            raterCredentialNullifierHash: nullifierHash,
+            raterCredentialExpiresAt: 2000n,
+            raterCredentialUpdatedAt: 1100n,
+          },
+        ],
+        [],
+        [],
+        [
+          {
+            active: false,
+            expiresAt: 0n,
+            permanent: false,
+            updatedAt: 1300n,
+          },
+        ],
+      ],
+    );
+    const { registerCorrelationRoutes } = await import(
+      "../src/api/routes/correlation-routes.js"
+    );
+
+    const app = new Hono();
+    registerCorrelationRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/correlation/launch-round-votes?contentId=9&roundId=2&limit=1&offset=0&now=1300",
+    );
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      reason: "launch_identity_ban_drift",
+    });
+    const driftWhere = serializeExpression(queryBuilders[5]?.where.mock.calls[0]?.[0]);
+    expect(driftWhere).toContain("raterIdentityBan.updatedAt");
+    expect(driftWhere).toContain("raterIdentityBan.provider");
+    expect(driftWhere).toContain("raterIdentityBan.nullifierHash");
+    expect(driftWhere).not.toContain("raterIdentityBan.active");
+  });
+
+  it("fails closed when a relevant expired launch ban changed after credit record time", async () => {
+    const nullifierHash = `0x${"8".repeat(64)}` as const;
+    mockPonderModules(
+      [
+        {
+          startTime: 1000n,
+          submitter: "0x0000000000000000000000000000000000009999",
+          submitterIdentity: "0x0000000000000000000000000000000000009999",
+        },
+      ],
+      [
+        [
+          {
+            id: "current",
+            minVerifiedHumans: 1,
+            minAnchorCredentialAgeSeconds: 10,
+            updatedAt: 1100n,
+          },
+        ],
+        [
+          {
+            rater: "0x0000000000000000000000000000000000000001",
+            commitKey: `0x${"b".repeat(64)}`,
+            recordedAt: 1200n,
+            historicalVoteCount: 4,
+            raterVerified: true,
+            raterRevoked: false,
+            raterCredentialProvider: 2,
+            raterCredentialNullifierHash: nullifierHash,
+            raterCredentialExpiresAt: 2000n,
+            raterCredentialUpdatedAt: 1100n,
+          },
+        ],
+        [
+          {
+            account: "0x00000000000000000000000000000000000000aa",
+            voter: "0x00000000000000000000000000000000000000aa",
+            provider: 1,
+            nullifierHash: `0x${"a".repeat(64)}`,
+            verified: true,
+            revoked: false,
+            verifiedAt: 100n,
+            expiresAt: 2000n,
+            credentialUpdatedAt: 1100n,
+          },
+        ],
+        [],
+        [
+          {
+            active: true,
+            expiresAt: 1190n,
+            permanent: false,
+            updatedAt: 1300n,
+          },
+        ],
+      ],
+    );
+    const { registerCorrelationRoutes } = await import(
+      "../src/api/routes/correlation-routes.js"
+    );
+
+    const app = new Hono();
+    registerCorrelationRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/correlation/launch-round-votes?contentId=9&roundId=2&limit=1&offset=0&now=1300",
+    );
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      reason: "launch_identity_ban_drift",
     });
   });
 

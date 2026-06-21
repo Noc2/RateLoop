@@ -29,6 +29,45 @@ interface PonderCorrelationRoundVotesResponse {
   truncated?: boolean;
 }
 
+class PonderHttpError extends Error {
+  readonly body: string;
+  readonly path: string;
+  readonly reason: string | null;
+  readonly status: number;
+
+  constructor(url: URL, status: number, body: string) {
+    const reason = parsePonderErrorReason(body);
+    super(
+      `Ponder request failed: ${url.pathname} ${status}${
+        reason ? ` (${reason})` : ""
+      }`,
+    );
+    this.name = "PonderHttpError";
+    this.body = body;
+    this.path = url.pathname;
+    this.reason = reason;
+    this.status = status;
+  }
+}
+
+function parsePonderErrorReason(body: string) {
+  try {
+    const parsed = JSON.parse(body) as unknown;
+    if (parsed && typeof parsed === "object") {
+      const record = parsed as Record<string, unknown>;
+      if (typeof record.reason === "string" && record.reason.trim()) {
+        return record.reason;
+      }
+      if (typeof record.error === "string" && record.error.trim()) {
+        return record.error;
+      }
+    }
+  } catch {
+    // Non-JSON error bodies still get logged as bounded text.
+  }
+  return null;
+}
+
 function buildCorrelationVotesUrl(
   ponderBaseUrl: string,
   candidate: CorrelationRoundCandidate,
@@ -62,10 +101,10 @@ async function fetchPonderJson<T>(url: URL): Promise<T> {
     headers: { accept: "application/json" },
     signal: AbortSignal.timeout(PONDER_FETCH_TIMEOUT_MS),
   });
-  if (!response.ok) {
-    throw new Error(`Ponder request failed: ${url.pathname} ${response.status}`);
-  }
   const body = await readBoundedResponseText(response, PONDER_JSON_MAX_BYTES, "Ponder");
+  if (!response.ok) {
+    throw new PonderHttpError(url, response.status, body);
+  }
   return JSON.parse(body) as T;
 }
 
@@ -74,6 +113,16 @@ async function fetchPonderJsonOptional<T>(url: URL): Promise<T | null> {
     return await fetchPonderJson<T>(url);
   } catch {
     return null;
+  }
+}
+
+async function fetchPonderJsonResult<T>(
+  url: URL,
+): Promise<{ ok: true; value: T } | { error: unknown; ok: false }> {
+  try {
+    return { ok: true, value: await fetchPonderJson<T>(url) };
+  } catch (error) {
+    return { error, ok: false };
   }
 }
 
@@ -113,7 +162,7 @@ async function fetchPonderCorrelationEligibleVoteIndexing(
   ponderBaseUrl: string,
   candidate: CorrelationRoundCandidate,
   ponderNowSeconds?: bigint,
-): Promise<{ complete: boolean; eligibleCount: number } | null> {
+): Promise<{ complete: boolean; eligibleCount: number; error?: unknown } | null> {
   let eligibleCount = 0;
   for (let page = 0; page < MAX_VOTE_PAGES; page += 1) {
     const offset = page * VOTE_PAGE_SIZE;
@@ -124,10 +173,11 @@ async function fetchPonderCorrelationEligibleVoteIndexing(
       offset,
       ponderNowSeconds,
     );
-    const response = await fetchPonderJsonOptional<PonderCorrelationRoundVotesResponse>(url);
-    if (response === null) {
-      return null;
+    const result = await fetchPonderJsonResult<PonderCorrelationRoundVotesResponse>(url);
+    if (!result.ok) {
+      return { complete: false, eligibleCount, error: result.error };
     }
+    const response = result.value;
     if (response.truncated) {
       return null;
     }
@@ -232,6 +282,22 @@ export async function areCorrelationCandidatesPonderFresh(
         options.ponderNowSeconds,
       );
       if (eligibleIndexing === null || !eligibleIndexing.complete) {
+        if (eligibleIndexing?.error instanceof PonderHttpError) {
+          logger.warn(
+            "Deferring correlation artifact build because Ponder rejected correlation-eligible vote reconstruction",
+            {
+              contentId: candidate.contentId.toString(),
+              roundId: candidate.roundId.toString(),
+              domain: candidate.domain,
+              eligibleVoteCount: eligibleIndexing.eligibleCount.toString(),
+              path: eligibleIndexing.error.path,
+              ponderErrorBody: eligibleIndexing.error.body,
+              ponderReason: eligibleIndexing.error.reason,
+              ponderStatus: eligibleIndexing.error.status,
+            },
+          );
+          return false;
+        }
         logger.debug(
           "Deferring correlation artifact build until Ponder indexes correlation-eligible revealed votes",
           {
