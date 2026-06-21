@@ -6,6 +6,11 @@ confidentiality architecture, and trust topology), one academic/ecosystem litera
 researcher, and adversarial verification of every claimed weakness against the code
 and public docs. HEAD `3d58264b`.
 
+This is a historical **design** review snapshot, not the current operator runbook. Base mainnet production artifacts now
+exist, and routine production work should preserve the deployed Base mainnet stack unless a contract-level incident
+requires a governed redeploy. For current operator posture, use `packages/foundry/README.md`, `docs/env-parity.md`, and
+the Base readiness scripts.
+
 This is a **design** review — mechanism design, incentive compatibility, economic
 security, trust assumptions, and architecture — not an implementation-bug hunt (those
 are covered by the separate pass-2…5 code reviews). Each weakness is classified as a
@@ -43,11 +48,11 @@ not for the mainnet claim**, and given a severity by design impact. 39 strengths
 > `recordConfidentialityNexusForRegistry`; the ABI-parity CI job installs workspace
 > deps before `generate-abis-only`; scheduled live readiness is skipped when live RPC
 > env is absent; and discovery serializers use each round's indexed
-> `revealGracePeriod`. `node scripts/check-base-sepolia-readiness.mjs` is the
-> active offline preflight for the next rollout.
-> `node scripts/check-base-mainnet-readiness.mjs` is expected to fail until the
-> first chain `8453` production artifact exists.
-> Remaining pre-mainnet work: small-round verdict economics, LREP value circularity,
+> `revealGracePeriod`. `node scripts/check-base-sepolia-readiness.mjs` remains the
+> active staging preflight, and `node scripts/check-base-mainnet-readiness.mjs` now
+> validates the existing chain `8453` production artifact.
+> Remaining protocol-design work for stronger decision-grade production claims:
+> small-round verdict economics, LREP value circularity,
 > confidentiality evidence anchoring, x402 local/server validation drift, governed
 > full-stack engine-rotation runbook, World ID production live-proof/ABI validation,
 > and fast-tier AI/operator-diversity controls.
@@ -569,9 +574,9 @@ stake-weighting, voter apathy, and credential rental all erode.
 
 ---
 
-## Recommendations, prioritized for mainnet
+## Recommendations, Preserved From The Review Snapshot
 
-**Gate items (resolve before a mainnet that markets agent-decision / acceptance-oracle use):**
+**Gate items (resolve before stronger agent-decision / acceptance-oracle security claims):**
 
 1. **Give small rounds economic teeth without arming majorities (H1/H3, RBTS-inert).**
    Keep the launch default at 3 raters so cold-start asks remain usable, but document it as
@@ -601,13 +606,13 @@ stake-weighting, voter apathy, and credential rental all erode.
    view-token evidence bound to a published breach artifact hash. The mainnet operational
    gate that remains is provisioning and verifying the production anchor key/role.
 
-**Operational launch gates for the first Base deployment path:**
+**Operational evidence and migration hygiene:**
 
-5. **Freeze a public deployment evidence bundle before production traffic.** Include the
+5. **Keep a public deployment evidence bundle current for production traffic.** Include the
    exact commit, Foundry profile, compiler/optimizer config, ABIs, storage-layout
    snapshots, contract-size output, deployment artifact profile, chain `84532`
-   Base Sepolia start blocks, the eventual chain `8453` Base mainnet start blocks
-   only when promoted, World ID verifier address and ABI/proof smoke test, Ponder
+   Base Sepolia start blocks, chain `8453` Base mainnet start blocks, World ID
+   verifier address and ABI/proof smoke test, Ponder
    schema/start state, keeper config hash, oracle artifact base URL, and the
    production state reset checklist. This is cheap now and makes the first incident
    or external review dramatically less ambiguous.
@@ -641,19 +646,19 @@ stake-weighting, voter apathy, and credential rental all erode.
 **Strongly recommended:**
 
 11. **Done:** use a **leave-one-out mean** in the RBTS payment benchmark. This fixes the
-   whale self-benchmark issue; the separate non-affine payoff-shape caveat remains.
+    whale self-benchmark issue; the separate non-affine payoff-shape caveat remains.
 12. Reprice or rate-limit the **tlock garbage-ciphertext grief** (scale the grace-triggering
-   stake, or forfeit even on reveal-failed when the round otherwise had quorum) so a thin
-   content can't be stalled 24h for ~free.
+    stake, or forfeit even on reveal-failed when the round otherwise had quorum) so a thin
+    content can't be stalled 24h for ~free.
 13. **Done after reviewed HEAD:** bind `evidenceHash` to a published breach-evidence
-   artifact and require rooted view-token evidence before slash-ready filing. This is the
-   current anti-grief cost: reporters must possess a valid access receipt tied to an anchored
-   log root rather than filing a free arbitrary accusation. A value-proportional reporter bond
-   can still be added later if governance wants stronger spam economics.
+    artifact and require rooted view-token evidence before slash-ready filing. This is the
+    current anti-grief cost: reporters must possess a valid access receipt tied to an anchored
+    log root rather than filing a free arbitrary accusation. A value-proportional reporter bond
+    can still be added later if governance wants stronger spam economics.
 14. Replace the imperative multi-mapping identity state with an **explicit lifecycle-state or
-   append-only history** model, given it has needed repeated emergency repair.
+    append-only history** model, given it has needed repeated emergency repair.
 15. Fund **third-party keeper/challenger incentives** for rounds outside the operator's own
-   frontend, or state plainly that operator liveness is a trusted service.
+    frontend, or state plainly that operator liveness is a trusted service.
 
 **Worth doing, lower urgency:** per-question/per-category surprise priors; value-proportional
 or fee-funded frontend bonds; SDK/API disclosure-default parity checks; AI-only eligibility mask;

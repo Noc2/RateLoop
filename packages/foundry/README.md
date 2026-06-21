@@ -33,13 +33,13 @@ Run `yarn workspace @rateloop/foundry check:sizes` from the monorepo root to ver
 
 Several production contracts run close to the limit. Run `yarn workspace @rateloop/foundry check:sizes` for current numbers. As of June 2026 deploy-profile checks:
 
-| Contract | Size (B) | Headroom (B) |
-| --- | --- | --- |
-| `LaunchDistributionPool` | 24,561 | 15 |
-| `ContentRegistry` | 24,501 | 75 |
-| `QuestionRewardPoolEscrow` | 24,516 | 60 |
-| `RoundVotingEngine` | 24,383 | 193 |
-| `RaterRegistry` | 22,900 | 1,676 |
+| Contract                   | Size (B) | Headroom (B) |
+| -------------------------- | -------- | ------------ |
+| `LaunchDistributionPool`   | 24,561   | 15           |
+| `ContentRegistry`          | 24,501   | 75           |
+| `QuestionRewardPoolEscrow` | 24,516   | 60           |
+| `RoundVotingEngine`        | 24,383   | 193          |
+| `RaterRegistry`            | 22,900   | 1,676        |
 
 `ContentRegistry.repointPendingRatingClusterPayoutOracle` is exposed via a thin `CONFIG_ROLE` wrapper; dormancy lifecycle and engine-probing helpers live in `ContentRegistryDormancyLib` to preserve EIP-170 headroom.
 
@@ -47,7 +47,7 @@ Treat new features on these contracts as size-sensitive: prefer library extracti
 
 **Deploy profile vs default profile:** `yarn workspace @rateloop/foundry check:sizes` and live deploys use the Foundry **deploy** profile (`FOUNDRY_PROFILE=deploy`). A plain `forge build` with the default profile can produce oversize bytecode for `RoundVotingEngine`, `LaunchDistributionPool`, `QuestionRewardPoolEscrow`, and `ContentRegistry` even when deploy-profile artifacts pass EIP-170. Do not use default-profile build artifacts for size gates or production deploys.
 
-**Settlement side effects:** `RoundSettlementSideEffectsLib` records pending public-rating settlements in a try/catch. A failed side effect emits `SettlementSideEffectFailed` but still completes settlement; operators must monitor logs and manually call `recordPendingRatingSettlement` (or repoint/retry tooling) when that event appears. Index or alert on `SettlementSideEffectFailed` from `RoundVotingEngine` in production before mainnet launch.
+**Settlement side effects:** `RoundSettlementSideEffectsLib` records pending public-rating settlements in a try/catch. A failed side effect emits `SettlementSideEffectFailed` but still completes settlement; operators must monitor logs and manually call `recordPendingRatingSettlement` (or repoint/retry tooling) when that event appears. Index or alert on `SettlementSideEffectFailed` from `RoundVotingEngine` as a standing production requirement.
 
 On Base mainnet and Base Sepolia, deploys use a Foundry keystore selected via `--keystore <name>`. Forge can use
 Basescan verification when `BASESCAN_API_KEY` is set.
@@ -62,6 +62,13 @@ readiness probe verifies the deployed `ContentRegistry.submissionMediaValidator(
 validator selectors before staging is treated as ready. For production wiring or environment changes, run
 `base:check -- --live` or `base-mainnet:check -- --live` against the existing Base mainnet deployment.
 
+The deploy wrapper refuses routine Base or World Chain mainnet redeploys when a checked-in production artifact exists.
+If an incident or governance process genuinely requires a fresh production stack, compute the break-glass token from the
+current artifact as `<chainId>:<deploymentBlockNumber>` and pass
+`--confirm-production-redeploy <token>` or set `RATELOOP_CONFIRM_PRODUCTION_REDEPLOY=<token>`. Prefer governance/admin
+rewiring, service configuration, indexing fixes, or app/keeper changes against the existing Base mainnet deployment
+whenever those are sufficient.
+
 Base and World Chain deploys default to legacy World ID 3.0 Orb verification. The deploy script resolves the canonical
 World ID router for chain `8453`, `84532`, `480`, or `4801`, derives the external nullifier from
 `NEXT_PUBLIC_WORLD_ID_APP_ID` and `NEXT_PUBLIC_WORLD_ID_CREDENTIAL_ACTION`, and fails pre-broadcast if the live router
@@ -72,20 +79,21 @@ not depend on a v4 verifier until that path is tested end-to-end.
 
 Create a `.env` file (see `.env.example`):
 
-| Variable                                       | Description                                                                                                                                                                 |
-| ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ALCHEMY_API_KEY`                              | Optional RPC provider key for testnet/mainnet deploys                                                                                                                       |
-| `BASE_RPC_URL`                                 | Optional Base mainnet RPC override for live deploys                                                                                                                         |
-| `BASE_SEPOLIA_RPC_URL`                         | Optional Base Sepolia RPC override for live deploys                                                                                                                         |
-| `WORLDCHAIN_RPC_URL`                           | Optional World Chain mainnet RPC override for live deploys                                                                                                                  |
-| `WORLDCHAIN_SEPOLIA_RPC_URL`                   | Optional World Chain Sepolia RPC override for live deploys                                                                                                                  |
-| `NEXT_PUBLIC_WORLD_ID_APP_ID`                  | World ID app ID used to derive the legacy v3 external nullifier                                                                                                             |
-| `NEXT_PUBLIC_WORLD_ID_CREDENTIAL_ACTION`       | World ID credential action; defaults to `rateloop-human-credential-v1`                                                                                                      |
-| `WORLD_ID_ROUTER_ADDRESS`                      | Optional explicit World ID v3 router override; nonzero live-network overrides must have code                                                                                |
-| `WORLD_ID_EXTERNAL_NULLIFIER_HASH`             | Optional explicit v3 external nullifier hash override; leave unset to derive from app ID and action                                                                         |
-| `RATELOOP_DEPLOYMENT_PROFILE`                  | Deployment artifact profile stamp; the deploy wrapper sets `production` for Base/World Chain mainnet and `default` elsewhere                                                |
-| `ETHERSCAN_API_KEY`                            | Optional explorer API key for Etherscan-compatible networks                                                                                                                 |
-| `BASESCAN_API_KEY`                             | Optional Basescan API key for Base and Base Sepolia verification                                                                                                            |
+| Variable                                 | Description                                                                                                                  |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `ALCHEMY_API_KEY`                        | Optional RPC provider key for testnet/mainnet deploys                                                                        |
+| `BASE_RPC_URL`                           | Optional Base mainnet RPC override for live deploys                                                                          |
+| `BASE_SEPOLIA_RPC_URL`                   | Optional Base Sepolia RPC override for live deploys                                                                          |
+| `WORLDCHAIN_RPC_URL`                     | Optional World Chain mainnet RPC override for live deploys                                                                   |
+| `WORLDCHAIN_SEPOLIA_RPC_URL`             | Optional World Chain Sepolia RPC override for live deploys                                                                   |
+| `NEXT_PUBLIC_WORLD_ID_APP_ID`            | World ID app ID used to derive the legacy v3 external nullifier                                                              |
+| `NEXT_PUBLIC_WORLD_ID_CREDENTIAL_ACTION` | World ID credential action; defaults to `rateloop-human-credential-v1`                                                       |
+| `WORLD_ID_ROUTER_ADDRESS`                | Optional explicit World ID v3 router override; nonzero live-network overrides must have code                                 |
+| `WORLD_ID_EXTERNAL_NULLIFIER_HASH`       | Optional explicit v3 external nullifier hash override; leave unset to derive from app ID and action                          |
+| `RATELOOP_DEPLOYMENT_PROFILE`            | Deployment artifact profile stamp; the deploy wrapper sets `production` for Base/World Chain mainnet and `default` elsewhere |
+| `RATELOOP_CONFIRM_PRODUCTION_REDEPLOY`   | Break-glass token `<chainId>:<deploymentBlockNumber>` required to intentionally redeploy an existing production stack        |
+| `ETHERSCAN_API_KEY`                      | Optional explorer API key for Etherscan-compatible networks                                                                  |
+| `BASESCAN_API_KEY`                       | Optional Basescan API key for Base and Base Sepolia verification                                                             |
 
 Base mainnet (`8453`) resolves router `0xBCC7e5910178AFFEEeBA573ba6903E9869594163` by default. Base Sepolia (`84532`)
 resolves router `0x42FF98C4E85212a5D31358ACbFe76a621b50fC02` by default. World Chain mainnet (`480`) and World Chain
@@ -152,10 +160,10 @@ Rotating `ContentRegistry.setVotingEngine` or `FrontendRegistry.setVotingEngine`
 
 **Contracts that accept governed engine rotation**
 
-| Contract | Entrypoint | Footgun |
-| --- | --- | --- |
-| `ContentRegistry` | `setVotingEngine` | In-flight rounds on the previous engine may still settle; fresh content routes through the new engine. Pending public-rating settlements pin both `votingEngine` and `clusterPayoutOracle`. |
-| `FrontendRegistry` | `setVotingEngine` | Clears the fee creditor until `addFeeCreditor` binds the new reward distributor; `initializeFeeCreditor` is deploy-time only. |
+| Contract           | Entrypoint        | Footgun                                                                                                                                                                                     |
+| ------------------ | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ContentRegistry`  | `setVotingEngine` | In-flight rounds on the previous engine may still settle; fresh content routes through the new engine. Pending public-rating settlements pin both `votingEngine` and `clusterPayoutOracle`. |
+| `FrontendRegistry` | `setVotingEngine` | Clears the fee creditor until `addFeeCreditor` binds the new reward distributor; `initializeFeeCreditor` is deploy-time only.                                                               |
 
 **Contracts that pin engine at init (no governed rotation today)**
 

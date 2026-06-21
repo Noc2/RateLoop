@@ -25,6 +25,7 @@ jobs:
     timeout-minutes: 10
     env:
       BASE_SEPOLIA_APP_URL: ${{ vars.BASE_SEPOLIA_APP_URL }}
+      BASE_SEPOLIA_NEXT_ENV_FILE: docs/testing/base-sepolia-next-env.fixture
       BASE_SEPOLIA_PONDER_URL: ${{ vars.BASE_SEPOLIA_PONDER_URL }}
       BASE_SEPOLIA_RPC_URL: ${{ secrets.BASE_SEPOLIA_RPC_URL }}
 
