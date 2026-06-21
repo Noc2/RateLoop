@@ -112,6 +112,7 @@ type ActiveCorrelationIdentityBanState = {
   addressIdentityKeys: Set<string>;
   identityKeys: Set<string>;
   launchIdentityKeys: Set<string>;
+  latestUpdatedAt: bigint | null;
 };
 
 async function loadActiveCorrelationIdentityBanState(
@@ -121,6 +122,7 @@ async function loadActiveCorrelationIdentityBanState(
     .select({
       provider: raterIdentityBan.provider,
       nullifierHash: raterIdentityBan.nullifierHash,
+      updatedAt: raterIdentityBan.updatedAt,
     })
     .from(raterIdentityBan)
     .where(
@@ -138,7 +140,11 @@ async function loadActiveCorrelationIdentityBanState(
   const sourceKeys = new Set<string>();
   const nullifierHashes: `0x${string}`[] = [];
   const seenNullifierHashes = new Set<string>();
+  let latestUpdatedAt: bigint | null = null;
   for (const ban of activeBans) {
+    if (latestUpdatedAt === null || ban.updatedAt > latestUpdatedAt) {
+      latestUpdatedAt = ban.updatedAt;
+    }
     const nullifierHash = normalizeHex32(ban.nullifierHash);
     if (nullifierHash === null) continue;
     const provider = Number(ban.provider);
@@ -180,7 +186,7 @@ async function loadActiveCorrelationIdentityBanState(
     }
   }
 
-  return { addressIdentityKeys, identityKeys, launchIdentityKeys };
+  return { addressIdentityKeys, identityKeys, launchIdentityKeys, latestUpdatedAt };
 }
 
 function questionMetadataRef(
@@ -361,10 +367,12 @@ function formatCorrelationVoteRow(
 type LaunchCreditRow = {
   rater: `0x${string}`;
   commitKey: `0x${string}`;
+  recordedAt: bigint;
   historicalVoteCount: number;
   raterVerified: boolean | null;
   raterRevoked: boolean | null;
   raterCredentialExpiresAt: bigint | null;
+  raterCredentialUpdatedAt: bigint | null;
 };
 
 type LaunchAnchorVoteRow = {
@@ -376,6 +384,7 @@ type LaunchAnchorVoteRow = {
   revoked: boolean | null;
   verifiedAt: bigint | null;
   expiresAt: bigint | null;
+  credentialUpdatedAt: bigint | null;
 };
 
 function isActiveRoundHumanCredential(
@@ -1009,10 +1018,12 @@ export function registerCorrelationRoutes(app: ApiApp) {
         .select({
           rater: launchEarnedRaterCredit.rater,
           commitKey: launchEarnedRaterCredit.commitKey,
+          recordedAt: launchEarnedRaterCredit.recordedAt,
           historicalVoteCount: sql<number>`case when coalesce(${voterStats.totalSettledVotes}, 0) > 0 then coalesce(${voterStats.totalSettledVotes}, 0) - 1 else 0 end`,
           raterVerified: raterHumanCredential.verified,
           raterRevoked: raterHumanCredential.revoked,
           raterCredentialExpiresAt: raterHumanCredential.expiresAt,
+          raterCredentialUpdatedAt: raterHumanCredential.updatedAt,
         })
         .from(launchEarnedRaterCredit)
         .leftJoin(
@@ -1046,6 +1057,7 @@ export function registerCorrelationRoutes(app: ApiApp) {
           revoked: raterHumanCredential.revoked,
           verifiedAt: raterHumanCredential.verifiedAt,
           expiresAt: raterHumanCredential.expiresAt,
+          credentialUpdatedAt: raterHumanCredential.updatedAt,
         })
         .from(vote)
         .leftJoin(
@@ -1073,16 +1085,88 @@ export function registerCorrelationRoutes(app: ApiApp) {
             addressIdentityKeys: new Set<string>(),
             identityKeys: new Set<string>(),
             launchIdentityKeys: new Set<string>(),
+            latestUpdatedAt: null,
           };
+    const typedCreditRows = creditRows as LaunchCreditRow[];
+    const typedAnchorRows = anchorRows as LaunchAnchorVoteRow[];
+    const earliestRecordedAt = typedCreditRows.reduce<bigint | null>(
+      (earliest, credit) =>
+        earliest === null || credit.recordedAt < earliest
+          ? credit.recordedAt
+          : earliest,
+      null,
+    );
+    if (
+      earliestRecordedAt !== null &&
+      launchPolicy?.updatedAt !== undefined &&
+      launchPolicy.updatedAt > earliestRecordedAt
+    ) {
+      return c.json(
+        {
+          error:
+            "Launch reward policy changed after a pending credit was recorded; use a manually verified artifact.",
+          reason: "launch_policy_drift",
+        },
+        409,
+      );
+    }
+    if (
+      earliestRecordedAt !== null &&
+      typedCreditRows.some(
+        (credit) =>
+          credit.raterCredentialUpdatedAt !== null &&
+          credit.raterCredentialUpdatedAt > credit.recordedAt,
+      )
+    ) {
+      return c.json(
+        {
+          error:
+            "Rater credential state changed after a pending credit was recorded; use a manually verified artifact.",
+          reason: "launch_rater_credential_drift",
+        },
+        409,
+      );
+    }
+    if (
+      earliestRecordedAt !== null &&
+      typedAnchorRows.some(
+        (row) =>
+          row.credentialUpdatedAt !== null &&
+          row.credentialUpdatedAt > earliestRecordedAt,
+      )
+    ) {
+      return c.json(
+        {
+          error:
+            "Anchor credential state changed after a pending credit was recorded; use a manually verified artifact.",
+          reason: "launch_anchor_credential_drift",
+        },
+        409,
+      );
+    }
+    if (
+      earliestRecordedAt !== null &&
+      banState.latestUpdatedAt !== null &&
+      banState.latestUpdatedAt > earliestRecordedAt
+    ) {
+      return c.json(
+        {
+          error:
+            "Identity ban state changed after a pending credit was recorded; use a manually verified artifact.",
+          reason: "launch_identity_ban_drift",
+        },
+        409,
+      );
+    }
     const items: ReturnType<typeof formatLaunchCreditRow>["item"][] = [];
     const excludedVotes: NonNullable<
       ReturnType<typeof formatLaunchCreditRow>["excludedVote"]
     >[] = [];
     let eligibleSeen = 0;
 
-    for (const credit of creditRows as LaunchCreditRow[]) {
+    for (const credit of typedCreditRows) {
       const anchorFeatures = collectCurrentLaunchAnchorFeatures({
-        anchorRows: anchorRows as LaunchAnchorVoteRow[],
+        anchorRows: typedAnchorRows,
         banState,
         minAnchorCredentialAgeSeconds,
         rewardRecipient: credit.rater,
@@ -1106,14 +1190,13 @@ export function registerCorrelationRoutes(app: ApiApp) {
       eligibleSeen += 1;
     }
 
-    const truncated = eligibleSeen > offset + items.length;
     const roundContext = await getRoundContext(contentId, roundId);
 
     return jsonBig(c, {
       excludedVotes,
       items,
       roundContext,
-      truncated,
+      truncated: false,
     });
   });
 

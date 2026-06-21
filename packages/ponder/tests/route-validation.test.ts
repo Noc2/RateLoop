@@ -191,6 +191,8 @@ function mockPonderModules<T>(result: T, additionalResults: unknown[] = []) {
     launchRewardPolicyState: {
       eligibilityRatingCount: "launchRewardPolicyState.eligibilityRatingCount",
       id: "launchRewardPolicyState.id",
+      minAnchorCredentialAgeSeconds:
+        "launchRewardPolicyState.minAnchorCredentialAgeSeconds",
       minDistinctAnchorRounds:
         "launchRewardPolicyState.minDistinctAnchorRounds",
       minDistinctVerifiedAnchors:
@@ -204,6 +206,23 @@ function mockPonderModules<T>(result: T, additionalResults: unknown[] = []) {
       unverifiedEarnedRaterCapBps:
         "launchRewardPolicyState.unverifiedEarnedRaterCapBps",
       updatedAt: "launchRewardPolicyState.updatedAt",
+    },
+    launchEarnedRaterCredit: {
+      cancelled: "launchEarnedRaterCredit.cancelled",
+      cancelledAt: "launchEarnedRaterCredit.cancelledAt",
+      commitKey: "launchEarnedRaterCredit.commitKey",
+      contentId: "launchEarnedRaterCredit.contentId",
+      effectiveCreditBps: "launchEarnedRaterCredit.effectiveCreditBps",
+      finalized: "launchEarnedRaterCredit.finalized",
+      finalizedAt: "launchEarnedRaterCredit.finalizedAt",
+      id: "launchEarnedRaterCredit.id",
+      pending: "launchEarnedRaterCredit.pending",
+      qualifyingCreditBps: "launchEarnedRaterCredit.qualifyingCreditBps",
+      rater: "launchEarnedRaterCredit.rater",
+      recordedAt: "launchEarnedRaterCredit.recordedAt",
+      roundId: "launchEarnedRaterCredit.roundId",
+      scoreBps: "launchEarnedRaterCredit.scoreBps",
+      updatedAt: "launchEarnedRaterCredit.updatedAt",
     },
     raterFollow: {
       active: "raterFollow.active",
@@ -3301,6 +3320,156 @@ describe("registerCorrelationRoutes", () => {
     expect(
       serializedJoins.some((join) => join.includes("round.settledAt")),
     ).toBe(true);
+  });
+
+  it("paginates launch-credit votes without marking normal next pages as truncated", async () => {
+    mockPonderModules(
+      [
+        {
+          startTime: 1000n,
+          submitter: "0x0000000000000000000000000000000000009999",
+        },
+      ],
+      [
+        [
+          {
+            id: "current",
+            minVerifiedHumans: 1,
+            minAnchorCredentialAgeSeconds: 10,
+            updatedAt: 1100n,
+          },
+        ],
+        [
+          {
+            rater: "0x0000000000000000000000000000000000000001",
+            commitKey: `0x${"b".repeat(64)}`,
+            recordedAt: 1200n,
+            historicalVoteCount: 4,
+            raterVerified: true,
+            raterRevoked: false,
+            raterCredentialExpiresAt: 2000n,
+            raterCredentialUpdatedAt: 1100n,
+          },
+          {
+            rater: "0x0000000000000000000000000000000000000002",
+            commitKey: `0x${"c".repeat(64)}`,
+            recordedAt: 1210n,
+            historicalVoteCount: 5,
+            raterVerified: true,
+            raterRevoked: false,
+            raterCredentialExpiresAt: 2000n,
+            raterCredentialUpdatedAt: 1100n,
+          },
+        ],
+        [
+          {
+            account: "0x00000000000000000000000000000000000000aa",
+            voter: "0x00000000000000000000000000000000000000aa",
+            provider: 1,
+            nullifierHash: `0x${"a".repeat(64)}`,
+            verified: true,
+            revoked: false,
+            verifiedAt: 100n,
+            expiresAt: 2000n,
+            credentialUpdatedAt: 1100n,
+          },
+        ],
+        [],
+        [
+          {
+            questionMetadataHash: `0x${"2".repeat(64)}`,
+            questionMetadataUri: "ipfs://question",
+            resultSpecHash: `0x${"3".repeat(64)}`,
+            settledAt: 1500n,
+          },
+        ],
+        [],
+      ],
+    );
+    const { registerCorrelationRoutes } = await import(
+      "../src/api/routes/correlation-routes.js"
+    );
+
+    const app = new Hono();
+    registerCorrelationRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/correlation/launch-round-votes?contentId=9&roundId=2&limit=1&offset=0&now=1300",
+    );
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.items).toHaveLength(1);
+    expect(body.items[0]).toMatchObject({
+      account: "0x0000000000000000000000000000000000000001",
+      identityKey: `0x${"0".repeat(64)}`,
+      commitKey: `0x${"b".repeat(64)}`,
+      baseWeight: "10000",
+    });
+    expect(body.items[0].features[0]).toMatch(/^launch-anchor:0x/);
+    expect(body.truncated).toBe(false);
+  });
+
+  it("fails closed when launch policy changed after pending credit record time", async () => {
+    mockPonderModules(
+      [
+        {
+          startTime: 1000n,
+          submitter: "0x0000000000000000000000000000000000009999",
+        },
+      ],
+      [
+        [
+          {
+            id: "current",
+            minVerifiedHumans: 1,
+            minAnchorCredentialAgeSeconds: 10,
+            updatedAt: 1300n,
+          },
+        ],
+        [
+          {
+            rater: "0x0000000000000000000000000000000000000001",
+            commitKey: `0x${"b".repeat(64)}`,
+            recordedAt: 1200n,
+            historicalVoteCount: 4,
+            raterVerified: true,
+            raterRevoked: false,
+            raterCredentialExpiresAt: 2000n,
+            raterCredentialUpdatedAt: 1100n,
+          },
+        ],
+        [
+          {
+            account: "0x00000000000000000000000000000000000000aa",
+            voter: "0x00000000000000000000000000000000000000aa",
+            provider: 1,
+            nullifierHash: `0x${"a".repeat(64)}`,
+            verified: true,
+            revoked: false,
+            verifiedAt: 100n,
+            expiresAt: 2000n,
+            credentialUpdatedAt: 1100n,
+          },
+        ],
+        [],
+      ],
+    );
+    const { registerCorrelationRoutes } = await import(
+      "../src/api/routes/correlation-routes.js"
+    );
+
+    const app = new Hono();
+    registerCorrelationRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/correlation/launch-round-votes?contentId=9&roundId=2&limit=1&offset=0&now=1300",
+    );
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      reason: "launch_policy_drift",
+    });
   });
 
   it("excludes raw-address banned voters from correlation scoring inputs", async () => {

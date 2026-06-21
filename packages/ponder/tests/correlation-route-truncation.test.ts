@@ -96,7 +96,9 @@ function mockCorrelationVoteScan(results: unknown[]) {
       provider: "raterHumanCredential.provider",
       rater: "raterHumanCredential.rater",
       revoked: "raterHumanCredential.revoked",
+      updatedAt: "raterHumanCredential.updatedAt",
       verified: "raterHumanCredential.verified",
+      verifiedAt: "raterHumanCredential.verifiedAt",
     },
     raterIdentityBan: {
       active: "raterIdentityBan.active",
@@ -104,6 +106,7 @@ function mockCorrelationVoteScan(results: unknown[]) {
       nullifierHash: "raterIdentityBan.nullifierHash",
       permanent: "raterIdentityBan.permanent",
       provider: "raterIdentityBan.provider",
+      updatedAt: "raterIdentityBan.updatedAt",
     },
     round: {
       contentId: "round.contentId",

@@ -23,7 +23,6 @@ import {
 } from "./correlation-artifact-builder.js";
 import { areCorrelationCandidatesPonderFresh } from "./correlation-ponder-freshness.js";
 import {
-  readCachedCorrelationArtifact,
   runWithCorrelationSnapshotPublishLock,
   writeCachedCorrelationArtifact,
 } from "./keeper-state.js";
@@ -141,8 +140,6 @@ interface AutomaticCorrelationSnapshotPublishContext {
   candidateFingerprint?: `0x${string}`;
   rejectedEpochIds?: ReadonlySet<string>;
 }
-
-const rejectedAutomaticCorrelationCandidates = new Set<string>();
 
 function emptyResult(): CorrelationSnapshotPublisherResult {
   return {
@@ -270,31 +267,6 @@ const ClusterPayoutOracleStatusReadAbi = [
     ],
   },
 ] as const;
-
-function rejectedAutomaticCorrelationCandidateKey(
-  epochId: string,
-  candidateFingerprint: `0x${string}`,
-): string {
-  return `${epochId}:${candidateFingerprint.toLowerCase()}`;
-}
-
-function hasRejectedAutomaticCorrelationCandidate(
-  epochId: string,
-  candidateFingerprint: `0x${string}`,
-): boolean {
-  return rejectedAutomaticCorrelationCandidates.has(
-    rejectedAutomaticCorrelationCandidateKey(epochId, candidateFingerprint),
-  );
-}
-
-function rememberRejectedAutomaticCorrelationCandidate(
-  epochId: string,
-  candidateFingerprint: `0x${string}`,
-): void {
-  rejectedAutomaticCorrelationCandidates.add(
-    rejectedAutomaticCorrelationCandidateKey(epochId, candidateFingerprint),
-  );
-}
 
 function normalizeClusterRoot(clusterRoot: unknown): `0x${string}` | null {
   if (
@@ -1003,77 +975,21 @@ async function publishAutomaticCorrelationSnapshots(
   }
 
   const fingerprint = correlationSnapshotCandidateFingerprint(candidates);
-  const rejectedEpochIds = [...preflight.rejectedEpochIds];
-  if (
-    rejectedEpochIds.some((epochId) =>
-      hasRejectedAutomaticCorrelationCandidate(epochId, fingerprint),
-    )
-  ) {
-    logger.debug(
-      "Skipping automatic correlation snapshot build for previously rejected candidate fingerprint",
-      {
-        candidateFingerprint: fingerprint,
-        rejectedEpochIds,
-      },
-    );
-    return preflight.result;
-  }
-
-  const cachedArtifact = preflight.hasRejectedRoundSnapshots
-    ? null
-    : await readCachedCorrelationArtifact(
-        fingerprint,
-        logger,
-      );
   if (preflight.hasRejectedRoundSnapshots) {
     logger.debug(
-      "Skipping cached automatic correlation snapshot artifact after rejected round payout snapshot",
+      "Rebuilding automatic correlation snapshot artifact after rejected round payout snapshot",
       {
         candidateFingerprint: fingerprint,
       },
     );
   }
-  let built = cachedArtifact
-    ? await restoreConfiguredCorrelationSnapshotArtifactFromCanonicalJson(
-        cachedArtifact.canonicalJson,
-      )
-    : null;
-  if (
-    cachedArtifact &&
-    built?.artifactHash &&
-    built.artifactHash !== cachedArtifact.artifactHash
-  ) {
-    logger.warn(
-      "Ignoring cached automatic correlation snapshot artifact with mismatched hash",
-      {
-        candidateFingerprint: fingerprint,
-        cachedArtifactHash: cachedArtifact.artifactHash,
-        actualArtifactHash: built.artifactHash,
-      },
-    );
-    built = null;
-  }
-  if (cachedArtifact && built) {
-    logger.debug("Using cached automatic correlation snapshot artifact", {
-      candidateFingerprint: fingerprint,
-      artifactHash: built.artifactHash,
-      roundSnapshotCount: built.roundSnapshotCount,
-      epochCount: built.epochCount,
-      canonicalBytes: built.canonicalBytes,
-    });
-  }
-  if (!built) {
-    built = await buildConfiguredCorrelationSnapshotArtifactForCandidates(
-      candidates,
-      logger,
-      { ponderNowSeconds: options.ponderNowSeconds },
-    );
-  }
-  if (
-    (!cachedArtifact || cachedArtifact.artifactHash !== built.artifactHash) &&
-    built.artifactHash &&
-    built.canonicalJson
-  ) {
+
+  const built = await buildConfiguredCorrelationSnapshotArtifactForCandidates(
+    candidates,
+    logger,
+    { ponderNowSeconds: options.ponderNowSeconds },
+  );
+  if (built.artifactHash && built.canonicalJson) {
     await writeCachedCorrelationArtifact({
       fingerprint,
       artifactHash: built.artifactHash,
@@ -1292,10 +1208,6 @@ async function publishCorrelationSnapshotArtifact(
           automaticContext.rejectedEpochIds?.has(rejectedEpochId) &&
           existing.clusterRoot === epoch.clusterRoot.toLowerCase()
         ) {
-          rememberRejectedAutomaticCorrelationCandidate(
-            rejectedEpochId,
-            automaticContext.candidateFingerprint,
-          );
           logger.debug(
             "Skipping automatic correlation epoch proposal for rejected cluster root",
             {
