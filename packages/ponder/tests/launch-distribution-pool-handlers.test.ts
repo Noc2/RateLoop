@@ -233,6 +233,7 @@ describe("LaunchDistributionPool ponder handlers", () => {
             eligibilityRatingCount: 5,
             rewardingRatingCount: 10,
             unverifiedEarnedRaterCapBps: 10_000,
+            minAnchorCredentialAgeSeconds: 604_800,
             requireNoPendingCleanup: true,
           },
         },
@@ -270,12 +271,14 @@ describe("LaunchDistributionPool ponder handlers", () => {
         eligibilityRatingCount: 5,
         rewardingRatingCount: 10,
         unverifiedEarnedRaterCapBps: 10_000,
+        minAnchorCredentialAgeSeconds: 604_800,
         requireNoPendingCleanup: true,
         updatedAt: 700n,
       },
       update: expect.objectContaining({
         minQualifyingScoreBps: 7_000,
         unverifiedEarnedRaterCapBps: 10_000,
+        minAnchorCredentialAgeSeconds: 604_800,
         updatedAt: 700n,
       }),
     });

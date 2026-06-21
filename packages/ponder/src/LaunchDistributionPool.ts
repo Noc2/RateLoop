@@ -10,6 +10,14 @@ import {
 
 const CURRENT_LAUNCH_REWARD_POLICY_ID = "current";
 
+function requirePolicyNumber(value: unknown, label: string) {
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed)) {
+    throw new Error(`Invalid launch reward policy ${label}`);
+  }
+  return parsed;
+}
+
 function launchCreditId(
   contentId: bigint,
   roundId: bigint,
@@ -147,6 +155,10 @@ ponder.on(
   "LaunchDistributionPool:LaunchRewardPolicyUpdated",
   async ({ event, context }) => {
     const { policy } = event.args;
+    const minAnchorCredentialAgeSeconds = requirePolicyNumber(
+      policy.minAnchorCredentialAgeSeconds,
+      "minAnchorCredentialAgeSeconds",
+    );
 
     await context.db
       .insert(launchRewardPolicyState)
@@ -160,9 +172,7 @@ ponder.on(
         eligibilityRatingCount: Number(policy.eligibilityRatingCount),
         rewardingRatingCount: Number(policy.rewardingRatingCount),
         unverifiedEarnedRaterCapBps: Number(policy.unverifiedEarnedRaterCapBps),
-        minAnchorCredentialAgeSeconds: Number(
-          policy.minAnchorCredentialAgeSeconds,
-        ),
+        minAnchorCredentialAgeSeconds,
         requireNoPendingCleanup: policy.requireNoPendingCleanup,
         updatedAt: event.block.timestamp,
       })
@@ -175,9 +185,7 @@ ponder.on(
         eligibilityRatingCount: Number(policy.eligibilityRatingCount),
         rewardingRatingCount: Number(policy.rewardingRatingCount),
         unverifiedEarnedRaterCapBps: Number(policy.unverifiedEarnedRaterCapBps),
-        minAnchorCredentialAgeSeconds: Number(
-          policy.minAnchorCredentialAgeSeconds,
-        ),
+        minAnchorCredentialAgeSeconds,
         requireNoPendingCleanup: policy.requireNoPendingCleanup,
         updatedAt: event.block.timestamp,
       });
