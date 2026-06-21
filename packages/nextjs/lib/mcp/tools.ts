@@ -808,8 +808,11 @@ function feedbackBonusAmount(feedbackBonus: X402FeedbackBonusRequest | null) {
   return feedbackBonus?.amount ?? 0n;
 }
 
-function feedbackBonusPaymentCapAmount(feedbackBonus: X402FeedbackBonusRequest | null) {
-  return feedbackBonus?.amount ?? 0n;
+function feedbackBonusPaymentCapAmount(
+  feedbackBonus: X402FeedbackBonusRequest | null,
+  paymentAsset: X402QuestionPayload["bounty"]["asset"],
+) {
+  return feedbackBonus?.asset === paymentAsset ? feedbackBonus.amount : 0n;
 }
 
 function buildFeedbackBonusGuidance(feedbackBonus: X402FeedbackBonusRequest | null, payload: X402QuestionPayload) {
@@ -3305,7 +3308,8 @@ export async function callPublicRateLoopMcpTool(params: {
             ownerWalletAddress: walletAddress,
             payload: permissionlessPayload,
           });
-      const totalPaymentAmount = quote.paymentAmount + feedbackBonusPaymentCapAmount(feedbackBonus);
+      const totalPaymentAmount =
+        quote.paymentAmount + feedbackBonusPaymentCapAmount(feedbackBonus, payload.bounty.asset);
       const maxPaymentAmount = parseMaxPaymentAmount(args.maxPaymentAmount);
       if (totalPaymentAmount > maxPaymentAmount) {
         throw new McpToolError("Quoted payment exceeds maxPaymentAmount.");
@@ -3614,7 +3618,8 @@ export async function callRateLoopMcpTool(params: {
         questionCount: payload.questions.length,
         roundConfig: payload.roundConfig,
       });
-      const totalPaymentAmount = quote.paymentAmount + feedbackBonusPaymentCapAmount(feedbackBonus);
+      const totalPaymentAmount =
+        quote.paymentAmount + feedbackBonusPaymentCapAmount(feedbackBonus, payload.bounty.asset);
       const maxPaymentAmount = parseMaxPaymentAmount(args.maxPaymentAmount);
       if (totalPaymentAmount > maxPaymentAmount) {
         throw new McpToolError("Quoted payment exceeds maxPaymentAmount.");

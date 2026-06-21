@@ -1387,6 +1387,106 @@ test("rateloop_ask_humans carries optional feedback bonus and reserves total spe
   assert.equal((reserved[0] as { amount: bigint }).amount, 3_000_000n);
 });
 
+test("rateloop_ask_humans keeps mixed-asset feedback bonuses out of the scalar payment cap", async () => {
+  const prepared: unknown[] = [];
+  const reserved: unknown[] = [];
+
+  __setMcpToolTestOverridesForTests({
+    ...quoteOverrides(),
+    getMcpAgentBudgetSummary: async () => managedBudgetSummary(),
+    prepareAgentWalletQuestionSubmissionRequest: async params => {
+      prepared.push(params);
+      return {
+        body: {
+          operationKey: OPERATION_KEY,
+          payment: {
+            amount: "1000000",
+            asset: "USDC",
+            bountyAmount: "1000000",
+            decimals: 6,
+            spender: "0x0000000000000000000000000000000000000002",
+            tokenAddress: "0x0000000000000000000000000000000000000001",
+          },
+          status: "awaiting_wallet_signature",
+        },
+        status: 202,
+      };
+    },
+    reserveMcpAgentBudget: async params => {
+      reserved.push(params);
+      return budgetReservation();
+    },
+  });
+
+  const result = await callRateLoopMcpTool({
+    agent: AGENT,
+    arguments: askArguments({
+      feedbackBonus: { amount: "2000000", asset: "LREP" },
+      maxPaymentAmount: "1000000",
+    }),
+    name: "rateloop_ask_humans",
+  });
+  const body = result as unknown as {
+    feedbackBonus: { amount: string; asset: string };
+    payment: { feedbackBonusAmount: string; feedbackBonusAsset: string; totalAmount: string };
+  };
+
+  assert.equal(body.feedbackBonus.amount, "2000000");
+  assert.equal(body.feedbackBonus.asset, "LREP");
+  assert.equal(body.payment.feedbackBonusAmount, "2000000");
+  assert.equal(body.payment.feedbackBonusAsset, "LREP");
+  assert.equal(body.payment.totalAmount, "1000000");
+  assert.equal(
+    (prepared[0] as { feedbackBonus?: { amount: bigint; asset: string } }).feedbackBonus?.amount,
+    2_000_000n,
+  );
+  assert.equal((prepared[0] as { feedbackBonus?: { asset: string } }).feedbackBonus?.asset, "LREP");
+  assert.equal((reserved[0] as { amount: bigint }).amount, 1_000_000n);
+});
+
+test("rateloop_ask_humans still requires cap room for same-asset feedback bonuses", async () => {
+  __setMcpToolTestOverridesForTests({
+    ...quoteOverrides(),
+    getMcpAgentBudgetSummary: async () => managedBudgetSummary(),
+  });
+
+  await assert.rejects(
+    () =>
+      callRateLoopMcpTool({
+        agent: AGENT,
+        arguments: askArguments({
+          feedbackBonus: { amount: "2000000" },
+          maxPaymentAmount: "1000000",
+        }),
+        name: "rateloop_ask_humans",
+      }),
+    /Quoted payment exceeds maxPaymentAmount/,
+  );
+});
+
+test("public rateloop_ask_humans dry-run reports mixed-asset bonus outside totalAmount", async () => {
+  __setMcpToolTestOverridesForTests({
+    ...quoteOverrides(),
+  });
+
+  const result = await callPublicRateLoopMcpTool({
+    arguments: askArguments({
+      dryRun: true,
+      feedbackBonus: { amount: "2000000", asset: "LREP" },
+      maxPaymentAmount: "1000000",
+      walletAddress: AGENT.walletAddress,
+    }),
+    name: "rateloop_ask_humans",
+  });
+  const body = result as unknown as {
+    payment: { feedbackBonusAmount: string; feedbackBonusAsset: string; totalAmount: string };
+  };
+
+  assert.equal(body.payment.feedbackBonusAmount, "2000000");
+  assert.equal(body.payment.feedbackBonusAsset, "LREP");
+  assert.equal(body.payment.totalAmount, "1000000");
+});
+
 test("rateloop_ask_humans can return an EIP-3009 USDC authorization request", async () => {
   const prepared: unknown[] = [];
 

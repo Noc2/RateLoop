@@ -683,9 +683,22 @@ function parseMaxPaymentAmount(value: unknown): bigint {
   return BigInt(raw);
 }
 
+function normalizeSubmissionRewardAsset(value: unknown): LocalSubmissionRewardAsset {
+  if (value === undefined || value === null || value === "") return "USDC";
+  if (typeof value !== "string") {
+    throw new Error("bounty.asset must be USDC or LREP.");
+  }
+  const asset = value.trim().toUpperCase();
+  if (asset === "USDC" || asset === "LREP") return asset;
+  throw new Error("bounty.asset must be USDC or LREP.");
+}
+
 function feedbackBonusPaymentAmount(request: AskHumansRequest): bigint {
   const bonus = request.feedbackBonus;
   if (!bonus) return 0n;
+  if (normalizeFeedbackBonusAsset(bonus.asset) !== normalizeSubmissionRewardAsset(request.bounty.asset)) {
+    return 0n;
+  }
   return normalizeBigInt(bonus.amount, "feedbackBonus.amount");
 }
 

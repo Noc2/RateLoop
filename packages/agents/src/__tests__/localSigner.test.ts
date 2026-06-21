@@ -1447,6 +1447,76 @@ describe("local signer", () => {
     ).toThrow(/does not match local signer/);
   });
 
+  it("keeps mixed-asset Feedback Bonuses out of the scalar maxPaymentAmount precheck", async () => {
+    const payload = feedbackBonusAskPayload({ asset: "LREP" });
+    payload.maxPaymentAmount = X402_AMOUNT;
+    const askCalls: AskHumansRequest[] = [];
+    const agent = {
+      askHumans: async (requestPayload: AskHumansRequest) => {
+        askCalls.push(requestPayload);
+        throw new Error("mixed asset cap passed");
+      },
+      confirmAskTransactions: async () => {
+        throw new Error("confirmAskTransactions should not run");
+      },
+    } satisfies Pick<
+      RateLoopAgentClient,
+      "askHumans" | "confirmAskTransactions"
+    >;
+
+    await expect(
+      askHumansWithLocalSigner({
+        account,
+        agent,
+        config: {
+          ...validationConfig(),
+          chainId: 480,
+          chainName: "test",
+          pollingIntervalMs: 1,
+          receiptTimeoutMs: 1,
+        },
+        payload,
+        paymentMode: "wallet_calls",
+      }),
+    ).rejects.toThrow(/mixed asset cap passed/);
+
+    expect(askCalls).toHaveLength(1);
+    expect(askCalls[0].feedbackBonus?.asset).toBe("LREP");
+    expect(askCalls[0].maxPaymentAmount).toBe(X402_AMOUNT);
+  });
+
+  it("still requires cap room for same-asset Feedback Bonuses", async () => {
+    const payload = feedbackBonusAskPayload();
+    payload.maxPaymentAmount = X402_AMOUNT;
+    const agent = {
+      askHumans: async () => {
+        throw new Error("askHumans should not run");
+      },
+      confirmAskTransactions: async () => {
+        throw new Error("confirmAskTransactions should not run");
+      },
+    } satisfies Pick<
+      RateLoopAgentClient,
+      "askHumans" | "confirmAskTransactions"
+    >;
+
+    await expect(
+      askHumansWithLocalSigner({
+        account,
+        agent,
+        config: {
+          ...validationConfig(),
+          chainId: 480,
+          chainName: "test",
+          pollingIntervalMs: 1,
+          receiptTimeoutMs: 1,
+        },
+        payload,
+        paymentMode: "wallet_calls",
+      }),
+    ).rejects.toThrow(/Quoted payment exceeds maxPaymentAmount/);
+  });
+
   it("signs native x402 authorization requests", async () => {
     const paymentAuthorization = await signX402AuthorizationRequest(
       account,
