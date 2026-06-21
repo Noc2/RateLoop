@@ -64,7 +64,7 @@ function validateKeystore(keystoreName) {
     process.env.HOME,
     ".foundry",
     "keystores",
-    keystoreName,
+    keystoreName
   );
   return existsSync(keystorePath);
 }
@@ -116,7 +116,7 @@ function configureDeploymentProfile() {
   try {
     Object.assign(
       process.env,
-      buildDeploymentProfileEnv({ network }, process.env),
+      buildDeploymentProfileEnv({ network }, process.env)
     );
   } catch (error) {
     console.error(`\n❌ Error: ${error.message}`);
@@ -133,7 +133,7 @@ try {
   if (!parsedToml.rpc_endpoints[network]) {
     console.log(
       `\n❌ Error: Network '${network}' not found in foundry.toml!`,
-      "\nPlease check `foundry.toml` for available networks in the [rpc_endpoints] section or add a new network.",
+      "\nPlease check `foundry.toml` for available networks in the [rpc_endpoints] section or add a new network."
     );
     process.exit(1);
   }
@@ -151,7 +151,7 @@ if (network !== "localhost") {
     if (!validateKeystore(keystoreArg)) {
       console.log(`\n❌ Error: Keystore '${keystoreArg}' not found!`);
       console.log(
-        `Please check that the keystore exists in ~/.foundry/keystores/`,
+        `Please check that the keystore exists in ~/.foundry/keystores/`
       );
       process.exit(1);
     }
@@ -167,7 +167,7 @@ if (network !== "localhost") {
   }
 } else if (keystoreArg) {
   console.log(
-    "\nℹ️  Ignoring --keystore for localhost; local deploys use the standard Anvil private key directly.",
+    "\nℹ️  Ignoring --keystore for localhost; local deploys use the standard Anvil private key directly."
   );
 }
 
@@ -210,7 +210,7 @@ if (resume) {
 
 if (isSlowBroadcastNetwork(network)) {
   console.log(
-    `\n🐢 Using throttled slow broadcast mode for ${network} to avoid sequencer nonce and RPC rate-limit issues`,
+    `\n🐢 Using throttled slow broadcast mode for ${network} to avoid sequencer nonce and RPC rate-limit issues`
   );
 }
 
@@ -229,7 +229,7 @@ if (network !== "localhost") {
       : "etherscan=off";
     console.log(`\n⚠️  Skipping auto-verification for ${network}`);
     console.log(
-      `   Verify after deploy: ${formatBlockscoutVerifyCommand(network)}`,
+      `   Verify after deploy: ${formatBlockscoutVerifyCommand(network)}`
     );
   } else {
     try {
@@ -247,11 +247,11 @@ if (network !== "localhost") {
         console.log(`\n🔍 Verification: using Etherscan-compatible API`);
       } else if (verification.reason === "missing-api-key") {
         console.log(
-          `\n⚠️  Skipping auto-verification for ${network}: ${verification.requiredApiKeyEnv} is not set`,
+          `\n⚠️  Skipping auto-verification for ${network}: ${verification.requiredApiKeyEnv} is not set`
         );
       } else {
         console.log(
-          `\n⚠️  No explorer config for '${network}' — skipping verification`,
+          `\n⚠️  No explorer config for '${network}' — skipping verification`
         );
       }
     } catch {
@@ -274,7 +274,7 @@ const result = spawnSync("make", ["deploy-and-generate-abis"], {
 if (result.status !== 0) {
   if (!resume && network !== "localhost") {
     console.log(
-      "\n💡 If this was a partial broadcast, rerun the same deploy with --resume.",
+      "\n💡 If this was a partial broadcast, rerun the same deploy with --resume."
     );
   }
   process.exit(result.status);
@@ -286,7 +286,7 @@ if (network === "localhost") {
     __dirname,
     "..",
     "scripts-js",
-    "fundLocalKeeper.js",
+    "fundLocalKeeper.js"
   );
   const fundKeeperResult = spawnSync("node", [fundKeeperScript], {
     stdio: "inherit",

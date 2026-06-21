@@ -20,10 +20,10 @@ import {
 } from "./deployArgs.js";
 
 const parseArgsScript = fileURLToPath(
-  new URL("./parseArgs.js", import.meta.url),
+  new URL("./parseArgs.js", import.meta.url)
 );
 const checkProductionDeployGuardScript = fileURLToPath(
-  new URL("./checkProductionDeployGuard.js", import.meta.url),
+  new URL("./checkProductionDeployGuard.js", import.meta.url)
 );
 const makefilePath = fileURLToPath(new URL("../Makefile", import.meta.url));
 
@@ -46,7 +46,7 @@ test("parseDeployArgs reads supported options", () => {
       keystoreArg: "deployer",
       resume: false,
       productionRedeployConfirmation: null,
-    },
+    }
   );
 });
 
@@ -84,7 +84,7 @@ test("parseDeployArgs reads production redeploy confirmation", () => {
       keystoreArg: null,
       resume: false,
       productionRedeployConfirmation: "8453:47542128",
-    },
+    }
   );
 });
 
@@ -95,25 +95,25 @@ test("parseDeployArgs rejects unknown options", () => {
 test("parseDeployArgs rejects missing values", () => {
   assert.throws(
     () => parseDeployArgs(["--network"]),
-    /Missing value for --network/,
+    /Missing value for --network/
   );
   assert.throws(
     () => parseDeployArgs(["--confirm-production-redeploy"]),
-    /Missing value for --confirm-production-redeploy/,
+    /Missing value for --confirm-production-redeploy/
   );
 });
 
 test("parseDeployArgs rejects positional arguments", () => {
   assert.throws(
     () => parseDeployArgs(["sepolia"]),
-    /Unexpected argument: sepolia/,
+    /Unexpected argument: sepolia/
   );
 });
 
 test("parseDeployArgs rejects networks unsupported by the deploy script", () => {
   assert.throws(
     () => parseDeployArgs(["--network", "sepolia"]),
-    /Unsupported deploy network: sepolia/,
+    /Unsupported deploy network: sepolia/
   );
 });
 
@@ -126,7 +126,7 @@ test("buildDeployFlowFlags throttles live deploys", () => {
   assert.equal(isSlowBroadcastNetwork("worldchainSepolia"), true);
   assert.equal(
     buildDeployFlowFlags("baseSepolia", {}),
-    "--slow --compute-units-per-second 25 --rpc-timeout 120 --timeout 300",
+    "--slow --compute-units-per-second 25 --rpc-timeout 120 --timeout 300"
   );
 });
 
@@ -137,7 +137,7 @@ test("buildDeployFlowFlags accepts neutral live throttle overrides", () => {
       RATELOOP_LIVE_DEPLOY_RPC_TIMEOUT_SECONDS: "180",
       RATELOOP_LIVE_DEPLOY_BROADCAST_TIMEOUT_SECONDS: "600",
     }),
-    "--slow --compute-units-per-second 10 --rpc-timeout 180 --timeout 600",
+    "--slow --compute-units-per-second 10 --rpc-timeout 180 --timeout 600"
   );
 });
 
@@ -148,7 +148,7 @@ test("buildDeployFlowFlags accepts legacy World Chain throttle overrides", () =>
       WORLDCHAIN_DEPLOY_RPC_TIMEOUT_SECONDS: "180",
       WORLDCHAIN_DEPLOY_BROADCAST_TIMEOUT_SECONDS: "600",
     }),
-    "--slow --compute-units-per-second 10 --rpc-timeout 180 --timeout 600",
+    "--slow --compute-units-per-second 10 --rpc-timeout 180 --timeout 600"
   );
 });
 
@@ -159,7 +159,7 @@ test("buildDeploymentProfileEnv defaults mainnets to production", () => {
     }),
     {
       [RATELOOP_DEPLOYMENT_PROFILE_ENV]: PRODUCTION_DEPLOYMENT_PROFILE,
-    },
+    }
   );
 });
 
@@ -172,9 +172,9 @@ test("buildDeploymentProfileEnv rejects non-production mainnet profile overrides
         },
         {
           [RATELOOP_DEPLOYMENT_PROFILE_ENV]: "staging",
-        },
+        }
       ),
-    /must be production/,
+    /must be production/
   );
 });
 
@@ -185,7 +185,7 @@ test("buildDeploymentProfileEnv defaults non-mainnet deployments to default", ()
     }),
     {
       [RATELOOP_DEPLOYMENT_PROFILE_ENV]: DEFAULT_DEPLOYMENT_PROFILE,
-    },
+    }
   );
 });
 
@@ -193,7 +193,7 @@ test("production deploy help avoids ordinary mainnet redeploy examples", () => {
   assert.match(DEPLOY_HELP_TEXT, /--confirm-production-redeploy/);
   assert.doesNotMatch(
     DEPLOY_HELP_TEXT,
-    /yarn deploy --network base --keystore/,
+    /yarn deploy --network base --keystore/
   );
 });
 
@@ -203,7 +203,7 @@ test("buildProductionRedeployConfirmationToken uses chain and deployment block",
       chainId: 8453,
       deploymentBlockNumber: 47542128,
     }),
-    "8453:47542128",
+    "8453:47542128"
   );
 });
 
@@ -217,7 +217,7 @@ test("validateProductionRedeployConfirmation ignores non-production networks", (
     {
       required: false,
       expectedToken: null,
-    },
+    }
   );
 });
 
@@ -233,7 +233,7 @@ test("validateProductionRedeployConfirmation rejects existing production artifac
         },
         confirmation: null,
       }),
-    /production contracts are already deployed/,
+    /production contracts are already deployed/
   );
 });
 
@@ -251,7 +251,7 @@ test("validateProductionRedeployConfirmation accepts the current artifact token"
     {
       required: true,
       expectedToken: "8453:47542128",
-    },
+    }
   );
 });
 
@@ -267,7 +267,7 @@ test("validateProductionRedeployConfirmation message names the env break-glass t
         },
         confirmation: "8453:1",
       }),
-    new RegExp(`${PRODUCTION_REDEPLOY_CONFIRMATION_ENV}=8453:47542128`),
+    new RegExp(`${PRODUCTION_REDEPLOY_CONFIRMATION_ENV}=8453:47542128`)
   );
 });
 
@@ -283,7 +283,7 @@ test("validateProductionRedeployConfirmation rejects mismatched production artif
         },
         confirmation: "8453:47542128",
       }),
-    /existing production artifact is for worldchain/,
+    /existing production artifact is for worldchain/
   );
 });
 
@@ -297,7 +297,7 @@ test("deploy wrapper rejects production redeploys before keystore selection", ()
         ...process.env,
         HOME: "/tmp/rateloop-missing-keystore-home",
       },
-    },
+    }
   );
 
   assert.notEqual(result.status, 0);
@@ -306,14 +306,18 @@ test("deploy wrapper rejects production redeploys before keystore selection", ()
 });
 
 test("direct make deploy guard rejects production redeploys without confirmation", () => {
-  const result = spawnSync(process.execPath, [checkProductionDeployGuardScript], {
-    encoding: "utf8",
-    env: {
-      ...process.env,
-      DEPLOY_TARGET_NETWORK: "base",
-      RPC_URL: "https://base.example.invalid",
-    },
-  });
+  const result = spawnSync(
+    process.execPath,
+    [checkProductionDeployGuardScript],
+    {
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        DEPLOY_TARGET_NETWORK: "base",
+        RPC_URL: "https://base.example.invalid",
+      },
+    }
+  );
 
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /production contracts are already deployed/);
@@ -325,51 +329,75 @@ test("direct make deploy guard accepts the current production artifact token", (
     chainId: 8453,
     deploymentBlockNumber: deployment.deploymentBlockNumber,
   });
-  const result = spawnSync(process.execPath, [checkProductionDeployGuardScript], {
-    encoding: "utf8",
-    env: {
-      ...process.env,
-      DEPLOY_TARGET_NETWORK: "base",
-      RATELOOP_CONFIRM_PRODUCTION_REDEPLOY: token,
-      RPC_URL: "https://base.example.invalid",
-    },
-  });
+  const result = spawnSync(
+    process.execPath,
+    [checkProductionDeployGuardScript],
+    {
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        DEPLOY_TARGET_NETWORK: "base",
+        RATELOOP_CONFIRM_PRODUCTION_REDEPLOY: token,
+        RPC_URL: "https://base.example.invalid",
+      },
+    }
+  );
 
   assert.equal(result.status, 0);
 });
 
 test("direct make deploy guard rejects raw live RPC URLs without target network", () => {
-  const result = spawnSync(process.execPath, [checkProductionDeployGuardScript], {
-    encoding: "utf8",
-    env: {
-      ...process.env,
-      DEPLOY_TARGET_NETWORK: "",
-      RPC_URL: "https://base.example.invalid",
-    },
-  });
+  const result = spawnSync(
+    process.execPath,
+    [checkProductionDeployGuardScript],
+    {
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        DEPLOY_TARGET_NETWORK: "",
+        RPC_URL: "https://base.example.invalid",
+      },
+    }
+  );
 
   assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /Refusing live make deploy without DEPLOY_TARGET_NETWORK/);
+  assert.match(
+    result.stderr,
+    /Refusing live make deploy without DEPLOY_TARGET_NETWORK/
+  );
 });
 
 test("direct make deploy guard allows explicit staging targets", () => {
-  const result = spawnSync(process.execPath, [checkProductionDeployGuardScript], {
-    encoding: "utf8",
-    env: {
-      ...process.env,
-      DEPLOY_TARGET_NETWORK: "baseSepolia",
-      RPC_URL: "https://base-sepolia.example.invalid",
-    },
-  });
+  const result = spawnSync(
+    process.execPath,
+    [checkProductionDeployGuardScript],
+    {
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        DEPLOY_TARGET_NETWORK: "baseSepolia",
+        RPC_URL: "https://base-sepolia.example.invalid",
+      },
+    }
+  );
 
   assert.equal(result.status, 0);
 });
 
 test("Make live deploys run the production guard before Forge work", () => {
   const makefile = readFileSync(makefilePath, "utf8");
-  assert.match(makefile, /guard-production-deploy:\n\t@node scripts-js\/checkProductionDeployGuard\.js/);
-  assert.match(makefile, /deploy-and-generate-abis: guard-production-deploy check-contract-sizes/);
-  assert.match(makefile, /\$\(MAKE\) guard-production-deploy \|\| exit 1; \\\n\t\tFOUNDRY_PROFILE=.*forge script/s);
+  assert.match(
+    makefile,
+    /guard-production-deploy:\n\t@node scripts-js\/checkProductionDeployGuard\.js/
+  );
+  assert.match(
+    makefile,
+    /deploy-and-generate-abis: guard-production-deploy check-contract-sizes/
+  );
+  assert.match(
+    makefile,
+    /\$\(MAKE\) guard-production-deploy \|\| exit 1; \\\n\t\tFOUNDRY_PROFILE=.*forge script/s
+  );
 });
 
 test("resolveEtherscanVerification skips when the required API key env is missing", () => {
@@ -385,7 +413,7 @@ test("resolveEtherscanVerification skips when the required API key env is missin
       verifyFlags: "",
       reason: "missing-api-key",
       requiredApiKeyEnv: "BASESCAN_API_KEY",
-    },
+    }
   );
 });
 
@@ -404,6 +432,6 @@ test("resolveEtherscanVerification enables verification when the required API ke
       verifyFlags: "--verify",
       reason: "enabled",
       requiredApiKeyEnv: "BASESCAN_API_KEY",
-    },
+    }
   );
 });

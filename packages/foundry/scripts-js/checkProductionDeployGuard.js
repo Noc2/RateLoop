@@ -20,7 +20,7 @@ function readDeployTargetNetwork(env = process.env) {
     if (parsed.network === rpcUrl) return parsed.network;
   } catch {
     throw new Error(
-      "Refusing live make deploy without DEPLOY_TARGET_NETWORK. Use `yarn deploy --network <network>` or set DEPLOY_TARGET_NETWORK to the intended supported network.",
+      "Refusing live make deploy without DEPLOY_TARGET_NETWORK. Use `yarn deploy --network <network>` or set DEPLOY_TARGET_NETWORK to the intended supported network."
     );
   }
 
@@ -34,7 +34,7 @@ function main() {
   const rpcUrl = process.env.RPC_URL?.trim();
   if (!process.env.DEPLOY_TARGET_NETWORK?.trim() && rpcUrl !== network) {
     throw new Error(
-      "Refusing live make deploy without DEPLOY_TARGET_NETWORK. Use `yarn deploy --network <network>` or set DEPLOY_TARGET_NETWORK to the intended supported network.",
+      "Refusing live make deploy without DEPLOY_TARGET_NETWORK. Use `yarn deploy --network <network>` or set DEPLOY_TARGET_NETWORK to the intended supported network."
     );
   }
 

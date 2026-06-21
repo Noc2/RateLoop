@@ -51,7 +51,7 @@ function readOptionValue(args, index, optionName) {
   const value = args[index + 1];
   if (!value || value.startsWith("-")) {
     throw new Error(
-      `Missing value for ${optionName}. Run \`yarn deploy --help\` for usage.`,
+      `Missing value for ${optionName}. Run \`yarn deploy --help\` for usage.`
     );
   }
   return value;
@@ -97,7 +97,7 @@ export function parseDeployArgs(args) {
       productionRedeployConfirmation = readOptionValue(
         args,
         i,
-        "--confirm-production-redeploy",
+        "--confirm-production-redeploy"
       );
       i++;
       continue;
@@ -105,20 +105,20 @@ export function parseDeployArgs(args) {
 
     if (arg.startsWith("-")) {
       throw new Error(
-        `Unknown option: ${arg}. Run \`yarn deploy --help\` for usage.`,
+        `Unknown option: ${arg}. Run \`yarn deploy --help\` for usage.`
       );
     }
 
     throw new Error(
-      `Unexpected argument: ${arg}. Run \`yarn deploy --help\` for usage.`,
+      `Unexpected argument: ${arg}. Run \`yarn deploy --help\` for usage.`
     );
   }
 
   if (!SUPPORTED_DEPLOY_NETWORKS.has(network)) {
     throw new Error(
       `Unsupported deploy network: ${network}. Supported networks: ${Array.from(
-        SUPPORTED_DEPLOY_NETWORKS,
-      ).join(", ")}.`,
+        SUPPORTED_DEPLOY_NETWORKS
+      ).join(", ")}.`
     );
   }
 
@@ -151,8 +151,8 @@ export function buildDeployFlowFlags(network, env = process.env) {
     envValue(
       env,
       "WORLDCHAIN_DEPLOY_COMPUTE_UNITS_PER_SECOND",
-      DEFAULT_LIVE_DEPLOY_COMPUTE_UNITS_PER_SECOND,
-    ),
+      DEFAULT_LIVE_DEPLOY_COMPUTE_UNITS_PER_SECOND
+    )
   );
   const rpcTimeoutSeconds = envValue(
     env,
@@ -160,8 +160,8 @@ export function buildDeployFlowFlags(network, env = process.env) {
     envValue(
       env,
       "WORLDCHAIN_DEPLOY_RPC_TIMEOUT_SECONDS",
-      DEFAULT_LIVE_DEPLOY_RPC_TIMEOUT_SECONDS,
-    ),
+      DEFAULT_LIVE_DEPLOY_RPC_TIMEOUT_SECONDS
+    )
   );
   const broadcastTimeoutSeconds = envValue(
     env,
@@ -169,8 +169,8 @@ export function buildDeployFlowFlags(network, env = process.env) {
     envValue(
       env,
       "WORLDCHAIN_DEPLOY_BROADCAST_TIMEOUT_SECONDS",
-      DEFAULT_LIVE_DEPLOY_BROADCAST_TIMEOUT_SECONDS,
-    ),
+      DEFAULT_LIVE_DEPLOY_BROADCAST_TIMEOUT_SECONDS
+    )
   );
 
   return [
@@ -195,7 +195,7 @@ export function buildDeploymentProfileEnv({ network }, env = process.env) {
     existingProfile !== PRODUCTION_DEPLOYMENT_PROFILE
   ) {
     throw new Error(
-      `${RATELOOP_DEPLOYMENT_PROFILE_ENV} must be ${PRODUCTION_DEPLOYMENT_PROFILE} for mainnet deployments.`,
+      `${RATELOOP_DEPLOYMENT_PROFILE_ENV} must be ${PRODUCTION_DEPLOYMENT_PROFILE} for mainnet deployments.`
     );
   }
 
@@ -212,7 +212,10 @@ export function getProductionDeployChainId(network) {
   return PRODUCTION_DEPLOY_CHAIN_IDS[network] ?? null;
 }
 
-export function readProductionDeploymentArtifact(network, rootDir = foundryPackageRoot) {
+export function readProductionDeploymentArtifact(
+  network,
+  rootDir = foundryPackageRoot
+) {
   const chainId = getProductionDeployChainId(network);
   if (!chainId) return null;
   const deploymentPath = join(rootDir, "deployments", `${chainId}.json`);
@@ -231,7 +234,7 @@ export function buildProductionRedeployConfirmationToken({
   const parsedDeploymentBlockNumber = Number(deploymentBlockNumber);
   if (!Number.isInteger(parsedChainId) || parsedChainId <= 0) {
     throw new Error(
-      "Production redeploy confirmation requires a valid chain ID.",
+      "Production redeploy confirmation requires a valid chain ID."
     );
   }
   if (
@@ -239,7 +242,7 @@ export function buildProductionRedeployConfirmationToken({
     parsedDeploymentBlockNumber <= 0
   ) {
     throw new Error(
-      "Production redeploy confirmation requires a valid deploymentBlockNumber.",
+      "Production redeploy confirmation requires a valid deploymentBlockNumber."
     );
   }
   return `${parsedChainId}:${parsedDeploymentBlockNumber}`;
@@ -264,19 +267,21 @@ export function validateProductionRedeployConfirmation({
 
   if (!deploymentJson || typeof deploymentJson !== "object") {
     throw new Error(
-      `Refusing to deploy to ${network}: missing existing production deployment artifact for chain ${chainId}. Restore the artifact or use a dedicated incident runbook before redeploying.`,
+      `Refusing to deploy to ${network}: missing existing production deployment artifact for chain ${chainId}. Restore the artifact or use a dedicated incident runbook before redeploying.`
     );
   }
 
   if (deploymentJson.networkName !== network) {
     throw new Error(
-      `Refusing to deploy to ${network}: existing production artifact is for ${deploymentJson.networkName ?? "unknown network"}.`,
+      `Refusing to deploy to ${network}: existing production artifact is for ${
+        deploymentJson.networkName ?? "unknown network"
+      }.`
     );
   }
 
   if (deploymentJson.deploymentProfile !== PRODUCTION_DEPLOYMENT_PROFILE) {
     throw new Error(
-      `Refusing to deploy to ${network}: existing deployment artifact must use deploymentProfile=${PRODUCTION_DEPLOYMENT_PROFILE}.`,
+      `Refusing to deploy to ${network}: existing deployment artifact must use deploymentProfile=${PRODUCTION_DEPLOYMENT_PROFILE}.`
     );
   }
 
@@ -292,7 +297,7 @@ export function validateProductionRedeployConfirmation({
         `Refusing to deploy to ${network}: production contracts are already deployed.`,
         "For routine configuration, indexing, UI, keeper, or operator changes, use the existing deployment.",
         `If this is a deliberate incident/governance redeploy, pass --confirm-production-redeploy ${expectedToken} or set ${PRODUCTION_REDEPLOY_CONFIRMATION_ENV}=${expectedToken}.`,
-      ].join(" "),
+      ].join(" ")
     );
   }
 
