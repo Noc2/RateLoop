@@ -67,6 +67,7 @@ export async function GET(request: NextRequest) {
     }
     const context = await resolveContentFeedbackRoundContext(normalized.payload.contentId, deployment.chainId);
     const result = await listContentFeedback({
+      chainId: deployment.chainId,
       deploymentKey: deployment.deploymentKey,
       contentId: normalized.payload.contentId,
       context,

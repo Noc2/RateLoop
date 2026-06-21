@@ -7,6 +7,7 @@ import { useDeployedContractInfo } from "~~/hooks/scaffold-eth";
 import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import { usePageVisibility } from "~~/hooks/usePageVisibility";
 import { usePonderQuery } from "~~/hooks/usePonderQuery";
+import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 import { getVoteCooldownRemainingSeconds } from "~~/lib/vote/cooldown";
 import {
   type VoteCooldownContractInfo,
@@ -55,6 +56,7 @@ function normalizeVoters(voters: readonly string[]) {
 
 export function useVoteCooldowns({ contentIds, voters, nowSeconds, enabled = true }: UseVoteCooldownsParams) {
   const { targetNetwork } = useTargetNetwork();
+  const deployment = useMemo(() => resolveProtocolDeploymentScope(targetNetwork.id), [targetNetwork.id]);
   const publicClient = usePublicClient({ chainId: targetNetwork.id });
   const isPageVisible = usePageVisibility();
   const { data: votingEngineInfo } = useDeployedContractInfo({
@@ -77,16 +79,27 @@ export function useVoteCooldowns({ contentIds, voters, nowSeconds, enabled = tru
   const rpcCooldownFallbackEnabled = Boolean(publicClient && voteCooldownContractInfo?.address && voteCommittedEvent);
 
   const { data: result, isLoading } = usePonderQuery<PonderVoteCooldownsResponse, PonderVoteCooldownsResponse>({
-    queryKey: ["voteCooldowns", targetNetwork.id, voteCooldownContractInfo?.address ?? null, contentIdsKey, votersKey],
+    queryKey: [
+      "voteCooldowns",
+      targetNetwork.id,
+      deployment?.deploymentKey ?? null,
+      voteCooldownContractInfo?.address ?? null,
+      contentIdsKey,
+      votersKey,
+    ],
+    availabilityDeploymentKey: deployment?.deploymentKey,
     enabled: queryEnabled,
     ponderFn: async () => {
       const batches = chunkList(normalizedContentIds, PONDER_VOTE_COOLDOWN_CONTENT_ID_BATCH_SIZE);
       const responses = await Promise.all(
         batches.map(batch =>
-          ponderApi.getVoteCooldowns({
-            contentIds: batch.join(","),
-            voters: votersKey,
-          }),
+          ponderApi.getVoteCooldowns(
+            {
+              contentIds: batch.join(","),
+              voters: votersKey,
+            },
+            { chainId: targetNetwork.id, deploymentKey: deployment?.deploymentKey },
+          ),
         ),
       );
 

@@ -7,6 +7,7 @@ import { type ClaimableRewardItem, type QuestionRewardPayoutWeight } from "~~/ho
 import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import { useDelegation } from "~~/hooks/useDelegation";
 import { usePonderQuery } from "~~/hooks/usePonderQuery";
+import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 import {
   QUESTION_REWARD_POOL_ESCROW_ABI,
   getConfiguredQuestionRewardPoolEscrowAddress,
@@ -17,12 +18,25 @@ import {
   ponderApi,
 } from "~~/services/ponder/client";
 
-export function getClaimableQuestionRewardsQueryKey(addresses?: readonly string[], chainId?: number) {
-  return ["claimableQuestionRewards", addresses?.join(",") ?? null, chainId ?? null] as const;
+export function getClaimableQuestionRewardsQueryKey(
+  addresses?: readonly string[],
+  chainId?: number,
+  deploymentKey?: string | null,
+) {
+  return ["claimableQuestionRewards", addresses?.join(",") ?? null, chainId ?? null, deploymentKey ?? null] as const;
 }
 
-function getClaimableQuestionBundleRewardsQueryKey(addresses?: readonly string[], chainId?: number) {
-  return ["claimableQuestionBundleRewards", addresses?.join(",") ?? null, chainId ?? null] as const;
+function getClaimableQuestionBundleRewardsQueryKey(
+  addresses?: readonly string[],
+  chainId?: number,
+  deploymentKey?: string | null,
+) {
+  return [
+    "claimableQuestionBundleRewards",
+    addresses?.join(",") ?? null,
+    chainId ?? null,
+    deploymentKey ?? null,
+  ] as const;
 }
 
 export function buildClaimableQuestionRewardCandidateVoters(params: {
@@ -83,6 +97,7 @@ function buildPayoutProof(candidate: PonderQuestionRewardClaimCandidate | Ponder
 export function useClaimableQuestionRewards() {
   const { address } = useAccount();
   const { targetNetwork } = useTargetNetwork();
+  const deployment = useMemo(() => resolveProtocolDeploymentScope(targetNetwork.id), [targetNetwork.id]);
   const normalizedAddress = address?.toLowerCase();
   const { delegateTo, delegateOf, isLoading: delegationLoading } = useDelegation(normalizedAddress);
   const escrowAddress = useMemo(
@@ -105,10 +120,15 @@ export function useClaimableQuestionRewards() {
     isLoading: candidatesLoading,
     refetch: refetchCandidates,
   } = usePonderQuery({
-    queryKey: getClaimableQuestionRewardsQueryKey(candidateVoters, targetNetwork.id),
+    queryKey: getClaimableQuestionRewardsQueryKey(candidateVoters, targetNetwork.id, deployment?.deploymentKey),
+    availabilityDeploymentKey: deployment?.deploymentKey,
     ponderFn: async () => {
       if (!voterQuery) return [];
-      const response = await ponderApi.getQuestionRewardClaimCandidates(voterQuery, { limit: "200" });
+      const response = await ponderApi.getQuestionRewardClaimCandidates(
+        voterQuery,
+        { limit: "200" },
+        { chainId: targetNetwork.id, deploymentKey: deployment?.deploymentKey },
+      );
       return response.items;
     },
     rpcFn: async () => [],
@@ -121,10 +141,15 @@ export function useClaimableQuestionRewards() {
     isLoading: bundleCandidatesLoading,
     refetch: refetchBundleCandidates,
   } = usePonderQuery({
-    queryKey: getClaimableQuestionBundleRewardsQueryKey(candidateVoters, targetNetwork.id),
+    queryKey: getClaimableQuestionBundleRewardsQueryKey(candidateVoters, targetNetwork.id, deployment?.deploymentKey),
+    availabilityDeploymentKey: deployment?.deploymentKey,
     ponderFn: async () => {
       if (!voterQuery) return [];
-      const response = await ponderApi.getQuestionBundleRewardClaimCandidates(voterQuery, { limit: "200" });
+      const response = await ponderApi.getQuestionBundleRewardClaimCandidates(
+        voterQuery,
+        { limit: "200" },
+        { chainId: targetNetwork.id, deploymentKey: deployment?.deploymentKey },
+      );
       return response.items;
     },
     rpcFn: async () => [],

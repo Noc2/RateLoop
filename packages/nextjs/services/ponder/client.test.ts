@@ -116,7 +116,7 @@ test("isPonderAvailable proxies browser health checks through Next", async () =>
 
   Object.defineProperty(globalThis, "window", {
     configurable: true,
-    value: {},
+    value: { location: { origin: "http://localhost:3000" } },
   });
 
   globalThis.fetch = (async (input, init) => {
@@ -144,6 +144,41 @@ test("isPonderAvailable proxies browser health checks through Next", async () =>
 
   assert.equal(requestedUrl, "/api/ponder/availability");
   assert.equal(requestedCache, "no-store");
+});
+
+test("isPonderAvailable includes explicit deployment keys in browser health checks", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+  let requestedUrl = "";
+
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: { location: { origin: "http://localhost:3000" } },
+  });
+
+  globalThis.fetch = (async input => {
+    requestedUrl = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    return new Response(JSON.stringify({ available: true }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    invalidatePonderCache();
+
+    assert.equal(await isPonderAvailable("84532:0xabc:0xdef"), true);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalWindow) {
+      Object.defineProperty(globalThis, "window", originalWindow);
+    } else {
+      delete (globalThis as { window?: unknown }).window;
+    }
+    invalidatePonderCache();
+  }
+
+  assert.equal(requestedUrl, "/api/ponder/availability?deploymentKey=84532%3A0xabc%3A0xdef");
 });
 
 test("isPonderAvailable retries transient deployment probe failures", async () => {
@@ -528,6 +563,78 @@ test("ponderApi.getContent can preflight and stamp an explicit chain deployment"
   assert.match(requestedUrls[0] ?? "", /\/health$/);
   assert.match(requestedUrls[1] ?? "", /\/deployment$/);
   assert.match(requestedUrls[2] ?? "", /\/content$/);
+});
+
+test("protocol data reads preflight an explicit deployment key", async () => {
+  const originalFetch = globalThis.fetch;
+  assert.ok(BASE_SEPOLIA_PONDER_DEPLOYMENT);
+  const expectedDeploymentKey = BASE_SEPOLIA_PONDER_DEPLOYMENT.deploymentKey;
+  const requestedUrls: string[] = [];
+
+  globalThis.fetch = (async input => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    requestedUrls.push(url);
+    const preflightResponse = healthyPonderPreflightResponseForDeployment(url, BASE_SEPOLIA_PONDER_DEPLOYMENT);
+    if (preflightResponse) return preflightResponse;
+
+    if (url.includes("/vote-cooldowns")) {
+      return new Response(JSON.stringify({ items: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+
+    return new Response(
+      JSON.stringify({
+        items: [],
+        total: 0,
+        settledTotal: 0,
+        limit: 25,
+        offset: 0,
+        hasMore: false,
+      }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
+  }) as typeof fetch;
+
+  try {
+    invalidatePonderCache({ clearLastKnownGood: true });
+
+    const options = {
+      chainId: BASE_SEPOLIA_PONDER_DEPLOYMENT.chainId,
+      deploymentKey: expectedDeploymentKey,
+    };
+    await ponderApi.getVotes({ voter: "0x1234567890abcdef1234567890abcdef12345678" }, options);
+    await ponderApi.getContentFeedback({ contentId: "42" }, options);
+    await ponderApi.getFeedbackBonusPools({ contentId: "42" }, options);
+    await ponderApi.getFeedbackBonusAwards({ contentId: "42" }, options);
+    await ponderApi.getVoteCooldowns({ contentIds: "42" }, options);
+    await ponderApi.getQuestionRewardClaimCandidates("0x1234567890abcdef1234567890abcdef12345678", undefined, options);
+    await ponderApi.getQuestionBundleRewardClaimCandidates(
+      "0x1234567890abcdef1234567890abcdef12345678",
+      undefined,
+      options,
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+    invalidatePonderCache({ clearLastKnownGood: true });
+  }
+
+  assert.match(requestedUrls[0] ?? "", /\/health$/);
+  assert.match(requestedUrls[1] ?? "", /\/deployment$/);
+  const dataUrls = requestedUrls.filter(url => !isPonderPreflightUrl(url));
+  assert.deepEqual(
+    dataUrls.map(url => new URL(url).pathname),
+    [
+      "/votes",
+      "/content-feedback",
+      "/feedback-bonus-pools",
+      "/feedback-bonus-awards",
+      "/vote-cooldowns",
+      "/question-reward-claim-candidates",
+      "/question-bundle-claim-candidates",
+    ],
+  );
 });
 
 test("ponderApi.getContentWindow respects hasMore when search totals are omitted", async () => {

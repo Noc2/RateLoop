@@ -81,10 +81,15 @@ export interface PonderAvailabilityStatus {
   deployment?: PonderDeploymentMetadata | null;
 }
 
-let cachedAvailabilityStatus: PonderAvailabilityStatus | null = null;
 let lastKnownGoodAvailabilityStatus: PonderAvailabilityStatus | null = null;
-let cacheExpiry = 0;
-let availabilityPromise: Promise<PonderAvailabilityStatus> | null = null;
+const availabilityCache = new Map<
+  string,
+  {
+    status: PonderAvailabilityStatus | null;
+    expiry: number;
+    promise: Promise<PonderAvailabilityStatus> | null;
+  }
+>();
 
 const HEALTH_CHECK_TIMEOUT = 2000;
 const PONDER_REQUEST_TIMEOUT = 10_000;
@@ -298,6 +303,10 @@ function normalizeDeploymentKey(value: string | null | undefined) {
   return deploymentKey ? deploymentKey : null;
 }
 
+function availabilityCacheKey(expectedDeploymentKey?: string | null) {
+  return normalizeDeploymentKey(expectedDeploymentKey) ?? "__default__";
+}
+
 function getDefaultExpectedPonderDeploymentScope(): ExpectedPonderDeploymentScope | null {
   const chainId = scaffoldConfig.targetNetworks[0]?.id;
   return typeof chainId === "number" ? resolveProtocolDeploymentScope(chainId) : null;
@@ -417,31 +426,41 @@ export async function getPonderAvailabilityStatus(
   if (shouldBypassPonderAvailabilityPreflight()) {
     return getBypassedPonderAvailabilityStatus(explicitDeploymentKey);
   }
-  if (explicitDeploymentKey) {
-    return checkPonderAvailabilityDirect(ponderUrl, { deploymentKey: explicitDeploymentKey });
+
+  const cacheKey = availabilityCacheKey(explicitDeploymentKey);
+  const cached = availabilityCache.get(cacheKey);
+  if (cached?.status !== null && cached !== undefined && Date.now() < cached.expiry) {
+    return cached.status;
+  }
+  if (cached?.promise) {
+    return cached.promise;
   }
 
-  if (cachedAvailabilityStatus !== null && Date.now() < cacheExpiry) {
-    return cachedAvailabilityStatus;
-  }
-
-  if (availabilityPromise) {
-    return availabilityPromise;
-  }
-
-  availabilityPromise = (async () => {
-    cachedAvailabilityStatus =
+  const promise = (async () => {
+    const status =
       typeof window === "undefined"
-        ? await checkPonderAvailabilityDirect(ponderUrl)
-        : await checkPonderAvailabilityThroughApi();
+        ? await checkPonderAvailabilityDirect(
+            ponderUrl,
+            explicitDeploymentKey ? { deploymentKey: explicitDeploymentKey } : undefined,
+          )
+        : await checkPonderAvailabilityThroughApi(explicitDeploymentKey);
 
-    cacheExpiry = Date.now() + CACHE_DURATION;
-    availabilityPromise = null;
+    availabilityCache.set(cacheKey, {
+      status,
+      expiry: Date.now() + CACHE_DURATION,
+      promise: null,
+    });
 
-    return cachedAvailabilityStatus;
+    return status;
   })();
 
-  return availabilityPromise;
+  availabilityCache.set(cacheKey, {
+    status: null,
+    expiry: 0,
+    promise,
+  });
+
+  return promise;
 }
 
 export async function isPonderAvailable(expectedDeploymentKey?: string | null): Promise<boolean> {
@@ -501,9 +520,16 @@ async function checkPonderAvailabilityDirect(
   }
 }
 
-async function checkPonderAvailabilityThroughApi(): Promise<PonderAvailabilityStatus> {
+async function checkPonderAvailabilityThroughApi(
+  expectedDeploymentKey?: string | null,
+): Promise<PonderAvailabilityStatus> {
   try {
-    const res = await fetch("/api/ponder/availability", {
+    const url = new URL("/api/ponder/availability", window.location.origin);
+    const deploymentKey = normalizeDeploymentKey(expectedDeploymentKey);
+    if (deploymentKey) {
+      url.searchParams.set("deploymentKey", deploymentKey);
+    }
+    const res = await fetch(`${url.pathname}${url.search}`, {
       cache: "no-store",
       signal: AbortSignal.timeout(HEALTH_CHECK_TIMEOUT),
     });
@@ -520,9 +546,7 @@ async function checkPonderAvailabilityThroughApi(): Promise<PonderAvailabilitySt
 }
 
 export function invalidatePonderCache(options?: { clearLastKnownGood?: boolean }) {
-  cachedAvailabilityStatus = null;
-  cacheExpiry = 0;
-  availabilityPromise = null;
+  availabilityCache.clear();
   if (options?.clearLastKnownGood) {
     lastKnownGoodAvailabilityStatus = null;
   }
@@ -533,10 +557,7 @@ async function assertPonderAvailableForDeployment(expectedDeploymentKey?: string
     return getBypassedPonderAvailabilityStatus(expectedDeploymentKey);
   }
 
-  const explicitDeploymentKey = normalizeDeploymentKey(expectedDeploymentKey);
-  const status = explicitDeploymentKey
-    ? await checkPonderAvailabilityDirect(getRequiredPonderUrl(), { deploymentKey: explicitDeploymentKey })
-    : await getPonderAvailabilityStatus();
+  const status = await getPonderAvailabilityStatus(expectedDeploymentKey);
   if (!status.available) {
     throw new Error(`Ponder is unavailable for this deployment: ${status.reason ?? "unknown"}`);
   }
@@ -1701,17 +1722,29 @@ export const ponderApi = {
     } satisfies PonderContentResponse;
   },
 
-  getRounds(params?: { contentId?: string; state?: string; submitter?: string; limit?: string; offset?: string }) {
-    return ponderGet<PonderRoundsResponse>("/rounds", params);
+  getRounds(
+    params?: { contentId?: string; state?: string; submitter?: string; limit?: string; offset?: string },
+    options?: PonderDeploymentOptions,
+  ) {
+    const deployment = getExpectedPonderDeploymentScope(options);
+    return ponderGet<PonderRoundsResponse>("/rounds", params, {
+      expectedDeploymentKey: deployment?.deploymentKey,
+    });
   },
 
-  async getAllRounds(params?: { contentId?: string; state?: string; submitter?: string }) {
+  async getAllRounds(
+    params?: { contentId?: string; state?: string; submitter?: string },
+    options?: PonderDeploymentOptions,
+  ) {
     return getAllPages(offset =>
-      ponderApi.getRounds({
-        ...params,
-        limit: String(PONDER_PAGE_LIMIT),
-        offset: String(offset),
-      }),
+      ponderApi.getRounds(
+        {
+          ...params,
+          limit: String(PONDER_PAGE_LIMIT),
+          offset: String(offset),
+        },
+        options,
+      ),
     );
   },
 
@@ -1921,50 +1954,77 @@ export const ponderApi = {
     return ponderGet<PonderRaterParticipationStatusResponse>(`/rater-participation-status/${address}`);
   },
 
-  getVotes(params?: {
-    voter?: string;
-    contentId?: string;
-    roundId?: string;
-    state?: string;
-    limit?: string;
-    offset?: string;
-  }) {
-    return ponderGet<PonderVotesResponse>("/votes", params);
+  getVotes(
+    params?: {
+      voter?: string;
+      contentId?: string;
+      roundId?: string;
+      state?: string;
+      limit?: string;
+      offset?: string;
+    },
+    options?: PonderDeploymentOptions,
+  ) {
+    const deployment = getExpectedPonderDeploymentScope(options);
+    return ponderGet<PonderVotesResponse>("/votes", params, {
+      expectedDeploymentKey: deployment?.deploymentKey,
+    });
   },
 
-  getContentFeedback(params: {
-    contentId: string;
-    roundId?: string;
-    author?: string;
-    limit?: string;
-    offset?: string;
-  }) {
-    return ponderGet<PonderContentFeedbackResponse>("/content-feedback", params);
+  getContentFeedback(
+    params: {
+      contentId: string;
+      roundId?: string;
+      author?: string;
+      limit?: string;
+      offset?: string;
+    },
+    options?: PonderDeploymentOptions,
+  ) {
+    const deployment = getExpectedPonderDeploymentScope(options);
+    return ponderGet<PonderContentFeedbackResponse>("/content-feedback", params, {
+      expectedDeploymentKey: deployment?.deploymentKey,
+    });
   },
 
-  getFeedbackBonusPools(params: {
-    contentId: string;
-    roundId?: string;
-    awarder?: string;
-    activeOnly?: string;
-    limit?: string;
-    offset?: string;
-  }) {
-    return ponderGet<PonderFeedbackBonusPoolsResponse>("/feedback-bonus-pools", params);
+  getFeedbackBonusPools(
+    params: {
+      contentId: string;
+      roundId?: string;
+      awarder?: string;
+      activeOnly?: string;
+      limit?: string;
+      offset?: string;
+    },
+    options?: PonderDeploymentOptions,
+  ) {
+    const deployment = getExpectedPonderDeploymentScope(options);
+    return ponderGet<PonderFeedbackBonusPoolsResponse>("/feedback-bonus-pools", params, {
+      expectedDeploymentKey: deployment?.deploymentKey,
+    });
   },
 
-  getFeedbackBonusAwards(params: {
-    contentId: string;
-    roundId?: string;
-    feedbackHashes?: string;
-    limit?: string;
-    offset?: string;
-  }) {
-    return ponderGet<PonderFeedbackBonusAwardsResponse>("/feedback-bonus-awards", params);
+  getFeedbackBonusAwards(
+    params: {
+      contentId: string;
+      roundId?: string;
+      feedbackHashes?: string;
+      limit?: string;
+      offset?: string;
+    },
+    options?: PonderDeploymentOptions,
+  ) {
+    const deployment = getExpectedPonderDeploymentScope(options);
+    return ponderGet<PonderFeedbackBonusAwardsResponse>("/feedback-bonus-awards", params, {
+      expectedDeploymentKey: deployment?.deploymentKey,
+    });
   },
 
-  getVoteCooldowns(params?: { voters?: string; contentIds?: string }) {
-    return ponderGet<PonderVoteCooldownsResponse>("/vote-cooldowns", params);
+  getVoteCooldowns(params?: { voters?: string; contentIds?: string }, options?: PonderDeploymentOptions) {
+    const deployment = getExpectedPonderDeploymentScope(options);
+    return ponderGet<PonderVoteCooldownsResponse>("/vote-cooldowns", params, {
+      expectedDeploymentKey: deployment?.deploymentKey,
+    });
   },
 
   getViewerRewardStatuses(params: { voters: string; contentIds?: string }, options?: PonderDeploymentOptions) {
@@ -1974,28 +2034,53 @@ export const ponderApi = {
     });
   },
 
-  getQuestionRewardClaimCandidates(voter: string, params?: { limit?: string; offset?: string }) {
-    return ponderGet<PonderQuestionRewardClaimCandidatesResponse>("/question-reward-claim-candidates", {
-      ...params,
-      voter,
-    });
+  getQuestionRewardClaimCandidates(
+    voter: string,
+    params?: { limit?: string; offset?: string },
+    options?: PonderDeploymentOptions,
+  ) {
+    const deployment = getExpectedPonderDeploymentScope(options);
+    return ponderGet<PonderQuestionRewardClaimCandidatesResponse>(
+      "/question-reward-claim-candidates",
+      {
+        ...params,
+        voter,
+      },
+      {
+        expectedDeploymentKey: deployment?.deploymentKey,
+      },
+    );
   },
 
-  getQuestionBundleRewardClaimCandidates(voter: string, params?: { limit?: string; offset?: string }) {
-    return ponderGet<PonderQuestionBundleRewardClaimCandidatesResponse>("/question-bundle-claim-candidates", {
-      ...params,
-      voter,
-    });
+  getQuestionBundleRewardClaimCandidates(
+    voter: string,
+    params?: { limit?: string; offset?: string },
+    options?: PonderDeploymentOptions,
+  ) {
+    const deployment = getExpectedPonderDeploymentScope(options);
+    return ponderGet<PonderQuestionBundleRewardClaimCandidatesResponse>(
+      "/question-bundle-claim-candidates",
+      {
+        ...params,
+        voter,
+      },
+      {
+        expectedDeploymentKey: deployment?.deploymentKey,
+      },
+    );
   },
 
-  async getVotesWindow(params?: {
-    voter?: string;
-    contentId?: string;
-    roundId?: string;
-    state?: string;
-    limit?: string;
-    offset?: string;
-  }) {
+  async getVotesWindow(
+    params?: {
+      voter?: string;
+      contentId?: string;
+      roundId?: string;
+      state?: string;
+      limit?: string;
+      offset?: string;
+    },
+    options?: PonderDeploymentOptions,
+  ) {
     const requestedLimit = Number(params?.limit ?? PONDER_PAGE_LIMIT);
     const safeRequestedLimit = Number.isFinite(requestedLimit)
       ? Math.max(1, Math.floor(requestedLimit))
@@ -2008,11 +2093,14 @@ export const ponderApi = {
 
     while (items.length < safeRequestedLimit) {
       const remaining = safeRequestedLimit - items.length;
-      const page = await ponderApi.getVotes({
-        ...params,
-        limit: String(Math.min(PONDER_PAGE_LIMIT, remaining)),
-        offset: String(offset),
-      });
+      const page = await ponderApi.getVotes(
+        {
+          ...params,
+          limit: String(Math.min(PONDER_PAGE_LIMIT, remaining)),
+          offset: String(offset),
+        },
+        options,
+      );
 
       items.push(...page.items);
       total = page.total;
@@ -2033,13 +2121,19 @@ export const ponderApi = {
     } satisfies PonderVotesResponse;
   },
 
-  async getAllVotes(params?: { voter?: string; contentId?: string; roundId?: string; state?: string }) {
+  async getAllVotes(
+    params?: { voter?: string; contentId?: string; roundId?: string; state?: string },
+    options?: PonderDeploymentOptions,
+  ) {
     return getAllPages(offset =>
-      ponderApi.getVotes({
-        ...params,
-        limit: String(PONDER_PAGE_LIMIT),
-        offset: String(offset),
-      }),
+      ponderApi.getVotes(
+        {
+          ...params,
+          limit: String(PONDER_PAGE_LIMIT),
+          offset: String(offset),
+        },
+        options,
+      ),
     );
   },
 

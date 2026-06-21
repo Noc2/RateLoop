@@ -6,14 +6,15 @@ import { ROUND_STATE } from "@rateloop/contracts/protocol";
 import { QueryClient } from "@tanstack/react-query";
 import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import { usePageVisibility } from "~~/hooks/usePageVisibility";
+import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 import { type PonderVoteItem, ponderApi } from "~~/services/ponder/client";
 
 function normalizeVoter(voter?: string) {
   return voter?.toLowerCase() ?? null;
 }
 
-export function getRecentUserVotesQueryKey(voter?: string, chainId?: number) {
-  return ["ponder-fallback", "recentUserVotes", chainId ?? null, normalizeVoter(voter)] as const;
+export function getRecentUserVotesQueryKey(voter?: string, chainId?: number, deploymentKey?: string | null) {
+  return ["ponder-fallback", "recentUserVotes", chainId ?? null, deploymentKey ?? null, normalizeVoter(voter)] as const;
 }
 
 export function invalidateRecentUserVotes(queryClient: QueryClient, voter?: string, chainId?: number) {
@@ -24,15 +25,20 @@ export function useRecentUserVotes(voter?: string) {
   const { targetNetwork } = useTargetNetwork();
   const isPageVisible = usePageVisibility();
   const normalizedVoter = normalizeVoter(voter) ?? undefined;
+  const deployment = useMemo(() => resolveProtocolDeploymentScope(targetNetwork.id), [targetNetwork.id]);
   const {
     data: result,
     isLoading,
     refetch,
   } = usePonderQuery({
-    queryKey: ["recentUserVotes", targetNetwork.id, normalizedVoter],
+    queryKey: ["recentUserVotes", targetNetwork.id, deployment?.deploymentKey ?? null, normalizedVoter],
+    availabilityDeploymentKey: deployment?.deploymentKey,
     ponderFn: async () => {
       if (!normalizedVoter) return [] as PonderVoteItem[];
-      return ponderApi.getAllVotes({ voter: normalizedVoter });
+      return ponderApi.getAllVotes(
+        { voter: normalizedVoter },
+        { chainId: targetNetwork.id, deploymentKey: deployment?.deploymentKey },
+      );
     },
     rpcFn: async () => [] as PonderVoteItem[],
     enabled: !!normalizedVoter,

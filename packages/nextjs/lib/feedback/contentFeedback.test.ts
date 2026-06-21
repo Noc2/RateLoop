@@ -1,6 +1,7 @@
 import { ROUND_STATE } from "@rateloop/contracts/protocol";
 import assert from "node:assert/strict";
 import { after, before, beforeEach, test } from "node:test";
+import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 
 process.env.DATABASE_URL = "memory:";
 
@@ -331,11 +332,21 @@ test("builds round context from terminal and open rounds", () => {
 });
 
 test("resolves open feedback round from on-chain fallback when ponder is stale", async () => {
+  const deployment = resolveProtocolDeploymentScope(CHAIN_ID);
+  assert.ok(deployment);
   let observedContentId: string | undefined;
   let observedChainId: number | undefined;
+  let observedContentOptions: unknown;
+  let observedRoundsOptions: unknown;
   contentFeedback.__setContentFeedbackVoteEligibilityTestOverridesForTests({
-    getContentById: async () => ({ content: { openRound: null } }) as any,
-    getAllRounds: async () => [buildRoundItem({ contentId: "18", roundId: "1", state: ROUND_STATE.Settled })],
+    getContentById: async (_contentId, options) => {
+      observedContentOptions = options;
+      return { content: { openRound: null } } as any;
+    },
+    getAllRounds: async (_params, options) => {
+      observedRoundsOptions = options;
+      return [buildRoundItem({ contentId: "18", roundId: "1", state: ROUND_STATE.Settled })];
+    },
     resolveOnchainOpenRoundId: async params => {
       observedContentId = params.contentId;
       observedChainId = params.chainId;
@@ -351,6 +362,14 @@ test("resolves open feedback round from on-chain fallback when ponder is stale",
   assert.equal(context.settlementComplete, false);
   assert.equal(observedContentId, "18");
   assert.equal(observedChainId, CHAIN_ID);
+  assert.deepEqual(observedContentOptions, {
+    chainId: CHAIN_ID,
+    deploymentKey: deployment.deploymentKey,
+  });
+  assert.deepEqual(observedRoundsOptions, {
+    chainId: CHAIN_ID,
+    deploymentKey: deployment.deploymentKey,
+  });
 });
 
 test("keeps ponder open round ahead of on-chain fallback", async () => {
@@ -445,8 +464,14 @@ test("preserves stale ponder context when no on-chain open round exists", async 
 });
 
 test("accepts feedback eligibility from indexed staked votes", async () => {
+  const deployment = resolveProtocolDeploymentScope(CHAIN_ID);
+  assert.ok(deployment);
+  let observedVoteOptions: unknown;
   contentFeedback.__setContentFeedbackVoteEligibilityTestOverridesForTests({
-    getVotes: async () => buildVotesResponse([buildVoteItem({ contentId: "15", roundId: "2", voter: WALLET })]),
+    getVotes: async (_params, options) => {
+      observedVoteOptions = options;
+      return buildVotesResponse([buildVoteItem({ contentId: "15", roundId: "2", voter: WALLET })]);
+    },
     hasOnchainFeedbackEligibleVote: async () => false,
   });
 
@@ -458,6 +483,10 @@ test("accepts feedback eligibility from indexed staked votes", async () => {
       roundId: "2",
     }),
   );
+  assert.deepEqual(observedVoteOptions, {
+    chainId: CHAIN_ID,
+    deploymentKey: deployment.deploymentKey,
+  });
 });
 
 test("rejects feedback eligibility when the rater identity is banned", async () => {
@@ -671,6 +700,8 @@ test("stores publication metadata for immediately published feedback", async () 
 });
 
 test("returns awardable feedback bonus pools and awards for public feedback", async () => {
+  const deployment = resolveProtocolDeploymentScope(CHAIN_ID);
+  assert.ok(deployment);
   const activeContext = contentFeedback.buildContentFeedbackRoundContext([{ roundId: "8", state: ROUND_STATE.Open }]);
   const settledContext = contentFeedback.buildContentFeedbackRoundContext([
     { roundId: "8", state: ROUND_STATE.Settled },
@@ -690,22 +721,32 @@ test("returns awardable feedback bonus pools and awards for public feedback", as
   );
   assert.ok(added.feedbackHash);
 
+  const observedAwardOptions: unknown[] = [];
+  const observedPoolOptions: unknown[] = [];
   contentFeedback.__setContentFeedbackVoteEligibilityTestOverridesForTests({
-    getFeedbackBonusAwards: async params => ({
-      items: [buildFeedbackBonusAward({ feedbackHash: params.feedbackHashes?.split(",")[0] })],
-      limit: 1,
-      offset: 0,
-      hasMore: false,
-    }),
-    getFeedbackBonusPools: async params => ({
-      items: [buildFeedbackBonusPool({ awarder: params.awarder })],
-      limit: 1,
-      offset: 0,
-      hasMore: false,
-    }),
+    getFeedbackBonusAwards: async (params, options) => {
+      observedAwardOptions.push(options);
+      return {
+        items: [buildFeedbackBonusAward({ feedbackHash: params.feedbackHashes?.split(",")[0] })],
+        limit: 1,
+        offset: 0,
+        hasMore: false,
+      };
+    },
+    getFeedbackBonusPools: async (params, options) => {
+      observedPoolOptions.push(options);
+      return {
+        items: [buildFeedbackBonusPool({ awarder: params.awarder })],
+        limit: 1,
+        offset: 0,
+        hasMore: false,
+      };
+    },
   });
 
   const activeResult = await contentFeedback.listContentFeedback({
+    chainId: CHAIN_ID,
+    deploymentKey: deployment.deploymentKey,
     contentId: "13",
     context: activeContext,
     awarderAddress: WALLET,
@@ -714,11 +755,21 @@ test("returns awardable feedback bonus pools and awards for public feedback", as
   assert.equal(activeResult.awardableFeedbackBonusPools?.length, 0);
 
   const result = await contentFeedback.listContentFeedback({
+    chainId: CHAIN_ID,
+    deploymentKey: deployment.deploymentKey,
     contentId: "13",
     context: settledContext,
     awarderAddress: WALLET,
   });
 
+  assert.deepEqual(observedAwardOptions, [
+    { chainId: CHAIN_ID, deploymentKey: deployment.deploymentKey },
+    { chainId: CHAIN_ID, deploymentKey: deployment.deploymentKey },
+  ]);
+  assert.deepEqual(observedPoolOptions, [
+    { chainId: CHAIN_ID, deploymentKey: deployment.deploymentKey },
+    { chainId: CHAIN_ID, deploymentKey: deployment.deploymentKey },
+  ]);
   assert.equal(result.awardableFeedbackBonusPools?.length, 1);
   assert.equal(result.awardableFeedbackBonusPools?.[0]?.id, "7");
   assert.equal(result.awardableFeedbackBonusPools?.[0]?.awarder, WALLET);

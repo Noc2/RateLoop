@@ -51,6 +51,49 @@ test("ponder availability route reports a healthy indexer", async () => {
   }
 });
 
+test("ponder availability route checks explicit deployment keys", async () => {
+  const originalFetch = globalThis.fetch;
+  const deployment = resolveProtocolDeploymentScope(84532);
+  assert.ok(deployment);
+
+  globalThis.fetch = (async input => {
+    const requestedUrl = getFetchUrl(input);
+    if (requestedUrl.endsWith("/deployment")) {
+      return new Response(
+        JSON.stringify({
+          configured: true,
+          chainId: deployment.chainId,
+          contentRegistryAddress: deployment.contentRegistryAddress,
+          feedbackRegistryAddress: deployment.feedbackRegistryAddress,
+          deploymentKey: deployment.deploymentKey,
+          databaseSchema: "rateloop_ponder_base_sepolia",
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }
+    return new Response("ok", { status: 200 });
+  }) as typeof fetch;
+
+  try {
+    invalidatePonderCache();
+
+    const response = await GET(
+      new Request(
+        `http://localhost/api/ponder/availability?deploymentKey=${encodeURIComponent(deployment.deploymentKey)}`,
+      ),
+    );
+    const body = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(body.available, true);
+    assert.equal(body.expectedDeploymentKey, deployment.deploymentKey);
+    assert.equal(body.ponderDeploymentKey, deployment.deploymentKey);
+  } finally {
+    globalThis.fetch = originalFetch;
+    invalidatePonderCache();
+  }
+});
+
 test("ponder availability route reports an offline indexer", async () => {
   const originalFetch = globalThis.fetch;
 

@@ -463,9 +463,14 @@ export async function resolveContentFeedbackRoundContext(
   contentId: string,
   chainId?: number,
 ): Promise<ContentFeedbackRoundContext> {
+  const deployment = resolveContentFeedbackDeploymentScope(chainId);
+  const ponderOptions = {
+    chainId: deployment?.chainId ?? chainId,
+    deploymentKey: deployment?.deploymentKey,
+  };
   const [contentResult, roundsResult] = await Promise.allSettled([
-    (feedbackVoteEligibilityTestOverrides?.getContentById ?? ponderApi.getContentById)(contentId),
-    (feedbackVoteEligibilityTestOverrides?.getAllRounds ?? ponderApi.getAllRounds)({ contentId }),
+    (feedbackVoteEligibilityTestOverrides?.getContentById ?? ponderApi.getContentById)(contentId, ponderOptions),
+    (feedbackVoteEligibilityTestOverrides?.getAllRounds ?? ponderApi.getAllRounds)({ contentId }, ponderOptions),
   ]);
   const contentResponse = contentResult.status === "fulfilled" ? contentResult.value : null;
   const rounds =
@@ -758,12 +763,19 @@ export async function assertContentFeedbackVoterEligibility(params: FeedbackVote
     throw new ContentFeedbackVoterEligibilityError("CONTENT_FEEDBACK_IDENTITY_BANNED");
   }
 
-  const votes = await (feedbackVoteEligibilityTestOverrides?.getVotes ?? ponderApi.getVotes)({
-    voter: params.address,
-    contentId: params.contentId,
-    roundId: params.roundId,
-    limit: "1",
-  });
+  const deployment = resolveContentFeedbackDeploymentScope(params.chainId);
+  const votes = await (feedbackVoteEligibilityTestOverrides?.getVotes ?? ponderApi.getVotes)(
+    {
+      voter: params.address,
+      contentId: params.contentId,
+      roundId: params.roundId,
+      limit: "1",
+    },
+    {
+      chainId: deployment?.chainId ?? params.chainId,
+      deploymentKey: deployment?.deploymentKey,
+    },
+  );
   const hasVote = votes.items.some(
     vote =>
       String(vote.contentId) === params.contentId &&
@@ -848,6 +860,7 @@ function unixSecondsToIso(value: string | number | bigint | null | undefined): s
 function mapProtocolFeedbackRow(
   row: PonderContentFeedbackItem,
   params: {
+    chainId?: number | null;
     viewerAddress?: `0x${string}` | null;
   },
 ): ContentFeedbackItem | null {
@@ -870,7 +883,7 @@ function mapProtocolFeedbackRow(
     id: `protocol:${row.id}`,
     contentId: row.contentId,
     roundId: row.roundId,
-    chainId: null,
+    chainId: params.chainId ?? null,
     authorAddress,
     feedbackType,
     feedbackTypeLabel,
@@ -889,7 +902,9 @@ function mapProtocolFeedbackRow(
 }
 
 async function listProtocolContentFeedback(params: {
+  chainId: number;
   contentId: string;
+  deploymentKey: string;
   viewerAddress?: `0x${string}` | null;
 }): Promise<ContentFeedbackItem[]> {
   if (!isPonderConfigured()) {
@@ -897,12 +912,15 @@ async function listProtocolContentFeedback(params: {
   }
 
   try {
-    const response = await ponderApi.getContentFeedback({
-      contentId: params.contentId,
-      limit: String(CONTENT_FEEDBACK_LIST_LIMIT),
-    });
+    const response = await ponderApi.getContentFeedback(
+      {
+        contentId: params.contentId,
+        limit: String(CONTENT_FEEDBACK_LIST_LIMIT),
+      },
+      { chainId: params.chainId, deploymentKey: params.deploymentKey },
+    );
     return response.items
-      .map(row => mapProtocolFeedbackRow(row, { viewerAddress: params.viewerAddress }))
+      .map(row => mapProtocolFeedbackRow(row, { chainId: params.chainId, viewerAddress: params.viewerAddress }))
       .filter((item): item is ContentFeedbackItem => item !== null);
   } catch (error) {
     console.warn("[content-feedback] Unable to load protocol-indexed feedback.", {
@@ -958,7 +976,9 @@ function mapFeedbackBonusAward(row: PonderFeedbackBonusAward): ContentFeedbackBo
 }
 
 async function listAwardableFeedbackBonusPools(params: {
+  chainId: number;
   contentId: string;
+  deploymentKey: string;
   awarderAddress?: `0x${string}` | null;
 }): Promise<ContentFeedbackBonusPool[]> {
   const getFeedbackBonusPools =
@@ -971,12 +991,15 @@ async function listAwardableFeedbackBonusPools(params: {
   }
 
   try {
-    const response = await getFeedbackBonusPools({
-      contentId: params.contentId,
-      awarder: params.awarderAddress,
-      activeOnly: "true",
-      limit: String(CONTENT_FEEDBACK_LIST_LIMIT),
-    });
+    const response = await getFeedbackBonusPools(
+      {
+        contentId: params.contentId,
+        awarder: params.awarderAddress,
+        activeOnly: "true",
+        limit: String(CONTENT_FEEDBACK_LIST_LIMIT),
+      },
+      { chainId: params.chainId, deploymentKey: params.deploymentKey },
+    );
     return response.items.map(mapFeedbackBonusPool).filter((pool): pool is ContentFeedbackBonusPool => pool !== null);
   } catch (error) {
     console.warn("[content-feedback] Unable to load awardable feedback bonus pools.", {
@@ -989,7 +1012,9 @@ async function listAwardableFeedbackBonusPools(params: {
 }
 
 async function listFeedbackBonusAwards(params: {
+  chainId: number;
   contentId: string;
+  deploymentKey: string;
   items: ContentFeedbackItem[];
 }): Promise<ContentFeedbackBonusAward[]> {
   const getFeedbackBonusAwards =
@@ -1010,11 +1035,14 @@ async function listFeedbackBonusAwards(params: {
   }
 
   try {
-    const response = await getFeedbackBonusAwards({
-      contentId: params.contentId,
-      feedbackHashes: feedbackHashes.join(","),
-      limit: String(CONTENT_FEEDBACK_LIST_LIMIT),
-    });
+    const response = await getFeedbackBonusAwards(
+      {
+        contentId: params.contentId,
+        feedbackHashes: feedbackHashes.join(","),
+        limit: String(CONTENT_FEEDBACK_LIST_LIMIT),
+      },
+      { chainId: params.chainId, deploymentKey: params.deploymentKey },
+    );
     return response.items
       .map(mapFeedbackBonusAward)
       .filter((award): award is ContentFeedbackBonusAward => award !== null);
@@ -1148,13 +1176,16 @@ export async function getExistingActiveContentFeedbackForAuthor(params: {
 }
 
 export async function listContentFeedback(params: {
+  chainId?: number;
   deploymentKey?: string;
   contentId: string;
   context: ContentFeedbackRoundContext;
   viewerAddress?: `0x${string}` | null;
   awarderAddress?: `0x${string}` | null;
 }): Promise<ContentFeedbackListResult> {
-  const deploymentKey = params.deploymentKey ?? requireContentFeedbackDeploymentScope().deploymentKey;
+  const deployment = requireContentFeedbackDeploymentScope(params.chainId);
+  const deploymentKey = params.deploymentKey ?? deployment.deploymentKey;
+  const chainId = params.chainId ?? deployment.chainId;
   let rows: FeedbackRow[];
   let publicCount = 0;
   try {
@@ -1200,16 +1231,20 @@ export async function listContentFeedback(params: {
     .map(row => mapFeedbackRow(row, { context: params.context, viewerAddress: params.viewerAddress }))
     .filter((item): item is ContentFeedbackItem => item !== null);
   const protocolItems = await listProtocolContentFeedback({
+    chainId,
     contentId: params.contentId,
+    deploymentKey,
     viewerAddress: params.viewerAddress,
   });
   const items = mergeContentFeedbackItems(protocolItems, localItems);
   const [awardableFeedbackBonusPools, feedbackBonusAwards] = await Promise.all([
     listAwardableFeedbackBonusPools({
+      chainId,
       contentId: params.contentId,
+      deploymentKey,
       awarderAddress: params.awarderAddress,
     }),
-    listFeedbackBonusAwards({ contentId: params.contentId, items }),
+    listFeedbackBonusAwards({ chainId, contentId: params.contentId, deploymentKey, items }),
   ]);
   const terminalAwardablePools = awardableFeedbackBonusPools.filter(pool =>
     params.context.terminalRoundIds.has(pool.roundId),

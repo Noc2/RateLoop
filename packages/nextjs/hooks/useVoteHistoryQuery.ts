@@ -8,6 +8,7 @@ import { usePageVisibility } from "~~/hooks/usePageVisibility";
 import { usePonderAvailability } from "~~/hooks/usePonderAvailability";
 import { usePonderQuery } from "~~/hooks/usePonderQuery";
 import { type VoteHistoryItem, mapVoteHistoryItem } from "~~/hooks/voteHistory/shared";
+import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 import { ponderApi } from "~~/services/ponder/client";
 import { publicEnv } from "~~/utils/env/public";
 
@@ -109,7 +110,8 @@ export function buildRpcVoteHistory(params: {
 export function useVoteHistoryQuery(voter?: string, options: UseVoteHistoryQueryOptions = {}) {
   const { targetNetwork } = useTargetNetwork();
   const rpcFallbackEnabled = publicEnv.rpcFallbackEnabled;
-  const ponderAvailable = usePonderAvailability(rpcFallbackEnabled);
+  const deployment = useMemo(() => resolveProtocolDeploymentScope(targetNetwork.id), [targetNetwork.id]);
+  const ponderAvailable = usePonderAvailability(rpcFallbackEnabled, deployment?.deploymentKey);
   const rpcFallbackActive = rpcFallbackEnabled && ponderAvailable === false;
   const isPageVisible = usePageVisibility();
   const contentId = options.contentId;
@@ -178,7 +180,15 @@ export function useVoteHistoryQuery(voter?: string, options: UseVoteHistoryQuery
   const rpcVisibleVotes = useMemo(() => (limit === undefined ? rpcVotes : rpcVotes.slice(0, limit)), [limit, rpcVotes]);
 
   const { data: result, isLoading } = usePonderQuery({
-    queryKey: ["voteHistory", targetNetwork.id, normalizedVoter, contentIdParam ?? "all-content", limit ?? "all"],
+    queryKey: [
+      "voteHistory",
+      targetNetwork.id,
+      deployment?.deploymentKey ?? null,
+      normalizedVoter,
+      contentIdParam ?? "all-content",
+      limit ?? "all",
+    ],
+    availabilityDeploymentKey: deployment?.deploymentKey,
     enabled: queryEnabled && Boolean(normalizedVoter),
     ponderFn: async () => {
       if (!normalizedVoter) {
@@ -190,11 +200,14 @@ export function useVoteHistoryQuery(voter?: string, options: UseVoteHistoryQuery
       }
 
       if (limit !== undefined) {
-        const response = await ponderApi.getVotesWindow({
-          voter: normalizedVoter,
-          contentId: contentIdParam,
-          limit: String(limit),
-        });
+        const response = await ponderApi.getVotesWindow(
+          {
+            voter: normalizedVoter,
+            contentId: contentIdParam,
+            limit: String(limit),
+          },
+          { chainId: targetNetwork.id, deploymentKey: deployment?.deploymentKey },
+        );
         const mappedVotes = response.items.map(mapVoteHistoryItem);
         return {
           votes: mappedVotes,
@@ -203,7 +216,10 @@ export function useVoteHistoryQuery(voter?: string, options: UseVoteHistoryQuery
         };
       }
 
-      const votes = await ponderApi.getAllVotes({ voter: normalizedVoter, contentId: contentIdParam });
+      const votes = await ponderApi.getAllVotes(
+        { voter: normalizedVoter, contentId: contentIdParam },
+        { chainId: targetNetwork.id, deploymentKey: deployment?.deploymentKey },
+      );
       const mappedVotes = votes.map(mapVoteHistoryItem);
       return {
         votes: mappedVotes,
