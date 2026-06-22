@@ -764,6 +764,7 @@ const HomeInner = () => {
   const [stakeModal, setStakeModal] = useState<{
     isOpen: boolean;
     initialIsUp: boolean;
+    initialStakeAmount?: number;
     contentId: bigint;
     chainId?: number | null;
     questionTitle: string;
@@ -781,6 +782,7 @@ const HomeInner = () => {
   }>({
     isOpen: false,
     initialIsUp: true,
+    initialStakeAmount: undefined,
     contentId: 0n,
     chainId: null,
     questionTitle: "",
@@ -1355,6 +1357,7 @@ const HomeInner = () => {
       setStakeModal({
         isOpen: true,
         initialIsUp: isUp,
+        initialStakeAmount: isAdvisoryOnlyRater || isZeroLrepVoteView ? 0 : undefined,
         contentId: item.id,
         chainId: item.chainId ?? null,
         questionTitle: item.question?.trim() || item.title,
@@ -1376,6 +1379,7 @@ const HomeInner = () => {
       advisoryAvailabilityByContentId,
       isAdvisoryOnlyRater,
       isVoteCooldownCheckPendingForContent,
+      isZeroLrepVoteView,
       markPrimaryInteraction,
       openConnectModal,
       primaryConfidentialContextBlocker,
@@ -1404,6 +1408,7 @@ const HomeInner = () => {
       setStakeModal({
         isOpen: true,
         initialIsUp: true,
+        initialStakeAmount: undefined,
         contentId: 1n,
         chainId: null,
         questionTitle: "Responsive layout check",
@@ -2232,6 +2237,7 @@ const HomeInner = () => {
           questionTitle={stakeModal.questionTitle}
           categoryId={stakeModal.categoryId}
           currentRating={stakeModal.currentRating}
+          initialStakeAmount={stakeModal.initialStakeAmount}
           initialIsUp={stakeModal.initialIsUp}
           openRound={stakeModal.openRound}
           roundConfig={stakeModal.roundConfig}

@@ -42,6 +42,7 @@ interface StakeSelectorProps {
   questionTitle?: string;
   categoryId?: bigint;
   currentRating?: number | null;
+  initialStakeAmount?: number;
   initialIsUp?: boolean;
   openRound?: OpenRoundFallbackData | null;
   roundConfig?: VotingConfig | null;
@@ -98,9 +99,16 @@ export function normalizeStakeSelectorPredictedUpPercent(predictedUpPercent: num
   return Math.min(MAX_PREDICTED_UP_PERCENT, Math.max(MIN_PREDICTED_UP_PERCENT, Math.round(predictedUpPercent)));
 }
 
-export function getNextStakeSelectorAmount(currentAmount: number, maxStake: number, hasAdjustedStake: boolean) {
+export function getNextStakeSelectorAmount(
+  currentAmount: number,
+  maxStake: number,
+  hasAdjustedStake: boolean,
+  initialStakeAmount = MIN_COUNTED_STAKE_AMOUNT,
+) {
   if (!Number.isFinite(maxStake) || maxStake < MIN_COUNTED_STAKE_AMOUNT) return 0;
-  if (!hasAdjustedStake) return MIN_COUNTED_STAKE_AMOUNT;
+  if (!hasAdjustedStake) {
+    return Math.min(normalizeStakeSelectorAmount(initialStakeAmount), maxStake);
+  }
   if (!Number.isFinite(currentAmount) || currentAmount <= 0) return 0;
   return Math.min(currentAmount, maxStake);
 }
@@ -158,6 +166,7 @@ export function StakeSelector({
   questionTitle,
   categoryId,
   currentRating,
+  initialStakeAmount,
   initialIsUp,
   openRound,
   roundConfig,
@@ -259,8 +268,10 @@ export function StakeSelector({
 
   useEffect(() => {
     if (!isOpen) return;
-    setAmount(currentAmount => getNextStakeSelectorAmount(currentAmount, maxStake, hasAdjustedStake));
-  }, [hasAdjustedStake, isOpen, maxStake]);
+    setAmount(currentAmount =>
+      getNextStakeSelectorAmount(currentAmount, maxStake, hasAdjustedStake, initialStakeAmount),
+    );
+  }, [hasAdjustedStake, initialStakeAmount, isOpen, maxStake]);
 
   useEffect(() => {
     if (!isOpen || !privateContext) {

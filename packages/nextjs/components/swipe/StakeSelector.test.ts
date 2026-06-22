@@ -49,6 +49,15 @@ test("getNextStakeSelectorAmount initializes unadjusted stake when capacity load
   assert.equal(getNextStakeSelectorAmount(0, 0, false), 0);
 });
 
+test("getNextStakeSelectorAmount honors explicit advisory initial stake", () => {
+  assert.equal(getNextStakeSelectorAmount(0, 10, false, 0), 0);
+});
+
+test("getNextStakeSelectorAmount clamps explicit counted initial stake to capacity", () => {
+  assert.equal(getNextStakeSelectorAmount(0, 10, false, 2.5), 2.5);
+  assert.equal(getNextStakeSelectorAmount(0, 1, false, 2.5), 1);
+});
+
 test("getNextStakeSelectorAmount preserves adjusted advisory stake on later capacity updates", () => {
   assert.equal(getNextStakeSelectorAmount(0, 10, true), 0);
 });
