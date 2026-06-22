@@ -39,6 +39,7 @@ import { getSharedDeploymentAddress } from "@rateloop/contracts/deployments";
 import {
   CONFIDENTIALITY_FLAG_PRIVATE_FOREVER,
   USDC_BY_CHAIN_ID,
+  getUsdcEip712DomainName,
 } from "@rateloop/contracts/protocol";
 import type {
   AskHumansRequest,
@@ -1060,15 +1061,19 @@ function normalizeX402Domain(domainRecord: JsonRecord) {
     domainRecord.chainId,
     "x402 typedData.domain.chainId",
   );
-  if (domainRecord.name !== "USDC") {
-    throw new Error("x402 typedData.domain.name must be USDC.");
+  if (typeof domainRecord.name !== "string" || !domainRecord.name.trim()) {
+    throw new Error("x402 typedData.domain.name must be a non-empty string.");
   }
   if (domainRecord.version !== "2") {
     throw new Error("x402 typedData.domain.version must be 2.");
   }
+  const expectedDomainName = getUsdcEip712DomainName(chainId);
+  if (domainRecord.name !== expectedDomainName) {
+    throw new Error(`x402 typedData.domain.name must be ${expectedDomainName}.`);
+  }
   return {
     chainId,
-    name: "USDC",
+    name: domainRecord.name,
     verifyingContract: normalizeAddress(
       domainRecord.verifyingContract,
       "x402 typedData.domain.verifyingContract",

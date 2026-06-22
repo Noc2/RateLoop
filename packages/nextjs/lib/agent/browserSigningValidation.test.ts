@@ -87,6 +87,21 @@ test("validateBrowserX402AuthorizationRequest accepts exact RateLoop EIP-3009 ty
   );
 });
 
+test("validateBrowserX402AuthorizationRequest accepts Base mainnet USDC's USD Coin domain", () => {
+  const request = authorizationRequest({ domain: { chainId: 8453, name: "USD Coin" } });
+  const result = validateBrowserX402AuthorizationRequest({
+    expectedAmount: amount,
+    expectedChainId: 8453,
+    expectedSubmitterAddress: submitter,
+    expectedUsdcAddress: usdc,
+    expectedWalletAddress: wallet,
+    request,
+  });
+
+  assert.equal(result.typedData.domain.name, "USD Coin");
+  assert.equal(result.typedData.domain.chainId, 8453);
+});
+
 test("validateBrowserX402AuthorizationRequest rejects non-EIP-3009 typed data", () => {
   assert.throws(
     () =>
@@ -107,6 +122,18 @@ test("validateBrowserX402AuthorizationRequest rejects non-EIP-3009 typed data", 
 });
 
 test("validateBrowserX402AuthorizationRequest rejects wrong contracts and amounts", () => {
+  assert.throws(
+    () =>
+      validateBrowserX402AuthorizationRequest({
+        expectedAmount: amount,
+        expectedChainId: 8453,
+        expectedSubmitterAddress: submitter,
+        expectedUsdcAddress: usdc,
+        expectedWalletAddress: wallet,
+        request: authorizationRequest({ domain: { chainId: 8453, name: "USDC" } }),
+      }),
+    /domain.name must be USD Coin/,
+  );
   assert.throws(
     () =>
       validate(authorizationRequest({ domain: { verifyingContract: "0x00000000000000000000000000000000000000dd" } })),

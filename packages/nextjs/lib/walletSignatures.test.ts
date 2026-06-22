@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { hashDomain } from "viem";
 import {
   buildLrepPermitTypedData,
   buildRaterDelegateAuthorizationTypedData,
@@ -11,6 +12,7 @@ import {
 const owner = "0x0000000000000000000000000000000000000001";
 const spender = "0x0000000000000000000000000000000000000002";
 const tokenAddress = "0x0000000000000000000000000000000000000003";
+const baseUsdcAddress = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const;
 
 test("buildLrepPermitTypedData binds the LREP permit domain and spender", () => {
   const typedData = buildLrepPermitTypedData({
@@ -72,6 +74,37 @@ test("buildUsdcReceiveWithAuthorizationTypedData builds Circle EIP-3009 typed da
   assert.equal(typedData.primaryType, "ReceiveWithAuthorization");
   assert.equal(typedData.message.to, spender);
   assert.equal(typedData.message.nonce, `0x${"a".repeat(64)}`);
+});
+
+test("buildUsdcReceiveWithAuthorizationTypedData uses Base mainnet USDC's live EIP-712 domain", () => {
+  const typedData = buildUsdcReceiveWithAuthorizationTypedData({
+    authorization: {
+      from: owner,
+      nonce: `0x${"b".repeat(64)}`,
+      to: spender,
+      validAfter: 1n,
+      validBefore: 2n,
+      value: 10n,
+    },
+    chainId: 8453,
+    tokenAddress: baseUsdcAddress,
+  });
+
+  assert.equal(typedData.domain.name, "USD Coin");
+  assert.equal(
+    hashDomain({
+      domain: typedData.domain,
+      types: {
+        EIP712Domain: [
+          { name: "name", type: "string" },
+          { name: "version", type: "string" },
+          { name: "chainId", type: "uint256" },
+          { name: "verifyingContract", type: "address" },
+        ],
+      },
+    }),
+    "0x02fa7265e7c5d81118673727957699e4d68f74cd74b7db77da710fe8a2c7834f",
+  );
 });
 
 test("getSignatureParts normalizes a 65-byte signature", () => {

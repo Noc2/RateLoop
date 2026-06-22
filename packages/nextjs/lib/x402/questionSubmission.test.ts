@@ -2082,6 +2082,16 @@ test("prepareNativeX402QuestionSubmissionRequest returns an authorization reques
   assert.equal(body.x402AuthorizationRequest.eip712.domain.version, "2");
   assert.equal(body.x402AuthorizationRequest.eip712.domain.verifyingContract, TEST_CONFIG.usdcAddress);
 
+  const baseMainnetPrepared = await prepareNativeX402QuestionSubmissionRequest({
+    agentId: "native-agent",
+    payload: { ...buildPayload("native-x402-base-mainnet-domain"), chainId: 8453 },
+    walletAddress,
+  });
+  const baseMainnetBody = baseMainnetPrepared.body as {
+    x402AuthorizationRequest: { eip712: { domain: { name?: string } } };
+  };
+  assert.equal(baseMainnetBody.x402AuthorizationRequest.eip712.domain.name, "USD Coin");
+
   const submitFunction = X402QuestionSubmitterAbi.find(
     (item: (typeof X402QuestionSubmitterAbi)[number]) =>
       item.type === "function" && item.name === "submitQuestionWithX402Payment",

@@ -1,3 +1,4 @@
+import { getUsdcEip712DomainName } from "@rateloop/contracts/protocol";
 import { type Address, type Hex, isAddress } from "viem";
 
 type JsonRecord = Record<string, unknown>;
@@ -24,7 +25,7 @@ type BrowserX402Authorization = {
 type BrowserX402TypedData = {
   domain: {
     chainId: number;
-    name: "USDC";
+    name: string;
     verifyingContract: Address;
     version: "2";
   };
@@ -105,11 +106,16 @@ function readTypedData(request: JsonRecord | null | undefined): BrowserX402Typed
     throw new Error("Signing intent is missing an EIP-712 domain.");
   }
   assertExactKeys(domain, ["chainId", "name", "verifyingContract", "version"], "EIP-712 domain");
-  if (domain.name !== "USDC") {
-    throw new Error("EIP-712 domain.name must be USDC.");
+  if (typeof domain.name !== "string" || !domain.name.trim()) {
+    throw new Error("EIP-712 domain.name must be a non-empty string.");
   }
   if (domain.version !== "2") {
     throw new Error("EIP-712 domain.version must be 2.");
+  }
+  const chainId = normalizeChainId(domain.chainId, "EIP-712 domain.chainId");
+  const expectedDomainName = getUsdcEip712DomainName(chainId);
+  if (domain.name !== expectedDomainName) {
+    throw new Error(`EIP-712 domain.name must be ${expectedDomainName}.`);
   }
 
   const primaryType = typedData.primaryType;
@@ -138,8 +144,8 @@ function readTypedData(request: JsonRecord | null | undefined): BrowserX402Typed
   const message = normalizeAuthorizationRecord(typedData.message, "EIP-3009 typedData.message");
   return {
     domain: {
-      chainId: normalizeChainId(domain.chainId, "EIP-712 domain.chainId"),
-      name: "USDC",
+      chainId,
+      name: domain.name,
       verifyingContract: normalizeAddressField(domain.verifyingContract, "EIP-712 domain.verifyingContract"),
       version: "2",
     },

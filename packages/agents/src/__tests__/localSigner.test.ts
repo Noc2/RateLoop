@@ -1611,6 +1611,19 @@ describe("local signer", () => {
     ).rejects.toThrow(/primaryType must be ReceiveWithAuthorization/);
   });
 
+  it("accepts Base mainnet x402 authorizations with USDC's USD Coin domain", async () => {
+    const request = x402AuthorizationRequest();
+    request.typedData.domain.chainId = 8453;
+    request.typedData.domain.name = "USD Coin";
+
+    const authorization = await signX402AuthorizationRequest(account, request, {
+      ...X402_SIGN_OPTIONS,
+      expectedChainId: 8453,
+    });
+
+    expect(authorization.signature).toMatch(/^0x[0-9a-f]{130}$/i);
+  });
+
   it("rejects x402 authorizations for an untrusted USDC contract", async () => {
     const request = x402AuthorizationRequest();
     request.typedData.domain.verifyingContract =

@@ -5,6 +5,7 @@ import {
   RoundVotingEngineAbi,
 } from "@rateloop/contracts/abis";
 import { getSharedDeploymentAddress } from "@rateloop/contracts/deployments";
+import { getUsdcEip712DomainName } from "@rateloop/contracts/protocol";
 import { canonicalJsonHash } from "@rateloop/node-utils/json";
 import { type TargetAudience, normalizeTargetAudience } from "@rateloop/node-utils/profileSelfReport";
 import { createHash } from "crypto";
@@ -1906,7 +1907,7 @@ function buildNativeX402TypedData(params: {
   return {
     domain: {
       chainId: params.chainId,
-      name: "USDC",
+      name: getUsdcEip712DomainName(params.chainId),
       verifyingContract: params.tokenAddress,
       version: "2",
     },

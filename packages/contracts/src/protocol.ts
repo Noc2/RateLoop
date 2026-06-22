@@ -92,6 +92,17 @@ export const USDC_BY_CHAIN_ID: Record<number, `0x${string}`> = {
   4801: "0x66145f38cBAC35Ca6F1Dfb4914dF98F1614aeA88",
 };
 
+export const USDC_EIP712_DOMAIN_NAME_BY_CHAIN_ID: Record<number, string> = {
+  8453: "USD Coin",
+  84532: "USDC",
+  480: "USDC",
+  4801: "USDC",
+};
+
+export function getUsdcEip712DomainName(chainId: number): string {
+  return USDC_EIP712_DOMAIN_NAME_BY_CHAIN_ID[chainId] ?? "USDC";
+}
+
 export const WORLD_ID_V3_ROUTER_BY_CHAIN_ID: Record<number, `0x${string}`> = {
   8453: "0xBCC7e5910178AFFEEeBA573ba6903E9869594163",
   84532: "0x42FF98C4E85212a5D31358ACbFe76a621b50fC02",

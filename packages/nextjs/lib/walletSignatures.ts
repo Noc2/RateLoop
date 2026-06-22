@@ -1,3 +1,4 @@
+import { getUsdcEip712DomainName } from "@rateloop/contracts/protocol";
 import { type Address, type Hex, parseSignature } from "viem";
 
 const WALLET_SIGNATURE_VALIDITY_SECONDS = 30 * 60;
@@ -108,7 +109,7 @@ export function buildUsdcReceiveWithAuthorizationTypedData(params: {
   return {
     domain: {
       chainId: params.chainId,
-      name: "USDC",
+      name: getUsdcEip712DomainName(params.chainId),
       verifyingContract: params.tokenAddress,
       version: "2",
     },
