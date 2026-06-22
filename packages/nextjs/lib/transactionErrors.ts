@@ -133,6 +133,15 @@ export function isTransactionRelayTimeoutError(error: unknown) {
   );
 }
 
+export function isTransactionReceiptTimeoutError(error: unknown) {
+  const haystack = getTransactionErrorText(error).toLowerCase();
+
+  return (
+    haystack.includes("waitfortransactionreceipttimeouterror") ||
+    (haystack.includes("timed out while waiting for transaction") && haystack.includes("to be confirmed"))
+  );
+}
+
 export function isWalletRpcOverloadedError(error: unknown) {
   const haystack = getTransactionErrorText(error).toLowerCase();
 

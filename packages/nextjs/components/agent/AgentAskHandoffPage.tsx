@@ -78,7 +78,7 @@ import {
   isQuestionRoundMaxDurationValidForEpoch,
 } from "~~/lib/questionRoundConfig";
 import { assertContentRegistryQuestionSubmissionSelector } from "~~/lib/questionSubmissionSelectorSupport";
-import { isUserRejectedTransactionError } from "~~/lib/transactionErrors";
+import { isTransactionReceiptTimeoutError, isUserRejectedTransactionError } from "~~/lib/transactionErrors";
 import {
   type HandoffWebMcpQuestion,
   type HandoffWebMcpState,
@@ -1648,6 +1648,9 @@ function readResponseError(value: unknown, fallback: string) {
 function readHandoffActionError(error: unknown, fallback: string) {
   if (isUserRejectedTransactionError(error)) {
     return "Wallet request rejected. No transaction was submitted; you can retry when ready.";
+  }
+  if (isTransactionReceiptTimeoutError(error)) {
+    return "Wallet returned a transaction hash, but Base did not confirm it before the timeout. Check MetaMask activity; if it is no longer pending, refresh and retry. No RateLoop ask was submitted yet.";
   }
   return error instanceof Error ? error.message : fallback;
 }

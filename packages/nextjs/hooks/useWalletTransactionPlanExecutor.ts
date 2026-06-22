@@ -10,7 +10,7 @@ import { refreshActiveWalletReadQueries } from "~~/hooks/useRefreshWalletBalance
 import { useWalletExecutionCapabilities } from "~~/hooks/useWalletExecutionCapabilities";
 import {
   type NormalizedWalletTransactionPlanCall,
-  WALLET_TRANSACTION_PLAN_STEP_TIMEOUT_MS,
+  WALLET_TRANSACTION_PLAN_RECEIPT_TIMEOUT_MS,
   type WalletTransactionPlanCall,
   assertWalletTransactionPlanReceiptSucceeded,
   createWalletTransactionPlanExecutionSegments,
@@ -85,7 +85,7 @@ export function useWalletTransactionPlanExecutor() {
         chainId: options.chainId,
         hash,
         pollingInterval: getTransactionStatusPollingInterval(options.chainId),
-        timeout: WALLET_TRANSACTION_PLAN_STEP_TIMEOUT_MS,
+        timeout: WALLET_TRANSACTION_PLAN_RECEIPT_TIMEOUT_MS,
       });
       assertWalletTransactionPlanReceiptSucceeded(receipt);
       options.onCallConfirmed?.({ call: call.call, hash, index: call.index });
@@ -118,21 +118,23 @@ export function useWalletTransactionPlanExecutor() {
 
         if (canBatchSegment) {
           try {
-            const callsStatus = await sendCallsSyncAsync({
-              account: address as `0x${string}`,
-              calls: segment.calls.map(call => ({
-                data: call.data,
-                to: call.to,
-                ...(call.value > 0n ? { value: call.value } : {}),
-              })),
-              chainId: options.chainId,
-              connector,
-              forceAtomic: true,
-              pollingInterval: getTransactionStatusPollingInterval(options.chainId),
-              status: isSuccessfulCallsStatus,
-              throwOnFailure: true,
-              timeout: 120_000,
-            } as never);
+            const callsStatus = await withWalletTransactionPlanStepTimeout(
+              sendCallsSyncAsync({
+                account: address as `0x${string}`,
+                calls: segment.calls.map(call => ({
+                  data: call.data,
+                  to: call.to,
+                  ...(call.value > 0n ? { value: call.value } : {}),
+                })),
+                chainId: options.chainId,
+                connector,
+                forceAtomic: true,
+                pollingInterval: getTransactionStatusPollingInterval(options.chainId),
+                status: isSuccessfulCallsStatus,
+                throwOnFailure: true,
+                timeout: WALLET_TRANSACTION_PLAN_RECEIPT_TIMEOUT_MS,
+              } as never),
+            );
             const receiptHashes = collectReceiptHashes(callsStatus);
             const representativeHash = receiptHashes[0];
             for (const hash of receiptHashes) {

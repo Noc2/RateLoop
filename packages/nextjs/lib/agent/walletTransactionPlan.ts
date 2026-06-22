@@ -26,7 +26,8 @@ export type WalletTransactionPlanExecutionSegment<TCall extends WalletTransactio
     calls: Array<NormalizedWalletTransactionPlanCall<TCall>>;
   };
 
-export const WALLET_TRANSACTION_PLAN_STEP_TIMEOUT_MS = 180_000;
+export const WALLET_TRANSACTION_PLAN_REQUEST_TIMEOUT_MS = 45_000;
+export const WALLET_TRANSACTION_PLAN_RECEIPT_TIMEOUT_MS = 180_000;
 
 export function walletTransactionPlanAtomicBatchRequiredError() {
   return new Error(
@@ -40,7 +41,7 @@ export function walletTransactionPlanStepTimeoutError() {
 
 export async function withWalletTransactionPlanStepTimeout<T>(
   promise: Promise<T>,
-  timeoutMs = WALLET_TRANSACTION_PLAN_STEP_TIMEOUT_MS,
+  timeoutMs = WALLET_TRANSACTION_PLAN_REQUEST_TIMEOUT_MS,
 ): Promise<T> {
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) return promise;
 

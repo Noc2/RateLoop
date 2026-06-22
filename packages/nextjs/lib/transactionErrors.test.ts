@@ -4,6 +4,7 @@ import {
   isInsufficientFundsError,
   isThirdwebBundlerInfrastructureError,
   isThirdwebSponsoredExecutionRejectedError,
+  isTransactionReceiptTimeoutError,
   isTransactionRelayAuthorizationError,
   isTransactionRelayTimeoutError,
   isUnsupportedRpcMethodError,
@@ -115,6 +116,22 @@ test("detects MetaMask transaction relay timeouts", () => {
   };
 
   assert.equal(isTransactionRelayTimeoutError(error), true);
+});
+
+test("detects viem transaction receipt timeout errors", () => {
+  const error = new Error(
+    'Timed out while waiting for transaction with hash "0x9b55a466381ec149d427b37d2d763a6cde9f3c93b1481a1fc77e5662048865da" to be confirmed. Version: viem@2.39.0',
+  );
+
+  assert.equal(isTransactionReceiptTimeoutError(error), true);
+});
+
+test("does not classify unrelated timeouts as receipt timeout errors", () => {
+  const error = {
+    message: "Wallet request timed out before the user approved it.",
+  };
+
+  assert.equal(isTransactionReceiptTimeoutError(error), false);
 });
 
 test("detects unsupported RPC method errors from nested wallet responses", () => {
