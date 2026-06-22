@@ -30,6 +30,7 @@ import { surfaceSectionHeadingClassName } from "~~/components/shared/sectionHead
 import { ImageAttachmentUploader } from "~~/components/submit/ImageAttachmentUploader";
 import { DurationInput } from "~~/components/ui/DurationInput";
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
+import { getTransactionReceiptPollingInterval } from "~~/config/shared";
 import { serializeTags } from "~~/constants/categories";
 import { useTermsAcceptance } from "~~/contexts/TermsAcceptanceContext";
 import { useDeployedContractInfo, useScaffoldReadContract, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
@@ -138,19 +139,19 @@ import {
   assertContentRegistryQuestionSubmissionSelector,
   getSubmissionErrorMessage,
 } from "~~/lib/questionSubmissionSelectorSupport";
+import { waitForReservationRevealReady } from "~~/lib/submission/reservationRevealWait";
 import {
   getGasBalanceErrorMessage,
   isFreeTransactionExhaustedError,
   isInsufficientFundsError,
   isWalletRpcOverloadedError,
 } from "~~/lib/transactionErrors";
+import scaffoldConfig from "~~/scaffold.config";
 import { containsBlockedUrl } from "~~/utils/contentFilter";
 import { sanitizeExternalUrl } from "~~/utils/externalUrl";
 import { notification } from "~~/utils/scaffold-eth";
 
 const ShareModal = dynamic(() => import("~~/components/submit/ShareModal").then(m => m.ShareModal), { ssr: false });
-
-const RESERVED_SUBMISSION_REVEAL_WAIT_MS = 3_000;
 
 type MediaMode = "images" | "video";
 type ContextVisibility = "public" | "gated";
@@ -178,6 +179,13 @@ const MONEY_FIELD_CONTROL_ROW_CLASS = "mt-1.5 grid grid-cols-2 items-start gap-3
 const MONEY_FIELD_LABEL_CLASS = "label-text flex h-6 min-w-0 items-center gap-1.5 text-sm font-medium leading-none";
 const MONEY_FIELD_CONTROL_CLASS = "h-12 w-full min-w-0";
 const SECONDS_PER_MINUTE = 60;
+
+function getSubmitReceiptPollingInterval(chainId: number) {
+  return getTransactionReceiptPollingInterval(chainId, {
+    preconfirmation: scaffoldConfig.useBasePreconfRpc,
+  });
+}
+
 const SECONDS_PER_HOUR = 60 * SECONDS_PER_MINUTE;
 const MIN_HUMAN_RESPONSE_WINDOW_MINUTES = 20;
 const DEFAULT_ETH_TOP_UP_AMOUNT = "1";
@@ -2665,13 +2673,17 @@ export function ContentSubmissionSection() {
         );
 
         if (cancelTxHash) {
-          await waitForTransactionReceipt(wagmiConfig, { chainId: targetNetwork.id, hash: cancelTxHash });
+          await waitForTransactionReceipt(wagmiConfig, {
+            chainId: targetNetwork.id,
+            hash: cancelTxHash,
+            pollingInterval: getSubmitReceiptPollingInterval(targetNetwork.id),
+          });
         }
       };
 
       const reserveSubmission = async (revealCommitment: `0x${string}`) => {
         if (canUseBatchedSubmitCalls) {
-          await executeSponsoredCalls(
+          const callsResult = await executeSponsoredCalls(
             [
               {
                 abi: registryInfo.abi,
@@ -2686,7 +2698,11 @@ export function ContentSubmissionSection() {
               suppressStatusToast: true,
             },
           );
-          return null;
+          const receipts = callsResult.receipts ?? [];
+          return {
+            hash: extractReceiptTransactionHashes(receipts)[0] ?? null,
+            receipt: receipts[0] ?? null,
+          };
         }
 
         const reserveTxHash = await writeRegistry(
@@ -2701,22 +2717,39 @@ export function ContentSubmissionSection() {
           },
         );
 
+        let reserveReceipt: Awaited<ReturnType<typeof waitForTransactionReceipt>> | null = null;
         if (reserveTxHash) {
-          await waitForTransactionReceipt(wagmiConfig, { chainId: targetNetwork.id, hash: reserveTxHash });
+          reserveReceipt = await waitForTransactionReceipt(wagmiConfig, {
+            chainId: targetNetwork.id,
+            hash: reserveTxHash,
+            pollingInterval: getSubmitReceiptPollingInterval(targetNetwork.id),
+          });
         }
 
-        return reserveTxHash ?? null;
+        return {
+          hash: reserveTxHash ?? null,
+          receipt: reserveReceipt,
+        };
       };
 
-      const reserveTxHash = await reserveSubmission(revealCommitment);
+      const reserveResult = await reserveSubmission(revealCommitment);
       reservedRevealCommitment = revealCommitment;
-      const reserveNonce = await getSubmittedTransactionNonce(reserveTxHash);
+      const reserveNonce = await getSubmittedTransactionNonce(reserveResult.hash);
 
-      // ContentRegistry enforces a minimum reservation age before reveal.
-      // Give the next block timestamp enough room to advance before the reveal submit.
-      await new Promise(resolve => setTimeout(resolve, RESERVED_SUBMISSION_REVEAL_WAIT_MS));
+      const waitForReservedSubmissionReveal = async () => {
+        const publicClient = getPublicClient(wagmiConfig, { chainId: targetNetwork.id as any });
+        if (!publicClient) {
+          throw new Error("Public client not available for this chain.");
+        }
+        await waitForReservationRevealReady({
+          client: publicClient,
+          pollingIntervalMs: getSubmitReceiptPollingInterval(targetNetwork.id),
+          receipt: reserveResult.receipt ?? {},
+        });
+      };
 
       if (canUseBatchedSubmitCalls) {
+        await waitForReservedSubmissionReveal();
         const callsResult = await executeSponsoredCalls(
           [
             {
@@ -2780,9 +2813,14 @@ export function ContentSubmissionSection() {
             );
 
         if (approveTxHash) {
-          await waitForTransactionReceipt(wagmiConfig, { chainId: targetNetwork.id, hash: approveTxHash });
+          await waitForTransactionReceipt(wagmiConfig, {
+            chainId: targetNetwork.id,
+            hash: approveTxHash,
+            pollingInterval: getSubmitReceiptPollingInterval(targetNetwork.id),
+          });
         }
         const approveNonce = await getSubmittedTransactionNonce(approveTxHash);
+        await waitForReservedSubmissionReveal();
 
         const submitWrite = isBundleSubmission
           ? ({
@@ -2825,6 +2863,7 @@ export function ContentSubmissionSection() {
           const submitReceipt = await waitForTransactionReceipt(wagmiConfig, {
             chainId: targetNetwork.id,
             hash: submitTxHash,
+            pollingInterval: getSubmitReceiptPollingInterval(targetNetwork.id),
           });
           submittedContentIds = extractSubmittedContentIds(submitReceipt.logs);
           submissionTransactionHashes = [submitTxHash];
@@ -2898,7 +2937,11 @@ export function ContentSubmissionSection() {
               : await writeContract(wagmiConfig, await prepareDirectWalletWrite(feedbackApproveWrite));
 
             if (feedbackApproveTxHash) {
-              await waitForTransactionReceipt(wagmiConfig, { chainId: targetNetwork.id, hash: feedbackApproveTxHash });
+              await waitForTransactionReceipt(wagmiConfig, {
+                chainId: targetNetwork.id,
+                hash: feedbackApproveTxHash,
+                pollingInterval: getSubmitReceiptPollingInterval(targetNetwork.id),
+              });
             }
             const feedbackApproveNonce = await getSubmittedTransactionNonce(feedbackApproveTxHash);
 
@@ -2912,7 +2955,11 @@ export function ContentSubmissionSection() {
                 );
 
             if (feedbackPoolTxHash) {
-              await waitForTransactionReceipt(wagmiConfig, { chainId: targetNetwork.id, hash: feedbackPoolTxHash });
+              await waitForTransactionReceipt(wagmiConfig, {
+                chainId: targetNetwork.id,
+                hash: feedbackPoolTxHash,
+                pollingInterval: getSubmitReceiptPollingInterval(targetNetwork.id),
+              });
             }
             feedbackBonusFunded = true;
           }

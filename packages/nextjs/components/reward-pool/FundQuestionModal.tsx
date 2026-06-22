@@ -8,6 +8,7 @@ import { getPublicClient, readContract, waitForTransactionReceipt } from "wagmi/
 import { XMarkIcon } from "@heroicons/react/24/outline";
 import { GradientActionButton, getGradientActionMotion } from "~~/components/shared/GradientAction";
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
+import { getTransactionReceiptPollingInterval } from "~~/config/shared";
 import { useRateLoopSwitchNetwork } from "~~/hooks/useRateLoopSwitchNetwork";
 import {
   BOUNTY_WINDOW_PRESETS,
@@ -41,6 +42,7 @@ import {
   getDefaultSignatureDeadline,
   getSignatureParts,
 } from "~~/lib/walletSignatures";
+import scaffoldConfig from "~~/scaffold.config";
 import { getTargetNetworks, notification } from "~~/utils/scaffold-eth";
 
 type FundQuestionModalProps = {
@@ -64,6 +66,12 @@ const BOUNTY_AMOUNT_TOOLTIP = `Paid in USDC on the active network. Qualified cla
 const REQUIRED_VOTERS_TOOLTIP = `Matches the question's settlement voters so every qualifying round can count toward this bounty. Bounty floors: ${protocolDocFacts.bountyParticipantFloorsLabel}.`;
 const SETTLED_ROUNDS_TOOLTIP = `How many qualifying settled rounds must complete before the bounty is filled. USDC payouts then wait on finalized payout roots: ${protocolDocFacts.usdcBountyPayoutMinimumDelayLabel} minimum, normally up to ${protocolDocFacts.usdcBountyPayoutHappyPathMaxDelayLabel} on the happy path.`;
 const BOUNTY_WINDOW_TOOLTIP = `Bounty eligibility opens with the first private round and uses this window duration. The quick fund flow uses the same duration as the start-by deadline. ${protocolDocFacts.usdcBountyPayoutTimingTooltip}`;
+
+function getFundReceiptPollingInterval(chainId: number) {
+  return getTransactionReceiptPollingInterval(chainId, {
+    preconfirmation: scaffoldConfig.useBasePreconfRpc,
+  });
+}
 
 function readPositiveInteger(value: unknown): number | null {
   const rawValue =
@@ -327,7 +335,11 @@ export function FundQuestionModal({
             },
           ],
         });
-        await waitForTransactionReceipt(wagmiConfig, { chainId: chainId as any, hash: authorizationHash });
+        await waitForTransactionReceipt(wagmiConfig, {
+          chainId: chainId as any,
+          hash: authorizationHash,
+          pollingInterval: getFundReceiptPollingInterval(chainId),
+        });
 
         notification.success(`Bounty funded with ${formatUsdAmount(parsedAmount)}. Paid in USDC.`);
         onCreated?.();
@@ -357,7 +369,11 @@ export function FundQuestionModal({
           functionName: "approve",
           args: [escrowAddress, parsedAmount],
         });
-        await waitForTransactionReceipt(wagmiConfig, { chainId: chainId as any, hash: approveHash });
+        await waitForTransactionReceipt(wagmiConfig, {
+          chainId: chainId as any,
+          hash: approveHash,
+          pollingInterval: getFundReceiptPollingInterval(chainId),
+        });
 
         // M-5 (2026-05-22 audit): re-read the allowance after waiting on the approval so
         // any concurrent spender that consumed it cannot turn the subsequent
@@ -384,7 +400,11 @@ export function FundQuestionModal({
           bountyWindowSecondsValue,
         ],
       });
-      await waitForTransactionReceipt(wagmiConfig, { chainId: chainId as any, hash: rewardPoolHash });
+      await waitForTransactionReceipt(wagmiConfig, {
+        chainId: chainId as any,
+        hash: rewardPoolHash,
+        pollingInterval: getFundReceiptPollingInterval(chainId),
+      });
 
       notification.success(`Bounty funded with ${formatUsdAmount(parsedAmount)}. Paid in USDC.`);
       onCreated?.();

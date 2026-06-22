@@ -8,6 +8,7 @@ import { getPublicClient, readContract, waitForTransactionReceipt } from "wagmi/
 import { XMarkIcon } from "@heroicons/react/24/outline";
 import { GradientActionButton, getGradientActionMotion } from "~~/components/shared/GradientAction";
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
+import { getTransactionReceiptPollingInterval } from "~~/config/shared";
 import { useRateLoopSwitchNetwork } from "~~/hooks/useRateLoopSwitchNetwork";
 import {
   BOUNTY_WINDOW_PRESETS,
@@ -39,6 +40,7 @@ import {
   getDefaultSignatureDeadline,
   getSignatureParts,
 } from "~~/lib/walletSignatures";
+import scaffoldConfig from "~~/scaffold.config";
 import { getTargetNetworks, notification } from "~~/utils/scaffold-eth";
 
 type FundFeedbackBonusModalProps = {
@@ -54,6 +56,12 @@ const FRONTEND_FEE_PERCENT = DEFAULT_REWARD_POOL_FRONTEND_FEE_BPS / 100;
 const FEEDBACK_BONUS_AMOUNT_TOOLTIP = `Paid in LREP or USDC on the active network. Awarded feedback reserves ${FRONTEND_FEE_PERCENT}% for the eligible frontend operator; the rest goes to selected revealed raters after settlement.`;
 const FEEDBACK_WINDOW_TOOLTIP =
   "Sets the requested feedback close for this active round. Awarders still get at least 24 hours after the round settles to decide payouts.";
+
+function getFundReceiptPollingInterval(chainId: number) {
+  return getTransactionReceiptPollingInterval(chainId, {
+    preconfirmation: scaffoldConfig.useBasePreconfRpc,
+  });
+}
 
 function FeedbackBonusFieldLabel({
   htmlFor,
@@ -261,7 +269,11 @@ export function FundFeedbackBonusModal({
               },
             ],
           });
-          await waitForTransactionReceipt(wagmiConfig, { chainId: chainId as any, hash: authorizationHash });
+          await waitForTransactionReceipt(wagmiConfig, {
+            chainId: chainId as any,
+            hash: authorizationHash,
+            pollingInterval: getFundReceiptPollingInterval(chainId),
+          });
 
           notification.success(`Feedback Bonus funded with ${formatFeedbackBonusAmount(parsedAmount, asset)}.`);
           onCreated?.();
@@ -292,7 +304,11 @@ export function FundFeedbackBonusModal({
           functionName: "approve",
           args: [escrowAddress, parsedAmount],
         });
-        await waitForTransactionReceipt(wagmiConfig, { chainId: chainId as any, hash: approveHash });
+        await waitForTransactionReceipt(wagmiConfig, {
+          chainId: chainId as any,
+          hash: approveHash,
+          pollingInterval: getFundReceiptPollingInterval(chainId),
+        });
 
         const allowanceAfterApprove = await readTokenAllowance();
         if (allowanceAfterApprove < parsedAmount) {
@@ -309,7 +325,11 @@ export function FundFeedbackBonusModal({
         functionName: "createFeedbackBonusPoolWithAsset",
         args: [contentId, roundId, selectedAssetId, parsedAmount, feedbackClosesAt, selectedAwarderAddress],
       });
-      await waitForTransactionReceipt(wagmiConfig, { chainId: chainId as any, hash: feedbackBonusHash });
+      await waitForTransactionReceipt(wagmiConfig, {
+        chainId: chainId as any,
+        hash: feedbackBonusHash,
+        pollingInterval: getFundReceiptPollingInterval(chainId),
+      });
 
       notification.success(`Feedback Bonus funded with ${formatFeedbackBonusAmount(parsedAmount, asset)}.`);
       onCreated?.();

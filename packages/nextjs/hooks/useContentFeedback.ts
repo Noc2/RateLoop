@@ -4,8 +4,7 @@ import { useCallback, useMemo, useState } from "react";
 import { FeedbackRegistryAbi, RoundVotingEngineAbi } from "@rateloop/contracts/abis";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { type Address, encodePacked, keccak256, zeroHash } from "viem";
-import { useAccount, useConfig, usePublicClient, useSignMessage, useWriteContract } from "wagmi";
-import { waitForTransactionReceipt } from "wagmi/actions";
+import { useAccount, usePublicClient, useSignMessage, useWriteContract } from "wagmi";
 import { useTransactor } from "~~/hooks/scaffold-eth";
 import { useLocalE2ETestWalletClient } from "~~/hooks/scaffold-eth/useLocalE2ETestWalletClient";
 import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
@@ -122,7 +121,6 @@ export function useContentFeedback(contentId: bigint | string | number | null | 
   const { canSponsorTransactions, isMissingGasBalance, nativeTokenSymbol } = useGasBalanceStatus({
     includeExternalSendCalls: true,
   });
-  const wagmiConfig = useConfig();
   const { chain } = useAccount();
   const { targetNetwork } = useTargetNetwork();
   const publicClient = usePublicClient({ chainId: targetNetwork.id });
@@ -254,13 +252,6 @@ export function useContentFeedback(contentId: bigint | string | number | null | 
         }
         throw error;
       }
-      try {
-        await waitForTransactionReceipt(wagmiConfig, { chainId: targetNetwork.id, hash: txHash });
-      } catch (error) {
-        if (!(await hasAlreadyPublishedFeedback())) {
-          throw error;
-        }
-      }
       return { commitKey, txHash };
     },
     [
@@ -274,7 +265,6 @@ export function useContentFeedback(contentId: bigint | string | number | null | 
       resolveCommitKey,
       targetNetwork.id,
       targetNetwork.name,
-      wagmiConfig,
       writeContractAsync,
       writeTx,
     ],
