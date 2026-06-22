@@ -482,6 +482,12 @@ function loadConfig() {
     "KEEPER_DATABASE_URL",
     errors,
   );
+  const mainLoopLockRequired = parseBooleanEnv(
+    readEnv("KEEPER_MAIN_LOOP_LOCK_REQUIRED"),
+    isProduction,
+    "KEEPER_MAIN_LOOP_LOCK_REQUIRED",
+    errors,
+  );
   const ponderBaseUrl = readOptionalUrlEnv("PONDER_BASE_URL", errors, {
     rejectLocalhostInProduction: true,
     requireHttpsInProduction: true,
@@ -658,6 +664,7 @@ function loadConfig() {
     },
     persistence: {
       databaseUrl: keeperDatabaseUrl ?? null,
+      mainLoopLockRequired,
     },
     startupJitterMs: readNonNegativeIntEnv(
       "KEEPER_STARTUP_JITTER_MS",
@@ -813,6 +820,9 @@ function loadConfig() {
         "CLUSTER_PAYOUT_ORACLE_ADDRESS or a shared ClusterPayoutOracle deployment artifact is required when KEEPER_CORRELATION_SNAPSHOTS_ENABLED=true",
       );
     }
+  }
+  if (mainLoopLockRequired && !keeperDatabaseUrl) {
+    errors.push("KEEPER_DATABASE_URL is required when KEEPER_MAIN_LOOP_LOCK_REQUIRED=true");
   }
   if (
     loadedConfig.metricsEnabled &&

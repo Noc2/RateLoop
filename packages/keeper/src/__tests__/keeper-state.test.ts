@@ -14,7 +14,7 @@ interface MockPool {
 function mockConfig(databaseUrl: string | null = "postgres://keeper:keeper@localhost/keeper") {
   vi.doMock("../config.js", () => ({
     config: {
-      persistence: databaseUrl ? { databaseUrl } : undefined,
+      persistence: databaseUrl ? { databaseUrl, mainLoopLockRequired: false } : undefined,
     },
   }));
 }
@@ -29,13 +29,14 @@ function createLogger() {
 }
 
 async function importKeeperState(params: {
+  databaseUrl?: string | null;
   locked?: boolean;
   schemaError?: Error;
   connectError?: Error;
   unlockError?: Error;
 } = {}) {
   vi.resetModules();
-  mockConfig();
+  mockConfig(params.databaseUrl === undefined ? "postgres://keeper:keeper@localhost/keeper" : params.databaseUrl);
 
   const client: MockClient = {
     query: vi.fn(async (sql: string) => {
@@ -181,6 +182,63 @@ describe("keeper advisory lock wrappers", () => {
     expect(logger.warn).toHaveBeenCalledWith(
       "Keeper persistence schema initialization failed",
       { error: "database down" },
+    );
+  });
+
+  it("returns the main-loop fallback when a required lock cannot initialize", async () => {
+    const { runWithKeeperMainLoopLock, pool } = await importKeeperState({
+      schemaError: new Error("database down"),
+    });
+    const logger = createLogger();
+    const run = vi.fn(async () => "ran");
+
+    await expect(
+      runWithKeeperMainLoopLock(logger, "fallback", run, { lockRequired: true }),
+    ).resolves.toBe("fallback");
+
+    expect(run).not.toHaveBeenCalled();
+    expect(pool.connect).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalledWith(
+      "Keeper persistence schema initialization failed",
+      { error: "database down" },
+    );
+  });
+
+  it("returns the main-loop fallback when a required lock cannot be acquired", async () => {
+    const { runWithKeeperMainLoopLock, client } = await importKeeperState({
+      connectError: new Error("too many clients"),
+    });
+    const logger = createLogger();
+    const run = vi.fn(async () => "ran");
+
+    await expect(
+      runWithKeeperMainLoopLock(logger, "fallback", run, { lockRequired: true }),
+    ).resolves.toBe("fallback");
+
+    expect(run).not.toHaveBeenCalled();
+    expect(client.query).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalledWith(
+      "Keeper main loop lock unavailable; skipping this tick because KEEPER_MAIN_LOOP_LOCK_REQUIRED=true",
+      { error: "too many clients" },
+    );
+  });
+
+  it("returns the main-loop fallback when a required lock has no database", async () => {
+    const { runWithKeeperMainLoopLock, pool } = await importKeeperState({
+      databaseUrl: null,
+    });
+    const logger = createLogger();
+    const run = vi.fn(async () => "ran");
+
+    await expect(
+      runWithKeeperMainLoopLock(logger, "fallback", run, { lockRequired: true }),
+    ).resolves.toBe("fallback");
+
+    expect(run).not.toHaveBeenCalled();
+    expect(pool.connect).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalledWith(
+      "Keeper main loop lock required but KEEPER_DATABASE_URL is not configured; skipping this tick",
+      { error: "missing database" },
     );
   });
 

@@ -213,6 +213,7 @@ async function main() {
             : null;
           return { result, frontendFeeResult, correlationSnapshotResult };
         },
+        { lockRequired: config.persistence.mainLoopLockRequired },
       );
       if (!mainLoopRan) {
         incrementCounter("keeper_main_loop_lock_skips_total");

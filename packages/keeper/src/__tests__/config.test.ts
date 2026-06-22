@@ -110,7 +110,10 @@ describe("keeper config", () => {
       minAgeSeconds: 60,
     });
     expect(config.frontendFees.enabled).toBe(false);
-    expect(config.persistence.databaseUrl).toBeNull();
+    expect(config.persistence).toEqual({
+      databaseUrl: null,
+      mainLoopLockRequired: false,
+    });
   });
 
   it("loads an optional keeper persistence database URL", async () => {
@@ -122,6 +125,41 @@ describe("keeper config", () => {
     expect(config.persistence.databaseUrl).toBe(
       "postgresql://postgres:postgres@postgres.railway.internal:5432/railway",
     );
+    expect(config.persistence.mainLoopLockRequired).toBe(false);
+  });
+
+  it("requires keeper persistence for production main-loop locks by default", async () => {
+    await expect(
+      loadKeeperConfig({
+        NODE_ENV: "production",
+      }),
+    ).rejects.toThrow("KEEPER_DATABASE_URL is required when KEEPER_MAIN_LOOP_LOCK_REQUIRED=true");
+  });
+
+  it("allows production operators to explicitly opt out of main-loop locks", async () => {
+    const { config } = await loadKeeperConfig({
+      KEEPER_MAIN_LOOP_LOCK_REQUIRED: "false",
+      NODE_ENV: "production",
+    });
+
+    expect(config.persistence).toEqual({
+      databaseUrl: null,
+      mainLoopLockRequired: false,
+    });
+  });
+
+  it("enables required main-loop locks in production when a database is configured", async () => {
+    const { config } = await loadKeeperConfig({
+      KEEPER_DATABASE_URL:
+        "postgresql://postgres:postgres@postgres.railway.internal:5432/railway",
+      NODE_ENV: "production",
+    });
+
+    expect(config.persistence).toEqual({
+      databaseUrl:
+        "postgresql://postgres:postgres@postgres.railway.internal:5432/railway",
+      mainLoopLockRequired: true,
+    });
   });
 
   it("rejects invalid keeper persistence database URLs", async () => {

@@ -103,6 +103,7 @@ async function loadKeeperIndex(options: KeeperIndexOptions = {}) {
       metricsPort: 9090,
       persistence: {
         databaseUrl: null,
+        mainLoopLockRequired: false,
       },
       startupJitterMs: 0,
       minGasBalanceWei: "100",

@@ -163,12 +163,14 @@ If you only want the database helper, use `yarn dev:db`. It starts the local Pos
 
 The keeper is a lightweight stateless service that calls settleRound() on eligible active rounds, cancels expired rounds, marks dormant content, and can publish correlation payout snapshots from deterministic artifacts. Snapshot publishing can use a separate keeper wallet that first approves the bonded frontend operator and is then delegated by that frontend. Anyone can run a keeper — all data is public, and multiple instances provide redundancy with no coordination.
 
-**Configure** by copying `.env.example` and setting contract addresses and a wallet:
+**Configure** by copying `.env.example` and setting an RPC URL, `CHAIN_ID`, and keeper wallet:
 
 ```bash
 cp packages/keeper/.env.example packages/keeper/.env.local
-# Edit packages/keeper/.env.local with your RPC URL, contract addresses, and wallet key
+# Edit packages/keeper/.env.local with RPC_URL, CHAIN_ID, and wallet credentials
 ```
+
+For supported live chains, core contract addresses come from `@rateloop/contracts`; address env overrides are for local or recovery workflows.
 
 **Start the keeper:**
 

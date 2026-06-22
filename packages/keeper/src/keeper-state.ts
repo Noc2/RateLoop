@@ -185,15 +185,26 @@ export async function runWithKeeperMainLoopLock<T>(
   logger: Logger,
   fallback: T,
   run: () => Promise<T>,
+  options: { lockRequired?: boolean } = {},
 ): Promise<T> {
+  const lockRequired = options.lockRequired === true;
   let activePool: pg.Pool | null = null;
   try {
     activePool = await ensureSchema(logger);
   } catch {
-    return run();
+    return lockRequired ? fallback : run();
   }
 
   if (!activePool) {
+    if (lockRequired) {
+      warnPersistenceOnce(
+        logger,
+        "main-loop-lock-required-without-database",
+        "Keeper main loop lock required but KEEPER_DATABASE_URL is not configured; skipping this tick",
+        "missing database",
+      );
+      return fallback;
+    }
     return run();
   }
 
@@ -202,9 +213,14 @@ export async function runWithKeeperMainLoopLock<T>(
     lockKey: MAIN_LOOP_LOCK_KEY,
     logger,
     warningKey: "main-loop-lock",
-    warningMessage: "Keeper main loop lock unavailable; running this tick without it",
+    warningMessage: lockRequired
+      ? "Keeper main loop lock unavailable; skipping this tick because KEEPER_MAIN_LOOP_LOCK_REQUIRED=true"
+      : "Keeper main loop lock unavailable; running this tick without it",
   });
   if (lock.status === "unavailable") {
+    if (lockRequired) {
+      return fallback;
+    }
     return run();
   }
   if (lock.status === "busy") {
