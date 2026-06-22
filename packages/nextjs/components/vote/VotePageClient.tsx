@@ -76,7 +76,12 @@ import { getLocalVoteCooldownsByContentId } from "~~/lib/vote/localCooldown";
 import { buildVoteContentPinKey, buildVoteContentPinKeyFromUrl, buildVoteLocation } from "~~/lib/vote/location";
 import { mergeRequestedContentIntoFeed } from "~~/lib/vote/requestedContent";
 import { resolveStableSessionFeedOrder } from "~~/lib/vote/stableFeedOrder";
-import { type VoteView, getVoteViewGroups, isScopedVoteViewOption } from "~~/lib/vote/viewOptions";
+import {
+  type VoteView,
+  getVoteViewGroups,
+  isScopedVoteViewOption,
+  resolveSupportedVoteView,
+} from "~~/lib/vote/viewOptions";
 import type { WorldCredentialKind, WorldIdProofPurpose } from "~~/lib/world-id/credentials";
 import { buildRecommendationSignalContext, trackRecommendationSignal } from "~~/utils/recommendationTracker";
 import { notification } from "~~/utils/scaffold-eth";
@@ -285,7 +290,6 @@ const HomeInner = () => {
   const mobileDockContainerRef = useRef<HTMLDivElement | null>(null);
   const voteAttentionTimeoutRef = useRef<number | null>(null);
   const voteAttentionTokenRef = useRef(0);
-  const autoZeroLrepViewAddressRef = useRef<string | null>(null);
   const [mobileDockReservedSpace, setMobileDockReservedSpace] = useState<number | null>(null);
   const trimmedSearchQuery = searchQuery.trim();
   const isSearchMode = trimmedSearchQuery.length > 0;
@@ -344,7 +348,6 @@ const HomeInner = () => {
   const hasWallet = Boolean(address);
   const hasResolvedLrepBalance = hasWallet && lrepBalance !== undefined;
   const hasZeroLrepBalance = hasResolvedLrepBalance && lrepBalance === 0n;
-  const hasPositiveLrepBalance = hasResolvedLrepBalance && lrepBalance > 0n;
   const isAdvisoryOnlyRater = hasWallet && lrepBalance !== undefined && lrepBalance < MIN_COUNTED_STAKE_MICRO;
   const viewGroups = useMemo(() => getVoteViewGroups(hasWallet, hasZeroLrepBalance), [hasWallet, hasZeroLrepBalance]);
   const activeScope: ScopeOption = isScopedVoteViewOption(view) ? view : "all";
@@ -596,48 +599,16 @@ const HomeInner = () => {
   );
 
   useEffect(() => {
-    if (!address && isScopedVoteViewOption(view)) {
-      setView("for_you");
+    const supportedView = resolveSupportedVoteView({
+      view,
+      hasWallet,
+      hasResolvedLrepBalance,
+      hasZeroLrepBalance,
+    });
+    if (supportedView !== view) {
+      setView(supportedView);
     }
-  }, [address, view]);
-
-  useEffect(() => {
-    if (!normalizedAddress) {
-      autoZeroLrepViewAddressRef.current = null;
-      return;
-    }
-
-    if (lrepBalance === undefined) {
-      return;
-    }
-
-    if (hasPositiveLrepBalance) {
-      autoZeroLrepViewAddressRef.current = null;
-      if (view === "zero_lrep_vote") {
-        setView("for_you");
-      }
-      return;
-    }
-
-    if (autoZeroLrepViewAddressRef.current === normalizedAddress) {
-      return;
-    }
-
-    autoZeroLrepViewAddressRef.current = normalizedAddress;
-    if (!hasZeroLrepBalance || view !== "for_you" || isSearchMode || hasExplicitRequestedContentPin) {
-      return;
-    }
-
-    setView("zero_lrep_vote");
-  }, [
-    hasExplicitRequestedContentPin,
-    hasPositiveLrepBalance,
-    hasZeroLrepBalance,
-    isSearchMode,
-    lrepBalance,
-    normalizedAddress,
-    view,
-  ]);
+  }, [hasResolvedLrepBalance, hasWallet, hasZeroLrepBalance, view]);
 
   const displayFeedRef = useRef<ContentItem[]>([]);
   const activeViewSessionRef = useRef<ActiveViewSession | null>(null);

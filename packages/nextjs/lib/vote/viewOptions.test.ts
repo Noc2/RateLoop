@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { getVoteViewGroups, isScopedVoteViewOption } from "~~/lib/vote/viewOptions";
+import { getVoteViewGroups, isScopedVoteViewOption, resolveSupportedVoteView } from "~~/lib/vote/viewOptions";
 
 test("getVoteViewGroups hides wallet-only entries when disconnected", () => {
   const groups = getVoteViewGroups(false);
@@ -73,4 +73,49 @@ test("isScopedVoteViewOption identifies non-discover scoped views", () => {
   assert.equal(isScopedVoteViewOption("trending"), false);
   assert.equal(isScopedVoteViewOption("my_submissions"), true);
   assert.equal(isScopedVoteViewOption("zero_lrep_vote"), true);
+});
+
+test("resolveSupportedVoteView does not auto-select zero LREP view for zero-balance wallets", () => {
+  assert.equal(
+    resolveSupportedVoteView({
+      view: "for_you",
+      hasWallet: true,
+      hasResolvedLrepBalance: true,
+      hasZeroLrepBalance: true,
+    }),
+    "for_you",
+  );
+});
+
+test("resolveSupportedVoteView keeps manually selected zero LREP view while supported", () => {
+  assert.equal(
+    resolveSupportedVoteView({
+      view: "zero_lrep_vote",
+      hasWallet: true,
+      hasResolvedLrepBalance: true,
+      hasZeroLrepBalance: true,
+    }),
+    "zero_lrep_vote",
+  );
+});
+
+test("resolveSupportedVoteView resets unsupported scoped views", () => {
+  assert.equal(
+    resolveSupportedVoteView({
+      view: "watched",
+      hasWallet: false,
+      hasResolvedLrepBalance: false,
+      hasZeroLrepBalance: false,
+    }),
+    "for_you",
+  );
+  assert.equal(
+    resolveSupportedVoteView({
+      view: "zero_lrep_vote",
+      hasWallet: true,
+      hasResolvedLrepBalance: true,
+      hasZeroLrepBalance: false,
+    }),
+    "for_you",
+  );
 });

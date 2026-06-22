@@ -35,6 +35,23 @@ export function isScopedVoteViewOption(value: VoteView): value is ScopedVoteView
   return SCOPED_VIEW_VALUES.has(value as ScopedVoteViewOption);
 }
 
+export function resolveSupportedVoteView(params: {
+  view: VoteView;
+  hasWallet: boolean;
+  hasResolvedLrepBalance: boolean;
+  hasZeroLrepBalance: boolean;
+}): VoteView {
+  if (!params.hasWallet && isScopedVoteViewOption(params.view)) {
+    return "for_you";
+  }
+
+  if (params.hasResolvedLrepBalance && params.view === "zero_lrep_vote" && !params.hasZeroLrepBalance) {
+    return "for_you";
+  }
+
+  return params.view;
+}
+
 export function getVoteViewGroups(hasWallet: boolean, canUseZeroLrepVote = hasWallet): VoteViewGroup[] {
   const rateOptions: VoteViewOption[] = DISCOVER_FEED_MODE_OPTIONS.filter(option => option.value !== "contested").map(
     option => ({
