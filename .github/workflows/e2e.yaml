@@ -240,6 +240,7 @@ jobs:
       image: mcr.microsoft.com/playwright:v1.58.2-noble
       options: --ipc=host
     env:
+      HOME: /root
       PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
     services:
       postgres:
