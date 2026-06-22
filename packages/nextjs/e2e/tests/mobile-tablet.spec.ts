@@ -101,7 +101,7 @@ test.describe("Tablet viewport", () => {
   });
 
   test("no horizontal overflow on key pages", async ({ connectedPage: page }) => {
-    const pages = ["/rate", "/ask", "/governance", "/docs"];
+    const pages = ["/rate", "/ask", "/docs", "/legal"];
 
     for (const path of pages) {
       await page.goto(path, { waitUntil: "domcontentloaded" });
