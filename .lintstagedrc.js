@@ -9,6 +9,7 @@ const buildNextEslintCommand = (filenames) =>
     .join(" ")}`;
 
 const checkTypesNextCommand = () => "yarn next:check-types";
+const buildContractsCommand = () => "yarn workspace @rateloop/contracts build";
 
 // Backend TS-only packages don't have an eslint config wired through yarn, but they all
 // expose `check-types` (tsc --noEmit). Run that whenever a TS file in those packages
@@ -33,6 +34,7 @@ const buildPackageTypecheckCommands = (filenames) => {
 
   if (nextjsFiles.length > 0) {
     commands.push(buildNextEslintCommand(nextjsFiles));
+    commands.push(buildContractsCommand());
     commands.push(checkTypesNextCommand());
   }
 
