@@ -9,6 +9,8 @@ const DETAILS_HASH = `0x${"4".repeat(64)}`;
 const VALID_REQUEST = {
   bounty: {
     amount: "1000000",
+    bountyStartBy: "1893456000",
+    bountyWindowSeconds: "1200",
     requiredSettledRounds: "1",
     requiredVoters: "3",
   },
@@ -32,6 +34,30 @@ describe("agent question linting", () => {
       ok: true,
       warningCount: 0,
     });
+  });
+
+  it("rejects missing bounty timing fields", () => {
+    const findings = lintAgentAskRequest({
+      ...VALID_REQUEST,
+      bounty: {
+        amount: "1000000",
+        requiredSettledRounds: "1",
+        requiredVoters: "3",
+      },
+    });
+
+    expect(findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "error",
+          path: "bounty.bountyStartBy",
+        }),
+        expect.objectContaining({
+          level: "error",
+          path: "bounty.bountyWindowSeconds",
+        }),
+      ]),
+    );
   });
 
   it("accepts public image context without a context URL", () => {

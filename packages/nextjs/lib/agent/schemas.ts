@@ -254,7 +254,7 @@ const agentBountyInputSchema = {
       type: ["integer", "string"],
     },
   },
-  required: ["amount"],
+  required: ["amount", "bountyStartBy", "bountyWindowSeconds"],
   type: "object",
 } satisfies JsonSchema;
 

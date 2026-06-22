@@ -20,6 +20,7 @@ type AskHandoffResponse = Record<string, unknown> & {
 
 const INLINE_IMAGE_JSON_BUDGET_BYTES = 3 * 1024 * 1024;
 const BLOB_MULTIPART_UPLOAD_THRESHOLD_BYTES = 5 * 1024 * 1024;
+const HANDOFF_JSON_REQUEST_TIMEOUT_MS = 10_000;
 const STAGED_UPLOAD_POLL_INTERVAL_MS = 1_000;
 const STAGED_UPLOAD_POLL_TIMEOUT_MS = 90_000;
 
@@ -30,7 +31,7 @@ function apiUrl(config: AgentsRuntimeConfig, pathname: string) {
     );
   }
   return new URL(
-    pathname,
+    pathname.replace(/^\/+/, ""),
     `${config.apiBaseUrl.replace(/\/+$/, "")}/`,
   ).toString();
 }
@@ -75,7 +76,18 @@ function responseErrorMessage(body: unknown, fallback: string) {
 }
 
 async function requestJson<T>(url: string, init: RequestInit): Promise<T> {
-  const response = await fetch(url, init);
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      ...init,
+      signal: init.signal ?? AbortSignal.timeout(HANDOFF_JSON_REQUEST_TIMEOUT_MS),
+    });
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error(`RateLoop request timed out after ${HANDOFF_JSON_REQUEST_TIMEOUT_MS}ms.`);
+    }
+    throw error;
+  }
   const body = await readJsonResponse(response);
   if (!response.ok) {
     throw new Error(

@@ -615,6 +615,20 @@ function isSupportedBountyEligibility(value: number): boolean {
   return value === 0 || value === X402_BOUNTY_ELIGIBILITY_PROOF_OF_HUMAN;
 }
 
+function parseRequiredPositiveBountyInteger(
+  value: unknown,
+  fieldName: "bounty.bountyStartBy" | "bounty.bountyWindowSeconds",
+): bigint {
+  if (value === undefined || value === null || String(value).trim() === "") {
+    throw new X402QuestionInputError(`${fieldName} is required for bundle submissions.`);
+  }
+  const parsed = parseNonNegativeInteger(value, fieldName);
+  if (parsed <= 0n) {
+    throw new X402QuestionInputError(`${fieldName} must be greater than zero for bundle submissions.`);
+  }
+  return parsed;
+}
+
 function normalizeBounty(value: unknown): X402QuestionPayload["bounty"] {
   if (!isObject(value)) {
     throw new X402QuestionInputError("bounty is required.");
@@ -634,10 +648,13 @@ function normalizeBounty(value: unknown): X402QuestionPayload["bounty"] {
     value.requiredSettledRounds ?? X402_MIN_REWARD_POOL_SETTLED_ROUNDS,
     "bounty.requiredSettledRounds",
   );
-  const bountyStartBy = parseNonNegativeInteger(value.bountyStartBy ?? 0n, "bounty.bountyStartBy");
-  const bountyWindowSeconds = parseNonNegativeInteger(value.bountyWindowSeconds ?? 0n, "bounty.bountyWindowSeconds");
+  const bountyStartBy = parseRequiredPositiveBountyInteger(value.bountyStartBy, "bounty.bountyStartBy");
+  const bountyWindowSeconds = parseRequiredPositiveBountyInteger(
+    value.bountyWindowSeconds,
+    "bounty.bountyWindowSeconds",
+  );
   const feedbackWindowSeconds = parseNonNegativeInteger(
-    value.feedbackWindowSeconds ?? value.bountyWindowSeconds ?? 0n,
+    value.feedbackWindowSeconds ?? bountyWindowSeconds,
     "bounty.feedbackWindowSeconds",
   );
   const bountyEligibility = Number(parseNonNegativeInteger(value.bountyEligibility ?? 0n, "bounty.bountyEligibility"));
@@ -670,11 +687,6 @@ function normalizeBounty(value: unknown): X402QuestionPayload["bounty"] {
       "bounty.bountyEligibility must be 0 for everyone or 8 for Proof of Human.",
     );
   }
-  assertSupportedX402BundleBounty({
-    bountyStartBy,
-    bountyWindowSeconds,
-  });
-
   return {
     asset,
     amount,

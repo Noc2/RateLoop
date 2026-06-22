@@ -66,8 +66,8 @@ export interface RateLoopAgentBounty {
   /** Must match roundConfig.minVoters when a custom roundConfig is supplied. */
   requiredVoters?: string | number | bigint;
   requiredSettledRounds?: string | number | bigint;
-  bountyStartBy?: string | number | bigint;
-  bountyWindowSeconds?: string | number | bigint;
+  bountyStartBy: string | number | bigint;
+  bountyWindowSeconds: string | number | bigint;
   feedbackWindowSeconds?: string | number | bigint;
   bountyEligibility?: string | number;
   [key: string]: unknown;

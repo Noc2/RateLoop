@@ -822,7 +822,23 @@ test("parseX402QuestionRequest rejects bundle payouts without a start-by deadlin
         ...VALID_REQUEST,
         bounty: { ...VALID_REQUEST.bounty, bountyStartBy: "0" },
       }),
-    /must be greater than zero/,
+    /bounty\.bountyStartBy must be greater than zero/,
+  );
+  assert.throws(
+    () =>
+      parseX402QuestionRequest({
+        ...VALID_REQUEST,
+        bounty: { ...VALID_REQUEST.bounty, bountyStartBy: undefined },
+      }),
+    /bounty\.bountyStartBy is required/,
+  );
+  assert.throws(
+    () =>
+      parseX402QuestionRequest({
+        ...VALID_REQUEST,
+        bounty: { ...VALID_REQUEST.bounty, bountyWindowSeconds: undefined },
+      }),
+    /bounty\.bountyWindowSeconds is required/,
   );
 });
 

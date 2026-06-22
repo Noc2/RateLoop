@@ -143,6 +143,28 @@ function parseLintVoterCount(value: unknown): bigint | null {
   return /^\d+$/.test(raw) ? BigInt(raw) : null;
 }
 
+function parseLintPositiveInteger(value: unknown): bigint | null {
+  if (typeof value !== "string" && typeof value !== "number" && typeof value !== "bigint") return null;
+  const raw = String(value).trim();
+  if (!/^\d+$/.test(raw)) return null;
+  const parsed = BigInt(raw);
+  return parsed > 0n ? parsed : null;
+}
+
+function lintRequiredPositiveBountyField(
+  bounty: Record<string, unknown>,
+  fieldName: "bountyStartBy" | "bountyWindowSeconds",
+  findings: QuestionLintFinding[],
+) {
+  if (bounty[fieldName] === undefined || bounty[fieldName] === null || String(bounty[fieldName]).trim() === "") {
+    pushFinding(findings, "error", `bounty.${fieldName}`, `bounty.${fieldName} is required.`);
+    return;
+  }
+  if (parseLintPositiveInteger(bounty[fieldName]) === null) {
+    pushFinding(findings, "error", `bounty.${fieldName}`, `bounty.${fieldName} must be a positive integer.`);
+  }
+}
+
 function lintRoundConfigVoterAlignment(request: Partial<AgentAskExample>, findings: QuestionLintFinding[]) {
   const firstQuestion = request.question ?? (Array.isArray(request.questions) ? request.questions[0] : undefined);
   const usesTopLevelRoundConfig = isObject(request.roundConfig);
@@ -392,20 +414,24 @@ export function lintAgentAskRequest(input: unknown): QuestionLintFinding[] {
 
   if (!isObject(request.bounty)) {
     pushFinding(findings, "error", "bounty", "A bounty object is required before an agent spends.");
-  } else if (!/^\d+$/.test(String(request.bounty.amount ?? "")) || BigInt(String(request.bounty.amount ?? "0")) <= 0n) {
-    pushFinding(findings, "error", "bounty.amount", "Bounty amount must be a positive atomic integer.");
   } else {
-    const amount = BigInt(String(request.bounty.amount));
-    const requiredVoters =
-      parseLintVoterCount(request.bounty.requiredVoters) ?? DEFAULT_REQUIRED_VOTERS;
-    const requiredVoterFloor = requiredQuestionRewardParticipants(amount);
-    if (requiredVoters < requiredVoterFloor) {
-      pushFinding(
-        findings,
-        "error",
-        "bounty.requiredVoters",
-        `bounty.requiredVoters must be at least ${requiredVoterFloor} for this bounty amount.`,
-      );
+    lintRequiredPositiveBountyField(request.bounty, "bountyStartBy", findings);
+    lintRequiredPositiveBountyField(request.bounty, "bountyWindowSeconds", findings);
+
+    if (!/^\d+$/.test(String(request.bounty.amount ?? "")) || BigInt(String(request.bounty.amount ?? "0")) <= 0n) {
+      pushFinding(findings, "error", "bounty.amount", "Bounty amount must be a positive atomic integer.");
+    } else {
+      const amount = BigInt(String(request.bounty.amount));
+      const requiredVoters = parseLintVoterCount(request.bounty.requiredVoters) ?? DEFAULT_REQUIRED_VOTERS;
+      const requiredVoterFloor = requiredQuestionRewardParticipants(amount);
+      if (requiredVoters < requiredVoterFloor) {
+        pushFinding(
+          findings,
+          "error",
+          "bounty.requiredVoters",
+          `bounty.requiredVoters must be at least ${requiredVoterFloor} for this bounty amount.`,
+        );
+      }
     }
   }
 

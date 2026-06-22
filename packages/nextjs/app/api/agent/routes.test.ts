@@ -1252,6 +1252,8 @@ test("agent ask handoff route stages generated image bytes behind a browser link
   assert.equal(response.status, 200);
   assert.match(handoffId, /^ahf_/);
   assert.ok(token);
+  assert.equal(body.effectiveTtlMs, 300000);
+  assert.deepEqual(body.warnings, []);
   assert.equal(handoffUrl.searchParams.get("token"), null);
   assert.equal(body.nextAction, "Share handoffUrl with the user. Do not ask the user to paste raw wallet signatures.");
 
@@ -1288,6 +1290,25 @@ test("agent ask handoff route stages generated image bytes behind a browser link
   assert.equal(prepareBody.uploadChallenges?.length, 1);
   assert.equal(prepareBody.uploadChallenges?.[0]?.assetId, readBody.assets?.[0]?.id);
   assert.match(String(prepareBody.uploadChallenges?.[0]?.challengeId), /^[a-f0-9]{32}$/);
+});
+
+test("agent ask handoff route reports clamped TTLs", async () => {
+  const response = await handoffsRoute.POST(
+    makePublicPost("https://rateloop.ai/api/agent/handoffs", {
+      request: {
+        ...handoffQuestionPayload("agent-handoff-clamped-ttl"),
+        maxPaymentAmount: "1500000",
+      },
+      ttlMs: 7_200_000,
+    }),
+  );
+  const body = (await response.json()) as Record<string, unknown>;
+
+  assert.equal(response.status, 200);
+  assert.equal(body.effectiveTtlMs, 1_800_000);
+  assert.deepEqual(body.warnings, [
+    "requested_ttl_clamped: requested ttlMs 7200000 exceeds the maximum 1800000; using 1800000.",
+  ]);
 });
 
 test("agent ask handoff route stages generated image upload metadata before blob bytes arrive", async () => {

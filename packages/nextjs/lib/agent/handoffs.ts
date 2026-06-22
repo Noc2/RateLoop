@@ -100,6 +100,22 @@ const HANDOFF_DRAFT_MIGRATION_MESSAGE =
 const IMAGE_BASE64_TRANSPORT_HINT =
   "Read the image from disk or memory in the same process that sends the request; do not copy base64 from terminal output or downscale solely because a chat display capped the output.";
 
+function resolveHandoffTtl(requestedTtlMs: number | undefined) {
+  const requested = requestedTtlMs ?? DEFAULT_HANDOFF_TTL_MS;
+  const effectiveTtlMs = Math.min(Math.max(requested, 60_000), PUBLIC_HANDOFF_MAX_TTL_MS);
+  const warnings =
+    requested > PUBLIC_HANDOFF_MAX_TTL_MS
+      ? [
+          `requested_ttl_clamped: requested ttlMs ${requested} exceeds the maximum ${PUBLIC_HANDOFF_MAX_TTL_MS}; using ${effectiveTtlMs}.`,
+        ]
+      : [];
+  return {
+    effectiveTtlMs,
+    requestedTtlMs: requestedTtlMs ?? null,
+    warnings,
+  };
+}
+
 type ErrorWithCause = {
   cause?: unknown;
   code?: unknown;
@@ -851,8 +867,8 @@ export async function createAgentAskHandoff(params: {
   const id = randomHandoffId();
   const token = randomToken();
   const now = nowDate();
-  const ttlMs = Math.min(Math.max(params.ttlMs ?? DEFAULT_HANDOFF_TTL_MS, 60_000), PUBLIC_HANDOFF_MAX_TTL_MS);
-  const expiresAt = new Date(now.getTime() + ttlMs);
+  const ttl = resolveHandoffTtl(params.ttlMs);
+  const expiresAt = new Date(now.getTime() + ttl.effectiveTtlMs);
   const assets = [
     ...generatedImages.map(image => ({
       ...image,
@@ -952,6 +968,7 @@ export async function createAgentAskHandoff(params: {
   const storedAssets = await listAgentAskHandoffAssets(id);
   return {
     ...buildAgentAskHandoffResponse({ assets: storedAssets, handoff }),
+    effectiveTtlMs: ttl.effectiveTtlMs,
     handoffId: id,
     handoffToken: token,
     handoffUrl: handoffUrl({ appBaseUrl: params.appBaseUrl, handoffId: id, token }),
@@ -961,6 +978,7 @@ export async function createAgentAskHandoff(params: {
         : "Share handoffUrl with the user. Do not ask the user to paste raw wallet signatures.",
     resultTool: "rateloop_get_result",
     statusTool: "rateloop_get_handoff_status",
+    warnings: ttl.warnings,
   };
 }
 
