@@ -1,10 +1,55 @@
 import { expect, test } from "../fixtures/wallet";
 import { openAdvancedQuestionSettings } from "../helpers/ask-form";
 import { findVoteableContent, gotoWithRetry, waitForFeedLoaded } from "../helpers/wait-helpers";
+import type { Page } from "@playwright/test";
 
 // Device profile comes from Playwright project config (iPhone / Android).
 // No manual setViewportSize() needed — the project device descriptor handles
 // viewport, UA, touch emulation, and browser engine.
+
+async function getReadyRateMobileMenuButton(page: Page) {
+  const scrollSource = page.locator('[data-mobile-header-scroll-source="true"]').first();
+  await expect(scrollSource).toBeVisible({ timeout: 5_000 });
+  await scrollSource.evaluate(element => {
+    element.scrollTop = 0;
+    element.dispatchEvent(new Event("scroll", { bubbles: true }));
+  });
+
+  const mobileHeader = page.locator('[data-mobile-header="true"]');
+  await expect(mobileHeader).toHaveAttribute("data-visible", "true", { timeout: 5_000 });
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const header = document.querySelector<HTMLElement>('[data-mobile-header="true"]');
+          const button = header?.querySelector<HTMLElement>('[aria-label="Open menu"]');
+          if (!header || !button) {
+            return false;
+          }
+
+          const headerRect = header.getBoundingClientRect();
+          const buttonRect = button.getBoundingClientRect();
+          if (headerRect.height <= 0 || buttonRect.width <= 0 || buttonRect.height <= 0) {
+            return false;
+          }
+
+          const hitTarget = document.elementFromPoint(
+            buttonRect.left + buttonRect.width / 2,
+            buttonRect.top + buttonRect.height / 2,
+          );
+          return Boolean(
+            hitTarget instanceof Element &&
+              (hitTarget === button ||
+                button.contains(hitTarget) ||
+                hitTarget.closest('[aria-label="Open menu"]') === button),
+          );
+        }),
+      { timeout: 5_000 },
+    )
+    .toBe(true);
+
+  return mobileHeader.getByLabel("Open menu");
+}
 
 test.describe("Mobile viewport (phone)", () => {
   test("sidebar hidden and hamburger visible", async ({ connectedPage: page }) => {
@@ -14,7 +59,7 @@ test.describe("Mobile viewport (phone)", () => {
     const sidebar = page.locator("aside.fixed.left-0.top-0");
     await expect(sidebar).toBeHidden();
 
-    const hamburger = page.getByLabel("Open menu");
+    const hamburger = await getReadyRateMobileMenuButton(page);
     await expect(hamburger).toBeVisible({ timeout: 5_000 });
   });
 
@@ -22,7 +67,7 @@ test.describe("Mobile viewport (phone)", () => {
     await page.goto("/rate");
     await waitForFeedLoaded(page);
 
-    await page.getByLabel("Open menu").click();
+    await (await getReadyRateMobileMenuButton(page)).click();
 
     const dropdown = page.locator(".dropdown-content");
     await expect(dropdown.getByRole("link", { name: /Discover/i })).toBeVisible({ timeout: 5_000 });
@@ -784,7 +829,7 @@ test.describe("Mobile viewport (phone)", () => {
     await page.goto("/rate");
     await waitForFeedLoaded(page);
 
-    await page.getByLabel("Open menu").click();
+    await (await getReadyRateMobileMenuButton(page)).click();
     await page
       .locator(".dropdown-content")
       .getByRole("link", { name: /Submit/i })
