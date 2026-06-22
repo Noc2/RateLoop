@@ -198,6 +198,8 @@ test.describe("Mobile viewport (phone)", () => {
           scrollContainerBackground: mobileScrollContainer
             ? getComputedStyle(mobileScrollContainer).backgroundColor
             : "",
+          scrollContainerSnapType: mobileScrollContainer ? getComputedStyle(mobileScrollContainer).scrollSnapType : "",
+          scrollContainerTouchAction: mobileScrollContainer ? getComputedStyle(mobileScrollContainer).touchAction : "",
           scrollWheelX: activeArticleRect
             ? activeArticleRect.left + Math.min(24, activeArticleRect.width / 2)
             : scrollerRect
@@ -352,6 +354,9 @@ test.describe("Mobile viewport (phone)", () => {
     expect(initialLayout.rootOverflowY).toBe("hidden");
     expect(initialLayout.bodyOverflowY).toBe("hidden");
     expect(initialLayout.scrollContainerBackground).toBe("rgb(0, 0, 0)");
+    expect(initialLayout.scrollContainerSnapType).toBe("y proximity");
+    expect(initialLayout.scrollContainerTouchAction).toContain("pan-y");
+    expect(initialLayout.scrollContainerTouchAction).toContain("pinch-zoom");
     expect(initialLayout.activeContentCardShellBackground).toBe("rgb(23, 22, 26)");
     expect(initialLayout.activeContentHeaderBackground).toBe("rgb(23, 22, 26)");
     expect(Math.abs(initialLayout.activeContentHeaderToSurfaceGap)).toBeLessThanOrEqual(1);
@@ -361,12 +366,6 @@ test.describe("Mobile viewport (phone)", () => {
     expect(initialLayout.activeMoreControlVisible).toBe(true);
     expect(initialLayout.activeMoreControlFits).toBe(true);
 
-    await page.evaluate(() => {
-      const explicitScrollSource = document.querySelector<HTMLElement>('[data-mobile-header-scroll-source="true"]');
-      if (explicitScrollSource) {
-        explicitScrollSource.style.scrollSnapType = "none";
-      }
-    });
     const sameCardScrollStart = await readLayout();
     await startMobileChromeChangeCapture();
     await setFeedScrollTop(sameCardScrollStart.voteScrollTop + 96);
@@ -385,12 +384,6 @@ test.describe("Mobile viewport (phone)", () => {
       "false",
     ]);
 
-    await page.evaluate(() => {
-      const explicitScrollSource = document.querySelector<HTMLElement>('[data-mobile-header-scroll-source="true"]');
-      if (explicitScrollSource) {
-        explicitScrollSource.style.scrollSnapType = "";
-      }
-    });
     await setFeedScrollTop(0);
     await expect(mobileHeader).toHaveAttribute("data-visible", "true");
     await expect(voteTopChrome).toHaveAttribute("data-visible", "true");
