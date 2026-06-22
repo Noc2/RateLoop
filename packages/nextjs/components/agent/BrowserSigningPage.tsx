@@ -384,6 +384,9 @@ export function BrowserSigningPage({ intentId }: { intentId: string }) {
         // the live wallet chain per call instead of trusting the pre-loop switch.
         const intentChainId = currentIntent.chainId ?? undefined;
         const hashes = await executeWalletTransactionPlan({
+          action: isFeedbackBonusSigningStep(currentIntent)
+            ? "browser signing feedback bonus funding"
+            : "browser signing ask submission",
           calls,
           chainId: intentChainId,
           getPostCallDelayMs,

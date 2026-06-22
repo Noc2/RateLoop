@@ -30,6 +30,7 @@ import {
   isThirdwebBundlerInfrastructureError,
   isThirdwebSponsoredExecutionRejectedError,
 } from "~~/lib/transactionErrors";
+import { createTransactionTimingRun } from "~~/lib/transactions/timing";
 import scaffoldConfig from "~~/scaffold.config";
 import {
   createThirdwebInAppWallet,
@@ -73,41 +74,26 @@ function wait(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-function nowMs() {
-  return typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now();
-}
-
 function createThirdwebBatchTimingLog(params: {
   action: string;
   callCount: number;
+  callTypes?: readonly string[];
   chainId: number;
   operationKey: string | null;
   route: "external-wallet" | "thirdweb";
   sponsorshipMode: ThirdwebBatchSponsorshipMode;
 }) {
-  const startedAt = nowMs();
-  let lastMarkAt = startedAt;
-  const runId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-
-  const emit = (event: string, extra: Record<string, unknown> = {}) => {
-    const timestamp = nowMs();
-    const elapsedMs = Math.round(timestamp - startedAt);
-    const deltaMs = Math.round(timestamp - lastMarkAt);
-    lastMarkAt = timestamp;
-
-    console.info("[thirdweb-batch-timing]", {
-      ...params,
-      ...extra,
-      deltaMs,
-      elapsedMs,
-      event,
-      runId,
-    });
-  };
-
-  emit("start");
-
-  return { emit };
+  return createTransactionTimingRun({
+    action: params.action,
+    callCount: params.callCount,
+    callTypes: params.callTypes,
+    chainId: params.chainId,
+    consoleLabel: "thirdweb-batch-timing",
+    metadata: params.operationKey ? { operationKey: params.operationKey } : undefined,
+    route: params.route,
+    source: "thirdweb-batch",
+    sponsorshipMode: params.sponsorshipMode,
+  });
 }
 
 function getTransactionStatusPollingInterval(chainId: number) {
@@ -586,6 +572,7 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
       const timingLog = createThirdwebBatchTimingLog({
         action: options.action ?? "transaction",
         callCount: calls.length,
+        callTypes: calls.map(call => call.functionName),
         chainId,
         operationKey,
         route: canUseExternalWalletPath ? "external-wallet" : "thirdweb",

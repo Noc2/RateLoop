@@ -2572,6 +2572,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
           }
 
           const hashes = await executeWalletTransactionPlan({
+            action: isFundingFeedbackBonus ? "agent handoff feedback bonus funding" : "agent handoff ask submission",
             calls,
             chainId: handoffChainId,
             getPostCallDelayMs,
