@@ -236,6 +236,11 @@ jobs:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: ${{ matrix.timeout }}
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble
+      options: --ipc=host
+    env:
+      PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
     services:
       postgres:
         image: postgres:16
@@ -281,25 +286,6 @@ jobs:
       - name: Install dependencies
         run: yarn install --immutable
 
-      - name: Cache Playwright browsers
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('yarn.lock', 'packages/nextjs/package.json') }}
-          restore-keys: |
-            playwright-${{ runner.os }}-
-
-      - name: Disable optional Microsoft apt sources
-        run: |
-          sudo rm -f \
-            /etc/apt/sources.list.d/azure-cli.list \
-            /etc/apt/sources.list.d/azure-cli.sources \
-            /etc/apt/sources.list.d/microsoft-prod.list \
-            /etc/apt/sources.list.d/microsoft-prod.sources
-
-      - name: Install Playwright browsers
-        run: yarn workspace @rateloop/nextjs exec playwright install ${{ matrix.playwright_browsers }} --with-deps
-
       - name: Start Anvil and deploy contracts
         env:
           ETHERSCAN_API_KEY: ${{ secrets.ETHERSCAN_API_KEY }}
@@ -323,7 +309,7 @@ jobs:
 
       - name: Start Ponder indexer
         env:
-          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/rateloop_app
+          DATABASE_URL: postgresql://postgres:postgres@postgres:5432/rateloop_app
           RATELOOP_PONDER_DATABASE_SCHEMA: rateloop_ponder_ci
           PONDER_NETWORK: hardhat
           PONDER_RPC_URL_31337: http://127.0.0.1:8545
@@ -333,7 +319,7 @@ jobs:
         env:
           RATELOOP_E2E_PRODUCTION_BUILD: "true"
           NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD: "true"
-          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/rateloop_app
+          DATABASE_URL: postgresql://postgres:postgres@postgres:5432/rateloop_app
           NEXT_PUBLIC_PONDER_URL: http://127.0.0.1:42069
           NEXT_PUBLIC_TARGET_NETWORKS: "31337"
           NEXT_PUBLIC_THIRDWEB_CLIENT_ID: 124332de491a2aa8b7ba8ea6db1ce693
@@ -364,7 +350,7 @@ jobs:
           CI: true
           RATELOOP_E2E_PRODUCTION_BUILD: "true"
           NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD: "true"
-          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/rateloop_app
+          DATABASE_URL: postgresql://postgres:postgres@postgres:5432/rateloop_app
           NEXT_PUBLIC_PONDER_URL: http://127.0.0.1:42069
           NEXT_PUBLIC_TARGET_NETWORKS: "31337"
           NEXT_PUBLIC_THIRDWEB_CLIENT_ID: 124332de491a2aa8b7ba8ea6db1ce693
