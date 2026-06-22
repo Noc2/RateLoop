@@ -38,6 +38,14 @@ const governanceDocsPage = readFileSync(
   ),
   "utf8",
 );
+const betaNoticeBanner = readFileSync(
+  new URL("../packages/nextjs/components/BetaNoticeBanner.tsx", import.meta.url),
+  "utf8",
+);
+const protocolReleaseConstants = readFileSync(
+  new URL("../packages/nextjs/constants/protocolRelease.ts", import.meta.url),
+  "utf8",
+);
 
 const ponderReadme = readFileSync(
   new URL("../packages/ponder/README.md", import.meta.url),
@@ -77,6 +85,9 @@ test("governance docs frame Base mainnet contracts as durable infrastructure", (
   );
   assert.doesNotMatch(governanceDocsPage, /release candidate/i);
   assert.doesNotMatch(governanceDocsPage, /redeploy/i);
+  assert.doesNotMatch(betaNoticeBanner, /release candidate/i);
+  assert.doesNotMatch(protocolReleaseConstants, /release candidate/i);
+  assert.match(protocolReleaseConstants, /mainnet-beta/);
 });
 
 test("Ponder README says live override conflicts fail closed", () => {

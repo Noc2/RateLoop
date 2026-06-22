@@ -34,6 +34,7 @@ export const CONFIDENTIALITY_ESCROW_ABI = [
 ] as const;
 
 const CONFIDENTIALITY_BOND_POSTED_EVENT = "rateloop:confidentiality-bond-posted";
+const LOCAL_DEVELOPMENT_CHAIN_IDS = new Set([31337]);
 
 function normalizeAddress(value: string | undefined): Address | undefined {
   const trimmed = value?.trim();
@@ -45,10 +46,13 @@ function getPublicConfidentialityEscrowAddressOverride(): Address | undefined {
 }
 
 export function getConfiguredConfidentialityEscrowAddress(chainId: number): Address | undefined {
-  return (
-    getPublicConfidentialityEscrowAddressOverride() ??
-    normalizeAddress((contracts?.[chainId]?.ConfidentialityEscrow as { address?: string } | undefined)?.address)
+  const override = getPublicConfidentialityEscrowAddressOverride();
+  const deploymentAddress = normalizeAddress(
+    (contracts?.[chainId]?.ConfidentialityEscrow as { address?: string } | undefined)?.address,
   );
+  if (!deploymentAddress) return override;
+  if (!override || LOCAL_DEVELOPMENT_CHAIN_IDS.has(chainId)) return override ?? deploymentAddress;
+  return deploymentAddress;
 }
 
 function dispatchConfidentialityBondPosted(contentId: bigint, identityKey?: string | null) {
