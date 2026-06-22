@@ -1,5 +1,6 @@
 export const RESERVED_SUBMISSION_MIN_AGE_SECONDS = 1n;
 export const RESERVATION_REVEAL_READY_TIMEOUT_MS = 30_000;
+export const RESERVATION_REVEAL_WALL_CLOCK_BUFFER_MS = 250;
 
 export type ReservationRevealWaitReceipt = {
   blockNumber?: bigint | null;
@@ -44,6 +45,15 @@ export async function waitForReservationRevealReady(params: {
     if (remainingMs <= 0) {
       throw new Error("Timed out waiting for the reserved submission reveal window.");
     }
-    await sleepFn(Math.min(pollMs, remainingMs));
+
+    const timestampShortfallMs = Number(revealReadyTimestamp - latestBlock.timestamp) * 1_000;
+    const revealWaitMs = Math.max(pollMs, timestampShortfallMs + RESERVATION_REVEAL_WALL_CLOCK_BUFFER_MS);
+    if (remainingMs < revealWaitMs) {
+      await sleepFn(remainingMs);
+      throw new Error("Timed out waiting for the reserved submission reveal window.");
+    }
+
+    await sleepFn(revealWaitMs);
+    return;
   }
 }

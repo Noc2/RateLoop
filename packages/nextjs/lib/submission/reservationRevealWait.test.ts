@@ -1,4 +1,4 @@
-import { waitForReservationRevealReady } from "./reservationRevealWait";
+import { RESERVATION_REVEAL_WALL_CLOCK_BUFFER_MS, waitForReservationRevealReady } from "./reservationRevealWait";
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -22,15 +22,14 @@ test("waitForReservationRevealReady returns immediately when latest block is old
   assert.deepEqual(calls, [{ blockNumber: 7n }, { blockTag: "latest" }]);
 });
 
-test("waitForReservationRevealReady polls until the next block timestamp satisfies the reservation age", async () => {
+test("waitForReservationRevealReady waits wall-clock time when automine has not advanced the latest block", async () => {
   const sleeps: number[] = [];
-  const latestTimestamps = [10n, 10n, 11n];
 
   await waitForReservationRevealReady({
     client: {
       getBlock: async params => {
         if ("blockNumber" in params) return { timestamp: 10n };
-        return { timestamp: latestTimestamps.shift() ?? 11n };
+        return { timestamp: 10n };
       },
     },
     pollingIntervalMs: 200,
@@ -40,7 +39,7 @@ test("waitForReservationRevealReady polls until the next block timestamp satisfi
     },
   });
 
-  assert.deepEqual(sleeps, [200, 200]);
+  assert.deepEqual(sleeps, [1_000 + RESERVATION_REVEAL_WALL_CLOCK_BUFFER_MS]);
 });
 
 test("waitForReservationRevealReady uses a one-second fallback without a receipt block", async () => {
