@@ -104,6 +104,47 @@ function encodeAsciiBase64(value: string): string {
   throw new Error("Base64 encoder unavailable");
 }
 
+function nowMs() {
+  return typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now();
+}
+
+function createRoundVoteTimingLog(params: {
+  chainId: number;
+  contentId: bigint;
+  isGatedContext: boolean;
+  stakeAmount: number;
+}) {
+  const startedAt = nowMs();
+  let lastMarkAt = startedAt;
+  const runId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  const basePayload = {
+    chainId: params.chainId,
+    contentId: params.contentId.toString(),
+    isGatedContext: params.isGatedContext,
+    runId,
+    stakeAmount: params.stakeAmount,
+  };
+
+  const emit = (event: string, extra: Record<string, unknown> = {}) => {
+    const timestamp = nowMs();
+    const elapsedMs = Math.round(timestamp - startedAt);
+    const deltaMs = Math.round(timestamp - lastMarkAt);
+    lastMarkAt = timestamp;
+
+    console.info("[round-vote-timing]", {
+      ...basePayload,
+      ...extra,
+      deltaMs,
+      elapsedMs,
+      event,
+    });
+  };
+
+  emit("start");
+
+  return { emit };
+}
+
 function buildLocalE2EArmoredTlockCiphertext(targetRound: bigint | number, drandChainHash: string): string {
   const normalizedHash = drandChainHash.replace(/^0x/u, "").toLowerCase();
   const stanzaBody = chunkString("A".repeat(108), 64).join("\n");
@@ -214,44 +255,60 @@ export function useRoundVote() {
     contextVisibility,
     confidentiality,
   }: RoundVoteParams) => {
-    const accepted = await requireAcceptance("vote");
-    if (!accepted) return false;
-
-    if (!address) {
-      setError("Please connect your wallet");
-      return false;
-    }
-
-    if (!chain?.id) {
-      setError("Please connect your wallet");
-      return false;
-    }
-
-    if (chain.id !== targetNetwork.id) {
-      setError(`Wallet is connected to the wrong network. Please switch to ${targetNetwork.name}.`);
-      return false;
-    }
-
-    if (isOwnContent || (submitter && address && submitter.toLowerCase() === address.toLowerCase())) {
-      setError(normalizeRoundVoteError("SelfVote"));
-      return false;
-    }
-
     const isGatedContext = isPrivateContextMetadata({
       confidentiality,
       contextAccess,
       contextVisibility,
     });
+    const timingLog = createRoundVoteTimingLog({
+      chainId: targetNetwork.id,
+      contentId,
+      isGatedContext,
+      stakeAmount,
+    });
+    const accepted = await requireAcceptance("vote");
+    if (!accepted) {
+      timingLog.emit("terms-rejected");
+      return false;
+    }
+    timingLog.emit("terms-accepted");
+
+    if (!address) {
+      timingLog.emit("blocked", { reason: "missing_address" });
+      setError("Please connect your wallet");
+      return false;
+    }
+
+    if (!chain?.id) {
+      timingLog.emit("blocked", { reason: "missing_chain" });
+      setError("Please connect your wallet");
+      return false;
+    }
+
+    if (chain.id !== targetNetwork.id) {
+      timingLog.emit("blocked", { reason: "wrong_network", walletChainId: chain.id });
+      setError(`Wallet is connected to the wrong network. Please switch to ${targetNetwork.name}.`);
+      return false;
+    }
+
+    if (isOwnContent || (submitter && address && submitter.toLowerCase() === address.toLowerCase())) {
+      timingLog.emit("blocked", { reason: "self_vote" });
+      setError(normalizeRoundVoteError("SelfVote"));
+      return false;
+    }
+
     if (isGatedContext) {
       const bondRequirement = getConfidentialityBondRequirement(confidentiality);
       let hasAcceptedTerms = false;
       try {
         hasAcceptedTerms = await hasAcceptedConfidentialityTerms(address, contentId, targetNetwork.id);
+        timingLog.emit("confidentiality-terms-checked", { hasAcceptedTerms });
       } catch (termsError) {
         console.warn("[round-vote] failed to check confidentiality terms before commit.", {
           contentId: contentId.toString(),
           error: termsError,
         });
+        timingLog.emit("blocked", { reason: "confidentiality_terms_check_failed" });
         setError("Could not verify confidentiality terms acceptance. Try unlocking the private context again.");
         return false;
       }
@@ -259,6 +316,7 @@ export function useRoundVote() {
       const escrowAddress = getConfiguredConfidentialityEscrowAddress(targetNetwork.id);
 
       if (bondRequirement.isRequired && !publicClient) {
+        timingLog.emit("blocked", { reason: "missing_public_client_for_bond" });
         setError("Checking confidentiality bond status. Try again in a moment.");
         return false;
       }
@@ -271,11 +329,13 @@ export function useRoundVote() {
             functionName: "hasActiveBond",
             args: [contentId, identityKey],
           })) as boolean;
+          timingLog.emit("confidentiality-bond-checked", { hasActiveBond });
         } catch (bondError) {
           console.warn("[round-vote] failed to check confidentiality bond before commit.", {
             contentId: contentId.toString(),
             error: bondError,
           });
+          timingLog.emit("blocked", { reason: "confidentiality_bond_check_failed" });
           setError(`Could not verify the required ${bondRequirement.label} confidentiality bond. Try again.`);
           return false;
         }
@@ -291,46 +351,57 @@ export function useRoundVote() {
         isGated: true,
       });
       if (privateContextBlocker) {
+        timingLog.emit("blocked", { reason: "private_context_blocker" });
         setError(privateContextBlocker);
         return false;
       }
     }
 
     if (isVotingEngineLoading || isContentRegistryLoading || isLrepLoading) {
+      timingLog.emit("blocked", { reason: "contracts_loading" });
       setError("Preparing vote. Try again in a moment.");
       return false;
     }
 
     if (!votingEngineInfo?.address || !contentRegistryInfo?.address || !lrepInfo?.address) {
+      timingLog.emit("blocked", { reason: "missing_contract_info" });
       setError("Voting is unavailable right now.");
       return false;
     }
 
     if (isAwaitingSponsoredBatchCalls) {
+      timingLog.emit("blocked", { reason: "awaiting_sponsored_batch_calls" });
       setError("Preparing wallet. Try again in a moment.");
       return false;
     }
 
     if (isAwaitingSelfFundedBatchCalls) {
+      timingLog.emit("blocked", { reason: "awaiting_self_funded_batch_calls" });
       setError("Wallet switching to paid gas. Retry in a moment.");
       return false;
     }
 
     if (isMissingGasBalance) {
+      timingLog.emit("blocked", { reason: "missing_gas_balance" });
       setError(getGasBalanceErrorMessage(nativeTokenSymbol, { canSponsorTransactions }));
       return false;
     }
 
     if (isUp === undefined || predictedUpPercent === undefined) {
+      timingLog.emit("blocked", { reason: "missing_vote_inputs" });
       setError("Choose your vote and expected up-share before submitting.");
       return false;
     }
 
     // Synchronous guard against double-submission (React state updates are async)
-    if (commitLock.current) return false;
+    if (commitLock.current) {
+      timingLog.emit("blocked", { reason: "commit_lock" });
+      return false;
+    }
     commitLock.current = true;
     setIsCommitting(true);
     setError(null);
+    timingLog.emit("commit-lock-acquired");
 
     try {
       if (publicClient) {
@@ -343,14 +414,17 @@ export function useRoundVote() {
           });
 
           if (!isContentActive) {
+            timingLog.emit("blocked", { reason: "content_not_active" });
             setError(normalizeRoundVoteError("ContentNotActive"));
             return false;
           }
+          timingLog.emit("content-active-checked");
         } catch (activeCheckError) {
           console.warn("[round-vote] failed to check content activity before commit.", {
             contentId: contentId.toString(),
             error: activeCheckError,
           });
+          timingLog.emit("content-active-check-failed-nonfatal");
         }
       }
 
@@ -401,6 +475,10 @@ export function useRoundVote() {
             runtime = withLocalE2ETlockRuntime(runtime);
           }
           await getVoteTlockChainInfo(runtime);
+          timingLog.emit("advisory-runtime-prepared", {
+            roundId: availability.roundId.toString(),
+            targetRound: availability.minTargetRound.toString(),
+          });
           if (process.env.NODE_ENV !== "production") {
             console.debug("[round-vote] advisory availability", {
               drandChainHash: availability.drandChainHash,
@@ -418,6 +496,7 @@ export function useRoundVote() {
           });
           const message =
             availabilityError instanceof Error ? availabilityError.message : "Preparing vote. Try again in a moment.";
+          timingLog.emit("blocked", { reason: "advisory_runtime_failed", message });
           setError(normalizeRoundVoteError(message));
           return false;
         }
@@ -433,6 +512,11 @@ export function useRoundVote() {
             runtime = withLocalE2ETlockRuntime(runtime);
           }
           await getVoteTlockChainInfo(runtime);
+          timingLog.emit("staked-runtime-prepared", {
+            requiresOpenRound: runtime.requiresOpenRound,
+            roundId: runtime.roundId.toString(),
+            targetRound: runtime.targetRound?.toString() ?? null,
+          });
         } catch (runtimeError) {
           console.warn("[round-vote] failed to anchor tlock target to the active round.", {
             contentId: contentId.toString(),
@@ -440,23 +524,27 @@ export function useRoundVote() {
           });
           const message =
             runtimeError instanceof Error ? runtimeError.message : "Preparing vote. Try again in a moment.";
+          timingLog.emit("blocked", { reason: "staked_runtime_failed", message });
           setError(normalizeRoundVoteError(message));
           return false;
         }
       }
 
       if (!runtime || !publicClient) {
+        timingLog.emit("blocked", { reason: "missing_runtime_or_public_client" });
         setError("Preparing vote. Try again in a moment.");
         return false;
       }
 
       const requestedStakeWei = buildStakeAmountWei(stakeAmount);
       if (stakeAmount > 0 && requestedStakeWei < COUNTED_VOTE_MIN_STAKE_WEI) {
+        timingLog.emit("blocked", { reason: "stake_too_low" });
         setError("Stake at least 1 LREP or choose 0 for advisory voting.");
         return false;
       }
       const isZeroStakeVote = requestedStakeWei === 0n;
       if (isZeroStakeVote && isAdvisoryVoteRecorderLoading) {
+        timingLog.emit("blocked", { reason: "advisory_recorder_loading" });
         setError("Preparing vote. Try again in a moment.");
         return false;
       }
@@ -472,6 +560,10 @@ export function useRoundVote() {
               args: [address as Address, votingEngineAddress],
             })) as bigint);
       let currentAllowance = await readCurrentAllowance();
+      timingLog.emit("allowance-read", {
+        currentAllowance: currentAllowance.toString(),
+        requestedStakeWei: requestedStakeWei.toString(),
+      });
       const signPermitForVote = async (stakeWei: bigint): Promise<RoundVotePermitSignature | undefined> => {
         if (useDirectLocalE2EWrites || stakeWei === 0n) return undefined;
         try {
@@ -494,9 +586,11 @@ export function useRoundVote() {
             }),
           );
           const parts = getSignatureParts(signature);
+          timingLog.emit("permit-signed");
           return { deadline, ...parts };
         } catch (permitError) {
           console.warn("LREP permit signing unavailable; falling back to approve + vote.", permitError);
+          timingLog.emit("permit-signing-failed");
           return undefined;
         }
       };
@@ -576,12 +670,14 @@ export function useRoundVote() {
           functionName: "openRound",
           kind: "openRound",
         };
+        timingLog.emit("open-round-submit-start");
         if (!useDirectLocalE2EWrites && canUseSponsoredBatchCalls) {
           await executeContractCallBatch([openRoundCall], {
             action: "open round",
             atomicRequired: true,
             sponsorshipMode: "sponsored",
           });
+          timingLog.emit("open-round-submit-complete", { transport: "sponsored-batch" });
           return;
         }
         if (!useDirectLocalE2EWrites && canUseSelfFundedBatchCalls) {
@@ -590,12 +686,14 @@ export function useRoundVote() {
             atomicRequired: true,
             sponsorshipMode: "self-funded",
           });
+          timingLog.emit("open-round-submit-complete", { transport: "self-funded-batch" });
           return;
         }
         const transactionHash = await writePlannedCall(openRoundCall, "open round");
         if (!transactionHash) {
           throw new Error("Preparing vote. Try again in a moment.");
         }
+        timingLog.emit("open-round-submit-complete", { transport: "direct-wallet", transactionHash });
       };
 
       const ensureOpenStakedRuntime = () =>
@@ -634,6 +732,10 @@ export function useRoundVote() {
         });
         const { ciphertext, commitHash, roundReferenceRatingBps, targetRound, drandChainHash, frontend, stakeWei } =
           commitParams;
+        timingLog.emit("commit-artifacts-built", {
+          roundId: freshRuntime.roundId.toString(),
+          targetRound: targetRound.toString(),
+        });
         const roundContext = packVoteRoundContext(freshRuntime.roundId, roundReferenceRatingBps);
         const plan = buildRoundVoteTransactionPlan({
           advisoryVoteRecorderAddress,
@@ -650,25 +752,34 @@ export function useRoundVote() {
           targetRound,
           votingEngineAddress,
         });
+        timingLog.emit("transaction-plan-built", {
+          callKinds: plan.calls.map(call => call.kind).join(","),
+          isAdvisoryVote: plan.isAdvisoryVote,
+          needsApproval: plan.needsApproval,
+        });
         return { plan, runtime: freshRuntime, stakeWei };
       };
       let submittedVote: Awaited<ReturnType<typeof buildFreshRoundVotePlan>> | null = null;
 
       if (!useDirectLocalE2EWrites && canUseSponsoredBatchCalls) {
         const freshVote = await buildFreshRoundVotePlan(currentAllowance);
+        timingLog.emit("vote-batch-submit-start", { sponsorshipMode: "sponsored" });
         await executeContractCallBatch(freshVote.plan.calls, {
           action: "vote",
           atomicRequired: true,
           sponsorshipMode: "sponsored",
         });
+        timingLog.emit("vote-batch-submit-complete", { sponsorshipMode: "sponsored" });
         submittedVote = freshVote;
       } else if (!useDirectLocalE2EWrites && canUseSelfFundedBatchCalls) {
         const freshVote = await buildFreshRoundVotePlan(currentAllowance);
+        timingLog.emit("vote-batch-submit-start", { sponsorshipMode: "self-funded" });
         await executeContractCallBatch(freshVote.plan.calls, {
           action: "vote",
           atomicRequired: true,
           sponsorshipMode: "self-funded",
         });
+        timingLog.emit("vote-batch-submit-complete", { sponsorshipMode: "self-funded" });
         submittedVote = freshVote;
       } else {
         const needsApproval = !isZeroStakeVote && currentAllowance < requestedStakeWei;
@@ -678,10 +789,12 @@ export function useRoundVote() {
           if (permitSignature) {
             const freshVote = await buildFreshRoundVotePlan(currentAllowance, permitSignature);
             for (const call of freshVote.plan.calls) {
+              timingLog.emit("direct-call-submit-start", { callKind: call.kind });
               const transactionHash = await writePlannedCall(call, "vote");
               if (!transactionHash) {
                 return false;
               }
+              timingLog.emit("direct-call-submit-complete", { callKind: call.kind, transactionHash });
             }
             submittedVote = freshVote;
           }
@@ -693,20 +806,24 @@ export function useRoundVote() {
           if (!approvalCall) {
             throw new Error("Preparing approval. Try again in a moment.");
           }
+          timingLog.emit("direct-call-submit-start", { callKind: approvalCall.kind });
           const transactionHash = await writePlannedCall(approvalCall, "approve");
           if (!transactionHash) {
             return false;
           }
+          timingLog.emit("direct-call-submit-complete", { callKind: approvalCall.kind, transactionHash });
           currentAllowance = requestedStakeWei;
         }
 
         if (!submittedVote) {
           const freshVote = await buildFreshRoundVotePlan(currentAllowance);
           for (const call of freshVote.plan.calls) {
+            timingLog.emit("direct-call-submit-start", { callKind: call.kind });
             const transactionHash = await writePlannedCall(call, call.kind === "approve" ? "approve" : "vote");
             if (!transactionHash) {
               return false;
             }
+            timingLog.emit("direct-call-submit-complete", { callKind: call.kind, transactionHash });
           }
           submittedVote = freshVote;
         }
@@ -774,10 +891,17 @@ export function useRoundVote() {
       queryClient.invalidateQueries({ queryKey: getRecentUserVotesQueryKey(address, targetNetwork.id, deploymentKey) });
       queryClient.invalidateQueries({ queryKey: getVoteHistoryQueryKey(address, targetNetwork.id, deploymentKey) });
 
+      timingLog.emit("success", {
+        isAdvisoryVote: submittedPlan.isAdvisoryVote,
+        roundId: submittedRuntime.roundId.toString(),
+      });
       return true;
     } catch (e: any) {
       void queryClient.invalidateQueries({ queryKey: FREE_TRANSACTION_ALLOWANCE_QUERY_KEY });
       console.error("Round vote commit failed:", e);
+      timingLog.emit("failure", {
+        message: e?.shortMessage || e?.message || "Failed to submit vote",
+      });
       if (isFreeTransactionExhaustedError(e)) {
         setError("Free transactions used up. Add ETH to continue.");
         return false;

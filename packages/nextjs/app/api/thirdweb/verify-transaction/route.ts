@@ -37,9 +37,23 @@ function createDeniedResponse(reason: string) {
   });
 }
 
+function logVerifierRequestCompleted(startedAt: number, payload: Record<string, unknown>) {
+  console.info("[thirdweb-verifier] request completed", {
+    ...payload,
+    durationMs: Date.now() - startedAt,
+  });
+}
+
 export async function POST(request: NextRequest) {
+  const startedAt = Date.now();
   const limited = await checkRateLimit(request, RATE_LIMIT);
-  if (limited) return limited;
+  if (limited) {
+    logVerifierRequestCompleted(startedAt, {
+      debugCode: "rate_limited",
+      isAllowed: false,
+    });
+    return limited;
+  }
 
   const overrides = getThirdwebVerifierRouteTestOverrides();
   const configuredSecret = overrides?.getThirdwebServerVerifierSecret?.() ?? getThirdwebServerVerifierSecret();
@@ -48,6 +62,10 @@ export async function POST(request: NextRequest) {
   if (!configuredSecret) {
     console.error("[thirdweb-verifier] denied request", {
       debugCode: "missing_server_secret",
+    });
+    logVerifierRequestCompleted(startedAt, {
+      debugCode: "missing_server_secret",
+      isAllowed: false,
     });
     return createDeniedResponse("Transactions are not sponsored right now.");
   }
@@ -61,11 +79,20 @@ export async function POST(request: NextRequest) {
       debugCode: "invalid_verifier_secret",
       hasProvidedSecret: Boolean(providedSecret),
     });
+    logVerifierRequestCompleted(startedAt, {
+      debugCode: "invalid_verifier_secret",
+      hasProvidedSecret: Boolean(providedSecret),
+      isAllowed: false,
+    });
     return createDeniedResponse("Unauthorized");
   }
 
   const parsedBody = await parseJsonBody(request);
   if (!isJsonObjectBody(parsedBody)) {
+    logVerifierRequestCompleted(startedAt, {
+      debugCode: "invalid_json_body",
+      isAllowed: false,
+    });
     return createDeniedResponse("Invalid request.");
   }
   const body = parsedBody;
@@ -79,6 +106,11 @@ export async function POST(request: NextRequest) {
       ...requestSummary,
       debugCode: "client_id_mismatch",
       expectedClientId: configuredClientId,
+    });
+    logVerifierRequestCompleted(startedAt, {
+      ...requestSummary,
+      debugCode: "client_id_mismatch",
+      isAllowed: false,
     });
     return createDeniedResponse("Transactions are not sponsored right now.");
   }
@@ -94,6 +126,12 @@ export async function POST(request: NextRequest) {
         reason: decision.reason,
         summary: decision.summary,
       });
+      logVerifierRequestCompleted(startedAt, {
+        ...requestSummary,
+        debugCode: decision.debugCode,
+        isAllowed: false,
+        reason: decision.reason,
+      });
       return createDeniedResponse(decision.reason);
     }
 
@@ -101,11 +139,21 @@ export async function POST(request: NextRequest) {
       console.info("[thirdweb-verifier] approved mainnet request", requestSummary);
     }
 
+    logVerifierRequestCompleted(startedAt, {
+      ...requestSummary,
+      debugCode: decision.debugCode ?? null,
+      isAllowed: true,
+    });
     return NextResponse.json({ isAllowed: true });
   } catch (error) {
     console.error("[thirdweb-verifier] request failed", {
       ...requestSummary,
       error,
+    });
+    logVerifierRequestCompleted(startedAt, {
+      ...requestSummary,
+      debugCode: "verifier_exception",
+      isAllowed: false,
     });
     return createDeniedResponse("Transactions are not sponsored right now.");
   }

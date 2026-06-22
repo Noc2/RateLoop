@@ -11,6 +11,7 @@ const originalFreeTransactionLimit = env.FREE_TRANSACTION_LIMIT;
 const originalNodeEnv = env.NODE_ENV;
 const originalNextPublicUsdcAddress31337 = env.NEXT_PUBLIC_USDC_ADDRESS_31337;
 const originalTargetNetworks = env.NEXT_PUBLIC_TARGET_NETWORKS;
+const originalConsoleInfo = console.info;
 
 env.APP_ENV = "test";
 env.DATABASE_URL = "memory:";
@@ -407,6 +408,7 @@ before(async () => {
 });
 
 beforeEach(async () => {
+  console.info = () => {};
   dbModule.__setDatabaseResourcesForTests(memoryResources);
   freeTransactions.__setFreeTransactionTestOverridesForTests({
     allTransactionHashesSucceeded: async () => true,
@@ -421,6 +423,7 @@ beforeEach(async () => {
 after(() => {
   freeTransactions.__setFreeTransactionTestOverridesForTests(null);
   dbModule.__setDatabaseResourcesForTests(null);
+  console.info = originalConsoleInfo;
 
   if (originalAppEnv === undefined) {
     delete env.APP_ENV;

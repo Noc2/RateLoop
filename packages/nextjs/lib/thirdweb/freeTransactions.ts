@@ -1002,6 +1002,39 @@ function buildIdentityBoundUnmeteredSummary(params: {
   } satisfies FreeTransactionAllowanceSummary;
 }
 
+function createFreeTransactionTimingLog(params: {
+  chainId?: number | null;
+  operation: "evaluate_allowance" | "confirm_reservation";
+  operationKey?: string | null;
+  targetCount?: number | null;
+  transactionHashCount?: number | null;
+  walletAddress?: string | null;
+}) {
+  const startedAt = Date.now();
+  let lastMarkAt = startedAt;
+  const runId = `${startedAt.toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+
+  const emit = (event: string, extra: Record<string, unknown> = {}) => {
+    const timestamp = Date.now();
+    const elapsedMs = timestamp - startedAt;
+    const deltaMs = timestamp - lastMarkAt;
+    lastMarkAt = timestamp;
+
+    console.info("[thirdweb-free-tx-timing]", {
+      ...params,
+      ...extra,
+      deltaMs,
+      elapsedMs,
+      event,
+      runId,
+    });
+  };
+
+  emit("start");
+
+  return { emit };
+}
+
 type NormalizedVerifierCall = {
   data: Hex;
   to: `0x${string}`;
@@ -1667,89 +1700,150 @@ export async function getFreeTransactionAllowanceSummary(params: { address: stri
 export async function evaluateFreeTransactionAllowance(
   body: ThirdwebVerifierRequest,
 ): Promise<FreeTransactionAllowanceDecision> {
+  const requestedTargets = body.userOp?.data?.targets ?? body.userOp?.targets;
+  const timingLog = createFreeTransactionTimingLog({
+    chainId: typeof body.chainId === "number" ? body.chainId : null,
+    operation: "evaluate_allowance",
+    targetCount: Array.isArray(requestedTargets) ? requestedTargets.length : null,
+  });
+  const finish = <Decision extends FreeTransactionAllowanceDecision>(
+    decision: Decision,
+    extra: Record<string, unknown> = {},
+  ) => {
+    const summary = "summary" in decision ? decision.summary : undefined;
+    timingLog.emit("decision", {
+      ...extra,
+      debugCode: decision.debugCode ?? null,
+      exhausted: summary?.exhausted ?? null,
+      isAllowed: decision.isAllowed,
+      reason: decision.isAllowed ? null : decision.reason,
+      remaining: summary?.remaining ?? null,
+      used: summary?.used ?? null,
+      verified: summary?.verified ?? null,
+    });
+    return decision;
+  };
+
   await ensureFreeTransactionQuotaTable();
+  timingLog.emit("quota-table-ready");
 
   if (typeof body.chainId !== "number") {
-    return {
-      isAllowed: false,
+    return finish({
       debugCode: "invalid_chain",
+      isAllowed: false,
       reason: DEFAULT_DENY_REASON,
-    };
+    });
   }
+  const chainId = body.chainId;
 
   const sender = body.userOp?.sender;
   if (!sender || !isAddress(sender)) {
-    return {
-      isAllowed: false,
+    return finish({
       debugCode: "invalid_sender",
+      isAllowed: false,
       reason: DEFAULT_DENY_REASON,
-    };
+    });
   }
 
   const calls = extractOperationCalls(body);
   if (!calls || calls.length === 0) {
-    return {
-      isAllowed: false,
+    return finish({
       debugCode: "invalid_targets",
+      isAllowed: false,
       reason: DEFAULT_DENY_REASON,
-    };
+    });
   }
+  timingLog.emit("calls-extracted", {
+    targetCount: calls.length,
+  });
 
   const walletAddress = normalizeAddress(sender);
-  const validatedCalls = await validateSponsoredCalls(body.chainId, calls, walletAddress);
+  const validatedCalls = await validateSponsoredCalls(chainId, calls, walletAddress);
   if (!validatedCalls.ok) {
-    return {
-      isAllowed: false,
-      debugCode: validatedCalls.debugCode,
-      reason: DEFAULT_DENY_REASON,
-    };
+    return finish(
+      {
+        debugCode: validatedCalls.debugCode,
+        isAllowed: false,
+        reason: DEFAULT_DENY_REASON,
+      },
+      { walletAddress },
+    );
   }
+  timingLog.emit("calls-validated", {
+    targetCount: calls.length,
+    walletAddress,
+  });
 
   const raterIdentityKey = await resolveFreeTransactionRaterIdentityKey({
-    chainId: body.chainId,
+    chainId,
     userOp: body.userOp,
+    walletAddress,
+  });
+  timingLog.emit("identity-resolved", {
+    hasRaterIdentity: Boolean(raterIdentityKey),
     walletAddress,
   });
 
   if (!raterIdentityKey) {
-    return {
-      isAllowed: false,
-      debugCode: "missing_rater_identity",
-      reason: NO_RATER_IDENTITY_REASON,
-      summary: buildUnverifiedSummary({
-        chainId: body.chainId,
-        walletAddress,
-      }),
-    };
+    return finish(
+      {
+        debugCode: "missing_rater_identity",
+        isAllowed: false,
+        reason: NO_RATER_IDENTITY_REASON,
+        summary: buildUnverifiedSummary({
+          chainId,
+          walletAddress,
+        }),
+      },
+      { walletAddress },
+    );
   }
 
-  if (isUnmeteredFrontendRegistrationOperation(body.chainId, calls)) {
-    return {
-      isAllowed: true,
-      summary: buildIdentityBoundUnmeteredSummary({
-        chainId: body.chainId,
-        raterIdentityKey,
-        walletAddress,
-      }),
+  if (isUnmeteredFrontendRegistrationOperation(chainId, calls)) {
+    timingLog.emit("unmetered-operation", {
       debugCode: "frontend_registration",
-    };
+      walletAddress,
+    });
+    return finish(
+      {
+        debugCode: "frontend_registration",
+        isAllowed: true,
+        summary: buildIdentityBoundUnmeteredSummary({
+          chainId,
+          raterIdentityKey,
+          walletAddress,
+        }),
+      },
+      { walletAddress },
+    );
   }
 
   const operationKey = extractOperationKey(body, calls);
   if (!operationKey) {
-    return {
-      isAllowed: false,
-      debugCode: "invalid_operation_key",
-      reason: DEFAULT_DENY_REASON,
-    };
+    return finish(
+      {
+        debugCode: "invalid_operation_key",
+        isAllowed: false,
+        reason: DEFAULT_DENY_REASON,
+      },
+      { walletAddress },
+    );
   }
+  timingLog.emit("operation-key-derived", {
+    operationKey,
+    walletAddress,
+  });
 
   const environment = getServerEnvironmentScope();
 
   try {
-    return await db.transaction(async tx => {
+    timingLog.emit("quota-transaction-start", {
+      operationKey,
+      walletAddress,
+    });
+    const decision = await db.transaction(async (tx): Promise<FreeTransactionAllowanceDecision> => {
       const identityKey = await ensureQuotaRow(tx, {
-        chainId: body.chainId!,
+        chainId,
         environment,
         raterIdentityKey,
         walletAddress,
@@ -1767,6 +1861,12 @@ export async function evaluateFreeTransactionAllowance(
       if (!normalizedQuotaRow) {
         throw new Error("Failed to read free transaction quota.");
       }
+      timingLog.emit("quota-row-read", {
+        freeTxLimit: normalizedQuotaRow.freeTxLimit,
+        freeTxUsed: normalizedQuotaRow.freeTxUsed,
+        operationKey,
+        walletAddress,
+      });
 
       const [existingReservation] = await tx
         .select()
@@ -1785,6 +1885,11 @@ export async function evaluateFreeTransactionAllowance(
         normalizedReservation.expiresAt &&
         getTimestampMs(normalizedReservation.expiresAt) > now.getTime()
       ) {
+        timingLog.emit("reservation-reused", {
+          operationKey,
+          reservationStatus: "pending",
+          walletAddress,
+        });
         return {
           isAllowed: true,
           summary: buildQuotaSummary({
@@ -1799,6 +1904,11 @@ export async function evaluateFreeTransactionAllowance(
       }
 
       if (idempotentConfirmed) {
+        timingLog.emit("reservation-reused", {
+          operationKey,
+          reservationStatus: "confirmed",
+          walletAddress,
+        });
         return {
           isAllowed: true,
           summary: buildQuotaSummary({
@@ -1813,6 +1923,12 @@ export async function evaluateFreeTransactionAllowance(
       }
 
       if (normalizedQuotaRow.freeTxUsed >= normalizedQuotaRow.freeTxLimit) {
+        timingLog.emit("quota-exhausted", {
+          freeTxLimit: normalizedQuotaRow.freeTxLimit,
+          freeTxUsed: normalizedQuotaRow.freeTxUsed,
+          operationKey,
+          walletAddress,
+        });
         const [latestQuotaRow] = await tx
           .select()
           .from(freeTransactionQuotas)
@@ -1845,7 +1961,7 @@ export async function evaluateFreeTransactionAllowance(
           .set({
             identityKey,
             raterIdentityKey,
-            chainId: body.chainId!,
+            chainId,
             environment,
             walletAddress,
             status: "pending",
@@ -1862,7 +1978,7 @@ export async function evaluateFreeTransactionAllowance(
           operationKey,
           identityKey,
           raterIdentityKey,
-          chainId: body.chainId!,
+          chainId,
           environment,
           walletAddress,
           status: "pending",
@@ -1895,6 +2011,12 @@ export async function evaluateFreeTransactionAllowance(
       if (!normalizedUpdatedQuotaRow) {
         throw new Error("Failed to update free transaction quota.");
       }
+      timingLog.emit("reservation-created", {
+        freeTxLimit: normalizedUpdatedQuotaRow.freeTxLimit,
+        freeTxUsed: normalizedUpdatedQuotaRow.freeTxUsed,
+        operationKey,
+        walletAddress,
+      });
 
       return {
         isAllowed: true,
@@ -1908,20 +2030,39 @@ export async function evaluateFreeTransactionAllowance(
         }),
       };
     });
+    timingLog.emit("quota-transaction-complete", {
+      operationKey,
+      walletAddress,
+    });
+    return finish(decision, {
+      operationKey,
+      walletAddress,
+    });
   } catch (error) {
     if (isFreeTransactionStoreUnavailableError(error)) {
       console.warn("[thirdweb-free-tx] quota store unavailable during verifier check; failing closed.", {
-        chainId: body.chainId,
+        chainId,
         sender: walletAddress,
         raterIdentityKey,
       });
-      return {
-        isAllowed: false,
-        debugCode: "quota_store_unavailable",
-        reason: DEFAULT_DENY_REASON,
-      };
+      return finish(
+        {
+          debugCode: "quota_store_unavailable",
+          isAllowed: false,
+          reason: DEFAULT_DENY_REASON,
+        },
+        {
+          operationKey,
+          walletAddress,
+        },
+      );
     }
 
+    timingLog.emit("failure", {
+      message: error instanceof Error ? error.message : "Unknown error",
+      operationKey,
+      walletAddress,
+    });
     throw error;
   }
 }
@@ -1932,16 +2073,38 @@ export async function confirmFreeTransactionReservation(params: {
   operationKey: string;
   transactionHashes: string[];
 }) {
+  const timingLog = createFreeTransactionTimingLog({
+    chainId: Number.isFinite(params.chainId) ? params.chainId : null,
+    operation: "confirm_reservation",
+    operationKey: isHash(params.operationKey) ? params.operationKey : null,
+    transactionHashCount: params.transactionHashes.length,
+    walletAddress: isAddress(params.address) ? normalizeAddress(params.address) : null,
+  });
+
   if (!isAddress(params.address) || !Number.isFinite(params.chainId) || !isHash(params.operationKey)) {
+    timingLog.emit("failure", {
+      reason: "invalid_confirmation_payload",
+    });
     throw new Error("Invalid free transaction confirmation payload");
   }
 
   const normalizedTransactionHashes = [...new Set(params.transactionHashes.filter(isHash))] as Hash[];
   if (normalizedTransactionHashes.length === 0) {
+    timingLog.emit("failure", {
+      reason: "missing_transaction_hashes",
+    });
     throw new Error("At least one transaction hash is required");
   }
+  timingLog.emit("transaction-hashes-normalized", {
+    transactionHashCount: normalizedTransactionHashes.length,
+  });
 
   const walletAddress = normalizeAddress(params.address);
+  timingLog.emit("receipt-verification-start", {
+    operationKey: params.operationKey,
+    transactionHashCount: normalizedTransactionHashes.length,
+    walletAddress,
+  });
   const allSucceeded = await (
     freeTransactionTestOverrides?.allTransactionHashesSucceeded ?? allTransactionHashesSucceeded
   )({
@@ -1949,14 +2112,35 @@ export async function confirmFreeTransactionReservation(params: {
     transactionHashes: normalizedTransactionHashes,
     walletAddress,
   });
+  timingLog.emit("receipt-verification-complete", {
+    allSucceeded,
+    operationKey: params.operationKey,
+    transactionHashCount: normalizedTransactionHashes.length,
+    walletAddress,
+  });
 
   if (!allSucceeded) {
+    timingLog.emit("failure", {
+      reason: "receipt_verification_failed",
+      operationKey: params.operationKey,
+      transactionHashCount: normalizedTransactionHashes.length,
+      walletAddress,
+    });
     throw new Error("Sponsored transaction receipts could not be verified");
   }
 
   try {
     await ensureFreeTransactionQuotaTable();
+    timingLog.emit("quota-table-ready", {
+      operationKey: params.operationKey,
+      walletAddress,
+    });
 
+    let confirmationOutcome = "unknown";
+    timingLog.emit("confirmation-transaction-start", {
+      operationKey: params.operationKey,
+      walletAddress,
+    });
     await db.transaction(async tx => {
       const [reservation] = await tx
         .select()
@@ -1966,6 +2150,7 @@ export async function confirmFreeTransactionReservation(params: {
       const normalizedReservation = normalizeReservationRow(reservation);
 
       if (!normalizedReservation) {
+        confirmationOutcome = "missing_reservation";
         return;
       }
 
@@ -1973,14 +2158,17 @@ export async function confirmFreeTransactionReservation(params: {
         normalizedReservation.chainId !== params.chainId ||
         normalizedReservation.walletAddress.toLowerCase() !== walletAddress.toLowerCase()
       ) {
+        confirmationOutcome = "reservation_mismatch";
         throw new Error("Sponsored transaction reservation does not match the current wallet");
       }
 
       if (normalizedReservation.status === "confirmed") {
+        confirmationOutcome = "already_confirmed";
         return;
       }
 
       if (normalizedReservation.status !== "pending") {
+        confirmationOutcome = `ignored_${normalizedReservation.status || "unknown"}`;
         return;
       }
 
@@ -2003,8 +2191,20 @@ export async function confirmFreeTransactionReservation(params: {
         .returning({ operationKey: freeTransactionReservations.operationKey });
 
       if (updatedReservations.length === 0) {
+        confirmationOutcome = "update_skipped";
         return;
       }
+      confirmationOutcome = "confirmed";
+    });
+    timingLog.emit("confirmation-transaction-complete", {
+      confirmationOutcome,
+      operationKey: params.operationKey,
+      walletAddress,
+    });
+    timingLog.emit("success", {
+      confirmationOutcome,
+      operationKey: params.operationKey,
+      walletAddress,
     });
   } catch (error) {
     if (isFreeTransactionStoreUnavailableError(error)) {
@@ -2013,9 +2213,19 @@ export async function confirmFreeTransactionReservation(params: {
         chainId: params.chainId,
         operationKey: params.operationKey,
       });
+      timingLog.emit("failure", {
+        debugCode: "quota_store_unavailable",
+        operationKey: params.operationKey,
+        walletAddress,
+      });
       throw error;
     }
 
+    timingLog.emit("failure", {
+      message: error instanceof Error ? error.message : "Unknown error",
+      operationKey: params.operationKey,
+      walletAddress,
+    });
     throw error;
   }
 }

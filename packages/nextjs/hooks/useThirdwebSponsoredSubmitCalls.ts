@@ -73,6 +73,43 @@ function wait(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+function nowMs() {
+  return typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now();
+}
+
+function createThirdwebBatchTimingLog(params: {
+  action: string;
+  callCount: number;
+  chainId: number;
+  operationKey: string | null;
+  route: "external-wallet" | "thirdweb";
+  sponsorshipMode: ThirdwebBatchSponsorshipMode;
+}) {
+  const startedAt = nowMs();
+  let lastMarkAt = startedAt;
+  const runId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+
+  const emit = (event: string, extra: Record<string, unknown> = {}) => {
+    const timestamp = nowMs();
+    const elapsedMs = Math.round(timestamp - startedAt);
+    const deltaMs = Math.round(timestamp - lastMarkAt);
+    lastMarkAt = timestamp;
+
+    console.info("[thirdweb-batch-timing]", {
+      ...params,
+      ...extra,
+      deltaMs,
+      elapsedMs,
+      event,
+      runId,
+    });
+  };
+
+  emit("start");
+
+  return { emit };
+}
+
 function getTransactionStatusPollingInterval(chainId: number) {
   return getTransactionReceiptPollingInterval(chainId, {
     preconfirmation: scaffoldConfig.useBasePreconfRpc,
@@ -546,11 +583,20 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
             })
           : null;
       const hasNativeGasBalance = (nativeBalance?.value ?? 0n) > 0n;
+      const timingLog = createThirdwebBatchTimingLog({
+        action: options.action ?? "transaction",
+        callCount: calls.length,
+        chainId,
+        operationKey,
+        route: canUseExternalWalletPath ? "external-wallet" : "thirdweb",
+        sponsorshipMode,
+      });
       const sendCallsWithExternalWallet = async () => {
         if (!address || !connector) {
           throw new Error("Wallet reconnecting. Retry in a moment.");
         }
 
+        timingLog.emit("external-wallet-sendCalls-start");
         return sendCallsSyncAsync({
           account: address as Address,
           calls: encodedCalls,
@@ -575,13 +621,16 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
             }),
           );
       const sendCallsWithWallet = async (wallet: NonNullable<typeof activeWallet>) =>
-        retryThirdwebBundlerOperation(() =>
-          sendAndConfirmCalls({
+        retryThirdwebBundlerOperation(() => {
+          timingLog.emit("thirdweb-sendAndConfirmCalls-start", {
+            walletId: wallet.id,
+          });
+          return sendAndConfirmCalls({
             atomicRequired: options.atomicRequired ?? false,
             calls: preparedCalls,
             wallet,
-          }),
-        );
+          });
+        });
       const getSponsoredWalletForUnmeteredCall = async () => {
         if (
           sponsorshipMode !== "sponsored" ||
@@ -596,10 +645,12 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
           sponsorshipMode: "sponsored",
         });
 
+        timingLog.emit("sponsored-wallet-autoconnect-start");
         await sponsoredWallet.autoConnect({
           chain,
           client: client!,
         });
+        timingLog.emit("sponsored-wallet-autoconnect-complete");
 
         return sponsoredWallet;
       };
@@ -607,11 +658,16 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
       try {
         if (!options.suppressStatusToast) {
           statusToast.showSubmitting({ action: options.action ?? "transaction" });
+          timingLog.emit("status-toast-shown");
         }
 
         const result = canUseExternalWalletPath
           ? await sendCallsWithExternalWallet()
           : await sendCallsWithWallet(await getSponsoredWalletForUnmeteredCall());
+        timingLog.emit("send-and-confirm-complete", {
+          receiptCount: result.receipts?.length ?? 0,
+          status: result.status,
+        });
 
         if (result.status !== "success") {
           const error = new Error("Batch calls failed.");
@@ -626,19 +682,29 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
 
           if (transactionHashes.length > 0) {
             try {
+              timingLog.emit("free-transaction-confirm-start", {
+                transactionHashCount: transactionHashes.length,
+              });
               await postFreeTransactionMutation("/api/transactions/free/confirm", {
                 address,
                 chainId,
                 operationKey,
                 transactionHashes,
               });
+              timingLog.emit("free-transaction-confirm-complete", {
+                transactionHashCount: transactionHashes.length,
+              });
             } catch (error) {
+              timingLog.emit("free-transaction-confirm-failed", {
+                message: error instanceof Error ? error.message : "Unknown error",
+              });
               console.error("Failed to confirm sponsored free transaction usage:", error);
             }
           }
         }
 
         void refreshActiveWalletReadQueries(queryClient);
+        timingLog.emit("success");
         return result;
       } catch (error) {
         if (
@@ -662,12 +728,18 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
               sponsorshipMode: "self-funded",
             });
 
+            timingLog.emit("self-funded-fallback-autoconnect-start");
             await fallbackWallet.autoConnect({
               chain,
               client: client!,
             });
+            timingLog.emit("self-funded-fallback-autoconnect-complete");
 
             const fallbackResult = await sendCallsWithWallet(fallbackWallet);
+            timingLog.emit("self-funded-fallback-complete", {
+              receiptCount: fallbackResult.receipts?.length ?? 0,
+              status: fallbackResult.status,
+            });
 
             if (fallbackResult.status !== "success") {
               const fallbackStatusError = new Error("Self-funded calls failed.");
@@ -687,6 +759,7 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
             }
 
             void refreshActiveWalletReadQueries(queryClient);
+            timingLog.emit("success", { fallback: "self-funded" });
             return fallbackResult;
           } catch (fallbackError) {
             error = fallbackError;
@@ -694,9 +767,16 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
         }
 
         if (isThirdwebBundlerInfrastructureError(error)) {
+          timingLog.emit("failure", {
+            bundlerInfrastructureError: true,
+            message: error instanceof Error ? error.message : "Unknown error",
+          });
           throw createThirdwebBundlerUnavailableError(error);
         }
 
+        timingLog.emit("failure", {
+          message: error instanceof Error ? error.message : "Unknown error",
+        });
         throw error;
       } finally {
         statusToast.dismiss();
