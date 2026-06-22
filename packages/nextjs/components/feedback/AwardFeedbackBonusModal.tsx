@@ -6,6 +6,7 @@ import { useAccount, useConfig, useWriteContract } from "wagmi";
 import { XMarkIcon } from "@heroicons/react/24/outline";
 import { GradientActionButton, getGradientActionMotion } from "~~/components/shared/GradientAction";
 import { useTargetNetwork, useTransactor } from "~~/hooks/scaffold-eth";
+import { useThirdwebSponsoredSubmitCalls } from "~~/hooks/useThirdwebSponsoredSubmitCalls";
 import type { ContentFeedbackBonusPool, ContentFeedbackItem } from "~~/lib/feedback/types";
 import {
   FEEDBACK_BONUS_ESCROW_ABI,
@@ -85,6 +86,8 @@ export function AwardFeedbackBonusModal({ item, pools, onAwarded, onClose }: Awa
   const { address, chain } = useAccount();
   const { writeContractAsync } = useWriteContract();
   const writeTx = useTransactor();
+  const { canUseSelfFundedBatchCalls, canUseSponsoredBatchCalls, executeContractCallBatch } =
+    useThirdwebSponsoredSubmitCalls();
   const { targetNetwork } = useTargetNetwork();
   const amountInputId = useId();
   const poolInputId = useId();
@@ -158,23 +161,43 @@ export function AwardFeedbackBonusModal({ item, pools, onAwarded, onClose }: Awa
 
     setIsAwarding(true);
     try {
-      const hash = await writeTx(
-        () =>
-          writeContractAsync({
-            address: escrowAddress,
-            abi: FEEDBACK_BONUS_ESCROW_ABI,
-            functionName: "awardFeedbackBonus",
-            args: [BigInt(selectedPool.id), item.authorAddress, feedbackHash, parsedAmount],
-            chainId: chainId as any,
-          } as any),
-        {
-          action: "Award Feedback Bonus",
-          suppressErrorToast: true,
-          suppressSuccessToast: true,
-        },
-      );
-      if (!hash) {
-        throw new Error("Feedback Bonus award transaction was not submitted.");
+      const awardArgs = [BigInt(selectedPool.id), item.authorAddress, feedbackHash, parsedAmount] as const;
+      const canUseBatchAward = canUseSponsoredBatchCalls || canUseSelfFundedBatchCalls;
+
+      if (canUseBatchAward) {
+        await executeContractCallBatch(
+          [
+            {
+              address: escrowAddress,
+              abi: FEEDBACK_BONUS_ESCROW_ABI,
+              functionName: "awardFeedbackBonus",
+              args: awardArgs,
+            },
+          ],
+          {
+            action: "Award Feedback Bonus",
+            sponsorshipMode: canUseSponsoredBatchCalls ? "sponsored" : "self-funded",
+          },
+        );
+      } else {
+        const hash = await writeTx(
+          () =>
+            writeContractAsync({
+              address: escrowAddress,
+              abi: FEEDBACK_BONUS_ESCROW_ABI,
+              functionName: "awardFeedbackBonus",
+              args: awardArgs,
+              chainId: chainId as any,
+            } as any),
+          {
+            action: "Award Feedback Bonus",
+            suppressErrorToast: true,
+            suppressSuccessToast: true,
+          },
+        );
+        if (!hash) {
+          throw new Error("Feedback Bonus award transaction was not submitted.");
+        }
       }
 
       notification.success(`Awarded ${formatFeedbackBonusAmount(parsedAmount, selectedAsset)} Feedback Bonus.`);
