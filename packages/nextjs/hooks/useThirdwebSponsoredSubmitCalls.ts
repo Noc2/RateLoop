@@ -490,6 +490,7 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
       headers: {
         "content-type": "application/json",
       },
+      keepalive: true,
       method: "POST",
     });
 
@@ -668,25 +669,29 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
             .filter((hash): hash is Hex => typeof hash === "string");
 
           if (transactionHashes.length > 0) {
-            try {
-              timingLog.emit("free-transaction-confirm-start", {
-                transactionHashCount: transactionHashes.length,
+            timingLog.emit("free-transaction-confirm-scheduled", {
+              transactionHashCount: transactionHashes.length,
+            });
+            void postFreeTransactionMutation("/api/transactions/free/confirm", {
+              address,
+              chainId,
+              operationKey,
+              transactionHashes,
+            })
+              .then(() => {
+                timingLog.emit("free-transaction-confirm-complete", {
+                  transactionHashCount: transactionHashes.length,
+                });
+              })
+              .catch(error => {
+                timingLog.emit("free-transaction-confirm-failed", {
+                  message: error instanceof Error ? error.message : "Unknown error",
+                });
+                console.error("Failed to confirm sponsored free transaction usage:", error);
+              })
+              .finally(() => {
+                void queryClient.invalidateQueries({ queryKey: FREE_TRANSACTION_ALLOWANCE_QUERY_KEY });
               });
-              await postFreeTransactionMutation("/api/transactions/free/confirm", {
-                address,
-                chainId,
-                operationKey,
-                transactionHashes,
-              });
-              timingLog.emit("free-transaction-confirm-complete", {
-                transactionHashCount: transactionHashes.length,
-              });
-            } catch (error) {
-              timingLog.emit("free-transaction-confirm-failed", {
-                message: error instanceof Error ? error.message : "Unknown error",
-              });
-              console.error("Failed to confirm sponsored free transaction usage:", error);
-            }
           }
         }
 
