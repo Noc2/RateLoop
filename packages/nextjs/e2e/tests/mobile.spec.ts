@@ -71,6 +71,8 @@ test.describe("Mobile viewport (phone)", () => {
           '[data-testid="vote-content-card-shell"]',
         );
         const activeContentHeader = activeArticle?.querySelector<HTMLElement>('[data-testid="vote-content-header"]');
+        const activeContentSurface = activeArticle?.querySelector<HTMLElement>('[data-testid="vote-content-surface"]');
+        const activeContentMeta = activeContentSurface?.nextElementSibling as HTMLElement | null | undefined;
         const activeMoreButton = activeArticle?.querySelector<HTMLElement>(
           'button[aria-label="Expand details"], button[aria-label="Collapse details"]',
         );
@@ -86,9 +88,13 @@ test.describe("Mobile viewport (phone)", () => {
         const mobileScrollContainerRect = mobileScrollContainer?.getBoundingClientRect() ?? null;
         const activeArticleRect = activeArticle?.getBoundingClientRect() ?? null;
         const activeTitleRect = activeTitle?.getBoundingClientRect() ?? null;
+        const activeContentHeaderRect = activeContentHeader?.getBoundingClientRect() ?? null;
+        const activeContentSurfaceRect = activeContentSurface?.getBoundingClientRect() ?? null;
+        const activeContentMetaRect = activeContentMeta?.getBoundingClientRect() ?? null;
         const activeMoreButtonRect = activeMoreButton?.getBoundingClientRect() ?? null;
         const categoryButtonRect = categoryButton?.getBoundingClientRect() ?? null;
         const viewButtonRect = viewButton?.getBoundingClientRect() ?? null;
+        const activeContentHeaderStyle = activeContentHeader ? getComputedStyle(activeContentHeader) : null;
         const leftGutterWidth =
           activeArticleRect && mobileScrollContainerRect ? activeArticleRect.left - mobileScrollContainerRect.left : 0;
         const rightGutterWidth =
@@ -110,6 +116,16 @@ test.describe("Mobile viewport (phone)", () => {
           activeContentHeaderBackground: activeContentHeader
             ? getComputedStyle(activeContentHeader).backgroundColor
             : "",
+          activeContentHeaderBorderBottomLeftRadius: activeContentHeaderStyle?.borderBottomLeftRadius ?? "",
+          activeContentHeaderBorderBottomRightRadius: activeContentHeaderStyle?.borderBottomRightRadius ?? "",
+          activeContentHeaderToSurfaceGap:
+            activeContentHeaderRect && activeContentSurfaceRect
+              ? activeContentSurfaceRect.top - activeContentHeaderRect.bottom
+              : 0,
+          activeContentSurfaceToMetaGap:
+            activeContentSurfaceRect && activeContentMetaRect
+              ? activeContentMetaRect.top - activeContentSurfaceRect.bottom
+              : 0,
           activeIndex: Number(activeArticle?.getAttribute("data-feed-card-index") ?? -1),
           activeTop: activeArticleRect?.top ?? 0,
           activeBottom: activeArticleRect?.bottom ?? 0,
@@ -277,6 +293,10 @@ test.describe("Mobile viewport (phone)", () => {
     expect(initialLayout.scrollContainerBackground).toBe("rgb(0, 0, 0)");
     expect(initialLayout.activeContentCardShellBackground).toBe("rgb(23, 22, 26)");
     expect(initialLayout.activeContentHeaderBackground).toBe("rgb(23, 22, 26)");
+    expect(Math.abs(initialLayout.activeContentHeaderToSurfaceGap)).toBeLessThanOrEqual(1);
+    expect(Math.abs(initialLayout.activeContentSurfaceToMetaGap)).toBeLessThanOrEqual(1);
+    expect(initialLayout.activeContentHeaderBorderBottomLeftRadius).toBe("0px");
+    expect(initialLayout.activeContentHeaderBorderBottomRightRadius).toBe("0px");
     expect(initialLayout.activeMoreControlVisible).toBe(true);
     expect(initialLayout.activeMoreControlFits).toBe(true);
 

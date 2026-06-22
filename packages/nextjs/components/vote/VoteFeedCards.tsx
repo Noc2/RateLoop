@@ -243,8 +243,6 @@ export const FeedVoteCard = memo(function FeedVoteCard({
 
   const useCompactCard = isLaptopCompact || isMobileViewport;
   const useCompactEmbed = isMobileViewport;
-  const contentStackClassName = useCompactCard ? "gap-2" : "gap-3 xl:gap-2.5";
-  const contentGridClassName = "grid min-h-0 flex-1 grid-cols-1 gap-3";
   const usesIntrinsicMediaHeight = platformType === "youtube";
   const mediaHeightClassName = usesIntrinsicMediaHeight
     ? "w-full"
@@ -257,74 +255,71 @@ export const FeedVoteCard = memo(function FeedVoteCard({
   const contentIntentEnabled = Boolean(item.url) && platformType !== "youtube" && !imageContextClickOpensExternally;
 
   return (
-    <div className={`flex min-h-0 flex-col ${contentStackClassName}`}>
-      <FeedContentHeader item={item} titleId={titleId} compact={useCompactCard} />
-
-      <div className={contentGridClassName}>
+    <div className="flex min-h-0 flex-col">
+      <div
+        data-testid="vote-content-card-shell"
+        data-content-id={item.id.toString()}
+        className="flex min-w-0 min-h-0 flex-1 flex-col overflow-hidden rounded-lg bg-base-200"
+      >
+        <FeedContentHeader item={item} titleId={titleId} compact={useCompactCard} />
         <div
-          data-testid="vote-content-card-shell"
-          data-content-id={item.id.toString()}
-          className="flex min-w-0 min-h-0 flex-1 flex-col overflow-hidden rounded-lg bg-base-200"
-        >
-          <div
-            className={`${mediaHeightClassName} relative overflow-hidden`}
-            data-testid="vote-content-surface"
-            onClickCapture={event => {
-              if (!contentIntentEnabled || !onContentIntent) return;
+          className={`${mediaHeightClassName} relative overflow-hidden`}
+          data-testid="vote-content-surface"
+          onClickCapture={event => {
+            if (!contentIntentEnabled || !onContentIntent) return;
 
-              const target = event.target;
-              if (!(target instanceof Element)) return;
+            const target = event.target;
+            if (!(target instanceof Element)) return;
 
-              const contentIntentSurface = target.closest<HTMLElement>("[data-content-intent-surface='true']");
-              if (contentIntentSurface) {
-                event.stopPropagation();
-                onContentIntent(item);
-                return;
-              }
-
-              const anchor = target.closest<HTMLAnchorElement>("a[href]");
-              if (!anchor) return;
-              if (anchor.dataset.allowExternalOpen === "true") return;
-
-              const href = anchor.getAttribute("href");
-              if (!href || href.startsWith("/") || href.startsWith("#")) return;
-
-              event.preventDefault();
+            const contentIntentSurface = target.closest<HTMLElement>("[data-content-intent-surface='true']");
+            if (contentIntentSurface) {
               event.stopPropagation();
               onContentIntent(item);
-            }}
-            onClick={event => {
-              if (!contentIntentEnabled || !onContentIntent) return;
-              if (isInteractiveTarget(event.target)) return;
-              onContentIntent(item);
-            }}
-          >
-            <ContentMediaCarousel
-              item={item}
-              compact={useCompactEmbed}
-              isActive={isActive}
-              interactionMode={contentIntentEnabled ? "vote" : "default"}
-            />
-          </div>
-          <FeedContentMetaCard
+              return;
+            }
+
+            const anchor = target.closest<HTMLAnchorElement>("a[href]");
+            if (!anchor) return;
+            if (anchor.dataset.allowExternalOpen === "true") return;
+
+            const href = anchor.getAttribute("href");
+            if (!href || href.startsWith("/") || href.startsWith("#")) return;
+
+            event.preventDefault();
+            event.stopPropagation();
+            onContentIntent(item);
+          }}
+          onClick={event => {
+            if (!contentIntentEnabled || !onContentIntent) return;
+            if (isInteractiveTarget(event.target)) return;
+            onContentIntent(item);
+          }}
+        >
+          <ContentMediaCarousel
             item={item}
-            submitterProfile={submitterProfile}
-            onOpenFeedback={onOpenFeedback}
-            onSourceOpen={onSourceOpen}
-            normalizedAddress={normalizedAddress}
-            following={following}
-            followPending={followPending}
-            watched={watched}
-            watchPending={watchPending}
-            onToggleFollow={onToggleFollow}
-            onToggleWatch={onToggleWatch}
-            referencedContentById={referencedContentById}
-            compact={useCompactCard}
-            isMobileViewport={isMobileViewport}
             isActive={isActive}
-            embedded
+            compact={useCompactEmbed}
+            interactionMode={contentIntentEnabled ? "vote" : "default"}
           />
         </div>
+        <FeedContentMetaCard
+          item={item}
+          submitterProfile={submitterProfile}
+          onOpenFeedback={onOpenFeedback}
+          onSourceOpen={onSourceOpen}
+          normalizedAddress={normalizedAddress}
+          following={following}
+          followPending={followPending}
+          watched={watched}
+          watchPending={watchPending}
+          onToggleFollow={onToggleFollow}
+          onToggleWatch={onToggleWatch}
+          referencedContentById={referencedContentById}
+          compact={useCompactCard}
+          isMobileViewport={isMobileViewport}
+          isActive={isActive}
+          embedded
+        />
       </div>
     </div>
   );
@@ -369,7 +364,7 @@ function FeedContentHeader({ item, titleId, compact }: FeedContentHeaderProps) {
   return (
     <div
       data-testid="vote-content-header"
-      className={`rounded-lg bg-base-200 ${compact ? "px-4 py-3" : "px-5 py-4 xl:px-4 xl:py-3"}`}
+      className={`border-b border-base-content/10 bg-base-200 ${compact ? "px-4 py-3" : "px-5 py-4 xl:px-4 xl:py-3"}`}
     >
       <h2
         id={titleId}
