@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo } from "react";
-import { useSignMessage } from "wagmi";
 import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import {
   type SignedCollectionReadAccessResult,
@@ -9,6 +8,7 @@ import {
   type SignedCollectionToggleResult,
   useSignedCollection,
 } from "~~/hooks/useSignedCollection";
+import { useWalletMessageSigner } from "~~/hooks/useWalletMessageSigner";
 
 export interface WatchedContentItem {
   contentId: string;
@@ -28,7 +28,7 @@ interface UseWatchedContentOptions {
 const EMPTY_WATCHED_RESPONSE: WatchedContentResponse = { items: [], count: 0 };
 
 export function useWatchedContent(address?: string, options?: UseWatchedContentOptions) {
-  const { signMessageAsync } = useSignMessage();
+  const { signMessageAsync } = useWalletMessageSigner({ address });
   const { targetNetwork } = useTargetNetwork();
   const autoRead = options?.autoRead ?? false;
   const chainId = targetNetwork.id;

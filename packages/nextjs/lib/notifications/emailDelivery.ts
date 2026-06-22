@@ -3,7 +3,7 @@ import "server-only";
 import { RATE_ROUTE } from "~~/constants/routes";
 import { getQuestionConfidentiality, isConfidentialityCurrentlyGated } from "~~/lib/confidentiality/context";
 import { db, dbClient } from "~~/lib/db";
-import { notificationEmailDeliveries, notificationEmailSubscriptions, watchedContent } from "~~/lib/db/schema";
+import { notificationEmailDeliveries, notificationEmailSubscriptions } from "~~/lib/db/schema";
 import { getNotificationDeliverySecret, getOptionalAppUrl, getPrimaryServerTargetNetwork } from "~~/lib/env/server";
 import { buildRateLoopEmailHtml } from "~~/lib/notifications/emailTemplate";
 import { buildNotificationEmailUnsubscribeUrl } from "~~/lib/notifications/emailUrls";
@@ -11,6 +11,7 @@ import { isResendConfigured, sendResendEmail } from "~~/lib/notifications/resend
 import { pickSettlingSoonNotification } from "~~/lib/notifications/settlingSoon";
 import { resolveContentDeploymentScope } from "~~/lib/protocolDeployment";
 import { buildAppRelativeUrl } from "~~/lib/url/appRelative";
+import { listWatchedContent } from "~~/lib/watchlist/contentWatch";
 import { isPonderAvailable, isPonderConfigured, ponderGet } from "~~/services/ponder/client";
 
 type DeliverySubscription = typeof notificationEmailSubscriptions.$inferSelect;
@@ -166,13 +167,7 @@ async function getWatchedContentIds(walletAddress: string) {
   const deployment = getNotificationContentDeployment();
   if (!deployment) return [];
 
-  const rows = await db
-    .select({ contentId: watchedContent.contentId })
-    .from(watchedContent)
-    .where(
-      and(eq(watchedContent.walletAddress, walletAddress), eq(watchedContent.deploymentKey, deployment.deploymentKey)),
-    );
-
+  const rows = await listWatchedContent(walletAddress.toLowerCase() as `0x${string}`, deployment);
   return rows.map(row => row.contentId);
 }
 
