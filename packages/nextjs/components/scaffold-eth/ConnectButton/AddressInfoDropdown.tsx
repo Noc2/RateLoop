@@ -3,7 +3,7 @@ import Link from "next/link";
 import { getFreeTransactionAllowanceDisplayState } from "./freeTransactionAllowanceDisplay";
 import { defineChain } from "thirdweb";
 import { useActiveWalletChain } from "thirdweb/react";
-import { type Address, formatEther, getAddress } from "viem";
+import { type Address, getAddress } from "viem";
 import { hardhat } from "viem/chains";
 import { useAccount } from "wagmi";
 import { ArrowLeftOnRectangleIcon, CheckIcon, ClipboardDocumentIcon, Cog6ToothIcon } from "@heroicons/react/24/outline";
@@ -22,7 +22,13 @@ import { resolveWalletExecutionChainId, useWalletExecutionCapabilities } from "~
 import { useWalletSummaryData } from "~~/hooks/useWalletSummaryData";
 import { AVATAR_WIN_RATE_TOOLTIP } from "~~/lib/profile/winRateTooltip";
 import { getDefaultUsdcAddress, getDefaultUsdcDisplayName } from "~~/lib/questionRewardPools";
+import { formatEthTokenAmount, formatLrepTokenAmount, formatUsdcTokenAmount } from "~~/lib/ui/tokenAmountDisplay";
 import { isENS } from "~~/utils/scaffold-eth/common";
+
+export {
+  formatEthTokenAmount as formatEthAmount,
+  formatUsdcTokenAmount as formatUsdcAmount,
+} from "~~/lib/ui/tokenAmountDisplay";
 
 type AddressInfoDropdownProps = {
   address: Address;
@@ -44,31 +50,6 @@ const getMenuItemClass = (showText: boolean) =>
 const DEFAULT_ETH_TOP_UP_AMOUNT = "1";
 const DEFAULT_USDC_TOP_UP_AMOUNT = "10";
 const FUNDING_PRESET_OPTIONS: [number, number, number] = [5, 10, 20];
-
-function formatLrepAmount(value: bigint | null | undefined) {
-  if (value == null) return "—";
-  return (Number(value) / 1e6).toLocaleString(undefined, { maximumFractionDigits: 0 });
-}
-
-export function formatEthAmount(value: bigint | null | undefined) {
-  if (value == null) return "—";
-  const formatted = Number(formatEther(value));
-  return formatted.toLocaleString(undefined, {
-    maximumFractionDigits: formatted >= 1 ? 4 : 6,
-    minimumFractionDigits: 0,
-  });
-}
-
-export function formatUsdcAmount(value: bigint | null | undefined) {
-  if (value == null) return "—";
-  const roundedCents = (value + 5_000n) / 10_000n;
-  const whole = roundedCents / 100n;
-  const cents = roundedCents % 100n;
-  const groupedWhole = whole.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-  const hasFractionalMicroUsdc = value % 1_000_000n > 0n;
-
-  return hasFractionalMicroUsdc ? `${groupedWhole}.${cents.toString().padStart(2, "0")}` : groupedWhole;
-}
 
 function formatWinRate(value: number) {
   const percent = Number((value * 100).toFixed(1));
@@ -266,10 +247,10 @@ function WalletSummaryDetails({
 
   const stakeParts: string[] = [];
   if (submissionStakedMicro > 0n) {
-    stakeParts.push(`${formatLrepAmount(submissionStakedMicro)} LREP submissions`);
+    stakeParts.push(`${formatLrepTokenAmount(submissionStakedMicro)} LREP submissions`);
   }
   if (votingStakedMicro > 0n) {
-    let votingLabel = `${formatLrepAmount(votingStakedMicro)} LREP voting`;
+    let votingLabel = `${formatLrepTokenAmount(votingStakedMicro)} LREP voting`;
     if (earliestReveal) {
       votingLabel += ` · reveals in ${earliestReveal}`;
     } else if (hasPendingReveals) {
@@ -278,16 +259,12 @@ function WalletSummaryDetails({
     stakeParts.push(votingLabel);
   }
   if (frontendStakedMicro > 0n) {
-    stakeParts.push(`${formatLrepAmount(frontendStakedMicro)} LREP frontend`);
+    stakeParts.push(`${formatLrepTokenAmount(frontendStakedMicro)} LREP frontend`);
   }
   const stakeTooltip = stakeParts.join(" · ");
 
   return (
     <>
-      <div className={balanceClassName}>
-        <span className="tabular-nums">{formatLrepAmount(isClientMounted ? liquidBalance : null)}</span>{" "}
-        <span className="text-base-content/52">LREP</span>
-      </div>
       {shouldShowNativeFundingBalance ? (
         <button
           type="button"
@@ -296,10 +273,14 @@ function WalletSummaryDetails({
           aria-label={`Add ${nativeTokenSymbol}`}
           title={`Add ${nativeTokenSymbol}`}
         >
-          <span className="tabular-nums">{formatEthAmount(nativeBalanceValue)}</span>{" "}
+          <span className="tabular-nums">{formatEthTokenAmount(nativeBalanceValue)}</span>{" "}
           <span className="text-base-content/52">{nativeTokenSymbol}</span>
         </button>
       ) : null}
+      <div className={balanceClassName}>
+        <span className="tabular-nums">{formatLrepTokenAmount(isClientMounted ? liquidBalance : null)}</span>{" "}
+        <span className="text-base-content/52">LREP</span>
+      </div>
       <button
         type="button"
         className={interactiveBalanceClassName}
@@ -308,12 +289,12 @@ function WalletSummaryDetails({
         aria-label={`Add ${usdcDisplayName}`}
         title={usdcAddress ? `Add ${usdcDisplayName}` : "USDC is not configured for this network"}
       >
-        <span className="tabular-nums">{formatUsdcAmount(isClientMounted ? usdcBalance : null)}</span>{" "}
+        <span className="tabular-nums">{formatUsdcTokenAmount(isClientMounted ? usdcBalance : null)}</span>{" "}
         <span className="text-base-content/52">USDC</span>
       </button>
       {showStaked ? (
         <div className={stakeClassName}>
-          <span className="tabular-nums">{formatLrepAmount(totalStakedMicro)}</span>
+          <span className="tabular-nums">{formatLrepTokenAmount(totalStakedMicro)}</span>
           <span className="text-base-content/52">Staked</span>
           {stakeTooltip ? <InfoTooltip text={stakeTooltip} position="bottom" /> : null}
         </div>

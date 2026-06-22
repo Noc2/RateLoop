@@ -2,7 +2,7 @@
 
 import { type ReactNode, useCallback } from "react";
 import { defineChain } from "thirdweb";
-import { formatEther, isAddress } from "viem";
+import { isAddress } from "viem";
 import { useAccount, useBalance } from "wagmi";
 import { ArrowsRightLeftIcon, WalletIcon } from "@heroicons/react/24/outline";
 import { DelegationSection } from "~~/components/profile/DelegationSection";
@@ -15,6 +15,7 @@ import {
   getThirdwebWalletFundingUnavailableMessage,
   supportsThirdwebWalletFunding,
 } from "~~/lib/thirdweb/walletFunding";
+import { formatEthTokenAmount, formatLrepTokenAmount, formatUsdcTokenAmount } from "~~/lib/ui/tokenAmountDisplay";
 import { thirdwebClient } from "~~/services/thirdweb/client";
 
 const LOCAL_FOUNDRY_CHAIN_ID = 31337;
@@ -26,21 +27,14 @@ const USDC_TOP_UP_PRESET_OPTIONS: [number, number, number] = [5, 10, 20];
 function formatEthBalance(value: bigint | undefined) {
   if (value === undefined) return "Loading...";
 
-  const formatted = Number(formatEther(value));
-  return `${formatted.toLocaleString(undefined, {
-    maximumFractionDigits: formatted >= 1 ? 3 : 6,
-    minimumFractionDigits: 0,
-  })} ETH`;
+  return `${formatEthTokenAmount(value)} ETH`;
 }
 
 function formatMicroBalance(value: bigint | undefined, symbol: string) {
   if (value === undefined) return "Loading...";
 
-  const whole = value / 1_000_000n;
-  const fractional = value % 1_000_000n;
-  const wholeText = whole.toLocaleString();
-  const fractionalText = fractional.toString().padStart(6, "0").replace(/0+$/, "");
-  return `${fractionalText ? `${wholeText}.${fractionalText}` : wholeText} ${symbol}`;
+  const amount = symbol === "LREP" ? formatLrepTokenAmount(value) : formatUsdcTokenAmount(value);
+  return `${amount} ${symbol}`;
 }
 
 function WalletSnapshotRow({
