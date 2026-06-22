@@ -1148,7 +1148,7 @@ export function VoteFeedStage({
       aria-describedby={feedInstructionsId}
       data-mobile-header-scroll-source="true"
       data-testid="vote-mobile-scroll-container"
-      className="scrollbar-hide flex h-full min-h-0 snap-y snap-mandatory flex-col gap-3 overflow-y-auto overscroll-contain bg-[#000] xl:h-auto xl:flex-none xl:gap-4 xl:overflow-visible xl:overscroll-auto xl:pb-4 xl:pr-0 xl:scroll-pb-0"
+      className="scrollbar-hide flex h-full min-h-0 snap-y snap-proximity flex-col gap-3 overflow-y-auto overscroll-contain bg-[#000] [touch-action:pan-y_pinch-zoom] md:snap-mandatory md:[touch-action:auto] xl:h-auto xl:flex-none xl:gap-4 xl:overflow-visible xl:overscroll-auto xl:pb-4 xl:pr-0 xl:scroll-pb-0"
       style={{
         height: mobileScrollerHeight !== null ? `${mobileScrollerHeight}px` : undefined,
         maxHeight: mobileScrollerHeight !== null ? `${mobileScrollerHeight}px` : undefined,
