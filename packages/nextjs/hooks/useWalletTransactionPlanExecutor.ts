@@ -5,7 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import type { GetCallsStatusReturnType, Hex } from "viem";
 import { useAccount, useConfig, useSendCallsSync } from "wagmi";
 import { sendTransaction, waitForTransactionReceipt } from "wagmi/actions";
-import { getPollingIntervalForChainId } from "~~/config/shared";
+import { getTransactionReceiptPollingInterval } from "~~/config/shared";
 import { refreshActiveWalletReadQueries } from "~~/hooks/useRefreshWalletBalances";
 import { useWalletExecutionCapabilities } from "~~/hooks/useWalletExecutionCapabilities";
 import {
@@ -43,11 +43,9 @@ function pushUniqueHash(hashes: Hex[], hash: Hex | undefined) {
 }
 
 function getTransactionStatusPollingInterval(chainId: number | undefined) {
-  return typeof chainId === "number"
-    ? getPollingIntervalForChainId(chainId, 1_000, {
-        preconfirmation: scaffoldConfig.useBasePreconfRpc,
-      })
-    : 1_000;
+  return getTransactionReceiptPollingInterval(chainId, {
+    preconfirmation: scaffoldConfig.useBasePreconfRpc,
+  });
 }
 
 export function useWalletTransactionPlanExecutor() {

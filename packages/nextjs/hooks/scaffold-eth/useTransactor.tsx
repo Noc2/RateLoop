@@ -4,6 +4,7 @@ import { Config, useConfig, useWalletClient } from "wagmi";
 import { getPublicClient } from "wagmi/actions";
 import { SendTransactionMutate } from "wagmi/query";
 import { TransactionStatusCallout } from "~~/components/shared/TransactionStatusCallout";
+import { getTransactionReceiptPollingInterval } from "~~/config/shared";
 import { FREE_TRANSACTION_ALLOWANCE_QUERY_KEY } from "~~/hooks/useFreeTransactionAllowance";
 import { refreshActiveWalletReadQueries } from "~~/hooks/useRefreshWalletBalances";
 import { TRANSACTION_CONFIRMING_STATUS, getSubmittingTransactionStatus } from "~~/lib/ui/transactionStatusCopy";
@@ -173,6 +174,9 @@ export const useTransactor = (_walletClient?: WalletClient): TransactionFunc => 
       transactionReceipt = await publicClient.waitForTransactionReceipt({
         hash: transactionHash,
         confirmations: options?.blockConfirmations,
+        pollingInterval: getTransactionReceiptPollingInterval(chainId, {
+          preconfirmation: scaffoldConfig.useBasePreconfRpc,
+        }),
       });
       if (notificationId) {
         notification.remove(notificationId);

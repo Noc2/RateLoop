@@ -1,6 +1,7 @@
 export const DEFAULT_POLLING_INTERVAL = 30_000;
 export const BASE_POLLING_INTERVAL = 1_000;
 export const BASE_PRECONF_POLLING_INTERVAL = 200;
+export const DEFAULT_TRANSACTION_RECEIPT_POLLING_INTERVAL = 1_000;
 
 export const RPC_OVERRIDES = {} as const satisfies Partial<Record<number, string>>;
 
@@ -13,4 +14,15 @@ export function getPollingIntervalForChainId(
 ) {
   if (!BASE_CHAIN_IDS.has(chainId)) return fallback;
   return options?.preconfirmation ? BASE_PRECONF_POLLING_INTERVAL : BASE_POLLING_INTERVAL;
+}
+
+export function getTransactionReceiptPollingInterval(
+  chainId: number | null | undefined,
+  options?: { fallback?: number; preconfirmation?: boolean },
+) {
+  const fallback = options?.fallback ?? DEFAULT_TRANSACTION_RECEIPT_POLLING_INTERVAL;
+  if (typeof chainId !== "number" || !Number.isFinite(chainId)) return fallback;
+  return getPollingIntervalForChainId(chainId, fallback, {
+    preconfirmation: options?.preconfirmation,
+  });
 }

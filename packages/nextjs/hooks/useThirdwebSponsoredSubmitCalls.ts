@@ -7,7 +7,7 @@ import { useActiveAccount, useActiveWallet, useActiveWalletChain, useSetActiveWa
 import { sendAndConfirmCalls } from "thirdweb/wallets/eip5792";
 import { type Abi, type Address, type GetCallsStatusReturnType, type Hex, encodeFunctionData } from "viem";
 import { useAccount, useBalance, usePublicClient, useSendCallsSync } from "wagmi";
-import { getPollingIntervalForChainId } from "~~/config/shared";
+import { getTransactionReceiptPollingInterval } from "~~/config/shared";
 import {
   FREE_TRANSACTION_ALLOWANCE_QUERY_KEY,
   useFreeTransactionAllowance,
@@ -74,7 +74,7 @@ function wait(ms: number) {
 }
 
 function getTransactionStatusPollingInterval(chainId: number) {
-  return getPollingIntervalForChainId(chainId, 1_000, {
+  return getTransactionReceiptPollingInterval(chainId, {
     preconfirmation: scaffoldConfig.useBasePreconfRpc,
   });
 }

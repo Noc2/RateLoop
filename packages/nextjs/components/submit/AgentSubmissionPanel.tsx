@@ -20,6 +20,7 @@ import { GradientActionButton, getGradientActionMotion } from "~~/components/sha
 import { useWalletFunding } from "~~/components/shared/WalletFundingProvider";
 import { surfaceSectionHeadingClassName } from "~~/components/shared/sectionHeading";
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
+import { getTransactionReceiptPollingInterval } from "~~/config/shared";
 import { DOCS_AI_ROUTE } from "~~/constants/routes";
 import { useCopyToClipboard } from "~~/hooks/scaffold-eth";
 import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
@@ -40,6 +41,7 @@ import {
   getThirdwebWalletFundingUnavailableMessage,
   supportsThirdwebWalletFunding,
 } from "~~/lib/thirdweb/walletFunding";
+import scaffoldConfig from "~~/scaffold.config";
 import { thirdwebClient } from "~~/services/thirdweb/client";
 import { notification } from "~~/utils/scaffold-eth";
 
@@ -342,7 +344,13 @@ export function AgentSubmissionPanel() {
         functionName: "transfer",
         args: [agentWalletAddress, amount],
       });
-      await waitForTransactionReceipt(wagmiConfig, { chainId: targetNetwork.id, hash: transferHash });
+      await waitForTransactionReceipt(wagmiConfig, {
+        chainId: targetNetwork.id,
+        hash: transferHash,
+        pollingInterval: getTransactionReceiptPollingInterval(targetNetwork.id, {
+          preconfirmation: scaffoldConfig.useBasePreconfRpc,
+        }),
+      });
       await refetchBalance();
       notification.success(`Transferred ${formatUsdc(amount)} to the agent wallet.`);
     } catch (error) {
