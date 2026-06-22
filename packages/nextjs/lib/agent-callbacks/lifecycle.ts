@@ -6,6 +6,7 @@ import { ROUND_STATE } from "@rateloop/contracts/protocol";
 import { buildAgentLiveAskGuidance } from "~~/lib/agent/liveAskGuidance";
 import { dbClient } from "~~/lib/db";
 import { buildContentFeedbackRoundContext, listContentFeedback } from "~~/lib/feedback/contentFeedback";
+import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 import { ponderApi } from "~~/services/ponder/client";
 
 type ManagedLifecycleCandidate = {
@@ -218,14 +219,30 @@ export async function sweepAgentLifecycleCallbacks(params: { limit?: number; now
         break;
       }
 
-      const response = await dependencies.getContentById(candidate.contentId);
+      const deployment = resolveProtocolDeploymentScope(candidate.chainId);
+      if (!deployment) {
+        if (process.env.NODE_ENV !== "production") {
+          console.warn(
+            `[agent-lifecycle] Skipping candidate ${candidate.contentId}: unsupported chain ${candidate.chainId}`,
+          );
+        }
+        scanned += 1;
+        continue;
+      }
+      const deploymentOptions = {
+        chainId: candidate.chainId,
+        deploymentKey: deployment.deploymentKey,
+      };
+      const response = await dependencies.getContentById(candidate.contentId, deploymentOptions);
       const feedbackContext = buildContentFeedbackRoundContext(
         Array.isArray(response.rounds) ? response.rounds : [],
         response.content.openRound?.roundId ?? null,
       );
       const feedback = await dependencies.listContentFeedback({
+        chainId: candidate.chainId,
         contentId: candidate.contentId,
         context: feedbackContext,
+        deploymentKey: deployment.deploymentKey,
       });
       const liveAskGuidance = buildAgentLiveAskGuidance({
         content: response.content,

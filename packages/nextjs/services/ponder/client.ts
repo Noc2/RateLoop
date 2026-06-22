@@ -1785,25 +1785,42 @@ export const ponderApi = {
     return ponderGet<Record<string, number>>("/category-popularity");
   },
 
-  getProfiles(addresses: string[]) {
-    return ponderGet<Record<string, PonderProfile>>("/profiles", {
-      addresses: addresses.join(","),
+  getProfiles(addresses: string[], options?: PonderDeploymentOptions) {
+    const deployment = getExpectedPonderDeploymentScope(options);
+    return ponderGet<Record<string, PonderProfile>>(
+      "/profiles",
+      {
+        addresses: addresses.join(","),
+      },
+      {
+        expectedDeploymentKey: deployment?.deploymentKey,
+      },
+    );
+  },
+
+  getProfile(address: string, options?: PonderDeploymentOptions) {
+    const deployment = getExpectedPonderDeploymentScope(options);
+    return ponderGet<PonderProfileDetailResponse>(`/profile/${address}`, undefined, {
+      expectedDeploymentKey: deployment?.deploymentKey,
     });
   },
 
-  getProfile(address: string) {
-    return ponderGet<PonderProfileDetailResponse>(`/profile/${address}`);
-  },
-
-  getFollows(address: string, params?: { limit?: string; offset?: string }) {
-    return ponderGet<PonderFollowResponse>(`/follows/${address}`, params);
-  },
-
-  async getAllFollows(address: string) {
-    const firstPage = await ponderApi.getFollows(address, {
-      limit: String(PONDER_PAGE_LIMIT),
-      offset: "0",
+  getFollows(address: string, params?: { limit?: string; offset?: string }, options?: PonderDeploymentOptions) {
+    const deployment = getExpectedPonderDeploymentScope(options);
+    return ponderGet<PonderFollowResponse>(`/follows/${address}`, params, {
+      expectedDeploymentKey: deployment?.deploymentKey,
     });
+  },
+
+  async getAllFollows(address: string, options?: PonderDeploymentOptions) {
+    const firstPage = await ponderApi.getFollows(
+      address,
+      {
+        limit: String(PONDER_PAGE_LIMIT),
+        offset: "0",
+      },
+      options,
+    );
 
     if (firstPage.items.length >= firstPage.count) {
       return firstPage;
@@ -1813,10 +1830,14 @@ export const ponderApi = {
     let offset = firstPage.items.length;
 
     while (offset < firstPage.count) {
-      const page = await ponderApi.getFollows(address, {
-        limit: String(PONDER_PAGE_LIMIT),
-        offset: String(offset),
-      });
+      const page = await ponderApi.getFollows(
+        address,
+        {
+          limit: String(PONDER_PAGE_LIMIT),
+          offset: String(offset),
+        },
+        options,
+      );
 
       if (page.items.length === 0) {
         break;
@@ -1834,12 +1855,22 @@ export const ponderApi = {
     };
   },
 
-  getFollowers(address: string, params?: { limit?: string; offset?: string }) {
-    return ponderGet<PonderFollowResponse>(`/followers/${address}`, params);
+  getFollowers(address: string, params?: { limit?: string; offset?: string }, options?: PonderDeploymentOptions) {
+    const deployment = getExpectedPonderDeploymentScope(options);
+    return ponderGet<PonderFollowResponse>(`/followers/${address}`, params, {
+      expectedDeploymentKey: deployment?.deploymentKey,
+    });
   },
 
-  getDiscoverSignals(address: string, params?: { watched?: string; followed?: string }) {
-    return ponderGet<PonderDiscoverSignalsResponse>(`/discover-signals/${address}`, params);
+  getDiscoverSignals(
+    address: string,
+    params?: { watched?: string; followed?: string },
+    options?: PonderDeploymentOptions,
+  ) {
+    const deployment = getExpectedPonderDeploymentScope(options);
+    return ponderGet<PonderDiscoverSignalsResponse>(`/discover-signals/${address}`, params, {
+      expectedDeploymentKey: deployment?.deploymentKey,
+    });
   },
 
   getFeaturedToday(limit?: string) {
@@ -1859,8 +1890,11 @@ export const ponderApi = {
     });
   },
 
-  getFrontend(address: string) {
-    return ponderGet<{ frontend: PonderFrontend }>(`/frontend/${address}`);
+  getFrontend(address: string, options?: PonderDeploymentOptions) {
+    const deployment = getExpectedPonderDeploymentScope(options);
+    return ponderGet<{ frontend: PonderFrontend }>(`/frontend/${address}`, undefined, {
+      expectedDeploymentKey: deployment?.deploymentKey,
+    });
   },
 
   async getAllTokenHolders(options?: { deploymentKey?: string | null }) {
@@ -1945,9 +1979,14 @@ export const ponderApi = {
     return ponderGet<PonderEarningsLeaderboardResponse>("/earnings-leaderboard", params);
   },
 
-  getVoterAccuracy(address: string) {
+  getVoterAccuracy(address: string, options?: PonderDeploymentOptions) {
+    const deployment = getExpectedPonderDeploymentScope(options);
     return ponderGet<{ stats: PonderVoterStats | null; categories: PonderVoterCategoryStats[] }>(
       `/voter-accuracy/${address}`,
+      undefined,
+      {
+        expectedDeploymentKey: deployment?.deploymentKey,
+      },
     );
   },
 
@@ -1957,8 +1996,11 @@ export const ponderApi = {
     });
   },
 
-  getRaterParticipationStatus(address: string) {
-    return ponderGet<PonderRaterParticipationStatusResponse>(`/rater-participation-status/${address}`);
+  getRaterParticipationStatus(address: string, options?: PonderDeploymentOptions) {
+    const deployment = getExpectedPonderDeploymentScope(options);
+    return ponderGet<PonderRaterParticipationStatusResponse>(`/rater-participation-status/${address}`, undefined, {
+      expectedDeploymentKey: deployment?.deploymentKey,
+    });
   },
 
   getVotes(

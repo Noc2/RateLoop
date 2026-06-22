@@ -6,6 +6,7 @@ import { type FollowedProfileItem, useFollowedProfiles } from "~~/hooks/useFollo
 import { usePageVisibility } from "~~/hooks/usePageVisibility";
 import { usePonderQuery } from "~~/hooks/usePonderQuery";
 import { type WatchedContentItem, useWatchedContent } from "~~/hooks/useWatchedContent";
+import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 import { PonderDiscoverSignalsResponse, ponderApi } from "~~/services/ponder/client";
 
 const EMPTY_DISCOVER_SIGNALS: PonderDiscoverSignalsResponse = {
@@ -24,6 +25,8 @@ interface UseDiscoverSignalsOptions {
 export function useDiscoverSignals(address?: string, options?: UseDiscoverSignalsOptions) {
   const isPageVisible = usePageVisibility();
   const { targetNetwork } = useTargetNetwork();
+  const deployment = useMemo(() => resolveProtocolDeploymentScope(targetNetwork.id), [targetNetwork.id]);
+  const deploymentKey = deployment?.deploymentKey ?? null;
   const watchlistAddress = options?.watchedItems ? undefined : address;
   const followsAddress = options?.followedItems ? undefined : address;
   const { watchedItems: hookWatchedItems, isLoading: watchedLoading } = useWatchedContent(watchlistAddress, {
@@ -43,15 +46,20 @@ export function useDiscoverSignals(address?: string, options?: UseDiscoverSignal
   );
 
   const { data, isLoading } = usePonderQuery<PonderDiscoverSignalsResponse, PonderDiscoverSignalsResponse>({
-    queryKey: ["discoverSignals", address, targetNetwork.id, watchedParam, followedParam],
+    queryKey: ["discoverSignals", address, targetNetwork.id, deploymentKey, watchedParam, followedParam],
+    availabilityDeploymentKey: deploymentKey,
     enabled: Boolean(address) && hasTrackedSignals,
     ponderFn: async () => {
       if (!address) return EMPTY_DISCOVER_SIGNALS;
 
-      return ponderApi.getDiscoverSignals(address, {
-        watched: watchedParam || undefined,
-        followed: followedParam || undefined,
-      });
+      return ponderApi.getDiscoverSignals(
+        address,
+        {
+          watched: watchedParam || undefined,
+          followed: followedParam || undefined,
+        },
+        { chainId: targetNetwork.id, deploymentKey },
+      );
     },
     rpcFn: async () => EMPTY_DISCOVER_SIGNALS,
     staleTime: 30_000,

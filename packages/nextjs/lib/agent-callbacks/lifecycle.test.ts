@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import test, { afterEach, beforeEach } from "node:test";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testMemory";
+import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 import { __setUrlSafetyDnsResolversForTests } from "~~/utils/urlSafety";
 
 const CANDIDATE = {
@@ -82,6 +83,54 @@ test("sweepAgentLifecycleCallbacks emits open and settling for overdue open roun
     enqueued.map(event => event.eventType),
     ["question.open", "question.settling"],
   );
+});
+
+test("sweepAgentLifecycleCallbacks scopes content and feedback reads by candidate deployment", async () => {
+  const candidate = { ...CANDIDATE, chainId: 84532 };
+  const deployment = resolveProtocolDeploymentScope(candidate.chainId);
+  assert.ok(deployment);
+  let contentOptions: unknown = null;
+  let feedbackOptions: unknown = null;
+
+  __setAgentLifecycleTestOverridesForTests({
+    enqueueAgentCallbackEvent: async () => [],
+    getContentById: async (_contentId, options) => {
+      contentOptions = options;
+      return contentResponse({
+        openRound: {
+          estimatedSettlementTime: "1700000000",
+          roundId: "7",
+        },
+      }) as never;
+    },
+    listCandidates: async () => [candidate],
+    listContentFeedback: async params => {
+      feedbackOptions = params;
+      return {
+        items: [],
+      } as never;
+    },
+  });
+
+  await sweepAgentLifecycleCallbacks({
+    now: new Date("2023-11-14T22:13:40.000Z"),
+  });
+
+  assert.deepEqual(contentOptions, {
+    chainId: candidate.chainId,
+    deploymentKey: deployment.deploymentKey,
+  });
+  assert.deepEqual(feedbackOptions, {
+    chainId: candidate.chainId,
+    contentId: candidate.contentId,
+    context: {
+      currentRoundId: "7",
+      openRoundId: "7",
+      settlementComplete: false,
+      terminalRoundIds: new Set(),
+    },
+    deploymentKey: deployment.deploymentKey,
+  });
 });
 
 test("sweepAgentLifecycleCallbacks emits settled and feedback unlocked for terminal rounds", async () => {

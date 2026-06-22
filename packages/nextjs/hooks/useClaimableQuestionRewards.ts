@@ -170,12 +170,14 @@ export function useClaimableQuestionRewards() {
       const contract = payoutProof
         ? {
             address: escrowAddress,
+            chainId: targetNetwork.id,
             abi: QUESTION_REWARD_POOL_ESCROW_ABI,
             functionName: "claimableQuestionRewardWithPayoutWeight" as const,
             args: [rewardPoolId, roundId, address, payoutProof.payoutWeight, payoutProof.payoutProof],
           }
         : {
             address: escrowAddress,
+            chainId: targetNetwork.id,
             abi: QUESTION_REWARD_POOL_ESCROW_ABI,
             functionName: "claimableQuestionReward" as const,
             args: [rewardPoolId, roundId, address],
@@ -183,7 +185,7 @@ export function useClaimableQuestionRewards() {
 
       return [{ candidate, payoutProof, contract }];
     });
-  }, [address, candidates, escrowAddress]);
+  }, [address, candidates, escrowAddress, targetNetwork.id]);
   const claimableContracts = useMemo(() => claimableRequests.map(request => request.contract), [claimableRequests]);
   const bundleClaimableRequests = useMemo(() => {
     if (!address || !escrowAddress || bundleCandidates.length === 0) return [];
@@ -195,12 +197,14 @@ export function useClaimableQuestionRewards() {
       const contract = payoutProof
         ? {
             address: escrowAddress,
+            chainId: targetNetwork.id,
             abi: QUESTION_REWARD_POOL_ESCROW_ABI,
             functionName: "claimableQuestionBundleRewardWithPayoutWeight" as const,
             args: [bundleId, roundSetIndex, address, payoutProof.payoutWeight, payoutProof.payoutProof],
           }
         : {
             address: escrowAddress,
+            chainId: targetNetwork.id,
             abi: QUESTION_REWARD_POOL_ESCROW_ABI,
             functionName: "claimableQuestionBundleReward" as const,
             args: [bundleId, roundSetIndex, address],
@@ -208,7 +212,7 @@ export function useClaimableQuestionRewards() {
 
       return [{ candidate, payoutProof, contract }];
     });
-  }, [address, bundleCandidates, escrowAddress]);
+  }, [address, bundleCandidates, escrowAddress, targetNetwork.id]);
   const bundleClaimableContracts = useMemo(
     () => bundleClaimableRequests.map(request => request.contract),
     [bundleClaimableRequests],

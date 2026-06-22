@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAddress } from "viem";
+import { parsePositiveIntegerChainId } from "~~/lib/chainId";
+import { getPrimaryServerTargetNetwork, getServerTargetNetworkById } from "~~/lib/env/server";
+import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 import { ponderApi } from "~~/services/ponder/client";
 import { checkRateLimit } from "~~/utils/rateLimit";
 
@@ -19,9 +22,10 @@ function parseOffset(value: string | null) {
 
 export async function GET(request: NextRequest) {
   const address = request.nextUrl.searchParams.get("address");
+  const chainIdRaw = request.nextUrl.searchParams.get("chainId");
   const limited = await checkRateLimit(request, READ_RATE_LIMIT, {
     allowOnStoreUnavailable: true,
-    extraKeyParts: [typeof address === "string" ? address : undefined],
+    extraKeyParts: [typeof address === "string" ? address : undefined, chainIdRaw ?? undefined],
   });
   if (limited) return limited;
 
@@ -32,12 +36,28 @@ export async function GET(request: NextRequest) {
 
   const limit = parseLimit(request.nextUrl.searchParams.get("limit"), 200, 500);
   const offset = parseOffset(request.nextUrl.searchParams.get("offset"));
+  const fallbackChainId = getPrimaryServerTargetNetwork()?.id;
+  const chainId = chainIdRaw === null ? fallbackChainId : parsePositiveIntegerChainId(chainIdRaw);
+  if (chainId === null || chainId === undefined) {
+    return NextResponse.json({ error: "Valid chainId is required" }, { status: 400 });
+  }
+  if (!getServerTargetNetworkById(chainId)) {
+    return NextResponse.json({ error: "Unsupported chainId" }, { status: 400 });
+  }
+  const deployment = resolveProtocolDeploymentScope(chainId);
+  if (!deployment) {
+    return NextResponse.json({ error: "Unsupported protocol deployment" }, { status: 400 });
+  }
 
   try {
-    const follows = await ponderApi.getFollows(normalizedAddress, {
-      limit: String(limit),
-      offset: String(offset),
-    });
+    const follows = await ponderApi.getFollows(
+      normalizedAddress,
+      {
+        limit: String(limit),
+        offset: String(offset),
+      },
+      { chainId, deploymentKey: deployment.deploymentKey },
+    );
     return NextResponse.json(follows);
   } catch (error) {
     console.error("Failed to fetch public follows:", error);

@@ -4,7 +4,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { isAddress } from "viem";
 import { useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
+import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import type { SignedCollectionReadAccessResult, SignedCollectionToggleResult } from "~~/hooks/useSignedCollection";
+import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 import {
   type PonderFollowResponse,
   invalidatePonderCache,
@@ -46,15 +48,18 @@ function normalizeFollowItems(items: FollowedProfileItem[]) {
   }));
 }
 
-async function fetchFollowedProfiles(address?: string): Promise<PonderFollowResponse> {
+async function fetchFollowedProfiles(
+  address: string | undefined,
+  options: { chainId: number; deploymentKey?: string | null },
+): Promise<PonderFollowResponse> {
   const normalizedAddress = address?.toLowerCase();
   if (!normalizedAddress) return EMPTY_FOLLOWED_RESPONSE;
 
-  const available = await isPonderAvailable();
+  const available = await isPonderAvailable(options.deploymentKey);
   if (!available) return EMPTY_FOLLOWED_RESPONSE;
 
   try {
-    return await ponderApi.getAllFollows(normalizedAddress);
+    return await ponderApi.getAllFollows(normalizedAddress, options);
   } catch (error) {
     invalidatePonderCache();
     if (process.env.NODE_ENV !== "production") {
@@ -65,27 +70,33 @@ async function fetchFollowedProfiles(address?: string): Promise<PonderFollowResp
 }
 
 export function useFollowedProfiles(address?: string, options?: UseFollowedProfilesOptions) {
-  void options;
+  const { targetNetwork } = useTargetNetwork();
+  const deployment = useMemo(() => resolveProtocolDeploymentScope(targetNetwork.id), [targetNetwork.id]);
+  const deploymentKey = deployment?.deploymentKey ?? null;
+  const autoRead = options?.autoRead ?? true;
   const normalizedAddress = address?.toLowerCase();
   const queryClient = useQueryClient();
   const { writeContractAsync } = useScaffoldWriteContract({
     contractName: "RaterRegistry",
   });
-  const queryKey = useMemo(() => ["followedProfiles", normalizedAddress ?? "anonymous"] as const, [normalizedAddress]);
+  const queryKey = useMemo(
+    () => ["followedProfiles", normalizedAddress ?? "anonymous", targetNetwork.id, deploymentKey] as const,
+    [deploymentKey, normalizedAddress, targetNetwork.id],
+  );
   const [pendingWallets, setPendingWallets] = useState<Set<string>>(() => new Set());
   const [optimisticFollows, setOptimisticFollows] = useState<Map<string, FollowedProfileItem | null>>(() => new Map());
 
   useEffect(() => {
     setPendingWallets(new Set());
     setOptimisticFollows(new Map());
-  }, [normalizedAddress]);
+  }, [deploymentKey, normalizedAddress, targetNetwork.id]);
 
   const followQuery = useQuery({
     queryKey,
     queryFn: async () => {
-      return fetchFollowedProfiles(normalizedAddress);
+      return fetchFollowedProfiles(normalizedAddress, { chainId: targetNetwork.id, deploymentKey });
     },
-    enabled: Boolean(normalizedAddress),
+    enabled: Boolean(normalizedAddress) && autoRead,
     staleTime: 15_000,
     retry: false,
   });
@@ -143,18 +154,24 @@ export function useFollowedProfiles(address?: string, options?: UseFollowedProfi
       if (normalizedAddress) {
         invalidations.push(
           queryClient.invalidateQueries({ queryKey: ["ponder-fallback", "publicProfile", normalizedAddress] }),
+          queryClient.invalidateQueries({
+            queryKey: ["ponder-fallback", "publicProfile", normalizedAddress, targetNetwork.id, deploymentKey],
+          }),
         );
       }
 
       if (targetWalletAddress) {
         invalidations.push(
           queryClient.invalidateQueries({ queryKey: ["ponder-fallback", "publicProfile", targetWalletAddress] }),
+          queryClient.invalidateQueries({
+            queryKey: ["ponder-fallback", "publicProfile", targetWalletAddress, targetNetwork.id, deploymentKey],
+          }),
         );
       }
 
       await Promise.all(invalidations);
     },
-    [normalizedAddress, queryClient, queryKey],
+    [deploymentKey, normalizedAddress, queryClient, queryKey, targetNetwork.id],
   );
 
   const requestReadAccess = useCallback(async (): Promise<SignedCollectionReadAccessResult> => {

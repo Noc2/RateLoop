@@ -2,6 +2,7 @@ import deployedContracts from "@rateloop/contracts/deployedContracts";
 import { ROUND_STATE } from "@rateloop/contracts/protocol";
 import { type Abi, type Address, createPublicClient, http, isAddress } from "viem";
 import { getPrimaryServerTargetNetwork, getServerRpcOverrides, getServerTargetNetworkById } from "~~/lib/env/server";
+import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 import { type PonderFrontend, type PonderRoundItem, isPonderAvailable, ponderApi } from "~~/services/ponder/client";
 
 type DeployedContractsMap = Record<
@@ -274,14 +275,22 @@ async function buildClaimableFrontendFeeSnapshot(
   if (!context) {
     return emptySnapshot();
   }
+  const deployment = resolveProtocolDeploymentScope(chainId);
+  if (!deployment) {
+    return emptySnapshot();
+  }
+  const deploymentOptions = {
+    chainId,
+    deploymentKey: deployment.deploymentKey,
+  };
 
-  if (!(await isPonderAvailable())) {
+  if (!(await isPonderAvailable(deployment.deploymentKey))) {
     return emptySnapshot();
   }
 
   let frontendRecord: PonderFrontend | null = null;
   try {
-    frontendRecord = (await ponderApi.getFrontend(frontend)).frontend;
+    frontendRecord = (await ponderApi.getFrontend(frontend, deploymentOptions)).frontend;
   } catch (error) {
     if (isPonderNotFoundError(error)) {
       return emptySnapshot();
@@ -301,11 +310,14 @@ async function buildClaimableFrontendFeeSnapshot(
 
   while (true) {
     const batchSize = MAX_SCAN_BATCH;
-    const page = await ponderApi.getRounds({
-      state: String(ROUND_STATE.Settled),
-      limit: String(batchSize),
-      offset: String(scanOffset),
-    });
+    const page = await ponderApi.getRounds(
+      {
+        state: String(ROUND_STATE.Settled),
+        limit: String(batchSize),
+        offset: String(scanOffset),
+      },
+      deploymentOptions,
+    );
 
     totalRounds = page.total;
     if (page.items.length === 0) {

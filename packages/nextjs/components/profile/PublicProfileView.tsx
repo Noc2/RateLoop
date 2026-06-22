@@ -70,6 +70,7 @@ import {
 } from "~~/lib/profile/profileSelfReportDisplay";
 import { MAX_PROFILE_SELF_REPORT_LENGTH } from "~~/lib/profile/profileValidation";
 import { AVATAR_WIN_RATE_TOOLTIP } from "~~/lib/profile/winRateTooltip";
+import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 import { formatRatingScoreOutOfTen } from "~~/lib/ui/ratingDisplay";
 import {
   type PonderProfileDetailResponse,
@@ -777,6 +778,8 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
   const normalizedAddress = address.toLowerCase() as `0x${string}`;
   const isPageVisible = usePageVisibility();
   const { targetNetwork } = useTargetNetwork();
+  const deployment = useMemo(() => resolveProtocolDeploymentScope(targetNetwork.id), [targetNetwork.id]);
+  const deploymentKey = deployment?.deploymentKey ?? null;
   const { address: connectedAddress } = useAccount();
   const { openConnectModal } = useRateLoopConnectModal();
   const { followedWallets, toggleFollow, isPending: isFollowPending } = useFollowedProfiles(connectedAddress);
@@ -807,8 +810,9 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
     PonderProfileDetailResponse,
     PonderProfileDetailResponse
   >({
-    queryKey: ["publicProfile", normalizedAddress],
-    ponderFn: async () => ponderApi.getProfile(normalizedAddress),
+    queryKey: ["publicProfile", normalizedAddress, targetNetwork.id, deploymentKey],
+    availabilityDeploymentKey: deploymentKey,
+    ponderFn: async () => ponderApi.getProfile(normalizedAddress, { chainId: targetNetwork.id, deploymentKey }),
     rpcFn: async () => ({
       profile: null,
       summary: {
@@ -841,8 +845,9 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
     refetchInterval: isPageVisible ? 60_000 : false,
   });
   const rewardStatusQuery = useQuery({
-    queryKey: ["profile-participation-status", normalizedAddress],
-    queryFn: () => ponderApi.getRaterParticipationStatus(normalizedAddress),
+    queryKey: ["profile-participation-status", normalizedAddress, targetNetwork.id, deploymentKey],
+    queryFn: () =>
+      ponderApi.getRaterParticipationStatus(normalizedAddress, { chainId: targetNetwork.id, deploymentKey }),
     staleTime: 15_000,
   });
 

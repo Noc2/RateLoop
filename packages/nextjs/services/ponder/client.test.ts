@@ -896,6 +896,110 @@ test("ponderApi.getAllFollows paginates the full public follow set", async () =>
   assert.match(dataUrls[1] ?? "", /\/follows\/0x1111111111111111111111111111111111111111\?limit=200&offset=200$/);
 });
 
+test("ponder social and profile reads preflight explicit deployment keys", async () => {
+  const originalFetch = globalThis.fetch;
+  const requestedUrls: string[] = [];
+  assert.ok(BASE_SEPOLIA_PONDER_DEPLOYMENT);
+  const deploymentOptions = {
+    chainId: BASE_SEPOLIA_PONDER_DEPLOYMENT.chainId,
+    deploymentKey: BASE_SEPOLIA_PONDER_DEPLOYMENT.deploymentKey,
+  };
+
+  globalThis.fetch = (async input => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    requestedUrls.push(url);
+    const preflightResponse = healthyPonderPreflightResponseForDeployment(url, BASE_SEPOLIA_PONDER_DEPLOYMENT);
+    if (preflightResponse) return preflightResponse;
+
+    if (url.includes("/profiles")) {
+      return new Response(JSON.stringify({ "0x1111111111111111111111111111111111111111": { name: "Alice" } }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    if (url.includes("/profile/")) {
+      return new Response(JSON.stringify({ profile: null, summary: {}, social: {} }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    if (url.includes("/follows/") || url.includes("/followers/")) {
+      return new Response(
+        JSON.stringify({
+          items: [],
+          count: 0,
+          followerCount: 0,
+          followingCount: 0,
+          limit: 200,
+          offset: 0,
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        },
+      );
+    }
+    if (url.includes("/discover-signals/")) {
+      return new Response(JSON.stringify({ settlingSoon: [], followedSubmissions: [], followedResolutions: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    if (url.includes("/frontend/")) {
+      return new Response(JSON.stringify({ frontend: { operator: "0x1111111111111111111111111111111111111111" } }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    if (url.includes("/voter-accuracy/")) {
+      return new Response(JSON.stringify({ stats: null, categories: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    if (url.includes("/rater-participation-status/")) {
+      return new Response(JSON.stringify({ launchRewards: null }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+
+    return new Response("unexpected", { status: 500 });
+  }) as typeof fetch;
+
+  try {
+    invalidatePonderCache({ clearLastKnownGood: true });
+    await ponderApi.getProfiles(["0x1111111111111111111111111111111111111111"], deploymentOptions);
+    await ponderApi.getProfile("0x1111111111111111111111111111111111111111", deploymentOptions);
+    await ponderApi.getFollows("0x1111111111111111111111111111111111111111", { limit: "5" }, deploymentOptions);
+    await ponderApi.getAllFollows("0x1111111111111111111111111111111111111111", deploymentOptions);
+    await ponderApi.getFollowers("0x1111111111111111111111111111111111111111", { limit: "5" }, deploymentOptions);
+    await ponderApi.getDiscoverSignals(
+      "0x1111111111111111111111111111111111111111",
+      { watched: "1", followed: "0x2222222222222222222222222222222222222222" },
+      deploymentOptions,
+    );
+    await ponderApi.getFrontend("0x1111111111111111111111111111111111111111", deploymentOptions);
+    await ponderApi.getVoterAccuracy("0x1111111111111111111111111111111111111111", deploymentOptions);
+    await ponderApi.getRaterParticipationStatus("0x1111111111111111111111111111111111111111", deploymentOptions);
+  } finally {
+    globalThis.fetch = originalFetch;
+    invalidatePonderCache({ clearLastKnownGood: true });
+  }
+
+  const dataUrls = requestedUrls.filter(url => !isPonderPreflightUrl(url));
+  assert.ok(dataUrls.some(url => url.includes("/profiles?addresses=")));
+  assert.ok(dataUrls.some(url => url.includes("/profile/0x1111111111111111111111111111111111111111")));
+  assert.ok(dataUrls.some(url => url.includes("/follows/0x1111111111111111111111111111111111111111")));
+  assert.ok(dataUrls.some(url => url.includes("/followers/0x1111111111111111111111111111111111111111")));
+  assert.ok(dataUrls.some(url => url.includes("/discover-signals/0x1111111111111111111111111111111111111111")));
+  assert.ok(dataUrls.some(url => url.includes("/frontend/0x1111111111111111111111111111111111111111")));
+  assert.ok(dataUrls.some(url => url.includes("/voter-accuracy/0x1111111111111111111111111111111111111111")));
+  assert.ok(
+    dataUrls.some(url => url.includes("/rater-participation-status/0x1111111111111111111111111111111111111111")),
+  );
+});
+
 test("ponderApi.getAccuracyLeaderboard forwards includeReputation", async () => {
   const originalFetch = globalThis.fetch;
   let requestedUrl = "";

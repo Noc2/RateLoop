@@ -10,6 +10,7 @@ import {
   hasIndexedRefundClaim,
 } from "~~/hooks/claimableRewards";
 import { useDeployedContractInfo } from "~~/hooks/scaffold-eth";
+import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import { useClaimableFrontendRewards } from "~~/hooks/useClaimableFrontendRewards";
 import { useClaimableQuestionRewards } from "~~/hooks/useClaimableQuestionRewards";
 import { useRecentUserVotes } from "~~/hooks/useRecentUserVotes";
@@ -59,6 +60,7 @@ function isRefundRound(vote: PonderVoteItem) {
  */
 export function useAllClaimableRewards() {
   const { address } = useAccount();
+  const { targetNetwork } = useTargetNetwork();
   const { votes, refetch: refetchVotes } = useRecentUserVotes(address);
   const {
     claimableItems: frontendClaimableItems,
@@ -83,8 +85,14 @@ export function useAllClaimableRewards() {
   }, [votes]);
 
   // --- Step 3: Multicall rewardClaimed to filter out already claimed ---
-  const { data: distributorInfo } = useDeployedContractInfo({ contractName: "RoundRewardDistributor" });
-  const { data: engineInfo } = useDeployedContractInfo({ contractName: "RoundVotingEngine" as any });
+  const { data: distributorInfo } = useDeployedContractInfo({
+    contractName: "RoundRewardDistributor",
+    chainId: targetNetwork.id as any,
+  });
+  const { data: engineInfo } = useDeployedContractInfo({
+    contractName: "RoundVotingEngine" as any,
+    chainId: targetNetwork.id as any,
+  });
 
   const claimLookups = useMemo(() => {
     return terminalVotes.map(v =>
@@ -105,12 +113,13 @@ export function useAllClaimableRewards() {
       if (!lookup) return [];
       return {
         address: lookup.contract === "distributor" ? distributorInfo.address : engineInfo.address,
+        chainId: targetNetwork.id,
         abi: lookup.contract === "distributor" ? distributorInfo.abi : engineInfo.abi,
         functionName: lookup.functionName,
         args: lookup.args,
       };
     });
-  }, [distributorInfo, engineInfo, address, terminalVotes.length, claimLookups]);
+  }, [distributorInfo, engineInfo, address, terminalVotes.length, claimLookups, targetNetwork.id]);
 
   const {
     data: claimedResults,
@@ -162,24 +171,27 @@ export function useAllClaimableRewards() {
       .flatMap(({ contentId, roundId }) => [
         {
           address: distributorInfo.address,
+          chainId: targetNetwork.id,
           abi: distributorInfo.abi,
           functionName: "roundVoterRewardClaimedCount" as const,
           args: [contentId, roundId],
         },
         {
           address: distributorInfo.address,
+          chainId: targetNetwork.id,
           abi: distributorInfo.abi,
           functionName: "roundVoterRewardClaimedAmount" as const,
           args: [contentId, roundId],
         },
         {
           address: engineInfo.address,
+          chainId: targetNetwork.id,
           abi: engineInfo.abi,
           functionName: "rbtsRoundState" as const,
           args: [contentId, roundId],
         },
       ]);
-  }, [distributorInfo, engineInfo, settledRbtsVotes]);
+  }, [distributorInfo, engineInfo, settledRbtsVotes, targetNetwork.id]);
 
   const { data: rbtsRewardStateResults, isLoading: rbtsRewardsLoading } = useReadContracts({
     contracts: rbtsRewardStateContracts,

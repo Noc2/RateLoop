@@ -3,7 +3,9 @@
 import { useMemo } from "react";
 import { useReadContracts } from "wagmi";
 import { useDeployedContractInfo } from "~~/hooks/scaffold-eth";
+import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import { usePonderQuery } from "~~/hooks/usePonderQuery";
+import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 import { ponderApi } from "~~/services/ponder/client";
 
 export interface SubmitterProfile {
@@ -15,6 +17,9 @@ export interface SubmitterProfile {
  * Uses Ponder API when available, falls back to on-chain multicall.
  */
 export function useSubmitterProfiles(addresses: string[]) {
+  const { targetNetwork } = useTargetNetwork();
+  const deployment = useMemo(() => resolveProtocolDeploymentScope(targetNetwork.id), [targetNetwork.id]);
+  const deploymentKey = deployment?.deploymentKey ?? null;
   // Dedupe and normalize addresses
   const uniqueAddresses = useMemo(() => {
     const seen = new Set<string>();
@@ -29,17 +34,21 @@ export function useSubmitterProfiles(addresses: string[]) {
   }, [addresses]);
 
   // --- RPC fallback: multicall getProfile ---
-  const { data: registryInfo } = useDeployedContractInfo({ contractName: "ProfileRegistry" as any });
+  const { data: registryInfo } = useDeployedContractInfo({
+    contractName: "ProfileRegistry" as any,
+    chainId: targetNetwork.id as any,
+  });
 
   const profileCalls = useMemo(() => {
     if (!registryInfo || uniqueAddresses.length === 0) return [];
     return uniqueAddresses.map(addr => ({
       address: registryInfo.address,
+      chainId: targetNetwork.id,
       abi: registryInfo.abi,
       functionName: "getProfile" as const,
       args: [addr as `0x${string}`],
     }));
-  }, [registryInfo, uniqueAddresses]);
+  }, [registryInfo, targetNetwork.id, uniqueAddresses]);
 
   const { data: profilesData, isLoading: rpcLoading } = useReadContracts({
     contracts: profileCalls,
@@ -79,10 +88,11 @@ export function useSubmitterProfiles(addresses: string[]) {
   // --- Ponder-first with RPC fallback ---
   const addressesKey = uniqueAddresses.join(",");
   const { data: result, isLoading: ponderLoading } = usePonderQuery({
-    queryKey: ["submitterProfiles", addressesKey],
+    queryKey: ["submitterProfiles", addressesKey, targetNetwork.id, deploymentKey],
+    availabilityDeploymentKey: deploymentKey,
     ponderFn: async () => {
       if (uniqueAddresses.length === 0) return {};
-      const profileMap = await ponderApi.getProfiles(uniqueAddresses);
+      const profileMap = await ponderApi.getProfiles(uniqueAddresses, { chainId: targetNetwork.id, deploymentKey });
       const mapped: Record<string, SubmitterProfile> = {};
       for (const addr of uniqueAddresses) {
         const p = profileMap[addr];
