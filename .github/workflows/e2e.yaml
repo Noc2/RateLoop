@@ -288,9 +288,9 @@ jobs:
 
       - name: Install contract build tools
         run: |
-          if ! command -v make >/dev/null 2>&1; then
+          if ! command -v make >/dev/null 2>&1 || ! command -v jq >/dev/null 2>&1; then
             apt-get update
-            apt-get install -y --no-install-recommends make
+            apt-get install -y --no-install-recommends jq make
           fi
 
       - name: Start Anvil and deploy contracts
