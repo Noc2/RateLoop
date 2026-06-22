@@ -474,13 +474,11 @@ function collectCurrentLaunchAnchorFeatures(args: {
   minAnchorCredentialAgeSeconds: number;
   rewardRecipient: `0x${string}`;
   roundStartTime: bigint;
-  submitter: `0x${string}`;
   submitterIdentity: `0x${string}`;
 }) {
   const anchors: string[] = [];
   const seenAnchors = new Set<string>();
   const rewardRecipient = args.rewardRecipient.toLowerCase();
-  const submitter = args.submitter.toLowerCase();
   const submitterIdentity = args.submitterIdentity.toLowerCase();
   const minCredentialAge = BigInt(args.minAnchorCredentialAgeSeconds);
   for (const row of args.anchorRows) {
@@ -488,7 +486,6 @@ function collectCurrentLaunchAnchorFeatures(args: {
     const normalizedAccount = account.toLowerCase();
     if (
       normalizedAccount === rewardRecipient ||
-      normalizedAccount === submitter ||
       normalizedAccount === submitterIdentity
     )
       continue;
@@ -1255,7 +1252,6 @@ export function registerCorrelationRoutes(app: ApiApp) {
         minAnchorCredentialAgeSeconds,
         rewardRecipient: credit.rater,
         roundStartTime: roundRow.startTime,
-        submitter: roundRow.submitter,
         submitterIdentity,
       });
       const formatted = formatLaunchCreditRow({
