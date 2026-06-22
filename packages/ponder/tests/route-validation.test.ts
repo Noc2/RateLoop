@@ -3634,6 +3634,81 @@ describe("registerCorrelationRoutes", () => {
     });
   });
 
+  it("counts the raw delegated submitter as a launch anchor", async () => {
+    const rawSubmitter = "0x0000000000000000000000000000000000009999";
+    const submitterIdentity = "0x00000000000000000000000000000000000000aa";
+    mockPonderModules(
+      [
+        {
+          startTime: 1000n,
+          submitter: rawSubmitter,
+          submitterIdentity,
+        },
+      ],
+      [
+        [
+          {
+            id: "current",
+            minVerifiedHumans: 1,
+            minAnchorCredentialAgeSeconds: 10,
+            updatedAt: 1100n,
+          },
+        ],
+        [
+          {
+            rater: "0x0000000000000000000000000000000000000001",
+            commitKey: `0x${"b".repeat(64)}`,
+            recordedAt: 1200n,
+            historicalVoteCount: 4,
+            raterVerified: true,
+            raterRevoked: false,
+            raterCredentialExpiresAt: 2000n,
+            raterCredentialUpdatedAt: 1100n,
+          },
+        ],
+        [
+          {
+            account: rawSubmitter,
+            voter: rawSubmitter,
+            provider: 1,
+            nullifierHash: `0x${"a".repeat(64)}`,
+            verified: true,
+            revoked: false,
+            verifiedAt: 100n,
+            expiresAt: 2000n,
+            credentialUpdatedAt: 1100n,
+          },
+        ],
+        [],
+        [
+          {
+            questionMetadataHash: `0x${"2".repeat(64)}`,
+            questionMetadataUri: "ipfs://question",
+            resultSpecHash: `0x${"3".repeat(64)}`,
+            settledAt: 1500n,
+          },
+        ],
+        [],
+      ],
+    );
+    const { registerCorrelationRoutes } = await import(
+      "../src/api/routes/correlation-routes.js"
+    );
+
+    const app = new Hono();
+    registerCorrelationRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/correlation/launch-round-votes?contentId=9&roundId=2&limit=1&offset=0&now=1300",
+    );
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.items).toHaveLength(1);
+    expect(body.items[0].features[0]).toMatch(/^launch-anchor:0x/);
+    expect(body.excludedVotes).toEqual([]);
+  });
+
   it("does not count the submitter identity holder as a launch anchor", async () => {
     const rawSubmitter = "0x0000000000000000000000000000000000009999";
     const submitterIdentity = "0x00000000000000000000000000000000000000aa";
