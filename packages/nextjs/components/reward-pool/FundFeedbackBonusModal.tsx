@@ -10,6 +10,7 @@ import { GradientActionButton, getGradientActionMotion } from "~~/components/sha
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import { getTransactionReceiptPollingInterval } from "~~/config/shared";
 import { useRateLoopSwitchNetwork } from "~~/hooks/useRateLoopSwitchNetwork";
+import { useThirdwebSponsoredSubmitCalls } from "~~/hooks/useThirdwebSponsoredSubmitCalls";
 import {
   BOUNTY_WINDOW_PRESETS,
   type BountyWindowPreset,
@@ -95,6 +96,8 @@ export function FundFeedbackBonusModal({
   const { writeContractAsync } = useWriteContract();
   const { signTypedDataAsync } = useSignTypedData();
   const { switchToChain, switchingChainId } = useRateLoopSwitchNetwork();
+  const { canUseSelfFundedBatchCalls, canUseSponsoredBatchCalls, executeContractCallBatch } =
+    useThirdwebSponsoredSubmitCalls();
   const [isMounted, setIsMounted] = useState(false);
   const amountInputId = useId();
   const awarderInputId = useId();
@@ -295,8 +298,34 @@ export function FundFeedbackBonusModal({
         })) as bigint;
 
       const initialAllowance = await readTokenAllowance();
+      const canUseBatchFunding = canUseSponsoredBatchCalls || canUseSelfFundedBatchCalls;
 
-      if (initialAllowance < parsedAmount) {
+      if (canUseBatchFunding) {
+        await executeContractCallBatch(
+          [
+            ...(initialAllowance < parsedAmount
+              ? [
+                  {
+                    address: tokenAddress,
+                    abi: ERC20_APPROVAL_ABI,
+                    functionName: "approve",
+                    args: [escrowAddress, parsedAmount],
+                  },
+                ]
+              : []),
+            {
+              address: escrowAddress,
+              abi: FEEDBACK_BONUS_ESCROW_ABI,
+              functionName: "createFeedbackBonusPoolWithAsset",
+              args: [contentId, roundId, selectedAssetId, parsedAmount, feedbackClosesAt, selectedAwarderAddress],
+            },
+          ],
+          {
+            action: "Fund Feedback Bonus",
+            sponsorshipMode: canUseSponsoredBatchCalls ? "sponsored" : "self-funded",
+          },
+        );
+      } else if (initialAllowance < parsedAmount) {
         const approveHash = await writeContractAsync({
           chainId: chainId as any,
           address: tokenAddress,
@@ -318,18 +347,20 @@ export function FundFeedbackBonusModal({
         }
       }
 
-      const feedbackBonusHash = await writeContractAsync({
-        chainId: chainId as any,
-        address: escrowAddress,
-        abi: FEEDBACK_BONUS_ESCROW_ABI,
-        functionName: "createFeedbackBonusPoolWithAsset",
-        args: [contentId, roundId, selectedAssetId, parsedAmount, feedbackClosesAt, selectedAwarderAddress],
-      });
-      await waitForTransactionReceipt(wagmiConfig, {
-        chainId: chainId as any,
-        hash: feedbackBonusHash,
-        pollingInterval: getFundReceiptPollingInterval(chainId),
-      });
+      if (!canUseBatchFunding) {
+        const feedbackBonusHash = await writeContractAsync({
+          chainId: chainId as any,
+          address: escrowAddress,
+          abi: FEEDBACK_BONUS_ESCROW_ABI,
+          functionName: "createFeedbackBonusPoolWithAsset",
+          args: [contentId, roundId, selectedAssetId, parsedAmount, feedbackClosesAt, selectedAwarderAddress],
+        });
+        await waitForTransactionReceipt(wagmiConfig, {
+          chainId: chainId as any,
+          hash: feedbackBonusHash,
+          pollingInterval: getFundReceiptPollingInterval(chainId),
+        });
+      }
 
       notification.success(`Feedback Bonus funded with ${formatFeedbackBonusAmount(parsedAmount, asset)}.`);
       onCreated?.();
