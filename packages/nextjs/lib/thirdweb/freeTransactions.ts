@@ -1471,7 +1471,11 @@ async function validateSponsoredCalls(
         }
         return { ok: false, debugCode: "unsupported_operation" };
       case "QuestionRewardPoolEscrow":
-        if (functionName === "claimQuestionReward" || functionName === "claimQuestionBundleReward") {
+        if (
+          functionName === "claimQuestionReward" ||
+          functionName === "claimQuestionBundleReward" ||
+          functionName === "createRewardPool"
+        ) {
           continue;
         }
         return { ok: false, debugCode: "unsupported_operation" };

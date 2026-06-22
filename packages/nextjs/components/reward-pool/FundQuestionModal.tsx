@@ -10,6 +10,7 @@ import { GradientActionButton, getGradientActionMotion } from "~~/components/sha
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import { getTransactionReceiptPollingInterval } from "~~/config/shared";
 import { useRateLoopSwitchNetwork } from "~~/hooks/useRateLoopSwitchNetwork";
+import { useThirdwebSponsoredSubmitCalls } from "~~/hooks/useThirdwebSponsoredSubmitCalls";
 import {
   BOUNTY_WINDOW_PRESETS,
   type BountyWindowPreset,
@@ -112,6 +113,8 @@ export function FundQuestionModal({
   const { writeContractAsync } = useWriteContract();
   const { signTypedDataAsync } = useSignTypedData();
   const { switchToChain, switchingChainId } = useRateLoopSwitchNetwork();
+  const { canUseSelfFundedBatchCalls, canUseSponsoredBatchCalls, executeContractCallBatch } =
+    useThirdwebSponsoredSubmitCalls();
   const [isMounted, setIsMounted] = useState(false);
   const amountInputId = useId();
   const requiredVotersInputId = useId();
@@ -360,8 +363,43 @@ export function FundQuestionModal({
         })) as bigint;
 
       const initialAllowance = await readUsdcAllowance();
+      const rewardPoolArgs = [
+        contentId,
+        parsedAmount,
+        BigInt(voterCount),
+        BigInt(settledRounds),
+        bountyStartBy,
+        bountyWindowSecondsValue,
+        bountyWindowSecondsValue,
+      ] as const;
+      const canUseBatchFunding = canUseSponsoredBatchCalls || canUseSelfFundedBatchCalls;
 
-      if (initialAllowance < parsedAmount) {
+      if (canUseBatchFunding) {
+        await executeContractCallBatch(
+          [
+            ...(initialAllowance < parsedAmount
+              ? [
+                  {
+                    address: usdcAddress,
+                    abi: ERC20_APPROVAL_ABI,
+                    functionName: "approve",
+                    args: [escrowAddress, parsedAmount],
+                  },
+                ]
+              : []),
+            {
+              address: escrowAddress,
+              abi: QUESTION_REWARD_POOL_ESCROW_ABI,
+              functionName: "createRewardPool",
+              args: rewardPoolArgs,
+            },
+          ],
+          {
+            action: "Fund Bounty",
+            sponsorshipMode: canUseSponsoredBatchCalls ? "sponsored" : "self-funded",
+          },
+        );
+      } else if (initialAllowance < parsedAmount) {
         const approveHash = await writeContractAsync({
           chainId: chainId as any,
           address: usdcAddress,
@@ -385,26 +423,20 @@ export function FundQuestionModal({
           );
         }
       }
-      const rewardPoolHash = await writeContractAsync({
-        chainId: chainId as any,
-        address: escrowAddress,
-        abi: QUESTION_REWARD_POOL_ESCROW_ABI,
-        functionName: "createRewardPool",
-        args: [
-          contentId,
-          parsedAmount,
-          BigInt(voterCount),
-          BigInt(settledRounds),
-          bountyStartBy,
-          bountyWindowSecondsValue,
-          bountyWindowSecondsValue,
-        ],
-      });
-      await waitForTransactionReceipt(wagmiConfig, {
-        chainId: chainId as any,
-        hash: rewardPoolHash,
-        pollingInterval: getFundReceiptPollingInterval(chainId),
-      });
+      if (!canUseBatchFunding) {
+        const rewardPoolHash = await writeContractAsync({
+          chainId: chainId as any,
+          address: escrowAddress,
+          abi: QUESTION_REWARD_POOL_ESCROW_ABI,
+          functionName: "createRewardPool",
+          args: rewardPoolArgs,
+        });
+        await waitForTransactionReceipt(wagmiConfig, {
+          chainId: chainId as any,
+          hash: rewardPoolHash,
+          pollingInterval: getFundReceiptPollingInterval(chainId),
+        });
+      }
 
       notification.success(`Bounty funded with ${formatUsdAmount(parsedAmount)}. Paid in USDC.`);
       onCreated?.();

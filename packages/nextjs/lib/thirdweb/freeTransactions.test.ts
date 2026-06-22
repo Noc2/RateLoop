@@ -815,6 +815,7 @@ test("supported sponsored operation families are allowlisted", async () => {
     [encodeCall(votingEngineContract, "openRound", [1n])],
     [encodeCall(rewardDistributorContract, "claimFrontendFee", [1n, 1n, WALLET])],
     [encodeCall(rewardDistributorContract, "claimReward", [1n, 1n])],
+    [encodeCall(rewardEscrowContract, "createRewardPool", [1n, 1_000_000n, 3n, 0n, 1_234n, 86_400n, 86_400n])],
     [encodeCall(rewardEscrowContract, "claimQuestionReward", [1n, 1n])],
     [encodeCall(rewardEscrowContract, "claimQuestionReward", [1n, 1n, payoutWeight, []])],
     [encodeCall(rewardEscrowContract, "claimQuestionBundleReward", [1n, 0n])],
@@ -893,7 +894,10 @@ test("allows sponsorship for the configured chain-scoped USDC address", async ()
 
   try {
     const decision = await freeTransactions.evaluateFreeTransactionAllowance(
-      buildRequest([encodeCall(configuredUsdcContract, "approve", [rewardEscrowContract.address, 10n])]) as never,
+      buildRequest([
+        encodeCall(configuredUsdcContract, "approve", [rewardEscrowContract.address, 10n]),
+        encodeCall(rewardEscrowContract, "createRewardPool", [1n, 10n, 3n, 0n, 1_234n, 86_400n, 86_400n]),
+      ]) as never,
     );
 
     assert.equal(decision.isAllowed, true);
