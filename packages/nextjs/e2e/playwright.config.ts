@@ -14,6 +14,7 @@ const BROWSER_COMPAT_TESTS = specFile("browser-compat");
 const RESPONSIVE_LAYOUT_TESTS = specFile("responsive-layout");
 const ACCESSIBILITY_AXE_TESTS = specFile("accessibility-axe");
 const MOBILE_TESTS = specFile("mobile");
+const MOBILE_ANDROID_TESTS = specFile("mobile-android");
 const MOBILE_TABLET_TESTS = specFile("mobile-tablet");
 const WORLD_ID_MOCK_TESTS = specFile("world-id-mock");
 const CI_SMOKE_TESTS = specFiles("smoke", "pages-smoke", "docs-pages");
@@ -201,7 +202,7 @@ export default defineConfig({
     {
       name: "mobile-android",
       use: { ...devices["Pixel 5"] },
-      testMatch: MOBILE_TESTS,
+      testMatch: MOBILE_ANDROID_TESTS,
     },
     {
       name: "mobile-tablet",

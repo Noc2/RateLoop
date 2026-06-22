@@ -74,6 +74,12 @@ test("browser-scoped Playwright projects only match their intended spec files", 
       nonMatchingSpec: "browser-compat.spec.ts",
     },
     {
+      project: "mobile-android",
+      workspaceSegment: "mobile-preview",
+      matchingSpec: "mobile-android.spec.ts",
+      nonMatchingSpec: "mobile.spec.ts",
+    },
+    {
       project: "mobile-tablet",
       workspaceSegment: "mobile-preview",
       matchingSpec: "mobile-tablet.spec.ts",
@@ -180,9 +186,11 @@ test("broad Chromium ignores and lifecycle matches only target spec basenames", 
 
 test("mobile specs avoid runtime project skips", () => {
   const phoneSpec = readFileSync("e2e/tests/mobile.spec.ts", "utf8");
+  const androidSpec = readFileSync("e2e/tests/mobile-android.spec.ts", "utf8");
   const tabletSpec = readFileSync("e2e/tests/mobile-tablet.spec.ts", "utf8");
 
   assert.doesNotMatch(phoneSpec, /\btest\.skip\b/, "phone mobile spec should be selected by project config");
+  assert.doesNotMatch(androidSpec, /\btest\.skip\b/, "Android mobile spec should be selected by project config");
   assert.doesNotMatch(tabletSpec, /\btest\.skip\b/, "tablet mobile spec should be selected by project config");
 });
 
