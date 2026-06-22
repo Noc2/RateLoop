@@ -1408,7 +1408,12 @@ async function validateSponsoredCalls(
         }
         return { ok: false, debugCode: "unsupported_operation" };
       case "RaterRegistry":
-        if (functionName === "setProfile" || functionName === "acceptDelegateWithSig") {
+        if (
+          functionName === "setProfile" ||
+          functionName === "acceptDelegateWithSig" ||
+          functionName === "followProfile" ||
+          functionName === "unfollowProfile"
+        ) {
           continue;
         }
         return { ok: false, debugCode: "unsupported_operation" };
