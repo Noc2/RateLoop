@@ -805,7 +805,7 @@ export const Header = () => {
     <>
       {/* Mobile: top bar */}
       <div
-        className={`xl:hidden sticky top-0 z-20 duration-200 ease-out ${
+        className={`xl:hidden sticky top-0 z-40 duration-200 ease-out ${
           shouldUseVoteLayoutCollapse
             ? `transition-[max-height,opacity] will-change-[max-height,opacity] ${
                 isMobileHeaderVisible ? "overflow-visible opacity-100" : "overflow-hidden opacity-0"
