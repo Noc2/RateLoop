@@ -181,6 +181,39 @@ test.describe("Responsive layout", () => {
     await page.keyboard.press("Escape");
   });
 
+  test("small yes/no vote buttons stay circular below xl", async ({ connectedPage: page }) => {
+    await page.setViewportSize({ width: 1024, height: 768 });
+    await page.goto("/rate", { waitUntil: "domcontentloaded" });
+    await expect(page.locator("main")).toBeVisible({ timeout: 15_000 });
+
+    const buttonMetrics = await page.evaluate(() => {
+      const fixture = document.createElement("div");
+      fixture.setAttribute("data-testid", "vote-button-shape-fixture");
+      fixture.style.cssText = "position:absolute;left:-9999px;top:0;display:flex;gap:8px;";
+      fixture.innerHTML = `
+        <button class="vote-btn vote-btn-sm vote-yes" aria-label="Vote thumbs up"><span class="vote-bg"></span></button>
+        <button class="vote-btn vote-btn-sm vote-no" aria-label="Vote thumbs down"><span class="vote-bg"></span></button>
+      `;
+      document.body.appendChild(fixture);
+
+      return Array.from(fixture.querySelectorAll<HTMLElement>("button")).map(element => {
+        const rect = element.getBoundingClientRect();
+        const style = getComputedStyle(element);
+
+        return {
+          borderRadius: style.borderRadius,
+          height: rect.height,
+          width: rect.width,
+        };
+      });
+    });
+
+    for (const metric of buttonMetrics) {
+      expect(Math.abs(metric.width - metric.height)).toBeLessThanOrEqual(1);
+      expect(parseFloat(metric.borderRadius)).toBeGreaterThanOrEqual(metric.height / 2 - 1);
+    }
+  });
+
   test("desktop vote side padding remains inside the feed scroll hit area", async ({ connectedPage: page }) => {
     await page.setViewportSize({ width: 1366, height: 768 });
     await gotoWithRetry(page, "/rate", { ensureWalletConnected: true, timeout: 45_000 });

@@ -914,14 +914,7 @@ body {
 
 .vote-btn.vote-btn-sm.vote-yes,
 .vote-btn.vote-btn-sm.vote-no {
-  border-radius: var(--rateloop-radius-control);
-}
-
-@media (max-width: 767px) {
-  .vote-btn.vote-btn-sm.vote-yes,
-  .vote-btn.vote-btn-sm.vote-no {
-    border-radius: 9999px;
-  }
+  border-radius: 9999px;
 }
 
 .vote-btn .vote-bg {
