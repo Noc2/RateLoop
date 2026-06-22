@@ -83,6 +83,24 @@ test("QuestionDescription inline preview renders references as plain labels unti
   assert.match(html, /Show More/);
 });
 
+test("QuestionDescription can use a modal trigger for mobile previews", () => {
+  const html = renderToStaticMarkup(
+    <QuestionDescription
+      description="One two three four five six seven eight nine ten eleven twelve"
+      previewLayout="inline-toggle"
+      previewWordLimit={5}
+      expandBehavior="modal"
+    />,
+  ).replace(/\s+/g, " ");
+
+  assert.match(html, /line-clamp-1/);
+  assert.match(html, /aria-haspopup="dialog"/);
+  assert.doesNotMatch(html, /aria-expanded/);
+  assert.match(html, /One two three four five\.\.\./);
+  assert.doesNotMatch(html, /six seven/);
+  assert.match(html, /Show More/);
+});
+
 test("QuestionDescription inline preview still renders details-only toggle", () => {
   const html = renderToStaticMarkup(
     <QuestionDescription

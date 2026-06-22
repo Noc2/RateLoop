@@ -566,6 +566,7 @@ function GatedQuestionDescription({
       referencedContentById={referencedContentById}
       previewWordLimit={isMobileViewport ? MOBILE_DESCRIPTION_PREVIEW_WORDS : undefined}
       previewLayout={isMobileViewport ? "inline-toggle" : undefined}
+      expandBehavior={isMobileViewport ? "modal" : "inline"}
       className={className}
     />
   );
