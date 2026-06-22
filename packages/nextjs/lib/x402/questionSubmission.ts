@@ -26,6 +26,7 @@ import {
   parseSignature,
   toBytes,
 } from "viem";
+import { getTransactionReceiptPollingInterval } from "~~/config/shared";
 import {
   attachImagesToContent,
   getImageAttachmentSubmissionValidationError,
@@ -72,6 +73,7 @@ import {
   buildX402QuestionOperation,
 } from "~~/lib/x402/questionPayload";
 import { ponderApi } from "~~/services/ponder/client";
+import { isBasePreconfRpcChain } from "~~/utils/rpcUrls";
 
 const TX_RECEIPT_TIMEOUT_MS = 180_000;
 const MAX_X402_AUTHORIZATION_VALIDITY_SECONDS = 24n * 60n * 60n;
@@ -1418,8 +1420,12 @@ async function resolveSubmissionMediaValidator(
 }
 
 async function waitForSuccessfulReceipt(publicClient: X402PublicClient, hash: Hex): Promise<TransactionReceipt> {
+  const chain = publicClient.chain;
   const receipt = await publicClient.waitForTransactionReceipt({
     hash,
+    pollingInterval: getTransactionReceiptPollingInterval(chain?.id, {
+      preconfirmation: chain ? isBasePreconfRpcChain(chain) : false,
+    }),
     timeout: TX_RECEIPT_TIMEOUT_MS,
   });
   if (receipt.status !== "success") {
@@ -3279,8 +3285,10 @@ export async function confirmFeedbackBonusQuestionSubmissionRequest(params: {
 
   const publicClient = createPublicQuestionClient(config);
   let createdPool: ReturnType<typeof readFeedbackBonusPoolCreated> | null = null;
-  for (const hash of params.transactionHashes) {
-    const receipt = await dependencies.waitForSuccessfulReceipt(publicClient, hash);
+  const receipts = await Promise.all(
+    params.transactionHashes.map(hash => dependencies.waitForSuccessfulReceipt(publicClient, hash)),
+  );
+  for (const receipt of receipts) {
     createdPool = readFeedbackBonusPoolCreated(receipt, config.feedbackBonusEscrowAddress) ?? createdPool;
   }
   if (!createdPool) {
@@ -3671,8 +3679,10 @@ async function repairSubmittedFeedbackBonusReceipt(params: {
   }
   const publicClient = params.dependencies.createPublicQuestionClient(config);
   let createdPool: ReturnType<typeof readFeedbackBonusPoolCreated> | null = null;
-  for (const hash of transactionHashes) {
-    const receipt = await params.dependencies.waitForSuccessfulReceipt(publicClient, hash);
+  const receipts = await Promise.all(
+    transactionHashes.map(hash => params.dependencies.waitForSuccessfulReceipt(publicClient, hash)),
+  );
+  for (const receipt of receipts) {
     createdPool = readFeedbackBonusPoolCreated(receipt, config.feedbackBonusEscrowAddress) ?? createdPool;
   }
   if (!createdPool) {
@@ -3725,8 +3735,10 @@ export async function confirmAgentWalletQuestionSubmissionRequest(params: {
   const submittedContents: SubmittedQuestionContent[] = [];
   const submittedDetails: SubmittedQuestionDetails[] = [];
 
-  for (const hash of params.transactionHashes) {
-    const receipt = await dependencies.waitForSuccessfulReceipt(publicClient, hash);
+  const receipts = await Promise.all(
+    params.transactionHashes.map(hash => dependencies.waitForSuccessfulReceipt(publicClient, hash)),
+  );
+  for (const receipt of receipts) {
     const result = readSubmissionResult(receipt, config.contentRegistryAddress, mediaValidatorAddress);
     bundleContentLinks.push(...result.bundleContentLinks);
     submittedContents.push(...result.submittedContents);

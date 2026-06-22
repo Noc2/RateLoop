@@ -398,8 +398,12 @@ export async function POST(request: NextRequest) {
   const imageProofs = new Map<string, ImageAttachmentProof>();
   const metadataProofs = new Map<string, QuestionMetadataProof>();
   const submissionProofs = new Map<string, ContentSubmissionProof>();
-  for (const transactionHash of transactionHashes) {
-    const receipt = await context.publicClient.getTransactionReceipt({ hash: transactionHash }).catch(() => null);
+  const receipts = await Promise.all(
+    transactionHashes.map(transactionHash =>
+      context.publicClient.getTransactionReceipt({ hash: transactionHash }).catch(() => null),
+    ),
+  );
+  for (const receipt of receipts) {
     if (!receipt || receipt.status !== "success") continue;
     const receiptProofs = collectDetailsProofsFromReceiptLogs({
       contentRegistryAddress: context.contentRegistryAddress,
