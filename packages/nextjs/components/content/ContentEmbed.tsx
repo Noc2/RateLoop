@@ -104,7 +104,8 @@ export function ContentEmbed({
 
   if (isUploadedImageFetchUrl(url)) {
     const imageAlt = title || "Question media";
-    const imageClassName = `h-full w-full ${imageFit === "contain" ? "object-contain" : "object-cover"}`;
+    const imageClassName =
+      imageFit === "contain" ? "block h-auto w-full object-contain" : "block h-full w-full object-cover";
     const feedImageUrl = withImageAttachmentVariantUrl(url, "feed");
     const fullImageUrl = withImageAttachmentVariantUrl(url, "full");
 

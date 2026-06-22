@@ -244,14 +244,17 @@ export const FeedVoteCard = memo(function FeedVoteCard({
   const useCompactCard = isLaptopCompact || isMobileViewport;
   const useCompactEmbed = isMobileViewport;
   const usesIntrinsicMediaHeight = platformType === "youtube";
+  const usesNaturalImageHeight = platformType === "image";
   const flushMediaEdges = platformType === "image";
-  const mediaHeightClassName = usesIntrinsicMediaHeight
+  const mediaHeightClassName = usesNaturalImageHeight
     ? "w-full"
-    : isMobileViewport
-      ? "w-full min-h-[14rem] max-h-[46svh] flex-1"
-      : isLaptopCompact
-        ? "w-full h-[clamp(18rem,50vh,24rem)]"
-        : "w-full h-[clamp(20rem,56vh,32rem)]";
+    : usesIntrinsicMediaHeight
+      ? "w-full"
+      : isMobileViewport
+        ? "w-full min-h-[14rem] max-h-[46svh] flex-1"
+        : isLaptopCompact
+          ? "w-full h-[clamp(18rem,50vh,24rem)]"
+          : "w-full h-[clamp(20rem,56vh,32rem)]";
   const imageContextClickOpensExternally = platformType === "image";
   const contentIntentEnabled = Boolean(item.url) && platformType !== "youtube" && !imageContextClickOpensExternally;
 
