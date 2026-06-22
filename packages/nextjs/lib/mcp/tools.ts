@@ -138,6 +138,7 @@ import {
   reserveMcpAgentBudget,
   updateMcpBudgetReservation,
 } from "~~/lib/mcp/budget";
+import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 import { buildQuestionSubmissionKey } from "~~/lib/questionSubmissionCommitment";
 import { buildAppRelativeUrl, resolveRequestAppBaseUrl } from "~~/lib/url/appRelative";
 import { resolveRoundVoteRuntime } from "~~/lib/vote/roundVoteRuntime";
@@ -173,6 +174,7 @@ import {
 } from "~~/lib/x402/questionSubmission";
 import {
   type PonderContentItem,
+  type PonderDeploymentOptions,
   type PonderRaterParticipationStatusResponse,
   type PonderVoteItem,
   ponderApi,
@@ -236,7 +238,7 @@ function getMcpToolDependencies(): McpToolDependencies {
       mcpToolTestOverrides?.confirmFeedbackBonusQuestionSubmissionRequest ??
       confirmFeedbackBonusQuestionSubmissionRequest,
     enqueueAgentCallbackEvent: mcpToolTestOverrides?.enqueueAgentCallbackEvent ?? enqueueAgentCallbackEvent,
-    getAllVotes: mcpToolTestOverrides?.getAllVotes ?? (params => ponderApi.getAllVotes(params)),
+    getAllVotes: mcpToolTestOverrides?.getAllVotes ?? ((params, options) => ponderApi.getAllVotes(params, options)),
     getContentById: mcpToolTestOverrides?.getContentById ?? ponderApi.getContentById,
     getRaterParticipationStatus:
       mcpToolTestOverrides?.getRaterParticipationStatus ?? ponderApi.getRaterParticipationStatus,
@@ -1286,6 +1288,27 @@ function parseChainId(value: unknown): number | null {
   return parsed;
 }
 
+function resolvePonderDeploymentOptionsForChainId(
+  chainId: number | null | undefined,
+): PonderDeploymentOptions | undefined {
+  if (typeof chainId !== "number") return undefined;
+  const deployment = resolveProtocolDeploymentScope(chainId);
+  if (!deployment) {
+    throw new McpToolError("Ponder deployment is not configured for the requested chain.", 503);
+  }
+  return {
+    chainId,
+    deploymentKey: deployment.deploymentKey,
+  };
+}
+
+function resolvePonderDeploymentOptionsFromArgs(
+  args: JsonObject,
+  fallbackChainId?: number | null,
+): PonderDeploymentOptions | undefined {
+  return resolvePonderDeploymentOptionsForChainId(parseChainId(args.chainId) ?? fallbackChainId ?? null);
+}
+
 function parseRatingContentId(value: unknown): bigint {
   const rawValue =
     typeof value === "number" || typeof value === "bigint" || typeof value === "string" ? String(value).trim() : "";
@@ -1664,8 +1687,14 @@ async function acceptConfidentialityTerms(args: JsonObject, agent?: McpAgentAuth
     typeof args.termsVersion === "string" && args.termsVersion.trim()
       ? args.termsVersion.trim()
       : CONFIDENTIALITY_TERMS_VERSION;
-  const contentResponse = await dependencies.getContentById(contentId.toString());
+  const deploymentOptions = resolvePonderDeploymentOptionsFromArgs(args);
+  const contentResponse = await dependencies.getContentById(contentId.toString(), deploymentOptions);
   const content = contentResponse.content;
+  const confidentialityScope = {
+    chainId: content.chainId ?? deploymentOptions?.chainId,
+    contentRegistryAddress: content.contentRegistryAddress,
+    deploymentKey: content.deploymentKey,
+  };
   const contextAccess = contentContextAccess(content);
 
   if (contextAccess !== "gated") {
@@ -1681,6 +1710,7 @@ async function acceptConfidentialityTerms(args: JsonObject, agent?: McpAgentAuth
   }
 
   const payload = await buildConfidentialityTermsInput({
+    ...confidentialityScope,
     contentId: contentId.toString(),
     termsVersion,
     walletAddress,
@@ -1774,6 +1804,7 @@ async function acceptConfidentialityTerms(args: JsonObject, agent?: McpAgentAuth
     contextAccess: "gated",
     gatedContext: {
       ...(await buildGatedContextFetchInfo({
+        ...confidentialityScope,
         contentId: payload.contentId,
         requestUrl,
         signedReadSession,
@@ -1851,7 +1882,8 @@ async function buildRatingContext(args: JsonObject, agent?: McpAgentAuth, reques
   const walletAddress = parseRatingWalletAddress(args, agent);
   const contentId = parseRatingContentId(args.contentId);
   const context = resolveRatingChainContext(args.chainId);
-  const contentResponse = await dependencies.getContentById(contentId.toString());
+  const deploymentOptions = resolvePonderDeploymentOptionsForChainId(context.chainId);
+  const contentResponse = await dependencies.getContentById(contentId.toString(), deploymentOptions);
   const content = contentResponse.content;
   assertCanRateContent(content, walletAddress);
 
@@ -1915,7 +1947,8 @@ async function prepareRatingTransactions(args: JsonObject, agent?: McpAgentAuth)
   }
 
   const context = resolveRatingChainContext(args.chainId);
-  const contentResponse = await dependencies.getContentById(contentId.toString());
+  const deploymentOptions = resolvePonderDeploymentOptionsForChainId(context.chainId);
+  const contentResponse = await dependencies.getContentById(contentId.toString(), deploymentOptions);
   const content = contentResponse.content;
   assertCanRateContent(content, walletAddress);
 
@@ -2058,13 +2091,20 @@ async function getRatingStatusFromIndex(args: JsonObject, agent?: McpAgentAuth) 
   const dependencies = getMcpToolDependencies();
   const walletAddress = parseRatingWalletAddress(args, agent);
   const contentId = parseRatingContentId(args.contentId);
-  const chainId = parseChainId(args.chainId) ?? getPrimaryServerTargetNetwork()?.id ?? 0;
+  const chainId = parseChainId(args.chainId) ?? getPrimaryServerTargetNetwork()?.id ?? null;
+  if (chainId === null) {
+    throw new McpToolError("Rating chain is not configured.", 503);
+  }
+  const deploymentOptions = resolvePonderDeploymentOptionsForChainId(chainId);
   const roundId = args.roundId !== undefined ? parseRatingBigInt(args.roundId, "roundId") : null;
-  const votes = await dependencies.getAllVotes({
-    contentId: contentId.toString(),
-    voter: walletAddress,
-    ...(roundId !== null ? { roundId: roundId.toString() } : {}),
-  });
+  const votes = await dependencies.getAllVotes(
+    {
+      contentId: contentId.toString(),
+      voter: walletAddress,
+      ...(roundId !== null ? { roundId: roundId.toString() } : {}),
+    },
+    deploymentOptions,
+  );
   const vote = votes.find(
     item =>
       String(item.contentId) === contentId.toString() &&
@@ -3136,6 +3176,7 @@ function buildPendingQuestionResultPackage(params: { failed: boolean; operation:
 
 async function loadBountyEligibleVotes(params: {
   content: PonderContentItem;
+  deploymentOptions?: PonderDeploymentOptions;
   dependencies: McpToolDependencies;
   latestRound: ReturnType<typeof latestRoundFromContentResponse>;
 }): Promise<PonderVoteItem[] | null> {
@@ -3144,10 +3185,13 @@ async function loadBountyEligibleVotes(params: {
 
   let votes: PonderVoteItem[];
   try {
-    votes = await params.dependencies.getAllVotes({
-      contentId: params.content.id,
-      roundId: String(params.latestRound.roundId),
-    });
+    votes = await params.dependencies.getAllVotes(
+      {
+        contentId: params.content.id,
+        roundId: String(params.latestRound.roundId),
+      },
+      params.deploymentOptions,
+    );
   } catch {
     return null;
   }
@@ -3159,7 +3203,7 @@ async function loadBountyEligibleVotes(params: {
   await Promise.all(
     raterAddresses.map(async address => {
       try {
-        statuses.set(address, await params.dependencies.getRaterParticipationStatus(address));
+        statuses.set(address, await params.dependencies.getRaterParticipationStatus(address, params.deploymentOptions));
       } catch {
         // Missing status data should not make an agent result fail; it simply makes the eligible-only view conservative.
       }
@@ -3177,6 +3221,7 @@ async function buildQuestionResultForRecord(
 ) {
   const dependencies = getMcpToolDependencies();
   const directContentId = typeof args.contentId === "string" ? args.contentId.trim() : "";
+  const deploymentOptions = resolvePonderDeploymentOptionsFromArgs(args, record?.chainId ?? null);
   const operation = normalizeMcpQuestionBody(x402QuestionSubmissionRecordBody(record));
   const operationContentIds =
     operation && typeof operation === "object" && Array.isArray((operation as JsonObject).contentIds)
@@ -3206,15 +3251,24 @@ async function buildQuestionResultForRecord(
     });
   }
 
-  const response = await dependencies.getContentById(contentId, { includeTargetAudience: true });
+  const response = await dependencies.getContentById(contentId, {
+    ...deploymentOptions,
+    includeTargetAudience: true,
+  });
   const latestRound = latestRoundFromContentResponse(response);
   const feedbackContext = buildContentFeedbackRoundContext(
     Array.isArray(response.rounds) ? response.rounds : [],
     response.content.openRound?.roundId ?? null,
   );
-  const feedback = await listContentFeedback({ contentId, context: feedbackContext });
+  const feedback = await listContentFeedback({
+    chainId: deploymentOptions?.chainId ?? undefined,
+    contentId,
+    context: feedbackContext,
+    deploymentKey: deploymentOptions?.deploymentKey ?? undefined,
+  });
   const bountyEligibleVotes = await loadBountyEligibleVotes({
     content: response.content,
+    deploymentOptions,
     dependencies,
     latestRound,
   });
@@ -3501,7 +3555,10 @@ export async function callPublicRateLoopMcpTool(params: {
       let latestRoundState: number | null = null;
       if (record?.contentId) {
         try {
-          const contentResponse = await dependencies.getContentById(record.contentId);
+          const contentResponse = await dependencies.getContentById(
+            record.contentId,
+            resolvePonderDeploymentOptionsForChainId(record.chainId),
+          );
           const rawLatestRoundState = latestRoundFromContentResponse(contentResponse)?.state;
           latestRoundState =
             typeof rawLatestRoundState === "number" && Number.isFinite(rawLatestRoundState)
@@ -3833,7 +3890,10 @@ export async function callRateLoopMcpTool(params: {
       let latestRoundState: number | null = null;
       if (record?.contentId) {
         try {
-          const contentResponse = await dependencies.getContentById(record.contentId);
+          const contentResponse = await dependencies.getContentById(
+            record.contentId,
+            resolvePonderDeploymentOptionsForChainId(record.chainId),
+          );
           const rawLatestRoundState = latestRoundFromContentResponse(contentResponse)?.state;
           latestRoundState =
             typeof rawLatestRoundState === "number" && Number.isFinite(rawLatestRoundState)

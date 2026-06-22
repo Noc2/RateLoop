@@ -7,6 +7,7 @@ import { listAgentCallbackEventsByEventIdPrefix } from "~~/lib/agent-callbacks/e
 import { getAgentPublicQuestionUrl } from "~~/lib/agent-callbacks/payload";
 import { type AgentLiveAskGuidance, buildAgentLiveAskGuidance } from "~~/lib/agent/liveAskGuidance";
 import { dbClient } from "~~/lib/db";
+import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 import {
   type X402QuestionSubmissionRecord,
   getX402QuestionSubmissionByOperationKey,
@@ -182,10 +183,15 @@ async function listAuditRecords(params: McpAskAuditFilters & { operationKey?: `0
   return result.rows.map(row => rowToAuditRecord(row as QueryRow)).filter((row): row is McpAskAuditRecord => !!row);
 }
 
-async function loadLiveAskGuidance(contentId: string | null): Promise<AgentLiveAskGuidance | null> {
+async function loadLiveAskGuidance(contentId: string | null, chainId: number): Promise<AgentLiveAskGuidance | null> {
   if (!contentId) return null;
+  const deployment = resolveProtocolDeploymentScope(chainId);
+  if (!deployment) return null;
   try {
-    const response = await ponderApi.getContentById(contentId);
+    const response = await ponderApi.getContentById(contentId, {
+      chainId,
+      deploymentKey: deployment.deploymentKey,
+    });
     return buildAgentLiveAskGuidance({ content: response.content });
   } catch (error) {
     console.error("[agent-audits] live ask guidance unavailable", error);
@@ -222,7 +228,7 @@ async function buildAuditDetails(
     contentId,
     createdAt: reservation.createdAt.toISOString(),
     error: submission?.error ?? reservation.error,
-    liveAskGuidance: await loadLiveAskGuidance(contentId),
+    liveAskGuidance: await loadLiveAskGuidance(contentId, reservation.chainId),
     operationKey: reservation.operationKey,
     paymentAmount: reservation.paymentAmount,
     payloadHash: reservation.payloadHash,

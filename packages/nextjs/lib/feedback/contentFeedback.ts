@@ -1200,9 +1200,14 @@ export async function listContentFeedback(params: {
   viewerAddress?: `0x${string}` | null;
   awarderAddress?: `0x${string}` | null;
 }): Promise<ContentFeedbackListResult> {
-  const deployment = requireContentFeedbackDeploymentScope(params.chainId);
-  const deploymentKey = params.deploymentKey ?? deployment.deploymentKey;
-  const chainId = params.chainId ?? deployment.chainId;
+  const deployment = params.deploymentKey
+    ? resolveContentFeedbackDeploymentScope(params.chainId)
+    : requireContentFeedbackDeploymentScope(params.chainId);
+  const deploymentKey = params.deploymentKey ?? deployment?.deploymentKey;
+  const chainId = params.chainId ?? deployment?.chainId;
+  if (!deploymentKey || typeof chainId !== "number") {
+    throw new ContentFeedbackDeploymentUnavailableError();
+  }
   let rows: FeedbackRow[];
   let publicCount = 0;
   try {

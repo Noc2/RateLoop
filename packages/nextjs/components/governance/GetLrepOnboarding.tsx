@@ -7,6 +7,8 @@ import { GradientActionInner, getGradientActionClassName } from "~~/components/s
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import { RATE_ROUTE, SETTINGS_ROUTE } from "~~/constants/routes";
 import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
+import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
+import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 import { type PonderRaterParticipationStatusResponse, ponderApi } from "~~/services/ponder/client";
 
 type GetLrepOnboardingProps = {
@@ -76,9 +78,15 @@ function ActionStat({
 }
 
 export function GetLrepOnboarding({ address }: GetLrepOnboardingProps) {
+  const { targetNetwork } = useTargetNetwork();
+  const deployment = resolveProtocolDeploymentScope(targetNetwork.id);
   const { data: rewardStatus, isLoading: rewardStatusLoading } = useQuery({
-    queryKey: ["get-lrep-onboarding", address],
-    queryFn: () => ponderApi.getRaterParticipationStatus(address),
+    queryKey: ["get-lrep-onboarding", targetNetwork.id, deployment?.deploymentKey ?? null, address],
+    queryFn: () =>
+      ponderApi.getRaterParticipationStatus(address, {
+        chainId: targetNetwork.id,
+        deploymentKey: deployment?.deploymentKey,
+      }),
     staleTime: 15_000,
   });
 

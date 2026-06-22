@@ -108,6 +108,13 @@ test("shouldBypassPonderAvailabilityPreflightForConfig only bypasses local E2E l
   );
 });
 
+test("ponderApi rejects explicit unconfigured chain ids instead of falling back to the default deployment", async () => {
+  await assert.rejects(
+    () => ponderApi.getContent(undefined, { chainId: 999_999 }),
+    /Ponder deployment is not configured for chain 999999/,
+  );
+});
+
 test("isPonderAvailable proxies browser health checks through Next", async () => {
   const originalFetch = globalThis.fetch;
   const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
@@ -896,7 +903,7 @@ test("ponderApi.getAllFollows paginates the full public follow set", async () =>
   assert.match(dataUrls[1] ?? "", /\/follows\/0x1111111111111111111111111111111111111111\?limit=200&offset=200$/);
 });
 
-test("ponder social and profile reads preflight explicit deployment keys", async () => {
+test("ponder scoped reads preflight explicit deployment keys", async () => {
   const originalFetch = globalThis.fetch;
   const requestedUrls: string[] = [];
   assert.ok(BASE_SEPOLIA_PONDER_DEPLOYMENT);
@@ -911,6 +918,30 @@ test("ponder social and profile reads preflight explicit deployment keys", async
     const preflightResponse = healthyPonderPreflightResponseForDeployment(url, BASE_SEPOLIA_PONDER_DEPLOYMENT);
     if (preflightResponse) return preflightResponse;
 
+    if (url.includes("/category-popularity")) {
+      return new Response(JSON.stringify({ "1": 3 }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    if (url.includes("/categories")) {
+      return new Response(JSON.stringify({ items: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    if (url.includes("/accuracy-leaderboard")) {
+      return new Response(JSON.stringify({ items: [], window: "30d", startsAt: null, endsAt: null }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    if (url.includes("/earnings-leaderboard")) {
+      return new Response(JSON.stringify({ items: [], window: "30d", startsAt: null, endsAt: null }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
     if (url.includes("/profiles")) {
       return new Response(JSON.stringify({ "0x1111111111111111111111111111111111111111": { name: "Alice" } }), {
         status: 200,
@@ -969,6 +1000,8 @@ test("ponder social and profile reads preflight explicit deployment keys", async
 
   try {
     invalidatePonderCache({ clearLastKnownGood: true });
+    await ponderApi.getCategories(deploymentOptions);
+    await ponderApi.getCategoryPopularity(deploymentOptions);
     await ponderApi.getProfiles(["0x1111111111111111111111111111111111111111"], deploymentOptions);
     await ponderApi.getProfile("0x1111111111111111111111111111111111111111", deploymentOptions);
     await ponderApi.getFollows("0x1111111111111111111111111111111111111111", { limit: "5" }, deploymentOptions);
@@ -980,6 +1013,8 @@ test("ponder social and profile reads preflight explicit deployment keys", async
       deploymentOptions,
     );
     await ponderApi.getFrontend("0x1111111111111111111111111111111111111111", deploymentOptions);
+    await ponderApi.getAccuracyLeaderboard({ includeReputation: "1" }, deploymentOptions);
+    await ponderApi.getEarningsLeaderboard({ asset: "all", source: "all" }, deploymentOptions);
     await ponderApi.getVoterAccuracy("0x1111111111111111111111111111111111111111", deploymentOptions);
     await ponderApi.getRaterParticipationStatus("0x1111111111111111111111111111111111111111", deploymentOptions);
   } finally {
@@ -988,12 +1023,16 @@ test("ponder social and profile reads preflight explicit deployment keys", async
   }
 
   const dataUrls = requestedUrls.filter(url => !isPonderPreflightUrl(url));
+  assert.ok(dataUrls.some(url => url.includes("/categories")));
+  assert.ok(dataUrls.some(url => url.includes("/category-popularity")));
   assert.ok(dataUrls.some(url => url.includes("/profiles?addresses=")));
   assert.ok(dataUrls.some(url => url.includes("/profile/0x1111111111111111111111111111111111111111")));
   assert.ok(dataUrls.some(url => url.includes("/follows/0x1111111111111111111111111111111111111111")));
   assert.ok(dataUrls.some(url => url.includes("/followers/0x1111111111111111111111111111111111111111")));
   assert.ok(dataUrls.some(url => url.includes("/discover-signals/0x1111111111111111111111111111111111111111")));
   assert.ok(dataUrls.some(url => url.includes("/frontend/0x1111111111111111111111111111111111111111")));
+  assert.ok(dataUrls.some(url => url.includes("/accuracy-leaderboard?includeReputation=1")));
+  assert.ok(dataUrls.some(url => url.includes("/earnings-leaderboard?asset=all&source=all")));
   assert.ok(dataUrls.some(url => url.includes("/voter-accuracy/0x1111111111111111111111111111111111111111")));
   assert.ok(
     dataUrls.some(url => url.includes("/rater-participation-status/0x1111111111111111111111111111111111111111")),

@@ -12,6 +12,7 @@ import { useCategoryRegistry } from "~~/hooks/useCategoryRegistry";
 import { useFollowedProfiles } from "~~/hooks/useFollowedProfiles";
 import { useRateLoopConnectModal } from "~~/hooks/useRateLoopConnectModal";
 import { FOLLOWED_CURATOR_TOAST_ID } from "~~/lib/notifications/followedActivity";
+import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 import { formatUsdAmount } from "~~/lib/questionRewardPools";
 import { formatLrepAmount } from "~~/lib/vote/voteIncentives";
 import {
@@ -34,6 +35,7 @@ type RaterTypeFilter = "" | "1" | "2" | "3" | "4";
 export function AccuracyLeaderboard() {
   const { address: connectedAddress } = useAccount();
   const { targetNetwork } = useTargetNetwork();
+  const deployment = useMemo(() => resolveProtocolDeploymentScope(targetNetwork.id), [targetNetwork.id]);
   const { openConnectModal } = useRateLoopConnectModal();
   const { categories } = useCategoryRegistry();
   const { followedWallets, toggleFollow, isPending: isFollowPending } = useFollowedProfiles(connectedAddress);
@@ -71,7 +73,10 @@ export function AccuracyLeaderboard() {
         if (sortBy === "signalScore") params.minSignalVotes = minVotes;
         if (categoryId) params.categoryId = categoryId;
         if (raterType) params.raterType = raterType;
-        const data = await ponderApi.getAccuracyLeaderboard(params);
+        const data = await ponderApi.getAccuracyLeaderboard(params, {
+          chainId: targetNetwork.id,
+          deploymentKey: deployment?.deploymentKey,
+        });
         if (!cancelled) setItems(data.items);
       } catch (err) {
         console.error("Failed to fetch accuracy leaderboard:", err);
@@ -87,7 +92,7 @@ export function AccuracyLeaderboard() {
     return () => {
       cancelled = true;
     };
-  }, [mode, sortBy, window, minVotes, categoryId, raterType]);
+  }, [mode, sortBy, window, minVotes, categoryId, raterType, targetNetwork.id, deployment?.deploymentKey]);
 
   useEffect(() => {
     if (mode !== "earnings") return;
@@ -96,12 +101,18 @@ export function AccuracyLeaderboard() {
       setEarningsLoading(true);
       setEarningsFetchError(false);
       try {
-        const data = await ponderApi.getEarningsLeaderboard({
-          window,
-          asset: earningsAsset,
-          source: earningsSource,
-          limit: "50",
-        });
+        const data = await ponderApi.getEarningsLeaderboard(
+          {
+            window,
+            asset: earningsAsset,
+            source: earningsSource,
+            limit: "50",
+          },
+          {
+            chainId: targetNetwork.id,
+            deploymentKey: deployment?.deploymentKey,
+          },
+        );
         if (!cancelled) setEarningsItems(data.items);
       } catch (err) {
         console.error("Failed to fetch earnings leaderboard:", err);
@@ -117,7 +128,7 @@ export function AccuracyLeaderboard() {
     return () => {
       cancelled = true;
     };
-  }, [mode, window, earningsAsset, earningsSource]);
+  }, [mode, window, earningsAsset, earningsSource, targetNetwork.id, deployment?.deploymentKey]);
 
   const truncateAddress = (addr: string) => `${addr.slice(0, 6)}...${addr.slice(-4)}`;
   const formatRate = (rate: number) => `${(rate * 100).toFixed(1)}%`;

@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { after, before, beforeEach, test } from "node:test";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testMemory";
+import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 
 const env = process.env as Record<string, string | undefined>;
 const originalDatabaseUrl = env.DATABASE_URL;
@@ -138,6 +139,7 @@ test("rateloop_get_result requires contentId when an operation maps to multiple 
 test("rateloop_get_result accepts an explicit bundle contentId without bypassing operation lookup", async () => {
   const operationKey = `0x${"7".repeat(64)}` as const;
   const now = new Date("2026-04-23T12:00:00.000Z");
+  let contentLookupOptions: unknown;
 
   await dbClient.execute({
     args: [
@@ -212,8 +214,9 @@ test("rateloop_get_result accepts an explicit bundle contentId without bypassing
   });
 
   __setMcpToolTestOverridesForTests({
-    getContentById: async contentId =>
-      ({
+    getContentById: async (contentId, options) => {
+      contentLookupOptions = options;
+      return {
         audienceContext: null,
         content: {
           categoryId: "5",
@@ -238,7 +241,8 @@ test("rateloop_get_result accepts an explicit bundle contentId without bypassing
         },
         ratings: [],
         rounds: [],
-      }) as never,
+      } as never;
+    },
   });
 
   const result = (await callRateLoopMcpTool({
@@ -258,6 +262,109 @@ test("rateloop_get_result accepts an explicit bundle contentId without bypassing
 
   assert.equal(result.publicUrl, "http://localhost:3000/rate?content=456");
   assert.deepEqual(result.operation?.contentIds, ["123", "456"]);
+  const expectedDeployment = resolveProtocolDeploymentScope(480);
+  assert.ok(expectedDeployment);
+  assert.deepEqual(contentLookupOptions, {
+    chainId: 480,
+    deploymentKey: expectedDeployment.deploymentKey,
+    includeTargetAudience: true,
+  });
+});
+
+test("rateloop_get_result rejects contentId that does not belong to the operation", async () => {
+  const operationKey = `0x${"a".repeat(64)}` as const;
+  const now = new Date("2026-04-23T12:00:00.000Z");
+
+  await dbClient.execute({
+    args: [
+      operationKey,
+      AGENT.id,
+      "bundle-result-mismatch",
+      "payload-hash",
+      480,
+      "5",
+      "1000000",
+      "submitted",
+      "42",
+      null,
+      now,
+      now,
+    ],
+    sql: `
+      INSERT INTO mcp_agent_budget_reservations (
+        operation_key,
+        agent_id,
+        client_request_id,
+        payload_hash,
+        chain_id,
+        category_id,
+        payment_amount,
+        status,
+        content_id,
+        error,
+        created_at,
+        updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `,
+  });
+
+  await dbClient.execute({
+    args: [
+      operationKey,
+      "bundle-result-mismatch",
+      "payload-hash",
+      480,
+      "0x0000000000000000000000000000000000000001",
+      "1000000",
+      "1000000",
+      1,
+      "submitted",
+      "42",
+      JSON.stringify(["42"]),
+      now,
+      now,
+      now,
+    ],
+    sql: `
+      INSERT INTO x402_question_submissions (
+        operation_key,
+        client_request_id,
+        payload_hash,
+        chain_id,
+        payment_asset,
+        payment_amount,
+        bounty_amount,
+        question_count,
+        status,
+        content_id,
+        content_ids,
+        created_at,
+        updated_at,
+        submitted_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `,
+  });
+
+  __setMcpToolTestOverridesForTests({
+    getContentById: async () => {
+      throw new Error("content lookup should not run for mismatched operation contentId");
+    },
+  });
+
+  await assert.rejects(
+    () =>
+      callRateLoopMcpTool({
+        agent: AGENT,
+        arguments: {
+          contentId: "99",
+          operationKey,
+        },
+        name: "rateloop_get_result",
+      }),
+    /contentId does not belong to this ask/i,
+  );
 });
 
 test("rateloop_get_result returns schema-shaped pending packages before content exists", async () => {

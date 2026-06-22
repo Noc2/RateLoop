@@ -293,7 +293,7 @@ type ExpectedPonderDeploymentScope = {
   deploymentKey: string;
 };
 type ExpectedContentDeploymentScope = NonNullable<ReturnType<typeof resolveContentDeploymentScope>>;
-type PonderDeploymentOptions = {
+export type PonderDeploymentOptions = {
   chainId?: number | null;
   deploymentKey?: string | null;
 };
@@ -344,11 +344,18 @@ function withContentDeploymentScopes<T extends PonderContentItem>(
 }
 
 function getExpectedPonderDeploymentScope(options?: PonderDeploymentOptions): ExpectedPonderDeploymentScope | null {
-  const chainDeployment = typeof options?.chainId === "number" ? resolveProtocolDeploymentScope(options.chainId) : null;
   const explicitDeploymentKey = normalizeDeploymentKey(options?.deploymentKey);
-  return explicitDeploymentKey
-    ? { deploymentKey: explicitDeploymentKey }
-    : (chainDeployment ?? getDefaultExpectedPonderDeploymentScope());
+  if (explicitDeploymentKey) {
+    return { deploymentKey: explicitDeploymentKey };
+  }
+  if (typeof options?.chainId === "number") {
+    const chainDeployment = resolveProtocolDeploymentScope(options.chainId);
+    if (!chainDeployment) {
+      throw new Error(`Ponder deployment is not configured for chain ${options.chainId}.`);
+    }
+    return chainDeployment;
+  }
+  return getDefaultExpectedPonderDeploymentScope();
 }
 
 function isPonderDeploymentMetadata(value: unknown): value is PonderDeploymentMetadata {
@@ -1777,12 +1784,18 @@ export const ponderApi = {
     );
   },
 
-  getCategories() {
-    return ponderGet<{ items: PonderCategory[] }>("/categories");
+  getCategories(options?: PonderDeploymentOptions) {
+    const deployment = getExpectedPonderDeploymentScope(options);
+    return ponderGet<{ items: PonderCategory[] }>("/categories", undefined, {
+      expectedDeploymentKey: deployment?.deploymentKey,
+    });
   },
 
-  getCategoryPopularity() {
-    return ponderGet<Record<string, number>>("/category-popularity");
+  getCategoryPopularity(options?: PonderDeploymentOptions) {
+    const deployment = getExpectedPonderDeploymentScope(options);
+    return ponderGet<Record<string, number>>("/category-popularity", undefined, {
+      expectedDeploymentKey: deployment?.deploymentKey,
+    });
   },
 
   getProfiles(addresses: string[], options?: PonderDeploymentOptions) {
@@ -1955,28 +1968,40 @@ export const ponderApi = {
     }>("/stats");
   },
 
-  getAccuracyLeaderboard(params?: {
-    categoryId?: string;
-    sortBy?: string;
-    window?: string;
-    minVotes?: string;
-    minSignalVotes?: string;
-    includeReputation?: string;
-    raterType?: string;
-    limit?: string;
-    offset?: string;
-  }) {
-    return ponderGet<PonderAccuracyLeaderboardResponse>("/accuracy-leaderboard", params);
+  getAccuracyLeaderboard(
+    params?: {
+      categoryId?: string;
+      sortBy?: string;
+      window?: string;
+      minVotes?: string;
+      minSignalVotes?: string;
+      includeReputation?: string;
+      raterType?: string;
+      limit?: string;
+      offset?: string;
+    },
+    options?: PonderDeploymentOptions,
+  ) {
+    const deployment = getExpectedPonderDeploymentScope(options);
+    return ponderGet<PonderAccuracyLeaderboardResponse>("/accuracy-leaderboard", params, {
+      expectedDeploymentKey: deployment?.deploymentKey,
+    });
   },
 
-  getEarningsLeaderboard(params?: {
-    window?: string;
-    asset?: PonderEarningsLeaderboardAsset;
-    source?: PonderEarningsLeaderboardSource;
-    limit?: string;
-    offset?: string;
-  }) {
-    return ponderGet<PonderEarningsLeaderboardResponse>("/earnings-leaderboard", params);
+  getEarningsLeaderboard(
+    params?: {
+      window?: string;
+      asset?: PonderEarningsLeaderboardAsset;
+      source?: PonderEarningsLeaderboardSource;
+      limit?: string;
+      offset?: string;
+    },
+    options?: PonderDeploymentOptions,
+  ) {
+    const deployment = getExpectedPonderDeploymentScope(options);
+    return ponderGet<PonderEarningsLeaderboardResponse>("/earnings-leaderboard", params, {
+      expectedDeploymentKey: deployment?.deploymentKey,
+    });
   },
 
   getVoterAccuracy(address: string, options?: PonderDeploymentOptions) {

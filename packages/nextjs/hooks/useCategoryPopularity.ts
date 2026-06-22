@@ -2,9 +2,11 @@
 
 import { useMemo } from "react";
 import { useScaffoldEventHistory } from "~~/hooks/scaffold-eth";
+import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import type { ContentItem } from "~~/hooks/useContentFeed";
 import { usePonderAvailability } from "~~/hooks/usePonderAvailability";
 import { usePonderQuery } from "~~/hooks/usePonderQuery";
+import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 import { ponderApi } from "~~/services/ponder/client";
 import { publicEnv } from "~~/utils/env/public";
 
@@ -13,8 +15,11 @@ import { publicEnv } from "~~/utils/env/public";
  * Uses Ponder API when available, falls back to scanning VoteCommitted events.
  */
 export function useCategoryPopularity(feed: ContentItem[]): Map<string, number> {
+  const { targetNetwork } = useTargetNetwork();
+  const deployment = useMemo(() => resolveProtocolDeploymentScope(targetNetwork.id), [targetNetwork.id]);
+  const availabilityDeploymentKey = deployment?.deploymentKey ?? `missing:${targetNetwork.id}`;
   const rpcFallbackEnabled = publicEnv.rpcFallbackEnabled;
-  const ponderAvailable = usePonderAvailability(rpcFallbackEnabled);
+  const ponderAvailable = usePonderAvailability(rpcFallbackEnabled, availabilityDeploymentKey);
   const rpcFallbackActive = rpcFallbackEnabled && ponderAvailable === false;
 
   // --- RPC fallback: scan VoteCommitted events ---
@@ -48,9 +53,13 @@ export function useCategoryPopularity(feed: ContentItem[]): Map<string, number> 
 
   // --- Ponder-first with RPC fallback ---
   const { data: result } = usePonderQuery({
-    queryKey: ["categoryPopularity"],
+    availabilityDeploymentKey,
+    queryKey: ["categoryPopularity", targetNetwork.id, availabilityDeploymentKey],
     ponderFn: async () => {
-      const popularity = await ponderApi.getCategoryPopularity();
+      const popularity = await ponderApi.getCategoryPopularity({
+        chainId: targetNetwork.id,
+        deploymentKey: deployment?.deploymentKey,
+      });
       const map = new Map<string, number>();
       for (const [id, count] of Object.entries(popularity)) {
         map.set(id, count);

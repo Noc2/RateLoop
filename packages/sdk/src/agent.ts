@@ -1828,20 +1828,25 @@ function agentResultUrl(
   config: NormalizedAgentConfig,
   params: QuestionStatusLookup & { contentId?: string | bigint },
 ) {
-  const contentId =
-    params.contentId === undefined ? "" : String(params.contentId).trim();
-  if (contentId) {
-    return new URL(
-      `./results/by-content/${encodeURIComponent(contentId)}`,
-      `${agentBaseUrl(config)}/`,
-    ).toString();
-  }
-
   const operationKey =
     typeof params.operationKey === "string" ? params.operationKey.trim() : "";
   if (operationKey) {
-    return new URL(
+    const url = new URL(
       `./results/${operationKey}`,
+      `${agentBaseUrl(config)}/`,
+    );
+    if (params.contentId !== undefined) {
+      const contentId = String(params.contentId).trim();
+      if (contentId) url.searchParams.set("contentId", contentId);
+    }
+    return url.toString();
+  }
+
+  const contentId =
+    params.contentId === undefined ? "" : String(params.contentId).trim();
+  if (contentId && (!params.chainId || !params.clientRequestId)) {
+    return new URL(
+      `./results/by-content/${encodeURIComponent(contentId)}`,
       `${agentBaseUrl(config)}/`,
     ).toString();
   }
@@ -1860,6 +1865,9 @@ function agentResultUrl(
   url.searchParams.set("clientRequestId", params.clientRequestId);
   if (params.walletAddress) {
     url.searchParams.set("walletAddress", params.walletAddress);
+  }
+  if (contentId) {
+    url.searchParams.set("contentId", contentId);
   }
   return url.toString();
 }

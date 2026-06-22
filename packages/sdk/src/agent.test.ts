@@ -1282,6 +1282,10 @@ test("authenticated status, result, and templates use direct agent HTTP endpoint
   });
   await agent.getResult({ chainId: 480, clientRequestId: "ask-http" });
   await agent.getResult({ contentId: "123" });
+  await agent.getResult({
+    contentId: "456",
+    operationKey: `0x${"88".repeat(32)}`,
+  });
   const templates = await agent.listResultTemplates();
 
   const callbackStatus:
@@ -1309,6 +1313,10 @@ test("authenticated status, result, and templates use direct agent HTTP endpoint
   );
   assert.equal(
     requestedUrls[3],
+    `https://rateloop.example/api/agent/results/0x${"88".repeat(32)}?contentId=456`,
+  );
+  assert.equal(
+    requestedUrls[4],
     "https://rateloop.example/api/agent/templates",
   );
   assert.equal(callbackStatus, "retrying");

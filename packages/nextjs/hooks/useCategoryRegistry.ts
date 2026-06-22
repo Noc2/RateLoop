@@ -5,7 +5,9 @@ import { CategoryRegistryAbi } from "@rateloop/contracts/abis";
 import { useReadContract, useReadContracts } from "wagmi";
 import { getSeededCategorySubcategories } from "~~/constants/categories";
 import { useDeployedContractInfo } from "~~/hooks/scaffold-eth";
+import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import { usePonderQuery } from "~~/hooks/usePonderQuery";
+import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 import { ponderApi } from "~~/services/ponder/client";
 
 export interface Category {
@@ -21,7 +23,10 @@ export interface Category {
  * Uses Ponder API when available, falls back to on-chain multicall.
  */
 export function useCategoryRegistry() {
+  const { targetNetwork } = useTargetNetwork();
   const { data: registryInfo } = useDeployedContractInfo({ contractName: "CategoryRegistry" });
+  const deployment = useMemo(() => resolveProtocolDeploymentScope(targetNetwork.id), [targetNetwork.id]);
+  const availabilityDeploymentKey = deployment?.deploymentKey ?? `missing:${targetNetwork.id}`;
 
   const {
     data: categoryIdsMeta,
@@ -99,9 +104,13 @@ export function useCategoryRegistry() {
 
   // --- Ponder-first with RPC fallback ---
   const { data: result, isLoading: ponderLoading } = usePonderQuery({
-    queryKey: ["categories"],
+    availabilityDeploymentKey,
+    queryKey: ["categories", targetNetwork.id, availabilityDeploymentKey],
     ponderFn: async () => {
-      const response = await ponderApi.getCategories();
+      const response = await ponderApi.getCategories({
+        chainId: targetNetwork.id,
+        deploymentKey: deployment?.deploymentKey,
+      });
       // Ponder doesn't have subcategories; RPC enrichment below fills them when available.
       return response.items.map(
         (cat): Category => ({
