@@ -70,6 +70,8 @@ type JsonRecord = Record<string, unknown>;
 type ChainScopedAddressOverrides = Partial<Record<number, Address>>;
 
 const KEYSTORE_VERSION = 3;
+const RESERVED_SUBMISSION_MIN_AGE_SECONDS = 1n;
+const RESERVATION_REVEAL_READY_TIMEOUT_MS = 30_000;
 const DEFAULT_SCRYPT_PARAMS = {
   dklen: 32,
   n: 1 << 15,
@@ -3707,6 +3709,54 @@ function summarizeReceipt(
   };
 }
 
+function isReserveSubmissionCall(call: RateLoopAgentWalletTransactionCall) {
+  return (
+    call.functionName === "reserveSubmission" ||
+    call.phase === "reserve_submission" ||
+    call.id === "reserve-submission"
+  );
+}
+
+function isReservationRevealCall(call: RateLoopAgentWalletTransactionCall) {
+  return (
+    call.phase === "submit_question" ||
+    call.id === "submit-question" ||
+    (typeof call.functionName === "string" &&
+      call.functionName.startsWith("submitQuestion"))
+  );
+}
+
+async function waitForLocalReservationRevealReady(params: {
+  config: LocalSignerConfig;
+  publicClient: Pick<ReturnType<typeof createPublicClient>, "getBlock">;
+  receipt: TransactionReceipt;
+}) {
+  const reserveBlock = await params.publicClient.getBlock({
+    blockNumber: params.receipt.blockNumber,
+  });
+  const revealReadyTimestamp =
+    reserveBlock.timestamp + RESERVED_SUBMISSION_MIN_AGE_SECONDS;
+  const pollMs = Math.max(50, params.config.pollingIntervalMs);
+  const deadline = Date.now() + RESERVATION_REVEAL_READY_TIMEOUT_MS;
+
+  for (;;) {
+    const latestBlock = await params.publicClient.getBlock({
+      blockTag: "latest",
+    });
+    if (latestBlock.timestamp >= revealReadyTimestamp) return;
+
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 0) {
+      throw new Error(
+        "Timed out waiting for the reserved submission reveal window.",
+      );
+    }
+    await new Promise((resolveWait) =>
+      setTimeout(resolveWait, Math.min(pollMs, remainingMs)),
+    );
+  }
+}
+
 async function executeTransactionPlan(params: {
   account: PrivateKeyAccount;
   calls: RateLoopAgentWalletTransactionCall[];
@@ -3723,8 +3773,18 @@ async function executeTransactionPlan(params: {
     transport,
   });
   const calls: LocalTransactionExecutionSummary["calls"] = [];
+  let latestReservationReceipt: TransactionReceipt | null = null;
 
   for (const [index, call] of params.calls.entries()) {
+    if (latestReservationReceipt && isReservationRevealCall(call)) {
+      await waitForLocalReservationRevealReady({
+        config: params.config,
+        publicClient,
+        receipt: latestReservationReceipt,
+      });
+      latestReservationReceipt = null;
+    }
+
     const to = normalizeAddress(call.to, `transactionPlan.calls[${index}].to`);
     const hash = await walletClient.sendTransaction({
       account: params.account,
@@ -3761,6 +3821,9 @@ async function executeTransactionPlan(params: {
     });
     if (receipt.status !== "success") {
       throw new Error(`transactionPlan.calls[${index}] reverted: ${hash}`);
+    }
+    if (isReserveSubmissionCall(call)) {
+      latestReservationReceipt = receipt;
     }
 
     calls.push({ hash, index, phase: call.phase, receipt: summary, to });

@@ -91,8 +91,6 @@ const ShareModal = dynamic(() => import("~~/components/submit/ShareModal").then(
   ssr: false,
 });
 
-const RESERVED_SUBMISSION_REVEAL_WAIT_MS = 3_000;
-
 type JsonRecord = Record<string, unknown>;
 
 type HandoffAsset = {
@@ -667,13 +665,7 @@ function shortAddress(value: string | null | undefined) {
 }
 
 function getPostCallDelayMs(call: NonNullable<HandoffTransactionPlan["calls"]>[number]) {
-  const waitAfterMs = Number.isFinite(call.waitAfterMs) ? Math.max(0, call.waitAfterMs ?? 0) : 0;
-  const isReserveSubmission =
-    call.functionName === "reserveSubmission" ||
-    call.phase === "reserve_submission" ||
-    call.id === "reserve-submission";
-
-  return isReserveSubmission ? Math.max(waitAfterMs, RESERVED_SUBMISSION_REVEAL_WAIT_MS) : waitAfterMs;
+  return Number.isFinite(call.waitAfterMs) ? Math.max(0, call.waitAfterMs ?? 0) : 0;
 }
 
 function readToken() {

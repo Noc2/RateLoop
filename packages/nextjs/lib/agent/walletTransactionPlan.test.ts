@@ -2,6 +2,8 @@ import {
   assertWalletTransactionPlanReceiptSucceeded,
   createWalletTransactionPlanExecutionSegments,
   isWalletSendCallsUnsupportedError,
+  isWalletTransactionPlanReservationRevealCall,
+  isWalletTransactionPlanReserveSubmissionCall,
   normalizeWalletTransactionPlanCalls,
   segmentRequiresAtomicWalletBatch,
   withWalletTransactionPlanStepTimeout,
@@ -27,17 +29,12 @@ test("createWalletTransactionPlanExecutionSegments batches adjacent calls withou
   );
 });
 
-test("createWalletTransactionPlanExecutionSegments isolates calls with post-call delays", () => {
-  const calls = normalizeWalletTransactionPlanCalls(
-    [
-      { data: "0x01", functionName: "reserveSubmission", to: TEST_ADDRESS },
-      { data: "0x02", to: TEST_ADDRESS },
-      { data: "0x03", to: TEST_ADDRESS },
-    ],
-    {
-      getPostCallDelayMs: call => (call.functionName === "reserveSubmission" ? 3_000 : 0),
-    },
-  );
+test("createWalletTransactionPlanExecutionSegments isolates reserve calls without post-call delays", () => {
+  const calls = normalizeWalletTransactionPlanCalls([
+    { data: "0x01", functionName: "reserveSubmission", to: TEST_ADDRESS },
+    { data: "0x02", to: TEST_ADDRESS },
+    { data: "0x03", functionName: "submitQuestionWithRewardAndRoundConfig", to: TEST_ADDRESS },
+  ]);
 
   const segments = createWalletTransactionPlanExecutionSegments(calls);
 
@@ -54,21 +51,27 @@ test("createWalletTransactionPlanExecutionSegments isolates calls with post-call
 
 test("segmentRequiresAtomicWalletBatch only gates batchable atomic-required segments", () => {
   const segments = createWalletTransactionPlanExecutionSegments(
-    normalizeWalletTransactionPlanCalls(
-      [
-        { data: "0x01", functionName: "reserveSubmission", to: TEST_ADDRESS },
-        { data: "0x02", to: TEST_ADDRESS },
-        { data: "0x03", to: TEST_ADDRESS },
-      ],
-      {
-        getPostCallDelayMs: call => (call.functionName === "reserveSubmission" ? 3_000 : 0),
-      },
-    ),
+    normalizeWalletTransactionPlanCalls([
+      { data: "0x01", functionName: "reserveSubmission", to: TEST_ADDRESS },
+      { data: "0x02", to: TEST_ADDRESS },
+      { data: "0x03", functionName: "submitQuestionWithRewardAndRoundConfig", to: TEST_ADDRESS },
+    ]),
   );
 
   assert.equal(segmentRequiresAtomicWalletBatch(segments[0]!, { requiresAtomicExecution: true }), false);
   assert.equal(segmentRequiresAtomicWalletBatch(segments[1]!, { requiresAtomicExecution: true }), true);
   assert.equal(segmentRequiresAtomicWalletBatch(segments[1]!, { requiresAtomicExecution: false }), false);
+});
+
+test("wallet transaction plan call classifiers recognize reservation phases", () => {
+  assert.equal(isWalletTransactionPlanReserveSubmissionCall({ functionName: "reserveSubmission" }), true);
+  assert.equal(isWalletTransactionPlanReserveSubmissionCall({ phase: "approve_usdc" }), false);
+  assert.equal(isWalletTransactionPlanReservationRevealCall({ phase: "submit_question" }), true);
+  assert.equal(isWalletTransactionPlanReservationRevealCall({ functionName: "submitQuestionBundleWithReward" }), true);
+  assert.equal(
+    isWalletTransactionPlanReservationRevealCall({ functionName: "createFeedbackBonusPoolWithAsset" }),
+    false,
+  );
 });
 
 test("normalizeWalletTransactionPlanCalls rejects nonzero value calls", () => {

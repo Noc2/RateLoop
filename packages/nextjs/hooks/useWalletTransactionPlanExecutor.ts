@@ -2,9 +2,9 @@
 
 import { useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import type { GetCallsStatusReturnType, Hex } from "viem";
+import type { GetCallsStatusReturnType, Hex, TransactionReceipt } from "viem";
 import { useAccount, useConfig, useSendCallsSync } from "wagmi";
-import { sendTransaction, waitForTransactionReceipt } from "wagmi/actions";
+import { getPublicClient, sendTransaction, waitForTransactionReceipt } from "wagmi/actions";
 import { getTransactionReceiptPollingInterval } from "~~/config/shared";
 import { refreshActiveWalletReadQueries } from "~~/hooks/useRefreshWalletBalances";
 import { useWalletExecutionCapabilities } from "~~/hooks/useWalletExecutionCapabilities";
@@ -15,11 +15,14 @@ import {
   assertWalletTransactionPlanReceiptSucceeded,
   createWalletTransactionPlanExecutionSegments,
   isWalletSendCallsUnsupportedError,
+  isWalletTransactionPlanReservationRevealCall,
+  isWalletTransactionPlanReserveSubmissionCall,
   normalizeWalletTransactionPlanCalls,
   segmentRequiresAtomicWalletBatch,
   walletTransactionPlanAtomicBatchRequiredError,
   withWalletTransactionPlanStepTimeout,
 } from "~~/lib/agent/walletTransactionPlan";
+import { waitForReservationRevealReady } from "~~/lib/submission/reservationRevealWait";
 import scaffoldConfig from "~~/scaffold.config";
 
 function delay(ms: number) {
@@ -68,7 +71,7 @@ export function useWalletTransactionPlanExecutor() {
         onCallConfirmed?: (params: { call: TCall; hash: Hex; index: number }) => void;
         onCallSent?: (params: { call: TCall; hash: Hex; index: number }) => void;
       },
-    ) => {
+    ): Promise<TransactionReceipt> => {
       const hash = await withWalletTransactionPlanStepTimeout(
         sendTransaction(wagmiConfig, {
           chainId: options.chainId,
@@ -90,6 +93,7 @@ export function useWalletTransactionPlanExecutor() {
       if (call.postCallDelayMs > 0) {
         await delay(call.postCallDelayMs);
       }
+      return receipt;
     },
     [wagmiConfig],
   );
@@ -109,12 +113,34 @@ export function useWalletTransactionPlanExecutor() {
         getPostCallDelayMs: options.getPostCallDelayMs,
       });
       const segments = createWalletTransactionPlanExecutionSegments(normalizedCalls);
+      let latestReservationReceipt: TransactionReceipt | null = null;
+
+      const waitForReservationRevealIfNeeded = async (call: NormalizedWalletTransactionPlanCall<TCall>) => {
+        if (!latestReservationReceipt || !isWalletTransactionPlanReservationRevealCall(call.call)) return;
+        const publicClient =
+          typeof options.chainId === "number" ? getPublicClient(wagmiConfig, { chainId: options.chainId }) : null;
+        if (!publicClient) {
+          await delay(1_000);
+          latestReservationReceipt = null;
+          return;
+        }
+        await waitForReservationRevealReady({
+          client: publicClient,
+          pollingIntervalMs: getTransactionStatusPollingInterval(options.chainId),
+          receipt: latestReservationReceipt,
+        });
+        latestReservationReceipt = null;
+      };
 
       for (const segment of segments) {
         const canBatchSegment =
           canUseAtomicWalletSendCalls && segment.batchable && typeof options.chainId === "number" && connector;
 
         if (canBatchSegment) {
+          const revealCall = segment.calls.find(call => isWalletTransactionPlanReservationRevealCall(call.call));
+          if (revealCall) {
+            await waitForReservationRevealIfNeeded(revealCall);
+          }
           try {
             const callsStatus = await withWalletTransactionPlanStepTimeout(
               sendCallsSyncAsync({
@@ -156,19 +182,31 @@ export function useWalletTransactionPlanExecutor() {
         }
 
         for (const call of segment.calls) {
-          await executeSequentialCall(call, {
+          await waitForReservationRevealIfNeeded(call);
+          const receipt = await executeSequentialCall(call, {
             chainId: options.chainId,
             hashes,
             onCallConfirmed: options.onCallConfirmed,
             onCallSent: options.onCallSent,
           });
+          if (isWalletTransactionPlanReserveSubmissionCall(call.call)) {
+            latestReservationReceipt = receipt;
+          }
         }
       }
 
       void refreshActiveWalletReadQueries(queryClient);
       return hashes;
     },
-    [address, canUseAtomicWalletSendCalls, connector, executeSequentialCall, queryClient, sendCallsSyncAsync],
+    [
+      address,
+      canUseAtomicWalletSendCalls,
+      connector,
+      executeSequentialCall,
+      queryClient,
+      sendCallsSyncAsync,
+      wagmiConfig,
+    ],
   );
 
   return {

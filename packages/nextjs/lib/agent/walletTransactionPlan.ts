@@ -64,6 +64,20 @@ export function assertWalletTransactionPlanReceiptSucceeded(receipt: { status?: 
   }
 }
 
+export function isWalletTransactionPlanReserveSubmissionCall(call: WalletTransactionPlanCall) {
+  return (
+    call.functionName === "reserveSubmission" || call.phase === "reserve_submission" || call.id === "reserve-submission"
+  );
+}
+
+export function isWalletTransactionPlanReservationRevealCall(call: WalletTransactionPlanCall) {
+  return (
+    call.phase === "submit_question" ||
+    call.id === "submit-question" ||
+    (typeof call.functionName === "string" && call.functionName.startsWith("submitQuestion"))
+  );
+}
+
 function normalizeHex(value: unknown, field: string): Hex {
   if (typeof value !== "string" || !/^0x([a-fA-F0-9]{2})*$/.test(value)) {
     throw new Error(`${field} must be hex data.`);
@@ -116,7 +130,7 @@ export function createWalletTransactionPlanExecutionSegments<TCall extends Walle
   };
 
   for (const call of calls) {
-    if (call.postCallDelayMs > 0) {
+    if (isWalletTransactionPlanReserveSubmissionCall(call.call) || call.postCallDelayMs > 0) {
       flushBatchableCalls();
       segments.push({ batchable: false, calls: [call] });
       continue;
