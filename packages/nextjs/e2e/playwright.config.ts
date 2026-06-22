@@ -19,6 +19,8 @@ const MOBILE_TABLET_TESTS = specFile("mobile-tablet");
 const WORLD_ID_MOCK_TESTS = specFile("world-id-mock");
 const CI_SMOKE_TESTS = specFiles("smoke", "pages-smoke", "docs-pages");
 const CI_API_TESTS = specFiles("nextjs-api", "watchlist-api", "faucet", "contract-boundaries", "ponder-api");
+const CI_SUBMIT_TESTS = specFile("submit");
+const CI_CONFIDENTIAL_CONTEXT_TESTS = specFile("confidential-context");
 const SETTLEMENT_TESTS = specFiles(
   "settlement-lifecycle",
   "reward-claim",
@@ -65,6 +67,8 @@ const CI_APP_IGNORED_TESTS = specFiles(
   "faucet",
   "contract-boundaries",
   "ponder-api",
+  "submit",
+  "confidential-context",
   "round-cancellation",
   "content-dormancy",
   "settlement-lifecycle",
@@ -120,6 +124,16 @@ export default defineConfig({
     {
       name: "ci-api",
       testMatch: CI_API_TESTS,
+    },
+    {
+      name: "ci-submit",
+      use: { ...devices["Desktop Chrome"] },
+      testMatch: CI_SUBMIT_TESTS,
+    },
+    {
+      name: "ci-confidential-context",
+      use: { ...devices["Desktop Chrome"] },
+      testMatch: CI_CONFIDENTIAL_CONTEXT_TESTS,
     },
     {
       name: "ci-app",

@@ -126,6 +126,8 @@ test("CI app project covers broad Chromium specs without rerunning scoped suites
   const compatSpec = "/tmp/rateloop/packages/nextjs/e2e/tests/browser-compat.spec.ts";
   const androidSpec = "/tmp/rateloop/packages/nextjs/e2e/tests/mobile-android.spec.ts";
   const worldIdMockSpec = "/tmp/rateloop/packages/nextjs/e2e/tests/world-id-mock.spec.ts";
+  const submitSpec = "/tmp/rateloop/packages/nextjs/e2e/tests/submit.spec.ts";
+  const confidentialContextSpec = "/tmp/rateloop/packages/nextjs/e2e/tests/confidential-context.spec.ts";
 
   assert.equal(testIgnore.test(broadSpec), false, "ci-app should include broad app specs");
   assert.equal(
@@ -143,6 +145,35 @@ test("CI app project covers broad Chromium specs without rerunning scoped suites
   );
   assert.equal(testIgnore.test(androidSpec), true, "ci-app should leave Android specs to mobile-android");
   assert.equal(testIgnore.test(worldIdMockSpec), true, "ci-app should leave World ID mock specs to the mock project");
+  assert.equal(testIgnore.test(submitSpec), true, "ci-app should leave submit specs to ci-submit");
+  assert.equal(
+    testIgnore.test(confidentialContextSpec),
+    true,
+    "ci-app should leave confidential context specs to ci-confidential-context",
+  );
+});
+
+test("CI submission projects isolate browser write-heavy specs", () => {
+  const submitMatch = getProjectTestMatch("ci-submit");
+  const confidentialMatch = getProjectTestMatch("ci-confidential-context");
+  const submitSpec = "/tmp/rateloop/packages/nextjs/e2e/tests/submit.spec.ts";
+  const confidentialContextSpec = "/tmp/rateloop/packages/nextjs/e2e/tests/confidential-context.spec.ts";
+  const voteSpec = "/tmp/rateloop/packages/nextjs/e2e/tests/vote.spec.ts";
+
+  assert.equal(submitMatch.test(submitSpec), true, "ci-submit should include submit specs");
+  assert.equal(
+    submitMatch.test(confidentialContextSpec),
+    false,
+    "ci-submit should not include confidential context specs",
+  );
+  assert.equal(submitMatch.test(voteSpec), false, "ci-submit should not include broad app specs");
+  assert.equal(
+    confidentialMatch.test(confidentialContextSpec),
+    true,
+    "ci-confidential-context should include confidential context specs",
+  );
+  assert.equal(confidentialMatch.test(submitSpec), false, "ci-confidential-context should not include submit specs");
+  assert.equal(confidentialMatch.test(voteSpec), false, "ci-confidential-context should not include broad app specs");
 });
 
 test("broad Chromium ignores and lifecycle matches only target spec basenames", () => {
@@ -227,6 +258,11 @@ test("mobile CI scripts can run each device profile independently", () => {
   assert.doesNotMatch(packageJson.scripts?.["e2e:mobile:android"] ?? "", /--project=mobile-phone\b/);
   assert.match(packageJson.scripts?.["e2e:mobile:tablet"] ?? "", /--project=mobile-tablet\b/);
   assert.doesNotMatch(packageJson.scripts?.["e2e:mobile:tablet"] ?? "", /--project=mobile-phone\b/);
+  assert.match(packageJson.scripts?.["e2e:ci:submit"] ?? "", /--project=ci-submit\b/);
+  assert.match(
+    packageJson.scripts?.["e2e:ci:confidential"] ?? "",
+    /--project=ci-confidential-context\b/,
+  );
 });
 
 test("CI smoke and API projects keep browser smoke separate from fetch-only specs", () => {
