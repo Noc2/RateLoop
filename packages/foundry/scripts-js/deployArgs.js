@@ -31,6 +31,13 @@ const SLOW_BROADCAST_NETWORKS = new Set([
   "worldchain",
 ]);
 const PRODUCTION_DEPLOY_NETWORKS = new Set(["base", "worldchain"]);
+export const DEPLOY_NETWORK_CHAIN_IDS = {
+  localhost: 31337,
+  baseSepolia: 84532,
+  base: 8453,
+  worldchainSepolia: 4801,
+  worldchain: 480,
+};
 export const PRODUCTION_DEPLOY_CHAIN_IDS = {
   base: 8453,
   worldchain: 480,
@@ -39,12 +46,14 @@ export const PRODUCTION_DEPLOY_CHAIN_IDS = {
 export const DEFAULT_LIVE_DEPLOY_COMPUTE_UNITS_PER_SECOND = "25";
 export const DEFAULT_LIVE_DEPLOY_RPC_TIMEOUT_SECONDS = "120";
 export const DEFAULT_LIVE_DEPLOY_BROADCAST_TIMEOUT_SECONDS = "300";
+export const DEFAULT_RPC_CHAIN_ID_TIMEOUT_MS = 10_000;
 export const RATELOOP_DEPLOYMENT_PROFILE_ENV = "RATELOOP_DEPLOYMENT_PROFILE";
 export const PRODUCTION_REDEPLOY_CONFIRMATION_ENV =
   "RATELOOP_CONFIRM_PRODUCTION_REDEPLOY";
 export const PRODUCTION_DEPLOYMENT_PROFILE = "production";
 export const DEFAULT_DEPLOYMENT_PROFILE = "default";
 const ENV_INTERPOLATION_RE = /^\$\{([A-Z0-9_]+)\}$/;
+const ENV_INTERPOLATION_GLOBAL_RE = /\$\{([A-Z0-9_]+)\}/g;
 const foundryPackageRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 function readOptionValue(args, index, optionName) {
@@ -210,6 +219,139 @@ export function isProductionDeployNetwork(network) {
 
 export function getProductionDeployChainId(network) {
   return PRODUCTION_DEPLOY_CHAIN_IDS[network] ?? null;
+}
+
+export function getDeployNetworkChainId(network) {
+  return DEPLOY_NETWORK_CHAIN_IDS[network] ?? null;
+}
+
+export function getProductionDeployNetworkForChainId(chainId) {
+  const parsedChainId = Number(chainId);
+  return (
+    Object.entries(PRODUCTION_DEPLOY_CHAIN_IDS).find(
+      ([, productionChainId]) => productionChainId === parsedChainId
+    )?.[0] ?? null
+  );
+}
+
+export function resolveConfiguredRpcEndpoint(endpoint, env = process.env) {
+  const value = String(endpoint ?? "").trim();
+  if (!value) return "";
+
+  return value.replace(ENV_INTERPOLATION_GLOBAL_RE, (_, envKey) => {
+    const envValue = env[envKey]?.trim();
+    if (!envValue) {
+      throw new Error(`${envKey} is required to resolve RPC endpoint.`);
+    }
+    return envValue;
+  });
+}
+
+export async function readRpcChainId(
+  rpcUrl,
+  { fetchImpl = fetch, timeoutMs = DEFAULT_RPC_CHAIN_ID_TIMEOUT_MS } = {}
+) {
+  const controller =
+    typeof AbortController === "function" ? new AbortController() : null;
+  const timeout =
+    controller && Number.isFinite(timeoutMs) && timeoutMs > 0
+      ? setTimeout(() => controller.abort(), timeoutMs)
+      : null;
+
+  try {
+    const response = await fetchImpl(rpcUrl, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      signal: controller?.signal,
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "eth_chainId",
+        params: [],
+      }),
+    });
+    if (!response.ok) {
+      throw new Error(`RPC eth_chainId failed with HTTP ${response.status}.`);
+    }
+
+    const payload = await response.json();
+    if (payload?.error) {
+      throw new Error(
+        `RPC eth_chainId failed: ${
+          payload.error.message ?? JSON.stringify(payload.error)
+        }`
+      );
+    }
+
+    const rawChainId = payload?.result;
+    const parsedChainId =
+      typeof rawChainId === "string" && rawChainId.startsWith("0x")
+        ? Number.parseInt(rawChainId, 16)
+        : Number(rawChainId);
+    if (!Number.isInteger(parsedChainId) || parsedChainId <= 0) {
+      throw new Error(
+        `RPC eth_chainId returned invalid chain ID ${rawChainId}.`
+      );
+    }
+    return parsedChainId;
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new Error(`RPC eth_chainId timed out after ${timeoutMs}ms.`);
+    }
+    throw error;
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
+
+export async function validateObservedDeployChain({
+  network,
+  rpcUrl,
+  confirmation,
+  fetchImpl,
+}) {
+  if (network === "localhost") {
+    return {
+      observedChainId: null,
+      productionNetwork: null,
+    };
+  }
+
+  let observedChainId;
+  try {
+    observedChainId = await readRpcChainId(rpcUrl, { fetchImpl });
+  } catch (error) {
+    throw new Error(
+      `Unable to verify RPC chain for ${network}: ${error.message}`
+    );
+  }
+
+  const expectedChainId = getDeployNetworkChainId(network);
+  if (!expectedChainId) {
+    throw new Error(`Missing deploy chain ID for ${network}.`);
+  }
+  if (observedChainId !== expectedChainId) {
+    throw new Error(
+      `Refusing to deploy to ${network}: RPC_URL reports chain ${observedChainId}, expected ${expectedChainId}.`
+    );
+  }
+
+  const productionNetwork =
+    getProductionDeployNetworkForChainId(observedChainId);
+  if (productionNetwork) {
+    validateProductionRedeployConfirmation({
+      network: productionNetwork,
+      deploymentJson: readProductionDeploymentArtifact(productionNetwork),
+      confirmation,
+    });
+  }
+
+  return {
+    observedChainId,
+    productionNetwork,
+  };
 }
 
 export function readProductionDeploymentArtifact(

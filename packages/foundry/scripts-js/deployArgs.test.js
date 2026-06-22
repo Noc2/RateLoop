@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { createServer } from "node:http";
 import { fileURLToPath } from "node:url";
 import {
   DEFAULT_DEPLOYMENT_PROFILE,
@@ -15,6 +16,8 @@ import {
   isSlowBroadcastNetwork,
   parseDeployArgs,
   readProductionDeploymentArtifact,
+  readRpcChainId,
+  resolveConfiguredRpcEndpoint,
   resolveEtherscanVerification,
   validateProductionRedeployConfirmation,
 } from "./deployArgs.js";
@@ -26,6 +29,64 @@ const checkProductionDeployGuardScript = fileURLToPath(
   new URL("./checkProductionDeployGuard.js", import.meta.url)
 );
 const makefilePath = fileURLToPath(new URL("../Makefile", import.meta.url));
+
+function runNodeScript(script, args = [], env = {}) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [script, ...args], {
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        ...env,
+      },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk;
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+    });
+    child.on("error", reject);
+    child.on("close", (status) => {
+      resolve({ status, stdout, stderr });
+    });
+  });
+}
+
+async function withMockRpcChain(chainId, callback) {
+  const server = createServer((request, response) => {
+    let body = "";
+    request.setEncoding("utf8");
+    request.on("data", (chunk) => {
+      body += chunk;
+    });
+    request.on("end", () => {
+      const payload = body ? JSON.parse(body) : {};
+      response.setHeader("content-type", "application/json");
+      response.end(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: payload.id ?? 1,
+          result: `0x${chainId.toString(16)}`,
+        })
+      );
+    });
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  const rpcUrl = `http://127.0.0.1:${address.port}`;
+  try {
+    return await callback(rpcUrl);
+  } finally {
+    await new Promise((resolve, reject) => {
+      server.close((error) => (error ? reject(error) : resolve()));
+    });
+  }
+}
 
 test("parseDeployArgs returns defaults with no options", () => {
   assert.deepEqual(parseDeployArgs([]), {
@@ -287,17 +348,97 @@ test("validateProductionRedeployConfirmation rejects mismatched production artif
   );
 });
 
-test("deploy wrapper rejects production redeploys before keystore selection", () => {
-  const result = spawnSync(
-    process.execPath,
-    [parseArgsScript, "--network", "base", "--keystore", "does-not-matter"],
-    {
-      encoding: "utf8",
-      env: {
-        ...process.env,
+test("resolveConfiguredRpcEndpoint expands required environment variables", () => {
+  assert.equal(
+    resolveConfiguredRpcEndpoint("https://rpc.example/${API_KEY}", {
+      API_KEY: "secret",
+    }),
+    "https://rpc.example/secret"
+  );
+  assert.throws(
+    () => resolveConfiguredRpcEndpoint("https://rpc.example/${API_KEY}", {}),
+    /API_KEY is required/
+  );
+});
+
+test("readRpcChainId parses hex chain IDs", async () => {
+  const chainId = await readRpcChainId("https://rpc.example", {
+    fetchImpl: async () => ({
+      ok: true,
+      json: async () => ({ result: "0x14a34" }),
+    }),
+  });
+
+  assert.equal(chainId, 84532);
+});
+
+test("readRpcChainId reports HTTP failures", async () => {
+  await assert.rejects(
+    () =>
+      readRpcChainId("https://rpc.example", {
+        fetchImpl: async () => ({
+          ok: false,
+          status: 500,
+        }),
+      }),
+    /HTTP 500/
+  );
+});
+
+test("readRpcChainId reports JSON-RPC errors", async () => {
+  await assert.rejects(
+    () =>
+      readRpcChainId("https://rpc.example", {
+        fetchImpl: async () => ({
+          ok: true,
+          json: async () => ({ error: { message: "bad method" } }),
+        }),
+      }),
+    /bad method/
+  );
+});
+
+test("readRpcChainId rejects invalid chain IDs", async () => {
+  await assert.rejects(
+    () =>
+      readRpcChainId("https://rpc.example", {
+        fetchImpl: async () => ({
+          ok: true,
+          json: async () => ({ result: "nope" }),
+        }),
+      }),
+    /invalid chain ID/
+  );
+});
+
+test("readRpcChainId times out stalled probes", async () => {
+  await assert.rejects(
+    () =>
+      readRpcChainId("https://rpc.example", {
+        timeoutMs: 1,
+        fetchImpl: async (_url, init) =>
+          new Promise((_resolve, reject) => {
+            init.signal.addEventListener("abort", () => {
+              const error = new Error("aborted");
+              error.name = "AbortError";
+              reject(error);
+            });
+          }),
+      }),
+    /timed out/
+  );
+});
+
+test("deploy wrapper rejects production redeploys before keystore selection", async () => {
+  const result = await withMockRpcChain(8453, (rpcUrl) =>
+    runNodeScript(
+      parseArgsScript,
+      ["--network", "base", "--keystore", "does-not-matter"],
+      {
+        BASE_RPC_URL: rpcUrl,
         HOME: "/tmp/rateloop-missing-keystore-home",
-      },
-    }
+      }
+    )
   );
 
   assert.notEqual(result.status, 0);
@@ -305,42 +446,30 @@ test("deploy wrapper rejects production redeploys before keystore selection", ()
   assert.doesNotMatch(result.stdout, /Keystore/);
 });
 
-test("direct make deploy guard rejects production redeploys without confirmation", () => {
-  const result = spawnSync(
-    process.execPath,
-    [checkProductionDeployGuardScript],
-    {
-      encoding: "utf8",
-      env: {
-        ...process.env,
-        DEPLOY_TARGET_NETWORK: "base",
-        RPC_URL: "https://base.example.invalid",
-      },
-    }
+test("direct make deploy guard rejects production redeploys without confirmation", async () => {
+  const result = await withMockRpcChain(8453, (rpcUrl) =>
+    runNodeScript(checkProductionDeployGuardScript, [], {
+      DEPLOY_TARGET_NETWORK: "base",
+      RPC_URL: rpcUrl,
+    })
   );
 
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /production contracts are already deployed/);
 });
 
-test("direct make deploy guard accepts the current production artifact token", () => {
+test("direct make deploy guard accepts the current production artifact token", async () => {
   const deployment = readProductionDeploymentArtifact("base");
   const token = buildProductionRedeployConfirmationToken({
     chainId: 8453,
     deploymentBlockNumber: deployment.deploymentBlockNumber,
   });
-  const result = spawnSync(
-    process.execPath,
-    [checkProductionDeployGuardScript],
-    {
-      encoding: "utf8",
-      env: {
-        ...process.env,
-        DEPLOY_TARGET_NETWORK: "base",
-        RATELOOP_CONFIRM_PRODUCTION_REDEPLOY: token,
-        RPC_URL: "https://base.example.invalid",
-      },
-    }
+  const result = await withMockRpcChain(8453, (rpcUrl) =>
+    runNodeScript(checkProductionDeployGuardScript, [], {
+      DEPLOY_TARGET_NETWORK: "base",
+      RATELOOP_CONFIRM_PRODUCTION_REDEPLOY: token,
+      RPC_URL: rpcUrl,
+    })
   );
 
   assert.equal(result.status, 0);
@@ -367,21 +496,44 @@ test("direct make deploy guard rejects raw live RPC URLs without target network"
   );
 });
 
-test("direct make deploy guard allows explicit staging targets", () => {
-  const result = spawnSync(
-    process.execPath,
-    [checkProductionDeployGuardScript],
-    {
-      encoding: "utf8",
-      env: {
-        ...process.env,
-        DEPLOY_TARGET_NETWORK: "baseSepolia",
-        RPC_URL: "https://base-sepolia.example.invalid",
-      },
-    }
+test("direct make deploy guard allows explicit staging targets", async () => {
+  const result = await withMockRpcChain(84532, (rpcUrl) =>
+    runNodeScript(checkProductionDeployGuardScript, [], {
+      DEPLOY_TARGET_NETWORK: "baseSepolia",
+      RPC_URL: rpcUrl,
+    })
   );
 
   assert.equal(result.status, 0);
+});
+
+test("direct make deploy guard rejects staging targets backed by production RPC", async () => {
+  const result = await withMockRpcChain(8453, (rpcUrl) =>
+    runNodeScript(checkProductionDeployGuardScript, [], {
+      DEPLOY_TARGET_NETWORK: "baseSepolia",
+      RPC_URL: rpcUrl,
+    })
+  );
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /RPC_URL reports chain 8453, expected 84532/);
+});
+
+test("deploy wrapper rejects staging targets backed by production RPC before keystore selection", async () => {
+  const result = await withMockRpcChain(8453, (rpcUrl) =>
+    runNodeScript(
+      parseArgsScript,
+      ["--network", "baseSepolia", "--keystore", "does-not-matter"],
+      {
+        BASE_SEPOLIA_RPC_URL: rpcUrl,
+        HOME: "/tmp/rateloop-missing-keystore-home",
+      }
+    )
+  );
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /RPC_URL reports chain 8453, expected 84532/);
+  assert.doesNotMatch(result.stdout, /Keystore/);
 });
 
 test("Make live deploys run the production guard before Forge work", () => {
@@ -398,6 +550,7 @@ test("Make live deploys run the production guard before Forge work", () => {
     makefile,
     /\$\(MAKE\) guard-production-deploy \|\| exit 1; \\\n\t\tFOUNDRY_PROFILE=.*forge script/s
   );
+  assert.match(makefile, /--rpc-url "\$\(RPC_URL\)"/);
 });
 
 test("resolveEtherscanVerification skips when the required API key env is missing", () => {

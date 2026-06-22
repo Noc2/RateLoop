@@ -9,12 +9,11 @@ import {
   PRODUCTION_REDEPLOY_CONFIRMATION_ENV,
   buildDeploymentProfileEnv,
   buildDeployFlowFlags,
-  isProductionDeployNetwork,
   isSlowBroadcastNetwork,
   parseDeployArgs,
-  readProductionDeploymentArtifact,
+  resolveConfiguredRpcEndpoint,
   resolveEtherscanVerification,
-  validateProductionRedeployConfirmation,
+  validateObservedDeployChain,
 } from "./deployArgs.js";
 import { selectOrCreateKeystore } from "./selectOrCreateKeystore.js";
 
@@ -27,6 +26,7 @@ const NETWORK_RPC_OVERRIDE_ENV = {
   worldchainSepolia: "WORLDCHAIN_SEPOLIA_RPC_URL",
   worldchain: "WORLDCHAIN_RPC_URL",
 };
+let foundryRpcEndpoints = {};
 
 function formatBlockscoutVerifyCommand(networkName) {
   return `make verify-blockscout NETWORK=${networkName} CONTRACT_ADDRESS=0x... CONTRACT_NAME=MyContract`;
@@ -76,11 +76,15 @@ function resolveRpcUrl(networkName) {
   }
 
   const overrideValue = process.env[overrideEnvKey]?.trim();
-  if (!overrideValue) {
-    return { rpcUrl: networkName, overrideEnvKey: null };
+  if (overrideValue) {
+    return { rpcUrl: overrideValue, overrideEnvKey };
   }
 
-  return { rpcUrl: overrideValue, overrideEnvKey };
+  const configuredRpcUrl = resolveConfiguredRpcEndpoint(
+    foundryRpcEndpoints[networkName],
+    process.env
+  );
+  return { rpcUrl: configuredRpcUrl || networkName, overrideEnvKey: null };
 }
 
 function clearKeystoreEnvForLocalDeploy() {
@@ -89,18 +93,14 @@ function clearKeystoreEnvForLocalDeploy() {
   delete process.env.ETH_PASSWORD;
 }
 
-function validateProductionDeployGuard() {
-  if (!isProductionDeployNetwork(network)) {
-    return;
-  }
-
+async function validateProductionDeployGuard(rpcUrl) {
   try {
     const confirmation =
       productionRedeployConfirmation ??
       process.env[PRODUCTION_REDEPLOY_CONFIRMATION_ENV];
-    validateProductionRedeployConfirmation({
+    await validateObservedDeployChain({
       network,
-      deploymentJson: readProductionDeploymentArtifact(network),
+      rpcUrl,
       confirmation,
     });
     if (confirmation) {
@@ -129,8 +129,9 @@ try {
   const foundryTomlPath = join(__dirname, "..", "foundry.toml");
   const tomlString = readFileSync(foundryTomlPath, "utf-8");
   const parsedToml = parse(tomlString);
+  foundryRpcEndpoints = parsedToml.rpc_endpoints ?? {};
 
-  if (!parsedToml.rpc_endpoints[network]) {
+  if (!foundryRpcEndpoints[network]) {
     console.log(
       `\n❌ Error: Network '${network}' not found in foundry.toml!`,
       "\nPlease check `foundry.toml` for available networks in the [rpc_endpoints] section or add a new network."
@@ -142,7 +143,8 @@ try {
   process.exit(1);
 }
 
-validateProductionDeployGuard();
+const { rpcUrl, overrideEnvKey } = resolveRpcUrl(network);
+await validateProductionDeployGuard(rpcUrl);
 
 let selectedKeystore;
 if (network !== "localhost") {
@@ -189,7 +191,6 @@ The default account (scaffold-eth-default) can only be used for localhost deploy
 }
 
 // Set environment variables for the make command
-const { rpcUrl, overrideEnvKey } = resolveRpcUrl(network);
 process.env.RPC_URL = rpcUrl;
 if (network === "localhost") {
   clearKeystoreEnvForLocalDeploy();
