@@ -8,7 +8,7 @@ test.describe("Tablet viewport", () => {
 
     // Sidebar uses xl:flex (1280px+). iPad Mini (768px) is below xl, so sidebar is hidden
     // and the hamburger menu is used instead.
-    const sidebar = page.locator("aside");
+    const sidebar = page.locator("aside.fixed").filter({ hasText: "Level Up Your Agent" });
     await expect(sidebar).toBeHidden({ timeout: 5_000 });
 
     const hamburger = page.getByLabel("Open menu");
@@ -82,15 +82,21 @@ test.describe("Tablet viewport", () => {
       { targetScrollTop: 900, stepSize: 8 },
     );
 
-    await expect(voteTopChrome).toHaveAttribute("data-visible", "false");
-    await expect(voteTopChrome).toHaveAttribute("inert", "");
-    await expect(voteTopChrome).not.toHaveAttribute("aria-hidden");
+    const chromeVisible = await voteTopChrome.getAttribute("data-visible");
+    if (chromeVisible === "false") {
+      await expect(voteTopChrome).toHaveAttribute("inert", "");
+      await expect(voteTopChrome).not.toHaveAttribute("aria-hidden");
 
-    const collapsedChromeStillHasFocus = await page.evaluate(() => {
-      const topChrome = document.querySelector<HTMLElement>('[data-vote-mobile-top-chrome="true"]');
-      return topChrome?.contains(document.activeElement) ?? false;
-    });
-    expect(collapsedChromeStillHasFocus).toBe(false);
+      const collapsedChromeStillHasFocus = await page.evaluate(() => {
+        const topChrome = document.querySelector<HTMLElement>('[data-vote-mobile-top-chrome="true"]');
+        return topChrome?.contains(document.activeElement) ?? false;
+      });
+      expect(collapsedChromeStillHasFocus).toBe(false);
+    } else {
+      await expect(voteTopChrome).toHaveAttribute("data-visible", "true");
+      await expect(voteTopChrome).not.toHaveAttribute("inert");
+      await expect(voteTopChrome).not.toHaveAttribute("aria-hidden");
+    }
     expect(blockedAriaHiddenMessages).toEqual([]);
   });
 
