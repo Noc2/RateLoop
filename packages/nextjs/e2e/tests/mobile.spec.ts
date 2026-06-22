@@ -11,7 +11,7 @@ test.describe("Mobile viewport (phone)", () => {
     await page.goto("/rate");
     await waitForFeedLoaded(page);
 
-    const sidebar = page.locator("aside");
+    const sidebar = page.locator("aside.fixed.left-0.top-0");
     await expect(sidebar).toBeHidden();
 
     const hamburger = page.getByLabel("Open menu");
