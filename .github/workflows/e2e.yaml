@@ -265,9 +265,19 @@ jobs:
             playwright_browsers: chromium firefox webkit
             timeout: 45
             warm_routes: true
-          - suite: mobile
-            command: yarn workspace @rateloop/nextjs e2e:mobile
-            playwright_browsers: chromium webkit
+          - suite: mobile-phone
+            command: yarn workspace @rateloop/nextjs e2e:mobile:phone
+            playwright_browsers: webkit
+            timeout: 45
+            warm_routes: true
+          - suite: mobile-android
+            command: yarn workspace @rateloop/nextjs e2e:mobile:android
+            playwright_browsers: chromium
+            timeout: 45
+            warm_routes: true
+          - suite: mobile-tablet
+            command: yarn workspace @rateloop/nextjs e2e:mobile:tablet
+            playwright_browsers: webkit
             timeout: 45
             warm_routes: true
 

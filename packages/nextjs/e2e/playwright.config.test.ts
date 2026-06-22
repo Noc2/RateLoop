@@ -186,6 +186,22 @@ test("mobile specs avoid runtime project skips", () => {
   assert.doesNotMatch(tabletSpec, /\btest\.skip\b/, "tablet mobile spec should be selected by project config");
 });
 
+test("mobile CI scripts can run each device profile independently", () => {
+  const packageJson = JSON.parse(readFileSync("package.json", "utf8")) as {
+    scripts?: Record<string, string>;
+  };
+
+  assert.match(packageJson.scripts?.["e2e:mobile"] ?? "", /--project=mobile-phone\b/);
+  assert.match(packageJson.scripts?.["e2e:mobile"] ?? "", /--project=mobile-android\b/);
+  assert.match(packageJson.scripts?.["e2e:mobile"] ?? "", /--project=mobile-tablet\b/);
+  assert.match(packageJson.scripts?.["e2e:mobile:phone"] ?? "", /--project=mobile-phone\b/);
+  assert.doesNotMatch(packageJson.scripts?.["e2e:mobile:phone"] ?? "", /--project=mobile-android\b/);
+  assert.match(packageJson.scripts?.["e2e:mobile:android"] ?? "", /--project=mobile-android\b/);
+  assert.doesNotMatch(packageJson.scripts?.["e2e:mobile:android"] ?? "", /--project=mobile-phone\b/);
+  assert.match(packageJson.scripts?.["e2e:mobile:tablet"] ?? "", /--project=mobile-tablet\b/);
+  assert.doesNotMatch(packageJson.scripts?.["e2e:mobile:tablet"] ?? "", /--project=mobile-phone\b/);
+});
+
 test("CI smoke and API projects keep browser smoke separate from fetch-only specs", () => {
   const smokeMatch = getProjectTestMatch("ci-smoke");
   const apiMatch = getProjectTestMatch("ci-api");
