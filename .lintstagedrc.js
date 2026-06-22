@@ -1,5 +1,8 @@
 const path = require("path");
 
+const toRepoRelativePath = (filename) =>
+  path.isAbsolute(filename) ? path.relative(process.cwd(), filename) : filename;
+
 const buildNextEslintCommand = (filenames) =>
   `yarn next:lint --fix ${filenames
     .map((f) => path.relative(path.join("packages", "nextjs"), f))
@@ -12,15 +15,36 @@ const checkTypesNextCommand = () => "yarn next:check-types";
 // changes so the pre-commit hook catches type regressions before they reach CI.
 const checkTypesForWorkspace = (workspace) => () => `yarn workspace ${workspace} check-types`;
 
+const workspaceTypecheckGlobs = [
+  ["packages/keeper/", "@rateloop/keeper"],
+  ["packages/ponder/", "@rateloop/ponder"],
+  ["packages/contracts/", "@rateloop/contracts"],
+  ["packages/agents/", "@rateloop/agents"],
+  ["packages/sdk/", "@rateloop/sdk"],
+  ["packages/node-utils/", "@rateloop/node-utils"],
+];
+
+const buildPackageTypecheckCommands = (filenames) => {
+  const repoRelativeFiles = filenames.map(toRepoRelativePath);
+  const commands = [];
+  const nextjsFiles = repoRelativeFiles.filter((filename) =>
+    filename.startsWith("packages/nextjs/"),
+  );
+
+  if (nextjsFiles.length > 0) {
+    commands.push(buildNextEslintCommand(nextjsFiles));
+    commands.push(checkTypesNextCommand());
+  }
+
+  for (const [packagePrefix, workspace] of workspaceTypecheckGlobs) {
+    if (repoRelativeFiles.some((filename) => filename.startsWith(packagePrefix))) {
+      commands.push(checkTypesForWorkspace(workspace)());
+    }
+  }
+
+  return commands;
+};
+
 module.exports = {
-  "packages/nextjs/**/*.{ts,tsx}": [
-    buildNextEslintCommand,
-    checkTypesNextCommand,
-  ],
-  "packages/keeper/**/*.{ts,tsx}": [checkTypesForWorkspace("@rateloop/keeper")],
-  "packages/ponder/**/*.{ts,tsx}": [checkTypesForWorkspace("@rateloop/ponder")],
-  "packages/contracts/**/*.{ts,tsx}": [checkTypesForWorkspace("@rateloop/contracts")],
-  "packages/agents/**/*.{ts,tsx}": [checkTypesForWorkspace("@rateloop/agents")],
-  "packages/sdk/**/*.{ts,tsx}": [checkTypesForWorkspace("@rateloop/sdk")],
-  "packages/node-utils/**/*.{ts,tsx}": [checkTypesForWorkspace("@rateloop/node-utils")],
+  "packages/**/*.{ts,tsx}": [buildPackageTypecheckCommands],
 };
