@@ -886,9 +886,11 @@ test.describe("Mobile viewport (phone)", () => {
     await page.goto("/rate");
     await waitForFeedLoaded(page);
 
-    const viewButton = page.getByRole("button", { name: /^View$/i }).first();
+    const voteTopChrome = page.locator('[data-vote-mobile-top-chrome="true"]');
+    await expect(voteTopChrome).toHaveAttribute("data-visible", "true", { timeout: 5_000 });
+    const viewButton = voteTopChrome.getByRole("button", { name: /^View(?:$|:)/ }).first();
     await expect(viewButton).toBeVisible({ timeout: 10_000 });
-    await viewButton.click();
+    await viewButton.evaluate(element => (element as HTMLElement).click());
 
     const dialog = page.getByRole("dialog", { name: "View options" });
     await expect(dialog).toBeVisible({ timeout: 5_000 });
