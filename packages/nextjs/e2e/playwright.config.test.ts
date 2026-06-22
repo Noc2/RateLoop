@@ -205,12 +205,24 @@ test("mobile CI scripts can run each device profile independently", () => {
   const packageJson = JSON.parse(readFileSync("package.json", "utf8")) as {
     scripts?: Record<string, string>;
   };
+  const phoneShardScripts = [
+    "e2e:mobile:phone:navigation",
+    "e2e:mobile:phone:vote",
+    "e2e:mobile:phone:pages",
+  ];
 
   assert.match(packageJson.scripts?.["e2e:mobile"] ?? "", /--project=mobile-phone\b/);
   assert.match(packageJson.scripts?.["e2e:mobile"] ?? "", /--project=mobile-android\b/);
   assert.match(packageJson.scripts?.["e2e:mobile"] ?? "", /--project=mobile-tablet\b/);
   assert.match(packageJson.scripts?.["e2e:mobile:phone"] ?? "", /--project=mobile-phone\b/);
   assert.doesNotMatch(packageJson.scripts?.["e2e:mobile:phone"] ?? "", /--project=mobile-android\b/);
+  for (const scriptName of phoneShardScripts) {
+    const script = packageJson.scripts?.[scriptName] ?? "";
+    assert.match(script, /--project=mobile-phone\b/, `${scriptName} should target the phone profile`);
+    assert.match(script, /--grep\b/, `${scriptName} should keep scheduled WebKit phone coverage sharded`);
+    assert.doesNotMatch(script, /--project=mobile-android\b/, `${scriptName} should not run Android coverage`);
+    assert.doesNotMatch(script, /--project=mobile-tablet\b/, `${scriptName} should not run tablet coverage`);
+  }
   assert.match(packageJson.scripts?.["e2e:mobile:android"] ?? "", /--project=mobile-android\b/);
   assert.doesNotMatch(packageJson.scripts?.["e2e:mobile:android"] ?? "", /--project=mobile-phone\b/);
   assert.match(packageJson.scripts?.["e2e:mobile:tablet"] ?? "", /--project=mobile-tablet\b/);
