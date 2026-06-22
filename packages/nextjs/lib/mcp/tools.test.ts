@@ -505,7 +505,7 @@ test("rateloop_ask_humans returns a wallet transaction plan without submitting f
 
   const result = await callRateLoopMcpTool({
     agent: AGENT,
-    arguments: askArguments(),
+    arguments: askArguments({ paymentMode: "wallet_calls" }),
     name: "rateloop_ask_humans",
   });
 
@@ -724,6 +724,7 @@ test("public rateloop_ask_humans stores signed webhook registration until paymen
 
   const unsigned = (await callPublicRateLoopMcpTool({
     arguments: askArguments({
+      paymentMode: "wallet_calls",
       walletAddress: account.address,
       webhookEvents: ["question.submitting"],
       webhookSecret: "webhook-secret",
@@ -735,6 +736,7 @@ test("public rateloop_ask_humans stores signed webhook registration until paymen
 
   const result = await callPublicRateLoopMcpTool({
     arguments: askArguments({
+      paymentMode: "wallet_calls",
       walletAddress: account.address,
       webhookChallengeId: unsigned.challengeId,
       webhookEvents: ["question.submitting"],
@@ -1369,6 +1371,7 @@ test("rateloop_ask_humans carries optional feedback bonus and reserves total spe
     arguments: askArguments({
       feedbackBonus: { amount: "2000000" },
       maxPaymentAmount: "3000000",
+      paymentMode: "wallet_calls",
     }),
     name: "rateloop_ask_humans",
   });
@@ -1487,7 +1490,7 @@ test("public rateloop_ask_humans dry-run reports mixed-asset bonus outside total
   assert.equal(body.payment.totalAmount, "1000000");
 });
 
-test("rateloop_ask_humans can return an EIP-3009 USDC authorization request", async () => {
+test("rateloop_ask_humans defaults eligible USDC asks to an EIP-3009 authorization request", async () => {
   const prepared: unknown[] = [];
 
   __setMcpToolTestOverridesForTests({
@@ -1523,7 +1526,7 @@ test("rateloop_ask_humans can return an EIP-3009 USDC authorization request", as
 
   const result = await callRateLoopMcpTool({
     agent: AGENT,
-    arguments: askArguments({ paymentMode: "eip3009_usdc_authorization" }),
+    arguments: askArguments(),
     name: "rateloop_ask_humans",
   });
 
@@ -1620,12 +1623,13 @@ test("quote and ask flows pass submission identity into image preflight", async 
   });
   await callRateLoopMcpTool({
     agent: AGENT,
-    arguments: askArguments(),
+    arguments: askArguments({ paymentMode: "wallet_calls" }),
     name: "rateloop_ask_humans",
   });
   await callPublicRateLoopMcpTool({
     arguments: {
       ...askArguments(),
+      paymentMode: "wallet_calls",
       walletAddress: AGENT.walletAddress,
     },
     name: "rateloop_ask_humans",
@@ -1791,6 +1795,7 @@ test("rateloop_ask_humans stores webhooks until payment confirmation", async () 
   const result = await callRateLoopMcpTool({
     agent: AGENT,
     arguments: askArguments({
+      paymentMode: "wallet_calls",
       webhookEvents: ["question.submitting"],
       webhookSecret: "webhook-secret",
       webhookUrl: "https://agent.example/rateloop",
@@ -1843,6 +1848,7 @@ test("rateloop_ask_humans stores the default lifecycle webhook events", async ()
   await callRateLoopMcpTool({
     agent: AGENT,
     arguments: askArguments({
+      paymentMode: "wallet_calls",
       webhookSecret: "webhook-secret",
       webhookUrl: "https://agent.example/rateloop",
     }),

@@ -762,6 +762,11 @@ export function readHandoffTokenFromHeaders(headers: Pick<Headers, "get">) {
   return headers.get(HANDOFF_TOKEN_HEADER)?.trim() ?? "";
 }
 
+function transactionPlanCallCount(transactionPlan: JsonObject | null) {
+  const calls = transactionPlan?.calls;
+  return Array.isArray(calls) ? calls.length : 0;
+}
+
 export function buildAgentAskHandoffResponse(params: {
   assets: AgentAskHandoffAssetRecord[];
   handoff: AgentAskHandoffRecord;
@@ -828,6 +833,14 @@ export function buildAgentAskHandoffResponse(params: {
     originalRequestBody: params.handoff.originalRequestBody,
     payloadHash: params.handoff.payloadHash,
     paymentMode: params.handoff.paymentMode,
+    paymentModeDiagnostics: {
+      awaitingX402Authorization:
+        params.handoff.paymentMode === "x402_authorization" &&
+        params.handoff.status === "prepared" &&
+        !params.handoff.transactionPlan,
+      mode: params.handoff.paymentMode,
+      transactionCallCount: transactionPlanCallCount(params.handoff.transactionPlan),
+    },
     preparedDraftRevision: params.handoff.preparedDraftRevision,
     requestBody: params.handoff.requestBody,
     status: params.handoff.status,

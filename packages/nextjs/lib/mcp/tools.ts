@@ -1239,8 +1239,22 @@ function assertSupportedAskHumansMode(value: unknown) {
   throw new McpToolError('mode must be omitted for live asks or set to "dry_run".');
 }
 
-function parseAskHumansPaymentMode(value: unknown): AskHumansPaymentMode {
-  if (value === undefined || value === null || value === "") return "wallet_calls";
+function defaultAskHumansPaymentMode(params: {
+  feedbackBonus: X402FeedbackBonusRequest | null;
+  payload: X402QuestionPayload;
+}): AskHumansPaymentMode {
+  return params.payload.bounty.asset === "USDC" &&
+    params.payload.questions.length === 1 &&
+    params.feedbackBonus?.asset !== "LREP"
+    ? "x402_authorization"
+    : "wallet_calls";
+}
+
+function parseAskHumansPaymentMode(
+  value: unknown,
+  defaultMode: AskHumansPaymentMode = "wallet_calls",
+): AskHumansPaymentMode {
+  if (value === undefined || value === null || value === "") return defaultMode;
   if (value === "wallet_calls" || value === "agent_wallet") return "wallet_calls";
   if (
     value === "eip3009_usdc_authorization" ||
@@ -3345,11 +3359,14 @@ export async function callPublicRateLoopMcpTool(params: {
     case "rateloop_ask_humans": {
       assertSupportedAskHumansMode(args.mode);
       const dryRun = isDryRunRequest(args);
-      const paymentMode = parseAskHumansPaymentMode(args.paymentMode ?? args.fundingMode);
       const payload = parseX402QuestionRequest(questionPayloadArgs(args));
       const walletAddress = parsePublicWalletAddress(args);
       const webhook = await parseWebhookOptions(args);
       const feedbackBonus = parseOptionalFeedbackBonus(args, payload, walletAddress);
+      const paymentMode = parseAskHumansPaymentMode(
+        args.paymentMode ?? args.fundingMode,
+        defaultAskHumansPaymentMode({ feedbackBonus, payload }),
+      );
       const permissionlessPayload = toPermissionlessWalletPayload(payload, walletAddress);
       const config = dependencies.resolveX402QuestionConfig(permissionlessPayload.chainId);
       if (feedbackBonus && !config.feedbackBonusEscrowAddress) {
@@ -3651,12 +3668,15 @@ export async function callRateLoopMcpTool(params: {
     case "rateloop_ask_humans": {
       assertSupportedAskHumansMode(args.mode);
       const dryRun = isDryRunRequest(args);
-      const paymentMode = parseAskHumansPaymentMode(args.paymentMode ?? args.fundingMode);
       const payload = parseX402QuestionRequest(questionPayloadArgs(args));
       assertManagedQuestionCategoriesAllowed(params.agent, payload);
       const webhook = await parseWebhookOptions(args);
       const walletAddress = parseAgentWalletAddress(args, params.agent);
       const feedbackBonus = parseOptionalFeedbackBonus(args, payload, walletAddress);
+      const paymentMode = parseAskHumansPaymentMode(
+        args.paymentMode ?? args.fundingMode,
+        defaultAskHumansPaymentMode({ feedbackBonus, payload }),
+      );
       const managedPayload = toManagedMcpPayload(params.agent, payload);
       const config = dependencies.resolveX402QuestionConfig(managedPayload.chainId);
       if (feedbackBonus && !config.feedbackBonusEscrowAddress) {

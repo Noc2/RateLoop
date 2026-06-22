@@ -478,6 +478,7 @@ test("public MCP ask returns a tokenless wallet-call plan", async () => {
           chainId: 480,
           clientRequestId: "public-ask",
           maxPaymentAmount: "1500000",
+          paymentMode: "wallet_calls",
           question: {
             categoryId: "5",
             contextUrl: "https://example.com/context",

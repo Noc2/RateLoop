@@ -671,6 +671,7 @@ test("agent asks route returns the wallet transaction plan response", async () =
     makePost("https://rateloop.ai/api/agent/asks", {
       ...questionPayload("ask-http"),
       maxPaymentAmount: "1500000",
+      paymentMode: "wallet_calls",
     }),
   );
   const body = (await response.json()) as Record<string, unknown>;
@@ -688,6 +689,7 @@ test("agent asks route returns a tokenless wallet transaction plan response", as
     makePublicPost("https://rateloop.ai/api/agent/asks", {
       ...questionPayload("ask-public"),
       maxPaymentAmount: "1500000",
+      paymentMode: "wallet_calls",
       walletAddress: "0x00000000000000000000000000000000000000aa",
     }),
   );

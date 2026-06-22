@@ -700,9 +700,9 @@ export const agentAskHumansInputSchema = {
       type: "object",
     },
     paymentMode: {
-      default: "wallet_calls",
+      default: "eip3009_usdc_authorization",
       description:
-        "wallet_calls returns approve/reserve/submit transactions. eip3009_usdc_authorization returns an EIP-3009 USDC authorization request, then ordered reserve/submit transactions after signature. x402_authorization is accepted as a legacy compatibility alias.",
+        "Eligible single-question USDC asks default to eip3009_usdc_authorization so the wallet signs a USDC authorization and submits one transaction. wallet_calls returns approve/reserve/submit transactions and is required for LREP bounties, LREP Feedback Bonuses, and bundled asks. x402_authorization is accepted as a legacy compatibility alias.",
       enum: ["wallet_calls", "eip3009_usdc_authorization", "x402_authorization"],
       type: "string",
     },
