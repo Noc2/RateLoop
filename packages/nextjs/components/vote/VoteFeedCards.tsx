@@ -244,6 +244,7 @@ export const FeedVoteCard = memo(function FeedVoteCard({
   const useCompactCard = isLaptopCompact || isMobileViewport;
   const useCompactEmbed = isMobileViewport;
   const usesIntrinsicMediaHeight = platformType === "youtube";
+  const flushMediaEdges = platformType === "image";
   const mediaHeightClassName = usesIntrinsicMediaHeight
     ? "w-full"
     : isMobileViewport
@@ -261,7 +262,7 @@ export const FeedVoteCard = memo(function FeedVoteCard({
         data-content-id={item.id.toString()}
         className="flex min-w-0 min-h-0 flex-1 flex-col overflow-hidden rounded-lg bg-base-200"
       >
-        <FeedContentHeader item={item} titleId={titleId} compact={useCompactCard} />
+        <FeedContentHeader item={item} titleId={titleId} compact={useCompactCard} flushMediaEdges={flushMediaEdges} />
         <div
           className={`${mediaHeightClassName} relative overflow-hidden`}
           data-testid="vote-content-surface"
@@ -319,6 +320,7 @@ export const FeedVoteCard = memo(function FeedVoteCard({
           isMobileViewport={isMobileViewport}
           isActive={isActive}
           embedded
+          flushMediaEdges={flushMediaEdges}
         />
       </div>
     </div>
@@ -342,15 +344,17 @@ interface FeedContentMetaCardProps {
   isMobileViewport?: boolean;
   isActive?: boolean;
   embedded?: boolean;
+  flushMediaEdges?: boolean;
 }
 
 interface FeedContentHeaderProps {
   item: ContentItem;
   titleId?: string;
   compact?: boolean;
+  flushMediaEdges?: boolean;
 }
 
-function FeedContentHeader({ item, titleId, compact }: FeedContentHeaderProps) {
+function FeedContentHeader({ item, titleId, compact, flushMediaEdges = false }: FeedContentHeaderProps) {
   const questionText = getQuestionText(item);
   const isLongQuestion = questionText.length > 90;
   const headlineSizeClassName = compact
@@ -364,7 +368,9 @@ function FeedContentHeader({ item, titleId, compact }: FeedContentHeaderProps) {
   return (
     <div
       data-testid="vote-content-header"
-      className={`border-b border-base-content/10 bg-base-200 ${compact ? "px-4 py-3" : "px-5 py-4 xl:px-4 xl:py-3"}`}
+      className={`${flushMediaEdges ? "" : "border-b border-base-content/10"} bg-base-200 ${
+        compact ? "px-4 py-3" : "px-5 py-4 xl:px-4 xl:py-3"
+      }`}
     >
       <h2
         id={titleId}
@@ -582,6 +588,7 @@ function FeedContentMetaCard({
   isMobileViewport = false,
   isActive = true,
   embedded = false,
+  flushMediaEdges = false,
 }: FeedContentMetaCardProps) {
   const [showShare, setShowShare] = useState(false);
   const hasFollowButton = !(normalizedAddress && item.submitter.toLowerCase() === normalizedAddress);
@@ -598,10 +605,11 @@ function FeedContentMetaCard({
   const hasVisibleReward = rewardPoolTotal > 0n || feedbackBonusTotal > 0n;
   const hideDockedActionButtons = isMobileViewport;
   const actionRowClassName = `flex items-center justify-between gap-3 ${compact ? "mt-3" : "mt-4"}`;
+  const embeddedBorderClassName = flushMediaEdges ? "" : "border-t border-base-content/10";
   const wrapperClassName = embedded
     ? compact
-      ? "border-t border-base-content/10 px-3 py-3"
-      : "border-t border-base-content/10 p-4"
+      ? `${embeddedBorderClassName} px-3 py-3`
+      : `${embeddedBorderClassName} p-4`
     : `rounded-lg bg-base-200 ${compact ? "p-3" : "p-4 xl:p-3"}`;
   const actionButtons = (
     <div className="ml-auto flex shrink-0 items-center gap-0.5 sm:gap-1">
