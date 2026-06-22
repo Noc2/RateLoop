@@ -10,12 +10,15 @@ import { refreshActiveWalletReadQueries } from "~~/hooks/useRefreshWalletBalance
 import { useWalletExecutionCapabilities } from "~~/hooks/useWalletExecutionCapabilities";
 import {
   type NormalizedWalletTransactionPlanCall,
+  WALLET_TRANSACTION_PLAN_STEP_TIMEOUT_MS,
   type WalletTransactionPlanCall,
+  assertWalletTransactionPlanReceiptSucceeded,
   createWalletTransactionPlanExecutionSegments,
   isWalletSendCallsUnsupportedError,
   normalizeWalletTransactionPlanCalls,
   segmentRequiresAtomicWalletBatch,
   walletTransactionPlanAtomicBatchRequiredError,
+  withWalletTransactionPlanStepTimeout,
 } from "~~/lib/agent/walletTransactionPlan";
 import scaffoldConfig from "~~/scaffold.config";
 
@@ -68,19 +71,23 @@ export function useWalletTransactionPlanExecutor() {
         onCallSent?: (params: { call: TCall; hash: Hex; index: number }) => void;
       },
     ) => {
-      const hash = await sendTransaction(wagmiConfig, {
-        chainId: options.chainId,
-        data: call.data,
-        to: call.to,
-        value: call.value,
-      });
+      const hash = await withWalletTransactionPlanStepTimeout(
+        sendTransaction(wagmiConfig, {
+          chainId: options.chainId,
+          data: call.data,
+          to: call.to,
+          value: call.value,
+        }),
+      );
       pushUniqueHash(options.hashes, hash);
       options.onCallSent?.({ call: call.call, hash, index: call.index });
-      await waitForTransactionReceipt(wagmiConfig, {
+      const receipt = await waitForTransactionReceipt(wagmiConfig, {
         chainId: options.chainId,
         hash,
         pollingInterval: getTransactionStatusPollingInterval(options.chainId),
+        timeout: WALLET_TRANSACTION_PLAN_STEP_TIMEOUT_MS,
       });
+      assertWalletTransactionPlanReceiptSucceeded(receipt);
       options.onCallConfirmed?.({ call: call.call, hash, index: call.index });
       if (call.postCallDelayMs > 0) {
         await delay(call.postCallDelayMs);

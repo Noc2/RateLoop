@@ -26,10 +26,41 @@ export type WalletTransactionPlanExecutionSegment<TCall extends WalletTransactio
     calls: Array<NormalizedWalletTransactionPlanCall<TCall>>;
   };
 
+export const WALLET_TRANSACTION_PLAN_STEP_TIMEOUT_MS = 180_000;
+
 export function walletTransactionPlanAtomicBatchRequiredError() {
   return new Error(
     "This transaction plan requires an atomic wallet batch. Connect a wallet with wallet_sendCalls atomic batch support or request a non-atomic plan.",
   );
+}
+
+export function walletTransactionPlanStepTimeoutError() {
+  return new Error("Wallet request did not finish. Check your wallet for a pending or rejected request, then retry.");
+}
+
+export async function withWalletTransactionPlanStepTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs = WALLET_TRANSACTION_PLAN_STEP_TIMEOUT_MS,
+): Promise<T> {
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) return promise;
+
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => reject(walletTransactionPlanStepTimeoutError()), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+}
+
+export function assertWalletTransactionPlanReceiptSucceeded(receipt: { status?: unknown }) {
+  if (receipt.status === "reverted") {
+    throw new Error("Transaction reverted.");
+  }
 }
 
 function normalizeHex(value: unknown, field: string): Hex {

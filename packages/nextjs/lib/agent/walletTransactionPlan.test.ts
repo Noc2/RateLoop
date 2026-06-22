@@ -1,8 +1,10 @@
 import {
+  assertWalletTransactionPlanReceiptSucceeded,
   createWalletTransactionPlanExecutionSegments,
   isWalletSendCallsUnsupportedError,
   normalizeWalletTransactionPlanCalls,
   segmentRequiresAtomicWalletBatch,
+  withWalletTransactionPlanStepTimeout,
 } from "./walletTransactionPlan";
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -79,4 +81,20 @@ test("normalizeWalletTransactionPlanCalls rejects nonzero value calls", () => {
 test("isWalletSendCallsUnsupportedError recognizes unsupported batch methods without matching rejection", () => {
   assert.equal(isWalletSendCallsUnsupportedError(new Error("wallet_sendCalls method not found")), true);
   assert.equal(isWalletSendCallsUnsupportedError(new Error("User rejected the request")), false);
+});
+
+test("withWalletTransactionPlanStepTimeout resolves completed wallet steps", async () => {
+  await assert.doesNotReject(withWalletTransactionPlanStepTimeout(Promise.resolve("0xhash"), 10));
+});
+
+test("withWalletTransactionPlanStepTimeout rejects stuck wallet steps", async () => {
+  await assert.rejects(
+    withWalletTransactionPlanStepTimeout(new Promise(() => undefined), 1),
+    /Wallet request did not finish/,
+  );
+});
+
+test("assertWalletTransactionPlanReceiptSucceeded rejects reverted receipts", () => {
+  assert.throws(() => assertWalletTransactionPlanReceiptSucceeded({ status: "reverted" }), /Transaction reverted/);
+  assert.doesNotThrow(() => assertWalletTransactionPlanReceiptSucceeded({ status: "success" }));
 });

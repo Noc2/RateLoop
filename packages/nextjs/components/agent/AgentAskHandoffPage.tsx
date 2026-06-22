@@ -78,6 +78,7 @@ import {
   isQuestionRoundMaxDurationValidForEpoch,
 } from "~~/lib/questionRoundConfig";
 import { assertContentRegistryQuestionSubmissionSelector } from "~~/lib/questionSubmissionSelectorSupport";
+import { isUserRejectedTransactionError } from "~~/lib/transactionErrors";
 import {
   type HandoffWebMcpQuestion,
   type HandoffWebMcpState,
@@ -1644,6 +1645,13 @@ function readResponseError(value: unknown, fallback: string) {
       : fallback;
 }
 
+function readHandoffActionError(error: unknown, fallback: string) {
+  if (isUserRejectedTransactionError(error)) {
+    return "Wallet request rejected. No transaction was submitted; you can retry when ready.";
+  }
+  return error instanceof Error ? error.message : fallback;
+}
+
 function imageSignatureLabel(challenge: UploadChallenge, handoff: Handoff | null) {
   const asset = handoff?.assets?.find(candidate => candidate.id === challenge.assetId);
   return asset?.filename || challenge.attachmentId || challenge.assetId;
@@ -2476,7 +2484,9 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
         setImageSignatureSteps([]);
         return prepared;
       } catch (prepareError) {
-        setError(prepareError instanceof Error ? prepareError.message : "Failed to prepare handoff.");
+        const message = readHandoffActionError(prepareError, "Failed to prepare handoff.");
+        setError(message);
+        notification.error(message);
         return null;
       } finally {
         setIsPreparing(false);
@@ -2615,7 +2625,9 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
         }
       } catch (executeError) {
         dismissTransactionStatusToast();
-        setError(executeError instanceof Error ? executeError.message : "Failed to execute wallet calls.");
+        const message = readHandoffActionError(executeError, "Failed to execute wallet calls.");
+        setError(message);
+        notification.error(message);
       } finally {
         setIsExecuting(false);
         dismissTransactionStatusToast();
