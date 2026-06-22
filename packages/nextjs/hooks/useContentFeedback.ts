@@ -9,11 +9,14 @@ import { waitForTransactionReceipt } from "wagmi/actions";
 import { useTransactor } from "~~/hooks/scaffold-eth";
 import { useLocalE2ETestWalletClient } from "~~/hooks/scaffold-eth/useLocalE2ETestWalletClient";
 import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
+import { useGasBalanceStatus } from "~~/hooks/useGasBalanceStatus";
+import { useThirdwebSponsoredSubmitCalls } from "~~/hooks/useThirdwebSponsoredSubmitCalls";
 import type { ContentFeedbackItem, ContentFeedbackListResult, ContentFeedbackType } from "~~/lib/feedback/types";
 import {
   getConfiguredFeedbackRegistryAddress,
   getConfiguredRoundVotingEngineAddress,
 } from "~~/lib/questionRewardPools";
+import { getGasBalanceErrorMessage, isUserRejectedTransactionError } from "~~/lib/transactionErrors";
 import { isSignatureRejected } from "~~/utils/signatureErrors";
 
 interface SignedChallengeResponse {
@@ -87,10 +90,38 @@ function hasPublishedFeedbackRecord(record: unknown) {
   return typeof feedbackHash === "string" && feedbackHash !== zeroHash;
 }
 
+function readBatchTransactionHash(result: { receipts?: readonly { transactionHash?: unknown }[] }) {
+  return result.receipts?.find(receipt => typeof receipt.transactionHash === "string")?.transactionHash as
+    | `0x${string}`
+    | undefined;
+}
+
+function readFeedbackSubmissionError(error: unknown, fallback = "Failed to submit feedback") {
+  if (isUserRejectedTransactionError(error) || isSignatureRejected(error)) {
+    return null;
+  }
+
+  const message = error instanceof Error ? error.message : "";
+  if (/unknown rpc error occurred/i.test(message) && /request arguments:/i.test(message)) {
+    return "Wallet could not submit the feedback transaction. Wait a moment for your wallet session to finish reconnecting, then retry.";
+  }
+
+  return message || fallback;
+}
+
 export function useContentFeedback(contentId: bigint | string | number | null | undefined, address?: string) {
   const queryClient = useQueryClient();
   const { signMessageAsync } = useSignMessage();
   const { writeContractAsync } = useWriteContract();
+  const {
+    canUseSelfFundedBatchCalls,
+    canUseSponsoredSubmitCalls,
+    executeContractCallBatch,
+    isAwaitingSponsoredSubmitCalls,
+  } = useThirdwebSponsoredSubmitCalls();
+  const { canSponsorTransactions, isMissingGasBalance, nativeTokenSymbol } = useGasBalanceStatus({
+    includeExternalSendCalls: true,
+  });
   const wagmiConfig = useConfig();
   const { chain } = useAccount();
   const { targetNetwork } = useTargetNetwork();
@@ -186,13 +217,33 @@ export function useContentFeedback(contentId: bigint | string | number | null | 
             params.clientNonce,
           ],
         } as const;
-        const submittedHash = await writeTx(
-          () =>
-            localE2ETestWalletClient
-              ? localE2ETestWalletClient.writeContract(request as any)
-              : writeContractAsync(request as any),
-          { action: "Publish feedback", suppressSuccessToast: true },
-        );
+        const canUseBatchedFeedbackWrite =
+          !localE2ETestWalletClient && (canUseSponsoredSubmitCalls || canUseSelfFundedBatchCalls);
+        const submittedHash = canUseBatchedFeedbackWrite
+          ? readBatchTransactionHash(
+              await executeContractCallBatch(
+                [
+                  {
+                    abi: request.abi,
+                    address: request.address,
+                    args: request.args,
+                    functionName: request.functionName,
+                  },
+                ],
+                {
+                  action: "Publish feedback",
+                  atomicRequired: true,
+                  sponsorshipMode: canUseSponsoredSubmitCalls ? "sponsored" : "self-funded",
+                },
+              ),
+            )
+          : await writeTx(
+              () =>
+                localE2ETestWalletClient
+                  ? localE2ETestWalletClient.writeContract(request as any)
+                  : writeContractAsync(request as any),
+              { action: "Publish feedback", suppressSuccessToast: true },
+            );
         if (!submittedHash) {
           throw new Error("Feedback publication transaction was not submitted.");
         }
@@ -214,6 +265,9 @@ export function useContentFeedback(contentId: bigint | string | number | null | 
     },
     [
       chain?.id,
+      canUseSelfFundedBatchCalls,
+      canUseSponsoredSubmitCalls,
+      executeContractCallBatch,
       localE2ETestWalletClient,
       normalizedContentId,
       publicClient,
@@ -251,6 +305,20 @@ export function useContentFeedback(contentId: bigint | string | number | null | 
     async (input: SubmitContentFeedbackInput): Promise<ContentFeedbackActionResult> => {
       if (!address || !normalizedContentId) {
         return { ok: false, reason: "not_connected" };
+      }
+      if (isAwaitingSponsoredSubmitCalls) {
+        return {
+          ok: false,
+          reason: "request_failed",
+          error: "Your wallet session is still preparing free transactions. Wait a moment, then retry.",
+        };
+      }
+      if (isMissingGasBalance && !canUseSponsoredSubmitCalls && !canUseSelfFundedBatchCalls) {
+        return {
+          ok: false,
+          reason: "request_failed",
+          error: getGasBalanceErrorMessage(nativeTokenSymbol, { canSponsorTransactions }),
+        };
       }
 
       setIsSubmitting(true);
@@ -326,20 +394,35 @@ export function useContentFeedback(contentId: bigint | string | number | null | 
         await queryClient.invalidateQueries({ queryKey });
         return { ok: true };
       } catch (error) {
-        if (isSignatureRejected(error)) {
+        const submitError = readFeedbackSubmissionError(error);
+        if (!submitError) {
           return { ok: false, reason: "rejected" };
         }
 
         return {
           ok: false,
           reason: "request_failed",
-          error: error instanceof Error ? error.message : "Failed to submit feedback",
+          error: submitError,
         };
       } finally {
         setIsSubmitting(false);
       }
     },
-    [address, chainId, normalizedContentId, publishFeedbackOnchain, queryClient, queryKey, signMessageAsync],
+    [
+      address,
+      canSponsorTransactions,
+      canUseSelfFundedBatchCalls,
+      canUseSponsoredSubmitCalls,
+      chainId,
+      isAwaitingSponsoredSubmitCalls,
+      isMissingGasBalance,
+      nativeTokenSymbol,
+      normalizedContentId,
+      publishFeedbackOnchain,
+      queryClient,
+      queryKey,
+      signMessageAsync,
+    ],
   );
 
   const feedback = feedbackQuery.data ?? EMPTY_FEEDBACK_RESPONSE;
