@@ -42,7 +42,7 @@
     "e2e:mobile": "playwright test --config e2e/playwright.config.ts --project=mobile-phone --project=mobile-android --project=mobile-tablet",
     "e2e:mobile:phone": "playwright test --config e2e/playwright.config.ts --project=mobile-phone",
     "e2e:mobile:phone:navigation": "playwright test --config e2e/playwright.config.ts --project=mobile-phone --grep 'sidebar hidden|hamburger opens|mobile header still hides|hamburger menu navigation|public mobile menu closes'",
-    "e2e:mobile:phone:vote": "playwright test --config e2e/playwright.config.ts --project=mobile-phone --grep 'vote page mobile chrome|last category card|mobile description preview|mobile voting dock|category switches|vote page loads|view filter sheet|StakeSelector|image preview'",
+    "e2e:mobile:phone:vote": "playwright test --config e2e/playwright.config.ts --project=mobile-phone --grep 'vote page loads|view filter sheet'",
     "e2e:mobile:phone:pages": "playwright test --config e2e/playwright.config.ts --project=mobile-phone --grep 'ask page form|governance page renders|docs page renders'",
     "e2e:mobile:android": "playwright test --config e2e/playwright.config.ts --project=mobile-android",
     "e2e:mobile:tablet": "playwright test --config e2e/playwright.config.ts --project=mobile-tablet",
