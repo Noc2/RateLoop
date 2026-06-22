@@ -124,6 +124,7 @@ test("CI app project covers broad Chromium specs without rerunning scoped suites
   const apiSpec = "/tmp/rateloop/packages/nextjs/e2e/tests/ponder-api.spec.ts";
   const lifecycleSpec = "/tmp/rateloop/packages/nextjs/e2e/tests/settlement-lifecycle.spec.ts";
   const compatSpec = "/tmp/rateloop/packages/nextjs/e2e/tests/browser-compat.spec.ts";
+  const androidSpec = "/tmp/rateloop/packages/nextjs/e2e/tests/mobile-android.spec.ts";
   const worldIdMockSpec = "/tmp/rateloop/packages/nextjs/e2e/tests/world-id-mock.spec.ts";
 
   assert.equal(testIgnore.test(broadSpec), false, "ci-app should include broad app specs");
@@ -140,6 +141,7 @@ test("CI app project covers broad Chromium specs without rerunning scoped suites
     true,
     "ci-app should leave browser compat specs to scheduled compat projects",
   );
+  assert.equal(testIgnore.test(androidSpec), true, "ci-app should leave Android specs to mobile-android");
   assert.equal(testIgnore.test(worldIdMockSpec), true, "ci-app should leave World ID mock specs to the mock project");
 });
 
@@ -156,6 +158,11 @@ test("broad Chromium ignores and lifecycle matches only target spec basenames", 
     chromiumIgnore.test("/tmp/rateloop/packages/nextjs/e2e/tests/mobile-tablet.spec.ts"),
     true,
     "chromium should ignore tablet mobile specs",
+  );
+  assert.equal(
+    chromiumIgnore.test("/tmp/rateloop/packages/nextjs/e2e/tests/mobile-android.spec.ts"),
+    true,
+    "chromium should ignore Android mobile specs",
   );
   assert.equal(
     settlementMatch.test("/tmp/settlement-lifecycle-worktree/packages/nextjs/e2e/tests/vote.spec.ts"),
