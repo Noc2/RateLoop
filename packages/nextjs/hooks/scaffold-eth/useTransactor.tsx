@@ -7,6 +7,7 @@ import { TransactionStatusCallout } from "~~/components/shared/TransactionStatus
 import { getTransactionReceiptPollingInterval } from "~~/config/shared";
 import { FREE_TRANSACTION_ALLOWANCE_QUERY_KEY } from "~~/hooks/useFreeTransactionAllowance";
 import { refreshActiveWalletReadQueries } from "~~/hooks/useRefreshWalletBalances";
+import { createTransactionTimingRun } from "~~/lib/transactions/timing";
 import { TRANSACTION_CONFIRMING_STATUS, getSubmittingTransactionStatus } from "~~/lib/ui/transactionStatusCopy";
 import scaffoldConfig from "~~/scaffold.config";
 import { AllowedChainIds, getBlockExplorerTxLink, notification } from "~~/utils/scaffold-eth";
@@ -115,6 +116,7 @@ export const useTransactor = (_walletClient?: WalletClient): TransactionFunc => 
     let transactionReceipt: TransactionReceipt | undefined;
     let blockExplorerTxURL = "";
     let chainId: number = scaffoldConfig.targetNetworks[0].id;
+    let timingLog: ReturnType<typeof createTransactionTimingRun> | null = null;
     try {
       const cachedChainId =
         walletClient.chain?.id ??
@@ -135,6 +137,13 @@ export const useTransactor = (_walletClient?: WalletClient): TransactionFunc => 
       }
 
       const action = options?.action ?? "transaction";
+      timingLog = createTransactionTimingRun({
+        action,
+        chainId,
+        consoleLabel: "wallet-transaction-timing",
+        route: typeof tx === "function" ? "prepared-wallet-call" : "send-transaction",
+        source: "wallet-transaction",
+      });
       const submittingStatus = getSubmittingTransactionStatus(action);
       if (!options?.suppressStatusToast) {
         notificationId = notification.loading(
@@ -144,16 +153,22 @@ export const useTransactor = (_walletClient?: WalletClient): TransactionFunc => 
             description={submittingStatus.description}
           />,
         );
+        timingLog.emit("status-toast-shown");
       }
       if (typeof tx === "function") {
         // Tx is already prepared by the caller
+        timingLog.emit("wallet-request-start");
         const result = await tx();
         transactionHash = result;
       } else if (tx != null) {
+        timingLog.emit("wallet-request-start");
         transactionHash = await walletClient.sendTransaction(tx as SendTransactionParameters);
       } else {
         throw new Error("Incorrect transaction passed to transactor");
       }
+      timingLog.emit("wallet-request-complete", {
+        transactionHash,
+      });
       if (notificationId) {
         notification.remove(notificationId);
       }
@@ -171,6 +186,9 @@ export const useTransactor = (_walletClient?: WalletClient): TransactionFunc => 
         );
       }
 
+      timingLog.emit("receipt-wait-start", {
+        transactionHash,
+      });
       transactionReceipt = await publicClient.waitForTransactionReceipt({
         hash: transactionHash,
         confirmations: options?.blockConfirmations,
@@ -181,6 +199,10 @@ export const useTransactor = (_walletClient?: WalletClient): TransactionFunc => 
       if (notificationId) {
         notification.remove(notificationId);
       }
+      timingLog.emit("receipt-wait-complete", {
+        receiptStatus: transactionReceipt.status,
+        transactionHash,
+      });
 
       if (transactionReceipt.status === "reverted") {
         throw await buildTransactionRevertedError({
@@ -204,6 +226,9 @@ export const useTransactor = (_walletClient?: WalletClient): TransactionFunc => 
       void queryClient.invalidateQueries({ queryKey: FREE_TRANSACTION_ALLOWANCE_QUERY_KEY });
 
       if (options?.onBlockConfirmation) options.onBlockConfirmation(transactionReceipt);
+      timingLog.emit("success", {
+        transactionHash,
+      });
     } catch (error: any) {
       if (notificationId) {
         notification.remove(notificationId);
@@ -223,6 +248,10 @@ export const useTransactor = (_walletClient?: WalletClient): TransactionFunc => 
         notification.error(message);
       }
       void queryClient.invalidateQueries({ queryKey: FREE_TRANSACTION_ALLOWANCE_QUERY_KEY });
+      timingLog?.emit("failure", {
+        message,
+        transactionHash,
+      });
       throw error;
     }
 
