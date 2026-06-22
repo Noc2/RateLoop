@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   PONDER_INDEXED_CONTRACTS,
   REQUIRED_ADDRESS_WIRING_CHECKS,
+  REQUIRED_CLUSTER_PAYOUT_ORACLE_CONSUMERS,
   REQUIRED_DEPLOYED_CONTRACTS,
   REQUIRED_SELECTOR_CHECKS,
   REQUIRED_SUBMISSION_MEDIA_VALIDATOR_SELECTORS,
@@ -124,6 +125,23 @@ function handleWiringCall(call, deploymentAddresses, overrides = {}) {
       overrides[check.label] ??
         deploymentAddresses.get(check.expectedContractName),
     );
+  }
+  const oracleAddress = deploymentAddresses.get("ClusterPayoutOracle");
+  if (
+    oracleAddress &&
+    call.to === oracleAddress &&
+    call.data.toLowerCase().startsWith("0x2fc1e72a")
+  ) {
+    const domain = Number(BigInt(`0x${call.data.slice(-64)}`));
+    const consumerCheck = REQUIRED_CLUSTER_PAYOUT_ORACLE_CONSUMERS.find(
+      (check) => check.domain === domain,
+    );
+    if (consumerCheck) {
+      return encodeAddressWords(
+        overrides[consumerCheck.label] ??
+          deploymentAddresses.get(consumerCheck.expectedContractName),
+      );
+    }
   }
   return undefined;
 }
@@ -275,6 +293,34 @@ test("validateBaseSepoliaOfflineReadiness accepts a staging app env that targets
 
   assert.equal(result.ok, true);
   assert.deepEqual(result.failures, []);
+});
+
+test("validateBaseSepoliaOfflineReadiness warns on the known stale x402 submitter", () => {
+  const staleSubmitter = "0x24AB19e0D8052DEc62bEc59e986e336adc4721F3";
+  const deploymentJson = makeDeploymentJson({ networkName: "baseSepolia" });
+  const x402Address = buildDeploymentAddressMap(deploymentJson).get(
+    "X402QuestionSubmitter",
+  );
+  delete deploymentJson[x402Address];
+  deploymentJson[staleSubmitter] = "X402QuestionSubmitter";
+
+  const result = validateBaseSepoliaOfflineReadiness({
+    deploymentJson,
+    deployedContractsSource: makeGeneratedContractsSource(
+      {
+        X402QuestionSubmitter: {
+          address: staleSubmitter,
+        },
+      },
+      84532,
+    ),
+    protocolSource:
+      'const USDC_BY_CHAIN_ID = { 84532: "0x036CbD53842c5426634e7929541eC2318f3dCF7e" };',
+    appEnvSource: "NEXT_PUBLIC_TARGET_NETWORKS=84532\n",
+  });
+
+  assert.equal(result.ok, true);
+  assert.match(result.warnings?.[0] ?? "", /known stale staging submitter/);
 });
 
 test("Base Sepolia readiness defaults to the committed staging env fixture", () => {
@@ -878,6 +924,7 @@ test("validateLiveReadiness rejects live deployment wiring mismatches", async ()
       }
       const wiringResult = handleWiringCall(params[0], deploymentAddresses, {
         "ProtocolConfig rewardDistributor": addressFor(777),
+        "ClusterPayoutOracle public rating consumer": addressFor(779),
         "X402QuestionSubmitter feedbackBonusEscrow": addressFor(778),
       });
       if (wiringResult) return wiringResult;
@@ -909,6 +956,13 @@ test("validateLiveReadiness rejects live deployment wiring mismatches", async ()
       result.failures.some((message) =>
         message.includes(
           "X402QuestionSubmitter feedbackBonusEscrow points to FeedbackBonusEscrow deployment",
+        ),
+      ),
+    );
+    assert(
+      result.failures.some((message) =>
+        message.includes(
+          "ClusterPayoutOracle public rating consumer points to ContentRegistry deployment",
         ),
       ),
     );

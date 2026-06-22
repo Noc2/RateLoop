@@ -24,6 +24,7 @@ const EIP1967_IMPLEMENTATION_SLOT =
   "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc";
 const SUBMISSION_MEDIA_VALIDATOR_SELECTOR = "0x738dbaa0";
 const SUBMISSION_MEDIA_VALIDATOR_AUTHORIZED_EMITTER_SELECTOR = "0xb717bbbd";
+const ROUND_PAYOUT_SNAPSHOT_CONSUMER_SELECTOR = "0x2fc1e72a";
 const ADDRESS_WORD_RE = /^[a-fA-F0-9]{64}$/;
 export const REQUIRED_SUBMISSION_MEDIA_VALIDATOR_SELECTORS = [
   "0x6773a34f", // validateContextSubmission(string,string[],string,string,string,bool)
@@ -341,6 +342,19 @@ export const REQUIRED_ADDRESS_WIRING_CHECKS = [
   },
 ];
 
+export const REQUIRED_CLUSTER_PAYOUT_ORACLE_CONSUMERS = [
+  {
+    domain: 1,
+    expectedContractName: "QuestionRewardPoolEscrow",
+    label: "ClusterPayoutOracle question reward consumer",
+  },
+  {
+    domain: 3,
+    expectedContractName: "ContentRegistry",
+    label: "ClusterPayoutOracle public rating consumer",
+  },
+];
+
 function isAddress(value) {
   return typeof value === "string" && ADDRESS_RE.test(value);
 }
@@ -647,8 +661,16 @@ function encodeAddressArgument(value) {
   return value.toLowerCase().replace(/^0x/, "").padStart(64, "0");
 }
 
+function encodeUint8Argument(value) {
+  return Number(value).toString(16).padStart(64, "0");
+}
+
 function buildAddressCallData(selector, argumentAddresses = []) {
   return `${selector}${argumentAddresses.map(encodeAddressArgument).join("")}`;
+}
+
+function buildUint8CallData(selector, value) {
+  return `${selector}${encodeUint8Argument(value)}`;
 }
 
 function sameAddress(left, right) {
@@ -764,6 +786,50 @@ async function validateLiveDeploymentWiring({
   }
 }
 
+async function getClusterPayoutOracleConsumer(
+  rpcUrl,
+  deploymentAddresses,
+  consumerCheck,
+) {
+  const oracleAddress = deploymentAddresses.get("ClusterPayoutOracle");
+  if (!oracleAddress) return undefined;
+  const result = await rpc(rpcUrl, "eth_call", [
+    {
+      to: oracleAddress,
+      data: buildUint8CallData(
+        ROUND_PAYOUT_SNAPSHOT_CONSUMER_SELECTOR,
+        consumerCheck.domain,
+      ),
+    },
+    "latest",
+  ]);
+  return parseAddressResult(result);
+}
+
+async function validateLiveClusterPayoutOracleConsumers({
+  checks,
+  deploymentAddresses,
+  failures,
+  rpcUrl,
+}) {
+  for (const consumerCheck of REQUIRED_CLUSTER_PAYOUT_ORACLE_CONSUMERS) {
+    const expectedAddress = deploymentAddresses.get(
+      consumerCheck.expectedContractName,
+    );
+    const actualAddress = await getClusterPayoutOracleConsumer(
+      rpcUrl,
+      deploymentAddresses,
+      consumerCheck,
+    );
+    addCheck(
+      checks,
+      failures,
+      sameAddress(actualAddress, expectedAddress),
+      `${consumerCheck.label} points to ${consumerCheck.expectedContractName} deployment`,
+    );
+  }
+}
+
 export async function validateLiveReadiness({
   appUrl,
   deploymentJson,
@@ -817,6 +883,12 @@ export async function validateLiveReadiness({
       }
 
       await validateLiveDeploymentWiring({
+        checks,
+        deploymentAddresses,
+        failures,
+        rpcUrl,
+      });
+      await validateLiveClusterPayoutOracleConsumers({
         checks,
         deploymentAddresses,
         failures,

@@ -3,6 +3,7 @@ import { dirname, isAbsolute, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   addBasePreconfirmationEnvChecks,
+  buildDeploymentAddressMap,
   loadOfflineInputs,
   validateLiveReadiness,
   validateOfflineReadiness,
@@ -25,6 +26,8 @@ export const BASE_SEPOLIA_READINESS_CONFIG = {
   rpcEnvName: "BASE_SEPOLIA_RPC_URL",
   usdc: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
 };
+const KNOWN_STALE_BASE_SEPOLIA_X402_QUESTION_SUBMITTER =
+  "0x24ab19e0d8052dec62bec59e986e336adc4721f3";
 
 function parseArgs(argv) {
   return {
@@ -43,6 +46,9 @@ function printResult(title, result, json = false) {
   console.log(`\n${title}`);
   for (const check of result.checks) {
     console.log(`${check.ok ? "PASS" : "FAIL"} ${check.message}`);
+  }
+  for (const warning of result.warnings ?? []) {
+    console.log(`WARN ${warning}`);
   }
 }
 
@@ -90,6 +96,9 @@ export function validateBaseSepoliaOfflineReadiness(inputs) {
     BASE_SEPOLIA_READINESS_CONFIG,
   );
   const appEnvSource = inputs.appEnvSource ?? "";
+  const deploymentAddresses = buildDeploymentAddressMap(inputs.deploymentJson);
+  const x402QuestionSubmitter = deploymentAddresses.get("X402QuestionSubmitter");
+  result.warnings ??= [];
 
   addCheck(
     result,
@@ -105,6 +114,14 @@ export function validateBaseSepoliaOfflineReadiness(inputs) {
     ),
     "Next.js staging env targets Base Sepolia",
   );
+  if (
+    x402QuestionSubmitter?.toLowerCase() ===
+    KNOWN_STALE_BASE_SEPOLIA_X402_QUESTION_SUBMITTER
+  ) {
+    result.warnings.push(
+      "Base Sepolia X402QuestionSubmitter is the known stale staging submitter; one-shot Feedback Bonus x402 submissions remain disabled until the staging submitter is refreshed.",
+    );
+  }
 
   return result;
 }
