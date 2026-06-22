@@ -51,16 +51,12 @@ async function getReadyRateMobileMenuButton(page: Page) {
   return mobileHeader.getByLabel("Open menu");
 }
 
-async function clickReadyRateMobileMenuButton(page: Page) {
+async function openReadyRateMobileMenu(page: Page) {
   const button = await getReadyRateMobileMenuButton(page);
-  const clickPoint = await button.evaluate(element => {
-    const rect = element.getBoundingClientRect();
-    return {
-      x: rect.left + rect.width / 2,
-      y: rect.top + rect.height / 2,
-    };
+  await button.evaluate(element => (element as HTMLElement).click());
+  await expect(page.locator('[data-mobile-header="true"] details.dropdown').first()).toHaveAttribute("open", "", {
+    timeout: 3_000,
   });
-  await page.mouse.click(clickPoint.x, clickPoint.y);
 }
 
 test.describe("Mobile viewport (phone)", () => {
@@ -79,7 +75,7 @@ test.describe("Mobile viewport (phone)", () => {
     await page.goto("/rate");
     await waitForFeedLoaded(page);
 
-    await clickReadyRateMobileMenuButton(page);
+    await openReadyRateMobileMenu(page);
 
     const dropdown = page.locator(".dropdown-content");
     await expect(dropdown.getByRole("link", { name: /Discover/i })).toBeVisible({ timeout: 5_000 });
@@ -841,7 +837,7 @@ test.describe("Mobile viewport (phone)", () => {
     await page.goto("/rate");
     await waitForFeedLoaded(page);
 
-    await clickReadyRateMobileMenuButton(page);
+    await openReadyRateMobileMenu(page);
     await page
       .locator(".dropdown-content")
       .getByRole("link", { name: /Submit/i })
