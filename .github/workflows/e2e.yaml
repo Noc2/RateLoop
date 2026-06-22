@@ -286,6 +286,13 @@ jobs:
       - name: Install dependencies
         run: yarn install --immutable
 
+      - name: Install contract build tools
+        run: |
+          if ! command -v make >/dev/null 2>&1; then
+            apt-get update
+            apt-get install -y --no-install-recommends make
+          fi
+
       - name: Start Anvil and deploy contracts
         env:
           ETHERSCAN_API_KEY: ${{ secrets.ETHERSCAN_API_KEY }}
