@@ -45,6 +45,10 @@ test("Base Sepolia readiness remains an active push, PR, scheduled, and manual g
     workflow,
     /BASE_SEPOLIA_NEXT_ENV_FILE: docs\/testing\/base-sepolia-next-env\.fixture/,
   );
+  assert.match(
+    workflow,
+    /PONDER_METADATA_SYNC_TOKEN: \$\{\{ secrets\.PONDER_METADATA_SYNC_TOKEN \}\}/,
+  );
 });
 
 test("Base mainnet readiness remains an active push, PR, scheduled, and manual gate", () => {
@@ -58,4 +62,8 @@ test("Base mainnet readiness remains an active push, PR, scheduled, and manual g
   assert.match(workflow, /^  schedule:/m);
   assert.match(workflow, /^  workflow_dispatch:/m);
   assert.match(workflow, /check-base-mainnet-readiness\.mjs/);
+  assert.match(
+    workflow,
+    /PONDER_METADATA_SYNC_TOKEN: \$\{\{ secrets\.PONDER_METADATA_SYNC_TOKEN \}\}/,
+  );
 });

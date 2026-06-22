@@ -918,19 +918,29 @@ export async function validateLiveReadiness({
       );
       if (deploymentResponse.ok) {
         const deployment = await deploymentResponse.json().catch(() => null);
-        const contentRegistryAddress = deploymentAddresses.get("ContentRegistry");
-        const feedbackRegistryAddress = deploymentAddresses.get("FeedbackRegistry");
-        const expectedDeploymentKey = expectedPonderDeploymentKey(readinessConfig, deploymentAddresses);
+        const contentRegistryAddress =
+          deploymentAddresses.get("ContentRegistry");
+        const feedbackRegistryAddress =
+          deploymentAddresses.get("FeedbackRegistry");
+        const expectedDeploymentKey = expectedPonderDeploymentKey(
+          readinessConfig,
+          deploymentAddresses,
+        );
         const ponderChainId =
           typeof deployment?.chainId === "number"
             ? deployment.chainId
             : typeof deployment?.chainId === "string"
               ? Number(deployment.chainId)
               : NaN;
-        const ponderContentRegistry = normalizeReadinessAddress(deployment?.contentRegistryAddress);
-        const ponderFeedbackRegistry = normalizeReadinessAddress(deployment?.feedbackRegistryAddress);
+        const ponderContentRegistry = normalizeReadinessAddress(
+          deployment?.contentRegistryAddress,
+        );
+        const ponderFeedbackRegistry = normalizeReadinessAddress(
+          deployment?.feedbackRegistryAddress,
+        );
         const ponderDeploymentKey =
-          typeof deployment?.deploymentKey === "string" && deployment.deploymentKey.trim()
+          typeof deployment?.deploymentKey === "string" &&
+          deployment.deploymentKey.trim()
             ? deployment.deploymentKey.trim().toLowerCase()
             : null;
         addCheck(
@@ -956,10 +966,31 @@ export async function validateLiveReadiness({
         addCheck(
           checks,
           failures,
-          Boolean(expectedDeploymentKey) && ponderDeploymentKey === expectedDeploymentKey,
+          Boolean(expectedDeploymentKey) &&
+            ponderDeploymentKey === expectedDeploymentKey,
           "Ponder deployment key matches deployment artifact",
         );
       }
+
+      const metadataSyncHeaders = { "content-type": "application/json" };
+      const metadataSyncToken = process.env.PONDER_METADATA_SYNC_TOKEN?.trim();
+      if (metadataSyncToken) {
+        metadataSyncHeaders.authorization = `Bearer ${metadataSyncToken}`;
+      }
+      const metadataSyncResponse = await fetchWithTimeout(
+        buildPonderUrl(ponderUrl, "/question-metadata"),
+        {
+          body: "{",
+          headers: metadataSyncHeaders,
+          method: "POST",
+        },
+      );
+      addCheck(
+        checks,
+        failures,
+        metadataSyncResponse.status === 400,
+        `Ponder /question-metadata auth reaches JSON validation (HTTP ${metadataSyncResponse.status})`,
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       addCheck(
@@ -1013,15 +1044,20 @@ export async function validateLiveReadiness({
       );
       if (response.status < 500) {
         const body = await response.json().catch(() => null);
-        const expectedDeploymentKey = expectedPonderDeploymentKey(readinessConfig, deploymentAddresses);
+        const expectedDeploymentKey = expectedPonderDeploymentKey(
+          readinessConfig,
+          deploymentAddresses,
+        );
         const appExpectedDeploymentKey =
-          typeof body?.expectedDeploymentKey === "string" && body.expectedDeploymentKey.trim()
+          typeof body?.expectedDeploymentKey === "string" &&
+          body.expectedDeploymentKey.trim()
             ? body.expectedDeploymentKey.trim().toLowerCase()
             : null;
         addCheck(
           checks,
           failures,
-          Boolean(expectedDeploymentKey) && appExpectedDeploymentKey === expectedDeploymentKey,
+          Boolean(expectedDeploymentKey) &&
+            appExpectedDeploymentKey === expectedDeploymentKey,
           `app expects ${readinessConfig.label} Ponder deployment`,
         );
       }

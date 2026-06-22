@@ -651,12 +651,12 @@ describe("question bundle claim candidates", () => {
 
     expect(response.status).toBe(200);
 
-    const leftJoinExpressions = queryBuilder.leftJoin.mock.calls.map(call =>
+    const leftJoinExpressions = queryBuilder.leftJoin.mock.calls.map((call) =>
       serializeExpression(call),
     );
     expect(
       leftJoinExpressions.some(
-        join =>
+        (join) =>
           join.includes("questionBundleClaim.bundleId") &&
           join.includes("questionBundleClaim.roundSetIndex") &&
           join.includes("questionBundleClaim.identityKey"),
@@ -1003,6 +1003,193 @@ describe("registerContentRoutes", () => {
         delete process.env.PONDER_METADATA_SYNC_ALLOW_OPEN;
       } else {
         process.env.PONDER_METADATA_SYNC_ALLOW_OPEN = originalAllowOpen;
+      }
+    }
+  });
+
+  it("uses DATABASE_PRIVATE_URL for metadata sync writes when DATABASE_URL is unset", async () => {
+    const originalDatabaseUrl = process.env.DATABASE_URL;
+    const originalDatabasePrivateUrl = process.env.DATABASE_PRIVATE_URL;
+    const originalNodeEnv = process.env.NODE_ENV;
+    const originalPonderNetwork = process.env.PONDER_NETWORK;
+    const originalAllowOpen = process.env.PONDER_METADATA_SYNC_ALLOW_OPEN;
+    const query = vi.fn(async () => ({ rowCount: 1 }));
+    const poolConfigs: unknown[] = [];
+    vi.doMock("pg", () => ({
+      Pool: vi.fn(function MockPool(config: unknown) {
+        poolConfigs.push(config);
+        return { query };
+      }),
+    }));
+    delete process.env.DATABASE_URL;
+    process.env.DATABASE_PRIVATE_URL = "postgres://private/rateloop";
+    process.env.NODE_ENV = "test";
+    process.env.PONDER_NETWORK = "hardhat";
+    process.env.PONDER_METADATA_SYNC_ALLOW_OPEN = "true";
+
+    try {
+      mockPonderModules([]);
+      const { registerContentRoutes } = await import(
+        "../src/api/routes/content-routes.js"
+      );
+
+      const app = new Hono();
+      registerContentRoutes(app);
+      const questionMetadata = {
+        schemaVersion: "rateloop.question.v3",
+        title: "Private database metadata title",
+      };
+      const questionMetadataHash = canonicalJsonHash(questionMetadata);
+      const deployment = resolvePonderProtocolDeploymentMetadata();
+      expect(deployment).not.toBeNull();
+
+      const response = await app.request("http://localhost/question-metadata", {
+        body: JSON.stringify({
+          deploymentKey: deployment?.deploymentKey,
+          metadata: [
+            {
+              contentId: "42",
+              questionMetadata,
+              questionMetadataHash,
+              resultSpecHash: `0x${"3".repeat(64)}`,
+            },
+          ],
+        }),
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      });
+
+      expect(response.status).toBe(200);
+      expect(poolConfigs[0]).toMatchObject({
+        connectionString: "postgres://private/rateloop",
+      });
+    } finally {
+      if (originalDatabaseUrl === undefined) {
+        delete process.env.DATABASE_URL;
+      } else {
+        process.env.DATABASE_URL = originalDatabaseUrl;
+      }
+      if (originalDatabasePrivateUrl === undefined) {
+        delete process.env.DATABASE_PRIVATE_URL;
+      } else {
+        process.env.DATABASE_PRIVATE_URL = originalDatabasePrivateUrl;
+      }
+      if (originalNodeEnv === undefined) {
+        delete process.env.NODE_ENV;
+      } else {
+        process.env.NODE_ENV = originalNodeEnv;
+      }
+      if (originalPonderNetwork === undefined) {
+        delete process.env.PONDER_NETWORK;
+      } else {
+        process.env.PONDER_NETWORK = originalPonderNetwork;
+      }
+      if (originalAllowOpen === undefined) {
+        delete process.env.PONDER_METADATA_SYNC_ALLOW_OPEN;
+      } else {
+        process.env.PONDER_METADATA_SYNC_ALLOW_OPEN = originalAllowOpen;
+      }
+    }
+  });
+
+  it("requires the metadata sync bearer token when open sync is disabled", async () => {
+    const originalDatabaseUrl = process.env.DATABASE_URL;
+    const originalDatabasePrivateUrl = process.env.DATABASE_PRIVATE_URL;
+    const originalNodeEnv = process.env.NODE_ENV;
+    const originalPonderNetwork = process.env.PONDER_NETWORK;
+    const originalAllowOpen = process.env.PONDER_METADATA_SYNC_ALLOW_OPEN;
+    const originalToken = process.env.PONDER_METADATA_SYNC_TOKEN;
+    const query = vi.fn(async () => ({ rowCount: 1 }));
+    vi.doMock("pg", () => ({
+      Pool: vi.fn(function MockPool() {
+        return { query };
+      }),
+    }));
+    process.env.DATABASE_URL = "postgres://localhost/rateloop";
+    delete process.env.DATABASE_PRIVATE_URL;
+    process.env.NODE_ENV = "test";
+    process.env.PONDER_NETWORK = "hardhat";
+    delete process.env.PONDER_METADATA_SYNC_ALLOW_OPEN;
+    process.env.PONDER_METADATA_SYNC_TOKEN = "shared-secret";
+
+    try {
+      mockPonderModules([]);
+      const { registerContentRoutes } = await import(
+        "../src/api/routes/content-routes.js"
+      );
+
+      const app = new Hono();
+      registerContentRoutes(app);
+      const questionMetadata = {
+        schemaVersion: "rateloop.question.v3",
+        title: "Token-protected metadata title",
+      };
+      const questionMetadataHash = canonicalJsonHash(questionMetadata);
+      const deployment = resolvePonderProtocolDeploymentMetadata();
+      expect(deployment).not.toBeNull();
+      const body = JSON.stringify({
+        deploymentKey: deployment?.deploymentKey,
+        metadata: [
+          {
+            contentId: "42",
+            questionMetadata,
+            questionMetadataHash,
+            resultSpecHash: `0x${"3".repeat(64)}`,
+          },
+        ],
+      });
+
+      const rejected = await app.request("http://localhost/question-metadata", {
+        body,
+        headers: {
+          authorization: "Bearer wrong-secret",
+          "content-type": "application/json",
+        },
+        method: "POST",
+      });
+      expect(rejected.status).toBe(401);
+
+      const accepted = await app.request("http://localhost/question-metadata", {
+        body,
+        headers: {
+          authorization: "Bearer shared-secret",
+          "content-type": "application/json",
+        },
+        method: "POST",
+      });
+      expect(accepted.status).toBe(200);
+      expect(await accepted.json()).toMatchObject({ updated: 1, skipped: 0 });
+      expect(query).toHaveBeenCalledTimes(1);
+    } finally {
+      if (originalDatabaseUrl === undefined) {
+        delete process.env.DATABASE_URL;
+      } else {
+        process.env.DATABASE_URL = originalDatabaseUrl;
+      }
+      if (originalDatabasePrivateUrl === undefined) {
+        delete process.env.DATABASE_PRIVATE_URL;
+      } else {
+        process.env.DATABASE_PRIVATE_URL = originalDatabasePrivateUrl;
+      }
+      if (originalNodeEnv === undefined) {
+        delete process.env.NODE_ENV;
+      } else {
+        process.env.NODE_ENV = originalNodeEnv;
+      }
+      if (originalPonderNetwork === undefined) {
+        delete process.env.PONDER_NETWORK;
+      } else {
+        process.env.PONDER_NETWORK = originalPonderNetwork;
+      }
+      if (originalAllowOpen === undefined) {
+        delete process.env.PONDER_METADATA_SYNC_ALLOW_OPEN;
+      } else {
+        process.env.PONDER_METADATA_SYNC_ALLOW_OPEN = originalAllowOpen;
+      }
+      if (originalToken === undefined) {
+        delete process.env.PONDER_METADATA_SYNC_TOKEN;
+      } else {
+        process.env.PONDER_METADATA_SYNC_TOKEN = originalToken;
       }
     }
   });
@@ -1785,11 +1972,11 @@ describe("registerContentRoutes", () => {
     expect(response.status).toBe(200);
 
     const serialized = queryBuilders
-      .flatMap(builder =>
+      .flatMap((builder) =>
         builder.where.mock.calls.map(([value]) => serializeExpression(value)),
       )
       .find(
-        value =>
+        (value) =>
           value.includes("content.submitter") &&
           value.includes("content.urlHost"),
       );
@@ -2250,10 +2437,7 @@ describe("registerDataRoutes", () => {
   });
 
   it("adds moderation predicates to question bundle previews", async () => {
-    const { queryBuilders } = mockPonderModules(
-      [{ id: 7n }],
-      [[], [], []],
-    );
+    const { queryBuilders } = mockPonderModules([{ id: 7n }], [[], [], []]);
     const { registerDataRoutes } = await import(
       "../src/api/routes/data-routes.js"
     );
@@ -3657,7 +3841,9 @@ describe("registerCorrelationRoutes", () => {
     await expect(response.json()).resolves.toMatchObject({
       reason: "launch_identity_ban_drift",
     });
-    const driftWhere = serializeExpression(queryBuilders[5]?.where.mock.calls[0]?.[0]);
+    const driftWhere = serializeExpression(
+      queryBuilders[5]?.where.mock.calls[0]?.[0],
+    );
     expect(driftWhere).toContain("raterIdentityBan.updatedAt");
     expect(driftWhere).toContain("raterIdentityBan.provider");
     expect(driftWhere).toContain("raterIdentityBan.nullifierHash");
@@ -3803,10 +3989,12 @@ describe("registerCorrelationRoutes", () => {
         roundOpenTime: null,
       },
     ]);
-    expect(serializeExpression(queryBuilders[1]?.where.mock.calls[0]?.[0])).toContain("raterIdentityBan.active");
-    expect(serializeExpression(queryBuilders[2]?.where.mock.calls[0]?.[0])).toContain(
-      "raterHumanCredential.nullifierHash",
-    );
+    expect(
+      serializeExpression(queryBuilders[1]?.where.mock.calls[0]?.[0]),
+    ).toContain("raterIdentityBan.active");
+    expect(
+      serializeExpression(queryBuilders[2]?.where.mock.calls[0]?.[0]),
+    ).toContain("raterHumanCredential.nullifierHash");
   });
 
   it("excludes holder-address banned voters from correlation scoring inputs", async () => {
@@ -3876,10 +4064,12 @@ describe("registerCorrelationRoutes", () => {
         roundOpenTime: null,
       },
     ]);
-    expect(serializeExpression(queryBuilders[1]?.where.mock.calls[0]?.[0])).toContain("raterIdentityBan.active");
-    expect(serializeExpression(queryBuilders[2]?.where.mock.calls[0]?.[0])).toContain(
-      "raterHumanCredential.nullifierHash",
-    );
+    expect(
+      serializeExpression(queryBuilders[1]?.where.mock.calls[0]?.[0]),
+    ).toContain("raterIdentityBan.active");
+    expect(
+      serializeExpression(queryBuilders[2]?.where.mock.calls[0]?.[0]),
+    ).toContain("raterHumanCredential.nullifierHash");
   });
 
   it("reports both voter and holder address ban reasons for delegated correlation votes", async () => {
@@ -3943,13 +4133,15 @@ describe("registerCorrelationRoutes", () => {
         roundOpenTime: null,
       },
     ]);
-    const banWhere = serializeExpression(queryBuilders[1]?.where.mock.calls[0]?.[0]);
+    const banWhere = serializeExpression(
+      queryBuilders[1]?.where.mock.calls[0]?.[0],
+    );
     expect(banWhere).toContain("raterIdentityBan.active");
     expect(banWhere).toContain("raterIdentityBan.permanent");
     expect(banWhere).toContain("raterIdentityBan.expiresAt");
-    expect(serializeExpression(queryBuilders[2]?.where.mock.calls[0]?.[0])).toContain(
-      "raterHumanCredential.nullifierHash",
-    );
+    expect(
+      serializeExpression(queryBuilders[2]?.where.mock.calls[0]?.[0]),
+    ).toContain("raterHumanCredential.nullifierHash");
   });
 
   it("does not count holder-address banned votes against round-vote pagination", async () => {
@@ -4427,7 +4619,9 @@ describe("registerCorrelationRoutes", () => {
         roundOpenTime: null,
       },
     ]);
-    expect(serializeExpression(queryBuilders[1]?.where.mock.calls[0]?.[0])).toContain("raterIdentityBan.active");
+    expect(
+      serializeExpression(queryBuilders[1]?.where.mock.calls[0]?.[0]),
+    ).toContain("raterIdentityBan.active");
   });
 });
 
@@ -4901,9 +5095,13 @@ describe("shared settlement helpers", () => {
       revealGracePeriod: 60n,
     };
 
-    expect(getEstimatedSettlementTime(row.startTime, row.epochDuration, row.revealGracePeriod)).toBe(
-      1_660n,
-    );
+    expect(
+      getEstimatedSettlementTime(
+        row.startTime,
+        row.epochDuration,
+        row.revealGracePeriod,
+      ),
+    ).toBe(1_660n);
     expect(
       getEstimatedRevealFailedTime(
         row.startTime,

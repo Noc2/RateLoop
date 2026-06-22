@@ -34,26 +34,28 @@ Within the package directory, additional scripts are available:
 
 ## Configuration
 
-| Variable                                   | Description                                                                                                                 |
-| ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
-| `PONDER_NETWORK`                           | Active network: `hardhat`, `baseSepolia`, `base`, `worldchainSepolia`, or `worldchain`                                      |
+| Variable                                   | Description                                                                                                                                                                                                 |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PONDER_NETWORK`                           | Active network: `hardhat`, `baseSepolia`, `base`, `worldchainSepolia`, or `worldchain`                                                                                                                      |
 | `PONDER_CHAIN_ID`                          | Optional explicit chain ID; must match `PONDER_NETWORK` when both are set. Used by `yarn ponder:start` for protocol deployment keys and Postgres schema selection when unset defaults from the network name |
-| `PONDER_RPC_URL_31337`                     | RPC URL for local Hardhat/Anvil chain                                                                                       |
-| `PONDER_RPC_URL_84532`                     | RPC URL for Base Sepolia                                                                                                    |
-| `PONDER_RPC_URL_8453`                      | RPC URL for Base mainnet                                                                                                    |
-| `PONDER_RPC_URL_4801`                      | RPC URL for World Chain Sepolia                                                                                             |
-| `PONDER_RPC_URL_480`                       | RPC URL for World Chain mainnet                                                                                             |
-| `PONDER_CONTENT_REGISTRY_ADDRESS` etc.     | Local Hardhat address overrides; ignored for supported live chains that have shared deployment metadata in `@rateloop/contracts` |
-| `PONDER_ADVISORY_VOTE_RECORDER_ADDRESS`    | Advisory zero-stake vote recorder address; local override only once deployments are refreshed                               |
-| `PONDER_CLUSTER_PAYOUT_ORACLE_ADDRESS`     | Correlation payout oracle address; local-only fallback when the active chain has no shared deployment metadata              |
-| `PONDER_CONFIDENTIALITY_ESCROW_ADDRESS`    | Confidentiality escrow address; local-only fallback when the active chain has no shared deployment metadata                |
-| `PONDER_CONTENT_REGISTRY_START_BLOCK` etc. | Local-only fallback start blocks when the active chain has no shared deployment metadata                                    |
-| `RATELOOP_PONDER_DATABASE_SCHEMA`          | Optional production schema override for Ponder tables; `yarn ponder:start` defaults to a Railway deployment schema, then a protocol deployment schema, then a RateLoop-owned network schema |
-| `CORS_ORIGIN`                              | Allowed origins (comma-separated; required in production)                                                                   |
-| `RATE_LIMIT_TRUSTED_IP_HEADERS`            | Comma-separated proxy IP headers to trust for API rate limiting in production                                               |
-| `PAYOUT_ARTIFACT_HTTPS_ALLOWLIST`          | Comma-separated HTTPS URL prefixes Ponder may fetch for keeper-published payout artifacts                                  |
+| `PONDER_RPC_URL_31337`                     | RPC URL for local Hardhat/Anvil chain                                                                                                                                                                       |
+| `PONDER_RPC_URL_84532`                     | RPC URL for Base Sepolia                                                                                                                                                                                    |
+| `PONDER_RPC_URL_8453`                      | RPC URL for Base mainnet                                                                                                                                                                                    |
+| `PONDER_RPC_URL_4801`                      | RPC URL for World Chain Sepolia                                                                                                                                                                             |
+| `PONDER_RPC_URL_480`                       | RPC URL for World Chain mainnet                                                                                                                                                                             |
+| `PONDER_CONTENT_REGISTRY_ADDRESS` etc.     | Local Hardhat address overrides; validated against shared artifacts for supported live chains that have deployment metadata in `@rateloop/contracts`                                                        |
+| `PONDER_ADVISORY_VOTE_RECORDER_ADDRESS`    | Advisory zero-stake vote recorder address; local override only once deployments are refreshed                                                                                                               |
+| `PONDER_CLUSTER_PAYOUT_ORACLE_ADDRESS`     | Correlation payout oracle address; local-only fallback when the active chain has no shared deployment metadata                                                                                              |
+| `PONDER_CONFIDENTIALITY_ESCROW_ADDRESS`    | Confidentiality escrow address; local-only fallback when the active chain has no shared deployment metadata                                                                                                 |
+| `PONDER_CONTENT_REGISTRY_START_BLOCK` etc. | Local-only fallback start blocks when the active chain has no shared deployment metadata                                                                                                                    |
+| `RATELOOP_PONDER_DATABASE_SCHEMA`          | Optional production schema override for Ponder tables; `yarn ponder:start` defaults to a Railway deployment schema, then a protocol deployment schema, then a RateLoop-owned network schema                 |
+| `CORS_ORIGIN`                              | Allowed origins (comma-separated; required in production)                                                                                                                                                   |
+| `RATE_LIMIT_TRUSTED_IP_HEADERS`            | Comma-separated proxy IP headers to trust for API rate limiting in production                                                                                                                               |
+| `PAYOUT_ARTIFACT_HTTPS_ALLOWLIST`          | Comma-separated HTTPS URL prefixes Ponder may fetch for keeper-published payout artifacts                                                                                                                   |
+| `PONDER_METADATA_SYNC_TOKEN`               | Bearer token for Next.js `POST /question-metadata` metadata sync; must match the Next.js server value                                                                                                       |
+| `PONDER_METADATA_SYNC_ALLOW_OPEN`          | Local/dev-only escape hatch for unauthenticated metadata sync                                                                                                                                               |
 
-For live supported chains, Ponder treats `@rateloop/contracts` as the source of truth and ignores stale address/start-block env values.
+For live supported chains, Ponder treats `@rateloop/contracts` as the source of truth and validates address and start-block env values against the shared artifacts. Conflicting live-chain overrides fail startup instead of being ignored.
 For local Hardhat/Anvil, Ponder prefers the address env values generated into `packages/ponder/.env.local` so a fresh
 `yarn deploy` does not need machine-specific addresses committed to the shared deployment artifact. After `yarn deploy`,
 the Foundry deployment script refreshes `packages/ponder/.env.local` to match the deployment target. Local deploys set
@@ -65,10 +67,11 @@ In production, `yarn ponder:start` launches Ponder with an explicit Postgres sch
 launcher uses `RAILWAY_DEPLOYMENT_ID`, matching Ponder's zero-downtime deployment model and keeping new
 app builds from colliding with older Ponder app metadata. Outside Railway, the launcher derives a
 protocol deployment key from the active chain's `ContentRegistry` and `FeedbackRegistry` addresses, so a
-contract redeploy automatically indexes into a fresh schema even if content IDs restart. If neither value
-is available and `DATABASE_SCHEMA` is unset or still set to the generic legacy `ponder` value, the launcher
-uses network-specific defaults such as `rateloop_ponder_base_sepolia`. To force a specific schema, set
-`RATELOOP_PONDER_DATABASE_SCHEMA` to a unique value such as `rateloop_ponder_base_sepolia_v2`.
+future incident/governance migration that changes contract addresses indexes into a fresh schema even if
+content IDs restart. If neither value is available and `DATABASE_SCHEMA` is unset or still set to the generic
+legacy `ponder` value, the launcher uses network-specific defaults such as `rateloop_ponder_base_sepolia`.
+To force a specific schema, set `RATELOOP_PONDER_DATABASE_SCHEMA` to a unique value such as
+`rateloop_ponder_base_sepolia_v2`.
 
 When the keeper publishes correlation payout artifacts with `KEEPER_CORRELATION_ARTIFACT_STORAGE=file`, set
 `PAYOUT_ARTIFACT_HTTPS_ALLOWLIST` to the same public HTTPS prefix as the keeper's

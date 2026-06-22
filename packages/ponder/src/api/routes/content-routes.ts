@@ -577,10 +577,14 @@ function quotePonderColumn(value: string) {
   return quoteIdentifier(toSnakeCaseIdentifier(value));
 }
 
+function metadataSyncDatabaseUrl() {
+  return readEnv("DATABASE_PRIVATE_URL") || readEnv("DATABASE_URL");
+}
+
 function getMetadataUpdatePool() {
-  const connectionString = readEnv("DATABASE_URL");
+  const connectionString = metadataSyncDatabaseUrl();
   if (!connectionString) {
-    throw new Error("DATABASE_URL is required for metadata sync.");
+    throw new Error("DATABASE_PRIVATE_URL or DATABASE_URL is required for metadata sync.");
   }
   metadataUpdatePool ??= new Pool({
     connectionString,
@@ -700,8 +704,8 @@ function authorizeMetadataSync(c: Context) {
     if (process.env.PONDER_METADATA_SYNC_ALLOW_OPEN === "true") {
       return null;
     }
-    return process.env.DATABASE_URL?.trim()
-      ? "PONDER_METADATA_SYNC_TOKEN is required when DATABASE_URL is configured."
+    return metadataSyncDatabaseUrl()
+      ? "PONDER_METADATA_SYNC_TOKEN is required when database metadata sync is configured."
       : "PONDER_METADATA_SYNC_TOKEN is required.";
   }
   return c.req.header("authorization") === `Bearer ${token}` ? null : "Invalid metadata sync token.";

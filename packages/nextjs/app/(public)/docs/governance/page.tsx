@@ -1,7 +1,6 @@
 import type { NextPage } from "next";
 import { DocsTitle } from "~~/components/docs/DocsTitle";
 import { OracleChallengeFlowDiagram } from "~~/components/docs/OracleChallengeFlowDiagram";
-import { PROTOCOL_RELEASE_CANDIDATE_LABEL } from "~~/constants/protocolRelease";
 import { protocolDocFacts } from "~~/lib/docs/protocolFacts";
 
 const GovernanceDocs: NextPage = () => {
@@ -12,22 +11,20 @@ const GovernanceDocs: NextPage = () => {
         LREP governance controls protocol settings, upgrades, treasury routing, and optional identity policy.
       </p>
 
-      <h2 id="mainnet-beta-release-candidates">Mainnet Beta and Release Candidates</h2>
+      <h2 id="mainnet-beta">Mainnet Beta</h2>
       <p>
-        The first mainnet deployment is intended to launch as {PROTOCOL_RELEASE_CANDIDATE_LABEL}, and the protocol will
-        remain in beta while that deployment is observed in production. If the release candidate works as expected and
-        no serious protocol issue appears, it can become the main RateLoop protocol and the public beta label can be
-        removed.
+        RateLoop&apos;s Base mainnet contracts are live production infrastructure. The beta label covers operational
+        maturity around governance participation, off-chain services, indexer reliability, operator tooling, and public
+        documentation while the deployed contract stack remains the system of record.
       </p>
       <p>
-        If a material issue appears during beta, RateLoop may publish a new release candidate instead of treating the
-        first deployment as final. Before that redeployment, the community can take a public snapshot of the current
-        allocation so balances, earned reputation, and relevant protocol state can be carried forward into the updated
-        contracts.
+        Routine configuration, indexing, UI, keeper, and operator issues should be resolved against the existing
+        deployment. If a significant contract-level incident cannot be handled through governance, admin actions, or
+        service rewiring, the community should publish a separate migration runbook that explains why the existing
+        deployment cannot safely continue.
       </p>
       <p>
-        Once the protocol leaves beta, the deployed smart-contract system is considered final. New release-candidate
-        redeployments stop, and protocol evolution moves through the normal governance process: proposals, voting,
+        As the protocol leaves beta, evolution continues through the normal governance process: proposals, voting,
         timelock review, and execution through the deployed governance system.
       </p>
 
@@ -230,9 +227,9 @@ const GovernanceDocs: NextPage = () => {
         relying on informal operator discretion.
       </p>
       <p>
-        After the beta release-candidate phase, protocol changes should use the deployed governance path rather than a
-        new release-candidate redeployment. Material changes should be documented, reviewable, and aligned with the same
-        proposal, voting, and timelock principles that control upgrades and configuration changes.
+        During and after beta, protocol changes should use the deployed governance path wherever possible. Material
+        changes should be documented, reviewable, and aligned with the same proposal, voting, and timelock principles
+        that control upgrades and configuration changes.
       </p>
     </article>
   );

@@ -27,6 +27,7 @@ jobs:
       BASE_APP_URL: ${{ vars.BASE_APP_URL }}
       BASE_PONDER_URL: ${{ vars.BASE_PONDER_URL }}
       BASE_RPC_URL: ${{ secrets.BASE_RPC_URL }}
+      PONDER_METADATA_SYNC_TOKEN: ${{ secrets.PONDER_METADATA_SYNC_TOKEN }}
 
     steps:
       - name: Checkout

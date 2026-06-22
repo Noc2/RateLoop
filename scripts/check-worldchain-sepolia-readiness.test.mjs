@@ -527,6 +527,12 @@ test("validateLiveReadiness rejects stale Ponder deployment metadata", async () 
         { status: 200, headers: { "content-type": "application/json" } },
       );
     }
+    if (urlString.endsWith("/question-metadata")) {
+      return new Response(JSON.stringify({ error: "Invalid JSON body." }), {
+        status: 400,
+        headers: { "content-type": "application/json" },
+      });
+    }
     throw new Error(`Unexpected fetch ${urlString}`);
   };
 
@@ -551,6 +557,129 @@ test("validateLiveReadiness rejects stale Ponder deployment metadata", async () 
     );
   } finally {
     globalThis.fetch = previousFetch;
+  }
+});
+
+test("validateLiveReadiness sends metadata sync bearer token to Ponder", async () => {
+  const previousFetch = globalThis.fetch;
+  const previousToken = process.env.PONDER_METADATA_SYNC_TOKEN;
+  const deploymentJson = makeDeploymentJson();
+  const deploymentAddresses = buildDeploymentAddressMap(deploymentJson);
+  let metadataAuthorization = null;
+  process.env.PONDER_METADATA_SYNC_TOKEN = "shared-secret";
+  globalThis.fetch = async (url, init) => {
+    const urlString = url.toString();
+    if (urlString.endsWith("/status")) {
+      return new Response(
+        JSON.stringify({
+          worldchainSepolia: {
+            block: { number: deploymentJson.deploymentBlockNumber },
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }
+    if (urlString.endsWith("/deployment")) {
+      return new Response(
+        JSON.stringify({
+          chainId: 4801,
+          contentRegistryAddress: deploymentAddresses.get("ContentRegistry"),
+          feedbackRegistryAddress: deploymentAddresses.get("FeedbackRegistry"),
+          deploymentKey: expectedDeploymentKeyFor(deploymentJson),
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }
+    if (urlString.endsWith("/question-metadata")) {
+      metadataAuthorization = init?.headers?.authorization ?? null;
+      return new Response(JSON.stringify({ error: "Invalid JSON body." }), {
+        status: 400,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    throw new Error(`Unexpected fetch ${urlString}`);
+  };
+
+  try {
+    const result = await validateLiveReadiness({
+      deploymentJson,
+      ponderUrl: "https://ponder.example.test/indexer",
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(metadataAuthorization, "Bearer shared-secret");
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousToken === undefined) {
+      delete process.env.PONDER_METADATA_SYNC_TOKEN;
+    } else {
+      process.env.PONDER_METADATA_SYNC_TOKEN = previousToken;
+    }
+  }
+});
+
+test("validateLiveReadiness rejects metadata sync auth failures", async () => {
+  const previousFetch = globalThis.fetch;
+  const previousToken = process.env.PONDER_METADATA_SYNC_TOKEN;
+  const deploymentJson = makeDeploymentJson();
+  const deploymentAddresses = buildDeploymentAddressMap(deploymentJson);
+  delete process.env.PONDER_METADATA_SYNC_TOKEN;
+  globalThis.fetch = async (url) => {
+    const urlString = url.toString();
+    if (urlString.endsWith("/status")) {
+      return new Response(
+        JSON.stringify({
+          worldchainSepolia: {
+            block: { number: deploymentJson.deploymentBlockNumber },
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }
+    if (urlString.endsWith("/deployment")) {
+      return new Response(
+        JSON.stringify({
+          chainId: 4801,
+          contentRegistryAddress: deploymentAddresses.get("ContentRegistry"),
+          feedbackRegistryAddress: deploymentAddresses.get("FeedbackRegistry"),
+          deploymentKey: expectedDeploymentKeyFor(deploymentJson),
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }
+    if (urlString.endsWith("/question-metadata")) {
+      return new Response(
+        JSON.stringify({ error: "PONDER_METADATA_SYNC_TOKEN is required." }),
+        {
+          status: 503,
+          headers: { "content-type": "application/json" },
+        },
+      );
+    }
+    throw new Error(`Unexpected fetch ${urlString}`);
+  };
+
+  try {
+    const result = await validateLiveReadiness({
+      deploymentJson,
+      ponderUrl: "https://ponder.example.test/indexer",
+    });
+
+    assert.equal(result.ok, false);
+    assert(
+      result.failures.some((message) =>
+        message.includes(
+          "Ponder /question-metadata auth reaches JSON validation (HTTP 503)",
+        ),
+      ),
+    );
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousToken === undefined) {
+      delete process.env.PONDER_METADATA_SYNC_TOKEN;
+    } else {
+      process.env.PONDER_METADATA_SYNC_TOKEN = previousToken;
+    }
   }
 });
 

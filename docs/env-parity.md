@@ -65,10 +65,12 @@ The deployed Next.js app can use Base Flashblocks/preconfirmation metadata to ma
 
 ### Keeper / Ponder shared secrets
 
-| Package | Variable                   | Purpose                                                        |
-| ------- | -------------------------- | -------------------------------------------------------------- |
-| Keeper  | `PONDER_KEEPER_WORK_TOKEN` | Bearer token for Ponder `GET /keeper/work` (must match Ponder) |
-| Ponder  | `PONDER_KEEPER_WORK_TOKEN` | Required in production for `/keeper/work`                      |
+| Package | Variable                     | Purpose                                                                               |
+| ------- | ---------------------------- | ------------------------------------------------------------------------------------- |
+| Keeper  | `PONDER_KEEPER_WORK_TOKEN`   | Bearer token for Ponder `GET /keeper/work` (must match Ponder)                        |
+| Ponder  | `PONDER_KEEPER_WORK_TOKEN`   | Required in production for `/keeper/work`                                             |
+| Next.js | `PONDER_METADATA_SYNC_TOKEN` | Bearer token sent to Ponder `POST /question-metadata` after x402 submissions          |
+| Ponder  | `PONDER_METADATA_SYNC_TOKEN` | Required for metadata sync unless `PONDER_METADATA_SYNC_ALLOW_OPEN=true` in local/dev |
 
 ## E2E production-build flags
 

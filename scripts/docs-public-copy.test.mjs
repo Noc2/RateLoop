@@ -31,6 +31,19 @@ const publicDocs = {
   ),
 };
 
+const governanceDocsPage = readFileSync(
+  new URL(
+    "../packages/nextjs/app/(public)/docs/governance/page.tsx",
+    import.meta.url,
+  ),
+  "utf8",
+);
+
+const ponderReadme = readFileSync(
+  new URL("../packages/ponder/README.md", import.meta.url),
+  "utf8",
+);
+
 test("active public docs avoid stale World Chain and mandatory credential copy", () => {
   for (const [file, content] of Object.entries(activeDocs)) {
     assert.doesNotMatch(content, /World App rater base/i, file);
@@ -47,9 +60,26 @@ test("static public docs identify Base mainnet production and Base Sepolia stagi
 });
 
 test("static agent docs keep no-payment dry-run guidance", () => {
-  for (const file of ["packages/nextjs/public/docs/ai.md", "packages/nextjs/public/llms.txt"]) {
+  for (const file of [
+    "packages/nextjs/public/docs/ai.md",
+    "packages/nextjs/public/llms.txt",
+  ]) {
     const content = publicDocs[file];
     assert.match(content, /dryRun: true/, file);
     assert.match(content, /dry_run|rateloop-agents sandbox/, file);
   }
+});
+
+test("governance docs frame Base mainnet contracts as durable infrastructure", () => {
+  assert.match(
+    governanceDocsPage,
+    /Base mainnet contracts are live production infrastructure/,
+  );
+  assert.doesNotMatch(governanceDocsPage, /release candidate/i);
+  assert.doesNotMatch(governanceDocsPage, /redeploy/i);
+});
+
+test("Ponder README says live override conflicts fail closed", () => {
+  assert.match(ponderReadme, /Conflicting live-chain overrides fail startup/);
+  assert.doesNotMatch(ponderReadme, /ignores stale address\/start-block/i);
 });
