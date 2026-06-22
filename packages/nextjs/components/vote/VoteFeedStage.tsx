@@ -280,6 +280,7 @@ export function VoteFeedStage({
 
     const mobileStageQuery = window.matchMedia(MOBILE_STAGE_MEDIA_QUERY);
     let frameId = 0;
+    let forceHeadlineProtectionOnNextMeasure = false;
     const transitionMeasurementTimeouts: number[] = [];
     const previousHeadlineGuardState = lastMobileHeadlineGuardStateRef.current;
     const didChromeVisibilityChange =
@@ -293,8 +294,8 @@ export function VoteFeedStage({
       topChromeVisible: mobileTopChromeVisible,
     };
 
-    const keepActiveHeadlineInView = (scroller: HTMLDivElement) => {
-      if (!shouldProtectActiveHeadline || !mobileStageQuery.matches) {
+    const keepActiveHeadlineInView = (scroller: HTMLDivElement, forceProtection = false) => {
+      if ((!shouldProtectActiveHeadline && !forceProtection) || !mobileStageQuery.matches) {
         return;
       }
 
@@ -328,7 +329,7 @@ export function VoteFeedStage({
       setMobileScrollerScrollTop(scroller, nextScrollTop);
     };
 
-    const measureScrollerHeight = () => {
+    const measureScrollerHeight = (options?: { protectHeadline?: boolean }) => {
       const scroller = scrollerRef.current;
       if (!scroller) return;
 
@@ -337,7 +338,7 @@ export function VoteFeedStage({
         return;
       }
 
-      keepActiveHeadlineInView(scroller);
+      keepActiveHeadlineInView(scroller, options?.protectHeadline);
       const topOffset = scroller.getBoundingClientRect().top;
       const viewportHeight = Math.floor(window.visualViewport?.height ?? window.innerHeight);
       const availableHeight = Math.max(MOBILE_MIN_SCROLLER_HEIGHT_PX, Math.floor(viewportHeight - topOffset));
@@ -345,16 +346,22 @@ export function VoteFeedStage({
       setMobileScrollerHeight(current => (current === availableHeight ? current : availableHeight));
     };
 
-    const requestMeasurement = () => {
+    const scheduleMeasurement = (protectHeadline = false) => {
+      forceHeadlineProtectionOnNextMeasure ||= protectHeadline;
+
       if (frameId !== 0) {
         window.cancelAnimationFrame(frameId);
       }
 
       frameId = window.requestAnimationFrame(() => {
         frameId = 0;
-        measureScrollerHeight();
+        const shouldProtectHeadline = forceHeadlineProtectionOnNextMeasure;
+        forceHeadlineProtectionOnNextMeasure = false;
+        measureScrollerHeight({ protectHeadline: shouldProtectHeadline });
       });
     };
+    const requestMeasurement = () => scheduleMeasurement();
+    const requestVisualViewportMeasurement = () => scheduleMeasurement(true);
 
     if (didChromeVisibilityChange) {
       transitionMeasurementTimeouts.push(window.setTimeout(requestMeasurement, MOBILE_CHROME_SETTLED_MEASURE_MS));
@@ -364,7 +371,8 @@ export function VoteFeedStage({
     window.addEventListener("resize", requestMeasurement);
 
     if (window.visualViewport) {
-      window.visualViewport.addEventListener("resize", requestMeasurement);
+      window.visualViewport.addEventListener("resize", requestVisualViewportMeasurement);
+      window.visualViewport.addEventListener("scroll", requestVisualViewportMeasurement);
     }
 
     if (typeof mobileStageQuery.addEventListener === "function") {
@@ -381,7 +389,8 @@ export function VoteFeedStage({
       window.removeEventListener("resize", requestMeasurement);
 
       if (window.visualViewport) {
-        window.visualViewport.removeEventListener("resize", requestMeasurement);
+        window.visualViewport.removeEventListener("resize", requestVisualViewportMeasurement);
+        window.visualViewport.removeEventListener("scroll", requestVisualViewportMeasurement);
       }
 
       if (typeof mobileStageQuery.addEventListener === "function") {

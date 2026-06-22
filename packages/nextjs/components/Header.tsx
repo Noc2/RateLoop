@@ -25,6 +25,7 @@ import { useOutsideClick } from "~~/hooks/scaffold-eth";
 import { useVoteSearch } from "~~/hooks/useVoteSearch";
 import { isHeaderMenuLinkActive } from "~~/lib/ui/headerNavigation";
 import { shouldSuppressShellNavClick } from "~~/lib/ui/shellNavigation";
+import { VOTE_MOBILE_LAYOUT_MEDIA_QUERY, VOTE_ROOT_SCROLL_LOCK_CLASS_NAME } from "~~/lib/ui/voteRootScrollLock";
 
 type HeaderMenuLink = {
   label: string;
@@ -217,7 +218,6 @@ const MOBILE_HEADER_HIDE_OFFSET = 72;
 const MOBILE_HEADER_VISIBILITY_STABILIZE_MS = 260;
 const MOBILE_HEADER_VOTE_SAME_CARD_SETTLE_MS = 160;
 const EXPLICIT_LANDING_HREF = "/?landing=1";
-const VOTE_MOBILE_LAYOUT_MEDIA_QUERY = "(max-width: 1279px)";
 const VOTE_ROOT_SCROLL_RECOVERY_MIN_PX = 1;
 const MOBILE_HEADER_SCROLL_SOURCE_ATTRIBUTE = "data-mobile-header-scroll-source";
 const MOBILE_HEADER_SCROLL_SYNC_ATTRIBUTE = "data-mobile-header-scroll-sync";
@@ -517,6 +517,7 @@ export const Header = () => {
         document.documentElement.scrollTop,
         document.body.scrollTop,
       );
+    const isVoteRootScrollLocked = () => document.documentElement.classList.contains(VOTE_ROOT_SCROLL_LOCK_CLASS_NAME);
     const resetRootScrollOffset = () => {
       const previousHtmlScrollBehavior = document.documentElement.style.scrollBehavior;
       document.documentElement.style.scrollBehavior = "auto";
@@ -599,6 +600,14 @@ export const Header = () => {
           const nextScrollTop = Math.min(Math.max(explicitScrollSource.scrollTop + rootScrollOffset, 0), maxScrollTop);
           suppressNextVoteRootScrollRef.current = true;
           resetRootScrollOffset();
+
+          if (isVoteRootScrollLocked()) {
+            lastScrollStateRef.current = {
+              source: explicitScrollSource,
+              offset: explicitScrollSource.scrollTop,
+            };
+            return;
+          }
 
           if (Math.abs(nextScrollTop - explicitScrollSource.scrollTop) >= 0.5) {
             const previousScrollBehavior = explicitScrollSource.style.scrollBehavior;

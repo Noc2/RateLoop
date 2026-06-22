@@ -53,6 +53,7 @@ import { FOLLOWED_CURATOR_TOAST_ID } from "~~/lib/notifications/followedActivity
 import { extractQuestionReferenceIds } from "~~/lib/questionReferences";
 import { replaceUrlPreservingHistoryState } from "~~/lib/ui/browserHistory";
 import { getVisualViewportBottom, resolveMobileDockReservedSpace } from "~~/lib/ui/mobileDockReservedSpace";
+import { VOTE_MOBILE_LAYOUT_MEDIA_QUERY, VOTE_ROOT_SCROLL_LOCK_CLASS_NAME } from "~~/lib/ui/voteRootScrollLock";
 import { getAdvisoryVoteUnavailableMessage } from "~~/lib/vote/advisoryVoteAvailability";
 import { orderBundleMembersInFeed } from "~~/lib/vote/bundleFeedOrder";
 import { formatVoteCooldownRemaining, getVoteCooldownRemainingSeconds } from "~~/lib/vote/cooldown";
@@ -435,6 +436,69 @@ const HomeInner = () => {
       : activeScope === "all"
         ? "bounty_first"
         : "newest";
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const mobileLayoutQuery = window.matchMedia(VOTE_MOBILE_LAYOUT_MEDIA_QUERY);
+    const root = document.documentElement;
+    const body = document.body;
+
+    const readRootScrollOffset = () =>
+      Math.max(
+        window.scrollY,
+        document.scrollingElement?.scrollTop ?? 0,
+        document.documentElement.scrollTop,
+        document.body.scrollTop,
+      );
+    const resetRootScrollOffset = () => {
+      if (!mobileLayoutQuery.matches || readRootScrollOffset() <= 0) return;
+
+      const previousHtmlScrollBehavior = root.style.scrollBehavior;
+      root.style.scrollBehavior = "auto";
+      window.scrollTo({ top: 0, left: window.scrollX, behavior: "auto" });
+
+      if (document.scrollingElement) {
+        document.scrollingElement.scrollTop = 0;
+      }
+      root.scrollTop = 0;
+      body.scrollTop = 0;
+      root.style.scrollBehavior = previousHtmlScrollBehavior;
+    };
+    const applyRootScrollLock = () => {
+      const shouldLock = mobileLayoutQuery.matches;
+      root.classList.toggle(VOTE_ROOT_SCROLL_LOCK_CLASS_NAME, shouldLock);
+      body.classList.toggle(VOTE_ROOT_SCROLL_LOCK_CLASS_NAME, shouldLock);
+
+      if (shouldLock) {
+        resetRootScrollOffset();
+      }
+    };
+
+    applyRootScrollLock();
+    window.addEventListener("resize", applyRootScrollLock);
+    window.addEventListener("scroll", resetRootScrollOffset, { passive: true });
+
+    if (typeof mobileLayoutQuery.addEventListener === "function") {
+      mobileLayoutQuery.addEventListener("change", applyRootScrollLock);
+    } else {
+      mobileLayoutQuery.addListener(applyRootScrollLock);
+    }
+
+    return () => {
+      window.removeEventListener("resize", applyRootScrollLock);
+      window.removeEventListener("scroll", resetRootScrollOffset);
+
+      if (typeof mobileLayoutQuery.removeEventListener === "function") {
+        mobileLayoutQuery.removeEventListener("change", applyRootScrollLock);
+      } else {
+        mobileLayoutQuery.removeListener(applyRootScrollLock);
+      }
+
+      root.classList.remove(VOTE_ROOT_SCROLL_LOCK_CLASS_NAME);
+      body.classList.remove(VOTE_ROOT_SCROLL_LOCK_CLASS_NAME);
+    };
+  }, []);
 
   const {
     feed: rawFeed,

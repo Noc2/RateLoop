@@ -134,9 +134,14 @@ test.describe("Mobile viewport (phone)", () => {
           categoryButtonHeight: categoryButtonRect?.height ?? 0,
           categoryButtonTop: categoryButtonRect?.top ?? 0,
           documentScrollTop: document.scrollingElement?.scrollTop ?? 0,
+          bodyOverflowY: getComputedStyle(document.body).overflowY,
           feedSurfaceBackground: feedSurface ? getComputedStyle(feedSurface).backgroundColor : "",
           feedSurfacePaddingTop: feedSurface ? getComputedStyle(feedSurface).paddingTop : "",
           feedSurfaceTop: feedSurface?.getBoundingClientRect().top ?? 0,
+          rootOverflowY: getComputedStyle(document.documentElement).overflowY,
+          rootScrollLocked:
+            document.documentElement.classList.contains("rateloop-vote-root-scroll-lock") &&
+            document.body.classList.contains("rateloop-vote-root-scroll-lock"),
           scrollContainerBackground: mobileScrollContainer
             ? getComputedStyle(mobileScrollContainer).backgroundColor
             : "",
@@ -290,6 +295,9 @@ test.describe("Mobile viewport (phone)", () => {
     expect(initialLayout.rightGutterWidth).toBeLessThanOrEqual(1);
     expect(initialLayout.feedSurfaceBackground).toBe("rgb(0, 0, 0)");
     expect(initialLayout.feedSurfacePaddingTop).toBe("6px");
+    expect(initialLayout.rootScrollLocked).toBe(true);
+    expect(initialLayout.rootOverflowY).toBe("hidden");
+    expect(initialLayout.bodyOverflowY).toBe("hidden");
     expect(initialLayout.scrollContainerBackground).toBe("rgb(0, 0, 0)");
     expect(initialLayout.activeContentCardShellBackground).toBe("rgb(23, 22, 26)");
     expect(initialLayout.activeContentHeaderBackground).toBe("rgb(23, 22, 26)");
@@ -351,11 +359,18 @@ test.describe("Mobile viewport (phone)", () => {
     expect(beforeRootScrollLeak.voteScrollTop).toBeLessThan(2);
     await forceDocumentScrollLeak(64);
     await expect.poll(async () => (await readLayout()).documentScrollTop).toBe(0);
-    await expect.poll(async () => (await readLayout()).voteScrollTop).toBeGreaterThan(48);
+    await expect
+      .poll(async () => {
+        const layout = await readLayout();
+        return Math.abs(layout.voteScrollTop - beforeRootScrollLeak.voteScrollTop) <= 2;
+      })
+      .toBe(true);
 
     const afterRootScrollLeak = await readLayout();
+    expect(afterRootScrollLeak.rootScrollLocked).toBe(true);
     expect(afterRootScrollLeak.topChromeTop).toBeGreaterThanOrEqual(afterRootScrollLeak.mobileHeaderNavbarBottom - 1);
     expect(afterRootScrollLeak.topChromeBottom).toBeLessThanOrEqual(afterRootScrollLeak.mobileHeaderBottom + 1);
+    expect(afterRootScrollLeak.activeTitleTop).toBeGreaterThanOrEqual(afterRootScrollLeak.mobileHeaderBottom - 1);
     await removeDocumentScrollLeakSpacer();
     await setFeedScrollTop(0);
     await expect(mobileHeader).toHaveAttribute("data-visible", "true");
