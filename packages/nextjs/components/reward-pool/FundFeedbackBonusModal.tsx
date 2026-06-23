@@ -11,6 +11,7 @@ import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import { getTransactionReceiptPollingInterval } from "~~/config/shared";
 import { useRateLoopSwitchNetwork } from "~~/hooks/useRateLoopSwitchNetwork";
 import { useThirdwebSponsoredSubmitCalls } from "~~/hooks/useThirdwebSponsoredSubmitCalls";
+import { useWalletTransactionReadiness } from "~~/hooks/useWalletTransactionReadiness";
 import {
   BOUNTY_WINDOW_PRESETS,
   type BountyWindowPreset,
@@ -98,8 +99,13 @@ export function FundFeedbackBonusModal({
   const { writeContractAsync } = useWriteContract();
   const { signTypedDataAsync } = useSignTypedData();
   const { switchToChain, switchingChainId } = useRateLoopSwitchNetwork();
-  const { canUseSelfFundedBatchCalls, canUseSponsoredBatchCalls, executeContractCallBatch } =
-    useThirdwebSponsoredSubmitCalls();
+  const {
+    canUseSelfFundedBatchCalls,
+    canUseSponsoredBatchCalls,
+    executeContractCallBatch,
+    isAwaitingSelfFundedBatchCalls,
+    isAwaitingSponsoredBatchCalls,
+  } = useThirdwebSponsoredSubmitCalls();
   const [isMounted, setIsMounted] = useState(false);
   const amountInputId = useId();
   const awarderInputId = useId();
@@ -117,6 +123,13 @@ export function FundFeedbackBonusModal({
   const chainId = contentChainId ?? chain?.id ?? wagmiConfig.chains[0]?.id ?? 0;
   const targetChain = useMemo(() => getTargetNetworks().find(network => network.id === chainId), [chainId]);
   const targetChainName = targetChain?.name ?? `chain ${chainId}`;
+  const walletTransactionReadiness = useWalletTransactionReadiness({
+    includeExternalSendCalls: true,
+    isAwaitingSelfFundedWallet: isAwaitingSelfFundedBatchCalls,
+    isAwaitingSponsoredWallet: isAwaitingSponsoredBatchCalls,
+    targetChainId: chainId,
+    targetChainName,
+  });
   const isWrongFundingChain = Boolean(address && chainId && chain?.id !== chainId);
   const escrowAddress = useMemo(() => getConfiguredFeedbackBonusEscrowAddress(chainId), [chainId]);
   const fallbackUsdcAddress = useMemo(() => getDefaultUsdcAddress(chainId), [chainId]);
@@ -153,7 +166,8 @@ export function FundFeedbackBonusModal({
       selectedAwarderAddress &&
       hasActiveRound &&
       hasValidFeedbackWindow &&
-      !isWrongFundingChain,
+      !isWrongFundingChain &&
+      !walletTransactionReadiness.isBlocked,
   );
 
   useEffect(() => {
@@ -173,6 +187,15 @@ export function FundFeedbackBonusModal({
   }, [onClose]);
 
   const handleFundFeedbackBonus = async () => {
+    if (walletTransactionReadiness.isBlocked && walletTransactionReadiness.status !== "disconnected") {
+      const message = walletTransactionReadiness.message ?? "Wallet is unavailable.";
+      if (walletTransactionReadiness.isPending) {
+        notification.info(message);
+      } else {
+        notification.error(message);
+      }
+      return;
+    }
     if (!address) {
       notification.error("Connect your wallet to fund a Feedback Bonus.");
       return;

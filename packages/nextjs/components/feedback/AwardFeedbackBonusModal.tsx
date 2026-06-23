@@ -7,6 +7,7 @@ import { XMarkIcon } from "@heroicons/react/24/outline";
 import { GradientActionButton, getGradientActionMotion } from "~~/components/shared/GradientAction";
 import { useTargetNetwork, useTransactor } from "~~/hooks/scaffold-eth";
 import { useThirdwebSponsoredSubmitCalls } from "~~/hooks/useThirdwebSponsoredSubmitCalls";
+import { useWalletTransactionReadiness } from "~~/hooks/useWalletTransactionReadiness";
 import type { ContentFeedbackBonusPool, ContentFeedbackItem } from "~~/lib/feedback/types";
 import {
   FEEDBACK_BONUS_ESCROW_ABI,
@@ -86,8 +87,13 @@ export function AwardFeedbackBonusModal({ item, pools, onAwarded, onClose }: Awa
   const { address, chain } = useAccount();
   const { writeContractAsync } = useWriteContract();
   const writeTx = useTransactor();
-  const { canUseSelfFundedBatchCalls, canUseSponsoredBatchCalls, executeContractCallBatch } =
-    useThirdwebSponsoredSubmitCalls();
+  const {
+    canUseSelfFundedBatchCalls,
+    canUseSponsoredBatchCalls,
+    executeContractCallBatch,
+    isAwaitingSelfFundedBatchCalls,
+    isAwaitingSponsoredBatchCalls,
+  } = useThirdwebSponsoredSubmitCalls();
   const { targetNetwork } = useTargetNetwork();
   const amountInputId = useId();
   const poolInputId = useId();
@@ -97,6 +103,13 @@ export function AwardFeedbackBonusModal({ item, pools, onAwarded, onClose }: Awa
   const [isAwarding, setIsAwarding] = useState(false);
 
   const chainId = targetNetwork.id ?? wagmiConfig.chains[0]?.id ?? 0;
+  const walletTransactionReadiness = useWalletTransactionReadiness({
+    includeExternalSendCalls: true,
+    isAwaitingSelfFundedWallet: isAwaitingSelfFundedBatchCalls,
+    isAwaitingSponsoredWallet: isAwaitingSponsoredBatchCalls,
+    targetChainId: chainId,
+    targetChainName: targetNetwork.name,
+  });
   const walletOnTargetNetwork = chain?.id === chainId;
   const escrowAddress = useMemo(() => getConfiguredFeedbackBonusEscrowAddress(chainId), [chainId]);
   const selectedPool = useMemo(
@@ -118,7 +131,14 @@ export function AwardFeedbackBonusModal({ item, pools, onAwarded, onClose }: Awa
         ? `This pool has ${formatFeedbackBonusAmount(remainingAmount, selectedAsset)} left.`
         : null;
   const canAward = Boolean(
-    address && walletOnTargetNetwork && escrowAddress && selectedPool && feedbackHash && parsedAmount && !amountError,
+    address &&
+      walletOnTargetNetwork &&
+      escrowAddress &&
+      selectedPool &&
+      feedbackHash &&
+      parsedAmount &&
+      !amountError &&
+      !walletTransactionReadiness.isBlocked,
   );
 
   useEffect(() => {
@@ -138,6 +158,15 @@ export function AwardFeedbackBonusModal({ item, pools, onAwarded, onClose }: Awa
   }, [onClose]);
 
   const handleAward = async () => {
+    if (walletTransactionReadiness.isBlocked && walletTransactionReadiness.status !== "disconnected") {
+      const message = walletTransactionReadiness.message ?? "Wallet is unavailable.";
+      if (walletTransactionReadiness.isPending) {
+        notification.info(message);
+      } else {
+        notification.error(message);
+      }
+      return;
+    }
     if (!address) {
       notification.info("Connect the awarder wallet to pay this Feedback Bonus.");
       return;
@@ -333,6 +362,9 @@ export function AwardFeedbackBonusModal({ item, pools, onAwarded, onClose }: Awa
             <p className="rounded-lg bg-warning/10 p-3 text-sm text-warning">
               Switch your wallet to {targetNetwork.name} to award from this pool.
             </p>
+          ) : null}
+          {walletTransactionReadiness.isPending && walletTransactionReadiness.message ? (
+            <p className="rounded-lg bg-info/10 p-3 text-sm text-info">{walletTransactionReadiness.message}</p>
           ) : null}
         </div>
 

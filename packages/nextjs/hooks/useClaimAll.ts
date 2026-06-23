@@ -16,6 +16,7 @@ import { useGasBalanceStatus } from "~~/hooks/useGasBalanceStatus";
 import { useRefreshWalletBalances } from "~~/hooks/useRefreshWalletBalances";
 import { useThirdwebSponsoredSubmitCalls } from "~~/hooks/useThirdwebSponsoredSubmitCalls";
 import { useWalletRpcRecovery } from "~~/hooks/useWalletRpcRecovery";
+import { useWalletTransactionReadiness } from "~~/hooks/useWalletTransactionReadiness";
 import {
   getClaimGasErrorMessage,
   getClaimPreflightErrorMessage,
@@ -84,6 +85,11 @@ export function useClaimAll() {
     nativeTokenSymbol,
   } = useGasBalanceStatus({
     includeExternalSendCalls: true,
+  });
+  const walletTransactionReadiness = useWalletTransactionReadiness({
+    includeExternalSendCalls: true,
+    isAwaitingSelfFundedWallet: isAwaitingSelfFundedWalletReconnect,
+    isAwaitingSponsoredWallet: isAwaitingSponsoredSubmitCalls || isAwaitingSponsoredWalletReconnect,
   });
   const { showWalletRpcOverloadNotification } = useWalletRpcRecovery();
   const refreshWalletBalances = useRefreshWalletBalances();
@@ -175,6 +181,16 @@ export function useClaimAll() {
 
     const accepted = await requireAcceptance("claim");
     if (!accepted) return;
+
+    if (walletTransactionReadiness.isBlocked) {
+      const message = walletTransactionReadiness.message ?? "Wallet is unavailable.";
+      if (walletTransactionReadiness.isPending) {
+        notification.warning(message);
+      } else {
+        notification.error(message);
+      }
+      return;
+    }
 
     const transactionFeedback = {
       canShowFreeTransactionAllowance,
@@ -314,7 +330,8 @@ export function useClaimAll() {
       isAwaitingFreeTransactionAllowance ||
       isAwaitingSelfFundedWalletReconnect ||
       isAwaitingSponsoredSubmitCalls ||
-      isAwaitingSponsoredWalletReconnect,
+      isAwaitingSponsoredWalletReconnect ||
+      walletTransactionReadiness.isPending,
     progress,
   };
 }

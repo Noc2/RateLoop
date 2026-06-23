@@ -11,6 +11,7 @@ import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import { getTransactionReceiptPollingInterval } from "~~/config/shared";
 import { useRateLoopSwitchNetwork } from "~~/hooks/useRateLoopSwitchNetwork";
 import { useThirdwebSponsoredSubmitCalls } from "~~/hooks/useThirdwebSponsoredSubmitCalls";
+import { useWalletTransactionReadiness } from "~~/hooks/useWalletTransactionReadiness";
 import {
   BOUNTY_WINDOW_PRESETS,
   type BountyWindowPreset,
@@ -115,8 +116,13 @@ export function FundQuestionModal({
   const { writeContractAsync } = useWriteContract();
   const { signTypedDataAsync } = useSignTypedData();
   const { switchToChain, switchingChainId } = useRateLoopSwitchNetwork();
-  const { canUseSelfFundedBatchCalls, canUseSponsoredBatchCalls, executeContractCallBatch } =
-    useThirdwebSponsoredSubmitCalls();
+  const {
+    canUseSelfFundedBatchCalls,
+    canUseSponsoredBatchCalls,
+    executeContractCallBatch,
+    isAwaitingSelfFundedBatchCalls,
+    isAwaitingSponsoredBatchCalls,
+  } = useThirdwebSponsoredSubmitCalls();
   const [isMounted, setIsMounted] = useState(false);
   const amountInputId = useId();
   const requiredVotersInputId = useId();
@@ -136,6 +142,13 @@ export function FundQuestionModal({
   const chainId = contentChainId ?? chain?.id ?? wagmiConfig.chains[0]?.id ?? 0;
   const targetChain = useMemo(() => getTargetNetworks().find(network => network.id === chainId), [chainId]);
   const targetChainName = targetChain?.name ?? `chain ${chainId}`;
+  const walletTransactionReadiness = useWalletTransactionReadiness({
+    includeExternalSendCalls: true,
+    isAwaitingSelfFundedWallet: isAwaitingSelfFundedBatchCalls,
+    isAwaitingSponsoredWallet: isAwaitingSponsoredBatchCalls,
+    targetChainId: chainId,
+    targetChainName,
+  });
   const isWrongFundingChain = Boolean(address && chainId && chain?.id !== chainId);
   const contentRegistryAddress = useMemo(() => getConfiguredContentRegistryAddress(chainId), [chainId]);
   const escrowAddress = useMemo(() => getConfiguredQuestionRewardPoolEscrowAddress(chainId), [chainId]);
@@ -162,7 +175,8 @@ export function FundQuestionModal({
       (requiredVoterFloor === null || voterCount >= requiredVoterFloor) &&
       settledRounds >= MIN_REWARD_POOL_SETTLED_ROUNDS &&
       hasValidBountyWindow &&
-      !isWrongFundingChain,
+      !isWrongFundingChain &&
+      !walletTransactionReadiness.isBlocked,
   );
 
   useEffect(() => {
@@ -212,6 +226,15 @@ export function FundQuestionModal({
   }, [onClose]);
 
   const handleFundQuestion = async () => {
+    if (walletTransactionReadiness.isBlocked && walletTransactionReadiness.status !== "disconnected") {
+      const message = walletTransactionReadiness.message ?? "Wallet is unavailable.";
+      if (walletTransactionReadiness.isPending) {
+        notification.info(message);
+      } else {
+        notification.error(message);
+      }
+      return;
+    }
     if (!address) {
       notification.error("Connect your wallet to fund this question.");
       return;
@@ -296,6 +319,7 @@ export function FundQuestionModal({
         requiredSettledRounds: BigInt(settledRounds),
         requiredVoters: BigInt(voterCount),
       } as const;
+      const canUseBatchFunding = canUseSponsoredBatchCalls || canUseSelfFundedBatchCalls;
       let authorizationHash: `0x${string}` | undefined;
       try {
         const validAfter = 0n;
@@ -322,8 +346,7 @@ export function FundQuestionModal({
           }),
         );
         const signatureParts = getSignatureParts(signature);
-        authorizationHash = await writeContractAsync({
-          chainId: chainId as any,
+        const authorizationCall = {
           address: escrowAddress,
           abi: QUESTION_REWARD_POOL_ESCROW_ABI,
           functionName: "createRewardPoolWithAuthorization",
@@ -339,12 +362,25 @@ export function FundQuestionModal({
               ...signatureParts,
             },
           ],
-        });
-        await waitForTransactionReceipt(wagmiConfig, {
-          chainId: chainId as any,
-          hash: authorizationHash,
-          pollingInterval: getFundReceiptPollingInterval(chainId),
-        });
+        } as const;
+
+        if (canUseBatchFunding) {
+          await executeContractCallBatch([authorizationCall], {
+            action: "Fund Bounty",
+            atomicRequired: false,
+            sponsorshipMode: canUseSponsoredBatchCalls ? "sponsored" : "self-funded",
+          });
+        } else {
+          authorizationHash = await writeContractAsync({
+            chainId: chainId as any,
+            ...authorizationCall,
+          });
+          await waitForTransactionReceipt(wagmiConfig, {
+            chainId: chainId as any,
+            hash: authorizationHash,
+            pollingInterval: getFundReceiptPollingInterval(chainId),
+          });
+        }
 
         notification.success(`Bounty funded with ${formatUsdAmount(parsedAmount)}. Paid in USDC.`);
         onCreated?.();
@@ -378,7 +414,6 @@ export function FundQuestionModal({
         bountyWindowSecondsValue,
         bountyWindowSecondsValue,
       ] as const;
-      const canUseBatchFunding = canUseSponsoredBatchCalls || canUseSelfFundedBatchCalls;
 
       if (canUseBatchFunding) {
         await executeContractCallBatch(
@@ -620,6 +655,9 @@ export function FundQuestionModal({
               This amount requires at least {requiredVoterFloor} required voters, but this question settles at{" "}
               {voterCount}. Choose a smaller amount or ask a new question with a higher voter threshold.
             </p>
+          ) : null}
+          {walletTransactionReadiness.isPending && walletTransactionReadiness.message ? (
+            <p className="rounded-lg bg-info/10 p-3 text-sm text-info">{walletTransactionReadiness.message}</p>
           ) : null}
         </div>
 

@@ -15,6 +15,7 @@ import { useGasBalanceStatus } from "~~/hooks/useGasBalanceStatus";
 import { useRaterRegistryIdentity } from "~~/hooks/useRaterRegistryIdentity";
 import { useRefreshWalletBalances } from "~~/hooks/useRefreshWalletBalances";
 import { useThirdwebSponsoredSubmitCalls } from "~~/hooks/useThirdwebSponsoredSubmitCalls";
+import { useWalletTransactionReadiness } from "~~/hooks/useWalletTransactionReadiness";
 import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
 import { getLrepTransferErrorMessage } from "~~/lib/lrepTransferErrors";
 import { formatLrepAmount } from "~~/lib/vote/voteIncentives";
@@ -77,6 +78,11 @@ export function DelegationSection() {
     allowInAppSponsorshipSync: false,
     includeExternalSendCalls: true,
   });
+  const walletTransactionReadiness = useWalletTransactionReadiness({
+    includeExternalSendCalls: true,
+    isAwaitingSelfFundedWallet: isAwaitingSelfFundedBatchCalls,
+    isAwaitingSponsoredWallet: isAwaitingSponsoredSubmitCalls,
+  });
 
   const [delegateInput, setDelegateInput] = useState("");
   const [transferAddressInput, setTransferAddressInput] = useState("");
@@ -111,7 +117,8 @@ export function DelegationSection() {
     !isTransferZeroAddress &&
     !isTransferSelfAddress &&
     isValidTransferAmount &&
-    !exceedsTransferBalance;
+    !exceedsTransferBalance &&
+    !walletTransactionReadiness.isBlocked;
 
   const submitDelegationWrite = async (
     functionName: "setDelegate" | "removeDelegate",
@@ -161,12 +168,8 @@ export function DelegationSection() {
       setDelegationError("Cannot delegate to yourself");
       return;
     }
-    if (isAwaitingSponsoredSubmitCalls) {
-      setDelegationError("Preparing wallet. Try again in a moment.");
-      return;
-    }
-    if (isAwaitingSelfFundedBatchCalls) {
-      setDelegationError("Wallet switching to paid gas. Retry in a moment.");
+    if (walletTransactionReadiness.isBlocked) {
+      setDelegationError(walletTransactionReadiness.message ?? "Wallet is unavailable.");
       return;
     }
     setDelegationError(null);
@@ -193,12 +196,8 @@ export function DelegationSection() {
   };
 
   const handleRemoveDelegate = async () => {
-    if (isAwaitingSponsoredSubmitCalls) {
-      setDelegationError("Preparing wallet. Try again in a moment.");
-      return;
-    }
-    if (isAwaitingSelfFundedBatchCalls) {
-      setDelegationError("Wallet switching to paid gas. Retry in a moment.");
+    if (walletTransactionReadiness.isBlocked) {
+      setDelegationError(walletTransactionReadiness.message ?? "Wallet is unavailable.");
       return;
     }
     setDelegationError(null);
@@ -235,6 +234,10 @@ export function DelegationSection() {
     }
     if (exceedsTransferBalance) {
       setTransferError("Amount exceeds your balance");
+      return;
+    }
+    if (walletTransactionReadiness.isBlocked) {
+      setTransferError(walletTransactionReadiness.message ?? "Wallet is unavailable.");
       return;
     }
     if (isMissingGasBalance) {
