@@ -214,6 +214,61 @@ test.describe("Responsive layout", () => {
     }
   });
 
+  test("narrow desktop vote layout scrolls while the mobile dock is visible", async ({ connectedPage: page }) => {
+    await page.setViewportSize({ width: 1024, height: 768 });
+    await gotoWithRetry(page, "/rate?content=1", { ensureWalletConnected: true, timeout: 45_000 });
+    await waitForFeedLoaded(page, 30_000);
+
+    await expect(page.getByTestId("vote-mobile-dock"), "Mobile vote dock should be visible below xl").toBeVisible({
+      timeout: 5_000,
+    });
+
+    const metrics = await page.evaluate(() => {
+      const scroller = document.querySelector<HTMLElement>('[data-testid="vote-mobile-scroll-container"]');
+      if (!scroller) return null;
+
+      scroller.scrollTop = 0;
+      scroller.dispatchEvent(new Event("scroll", { bubbles: true }));
+      const rect = scroller.getBoundingClientRect();
+
+      return {
+        canScroll: scroller.scrollHeight > scroller.clientHeight + 48,
+        clientHeight: scroller.clientHeight,
+        height: rect.height,
+        rootLocked: document.documentElement.classList.contains("rateloop-vote-root-scroll-lock"),
+        scrollHeight: scroller.scrollHeight,
+        wheelX: rect.left + rect.width / 2,
+        wheelY: Math.min(Math.max(rect.top + 80, 80), rect.bottom - 80),
+      };
+    });
+
+    expect(metrics, "Vote feed should expose the mobile scroll container").not.toBeNull();
+    if (!metrics) return;
+
+    expect(metrics.rootLocked, "Narrow desktop vote layout should reproduce the root-locked mobile shell").toBe(true);
+    expect(metrics.height, "Mobile-shell feed should receive a measurable scroll viewport").toBeGreaterThan(320);
+    expect(
+      metrics.canScroll,
+      `Mobile-shell feed should be scrollable. ${JSON.stringify({
+        clientHeight: metrics.clientHeight,
+        scrollHeight: metrics.scrollHeight,
+      })}`,
+    ).toBe(true);
+
+    await page.mouse.move(metrics.wheelX, metrics.wheelY);
+    await page.mouse.wheel(0, 420);
+
+    await expect
+      .poll(
+        () =>
+          page.evaluate(() => {
+            return document.querySelector<HTMLElement>('[data-testid="vote-mobile-scroll-container"]')?.scrollTop ?? 0;
+          }),
+        { timeout: 3_000 },
+      )
+      .toBeGreaterThan(0);
+  });
+
   test("desktop vote side padding remains inside the feed scroll hit area", async ({ connectedPage: page }) => {
     await page.setViewportSize({ width: 1366, height: 768 });
     await gotoWithRetry(page, "/rate", { ensureWalletConnected: true, timeout: 45_000 });

@@ -8,6 +8,7 @@ import { useMobileHeaderVisibility } from "~~/contexts/MobileHeaderVisibilityCon
 import type { ContentItem } from "~~/hooks/useContentFeed";
 import type { SubmitterProfile } from "~~/hooks/useSubmitterProfiles";
 import { resolveEndSpacerHeightForLastCardSnap } from "~~/lib/ui/feedScrollSpacer";
+import { VOTE_MOBILE_LAYOUT_MEDIA_QUERY } from "~~/lib/ui/voteRootScrollLock";
 
 interface VoteFeedStageProps {
   displayFeed: ContentItem[];
@@ -40,7 +41,7 @@ interface VoteFeedStageProps {
 }
 
 const DESKTOP_STEP_MEDIA_QUERY = "(min-width: 1280px)";
-const MOBILE_STAGE_MEDIA_QUERY = "(max-width: 767px)";
+const MOBILE_STAGE_MEDIA_QUERY = VOTE_MOBILE_LAYOUT_MEDIA_QUERY;
 const MOBILE_DOCK_RESERVED_SPACE_PX = 152;
 const MOBILE_LAST_CARD_END_SPACER_CUSHION_PX = 192;
 const MOBILE_MIN_SCROLLER_HEIGHT_PX = 320;
