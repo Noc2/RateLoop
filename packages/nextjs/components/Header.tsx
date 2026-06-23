@@ -216,13 +216,13 @@ const SEARCH_COMMIT_DEBOUNCE_MS = 200;
 const MOBILE_HEADER_SCROLL_DELTA = 12;
 const MOBILE_HEADER_HIDE_OFFSET = 72;
 const MOBILE_HEADER_VISIBILITY_STABILIZE_MS = 260;
-const MOBILE_HEADER_VOTE_SAME_CARD_SETTLE_MS = 160;
 const MOBILE_HEADER_VOTE_MIN_VISIBLE_HEIGHT = 280;
 const EXPLICIT_LANDING_HREF = "/?landing=1";
 const VOTE_ROOT_SCROLL_RECOVERY_MIN_PX = 1;
 const MOBILE_HEADER_SCROLL_SOURCE_ATTRIBUTE = "data-mobile-header-scroll-source";
 const MOBILE_HEADER_SCROLL_SYNC_ATTRIBUTE = "data-mobile-header-scroll-sync";
 const MOBILE_HEADER_SCROLL_SYNC_OFFSET_ATTRIBUTE = "data-mobile-header-scroll-sync-offset";
+const MOBILE_HEADER_SCROLL_INTENT_ATTRIBUTE = "data-mobile-header-scroll-intent";
 
 export const HeaderBrand = ({
   brandIdPrefix,
@@ -541,9 +541,6 @@ export const Header = () => {
       document.documentElement.style.scrollBehavior = previousHtmlScrollBehavior;
     };
 
-    const readVoteActiveCardIndex = (source: HTMLElement) =>
-      source.querySelector<HTMLElement>('article[aria-current="true"]')?.getAttribute("data-feed-card-index") ?? null;
-
     const resolveScrollSource = (target: EventTarget | null) => {
       if (
         target === window ||
@@ -567,14 +564,23 @@ export const Header = () => {
     };
 
     let voteLayoutScrollVisibilityTimeout: number | null = null;
-    let voteLayoutScrollSequenceIndex: string | null | undefined = undefined;
+
+    const markVoteLayoutScrollIntent = (event: Event) => {
+      const source = event.currentTarget;
+      if (
+        shouldUseVoteLayoutCollapse &&
+        source instanceof HTMLElement &&
+        source.getAttribute(MOBILE_HEADER_SCROLL_SOURCE_ATTRIBUTE) === "true"
+      ) {
+        source.setAttribute(MOBILE_HEADER_SCROLL_INTENT_ATTRIBUTE, "true");
+      }
+    };
 
     const clearDeferredVoteLayoutVisibility = () => {
       if (voteLayoutScrollVisibilityTimeout !== null) {
         window.clearTimeout(voteLayoutScrollVisibilityTimeout);
         voteLayoutScrollVisibilityTimeout = null;
       }
-      voteLayoutScrollSequenceIndex = undefined;
     };
 
     const handleScroll = (event: Event) => {
@@ -690,15 +696,12 @@ export const Header = () => {
           return;
         }
 
-        const sequenceIndex =
-          voteLayoutScrollSequenceIndex === undefined
-            ? readVoteActiveCardIndex(scrollSource)
-            : voteLayoutScrollSequenceIndex;
-        voteLayoutScrollSequenceIndex = sequenceIndex;
-        const nextVisible = scrollDelta < 0 || currentScrollY < MOBILE_HEADER_HIDE_OFFSET;
+        const shouldShowNearTop = currentScrollY < MOBILE_HEADER_HIDE_OFFSET;
+        const hasUserScrollIntent = scrollSource.getAttribute(MOBILE_HEADER_SCROLL_INTENT_ATTRIBUTE) === "true";
 
-        if (!nextVisible) {
+        if (shouldShowNearTop) {
           clearDeferredVoteLayoutVisibility();
+          setMobileHeaderVisibility(true, { ignoreStabilizeWindow: true });
           lastScrollStateRef.current = {
             source: scrollSource,
             offset: currentScrollY,
@@ -706,20 +709,10 @@ export const Header = () => {
           return;
         }
 
-        if (voteLayoutScrollVisibilityTimeout !== null) {
-          window.clearTimeout(voteLayoutScrollVisibilityTimeout);
+        if (scrollDelta > 0 && hasUserScrollIntent) {
+          clearDeferredVoteLayoutVisibility();
+          setMobileHeaderVisibility(false, { ignoreStabilizeWindow: true });
         }
-
-        voteLayoutScrollVisibilityTimeout = window.setTimeout(() => {
-          voteLayoutScrollVisibilityTimeout = null;
-          voteLayoutScrollSequenceIndex = undefined;
-
-          if (sequenceIndex === null || readVoteActiveCardIndex(scrollSource) !== sequenceIndex) {
-            return;
-          }
-
-          setMobileHeaderVisibility(nextVisible);
-        }, MOBILE_HEADER_VOTE_SAME_CARD_SETTLE_MS);
 
         lastScrollStateRef.current = {
           source: scrollSource,
@@ -770,11 +763,15 @@ export const Header = () => {
 
       if (explicitScrollSource) {
         explicitScrollSource.removeEventListener("scroll", handleScroll);
+        explicitScrollSource.removeEventListener("touchmove", markVoteLayoutScrollIntent);
+        explicitScrollSource.removeEventListener("wheel", markVoteLayoutScrollIntent);
       }
 
       explicitScrollSource = nextExplicitScrollSource;
 
       if (explicitScrollSource) {
+        explicitScrollSource.addEventListener("touchmove", markVoteLayoutScrollIntent, { passive: true });
+        explicitScrollSource.addEventListener("wheel", markVoteLayoutScrollIntent, { passive: true });
         explicitScrollSource.addEventListener("scroll", handleScroll, { passive: true });
         setInitialScrollState(explicitScrollSource);
         return;
@@ -817,6 +814,8 @@ export const Header = () => {
       mutationObserver?.disconnect();
       if (explicitScrollSource) {
         explicitScrollSource.removeEventListener("scroll", handleScroll);
+        explicitScrollSource.removeEventListener("touchmove", markVoteLayoutScrollIntent);
+        explicitScrollSource.removeEventListener("wheel", markVoteLayoutScrollIntent);
       }
       window.removeEventListener("scroll", handleScroll, true);
     };

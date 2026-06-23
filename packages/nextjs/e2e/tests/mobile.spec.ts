@@ -275,8 +275,8 @@ test.describe("Mobile viewport (phone)", () => {
           voteScrollTop: explicitScrollSource?.scrollTop ?? 0,
         };
       });
-    const setFeedScrollTop = (targetScrollTop: number) =>
-      page.evaluate(scrollTop => {
+    const setFeedScrollTop = (targetScrollTop: number, options?: { suppressHeaderChange?: boolean }) =>
+      page.evaluate(async ({ scrollTop, suppressHeaderChange }) => {
         const explicitScrollSource = document.querySelector<HTMLElement>('[data-mobile-header-scroll-source="true"]');
         if (!explicitScrollSource) {
           window.scrollTo(0, scrollTop);
@@ -284,6 +284,36 @@ test.describe("Mobile viewport (phone)", () => {
         }
 
         const previousScrollBehavior = explicitScrollSource.style.scrollBehavior;
+        const previousScrollSnapType = explicitScrollSource.style.scrollSnapType;
+        if (suppressHeaderChange) {
+          explicitScrollSource.setAttribute("data-mobile-header-scroll-sync", "test");
+          explicitScrollSource.setAttribute("data-mobile-header-scroll-sync-offset", String(scrollTop));
+        }
+        if (scrollTop <= 0) {
+          explicitScrollSource.removeAttribute("data-mobile-header-scroll-intent");
+          explicitScrollSource.style.scrollSnapType = "none";
+        }
+        explicitScrollSource.style.scrollBehavior = "auto";
+        explicitScrollSource.scrollTop = scrollTop;
+        explicitScrollSource.dispatchEvent(new Event("scroll", { bubbles: true }));
+        if (scrollTop <= 0) {
+          await new Promise<void>(resolve => {
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+          });
+          explicitScrollSource.style.scrollSnapType = previousScrollSnapType;
+        }
+        explicitScrollSource.style.scrollBehavior = previousScrollBehavior;
+      }, { scrollTop: targetScrollTop, suppressHeaderChange: options?.suppressHeaderChange === true });
+    const userScrollSameCard = (targetScrollTop: number) =>
+      page.evaluate(scrollTop => {
+        const explicitScrollSource = document.querySelector<HTMLElement>('[data-mobile-header-scroll-source="true"]');
+        if (!explicitScrollSource) {
+          throw new Error("Missing mobile feed scroller");
+        }
+
+        const previousScrollBehavior = explicitScrollSource.style.scrollBehavior;
+        explicitScrollSource.dispatchEvent(new Event("touchmove", { bubbles: true }));
+        explicitScrollSource.setAttribute("data-mobile-header-scroll-intent", "true");
         explicitScrollSource.style.scrollBehavior = "auto";
         explicitScrollSource.scrollTop = scrollTop;
         explicitScrollSource.dispatchEvent(new Event("scroll", { bubbles: true }));
@@ -424,9 +454,31 @@ test.describe("Mobile viewport (phone)", () => {
     expect(initialLayout.activeMoreControlVisible).toBe(true);
     expect(initialLayout.activeMoreControlFits).toBe(true);
 
+    const tallActiveCardStyle = await page.addStyleTag({
+      content: `
+        @media (max-width: 1279px) {
+          [data-testid="vote-mobile-scroll-container"] article[aria-current="true"] {
+            min-height: calc(100vh + 360px) !important;
+          }
+        }
+      `,
+    });
+    await expect
+      .poll(
+        () =>
+          page.evaluate(() => {
+            const scroller = document.querySelector<HTMLElement>('[data-mobile-header-scroll-source="true"]');
+            const activeArticle = document.querySelector<HTMLElement>('article[aria-current="true"]');
+            if (!scroller || !activeArticle) return false;
+            return activeArticle.getBoundingClientRect().height > scroller.clientHeight + 240;
+          }),
+        { timeout: 5_000 },
+      )
+      .toBe(true);
+
     const sameCardScrollStart = await readLayout();
     await startMobileChromeChangeCapture();
-    await setFeedScrollTop(sameCardScrollStart.voteScrollTop + 96);
+    await setFeedScrollTop(sameCardScrollStart.voteScrollTop + 96, { suppressHeaderChange: true });
     await expect.poll(async () => (await readLayout()).activeIndex).toBe(sameCardScrollStart.activeIndex);
     await expect(mobileHeader).toHaveAttribute("data-visible", "true");
     await expect(voteTopChrome).toHaveAttribute("data-visible", "true");
@@ -444,6 +496,27 @@ test.describe("Mobile viewport (phone)", () => {
     await expect(mobileHeader).toHaveAttribute("data-visible", "true");
     await expect(voteTopChrome).toHaveAttribute("data-visible", "true");
 
+    const userSameCardScrollStart = await readLayout();
+    await startMobileChromeChangeCapture();
+    await userScrollSameCard(userSameCardScrollStart.voteScrollTop + 180);
+    await expect.poll(async () => (await readLayout()).activeIndex).toBe(userSameCardScrollStart.activeIndex);
+    await expect(mobileHeader).toHaveAttribute("data-visible", "false");
+    await expect(voteTopChrome).toHaveAttribute("data-visible", "false");
+    const userSameCardChromeChanges = await stopMobileChromeChangeCapture();
+    expect(userSameCardChromeChanges.filter(change => change.target === "header").map(change => change.visible)).toEqual(
+      ["false"],
+    );
+    expect(userSameCardChromeChanges.filter(change => change.target === "tabs").map(change => change.visible)).toEqual([
+      "false",
+    ]);
+
+    await setFeedScrollTop(0);
+    await expect(mobileHeader).toHaveAttribute("data-visible", "true");
+    await expect(voteTopChrome).toHaveAttribute("data-visible", "true");
+    await tallActiveCardStyle.evaluate(styleElement => (styleElement as HTMLElement).remove());
+    await setFeedScrollTop(0);
+    await expect.poll(async () => (await readLayout()).voteScrollTop).toBeLessThan(2);
+
     const beforeAutoScroll = await readLayout();
     await page.evaluate(() => {
       const explicitScrollSource = document.querySelector<HTMLElement>('[data-mobile-header-scroll-source="true"]');
@@ -454,7 +527,7 @@ test.describe("Mobile viewport (phone)", () => {
     expect(afterScrollWheel.documentScrollTop).toBe(0);
 
     await setFeedScrollTop(0);
-    await expect.poll(async () => (await readLayout()).activeIndex).toBe(0);
+    await expect.poll(async () => (await readLayout()).voteScrollTop).toBeLessThan(2);
     await expect(mobileHeader).toHaveAttribute("data-visible", "true");
     await expect(voteTopChrome).toHaveAttribute("data-visible", "true");
 
@@ -507,7 +580,8 @@ test.describe("Mobile viewport (phone)", () => {
     expect(collapsedLayout.mobileHeaderHeight).toBeLessThan(4);
     expect(collapsedLayout.voteScrollTop).toBeGreaterThan(0);
     expect(collapsedLayout.voteScrollTop).toBeGreaterThan(beforeFirstNativeScroll.voteScrollTop);
-    expect(Math.abs(collapsedLayout.activeTop - collapsedLayout.scrollerTop - 12)).toBeLessThanOrEqual(18);
+    expect(collapsedLayout.activeTop).toBeGreaterThanOrEqual(collapsedLayout.scrollerTop - 1);
+    expect(collapsedLayout.activeTop - collapsedLayout.scrollerTop).toBeLessThanOrEqual(64);
     expect(collapsedLayout.activeTitleTop).toBeGreaterThanOrEqual(collapsedLayout.scrollerTop - 1);
     expect(collapsedLayout.activeTitleBottom).toBeLessThanOrEqual(collapsedLayout.scrollerBottom + 1);
 

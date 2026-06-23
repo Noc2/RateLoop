@@ -52,6 +52,7 @@ const MOBILE_HEADLINE_GUARD_SNAP_TOLERANCE_PX = 28;
 const MOBILE_HEADER_CARD_VISIBILITY_SETTLE_MS = 140;
 const MOBILE_HEADER_SCROLL_SYNC_ATTRIBUTE = "data-mobile-header-scroll-sync";
 const MOBILE_HEADER_SCROLL_SYNC_OFFSET_ATTRIBUTE = "data-mobile-header-scroll-sync-offset";
+const MOBILE_HEADER_SCROLL_INTENT_ATTRIBUTE = "data-mobile-header-scroll-intent";
 const MOBILE_HEADER_SCROLL_SYNC_MS = MOBILE_CHROME_TRANSITION_MEASURE_MS + 120;
 const PROGRAMMATIC_SCROLL_RECOVERY_MS = 700;
 const MIN_SCROLL_INDICATOR_HEIGHT_PX = 40;
@@ -161,7 +162,8 @@ export function VoteFeedStage({
   const markMobileFeedScrollIntent = useCallback(() => {
     if (isDesktopViewport) return;
     hasObservedMobileFeedScrollRef.current = true;
-  }, [isDesktopViewport]);
+    getActiveScroller()?.setAttribute(MOBILE_HEADER_SCROLL_INTENT_ATTRIBUTE, "true");
+  }, [getActiveScroller, isDesktopViewport]);
 
   const setMobileScrollerScrollTop = useCallback((scroller: HTMLElement, nextScrollTop: number) => {
     const previousScrollBehavior = scroller.style.scrollBehavior;
@@ -261,6 +263,7 @@ export function VoteFeedStage({
       return;
     }
 
+    scroller.removeAttribute(MOBILE_HEADER_SCROLL_INTENT_ATTRIBUTE);
     markMobileHeaderScrollSync(scroller, 0);
     setMobileScrollerScrollTop(scroller, 0);
   }, [
