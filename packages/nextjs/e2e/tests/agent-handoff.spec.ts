@@ -1,7 +1,7 @@
 import { ANVIL_ACCOUNTS } from "../helpers/anvil-accounts";
 import { newE2EContext } from "../helpers/browser-context";
 import { setupWallet } from "../helpers/wallet-session";
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 type HandoffCreateResponse = {
   handoffId: string;
@@ -73,6 +73,10 @@ function tokenFromFragment(url: string) {
   return new URLSearchParams(new URL(url).hash.replace(/^#/, "")).get("token") ?? "";
 }
 
+async function expectPrivateTokenStripped(page: Page) {
+  await page.waitForFunction(() => !window.location.hash.includes("token="), undefined, { timeout: 30_000 });
+}
+
 test.describe("Agent browser handoffs", () => {
   test("agent ask handoff loads from a private token and saves a gated draft", async ({ browser, request }) => {
     test.setTimeout(120_000);
@@ -113,6 +117,7 @@ test.describe("Agent browser handoffs", () => {
     await setupWallet(page, ANVIL_ACCOUNTS.account2.privateKey);
     await page.goto(created.handoffUrl, { waitUntil: "domcontentloaded" });
 
+    await expectPrivateTokenStripped(page);
     await expect(page).toHaveURL(new RegExp(`/agent/handoff/${created.handoffId}$`));
     await expect(page.getByText("Agent ask handoff")).toBeVisible({ timeout: 30_000 });
     await expect(page.getByRole("heading", { name: originalTitle })).toBeVisible({ timeout: 60_000 });
@@ -165,6 +170,7 @@ test.describe("Agent browser handoffs", () => {
     await setupWallet(page, ANVIL_ACCOUNTS.account2.privateKey);
     await page.goto(created.signingUrl, { waitUntil: "domcontentloaded" });
 
+    await expectPrivateTokenStripped(page);
     await expect(page).toHaveURL(new RegExp(`/agent/sign/${created.id}$`));
     await expect(page.getByText("Agent signing handoff")).toBeVisible({ timeout: 30_000 });
     await expect(page.getByRole("heading", { name: title })).toBeVisible({ timeout: 60_000 });

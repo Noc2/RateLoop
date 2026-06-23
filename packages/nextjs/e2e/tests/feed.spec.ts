@@ -76,10 +76,13 @@ test.describe("Content feed", () => {
   });
 
   test("explicit source links still open externally", async ({ connectedPage: page }) => {
-    await gotoWithRetry(page, "/rate?q=workspace", { ensureWalletConnected: true, timeout: 45_000 });
+    const { content } = await getContentById(1);
+
+    await gotoWithRetry(page, `/rate?content=${content.id}`, { ensureWalletConnected: true, timeout: 45_000 });
     await waitForFeedLoaded(page, 30_000);
 
     const activeCard = page.locator('article[aria-current="true"]').first();
+    await expect(activeCard.getByRole("heading", { name: content.title }).first()).toBeVisible({ timeout: 10_000 });
     const sourceLink = activeCard.getByTestId("content-source-link").first();
     await expect(sourceLink).toBeVisible({ timeout: 10_000 });
     const href = await sourceLink.getAttribute("href");

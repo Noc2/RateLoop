@@ -1,5 +1,6 @@
 import { type Page, expect, test } from "../fixtures/wallet";
 import { ANVIL_ACCOUNTS } from "../helpers/anvil-accounts";
+import { getContentById } from "../helpers/ponder-api";
 import { E2E_BASE_URL } from "../helpers/service-urls";
 import {
   FEED_EMPTY_STATE_RE,
@@ -74,12 +75,15 @@ test.describe("Accessibility basics", () => {
   });
 
   test("non-video previews expose focusable preview and source actions", async ({ page }) => {
+    const { content } = await getContentById(1);
+
     await setupWallet(page, ANVIL_ACCOUNTS.account2.privateKey);
-    await gotoPath(page, "/rate?q=workspace", { ensureWalletConnected: true });
+    await gotoPath(page, `/rate?content=${content.id}`, { ensureWalletConnected: true });
     await waitForFeedLoaded(page, 30_000);
 
     const activeCard = page.locator('article[aria-current="true"]').first();
     await expect(activeCard).toBeVisible({ timeout: 10_000 });
+    await expect(activeCard.getByRole("heading", { name: content.title }).first()).toBeVisible({ timeout: 10_000 });
     await expect(
       activeCard.locator('[data-testid="vote-content-surface"], [data-content-intent-surface="true"]').first(),
     ).toBeVisible({ timeout: 10_000 });
