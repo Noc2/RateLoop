@@ -9,6 +9,7 @@ import {
   getBlobUploadProgress,
   getImageAttachmentUploadProgress,
 } from "~~/components/submit/imageAttachmentUploadProgress";
+import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import { useWalletMessageSigner } from "~~/hooks/useWalletMessageSigner";
 import { getMaxImageUploadSizeBytes } from "~~/lib/auth/imageUploadChallenge.shared";
 import { notification } from "~~/utils/scaffold-eth";
@@ -229,8 +230,12 @@ export function ImageAttachmentUploader({
           <ArrowUpTrayIcon className="h-4 w-4" />
           {isUploading ? "Uploading" : "Upload image"}
         </button>
-        <span className="text-sm text-base-content/60">
-          JPG, PNG, or WEBP up to {maxSizeMb} MB. Images are moderated and become public question context.
+        <span className="flex flex-wrap items-center gap-x-1 gap-y-0.5 text-sm text-base-content/60">
+          <span>JPG, PNG, or WEBP up to {maxSizeMb} MB. Prefer 16:9 for generated public images.</span>
+          <InfoTooltip
+            text="16:9 is recommended, not required. Keep screenshots, mockups, or evidence in another ratio when that works better."
+            position="top"
+          />
         </span>
       </div>
       {isUploading && uploadPhaseCopy ? (
