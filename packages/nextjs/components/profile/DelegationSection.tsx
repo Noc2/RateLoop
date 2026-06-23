@@ -2,17 +2,21 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import type { Abi } from "viem";
 import { formatUnits, isAddress, parseUnits } from "viem";
 import { useAccount } from "wagmi";
 import { ArrowsRightLeftIcon, ShieldCheckIcon } from "@heroicons/react/24/outline";
 import { GradientActionButton, getGradientActionMotion } from "~~/components/shared/GradientAction";
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import { GOVERNANCE_ROUTE } from "~~/constants/routes";
-import { useScaffoldReadContract, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
+import { useDeployedContractInfo, useScaffoldReadContract, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
 import { useDelegation } from "~~/hooks/useDelegation";
+import { useGasBalanceStatus } from "~~/hooks/useGasBalanceStatus";
 import { useRaterRegistryIdentity } from "~~/hooks/useRaterRegistryIdentity";
 import { useRefreshWalletBalances } from "~~/hooks/useRefreshWalletBalances";
+import { useThirdwebSponsoredSubmitCalls } from "~~/hooks/useThirdwebSponsoredSubmitCalls";
 import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
+import { getLrepTransferErrorMessage } from "~~/lib/lrepTransferErrors";
 import { formatLrepAmount } from "~~/lib/vote/voteIncentives";
 import { notification } from "~~/utils/scaffold-eth";
 import { ZERO_ADDRESS } from "~~/utils/scaffold-eth/common";
@@ -52,8 +56,17 @@ export function DelegationSection() {
     args: [address],
     query: { enabled: !!address },
   });
-  const { writeContractAsync: writeLrepContractAsync, isPending: isTransferPending } = useScaffoldWriteContract({
+  const { data: lrepContract } = useDeployedContractInfo({
     contractName: REPUTATION_CONTRACT_NAME,
+  });
+  const { writeContractAsync: writeLrepContractAsync, isPending: isDirectTransferPending } = useScaffoldWriteContract({
+    contractName: REPUTATION_CONTRACT_NAME,
+  });
+  const { canUseSponsoredSubmitCalls, executeSponsoredCalls, isAwaitingSponsoredSubmitCalls } =
+    useThirdwebSponsoredSubmitCalls();
+  const { isMissingGasBalance, nativeTokenSymbol } = useGasBalanceStatus({
+    allowInAppSponsorshipSync: false,
+    includeExternalSendCalls: true,
   });
 
   const [delegateInput, setDelegateInput] = useState("");
@@ -61,6 +74,7 @@ export function DelegationSection() {
   const [transferAmountInput, setTransferAmountInput] = useState("");
   const [delegationError, setDelegationError] = useState<string | null>(null);
   const [transferError, setTransferError] = useState<string | null>(null);
+  const [isSponsoredTransferPending, setIsSponsoredTransferPending] = useState(false);
 
   const normalizedDelegateInput = delegateInput.trim();
   const isValidAddress = normalizedDelegateInput.length > 0 && isAddress(normalizedDelegateInput);
@@ -78,8 +92,10 @@ export function DelegationSection() {
   const isValidTransferAmount = parsedTransferAmount !== null && parsedTransferAmount > 0n;
   const exceedsTransferBalance =
     !isLrepBalanceLoading && parsedTransferAmount !== null && parsedTransferAmount > lrepBalanceMicro;
+  const isTransferPending = isDirectTransferPending || isSponsoredTransferPending;
   const canSubmitTransfer =
     !isLrepBalanceLoading &&
+    !isAwaitingSponsoredSubmitCalls &&
     isValidTransferAddress &&
     !isTransferZeroAddress &&
     !isTransferSelfAddress &&
@@ -160,20 +176,54 @@ export function DelegationSection() {
       setTransferError("Amount exceeds your balance");
       return;
     }
+    if (isMissingGasBalance) {
+      setTransferError(`LREP transfers are not sponsored. Add some ${nativeTokenSymbol} for gas, then retry.`);
+      return;
+    }
 
     setTransferError(null);
 
     try {
-      await writeLrepContractAsync({
-        functionName: "transfer",
-        args: [normalizedTransferAddress as `0x${string}`, parsedTransferAmount],
-      });
+      const transferArgs = [normalizedTransferAddress as `0x${string}`, parsedTransferAmount] as const;
+
+      if (canUseSponsoredSubmitCalls && lrepContract) {
+        setIsSponsoredTransferPending(true);
+        try {
+          await executeSponsoredCalls(
+            [
+              {
+                abi: lrepContract.abi as Abi,
+                address: lrepContract.address as `0x${string}`,
+                args: transferArgs,
+                functionName: "transfer",
+              },
+            ],
+            {
+              action: "LREP transfer",
+              allowSelfFundedFallback: true,
+            },
+          );
+        } finally {
+          setIsSponsoredTransferPending(false);
+        }
+      } else {
+        await writeLrepContractAsync(
+          {
+            functionName: "transfer",
+            args: transferArgs,
+          },
+          {
+            action: "LREP transfer",
+            getErrorMessage: error => getLrepTransferErrorMessage(error, nativeTokenSymbol),
+          },
+        );
+      }
       notification.success(`Sent ${formatLrepAmount(parsedTransferAmount, 6)} LREP`);
       setTransferAmountInput("");
       await refreshWalletBalances(address);
     } catch (e: any) {
       console.error("Transfer LREP failed:", e);
-      setTransferError(e?.shortMessage || e?.message || "Failed to transfer LREP");
+      setTransferError(getLrepTransferErrorMessage(e, nativeTokenSymbol));
     }
   };
 
