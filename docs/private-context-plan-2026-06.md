@@ -1,5 +1,9 @@
 # Private Context Plan — June 2026
 
+Historical status: this plan predates the current Base mainnet production deployment. Use `packages/foundry/README.md`,
+`docs/env-parity.md`, and the Base readiness scripts for current operator posture. Do not infer routine production
+contract redeploy work from the pre-mainnet assumptions in this document.
+
 A multi-agent research pass on RateLoop's "public-only context" limitation — the constraint that
 kills confidential demand (pre-launch concept tests, proprietary review, enterprise evals) in
 every adjacent use-case category (`use-cases-2026-06.md`). One agent mapped the context pipeline
@@ -18,7 +22,7 @@ There is a good, relatively simple solution, because two things turn out to be t
    enforcement (nobody litigates; Epic-vs-Fortnite-testers is the rare exception and was solved
    by identification, not the NDA text). PickFu and Wynter close pre-launch deals on exactly
    "respondents sign NDAs"; Apple runs the world's app betas on a blanket ToS clause signed by
-   anonymous testers. Buyers accept "50 vetted strangers saw it under NDA" — that *is* the
+   anonymous testers. Buyers accept "50 vetted strangers saw it under NDA" — that _is_ the
    product, and they pay a premium for it.
 2. **RateLoop's protocol never needed public context.** Settlement, RBTS scoring, payouts, and
    the payout-root challenge system run entirely on votes, stakes, and hashes — the audit trust
@@ -54,20 +58,20 @@ power permanently (a banned human can't re-enter, unlike any panel account).
 
 ### Click-through terms: legally real, practically a slashing predicate
 
-- US courts enforce clickwrap (~70% success vs ~14% for browsewrap; *Berman*, *Meyer v. Uber*);
+- US courts enforce clickwrap (~70% success vs ~14% for browsewrap; _Berman_, _Meyer v. Uber_);
   eIDAS/E-Sign accept cryptographic signatures, and SIWE (EIP-4361) standardizes a `statement`
   field for exactly "I accept terms at <url>" — deployed precedent for wallet-signed terms.
 - Against a pseudonymous wallet, litigation value is ~zero (no case law yet; treat it as such).
   But that misses how the industry actually enforces: removal, cohort-publicized penalty,
   reputation/earnings destruction. HackerOne private programs — the best gated-cohort analog —
-  make accepting the invite *itself* the non-disclosure event, and enforce via eviction from a
+  make accepting the invite _itself_ the non-disclosure event, and enforce via eviction from a
   valuable invite pool. RateLoop's version is strictly stronger: the wallet has staked bonds,
   rating reputation, and a World ID behind it. The signed terms are (a) the provable predicate
   for slashing and (b) norm-setting; design the economics, not the lawsuit.
 
 ### Blinding kills most of the problem for free
 
-Unbranded stimuli are *already* market-research best practice (monadic blind testing isolates
+Unbranded stimuli are _already_ market-research best practice (monadic blind testing isolates
 the concept from brand halo), and PickFu's respondents never see who is asking. A leaked
 screenshot of an unbranded landing-page concept with no attribution has near-zero competitive
 value. For concept/copy/creative tests — the bulk of RateLoop's confidential demand —
@@ -84,7 +88,7 @@ demonstrably still produce decision-grade signal (the entire monadic-testing lit
   scopes. Moderation already runs at upload, before any gating would apply.
 - The two leak layers are distinct: the **serving layer** (fully gateable today) and **on-chain
   event URLs** (`ContentSubmitted.url`, `QuestionContentAnchored`, `ContentDetailsSubmitted`).
-  For RateLoop-hosted attachments the on-chain URL is an opaque ID — harmless. Only *external*
+  For RateLoop-hosted attachments the on-chain URL is an opaque ID — harmless. Only _external_
   context (`contextUrl`, YouTube `videoUrl`) leaks by reference, so private mode simply
   disallows it (or allows only public-safe externals).
 - Terms acceptance today is localStorage-only (`TermsAcceptanceContext`) — unusable as an
@@ -96,8 +100,8 @@ demonstrably still produce decision-grade signal (the entire monadic-testing lit
 
 ### Access rule: terms-gate, not commit-gate
 
-Raters must see context *before* committing (to decide whether and how to vote), so "has a
-commit on this round" can't be the gate — that's circular. The HackerOne model applies: 
+Raters must see context _before_ committing (to decide whether and how to vote), so "has a
+commit on this round" can't be the gate — that's circular. The HackerOne model applies:
 **accepting the confidentiality terms is the access event.** Concretely, a rater requesting
 gated context must present a wallet session whose address has a server-recorded, wallet-signed
 acceptance of the confidentiality terms for that question (SIWE-style message embedding the
@@ -118,7 +122,7 @@ revoked at reveal; every access is logged per rater.
    proportionate consequences — no $1M liquidated damages on a $0.50 task).
 3. **Gated serving** — `/api/attachments/images/[id]` and `/api/attachments/details/[id]` check
    visibility flag → require session + acceptance → stream with `Cache-Control: private,
-   no-store`, `X-Robots-Tag: noindex, noimageindex`. EIP-1271/6492-aware signature verification
+no-store`, `X-Robots-Tag: noindex, noimageindex`. EIP-1271/6492-aware signature verification
    is mandatory (World App users are smart accounts; EOA-only verification locks out the main
    rater base).
 4. **Watermark + traceability** — server-side sharp overlay of rater address prefix + timestamp
@@ -154,12 +158,12 @@ revoked at reveal; every access is logged per rater.
 
 ## Tiers (each subsumes the previous)
 
-| Tier | What | Effort | Unlocks |
-| --- | --- | --- | --- |
-| 0. Blinding guidance | Submit-flow + agent-docs guidance: unbranded stimuli, pseudonymous asker, redaction checklist; position as MR best practice | Days | Most concept/copy/creative confidentiality, free |
-| 1. Private Context Mode | MVP above: gated RateLoop-hosted context, signed terms, watermarks, redaction, disclosure-after-settlement | ~2–4 weeks | Pre-launch tests, NDA-expected buyers |
-| 2. Private-program cohorts | Gated questions route only to raters above reputation/stake/World ID thresholds, zero violations; optional extra **slashable confidentiality bond**; smaller audiences (10–15) | Weeks, after Tier 1 | Higher-sensitivity work; the collateralized-NDA differentiator |
-| 3. Embargo hardening + forensics | tlock-wrapped content keys for trustless eventual disclosure (reuses drand: AES-encrypt assets, tlock-wrap the 32-byte key to worst-case-settlement round); invisible forensic watermarking ($150–450/mo) and leak monitoring as a paid tier | Weeks, optional | Enterprise tier; disclosure survives RateLoop's server disappearing |
+| Tier                             | What                                                                                                                                                                                                                                         | Effort              | Unlocks                                                             |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- | ------------------------------------------------------------------- |
+| 0. Blinding guidance             | Submit-flow + agent-docs guidance: unbranded stimuli, pseudonymous asker, redaction checklist; position as MR best practice                                                                                                                  | Days                | Most concept/copy/creative confidentiality, free                    |
+| 1. Private Context Mode          | MVP above: gated RateLoop-hosted context, signed terms, watermarks, redaction, disclosure-after-settlement                                                                                                                                   | ~2–4 weeks          | Pre-launch tests, NDA-expected buyers                               |
+| 2. Private-program cohorts       | Gated questions route only to raters above reputation/stake/World ID thresholds, zero violations; optional extra **slashable confidentiality bond**; smaller audiences (10–15)                                                               | Weeks, after Tier 1 | Higher-sensitivity work; the collateralized-NDA differentiator      |
+| 3. Embargo hardening + forensics | tlock-wrapped content keys for trustless eventual disclosure (reuses drand: AES-encrypt assets, tlock-wrap the 32-byte key to worst-case-settlement round); invisible forensic watermarking ($150–450/mo) and leak monitoring as a paid tier | Weeks, optional     | Enterprise tier; disclosure survives RateLoop's server disappearing |
 
 **Scope decision (2026-06-11):** Tiers 0–2 are adopted for implementation; Tier 3 and the
 cryptographic upgrade path below are explicitly deferred. The concrete implementation plan
@@ -176,7 +180,7 @@ the architecture.
 
 ### Design corrections from the adversarial review
 
-1. **The bond must gate *access*, not just commit.** Leakage happens at viewing; a
+1. **The bond must gate _access_, not just commit.** Leakage happens at viewing; a
    sign-terms → view → leak → never-commit attacker would otherwise post no bond at all. The
    serving layer checks bond-posted (when `bondAmount > 0`) before serving bytes; the engine
    commit gate is a consistency check, not the security boundary. Bond lifecycle therefore
@@ -248,17 +252,17 @@ the architecture.
   per wallet + per-question signed acknowledgment for gated asks; gated mode ships unpriced
   (bond friction is enough for v1); gated rating requires an active human credential.
 
-| Parameter | Default | Bounds (governance) | Precedent |
-| --- | --- | --- | --- |
-| `minBond` (when nonzero) | 1e6 | fixed | `MIN_CHALLENGE_BOND` |
-| `maxBond` | 100e6 | ≤1,000e6 | `MAX_CHALLENGE_BOND` (anti-spam scale, not coverage) |
-| Reporter share of slashed bond | 5,000 bps | fixed | `CHALLENGER_BOUNTY_BPS` |
-| Evidence window (bond locked past terminal trigger) | 21 days | 7–30 days | `FEE_WITHDRAWAL_DELAY` rationale |
-| `maxBondLockDuration` (hard stop from `postedAt`) | 120 days | 30–180 days | Covers worst-case round sets; no stranding |
-| Ban duration | 365 days | permanent = explicit flag | Person-targeted sanctions decay by default |
-| Slash/ban reason | ≤280 bytes + `evidenceHash` | fixed | `MAX_SLASH_REASON_LENGTH` |
-| Advisory votes on gated content | disallowed | governance-flippable | Closes the bypass |
-| Acceptance/access log roots | daily epoch | — | Payout-root artifact shape |
+| Parameter                                           | Default                     | Bounds (governance)       | Precedent                                            |
+| --------------------------------------------------- | --------------------------- | ------------------------- | ---------------------------------------------------- |
+| `minBond` (when nonzero)                            | 1e6                         | fixed                     | `MIN_CHALLENGE_BOND`                                 |
+| `maxBond`                                           | 100e6                       | ≤1,000e6                  | `MAX_CHALLENGE_BOND` (anti-spam scale, not coverage) |
+| Reporter share of slashed bond                      | 5,000 bps                   | fixed                     | `CHALLENGER_BOUNTY_BPS`                              |
+| Evidence window (bond locked past terminal trigger) | 21 days                     | 7–30 days                 | `FEE_WITHDRAWAL_DELAY` rationale                     |
+| `maxBondLockDuration` (hard stop from `postedAt`)   | 120 days                    | 30–180 days               | Covers worst-case round sets; no stranding           |
+| Ban duration                                        | 365 days                    | permanent = explicit flag | Person-targeted sanctions decay by default           |
+| Slash/ban reason                                    | ≤280 bytes + `evidenceHash` | fixed                     | `MAX_SLASH_REASON_LENGTH`                            |
+| Advisory votes on gated content                     | disallowed                  | governance-flippable      | Closes the bypass                                    |
+| Acceptance/access log roots                         | daily epoch                 | —                         | Payout-root artifact shape                           |
 
 ### Workstream A — Contracts (pre-mainnet; ~1.5–2 weeks)
 
@@ -341,7 +345,7 @@ renounce, `deployments.push`).
    don't 404 where the breach UI needs a 403.
 5. **Leak closures found in review:** generic OG metadata for gated questions — title and
    description currently leak into the CDN-cached OG image (`og/vote/route.tsx`) and meta title
-   (`contentShare.server.ts`); gated titles must be non-sensitive by guidance *and* withheld
+   (`contentShare.server.ts`); gated titles must be non-sensitive by guidance _and_ withheld
    from `followed_submission` / settling-soon email bodies (`emailDelivery.ts`); MCP
    quote/result surfaces (`tools.ts` submission keys, `resultPackage.ts` submitter-authored
    text) gated the same way; dictionary-attack note: details hashes are unsalted sha256 — salt

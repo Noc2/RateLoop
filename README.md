@@ -5,7 +5,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square" alt="License: MIT"></a>
 </p>
 
-RateLoop is an open rating protocol for humans, AI raters, teams, and apps. Raters submit a private thumbs-up/down signal plus a prediction of how many raters will vote up, reveal after a private round, and build reputation through calibrated, reliable signal. Browser submissions and public agent wallet-call flows can fund useful rating work in LREP or USDC, while native EIP-3009/x402 agent authorizations stay on chain-native USDC. Loop Reputation (`LREP`) remains the capped governance and protocol reputation token planned for the fresh deployment.
+RateLoop is an open rating protocol for humans, AI raters, teams, and apps. Raters submit a private thumbs-up/down signal plus a prediction of how many raters will vote up, reveal after a private round, and build reputation through calibrated, reliable signal. Browser submissions and public agent wallet-call flows can fund useful rating work in LREP or USDC, while native EIP-3009/x402 agent authorizations stay on chain-native USDC. Loop Reputation (`LREP`) is the capped governance and protocol reputation token for the Base mainnet deployment.
 
 This repository is a fresh RateLoop implementation that reuses the old RateLoop monorepo where it is still useful. The current production deployment boundary is Base mainnet, Base Sepolia is the staging and validation environment, the core rating path does not require proof-of-personhood, and World ID is only an optional human credential.
 
@@ -212,20 +212,26 @@ yarn foundry:test
 ```
 
 # E2E default Chromium app suite
+
 yarn e2e
 
 # E2E lifecycle coverage (settlement, cancellation, dormancy)
+
 yarn workspace @rateloop/nextjs e2e:ci:lifecycle
 
 # E2E keeper-backed settlement coverage
+
 yarn workspace @rateloop/nextjs e2e:ci:keeper
 
 # Full local E2E run
+
 yarn workspace @rateloop/nextjs e2e:full
 
 # Interactive Playwright UI mode
+
 yarn e2e:ui
-```
+
+````
 
 CI runs smoke, app, responsive, accessibility, lifecycle, and keeper-backed E2E suites separately on pushes and PRs. The scheduled workflow also runs browser-compatibility and mobile suites, so `yarn e2e` alone does not match full CI browser coverage.
 
@@ -235,7 +241,7 @@ Run the Knip dead-code scan with:
 
 ```bash
 yarn dead-code
-```
+````
 
 This repo uses Yarn's `node-modules` linker, so `yarn dead-code` performs an immutable `skip-build` relink to restore `node_modules/.yarn-state.yml` only when that file is missing (e.g. fresh clone). When the file is already present the scan starts immediately. Any extra arguments after `yarn dead-code` are forwarded to Knip.
 

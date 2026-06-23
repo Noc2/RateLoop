@@ -4,18 +4,22 @@ Cross-package reference for env names that refer to the same on-chain value, E2E
 
 ## Chain IDs
 
-| Chain ID | Network               | Deployment artifact                       | Profile      |
-| -------- | --------------------- | ----------------------------------------- | ------------ |
-| `84532`  | Base Sepolia          | `packages/foundry/deployments/84532.json` | `default`    |
-| `8453`   | Base mainnet          | `packages/foundry/deployments/8453.json`  | `production` |
-| `4801`   | World Chain Sepolia   | `packages/foundry/deployments/4801.json`  | `default`    |
-| `480`    | World Chain mainnet   | `packages/foundry/deployments/480.json`   | `production` |
-| `31337`  | Local Foundry / Anvil | gitignored local deploy                   | local        |
+| Chain ID | Network               | Deployment artifact                       | Artifact profile / operational status            |
+| -------- | --------------------- | ----------------------------------------- | ------------------------------------------------ |
+| `84532`  | Base Sepolia          | `packages/foundry/deployments/84532.json` | `default`; active staging                        |
+| `8453`   | Base mainnet          | `packages/foundry/deployments/8453.json`  | `production`; current production boundary        |
+| `4801`   | World Chain Sepolia   | `packages/foundry/deployments/4801.json`  | `default`; legacy validation artifact            |
+| `480`    | World Chain mainnet   | `packages/foundry/deployments/480.json`   | `production` profile; retired operational target |
+| `31337`  | Local Foundry / Anvil | gitignored local deploy                   | local                                            |
 
 `packages/nextjs/.env.production` targets `NEXT_PUBLIC_TARGET_NETWORKS=8453` for the Base mainnet production
 deployment. Base Sepolia validation should override the target to `84532` explicitly; the bare
 `yarn base-sepolia:check` command defaults to `docs/testing/base-sepolia-next-env.fixture` for that offline
 readiness check, and `BASE_SEPOLIA_NEXT_ENV_FILE` can point at a different staging env file when needed.
+
+Base Sepolia is the staging chain, but its known stale `X402QuestionSubmitter` disables one-shot USDC Feedback Bonus
+x402 submissions. Use bounty-only x402 or `wallet_calls` for staging Feedback Bonus coverage until
+`yarn base-sepolia:check -- --require-one-shot-feedback-bonus-x402` passes.
 
 ## USDC address aliases
 
