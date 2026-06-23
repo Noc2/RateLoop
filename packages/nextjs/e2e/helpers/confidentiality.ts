@@ -22,7 +22,7 @@ import { ponderGet } from "./ponder-api";
 import { gotoWithRetry } from "./wait-helpers";
 import { setupWallet } from "./wallet-session";
 import { installLocalE2EWorldIdMock, readActiveHumanCredential } from "./world-id";
-import type { APIRequestContext, Page } from "@playwright/test";
+import type { APIRequestContext, APIResponse, Page } from "@playwright/test";
 import { expect } from "@playwright/test";
 import {
   createPublicClient,
@@ -48,6 +48,43 @@ export const CONFIDENTIALITY_BOND_ASSET_USDC = 1;
 export const CONFIDENTIALITY_FLAG_PRIVATE_FOREVER = 1;
 const E2E_CONFIDENTIALITY_NEXUS_BOND_AMOUNT = 1_000_000n;
 const E2E_CONTENT_DEPLOYMENT_KEY = `${foundry.id}:${CONTRACT_ADDRESSES.ContentRegistry.toLowerCase()}`;
+const RETRYABLE_API_REQUEST_ERROR_PATTERNS = [
+  /ECONNRESET/i,
+  /ECONNREFUSED/i,
+  /ERR_CONNECTION_RESET/i,
+  /ERR_CONNECTION_REFUSED/i,
+  /ETIMEDOUT/i,
+  /socket hang up/i,
+  /Target page, context or browser has been closed/i,
+];
+
+function isRetryableApiRequestError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return RETRYABLE_API_REQUEST_ERROR_PATTERNS.some(pattern => pattern.test(message));
+}
+
+async function postJsonWithRequestRetry(
+  request: APIRequestContext,
+  url: string,
+  data: unknown,
+  attempts = 3,
+): Promise<APIResponse> {
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      return await request.post(url, { data });
+    } catch (error) {
+      lastError = error;
+      if (attempt === attempts - 1 || !isRetryableApiRequestError(error)) {
+        throw error;
+      }
+      await new Promise(resolve => setTimeout(resolve, 500 * (attempt + 1)));
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
+}
 
 type AnvilAccount = (typeof ANVIL_ACCOUNTS)[keyof typeof ANVIL_ACCOUNTS];
 
@@ -494,9 +531,7 @@ export async function acceptConfidentialityTerms(
     questionMetadataHash: input.questionMetadataHash ?? undefined,
   };
 
-  const challengeResponse = await request.post("/api/confidentiality/terms/challenge", {
-    data: body,
-  });
+  const challengeResponse = await postJsonWithRequestRetry(request, "/api/confidentiality/terms/challenge", body);
   expect(challengeResponse.ok(), await challengeResponse.text()).toBe(true);
   const challenge = await challengeResponse.json();
   expect(typeof challenge.challengeId).toBe("string");
@@ -504,13 +539,11 @@ export async function acceptConfidentialityTerms(
 
   const signer = privateKeyToAccount(account.privateKey);
   const signature = await signer.signMessage({ message: challenge.message });
-  const acceptResponse = await request.post("/api/confidentiality/terms", {
-    data: {
-      ...body,
-      challengeId: challenge.challengeId,
-      signature,
-      termsVersion: challenge.termsVersion,
-    },
+  const acceptResponse = await postJsonWithRequestRetry(request, "/api/confidentiality/terms", {
+    ...body,
+    challengeId: challenge.challengeId,
+    signature,
+    termsVersion: challenge.termsVersion,
   });
   expect(acceptResponse.ok(), await acceptResponse.text()).toBe(true);
 
