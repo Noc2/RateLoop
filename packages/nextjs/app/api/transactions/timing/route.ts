@@ -11,18 +11,30 @@ const SENSITIVE_METADATA_KEY_PATTERN =
 
 type SanitizedTimingPayload = {
   action: string;
+  attemptIndex?: number;
+  bundlerInfrastructureError?: boolean;
   callCount?: number;
   callTypes?: string[];
   chainId?: number;
   deltaMs?: number;
   elapsedMs?: number;
   event: string;
+  fallback?: string | boolean;
+  message?: string;
   metadata?: Record<string, string | number | boolean | null>;
+  parentRunId?: string;
+  pollCount?: number;
+  receiptCount?: number;
   route?: string;
   runId: string;
+  segmentIndex?: number;
   source: string;
   sponsorshipMode?: string;
   status?: string;
+  statusCode?: number;
+  transactionHashCount?: number;
+  transport?: string;
+  walletId?: string;
 };
 
 function readString(value: unknown, fallback = "") {
@@ -39,6 +51,15 @@ function readFiniteNumber(value: unknown) {
 function readOptionalString(value: unknown) {
   const normalized = readString(value);
   return normalized || undefined;
+}
+
+function readOptionalBoolean(value: unknown) {
+  return typeof value === "boolean" ? value : undefined;
+}
+
+function readOptionalFallback(value: unknown) {
+  if (typeof value === "boolean") return value;
+  return readOptionalString(value);
 }
 
 function sanitizeCallTypes(value: unknown) {
@@ -79,18 +100,30 @@ function sanitizeTimingPayload(body: Record<string, unknown>): SanitizedTimingPa
   const chainId = readFiniteNumber(body.chainId);
   return {
     action: readString(body.action, "transaction"),
+    attemptIndex: readFiniteNumber(body.attemptIndex),
+    bundlerInfrastructureError: readOptionalBoolean(body.bundlerInfrastructureError),
     callCount: readFiniteNumber(body.callCount),
     callTypes: sanitizeCallTypes(body.callTypes),
     chainId,
     deltaMs: readFiniteNumber(body.deltaMs),
     elapsedMs: readFiniteNumber(body.elapsedMs),
     event,
+    fallback: readOptionalFallback(body.fallback),
+    message: readOptionalString(body.message),
     metadata: sanitizeMetadata(body.metadata),
+    parentRunId: readOptionalString(body.parentRunId),
+    pollCount: readFiniteNumber(body.pollCount),
+    receiptCount: readFiniteNumber(body.receiptCount),
     route: readOptionalString(body.route),
     runId,
+    segmentIndex: readFiniteNumber(body.segmentIndex),
     source,
     sponsorshipMode: readOptionalString(body.sponsorshipMode),
     status: readOptionalString(body.status),
+    statusCode: readFiniteNumber(body.statusCode),
+    transactionHashCount: readFiniteNumber(body.transactionHashCount),
+    transport: readOptionalString(body.transport),
+    walletId: readOptionalString(body.walletId),
   };
 }
 

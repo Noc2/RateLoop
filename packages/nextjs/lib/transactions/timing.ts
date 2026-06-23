@@ -2,18 +2,30 @@ export type TransactionTimingMetadataValue = string | number | boolean | null | 
 
 export type TransactionTimingPayload = {
   action?: string;
+  attemptIndex?: number;
+  bundlerInfrastructureError?: boolean;
   callCount?: number;
   callTypes?: readonly string[];
   chainId?: number | null;
   deltaMs?: number;
   elapsedMs?: number;
   event: string;
+  fallback?: string | boolean;
+  message?: string;
   metadata?: Record<string, TransactionTimingMetadataValue>;
+  parentRunId?: string;
+  pollCount?: number;
+  receiptCount?: number;
   route?: string;
   runId: string;
+  segmentIndex?: number;
   source: string;
   sponsorshipMode?: string;
   status?: string;
+  statusCode?: number;
+  transactionHashCount?: number;
+  transport?: string;
+  walletId?: string;
 };
 
 type TransactionTimingRunParams = {
@@ -23,9 +35,12 @@ type TransactionTimingRunParams = {
   chainId?: number | null;
   consoleLabel: string;
   metadata?: Record<string, TransactionTimingMetadataValue>;
+  parentRunId?: string;
   route?: string;
+  segmentIndex?: number;
   source: string;
   sponsorshipMode?: string;
+  transport?: string;
 };
 
 function nowMs() {
@@ -76,10 +91,13 @@ export function createTransactionTimingRun(params: TransactionTimingRunParams) {
       elapsedMs,
       event,
       metadata: params.metadata,
+      parentRunId: params.parentRunId,
       route: params.route,
       runId,
+      segmentIndex: params.segmentIndex,
       source: params.source,
       sponsorshipMode: params.sponsorshipMode,
+      transport: params.transport,
       ...extra,
     };
 
