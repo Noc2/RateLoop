@@ -1,0 +1,45 @@
+{
+  "clientRequestId": "ai-assistant-preference-clear-title-2026-06-23",
+  "chainId": 8453,
+  "templateId": "generic_rating",
+  "maxPaymentAmount": "2000000",
+  "bounty": {
+    "asset": "USDC",
+    "amount": "1000000",
+    "requiredVoters": "3",
+    "requiredSettledRounds": "1",
+    "bountyStartBy": "1797897600",
+    "bountyWindowSeconds": "86400",
+    "feedbackWindowSeconds": "86400"
+  },
+  "feedbackBonus": {
+    "asset": "USDC",
+    "amount": "1000000",
+    "feedbackClosesAt": "1797984000"
+  },
+  "question": {
+    "templateId": "generic_rating",
+    "templateInputs": {
+      "audience": "AI developers and power users who have recently used Claude and Codex for coding or agentic software work",
+      "goal": "measure whether the current developer zeitgeist leans toward Codex or Claude for real coding work, and why",
+      "successSignal": "Voters choose a side and explain the task type, workflow, or model behavior that drives their preference."
+    },
+    "title": "Vote up if you prefer Codex over Claude for coding work.",
+    "description": "Vote up if you currently prefer Codex over Claude for serious coding-agent work. Vote down if you prefer Claude, would choose Claude for most code tasks, or think Codex is not yet better. In feedback, share your main reason and one task where the choice flips.",
+    "categoryId": "6",
+    "tags": [
+      "ai-coding",
+      "claude",
+      "codex"
+    ],
+    "confidentiality": {
+      "visibility": "public"
+    }
+  },
+  "roundConfig": {
+    "epochDuration": "604800",
+    "maxDuration": "604800",
+    "maxVoters": "100",
+    "minVoters": "3"
+  }
+}
