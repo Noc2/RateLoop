@@ -180,6 +180,9 @@ test.describe("Governance page", () => {
     const [cookieName, cookieValue] = readSessionCookie.split("=");
     await page.context().addCookies([{ name: cookieName, value: cookieValue, url: E2E_BASE_URL }]);
 
+    const warmedReportsResponse = await page.request.get(`/api/confidentiality/breaches?contentId=${contentId}`);
+    expect(warmedReportsResponse.ok(), await warmedReportsResponse.text()).toBe(true);
+
     await gotoWithRetry(page, "/governance#breaches", { ensureWalletConnected: true });
     await expect(page.getByRole("heading", { name: "Confidentiality breach report" })).toBeVisible({
       timeout: 20_000,
@@ -190,7 +193,14 @@ test.describe("Governance page", () => {
     await page.getByLabel("External evidence hash").fill(`0x${"5".repeat(64)}`);
     await page.getByLabel("Evidence URL").fill("https://www.rateloop.ai/confidentiality/evidence/e2e");
     await page.getByLabel("View token").fill(viewToken);
+    const submitResponsePromise = page.waitForResponse(
+      response =>
+        response.url().includes("/api/confidentiality/breaches") && response.request().method().toUpperCase() === "POST",
+      { timeout: 60_000 },
+    );
     await page.getByRole("button", { name: "Submit report" }).click();
+    const submitResponse = await submitResponsePromise;
+    expect(submitResponse.ok(), await submitResponse.text()).toBe(true);
 
     await expect(page.getByText("Breach report submitted.")).toBeVisible({ timeout: 20_000 });
     const submittedReport = page
