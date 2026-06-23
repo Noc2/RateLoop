@@ -86,6 +86,29 @@ async function postJsonWithRequestRetry(
   throw lastError instanceof Error ? lastError : new Error(String(lastError));
 }
 
+async function getWithRequestRetry(
+  request: APIRequestContext,
+  url: string,
+  options?: Parameters<APIRequestContext["get"]>[1],
+  attempts = 3,
+): Promise<APIResponse> {
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      return await request.get(url, options);
+    } catch (error) {
+      lastError = error;
+      if (attempt === attempts - 1 || !isRetryableApiRequestError(error)) {
+        throw error;
+      }
+      await new Promise(resolve => setTimeout(resolve, 500 * (attempt + 1)));
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
+}
+
 type AnvilAccount = (typeof ANVIL_ACCOUNTS)[keyof typeof ANVIL_ACCOUNTS];
 
 type SubmitGatedQuestionDirectConfig = {
@@ -483,7 +506,7 @@ export async function submitGatedQuestion(
   expect(uploadedDetailsUrl, "private browser submission should upload hosted details").toBeTruthy();
 
   const uploadedDetailsPath = new URL(uploadedDetailsUrl!).pathname;
-  const unlinkedDetails = await page.request.get(uploadedDetailsPath);
+  const unlinkedDetails = await getWithRequestRetry(page.request, uploadedDetailsPath);
   expect(unlinkedDetails.status(), "pending gated hosted details should fail closed before content linkage").toBe(404);
   expect(unlinkedDetails.headers()["cache-control"]).toBe("private, no-store");
 
@@ -507,7 +530,7 @@ export async function submitGatedQuestion(
     )}`,
   ).toBe(true);
 
-  const publicDetails = await page.request.get(uploadedDetailsPath);
+  const publicDetails = await getWithRequestRetry(page.request, uploadedDetailsPath);
   expect([401, 403], "linked gated details should require a signed session").toContain(publicDetails.status());
   expect(publicDetails.headers()["cache-control"]).toBe("private, no-store");
 
@@ -608,7 +631,7 @@ export async function fetchGatedAttachment(
     kind?: "details" | "image";
   } = {},
 ) {
-  const response = await request.get(appendAddress(url, address), {
+  const response = await getWithRequestRetry(request, appendAddress(url, address), {
     headers: cookie ? { cookie } : undefined,
   });
   expect(response.status()).toBe(expectedStatus);
