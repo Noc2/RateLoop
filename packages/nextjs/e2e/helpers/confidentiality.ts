@@ -445,7 +445,8 @@ export async function submitGatedQuestion(
   const uploadedDetailsUrl = typeof detailsUpload.detailsUrl === "string" ? detailsUpload.detailsUrl : null;
   expect(uploadedDetailsUrl, "private browser submission should upload hosted details").toBeTruthy();
 
-  const unlinkedDetails = await page.request.get(uploadedDetailsUrl!);
+  const uploadedDetailsPath = new URL(uploadedDetailsUrl!).pathname;
+  const unlinkedDetails = await page.request.get(uploadedDetailsPath);
   expect(unlinkedDetails.status(), "pending gated hosted details should fail closed before content linkage").toBe(404);
   expect(unlinkedDetails.headers()["cache-control"]).toBe("private, no-store");
 
@@ -469,7 +470,7 @@ export async function submitGatedQuestion(
     )}`,
   ).toBe(true);
 
-  const publicDetails = await page.request.get(uploadedDetailsUrl!);
+  const publicDetails = await page.request.get(uploadedDetailsPath);
   expect([401, 403], "linked gated details should require a signed session").toContain(publicDetails.status());
   expect(publicDetails.headers()["cache-control"]).toBe("private, no-store");
 

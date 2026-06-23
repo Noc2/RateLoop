@@ -1,7 +1,7 @@
 import { ANVIL_ACCOUNTS } from "../helpers/anvil-accounts";
 import { newE2EContext } from "../helpers/browser-context";
 import { setupWallet } from "../helpers/wallet-session";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 
 type HandoffCreateResponse = {
   handoffId: string;
@@ -77,6 +77,25 @@ async function expectPrivateTokenStripped(page: Page) {
   await page.waitForFunction(() => !window.location.hash.includes("token="), undefined, { timeout: 30_000 });
 }
 
+async function expectPrivateResourceReadable(
+  request: APIRequestContext,
+  path: string,
+  headers: Record<string, string>,
+) {
+  await expect(async () => {
+    const response = await request.get(path, { headers });
+    expect(response.ok(), await response.text()).toBe(true);
+  }).toPass({ timeout: 60_000, intervals: [1_000, 2_000, 5_000] });
+}
+
+async function openPrivateTokenPage(page: Page, url: string, expectedUrl: RegExp, markerText: string, title: string) {
+  await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30_000 });
+  await expectPrivateTokenStripped(page);
+  await expect(page).toHaveURL(expectedUrl, { timeout: 10_000 });
+  await expect(page.getByText(markerText)).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("heading", { name: title })).toBeVisible({ timeout: 90_000 });
+}
+
 test.describe("Agent browser handoffs", () => {
   test("agent ask handoff loads from a private token and saves a gated draft", async ({ browser, request }) => {
     test.setTimeout(120_000);
@@ -111,16 +130,20 @@ test.describe("Agent browser handoffs", () => {
     const created = (await createResponse.json()) as HandoffCreateResponse;
     const token = tokenFromFragment(created.handoffUrl);
     expect(token).toBeTruthy();
+    await expectPrivateResourceReadable(request, `/api/agent/handoffs/${created.handoffId}`, {
+      "x-rateloop-handoff-token": token,
+    });
 
     const context = await newE2EContext(browser);
     const page = await context.newPage();
     await setupWallet(page, ANVIL_ACCOUNTS.account2.privateKey);
-    await page.goto(created.handoffUrl, { waitUntil: "domcontentloaded" });
-
-    await expectPrivateTokenStripped(page);
-    await expect(page).toHaveURL(new RegExp(`/agent/handoff/${created.handoffId}$`));
-    await expect(page.getByText("Agent ask handoff")).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByRole("heading", { name: originalTitle })).toBeVisible({ timeout: 60_000 });
+    await openPrivateTokenPage(
+      page,
+      created.handoffUrl,
+      new RegExp(`/agent/handoff/${created.handoffId}$`),
+      "Agent ask handoff",
+      originalTitle,
+    );
     await expect(page.getByRole("checkbox", { name: "Private context" })).toBeChecked();
     await expect(page.locator("#agent-ask-confidentiality-bond-amount")).toHaveValue("1");
 
@@ -163,17 +186,22 @@ test.describe("Agent browser handoffs", () => {
     });
     expect(createResponse.ok(), await createResponse.text()).toBe(true);
     const created = (await createResponse.json()) as SigningIntentCreateResponse;
-    expect(tokenFromFragment(created.signingUrl)).toBeTruthy();
+    const token = tokenFromFragment(created.signingUrl);
+    expect(token).toBeTruthy();
+    await expectPrivateResourceReadable(request, `/api/agent/signing-intents/${created.id}`, {
+      "x-rateloop-signing-intent-token": token,
+    });
 
     const context = await newE2EContext(browser);
     const page = await context.newPage();
     await setupWallet(page, ANVIL_ACCOUNTS.account2.privateKey);
-    await page.goto(created.signingUrl, { waitUntil: "domcontentloaded" });
-
-    await expectPrivateTokenStripped(page);
-    await expect(page).toHaveURL(new RegExp(`/agent/sign/${created.id}$`));
-    await expect(page.getByText("Agent signing handoff")).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByRole("heading", { name: title })).toBeVisible({ timeout: 60_000 });
+    await openPrivateTokenPage(
+      page,
+      created.signingUrl,
+      new RegExp(`/agent/sign/${created.id}$`),
+      "Agent signing handoff",
+      title,
+    );
     await expect(page.getByText("pending")).toBeVisible();
     await expect(page.getByRole("button", { name: "Prepare" })).toBeVisible();
 

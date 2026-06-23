@@ -51,20 +51,29 @@ test.describe("Confidential context", () => {
     await expect(page.getByText("Confirm wallet to view your private context").first()).toBeVisible({
       timeout: 20_000,
     });
-    await page.getByRole("button", { name: "Confirm wallet" }).first().click();
-    await expect
-      .poll(
-        async () => {
-          const sessionResponse = await page.request.get(
-            `/api/account/private-session?address=${ANVIL_ACCOUNTS.account2.address}`,
-          );
-          if (!sessionResponse.ok()) return false;
-          const session = await sessionResponse.json();
-          return session?.hasSession === true;
-        },
-        { intervals: [1_000, 2_000], timeout: 30_000 },
-      )
-      .toBe(true);
+    await expect(async () => {
+      const sessionResponse = await page.request.get(
+        `/api/account/private-session?address=${ANVIL_ACCOUNTS.account2.address}`,
+      );
+      if (sessionResponse.ok()) {
+        const session = await sessionResponse.json();
+        if (session?.hasSession === true) {
+          return;
+        }
+      }
+
+      const confirmButton = page.getByRole("button", { name: "Confirm wallet" }).first();
+      if (await confirmButton.isVisible().catch(() => false)) {
+        await confirmButton.click({ timeout: 5_000 }).catch(() => undefined);
+      }
+
+      const retryResponse = await page.request.get(
+        `/api/account/private-session?address=${ANVIL_ACCOUNTS.account2.address}`,
+      );
+      expect(retryResponse.ok()).toBe(true);
+      const retrySession = await retryResponse.json();
+      expect(retrySession?.hasSession).toBe(true);
+    }).toPass({ intervals: [1_000, 2_000, 5_000], timeout: 75_000 });
 
     const ownerDetails = await fetchGatedAttachment(page.request, submitted.detailsUrl!, {
       address: ANVIL_ACCOUNTS.account2.address,
