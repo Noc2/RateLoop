@@ -36,3 +36,23 @@ test("getAdvisoryVoteUnavailableMessage explains missing staked rounds", () => {
   assert.ok(message);
   assert.match(message, /after at least one staked rater/u);
 });
+
+test("getAdvisoryVoteUnavailableMessage explains sender-specific advisory caps", () => {
+  assert.match(
+    getAdvisoryVoteUnavailableMessage({
+      canCommit: false,
+      status: ADVISORY_COMMIT_AVAILABILITY_STATUS.UnverifiedAdvisoryCapReached,
+    }) ?? "",
+    /zero-LREP limit for unverified wallets/u,
+  );
+});
+
+test("getAdvisoryVoteUnavailableMessage explains private-context advisory blocks", () => {
+  assert.match(
+    getAdvisoryVoteUnavailableMessage({
+      canCommit: false,
+      status: ADVISORY_COMMIT_AVAILABILITY_STATUS.ConfidentialityGated,
+    }) ?? "",
+    /not available for private-context questions/u,
+  );
+});

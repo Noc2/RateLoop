@@ -470,6 +470,7 @@ export function useRoundVote() {
 
         try {
           const rawAvailability = await publicClient.readContract({
+            account: address as Address,
             address: advisoryVoteRecorderAddress,
             abi: AdvisoryVoteRecorderAbi,
             functionName: "advisoryCommitAvailability",
@@ -786,10 +787,40 @@ export function useRoundVote() {
         });
         return { plan, runtime: freshRuntime, stakeWei };
       };
+      const simulatePlannedCall = async (call: RoundVoteContractCall) => {
+        if (call.data) {
+          await publicClient.call({
+            account: address as Address,
+            data: call.data,
+            to: call.address,
+            ...(typeof call.value !== "undefined" ? { value: call.value } : {}),
+          });
+          return;
+        }
+
+        await publicClient.simulateContract({
+          account: address as Address,
+          address: call.address,
+          abi: call.abi,
+          args: call.args as never,
+          functionName: call.functionName as never,
+          ...(typeof call.value !== "undefined" ? { value: call.value } : {}),
+        } as any);
+      };
+      const preflightAdvisoryBatchPlan = async (vote: Awaited<ReturnType<typeof buildFreshRoundVotePlan>>) => {
+        if (!vote.plan.isAdvisoryVote) return;
+
+        timingLog.emit("advisory-batch-preflight-start");
+        for (const call of vote.plan.calls) {
+          await simulatePlannedCall(call);
+        }
+        timingLog.emit("advisory-batch-preflight-complete");
+      };
       let submittedVote: Awaited<ReturnType<typeof buildFreshRoundVotePlan>> | null = null;
 
       if (!useDirectLocalE2EWrites && canUseSponsoredBatchCalls) {
         const freshVote = await buildFreshRoundVotePlan(currentAllowance);
+        await preflightAdvisoryBatchPlan(freshVote);
         timingLog.emit("vote-batch-submit-start", { sponsorshipMode: "sponsored" });
         await executeContractCallBatch(freshVote.plan.calls, {
           action: "vote",
@@ -801,6 +832,7 @@ export function useRoundVote() {
         submittedVote = freshVote;
       } else if (!useDirectLocalE2EWrites && canUseSelfFundedBatchCalls) {
         const freshVote = await buildFreshRoundVotePlan(currentAllowance);
+        await preflightAdvisoryBatchPlan(freshVote);
         timingLog.emit("vote-batch-submit-start", { sponsorshipMode: "self-funded" });
         await executeContractCallBatch(freshVote.plan.calls, {
           action: "vote",

@@ -23,6 +23,13 @@ test("normalizeRoundVoteError keeps existing named protocol errors readable", ()
   );
 });
 
+test("normalizeRoundVoteError hides raw wallet bundle failures", () => {
+  assert.equal(
+    normalizeRoundVoteError("Call bundle failed with status: 500"),
+    "Wallet could not submit this vote bundle. Please retry in a moment.",
+  );
+});
+
 test("normalizeRoundVoteError translates content inactive selectors", () => {
   assert.equal(
     normalizeRoundVoteError(`commitVote reverted with selector ${CONTENT_NOT_ACTIVE_ERROR_SELECTOR}`),
@@ -60,6 +67,17 @@ test("normalizeRoundVoteError translates invalid stake errors", () => {
   assert.equal(
     normalizeRoundVoteError("InvalidStake"),
     "Choose a stake between 1 and 10 LREP, or choose 0 for advisory voting.",
+  );
+});
+
+test("normalizeRoundVoteError translates advisory recorder errors", () => {
+  assert.equal(
+    normalizeRoundVoteError("UnverifiedAdvisoryCapReached"),
+    "This round has reached the zero-LREP limit for unverified wallets. Verify a human credential or try another round.",
+  );
+  assert.equal(
+    normalizeRoundVoteError("ConfidentialityGated"),
+    "Zero-LREP advisory voting is not available for private-context questions.",
   );
 });
 

@@ -8,6 +8,8 @@ export const ADVISORY_COMMIT_AVAILABILITY_STATUS = {
   ThresholdReached: 6,
   MaxAdvisoryVotersReached: 7,
   InvalidConfig: 8,
+  UnverifiedAdvisoryCapReached: 9,
+  ConfidentialityGated: 10,
 } as const;
 
 export type AdvisoryCommitAvailabilityStatus =
@@ -73,6 +75,10 @@ export function getAdvisoryVoteUnavailableMessage(
       return "This round is already waiting for settlement.";
     case ADVISORY_COMMIT_AVAILABILITY_STATUS.MaxAdvisoryVotersReached:
       return "This round has reached the maximum number of advisory voters.";
+    case ADVISORY_COMMIT_AVAILABILITY_STATUS.UnverifiedAdvisoryCapReached:
+      return "This round has reached the zero-LREP limit for unverified wallets. Verify a human credential or try another round.";
+    case ADVISORY_COMMIT_AVAILABILITY_STATUS.ConfidentialityGated:
+      return "Zero-LREP advisory voting is not available for private-context questions.";
     case ADVISORY_COMMIT_AVAILABILITY_STATUS.RoundNotOpen:
       return "This round is not accepting votes right now.";
     case ADVISORY_COMMIT_AVAILABILITY_STATUS.InvalidConfig:

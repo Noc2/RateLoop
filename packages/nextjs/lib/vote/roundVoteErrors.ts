@@ -25,6 +25,9 @@ export function normalizeRoundVoteError(message: string) {
   if (normalizedMessage.includes("free transactions used up")) {
     return "Free transactions used up. Add ETH to continue.";
   }
+  if (normalizedMessage.includes("call bundle failed")) {
+    return "Wallet could not submit this vote bundle. Please retry in a moment.";
+  }
   if (matchesContractError(message, normalizedMessage, "CooldownActive")) {
     return `You already voted on this content within the last ${Math.round(VOTE_COOLDOWN_SECONDS / 3600)} hours. Try again after the cooldown ends.`;
   }
@@ -48,6 +51,12 @@ export function normalizeRoundVoteError(message: string) {
   }
   if (matchesContractError(message, normalizedMessage, "InvalidStake")) {
     return "Choose a stake between 1 and 10 LREP, or choose 0 for advisory voting.";
+  }
+  if (matchesContractError(message, normalizedMessage, "UnverifiedAdvisoryCapReached")) {
+    return "This round has reached the zero-LREP limit for unverified wallets. Verify a human credential or try another round.";
+  }
+  if (matchesContractError(message, normalizedMessage, "ConfidentialityGated")) {
+    return "Zero-LREP advisory voting is not available for private-context questions.";
   }
   if (matchesContractError(message, normalizedMessage, "SelfVote", SELF_VOTE_ERROR_SELECTOR)) {
     return "You cannot vote on your own content.";

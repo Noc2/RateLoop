@@ -2,13 +2,16 @@
 
 import { useMemo } from "react";
 import { AdvisoryVoteRecorderAbi } from "@rateloop/contracts/abis";
-import { useReadContracts } from "wagmi";
+import { useQuery } from "@tanstack/react-query";
+import { useAccount, usePublicClient } from "wagmi";
 import { useDeployedContractInfo } from "~~/hooks/scaffold-eth";
 import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import { type AdvisoryCommitAvailability, parseAdvisoryCommitAvailability } from "~~/lib/vote/advisoryVoteAvailability";
 
 export function useAdvisoryVoteAvailabilities(contentIds: readonly bigint[], enabled = true) {
   const { targetNetwork } = useTargetNetwork();
+  const { address } = useAccount();
+  const publicClient = usePublicClient({ chainId: targetNetwork.id });
   const { data: advisoryVoteRecorderInfo, isLoading: isAdvisoryVoteRecorderLoading } = useDeployedContractInfo({
     contractName: "AdvisoryVoteRecorder",
   } as any);
@@ -17,34 +20,46 @@ export function useAdvisoryVoteAvailabilities(contentIds: readonly bigint[], ena
     [contentIds],
   );
   const recorderAddress = advisoryVoteRecorderInfo?.address as `0x${string}` | undefined;
+  const contentIdKey = useMemo(
+    () => uniqueContentIds.map(contentId => contentId.toString()).join(","),
+    [uniqueContentIds],
+  );
 
-  const { data, isLoading, isFetching } = useReadContracts({
-    allowFailure: true,
-    contracts:
-      recorderAddress && enabled
-        ? uniqueContentIds.map(contentId => ({
-            address: recorderAddress,
-            abi: AdvisoryVoteRecorderAbi,
-            functionName: "advisoryCommitAvailability",
-            args: [contentId],
-            chainId: targetNetwork.id,
-          }))
-        : [],
-    query: {
-      enabled: enabled && !!recorderAddress && uniqueContentIds.length > 0,
-      refetchInterval: 10_000,
+  const { data, isLoading, isFetching } = useQuery({
+    queryKey: [
+      "advisoryVoteAvailabilities",
+      targetNetwork.id,
+      recorderAddress ?? null,
+      address?.toLowerCase() ?? null,
+      contentIdKey,
+    ],
+    enabled: enabled && !!publicClient && !!recorderAddress && uniqueContentIds.length > 0,
+    refetchInterval: 10_000,
+    queryFn: async () => {
+      const entries = await Promise.all(
+        uniqueContentIds.map(async contentId => {
+          try {
+            const result = await publicClient!.readContract({
+              account: address,
+              address: recorderAddress!,
+              abi: AdvisoryVoteRecorderAbi,
+              functionName: "advisoryCommitAvailability",
+              args: [contentId],
+            });
+            return [contentId.toString(), parseAdvisoryCommitAvailability(result)] as const;
+          } catch {
+            return null;
+          }
+        }),
+      );
+
+      return entries.filter((entry): entry is NonNullable<typeof entry> => entry !== null);
     },
   });
 
   const availabilityByContentId = useMemo(() => {
-    const map = new Map<string, AdvisoryCommitAvailability>();
-    uniqueContentIds.forEach((contentId, index) => {
-      const result = data?.[index];
-      if (result?.status !== "success") return;
-      map.set(contentId.toString(), parseAdvisoryCommitAvailability(result.result));
-    });
-    return map;
-  }, [data, uniqueContentIds]);
+    return new Map<string, AdvisoryCommitAvailability>(data ?? []);
+  }, [data]);
 
   return {
     availabilityByContentId,
