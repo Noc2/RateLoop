@@ -21,12 +21,33 @@ type FeedbackCountsResponse = {
   counts: Record<string, number>;
 };
 
+let feedbackDbPool: import("pg").Pool | null = null;
+
+async function getFeedbackDbPool() {
+  const databaseUrl = process.env.DATABASE_URL;
+  expect(databaseUrl, "DATABASE_URL must be set for content feedback e2e cleanup").toBeTruthy();
+  const { Pool } = await import("pg");
+  feedbackDbPool ??= new Pool({ connectionString: databaseUrl, max: 1 });
+  return feedbackDbPool;
+}
+
+async function clearContentFeedbackForContent(contentId: string) {
+  const pool = await getFeedbackDbPool();
+  await pool.query("delete from content_feedback where content_id = $1", [contentId]);
+}
+
 test.describe("Content feedback", () => {
+  test.afterAll(async () => {
+    await feedbackDbPool?.end();
+    feedbackDbPool = null;
+  });
+
   test("rater can publish feedback through the UI and counts update", async ({ browser }) => {
     test.setTimeout(180_000);
 
     const target = await createFreshVoteableContent("Feedback UI Target", ANVIL_ACCOUNTS.account3.address);
     expect(target, "fresh feedback target should submit and index").not.toBeNull();
+    await clearContentFeedbackForContent(target!.contentId);
 
     const context = await newE2EContext(browser);
     const page = await context.newPage();
