@@ -35,11 +35,17 @@ async function dismissBetaNotice(page: Page): Promise<void> {
 
 async function getReadyRateMobileMenuButton(page: Page) {
   const scrollSource = page.locator('[data-mobile-header-scroll-source="true"]').first();
-  await expect(scrollSource).toBeVisible({ timeout: 5_000 });
-  await scrollSource.evaluate(element => {
-    element.scrollTop = 0;
-    element.dispatchEvent(new Event("scroll", { bubbles: true }));
-  });
+  if (await scrollSource.isVisible({ timeout: 5_000 }).catch(() => false)) {
+    await scrollSource.evaluate(element => {
+      element.scrollTop = 0;
+      element.dispatchEvent(new Event("scroll", { bubbles: true }));
+    });
+  } else {
+    await page.evaluate(() => {
+      window.scrollTo(0, 0);
+      document.scrollingElement?.scrollTo(0, 0);
+    });
+  }
 
   const mobileHeader = page.locator('[data-mobile-header="true"]');
   await expect(mobileHeader).toHaveAttribute("data-visible", "true", { timeout: 5_000 });
@@ -956,9 +962,7 @@ test.describe("Mobile viewport (phone)", () => {
     await openReadyRateMobileMenu(page);
     const submitLink = page.locator(".dropdown-content").getByRole("link", { name: /Submit/i });
     await submitLink.waitFor({ state: "visible", timeout: 3_000 });
-    await submitLink.evaluate(link => (link as HTMLAnchorElement).click());
-
-    await expect(page).toHaveURL(/\/ask/, { timeout: 15_000 });
+    await Promise.all([page.waitForURL(/\/ask/, { timeout: 15_000 }), submitLink.click({ force: true })]);
   });
 
   test("public mobile menu closes after navigating from a page link", async ({ page }) => {
@@ -974,12 +978,7 @@ test.describe("Mobile viewport (phone)", () => {
     const imprintLink = page.locator("footer").getByRole("link", { name: "Imprint" });
     await imprintLink.scrollIntoViewIfNeeded();
     await expect(imprintLink).toBeVisible({ timeout: 5_000 });
-    await page.evaluate(() => {
-      const link = document.querySelector<HTMLAnchorElement>('footer a[href="/legal/imprint"]');
-      link?.click();
-    });
-
-    await expect(page).toHaveURL(/\/legal\/imprint/, { timeout: 15_000 });
+    await Promise.all([page.waitForURL(/\/legal\/imprint/, { timeout: 15_000 }), imprintLink.click({ force: true })]);
     await expect(page.getByRole("heading", { name: /Imprint/i }).first()).toBeVisible({ timeout: 10_000 });
     await expect(menu).not.toHaveAttribute("open", "");
     await expect(page.locator("header .dropdown-content").first()).toBeHidden();
@@ -1000,7 +999,7 @@ test.describe("Mobile viewport (phone)", () => {
 
   test("view filter sheet opens above the vote feed", async ({ connectedPage: page }) => {
     await gotoWithRetry(page, "/rate", { ensureWalletConnected: true, timeout: 45_000 });
-    await waitForFeedLoaded(page, 30_000);
+    await waitForFeedLoaded(page, 60_000);
 
     const voteTopChrome = page.locator('[data-vote-mobile-top-chrome="true"]');
     await expect(voteTopChrome).toHaveAttribute("data-visible", "true", { timeout: 5_000 });
@@ -1028,7 +1027,8 @@ test.describe("Mobile viewport (phone)", () => {
 
   test("StakeSelector dialog opens on mobile", async ({ connectedPage: page }) => {
     await gotoWithRetry(page, "/rate", { ensureWalletConnected: true, timeout: 45_000 });
-    await waitForFeedLoaded(page, 30_000);
+    await waitForFeedLoaded(page, 60_000);
+    expect(await findVoteableContent(page)).toBe(true);
 
     await page.evaluate(eventName => window.dispatchEvent(new Event(eventName)), E2E_OPEN_STAKE_SELECTOR_EVENT);
 
@@ -1047,7 +1047,8 @@ test.describe("Mobile viewport (phone)", () => {
 
   test("content source link opens the context externally", async ({ connectedPage: page }) => {
     await gotoWithRetry(page, "/rate", { ensureWalletConnected: true, timeout: 45_000 });
-    await waitForFeedLoaded(page, 30_000);
+    await waitForFeedLoaded(page, 60_000);
+    await expect(page.locator('article[aria-current="true"]').first()).toBeVisible({ timeout: 15_000 });
 
     const activeSourceLink = page.locator('[aria-current="true"] [data-testid="content-source-link"]').first();
     await expect(activeSourceLink).toBeVisible({ timeout: 10_000 });

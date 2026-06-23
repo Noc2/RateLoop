@@ -99,7 +99,7 @@ export async function ensureInjectedWalletConnected(page: Page, timeout: number)
       }
     }
 
-    if (attempt === 1) {
+    if (attempt === FEED_LOAD_ATTEMPTS - 1) {
       break;
     }
 
@@ -189,7 +189,7 @@ export async function waitForFeedLoaded(page: Page, timeout = 15_000): Promise<v
 
   let lastError: unknown;
 
-  for (let attempt = 0; attempt < 2; attempt += 1) {
+  for (let attempt = 0; attempt < FEED_LOAD_ATTEMPTS; attempt += 1) {
     try {
       if (
         await connectButton
