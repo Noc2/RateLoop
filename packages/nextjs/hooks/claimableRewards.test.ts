@@ -1,6 +1,7 @@
 import {
   buildRoundClaimStateLookup,
   calculateLastClaimAwarePoolShare,
+  claimItemMayWriteLrepCheckpoint,
   getClaimableRoundKey,
   getQuestionRewardClaimArgs,
   hasIndexedRefundClaim,
@@ -290,5 +291,49 @@ test("getClaimableRoundKey namespaces question and bundle rewards", () => {
       claimType: "frontend_registry_withdrawal",
     }),
     null,
+  );
+});
+
+test("claimItemMayWriteLrepCheckpoint identifies LREP-paying claim paths", () => {
+  assert.equal(
+    claimItemMayWriteLrepCheckpoint({
+      contentId: 8n,
+      roundId: 2n,
+      reward: 3n,
+      claimType: "reward",
+    }),
+    true,
+  );
+  assert.equal(
+    claimItemMayWriteLrepCheckpoint({
+      rewardPoolId: 9n,
+      contentId: 5n,
+      roundId: 1n,
+      reward: 2n,
+      asset: "LREP",
+      title: "Is this worth it?",
+      claimType: "question_reward",
+    }),
+    true,
+  );
+  assert.equal(
+    claimItemMayWriteLrepCheckpoint({
+      rewardPoolId: 9n,
+      contentId: 5n,
+      roundId: 1n,
+      reward: 2n,
+      asset: "USDC",
+      title: "Is this worth it?",
+      claimType: "question_reward",
+    }),
+    false,
+  );
+  assert.equal(
+    claimItemMayWriteLrepCheckpoint({
+      frontend: "0x3000000000000000000000000000000000000000",
+      reward: 5n,
+      claimType: "frontend_registry_fee",
+    }),
+    false,
   );
 });

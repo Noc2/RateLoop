@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import { type Abi } from "viem";
-import { useAccount } from "wagmi";
+import { useAccount, usePublicClient } from "wagmi";
 import { useTermsAcceptance } from "~~/contexts/TermsAcceptanceContext";
 import {
   type ClaimableRewardItem,
+  claimItemMayWriteLrepCheckpoint,
   getQuestionBundleRewardClaimArgs,
   getQuestionRewardClaimArgs,
   sortClaimableRewardItems,
@@ -27,6 +28,7 @@ import {
   getConfiguredQuestionRewardPoolEscrowAddress,
 } from "~~/lib/questionRewardPools";
 import { isWalletRpcOverloadedError } from "~~/lib/transactionErrors";
+import { readLatestBlockNumber, waitForNextObservedBlock } from "~~/lib/transactions/blockWait";
 import { notification } from "~~/utils/scaffold-eth";
 
 /**
@@ -63,6 +65,7 @@ export function useClaimAll() {
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const { requireAcceptance } = useTermsAcceptance();
   const { targetNetwork } = useTargetNetwork();
+  const publicClient = usePublicClient({ chainId: targetNetwork.id });
   const questionRewardPoolEscrowAddress = getConfiguredQuestionRewardPoolEscrowAddress(targetNetwork.id);
   const { canUseSponsoredSubmitCalls, executeSponsoredCalls, isAwaitingSponsoredSubmitCalls } =
     useThirdwebSponsoredSubmitCalls();
@@ -239,7 +242,18 @@ export function useClaimAll() {
           }
 
           if (canUseSponsoredSubmitCalls) {
+            const nextItem = orderedItems[i + 1];
+            const shouldWaitForCheckpointBlock =
+              claimItemMayWriteLrepCheckpoint(item) &&
+              nextItem !== undefined &&
+              claimItemMayWriteLrepCheckpoint(nextItem);
+            const checkpointBaselineBlock = shouldWaitForCheckpointBlock
+              ? await readLatestBlockNumber(publicClient)
+              : null;
             await executeSponsoredCalls([getSponsoredClaimCall(item)], { action: claimLabel });
+            if (shouldWaitForCheckpointBlock) {
+              await waitForNextObservedBlock(publicClient, { afterBlockNumber: checkpointBaselineBlock });
+            }
             if (item.claimType === "frontend_round_fee") {
               creditedFrontendRoundCount += 1;
             }

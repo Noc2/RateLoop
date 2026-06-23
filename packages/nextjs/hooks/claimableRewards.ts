@@ -211,6 +211,21 @@ export function sortClaimableRewardItems(items: readonly ClaimableRewardItem[]) 
   });
 }
 
+export function claimItemMayWriteLrepCheckpoint(item: ClaimableRewardItem) {
+  switch (item.claimType) {
+    case "question_reward":
+    case "question_bundle_reward":
+      return item.asset === "LREP";
+    case "frontend_registry_fee":
+      return false;
+    case "refund":
+    case "reward":
+    case "frontend_round_fee":
+    case "frontend_registry_withdrawal":
+      return true;
+  }
+}
+
 export function getQuestionRewardClaimArgs(item: QuestionRewardPoolClaimableRewardItem) {
   if (item.payoutWeight && item.payoutProof) {
     return [item.rewardPoolId, item.roundId, item.payoutWeight, item.payoutProof] as const;
