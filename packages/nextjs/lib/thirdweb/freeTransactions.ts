@@ -1401,6 +1401,75 @@ function validateSponsoredFeedbackRegistryCall(functionName: string, args: reado
   return !sourceUrl || sanitizeExternalUrl(sourceUrl) === sourceUrl;
 }
 
+function validateEip3009Authorization(params: {
+  amountArgIndex: number;
+  args: readonly unknown[];
+  expectedPayee: Address;
+  walletAddress: `0x${string}`;
+}) {
+  const paymentParams = params.args[0];
+  const authorization = params.args[1];
+  const expectedAmount = normalizeUintArg(getTupleField(paymentParams, "amount", params.amountArgIndex));
+  const from = normalizeAddressArg(getTupleField(authorization, "from", 0));
+  const to = normalizeAddressArg(getTupleField(authorization, "to", 1));
+  const value = normalizeUintArg(getTupleField(authorization, "value", 2));
+  const validAfter = normalizeUintArg(getTupleField(authorization, "validAfter", 3));
+  const validBefore = normalizeUintArg(getTupleField(authorization, "validBefore", 4));
+  const nonce = getTupleField(authorization, "nonce", 5);
+  const v = normalizeUintArg(getTupleField(authorization, "v", 6));
+  const r = getTupleField(authorization, "r", 7);
+  const s = getTupleField(authorization, "s", 8);
+
+  if (
+    expectedAmount === null ||
+    expectedAmount <= 0n ||
+    from?.toLowerCase() !== params.walletAddress.toLowerCase() ||
+    to?.toLowerCase() !== params.expectedPayee.toLowerCase() ||
+    value === null ||
+    value !== expectedAmount ||
+    validAfter === null ||
+    validBefore === null ||
+    validBefore <= validAfter ||
+    validBefore <= BigInt(Math.floor(Date.now() / 1000)) ||
+    !isBytes32Hex(nonce) ||
+    !isBytes32Hex(r) ||
+    !isBytes32Hex(s) ||
+    v === null ||
+    v > 255n
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+async function validateSponsoredX402QuestionSubmitterCall(
+  functionName: string,
+  args: readonly unknown[],
+  submitterAddress: Address,
+  walletAddress: `0x${string}`,
+) {
+  if (functionName !== "submitQuestionWithX402Payment" && functionName !== "submitQuestionWithX402OneShotPayment") {
+    return false;
+  }
+
+  const question = readSponsoredSubmissionQuestionFromArgs(args);
+  if (!question) return false;
+
+  const confidentiality = readSubmissionConfidentialityField(args[11]);
+  if (!(await validateSponsoredSubmissionQuestion(question, walletAddress, confidentiality?.gated ?? false))) {
+    return false;
+  }
+
+  const paymentAuthorization = args[args.length - 1];
+  return validateEip3009Authorization({
+    amountArgIndex: 1,
+    args: [{ amount: normalizeUintArg(getTupleField(paymentAuthorization, "value", 2)) }, paymentAuthorization],
+    expectedPayee: submitterAddress,
+    walletAddress,
+  });
+}
+
 async function validateSponsoredCalls(
   chainId: number,
   calls: readonly NormalizedVerifierCall[],
@@ -1413,6 +1482,7 @@ async function validateSponsoredCalls(
   const feedbackBonusEscrow = contracts?.FeedbackBonusEscrow;
   const confidentialityEscrow = contracts?.ConfidentialityEscrow;
   const votingEngine = contracts?.RoundVotingEngine;
+  const x402QuestionSubmitter = contracts?.X402QuestionSubmitter;
   const allowedApproveSpenders = new Set(
     [
       frontendRegistry?.address,
@@ -1546,9 +1616,46 @@ async function validateSponsoredCalls(
         ) {
           continue;
         }
+        if (
+          functionName === "createRewardPoolWithAuthorization" &&
+          rewardEscrow &&
+          validateEip3009Authorization({
+            amountArgIndex: 1,
+            args,
+            expectedPayee: rewardEscrow.address,
+            walletAddress,
+          })
+        ) {
+          continue;
+        }
         return { ok: false, debugCode: "unsupported_operation" };
       case "FeedbackBonusEscrow":
         if (functionName === "createFeedbackBonusPoolWithAsset" || functionName === "awardFeedbackBonus") {
+          continue;
+        }
+        if (
+          functionName === "createFeedbackBonusPoolWithAuthorization" &&
+          feedbackBonusEscrow &&
+          validateEip3009Authorization({
+            amountArgIndex: 2,
+            args,
+            expectedPayee: feedbackBonusEscrow.address,
+            walletAddress,
+          })
+        ) {
+          continue;
+        }
+        return { ok: false, debugCode: "unsupported_operation" };
+      case "X402QuestionSubmitter":
+        if (
+          x402QuestionSubmitter &&
+          (await validateSponsoredX402QuestionSubmitterCall(
+            functionName,
+            args,
+            x402QuestionSubmitter.address,
+            walletAddress,
+          ))
+        ) {
           continue;
         }
         return { ok: false, debugCode: "unsupported_operation" };

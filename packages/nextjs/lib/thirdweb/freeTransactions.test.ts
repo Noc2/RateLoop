@@ -78,6 +78,7 @@ const confidentialityEscrowContract = contractsForChain.ConfidentialityEscrow;
 const launchDistributionPoolContract = contractsForChain.LaunchDistributionPool;
 const rewardDistributorContract = contractsForChain.RoundRewardDistributor;
 const votingEngineContract = contractsForChain.RoundVotingEngine;
+const x402QuestionSubmitterContract = contractsForChain.X402QuestionSubmitter;
 const arbitraryTokenContract = {
   address: "0x9999999999999999999999999999999999999999" as const,
   abi: parseAbi(["function approve(address spender, uint256 amount) returns (bool)"]),
@@ -292,6 +293,72 @@ const legacyRecipientClaimCall = () =>
     legacyClaimProof,
   ]);
 
+function eip3009Authorization(
+  to: `0x${string}`,
+  options: Partial<{
+    amount: bigint;
+    from: `0x${string}`;
+    validAfter: bigint;
+    validBefore: bigint;
+  }> = {},
+) {
+  return {
+    from: options.from ?? WALLET,
+    to,
+    value: options.amount ?? 1_000_000n,
+    validAfter: options.validAfter ?? 0n,
+    validBefore: options.validBefore ?? BigInt(Math.floor(Date.now() / 1000) + 1800),
+    nonce: `0x${"9".repeat(64)}` as const,
+    v: 27,
+    r: `0x${"a".repeat(64)}` as const,
+    s: `0x${"b".repeat(64)}` as const,
+  };
+}
+
+function rewardPoolAuthorizationCall(
+  overrides: Partial<{
+    amount: bigint;
+    authorization: ReturnType<typeof eip3009Authorization>;
+  }> = {},
+) {
+  const amount = overrides.amount ?? 1_000_000n;
+  return encodeCall(rewardEscrowContract, "createRewardPoolWithAuthorization", [
+    {
+      contentId: 1n,
+      amount,
+      requiredVoters: 3n,
+      requiredSettledRounds: 1n,
+      bountyStartBy: 1_234n,
+      bountyWindowSeconds: 86_400n,
+      feedbackWindowSeconds: 86_400n,
+      bountyEligibility: 0,
+      bountyKind: 0,
+      relatedRoundId: 0n,
+      reasonHash: EMPTY_DETAILS_HASH,
+    },
+    overrides.authorization ?? eip3009Authorization(rewardEscrowContract.address, { amount }),
+  ]);
+}
+
+function feedbackBonusAuthorizationCall(
+  overrides: Partial<{
+    amount: bigint;
+    authorization: ReturnType<typeof eip3009Authorization>;
+  }> = {},
+) {
+  const amount = overrides.amount ?? 1_000_000n;
+  return encodeCall(feedbackBonusEscrowContract, "createFeedbackBonusPoolWithAuthorization", [
+    {
+      contentId: 1n,
+      roundId: 1n,
+      amount,
+      feedbackClosesAt: 1_234n,
+      awarder: WALLET,
+    },
+    overrides.authorization ?? eip3009Authorization(feedbackBonusEscrowContract.address, { amount }),
+  ]);
+}
+
 function submitQuestionWithRewardCall(
   overrides: Partial<{
     contextUrl: string;
@@ -351,6 +418,47 @@ function submitQuestionWithRewardCall(
       question.confidentiality,
     ],
   );
+}
+
+function x402QuestionPaymentCall(
+  overrides: Partial<{
+    authorization: ReturnType<typeof eip3009Authorization>;
+    contextUrl: string;
+    detailsHash: `0x${string}`;
+    detailsUrl: string;
+    title: string;
+  }> = {},
+) {
+  return encodeCall(x402QuestionSubmitterContract, "submitQuestionWithX402Payment", [
+    overrides.contextUrl ?? "https://example.com/product",
+    [],
+    "",
+    overrides.title ?? "Is this product worth recommending?",
+    "Products,Value",
+    1n,
+    {
+      detailsHash: overrides.detailsHash ?? EMPTY_DETAILS_HASH,
+      detailsUrl: overrides.detailsUrl ?? "",
+    },
+    `0x${"5".repeat(64)}`,
+    {
+      asset: 0,
+      amount: 1_000_000n,
+      requiredVoters: 3n,
+      requiredSettledRounds: 1n,
+      bountyStartBy: 0n,
+      bountyWindowSeconds: 0n,
+      feedbackWindowSeconds: 0n,
+      bountyEligibility: 0,
+    },
+    { epochDuration: 1200, maxDuration: 604800, minVoters: 3, maxVoters: 100 },
+    {
+      questionMetadataHash: `0x${"6".repeat(64)}`,
+      resultSpecHash: `0x${"7".repeat(64)}`,
+    },
+    PUBLIC_CONFIDENTIALITY_CONFIG,
+    overrides.authorization ?? eip3009Authorization(x402QuestionSubmitterContract.address),
+  ]);
 }
 
 async function insertApprovedImageAttachment(params: { id?: string; ownerWalletAddress?: `0x${string}` }) {
@@ -835,9 +943,12 @@ test("supported sponsored operation families are allowlisted", async () => {
     [encodeCall(rewardDistributorContract, "claimFrontendFee", [1n, 1n, WALLET])],
     [encodeCall(rewardDistributorContract, "claimReward", [1n, 1n])],
     [encodeCall(rewardEscrowContract, "createRewardPool", [1n, 1_000_000n, 3n, 0n, 1_234n, 86_400n, 86_400n])],
+    [rewardPoolAuthorizationCall()],
     [encodeCall(rewardEscrowContract, "claimQuestionReward", [1n, 1n])],
     [encodeCall(rewardEscrowContract, "claimQuestionReward", [1n, 1n, payoutWeight, []])],
     [encodeCall(rewardEscrowContract, "claimQuestionBundleReward", [1n, 0n])],
+    [feedbackBonusAuthorizationCall()],
+    [x402QuestionPaymentCall()],
   ] as const;
 
   for (const calls of supportedCases) {
@@ -927,6 +1038,43 @@ test("allows sponsorship for the configured chain-scoped USDC address", async ()
       env.NEXT_PUBLIC_USDC_ADDRESS_31337 = previousUsdcOverride;
     }
   }
+});
+
+test("rejects malformed sponsored EIP-3009 authorization calls", async () => {
+  const wrongFunderDecision = await freeTransactions.evaluateFreeTransactionAllowance(
+    buildRequest([
+      rewardPoolAuthorizationCall({
+        authorization: eip3009Authorization(rewardEscrowContract.address, { from: THIRDWEB_ADMIN_WALLET }),
+      }),
+    ]) as never,
+  );
+  assert.equal(wrongFunderDecision.isAllowed, false);
+  if (wrongFunderDecision.isAllowed) return;
+  assert.equal(wrongFunderDecision.debugCode, "unsupported_operation");
+
+  const wrongPayeeDecision = await freeTransactions.evaluateFreeTransactionAllowance(
+    buildRequest([
+      feedbackBonusAuthorizationCall({
+        authorization: eip3009Authorization(rewardEscrowContract.address),
+      }),
+    ]) as never,
+  );
+  assert.equal(wrongPayeeDecision.isAllowed, false);
+  if (wrongPayeeDecision.isAllowed) return;
+  assert.equal(wrongPayeeDecision.debugCode, "unsupported_operation");
+
+  const expiredX402Decision = await freeTransactions.evaluateFreeTransactionAllowance(
+    buildRequest([
+      x402QuestionPaymentCall({
+        authorization: eip3009Authorization(x402QuestionSubmitterContract.address, {
+          validBefore: BigInt(Math.floor(Date.now() / 1000) - 1),
+        }),
+      }),
+    ]) as never,
+  );
+  assert.equal(expiredX402Decision.isAllowed, false);
+  if (expiredX402Decision.isAllowed) return;
+  assert.equal(expiredX402Decision.debugCode, "unsupported_operation");
 });
 
 test("validates sponsored ContentRegistry submit question media", async () => {

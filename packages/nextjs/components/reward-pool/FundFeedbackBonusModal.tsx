@@ -245,6 +245,8 @@ export function FundFeedbackBonusModal({
         resolveBountyReferenceNowSeconds(latestBlockTimestamp),
       );
 
+      const canUseBatchFunding = canUseSponsoredBatchCalls || canUseSelfFundedBatchCalls;
+
       if (asset === "usdc") {
         const authorizationParams = {
           amount: parsedAmount,
@@ -279,8 +281,7 @@ export function FundFeedbackBonusModal({
             }),
           );
           const signatureParts = getSignatureParts(signature);
-          authorizationHash = await writeContractAsync({
-            chainId: chainId as any,
+          const authorizationCall = {
             address: escrowAddress,
             abi: FEEDBACK_BONUS_ESCROW_ABI,
             functionName: "createFeedbackBonusPoolWithAuthorization",
@@ -296,12 +297,25 @@ export function FundFeedbackBonusModal({
                 ...signatureParts,
               },
             ],
-          });
-          await waitForTransactionReceipt(wagmiConfig, {
-            chainId: chainId as any,
-            hash: authorizationHash,
-            pollingInterval: getFundReceiptPollingInterval(chainId),
-          });
+          } as const;
+
+          if (canUseBatchFunding) {
+            await executeContractCallBatch([authorizationCall], {
+              action: "Fund Feedback Bonus",
+              atomicRequired: false,
+              sponsorshipMode: canUseSponsoredBatchCalls ? "sponsored" : "self-funded",
+            });
+          } else {
+            authorizationHash = await writeContractAsync({
+              chainId: chainId as any,
+              ...authorizationCall,
+            });
+            await waitForTransactionReceipt(wagmiConfig, {
+              chainId: chainId as any,
+              hash: authorizationHash,
+              pollingInterval: getFundReceiptPollingInterval(chainId),
+            });
+          }
 
           notification.success(`Feedback Bonus funded with ${formatFeedbackBonusAmount(parsedAmount, asset)}.`);
           onCreated?.();
@@ -327,7 +341,6 @@ export function FundFeedbackBonusModal({
         })) as bigint;
 
       const initialAllowance = await readTokenAllowance();
-      const canUseBatchFunding = canUseSponsoredBatchCalls || canUseSelfFundedBatchCalls;
 
       if (canUseBatchFunding) {
         await executeContractCallBatch(
