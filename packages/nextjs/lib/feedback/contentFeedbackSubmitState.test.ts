@@ -1,4 +1,5 @@
 import {
+  ADVISORY_ONLY_CONTENT_FEEDBACK_DISABLED_REASON,
   EXISTING_CONTENT_FEEDBACK_DISABLED_REASON,
   OWN_CONTENT_FEEDBACK_DISABLED_REASON,
   getContentFeedbackSubmitTooltip,
@@ -65,6 +66,19 @@ test("feedback submit tooltip keeps vote-first guidance for non-voters on other 
       isOwnContent: false,
     }),
     "You need to vote first.",
+  );
+});
+
+test("feedback submit tooltip blocks advisory-only voters before draft guidance", () => {
+  assert.equal(
+    getContentFeedbackSubmitTooltip({
+      advisoryOnlyFeedbackBlocker: ADVISORY_ONLY_CONTENT_FEEDBACK_DISABLED_REASON,
+      canSubmitDraft: false,
+      hasCurrentRoundVote: true,
+      isFeedbackOpen: true,
+      isOwnContent: false,
+    }),
+    ADVISORY_ONLY_CONTENT_FEEDBACK_DISABLED_REASON,
   );
 });
 

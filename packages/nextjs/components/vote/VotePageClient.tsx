@@ -284,6 +284,7 @@ const HomeInner = () => {
   const [voteAttention, setVoteAttention] = useState<{ contentId: string; token: number } | null>(null);
   const [optimisticOwnContentIds, setOptimisticOwnContentIds] = useState<Set<string>>(() => new Set());
   const [optimisticVotedContentIds, setOptimisticVotedContentIds] = useState<Set<string>>(() => new Set());
+  const [optimisticStakedVotedContentIds, setOptimisticStakedVotedContentIds] = useState<Set<string>>(() => new Set());
   const [localVoteCooldownVersion, setLocalVoteCooldownVersion] = useState(0);
   const [feedbackSheetItem, setFeedbackSheetItem] = useState<ContentItem | null>(null);
   const [shareSheetItem, setShareSheetItem] = useState<ContentItem | null>(null);
@@ -587,6 +588,7 @@ const HomeInner = () => {
   useEffect(() => {
     setOptimisticOwnContentIds(previous => (previous.size === 0 ? previous : new Set()));
     setOptimisticVotedContentIds(previous => (previous.size === 0 ? previous : new Set()));
+    setOptimisticStakedVotedContentIds(previous => (previous.size === 0 ? previous : new Set()));
   }, [address, targetNetwork.id]);
 
   useEffect(() => {
@@ -598,6 +600,20 @@ const HomeInner = () => {
 
     const fetchedVoteIds = new Set(votes.map(vote => vote.contentId.toString()));
     setOptimisticVotedContentIds(previous => {
+      let changed = false;
+      const next = new Set<string>();
+
+      previous.forEach(contentId => {
+        if (fetchedVoteIds.has(contentId)) {
+          changed = true;
+          return;
+        }
+        next.add(contentId);
+      });
+
+      return changed ? next : previous;
+    });
+    setOptimisticStakedVotedContentIds(previous => {
       let changed = false;
       const next = new Set<string>();
 
@@ -1249,11 +1265,11 @@ const HomeInner = () => {
   const primaryPendingRewardStatus = primaryItem
     ? (viewerRewardStatusByContentId.get(primaryItem.id.toString()) ?? null)
     : null;
-  const primaryHasOptimisticCurrentRoundVote = primaryItem
-    ? optimisticVotedContentIds.has(primaryItem.id.toString())
+  const primaryHasOptimisticStakedCurrentRoundVote = primaryItem
+    ? optimisticStakedVotedContentIds.has(primaryItem.id.toString())
     : false;
-  const feedbackSheetHasOptimisticCurrentRoundVote = feedbackSheetItem
-    ? optimisticVotedContentIds.has(feedbackSheetItem.id.toString())
+  const feedbackSheetHasOptimisticStakedCurrentRoundVote = feedbackSheetItem
+    ? optimisticStakedVotedContentIds.has(feedbackSheetItem.id.toString())
     : false;
   const primaryConfidentialContextBlocker = useConfidentialContextAccessBlocker(primaryItem);
   const feedbackSheetConfidentialContextBlocker = useConfidentialContextAccessBlocker(feedbackSheetItem);
@@ -1586,6 +1602,13 @@ const HomeInner = () => {
         next.add(stakeModal.contentId.toString());
         return next;
       });
+      if (stakeAmount > 0) {
+        setOptimisticStakedVotedContentIds(previous => {
+          const next = new Set(previous);
+          next.add(stakeModal.contentId.toString());
+          return next;
+        });
+      }
       setLocalVoteCooldownVersion(version => version + 1);
       if (item) {
         markPrimaryInteraction(item.id, { isVote: true });
@@ -2117,7 +2140,7 @@ const HomeInner = () => {
                 isCommitting={isCommitting}
                 voteError={voteError}
                 cooldownSecondsRemaining={primaryItemCooldownSeconds}
-                hasOptimisticCurrentRoundVote={primaryHasOptimisticCurrentRoundVote}
+                hasOptimisticStakedCurrentRoundVote={primaryHasOptimisticStakedCurrentRoundVote}
                 isVoteEligibilityPending={primaryVoteEligibilityPending}
                 voteUnavailableStatus={primaryVoteUnavailableStatus}
                 feedbackUnavailableReason={primaryConfidentialContextBlocker}
@@ -2198,7 +2221,7 @@ const HomeInner = () => {
             </h3>
             <ContentFeedbackPanel
               item={feedbackSheetItem}
-              hasOptimisticCurrentRoundVote={feedbackSheetHasOptimisticCurrentRoundVote}
+              hasOptimisticStakedCurrentRoundVote={feedbackSheetHasOptimisticStakedCurrentRoundVote}
               submitBlocker={feedbackSheetConfidentialContextBlocker}
               variant="sheet"
               onRequestConnect={openConnectModal}

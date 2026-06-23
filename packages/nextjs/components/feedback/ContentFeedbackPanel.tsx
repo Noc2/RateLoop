@@ -10,7 +10,10 @@ import { TooltipAnchor } from "~~/components/ui/InfoTooltip";
 import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 import type { ContentItem } from "~~/hooks/useContentFeed";
 import { useContentFeedback } from "~~/hooks/useContentFeedback";
-import { getContentFeedbackSubmitTooltip } from "~~/lib/feedback/contentFeedbackSubmitState";
+import {
+  ADVISORY_ONLY_CONTENT_FEEDBACK_DISABLED_REASON,
+  getContentFeedbackSubmitTooltip,
+} from "~~/lib/feedback/contentFeedbackSubmitState";
 import {
   CONTENT_FEEDBACK_BODY_MAX_LENGTH,
   CONTENT_FEEDBACK_PICKER_TYPES,
@@ -23,7 +26,7 @@ import { notification } from "~~/utils/scaffold-eth";
 
 interface ContentFeedbackPanelProps {
   item: ContentItem | null;
-  hasOptimisticCurrentRoundVote?: boolean;
+  hasOptimisticStakedCurrentRoundVote?: boolean;
   submitBlocker?: string | null;
   variant?: "rail" | "sheet";
   onRequestConnect?: () => void;
@@ -150,7 +153,7 @@ function FeedbackItem({
 
 export function ContentFeedbackPanel({
   item,
-  hasOptimisticCurrentRoundVote = false,
+  hasOptimisticStakedCurrentRoundVote = false,
   submitBlocker = null,
   variant = "rail",
   onRequestConnect,
@@ -188,8 +191,11 @@ export function ContentFeedbackPanel({
     watch: true,
     query: { enabled: Boolean(item && address && openRoundId > 0n) },
   } as any);
-  const hasCurrentRoundVote =
-    hasOptimisticCurrentRoundVote || hasNonZeroCommit(myCommitState) || hasNonZeroCommit(myAdvisoryCommitKey);
+  const hasStakedCurrentRoundVote = hasOptimisticStakedCurrentRoundVote || hasNonZeroCommit(myCommitState);
+  const hasAdvisoryCurrentRoundVote = hasNonZeroCommit(myAdvisoryCommitKey);
+  const hasCurrentRoundVote = hasStakedCurrentRoundVote || hasAdvisoryCurrentRoundVote;
+  const advisoryOnlyFeedbackBlocker =
+    hasAdvisoryCurrentRoundVote && !hasStakedCurrentRoundVote ? ADVISORY_ONLY_CONTENT_FEEDBACK_DISABLED_REASON : null;
   const isFeedbackOpen = openRoundId > 0n;
   const hasCurrentRoundFeedback = useMemo(
     () => items.some(feedbackItem => feedbackItem.isOwn && isFeedbackForRound(feedbackItem, openRoundId)),
@@ -201,11 +207,13 @@ export function ContentFeedbackPanel({
     !canSubmitDraft ||
     isSubmitting ||
     Boolean(submitBlocker) ||
+    Boolean(advisoryOnlyFeedbackBlocker) ||
     !isFeedbackOpen ||
     !hasCurrentRoundVote ||
     hasCurrentRoundFeedback ||
     isOwnContent;
   const submitTooltip = getContentFeedbackSubmitTooltip({
+    advisoryOnlyFeedbackBlocker,
     canSubmitDraft,
     hasCurrentRoundVote,
     hasCurrentRoundFeedback,
@@ -214,7 +222,7 @@ export function ContentFeedbackPanel({
     submitBlocker,
   });
   const submitButtonToneClassName =
-    isFeedbackOpen && hasCurrentRoundVote && !submitBlocker ? "vote-feedback" : "vote-light";
+    isFeedbackOpen && hasStakedCurrentRoundVote && !submitBlocker ? "vote-feedback" : "vote-light";
   const feedbackFieldsDisabled = !item || isSubmitting || Boolean(submitBlocker);
   const panelClassName = isSheet
     ? "flex min-h-0 flex-col overflow-visible"
@@ -254,7 +262,13 @@ export function ContentFeedbackPanel({
       notification.info(submitBlocker, { duration: 6000 });
       return;
     }
-    if (!canSubmitDraft || !isFeedbackOpen || !hasCurrentRoundVote || hasCurrentRoundFeedback || isOwnContent) return;
+    if (advisoryOnlyFeedbackBlocker) {
+      notification.info(advisoryOnlyFeedbackBlocker, { duration: 6000 });
+      return;
+    }
+    if (!canSubmitDraft || !isFeedbackOpen || !hasStakedCurrentRoundVote || hasCurrentRoundFeedback || isOwnContent) {
+      return;
+    }
 
     if (!address) {
       notification.info("Sign in to add feedback.");

@@ -17,7 +17,7 @@ interface VoteSignalRailProps {
   isCommitting: boolean;
   voteError?: string | null;
   cooldownSecondsRemaining: number;
-  hasOptimisticCurrentRoundVote?: boolean;
+  hasOptimisticStakedCurrentRoundVote?: boolean;
   isVoteEligibilityPending?: boolean;
   voteUnavailableStatus?: {
     label: string;
@@ -34,7 +34,7 @@ export function VoteSignalRail({
   isCommitting,
   voteError,
   cooldownSecondsRemaining,
-  hasOptimisticCurrentRoundVote = false,
+  hasOptimisticStakedCurrentRoundVote = false,
   isVoteEligibilityPending = false,
   voteUnavailableStatus = null,
   feedbackUnavailableReason = null,
@@ -101,7 +101,7 @@ export function VoteSignalRail({
       {primaryItem ? (
         <ContentFeedbackPanel
           item={primaryItem}
-          hasOptimisticCurrentRoundVote={hasOptimisticCurrentRoundVote}
+          hasOptimisticStakedCurrentRoundVote={hasOptimisticStakedCurrentRoundVote}
           submitBlocker={feedbackUnavailableReason}
           onRequestConnect={openConnectModal}
         />
