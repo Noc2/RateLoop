@@ -7,11 +7,25 @@ export type ReservationRevealWaitReceipt = {
 };
 
 export type ReservationRevealWaitClient = {
-  getBlock: (params: { blockNumber: bigint } | { blockTag: "latest" }) => Promise<{ timestamp: bigint }>;
+  getBlock: (params: { blockNumber: bigint } | { blockTag: "latest" }) => Promise<{
+    number?: bigint | null;
+    timestamp: bigint;
+  }>;
 };
 
 function sleep(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function isSameObservedBlock(
+  before: { number?: bigint | null; timestamp: bigint },
+  after: { number?: bigint | null; timestamp: bigint },
+) {
+  if (typeof before.number === "bigint" && typeof after.number === "bigint") {
+    return before.number === after.number;
+  }
+
+  return before.timestamp === after.timestamp;
 }
 
 export async function waitForReservationRevealReady(params: {
@@ -54,5 +68,11 @@ export async function waitForReservationRevealReady(params: {
     }
 
     await sleepFn(revealWaitMs);
+
+    const refreshedLatestBlock = await params.client.getBlock({ blockTag: "latest" });
+    if (refreshedLatestBlock.timestamp >= revealReadyTimestamp) return;
+
+    // On automine chains, the reveal transaction may be the next block that advances timestamp.
+    if (isSameObservedBlock(latestBlock, refreshedLatestBlock)) return;
   }
 }
