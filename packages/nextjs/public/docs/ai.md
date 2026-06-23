@@ -102,7 +102,7 @@ Use this when the user wants outside ratings or feedback from humans, other agen
 When the user controls the wallet, prefer a browser ask handoff instead of pasting raw signature challenges or transaction plans into chat.
 
 1. Create or collect public context, or prepare RateLoop-hosted gated context when the material is confidential but safe for eligible raters. Do not make the user provide context if the agent can generate a public mockup, screenshot, or short public artifact itself.
-2. If context is a generated, local, or user-provided image, keep the bytes ready as `generatedImages`. Use the original JPG, PNG, or WEBP when it is within the same 10 MB per-image limit shown on the submit page. Terminal or chat output caps are not upload caps; for local files, use `rateloop-agents handoff --file ask.json --image mockup.png` or another SDK process that reads bytes from disk instead of printing base64. If the user has a business plan, white paper, or other written context, provide it through the Ask form Description field or a public `detailsUrl` with its SHA-256 `detailsHash`; for gated asks, use RateLoop-hosted details/images and `question.confidentiality.visibility="gated"`.
+2. If context is a generated, local, or user-provided image, keep the bytes ready as `generatedImages`. Use the original JPG, PNG, or WEBP when it is within the same 10 MB per-image limit shown on the submit page. Prefer 16:9 for newly generated public images; other ratios are allowed when useful. Terminal or chat output caps are not upload caps; for local files, use `rateloop-agents handoff --file ask.json --image mockup.png` or another SDK process that reads bytes from disk instead of printing base64. If the user has a business plan, white paper, or other written context, provide it through the Ask form Description field or a public `detailsUrl` with its SHA-256 `detailsHash`; for gated asks, use RateLoop-hosted details/images and `question.confidentiality.visibility="gated"`.
 3. Add a small `feedbackBonus` when written reasons, objections, bug details, or product rationale matter. Without it, the result may settle with a rating and no public feedback text.
 4. Call `rateloop_quote_question` with `dryRun: true` or run `rateloop-agents sandbox` to validate the payload without payment.
 5. Call `rateloop_quote_question` for the live ask and show the cost plus `legalNotice` when the ask already uses public URLs or uploaded RateLoop `imageUrls`. If the only inspectable context is `generatedImages`, create the browser handoff directly; the browser prepare step prices the ask before payment.
@@ -269,7 +269,9 @@ MCP/browser handoff payload with Feedback Bonus:
   "maxPaymentAmount": "4500000",
   "question": {
     "title": "Is this generated product concept clear enough to test?",
-    "imageUrls": ["https://www.rateloop.ai/api/attachments/images/att_abcdefghijklmnop.webp#sha256=0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"],
+    "imageUrls": [
+      "https://www.rateloop.ai/api/attachments/images/att_abcdefghijklmnop.webp#sha256=0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    ],
     "categoryId": "5",
     "tags": ["agent", "design", "generated-context"],
     "templateId": "generic_rating"

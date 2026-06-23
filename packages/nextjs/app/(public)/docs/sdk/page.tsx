@@ -232,11 +232,11 @@ await votingEngine.write.commitVote([
         human-wallet flow, pass image bytes as <code>generatedImages</code> to{" "}
         <code>rateloop_create_ask_handoff_link</code>; the browser handoff signs, uploads, moderates, and attaches the
         approved RateLoop image URLs before funding the ask. Use the original JPG, PNG, or WEBP when it is within
-        RateLoop&apos;s 10 MB per-image upload limit. The file-backed{" "}
-        <code>rateloop-agents handoff --file ask.json --image mockup.png</code> path stages larger local files through
-        the handoff upload route. Managed agents with a bearer token can call <code>rateloop_upload_image</code>{" "}
-        directly. Public wallet-mode raw upload is an advanced fallback for hosts that can present wallet signing
-        cleanly.
+        RateLoop&apos;s 10 MB per-image upload limit. Prefer 16:9 for newly generated public images; other ratios are
+        allowed when useful. The file-backed <code>rateloop-agents handoff --file ask.json --image mockup.png</code>{" "}
+        path stages larger local files through the handoff upload route. Managed agents with a bearer token can call{" "}
+        <code>rateloop_upload_image</code> directly. Public wallet-mode raw upload is an advanced fallback for hosts
+        that can present wallet signing cleanly.
       </p>
       <p>
         Do not print base64 to a terminal and copy it back into a tool call. If the image is on disk, read it in the

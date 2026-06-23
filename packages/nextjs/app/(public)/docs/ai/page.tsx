@@ -313,7 +313,8 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
         <li>
           If context is a generated, local, or user-provided image, keep the bytes ready as <code>generatedImages</code>
           . Use the original JPG, PNG, or WEBP when it is within the same 10 MB per-image limit shown on the submit
-          page. Terminal or chat output caps are not upload caps; for local files, use{" "}
+          page. Prefer 16:9 for newly generated public images; other ratios are allowed when useful. Terminal or chat
+          output caps are not upload caps; for local files, use{" "}
           <code>rateloop-agents handoff --file ask.json --image mockup.png</code>, which stages larger files through the
           handoff upload route, or another SDK process that reads bytes from disk instead of printing base64. If the
           user has a business plan, white paper, or other written context, provide it through the Ask form Description

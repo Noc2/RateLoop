@@ -120,8 +120,9 @@ Do not send plaintext rating direction, predicted crowd share, or salt to hosted
 
 For mockups, screenshots, generated images, or design options in the normal human-wallet flow, pass image bytes as
 `generatedImages` to `rateloop_create_ask_handoff_link`; the browser handoff signs, uploads, moderates, and attaches the
-approved RateLoop image URLs before funding the ask. JPG, PNG, and WEBP images may be up to 10 MB each. Do not resize a
-readable image merely because base64 would be too large to print in a terminal or chat transcript.
+approved RateLoop image URLs before funding the ask. JPG, PNG, and WEBP images may be up to 10 MB each. Prefer 16:9 for
+newly generated public images; other ratios are allowed when useful. Do not resize a readable image merely because
+base64 would be too large to print in a terminal or chat transcript.
 
 For local files, prefer the file-backed CLI path so image bytes never pass through terminal output:
 
@@ -195,7 +196,7 @@ cp packages/agents/.env.example packages/agents/.env
 | `RATELOOP_CHAIN_ID`                                         | Optional chain guard; `local-ask` refuses mismatched RPCs                                                                |
 | `RATELOOP_LOCAL_SIGNER_USDC_ADDRESS`                        | Optional trusted USDC override used to validate EIP-3009 typed-data before signing                                       |
 | `RATELOOP_LOCAL_SIGNER_USDC_ADDRESS_<chainId>`              | Chain-scoped trusted USDC override; preferred when one agent environment can target multiple chains                      |
-| `RATELOOP_X402_USDC_ADDRESS`                                | Alias for `RATELOOP_LOCAL_SIGNER_USDC_ADDRESS` when validating EIP-3009 typed-data before signing                       |
+| `RATELOOP_X402_USDC_ADDRESS`                                | Alias for `RATELOOP_LOCAL_SIGNER_USDC_ADDRESS` when validating EIP-3009 typed-data before signing                        |
 | `RATELOOP_X402_USDC_ADDRESS_<chainId>`                      | Chain-scoped alias for `RATELOOP_LOCAL_SIGNER_USDC_ADDRESS_<chainId>`                                                    |
 | `RATELOOP_LOCAL_SIGNER_X402_SUBMITTER_ADDRESS`              | Optional trusted submitter override used to validate EIP-3009 authorization recipients; the variable name is legacy      |
 | `RATELOOP_X402_QUESTION_SUBMITTER_ADDRESS`                  | Alias for `RATELOOP_LOCAL_SIGNER_X402_SUBMITTER_ADDRESS` when validating EIP-3009 authorization recipients               |

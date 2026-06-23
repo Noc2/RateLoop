@@ -84,7 +84,7 @@ payload because the browser completes the funded flow.
 
 ## Generated Images And Mockups
 
-Agents do not need to ask users to host generated images, screenshots, or mockups. In the normal human-wallet flow, pass image bytes as `generatedImages` to `rateloop_create_ask_handoff_link`; the browser handoff signs, uploads, moderates, and attaches approved RateLoop image URLs before funding the ask. Use the original JPG, PNG, or WEBP when it is within RateLoop's 10 MB per-image upload limit.
+Agents do not need to ask users to host generated images, screenshots, or mockups. In the normal human-wallet flow, pass image bytes as `generatedImages` to `rateloop_create_ask_handoff_link`; the browser handoff signs, uploads, moderates, and attaches approved RateLoop image URLs before funding the ask. Use the original JPG, PNG, or WEBP when it is within RateLoop's 10 MB per-image upload limit. Prefer 16:9 for newly generated public images; other ratios are allowed when useful.
 
 Do not print base64 to a terminal and copy it back into a tool call. If the image is on disk, read it in the same Node, Python, SDK, MCP process, or `rateloop-agents handoff --file ask.json --image mockup.png` CLI process that sends the request, then compute `imageBase64` from that buffer. Terminal or chat display caps are transport problems, not reasons to shrink the image.
 
@@ -166,7 +166,9 @@ Use this shape after a successful MCP or browser handoff quote. USDC amounts are
     "title": "Is this generated product concept clear enough to test?",
     "detailsUrl": "https://www.rateloop.ai/api/attachments/details/det_abcdefghijklmnop",
     "detailsHash": "0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-    "imageUrls": ["https://www.rateloop.ai/api/attachments/images/att_abcdefghijklmnop.webp#sha256=0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"],
+    "imageUrls": [
+      "https://www.rateloop.ai/api/attachments/images/att_abcdefghijklmnop.webp#sha256=0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    ],
     "categoryId": "5",
     "tags": ["agent", "design", "generated-context"],
     "templateId": "feature_acceptance_test",

@@ -39,7 +39,10 @@ const governanceDocsPage = readFileSync(
   "utf8",
 );
 const betaNoticeBanner = readFileSync(
-  new URL("../packages/nextjs/components/BetaNoticeBanner.tsx", import.meta.url),
+  new URL(
+    "../packages/nextjs/components/BetaNoticeBanner.tsx",
+    import.meta.url,
+  ),
   "utf8",
 );
 const protocolReleaseConstants = readFileSync(
@@ -75,6 +78,17 @@ test("static agent docs keep no-payment dry-run guidance", () => {
     const content = publicDocs[file];
     assert.match(content, /dryRun: true/, file);
     assert.match(content, /dry_run|rateloop-agents sandbox/, file);
+  }
+});
+
+test("static agent docs mention optional 16:9 image guidance", () => {
+  for (const file of [
+    "packages/nextjs/public/docs/ai.md",
+    "packages/nextjs/public/docs/sdk.md",
+    "packages/nextjs/public/llms.txt",
+  ]) {
+    assert.match(publicDocs[file], /Prefer 16:9/i, file);
+    assert.match(publicDocs[file], /other ratios are allowed/i, file);
   }
 });
 

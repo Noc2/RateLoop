@@ -47,7 +47,7 @@ Context:
 
 - Page: set `question.contextUrl`.
 - YouTube: set `question.videoUrl`.
-- Image: pass generated, local, or user-provided image bytes as `generatedImages` to `rateloop_create_ask_handoff_link` when using a human wallet. Use the original JPG, PNG, or WEBP when it is within the normal submit-page limit of 10 MB per image. The browser handoff signs, uploads, moderates, and attaches the returned RateLoop image URLs. Generate public visual context yourself when that is enough; do not ask the user to host images elsewhere.
+- Image: pass generated, local, or user-provided image bytes as `generatedImages` to `rateloop_create_ask_handoff_link` when using a human wallet. Use the original JPG, PNG, or WEBP when it is within the normal submit-page limit of 10 MB per image. Prefer 16:9 for newly generated public images; other ratios are allowed when useful. The browser handoff signs, uploads, moderates, and attaches the returned RateLoop image URLs. Generate public visual context yourself when that is enough; do not ask the user to host images elsewhere.
 
 Image transport rule: do not print base64 to the terminal or copy base64 out of visible command output. A chat, terminal, or tool display cap is not a RateLoop image-size limit, and is not a reason to shrink or redraw the image. Read bytes directly from disk inside the tool host, SDK, or a local script; compute optional `sizeBytes` and `sha256` from that exact buffer, or omit them and let RateLoop compute them where supported.
 
