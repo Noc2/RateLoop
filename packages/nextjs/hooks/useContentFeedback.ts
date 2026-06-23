@@ -8,14 +8,14 @@ import { useAccount, usePublicClient, useSignMessage, useWriteContract } from "w
 import { useTransactor } from "~~/hooks/scaffold-eth";
 import { useLocalE2ETestWalletClient } from "~~/hooks/scaffold-eth/useLocalE2ETestWalletClient";
 import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
-import { useGasBalanceStatus } from "~~/hooks/useGasBalanceStatus";
 import { useThirdwebSponsoredSubmitCalls } from "~~/hooks/useThirdwebSponsoredSubmitCalls";
+import { useWalletTransactionReadiness } from "~~/hooks/useWalletTransactionReadiness";
 import type { ContentFeedbackItem, ContentFeedbackListResult, ContentFeedbackType } from "~~/lib/feedback/types";
 import {
   getConfiguredFeedbackRegistryAddress,
   getConfiguredRoundVotingEngineAddress,
 } from "~~/lib/questionRewardPools";
-import { getGasBalanceErrorMessage, isUserRejectedTransactionError } from "~~/lib/transactionErrors";
+import { isUserRejectedTransactionError } from "~~/lib/transactionErrors";
 import { isSignatureRejected } from "~~/utils/signatureErrors";
 
 interface SignedChallengeResponse {
@@ -116,10 +116,14 @@ export function useContentFeedback(contentId: bigint | string | number | null | 
     canUseSelfFundedBatchCalls,
     canUseSponsoredSubmitCalls,
     executeContractCallBatch,
+    isAwaitingSelfFundedSubmitCalls,
     isAwaitingSponsoredSubmitCalls,
   } = useThirdwebSponsoredSubmitCalls();
-  const { canSponsorTransactions, isMissingGasBalance, nativeTokenSymbol } = useGasBalanceStatus({
+  const walletTransactionReadiness = useWalletTransactionReadiness({
+    address,
     includeExternalSendCalls: true,
+    isAwaitingSelfFundedWallet: isAwaitingSelfFundedSubmitCalls,
+    isAwaitingSponsoredWallet: isAwaitingSponsoredSubmitCalls,
   });
   const { chain } = useAccount();
   const { targetNetwork } = useTargetNetwork();
@@ -293,22 +297,15 @@ export function useContentFeedback(contentId: bigint | string | number | null | 
 
   const submitFeedback = useCallback(
     async (input: SubmitContentFeedbackInput): Promise<ContentFeedbackActionResult> => {
+      if (walletTransactionReadiness.isBlocked) {
+        return {
+          ok: false,
+          reason: walletTransactionReadiness.status === "disconnected" ? "not_connected" : "request_failed",
+          error: walletTransactionReadiness.message ?? "Wallet is unavailable.",
+        };
+      }
       if (!address || !normalizedContentId) {
         return { ok: false, reason: "not_connected" };
-      }
-      if (isAwaitingSponsoredSubmitCalls) {
-        return {
-          ok: false,
-          reason: "request_failed",
-          error: "Your wallet session is still preparing free transactions. Wait a moment, then retry.",
-        };
-      }
-      if (isMissingGasBalance && !canUseSponsoredSubmitCalls && !canUseSelfFundedBatchCalls) {
-        return {
-          ok: false,
-          reason: "request_failed",
-          error: getGasBalanceErrorMessage(nativeTokenSymbol, { canSponsorTransactions }),
-        };
       }
 
       setIsSubmitting(true);
@@ -400,18 +397,15 @@ export function useContentFeedback(contentId: bigint | string | number | null | 
     },
     [
       address,
-      canSponsorTransactions,
-      canUseSelfFundedBatchCalls,
-      canUseSponsoredSubmitCalls,
       chainId,
-      isAwaitingSponsoredSubmitCalls,
-      isMissingGasBalance,
-      nativeTokenSymbol,
       normalizedContentId,
       publishFeedbackOnchain,
       queryClient,
       queryKey,
       signMessageAsync,
+      walletTransactionReadiness.isBlocked,
+      walletTransactionReadiness.message,
+      walletTransactionReadiness.status,
     ],
   );
 

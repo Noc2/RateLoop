@@ -31,6 +31,7 @@ import {
   getWalletDisplaySummaryQueryKey,
   persistWalletDisplaySummarySnapshot,
 } from "~~/hooks/useWalletDisplaySummary";
+import { useWalletTransactionReadiness } from "~~/hooks/useWalletTransactionReadiness";
 import { fetchConfidentialityTermsStatus } from "~~/lib/confidentiality/clientTermsStatus";
 import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
 import { DEFAULT_VOTING_CONFIG, type VotingConfig } from "~~/lib/contracts/roundVotingEngine";
@@ -223,8 +224,13 @@ export function useRoundVote() {
     isAwaitingSelfFundedBatchCalls,
     isAwaitingSponsoredBatchCalls,
   } = useThirdwebSponsoredSubmitCalls();
-  const { canSponsorTransactions, isMissingGasBalance, nativeTokenSymbol } = useGasBalanceStatus({
+  const { canSponsorTransactions, nativeTokenSymbol } = useGasBalanceStatus({
     includeExternalSendCalls: true,
+  });
+  const walletTransactionReadiness = useWalletTransactionReadiness({
+    includeExternalSendCalls: true,
+    isAwaitingSelfFundedWallet: isAwaitingSelfFundedBatchCalls,
+    isAwaitingSponsoredWallet: isAwaitingSponsoredBatchCalls,
   });
 
   const { data: votingEngineInfo, isLoading: isVotingEngineLoading } = useDeployedContractInfo({
@@ -272,6 +278,15 @@ export function useRoundVote() {
       return false;
     }
     timingLog.emit("terms-accepted");
+
+    if (walletTransactionReadiness.isBlocked) {
+      timingLog.emit("blocked", {
+        reason: walletTransactionReadiness.status,
+        message: walletTransactionReadiness.message ?? "Wallet is unavailable.",
+      });
+      setError(walletTransactionReadiness.message ?? "Wallet is unavailable.");
+      return false;
+    }
 
     if (!address) {
       timingLog.emit("blocked", { reason: "missing_address" });
@@ -366,24 +381,6 @@ export function useRoundVote() {
     if (!votingEngineInfo?.address || !contentRegistryInfo?.address || !lrepInfo?.address) {
       timingLog.emit("blocked", { reason: "missing_contract_info" });
       setError("Voting is unavailable right now.");
-      return false;
-    }
-
-    if (isAwaitingSponsoredBatchCalls) {
-      timingLog.emit("blocked", { reason: "awaiting_sponsored_batch_calls" });
-      setError("Preparing wallet. Try again in a moment.");
-      return false;
-    }
-
-    if (isAwaitingSelfFundedBatchCalls) {
-      timingLog.emit("blocked", { reason: "awaiting_self_funded_batch_calls" });
-      setError("Wallet switching to paid gas. Retry in a moment.");
-      return false;
-    }
-
-    if (isMissingGasBalance) {
-      timingLog.emit("blocked", { reason: "missing_gas_balance" });
-      setError(getGasBalanceErrorMessage(nativeTokenSymbol, { canSponsorTransactions }));
       return false;
     }
 

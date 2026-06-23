@@ -9,6 +9,7 @@ import { getTransactionReceiptPollingInterval } from "~~/config/shared";
 import { refreshActiveWalletReadQueries } from "~~/hooks/useRefreshWalletBalances";
 import { useThirdwebSponsoredSubmitCalls } from "~~/hooks/useThirdwebSponsoredSubmitCalls";
 import { useWalletExecutionCapabilities } from "~~/hooks/useWalletExecutionCapabilities";
+import { useWalletTransactionReadiness } from "~~/hooks/useWalletTransactionReadiness";
 import {
   type NormalizedWalletTransactionPlanCall,
   WALLET_TRANSACTION_PLAN_RECEIPT_TIMEOUT_MS,
@@ -73,8 +74,18 @@ export function useWalletTransactionPlanExecutor() {
   const { address, connector } = useAccount();
   const { sendCallsSyncAsync } = useSendCallsSync();
   const { hasSendCalls, isThirdwebInApp, supportsAtomicBatchCalls } = useWalletExecutionCapabilities();
-  const { canUseSelfFundedBatchCalls, canUseSponsoredBatchCalls, executeContractCallBatch } =
-    useThirdwebSponsoredSubmitCalls();
+  const {
+    canUseSelfFundedBatchCalls,
+    canUseSponsoredBatchCalls,
+    executeContractCallBatch,
+    isAwaitingSelfFundedBatchCalls,
+    isAwaitingSponsoredBatchCalls,
+  } = useThirdwebSponsoredSubmitCalls();
+  const walletTransactionReadiness = useWalletTransactionReadiness({
+    includeExternalSendCalls: true,
+    isAwaitingSelfFundedWallet: isAwaitingSelfFundedBatchCalls,
+    isAwaitingSponsoredWallet: isAwaitingSponsoredBatchCalls,
+  });
 
   const canUseAtomicWalletSendCalls = Boolean(
     address && connector && hasSendCalls && supportsAtomicBatchCalls && isThirdwebInApp !== true,
@@ -158,6 +169,14 @@ export function useWalletTransactionPlanExecutor() {
         source: "wallet-transaction-plan",
         sponsorshipMode: canUseThirdwebPlanBatchCalls ? thirdwebPlanSponsorshipMode : undefined,
       });
+
+      if (walletTransactionReadiness.isBlocked) {
+        timingLog.emit("blocked", {
+          message: walletTransactionReadiness.message ?? "Wallet is unavailable.",
+          status: walletTransactionReadiness.status,
+        });
+        throw new Error(walletTransactionReadiness.message ?? "Wallet is unavailable.");
+      }
 
       const waitForReservationRevealIfNeeded = async (call: NormalizedWalletTransactionPlanCall<TCall>) => {
         if (!latestReservationReceipt || !isWalletTransactionPlanReservationRevealCall(call.call)) return;
@@ -362,6 +381,9 @@ export function useWalletTransactionPlanExecutor() {
       queryClient,
       sendCallsSyncAsync,
       wagmiConfig,
+      walletTransactionReadiness.isBlocked,
+      walletTransactionReadiness.message,
+      walletTransactionReadiness.status,
     ],
   );
 
