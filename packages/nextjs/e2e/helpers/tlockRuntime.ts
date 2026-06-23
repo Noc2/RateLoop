@@ -165,6 +165,7 @@ export function deriveKeeperDecryptableAtSeconds(params: {
 
 export function deriveKeeperDecryptWaitMs(params: {
   wallClockNowSeconds: number;
+  chainNowSeconds?: bigint | number;
   revealableAfterSeconds: bigint | number;
   targetRound: bigint | number;
   drandGenesisTimeSeconds: bigint | number;
@@ -172,18 +173,26 @@ export function deriveKeeperDecryptWaitMs(params: {
   keeperIntervalMs?: number;
   extraBufferMs?: number;
 }): number {
-  const decryptableAtSeconds = deriveKeeperDecryptableAtSeconds({
-    revealableAfterSeconds: params.revealableAfterSeconds,
+  const revealableAfterSeconds = BigInt(params.revealableAfterSeconds);
+  const chainNowSeconds =
+    params.chainNowSeconds == null ? BigInt(params.wallClockNowSeconds) : BigInt(params.chainNowSeconds);
+  const drandRoundRevealableAtSeconds = deriveDrandRoundRevealableAtSeconds({
     targetRound: params.targetRound,
     drandGenesisTimeSeconds: params.drandGenesisTimeSeconds,
     drandPeriodSeconds: params.drandPeriodSeconds,
   });
-  const waitUntilDecryptableMs =
+  const waitForChainRevealMs =
     Number(
-      decryptableAtSeconds - BigInt(params.wallClockNowSeconds) > 0n
-        ? decryptableAtSeconds - BigInt(params.wallClockNowSeconds)
+      revealableAfterSeconds - chainNowSeconds > 0n
+        ? revealableAfterSeconds - chainNowSeconds
+        : 0n,
+    ) * 1000;
+  const waitForDrandMs =
+    Number(
+      drandRoundRevealableAtSeconds - BigInt(params.wallClockNowSeconds) > 0n
+        ? drandRoundRevealableAtSeconds - BigInt(params.wallClockNowSeconds)
         : 0n,
     ) * 1000;
 
-  return waitUntilDecryptableMs + (params.keeperIntervalMs ?? 0) + (params.extraBufferMs ?? 0);
+  return Math.max(waitForChainRevealMs, waitForDrandMs) + (params.keeperIntervalMs ?? 0) + (params.extraBufferMs ?? 0);
 }

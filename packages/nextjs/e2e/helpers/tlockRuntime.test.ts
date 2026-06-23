@@ -1,4 +1,4 @@
-import { deriveAcceptedTlockTargetRound } from "./tlockRuntime";
+import { deriveAcceptedTlockTargetRound, deriveKeeperDecryptWaitMs } from "./tlockRuntime";
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -39,4 +39,29 @@ test("deriveAcceptedTlockTargetRound rejects windows without a shared target", (
       }),
     /No shared drand target round/,
   );
+});
+
+test("deriveKeeperDecryptWaitMs uses chain time for revealability and wall time for drand", () => {
+  const waitMs = deriveKeeperDecryptWaitMs({
+    wallClockNowSeconds: DRAND_GENESIS_TIME_SECONDS + 100,
+    chainNowSeconds: DRAND_GENESIS_TIME_SECONDS + 10_000,
+    revealableAfterSeconds: DRAND_GENESIS_TIME_SECONDS + 9_900,
+    targetRound: 51n,
+    drandGenesisTimeSeconds: DRAND_GENESIS_TIME_SECONDS,
+    drandPeriodSeconds: DRAND_PERIOD_SECONDS,
+  });
+
+  assert.equal(waitMs, 50_000);
+});
+
+test("deriveKeeperDecryptWaitMs falls back to wall clock when chain time is omitted", () => {
+  const waitMs = deriveKeeperDecryptWaitMs({
+    wallClockNowSeconds: DRAND_GENESIS_TIME_SECONDS + 100,
+    revealableAfterSeconds: DRAND_GENESIS_TIME_SECONDS + 130,
+    targetRound: 1n,
+    drandGenesisTimeSeconds: DRAND_GENESIS_TIME_SECONDS,
+    drandPeriodSeconds: DRAND_PERIOD_SECONDS,
+  });
+
+  assert.equal(waitMs, 30_000);
 });

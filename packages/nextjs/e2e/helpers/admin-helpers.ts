@@ -2288,6 +2288,33 @@ export async function setTestConfig(
   return sendTx(fromAddress, configAddress, data);
 }
 
+export async function setTestDrandConfig(
+  contractAddress: string,
+  fromAddress: string,
+  config: { chainHash: `0x${string}`; genesisTime: bigint; period: bigint },
+): Promise<boolean> {
+  const { encodeFunctionData } = await import("viem");
+  const configAddress = await resolveProtocolConfigAddress(contractAddress);
+  const data = encodeFunctionData({
+    abi: [
+      {
+        name: "setDrandConfig",
+        type: "function",
+        inputs: [
+          { name: "chainHash", type: "bytes32" },
+          { name: "genesisTime", type: "uint64" },
+          { name: "period", type: "uint64" },
+        ],
+        outputs: [],
+        stateMutability: "nonpayable",
+      },
+    ],
+    functionName: "setDrandConfig",
+    args: [config.chainHash, config.genesisTime, config.period],
+  });
+  return sendTx(fromAddress, configAddress, data);
+}
+
 /**
  * Wait for Ponder to catch up to the current chain block number.
  * Call this after mining blocks to ensure Ponder has processed all new blocks

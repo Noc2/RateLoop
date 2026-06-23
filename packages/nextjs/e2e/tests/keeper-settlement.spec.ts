@@ -4,6 +4,7 @@ import {
   evmIncreaseTime,
   evmSetTimestamp,
   getActiveRoundId,
+  setTestDrandConfig,
   setTestConfig,
   submitContentDirect,
   waitForPonderIndexed,
@@ -14,8 +15,9 @@ import "../helpers/fetch-shim";
 import { RATING_REVIEW_STATUS_PENDING, getContentById, getContentList, getVotes } from "../helpers/ponder-api";
 import { E2E_KEEPER_HEALTH_URL, E2E_RPC_URL } from "../helpers/service-urls";
 import { deriveKeeperDecryptWaitMs } from "../helpers/tlockRuntime";
-import { ProtocolConfigAbi, RoundVotingEngineAbi } from "@rateloop/contracts/abis";
+import { RoundVotingEngineAbi } from "@rateloop/contracts/abis";
 import { ROUND_STATE } from "@rateloop/contracts/protocol";
+import { getVoteTlockChainInfo } from "@rateloop/contracts/voting";
 import { expect, test } from "@playwright/test";
 import { createPublicClient, http } from "viem";
 import { foundry } from "viem/chains";
@@ -41,6 +43,7 @@ test.describe("Keeper-backed settlement lifecycle", () => {
   const KEEPER_INTERVAL_MS = Number(process.env.KEEPER_INTERVAL_MS ?? 30_000);
   const KEEPER_DECRYPT_BUFFER_MS = 10_000;
   const MAX_KEEPER_DECRYPT_WAIT_MS = Number(process.env.E2E_KEEPER_MAX_DECRYPT_WAIT_MS ?? 360_000);
+  let canonicalDrandConfig: { chainHash: `0x${string}`; genesisTime: bigint; period: bigint } | null = null;
   const publicClient = createPublicClient({
     chain: foundry,
     transport: http(E2E_RPC_URL),
@@ -50,14 +53,38 @@ test.describe("Keeper-backed settlement lifecycle", () => {
     const keeperRes = await fetch(E2E_KEEPER_HEALTH_URL).catch(() => null);
     expect(keeperRes?.ok, "Keeper health check failed. Start it with: yarn keeper:dev").toBe(true);
 
+    const liveDrand = await getVoteTlockChainInfo();
+    canonicalDrandConfig = {
+      chainHash: liveDrand.drandChainHash,
+      genesisTime: liveDrand.genesisTimeSeconds,
+      period: liveDrand.periodSeconds,
+    };
+
     const ok = await setTestConfig(VOTING_ENGINE, DEPLOYER.address, EPOCH_DURATION);
     if (!ok) throw new Error("Failed to set test config");
+  });
+
+  test.afterAll(async () => {
+    if (!canonicalDrandConfig) return;
+    await setTestDrandConfig(VOTING_ENGINE, DEPLOYER.address, canonicalDrandConfig);
   });
 
   test("keeper reveals and settles a short-tlock round end to end", async () => {
     test.setTimeout(780_000);
 
     await evmSetTimestamp(Math.floor(Date.now() / 1000) - CHAIN_TIME_OFFSET);
+    expect(canonicalDrandConfig, "Live drand metadata was not loaded").toBeTruthy();
+
+    const latestBlock = await publicClient.getBlock();
+    const wallClockNowSeconds = BigInt(Math.floor(Date.now() / 1000));
+    const chainDriftSeconds =
+      latestBlock.timestamp > wallClockNowSeconds ? latestBlock.timestamp - wallClockNowSeconds : 0n;
+    const drandAdjusted = await setTestDrandConfig(VOTING_ENGINE, DEPLOYER.address, {
+      chainHash: canonicalDrandConfig!.chainHash,
+      genesisTime: canonicalDrandConfig!.genesisTime + chainDriftSeconds,
+      period: canonicalDrandConfig!.period,
+    });
+    expect(drandAdjusted, "Failed to align local drand timing for keeper settlement").toBe(true);
 
     const submitter = ANVIL_ACCOUNTS.account10;
     const submitApproved = await approveLREP(CONTENT_REGISTRY, BigInt(10e6), submitter.address, LREP_TOKEN);
@@ -113,35 +140,11 @@ test.describe("Keeper-backed settlement lifecycle", () => {
     const roundId = await getActiveRoundId(BigInt(contentId!), VOTING_ENGINE);
     expect(roundId).toBeGreaterThan(0n);
 
-    // Move chain time past the revealable window. The short tlock epoch means
-    // the ciphertext should become decryptable shortly after the epoch ends.
-    //
-    // On heavily seeded Anvil chains, `evmSetTimestamp(realNow - 270s)` cannot move
-    // block.timestamp backwards behind the current head, so the later +301s jump can
-    // still leave the round a few real minutes ahead of drand wall-clock time.
-    // Wait for the latest commit's actual target round instead of assuming the rewind stuck.
+    // Move chain time past the on-chain reveal window. If another suite already
+    // pushed Anvil ahead of wall clock, the compensated local drand genesis above
+    // keeps the stored target rounds near real quicknet time for the live keeper.
     await evmIncreaseTime(EPOCH_DURATION + 1);
-
-    const protocolConfig = await publicClient.readContract({
-      address: VOTING_ENGINE,
-      abi: RoundVotingEngineAbi,
-      functionName: "protocolConfig",
-      args: [],
-    });
-    const [drandGenesisTime, drandPeriod] = await Promise.all([
-      publicClient.readContract({
-        address: protocolConfig,
-        abi: ProtocolConfigAbi,
-        functionName: "drandGenesisTime",
-        args: [],
-      }),
-      publicClient.readContract({
-        address: protocolConfig,
-        abi: ProtocolConfigAbi,
-        functionName: "drandPeriod",
-        args: [],
-      }),
-    ]);
+    const revealBlock = await publicClient.getBlock();
 
     let keeperDecryptWaitMs = 0;
     for (let i = 0n; i < BigInt(voters.length); i++) {
@@ -162,10 +165,11 @@ test.describe("Keeper-backed settlement lifecycle", () => {
         keeperDecryptWaitMs,
         deriveKeeperDecryptWaitMs({
           wallClockNowSeconds: Math.floor(Date.now() / 1000),
+          chainNowSeconds: revealBlock.timestamp,
           revealableAfterSeconds: commit[3],
           targetRound: commit[1],
-          drandGenesisTimeSeconds: drandGenesisTime,
-          drandPeriodSeconds: drandPeriod,
+          drandGenesisTimeSeconds: canonicalDrandConfig!.genesisTime,
+          drandPeriodSeconds: canonicalDrandConfig!.period,
           keeperIntervalMs: KEEPER_INTERVAL_MS,
           extraBufferMs: KEEPER_DECRYPT_BUFFER_MS,
         }),
