@@ -208,7 +208,9 @@ test.describe("Governance page", () => {
       .filter({ hasText: accused.identityKey })
       .first();
     await expect(async () => {
-      await page.getByLabel("Content id").fill(contentId);
+      const contentIdInput = page.getByLabel("Content id");
+      await contentIdInput.fill(contentId);
+      await expect(contentIdInput).toHaveValue(contentId);
       await page.getByRole("button", { name: "Load reports" }).click({ timeout: 5_000 });
       await expect(submittedReport.getByText(`identity ${accused.identityKey}`)).toBeVisible({
         timeout: 5_000,
@@ -233,7 +235,9 @@ test.describe("Governance page", () => {
     );
 
     await gotoWithRetry(page, "/governance#breaches", { ensureWalletConnected: true });
-    await page.getByLabel("Content id").fill(contentId);
+    const reloadedContentIdInput = page.getByLabel("Content id");
+    await reloadedContentIdInput.fill(contentId);
+    await expect(reloadedContentIdInput).toHaveValue(contentId);
     await page.getByRole("button", { name: "Load reports" }).click();
     const loadedReport = page
       .getByTestId("confidentiality-breach-report")
