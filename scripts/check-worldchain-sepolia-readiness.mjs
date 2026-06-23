@@ -389,7 +389,8 @@ const OFFCHAIN_RUNTIME_REQUIRED_ENVS = [
   {
     name: "RATE_LIMIT_TRUSTED_IP_HEADERS",
     isValid: (value) => Boolean(value),
-    message: "RATE_LIMIT_TRUSTED_IP_HEADERS is configured for Ponder rate limiting",
+    message:
+      "RATE_LIMIT_TRUSTED_IP_HEADERS is configured for Ponder rate limiting",
   },
 ];
 
@@ -409,9 +410,22 @@ function readRuntimeEnv(env, name) {
   return value ? value : "";
 }
 
+function isLoopbackBindAddress(value) {
+  const normalized = value?.trim();
+  return Boolean(
+    normalized &&
+      (LOOPBACK_BIND_ADDRESSES.has(normalized) ||
+        normalized.startsWith("127.")),
+  );
+}
+
 function isPublicBindAddress(value) {
   const normalized = value?.trim();
-  return Boolean(normalized && !LOOPBACK_BIND_ADDRESSES.has(normalized));
+  return Boolean(normalized && !isLoopbackBindAddress(normalized));
+}
+
+function isTruthyEnvValue(value) {
+  return ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
 }
 
 export function validateOffchainRuntimeEnv({
@@ -422,7 +436,12 @@ export function validateOffchainRuntimeEnv({
 }) {
   for (const check of OFFCHAIN_RUNTIME_REQUIRED_ENVS) {
     const value = readRuntimeEnv(env, check.name);
-    addCheck(checks, failures, !requireTargets || check.isValid(value), check.message);
+    addCheck(
+      checks,
+      failures,
+      !requireTargets || check.isValid(value),
+      check.message,
+    );
   }
 
   const metricsBindAddress = readRuntimeEnv(env, "METRICS_BIND_ADDRESS");
@@ -433,6 +452,25 @@ export function validateOffchainRuntimeEnv({
       failures,
       metricsAuthToken.length >= 16,
       "METRICS_AUTH_TOKEN is configured when Keeper metrics are public",
+    );
+  }
+
+  const publishesPublicFileArtifacts =
+    isTruthyEnvValue(
+      readRuntimeEnv(env, "KEEPER_CORRELATION_SNAPSHOTS_ENABLED"),
+    ) &&
+    readRuntimeEnv(env, "KEEPER_CORRELATION_SNAPSHOTS_MODE") === "auto" &&
+    readRuntimeEnv(env, "KEEPER_CORRELATION_ARTIFACT_STORAGE") === "file" &&
+    Boolean(readRuntimeEnv(env, "KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL"));
+  if (
+    publishesPublicFileArtifacts &&
+    isLoopbackBindAddress(metricsBindAddress)
+  ) {
+    addCheck(
+      checks,
+      failures,
+      false,
+      "METRICS_BIND_ADDRESS is non-loopback when Keeper publishes public correlation artifacts",
     );
   }
 }
@@ -1143,8 +1181,14 @@ export async function validateLiveReadiness({
         const keeperWorkToken = process.env.PONDER_KEEPER_WORK_TOKEN?.trim();
         if (keeperWorkToken) {
           const keeperWorkUrl = buildPonderUrl(ponderUrl, "/keeper/work");
-          keeperWorkUrl.searchParams.set("now", String(Math.floor(Date.now() / 1000)));
-          keeperWorkUrl.searchParams.set("dormancyPeriod", String(30 * 24 * 60 * 60));
+          keeperWorkUrl.searchParams.set(
+            "now",
+            String(Math.floor(Date.now() / 1000)),
+          );
+          keeperWorkUrl.searchParams.set(
+            "dormancyPeriod",
+            String(30 * 24 * 60 * 60),
+          );
           keeperWorkUrl.searchParams.set("feedbackBonusForfeitMinAge", "0");
           keeperWorkUrl.searchParams.set("limit", "1");
           const keeperWorkResponse = await fetchWithTimeout(keeperWorkUrl, {

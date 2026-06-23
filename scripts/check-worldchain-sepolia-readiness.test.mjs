@@ -300,6 +300,52 @@ test("validateOffchainRuntimeEnv accepts configured production runtime env", () 
   assert(checks.some((check) => check.message.includes("METRICS_AUTH_TOKEN")));
 });
 
+test("validateOffchainRuntimeEnv rejects public file artifacts on loopback metrics", () => {
+  const checks = [];
+  const failures = [];
+
+  validateOffchainRuntimeEnv({
+    checks,
+    env: {
+      KEEPER_CORRELATION_ARTIFACT_STORAGE: "file",
+      KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL:
+        "https://artifacts.example.com/rateloop",
+      KEEPER_CORRELATION_SNAPSHOTS_ENABLED: "true",
+      KEEPER_CORRELATION_SNAPSHOTS_MODE: "auto",
+      METRICS_BIND_ADDRESS: "127.0.0.1",
+    },
+    failures,
+  });
+
+  assert(
+    failures.some((message) =>
+      message.includes(
+        "METRICS_BIND_ADDRESS is non-loopback when Keeper publishes public correlation artifacts",
+      ),
+    ),
+  );
+});
+
+test("validateOffchainRuntimeEnv permits loopback metrics for data-uri artifacts", () => {
+  const checks = [];
+  const failures = [];
+
+  validateOffchainRuntimeEnv({
+    checks,
+    env: {
+      KEEPER_CORRELATION_ARTIFACT_STORAGE: "data-uri",
+      KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL:
+        "https://artifacts.example.com/rateloop",
+      KEEPER_CORRELATION_SNAPSHOTS_ENABLED: "true",
+      KEEPER_CORRELATION_SNAPSHOTS_MODE: "auto",
+      METRICS_BIND_ADDRESS: "127.0.0.1",
+    },
+    failures,
+  });
+
+  assert.deepEqual(failures, []);
+});
+
 test("validateOfflineReadiness flags a contract whose deployedOnBlock is missing", () => {
   const deployedContractsSource = makeGeneratedContractsSource().replace(
     /\n\s*deployedOnBlock: 101,/,
@@ -419,7 +465,9 @@ test("validateBaseSepoliaOfflineReadiness can require one-shot Feedback Bonus x4
   assert.equal(result.ok, false);
   assert(
     result.failures.some((message) =>
-      message.includes("one-shot Feedback Bonus x402 submissions remain disabled"),
+      message.includes(
+        "one-shot Feedback Bonus x402 submissions remain disabled",
+      ),
     ),
   );
 });
@@ -904,7 +952,9 @@ test("validateLiveReadiness probes keeper work with the configured bearer token"
       result.checks.some(
         (check) =>
           check.ok &&
-          check.message.includes("Ponder /keeper/work accepts Keeper bearer token"),
+          check.message.includes(
+            "Ponder /keeper/work accepts Keeper bearer token",
+          ),
       ),
     );
   } finally {

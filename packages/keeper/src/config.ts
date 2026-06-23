@@ -478,6 +478,11 @@ function loadConfig() {
     correlationSnapshotMode === "auto" &&
     correlationSnapshotArtifactStorageMode === "file" &&
     Boolean(correlationSnapshotArtifactPublicBaseUrl);
+  const publishesPublicFileArtifacts =
+    correlationSnapshotsEnabled &&
+    correlationSnapshotMode === "auto" &&
+    correlationSnapshotArtifactStorageMode === "file" &&
+    Boolean(correlationSnapshotArtifactPublicBaseUrl);
   const metricsBindAddress =
     readEnv("METRICS_BIND_ADDRESS") ||
     (shouldExposeFileArtifacts ? "0.0.0.0" : "127.0.0.1");
@@ -811,6 +816,14 @@ function loadConfig() {
       );
     }
     if (
+      publishesPublicFileArtifacts &&
+      isLoopbackBindAddress(loadedConfig.metricsBindAddress)
+    ) {
+      errors.push(
+        "METRICS_BIND_ADDRESS must be unset or non-loopback when auto correlation snapshots publish file artifacts",
+      );
+    }
+    if (
       correlationSnapshotMode === "auto" &&
       correlationSnapshotArtifactStorageMode === "data-uri" &&
       isProduction
@@ -826,7 +839,9 @@ function loadConfig() {
     }
   }
   if (mainLoopLockRequired && !keeperDatabaseUrl) {
-    errors.push("KEEPER_DATABASE_URL is required when KEEPER_MAIN_LOOP_LOCK_REQUIRED=true");
+    errors.push(
+      "KEEPER_DATABASE_URL is required when KEEPER_MAIN_LOOP_LOCK_REQUIRED=true",
+    );
   }
   if (
     loadedConfig.metricsEnabled &&

@@ -133,7 +133,9 @@ describe("keeper config", () => {
       loadKeeperConfig({
         NODE_ENV: "production",
       }),
-    ).rejects.toThrow("KEEPER_DATABASE_URL is required when KEEPER_MAIN_LOOP_LOCK_REQUIRED=true");
+    ).rejects.toThrow(
+      "KEEPER_DATABASE_URL is required when KEEPER_MAIN_LOOP_LOCK_REQUIRED=true",
+    );
   });
 
   it("allows production operators to explicitly opt out of main-loop locks", async () => {
@@ -435,7 +437,9 @@ describe("keeper config", () => {
         },
         ["RPC_URL"],
       ),
-    ).rejects.toThrow(/Invalid keeper configuration:\n- RPC_URL is required\n- METRICS_ENABLED must be a boolean-like value/);
+    ).rejects.toThrow(
+      /Invalid keeper configuration:\n- RPC_URL is required\n- METRICS_ENABLED must be a boolean-like value/,
+    );
   });
 
   it("loads feedback bonus forfeit sweep settings from the environment", async () => {
@@ -514,6 +518,40 @@ describe("keeper config", () => {
 
     expect(config.metricsBindAddress).toBe("0.0.0.0");
     expect(config.metricsAuthToken).toBe("0123456789abcdef");
+  });
+
+  it("rejects hosted file artifact publication on a loopback metrics bind", async () => {
+    await expect(
+      loadKeeperConfig({
+        PORT: "8080",
+        METRICS_BIND_ADDRESS: "127.0.0.1",
+        KEEPER_CORRELATION_SNAPSHOTS_ENABLED: "true",
+        KEEPER_CORRELATION_SNAPSHOTS_MODE: "auto",
+        KEEPER_CORRELATION_ARTIFACT_STORAGE: "file",
+        KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL:
+          "https://artifacts.example.com/rateloop/",
+        PONDER_BASE_URL: "https://ponder.example.com",
+        CLUSTER_PAYOUT_ORACLE_ADDRESS:
+          "0x6666666666666666666666666666666666666666",
+      }),
+    ).rejects.toThrow(
+      "METRICS_BIND_ADDRESS must be unset or non-loopback when auto correlation snapshots publish file artifacts",
+    );
+  });
+
+  it("allows data-uri correlation artifacts on a loopback metrics bind", async () => {
+    const { config } = await loadKeeperConfig({
+      METRICS_BIND_ADDRESS: "127.0.0.1",
+      KEEPER_CORRELATION_SNAPSHOTS_ENABLED: "true",
+      KEEPER_CORRELATION_SNAPSHOTS_MODE: "auto",
+      KEEPER_CORRELATION_ARTIFACT_STORAGE: "data-uri",
+      PONDER_BASE_URL: "https://ponder.example.com",
+      CLUSTER_PAYOUT_ORACLE_ADDRESS:
+        "0x6666666666666666666666666666666666666666",
+    });
+
+    expect(config.metricsBindAddress).toBe("127.0.0.1");
+    expect(config.correlationSnapshots.artifactStorage.mode).toBe("data-uri");
   });
 
   it("requires a metrics auth token for non-loopback binds", async () => {
@@ -858,6 +896,8 @@ describe("keeper config", () => {
         "https://artifacts.example.com/rateloop/",
       KEEPER_CORRELATION_SNAPSHOT_STORAGE_DIR: "/tmp/rateloop-correlation",
       KEEPER_CORRELATION_SNAPSHOT_MAX_ROUNDS_PER_TICK: "7",
+      PORT: "8080",
+      METRICS_AUTH_TOKEN: "0123456789abcdef",
       PONDER_BASE_URL: "https://ponder.example.com",
       CLUSTER_PAYOUT_ORACLE_ADDRESS:
         "0x6666666666666666666666666666666666666666",
