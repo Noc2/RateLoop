@@ -75,11 +75,39 @@ export async function selectAskSubcategory(page: Page, subcategoryNames = SEEDED
 export async function openAdvancedQuestionSettings(page: Page): Promise<void> {
   const form = page.locator("form").first();
   const trigger = form.getByRole("button", { name: /Advanced question settings/i });
+  const contextInput = form.getByPlaceholder("Paste a source link, or add media context below");
   await expect(trigger).toBeVisible({ timeout: 5_000 });
-  if ((await trigger.getAttribute("aria-expanded")) !== "true") {
-    await trigger.click();
+
+  await expect
+    .poll(
+      async () => {
+        const contextVisible = await contextInput.isVisible({ timeout: 250 }).catch(() => false);
+        if (contextVisible) return true;
+
+        const isOpen = (await trigger.getAttribute("aria-expanded").catch(() => null)) === "true";
+        if (isOpen) return false;
+
+        await trigger.scrollIntoViewIfNeeded().catch(() => undefined);
+        await trigger
+          .click({ timeout: 1_000 })
+          .catch(() => trigger.evaluate(element => (element as HTMLButtonElement).click()).catch(() => undefined));
+
+        return contextInput.isVisible({ timeout: 500 }).catch(() => false);
+      },
+      {
+        intervals: [500, 1_000, 1_500],
+        timeout: 30_000,
+      },
+    )
+    .toBe(true);
+
+  if (await contextInput.isVisible({ timeout: 500 }).catch(() => false)) {
+    await expect(trigger).toHaveAttribute("aria-expanded", "true");
+    return;
   }
+
   await expect(trigger).toHaveAttribute("aria-expanded", "true");
+  await expect(contextInput).toBeVisible({ timeout: 5_000 });
 }
 
 export async function fillAskContextSource(page: Page, contextUrl: string): Promise<void> {
