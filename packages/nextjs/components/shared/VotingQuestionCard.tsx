@@ -873,6 +873,7 @@ export function VotingQuestionCard({
                           disabled={dockVoteDisabled}
                           attention={isAttentionActive && !dockVoteDisabled}
                           tooltipPosition="top"
+                          showTooltip={false}
                         />
                       </div>
                       <div className="col-start-6 justify-self-center">
@@ -883,6 +884,7 @@ export function VotingQuestionCard({
                           disabled={dockVoteDisabled}
                           attention={isAttentionActive && !dockVoteDisabled}
                           tooltipPosition="top"
+                          showTooltip={false}
                         />
                       </div>
                       <div className="col-start-8 justify-self-center">{feedbackDockButton}</div>
@@ -897,6 +899,7 @@ export function VotingQuestionCard({
                           disabled={dockVoteDisabled}
                           attention={isAttentionActive && !dockVoteDisabled}
                           tooltipPosition="top"
+                          showTooltip={false}
                         />
                       </div>
                       <div className="justify-self-end translate-y-1">
@@ -915,6 +918,7 @@ export function VotingQuestionCard({
                           disabled={dockVoteDisabled}
                           attention={isAttentionActive && !dockVoteDisabled}
                           tooltipPosition="top"
+                          showTooltip={false}
                         />
                       </div>
                     </div>

@@ -9,6 +9,7 @@ interface RateLoopVoteButtonProps {
   size?: "default" | "sm";
   attention?: boolean;
   tooltipPosition?: TooltipPosition;
+  showTooltip?: boolean;
 }
 
 interface VoteDirectionIconProps {
@@ -29,6 +30,7 @@ export function RateLoopVoteButton({
   size = "default",
   attention = false,
   tooltipPosition = "bottom",
+  showTooltip = true,
 }: RateLoopVoteButtonProps) {
   const isUp = direction === "up";
   const label = isUp ? "Thumbs up" : "Thumbs down";
@@ -36,25 +38,31 @@ export function RateLoopVoteButton({
   const isSmall = size === "sm";
   const iconClassName = isSmall ? "h-5 w-5 drop-shadow-sm" : "h-5 w-5 drop-shadow-sm";
 
-  return (
+  const button = (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={isUp ? "Vote thumbs up" : "Vote thumbs down"}
+      data-testid={isUp ? "vote-button-up" : "vote-button-down"}
+      title={showTooltip ? label : undefined}
+      className={`vote-btn ${isSmall ? "vote-btn-sm" : ""} ${isUp ? "vote-yes" : "vote-no"} ${
+        attention ? "vote-btn-attention" : ""
+      }`}
+    >
+      <span className="vote-bg" />
+      <span className="vote-symbol">
+        <VoteDirectionIcon direction={direction} className={iconClassName} />
+        {!isSmall ? <span className="vote-label">{directionLabel}</span> : null}
+      </span>
+    </button>
+  );
+
+  return showTooltip ? (
     <TooltipAnchor text={label} position={tooltipPosition}>
-      <button
-        type="button"
-        onClick={onClick}
-        disabled={disabled}
-        aria-label={isUp ? "Vote thumbs up" : "Vote thumbs down"}
-        data-testid={isUp ? "vote-button-up" : "vote-button-down"}
-        title={label}
-        className={`vote-btn ${isSmall ? "vote-btn-sm" : ""} ${isUp ? "vote-yes" : "vote-no"} ${
-          attention ? "vote-btn-attention" : ""
-        }`}
-      >
-        <span className="vote-bg" />
-        <span className="vote-symbol">
-          <VoteDirectionIcon direction={direction} className={iconClassName} />
-          {!isSmall ? <span className="vote-label">{directionLabel}</span> : null}
-        </span>
-      </button>
+      {button}
     </TooltipAnchor>
+  ) : (
+    button
   );
 }
