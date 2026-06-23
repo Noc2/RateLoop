@@ -8,6 +8,7 @@ import { useTargetNetwork, useTransactor } from "~~/hooks/scaffold-eth";
 import { useLocalE2ETestWalletClient } from "~~/hooks/scaffold-eth/useLocalE2ETestWalletClient";
 import { useGasBalanceStatus } from "~~/hooks/useGasBalanceStatus";
 import { useRaterRegistryIdentity } from "~~/hooks/useRaterRegistryIdentity";
+import { useThirdwebSponsoredSubmitCalls } from "~~/hooks/useThirdwebSponsoredSubmitCalls";
 import { ERC20_APPROVAL_ABI, getDefaultLrepAddress, getDefaultUsdcAddress } from "~~/lib/questionRewardPools";
 import { getGasBalanceErrorMessage } from "~~/lib/transactionErrors";
 import type { ConfidentialityBondRequirement } from "~~/lib/vote/confidentialContext";
@@ -84,6 +85,13 @@ export function useConfidentialityBond({ bondRequirement, contentId, enabled = t
   const { canSponsorTransactions, isMissingGasBalance, nativeTokenSymbol } = useGasBalanceStatus({
     includeExternalSendCalls: true,
   });
+  const {
+    canUseSelfFundedBatchCalls,
+    canUseSponsoredBatchCalls,
+    executeContractCallBatch,
+    isAwaitingSelfFundedBatchCalls,
+    isAwaitingSponsoredBatchCalls,
+  } = useThirdwebSponsoredSubmitCalls();
   const {
     hasActiveHumanCredential,
     identityKey,
@@ -223,6 +231,14 @@ export function useConfidentialityBond({ bondRequirement, contentId, enabled = t
       setError("Connect a wallet to post the confidentiality bond.");
       return false;
     }
+    if (isAwaitingSponsoredBatchCalls) {
+      setError("Preparing wallet. Try again in a moment.");
+      return false;
+    }
+    if (isAwaitingSelfFundedBatchCalls) {
+      setError("Wallet switching to paid gas. Retry in a moment.");
+      return false;
+    }
     if (isMissingGasBalance) {
       const message = getGasBalanceErrorMessage(nativeTokenSymbol, { canSponsorTransactions });
       setError(message);
@@ -259,27 +275,39 @@ export function useConfidentialityBond({ bondRequirement, contentId, enabled = t
         args: [address as Address, escrowAddress],
       })) as bigint;
 
-      if (allowance < bondRequirement.amount) {
-        await writeContractCall(
-          {
-            abi: ERC20_APPROVAL_ABI as Abi,
-            address: tokenAddress,
-            args: [escrowAddress, bondRequirement.amount] as const,
-            functionName: "approve",
-          },
-          `approve ${bondRequirement.asset} bond`,
-        );
-      }
+      const batchEscrowAddress = escrowAddress as `0x${string}`;
+      const batchTokenAddress = tokenAddress as `0x${string}`;
+      const approvalCall =
+        allowance < bondRequirement.amount
+          ? ({
+              abi: ERC20_APPROVAL_ABI as Abi,
+              address: batchTokenAddress,
+              args: [escrowAddress, bondRequirement.amount] as const,
+              functionName: "approve",
+            } as const)
+          : null;
+      const postBondCall = {
+        abi: CONFIDENTIALITY_ESCROW_ABI as Abi,
+        address: batchEscrowAddress,
+        args: [contentId] as const,
+        functionName: "postBond",
+      } as const;
+      const canUseBatchedBondPost =
+        !localE2ETestWalletClient && (canUseSponsoredBatchCalls || canUseSelfFundedBatchCalls);
 
-      await writeContractCall(
-        {
-          abi: CONFIDENTIALITY_ESCROW_ABI as Abi,
-          address: escrowAddress,
-          args: [contentId] as const,
-          functionName: "postBond",
-        },
-        "post confidentiality bond",
-      );
+      if (canUseBatchedBondPost) {
+        await executeContractCallBatch([...(approvalCall ? [approvalCall] : []), postBondCall], {
+          action: "post confidentiality bond",
+          atomicRequired: true,
+          sponsorshipMode: canUseSponsoredBatchCalls ? "sponsored" : "self-funded",
+        });
+      } else {
+        if (approvalCall) {
+          await writeContractCall(approvalCall, `approve ${bondRequirement.asset} bond`);
+        }
+
+        await writeContractCall(postBondCall, "post confidentiality bond");
+      }
 
       await refetchIdentity();
       setHasActiveBond(true);
@@ -303,12 +331,18 @@ export function useConfidentialityBond({ bondRequirement, contentId, enabled = t
     bondRequirement.asset,
     bondRequirement.isRequired,
     canSponsorTransactions,
+    canUseSelfFundedBatchCalls,
+    canUseSponsoredBatchCalls,
     contentId,
     escrowAddress,
+    executeContractCallBatch,
     hasActiveHumanCredential,
     identityKey,
+    isAwaitingSelfFundedBatchCalls,
+    isAwaitingSponsoredBatchCalls,
     isIdentityLoading,
     isMissingGasBalance,
+    localE2ETestWalletClient,
     nativeTokenSymbol,
     publicClient,
     refetchIdentity,
