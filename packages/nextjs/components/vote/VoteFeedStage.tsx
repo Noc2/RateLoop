@@ -46,6 +46,7 @@ const MOBILE_MIN_SCROLLER_HEIGHT_PX = 320;
 const MOBILE_CHROME_TRANSITION_MEASURE_MS = 260;
 const MOBILE_CHROME_SETTLED_MEASURE_MS = MOBILE_CHROME_TRANSITION_MEASURE_MS + 40;
 const MOBILE_CARD_TOP_SNAP_GUARD_PX = 12;
+const MOBILE_HEADLINE_GUARD_SNAP_TOLERANCE_PX = 28;
 const MOBILE_HEADER_CARD_VISIBILITY_SETTLE_MS = 140;
 const MOBILE_HEADER_SCROLL_SYNC_ATTRIBUTE = "data-mobile-header-scroll-sync";
 const MOBILE_HEADER_SCROLL_SYNC_OFFSET_ATTRIBUTE = "data-mobile-header-scroll-sync-offset";
@@ -304,11 +305,20 @@ export function VoteFeedStage({
       const activeTitle =
         (activeTitleId ? document.getElementById(activeTitleId) : null) ?? activeNode?.querySelector<HTMLElement>("h2");
 
-      if (!activeTitle) {
+      if (!activeNode || !activeTitle) {
         return;
       }
 
       const scrollerRect = scroller.getBoundingClientRect();
+      const activeNodeRect = activeNode.getBoundingClientRect();
+      const activeNodeTopOffset = activeNodeRect.top - scrollerRect.top;
+      const isActiveNodeNearSnapStart =
+        Math.abs(activeNodeTopOffset - MOBILE_CARD_TOP_SNAP_GUARD_PX) <= MOBILE_HEADLINE_GUARD_SNAP_TOLERANCE_PX;
+
+      if (!isActiveNodeNearSnapStart) {
+        return;
+      }
+
       const viewportTop = window.visualViewport?.offsetTop ?? 0;
       const scrollerTop = Math.max(scrollerRect.top, viewportTop) + MOBILE_CARD_TOP_SNAP_GUARD_PX;
       const titleTop = activeTitle.getBoundingClientRect().top;

@@ -370,19 +370,17 @@ test.describe("Mobile viewport (phone)", () => {
     await startMobileChromeChangeCapture();
     await setFeedScrollTop(sameCardScrollStart.voteScrollTop + 96);
     await expect.poll(async () => (await readLayout()).activeIndex).toBe(sameCardScrollStart.activeIndex);
-    await expect(mobileHeader).toHaveAttribute("data-visible", "false");
-    await expect(voteTopChrome).toHaveAttribute("data-visible", "false");
+    await expect(mobileHeader).toHaveAttribute("data-visible", "true");
+    await expect(voteTopChrome).toHaveAttribute("data-visible", "true");
 
-    const sameCardCollapsedLayout = await readLayout();
+    const sameCardScrolledLayout = await readLayout();
     const sameCardChromeChanges = await stopMobileChromeChangeCapture();
-    expect(sameCardCollapsedLayout.activeIndex).toBe(sameCardScrollStart.activeIndex);
-    expect(sameCardCollapsedLayout.voteScrollTop).toBeGreaterThan(sameCardScrollStart.voteScrollTop);
-    expect(sameCardChromeChanges.filter(change => change.target === "header").map(change => change.visible)).toEqual([
-      "false",
-    ]);
-    expect(sameCardChromeChanges.filter(change => change.target === "tabs").map(change => change.visible)).toEqual([
-      "false",
-    ]);
+    expect(sameCardScrolledLayout.activeIndex).toBe(sameCardScrollStart.activeIndex);
+    expect(sameCardScrolledLayout.voteScrollTop).toBeGreaterThan(sameCardScrollStart.voteScrollTop);
+    expect(sameCardChromeChanges.filter(change => change.target === "header").map(change => change.visible)).toEqual(
+      [],
+    );
+    expect(sameCardChromeChanges.filter(change => change.target === "tabs").map(change => change.visible)).toEqual([]);
 
     await setFeedScrollTop(0);
     await expect(mobileHeader).toHaveAttribute("data-visible", "true");

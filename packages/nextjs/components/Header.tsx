@@ -687,6 +687,15 @@ export const Header = () => {
         voteLayoutScrollSequenceIndex = sequenceIndex;
         const nextVisible = scrollDelta < 0 || currentScrollY < MOBILE_HEADER_HIDE_OFFSET;
 
+        if (!nextVisible) {
+          clearDeferredVoteLayoutVisibility();
+          lastScrollStateRef.current = {
+            source: scrollSource,
+            offset: currentScrollY,
+          };
+          return;
+        }
+
         if (voteLayoutScrollVisibilityTimeout !== null) {
           window.clearTimeout(voteLayoutScrollVisibilityTimeout);
         }
