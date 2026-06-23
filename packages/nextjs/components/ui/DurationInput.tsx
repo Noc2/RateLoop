@@ -4,20 +4,20 @@ import { useEffect, useMemo, useState } from "react";
 import {
   HUMAN_DURATION_UNIT_OPTIONS,
   type HumanDurationUnit,
-  durationAmountToMinutes,
-  formatHumanDurationFromMinutes,
-  getBestDurationInputPartsFromMinutes,
-  getHumanDurationUnitMinutes,
+  durationAmountToSeconds,
+  formatHumanDurationFromSeconds,
+  getBestDurationInputPartsFromSeconds,
+  getHumanDurationUnitSeconds,
   normalizeDurationAmountInput,
   parseDurationAmountInput,
 } from "~~/lib/humanDuration";
 
 type DurationInputProps = {
   id: string;
-  valueMinutes: string;
-  minMinutes: number;
-  maxMinutes: number;
-  onChangeMinutes: (value: string) => void;
+  valueSeconds: string;
+  minSeconds: number;
+  maxSeconds: number;
+  onChangeSeconds: (value: string) => void;
   onBlur?: () => void;
   disabled?: boolean;
   invalid?: boolean;
@@ -29,30 +29,30 @@ type DurationInputProps = {
   summarySuffix?: string;
 };
 
-function getVisibleDurationParts(valueMinutes: string, preferredUnit: HumanDurationUnit) {
-  if (valueMinutes === "") {
+function getVisibleDurationParts(valueSeconds: string, preferredUnit: HumanDurationUnit) {
+  if (valueSeconds === "") {
     return { amount: "", unit: preferredUnit };
   }
 
-  const parsedMinutes = parseDurationAmountInput(valueMinutes);
-  if (parsedMinutes <= 0) {
-    return { amount: valueMinutes, unit: preferredUnit };
+  const parsedSeconds = parseDurationAmountInput(valueSeconds);
+  if (parsedSeconds <= 0) {
+    return { amount: valueSeconds, unit: preferredUnit };
   }
 
-  const unitMinutes = getHumanDurationUnitMinutes(preferredUnit);
-  if (parsedMinutes % unitMinutes === 0) {
-    return { amount: String(parsedMinutes / unitMinutes), unit: preferredUnit };
+  const unitSeconds = getHumanDurationUnitSeconds(preferredUnit);
+  if (parsedSeconds % unitSeconds === 0) {
+    return { amount: String(parsedSeconds / unitSeconds), unit: preferredUnit };
   }
 
-  return getBestDurationInputPartsFromMinutes(parsedMinutes);
+  return getBestDurationInputPartsFromSeconds(parsedSeconds);
 }
 
 export function DurationInput({
   id,
-  valueMinutes,
-  minMinutes,
-  maxMinutes,
-  onChangeMinutes,
+  valueSeconds,
+  minSeconds,
+  maxSeconds,
+  onChangeSeconds,
   onBlur,
   disabled = false,
   invalid = false,
@@ -63,8 +63,8 @@ export function DurationInput({
   summaryClassName = "",
   summarySuffix,
 }: DurationInputProps) {
-  const [unit, setUnit] = useState<HumanDurationUnit>(() => getBestDurationInputPartsFromMinutes(valueMinutes).unit);
-  const visibleParts = useMemo(() => getVisibleDurationParts(valueMinutes, unit), [unit, valueMinutes]);
+  const [unit, setUnit] = useState<HumanDurationUnit>(() => getBestDurationInputPartsFromSeconds(valueSeconds).unit);
+  const visibleParts = useMemo(() => getVisibleDurationParts(valueSeconds, unit), [unit, valueSeconds]);
 
   useEffect(() => {
     if (visibleParts.unit !== unit) {
@@ -73,8 +73,8 @@ export function DurationInput({
   }, [unit, visibleParts.unit]);
 
   const summary = [
-    formatHumanDurationFromMinutes(valueMinutes),
-    `Allowed: ${formatHumanDurationFromMinutes(minMinutes)}-${formatHumanDurationFromMinutes(maxMinutes)}`,
+    formatHumanDurationFromSeconds(valueSeconds),
+    `Allowed: ${formatHumanDurationFromSeconds(minSeconds)}-${formatHumanDurationFromSeconds(maxSeconds)}`,
     summarySuffix,
   ]
     .filter(Boolean)
@@ -98,11 +98,11 @@ export function DurationInput({
             }
 
             if (normalizedValue === "") {
-              onChangeMinutes("");
+              onChangeSeconds("");
               return;
             }
 
-            onChangeMinutes(String(durationAmountToMinutes(normalizedValue, visibleParts.unit)));
+            onChangeSeconds(String(durationAmountToSeconds(normalizedValue, visibleParts.unit)));
           }}
           onBlur={onBlur}
           className={`input input-bordered w-full bg-base-100 ${invalid ? "input-error" : ""} ${inputClassName}`}
@@ -119,7 +119,7 @@ export function DurationInput({
               return;
             }
 
-            onChangeMinutes(String(durationAmountToMinutes(visibleParts.amount, nextUnit)));
+            onChangeSeconds(String(durationAmountToSeconds(visibleParts.amount, nextUnit)));
           }}
           onBlur={onBlur}
           className={`select select-bordered w-full bg-base-100 ${invalid ? "select-error" : ""} ${selectClassName}`}

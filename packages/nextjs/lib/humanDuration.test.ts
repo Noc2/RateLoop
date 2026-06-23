@@ -2,9 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   durationAmountToMinutes,
+  durationAmountToSeconds,
   formatHumanDuration,
   formatHumanDurationFromMinutes,
+  formatHumanDurationFromSeconds,
   getBestDurationInputPartsFromMinutes,
+  getBestDurationInputPartsFromSeconds,
   normalizeDurationAmountInput,
   parseDurationAmountInput,
 } from "~~/lib/humanDuration";
@@ -13,6 +16,12 @@ test("formatHumanDurationFromMinutes translates large minute counts", () => {
   assert.equal(formatHumanDurationFromMinutes("1440"), "1 day");
   assert.equal(formatHumanDurationFromMinutes("10080"), "7 days");
   assert.equal(formatHumanDurationFromMinutes(60), "1 hour");
+});
+
+test("formatHumanDurationFromSeconds preserves sub-minute durations", () => {
+  assert.equal(formatHumanDurationFromSeconds("20"), "20 seconds");
+  assert.equal(formatHumanDurationFromSeconds("60"), "1 minute");
+  assert.equal(formatHumanDurationFromSeconds(1200), "20 minutes");
 });
 
 test("formatHumanDuration keeps useful mixed-unit labels", () => {
@@ -28,10 +37,22 @@ test("getBestDurationInputPartsFromMinutes chooses readable exact units", () => 
   assert.deepEqual(getBestDurationInputPartsFromMinutes("90"), { amount: "90", unit: "minutes" });
 });
 
+test("getBestDurationInputPartsFromSeconds chooses readable exact units", () => {
+  assert.deepEqual(getBestDurationInputPartsFromSeconds("20"), { amount: "20", unit: "seconds" });
+  assert.deepEqual(getBestDurationInputPartsFromSeconds("1200"), { amount: "20", unit: "minutes" });
+  assert.deepEqual(getBestDurationInputPartsFromSeconds("3600"), { amount: "1", unit: "hours" });
+});
+
 test("durationAmountToMinutes converts unit input back to protocol minutes", () => {
   assert.equal(durationAmountToMinutes("7", "days"), 10_080);
   assert.equal(durationAmountToMinutes("2", "hours"), 120);
   assert.equal(durationAmountToMinutes("20", "minutes"), 20);
+});
+
+test("durationAmountToSeconds converts unit input back to protocol seconds", () => {
+  assert.equal(durationAmountToSeconds("20", "seconds"), 20);
+  assert.equal(durationAmountToSeconds("20", "minutes"), 1200);
+  assert.equal(durationAmountToSeconds("2", "hours"), 7200);
 });
 
 test("duration amount parsing only accepts whole numeric input", () => {

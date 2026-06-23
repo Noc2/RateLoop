@@ -1,13 +1,14 @@
-export type HumanDurationUnit = "minutes" | "hours" | "days";
+export type HumanDurationUnit = "seconds" | "minutes" | "hours" | "days";
 
-export const HUMAN_DURATION_UNIT_OPTIONS: Array<{ value: HumanDurationUnit; label: string; minutes: number }> = [
-  { value: "minutes", label: "Minutes", minutes: 1 },
-  { value: "hours", label: "Hours", minutes: 60 },
-  { value: "days", label: "Days", minutes: 24 * 60 },
+export const HUMAN_DURATION_UNIT_OPTIONS: Array<{ value: HumanDurationUnit; label: string; seconds: number }> = [
+  { value: "seconds", label: "Seconds", seconds: 1 },
+  { value: "minutes", label: "Minutes", seconds: 60 },
+  { value: "hours", label: "Hours", seconds: 60 * 60 },
+  { value: "days", label: "Days", seconds: 24 * 60 * 60 },
 ];
 
-const UNIT_MINUTES = Object.fromEntries(
-  HUMAN_DURATION_UNIT_OPTIONS.map(option => [option.value, option.minutes]),
+const UNIT_SECONDS = Object.fromEntries(
+  HUMAN_DURATION_UNIT_OPTIONS.map(option => [option.value, option.seconds]),
 ) as Record<HumanDurationUnit, number>;
 
 function pluralize(value: number, unit: string) {
@@ -27,7 +28,11 @@ function toFinitePositiveInteger(value: bigint | number | null | undefined): num
 }
 
 export function getHumanDurationUnitMinutes(unit: HumanDurationUnit): number {
-  return UNIT_MINUTES[unit];
+  return UNIT_SECONDS[unit] / 60;
+}
+
+export function getHumanDurationUnitSeconds(unit: HumanDurationUnit): number {
+  return UNIT_SECONDS[unit];
 }
 
 export function normalizeDurationAmountInput(value: string): string | null {
@@ -49,12 +54,17 @@ export function parseDurationAmountInput(value: string): number {
 }
 
 export function durationAmountToMinutes(amount: string | number, unit: HumanDurationUnit): number {
+  const totalSeconds = durationAmountToSeconds(amount, unit);
+  return totalSeconds > 0 ? Math.floor(totalSeconds / 60) : 0;
+}
+
+export function durationAmountToSeconds(amount: string | number, unit: HumanDurationUnit): number {
   const parsedAmount = typeof amount === "number" ? Math.floor(amount) : parseDurationAmountInput(amount);
   if (!Number.isSafeInteger(parsedAmount) || parsedAmount <= 0) {
     return 0;
   }
 
-  return parsedAmount * getHumanDurationUnitMinutes(unit);
+  return parsedAmount * getHumanDurationUnitSeconds(unit);
 }
 
 export function getBestDurationInputPartsFromMinutes(minutes: string | number | null | undefined): {
@@ -68,15 +78,33 @@ export function getBestDurationInputPartsFromMinutes(minutes: string | number | 
     return { amount: "", unit: "minutes" };
   }
 
-  if (parsedMinutes % UNIT_MINUTES.days === 0) {
-    return { amount: String(parsedMinutes / UNIT_MINUTES.days), unit: "days" };
+  return getBestDurationInputPartsFromSeconds(parsedMinutes * 60);
+}
+
+export function getBestDurationInputPartsFromSeconds(seconds: string | number | null | undefined): {
+  amount: string;
+  unit: HumanDurationUnit;
+} {
+  const parsedSeconds =
+    typeof seconds === "string" ? parseDurationAmountInput(seconds) : typeof seconds === "number" ? seconds : 0;
+
+  if (!Number.isSafeInteger(parsedSeconds) || parsedSeconds <= 0) {
+    return { amount: "", unit: "minutes" };
   }
 
-  if (parsedMinutes % UNIT_MINUTES.hours === 0) {
-    return { amount: String(parsedMinutes / UNIT_MINUTES.hours), unit: "hours" };
+  if (parsedSeconds % UNIT_SECONDS.days === 0) {
+    return { amount: String(parsedSeconds / UNIT_SECONDS.days), unit: "days" };
   }
 
-  return { amount: String(parsedMinutes), unit: "minutes" };
+  if (parsedSeconds % UNIT_SECONDS.hours === 0) {
+    return { amount: String(parsedSeconds / UNIT_SECONDS.hours), unit: "hours" };
+  }
+
+  if (parsedSeconds % UNIT_SECONDS.minutes === 0) {
+    return { amount: String(parsedSeconds / UNIT_SECONDS.minutes), unit: "minutes" };
+  }
+
+  return { amount: String(parsedSeconds), unit: "seconds" };
 }
 
 export function formatHumanDuration(seconds: bigint | number | null | undefined): string {
@@ -112,4 +140,15 @@ export function formatHumanDurationFromMinutes(minutes: string | number | null |
   }
 
   return formatHumanDuration(parsedMinutes * 60);
+}
+
+export function formatHumanDurationFromSeconds(seconds: string | number | null | undefined): string {
+  const parsedSeconds =
+    typeof seconds === "string" ? parseDurationAmountInput(seconds) : typeof seconds === "number" ? seconds : 0;
+
+  if (!Number.isSafeInteger(parsedSeconds) || parsedSeconds <= 0) {
+    return "0 minutes";
+  }
+
+  return formatHumanDuration(parsedSeconds);
 }
