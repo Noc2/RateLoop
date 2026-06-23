@@ -15,4 +15,4 @@ watchPatterns = [
 ]
 
 [deploy]
-startCommand = "yarn workspace @rateloop/keeper start:built-workspace-deps"
+startCommand = "NODE_ENV=production yarn workspace @rateloop/keeper start:built-workspace-deps"

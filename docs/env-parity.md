@@ -72,6 +72,11 @@ The deployed Next.js app can use Base Flashblocks/preconfirmation metadata to ma
 | Next.js | `PONDER_METADATA_SYNC_TOKEN` | Bearer token sent to Ponder `POST /question-metadata` after x402 submissions          |
 | Ponder  | `PONDER_METADATA_SYNC_TOKEN` | Required for metadata sync unless `PONDER_METADATA_SYNC_ALLOW_OPEN=true` in local/dev |
 
+Production Keeper/Ponder services must also boot with `NODE_ENV=production`. Base mainnet service readiness expects
+`KEEPER_DATABASE_URL` for the keeper advisory lock, Ponder `CORS_ORIGIN`, and
+`RATE_LIMIT_TRUSTED_IP_HEADERS`; if Keeper metrics bind to a non-loopback address, set a 16+ character
+`METRICS_AUTH_TOKEN`. Strict live readiness probes Ponder `/keeper/work` with `PONDER_KEEPER_WORK_TOKEN`.
+
 ## E2E production-build flags
 
 Local Playwright suites can opt into production-style behavior (localhost attachment origins, wallet bridge, rate-limit bypass) without a production deploy.

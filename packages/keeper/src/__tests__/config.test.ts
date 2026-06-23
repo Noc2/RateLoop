@@ -162,6 +162,15 @@ describe("keeper config", () => {
     });
   });
 
+  it("requires production mode for Base mainnet keeper runtime", async () => {
+    await expect(
+      loadKeeperConfig({
+        CHAIN_ID: "8453",
+        RPC_URL: "https://mainnet.base.org",
+      }),
+    ).rejects.toThrow("NODE_ENV=production is required when CHAIN_ID=8453");
+  });
+
   it("rejects invalid keeper persistence database URLs", async () => {
     await expect(
       loadKeeperConfig({

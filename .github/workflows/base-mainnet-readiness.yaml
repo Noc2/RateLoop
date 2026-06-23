@@ -27,7 +27,14 @@ jobs:
       BASE_APP_URL: ${{ vars.BASE_APP_URL }}
       BASE_PONDER_URL: ${{ vars.BASE_PONDER_URL }}
       BASE_RPC_URL: ${{ secrets.BASE_RPC_URL }}
+      CORS_ORIGIN: ${{ vars.CORS_ORIGIN }}
+      KEEPER_DATABASE_URL: ${{ secrets.KEEPER_DATABASE_URL }}
+      METRICS_AUTH_TOKEN: ${{ secrets.METRICS_AUTH_TOKEN }}
+      METRICS_BIND_ADDRESS: ${{ vars.METRICS_BIND_ADDRESS }}
+      NODE_ENV: production
       PONDER_METADATA_SYNC_TOKEN: ${{ secrets.PONDER_METADATA_SYNC_TOKEN }}
+      PONDER_KEEPER_WORK_TOKEN: ${{ secrets.PONDER_KEEPER_WORK_TOKEN }}
+      RATE_LIMIT_TRUSTED_IP_HEADERS: ${{ vars.RATE_LIMIT_TRUSTED_IP_HEADERS }}
 
     steps:
       - name: Checkout

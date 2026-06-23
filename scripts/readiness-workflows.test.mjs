@@ -49,6 +49,12 @@ test("Base Sepolia readiness remains an active push, PR, scheduled, and manual g
     workflow,
     /PONDER_METADATA_SYNC_TOKEN: \$\{\{ secrets\.PONDER_METADATA_SYNC_TOKEN \}\}/,
   );
+  assert.match(workflow, /NODE_ENV: production/);
+  assert.match(
+    workflow,
+    /PONDER_KEEPER_WORK_TOKEN: \$\{\{ secrets\.PONDER_KEEPER_WORK_TOKEN \}\}/,
+  );
+  assert.match(workflow, /RATE_LIMIT_TRUSTED_IP_HEADERS:/);
 });
 
 test("Base mainnet readiness remains an active push, PR, scheduled, and manual gate", () => {
@@ -65,5 +71,25 @@ test("Base mainnet readiness remains an active push, PR, scheduled, and manual g
   assert.match(
     workflow,
     /PONDER_METADATA_SYNC_TOKEN: \$\{\{ secrets\.PONDER_METADATA_SYNC_TOKEN \}\}/,
+  );
+  assert.match(workflow, /NODE_ENV: production/);
+  assert.match(
+    workflow,
+    /PONDER_KEEPER_WORK_TOKEN: \$\{\{ secrets\.PONDER_KEEPER_WORK_TOKEN \}\}/,
+  );
+  assert.match(workflow, /RATE_LIMIT_TRUSTED_IP_HEADERS:/);
+});
+
+test("Railway service start commands pin production mode", () => {
+  const keeper = readWorkflow("packages/keeper/railway.toml");
+  const ponder = readWorkflow("packages/ponder/railway.toml");
+
+  assert.match(
+    keeper,
+    /startCommand = "NODE_ENV=production yarn workspace @rateloop\/keeper start:built-workspace-deps"/,
+  );
+  assert.match(
+    ponder,
+    /startCommand = "NODE_ENV=production yarn workspace @rateloop\/ponder start:built-contracts"/,
   );
 });

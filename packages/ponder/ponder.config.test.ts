@@ -311,12 +311,22 @@ describe("ponder config", () => {
 
     await expect(
       loadPonderConfig({
+        NODE_ENV: "production",
         PONDER_NETWORK: "base",
         PONDER_RPC_URL_8453: "https://mainnet.base.org",
       }),
     ).rejects.toThrow(
       /Missing shared deployment artifact for ContentRegistry on chain 8453.*Restore the existing Base mainnet deployment artifact.*yarn base-mainnet:check/,
     );
+  }, PONDER_CONFIG_TEST_TIMEOUT_MS);
+
+  it("requires production mode for Base mainnet runtime", async () => {
+    await expect(
+      loadPonderConfig({
+        PONDER_NETWORK: "base",
+        PONDER_RPC_URL_8453: "https://mainnet.base.org",
+      }),
+    ).rejects.toThrow("NODE_ENV=production is required when PONDER_NETWORK=base.");
   }, PONDER_CONFIG_TEST_TIMEOUT_MS);
 
   it("treats blank live RPC placeholders as unset in non-production", async () => {

@@ -104,6 +104,9 @@ function getActiveNetwork(): PonderNetworkName {
 }
 
 const activeNetwork = getActiveNetwork();
+if (activeNetwork === "base" && !isProduction) {
+  throw new Error("NODE_ENV=production is required when PONDER_NETWORK=base.");
+}
 const activeChainId = NETWORKS[activeNetwork].chainId;
 let warnedAboutHardhatStartBlocks = false;
 

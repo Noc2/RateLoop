@@ -349,11 +349,51 @@ export const REQUIRED_CLUSTER_PAYOUT_ORACLE_CONSUMERS = [
     label: "ClusterPayoutOracle question reward consumer",
   },
   {
+    domain: 2,
+    expectedContractName: "LaunchDistributionPool",
+    label: "ClusterPayoutOracle launch credit consumer",
+  },
+  {
     domain: 3,
     expectedContractName: "ContentRegistry",
     label: "ClusterPayoutOracle public rating consumer",
   },
+  {
+    domain: 4,
+    expectedContractName: "QuestionRewardPoolEscrow",
+    label: "ClusterPayoutOracle question bundle reward consumer",
+  },
 ];
+
+const OFFCHAIN_RUNTIME_REQUIRED_ENVS = [
+  {
+    name: "NODE_ENV",
+    isValid: (value) => value === "production",
+    message: "NODE_ENV is production for live service checks",
+  },
+  {
+    name: "PONDER_KEEPER_WORK_TOKEN",
+    isValid: (value) => Boolean(value),
+    message: "PONDER_KEEPER_WORK_TOKEN is configured for Keeper/Ponder",
+  },
+  {
+    name: "KEEPER_DATABASE_URL",
+    isValid: (value) => /^postgres(?:ql)?:\/\//u.test(value ?? ""),
+    message: "KEEPER_DATABASE_URL is configured for Keeper locking",
+  },
+  {
+    name: "CORS_ORIGIN",
+    isValid: (value) => Boolean(value),
+    message: "CORS_ORIGIN is configured for Ponder production API",
+  },
+  {
+    name: "RATE_LIMIT_TRUSTED_IP_HEADERS",
+    isValid: (value) => Boolean(value),
+    message: "RATE_LIMIT_TRUSTED_IP_HEADERS is configured for Ponder rate limiting",
+  },
+];
+
+const LOOPBACK_BIND_ADDRESSES = new Set(["127.0.0.1", "::1", "localhost"]);
 
 function isAddress(value) {
   return typeof value === "string" && ADDRESS_RE.test(value);
@@ -362,6 +402,39 @@ function isAddress(value) {
 function addCheck(checks, failures, ok, message) {
   checks.push({ ok, message });
   if (!ok) failures.push(message);
+}
+
+function readRuntimeEnv(env, name) {
+  const value = env[name]?.trim();
+  return value ? value : "";
+}
+
+function isPublicBindAddress(value) {
+  const normalized = value?.trim();
+  return Boolean(normalized && !LOOPBACK_BIND_ADDRESSES.has(normalized));
+}
+
+export function validateOffchainRuntimeEnv({
+  checks,
+  env = process.env,
+  failures,
+  requireTargets = false,
+}) {
+  for (const check of OFFCHAIN_RUNTIME_REQUIRED_ENVS) {
+    const value = readRuntimeEnv(env, check.name);
+    addCheck(checks, failures, !requireTargets || check.isValid(value), check.message);
+  }
+
+  const metricsBindAddress = readRuntimeEnv(env, "METRICS_BIND_ADDRESS");
+  if (isPublicBindAddress(metricsBindAddress)) {
+    const metricsAuthToken = readRuntimeEnv(env, "METRICS_AUTH_TOKEN");
+    addCheck(
+      checks,
+      failures,
+      metricsAuthToken.length >= 16,
+      "METRICS_AUTH_TOKEN is configured when Keeper metrics are public",
+    );
+  }
 }
 
 function readEnvAssignment(source, key) {
@@ -842,6 +915,8 @@ export async function validateLiveReadiness({
   const failures = [];
   const deploymentAddresses = buildDeploymentAddressMap(deploymentJson);
 
+  validateOffchainRuntimeEnv({ checks, failures, requireTargets });
+
   if (rpcUrl) {
     try {
       const chainId = await rpc(rpcUrl, "eth_chainId");
@@ -1063,6 +1138,35 @@ export async function validateLiveReadiness({
         metadataSyncResponse.status === 400,
         `Ponder /question-metadata auth reaches JSON validation (HTTP ${metadataSyncResponse.status})`,
       );
+
+      if (requireTargets) {
+        const keeperWorkToken = process.env.PONDER_KEEPER_WORK_TOKEN?.trim();
+        if (keeperWorkToken) {
+          const keeperWorkUrl = buildPonderUrl(ponderUrl, "/keeper/work");
+          keeperWorkUrl.searchParams.set("now", String(Math.floor(Date.now() / 1000)));
+          keeperWorkUrl.searchParams.set("dormancyPeriod", String(30 * 24 * 60 * 60));
+          keeperWorkUrl.searchParams.set("feedbackBonusForfeitMinAge", "0");
+          keeperWorkUrl.searchParams.set("limit", "1");
+          const keeperWorkResponse = await fetchWithTimeout(keeperWorkUrl, {
+            headers: {
+              authorization: `Bearer ${keeperWorkToken}`,
+            },
+          });
+          addCheck(
+            checks,
+            failures,
+            keeperWorkResponse.ok,
+            `Ponder /keeper/work accepts Keeper bearer token (HTTP ${keeperWorkResponse.status})`,
+          );
+        } else {
+          addCheck(
+            checks,
+            failures,
+            false,
+            "Ponder /keeper/work live probe skipped because PONDER_KEEPER_WORK_TOKEN is unset",
+          );
+        }
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       addCheck(

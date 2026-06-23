@@ -12,6 +12,7 @@ import {
   buildPonderUrl,
   buildReadinessUrl,
   parseGeneratedContractsForChain,
+  validateOffchainRuntimeEnv,
   validateLiveReadiness,
   validateOfflineReadiness,
 } from "./check-worldchain-sepolia-readiness.mjs";
@@ -234,6 +235,71 @@ test("ProtocolConfig is required but not marked as Ponder-indexed", () => {
   assert.equal(PONDER_INDEXED_CONTRACTS.includes("ProtocolConfig"), false);
 });
 
+test("required ClusterPayoutOracle consumers cover all deployed payout domains", () => {
+  assert.deepEqual(
+    REQUIRED_CLUSTER_PAYOUT_ORACLE_CONSUMERS.map((check) => check.domain),
+    [1, 2, 3, 4],
+  );
+  assert.deepEqual(
+    REQUIRED_CLUSTER_PAYOUT_ORACLE_CONSUMERS.map(
+      (check) => check.expectedContractName,
+    ),
+    [
+      "QuestionRewardPoolEscrow",
+      "LaunchDistributionPool",
+      "ContentRegistry",
+      "QuestionRewardPoolEscrow",
+    ],
+  );
+});
+
+test("validateOffchainRuntimeEnv fails closed for required live service env", () => {
+  const checks = [];
+  const failures = [];
+
+  validateOffchainRuntimeEnv({
+    checks,
+    env: {},
+    failures,
+    requireTargets: true,
+  });
+
+  assert(failures.some((message) => message.includes("NODE_ENV")));
+  assert(
+    failures.some((message) => message.includes("PONDER_KEEPER_WORK_TOKEN")),
+  );
+  assert(failures.some((message) => message.includes("KEEPER_DATABASE_URL")));
+  assert(failures.some((message) => message.includes("CORS_ORIGIN")));
+  assert(
+    failures.some((message) =>
+      message.includes("RATE_LIMIT_TRUSTED_IP_HEADERS"),
+    ),
+  );
+});
+
+test("validateOffchainRuntimeEnv accepts configured production runtime env", () => {
+  const checks = [];
+  const failures = [];
+
+  validateOffchainRuntimeEnv({
+    checks,
+    env: {
+      CORS_ORIGIN: "https://www.rateloop.ai",
+      KEEPER_DATABASE_URL: "postgres://keeper.example/rateloop",
+      METRICS_AUTH_TOKEN: "0123456789abcdef",
+      METRICS_BIND_ADDRESS: "0.0.0.0",
+      NODE_ENV: "production",
+      PONDER_KEEPER_WORK_TOKEN: "shared-keeper-token",
+      RATE_LIMIT_TRUSTED_IP_HEADERS: "x-forwarded-for",
+    },
+    failures,
+    requireTargets: true,
+  });
+
+  assert.deepEqual(failures, []);
+  assert(checks.some((check) => check.message.includes("METRICS_AUTH_TOKEN")));
+});
+
 test("validateOfflineReadiness flags a contract whose deployedOnBlock is missing", () => {
   const deployedContractsSource = makeGeneratedContractsSource().replace(
     /\n\s*deployedOnBlock: 101,/,
@@ -321,6 +387,41 @@ test("validateBaseSepoliaOfflineReadiness warns on the known stale x402 submitte
 
   assert.equal(result.ok, true);
   assert.match(result.warnings?.[0] ?? "", /known stale staging submitter/);
+});
+
+test("validateBaseSepoliaOfflineReadiness can require one-shot Feedback Bonus x402 support", () => {
+  const staleSubmitter = "0x24AB19e0D8052DEc62bEc59e986e336adc4721F3";
+  const deploymentJson = makeDeploymentJson({ networkName: "baseSepolia" });
+  const x402Address = buildDeploymentAddressMap(deploymentJson).get(
+    "X402QuestionSubmitter",
+  );
+  delete deploymentJson[x402Address];
+  deploymentJson[staleSubmitter] = "X402QuestionSubmitter";
+
+  const result = validateBaseSepoliaOfflineReadiness(
+    {
+      deploymentJson,
+      deployedContractsSource: makeGeneratedContractsSource(
+        {
+          X402QuestionSubmitter: {
+            address: staleSubmitter,
+          },
+        },
+        84532,
+      ),
+      protocolSource:
+        'const USDC_BY_CHAIN_ID = { 84532: "0x036CbD53842c5426634e7929541eC2318f3dCF7e" };',
+      appEnvSource: "NEXT_PUBLIC_TARGET_NETWORKS=84532\n",
+    },
+    { requireOneShotFeedbackBonusX402: true },
+  );
+
+  assert.equal(result.ok, false);
+  assert(
+    result.failures.some((message) =>
+      message.includes("one-shot Feedback Bonus x402 submissions remain disabled"),
+    ),
+  );
 });
 
 test("Base Sepolia readiness defaults to the committed staging env fixture", () => {
@@ -725,6 +826,95 @@ test("validateLiveReadiness rejects metadata sync auth failures", async () => {
       delete process.env.PONDER_METADATA_SYNC_TOKEN;
     } else {
       process.env.PONDER_METADATA_SYNC_TOKEN = previousToken;
+    }
+  }
+});
+
+test("validateLiveReadiness probes keeper work with the configured bearer token", async () => {
+  const previousFetch = globalThis.fetch;
+  const previousEnv = {
+    CORS_ORIGIN: process.env.CORS_ORIGIN,
+    KEEPER_DATABASE_URL: process.env.KEEPER_DATABASE_URL,
+    NODE_ENV: process.env.NODE_ENV,
+    PONDER_KEEPER_WORK_TOKEN: process.env.PONDER_KEEPER_WORK_TOKEN,
+    PONDER_METADATA_SYNC_TOKEN: process.env.PONDER_METADATA_SYNC_TOKEN,
+    RATE_LIMIT_TRUSTED_IP_HEADERS: process.env.RATE_LIMIT_TRUSTED_IP_HEADERS,
+  };
+  const deploymentJson = makeDeploymentJson();
+  const deploymentAddresses = buildDeploymentAddressMap(deploymentJson);
+  let keeperAuthorization = null;
+
+  Object.assign(process.env, {
+    CORS_ORIGIN: "https://www.rateloop.ai",
+    KEEPER_DATABASE_URL: "postgres://keeper.example/rateloop",
+    NODE_ENV: "production",
+    PONDER_KEEPER_WORK_TOKEN: "keeper-secret",
+    PONDER_METADATA_SYNC_TOKEN: "metadata-secret",
+    RATE_LIMIT_TRUSTED_IP_HEADERS: "x-forwarded-for",
+  });
+
+  globalThis.fetch = async (url, init) => {
+    const urlString = url.toString();
+    if (urlString.endsWith("/status")) {
+      return new Response(
+        JSON.stringify({
+          worldchainSepolia: {
+            block: { number: deploymentJson.deploymentBlockNumber },
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }
+    if (urlString.endsWith("/deployment")) {
+      return new Response(
+        JSON.stringify({
+          chainId: 4801,
+          contentRegistryAddress: deploymentAddresses.get("ContentRegistry"),
+          feedbackRegistryAddress: deploymentAddresses.get("FeedbackRegistry"),
+          deploymentKey: expectedDeploymentKeyFor(deploymentJson),
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }
+    if (urlString.endsWith("/question-metadata")) {
+      return new Response(JSON.stringify({ error: "Invalid JSON body." }), {
+        status: 400,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    if (urlString.includes("/keeper/work?")) {
+      keeperAuthorization = init?.headers?.authorization ?? null;
+      return new Response(JSON.stringify({ items: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    throw new Error(`Unexpected fetch ${urlString}`);
+  };
+
+  try {
+    const result = await validateLiveReadiness({
+      deploymentJson,
+      ponderUrl: "https://ponder.example.test/indexer",
+      requireTargets: true,
+    });
+
+    assert.equal(keeperAuthorization, "Bearer keeper-secret");
+    assert(
+      result.checks.some(
+        (check) =>
+          check.ok &&
+          check.message.includes("Ponder /keeper/work accepts Keeper bearer token"),
+      ),
+    );
+  } finally {
+    globalThis.fetch = previousFetch;
+    for (const [key, value] of Object.entries(previousEnv)) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
     }
   }
 });

@@ -15,6 +15,7 @@ const CHAIN_NAMES: Record<number, string> = {
 };
 
 const LOCAL_HARDHAT_CHAIN_ID = 31337;
+const BASE_MAINNET_CHAIN_ID = 8453;
 // ContentRegistry gates markDormant on its internal constant `DORMANCY_PERIOD = 30 days`
 // (and on `dormancyAnchorAt`, which has no public view). The constant is not exposed
 // on-chain either, so it cannot be read at runtime: a keeper-side period below 30 days
@@ -422,6 +423,9 @@ function loadConfig() {
   const errors: string[] = [];
   const warnings: string[] = [];
   const chainId = requireIntEnv("CHAIN_ID", errors);
+  if (chainId === BASE_MAINNET_CHAIN_ID && !isProduction) {
+    errors.push("NODE_ENV=production is required when CHAIN_ID=8453");
+  }
   const keystoreAccount = readEnv("KEYSTORE_ACCOUNT");
   const privateKey = readEnv("KEEPER_PRIVATE_KEY") as `0x${string}` | undefined;
   const frontendFeeEnabled = parseBooleanEnv(

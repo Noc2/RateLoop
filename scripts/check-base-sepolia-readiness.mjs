@@ -33,6 +33,9 @@ function parseArgs(argv) {
   return {
     live: argv.includes("--live"),
     json: argv.includes("--json"),
+    requireOneShotFeedbackBonusX402: argv.includes(
+      "--require-one-shot-feedback-bonus-x402",
+    ),
     requireLiveTargets: argv.includes("--require-live-targets"),
   };
 }
@@ -90,7 +93,7 @@ function loadBaseSepoliaOfflineInputs(root = repoRoot) {
   };
 }
 
-export function validateBaseSepoliaOfflineReadiness(inputs) {
+export function validateBaseSepoliaOfflineReadiness(inputs, options = {}) {
   const result = validateOfflineReadiness(
     inputs,
     BASE_SEPOLIA_READINESS_CONFIG,
@@ -118,9 +121,14 @@ export function validateBaseSepoliaOfflineReadiness(inputs) {
     x402QuestionSubmitter?.toLowerCase() ===
     KNOWN_STALE_BASE_SEPOLIA_X402_QUESTION_SUBMITTER
   ) {
-    result.warnings.push(
-      "Base Sepolia X402QuestionSubmitter is the known stale staging submitter; one-shot Feedback Bonus x402 submissions remain disabled until the staging submitter is refreshed.",
-    );
+    const message =
+      "Base Sepolia X402QuestionSubmitter is the known stale staging submitter; one-shot Feedback Bonus x402 submissions remain disabled until the staging submitter is refreshed.";
+    if (options.requireOneShotFeedbackBonusX402) {
+      result.failures.push(message);
+      result.ok = false;
+    } else {
+      result.warnings.push(message);
+    }
   }
 
   return result;
@@ -143,7 +151,9 @@ async function main() {
     throw error;
   }
 
-  const offlineResult = validateBaseSepoliaOfflineReadiness(offlineInputs);
+  const offlineResult = validateBaseSepoliaOfflineReadiness(offlineInputs, {
+    requireOneShotFeedbackBonusX402: args.requireOneShotFeedbackBonusX402,
+  });
   printResult("Base Sepolia offline readiness", offlineResult, args.json);
 
   let liveResult = { ok: true, checks: [], failures: [] };
