@@ -577,6 +577,50 @@ test("awaits sponsored submit calls while the wallet restore context is pending"
   );
 });
 
+test("awaits sponsored submit calls while sponsorship sync is pending", () => {
+  assert.equal(
+    shouldAwaitSponsoredSubmitCalls({
+      canUseSponsoredSubmitCalls: false,
+      expectsSponsoredBatchCalls: true,
+      freeTransactionAllowanceResolved: true,
+      hasBrokenSponsoredDelegation: false,
+      isInspectingSponsoredDelegation: false,
+      prefersSponsoredBatchCalls: true,
+      sponsorshipSyncStatus: "pending",
+    }),
+    true,
+  );
+  assert.equal(
+    shouldAwaitSponsoredSubmitCalls({
+      canUseSponsoredSubmitCalls: false,
+      expectsSponsoredBatchCalls: true,
+      freeTransactionAllowanceResolved: true,
+      hasBrokenSponsoredDelegation: false,
+      isInspectingSponsoredDelegation: false,
+      prefersSponsoredBatchCalls: true,
+      sponsorshipSyncStatus: "syncing",
+    }),
+    true,
+  );
+});
+
+test("does not await sponsored submit calls forever after sponsorship sync fails", () => {
+  for (const sponsorshipSyncStatus of ["failed", "timed_out"] as const) {
+    assert.equal(
+      shouldAwaitSponsoredSubmitCalls({
+        canUseSponsoredSubmitCalls: false,
+        expectsSponsoredBatchCalls: true,
+        freeTransactionAllowanceResolved: true,
+        hasBrokenSponsoredDelegation: false,
+        isInspectingSponsoredDelegation: false,
+        prefersSponsoredBatchCalls: true,
+        sponsorshipSyncStatus,
+      }),
+      false,
+    );
+  }
+});
+
 test("does not await sponsored submit calls for broken sponsored delegation", () => {
   assert.equal(
     shouldAwaitSponsoredSubmitCalls({

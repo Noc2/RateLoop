@@ -15,6 +15,7 @@ import { supportsThirdwebInAppExecutionCapabilities } from "~~/services/thirdweb
 type GasBalanceStatusOptions = {
   allowInAppSponsorshipSync?: boolean;
   includeExternalSendCalls?: boolean;
+  syncInAppSponsorship?: boolean;
 };
 
 export function shouldExpectThirdwebGasMode(params: {
@@ -66,7 +67,10 @@ export function useGasBalanceStatus(options: GasBalanceStatusOptions = {}) {
   const activeWalletChain = useActiveWalletChain();
   const { isRestoringWallet } = useWalletRestore();
   const { executionMode, isThirdwebInApp } = useWalletExecutionCapabilities();
-  const freeTransactionAllowance = useFreeTransactionAllowance({ allowInAppSponsorshipSync });
+  const freeTransactionAllowance = useFreeTransactionAllowance({
+    allowInAppSponsorshipSync,
+    syncInAppSponsorship: options.syncInAppSponsorship,
+  });
   const { data: nativeBalance, isLoading: nativeBalanceLoading } = useBalance({
     address,
     query: {

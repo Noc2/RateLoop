@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { defineChain } from "thirdweb";
 import { useActiveWallet, useActiveWalletChain, useSetActiveWallet } from "thirdweb/react";
@@ -39,9 +39,71 @@ type FreeTransactionAllowanceResponse = {
 
 type SponsorshipMode = "sponsored" | "self-funded";
 type SponsorshipSyncMode = SponsorshipMode | "eoa";
+export type SponsorshipSyncStatus = "idle" | "pending" | "syncing" | "settled" | "failed" | "timed_out";
 type FreeTransactionAllowanceOptions = {
   allowInAppSponsorshipSync?: boolean;
+  syncInAppSponsorship?: boolean;
 };
+export type SponsorshipSyncState = {
+  attemptKey: string | null;
+  error: string | null;
+  status: SponsorshipSyncStatus;
+};
+
+const INITIAL_SPONSORSHIP_SYNC_STATE: SponsorshipSyncState = {
+  attemptKey: null,
+  error: null,
+  status: "idle",
+};
+const SPONSORSHIP_SYNC_TIMEOUT_MS = 12_000;
+const SPONSORSHIP_SYNC_TIMEOUT_CODE = "RATELOOP_SPONSORSHIP_SYNC_TIMEOUT";
+
+export function isPendingSponsorshipSyncStatus(status: SponsorshipSyncStatus | null | undefined) {
+  return status === "pending" || status === "syncing";
+}
+
+export function getEffectiveSponsorshipSyncStatus(params: {
+  attemptKey: string | null;
+  needsSync: boolean;
+  state: SponsorshipSyncState;
+}): SponsorshipSyncStatus {
+  if (!params.needsSync) {
+    return params.attemptKey ? "settled" : "idle";
+  }
+
+  if (!params.attemptKey) {
+    return "pending";
+  }
+
+  return params.state.attemptKey === params.attemptKey ? params.state.status : "pending";
+}
+
+function createSponsorshipSyncTimeoutError(mode: SponsorshipSyncMode) {
+  const error = new Error(`Timed out syncing thirdweb ${mode} wallet mode.`);
+  (error as Error & { code?: string }).code = SPONSORSHIP_SYNC_TIMEOUT_CODE;
+  return error;
+}
+
+function isSponsorshipSyncTimeoutError(error: unknown) {
+  return (error as { code?: string } | undefined)?.code === SPONSORSHIP_SYNC_TIMEOUT_CODE;
+}
+
+async function runSponsorshipSyncWithTimeout<T>(operation: () => Promise<T>, mode: SponsorshipSyncMode) {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+  try {
+    return await Promise.race([
+      operation(),
+      new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => reject(createSponsorshipSyncTimeoutError(mode)), SPONSORSHIP_SYNC_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
+}
 
 function getClientFreeTransactionEnvironmentScope() {
   if (typeof window === "undefined") {
@@ -212,7 +274,8 @@ export function getFreeTransactionAllowanceIdentityAddress(params: {
 
 export function useFreeTransactionAllowance(options: FreeTransactionAllowanceOptions = {}) {
   const allowInAppSponsorshipSync = options.allowInAppSponsorshipSync ?? true;
-  const canSyncInAppSponsorship = allowInAppSponsorshipSync && !hasLocalE2ETestWalletSession();
+  const syncInAppSponsorship = options.syncInAppSponsorship ?? allowInAppSponsorshipSync;
+  const canSyncInAppSponsorship = allowInAppSponsorshipSync && syncInAppSponsorship && !hasLocalE2ETestWalletSession();
   const { address, chain } = useAccount();
   const activeWallet = useActiveWallet();
   const activeWalletChain = useActiveWalletChain();
@@ -220,6 +283,8 @@ export function useFreeTransactionAllowance(options: FreeTransactionAllowanceOpt
   const { syncWalletToWagmi } = useThirdwebWagmiSync();
   const previousRemainingRef = useRef<number | null>(null);
   const sponsorshipSyncAttemptRef = useRef<string | null>(null);
+  const [sponsorshipSyncState, setSponsorshipSyncState] =
+    useState<SponsorshipSyncState>(INITIAL_SPONSORSHIP_SYNC_STATE);
   const resolvedChainId = resolveWalletExecutionChainId(chain?.id, activeWalletChain?.id);
   const supportsInAppExecution = supportsThirdwebInAppExecutionCapabilities(resolvedChainId);
   const usesInAppEip7702Execution = usesThirdwebInAppEip7702Execution(resolvedChainId);
@@ -354,6 +419,32 @@ export function useFreeTransactionAllowance(options: FreeTransactionAllowanceOpt
     resolvedChainId,
     shouldUseEoaWallet,
   ]);
+  const desiredSponsorshipSyncAttemptKey = useMemo(() => {
+    if (!address || !resolvedChainId || !desiredSponsorshipMode) {
+      return null;
+    }
+
+    return buildSponsorshipSyncAttemptKey({
+      address,
+      chainId: resolvedChainId,
+      sponsorshipMode: desiredSponsorshipMode,
+    });
+  }, [address, desiredSponsorshipMode, resolvedChainId]);
+  const needsSponsorshipModeSync = Boolean(
+    canSyncInAppSponsorship &&
+      thirdwebClient &&
+      address &&
+      resolvedChainId &&
+      desiredSponsorshipMode &&
+      activeWallet &&
+      isCurrentInAppWallet &&
+      currentSponsorshipMode !== desiredSponsorshipMode,
+  );
+  const sponsorshipSyncStatus = getEffectiveSponsorshipSyncStatus({
+    attemptKey: desiredSponsorshipSyncAttemptKey,
+    needsSync: needsSponsorshipModeSync,
+    state: sponsorshipSyncState,
+  });
 
   useEffect(() => {
     if (!canSyncInAppSponsorship || !isCurrentInAppWallet || !resolvedChainId) {
@@ -379,28 +470,40 @@ export function useFreeTransactionAllowance(options: FreeTransactionAllowanceOpt
       !address ||
       !resolvedChainId ||
       !desiredSponsorshipMode ||
+      !desiredSponsorshipSyncAttemptKey ||
       !activeWallet ||
       !isCurrentInAppWallet
     ) {
       return;
     }
+    const client = thirdwebClient;
 
     const currentMode = getThirdwebWalletSponsorshipMode(activeWallet);
     if (currentMode === desiredSponsorshipMode) {
       sponsorshipSyncAttemptRef.current = null;
+      setSponsorshipSyncState(currentState =>
+        currentState.attemptKey === desiredSponsorshipSyncAttemptKey && currentState.status === "settled"
+          ? currentState
+          : {
+              attemptKey: desiredSponsorshipSyncAttemptKey,
+              error: null,
+              status: "settled",
+            },
+      );
       return;
     }
 
-    const attemptKey = buildSponsorshipSyncAttemptKey({
-      address,
-      chainId: resolvedChainId,
-      sponsorshipMode: desiredSponsorshipMode,
-    });
+    const attemptKey = desiredSponsorshipSyncAttemptKey;
     if (sponsorshipSyncAttemptRef.current === attemptKey) {
       return;
     }
 
     sponsorshipSyncAttemptRef.current = attemptKey;
+    setSponsorshipSyncState({
+      attemptKey,
+      error: null,
+      status: "syncing",
+    });
 
     void (async () => {
       try {
@@ -408,16 +511,41 @@ export function useFreeTransactionAllowance(options: FreeTransactionAllowanceOpt
           sponsorshipMode: desiredSponsorshipMode,
         });
 
-        await replacementWallet.autoConnect({
-          chain: defineChain(resolvedChainId),
-          client: thirdwebClient,
-        });
-        await syncWalletToWagmi(replacementWallet, resolvedChainId, { reconnect: true });
-        await setActiveWallet(replacementWallet);
+        await runSponsorshipSyncWithTimeout(async () => {
+          await replacementWallet.autoConnect({
+            chain: defineChain(resolvedChainId),
+            client,
+          });
+          await syncWalletToWagmi(replacementWallet, resolvedChainId, { reconnect: true });
+          await setActiveWallet(replacementWallet);
+        }, desiredSponsorshipMode);
+
+        if (sponsorshipSyncAttemptRef.current === attemptKey) {
+          sponsorshipSyncAttemptRef.current = null;
+        }
+        setSponsorshipSyncState(currentState =>
+          currentState.attemptKey === attemptKey
+            ? {
+                attemptKey,
+                error: null,
+                status: "settled",
+              }
+            : currentState,
+        );
       } catch (error) {
+        const failedStatus: SponsorshipSyncStatus = isSponsorshipSyncTimeoutError(error) ? "timed_out" : "failed";
         sponsorshipSyncAttemptRef.current = clearSponsorshipSyncAttemptAfterFailure(
           sponsorshipSyncAttemptRef.current,
           attemptKey,
+        );
+        setSponsorshipSyncState(currentState =>
+          currentState.attemptKey === attemptKey
+            ? {
+                attemptKey,
+                error: error instanceof Error ? error.message : "Failed to sync thirdweb sponsorship mode.",
+                status: failedStatus,
+              }
+            : currentState,
         );
         console.error("Failed to sync thirdweb sponsorship mode:", error);
       }
@@ -426,7 +554,9 @@ export function useFreeTransactionAllowance(options: FreeTransactionAllowanceOpt
     activeWallet,
     address,
     canSyncInAppSponsorship,
+    currentSponsorshipMode,
     desiredSponsorshipMode,
+    desiredSponsorshipSyncAttemptKey,
     isCurrentInAppWallet,
     resolvedChainId,
     setActiveWallet,
@@ -442,10 +572,11 @@ export function useFreeTransactionAllowance(options: FreeTransactionAllowanceOpt
       !shouldUseEoaWallet ||
       !activeWallet ||
       !isCurrentInAppWallet ||
-      getThirdwebWalletSponsorshipMode(activeWallet) === null
+      currentSponsorshipMode === null
     ) {
       return;
     }
+    const client = thirdwebClient;
 
     const attemptKey = buildSponsorshipSyncAttemptKey({
       address,
@@ -457,6 +588,11 @@ export function useFreeTransactionAllowance(options: FreeTransactionAllowanceOpt
     }
 
     sponsorshipSyncAttemptRef.current = attemptKey;
+    setSponsorshipSyncState({
+      attemptKey,
+      error: null,
+      status: "syncing",
+    });
 
     void (async () => {
       try {
@@ -464,16 +600,41 @@ export function useFreeTransactionAllowance(options: FreeTransactionAllowanceOpt
           forceEoa: true,
         });
 
-        await replacementWallet.autoConnect({
-          chain: defineChain(resolvedChainId),
-          client: thirdwebClient,
-        });
-        await syncWalletToWagmi(replacementWallet, resolvedChainId, { reconnect: true });
-        await setActiveWallet(replacementWallet);
+        await runSponsorshipSyncWithTimeout(async () => {
+          await replacementWallet.autoConnect({
+            chain: defineChain(resolvedChainId),
+            client,
+          });
+          await syncWalletToWagmi(replacementWallet, resolvedChainId, { reconnect: true });
+          await setActiveWallet(replacementWallet);
+        }, "eoa");
+
+        if (sponsorshipSyncAttemptRef.current === attemptKey) {
+          sponsorshipSyncAttemptRef.current = null;
+        }
+        setSponsorshipSyncState(currentState =>
+          currentState.attemptKey === attemptKey
+            ? {
+                attemptKey,
+                error: null,
+                status: "settled",
+              }
+            : currentState,
+        );
       } catch (error) {
+        const failedStatus: SponsorshipSyncStatus = isSponsorshipSyncTimeoutError(error) ? "timed_out" : "failed";
         sponsorshipSyncAttemptRef.current = clearSponsorshipSyncAttemptAfterFailure(
           sponsorshipSyncAttemptRef.current,
           attemptKey,
+        );
+        setSponsorshipSyncState(currentState =>
+          currentState.attemptKey === attemptKey
+            ? {
+                attemptKey,
+                error: error instanceof Error ? error.message : "Failed to sync thirdweb EOA mode.",
+                status: failedStatus,
+              }
+            : currentState,
         );
         console.error("Failed to sync thirdweb EOA mode:", error);
       }
@@ -482,6 +643,7 @@ export function useFreeTransactionAllowance(options: FreeTransactionAllowanceOpt
     activeWallet,
     address,
     canSyncInAppSponsorship,
+    currentSponsorshipMode,
     isCurrentInAppWallet,
     resolvedChainId,
     setActiveWallet,
@@ -515,5 +677,9 @@ export function useFreeTransactionAllowance(options: FreeTransactionAllowanceOpt
     notification.warning("Free transactions used up. Add ETH to continue.");
   }, [allowance.remaining, allowance.verified, allowance.raterIdentityKey, resolvedChainId]);
 
-  return allowance;
+  return {
+    ...allowance,
+    sponsorshipSyncError: sponsorshipSyncState.error,
+    sponsorshipSyncStatus,
+  };
 }

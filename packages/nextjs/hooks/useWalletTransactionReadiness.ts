@@ -26,6 +26,7 @@ type WalletTransactionReadinessOptions = {
   isMissingGasBalance?: boolean;
   isRestoringWallet?: boolean;
   nativeTokenSymbol?: string;
+  syncInAppSponsorship?: boolean;
   targetChainId?: number | null;
   targetChainName?: string | null;
   unavailableMessage?: string | null;
@@ -43,6 +44,7 @@ export function useWalletTransactionReadiness(options: WalletTransactionReadines
   const gasBalanceStatus = useGasBalanceStatus({
     allowInAppSponsorshipSync: options.allowInAppSponsorshipSync,
     includeExternalSendCalls: options.includeExternalSendCalls ?? true,
+    syncInAppSponsorship: options.syncInAppSponsorship,
   });
 
   return useMemo(

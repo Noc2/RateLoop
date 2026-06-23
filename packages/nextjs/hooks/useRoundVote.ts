@@ -224,14 +224,17 @@ export function useRoundVote() {
     executeContractCallBatch,
     isAwaitingSelfFundedBatchCalls,
     isAwaitingSponsoredBatchCalls,
+    sponsoredWalletSyncStatus,
   } = useThirdwebSponsoredSubmitCalls();
   const { canSponsorTransactions, nativeTokenSymbol } = useGasBalanceStatus({
     includeExternalSendCalls: true,
+    syncInAppSponsorship: false,
   });
   const walletTransactionReadiness = useWalletTransactionReadiness({
     includeExternalSendCalls: true,
     isAwaitingSelfFundedWallet: isAwaitingSelfFundedBatchCalls,
     isAwaitingSponsoredWallet: isAwaitingSponsoredBatchCalls,
+    syncInAppSponsorship: false,
   });
 
   const { data: votingEngineInfo, isLoading: isVotingEngineLoading } = useDeployedContractInfo({
@@ -305,6 +308,7 @@ export function useRoundVote() {
       timingLog.emit("blocked", {
         reason: walletTransactionReadiness.status,
         message,
+        sponsoredWalletSyncStatus,
       });
       setError(message);
       return false;

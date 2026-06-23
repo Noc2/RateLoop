@@ -17,8 +17,10 @@ import { getTransactionReceiptPollingInterval } from "~~/config/shared";
 import { useWalletRestore } from "~~/contexts/WalletRestoreContext";
 import {
   FREE_TRANSACTION_ALLOWANCE_QUERY_KEY,
+  isPendingSponsorshipSyncStatus,
   useFreeTransactionAllowance,
 } from "~~/hooks/useFreeTransactionAllowance";
+import type { SponsorshipSyncStatus } from "~~/hooks/useFreeTransactionAllowance";
 import { refreshActiveWalletReadQueries } from "~~/hooks/useRefreshWalletBalances";
 import { useThirdwebWagmiSync } from "~~/hooks/useThirdwebWagmiSync";
 import { useTransactionStatusToast } from "~~/hooks/useTransactionStatusToast";
@@ -402,6 +404,7 @@ export function shouldAwaitSponsoredSubmitCalls(params: {
   isInspectingSponsoredDelegation: boolean;
   isRestoringWallet?: boolean;
   prefersSponsoredBatchCalls: boolean;
+  sponsorshipSyncStatus?: SponsorshipSyncStatus;
 }) {
   return (
     params.expectsSponsoredBatchCalls &&
@@ -409,7 +412,9 @@ export function shouldAwaitSponsoredSubmitCalls(params: {
     (params.isRestoringWallet ||
       !params.freeTransactionAllowanceResolved ||
       params.isInspectingSponsoredDelegation ||
-      (params.prefersSponsoredBatchCalls && !params.canUseSponsoredSubmitCalls))
+      (params.prefersSponsoredBatchCalls &&
+        !params.canUseSponsoredSubmitCalls &&
+        isPendingSponsorshipSyncStatus(params.sponsorshipSyncStatus)))
   );
 }
 
@@ -582,6 +587,7 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
     isInspectingSponsoredDelegation,
     isRestoringWallet,
     prefersSponsoredBatchCalls,
+    sponsorshipSyncStatus: freeTransactionAllowance.sponsorshipSyncStatus,
   });
   const isAwaitingSelfFundedSubmitCalls = useMemo(
     () =>
@@ -954,5 +960,6 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
     isAwaitingSelfFundedSubmitCalls,
     isAwaitingSponsoredBatchCalls: isAwaitingSponsoredSubmitCalls,
     isAwaitingFreeTransactionAllowance: isEligibleForGaslessSubmitTransactions && !freeTransactionAllowance.isResolved,
+    sponsoredWalletSyncStatus: freeTransactionAllowance.sponsorshipSyncStatus,
   };
 }

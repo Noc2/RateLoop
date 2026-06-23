@@ -3,7 +3,9 @@ import {
   buildFreeTransactionAllowanceSnapshotKey,
   buildSponsorshipSyncAttemptKey,
   clearSponsorshipSyncAttemptAfterFailure,
+  getEffectiveSponsorshipSyncStatus,
   getFreeTransactionAllowanceIdentityAddress,
+  isPendingSponsorshipSyncStatus,
 } from "./useFreeTransactionAllowance";
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -59,6 +61,47 @@ test("clearSponsorshipSyncAttemptAfterFailure preserves newer attempts", () => {
     ),
     "0xabcdef0000000000000000000000000000000000:480:sponsored",
   );
+});
+
+test("getEffectiveSponsorshipSyncStatus marks new sync work as pending", () => {
+  assert.equal(
+    getEffectiveSponsorshipSyncStatus({
+      attemptKey: "0xabcdef0000000000000000000000000000000000:480:sponsored",
+      needsSync: true,
+      state: {
+        attemptKey: null,
+        error: null,
+        status: "idle",
+      },
+    }),
+    "pending",
+  );
+});
+
+test("getEffectiveSponsorshipSyncStatus preserves terminal attempt failures", () => {
+  const attemptKey = "0xabcdef0000000000000000000000000000000000:480:sponsored";
+
+  assert.equal(
+    getEffectiveSponsorshipSyncStatus({
+      attemptKey,
+      needsSync: true,
+      state: {
+        attemptKey,
+        error: "sync failed",
+        status: "failed",
+      },
+    }),
+    "failed",
+  );
+});
+
+test("isPendingSponsorshipSyncStatus only treats active sync states as pending", () => {
+  assert.equal(isPendingSponsorshipSyncStatus("pending"), true);
+  assert.equal(isPendingSponsorshipSyncStatus("syncing"), true);
+  assert.equal(isPendingSponsorshipSyncStatus("failed"), false);
+  assert.equal(isPendingSponsorshipSyncStatus("timed_out"), false);
+  assert.equal(isPendingSponsorshipSyncStatus("settled"), false);
+  assert.equal(isPendingSponsorshipSyncStatus("idle"), false);
 });
 
 test("getFreeTransactionAllowanceIdentityAddress prefers thirdweb admin identity", () => {
