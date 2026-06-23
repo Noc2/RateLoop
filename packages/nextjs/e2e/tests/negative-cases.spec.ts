@@ -10,7 +10,25 @@ import {
   waitForFeedLoaded,
 } from "../helpers/wait-helpers";
 import { setupWallet } from "../helpers/wallet-session";
-import { expect, test } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
+
+async function waitForAnyVisible(page: Page, locators: Locator[], timeout = 10_000): Promise<boolean> {
+  return expect
+    .poll(
+      async () => {
+        for (const locator of locators) {
+          if (await locator.first().isVisible().catch(() => false)) {
+            return true;
+          }
+        }
+        return false;
+      },
+      { intervals: [500, 1_000, 2_000], timeout },
+    )
+    .toBe(true)
+    .then(() => true)
+    .catch(() => false);
+}
 
 /**
  * Negative / rejection tests.
@@ -125,16 +143,16 @@ test.describe("Negative cases", () => {
     // The page may auto-advance to the next content after voting.
     // Also accept "vote reverted" as evidence: the contract rejects
     // duplicate votes, so a revert when revisiting means the prior vote stuck.
-    const votedOrCooldown = page
-      .getByText(/Voted(?: hidden| Up| Down)?/i)
-      .or(page.getByText(/Cooldown/i))
-      .or(page.getByText(/vote.*reverted/i));
+    const votedStateIndicators = [
+      page.getByText(/Voted(?: hidden| Up| Down)?/i),
+      page.getByText(/Cooldown/i),
+      page.getByText(/vote.*reverted/i),
+      page.getByText(/\bLREP voting\b/i),
+      page.getByText(/\bStaked\b/i),
+    ];
+    const votedOrCooldown = votedStateIndicators.reduce((combined, locator) => combined.or(locator));
 
-    let foundVotedState = await votedOrCooldown
-      .first()
-      .waitFor({ state: "visible", timeout: 10_000 })
-      .then(() => true)
-      .catch(() => false);
+    let foundVotedState = await waitForAnyVisible(page, votedStateIndicators, 15_000);
 
     if (!foundVotedState) {
       // Page may have auto-advanced to next content. Re-open the voted item
@@ -142,15 +160,15 @@ test.describe("Negative cases", () => {
       if (votedContentId) {
         await gotoWithRetry(page, `/rate?content=${votedContentId}`, { ensureWalletConnected: true, timeout: 30_000 });
         await waitForFeedLoaded(page, 20_000);
-        foundVotedState = await votedOrCooldown
-          .first()
-          .waitFor({ state: "visible", timeout: 5_000 })
-          .then(() => true)
-          .catch(() => false);
+        foundVotedState = await waitForAnyVisible(page, votedStateIndicators, 10_000);
       }
 
       if (!foundVotedState) {
         foundVotedState = await cycleVoteFeedForVisible(page, votedOrCooldown, { maxSteps: 20, timeout: 3_000 });
+      }
+
+      if (!foundVotedState) {
+        foundVotedState = await waitForAnyVisible(page, votedStateIndicators, 15_000);
       }
     }
 

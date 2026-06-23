@@ -24,10 +24,13 @@ test.describe("Funding modals", () => {
 
       const addBountyButton = page.getByRole("button", { name: "Add bounty" }).first();
       await expect(addBountyButton).toBeVisible({ timeout: 15_000 });
-      await addBountyButton.click();
-
       const bountyDialog = page.getByRole("dialog", { name: "Fund a bounty" });
-      await expect(bountyDialog).toBeVisible({ timeout: 10_000 });
+      await expect(async () => {
+        if (!(await bountyDialog.isVisible().catch(() => false))) {
+          await addBountyButton.click({ timeout: 5_000 });
+        }
+        await expect(bountyDialog).toBeVisible({ timeout: 5_000 });
+      }).toPass({ timeout: 30_000, intervals: [500, 1_000, 2_000] });
       await expect(bountyDialog.getByRole("heading", { name: target!.title })).toBeVisible();
       await expect(bountyDialog.getByLabel("Bounty amount")).toHaveValue("10");
       await expect(bountyDialog.getByRole("spinbutton", { name: "Required voters" })).not.toHaveValue("");
@@ -40,10 +43,13 @@ test.describe("Funding modals", () => {
       const addFeedbackBonusButton = page.getByRole("button", { name: "Add feedback bonus" }).first();
       await expect(addFeedbackBonusButton).toBeVisible({ timeout: 15_000 });
       await expect(addFeedbackBonusButton).toBeEnabled({ timeout: 30_000 });
-      await addFeedbackBonusButton.click();
-
       const feedbackDialog = page.getByRole("dialog", { name: "Fund a Feedback Bonus" });
-      await expect(feedbackDialog).toBeVisible({ timeout: 10_000 });
+      await expect(async () => {
+        if (!(await feedbackDialog.isVisible().catch(() => false))) {
+          await addFeedbackBonusButton.click({ timeout: 5_000 });
+        }
+        await expect(feedbackDialog).toBeVisible({ timeout: 5_000 });
+      }).toPass({ timeout: 30_000, intervals: [500, 1_000, 2_000] });
       await expect(feedbackDialog.getByRole("heading", { name: target!.title })).toBeVisible();
       await expect(feedbackDialog.getByRole("button", { name: "USDC", exact: true })).toHaveAttribute(
         "aria-pressed",

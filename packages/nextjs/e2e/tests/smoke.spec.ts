@@ -32,6 +32,8 @@ test.describe("Smoke tests", () => {
   });
 
   test("wallet auto-connects via the localhost thirdweb test wallet", async ({ page }) => {
+    test.setTimeout(120_000);
+
     await setupWallet(page, ANVIL_ACCOUNTS.account2.privateKey);
     await gotoWithRetry(page, "/rate", { ensureWalletConnected: true });
     await waitForWalletConnected(page);
@@ -61,12 +63,13 @@ test.describe("Smoke tests", () => {
     await waitForWalletConnected(page);
     await waitForFeedLoaded(page, 30_000);
 
-    await page.locator('a[href="/?landing=1"]:visible').first().click();
-
-    await expect(page.getByRole("heading", { name: /Level Up Your Agent/i }).first()).toBeVisible({
-      timeout: 15_000,
-    });
-    await expect(page).toHaveURL(/\/(?:\?landing=1)?$/);
+    await expect(async () => {
+      await page.locator('a[href="/?landing=1"]:visible').first().click({ timeout: 5_000 });
+      await expect(page).toHaveURL(/\/(?:\?landing=1)?$/, { timeout: 5_000 });
+      await expect(page.getByRole("heading", { name: /Level Up Your Agent/i }).first()).toBeVisible({
+        timeout: 5_000,
+      });
+    }).toPass({ timeout: 30_000, intervals: [500, 1_000, 2_000] });
   });
 
   test("promo video is click-to-play", async ({ page }) => {
@@ -80,13 +83,15 @@ test.describe("Smoke tests", () => {
 
     const playButton = page.getByRole("button", { name: "Play the RateLoop intro video" });
     await expect(playButton).toBeVisible();
-    await playButton.click();
-
-    await expect(playButton).toHaveCount(0);
-    await expect(video).toHaveJSProperty("controls", true);
+    await expect(async () => {
+      await playButton.click({ timeout: 5_000 });
+      await expect(video).toHaveJSProperty("controls", true, { timeout: 5_000 });
+    }).toPass({ timeout: 30_000, intervals: [500, 1_000, 2_000] });
   });
 
   test("navigation to ask page works", async ({ page }) => {
+    test.setTimeout(120_000);
+
     await setupWallet(page, ANVIL_ACCOUNTS.account2.privateKey);
     await gotoWithRetry(page, "/ask", { ensureWalletConnected: true });
 

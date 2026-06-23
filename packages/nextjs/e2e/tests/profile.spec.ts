@@ -106,10 +106,13 @@ test.describe("Profile management", () => {
 
     const editProfileButton = page.getByRole("button", { name: "Edit profile", exact: true });
     await waitForVisibleWithReload(page, () => editProfileButton, { timeout: 15_000 });
-    await editProfileButton.click();
 
     const updatedName = `e2e_upd_${Date.now().toString(36).slice(-5)}`;
     const nameInput = page.getByLabel("Profile name");
+    await expect(async () => {
+      await editProfileButton.click({ timeout: 5_000 });
+      await expect(nameInput).toBeVisible({ timeout: 5_000 });
+    }).toPass({ timeout: 30_000, intervals: [500, 1_000, 2_000] });
     await expect(nameInput).toBeVisible({ timeout: 5_000 });
     await nameInput.clear();
     await nameInput.fill(updatedName);

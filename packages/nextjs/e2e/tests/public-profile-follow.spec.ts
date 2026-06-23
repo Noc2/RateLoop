@@ -9,12 +9,15 @@ test.describe("Public profile follow button", () => {
     await expect(button).toBeVisible({ timeout: 15_000 });
 
     const before = (await button.textContent())?.toLowerCase() ?? "";
-    await button.click();
+    const expectedName = before.includes("following") ? /^Follow$/i : /^Following$/i;
 
-    if (before.includes("following")) {
-      await expect(page.getByRole("button", { name: /^Follow$/i }).first()).toBeVisible({ timeout: 20_000 });
-    } else {
-      await expect(page.getByRole("button", { name: /^Following$/i }).first()).toBeVisible({ timeout: 20_000 });
-    }
+    await expect(async () => {
+      const toggle = page.getByRole("button", { name: /^(Follow|Following)$/i }).first();
+      await expect(toggle).toBeVisible({ timeout: 5_000 });
+      if (!(await page.getByRole("button", { name: expectedName }).first().isVisible().catch(() => false))) {
+        await toggle.click({ timeout: 5_000 });
+      }
+      await expect(page.getByRole("button", { name: expectedName }).first()).toBeVisible({ timeout: 10_000 });
+    }).toPass({ timeout: 60_000, intervals: [1_000, 2_000, 5_000] });
   });
 });

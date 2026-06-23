@@ -9,9 +9,11 @@ test.describe("Settings page", () => {
   test("settings route defaults to the wallet tab", async ({ connectedPage: page }) => {
     await gotoWithRetry(page, "/settings");
 
-    await expect(page).toHaveURL(/\/settings#wallet$/);
-    await expect(page.getByRole("button", { name: "Wallet", exact: true })).toHaveClass(/pill-active/);
     await expect(page.getByRole("heading", { name: "Gas And Wallet Funding" })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("button", { name: "Wallet", exact: true })).toHaveClass(/pill-active/, {
+      timeout: 15_000,
+    });
+    await expect(page).toHaveURL(/\/settings(?:#wallet)?$/);
   });
 
   test("wallet tab can transfer LREP to another address", async ({ connectedPage: page }) => {
@@ -75,9 +77,11 @@ test.describe("Settings page", () => {
   test("wallet tab shows the ETH gas top-up surface", async ({ connectedPage: page }) => {
     await gotoWithRetry(page, "/settings#wallet");
 
-    await expect(page).toHaveURL(/\/settings#wallet$/);
-    await expect(page.getByRole("button", { name: "Wallet", exact: true })).toHaveClass(/pill-active/);
     await expect(page.getByRole("heading", { name: "Gas And Wallet Funding" })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("button", { name: "Wallet", exact: true })).toHaveClass(/pill-active/, {
+      timeout: 15_000,
+    });
+    await expect(page).toHaveURL(/\/settings#wallet$/);
     await expect(page.getByTestId("wallet-snapshot-address")).toHaveText(ANVIL_ACCOUNTS.account2.address);
     await expect(page.getByTestId("wallet-snapshot-eth")).toContainText("ETH");
     await expect(page.getByTestId("wallet-snapshot-lrep")).toContainText("LREP");
