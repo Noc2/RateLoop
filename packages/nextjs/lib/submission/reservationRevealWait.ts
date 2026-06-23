@@ -54,6 +54,5 @@ export async function waitForReservationRevealReady(params: {
     }
 
     await sleepFn(revealWaitMs);
-    return;
   }
 }

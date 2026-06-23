@@ -22,14 +22,17 @@ test("waitForReservationRevealReady returns immediately when latest block is old
   assert.deepEqual(calls, [{ blockNumber: 7n }, { blockTag: "latest" }]);
 });
 
-test("waitForReservationRevealReady waits wall-clock time when automine has not advanced the latest block", async () => {
+test("waitForReservationRevealReady rechecks latest block time after waiting", async () => {
   const sleeps: number[] = [];
+  const calls: unknown[] = [];
+  const latestTimestamps = [10n, 11n];
 
   await waitForReservationRevealReady({
     client: {
       getBlock: async params => {
+        calls.push(params);
         if ("blockNumber" in params) return { timestamp: 10n };
-        return { timestamp: 10n };
+        return { timestamp: latestTimestamps.shift() ?? 11n };
       },
     },
     pollingIntervalMs: 200,
@@ -40,6 +43,11 @@ test("waitForReservationRevealReady waits wall-clock time when automine has not 
   });
 
   assert.deepEqual(sleeps, [1_000 + RESERVATION_REVEAL_WALL_CLOCK_BUFFER_MS]);
+  assert.deepEqual(calls, [
+    { blockNumber: 7n },
+    { blockTag: "latest" },
+    { blockTag: "latest" },
+  ]);
 });
 
 test("waitForReservationRevealReady uses a one-second fallback without a receipt block", async () => {
