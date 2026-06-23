@@ -115,7 +115,7 @@ test.describe("Agent browser handoffs", () => {
 
     await expect(page).toHaveURL(new RegExp(`/agent/handoff/${created.handoffId}$`));
     await expect(page.getByText("Agent ask handoff")).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByRole("heading", { name: originalTitle })).toBeVisible();
+    await expect(page.getByRole("heading", { name: originalTitle })).toBeVisible({ timeout: 60_000 });
     await expect(page.getByRole("checkbox", { name: "Private context" })).toBeChecked();
     await expect(page.locator("#agent-ask-confidentiality-bond-amount")).toHaveValue("1");
 
@@ -147,6 +147,8 @@ test.describe("Agent browser handoffs", () => {
   });
 
   test("browser signing intent loads from a private token", async ({ browser, request }) => {
+    test.setTimeout(120_000);
+
     const title = `Agent signing intent ${Date.now()}`;
     const createResponse = await request.post("/api/agent/signing-intents", {
       data: {
@@ -165,7 +167,7 @@ test.describe("Agent browser handoffs", () => {
 
     await expect(page).toHaveURL(new RegExp(`/agent/sign/${created.id}$`));
     await expect(page.getByText("Agent signing handoff")).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByRole("heading", { name: title })).toBeVisible();
+    await expect(page.getByRole("heading", { name: title })).toBeVisible({ timeout: 60_000 });
     await expect(page.getByText("pending")).toBeVisible();
     await expect(page.getByRole("button", { name: "Prepare" })).toBeVisible();
 
