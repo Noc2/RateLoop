@@ -3,10 +3,9 @@
 import { useCallback, useState } from "react";
 import type { Abi } from "viem";
 import { useDeployedContractInfo, useScaffoldReadContract, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
-import { useGasBalanceStatus } from "~~/hooks/useGasBalanceStatus";
 import { useThirdwebSponsoredSubmitCalls } from "~~/hooks/useThirdwebSponsoredSubmitCalls";
+import { useWalletTransactionReadiness } from "~~/hooks/useWalletTransactionReadiness";
 import { avatarAccentRgbToHex } from "~~/lib/avatar/avatarAccent";
-import { getGasBalanceErrorMessage } from "~~/lib/transactionErrors";
 
 interface Profile {
   name: string;
@@ -28,16 +27,18 @@ function useProfileRegistryWrite() {
   const { writeContractAsync, isPending } = useScaffoldWriteContract({
     contractName: "ProfileRegistry" as any,
   });
-  const { canUseSponsoredSubmitCalls, executeSponsoredCalls } = useThirdwebSponsoredSubmitCalls();
-  const { canSponsorTransactions, isMissingGasBalance, nativeTokenSymbol } = useGasBalanceStatus({
+  const { canUseSponsoredSubmitCalls, executeSponsoredCalls, isAwaitingSponsoredSubmitCalls } =
+    useThirdwebSponsoredSubmitCalls();
+  const walletTransactionReadiness = useWalletTransactionReadiness({
     includeExternalSendCalls: true,
+    isAwaitingSponsoredWallet: isAwaitingSponsoredSubmitCalls,
   });
   const [isSponsoredWritePending, setIsSponsoredWritePending] = useState(false);
 
   const writeProfileRegistry = useCallback(
     async (functionName: string, args: readonly unknown[], action: string) => {
-      if (isMissingGasBalance) {
-        throw new Error(getGasBalanceErrorMessage(nativeTokenSymbol, { canSponsorTransactions }));
+      if (walletTransactionReadiness.isBlocked) {
+        throw new Error(walletTransactionReadiness.message ?? "Wallet is unavailable.");
       }
 
       if (canUseSponsoredSubmitCalls && profileRegistryContract) {
@@ -69,12 +70,11 @@ function useProfileRegistryWrite() {
       );
     },
     [
-      canSponsorTransactions,
       canUseSponsoredSubmitCalls,
       executeSponsoredCalls,
-      isMissingGasBalance,
-      nativeTokenSymbol,
       profileRegistryContract,
+      walletTransactionReadiness.isBlocked,
+      walletTransactionReadiness.message,
       writeContractAsync,
     ],
   );

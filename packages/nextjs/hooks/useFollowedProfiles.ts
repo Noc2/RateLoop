@@ -8,6 +8,7 @@ import { useDeployedContractInfo, useScaffoldWriteContract } from "~~/hooks/scaf
 import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import type { SignedCollectionReadAccessResult, SignedCollectionToggleResult } from "~~/hooks/useSignedCollection";
 import { useThirdwebSponsoredSubmitCalls } from "~~/hooks/useThirdwebSponsoredSubmitCalls";
+import { useWalletTransactionReadiness } from "~~/hooks/useWalletTransactionReadiness";
 import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 import {
   type PonderFollowResponse,
@@ -84,8 +85,19 @@ export function useFollowedProfiles(address?: string, options?: UseFollowedProfi
   const { data: raterRegistryContract } = useDeployedContractInfo({
     contractName: "RaterRegistry",
   } as any);
-  const { canUseSelfFundedBatchCalls, canUseSponsoredSubmitCalls, executeContractCallBatch } =
-    useThirdwebSponsoredSubmitCalls();
+  const {
+    canUseSelfFundedBatchCalls,
+    canUseSponsoredSubmitCalls,
+    executeContractCallBatch,
+    isAwaitingSelfFundedBatchCalls,
+    isAwaitingSponsoredSubmitCalls,
+  } = useThirdwebSponsoredSubmitCalls();
+  const walletTransactionReadiness = useWalletTransactionReadiness({
+    address,
+    includeExternalSendCalls: true,
+    isAwaitingSelfFundedWallet: isAwaitingSelfFundedBatchCalls,
+    isAwaitingSponsoredWallet: isAwaitingSponsoredSubmitCalls,
+  });
   const queryKey = useMemo(
     () => ["followedProfiles", normalizedAddress ?? "anonymous", targetNetwork.id, deploymentKey] as const,
     [deploymentKey, normalizedAddress, targetNetwork.id],
@@ -214,6 +226,13 @@ export function useFollowedProfiles(address?: string, options?: UseFollowedProfi
       if (normalizedTargetAddress === normalizedAddress) {
         return { ok: false, reason: "self_follow" };
       }
+      if (walletTransactionReadiness.isBlocked) {
+        return {
+          ok: false,
+          reason: walletTransactionReadiness.status === "disconnected" ? "not_connected" : "request_failed",
+          error: walletTransactionReadiness.message ?? "Wallet is unavailable.",
+        };
+      }
       if (pendingWallets.has(normalizedTargetAddress)) {
         return {
           ok: true,
@@ -312,6 +331,9 @@ export function useFollowedProfiles(address?: string, options?: UseFollowedProfi
       pendingWallets,
       raterRegistryContract,
       refreshFollowState,
+      walletTransactionReadiness.isBlocked,
+      walletTransactionReadiness.message,
+      walletTransactionReadiness.status,
       writeContractAsync,
     ],
   );

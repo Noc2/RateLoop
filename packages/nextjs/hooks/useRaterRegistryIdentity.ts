@@ -10,9 +10,8 @@ import {
 import type { Abi } from "viem";
 import { zeroAddress, zeroHash } from "viem";
 import { useDeployedContractInfo, useScaffoldReadContract, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
-import { useGasBalanceStatus } from "~~/hooks/useGasBalanceStatus";
 import { useThirdwebSponsoredSubmitCalls } from "~~/hooks/useThirdwebSponsoredSubmitCalls";
-import { getGasBalanceErrorMessage } from "~~/lib/transactionErrors";
+import { useWalletTransactionReadiness } from "~~/hooks/useWalletTransactionReadiness";
 
 interface RaterRegistryProfile {
   raterType: RaterTypeValue;
@@ -184,16 +183,18 @@ export function useSetRaterProfile() {
   const { writeContractAsync, isPending } = useScaffoldWriteContract({
     contractName: "RaterRegistry",
   });
-  const { canUseSponsoredSubmitCalls, executeSponsoredCalls } = useThirdwebSponsoredSubmitCalls();
-  const { canSponsorTransactions, isMissingGasBalance, nativeTokenSymbol } = useGasBalanceStatus({
+  const { canUseSponsoredSubmitCalls, executeSponsoredCalls, isAwaitingSponsoredSubmitCalls } =
+    useThirdwebSponsoredSubmitCalls();
+  const walletTransactionReadiness = useWalletTransactionReadiness({
     includeExternalSendCalls: true,
+    isAwaitingSponsoredWallet: isAwaitingSponsoredSubmitCalls,
   });
   const [isSponsoredWritePending, setIsSponsoredWritePending] = useState(false);
 
   const setRaterProfile = useCallback(
     async (raterType: RaterTypeValue, metadataHash: `0x${string}` = zeroHash) => {
-      if (isMissingGasBalance) {
-        throw new Error(getGasBalanceErrorMessage(nativeTokenSymbol, { canSponsorTransactions }));
+      if (walletTransactionReadiness.isBlocked) {
+        throw new Error(walletTransactionReadiness.message ?? "Wallet is unavailable.");
       }
 
       const args = [raterType, metadataHash] as const;
@@ -226,12 +227,11 @@ export function useSetRaterProfile() {
       );
     },
     [
-      canSponsorTransactions,
       canUseSponsoredSubmitCalls,
       executeSponsoredCalls,
-      isMissingGasBalance,
-      nativeTokenSymbol,
       raterRegistryContract,
+      walletTransactionReadiness.isBlocked,
+      walletTransactionReadiness.message,
       writeContractAsync,
     ],
   );
