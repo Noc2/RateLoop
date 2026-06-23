@@ -3,6 +3,7 @@ import { ANVIL_ACCOUNTS } from "../helpers/anvil-accounts";
 import { newE2EContext } from "../helpers/browser-context";
 import { CONTRACT_ADDRESSES } from "../helpers/contracts";
 import {
+  FEED_EMPTY_STATE_RE,
   VOTE_UP_BUTTON_NAME,
   cycleVoteFeedForVisible,
   findVoteableContent,
@@ -17,8 +18,12 @@ async function waitForAnyVisible(page: Page, locators: Locator[], timeout = 10_0
     .poll(
       async () => {
         for (const locator of locators) {
-          if (await locator.first().isVisible().catch(() => false)) {
-            return true;
+          const matchCount = await locator.count().catch(() => 0);
+          const visibleChecks = Math.max(matchCount, 1);
+          for (let index = 0; index < Math.min(visibleChecks, 10); index += 1) {
+            if (await locator.nth(index).isVisible().catch(() => false)) {
+              return true;
+            }
           }
         }
         return false;
@@ -28,6 +33,29 @@ async function waitForAnyVisible(page: Page, locators: Locator[], timeout = 10_0
     .toBe(true)
     .then(() => true)
     .catch(() => false);
+}
+
+async function findVoteableContentWithEmptyFeedRecovery(page: Page): Promise<boolean> {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await waitForFeedLoaded(page, 20_000);
+
+    if (await findVoteableContent(page)) {
+      return true;
+    }
+
+    const emptyFeedVisible = await page
+      .getByText(FEED_EMPTY_STATE_RE)
+      .first()
+      .isVisible()
+      .catch(() => false);
+    if (!emptyFeedVisible || attempt === 2) {
+      return false;
+    }
+
+    await gotoWithRetry(page, "/rate", { ensureWalletConnected: true, timeout: 30_000 });
+  }
+
+  return false;
 }
 
 /**
@@ -83,10 +111,9 @@ test.describe("Negative cases", () => {
     await setupWallet(page, ANVIL_ACCOUNTS.account6.privateKey);
 
     await gotoWithRetry(page, "/rate", { ensureWalletConnected: true, timeout: 30_000 });
-    await waitForFeedLoaded(page, 20_000);
 
     const voteUp = page.getByRole("button", { name: VOTE_UP_BUTTON_NAME }).first();
-    const canVote = await findVoteableContent(page);
+    const canVote = await findVoteableContentWithEmptyFeedRecovery(page);
 
     expect(canVote, "account #6 should have seeded voteable content in the default E2E suite").toBe(true);
     await expect(voteUp).toBeVisible({ timeout: 10_000 });
