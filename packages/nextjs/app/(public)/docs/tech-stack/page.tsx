@@ -258,9 +258,10 @@ const TechStackPage: NextPage = () => {
 
       <h2 id="correlation-epoch-snapshots">Correlation Epoch Snapshots</h2>
       <p>
-        RateLoop uses challengeable correlation snapshots for payout accounting. The public rating result settles first;
-        then USDC bounty claims and earned launch LREP credits wait for a finalized Merkle root of per-rater effective
-        weights. This delays payout finality, not the result itself.
+        RateLoop uses challengeable correlation snapshots for payout accounting and public-rating effective weights.
+        Settlement records pending raw rating evidence first; then the visible rating, USDC bounty claims, and earned
+        launch LREP credits wait for the matching finalized Merkle roots. This delays both payout finality and visible
+        rating movement until the relevant snapshot has cleared its challenge window.
       </p>
       <p>
         Effective correlation weight is the payout weight left after applying an independence multiplier to the

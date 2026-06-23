@@ -478,9 +478,10 @@ const SmartContracts: NextPage = () => {
           <code>settleRound(contentId, roundId)</code> &mdash; Settle the current round once at least{" "}
           <code>max(minVoters, 3)</code> votes from the round snapshot are revealed and all past-epoch votes have been
           revealed (or their {protocolDocFacts.revealGracePeriodLabel} reveal grace period has expired). Determines
-          winners based on epoch-weighted stakes, scores rating rewards from the signal and crowd forecast, and updates
-          content rating from bounded binary signal evidence. Bounty and launch-LREP correlation caps apply later in the
-          claim path, not to this public rating result.
+          winners based on epoch-weighted stakes, scores rating rewards from the signal and crowd forecast, and records
+          pending public-rating evidence from bounded binary signal evidence. The visible rating moves after the
+          finalized public-rating snapshot and veto window; bounty, launch-LREP, and public-rating correlation caps use
+          the ClusterPayoutOracle domains for their respective paths.
         </li>
         <li>
           <code>RoundRewardDistributor.claimFrontendFee(contentId, roundId, frontend)</code> &mdash; Frontend operators
@@ -495,8 +496,9 @@ const SmartContracts: NextPage = () => {
           with 1,000 LREP, either directly or through assigned keeper wallets, then finalized after the challenge
           window. Bad roots can be challenged with the configured USDC ERC20 bond, which defaults to 5 USDC (5_000_000
           atomic units). New bounties default to a 3% frontend-operator share, attributed from the vote commit;
-          unpayable frontend shares remain with the voter claim. Bounty eligibility and correlation caps only gate this
-          payout path, not who can answer, reveal, or affect the result.
+          unpayable frontend shares remain with the voter claim. Bounty eligibility and correlation caps gate this
+          payout path, while a separate public-rating oracle domain controls visible rating movement from pending
+          settlement evidence.
         </li>
         <li>
           <code>QuestionRewardPoolEscrow.claimQuestionBundleReward(bundleId, roundSetIndex)</code> &mdash; Claim a

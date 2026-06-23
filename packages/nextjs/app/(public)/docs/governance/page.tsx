@@ -112,10 +112,10 @@ const GovernanceDocs: NextPage = () => {
 
       <h2>Cluster Payout Oracle</h2>
       <p>
-        The ClusterPayoutOracle is a governance-managed target for payout accounting. It does not decide the public
-        rating result. Instead, it stores challengeable correlation epoch roots and per-round payout roots that USDC
-        bounty claims and launch LREP credits use after a round has already settled. Public rating settlement happens
-        first; this flow only finalizes payout weights for claim paths.
+        The ClusterPayoutOracle is a governance-managed target for payout and public-rating correlation accounting. It
+        stores challengeable correlation epoch roots and per-round roots for USDC bounty claims, launch LREP credits,
+        and public-rating effective weights. Settlement records pending raw rating evidence first; the visible rating
+        moves after the matching public-rating snapshot finalizes and the veto window elapses.
       </p>
       <p>
         Payout roots are proposed by registered frontend operators that have bonded{" "}

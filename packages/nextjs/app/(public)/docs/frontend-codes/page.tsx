@@ -172,8 +172,8 @@ RoundVotingEngine.commitVote(
         <li>
           <strong>Settling rounds:</strong> Once at least 3 votes are revealed and all past-epoch votes have been
           revealed (or the 60-minute reveal grace period has expired), the service calls{" "}
-          <code>settleRound(contentId, roundId)</code> to finalize the round, update the content rating, and open
-          rewards for claiming.
+          <code>settleRound(contentId, roundId)</code> to finalize the round, record pending public-rating evidence, and
+          prepare rewards for claiming after the matching oracle roots finalize.
         </li>
         <li>
           <strong>Publishing payout snapshots:</strong> After settlement, the service can recompute correlation epoch
