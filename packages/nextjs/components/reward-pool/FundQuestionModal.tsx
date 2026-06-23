@@ -38,6 +38,7 @@ import {
   parseUsdRewardPoolAmount,
 } from "~~/lib/questionRewardPools";
 import { requiredQuestionRewardVotersForAmount } from "~~/lib/questionRoundConfig";
+import { isUserRejectedTransactionError } from "~~/lib/transactionErrors";
 import {
   buildUsdcReceiveWithAuthorizationTypedData,
   getDefaultSignatureDeadline,
@@ -45,6 +46,7 @@ import {
 } from "~~/lib/walletSignatures";
 import scaffoldConfig from "~~/scaffold.config";
 import { getTargetNetworks, notification } from "~~/utils/scaffold-eth";
+import { isSignatureRejected } from "~~/utils/signatureErrors";
 
 type FundQuestionModalProps = {
   contentChainId?: number | null;
@@ -350,6 +352,10 @@ export function FundQuestionModal({
         return;
       } catch (authorizationError) {
         if (authorizationHash) throw authorizationError;
+        if (isSignatureRejected(authorizationError) || isUserRejectedTransactionError(authorizationError)) {
+          notification.info("USDC authorization rejected in your wallet.", { duration: 6000 });
+          return;
+        }
         console.warn("USDC authorization unavailable; falling back to approve + fund.", authorizationError);
       }
 
@@ -396,6 +402,7 @@ export function FundQuestionModal({
           ],
           {
             action: "Fund Bounty",
+            atomicRequired: true,
             sponsorshipMode: canUseSponsoredBatchCalls ? "sponsored" : "self-funded",
           },
         );
