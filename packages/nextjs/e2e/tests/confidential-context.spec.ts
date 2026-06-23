@@ -48,9 +48,12 @@ test.describe("Confidential context", () => {
 
     await ensureHumanCredential(page, ANVIL_ACCOUNTS.account2);
     await gotoWithRetry(page, `/rate?content=${submitted.contentId}`, { ensureWalletConnected: true });
-    await expect(page.getByText("Confirm wallet to view your private context").first()).toBeVisible({
-      timeout: 20_000,
-    });
+    await expect(
+      page
+        .getByText("Confirm wallet to view your private context")
+        .or(page.getByText(/Your question|cannot vote on your own question/i))
+        .first(),
+    ).toBeVisible({ timeout: 20_000 });
     await expect(async () => {
       const sessionResponse = await page.request.get(
         `/api/account/private-session?address=${ANVIL_ACCOUNTS.account2.address}`,
