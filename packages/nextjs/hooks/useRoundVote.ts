@@ -144,7 +144,7 @@ function createRoundVoteTimingLog(params: {
 
   emit("start");
 
-  return { emit };
+  return { emit, runId };
 }
 
 function buildLocalE2EArmoredTlockCiphertext(targetRound: bigint | number, drandChainHash: string): string {
@@ -636,6 +636,7 @@ export function useRoundVote() {
           wagmiTokenWrite.reset();
           return writeTx(request as any, {
             action,
+            parentRunId: timingLog.runId,
             suppressSuccessToast: true,
           });
         }
@@ -666,6 +667,7 @@ export function useRoundVote() {
               : wagmiTokenWrite.writeContractAsync(request),
           {
             action,
+            parentRunId: timingLog.runId,
             suppressSuccessToast: true,
           },
         );
@@ -698,6 +700,7 @@ export function useRoundVote() {
           await executeContractCallBatch([openRoundCall], {
             action: "open round",
             atomicRequired: true,
+            parentRunId: timingLog.runId,
             sponsorshipMode: "sponsored",
           });
           timingLog.emit("open-round-submit-complete", { transport: "sponsored-batch" });
@@ -707,6 +710,7 @@ export function useRoundVote() {
           await executeContractCallBatch([openRoundCall], {
             action: "open round",
             atomicRequired: true,
+            parentRunId: timingLog.runId,
             sponsorshipMode: "self-funded",
           });
           timingLog.emit("open-round-submit-complete", { transport: "self-funded-batch" });
@@ -790,6 +794,7 @@ export function useRoundVote() {
         await executeContractCallBatch(freshVote.plan.calls, {
           action: "vote",
           atomicRequired: true,
+          parentRunId: timingLog.runId,
           sponsorshipMode: "sponsored",
         });
         timingLog.emit("vote-batch-submit-complete", { sponsorshipMode: "sponsored" });
@@ -800,6 +805,7 @@ export function useRoundVote() {
         await executeContractCallBatch(freshVote.plan.calls, {
           action: "vote",
           atomicRequired: true,
+          parentRunId: timingLog.runId,
           sponsorshipMode: "self-funded",
         });
         timingLog.emit("vote-batch-submit-complete", { sponsorshipMode: "self-funded" });

@@ -178,6 +178,7 @@ export const useTransactor = (_walletClient?: WalletClient): TransactionFunc => 
         action,
         chainId,
         consoleLabel: "wallet-transaction-timing",
+        parentRunId: options?.parentRunId,
         route: typeof tx === "function" ? "prepared-wallet-call" : "send-transaction",
         source: "wallet-transaction",
       });

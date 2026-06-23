@@ -50,6 +50,9 @@ export function pickTransactorOptions(options?: ScaffoldWriteContractOptions): T
   if (options.blockConfirmations !== undefined) {
     transactorOptions.blockConfirmations = options.blockConfirmations;
   }
+  if (options.parentRunId !== undefined) {
+    transactorOptions.parentRunId = options.parentRunId;
+  }
   if (options.onBlockConfirmation !== undefined) {
     transactorOptions.onBlockConfirmation = options.onBlockConfirmation;
   }
@@ -202,6 +205,7 @@ export function useScaffoldWriteContract<TContractName extends ContractName>(
       if (mutateOptions) {
         delete mutateOptions.action;
         delete mutateOptions.blockConfirmations;
+        delete mutateOptions.parentRunId;
         delete mutateOptions.onBlockConfirmation;
         delete mutateOptions.getErrorMessage;
         delete mutateOptions.suppressErrorToast;

@@ -202,6 +202,7 @@ type WriteVariables = WriteContractVariables<Abi, string, any[], Config, number>
 export type TransactorFuncOptions = {
   onBlockConfirmation?: (txnReceipt: TransactionReceipt) => void;
   blockConfirmations?: number;
+  parentRunId?: string;
   getErrorMessage?: (error: unknown, defaultMessage: string) => string | undefined;
   suppressErrorToast?: boolean;
   suppressStatusToast?: boolean;
