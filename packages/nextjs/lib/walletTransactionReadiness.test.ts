@@ -5,6 +5,7 @@ import {
   WALLET_TRANSACTION_SELF_FUNDED_MESSAGE,
   getWalletTransactionReadiness,
   isPendingWalletTransactionReadiness,
+  isWalletTransactionReadinessMessage,
 } from "./walletTransactionReadiness";
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -125,4 +126,13 @@ test("isPendingWalletTransactionReadiness identifies transient statuses", () => 
   assert.equal(isPendingWalletTransactionReadiness("switching_gas_mode"), true);
   assert.equal(isPendingWalletTransactionReadiness("missing_gas"), false);
   assert.equal(isPendingWalletTransactionReadiness("ready"), false);
+});
+
+test("isWalletTransactionReadinessMessage identifies transient wallet readiness copy", () => {
+  assert.equal(isWalletTransactionReadinessMessage(WALLET_TRANSACTION_RESTORING_MESSAGE), true);
+  assert.equal(isWalletTransactionReadinessMessage(WALLET_TRANSACTION_PREPARING_MESSAGE), true);
+  assert.equal(isWalletTransactionReadinessMessage(WALLET_TRANSACTION_GAS_MODE_MESSAGE), true);
+  assert.equal(isWalletTransactionReadinessMessage(WALLET_TRANSACTION_SELF_FUNDED_MESSAGE), true);
+  assert.equal(isWalletTransactionReadinessMessage("Please connect your wallet"), false);
+  assert.equal(isWalletTransactionReadinessMessage(null), false);
 });

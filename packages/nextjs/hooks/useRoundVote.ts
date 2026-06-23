@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AdvisoryVoteRecorderAbi,
   ContentRegistryAbi,
@@ -60,6 +60,7 @@ import {
   buildRoundVoteTransactionPlan,
 } from "~~/lib/vote/roundVoteTransactionPlan";
 import { buildLrepPermitTypedData, getDefaultSignatureDeadline, getSignatureParts } from "~~/lib/walletSignatures";
+import { isWalletTransactionReadinessMessage } from "~~/lib/walletTransactionReadiness";
 import scaffoldConfig from "~~/scaffold.config";
 import { getParsedErrorWithAllAbis } from "~~/utils/scaffold-eth/contract";
 
@@ -246,7 +247,25 @@ export function useRoundVote() {
     contractName: REPUTATION_CONTRACT_NAME,
   });
   const publicClient = usePublicClient({ chainId: targetNetwork.id });
-  const clearError = useCallback(() => setError(null), []);
+  const lastWalletReadinessErrorRef = useRef<string | null>(null);
+  const clearError = useCallback(() => {
+    lastWalletReadinessErrorRef.current = null;
+    setError(null);
+  }, []);
+
+  useEffect(() => {
+    if (
+      !walletTransactionReadiness.isReady ||
+      !error ||
+      error !== lastWalletReadinessErrorRef.current ||
+      !isWalletTransactionReadinessMessage(error)
+    ) {
+      return;
+    }
+
+    lastWalletReadinessErrorRef.current = null;
+    setError(null);
+  }, [error, walletTransactionReadiness.isReady]);
 
   const commitVote = async ({
     contentId,
@@ -272,6 +291,7 @@ export function useRoundVote() {
       isGatedContext,
       stakeAmount,
     });
+    setError(null);
     const accepted = await requireAcceptance("vote");
     if (!accepted) {
       timingLog.emit("terms-rejected");
@@ -280,11 +300,13 @@ export function useRoundVote() {
     timingLog.emit("terms-accepted");
 
     if (walletTransactionReadiness.isBlocked) {
+      const message = walletTransactionReadiness.message ?? "Wallet is unavailable.";
+      lastWalletReadinessErrorRef.current = isWalletTransactionReadinessMessage(message) ? message : null;
       timingLog.emit("blocked", {
         reason: walletTransactionReadiness.status,
-        message: walletTransactionReadiness.message ?? "Wallet is unavailable.",
+        message,
       });
-      setError(walletTransactionReadiness.message ?? "Wallet is unavailable.");
+      setError(message);
       return false;
     }
 

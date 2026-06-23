@@ -70,6 +70,15 @@ export function isPendingWalletTransactionReadiness(status: WalletTransactionRea
   );
 }
 
+export function isWalletTransactionReadinessMessage(message: string | null | undefined) {
+  return (
+    message === WALLET_TRANSACTION_RESTORING_MESSAGE ||
+    message === WALLET_TRANSACTION_PREPARING_MESSAGE ||
+    message === WALLET_TRANSACTION_GAS_MODE_MESSAGE ||
+    message === WALLET_TRANSACTION_SELF_FUNDED_MESSAGE
+  );
+}
+
 export function getWalletTransactionReadiness(params: WalletTransactionReadinessParams): WalletTransactionReadiness {
   if (params.unavailableMessage) {
     return readiness("unavailable", params.unavailableMessage, "error");
