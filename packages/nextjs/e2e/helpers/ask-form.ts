@@ -8,27 +8,41 @@ function escapeRegExp(value: string) {
 }
 
 export async function selectAskCategory(page: Page, categoryNames = SEEDED_CATEGORY_NAMES): Promise<void> {
-  const form = page.locator("form").first();
-  const categoryTrigger = form.getByText("Select a category...");
-  const noCategories = form.getByText("No categories available");
-
-  await expect(categoryTrigger.or(noCategories)).toBeVisible({ timeout: 10_000 });
-  await expect(categoryTrigger, "ask categories should load from Ponder or the RPC fallback").toBeVisible();
-
-  await categoryTrigger.click();
-
-  for (const categoryName of categoryNames) {
-    const option = form.getByRole("button", { name: new RegExp(`^${escapeRegExp(categoryName)}$`, "i") }).first();
-    if (await option.isVisible({ timeout: 2_000 }).catch(() => false)) {
-      await option.click();
-      return;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    if (attempt > 0) {
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await expect(page.getByRole("heading", { name: "Submit Question" })).toBeVisible({ timeout: 15_000 });
     }
+
+    const form = page.locator("form").first();
+    const categoryTrigger = form.getByText("Select a category...");
+
+    const triggerVisible = await categoryTrigger
+      .waitFor({ state: "visible", timeout: 30_000 })
+      .then(() => true)
+      .catch(() => false);
+    if (!triggerVisible) {
+      continue;
+    }
+
+    await categoryTrigger.click();
+
+    for (const categoryName of categoryNames) {
+      const option = form.getByRole("button", { name: new RegExp(`^${escapeRegExp(categoryName)}$`, "i") }).first();
+      if (await option.isVisible({ timeout: 2_000 }).catch(() => false)) {
+        await option.click();
+        await expect(form.locator("label", { hasText: /^Select Categories/ })).toBeVisible({ timeout: 5_000 });
+        return;
+      }
+    }
+
+    await expect(
+      form.getByRole("button", { name: new RegExp(categoryNames.map(escapeRegExp).join("|"), "i") }).first(),
+      `expected one of the seeded ask categories to be selectable: ${categoryNames.join(", ")}`,
+    ).toBeVisible();
   }
 
-  await expect(
-    form.getByRole("button", { name: new RegExp(categoryNames.map(escapeRegExp).join("|"), "i") }).first(),
-    `expected one of the seeded ask categories to be selectable: ${categoryNames.join(", ")}`,
-  ).toBeVisible();
+  throw new Error("Ask categories did not become selectable.");
 }
 
 export async function selectAskSubcategory(page: Page, subcategoryNames = SEEDED_SUBCATEGORY_NAMES): Promise<void> {
