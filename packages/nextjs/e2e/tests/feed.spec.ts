@@ -1,5 +1,5 @@
 import { expect, test } from "../fixtures/wallet";
-import { getContentById } from "../helpers/ponder-api";
+import { getContentById, getContentList } from "../helpers/ponder-api";
 import { FEED_EMPTY_STATE_RE, VOTE_UP_BUTTON_NAME, gotoWithRetry, waitForFeedLoaded } from "../helpers/wait-helpers";
 
 test.describe("Content feed", () => {
@@ -55,10 +55,14 @@ test.describe("Content feed", () => {
   });
 
   test("clicking a video preview stays with the player", async ({ connectedPage: page }) => {
-    await gotoWithRetry(page, "/rate?q=short%20video", { ensureWalletConnected: true, timeout: 45_000 });
+    const { items } = await getContentList({ status: "all", search: "agent share", limit: 5 });
+    const videoContent = items.find(item => item.title === "Should an agent share this short video?");
+    if (!videoContent) throw new Error("Expected baseline seeded video content to be indexed in Ponder");
+
+    await gotoWithRetry(page, `/rate?content=${videoContent.id}`, { ensureWalletConnected: true, timeout: 45_000 });
     await waitForFeedLoaded(page, 30_000);
 
-    await expect(page.getByRole("heading", { name: /agent share this short video/i }).first()).toBeVisible({
+    await expect(page.getByRole("heading", { name: videoContent.title }).first()).toBeVisible({
       timeout: 10_000,
     });
 
