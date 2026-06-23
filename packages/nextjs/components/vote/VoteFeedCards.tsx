@@ -1,6 +1,6 @@
 "use client";
 
-import { type MouseEvent, memo, useEffect, useState } from "react";
+import { type MouseEvent, memo, useCallback, useEffect, useLayoutEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import {
   ArrowTopRightOnSquareIcon,
@@ -99,6 +99,42 @@ function getMediaPlatformType(media: ContentMediaItem | null) {
   return detectPlatform(media.url).type;
 }
 
+export type FeedCardMediaPlatformType = ReturnType<typeof getMediaPlatformType>;
+
+export function resolveFeedCardVisualPlatformType(
+  item: ContentItem,
+  resolvedPrivateMediaPlatformType?: FeedCardMediaPlatformType | null,
+): FeedCardMediaPlatformType {
+  if (isPrivateContextMetadata(item) && resolvedPrivateMediaPlatformType) {
+    return resolvedPrivateMediaPlatformType;
+  }
+  return getMediaPlatformType(getPrimaryMediaItem(item));
+}
+
+export function usesNaturalFeedMediaHeight(platformType: FeedCardMediaPlatformType) {
+  return platformType === "image";
+}
+
+export function shouldFlushFeedMediaEdges(platformType: FeedCardMediaPlatformType) {
+  return platformType === "image";
+}
+
+export function getFeedMediaHeightClassName({
+  isLaptopCompact,
+  isMobileViewport,
+  platformType,
+}: {
+  isLaptopCompact: boolean;
+  isMobileViewport: boolean;
+  platformType: FeedCardMediaPlatformType;
+}) {
+  if (usesNaturalFeedMediaHeight(platformType)) return "w-full";
+  if (platformType === "youtube") return "w-full";
+  if (isMobileViewport) return "w-full min-h-[14rem] max-h-[46svh] flex-1";
+  if (isLaptopCompact) return "w-full h-[clamp(18rem,50vh,24rem)]";
+  return "w-full h-[clamp(20rem,56vh,32rem)]";
+}
+
 function NoRewardChip() {
   return (
     <div
@@ -192,8 +228,10 @@ export const FeedVoteCard = memo(function FeedVoteCard({
 }: FeedVoteCardProps) {
   const [isLaptopCompact, setIsLaptopCompact] = useState(false);
   const [isMobileViewport, setIsMobileViewport] = useState(false);
-  const primaryMedia = getPrimaryMediaItem(item);
-  const platformType = getMediaPlatformType(primaryMedia);
+  const [resolvedPrivateMediaPlatformType, setResolvedPrivateMediaPlatformType] =
+    useState<FeedCardMediaPlatformType | null>(null);
+  const privateContext = isPrivateContextMetadata(item);
+  const platformType = resolveFeedCardVisualPlatformType(item, resolvedPrivateMediaPlatformType);
 
   useEffect(() => {
     if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
@@ -241,20 +279,18 @@ export const FeedVoteCard = memo(function FeedVoteCard({
     };
   }, []);
 
+  useEffect(() => {
+    setResolvedPrivateMediaPlatformType(null);
+  }, [item.chainId, item.contextAccess, item.contextVisibility, item.deploymentKey, item.id]);
+
+  const handleResolvedPrivateMediaPlatformType = useCallback((nextPlatformType: FeedCardMediaPlatformType | null) => {
+    setResolvedPrivateMediaPlatformType(current => (current === nextPlatformType ? current : nextPlatformType));
+  }, []);
+
   const useCompactCard = isLaptopCompact || isMobileViewport;
   const useCompactEmbed = isMobileViewport;
-  const usesIntrinsicMediaHeight = platformType === "youtube";
-  const usesNaturalImageHeight = platformType === "image";
-  const flushMediaEdges = platformType === "image";
-  const mediaHeightClassName = usesNaturalImageHeight
-    ? "w-full"
-    : usesIntrinsicMediaHeight
-      ? "w-full"
-      : isMobileViewport
-        ? "w-full min-h-[14rem] max-h-[46svh] flex-1"
-        : isLaptopCompact
-          ? "w-full h-[clamp(18rem,50vh,24rem)]"
-          : "w-full h-[clamp(20rem,56vh,32rem)]";
+  const flushMediaEdges = shouldFlushFeedMediaEdges(platformType);
+  const mediaHeightClassName = getFeedMediaHeightClassName({ isLaptopCompact, isMobileViewport, platformType });
   const imageContextClickOpensExternally = platformType === "image";
   const contentIntentEnabled = Boolean(item.url) && platformType !== "youtube" && !imageContextClickOpensExternally;
 
@@ -304,6 +340,7 @@ export const FeedVoteCard = memo(function FeedVoteCard({
             isActive={isActive}
             compact={useCompactEmbed}
             interactionMode={contentIntentEnabled ? "vote" : "default"}
+            onResolvedPrivateMediaPlatformType={privateContext ? handleResolvedPrivateMediaPlatformType : undefined}
           />
         </div>
         <FeedContentMetaCard
@@ -390,11 +427,13 @@ function ContentMediaCarousel({
   compact,
   isActive,
   interactionMode,
+  onResolvedPrivateMediaPlatformType,
 }: {
   item: ContentItem;
   compact: boolean;
   isActive: boolean;
   interactionMode: "default" | "vote";
+  onResolvedPrivateMediaPlatformType?: (platformType: FeedCardMediaPlatformType | null) => void;
 }) {
   return (
     <ConfidentialContextGate item={item}>
@@ -405,6 +444,7 @@ function ContentMediaCarousel({
           isActive={isActive}
           interactionMode={interactionMode}
           walletAddress={walletAddress}
+          onResolvedPrivateMediaPlatformType={onResolvedPrivateMediaPlatformType}
         />
       )}
     </ConfidentialContextGate>
@@ -428,12 +468,14 @@ function UnlockedContentMediaCarousel({
   isActive,
   interactionMode,
   walletAddress,
+  onResolvedPrivateMediaPlatformType,
 }: {
   item: ContentItem;
   compact: boolean;
   isActive: boolean;
   interactionMode: "default" | "vote";
   walletAddress?: string;
+  onResolvedPrivateMediaPlatformType?: (platformType: FeedCardMediaPlatformType | null) => void;
 }) {
   const privateContext = isPrivateContextMetadata(item);
   const manifestQuery = useGatedContextManifest({
@@ -450,12 +492,18 @@ function UnlockedContentMediaCarousel({
   const hasCarouselControls = mediaItems.length > 1;
   const contextUrl = item.url.trim();
   const embedUrl = activeMedia?.url.trim() || contextUrl;
-  const activeMediaIsImage = activeMedia && getMediaPlatformType(activeMedia) === "image";
+  const activeMediaPlatformType = getMediaPlatformType(activeMedia);
+  const activeMediaIsImage = activeMediaPlatformType === "image";
   const hasPublicFallback = item.media.length > 0 || Boolean(item.thumbnailUrl) || contextUrl.length > 0;
 
   useEffect(() => {
     setActiveIndex(0);
   }, [item.id, mediaItems.length]);
+
+  useLayoutEffect(() => {
+    if (!privateContext || !onResolvedPrivateMediaPlatformType) return;
+    onResolvedPrivateMediaPlatformType(activeMediaPlatformType);
+  }, [activeMediaPlatformType, onResolvedPrivateMediaPlatformType, privateContext]);
 
   const showPrevious = (event: MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
