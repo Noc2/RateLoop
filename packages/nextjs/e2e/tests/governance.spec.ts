@@ -197,9 +197,13 @@ test.describe("Governance page", () => {
       .getByTestId("confidentiality-breach-report")
       .filter({ hasText: accused.identityKey })
       .first();
-    await expect(submittedReport.getByText(`identity ${accused.identityKey}`)).toBeVisible({
-      timeout: 20_000,
-    });
+    await expect(async () => {
+      await page.getByLabel("Content id").fill(contentId);
+      await page.getByRole("button", { name: "Load reports" }).click({ timeout: 5_000 });
+      await expect(submittedReport.getByText(`identity ${accused.identityKey}`)).toBeVisible({
+        timeout: 5_000,
+      });
+    }).toPass({ timeout: 60_000, intervals: [1_000, 2_000, 5_000] });
     const evidenceLine = submittedReport.getByText(/^evidence 0x[0-9a-f]{64}$/);
     await expect(evidenceLine).toBeVisible();
     const evidenceHash = (await evidenceLine.textContent())?.replace(/^evidence\s+/, "") ?? "";
@@ -248,8 +252,14 @@ test.describe("Governance page", () => {
       );
       expect(indexed, "Ponder should index the active confidentiality sanction").toBe(true);
 
-      await gotoWithRetry(page, `/profiles/${ANVIL_ACCOUNTS.account3.address}`, { ensureWalletConnected: true });
-      await expect(page.getByText("Active sanction")).toBeVisible({ timeout: 20_000 });
+      await expect(async () => {
+        await gotoWithRetry(page, `/profiles/${ANVIL_ACCOUNTS.account3.address}`, {
+          ensureWalletConnected: true,
+          timeout: 30_000,
+        });
+        await expect(page.getByText(/Ponder is unavailable/i)).toHaveCount(0, { timeout: 5_000 });
+        await expect(page.getByText("Active sanction")).toBeVisible({ timeout: 5_000 });
+      }).toPass({ timeout: 60_000, intervals: [1_000, 2_000, 5_000] });
     } finally {
       await unbanConfidentialityIdentity(ANVIL_ACCOUNTS.account3);
     }
