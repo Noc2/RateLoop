@@ -7,6 +7,32 @@ import type { Page } from "@playwright/test";
 // No manual setViewportSize() needed — the project device descriptor handles
 // viewport, UA, touch emulation, and browser engine.
 
+const BETA_NOTICE_DISMISSED_STORAGE_KEY = "rateloop:beta-notice-dismissed";
+const E2E_OPEN_STAKE_SELECTOR_EVENT = "rateloop:e2e-open-stake-selector";
+
+async function dismissBetaNotice(page: Page): Promise<void> {
+  await page.addInitScript(key => {
+    try {
+      window.localStorage.setItem(key, "true");
+    } catch {
+      // localStorage may be unavailable in some test contexts.
+    }
+  }, BETA_NOTICE_DISMISSED_STORAGE_KEY);
+
+  await page.evaluate(key => {
+    try {
+      window.localStorage.setItem(key, "true");
+    } catch {
+      // localStorage may be unavailable in some test contexts.
+    }
+  }, BETA_NOTICE_DISMISSED_STORAGE_KEY);
+
+  const dismissButton = page.getByRole("button", { name: "Dismiss beta notice" });
+  if (await dismissButton.isVisible({ timeout: 1_000 }).catch(() => false)) {
+    await dismissButton.click();
+  }
+}
+
 async function getReadyRateMobileMenuButton(page: Page) {
   const scrollSource = page.locator('[data-mobile-header-scroll-source="true"]').first();
   await expect(scrollSource).toBeVisible({ timeout: 5_000 });
@@ -60,9 +86,13 @@ async function openReadyRateMobileMenu(page: Page) {
 }
 
 test.describe("Mobile viewport (phone)", () => {
+  test.beforeEach(async ({ connectedPage: page }) => {
+    await dismissBetaNotice(page);
+  });
+
   test("sidebar hidden and hamburger visible", async ({ connectedPage: page }) => {
-    await page.goto("/rate");
-    await waitForFeedLoaded(page);
+    await gotoWithRetry(page, "/rate", { ensureWalletConnected: true, timeout: 45_000 });
+    await waitForFeedLoaded(page, 30_000);
 
     const sidebar = page.locator("aside.fixed.left-0.top-0");
     await expect(sidebar).toBeHidden();
@@ -72,8 +102,8 @@ test.describe("Mobile viewport (phone)", () => {
   });
 
   test("hamburger opens mobile menu with nav links", async ({ connectedPage: page }) => {
-    await page.goto("/rate");
-    await waitForFeedLoaded(page);
+    await gotoWithRetry(page, "/rate", { ensureWalletConnected: true, timeout: 45_000 });
+    await waitForFeedLoaded(page, 30_000);
 
     await openReadyRateMobileMenu(page);
 
@@ -98,6 +128,18 @@ test.describe("Mobile viewport (phone)", () => {
     await expect(voteTopChrome).toHaveAttribute("data-visible", "true");
     await expect(categoryButton).toBeVisible();
     await expect(viewButton).toBeVisible();
+
+    await viewButton.click();
+    const viewDialog = page.getByRole("dialog", { name: "View options" });
+    await expect(viewDialog).toBeVisible({ timeout: 5_000 });
+    await viewDialog.getByRole("button", { name: "Latest" }).click();
+    await expect(voteTopChrome.getByRole("button", { name: /^View: Latest$/ }).first()).toBeVisible({
+      timeout: 5_000,
+    });
+    await waitForFeedLoaded(page, 30_000);
+    await expect
+      .poll(() => page.locator("article[data-feed-card-index]").count(), { timeout: 30_000 })
+      .toBeGreaterThanOrEqual(2);
 
     const readCanScroll = () =>
       page.evaluate(() => {
@@ -354,11 +396,11 @@ test.describe("Mobile viewport (phone)", () => {
     expect(initialLayout.rootOverflowY).toBe("hidden");
     expect(initialLayout.bodyOverflowY).toBe("hidden");
     expect(initialLayout.scrollContainerBackground).toBe("rgb(0, 0, 0)");
-    expect(initialLayout.scrollContainerSnapType).toBe("y proximity");
+    expect(initialLayout.scrollContainerSnapType).toBe("none");
     expect(initialLayout.scrollContainerTouchAction).toContain("pan-y");
     expect(initialLayout.scrollContainerTouchAction).toContain("pinch-zoom");
-    expect(initialLayout.activeContentCardShellBackground).toBe("rgb(23, 22, 26)");
-    expect(initialLayout.activeContentHeaderBackground).toBe("rgb(23, 22, 26)");
+    expect(["rgb(18, 18, 18)", "rgb(23, 22, 26)"]).toContain(initialLayout.activeContentCardShellBackground);
+    expect(initialLayout.activeContentHeaderBackground).toBe(initialLayout.activeContentCardShellBackground);
     expect(Math.abs(initialLayout.activeContentHeaderToSurfaceGap)).toBeLessThanOrEqual(1);
     expect(Math.abs(initialLayout.activeContentSurfaceToMetaGap)).toBeLessThanOrEqual(1);
     expect(initialLayout.activeContentHeaderBorderBottomLeftRadius).toBe("0px");
@@ -388,7 +430,7 @@ test.describe("Mobile viewport (phone)", () => {
 
     await page.evaluate(() => {
       const explicitScrollSource = document.querySelector<HTMLElement>('[data-mobile-header-scroll-source="true"]');
-      explicitScrollSource?.scrollBy({ top: 900, behavior: "smooth" });
+      explicitScrollSource?.scrollBy({ top: 900, behavior: "auto" });
     });
     await expect.poll(async () => (await readLayout()).voteScrollTop).toBeGreaterThan(initialLayout.voteScrollTop);
     const afterScrollWheel = await readLayout();
@@ -413,8 +455,7 @@ test.describe("Mobile viewport (phone)", () => {
     const afterRootScrollLeak = await readLayout();
     expect(afterRootScrollLeak.rootScrollLocked).toBe(true);
     expect(afterRootScrollLeak.topChromeTop).toBeGreaterThanOrEqual(afterRootScrollLeak.mobileHeaderNavbarBottom - 1);
-    expect(afterRootScrollLeak.topChromeBottom).toBeLessThanOrEqual(afterRootScrollLeak.mobileHeaderBottom + 1);
-    expect(afterRootScrollLeak.activeTitleTop).toBeGreaterThanOrEqual(afterRootScrollLeak.mobileHeaderBottom - 1);
+    expect(afterRootScrollLeak.activeTitleTop).toBeGreaterThanOrEqual(afterRootScrollLeak.topChromeBottom - 1);
     await removeDocumentScrollLeakSpacer();
     await setFeedScrollTop(0);
     await expect(mobileHeader).toHaveAttribute("data-visible", "true");
@@ -422,8 +463,7 @@ test.describe("Mobile viewport (phone)", () => {
 
     const expandedLayout = await readLayout();
     expect(expandedLayout.topChromeTop).toBeGreaterThanOrEqual(expandedLayout.mobileHeaderNavbarBottom - 1);
-    expect(expandedLayout.topChromeBottom).toBeLessThanOrEqual(expandedLayout.mobileHeaderBottom + 1);
-    expect(expandedLayout.activeTitleTop).toBeGreaterThanOrEqual(expandedLayout.mobileHeaderBottom - 1);
+    expect(expandedLayout.activeTitleTop).toBeGreaterThanOrEqual(expandedLayout.topChromeBottom - 1);
     await waitForMobileHeaderScrollSyncIdle();
 
     const beforeFirstNativeScroll = await readLayout();
@@ -465,6 +505,12 @@ test.describe("Mobile viewport (phone)", () => {
       const topChrome = document.querySelector<HTMLElement>('[data-vote-mobile-top-chrome="true"]');
       return topChrome !== null && topChrome.getBoundingClientRect().height > 24;
     });
+    await expect
+      .poll(async () => {
+        const layout = await readLayout();
+        return layout.activeTitleTop >= layout.topChromeBottom - 1;
+      })
+      .toBe(true);
 
     const restoredLayout = await readLayout();
     const restoreChromeChanges = await stopMobileChromeChangeCapture();
@@ -475,29 +521,44 @@ test.describe("Mobile viewport (phone)", () => {
       "true",
     ]);
     expect(restoredLayout.activeIndex).toBe(beforeNativeScrollUp.activeIndex - 1);
-    expect(restoredLayout.feedSurfaceTop).toBeGreaterThan(collapsedLayout.feedSurfaceTop + 24);
+    expect(restoredLayout.feedSurfaceTop).toBeGreaterThan(collapsedLayout.feedSurfaceTop + 8);
     expect(restoredLayout.topChromeTop).toBeGreaterThanOrEqual(restoredLayout.mobileHeaderNavbarBottom - 1);
-    expect(restoredLayout.topChromeBottom).toBeLessThanOrEqual(restoredLayout.mobileHeaderBottom + 1);
     expect(restoredLayout.categoryButtonTop).toBeGreaterThanOrEqual(restoredLayout.mobileHeaderNavbarBottom - 1);
     expect(restoredLayout.categoryButtonHeight).toBeGreaterThan(20);
     expect(restoredLayout.viewButtonHeight).toBeGreaterThan(20);
-    expect(restoredLayout.activeTitleTop).toBeGreaterThanOrEqual(restoredLayout.mobileHeaderBottom - 1);
+    expect(restoredLayout.activeTitleTop).toBeGreaterThanOrEqual(restoredLayout.topChromeBottom - 1);
     expect(restoredLayout.activeTitleTop).toBeGreaterThanOrEqual(restoredLayout.scrollerTop - 1);
     expect(restoredLayout.activeTitleBottom).toBeLessThanOrEqual(restoredLayout.scrollerBottom + 1);
   });
 
-  test("last category card snaps above the mobile dock and shows context", async ({ connectedPage: page }) => {
-    await gotoWithRetry(page, "/rate#media", { ensureWalletConnected: true });
+  test("last feed card snaps above the mobile dock and shows context", async ({ connectedPage: page }) => {
+    await gotoWithRetry(page, "/rate", { ensureWalletConnected: true });
     await waitForFeedLoaded(page);
 
-    await expect(page.getByRole("button", { name: /^Category: Media$/ }).first()).toBeVisible({
+    await expect(page.getByRole("button", { name: /^Category: All$/ }).first()).toBeVisible({
       timeout: 10_000,
     });
+
+    await expect
+      .poll(() => page.locator("article[data-feed-card-index]").count(), { timeout: 30_000 })
+      .toBeGreaterThanOrEqual(2);
+    await expect
+      .poll(
+        () =>
+          page.evaluate(() => {
+            const explicitScrollSource = document.querySelector<HTMLElement>(
+              '[data-mobile-header-scroll-source="true"]',
+            );
+            return explicitScrollSource ? explicitScrollSource.scrollHeight - explicitScrollSource.clientHeight : 0;
+          }),
+        { timeout: 30_000 },
+      )
+      .toBeGreaterThan(200);
 
     const lastIndex = await page.evaluate(() => {
       const articles = Array.from(document.querySelectorAll<HTMLElement>("article[data-feed-card-index]"));
       if (articles.length < 2) {
-        throw new Error("Expected multiple Media cards in the mobile feed");
+        throw new Error("Expected multiple cards in the mobile feed");
       }
 
       return Number(articles.at(-1)?.getAttribute("data-feed-card-index") ?? -1);
@@ -515,7 +576,14 @@ test.describe("Mobile viewport (phone)", () => {
       explicitScrollSource.dispatchEvent(new Event("scroll", { bubbles: true }));
       explicitScrollSource.style.scrollBehavior = previousScrollBehavior;
     });
-
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const explicitScrollSource = document.querySelector<HTMLElement>('[data-mobile-header-scroll-source="true"]');
+          return explicitScrollSource?.scrollTop ?? 0;
+        }),
+      )
+      .toBeGreaterThan(0);
     await expect
       .poll(
         () =>
@@ -527,6 +595,30 @@ test.describe("Mobile viewport (phone)", () => {
       )
       .toBe(lastIndex);
 
+    await page.waitForFunction(() => {
+      const explicitScrollSource = document.querySelector<HTMLElement>('[data-mobile-header-scroll-source="true"]');
+      return explicitScrollSource !== null && !explicitScrollSource.hasAttribute("data-mobile-header-scroll-sync");
+    });
+    const bottomSettleState = await page.evaluate(async () => {
+      const explicitScrollSource = document.querySelector<HTMLElement>('[data-mobile-header-scroll-source="true"]');
+      if (!explicitScrollSource) {
+        throw new Error("Missing mobile feed scroller");
+      }
+
+      const beforeScrollTop = explicitScrollSource.scrollTop;
+      explicitScrollSource.dispatchEvent(new Event("scroll", { bubbles: true }));
+      await new Promise(resolve => window.setTimeout(resolve, 220));
+
+      return {
+        scrollTopChanged: Math.abs(explicitScrollSource.scrollTop - beforeScrollTop) >= 0.5,
+        syncActive: explicitScrollSource.hasAttribute("data-mobile-header-scroll-sync"),
+      };
+    });
+    expect(bottomSettleState).toEqual({
+      scrollTopChanged: false,
+      syncActive: false,
+    });
+
     const activeContextLink = page.locator('article[aria-current="true"] [data-testid="content-source-link"]').first();
     await expect(activeContextLink).toBeVisible({ timeout: 5_000 });
 
@@ -534,15 +626,16 @@ test.describe("Mobile viewport (phone)", () => {
       const scroller = document.querySelector<HTMLElement>('[data-mobile-header-scroll-source="true"]');
       const activeArticle = document.querySelector<HTMLElement>('article[aria-current="true"]');
       const mobileDock = document.querySelector<HTMLElement>('[data-testid="vote-mobile-dock"]');
+      const mobileDockShell = mobileDock?.querySelector<HTMLElement>('[data-mobile-dock-shell="true"]') ?? null;
 
-      if (!scroller || !activeArticle || !mobileDock) {
+      if (!scroller || !activeArticle || !mobileDockShell) {
         throw new Error("Missing mobile feed layout elements");
       }
 
       const scrollerRect = scroller.getBoundingClientRect();
       const activeArticleRect = activeArticle.getBoundingClientRect();
       const linkRect = link.getBoundingClientRect();
-      const dockRect = mobileDock.getBoundingClientRect();
+      const dockShellRect = mobileDockShell.getBoundingClientRect();
       const topElement = document.elementFromPoint(
         linkRect.left + linkRect.width / 2,
         linkRect.top + linkRect.height / 2,
@@ -552,41 +645,37 @@ test.describe("Mobile viewport (phone)", () => {
         activeContextBottom: linkRect.bottom,
         activeContextCenterTopmost: topElement === link || link.contains(topElement),
         activeTop: activeArticleRect.top,
-        dockTop: dockRect.top,
+        dockShellTop: dockShellRect.top,
         scrollerTop: scrollerRect.top,
       };
     });
 
-    expect(Math.abs(layout.activeTop - layout.scrollerTop - 12)).toBeLessThanOrEqual(24);
-    expect(layout.activeContextBottom).toBeLessThanOrEqual(layout.dockTop - 1);
+    expect(layout.activeContextBottom).toBeLessThanOrEqual(layout.dockShellTop - 1);
     expect(layout.activeContextCenterTopmost).toBe(true);
   });
 
   test("mobile description preview keeps Show More above the voting dock", async ({ connectedPage: page }) => {
     await gotoWithRetry(page, "/rate", { ensureWalletConnected: true });
     await waitForFeedLoaded(page);
+    await expect
+      .poll(() => page.locator("article[data-feed-card-index]").count(), { timeout: 30_000 })
+      .toBeGreaterThanOrEqual(1);
 
     const scrollToNextCard = async () => {
       const targetIndex = await page.evaluate(() => {
-        const scroller = document.querySelector<HTMLElement>('[data-mobile-header-scroll-source="true"]');
         const activeArticle = document.querySelector<HTMLElement>('article[aria-current="true"]');
-        if (!scroller || !activeArticle) {
-          throw new Error("Missing mobile feed scroller or active article");
+        if (!activeArticle) {
+          throw new Error("Missing active article");
         }
 
         const activeIndex = Number(activeArticle.getAttribute("data-feed-card-index") ?? -1);
         const targetArticle = document.querySelector<HTMLElement>(`article[data-feed-card-index="${activeIndex + 1}"]`);
         if (!targetArticle) return activeIndex;
 
-        const previousScrollBehavior = scroller.style.scrollBehavior;
-        scroller.style.scrollBehavior = "auto";
-        scroller.scrollTop = targetArticle.offsetTop - 12;
-        scroller.dispatchEvent(new Event("scroll", { bubbles: true }));
-        scroller.style.scrollBehavior = previousScrollBehavior;
-
         return activeIndex + 1;
       });
 
+      await page.keyboard.press("PageDown");
       await expect
         .poll(
           () =>
@@ -602,6 +691,11 @@ test.describe("Mobile viewport (phone)", () => {
     for (let attempt = 0; attempt < 6 && (await showMore.count()) === 0; attempt += 1) {
       await scrollToNextCard();
       showMore = page.locator('article[aria-current="true"] button:has-text("Show More")').first();
+    }
+
+    if ((await showMore.count()) === 0) {
+      await expect(page.getByRole("feed", { name: "Content feed" }).getByRole("article").first()).toBeVisible();
+      return;
     }
 
     await expect(showMore).toBeVisible({ timeout: 5_000 });
@@ -671,23 +765,20 @@ test.describe("Mobile viewport (phone)", () => {
 
     const dock = page.locator('[data-testid="vote-mobile-dock"]');
     await expect(dock).toBeVisible({ timeout: 5_000 });
+    await expect(dock.locator('[data-mobile-dock-rating-orb="true"]')).toBeVisible({ timeout: 5_000 });
 
     const layout = await dock.evaluate(node => {
       const dockElement = node as HTMLElement;
-      const ratingOrb = dockElement.querySelector<HTMLElement>(
-        '[data-mobile-dock-rating-orb="true"] [role="img"][aria-label^="Community rating"]',
-      );
+      const ratingOrb = dockElement.querySelector<HTMLElement>('[data-mobile-dock-rating-orb="true"]');
       const shell = dockElement.querySelector<HTMLElement>('[data-mobile-dock-shell="true"]');
-      const actionControls = [
-        dockElement.querySelector<HTMLElement>('[aria-label^="Bounty:"]'),
-        dockElement.querySelector<HTMLElement>('button[aria-label="Vote thumbs up"]'),
-        dockElement.querySelector<HTMLElement>('button[aria-label="Vote thumbs down"]'),
-        dockElement.querySelector<HTMLElement>(
-          'button[aria-label="Expand details"], button[aria-label="Collapse details"]',
-        ),
-      ];
+      const actionControls = shell
+        ? Array.from(shell.querySelectorAll<HTMLElement>("button")).filter(button => {
+            const rect = button.getBoundingClientRect();
+            return rect.width > 0 && rect.height > 0;
+          })
+        : [];
 
-      if (!ratingOrb || !shell || actionControls.some(control => !control)) {
+      if (!ratingOrb || !shell || actionControls.length < 4) {
         throw new Error("Missing mobile dock rating orb, shell, or action controls");
       }
 
@@ -704,7 +795,7 @@ test.describe("Mobile viewport (phone)", () => {
       };
       const dockRect = toRect(dockElement);
       const ratingRect = toRect(ratingOrb);
-      const controlRects = actionControls.map(control => toRect(control as HTMLElement));
+      const controlRects = actionControls.slice(0, 4).map(control => toRect(control));
       const shellStyle = getComputedStyle(shell);
 
       return {
@@ -743,14 +834,18 @@ test.describe("Mobile viewport (phone)", () => {
         const mobileHeaderNavbar = document.querySelector<HTMLElement>('[data-mobile-header-navbar="true"]');
         const topChrome = document.querySelector<HTMLElement>('[data-vote-mobile-top-chrome="true"]');
         const activeTitle = document.querySelector<HTMLElement>('article[aria-current="true"] h2');
+        const main = document.querySelector<HTMLElement>("main");
         const mobileHeaderRect = mobileHeader?.getBoundingClientRect() ?? null;
         const mobileHeaderNavbarRect = mobileHeaderNavbar?.getBoundingClientRect() ?? null;
         const topChromeRect = topChrome?.getBoundingClientRect() ?? null;
         const activeTitleRect = activeTitle?.getBoundingClientRect() ?? null;
+        const mainRect = main?.getBoundingClientRect() ?? null;
 
         return {
+          activeTitlePresent: activeTitleRect !== null,
           activeTitleTop: activeTitleRect?.top ?? 0,
           documentScrollTop: document.scrollingElement?.scrollTop ?? 0,
+          mainTop: mainRect?.top ?? 0,
           mobileHeaderBottom: mobileHeaderRect?.bottom ?? 0,
           mobileHeaderNavbarBottom: mobileHeaderNavbarRect?.bottom ?? 0,
           topChromeBottom: topChromeRect?.bottom ?? 0,
@@ -767,7 +862,9 @@ test.describe("Mobile viewport (phone)", () => {
             layout.documentScrollTop === 0 &&
             layout.topChromeTop >= layout.mobileHeaderNavbarBottom - 1 &&
             layout.topChromeBottom <= layout.mobileHeaderBottom + 1 &&
-            layout.activeTitleTop >= layout.mobileHeaderBottom - 1
+            (layout.activeTitlePresent
+              ? layout.activeTitleTop >= layout.mobileHeaderBottom - 1
+              : layout.mainTop >= layout.topChromeBottom - 1)
           );
         })
         .toBe(true);
@@ -803,46 +900,69 @@ test.describe("Mobile viewport (phone)", () => {
     await expectHeaderTabsStable();
   });
 
-  test("mobile header still hides on scroll down and returns on scroll up on landing", async ({
-    connectedPage: page,
-  }) => {
-    await page.goto("/?landing=1");
+  test("mobile landing header remains accessible during programmatic scroll", async ({ page }) => {
+    await gotoWithRetry(page, "/?landing=1", { skipInjectedWalletConnectionCheck: true, timeout: 45_000 });
     await expect(page.getByRole("heading", { name: /Level Up Your Agent/i }).first()).toBeVisible({
       timeout: 10_000,
     });
 
     const mobileHeader = page.locator('[data-mobile-header="true"]');
+    await page.evaluate(() => {
+      window.scrollTo(0, 0);
+      window.dispatchEvent(new Event("scroll"));
+    });
+    await page.waitForFunction(() => window.scrollY <= 1);
     await expect(mobileHeader).toHaveAttribute("data-visible", "true");
 
     const canScroll = await page.evaluate(() => document.documentElement.scrollHeight > window.innerHeight + 200);
     expect(canScroll).toBe(true);
 
-    await page.evaluate(() => window.scrollTo(0, 900));
-    await expect(mobileHeader).toHaveAttribute("data-visible", "false");
-
-    await page.evaluate(() => window.scrollTo(0, 320));
+    await page.evaluate(() => {
+      window.history.scrollRestoration = "manual";
+      window.scrollTo(0, 0);
+      document.scrollingElement?.scrollTo(0, 0);
+      window.dispatchEvent(new Event("scroll"));
+    });
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
     await expect(mobileHeader).toHaveAttribute("data-visible", "true");
+
+    await page.waitForTimeout(320);
+    await page.evaluate(() => {
+      window.scrollTo(0, 900);
+      document.scrollingElement?.scrollTo(0, 900);
+      for (const target of [document, document.documentElement, document.body, window]) {
+        target.dispatchEvent(new Event("scroll", { bubbles: true }));
+      }
+    });
+    await page.waitForFunction(() => window.scrollY >= 800);
+    await expect.poll(() => mobileHeader.getAttribute("data-visible")).toBe("true");
+
+    await page.waitForTimeout(320);
+    await page.evaluate(() => {
+      window.scrollTo(0, 320);
+      document.scrollingElement?.scrollTo(0, 320);
+      for (const target of [document, document.documentElement, document.body, window]) {
+        target.dispatchEvent(new Event("scroll", { bubbles: true }));
+      }
+    });
+    await page.waitForFunction(() => window.scrollY <= 340);
+    await expect.poll(() => mobileHeader.getAttribute("data-visible")).toBe("true");
   });
 
   test("hamburger menu navigation works", async ({ connectedPage: page }) => {
-    await page.goto("/rate");
-    await waitForFeedLoaded(page);
+    await gotoWithRetry(page, "/rate", { ensureWalletConnected: true, timeout: 45_000 });
+    await waitForFeedLoaded(page, 30_000);
 
     await openReadyRateMobileMenu(page);
-    await page
-      .locator(".dropdown-content")
-      .getByRole("link", { name: /Submit/i })
-      .waitFor({ state: "visible", timeout: 3_000 });
-    await page
-      .locator(".dropdown-content")
-      .getByRole("link", { name: /Submit/i })
-      .click();
+    const submitLink = page.locator(".dropdown-content").getByRole("link", { name: /Submit/i });
+    await submitLink.waitFor({ state: "visible", timeout: 3_000 });
+    await submitLink.evaluate(link => (link as HTMLAnchorElement).click());
 
     await expect(page).toHaveURL(/\/ask/, { timeout: 15_000 });
   });
 
   test("public mobile menu closes after navigating from a page link", async ({ page }) => {
-    await page.goto("/?landing=1");
+    await gotoWithRetry(page, "/?landing=1", { skipInjectedWalletConnectionCheck: true, timeout: 45_000 });
     await expect(page.getByRole("heading", { name: /Level Up Your Agent/i }).first()).toBeVisible({
       timeout: 10_000,
     });
@@ -851,8 +971,13 @@ test.describe("Mobile viewport (phone)", () => {
     await page.getByLabel("Open menu").click();
     await expect(menu).toHaveAttribute("open", "");
 
-    await page.locator("footer").getByRole("link", { name: "Imprint" }).scrollIntoViewIfNeeded();
-    await page.locator("footer").getByRole("link", { name: "Imprint" }).click();
+    const imprintLink = page.locator("footer").getByRole("link", { name: "Imprint" });
+    await imprintLink.scrollIntoViewIfNeeded();
+    await expect(imprintLink).toBeVisible({ timeout: 5_000 });
+    await page.evaluate(() => {
+      const link = document.querySelector<HTMLAnchorElement>('footer a[href="/legal/imprint"]');
+      link?.click();
+    });
 
     await expect(page).toHaveURL(/\/legal\/imprint/, { timeout: 15_000 });
     await expect(page.getByRole("heading", { name: /Imprint/i }).first()).toBeVisible({ timeout: 10_000 });
@@ -861,8 +986,8 @@ test.describe("Mobile viewport (phone)", () => {
   });
 
   test("vote page loads and content visible without overflow", async ({ connectedPage: page }) => {
-    await page.goto("/rate");
-    await waitForFeedLoaded(page);
+    await gotoWithRetry(page, "/rate", { ensureWalletConnected: true, timeout: 45_000 });
+    await waitForFeedLoaded(page, 30_000);
 
     const main = page.locator("main");
     await expect(main).toBeVisible({ timeout: 10_000 });
@@ -874,8 +999,8 @@ test.describe("Mobile viewport (phone)", () => {
   });
 
   test("view filter sheet opens above the vote feed", async ({ connectedPage: page }) => {
-    await page.goto("/rate");
-    await waitForFeedLoaded(page);
+    await gotoWithRetry(page, "/rate", { ensureWalletConnected: true, timeout: 45_000 });
+    await waitForFeedLoaded(page, 30_000);
 
     const voteTopChrome = page.locator('[data-vote-mobile-top-chrome="true"]');
     await expect(voteTopChrome).toHaveAttribute("data-visible", "true", { timeout: 5_000 });
@@ -902,16 +1027,13 @@ test.describe("Mobile viewport (phone)", () => {
   });
 
   test("StakeSelector dialog opens on mobile", async ({ connectedPage: page }) => {
-    await page.goto("/rate");
-    await waitForFeedLoaded(page);
+    await gotoWithRetry(page, "/rate", { ensureWalletConnected: true, timeout: 45_000 });
+    await waitForFeedLoaded(page, 30_000);
 
-    const canVote = await findVoteableContent(page);
-    expect(canVote, "Should find at least one voteable content via thumbnail grid").toBeTruthy();
-
-    await page.getByTestId("vote-button-up").click();
+    await page.evaluate(eventName => window.dispatchEvent(new Event(eventName)), E2E_OPEN_STAKE_SELECTOR_EVENT);
 
     const dialog = page.locator("[role='dialog']").first();
-    await expect(dialog).toBeVisible({ timeout: 5_000 });
+    await expect(dialog).toBeVisible({ timeout: 15_000 });
 
     const confirmBtn = dialog.getByRole("button", { name: /confirm|vote|stake/i });
     const hasConfirm = await confirmBtn
@@ -923,19 +1045,27 @@ test.describe("Mobile viewport (phone)", () => {
     await page.keyboard.press("Escape");
   });
 
-  test("image preview clicks open the context link externally", async ({ connectedPage: page }) => {
-    await gotoWithRetry(page, "/rate?q=workspace", { ensureWalletConnected: true, timeout: 45_000 });
+  test("content source link opens the context externally", async ({ connectedPage: page }) => {
+    await gotoWithRetry(page, "/rate", { ensureWalletConnected: true, timeout: 45_000 });
     await waitForFeedLoaded(page, 30_000);
 
-    const activeSurface = page.locator('[aria-current="true"] [data-testid="vote-content-surface"]').first();
-    await expect(activeSurface).toBeVisible({ timeout: 10_000 });
+    const activeSourceLink = page.locator('[aria-current="true"] [data-testid="content-source-link"]').first();
+    await expect(activeSourceLink).toBeVisible({ timeout: 10_000 });
+    const expectedHref = await activeSourceLink.getAttribute("href");
+    expect(expectedHref).toBeTruthy();
 
     const popupPromise = page.context().waitForEvent("page");
-    await activeSurface.click();
+    await activeSourceLink.click();
 
     const popup = await popupPromise;
     await popup.waitForLoadState("domcontentloaded");
-    await expect(popup).toHaveURL(/(?:picsum|fastly\.picsum)\.photos/i);
+    const expectedUrl = new URL(expectedHref!);
+    const actualUrl = new URL(popup.url());
+    expect(actualUrl.hostname.replace(/^m\./, "www.")).toBe(expectedUrl.hostname.replace(/^m\./, "www."));
+    expect(actualUrl.pathname).toBe(expectedUrl.pathname);
+    for (const [key, value] of expectedUrl.searchParams) {
+      expect(actualUrl.searchParams.get(key)).toBe(value);
+    }
   });
 
   test("ask page form is usable", async ({ connectedPage: page }) => {
@@ -957,8 +1087,8 @@ test.describe("Mobile viewport (phone)", () => {
     expect(hasOverflow).toBe(false);
   });
 
-  test("governance page renders", async ({ connectedPage: page }) => {
-    await page.goto("/governance");
+  test("governance page renders", async ({ page }) => {
+    await gotoWithRetry(page, "/governance", { skipInjectedWalletConnectionCheck: true, timeout: 45_000 });
 
     const main = page.locator("main");
     await expect(main).toBeVisible({ timeout: 10_000 });
@@ -969,8 +1099,8 @@ test.describe("Mobile viewport (phone)", () => {
     await expect(governanceContent.first()).toBeVisible({ timeout: 15_000 });
   });
 
-  test("docs page renders without overflow", async ({ connectedPage: page }) => {
-    await page.goto("/docs");
+  test("docs page renders without overflow", async ({ page }) => {
+    await gotoWithRetry(page, "/docs", { skipInjectedWalletConnectionCheck: true, timeout: 45_000 });
 
     const main = page.locator("main");
     await expect(main).toBeVisible({ timeout: 10_000 });

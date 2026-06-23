@@ -47,3 +47,16 @@ test("does not add spacer when the final card is taller than the scroller", () =
     0,
   );
 });
+
+test("keeps an explicit minimum spacer for mobile dock clearance", () => {
+  assert.equal(
+    resolveEndSpacerHeightForLastCardSnap({
+      scrollerHeight: 620,
+      lastCardHeight: 900,
+      minimumEndSpacer: 96,
+      reservedEndSpace: 152,
+      topSnapGuard: 12,
+    }),
+    96,
+  );
+});

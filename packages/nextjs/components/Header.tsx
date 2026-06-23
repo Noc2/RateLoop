@@ -217,6 +217,7 @@ const MOBILE_HEADER_SCROLL_DELTA = 12;
 const MOBILE_HEADER_HIDE_OFFSET = 72;
 const MOBILE_HEADER_VISIBILITY_STABILIZE_MS = 260;
 const MOBILE_HEADER_VOTE_SAME_CARD_SETTLE_MS = 160;
+const MOBILE_HEADER_VOTE_MIN_VISIBLE_HEIGHT = 280;
 const EXPLICIT_LANDING_HREF = "/?landing=1";
 const VOTE_ROOT_SCROLL_RECOVERY_MIN_PX = 1;
 const MOBILE_HEADER_SCROLL_SOURCE_ATTRIBUTE = "data-mobile-header-scroll-source";
@@ -464,7 +465,10 @@ export const Header = () => {
     let resizeObserver: ResizeObserver | null = null;
 
     const updateMobileHeaderHeight = () => {
-      const nextHeight = Math.ceil(measuredNode.getBoundingClientRect().height);
+      const measuredHeight = Math.ceil(
+        Math.max(measuredNode.getBoundingClientRect().height, measuredNode.scrollHeight),
+      );
+      const nextHeight = Math.max(measuredHeight, MOBILE_HEADER_VOTE_MIN_VISIBLE_HEIGHT);
 
       if (nextHeight <= 0) return;
 
@@ -498,7 +502,13 @@ export const Header = () => {
       window.removeEventListener("resize", requestMobileHeaderHeightUpdate);
       resizeObserver?.disconnect();
     };
-  }, [mobileHeaderVoteControls, mobileSearchOpen, setMobileHeaderHeight, shouldUseVoteLayoutCollapse]);
+  }, [
+    isMobileHeaderVisible,
+    mobileHeaderVoteControls,
+    mobileSearchOpen,
+    setMobileHeaderHeight,
+    shouldUseVoteLayoutCollapse,
+  ]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -729,7 +739,9 @@ export const Header = () => {
       }
 
       const nextVisible = scrollDelta < 0 || currentScrollY < MOBILE_HEADER_HIDE_OFFSET;
-      const didSettleVisibility = setMobileHeaderVisibility(nextVisible);
+      const didSettleVisibility = setMobileHeaderVisibility(nextVisible, {
+        ignoreStabilizeWindow: !shouldUseVoteLayoutCollapse,
+      });
       if (didSettleVisibility) {
         lastScrollStateRef.current = {
           source: scrollSource,
