@@ -548,6 +548,10 @@ test("Make live deploys run the production guard before Forge work", () => {
   );
   assert.match(
     makefile,
+    /DEPLOY_TARGET_NETWORK" = "localhost".*validateLocalDeploymentSync\.js deployments\/31337\.json \.\.\/contracts\/src\/deployedContracts\.ts 31337 FeedbackRegistry FeedbackBonusEscrow X402QuestionSubmitter/s
+  );
+  assert.match(
+    makefile,
     /\$\(MAKE\) guard-production-deploy \|\| exit 1; \\\n\t\tFOUNDRY_PROFILE=.*forge script/s
   );
   assert.match(makefile, /--rpc-url "\$\(RPC_URL\)"/);

@@ -49,6 +49,9 @@ deploy-and-generate-abis: guard-production-deploy check-contract-sizes
 	$(MAKE) deploy
 	node scripts-js/exportDeploymentFromBroadcast.js
 	$(MAKE) generate-abis
+	@if [ "$$DEPLOY_TARGET_NETWORK" = "localhost" ]; then \
+		node scripts-js/validateLocalDeploymentSync.js deployments/31337.json ../contracts/src/deployedContracts.ts 31337 FeedbackRegistry FeedbackBonusEscrow X402QuestionSubmitter; \
+	fi
 	cd ../.. && yarn workspace @rateloop/contracts build
 
 # Generate TypeScript ABIs
