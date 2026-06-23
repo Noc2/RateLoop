@@ -13,6 +13,7 @@ import {
   type NormalizedWalletTransactionPlanCall,
   WALLET_TRANSACTION_PLAN_RECEIPT_TIMEOUT_MS,
   type WalletTransactionPlanCall,
+  type WalletTransactionPlanExecutionSegment,
   assertWalletTransactionPlanReceiptSucceeded,
   createWalletTransactionPlanExecutionSegments,
   isWalletSendCallsUnsupportedError,
@@ -57,6 +58,15 @@ function getTransactionStatusPollingInterval(chainId: number | undefined) {
   });
 }
 
+function canTransportWalletPlanSegmentWithThirdweb<TCall extends WalletTransactionPlanCall>(
+  segment: WalletTransactionPlanExecutionSegment<TCall>,
+) {
+  return (
+    segment.calls.length > 0 &&
+    segment.calls.every(call => call.postCallDelayMs === 0 && !isWalletTransactionPlanReserveSubmissionCall(call.call))
+  );
+}
+
 export function useWalletTransactionPlanExecutor() {
   const wagmiConfig = useConfig();
   const queryClient = useQueryClient();
@@ -78,8 +88,10 @@ export function useWalletTransactionPlanExecutor() {
         hashes: Hex[];
         onCallConfirmed?: (params: { call: TCall; hash: Hex; index: number }) => void;
         onCallSent?: (params: { call: TCall; hash: Hex; index: number }) => void;
+        onTiming?: (event: string, extra?: Record<string, unknown>) => void;
       },
     ): Promise<TransactionReceipt> => {
+      options.onTiming?.("sequential-wallet-request-start");
       const hash = await withWalletTransactionPlanStepTimeout(
         sendTransaction(wagmiConfig, {
           chainId: options.chainId,
@@ -88,8 +100,10 @@ export function useWalletTransactionPlanExecutor() {
           value: call.value,
         }),
       );
+      options.onTiming?.("sequential-wallet-request-complete", { transactionHashCount: 1 });
       pushUniqueHash(options.hashes, hash);
       options.onCallSent?.({ call: call.call, hash, index: call.index });
+      options.onTiming?.("sequential-receipt-wait-start", { transactionHashCount: 1 });
       const receipt = await waitForTransactionReceipt(wagmiConfig, {
         chainId: options.chainId,
         hash,
@@ -97,9 +111,12 @@ export function useWalletTransactionPlanExecutor() {
         timeout: WALLET_TRANSACTION_PLAN_RECEIPT_TIMEOUT_MS,
       });
       assertWalletTransactionPlanReceiptSucceeded(receipt);
+      options.onTiming?.("sequential-receipt-wait-complete", { status: receipt.status, transactionHashCount: 1 });
       options.onCallConfirmed?.({ call: call.call, hash, index: call.index });
       if (call.postCallDelayMs > 0) {
+        options.onTiming?.("sequential-post-call-delay-start", { delayMs: call.postCallDelayMs });
         await delay(call.postCallDelayMs);
+        options.onTiming?.("sequential-post-call-delay-complete", { delayMs: call.postCallDelayMs });
       }
       return receipt;
     },
@@ -160,17 +177,20 @@ export function useWalletTransactionPlanExecutor() {
       };
 
       try {
-        for (const segment of segments) {
+        for (const [segmentIndex, segment] of segments.entries()) {
           const callTypes = segment.calls.map(call => getWalletTransactionPlanCallType(call.call));
           const canBatchSegment =
             canUseAtomicWalletSendCalls && segment.batchable && typeof options.chainId === "number" && connector;
           const canBatchSegmentWithThirdweb =
-            canUseThirdwebPlanBatchCalls && segment.batchable && typeof options.chainId === "number";
+            canUseThirdwebPlanBatchCalls &&
+            typeof options.chainId === "number" &&
+            canTransportWalletPlanSegmentWithThirdweb(segment);
 
           timingLog.emit("segment-start", {
             callCount: segment.calls.length,
             callTypes,
-            route: segment.batchable ? undefined : "sequential-wallet",
+            route: canBatchSegmentWithThirdweb ? "thirdweb-plan" : segment.batchable ? undefined : "sequential-wallet",
+            segmentIndex,
           });
 
           if (canBatchSegmentWithThirdweb) {
@@ -182,6 +202,7 @@ export function useWalletTransactionPlanExecutor() {
               timingLog.emit("thirdweb-plan-segment-start", {
                 callCount: segment.calls.length,
                 callTypes,
+                segmentIndex,
                 sponsorshipMode: thirdwebPlanSponsorshipMode,
               });
               const callsStatus = await executeContractCallBatch(
@@ -194,7 +215,9 @@ export function useWalletTransactionPlanExecutor() {
                 })),
                 {
                   action,
-                  atomicRequired: options.requiresAtomicExecution ?? true,
+                  atomicRequired: segment.batchable ? (options.requiresAtomicExecution ?? true) : false,
+                  parentRunId: timingLog.runId,
+                  segmentIndex,
                   sponsorshipMode: thirdwebPlanSponsorshipMode,
                   suppressStatusToast: true,
                 },
@@ -211,11 +234,13 @@ export function useWalletTransactionPlanExecutor() {
               timingLog.emit("thirdweb-plan-segment-complete", {
                 callCount: segment.calls.length,
                 receiptCount: receiptHashes.length,
+                segmentIndex,
               });
               continue;
             } catch (error) {
               timingLog.emit("thirdweb-plan-segment-failed", {
                 message: error instanceof Error ? error.message : "Unknown error",
+                segmentIndex,
               });
               if (segmentRequiresAtomicWalletBatch(segment, options)) {
                 throw error;
@@ -229,6 +254,11 @@ export function useWalletTransactionPlanExecutor() {
               await waitForReservationRevealIfNeeded(revealCall);
             }
             try {
+              timingLog.emit("wallet-sendCalls-segment-start", {
+                callCount: segment.calls.length,
+                callTypes,
+                segmentIndex,
+              });
               const callsStatus = await withWalletTransactionPlanStepTimeout(
                 sendCallsSyncAsync({
                   account: address as `0x${string}`,
@@ -258,9 +288,14 @@ export function useWalletTransactionPlanExecutor() {
               timingLog.emit("wallet-sendCalls-segment-complete", {
                 callCount: segment.calls.length,
                 receiptCount: receiptHashes.length,
+                segmentIndex,
               });
               continue;
             } catch (error) {
+              timingLog.emit("wallet-sendCalls-segment-failed", {
+                message: error instanceof Error ? error.message : "Unknown error",
+                segmentIndex,
+              });
               if (!isWalletSendCallsUnsupportedError(error)) {
                 throw error;
               }
@@ -274,19 +309,30 @@ export function useWalletTransactionPlanExecutor() {
 
           for (const call of segment.calls) {
             await waitForReservationRevealIfNeeded(call);
+            const callType = getWalletTransactionPlanCallType(call.call);
             timingLog.emit("sequential-call-start", {
-              callType: getWalletTransactionPlanCallType(call.call),
+              callType,
               index: call.index,
+              segmentIndex,
             });
             const receipt = await executeSequentialCall(call, {
               chainId: options.chainId,
               hashes,
               onCallConfirmed: options.onCallConfirmed,
               onCallSent: options.onCallSent,
+              onTiming: (event, extra = {}) => {
+                timingLog.emit(event, {
+                  callType,
+                  index: call.index,
+                  segmentIndex,
+                  ...extra,
+                });
+              },
             });
             timingLog.emit("sequential-call-complete", {
-              callType: getWalletTransactionPlanCallType(call.call),
+              callType,
               index: call.index,
+              segmentIndex,
             });
             if (isWalletTransactionPlanReserveSubmissionCall(call.call)) {
               latestReservationReceipt = receipt;
