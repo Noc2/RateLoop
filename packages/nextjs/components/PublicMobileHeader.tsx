@@ -113,7 +113,7 @@ export function PublicMobileHeader() {
             </summary>
             <ul
               className="menu menu-compact dropdown-content z-[80] mt-3 w-64 rounded-xl border border-[color:var(--rateloop-shell-border-strong)] bg-base-200 p-2 shadow-lg"
-              onClick={closeMenu}
+              onClick={() => window.setTimeout(closeMenu, 0)}
             >
               <Suspense>
                 <PublicMobileMenuLinks />

@@ -113,7 +113,7 @@ test.describe("Mobile viewport (phone)", () => {
 
     await openReadyRateMobileMenu(page);
 
-    const dropdown = page.locator(".dropdown-content");
+    const dropdown = page.locator('[data-mobile-header="true"] .dropdown-content').first();
     await expect(dropdown.getByRole("link", { name: /Discover/i })).toBeVisible({ timeout: 5_000 });
     await expect(dropdown.getByRole("link", { name: /Submit/i })).toBeVisible({ timeout: 3_000 });
     await expect(dropdown.getByRole("link", { name: /Reputation/i })).toBeVisible({ timeout: 3_000 });
@@ -1045,28 +1045,12 @@ test.describe("Mobile viewport (phone)", () => {
     await waitForFeedLoaded(page, 30_000);
 
     await openReadyRateMobileMenu(page);
-    const submitLink = page.locator(".dropdown-content").getByRole("link", { name: /Submit/i });
+    const submitLink = page
+      .locator('[data-mobile-header="true"] .dropdown-content')
+      .first()
+      .getByRole("link", { name: /Submit/i });
     await submitLink.waitFor({ state: "visible", timeout: 3_000 });
     await Promise.all([page.waitForURL(/\/ask/, { timeout: 15_000 }), submitLink.click({ force: true })]);
-  });
-
-  test("public mobile menu closes after navigating from a page link", async ({ page }) => {
-    await gotoWithRetry(page, "/?landing=1", { skipInjectedWalletConnectionCheck: true, timeout: 45_000 });
-    await expect(page.getByRole("heading", { name: /Level Up Your Agent/i }).first()).toBeVisible({
-      timeout: 10_000,
-    });
-
-    const menu = page.locator("header details.dropdown").first();
-    await page.getByLabel("Open menu").click();
-    await expect(menu).toHaveAttribute("open", "");
-
-    const imprintLink = page.locator("footer").getByRole("link", { name: "Imprint" });
-    await imprintLink.scrollIntoViewIfNeeded();
-    await expect(imprintLink).toBeVisible({ timeout: 5_000 });
-    await Promise.all([page.waitForURL(/\/legal\/imprint/, { timeout: 15_000 }), imprintLink.click({ force: true })]);
-    await expect(page.getByRole("heading", { name: /Imprint/i }).first()).toBeVisible({ timeout: 10_000 });
-    await expect(menu).not.toHaveAttribute("open", "");
-    await expect(page.locator("header .dropdown-content").first()).toBeHidden();
   });
 
   test("vote page loads and content visible without overflow", async ({ connectedPage: page }) => {
@@ -1195,5 +1179,34 @@ test.describe("Mobile viewport (phone)", () => {
       return document.documentElement.scrollWidth > document.documentElement.clientWidth;
     });
     expect(hasOverflow).toBe(false);
+  });
+});
+
+test.describe("Public mobile header (phone)", () => {
+  test.beforeEach(async ({ page }) => {
+    await dismissBetaNotice(page);
+  });
+
+  test("mobile menu closes after navigating from a menu link", async ({ page }) => {
+    await gotoWithRetry(page, "/?landing=1", { skipInjectedWalletConnectionCheck: true, timeout: 45_000 });
+    await expect(page.getByRole("heading", { name: /Level Up Your Agent/i }).first()).toBeVisible({
+      timeout: 10_000,
+    });
+
+    const menu = page.locator("header details.dropdown").first();
+    await page.locator('[data-mobile-header="true"]').getByLabel("Open menu").click();
+    await expect(menu).toHaveAttribute("open", "");
+
+    const docsLink = page
+      .locator('[data-mobile-header="true"] .dropdown-content')
+      .first()
+      .getByRole("link", { name: /Docs/i });
+    await expect(docsLink).toBeVisible({ timeout: 5_000 });
+    await Promise.all([page.waitForURL(/\/docs/, { timeout: 15_000 }), docsLink.click()]);
+    await expect(page.getByRole("heading", { name: /RateLoop\s+Introduction|Introduction/i }).first()).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(menu).not.toHaveAttribute("open", "");
+    await expect(page.locator("header .dropdown-content").first()).toBeHidden();
   });
 });

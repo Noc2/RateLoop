@@ -867,7 +867,7 @@ export const Header = () => {
                     </summary>
                     <ul
                       className={`menu menu-compact dropdown-content z-[80] mt-3 w-64 rounded-xl border p-2 shadow-lg ${headerChromeSurfaceClassName} ${headerChromeBorderClassName}`}
-                      onClick={closeMobileMenu}
+                      onClick={() => window.setTimeout(closeMobileMenu, 0)}
                     >
                       <Suspense>
                         <MobileMenuLinks />
