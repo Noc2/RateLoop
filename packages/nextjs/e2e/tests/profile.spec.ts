@@ -23,6 +23,17 @@ test.describe("Profile management", () => {
     });
   }
 
+  async function openGovernanceProfileEditorEntry(page: Parameters<typeof gotoWithRetry>[0]) {
+    const editorEntry = () =>
+      page.getByLabel("Profile name").or(page.getByRole("button", { name: "Edit profile", exact: true }));
+
+    await expect(async () => {
+      await gotoWithRetry(page, "/governance#profile", { ensureWalletConnected: true, timeout: 30_000 });
+      await expect(page.getByText(/Loading LREP status/i)).toHaveCount(0, { timeout: 5_000 });
+      await expect(editorEntry().first()).toBeVisible({ timeout: 5_000 });
+    }).toPass({ timeout: 60_000, intervals: [1_000, 2_000, 5_000] });
+  }
+
   test("settings page stays focused on settings without notification signature prompts on load", async ({
     browser,
   }) => {
@@ -61,11 +72,10 @@ test.describe("Profile management", () => {
     await setupWallet(page, createProfileAccount.privateKey);
 
     await openSettingsWithConnectedWallet(page);
-    await gotoWithRetry(page, "/governance#profile", { ensureWalletConnected: true });
+    await openGovernanceProfileEditorEntry(page);
 
     const nameInput = page.getByLabel("Profile name");
     const editProfileButton = page.getByRole("button", { name: "Edit profile", exact: true });
-    await waitForVisibleWithReload(page, () => nameInput.or(editProfileButton), { timeout: 15_000 });
     if (await editProfileButton.count()) {
       await expect(editProfileButton).toBeVisible({ timeout: 15_000 });
       await editProfileButton.click();
