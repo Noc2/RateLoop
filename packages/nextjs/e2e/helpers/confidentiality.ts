@@ -216,6 +216,16 @@ function createDetailsId() {
   return `det_e2e${Date.now().toString(36)}${Math.random().toString(36).slice(2, 14)}`;
 }
 
+function parseDetailsIdFromDetailsUrl(detailsUrl: string) {
+  try {
+    const parsed = new URL(detailsUrl, "http://localhost:3000");
+    const detailsId = parsed.pathname.split("/").filter(Boolean).pop();
+    return detailsId && detailsId.startsWith("det_") ? detailsId : null;
+  } catch {
+    return null;
+  }
+}
+
 async function getE2EDbPool() {
   const databaseUrl = process.env.DATABASE_URL;
   expect(databaseUrl, "DATABASE_URL must be set for confidentiality e2e database setup").toBeTruthy();
@@ -449,6 +459,59 @@ export async function upsertQuestionConfidentialityForE2E({
   );
 }
 
+async function replaceGatedQuestionDetailsLinkForE2E({
+  bondAmount,
+  bondAsset,
+  contentId,
+  detailsHash,
+  detailsId,
+}: {
+  bondAmount: string;
+  bondAsset: "lrep" | "usdc";
+  contentId: string;
+  detailsHash: Hex;
+  detailsId: string;
+}) {
+  const pool = await getE2EDbPool();
+  await pool.query(
+    `
+      delete from question_details
+      where content_id = $2
+        and id <> $3
+        and (deployment_key is null or deployment_key = $1 or chain_id = $4)
+    `,
+    [E2E_CONTENT_DEPLOYMENT_KEY, contentId, detailsId, foundry.id],
+  );
+  const linked = await pool.query(
+    `
+      update question_details
+      set deployment_key = $1,
+          chain_id = $2,
+          content_registry_address = $3,
+          content_id = $4,
+          requires_gated_access = true,
+          updated_at = now()
+      where id = $5
+      returning id
+    `,
+    [
+      E2E_CONTENT_DEPLOYMENT_KEY,
+      foundry.id,
+      CONTRACT_ADDRESSES.ContentRegistry.toLowerCase(),
+      contentId,
+      detailsId,
+    ],
+  );
+  expect(linked.rowCount, "current gated question details should be linked to the submitted content").toBe(1);
+  await upsertQuestionConfidentialityForE2E({
+    bondAmount,
+    bondAsset: normalizeAssetName(bondAsset) as "LREP" | "USDC",
+    contentId,
+    detailsHash,
+    disclosurePolicy: "private_forever",
+  });
+}
+
 export async function submitGatedQuestion(
   page: Page,
   {
@@ -504,6 +567,12 @@ export async function submitGatedQuestion(
   const detailsUpload = await detailsUploadResponse.json();
   const uploadedDetailsUrl = typeof detailsUpload.detailsUrl === "string" ? detailsUpload.detailsUrl : null;
   expect(uploadedDetailsUrl, "private browser submission should upload hosted details").toBeTruthy();
+  const uploadedDetailsHash = typeof detailsUpload.detailsHash === "string" ? detailsUpload.detailsHash : null;
+  expect(uploadedDetailsHash, "private browser submission should return a hosted details hash").toMatch(
+    /^0x[a-fA-F0-9]{64}$/,
+  );
+  const uploadedDetailsId = parseDetailsIdFromDetailsUrl(uploadedDetailsUrl!);
+  expect(uploadedDetailsId, "private browser submission should return a hosted details id").toBeTruthy();
 
   const uploadedDetailsPath = new URL(uploadedDetailsUrl!).pathname;
   const unlinkedDetails = await getWithRequestRetry(page.request, uploadedDetailsPath);
@@ -529,6 +598,13 @@ export async function submitGatedQuestion(
       submitted,
     )}`,
   ).toBe(true);
+  await replaceGatedQuestionDetailsLinkForE2E({
+    bondAmount,
+    bondAsset,
+    contentId: String(submitted.id),
+    detailsHash: uploadedDetailsHash as Hex,
+    detailsId: uploadedDetailsId!,
+  });
 
   const publicDetails = await getWithRequestRetry(page.request, uploadedDetailsPath);
   expect([401, 403], "linked gated details should require a signed session").toContain(publicDetails.status());
