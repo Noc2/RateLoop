@@ -47,6 +47,7 @@ export function useContentFeed(voterAddress?: string, options: UseContentFeedOpt
   const limit = options.limit && options.limit > 0 ? Math.floor(options.limit) : undefined;
   const offset = options.offset && options.offset > 0 ? Math.floor(options.offset) : 0;
   const ownSubmitterAddresses = options.ownSubmitterAddresses;
+  const refetchInterval = options.refetchInterval;
   const searchQuery = options.searchQuery?.trim();
   const shortSearchQueryBlocked = isContentSearchQueryTooShort(searchQuery);
   const sortBy = options.sortBy ?? "newest";
@@ -260,7 +261,7 @@ export function useContentFeed(voterAddress?: string, options: UseContentFeedOpt
     availabilityDeploymentKey: ponderDeploymentKey,
     enabled,
     staleTime: 15_000,
-    refetchInterval: isPageVisible ? 30_000 : false,
+    refetchInterval: refetchInterval ?? (isPageVisible ? 30_000 : false),
     keepPrevious,
   });
 

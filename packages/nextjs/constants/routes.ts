@@ -6,6 +6,7 @@ export const ASK_SUBMISSIONS_ROUTE_TAB = "submissions";
 export type AskRouteTab = typeof ASK_MANUAL_ROUTE_TAB | typeof ASK_AGENT_ROUTE_TAB | typeof ASK_SUBMISSIONS_ROUTE_TAB;
 
 export const RATE_ROUTE = "/rate";
+export const RATE_WAIT_FOR_CONTENT_PARAM = "waitForContent";
 
 export const GOVERNANCE_ROUTE = "/governance";
 
@@ -44,8 +45,16 @@ export const ASK_SUBMISSIONS_ROUTE = buildRouteWithSearchParams(ASK_ROUTE, {
   [ASK_ROUTE_TAB_PARAM]: ASK_SUBMISSIONS_ROUTE_TAB,
 });
 
-export function buildRateContentHref(contentId: string | number | bigint) {
-  return buildRouteWithSearchParams(RATE_ROUTE, { content: contentId.toString() });
+export function buildRateContentHref(
+  contentId: string | number | bigint,
+  options?: {
+    waitForContent?: boolean;
+  },
+) {
+  return buildRouteWithSearchParams(RATE_ROUTE, {
+    content: contentId.toString(),
+    ...(options?.waitForContent ? { [RATE_WAIT_FOR_CONTENT_PARAM]: "1" } : {}),
+  });
 }
 
 export function parseAskRouteTab(tab: string | null | undefined): AskRouteTab {

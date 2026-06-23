@@ -6,6 +6,9 @@ import {
   ASK_ROUTE_TAB_PARAM,
   ASK_SUBMISSIONS_ROUTE,
   ASK_SUBMISSIONS_ROUTE_TAB,
+  RATE_ROUTE,
+  RATE_WAIT_FOR_CONTENT_PARAM,
+  buildRateContentHref,
   buildRouteWithSearchParams,
   parseAskRouteTab,
 } from "./routes";
@@ -33,5 +36,13 @@ test("route search param builder preserves ask tab values", () => {
   assert.equal(
     buildRouteWithSearchParams(ASK_ROUTE, { [ASK_ROUTE_TAB_PARAM]: ASK_SUBMISSIONS_ROUTE_TAB }),
     ASK_SUBMISSIONS_ROUTE,
+  );
+});
+
+test("rate content links can request a short readiness wait", () => {
+  assert.equal(buildRateContentHref(88n), `${RATE_ROUTE}?content=88`);
+  assert.equal(
+    buildRateContentHref(88n, { waitForContent: true }),
+    `${RATE_ROUTE}?content=88&${RATE_WAIT_FOR_CONTENT_PARAM}=1`,
   );
 });

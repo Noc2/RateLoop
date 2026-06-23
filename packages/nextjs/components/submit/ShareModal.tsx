@@ -123,7 +123,7 @@ export function ShareModal({
         <div className="space-y-2.5">
           {/* View content */}
           <Link
-            href={buildRateContentHref(contentId)}
+            href={buildRateContentHref(contentId, { waitForContent: true })}
             className={getGradientActionClassName("!w-full")}
             data-motion="idle"
           >

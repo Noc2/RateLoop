@@ -15,7 +15,7 @@ import { VotingQuestionCard } from "~~/components/shared/VotingQuestionCard";
 import { FeedScopeFilter } from "~~/components/vote/FeedScopeFilter";
 import { VoteSignalRail } from "~~/components/vote/VoteSignalRail";
 import { resolveStakeModalVoteItem } from "~~/components/vote/stakeModalVoteItem";
-import { RATE_ROUTE } from "~~/constants/routes";
+import { RATE_ROUTE, RATE_WAIT_FOR_CONTENT_PARAM } from "~~/constants/routes";
 import { useMobileHeaderVisibility } from "~~/contexts/MobileHeaderVisibilityContext";
 import {
   MIN_CONTENT_SEARCH_QUERY_LENGTH,
@@ -131,6 +131,8 @@ const stakeSelectorE2EHarnessEnabled =
   process.env.NODE_ENV !== "production" || process.env.NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD === "true";
 const MOBILE_VOTE_DOCK_RESERVED_SPACE_PX = 152;
 const CONTENT_INTENT_PROMPT_MS = 1_400;
+const REQUESTED_CONTENT_INDEXING_WAIT_MS = 45_000;
+const REQUESTED_CONTENT_INDEXING_POLL_MS = 1_500;
 const MIN_COUNTED_STAKE_MICRO = 1_000_000n;
 const INTERNAL_CONTENT_PIN_STORAGE_KEY = "rateloop_internal_vote_content_pin";
 const INTERNAL_CONTENT_PIN_TTL_MS = 6 * 60 * 60 * 1000;
@@ -231,6 +233,7 @@ const HomeInner = () => {
   const pathname = usePathname();
   const searchQuery = searchParams?.get("q") ?? "";
   const contentParam = searchParams?.get("content");
+  const waitForRequestedContent = searchParams?.get(RATE_WAIT_FOR_CONTENT_PARAM) === "1";
   const requestedActiveId = useMemo(() => {
     if (!contentParam) return null;
     try {
@@ -255,6 +258,8 @@ const HomeInner = () => {
       ? requestedActiveId
       : null;
   });
+  const [requestedContentWaitUntil, setRequestedContentWaitUntil] = useState<number | null>(null);
+  const [requestedContentWaitNow, setRequestedContentWaitNow] = useState(0);
 
   useEffect(() => {
     setInternallySyncedContentPinKey(readInternalContentPinKey(contentPinKey));
@@ -444,6 +449,12 @@ const HomeInner = () => {
     return scopedContentIds.slice(0, feedRequestLimit);
   }, [scopedContentIds, feedRequestLimit]);
   const effectiveRequestedActiveId = activeCategory === ALL_FILTER ? requestedActiveId : null;
+  const requestedContentWaitWindowActive =
+    waitForRequestedContent &&
+    effectiveRequestedActiveId !== null &&
+    (requestedContentWaitUntil === null ||
+      requestedContentWaitNow === 0 ||
+      requestedContentWaitNow < requestedContentWaitUntil);
   const contentFeedSortBy = isSearchMode
     ? effectiveSearchSortBy
     : activeScope === "all" && activeFeedMode === "highest_rewards"
@@ -451,6 +462,36 @@ const HomeInner = () => {
       : activeScope === "all"
         ? "bounty_first"
         : "newest";
+
+  useEffect(() => {
+    if (!waitForRequestedContent || effectiveRequestedActiveId === null) {
+      setRequestedContentWaitUntil(null);
+      setRequestedContentWaitNow(0);
+      return;
+    }
+
+    setRequestedContentWaitUntil(Date.now() + REQUESTED_CONTENT_INDEXING_WAIT_MS);
+    setRequestedContentWaitNow(Date.now());
+  }, [effectiveRequestedActiveId, waitForRequestedContent]);
+
+  useEffect(() => {
+    if (requestedContentWaitUntil === null) return;
+
+    const intervalId = window.setInterval(() => {
+      setRequestedContentWaitNow(Date.now());
+    }, 1_000);
+    const timeoutId = window.setTimeout(
+      () => {
+        setRequestedContentWaitNow(Date.now());
+      },
+      Math.max(0, requestedContentWaitUntil - Date.now()),
+    );
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.clearTimeout(timeoutId);
+    };
+  }, [requestedContentWaitUntil]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -560,6 +601,7 @@ const HomeInner = () => {
     keepPrevious: false,
     limit: requestedContentIds.length || undefined,
     ownSubmitterAddresses,
+    refetchInterval: requestedContentWaitWindowActive ? REQUESTED_CONTENT_INDEXING_POLL_MS : undefined,
     status: "all",
   });
   const requestedContentFeed = useMemo(
@@ -2078,15 +2120,38 @@ const HomeInner = () => {
     trimmedSearchQuery,
   ]);
 
+  const requestedContentWaitActive =
+    requestedContentWaitWindowActive &&
+    effectiveRequestedActiveId !== null &&
+    activeSourceIndex < 0 &&
+    !requestedContentItem;
   const showRequestedContentLoading = shouldHoldVoteFeedForRequestedContent({
     activeSourceIndex,
     isFeedLoading: isLoading,
-    isRequestedContentLoading: requestedContentLoading,
+    isRequestedContentLoading: requestedContentLoading || requestedContentWaitActive,
     requestedActiveId: effectiveRequestedActiveId,
     visibleCount,
   });
   const showRequestedContentUnavailable =
     effectiveRequestedActiveId !== null && activeSourceIndex < 0 && !showRequestedContentLoading;
+
+  useEffect(() => {
+    if (!waitForRequestedContent || effectiveRequestedActiveId === null || requestedContentWaitActive) return;
+    if (activeSourceIndex < 0 && !requestedContentItem) return;
+    if (typeof window === "undefined") return;
+
+    const nextUrl = new URL(window.location.href);
+    if (!nextUrl.searchParams.has(RATE_WAIT_FOR_CONTENT_PARAM)) return;
+
+    nextUrl.searchParams.delete(RATE_WAIT_FOR_CONTENT_PARAM);
+    replaceUrlPreservingHistoryState(nextUrl.toString());
+  }, [
+    activeSourceIndex,
+    effectiveRequestedActiveId,
+    requestedContentItem,
+    requestedContentWaitActive,
+    waitForRequestedContent,
+  ]);
   const mobileVoteDockItem = !showRequestedContentLoading && !showRequestedContentUnavailable ? primaryItem : null;
   return (
     <AppPageShell

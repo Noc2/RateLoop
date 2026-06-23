@@ -197,6 +197,7 @@ export interface UseContentFeedOptions {
   limit?: number;
   offset?: number;
   ownSubmitterAddresses?: string[];
+  refetchInterval?: number | false;
   searchQuery?: string;
   sortBy?: FeedSort;
   submitter?: string;
