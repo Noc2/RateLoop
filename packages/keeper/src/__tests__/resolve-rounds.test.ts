@@ -43,6 +43,11 @@ const {
       maxCandidates: 500,
       chainScanPerTick: 5,
     },
+    proactiveRoundOpening: {
+      enabled: false,
+      maxPerTick: 2,
+      recentSeconds: 6n * 60n * 60n,
+    },
     feedbackBonusForfeits: {
       enabled: true,
       maxPoolsPerTick: 25,
@@ -592,6 +597,10 @@ function makeHarness(options: {
           return "0xsync";
         }
 
+        if (functionName === "openRound") {
+          return "0xopenround";
+        }
+
         if (functionName === "revealAdvisoryVote") {
           const commitKey = String(args[0]);
           const commit = advisoryCommits[commitKey];
@@ -639,6 +648,9 @@ describe("resolveRounds", () => {
     mockConfig.keeperWorkDiscovery.enabled = false;
     mockConfig.keeperWorkDiscovery.reconciliationEveryTicks = 120;
     mockConfig.keeperWorkDiscovery.maxCandidates = 500;
+    mockConfig.proactiveRoundOpening.enabled = false;
+    mockConfig.proactiveRoundOpening.maxPerTick = 2;
+    mockConfig.proactiveRoundOpening.recentSeconds = 6n * 60n * 60n;
     mockConfig.feedbackBonusForfeits.enabled = true;
     mockConfig.feedbackBonusForfeits.maxPoolsPerTick = 25;
     mockConfig.feedbackBonusForfeits.minAgeSeconds = 60;
@@ -703,6 +715,62 @@ describe("resolveRounds", () => {
     expect(walletClient.writeContract).toHaveBeenCalledWith(
       expect.objectContaining({
         functionName: "markDormant",
+        args: [1n],
+      }),
+    );
+  });
+
+  it("proactively opens requested rating rounds from Ponder work discovery", async () => {
+    mockConfig.keeperWorkDiscovery.enabled = true;
+    mockConfig.proactiveRoundOpening.enabled = true;
+    mockConfig.proactiveRoundOpening.maxPerTick = 1;
+    mockConfig.proactiveRoundOpening.recentSeconds = 900n;
+
+    const { publicClient, walletClient } = makeHarness({
+      activeRoundId: 0n,
+      latestRoundId: 0n,
+      round: makeRound({ state: 1, voteCount: 0n, revealedCount: 0n }),
+      now: 3_000_000n,
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(input.toString());
+      if (url.pathname === "/deployment") {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => matchingPonderDeployment(),
+        };
+      }
+      expect(url.pathname).toBe("/keeper/work");
+      expect(url.searchParams.get("roundOpenLimit")).toBe("1");
+      expect(url.searchParams.get("roundOpenRecentSeconds")).toBe("900");
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          roundOpenRequests: [{ contentId: "1", reason: "proactive_open" }],
+          openRounds: [],
+          cleanupRounds: [],
+          dormantContent: [],
+          feedbackBonusForfeits: [],
+        }),
+      };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const logger = makeLogger();
+
+    const result = await resolveRounds(
+      publicClient as any,
+      walletClient as any,
+      {} as any,
+      { address: ACCOUNT } as any,
+      logger as any,
+    );
+
+    expect(result.roundsOpened).toBe(1);
+    expect(walletClient.writeContract).toHaveBeenCalledWith(
+      expect.objectContaining({
+        functionName: "openRound",
         args: [1n],
       }),
     );

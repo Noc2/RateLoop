@@ -69,6 +69,7 @@ import { getRevertReason, isExpectedRevert } from "./revert-utils.js";
 
 // --- Types ---
 export interface KeeperResult {
+  roundsOpened: number;
   roundsSettled: number;
   roundsCancelled: number;
   roundsRevealFailedFinalized: number;
@@ -114,6 +115,7 @@ interface KeeperWorkFeedbackBonusForfeitCandidate {
 interface KeeperWorkDiscovery {
   source: "ponder" | "chain";
   contentIds: bigint[];
+  roundOpenRequests: KeeperWorkContentCandidate[];
   openRounds: KeeperWorkRoundCandidate[];
   cleanupRounds: KeeperWorkRoundCandidate[];
   dormantContent: KeeperWorkContentCandidate[];
@@ -146,6 +148,7 @@ let verifiedPonderDeploymentCacheKey: string | null = null;
 
 function emptyResult(): KeeperResult {
   return {
+    roundsOpened: 0,
     roundsSettled: 0,
     roundsCancelled: 0,
     roundsRevealFailedFinalized: 0,
@@ -531,6 +534,7 @@ async function discoverKeeperWorkCandidates(
       discovery = {
         source: "chain",
         contentIds: chainContentIds,
+        roundOpenRequests: [],
         openRounds: [],
         cleanupRounds: [],
         dormantContent: [],
@@ -546,6 +550,10 @@ async function discoverKeeperWorkCandidates(
   setGauge(
     "keeper_work_discovery_last_source",
     discovery.source === "ponder" ? 1 : 2,
+  );
+  setGauge(
+    "keeper_work_discovery_round_open_requests",
+    discovery.roundOpenRequests.length,
   );
   setGauge(
     "keeper_work_discovery_open_round_candidates",
@@ -683,6 +691,15 @@ async function fetchKeeperWorkFromPonder(
     String(config.feedbackBonusForfeits?.minAgeSeconds ?? 0),
   );
   url.searchParams.set("limit", String(Math.max(1, limit)));
+  const proactiveRoundOpening = config.proactiveRoundOpening ?? {
+    enabled: false,
+    maxPerTick: 0,
+    recentSeconds: 0n,
+  };
+  if (proactiveRoundOpening.enabled && proactiveRoundOpening.maxPerTick > 0) {
+    url.searchParams.set("roundOpenLimit", String(proactiveRoundOpening.maxPerTick));
+    url.searchParams.set("roundOpenRecentSeconds", proactiveRoundOpening.recentSeconds.toString());
+  }
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), PONDER_FETCH_TIMEOUT_MS);
@@ -722,6 +739,7 @@ async function fetchKeeperWorkFromPonder(
 function parseKeeperWorkPayload(payload: unknown): KeeperWorkDiscovery | null {
   if (!payload || typeof payload !== "object") return null;
   const record = payload as Record<string, unknown>;
+  const roundOpenRequests = parseKeeperWorkContentArray(record.roundOpenRequests ?? []);
   const openRounds = parseKeeperWorkRoundArray(record.openRounds);
   const cleanupRounds = parseKeeperWorkRoundArray(record.cleanupRounds);
   const dormantContent = parseKeeperWorkContentArray(record.dormantContent);
@@ -730,6 +748,7 @@ function parseKeeperWorkPayload(payload: unknown): KeeperWorkDiscovery | null {
   );
 
   if (
+    !roundOpenRequests ||
     !openRounds ||
     !cleanupRounds ||
     !dormantContent ||
@@ -739,6 +758,7 @@ function parseKeeperWorkPayload(payload: unknown): KeeperWorkDiscovery | null {
   }
 
   const contentIds = sortedUniqueBigInts([
+    ...roundOpenRequests.map((candidate) => candidate.contentId),
     ...openRounds.map((candidate) => candidate.contentId),
     ...cleanupRounds.map((candidate) => candidate.contentId),
     ...dormantContent.map((candidate) => candidate.contentId),
@@ -747,6 +767,7 @@ function parseKeeperWorkPayload(payload: unknown): KeeperWorkDiscovery | null {
   return {
     source: "ponder",
     contentIds,
+    roundOpenRequests,
     openRounds,
     cleanupRounds,
     dormantContent,
@@ -1240,6 +1261,16 @@ export async function resolveRounds(
     enqueueRoundForCleanup(candidate.contentId, candidate.roundId);
   }
 
+  result.roundsOpened += await _openRequestedRounds(
+    publicClient,
+    walletClient,
+    chain,
+    account,
+    logger,
+    engineAddr,
+    discovery.roundOpenRequests,
+  );
+
   // --- Process discovered content items ---
   for (const contentId of discovery.contentIds) {
     try {
@@ -1647,6 +1678,87 @@ export async function resolveRounds(
   );
 
   return result;
+}
+
+function isExpectedRoundOpenRevert(reason: string): boolean {
+  const benign = [
+    "ContentNotActive",
+    "SelfVote",
+    "ConfidentialityCredentialRequired",
+    "ConfidentialityBondRequired",
+    "IdentityBanned",
+    "RoundNotOpen",
+    "ThresholdReached",
+    "EnforcedPause",
+    "Pausable",
+  ];
+  const lower = reason.toLowerCase();
+  return benign.some((phrase) => lower.includes(phrase.toLowerCase()));
+}
+
+async function _openRequestedRounds(
+  publicClient: PublicClient,
+  walletClient: WalletClient,
+  chain: Chain,
+  account: Account,
+  logger: Logger,
+  engineAddr: `0x${string}`,
+  candidates: readonly KeeperWorkContentCandidate[],
+): Promise<number> {
+  if (candidates.length === 0) {
+    return 0;
+  }
+
+  let opened = 0;
+  for (const candidate of candidates) {
+    try {
+      const { activeRoundId } = await readCurrentRoundIds(
+        publicClient,
+        engineAddr,
+        candidate.contentId,
+      );
+      if (activeRoundId > 0n) {
+        logger.debug("Skipped proactive round open; active round already exists", {
+          contentId: candidate.contentId.toString(),
+          reason: candidate.reason,
+          roundId: activeRoundId.toString(),
+        });
+        continue;
+      }
+
+      await writeContractAndConfirm(publicClient, walletClient, {
+        chain,
+        account,
+        address: engineAddr,
+        abi: RoundVotingEngineAbi,
+        functionName: "openRound",
+        args: [candidate.contentId],
+      });
+      opened++;
+      logger.info("Proactively opened rating round", {
+        contentId: candidate.contentId.toString(),
+        reason: candidate.reason,
+      });
+    } catch (err: unknown) {
+      const reason = getRevertReason(err);
+      if (isExpectedRoundOpenRevert(reason)) {
+        logger.debug("Skipped proactive round open candidate", {
+          contentId: candidate.contentId.toString(),
+          reason: candidate.reason,
+          error: reason,
+        });
+        continue;
+      }
+
+      logger.warn("Failed to proactively open rating round", {
+        contentId: candidate.contentId.toString(),
+        reason: candidate.reason,
+        error: reason,
+      });
+    }
+  }
+
+  return opened;
 }
 
 function isExpectedFeedbackBonusForfeitRevert(reason: string): boolean {

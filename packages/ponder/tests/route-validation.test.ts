@@ -4838,6 +4838,40 @@ describe("registerKeeperRoutes", () => {
     });
   });
 
+  it("returns proactive round open requests when requested by the keeper", async () => {
+    const { queryBuilders } = mockPonderModules([], [
+      [{ contentId: 4n, reason: "proactive_open" }],
+      [],
+      [],
+      [],
+    ]);
+    const { registerKeeperRoutes } = await import(
+      "../src/api/routes/keeper-routes.js"
+    );
+    const app = new Hono();
+    registerKeeperRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/keeper/work?now=1000&dormancyPeriod=60&roundOpenLimit=2&roundOpenRecentSeconds=300&limit=5",
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      roundOpenRequests: [{ contentId: "4", reason: "proactive_open" }],
+    });
+
+    const roundOpenBuilder = queryBuilders[1]!;
+    expect(roundOpenBuilder.limit).toHaveBeenCalledWith(2);
+    const serializedWhere = serializeExpression(
+      roundOpenBuilder.where.mock.calls[0]?.[0],
+    );
+    expect(serializedWhere).toContain("content.gated");
+    expect(serializedWhere).toContain("content.bundleId");
+    expect(serializedWhere).toContain("content.lastActivityAt");
+    expect(serializedWhere).toContain("round.state");
+    expect(serializedWhere).toContain("round.voteCount");
+  });
+
   it("filters feedback bonus forfeits to expired pools that are not started open rounds", async () => {
     const { queryBuilders } = mockPonderModules([], [[], [], []]);
     const { registerKeeperRoutes } = await import(

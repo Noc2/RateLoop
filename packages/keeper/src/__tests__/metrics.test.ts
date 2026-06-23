@@ -20,6 +20,7 @@ import type { KeeperResult } from "../keeper.js";
 
 function makeResult(overrides: Partial<KeeperResult> = {}): KeeperResult {
   return {
+    roundsOpened: 0,
     roundsSettled: 0,
     roundsCancelled: 0,
     roundsRevealFailedFinalized: 0,

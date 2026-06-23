@@ -48,6 +48,7 @@ async function loadKeeperIndex(options: KeeperIndexOptions = {}) {
             runContext.blockTimestamp = 1234n;
           }
           return {
+            roundsOpened: 0,
             roundsSettled: 0,
             roundsCancelled: 0,
             roundsRevealFailedFinalized: 0,

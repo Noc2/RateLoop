@@ -658,6 +658,24 @@ function loadConfig() {
         ),
       };
     })(),
+    proactiveRoundOpening: {
+      enabled: parseBooleanEnv(
+        readEnv("KEEPER_PROACTIVE_ROUND_OPENING_ENABLED"),
+        false,
+        "KEEPER_PROACTIVE_ROUND_OPENING_ENABLED",
+        errors,
+      ),
+      maxPerTick: readNonNegativeIntEnv(
+        "KEEPER_PROACTIVE_ROUND_OPENING_MAX_PER_TICK",
+        "2",
+        errors,
+      ),
+      recentSeconds: BigInt(readNonNegativeBigIntStringEnv(
+        "KEEPER_PROACTIVE_ROUND_OPENING_RECENT_SECONDS",
+        String(6n * 60n * 60n),
+        errors,
+      )),
+    },
     feedbackBonusForfeits: {
       enabled: feedbackBonusForfeitsEnabled,
       maxPoolsPerTick: readNonNegativeIntEnv(

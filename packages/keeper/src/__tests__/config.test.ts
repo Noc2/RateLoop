@@ -109,10 +109,29 @@ describe("keeper config", () => {
       maxPoolsPerTick: 25,
       minAgeSeconds: 60,
     });
+    expect(config.proactiveRoundOpening).toEqual({
+      enabled: false,
+      maxPerTick: 2,
+      recentSeconds: 21_600n,
+    });
     expect(config.frontendFees.enabled).toBe(false);
     expect(config.persistence).toEqual({
       databaseUrl: null,
       mainLoopLockRequired: false,
+    });
+  });
+
+  it("loads proactive round opening limits", async () => {
+    const { config } = await loadKeeperConfig({
+      KEEPER_PROACTIVE_ROUND_OPENING_ENABLED: "true",
+      KEEPER_PROACTIVE_ROUND_OPENING_MAX_PER_TICK: "3",
+      KEEPER_PROACTIVE_ROUND_OPENING_RECENT_SECONDS: "900",
+    });
+
+    expect(config.proactiveRoundOpening).toEqual({
+      enabled: true,
+      maxPerTick: 3,
+      recentSeconds: 900n,
     });
   });
 

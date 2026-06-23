@@ -9,6 +9,7 @@ import type { KeeperResult } from "./keeper.js";
 
 // --- Counters ---
 const counters: Record<string, number> = {
+  keeper_rounds_opened_total: 0,
   keeper_rounds_settled_total: 0,
   keeper_rounds_cancelled_total: 0,
   keeper_rounds_reveal_failed_finalized_total: 0,
@@ -41,6 +42,7 @@ const gauges: Record<string, number> = {
   keeper_reveal_grace_seconds_remaining_min: -1,
   keeper_work_discovery_last_duration_seconds: 0,
   keeper_work_discovery_last_source: 0,
+  keeper_work_discovery_round_open_requests: 0,
   keeper_work_discovery_open_round_candidates: 0,
   keeper_work_discovery_cleanup_round_candidates: 0,
   keeper_work_discovery_dormant_content_candidates: 0,
@@ -89,6 +91,7 @@ export function getConsecutiveErrors(): number {
 /** Record the result of a keeper run. */
 export function recordRun(result: KeeperResult, durationMs: number) {
   counters.keeper_runs_total++;
+  counters.keeper_rounds_opened_total += result.roundsOpened;
   counters.keeper_rounds_settled_total += result.roundsSettled;
   counters.keeper_rounds_cancelled_total += result.roundsCancelled;
   counters.keeper_rounds_reveal_failed_finalized_total += result.roundsRevealFailedFinalized;
@@ -118,6 +121,7 @@ function renderMetrics(): string {
   const lines: string[] = [];
 
   const counterHelp: Record<string, string> = {
+    keeper_rounds_opened_total: "Total rating rounds proactively opened by keeper",
     keeper_rounds_settled_total: "Total rounds settled by keeper",
     keeper_rounds_cancelled_total: "Total rounds cancelled by keeper",
     keeper_rounds_reveal_failed_finalized_total: "Total rounds finalized as RevealFailed by keeper",
@@ -161,6 +165,8 @@ function renderMetrics(): string {
       "Seconds until the most at-risk round becomes finalizable as RevealFailed (-1 = none)",
     keeper_work_discovery_last_duration_seconds: "Duration of the last keeper work discovery phase in seconds",
     keeper_work_discovery_last_source: "Last keeper work discovery source: 1=Ponder, 2=chain reconciliation",
+    keeper_work_discovery_round_open_requests:
+      "Proactive round open requests returned by the last keeper work discovery phase",
     keeper_work_discovery_open_round_candidates: "Open round candidates returned by the last keeper work discovery phase",
     keeper_work_discovery_cleanup_round_candidates: "Cleanup round candidates returned by the last keeper work discovery phase",
     keeper_work_discovery_dormant_content_candidates: "Dormant content candidates returned by the last keeper work discovery phase",
@@ -196,6 +202,7 @@ function renderHealth(): { status: number; body: string } {
     lastRunDuration: gauges.keeper_last_run_duration_seconds,
     consecutiveErrors,
     totalRuns: counters.keeper_runs_total,
+    roundsOpened: counters.keeper_rounds_opened_total,
     roundsRevealFailedFinalized: counters.keeper_rounds_reveal_failed_finalized_total,
     cleanupBatchesProcessed: counters.keeper_unrevealed_cleanup_batches_total,
     feedbackBonusPoolsForfeited: counters.keeper_feedback_bonus_forfeits_total,
@@ -204,6 +211,7 @@ function renderHealth(): { status: number; body: string } {
     revealGraceSecondsRemainingMin: gauges.keeper_reveal_grace_seconds_remaining_min,
     workDiscoveryDuration: gauges.keeper_work_discovery_last_duration_seconds,
     workDiscoverySource: gauges.keeper_work_discovery_last_source,
+    roundOpenRequests: gauges.keeper_work_discovery_round_open_requests,
     openRoundCandidates: gauges.keeper_work_discovery_open_round_candidates,
     cleanupRoundCandidates: gauges.keeper_work_discovery_cleanup_round_candidates,
     dormantContentCandidates: gauges.keeper_work_discovery_dormant_content_candidates,

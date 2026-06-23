@@ -1,6 +1,6 @@
 import type { Context } from "hono";
 import { REVEAL_FAILED_GRACE_MULTIPLIER, ROUND_STATE } from "@rateloop/contracts/protocol";
-import { and, asc, eq, inArray, or, sql } from "ponder";
+import { and, asc, desc, eq, inArray, or, sql } from "ponder";
 import { db } from "ponder:api";
 import { content, feedbackBonusPool, round } from "ponder:schema";
 import type { ApiApp } from "../shared.js";
@@ -10,6 +10,7 @@ import { safeBigInt, safeLimit } from "../utils.js";
 const DEFAULT_KEEPER_WORK_LIMIT = 500;
 const MAX_KEEPER_WORK_LIMIT = 2_000;
 const MAX_DORMANT_CANDIDATE_LIMIT = 500;
+const MAX_ROUND_OPEN_CANDIDATE_LIMIT = 25;
 
 function safeNonNegativeBigIntParam(value: string | undefined): bigint | null {
   if (value === undefined) return null;
@@ -41,6 +42,8 @@ export function registerKeeperRoutes(app: ApiApp) {
     const feedbackBonusForfeitMinAge = safeNonNegativeBigIntParam(
       c.req.query("feedbackBonusForfeitMinAge"),
     ) ?? 0n;
+    const roundOpenLimit = safeLimit(c.req.query("roundOpenLimit"), 0, MAX_ROUND_OPEN_CANDIDATE_LIMIT);
+    const roundOpenRecentSeconds = safeNonNegativeBigIntParam(c.req.query("roundOpenRecentSeconds")) ?? 0n;
     const limit = safeLimit(
       c.req.query("limit"),
       DEFAULT_KEEPER_WORK_LIMIT,
@@ -101,6 +104,37 @@ export function registerKeeperRoutes(app: ApiApp) {
       )
       .orderBy(asc(round.contentId), asc(round.roundId))
       .limit(limit);
+
+    const roundOpenRequests =
+      roundOpenLimit > 0 && roundOpenRecentSeconds > 0n
+        ? await db
+            .select({
+              contentId: content.id,
+              reason: sql<string>`'proactive_open'`,
+            })
+            .from(content)
+            .where(
+              and(
+                eq(content.status, 0),
+                eq(content.gated, false),
+                sql`${content.bundleId} = 0`,
+                sql`${content.lastActivityAt} > 0`,
+                sql`${content.lastActivityAt} + ${roundOpenRecentSeconds} >= ${now}`,
+                sql`not exists (
+                  select 1 from ${round}
+                  where ${round.contentId} = ${content.id}
+                    and ${round.state} = ${ROUND_STATE.Open}
+                )`,
+                sql`not exists (
+                  select 1 from ${round}
+                  where ${round.contentId} = ${content.id}
+                    and ${round.voteCount} = 0
+                )`,
+              ),
+            )
+            .orderBy(desc(content.lastActivityAt), desc(content.id))
+            .limit(roundOpenLimit)
+        : [];
 
     const cleanupRounds = await db
       .select({
@@ -192,6 +226,7 @@ export function registerKeeperRoutes(app: ApiApp) {
       now,
       limit,
       source: "ponder",
+      roundOpenRequests,
       openRounds,
       cleanupRounds,
       dormantContent,

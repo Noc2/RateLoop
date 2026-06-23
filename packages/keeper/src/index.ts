@@ -43,6 +43,7 @@ const logger = createLogger(config.logFormat);
 
 function emptyKeeperResult(): KeeperResult {
   return {
+    roundsOpened: 0,
     roundsSettled: 0,
     roundsCancelled: 0,
     roundsRevealFailedFinalized: 0,
@@ -227,6 +228,7 @@ async function main() {
       // so ticks that only finalize reveal-failed rounds or process cleanup batches
       // still produce a "Run complete" log.
       const total =
+        result.roundsOpened +
         result.roundsSettled +
         result.roundsCancelled +
         result.roundsRevealFailedFinalized +
