@@ -585,7 +585,7 @@ export function ConfidentialContextGate({
             <GateCopy title="Human credential required" variant={variant}>
               <p>Private-context ratings require an active human credential before hosted context is shown.</p>
             </GateCopy>
-            <a className="btn btn-outline btn-sm" href="/settings">
+            <a className="btn btn-outline btn-sm" href="/settings#identity">
               Verify in Settings
             </a>
           </>
