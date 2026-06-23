@@ -14,6 +14,13 @@ const ONE_PIXEL_PNG = Buffer.from(
   "base64",
 );
 
+function pngWithDimensions(width: number, height: number) {
+  const buffer = Buffer.from(ONE_PIXEL_PNG);
+  buffer.writeUInt32BE(width, 16);
+  buffer.writeUInt32BE(height, 20);
+  return buffer;
+}
+
 async function writeTempFile(name: string, buffer: Buffer) {
   const dir = await mkdtemp(join(tmpdir(), "rateloop-handoff-image-"));
   const path = join(dir, name);
@@ -34,7 +41,28 @@ describe("handoff generated image files", () => {
       sha256: createHash("sha256").update(ONE_PIXEL_PNG).digest("hex"),
       sizeBytes: ONE_PIXEL_PNG.length,
     });
+    expect(image.dimensions).toEqual({ width: 1, height: 1 });
     expect(image.buffer).toEqual(ONE_PIXEL_PNG);
+  });
+
+  it("warns when generated image dimensions are not 16:9", async () => {
+    const squarePng = pngWithDimensions(1200, 1200);
+    const path = await writeTempFile("square.png", squarePng);
+    const image = await readHandoffGeneratedImageFile(path);
+
+    expect(image.dimensions).toEqual({ width: 1200, height: 1200 });
+    expect(image.warnings).toEqual([
+      "1200x1200 is not 16:9. Prefer 16:9 for newly generated public images; other ratios are allowed when useful.",
+    ]);
+  });
+
+  it("does not warn when generated image dimensions are 16:9", async () => {
+    const widescreenPng = pngWithDimensions(1600, 900);
+    const path = await writeTempFile("widescreen.png", widescreenPng);
+    const image = await readHandoffGeneratedImageFile(path);
+
+    expect(image.dimensions).toEqual({ width: 1600, height: 900 });
+    expect(image.warnings).toEqual([]);
   });
 
   it("supports repeated image file inputs", async () => {

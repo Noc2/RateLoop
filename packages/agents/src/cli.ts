@@ -6,7 +6,10 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRateLoopAgentClient } from "@rateloop/sdk/agent";
 import { loadAgentsRuntimeConfig } from "./config";
-import { readHandoffGeneratedImageFiles } from "./handoffImages";
+import {
+  readHandoffGeneratedImageFiles,
+  type HandoffGeneratedImageFile,
+} from "./handoffImages";
 import {
   createAskHandoffWithStagedImageUploads,
   inlineHandoffGeneratedImage,
@@ -59,6 +62,16 @@ const packageRoot = findPackageRoot(
 
 function printJson(value: unknown) {
   console.log(JSON.stringify(value, null, 2));
+}
+
+function printHandoffGeneratedImageWarnings(
+  images: readonly HandoffGeneratedImageFile[],
+) {
+  for (const image of images) {
+    for (const warning of image.warnings) {
+      console.error(`Warning: ${image.filename}: ${warning}`);
+    }
+  }
 }
 
 function redactSensitive(value: unknown): unknown {
@@ -429,6 +442,7 @@ async function main() {
         process.exitCode = 1;
         return;
       }
+      printHandoffGeneratedImageWarnings(generatedImages);
       printJson(
         shouldStageHandoffImageUploads(generatedImages)
           ? await createAskHandoffWithStagedImageUploads({
