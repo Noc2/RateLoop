@@ -73,6 +73,8 @@ const profileRegistryContract = contractsForChain.ProfileRegistry;
 const raterRegistryContract = contractsForChain.RaterRegistry;
 const rewardEscrowContract = contractsForChain.QuestionRewardPoolEscrow;
 const feedbackBonusEscrowContract = contractsForChain.FeedbackBonusEscrow;
+const feedbackRegistryContract = contractsForChain.FeedbackRegistry;
+const confidentialityEscrowContract = contractsForChain.ConfidentialityEscrow;
 const launchDistributionPoolContract = contractsForChain.LaunchDistributionPool;
 const rewardDistributorContract = contractsForChain.RoundRewardDistributor;
 const votingEngineContract = contractsForChain.RoundVotingEngine;
@@ -808,11 +810,28 @@ test("supported sponsored operation families are allowlisted", async () => {
     [encodeCall(profileRegistryContract, "setAvatarAccent", [0x76bb40])],
     [encodeCall(profileRegistryContract, "clearAvatarAccent")],
     [encodeCall(raterRegistryContract, "setProfile", [2, `0x${"0".repeat(64)}`])],
+    [encodeCall(raterRegistryContract, "setDelegate", [THIRDWEB_ADMIN_WALLET])],
+    [encodeCall(raterRegistryContract, "removeDelegate")],
     [encodeCall(raterRegistryContract, "acceptDelegateWithSig", [THIRDWEB_ADMIN_WALLET, 1_234n, "0x1234"])],
     [encodeCall(raterRegistryContract, "followProfile", [THIRDWEB_ADMIN_WALLET])],
     [encodeCall(raterRegistryContract, "unfollowProfile", [THIRDWEB_ADMIN_WALLET])],
     [encodeCall(votingEngineContract, "claimCancelledRoundRefund", [1n, 1n])],
     [encodeCall(votingEngineContract, "openRound", [1n])],
+    [
+      encodeCall(lrepContract, "approve", [confidentialityEscrowContract.address, 1_000_000n]),
+      encodeCall(confidentialityEscrowContract, "postBond", [1n]),
+    ],
+    [
+      encodeCall(feedbackRegistryContract, "publishFeedback", [
+        1n,
+        1n,
+        `0x${"f".repeat(64)}`,
+        "quality",
+        "The reasoning was clear and actionable.",
+        "",
+        `0x${"d".repeat(64)}`,
+      ]),
+    ],
     [encodeCall(rewardDistributorContract, "claimFrontendFee", [1n, 1n, WALLET])],
     [encodeCall(rewardDistributorContract, "claimReward", [1n, 1n])],
     [encodeCall(rewardEscrowContract, "createRewardPool", [1n, 1_000_000n, 3n, 0n, 1_234n, 86_400n, 86_400n])],
@@ -1104,6 +1123,26 @@ test("rejects arbitrary token methods even on allowlisted contracts", async () =
 test("rejects unsupported FeedbackBonusEscrow operations", async () => {
   const decision = await freeTransactions.evaluateFreeTransactionAllowance(
     buildRequest([encodeCall(feedbackBonusEscrowContract, "forfeitExpiredFeedbackBonus", [1n])]) as never,
+  );
+
+  assert.equal(decision.isAllowed, false);
+  if (decision.isAllowed) return;
+  assert.equal(decision.debugCode, "unsupported_operation");
+});
+
+test("rejects malformed sponsored feedback publication", async () => {
+  const decision = await freeTransactions.evaluateFreeTransactionAllowance(
+    buildRequest([
+      encodeCall(feedbackRegistryContract, "publishFeedback", [
+        1n,
+        1n,
+        `0x${"f".repeat(64)}`,
+        "quality",
+        "",
+        "",
+        `0x${"d".repeat(64)}`,
+      ]),
+    ]) as never,
   );
 
   assert.equal(decision.isAllowed, false);

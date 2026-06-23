@@ -1149,6 +1149,10 @@ type SponsoredSubmissionConfidentiality = {
   gated: boolean;
 };
 
+const MAX_FEEDBACK_TYPE_LENGTH = 32;
+const MAX_FEEDBACK_BODY_LENGTH = 1600;
+const MAX_FEEDBACK_SOURCE_URL_LENGTH = 2048;
+
 function getTupleField(value: unknown, key: string, index: number) {
   if (Array.isArray(value)) return value[index];
   if (value && typeof value === "object") return (value as Record<string, unknown>)[key];
@@ -1161,6 +1165,14 @@ function readStringField(value: unknown) {
 
 function readStringArrayField(value: unknown) {
   return Array.isArray(value) && value.every(item => typeof item === "string") ? (value as string[]) : null;
+}
+
+function isBytes32Hex(value: unknown): value is `0x${string}` {
+  return typeof value === "string" && /^0x[a-fA-F0-9]{64}$/.test(value);
+}
+
+function getUtf8ByteLength(value: string) {
+  return new TextEncoder().encode(value).length;
 }
 
 function readSubmissionDetailsField(value: unknown): { detailsHash: string; detailsUrl: string } | null {
@@ -1352,6 +1364,43 @@ async function validateSponsoredContentRegistryCall(
   return false;
 }
 
+function validateSponsoredFeedbackRegistryCall(functionName: string, args: readonly unknown[]) {
+  if (functionName !== "publishFeedback") return false;
+
+  const contentId = normalizeUintArg(args[0]);
+  const roundId = normalizeUintArg(args[1]);
+  const commitKey = args[2];
+  const feedbackType = readStringField(args[3]);
+  const body = readStringField(args[4]);
+  const sourceUrl = readStringField(args[5]);
+  const clientNonce = args[6];
+
+  if (
+    contentId === null ||
+    contentId <= 0n ||
+    roundId === null ||
+    roundId <= 0n ||
+    !isBytes32Hex(commitKey) ||
+    !isBytes32Hex(clientNonce) ||
+    feedbackType === null ||
+    body === null ||
+    sourceUrl === null
+  ) {
+    return false;
+  }
+
+  if (
+    feedbackType.trim() !== feedbackType ||
+    !feedbackType ||
+    getUtf8ByteLength(feedbackType) > MAX_FEEDBACK_TYPE_LENGTH
+  ) {
+    return false;
+  }
+  if (body.trim() !== body || !body || getUtf8ByteLength(body) > MAX_FEEDBACK_BODY_LENGTH) return false;
+  if (sourceUrl.trim() !== sourceUrl || getUtf8ByteLength(sourceUrl) > MAX_FEEDBACK_SOURCE_URL_LENGTH) return false;
+  return !sourceUrl || sanitizeExternalUrl(sourceUrl) === sourceUrl;
+}
+
 async function validateSponsoredCalls(
   chainId: number,
   calls: readonly NormalizedVerifierCall[],
@@ -1362,9 +1411,16 @@ async function validateSponsoredCalls(
   const frontendRegistry = contracts?.FrontendRegistry;
   const rewardEscrow = contracts?.QuestionRewardPoolEscrow;
   const feedbackBonusEscrow = contracts?.FeedbackBonusEscrow;
+  const confidentialityEscrow = contracts?.ConfidentialityEscrow;
   const votingEngine = contracts?.RoundVotingEngine;
   const allowedApproveSpenders = new Set(
-    [frontendRegistry?.address, rewardEscrow?.address, feedbackBonusEscrow?.address, votingEngine?.address]
+    [
+      frontendRegistry?.address,
+      rewardEscrow?.address,
+      feedbackBonusEscrow?.address,
+      confidentialityEscrow?.address,
+      votingEngine?.address,
+    ]
       .filter((value): value is Address => Boolean(value))
       .map(value => value.toLowerCase()),
   );
@@ -1443,6 +1499,8 @@ async function validateSponsoredCalls(
       case "RaterRegistry":
         if (
           functionName === "setProfile" ||
+          functionName === "setDelegate" ||
+          functionName === "removeDelegate" ||
           functionName === "acceptDelegateWithSig" ||
           functionName === "followProfile" ||
           functionName === "unfollowProfile"
@@ -1462,6 +1520,16 @@ async function validateSponsoredCalls(
         return { ok: false, debugCode: "unsupported_operation" };
       case "AdvisoryVoteRecorder":
         if (functionName === "recordAdvisoryVote") {
+          continue;
+        }
+        return { ok: false, debugCode: "unsupported_operation" };
+      case "FeedbackRegistry":
+        if (validateSponsoredFeedbackRegistryCall(functionName, args)) {
+          continue;
+        }
+        return { ok: false, debugCode: "unsupported_operation" };
+      case "ConfidentialityEscrow":
+        if (functionName === "postBond") {
           continue;
         }
         return { ok: false, debugCode: "unsupported_operation" };
