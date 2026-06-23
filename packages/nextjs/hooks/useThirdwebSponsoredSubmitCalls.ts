@@ -4,10 +4,17 @@ import { useCallback, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { defineChain, prepareTransaction } from "thirdweb";
 import { useActiveAccount, useActiveWallet, useActiveWalletChain, useSetActiveWallet } from "thirdweb/react";
-import { sendAndConfirmCalls } from "thirdweb/wallets/eip5792";
-import { type Abi, type Address, type GetCallsStatusReturnType, type Hex, encodeFunctionData } from "viem";
+import { type GetCallsStatusResponse, type SendCallsResult, getCallsStatus, sendCalls } from "thirdweb/wallets/eip5792";
+import {
+  type Abi,
+  type Address,
+  type Hex,
+  type GetCallsStatusReturnType as WagmiGetCallsStatusReturnType,
+  encodeFunctionData,
+} from "viem";
 import { useAccount, useBalance, usePublicClient, useSendCallsSync } from "wagmi";
 import { getTransactionReceiptPollingInterval } from "~~/config/shared";
+import { useWalletRestore } from "~~/contexts/WalletRestoreContext";
 import {
   FREE_TRANSACTION_ALLOWANCE_QUERY_KEY,
   useFreeTransactionAllowance,
@@ -58,6 +65,8 @@ type ExecuteContractCallBatchOptions = {
   allowUnmeteredSponsoredCalls?: boolean;
   atomicRequired?: boolean;
   action?: string;
+  parentRunId?: string;
+  segmentIndex?: number;
   sponsorshipMode?: ThirdwebBatchSponsorshipMode;
   suppressStatusToast?: boolean;
 };
@@ -69,6 +78,8 @@ type ThirdwebSponsoredSubmitCallsOptions = {
 const THIRDWEB_BUNDLER_RETRY_DELAYS_MS = [1_000, 2_000] as const;
 const THIRDWEB_BUNDLER_UNAVAILABLE_MESSAGE =
   "thirdweb transaction service is temporarily unavailable. Retry in a moment.";
+const THIRDWEB_CALLS_STATUS_TIMEOUT_MS = 120_000;
+const THIRDWEB_CALLS_STATUS_SLOW_MS = 8_000;
 
 function wait(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -80,7 +91,9 @@ function createThirdwebBatchTimingLog(params: {
   callTypes?: readonly string[];
   chainId: number;
   operationKey: string | null;
+  parentRunId?: string;
   route: "external-wallet" | "thirdweb";
+  segmentIndex?: number;
   sponsorshipMode: ThirdwebBatchSponsorshipMode;
 }) {
   return createTransactionTimingRun({
@@ -90,9 +103,12 @@ function createThirdwebBatchTimingLog(params: {
     chainId: params.chainId,
     consoleLabel: "thirdweb-batch-timing",
     metadata: params.operationKey ? { operationKey: params.operationKey } : undefined,
+    parentRunId: params.parentRunId,
     route: params.route,
+    segmentIndex: params.segmentIndex,
     source: "thirdweb-batch",
     sponsorshipMode: params.sponsorshipMode,
+    transport: params.route === "external-wallet" ? "wallet_sendCalls" : "thirdweb_sendCalls",
   });
 }
 
@@ -100,6 +116,74 @@ function getTransactionStatusPollingInterval(chainId: number) {
   return getTransactionReceiptPollingInterval(chainId, {
     preconfirmation: scaffoldConfig.useBasePreconfRpc,
   });
+}
+
+function isTerminalThirdwebCallsStatus(status: GetCallsStatusResponse["status"]) {
+  return status === "success" || status === "failure";
+}
+
+async function waitForThirdwebCallsStatus(params: {
+  pollingIntervalMs: number;
+  sendResult: SendCallsResult;
+  timingLog: ReturnType<typeof createThirdwebBatchTimingLog>;
+}) {
+  const startedAt = Date.now();
+  let lastStatus: GetCallsStatusResponse["status"] | undefined;
+  let pollCount = 0;
+  let slowLogged = false;
+
+  params.timingLog.emit("thirdweb-status-wait-start");
+
+  for (;;) {
+    pollCount += 1;
+    try {
+      const result = await getCallsStatus({
+        client: params.sendResult.client,
+        id: params.sendResult.id,
+        wallet: params.sendResult.wallet,
+      });
+      const statusChanged = result.status !== lastStatus;
+      lastStatus = result.status;
+
+      if (statusChanged || isTerminalThirdwebCallsStatus(result.status)) {
+        params.timingLog.emit("thirdweb-status-poll", {
+          pollCount,
+          receiptCount: result.receipts?.length ?? 0,
+          status: result.status,
+          statusCode: result.statusCode,
+        });
+      }
+
+      if (isTerminalThirdwebCallsStatus(result.status)) {
+        params.timingLog.emit("thirdweb-status-wait-complete", {
+          pollCount,
+          receiptCount: result.receipts?.length ?? 0,
+          status: result.status,
+          statusCode: result.statusCode,
+        });
+        return result;
+      }
+    } catch (error) {
+      params.timingLog.emit("thirdweb-status-poll-error", {
+        message: error instanceof Error ? error.message : "Unknown error",
+        pollCount,
+      });
+    }
+
+    const elapsedMs = Date.now() - startedAt;
+    if (!slowLogged && elapsedMs >= THIRDWEB_CALLS_STATUS_SLOW_MS) {
+      slowLogged = true;
+      params.timingLog.emit("thirdweb-status-wait-slow", {
+        pollCount,
+        status: lastStatus,
+      });
+    }
+    if (elapsedMs >= THIRDWEB_CALLS_STATUS_TIMEOUT_MS) {
+      throw new Error("Bundle not confirmed before the transaction status timeout.");
+    }
+
+    await wait(Math.max(200, Math.min(params.pollingIntervalMs, THIRDWEB_CALLS_STATUS_TIMEOUT_MS - elapsedMs)));
+  }
 }
 
 export function shouldRetryThirdwebBundlerError(error: unknown, attemptIndex: number) {
@@ -288,13 +372,44 @@ export function shouldAwaitSelfFundedSubmitCalls(params: {
   connectorId: string | undefined;
   executionMode: WalletExecutionMode;
   freeTransactionAllowanceResolved: boolean;
+  isRestoringWallet?: boolean;
   isThirdwebInApp?: boolean;
 }) {
+  const expectsThirdwebBatchCalls = shouldExpectThirdwebBatchCalls(params);
+
+  if (
+    params.isRestoringWallet &&
+    expectsThirdwebBatchCalls &&
+    params.freeTransactionAllowanceResolved &&
+    !params.canUseFreeTransactions
+  ) {
+    return true;
+  }
+
   return (
-    shouldExpectThirdwebBatchCalls(params) &&
+    expectsThirdwebBatchCalls &&
     params.freeTransactionAllowanceResolved &&
     !params.canUseFreeTransactions &&
     params.executionMode === "sponsored_7702"
+  );
+}
+
+export function shouldAwaitSponsoredSubmitCalls(params: {
+  canUseSponsoredSubmitCalls: boolean;
+  expectsSponsoredBatchCalls: boolean;
+  freeTransactionAllowanceResolved: boolean;
+  hasBrokenSponsoredDelegation: boolean;
+  isInspectingSponsoredDelegation: boolean;
+  isRestoringWallet?: boolean;
+  prefersSponsoredBatchCalls: boolean;
+}) {
+  return (
+    params.expectsSponsoredBatchCalls &&
+    !params.hasBrokenSponsoredDelegation &&
+    (params.isRestoringWallet ||
+      !params.freeTransactionAllowanceResolved ||
+      params.isInspectingSponsoredDelegation ||
+      (params.prefersSponsoredBatchCalls && !params.canUseSponsoredSubmitCalls))
   );
 }
 
@@ -302,7 +417,7 @@ export function shouldIgnorePostTransactionFallbackWalletSyncError(callStatus: s
   return callStatus === "success";
 }
 
-export function isSuccessfulCallsStatus(callsStatus: GetCallsStatusReturnType) {
+export function isSuccessfulCallsStatus(callsStatus: WagmiGetCallsStatusReturnType) {
   return callsStatus.status === "success";
 }
 
@@ -316,6 +431,7 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
   const setActiveWallet = useSetActiveWallet();
   const { syncWalletToWagmi } = useThirdwebWagmiSync();
   const statusToast = useTransactionStatusToast();
+  const { isRestoringWallet } = useWalletRestore();
   const { address, chainId: wagmiChainId, connector } = useAccount();
   const { sendCallsSyncAsync } = useSendCallsSync();
   const freeTransactionAllowance = useFreeTransactionAllowance({ allowInAppSponsorshipSync });
@@ -458,12 +574,15 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
     typeof address === "string" && connector && typeof chainId === "number" && prefersExternalWalletBatchCalls,
   );
   const canUseSelfFundedBatchCalls = canUseThirdwebSelfFundedBatchCalls || canUseExternalWalletSelfFundedBatchCalls;
-  const isAwaitingSponsoredSubmitCalls =
-    expectsSponsoredBatchCalls &&
-    !hasBrokenSponsoredDelegation &&
-    (!freeTransactionAllowance.isResolved ||
-      isInspectingSponsoredDelegation ||
-      (prefersSponsoredBatchCalls && !canUseSponsoredSubmitCalls));
+  const isAwaitingSponsoredSubmitCalls = shouldAwaitSponsoredSubmitCalls({
+    canUseSponsoredSubmitCalls,
+    expectsSponsoredBatchCalls,
+    freeTransactionAllowanceResolved: freeTransactionAllowance.isResolved,
+    hasBrokenSponsoredDelegation,
+    isInspectingSponsoredDelegation,
+    isRestoringWallet,
+    prefersSponsoredBatchCalls,
+  });
   const isAwaitingSelfFundedSubmitCalls = useMemo(
     () =>
       shouldAwaitSelfFundedSubmitCalls({
@@ -472,6 +591,7 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
         connectorId: connector?.id,
         executionMode,
         freeTransactionAllowanceResolved: freeTransactionAllowance.isResolved,
+        isRestoringWallet,
         isThirdwebInApp,
       }),
     [
@@ -481,6 +601,7 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
       freeTransactionAllowance.canUseFreeTransactions,
       freeTransactionAllowance.isResolved,
       isThirdwebInApp,
+      isRestoringWallet,
     ],
   );
 
@@ -576,7 +697,9 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
         callTypes: calls.map(call => call.functionName),
         chainId,
         operationKey,
+        parentRunId: options.parentRunId,
         route: canUseExternalWalletPath ? "external-wallet" : "thirdweb",
+        segmentIndex: options.segmentIndex,
         sponsorshipMode,
       });
       const sendCallsWithExternalWallet = async () => {
@@ -585,7 +708,7 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
         }
 
         timingLog.emit("external-wallet-sendCalls-start");
-        return sendCallsSyncAsync({
+        const result = await sendCallsSyncAsync({
           account: address as Address,
           calls: encodedCalls,
           chainId,
@@ -596,6 +719,11 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
           throwOnFailure: true,
           timeout: 120_000,
         } as never);
+        timingLog.emit("external-wallet-sendCalls-complete", {
+          receiptCount: result.receipts?.length ?? 0,
+          status: result.status,
+        });
+        return result;
       };
       const preparedCalls = canUseExternalWalletPath
         ? []
@@ -608,17 +736,26 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
               ...(typeof call.value !== "undefined" ? { value: call.value } : {}),
             }),
           );
-      const sendCallsWithWallet = async (wallet: NonNullable<typeof activeWallet>) =>
-        retryThirdwebBundlerOperation(() => {
-          timingLog.emit("thirdweb-sendAndConfirmCalls-start", {
-            walletId: wallet.id,
-          });
-          return sendAndConfirmCalls({
+      const sendCallsWithWallet = async (wallet: NonNullable<typeof activeWallet>) => {
+        timingLog.emit("thirdweb-sendCalls-start", {
+          walletId: wallet.id,
+        });
+        const sendResult = await retryThirdwebBundlerOperation(() =>
+          sendCalls({
             atomicRequired: options.atomicRequired ?? false,
             calls: preparedCalls,
             wallet,
-          });
+          }),
+        );
+        timingLog.emit("thirdweb-sendCalls-complete", {
+          walletId: wallet.id,
         });
+        return waitForThirdwebCallsStatus({
+          pollingIntervalMs: getTransactionStatusPollingInterval(chainId),
+          sendResult,
+          timingLog,
+        });
+      };
       const getSponsoredWalletForUnmeteredCall = async () => {
         if (
           sponsorshipMode !== "sponsored" ||
