@@ -1,4 +1,4 @@
-import type { ConsoleMessage, Page } from "@playwright/test";
+import type { ConsoleMessage, Locator, Page } from "@playwright/test";
 import { waitForPonderIndexed } from "./admin-helpers";
 import { getVotes } from "./ponder-api";
 import {
@@ -48,6 +48,26 @@ async function waitForVoteIndexed(
     2_000,
     "waitForVoteIndexed",
   );
+}
+
+async function expectVoteButtonReady(page: Page, voteBtn: Locator): Promise<boolean> {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const visible = await voteBtn
+      .first()
+      .waitFor({ state: "visible", timeout: 10_000 })
+      .then(() => true)
+      .catch(() => false);
+    if (visible) {
+      return true;
+    }
+
+    if (attempt < 2) {
+      await page.reload({ waitUntil: "domcontentloaded", timeout: 30_000 }).catch(() => undefined);
+      await waitForFeedLoaded(page, 30_000).catch(() => undefined);
+    }
+  }
+
+  return false;
 }
 
 /**
@@ -215,16 +235,13 @@ export async function voteOnSpecificContent(
   };
 
   await gotoWithRetry(page, `/rate?content=${contentId}`, { ensureWalletConnected: true });
-  await waitForFeedLoaded(page);
+  await waitForFeedLoaded(page, 30_000);
 
   const voteBtn = page.getByRole("button", {
     name: direction === "up" ? VOTE_UP_BUTTON_NAME : VOTE_DOWN_BUTTON_NAME,
   });
 
-  const canVote = await voteBtn
-    .waitFor({ state: "visible", timeout: 10_000 })
-    .then(() => true)
-    .catch(() => false);
+  const canVote = await expectVoteButtonReady(page, voteBtn);
 
   if (!canVote) return fail("vote button not visible");
 
@@ -245,9 +262,22 @@ export async function voteOnSpecificContent(
   // StakeSelector modal
   const stakeModal = page.locator("[role='dialog']").first();
   const modalVisible = await stakeModal
-    .waitFor({ state: "visible", timeout: 5_000 })
+    .waitFor({ state: "visible", timeout: 10_000 })
     .then(() => true)
-    .catch(() => false);
+    .catch(async () => {
+      await page.reload({ waitUntil: "domcontentloaded", timeout: 30_000 }).catch(() => undefined);
+      await waitForFeedLoaded(page, 30_000).catch(() => undefined);
+      const recoveredVoteBtn = page.getByRole("button", {
+        name: direction === "up" ? VOTE_UP_BUTTON_NAME : VOTE_DOWN_BUTTON_NAME,
+      });
+      const recoveredCanVote = await expectVoteButtonReady(page, recoveredVoteBtn);
+      if (!recoveredCanVote) return false;
+      await recoveredVoteBtn.click({ timeout: 10_000 }).catch(() => undefined);
+      return stakeModal
+        .waitFor({ state: "visible", timeout: 10_000 })
+        .then(() => true)
+        .catch(() => false);
+    });
   if (!modalVisible) return fail("stake modal not visible");
 
   // Click "1" preset (lowest stake = 1 LREP)

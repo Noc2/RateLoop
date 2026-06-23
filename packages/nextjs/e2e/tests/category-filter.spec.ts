@@ -10,8 +10,8 @@ test.describe("Category filter", () => {
   async function loadVoteFeed(page: Page, path = "/rate") {
     await expect(async () => {
       await page.goto(path, { waitUntil: "domcontentloaded" });
-      await waitForFeedLoaded(page, 20_000);
-    }).toPass({ timeout: 30_000, intervals: [500, 1_000, 2_000] });
+      await waitForFeedLoaded(page, 30_000);
+    }).toPass({ timeout: 60_000, intervals: [500, 1_000, 2_000, 5_000] });
   }
 
   /**

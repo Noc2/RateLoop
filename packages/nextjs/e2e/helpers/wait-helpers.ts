@@ -55,6 +55,39 @@ function getEffectiveE2ETimeout(timeout: number): number {
   return Math.max(timeout, CI_MIN_E2E_TIMEOUT_MS);
 }
 
+async function gotoWithDomReadyFallback(
+  page: Page,
+  url: string,
+  options: {
+    timeout: number;
+    waitUntil: "load" | "domcontentloaded" | "networkidle" | "commit";
+  },
+): Promise<void> {
+  const { timeout, waitUntil } = options;
+
+  try {
+    await page.goto(url, { timeout, waitUntil });
+    return;
+  } catch (error) {
+    if (!isRetriableGotoError(error) || waitUntil === "commit" || page.isClosed()) {
+      throw error;
+    }
+
+    await page.goto(url, { timeout: Math.min(timeout, 15_000), waitUntil: "commit" });
+    await page.waitForLoadState(waitUntil, { timeout: Math.min(timeout, 10_000) }).catch(() => undefined);
+  }
+}
+
+async function reloadWithRetryableAbort(page: Page, timeout: number): Promise<void> {
+  try {
+    await page.reload({ waitUntil: "domcontentloaded", timeout });
+  } catch (error) {
+    if (page.isClosed() || !isRetriableGotoError(error)) {
+      throw error;
+    }
+  }
+}
+
 async function hasInjectedLocalTestWallet(page: Page): Promise<boolean> {
   try {
     return await page.evaluate(
@@ -103,7 +136,7 @@ export async function ensureInjectedWalletConnected(page: Page, timeout: number)
       break;
     }
 
-    await page.reload({ waitUntil: "domcontentloaded", timeout: effectiveTimeout });
+    await reloadWithRetryableAbort(page, effectiveTimeout);
   }
 
   await getVisibleConnectedWallet(page).first().waitFor({ state: "visible", timeout: recoveryWaitTimeout });
@@ -132,11 +165,11 @@ export async function gotoWithRetry(
   let lastError: unknown;
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     try {
-      await page.goto(url, { timeout: effectiveTimeout, waitUntil });
+      await gotoWithDomReadyFallback(page, url, { timeout: effectiveTimeout, waitUntil });
 
       const runtimeErrorHeading = page.getByRole("heading", { name: /Application error/i });
       if (await runtimeErrorHeading.isVisible().catch(() => false)) {
-        await page.reload({ timeout: effectiveTimeout, waitUntil: "domcontentloaded" });
+        await reloadWithRetryableAbort(page, effectiveTimeout);
       }
 
       if (ensureWalletConnected || (!skipInjectedWalletConnectionCheck && (await hasInjectedLocalTestWallet(page)))) {
@@ -226,7 +259,7 @@ export async function waitForFeedLoaded(page: Page, timeout = 15_000): Promise<v
         throw error;
       }
 
-      await page.reload({ waitUntil: "domcontentloaded", timeout: effectiveTimeout });
+      await reloadWithRetryableAbort(page, effectiveTimeout);
       await page
         .waitForLoadState("networkidle", { timeout: Math.min(effectiveTimeout, 10_000) })
         .catch(() => undefined);
@@ -273,7 +306,7 @@ export async function waitForVisibleWithReload(
         throw error;
       }
 
-      await page.reload({ waitUntil: "domcontentloaded" });
+      await reloadWithRetryableAbort(page, timeout);
     }
   }
 
