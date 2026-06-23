@@ -474,6 +474,8 @@ test("mapContentItem supports text-only questions and Ponder bounty summaries", 
       totalForfeitedAmount: "0",
       activePoolCount: 1,
       awardCount: 1,
+      nextFeedbackClosesAt: "1780010000",
+      nextFeedbackAwardDeadline: "1780096400",
     },
   });
 
@@ -511,6 +513,8 @@ test("mapContentItem supports text-only questions and Ponder bounty summaries", 
   assert.equal(item.feedbackBonusSummary?.totalFrontendAwarded, 120_000n);
   assert.equal(item.feedbackBonusSummary?.activePoolCount, 1);
   assert.equal(item.feedbackBonusSummary?.awardCount, 1);
+  assert.equal(item.feedbackBonusSummary?.nextFeedbackClosesAt, 1_780_010_000n);
+  assert.equal(item.feedbackBonusSummary?.nextFeedbackAwardDeadline, 1_780_096_400n);
 });
 
 test("mapContentItem prefers Ponder question text when present", () => {

@@ -803,13 +803,10 @@ export function mapContentItem(
                 : BigInt(item.feedbackBonusSummary.nextFeedbackClosesAt)
               : BigInt(item.feedbackBonusSummary.nextFeedbackAwardDeadline),
           nextFeedbackClosesAt:
-            item.feedbackBonusSummary.nextFeedbackAwardDeadline === null ||
-            item.feedbackBonusSummary.nextFeedbackAwardDeadline === undefined
-              ? item.feedbackBonusSummary.nextFeedbackClosesAt === null ||
-                item.feedbackBonusSummary.nextFeedbackClosesAt === undefined
-                ? null
-                : BigInt(item.feedbackBonusSummary.nextFeedbackClosesAt)
-              : BigInt(item.feedbackBonusSummary.nextFeedbackAwardDeadline),
+            item.feedbackBonusSummary.nextFeedbackClosesAt === null ||
+            item.feedbackBonusSummary.nextFeedbackClosesAt === undefined
+              ? null
+              : BigInt(item.feedbackBonusSummary.nextFeedbackClosesAt),
         }
       : null,
   };
