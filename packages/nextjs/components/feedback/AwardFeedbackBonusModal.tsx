@@ -2,12 +2,14 @@
 
 import { useEffect, useId, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { useAccount, useConfig, useWriteContract } from "wagmi";
+import { useAccount, useConfig, usePublicClient, useWriteContract } from "wagmi";
 import { XMarkIcon } from "@heroicons/react/24/outline";
 import { GradientActionButton, getGradientActionMotion } from "~~/components/shared/GradientAction";
+import { getTransactionReceiptPollingInterval } from "~~/config/shared";
 import { useTargetNetwork, useTransactor } from "~~/hooks/scaffold-eth";
 import { useThirdwebSponsoredSubmitCalls } from "~~/hooks/useThirdwebSponsoredSubmitCalls";
 import { useWalletTransactionReadiness } from "~~/hooks/useWalletTransactionReadiness";
+import { hasFeedbackBonusAwardPostcondition } from "~~/lib/feedback/postconditions";
 import type { ContentFeedbackBonusPool, ContentFeedbackItem } from "~~/lib/feedback/types";
 import {
   FEEDBACK_BONUS_ESCROW_ABI,
@@ -25,6 +27,8 @@ import {
   isUserRejectedTransactionError,
   isWalletRpcOverloadedError,
 } from "~~/lib/transactionErrors";
+import { raceTransactionWithPostcondition, waitForTransactionPostcondition } from "~~/lib/transactions/postcondition";
+import scaffoldConfig from "~~/scaffold.config";
 import { notification } from "~~/utils/scaffold-eth";
 
 type AwardFeedbackBonusModalProps = {
@@ -82,6 +86,24 @@ function getDefaultTransactionErrorMessage(error: unknown) {
   );
 }
 
+function getFeedbackBonusAwardPollingInterval(chainId: number) {
+  return getTransactionReceiptPollingInterval(chainId, {
+    preconfirmation: scaffoldConfig.useBasePreconfRpc,
+  });
+}
+
+function readPoolRemainingAmount(pool: unknown): bigint | null {
+  if (Array.isArray(pool)) {
+    const value = pool[12];
+    return typeof value === "bigint" ? value : null;
+  }
+  if (pool && typeof pool === "object" && "remainingAmount" in pool) {
+    const value = (pool as { remainingAmount?: unknown }).remainingAmount;
+    return typeof value === "bigint" ? value : null;
+  }
+  return null;
+}
+
 export function AwardFeedbackBonusModal({ item, pools, onAwarded, onClose }: AwardFeedbackBonusModalProps) {
   const wagmiConfig = useConfig();
   const { address, chain } = useAccount();
@@ -103,6 +125,7 @@ export function AwardFeedbackBonusModal({ item, pools, onAwarded, onClose }: Awa
   const [isAwarding, setIsAwarding] = useState(false);
 
   const chainId = targetNetwork.id ?? wagmiConfig.chains[0]?.id ?? 0;
+  const publicClient = usePublicClient({ chainId });
   const walletTransactionReadiness = useWalletTransactionReadiness({
     includeExternalSendCalls: true,
     isAwaitingSelfFundedWallet: isAwaitingSelfFundedBatchCalls,
@@ -194,20 +217,78 @@ export function AwardFeedbackBonusModal({ item, pools, onAwarded, onClose }: Awa
       const canUseBatchAward = canUseSponsoredBatchCalls || canUseSelfFundedBatchCalls;
 
       if (canUseBatchAward) {
-        await executeContractCallBatch(
-          [
-            {
-              address: escrowAddress,
-              abi: FEEDBACK_BONUS_ESCROW_ABI,
-              functionName: "awardFeedbackBonus",
-              args: awardArgs,
+        const poolId = BigInt(selectedPool.id);
+        const poolBefore = publicClient
+          ? await publicClient
+              .readContract({
+                address: escrowAddress,
+                abi: FEEDBACK_BONUS_ESCROW_ABI,
+                functionName: "feedbackBonusPools",
+                args: [poolId],
+              } as never)
+              .catch(() => null)
+          : null;
+        const remainingBefore = readPoolRemainingAmount(poolBefore);
+        const expectedRemainingAmount =
+          remainingBefore !== null && remainingBefore >= parsedAmount ? remainingBefore - parsedAmount : undefined;
+
+        if (publicClient && typeof expectedRemainingAmount !== "undefined") {
+          await raceTransactionWithPostcondition({
+            onPostconditionSuccessThenTransactionError: error => {
+              console.warn("[feedback-bonus] award postcondition succeeded before thirdweb status settled.", {
+                error,
+                poolId: selectedPool.id,
+              });
             },
-          ],
-          {
-            action: "Award Feedback Bonus",
-            sponsorshipMode: canUseSponsoredBatchCalls ? "sponsored" : "self-funded",
-          },
-        );
+            transaction: () =>
+              executeContractCallBatch(
+                [
+                  {
+                    address: escrowAddress,
+                    abi: FEEDBACK_BONUS_ESCROW_ABI,
+                    functionName: "awardFeedbackBonus",
+                    args: awardArgs,
+                  },
+                ],
+                {
+                  action: "Award Feedback Bonus",
+                  sponsorshipMode: canUseSponsoredBatchCalls ? "sponsored" : "self-funded",
+                  suppressStatusToast: true,
+                },
+              ),
+            waitForPostcondition: shouldStop =>
+              waitForTransactionPostcondition(
+                () =>
+                  hasFeedbackBonusAwardPostcondition({
+                    client: publicClient,
+                    escrowAddress,
+                    expectedRemainingAmount,
+                    feedbackHash,
+                    poolId,
+                  }),
+                "feedback-bonus-award-postcondition",
+                {
+                  pollingIntervalMs: getFeedbackBonusAwardPollingInterval(chainId),
+                  shouldStop,
+                },
+              ),
+          });
+        } else {
+          await executeContractCallBatch(
+            [
+              {
+                address: escrowAddress,
+                abi: FEEDBACK_BONUS_ESCROW_ABI,
+                functionName: "awardFeedbackBonus",
+                args: awardArgs,
+              },
+            ],
+            {
+              action: "Award Feedback Bonus",
+              sponsorshipMode: canUseSponsoredBatchCalls ? "sponsored" : "self-funded",
+            },
+          );
+        }
       } else {
         const hash = await writeTx(
           () =>

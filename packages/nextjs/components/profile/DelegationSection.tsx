@@ -4,12 +4,18 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { Abi } from "viem";
 import { formatUnits, isAddress, parseUnits } from "viem";
-import { useAccount } from "wagmi";
+import { useAccount, usePublicClient } from "wagmi";
 import { ArrowsRightLeftIcon, ShieldCheckIcon } from "@heroicons/react/24/outline";
 import { GradientActionButton, getGradientActionMotion } from "~~/components/shared/GradientAction";
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
+import { getTransactionReceiptPollingInterval } from "~~/config/shared";
 import { GOVERNANCE_ROUTE } from "~~/constants/routes";
-import { useDeployedContractInfo, useScaffoldReadContract, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
+import {
+  useDeployedContractInfo,
+  useScaffoldReadContract,
+  useScaffoldWriteContract,
+  useTargetNetwork,
+} from "~~/hooks/scaffold-eth";
 import { useDelegation } from "~~/hooks/useDelegation";
 import { useGasBalanceStatus } from "~~/hooks/useGasBalanceStatus";
 import { useRaterRegistryIdentity } from "~~/hooks/useRaterRegistryIdentity";
@@ -18,7 +24,9 @@ import { useThirdwebSponsoredSubmitCalls } from "~~/hooks/useThirdwebSponsoredSu
 import { useWalletTransactionReadiness } from "~~/hooks/useWalletTransactionReadiness";
 import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
 import { getLrepTransferErrorMessage } from "~~/lib/lrepTransferErrors";
+import { raceTransactionWithPostcondition, waitForTransactionPostcondition } from "~~/lib/transactions/postcondition";
 import { formatLrepAmount } from "~~/lib/vote/voteIncentives";
+import scaffoldConfig from "~~/scaffold.config";
 import { notification } from "~~/utils/scaffold-eth";
 import { ZERO_ADDRESS } from "~~/utils/scaffold-eth/common";
 
@@ -37,8 +45,20 @@ function parseLrepAmount(value: string): bigint | null {
   }
 }
 
+function getProfileTransactionPostconditionPollingInterval(chainId: number) {
+  return getTransactionReceiptPollingInterval(chainId, {
+    preconfirmation: scaffoldConfig.useBasePreconfRpc,
+  });
+}
+
+function normalizeAddress(value: string | null | undefined) {
+  return (value ?? ZERO_ADDRESS).toLowerCase();
+}
+
 export function DelegationSection() {
   const { address } = useAccount();
+  const { targetNetwork } = useTargetNetwork();
+  const publicClient = usePublicClient({ chainId: targetNetwork.id });
   const refreshWalletBalances = useRefreshWalletBalances();
   const { hasActiveHumanCredential, isLoading: credentialLoading } = useRaterRegistryIdentity(address);
   const {
@@ -132,21 +152,129 @@ export function DelegationSection() {
     if (canUseBatchedDelegationWrite && raterRegistryContract) {
       setIsSponsoredDelegationPending(true);
       try {
-        await executeContractCallBatch(
-          [
-            {
-              abi: raterRegistryContract.abi as Abi,
-              address: raterRegistryContract.address as `0x${string}`,
-              args,
-              functionName,
-            },
-          ],
-          {
-            action,
-            atomicRequired: true,
-            sponsorshipMode: canUseSponsoredSubmitCalls ? "sponsored" : "self-funded",
-          },
+        const registryAddress = raterRegistryContract.address as `0x${string}`;
+        const registryAbi = raterRegistryContract.abi as Abi;
+        const holderAddress = address as `0x${string}` | undefined;
+        const readRegistryAddress = async (
+          name: "delegateTo" | "delegateOf" | "pendingDelegateTo" | "pendingDelegateOf",
+          arg: string,
+        ) => {
+          if (!publicClient) return ZERO_ADDRESS;
+          try {
+            return (await publicClient.readContract({
+              address: registryAddress,
+              abi: registryAbi,
+              functionName: name,
+              args: [arg],
+            } as never)) as string;
+          } catch {
+            return ZERO_ADDRESS;
+          }
+        };
+        const activeDelegateBefore = holderAddress
+          ? await readRegistryAddress("delegateTo", holderAddress)
+          : ZERO_ADDRESS;
+        const pendingDelegateBefore = holderAddress
+          ? await readRegistryAddress("pendingDelegateTo", holderAddress)
+          : ZERO_ADDRESS;
+        const nextDelegate = functionName === "setDelegate" ? (args[0] as `0x${string}` | undefined) : undefined;
+        const canWaitForPostcondition = Boolean(
+          publicClient &&
+            holderAddress &&
+            (functionName === "setDelegate"
+              ? nextDelegate && normalizeAddress(pendingDelegateBefore) !== normalizeAddress(nextDelegate)
+              : normalizeAddress(activeDelegateBefore) !== normalizeAddress(ZERO_ADDRESS) ||
+                normalizeAddress(pendingDelegateBefore) !== normalizeAddress(ZERO_ADDRESS)),
         );
+
+        if (canWaitForPostcondition) {
+          await raceTransactionWithPostcondition({
+            onPostconditionSuccessThenTransactionError: error => {
+              console.warn("[delegation] postcondition succeeded before thirdweb status settled.", {
+                error,
+                functionName,
+              });
+            },
+            transaction: () =>
+              executeContractCallBatch(
+                [
+                  {
+                    abi: registryAbi,
+                    address: registryAddress,
+                    args,
+                    functionName,
+                  },
+                ],
+                {
+                  action,
+                  atomicRequired: true,
+                  sponsorshipMode: canUseSponsoredSubmitCalls ? "sponsored" : "self-funded",
+                  suppressStatusToast: true,
+                },
+              ),
+            waitForPostcondition: shouldStop =>
+              waitForTransactionPostcondition(
+                async () => {
+                  if (!holderAddress) return false;
+                  if (functionName === "setDelegate" && nextDelegate) {
+                    const [pendingDelegateTo, pendingDelegateOf] = await Promise.all([
+                      readRegistryAddress("pendingDelegateTo", holderAddress),
+                      readRegistryAddress("pendingDelegateOf", nextDelegate),
+                    ]);
+                    return (
+                      normalizeAddress(pendingDelegateTo) === normalizeAddress(nextDelegate) &&
+                      normalizeAddress(pendingDelegateOf) === normalizeAddress(holderAddress)
+                    );
+                  }
+
+                  const checks = [
+                    readRegistryAddress("delegateTo", holderAddress).then(
+                      value => normalizeAddress(value) === normalizeAddress(ZERO_ADDRESS),
+                    ),
+                    readRegistryAddress("pendingDelegateTo", holderAddress).then(
+                      value => normalizeAddress(value) === normalizeAddress(ZERO_ADDRESS),
+                    ),
+                  ];
+                  if (normalizeAddress(activeDelegateBefore) !== normalizeAddress(ZERO_ADDRESS)) {
+                    checks.push(
+                      readRegistryAddress("delegateOf", activeDelegateBefore).then(
+                        value => normalizeAddress(value) === normalizeAddress(ZERO_ADDRESS),
+                      ),
+                    );
+                  }
+                  if (normalizeAddress(pendingDelegateBefore) !== normalizeAddress(ZERO_ADDRESS)) {
+                    checks.push(
+                      readRegistryAddress("pendingDelegateOf", pendingDelegateBefore).then(
+                        value => normalizeAddress(value) === normalizeAddress(ZERO_ADDRESS),
+                      ),
+                    );
+                  }
+                  return (await Promise.all(checks)).every(Boolean);
+                },
+                "delegation-postcondition",
+                {
+                  pollingIntervalMs: getProfileTransactionPostconditionPollingInterval(targetNetwork.id),
+                  shouldStop,
+                },
+              ),
+          });
+        } else {
+          await executeContractCallBatch(
+            [
+              {
+                abi: registryAbi,
+                address: registryAddress,
+                args,
+                functionName,
+              },
+            ],
+            {
+              action,
+              atomicRequired: true,
+              sponsorshipMode: canUseSponsoredSubmitCalls ? "sponsored" : "self-funded",
+            },
+          );
+        }
       } finally {
         setIsSponsoredDelegationPending(false);
       }
@@ -253,20 +381,76 @@ export function DelegationSection() {
       if (canUseSponsoredSubmitCalls && lrepContract) {
         setIsSponsoredTransferPending(true);
         try {
-          await executeSponsoredCalls(
-            [
-              {
-                abi: lrepContract.abi as Abi,
-                address: lrepContract.address as `0x${string}`,
-                args: transferArgs,
-                functionName: "transfer",
+          const tokenAddress = lrepContract.address as `0x${string}`;
+          const tokenAbi = lrepContract.abi as Abi;
+          const recipientBalanceBefore =
+            publicClient && isValidTransferAddress
+              ? await publicClient
+                  .readContract({
+                    address: tokenAddress,
+                    abi: tokenAbi,
+                    functionName: "balanceOf",
+                    args: [normalizedTransferAddress],
+                  } as never)
+                  .then(value => (typeof value === "bigint" ? value : null))
+                  .catch(() => null)
+              : null;
+
+          if (publicClient && recipientBalanceBefore !== null) {
+            await raceTransactionWithPostcondition({
+              onPostconditionSuccessThenTransactionError: error => {
+                console.warn("[lrep-transfer] postcondition succeeded before thirdweb status settled.", error);
               },
-            ],
-            {
-              action: "LREP transfer",
-              allowSelfFundedFallback: true,
-            },
-          );
+              transaction: () =>
+                executeSponsoredCalls(
+                  [
+                    {
+                      abi: tokenAbi,
+                      address: tokenAddress,
+                      args: transferArgs,
+                      functionName: "transfer",
+                    },
+                  ],
+                  {
+                    action: "LREP transfer",
+                    allowSelfFundedFallback: true,
+                    suppressStatusToast: true,
+                  },
+                ),
+              waitForPostcondition: shouldStop =>
+                waitForTransactionPostcondition(
+                  async () => {
+                    const balance = await publicClient.readContract({
+                      address: tokenAddress,
+                      abi: tokenAbi,
+                      functionName: "balanceOf",
+                      args: [normalizedTransferAddress],
+                    } as never);
+                    return typeof balance === "bigint" && balance >= recipientBalanceBefore + parsedTransferAmount;
+                  },
+                  "lrep-transfer-postcondition",
+                  {
+                    pollingIntervalMs: getProfileTransactionPostconditionPollingInterval(targetNetwork.id),
+                    shouldStop,
+                  },
+                ),
+            });
+          } else {
+            await executeSponsoredCalls(
+              [
+                {
+                  abi: tokenAbi,
+                  address: tokenAddress,
+                  args: transferArgs,
+                  functionName: "transfer",
+                },
+              ],
+              {
+                action: "LREP transfer",
+                allowSelfFundedFallback: true,
+              },
+            );
+          }
         } finally {
           setIsSponsoredTransferPending(false);
         }

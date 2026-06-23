@@ -5,13 +5,26 @@ import { useActiveWallet } from "thirdweb/react";
 import { type Account } from "thirdweb/wallets";
 import type { Abi, Hex } from "viem";
 import { useAccount, usePublicClient } from "wagmi";
+import { getTransactionReceiptPollingInterval } from "~~/config/shared";
 import { useDeployedContractInfo, useScaffoldWriteContract, useTargetNetwork } from "~~/hooks/scaffold-eth";
 import { useRaterRegistryIdentity } from "~~/hooks/useRaterRegistryIdentity";
 import { useThirdwebSponsoredSubmitCalls } from "~~/hooks/useThirdwebSponsoredSubmitCalls";
 import { getThirdwebRaterDelegationCandidate } from "~~/lib/thirdweb/raterDelegation";
+import { raceTransactionWithPostcondition, waitForTransactionPostcondition } from "~~/lib/transactions/postcondition";
 import { buildRaterDelegateAuthorizationTypedData, getDefaultSignatureDeadline } from "~~/lib/walletSignatures";
+import scaffoldConfig from "~~/scaffold.config";
 
 type TypedDataSigner = Pick<Account, "address" | "signTypedData">;
+
+function getRaterDelegationPostconditionPollingInterval(chainId: number) {
+  return getTransactionReceiptPollingInterval(chainId, {
+    preconfirmation: scaffoldConfig.useBasePreconfRpc,
+  });
+}
+
+function normalizeAddress(value: string | null | undefined) {
+  return (value ?? "").toLowerCase();
+}
 
 export function useThirdwebRaterDelegationLink({ enabled = true }: { enabled?: boolean } = {}) {
   const { address, chain } = useAccount();
@@ -102,17 +115,78 @@ export function useThirdwebRaterDelegationLink({ enabled = true }: { enabled?: b
       const args = [candidate.holderAddress, deadline, signature] as const;
 
       if (canUseSponsoredSubmitCalls) {
-        await executeSponsoredCalls(
-          [
-            {
-              abi,
-              address: registryAddress,
-              args,
-              functionName: "acceptDelegateWithSig",
+        const activeDelegateBefore = await publicClient
+          .readContract({
+            address: registryAddress,
+            abi,
+            functionName: "delegateTo",
+            args: [candidate.holderAddress],
+          } as never)
+          .then(value => (typeof value === "string" ? value : null))
+          .catch(() => null);
+        const canWaitForPostcondition =
+          activeDelegateBefore === null ||
+          normalizeAddress(activeDelegateBefore) !== normalizeAddress(candidate.delegateAddress);
+
+        if (canWaitForPostcondition) {
+          await raceTransactionWithPostcondition({
+            onPostconditionSuccessThenTransactionError: error => {
+              console.warn("[rater-delegation-link] postcondition succeeded before thirdweb status settled.", error);
             },
-          ],
-          { action: "rater identity link" },
-        );
+            transaction: () =>
+              executeSponsoredCalls(
+                [
+                  {
+                    abi,
+                    address: registryAddress,
+                    args,
+                    functionName: "acceptDelegateWithSig",
+                  },
+                ],
+                { action: "rater identity link", suppressStatusToast: true },
+              ),
+            waitForPostcondition: shouldStop =>
+              waitForTransactionPostcondition(
+                async () => {
+                  const [delegateTo, delegateOf] = await Promise.all([
+                    publicClient.readContract({
+                      address: registryAddress,
+                      abi,
+                      functionName: "delegateTo",
+                      args: [candidate.holderAddress],
+                    } as never),
+                    publicClient.readContract({
+                      address: registryAddress,
+                      abi,
+                      functionName: "delegateOf",
+                      args: [candidate.delegateAddress],
+                    } as never),
+                  ]);
+                  return (
+                    normalizeAddress(String(delegateTo)) === normalizeAddress(candidate.delegateAddress) &&
+                    normalizeAddress(String(delegateOf)) === normalizeAddress(candidate.holderAddress)
+                  );
+                },
+                "rater-delegation-link-postcondition",
+                {
+                  pollingIntervalMs: getRaterDelegationPostconditionPollingInterval(targetNetwork.id),
+                  shouldStop,
+                },
+              ),
+          });
+        } else {
+          await executeSponsoredCalls(
+            [
+              {
+                abi,
+                address: registryAddress,
+                args,
+                functionName: "acceptDelegateWithSig",
+              },
+            ],
+            { action: "rater identity link" },
+          );
+        }
       } else {
         await (writeContractAsync as any)(
           {

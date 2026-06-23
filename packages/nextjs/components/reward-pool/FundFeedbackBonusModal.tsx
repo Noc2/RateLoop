@@ -24,6 +24,7 @@ import {
   parseBountyWindowAmount,
   resolveBountyReferenceNowSeconds,
 } from "~~/lib/bountyWindows";
+import { hasFeedbackBonusPoolCreatedPostcondition } from "~~/lib/feedback/postconditions";
 import {
   DEFAULT_REWARD_POOL_FRONTEND_FEE_BPS,
   ERC20_APPROVAL_ABI,
@@ -38,6 +39,7 @@ import {
   parseFeedbackBonusAmount,
 } from "~~/lib/questionRewardPools";
 import { isUserRejectedTransactionError } from "~~/lib/transactionErrors";
+import { raceTransactionWithPostcondition, waitForTransactionPostcondition } from "~~/lib/transactions/postcondition";
 import {
   buildUsdcReceiveWithAuthorizationTypedData,
   getDefaultSignatureDeadline,
@@ -246,6 +248,61 @@ export function FundFeedbackBonusModal({
       );
 
       const canUseBatchFunding = canUseSponsoredBatchCalls || canUseSelfFundedBatchCalls;
+      const startPoolId =
+        canUseBatchFunding && publicClient
+          ? await publicClient
+              .readContract({
+                address: escrowAddress,
+                abi: FEEDBACK_BONUS_ESCROW_ABI,
+                functionName: "nextFeedbackBonusPoolId",
+              } as never)
+              .then(value => (typeof value === "bigint" ? value : null))
+              .catch(() => null)
+          : null;
+      const executeFeedbackBonusFundingBatch = async (
+        calls: Parameters<typeof executeContractCallBatch>[0],
+        options: Parameters<typeof executeContractCallBatch>[1],
+      ) => {
+        if (!publicClient || startPoolId === null) {
+          return executeContractCallBatch(calls, options);
+        }
+
+        return raceTransactionWithPostcondition({
+          onPostconditionSuccessThenTransactionError: error => {
+            console.warn("[feedback-bonus] fund postcondition succeeded before thirdweb status settled.", {
+              contentId: contentId.toString(),
+              error,
+              roundId: roundId.toString(),
+            });
+          },
+          transaction: () =>
+            executeContractCallBatch(calls, {
+              ...options,
+              suppressStatusToast: true,
+            }),
+          waitForPostcondition: shouldStop =>
+            waitForTransactionPostcondition(
+              () =>
+                hasFeedbackBonusPoolCreatedPostcondition({
+                  amount: parsedAmount,
+                  asset: selectedAssetId,
+                  awarder: selectedAwarderAddress,
+                  client: publicClient,
+                  contentId,
+                  escrowAddress,
+                  feedbackClosesAt,
+                  funder: address,
+                  roundId,
+                  startPoolId,
+                }),
+              "feedback-bonus-fund-postcondition",
+              {
+                pollingIntervalMs: getFundReceiptPollingInterval(chainId),
+                shouldStop,
+              },
+            ),
+        });
+      };
 
       if (asset === "usdc") {
         const authorizationParams = {
@@ -300,7 +357,7 @@ export function FundFeedbackBonusModal({
           } as const;
 
           if (canUseBatchFunding) {
-            await executeContractCallBatch([authorizationCall], {
+            await executeFeedbackBonusFundingBatch([authorizationCall], {
               action: "Fund Feedback Bonus",
               atomicRequired: false,
               sponsorshipMode: canUseSponsoredBatchCalls ? "sponsored" : "self-funded",
@@ -343,7 +400,7 @@ export function FundFeedbackBonusModal({
       const initialAllowance = await readTokenAllowance();
 
       if (canUseBatchFunding) {
-        await executeContractCallBatch(
+        await executeFeedbackBonusFundingBatch(
           [
             ...(initialAllowance < parsedAmount
               ? [

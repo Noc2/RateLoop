@@ -5,17 +5,21 @@ import { FeedbackRegistryAbi, RoundVotingEngineAbi } from "@rateloop/contracts/a
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { type Address, encodePacked, keccak256, zeroHash } from "viem";
 import { useAccount, usePublicClient, useSignMessage, useWriteContract } from "wagmi";
+import { getTransactionReceiptPollingInterval } from "~~/config/shared";
 import { useTransactor } from "~~/hooks/scaffold-eth";
 import { useLocalE2ETestWalletClient } from "~~/hooks/scaffold-eth/useLocalE2ETestWalletClient";
 import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import { useThirdwebSponsoredSubmitCalls } from "~~/hooks/useThirdwebSponsoredSubmitCalls";
 import { useWalletTransactionReadiness } from "~~/hooks/useWalletTransactionReadiness";
+import { hasPublishedFeedbackPostcondition } from "~~/lib/feedback/postconditions";
 import type { ContentFeedbackItem, ContentFeedbackListResult, ContentFeedbackType } from "~~/lib/feedback/types";
 import {
   getConfiguredFeedbackRegistryAddress,
   getConfiguredRoundVotingEngineAddress,
 } from "~~/lib/questionRewardPools";
 import { isUserRejectedTransactionError } from "~~/lib/transactionErrors";
+import { raceTransactionWithPostcondition, waitForTransactionPostcondition } from "~~/lib/transactions/postcondition";
+import scaffoldConfig from "~~/scaffold.config";
 import { isSignatureRejected } from "~~/utils/signatureErrors";
 
 interface SignedChallengeResponse {
@@ -46,7 +50,7 @@ interface ContentFeedbackActionResult {
 }
 
 type PublishedFeedbackResult =
-  | { commitKey: `0x${string}`; txHash: `0x${string}`; alreadyPublished?: false }
+  | { commitKey: `0x${string}`; txHash: `0x${string}` | null; alreadyPublished?: false }
   | { commitKey: `0x${string}`; txHash: null; alreadyPublished: true };
 
 const EMPTY_FEEDBACK_RESPONSE: ContentFeedbackListResult = {
@@ -62,6 +66,12 @@ function normalizeContentId(contentId: bigint | string | number | null | undefin
   if (contentId === null || contentId === undefined) return null;
   const raw = typeof contentId === "bigint" ? contentId.toString() : String(contentId).trim();
   return /^\d+$/.test(raw) && raw !== "0" ? raw.replace(/^0+(?=\d)/, "") : null;
+}
+
+function getFeedbackPostconditionPollingInterval(chainId: number) {
+  return getTransactionReceiptPollingInterval(chainId, {
+    preconfirmation: scaffoldConfig.useBasePreconfRpc,
+  });
 }
 
 async function readResponseBody<T>(response: Response, fallbackError: string): Promise<T> {
@@ -170,6 +180,7 @@ export function useContentFeedback(contentId: bigint | string | number | null | 
       sourceUrl?: string;
       clientNonce: `0x${string}`;
       commitHash?: `0x${string}` | null;
+      feedbackHash: `0x${string}`;
     }): Promise<PublishedFeedbackResult | null> => {
       if (!normalizedContentId) return null;
       const feedbackRegistryAddress = getConfiguredFeedbackRegistryAddress(targetNetwork.id);
@@ -202,7 +213,7 @@ export function useContentFeedback(contentId: bigint | string | number | null | 
         return { commitKey, txHash: null, alreadyPublished: true };
       }
 
-      let txHash: `0x${string}`;
+      let txHash: `0x${string}` | null;
       try {
         const request = {
           address: feedbackRegistryAddress,
@@ -221,35 +232,85 @@ export function useContentFeedback(contentId: bigint | string | number | null | 
         } as const;
         const canUseBatchedFeedbackWrite =
           !localE2ETestWalletClient && (canUseSponsoredSubmitCalls || canUseSelfFundedBatchCalls);
-        const submittedHash = canUseBatchedFeedbackWrite
-          ? readBatchTransactionHash(
-              await executeContractCallBatch(
-                [
-                  {
-                    abi: request.abi,
-                    address: request.address,
-                    args: request.args,
-                    functionName: request.functionName,
-                  },
-                ],
-                {
-                  action: "Publish feedback",
-                  atomicRequired: true,
-                  sponsorshipMode: canUseSponsoredSubmitCalls ? "sponsored" : "self-funded",
+        const submittedHash = await (canUseBatchedFeedbackWrite && publicClient
+          ? (() => {
+              const contentIdValue = BigInt(normalizedContentId);
+              const roundIdValue = BigInt(params.roundId);
+              return raceTransactionWithPostcondition({
+                onPostconditionSuccessThenTransactionError: error => {
+                  console.warn("[content-feedback] publish postcondition succeeded before thirdweb status settled.", {
+                    contentId: normalizedContentId,
+                    error,
+                    roundId: params.roundId,
+                  });
                 },
-              ),
-            )
-          : await writeTx(
-              () =>
-                localE2ETestWalletClient
-                  ? localE2ETestWalletClient.writeContract(request as any)
-                  : writeContractAsync(request as any),
-              { action: "Publish feedback", suppressSuccessToast: true },
-            );
-        if (!submittedHash) {
+                transaction: () =>
+                  executeContractCallBatch(
+                    [
+                      {
+                        abi: request.abi,
+                        address: request.address,
+                        args: request.args,
+                        functionName: request.functionName,
+                      },
+                    ],
+                    {
+                      action: "Publish feedback",
+                      atomicRequired: true,
+                      sponsorshipMode: canUseSponsoredSubmitCalls ? "sponsored" : "self-funded",
+                      suppressStatusToast: true,
+                    },
+                  ),
+                waitForPostcondition: shouldStop =>
+                  waitForTransactionPostcondition(
+                    () =>
+                      hasPublishedFeedbackPostcondition({
+                        client: publicClient,
+                        commitKey,
+                        contentId: contentIdValue,
+                        expectedFeedbackHash: params.feedbackHash,
+                        feedbackRegistryAddress,
+                        roundId: roundIdValue,
+                      }),
+                    "feedback-publish-postcondition",
+                    {
+                      pollingIntervalMs: getFeedbackPostconditionPollingInterval(targetNetwork.id),
+                      shouldStop,
+                    },
+                  ),
+              }).then(result =>
+                result.confirmation === "postcondition" ? null : readBatchTransactionHash(result.result),
+              );
+            })()
+          : canUseBatchedFeedbackWrite
+            ? readBatchTransactionHash(
+                await executeContractCallBatch(
+                  [
+                    {
+                      abi: request.abi,
+                      address: request.address,
+                      args: request.args,
+                      functionName: request.functionName,
+                    },
+                  ],
+                  {
+                    action: "Publish feedback",
+                    atomicRequired: true,
+                    sponsorshipMode: canUseSponsoredSubmitCalls ? "sponsored" : "self-funded",
+                  },
+                ),
+              )
+            : writeTx(
+                () =>
+                  localE2ETestWalletClient
+                    ? localE2ETestWalletClient.writeContract(request as any)
+                    : writeContractAsync(request as any),
+                { action: "Publish feedback", suppressSuccessToast: true },
+              ));
+        if (submittedHash === undefined) {
           throw new Error("Feedback publication transaction was not submitted.");
         }
-        txHash = submittedHash as `0x${string}`;
+        txHash = submittedHash as `0x${string}` | null;
       } catch (error) {
         if (await hasAlreadyPublishedFeedback()) {
           return { commitKey, txHash: null, alreadyPublished: true };
@@ -347,6 +408,7 @@ export function useContentFeedback(contentId: bigint | string | number | null | 
           sourceUrl: challenge.sourceUrl ?? undefined,
           clientNonce: challenge.clientNonce as `0x${string}`,
           commitHash: input.commitHash,
+          feedbackHash: challenge.feedbackHash as `0x${string}`,
         });
         if (!publishedFeedback) {
           throw new Error("Feedback registry is not deployed for this chain");

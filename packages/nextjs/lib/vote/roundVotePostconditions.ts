@@ -1,6 +1,10 @@
 import { AdvisoryVoteRecorderAbi, RoundVotingEngineAbi } from "@rateloop/contracts/abis";
 import type { Address, Hex, PublicClient } from "viem";
 import { zeroHash } from "viem";
+import {
+  type TransactionPostconditionWaitOptions,
+  waitForTransactionPostcondition,
+} from "~~/lib/transactions/postcondition";
 
 type ReadContractClient = Pick<PublicClient, "readContract">;
 
@@ -14,21 +18,6 @@ export type RoundVoteCommitPostconditionParams = {
   voter: Address;
   votingEngineAddress: Address;
 };
-
-export type RoundVotePostconditionWaitOptions = {
-  onEvent?: (event: string, extra?: Record<string, unknown>) => void;
-  pollingIntervalMs: number;
-  shouldStop?: () => boolean;
-  slowMs?: number;
-  timeoutMs?: number;
-};
-
-const ROUND_VOTE_POSTCONDITION_TIMEOUT_MS = 20_000;
-const ROUND_VOTE_POSTCONDITION_SLOW_MS = 4_000;
-
-function delay(ms: number) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
 
 function normalizeHex(value: string) {
   return value.toLowerCase();
@@ -84,9 +73,9 @@ export async function hasRoundOpenPostcondition(params: {
 
 export async function waitForRoundVoteCommitPostcondition(
   params: RoundVoteCommitPostconditionParams,
-  options: RoundVotePostconditionWaitOptions,
+  options: TransactionPostconditionWaitOptions,
 ) {
-  return waitForRoundVotePostcondition(() => hasRoundVoteCommitPostcondition(params), "vote-postcondition", options);
+  return waitForTransactionPostcondition(() => hasRoundVoteCommitPostcondition(params), "vote-postcondition", options);
 }
 
 export async function waitForRoundOpenPostcondition(
@@ -95,52 +84,7 @@ export async function waitForRoundOpenPostcondition(
     contentId: bigint;
     votingEngineAddress: Address;
   },
-  options: RoundVotePostconditionWaitOptions,
+  options: TransactionPostconditionWaitOptions,
 ) {
-  return waitForRoundVotePostcondition(() => hasRoundOpenPostcondition(params), "open-round-postcondition", options);
-}
-
-async function waitForRoundVotePostcondition(
-  checkPostcondition: () => Promise<boolean>,
-  eventPrefix: string,
-  options: RoundVotePostconditionWaitOptions,
-) {
-  const timeoutMs = options.timeoutMs ?? ROUND_VOTE_POSTCONDITION_TIMEOUT_MS;
-  const slowMs = options.slowMs ?? ROUND_VOTE_POSTCONDITION_SLOW_MS;
-  const startedAt = Date.now();
-  let pollCount = 0;
-  let slowLogged = false;
-
-  options.onEvent?.(`${eventPrefix}-wait-start`);
-
-  for (;;) {
-    if (options.shouldStop?.()) {
-      return false;
-    }
-
-    pollCount += 1;
-    try {
-      if (await checkPostcondition()) {
-        options.onEvent?.(`${eventPrefix}-wait-complete`, { pollCount });
-        return true;
-      }
-    } catch (error) {
-      options.onEvent?.(`${eventPrefix}-poll-error`, {
-        message: error instanceof Error ? error.message : "Unknown error",
-        pollCount,
-      });
-    }
-
-    const elapsedMs = Date.now() - startedAt;
-    if (!slowLogged && elapsedMs >= slowMs) {
-      slowLogged = true;
-      options.onEvent?.(`${eventPrefix}-wait-slow`, { pollCount });
-    }
-    if (elapsedMs >= timeoutMs) {
-      options.onEvent?.(`${eventPrefix}-wait-timeout`, { pollCount });
-      return false;
-    }
-
-    await delay(Math.max(200, Math.min(options.pollingIntervalMs, timeoutMs - elapsedMs)));
-  }
+  return waitForTransactionPostcondition(() => hasRoundOpenPostcondition(params), "open-round-postcondition", options);
 }

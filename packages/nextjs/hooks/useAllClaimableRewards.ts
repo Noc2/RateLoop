@@ -206,10 +206,12 @@ export function useAllClaimableRewards() {
     for (const v of refundVotes) {
       const stake = safeBigInt(v.stake);
       items.push({
+        commitKey: typeof v.commitKey === "string" ? (v.commitKey as `0x${string}`) : null,
         contentId: safeBigInt(v.contentId),
         roundId: safeBigInt(v.roundId),
         reward: stake,
         claimType: "refund",
+        voter: typeof v.voter === "string" ? (v.voter as `0x${string}`) : null,
       });
     }
 
@@ -243,10 +245,12 @@ export function useAllClaimableRewards() {
 
         if (reward > 0n) {
           items.push({
+            commitKey: typeof v.commitKey === "string" ? (v.commitKey as `0x${string}`) : null,
             contentId: safeBigInt(v.contentId),
             roundId: safeBigInt(v.roundId),
             reward,
             claimType: "reward",
+            voter: typeof v.voter === "string" ? (v.voter as `0x${string}`) : null,
           });
         }
       }

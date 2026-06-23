@@ -2,10 +2,19 @@
 
 import { useCallback, useState } from "react";
 import type { Abi } from "viem";
-import { useDeployedContractInfo, useScaffoldReadContract, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
+import { useAccount, usePublicClient } from "wagmi";
+import { getTransactionReceiptPollingInterval } from "~~/config/shared";
+import {
+  useDeployedContractInfo,
+  useScaffoldReadContract,
+  useScaffoldWriteContract,
+  useTargetNetwork,
+} from "~~/hooks/scaffold-eth";
 import { useThirdwebSponsoredSubmitCalls } from "~~/hooks/useThirdwebSponsoredSubmitCalls";
 import { useWalletTransactionReadiness } from "~~/hooks/useWalletTransactionReadiness";
 import { avatarAccentRgbToHex } from "~~/lib/avatar/avatarAccent";
+import { raceTransactionWithPostcondition, waitForTransactionPostcondition } from "~~/lib/transactions/postcondition";
+import scaffoldConfig from "~~/scaffold.config";
 
 interface Profile {
   name: string;
@@ -20,7 +29,40 @@ interface AvatarAccent {
   hex: string | null;
 }
 
+function getProfileRegistryPostconditionPollingInterval(chainId: number) {
+  return getTransactionReceiptPollingInterval(chainId, {
+    preconfirmation: scaffoldConfig.useBasePreconfRpc,
+  });
+}
+
+function readProfileTuple(profileData: unknown): Pick<Profile, "name" | "selfReport"> {
+  const tuple = Array.isArray(profileData) ? (profileData as unknown[]) : [];
+  const record =
+    !Array.isArray(profileData) && profileData && typeof profileData === "object"
+      ? (profileData as Record<string, unknown>)
+      : {};
+  return {
+    name: typeof record.name === "string" ? record.name : typeof tuple[0] === "string" ? tuple[0] : "",
+    selfReport:
+      typeof record.selfReport === "string" ? record.selfReport : typeof tuple[1] === "string" ? tuple[1] : "",
+  };
+}
+
+function readAvatarAccentTuple(avatarAccentData: unknown): Pick<AvatarAccent, "enabled" | "rgb"> {
+  const tuple = Array.isArray(avatarAccentData) ? (avatarAccentData as unknown[]) : [];
+  const record =
+    !Array.isArray(avatarAccentData) && avatarAccentData && typeof avatarAccentData === "object"
+      ? (avatarAccentData as Record<string, unknown>)
+      : {};
+  const enabled = record.enabled === true || tuple[0] === true;
+  const rgb = typeof record.rgb === "bigint" ? record.rgb : typeof tuple[1] === "bigint" ? tuple[1] : null;
+  return { enabled, rgb };
+}
+
 function useProfileRegistryWrite() {
+  const { address } = useAccount();
+  const { targetNetwork } = useTargetNetwork();
+  const publicClient = usePublicClient({ chainId: targetNetwork.id });
   const { data: profileRegistryContract } = useDeployedContractInfo({
     contractName: "ProfileRegistry" as any,
   });
@@ -44,17 +86,90 @@ function useProfileRegistryWrite() {
       if (canUseSponsoredSubmitCalls && profileRegistryContract) {
         setIsSponsoredWritePending(true);
         try {
-          await executeSponsoredCalls(
-            [
-              {
-                abi: profileRegistryContract.abi as Abi,
-                address: profileRegistryContract.address as `0x${string}`,
-                args,
-                functionName,
+          const contractAddress = profileRegistryContract.address as `0x${string}`;
+          const contractAbi = profileRegistryContract.abi as Abi;
+          const canWaitForPostcondition = Boolean(address && publicClient);
+          if (canWaitForPostcondition) {
+            await raceTransactionWithPostcondition({
+              onPostconditionSuccessThenTransactionError: error => {
+                console.warn("[profile-registry] postcondition succeeded before thirdweb status settled.", {
+                  error,
+                  functionName,
+                });
               },
-            ],
-            { action },
-          );
+              transaction: () =>
+                executeSponsoredCalls(
+                  [
+                    {
+                      abi: contractAbi,
+                      address: contractAddress,
+                      args,
+                      functionName,
+                    },
+                  ],
+                  { action, suppressStatusToast: true },
+                ),
+              waitForPostcondition: shouldStop =>
+                waitForTransactionPostcondition(
+                  async () => {
+                    if (!address || !publicClient) return false;
+                    if (functionName === "setProfile") {
+                      const [expectedName, expectedSelfReport] = args as readonly [string, string];
+                      const profile = readProfileTuple(
+                        await publicClient.readContract({
+                          address: contractAddress,
+                          abi: contractAbi,
+                          functionName: "getProfile",
+                          args: [address],
+                        } as never),
+                      );
+                      return profile.name === expectedName && profile.selfReport === expectedSelfReport;
+                    }
+                    if (functionName === "setAvatarAccent") {
+                      const [expectedRgb] = args as readonly [bigint];
+                      const avatarAccent = readAvatarAccentTuple(
+                        await publicClient.readContract({
+                          address: contractAddress,
+                          abi: contractAbi,
+                          functionName: "getAvatarAccent",
+                          args: [address],
+                        } as never),
+                      );
+                      return avatarAccent.enabled && avatarAccent.rgb === expectedRgb;
+                    }
+                    if (functionName === "clearAvatarAccent") {
+                      const avatarAccent = readAvatarAccentTuple(
+                        await publicClient.readContract({
+                          address: contractAddress,
+                          abi: contractAbi,
+                          functionName: "getAvatarAccent",
+                          args: [address],
+                        } as never),
+                      );
+                      return !avatarAccent.enabled;
+                    }
+                    return false;
+                  },
+                  "profile-registry-postcondition",
+                  {
+                    pollingIntervalMs: getProfileRegistryPostconditionPollingInterval(targetNetwork.id),
+                    shouldStop,
+                  },
+                ),
+            });
+          } else {
+            await executeSponsoredCalls(
+              [
+                {
+                  abi: contractAbi,
+                  address: contractAddress,
+                  args,
+                  functionName,
+                },
+              ],
+              { action },
+            );
+          }
           return;
         } finally {
           setIsSponsoredWritePending(false);
@@ -70,9 +185,12 @@ function useProfileRegistryWrite() {
       );
     },
     [
+      address,
       canUseSponsoredSubmitCalls,
       executeSponsoredCalls,
       profileRegistryContract,
+      publicClient,
+      targetNetwork.id,
       walletTransactionReadiness.isBlocked,
       walletTransactionReadiness.message,
       writeContractAsync,

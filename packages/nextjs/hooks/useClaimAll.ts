@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { type Abi } from "viem";
 import { useAccount, usePublicClient } from "wagmi";
+import { getTransactionReceiptPollingInterval } from "~~/config/shared";
 import { useTermsAcceptance } from "~~/contexts/TermsAcceptanceContext";
 import {
   type ClaimableRewardItem,
@@ -29,6 +30,8 @@ import {
 } from "~~/lib/questionRewardPools";
 import { isWalletRpcOverloadedError } from "~~/lib/transactionErrors";
 import { readLatestBlockNumber, waitForNextObservedBlock } from "~~/lib/transactions/blockWait";
+import { raceTransactionWithPostcondition, waitForTransactionPostcondition } from "~~/lib/transactions/postcondition";
+import scaffoldConfig from "~~/scaffold.config";
 import { notification } from "~~/utils/scaffold-eth";
 
 /**
@@ -57,6 +60,12 @@ function getClaimableRewardLabel(item: ClaimableRewardItem) {
     case "reward":
       return `content #${item.contentId} round ${item.roundId}`;
   }
+}
+
+function getClaimPostconditionPollingInterval(chainId: number) {
+  return getTransactionReceiptPollingInterval(chainId, {
+    preconfirmation: scaffoldConfig.useBasePreconfRpc,
+  });
 }
 
 export function useClaimAll() {
@@ -179,6 +188,160 @@ export function useClaimAll() {
     };
   };
 
+  const waitForSponsoredClaimPostcondition = (
+    item: ClaimableRewardItem,
+    shouldStop: () => boolean,
+  ): Promise<boolean> | null => {
+    if (!publicClient || !address) return null;
+
+    if (item.claimType === "reward" && distributorInfo) {
+      const commitKey = item.commitKey;
+      const voter = item.voter;
+      const lookup =
+        commitKey && /^0x[0-9a-fA-F]{64}$/.test(commitKey)
+          ? {
+              functionName: "rewardCommitClaimed" as const,
+              args: [item.contentId, item.roundId, commitKey] as const,
+            }
+          : voter
+            ? {
+                functionName: "rewardClaimed" as const,
+                args: [item.contentId, item.roundId, voter] as const,
+              }
+            : null;
+      if (!lookup) return null;
+      return waitForTransactionPostcondition(
+        async () =>
+          (await publicClient.readContract({
+            address: distributorInfo.address as `0x${string}`,
+            abi: distributorInfo.abi as Abi,
+            functionName: lookup.functionName,
+            args: lookup.args,
+          } as never)) === true,
+        "claim-reward-postcondition",
+        {
+          pollingIntervalMs: getClaimPostconditionPollingInterval(targetNetwork.id),
+          shouldStop,
+        },
+      );
+    }
+
+    if (item.claimType === "frontend_round_fee" && distributorInfo) {
+      return waitForTransactionPostcondition(
+        async () =>
+          (await publicClient.readContract({
+            address: distributorInfo.address as `0x${string}`,
+            abi: distributorInfo.abi as Abi,
+            functionName: "frontendFeeClaimed",
+            args: [item.contentId, item.roundId, item.frontend],
+          } as never)) === true,
+        "claim-frontend-round-fee-postcondition",
+        {
+          pollingIntervalMs: getClaimPostconditionPollingInterval(targetNetwork.id),
+          shouldStop,
+        },
+      );
+    }
+
+    if (item.claimType === "frontend_registry_fee" && frontendRegistryInfo) {
+      return waitForTransactionPostcondition(
+        async () => {
+          const releaseAt = await publicClient.readContract({
+            address: frontendRegistryInfo.address as `0x${string}`,
+            abi: frontendRegistryInfo.abi as Abi,
+            functionName: "pendingFeeWithdrawalReleaseAt",
+            args: [item.frontend],
+          } as never);
+          return typeof releaseAt === "bigint" && releaseAt > 0n;
+        },
+        "claim-frontend-registry-fee-postcondition",
+        {
+          pollingIntervalMs: getClaimPostconditionPollingInterval(targetNetwork.id),
+          shouldStop,
+        },
+      );
+    }
+
+    if (item.claimType === "frontend_registry_withdrawal" && frontendRegistryInfo) {
+      return waitForTransactionPostcondition(
+        async () => {
+          const [pendingAmount, releaseAt] = await Promise.all([
+            publicClient.readContract({
+              address: frontendRegistryInfo.address as `0x${string}`,
+              abi: frontendRegistryInfo.abi as Abi,
+              functionName: "pendingFeeWithdrawalAmount",
+              args: [item.frontend],
+            } as never),
+            publicClient.readContract({
+              address: frontendRegistryInfo.address as `0x${string}`,
+              abi: frontendRegistryInfo.abi as Abi,
+              functionName: "pendingFeeWithdrawalReleaseAt",
+              args: [item.frontend],
+            } as never),
+          ]);
+          return pendingAmount === 0n && releaseAt === 0n;
+        },
+        "claim-frontend-registry-withdrawal-postcondition",
+        {
+          pollingIntervalMs: getClaimPostconditionPollingInterval(targetNetwork.id),
+          shouldStop,
+        },
+      );
+    }
+
+    if (item.claimType === "question_reward" && questionRewardPoolEscrowInfo) {
+      return waitForTransactionPostcondition(
+        async () => {
+          const claimableAmount = await publicClient.readContract({
+            address: questionRewardPoolEscrowInfo.address as `0x${string}`,
+            abi: QUESTION_REWARD_POOL_ESCROW_ABI,
+            functionName:
+              item.payoutWeight && item.payoutProof
+                ? "claimableQuestionRewardWithPayoutWeight"
+                : "claimableQuestionReward",
+            args:
+              item.payoutWeight && item.payoutProof
+                ? [item.rewardPoolId, item.roundId, address, item.payoutWeight, item.payoutProof]
+                : [item.rewardPoolId, item.roundId, address],
+          } as never);
+          return claimableAmount === 0n;
+        },
+        "claim-question-reward-postcondition",
+        {
+          pollingIntervalMs: getClaimPostconditionPollingInterval(targetNetwork.id),
+          shouldStop,
+        },
+      );
+    }
+
+    if (item.claimType === "question_bundle_reward" && questionRewardPoolEscrowInfo) {
+      return waitForTransactionPostcondition(
+        async () => {
+          const claimableAmount = await publicClient.readContract({
+            address: questionRewardPoolEscrowInfo.address as `0x${string}`,
+            abi: QUESTION_REWARD_POOL_ESCROW_ABI,
+            functionName:
+              item.payoutWeight && item.payoutProof
+                ? "claimableQuestionBundleRewardWithPayoutWeight"
+                : "claimableQuestionBundleReward",
+            args:
+              item.payoutWeight && item.payoutProof
+                ? [item.bundleId, item.roundSetIndex, address, item.payoutWeight, item.payoutProof]
+                : [item.bundleId, item.roundSetIndex, address],
+          } as never);
+          return claimableAmount === 0n;
+        },
+        "claim-question-bundle-reward-postcondition",
+        {
+          pollingIntervalMs: getClaimPostconditionPollingInterval(targetNetwork.id),
+          shouldStop,
+        },
+      );
+    }
+
+    return null;
+  };
+
   const claimAll = async (items: ClaimableRewardItem[], onComplete?: () => void) => {
     if (items.length === 0) return;
 
@@ -250,7 +413,36 @@ export function useClaimAll() {
             const checkpointBaselineBlock = shouldWaitForCheckpointBlock
               ? await readLatestBlockNumber(publicClient)
               : null;
-            await executeSponsoredCalls([getSponsoredClaimCall(item)], { action: claimLabel });
+            const executeClaim = (suppressStatusToast = false) =>
+              executeSponsoredCalls([getSponsoredClaimCall(item)], {
+                action: claimLabel,
+                suppressStatusToast,
+              });
+            const canWaitForPostcondition = Boolean(
+              publicClient &&
+                address &&
+                ((item.claimType === "reward" && distributorInfo && (item.commitKey || item.voter)) ||
+                  (item.claimType === "frontend_round_fee" && distributorInfo) ||
+                  (item.claimType === "frontend_registry_fee" && frontendRegistryInfo) ||
+                  (item.claimType === "frontend_registry_withdrawal" && frontendRegistryInfo) ||
+                  (item.claimType === "question_reward" && questionRewardPoolEscrowInfo) ||
+                  (item.claimType === "question_bundle_reward" && questionRewardPoolEscrowInfo)),
+            );
+            if (canWaitForPostcondition) {
+              await raceTransactionWithPostcondition({
+                onPostconditionSuccessThenTransactionError: error => {
+                  console.warn("[claim-all] claim postcondition succeeded before thirdweb status settled.", {
+                    claimType: item.claimType,
+                    error,
+                  });
+                },
+                transaction: () => executeClaim(true),
+                waitForPostcondition: shouldStop =>
+                  waitForSponsoredClaimPostcondition(item, shouldStop) ?? Promise.resolve(false),
+              });
+            } else {
+              await executeClaim();
+            }
             if (shouldWaitForCheckpointBlock) {
               await waitForNextObservedBlock(publicClient, { afterBlockNumber: checkpointBaselineBlock });
             }

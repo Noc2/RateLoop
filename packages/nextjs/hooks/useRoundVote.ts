@@ -42,6 +42,7 @@ import {
   isFreeTransactionExhaustedError,
   isInsufficientFundsError,
 } from "~~/lib/transactionErrors";
+import { raceTransactionWithPostcondition } from "~~/lib/transactions/postcondition";
 import {
   getAdvisoryVoteUnavailableMessage,
   parseAdvisoryCommitAvailability,
@@ -699,43 +700,6 @@ export function useRoundVote() {
           return preparedRuntime;
         });
 
-      const raceBatchWithPostcondition = async <T>(params: {
-        batch: () => Promise<T>;
-        label: string;
-        waitForPostcondition: (isBatchSettled: () => boolean) => Promise<boolean>;
-      }) => {
-        let batchSettled = false;
-        let postconditionSatisfied = false;
-        const batchPromise = params.batch().finally(() => {
-          batchSettled = true;
-        });
-        void batchPromise.catch(batchError => {
-          if (postconditionSatisfied) {
-            console.warn(`[round-vote] ${params.label} postcondition succeeded before thirdweb status settled.`, {
-              contentId: contentId.toString(),
-              error: batchError,
-            });
-          }
-        });
-
-        const firstCompletion = await Promise.race([
-          batchPromise.then(() => "batch" as const),
-          params
-            .waitForPostcondition(() => batchSettled)
-            .then(satisfied => (satisfied ? ("postcondition" as const) : ("timeout" as const))),
-        ]);
-
-        if (firstCompletion === "postcondition") {
-          postconditionSatisfied = true;
-          return "postcondition" as const;
-        }
-        if (firstCompletion === "timeout") {
-          await batchPromise;
-          return "batch-after-postcondition-timeout" as const;
-        }
-        return "batch" as const;
-      };
-
       const submitOpenRound = async () => {
         const openRoundCall: RoundVoteContractCall = {
           abi: RoundVotingEngineAbi as any,
@@ -746,8 +710,14 @@ export function useRoundVote() {
         };
         timingLog.emit("open-round-submit-start");
         if (!useDirectLocalE2EWrites && canUseSponsoredBatchCalls) {
-          const confirmation = await raceBatchWithPostcondition({
-            batch: () =>
+          const { confirmation } = await raceTransactionWithPostcondition({
+            onPostconditionSuccessThenTransactionError: batchError => {
+              console.warn("[round-vote] open round postcondition succeeded before thirdweb status settled.", {
+                contentId: contentId.toString(),
+                error: batchError,
+              });
+            },
+            transaction: () =>
               executeContractCallBatch([openRoundCall], {
                 action: "open round",
                 atomicRequired: true,
@@ -755,7 +725,6 @@ export function useRoundVote() {
                 sponsorshipMode: "sponsored",
                 suppressStatusToast: true,
               }),
-            label: "open round",
             waitForPostcondition: shouldStop =>
               waitForRoundOpenPostcondition(
                 {
@@ -774,8 +743,14 @@ export function useRoundVote() {
           return;
         }
         if (!useDirectLocalE2EWrites && canUseSelfFundedBatchCalls) {
-          const confirmation = await raceBatchWithPostcondition({
-            batch: () =>
+          const { confirmation } = await raceTransactionWithPostcondition({
+            onPostconditionSuccessThenTransactionError: batchError => {
+              console.warn("[round-vote] open round postcondition succeeded before thirdweb status settled.", {
+                contentId: contentId.toString(),
+                error: batchError,
+              });
+            },
+            transaction: () =>
               executeContractCallBatch([openRoundCall], {
                 action: "open round",
                 atomicRequired: true,
@@ -783,7 +758,6 @@ export function useRoundVote() {
                 sponsorshipMode: "self-funded",
                 suppressStatusToast: true,
               }),
-            label: "open round",
             waitForPostcondition: shouldStop =>
               waitForRoundOpenPostcondition(
                 {
@@ -905,8 +879,14 @@ export function useRoundVote() {
         sponsorshipMode: "sponsored" | "self-funded",
       ) => {
         const commitHash = vote.plan.commitVoteArgs[4] as Hex;
-        return raceBatchWithPostcondition({
-          batch: () =>
+        const { confirmation } = await raceTransactionWithPostcondition({
+          onPostconditionSuccessThenTransactionError: batchError => {
+            console.warn("[round-vote] vote postcondition succeeded before thirdweb status settled.", {
+              contentId: contentId.toString(),
+              error: batchError,
+            });
+          },
+          transaction: () =>
             executeContractCallBatch(vote.plan.calls, {
               action: "vote",
               atomicRequired: true,
@@ -914,7 +894,6 @@ export function useRoundVote() {
               sponsorshipMode,
               suppressStatusToast: true,
             }),
-          label: "vote",
           waitForPostcondition: shouldStop =>
             waitForRoundVoteCommitPostcondition(
               {
@@ -934,6 +913,7 @@ export function useRoundVote() {
               },
             ),
         });
+        return confirmation;
       };
       let submittedVote: Awaited<ReturnType<typeof buildFreshRoundVotePlan>> | null = null;
 

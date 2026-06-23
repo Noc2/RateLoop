@@ -1,10 +1,12 @@
 "use client";
 
 export interface RoundClaimableRewardItem {
+  commitKey?: `0x${string}` | null;
   contentId: bigint;
   roundId: bigint;
   reward: bigint;
   claimType: "reward" | "refund";
+  voter?: `0x${string}` | null;
 }
 
 type ClaimHex = `0x${string}`;

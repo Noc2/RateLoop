@@ -144,8 +144,9 @@ export async function POST(request: NextRequest) {
     if (!commitKey) {
       return NextResponse.json({ error: "Missing or invalid feedback commit key" }, { status: 400 });
     }
-    const publicationTxHash = normalizeContentFeedbackTxHash(body.publicationTxHash);
-    if (!publicationTxHash) {
+    const publicationTxHash =
+      body.publicationTxHash === null ? null : normalizeContentFeedbackTxHash(body.publicationTxHash);
+    if (body.publicationTxHash !== null && !publicationTxHash) {
       return NextResponse.json({ error: "Missing or invalid feedback publication transaction" }, { status: 400 });
     }
 

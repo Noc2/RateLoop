@@ -9,9 +9,14 @@ import {
 } from "@rateloop/node-utils/profileSelfReport";
 import type { Abi } from "viem";
 import { zeroAddress, zeroHash } from "viem";
+import { useAccount, usePublicClient } from "wagmi";
+import { getTransactionReceiptPollingInterval } from "~~/config/shared";
 import { useDeployedContractInfo, useScaffoldReadContract, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
+import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import { useThirdwebSponsoredSubmitCalls } from "~~/hooks/useThirdwebSponsoredSubmitCalls";
 import { useWalletTransactionReadiness } from "~~/hooks/useWalletTransactionReadiness";
+import { raceTransactionWithPostcondition, waitForTransactionPostcondition } from "~~/lib/transactions/postcondition";
+import scaffoldConfig from "~~/scaffold.config";
 
 interface RaterRegistryProfile {
   raterType: RaterTypeValue;
@@ -19,6 +24,12 @@ interface RaterRegistryProfile {
   metadataHash: `0x${string}`;
   updatedAt: bigint;
   hasProfile: boolean;
+}
+
+function getRaterRegistryPostconditionPollingInterval(chainId: number) {
+  return getTransactionReceiptPollingInterval(chainId, {
+    preconfirmation: scaffoldConfig.useBasePreconfRpc,
+  });
 }
 
 /**
@@ -177,6 +188,9 @@ export function useRaterRegistryProfile(address?: string) {
 }
 
 export function useSetRaterProfile() {
+  const { address } = useAccount();
+  const { targetNetwork } = useTargetNetwork();
+  const publicClient = usePublicClient({ chainId: targetNetwork.id });
   const { data: raterRegistryContract } = useDeployedContractInfo({
     contractName: "RaterRegistry",
   });
@@ -201,17 +215,75 @@ export function useSetRaterProfile() {
       if (canUseSponsoredSubmitCalls && raterRegistryContract) {
         setIsSponsoredWritePending(true);
         try {
-          await executeSponsoredCalls(
-            [
-              {
-                abi: raterRegistryContract.abi as Abi,
-                address: raterRegistryContract.address as `0x${string}`,
-                args,
-                functionName: "setProfile",
+          const registryAddress = raterRegistryContract.address as `0x${string}`;
+          const registryAbi = raterRegistryContract.abi as Abi;
+          const profileBefore =
+            address && publicClient
+              ? await publicClient
+                  .readContract({
+                    address: registryAddress,
+                    abi: registryAbi,
+                    functionName: "getProfile",
+                    args: [address],
+                  } as never)
+                  .then(parseRaterProfile)
+                  .catch(() => null)
+              : null;
+
+          if (address && publicClient && profileBefore) {
+            await raceTransactionWithPostcondition({
+              onPostconditionSuccessThenTransactionError: error => {
+                console.warn("[rater-registry] profile postcondition succeeded before thirdweb status settled.", error);
               },
-            ],
-            { action: "rater profile update" },
-          );
+              transaction: () =>
+                executeSponsoredCalls(
+                  [
+                    {
+                      abi: registryAbi,
+                      address: registryAddress,
+                      args,
+                      functionName: "setProfile",
+                    },
+                  ],
+                  { action: "rater profile update", suppressStatusToast: true },
+                ),
+              waitForPostcondition: shouldStop =>
+                waitForTransactionPostcondition(
+                  async () => {
+                    const profile = parseRaterProfile(
+                      await publicClient.readContract({
+                        address: registryAddress,
+                        abi: registryAbi,
+                        functionName: "getProfile",
+                        args: [address],
+                      } as never),
+                    );
+                    return (
+                      profile.raterType === raterType &&
+                      profile.metadataHash.toLowerCase() === metadataHash.toLowerCase() &&
+                      profile.updatedAt > profileBefore.updatedAt
+                    );
+                  },
+                  "rater-registry-profile-postcondition",
+                  {
+                    pollingIntervalMs: getRaterRegistryPostconditionPollingInterval(targetNetwork.id),
+                    shouldStop,
+                  },
+                ),
+            });
+          } else {
+            await executeSponsoredCalls(
+              [
+                {
+                  abi: registryAbi,
+                  address: registryAddress,
+                  args,
+                  functionName: "setProfile",
+                },
+              ],
+              { action: "rater profile update" },
+            );
+          }
           return;
         } finally {
           setIsSponsoredWritePending(false);
@@ -227,9 +299,12 @@ export function useSetRaterProfile() {
       );
     },
     [
+      address,
       canUseSponsoredSubmitCalls,
       executeSponsoredCalls,
+      publicClient,
       raterRegistryContract,
+      targetNetwork.id,
       walletTransactionReadiness.isBlocked,
       walletTransactionReadiness.message,
       writeContractAsync,
