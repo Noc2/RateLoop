@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { useActiveWalletChain } from "thirdweb/react";
 import { useAccount, useBalance } from "wagmi";
+import { useWalletRestore } from "~~/contexts/WalletRestoreContext";
 import { useFreeTransactionAllowance } from "~~/hooks/useFreeTransactionAllowance";
 import {
   type WalletExecutionMode,
@@ -63,6 +64,7 @@ export function useGasBalanceStatus(options: GasBalanceStatusOptions = {}) {
   const includeExternalSendCalls = options.includeExternalSendCalls ?? false;
   const { address, chain, connector } = useAccount();
   const activeWalletChain = useActiveWalletChain();
+  const { isRestoringWallet } = useWalletRestore();
   const { executionMode, isThirdwebInApp } = useWalletExecutionCapabilities();
   const freeTransactionAllowance = useFreeTransactionAllowance({ allowInAppSponsorshipSync });
   const { data: nativeBalance, isLoading: nativeBalanceLoading } = useBalance({
@@ -86,9 +88,11 @@ export function useGasBalanceStatus(options: GasBalanceStatusOptions = {}) {
     const hasExecutableSponsoredCalls = executionMode === "sponsored_7702";
     const supportsSponsoredCalls = expectsThirdwebGasMode;
     const canSponsorTransactions = supportsSponsoredCalls && freeTransactionAllowance.canUseFreeTransactions;
-    const isAwaitingFreeTransactionAllowance = supportsSponsoredCalls && !freeTransactionAllowance.isResolved;
+    const isAwaitingFreeTransactionAllowance =
+      supportsSponsoredCalls && !isRestoringWallet && !freeTransactionAllowance.isResolved;
     const isAwaitingSponsoredWalletReconnect =
-      expectsThirdwebGasMode && freeTransactionAllowance.canUseFreeTransactions && !hasExecutableSponsoredCalls;
+      (isRestoringWallet && expectsThirdwebGasMode) ||
+      (expectsThirdwebGasMode && freeTransactionAllowance.canUseFreeTransactions && !hasExecutableSponsoredCalls);
     const isAwaitingSelfFundedWalletReconnect = shouldAwaitSelfFundedGasModeReconnect({
       canUseFreeTransactions: freeTransactionAllowance.canUseFreeTransactions,
       chainId: resolvedChainId,
@@ -124,6 +128,7 @@ export function useGasBalanceStatus(options: GasBalanceStatusOptions = {}) {
       isAwaitingFreeTransactionAllowance,
       isAwaitingSelfFundedWalletReconnect,
       isAwaitingSponsoredWalletReconnect,
+      isRestoringWallet,
       isMissingGasBalance,
       nativeBalanceValue,
       nativeTokenSymbol,
@@ -144,6 +149,7 @@ export function useGasBalanceStatus(options: GasBalanceStatusOptions = {}) {
     freeTransactionAllowance.raterIdentityKey,
     includeExternalSendCalls,
     isThirdwebInApp,
+    isRestoringWallet,
     nativeBalance,
     nativeBalanceLoading,
     resolvedChainId,

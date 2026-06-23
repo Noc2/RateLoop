@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { Hash, PublicClient, SendTransactionParameters, TransactionReceipt, WalletClient } from "viem";
 import { Config, useConfig, useWalletClient } from "wagmi";
@@ -5,10 +6,12 @@ import { getPublicClient } from "wagmi/actions";
 import { SendTransactionMutate } from "wagmi/query";
 import { TransactionStatusCallout } from "~~/components/shared/TransactionStatusCallout";
 import { getTransactionReceiptPollingInterval } from "~~/config/shared";
+import { useWalletRestore } from "~~/contexts/WalletRestoreContext";
 import { FREE_TRANSACTION_ALLOWANCE_QUERY_KEY } from "~~/hooks/useFreeTransactionAllowance";
 import { refreshActiveWalletReadQueries } from "~~/hooks/useRefreshWalletBalances";
 import { createTransactionTimingRun } from "~~/lib/transactions/timing";
 import { TRANSACTION_CONFIRMING_STATUS, getSubmittingTransactionStatus } from "~~/lib/ui/transactionStatusCopy";
+import { WALLET_TRANSACTION_RESTORING_MESSAGE } from "~~/lib/walletTransactionReadiness";
 import scaffoldConfig from "~~/scaffold.config";
 import { AllowedChainIds, getBlockExplorerTxLink, notification } from "~~/utils/scaffold-eth";
 import { TransactorFuncOptions, getParsedErrorWithAllAbis } from "~~/utils/scaffold-eth/contract";
@@ -17,6 +20,13 @@ type TransactionFunc = (
   tx: (() => Promise<Hash>) | Parameters<SendTransactionMutate<Config, undefined>>[0],
   options?: TransactorFuncOptions,
 ) => Promise<Hash | undefined>;
+
+const WALLET_CLIENT_RESTORE_TIMEOUT_MS = 8_000;
+const WALLET_CLIENT_RESTORE_POLL_MS = 250;
+
+function wait(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 export function assertTransactionReceiptSucceeded(receipt: Pick<TransactionReceipt, "status">) {
   if (receipt.status === "reverted") throw new Error("Transaction reverted");
@@ -101,13 +111,40 @@ export const useTransactor = (_walletClient?: WalletClient): TransactionFunc => 
   const { data } = useWalletClient();
   const runtimeConfig = useConfig();
   const queryClient = useQueryClient();
+  const { isRestoringWallet } = useWalletRestore();
   if (walletClient === undefined && data) {
     walletClient = data;
   }
+  const walletClientRef = useRef<WalletClient | undefined>(walletClient);
+  const isRestoringWalletRef = useRef(isRestoringWallet);
+
+  useEffect(() => {
+    walletClientRef.current = walletClient;
+    isRestoringWalletRef.current = isRestoringWallet;
+  }, [isRestoringWallet, walletClient]);
+
+  const waitForWalletClient = async () => {
+    let currentWalletClient = walletClientRef.current;
+    if (currentWalletClient || !isRestoringWalletRef.current) {
+      return currentWalletClient;
+    }
+
+    const deadline = Date.now() + WALLET_CLIENT_RESTORE_TIMEOUT_MS;
+    while (Date.now() < deadline) {
+      await wait(WALLET_CLIENT_RESTORE_POLL_MS);
+      currentWalletClient = walletClientRef.current;
+      if (currentWalletClient || !isRestoringWalletRef.current) {
+        return currentWalletClient;
+      }
+    }
+
+    return walletClientRef.current;
+  };
 
   const result: TransactionFunc = async (tx, options) => {
-    if (!walletClient) {
-      notification.error("Cannot access account");
+    const executableWalletClient = await waitForWalletClient();
+    if (!executableWalletClient) {
+      notification.error(isRestoringWalletRef.current ? WALLET_TRANSACTION_RESTORING_MESSAGE : "Cannot access account");
       return;
     }
 
@@ -119,16 +156,16 @@ export const useTransactor = (_walletClient?: WalletClient): TransactionFunc => 
     let timingLog: ReturnType<typeof createTransactionTimingRun> | null = null;
     try {
       const cachedChainId =
-        walletClient.chain?.id ??
-        (typeof walletClient.account === "object" && "chainId" in walletClient.account
-          ? Number((walletClient.account as { chainId?: number }).chainId)
+        executableWalletClient.chain?.id ??
+        (typeof executableWalletClient.account === "object" && "chainId" in executableWalletClient.account
+          ? Number((executableWalletClient.account as { chainId?: number }).chainId)
           : undefined);
       chainId =
         typeof cachedChainId === "number" && Number.isFinite(cachedChainId)
           ? cachedChainId
           : scaffoldConfig.targetNetworks[0].id;
       if (!Number.isFinite(chainId)) {
-        chainId = await walletClient.getChainId();
+        chainId = await executableWalletClient.getChainId();
       }
       // Get full transaction from public client for the correct chain
       const publicClient = getPublicClient(runtimeConfig, { chainId: chainId as any });
@@ -162,7 +199,7 @@ export const useTransactor = (_walletClient?: WalletClient): TransactionFunc => 
         transactionHash = result;
       } else if (tx != null) {
         timingLog.emit("wallet-request-start");
-        transactionHash = await walletClient.sendTransaction(tx as SendTransactionParameters);
+        transactionHash = await executableWalletClient.sendTransaction(tx as SendTransactionParameters);
       } else {
         throw new Error("Incorrect transaction passed to transactor");
       }

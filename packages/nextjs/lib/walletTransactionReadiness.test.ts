@@ -29,15 +29,27 @@ test("getWalletTransactionReadiness returns ready for an executable wallet", () 
   assert.equal(readiness.isPending, false);
 });
 
-test("getWalletTransactionReadiness treats reconnecting wallets as pending", () => {
+test("getWalletTransactionReadiness treats reconnecting wallets without executable clients as pending", () => {
   const readiness = getWalletTransactionReadiness({
     ...BASE_PARAMS,
     accountStatus: "reconnecting",
+    hasExecutableWalletClient: false,
   });
 
   assert.equal(readiness.status, "restoring_wallet");
   assert.equal(readiness.message, WALLET_TRANSACTION_RESTORING_MESSAGE);
   assert.equal(readiness.isPending, true);
+});
+
+test("getWalletTransactionReadiness allows reconnecting wallets that are already executable", () => {
+  const readiness = getWalletTransactionReadiness({
+    ...BASE_PARAMS,
+    accountStatus: "reconnecting",
+    hasExecutableWalletClient: true,
+  });
+
+  assert.equal(readiness.status, "ready");
+  assert.equal(readiness.isReady, true);
 });
 
 test("getWalletTransactionReadiness waits for an executable wallet client after account restore", () => {

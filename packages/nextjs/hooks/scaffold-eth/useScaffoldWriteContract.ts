@@ -4,9 +4,11 @@ import { Abi, ExtractAbiFunctionNames } from "abitype";
 import { Config, useAccount, useConfig, useWriteContract } from "wagmi";
 import { WriteContractErrorType, WriteContractReturnType, getPublicClient } from "wagmi/actions";
 import { WriteContractVariables } from "wagmi/query";
+import { useWalletRestore } from "~~/contexts/WalletRestoreContext";
 import { useSelectedNetwork } from "~~/hooks/scaffold-eth";
 import { useDeployedContractInfo, useTransactor } from "~~/hooks/scaffold-eth";
 import { useLocalE2ETestWalletClient } from "~~/hooks/scaffold-eth/useLocalE2ETestWalletClient";
+import { WALLET_TRANSACTION_RESTORING_MESSAGE, getWalletTransactionReadiness } from "~~/lib/walletTransactionReadiness";
 import { AllowedChainIds, notification } from "~~/utils/scaffold-eth";
 import {
   ContractAbi,
@@ -67,14 +69,15 @@ export function pickTransactorOptions(options?: ScaffoldWriteContractOptions): T
   return transactorOptions;
 }
 
-export const WALLET_SESSION_RESTORING_MESSAGE =
-  "Your wallet session is still reconnecting. Wait a moment, then try again.";
+export const WALLET_SESSION_RESTORING_MESSAGE = WALLET_TRANSACTION_RESTORING_MESSAGE;
 
 type WalletWriteReadinessParams = {
+  accountAddress?: string;
   accountChainId?: number;
   accountStatus: "connected" | "connecting" | "disconnected" | "reconnecting";
   connector?: { getChainId?: unknown };
   hasDirectWalletClient?: boolean;
+  isRestoringWallet?: boolean;
   selectedNetworkId: number;
   selectedNetworkName: string;
 };
@@ -84,26 +87,26 @@ function connectorCanResolveChainId(connector: WalletWriteReadinessParams["conne
 }
 
 export function getWalletWriteUnavailableMessage({
+  accountAddress,
   accountChainId,
   accountStatus,
   connector,
   hasDirectWalletClient = false,
+  isRestoringWallet = false,
   selectedNetworkId,
   selectedNetworkName,
 }: WalletWriteReadinessParams) {
-  if (!accountChainId) {
-    return "Please connect your wallet";
-  }
+  const readiness = getWalletTransactionReadiness({
+    accountChainId,
+    accountStatus,
+    address: accountAddress,
+    hasExecutableWalletClient: hasDirectWalletClient || connectorCanResolveChainId(connector),
+    isRestoringWallet,
+    targetChainId: selectedNetworkId,
+    targetChainName: selectedNetworkName,
+  });
 
-  if (accountStatus !== "connected" || (!hasDirectWalletClient && !connectorCanResolveChainId(connector))) {
-    return WALLET_SESSION_RESTORING_MESSAGE;
-  }
-
-  if (accountChainId !== selectedNetworkId) {
-    return `Wallet is connected to the wrong network. Please switch to ${selectedNetworkName}`;
-  }
-
-  return null;
+  return readiness.message;
 }
 
 /**
@@ -150,6 +153,7 @@ export function useScaffoldWriteContract<TContractName extends ContractName>(
   const selectedNetwork = useSelectedNetwork(chainId);
   const localE2ETestWalletClient = useLocalE2ETestWalletClient(accountAddress, selectedNetwork.id);
   const writeTx = useTransactor(localE2ETestWalletClient);
+  const { isRestoringWallet } = useWalletRestore();
 
   const wagmiContractWrite = useWriteContract(finalWriteContractParams);
 
@@ -172,10 +176,12 @@ export function useScaffoldWriteContract<TContractName extends ContractName>(
     }
 
     const walletUnavailableMessage = getWalletWriteUnavailableMessage({
+      accountAddress,
       accountChainId: accountChain?.id,
       accountStatus,
       connector: accountConnector,
       hasDirectWalletClient: Boolean(localE2ETestWalletClient),
+      isRestoringWallet,
       selectedNetworkId: selectedNetwork.id,
       selectedNetworkName: selectedNetwork.name,
     });
@@ -288,10 +294,12 @@ export function useScaffoldWriteContract<TContractName extends ContractName>(
       return;
     }
     const walletUnavailableMessage = getWalletWriteUnavailableMessage({
+      accountAddress,
       accountChainId: accountChain?.id,
       accountStatus,
       connector: accountConnector,
       hasDirectWalletClient: Boolean(localE2ETestWalletClient),
+      isRestoringWallet,
       selectedNetworkId: selectedNetwork.id,
       selectedNetworkName: selectedNetwork.name,
     });

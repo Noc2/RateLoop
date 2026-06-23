@@ -75,17 +75,17 @@ export function getWalletTransactionReadiness(params: WalletTransactionReadiness
     return readiness("unavailable", params.unavailableMessage, "error");
   }
 
-  if (!params.address) {
-    return readiness("disconnected", "Please connect your wallet", "warning");
-  }
-
   if (
     params.isRestoringWallet ||
     params.accountStatus === "connecting" ||
-    params.accountStatus === "reconnecting" ||
-    (params.accountStatus === "connected" && params.hasExecutableWalletClient === false)
+    ((params.accountStatus === "connected" || params.accountStatus === "reconnecting") &&
+      params.hasExecutableWalletClient === false)
   ) {
     return readiness("restoring_wallet", WALLET_TRANSACTION_RESTORING_MESSAGE, "info", true);
+  }
+
+  if (!params.address) {
+    return readiness("disconnected", "Please connect your wallet", "warning");
   }
 
   if (params.isAwaitingFreeTransactionAllowance) {

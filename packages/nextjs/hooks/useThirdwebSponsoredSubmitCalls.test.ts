@@ -4,6 +4,7 @@ import {
   isThirdwebSponsorshipDeniedError,
   shouldAttemptSelfFundedThirdwebFallback,
   shouldAwaitSelfFundedSubmitCalls,
+  shouldAwaitSponsoredSubmitCalls,
   shouldExpectSponsoredSubmitCalls,
   shouldExpectThirdwebBatchCalls,
   shouldIgnorePostTransactionFallbackWalletSyncError,
@@ -544,6 +545,50 @@ test("awaits self-funded reconnect after exhausted free transactions before wagm
       isThirdwebInApp: true,
     }),
     true,
+  );
+});
+
+test("awaits self-funded reconnect while the wallet restore context is pending after free transactions are exhausted", () => {
+  assert.equal(
+    shouldAwaitSelfFundedSubmitCalls({
+      canUseFreeTransactions: false,
+      chainId: 480,
+      connectorId: "in-app-wallet",
+      executionMode: "sponsored_7702",
+      freeTransactionAllowanceResolved: true,
+      isRestoringWallet: true,
+    }),
+    true,
+  );
+});
+
+test("awaits sponsored submit calls while the wallet restore context is pending", () => {
+  assert.equal(
+    shouldAwaitSponsoredSubmitCalls({
+      canUseSponsoredSubmitCalls: false,
+      expectsSponsoredBatchCalls: true,
+      freeTransactionAllowanceResolved: true,
+      hasBrokenSponsoredDelegation: false,
+      isInspectingSponsoredDelegation: false,
+      isRestoringWallet: true,
+      prefersSponsoredBatchCalls: true,
+    }),
+    true,
+  );
+});
+
+test("does not await sponsored submit calls for broken sponsored delegation", () => {
+  assert.equal(
+    shouldAwaitSponsoredSubmitCalls({
+      canUseSponsoredSubmitCalls: false,
+      expectsSponsoredBatchCalls: true,
+      freeTransactionAllowanceResolved: true,
+      hasBrokenSponsoredDelegation: true,
+      isInspectingSponsoredDelegation: false,
+      isRestoringWallet: true,
+      prefersSponsoredBatchCalls: true,
+    }),
+    false,
   );
 });
 

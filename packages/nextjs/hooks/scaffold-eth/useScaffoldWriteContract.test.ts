@@ -8,6 +8,8 @@ import type { Abi } from "abitype";
 import assert from "node:assert/strict";
 import test from "node:test";
 
+const ACCOUNT_ADDRESS = "0x3333333333333333333333333333333333333333" as const;
+
 test("pickTransactorOptions forwards transaction toast controls to the transactor", () => {
   const onBlockConfirmation = () => undefined;
   const getErrorMessage = () => "custom failure";
@@ -39,6 +41,7 @@ test("pickTransactorOptions forwards transaction toast controls to the transacto
 test("getWalletWriteUnavailableMessage blocks writes while Wagmi is reconnecting", () => {
   assert.equal(
     getWalletWriteUnavailableMessage({
+      accountAddress: ACCOUNT_ADDRESS,
       accountChainId: 31337,
       accountStatus: "reconnecting",
       connector: { getChainId: undefined },
@@ -52,6 +55,7 @@ test("getWalletWriteUnavailableMessage blocks writes while Wagmi is reconnecting
 test("getWalletWriteUnavailableMessage blocks serialized connector placeholders", () => {
   assert.equal(
     getWalletWriteUnavailableMessage({
+      accountAddress: ACCOUNT_ADDRESS,
       accountChainId: 31337,
       accountStatus: "connected",
       connector: {},
@@ -62,9 +66,34 @@ test("getWalletWriteUnavailableMessage blocks serialized connector placeholders"
   );
 });
 
+test("getWalletWriteUnavailableMessage blocks active wallet restore even before wagmi exposes an address", () => {
+  assert.equal(
+    getWalletWriteUnavailableMessage({
+      accountStatus: "connecting",
+      isRestoringWallet: true,
+      selectedNetworkId: 31337,
+      selectedNetworkName: "Foundry",
+    }),
+    WALLET_SESSION_RESTORING_MESSAGE,
+  );
+});
+
+test("getWalletWriteUnavailableMessage allows reconnecting live connectors on the selected network", () => {
+  assert.equal(
+    getWalletWriteUnavailableMessage({
+      accountAddress: ACCOUNT_ADDRESS,
+      accountChainId: 31337,
+      accountStatus: "reconnecting",
+      connector: { getChainId: async () => 31337 },
+      selectedNetworkId: 31337,
+      selectedNetworkName: "Foundry",
+    }),
+    null,
+  );
+});
+
 const DEPLOYED_ADDRESS = "0x1111111111111111111111111111111111111111" as const;
 const OVERRIDE_ADDRESS = "0x2222222222222222222222222222222222222222" as const;
-const ACCOUNT = "0x3333333333333333333333333333333333333333" as const;
 const deployedAbi = [
   { type: "function", name: "claimAll", stateMutability: "nonpayable", inputs: [], outputs: [] },
 ] as const satisfies Abi;
@@ -96,12 +125,12 @@ test("buildGasEstimationRequest honors per-call address and abi overrides", () =
     value: 0n,
   });
 
-  assert.deepEqual(buildGasEstimationRequest(writeContractObject, ACCOUNT), {
+  assert.deepEqual(buildGasEstimationRequest(writeContractObject, ACCOUNT_ADDRESS), {
     address: OVERRIDE_ADDRESS,
     abi: overrideAbi,
     functionName: "claimReward",
     args: [1n],
-    account: ACCOUNT,
+    account: ACCOUNT_ADDRESS,
     value: 0n,
   });
 });
@@ -109,12 +138,12 @@ test("buildGasEstimationRequest honors per-call address and abi overrides", () =
 test("buildGasEstimationRequest falls back to the deployed contract without overrides", () => {
   const writeContractObject = mergeWriteCall({ functionName: "claimAll", args: [] });
 
-  assert.deepEqual(buildGasEstimationRequest(writeContractObject, ACCOUNT), {
+  assert.deepEqual(buildGasEstimationRequest(writeContractObject, ACCOUNT_ADDRESS), {
     address: DEPLOYED_ADDRESS,
     abi: deployedAbi,
     functionName: "claimAll",
     args: [],
-    account: ACCOUNT,
+    account: ACCOUNT_ADDRESS,
     value: undefined,
   });
 });
@@ -122,6 +151,7 @@ test("buildGasEstimationRequest falls back to the deployed contract without over
 test("getWalletWriteUnavailableMessage allows live connectors on the selected network", () => {
   assert.equal(
     getWalletWriteUnavailableMessage({
+      accountAddress: ACCOUNT_ADDRESS,
       accountChainId: 31337,
       accountStatus: "connected",
       connector: { getChainId: async () => 31337 },
