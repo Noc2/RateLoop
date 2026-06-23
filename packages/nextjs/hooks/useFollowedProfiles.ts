@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import type { Abi } from "viem";
 import { isAddress } from "viem";
-import { useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
+import { useDeployedContractInfo, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
 import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import type { SignedCollectionReadAccessResult, SignedCollectionToggleResult } from "~~/hooks/useSignedCollection";
+import { useThirdwebSponsoredSubmitCalls } from "~~/hooks/useThirdwebSponsoredSubmitCalls";
 import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 import {
   type PonderFollowResponse,
@@ -79,6 +81,11 @@ export function useFollowedProfiles(address?: string, options?: UseFollowedProfi
   const { writeContractAsync } = useScaffoldWriteContract({
     contractName: "RaterRegistry",
   });
+  const { data: raterRegistryContract } = useDeployedContractInfo({
+    contractName: "RaterRegistry",
+  } as any);
+  const { canUseSelfFundedBatchCalls, canUseSponsoredSubmitCalls, executeContractCallBatch } =
+    useThirdwebSponsoredSubmitCalls();
   const queryKey = useMemo(
     () => ["followedProfiles", normalizedAddress ?? "anonymous", targetNetwork.id, deploymentKey] as const,
     [deploymentKey, normalizedAddress, targetNetwork.id],
@@ -230,12 +237,36 @@ export function useFollowedProfiles(address?: string, options?: UseFollowedProfi
       });
 
       try {
-        const txHash = await writeContractAsync({
-          functionName: currentlyFollowing ? "unfollowProfile" : "followProfile",
-          args: [normalizedTargetAddress as `0x${string}`],
-        });
-        if (!txHash) {
-          throw new Error("Follow transaction was not submitted");
+        const functionName = currentlyFollowing ? "unfollowProfile" : "followProfile";
+        const args = [normalizedTargetAddress as `0x${string}`] as const;
+        const canUseBatchedFollowWrite = Boolean(
+          raterRegistryContract && (canUseSponsoredSubmitCalls || canUseSelfFundedBatchCalls),
+        );
+
+        if (canUseBatchedFollowWrite && raterRegistryContract) {
+          await executeContractCallBatch(
+            [
+              {
+                abi: raterRegistryContract.abi as Abi,
+                address: raterRegistryContract.address as `0x${string}`,
+                args,
+                functionName,
+              },
+            ],
+            {
+              action: nextFollowing ? "follow profile" : "unfollow profile",
+              atomicRequired: true,
+              sponsorshipMode: canUseSponsoredSubmitCalls ? "sponsored" : "self-funded",
+            },
+          );
+        } else {
+          const txHash = await writeContractAsync({
+            functionName,
+            args,
+          });
+          if (!txHash) {
+            throw new Error("Follow transaction was not submitted");
+          }
         }
         await refreshFollowState(normalizedTargetAddress);
         return {
@@ -271,7 +302,18 @@ export function useFollowedProfiles(address?: string, options?: UseFollowedProfi
         });
       }
     },
-    [followedWallets, normalizedAddress, optimisticFollows, pendingWallets, refreshFollowState, writeContractAsync],
+    [
+      canUseSelfFundedBatchCalls,
+      canUseSponsoredSubmitCalls,
+      executeContractCallBatch,
+      followedWallets,
+      normalizedAddress,
+      optimisticFollows,
+      pendingWallets,
+      raterRegistryContract,
+      refreshFollowState,
+      writeContractAsync,
+    ],
   );
 
   return {

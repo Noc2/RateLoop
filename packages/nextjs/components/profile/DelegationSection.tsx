@@ -59,11 +59,20 @@ export function DelegationSection() {
   const { data: lrepContract } = useDeployedContractInfo({
     contractName: REPUTATION_CONTRACT_NAME,
   });
+  const { data: raterRegistryContract } = useDeployedContractInfo({
+    contractName: "RaterRegistry",
+  } as any);
   const { writeContractAsync: writeLrepContractAsync, isPending: isDirectTransferPending } = useScaffoldWriteContract({
     contractName: REPUTATION_CONTRACT_NAME,
   });
-  const { canUseSponsoredSubmitCalls, executeSponsoredCalls, isAwaitingSponsoredSubmitCalls } =
-    useThirdwebSponsoredSubmitCalls();
+  const {
+    canUseSelfFundedBatchCalls,
+    canUseSponsoredSubmitCalls,
+    executeContractCallBatch,
+    executeSponsoredCalls,
+    isAwaitingSelfFundedBatchCalls,
+    isAwaitingSponsoredSubmitCalls,
+  } = useThirdwebSponsoredSubmitCalls();
   const { isMissingGasBalance, nativeTokenSymbol } = useGasBalanceStatus({
     allowInAppSponsorshipSync: false,
     includeExternalSendCalls: true,
@@ -74,6 +83,7 @@ export function DelegationSection() {
   const [transferAmountInput, setTransferAmountInput] = useState("");
   const [delegationError, setDelegationError] = useState<string | null>(null);
   const [transferError, setTransferError] = useState<string | null>(null);
+  const [isSponsoredDelegationPending, setIsSponsoredDelegationPending] = useState(false);
   const [isSponsoredTransferPending, setIsSponsoredTransferPending] = useState(false);
 
   const normalizedDelegateInput = delegateInput.trim();
@@ -92,6 +102,7 @@ export function DelegationSection() {
   const isValidTransferAmount = parsedTransferAmount !== null && parsedTransferAmount > 0n;
   const exceedsTransferBalance =
     !isLrepBalanceLoading && parsedTransferAmount !== null && parsedTransferAmount > lrepBalanceMicro;
+  const isDelegationWritePending = isDelegationPending || isSponsoredDelegationPending;
   const isTransferPending = isDirectTransferPending || isSponsoredTransferPending;
   const canSubmitTransfer =
     !isLrepBalanceLoading &&
@@ -102,6 +113,45 @@ export function DelegationSection() {
     isValidTransferAmount &&
     !exceedsTransferBalance;
 
+  const submitDelegationWrite = async (
+    functionName: "setDelegate" | "removeDelegate",
+    args: readonly unknown[],
+    action: string,
+  ) => {
+    const canUseBatchedDelegationWrite = Boolean(
+      raterRegistryContract && (canUseSponsoredSubmitCalls || canUseSelfFundedBatchCalls),
+    );
+
+    if (canUseBatchedDelegationWrite && raterRegistryContract) {
+      setIsSponsoredDelegationPending(true);
+      try {
+        await executeContractCallBatch(
+          [
+            {
+              abi: raterRegistryContract.abi as Abi,
+              address: raterRegistryContract.address as `0x${string}`,
+              args,
+              functionName,
+            },
+          ],
+          {
+            action,
+            atomicRequired: true,
+            sponsorshipMode: canUseSponsoredSubmitCalls ? "sponsored" : "self-funded",
+          },
+        );
+      } finally {
+        setIsSponsoredDelegationPending(false);
+      }
+      return;
+    }
+
+    await (writeContractAsync as any)({
+      functionName,
+      ...(args.length > 0 ? { args } : {}),
+    });
+  };
+
   const handleSetDelegate = async () => {
     if (!isValidAddress) {
       setDelegationError("Enter a valid address");
@@ -111,13 +161,18 @@ export function DelegationSection() {
       setDelegationError("Cannot delegate to yourself");
       return;
     }
+    if (isAwaitingSponsoredSubmitCalls) {
+      setDelegationError("Preparing wallet. Try again in a moment.");
+      return;
+    }
+    if (isAwaitingSelfFundedBatchCalls) {
+      setDelegationError("Wallet switching to paid gas. Retry in a moment.");
+      return;
+    }
     setDelegationError(null);
 
     try {
-      await (writeContractAsync as any)({
-        functionName: "setDelegate",
-        args: [normalizedDelegateInput],
-      });
+      await submitDelegationWrite("setDelegate", [normalizedDelegateInput as `0x${string}`], "set delegate");
       notification.success("Delegate set successfully!");
       setDelegateInput("");
       setTransferAddressInput(currentValue =>
@@ -138,11 +193,17 @@ export function DelegationSection() {
   };
 
   const handleRemoveDelegate = async () => {
+    if (isAwaitingSponsoredSubmitCalls) {
+      setDelegationError("Preparing wallet. Try again in a moment.");
+      return;
+    }
+    if (isAwaitingSelfFundedBatchCalls) {
+      setDelegationError("Wallet switching to paid gas. Retry in a moment.");
+      return;
+    }
     setDelegationError(null);
     try {
-      await (writeContractAsync as any)({
-        functionName: "removeDelegate",
-      });
+      await submitDelegationWrite("removeDelegate", [], "remove delegate");
       notification.success("Delegate removed!");
       refetch();
     } catch (e: any) {
@@ -390,9 +451,9 @@ export function DelegationSection() {
           <button
             onClick={handleRemoveDelegate}
             className="btn btn-outline btn-error btn-sm"
-            disabled={isDelegationPending}
+            disabled={isDelegationWritePending}
           >
-            {isDelegationPending ? (
+            {isDelegationWritePending ? (
               <span className="flex items-center gap-2">
                 <span className="loading loading-spinner loading-xs"></span>
                 Removing...
@@ -432,7 +493,7 @@ export function DelegationSection() {
                 setDelegationError(null);
               }
             }}
-            disabled={isDelegationPending}
+            disabled={isDelegationWritePending}
           />
           {delegateInput.length > 0 && !isValidAddress && (
             <p className="text-error text-base">Enter a valid Ethereum address</p>
@@ -442,10 +503,10 @@ export function DelegationSection() {
           <GradientActionButton
             onClick={handleSetDelegate}
             className="w-full"
-            motion={getGradientActionMotion(isDelegationPending)}
-            disabled={isDelegationPending || !isValidAddress || isSelfAddress}
+            motion={getGradientActionMotion(isDelegationWritePending)}
+            disabled={isDelegationWritePending || !isValidAddress || isSelfAddress}
           >
-            {isDelegationPending ? (
+            {isDelegationWritePending ? (
               <span className="flex items-center gap-2">
                 <span className="loading loading-spinner loading-sm"></span>
                 Setting delegate...
