@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Abi, Address } from "viem";
 import { isAddress, zeroHash } from "viem";
 import { useAccount, usePublicClient, useWriteContract } from "wagmi";
+import { getTransactionReceiptPollingInterval } from "~~/config/shared";
 import { useTargetNetwork, useTransactor } from "~~/hooks/scaffold-eth";
 import { useLocalE2ETestWalletClient } from "~~/hooks/scaffold-eth/useLocalE2ETestWalletClient";
 import { useGasBalanceStatus } from "~~/hooks/useGasBalanceStatus";
@@ -11,7 +12,9 @@ import { useRaterRegistryIdentity } from "~~/hooks/useRaterRegistryIdentity";
 import { useThirdwebSponsoredSubmitCalls } from "~~/hooks/useThirdwebSponsoredSubmitCalls";
 import { ERC20_APPROVAL_ABI, getDefaultLrepAddress, getDefaultUsdcAddress } from "~~/lib/questionRewardPools";
 import { getGasBalanceErrorMessage } from "~~/lib/transactionErrors";
+import { createTransactionTimingRun } from "~~/lib/transactions/timing";
 import type { ConfidentialityBondRequirement } from "~~/lib/vote/confidentialContext";
+import scaffoldConfig from "~~/scaffold.config";
 import { contracts } from "~~/utils/scaffold-eth/contract";
 
 export const CONFIDENTIALITY_ESCROW_ABI = [
@@ -36,6 +39,13 @@ export const CONFIDENTIALITY_ESCROW_ABI = [
 
 const CONFIDENTIALITY_BOND_POSTED_EVENT = "rateloop:confidentiality-bond-posted";
 const LOCAL_DEVELOPMENT_CHAIN_IDS = new Set([31337]);
+const CONFIDENTIALITY_BOND_REUSABLE_ALLOWANCE_MULTIPLIER = 10n;
+const CONFIDENTIALITY_BOND_POSTCONDITION_TIMEOUT_MS = 20_000;
+const CONFIDENTIALITY_BOND_POSTCONDITION_SLOW_MS = 4_000;
+
+function delay(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 function normalizeAddress(value: string | undefined): Address | undefined {
   const trimmed = value?.trim();
@@ -66,6 +76,16 @@ function dispatchConfidentialityBondPosted(contentId: bigint, identityKey?: stri
       },
     }),
   );
+}
+
+function getConfidentialityBondPollingInterval(chainId: number) {
+  return getTransactionReceiptPollingInterval(chainId, {
+    preconfirmation: scaffoldConfig.useBasePreconfRpc,
+  });
+}
+
+function getReusableBondApprovalAmount(requiredAmount: bigint) {
+  return requiredAmount > 0n ? requiredAmount * CONFIDENTIALITY_BOND_REUSABLE_ALLOWANCE_MULTIPLIER : requiredAmount;
 }
 
 interface UseConfidentialityBondParams {
@@ -160,6 +180,79 @@ export function useConfidentialityBond({ bondRequirement, contentId, enabled = t
       setIsCheckingBond(false);
     }
   }, [bondCheckKey, bondRequirement.isRequired, contentId, escrowAddress, identityKey, publicClient, shouldCheckBond]);
+
+  const waitForPostedBondPostcondition = useCallback(async () => {
+    if (!publicClient || !escrowAddress || !identityKey) return false;
+
+    const timingLog = createTransactionTimingRun({
+      action: "post confidentiality bond",
+      callCount: 1,
+      callTypes: ["hasActiveBond"],
+      chainId: targetNetwork.id,
+      consoleLabel: "confidentiality-bond-timing",
+      metadata: {
+        asset: bondRequirement.asset,
+        contentId: contentId.toString(),
+      },
+      route: "postcondition",
+      source: "confidentiality-bond",
+    });
+    const startedAt = Date.now();
+    let pollCount = 0;
+    let slowLogged = false;
+    timingLog.emit("postcondition-wait-start");
+
+    for (;;) {
+      pollCount += 1;
+      try {
+        const active = await publicClient.readContract({
+          address: escrowAddress,
+          abi: CONFIDENTIALITY_ESCROW_ABI,
+          functionName: "hasActiveBond",
+          args: [contentId, identityKey],
+        });
+
+        if (active === true) {
+          timingLog.emit("postcondition-wait-complete", {
+            pollCount,
+            status: "active",
+          });
+          return true;
+        }
+      } catch (postconditionError) {
+        timingLog.emit("postcondition-poll-error", {
+          message: postconditionError instanceof Error ? postconditionError.message : "Unknown error",
+          pollCount,
+        });
+      }
+
+      const elapsedMs = Date.now() - startedAt;
+      if (!slowLogged && elapsedMs >= CONFIDENTIALITY_BOND_POSTCONDITION_SLOW_MS) {
+        slowLogged = true;
+        timingLog.emit("postcondition-wait-slow", {
+          pollCount,
+          status: "pending",
+        });
+      }
+      if (elapsedMs >= CONFIDENTIALITY_BOND_POSTCONDITION_TIMEOUT_MS) {
+        timingLog.emit("postcondition-wait-timeout", {
+          pollCount,
+          status: "pending",
+        });
+        return false;
+      }
+
+      await delay(
+        Math.max(
+          200,
+          Math.min(
+            getConfidentialityBondPollingInterval(targetNetwork.id),
+            CONFIDENTIALITY_BOND_POSTCONDITION_TIMEOUT_MS - elapsedMs,
+          ),
+        ),
+      );
+    }
+  }, [bondRequirement.asset, contentId, escrowAddress, identityKey, publicClient, targetNetwork.id]);
 
   useEffect(() => {
     void refreshBond();
@@ -277,12 +370,13 @@ export function useConfidentialityBond({ bondRequirement, contentId, enabled = t
 
       const batchEscrowAddress = escrowAddress as `0x${string}`;
       const batchTokenAddress = tokenAddress as `0x${string}`;
+      const approvalAmount = getReusableBondApprovalAmount(bondRequirement.amount);
       const approvalCall =
         allowance < bondRequirement.amount
           ? ({
               abi: ERC20_APPROVAL_ABI as Abi,
               address: batchTokenAddress,
-              args: [escrowAddress, bondRequirement.amount] as const,
+              args: [escrowAddress, approvalAmount] as const,
               functionName: "approve",
             } as const)
           : null;
@@ -296,11 +390,28 @@ export function useConfidentialityBond({ bondRequirement, contentId, enabled = t
         !localE2ETestWalletClient && (canUseSponsoredBatchCalls || canUseSelfFundedBatchCalls);
 
       if (canUseBatchedBondPost) {
-        await executeContractCallBatch([...(approvalCall ? [approvalCall] : []), postBondCall], {
+        let postconditionSatisfied = false;
+        const batchPromise = executeContractCallBatch([...(approvalCall ? [approvalCall] : []), postBondCall], {
           action: "post confidentiality bond",
           atomicRequired: true,
           sponsorshipMode: canUseSponsoredBatchCalls ? "sponsored" : "self-funded",
         });
+        void batchPromise.catch(batchError => {
+          if (postconditionSatisfied) {
+            console.warn("[confidentiality] bond postcondition succeeded before thirdweb status settled.", batchError);
+          }
+        });
+
+        const firstCompletion = await Promise.race([
+          batchPromise.then(() => "batch" as const),
+          waitForPostedBondPostcondition().then(active => (active ? ("postcondition" as const) : ("timeout" as const))),
+        ]);
+
+        if (firstCompletion === "postcondition") {
+          postconditionSatisfied = true;
+        } else if (firstCompletion === "timeout") {
+          await batchPromise;
+        }
       } else {
         if (approvalCall) {
           await writeContractCall(approvalCall, `approve ${bondRequirement.asset} bond`);
@@ -348,6 +459,7 @@ export function useConfidentialityBond({ bondRequirement, contentId, enabled = t
     refetchIdentity,
     refreshBond,
     tokenAddress,
+    waitForPostedBondPostcondition,
     writeContractCall,
   ]);
 

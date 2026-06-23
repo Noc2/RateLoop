@@ -75,7 +75,7 @@ import { rankForYouFeed } from "~~/lib/vote/forYouRanker";
 import { buildLinkedWalletAddresses } from "~~/lib/vote/linkedWalletAddresses";
 import { getLocalVoteCooldownsByContentId } from "~~/lib/vote/localCooldown";
 import { buildVoteContentPinKey, buildVoteContentPinKeyFromUrl, buildVoteLocation } from "~~/lib/vote/location";
-import { mergeRequestedContentIntoFeed } from "~~/lib/vote/requestedContent";
+import { mergeRequestedContentIntoFeed, mergeRequestedContentPinIntoFeed } from "~~/lib/vote/requestedContent";
 import { resolveStableSessionFeedOrder } from "~~/lib/vote/stableFeedOrder";
 import {
   type VoteView,
@@ -249,10 +249,27 @@ const HomeInner = () => {
   );
   const hasExplicitRequestedContentPin =
     requestedActiveId !== null && contentPinKey !== null && internallySyncedContentPinKey !== contentPinKey;
+  const [externalContentPinId, setExternalContentPinId] = useState<bigint | null>(() => {
+    const initialSyncedContentPinKey = readInternalContentPinKey(contentPinKey);
+    return requestedActiveId !== null && contentPinKey !== null && initialSyncedContentPinKey !== contentPinKey
+      ? requestedActiveId
+      : null;
+  });
 
   useEffect(() => {
     setInternallySyncedContentPinKey(readInternalContentPinKey(contentPinKey));
   }, [contentPinKey]);
+
+  useEffect(() => {
+    if (requestedActiveId === null) {
+      setExternalContentPinId(current => (current === null ? current : null));
+      return;
+    }
+
+    if (hasExplicitRequestedContentPin) {
+      setExternalContentPinId(current => (current === requestedActiveId ? current : requestedActiveId));
+    }
+  }, [hasExplicitRequestedContentPin, requestedActiveId]);
 
   const { address } = useAccount();
   const { targetNetwork } = useTargetNetwork();
@@ -355,8 +372,9 @@ const HomeInner = () => {
   const activeScope: ScopeOption = isScopedVoteViewOption(view) ? view : "all";
   const activeFeedMode: DiscoverFeedMode = isScopedVoteViewOption(view) ? "for_you" : view;
   const isZeroLrepVoteView = activeScope === "zero_lrep_vote";
+  const effectiveExternalContentPinId = activeCategory === ALL_FILTER ? externalContentPinId : null;
   const isAlgorithmicForYouFeed =
-    !isSearchMode && activeScope === "all" && activeFeedMode === "for_you" && !hasExplicitRequestedContentPin;
+    !isSearchMode && activeScope === "all" && activeFeedMode === "for_you" && effectiveExternalContentPinId === null;
   const feedRequestLimit = Math.max(
     isAlgorithmicForYouFeed || isZeroLrepVoteView
       ? FEED_PAGE_SIZE * FOR_YOU_CANDIDATE_PAGE_MULTIPLIER
@@ -426,10 +444,6 @@ const HomeInner = () => {
     return scopedContentIds.slice(0, feedRequestLimit);
   }, [scopedContentIds, feedRequestLimit]);
   const effectiveRequestedActiveId = activeCategory === ALL_FILTER ? requestedActiveId : null;
-  const requestedContentIds = useMemo(
-    () => (effectiveRequestedActiveId !== null ? [effectiveRequestedActiveId] : undefined),
-    [effectiveRequestedActiveId],
-  );
   const contentFeedSortBy = isSearchMode
     ? effectiveSearchSortBy
     : activeScope === "all" && activeFeedMode === "highest_rewards"
@@ -524,15 +538,27 @@ const HomeInner = () => {
       ),
     [optimisticOwnContentIds, rawFeed],
   );
-  const feedContainsRequestedContent = useMemo(() => {
-    if (effectiveRequestedActiveId === null) return false;
-    return feed.some(item => item.id === effectiveRequestedActiveId);
-  }, [effectiveRequestedActiveId, feed]);
+  const requestedContentIds = useMemo(() => {
+    const ids: bigint[] = [];
+    const seen = new Set<string>();
+
+    for (const contentId of [effectiveRequestedActiveId, effectiveExternalContentPinId]) {
+      if (contentId === null) continue;
+
+      const key = contentId.toString();
+      if (seen.has(key) || feed.some(item => item.id === contentId)) continue;
+
+      seen.add(key);
+      ids.push(contentId);
+    }
+
+    return ids;
+  }, [effectiveExternalContentPinId, effectiveRequestedActiveId, feed]);
   const { feed: rawRequestedContentFeed, isLoading: requestedContentLoading } = useContentFeed(address, {
-    contentIds: requestedContentIds,
-    enabled: effectiveRequestedActiveId !== null && !feedContainsRequestedContent,
+    contentIds: requestedContentIds.length > 0 ? requestedContentIds : undefined,
+    enabled: requestedContentIds.length > 0,
     keepPrevious: false,
-    limit: 1,
+    limit: requestedContentIds.length || undefined,
     ownSubmitterAddresses,
     status: "all",
   });
@@ -543,7 +569,23 @@ const HomeInner = () => {
       ),
     [optimisticOwnContentIds, rawRequestedContentFeed],
   );
-  const requestedContentItem = requestedContentFeed[0] ?? null;
+  const requestedContentById = useMemo(() => {
+    const map = new Map(feed.map(item => [item.id.toString(), item]));
+
+    for (const item of requestedContentFeed) {
+      map.set(item.id.toString(), item);
+    }
+
+    return map;
+  }, [feed, requestedContentFeed]);
+  const requestedContentItem =
+    effectiveRequestedActiveId !== null
+      ? (requestedContentById.get(effectiveRequestedActiveId.toString()) ?? null)
+      : null;
+  const externalContentPinItem =
+    effectiveExternalContentPinId !== null
+      ? (requestedContentById.get(effectiveExternalContentPinId.toString()) ?? null)
+      : null;
   const totalContent = scopedContentIds?.length ?? serverTotalContent;
   const hasMoreFeed = scopedContentIds ? feed.length < totalContent : serverHasMoreFeed;
   const interestProfile = useInterestProfile({
@@ -852,12 +894,12 @@ const HomeInner = () => {
   ]);
   const rankedBaseDisplayFeed = useMemo(() => {
     const withRequestedItem = (items: ContentItem[]) =>
-      effectiveRequestedActiveId !== null
-        ? mergeRequestedContentIntoFeed(items, requestedContentItem, {
-            promoteExisting: hasExplicitRequestedContentPin,
-            requestedId: effectiveRequestedActiveId,
-          })
-        : items;
+      mergeRequestedContentPinIntoFeed(items, {
+        activeRequestedId: effectiveRequestedActiveId,
+        activeRequestedItem: requestedContentItem,
+        pinnedRequestedId: effectiveExternalContentPinId,
+        pinnedRequestedItem: externalContentPinItem,
+      });
     const items = [...baseFilteredFeed];
 
     if (isSearchMode) {
@@ -919,7 +961,7 @@ const HomeInner = () => {
               enabled: isAlgorithmicForYouFeed,
               minVisibleItems: FEED_PAGE_SIZE,
               now: nowSeconds * 1000,
-              protectedContentIds: effectiveRequestedActiveId !== null ? [effectiveRequestedActiveId] : [],
+              protectedContentIds: effectiveExternalContentPinId !== null ? [effectiveExternalContentPinId] : [],
               scope: feedExposureScope,
             },
           ),
@@ -934,7 +976,8 @@ const HomeInner = () => {
     effectiveSearchSortBy,
     followedCuratorOrderMap,
     followedWallets,
-    hasExplicitRequestedContentPin,
+    effectiveExternalContentPinId,
+    externalContentPinItem,
     interestProfile,
     isAlgorithmicForYouFeed,
     isSearchMode,
@@ -975,18 +1018,17 @@ const HomeInner = () => {
       items = items.filter(item => advisoryAvailabilityByContentId.get(item.id.toString())?.canCommit === true);
     }
 
-    if (!hasExplicitRequestedContentPin || effectiveRequestedActiveId === null) {
+    if (effectiveExternalContentPinId === null) {
       return items;
     }
 
     return mergeRequestedContentIntoFeed(items, null, {
       promoteExisting: true,
-      requestedId: effectiveRequestedActiveId,
+      requestedId: effectiveExternalContentPinId,
     });
   }, [
     advisoryAvailabilityByContentId,
-    effectiveRequestedActiveId,
-    hasExplicitRequestedContentPin,
+    effectiveExternalContentPinId,
     isAdvisoryOnlyRater,
     isZeroLrepVoteView,
     rankedBaseDisplayFeed,
@@ -1005,17 +1047,16 @@ const HomeInner = () => {
         activeCategory,
         view,
         advisoryPriorityKey,
-        hasExplicitRequestedContentPin && effectiveRequestedActiveId !== null
-          ? `explicit-content:${effectiveRequestedActiveId.toString()}`
+        effectiveExternalContentPinId !== null
+          ? `explicit-content:${effectiveExternalContentPinId.toString()}`
           : "content:auto",
         isSearchMode ? `search:${trimmedSearchQuery}:${effectiveSearchSortBy}` : `sort:${sortBy}`,
       ].join("|"),
     [
       activeCategory,
       advisoryPriorityKey,
-      effectiveRequestedActiveId,
+      effectiveExternalContentPinId,
       effectiveSearchSortBy,
-      hasExplicitRequestedContentPin,
       isSearchMode,
       normalizedAddress,
       sortBy,
@@ -1025,8 +1066,8 @@ const HomeInner = () => {
     ],
   );
   const prioritizedFeedIds = useMemo(
-    () => (effectiveRequestedActiveId !== null ? [effectiveRequestedActiveId.toString()] : []),
-    [effectiveRequestedActiveId],
+    () => (effectiveExternalContentPinId !== null ? [effectiveExternalContentPinId.toString()] : []),
+    [effectiveExternalContentPinId],
   );
   const orderedDisplayFeed = useMemo(() => orderBundleMembersInFeed(rankedDisplayFeed), [rankedDisplayFeed]);
   const rankedDisplayFeedIds = useMemo(() => orderedDisplayFeed.map(item => item.id.toString()), [orderedDisplayFeed]);

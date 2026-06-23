@@ -1,4 +1,4 @@
-import { mergeRequestedContentIntoFeed } from "./requestedContent";
+import { mergeRequestedContentIntoFeed, mergeRequestedContentPinIntoFeed } from "./requestedContent";
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { ContentItem } from "~~/hooks/useContentFeed";
@@ -86,5 +86,37 @@ test("mergeRequestedContentIntoFeed does not prepend a blocked requested item", 
   assert.deepEqual(
     mergeRequestedContentIntoFeed([first, second], requested).map(item => item.id),
     [1n, 2n],
+  );
+});
+
+test("mergeRequestedContentPinIntoFeed keeps the external pin above an internally synced active item", () => {
+  const first = buildItem(1n);
+  const second = buildItem(2n);
+  const third = buildItem(3n);
+
+  assert.deepEqual(
+    mergeRequestedContentPinIntoFeed([second, third, first], {
+      activeRequestedId: 2n,
+      activeRequestedItem: second,
+      pinnedRequestedId: 3n,
+      pinnedRequestedItem: third,
+    }).map(item => item.id),
+    [3n, 2n, 1n],
+  );
+});
+
+test("mergeRequestedContentPinIntoFeed keeps a missing active item directly behind the external pin", () => {
+  const first = buildItem(1n);
+  const second = buildItem(2n);
+  const third = buildItem(3n);
+
+  assert.deepEqual(
+    mergeRequestedContentPinIntoFeed([third, first], {
+      activeRequestedId: 2n,
+      activeRequestedItem: second,
+      pinnedRequestedId: 3n,
+      pinnedRequestedItem: third,
+    }).map(item => item.id),
+    [3n, 2n, 1n],
   );
 });

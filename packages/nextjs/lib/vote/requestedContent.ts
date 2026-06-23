@@ -31,3 +31,24 @@ export function mergeRequestedContentIntoFeed(
 
   return [requestedItem, ...items];
 }
+
+export function mergeRequestedContentPinIntoFeed(
+  items: readonly ContentItem[],
+  options: {
+    activeRequestedId?: bigint | null;
+    activeRequestedItem?: ContentItem | null;
+    pinnedRequestedId?: bigint | null;
+    pinnedRequestedItem?: ContentItem | null;
+  },
+) {
+  let mergedItems = mergeRequestedContentIntoFeed(items, options.activeRequestedItem, {
+    requestedId: options.activeRequestedId,
+  });
+
+  mergedItems = mergeRequestedContentIntoFeed(mergedItems, options.pinnedRequestedItem, {
+    promoteExisting: true,
+    requestedId: options.pinnedRequestedId,
+  });
+
+  return mergedItems;
+}

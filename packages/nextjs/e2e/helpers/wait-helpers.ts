@@ -9,8 +9,11 @@ export const FEED_EMPTY_STATE_RE =
 
 const RETRIABLE_GOTO_ERROR_PATTERNS = [
   /ERR_ABORTED/i,
+  /ERR_CONNECTION_REFUSED/i,
   /ERR_CONNECTION_RESET/i,
+  /ECONNREFUSED/i,
   /ECONNRESET/i,
+  /Could not connect to the server/i,
   /frame was detached/i,
   /page\.goto: Timeout .*exceeded/i,
   /page\.goto: Navigation to .* is interrupted by another navigation/i,
@@ -23,6 +26,7 @@ const CI_MIN_E2E_TIMEOUT_MS = 60_000;
 const WALLET_CONNECT_RECOVERY_WAIT_MS = 12_000;
 const WALLET_CONNECT_CLICK_TIMEOUT_MS = 5_000;
 const VOTE_FEED_NAVIGATION_TIMEOUT_MS = 2_000;
+const FEED_LOAD_ATTEMPTS = 3;
 
 function isRetriableGotoError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
@@ -70,7 +74,7 @@ export async function ensureInjectedWalletConnected(page: Page, timeout: number)
     return;
   }
 
-  for (let attempt = 0; attempt < 2; attempt += 1) {
+  for (let attempt = 0; attempt < FEED_LOAD_ATTEMPTS; attempt += 1) {
     if (page.isClosed()) {
       throw new Error("Page closed while waiting for injected wallet connection");
     }
@@ -214,7 +218,7 @@ export async function waitForFeedLoaded(page: Page, timeout = 15_000): Promise<v
         .isVisible()
         .catch(() => false);
 
-      if (attempt === 1 || (!stillLoading && !connectPromptVisible)) {
+      if (attempt === FEED_LOAD_ATTEMPTS - 1 || (!stillLoading && !connectPromptVisible)) {
         throw error;
       }
 
