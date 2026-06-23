@@ -2662,7 +2662,7 @@ export function ContentSubmissionSection() {
           return;
         }
 
-        const cancelTxHash = await writeRegistry(
+        await writeRegistry(
           {
             functionName: "cancelReservedSubmission",
             args: [revealCommitment],
@@ -2673,14 +2673,6 @@ export function ContentSubmissionSection() {
             suppressSuccessToast: true,
           },
         );
-
-        if (cancelTxHash) {
-          await waitForTransactionReceipt(wagmiConfig, {
-            chainId: targetNetwork.id,
-            hash: cancelTxHash,
-            pollingInterval: getSubmitReceiptPollingInterval(targetNetwork.id),
-          });
-        }
       };
 
       const reserveSubmission = async (revealCommitment: `0x${string}`) => {
@@ -2707,26 +2699,21 @@ export function ContentSubmissionSection() {
           };
         }
 
+        let reserveReceipt: { blockNumber?: bigint | null } | null = null;
         const reserveTxHash = await writeRegistry(
           {
             functionName: "reserveSubmission",
             args: [revealCommitment],
           },
           {
+            onBlockConfirmation: receipt => {
+              reserveReceipt = { blockNumber: receipt.blockNumber };
+            },
             suppressErrorToast: true,
             suppressStatusToast: true,
             suppressSuccessToast: true,
           },
         );
-
-        let reserveReceipt: Awaited<ReturnType<typeof waitForTransactionReceipt>> | null = null;
-        if (reserveTxHash) {
-          reserveReceipt = await waitForTransactionReceipt(wagmiConfig, {
-            chainId: targetNetwork.id,
-            hash: reserveTxHash,
-            pollingInterval: getSubmitReceiptPollingInterval(targetNetwork.id),
-          });
-        }
 
         return {
           hash: reserveTxHash ?? null,
