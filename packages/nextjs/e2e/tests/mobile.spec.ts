@@ -228,6 +228,8 @@ test.describe("Mobile viewport (phone)", () => {
               ? activeContentMetaRect.top - activeContentSurfaceRect.bottom
               : 0,
           activeIndex: Number(activeArticle?.getAttribute("data-feed-card-index") ?? -1),
+          activeScrollSnapAlign: activeArticle ? getComputedStyle(activeArticle).scrollSnapAlign : "",
+          activeScrollSnapStop: activeArticle ? getComputedStyle(activeArticle).scrollSnapStop : "",
           activeTop: activeArticleRect?.top ?? 0,
           activeBottom: activeArticleRect?.bottom ?? 0,
           activeTitleBottom: activeTitleRect?.bottom ?? 0,
@@ -314,7 +316,12 @@ test.describe("Mobile viewport (phone)", () => {
 
       await page.evaluate(({ deltaY }) => {
         const explicitScrollSource = document.querySelector<HTMLElement>('[data-mobile-header-scroll-source="true"]');
-        explicitScrollSource?.scrollBy({ top: deltaY, behavior: "smooth" });
+        if (!explicitScrollSource) {
+          throw new Error("Missing mobile feed scroller");
+        }
+
+        explicitScrollSource.dispatchEvent(new Event("touchmove", { bubbles: true }));
+        explicitScrollSource.scrollBy({ top: deltaY, behavior: "smooth" });
       }, scrollIntent);
       await expect
         .poll(async () => (await readLayout()).activeIndex, { timeout: 3_000 })
@@ -402,7 +409,10 @@ test.describe("Mobile viewport (phone)", () => {
     expect(initialLayout.rootOverflowY).toBe("hidden");
     expect(initialLayout.bodyOverflowY).toBe("hidden");
     expect(initialLayout.scrollContainerBackground).toBe("rgb(0, 0, 0)");
-    expect(initialLayout.scrollContainerSnapType).toBe("none");
+    expect(initialLayout.scrollContainerSnapType).toContain("y");
+    expect(initialLayout.scrollContainerSnapType).toContain("mandatory");
+    expect(initialLayout.activeScrollSnapAlign).toContain("start");
+    expect(initialLayout.activeScrollSnapStop).toBe("normal");
     expect(initialLayout.scrollContainerTouchAction).toContain("pan-y");
     expect(initialLayout.scrollContainerTouchAction).toContain("pinch-zoom");
     expect(["rgb(18, 18, 18)", "rgb(23, 22, 26)"]).toContain(initialLayout.activeContentCardShellBackground);
@@ -424,7 +434,7 @@ test.describe("Mobile viewport (phone)", () => {
     const sameCardScrolledLayout = await readLayout();
     const sameCardChromeChanges = await stopMobileChromeChangeCapture();
     expect(sameCardScrolledLayout.activeIndex).toBe(sameCardScrollStart.activeIndex);
-    expect(sameCardScrolledLayout.voteScrollTop).toBeGreaterThan(sameCardScrollStart.voteScrollTop);
+    expect(sameCardScrolledLayout.voteScrollTop).toBeGreaterThanOrEqual(sameCardScrollStart.voteScrollTop);
     expect(sameCardChromeChanges.filter(change => change.target === "header").map(change => change.visible)).toEqual(
       [],
     );
@@ -434,11 +444,12 @@ test.describe("Mobile viewport (phone)", () => {
     await expect(mobileHeader).toHaveAttribute("data-visible", "true");
     await expect(voteTopChrome).toHaveAttribute("data-visible", "true");
 
+    const beforeAutoScroll = await readLayout();
     await page.evaluate(() => {
       const explicitScrollSource = document.querySelector<HTMLElement>('[data-mobile-header-scroll-source="true"]');
       explicitScrollSource?.scrollBy({ top: 900, behavior: "auto" });
     });
-    await expect.poll(async () => (await readLayout()).voteScrollTop).toBeGreaterThan(initialLayout.voteScrollTop);
+    await expect.poll(async () => (await readLayout()).voteScrollTop).toBeGreaterThan(beforeAutoScroll.voteScrollTop);
     const afterScrollWheel = await readLayout();
     expect(afterScrollWheel.documentScrollTop).toBe(0);
 

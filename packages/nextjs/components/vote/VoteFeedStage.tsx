@@ -158,6 +158,11 @@ export function VoteFeedStage({
     }, MOBILE_HEADER_SCROLL_SYNC_MS);
   }, []);
 
+  const markMobileFeedScrollIntent = useCallback(() => {
+    if (isDesktopViewport) return;
+    hasObservedMobileFeedScrollRef.current = true;
+  }, [isDesktopViewport]);
+
   const setMobileScrollerScrollTop = useCallback((scroller: HTMLElement, nextScrollTop: number) => {
     const previousScrollBehavior = scroller.style.scrollBehavior;
 
@@ -839,11 +844,7 @@ export function VoteFeedStage({
     if (!scroller || typeof window === "undefined") return;
 
     let frameId = 0;
-    const requestTrack = (event?: Event) => {
-      if (event?.type === "scroll" && !isDesktopViewport) {
-        hasObservedMobileFeedScrollRef.current = true;
-      }
-
+    const requestTrack = () => {
       if (frameId !== 0) return;
       frameId = window.requestAnimationFrame(() => {
         frameId = 0;
@@ -853,6 +854,8 @@ export function VoteFeedStage({
 
     requestTrack();
     scroller.addEventListener("scroll", requestTrack, { passive: true });
+    scroller.addEventListener("touchmove", markMobileFeedScrollIntent, { passive: true });
+    scroller.addEventListener("wheel", markMobileFeedScrollIntent, { passive: true });
     window.addEventListener("resize", requestTrack);
 
     return () => {
@@ -860,9 +863,11 @@ export function VoteFeedStage({
         window.cancelAnimationFrame(frameId);
       }
       scroller.removeEventListener("scroll", requestTrack);
+      scroller.removeEventListener("touchmove", markMobileFeedScrollIntent);
+      scroller.removeEventListener("wheel", markMobileFeedScrollIntent);
       window.removeEventListener("resize", requestTrack);
     };
-  }, [feedItems.length, getActiveScroller, isDesktopViewport, trackActiveCard]);
+  }, [feedItems.length, getActiveScroller, markMobileFeedScrollIntent, trackActiveCard]);
 
   useEffect(() => {
     if (!isDesktopViewport || typeof window === "undefined") return;
@@ -910,80 +915,6 @@ export function VoteFeedStage({
       clearSettleTimeout();
     };
   }, [getActiveScroller, isDesktopViewport, navigationLocked, requestProgrammaticScroll, resolveNearestCard]);
-
-  useEffect(() => {
-    if (isDesktopViewport || typeof window === "undefined") return;
-
-    const scroller = getActiveScroller();
-    if (!scroller) return;
-
-    let settleTimeoutId: number | null = null;
-
-    const clearSettleTimeout = () => {
-      if (settleTimeoutId !== null) {
-        window.clearTimeout(settleTimeoutId);
-        settleTimeoutId = null;
-      }
-    };
-
-    const settleToNearestCard = () => {
-      settleTimeoutId = null;
-
-      if (navigationLocked || pendingProgrammaticScrollTargetRef.current !== null) {
-        return;
-      }
-
-      const nearestCard = resolveNearestCard();
-      if (!nearestCard) {
-        return;
-      }
-
-      const maxScrollTop = Math.max(scroller.scrollHeight - scroller.clientHeight, 0);
-      const isAtScrollEnd = scroller.scrollTop >= maxScrollTop - 2;
-      if (nearestCard.index === renderedActiveIndex && !isAtScrollEnd) {
-        return;
-      }
-
-      const targetNode = cardElementsRef.current.get(nearestCard.index);
-      if (!targetNode) {
-        return;
-      }
-
-      const scrollerRect = scroller.getBoundingClientRect();
-      const targetRect = targetNode.getBoundingClientRect();
-      const nextScrollTop = Math.min(
-        Math.max(scroller.scrollTop + targetRect.top - scrollerRect.top - MOBILE_CARD_TOP_SNAP_GUARD_PX, 0),
-        maxScrollTop,
-      );
-
-      if (Math.abs(nextScrollTop - scroller.scrollTop) < 0.5) {
-        return;
-      }
-
-      markMobileHeaderScrollSync(scroller, nextScrollTop);
-      setMobileScrollerScrollTop(scroller, nextScrollTop);
-    };
-
-    const scheduleSettle = () => {
-      clearSettleTimeout();
-      settleTimeoutId = window.setTimeout(settleToNearestCard, DESKTOP_SCROLL_SETTLE_MS);
-    };
-
-    scroller.addEventListener("scroll", scheduleSettle, { passive: true });
-
-    return () => {
-      scroller.removeEventListener("scroll", scheduleSettle);
-      clearSettleTimeout();
-    };
-  }, [
-    getActiveScroller,
-    isDesktopViewport,
-    markMobileHeaderScrollSync,
-    navigationLocked,
-    renderedActiveIndex,
-    resolveNearestCard,
-    setMobileScrollerScrollTop,
-  ]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1256,31 +1187,35 @@ export function VoteFeedStage({
 
       if (event.key === "ArrowDown" || event.key === "ArrowRight" || event.key === "PageDown") {
         event.preventDefault();
+        markMobileFeedScrollIntent();
         scrollToIndex(activeSourceIndex + 1);
         return;
       }
 
       if (event.key === "ArrowUp" || event.key === "ArrowLeft" || event.key === "PageUp") {
         event.preventDefault();
+        markMobileFeedScrollIntent();
         scrollToIndex(activeSourceIndex - 1);
         return;
       }
 
       if (event.key === "Home") {
         event.preventDefault();
+        markMobileFeedScrollIntent();
         scrollToIndex(0);
         return;
       }
 
       if (event.key === "End") {
         event.preventDefault();
+        markMobileFeedScrollIntent();
         scrollToIndex(displayFeed.length - 1);
       }
     };
 
     window.addEventListener("keydown", handleWindowKeyDown);
     return () => window.removeEventListener("keydown", handleWindowKeyDown);
-  }, [activeSourceIndex, displayFeed.length, navigationLocked, scrollToIndex]);
+  }, [activeSourceIndex, displayFeed.length, markMobileFeedScrollIntent, navigationLocked, scrollToIndex]);
 
   return (
     <div
@@ -1291,7 +1226,7 @@ export function VoteFeedStage({
       aria-describedby={feedInstructionsId}
       data-mobile-header-scroll-source="true"
       data-testid="vote-mobile-scroll-container"
-      className="scrollbar-hide flex h-full min-h-0 flex-col gap-3 overflow-y-auto overscroll-contain bg-[#000] [touch-action:pan-y_pinch-zoom] md:snap-y md:snap-mandatory md:[touch-action:auto] xl:h-auto xl:flex-none xl:gap-4 xl:overflow-visible xl:overscroll-auto xl:pb-4 xl:pr-0 xl:scroll-pb-0"
+      className="scrollbar-hide flex h-full min-h-0 snap-y snap-mandatory flex-col gap-3 overflow-y-auto overscroll-contain bg-[#000] [touch-action:pan-y_pinch-zoom] md:[touch-action:auto] xl:h-auto xl:flex-none xl:gap-4 xl:overflow-visible xl:overscroll-auto xl:pb-4 xl:pr-0 xl:scroll-pb-0"
       style={{
         height: mobileScrollerHeight !== null ? `${mobileScrollerHeight}px` : undefined,
         maxHeight: mobileScrollerHeight !== null ? `${mobileScrollerHeight}px` : undefined,
