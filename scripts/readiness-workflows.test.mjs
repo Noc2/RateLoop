@@ -90,6 +90,6 @@ test("Railway service start commands pin production mode", () => {
   );
   assert.match(
     ponder,
-    /startCommand = "NODE_ENV=production yarn workspace @rateloop\/ponder start:built-contracts"/,
+    /startCommand = "NODE_ENV=production yarn workspace @rateloop\/ponder start:built-workspace-deps"/,
   );
 });

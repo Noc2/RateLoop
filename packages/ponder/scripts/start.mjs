@@ -3,18 +3,31 @@ import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { pathToFileURL, fileURLToPath } from "node:url";
-import { buildPonderStartArgs, buildProtocolDeploymentKey } from "./databaseSchema.mjs";
+import {
+  buildPonderStartArgs,
+  buildProtocolDeploymentKey,
+} from "./databaseSchema.mjs";
 import { PONDER_NETWORK_CHAIN_IDS } from "../src/protocol-deployment.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, "../../..");
 const contractsRoot = resolve(repoRoot, "packages/contracts");
+const nodeUtilsRoot = resolve(repoRoot, "packages/node-utils");
 const require = createRequire(import.meta.url);
+const PRODUCTION_RPC_CHAIN_ID_TIMEOUT_MS = 5_000;
 export const requiredContractsArtifacts = [
   resolve(contractsRoot, "dist/esm/abis/index.js"),
   resolve(contractsRoot, "dist/esm/deployedContracts.js"),
   resolve(contractsRoot, "dist/esm/deployments.js"),
   resolve(contractsRoot, "dist/esm/protocol.js"),
+];
+export const requiredNodeUtilsArtifacts = [
+  resolve(nodeUtilsRoot, "dist/esm/correlationScoring.js"),
+  resolve(nodeUtilsRoot, "dist/esm/json.js"),
+];
+export const requiredRuntimeWorkspaceArtifacts = [
+  ...requiredContractsArtifacts,
+  ...requiredNodeUtilsArtifacts,
 ];
 function readEnv(env, key) {
   const value = env[key]?.trim();
@@ -24,18 +37,82 @@ function readEnv(env, key) {
 function resolveChainId(env) {
   const ponderNetwork = readEnv(env, "PONDER_NETWORK");
   const networkChainId = PONDER_NETWORK_CHAIN_IDS[ponderNetwork];
-  const explicitChainId = Number.parseInt(readEnv(env, "PONDER_CHAIN_ID") ?? "", 10);
+  const explicitChainId = Number.parseInt(
+    readEnv(env, "PONDER_CHAIN_ID") ?? "",
+    10,
+  );
   if (Number.isSafeInteger(explicitChainId) && explicitChainId > 0) {
     if (networkChainId !== undefined && explicitChainId !== networkChainId) {
       throw new Error(
         `PONDER_CHAIN_ID ${explicitChainId} does not match PONDER_NETWORK ${ponderNetwork} (${networkChainId}).`,
       );
     }
-    if (ponderNetwork !== undefined && networkChainId === undefined) return undefined;
+    if (ponderNetwork !== undefined && networkChainId === undefined)
+      return undefined;
     return explicitChainId;
   }
 
   return networkChainId;
+}
+
+export async function assertProductionRpcChainId({
+  env = process.env,
+  fetchImpl = globalThis.fetch,
+  timeoutMs = PRODUCTION_RPC_CHAIN_ID_TIMEOUT_MS,
+} = {}) {
+  if (readEnv(env, "NODE_ENV") !== "production") return false;
+
+  const expectedChainId = resolveChainId(env);
+  if (!expectedChainId) return false;
+
+  const key = `PONDER_RPC_URL_${expectedChainId}`;
+  const rpcUrl = readEnv(env, key);
+  if (!rpcUrl) {
+    throw new Error(`Missing ${key} for production Ponder startup.`);
+  }
+  if (typeof fetchImpl !== "function") {
+    throw new Error(
+      "global fetch is required for production Ponder RPC chain-id validation.",
+    );
+  }
+
+  let response;
+  try {
+    response = await fetchImpl(rpcUrl, {
+      method: "POST",
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "eth_chainId",
+        params: [],
+      }),
+      headers: { "content-type": "application/json" },
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`${key} eth_chainId probe failed: ${message}`);
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      `${key} returned HTTP ${response.status} on eth_chainId probe.`,
+    );
+  }
+
+  const body = await response.json().catch(() => null);
+  const reportedChainId =
+    typeof body?.result === "string" ? Number.parseInt(body.result, 16) : NaN;
+  if (!Number.isFinite(reportedChainId)) {
+    throw new Error(`${key} eth_chainId probe returned no chainId.`);
+  }
+  if (reportedChainId !== expectedChainId) {
+    throw new Error(
+      `${key} reports chainId ${reportedChainId} but ${expectedChainId} expected.`,
+    );
+  }
+
+  return true;
 }
 
 export function contractsArtifactsExist({
@@ -45,34 +122,55 @@ export function contractsArtifactsExist({
   return requiredArtifacts.every((path) => exists(path));
 }
 
-export function ensureContractsArtifacts({
+export function runtimeWorkspaceArtifactsExist({
+  exists = existsSync,
+  requiredArtifacts = requiredRuntimeWorkspaceArtifacts,
+} = {}) {
+  return requiredArtifacts.every((path) => exists(path));
+}
+
+export function ensureRuntimeWorkspaceArtifacts({
   exists = existsSync,
   spawnSyncImpl = spawnSync,
   cwd = repoRoot,
-  requiredArtifacts = requiredContractsArtifacts,
+  requiredArtifacts = requiredRuntimeWorkspaceArtifacts,
 } = {}) {
-  if (contractsArtifactsExist({ exists, requiredArtifacts })) {
+  if (runtimeWorkspaceArtifactsExist({ exists, requiredArtifacts })) {
     return false;
   }
 
-  console.warn("[ponder:start] Missing @rateloop/contracts build artifacts; building the contracts workspace.");
-  const result = spawnSyncImpl("yarn", ["workspace", "@rateloop/contracts", "build"], {
-    cwd,
-    stdio: "inherit",
-  });
+  console.warn(
+    "[ponder:start] Missing runtime workspace build artifacts; building Ponder workspace dependencies.",
+  );
+  const result = spawnSyncImpl(
+    "yarn",
+    ["workspace", "@rateloop/ponder", "build:workspace-deps"],
+    {
+      cwd,
+      stdio: "inherit",
+    },
+  );
 
   if (result.error) {
-    throw new Error(`Failed to build @rateloop/contracts: ${result.error.message}`);
+    throw new Error(
+      `Failed to build Ponder workspace dependencies: ${result.error.message}`,
+    );
   }
   if (result.status !== 0) {
-    throw new Error(`Failed to build @rateloop/contracts: yarn exited with status ${result.status ?? "unknown"}.`);
+    throw new Error(
+      `Failed to build Ponder workspace dependencies: yarn exited with status ${result.status ?? "unknown"}.`,
+    );
   }
-  if (!contractsArtifactsExist({ exists, requiredArtifacts })) {
-    throw new Error("Built @rateloop/contracts, but required Ponder contract artifacts are still missing.");
+  if (!runtimeWorkspaceArtifactsExist({ exists, requiredArtifacts })) {
+    throw new Error(
+      "Built Ponder workspace dependencies, but required runtime artifacts are still missing.",
+    );
   }
 
   return true;
 }
+
+export const ensureContractsArtifacts = ensureRuntimeWorkspaceArtifacts;
 
 export function resolveProtocolDeploymentKeyFromArtifacts({
   env = process.env,
@@ -91,8 +189,14 @@ export function resolveProtocolDeploymentKeyFromArtifacts({
   const getSharedDeploymentAddress = deployments.getSharedDeploymentAddress;
   if (typeof getSharedDeploymentAddress !== "function") return undefined;
 
-  const contentRegistryAddress = getSharedDeploymentAddress(chainId, "ContentRegistry");
-  const feedbackRegistryAddress = getSharedDeploymentAddress(chainId, "FeedbackRegistry");
+  const contentRegistryAddress = getSharedDeploymentAddress(
+    chainId,
+    "ContentRegistry",
+  );
+  const feedbackRegistryAddress = getSharedDeploymentAddress(
+    chainId,
+    "FeedbackRegistry",
+  );
   if (!contentRegistryAddress || !feedbackRegistryAddress) return undefined;
 
   return buildProtocolDeploymentKey({
@@ -103,7 +207,10 @@ export function resolveProtocolDeploymentKeyFromArtifacts({
 }
 
 function withProtocolDeploymentKey(env, resolveProtocolDeploymentKeyImpl) {
-  if (readEnv(env, "RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY") || readEnv(env, "RATELOOP_PROTOCOL_DEPLOYMENT_KEY")) {
+  if (
+    readEnv(env, "RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY") ||
+    readEnv(env, "RATELOOP_PROTOCOL_DEPLOYMENT_KEY")
+  ) {
     return env;
   }
 
@@ -116,23 +223,37 @@ function withProtocolDeploymentKey(env, resolveProtocolDeploymentKeyImpl) {
   };
 }
 
-export function startPonder({
+export async function startPonder({
   argv = process.argv.slice(2),
   env = process.env,
   spawnImpl = spawn,
-  ensureContractsArtifactsImpl = ensureContractsArtifacts,
+  assertProductionRpcChainIdImpl = assertProductionRpcChainId,
+  ensureContractsArtifactsImpl,
+  ensureRuntimeWorkspaceArtifactsImpl = ensureRuntimeWorkspaceArtifacts,
   resolveProtocolDeploymentKeyImpl = resolveProtocolDeploymentKeyFromArtifacts,
 } = {}) {
-  ensureContractsArtifactsImpl();
+  const ensureArtifactsImpl =
+    ensureContractsArtifactsImpl ?? ensureRuntimeWorkspaceArtifactsImpl;
+  ensureArtifactsImpl();
+  await assertProductionRpcChainIdImpl({ env });
 
-  const launcherEnv = withProtocolDeploymentKey(env, resolveProtocolDeploymentKeyImpl);
-  const { args, env: childEnv, schemaInfo } = buildPonderStartArgs(argv, launcherEnv);
+  const launcherEnv = withProtocolDeploymentKey(
+    env,
+    resolveProtocolDeploymentKeyImpl,
+  );
+  const {
+    args,
+    env: childEnv,
+    schemaInfo,
+  } = buildPonderStartArgs(argv, launcherEnv);
 
   if (schemaInfo?.ignoredLegacyDatabaseSchema) {
     console.warn(
       `[ponder:start] Ignoring DATABASE_SCHEMA=ponder to avoid colliding with legacy Ponder app metadata; using ${schemaInfo.schema}.`,
     );
-    console.warn("[ponder:start] Set RATELOOP_PONDER_DATABASE_SCHEMA to choose a different Ponder schema.");
+    console.warn(
+      "[ponder:start] Set RATELOOP_PONDER_DATABASE_SCHEMA to choose a different Ponder schema.",
+    );
   } else if (schemaInfo?.ignoredDeprecatedStaticSchema) {
     console.warn(
       `[ponder:start] Ignoring deprecated static Ponder schema override on Railway; using deployment-scoped schema ${schemaInfo.schema}.`,
@@ -176,9 +297,12 @@ export function startPonder({
   return child;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(process.argv[1]).href
+) {
   try {
-    startPonder();
+    await startPonder();
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error(`[ponder:start] ${message}`);

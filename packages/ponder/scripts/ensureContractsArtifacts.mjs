@@ -1,9 +1,9 @@
 import { pathToFileURL } from "node:url";
-import { ensureContractsArtifacts } from "./start.mjs";
+import { ensureRuntimeWorkspaceArtifacts } from "./start.mjs";
 
 export function runEnsureContractsArtifacts() {
   try {
-    ensureContractsArtifacts();
+    ensureRuntimeWorkspaceArtifacts();
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error(`[ponder] ${message}`);
@@ -11,6 +11,9 @@ export function runEnsureContractsArtifacts() {
   }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(process.argv[1]).href
+) {
   runEnsureContractsArtifacts();
 }

@@ -1,7 +1,9 @@
 import { EventEmitter } from "node:events";
 import {
+  assertProductionRpcChainId,
   contractsArtifactsExist,
-  ensureContractsArtifacts,
+  ensureRuntimeWorkspaceArtifacts,
+  runtimeWorkspaceArtifactsExist,
   resolveProtocolDeploymentKeyFromArtifacts,
   startPonder,
 } from "./start.mjs";
@@ -13,18 +15,33 @@ describe("Ponder production launcher", () => {
   });
 
   test("detects when required contracts artifacts already exist", () => {
-    const requiredArtifacts = ["/repo/packages/contracts/dist/esm/abis/index.js"];
+    const requiredArtifacts = [
+      "/repo/packages/contracts/dist/esm/abis/index.js",
+    ];
     const exists = vi.fn(() => true);
 
     expect(contractsArtifactsExist({ exists, requiredArtifacts })).toBe(true);
     expect(exists).toHaveBeenCalledWith(requiredArtifacts[0]);
   });
 
-  test("does not rebuild contracts when required artifacts exist", () => {
+  test("detects when required runtime workspace artifacts already exist", () => {
+    const requiredArtifacts = [
+      "/repo/packages/contracts/dist/esm/abis/index.js",
+      "/repo/packages/node-utils/dist/esm/correlationScoring.js",
+    ];
+    const exists = vi.fn(() => true);
+
+    expect(runtimeWorkspaceArtifactsExist({ exists, requiredArtifacts })).toBe(
+      true,
+    );
+    expect(exists).toHaveBeenCalledTimes(requiredArtifacts.length);
+  });
+
+  test("does not rebuild runtime workspace deps when required artifacts exist", () => {
     const spawnSyncImpl = vi.fn();
 
     expect(
-      ensureContractsArtifacts({
+      ensureRuntimeWorkspaceArtifacts({
         exists: () => true,
         spawnSyncImpl,
         requiredArtifacts: ["/repo/packages/contracts/dist/esm/abis/index.js"],
@@ -33,7 +50,7 @@ describe("Ponder production launcher", () => {
     expect(spawnSyncImpl).not.toHaveBeenCalled();
   });
 
-  test("builds contracts when required artifacts are missing", () => {
+  test("builds runtime workspace deps when a required artifact is missing", () => {
     let built = false;
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const spawnSyncImpl = vi.fn(() => {
@@ -42,20 +59,23 @@ describe("Ponder production launcher", () => {
     });
 
     expect(
-      ensureContractsArtifacts({
+      ensureRuntimeWorkspaceArtifacts({
         exists: () => built,
         spawnSyncImpl,
         cwd: "/repo",
-        requiredArtifacts: ["/repo/packages/contracts/dist/esm/abis/index.js"],
+        requiredArtifacts: [
+          "/repo/packages/contracts/dist/esm/abis/index.js",
+          "/repo/packages/node-utils/dist/esm/correlationScoring.js",
+        ],
       }),
     ).toBe(true);
 
     expect(warnSpy).toHaveBeenCalledWith(
-      "[ponder:start] Missing @rateloop/contracts build artifacts; building the contracts workspace.",
+      "[ponder:start] Missing runtime workspace build artifacts; building Ponder workspace dependencies.",
     );
     expect(spawnSyncImpl).toHaveBeenCalledWith(
       "yarn",
-      ["workspace", "@rateloop/contracts", "build"],
+      ["workspace", "@rateloop/ponder", "build:workspace-deps"],
       {
         cwd: "/repo",
         stdio: "inherit",
@@ -63,19 +83,98 @@ describe("Ponder production launcher", () => {
     );
   });
 
-  test("throws when the contracts build fails", () => {
+  test("throws when the runtime workspace build fails", () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
 
     expect(() =>
-      ensureContractsArtifacts({
+      ensureRuntimeWorkspaceArtifacts({
         exists: () => false,
         spawnSyncImpl: () => ({ status: 1 }),
         requiredArtifacts: ["/repo/packages/contracts/dist/esm/abis/index.js"],
       }),
-    ).toThrow("Failed to build @rateloop/contracts: yarn exited with status 1.");
+    ).toThrow(
+      "Failed to build Ponder workspace dependencies: yarn exited with status 1.",
+    );
   });
 
-  test("starts Ponder with the resolved schema after checking contracts artifacts", () => {
+  test("validates the production RPC chain id before startup", async () => {
+    const fetchImpl = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ result: "0x2105" }),
+    }));
+
+    await expect(
+      assertProductionRpcChainId({
+        env: {
+          NODE_ENV: "production",
+          PONDER_NETWORK: "base",
+          PONDER_RPC_URL_8453: "https://mainnet.base.org",
+        },
+        fetchImpl,
+      }),
+    ).resolves.toBe(true);
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      "https://mainnet.base.org",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "eth_chainId",
+          params: [],
+        }),
+        headers: { "content-type": "application/json" },
+      }),
+    );
+  });
+
+  test("rejects wrong-chain production RPCs before startup", async () => {
+    await expect(
+      assertProductionRpcChainId({
+        env: {
+          NODE_ENV: "production",
+          PONDER_NETWORK: "base",
+          PONDER_RPC_URL_8453: "https://mainnet.base.org",
+        },
+        fetchImpl: vi.fn(async () => ({
+          ok: true,
+          json: async () => ({ result: "0x14a34" }),
+        })),
+      }),
+    ).rejects.toThrow(
+      "PONDER_RPC_URL_8453 reports chainId 84532 but 8453 expected.",
+    );
+  });
+
+  test("does not spawn Ponder when the production RPC reports the wrong chain", async () => {
+    const ensureContractsArtifactsImpl = vi.fn();
+    const spawnImpl = vi.fn();
+
+    await expect(
+      startPonder({
+        env: {
+          NODE_ENV: "production",
+          PONDER_NETWORK: "base",
+          PONDER_RPC_URL_8453: "https://mainnet.base.org",
+        },
+        spawnImpl,
+        ensureContractsArtifactsImpl,
+        assertProductionRpcChainIdImpl: async () => {
+          throw new Error(
+            "PONDER_RPC_URL_8453 reports chainId 84532 but 8453 expected.",
+          );
+        },
+      }),
+    ).rejects.toThrow(
+      "PONDER_RPC_URL_8453 reports chainId 84532 but 8453 expected.",
+    );
+
+    expect(ensureContractsArtifactsImpl).toHaveBeenCalled();
+    expect(spawnImpl).not.toHaveBeenCalled();
+  });
+
+  test("starts Ponder with the resolved schema after checking contracts artifacts", async () => {
     class FakeChild extends EventEmitter {}
 
     const child = new FakeChild();
@@ -83,7 +182,7 @@ describe("Ponder production launcher", () => {
     const spawnImpl = vi.fn(() => child);
 
     expect(
-      startPonder({
+      await startPonder({
         argv: ["--port", "42069"],
         env: { DATABASE_SCHEMA: "rateloop_ponder_preview" },
         spawnImpl,
@@ -104,7 +203,7 @@ describe("Ponder production launcher", () => {
     );
   });
 
-  test("starts Ponder with a protocol deployment schema when artifacts provide one", () => {
+  test("starts Ponder with a protocol deployment schema when artifacts provide one", async () => {
     class FakeChild extends EventEmitter {}
 
     const child = new FakeChild();
@@ -117,7 +216,7 @@ describe("Ponder production launcher", () => {
     const schema = schemaFromProtocolDeploymentKey(deploymentKey);
 
     expect(
-      startPonder({
+      await startPonder({
         argv: ["--port", "42069"],
         env: { PONDER_NETWORK: "worldchainSepolia" },
         spawnImpl,
@@ -147,7 +246,7 @@ describe("Ponder production launcher", () => {
     );
   });
 
-  test("keeps artifact deployment schemas ahead of Railway deployment IDs", () => {
+  test("keeps artifact deployment schemas ahead of Railway deployment IDs", async () => {
     class FakeChild extends EventEmitter {}
 
     const child = new FakeChild();
@@ -161,7 +260,7 @@ describe("Ponder production launcher", () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     expect(
-      startPonder({
+      await startPonder({
         argv: ["--port", "42069"],
         env: {
           PONDER_NETWORK: "worldchainSepolia",
@@ -200,6 +299,8 @@ describe("Ponder production launcher", () => {
         },
         requireImpl: vi.fn(),
       }),
-    ).toThrow("PONDER_CHAIN_ID 4801 does not match PONDER_NETWORK hardhat (31337).");
+    ).toThrow(
+      "PONDER_CHAIN_ID 4801 does not match PONDER_NETWORK hardhat (31337).",
+    );
   });
 });
