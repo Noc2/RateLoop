@@ -11,8 +11,9 @@ import { type VoteTlockRuntime, getVoteTlockChainInfo } from "@rateloop/contract
 import { packVoteRoundContext } from "@rateloop/contracts/votingCore";
 import { buildCommitVoteParams, buildStakeAmountWei } from "@rateloop/sdk/vote";
 import { useQueryClient } from "@tanstack/react-query";
-import { type Address } from "viem";
+import { type Address, type Hex } from "viem";
 import { useAccount, usePublicClient, useSignTypedData, useWriteContract } from "wagmi";
+import { getTransactionReceiptPollingInterval } from "~~/config/shared";
 import { useOptimisticVote } from "~~/contexts/OptimisticVoteContext";
 import { useTermsAcceptance } from "~~/contexts/TermsAcceptanceContext";
 import { useDeployedContractInfo, useTransactor } from "~~/hooks/scaffold-eth";
@@ -53,6 +54,10 @@ import {
 import { recordLocalVoteCooldown } from "~~/lib/vote/localCooldown";
 import { PREPARING_ROUND_VOTE_MESSAGE, ensureOpenStakedRoundRuntime } from "~~/lib/vote/openStakedRoundRuntime";
 import { normalizeRoundVoteError } from "~~/lib/vote/roundVoteErrors";
+import {
+  waitForRoundOpenPostcondition,
+  waitForRoundVoteCommitPostcondition,
+} from "~~/lib/vote/roundVotePostconditions";
 import { resolveRoundVoteRuntime } from "~~/lib/vote/roundVoteRuntime";
 import {
   type RoundVoteContractCall,
@@ -89,6 +94,12 @@ interface RoundVoteParams {
 }
 
 const COUNTED_VOTE_MIN_STAKE_WEI = 1_000_000n;
+
+function getRoundVotePostconditionPollingInterval(chainId: number) {
+  return getTransactionReceiptPollingInterval(chainId, {
+    preconfirmation: scaffoldConfig.useBasePreconfRpc,
+  });
+}
 
 function chunkString(value: string, chunkSize: number): string[] {
   const chunks: string[] = [];
@@ -688,6 +699,43 @@ export function useRoundVote() {
           return preparedRuntime;
         });
 
+      const raceBatchWithPostcondition = async <T>(params: {
+        batch: () => Promise<T>;
+        label: string;
+        waitForPostcondition: (isBatchSettled: () => boolean) => Promise<boolean>;
+      }) => {
+        let batchSettled = false;
+        let postconditionSatisfied = false;
+        const batchPromise = params.batch().finally(() => {
+          batchSettled = true;
+        });
+        void batchPromise.catch(batchError => {
+          if (postconditionSatisfied) {
+            console.warn(`[round-vote] ${params.label} postcondition succeeded before thirdweb status settled.`, {
+              contentId: contentId.toString(),
+              error: batchError,
+            });
+          }
+        });
+
+        const firstCompletion = await Promise.race([
+          batchPromise.then(() => "batch" as const),
+          params
+            .waitForPostcondition(() => batchSettled)
+            .then(satisfied => (satisfied ? ("postcondition" as const) : ("timeout" as const))),
+        ]);
+
+        if (firstCompletion === "postcondition") {
+          postconditionSatisfied = true;
+          return "postcondition" as const;
+        }
+        if (firstCompletion === "timeout") {
+          await batchPromise;
+          return "batch-after-postcondition-timeout" as const;
+        }
+        return "batch" as const;
+      };
+
       const submitOpenRound = async () => {
         const openRoundCall: RoundVoteContractCall = {
           abi: RoundVotingEngineAbi as any,
@@ -698,23 +746,59 @@ export function useRoundVote() {
         };
         timingLog.emit("open-round-submit-start");
         if (!useDirectLocalE2EWrites && canUseSponsoredBatchCalls) {
-          await executeContractCallBatch([openRoundCall], {
-            action: "open round",
-            atomicRequired: true,
-            parentRunId: timingLog.runId,
-            sponsorshipMode: "sponsored",
+          const confirmation = await raceBatchWithPostcondition({
+            batch: () =>
+              executeContractCallBatch([openRoundCall], {
+                action: "open round",
+                atomicRequired: true,
+                parentRunId: timingLog.runId,
+                sponsorshipMode: "sponsored",
+                suppressStatusToast: true,
+              }),
+            label: "open round",
+            waitForPostcondition: shouldStop =>
+              waitForRoundOpenPostcondition(
+                {
+                  client: publicClient,
+                  contentId,
+                  votingEngineAddress,
+                },
+                {
+                  onEvent: timingLog.emit,
+                  pollingIntervalMs: getRoundVotePostconditionPollingInterval(targetNetwork.id),
+                  shouldStop,
+                },
+              ),
           });
-          timingLog.emit("open-round-submit-complete", { transport: "sponsored-batch" });
+          timingLog.emit("open-round-submit-complete", { confirmation, transport: "sponsored-batch" });
           return;
         }
         if (!useDirectLocalE2EWrites && canUseSelfFundedBatchCalls) {
-          await executeContractCallBatch([openRoundCall], {
-            action: "open round",
-            atomicRequired: true,
-            parentRunId: timingLog.runId,
-            sponsorshipMode: "self-funded",
+          const confirmation = await raceBatchWithPostcondition({
+            batch: () =>
+              executeContractCallBatch([openRoundCall], {
+                action: "open round",
+                atomicRequired: true,
+                parentRunId: timingLog.runId,
+                sponsorshipMode: "self-funded",
+                suppressStatusToast: true,
+              }),
+            label: "open round",
+            waitForPostcondition: shouldStop =>
+              waitForRoundOpenPostcondition(
+                {
+                  client: publicClient,
+                  contentId,
+                  votingEngineAddress,
+                },
+                {
+                  onEvent: timingLog.emit,
+                  pollingIntervalMs: getRoundVotePostconditionPollingInterval(targetNetwork.id),
+                  shouldStop,
+                },
+              ),
           });
-          timingLog.emit("open-round-submit-complete", { transport: "self-funded-batch" });
+          timingLog.emit("open-round-submit-complete", { confirmation, transport: "self-funded-batch" });
           return;
         }
         const transactionHash = await writePlannedCall(openRoundCall, "open round");
@@ -816,31 +900,56 @@ export function useRoundVote() {
         }
         timingLog.emit("advisory-batch-preflight-complete");
       };
+      const executeVoteBatchWithPostcondition = async (
+        vote: Awaited<ReturnType<typeof buildFreshRoundVotePlan>>,
+        sponsorshipMode: "sponsored" | "self-funded",
+      ) => {
+        const commitHash = vote.plan.commitVoteArgs[4] as Hex;
+        return raceBatchWithPostcondition({
+          batch: () =>
+            executeContractCallBatch(vote.plan.calls, {
+              action: "vote",
+              atomicRequired: true,
+              parentRunId: timingLog.runId,
+              sponsorshipMode,
+              suppressStatusToast: true,
+            }),
+          label: "vote",
+          waitForPostcondition: shouldStop =>
+            waitForRoundVoteCommitPostcondition(
+              {
+                advisoryVoteRecorderAddress,
+                client: publicClient,
+                commitHash,
+                contentId,
+                isAdvisoryVote: vote.plan.isAdvisoryVote,
+                roundId: vote.runtime.roundId,
+                voter: address as Address,
+                votingEngineAddress,
+              },
+              {
+                onEvent: timingLog.emit,
+                pollingIntervalMs: getRoundVotePostconditionPollingInterval(targetNetwork.id),
+                shouldStop,
+              },
+            ),
+        });
+      };
       let submittedVote: Awaited<ReturnType<typeof buildFreshRoundVotePlan>> | null = null;
 
       if (!useDirectLocalE2EWrites && canUseSponsoredBatchCalls) {
         const freshVote = await buildFreshRoundVotePlan(currentAllowance);
         await preflightAdvisoryBatchPlan(freshVote);
         timingLog.emit("vote-batch-submit-start", { sponsorshipMode: "sponsored" });
-        await executeContractCallBatch(freshVote.plan.calls, {
-          action: "vote",
-          atomicRequired: true,
-          parentRunId: timingLog.runId,
-          sponsorshipMode: "sponsored",
-        });
-        timingLog.emit("vote-batch-submit-complete", { sponsorshipMode: "sponsored" });
+        const confirmation = await executeVoteBatchWithPostcondition(freshVote, "sponsored");
+        timingLog.emit("vote-batch-submit-complete", { confirmation, sponsorshipMode: "sponsored" });
         submittedVote = freshVote;
       } else if (!useDirectLocalE2EWrites && canUseSelfFundedBatchCalls) {
         const freshVote = await buildFreshRoundVotePlan(currentAllowance);
         await preflightAdvisoryBatchPlan(freshVote);
         timingLog.emit("vote-batch-submit-start", { sponsorshipMode: "self-funded" });
-        await executeContractCallBatch(freshVote.plan.calls, {
-          action: "vote",
-          atomicRequired: true,
-          parentRunId: timingLog.runId,
-          sponsorshipMode: "self-funded",
-        });
-        timingLog.emit("vote-batch-submit-complete", { sponsorshipMode: "self-funded" });
+        const confirmation = await executeVoteBatchWithPostcondition(freshVote, "self-funded");
+        timingLog.emit("vote-batch-submit-complete", { confirmation, sponsorshipMode: "self-funded" });
         submittedVote = freshVote;
       } else {
         const needsApproval = !isZeroStakeVote && currentAllowance < requestedStakeWei;
