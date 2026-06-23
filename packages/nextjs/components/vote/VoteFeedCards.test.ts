@@ -1,0 +1,104 @@
+import {
+  type FeedCardMediaPlatformType,
+  getFeedMediaHeightClassName,
+  resolveFeedCardVisualPlatformType,
+  shouldFlushFeedMediaEdges,
+  usesNaturalFeedMediaHeight,
+} from "./VoteFeedCards";
+import assert from "node:assert/strict";
+import test from "node:test";
+import { CONTENT_STATUS, type ContentItem } from "~~/hooks/contentFeed/shared";
+import { buildFallbackMediaItems } from "~~/lib/contentMedia";
+
+const uploadedImageUrl =
+  "https://www.rateloop.ai/api/attachments/images/att_abcdefghijklmnop.webp#sha256=0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+function buildItem(overrides: Partial<ContentItem> = {}): ContentItem {
+  const url = overrides.url ?? "https://example.com/context";
+  return {
+    id: 1n,
+    url,
+    media: buildFallbackMediaItems(url),
+    title: "Example question",
+    description: "",
+    tags: [],
+    submitter: "0x0000000000000000000000000000000000000001",
+    contentHash: "0xhash",
+    status: CONTENT_STATUS.Active,
+    isOwnContent: false,
+    categoryId: 1n,
+    rating: 50,
+    ratingSettledRounds: 1,
+    createdAt: "2026-06-23T00:00:00.000Z",
+    lastActivityAt: "2026-06-23T00:00:00.000Z",
+    totalVotes: 0,
+    totalRounds: 0,
+    openRound: null,
+    latestRound: null,
+    isValidUrl: true,
+    thumbnailUrl: null,
+    rewardPoolSummary: null,
+    feedbackBonusSummary: null,
+    ...overrides,
+  };
+}
+
+function assertImageLayout(platformType: FeedCardMediaPlatformType) {
+  assert.equal(platformType, "image");
+  assert.equal(usesNaturalFeedMediaHeight(platformType), true);
+  assert.equal(shouldFlushFeedMediaEdges(platformType), true);
+  assert.equal(
+    getFeedMediaHeightClassName({ isLaptopCompact: false, isMobileViewport: false, platformType }),
+    "w-full",
+  );
+}
+
+test("feed card image layout uses natural height and flush media edges", () => {
+  const item = buildItem({
+    media: [
+      {
+        canonicalUrl: uploadedImageUrl,
+        mediaIndex: 0,
+        mediaType: "image",
+        url: uploadedImageUrl,
+        urlHost: null,
+      },
+    ],
+    url: "",
+  });
+
+  assertImageLayout(resolveFeedCardVisualPlatformType(item));
+});
+
+test("resolved private images reuse the public image card layout", () => {
+  const item = buildItem({
+    confidentiality: { visibility: "gated" },
+    contextAccess: "gated",
+    contextVisibility: "gated",
+    media: [],
+    url: "",
+  });
+
+  assert.equal(resolveFeedCardVisualPlatformType(item), "text");
+  assertImageLayout(resolveFeedCardVisualPlatformType(item, "image"));
+});
+
+test("details-only private context keeps the non-image media layout", () => {
+  const item = buildItem({
+    confidentiality: { visibility: "gated" },
+    contextAccess: "gated",
+    contextVisibility: "gated",
+    detailsUrl: "https://www.rateloop.ai/api/attachments/details/det_abcdefghijklmnop",
+    media: [],
+    url: "",
+  });
+  const platformType = resolveFeedCardVisualPlatformType(item, "text");
+
+  assert.equal(platformType, "text");
+  assert.equal(usesNaturalFeedMediaHeight(platformType), false);
+  assert.equal(shouldFlushFeedMediaEdges(platformType), false);
+  assert.equal(
+    getFeedMediaHeightClassName({ isLaptopCompact: false, isMobileViewport: true, platformType }),
+    "w-full min-h-[14rem] max-h-[46svh] flex-1",
+  );
+});
