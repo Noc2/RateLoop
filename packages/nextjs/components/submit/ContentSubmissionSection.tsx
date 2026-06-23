@@ -2360,6 +2360,18 @@ export function ContentSubmissionSection() {
       let submittedContentIds: bigint[] = [];
       let submissionTransactionHashes: `0x${string}`[] = [];
       const publicClient = getPublicClient(wagmiConfig, { chainId: targetNetwork.id as any });
+      const readRegistryNextContentId = async () => {
+        try {
+          return (await readContract(wagmiConfig, {
+            address: registryAddress,
+            abi: registryInfo.abi,
+            chainId: targetNetwork.id,
+            functionName: "nextContentId",
+          })) as bigint;
+        } catch {
+          return null;
+        }
+      };
       const getFreshPendingNonce = async (minimumNonce?: number): Promise<number | undefined> => {
         if (!publicClient) return minimumNonce;
 
@@ -2724,6 +2736,7 @@ export function ContentSubmissionSection() {
       const reserveResult = await reserveSubmission(revealCommitment);
       reservedRevealCommitment = revealCommitment;
       const reserveNonce = await getSubmittedTransactionNonce(reserveResult.hash);
+      const nextContentIdBeforeSubmit = await readRegistryNextContentId();
 
       const waitForReservedSubmissionReveal = async () => {
         const publicClient = getPublicClient(wagmiConfig, { chainId: targetNetwork.id as any });
@@ -2856,6 +2869,17 @@ export function ContentSubmissionSection() {
           });
           submittedContentIds = extractSubmittedContentIds(submitReceipt.logs);
           submissionTransactionHashes = [submitTxHash];
+        }
+      }
+
+      if (submittedContentIds.length === 0 && nextContentIdBeforeSubmit !== null) {
+        const nextContentIdAfterSubmit = await readRegistryNextContentId();
+        const expectedNextContentId = nextContentIdBeforeSubmit + BigInt(bundleQuestions.length);
+        if (nextContentIdAfterSubmit === expectedNextContentId) {
+          submittedContentIds = Array.from(
+            { length: bundleQuestions.length },
+            (_, index) => nextContentIdBeforeSubmit + BigInt(index),
+          );
         }
       }
 
