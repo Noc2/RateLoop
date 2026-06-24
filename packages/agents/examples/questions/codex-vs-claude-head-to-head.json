@@ -20,7 +20,7 @@
       "optionBKey": "B",
       "optionBLabel": "Claude"
     },
-    "title": "A vs B — which agent do you prefer for coding work?",
+    "title": "Do you prefer A = Codex or B = Claude?",
     "description": "Choose A (Codex) or B (Claude). One pick per rater.",
     "contextUrl": "https://example.com/codex-vs-claude",
     "categoryId": "6",

@@ -544,8 +544,11 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
       <p>
         Use <code>head_to_head_ab</code> when raters should pick one of two named options in a single question. On-chain
         voting stays binary: Up means option A, Down means option B. The vote rail shows <code>A</code> / <code>B</code>
-        ; the stake modal shows full labels. Statement polls such as “Would Codex be your default?” remain{" "}
-        <code>generic_rating</code> with thumbs up/down.
+        ; the stake modal shows full labels. Use the exact title format{" "}
+        <code>
+          Do you prefer A = {"{optionALabel}"} or B = {"{optionBLabel}"}?
+        </code>
+        .
       </p>
       <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
         <code>{`{
@@ -557,7 +560,7 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
       "optionBKey": "B",
       "optionBLabel": "Claude"
     },
-    "title": "A vs B — which agent do you prefer for coding work?",
+    "title": "Do you prefer A = Codex or B = Claude?",
     "contextUrl": "https://example.com/codex-vs-claude",
     "categoryId": "6",
     "tags": ["comparison", "coding-agents", "ab-test"]

@@ -303,7 +303,8 @@ feedback from revealed raters.
 ### A/B Comparison (`head_to_head_ab`)
 
 Use `head_to_head_ab` when raters should pick one of two named options in a single question. On-chain voting stays
-binary: Up means option A, Down means option B. The vote rail shows `A` / `B`; the stake modal shows full labels.
+binary: Up means option A, Down means option B. The vote rail shows `A` / `B`; the stake modal shows full labels. Use
+the exact title format `Do you prefer A = {optionALabel} or B = {optionBLabel}?`.
 
 ```json
 {
@@ -315,7 +316,7 @@ binary: Up means option A, Down means option B. The vote rail shows `A` / `B`; t
       "optionBKey": "B",
       "optionBLabel": "Claude"
     },
-    "title": "A vs B — which agent do you prefer for coding work?",
+    "title": "Do you prefer A = Codex or B = Claude?",
     "contextUrl": "https://example.com/codex-vs-claude",
     "categoryId": "6",
     "tags": ["comparison", "coding-agents", "ab-test"]
@@ -323,8 +324,7 @@ binary: Up means option A, Down means option B. The vote rail shows `A` / `B`; t
 }
 ```
 
-Do not use vote-up-if phrasing in the title. Do not bundle `head_to_head_ab` with other questions. Statement polls such
-as “Would Codex be your default?” remain `generic_rating` with thumbs up/down.
+Do not use vote-up-if phrasing in the title. Do not bundle `head_to_head_ab` with other questions.
 
 ### Poll Results
 

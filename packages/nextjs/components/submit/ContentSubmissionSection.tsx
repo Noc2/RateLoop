@@ -3,11 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import {
-  HEAD_TO_HEAD_AB_TEMPLATE_ID,
-  MAX_HEAD_TO_HEAD_OPTION_LABEL_LENGTH,
-  readHeadToHeadTemplateInputs,
-} from "@rateloop/agents/voteUi";
+import { HEAD_TO_HEAD_AB_TEMPLATE_ID, MAX_HEAD_TO_HEAD_OPTION_LABEL_LENGTH } from "@rateloop/agents/voteUi";
 import { RoundVotingEngineAbi } from "@rateloop/contracts/abis";
 import {
   type TargetAudience,

@@ -1,5 +1,6 @@
 import { findAgentResultTemplate } from "../templates";
 import { HEAD_TO_HEAD_AB_TEMPLATE_ID, normalizeHeadToHeadOptionKey, readHeadToHeadTemplateInputs } from "../voteUi";
+import { getHeadToHeadAbTitleValidationError } from "../headToHeadTitle.js";
 import type { AgentAskExample, AgentQuestionExample, JsonObject, JsonValue, QuestionLintFinding } from "./types";
 
 const CLIENT_REQUEST_ID_PATTERN = /^[A-Za-z0-9._:-]{4,160}$/;
@@ -25,7 +26,6 @@ const DIRECT_IMAGE_URL_PATH_PATTERN = /\.(?:avif|bmp|gif|jpe?g|png|svg|webp)$/i;
 const SURVEY_STYLE_PATTERN =
   /\b(multiple[-\s]?choice|answer options?|choose one|choose from|select one|select from|price range|pricing range)\b/i;
 const HIDDEN_CHOICE_TITLE_PATTERN = /\bwhich\s+(option|variant|candidate|direction|price|pricing|range)\b/i;
-const VOTE_UP_IF_TITLE_PATTERN = /\bvote\s+up\s+if\b/i;
 const VS_TITLE_PATTERN = /\b(vs\.?|versus)\b/i;
 
 function isObject(value: unknown): value is JsonObject {
@@ -402,14 +402,6 @@ export function lintAgentQuestion(
     }
   }
   if (templateId === HEAD_TO_HEAD_AB_TEMPLATE_ID) {
-    if (VOTE_UP_IF_TITLE_PATTERN.test(title)) {
-      pushFinding(
-        findings,
-        "error",
-        `${path}.title`,
-        "Head-to-head A/B titles should ask which option voters prefer. Use generic_rating for one-sided vote-up-if statement polls.",
-      );
-    }
     for (const key of HEAD_TO_HEAD_AB_REQUIRED_INPUTS) {
       if (!templateInputText(templateInputs, key)) {
         pushFinding(
@@ -441,6 +433,15 @@ export function lintAgentQuestion(
           `${path}.templateInputs`,
           "Head-to-head option labels must be 1-32 characters and keys must be distinct single letters.",
         );
+      }
+    } else {
+      const titleError = getHeadToHeadAbTitleValidationError(
+        title,
+        templateInputText(templateInputs, "optionALabel"),
+        templateInputText(templateInputs, "optionBLabel"),
+      );
+      if (titleError) {
+        pushFinding(findings, "error", `${path}.title`, titleError);
       }
     }
   }

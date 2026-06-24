@@ -42,7 +42,7 @@ describe("voteUi", () => {
         optionBKey: "B",
         optionBLabel: "Claude",
       },
-      title: "A vs B — which agent do you prefer?",
+      title: "Do you prefer A = Codex or B = Claude?",
       videoUrl: "",
     });
 

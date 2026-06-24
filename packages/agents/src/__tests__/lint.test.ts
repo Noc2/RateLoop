@@ -605,7 +605,7 @@ describe("round config voter alignment linting", () => {
       question: {
         ...VALID_REQUEST.question,
         templateId: "head_to_head_ab",
-        title: "A vs B — which agent do you prefer for coding work?",
+        title: "Do you prefer A = Codex or B = Claude?",
         description: "Choose A (Codex) or B (Claude). One pick per rater.",
         templateInputs: {
           optionAKey: "A",
@@ -621,6 +621,33 @@ describe("round config voter alignment linting", () => {
       ok: true,
       warningCount: 0,
     });
+  });
+
+  it("rejects non-canonical titles on head-to-head asks", () => {
+    const findings = lintAgentAskRequest({
+      ...VALID_REQUEST,
+      templateId: "head_to_head_ab",
+      question: {
+        ...VALID_REQUEST.question,
+        templateId: "head_to_head_ab",
+        title: "A vs B — which agent do you prefer for coding work?",
+        templateInputs: {
+          optionAKey: "A",
+          optionALabel: "Codex",
+          optionBKey: "B",
+          optionBLabel: "Claude",
+        },
+      },
+    });
+
+    expect(findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "error",
+          path: "question.title",
+        }),
+      ]),
+    );
   });
 
   it("rejects vote-up-if titles on head-to-head asks", () => {
@@ -657,7 +684,7 @@ describe("round config voter alignment linting", () => {
         {
           ...VALID_REQUEST.question,
           templateId: "head_to_head_ab",
-          title: "A vs B — which agent do you prefer?",
+          title: "Do you prefer A = Codex or B = Claude?",
           templateInputs: {
             optionAKey: "A",
             optionALabel: "Codex",
