@@ -54,7 +54,12 @@ import {
 } from "~~/lib/vote/confidentialContext";
 import { recordLocalVoteCooldown } from "~~/lib/vote/localCooldown";
 import { readEffectiveOnChainVoteCooldownRemainingSeconds } from "~~/lib/vote/onChainVoteCooldown";
-import { PREPARING_ROUND_VOTE_MESSAGE, ensureOpenStakedRoundRuntime } from "~~/lib/vote/openStakedRoundRuntime";
+import {
+  PREPARING_ROUND_VOTE_MESSAGE,
+  ensureOpenStakedRoundRuntime,
+  predictPostOpenRoundRuntime,
+  preflightRoundVoteBatchCalls,
+} from "~~/lib/vote/openStakedRoundRuntime";
 import { normalizeRoundVoteError } from "~~/lib/vote/roundVoteErrors";
 import {
   waitForRoundOpenPostcondition,
@@ -101,6 +106,10 @@ function getRoundVotePostconditionPollingInterval(chainId: number) {
   return getTransactionReceiptPollingInterval(chainId, {
     preconfirmation: scaffoldConfig.useBasePreconfRpc,
   });
+}
+
+function isRoundVoteCommitCallKind(kind: RoundVoteContractCall["kind"]) {
+  return kind === "commitVote" || kind === "commitVoteWithPermit" || kind === "recordAdvisoryVote";
 }
 
 function chunkString(value: string, chunkSize: number): string[] {
@@ -707,6 +716,77 @@ export function useRoundVote() {
           },
         );
       };
+      const submitDirectOpenRound = async (call: RoundVoteContractCall) => {
+        const { confirmation } = await raceTransactionWithPostcondition({
+          onPostconditionSuccessThenTransactionError: directError => {
+            console.warn("[round-vote] open round postcondition succeeded before direct wallet status settled.", {
+              contentId: contentId.toString(),
+              error: directError,
+            });
+          },
+          transaction: () => writePlannedCall(call, "open round"),
+          waitForPostcondition: shouldStop =>
+            waitForRoundOpenPostcondition(
+              {
+                client: publicClient,
+                contentId,
+                votingEngineAddress,
+              },
+              {
+                onEvent: timingLog.emit,
+                pollingIntervalMs: getRoundVotePostconditionPollingInterval(targetNetwork.id),
+                shouldStop,
+              },
+            ),
+        });
+        timingLog.emit("open-round-submit-complete", { confirmation, transport: "direct-wallet" });
+      };
+      const submitDirectPlannedCall = async (
+        call: RoundVoteContractCall,
+        action: string,
+        vote?: Awaited<ReturnType<typeof buildFreshRoundVotePlan>>,
+      ) => {
+        timingLog.emit("direct-call-submit-start", { callKind: call.kind });
+        if (vote && isRoundVoteCommitCallKind(call.kind)) {
+          const commitHash = vote.plan.commitVoteArgs[4] as Hex;
+          const { confirmation } = await raceTransactionWithPostcondition({
+            onPostconditionSuccessThenTransactionError: directError => {
+              console.warn("[round-vote] vote postcondition succeeded before direct wallet status settled.", {
+                contentId: contentId.toString(),
+                error: directError,
+              });
+            },
+            transaction: () => writePlannedCall(call, action),
+            waitForPostcondition: shouldStop =>
+              waitForRoundVoteCommitPostcondition(
+                {
+                  advisoryVoteRecorderAddress,
+                  client: publicClient,
+                  commitHash,
+                  contentId,
+                  isAdvisoryVote: vote.plan.isAdvisoryVote,
+                  roundId: vote.runtime.roundId,
+                  voter: address as Address,
+                  votingEngineAddress,
+                },
+                {
+                  onEvent: timingLog.emit,
+                  pollingIntervalMs: getRoundVotePostconditionPollingInterval(targetNetwork.id),
+                  shouldStop,
+                },
+              ),
+          });
+          timingLog.emit("direct-call-submit-complete", { callKind: call.kind, confirmation });
+          return true;
+        }
+
+        const transactionHash = await writePlannedCall(call, action);
+        if (!transactionHash) {
+          return false;
+        }
+        timingLog.emit("direct-call-submit-complete", { callKind: call.kind, transactionHash });
+        return true;
+      };
 
       const resolveFreshStakedRuntime = () =>
         resolveRoundVoteRuntime({
@@ -797,11 +877,7 @@ export function useRoundVote() {
           timingLog.emit("open-round-submit-complete", { confirmation, transport: "self-funded-batch" });
           return;
         }
-        const transactionHash = await writePlannedCall(openRoundCall, "open round");
-        if (!transactionHash) {
-          throw new Error("Preparing vote. Try again in a moment.");
-        }
-        timingLog.emit("open-round-submit-complete", { transport: "direct-wallet", transactionHash });
+        await submitDirectOpenRound(openRoundCall);
       };
 
       const ensureOpenStakedRuntime = () =>
@@ -819,8 +895,16 @@ export function useRoundVote() {
           resolveRuntime: resolveFreshStakedRuntime,
         });
 
-      const buildFreshRoundVotePlan = async (allowanceForPlan: bigint, permitSignature?: RoundVotePermitSignature) => {
-        const freshRuntime = isRequestedAdvisoryVote ? runtime : await ensureOpenStakedRuntime();
+      const buildFreshRoundVotePlan = async (
+        allowanceForPlan: bigint,
+        permitSignature?: RoundVotePermitSignature,
+        options?: {
+          includeOpenRound?: boolean;
+          runtimeOverride?: RoundVoteCommitRuntime;
+        },
+      ) => {
+        const freshRuntime =
+          options?.runtimeOverride ?? (isRequestedAdvisoryVote ? runtime : await ensureOpenStakedRuntime());
         if (!freshRuntime) {
           throw new Error(PREPARING_ROUND_VOTE_MESSAGE);
         }
@@ -853,6 +937,7 @@ export function useRoundVote() {
           currentAllowance: allowanceForPlan,
           drandChainHash,
           frontend,
+          includeOpenRound: options?.includeOpenRound,
           lrepAddress,
           permitSignature,
           roundContext,
@@ -886,6 +971,60 @@ export function useRoundVote() {
           functionName: call.functionName as never,
           ...(typeof call.value !== "undefined" ? { value: call.value } : {}),
         } as any);
+      };
+      const buildBatchFreshVotePlan = async () => {
+        const permitSignature = isZeroStakeVote ? undefined : await signPermitForVote(requestedStakeWei);
+        return buildFreshRoundVotePlan(currentAllowance, permitSignature);
+      };
+      const buildCombinedOpenRoundVotePlan = async () => {
+        const latestBlock = await publicClient.getBlock({ blockTag: "latest" });
+        let predictedRuntime = predictPostOpenRoundRuntime({
+          latestBlockTimestampSeconds: Number(latestBlock.timestamp),
+          runtime,
+        });
+        if (localE2ETestWalletClient) {
+          predictedRuntime = withLocalE2ETlockRuntime(predictedRuntime);
+        }
+        await getVoteTlockChainInfo(predictedRuntime);
+        const permitSignature = isZeroStakeVote ? undefined : await signPermitForVote(requestedStakeWei);
+        return buildFreshRoundVotePlan(currentAllowance, permitSignature, {
+          includeOpenRound: true,
+          runtimeOverride: predictedRuntime,
+        });
+      };
+      const executeSequentialOpenRoundVoteBatch = async (sponsorshipMode: "sponsored" | "self-funded") => {
+        const freshVote = await buildBatchFreshVotePlan();
+        await preflightAdvisoryBatchPlan(freshVote);
+        timingLog.emit("vote-batch-submit-start", { sponsorshipMode });
+        const confirmation = await executeVoteBatchWithPostcondition(freshVote, sponsorshipMode);
+        timingLog.emit("vote-batch-submit-complete", { confirmation, sponsorshipMode });
+        return freshVote;
+      };
+      const executeBatchVoteWithCombinedOpenRoundFallback = async (sponsorshipMode: "sponsored" | "self-funded") => {
+        const needsCombinedOpenRound = !isRequestedAdvisoryVote && runtime.requiresOpenRound;
+        if (!needsCombinedOpenRound) {
+          return executeSequentialOpenRoundVoteBatch(sponsorshipMode);
+        }
+
+        const combinedVote = await buildCombinedOpenRoundVotePlan();
+        timingLog.emit("combined-open-vote-preflight-start");
+        const preflightPassed = await preflightRoundVoteBatchCalls({
+          account: address as Address,
+          calls: combinedVote.plan.calls,
+          publicClient,
+          simulatePlannedCall,
+        });
+        timingLog.emit("combined-open-vote-preflight-complete", { preflightPassed });
+
+        if (preflightPassed) {
+          timingLog.emit("combined-open-vote-batch-submit-start", { sponsorshipMode });
+          const confirmation = await executeVoteBatchWithPostcondition(combinedVote, sponsorshipMode);
+          timingLog.emit("combined-open-vote-batch-submit-complete", { confirmation, sponsorshipMode });
+          return combinedVote;
+        }
+
+        timingLog.emit("combined-open-vote-fallback-sequential", { sponsorshipMode });
+        return executeSequentialOpenRoundVoteBatch(sponsorshipMode);
       };
       const preflightAdvisoryBatchPlan = async (vote: Awaited<ReturnType<typeof buildFreshRoundVotePlan>>) => {
         if (!vote.plan.isAdvisoryVote) return;
@@ -940,19 +1079,9 @@ export function useRoundVote() {
       let submittedVote: Awaited<ReturnType<typeof buildFreshRoundVotePlan>> | null = null;
 
       if (!useDirectLocalE2EWrites && canUseSponsoredBatchCalls) {
-        const freshVote = await buildFreshRoundVotePlan(currentAllowance);
-        await preflightAdvisoryBatchPlan(freshVote);
-        timingLog.emit("vote-batch-submit-start", { sponsorshipMode: "sponsored" });
-        const confirmation = await executeVoteBatchWithPostcondition(freshVote, "sponsored");
-        timingLog.emit("vote-batch-submit-complete", { confirmation, sponsorshipMode: "sponsored" });
-        submittedVote = freshVote;
+        submittedVote = await executeBatchVoteWithCombinedOpenRoundFallback("sponsored");
       } else if (!useDirectLocalE2EWrites && canUseSelfFundedBatchCalls) {
-        const freshVote = await buildFreshRoundVotePlan(currentAllowance);
-        await preflightAdvisoryBatchPlan(freshVote);
-        timingLog.emit("vote-batch-submit-start", { sponsorshipMode: "self-funded" });
-        const confirmation = await executeVoteBatchWithPostcondition(freshVote, "self-funded");
-        timingLog.emit("vote-batch-submit-complete", { confirmation, sponsorshipMode: "self-funded" });
-        submittedVote = freshVote;
+        submittedVote = await executeBatchVoteWithCombinedOpenRoundFallback("self-funded");
       } else {
         const needsApproval = !isZeroStakeVote && currentAllowance < requestedStakeWei;
 
@@ -961,12 +1090,9 @@ export function useRoundVote() {
           if (permitSignature) {
             const freshVote = await buildFreshRoundVotePlan(currentAllowance, permitSignature);
             for (const call of freshVote.plan.calls) {
-              timingLog.emit("direct-call-submit-start", { callKind: call.kind });
-              const transactionHash = await writePlannedCall(call, "vote");
-              if (!transactionHash) {
+              if (!(await submitDirectPlannedCall(call, "vote", freshVote))) {
                 return false;
               }
-              timingLog.emit("direct-call-submit-complete", { callKind: call.kind, transactionHash });
             }
             submittedVote = freshVote;
           }
@@ -978,24 +1104,24 @@ export function useRoundVote() {
           if (!approvalCall) {
             throw new Error("Preparing approval. Try again in a moment.");
           }
-          timingLog.emit("direct-call-submit-start", { callKind: approvalCall.kind });
-          const transactionHash = await writePlannedCall(approvalCall, "approve");
-          if (!transactionHash) {
+          if (!(await submitDirectPlannedCall(approvalCall, "approve"))) {
             return false;
           }
-          timingLog.emit("direct-call-submit-complete", { callKind: approvalCall.kind, transactionHash });
           currentAllowance = requestedStakeWei;
         }
 
         if (!submittedVote) {
           const freshVote = await buildFreshRoundVotePlan(currentAllowance);
           for (const call of freshVote.plan.calls) {
-            timingLog.emit("direct-call-submit-start", { callKind: call.kind });
-            const transactionHash = await writePlannedCall(call, call.kind === "approve" ? "approve" : "vote");
-            if (!transactionHash) {
+            if (
+              !(await submitDirectPlannedCall(
+                call,
+                call.kind === "approve" ? "approve" : "vote",
+                call.kind === "approve" ? undefined : freshVote,
+              ))
+            ) {
               return false;
             }
-            timingLog.emit("direct-call-submit-complete", { callKind: call.kind, transactionHash });
           }
           submittedVote = freshVote;
         }
