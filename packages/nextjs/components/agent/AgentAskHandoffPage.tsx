@@ -62,6 +62,7 @@ import {
   normalizeQuestionDetailsText,
 } from "~~/lib/attachments/questionDetails.shared";
 import {
+  HEAD_TO_HEAD_AB_QUESTION_TOOLTIP,
   type HeadToHeadTitleMode,
   getHeadToHeadOptionValidationError,
   getHeadToHeadQuestionTitleError,
@@ -3090,15 +3091,17 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                                 onChange={event => updateDraftQuestion(index, { optionBLabel: event.target.value })}
                               />
                             </label>
-                            <p className="sm:col-span-2 text-sm text-base-content/60">
-                              Question fills automatically from your options. You can edit it.
-                            </p>
                           </div>
                         ) : null}
 
                         <label className="form-control mt-4">
                           <span className="label-text flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-semibold uppercase tracking-wide text-base-content/45">
-                            <span>{hasQuestionBundle ? `Question ${index + 1}` : "Question"}</span>
+                            <span className="inline-flex items-center gap-1.5">
+                              {hasQuestionBundle ? `Question ${index + 1}` : "Question"}
+                              {question.templateId === HEAD_TO_HEAD_AB_TEMPLATE_ID ? (
+                                <InfoTooltip text={HEAD_TO_HEAD_AB_QUESTION_TOOLTIP} />
+                              ) : null}
+                            </span>
                             {question.templateId === HEAD_TO_HEAD_AB_TEMPLATE_ID &&
                             question.headToHeadTitleMode === "manual" &&
                             resolveAutoHeadToHeadTitle(question.optionALabel, question.optionBLabel) ? (

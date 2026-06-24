@@ -86,6 +86,7 @@ import { MAX_QUESTION_LENGTH } from "~~/lib/contentTitle";
 import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
 import { protocolDocFacts } from "~~/lib/docs/protocolFacts";
 import {
+  HEAD_TO_HEAD_AB_QUESTION_TOOLTIP,
   type HeadToHeadTitleMode,
   getHeadToHeadOptionValidationError,
   getHeadToHeadQuestionTitleError,
@@ -4644,9 +4645,6 @@ export function ContentSubmissionSection() {
                       />
                     </div>
                     {headToHeadError ? <p className="sm:col-span-2 text-base text-error">{headToHeadError}</p> : null}
-                    <p className="sm:col-span-2 text-sm text-base-content/60">
-                      Question fills automatically from your options. You can edit it.
-                    </p>
                   </div>
                 ) : null}
 
@@ -4661,7 +4659,7 @@ export function ContentSubmissionSection() {
                       <InfoTooltip
                         text={
                           questionFormat === "head_to_head_ab"
-                            ? "Use the exact format: Do you prefer A = Option A or B = Option B? Avoid vote-up-if phrasing."
+                            ? HEAD_TO_HEAD_AB_QUESTION_TOOLTIP
                             : "Good questions are specific, subjective, and easy to compare. Focus on one clear thing voters can rate, avoid yes/no or factual prompts, and add context below."
                         }
                       />
