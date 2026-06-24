@@ -1,5 +1,6 @@
 import { expect, test } from "../fixtures/wallet";
 import { openAdvancedQuestionSettings } from "../helpers/ask-form";
+import { ANVIL_ACCOUNTS } from "../helpers/anvil-accounts";
 import { findVoteableContent, gotoWithRetry, waitForFeedLoaded } from "../helpers/wait-helpers";
 import type { Page } from "@playwright/test";
 
@@ -8,7 +9,34 @@ import type { Page } from "@playwright/test";
 // viewport, UA, touch emulation, and browser engine.
 
 const BETA_NOTICE_DISMISSED_STORAGE_KEY = "rateloop:beta-notice-dismissed";
+const CLAIM_REWARD_NOTIFICATION_STORAGE_PREFIX = "rateloop_last_claim_reward_notification";
+const CLAIMABLE_TOTAL_STORAGE_PREFIX = "rateloop_last_notified_claimable_total";
 const E2E_OPEN_STAKE_SELECTOR_EVENT = "rateloop:e2e-open-stake-selector";
+const CONNECTED_TEST_WALLET_ADDRESS = ANVIL_ACCOUNTS.account2.address.toLowerCase();
+
+function seedSuppressedClaimRewardNotification(address: string) {
+  const normalizedAddress = address.toLowerCase();
+
+  try {
+    window.localStorage.setItem(`${CLAIM_REWARD_NOTIFICATION_STORAGE_PREFIX}:${normalizedAddress}`, String(Date.now()));
+  } catch {
+    // localStorage may be unavailable in some test contexts.
+  }
+
+  try {
+    window.sessionStorage.setItem(
+      `${CLAIMABLE_TOTAL_STORAGE_PREFIX}:${normalizedAddress}`,
+      Number.MAX_SAFE_INTEGER.toString(),
+    );
+  } catch {
+    // sessionStorage may be unavailable in some test contexts.
+  }
+}
+
+async function suppressClaimRewardNotifications(page: Page): Promise<void> {
+  await page.addInitScript(seedSuppressedClaimRewardNotification, CONNECTED_TEST_WALLET_ADDRESS);
+  await page.evaluate(seedSuppressedClaimRewardNotification, CONNECTED_TEST_WALLET_ADDRESS);
+}
 
 async function dismissBetaNotice(page: Page): Promise<void> {
   await page.addInitScript(key => {
@@ -33,7 +61,29 @@ async function dismissBetaNotice(page: Page): Promise<void> {
   }
 }
 
+async function dismissTransientNotifications(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    for (const notification of document.querySelectorAll<HTMLElement>(".rateloop-gradient-notification")) {
+      const closeIcon = Array.from(notification.querySelectorAll<SVGElement>("svg")).at(-1);
+      const closeTarget = closeIcon?.closest<HTMLElement>("div");
+      if (closeIcon) {
+        closeIcon.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+      } else {
+        closeTarget?.click();
+      }
+      notification.remove();
+    }
+  });
+  await expect
+    .poll(() => page.locator(".rateloop-gradient-notification").count(), {
+      timeout: 2_000,
+    })
+    .toBe(0);
+}
+
 async function getReadyRateMobileMenuButton(page: Page) {
+  await dismissTransientNotifications(page);
+
   const scrollSource = page.locator('[data-mobile-header-scroll-source="true"]').first();
   if (await scrollSource.isVisible({ timeout: 5_000 }).catch(() => false)) {
     await scrollSource.evaluate(element => {
@@ -57,6 +107,10 @@ async function getReadyRateMobileMenuButton(page: Page) {
           const button = header?.querySelector<HTMLElement>('[aria-label="Open menu"]');
           if (!header || !button) {
             return false;
+          }
+
+          for (const notification of document.querySelectorAll<HTMLElement>(".rateloop-gradient-notification")) {
+            notification.remove();
           }
 
           const headerRect = header.getBoundingClientRect();
@@ -93,6 +147,7 @@ async function openReadyRateMobileMenu(page: Page) {
 
 test.describe("Mobile viewport (phone)", () => {
   test.beforeEach(async ({ connectedPage: page }) => {
+    await suppressClaimRewardNotifications(page);
     await dismissBetaNotice(page);
   });
 
@@ -135,6 +190,7 @@ test.describe("Mobile viewport (phone)", () => {
     await expect(categoryButton).toBeVisible();
     await expect(viewButton).toBeVisible();
 
+    await dismissTransientNotifications(page);
     await viewButton.click();
     const viewDialog = page.getByRole("dialog", { name: "View options" });
     await expect(viewDialog).toBeVisible({ timeout: 5_000 });
@@ -566,8 +622,7 @@ test.describe("Mobile viewport (phone)", () => {
     await expect(mobileHeader).toHaveAttribute("data-visible", "true");
     await expect(voteTopChrome).toHaveAttribute("data-visible", "true");
     await tallActiveCardStyle.evaluate(styleElement => (styleElement as HTMLElement).remove());
-    await setFeedScrollTop(0);
-    await expect.poll(async () => (await readLayout()).voteScrollTop).toBeLessThan(2);
+    await resetToFirstFeedCard();
 
     const beforeAutoScroll = await readLayout();
     await page.evaluate(() => {
@@ -578,8 +633,7 @@ test.describe("Mobile viewport (phone)", () => {
     const afterScrollWheel = await readLayout();
     expect(afterScrollWheel.documentScrollTop).toBe(0);
 
-    await setFeedScrollTop(0);
-    await expect.poll(async () => (await readLayout()).voteScrollTop).toBeLessThan(2);
+    await resetToFirstFeedCard();
     await expect(mobileHeader).toHaveAttribute("data-visible", "true");
     await expect(voteTopChrome).toHaveAttribute("data-visible", "true");
 
