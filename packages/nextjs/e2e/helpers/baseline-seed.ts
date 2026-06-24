@@ -9,7 +9,7 @@ import {
   waitForPonderIndexed,
   waitForPonderSync,
 } from "./admin-helpers";
-import { ANVIL_ACCOUNTS } from "./anvil-accounts";
+import { ANVIL_ACCOUNTS, DEPLOYER } from "./anvil-accounts";
 import { CONTRACT_ADDRESSES } from "./contracts";
 import { getContentById, getContentList } from "./ponder-api";
 import { E2E_RPC_URL } from "./service-urls";
@@ -17,8 +17,21 @@ import { E2E_RPC_URL } from "./service-urls";
 const SUBMIT_STAKE = BigInt(10e6);
 const VOTE_STAKE = BigInt(5e6);
 const DEFAULT_EPOCH_DURATION_SECONDS = 2 * 60 * 60;
+const LOCAL_DEV_HUMAN_CREDENTIAL_TTL_SECONDS = 365 * 24 * 60 * 60;
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const BASELINE_SETTLED_CONTENT_TITLE = "Should this support agent approve the refund?";
+const LOCAL_DEV_HUMAN_CREDENTIAL_ACCOUNTS = [
+  ANVIL_ACCOUNTS.account2,
+  ANVIL_ACCOUNTS.account3,
+  ANVIL_ACCOUNTS.account4,
+  ANVIL_ACCOUNTS.account5,
+  ANVIL_ACCOUNTS.account6,
+  ANVIL_ACCOUNTS.account7,
+  ANVIL_ACCOUNTS.account8,
+  ANVIL_ACCOUNTS.account9,
+  ANVIL_ACCOUNTS.account10,
+] as const;
+type LocalDevHumanCredentialAccount = (typeof LOCAL_DEV_HUMAN_CREDENTIAL_ACCOUNTS)[number];
 const CATEGORY_REGISTRY_ABI = [
   {
     name: "getCategoryBySlug",
@@ -40,7 +53,73 @@ const CATEGORY_REGISTRY_ABI = [
     stateMutability: "view",
   },
 ] as const;
+const RATER_REGISTRY_HUMAN_CREDENTIAL_ABI = [
+  {
+    name: "hasActiveHumanCredential",
+    type: "function",
+    inputs: [{ name: "rater", type: "address" }],
+    outputs: [{ name: "", type: "bool" }],
+    stateMutability: "view",
+  },
+  {
+    name: "seedHumanCredential",
+    type: "function",
+    inputs: [
+      { name: "rater", type: "address" },
+      { name: "expiresAt", type: "uint64" },
+      { name: "anchorId", type: "bytes32" },
+      { name: "evidenceHash", type: "bytes32" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+] as const;
 const categoryIdBySlug = new Map<string, bigint>();
+
+export async function ensureLocalHumanCredentials(): Promise<void> {
+  const [
+    { createPublicClient, createWalletClient, encodePacked, http, keccak256 },
+    { privateKeyToAccount },
+    { foundry },
+  ] = await Promise.all([import("viem"), import("viem/accounts"), import("viem/chains")]);
+  const publicClient = createPublicClient({ chain: foundry, transport: http(E2E_RPC_URL) });
+  const expiredAccounts: LocalDevHumanCredentialAccount[] = [];
+
+  for (const account of LOCAL_DEV_HUMAN_CREDENTIAL_ACCOUNTS) {
+    const active = await publicClient.readContract({
+      address: CONTRACT_ADDRESSES.RaterRegistry as `0x${string}`,
+      abi: RATER_REGISTRY_HUMAN_CREDENTIAL_ABI,
+      functionName: "hasActiveHumanCredential",
+      args: [account.address as `0x${string}`],
+    });
+    if (!active) expiredAccounts.push(account);
+  }
+
+  if (expiredAccounts.length === 0) return;
+
+  const latestBlock = await publicClient.getBlock();
+  const expiresAt = latestBlock.timestamp + BigInt(LOCAL_DEV_HUMAN_CREDENTIAL_TTL_SECONDS);
+  const deployer = privateKeyToAccount(DEPLOYER.privateKey as `0x${string}`);
+  const walletClient = createWalletClient({ account: deployer, chain: foundry, transport: http(E2E_RPC_URL) });
+
+  for (const account of expiredAccounts) {
+    const address = account.address as `0x${string}`;
+    const anchorId = keccak256(encodePacked(["string", "address"], ["rateloop:local-dev-human-v1", address]));
+    const evidenceHash = keccak256(encodePacked(["string", "address"], ["rateloop:local-dev-evidence-v1", address]));
+    const hash = await walletClient.writeContract({
+      address: CONTRACT_ADDRESSES.RaterRegistry as `0x${string}`,
+      abi: RATER_REGISTRY_HUMAN_CREDENTIAL_ABI,
+      functionName: "seedHumanCredential",
+      args: [address, expiresAt, anchorId, evidenceHash],
+    });
+    const receipt = await publicClient.waitForTransactionReceipt({ hash });
+    if (receipt.status !== "success") {
+      throw new Error(`Failed to refresh local human credential for ${account.address}`);
+    }
+  }
+
+  console.log(`  ✓ Refreshed ${expiredAccounts.length} local human credential(s)`);
+}
 
 async function resolveCategoryIdBySlug(slug: string): Promise<bigint> {
   const cached = categoryIdBySlug.get(slug);

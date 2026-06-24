@@ -4,7 +4,7 @@
  */
 import { resolve } from "path";
 import { execFileSync, execSync } from "child_process";
-import { ensureBaselineSeedData } from "./helpers/baseline-seed";
+import { ensureBaselineSeedData, ensureLocalHumanCredentials } from "./helpers/baseline-seed";
 import {
   E2E_BASE_URL,
   E2E_KEEPER_HEALTH_URL,
@@ -171,6 +171,10 @@ async function globalSetup() {
 
   // Ensure the app database schema exists for API routes that use server-side persistence.
   await ensureDatabaseSchema();
+
+  // Local time-skip shards can advance Anvil past the deterministic rater
+  // credential TTL. Refresh them so repeated Playwright runs stay isolated.
+  await ensureLocalHumanCredentials();
 
   // Seed the baseline local content + commits expected by the E2E suite when
   // the chain/indexer starts empty.
