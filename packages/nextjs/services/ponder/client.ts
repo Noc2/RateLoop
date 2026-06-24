@@ -2094,7 +2094,10 @@ export const ponderApi = {
     });
   },
 
-  getVoteCooldowns(params?: { voters?: string; contentIds?: string }, options?: PonderDeploymentOptions) {
+  getVoteCooldowns(
+    params?: { voters?: string; contentIds?: string; identityKeys?: string; includeAdvisory?: string },
+    options?: PonderDeploymentOptions,
+  ) {
     const deployment = getExpectedPonderDeploymentScope(options);
     return ponderGet<PonderVoteCooldownsResponse>("/vote-cooldowns", params, {
       expectedDeploymentKey: deployment?.deploymentKey,

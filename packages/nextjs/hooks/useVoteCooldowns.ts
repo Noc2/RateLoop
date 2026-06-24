@@ -21,6 +21,8 @@ import { contracts } from "~~/utils/scaffold-eth/contract";
 interface UseVoteCooldownsParams {
   contentIds: readonly bigint[];
   voters: readonly string[];
+  identityKeys?: readonly string[];
+  includeAdvisory?: boolean;
   nowSeconds: number;
   enabled?: boolean;
 }
@@ -54,7 +56,24 @@ function normalizeVoters(voters: readonly string[]) {
   return Array.from(unique);
 }
 
-export function useVoteCooldowns({ contentIds, voters, nowSeconds, enabled = true }: UseVoteCooldownsParams) {
+function normalizeIdentityKeys(identityKeys: readonly string[] | undefined) {
+  const unique = new Set<string>();
+  for (const identityKey of identityKeys ?? []) {
+    const normalized = identityKey.trim().toLowerCase();
+    if (!/^0x[0-9a-f]{64}$/.test(normalized)) continue;
+    unique.add(normalized);
+  }
+  return Array.from(unique);
+}
+
+export function useVoteCooldowns({
+  contentIds,
+  voters,
+  identityKeys,
+  includeAdvisory = false,
+  nowSeconds,
+  enabled = true,
+}: UseVoteCooldownsParams) {
   const { targetNetwork } = useTargetNetwork();
   const deployment = useMemo(() => resolveProtocolDeploymentScope(targetNetwork.id), [targetNetwork.id]);
   const publicClient = usePublicClient({ chainId: targetNetwork.id });
@@ -65,8 +84,10 @@ export function useVoteCooldowns({ contentIds, voters, nowSeconds, enabled = tru
   });
   const normalizedContentIds = useMemo(() => normalizeContentIds(contentIds), [contentIds]);
   const normalizedVoters = useMemo(() => normalizeVoters(voters), [voters]);
+  const normalizedIdentityKeys = useMemo(() => normalizeIdentityKeys(identityKeys), [identityKeys]);
   const contentIdsKey = normalizedContentIds.join(",");
   const votersKey = normalizedVoters.join(",");
+  const identityKeysKey = normalizedIdentityKeys.join(",");
   const queryEnabled = enabled && normalizedContentIds.length > 0 && normalizedVoters.length > 0;
   const configuredVotingEngineInfo = contracts?.[targetNetwork.id]?.RoundVotingEngine as
     | VoteCooldownContractInfo
@@ -86,6 +107,8 @@ export function useVoteCooldowns({ contentIds, voters, nowSeconds, enabled = tru
       voteCooldownContractInfo?.address ?? null,
       contentIdsKey,
       votersKey,
+      identityKeysKey,
+      includeAdvisory,
     ],
     availabilityDeploymentKey: deployment?.deploymentKey,
     enabled: queryEnabled,
@@ -97,6 +120,8 @@ export function useVoteCooldowns({ contentIds, voters, nowSeconds, enabled = tru
             {
               contentIds: batch.join(","),
               voters: votersKey,
+              ...(identityKeysKey ? { identityKeys: identityKeysKey } : {}),
+              ...(includeAdvisory ? { includeAdvisory: "1" } : {}),
             },
             { chainId: targetNetwork.id, deploymentKey: deployment?.deploymentKey },
           ),

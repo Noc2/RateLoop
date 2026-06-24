@@ -67,6 +67,31 @@ export function parseAddressList(value: string | undefined, max = 200) {
   return items;
 }
 
+export function parseIdentityKeyList(value: string | undefined, max = 20) {
+  if (!value) return [];
+
+  const unique = new Set<string>();
+  const items: `0x${string}`[] = [];
+
+  for (const raw of value.split(",").slice(0, max)) {
+    const normalized = raw.trim().toLowerCase();
+    if (!/^0x[0-9a-f]{64}$/.test(normalized)) continue;
+    if (unique.has(normalized)) continue;
+    unique.add(normalized);
+    items.push(normalized as `0x${string}`);
+  }
+
+  return items;
+}
+
+export function parseOptionalBooleanFlag(value: string | undefined) {
+  if (value === undefined) return null;
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "1" || normalized === "true" || normalized === "yes") return true;
+  if (normalized === "0" || normalized === "false" || normalized === "no") return false;
+  return undefined;
+}
+
 export function resolveApiNowSeconds(value: string | undefined): bigint | null {
   if (value === undefined) {
     return BigInt(Math.floor(Date.now() / 1000));

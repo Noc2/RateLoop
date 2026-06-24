@@ -3049,6 +3049,36 @@ describe("registerDataRoutes", () => {
     expect(queryBuilder.groupBy).toHaveBeenCalledWith("vote.contentId");
   });
 
+  it("merges advisory vote cooldowns when includeAdvisory is enabled", async () => {
+    const identityKey = `0x${"ab".repeat(32)}`;
+    const { queryBuilder } = mockPonderModules(
+      [{ contentId: 1n, latestCommittedAt: 1000n }],
+      [{ contentId: 1n, latestCommittedAt: 1500n }],
+    );
+    const { registerDataRoutes } = await import(
+      "../src/api/routes/data-routes.js"
+    );
+
+    const app = new Hono();
+    registerDataRoutes(app);
+
+    const response = await app.request(
+      `http://localhost/vote-cooldowns?voters=0x0000000000000000000000000000000000000001&contentIds=1&includeAdvisory=1&identityKeys=${identityKey}`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      items: [
+        {
+          contentId: "1",
+          latestCommittedAt: "1500",
+          cooldownEndsAt: "87900",
+        },
+      ],
+    });
+    expect(queryBuilder.groupBy).toHaveBeenCalledWith("vote.contentId");
+  });
+
   it("rejects viewer reward status requests without valid voters or content ids", async () => {
     const { db } = mockPonderModules([]);
     const { registerDataRoutes } = await import(

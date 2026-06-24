@@ -47,6 +47,8 @@ import {
   jsonBig,
   parseAddressList,
   parseBigIntList,
+  parseIdentityKeyList,
+  parseOptionalBooleanFlag,
   resolveApiNowSeconds,
 } from "../shared.js";
 import {
@@ -137,6 +139,52 @@ function voteMatchesAnyVoter(addresses: `0x${string}`[]) {
     inArray(vote.voter, addresses),
     inArray(vote.identityHolder, addresses),
   );
+}
+
+function voteMatchesCooldownSubject(voters: `0x${string}`[], identityKeys: `0x${string}`[]) {
+  const conditions = [];
+  if (voters.length > 0) {
+    conditions.push(voteMatchesAnyVoter(voters));
+  }
+  if (identityKeys.length > 0) {
+    conditions.push(
+      and(
+        sql`${vote.identityKey} is not null`,
+        sql`${vote.identityKey} != ${zeroHash}`,
+        inArray(vote.identityKey, identityKeys),
+      ),
+    );
+  }
+  if (conditions.length === 0) {
+    return sql`false`;
+  }
+  if (conditions.length === 1) {
+    return conditions[0];
+  }
+  return or(...conditions);
+}
+
+function mergeVoteCooldownItems(
+  ...groups: Array<
+    | { contentId: bigint; latestCommittedAt: bigint }
+    | Array<{ contentId: bigint; latestCommittedAt: bigint }>
+  >
+) {
+  const merged = new Map<string, bigint>();
+  for (const group of groups) {
+    const rows = Array.isArray(group) ? group : [group];
+    for (const item of rows) {
+      const key = item.contentId.toString();
+      const previous = merged.get(key) ?? 0n;
+      if (item.latestCommittedAt > previous) {
+        merged.set(key, item.latestCommittedAt);
+      }
+    }
+  }
+  return Array.from(merged.entries()).map(([contentId, latestCommittedAt]) => ({
+    contentId: BigInt(contentId),
+    latestCommittedAt,
+  }));
 }
 
 async function resolveQuestionBundleClaimPayoutProof(params: {
@@ -1408,7 +1456,9 @@ export function registerDataRoutes(app: ApiApp) {
 
   app.get("/vote-cooldowns", async (c) => {
     const voters = parseAddressList(c.req.query("voters"), 20);
+    const identityKeys = parseIdentityKeyList(c.req.query("identityKeys"), 20);
     const contentIds = parseBigIntList(c.req.query("contentIds"), 200);
+    const includeAdvisory = parseOptionalBooleanFlag(c.req.query("includeAdvisory")) ?? false;
 
     if (voters.length === 0) {
       return c.json({ error: "voters parameter required" }, 400);
@@ -1425,7 +1475,7 @@ export function registerDataRoutes(app: ApiApp) {
     const activeCooldownCutoff = BigInt(
       Math.max(0, Number(nowSeconds) - VOTE_COOLDOWN_SECONDS),
     );
-    const items = await db
+    const voteItems = await db
       .select({
         contentId: vote.contentId,
         latestCommittedAt: sql<bigint>`max(${vote.committedAt})`,
@@ -1433,12 +1483,32 @@ export function registerDataRoutes(app: ApiApp) {
       .from(vote)
       .where(
         and(
-          voteMatchesAnyVoter(voters),
+          voteMatchesCooldownSubject(voters, identityKeys),
           inArray(vote.contentId, contentIds),
           gte(vote.committedAt, activeCooldownCutoff),
         ),
       )
       .groupBy(vote.contentId);
+
+    let advisoryItems: Array<{ contentId: bigint; latestCommittedAt: bigint }> = [];
+    if (includeAdvisory) {
+      advisoryItems = await db
+        .select({
+          contentId: advisoryVote.contentId,
+          latestCommittedAt: sql<bigint>`max(${advisoryVote.committedAt})`,
+        })
+        .from(advisoryVote)
+        .where(
+          and(
+            inArray(advisoryVote.voter, voters),
+            inArray(advisoryVote.contentId, contentIds),
+            gte(advisoryVote.committedAt, activeCooldownCutoff),
+          ),
+        )
+        .groupBy(advisoryVote.contentId);
+    }
+
+    const items = mergeVoteCooldownItems(voteItems, advisoryItems);
 
     return jsonBig(c, {
       items: items.map((item) => ({

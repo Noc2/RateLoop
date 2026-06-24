@@ -1231,6 +1231,8 @@ const HomeInner = () => {
     useVoteCooldowns({
       contentIds: voteCooldownContentIds,
       voters: voteCooldownAddresses,
+      identityKeys: voteCooldownIdentityKey ? [voteCooldownIdentityKey] : [],
+      includeAdvisory: isAdvisoryOnlyRater,
       nowSeconds,
       enabled: voteCooldownAddresses.length > 0,
     });
