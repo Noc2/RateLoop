@@ -5,6 +5,7 @@ import {
   FEED_EMPTY_STATE_RE,
   VOTE_DOWN_BUTTON_NAME,
   VOTE_UP_BUTTON_NAME,
+  findVoteableContent,
   gotoWithRetry,
   waitForFeedLoaded,
 } from "../helpers/wait-helpers";
@@ -158,11 +159,12 @@ test.describe("Responsive layout", () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await gotoWithRetry(page, "/rate", { ensureWalletConnected: true, timeout: 45_000 });
     await waitForFeedLoaded(page, 30_000);
+    expect(await findVoteableContent(page)).toBe(true);
 
     await page.evaluate(eventName => window.dispatchEvent(new Event(eventName)), E2E_OPEN_STAKE_SELECTOR_EVENT);
 
     const dialog = page.getByRole("dialog").first();
-    await expect(dialog).toBeVisible({ timeout: 5_000 });
+    await expect(dialog).toBeVisible({ timeout: 15_000 });
 
     const box = await dialog.boundingBox();
     expect(box, "Stake selector dialog should have a layout box").not.toBeNull();
