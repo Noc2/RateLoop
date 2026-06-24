@@ -76,8 +76,15 @@ export function useClaimAll() {
   const { targetNetwork } = useTargetNetwork();
   const publicClient = usePublicClient({ chainId: targetNetwork.id });
   const questionRewardPoolEscrowAddress = getConfiguredQuestionRewardPoolEscrowAddress(targetNetwork.id);
-  const { canUseSponsoredSubmitCalls, executeSponsoredCalls, isAwaitingSponsoredSubmitCalls } =
-    useThirdwebSponsoredSubmitCalls();
+  const {
+    canUseSelfFundedBatchCalls,
+    canUseSponsoredSubmitCalls,
+    executeSponsoredCalls,
+    isAwaitingSelfFundedSubmitCalls,
+    isAwaitingSponsoredSubmitCalls,
+  } = useThirdwebSponsoredSubmitCalls();
+  const canUseBatchedClaimCalls = canUseSponsoredSubmitCalls || canUseSelfFundedBatchCalls;
+  const claimCallSponsorshipMode = canUseSponsoredSubmitCalls ? "sponsored" : "self-funded";
   const { data: distributorInfo } = useDeployedContractInfo({ contractName: "RoundRewardDistributor" });
   const { data: votingEngineInfo } = useDeployedContractInfo({ contractName: "RoundVotingEngine" as any });
   const { data: frontendRegistryInfo } = useDeployedContractInfo({ contractName: "FrontendRegistry" });
@@ -100,7 +107,7 @@ export function useClaimAll() {
   });
   const walletTransactionReadiness = useWalletTransactionReadiness({
     includeExternalSendCalls: true,
-    isAwaitingSelfFundedWallet: isAwaitingSelfFundedWalletReconnect,
+    isAwaitingSelfFundedWallet: isAwaitingSelfFundedWalletReconnect || isAwaitingSelfFundedSubmitCalls,
     isAwaitingSponsoredWallet: isAwaitingSponsoredSubmitCalls || isAwaitingSponsoredWalletReconnect,
   });
   const { showWalletRpcOverloadNotification } = useWalletRpcRecovery();
@@ -465,7 +472,7 @@ export function useClaimAll() {
             continue;
           }
 
-          if (canUseSponsoredSubmitCalls) {
+          if (canUseBatchedClaimCalls) {
             const nextItem = orderedItems[i + 1];
             const shouldWaitForCheckpointBlock =
               claimItemMayWriteLrepCheckpoint(item) &&
@@ -477,6 +484,7 @@ export function useClaimAll() {
             const executeClaim = (suppressStatusToast = false) =>
               executeSponsoredCalls([getSponsoredClaimCall(item)], {
                 action: claimLabel,
+                sponsorshipMode: claimCallSponsorshipMode,
                 suppressStatusToast,
               });
             await raceClaimTransaction(item, () => executeClaim(canWaitForClaimPostcondition(item)));
@@ -576,6 +584,7 @@ export function useClaimAll() {
     isPreparingClaim:
       isAwaitingFreeTransactionAllowance ||
       isAwaitingSelfFundedWalletReconnect ||
+      isAwaitingSelfFundedSubmitCalls ||
       isAwaitingSponsoredSubmitCalls ||
       isAwaitingSponsoredWalletReconnect ||
       walletTransactionReadiness.isPending,
