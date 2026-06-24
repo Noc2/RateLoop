@@ -4,6 +4,7 @@ import type { ContentItem } from "~~/hooks/contentFeed/shared";
 
 export const CONFIDENTIALITY_ACCEPTED_EVENT = "rateloop:confidentiality-accepted";
 export const CONFIDENTIALITY_OWNER_SESSION_CONFIRMED_EVENT = "rateloop:confidentiality-owner-session-confirmed";
+export const CONFIDENTIALITY_READ_SESSION_CONFIRMED_EVENT = "rateloop:confidentiality-read-session-confirmed";
 
 export type ConfidentialityBondAsset = "LREP" | "USDC";
 
@@ -72,19 +73,25 @@ export function getConfidentialContextVoteBlocker(params: {
   hasActiveBond?: boolean;
   hasActiveHumanCredential?: boolean;
   hasAcceptedTerms?: boolean;
+  hasReadSession?: boolean;
   identityResolved?: boolean;
   isBondChecking?: boolean;
   isGated: boolean;
+  isSessionChecking?: boolean;
   isTermsChecking?: boolean;
 }) {
   if (!params.isGated) return null;
 
-  if (params.isTermsChecking) {
+  if (params.isTermsChecking || params.isSessionChecking) {
     return "Checking confidentiality terms acceptance.";
   }
 
   if (!params.hasAcceptedTerms) {
     return "Accept the confidentiality terms and unlock the private context before voting.";
+  }
+
+  if (params.hasReadSession === false) {
+    return "Confirm this wallet to unlock private context access before voting.";
   }
 
   if (!params.identityResolved) {

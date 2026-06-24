@@ -208,12 +208,13 @@ export function StakeSelector({
     [confidentiality],
   );
   const [hasAcceptedConfidentialTerms, setHasAcceptedConfidentialTerms] = useState(false);
+  const [hasReadConfidentialSession, setHasReadConfidentialSession] = useState(false);
   const [isCheckingConfidentialTerms, setIsCheckingConfidentialTerms] = useState(false);
   const [hasCheckedConfidentialTerms, setHasCheckedConfidentialTerms] = useState(false);
   const confidentialityBond = useConfidentialityBond({
     bondRequirement: confidentialityBondRequirement,
     contentId,
-    enabled: isOpen && privateContext && hasAcceptedConfidentialTerms,
+    enabled: isOpen && privateContext && hasAcceptedConfidentialTerms && hasReadConfidentialSession,
   });
 
   const roundSnapshot = useRoundSnapshot(contentId, openRound ?? undefined, roundConfig ?? undefined);
@@ -287,6 +288,7 @@ export function StakeSelector({
   useEffect(() => {
     if (!isOpen || !privateContext) {
       setHasAcceptedConfidentialTerms(false);
+      setHasReadConfidentialSession(false);
       setIsCheckingConfidentialTerms(false);
       setHasCheckedConfidentialTerms(false);
       return;
@@ -294,6 +296,7 @@ export function StakeSelector({
 
     if (!address) {
       setHasAcceptedConfidentialTerms(false);
+      setHasReadConfidentialSession(false);
       setIsCheckingConfidentialTerms(false);
       setHasCheckedConfidentialTerms(false);
       return;
@@ -305,12 +308,14 @@ export function StakeSelector({
       .then(status => {
         if (!cancelled) {
           setHasAcceptedConfidentialTerms(status.accepted);
+          setHasReadConfidentialSession(status.hasSession);
           setHasCheckedConfidentialTerms(true);
         }
       })
       .catch(() => {
         if (!cancelled) {
           setHasAcceptedConfidentialTerms(false);
+          setHasReadConfidentialSession(false);
           setHasCheckedConfidentialTerms(true);
         }
       })
@@ -405,6 +410,7 @@ export function StakeSelector({
   );
   const isConfidentialBondStatusPending = Boolean(
     hasAcceptedConfidentialTerms &&
+      hasReadConfidentialSession &&
       confidentialityBondRequirement.isRequired &&
       confidentialityBond.hasActiveHumanCredential &&
       confidentialityBond.identityKey &&
@@ -421,11 +427,13 @@ export function StakeSelector({
     bondRequirement: confidentialityBondRequirement,
     escrowConfigured: Boolean(confidentialityBond.escrowAddress),
     hasAcceptedTerms: hasAcceptedConfidentialTerms,
+    hasReadSession: !address || !hasCheckedConfidentialTerms || hasReadConfidentialSession,
     hasActiveBond: confidentialityBond.hasActiveBond,
     hasActiveHumanCredential: confidentialityBond.hasActiveHumanCredential && Boolean(confidentialityBond.identityKey),
     identityResolved: confidentialityBond.isIdentityResolved && !confidentialityBond.isIdentityLoading,
     isBondChecking: confidentialityBond.isCheckingBond || isConfidentialBondStatusPending,
     isGated: privateContext,
+    isSessionChecking: isCheckingConfidentialTerms || isConfidentialTermsStatusPending,
     isTermsChecking: isCheckingConfidentialTerms || isConfidentialTermsStatusPending,
   });
   const confirmDisabled =
@@ -442,6 +450,7 @@ export function StakeSelector({
   const canPostConfidentialityBond =
     privateContext &&
     hasAcceptedConfidentialTerms &&
+    hasReadConfidentialSession &&
     confidentialityBondRequirement.isRequired &&
     confidentialityBond.hasActiveHumanCredential &&
     confidentialityBond.hasCheckedBond &&

@@ -754,7 +754,13 @@ export function VotingQuestionCard({
   }, [attentionToken]);
 
   if (isDockVariant) {
-    const dockVoteDisabled = voteActionDisabled || Boolean(centerStatusContent);
+    const dockStatusReplacesVoteButtons = Boolean(
+      contentInactive ||
+        (address && (hasMyVote || isOwnContent || cooldownActive || isRoundFullStatus || resolvingStatusLabel)),
+    );
+    const dockCenterStatusContent =
+      voteUnavailableStatus && !dockStatusReplacesVoteButtons ? null : centerStatusContent;
+    const dockVoteDisabled = voteActionDisabled || Boolean(dockCenterStatusContent);
     const dockNotchRadius = compact ? 58 : 66;
     const dockNotchCutout = compact ? 52 : 60;
     const dockWrapperTopPaddingClassName = compact ? (isDetailsOpen ? "pt-8" : "pt-10") : "pt-14";
@@ -861,7 +867,7 @@ export function VotingQuestionCard({
             >
               <div style={dockContentStyle}>
                 <div className={dockControlsPaddingClassName}>
-                  {compact && !centerStatusContent ? (
+                  {compact && !dockCenterStatusContent ? (
                     <div className="grid w-full items-center" style={compactDockControlsGridStyle}>
                       <div className="col-start-2 justify-self-center">{shareDockButton}</div>
                       <div className="col-start-4 justify-self-center">
@@ -890,7 +896,7 @@ export function VotingQuestionCard({
                       </div>
                       <div className="col-start-8 justify-self-center">{feedbackDockButton}</div>
                     </div>
-                  ) : !centerStatusContent ? (
+                  ) : !dockCenterStatusContent ? (
                     <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-end gap-3">
                       <div className="justify-self-start">
                         <RateLoopVoteButton
@@ -928,14 +934,14 @@ export function VotingQuestionCard({
                   ) : compact ? (
                     <div className="grid w-full items-center" style={compactDockControlsGridStyle}>
                       <div className="col-start-1 col-end-5 min-w-0 justify-self-start pr-2 [&>button]:max-w-full [&>button]:justify-start">
-                        {centerStatusContent}
+                        {dockCenterStatusContent}
                       </div>
                       <div className="col-start-6 justify-self-center">{shareDockButton}</div>
                       <div className="col-start-8 justify-self-center">{feedbackDockButton}</div>
                     </div>
                   ) : (
                     <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3">
-                      <div className="min-w-0 justify-self-start [&>button]:max-w-full">{centerStatusContent}</div>
+                      <div className="min-w-0 justify-self-start [&>button]:max-w-full">{dockCenterStatusContent}</div>
                       <div className="self-center">
                         <MoreToggleButton
                           expanded={isDetailsOpen}

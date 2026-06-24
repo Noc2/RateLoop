@@ -209,9 +209,8 @@ function withLocalE2ETlockRuntime(runtime: RoundVoteCommitRuntime): RoundVoteCom
   };
 }
 
-async function hasAcceptedConfidentialityTerms(address: string, contentId: bigint, chainId: number) {
-  const status = await fetchConfidentialityTermsStatus(address, contentId, { chainId });
-  return status.accepted;
+async function getConfidentialContextAccessStatus(address: string, contentId: bigint, chainId: number) {
+  return fetchConfidentialityTermsStatus(address, contentId, { chainId });
 }
 
 /**
@@ -364,9 +363,12 @@ export function useRoundVote() {
     if (isGatedContext) {
       const bondRequirement = getConfidentialityBondRequirement(confidentiality);
       let hasAcceptedTerms = false;
+      let hasReadSession = false;
       try {
-        hasAcceptedTerms = await hasAcceptedConfidentialityTerms(address, contentId, targetNetwork.id);
-        timingLog.emit("confidentiality-terms-checked", { hasAcceptedTerms });
+        const accessStatus = await getConfidentialContextAccessStatus(address, contentId, targetNetwork.id);
+        hasAcceptedTerms = accessStatus.accepted;
+        hasReadSession = accessStatus.hasSession;
+        timingLog.emit("confidentiality-terms-checked", { hasAcceptedTerms, hasReadSession });
       } catch (termsError) {
         console.warn("[round-vote] failed to check confidentiality terms before commit.", {
           contentId: contentId.toString(),
@@ -409,6 +411,7 @@ export function useRoundVote() {
         bondRequirement,
         escrowConfigured: Boolean(escrowAddress),
         hasAcceptedTerms,
+        hasReadSession,
         hasActiveBond,
         hasActiveHumanCredential: hasActiveHumanCredential && Boolean(identityKey),
         identityResolved: isIdentityResolved && !isIdentityLoading,

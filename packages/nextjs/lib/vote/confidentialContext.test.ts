@@ -62,6 +62,16 @@ test("getConfidentialContextVoteBlocker guides terms, credential, escrow, and bo
     getConfidentialContextVoteBlocker({
       bondRequirement,
       hasAcceptedTerms: true,
+      hasReadSession: false,
+      identityResolved: true,
+      isGated: true,
+    }) ?? "",
+    /Confirm this wallet/,
+  );
+  assert.match(
+    getConfidentialContextVoteBlocker({
+      bondRequirement,
+      hasAcceptedTerms: true,
       identityResolved: true,
       isGated: true,
     }) ?? "",
@@ -72,6 +82,7 @@ test("getConfidentialContextVoteBlocker guides terms, credential, escrow, and bo
       bondRequirement,
       escrowConfigured: false,
       hasAcceptedTerms: true,
+      hasReadSession: true,
       hasActiveHumanCredential: true,
       identityResolved: true,
       isGated: true,
@@ -83,6 +94,7 @@ test("getConfidentialContextVoteBlocker guides terms, credential, escrow, and bo
       bondRequirement,
       escrowConfigured: true,
       hasAcceptedTerms: true,
+      hasReadSession: true,
       hasActiveBond: false,
       hasActiveHumanCredential: true,
       identityResolved: true,
@@ -95,6 +107,7 @@ test("getConfidentialContextVoteBlocker guides terms, credential, escrow, and bo
       bondRequirement,
       escrowConfigured: true,
       hasAcceptedTerms: true,
+      hasReadSession: true,
       hasActiveBond: true,
       hasActiveHumanCredential: true,
       identityResolved: true,

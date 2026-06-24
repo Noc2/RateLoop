@@ -15,6 +15,7 @@ import { CONFIDENTIALITY_TERMS_TITLE, CONFIDENTIALITY_TERMS_VERSION } from "~~/l
 import {
   CONFIDENTIALITY_ACCEPTED_EVENT,
   CONFIDENTIALITY_OWNER_SESSION_CONFIRMED_EVENT,
+  CONFIDENTIALITY_READ_SESSION_CONFIRMED_EVENT,
   getConfidentialContextVoteBlocker,
   getConfidentialityBondRequirement,
   isPrivateContextMetadata,
@@ -406,6 +407,17 @@ export function ConfidentialContextGate({
     try {
       await ensurePrivateAccountReadSession(address, signMessageAsync);
       setHasReadSession(true);
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent(CONFIDENTIALITY_READ_SESSION_CONFIRMED_EVENT, {
+            detail: {
+              chainId: confidentialityScope.chainId,
+              contentId: item.id.toString(),
+              deploymentKey: confidentialityScope.deploymentKey,
+            },
+          }),
+        );
+      }
     } catch (error) {
       notification.error(error instanceof Error ? error.message : "Could not confirm wallet access.");
     } finally {
@@ -499,11 +511,13 @@ export function ConfidentialContextGate({
     bondRequirement,
     escrowConfigured: Boolean(bond.escrowAddress),
     hasAcceptedTerms: accepted,
+    hasReadSession: !address || hasReadSession,
     hasActiveBond: bond.hasActiveBond,
     hasActiveHumanCredential: bond.hasActiveHumanCredential && Boolean(bond.identityKey),
     identityResolved: bond.isIdentityResolved,
     isBondChecking: bond.isCheckingBond,
     isGated: gated,
+    isSessionChecking: isCheckingTerms,
     isTermsChecking: isCheckingTerms,
   });
 
