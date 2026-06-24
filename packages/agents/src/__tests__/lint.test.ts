@@ -623,6 +623,29 @@ describe("round config voter alignment linting", () => {
     });
   });
 
+  it("rejects explicit Option A/B comparisons that stay on generic rating", () => {
+    const findings = lintAgentAskRequest({
+      ...VALID_REQUEST,
+      question: {
+        ...VALID_REQUEST.question,
+        title: "Vote up for Option A: Hermes Agent over Option B: OpenClaw for RateLoop agent loops.",
+        description:
+          "Vote up for Option A, Hermes Agent, if you would choose it over OpenClaw. Vote down for Option B, OpenClaw.",
+        templateId: "generic_rating",
+      },
+    });
+
+    expect(findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "error",
+          message: expect.stringContaining("head_to_head_ab"),
+          path: "question.templateId",
+        }),
+      ]),
+    );
+  });
+
   it("rejects titles missing option markers on head-to-head asks", () => {
     const findings = lintAgentAskRequest({
       ...VALID_REQUEST,

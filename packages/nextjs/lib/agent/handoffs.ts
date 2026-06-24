@@ -1,3 +1,4 @@
+import { normalizeInferredHeadToHeadAbRequestBody } from "@rateloop/agents/voteUi";
 import { createHash, randomBytes } from "crypto";
 import "server-only";
 import { type Address, type Hex, isAddress } from "viem";
@@ -859,7 +860,9 @@ export async function createAgentAskHandoff(params: {
   requestBody: unknown;
   ttlMs?: number;
 }) {
-  const requestBody = asJsonObject(params.requestBody, "Handoff request body");
+  const originalRequestBody = asJsonObject(params.requestBody, "Handoff request body");
+  const inferredHeadToHead = normalizeInferredHeadToHeadAbRequestBody(originalRequestBody);
+  const requestBody = inferredHeadToHead.requestBody;
 
   const generatedImages = readGeneratedImages(params.generatedImages);
   const generatedImageUploads = readGeneratedImageUploads(params.generatedImageUploads);
@@ -933,7 +936,7 @@ export async function createAgentAskHandoff(params: {
       normalized.paymentMode,
       normalized.walletAddress,
       JSON.stringify(requestBody),
-      JSON.stringify(requestBody),
+      JSON.stringify(originalRequestBody),
       0,
       null,
       false,
@@ -991,7 +994,14 @@ export async function createAgentAskHandoff(params: {
         : "Share handoffUrl with the user. Do not ask the user to paste raw wallet signatures.",
     resultTool: "rateloop_get_result",
     statusTool: "rateloop_get_handoff_status",
-    warnings: ttl.warnings,
+    warnings: [
+      ...ttl.warnings,
+      ...(inferredHeadToHead.inferred
+        ? [
+            `auto_converted_head_to_head_ab: inferred A = ${inferredHeadToHead.inferred.optionALabel}, B = ${inferredHeadToHead.inferred.optionBLabel}`,
+          ]
+        : []),
+    ],
   };
 }
 

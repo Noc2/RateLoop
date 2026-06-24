@@ -27,13 +27,17 @@ export {
 export type { AgentDecisionAnswer, AgentResultTemplate } from "./templates";
 export {
   HEAD_TO_HEAD_AB_TEMPLATE_ID,
+  inferHeadToHeadAbQuestion,
+  inferHeadToHeadAbQuestionFromText,
   getHeadToHeadAbResultSpecHash,
+  normalizeInferredHeadToHeadAbQuestion,
+  normalizeInferredHeadToHeadAbRequestBody,
   normalizeHeadToHeadOptionKey,
   readHeadToHeadTemplateInputs,
   readHeadToHeadVoteUiFromQuestionMetadata,
   resolveVoteUiConfig,
 } from "./voteUi";
-export type { HeadToHeadVoteUi, VoteUiConfig } from "./voteUi";
+export type { HeadToHeadVoteUi, InferredHeadToHeadAbQuestion, VoteUiConfig } from "./voteUi";
 export {
   HEAD_TO_HEAD_AB_TITLE_MAX_LENGTH,
   VOTE_UP_IF_TITLE_PATTERN,

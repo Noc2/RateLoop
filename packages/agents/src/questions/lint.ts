@@ -1,5 +1,10 @@
 import { findAgentResultTemplate } from "../templates";
-import { HEAD_TO_HEAD_AB_TEMPLATE_ID, normalizeHeadToHeadOptionKey, readHeadToHeadTemplateInputs } from "../voteUi";
+import {
+  HEAD_TO_HEAD_AB_TEMPLATE_ID,
+  inferHeadToHeadAbQuestion,
+  normalizeHeadToHeadOptionKey,
+  readHeadToHeadTemplateInputs,
+} from "../voteUi";
 import { getHeadToHeadAbTitleValidationError } from "../headToHeadTitle.js";
 import type { AgentAskExample, AgentQuestionExample, JsonObject, JsonValue, QuestionLintFinding } from "./types";
 
@@ -253,6 +258,18 @@ export function lintAgentQuestion(
       "warning",
       `${path}.title`,
       "Two-way pick-one comparisons should use templateId head_to_head_ab with option A/B labels. Use ranked bundles when scoring each option separately.",
+    );
+  }
+  if (
+    templateId !== HEAD_TO_HEAD_AB_TEMPLATE_ID &&
+    !RANK_BY_RATING_TEMPLATE_IDS.has(templateId ?? "") &&
+    inferHeadToHeadAbQuestion(question, inheritedTemplateId)
+  ) {
+    pushFinding(
+      findings,
+      "error",
+      `${path}.templateId`,
+      "Explicit Option A/B pick-one questions must use templateId head_to_head_ab with optionAKey/optionALabel and optionBKey/optionBLabel.",
     );
   }
 

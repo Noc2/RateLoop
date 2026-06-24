@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { buildQuestionSpecHashes } from "../questionSpecs.js";
 import {
   HEAD_TO_HEAD_AB_TEMPLATE_ID,
+  inferHeadToHeadAbQuestionFromText,
+  normalizeInferredHeadToHeadAbRequestBody,
   readHeadToHeadTemplateInputs,
   readHeadToHeadVoteUiFromQuestionMetadata,
   resolveVoteUiConfig,
@@ -79,5 +81,52 @@ describe("voteUi", () => {
         optionBLabel: "Claude",
       }),
     ).toBeNull();
+  });
+
+  it("infers explicit Option A/B comparison labels from vote-up wording", () => {
+    expect(
+      inferHeadToHeadAbQuestionFromText(
+        "Vote up for Option A: Hermes Agent over Option B: OpenClaw for RateLoop agent loops.",
+      ),
+    ).toEqual({
+      optionALabel: "Hermes Agent",
+      optionBLabel: "OpenClaw",
+      title: "Do you prefer A = Hermes Agent or B = OpenClaw?",
+    });
+  });
+
+  it("normalizes single-question handoff payloads with explicit Option A/B wording", () => {
+    const normalized = normalizeInferredHeadToHeadAbRequestBody({
+      bounty: {
+        amount: "1000000",
+        bountyStartBy: "1893456000",
+        bountyWindowSeconds: "1200",
+      },
+      clientRequestId: "hermes-vs-openclaw",
+      question: {
+        categoryId: "6",
+        tags: ["ai-agents"],
+        templateId: "generic_rating",
+        title: "Vote up for Option A: Hermes Agent over Option B: OpenClaw for RateLoop agent loops.",
+      },
+    });
+
+    expect(normalized.inferred).toMatchObject({
+      optionALabel: "Hermes Agent",
+      optionBLabel: "OpenClaw",
+    });
+    expect(normalized.requestBody).toMatchObject({
+      templateId: HEAD_TO_HEAD_AB_TEMPLATE_ID,
+      question: {
+        templateId: HEAD_TO_HEAD_AB_TEMPLATE_ID,
+        templateInputs: {
+          optionAKey: "A",
+          optionALabel: "Hermes Agent",
+          optionBKey: "B",
+          optionBLabel: "OpenClaw",
+        },
+        title: "Do you prefer A = Hermes Agent or B = OpenClaw?",
+      },
+    });
   });
 });

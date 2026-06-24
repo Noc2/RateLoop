@@ -6,6 +6,7 @@ import { expect, test, type APIRequestContext, type Page } from "@playwright/tes
 type HandoffCreateResponse = {
   handoffId: string;
   handoffUrl: string;
+  warnings?: string[];
 };
 
 type SigningIntentCreateResponse = {
@@ -40,6 +41,8 @@ type AgentQuestionRequest = {
     detailsHash?: `0x${string}`;
     detailsUrl?: string;
     tags: string[];
+    templateId?: string;
+    templateInputs?: Record<string, string>;
     title: string;
   };
   walletAddress: string;
@@ -170,6 +173,59 @@ test.describe("Agent browser handoffs", () => {
     expect(saved.requestBody.question.detailsUrl).toBe(
       "https://rateloop.ai/api/attachments/details/det_agenthandoffprivate01",
     );
+
+    await context.close();
+  });
+
+  test("agent ask handoff infers A/B mode from explicit option wording", async ({ browser, request }) => {
+    test.setTimeout(120_000);
+
+    const originalTitle = "Vote up for Option A: Hermes Agent over Option B: OpenClaw for RateLoop agent loops.";
+    const requestBody = baseAgentQuestionRequest(`agent-handoff-ab-${Date.now()}`, originalTitle);
+    requestBody.question = {
+      ...requestBody.question,
+      description:
+        "Vote up for Option A, Hermes Agent, if you would choose it over OpenClaw. Vote down for Option B, OpenClaw.",
+      tags: ["ai-agents", "hermes-agent", "openclaw"],
+      templateId: "generic_rating",
+    };
+
+    const createResponse = await request.post("/api/agent/handoffs", {
+      data: {
+        request: requestBody,
+        ttlMs: 300_000,
+      },
+    });
+    expect(createResponse.ok(), await createResponse.text()).toBe(true);
+    const created = (await createResponse.json()) as HandoffCreateResponse & {
+      originalRequestBody: AgentQuestionRequest;
+      requestBody: AgentQuestionRequest;
+    };
+    const token = tokenFromFragment(created.handoffUrl);
+    expect(token).toBeTruthy();
+    expect(created.warnings?.some(warning => warning.startsWith("auto_converted_head_to_head_ab"))).toBe(true);
+    expect(created.originalRequestBody.question.templateId).toBe("generic_rating");
+    expect(created.requestBody.question.templateId).toBe("head_to_head_ab");
+    expect(created.requestBody.question.templateInputs).toMatchObject({
+      optionAKey: "A",
+      optionALabel: "Hermes Agent",
+      optionBKey: "B",
+      optionBLabel: "OpenClaw",
+    });
+
+    const context = await newE2EContext(browser);
+    const page = await context.newPage();
+    await setupWallet(page, ANVIL_ACCOUNTS.account2.privateKey);
+    await openPrivateTokenPage(
+      page,
+      created.handoffUrl,
+      new RegExp(`/agent/handoff/${created.handoffId}$`),
+      "Agent ask handoff",
+      "Do you prefer A = Hermes Agent or B = OpenClaw?",
+    );
+    await expect(page.getByRole("button", { name: "A/B comparison" })).toHaveClass(/btn-primary/);
+    await expect(page.getByLabel("Option A")).toHaveValue("Hermes Agent");
+    await expect(page.getByLabel("Option B")).toHaveValue("OpenClaw");
 
     await context.close();
   });

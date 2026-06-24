@@ -26,6 +26,7 @@ import {
 import { listAgentResultTemplates } from "./templates";
 import { lintAgentAskRequest, summarizeLintFindings } from "./questions/lint";
 import type { QuestionLintFinding } from "./questions/types";
+import { normalizeInferredHeadToHeadAbRequestBody } from "./voteUi";
 
 type CliOptionValue = string | boolean | string[];
 type CliOptions = Record<string, CliOptionValue>;
@@ -304,6 +305,21 @@ function withConfiguredWalletAddress(
     : { ...record, walletAddress };
 }
 
+function normalizeHandoffPayload(payload: unknown) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return { payload, warnings: [] as string[] };
+  }
+  const normalized = normalizeInferredHeadToHeadAbRequestBody(payload as Record<string, unknown>);
+  return {
+    payload: normalized.requestBody,
+    warnings: normalized.inferred
+      ? [
+          `Inferred head_to_head_ab from explicit Option A/B wording (${normalized.inferred.optionALabel} vs ${normalized.inferred.optionBLabel}).`,
+        ]
+      : [],
+  };
+}
+
 function withDryRunOptions(
   payload: unknown,
   options: CliOptions,
@@ -427,10 +443,11 @@ async function main() {
       const config = loadAgentsRuntimeConfig();
       const agent = createAgentClient();
       const rawPayload = await readJsonFile(requireString(options, "file"));
-      const payload = withConfiguredWalletAddress(
+      const payloadWithWallet = withConfiguredWalletAddress(
         rawPayload,
         config.agentWalletAddress,
       );
+      const { payload, warnings } = normalizeHandoffPayload(payloadWithWallet);
       const generatedImages = await readHandoffGeneratedImageFiles(
         readStringList(options, "image", "generated-image"),
       );
@@ -443,6 +460,9 @@ async function main() {
         return;
       }
       printHandoffGeneratedImageWarnings(generatedImages);
+      for (const warning of warnings) {
+        console.error(`Warning: ${warning}`);
+      }
       printJson(
         shouldStageHandoffImageUploads(generatedImages)
           ? await createAskHandoffWithStagedImageUploads({
