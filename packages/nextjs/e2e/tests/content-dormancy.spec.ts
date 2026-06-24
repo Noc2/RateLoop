@@ -31,55 +31,64 @@ test.describe("Content dormancy lifecycle", () => {
   test("mark content as dormant after 30-day time skip", async () => {
     test.setTimeout(120_000);
 
-    // Find an active piece of seeded content to mark as dormant.
-    // Use content from the seed (not from E2E-submitted content which may have votes).
+    // Find an active piece of content to mark as dormant. Long lifecycle runs
+    // leave a mix of active, settled, and recently touched content in Ponder, so
+    // confirm dormancy eligibility against the contract after the time skip.
     let targetContentId: string | null = null;
+    let targetSubmitterAddress: string | null = null;
+    let candidateContentIds: string[] = [];
     try {
-      const { items } = await getContentList({ status: "0", limit: 50 });
-      // Pick content that's still active (status=0) and hasn't been touched by other tests.
-      // Seeded content IDs start at 1. Pick one near the end that's less likely to have votes.
-      for (const item of items) {
-        const id = parseInt(item.id);
-        if (id >= 8 && id <= 13 && item.status === 0) {
-          targetContentId = item.id;
-          break;
-        }
-      }
-      // Fallback: use any active content
-      if (!targetContentId && items.length > 0) {
-        targetContentId = items[items.length - 1].id;
-      }
+      const { items } = await getContentList({ status: "0", limit: 100 });
+      candidateContentIds = items
+        .filter(item => item.status === 0)
+        .sort((left, right) => {
+          const leftSeedPriority = Number(left.id) >= 8 && Number(left.id) <= 13 ? 0 : 1;
+          const rightSeedPriority = Number(right.id) >= 8 && Number(right.id) <= 13 ? 0 : 1;
+          if (leftSeedPriority !== rightSeedPriority) return leftSeedPriority - rightSeedPriority;
+          return Number(left.id) - Number(right.id);
+        })
+        .map(item => item.id);
     } catch {
       test.skip(true, "Ponder not available — cannot find content for dormancy test");
       return;
     }
 
-    if (!targetContentId) {
+    if (candidateContentIds.length === 0) {
       test.skip(true, "No active content available for dormancy test");
       return;
     }
 
-    // Verify it's active before time skip
-    const { content: before } = await getContentById(targetContentId);
-    expect(before.status).toBe(0);
-    dormantSubmitterAddress = before.submitter;
-
     // Fast-forward 30+ days
     await fastForwardTime(DORMANCY_SECONDS);
 
-    // Mark as dormant (permissionless after dormancy period)
-    const success = await markDormant(BigInt(targetContentId), ANVIL_ACCOUNTS.account0.address, CONTENT_REGISTRY);
-    expect(success).toBe(true);
+    for (const candidateContentId of candidateContentIds) {
+      const { content: before } = await getContentById(candidateContentId);
+      if (before.status !== 0) continue;
+
+      const success = await markDormant(BigInt(candidateContentId), ANVIL_ACCOUNTS.account0.address, CONTENT_REGISTRY);
+      if (!success) continue;
+
+      targetContentId = candidateContentId;
+      targetSubmitterAddress = before.submitter;
+      break;
+    }
+
+    expect(targetContentId, "No active content could be marked dormant after the dormancy time skip").toBeTruthy();
+    expect(targetSubmitterAddress, "Dormancy target should keep its original submitter").toBeTruthy();
+    if (!targetContentId || !targetSubmitterAddress) {
+      throw new Error("Missing marked dormant content target after successful dormancy selection");
+    }
 
     // Wait for Ponder to index the dormancy (60s — after 30-day time skip Ponder needs time)
     const indexed = await waitForPonderIndexed(async () => {
-      const { content } = await getContentById(targetContentId!);
+      const { content } = await getContentById(targetContentId);
       return content.status === 1; // Dormant
     }, 60_000);
 
     expect(indexed, "Ponder did not index dormancy within 60s — on-chain tx succeeded").toBe(true);
 
     dormantContentId = targetContentId;
+    dormantSubmitterAddress = targetSubmitterAddress;
     const { content: after } = await getContentById(targetContentId);
     expect(after.status).toBe(1); // Dormant
   });
