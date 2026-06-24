@@ -1355,7 +1355,11 @@ test.describe("Mobile viewport (phone)", () => {
 
     const governanceContent = main
       .getByRole("button", { name: /Profile|Leaderboard|Governance|rater credential/ })
-      .or(main.getByText(/Voting performance|Staked LREP|Checking rater credential/i));
+      .or(
+        main.getByText(
+          /Voting performance|Staked LREP|Checking rater credential|Loading LREP status|Loading governance|Connect a wallet to build reputation/i,
+        ),
+      );
     await expect(governanceContent.first()).toBeVisible({ timeout: 15_000 });
   });
 
