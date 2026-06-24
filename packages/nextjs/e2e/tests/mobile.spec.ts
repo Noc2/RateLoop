@@ -1273,6 +1273,47 @@ test.describe("Mobile viewport (phone)", () => {
     const expectedHref = await activeSourceLink.getAttribute("href");
     expect(expectedHref).toBeTruthy();
 
+    await activeSourceLink.evaluate(link => {
+      const scroller = document.querySelector<HTMLElement>('[data-mobile-header-scroll-source="true"]');
+      if (!scroller) {
+        link.scrollIntoView({ block: "center", inline: "nearest" });
+        return;
+      }
+
+      const header = document.querySelector<HTMLElement>('[data-mobile-header="true"]');
+      const dock = document.querySelector<HTMLElement>('[data-testid="vote-mobile-dock"]');
+      const scrollerRect = scroller.getBoundingClientRect();
+      const linkRect = link.getBoundingClientRect();
+      const safeTop = Math.max(scrollerRect.top, header?.getBoundingClientRect().bottom ?? 0) + 24;
+      const safeBottom = Math.min(scrollerRect.bottom, dock?.getBoundingClientRect().top ?? window.innerHeight) - 24;
+      const safeCenter = (safeTop + safeBottom) / 2;
+      const linkCenter = linkRect.top + linkRect.height / 2;
+      const maxScrollTop = Math.max(scroller.scrollHeight - scroller.clientHeight, 0);
+      const nextScrollTop = Math.min(Math.max(scroller.scrollTop + linkCenter - safeCenter, 0), maxScrollTop);
+      const previousScrollBehavior = scroller.style.scrollBehavior;
+      const previousScrollSnapType = scroller.style.scrollSnapType;
+
+      scroller.style.scrollBehavior = "auto";
+      scroller.style.scrollSnapType = "none";
+      scroller.scrollTop = nextScrollTop;
+      scroller.dispatchEvent(new Event("scroll", { bubbles: true }));
+      requestAnimationFrame(() => {
+        scroller.style.scrollSnapType = previousScrollSnapType;
+        scroller.style.scrollBehavior = previousScrollBehavior;
+      });
+    });
+    await expect
+      .poll(() =>
+        activeSourceLink.evaluate(link => {
+          const rect = link.getBoundingClientRect();
+          const centerX = rect.left + rect.width / 2;
+          const centerY = rect.top + rect.height / 2;
+          const topElement = document.elementFromPoint(centerX, centerY);
+          return topElement === link || link.contains(topElement);
+        }),
+      )
+      .toBe(true);
+
     const popupPromise = page.context().waitForEvent("page");
     await activeSourceLink.click();
 
