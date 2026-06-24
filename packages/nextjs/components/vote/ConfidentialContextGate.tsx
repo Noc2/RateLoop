@@ -450,7 +450,6 @@ export function ConfidentialContextGate({
           variant={variant}
         >
           <p>Your question&apos;s private context is visible after confirming the submitting wallet.</p>
-          <p>You still cannot vote on your own question.</p>
         </GateCopy>
         <button
           type="button"
