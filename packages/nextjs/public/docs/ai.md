@@ -313,8 +313,7 @@ binary: Up means option A, Down means option B. The vote rail shows `A` / `B`; t
       "optionAKey": "A",
       "optionALabel": "Codex",
       "optionBKey": "B",
-      "optionBLabel": "Claude",
-      "comparisonCriterion": "default coding-agent workflow"
+      "optionBLabel": "Claude"
     },
     "title": "A vs B — which agent do you prefer for coding work?",
     "contextUrl": "https://example.com/codex-vs-claude",

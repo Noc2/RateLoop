@@ -300,7 +300,6 @@ type QuestionDraft = {
   questionFormat: QuestionFormat;
   optionALabel: string;
   optionBLabel: string;
-  comparisonCriterion: string;
 };
 
 type ValidatedQuestionDraft = {
@@ -338,7 +337,6 @@ function createEmptyQuestionDraft(): QuestionDraft {
     questionFormat: "rate_one",
     optionALabel: "",
     optionBLabel: "",
-    comparisonCriterion: "",
   };
 }
 
@@ -370,7 +368,6 @@ function buildHeadToHeadTemplateInputs(draft: QuestionDraft) {
     optionALabel: draft.optionALabel.trim(),
     optionBKey: "B",
     optionBLabel: draft.optionBLabel.trim(),
-    ...(draft.comparisonCriterion.trim() ? { comparisonCriterion: draft.comparisonCriterion.trim() } : {}),
   };
 }
 
@@ -685,7 +682,6 @@ export function ContentSubmissionSection() {
   const [questionFormat, setQuestionFormat] = useState<QuestionFormat>("rate_one");
   const [optionALabel, setOptionALabel] = useState("");
   const [optionBLabel, setOptionBLabel] = useState("");
-  const [comparisonCriterion, setComparisonCriterion] = useState("");
   const [headToHeadError, setHeadToHeadError] = useState<string | null>(null);
   const [detailsText, setDetailsText] = useState("");
   const [detailsError, setDetailsError] = useState<string | null>(null);
@@ -804,7 +800,6 @@ export function ContentSubmissionSection() {
     questionFormat,
     optionALabel,
     optionBLabel,
-    comparisonCriterion,
   });
 
   const patchActiveQuestionDraft = (patch: Partial<QuestionDraft>) => {
@@ -827,7 +822,6 @@ export function ContentSubmissionSection() {
     setQuestionFormat(draft.questionFormat);
     setOptionALabel(draft.optionALabel);
     setOptionBLabel(draft.optionBLabel);
-    setComparisonCriterion(draft.comparisonCriterion);
     setHeadToHeadError(null);
     setDetailsText(draft.detailsText);
     setDetailsError(null);
@@ -1919,13 +1913,10 @@ export function ContentSubmissionSection() {
     }
   };
 
-  const handleHeadToHeadFieldChange = (
-    patch: Partial<Pick<QuestionDraft, "optionALabel" | "optionBLabel" | "comparisonCriterion">>,
-  ) => {
+  const handleHeadToHeadFieldChange = (patch: Partial<Pick<QuestionDraft, "optionALabel" | "optionBLabel">>) => {
     const nextDraft = { ...getActiveQuestionDraft(), ...patch };
     if (patch.optionALabel !== undefined) setOptionALabel(patch.optionALabel);
     if (patch.optionBLabel !== undefined) setOptionBLabel(patch.optionBLabel);
-    if (patch.comparisonCriterion !== undefined) setComparisonCriterion(patch.comparisonCriterion);
     patchActiveQuestionDraft(patch);
     setHeadToHeadError(getHeadToHeadValidationError(nextDraft));
   };
@@ -3138,7 +3129,6 @@ export function ContentSubmissionSection() {
       setQuestionFormat("rate_one");
       setOptionALabel("");
       setOptionBLabel("");
-      setComparisonCriterion("");
       setHeadToHeadError(null);
       setDetailsText("");
       setDetailsError(null);
@@ -4602,21 +4592,6 @@ export function ContentSubmissionSection() {
                         value={optionBLabel}
                         onChange={event => handleHeadToHeadFieldChange({ optionBLabel: event.target.value })}
                         maxLength={MAX_HEAD_TO_HEAD_OPTION_LABEL_LENGTH}
-                      />
-                    </div>
-                    <div className="sm:col-span-2">
-                      <label className="mb-2 flex items-center gap-1.5 text-base font-medium">
-                        Comparison focus
-                        <span className="text-base-content/60">(optional)</span>
-                        <InfoTooltip text="Short phrase for what raters should compare, such as default coding-agent workflow or landing-page clarity." />
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="e.g. default coding-agent workflow"
-                        className="input input-bordered w-full bg-base-100"
-                        value={comparisonCriterion}
-                        onChange={event => handleHeadToHeadFieldChange({ comparisonCriterion: event.target.value })}
-                        maxLength={120}
                       />
                     </div>
                     {headToHeadError ? <p className="sm:col-span-2 text-base text-error">{headToHeadError}</p> : null}

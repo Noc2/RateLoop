@@ -60,7 +60,6 @@ export type ContentVoteUi = {
   optionALabel: string;
   optionBKey: string;
   optionBLabel: string;
-  comparisonCriterion?: string;
 };
 
 export interface ContentItem {

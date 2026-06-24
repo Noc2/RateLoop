@@ -548,7 +548,6 @@ const TEMPLATE_DEFINITIONS = [
         optionALabel: { type: "string", minLength: 1, maxLength: 32 },
         optionBKey: { type: "string", pattern: "^[A-Z]$" },
         optionBLabel: { type: "string", minLength: 1, maxLength: 32 },
-        comparisonCriterion: { type: "string", maxLength: 120 },
       },
       type: "object",
     },
@@ -557,7 +556,6 @@ const TEMPLATE_DEFINITIONS = [
       optionALabel: "Codex",
       optionBKey: "B",
       optionBLabel: "Claude",
-      comparisonCriterion: "default coding-agent workflow",
     },
   },
 ] as const;

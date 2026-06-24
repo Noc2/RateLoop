@@ -190,7 +190,6 @@ type QuestionSummary = {
   videoUrl: string;
   optionALabel: string;
   optionBLabel: string;
-  comparisonCriterion: string;
 };
 
 type RoundSettings = {
@@ -218,7 +217,6 @@ type DraftQuestionForm = {
   videoUrl: string;
   optionALabel: string;
   optionBLabel: string;
-  comparisonCriterion: string;
 };
 
 type DraftForm = {
@@ -1025,13 +1023,12 @@ async function uploadQuestionDetailsForHandoff(params: {
 function readHeadToHeadDraftFields(question: JsonRecord) {
   const templateId = readString(question.templateId);
   if (templateId !== HEAD_TO_HEAD_AB_TEMPLATE_ID) {
-    return { optionALabel: "", optionBLabel: "", comparisonCriterion: "" };
+    return { optionALabel: "", optionBLabel: "" };
   }
   const inputs = readHeadToHeadTemplateInputs(question.templateInputs);
   return {
     optionALabel: inputs?.optionALabel ?? "",
     optionBLabel: inputs?.optionBLabel ?? "",
-    comparisonCriterion: inputs?.comparisonCriterion ?? "",
   };
 }
 
@@ -1190,7 +1187,6 @@ function createDraftForm(handoff: Handoff): DraftForm {
           videoUrl: question.confidentiality.visibility === "gated" ? "" : question.videoUrl,
           optionALabel: question.optionALabel,
           optionBLabel: question.optionBLabel,
-          comparisonCriterion: question.comparisonCriterion,
         }))
       : [
           {
@@ -1208,7 +1204,6 @@ function createDraftForm(handoff: Handoff): DraftForm {
             videoUrl: "",
             optionALabel: "",
             optionBLabel: "",
-            comparisonCriterion: "",
           },
         ],
     roundBlindSeconds: roundDurationDraft.roundBlindSeconds,
@@ -1389,7 +1384,6 @@ async function applyDraftQuestion(
       optionALabel: draft.optionALabel.trim(),
       optionBKey: "B",
       optionBLabel: draft.optionBLabel.trim(),
-      comparisonCriterion: draft.comparisonCriterion.trim() || undefined,
     });
     if (!templateInputs) {
       throw new Error(`Question ${index + 1} needs both option A and option B names.`);
@@ -1399,7 +1393,6 @@ async function applyDraftQuestion(
       optionALabel: templateInputs.optionALabel,
       optionBKey: templateInputs.optionBKey,
       optionBLabel: templateInputs.optionBLabel,
-      ...(templateInputs.comparisonCriterion ? { comparisonCriterion: templateInputs.comparisonCriterion } : {}),
     };
   } else {
     delete nextQuestion.templateInputs;
@@ -3035,7 +3028,6 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                                     templateId: "",
                                     optionALabel: "",
                                     optionBLabel: "",
-                                    comparisonCriterion: "",
                                   })
                                 }
                               >
@@ -3079,20 +3071,6 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                                 disabled={!canEditDraft}
                                 value={question.optionBLabel}
                                 onChange={event => updateDraftQuestion(index, { optionBLabel: event.target.value })}
-                              />
-                            </label>
-                            <label className="form-control sm:col-span-2">
-                              <span className="label-text flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-base-content/45">
-                                Comparison focus
-                                <span className="text-base-content/35">(optional)</span>
-                              </span>
-                              <input
-                                className="input input-bordered mt-1 w-full"
-                                disabled={!canEditDraft}
-                                value={question.comparisonCriterion}
-                                onChange={event =>
-                                  updateDraftQuestion(index, { comparisonCriterion: event.target.value })
-                                }
                               />
                             </label>
                           </div>

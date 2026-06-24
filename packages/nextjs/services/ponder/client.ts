@@ -647,7 +647,6 @@ export interface PonderContentItem {
     optionALabel: string;
     optionBKey: string;
     optionBLabel: string;
-    comparisonCriterion?: string;
   } | null;
   targetAudience?: TargetAudience | null;
   audienceContext?: ProfileSelfReportAudienceContext | null;

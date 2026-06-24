@@ -11,7 +11,6 @@ export type HeadToHeadVoteUi = {
   optionALabel: string;
   optionBKey: string;
   optionBLabel: string;
-  comparisonCriterion?: string;
 };
 
 export type VoteUiConfig = HeadToHeadVoteUi | { mode: "thumbs" };
@@ -36,7 +35,6 @@ export function readHeadToHeadTemplateInputs(templateInputs: unknown): HeadToHea
   const optionBKey = normalizeHeadToHeadOptionKey(templateInputs.optionBKey);
   const optionALabel = readTrimmedString(templateInputs.optionALabel);
   const optionBLabel = readTrimmedString(templateInputs.optionBLabel);
-  const comparisonCriterion = readTrimmedString(templateInputs.comparisonCriterion);
 
   if (
     !optionAKey ||
@@ -56,7 +54,6 @@ export function readHeadToHeadTemplateInputs(templateInputs: unknown): HeadToHea
     optionALabel,
     optionBKey,
     optionBLabel,
-    ...(comparisonCriterion ? { comparisonCriterion } : {}),
   };
 }
 

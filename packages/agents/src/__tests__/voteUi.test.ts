@@ -16,7 +16,6 @@ describe("voteUi", () => {
         optionALabel: "Codex",
         optionBKey: "B",
         optionBLabel: "Claude",
-        comparisonCriterion: "default coding-agent workflow",
       }),
     ).toEqual({
       mode: "head_to_head",
@@ -24,7 +23,6 @@ describe("voteUi", () => {
       optionALabel: "Codex",
       optionBKey: "B",
       optionBLabel: "Claude",
-      comparisonCriterion: "default coding-agent workflow",
     });
   });
 
