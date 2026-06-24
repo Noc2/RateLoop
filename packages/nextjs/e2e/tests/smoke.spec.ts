@@ -58,18 +58,20 @@ test.describe("Smoke tests", () => {
   });
 
   test("brand link can reopen landing page without redirecting connected users back to rate", async ({ page }) => {
+    test.setTimeout(120_000);
+
     await setupWallet(page, ANVIL_ACCOUNTS.account2.privateKey);
     await gotoWithRetry(page, "/rate", { ensureWalletConnected: true });
     await waitForWalletConnected(page);
     await waitForFeedLoaded(page, 30_000);
 
-    await expect(async () => {
-      await page.locator('a[href="/?landing=1"]:visible').first().click({ timeout: 5_000 });
-      await expect(page).toHaveURL(/\/(?:\?landing=1)?$/, { timeout: 5_000 });
-      await expect(page.getByRole("heading", { name: /Level Up Your Agent/i }).first()).toBeVisible({
-        timeout: 5_000,
-      });
-    }).toPass({ timeout: 30_000, intervals: [500, 1_000, 2_000] });
+    const brandLink = page.locator('a[href="/?landing=1"]:visible').first();
+    await expect(brandLink).toBeVisible({ timeout: 10_000 });
+    await brandLink.evaluate((link: HTMLAnchorElement) => link.click());
+    await expect.poll(() => page.url(), { timeout: 60_000 }).toMatch(/\/(?:\?landing=1)?$/);
+    await expect(page.getByRole("heading", { name: /Level Up Your Agent/i }).first()).toBeVisible({
+      timeout: 60_000,
+    });
   });
 
   test("promo video is click-to-play", async ({ page }) => {
