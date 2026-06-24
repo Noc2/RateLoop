@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildQuestionSpecHashes } from "@rateloop/agents/question-specs";
+import { findAgentResultTemplate } from "@rateloop/agents/templates";
 import { HEAD_TO_HEAD_AB_TEMPLATE_ID } from "@rateloop/agents/voteUi";
 import { attachVoteUiToContentResponse, extractVoteUiFromContentRecord } from "./voteUi.js";
 
@@ -72,6 +73,25 @@ describe("voteUi api helpers", () => {
       optionALabel: "Codex",
       optionBKey: "B",
       optionBLabel: "Claude",
+    });
+  });
+
+  it("infers voteUi from title when metadata preimage is missing", () => {
+    const template = findAgentResultTemplate(HEAD_TO_HEAD_AB_TEMPLATE_ID);
+    expect(template).toBeTruthy();
+
+    const response = attachVoteUiToContentResponse({
+      id: "5",
+      title: "Do you prefer A = Awesome or B = Bad?",
+      resultSpecHash: template!.resultSpecHash,
+    }) as Record<string, unknown>;
+
+    expect(response.voteUi).toEqual({
+      mode: "head_to_head",
+      optionAKey: "A",
+      optionALabel: "Awesome",
+      optionBKey: "B",
+      optionBLabel: "Bad",
     });
   });
 });

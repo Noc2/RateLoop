@@ -1,4 +1,4 @@
-import { readHeadToHeadVoteUiFromQuestionMetadata } from "@rateloop/agents/voteUi";
+import { resolveVoteUiConfig } from "@rateloop/agents/voteUi";
 
 function parseStoredJson(value: string | null | undefined) {
   if (!value) return null;
@@ -20,8 +20,19 @@ function readQuestionMetadata(record: Record<string, unknown>) {
   return null;
 }
 
+function readContentText(record: Record<string, unknown>) {
+  return [record.question, record.title, record.description]
+    .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+    .join("\n");
+}
+
 export function extractVoteUiFromContentRecord(record: Record<string, unknown>) {
-  return readHeadToHeadVoteUiFromQuestionMetadata(readQuestionMetadata(record));
+  const config = resolveVoteUiConfig({
+    resultSpecHash: typeof record.resultSpecHash === "string" ? record.resultSpecHash : null,
+    questionMetadata: readQuestionMetadata(record),
+    text: readContentText(record),
+  });
+  return config.mode === "head_to_head" ? config : null;
 }
 
 export function attachVoteUiToContentResponse<T extends Record<string, unknown>>(item: T): T {
