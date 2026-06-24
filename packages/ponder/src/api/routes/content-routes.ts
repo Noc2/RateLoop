@@ -538,7 +538,8 @@ function formatContentTargetAudience<T extends Record<string, unknown>>(item: T,
 }
 
 function formatContentResponse<T extends Record<string, unknown>>(item: T, includeTargetAudience = false): T {
-  return attachVoteUiToContentResponse(formatConfidentialContent(formatContentTargetAudience(item, includeTargetAudience)));
+  const withVoteUi = attachVoteUiToContentResponse({ ...item });
+  return formatConfidentialContent(formatContentTargetAudience(withVoteUi, includeTargetAudience)) as T;
 }
 
 function metadataSyncToken() {

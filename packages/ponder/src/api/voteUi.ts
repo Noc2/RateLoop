@@ -9,9 +9,19 @@ function parseStoredJson(value: string | null | undefined) {
   }
 }
 
+function readQuestionMetadata(record: Record<string, unknown>) {
+  const raw = record.questionMetadata;
+  if (typeof raw === "string") {
+    return parseStoredJson(raw);
+  }
+  if (typeof raw === "object" && raw !== null && !Array.isArray(raw)) {
+    return raw;
+  }
+  return null;
+}
+
 export function extractVoteUiFromContentRecord(record: Record<string, unknown>) {
-  const metadata = parseStoredJson(record.questionMetadata as string | null | undefined);
-  return readHeadToHeadVoteUiFromQuestionMetadata(metadata);
+  return readHeadToHeadVoteUiFromQuestionMetadata(readQuestionMetadata(record));
 }
 
 export function attachVoteUiToContentResponse<T extends Record<string, unknown>>(item: T): T {

@@ -805,10 +805,27 @@ test.describe("Mobile viewport (phone)", () => {
       )
       .toBe(lastIndex);
 
-    await page.waitForFunction(() => {
-      const explicitScrollSource = document.querySelector<HTMLElement>('[data-mobile-header-scroll-source="true"]');
-      return explicitScrollSource !== null && !explicitScrollSource.hasAttribute("data-mobile-header-scroll-sync");
-    });
+    await expect
+      .poll(
+        () =>
+          page.evaluate(async () => {
+            const explicitScrollSource = document.querySelector<HTMLElement>(
+              '[data-mobile-header-scroll-source="true"]',
+            );
+            if (!explicitScrollSource) {
+              return false;
+            }
+
+            const beforeScrollTop = explicitScrollSource.scrollTop;
+            await new Promise(resolve => window.setTimeout(resolve, 260));
+            return (
+              Math.abs(explicitScrollSource.scrollTop - beforeScrollTop) < 0.5 &&
+              !explicitScrollSource.hasAttribute("data-mobile-header-scroll-sync")
+            );
+          }),
+        { timeout: 5_000 },
+      )
+      .toBe(true);
     const bottomSettleState = await page.evaluate(async () => {
       const explicitScrollSource = document.querySelector<HTMLElement>('[data-mobile-header-scroll-source="true"]');
       if (!explicitScrollSource) {
