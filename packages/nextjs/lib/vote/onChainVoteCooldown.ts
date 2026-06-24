@@ -1,5 +1,5 @@
 import { VOTE_COOLDOWN_SECONDS, getVoteCooldownRemainingSeconds } from "./cooldown";
-import { RoundVotingEngineAbi } from "@rateloop/contracts/abis";
+import { AdvisoryVoteRecorderAbi, RoundVotingEngineAbi } from "@rateloop/contracts/abis";
 import { type Address, type Hex, zeroAddress } from "viem";
 import { type PublicClient } from "viem";
 
@@ -7,6 +7,12 @@ export interface VoteCooldownTimestampSnapshot {
   voterLastVote: bigint;
   identityHolderLastVote: bigint;
   identityLastVote: bigint;
+}
+
+export interface AdvisoryVoteCooldownTimestampSnapshot {
+  voterLastAdvisory: bigint;
+  identityHolderLastAdvisory: bigint;
+  identityLastAdvisory: bigint;
 }
 
 export function resolveLatestVoteCommittedSeconds(
@@ -38,6 +44,41 @@ export function getOnChainVoteCooldownRemainingSeconds(
   const committedSeconds = resolveLatestVoteCommittedSeconds(snapshot, voter, identityHolder);
   if (committedSeconds === null) return 0;
   return getVoteCooldownRemainingSeconds(committedSeconds, nowSeconds);
+}
+
+export function resolveLatestAdvisoryCommittedSeconds(
+  snapshot: AdvisoryVoteCooldownTimestampSnapshot,
+  voter: Address,
+  identityHolder?: Address | null,
+) {
+  let lastAdvisory = snapshot.voterLastAdvisory;
+  if (
+    identityHolder &&
+    identityHolder !== zeroAddress &&
+    identityHolder.toLowerCase() !== voter.toLowerCase() &&
+    snapshot.identityHolderLastAdvisory > lastAdvisory
+  ) {
+    lastAdvisory = snapshot.identityHolderLastAdvisory;
+  }
+  if (snapshot.identityLastAdvisory > lastAdvisory) {
+    lastAdvisory = snapshot.identityLastAdvisory;
+  }
+  return lastAdvisory > 0n ? lastAdvisory : null;
+}
+
+export function getAdvisoryOnChainCooldownRemainingSeconds(
+  snapshot: AdvisoryVoteCooldownTimestampSnapshot,
+  nowSeconds: number,
+  voter: Address,
+  identityHolder?: Address | null,
+) {
+  const committedSeconds = resolveLatestAdvisoryCommittedSeconds(snapshot, voter, identityHolder);
+  if (committedSeconds === null) return 0;
+  return getVoteCooldownRemainingSeconds(committedSeconds, nowSeconds);
+}
+
+export function getEffectiveVoteCooldownRemainingSeconds(engineRemaining: number, advisoryRemaining: number) {
+  return Math.max(engineRemaining, advisoryRemaining);
 }
 
 export function buildVoteCooldownTimestampReadArgs(params: {
@@ -108,6 +149,92 @@ export async function readOnChainVoteCooldownsByContentId(params: {
   }
 
   return cooldowns;
+}
+
+export async function readAdvisoryOnChainCooldownRemainingSeconds(params: {
+  advisoryVoteRecorderAddress: Address;
+  contentId: bigint;
+  identityHolder?: Address | null;
+  identityKey?: Hex | null;
+  nowSeconds: number;
+  publicClient: PublicClient;
+  voter: Address;
+}) {
+  const [voterLastAdvisory, identityLastAdvisory] = await Promise.all([
+    params.publicClient.readContract({
+      abi: AdvisoryVoteRecorderAbi,
+      address: params.advisoryVoteRecorderAddress,
+      functionName: "lastAdvisoryVoteTimestamp",
+      args: [params.contentId, params.voter],
+    }),
+    params.identityKey
+      ? params.publicClient.readContract({
+          abi: AdvisoryVoteRecorderAbi,
+          address: params.advisoryVoteRecorderAddress,
+          functionName: "lastAdvisoryVoteTimestampByIdentity",
+          args: [params.contentId, params.identityKey],
+        })
+      : Promise.resolve(0n),
+  ]);
+
+  let identityHolderLastAdvisory = 0n;
+  if (
+    params.identityHolder &&
+    params.identityHolder !== zeroAddress &&
+    params.identityHolder.toLowerCase() !== params.voter.toLowerCase()
+  ) {
+    identityHolderLastAdvisory = await params.publicClient.readContract({
+      abi: AdvisoryVoteRecorderAbi,
+      address: params.advisoryVoteRecorderAddress,
+      functionName: "lastAdvisoryVoteTimestamp",
+      args: [params.contentId, params.identityHolder],
+    });
+  }
+
+  return getAdvisoryOnChainCooldownRemainingSeconds(
+    { voterLastAdvisory, identityHolderLastAdvisory, identityLastAdvisory },
+    params.nowSeconds,
+    params.voter,
+    params.identityHolder,
+  );
+}
+
+export async function readEffectiveOnChainVoteCooldownRemainingSeconds(params: {
+  advisoryVoteRecorderAddress?: Address | null;
+  contentId: bigint;
+  identityHolder?: Address | null;
+  identityKey?: Hex | null;
+  includeAdvisoryCooldown?: boolean;
+  nowSeconds: number;
+  publicClient: PublicClient;
+  voter: Address;
+  votingEngineAddress: Address;
+}) {
+  const engineRemaining = await readOnChainVoteCooldownRemainingSeconds({
+    contentId: params.contentId,
+    identityHolder: params.identityHolder,
+    identityKey: params.identityKey,
+    nowSeconds: params.nowSeconds,
+    publicClient: params.publicClient,
+    voter: params.voter,
+    votingEngineAddress: params.votingEngineAddress,
+  });
+
+  if (!params.includeAdvisoryCooldown || !params.advisoryVoteRecorderAddress) {
+    return engineRemaining;
+  }
+
+  const advisoryRemaining = await readAdvisoryOnChainCooldownRemainingSeconds({
+    advisoryVoteRecorderAddress: params.advisoryVoteRecorderAddress,
+    contentId: params.contentId,
+    identityHolder: params.identityHolder,
+    identityKey: params.identityKey,
+    nowSeconds: params.nowSeconds,
+    publicClient: params.publicClient,
+    voter: params.voter,
+  });
+
+  return getEffectiveVoteCooldownRemainingSeconds(engineRemaining, advisoryRemaining);
 }
 
 export function maxVoteCooldownRemainingSeconds(current: number, next: number) {

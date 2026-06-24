@@ -53,6 +53,7 @@ import {
   isPrivateContextMetadata,
 } from "~~/lib/vote/confidentialContext";
 import { recordLocalVoteCooldown } from "~~/lib/vote/localCooldown";
+import { readEffectiveOnChainVoteCooldownRemainingSeconds } from "~~/lib/vote/onChainVoteCooldown";
 import { PREPARING_ROUND_VOTE_MESSAGE, ensureOpenStakedRoundRuntime } from "~~/lib/vote/openStakedRoundRuntime";
 import { normalizeRoundVoteError } from "~~/lib/vote/roundVoteErrors";
 import {
@@ -216,6 +217,7 @@ export function useRoundVote() {
   const { targetNetwork } = useTargetNetwork();
   const {
     hasActiveHumanCredential,
+    holder,
     identityKey,
     isLoading: isIdentityLoading,
     isResolved: isIdentityResolved,
@@ -461,6 +463,26 @@ export function useRoundVote() {
           });
           timingLog.emit("content-active-check-failed-nonfatal");
         }
+      }
+
+      if (publicClient) {
+        const cooldownRemaining = await readEffectiveOnChainVoteCooldownRemainingSeconds({
+          advisoryVoteRecorderAddress: advisoryVoteRecorderInfo?.address as Address | undefined,
+          contentId,
+          identityHolder: holder,
+          identityKey: identityKey as Hex | undefined,
+          includeAdvisoryCooldown: stakeAmount <= 0,
+          nowSeconds: Math.floor(Date.now() / 1000),
+          publicClient,
+          voter: address,
+          votingEngineAddress: votingEngineInfo.address as Address,
+        });
+        if (cooldownRemaining > 0) {
+          timingLog.emit("blocked", { reason: "cooldown_active", cooldownRemaining });
+          setError(normalizeRoundVoteError("CooldownActive"));
+          return false;
+        }
+        timingLog.emit("cooldown-checked", { cooldownRemaining });
       }
 
       let runtime: RoundVoteCommitRuntime | undefined;
@@ -1061,7 +1083,21 @@ export function useRoundVote() {
         return false;
       }
       const parsedError = getParsedErrorWithAllAbis(e, targetNetwork.id as any);
-      setError(normalizeRoundVoteError(parsedError || e?.shortMessage || e?.message || "Failed to submit vote"));
+      const normalizedError = normalizeRoundVoteError(
+        parsedError || e?.shortMessage || e?.message || "Failed to submit vote",
+      );
+      if (normalizedError === normalizeRoundVoteError("CooldownActive")) {
+        recordLocalVoteCooldown({
+          address,
+          chainId: targetNetwork.id,
+          contentId,
+          identityKey: identityKey ?? undefined,
+          votingEngineAddress: votingEngineInfo?.address,
+        });
+        void queryClient.invalidateQueries({ queryKey: ["voteCooldowns"] });
+        void queryClient.invalidateQueries({ queryKey: ["voteCooldownsOnChain"] });
+      }
+      setError(normalizedError);
       return false;
     } finally {
       commitLock.current = false;

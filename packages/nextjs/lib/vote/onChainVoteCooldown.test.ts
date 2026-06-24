@@ -1,7 +1,10 @@
 import {
   buildVoteCooldownTimestampReadArgs,
+  getAdvisoryOnChainCooldownRemainingSeconds,
+  getEffectiveVoteCooldownRemainingSeconds,
   getOnChainVoteCooldownRemainingSeconds,
   mergeVoteCooldownRemainingByContentId,
+  resolveLatestAdvisoryCommittedSeconds,
   resolveLatestVoteCommittedSeconds,
 } from "./onChainVoteCooldown";
 import assert from "node:assert/strict";
@@ -87,4 +90,36 @@ test("buildVoteCooldownTimestampReadArgs zeroes missing holder and identity", ()
 test("mergeVoteCooldownRemainingByContentId keeps the longest cooldown per content", () => {
   const merged = mergeVoteCooldownRemainingByContentId(new Map([["3", 100]]), 3n, 200);
   assert.equal(merged.get("3"), 200);
+});
+
+test("resolveLatestAdvisoryCommittedSeconds mirrors advisory recorder max logic", () => {
+  assert.equal(
+    resolveLatestAdvisoryCommittedSeconds(
+      {
+        voterLastAdvisory: 100n,
+        identityHolderLastAdvisory: 180n,
+        identityLastAdvisory: 150n,
+      },
+      voter,
+      holder,
+    ),
+    180n,
+  );
+});
+
+test("getEffectiveVoteCooldownRemainingSeconds uses the longer engine or advisory cooldown", () => {
+  assert.equal(getEffectiveVoteCooldownRemainingSeconds(100, 250), 250);
+  assert.equal(
+    getAdvisoryOnChainCooldownRemainingSeconds(
+      {
+        voterLastAdvisory: BigInt(100_000 - 30 * 60),
+        identityHolderLastAdvisory: 0n,
+        identityLastAdvisory: 0n,
+      },
+      100_000,
+      voter,
+      holder,
+    ),
+    23 * 60 * 60 + 30 * 60,
+  );
 });
