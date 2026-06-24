@@ -252,7 +252,6 @@ export function ImageAttachmentUploader({
             value={progress}
             max={100}
           />
-          <p className="text-xs text-base-content/55">{uploadPhaseCopy.description}</p>
         </div>
       ) : null}
       <input

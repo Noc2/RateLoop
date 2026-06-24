@@ -6,34 +6,28 @@ export type ImageAttachmentUploadPhase =
   | "processing";
 
 type ImageAttachmentUploadPhaseCopy = {
-  description: string;
   label: string;
   progress: number;
 };
 
 export const IMAGE_ATTACHMENT_UPLOAD_PHASE_COPY: Record<ImageAttachmentUploadPhase, ImageAttachmentUploadPhaseCopy> = {
   preparing: {
-    description: "Reading the file before the upload request is created.",
     label: "Preparing image",
     progress: 4,
   },
   "requesting-challenge": {
-    description: "Creating the signed upload request.",
     label: "Creating upload request",
     progress: 10,
   },
   "waiting-for-signature": {
-    description: "Check your wallet to sign. The file upload starts after the signature is approved.",
     label: "Waiting for wallet signature",
     progress: 18,
   },
   uploading: {
-    description: "Sending the image to private storage.",
     label: "Uploading image",
     progress: 24,
   },
   processing: {
-    description: "Converting, stripping metadata, and checking the image.",
     label: "Processing image",
     progress: 88,
   },

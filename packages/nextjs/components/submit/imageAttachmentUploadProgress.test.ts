@@ -9,7 +9,6 @@ import test from "node:test";
 test("wallet signature phase is visible before the file upload starts", () => {
   assert.equal(getImageAttachmentUploadProgress("waiting-for-signature"), 18);
   assert.match(IMAGE_ATTACHMENT_UPLOAD_PHASE_COPY["waiting-for-signature"].label, /wallet signature/i);
-  assert.match(IMAGE_ATTACHMENT_UPLOAD_PHASE_COPY["waiting-for-signature"].description, /file upload starts/i);
 });
 
 test("blob upload progress is bounded inside the upload phase", () => {
