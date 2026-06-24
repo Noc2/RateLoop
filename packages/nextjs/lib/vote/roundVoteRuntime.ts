@@ -1,4 +1,5 @@
 import { parseRound, parseVotingConfig } from "../contracts/roundVotingEngine";
+import { getBlockWithRetry } from "../transactions/blockWait";
 import { deriveCommitVoteRuntimeNowMs } from "./tlockCommitTiming";
 import { ProtocolConfigAbi, RoundVotingEngineAbi } from "@rateloop/contracts/abis";
 import { type Hex, type PublicClient, zeroHash } from "viem";
@@ -153,7 +154,7 @@ export async function resolveRoundVoteRuntime(params: {
   contentId: bigint;
   fallbackEpochDuration: number;
 }) {
-  const latestBlock = await params.publicClient.getBlock({ blockTag: "latest" });
+  const latestBlock = await getBlockWithRetry(params.publicClient, { blockTag: "latest" });
   let pendingTimestampSeconds = Number(latestBlock.timestamp);
   let canReadPendingBlock = false;
   try {
@@ -162,6 +163,10 @@ export async function resolveRoundVoteRuntime(params: {
     canReadPendingBlock = true;
   } catch {
     pendingTimestampSeconds = Number(latestBlock.timestamp);
+  }
+
+  if (latestBlock.number === null) {
+    throw new Error("Latest block number unavailable.");
   }
 
   const snapshotBlockNumber = latestBlock.number;

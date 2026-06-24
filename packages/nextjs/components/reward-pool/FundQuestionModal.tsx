@@ -4,7 +4,7 @@ import { type ReactNode, useEffect, useId, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { zeroHash } from "viem";
 import { useAccount, useConfig, useSignTypedData, useWriteContract } from "wagmi";
-import { getPublicClient, readContract, waitForTransactionReceipt } from "wagmi/actions";
+import { getPublicClient, readContract } from "wagmi/actions";
 import { XMarkIcon } from "@heroicons/react/24/outline";
 import { GradientActionButton, getGradientActionMotion } from "~~/components/shared/GradientAction";
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
@@ -40,6 +40,8 @@ import {
 } from "~~/lib/questionRewardPools";
 import { requiredQuestionRewardVotersForAmount } from "~~/lib/questionRoundConfig";
 import { isUserRejectedTransactionError } from "~~/lib/transactionErrors";
+import { getBlockWithRetry } from "~~/lib/transactions/blockWait";
+import { waitForTransactionReceiptWithRetry } from "~~/lib/transactions/receiptWait";
 import {
   buildUsdcReceiveWithAuthorizationTypedData,
   getDefaultSignatureDeadline,
@@ -295,10 +297,11 @@ export function FundQuestionModal({
       }
 
       const publicClient = getPublicClient(wagmiConfig, { chainId: chainId as any });
-      const latestBlockTimestamp = await publicClient
-        ?.getBlock({ blockTag: "latest" })
-        .then(block => block.timestamp)
-        .catch(() => undefined);
+      const latestBlockTimestamp = publicClient
+        ? await getBlockWithRetry(publicClient, { blockTag: "latest" })
+            .then(block => block.timestamp)
+            .catch(() => undefined)
+        : undefined;
       const bountyStartBy = getBountyStartBy(
         bountyWindowPreset,
         customBountyWindowAmount,
@@ -375,7 +378,7 @@ export function FundQuestionModal({
             chainId: chainId as any,
             ...authorizationCall,
           });
-          await waitForTransactionReceipt(wagmiConfig, {
+          await waitForTransactionReceiptWithRetry(wagmiConfig, {
             chainId: chainId as any,
             hash: authorizationHash,
             pollingInterval: getFundReceiptPollingInterval(chainId),
@@ -449,7 +452,7 @@ export function FundQuestionModal({
           functionName: "approve",
           args: [escrowAddress, parsedAmount],
         });
-        await waitForTransactionReceipt(wagmiConfig, {
+        await waitForTransactionReceiptWithRetry(wagmiConfig, {
           chainId: chainId as any,
           hash: approveHash,
           pollingInterval: getFundReceiptPollingInterval(chainId),
@@ -473,7 +476,7 @@ export function FundQuestionModal({
           functionName: "createRewardPool",
           args: rewardPoolArgs,
         });
-        await waitForTransactionReceipt(wagmiConfig, {
+        await waitForTransactionReceiptWithRetry(wagmiConfig, {
           chainId: chainId as any,
           hash: rewardPoolHash,
           pollingInterval: getFundReceiptPollingInterval(chainId),

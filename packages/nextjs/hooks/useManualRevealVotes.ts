@@ -13,6 +13,7 @@ import {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Address, isAddress, keccak256, zeroAddress, zeroHash } from "viem";
 import { useAccount, usePublicClient, useWalletClient } from "wagmi";
+import { getTransactionReceiptPollingInterval } from "~~/config/shared";
 import { useDeployedContractInfo } from "~~/hooks/scaffold-eth";
 import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import { usePageVisibility } from "~~/hooks/usePageVisibility";
@@ -21,7 +22,9 @@ import { useUnixTime } from "~~/hooks/useUnixTime";
 import { getVoteHistoryQueryKey } from "~~/hooks/useVoteHistoryQuery";
 import { getVotingStakesQueryKey } from "~~/hooks/useVotingStakes";
 import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
+import { waitForPublicClientTransactionReceiptWithRetry } from "~~/lib/transactions/receiptWait";
 import { getSubmittingTransactionMessage } from "~~/lib/ui/transactionStatusCopy";
+import scaffoldConfig from "~~/scaffold.config";
 import type { PonderVoteItem } from "~~/services/ponder/client";
 import { CommitData } from "~~/types/votingTypes";
 import { getParsedErrorWithAllAbis } from "~~/utils/scaffold-eth/contract";
@@ -646,7 +649,12 @@ export function useManualRevealVotes(voter?: Address) {
           chain: targetNetwork,
         } as any);
 
-        const receipt = await publicClient.waitForTransactionReceipt({ hash });
+        const receipt = await waitForPublicClientTransactionReceiptWithRetry(publicClient, {
+          hash,
+          pollingInterval: getTransactionReceiptPollingInterval(targetNetwork.id, {
+            preconfirmation: scaffoldConfig.useBasePreconfRpc,
+          }),
+        });
         notification.remove(toastId);
         toastId = undefined;
         if (receipt.status === "reverted") {

@@ -5,7 +5,6 @@ import Link from "next/link";
 import { defineChain } from "thirdweb";
 import { erc20Abi, isAddress } from "viem";
 import { useAccount, useConfig, useReadContract, useWriteContract } from "wagmi";
-import { waitForTransactionReceipt } from "wagmi/actions";
 import {
   ArrowTopRightOnSquareIcon,
   ClipboardDocumentIcon,
@@ -41,6 +40,7 @@ import {
   getThirdwebWalletFundingUnavailableMessage,
   supportsThirdwebWalletFunding,
 } from "~~/lib/thirdweb/walletFunding";
+import { waitForTransactionReceiptWithRetry } from "~~/lib/transactions/receiptWait";
 import scaffoldConfig from "~~/scaffold.config";
 import { thirdwebClient } from "~~/services/thirdweb/client";
 import { notification } from "~~/utils/scaffold-eth";
@@ -344,7 +344,7 @@ export function AgentSubmissionPanel() {
         functionName: "transfer",
         args: [agentWalletAddress, amount],
       });
-      await waitForTransactionReceipt(wagmiConfig, {
+      await waitForTransactionReceiptWithRetry(wagmiConfig, {
         chainId: targetNetwork.id,
         hash: transferHash,
         pollingInterval: getTransactionReceiptPollingInterval(targetNetwork.id, {

@@ -4,7 +4,7 @@ import { useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { GetCallsStatusReturnType, Hex, TransactionReceipt } from "viem";
 import { useAccount, useConfig, useSendCallsSync } from "wagmi";
-import { getPublicClient, sendTransaction, waitForTransactionReceipt } from "wagmi/actions";
+import { getPublicClient, sendTransaction } from "wagmi/actions";
 import { getTransactionReceiptPollingInterval } from "~~/config/shared";
 import { refreshActiveWalletReadQueries } from "~~/hooks/useRefreshWalletBalances";
 import { useThirdwebSponsoredSubmitCalls } from "~~/hooks/useThirdwebSponsoredSubmitCalls";
@@ -26,6 +26,7 @@ import {
   withWalletTransactionPlanStepTimeout,
 } from "~~/lib/agent/walletTransactionPlan";
 import { waitForReservationRevealReady } from "~~/lib/submission/reservationRevealWait";
+import { waitForTransactionReceiptWithRetry } from "~~/lib/transactions/receiptWait";
 import { createTransactionTimingRun } from "~~/lib/transactions/timing";
 import scaffoldConfig from "~~/scaffold.config";
 
@@ -115,7 +116,7 @@ export function useWalletTransactionPlanExecutor() {
       pushUniqueHash(options.hashes, hash);
       options.onCallSent?.({ call: call.call, hash, index: call.index });
       options.onTiming?.("sequential-receipt-wait-start", { transactionHashCount: 1 });
-      const receipt = await waitForTransactionReceipt(wagmiConfig, {
+      const receipt = await waitForTransactionReceiptWithRetry(wagmiConfig, {
         chainId: options.chainId,
         hash,
         pollingInterval: getTransactionStatusPollingInterval(options.chainId),

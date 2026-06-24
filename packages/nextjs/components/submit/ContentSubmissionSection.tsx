@@ -150,13 +150,14 @@ import {
   getSubmissionErrorMessage,
 } from "~~/lib/questionSubmissionSelectorSupport";
 import { waitForReservationRevealReady } from "~~/lib/submission/reservationRevealWait";
-import { waitForTransactionReceiptWithRetry } from "~~/lib/transactions/receiptWait";
 import {
   getGasBalanceErrorMessage,
   isFreeTransactionExhaustedError,
   isInsufficientFundsError,
   isWalletRpcOverloadedError,
 } from "~~/lib/transactionErrors";
+import { getBlockWithRetry } from "~~/lib/transactions/blockWait";
+import { waitForTransactionReceiptWithRetry } from "~~/lib/transactions/receiptWait";
 import scaffoldConfig from "~~/scaffold.config";
 import { containsBlockedUrl } from "~~/utils/contentFilter";
 import { sanitizeExternalUrl } from "~~/utils/externalUrl";
@@ -2573,10 +2574,11 @@ export function ContentSubmissionSection() {
 
         return preparedWrite as TWrite;
       };
-      const latestBlockTimestamp = await publicClient
-        ?.getBlock({ blockTag: "latest" })
-        .then(block => block.timestamp)
-        .catch(() => undefined);
+      const latestBlockTimestamp = publicClient
+        ? await getBlockWithRetry(publicClient, { blockTag: "latest" })
+            .then(block => block.timestamp)
+            .catch(() => undefined)
+        : undefined;
       const bountyReferenceNowSeconds = resolveBountyReferenceNowSeconds(latestBlockTimestamp);
       const bountyStartBy = getBountyStartByFromWindowSeconds(
         effectiveBountyStartByWindowSeconds,
