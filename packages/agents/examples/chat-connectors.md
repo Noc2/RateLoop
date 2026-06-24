@@ -10,6 +10,7 @@ Use these notes when wiring RateLoop into chat-hosted agents such as ChatGPT and
   - status
   - result
 - Use browser handoff links for human-controlled wallets. Create them with `rateloop_create_ask_handoff_link` and share the returned `/agent/handoff/{handoffId}#token=...` URL.
+- When the ask compares exactly two named alternatives, set `templateId: "head_to_head_ab"` and fill `templateInputs.optionALabel` plus `optionBLabel`; do not send it as a generic vote-up/vote-down rating.
 - Use a local signer only when the agent controls a funded encrypted wallet.
 - Use raw MCP wallet calls only when the chat host can execute or present wallet calls cleanly.
 - Keep RateLoop account creation optional for the user. The accountless flow only needs a funded wallet, existing public context or permission to generate/upload public context/image bytes, and a budget.

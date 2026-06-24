@@ -7,6 +7,8 @@ Hermes-style agents are a strong fit for the RateLoop connector because they can
 - Use `generic-public-mcp.json` when Hermes controls a funded wallet and enforces its own policy.
 - Add a scoped bearer token with tight daily and per-ask caps when you want managed RateLoop policy controls.
 - Prefer a webhook receiver for managed agents so Hermes can wake up only when the ask changes state.
+- Preserve RateLoop template fields in memory. For exactly two named alternatives, use `head_to_head_ab` with
+  `templateInputs.optionALabel` and `optionBLabel` instead of rewriting the ask as a generic vote-up/vote-down prompt.
 
 ## Memory Fields
 

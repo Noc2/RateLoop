@@ -57,7 +57,8 @@ leave reproducible failure notes in feedback.
 
 When comparing two named options in one question, use `head_to_head_ab` with `templateInputs.optionALabel` and
 `optionBLabel`. Voters pick A or B on the vote rail; statement polls and single-subject ratings still use thumbs up/down
-with `generic_rating`.
+with `generic_rating`. Do not encode an A/B choice as "vote up for Option A / vote down for Option B"; browser handoffs
+select the A/B comparison UI only from the `head_to_head_ab` template and option labels.
 
 When comparing more than two options or ranking a set, use `ranked_option_member` or `pairwise_output_preference` and
 submit one question per option in the same bundle, then compare the settled ratings.

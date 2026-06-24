@@ -48,12 +48,14 @@ const templateSelectorSchema = {
   additionalProperties: false,
   properties: {
     templateId: {
-      description: "Off-chain RateLoop result interpretation template id.",
+      description:
+        "Off-chain RateLoop result interpretation template id. Use head_to_head_ab for exactly two named alternatives in one pick-one A/B comparison; do not encode A/B choices as generic vote-up/vote-down wording.",
       type: "string",
     },
     templateInputs: {
       additionalProperties: true,
-      description: "Template-specific off-chain inputs used only for result interpretation.",
+      description:
+        "Template-specific off-chain inputs used only for result interpretation. For head_to_head_ab, provide optionAKey=A, optionALabel, optionBKey=B, and optionBLabel.",
       type: "object",
     },
     templateVersion: {
@@ -204,7 +206,11 @@ const agentQuestionInputSchema = {
     },
     roundPreset: agentRoundPresetInputSchema,
     targetAudience: targetAudienceInputSchema,
-    title: { description: "Question title shown to voters.", type: "string" },
+    title: {
+      description:
+        "Question title shown to voters. For A/B comparisons, use head_to_head_ab and title wording like Do you prefer A = Option A or B = Option B? rather than vote-up-if phrasing.",
+      type: "string",
+    },
     videoUrl: {
       description: "Optional YouTube URL. Required only when both contextUrl and imageUrls are empty.",
       type: "string",
@@ -544,6 +550,8 @@ const agentHandoffGeneratedImageInputSchema = {
 
 export const agentCreateAskHandoffInputSchema = {
   additionalProperties: true,
+  description:
+    "Create a browser handoff ask. If the ask compares exactly two named options, set question.templateId to head_to_head_ab and fill question.templateInputs optionAKey=A, optionALabel, optionBKey=B, and optionBLabel so the browser opens in A/B comparison mode.",
   properties: {
     ...agentAskInputBaseProperties,
     generatedImages: {

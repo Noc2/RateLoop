@@ -60,7 +60,7 @@ Good fits: UX feedback, landing-page review, feature acceptance, public bug repr
 
 Do not use RateLoop for private secrets, ungated confidential context, emergency decisions, medical/legal/financial/safety-critical advice, external financial-contract settlement, or tasks that can be verified directly with tests, docs, or source inspection. For confidential review material, use only RateLoop-hosted gated context (`confidentiality.visibility="gated"`) and keep public titles non-sensitive.
 
-If RateLoop MCP or the RateLoop skill is available, use it to quote an ask. Prefer browser handoff when the user funds the ask. Add a Feedback Bonus when written rationale matters. Bring back the settled rating, confidence, limitations, public result URL, and notable feedback.
+If RateLoop MCP or the RateLoop skill is available, use it to quote an ask. Prefer browser handoff when the user funds the ask. For exactly two named alternatives in one pick-one comparison, use `question.templateId="head_to_head_ab"` with `optionAKey`, `optionALabel`, `optionBKey`, and `optionBLabel`; do not encode A/B choices as generic vote-up/vote-down wording. Add a Feedback Bonus when written rationale matters. Bring back the settled rating, confidence, limitations, public result URL, and notable feedback.
 
 If RateLoop contracts are not deployed for the requested chain yet, stop before paid submission. Explain that the agent setup is ready, then wait for a live deployment or use an approved local/test deployment.
 ```
@@ -120,7 +120,7 @@ Backup: if the agent controls a funded encrypted wallet, use the local signer CL
 - Bounty: `amount`, `requiredVoters`, `requiredSettledRounds`, `bountyStartBy`, `bountyWindowSeconds`, `feedbackWindowSeconds`, and optional `bountyEligibility` (`0` everyone, `8` Proof of Human). If a custom `roundConfig` is supplied, `roundConfig.minVoters` must match `bounty.requiredVoters`. Under the launch policy, use at least 5 voters for bounties at or above 1000 USDC and at least 8 voters for bounties at or above 10000 USDC. Three-voter rounds are the launch feedback tier; score-spread LREP forfeits are disabled below 8 score-eligible revealed voters, and governance can raise new-ask voter floors as usage grows.
 - Optional Feedback Bonus: extra USDC or LREP for useful public rater feedback on single-question asks. Use it by default for user testing, product-concept checks, bug reproduction, source-quality review, and go/no-go decisions where the human wants to know why. On Base mainnet, USDC bonuses can be included in native EIP-3009/x402 authorization so bounty and bonus funding land in one submit transaction; LREP bonuses require `paymentMode: "wallet_calls"`. On Base Sepolia, use bounty-only x402 or `paymentMode: "wallet_calls"` for Feedback Bonus staging until strict one-shot readiness passes.
 - Round speed: `roundConfig.epochDuration` and `maxDuration` are per-question. Short rounds can settle within minutes when raters respond quickly; for low-stakes pure-agent asks, `roundPreset: "pure_agent_fast"` requests a 60 second blind phase with a small quorum. For unusually sensitive or high-value asks, keep a longer blind phase and at least 8 required voters instead of optimizing for speed.
-- Question fields: title, optional `detailsUrl`/`detailsHash`, category id, tags, optional template id, optional `templateInputs`, and optional `targetAudience`.
+- Question fields: title, optional `detailsUrl`/`detailsHash`, category id, tags, optional template id, optional `templateInputs`, and optional `targetAudience`. If the question names exactly two alternatives, use `head_to_head_ab` and fill `templateInputs.optionAKey="A"`, `optionALabel`, `optionBKey="B"`, and `optionBLabel` so the browser handoff opens in A/B mode.
 - Audience fields: use `question.templateInputs.audience` for a free-text audience or rubric note that helps interpret the result package. Use `question.targetAudience` only for structured self-reported targeting from `rateloop_list_audience_options`; invalid aliases such as `developer` are rejected with canonical suggestions such as `engineer`. Target criteria are hidden from the normal rating UI but are part of the public question metadata preimage; do not put secrets there.
 
 The browser handoff signs and uploads staged generated images before funding the ask. Managed MCP agents can still call `rateloop_upload_image` directly. Public wallet-mode raw image upload (`rateloop_prepare_image_upload`, wallet signature, then `rateloop_upload_image`) is an advanced fallback for hosts that can present wallet signing cleanly. Uploaded images and Details text become public ask context after approval unless the ask explicitly uses RateLoop-hosted gated context. Avoid secrets that should never be shown to eligible raters, personal data without permission, rights-restricted material, or prohibited content.
@@ -131,7 +131,7 @@ Do not move image bytes through visible terminal output. If base64 output is too
 
 Treat the default blind phase as suitable for ordinary feedback. For Tier-0, unusually sensitive, or high-value asks, prefer a longer `roundConfig.epochDuration`, a matching `maxDuration`, and at least 8 required voters instead of shortening the blind window for speed. The hosted MCP server must never receive plaintext vote direction, predicted crowd share, or salt; use the SDK vote helper to build encrypted commits locally and send only encrypted commit material.
 
-If the category, template, or structured audience vocabulary is unknown, call `rateloop_list_categories`, `rateloop_list_result_templates`, or `rateloop_list_audience_options`. Otherwise skip reference-tool calls. More examples are in `packages/agents/examples/questions`.
+If the category, template, or structured audience vocabulary is unknown, call `rateloop_list_categories`, `rateloop_list_result_templates`, or `rateloop_list_audience_options`. For an A/B ask, verify the draft payload uses `head_to_head_ab` before creating the handoff link. Otherwise skip reference-tool calls. More examples are in `packages/agents/examples/questions`.
 
 ### Connect
 
@@ -324,7 +324,7 @@ question title must include both `A = {optionALabel}` and `B = {optionBLabel}`.
 }
 ```
 
-Do not use vote-up-if phrasing in the title. Do not bundle `head_to_head_ab` with other questions.
+Do not use vote-up-if phrasing in the title. Do not submit A/B preference asks as `generic_rating`. Do not bundle `head_to_head_ab` with other questions.
 
 ### Poll Results
 

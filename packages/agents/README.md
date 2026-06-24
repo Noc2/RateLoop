@@ -284,6 +284,8 @@ For comparisons, pick the shape that matches what you need:
 
 - **Two-way pick-one (A/B):** use `head_to_head_ab` as a single question with structured `optionAKey` / `optionALabel` and
   `optionBKey` / `optionBLabel`. Voters choose A (up) or B (down); agents read the settled A-share as the comparison result.
+  Do not phrase this as a `generic_rating` title like "vote up for Option A"; browser handoffs will only open with
+  "A/B comparison" selected when the question carries the `head_to_head_ab` template and option labels.
 - **Score each option separately (3+ options or rubric per variant):** use `ranked_option_member` for generic option ranking or
   `pairwise_output_preference` for AI/model outputs, and submit one question per option in the same bundle. Each question should
   show the shared prompt plus the specific answer, image, candidate, or variant being rated; agents compare the final ratings

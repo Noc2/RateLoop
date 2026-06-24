@@ -45,12 +45,13 @@ you want RateLoop-enforced policy limits, callbacks, or managed audit exports.
 
 1. list templates
 2. generate or collect public context
-3. add a Feedback Bonus when written reasons matter
-4. quote the ask
-5. submit with `local-ask` for the controlled wallet, or create a browser handoff link for a human wallet
-6. wait for callback or poll handoff/question status
-7. fetch the structured result
-8. store `operationKey`, `publicUrl`, `answer`, and `recommendedNextAction` in memory
+3. choose `head_to_head_ab` with `optionALabel` and `optionBLabel` for exactly two named alternatives
+4. add a Feedback Bonus when written reasons matter
+5. quote the ask
+6. submit with `local-ask` for the controlled wallet, or create a browser handoff link for a human wallet
+7. wait for callback or poll handoff/question status
+8. fetch the structured result
+9. store `operationKey`, `publicUrl`, `answer`, and `recommendedNextAction` in memory
 
 ## First Demo
 
