@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
+import { HEAD_TO_HEAD_AB_TEMPLATE_ID, readHeadToHeadTemplateInputs } from "@rateloop/agents/voteUi";
 import { RoundVotingEngineAbi } from "@rateloop/contracts/abis";
 import {
   type TargetAudience,
@@ -274,6 +275,8 @@ function normalizeAudienceCountryCodeInput(value: string) {
   return COUNTRY_CODE_PATTERN.test(normalized) ? normalized : null;
 }
 
+type QuestionFormat = "rate_one" | "head_to_head_ab";
+
 type QuestionDraft = {
   mediaMode: MediaMode;
   contextVisibility: ContextVisibility;
@@ -287,6 +290,10 @@ type QuestionDraft = {
   selectedSubcategories: string[];
   customSubcategory: string;
   targetAudience: QuestionTargetAudienceDraft;
+  questionFormat: QuestionFormat;
+  optionALabel: string;
+  optionBLabel: string;
+  comparisonCriterion: string;
 };
 
 type ValidatedQuestionDraft = {
@@ -321,6 +328,34 @@ function createEmptyQuestionDraft(): QuestionDraft {
     selectedSubcategories: [],
     customSubcategory: "",
     targetAudience: createEmptyTargetAudienceDraft(),
+    questionFormat: "rate_one",
+    optionALabel: "",
+    optionBLabel: "",
+    comparisonCriterion: "",
+  };
+}
+
+function getHeadToHeadValidationError(
+  draft: Pick<QuestionDraft, "questionFormat" | "optionALabel" | "optionBLabel">,
+): string | null {
+  if (draft.questionFormat !== "head_to_head_ab") return null;
+  const inputs = readHeadToHeadTemplateInputs({
+    optionAKey: "A",
+    optionALabel: draft.optionALabel.trim(),
+    optionBKey: "B",
+    optionBLabel: draft.optionBLabel.trim(),
+  });
+  if (!inputs) return "Enter both option names for the A/B comparison.";
+  return null;
+}
+
+function buildHeadToHeadTemplateInputs(draft: QuestionDraft) {
+  return {
+    optionAKey: "A",
+    optionALabel: draft.optionALabel.trim(),
+    optionBKey: "B",
+    optionBLabel: draft.optionBLabel.trim(),
+    ...(draft.comparisonCriterion.trim() ? { comparisonCriterion: draft.comparisonCriterion.trim() } : {}),
   };
 }
 
@@ -632,6 +667,11 @@ export function ContentSubmissionSection() {
   const [videoUrlError, setVideoUrlError] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [titleError, setTitleError] = useState<string | null>(null);
+  const [questionFormat, setQuestionFormat] = useState<QuestionFormat>("rate_one");
+  const [optionALabel, setOptionALabel] = useState("");
+  const [optionBLabel, setOptionBLabel] = useState("");
+  const [comparisonCriterion, setComparisonCriterion] = useState("");
+  const [headToHeadError, setHeadToHeadError] = useState<string | null>(null);
   const [detailsText, setDetailsText] = useState("");
   const [detailsError, setDetailsError] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
@@ -746,6 +786,10 @@ export function ContentSubmissionSection() {
     selectedSubcategories,
     customSubcategory,
     targetAudience: cloneTargetAudienceDraft(targetAudience),
+    questionFormat,
+    optionALabel,
+    optionBLabel,
+    comparisonCriterion,
   });
 
   const patchActiveQuestionDraft = (patch: Partial<QuestionDraft>) => {
@@ -765,6 +809,11 @@ export function ContentSubmissionSection() {
     setVideoUrlError(null);
     setTitle(draft.title);
     setTitleError(null);
+    setQuestionFormat(draft.questionFormat);
+    setOptionALabel(draft.optionALabel);
+    setOptionBLabel(draft.optionBLabel);
+    setComparisonCriterion(draft.comparisonCriterion);
+    setHeadToHeadError(null);
     setDetailsText(draft.detailsText);
     setDetailsError(null);
     setSelectedCategory(draft.selectedCategory);
@@ -1846,6 +1895,26 @@ export function ContentSubmissionSection() {
     setTitleError(getContentTitleValidationError(value));
   };
 
+  const handleQuestionFormatChange = (nextFormat: QuestionFormat) => {
+    setQuestionFormat(nextFormat);
+    patchActiveQuestionDraft({ questionFormat: nextFormat });
+    setHeadToHeadError(getHeadToHeadValidationError({ ...getActiveQuestionDraft(), questionFormat: nextFormat }));
+    if (nextFormat === "head_to_head_ab" && questionCount > 1) {
+      handleQuestionCountChange("1");
+    }
+  };
+
+  const handleHeadToHeadFieldChange = (
+    patch: Partial<Pick<QuestionDraft, "optionALabel" | "optionBLabel" | "comparisonCriterion">>,
+  ) => {
+    const nextDraft = { ...getActiveQuestionDraft(), ...patch };
+    if (patch.optionALabel !== undefined) setOptionALabel(patch.optionALabel);
+    if (patch.optionBLabel !== undefined) setOptionBLabel(patch.optionBLabel);
+    if (patch.comparisonCriterion !== undefined) setComparisonCriterion(patch.comparisonCriterion);
+    patchActiveQuestionDraft(patch);
+    setHeadToHeadError(getHeadToHeadValidationError(nextDraft));
+  };
+
   const validateQuestionSection = (draft = getActiveQuestionDraft(), applyErrors = true): ValidatedQuestionDraft => {
     const isPrivateContext = draft.contextVisibility === "gated";
     const trimmedTitle = draft.title.trim();
@@ -1878,6 +1947,7 @@ export function ContentSubmissionSection() {
     const nextVideoUrlError = isPrivateContext ? null : getMediaUrlValidationError(draft.videoUrl, "video");
     const nextContextUrlError = isPrivateContext ? null : getContextUrlValidationError(trimmedContextUrl);
     const nextTitleError = trimmedTitle ? getContentTitleValidationError(trimmedTitle) : null;
+    const nextHeadToHeadError = getHeadToHeadValidationError(draft);
     const blockedContentTags = findBlockedContentTags(draft.selectedSubcategories);
     const submittedTags = serializeTags(draft.selectedSubcategories);
     const submittedTargetAudience = targetAudienceDraftToMetadata(draft.targetAudience);
@@ -1897,6 +1967,7 @@ export function ContentSubmissionSection() {
       setVideoUrlError(nextVideoUrlError);
       setContextUrlError(nextContextUrlError);
       setTitleError(nextTitleError);
+      setHeadToHeadError(nextHeadToHeadError);
       setDetailsError(nextDetailsError);
     }
 
@@ -1909,6 +1980,7 @@ export function ContentSubmissionSection() {
       !questionFieldsComplete ||
       Boolean(nextContextUrlError) ||
       Boolean(nextTitleError) ||
+      Boolean(nextHeadToHeadError) ||
       Boolean(nextDetailsError) ||
       hasMediaError ||
       Boolean(tagsValidationError) ||
@@ -2084,6 +2156,10 @@ export function ContentSubmissionSection() {
   };
 
   const handleQuestionCountChange = (value: string) => {
+    const activeDraft = getActiveQuestionDraft();
+    if (activeDraft.questionFormat === "head_to_head_ab") {
+      return;
+    }
     const nextCount = Math.max(1, Math.min(MAX_QUESTION_BUNDLE_COUNT, parseWholeNumberInput(value)));
     const nextVoterCapMax =
       nextCount > 1
@@ -2189,6 +2265,12 @@ export function ContentSubmissionSection() {
       validateQuestionSection(invalidDraft, true);
       setSubmissionStep("question");
       notification.warning("Fill in every question page before submitting.");
+      return;
+    }
+
+    if (syncedDrafts.some(draft => draft.questionFormat === "head_to_head_ab") && syncedDrafts.length > 1) {
+      setSubmissionStep("question");
+      notification.warning("A/B comparison questions must be submitted one at a time.");
       return;
     }
 
@@ -2481,8 +2563,10 @@ export function ContentSubmissionSection() {
         if (!question.selectedCategory) {
           throw new Error(`Question ${index + 1} is missing a category.`);
         }
+        const draft = syncedDrafts[index] ?? createEmptyQuestionDraft();
         const details = submittedDetails[index] ?? EMPTY_SUBMISSION_DETAILS;
         const submittedImageUrls = canonicalQuestionImageUrls(question.submittedImageUrls);
+        const isHeadToHead = draft.questionFormat === "head_to_head_ab";
 
         const spec = buildQuestionSpecHashes({
           bounty: {
@@ -2514,6 +2598,12 @@ export function ContentSubmissionSection() {
           targetAudience: targetAudienceToQuestionSpecInput(question.targetAudience),
           title: question.trimmedTitle,
           videoUrl: question.submittedVideoUrl,
+          ...(isHeadToHead
+            ? {
+                templateId: HEAD_TO_HEAD_AB_TEMPLATE_ID,
+                templateInputs: buildHeadToHeadTemplateInputs(draft),
+              }
+            : {}),
         });
 
         return {
@@ -3028,6 +3118,11 @@ export function ContentSubmissionSection() {
       setVideoUrlError(null);
       setTitle("");
       setTitleError(null);
+      setQuestionFormat("rate_one");
+      setOptionALabel("");
+      setOptionBLabel("");
+      setComparisonCriterion("");
+      setHeadToHeadError(null);
       setDetailsText("");
       setDetailsError(null);
       setSelectedCategory(null);
@@ -4422,8 +4517,9 @@ export function ContentSubmissionSection() {
               max={MAX_QUESTION_BUNDLE_COUNT}
               step={1}
               value={questionCount}
+              disabled={questionFormat === "head_to_head_ab"}
               onChange={event => handleQuestionCountChange(event.target.value)}
-              className="input h-8 w-11 rounded-md px-2 text-center text-base font-semibold leading-none text-base-content transition-colors"
+              className="input h-8 w-11 rounded-md px-2 text-center text-base font-semibold leading-none text-base-content transition-colors disabled:cursor-not-allowed disabled:opacity-50"
               aria-label="Number of questions"
             />
           </label>
@@ -4441,17 +4537,99 @@ export function ContentSubmissionSection() {
             <div className="grid gap-6 xl:grid-cols-[minmax(0,1.5fr)_minmax(18rem,0.9fr)] xl:items-start">
               <div className="space-y-5">
                 <div>
+                  <p className="mb-2 text-base font-medium">Question type</p>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className={`btn btn-sm ${questionFormat === "rate_one" ? "btn-primary" : "btn-outline"}`}
+                      onClick={() => handleQuestionFormatChange("rate_one")}
+                    >
+                      Rate one thing
+                    </button>
+                    <button
+                      type="button"
+                      className={`btn btn-sm ${questionFormat === "head_to_head_ab" ? "btn-primary" : "btn-outline"}`}
+                      onClick={() => handleQuestionFormatChange("head_to_head_ab")}
+                    >
+                      A/B comparison (pick one)
+                    </button>
+                  </div>
+                  <p className="mt-2 text-sm text-base-content/60">
+                    {questionFormat === "head_to_head_ab"
+                      ? "Voters choose A or B. Up means option A; down means option B."
+                      : "Voters use thumbs up or down on one thing you ask them to rate."}
+                  </p>
+                </div>
+
+                {questionFormat === "head_to_head_ab" ? (
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-2 block text-base font-medium">Option A</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Codex"
+                        className={`input input-bordered w-full bg-base-100 ${
+                          headToHeadError || (questionStepAttempted && !optionALabel.trim()) ? "input-error" : ""
+                        }`}
+                        value={optionALabel}
+                        onChange={event => handleHeadToHeadFieldChange({ optionALabel: event.target.value })}
+                        maxLength={80}
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-2 block text-base font-medium">Option B</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Claude"
+                        className={`input input-bordered w-full bg-base-100 ${
+                          headToHeadError || (questionStepAttempted && !optionBLabel.trim()) ? "input-error" : ""
+                        }`}
+                        value={optionBLabel}
+                        onChange={event => handleHeadToHeadFieldChange({ optionBLabel: event.target.value })}
+                        maxLength={80}
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="mb-2 flex items-center gap-1.5 text-base font-medium">
+                        Comparison focus
+                        <span className="text-base-content/60">(optional)</span>
+                        <InfoTooltip text="Short phrase for what raters should compare, such as default coding-agent workflow or landing-page clarity." />
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. default coding-agent workflow"
+                        className="input input-bordered w-full bg-base-100"
+                        value={comparisonCriterion}
+                        onChange={event => handleHeadToHeadFieldChange({ comparisonCriterion: event.target.value })}
+                        maxLength={120}
+                      />
+                    </div>
+                    {headToHeadError ? <p className="sm:col-span-2 text-base text-error">{headToHeadError}</p> : null}
+                  </div>
+                ) : null}
+
+                <div>
                   <label
                     className={`mb-2 flex items-center gap-1.5 text-base font-medium ${
                       questionStepAttempted && !title.trim() ? "text-error" : ""
                     }`}
                   >
                     Question
-                    <InfoTooltip text="Good questions are specific, subjective, and easy to compare. Focus on one clear thing voters can rate, avoid yes/no or factual prompts, and add context below." />
+                    <InfoTooltip
+                      text={
+                        questionFormat === "head_to_head_ab"
+                          ? "Ask which option raters prefer. Name both options in the title, avoid vote-up-if phrasing, and add comparison context below."
+                          : "Good questions are specific, subjective, and easy to compare. Focus on one clear thing voters can rate, avoid yes/no or factual prompts, and add context below."
+                      }
+                    />
                   </label>
                   <input
                     type="text"
-                    placeholder="Write a subjective question voters can rate"
+                    placeholder={
+                      questionFormat === "head_to_head_ab"
+                        ? "Which agent do you prefer for coding work?"
+                        : "Write a subjective question voters can rate"
+                    }
                     className={`input input-bordered w-full bg-base-100 ${
                       titleError || (questionStepAttempted && !title.trim()) ? "input-error" : ""
                     }`}
