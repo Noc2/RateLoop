@@ -290,23 +290,71 @@ export function AwardFeedbackBonusModal({ item, pools, onAwarded, onClose }: Awa
           );
         }
       } else {
-        const hash = await writeTx(
-          () =>
-            writeContractAsync({
-              address: escrowAddress,
-              abi: FEEDBACK_BONUS_ESCROW_ABI,
-              functionName: "awardFeedbackBonus",
-              args: awardArgs,
-              chainId: chainId as any,
-            } as any),
-          {
-            action: "Award Feedback Bonus",
-            suppressErrorToast: true,
-            suppressSuccessToast: true,
-          },
-        );
-        if (!hash) {
-          throw new Error("Feedback Bonus award transaction was not submitted.");
+        const poolId = BigInt(selectedPool.id);
+        const poolBefore = publicClient
+          ? await publicClient
+              .readContract({
+                address: escrowAddress,
+                abi: FEEDBACK_BONUS_ESCROW_ABI,
+                functionName: "feedbackBonusPools",
+                args: [poolId],
+              } as never)
+              .catch(() => null)
+          : null;
+        const remainingBefore = readPoolRemainingAmount(poolBefore);
+        const expectedRemainingAmount =
+          remainingBefore !== null && remainingBefore >= parsedAmount ? remainingBefore - parsedAmount : undefined;
+        const submitDirectAward = () =>
+          writeTx(
+            () =>
+              writeContractAsync({
+                address: escrowAddress,
+                abi: FEEDBACK_BONUS_ESCROW_ABI,
+                functionName: "awardFeedbackBonus",
+                args: awardArgs,
+                chainId: chainId as any,
+              } as any),
+            {
+              action: "Award Feedback Bonus",
+              suppressErrorToast: true,
+              suppressSuccessToast: true,
+            },
+          );
+
+        if (publicClient && typeof expectedRemainingAmount !== "undefined") {
+          const { confirmation, result: hash } = await raceTransactionWithPostcondition({
+            onPostconditionSuccessThenTransactionError: error => {
+              console.warn("[feedback-bonus] award postcondition succeeded before direct wallet status settled.", {
+                error,
+                poolId: selectedPool.id,
+              });
+            },
+            transaction: submitDirectAward,
+            waitForPostcondition: shouldStop =>
+              waitForTransactionPostcondition(
+                () =>
+                  hasFeedbackBonusAwardPostcondition({
+                    client: publicClient,
+                    escrowAddress,
+                    expectedRemainingAmount,
+                    feedbackHash,
+                    poolId,
+                  }),
+                "feedback-bonus-award-postcondition",
+                {
+                  pollingIntervalMs: getFeedbackBonusAwardPollingInterval(chainId),
+                  shouldStop,
+                },
+              ),
+          });
+          if (confirmation !== "postcondition" && !hash) {
+            throw new Error("Feedback Bonus award transaction was not submitted.");
+          }
+        } else {
+          const hash = await submitDirectAward();
+          if (!hash) {
+            throw new Error("Feedback Bonus award transaction was not submitted.");
+          }
         }
       }
 

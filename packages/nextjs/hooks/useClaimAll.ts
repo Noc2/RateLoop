@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { type Abi } from "viem";
+import { type Abi, zeroHash } from "viem";
 import { useAccount, usePublicClient } from "wagmi";
 import { getTransactionReceiptPollingInterval } from "~~/config/shared";
 import { useTermsAcceptance } from "~~/contexts/TermsAcceptanceContext";
@@ -188,11 +188,41 @@ export function useClaimAll() {
     };
   };
 
-  const waitForSponsoredClaimPostcondition = (
-    item: ClaimableRewardItem,
-    shouldStop: () => boolean,
-  ): Promise<boolean> | null => {
+  const waitForClaimPostcondition = (item: ClaimableRewardItem, shouldStop: () => boolean): Promise<boolean> | null => {
     if (!publicClient || !address) return null;
+
+    if (item.claimType === "refund" && votingEngineInfo) {
+      const claimVoter = item.voter ?? address;
+      return waitForTransactionPostcondition(
+        async () => {
+          let commitKey = item.commitKey;
+          if (!commitKey || commitKey.toLowerCase() === zeroHash) {
+            const voterCommit = (await publicClient.readContract({
+              address: votingEngineInfo.address as `0x${string}`,
+              abi: votingEngineInfo.abi as Abi,
+              functionName: "voterCommitKey",
+              args: [item.contentId, item.roundId, claimVoter],
+            } as never)) as readonly [`0x${string}`, `0x${string}`];
+            commitKey = voterCommit[1];
+          }
+          if (!commitKey || commitKey.toLowerCase() === zeroHash) return false;
+
+          const commitCore = (await publicClient.readContract({
+            address: votingEngineInfo.address as `0x${string}`,
+            abi: votingEngineInfo.abi as Abi,
+            functionName: "commitCore",
+            args: [item.contentId, item.roundId, commitKey],
+          } as never)) as readonly unknown[];
+          const stakeAmount = commitCore[1];
+          return stakeAmount === 0n || stakeAmount === 0;
+        },
+        "claim-refund-postcondition",
+        {
+          pollingIntervalMs: getClaimPostconditionPollingInterval(targetNetwork.id),
+          shouldStop,
+        },
+      );
+    }
 
     if (item.claimType === "reward" && distributorInfo) {
       const commitKey = item.commitKey;
@@ -342,6 +372,37 @@ export function useClaimAll() {
     return null;
   };
 
+  const canWaitForClaimPostcondition = (item: ClaimableRewardItem) =>
+    Boolean(
+      publicClient &&
+        address &&
+        ((item.claimType === "refund" && votingEngineInfo && (item.commitKey || item.voter || address)) ||
+          (item.claimType === "reward" && distributorInfo && (item.commitKey || item.voter)) ||
+          (item.claimType === "frontend_round_fee" && distributorInfo) ||
+          (item.claimType === "frontend_registry_fee" && frontendRegistryInfo) ||
+          (item.claimType === "frontend_registry_withdrawal" && frontendRegistryInfo) ||
+          (item.claimType === "question_reward" && questionRewardPoolEscrowInfo) ||
+          (item.claimType === "question_bundle_reward" && questionRewardPoolEscrowInfo)),
+    );
+
+  const raceClaimTransaction = async (item: ClaimableRewardItem, transaction: () => Promise<unknown>) => {
+    if (canWaitForClaimPostcondition(item)) {
+      await raceTransactionWithPostcondition({
+        onPostconditionSuccessThenTransactionError: error => {
+          console.warn("[claim-all] claim postcondition succeeded before transaction status settled.", {
+            claimType: item.claimType,
+            error,
+          });
+        },
+        transaction,
+        waitForPostcondition: shouldStop => waitForClaimPostcondition(item, shouldStop) ?? Promise.resolve(false),
+      });
+      return;
+    }
+
+    await transaction();
+  };
+
   const claimAll = async (items: ClaimableRewardItem[], onComplete?: () => void) => {
     if (items.length === 0) return;
 
@@ -418,97 +479,77 @@ export function useClaimAll() {
                 action: claimLabel,
                 suppressStatusToast,
               });
-            const canWaitForPostcondition = Boolean(
-              publicClient &&
-                address &&
-                ((item.claimType === "reward" && distributorInfo && (item.commitKey || item.voter)) ||
-                  (item.claimType === "frontend_round_fee" && distributorInfo) ||
-                  (item.claimType === "frontend_registry_fee" && frontendRegistryInfo) ||
-                  (item.claimType === "frontend_registry_withdrawal" && frontendRegistryInfo) ||
-                  (item.claimType === "question_reward" && questionRewardPoolEscrowInfo) ||
-                  (item.claimType === "question_bundle_reward" && questionRewardPoolEscrowInfo)),
-            );
-            if (canWaitForPostcondition) {
-              await raceTransactionWithPostcondition({
-                onPostconditionSuccessThenTransactionError: error => {
-                  console.warn("[claim-all] claim postcondition succeeded before thirdweb status settled.", {
-                    claimType: item.claimType,
-                    error,
-                  });
-                },
-                transaction: () => executeClaim(true),
-                waitForPostcondition: shouldStop =>
-                  waitForSponsoredClaimPostcondition(item, shouldStop) ?? Promise.resolve(false),
-              });
-            } else {
-              await executeClaim();
-            }
+            await raceClaimTransaction(item, () => executeClaim(canWaitForClaimPostcondition(item)));
             if (shouldWaitForCheckpointBlock) {
               await waitForNextObservedBlock(publicClient, { afterBlockNumber: checkpointBaselineBlock });
             }
             if (item.claimType === "frontend_round_fee") {
               creditedFrontendRoundCount += 1;
             }
-          } else if (item.claimType === "refund") {
-            await (writeVotingEngine as any)(
-              {
-                functionName: "claimCancelledRoundRefund",
-                args: [item.contentId, item.roundId],
-              },
-              { getErrorMessage: getTransactionErrorMessage },
-            );
-          } else if (item.claimType === "frontend_round_fee") {
-            await (writeDistributor as any)(
-              {
-                functionName: "claimFrontendFee",
-                args: [item.contentId, item.roundId, item.frontend],
-              },
-              { getErrorMessage: getTransactionErrorMessage },
-            );
-            creditedFrontendRoundCount += 1;
-          } else if (item.claimType === "frontend_registry_fee") {
-            await (writeFrontendRegistry as any)(
-              {
-                functionName: "requestFeeWithdrawal",
-              },
-              { getErrorMessage: getTransactionErrorMessage },
-            );
-          } else if (item.claimType === "frontend_registry_withdrawal") {
-            await (writeFrontendRegistry as any)(
-              {
-                functionName: "completeFeeWithdrawal",
-              },
-              { getErrorMessage: getTransactionErrorMessage },
-            );
-          } else if (item.claimType === "question_reward") {
-            await (writeQuestionRewardPoolEscrow as any)(
-              {
-                functionName: "claimQuestionReward",
-                args: getQuestionRewardClaimArgs(item),
-              },
-              { getErrorMessage: getTransactionErrorMessage },
-            );
-          } else if (item.claimType === "question_bundle_reward") {
-            if (!questionRewardPoolEscrowAddress) {
-              throw new Error("Question reward escrow is not configured");
-            }
-            await (writeQuestionRewardPoolEscrow as any)(
-              {
-                address: questionRewardPoolEscrowAddress,
-                abi: QUESTION_REWARD_POOL_ESCROW_ABI,
-                functionName: "claimQuestionBundleReward",
-                args: getQuestionBundleRewardClaimArgs(item),
-              },
-              { getErrorMessage: getTransactionErrorMessage },
-            );
           } else {
-            await (writeDistributor as any)(
-              {
-                functionName: "claimReward",
-                args: [item.contentId, item.roundId],
-              },
-              { getErrorMessage: getTransactionErrorMessage },
-            );
+            await raceClaimTransaction(item, async () => {
+              if (item.claimType === "refund") {
+                await (writeVotingEngine as any)(
+                  {
+                    functionName: "claimCancelledRoundRefund",
+                    args: [item.contentId, item.roundId],
+                  },
+                  { getErrorMessage: getTransactionErrorMessage },
+                );
+              } else if (item.claimType === "frontend_round_fee") {
+                await (writeDistributor as any)(
+                  {
+                    functionName: "claimFrontendFee",
+                    args: [item.contentId, item.roundId, item.frontend],
+                  },
+                  { getErrorMessage: getTransactionErrorMessage },
+                );
+                creditedFrontendRoundCount += 1;
+              } else if (item.claimType === "frontend_registry_fee") {
+                await (writeFrontendRegistry as any)(
+                  {
+                    functionName: "requestFeeWithdrawal",
+                  },
+                  { getErrorMessage: getTransactionErrorMessage },
+                );
+              } else if (item.claimType === "frontend_registry_withdrawal") {
+                await (writeFrontendRegistry as any)(
+                  {
+                    functionName: "completeFeeWithdrawal",
+                  },
+                  { getErrorMessage: getTransactionErrorMessage },
+                );
+              } else if (item.claimType === "question_reward") {
+                await (writeQuestionRewardPoolEscrow as any)(
+                  {
+                    functionName: "claimQuestionReward",
+                    args: getQuestionRewardClaimArgs(item),
+                  },
+                  { getErrorMessage: getTransactionErrorMessage },
+                );
+              } else if (item.claimType === "question_bundle_reward") {
+                if (!questionRewardPoolEscrowAddress) {
+                  throw new Error("Question reward escrow is not configured");
+                }
+                await (writeQuestionRewardPoolEscrow as any)(
+                  {
+                    address: questionRewardPoolEscrowAddress,
+                    abi: QUESTION_REWARD_POOL_ESCROW_ABI,
+                    functionName: "claimQuestionBundleReward",
+                    args: getQuestionBundleRewardClaimArgs(item),
+                  },
+                  { getErrorMessage: getTransactionErrorMessage },
+                );
+              } else {
+                await (writeDistributor as any)(
+                  {
+                    functionName: "claimReward",
+                    args: [item.contentId, item.roundId],
+                  },
+                  { getErrorMessage: getTransactionErrorMessage },
+                );
+              }
+            });
           }
         } catch (e: any) {
           console.error(`Claim failed for ${claimLabel}:`, e?.shortMessage || e?.message);
