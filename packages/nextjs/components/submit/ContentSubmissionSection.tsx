@@ -5094,17 +5094,19 @@ export function ContentSubmissionSection() {
                     {...bountyFundingWarningAction}
                   />
                 ) : null}
-                {activeQuestionIndex > 0 ? (
-                  <button type="button" onClick={handleGoToPreviousQuestion} className="btn btn-ghost w-full gap-2">
-                    <ChevronLeftIcon className="h-4 w-4" />
-                    Back to Q{activeQuestionIndex}
-                  </button>
-                ) : null}
-                <GradientActionButton onClick={handleContinueToBounty} className="w-full">
-                  {activeQuestionIndex < questionCount - 1
-                    ? `Next Question (${activeQuestionIndex + 2}/${questionCount})`
-                    : "Continue to Bounty"}
-                </GradientActionButton>
+                <div className="space-y-2 px-4">
+                  {activeQuestionIndex > 0 ? (
+                    <button type="button" onClick={handleGoToPreviousQuestion} className="btn btn-ghost w-full gap-2">
+                      <ChevronLeftIcon className="h-4 w-4" />
+                      Back to Q{activeQuestionIndex}
+                    </button>
+                  ) : null}
+                  <GradientActionButton onClick={handleContinueToBounty} className="w-full">
+                    {activeQuestionIndex < questionCount - 1
+                      ? `Next Question (${activeQuestionIndex + 2}/${questionCount})`
+                      : "Continue to Bounty"}
+                  </GradientActionButton>
+                </div>
               </div>
             </div>
           ) : submissionStep === "bounty" ? (
