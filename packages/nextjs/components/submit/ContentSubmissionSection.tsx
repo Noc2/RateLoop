@@ -1935,9 +1935,7 @@ export function ContentSubmissionSection() {
     }
     setQuestionFormat(nextFormat);
     patchActiveQuestionDraft(nextDraft);
-    setHeadToHeadError(
-      getHeadToHeadValidationError({ ...activeDraft, ...nextDraft, questionFormat: nextFormat } as QuestionDraft),
-    );
+    setHeadToHeadError(null);
     if (nextFormat === "head_to_head_ab" && questionCount > 1) {
       handleQuestionCountChange("1");
     }
@@ -1962,7 +1960,9 @@ export function ContentSubmissionSection() {
 
     setHeadToHeadTitleMode(nextHeadToHeadTitleMode);
     patchActiveQuestionDraft({ ...patch, title: nextTitle, headToHeadTitleMode: nextHeadToHeadTitleMode });
-    setHeadToHeadError(getHeadToHeadValidationError(nextDraft));
+    if (questionStepAttempted) {
+      setHeadToHeadError(getHeadToHeadValidationError(nextDraft));
+    }
   };
 
   const validateQuestionSection = (draft = getActiveQuestionDraft(), applyErrors = true): ValidatedQuestionDraft => {
@@ -4624,7 +4624,7 @@ export function ContentSubmissionSection() {
                         type="text"
                         placeholder="e.g. Codex"
                         className={`input input-bordered w-full bg-base-100 ${
-                          headToHeadError || (questionStepAttempted && !optionALabel.trim()) ? "input-error" : ""
+                          questionStepAttempted && (headToHeadError || !optionALabel.trim()) ? "input-error" : ""
                         }`}
                         value={optionALabel}
                         onChange={event => handleHeadToHeadFieldChange({ optionALabel: event.target.value })}
@@ -4637,14 +4637,16 @@ export function ContentSubmissionSection() {
                         type="text"
                         placeholder="e.g. Claude"
                         className={`input input-bordered w-full bg-base-100 ${
-                          headToHeadError || (questionStepAttempted && !optionBLabel.trim()) ? "input-error" : ""
+                          questionStepAttempted && (headToHeadError || !optionBLabel.trim()) ? "input-error" : ""
                         }`}
                         value={optionBLabel}
                         onChange={event => handleHeadToHeadFieldChange({ optionBLabel: event.target.value })}
                         maxLength={MAX_HEAD_TO_HEAD_OPTION_LABEL_LENGTH}
                       />
                     </div>
-                    {headToHeadError ? <p className="sm:col-span-2 text-base text-error">{headToHeadError}</p> : null}
+                    {questionStepAttempted && headToHeadError ? (
+                      <p className="sm:col-span-2 text-base text-error">{headToHeadError}</p>
+                    ) : null}
                   </div>
                 ) : null}
 
