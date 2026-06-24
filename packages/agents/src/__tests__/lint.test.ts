@@ -649,4 +649,37 @@ describe("round config voter alignment linting", () => {
       ]),
     );
   });
+
+  it("rejects head-to-head template on bundled asks", () => {
+    const findings = lintAgentAskRequest({
+      ...VALID_REQUEST,
+      questions: [
+        {
+          ...VALID_REQUEST.question,
+          templateId: "head_to_head_ab",
+          title: "A vs B — which agent do you prefer?",
+          templateInputs: {
+            optionAKey: "A",
+            optionALabel: "Codex",
+            optionBKey: "B",
+            optionBLabel: "Claude",
+          },
+        },
+        {
+          ...VALID_REQUEST.question,
+          title: "Second question",
+        },
+      ],
+      question: undefined,
+    });
+
+    expect(findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "error",
+          path: "questions.0.templateId",
+        }),
+      ]),
+    );
+  });
 });

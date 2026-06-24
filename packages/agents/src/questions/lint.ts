@@ -529,6 +529,18 @@ export function lintAgentAskRequest(input: unknown): QuestionLintFinding[] {
       "head_to_head_ab supports exactly one question. Use ranked_option_member bundles for 3+ options or per-option scoring.",
     );
   }
+  if (findings.length === 0 && questions.length > 1) {
+    questions.forEach((question, index) => {
+      const templateId = question.templateId ?? request.templateId;
+      if (templateId !== HEAD_TO_HEAD_AB_TEMPLATE_ID) return;
+      pushFinding(
+        findings,
+        "error",
+        request.question ? "question.templateId" : `questions.${index}.templateId`,
+        "head_to_head_ab supports exactly one question. Use ranked_option_member bundles for 3+ options or per-option scoring.",
+      );
+    });
+  }
   if (findings.length === 0 && questions.length > 1 && (!request.templateId || !RANK_BY_RATING_TEMPLATE_IDS.has(request.templateId))) {
     pushFinding(
       findings,

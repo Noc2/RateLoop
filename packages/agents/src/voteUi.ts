@@ -1,6 +1,7 @@
 import { findAgentResultTemplate, getAgentResultTemplateBySpecHash } from "./templates";
 
 export const HEAD_TO_HEAD_AB_TEMPLATE_ID = "head_to_head_ab";
+export const MAX_HEAD_TO_HEAD_OPTION_LABEL_LENGTH = 32;
 
 const SINGLE_LETTER_KEY_PATTERN = /^[A-Z]$/;
 
@@ -37,7 +38,15 @@ export function readHeadToHeadTemplateInputs(templateInputs: unknown): HeadToHea
   const optionBLabel = readTrimmedString(templateInputs.optionBLabel);
   const comparisonCriterion = readTrimmedString(templateInputs.comparisonCriterion);
 
-  if (!optionAKey || !optionBKey || optionAKey === optionBKey || !optionALabel || !optionBLabel) {
+  if (
+    !optionAKey ||
+    !optionBKey ||
+    optionAKey === optionBKey ||
+    !optionALabel ||
+    !optionBLabel ||
+    optionALabel.length > MAX_HEAD_TO_HEAD_OPTION_LABEL_LENGTH ||
+    optionBLabel.length > MAX_HEAD_TO_HEAD_OPTION_LABEL_LENGTH
+  ) {
     return null;
   }
 

@@ -71,4 +71,15 @@ describe("voteUi", () => {
       }),
     ).toEqual({ mode: "thumbs" });
   });
+
+  it("rejects option labels longer than 32 characters", () => {
+    expect(
+      readHeadToHeadTemplateInputs({
+        optionAKey: "A",
+        optionALabel: "A".repeat(33),
+        optionBKey: "B",
+        optionBLabel: "Claude",
+      }),
+    ).toBeNull();
+  });
 });
