@@ -53,6 +53,7 @@ export function CategoryFilter({ categories, activeCategory, onSelect, pillClass
   const mobileSearchInputRef = useRef<HTMLInputElement>(null);
   const mobileSearchInputId = `${searchFieldBaseId}-mobile`;
   const desktopSearchInputId = `${searchFieldBaseId}-desktop`;
+  const canRenderPortal = isMounted || ((mobileOpen || dropdownOpen) && typeof document !== "undefined");
 
   useEffect(() => {
     setIsMounted(true);
@@ -250,7 +251,7 @@ export function CategoryFilter({ categories, activeCategory, onSelect, pillClass
         </button>
       </div>
 
-      {mobileOpen && isMounted
+      {mobileOpen && canRenderPortal
         ? createPortal(
             <>
               <div
@@ -366,7 +367,7 @@ export function CategoryFilter({ categories, activeCategory, onSelect, pillClass
               <ChevronDownIcon className="w-3.5 h-3.5" />
             </button>
 
-            {dropdownOpen && isMounted && isDesktopViewport
+            {dropdownOpen && canRenderPortal && isDesktopViewport
               ? createPortal(
                   <div
                     ref={desktopPanelRef}

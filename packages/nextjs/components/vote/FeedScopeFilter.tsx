@@ -54,6 +54,7 @@ export function FeedScopeFilter({ value, groups, onChange, label = "View" }: Fee
   const flatOptions = useMemo(() => groups.flatMap(group => group.options), [groups]);
   const defaultValue = flatOptions[0]?.value;
   const isFiltered = value !== defaultValue;
+  const canRenderPortal = isMounted || (isOpen && typeof document !== "undefined");
 
   const selectedOption = useMemo(
     () => flatOptions.find(option => option.value === value) ?? flatOptions[0],
@@ -238,8 +239,8 @@ export function FeedScopeFilter({ value, groups, onChange, label = "View" }: Fee
 
       {isOpen && (
         <>
-          {isMounted ? createPortal(mobilePanel, document.body) : null}
-          {isMounted && isDesktopViewport
+          {canRenderPortal ? createPortal(mobilePanel, document.body) : null}
+          {canRenderPortal && isDesktopViewport
             ? createPortal(
                 <div
                   ref={desktopPanelRef}

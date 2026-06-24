@@ -319,6 +319,27 @@ test.describe("Mobile viewport (phone)", () => {
         explicitScrollSource.dispatchEvent(new Event("scroll", { bubbles: true }));
         explicitScrollSource.style.scrollBehavior = previousScrollBehavior;
       }, targetScrollTop);
+    const browserScrollWithinActiveCard = (deltaY: number) =>
+      page.evaluate(async delta => {
+        const explicitScrollSource = document.querySelector<HTMLElement>('[data-mobile-header-scroll-source="true"]');
+        const activeArticle = document.querySelector<HTMLElement>('article[aria-current="true"]');
+        if (!explicitScrollSource || !activeArticle) {
+          throw new Error("Missing mobile feed scroller or active article");
+        }
+
+        const activeIndex = Number(activeArticle.getAttribute("data-feed-card-index") ?? -1);
+        const startingScrollTop = explicitScrollSource.scrollTop;
+
+        explicitScrollSource.dispatchEvent(new Event("touchmove", { bubbles: true }));
+        explicitScrollSource.scrollBy({ top: delta, behavior: "smooth" });
+        await new Promise(resolve => window.setTimeout(resolve, 480));
+
+        return {
+          activeIndex,
+          endingScrollTop: explicitScrollSource.scrollTop,
+          startingScrollTop,
+        };
+      }, deltaY);
     const browserSnapScrollOneCard = async (direction: "down" | "up") => {
       const scrollIntent = await page.evaluate(direction => {
         const explicitScrollSource = document.querySelector<HTMLElement>('[data-mobile-header-scroll-source="true"]');
@@ -358,6 +379,12 @@ test.describe("Mobile viewport (phone)", () => {
         .toBe(scrollIntent.targetIndex);
 
       return scrollIntent;
+    };
+    const resetToFirstFeedCard = async () => {
+      await page.locator('article[aria-current="true"]').first().focus({ timeout: 1_000 }).catch(() => undefined);
+      await page.keyboard.press("Home");
+      await expect.poll(async () => (await readLayout()).activeIndex, { timeout: 3_000 }).toBe(0);
+      await expect.poll(async () => (await readLayout()).voteScrollTop, { timeout: 3_000 }).toBeLessThan(2);
     };
     const forceDocumentScrollLeak = (targetScrollTop: number) =>
       page.evaluate(scrollTop => {
@@ -429,6 +456,8 @@ test.describe("Mobile viewport (phone)", () => {
         captureWindow.__rateloopMobileChromeChanges = [];
         return changes;
       });
+
+    await resetToFirstFeedCard();
 
     const initialLayout = await readLayout();
     expect(initialLayout.leftGutterWidth).toBeLessThanOrEqual(1);
@@ -509,6 +538,29 @@ test.describe("Mobile viewport (phone)", () => {
     expect(userSameCardChromeChanges.filter(change => change.target === "tabs").map(change => change.visible)).toEqual([
       "false",
     ]);
+
+    await setFeedScrollTop(0);
+    await expect(mobileHeader).toHaveAttribute("data-visible", "true");
+    await expect(voteTopChrome).toHaveAttribute("data-visible", "true");
+
+    const settledSameCardScrollStart = await readLayout();
+    await startMobileChromeChangeCapture();
+    const settledSameCardScroll = await browserScrollWithinActiveCard(180);
+    await expect.poll(async () => (await readLayout()).activeIndex).toBe(settledSameCardScrollStart.activeIndex);
+    await expect
+      .poll(async () => (await readLayout()).voteScrollTop)
+      .toBeGreaterThan(settledSameCardScroll.startingScrollTop + 48);
+    await expect(mobileHeader).toHaveAttribute("data-visible", "false");
+    await expect(voteTopChrome).toHaveAttribute("data-visible", "false");
+    expect(settledSameCardScroll.activeIndex).toBe(settledSameCardScrollStart.activeIndex);
+    expect(settledSameCardScroll.endingScrollTop).toBeGreaterThan(settledSameCardScroll.startingScrollTop + 48);
+    const settledSameCardChromeChanges = await stopMobileChromeChangeCapture();
+    expect(settledSameCardChromeChanges.filter(change => change.target === "header").map(change => change.visible)).toEqual(
+      ["false"],
+    );
+    expect(settledSameCardChromeChanges.filter(change => change.target === "tabs").map(change => change.visible)).toEqual(
+      ["false"],
+    );
 
     await setFeedScrollTop(0);
     await expect(mobileHeader).toHaveAttribute("data-visible", "true");
