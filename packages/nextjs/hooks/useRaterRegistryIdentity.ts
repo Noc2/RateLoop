@@ -197,10 +197,18 @@ export function useSetRaterProfile() {
   const { writeContractAsync, isPending } = useScaffoldWriteContract({
     contractName: "RaterRegistry",
   });
-  const { canUseSponsoredSubmitCalls, executeSponsoredCalls, isAwaitingSponsoredSubmitCalls } =
-    useThirdwebSponsoredSubmitCalls();
+  const {
+    canUseSelfFundedBatchCalls,
+    canUseSponsoredSubmitCalls,
+    executeSponsoredCalls,
+    isAwaitingSelfFundedSubmitCalls,
+    isAwaitingSponsoredSubmitCalls,
+  } = useThirdwebSponsoredSubmitCalls();
+  const canUseBatchedRaterProfileCalls = canUseSponsoredSubmitCalls || canUseSelfFundedBatchCalls;
+  const raterProfileBatchSponsorshipMode = canUseSponsoredSubmitCalls ? "sponsored" : "self-funded";
   const walletTransactionReadiness = useWalletTransactionReadiness({
     includeExternalSendCalls: true,
+    isAwaitingSelfFundedWallet: isAwaitingSelfFundedSubmitCalls,
     isAwaitingSponsoredWallet: isAwaitingSponsoredSubmitCalls,
   });
   const [isSponsoredWritePending, setIsSponsoredWritePending] = useState(false);
@@ -212,7 +220,7 @@ export function useSetRaterProfile() {
       }
 
       const args = [raterType, metadataHash] as const;
-      if (canUseSponsoredSubmitCalls && raterRegistryContract) {
+      if (canUseBatchedRaterProfileCalls && raterRegistryContract) {
         setIsSponsoredWritePending(true);
         try {
           const registryAddress = raterRegistryContract.address as `0x${string}`;
@@ -245,7 +253,11 @@ export function useSetRaterProfile() {
                       functionName: "setProfile",
                     },
                   ],
-                  { action: "rater profile update", suppressStatusToast: true },
+                  {
+                    action: "rater profile update",
+                    sponsorshipMode: raterProfileBatchSponsorshipMode,
+                    suppressStatusToast: true,
+                  },
                 ),
               waitForPostcondition: shouldStop =>
                 waitForTransactionPostcondition(
@@ -281,7 +293,7 @@ export function useSetRaterProfile() {
                   functionName: "setProfile",
                 },
               ],
-              { action: "rater profile update" },
+              { action: "rater profile update", sponsorshipMode: raterProfileBatchSponsorshipMode },
             );
           }
           return;
@@ -300,9 +312,10 @@ export function useSetRaterProfile() {
     },
     [
       address,
-      canUseSponsoredSubmitCalls,
+      canUseBatchedRaterProfileCalls,
       executeSponsoredCalls,
       publicClient,
+      raterProfileBatchSponsorshipMode,
       raterRegistryContract,
       targetNetwork.id,
       walletTransactionReadiness.isBlocked,

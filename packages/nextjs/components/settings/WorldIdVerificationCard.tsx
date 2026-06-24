@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { CredentialRequest, IDKit, type IDKitResult, type RpContext, orbLegacy } from "@worldcoin/idkit";
-import { formatUnits, zeroAddress } from "viem";
+import { type Abi, type Hex, formatUnits, zeroAddress } from "viem";
 import { useAccount } from "wagmi";
 import {
   ArrowTopRightOnSquareIcon,
@@ -24,6 +24,7 @@ import {
 } from "~~/hooks/scaffold-eth";
 import { useRaterRegistryIdentity } from "~~/hooks/useRaterRegistryIdentity";
 import { useRefreshWalletBalances } from "~~/hooks/useRefreshWalletBalances";
+import { useThirdwebBatchedContractWrite } from "~~/hooks/useThirdwebBatchedContractWrite";
 import { useThirdwebRaterDelegationLink } from "~~/hooks/useThirdwebRaterDelegationLink";
 import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
 import { getLaunchReferralInputState, resolveLaunchClaimReferrer } from "~~/lib/referrals/launchReferral";
@@ -135,6 +136,7 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
   const isConfigured = Boolean((appId && config.enabled) || localE2EWorldIdMock);
   const canVerify = Boolean(isConfigured && address);
   const resolvedIdentity = useRaterRegistryIdentity(walletAddress);
+  const { writeContractOrBatch } = useThirdwebBatchedContractWrite();
   const thirdwebCredentialLink = useThirdwebRaterDelegationLink({ enabled: Boolean(walletAddress) });
   const { data: hasActiveCredential, refetch: refetchHasActiveCredential } = useScaffoldReadContract({
     contractName: "RaterRegistry",
@@ -193,6 +195,9 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
   });
   const { data: raterRegistryContractData } = useDeployedContractInfo({
     contractName: "RaterRegistry",
+  });
+  const { data: launchDistributionPoolContractData } = useDeployedContractInfo({
+    contractName: "LaunchDistributionPool",
   });
   const hasWorldIdV4AttestFunction = useMemo(
     () =>
@@ -355,16 +360,33 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
       return undefined;
     }
 
+    if (!launchDistributionPoolContractData) {
+      throw new Error("Launch distribution pool is unavailable right now.");
+    }
+
     const verifiedBonusReferrer = hasInvalidReferral ? zeroAddress : claimReferrer;
 
-    await claimVerifiedBonus(
+    await writeContractOrBatch(
       {
-        functionName: "claimVerifiedBonus",
+        abi: launchDistributionPoolContractData.abi as Abi,
+        address: launchDistributionPoolContractData.address as `0x${string}`,
         args: [verifiedBonusReferrer],
+        functionName: "claimVerifiedBonus",
       },
+      () =>
+        claimVerifiedBonus(
+          {
+            functionName: "claimVerifiedBonus",
+            args: [verifiedBonusReferrer],
+          },
+          {
+            action: "claim launch bonus",
+            suppressSuccessToast: true,
+          },
+        ) as Promise<Hex | undefined>,
       {
         action: "claim launch bonus",
-        suppressSuccessToast: true,
+        suppressStatusToast: true,
       },
     );
     if (verifiedBonusReferrer !== zeroAddress) {
@@ -377,9 +399,11 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
     claimReferrer,
     claimVerifiedBonus,
     hasInvalidReferral,
+    launchDistributionPoolContractData,
     refetchCurrentVerifiedBonus,
     refetchVerifiedBonusClaimed,
     walletAddress,
+    writeContractOrBatch,
   ]);
 
   const handleClaimVerifiedBonus = useCallback(async () => {
@@ -439,21 +463,46 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
         });
 
         let transactionHash;
+        if (!raterRegistryContractData) {
+          throw new Error("Rater registry is unavailable right now.");
+        }
+
+        const raterRegistryAddress = raterRegistryContractData.address as `0x${string}`;
+        const raterRegistryAbi = raterRegistryContractData.abi as Abi;
+
         if (parsedProof.protocolVersion === "4.0") {
           assertWorldIdProofHasSubmissionWindow(parsedProof.expiresAtMin);
           if (!hasWorldIdV4AttestFunction) {
             throw new Error(`This RaterRegistry deployment does not expose ${WORLD_ID_V4_ATTEST_FUNCTION_NAME}.`);
           }
 
-          transactionHash = await (attestWorldIdCredential as any)(
+          transactionHash = await writeContractOrBatch(
             {
-              functionName: WORLD_ID_V4_ATTEST_FUNCTION_NAME,
+              abi: raterRegistryAbi,
+              address: raterRegistryAddress,
               args: [parsedProof.nullifierHash, parsedProof.nonce, BigInt(parsedProof.expiresAtMin), parsedProof.proof],
+              functionName: WORLD_ID_V4_ATTEST_FUNCTION_NAME,
             },
+            () =>
+              (attestWorldIdCredential as any)(
+                {
+                  functionName: WORLD_ID_V4_ATTEST_FUNCTION_NAME,
+                  args: [
+                    parsedProof.nullifierHash,
+                    parsedProof.nonce,
+                    BigInt(parsedProof.expiresAtMin),
+                    parsedProof.proof,
+                  ],
+                },
+                {
+                  action: "attest World ID credential",
+                  getErrorMessage: getWorldIdCredentialAttestationErrorMessage,
+                  suppressSuccessToast: true,
+                },
+              ) as Promise<Hex | undefined>,
             {
               action: "attest World ID credential",
-              getErrorMessage: getWorldIdCredentialAttestationErrorMessage,
-              suppressSuccessToast: true,
+              suppressStatusToast: true,
             },
           );
         } else {
@@ -461,15 +510,28 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
             throw new Error(`This RaterRegistry deployment does not expose ${WORLD_ID_LEGACY_ATTEST_FUNCTION_NAME}.`);
           }
 
-          transactionHash = await (attestWorldIdCredential as any)(
+          transactionHash = await writeContractOrBatch(
             {
-              functionName: WORLD_ID_LEGACY_ATTEST_FUNCTION_NAME,
+              abi: raterRegistryAbi,
+              address: raterRegistryAddress,
               args: [parsedProof.root, parsedProof.nullifierHash, parsedProof.proof],
+              functionName: WORLD_ID_LEGACY_ATTEST_FUNCTION_NAME,
             },
+            () =>
+              (attestWorldIdCredential as any)(
+                {
+                  functionName: WORLD_ID_LEGACY_ATTEST_FUNCTION_NAME,
+                  args: [parsedProof.root, parsedProof.nullifierHash, parsedProof.proof],
+                },
+                {
+                  action: "attest World ID credential",
+                  getErrorMessage: getWorldIdCredentialAttestationErrorMessage,
+                  suppressSuccessToast: true,
+                },
+              ) as Promise<Hex | undefined>,
             {
               action: "attest World ID credential",
-              getErrorMessage: getWorldIdCredentialAttestationErrorMessage,
-              suppressSuccessToast: true,
+              suppressStatusToast: true,
             },
           );
         }
@@ -492,14 +554,31 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
           fullEarnedRaterCap > activeEarnedRaterCap
         ) {
           try {
-            await unlockFullEarnedRaterCap(
+            if (!launchDistributionPoolContractData) {
+              throw new Error("Launch distribution pool is unavailable right now.");
+            }
+
+            await writeContractOrBatch(
               {
-                functionName: "unlockFullEarnedRaterCap",
+                abi: launchDistributionPoolContractData.abi as Abi,
+                address: launchDistributionPoolContractData.address as `0x${string}`,
                 args: [walletAddress],
+                functionName: "unlockFullEarnedRaterCap",
               },
+              () =>
+                unlockFullEarnedRaterCap(
+                  {
+                    functionName: "unlockFullEarnedRaterCap",
+                    args: [walletAddress],
+                  },
+                  {
+                    action: "unlock full earned-rater cap",
+                    suppressSuccessToast: true,
+                  },
+                ) as Promise<Hex | undefined>,
               {
                 action: "unlock full earned-rater cap",
-                suppressSuccessToast: true,
+                suppressStatusToast: true,
               },
             );
             notification.success("Full earned-rater launch cap unlocked.");
@@ -531,11 +610,14 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
       fullEarnedRaterCap,
       hasWorldIdLegacyAttestFunction,
       hasWorldIdV4AttestFunction,
+      launchDistributionPoolContractData,
       raterFullLaunchCapUnlocked,
+      raterRegistryContractData,
       signal,
       unlockFullEarnedRaterCap,
       walletAddress,
       worldIdProofMode,
+      writeContractOrBatch,
       rpContextResponse,
     ],
   );

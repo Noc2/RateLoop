@@ -69,10 +69,18 @@ function useProfileRegistryWrite() {
   const { writeContractAsync, isPending } = useScaffoldWriteContract({
     contractName: "ProfileRegistry" as any,
   });
-  const { canUseSponsoredSubmitCalls, executeSponsoredCalls, isAwaitingSponsoredSubmitCalls } =
-    useThirdwebSponsoredSubmitCalls();
+  const {
+    canUseSelfFundedBatchCalls,
+    canUseSponsoredSubmitCalls,
+    executeSponsoredCalls,
+    isAwaitingSelfFundedSubmitCalls,
+    isAwaitingSponsoredSubmitCalls,
+  } = useThirdwebSponsoredSubmitCalls();
+  const canUseBatchedProfileRegistryCalls = canUseSponsoredSubmitCalls || canUseSelfFundedBatchCalls;
+  const profileRegistryBatchSponsorshipMode = canUseSponsoredSubmitCalls ? "sponsored" : "self-funded";
   const walletTransactionReadiness = useWalletTransactionReadiness({
     includeExternalSendCalls: true,
+    isAwaitingSelfFundedWallet: isAwaitingSelfFundedSubmitCalls,
     isAwaitingSponsoredWallet: isAwaitingSponsoredSubmitCalls,
   });
   const [isSponsoredWritePending, setIsSponsoredWritePending] = useState(false);
@@ -83,7 +91,7 @@ function useProfileRegistryWrite() {
         throw new Error(walletTransactionReadiness.message ?? "Wallet is unavailable.");
       }
 
-      if (canUseSponsoredSubmitCalls && profileRegistryContract) {
+      if (canUseBatchedProfileRegistryCalls && profileRegistryContract) {
         setIsSponsoredWritePending(true);
         try {
           const contractAddress = profileRegistryContract.address as `0x${string}`;
@@ -107,7 +115,7 @@ function useProfileRegistryWrite() {
                       functionName,
                     },
                   ],
-                  { action, suppressStatusToast: true },
+                  { action, sponsorshipMode: profileRegistryBatchSponsorshipMode, suppressStatusToast: true },
                 ),
               waitForPostcondition: shouldStop =>
                 waitForTransactionPostcondition(
@@ -167,7 +175,7 @@ function useProfileRegistryWrite() {
                   functionName,
                 },
               ],
-              { action },
+              { action, sponsorshipMode: profileRegistryBatchSponsorshipMode },
             );
           }
           return;
@@ -186,9 +194,10 @@ function useProfileRegistryWrite() {
     },
     [
       address,
-      canUseSponsoredSubmitCalls,
+      canUseBatchedProfileRegistryCalls,
       executeSponsoredCalls,
       profileRegistryContract,
+      profileRegistryBatchSponsorshipMode,
       publicClient,
       targetNetwork.id,
       walletTransactionReadiness.isBlocked,

@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CredentialRequest, IDKit, type IDKitResult, type RpContext, orbLegacy } from "@worldcoin/idkit";
+import type { Abi, Hex } from "viem";
 import { ArrowTopRightOnSquareIcon, ExclamationTriangleIcon, QrCodeIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { WorldIdQrCode } from "~~/components/settings/WorldIdQrCode";
 import { GradientActionButton, getGradientActionMotion } from "~~/components/shared/GradientAction";
-import { useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
+import { useDeployedContractInfo, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
+import { useThirdwebBatchedContractWrite } from "~~/hooks/useThirdwebBatchedContractWrite";
 import { type WorldIdProofMode, getWorldIdClientConfig } from "~~/lib/world-id/config";
 import {
   WORLD_CREDENTIAL_PROOF_OF_HUMAN,
@@ -77,6 +79,10 @@ export function WorldIdProofDialog({ address, kind, onClose, onSuccess, open, pu
   const { writeContractAsync: writeRaterRegistry, isMining } = useScaffoldWriteContract({
     contractName: "RaterRegistry",
   });
+  const { data: raterRegistryContractData } = useDeployedContractInfo({
+    contractName: "RaterRegistry",
+  });
+  const { writeContractOrBatch } = useThirdwebBatchedContractWrite();
 
   const option = getWorldCredentialOption(kind);
   const appId = config.appId?.startsWith("app_") ? (config.appId as `app_${string}`) : null;
@@ -146,6 +152,12 @@ export function WorldIdProofDialog({ address, kind, onClose, onSuccess, open, pu
 
   const submitProof = useCallback(
     async (result: IDKitResult, requestContext: RpContextResponse) => {
+      if (!raterRegistryContractData) {
+        throw new Error("Rater registry is unavailable right now.");
+      }
+
+      const registryAddress = raterRegistryContractData.address as `0x${string}`;
+      const registryAbi = raterRegistryContractData.abi as Abi;
       const parsedProof = parseWorldIdProof(result, {
         expectedAction: requestContext.action,
         expectedCredential: option.identifier,
@@ -153,34 +165,41 @@ export function WorldIdProofDialog({ address, kind, onClose, onSuccess, open, pu
         proofMode: requestContext.proofMode ?? proofMode,
       });
 
+      const submitAttestation = async (functionName: string, args: readonly unknown[], action: string) => {
+        await writeContractOrBatch(
+          {
+            abi: registryAbi,
+            address: registryAddress,
+            args,
+            functionName,
+          },
+          () =>
+            (writeRaterRegistry as any)(
+              {
+                functionName,
+                args,
+              },
+              {
+                action,
+                getErrorMessage: getWorldIdCredentialAttestationErrorMessage,
+                suppressSuccessToast: true,
+              },
+            ) as Promise<Hex | undefined>,
+          {
+            action,
+            suppressStatusToast: true,
+          },
+        );
+      };
+
       if (parsedProof.protocolVersion === "4.0") {
         assertWorldIdProofHasSubmissionWindow(parsedProof.expiresAtMin);
-        await (writeRaterRegistry as any)(
-          {
-            functionName:
-              purpose === "presence" ? "attestHumanPresenceWithV4Proof" : "attestWorldCredentialWithV4Proof",
-            args:
-              purpose === "presence"
-                ? [
-                    kind,
-                    parsedProof.nullifierHash,
-                    parsedProof.nonce,
-                    BigInt(parsedProof.expiresAtMin),
-                    parsedProof.proof,
-                  ]
-                : [
-                    kind,
-                    parsedProof.nullifierHash,
-                    parsedProof.nonce,
-                    BigInt(parsedProof.expiresAtMin),
-                    parsedProof.proof,
-                  ],
-          },
-          {
-            action: purpose === "presence" ? "attest World ID recheck" : "attest World ID credential",
-            getErrorMessage: getWorldIdCredentialAttestationErrorMessage,
-            suppressSuccessToast: true,
-          },
+        await submitAttestation(
+          purpose === "presence" ? "attestHumanPresenceWithV4Proof" : "attestWorldCredentialWithV4Proof",
+          purpose === "presence"
+            ? [kind, parsedProof.nullifierHash, parsedProof.nonce, BigInt(parsedProof.expiresAtMin), parsedProof.proof]
+            : [kind, parsedProof.nullifierHash, parsedProof.nonce, BigInt(parsedProof.expiresAtMin), parsedProof.proof],
+          purpose === "presence" ? "attest World ID recheck" : "attest World ID credential",
         );
         return;
       }
@@ -189,19 +208,22 @@ export function WorldIdProofDialog({ address, kind, onClose, onSuccess, open, pu
         throw new Error("World ID v3 only supports the Proof of Human credential.");
       }
 
-      await (writeRaterRegistry as any)(
-        {
-          functionName: "attestHumanCredentialWithProof",
-          args: [parsedProof.root, parsedProof.nullifierHash, parsedProof.proof],
-        },
-        {
-          action: "attest World ID credential",
-          getErrorMessage: getWorldIdCredentialAttestationErrorMessage,
-          suppressSuccessToast: true,
-        },
+      await submitAttestation(
+        "attestHumanCredentialWithProof",
+        [parsedProof.root, parsedProof.nullifierHash, parsedProof.proof],
+        "attest World ID credential",
       );
     },
-    [kind, option.identifier, proofMode, purpose, signal, writeRaterRegistry],
+    [
+      kind,
+      option.identifier,
+      proofMode,
+      purpose,
+      raterRegistryContractData,
+      signal,
+      writeContractOrBatch,
+      writeRaterRegistry,
+    ],
   );
 
   const start = useCallback(async () => {

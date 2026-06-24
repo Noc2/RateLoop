@@ -3,6 +3,7 @@ import {
   getLegacyClaimTransactionErrorMessage,
   shouldInspectLegacyAdminClaim,
   shouldRetryLegacySponsoredClaimAsEoa,
+  shouldUseBatchedLegacyClaim,
   shouldUseLegacyAdminClaim,
   shouldUseSponsoredLegacyClaim,
 } from "./useLegacyClaim";
@@ -85,6 +86,26 @@ test("does not use admin claim data when connected wallet is already the eligibl
       adminAddress: "0x63cada40E8AcF7A1d47229af5Be35b78b16035fa",
       adminClaimStatus: "eligible",
       connectedAddress: "0x63CADA40E8ACF7A1D47229AF5BE35B78B16035FA",
+    }),
+    false,
+  );
+});
+
+test("uses batched legacy claims when self-funded batch calls are available", () => {
+  assert.equal(
+    shouldUseBatchedLegacyClaim({
+      canUseBatchedSubmitCalls: true,
+      claimAddress: "0x63cada40E8AcF7A1d47229af5Be35b78b16035fa",
+      executionAddress: "0x63CADA40E8ACF7A1D47229AF5BE35B78B16035FA",
+    }),
+    true,
+  );
+
+  assert.equal(
+    shouldUseBatchedLegacyClaim({
+      canUseBatchedSubmitCalls: false,
+      claimAddress: "0x63cada40E8AcF7A1d47229af5Be35b78b16035fa",
+      executionAddress: "0x63CADA40E8ACF7A1D47229AF5BE35B78B16035FA",
     }),
     false,
   );

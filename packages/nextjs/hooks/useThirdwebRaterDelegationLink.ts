@@ -37,7 +37,10 @@ export function useThirdwebRaterDelegationLink({ enabled = true }: { enabled?: b
   const { writeContractAsync, isMining: isWriteMining } = useScaffoldWriteContract({
     contractName: "RaterRegistry",
   });
-  const { canUseSponsoredSubmitCalls, executeSponsoredCalls } = useThirdwebSponsoredSubmitCalls();
+  const { canUseSelfFundedBatchCalls, canUseSponsoredSubmitCalls, executeSponsoredCalls } =
+    useThirdwebSponsoredSubmitCalls();
+  const canUseBatchedDelegationLinkCalls = canUseSponsoredSubmitCalls || canUseSelfFundedBatchCalls;
+  const delegationLinkBatchSponsorshipMode = canUseSponsoredSubmitCalls ? "sponsored" : "self-funded";
   const [isLinking, setIsLinking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -114,7 +117,7 @@ export function useThirdwebRaterDelegationLink({ enabled = true }: { enabled?: b
       )) as Hex;
       const args = [candidate.holderAddress, deadline, signature] as const;
 
-      if (canUseSponsoredSubmitCalls) {
+      if (canUseBatchedDelegationLinkCalls) {
         const activeDelegateBefore = await publicClient
           .readContract({
             address: registryAddress,
@@ -143,7 +146,11 @@ export function useThirdwebRaterDelegationLink({ enabled = true }: { enabled?: b
                     functionName: "acceptDelegateWithSig",
                   },
                 ],
-                { action: "rater identity link", suppressStatusToast: true },
+                {
+                  action: "rater identity link",
+                  sponsorshipMode: delegationLinkBatchSponsorshipMode,
+                  suppressStatusToast: true,
+                },
               ),
             waitForPostcondition: shouldStop =>
               waitForTransactionPostcondition(
@@ -184,7 +191,7 @@ export function useThirdwebRaterDelegationLink({ enabled = true }: { enabled?: b
                 functionName: "acceptDelegateWithSig",
               },
             ],
-            { action: "rater identity link" },
+            { action: "rater identity link", sponsorshipMode: delegationLinkBatchSponsorshipMode },
           );
         }
       } else {
@@ -209,8 +216,9 @@ export function useThirdwebRaterDelegationLink({ enabled = true }: { enabled?: b
     }
   }, [
     activeWalletAdminAccount,
-    canUseSponsoredSubmitCalls,
+    canUseBatchedDelegationLinkCalls,
     candidate,
+    delegationLinkBatchSponsorshipMode,
     chain?.id,
     connectedIdentity,
     executeSponsoredCalls,

@@ -12,6 +12,7 @@ import {
   useTransactor,
 } from "~~/hooks/scaffold-eth";
 import { usePageVisibility } from "~~/hooks/usePageVisibility";
+import { useThirdwebSponsoredSubmitCalls } from "~~/hooks/useThirdwebSponsoredSubmitCalls";
 import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
 import { notification } from "~~/utils/scaffold-eth";
 import { ZERO_ADDRESS } from "~~/utils/scaffold-eth/common";
@@ -542,6 +543,10 @@ export function useGovernanceWrite() {
   const { targetNetwork } = useTargetNetwork();
   const writeTx = useTransactor();
   const { writeContractAsync, isPending, reset } = useWriteContract();
+  const { canUseSelfFundedBatchCalls, canUseSponsoredSubmitCalls, executeSponsoredCalls } =
+    useThirdwebSponsoredSubmitCalls();
+  const canUseBatchedGovernanceCalls = canUseSponsoredSubmitCalls || canUseSelfFundedBatchCalls;
+  const governanceBatchSponsorshipMode = canUseSponsoredSubmitCalls ? "sponsored" : "self-funded";
 
   const writeDynamicContract = async (request: GovernanceWriteRequest, options?: TransactorFuncOptions) => {
     if (!chain?.id) {
@@ -555,6 +560,28 @@ export function useGovernanceWrite() {
     }
 
     reset();
+
+    if (canUseBatchedGovernanceCalls) {
+      const result = await executeSponsoredCalls(
+        [
+          {
+            abi: request.abi,
+            address: request.address as `0x${string}`,
+            args: request.args,
+            functionName: request.functionName,
+            ...(typeof request.value !== "undefined" ? { value: request.value } : {}),
+          },
+        ],
+        {
+          action: options?.action ?? request.functionName,
+          sponsorshipMode: governanceBatchSponsorshipMode,
+          suppressStatusToast: options?.suppressStatusToast,
+        },
+      );
+
+      return result.receipts?.[0]?.transactionHash;
+    }
+
     return writeTx(
       () =>
         writeContractAsync({

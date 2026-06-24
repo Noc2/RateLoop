@@ -130,9 +130,12 @@ export function DelegationSection() {
     !isLrepBalanceLoading && parsedTransferAmount !== null && parsedTransferAmount > lrepBalanceMicro;
   const isDelegationWritePending = isDelegationPending || isSponsoredDelegationPending;
   const isTransferPending = isDirectTransferPending || isSponsoredTransferPending;
+  const canUseBatchedLrepTransferCalls = canUseSponsoredSubmitCalls || canUseSelfFundedBatchCalls;
+  const lrepTransferBatchSponsorshipMode = canUseSponsoredSubmitCalls ? "sponsored" : "self-funded";
   const canSubmitTransfer =
     !isLrepBalanceLoading &&
     !isAwaitingSponsoredSubmitCalls &&
+    !isAwaitingSelfFundedBatchCalls &&
     isValidTransferAddress &&
     !isTransferZeroAddress &&
     !isTransferSelfAddress &&
@@ -378,7 +381,7 @@ export function DelegationSection() {
     try {
       const transferArgs = [normalizedTransferAddress as `0x${string}`, parsedTransferAmount] as const;
 
-      if (canUseSponsoredSubmitCalls && lrepContract) {
+      if (canUseBatchedLrepTransferCalls && lrepContract) {
         setIsSponsoredTransferPending(true);
         try {
           const tokenAddress = lrepContract.address as `0x${string}`;
@@ -414,6 +417,7 @@ export function DelegationSection() {
                   {
                     action: "LREP transfer",
                     allowSelfFundedFallback: true,
+                    sponsorshipMode: lrepTransferBatchSponsorshipMode,
                     suppressStatusToast: true,
                   },
                 ),
@@ -448,6 +452,7 @@ export function DelegationSection() {
               {
                 action: "LREP transfer",
                 allowSelfFundedFallback: true,
+                sponsorshipMode: lrepTransferBatchSponsorshipMode,
               },
             );
           }

@@ -46,12 +46,12 @@ function addressesMatch(left: string | null | undefined, right: string | null | 
   return Boolean(normalizedLeft && normalizedRight && normalizedLeft === normalizedRight);
 }
 
-export function shouldUseSponsoredLegacyClaim(params: {
-  canUseSponsoredSubmitCalls: boolean;
+export function shouldUseBatchedLegacyClaim(params: {
+  canUseBatchedSubmitCalls: boolean;
   claimAddress?: string | null;
   executionAddress?: string | null;
 }) {
-  if (!params.canUseSponsoredSubmitCalls) {
+  if (!params.canUseBatchedSubmitCalls) {
     return false;
   }
 
@@ -59,6 +59,18 @@ export function shouldUseSponsoredLegacyClaim(params: {
   const executionAddress = normalizeComparableAddress(params.executionAddress);
 
   return Boolean(claimAddress && executionAddress && claimAddress === executionAddress);
+}
+
+export function shouldUseSponsoredLegacyClaim(params: {
+  canUseSponsoredSubmitCalls: boolean;
+  claimAddress?: string | null;
+  executionAddress?: string | null;
+}) {
+  return shouldUseBatchedLegacyClaim({
+    canUseBatchedSubmitCalls: params.canUseSponsoredSubmitCalls,
+    claimAddress: params.claimAddress,
+    executionAddress: params.executionAddress,
+  });
 }
 
 function getErrorText(error: unknown) {
@@ -331,14 +343,16 @@ export function useLegacyClaim() {
   const { data: launchDistributionPoolInfo } = useDeployedContractInfo({
     contractName: "LaunchDistributionPool",
   });
-  const { canUseSponsoredSubmitCalls, executeSponsoredCalls } = useThirdwebSponsoredSubmitCalls({
-    allowInAppSponsorshipSync: LEGACY_CLAIM_ALLOW_IN_APP_SPONSORSHIP_SYNC,
-  });
-  const canUseSponsoredLegacyClaim = shouldUseSponsoredLegacyClaim({
-    canUseSponsoredSubmitCalls: canUseSponsoredSubmitCalls && canClaimWithConnectedWallet,
+  const { canUseSelfFundedBatchCalls, canUseSponsoredSubmitCalls, executeSponsoredCalls } =
+    useThirdwebSponsoredSubmitCalls({
+      allowInAppSponsorshipSync: LEGACY_CLAIM_ALLOW_IN_APP_SPONSORSHIP_SYNC,
+    });
+  const canUseBatchedLegacyClaim = shouldUseBatchedLegacyClaim({
+    canUseBatchedSubmitCalls: (canUseSponsoredSubmitCalls || canUseSelfFundedBatchCalls) && canClaimWithConnectedWallet,
     claimAddress: claimOwnerAddress,
     executionAddress: activeExecutionAddress,
   });
+  const legacyClaimBatchSponsorshipMode = canUseSponsoredSubmitCalls ? "sponsored" : "self-funded";
   const {
     canShowFreeTransactionAllowance,
     canSponsorTransactions,
@@ -450,7 +464,7 @@ export function useLegacyClaim() {
 
     const preflightError = getClaimPreflightErrorMessage({
       canShowFreeTransactionAllowance,
-      canSponsorTransactions: canSponsorTransactions && canUseSponsoredLegacyClaim,
+      canSponsorTransactions: canSponsorTransactions && canUseBatchedLegacyClaim,
       freeTransactionRemaining,
       freeTransactionVerified,
       hasNativeGasBalance: nativeBalanceValue > 0n,
@@ -473,7 +487,7 @@ export function useLegacyClaim() {
       return;
     }
 
-    if (canUseSponsoredLegacyClaim) {
+    if (canUseBatchedLegacyClaim) {
       const client = thirdwebClient;
       if (!launchDistributionPoolInfo || !publicClient || !client) {
         notification.error("Legacy claim contract is unavailable right now.");
@@ -529,11 +543,11 @@ export function useLegacyClaim() {
                 functionName: "claimLegacyContributorAllocation",
               },
             ],
-            { action: "Claim legacy LREP" },
+            { action: "Claim legacy LREP", sponsorshipMode: legacyClaimBatchSponsorshipMode },
           );
         } catch (error) {
-          console.error("Sponsored legacy claim failed:", error);
-          if (!shouldRetryLegacySponsoredClaimAsEoa(error)) {
+          console.error("Batched legacy claim failed:", error);
+          if (legacyClaimBatchSponsorshipMode !== "sponsored" || !shouldRetryLegacySponsoredClaimAsEoa(error)) {
             throw error;
           }
           await submitSelfFundedLegacyClaim(error);
