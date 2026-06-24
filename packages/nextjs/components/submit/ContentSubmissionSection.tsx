@@ -6,10 +6,6 @@ import Link from "next/link";
 import {
   HEAD_TO_HEAD_AB_TEMPLATE_ID,
   MAX_HEAD_TO_HEAD_OPTION_LABEL_LENGTH,
-  buildHeadToHeadAbTitle,
-  getHeadToHeadAbTitleLengthError,
-  getHeadToHeadAbTitleValidationError,
-  isHeadToHeadAbAutoTitle,
   readHeadToHeadTemplateInputs,
 } from "@rateloop/agents/voteUi";
 import { RoundVotingEngineAbi } from "@rateloop/contracts/abis";
@@ -93,6 +89,13 @@ import {
 import { MAX_QUESTION_LENGTH } from "~~/lib/contentTitle";
 import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
 import { protocolDocFacts } from "~~/lib/docs/protocolFacts";
+import {
+  type HeadToHeadTitleMode,
+  getHeadToHeadOptionValidationError,
+  getHeadToHeadQuestionTitleError,
+  isHeadToHeadAbAutoTitle,
+  resolveAutoHeadToHeadTitle,
+} from "~~/lib/headToHeadQuestion";
 import { formatHumanDuration } from "~~/lib/humanDuration";
 import {
   findBlockedContentTags,
@@ -287,7 +290,6 @@ function normalizeAudienceCountryCodeInput(value: string) {
 }
 
 type QuestionFormat = "rate_one" | "head_to_head_ab";
-type HeadToHeadTitleMode = "auto" | "manual";
 
 type QuestionDraft = {
   mediaMode: MediaMode;
@@ -351,24 +353,7 @@ function getHeadToHeadValidationError(
   draft: Pick<QuestionDraft, "questionFormat" | "optionALabel" | "optionBLabel">,
 ): string | null {
   if (draft.questionFormat !== "head_to_head_ab") return null;
-  const trimmedA = draft.optionALabel.trim();
-  const trimmedB = draft.optionBLabel.trim();
-  if (
-    trimmedA.length > MAX_HEAD_TO_HEAD_OPTION_LABEL_LENGTH ||
-    trimmedB.length > MAX_HEAD_TO_HEAD_OPTION_LABEL_LENGTH
-  ) {
-    return `Option names must be ${MAX_HEAD_TO_HEAD_OPTION_LABEL_LENGTH} characters or fewer.`;
-  }
-  const inputs = readHeadToHeadTemplateInputs({
-    optionAKey: "A",
-    optionALabel: trimmedA,
-    optionBKey: "B",
-    optionBLabel: trimmedB,
-  });
-  if (!inputs) return "Enter both option names for the A/B comparison.";
-  const lengthError = getHeadToHeadAbTitleLengthError(trimmedA, trimmedB);
-  if (lengthError) return lengthError;
-  return null;
+  return getHeadToHeadOptionValidationError(draft.optionALabel, draft.optionBLabel);
 }
 
 function buildHeadToHeadTemplateInputs(draft: QuestionDraft) {
@@ -378,36 +363,6 @@ function buildHeadToHeadTemplateInputs(draft: QuestionDraft) {
     optionBKey: "B",
     optionBLabel: draft.optionBLabel.trim(),
   };
-}
-
-function resolveAutoHeadToHeadTitle(optionALabel: string, optionBLabel: string): string | null {
-  const trimmedA = optionALabel.trim();
-  const trimmedB = optionBLabel.trim();
-  if (
-    !readHeadToHeadTemplateInputs({
-      optionAKey: "A",
-      optionALabel: trimmedA,
-      optionBKey: "B",
-      optionBLabel: trimmedB,
-    })
-  ) {
-    return null;
-  }
-  if (getHeadToHeadAbTitleLengthError(trimmedA, trimmedB)) {
-    return null;
-  }
-  return buildHeadToHeadAbTitle(trimmedA, trimmedB);
-}
-
-function getHeadToHeadQuestionTitleError(
-  draft: Pick<QuestionDraft, "questionFormat" | "optionALabel" | "optionBLabel">,
-  title: string,
-): string | null {
-  if (draft.questionFormat !== "head_to_head_ab") return null;
-  if (getHeadToHeadValidationError(draft)) return null;
-  const moderationError = title.trim() ? getContentTitleValidationError(title) : null;
-  if (moderationError) return moderationError;
-  return getHeadToHeadAbTitleValidationError(title, draft.optionALabel, draft.optionBLabel);
 }
 
 function createQuestionDraftWithTaxonomy(source: QuestionTaxonomySelection): QuestionDraft {
@@ -1953,7 +1908,7 @@ export function ContentSubmissionSection() {
     patchActiveQuestionDraft({ title: value, headToHeadTitleMode: nextHeadToHeadTitleMode });
     setTitleError(
       activeDraft.questionFormat === "head_to_head_ab"
-        ? getHeadToHeadQuestionTitleError(activeDraft, value)
+        ? getHeadToHeadQuestionTitleError(activeDraft.optionALabel, activeDraft.optionBLabel, value)
         : getContentTitleValidationError(value),
     );
   };
@@ -1965,7 +1920,7 @@ export function ContentSubmissionSection() {
     setTitle(suggestedTitle);
     setHeadToHeadTitleMode("auto");
     patchActiveQuestionDraft({ title: suggestedTitle, headToHeadTitleMode: "auto" });
-    setTitleError(getHeadToHeadQuestionTitleError(activeDraft, suggestedTitle));
+    setTitleError(getHeadToHeadQuestionTitleError(activeDraft.optionALabel, activeDraft.optionBLabel, suggestedTitle));
   };
 
   const handleQuestionFormatChange = (nextFormat: QuestionFormat) => {
@@ -2004,7 +1959,7 @@ export function ContentSubmissionSection() {
       if (suggestedTitle) {
         nextTitle = suggestedTitle;
         setTitle(suggestedTitle);
-        setTitleError(getHeadToHeadQuestionTitleError(nextDraft, suggestedTitle));
+        setTitleError(getHeadToHeadQuestionTitleError(nextDraft.optionALabel, nextDraft.optionBLabel, suggestedTitle));
       }
     }
 
@@ -2046,7 +2001,7 @@ export function ContentSubmissionSection() {
     const nextContextUrlError = isPrivateContext ? null : getContextUrlValidationError(trimmedContextUrl);
     const nextTitleError =
       draft.questionFormat === "head_to_head_ab"
-        ? getHeadToHeadQuestionTitleError(draft, trimmedTitle)
+        ? getHeadToHeadQuestionTitleError(draft.optionALabel, draft.optionBLabel, trimmedTitle)
         : trimmedTitle
           ? getContentTitleValidationError(trimmedTitle)
           : null;

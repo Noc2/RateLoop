@@ -61,6 +61,14 @@ import {
   getQuestionDetailsTextSizeBytes,
   normalizeQuestionDetailsText,
 } from "~~/lib/attachments/questionDetails.shared";
+import {
+  type HeadToHeadTitleMode,
+  getHeadToHeadOptionValidationError,
+  getHeadToHeadQuestionTitleError,
+  isHeadToHeadAbAutoTitle,
+  mergeHeadToHeadDraftQuestion,
+  resolveAutoHeadToHeadTitle,
+} from "~~/lib/headToHeadQuestion";
 import { formatHumanDuration } from "~~/lib/humanDuration";
 import {
   type FeedbackBonusAsset,
@@ -190,6 +198,7 @@ type QuestionSummary = {
   videoUrl: string;
   optionALabel: string;
   optionBLabel: string;
+  headToHeadTitleMode: HeadToHeadTitleMode;
 };
 
 type RoundSettings = {
@@ -217,6 +226,7 @@ type DraftQuestionForm = {
   videoUrl: string;
   optionALabel: string;
   optionBLabel: string;
+  headToHeadTitleMode: HeadToHeadTitleMode;
 };
 
 type DraftForm = {
@@ -1023,12 +1033,18 @@ async function uploadQuestionDetailsForHandoff(params: {
 function readHeadToHeadDraftFields(question: JsonRecord) {
   const templateId = readString(question.templateId);
   if (templateId !== HEAD_TO_HEAD_AB_TEMPLATE_ID) {
-    return { optionALabel: "", optionBLabel: "" };
+    return { optionALabel: "", optionBLabel: "", headToHeadTitleMode: "auto" as const };
   }
   const inputs = readHeadToHeadTemplateInputs(question.templateInputs);
+  const optionALabel = inputs?.optionALabel ?? "";
+  const optionBLabel = inputs?.optionBLabel ?? "";
+  const title = readString(question.title);
   return {
-    optionALabel: inputs?.optionALabel ?? "",
-    optionBLabel: inputs?.optionBLabel ?? "",
+    optionALabel,
+    optionBLabel,
+    headToHeadTitleMode: isHeadToHeadAbAutoTitle(title, optionALabel, optionBLabel)
+      ? ("auto" as const)
+      : ("manual" as const),
   };
 }
 
@@ -1187,6 +1203,7 @@ function createDraftForm(handoff: Handoff): DraftForm {
           videoUrl: question.confidentiality.visibility === "gated" ? "" : question.videoUrl,
           optionALabel: question.optionALabel,
           optionBLabel: question.optionBLabel,
+          headToHeadTitleMode: question.headToHeadTitleMode,
         }))
       : [
           {
@@ -1204,6 +1221,7 @@ function createDraftForm(handoff: Handoff): DraftForm {
             videoUrl: "",
             optionALabel: "",
             optionBLabel: "",
+            headToHeadTitleMode: "auto",
           },
         ],
     roundBlindSeconds: roundDurationDraft.roundBlindSeconds,
@@ -1387,6 +1405,14 @@ async function applyDraftQuestion(
     });
     if (!templateInputs) {
       throw new Error(`Question ${index + 1} needs both option A and option B names.`);
+    }
+    const optionError = getHeadToHeadOptionValidationError(draft.optionALabel, draft.optionBLabel);
+    if (optionError) {
+      throw new Error(`Question ${index + 1}: ${optionError}`);
+    }
+    const titleError = getHeadToHeadQuestionTitleError(draft.optionALabel, draft.optionBLabel, title);
+    if (titleError) {
+      throw new Error(`Question ${index + 1}: ${titleError}`);
     }
     nextQuestion.templateInputs = {
       optionAKey: templateInputs.optionAKey,
@@ -2292,7 +2318,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
       return {
         ...current,
         questions: current.questions.map((question, questionIndex) =>
-          questionIndex === index ? { ...question, ...patch } : question,
+          questionIndex === index ? mergeHeadToHeadDraftQuestion(question, patch) : question,
         ),
       };
     });
@@ -3001,20 +3027,8 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                         key={`agent-ask-question-${index}`}
                         className={hasQuestionBundle ? "rounded-lg border border-base-content/10 p-4" : ""}
                       >
-                        <label className="form-control">
-                          <span className="label-text text-xs font-semibold uppercase tracking-wide text-base-content/45">
-                            {hasQuestionBundle ? `Question ${index + 1}` : "Question"}
-                          </span>
-                          <input
-                            className="input input-bordered mt-1 w-full"
-                            disabled={!canEditDraft}
-                            value={question.title}
-                            onChange={event => updateDraftQuestion(index, { title: event.target.value })}
-                          />
-                        </label>
-
                         {hasQuestionBundle ? null : (
-                          <div className="mt-4">
+                          <div>
                             <span className="label-text text-xs font-semibold uppercase tracking-wide text-base-content/45">
                               Question type
                             </span>
@@ -3028,6 +3042,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                                     templateId: "",
                                     optionALabel: "",
                                     optionBLabel: "",
+                                    headToHeadTitleMode: "auto",
                                   })
                                 }
                               >
@@ -3040,6 +3055,8 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                                 onClick={() =>
                                   updateDraftQuestion(index, {
                                     templateId: HEAD_TO_HEAD_AB_TEMPLATE_ID,
+                                    headToHeadTitleMode: "auto",
+                                    title: "",
                                   })
                                 }
                               >
@@ -3073,8 +3090,51 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                                 onChange={event => updateDraftQuestion(index, { optionBLabel: event.target.value })}
                               />
                             </label>
+                            <p className="sm:col-span-2 text-sm text-base-content/60">
+                              Question fills automatically from your options. You can edit it.
+                            </p>
                           </div>
                         ) : null}
+
+                        <label className="form-control mt-4">
+                          <span className="label-text flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-semibold uppercase tracking-wide text-base-content/45">
+                            <span>{hasQuestionBundle ? `Question ${index + 1}` : "Question"}</span>
+                            {question.templateId === HEAD_TO_HEAD_AB_TEMPLATE_ID &&
+                            question.headToHeadTitleMode === "manual" &&
+                            resolveAutoHeadToHeadTitle(question.optionALabel, question.optionBLabel) ? (
+                              <button
+                                type="button"
+                                className="normal-case tracking-normal text-primary hover:underline"
+                                disabled={!canEditDraft}
+                                onClick={() => {
+                                  const suggestedTitle = resolveAutoHeadToHeadTitle(
+                                    question.optionALabel,
+                                    question.optionBLabel,
+                                  );
+                                  if (!suggestedTitle) return;
+                                  updateDraftQuestion(index, {
+                                    title: suggestedTitle,
+                                    headToHeadTitleMode: "auto",
+                                  });
+                                }}
+                              >
+                                Use suggested question
+                              </button>
+                            ) : null}
+                          </span>
+                          <input
+                            className="input input-bordered mt-1 w-full"
+                            disabled={!canEditDraft}
+                            placeholder={
+                              question.templateId === HEAD_TO_HEAD_AB_TEMPLATE_ID
+                                ? (resolveAutoHeadToHeadTitle(question.optionALabel, question.optionBLabel) ??
+                                  "Do you prefer A = Codex or B = Claude?")
+                                : undefined
+                            }
+                            value={question.title}
+                            onChange={event => updateDraftQuestion(index, { title: event.target.value })}
+                          />
+                        </label>
 
                         {hasQuestionBundle ? (
                           <div className="mt-4">
