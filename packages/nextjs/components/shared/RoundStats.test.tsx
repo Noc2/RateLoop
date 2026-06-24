@@ -37,6 +37,36 @@ test("RoundRevealedBreakdown renders Up before Down to match the rating button o
   assert.ok(html.indexOf(">Up<") < html.indexOf(">Down<"));
 });
 
+test("RoundRevealedBreakdown renders A/B labels for head-to-head content", () => {
+  const html = renderToStaticMarkup(
+    <RoundRevealedBreakdown
+      voteUiConfig={{
+        mode: "head_to_head",
+        optionAKey: "A",
+        optionALabel: "Awesome",
+        optionBKey: "B",
+        optionBLabel: "Bad",
+      }}
+      snapshot={
+        {
+          isLoading: false,
+          round: {
+            revealedCount: 2,
+            upPool: 2_000_000n,
+            downPool: 1_000_000n,
+            upCount: 1n,
+            downCount: 1n,
+          },
+        } as any
+      }
+    />,
+  ).replace(/\s+/g, " ");
+
+  assert.match(html, />A</);
+  assert.match(html, />B</);
+  assert.ok(html.indexOf(">A<") < html.indexOf(">B<"));
+});
+
 test("formatPrivateRoundHint shows the next private round countdown", () => {
   assert.equal(
     formatPrivateRoundHint({

@@ -460,6 +460,7 @@ export function VotingQuestionContextDetails({
   active = true,
   statusChips,
   statusActions,
+  voteUiConfig = { mode: "thumbs" },
 }: {
   contentId: bigint;
   categoryId: bigint;
@@ -469,6 +470,7 @@ export function VotingQuestionContextDetails({
   active?: boolean;
   statusChips?: ReactNode;
   statusActions?: ReactNode;
+  voteUiConfig?: VoteUiConfig;
 }) {
   const roundSnapshot = useRoundSnapshot(
     active ? contentId : undefined,
@@ -496,7 +498,9 @@ export function VotingQuestionContextDetails({
           {statusActions}
         </div>
       ) : null}
-      {!showInlineRevealedBreakdown ? <RoundRevealedBreakdown snapshot={roundSnapshot} stacked={compact} /> : null}
+      {!showInlineRevealedBreakdown ? (
+        <RoundRevealedBreakdown snapshot={roundSnapshot} stacked={compact} voteUiConfig={voteUiConfig} />
+      ) : null}
       <RoundStats categoryId={categoryId} snapshot={roundSnapshot} />
     </div>
   );

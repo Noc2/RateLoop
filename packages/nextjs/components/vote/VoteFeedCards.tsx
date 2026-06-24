@@ -29,6 +29,7 @@ import { appendGatedContextAddress, appendOptionalGatedContextAddress } from "~~
 import { type ContentMediaItem, buildFallbackMediaItems, isUploadedImageUrl } from "~~/lib/contentMedia";
 import { isPrivateContextMetadata } from "~~/lib/vote/confidentialContext";
 import { getVisibleFeedbackBonusAmount, getVisibleRewardPoolAmount } from "~~/lib/vote/discoverFeedFilter";
+import { resolveContentVoteUi } from "~~/lib/vote/voteUiConfig";
 import { detectPlatform } from "~~/utils/platforms";
 
 const ShareContentModal = dynamic(
@@ -728,6 +729,7 @@ function FeedContentMetaCard({
             active={isActive}
             statusChips={rewardStatusChips}
             statusActions={actionButtons}
+            voteUiConfig={resolveContentVoteUi(item)}
           />
         </div>
 
