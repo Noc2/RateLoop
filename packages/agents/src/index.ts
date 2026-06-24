@@ -35,6 +35,15 @@ export {
 } from "./voteUi";
 export type { HeadToHeadVoteUi, VoteUiConfig } from "./voteUi";
 export {
+  HEAD_TO_HEAD_AB_TITLE_MAX_LENGTH,
+  VOTE_UP_IF_TITLE_PATTERN,
+  buildHeadToHeadAbTitle,
+  getHeadToHeadAbTitleLengthError,
+  getHeadToHeadAbTitleValidationError,
+  isHeadToHeadAbAutoTitle,
+  isHeadToHeadAbTitleWithinOptionLabelLimits,
+} from "./headToHeadTitle";
+export {
   X402_MIN_NONZERO_CONFIDENTIALITY_BOND,
   X402_SUBMISSION_REWARD_ASSET_LREP,
   X402_SUBMISSION_REWARD_ASSET_USDC,

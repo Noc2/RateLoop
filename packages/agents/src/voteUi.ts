@@ -86,3 +86,13 @@ export function resolveVoteUiConfig(params: {
 export function getHeadToHeadAbResultSpecHash(): `0x${string}` {
   return findAgentResultTemplate(HEAD_TO_HEAD_AB_TEMPLATE_ID)?.resultSpecHash ?? ("0x" as `0x${string}`);
 }
+
+export {
+  HEAD_TO_HEAD_AB_TITLE_MAX_LENGTH,
+  VOTE_UP_IF_TITLE_PATTERN,
+  buildHeadToHeadAbTitle,
+  getHeadToHeadAbTitleLengthError,
+  getHeadToHeadAbTitleValidationError,
+  isHeadToHeadAbAutoTitle,
+  isHeadToHeadAbTitleWithinOptionLabelLimits,
+} from "./headToHeadTitle.js";
