@@ -1921,7 +1921,6 @@ export function ContentSubmissionSection() {
   };
 
   const handleQuestionFormatChange = (nextFormat: QuestionFormat) => {
-    const activeDraft = getActiveQuestionDraft();
     const nextDraft: Partial<QuestionDraft> = { questionFormat: nextFormat };
     if (nextFormat === "head_to_head_ab") {
       nextDraft.headToHeadTitleMode = "auto";
