@@ -597,4 +597,56 @@ describe("round config voter alignment linting", () => {
       ).ok,
     ).toBe(true);
   });
+
+  it("accepts a valid head-to-head A/B ask", () => {
+    const findings = lintAgentAskRequest({
+      ...VALID_REQUEST,
+      templateId: "head_to_head_ab",
+      question: {
+        ...VALID_REQUEST.question,
+        templateId: "head_to_head_ab",
+        title: "A vs B — which agent do you prefer for coding work?",
+        description: "Choose A (Codex) or B (Claude). One pick per rater.",
+        templateInputs: {
+          optionAKey: "A",
+          optionALabel: "Codex",
+          optionBKey: "B",
+          optionBLabel: "Claude",
+        },
+      },
+    });
+
+    expect(summarizeLintFindings(findings)).toEqual({
+      errorCount: 0,
+      ok: true,
+      warningCount: 0,
+    });
+  });
+
+  it("rejects vote-up-if titles on head-to-head asks", () => {
+    const findings = lintAgentAskRequest({
+      ...VALID_REQUEST,
+      templateId: "head_to_head_ab",
+      question: {
+        ...VALID_REQUEST.question,
+        templateId: "head_to_head_ab",
+        title: "Vote up if Codex is your default over Claude",
+        templateInputs: {
+          optionAKey: "A",
+          optionALabel: "Codex",
+          optionBKey: "B",
+          optionBLabel: "Claude",
+        },
+      },
+    });
+
+    expect(findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "error",
+          path: "question.title",
+        }),
+      ]),
+    );
+  });
 });

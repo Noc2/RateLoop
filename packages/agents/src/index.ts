@@ -26,6 +26,15 @@ export {
 } from "./templates";
 export type { AgentDecisionAnswer, AgentResultTemplate } from "./templates";
 export {
+  HEAD_TO_HEAD_AB_TEMPLATE_ID,
+  getHeadToHeadAbResultSpecHash,
+  normalizeHeadToHeadOptionKey,
+  readHeadToHeadTemplateInputs,
+  readHeadToHeadVoteUiFromQuestionMetadata,
+  resolveVoteUiConfig,
+} from "./voteUi";
+export type { HeadToHeadVoteUi, VoteUiConfig } from "./voteUi";
+export {
   X402_MIN_NONZERO_CONFIDENTIALITY_BOND,
   X402_SUBMISSION_REWARD_ASSET_LREP,
   X402_SUBMISSION_REWARD_ASSET_USDC,

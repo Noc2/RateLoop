@@ -1,4 +1,5 @@
 import { findAgentResultTemplate } from "../templates";
+import { HEAD_TO_HEAD_AB_TEMPLATE_ID, normalizeHeadToHeadOptionKey, readHeadToHeadTemplateInputs } from "../voteUi";
 import type { AgentAskExample, AgentQuestionExample, JsonObject, JsonValue, QuestionLintFinding } from "./types";
 
 const CLIENT_REQUEST_ID_PATTERN = /^[A-Za-z0-9._:-]{4,160}$/;
@@ -6,6 +7,7 @@ const CLIENT_REQUEST_ID_PATTERN = /^[A-Za-z0-9._:-]{4,160}$/;
 // ("Voters mismatch"), and the server defaults requiredVoters to 3.
 const DEFAULT_REQUIRED_VOTERS = 3n;
 const RANK_BY_RATING_TEMPLATE_IDS = new Set(["ranked_option_member", "pairwise_output_preference"]);
+const HEAD_TO_HEAD_AB_REQUIRED_INPUTS = ["optionAKey", "optionALabel", "optionBKey", "optionBLabel"] as const;
 const FEATURE_ACCEPTANCE_TEMPLATE_ID = "feature_acceptance_test";
 const FEATURE_ACCEPTANCE_REQUIRED_INPUTS = ["expectedBehavior", "testSteps", "acceptanceCriteria"] as const;
 const AGENT_TRACE_REVIEW_TEMPLATE_ID = "agent_trace_review";
@@ -23,6 +25,8 @@ const DIRECT_IMAGE_URL_PATH_PATTERN = /\.(?:avif|bmp|gif|jpe?g|png|svg|webp)$/i;
 const SURVEY_STYLE_PATTERN =
   /\b(multiple[-\s]?choice|answer options?|choose one|choose from|select one|select from|price range|pricing range)\b/i;
 const HIDDEN_CHOICE_TITLE_PATTERN = /\bwhich\s+(option|variant|candidate|direction|price|pricing|range)\b/i;
+const VOTE_UP_IF_TITLE_PATTERN = /\bvote\s+up\s+if\b/i;
+const VS_TITLE_PATTERN = /\b(vs\.?|versus)\b/i;
 
 function isObject(value: unknown): value is JsonObject {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -234,7 +238,21 @@ export function lintAgentQuestion(
       findings,
       "warning",
       `${path}.title`,
-      "Choice questions should use one binary-rated ranked bundle member per option, then compare final ratings later.",
+      templateId === HEAD_TO_HEAD_AB_TEMPLATE_ID
+        ? "Head-to-head titles should name options A and B instead of asking which option/variant."
+        : "Choice questions should use head_to_head_ab for two-way pick-one comparisons, or one ranked bundle member per option for 3+ options.",
+    );
+  }
+  if (
+    templateId !== HEAD_TO_HEAD_AB_TEMPLATE_ID &&
+    !RANK_BY_RATING_TEMPLATE_IDS.has(templateId ?? "") &&
+    VS_TITLE_PATTERN.test(title)
+  ) {
+    pushFinding(
+      findings,
+      "warning",
+      `${path}.title`,
+      "Two-way pick-one comparisons should use templateId head_to_head_ab with option A/B labels. Use ranked bundles when scoring each option separately.",
     );
   }
 
@@ -383,6 +401,49 @@ export function lintAgentQuestion(
       }
     }
   }
+  if (templateId === HEAD_TO_HEAD_AB_TEMPLATE_ID) {
+    if (VOTE_UP_IF_TITLE_PATTERN.test(title)) {
+      pushFinding(
+        findings,
+        "error",
+        `${path}.title`,
+        "Head-to-head A/B titles should ask which option voters prefer. Use generic_rating for one-sided vote-up-if statement polls.",
+      );
+    }
+    for (const key of HEAD_TO_HEAD_AB_REQUIRED_INPUTS) {
+      if (!templateInputText(templateInputs, key)) {
+        pushFinding(
+          findings,
+          "error",
+          `${path}.templateInputs.${key}`,
+          "Head-to-head A/B questions require optionAKey, optionALabel, optionBKey, and optionBLabel.",
+        );
+      }
+    }
+    const optionAKey = normalizeHeadToHeadOptionKey(templateInputs?.optionAKey);
+    const optionBKey = normalizeHeadToHeadOptionKey(templateInputs?.optionBKey);
+    if (templateInputs?.optionAKey !== undefined && !optionAKey) {
+      pushFinding(findings, "error", `${path}.templateInputs.optionAKey`, "optionAKey must be a single uppercase letter A-Z.");
+    }
+    if (templateInputs?.optionBKey !== undefined && !optionBKey) {
+      pushFinding(findings, "error", `${path}.templateInputs.optionBKey`, "optionBKey must be a single uppercase letter A-Z.");
+    }
+    if (optionAKey && optionBKey && optionAKey === optionBKey) {
+      pushFinding(findings, "error", `${path}.templateInputs.optionBKey`, "optionBKey must differ from optionAKey.");
+    }
+    if (!readHeadToHeadTemplateInputs(templateInputs)) {
+      const hasAllKeys =
+        HEAD_TO_HEAD_AB_REQUIRED_INPUTS.every(key => templateInputText(templateInputs, key).length > 0);
+      if (hasAllKeys) {
+        pushFinding(
+          findings,
+          "error",
+          `${path}.templateInputs`,
+          "Head-to-head option labels must be 1-32 characters and keys must be distinct single letters.",
+        );
+      }
+    }
+  }
   if (question.imageUrls !== undefined && hasInvalidUploadedImageUrlList(question.imageUrls)) {
     pushFinding(
       findings,
@@ -460,6 +521,14 @@ export function lintAgentAskRequest(input: unknown): QuestionLintFinding[] {
     );
   });
 
+  if (findings.length === 0 && questions.length > 1 && request.templateId === HEAD_TO_HEAD_AB_TEMPLATE_ID) {
+    pushFinding(
+      findings,
+      "error",
+      "templateId",
+      "head_to_head_ab supports exactly one question. Use ranked_option_member bundles for 3+ options or per-option scoring.",
+    );
+  }
   if (findings.length === 0 && questions.length > 1 && (!request.templateId || !RANK_BY_RATING_TEMPLATE_IDS.has(request.templateId))) {
     pushFinding(
       findings,

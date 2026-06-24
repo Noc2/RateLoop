@@ -39,8 +39,9 @@ describe("agent templates", () => {
       "agent_trace_review",
       "proposal_review",
       "pairwise_output_preference",
+      "head_to_head_ab",
     ]);
-    expect(templates).toHaveLength(12);
+    expect(templates).toHaveLength(13);
     for (const template of templates) {
       expect(template.ratingSystem).toBe("rateloop.robust_bts_binary.v1");
       expect(template.resultSpecHash).toMatch(/^0x[a-f0-9]{64}$/);
@@ -96,6 +97,12 @@ describe("agent templates", () => {
     ).toMatchObject({
       bundleStrategy: "rank_by_rating",
       submissionPattern: "bundle_member",
+    });
+    expect(
+      templates.find((template) => template.id === "head_to_head_ab"),
+    ).toMatchObject({
+      bundleStrategy: "independent",
+      submissionPattern: "single_question",
     });
   });
 

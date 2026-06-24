@@ -522,6 +522,44 @@ const TEMPLATE_DEFINITIONS = [
       promptSummary: "Customer asks for a refund after a delayed package.",
     },
   },
+  {
+    id: "head_to_head_ab",
+    title: "Head-to-Head A/B",
+    description:
+      "Exactly two alternatives in one question. Voters pick option A (up) or option B (down); agents read the settled A-share as the comparison result.",
+    voteSemantics: {
+      up: "option A is preferred for the stated comparison",
+      down: "option B is preferred for the stated comparison",
+    },
+    interpretation: {
+      proceedRatingBps: 6500,
+      proceedConservativeRatingBps: 5500,
+      cautionRatingBps: 5200,
+      reviseRatingBps: 4000,
+    },
+    recommendedUse: ["ab_test", "two_way_comparison", "pick_one"],
+    submissionPattern: "single_question",
+    bundleStrategy: "independent",
+    templateInputsSchema: {
+      additionalProperties: false,
+      required: ["optionAKey", "optionALabel", "optionBKey", "optionBLabel"],
+      properties: {
+        optionAKey: { type: "string", pattern: "^[A-Z]$" },
+        optionALabel: { type: "string", minLength: 1, maxLength: 32 },
+        optionBKey: { type: "string", pattern: "^[A-Z]$" },
+        optionBLabel: { type: "string", minLength: 1, maxLength: 32 },
+        comparisonCriterion: { type: "string", maxLength: 120 },
+      },
+      type: "object",
+    },
+    templateInputsExample: {
+      optionAKey: "A",
+      optionALabel: "Codex",
+      optionBKey: "B",
+      optionBLabel: "Claude",
+      comparisonCriterion: "default coding-agent workflow",
+    },
+  },
 ] as const;
 
 export const AGENT_RESULT_TEMPLATES: AgentResultTemplate[] =

@@ -280,10 +280,16 @@ Good agent questions:
 - use `targetAudience` only with structured values from `rateloop_list_audience_options`; keep free-text audience notes in
   `templateInputs.audience`
 
-For comparisons, do not ask raters to select "which answer" inside one question. Use `ranked_option_member` for generic
-option ranking or `pairwise_output_preference` for AI/model outputs, and submit one question per option in the same
-bundle. Each question should show the shared prompt plus the specific answer, image, candidate, or variant being rated;
-agents compare the final ratings and confidence later.
+For comparisons, pick the shape that matches what you need:
+
+- **Two-way pick-one (A/B):** use `head_to_head_ab` as a single question with structured `optionAKey` / `optionALabel` and
+  `optionBKey` / `optionBLabel`. Voters choose A (up) or B (down); agents read the settled A-share as the comparison result.
+- **Score each option separately (3+ options or rubric per variant):** use `ranked_option_member` for generic option ranking or
+  `pairwise_output_preference` for AI/model outputs, and submit one question per option in the same bundle. Each question should
+  show the shared prompt plus the specific answer, image, candidate, or variant being rated; agents compare the final ratings
+  and confidence later.
+- **One-sided statement polls** such as "Would X be your default?" stay on `generic_rating` with normal thumbs up/down.
+
 When a bundle needs repeated samples, set `requiredSettledRounds` above 1. Each required round is a bundle round set:
 every bundled question must settle once before that set can pay.
 
