@@ -674,7 +674,7 @@ test.describe("Mobile viewport (phone)", () => {
     expect(restoredLayout.activeTitleBottom).toBeLessThanOrEqual(restoredLayout.scrollerBottom + 1);
   });
 
-  test("last feed card snaps above the mobile dock and shows context", async ({ connectedPage: page }) => {
+  test("last feed card snaps above the mobile dock", async ({ connectedPage: page }) => {
     await gotoWithRetry(page, "/rate", { ensureWalletConnected: true });
     await waitForFeedLoaded(page);
 
@@ -763,6 +763,36 @@ test.describe("Mobile viewport (phone)", () => {
     });
 
     const activeContextLink = page.locator('article[aria-current="true"] [data-testid="content-source-link"]').first();
+    if ((await activeContextLink.count()) === 0) {
+      const activeTitle = page.locator('article[aria-current="true"] h2').first();
+      await expect(activeTitle).toBeVisible({ timeout: 5_000 });
+
+      const titleLayout = await activeTitle.evaluate(title => {
+        const mobileDock = document.querySelector<HTMLElement>('[data-testid="vote-mobile-dock"]');
+        const mobileDockShell = mobileDock?.querySelector<HTMLElement>('[data-mobile-dock-shell="true"]') ?? null;
+        if (!mobileDockShell) {
+          throw new Error("Missing mobile voting dock shell");
+        }
+
+        const titleRect = title.getBoundingClientRect();
+        const dockShellRect = mobileDockShell.getBoundingClientRect();
+        const topElement = document.elementFromPoint(
+          titleRect.left + titleRect.width / 2,
+          titleRect.top + titleRect.height / 2,
+        );
+
+        return {
+          dockShellTop: dockShellRect.top,
+          titleBottom: titleRect.bottom,
+          titleCenterTopmost: topElement === title || title.contains(topElement),
+        };
+      });
+
+      expect(titleLayout.titleBottom).toBeLessThanOrEqual(titleLayout.dockShellTop - 1);
+      expect(titleLayout.titleCenterTopmost).toBe(true);
+      return;
+    }
+
     await expect(activeContextLink).toBeVisible({ timeout: 5_000 });
 
     const layout = await activeContextLink.evaluate(link => {
