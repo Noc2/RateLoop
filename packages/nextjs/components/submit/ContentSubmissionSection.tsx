@@ -3,7 +3,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { HEAD_TO_HEAD_AB_TEMPLATE_ID, readHeadToHeadTemplateInputs } from "@rateloop/agents/voteUi";
+import {
+  HEAD_TO_HEAD_AB_TEMPLATE_ID,
+  MAX_HEAD_TO_HEAD_OPTION_LABEL_LENGTH,
+  readHeadToHeadTemplateInputs,
+} from "@rateloop/agents/voteUi";
 import { RoundVotingEngineAbi } from "@rateloop/contracts/abis";
 import {
   type TargetAudience,
@@ -45,6 +49,7 @@ import { useTransactionStatusToast } from "~~/hooks/useTransactionStatusToast";
 import { useWalletMessageSigner } from "~~/hooks/useWalletMessageSigner";
 import { useWalletRpcRecovery } from "~~/hooks/useWalletRpcRecovery";
 import { type AgentQuestionSpecInput, buildQuestionSpecHashes } from "~~/lib/agent/questionSpecs";
+import { findAgentResultTemplate } from "~~/lib/agent/templates";
 import { createQuestionDetailsId, questionDetailsSha256Hex } from "~~/lib/attachments/browserQuestionDetails";
 import { withImageAttachmentVariantUrl } from "~~/lib/attachments/imageAttachmentVariants";
 import { IMAGE_UPLOAD_CONTEXT_HINT } from "~~/lib/attachments/imageDisplayGuidance";
@@ -175,6 +180,8 @@ const DEFAULT_SUBMISSION_BOUNTY_AMOUNT = "1";
 const DEFAULT_SUBMISSION_ROUND_MAX_VOTERS = 100;
 const CONFIDENTIALITY_BOND_TOOLTIP =
   "Optional extra bond raters must post before private context is served. Use 0 for no extra bond.";
+const QUESTION_TYPE_TOOLTIP =
+  "Rate one thing: Voters use thumbs up or down on one thing you ask them to rate. A/B comparison: Voters choose A or B. Up means option A; down means option B.";
 const MONEY_FIELD_LABEL_ROW_CLASS = "grid grid-cols-2 gap-3";
 const MONEY_FIELD_CONTROL_ROW_CLASS = "mt-1.5 grid grid-cols-2 items-start gap-3";
 const MONEY_FIELD_LABEL_CLASS = "label-text flex h-6 min-w-0 items-center gap-1.5 text-sm font-medium leading-none";
@@ -339,11 +346,19 @@ function getHeadToHeadValidationError(
   draft: Pick<QuestionDraft, "questionFormat" | "optionALabel" | "optionBLabel">,
 ): string | null {
   if (draft.questionFormat !== "head_to_head_ab") return null;
+  const trimmedA = draft.optionALabel.trim();
+  const trimmedB = draft.optionBLabel.trim();
+  if (
+    trimmedA.length > MAX_HEAD_TO_HEAD_OPTION_LABEL_LENGTH ||
+    trimmedB.length > MAX_HEAD_TO_HEAD_OPTION_LABEL_LENGTH
+  ) {
+    return `Option names must be ${MAX_HEAD_TO_HEAD_OPTION_LABEL_LENGTH} characters or fewer.`;
+  }
   const inputs = readHeadToHeadTemplateInputs({
     optionAKey: "A",
-    optionALabel: draft.optionALabel.trim(),
+    optionALabel: trimmedA,
     optionBKey: "B",
-    optionBLabel: draft.optionBLabel.trim(),
+    optionBLabel: trimmedB,
   });
   if (!inputs) return "Enter both option names for the A/B comparison.";
   return null;
@@ -2567,6 +2582,7 @@ export function ContentSubmissionSection() {
         const details = submittedDetails[index] ?? EMPTY_SUBMISSION_DETAILS;
         const submittedImageUrls = canonicalQuestionImageUrls(question.submittedImageUrls);
         const isHeadToHead = draft.questionFormat === "head_to_head_ab";
+        const headToHeadTemplate = isHeadToHead ? findAgentResultTemplate(HEAD_TO_HEAD_AB_TEMPLATE_ID) : null;
 
         const spec = buildQuestionSpecHashes({
           bounty: {
@@ -2598,10 +2614,11 @@ export function ContentSubmissionSection() {
           targetAudience: targetAudienceToQuestionSpecInput(question.targetAudience),
           title: question.trimmedTitle,
           videoUrl: question.submittedVideoUrl,
-          ...(isHeadToHead
+          ...(isHeadToHead && headToHeadTemplate
             ? {
                 templateId: HEAD_TO_HEAD_AB_TEMPLATE_ID,
                 templateInputs: buildHeadToHeadTemplateInputs(draft),
+                voteSemantics: headToHeadTemplate.voteSemantics,
               }
             : {}),
         });
@@ -4537,7 +4554,10 @@ export function ContentSubmissionSection() {
             <div className="grid gap-6 xl:grid-cols-[minmax(0,1.5fr)_minmax(18rem,0.9fr)] xl:items-start">
               <div className="space-y-5">
                 <div>
-                  <p className="mb-2 text-base font-medium">Question type</p>
+                  <p className="mb-2 flex items-center gap-1.5 text-base font-medium">
+                    Question type
+                    <InfoTooltip text={QUESTION_TYPE_TOOLTIP} />
+                  </p>
                   <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
@@ -4554,11 +4574,6 @@ export function ContentSubmissionSection() {
                       A/B comparison (pick one)
                     </button>
                   </div>
-                  <p className="mt-2 text-sm text-base-content/60">
-                    {questionFormat === "head_to_head_ab"
-                      ? "Voters choose A or B. Up means option A; down means option B."
-                      : "Voters use thumbs up or down on one thing you ask them to rate."}
-                  </p>
                 </div>
 
                 {questionFormat === "head_to_head_ab" ? (
@@ -4573,7 +4588,7 @@ export function ContentSubmissionSection() {
                         }`}
                         value={optionALabel}
                         onChange={event => handleHeadToHeadFieldChange({ optionALabel: event.target.value })}
-                        maxLength={80}
+                        maxLength={MAX_HEAD_TO_HEAD_OPTION_LABEL_LENGTH}
                       />
                     </div>
                     <div>
@@ -4586,7 +4601,7 @@ export function ContentSubmissionSection() {
                         }`}
                         value={optionBLabel}
                         onChange={event => handleHeadToHeadFieldChange({ optionBLabel: event.target.value })}
-                        maxLength={80}
+                        maxLength={MAX_HEAD_TO_HEAD_OPTION_LABEL_LENGTH}
                       />
                     </div>
                     <div className="sm:col-span-2">
