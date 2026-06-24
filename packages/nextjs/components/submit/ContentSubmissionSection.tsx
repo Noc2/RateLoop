@@ -6,6 +6,10 @@ import Link from "next/link";
 import {
   HEAD_TO_HEAD_AB_TEMPLATE_ID,
   MAX_HEAD_TO_HEAD_OPTION_LABEL_LENGTH,
+  buildHeadToHeadAbTitle,
+  getHeadToHeadAbTitleLengthError,
+  getHeadToHeadAbTitleValidationError,
+  isHeadToHeadAbAutoTitle,
   readHeadToHeadTemplateInputs,
 } from "@rateloop/agents/voteUi";
 import { RoundVotingEngineAbi } from "@rateloop/contracts/abis";
@@ -283,6 +287,7 @@ function normalizeAudienceCountryCodeInput(value: string) {
 }
 
 type QuestionFormat = "rate_one" | "head_to_head_ab";
+type HeadToHeadTitleMode = "auto" | "manual";
 
 type QuestionDraft = {
   mediaMode: MediaMode;
@@ -300,6 +305,7 @@ type QuestionDraft = {
   questionFormat: QuestionFormat;
   optionALabel: string;
   optionBLabel: string;
+  headToHeadTitleMode: HeadToHeadTitleMode;
 };
 
 type ValidatedQuestionDraft = {
@@ -337,6 +343,7 @@ function createEmptyQuestionDraft(): QuestionDraft {
     questionFormat: "rate_one",
     optionALabel: "",
     optionBLabel: "",
+    headToHeadTitleMode: "auto",
   };
 }
 
@@ -359,6 +366,8 @@ function getHeadToHeadValidationError(
     optionBLabel: trimmedB,
   });
   if (!inputs) return "Enter both option names for the A/B comparison.";
+  const lengthError = getHeadToHeadAbTitleLengthError(trimmedA, trimmedB);
+  if (lengthError) return lengthError;
   return null;
 }
 
@@ -369,6 +378,36 @@ function buildHeadToHeadTemplateInputs(draft: QuestionDraft) {
     optionBKey: "B",
     optionBLabel: draft.optionBLabel.trim(),
   };
+}
+
+function resolveAutoHeadToHeadTitle(optionALabel: string, optionBLabel: string): string | null {
+  const trimmedA = optionALabel.trim();
+  const trimmedB = optionBLabel.trim();
+  if (
+    !readHeadToHeadTemplateInputs({
+      optionAKey: "A",
+      optionALabel: trimmedA,
+      optionBKey: "B",
+      optionBLabel: trimmedB,
+    })
+  ) {
+    return null;
+  }
+  if (getHeadToHeadAbTitleLengthError(trimmedA, trimmedB)) {
+    return null;
+  }
+  return buildHeadToHeadAbTitle(trimmedA, trimmedB);
+}
+
+function getHeadToHeadQuestionTitleError(
+  draft: Pick<QuestionDraft, "questionFormat" | "optionALabel" | "optionBLabel">,
+  title: string,
+): string | null {
+  if (draft.questionFormat !== "head_to_head_ab") return null;
+  if (getHeadToHeadValidationError(draft)) return null;
+  const moderationError = title.trim() ? getContentTitleValidationError(title) : null;
+  if (moderationError) return moderationError;
+  return getHeadToHeadAbTitleValidationError(title, draft.optionALabel, draft.optionBLabel);
 }
 
 function createQuestionDraftWithTaxonomy(source: QuestionTaxonomySelection): QuestionDraft {
@@ -682,6 +721,7 @@ export function ContentSubmissionSection() {
   const [questionFormat, setQuestionFormat] = useState<QuestionFormat>("rate_one");
   const [optionALabel, setOptionALabel] = useState("");
   const [optionBLabel, setOptionBLabel] = useState("");
+  const [headToHeadTitleMode, setHeadToHeadTitleMode] = useState<HeadToHeadTitleMode>("auto");
   const [headToHeadError, setHeadToHeadError] = useState<string | null>(null);
   const [detailsText, setDetailsText] = useState("");
   const [detailsError, setDetailsError] = useState<string | null>(null);
@@ -800,6 +840,7 @@ export function ContentSubmissionSection() {
     questionFormat,
     optionALabel,
     optionBLabel,
+    headToHeadTitleMode,
   });
 
   const patchActiveQuestionDraft = (patch: Partial<QuestionDraft>) => {
@@ -822,6 +863,7 @@ export function ContentSubmissionSection() {
     setQuestionFormat(draft.questionFormat);
     setOptionALabel(draft.optionALabel);
     setOptionBLabel(draft.optionBLabel);
+    setHeadToHeadTitleMode(draft.headToHeadTitleMode);
     setHeadToHeadError(null);
     setDetailsText(draft.detailsText);
     setDetailsError(null);
@@ -1899,25 +1941,75 @@ export function ContentSubmissionSection() {
   };
 
   const handleTitleChange = (value: string) => {
+    const activeDraft = getActiveQuestionDraft();
+    const nextHeadToHeadTitleMode =
+      activeDraft.questionFormat === "head_to_head_ab"
+        ? isHeadToHeadAbAutoTitle(value, activeDraft.optionALabel, activeDraft.optionBLabel)
+          ? "auto"
+          : "manual"
+        : activeDraft.headToHeadTitleMode;
     setTitle(value);
-    patchActiveQuestionDraft({ title: value });
-    setTitleError(getContentTitleValidationError(value));
+    setHeadToHeadTitleMode(nextHeadToHeadTitleMode);
+    patchActiveQuestionDraft({ title: value, headToHeadTitleMode: nextHeadToHeadTitleMode });
+    setTitleError(
+      activeDraft.questionFormat === "head_to_head_ab"
+        ? getHeadToHeadQuestionTitleError(activeDraft, value)
+        : getContentTitleValidationError(value),
+    );
+  };
+
+  const handleUseSuggestedHeadToHeadTitle = () => {
+    const activeDraft = getActiveQuestionDraft();
+    const suggestedTitle = resolveAutoHeadToHeadTitle(activeDraft.optionALabel, activeDraft.optionBLabel);
+    if (!suggestedTitle) return;
+    setTitle(suggestedTitle);
+    setHeadToHeadTitleMode("auto");
+    patchActiveQuestionDraft({ title: suggestedTitle, headToHeadTitleMode: "auto" });
+    setTitleError(getHeadToHeadQuestionTitleError(activeDraft, suggestedTitle));
   };
 
   const handleQuestionFormatChange = (nextFormat: QuestionFormat) => {
+    const activeDraft = getActiveQuestionDraft();
+    const nextDraft: Partial<QuestionDraft> = { questionFormat: nextFormat };
+    if (nextFormat === "head_to_head_ab") {
+      nextDraft.headToHeadTitleMode = "auto";
+      nextDraft.title = "";
+      setTitle("");
+      setTitleError(null);
+      setHeadToHeadTitleMode("auto");
+    } else {
+      nextDraft.headToHeadTitleMode = "auto";
+      setHeadToHeadTitleMode("auto");
+    }
     setQuestionFormat(nextFormat);
-    patchActiveQuestionDraft({ questionFormat: nextFormat });
-    setHeadToHeadError(getHeadToHeadValidationError({ ...getActiveQuestionDraft(), questionFormat: nextFormat }));
+    patchActiveQuestionDraft(nextDraft);
+    setHeadToHeadError(
+      getHeadToHeadValidationError({ ...activeDraft, ...nextDraft, questionFormat: nextFormat } as QuestionDraft),
+    );
     if (nextFormat === "head_to_head_ab" && questionCount > 1) {
       handleQuestionCountChange("1");
     }
   };
 
   const handleHeadToHeadFieldChange = (patch: Partial<Pick<QuestionDraft, "optionALabel" | "optionBLabel">>) => {
-    const nextDraft = { ...getActiveQuestionDraft(), ...patch };
+    const activeDraft = getActiveQuestionDraft();
+    const nextDraft = { ...activeDraft, ...patch };
     if (patch.optionALabel !== undefined) setOptionALabel(patch.optionALabel);
     if (patch.optionBLabel !== undefined) setOptionBLabel(patch.optionBLabel);
-    patchActiveQuestionDraft(patch);
+
+    let nextTitle = nextDraft.title;
+    const nextHeadToHeadTitleMode = nextDraft.headToHeadTitleMode;
+    if (nextDraft.headToHeadTitleMode === "auto") {
+      const suggestedTitle = resolveAutoHeadToHeadTitle(nextDraft.optionALabel, nextDraft.optionBLabel);
+      if (suggestedTitle) {
+        nextTitle = suggestedTitle;
+        setTitle(suggestedTitle);
+        setTitleError(getHeadToHeadQuestionTitleError(nextDraft, suggestedTitle));
+      }
+    }
+
+    setHeadToHeadTitleMode(nextHeadToHeadTitleMode);
+    patchActiveQuestionDraft({ ...patch, title: nextTitle, headToHeadTitleMode: nextHeadToHeadTitleMode });
     setHeadToHeadError(getHeadToHeadValidationError(nextDraft));
   };
 
@@ -1952,7 +2044,12 @@ export function ContentSubmissionSection() {
     );
     const nextVideoUrlError = isPrivateContext ? null : getMediaUrlValidationError(draft.videoUrl, "video");
     const nextContextUrlError = isPrivateContext ? null : getContextUrlValidationError(trimmedContextUrl);
-    const nextTitleError = trimmedTitle ? getContentTitleValidationError(trimmedTitle) : null;
+    const nextTitleError =
+      draft.questionFormat === "head_to_head_ab"
+        ? getHeadToHeadQuestionTitleError(draft, trimmedTitle)
+        : trimmedTitle
+          ? getContentTitleValidationError(trimmedTitle)
+          : null;
     const nextHeadToHeadError = getHeadToHeadValidationError(draft);
     const blockedContentTags = findBlockedContentTags(draft.selectedSubcategories);
     const submittedTags = serializeTags(draft.selectedSubcategories);
@@ -3129,6 +3226,7 @@ export function ContentSubmissionSection() {
       setQuestionFormat("rate_one");
       setOptionALabel("");
       setOptionBLabel("");
+      setHeadToHeadTitleMode("auto");
       setHeadToHeadError(null);
       setDetailsText("");
       setDetailsError(null);
@@ -4595,29 +4693,46 @@ export function ContentSubmissionSection() {
                       />
                     </div>
                     {headToHeadError ? <p className="sm:col-span-2 text-base text-error">{headToHeadError}</p> : null}
+                    <p className="sm:col-span-2 text-sm text-base-content/60">
+                      Question fills automatically from your options. You can edit it.
+                    </p>
                   </div>
                 ) : null}
 
                 <div>
-                  <label
-                    className={`mb-2 flex items-center gap-1.5 text-base font-medium ${
+                  <div
+                    className={`mb-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-base font-medium ${
                       questionStepAttempted && !title.trim() ? "text-error" : ""
                     }`}
                   >
-                    Question
-                    <InfoTooltip
-                      text={
-                        questionFormat === "head_to_head_ab"
-                          ? "Ask which option raters prefer. Name both options in the title, avoid vote-up-if phrasing, and add comparison context below."
-                          : "Good questions are specific, subjective, and easy to compare. Focus on one clear thing voters can rate, avoid yes/no or factual prompts, and add context below."
-                      }
-                    />
-                  </label>
+                    <label className="flex items-center gap-1.5">
+                      Question
+                      <InfoTooltip
+                        text={
+                          questionFormat === "head_to_head_ab"
+                            ? "Use the exact format: Do you prefer A = Option A or B = Option B? Avoid vote-up-if phrasing."
+                            : "Good questions are specific, subjective, and easy to compare. Focus on one clear thing voters can rate, avoid yes/no or factual prompts, and add context below."
+                        }
+                      />
+                    </label>
+                    {questionFormat === "head_to_head_ab" &&
+                    headToHeadTitleMode === "manual" &&
+                    resolveAutoHeadToHeadTitle(optionALabel, optionBLabel) ? (
+                      <button
+                        type="button"
+                        className="text-sm font-medium text-primary hover:underline"
+                        onClick={handleUseSuggestedHeadToHeadTitle}
+                      >
+                        Use suggested question
+                      </button>
+                    ) : null}
+                  </div>
                   <input
                     type="text"
                     placeholder={
                       questionFormat === "head_to_head_ab"
-                        ? "Which agent do you prefer for coding work?"
+                        ? (resolveAutoHeadToHeadTitle(optionALabel, optionBLabel) ??
+                          "Do you prefer A = Codex or B = Claude?")
                         : "Write a subjective question voters can rate"
                     }
                     className={`input input-bordered w-full bg-base-100 ${
@@ -4627,7 +4742,7 @@ export function ContentSubmissionSection() {
                     onChange={e => handleTitleChange(e.target.value)}
                     maxLength={MAX_QUESTION_LENGTH}
                   />
-                  {questionStepAttempted && !title.trim() ? (
+                  {questionStepAttempted && !title.trim() && questionFormat !== "head_to_head_ab" ? (
                     <p className="mt-1 text-base text-error">Question is required.</p>
                   ) : null}
                   {titleError ? <p className="mt-1 text-base text-error">{titleError}</p> : null}
