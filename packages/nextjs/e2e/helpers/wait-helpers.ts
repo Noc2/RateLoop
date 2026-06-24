@@ -209,14 +209,7 @@ export async function waitForFeedLoaded(page: Page, timeout = 15_000): Promise<v
   const effectiveTimeout = getEffectiveE2ETimeout(timeout);
   const feedContent = () =>
     page
-      .getByRole("button", { name: VOTE_UP_BUTTON_NAME })
-      .or(page.getByRole("button", { name: VOTE_DOWN_BUTTON_NAME }))
-      .or(page.getByRole("button", { name: PREDICT_BUTTON_NAME }))
-      .or(page.getByText(/Voted(?: hidden| Up| Down)?/i))
-      .or(page.getByText("Your question"))
-      .or(page.getByText(/Cooldown/))
-      .or(page.getByText("Round full"))
-      .or(page.getByText(FEED_EMPTY_STATE_RE))
+      .getByText(FEED_EMPTY_STATE_RE)
       .or(page.getByRole("feed", { name: "Content feed" }).getByRole("article"));
   const connectButton = getVisibleAuthConnectButton(page);
 
