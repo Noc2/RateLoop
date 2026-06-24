@@ -10,13 +10,6 @@ type LandingSocialProofItem = {
   label: string;
 };
 
-export const FALLBACK_SOCIAL_PROOF_STATS = {
-  totalVotes: 3482,
-  totalVerifiedHumans: 287,
-  totalQuestionRewardsPaid: "0",
-  totalFeedbackBonusesPaid: "0",
-} satisfies Required<LandingSocialProofStats>;
-
 function nonNegativeNumber(value: unknown) {
   const parsed = Number(value ?? 0);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;

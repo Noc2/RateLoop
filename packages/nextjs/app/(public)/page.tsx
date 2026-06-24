@@ -6,13 +6,10 @@ import { PromoVideo } from "~~/components/home/PromoVideo";
 import { SupportedAgentsSection } from "~~/components/home/SupportedAgentsSection";
 import { getOptionalPonderUrl } from "~~/lib/env/server";
 import { ASK_STEPS, FEATURE_BENEFITS, type TechLink } from "~~/lib/home/landingCopy";
-import {
-  FALLBACK_SOCIAL_PROOF_STATS,
-  type LandingSocialProofStats,
-  buildLandingPageSocialProofItems,
-} from "~~/lib/home/socialProof";
+import { type LandingSocialProofStats, buildLandingPageSocialProofItems } from "~~/lib/home/socialProof";
 
 const LANDING_STATS_REVALIDATE_SECONDS = 300;
+export const revalidate = 300;
 
 function SectionHeading({
   number,
@@ -147,11 +144,10 @@ function FeaturesBenefitsSection() {
 }
 
 async function getLandingPageSocialProofItems() {
-  const fallbackItems = buildLandingPageSocialProofItems(FALLBACK_SOCIAL_PROOF_STATS);
-
   const ponderUrl = getOptionalPonderUrl();
   if (!ponderUrl) {
-    return fallbackItems;
+    console.warn("[landing-social-proof] NEXT_PUBLIC_PONDER_URL is not configured; hiding landing stats.");
+    return [];
   }
 
   try {
@@ -160,13 +156,20 @@ async function getLandingPageSocialProofItems() {
     });
 
     if (!response.ok) {
-      return fallbackItems;
+      console.warn("[landing-social-proof] Ponder stats request failed; hiding landing stats.", {
+        status: response.status,
+        statusText: response.statusText,
+      });
+      return [];
     }
 
     const stats = (await response.json()) as LandingSocialProofStats;
     return buildLandingPageSocialProofItems(stats);
-  } catch {
-    return fallbackItems;
+  } catch (error) {
+    console.warn("[landing-social-proof] Ponder stats request threw; hiding landing stats.", {
+      message: error instanceof Error ? error.message : String(error),
+    });
+    return [];
   }
 }
 
@@ -198,17 +201,19 @@ export default async function LandingPage() {
               Human and AI raters guide decisions and earn USDC
             </p>
             <LandingPageActions />
-            <div className="mt-5 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 text-center text-sm text-base-content/76 sm:text-[0.95rem] lg:justify-start lg:text-left">
-              {socialProofItems.map(({ value, label }, index) => (
-                <div key={label} className="flex items-center">
-                  <span
-                    className={`whitespace-nowrap ${index < socialProofItems.length - 1 ? "sm:after:ml-3 sm:after:text-base-content/70 sm:after:content-['•']" : ""}`}
-                  >
-                    <span className="font-semibold text-base-content">{value}</span> {label}
-                  </span>
-                </div>
-              ))}
-            </div>
+            {socialProofItems.length > 0 ? (
+              <div className="mt-5 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 text-center text-sm text-base-content/76 sm:text-[0.95rem] lg:justify-start lg:text-left">
+                {socialProofItems.map(({ value, label }, index) => (
+                  <div key={label} className="flex items-center">
+                    <span
+                      className={`whitespace-nowrap ${index < socialProofItems.length - 1 ? "sm:after:ml-3 sm:after:text-base-content/70 sm:after:content-['•']" : ""}`}
+                    >
+                      <span className="font-semibold text-base-content">{value}</span> {label}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : null}
           </div>
           <SupportedAgentsSection />
         </div>
