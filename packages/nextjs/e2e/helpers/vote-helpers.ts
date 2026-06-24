@@ -8,6 +8,7 @@ import {
   gotoWithRetry,
   waitForFeedLoaded,
 } from "./wait-helpers";
+import { buildRateContentHref } from "../../constants/routes";
 
 type VoteSubmissionOptions = {
   voterAddress?: string;
@@ -234,7 +235,7 @@ export async function voteOnSpecificContent(
     return false;
   };
 
-  await gotoWithRetry(page, `/rate?content=${contentId}`, { ensureWalletConnected: true });
+  await gotoWithRetry(page, buildRateContentHref(contentId, { waitForContent: true }), { ensureWalletConnected: true });
   await waitForFeedLoaded(page, 30_000);
 
   const voteBtn = page.getByRole("button", {

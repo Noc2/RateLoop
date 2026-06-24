@@ -2,11 +2,10 @@ import { cancelContent } from "../helpers/admin-helpers";
 import { ANVIL_ACCOUNTS } from "../helpers/anvil-accounts";
 import { newE2EContext } from "../helpers/browser-context";
 import { CONTRACT_ADDRESSES } from "../helpers/contracts";
+import { createFreshVoteableContent } from "../helpers/voteable-content";
+import { voteOnSpecificContent } from "../helpers/vote-helpers";
 import {
-  FEED_EMPTY_STATE_RE,
-  VOTE_UP_BUTTON_NAME,
   cycleVoteFeedForVisible,
-  findVoteableContent,
   gotoWithRetry,
   waitForFeedLoaded,
 } from "../helpers/wait-helpers";
@@ -33,29 +32,6 @@ async function waitForAnyVisible(page: Page, locators: Locator[], timeout = 10_0
     .toBe(true)
     .then(() => true)
     .catch(() => false);
-}
-
-async function findVoteableContentWithEmptyFeedRecovery(page: Page): Promise<boolean> {
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    await waitForFeedLoaded(page, 20_000);
-
-    if (await findVoteableContent(page)) {
-      return true;
-    }
-
-    const emptyFeedVisible = await page
-      .getByText(FEED_EMPTY_STATE_RE)
-      .first()
-      .isVisible()
-      .catch(() => false);
-    if (!emptyFeedVisible || attempt === 2) {
-      return false;
-    }
-
-    await gotoWithRetry(page, "/rate", { ensureWalletConnected: true, timeout: 30_000 });
-  }
-
-  return false;
 }
 
 /**
@@ -107,60 +83,17 @@ test.describe("Negative cases", () => {
   test("double vote on same content shows cooldown", async ({ page }) => {
     test.setTimeout(120_000);
 
+    const target = await createFreshVoteableContent("Negative Double Vote", ANVIL_ACCOUNTS.account3.address);
+    expect(target, "fresh double-vote target should submit and index").not.toBeNull();
+
     // Account #6 has rater credential #104 and LREP.
     await setupWallet(page, ANVIL_ACCOUNTS.account6.privateKey);
 
-    await gotoWithRetry(page, "/rate", { ensureWalletConnected: true, timeout: 30_000 });
-
-    const voteUp = page.getByRole("button", { name: VOTE_UP_BUTTON_NAME }).first();
-    const canVote = await findVoteableContentWithEmptyFeedRecovery(page);
-
-    expect(canVote, "account #6 should have seeded voteable content in the default E2E suite").toBe(true);
-    await expect(voteUp).toBeVisible({ timeout: 10_000 });
-    const votedContentId = await page.getByTestId("vote-content-card-shell").first().getAttribute("data-content-id");
-
-    const stakeModal = page.locator("[role='dialog']").first();
-    await expect(async () => {
-      await voteUp.waitFor({ state: "visible", timeout: 10_000 });
-      await voteUp.click({ timeout: 5_000 });
-      await expect(stakeModal).toBeVisible({ timeout: 5_000 });
-    }).toPass({ timeout: 30_000, intervals: [500, 1_000, 2_000] });
-
-    const presetBtn = stakeModal.getByRole("button", { name: /^1$/ });
-    if (await presetBtn.isVisible().catch(() => false)) {
-      await presetBtn.click();
-    }
-
-    const confirmBtn = stakeModal.getByRole("button", { name: /Stake \d+/i });
-    await expect(confirmBtn).toBeVisible({ timeout: 5_000 });
-    await expect(confirmBtn).toBeEnabled({ timeout: 5_000 });
-    await confirmBtn.click();
-
-    // Wait for success or error (includes approval failures).
-    // The UI may show "Voted!", "submitted", "committed", "staked", or an error toast.
-    // Also detect the modal closing as an implicit success signal.
-    const successMsg = page.getByText(/voted|success|submitted|committed|staked/i);
-    const errorMsg = page.getByText(/reverted|failed|error|rejected|not confirmed/i);
-    const modalClosed = stakeModal
-      .waitFor({ state: "hidden", timeout: 30_000 })
-      .then(() => true)
-      .catch(() => false);
-    const msgVisible = expect(successMsg.or(errorMsg).first())
-      .toBeVisible({ timeout: 30_000 })
-      .then(() => true)
-      .catch(() => false);
-    await Promise.race([modalClosed, msgVisible]);
-
-    // Check if vote succeeded: either success message visible or modal closed without error
-    const hasSuccessMsg = await successMsg
-      .first()
-      .isVisible()
-      .catch(() => false);
-    const hasErrorMsg = await errorMsg
-      .first()
-      .isVisible()
-      .catch(() => false);
-    const firstVoteSucceeded = hasSuccessMsg || (!hasErrorMsg && !(await stakeModal.isVisible().catch(() => true)));
+    const votedContentId = target!.contentId;
+    const firstVoteSucceeded = await voteOnSpecificContent(page, votedContentId, "up", {
+      indexedTimeoutMs: 90_000,
+      voterAddress: ANVIL_ACCOUNTS.account6.address,
+    });
 
     expect(firstVoteSucceeded, "first vote should succeed before the duplicate-vote cooldown assertion").toBe(true);
 
