@@ -1894,6 +1894,33 @@ export function ContentSubmissionSection() {
     if (!response.ok) {
       throw new Error("Could not attach question details to submitted content.");
     }
+
+    if (metadata.length === 0) return;
+
+    const body = (await response.json()) as {
+      metadataIndexed?: number;
+      metadataRequested?: number;
+      metadataSkipped?: number;
+      warnings?: unknown[];
+    };
+    const metadataIndexed = typeof body.metadataIndexed === "number" ? body.metadataIndexed : 0;
+    const metadataSkipped = typeof body.metadataSkipped === "number" ? body.metadataSkipped : 0;
+    const warnings = Array.isArray(body.warnings)
+      ? body.warnings.filter((entry): entry is string => typeof entry === "string")
+      : [];
+
+    if (metadataIndexed === 0 && metadataSkipped > 0) {
+      notification.warning(
+        "Question metadata could not be indexed yet. A/B vote labels still work from your question title.",
+      );
+      return;
+    }
+
+    if (warnings.some(warning => warning.startsWith("metadata_sync"))) {
+      notification.warning(
+        "Question metadata sync is delayed. Your submission succeeded; refresh if vote labels look wrong.",
+      );
+    }
   };
 
   const handleTitleChange = (value: string) => {
