@@ -207,7 +207,11 @@ export function useVoteCooldowns({
     refetchInterval: isPageVisible ? 30_000 : false,
   });
 
-  const { data: onChainCooldownByContentId, isLoading: onChainLoading } = useQuery({
+  const {
+    data: onChainCooldownByContentId,
+    isError: onChainError,
+    isLoading: onChainLoading,
+  } = useQuery({
     queryKey: [
       "voteCooldownsOnChain",
       targetNetwork.id,
@@ -253,6 +257,6 @@ export function useVoteCooldowns({
       indexedLoading ||
       onChainLoading ||
       (queryEnabled && result === undefined) ||
-      (onChainQueryEnabled && onChainCooldownByContentId === undefined),
+      (onChainQueryEnabled && !onChainError && onChainCooldownByContentId === undefined),
   };
 }
