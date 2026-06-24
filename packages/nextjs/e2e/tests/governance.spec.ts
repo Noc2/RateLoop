@@ -17,9 +17,27 @@ import {
 } from "../helpers/confidentiality";
 import { waitForPonderIndexed } from "../helpers/admin-helpers";
 import { ponderGet } from "../helpers/ponder-api";
-import { E2E_BASE_URL } from "../helpers/service-urls";
+import { E2E_BASE_URL, E2E_RPC_URL } from "../helpers/service-urls";
 import { gotoWithRetry, waitForFeedLoaded } from "../helpers/wait-helpers";
 import { setupWallet } from "../helpers/wallet-session";
+import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
+
+async function topUpLocalEth(address: string): Promise<void> {
+  const response = await fetch(E2E_RPC_URL, {
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      method: "anvil_setBalance",
+      params: [address, "0x21E19E0C9BAB2400000"],
+      id: Date.now(),
+    }),
+    headers: { "Content-Type": "application/json" },
+    method: "POST",
+  });
+  expect(response.ok, "local Anvil balance top-up request should succeed").toBe(true);
+
+  const body = await response.json();
+  expect(body.error, "local Anvil balance top-up should not return an RPC error").toBeFalsy();
+}
 
 test.describe("Governance page", () => {
   test("page loads and shows tabs", async ({ connectedPage: page }) => {
@@ -62,7 +80,12 @@ test.describe("Governance page", () => {
   });
 
   test("zero-LREP onboarding explains launch credit paths", async ({ page }) => {
-    await setupWallet(page, ANVIL_ACCOUNTS.account1.privateKey);
+    test.setTimeout(120_000);
+
+    const zeroLrepPrivateKey = generatePrivateKey();
+    const zeroLrepAccount = privateKeyToAccount(zeroLrepPrivateKey);
+    await topUpLocalEth(zeroLrepAccount.address);
+    await setupWallet(page, zeroLrepPrivateKey);
     await gotoWithRetry(page, "/governance", { ensureWalletConnected: true });
 
     await expect(page.getByRole("heading", { name: "Start Building Reputation" })).toBeVisible({ timeout: 15_000 });
