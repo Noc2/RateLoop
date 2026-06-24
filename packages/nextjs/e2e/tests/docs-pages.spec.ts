@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { gotoWithRetry } from "../helpers/wait-helpers";
 
 /**
  * Documentation and legal page smoke tests.
@@ -21,15 +22,14 @@ test.describe("Documentation pages", () => {
 
   for (const path of docPages) {
     test(`${path} loads with a heading`, async ({ page }) => {
-      await page.goto(path, { waitUntil: "domcontentloaded" });
+      await gotoWithRetry(page, path, { skipInjectedWalletConnectionCheck: true });
       const h1 = page.locator("h1");
       await expect(h1.first(), `${path} should expose a visible h1 heading`).toBeVisible({ timeout: 20_000 });
     });
   }
 
   test("docs navigation links work", async ({ page }) => {
-    await page.goto("/docs");
-    await page.waitForLoadState("domcontentloaded");
+    await gotoWithRetry(page, "/docs", { skipInjectedWalletConnectionCheck: true });
 
     const h1 = page.locator("h1");
     await expect(h1.first()).toBeVisible({ timeout: 15_000 });
@@ -43,8 +43,7 @@ test.describe("Documentation pages", () => {
   });
 
   test("docs section headings open the first page in each section", async ({ page }) => {
-    await page.goto("/docs/tokenomics");
-    await page.waitForLoadState("domcontentloaded");
+    await gotoWithRetry(page, "/docs/tokenomics", { skipInjectedWalletConnectionCheck: true });
 
     const startHereLink = page.getByRole("link", { name: /^Start Here$/i });
     await expect(startHereLink).toBeVisible({ timeout: 10_000 });
@@ -68,19 +67,21 @@ test.describe("Documentation pages", () => {
   });
 
   test("docs explain advisory launch credits without stale credential wording", async ({ page }) => {
-    await page.goto("/docs/how-it-works#eligible-settled-rounds", { waitUntil: "domcontentloaded" });
+    await gotoWithRetry(page, "/docs/how-it-works#eligible-settled-rounds", {
+      skipInjectedWalletConnectionCheck: true,
+    });
 
     await expect(page.getByRole("heading", { name: "Launch LREP Credits" })).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText(/finalized independence weight for round r/i)).toBeVisible();
     await expect(page.getByText(/self-verified/i)).toHaveCount(0);
 
-    await page.goto("/docs/tokenomics", { waitUntil: "domcontentloaded" });
+    await gotoWithRetry(page, "/docs/tokenomics", { skipInjectedWalletConnectionCheck: true });
     await expect(page.getByText(/eligible settled advisory rounds can qualify for launch credits/i)).toBeVisible();
     await expect(page.getByText(/self-verified/i)).toHaveCount(0);
   });
 
   test("docs render surprise multiplier chart and weighted USDC example", async ({ page }) => {
-    await page.goto("/docs/tech-stack#bounties", { waitUntil: "domcontentloaded" });
+    await gotoWithRetry(page, "/docs/tech-stack#bounties", { skipInjectedWalletConnectionCheck: true });
     await expect(
       page.getByRole("img", {
         name: /Surprise multiplier versus agreement over base rate/i,
@@ -88,13 +89,15 @@ test.describe("Documentation pages", () => {
     ).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText(/15 USDC, 7\.5 USDC, and 7\.5 USDC/i)).toBeVisible();
 
-    await page.goto("/docs/how-it-works#eligible-settled-rounds", { waitUntil: "domcontentloaded" });
+    await gotoWithRetry(page, "/docs/how-it-works#eligible-settled-rounds", {
+      skipInjectedWalletConnectionCheck: true,
+    });
     await expect(page.getByText(/15 USDC, 7\.50 USDC, and 7\.50 USDC/i)).toBeVisible();
   });
 
   for (const path of legalPages) {
     test(`${path} loads with a heading`, async ({ page }) => {
-      await page.goto(path, { waitUntil: "domcontentloaded" });
+      await gotoWithRetry(page, path, { skipInjectedWalletConnectionCheck: true });
       const h1 = page.locator("h1");
       await expect(h1.first(), `${path} should expose a visible h1 heading`).toBeVisible({ timeout: 10_000 });
     });
