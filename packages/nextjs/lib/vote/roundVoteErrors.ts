@@ -5,6 +5,7 @@ export const CONTENT_NOT_ACTIVE_ERROR_SELECTOR = "0x74e73b6d";
 export const CONFIDENTIALITY_CREDENTIAL_REQUIRED_ERROR_SELECTOR = "0x9aacec92";
 export const CONFIDENTIALITY_BOND_REQUIRED_ERROR_SELECTOR = "0x2b720139";
 export const IDENTITY_BANNED_ERROR_SELECTOR = "0xe51434d4";
+export const COOLDOWN_ACTIVE_ERROR_SELECTOR = "0xaa9a98df";
 const TARGET_ROUND_OUT_OF_WINDOW_ERROR_SELECTOR = "0xe56a7aca";
 
 /**
@@ -13,9 +14,19 @@ const TARGET_ROUND_OUT_OF_WINDOW_ERROR_SELECTOR = "0xe56a7aca";
  * forms can reach this normalizer depending on whether the contract ABI was reachable
  * at decode time, so every branch with a known selector checks both forms uniformly.
  */
+function matchesRevertSelector(normalizedMessage: string, selector: string) {
+  const normalizedSelector = selector.toLowerCase();
+  const bareSelector = normalizedSelector.replace(/^0x/, "");
+  return (
+    normalizedMessage.includes(normalizedSelector) ||
+    normalizedMessage.includes(`revert: ${bareSelector}`) ||
+    normalizedMessage.includes(`revert:${bareSelector}`)
+  );
+}
+
 function matchesContractError(message: string, normalizedMessage: string, name: string, selector?: string) {
   if (message.includes(name)) return true;
-  if (selector && normalizedMessage.includes(selector)) return true;
+  if (selector && matchesRevertSelector(normalizedMessage, selector)) return true;
   return false;
 }
 
@@ -28,7 +39,7 @@ export function normalizeRoundVoteError(message: string) {
   if (normalizedMessage.includes("call bundle failed")) {
     return "Wallet could not submit this vote bundle. Please retry in a moment.";
   }
-  if (matchesContractError(message, normalizedMessage, "CooldownActive")) {
+  if (matchesContractError(message, normalizedMessage, "CooldownActive", COOLDOWN_ACTIVE_ERROR_SELECTOR)) {
     return `You already voted on this content within the last ${Math.round(VOTE_COOLDOWN_SECONDS / 3600)} hours. Try again after the cooldown ends.`;
   }
   if (matchesContractError(message, normalizedMessage, "AlreadyCommitted")) {

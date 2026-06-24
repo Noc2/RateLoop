@@ -2,6 +2,7 @@ import {
   CONFIDENTIALITY_BOND_REQUIRED_ERROR_SELECTOR,
   CONFIDENTIALITY_CREDENTIAL_REQUIRED_ERROR_SELECTOR,
   CONTENT_NOT_ACTIVE_ERROR_SELECTOR,
+  COOLDOWN_ACTIVE_ERROR_SELECTOR,
   IDENTITY_BANNED_ERROR_SELECTOR,
   SELF_VOTE_ERROR_SELECTOR,
   normalizeRoundVoteError,
@@ -19,6 +20,19 @@ test("normalizeRoundVoteError translates self-vote selectors into a user-facing 
 test("normalizeRoundVoteError keeps existing named protocol errors readable", () => {
   assert.equal(
     normalizeRoundVoteError("CooldownActive"),
+    "You already voted on this content within the last 24 hours. Try again after the cooldown ends.",
+  );
+});
+
+test("normalizeRoundVoteError translates CooldownActive selectors from thirdweb simulation errors", () => {
+  assert.equal(
+    normalizeRoundVoteError(
+      `tw_getTransactionHash error: {"code":-32000,"message":"Transaction failed: TRANSACTION_SIMULATION_FAILED: Transaction reverted during gas estimation: execution reverted (revert: aa9a98df)"}`,
+    ),
+    "You already voted on this content within the last 24 hours. Try again after the cooldown ends.",
+  );
+  assert.equal(
+    normalizeRoundVoteError(`commitVote reverted with selector ${COOLDOWN_ACTIVE_ERROR_SELECTOR}`),
     "You already voted on this content within the last 24 hours. Try again after the cooldown ends.",
   );
 });
