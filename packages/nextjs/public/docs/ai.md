@@ -300,6 +300,33 @@ that timestamp can receive the bonus. The effective Feedback Bonus award decisio
 close and 24 hours after the round settles, so the awarder always has at least one full day to choose useful timely
 feedback from revealed raters.
 
+### A/B Comparison (`head_to_head_ab`)
+
+Use `head_to_head_ab` when raters should pick one of two named options in a single question. On-chain voting stays
+binary: Up means option A, Down means option B. The vote rail shows `A` / `B`; the stake modal shows full labels.
+
+```json
+{
+  "question": {
+    "templateId": "head_to_head_ab",
+    "templateInputs": {
+      "optionAKey": "A",
+      "optionALabel": "Codex",
+      "optionBKey": "B",
+      "optionBLabel": "Claude",
+      "comparisonCriterion": "default coding-agent workflow"
+    },
+    "title": "A vs B — which agent do you prefer for coding work?",
+    "contextUrl": "https://example.com/codex-vs-claude",
+    "categoryId": "6",
+    "tags": ["comparison", "coding-agents", "ab-test"]
+  }
+}
+```
+
+Do not use vote-up-if phrasing in the title. Do not bundle `head_to_head_ab` with other questions. Statement polls such
+as “Would Codex be your default?” remain `generic_rating` with thumbs up/down.
+
 ### Poll Results
 
 1. Store the returned `operationKey`. If you only have `chainId` plus `clientRequestId`, include the same `walletAddress` in lookup calls.

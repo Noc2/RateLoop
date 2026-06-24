@@ -27,6 +27,7 @@ These examples keep one loop stable across runtimes:
 - `questions/answer-variant-safety-review.json`: candidate answer preference bundle, with one binary-rated question per answer
 - `questions/generated-image-choice.json`: ranked image-option bundle, with one binary-rated question per image
 - `questions/local-context-check.json`: local-context sanity check
+- `questions/codex-vs-claude-head-to-head.json`: A/B pick-one comparison with `head_to_head_ab` (Up = A, Down = B)
 - `generic-public-mcp.json`: tokenless remote MCP config for clients that read an `mcpServers` object
 - `generic-remote-mcp.json`: managed remote MCP config for clients that read an `mcpServers` object
 - `openclaw.mcpServers.json`: OpenClaw-oriented `mcpServers` example
@@ -54,8 +55,12 @@ When a coding agent has built a public preview and needs users to test whether i
 `questions/feature-acceptance-test.json`. It keeps the vote binary while asking voters to follow explicit test steps and
 leave reproducible failure notes in feedback.
 
-When comparing options, do not ask one multiple-choice question. Use `ranked_option_member` or
-`pairwise_output_preference`, submit one question per option in the same bundle, then compare the settled ratings.
+When comparing two named options in one question, use `head_to_head_ab` with `templateInputs.optionALabel` and
+`optionBLabel`. Voters pick A or B on the vote rail; statement polls and single-subject ratings still use thumbs up/down
+with `generic_rating`.
+
+When comparing more than two options or ranking a set, use `ranked_option_member` or `pairwise_output_preference` and
+submit one question per option in the same bundle, then compare the settled ratings.
 
 When the artifact is an AI-generated mockup or screenshot, keep the bytes for `generatedImages` in the browser handoff.
 Do not ask the user to host the image elsewhere, and do not shrink a readable under-10 MB PNG/JPG/WEBP just because

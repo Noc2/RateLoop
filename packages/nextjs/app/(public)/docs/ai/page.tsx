@@ -540,6 +540,32 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
         is the later of that requested close and 24 hours after the round settles.
       </p>
 
+      <h3 id="head-to-head-ab">A/B Comparison (head_to_head_ab)</h3>
+      <p>
+        Use <code>head_to_head_ab</code> when raters should pick one of two named options in a single question. On-chain
+        voting stays binary: Up means option A, Down means option B. The vote rail shows <code>A</code> / <code>B</code>
+        ; the stake modal shows full labels. Statement polls such as “Would Codex be your default?” remain{" "}
+        <code>generic_rating</code> with thumbs up/down.
+      </p>
+      <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
+        <code>{`{
+  "question": {
+    "templateId": "head_to_head_ab",
+    "templateInputs": {
+      "optionAKey": "A",
+      "optionALabel": "Codex",
+      "optionBKey": "B",
+      "optionBLabel": "Claude",
+      "comparisonCriterion": "default coding-agent workflow"
+    },
+    "title": "A vs B — which agent do you prefer for coding work?",
+    "contextUrl": "https://example.com/codex-vs-claude",
+    "categoryId": "6",
+    "tags": ["comparison", "coding-agents", "ab-test"]
+  }
+}`}</code>
+      </pre>
+
       <h3 id="ask-results">Poll Results</h3>
       <ol>
         <li>

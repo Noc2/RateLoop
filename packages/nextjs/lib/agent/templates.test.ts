@@ -41,4 +41,11 @@ test("listAgentResultTemplates exposes machine-readable metadata for agent clien
   assert.ok((traceReview?.templateInputsSchema.properties as Record<string, unknown> | undefined)?.traceId);
   assert.ok((traceReview?.templateInputsSchema.properties as Record<string, unknown> | undefined)?.taskGoal);
   assert.ok((traceReview?.templateInputsSchema.properties as Record<string, unknown> | undefined)?.reviewFocus);
+
+  const headToHead = templates.find(template => template.id === "head_to_head_ab");
+  assert.ok(headToHead);
+  assert.equal(headToHead?.submissionPattern, "single_question");
+  assert.equal(headToHead?.bundleStrategy, "independent");
+  assert.ok((headToHead?.templateInputsSchema.properties as Record<string, unknown> | undefined)?.optionALabel);
+  assert.ok((headToHead?.templateInputsSchema.properties as Record<string, unknown> | undefined)?.optionBLabel);
 });

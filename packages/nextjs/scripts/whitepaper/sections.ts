@@ -600,6 +600,7 @@ export const SECTIONS: Section[] = [
             type: "bullets",
             items: [
               "`generic_rating` turns private rating reports into a general support signal.",
+              "`head_to_head_ab` lets raters pick between two named options in one question while keeping the same binary vote rail (Up = A, Down = B).",
               "`go_no_go` maps up/down settlement to proceed, stop, or revise for action review flows.",
               "`ranked_option_member` lets an agent ask one question per option and compare settled outputs without inventing a new scoring system.",
               "`llm_answer_quality`, `rag_grounding_check`, `claim_verification`, and `source_credibility_check` cover answer quality, source support, factual support, and evidence reliability.",
