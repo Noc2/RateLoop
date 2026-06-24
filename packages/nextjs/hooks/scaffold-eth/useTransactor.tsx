@@ -9,6 +9,7 @@ import { getTransactionReceiptPollingInterval } from "~~/config/shared";
 import { useWalletRestore } from "~~/contexts/WalletRestoreContext";
 import { FREE_TRANSACTION_ALLOWANCE_QUERY_KEY } from "~~/hooks/useFreeTransactionAllowance";
 import { refreshActiveWalletReadQueries } from "~~/hooks/useRefreshWalletBalances";
+import { waitForPublicClientTransactionReceiptWithRetry } from "~~/lib/transactions/receiptWait";
 import { createTransactionTimingRun } from "~~/lib/transactions/timing";
 import { TRANSACTION_CONFIRMING_STATUS, getSubmittingTransactionStatus } from "~~/lib/ui/transactionStatusCopy";
 import { WALLET_TRANSACTION_RESTORING_MESSAGE } from "~~/lib/walletTransactionReadiness";
@@ -227,7 +228,7 @@ export const useTransactor = (_walletClient?: WalletClient): TransactionFunc => 
       timingLog.emit("receipt-wait-start", {
         transactionHash,
       });
-      transactionReceipt = await publicClient.waitForTransactionReceipt({
+      transactionReceipt = await waitForPublicClientTransactionReceiptWithRetry(publicClient, {
         hash: transactionHash,
         confirmations: options?.blockConfirmations,
         pollingInterval: getTransactionReceiptPollingInterval(chainId, {
