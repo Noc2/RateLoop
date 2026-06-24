@@ -39,8 +39,10 @@ import {
   parseUsdRewardPoolAmount,
 } from "~~/lib/questionRewardPools";
 import { requiredQuestionRewardVotersForAmount } from "~~/lib/questionRoundConfig";
+import { hasRewardPoolFundedPostcondition } from "~~/lib/rewardPool/postconditions";
 import { isUserRejectedTransactionError } from "~~/lib/transactionErrors";
-import { getBlockWithRetry } from "~~/lib/transactions/blockWait";
+import { getBlockWithRetry, readLatestBlockNumber } from "~~/lib/transactions/blockWait";
+import { raceTransactionWithPostcondition, waitForTransactionPostcondition } from "~~/lib/transactions/postcondition";
 import { waitForTransactionReceiptWithRetry } from "~~/lib/transactions/receiptWait";
 import {
   buildUsdcReceiveWithAuthorizationTypedData,
@@ -323,6 +325,46 @@ export function FundQuestionModal({
         requiredVoters: BigInt(voterCount),
       } as const;
       const canUseBatchFunding = canUseSponsoredBatchCalls || canUseSelfFundedBatchCalls;
+      const startBlock = canUseBatchFunding && publicClient ? await readLatestBlockNumber(publicClient) : null;
+      const executeRewardPoolFundingBatch = async (
+        calls: Parameters<typeof executeContractCallBatch>[0],
+        options: Parameters<typeof executeContractCallBatch>[1],
+      ) => {
+        if (!publicClient || startBlock === null || !address) {
+          return executeContractCallBatch(calls, options);
+        }
+
+        return raceTransactionWithPostcondition({
+          onPostconditionSuccessThenTransactionError: error => {
+            console.warn("[reward-pool] fund postcondition succeeded before thirdweb status settled.", {
+              contentId: contentId.toString(),
+              error,
+            });
+          },
+          transaction: () =>
+            executeContractCallBatch(calls, {
+              ...options,
+              suppressStatusToast: true,
+            }),
+          waitForPostcondition: shouldStop =>
+            waitForTransactionPostcondition(
+              () =>
+                hasRewardPoolFundedPostcondition({
+                  amount: parsedAmount,
+                  client: publicClient,
+                  contentId,
+                  escrowAddress,
+                  funder: address,
+                  startBlock,
+                }),
+              "reward-pool-fund-postcondition",
+              {
+                pollingIntervalMs: getFundReceiptPollingInterval(chainId),
+                shouldStop,
+              },
+            ),
+        });
+      };
       let authorizationHash: `0x${string}` | undefined;
       try {
         const validAfter = 0n;
@@ -368,7 +410,7 @@ export function FundQuestionModal({
         } as const;
 
         if (canUseBatchFunding) {
-          await executeContractCallBatch([authorizationCall], {
+          await executeRewardPoolFundingBatch([authorizationCall], {
             action: "Fund Bounty",
             atomicRequired: false,
             sponsorshipMode: canUseSponsoredBatchCalls ? "sponsored" : "self-funded",
@@ -419,7 +461,7 @@ export function FundQuestionModal({
       ] as const;
 
       if (canUseBatchFunding) {
-        await executeContractCallBatch(
+        await executeRewardPoolFundingBatch(
           [
             ...(initialAllowance < parsedAmount
               ? [

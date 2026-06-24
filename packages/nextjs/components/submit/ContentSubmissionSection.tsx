@@ -149,6 +149,7 @@ import {
   assertContentRegistryQuestionSubmissionSelector,
   getSubmissionErrorMessage,
 } from "~~/lib/questionSubmissionSelectorSupport";
+import { hasQuestionSubmittedPostcondition } from "~~/lib/submission/postconditions";
 import { waitForReservationRevealReady } from "~~/lib/submission/reservationRevealWait";
 import {
   getGasBalanceErrorMessage,
@@ -157,6 +158,7 @@ import {
   isWalletRpcOverloadedError,
 } from "~~/lib/transactionErrors";
 import { getBlockWithRetry } from "~~/lib/transactions/blockWait";
+import { raceTransactionWithPostcondition, waitForTransactionPostcondition } from "~~/lib/transactions/postcondition";
 import { waitForTransactionReceiptWithRetry } from "~~/lib/transactions/receiptWait";
 import scaffoldConfig from "~~/scaffold.config";
 import { containsBlockedUrl } from "~~/utils/contentFilter";
@@ -2901,47 +2903,74 @@ export function ContentSubmissionSection() {
 
       if (canUseBatchedSubmitCalls) {
         await waitForReservedSubmissionReveal();
-        const callsResult = await executeSponsoredCalls(
-          [
-            {
-              abi: ERC20_APPROVAL_ABI,
-              address: verifiedRewardTokenAddress,
-              args: [rewardEscrowAddress, selectedRewardAmount],
-              functionName: "approve",
-            },
-            {
-              abi: QUESTION_SUBMISSION_ABI,
-              address: registryAddress,
-              args: isBundleSubmission
-                ? [contractBundleQuestions, rewardTerms, roundConfigAbi]
-                : [
-                    onChainPrimaryQuestion.contextUrl,
-                    onChainPrimaryQuestion.imageUrls,
-                    onChainPrimaryQuestion.videoUrl,
-                    onChainPrimaryQuestion.title,
-                    onChainPrimaryQuestion.tags,
-                    onChainPrimaryQuestion.categoryId,
-                    {
-                      detailsUrl: onChainPrimaryQuestion.detailsUrl,
-                      detailsHash: onChainPrimaryQuestion.detailsHash,
-                    },
-                    onChainPrimaryQuestion.salt,
-                    rewardTerms,
-                    roundConfigAbi,
-                    primaryQuestionContractSpec,
-                    primaryQuestionConfidentialityAbi,
-                  ],
-              functionName: isBundleSubmission
-                ? "submitQuestionBundleWithRewardAndRoundConfig"
-                : "submitQuestionWithRewardAndRoundConfig",
-            },
-          ],
+        const expectedNextContentId =
+          nextContentIdBeforeSubmit !== null ? nextContentIdBeforeSubmit + BigInt(bundleQuestions.length) : null;
+        const submitCalls = [
           {
-            atomicRequired: true,
-            sponsorshipMode: submitCallSponsorshipMode,
-            suppressStatusToast: true,
+            abi: ERC20_APPROVAL_ABI,
+            address: verifiedRewardTokenAddress,
+            args: [rewardEscrowAddress, selectedRewardAmount],
+            functionName: "approve",
           },
-        );
+          {
+            abi: QUESTION_SUBMISSION_ABI,
+            address: registryAddress,
+            args: isBundleSubmission
+              ? [contractBundleQuestions, rewardTerms, roundConfigAbi]
+              : [
+                  onChainPrimaryQuestion.contextUrl,
+                  onChainPrimaryQuestion.imageUrls,
+                  onChainPrimaryQuestion.videoUrl,
+                  onChainPrimaryQuestion.title,
+                  onChainPrimaryQuestion.tags,
+                  onChainPrimaryQuestion.categoryId,
+                  {
+                    detailsUrl: onChainPrimaryQuestion.detailsUrl,
+                    detailsHash: onChainPrimaryQuestion.detailsHash,
+                  },
+                  onChainPrimaryQuestion.salt,
+                  rewardTerms,
+                  roundConfigAbi,
+                  primaryQuestionContractSpec,
+                  primaryQuestionConfidentialityAbi,
+                ],
+            functionName: isBundleSubmission
+              ? "submitQuestionBundleWithRewardAndRoundConfig"
+              : "submitQuestionWithRewardAndRoundConfig",
+          },
+        ] as const;
+        const submitBatchCalls = [...submitCalls];
+        const submitBatchOptions = {
+          atomicRequired: true,
+          sponsorshipMode: submitCallSponsorshipMode,
+          suppressStatusToast: true,
+        } as const;
+        const callsResult =
+          publicClient && expectedNextContentId !== null
+            ? await raceTransactionWithPostcondition({
+                onPostconditionSuccessThenTransactionError: error => {
+                  console.warn("[content-submission] submit postcondition succeeded before thirdweb status settled.", {
+                    error,
+                    expectedNextContentId: expectedNextContentId.toString(),
+                  });
+                },
+                transaction: () => executeSponsoredCalls(submitBatchCalls, submitBatchOptions),
+                waitForPostcondition: shouldStop =>
+                  waitForTransactionPostcondition(
+                    () =>
+                      hasQuestionSubmittedPostcondition({
+                        client: publicClient,
+                        contentRegistryAddress: registryAddress,
+                        expectedNextContentId,
+                      }),
+                    "question-submit-postcondition",
+                    {
+                      pollingIntervalMs: getSubmitReceiptPollingInterval(targetNetwork.id),
+                      shouldStop,
+                    },
+                  ),
+              }).then(result => (result.confirmation === "postcondition" ? { receipts: [] } : result.result))
+            : await executeSponsoredCalls(submitBatchCalls, submitBatchOptions);
 
         const submissionReceipts = callsResult.receipts ?? [];
         submittedContentIds = extractSubmittedContentIds(submissionReceipts.flatMap(receipt => receipt.logs));
