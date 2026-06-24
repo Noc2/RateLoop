@@ -8,6 +8,21 @@ export function buildHeadToHeadAbTitle(optionALabel: string, optionBLabel: strin
   return `Do you prefer A = ${optionALabel.trim()} or B = ${optionBLabel.trim()}?`;
 }
 
+export function formatHeadToHeadOptionMarker(optionKey: "A" | "B", optionLabel: string): string {
+  return `${optionKey} = ${optionLabel.trim()}`;
+}
+
+export function titleIncludesHeadToHeadOptionMarkers(
+  title: string,
+  optionALabel: string,
+  optionBLabel: string,
+): boolean {
+  const trimmedTitle = title.trim();
+  const markerA = formatHeadToHeadOptionMarker("A", optionALabel);
+  const markerB = formatHeadToHeadOptionMarker("B", optionBLabel);
+  return trimmedTitle.includes(markerA) && trimmedTitle.includes(markerB);
+}
+
 export function getHeadToHeadAbTitleLengthError(optionALabel: string, optionBLabel: string): string | null {
   const expected = buildHeadToHeadAbTitle(optionALabel, optionBLabel);
   if (expected.length > HEAD_TO_HEAD_AB_TITLE_MAX_LENGTH) {
@@ -38,9 +53,10 @@ export function getHeadToHeadAbTitleValidationError(
     return lengthError;
   }
 
-  const expected = buildHeadToHeadAbTitle(trimmedA, trimmedB);
-  if (trimmedTitle !== expected) {
-    return `Use: ${expected}`;
+  const markerA = formatHeadToHeadOptionMarker("A", trimmedA);
+  const markerB = formatHeadToHeadOptionMarker("B", trimmedB);
+  if (!trimmedTitle.includes(markerA) || !trimmedTitle.includes(markerB)) {
+    return `Include both option names in the question, e.g. ${markerA} and ${markerB}.`;
   }
 
   return null;

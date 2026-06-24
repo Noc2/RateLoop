@@ -26,9 +26,10 @@ test("mergeHeadToHeadDraftQuestion auto-fills the title from options", () => {
   assert.equal(next.headToHeadTitleMode, "auto");
 });
 
-test("getHeadToHeadQuestionTitleError requires the canonical format", () => {
+test("getHeadToHeadQuestionTitleError requires both option markers", () => {
   assert.equal(
     getHeadToHeadQuestionTitleError("Codex", "Claude", "Which agent is better?"),
-    "Use: Do you prefer A = Codex or B = Claude?",
+    "Include both option names in the question, e.g. A = Codex and B = Claude.",
   );
+  assert.equal(getHeadToHeadQuestionTitleError("Hermes", "OpenClaw", "Do you A = Hermes or B = OpenClaw?"), null);
 });

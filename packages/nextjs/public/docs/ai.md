@@ -303,8 +303,8 @@ feedback from revealed raters.
 ### A/B Comparison (`head_to_head_ab`)
 
 Use `head_to_head_ab` when raters should pick one of two named options in a single question. On-chain voting stays
-binary: Up means option A, Down means option B. The vote rail shows `A` / `B`; the stake modal shows full labels. Use
-the exact title format `Do you prefer A = {optionALabel} or B = {optionBLabel}?`.
+binary: Up means option A, Down means option B. The vote rail shows `A` / `B`; the stake modal shows full labels. The
+question title must include both `A = {optionALabel}` and `B = {optionBLabel}`.
 
 ```json
 {

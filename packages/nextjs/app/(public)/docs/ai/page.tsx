@@ -544,11 +544,8 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
       <p>
         Use <code>head_to_head_ab</code> when raters should pick one of two named options in a single question. On-chain
         voting stays binary: Up means option A, Down means option B. The vote rail shows <code>A</code> / <code>B</code>
-        ; the stake modal shows full labels. Use the exact title format{" "}
-        <code>
-          Do you prefer A = {"{optionALabel}"} or B = {"{optionBLabel}"}?
-        </code>
-        .
+        ; the stake modal shows full labels. The question title must include both <code>A = {"{optionALabel}"}</code>{" "}
+        and <code>B = {"{optionBLabel}"}</code>.
       </p>
       <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
         <code>{`{

@@ -91,8 +91,10 @@ export {
   HEAD_TO_HEAD_AB_TITLE_MAX_LENGTH,
   VOTE_UP_IF_TITLE_PATTERN,
   buildHeadToHeadAbTitle,
+  formatHeadToHeadOptionMarker,
   getHeadToHeadAbTitleLengthError,
   getHeadToHeadAbTitleValidationError,
   isHeadToHeadAbAutoTitle,
   isHeadToHeadAbTitleWithinOptionLabelLimits,
+  titleIncludesHeadToHeadOptionMarkers,
 } from "./headToHeadTitle.js";

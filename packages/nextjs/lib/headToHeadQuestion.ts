@@ -16,6 +16,9 @@ export {
 
 export type HeadToHeadTitleMode = "auto" | "manual";
 
+export const HEAD_TO_HEAD_AB_QUESTION_TOOLTIP =
+  "Question fills automatically from your options. You can edit it. Include both A = Option A and B = Option B in the question. Avoid vote-up-if phrasing.";
+
 export function resolveAutoHeadToHeadTitle(optionALabel: string, optionBLabel: string): string | null {
   const trimmedA = optionALabel.trim();
   const trimmedB = optionBLabel.trim();

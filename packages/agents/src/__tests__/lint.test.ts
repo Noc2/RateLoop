@@ -623,7 +623,7 @@ describe("round config voter alignment linting", () => {
     });
   });
 
-  it("rejects non-canonical titles on head-to-head asks", () => {
+  it("rejects titles missing option markers on head-to-head asks", () => {
     const findings = lintAgentAskRequest({
       ...VALID_REQUEST,
       templateId: "head_to_head_ab",
