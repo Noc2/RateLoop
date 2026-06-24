@@ -1140,7 +1140,7 @@ test.describe("Mobile viewport (phone)", () => {
     await expectHeaderTabsStable();
   });
 
-  test("mobile landing header remains accessible during programmatic scroll", async ({ page }) => {
+  test("mobile landing header hides and returns during programmatic scroll", async ({ page }) => {
     await gotoWithRetry(page, "/?landing=1", { skipInjectedWalletConnectionCheck: true, timeout: 45_000 });
     await expect(page.getByRole("heading", { name: /Level Up Your Agent/i }).first()).toBeVisible({
       timeout: 10_000,
@@ -1175,7 +1175,7 @@ test.describe("Mobile viewport (phone)", () => {
       }
     });
     await page.waitForFunction(() => window.scrollY >= 800);
-    await expect.poll(() => mobileHeader.getAttribute("data-visible")).toBe("true");
+    await expect.poll(() => mobileHeader.getAttribute("data-visible")).toBe("false");
 
     await page.waitForTimeout(320);
     await page.evaluate(() => {
