@@ -94,4 +94,25 @@ describe("voteUi api helpers", () => {
       optionBLabel: "Bad",
     });
   });
+
+  it("infers voteUi when question and title repeat the same text", () => {
+    const template = findAgentResultTemplate(HEAD_TO_HEAD_AB_TEMPLATE_ID);
+    expect(template).toBeTruthy();
+    const title = "Do you prefer A = Awesome or B = Bad?";
+
+    const response = attachVoteUiToContentResponse({
+      id: "5",
+      question: title,
+      title,
+      resultSpecHash: template!.resultSpecHash,
+    }) as Record<string, unknown>;
+
+    expect(response.voteUi).toEqual({
+      mode: "head_to_head",
+      optionAKey: "A",
+      optionALabel: "Awesome",
+      optionBKey: "B",
+      optionBLabel: "Bad",
+    });
+  });
 });

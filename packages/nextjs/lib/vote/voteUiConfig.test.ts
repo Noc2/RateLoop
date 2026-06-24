@@ -107,6 +107,28 @@ test("infers A/B vote ui from title when voteUi metadata is missing", () => {
   );
 });
 
+test("infers A/B vote ui when question and title repeat the same text", () => {
+  const template = findAgentResultTemplate(HEAD_TO_HEAD_AB_TEMPLATE_ID);
+  assert.ok(template);
+  const title = "Do you prefer A = Awesome or B = Bad?";
+
+  assert.deepEqual(
+    resolveContentVoteUi({
+      resultSpecHash: template!.resultSpecHash,
+      voteUi: null,
+      question: title,
+      title,
+    }),
+    {
+      mode: "head_to_head",
+      optionAKey: "A",
+      optionALabel: "Awesome",
+      optionBKey: "B",
+      optionBLabel: "Bad",
+    },
+  );
+});
+
 test("formats head-to-head vote submitted toast copy", () => {
   assert.match(
     getVoteSubmittedToastMessage({

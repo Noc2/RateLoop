@@ -92,6 +92,21 @@ describe("voteUi", () => {
     });
   });
 
+  it("infers head-to-head vote ui when the same title is repeated on multiple lines", () => {
+    const title = "Do you prefer A = Awesome or B = Bad?";
+    expect(
+      resolveVoteUiConfig({
+        text: `${title}\n${title}`,
+      }),
+    ).toEqual({
+      mode: "head_to_head",
+      optionAKey: "A",
+      optionALabel: "Awesome",
+      optionBKey: "B",
+      optionBLabel: "Bad",
+    });
+  });
+
   it("infers head-to-head vote ui from title even without head-to-head result spec hash", () => {
     const generic = findAgentResultTemplate("generic_rating");
     expect(

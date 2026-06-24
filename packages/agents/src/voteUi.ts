@@ -86,10 +86,7 @@ function buildInferredHeadToHeadAbTitle(optionALabel: string, optionBLabel: stri
   return `Do you prefer A = ${optionALabel} or B = ${optionBLabel}?`;
 }
 
-export function inferHeadToHeadAbQuestionFromText(text: string): InferredHeadToHeadAbQuestion | null {
-  const source = text.trim();
-  if (!source) return null;
-
+function inferHeadToHeadAbQuestionFromCandidate(source: string): InferredHeadToHeadAbQuestion | null {
   for (const pattern of OPTION_PAIR_PATTERNS) {
     const match = source.match(pattern);
     const optionALabel = cleanInferredOptionLabel(match?.groups?.a);
@@ -100,6 +97,26 @@ export function inferHeadToHeadAbQuestionFromText(text: string): InferredHeadToH
       optionBLabel,
       title: buildInferredHeadToHeadAbTitle(optionALabel, optionBLabel),
     };
+  }
+
+  return null;
+}
+
+export function inferHeadToHeadAbQuestionFromText(text: string): InferredHeadToHeadAbQuestion | null {
+  const source = text.trim();
+  if (!source) return null;
+
+  const candidates: string[] = [];
+  const seen = new Set<string>();
+  for (const candidate of [source, ...source.split(/\n+/).map(line => line.trim())]) {
+    if (!candidate || seen.has(candidate)) continue;
+    seen.add(candidate);
+    candidates.push(candidate);
+  }
+
+  for (const candidate of candidates) {
+    const inferred = inferHeadToHeadAbQuestionFromCandidate(candidate);
+    if (inferred) return inferred;
   }
 
   return null;

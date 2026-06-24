@@ -15,11 +15,21 @@ export type ContentVoteUiInput = Pick<ContentItem, "resultSpecHash" | "voteUi"> 
   description?: ContentItem["description"];
 };
 
+function joinUniqueContentText(...parts: Array<string | null | undefined>) {
+  const unique: string[] = [];
+  for (const part of parts) {
+    const trimmed = part?.trim();
+    if (!trimmed || unique.includes(trimmed)) continue;
+    unique.push(trimmed);
+  }
+  return unique.join("\n");
+}
+
 export function resolveContentVoteUi(item: ContentVoteUiInput): VoteUiConfig {
   if (item.voteUi?.mode === "head_to_head") {
     return item.voteUi;
   }
-  const text = [item.question, item.title, item.description].filter(Boolean).join("\n");
+  const text = joinUniqueContentText(item.question, item.title, item.description);
   return resolveVoteUiConfig({ resultSpecHash: item.resultSpecHash, text });
 }
 

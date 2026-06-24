@@ -21,9 +21,14 @@ function readQuestionMetadata(record: Record<string, unknown>) {
 }
 
 function readContentText(record: Record<string, unknown>) {
-  return [record.question, record.title, record.description]
-    .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
-    .join("\n");
+  const unique: string[] = [];
+  for (const value of [record.question, record.title, record.description]) {
+    if (typeof value !== "string") continue;
+    const trimmed = value.trim();
+    if (!trimmed || unique.includes(trimmed)) continue;
+    unique.push(trimmed);
+  }
+  return unique.join("\n");
 }
 
 export function extractVoteUiFromContentRecord(record: Record<string, unknown>) {
