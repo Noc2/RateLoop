@@ -10,6 +10,7 @@ import {
   isUnsupportedRpcMethodError,
   isUserRejectedTransactionError,
   isWalletRpcOverloadedError,
+  isBlockNotFoundError,
 } from "./transactionErrors";
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -161,4 +162,16 @@ test("does not classify unrelated transaction failures as user rejection", () =>
   };
 
   assert.equal(isUserRejectedTransactionError(error), false);
+});
+
+test("detects viem block-not-found errors", () => {
+  const error = new Error('BlockNotFoundError: Block at number "47757385" could not be found.');
+
+  assert.equal(isBlockNotFoundError(error), true);
+});
+
+test("does not classify unrelated not-found errors as block-not-found", () => {
+  const error = new Error("Reservation not found");
+
+  assert.equal(isBlockNotFoundError(error), false);
 });

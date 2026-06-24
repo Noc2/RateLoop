@@ -1,3 +1,5 @@
+import { getBlockWithRetry } from "../transactions/blockWait";
+
 export const RESERVED_SUBMISSION_MIN_AGE_SECONDS = 1n;
 export const RESERVATION_REVEAL_READY_TIMEOUT_MS = 30_000;
 export const RESERVATION_REVEAL_WALL_CLOCK_BUFFER_MS = 250;
@@ -46,13 +48,13 @@ export async function waitForReservationRevealReady(params: {
     return;
   }
 
-  const reserveBlock = await params.client.getBlock({ blockNumber });
+  const reserveBlock = await getBlockWithRetry(params.client, { blockNumber }, { pollMs, timeoutMs: pollMs * 60 });
   const revealReadyTimestamp = reserveBlock.timestamp + minAgeSeconds;
   const timeoutMs = params.timeoutMs ?? RESERVATION_REVEAL_READY_TIMEOUT_MS;
   const deadline = Date.now() + timeoutMs;
 
   for (;;) {
-    const latestBlock = await params.client.getBlock({ blockTag: "latest" });
+    const latestBlock = await getBlockWithRetry(params.client, { blockTag: "latest" }, { pollMs });
     if (latestBlock.timestamp >= revealReadyTimestamp) return;
 
     const remainingMs = deadline - Date.now();
@@ -69,7 +71,7 @@ export async function waitForReservationRevealReady(params: {
 
     await sleepFn(revealWaitMs);
 
-    const refreshedLatestBlock = await params.client.getBlock({ blockTag: "latest" });
+    const refreshedLatestBlock = await getBlockWithRetry(params.client, { blockTag: "latest" }, { pollMs });
     if (refreshedLatestBlock.timestamp >= revealReadyTimestamp) return;
 
     // On automine chains, the reveal transaction may be the next block that advances timestamp.

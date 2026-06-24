@@ -151,6 +151,15 @@ export function isWalletRpcOverloadedError(error: unknown) {
   );
 }
 
+export function isBlockNotFoundError(error: unknown) {
+  const haystack = getTransactionErrorText(error).toLowerCase();
+
+  return (
+    haystack.includes("blocknotfounderror") ||
+    (haystack.includes("block at number") && haystack.includes("could not be found"))
+  );
+}
+
 export function getGasBalanceErrorMessage(nativeTokenSymbol: string, options?: { canSponsorTransactions?: boolean }) {
   if (options?.canSponsorTransactions) {
     return `Gas is sponsored for now. If it still fails, add some ${nativeTokenSymbol} and retry.`;

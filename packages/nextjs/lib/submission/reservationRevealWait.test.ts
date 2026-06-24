@@ -89,3 +89,29 @@ test("waitForReservationRevealReady uses a one-second fallback without a receipt
 
   assert.deepEqual(sleeps, [1_000]);
 });
+
+test("waitForReservationRevealReady retries when the reserve block is not indexed yet", async () => {
+  let reserveBlockAttempts = 0;
+
+  await waitForReservationRevealReady({
+    client: {
+      getBlock: async params => {
+        if ("blockNumber" in params) {
+          reserveBlockAttempts += 1;
+          if (reserveBlockAttempts === 1) {
+            throw new Error('BlockNotFoundError: Block at number "47757385" could not be found.');
+          }
+          return { number: 47757385n, timestamp: 10n };
+        }
+        return { number: 47757386n, timestamp: 11n };
+      },
+    },
+    pollingIntervalMs: 10,
+    receipt: { blockNumber: 47757385n },
+    sleepMs: async () => {
+      throw new Error("sleep should not run");
+    },
+  });
+
+  assert.equal(reserveBlockAttempts, 2);
+});

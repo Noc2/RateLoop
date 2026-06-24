@@ -447,6 +447,39 @@ test("unlinked public details are not served before submission", async () => {
   assert.equal(details.headers.get("cache-control"), "private, no-store");
 });
 
+test("unlinked public images serve preview variants before submission", async () => {
+  const now = new Date("2026-06-11T12:00:00.000Z");
+  const attachmentDir = path.join(tempDir!, "question-attachments", PUBLIC_ATTACHMENT_ID);
+  await mkdir(attachmentDir, { recursive: true });
+  await writeFile(path.join(attachmentDir, "image.webp"), ONE_PIXEL_PNG);
+
+  await db.insert(questionImageAttachments).values({
+    id: PUBLIC_ATTACHMENT_ID,
+    uploaderKind: "wallet",
+    ownerWalletAddress: WALLET,
+    normalizedBlobPathname: `local://question-attachments/${PUBLIC_ATTACHMENT_ID}/image.webp`,
+    originalFilename: "draft-mockup.png",
+    mimeType: "image/webp",
+    sizeBytes: ONE_PIXEL_PNG.length,
+    sha256: "c".repeat(64),
+    status: "approved",
+    moderationStatus: "approved",
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  const response = await getImage(
+    new NextRequest(`https://www.rateloop.ai/api/attachments/images/${PUBLIC_ATTACHMENT_ID}.webp?variant=preview`),
+    { params: Promise.resolve({ attachmentId: `${PUBLIC_ATTACHMENT_ID}.webp` }) },
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("content-type"), "image/webp");
+  assert.equal(response.headers.get("cache-control"), "private, no-store");
+  assert.equal(response.headers.get("x-robots-tag"), "noindex, noimageindex");
+  assert.ok((await response.arrayBuffer()).byteLength > 0);
+});
+
 test("public images serve and backfill requested display variants", async () => {
   await seedPublicImage();
   const normalizedPathname = `local://question-attachments/${PUBLIC_ATTACHMENT_ID}/image.webp`;

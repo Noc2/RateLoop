@@ -14,7 +14,7 @@ import { useQuery } from "@tanstack/react-query";
 import { defineChain } from "thirdweb";
 import { decodeEventLog, isAddress, toHex } from "viem";
 import { useAccount, useConfig, useReadContract } from "wagmi";
-import { getPublicClient, readContract, waitForTransactionReceipt, writeContract } from "wagmi/actions";
+import { getPublicClient, readContract, writeContract } from "wagmi/actions";
 import {
   ChevronDownIcon,
   ChevronLeftIcon,
@@ -150,6 +150,7 @@ import {
   getSubmissionErrorMessage,
 } from "~~/lib/questionSubmissionSelectorSupport";
 import { waitForReservationRevealReady } from "~~/lib/submission/reservationRevealWait";
+import { waitForTransactionReceiptWithRetry } from "~~/lib/transactions/receiptWait";
 import {
   getGasBalanceErrorMessage,
   isFreeTransactionExhaustedError,
@@ -2961,7 +2962,7 @@ export function ContentSubmissionSection() {
             );
 
         if (approveTxHash) {
-          await waitForTransactionReceipt(wagmiConfig, {
+          await waitForTransactionReceiptWithRetry(wagmiConfig, {
             chainId: targetNetwork.id,
             hash: approveTxHash,
             pollingInterval: getSubmitReceiptPollingInterval(targetNetwork.id),
@@ -3008,7 +3009,7 @@ export function ContentSubmissionSection() {
             );
 
         if (submitTxHash) {
-          const submitReceipt = await waitForTransactionReceipt(wagmiConfig, {
+          const submitReceipt = await waitForTransactionReceiptWithRetry(wagmiConfig, {
             chainId: targetNetwork.id,
             hash: submitTxHash,
             pollingInterval: getSubmitReceiptPollingInterval(targetNetwork.id),
@@ -3096,7 +3097,7 @@ export function ContentSubmissionSection() {
               : await writeContract(wagmiConfig, await prepareDirectWalletWrite(feedbackApproveWrite));
 
             if (feedbackApproveTxHash) {
-              await waitForTransactionReceipt(wagmiConfig, {
+              await waitForTransactionReceiptWithRetry(wagmiConfig, {
                 chainId: targetNetwork.id,
                 hash: feedbackApproveTxHash,
                 pollingInterval: getSubmitReceiptPollingInterval(targetNetwork.id),
@@ -3114,7 +3115,7 @@ export function ContentSubmissionSection() {
                 );
 
             if (feedbackPoolTxHash) {
-              await waitForTransactionReceipt(wagmiConfig, {
+              await waitForTransactionReceiptWithRetry(wagmiConfig, {
                 chainId: targetNetwork.id,
                 hash: feedbackPoolTxHash,
                 pollingInterval: getSubmitReceiptPollingInterval(targetNetwork.id),

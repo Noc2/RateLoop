@@ -36,6 +36,12 @@ const GATED_IMAGE_HEADERS = {
   "X-Content-Type-Options": "nosniff",
   "X-Robots-Tag": "noindex, noimageindex",
 };
+const UNLINKED_PUBLIC_IMAGE_HEADERS = {
+  "Cache-Control": "private, no-store",
+  "Content-Type": "image/webp",
+  "X-Content-Type-Options": "nosniff",
+  "X-Robots-Tag": "noindex, noimageindex",
+};
 const PUBLIC_IMAGE_CACHE_CONTROL = "public, max-age=31536000, immutable";
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ attachmentId: string }> }) {
@@ -55,15 +61,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   }
   const servedBlobPathname = getImageAttachmentVariantPathname(attachment.normalizedBlobPathname, requestedVariant);
 
-  if (!attachment.contentId) {
+  const isUnlinkedPublic = !attachment.contentId && !attachment.requiresGatedAccess;
+  if (!attachment.contentId && attachment.requiresGatedAccess) {
     return new NextResponse("Not found", {
       status: 404,
-      headers: attachment.requiresGatedAccess
-        ? {
-            "Cache-Control": "private, no-store",
-            "X-Robots-Tag": "noindex, noimageindex",
-          }
-        : { "Cache-Control": "private, no-store" },
+      headers: {
+        "Cache-Control": "private, no-store",
+        "X-Robots-Tag": "noindex, noimageindex",
+      },
     });
   }
 
@@ -75,9 +80,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const confidentiality = attachment.contentId
     ? await getQuestionConfidentiality(attachment.contentId, attachmentDeploymentScope)
     : null;
-  const gated = attachment.requiresGatedAccess
-    ? !confidentiality?.publishedAt
-    : isConfidentialityCurrentlyGated(confidentiality);
+  const gated =
+    !isUnlinkedPublic &&
+    (attachment.requiresGatedAccess ? !confidentiality?.publishedAt : isConfidentialityCurrentlyGated(confidentiality));
   const gatedAuth =
     gated && attachment.contentId
       ? await authorizeGatedContextRequest(request, attachment.contentId, {
@@ -91,6 +96,16 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       { status: gatedAuth.status, headers: { "Cache-Control": "private, no-store" } },
     );
   }
+
+  const publicImageCacheControl = isUnlinkedPublic
+    ? UNLINKED_PUBLIC_IMAGE_HEADERS["Cache-Control"]
+    : PUBLIC_IMAGE_CACHE_CONTROL;
+  const publicImageHeaders = {
+    "Content-Type": "image/webp",
+    "X-Content-Type-Options": "nosniff",
+    "Cache-Control": publicImageCacheControl,
+    ...(isUnlinkedPublic ? { "X-Robots-Tag": "noindex, noimageindex" as const } : {}),
+  };
 
   if (isLocalImageAttachmentPathname(attachment.normalizedBlobPathname)) {
     let result = await readLocalImageAttachment(servedBlobPathname);
@@ -142,22 +157,20 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       );
     }
 
-    if (request.headers.get("if-none-match") === result.etag) {
+    if (!isUnlinkedPublic && request.headers.get("if-none-match") === result.etag) {
       return new NextResponse(null, {
         status: 304,
         headers: {
           ETag: result.etag,
-          "Cache-Control": PUBLIC_IMAGE_CACHE_CONTROL,
+          "Cache-Control": publicImageCacheControl,
         },
       });
     }
 
     return new NextResponse(result.buffer, {
       headers: {
-        "Content-Type": "image/webp",
-        "X-Content-Type-Options": "nosniff",
+        ...publicImageHeaders,
         ETag: result.etag,
-        "Cache-Control": PUBLIC_IMAGE_CACHE_CONTROL,
       },
     });
   }
@@ -181,12 +194,12 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     return new NextResponse("Not found", { status: 404 });
   }
 
-  if (!gated && result.statusCode === 304) {
+  if (!gated && !isUnlinkedPublic && result.statusCode === 304) {
     return new NextResponse(null, {
       status: 304,
       headers: {
         ETag: result.blob.etag,
-        "Cache-Control": PUBLIC_IMAGE_CACHE_CONTROL,
+        "Cache-Control": publicImageCacheControl,
       },
     });
   }
@@ -232,10 +245,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
   return new NextResponse(result.stream, {
     headers: {
-      "Content-Type": "image/webp",
-      "X-Content-Type-Options": "nosniff",
+      ...publicImageHeaders,
       ETag: result.blob.etag,
-      "Cache-Control": PUBLIC_IMAGE_CACHE_CONTROL,
     },
   });
 }
