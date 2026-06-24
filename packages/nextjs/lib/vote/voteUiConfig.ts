@@ -44,12 +44,36 @@ export function getVoteButtonPresentation(config: VoteUiConfig, direction: "up" 
 }
 
 export function getCrowdForecastLabel(config: VoteUiConfig) {
-  return config.mode === "head_to_head" ? "% choosing A" : "% up";
+  return config.mode === "head_to_head" ? `% choosing ${config.optionAKey}` : "% up";
+}
+
+const THUMBS_RATING_GUIDANCE_TEXT =
+  "The public rating appears after a round settles and is the cumulative share of bounded thumbs-up evidence across settled rounds. Vote thumbs up when the content is useful for the question, thumbs down when it is unhelpful, broken, misleading, or unsafe. Your separate forecast is the expected share of revealed raters choosing thumbs up.";
+
+export function getRatingGuidanceText(config: VoteUiConfig) {
+  if (config.mode === "head_to_head") {
+    return `The public rating appears after a round settles and is the cumulative share choosing ${config.optionAKey} (${config.optionALabel}) across settled rounds. Vote ${config.optionAKey} to pick ${config.optionALabel}; vote ${config.optionBKey} to pick ${config.optionBLabel}. Your separate forecast is the expected share of revealed raters choosing ${config.optionAKey}.`;
+  }
+  return THUMBS_RATING_GUIDANCE_TEXT;
+}
+
+export function getVoteSubmittedToastMessage(params: {
+  config: VoteUiConfig;
+  isUp: boolean;
+  predictedUpPercent: number;
+  stakeStatus: string;
+}) {
+  const { config, isUp, predictedUpPercent, stakeStatus } = params;
+  if (config.mode === "head_to_head") {
+    const pick = isUp ? config.optionAKey : config.optionBKey;
+    return `Vote submitted: ${pick}, crowd forecast ${predictedUpPercent.toFixed(0)}% choosing ${config.optionAKey}, ${stakeStatus}`;
+  }
+  return `Vote submitted: ${isUp ? "up" : "down"}, crowd forecast ${predictedUpPercent.toFixed(0)}% up, ${stakeStatus}`;
 }
 
 export function getYourVoteTooltip(config: VoteUiConfig) {
   if (config.mode === "head_to_head") {
-    return `${config.optionAKey} (${config.optionALabel}) means you prefer option A; ${config.optionBKey} (${config.optionBLabel}) means you prefer option B.`;
+    return `${config.optionAKey} (${config.optionALabel}) means you prefer ${config.optionALabel}; ${config.optionBKey} (${config.optionBLabel}) means you prefer ${config.optionBLabel}.`;
   }
   return "Thumbs up means you think this content is useful for the question; thumbs down means it is unhelpful, broken, misleading, or unsafe.";
 }

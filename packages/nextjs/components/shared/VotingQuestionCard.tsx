@@ -24,6 +24,7 @@ import { formatSubmissionRewardAmount, formatUsdAmount } from "~~/lib/questionRe
 import { formatVoteCooldownRemaining } from "~~/lib/vote/cooldown";
 import { describeOpenRoundActivity, formatLrepAmount, getRoundProgressMessaging } from "~~/lib/vote/voteIncentives";
 import type { VoteUiConfig } from "~~/lib/vote/voteUiConfig";
+import { getRatingGuidanceText } from "~~/lib/vote/voteUiConfig";
 import { resolveVotingQuestionCardDisplayError } from "~~/lib/vote/votingQuestionCardStatus";
 
 interface VotingQuestionCardProps {
@@ -60,8 +61,6 @@ interface VotingQuestionCardProps {
   voteUiConfig?: VoteUiConfig;
 }
 
-const RATING_GUIDANCE_TEXT =
-  "The public rating appears after a round settles and is the cumulative share of bounded thumbs-up evidence across settled rounds. Vote thumbs up when the content is useful for the question, thumbs down when it is unhelpful, broken, misleading, or unsafe. Your separate forecast is the expected share of revealed raters choosing thumbs up.";
 const RATING_REVIEW_PENDING_TOOLTIP = "Waiting for the correlation snapshot before publishing the final rating.";
 const RATING_REVIEW_STATUS_PENDING = 1;
 const REWARD_POOL_TOOLTIP_TEXT =
@@ -723,12 +722,9 @@ export function VotingQuestionCard({
   const showVoteAttentionHint = isAttentionActive && !centerStatusContent;
   const fundQuestionTitle = questionTitle?.trim() || `Question #${contentId.toString()}`;
   const canFundFeedbackBonus = !contentInactive && roundId > 0n;
+  const ratingGuidanceText = getRatingGuidanceText(voteUiConfig);
   const ratingOrb = (
-    <TooltipAnchor
-      text={RATING_GUIDANCE_TEXT}
-      position="bottom"
-      className="pointer-events-auto cursor-help rounded-full"
-    >
+    <TooltipAnchor text={ratingGuidanceText} position="bottom" className="pointer-events-auto cursor-help rounded-full">
       <RatingOrb rating={currentRating} size={orbSize} />
     </TooltipAnchor>
   );
@@ -835,7 +831,7 @@ export function VotingQuestionCard({
             data-mobile-dock-rating-orb={compact ? "true" : undefined}
           >
             <TooltipAnchor
-              text={RATING_GUIDANCE_TEXT}
+              text={ratingGuidanceText}
               position="bottom"
               className="pointer-events-auto cursor-help rounded-full"
             >

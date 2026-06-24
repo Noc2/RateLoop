@@ -83,7 +83,7 @@ import {
   isScopedVoteViewOption,
   resolveSupportedVoteView,
 } from "~~/lib/vote/viewOptions";
-import { resolveContentVoteUi } from "~~/lib/vote/voteUiConfig";
+import { getVoteSubmittedToastMessage, resolveContentVoteUi } from "~~/lib/vote/voteUiConfig";
 import type { WorldCredentialKind, WorldIdProofPurpose } from "~~/lib/world-id/credentials";
 import { buildRecommendationSignalContext, trackRecommendationSignal } from "~~/utils/recommendationTracker";
 import { notification } from "~~/utils/scaffold-eth";
@@ -1716,7 +1716,12 @@ const HomeInner = () => {
       const stakeStatus =
         stakeAmount > 0 ? `${stakeAmount} reputation locked.` : "no reputation locked; network fee only.";
       notification.success(
-        `Vote submitted: ${isUp ? "up" : "down"}, crowd forecast ${predictedUpPercent.toFixed(0)}% up, ${stakeStatus}`,
+        getVoteSubmittedToastMessage({
+          config: stakeModalVoteUiConfig,
+          isUp,
+          predictedUpPercent,
+          stakeStatus,
+        }),
       );
 
       if (isFirstVote) {
@@ -1737,6 +1742,7 @@ const HomeInner = () => {
       recordRecommendationSignal,
       stakeModal,
       stakeModalCooldownSeconds,
+      stakeModalVoteUiConfig,
     ],
   );
 

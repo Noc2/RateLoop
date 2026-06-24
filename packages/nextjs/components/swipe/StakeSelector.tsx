@@ -578,7 +578,9 @@ export function StakeSelector({
                   style={sliderStyle}
                   disabled={formDisabled}
                   aria-label={
-                    voteUiConfig.mode === "head_to_head" ? "Crowd forecast for option A" : "Crowd thumbs-up forecast"
+                    voteUiConfig.mode === "head_to_head"
+                      ? `Crowd forecast for option ${voteUiConfig.optionAKey}`
+                      : "Crowd thumbs-up forecast"
                   }
                   aria-valuetext={`${predictedUpPercent.toFixed(0)} ${crowdForecastLabel}`}
                 />
