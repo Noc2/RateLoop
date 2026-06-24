@@ -31,7 +31,7 @@ function roundAtOrAfterSeconds(timestampSeconds: bigint, genesisTimeSeconds: big
   return (elapsed + periodSeconds - 1n) / periodSeconds + 1n;
 }
 
-function deriveContractAcceptedTargetRound(params: {
+export function deriveRoundCommitTargetRound(params: {
   drandGenesisTimeSeconds: bigint;
   drandPeriodSeconds: bigint;
   epochDurationSeconds: number;
@@ -280,7 +280,7 @@ export async function resolveRoundVoteRuntime(params: {
     roundId: resolvedRoundId,
     block: previewBlock,
   });
-  const targetRound = deriveContractAcceptedTargetRound({
+  const targetRound = deriveRoundCommitTargetRound({
     ...drandRuntime,
     epochDurationSeconds: epochDuration,
     roundStartTimeSeconds,

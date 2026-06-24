@@ -61,6 +61,7 @@ export function buildRoundVoteTransactionPlan(params: {
   currentAllowance: bigint;
   drandChainHash: Hex;
   frontend: EvmAddress;
+  includeOpenRound?: boolean;
   lrepAddress: EvmAddress;
   roundContext: bigint;
   permitSignature?: RoundVotePermitSignature;
@@ -103,6 +104,17 @@ export function buildRoundVoteTransactionPlan(params: {
 
   const needsApproval = params.currentAllowance < params.stakeWei;
   const calls: RoundVoteContractCall[] = [];
+  const prependOpenRoundIfNeeded = () => {
+    if (!params.includeOpenRound) return;
+
+    calls.unshift({
+      abi: RoundVotingEngineAbi as Abi,
+      address: params.votingEngineAddress,
+      args: [params.contentId] as const,
+      functionName: "openRound",
+      kind: "openRound",
+    });
+  };
   if (needsApproval && !params.permitSignature) {
     calls.push({
       abi: LoopReputationAbi as Abi,
@@ -129,6 +141,7 @@ export function buildRoundVoteTransactionPlan(params: {
       functionName: "commitVoteWithPermit",
       kind: "commitVoteWithPermit",
     });
+    prependOpenRoundIfNeeded();
 
     return {
       advisoryVoteArgs,
@@ -147,6 +160,7 @@ export function buildRoundVoteTransactionPlan(params: {
     functionName: "commitVote",
     kind: "commitVote",
   });
+  prependOpenRoundIfNeeded();
 
   return {
     advisoryVoteArgs,

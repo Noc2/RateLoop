@@ -105,3 +105,72 @@ test("buildRoundVoteTransactionPlan skips approval when allowance covers the sta
   assert.equal(plan.calls.length, 1);
   assert.equal(plan.calls[0].kind, "commitVote");
 });
+
+test("buildRoundVoteTransactionPlan prepends openRound when includeOpenRound is true", () => {
+  const plan = buildRoundVoteTransactionPlan({
+    ...baseParams,
+    currentAllowance: 10n,
+    includeOpenRound: true,
+    stakeWei: 10n,
+  });
+
+  assert.equal(plan.calls.length, 2);
+  assert.equal(plan.calls[0].kind, "openRound");
+  assert.equal(plan.calls[0].functionName, "openRound");
+  assert.deepEqual(plan.calls[0].args, [baseParams.contentId]);
+  assert.equal(plan.calls[1].kind, "commitVote");
+});
+
+test("buildRoundVoteTransactionPlan prepends openRound before approve and commit when allowance is low", () => {
+  const plan = buildRoundVoteTransactionPlan({
+    ...baseParams,
+    currentAllowance: 1n,
+    includeOpenRound: true,
+    stakeWei: 10n,
+  });
+
+  assert.equal(plan.calls.length, 3);
+  assert.equal(plan.calls[0].kind, "openRound");
+  assert.equal(plan.calls[1].kind, "approve");
+  assert.equal(plan.calls[2].kind, "commitVote");
+});
+
+test("buildRoundVoteTransactionPlan prepends openRound before commitVoteWithPermit when permit is supplied", () => {
+  const permitSignature = {
+    deadline: 1234n,
+    r: `0x${"1".repeat(64)}` as const,
+    s: `0x${"2".repeat(64)}` as const,
+    v: 27,
+  };
+  const plan = buildRoundVoteTransactionPlan({
+    ...baseParams,
+    currentAllowance: 1n,
+    includeOpenRound: true,
+    permitSignature,
+    stakeWei: 10n,
+  });
+
+  assert.equal(plan.calls.length, 2);
+  assert.equal(plan.calls[0].kind, "openRound");
+  assert.equal(plan.calls[1].kind, "commitVoteWithPermit");
+});
+
+test("buildRoundVoteTransactionPlan ignores permit when allowance already covers the stake", () => {
+  const permitSignature = {
+    deadline: 1234n,
+    r: `0x${"1".repeat(64)}` as const,
+    s: `0x${"2".repeat(64)}` as const,
+    v: 27,
+  };
+  const plan = buildRoundVoteTransactionPlan({
+    ...baseParams,
+    currentAllowance: 10n,
+    permitSignature,
+    stakeWei: 10n,
+  });
+
+  assert.equal(plan.needsApproval, false);
+  assert.equal(plan.calls.length, 1);
+  assert.equal(plan.calls[0].kind, "commitVote");
+  assert.equal(plan.calls[0].functionName, "commitVote");
+});
