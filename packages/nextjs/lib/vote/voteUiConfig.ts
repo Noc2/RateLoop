@@ -9,11 +9,25 @@ import type { ContentItem } from "~~/hooks/contentFeed/shared";
 export type { HeadToHeadVoteUi, VoteUiConfig };
 export { getHeadToHeadAbResultSpecHash, resolveVoteUiConfig };
 
-export function resolveContentVoteUi(item: Pick<ContentItem, "resultSpecHash" | "voteUi">): VoteUiConfig {
+export type ContentVoteUiInput = Pick<ContentItem, "resultSpecHash" | "voteUi"> & {
+  title?: ContentItem["title"];
+  question?: ContentItem["question"];
+  description?: ContentItem["description"];
+};
+
+export function resolveContentVoteUi(item: ContentVoteUiInput): VoteUiConfig {
   if (item.voteUi?.mode === "head_to_head") {
     return item.voteUi;
   }
-  return resolveVoteUiConfig({ resultSpecHash: item.resultSpecHash });
+  const text = [item.question, item.title, item.description].filter(Boolean).join("\n");
+  return resolveVoteUiConfig({ resultSpecHash: item.resultSpecHash, text });
+}
+
+export function getRevealedDirectionLabels(config: VoteUiConfig) {
+  if (config.mode === "head_to_head") {
+    return { up: config.optionAKey, down: config.optionBKey };
+  }
+  return { up: "Up", down: "Down" };
 }
 
 export function isHeadToHeadVoteUi(config: VoteUiConfig): config is HeadToHeadVoteUi {

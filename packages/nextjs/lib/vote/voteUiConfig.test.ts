@@ -68,8 +68,9 @@ test("builds head-to-head result spec hash with template vote semantics", () => 
     resolveContentVoteUi({
       resultSpecHash: spec.resultSpecHash,
       voteUi: null,
+      title: "Do you prefer A = Codex or B = Claude?",
     }).mode,
-    "thumbs",
+    "head_to_head",
   );
   assert.equal(
     resolveContentVoteUi({
@@ -83,6 +84,26 @@ test("builds head-to-head result spec hash with template vote semantics", () => 
       },
     }).mode,
     "head_to_head",
+  );
+});
+
+test("infers A/B vote ui from title when voteUi metadata is missing", () => {
+  const template = findAgentResultTemplate(HEAD_TO_HEAD_AB_TEMPLATE_ID);
+  assert.ok(template);
+
+  assert.deepEqual(
+    resolveContentVoteUi({
+      resultSpecHash: template!.resultSpecHash,
+      voteUi: null,
+      title: "Do you prefer A = Awesome or B = Bad?",
+    }),
+    {
+      mode: "head_to_head",
+      optionAKey: "A",
+      optionALabel: "Awesome",
+      optionBKey: "B",
+      optionBLabel: "Bad",
+    },
   );
 });
 
