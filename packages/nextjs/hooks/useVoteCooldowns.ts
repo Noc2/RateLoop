@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo } from "react";
-import { type Address } from "viem";
+import { useQuery } from "@tanstack/react-query";
+import { type Address, type Hex, isAddress } from "viem";
 import { usePublicClient } from "wagmi";
 import { useDeployedContractInfo } from "~~/hooks/scaffold-eth";
 import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
@@ -15,6 +16,10 @@ import {
   pickVoteCooldownFallbackContract,
 } from "~~/lib/vote/cooldownFallback";
 import { type VoteCooldownLogLike, buildVoteCooldownItemsFromLogs } from "~~/lib/vote/cooldownLogs";
+import {
+  mergeVoteCooldownRemainingByContentId,
+  readOnChainVoteCooldownsByContentId,
+} from "~~/lib/vote/onChainVoteCooldown";
 import { type PonderVoteCooldownsResponse, ponderApi } from "~~/services/ponder/client";
 import { contracts } from "~~/utils/scaffold-eth/contract";
 
@@ -23,6 +28,10 @@ interface UseVoteCooldownsParams {
   voters: readonly string[];
   identityKeys?: readonly string[];
   includeAdvisory?: boolean;
+  primaryVoter?: string | null;
+  identityHolder?: Address | null;
+  identityKey?: Hex | null;
+  identityResolved?: boolean;
   nowSeconds: number;
   enabled?: boolean;
 }
@@ -66,11 +75,24 @@ function normalizeIdentityKeys(identityKeys: readonly string[] | undefined) {
   return Array.from(unique);
 }
 
+function normalizePrimaryVoter(primaryVoter: string | null | undefined, voters: readonly string[]) {
+  const candidate = primaryVoter?.trim();
+  if (candidate && isAddress(candidate)) {
+    return candidate as Address;
+  }
+  const fallback = voters[0]?.trim();
+  return fallback && isAddress(fallback) ? (fallback as Address) : null;
+}
+
 export function useVoteCooldowns({
   contentIds,
   voters,
   identityKeys,
   includeAdvisory = false,
+  primaryVoter,
+  identityHolder,
+  identityKey,
+  identityResolved = true,
   nowSeconds,
   enabled = true,
 }: UseVoteCooldownsParams) {
@@ -85,6 +107,10 @@ export function useVoteCooldowns({
   const normalizedContentIds = useMemo(() => normalizeContentIds(contentIds), [contentIds]);
   const normalizedVoters = useMemo(() => normalizeVoters(voters), [voters]);
   const normalizedIdentityKeys = useMemo(() => normalizeIdentityKeys(identityKeys), [identityKeys]);
+  const resolvedPrimaryVoter = useMemo(
+    () => normalizePrimaryVoter(primaryVoter, normalizedVoters),
+    [normalizedVoters, primaryVoter],
+  );
   const contentIdsKey = normalizedContentIds.join(",");
   const votersKey = normalizedVoters.join(",");
   const identityKeysKey = normalizedIdentityKeys.join(",");
@@ -98,8 +124,15 @@ export function useVoteCooldowns({
     [voteCooldownContractInfo],
   );
   const rpcCooldownFallbackEnabled = Boolean(publicClient && voteCooldownContractInfo?.address && voteCommittedEvent);
+  const onChainQueryEnabled =
+    queryEnabled &&
+    identityResolved &&
+    Boolean(publicClient && voteCooldownContractInfo?.address && resolvedPrimaryVoter);
 
-  const { data: result, isLoading } = usePonderQuery<PonderVoteCooldownsResponse, PonderVoteCooldownsResponse>({
+  const { data: result, isLoading: indexedLoading } = usePonderQuery<
+    PonderVoteCooldownsResponse,
+    PonderVoteCooldownsResponse
+  >({
     queryKey: [
       "voteCooldowns",
       targetNetwork.id,
@@ -174,24 +207,52 @@ export function useVoteCooldowns({
     refetchInterval: isPageVisible ? 30_000 : false,
   });
 
+  const { data: onChainCooldownByContentId, isLoading: onChainLoading } = useQuery({
+    queryKey: [
+      "voteCooldownsOnChain",
+      targetNetwork.id,
+      voteCooldownContractInfo?.address ?? null,
+      contentIdsKey,
+      resolvedPrimaryVoter,
+      identityHolder ?? null,
+      identityKey ?? null,
+    ],
+    enabled: onChainQueryEnabled,
+    staleTime: 15_000,
+    refetchInterval: isPageVisible ? 30_000 : false,
+    queryFn: async () =>
+      readOnChainVoteCooldownsByContentId({
+        contentIds: normalizedContentIds.map(contentId => BigInt(contentId)),
+        identityHolder,
+        identityKey,
+        nowSeconds,
+        publicClient: publicClient!,
+        voter: resolvedPrimaryVoter!,
+        votingEngineAddress: voteCooldownContractInfo!.address as Address,
+      }),
+  });
+
   const cooldownByContentId = useMemo(() => {
-    const cooldowns = new Map<string, number>();
+    let cooldowns = new Map<string, number>();
 
     for (const item of result?.data.items ?? []) {
       const remainingSeconds = getVoteCooldownRemainingSeconds(item.latestCommittedAt, nowSeconds);
-      if (remainingSeconds <= 0) continue;
+      cooldowns = mergeVoteCooldownRemainingByContentId(cooldowns, BigInt(item.contentId), remainingSeconds);
+    }
 
-      const previous = cooldowns.get(item.contentId) ?? 0;
-      if (remainingSeconds > previous) {
-        cooldowns.set(item.contentId, remainingSeconds);
-      }
+    for (const [contentId, remainingSeconds] of onChainCooldownByContentId ?? []) {
+      cooldowns = mergeVoteCooldownRemainingByContentId(cooldowns, BigInt(contentId), remainingSeconds);
     }
 
     return cooldowns;
-  }, [nowSeconds, result?.data.items]);
+  }, [nowSeconds, onChainCooldownByContentId, result?.data.items]);
 
   return {
     cooldownByContentId,
-    isLoading: isLoading || (queryEnabled && result === undefined),
+    isLoading:
+      indexedLoading ||
+      onChainLoading ||
+      (queryEnabled && result === undefined) ||
+      (onChainQueryEnabled && onChainCooldownByContentId === undefined),
   };
 }

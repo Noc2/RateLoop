@@ -323,7 +323,11 @@ const HomeInner = () => {
   const { delegateTo, delegateOf, hasDelegate, isDelegate, isLoading: delegationLoading } = useDelegation(address);
   const delegateVoteAddress = hasDelegate ? delegateTo : undefined;
   const delegatorVoteAddress = isDelegate ? delegateOf : undefined;
-  const { identityKey: voteCooldownIdentityKey } = useRaterRegistryIdentity(address);
+  const {
+    holder: voteCooldownIdentityHolder,
+    identityKey: voteCooldownIdentityKey,
+    isResolved: voteCooldownIdentityResolved,
+  } = useRaterRegistryIdentity(address);
   const voteCooldownAddresses = useMemo(
     () => buildLinkedWalletAddresses(address, delegateVoteAddress, delegatorVoteAddress),
     [address, delegateVoteAddress, delegatorVoteAddress],
@@ -1233,6 +1237,10 @@ const HomeInner = () => {
       voters: voteCooldownAddresses,
       identityKeys: voteCooldownIdentityKey ? [voteCooldownIdentityKey] : [],
       includeAdvisory: isAdvisoryOnlyRater,
+      primaryVoter: address,
+      identityHolder: voteCooldownIdentityHolder,
+      identityKey: voteCooldownIdentityKey,
+      identityResolved: !address || voteCooldownIdentityResolved,
       nowSeconds,
       enabled: voteCooldownAddresses.length > 0,
     });
