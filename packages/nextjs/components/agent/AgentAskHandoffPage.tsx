@@ -3,6 +3,7 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
+import { HEAD_TO_HEAD_AB_TEMPLATE_ID, readHeadToHeadTemplateInputs } from "@rateloop/agents/voteUi";
 import {
   type TargetAudience,
   getProfileSelfReportTaxonomy,
@@ -187,6 +188,9 @@ type QuestionSummary = {
   templateId: string;
   title: string;
   videoUrl: string;
+  optionALabel: string;
+  optionBLabel: string;
+  comparisonCriterion: string;
 };
 
 type RoundSettings = {
@@ -212,6 +216,9 @@ type DraftQuestionForm = {
   templateId: string;
   title: string;
   videoUrl: string;
+  optionALabel: string;
+  optionBLabel: string;
+  comparisonCriterion: string;
 };
 
 type DraftForm = {
@@ -1015,22 +1022,39 @@ async function uploadQuestionDetailsForHandoff(params: {
   };
 }
 
+function readHeadToHeadDraftFields(question: JsonRecord) {
+  const templateId = readString(question.templateId);
+  if (templateId !== HEAD_TO_HEAD_AB_TEMPLATE_ID) {
+    return { optionALabel: "", optionBLabel: "", comparisonCriterion: "" };
+  }
+  const inputs = readHeadToHeadTemplateInputs(question.templateInputs);
+  return {
+    optionALabel: inputs?.optionALabel ?? "",
+    optionBLabel: inputs?.optionBLabel ?? "",
+    comparisonCriterion: inputs?.comparisonCriterion ?? "",
+  };
+}
+
 function readQuestionSummaries(handoff: Handoff | null): QuestionSummary[] {
   const topLevelConfidentiality = readDraftConfidentiality(handoff?.requestBody?.confidentiality);
-  return readQuestionRecords(handoff).map((question, index) => ({
-    categoryId: readDisplayValue(question.categoryId),
-    confidentiality: readDraftConfidentiality(question.confidentiality, topLevelConfidentiality),
-    contextUrl: readString(question.contextUrl),
-    description: readString(question.description),
-    detailsHash: readString(question.detailsHash),
-    detailsUrl: readString(question.detailsUrl),
-    imageUrls: readStringArray(question.imageUrls),
-    tags: readQuestionTags(question.tags),
-    targetAudience: readTargetAudienceDraft(question.targetAudience),
-    templateId: readString(question.templateId),
-    title: readString(question.title) || `Question ${index + 1}`,
-    videoUrl: readString(question.videoUrl),
-  }));
+  return readQuestionRecords(handoff).map((question, index) => {
+    const headToHeadFields = readHeadToHeadDraftFields(question);
+    return {
+      categoryId: readDisplayValue(question.categoryId),
+      confidentiality: readDraftConfidentiality(question.confidentiality, topLevelConfidentiality),
+      contextUrl: readString(question.contextUrl),
+      description: readString(question.description),
+      detailsHash: readString(question.detailsHash),
+      detailsUrl: readString(question.detailsUrl),
+      imageUrls: readStringArray(question.imageUrls),
+      tags: readQuestionTags(question.tags),
+      targetAudience: readTargetAudienceDraft(question.targetAudience),
+      templateId: readString(question.templateId),
+      title: readString(question.title) || `Question ${index + 1}`,
+      videoUrl: readString(question.videoUrl),
+      ...headToHeadFields,
+    };
+  });
 }
 
 function readBountyAmountAtomic(handoff: Handoff | null) {
@@ -1164,6 +1188,9 @@ function createDraftForm(handoff: Handoff): DraftForm {
           templateId: question.templateId,
           title: question.title,
           videoUrl: question.confidentiality.visibility === "gated" ? "" : question.videoUrl,
+          optionALabel: question.optionALabel,
+          optionBLabel: question.optionBLabel,
+          comparisonCriterion: question.comparisonCriterion,
         }))
       : [
           {
@@ -1179,6 +1206,9 @@ function createDraftForm(handoff: Handoff): DraftForm {
             templateId: "",
             title: readQuestionTitle(handoff),
             videoUrl: "",
+            optionALabel: "",
+            optionBLabel: "",
+            comparisonCriterion: "",
           },
         ],
     roundBlindSeconds: roundDurationDraft.roundBlindSeconds,
@@ -1352,6 +1382,27 @@ async function applyDraftQuestion(
     nextQuestion.templateId = templateId;
   } else {
     delete nextQuestion.templateId;
+  }
+  if (templateId === HEAD_TO_HEAD_AB_TEMPLATE_ID) {
+    const templateInputs = readHeadToHeadTemplateInputs({
+      optionAKey: "A",
+      optionALabel: draft.optionALabel.trim(),
+      optionBKey: "B",
+      optionBLabel: draft.optionBLabel.trim(),
+      comparisonCriterion: draft.comparisonCriterion.trim() || undefined,
+    });
+    if (!templateInputs) {
+      throw new Error(`Question ${index + 1} needs both option A and option B names.`);
+    }
+    nextQuestion.templateInputs = {
+      optionAKey: templateInputs.optionAKey,
+      optionALabel: templateInputs.optionALabel,
+      optionBKey: templateInputs.optionBKey,
+      optionBLabel: templateInputs.optionBLabel,
+      ...(templateInputs.comparisonCriterion ? { comparisonCriterion: templateInputs.comparisonCriterion } : {}),
+    };
+  } else {
+    delete nextQuestion.templateInputs;
   }
   const targetAudience = targetAudienceDraftToMetadata(draft.targetAudience);
   if (targetAudience) {
@@ -2968,6 +3019,84 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                             onChange={event => updateDraftQuestion(index, { title: event.target.value })}
                           />
                         </label>
+
+                        {hasQuestionBundle ? null : (
+                          <div className="mt-4">
+                            <span className="label-text text-xs font-semibold uppercase tracking-wide text-base-content/45">
+                              Question type
+                            </span>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                className={`btn btn-xs ${question.templateId !== HEAD_TO_HEAD_AB_TEMPLATE_ID ? "btn-primary" : "btn-outline"}`}
+                                disabled={!canEditDraft}
+                                onClick={() =>
+                                  updateDraftQuestion(index, {
+                                    templateId: "",
+                                    optionALabel: "",
+                                    optionBLabel: "",
+                                    comparisonCriterion: "",
+                                  })
+                                }
+                              >
+                                Rate one thing
+                              </button>
+                              <button
+                                type="button"
+                                className={`btn btn-xs ${question.templateId === HEAD_TO_HEAD_AB_TEMPLATE_ID ? "btn-primary" : "btn-outline"}`}
+                                disabled={!canEditDraft}
+                                onClick={() =>
+                                  updateDraftQuestion(index, {
+                                    templateId: HEAD_TO_HEAD_AB_TEMPLATE_ID,
+                                  })
+                                }
+                              >
+                                A/B comparison
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        {question.templateId === HEAD_TO_HEAD_AB_TEMPLATE_ID ? (
+                          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                            <label className="form-control">
+                              <span className="label-text text-xs font-semibold uppercase tracking-wide text-base-content/45">
+                                Option A
+                              </span>
+                              <input
+                                className="input input-bordered mt-1 w-full"
+                                disabled={!canEditDraft}
+                                value={question.optionALabel}
+                                onChange={event => updateDraftQuestion(index, { optionALabel: event.target.value })}
+                              />
+                            </label>
+                            <label className="form-control">
+                              <span className="label-text text-xs font-semibold uppercase tracking-wide text-base-content/45">
+                                Option B
+                              </span>
+                              <input
+                                className="input input-bordered mt-1 w-full"
+                                disabled={!canEditDraft}
+                                value={question.optionBLabel}
+                                onChange={event => updateDraftQuestion(index, { optionBLabel: event.target.value })}
+                              />
+                            </label>
+                            <label className="form-control sm:col-span-2">
+                              <span className="label-text flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-base-content/45">
+                                Comparison focus
+                                <span className="text-base-content/35">(optional)</span>
+                              </span>
+                              <input
+                                className="input input-bordered mt-1 w-full"
+                                disabled={!canEditDraft}
+                                value={question.comparisonCriterion}
+                                onChange={event =>
+                                  updateDraftQuestion(index, { comparisonCriterion: event.target.value })
+                                }
+                              />
+                            </label>
+                          </div>
+                        ) : null}
 
                         {hasQuestionBundle ? (
                           <div className="mt-4">
