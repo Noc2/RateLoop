@@ -251,12 +251,16 @@ export async function waitForFeedLoaded(page: Page, timeout = 15_000): Promise<v
         .isVisible()
         .catch(() => false);
 
-      if (attempt === FEED_LOAD_ATTEMPTS - 1 || (!stillLoading && !connectPromptVisible)) {
+      if (attempt === FEED_LOAD_ATTEMPTS - 1) {
         throw error;
       }
 
       if (page.isClosed()) {
         throw error;
+      }
+
+      if (!stillLoading && !connectPromptVisible) {
+        await page.waitForTimeout(500 * (attempt + 1)).catch(() => undefined);
       }
 
       await reloadWithRetryableAbort(page, effectiveTimeout);
