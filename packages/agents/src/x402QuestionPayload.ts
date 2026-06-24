@@ -20,6 +20,8 @@ import {
   type AgentQuestionSpecInput,
 } from "./questionSpecs";
 import { findAgentResultTemplate } from "./templates";
+import { getHeadToHeadAbTitleValidationError } from "./headToHeadTitle.js";
+import { HEAD_TO_HEAD_AB_TEMPLATE_ID, readHeadToHeadTemplateInputs } from "./voteUi.js";
 
 export const X402_USDC_BY_CHAIN_ID = USDC_BY_CHAIN_ID;
 /** @deprecated Use `X402_USDC_BY_CHAIN_ID`. */
@@ -880,6 +882,22 @@ function normalizeQuestion(
   };
 }
 
+function validateHeadToHeadTemplateSelection(question: NormalizedQuestionInput, fieldPrefix: string) {
+  if (question.templateId !== HEAD_TO_HEAD_AB_TEMPLATE_ID) return;
+
+  const voteUi = readHeadToHeadTemplateInputs(question.templateInputs);
+  if (!voteUi) {
+    throw new X402QuestionInputError(
+      `${fieldPrefix}.templateInputs must include valid optionAKey, optionALabel, optionBKey, and optionBLabel for head_to_head_ab.`,
+    );
+  }
+
+  const titleError = getHeadToHeadAbTitleValidationError(question.title, voteUi.optionALabel, voteUi.optionBLabel);
+  if (titleError) {
+    throw new X402QuestionInputError(titleError);
+  }
+}
+
 function resolveQuestionMetadataBaseUrl(options: X402QuestionParserOptions) {
   return normalizeQuestionMetadataBaseUrl(options.questionMetadataBaseUrl);
 }
@@ -937,6 +955,7 @@ export function parseX402QuestionRequest(
   const metadataBaseUrl = resolveQuestionMetadataBaseUrl(options);
   const questions = rawQuestions.map((question, index) => {
     const normalizedQuestion = normalizeQuestion(question, index, templateDefaults, options);
+    validateHeadToHeadTemplateSelection(normalizedQuestion, `questions[${index}]`);
     const spec = buildQuestionSpecHashes(
       {
         bounty: {
@@ -990,6 +1009,11 @@ export function parseX402QuestionRequest(
   if (questions.length > 1 && questions.some((question) => question.confidentiality.visibility === "gated")) {
     throw new X402QuestionInputError(
       "Private context bundles are not supported yet. Submit gated questions one at a time.",
+    );
+  }
+  if (questions.length > 1 && questions.some((question) => question.templateId === HEAD_TO_HEAD_AB_TEMPLATE_ID)) {
+    throw new X402QuestionInputError(
+      "head_to_head_ab supports exactly one question. Use ranked_option_member bundles for 3+ options or per-option scoring.",
     );
   }
 

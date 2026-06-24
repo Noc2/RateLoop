@@ -2564,3 +2564,56 @@ describe("local signer media canonicalization", () => {
     expect(parsed.questions[0].imageUrls).toEqual([UPLOADED_IMAGE_URL_PREFIXED]);
   });
 });
+
+describe("x402 head-to-head parser validation", () => {
+  it("rejects head-to-head asks without option metadata", () => {
+    const base = askPayload();
+
+    expect(() =>
+      parseX402QuestionRequest(
+        {
+          ...base,
+          templateId: "head_to_head_ab",
+          question: {
+            ...base.question,
+            title: "Do you prefer A = Codex or B = Claude?",
+            templateId: "head_to_head_ab",
+          },
+        },
+        480,
+      ),
+    ).toThrow(/templateInputs must include valid optionAKey/);
+  });
+
+  it("rejects bundled head-to-head asks", () => {
+    const base = askPayload();
+    const templateInputs = {
+      optionAKey: "A",
+      optionALabel: "Codex",
+      optionBKey: "B",
+      optionBLabel: "Claude",
+    };
+
+    expect(() =>
+      parseX402QuestionRequest(
+        {
+          ...base,
+          question: undefined,
+          questions: [
+            {
+              ...base.question,
+              title: "Do you prefer A = Codex or B = Claude?",
+              templateId: "head_to_head_ab",
+              templateInputs,
+            },
+            {
+              ...base.question,
+              title: "Should this agent proceed with the fallback plan?",
+            },
+          ],
+        },
+        480,
+      ),
+    ).toThrow(/head_to_head_ab supports exactly one question/);
+  });
+});
