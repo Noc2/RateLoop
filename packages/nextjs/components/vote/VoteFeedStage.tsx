@@ -365,13 +365,13 @@ export function VoteFeedStage({
       const scrollerTop = Math.max(scrollerRect.top, viewportTop) + MOBILE_CARD_TOP_SNAP_GUARD_PX;
       const titleTop = activeTitle.getBoundingClientRect().top;
       const hiddenByTopEdge = scrollerTop - titleTop;
+      const snapGuardCorrection = activeNodeRect.top - scrollerTop;
 
-      if (hiddenByTopEdge < 1) {
+      if (hiddenByTopEdge < 1 && snapGuardCorrection >= -0.5) {
         return;
       }
 
       const maxScrollTop = Math.max(scroller.scrollHeight - scroller.clientHeight, 0);
-      const snapGuardCorrection = activeNodeRect.top - scrollerTop;
       const scrollCorrection = snapGuardCorrection < -0.5 ? snapGuardCorrection : -hiddenByTopEdge;
       const nextScrollTop = Math.min(Math.max(scroller.scrollTop + scrollCorrection, 0), maxScrollTop);
 
@@ -948,9 +948,7 @@ export function VoteFeedStage({
         return;
       }
 
-      if (
-        Math.abs(nearestCard.relativeTop - MOBILE_CARD_TOP_SNAP_GUARD_PX) > MOBILE_HEADLINE_GUARD_SNAP_TOLERANCE_PX
-      ) {
+      if (Math.abs(nearestCard.relativeTop - MOBILE_CARD_TOP_SNAP_GUARD_PX) > MOBILE_HEADLINE_GUARD_SNAP_TOLERANCE_PX) {
         return;
       }
 
@@ -968,13 +966,15 @@ export function VoteFeedStage({
       const viewportTop = window.visualViewport?.offsetTop ?? 0;
       const scrollerTop = Math.max(scrollerRect.top, viewportTop) + MOBILE_CARD_TOP_SNAP_GUARD_PX;
       const hiddenByTopEdge = scrollerTop - activeTitle.getBoundingClientRect().top;
+      const snapGuardCorrection = activeNodeRect.top - scrollerTop;
 
-      if (hiddenByTopEdge < 1) {
+      if (hiddenByTopEdge < 1 && snapGuardCorrection >= -0.5) {
         return;
       }
 
       const maxScrollTop = Math.max(scroller.scrollHeight - scroller.clientHeight, 0);
-      const nextScrollTop = Math.min(Math.max(scroller.scrollTop + activeNodeRect.top - scrollerTop, 0), maxScrollTop);
+      const scrollCorrection = snapGuardCorrection < -0.5 ? snapGuardCorrection : -hiddenByTopEdge;
+      const nextScrollTop = Math.min(Math.max(scroller.scrollTop + scrollCorrection, 0), maxScrollTop);
 
       if (Math.abs(nextScrollTop - scroller.scrollTop) < 0.5) {
         return;

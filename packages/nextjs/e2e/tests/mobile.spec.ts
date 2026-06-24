@@ -671,6 +671,19 @@ test.describe("Mobile viewport (phone)", () => {
       const mobileHeader = document.querySelector<HTMLElement>('[data-mobile-header="true"]');
       return mobileHeader !== null && mobileHeader.getBoundingClientRect().height < 4;
     });
+    await expect
+      .poll(
+        async () => {
+          const layout = await readLayout();
+          return (
+            layout.activeTop >= layout.scrollerTop - 1 &&
+            layout.activeTitleTop >= layout.scrollerTop - 1 &&
+            layout.activeTitleBottom <= layout.scrollerBottom + 1
+          );
+        },
+        { timeout: 3_000 },
+      )
+      .toBe(true);
 
     const collapsedLayout = await readLayout();
     const collapseChromeChanges = await stopMobileChromeChangeCapture();
