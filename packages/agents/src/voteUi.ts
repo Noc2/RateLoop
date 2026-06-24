@@ -188,21 +188,36 @@ export function readHeadToHeadVoteUiFromQuestionMetadata(metadata: unknown): Hea
   return readHeadToHeadTemplateInputs(metadata.templateInputs);
 }
 
+export function isHeadToHeadAbResultSpecHash(resultSpecHash: string | null | undefined): boolean {
+  return getAgentResultTemplateBySpecHash(resultSpecHash).id === HEAD_TO_HEAD_AB_TEMPLATE_ID;
+}
+
+export function inferHeadToHeadVoteUiFromText(text: string): HeadToHeadVoteUi | null {
+  const inferred = inferHeadToHeadAbQuestionFromText(text);
+  if (!inferred) return null;
+  return {
+    mode: "head_to_head",
+    optionAKey: "A",
+    optionALabel: inferred.optionALabel,
+    optionBKey: "B",
+    optionBLabel: inferred.optionBLabel,
+  };
+}
+
 export function resolveVoteUiConfig(params: {
   resultSpecHash?: string | null;
   questionMetadata?: unknown;
   templateInputs?: unknown;
+  text?: string | null;
 }): VoteUiConfig {
-  const template = getAgentResultTemplateBySpecHash(params.resultSpecHash);
-  if (template.id !== HEAD_TO_HEAD_AB_TEMPLATE_ID) {
-    return { mode: "thumbs" };
-  }
-
   const fromMetadata = readHeadToHeadVoteUiFromQuestionMetadata(params.questionMetadata);
   if (fromMetadata) return fromMetadata;
 
   const fromInputs = readHeadToHeadTemplateInputs(params.templateInputs);
   if (fromInputs) return fromInputs;
+
+  const fromText = inferHeadToHeadVoteUiFromText(params.text ?? "");
+  if (fromText) return fromText;
 
   return { mode: "thumbs" };
 }

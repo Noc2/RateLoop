@@ -3,6 +3,8 @@ import { buildQuestionSpecHashes } from "../questionSpecs.js";
 import {
   HEAD_TO_HEAD_AB_TEMPLATE_ID,
   inferHeadToHeadAbQuestionFromText,
+  inferHeadToHeadVoteUiFromText,
+  isHeadToHeadAbResultSpecHash,
   normalizeInferredHeadToHeadAbRequestBody,
   readHeadToHeadTemplateInputs,
   readHeadToHeadVoteUiFromQuestionMetadata,
@@ -70,6 +72,54 @@ describe("voteUi", () => {
         resultSpecHash: generic?.resultSpecHash,
       }),
     ).toEqual({ mode: "thumbs" });
+  });
+
+  it("infers head-to-head vote ui from title when metadata is missing", () => {
+    const template = findAgentResultTemplate(HEAD_TO_HEAD_AB_TEMPLATE_ID);
+    expect(template).toBeTruthy();
+
+    expect(
+      resolveVoteUiConfig({
+        resultSpecHash: template!.resultSpecHash,
+        text: "Do you prefer A = Awesome or B = Bad?",
+      }),
+    ).toEqual({
+      mode: "head_to_head",
+      optionAKey: "A",
+      optionALabel: "Awesome",
+      optionBKey: "B",
+      optionBLabel: "Bad",
+    });
+  });
+
+  it("infers head-to-head vote ui from title even without head-to-head result spec hash", () => {
+    const generic = findAgentResultTemplate("generic_rating");
+    expect(
+      resolveVoteUiConfig({
+        resultSpecHash: generic?.resultSpecHash,
+        text: "Do you prefer A = Awesome or B = Bad?",
+      }),
+    ).toMatchObject({
+      mode: "head_to_head",
+      optionALabel: "Awesome",
+      optionBLabel: "Bad",
+    });
+  });
+
+  it("maps inferred A/B labels to vote ui config", () => {
+    expect(inferHeadToHeadVoteUiFromText("Do you prefer A = Awesome or B = Bad?")).toEqual({
+      mode: "head_to_head",
+      optionAKey: "A",
+      optionALabel: "Awesome",
+      optionBKey: "B",
+      optionBLabel: "Bad",
+    });
+  });
+
+  it("detects head-to-head result spec hashes", () => {
+    const template = findAgentResultTemplate(HEAD_TO_HEAD_AB_TEMPLATE_ID);
+    expect(isHeadToHeadAbResultSpecHash(template?.resultSpecHash)).toBe(true);
+    expect(isHeadToHeadAbResultSpecHash(findAgentResultTemplate("generic_rating")?.resultSpecHash)).toBe(false);
   });
 
   it("rejects option labels longer than 32 characters", () => {
