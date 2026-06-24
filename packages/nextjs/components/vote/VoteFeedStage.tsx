@@ -48,7 +48,7 @@ const MOBILE_MIN_SCROLLER_HEIGHT_PX = 320;
 const MOBILE_CHROME_TRANSITION_MEASURE_MS = 260;
 const MOBILE_CHROME_SETTLED_MEASURE_MS = MOBILE_CHROME_TRANSITION_MEASURE_MS + 40;
 const MOBILE_CARD_TOP_SNAP_GUARD_PX = 12;
-const MOBILE_HEADLINE_GUARD_SNAP_TOLERANCE_PX = 28;
+const MOBILE_HEADLINE_GUARD_SNAP_TOLERANCE_PX = 48;
 const MOBILE_HEADER_CARD_VISIBILITY_SETTLE_MS = 140;
 const MOBILE_HEADER_SCROLL_SYNC_ATTRIBUTE = "data-mobile-header-scroll-sync";
 const MOBILE_HEADER_SCROLL_SYNC_OFFSET_ATTRIBUTE = "data-mobile-header-scroll-sync-offset";
@@ -371,7 +371,9 @@ export function VoteFeedStage({
       }
 
       const maxScrollTop = Math.max(scroller.scrollHeight - scroller.clientHeight, 0);
-      const nextScrollTop = Math.min(Math.max(scroller.scrollTop - hiddenByTopEdge, 0), maxScrollTop);
+      const snapGuardCorrection = activeNodeRect.top - scrollerTop;
+      const scrollCorrection = snapGuardCorrection < -0.5 ? snapGuardCorrection : -hiddenByTopEdge;
+      const nextScrollTop = Math.min(Math.max(scroller.scrollTop + scrollCorrection, 0), maxScrollTop);
 
       if (Math.abs(nextScrollTop - scroller.scrollTop) < 0.5) {
         return;
@@ -918,6 +920,91 @@ export function VoteFeedStage({
       clearSettleTimeout();
     };
   }, [getActiveScroller, isDesktopViewport, navigationLocked, requestProgrammaticScroll, resolveNearestCard]);
+
+  useEffect(() => {
+    if (isDesktopViewport || typeof window === "undefined") return;
+
+    const scroller = getActiveScroller();
+    if (!scroller) return;
+
+    let settleTimeoutId: number | null = null;
+
+    const clearSettleTimeout = () => {
+      if (settleTimeoutId !== null) {
+        window.clearTimeout(settleTimeoutId);
+        settleTimeoutId = null;
+      }
+    };
+
+    const settleActiveHeadline = () => {
+      settleTimeoutId = null;
+
+      if (navigationLocked) {
+        return;
+      }
+
+      const nearestCard = resolveNearestCard();
+      if (!nearestCard) {
+        return;
+      }
+
+      if (
+        Math.abs(nearestCard.relativeTop - MOBILE_CARD_TOP_SNAP_GUARD_PX) > MOBILE_HEADLINE_GUARD_SNAP_TOLERANCE_PX
+      ) {
+        return;
+      }
+
+      const activeNode = cardElementsRef.current.get(nearestCard.index);
+      const activeTitleId = activeNode?.getAttribute("aria-labelledby");
+      const activeTitle =
+        (activeTitleId ? document.getElementById(activeTitleId) : null) ?? activeNode?.querySelector<HTMLElement>("h2");
+
+      if (!activeNode || !activeTitle) {
+        return;
+      }
+
+      const scrollerRect = scroller.getBoundingClientRect();
+      const activeNodeRect = activeNode.getBoundingClientRect();
+      const viewportTop = window.visualViewport?.offsetTop ?? 0;
+      const scrollerTop = Math.max(scrollerRect.top, viewportTop) + MOBILE_CARD_TOP_SNAP_GUARD_PX;
+      const hiddenByTopEdge = scrollerTop - activeTitle.getBoundingClientRect().top;
+
+      if (hiddenByTopEdge < 1) {
+        return;
+      }
+
+      const maxScrollTop = Math.max(scroller.scrollHeight - scroller.clientHeight, 0);
+      const nextScrollTop = Math.min(Math.max(scroller.scrollTop + activeNodeRect.top - scrollerTop, 0), maxScrollTop);
+
+      if (Math.abs(nextScrollTop - scroller.scrollTop) < 0.5) {
+        return;
+      }
+
+      markMobileHeaderScrollSync(scroller, nextScrollTop);
+      setMobileScrollerScrollTop(scroller, nextScrollTop);
+    };
+
+    const scheduleSettle = () => {
+      clearSettleTimeout();
+      settleTimeoutId = window.setTimeout(settleActiveHeadline, MOBILE_HEADER_CARD_VISIBILITY_SETTLE_MS);
+    };
+
+    scroller.addEventListener("scroll", scheduleSettle, { passive: true });
+    window.addEventListener("resize", scheduleSettle);
+
+    return () => {
+      scroller.removeEventListener("scroll", scheduleSettle);
+      window.removeEventListener("resize", scheduleSettle);
+      clearSettleTimeout();
+    };
+  }, [
+    getActiveScroller,
+    isDesktopViewport,
+    markMobileHeaderScrollSync,
+    navigationLocked,
+    resolveNearestCard,
+    setMobileScrollerScrollTop,
+  ]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;

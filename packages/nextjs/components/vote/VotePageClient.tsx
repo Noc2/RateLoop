@@ -83,6 +83,7 @@ import {
   isScopedVoteViewOption,
   resolveSupportedVoteView,
 } from "~~/lib/vote/viewOptions";
+import { resolveContentVoteUi } from "~~/lib/vote/voteUiConfig";
 import type { WorldCredentialKind, WorldIdProofPurpose } from "~~/lib/world-id/credentials";
 import { buildRecommendationSignalContext, trackRecommendationSignal } from "~~/utils/recommendationTracker";
 import { notification } from "~~/utils/scaffold-eth";
@@ -1391,6 +1392,10 @@ const HomeInner = () => {
   const primaryAttentionToken =
     primaryItem && voteAttention?.contentId === primaryItem.id.toString() ? voteAttention.token : null;
   const stakeModalCooldownSeconds = stakeModal.contentId > 0n ? getContentCooldownSeconds(stakeModal.contentId) : 0;
+  const stakeModalVoteUiConfig = useMemo(
+    () => resolveContentVoteUi(stakeModal.voteItemSnapshot ?? { resultSpecHash: null }),
+    [stakeModal.voteItemSnapshot],
+  );
 
   // Reset visible count when filters change
   useEffect(() => {
@@ -2163,6 +2168,11 @@ const HomeInner = () => {
     waitForRequestedContent,
   ]);
   const mobileVoteDockItem = !showRequestedContentLoading && !showRequestedContentUnavailable ? primaryItem : null;
+  const mobileVoteDockVoteUiConfig = useMemo(
+    () => (mobileVoteDockItem ? resolveContentVoteUi(mobileVoteDockItem) : { mode: "thumbs" as const }),
+    [mobileVoteDockItem],
+  );
+
   return (
     <AppPageShell
       horizontalPaddingClassName="px-0 xl:px-4"
@@ -2304,6 +2314,7 @@ const HomeInner = () => {
                 onShareContent={() => handleShareContent(mobileVoteDockItem)}
                 feedbackUnavailableReason={primaryConfidentialContextBlocker}
                 onOpenFeedback={() => handleOpenFeedback(mobileVoteDockItem)}
+                voteUiConfig={mobileVoteDockVoteUiConfig}
               />
             </div>
           </div>
@@ -2391,6 +2402,7 @@ const HomeInner = () => {
           onConfirm={handleConfirmStake}
           onCancel={handleCancelStake}
           onRequestWorldIdProof={setWorldIdProofRequest}
+          voteUiConfig={stakeModalVoteUiConfig}
         />
       ) : null}
       {worldIdProofRequest ? (

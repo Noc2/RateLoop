@@ -54,6 +54,15 @@ export interface ContentOpenRoundSummary {
 export type RewardPoolCurrency = "LREP" | "USDC" | "MIXED";
 export type RewardPoolDisplayCurrency = "LREP" | "USD" | "MIXED";
 
+export type ContentVoteUi = {
+  mode: "head_to_head";
+  optionAKey: string;
+  optionALabel: string;
+  optionBKey: string;
+  optionBLabel: string;
+  comparisonCriterion?: string;
+};
+
 export interface ContentItem {
   id: bigint;
   chainId?: number | null;
@@ -79,6 +88,7 @@ export interface ContentItem {
   contentHash: string;
   questionMetadataHash?: string | null;
   resultSpecHash?: string | null;
+  voteUi?: ContentVoteUi | null;
   audienceContext?: ProfileSelfReportAudienceContext | null;
   detailsUrl?: string | null;
   detailsHash?: string | null;
@@ -387,6 +397,7 @@ export function mapContentItem(
     contentHash: string;
     questionMetadataHash?: string | null;
     resultSpecHash?: string | null;
+    voteUi?: ContentVoteUi | null;
     detailsUrl?: string | null;
     detailsHash?: string | null;
     status?: string | number | null;
@@ -632,6 +643,7 @@ export function mapContentItem(
     contentHash: item.contentHash,
     questionMetadataHash: item.questionMetadataHash ?? null,
     resultSpecHash: item.resultSpecHash ?? null,
+    voteUi: item.voteUi ?? null,
     audienceContext: item.audienceContext ?? null,
     detailsUrl: item.detailsUrl ?? null,
     detailsHash: item.detailsHash ?? null,

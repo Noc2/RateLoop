@@ -28,6 +28,14 @@ import {
   isPrivateContextMetadata,
 } from "~~/lib/vote/confidentialContext";
 import {
+  type VoteUiConfig,
+  getCrowdForecastLabel,
+  getExpectedCrowdTooltip,
+  getSignalToneLabel,
+  getVoteButtonPresentation,
+  getYourVoteTooltip,
+} from "~~/lib/vote/voteUiConfig";
+import {
   type WorldCredentialKind,
   type WorldIdProofPurpose,
   getWorldCredentialOption,
@@ -57,15 +65,12 @@ interface StakeSelectorProps {
   onConfirm: (stakeAmount: number, isUp: boolean, predictedUpPercent: number) => void;
   onCancel: () => void;
   onRequestWorldIdProof?: (request: { kind: WorldCredentialKind; purpose: WorldIdProofPurpose }) => void;
+  voteUiConfig?: VoteUiConfig;
 }
 
 const MIN_COUNTED_STAKE_AMOUNT = 1;
 const MIN_PREDICTED_UP_PERCENT = USER_PREDICTION_PERCENT.min;
 const MAX_PREDICTED_UP_PERCENT = USER_PREDICTION_PERCENT.max;
-const YOUR_VOTE_TOOLTIP =
-  "Thumbs up means you think this content is useful for the question; thumbs down means it is unhelpful, broken, misleading, or unsafe.";
-const EXPECTED_CROWD_TOOLTIP =
-  "Your forecast of what share of revealed raters will choose thumbs up this round. This forecast helps determine rewards; it is separate from your own thumbs up/down vote.";
 export const STAKE_AMOUNT_TOOLTIP =
   "Stake is optional LREP you put behind your vote. It represents your conviction in this rating and can affect rewards or losses after settlement.";
 export const RATING_TOOLTIP =
@@ -181,6 +186,7 @@ export function StakeSelector({
   onConfirm,
   onCancel,
   onRequestWorldIdProof,
+  voteUiConfig = { mode: "thumbs" },
 }: StakeSelectorProps) {
   const dialogTitleId = useId();
   const stakeAmountInputId = useId();
@@ -236,8 +242,13 @@ export function StakeSelector({
 
   const symbol = tokenSymbol ?? "LREP";
   const normalizedCurrentRating = normalizeStakeSelectorRating(currentRating);
-  const signalTone = isUp ? "Thumbs up" : "Thumbs down";
+  const signalTone = getSignalToneLabel(voteUiConfig, isUp);
   const signalToneClassName = isUp ? "text-success" : "text-error";
+  const upPresentation = getVoteButtonPresentation(voteUiConfig, "up");
+  const downPresentation = getVoteButtonPresentation(voteUiConfig, "down");
+  const yourVoteTooltip = getYourVoteTooltip(voteUiConfig);
+  const expectedCrowdTooltip = getExpectedCrowdTooltip(voteUiConfig);
+  const crowdForecastLabel = getCrowdForecastLabel(voteUiConfig);
   const currentRatingLabel =
     currentRating === null || currentRating === undefined || !Number.isFinite(currentRating)
       ? "N/A"
@@ -499,7 +510,7 @@ export function StakeSelector({
                 <div>
                   <p className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-base-content/55">
                     <span>Your signal</span>
-                    <InfoTooltip text={YOUR_VOTE_TOOLTIP} position="bottom" />
+                    <InfoTooltip text={yourVoteTooltip} position="bottom" />
                   </p>
                   <p className={`mt-1 text-3xl font-bold ${signalToneClassName}`}>{signalTone}</p>
                 </div>
@@ -520,8 +531,8 @@ export function StakeSelector({
                   disabled={formDisabled}
                   aria-pressed={isUp}
                 >
-                  <HandThumbUpIcon className="h-5 w-5" />
-                  Thumbs up
+                  {upPresentation.variant === "thumbs" ? <HandThumbUpIcon className="h-5 w-5" /> : null}
+                  {upPresentation.longLabel}
                 </button>
                 <button
                   type="button"
@@ -531,8 +542,8 @@ export function StakeSelector({
                   disabled={formDisabled}
                   aria-pressed={!isUp}
                 >
-                  <HandThumbDownIcon className="h-5 w-5" />
-                  Thumbs down
+                  {downPresentation.variant === "thumbs" ? <HandThumbDownIcon className="h-5 w-5" /> : null}
+                  {downPresentation.longLabel}
                 </button>
               </div>
               <div className="mt-5 border-t border-base-content/10 pt-4">
@@ -540,11 +551,11 @@ export function StakeSelector({
                   <div>
                     <p className={metricLabelClassName}>
                       <span>Crowd forecast</span>
-                      <InfoTooltip text={EXPECTED_CROWD_TOOLTIP} position="bottom" />
+                      <InfoTooltip text={expectedCrowdTooltip} position="bottom" />
                     </p>
                     <p className={metricValueClassName}>
                       {predictedUpPercent.toFixed(0)}
-                      <span className={metricUnitClassName}>% up</span>
+                      <span className={metricUnitClassName}>{crowdForecastLabel}</span>
                     </p>
                   </div>
                 </div>
@@ -566,8 +577,10 @@ export function StakeSelector({
                   className="crowd-forecast-range range range-sm mt-4 w-full"
                   style={sliderStyle}
                   disabled={formDisabled}
-                  aria-label="Crowd thumbs-up forecast"
-                  aria-valuetext={`${predictedUpPercent.toFixed(0)} percent up`}
+                  aria-label={
+                    voteUiConfig.mode === "head_to_head" ? "Crowd forecast for option A" : "Crowd thumbs-up forecast"
+                  }
+                  aria-valuetext={`${predictedUpPercent.toFixed(0)} ${crowdForecastLabel}`}
                 />
                 <div className="mt-1 flex justify-between text-xs text-base-content/55">
                   <span>{MIN_PREDICTED_UP_PERCENT}%</span>

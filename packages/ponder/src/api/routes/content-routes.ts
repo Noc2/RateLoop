@@ -59,6 +59,7 @@ import {
   readQuestionMetadataConfidentiality,
   type ContentConfidentialityState,
 } from "../confidentiality-redaction.js";
+import { attachVoteUiToContentResponse } from "../voteUi.js";
 import {
   getUrlLookupCandidates,
   isValidAddress,
@@ -537,7 +538,7 @@ function formatContentTargetAudience<T extends Record<string, unknown>>(item: T,
 }
 
 function formatContentResponse<T extends Record<string, unknown>>(item: T, includeTargetAudience = false): T {
-  return formatConfidentialContent(formatContentTargetAudience(item, includeTargetAudience));
+  return attachVoteUiToContentResponse(formatConfidentialContent(formatContentTargetAudience(item, includeTargetAudience)));
 }
 
 function metadataSyncToken() {

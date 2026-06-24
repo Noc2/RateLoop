@@ -641,6 +641,14 @@ export interface PonderContentItem {
   contentHash: string;
   questionMetadataHash?: string | null;
   resultSpecHash?: string | null;
+  voteUi?: {
+    mode: "head_to_head";
+    optionAKey: string;
+    optionALabel: string;
+    optionBKey: string;
+    optionBLabel: string;
+    comparisonCriterion?: string;
+  } | null;
   targetAudience?: TargetAudience | null;
   audienceContext?: ProfileSelfReportAudienceContext | null;
   contextAccess?: "public" | "gated" | string;

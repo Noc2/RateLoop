@@ -9,6 +9,7 @@ import type { ContentItem } from "~~/hooks/useContentFeed";
 import { useRateLoopConnectModal } from "~~/hooks/useRateLoopConnectModal";
 import type { ViewerRewardStatus } from "~~/hooks/useViewerRewardStatuses";
 import { shouldShowBountyExpiredStatus } from "~~/lib/vote/discoverFeedFilter";
+import { resolveContentVoteUi } from "~~/lib/vote/voteUiConfig";
 
 interface VoteSignalRailProps {
   primaryItem: ContentItem | null;
@@ -49,6 +50,7 @@ export function VoteSignalRail({
   const bundleQuestionCount = primaryItem?.bundle?.questionCount ?? null;
   const isBundleQuestion = Boolean(primaryItem?.bundleId && bundleQuestionNumber && bundleQuestionCount);
   const isBundleBountyExpired = Boolean(primaryItem && isBundleQuestion && shouldShowBountyExpiredStatus(primaryItem));
+  const voteUiConfig = primaryItem ? resolveContentVoteUi(primaryItem) : { mode: "thumbs" as const };
 
   return (
     <div className="flex w-full min-w-0 flex-col gap-3">
@@ -94,6 +96,7 @@ export function VoteSignalRail({
             compact
             variant="signal"
             attentionToken={attentionToken}
+            voteUiConfig={voteUiConfig}
           />
         ) : null}
       </aside>

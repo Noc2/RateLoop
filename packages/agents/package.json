@@ -38,6 +38,9 @@
       "templates": [
         "dist/esm/templates.d.ts"
       ],
+      "voteUi": [
+        "dist/esm/voteUi.d.ts"
+      ],
       "x402-question-payload": [
         "dist/esm/x402QuestionPayload.d.ts"
       ],
@@ -77,6 +80,11 @@
       "types": "./dist/esm/templates.d.ts",
       "import": "./dist/esm/templates.js",
       "require": "./dist/cjs/templates.js"
+    },
+    "./voteUi": {
+      "types": "./dist/esm/voteUi.d.ts",
+      "import": "./dist/esm/voteUi.js",
+      "require": "./dist/cjs/voteUi.js"
     },
     "./x402-question-payload": {
       "types": "./dist/esm/x402QuestionPayload.d.ts",

@@ -1004,6 +1004,16 @@ body {
   line-height: 1;
 }
 
+.vote-btn .vote-letter {
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.vote-btn .vote-letter-sm {
+  font-size: 0.95rem;
+}
+
 @keyframes vote-btn-attention {
   0% {
     transform: translateY(0) scale(1);

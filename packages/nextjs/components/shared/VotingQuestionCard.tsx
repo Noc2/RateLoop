@@ -23,6 +23,7 @@ import {
 import { formatSubmissionRewardAmount, formatUsdAmount } from "~~/lib/questionRewardPools";
 import { formatVoteCooldownRemaining } from "~~/lib/vote/cooldown";
 import { describeOpenRoundActivity, formatLrepAmount, getRoundProgressMessaging } from "~~/lib/vote/voteIncentives";
+import type { VoteUiConfig } from "~~/lib/vote/voteUiConfig";
 import { resolveVotingQuestionCardDisplayError } from "~~/lib/vote/votingQuestionCardStatus";
 
 interface VotingQuestionCardProps {
@@ -56,6 +57,7 @@ interface VotingQuestionCardProps {
   onShareContent?: () => void;
   feedbackUnavailableReason?: string | null;
   onOpenFeedback?: () => void;
+  voteUiConfig?: VoteUiConfig;
 }
 
 const RATING_GUIDANCE_TEXT =
@@ -529,6 +531,7 @@ export function VotingQuestionCard({
   onShareContent,
   feedbackUnavailableReason,
   onOpenFeedback,
+  voteUiConfig = { mode: "thumbs" },
 }: VotingQuestionCardProps) {
   const isSignalVariant = variant === "signal";
   const isDockVariant = variant === "dock";
@@ -868,6 +871,7 @@ export function VotingQuestionCard({
                       <div className="col-start-4 justify-self-center">
                         <RateLoopVoteButton
                           direction="up"
+                          voteUiConfig={voteUiConfig}
                           size="sm"
                           onClick={() => onVote(true)}
                           disabled={dockVoteDisabled}
@@ -879,6 +883,7 @@ export function VotingQuestionCard({
                       <div className="col-start-6 justify-self-center">
                         <RateLoopVoteButton
                           direction="down"
+                          voteUiConfig={voteUiConfig}
                           size="sm"
                           onClick={() => onVote(false)}
                           disabled={dockVoteDisabled}
@@ -894,6 +899,7 @@ export function VotingQuestionCard({
                       <div className="justify-self-start">
                         <RateLoopVoteButton
                           direction="up"
+                          voteUiConfig={voteUiConfig}
                           size="sm"
                           onClick={() => onVote(true)}
                           disabled={dockVoteDisabled}
@@ -913,6 +919,7 @@ export function VotingQuestionCard({
                       <div className="justify-self-end">
                         <RateLoopVoteButton
                           direction="down"
+                          voteUiConfig={voteUiConfig}
                           size="sm"
                           onClick={() => onVote(false)}
                           disabled={dockVoteDisabled}
@@ -1030,12 +1037,14 @@ export function VotingQuestionCard({
               <div className="mt-3 flex items-center justify-center gap-3">
                 <RateLoopVoteButton
                   direction="up"
+                  voteUiConfig={voteUiConfig}
                   onClick={() => onVote(true)}
                   disabled={voteActionDisabled}
                   attention={isAttentionActive && !voteActionDisabled}
                 />
                 <RateLoopVoteButton
                   direction="down"
+                  voteUiConfig={voteUiConfig}
                   onClick={() => onVote(false)}
                   disabled={voteActionDisabled}
                   attention={isAttentionActive && !voteActionDisabled}
@@ -1053,12 +1062,14 @@ export function VotingQuestionCard({
                 <div className="flex shrink-0 items-center justify-center gap-2 lg:gap-3">
                   <RateLoopVoteButton
                     direction="up"
+                    voteUiConfig={voteUiConfig}
                     onClick={() => onVote(true)}
                     disabled={voteActionDisabled}
                     attention={isAttentionActive && !voteActionDisabled}
                   />
                   <RateLoopVoteButton
                     direction="down"
+                    voteUiConfig={voteUiConfig}
                     onClick={() => onVote(false)}
                     disabled={voteActionDisabled}
                     attention={isAttentionActive && !voteActionDisabled}

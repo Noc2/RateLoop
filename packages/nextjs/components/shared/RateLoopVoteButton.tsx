@@ -1,6 +1,7 @@
 import { HandThumbDownIcon, HandThumbUpIcon } from "@heroicons/react/24/outline";
 import { TooltipAnchor } from "~~/components/ui/InfoTooltip";
 import type { TooltipPosition } from "~~/lib/ui/tooltipPosition";
+import { type VoteUiConfig, getVoteButtonPresentation } from "~~/lib/vote/voteUiConfig";
 
 interface RateLoopVoteButtonProps {
   direction: "up" | "down";
@@ -10,6 +11,7 @@ interface RateLoopVoteButtonProps {
   attention?: boolean;
   tooltipPosition?: TooltipPosition;
   showTooltip?: boolean;
+  voteUiConfig?: VoteUiConfig;
 }
 
 interface VoteDirectionIconProps {
@@ -31,35 +33,44 @@ export function RateLoopVoteButton({
   attention = false,
   tooltipPosition = "bottom",
   showTooltip = true,
+  voteUiConfig = { mode: "thumbs" },
 }: RateLoopVoteButtonProps) {
   const isUp = direction === "up";
-  const label = isUp ? "Thumbs up" : "Thumbs down";
-  const directionLabel = isUp ? "Up" : "Down";
+  const presentation = getVoteButtonPresentation(voteUiConfig, direction);
   const isSmall = size === "sm";
   const iconClassName = isSmall ? "h-5 w-5 drop-shadow-sm" : "h-5 w-5 drop-shadow-sm";
+  const showTextLabel = !isSmall || presentation.variant === "letters";
 
   const button = (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
-      aria-label={isUp ? "Vote thumbs up" : "Vote thumbs down"}
+      aria-label={presentation.ariaLabel}
       data-testid={isUp ? "vote-button-up" : "vote-button-down"}
-      title={showTooltip ? label : undefined}
+      title={showTooltip ? presentation.tooltip : undefined}
       className={`vote-btn ${isSmall ? "vote-btn-sm" : ""} ${isUp ? "vote-yes" : "vote-no"} ${
         attention ? "vote-btn-attention" : ""
-      }`}
+      } ${presentation.variant === "letters" ? "vote-btn-letter" : ""}`}
     >
       <span className="vote-bg" />
       <span className="vote-symbol">
-        <VoteDirectionIcon direction={direction} className={iconClassName} />
-        {!isSmall ? <span className="vote-label">{directionLabel}</span> : null}
+        {presentation.variant === "thumbs" ? (
+          <VoteDirectionIcon direction={direction} className={iconClassName} />
+        ) : (
+          <span className={`vote-letter ${isSmall ? "vote-letter-sm" : ""}`} aria-hidden>
+            {presentation.shortLabel}
+          </span>
+        )}
+        {showTextLabel && presentation.variant === "thumbs" ? (
+          <span className="vote-label">{presentation.shortLabel}</span>
+        ) : null}
       </span>
     </button>
   );
 
   return showTooltip ? (
-    <TooltipAnchor text={label} position={tooltipPosition}>
+    <TooltipAnchor text={presentation.tooltip} position={tooltipPosition}>
       {button}
     </TooltipAnchor>
   ) : (
