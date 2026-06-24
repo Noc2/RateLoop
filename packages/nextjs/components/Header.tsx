@@ -678,6 +678,9 @@ export const Header = () => {
 
       if (currentScrollY <= 0) {
         clearDeferredVoteLayoutVisibility();
+        if (scrollSource instanceof HTMLElement) {
+          scrollSource.removeAttribute(MOBILE_HEADER_SCROLL_INTENT_ATTRIBUTE);
+        }
         setMobileHeaderVisibility(true, { ignoreStabilizeWindow: true });
         lastScrollStateRef.current = {
           source: scrollSource,
@@ -709,6 +712,20 @@ export const Header = () => {
 
         const shouldShowNearTop = currentScrollY < MOBILE_HEADER_HIDE_OFFSET;
         const hasUserScrollIntent = scrollSource.getAttribute(MOBILE_HEADER_SCROLL_INTENT_ATTRIBUTE) === "true";
+        const shouldHideForVoteScrollIntent =
+          hasUserScrollIntent &&
+          currentScrollY >= MOBILE_HEADER_SCROLL_DELTA &&
+          (scrollDelta > 0 || currentScrollY >= MOBILE_HEADER_HIDE_OFFSET || !isMobileHeaderVisibleRef.current);
+
+        if (shouldHideForVoteScrollIntent) {
+          clearDeferredVoteLayoutVisibility();
+          setMobileHeaderVisibility(false, { ignoreStabilizeWindow: true });
+          lastScrollStateRef.current = {
+            source: scrollSource,
+            offset: currentScrollY,
+          };
+          return;
+        }
 
         if (shouldShowNearTop) {
           clearDeferredVoteLayoutVisibility();
@@ -718,11 +735,6 @@ export const Header = () => {
             offset: currentScrollY,
           };
           return;
-        }
-
-        if (scrollDelta > 0 && hasUserScrollIntent) {
-          clearDeferredVoteLayoutVisibility();
-          setMobileHeaderVisibility(false, { ignoreStabilizeWindow: true });
         }
 
         lastScrollStateRef.current = {
