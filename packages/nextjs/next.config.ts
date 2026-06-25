@@ -12,6 +12,11 @@ import { fileURLToPath } from "node:url";
 loadEnvConfig(dirname(fileURLToPath(import.meta.url)));
 
 const isDev = process.env.NODE_ENV === "development";
+if (process.env.NEXT_PUBLIC_IGNORE_BUILD_ERROR === "true") {
+  throw new Error(
+    "NEXT_PUBLIC_IGNORE_BUILD_ERROR is no longer supported. Fix TypeScript and ESLint errors before deploying.",
+  );
+}
 // WS-5 (2026-05-21 repo audit): Vercel Live is a preview-deployment debugging feature; it
 // should not load on production. The CSP previously allowed `https://vercel.live` and
 // `wss://*.pusher.com` for every Vercel deployment (incl. production) which widened the
@@ -158,10 +163,10 @@ const nextConfig: NextConfig = {
   devIndicators: false,
   transpilePackages: ["@rateloop/contracts", "@rateloop/node-utils", "thirdweb", "@thirdweb-dev/wagmi-adapter"],
   typescript: {
-    ignoreBuildErrors: process.env.NEXT_PUBLIC_IGNORE_BUILD_ERROR === "true",
+    ignoreBuildErrors: false,
   },
   eslint: {
-    ignoreDuringBuilds: process.env.NEXT_PUBLIC_IGNORE_BUILD_ERROR === "true",
+    ignoreDuringBuilds: false,
   },
   webpack: config => {
     config.resolve.fallback = { fs: false, net: false, tls: false };

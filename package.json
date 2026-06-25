@@ -64,7 +64,6 @@
     "foundry:generate-ts-abis:test": "node scripts/run-node-tests.mjs packages/foundry/scripts-js/generateTsAbis.test.js",
     "vercel": "yarn workspace @rateloop/nextjs vercel",
     "vercel:login": "yarn workspace @rateloop/nextjs vercel:login",
-    "vercel:yolo": "yarn workspace @rateloop/nextjs vercel:yolo",
     "verify": "yarn foundry:verify",
     "world-id:test": "yarn world-id:test:contracts && yarn world-id:test:next",
     "world-id:test:contracts": "yarn workspace @rateloop/foundry test:world-id",

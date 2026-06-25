@@ -15,7 +15,6 @@
     "start": "yarn build:workspace-deps && node scripts/dev-preflight.mjs",
     "vercel": "yarn dlx vercel@54.0.0 --build-env YARN_ENABLE_IMMUTABLE_INSTALLS=false --build-env ENABLE_EXPERIMENTAL_COREPACK=1 --build-env VERCEL_TELEMETRY_DISABLED=1",
     "vercel:login": "yarn dlx vercel@54.0.0 login",
-    "vercel:yolo": "yarn dlx vercel@54.0.0 --build-env YARN_ENABLE_IMMUTABLE_INSTALLS=false --build-env ENABLE_EXPERIMENTAL_COREPACK=1 --build-env NEXT_PUBLIC_IGNORE_BUILD_ERROR=true --build-env VERCEL_TELEMETRY_DISABLED=1",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
