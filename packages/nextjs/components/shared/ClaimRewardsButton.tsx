@@ -148,6 +148,13 @@ export function ClaimRewardsButton({ className, layout = "default", showTokenSym
           ),
       });
 
+      const converged = !claimedItems.some(item =>
+        claimableItemsRef.current.some(
+          claimable => getClaimableRewardItemKey(claimable) === getClaimableRewardItemKey(item),
+        ),
+      );
+      if (!converged) return;
+
       setOptimisticallyClaimedKeys(previousKeys => {
         const nextKeys = new Set(previousKeys);
         for (const key of succeededKeys) {
