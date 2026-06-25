@@ -211,27 +211,24 @@ yarn test:ts
 yarn foundry:test
 ```
 
-# E2E default Chromium app suite
+E2E commands:
 
+```bash
+# E2E default Chromium app suite
 yarn e2e
 
 # E2E lifecycle coverage (settlement, cancellation, dormancy)
-
 yarn workspace @rateloop/nextjs e2e:ci:lifecycle
 
 # E2E keeper-backed settlement coverage
-
 yarn workspace @rateloop/nextjs e2e:ci:keeper
 
 # Full local E2E run
-
 yarn workspace @rateloop/nextjs e2e:full
 
 # Interactive Playwright UI mode
-
 yarn e2e:ui
-
-````
+```
 
 CI runs smoke, app, responsive, accessibility, lifecycle, and keeper-backed E2E suites separately on pushes and PRs. The scheduled workflow also runs browser-compatibility and mobile suites, so `yarn e2e` alone does not match full CI browser coverage.
 

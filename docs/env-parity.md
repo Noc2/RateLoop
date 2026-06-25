@@ -144,6 +144,18 @@ Keeper and Ponder reject conflicting live-chain overrides when shared artifacts 
 | `RATELOOP_LOCAL_SIGNER_X402_SUBMITTER_ADDRESS` | Agents  | Trusted EIP-3009 authorization recipient before signing   |
 | `RATELOOP_X402_QUESTION_SUBMITTER_ADDRESS`     | Agents  | Alias for the same submitter override in `localSigner.ts` |
 
+## Correlation artifact HTTPS allowlists
+
+Keeper and Ponder use different env var names for the same HTTPS prefix allowlist. Set both to the keeper's public artifact base URL (for example `https://keeper.example.com/correlation-artifacts`):
+
+| Env var | Package | Role |
+| ------- | ------- | ---- |
+| `KEEPER_ARTIFACT_HTTPS_ALLOWLIST` | Keeper | HTTPS prefixes the keeper may fetch when ingesting third-party correlation artifacts |
+| `KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL` | Keeper | Public base URL published on-chain for file-backed artifacts |
+| `PAYOUT_ARTIFACT_HTTPS_ALLOWLIST` | Ponder | HTTPS prefixes Ponder may fetch when indexing payout artifacts and serving proofs |
+
+Each service also accepts the other service's allowlist env name as an alias. Production readiness should verify the prefixes match the keeper's published artifact URL.
+
 ## RaterRegistry follow counter storage drift
 
 `RaterRegistry` declares `followingCount` and `followerCount` in storage and interfaces, but the implementation does not maintain them (follow edges are tracked without updating those counters). This is documentation-only drift: **no contract change is planned** for the unused counters. Off-chain indexers should not rely on those fields until a future migration explicitly wires them.
