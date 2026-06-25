@@ -194,6 +194,7 @@ cp packages/agents/.env.example packages/agents/.env
 | `RATELOOP_AGENT_WALLET_ADDRESS`                             | Funded wallet address for tokenless public asks                                                                          |
 | `RATELOOP_RPC_URL`                                          | RPC URL used by `local-ask` to send returned transaction plan calls                                                      |
 | `RATELOOP_CHAIN_ID`                                         | Optional chain guard; `local-ask` refuses mismatched RPCs                                                                |
+| `RATELOOP_LOCAL_SIGNER_QUESTION_METADATA_BASE_URL`          | Production metadata pin for canonical ask hashes                                                                         |
 | `RATELOOP_LOCAL_SIGNER_USDC_ADDRESS`                        | Optional trusted USDC override used to validate EIP-3009 typed-data before signing                                       |
 | `RATELOOP_LOCAL_SIGNER_USDC_ADDRESS_<chainId>`              | Chain-scoped trusted USDC override; preferred when one agent environment can target multiple chains                      |
 | `RATELOOP_X402_USDC_ADDRESS`                                | Alias for `RATELOOP_LOCAL_SIGNER_USDC_ADDRESS` when validating EIP-3009 typed-data before signing                        |
@@ -202,6 +203,8 @@ cp packages/agents/.env.example packages/agents/.env
 | `RATELOOP_X402_QUESTION_SUBMITTER_ADDRESS`                  | Alias for `RATELOOP_LOCAL_SIGNER_X402_SUBMITTER_ADDRESS` when validating EIP-3009 authorization recipients               |
 | `RATELOOP_LOCAL_SIGNER_CONTENT_REGISTRY_ADDRESS`            | Optional trusted ContentRegistry override used to validate wallet-call transaction plans                                 |
 | `RATELOOP_LOCAL_SIGNER_QUESTION_REWARD_POOL_ESCROW_ADDRESS` | Optional trusted QuestionRewardPoolEscrow override used to validate wallet-call approvals                                |
+| `RATELOOP_LOCAL_SIGNER_FEEDBACK_BONUS_ESCROW_ADDRESS`       | Optional trusted FeedbackBonusEscrow override used to validate wallet-call approvals                                     |
+| `RATELOOP_LOCAL_SIGNER_LREP_ADDRESS`                        | Optional trusted LREP token override used to validate wallet-call approvals                                              |
 | `RATELOOP_LOCAL_SIGNER_KEYSTORE_PATH`                       | Encrypted local signer keystore path                                                                                     |
 | `RATELOOP_LOCAL_SIGNER_KEYSTORE_PASSWORD`                   | Password for the local signer keystore; load from a secret source                                                        |
 | `RATELOOP_LOCAL_SIGNER_PASSWORD_ENV`                        | Name of an alternate environment variable that holds the keystore password                                               |

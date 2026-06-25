@@ -174,6 +174,23 @@ Each service also accepts the other service's allowlist env name as an alias. Pr
 | `RATELOOP_LOCAL_SIGNER_KEYSTORE_PATH` / `RATELOOP_LOCAL_SIGNER_KEYSTORE_PASSWORD` | Agents | Encrypted local signer keystore |
 | `RATELOOP_LOCAL_SIGNER_PRIVATE_KEY` | Agents | Ephemeral CI escape hatch only |
 
+### Local signer contract overrides
+
+| Env var | Package | Role |
+| ------- | ------- | ---- |
+| `RATELOOP_LOCAL_SIGNER_CONTENT_REGISTRY_ADDRESS` | Agents | Trusted ContentRegistry override for wallet-call plans |
+| `RATELOOP_LOCAL_SIGNER_QUESTION_REWARD_POOL_ESCROW_ADDRESS` | Agents | Trusted QuestionRewardPoolEscrow override |
+| `RATELOOP_LOCAL_SIGNER_FEEDBACK_BONUS_ESCROW_ADDRESS` | Agents | Trusted FeedbackBonusEscrow override |
+| `RATELOOP_LOCAL_SIGNER_LREP_ADDRESS` | Agents | Trusted LREP token override |
+| `RATELOOP_LOCAL_SIGNER_PASSWORD_ENV` | Agents | Alternate env var name for keystore password |
+| `RATELOOP_LOCAL_SIGNER_POLLING_INTERVAL_MS` | Agents | Receipt polling interval for local-ask |
+| `RATELOOP_LOCAL_SIGNER_RECEIPT_TIMEOUT_MS` | Agents | Receipt timeout for local-ask |
+| `RATELOOP_CHAIN_NAME` | Agents | Optional human-readable chain label for CLI output |
+
+### Agent attachment-origin fallbacks
+
+Agents and Next.js x402 parsers accept hosted attachment origins from `APP_URL`, `VERCEL_URL` (agents), and `NEXT_PUBLIC_APP_URL` in addition to `rateloop.ai` / `www.rateloop.ai`. Legacy `RATELOOP_QUESTION_METADATA_BASE_URL` is still read by `questionSpecs.ts` when newer pins are unset.
+
 Agent x402 parsers also accept `RATELOOP_LOCAL_SIGNER_QUESTION_METADATA_BASE_URL` before `NEXT_PUBLIC_PONDER_URL` / `NEXT_PUBLIC_APP_URL` when building default metadata URLs outside Next.js.
 
 ## RaterRegistry follow counter storage drift

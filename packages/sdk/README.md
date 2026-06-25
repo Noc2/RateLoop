@@ -38,7 +38,7 @@ import { createRateLoopClient } from "@rateloop/sdk";
 import { buildCommitVoteParams } from "@rateloop/sdk/vote";
 
 const rateloop = createRateLoopClient({
-  apiBaseUrl: process.env.PONDER_URL ?? "https://ponder.rateloop.ai",
+  apiBaseUrl: process.env.NEXT_PUBLIC_PONDER_URL ?? "https://ponder.rateloop.ai",
   frontendCode: "0x1234567890123456789012345678901234567890",
 });
 
