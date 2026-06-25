@@ -133,6 +133,10 @@ if (!isProduction && !corsOrigin) {
 if (corsMisconfigured) {
   app.use("/*", async (c, next) => {
     const requestPath = new URL(c.req.url).pathname;
+    if (requestPath === "/deployment") {
+      await next();
+      return;
+    }
     if (isKeeperInternalPath(requestPath) && hasValidKeeperWorkAuthorization(c)) {
       await next();
       return;

@@ -77,4 +77,21 @@ describe("ponder api bootstrap", () => {
         "31337:0x0000000000000000000000000000000000000001:0x0000000000000000000000000000000000000002",
     });
   });
+
+  it("keeps deployment probes available when CORS is misconfigured", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { default: app } = await loadApp({
+      NODE_ENV: "production",
+      CORS_ORIGIN: undefined,
+      RATE_LIMIT_TRUSTED_IP_HEADERS: "x-forwarded-for",
+      PONDER_NETWORK: "hardhat",
+      PONDER_CONTENT_REGISTRY_ADDRESS: "0x0000000000000000000000000000000000000001",
+      PONDER_FEEDBACK_REGISTRY_ADDRESS: "0x0000000000000000000000000000000000000002",
+    });
+
+    const response = await app.request("https://ponder.rateloop.ai/deployment");
+
+    expect(response.status).toBe(200);
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("CORS_ORIGIN is required"));
+  });
 });
