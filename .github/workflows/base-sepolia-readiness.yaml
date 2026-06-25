@@ -36,6 +36,8 @@ jobs:
       PONDER_METADATA_SYNC_TOKEN: ${{ secrets.PONDER_METADATA_SYNC_TOKEN }}
       PONDER_KEEPER_WORK_TOKEN: ${{ secrets.PONDER_KEEPER_WORK_TOKEN }}
       RATE_LIMIT_TRUSTED_IP_HEADERS: ${{ vars.RATE_LIMIT_TRUSTED_IP_HEADERS }}
+      KEEPER_ARTIFACT_HTTPS_ALLOWLIST: https://artifacts.rateloop.ai/rateloop
+      PAYOUT_ARTIFACT_HTTPS_ALLOWLIST: https://artifacts.rateloop.ai/rateloop
 
     steps:
       - name: Checkout
