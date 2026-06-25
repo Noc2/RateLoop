@@ -7,9 +7,15 @@ import { getAgentGeneratedImagesJsonBudgetBytes } from "~~/lib/auth/imageUploadC
 
 const env = process.env as Record<string, string | undefined>;
 const originalAgents = env.RATELOOP_MCP_AGENTS;
+const originalAppUrl = env.APP_URL;
 const originalDatabaseUrl = env.DATABASE_URL;
+const originalNextPublicAppUrl = env.NEXT_PUBLIC_APP_URL;
 const originalNodeEnv = env.NODE_ENV;
 const originalTargetNetworks = env.NEXT_PUBLIC_TARGET_NETWORKS;
+const originalVercel = env.VERCEL;
+const originalVercelEnv = env.VERCEL_ENV;
+const originalVercelProjectProductionUrl = env.VERCEL_PROJECT_PRODUCTION_URL;
+const originalVercelUrl = env.VERCEL_URL;
 
 env.DATABASE_URL = "memory:";
 
@@ -156,6 +162,20 @@ function makePublicGet(url: string, headers: Record<string, string> = {}) {
     headers: new Headers(headers),
     method: "GET",
   });
+}
+
+function configureProductionAgentLinks(appUrl?: string) {
+  env.NODE_ENV = "production";
+  env.VERCEL = "1";
+  if (appUrl) {
+    env.APP_URL = appUrl;
+  } else {
+    delete env.APP_URL;
+  }
+  delete env.NEXT_PUBLIC_APP_URL;
+  delete env.VERCEL_ENV;
+  delete env.VERCEL_PROJECT_PRODUCTION_URL;
+  delete env.VERCEL_URL;
 }
 
 function questionPayload(clientRequestId: string, params: { chainId?: number } = {}) {
@@ -572,9 +592,15 @@ after(() => {
   handoffsModule.__setAgentAskHandoffDraftSchemaReadyForTests(null);
   dbModule.__setDatabaseResourcesForTests(null);
   restoreEnv("RATELOOP_MCP_AGENTS", originalAgents);
+  restoreEnv("APP_URL", originalAppUrl);
   restoreEnv("DATABASE_URL", originalDatabaseUrl);
+  restoreEnv("NEXT_PUBLIC_APP_URL", originalNextPublicAppUrl);
   restoreEnv("NODE_ENV", originalNodeEnv);
   restoreEnv("NEXT_PUBLIC_TARGET_NETWORKS", originalTargetNetworks);
+  restoreEnv("VERCEL", originalVercel);
+  restoreEnv("VERCEL_ENV", originalVercelEnv);
+  restoreEnv("VERCEL_PROJECT_PRODUCTION_URL", originalVercelProjectProductionUrl);
+  restoreEnv("VERCEL_URL", originalVercelUrl);
 });
 
 test("agent templates route returns public templates without bearer auth", async () => {
@@ -833,6 +859,75 @@ test("agent signing intent routes create and prepare browser handoff asks", asyn
   assert.equal(readAfterPrepare.status, 200);
   assert.equal(readAfterPrepareBody.status, "prepared");
   assert.equal((readAfterPrepareBody.transactionPlan as { calls: unknown[] }).calls.length, 1);
+});
+
+test("agent signing intent route uses configured production app URL for token links", async () => {
+  configureProductionAgentLinks("https://canonical.rateloop.ai/app");
+  installAskOverrides();
+
+  try {
+    const createResponse = await signingIntentsRoute.POST(
+      makePublicPost(
+        "https://evil.example/api/agent/signing-intents",
+        {
+          request: {
+            ...questionPayload("browser-handoff-canonical-origin"),
+            maxPaymentAmount: "1500000",
+            signatureMode: "browser_link",
+          },
+        },
+        { "x-real-ip": "203.0.113.10" },
+      ),
+    );
+    const createBody = (await createResponse.json()) as Record<string, unknown>;
+    const signingUrl = new URL(String(createBody.signingUrl));
+
+    assert.equal(createResponse.status, 200, JSON.stringify(createBody));
+    assert.equal(signingUrl.origin, "https://canonical.rateloop.ai");
+    assert.match(signingUrl.pathname, /^\/app\/agent\/sign\/asi_/);
+    assert.ok(new URLSearchParams(signingUrl.hash.replace(/^#/, "")).get("token"));
+  } finally {
+    restoreEnv("APP_URL", originalAppUrl);
+    restoreEnv("NEXT_PUBLIC_APP_URL", originalNextPublicAppUrl);
+    restoreEnv("NODE_ENV", originalNodeEnv);
+    restoreEnv("VERCEL", originalVercel);
+    restoreEnv("VERCEL_ENV", originalVercelEnv);
+    restoreEnv("VERCEL_PROJECT_PRODUCTION_URL", originalVercelProjectProductionUrl);
+    restoreEnv("VERCEL_URL", originalVercelUrl);
+  }
+});
+
+test("agent signing intent route fails closed without production app URL", async () => {
+  configureProductionAgentLinks();
+
+  try {
+    const response = await signingIntentsRoute.POST(
+      makePublicPost(
+        "https://evil.example/api/agent/signing-intents",
+        {
+          request: {
+            ...questionPayload("browser-handoff-missing-app-url"),
+            maxPaymentAmount: "1500000",
+            signatureMode: "browser_link",
+          },
+        },
+        { "x-real-ip": "203.0.113.11" },
+      ),
+    );
+    const body = (await response.json()) as Record<string, unknown>;
+
+    assert.equal(response.status, 503);
+    assert.equal(body.recoverWith, "configure_app_url");
+    assert.match(String(body.message), /APP_URL, NEXT_PUBLIC_APP_URL, or VERCEL_PROJECT_PRODUCTION_URL is required/);
+  } finally {
+    restoreEnv("APP_URL", originalAppUrl);
+    restoreEnv("NEXT_PUBLIC_APP_URL", originalNextPublicAppUrl);
+    restoreEnv("NODE_ENV", originalNodeEnv);
+    restoreEnv("VERCEL", originalVercel);
+    restoreEnv("VERCEL_ENV", originalVercelEnv);
+    restoreEnv("VERCEL_PROJECT_PRODUCTION_URL", originalVercelProjectProductionUrl);
+    restoreEnv("VERCEL_URL", originalVercelUrl);
+  }
 });
 
 test("agent signing intent completion continues into Feedback Bonus wallet calls", async () => {
@@ -1218,6 +1313,41 @@ test("agent ask handoff route rejects chains unavailable on this server", async 
   assert.equal(body.retryable, true);
   assert.match(String(body.message), /Chain 480 is not available for browser handoffs/);
   assert.match(String(body.message), /Chain 480 is not configured for this server/);
+});
+
+test("agent ask handoff route uses configured production app URL for token links", async () => {
+  configureProductionAgentLinks("https://canonical.rateloop.ai/app");
+
+  try {
+    const response = await handoffsRoute.POST(
+      makePublicPost(
+        "https://evil.example/api/agent/handoffs",
+        {
+          request: {
+            ...handoffQuestionPayload("agent-handoff-canonical-origin"),
+            maxPaymentAmount: "1500000",
+          },
+          ttlMs: 300000,
+        },
+        { "x-real-ip": "203.0.113.12" },
+      ),
+    );
+    const body = (await response.json()) as Record<string, unknown>;
+    const handoffUrl = new URL(String(body.handoffUrl));
+
+    assert.equal(response.status, 200, JSON.stringify(body));
+    assert.equal(handoffUrl.origin, "https://canonical.rateloop.ai");
+    assert.match(handoffUrl.pathname, /^\/app\/agent\/handoff\/ahf_/);
+    assert.ok(new URLSearchParams(handoffUrl.hash.replace(/^#/, "")).get("token"));
+  } finally {
+    restoreEnv("APP_URL", originalAppUrl);
+    restoreEnv("NEXT_PUBLIC_APP_URL", originalNextPublicAppUrl);
+    restoreEnv("NODE_ENV", originalNodeEnv);
+    restoreEnv("VERCEL", originalVercel);
+    restoreEnv("VERCEL_ENV", originalVercelEnv);
+    restoreEnv("VERCEL_PROJECT_PRODUCTION_URL", originalVercelProjectProductionUrl);
+    restoreEnv("VERCEL_URL", originalVercelUrl);
+  }
 });
 
 test("agent ask handoff route stages generated image bytes behind a browser link", async () => {

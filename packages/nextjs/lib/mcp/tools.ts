@@ -34,6 +34,7 @@ import {
 } from "~~/lib/agent-callbacks";
 import { buildAgentCallbackPayload, callbackEventId, getAgentPublicQuestionUrl } from "~~/lib/agent-callbacks/payload";
 import { assertSafeAgentCallbackUrl } from "~~/lib/agent-callbacks/urlSafety";
+import { AGENT_APP_BASE_URL_REQUIRED_MESSAGE, resolveAgentAppBaseUrl } from "~~/lib/agent/appBaseUrl";
 import { buildAgentFastLaneGuidance } from "~~/lib/agent/fastLane";
 import {
   buildAgentAskHandoffResponse,
@@ -140,7 +141,7 @@ import {
 } from "~~/lib/mcp/budget";
 import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 import { buildQuestionSubmissionKey } from "~~/lib/questionSubmissionCommitment";
-import { buildAppRelativeUrl, resolveRequestAppBaseUrl } from "~~/lib/url/appRelative";
+import { buildAppRelativeUrl } from "~~/lib/url/appRelative";
 import { resolveRoundVoteRuntime } from "~~/lib/vote/roundVoteRuntime";
 import { type RoundVoteContractCall, buildRoundVoteTransactionPlan } from "~~/lib/vote/roundVoteTransactionPlan";
 import {
@@ -713,11 +714,11 @@ function handoffRequestArgs(args: JsonObject): JsonObject {
 }
 
 function toolAppBaseUrl(requestUrl: string | undefined) {
-  try {
-    return resolveRequestAppBaseUrl(toolRequestUrl(requestUrl, true), "/api/mcp/public");
-  } catch {
-    return "https://www.rateloop.ai";
+  const appBaseUrl = resolveAgentAppBaseUrl(toolRequestUrl(requestUrl, true), "/api/mcp/public");
+  if (appBaseUrl) {
+    return appBaseUrl;
   }
+  throw new McpToolError(AGENT_APP_BASE_URL_REQUIRED_MESSAGE, 503);
 }
 
 async function createAskHandoffLink(args: JsonObject, requestUrl: string | undefined, rateLimitSubjectId?: string) {

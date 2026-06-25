@@ -1,15 +1,16 @@
 import { NextRequest } from "next/server";
+import { AGENT_APP_BASE_URL_REQUIRED_MESSAGE, resolveAgentAppBaseUrl } from "~~/lib/agent/appBaseUrl";
 import { AgentAskHandoffError, createAgentAskHandoff } from "~~/lib/agent/handoffs";
 import {
   AGENT_JSON_BODY_MAX_BYTES,
   AGENT_WRITE_RATE_LIMIT,
+  agentRouteErrorResponse,
   handlePublicAgentRoute,
   isJsonObjectBody,
   jsonBodyErrorResponse,
   parseJsonBody,
 } from "~~/lib/agent/http";
 import { ImageUploadQuotaError } from "~~/lib/attachments/imageAttachments";
-import { resolveRequestAppBaseUrl } from "~~/lib/url/appRelative";
 import { resolveRateLimitSubject } from "~~/utils/rateLimit";
 
 export const runtime = "nodejs";
@@ -24,10 +25,15 @@ function readTtlMs(value: unknown) {
 }
 
 export async function POST(request: NextRequest) {
-  const appBaseUrl = resolveRequestAppBaseUrl(request.url, HANDOFFS_ROUTE_PATH);
-
   return handlePublicAgentRoute({
     handler: async () => {
+      const appBaseUrl = resolveAgentAppBaseUrl(request.url, HANDOFFS_ROUTE_PATH);
+      if (!appBaseUrl) {
+        return agentRouteErrorResponse(AGENT_APP_BASE_URL_REQUIRED_MESSAGE, 503, {
+          recoverWith: "configure_app_url",
+        });
+      }
+
       const body = await parseJsonBody(request, { maxBytes: AGENT_JSON_BODY_MAX_BYTES });
       if (!isJsonObjectBody(body)) return jsonBodyErrorResponse(body);
 

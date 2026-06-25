@@ -1,14 +1,15 @@
 import { NextRequest } from "next/server";
+import { AGENT_APP_BASE_URL_REQUIRED_MESSAGE, resolveAgentAppBaseUrl } from "~~/lib/agent/appBaseUrl";
 import {
   AGENT_JSON_BODY_MAX_BYTES,
   AGENT_WRITE_RATE_LIMIT,
+  agentRouteErrorResponse,
   handlePublicAgentRoute,
   isJsonObjectBody,
   jsonBodyErrorResponse,
   parseJsonBody,
 } from "~~/lib/agent/http";
 import { createAgentSigningIntent } from "~~/lib/agent/signingIntents";
-import { resolveRequestAppBaseUrl } from "~~/lib/url/appRelative";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,10 +22,15 @@ function readTtlMs(value: unknown) {
 }
 
 export async function POST(request: NextRequest) {
-  const appBaseUrl = resolveRequestAppBaseUrl(request.url, SIGNING_INTENTS_ROUTE_PATH);
-
   return handlePublicAgentRoute({
     handler: async () => {
+      const appBaseUrl = resolveAgentAppBaseUrl(request.url, SIGNING_INTENTS_ROUTE_PATH);
+      if (!appBaseUrl) {
+        return agentRouteErrorResponse(AGENT_APP_BASE_URL_REQUIRED_MESSAGE, 503, {
+          recoverWith: "configure_app_url",
+        });
+      }
+
       const body = await parseJsonBody(request, { maxBytes: AGENT_JSON_BODY_MAX_BYTES });
       if (!isJsonObjectBody(body)) return jsonBodyErrorResponse(body);
 

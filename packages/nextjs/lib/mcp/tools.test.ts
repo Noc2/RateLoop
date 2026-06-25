@@ -45,6 +45,22 @@ const ONE_PIXEL_PNG = Buffer.from(
   "base64",
 );
 const ONE_PIXEL_PNG_SHA256 = createHash("sha256").update(ONE_PIXEL_PNG).digest("hex");
+const env = process.env as Record<string, string | undefined>;
+const originalAppUrl = env.APP_URL;
+const originalNextPublicAppUrl = env.NEXT_PUBLIC_APP_URL;
+const originalNodeEnv = env.NODE_ENV;
+const originalTargetNetworks = env.NEXT_PUBLIC_TARGET_NETWORKS;
+const originalVercelEnv = env.VERCEL_ENV;
+const originalVercelProjectProductionUrl = env.VERCEL_PROJECT_PRODUCTION_URL;
+const originalVercelUrl = env.VERCEL_URL;
+
+function restoreEnv(name: keyof NodeJS.ProcessEnv, value: string | undefined) {
+  if (value === undefined) {
+    delete env[name];
+  } else {
+    env[name] = value;
+  }
+}
 
 function askArguments(overrides: Record<string, unknown> = {}) {
   return {
@@ -448,6 +464,13 @@ afterEach(() => {
   __setSignedActionVerificationClientForTests(null);
   __setUrlSafetyDnsResolversForTests(null);
   __setMcpToolTestOverridesForTests(null);
+  restoreEnv("APP_URL", originalAppUrl);
+  restoreEnv("NEXT_PUBLIC_APP_URL", originalNextPublicAppUrl);
+  restoreEnv("NODE_ENV", originalNodeEnv);
+  restoreEnv("NEXT_PUBLIC_TARGET_NETWORKS", originalTargetNetworks);
+  restoreEnv("VERCEL_ENV", originalVercelEnv);
+  restoreEnv("VERCEL_PROJECT_PRODUCTION_URL", originalVercelProjectProductionUrl);
+  restoreEnv("VERCEL_URL", originalVercelUrl);
 });
 
 test("public rateloop_list_audience_options returns the shared targeting taxonomy", async () => {
@@ -647,6 +670,31 @@ test("public rateloop_ask_humans dry-run skips permissionless transaction planni
   assert.equal(body.transactionPlan, null);
   assert.equal(body.managedBudget, null);
   assert.equal(body.walletPolicyRequired, false);
+});
+
+test("public rateloop_create_ask_handoff_link uses configured production app URL", async () => {
+  env.NODE_ENV = "production";
+  env.APP_URL = "https://canonical.rateloop.ai/app";
+  env.NEXT_PUBLIC_TARGET_NETWORKS = "4801";
+  delete env.NEXT_PUBLIC_APP_URL;
+  delete env.VERCEL_ENV;
+  delete env.VERCEL_PROJECT_PRODUCTION_URL;
+  delete env.VERCEL_URL;
+
+  const result = await callPublicRateLoopMcpTool({
+    arguments: {
+      request: askArguments({ chainId: 4801, clientRequestId: "mcp-handoff-canonical-origin" }),
+      ttlMs: 300000,
+    },
+    name: "rateloop_create_ask_handoff_link",
+    requestUrl: "https://evil.example/api/mcp/public",
+  });
+  const body = result as { handoffUrl: string };
+  const handoffUrl = new URL(body.handoffUrl);
+
+  assert.equal(handoffUrl.origin, "https://canonical.rateloop.ai");
+  assert.match(handoffUrl.pathname, /^\/app\/agent\/handoff\/ahf_/);
+  assert.ok(new URLSearchParams(handoffUrl.hash.replace(/^#/, "")).get("token"));
 });
 
 test("public rateloop_ask_humans returns a wallet-signed webhook challenge before side effects", async () => {
