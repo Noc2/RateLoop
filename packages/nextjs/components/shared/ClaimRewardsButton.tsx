@@ -1,6 +1,13 @@
 "use client";
 
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useAccount } from "wagmi";
 import { GradientActionButton, getGradientActionMotion } from "~~/components/shared/GradientAction";
+import {
+  getClaimableRewardItemKey,
+  pollClaimableRewardsRefresh,
+  sumClaimableRewardTotals,
+} from "~~/hooks/claimableRewards";
 import { useAllClaimableRewards } from "~~/hooks/useAllClaimableRewards";
 import { useClaimAll } from "~~/hooks/useClaimAll";
 import { formatUsdAmount } from "~~/lib/questionRewardPools";
@@ -51,6 +58,7 @@ export function buildClaimRewardsButtonLabel({
 }
 
 export function ClaimRewardsButton({ className, layout = "default", showTokenSymbol = true }: ClaimRewardsButtonProps) {
+  const { address } = useAccount();
   const {
     claimableItems,
     totalLrepClaimable,
@@ -58,15 +66,98 @@ export function ClaimRewardsButton({ className, layout = "default", showTokenSym
     refetch: refetchClaimable,
   } = useAllClaimableRewards();
   const { claimAll, isClaiming, isPreparingClaim, progress } = useClaimAll();
+  const [optimisticallyClaimedKeys, setOptimisticallyClaimedKeys] = useState<Set<string>>(() => new Set());
+  const claimInFlightRef = useRef(false);
+  const claimableItemsRef = useRef(claimableItems);
 
-  if (claimableItems.length === 0 || (totalLrepClaimable <= 0n && totalUsdcClaimable <= 0n)) {
+  useEffect(() => {
+    setOptimisticallyClaimedKeys(new Set());
+  }, [address]);
+
+  useEffect(() => {
+    claimableItemsRef.current = claimableItems;
+  }, [claimableItems]);
+
+  const visibleClaimableItems = useMemo(
+    () => claimableItems.filter(item => !optimisticallyClaimedKeys.has(getClaimableRewardItemKey(item))),
+    [claimableItems, optimisticallyClaimedKeys],
+  );
+
+  const { totalLrepClaimable: visibleLrepClaimable, totalUsdcClaimable: visibleUsdcClaimable } = useMemo(
+    () => sumClaimableRewardTotals(visibleClaimableItems),
+    [visibleClaimableItems],
+  );
+
+  useEffect(() => {
+    if (optimisticallyClaimedKeys.size === 0) return;
+
+    setOptimisticallyClaimedKeys(previousKeys => {
+      const nextKeys = new Set(previousKeys);
+      let changed = false;
+
+      for (const key of previousKeys) {
+        const stillClaimable = claimableItems.some(item => getClaimableRewardItemKey(item) === key);
+        if (!stillClaimable) {
+          nextKeys.delete(key);
+          changed = true;
+        }
+      }
+
+      return changed ? nextKeys : previousKeys;
+    });
+  }, [claimableItems, optimisticallyClaimedKeys.size]);
+
+  const handleClaimAll = useCallback(() => {
+    if (claimInFlightRef.current || isClaiming || isPreparingClaim) return;
+
+    const itemsToClaim = visibleClaimableItems;
+    if (itemsToClaim.length === 0) return;
+
+    claimInFlightRef.current = true;
+    const claimKeys = itemsToClaim.map(getClaimableRewardItemKey);
+    setOptimisticallyClaimedKeys(previousKeys => new Set([...previousKeys, ...claimKeys]));
+
+    void claimAll(itemsToClaim, async ({ claimedItems }) => {
+      setOptimisticallyClaimedKeys(previousKeys => {
+        const nextKeys = new Set(previousKeys);
+        for (const key of claimKeys) {
+          nextKeys.delete(key);
+        }
+        return nextKeys;
+      });
+
+      if (claimedItems.length === 0) {
+        return;
+      }
+
+      await pollClaimableRewardsRefresh(refetchClaimable, {
+        shouldStop: () =>
+          !claimedItems.some(item =>
+            claimableItemsRef.current.some(
+              claimable => getClaimableRewardItemKey(claimable) === getClaimableRewardItemKey(item),
+            ),
+          ),
+      });
+    }).finally(() => {
+      claimInFlightRef.current = false;
+    });
+  }, [claimAll, isClaiming, isPreparingClaim, refetchClaimable, visibleClaimableItems]);
+
+  if (
+    visibleClaimableItems.length === 0 &&
+    totalLrepClaimable <= 0n &&
+    totalUsdcClaimable <= 0n &&
+    !isClaiming &&
+    !isPreparingClaim
+  ) {
     return null;
   }
 
-  const handleClaimAll = () => {
-    void claimAll(claimableItems, () => refetchClaimable());
-  };
-  const claimParts = buildClaimRewardsButtonParts({ showTokenSymbol, totalLrepClaimable, totalUsdcClaimable });
+  const claimParts = buildClaimRewardsButtonParts({
+    showTokenSymbol,
+    totalLrepClaimable: visibleLrepClaimable,
+    totalUsdcClaimable: visibleUsdcClaimable,
+  });
   const claimLabel = claimParts.length > 0 ? `Claim ${claimParts.join(" + ")}` : null;
 
   if (!claimLabel && !isClaiming && !isPreparingClaim) {
@@ -92,7 +183,7 @@ export function ClaimRewardsButton({ className, layout = "default", showTokenSym
     <div className={className}>
       <GradientActionButton
         onClick={handleClaimAll}
-        disabled={isClaiming || isPreparingClaim}
+        disabled={isClaiming || isPreparingClaim || visibleClaimableItems.length === 0}
         fullWidth
         size="sm"
         data-claim-layout={useCompactMixedRewardLabel ? "compact" : undefined}
