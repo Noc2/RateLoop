@@ -8,7 +8,7 @@ import type { Page } from "@playwright/test";
 
 const SUBMIT_STAKE = BigInt(10e6);
 const FALLBACK_CONTENT_ATTEMPTS = 3;
-const FRESH_VOTEABLE_ROUND_CONFIG = {
+export const FRESH_VOTEABLE_ROUND_CONFIG = {
   epochDuration: 2 * 60 * 60,
   maxDuration: 2 * 60 * 60,
   minVoters: 3,
