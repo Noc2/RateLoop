@@ -240,6 +240,7 @@ export function useClaimableFrontendRewards() {
       pendingFeeWithdrawalLoading ||
       pendingFeeWithdrawalReleaseAtLoading ||
       (canCreditRoundFees && roundFeesQuery.isLoading),
+    feesUnavailable: canCreditRoundFees && roundFeesQuery.isError,
     refetch,
   };
 }
