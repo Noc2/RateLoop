@@ -135,7 +135,7 @@ export function useClaimableQuestionRewards() {
       );
       const seen = new Set<string>();
       return pages.flat().filter(candidate => {
-        const key = `${candidate.rewardPoolId}-${candidate.roundId}`;
+        const key = `${candidate.rewardPoolId}-${candidate.roundId}-${candidate.payoutWeight?.account ?? ""}`;
         if (seen.has(key)) return false;
         seen.add(key);
         return true;
