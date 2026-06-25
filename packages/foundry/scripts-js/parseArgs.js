@@ -7,6 +7,7 @@ import { fileURLToPath } from "url";
 import {
   DEPLOY_HELP_TEXT,
   PRODUCTION_REDEPLOY_CONFIRMATION_ENV,
+  assertDeployKeystoreAccountName,
   buildDeploymentProfileEnv,
   buildDeployFlowFlags,
   isSlowBroadcastNetwork,
@@ -56,6 +57,7 @@ try {
 
 // Function to check if a keystore exists
 function validateKeystore(keystoreName) {
+  const safeKeystoreName = assertDeployKeystoreAccountName(keystoreName);
   if (keystoreName === "scaffold-eth-default") {
     return true; // Default keystore is always valid
   }
@@ -64,7 +66,7 @@ function validateKeystore(keystoreName) {
     process.env.HOME,
     ".foundry",
     "keystores",
-    keystoreName
+    safeKeystoreName
   );
   return existsSync(keystorePath);
 }
@@ -157,7 +159,7 @@ if (network !== "localhost") {
       );
       process.exit(1);
     }
-    selectedKeystore = keystoreArg;
+    selectedKeystore = assertDeployKeystoreAccountName(keystoreArg);
     console.log(`\n🔑 Using keystore: ${selectedKeystore}`);
   } else {
     try {
@@ -195,7 +197,8 @@ process.env.RPC_URL = rpcUrl;
 if (network === "localhost") {
   clearKeystoreEnvForLocalDeploy();
 } else {
-  process.env.ETH_KEYSTORE_ACCOUNT = selectedKeystore;
+  process.env.ETH_KEYSTORE_ACCOUNT =
+    assertDeployKeystoreAccountName(selectedKeystore);
 }
 configureDeploymentProfile();
 process.env.RESUME_FLAG = resume ? "--resume" : "";

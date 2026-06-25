@@ -10,9 +10,11 @@ import {
   PRODUCTION_DEPLOYMENT_PROFILE,
   PRODUCTION_REDEPLOY_CONFIRMATION_ENV,
   RATELOOP_DEPLOYMENT_PROFILE_ENV,
+  assertDeployKeystoreAccountName,
   buildDeploymentProfileEnv,
   buildDeployFlowFlags,
   buildProductionRedeployConfirmationToken,
+  isDeployKeystoreAccountName,
   isSlowBroadcastNetwork,
   parseDeployArgs,
   readProductionDeploymentArtifact,
@@ -109,6 +111,41 @@ test("parseDeployArgs reads supported options", () => {
       productionRedeployConfirmation: null,
     }
   );
+});
+
+test("parseDeployArgs accepts conservative live keystore names", () => {
+  assert.equal(isDeployKeystoreAccountName("keeper-prod_1.json"), true);
+  assert.equal(
+    parseDeployArgs([
+      "--network",
+      "baseSepolia",
+      "--keystore",
+      "keeper-prod_1.json",
+    ]).keystoreArg,
+    "keeper-prod_1.json"
+  );
+});
+
+test("parseDeployArgs rejects unsafe live keystore names", () => {
+  for (const value of [
+    "keeper profile",
+    "nested/keeper",
+    "../keeper",
+    "keeper;echo",
+    "-keeper",
+    ".keeper",
+  ]) {
+    assert.equal(isDeployKeystoreAccountName(value), false);
+    assert.throws(
+      () =>
+        parseDeployArgs(["--network", "baseSepolia", "--keystore", value]),
+      /(--keystore must be 1-128 characters|Missing value for --keystore)/
+    );
+    assert.throws(
+      () => assertDeployKeystoreAccountName(value),
+      /keystore name must be 1-128 characters/
+    );
+  }
 });
 
 test("parseDeployArgs reads resume", () => {
@@ -555,6 +592,8 @@ test("Make live deploys run the production guard before Forge work", () => {
     /\$\(MAKE\) guard-production-deploy \|\| exit 1; \\\n\t\tFOUNDRY_PROFILE=.*forge script/s
   );
   assert.match(makefile, /--rpc-url "\$\(RPC_URL\)"/);
+  assert.match(makefile, /--account "\$\(ETH_KEYSTORE_ACCOUNT\)"/);
+  assert.match(makefile, /cast wallet address --account "\$\(ACCOUNT_NAME\)"/);
 });
 
 test("resolveEtherscanVerification skips when the required API key env is missing", () => {

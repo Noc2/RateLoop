@@ -2,6 +2,10 @@ import { readdirSync, existsSync } from "fs";
 import { join } from "path";
 import { spawnSync, spawn } from "child_process";
 import readline from "readline";
+import {
+  assertDeployKeystoreAccountName,
+  isDeployKeystoreAccountName,
+} from "./deployArgs.js";
 
 async function selectOrCreateKeystore() {
   // Create readline interface only when function is called
@@ -15,7 +19,9 @@ async function selectOrCreateKeystore() {
   try {
     const keystores = existsSync(keystorePath)
       ? readdirSync(keystorePath).filter(
-          (keystore) => keystore !== "scaffold-eth-default"
+          (keystore) =>
+            keystore !== "scaffold-eth-default" &&
+            isDeployKeystoreAccountName(keystore)
         )
       : [];
 
@@ -67,9 +73,10 @@ async function selectOrCreateKeystore() {
         process.exit(1);
       }
 
-      const keystoreName = await new Promise((resolve) => {
+      const rawKeystoreName = await new Promise((resolve) => {
         rl.question("\nEnter name for new keystore: ", resolve);
       });
+      const keystoreName = assertDeployKeystoreAccountName(rawKeystoreName);
 
       // Close readline before spawning process with inherited stdio
       rl.close();

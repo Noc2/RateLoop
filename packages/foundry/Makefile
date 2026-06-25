@@ -36,7 +36,7 @@ deploy:
 			FOUNDRY_PROFILE=$(DEPLOY_PROFILE) forge script script/Deploy.s.sol --tc DeployScript --rpc-url localhost --private-key $(LOCALHOST_DEPLOYER_PRIVATE_KEY) --broadcast --ffi --slow --non-interactive $(LOCALHOST_EVM_SIZE_FLAGS) $(RESUME_FLAG); \
 	else \
 		$(MAKE) guard-production-deploy || exit 1; \
-		FOUNDRY_PROFILE=$(DEPLOY_PROFILE) forge script script/Deploy.s.sol --tc DeployScript --rpc-url "$(RPC_URL)" --account $(ETH_KEYSTORE_ACCOUNT) --broadcast --ffi --gas-estimate-multiplier 200 $(DEPLOY_SCRIPT_IGNORED_ERROR_CODE_FLAGS) --non-interactive $(DEPLOY_FLOW_FLAGS) $(RESUME_FLAG) $(VERIFY_FLAGS); \
+		FOUNDRY_PROFILE=$(DEPLOY_PROFILE) forge script script/Deploy.s.sol --tc DeployScript --rpc-url "$(RPC_URL)" --account "$(ETH_KEYSTORE_ACCOUNT)" --broadcast --ffi --gas-estimate-multiplier 200 $(DEPLOY_SCRIPT_IGNORED_ERROR_CODE_FLAGS) --non-interactive $(DEPLOY_FLOW_FLAGS) $(RESUME_FLAG) $(VERIFY_FLAGS); \
 	fi
 
 # Deploy and generate shared deployment artifacts.
@@ -68,7 +68,7 @@ account:
 
 # Get address of a keystore
 get-address:
-	@cast wallet address --account $(ACCOUNT_NAME)
+	@cast wallet address --account "$(ACCOUNT_NAME)"
 
 # Compile contracts
 compile:

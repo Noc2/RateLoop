@@ -54,6 +54,7 @@ export const PRODUCTION_DEPLOYMENT_PROFILE = "production";
 export const DEFAULT_DEPLOYMENT_PROFILE = "default";
 const ENV_INTERPOLATION_RE = /^\$\{([A-Z0-9_]+)\}$/;
 const ENV_INTERPOLATION_GLOBAL_RE = /\$\{([A-Z0-9_]+)\}/g;
+const DEPLOY_KEYSTORE_ACCOUNT_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 const foundryPackageRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 function readOptionValue(args, index, optionName) {
@@ -92,7 +93,10 @@ export function parseDeployArgs(args) {
     }
 
     if (arg === "--keystore") {
-      keystoreArg = readOptionValue(args, i, "--keystore");
+      keystoreArg = assertDeployKeystoreAccountName(
+        readOptionValue(args, i, "--keystore"),
+        "--keystore"
+      );
       i++;
       continue;
     }
@@ -138,6 +142,19 @@ export function parseDeployArgs(args) {
     resume,
     productionRedeployConfirmation,
   };
+}
+
+export function isDeployKeystoreAccountName(value) {
+  return typeof value === "string" && DEPLOY_KEYSTORE_ACCOUNT_RE.test(value);
+}
+
+export function assertDeployKeystoreAccountName(value, label = "keystore name") {
+  if (!isDeployKeystoreAccountName(value)) {
+    throw new Error(
+      `${label} must be 1-128 characters, start with a letter or number, and use only letters, numbers, dots, underscores, or dashes.`
+    );
+  }
+  return value;
 }
 
 function envValue(env, key, fallback) {

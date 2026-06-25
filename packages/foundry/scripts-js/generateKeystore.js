@@ -1,6 +1,7 @@
 import { spawnSync, spawn } from "child_process";
 import readline from "readline";
 import { fileURLToPath } from "url";
+import { assertDeployKeystoreAccountName } from "./deployArgs.js";
 
 async function createKeystore() {
   // Create readline interface
@@ -35,9 +36,10 @@ async function createKeystore() {
       process.exit(1);
     }
 
-    const keystoreName = await new Promise((resolve) => {
+    const rawKeystoreName = await new Promise((resolve) => {
       rl.question("\nEnter name for new keystore: ", resolve);
     });
+    const keystoreName = assertDeployKeystoreAccountName(rawKeystoreName);
 
     // Close readline before spawning process with inherited stdio
     rl.close();
