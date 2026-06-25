@@ -4,7 +4,8 @@ import { verifyEmailNotificationToken } from "~~/lib/notifications/emailSettings
 import { buildNotificationSettingsRedirectUrl } from "~~/lib/notifications/emailUrls";
 import { checkRateLimit } from "~~/utils/rateLimit";
 
-const RATE_LIMIT = { limit: 30, windowMs: 60_000 };
+const ROUTE_RATE_LIMIT = { limit: 60, windowMs: 60_000 };
+const TOKEN_RATE_LIMIT = { limit: 30, windowMs: 60_000 };
 
 function buildRedirect(request: NextRequest, status: "verified" | "invalid") {
   return buildNotificationSettingsRedirectUrl({
@@ -15,10 +16,10 @@ function buildRedirect(request: NextRequest, status: "verified" | "invalid") {
 }
 
 export async function GET(request: NextRequest) {
-  const limited = await checkRateLimit(request, RATE_LIMIT, {
-    extraKeyParts: [request.nextUrl.searchParams.get("token")?.slice(0, 16)],
+  const routeLimited = await checkRateLimit(request, ROUTE_RATE_LIMIT, {
+    routeKey: "/api/notifications/email/verify",
   });
-  if (limited) return limited;
+  if (routeLimited) return routeLimited;
 
   const token = request.nextUrl.searchParams.get("token");
   if (!token) {
@@ -27,6 +28,12 @@ export async function GET(request: NextRequest) {
       ? NextResponse.redirect(redirectUrl)
       : NextResponse.json({ ok: false, status: "invalid" }, { status: 400 });
   }
+
+  const limited = await checkRateLimit(request, TOKEN_RATE_LIMIT, {
+    extraKeyParts: [token.slice(0, 16)],
+    routeKey: "/api/notifications/email/verify/token",
+  });
+  if (limited) return limited;
 
   const result = await verifyEmailNotificationToken(token);
   const status = result.ok ? "verified" : "invalid";

@@ -5,19 +5,17 @@ import { getPrimaryServerTargetNetwork, getServerTargetNetworkById } from "~~/li
 import { listClaimableFrontendFeeRounds } from "~~/lib/frontendFees/server";
 import { checkRateLimit } from "~~/utils/rateLimit";
 
-const RATE_LIMIT = { limit: 60, windowMs: 60_000 };
+const ROUTE_RATE_LIMIT = { limit: 120, windowMs: 60_000 };
+const LOOKUP_RATE_LIMIT = { limit: 60, windowMs: 60_000 };
 
 export async function GET(request: NextRequest) {
   const frontend = request.nextUrl.searchParams.get("frontend");
   const chainIdRaw = request.nextUrl.searchParams.get("chainId");
-  const limited = await checkRateLimit(request, RATE_LIMIT, {
+  const routeLimited = await checkRateLimit(request, ROUTE_RATE_LIMIT, {
     allowOnStoreUnavailable: true,
-    extraKeyParts: [
-      typeof frontend === "string" ? frontend : undefined,
-      typeof chainIdRaw === "string" ? chainIdRaw : undefined,
-    ],
+    routeKey: "/api/frontend/claimable-fees",
   });
-  if (limited) return limited;
+  if (routeLimited) return routeLimited;
 
   if (!frontend || !isAddress(frontend)) {
     return NextResponse.json({ error: "Valid frontend address is required" }, { status: 400 });
@@ -32,6 +30,13 @@ export async function GET(request: NextRequest) {
   if (!getServerTargetNetworkById(parsedChainId)) {
     return NextResponse.json({ error: "Unsupported chainId" }, { status: 400 });
   }
+
+  const limited = await checkRateLimit(request, LOOKUP_RATE_LIMIT, {
+    allowOnStoreUnavailable: true,
+    extraKeyParts: [frontend.toLowerCase(), parsedChainId],
+    routeKey: "/api/frontend/claimable-fees/lookup",
+  });
+  if (limited) return limited;
 
   const limit = Math.min(Math.max(parseInt(request.nextUrl.searchParams.get("limit") ?? "10") || 10, 1), 50);
   const offset = Math.max(parseInt(request.nextUrl.searchParams.get("offset") ?? "0") || 0, 0);

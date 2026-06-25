@@ -13,9 +13,13 @@ const TEST_FRONTEND = "0x63cada40E8AcF7A1d47229af5Be35b78b16035fa";
 const TEST_CHAIN_ID = 4801;
 
 type RateLimitModule = typeof import("~~/utils/rateLimit");
+type DbModule = typeof import("~~/lib/db");
+type DbTestMemoryModule = typeof import("~~/lib/db/testMemory");
 type RouteModule = typeof import("./route");
 
 let rateLimit: RateLimitModule;
+let dbModule: DbModule;
+let dbTestMemory: DbTestMemoryModule;
 let route: RouteModule;
 
 function makeRequest(pathname: string): NextRequest {
@@ -33,6 +37,8 @@ before(async () => {
   env.NEXT_PUBLIC_PONDER_URL = "";
   env.NEXT_PUBLIC_TARGET_NETWORKS = String(TEST_CHAIN_ID);
 
+  dbModule = await import("~~/lib/db");
+  dbTestMemory = await import("~~/lib/db/testMemory");
   rateLimit = await import("~~/utils/rateLimit");
   route = await import("./route");
 });
@@ -43,6 +49,7 @@ beforeEach(() => {
   env.RATE_LIMIT_TRUSTED_IP_HEADERS = "x-forwarded-for";
   env.NEXT_PUBLIC_PONDER_URL = "";
   env.NEXT_PUBLIC_TARGET_NETWORKS = String(TEST_CHAIN_ID);
+  dbModule.__setDatabaseResourcesForTests(dbTestMemory.createMemoryDatabaseResources());
 
   rateLimit.__setRateLimitStoreForTests({
     execute: async () => {
@@ -53,6 +60,7 @@ beforeEach(() => {
 
 after(() => {
   rateLimit.__setRateLimitStoreForTests(null);
+  dbModule.__setDatabaseResourcesForTests(null);
 
   if (originalDatabaseUrl === undefined) {
     delete env.DATABASE_URL;
@@ -82,6 +90,28 @@ after(() => {
     delete env.NEXT_PUBLIC_TARGET_NETWORKS;
   } else {
     env.NEXT_PUBLIC_TARGET_NETWORKS = originalTargetNetworks;
+  }
+});
+
+test("frontend claimable fees route throttles varied lookup keys before validation", async () => {
+  rateLimit.__setRateLimitStoreForTests(null);
+
+  for (let index = 0; index < 121; index += 1) {
+    const response = await route.GET(
+      makeRequest(
+        `/api/frontend/claimable-fees?frontend=${encodeURIComponent(`not-an-address-${index}`)}&chainId=${TEST_CHAIN_ID}`,
+      ),
+    );
+
+    if (index < 120) {
+      assert.equal(response.status, 400);
+      assert.deepEqual(await response.json(), {
+        error: "Valid frontend address is required",
+      });
+    } else {
+      assert.equal(response.status, 429);
+      assert.equal((await response.json()).code, "rate_limit_exceeded");
+    }
   }
 });
 
