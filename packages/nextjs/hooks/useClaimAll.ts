@@ -590,6 +590,11 @@ export function useClaimAll() {
         }
       }
       await refreshWalletBalances(address);
+      if (failedItems.length > 0) {
+        notification.error(
+          failedItems.length === 1 ? `Failed to claim 1 reward.` : `Failed to claim ${failedItems.length} rewards.`,
+        );
+      }
       await onComplete?.({ claimedItems, failedItems });
     } finally {
       setIsClaiming(false);
