@@ -1,3 +1,4 @@
+import { createRequire } from "node:module";
 import { REVEAL_FAILED_GRACE_MULTIPLIER, ROUND_STATE } from "@rateloop/contracts/protocol";
 import { canonicalJson, canonicalJsonHash } from "@rateloop/node-utils/json";
 import {
@@ -75,17 +76,12 @@ type AudienceColumn = Parameters<typeof sql>[1];
 const CONTENT_STATUS_ACTIVE = 0;
 const MAX_TARGET_AUDIENCE_METADATA_ITEMS = 25;
 const BYTES32_PATTERN = /^0x[a-fA-F0-9]{64}$/;
-const SCHEMA_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
-const DEFAULT_PONDER_DATABASE_SCHEMA_BY_NETWORK: Record<string, string> = {
-  hardhat: "rateloop_ponder_hardhat",
-  baseSepolia: "rateloop_ponder_base_sepolia",
-  base: "rateloop_ponder_base",
-  worldchain: "rateloop_ponder_worldchain",
-  worldchainSepolia: "rateloop_ponder_worldchain_sepolia",
-};
-const DEFAULT_PONDER_DATABASE_SCHEMA = "rateloop_ponder";
-const LEGACY_PONDER_DATABASE_SCHEMA = "ponder";
 let metadataUpdatePool: Pool | null = null;
+
+const require = createRequire(import.meta.url);
+const { resolvePonderDatabaseSchema } = require("../../../scripts/databaseSchema.mjs") as {
+  resolvePonderDatabaseSchema: (env?: NodeJS.ProcessEnv) => { schema: string };
+};
 
 type AudienceFilter = {
   column: AudienceColumn;
@@ -552,19 +548,7 @@ function readEnv(key: string) {
 }
 
 function resolveWritablePonderSchema() {
-  const rateloopSchema = readEnv("RATELOOP_PONDER_DATABASE_SCHEMA");
-  const databaseSchema = readEnv("DATABASE_SCHEMA");
-  const ponderNetwork = readEnv("PONDER_NETWORK");
-  const isLegacyDatabaseSchema = rateloopSchema === undefined && databaseSchema === LEGACY_PONDER_DATABASE_SCHEMA;
-  const schema =
-    rateloopSchema ??
-    (isLegacyDatabaseSchema ? undefined : databaseSchema) ??
-    (ponderNetwork ? DEFAULT_PONDER_DATABASE_SCHEMA_BY_NETWORK[ponderNetwork] : undefined) ??
-    DEFAULT_PONDER_DATABASE_SCHEMA;
-  if (!SCHEMA_NAME_PATTERN.test(schema)) {
-    throw new Error("Invalid Ponder database schema.");
-  }
-  return schema;
+  return resolvePonderDatabaseSchema(process.env).schema;
 }
 
 function quoteIdentifier(value: string) {
