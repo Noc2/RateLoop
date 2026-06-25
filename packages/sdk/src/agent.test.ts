@@ -1418,7 +1418,7 @@ test("parseAgentResult unwraps MCP tool content and preserves top-level fields",
   assert.deepEqual(parsed.extra, { kept: true });
 });
 
-test("buildWebhookVerifier validates timestamped HMAC signatures", async () => {
+test("buildSignatureOnlyWebhookVerifier validates timestamped HMAC signatures", async () => {
   const body = JSON.stringify({
     operationKey: `0x${"44".repeat(32)}`,
     ready: true,
@@ -1428,7 +1428,10 @@ test("buildWebhookVerifier validates timestamped HMAC signatures", async () => {
   const signature = createHmac("sha256", "shared-secret")
     .update(`v1.${eventId}.${timestamp}.${body}`)
     .digest("hex");
-  const verifier = buildWebhookVerifier({ secret: "shared-secret" });
+  const verifier = buildSignatureOnlyWebhookVerifier({
+    allowReplay: true,
+    secret: "shared-secret",
+  });
 
   assert.equal(
     await verifier.verify({
@@ -1454,6 +1457,13 @@ test("buildWebhookVerifier validates timestamped HMAC signatures", async () => {
       now: new Date("2026-04-23T12:06:01.000Z"),
     }),
     false,
+  );
+});
+
+test("buildWebhookVerifier rejects implicit replay-prone signature-only use", () => {
+  assert.throws(
+    () => buildWebhookVerifier({ secret: "shared-secret" } as never),
+    /requires replayProtection/,
   );
 });
 
@@ -1543,6 +1553,7 @@ test("buildWebhookVerifier rejects negative toleranceSeconds", () => {
   assert.throws(
     () =>
       buildWebhookVerifier({
+        allowReplay: true,
         secret: "shared-secret",
         toleranceSeconds: -1,
       }),

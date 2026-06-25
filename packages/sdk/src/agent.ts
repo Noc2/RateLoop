@@ -772,28 +772,27 @@ export interface RateLoopAgentClient {
   listResultTemplates(): Promise<ListResultTemplatesResponse>;
 }
 
-export interface WebhookVerifierOptions {
+export interface WebhookVerifierBaseOptions {
   secret: string;
   eventIdHeader?: string;
-  replayProtection?: WebhookReplayProtectionOptions;
   signatureHeader?: string;
   timestampHeader?: string;
   toleranceSeconds?: number;
 }
 
-export type ReplayProtectedWebhookVerifierOptions = Omit<
-  WebhookVerifierOptions,
-  "replayProtection"
-> & {
+export type ReplayProtectedWebhookVerifierOptions = WebhookVerifierBaseOptions & {
+  allowReplay?: never;
   replayProtection: WebhookReplayProtectionOptions;
 };
 
-export type SignatureOnlyWebhookVerifierOptions = Omit<
-  WebhookVerifierOptions,
-  "replayProtection"
-> & {
+export type SignatureOnlyWebhookVerifierOptions = WebhookVerifierBaseOptions & {
   allowReplay: true;
+  replayProtection?: never;
 };
+
+export type WebhookVerifierOptions =
+  | ReplayProtectedWebhookVerifierOptions
+  | SignatureOnlyWebhookVerifierOptions;
 
 export interface VerifyWebhookParams {
   body: string | Uint8Array | ArrayBuffer | JsonValue | JsonRecord;
@@ -1361,13 +1360,18 @@ export function buildWebhookVerifier(
   options: ReplayProtectedWebhookVerifierOptions,
 ): ReplayProtectedWebhookVerifier;
 export function buildWebhookVerifier(
-  options: WebhookVerifierOptions,
+  options: SignatureOnlyWebhookVerifierOptions,
 ): WebhookVerifier;
 export function buildWebhookVerifier(
   options: WebhookVerifierOptions,
 ): WebhookVerifier | ReplayProtectedWebhookVerifier {
   if (!options.secret) {
     throw new RateLoopSdkError("Webhook verifier secret is required");
+  }
+  if (!options.replayProtection && options.allowReplay !== true) {
+    throw new RateLoopSdkError(
+      "Webhook verifier requires replayProtection. For idempotent handlers or diagnostics, use buildSignatureOnlyWebhookVerifier({ allowReplay: true, ... }).",
+    );
   }
 
   const eventIdHeader = (

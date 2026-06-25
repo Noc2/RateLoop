@@ -256,8 +256,9 @@ if (handled.status === "duplicate") {
   return new Response("ok");
 }
 
-// Signature-only verification is for idempotent handlers or diagnostics where
-// replay inside the timestamp window is acceptable.
+// Signature-only verification must opt in to allowReplay and is only for
+// idempotent handlers or diagnostics where replay inside the timestamp window is
+// acceptable.
 const signatureOnlyVerifier = buildSignatureOnlyWebhookVerifier({
   allowReplay: true,
   secret: process.env.RATELOOP_WEBHOOK_SECRET ?? "",
@@ -326,7 +327,7 @@ USDC `feedbackBonus`, the authorization value is bounty plus bonus and the submi
 escrow funding and Feedback Bonus pool creation; LREP Feedback Bonuses still require the separate wallet-call funding
 plan after the question is confirmed.
 
-Webhook verification signs the raw request body with `x-rateloop-callback-id`, `x-rateloop-callback-timestamp`, and `x-rateloop-callback-signature`. Use `buildReplayProtectedWebhookVerifier` and `handleOnce` with an atomic replay store for non-idempotent handlers. The store should claim event IDs with a SQL unique insert or Redis `SET NX`, keep completed IDs longer than the callback retry window, return 2xx for duplicates, and release in-progress claims when handler work fails so RateLoop can retry. `buildSignatureOnlyWebhookVerifier` only checks HMAC and timestamp freshness; it does not prevent replay during the tolerance window.
+Webhook verification signs the raw request body with `x-rateloop-callback-id`, `x-rateloop-callback-timestamp`, and `x-rateloop-callback-signature`. Use `buildReplayProtectedWebhookVerifier` and `handleOnce` with an atomic replay store for non-idempotent handlers. The generic `buildWebhookVerifier` also requires `replayProtection`; replay-prone signature-only use must go through `buildSignatureOnlyWebhookVerifier({ allowReplay: true, ... })`. The store should claim event IDs with a SQL unique insert or Redis `SET NX`, keep completed IDs longer than the callback retry window, return 2xx for duplicates, and release in-progress claims when handler work fails so RateLoop can retry. `buildSignatureOnlyWebhookVerifier` only checks HMAC and timestamp freshness; it does not prevent replay during the tolerance window.
 
 ## Agent Examples
 
