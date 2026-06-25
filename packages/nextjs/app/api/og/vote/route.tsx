@@ -1,6 +1,7 @@
 import React from "react";
 import { ImageResponse } from "next/og";
 import type { NextRequest } from "next/server";
+import { readFile } from "node:fs/promises";
 import { type ContentShareData, VOTE_SHARE_RATING_VERSION_PARAM } from "~~/lib/social/contentShare";
 import { getContentShareDataForParam } from "~~/lib/social/contentShare.server";
 import { checkRateLimit } from "~~/utils/rateLimit";
@@ -8,6 +9,9 @@ import { checkRateLimit } from "~~/utils/rateLimit";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+
+const bodyFontFamily = "Inter";
+const headingFontFamily = "Space Grotesk";
 
 const RATE_LIMIT = { limit: 60, windowMs: 60_000 };
 
@@ -43,6 +47,44 @@ const brandColors = {
 
 const spectrumGradient = `linear-gradient(90deg, ${brandColors.blue}, ${brandColors.green}, ${brandColors.yellow}, ${brandColors.pink})`;
 const surfaceGradient = `linear-gradient(135deg, ${brandColors.surface} 0%, ${brandColors.surfaceElevated} 52%, ${brandColors.surface} 100%)`;
+
+type ImageResponseFontWeight = 400 | 600 | 700;
+
+interface ImageResponseFont {
+  name: string;
+  data: ArrayBuffer;
+  weight: ImageResponseFontWeight;
+  style: "normal";
+}
+
+// ImageResponse's renderer accepts OpenType/TrueType bytes, so these static
+// instances mirror the Google font families configured through next/font in app/layout.tsx.
+const ogFontSources = [
+  { name: bodyFontFamily, file: new URL("./fonts/inter-regular.ttf", import.meta.url), weight: 400 },
+  { name: bodyFontFamily, file: new URL("./fonts/inter-semibold.ttf", import.meta.url), weight: 600 },
+  { name: bodyFontFamily, file: new URL("./fonts/inter-bold.ttf", import.meta.url), weight: 700 },
+  { name: headingFontFamily, file: new URL("./fonts/space-grotesk-regular.ttf", import.meta.url), weight: 400 },
+  { name: headingFontFamily, file: new URL("./fonts/space-grotesk-bold.ttf", import.meta.url), weight: 700 },
+] as const;
+
+let ogFontsPromise: Promise<ImageResponseFont[]> | null = null;
+
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+}
+
+function loadOgFonts() {
+  ogFontsPromise ??= Promise.all(
+    ogFontSources.map(async font => ({
+      name: font.name,
+      data: toArrayBuffer(await readFile(font.file)),
+      weight: font.weight,
+      style: "normal" as const,
+    })),
+  );
+
+  return ogFontsPromise;
+}
 
 function RateLoopMark({ size = 46 }: { size?: number }) {
   return (
@@ -118,7 +160,9 @@ function RateLoopMark({ size = 46 }: { size?: number }) {
 function BrandKicker({ children }: { children: React.ReactNode }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", marginBottom: 18 }}>
-      <div style={{ color: brandColors.warmWhite, fontSize: 28, fontWeight: 800 }}>{children}</div>
+      <div style={{ color: brandColors.warmWhite, fontFamily: headingFontFamily, fontSize: 28, fontWeight: 700 }}>
+        {children}
+      </div>
       <div
         style={{
           width: 250,
@@ -192,9 +236,19 @@ function RatingBadge({
           justifyContent: "center",
         }}
       >
-        <div style={{ fontSize: ratingFontSize, fontWeight: 900, lineHeight: 0.86 }}>{ratingLabel}</div>
+        <div style={{ fontFamily: headingFontFamily, fontSize: ratingFontSize, fontWeight: 700, lineHeight: 0.86 }}>
+          {ratingLabel}
+        </div>
         {hasRating ? (
-          <div style={{ color: "rgba(245,245,245,0.72)", fontSize: scaleFontSize, fontWeight: 900, lineHeight: 1.1 }}>
+          <div
+            style={{
+              color: "rgba(245,245,245,0.72)",
+              fontFamily: headingFontFamily,
+              fontSize: scaleFontSize,
+              fontWeight: 700,
+              lineHeight: 1.1,
+            }}
+          >
             /10
           </div>
         ) : null}
@@ -218,7 +272,15 @@ function Metric({ label, value, valueFontSize = 38 }: { label: string; value: st
       }}
     >
       <div style={{ color: brandColors.muted, fontSize: 19, fontWeight: 600 }}>{label}</div>
-      <div style={{ color: brandColors.warmWhite, fontSize: valueFontSize, fontWeight: 800, lineHeight: 1.1 }}>
+      <div
+        style={{
+          color: brandColors.warmWhite,
+          fontFamily: headingFontFamily,
+          fontSize: valueFontSize,
+          fontWeight: 700,
+          lineHeight: 1.1,
+        }}
+      >
         {value}
       </div>
     </div>
@@ -250,13 +312,13 @@ function RatingShareImage({ shareData }: { shareData: ContentShareData }) {
         background: surfaceGradient,
         color: brandColors.warmWhite,
         padding: 56,
-        fontFamily: "Arial",
+        fontFamily: bodyFontFamily,
       }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
           <RateLoopMark />
-          <div style={{ fontSize: 32, fontWeight: 800, letterSpacing: 0 }}>RateLoop</div>
+          <div style={{ fontFamily: headingFontFamily, fontSize: 32, fontWeight: 700, letterSpacing: 0 }}>RateLoop</div>
         </div>
         <GradientFrame style={{ borderRadius: 8, padding: 2, boxShadow: "none" }}>
           <div
@@ -266,7 +328,7 @@ function RatingShareImage({ shareData }: { shareData: ContentShareData }) {
               borderRadius: 6,
               padding: "10px 18px",
               fontSize: 24,
-              fontWeight: 800,
+              fontWeight: 700,
               boxShadow: "inset 0 1px 0 rgba(245,245,245,0.08)",
             }}
           >
@@ -280,8 +342,9 @@ function RatingShareImage({ shareData }: { shareData: ContentShareData }) {
           <BrandKicker>{hasRating ? "Current RateLoop rating" : "Community rating pending"}</BrandKicker>
           <div
             style={{
+              fontFamily: headingFontFamily,
               fontSize: 68,
-              fontWeight: 900,
+              fontWeight: 700,
               lineHeight: 1.04,
               color: brandColors.warmWhite,
               marginBottom: 24,
@@ -347,7 +410,7 @@ function RatingShareImage({ shareData }: { shareData: ContentShareData }) {
                 />
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: 18 }}>
-                <div style={{ fontSize: 23, fontWeight: 900, color: brandColors.warmWhite }}>
+                <div style={{ fontSize: 23, fontWeight: 700, color: brandColors.warmWhite }}>
                   {hasRating ? "Current rating" : "No rating yet"}
                 </div>
                 {ratingMetrics}
@@ -368,7 +431,7 @@ function RatingShareImage({ shareData }: { shareData: ContentShareData }) {
                 gap: 20,
               }}
             >
-              <div style={{ fontSize: 26, fontWeight: 900, color: brandColors.warmWhite }}>
+              <div style={{ fontSize: 26, fontWeight: 700, color: brandColors.warmWhite }}>
                 {hasRating ? "Current rating" : "No rating yet"}
               </div>
               <RatingBadge ratingLabel={ratingLabel} hasRating={hasRating} size={160} />
@@ -401,15 +464,19 @@ function FallbackShareImage() {
         background: surfaceGradient,
         color: brandColors.warmWhite,
         padding: 64,
-        fontFamily: "Arial",
+        fontFamily: bodyFontFamily,
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 34 }}>
         <RateLoopMark size={52} />
-        <div style={{ color: brandColors.warmWhite, fontSize: 34, fontWeight: 800 }}>RateLoop</div>
+        <div style={{ color: brandColors.warmWhite, fontFamily: headingFontFamily, fontSize: 34, fontWeight: 700 }}>
+          RateLoop
+        </div>
       </div>
       <div style={{ width: 330, height: 6, borderRadius: 999, background: spectrumGradient, marginBottom: 24 }} />
-      <div style={{ fontSize: 86, fontWeight: 900, lineHeight: 1.02, maxWidth: 880 }}>Human reputation at stake</div>
+      <div style={{ fontFamily: headingFontFamily, fontSize: 86, fontWeight: 700, lineHeight: 1.02, maxWidth: 880 }}>
+        Human reputation at stake
+      </div>
       <div style={{ color: "rgba(245,245,245,0.76)", fontSize: 34, marginTop: 28 }}>
         Get verified, stake LREP, and rate content.
       </div>
@@ -434,8 +501,11 @@ export async function GET(request: NextRequest) {
   const requestedRatingVersion = request.nextUrl.searchParams.get(VOTE_SHARE_RATING_VERSION_PARAM);
   const hasCurrentRatingVersion = Boolean(shareData && requestedRatingVersion === shareData.ratingVersion);
 
+  const fonts = await loadOgFonts();
+
   return new ImageResponse(shareData ? <RatingShareImage shareData={shareData} /> : <FallbackShareImage />, {
     ...imageSize,
+    fonts,
     headers: hasCurrentRatingVersion ? versionedResponseHeaders : fallbackResponseHeaders,
   });
 }
