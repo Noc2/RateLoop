@@ -50,6 +50,8 @@ test("Base Sepolia readiness remains an active push, PR, scheduled, and manual g
     /PONDER_METADATA_SYNC_TOKEN: \$\{\{ secrets\.PONDER_METADATA_SYNC_TOKEN \}\}/,
   );
   assert.match(workflow, /NODE_ENV: production/);
+  assert.match(workflow, /Offline core readiness checks/);
+  assert.match(workflow, /Live core readiness probes/);
   assert.match(
     workflow,
     /PONDER_KEEPER_WORK_TOKEN: \$\{\{ secrets\.PONDER_KEEPER_WORK_TOKEN \}\}/,

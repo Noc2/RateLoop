@@ -50,9 +50,9 @@ jobs:
         with:
           node-version: "24"
 
-      - name: Offline readiness checks
+      - name: Offline core readiness checks
         run: node scripts/check-base-sepolia-readiness.mjs
 
-      - name: Live readiness probes
+      - name: Live core readiness probes
         if: (github.event_name == 'workflow_dispatch' && github.event.inputs.live == 'true') || (github.event_name == 'schedule' && env.BASE_SEPOLIA_RPC_URL != '' && env.BASE_SEPOLIA_PONDER_URL != '' && env.BASE_SEPOLIA_APP_URL != '')
         run: node scripts/check-base-sepolia-readiness.mjs --live --require-live-targets

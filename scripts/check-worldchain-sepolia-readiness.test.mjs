@@ -328,6 +328,70 @@ test("validateOffchainRuntimeEnv rejects public file artifacts on loopback metri
   );
 });
 
+test("validateOffchainRuntimeEnv requires public HTTPS URL for automatic file artifacts", () => {
+  const checks = [];
+  const failures = [];
+
+  validateOffchainRuntimeEnv({
+    checks,
+    env: {
+      KEEPER_CORRELATION_ARTIFACT_STORAGE: "file",
+      KEEPER_CORRELATION_SNAPSHOTS_ENABLED: "true",
+      KEEPER_CORRELATION_SNAPSHOTS_MODE: "auto",
+    },
+    failures,
+  });
+
+  assert(
+    failures.some((message) =>
+      message.includes("KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL is configured"),
+    ),
+  );
+});
+
+test("validateOffchainRuntimeEnv treats unset live artifact storage as file", () => {
+  const checks = [];
+  const failures = [];
+
+  validateOffchainRuntimeEnv({
+    checks,
+    env: {
+      KEEPER_CORRELATION_SNAPSHOTS_ENABLED: "true",
+      KEEPER_CORRELATION_SNAPSHOTS_MODE: "auto",
+    },
+    failures,
+  });
+
+  assert(
+    failures.some((message) =>
+      message.includes("KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL is configured"),
+    ),
+  );
+});
+
+test("validateOffchainRuntimeEnv requires HTTPS public artifact URLs", () => {
+  const checks = [];
+  const failures = [];
+
+  validateOffchainRuntimeEnv({
+    checks,
+    env: {
+      KEEPER_CORRELATION_ARTIFACT_STORAGE: "file",
+      KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL:
+        "http://artifacts.example.com/rateloop",
+      KEEPER_CORRELATION_SNAPSHOTS_ENABLED: "true",
+      KEEPER_CORRELATION_SNAPSHOTS_MODE: "auto",
+    },
+    failures,
+  });
+
+  assert(
+    failures.some((message) =>
+      message.includes("KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL is HTTPS"),
+    ),
+  );
+});
+
 test("validateOffchainRuntimeEnv permits loopback metrics for data-uri artifacts", () => {
   const checks = [];
   const failures = [];

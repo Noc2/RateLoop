@@ -234,6 +234,29 @@ describe("keeper config", () => {
     expect(config.keystoreAccount).toBeUndefined();
   });
 
+  it("rejects malformed private keys before account initialization", async () => {
+    await expect(
+      loadKeeperConfig(
+        {
+          KEEPER_PRIVATE_KEY: "0x1234",
+        },
+        ["KEYSTORE_ACCOUNT", "KEYSTORE_PASSWORD"],
+      ),
+    ).rejects.toThrow("KEEPER_PRIVATE_KEY must be a 0x-prefixed 32-byte hex private key");
+  });
+
+  it("does not let a malformed private key satisfy wallet configuration", async () => {
+    await expect(
+      loadKeeperConfig(
+        {
+          KEYSTORE_ACCOUNT: "keeper",
+          KEEPER_PRIVATE_KEY: "0x1234",
+        },
+        ["KEYSTORE_PASSWORD"],
+      ),
+    ).rejects.toThrow("KEYSTORE_PASSWORD is required when KEYSTORE_ACCOUNT is configured without KEEPER_PRIVATE_KEY");
+  });
+
   it("requires a keystore password when using a keystore account without a private key", async () => {
     await expect(
       loadKeeperConfig(
@@ -273,6 +296,14 @@ describe("keeper config", () => {
         KEEPER_PRIVATE_KEY: "",
       }),
     ).rejects.toThrow("KEYSTORE_ACCOUNT or KEEPER_PRIVATE_KEY is required");
+  });
+
+  it("rejects unsupported log formats", async () => {
+    await expect(
+      loadKeeperConfig({
+        LOG_FORMAT: "xml",
+      }),
+    ).rejects.toThrow("LOG_FORMAT must be one of: json, text");
   });
 
   it("rejects localhost RPC URLs in production", async () => {

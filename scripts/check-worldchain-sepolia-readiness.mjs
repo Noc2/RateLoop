@@ -433,6 +433,34 @@ function isTruthyEnvValue(value) {
   return ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
 }
 
+function isHttpsUrl(value) {
+  try {
+    return new URL(value).protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function usesAutomaticFileCorrelationArtifacts(env) {
+  if (
+    !isTruthyEnvValue(
+      readRuntimeEnv(env, "KEEPER_CORRELATION_SNAPSHOTS_ENABLED"),
+    )
+  ) {
+    return false;
+  }
+
+  const snapshotMode =
+    readRuntimeEnv(env, "KEEPER_CORRELATION_SNAPSHOTS_MODE") ||
+    (readRuntimeEnv(env, "KEEPER_CORRELATION_SNAPSHOT_ARTIFACT_PATH")
+      ? "file"
+      : "auto");
+  const artifactStorage =
+    readRuntimeEnv(env, "KEEPER_CORRELATION_ARTIFACT_STORAGE") || "file";
+
+  return snapshotMode === "auto" && artifactStorage === "file";
+}
+
 function normalizeArtifactAllowlistPrefixes(value) {
   return value
     .split(",")
@@ -485,13 +513,28 @@ export function validateOffchainRuntimeEnv({
     );
   }
 
+  const usesAutoFileArtifacts = usesAutomaticFileCorrelationArtifacts(env);
+  const artifactPublicBaseUrl = readRuntimeEnv(
+    env,
+    "KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL",
+  );
+  if (usesAutoFileArtifacts) {
+    addCheck(
+      checks,
+      failures,
+      Boolean(artifactPublicBaseUrl),
+      "KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL is configured when Keeper auto correlation snapshots use file artifacts",
+    );
+    addCheck(
+      checks,
+      failures,
+      !artifactPublicBaseUrl || isHttpsUrl(artifactPublicBaseUrl),
+      "KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL is HTTPS when Keeper auto correlation snapshots use file artifacts",
+    );
+  }
+
   const publishesPublicFileArtifacts =
-    isTruthyEnvValue(
-      readRuntimeEnv(env, "KEEPER_CORRELATION_SNAPSHOTS_ENABLED"),
-    ) &&
-    readRuntimeEnv(env, "KEEPER_CORRELATION_SNAPSHOTS_MODE") === "auto" &&
-    readRuntimeEnv(env, "KEEPER_CORRELATION_ARTIFACT_STORAGE") === "file" &&
-    Boolean(readRuntimeEnv(env, "KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL"));
+    usesAutoFileArtifacts && Boolean(artifactPublicBaseUrl);
   if (
     publishesPublicFileArtifacts &&
     isLoopbackBindAddress(metricsBindAddress)

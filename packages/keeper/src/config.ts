@@ -25,7 +25,9 @@ const CONTRACT_DORMANCY_PERIOD_S = 30n * 24n * 60n * 60n;
 const isProduction = process.env.NODE_ENV === "production";
 const CORRELATION_SNAPSHOT_MODES = ["file", "auto"] as const;
 const CORRELATION_ARTIFACT_STORAGE_MODES = ["file", "data-uri"] as const;
+const LOG_FORMATS = ["json", "text"] as const;
 const LOOPBACK_BIND_ADDRESSES = new Set(["127.0.0.1", "::1", "localhost"]);
+const PRIVATE_KEY_PATTERN = /^0x[0-9a-fA-F]{64}$/;
 
 function readEnv(name: string): string | undefined {
   const value = process.env[name]?.trim();
@@ -144,6 +146,16 @@ function readEnumEnv<const T extends readonly string[]>(
 
   errors.push(`${name} must be one of: ${values.join(", ")}`);
   return fallback;
+}
+
+function readOptionalPrivateKeyEnv(name: string, errors: string[]): `0x${string}` | undefined {
+  const value = readEnv(name);
+  if (!value) return undefined;
+  if (!PRIVATE_KEY_PATTERN.test(value)) {
+    errors.push(`${name} must be a 0x-prefixed 32-byte hex private key`);
+    return undefined;
+  }
+  return value as `0x${string}`;
 }
 
 function requireIntEnv(name: string, errors: string[]): number {
@@ -427,7 +439,7 @@ function loadConfig() {
     errors.push("NODE_ENV=production is required when CHAIN_ID=8453");
   }
   const keystoreAccount = readEnv("KEYSTORE_ACCOUNT");
-  const privateKey = readEnv("KEEPER_PRIVATE_KEY") as `0x${string}` | undefined;
+  const privateKey = readOptionalPrivateKeyEnv("KEEPER_PRIVATE_KEY", errors);
   const frontendFeeEnabled = parseBooleanEnv(
     readEnv("KEEPER_FRONTEND_FEE_ENABLED"),
     false,
@@ -741,7 +753,7 @@ function loadConfig() {
     ),
 
     // Logging
-    logFormat: (process.env.LOG_FORMAT || "json") as "json" | "text",
+    logFormat: readEnumEnv("LOG_FORMAT", LOG_FORMATS, "json", errors),
 
     // Frontend-fee ops
     frontendFees: {

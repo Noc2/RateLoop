@@ -127,7 +127,7 @@ Shared deployments live in `packages/contracts/src/deployedContracts.ts`. Keeper
 | `RoundRewardDistributor`   | `ROUND_REWARD_DISTRIBUTOR_ADDRESS` | `PONDER_ROUND_REWARD_DISTRIBUTOR_ADDRESS`    | —                                                 |
 | `QuestionRewardPoolEscrow` | —                                  | `PONDER_QUESTION_REWARD_POOL_ESCROW_ADDRESS` | `NEXT_PUBLIC_QUESTION_REWARD_POOL_ESCROW_ADDRESS` |
 | `FeedbackBonusEscrow`      | `FEEDBACK_BONUS_ESCROW_ADDRESS`    | `PONDER_FEEDBACK_BONUS_ESCROW_ADDRESS`       | —                                                 |
-| `FeedbackRegistry`         | —                                  | `PONDER_FEEDBACK_REGISTRY_ADDRESS`           | —                                                 |
+| `FeedbackRegistry`         | `FEEDBACK_REGISTRY_ADDRESS`        | `PONDER_FEEDBACK_REGISTRY_ADDRESS`           | —                                                 |
 | `CategoryRegistry`         | —                                  | `PONDER_CATEGORY_REGISTRY_ADDRESS`           | —                                                 |
 | `ProfileRegistry`          | —                                  | `PONDER_PROFILE_REGISTRY_ADDRESS`            | —                                                 |
 | `FrontendRegistry`         | `FRONTEND_REGISTRY_ADDRESS`        | `PONDER_FRONTEND_REGISTRY_ADDRESS`           | —                                                 |
