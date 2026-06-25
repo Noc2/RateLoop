@@ -160,7 +160,7 @@ async function listManagedLifecycleCandidates(params: { after?: ManagedLifecycle
       SELECT *
       FROM lifecycle_candidates
       WHERE (
-        ? IS NULL
+        CAST(? AS timestamptz) IS NULL
         OR sort_at > ?
         OR (sort_at = ? AND operation_key > ?)
       )

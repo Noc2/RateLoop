@@ -342,6 +342,29 @@ test("sweepAgentLifecycleCallbacks emits bounty.low_response with live ask guida
   });
 });
 
+test("sweepAgentLifecycleCallbacks casts nullable lifecycle cursor parameters", async () => {
+  const resources = createMemoryDatabaseResources();
+  const lifecycleQueries: string[] = [];
+  const execute: typeof resources.client.execute = async input => {
+    if (typeof input !== "string" && input.sql.includes("WITH lifecycle_candidates AS")) {
+      lifecycleQueries.push(input.sql);
+    }
+    return resources.client.execute(input);
+  };
+  __setDatabaseResourcesForTests({
+    ...resources,
+    client: { execute },
+  });
+
+  const result = await sweepAgentLifecycleCallbacks({
+    now: new Date("2023-11-14T22:13:40.000Z"),
+  });
+
+  assert.equal(result.scanned, 0);
+  assert.equal(lifecycleQueries.length, 1);
+  assert.match(lifecycleQueries[0] ?? "", /CAST\(\? AS timestamptz\) IS NULL/);
+});
+
 test("sweepAgentLifecycleCallbacks discovers public wallet webhook subscriptions", async () => {
   const operationKey = `0x${"8".repeat(64)}` as const;
   const walletAddress = "0x00000000000000000000000000000000000000aa";
