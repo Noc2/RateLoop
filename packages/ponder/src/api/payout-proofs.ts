@@ -86,7 +86,7 @@ class LruPromiseCache {
 }
 const artifactCache = new LruPromiseCache(ARTIFACT_CACHE_MAX_ENTRIES);
 const httpsArtifactAllowlist = parseHttpsArtifactAllowlist(
-  process.env.PAYOUT_ARTIFACT_HTTPS_ALLOWLIST ?? "",
+  process.env.PAYOUT_ARTIFACT_HTTPS_ALLOWLIST ?? process.env.KEEPER_ARTIFACT_HTTPS_ALLOWLIST ?? "",
 );
 
 export async function resolveQuestionPayoutProof(

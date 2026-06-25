@@ -13,7 +13,7 @@ const SNAPSHOT_STATUS = {
 const ARTIFACT_FETCH_TIMEOUT_MS = 5_000;
 const ARTIFACT_MAX_BYTES = 10_000_000;
 const httpsArtifactAllowlist = parseHttpsArtifactAllowlist(
-  process.env.PAYOUT_ARTIFACT_HTTPS_ALLOWLIST ?? "",
+  process.env.PAYOUT_ARTIFACT_HTTPS_ALLOWLIST ?? process.env.KEEPER_ARTIFACT_HTTPS_ALLOWLIST ?? "",
 );
 
 function readFrontendOperator(args: Record<string, unknown>): `0x${string}` {

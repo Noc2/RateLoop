@@ -552,6 +552,7 @@ async function readArtifactCanonicalJson(uri: string): Promise<string | null> {
 
   const allowlistCsv = [
     process.env.KEEPER_ARTIFACT_HTTPS_ALLOWLIST?.trim(),
+    process.env.PAYOUT_ARTIFACT_HTTPS_ALLOWLIST?.trim(),
     config.correlationSnapshots.artifactStorage.publicBaseUrl?.trim(),
   ]
     .filter(Boolean)
