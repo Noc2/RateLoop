@@ -428,6 +428,31 @@ function isTruthyEnvValue(value) {
   return ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
 }
 
+function normalizeArtifactAllowlistPrefixes(value) {
+  return value
+    .split(",")
+    .map((part) => part.trim().replace(/\/+$/, ""))
+    .filter(Boolean)
+    .sort()
+    .join(",");
+}
+
+export function validateArtifactAllowlistParity({ checks, env = process.env, failures }) {
+  const keeperAllowlist = readRuntimeEnv(env, "KEEPER_ARTIFACT_HTTPS_ALLOWLIST");
+  const payoutAllowlist = readRuntimeEnv(env, "PAYOUT_ARTIFACT_HTTPS_ALLOWLIST");
+  if (!keeperAllowlist || !payoutAllowlist) {
+    return;
+  }
+
+  addCheck(
+    checks,
+    failures,
+    normalizeArtifactAllowlistPrefixes(keeperAllowlist) ===
+      normalizeArtifactAllowlistPrefixes(payoutAllowlist),
+    "KEEPER_ARTIFACT_HTTPS_ALLOWLIST matches PAYOUT_ARTIFACT_HTTPS_ALLOWLIST when both are set",
+  );
+}
+
 export function validateOffchainRuntimeEnv({
   checks,
   env = process.env,
@@ -473,6 +498,8 @@ export function validateOffchainRuntimeEnv({
       "METRICS_BIND_ADDRESS is non-loopback when Keeper publishes public correlation artifacts",
     );
   }
+
+  validateArtifactAllowlistParity({ checks, env, failures });
 }
 
 function readEnvAssignment(source, key) {

@@ -12,6 +12,7 @@ import {
   buildPonderUrl,
   buildReadinessUrl,
   parseGeneratedContractsForChain,
+  validateArtifactAllowlistParity,
   validateOffchainRuntimeEnv,
   validateLiveReadiness,
   validateOfflineReadiness,
@@ -344,6 +345,36 @@ test("validateOffchainRuntimeEnv permits loopback metrics for data-uri artifacts
   });
 
   assert.deepEqual(failures, []);
+});
+
+test("validateArtifactAllowlistParity requires matching keeper and ponder allowlists", () => {
+  const matchingChecks = [];
+  const matchingFailures = [];
+
+  validateArtifactAllowlistParity({
+    checks: matchingChecks,
+    env: {
+      KEEPER_ARTIFACT_HTTPS_ALLOWLIST: "https://keeper.example.com/artifacts/",
+      PAYOUT_ARTIFACT_HTTPS_ALLOWLIST: "https://keeper.example.com/artifacts",
+    },
+    failures: matchingFailures,
+  });
+
+  assert.deepEqual(matchingFailures, []);
+
+  const mismatchChecks = [];
+  const mismatchFailures = [];
+
+  validateArtifactAllowlistParity({
+    checks: mismatchChecks,
+    env: {
+      KEEPER_ARTIFACT_HTTPS_ALLOWLIST: "https://keeper.example.com/artifacts",
+      PAYOUT_ARTIFACT_HTTPS_ALLOWLIST: "https://other.example.com/artifacts",
+    },
+    failures: mismatchFailures,
+  });
+
+  assert.equal(mismatchFailures.length, 1);
 });
 
 test("validateOfflineReadiness flags a contract whose deployedOnBlock is missing", () => {

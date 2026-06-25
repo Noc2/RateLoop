@@ -154,7 +154,27 @@ Keeper and Ponder use different env var names for the same HTTPS prefix allowlis
 | `KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL` | Keeper | Public base URL published on-chain for file-backed artifacts |
 | `PAYOUT_ARTIFACT_HTTPS_ALLOWLIST` | Ponder | HTTPS prefixes Ponder may fetch when indexing payout artifacts and serving proofs |
 
-Each service also accepts the other service's allowlist env name as an alias. Production readiness should verify the prefixes match the keeper's published artifact URL.
+Each service also accepts the other service's allowlist env name as an alias. Production readiness should verify the prefixes match the keeper's published artifact URL. When both `KEEPER_ARTIFACT_HTTPS_ALLOWLIST` and `PAYOUT_ARTIFACT_HTTPS_ALLOWLIST` are set, `yarn base-mainnet:check` and `yarn base-sepolia:check` require the normalized prefix lists to match.
+
+## Agent runtime env surface
+
+| Env var | Package | Role |
+| ------- | ------- | ---- |
+| `RATELOOP_API_BASE_URL` | Agents | Hosted RateLoop app origin for SDK HTTP and default MCP routing |
+| `RATELOOP_MCP_TOKEN` | Agents | Managed agent bearer token; requires HTTPS API URLs when set |
+| `RATELOOP_MCP_API_URL` | Agents | Optional MCP endpoint override (defaults to `${RATELOOP_API_BASE_URL}/api/mcp/public`) |
+| `RATELOOP_MCP_PROTOCOL_VERSION` | Agents | Optional MCP protocol version override |
+| `RATELOOP_AGENT_WALLET_ADDRESS` | Agents | Wallet used for tokenless public asks |
+| `RATELOOP_RPC_URL` | Agents | RPC for `local-ask` transaction execution |
+| `RATELOOP_CHAIN_ID` | Agents | Optional chain guard for `local-ask` |
+| `RATELOOP_LOCAL_SIGNER_QUESTION_METADATA_BASE_URL` | Agents | Production metadata pin for canonical ask hashes |
+| `RATELOOP_LOCAL_SIGNER_USDC_ADDRESS` / `RATELOOP_LOCAL_SIGNER_USDC_ADDRESS_<chainId>` | Agents | Trusted USDC override before EIP-3009 signing |
+| `RATELOOP_X402_USDC_ADDRESS` / `RATELOOP_X402_USDC_ADDRESS_<chainId>` | Agents | Alias accepted by `localSigner.ts` |
+| `RATELOOP_LOCAL_SIGNER_X402_SUBMITTER_ADDRESS` / `RATELOOP_X402_QUESTION_SUBMITTER_ADDRESS` | Agents | Trusted x402 submitter override |
+| `RATELOOP_LOCAL_SIGNER_KEYSTORE_PATH` / `RATELOOP_LOCAL_SIGNER_KEYSTORE_PASSWORD` | Agents | Encrypted local signer keystore |
+| `RATELOOP_LOCAL_SIGNER_PRIVATE_KEY` | Agents | Ephemeral CI escape hatch only |
+
+Agent x402 parsers also accept `RATELOOP_LOCAL_SIGNER_QUESTION_METADATA_BASE_URL` before `NEXT_PUBLIC_PONDER_URL` / `NEXT_PUBLIC_APP_URL` when building default metadata URLs outside Next.js.
 
 ## RaterRegistry follow counter storage drift
 
