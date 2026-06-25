@@ -49,7 +49,7 @@
     "generate": "yarn foundry:generate",
     "seed": "bash packages/foundry/script/SeedContent.sh",
     "postinstall": "husky install",
-    "lint": "yarn next:lint && yarn foundry:lint",
+    "lint": "yarn next:lint && yarn foundry:lint && yarn agents:lint",
     "next:test": "yarn workspace @rateloop/nextjs test",
     "next:build": "yarn workspace @rateloop/nextjs build",
     "next:check-types": "yarn workspace @rateloop/nextjs check-types",
