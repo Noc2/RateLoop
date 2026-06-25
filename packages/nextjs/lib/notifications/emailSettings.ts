@@ -8,8 +8,34 @@ import {
   type EmailNotificationSettingsState,
 } from "~~/lib/notifications/emailShared";
 
+const EMAIL_IN_USE_ERROR = "EMAIL_IN_USE";
+const EMAIL_UNIQUE_CONSTRAINT = "notification_email_subscriptions_email_unique";
+
 async function ensureNotificationEmailSubscriptionsTable() {
   // Schema is managed via Drizzle migrations.
+}
+
+export function isEmailNotificationEmailInUseError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  if (error.message === EMAIL_IN_USE_ERROR) return true;
+
+  const details = error as Error & {
+    cause?: unknown;
+    code?: unknown;
+    constraint?: unknown;
+  };
+  if (details.code === "23505" && details.constraint === EMAIL_UNIQUE_CONSTRAINT) {
+    return true;
+  }
+
+  if (
+    /UNIQUE constraint failed: notification_email_subscriptions\.email/i.test(error.message) ||
+    error.message.includes(EMAIL_UNIQUE_CONSTRAINT)
+  ) {
+    return true;
+  }
+
+  return details.cause ? isEmailNotificationEmailInUseError(details.cause) : false;
 }
 
 function getTimestampMs(value: Date | string): number {
@@ -83,7 +109,7 @@ export async function upsertEmailNotificationSettings(walletAddress: `0x${string
     .limit(1);
 
   if (emailOwner) {
-    throw new Error("EMAIL_IN_USE");
+    throw new Error(EMAIL_IN_USE_ERROR);
   }
 
   const [existing] = await db
@@ -98,25 +124,11 @@ export async function upsertEmailNotificationSettings(walletAddress: `0x${string
   const verificationToken = requiresVerification ? crypto.randomUUID() : null;
   const verificationExpiresAt = requiresVerification ? new Date(now.getTime() + 24 * 60 * 60 * 1000) : null;
 
-  await db
-    .insert(notificationEmailSubscriptions)
-    .values({
-      walletAddress,
-      email: payload.email,
-      verifiedAt: emailChanged ? null : (existing?.verifiedAt ?? null),
-      verificationToken,
-      verificationExpiresAt,
-      roundResolved: payload.roundResolved,
-      settlingSoonHour: payload.settlingSoonHour,
-      settlingSoonDay: payload.settlingSoonDay,
-      followedSubmission: payload.followedSubmission,
-      followedResolution: payload.followedResolution,
-      createdAt: existing?.createdAt ?? now,
-      updatedAt: now,
-    })
-    .onConflictDoUpdate({
-      target: notificationEmailSubscriptions.walletAddress,
-      set: {
+  try {
+    await db
+      .insert(notificationEmailSubscriptions)
+      .values({
+        walletAddress,
         email: payload.email,
         verifiedAt: emailChanged ? null : (existing?.verifiedAt ?? null),
         verificationToken,
@@ -126,9 +138,30 @@ export async function upsertEmailNotificationSettings(walletAddress: `0x${string
         settlingSoonDay: payload.settlingSoonDay,
         followedSubmission: payload.followedSubmission,
         followedResolution: payload.followedResolution,
+        createdAt: existing?.createdAt ?? now,
         updatedAt: now,
-      },
-    });
+      })
+      .onConflictDoUpdate({
+        target: notificationEmailSubscriptions.walletAddress,
+        set: {
+          email: payload.email,
+          verifiedAt: emailChanged ? null : (existing?.verifiedAt ?? null),
+          verificationToken,
+          verificationExpiresAt,
+          roundResolved: payload.roundResolved,
+          settlingSoonHour: payload.settlingSoonHour,
+          settlingSoonDay: payload.settlingSoonDay,
+          followedSubmission: payload.followedSubmission,
+          followedResolution: payload.followedResolution,
+          updatedAt: now,
+        },
+      });
+  } catch (error) {
+    if (isEmailNotificationEmailInUseError(error)) {
+      throw new Error(EMAIL_IN_USE_ERROR);
+    }
+    throw error;
+  }
 
   return {
     settings: {

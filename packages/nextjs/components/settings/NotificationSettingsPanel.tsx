@@ -254,7 +254,7 @@ export function NotificationSettingsPanel({
 
     if (result.verificationSent) {
       onStatusChange?.();
-      notification.success("Verification email sent");
+      notification.success("If this email can be used, a verification link will arrive shortly.");
       return;
     }
 

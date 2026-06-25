@@ -19,6 +19,7 @@ import { isJsonObjectBody, jsonBodyErrorResponse, parseJsonBody } from "~~/lib/h
 import {
   getEmailNotificationSettings,
   getEmailNotificationSubscription,
+  isEmailNotificationEmailInUseError,
   restoreEmailNotificationSubscription,
   upsertEmailNotificationSettings,
 } from "~~/lib/notifications/emailSettings";
@@ -32,6 +33,8 @@ import { checkRateLimit } from "~~/utils/rateLimit";
 
 const READ_RATE_LIMIT = { limit: 30, windowMs: 60_000 };
 const WRITE_RATE_LIMIT = { limit: 10, windowMs: 60_000 };
+const GENERIC_EMAIL_VERIFICATION_REQUESTED_MESSAGE =
+  "If this email address can be used, a verification email will be sent.";
 
 export async function GET(request: NextRequest) {
   const address = request.nextUrl.searchParams.get("address");
@@ -200,8 +203,20 @@ export async function PUT(request: NextRequest) {
       if (payload.email) {
         await restoreEmailNotificationSubscription(payload.normalizedAddress, existingSubscription);
       }
-      if (error.message === "EMAIL_IN_USE") {
-        return NextResponse.json({ error: "Email address already belongs to another wallet" }, { status: 409 });
+      if (isEmailNotificationEmailInUseError(error)) {
+        console.info("Notification email update accepted without disclosing an existing email owner.", {
+          walletAddress: payload.normalizedAddress,
+        });
+        const settings = await getEmailNotificationSettings(payload.normalizedAddress);
+        return NextResponse.json(
+          {
+            ok: true,
+            message: GENERIC_EMAIL_VERIFICATION_REQUESTED_MESSAGE,
+            settings,
+            verificationSent: true,
+          },
+          { status: 202 },
+        );
       }
       if (isResendDeliveryError(error)) {
         console.error("Failed to send notification verification email:", error);
