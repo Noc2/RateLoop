@@ -291,6 +291,7 @@ test("validateOffchainRuntimeEnv accepts configured production runtime env", () 
       METRICS_BIND_ADDRESS: "0.0.0.0",
       NODE_ENV: "production",
       PONDER_KEEPER_WORK_TOKEN: "shared-keeper-token",
+      PONDER_METADATA_SYNC_TOKEN: "shared-metadata-sync-token",
       RATE_LIMIT_TRUSTED_IP_HEADERS: "x-forwarded-for",
     },
     failures,

@@ -387,6 +387,11 @@ const OFFCHAIN_RUNTIME_REQUIRED_ENVS = [
     message: "CORS_ORIGIN is configured for Ponder production API",
   },
   {
+    name: "PONDER_METADATA_SYNC_TOKEN",
+    isValid: (value) => Boolean(value),
+    message: "PONDER_METADATA_SYNC_TOKEN is configured for Ponder metadata sync",
+  },
+  {
     name: "RATE_LIMIT_TRUSTED_IP_HEADERS",
     isValid: (value) => Boolean(value),
     message:
