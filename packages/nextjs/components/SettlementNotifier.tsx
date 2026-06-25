@@ -73,14 +73,13 @@ export function SettlementNotifier() {
   });
   const { preferences } = useNotificationPreferences(address, { autoRead: false });
   const { claimableItems, refetch: refetchClaimable } = useAllClaimableRewards();
-  const { openVotes, votes } = useRecentUserVotes(address);
+  const { openVotes } = useRecentUserVotes(address);
   const hasTrackedDiscoverSignals = watchedItems.length > 0 || followedItems.length > 0;
   const trackedSignalSourcesLoading = watchedContentLoading || followedProfilesLoading;
   const discoverSignalsReady = !trackedSignalSourcesLoading && !discoverSignalsLoading;
 
   const claimableRoundKeys = useMemo(() => {
     const keys = new Set<string>();
-    const hasBundleClaimable = claimableItems.some(item => item.claimType === "question_bundle_reward");
     for (const item of claimableItems) {
       const key = getClaimableRoundKey(item);
       if (key) keys.add(key);
@@ -91,13 +90,8 @@ export function SettlementNotifier() {
         keys.add(`${item.payoutWeight.contentId.toString()}-${item.payoutWeight.roundId.toString()}`);
       }
     }
-    if (hasBundleClaimable) {
-      for (const vote of votes) {
-        keys.add(`${vote.contentId.toString()}-${vote.roundId.toString()}`);
-      }
-    }
     return keys;
-  }, [claimableItems, votes]);
+  }, [claimableItems]);
 
   useEffect(() => {
     roundResolvedEnabledRef.current = preferences.roundResolved;
