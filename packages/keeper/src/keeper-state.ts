@@ -191,8 +191,11 @@ export async function runWithKeeperMainLoopLock<T>(
   let activePool: pg.Pool | null = null;
   try {
     activePool = await ensureSchema(logger);
-  } catch {
-    return lockRequired ? fallback : run();
+  } catch (error) {
+    if (lockRequired) {
+      throw error;
+    }
+    return run();
   }
 
   if (!activePool) {
@@ -203,7 +206,7 @@ export async function runWithKeeperMainLoopLock<T>(
         "Keeper main loop lock required but KEEPER_DATABASE_URL is not configured; skipping this tick",
         "missing database",
       );
-      return fallback;
+      throw new Error("KEEPER_DATABASE_URL is required when KEEPER_MAIN_LOOP_LOCK_REQUIRED=true");
     }
     return run();
   }
@@ -219,7 +222,7 @@ export async function runWithKeeperMainLoopLock<T>(
   });
   if (lock.status === "unavailable") {
     if (lockRequired) {
-      return fallback;
+      throw new Error("Keeper main loop lock unavailable while KEEPER_MAIN_LOOP_LOCK_REQUIRED=true");
     }
     return run();
   }

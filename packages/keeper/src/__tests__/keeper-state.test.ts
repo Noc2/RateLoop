@@ -185,7 +185,7 @@ describe("keeper advisory lock wrappers", () => {
     );
   });
 
-  it("returns the main-loop fallback when a required lock cannot initialize", async () => {
+  it("propagates schema errors when a required lock cannot initialize", async () => {
     const { runWithKeeperMainLoopLock, pool } = await importKeeperState({
       schemaError: new Error("database down"),
     });
@@ -194,7 +194,7 @@ describe("keeper advisory lock wrappers", () => {
 
     await expect(
       runWithKeeperMainLoopLock(logger, "fallback", run, { lockRequired: true }),
-    ).resolves.toBe("fallback");
+    ).rejects.toThrow("database down");
 
     expect(run).not.toHaveBeenCalled();
     expect(pool.connect).not.toHaveBeenCalled();
@@ -204,7 +204,7 @@ describe("keeper advisory lock wrappers", () => {
     );
   });
 
-  it("returns the main-loop fallback when a required lock cannot be acquired", async () => {
+  it("propagates lock acquisition errors when a required lock cannot be acquired", async () => {
     const { runWithKeeperMainLoopLock, client } = await importKeeperState({
       connectError: new Error("too many clients"),
     });
@@ -213,7 +213,7 @@ describe("keeper advisory lock wrappers", () => {
 
     await expect(
       runWithKeeperMainLoopLock(logger, "fallback", run, { lockRequired: true }),
-    ).resolves.toBe("fallback");
+    ).rejects.toThrow("Keeper main loop lock unavailable while KEEPER_MAIN_LOOP_LOCK_REQUIRED=true");
 
     expect(run).not.toHaveBeenCalled();
     expect(client.query).not.toHaveBeenCalled();
@@ -223,7 +223,7 @@ describe("keeper advisory lock wrappers", () => {
     );
   });
 
-  it("returns the main-loop fallback when a required lock has no database", async () => {
+  it("propagates missing database configuration when a required lock has no database", async () => {
     const { runWithKeeperMainLoopLock, pool } = await importKeeperState({
       databaseUrl: null,
     });
@@ -232,7 +232,7 @@ describe("keeper advisory lock wrappers", () => {
 
     await expect(
       runWithKeeperMainLoopLock(logger, "fallback", run, { lockRequired: true }),
-    ).resolves.toBe("fallback");
+    ).rejects.toThrow("KEEPER_DATABASE_URL is required when KEEPER_MAIN_LOOP_LOCK_REQUIRED=true");
 
     expect(run).not.toHaveBeenCalled();
     expect(pool.connect).not.toHaveBeenCalled();

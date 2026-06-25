@@ -6,8 +6,10 @@ const ACCOUNT = "0x3333333333333333333333333333333333333333" as const;
 
 type KeeperIndexOptions = {
   balance?: bigint;
+  databaseUrl?: string | null;
   failBalanceRead?: boolean;
   frontendFeeEnabled?: boolean;
+  mainLoopLockRequired?: boolean;
   resolveRoundsError?: Error;
   resolveRoundsResult?: Record<string, number | null>;
 };
@@ -103,8 +105,8 @@ async function loadKeeperIndex(options: KeeperIndexOptions = {}) {
       metricsEnabled: false,
       metricsPort: 9090,
       persistence: {
-        databaseUrl: null,
-        mainLoopLockRequired: false,
+        databaseUrl: options.databaseUrl ?? null,
+        mainLoopLockRequired: options.mainLoopLockRequired ?? false,
       },
       startupJitterMs: 0,
       minGasBalanceWei: "100",
@@ -297,6 +299,26 @@ describe("keeper index", () => {
       "Run failed",
       expect.objectContaining({
         error: "Cannot resolve current block time: rpc down",
+      }),
+    );
+  });
+
+  it("records an error instead of a successful run when the required main-loop lock is unavailable", async () => {
+    const keeper = await loadKeeperIndex({
+      mainLoopLockRequired: true,
+    });
+
+    expect(keeper.resolveRounds).not.toHaveBeenCalled();
+    expect(keeper.recordRun).not.toHaveBeenCalled();
+    expect(keeper.recordError).toHaveBeenCalledOnce();
+    expect(keeper.incrementCounter).not.toHaveBeenCalledWith(
+      "keeper_main_loop_lock_skips_total",
+    );
+    expect(keeper.logger.error).toHaveBeenCalledWith(
+      "Run failed",
+      expect.objectContaining({
+        error:
+          "KEEPER_DATABASE_URL is required when KEEPER_MAIN_LOOP_LOCK_REQUIRED=true",
       }),
     );
   });
