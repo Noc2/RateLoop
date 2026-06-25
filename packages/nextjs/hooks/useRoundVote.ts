@@ -829,7 +829,6 @@ export function useRoundVote() {
                 },
                 parentRunId: timingLog.runId,
                 sponsorshipMode: "sponsored",
-                suppressStatusToast: true,
               }),
             waitForPostcondition: shouldStop =>
               waitForRoundOpenPostcondition(
@@ -868,7 +867,6 @@ export function useRoundVote() {
                 },
                 parentRunId: timingLog.runId,
                 sponsorshipMode: "self-funded",
-                suppressStatusToast: true,
               }),
             waitForPostcondition: shouldStop =>
               waitForRoundOpenPostcondition(
@@ -892,15 +890,6 @@ export function useRoundVote() {
 
       const ensureOpenStakedRuntime = () =>
         ensureOpenStakedRoundRuntime({
-          buildOpenedRuntimeFallback: openedRuntime =>
-            openedRuntime.roundId > 0n &&
-            openedRuntime.roundStartTimeSeconds != null &&
-            BigInt(openedRuntime.roundStartTimeSeconds) > 0n
-              ? {
-                  ...openedRuntime,
-                  requiresOpenRound: false,
-                }
-              : null,
           openRound: submitOpenRound,
           resolveRuntime: resolveFreshStakedRuntime,
         });
@@ -1038,7 +1027,6 @@ export function useRoundVote() {
               },
               parentRunId: timingLog.runId,
               sponsorshipMode,
-              suppressStatusToast: true,
             }),
           waitForPostcondition: shouldStop =>
             waitForRoundVoteCommitPostcondition(

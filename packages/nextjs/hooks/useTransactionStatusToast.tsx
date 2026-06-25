@@ -14,13 +14,16 @@ interface ShowTransactionStatusToastOptions {
 export function useTransactionStatusToast() {
   const toastIdRef = useRef<string | null>(null);
 
-  const dismiss = useCallback(() => {
-    if (!toastIdRef.current) {
+  const dismiss = useCallback((toastId?: string | null) => {
+    const targetToastId = toastId ?? toastIdRef.current;
+    if (!targetToastId) {
       return;
     }
 
-    notification.remove(toastIdRef.current);
-    toastIdRef.current = null;
+    notification.remove(targetToastId);
+    if (!toastId || toastIdRef.current === targetToastId) {
+      toastIdRef.current = null;
+    }
   }, []);
 
   const showSubmitting = useCallback(

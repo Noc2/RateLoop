@@ -1,12 +1,13 @@
 import { AdvisoryVoteRecorderAbi, RoundVotingEngineAbi } from "@rateloop/contracts/abis";
 import type { Address, Hex, PublicClient } from "viem";
 import { zeroHash } from "viem";
+import { parseRound, parseVotingConfig } from "~~/lib/contracts/roundVotingEngine";
 import {
   type TransactionPostconditionWaitOptions,
   waitForTransactionPostcondition,
 } from "~~/lib/transactions/postcondition";
 
-type ReadContractClient = Pick<PublicClient, "readContract">;
+type ReadContractClient = Pick<PublicClient, "getBlock" | "readContract">;
 
 export type RoundVoteCommitPostconditionParams = {
   advisoryVoteRecorderAddress?: Address;
@@ -68,7 +69,35 @@ export async function hasRoundOpenPostcondition(params: {
     functionName: "currentRoundId",
     args: [params.contentId],
   } as never)) as bigint;
-  return currentRoundId > 0n;
+  if (currentRoundId <= 0n) {
+    return false;
+  }
+
+  const [round, roundConfig, latestBlock] = await Promise.all([
+    params.client.readContract({
+      address: params.votingEngineAddress,
+      abi: RoundVotingEngineAbi,
+      functionName: "roundCore",
+      args: [params.contentId, currentRoundId],
+    } as never),
+    params.client.readContract({
+      address: params.votingEngineAddress,
+      abi: RoundVotingEngineAbi,
+      functionName: "roundConfigSnapshot",
+      args: [params.contentId, currentRoundId],
+    } as never),
+    params.client.getBlock({ blockTag: "latest" }),
+  ]);
+  const parsedRound = parseRound(round);
+  const parsedConfig = parseVotingConfig(roundConfig);
+  if (!parsedRound || parsedRound.state !== 0 || parsedRound.startTime <= 0n) {
+    return false;
+  }
+  if (parsedRound.thresholdReachedAt > 0n || parsedRound.voteCount >= BigInt(parsedConfig.maxVoters)) {
+    return false;
+  }
+
+  return BigInt(latestBlock.timestamp) < parsedRound.startTime + BigInt(parsedConfig.maxDuration);
 }
 
 export async function waitForRoundVoteCommitPostcondition(

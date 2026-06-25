@@ -763,6 +763,10 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
               ...(typeof call.value !== "undefined" ? { value: call.value } : {}),
             }),
           );
+      let activeStatusToastId: string | null = null;
+      const showStatusToast = (status: { action?: string; title?: string; description?: string }) => {
+        activeStatusToastId = statusToast.showSubmitting(status);
+      };
       const sendCallsWithWallet = async (wallet: NonNullable<typeof activeWallet>) => {
         timingLog.emit("thirdweb-sendCalls-start", {
           walletId: wallet.id,
@@ -775,7 +779,7 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
                 timingLog.emit("thirdweb-sendCalls-slow", {
                   walletId: wallet.id,
                 });
-                statusToast.showSubmitting(getSlowThirdwebSubmitStatus(action));
+                showStatusToast(getSlowThirdwebSubmitStatus(action));
               }, THIRDWEB_SEND_CALLS_SLOW_MS);
         let sendResult: SendCallsResult;
         try {
@@ -795,7 +799,7 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
           walletId: wallet.id,
         });
         if (!options.suppressStatusToast) {
-          statusToast.showSubmitting(TRANSACTION_CONFIRMING_STATUS);
+          showStatusToast(TRANSACTION_CONFIRMING_STATUS);
         }
         return waitForThirdwebCallsStatus({
           pollingIntervalMs: getTransactionStatusPollingInterval(chainId),
@@ -829,7 +833,7 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
 
       try {
         if (!options.suppressStatusToast) {
-          statusToast.showSubmitting({ action: options.action ?? "transaction" });
+          showStatusToast({ action: options.action ?? "transaction" });
           timingLog.emit("status-toast-shown");
         }
 
@@ -955,7 +959,7 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
         });
         throw error;
       } finally {
-        statusToast.dismiss();
+        statusToast.dismiss(activeStatusToastId);
         void queryClient.invalidateQueries({ queryKey: FREE_TRANSACTION_ALLOWANCE_QUERY_KEY });
       }
     },
