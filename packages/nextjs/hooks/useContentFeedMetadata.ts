@@ -5,7 +5,7 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import type { ContentItem } from "~~/hooks/contentFeed/shared";
 import type { ContentMetadataResult } from "~~/lib/contentMetadata/types";
 
-const THUMBNAIL_BATCH_SIZE = 40;
+const THUMBNAIL_BATCH_SIZE = 20;
 
 function chunkItems<T>(items: T[], batchSize: number): T[][] {
   const batches: T[][] = [];
