@@ -77,10 +77,17 @@ export function SettlementNotifier() {
   const trackedSignalSourcesLoading = watchedContentLoading || followedProfilesLoading;
   const discoverSignalsReady = !trackedSignalSourcesLoading && !discoverSignalsLoading;
 
-  const claimableRoundKeys = useMemo(
-    () => new Set(claimableItems.map(item => getClaimableRoundKey(item)).filter((key): key is string => key !== null)),
-    [claimableItems],
-  );
+  const claimableRoundKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const item of claimableItems) {
+      const key = getClaimableRoundKey(item);
+      if (key) keys.add(key);
+      if (item.claimType === "question_reward") {
+        keys.add(`${item.contentId.toString()}-${item.roundId.toString()}`);
+      }
+    }
+    return keys;
+  }, [claimableItems]);
 
   useEffect(() => {
     roundResolvedEnabledRef.current = preferences.roundResolved;
