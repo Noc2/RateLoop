@@ -1,3 +1,4 @@
+import { buildPonderRequestHeaders } from "./ponder-headers.js";
 import {
   CORRELATION_VOTE_PAGE_SIZE,
   MAX_CORRELATION_VOTE_PAGES,
@@ -693,7 +694,7 @@ async function fetchRoundVotes(
 
 async function fetchJson<T>(url: URL): Promise<T> {
   const response = await fetch(url, {
-    headers: { accept: "application/json" },
+    headers: { accept: "application/json", ...buildPonderRequestHeaders() },
     signal: AbortSignal.timeout(PONDER_FETCH_TIMEOUT_MS),
   });
   if (!response.ok) {
