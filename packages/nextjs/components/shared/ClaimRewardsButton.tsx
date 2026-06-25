@@ -63,6 +63,8 @@ export function ClaimRewardsButton({ className, layout = "default", showTokenSym
     claimableItems,
     totalLrepClaimable,
     totalUsdcClaimable,
+    ponderUnavailable,
+    isLoading: claimablesLoading,
     refetch: refetchClaimable,
   } = useAllClaimableRewards();
   const { claimAll, isClaiming, isPreparingClaim, progress } = useClaimAll();
@@ -117,16 +119,23 @@ export function ClaimRewardsButton({ className, layout = "default", showTokenSym
     const claimKeys = itemsToClaim.map(getClaimableRewardItemKey);
     setOptimisticallyClaimedKeys(previousKeys => new Set([...previousKeys, ...claimKeys]));
 
-    void claimAll(itemsToClaim, async ({ claimedItems }) => {
-      setOptimisticallyClaimedKeys(previousKeys => {
-        const nextKeys = new Set(previousKeys);
-        for (const key of claimKeys) {
-          nextKeys.delete(key);
-        }
-        return nextKeys;
-      });
+    void claimAll(itemsToClaim, async ({ claimedItems, failedItems }) => {
+      if (failedItems.length > 0) {
+        const failedKeys = new Set(failedItems.map(getClaimableRewardItemKey));
+        setOptimisticallyClaimedKeys(previousKeys => {
+          const nextKeys = new Set(previousKeys);
+          for (const key of failedKeys) {
+            nextKeys.delete(key);
+          }
+          return nextKeys;
+        });
+      }
 
-      if (claimedItems.length === 0) {
+      const succeededKeys = claimedItems.map(getClaimableRewardItemKey);
+      if (succeededKeys.length === 0) {
+        if (failedItems.length === itemsToClaim.length) {
+          setOptimisticallyClaimedKeys(new Set());
+        }
         return;
       }
 
@@ -138,6 +147,14 @@ export function ClaimRewardsButton({ className, layout = "default", showTokenSym
             ),
           ),
       });
+
+      setOptimisticallyClaimedKeys(previousKeys => {
+        const nextKeys = new Set(previousKeys);
+        for (const key of succeededKeys) {
+          nextKeys.delete(key);
+        }
+        return nextKeys;
+      });
     }).finally(() => {
       claimInFlightRef.current = false;
     });
@@ -148,9 +165,24 @@ export function ClaimRewardsButton({ className, layout = "default", showTokenSym
     totalLrepClaimable <= 0n &&
     totalUsdcClaimable <= 0n &&
     !isClaiming &&
-    !isPreparingClaim
+    !isPreparingClaim &&
+    !ponderUnavailable
   ) {
     return null;
+  }
+
+  if (
+    ponderUnavailable &&
+    !claimablesLoading &&
+    visibleClaimableItems.length === 0 &&
+    !isClaiming &&
+    !isPreparingClaim
+  ) {
+    return (
+      <p className={`${className ?? ""} text-xs text-base-content/60`} role="status">
+        Reward indexer unavailable
+      </p>
+    );
   }
 
   const claimParts = buildClaimRewardsButtonParts({

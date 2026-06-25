@@ -64,7 +64,7 @@ export function useAllClaimableRewards() {
   const queryClient = useQueryClient();
   const { address } = useAccount();
   const { targetNetwork } = useTargetNetwork();
-  const { votes, refetch: refetchVotes } = useRecentUserVotes(address);
+  const { votes, refetch: refetchVotes, ponderUnavailable: votesPonderUnavailable } = useRecentUserVotes(address);
   const {
     claimableItems: frontendClaimableItems,
     isLoading: frontendClaimableLoading,
@@ -74,6 +74,7 @@ export function useAllClaimableRewards() {
     claimableItems: questionRewardPoolClaimableItems,
     isLoading: questionRewardPoolClaimableLoading,
     refetch: refetchQuestionRewardPoolClaimables,
+    ponderUnavailable: questionRewardsPonderUnavailable,
   } = useClaimableQuestionRewards();
 
   // --- Step 2: Filter to terminal rounds only ---
@@ -142,7 +143,7 @@ export function useAllClaimableRewards() {
       const lookup = claimLookups[i];
       if (!lookup) return true;
       if (!claimedResults || claimedResults.length !== claimedContracts.length) {
-        return claimedLoading ? false : true;
+        return true;
       }
       const r = claimedResults[claimedIndex++];
       if (r?.status !== "success") return true;
@@ -311,6 +312,7 @@ export function useAllClaimableRewards() {
 
   const isLoading =
     claimedLoading || rbtsRewardsLoading || frontendClaimableLoading || questionRewardPoolClaimableLoading;
+  const ponderUnavailable = votesPonderUnavailable || questionRewardsPonderUnavailable;
 
   const refetch = useCallback(async () => {
     await Promise.all([
@@ -337,6 +339,7 @@ export function useAllClaimableRewards() {
     totalUsdcClaimable: totalQuestionRewardPoolUsdcClaimable,
     activeStake,
     isLoading,
+    ponderUnavailable,
     refetch,
   };
 }

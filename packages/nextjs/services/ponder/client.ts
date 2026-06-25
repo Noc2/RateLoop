@@ -2154,6 +2154,32 @@ export const ponderApi = {
     );
   },
 
+  async getAllQuestionRewardClaimCandidates(voter: string, options?: PonderDeploymentOptions) {
+    return getAllPages(offset =>
+      ponderApi.getQuestionRewardClaimCandidates(
+        voter,
+        {
+          limit: String(PONDER_PAGE_LIMIT),
+          offset: String(offset),
+        },
+        options,
+      ),
+    );
+  },
+
+  async getAllQuestionBundleRewardClaimCandidates(voter: string, options?: PonderDeploymentOptions) {
+    return getAllPages(offset =>
+      ponderApi.getQuestionBundleRewardClaimCandidates(
+        voter,
+        {
+          limit: String(PONDER_PAGE_LIMIT),
+          offset: String(offset),
+        },
+        options,
+      ),
+    );
+  },
+
   async getVotesWindow(
     params?: {
       voter?: string;

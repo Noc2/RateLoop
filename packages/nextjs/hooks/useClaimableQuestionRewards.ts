@@ -118,20 +118,33 @@ export function useClaimableQuestionRewards() {
   const {
     data: result,
     isLoading: candidatesLoading,
+    isError: candidatesError,
     refetch: refetchCandidates,
   } = usePonderQuery({
     queryKey: getClaimableQuestionRewardsQueryKey(candidateVoters, targetNetwork.id, deployment?.deploymentKey),
     availabilityDeploymentKey: deployment?.deploymentKey,
     ponderFn: async () => {
       if (!voterQuery) return [];
-      const response = await ponderApi.getQuestionRewardClaimCandidates(
-        voterQuery,
-        { limit: "500" },
-        { chainId: targetNetwork.id, deploymentKey: deployment?.deploymentKey },
+      const pages = await Promise.all(
+        candidateVoters.map(candidate =>
+          ponderApi.getAllQuestionRewardClaimCandidates(candidate, {
+            chainId: targetNetwork.id,
+            deploymentKey: deployment?.deploymentKey,
+          }),
+        ),
       );
-      return response.items;
+      const seen = new Set<string>();
+      return pages.flat().filter(candidate => {
+        const key = `${candidate.rewardPoolId}-${candidate.roundId}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
     },
-    rpcFn: async () => [],
+    rpcFn: async () => {
+      throw new Error("Reward indexer unavailable");
+    },
+    rpcEnabled: false,
     enabled: candidateVoters.length > 0 && !delegationLoading,
     staleTime: 30_000,
   });
@@ -139,20 +152,33 @@ export function useClaimableQuestionRewards() {
   const {
     data: bundleResult,
     isLoading: bundleCandidatesLoading,
+    isError: bundleCandidatesError,
     refetch: refetchBundleCandidates,
   } = usePonderQuery({
     queryKey: getClaimableQuestionBundleRewardsQueryKey(candidateVoters, targetNetwork.id, deployment?.deploymentKey),
     availabilityDeploymentKey: deployment?.deploymentKey,
     ponderFn: async () => {
       if (!voterQuery) return [];
-      const response = await ponderApi.getQuestionBundleRewardClaimCandidates(
-        voterQuery,
-        { limit: "500" },
-        { chainId: targetNetwork.id, deploymentKey: deployment?.deploymentKey },
+      const pages = await Promise.all(
+        candidateVoters.map(candidate =>
+          ponderApi.getAllQuestionBundleRewardClaimCandidates(candidate, {
+            chainId: targetNetwork.id,
+            deploymentKey: deployment?.deploymentKey,
+          }),
+        ),
       );
-      return response.items;
+      const seen = new Set<string>();
+      return pages.flat().filter(candidate => {
+        const key = `${candidate.bundleId}-${candidate.roundSetIndex}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
     },
-    rpcFn: async () => [],
+    rpcFn: async () => {
+      throw new Error("Reward indexer unavailable");
+    },
+    rpcEnabled: false,
     enabled: candidateVoters.length > 0 && !delegationLoading,
     staleTime: 30_000,
   });
@@ -297,6 +323,7 @@ export function useClaimableQuestionRewards() {
     claimableItems: allClaimableItems,
     isLoading:
       candidatesLoading || claimablesLoading || bundleCandidatesLoading || bundleClaimablesLoading || delegationLoading,
+    ponderUnavailable: candidatesError || bundleCandidatesError,
     refetch: async () => {
       await Promise.all([
         refetchCandidates(),
