@@ -29,6 +29,7 @@ import {
   resolveWalletExecutionChainId,
   useWalletExecutionCapabilities,
 } from "~~/hooks/useWalletExecutionCapabilities";
+import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 import {
   getEip7702DelegationTarget,
   hasMissingEip7702DelegationImplementation,
@@ -103,6 +104,7 @@ function createThirdwebBatchTimingLog(params: {
   callCount: number;
   callTypes?: readonly string[];
   chainId: number;
+  executionMode: WalletExecutionMode;
   metadata?: Record<string, TransactionTimingMetadataValue>;
   operationKey: string | null;
   parentRunId?: string;
@@ -117,6 +119,7 @@ function createThirdwebBatchTimingLog(params: {
           ...(params.operationKey ? { operationKey: params.operationKey } : {}),
         }
       : undefined;
+  const deployment = resolveProtocolDeploymentScope(params.chainId);
 
   return createTransactionTimingRun({
     action: params.action,
@@ -124,6 +127,9 @@ function createThirdwebBatchTimingLog(params: {
     callTypes: params.callTypes,
     chainId: params.chainId,
     consoleLabel: "thirdweb-batch-timing",
+    contentRegistryAddress: deployment?.contentRegistryAddress,
+    deploymentKey: deployment?.deploymentKey,
+    feedbackRegistryAddress: deployment?.feedbackRegistryAddress,
     metadata,
     parentRunId: params.parentRunId,
     route: params.route,
@@ -131,6 +137,7 @@ function createThirdwebBatchTimingLog(params: {
     source: "thirdweb-batch",
     sponsorshipMode: params.sponsorshipMode,
     transport: params.route === "external-wallet" ? "wallet_sendCalls" : "thirdweb_sendCalls",
+    walletExecutionMode: params.executionMode,
   });
 }
 
@@ -154,7 +161,9 @@ async function waitForThirdwebCallsStatus(params: {
   let pollCount = 0;
   let slowLogged = false;
 
-  params.timingLog.emit("thirdweb-status-wait-start");
+  params.timingLog.emit("thirdweb-status-wait-start", {
+    thirdwebCallsId: params.sendResult.id,
+  });
 
   for (;;) {
     pollCount += 1;
@@ -173,6 +182,7 @@ async function waitForThirdwebCallsStatus(params: {
           receiptCount: result.receipts?.length ?? 0,
           status: result.status,
           statusCode: result.statusCode,
+          thirdwebCallsId: result.id ?? params.sendResult.id,
         });
       }
 
@@ -182,6 +192,7 @@ async function waitForThirdwebCallsStatus(params: {
           receiptCount: result.receipts?.length ?? 0,
           status: result.status,
           statusCode: result.statusCode,
+          thirdwebCallsId: result.id ?? params.sendResult.id,
         });
         return result;
       }
@@ -198,6 +209,7 @@ async function waitForThirdwebCallsStatus(params: {
       params.timingLog.emit("thirdweb-status-wait-slow", {
         pollCount,
         status: lastStatus,
+        thirdwebCallsId: params.sendResult.id,
       });
     }
     if (elapsedMs >= THIRDWEB_CALLS_STATUS_TIMEOUT_MS) {
@@ -728,6 +740,7 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
         route: canUseExternalWalletPath ? "external-wallet" : "thirdweb",
         segmentIndex: options.segmentIndex,
         sponsorshipMode,
+        executionMode,
       });
       const sendCallsWithExternalWallet = async () => {
         if (!address || !connector) {
@@ -768,19 +781,25 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
         activeStatusToastId = statusToast.showSubmitting(status);
       };
       const sendCallsWithWallet = async (wallet: NonNullable<typeof activeWallet>) => {
-        timingLog.emit("thirdweb-sendCalls-start", {
-          walletId: wallet.id,
-        });
+        const sendCallsStartedAt = Date.now();
         const action = options.action ?? "transaction";
-        const slowSubmitTimeout =
-          options.suppressStatusToast === true
-            ? undefined
-            : setTimeout(() => {
-                timingLog.emit("thirdweb-sendCalls-slow", {
-                  walletId: wallet.id,
-                });
-                showStatusToast(getSlowThirdwebSubmitStatus(action));
-              }, THIRDWEB_SEND_CALLS_SLOW_MS);
+        const baseSendCallsEvent = {
+          sendCallsSlowThresholdMs: THIRDWEB_SEND_CALLS_SLOW_MS,
+          statusToastSuppressed: options.suppressStatusToast === true,
+          walletId: wallet.id,
+        };
+        timingLog.emit("thirdweb-sendCalls-start", {
+          ...baseSendCallsEvent,
+        });
+        const slowSubmitTimeout = setTimeout(() => {
+          timingLog.emit("thirdweb-sendCalls-slow", {
+            ...baseSendCallsEvent,
+            sendCallsDurationMs: Date.now() - sendCallsStartedAt,
+          });
+          if (!options.suppressStatusToast) {
+            showStatusToast(getSlowThirdwebSubmitStatus(action));
+          }
+        }, THIRDWEB_SEND_CALLS_SLOW_MS);
         let sendResult: SendCallsResult;
         try {
           sendResult = await retryThirdwebBundlerOperation(() =>
@@ -790,13 +809,20 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
               wallet,
             }),
           );
+        } catch (error) {
+          timingLog.emit("thirdweb-sendCalls-error", {
+            ...baseSendCallsEvent,
+            message: error instanceof Error ? error.message : "Unknown error",
+            sendCallsDurationMs: Date.now() - sendCallsStartedAt,
+          });
+          throw error;
         } finally {
-          if (slowSubmitTimeout) {
-            clearTimeout(slowSubmitTimeout);
-          }
+          clearTimeout(slowSubmitTimeout);
         }
         timingLog.emit("thirdweb-sendCalls-complete", {
-          walletId: wallet.id,
+          ...baseSendCallsEvent,
+          sendCallsDurationMs: Date.now() - sendCallsStartedAt,
+          thirdwebCallsId: sendResult.id,
         });
         if (!options.suppressStatusToast) {
           showStatusToast(TRANSACTION_CONFIRMING_STATUS);

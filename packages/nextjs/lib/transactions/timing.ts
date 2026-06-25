@@ -7,10 +7,13 @@ export type TransactionTimingPayload = {
   callCount?: number;
   callTypes?: readonly string[];
   chainId?: number | null;
+  contentRegistryAddress?: string;
   deltaMs?: number;
+  deploymentKey?: string;
   elapsedMs?: number;
   event: string;
   fallback?: string | boolean;
+  feedbackRegistryAddress?: string;
   message?: string;
   metadata?: Record<string, TransactionTimingMetadataValue>;
   parentRunId?: string;
@@ -19,12 +22,17 @@ export type TransactionTimingPayload = {
   route?: string;
   runId: string;
   segmentIndex?: number;
+  sendCallsDurationMs?: number;
+  sendCallsSlowThresholdMs?: number;
   source: string;
   sponsorshipMode?: string;
   status?: string;
   statusCode?: number;
+  statusToastSuppressed?: boolean;
+  thirdwebCallsId?: string;
   transactionHashCount?: number;
   transport?: string;
+  walletExecutionMode?: string;
   walletId?: string;
 };
 
@@ -34,6 +42,9 @@ type TransactionTimingRunParams = {
   callTypes?: readonly string[];
   chainId?: number | null;
   consoleLabel: string;
+  contentRegistryAddress?: string;
+  deploymentKey?: string;
+  feedbackRegistryAddress?: string;
   metadata?: Record<string, TransactionTimingMetadataValue>;
   parentRunId?: string;
   route?: string;
@@ -41,6 +52,7 @@ type TransactionTimingRunParams = {
   source: string;
   sponsorshipMode?: string;
   transport?: string;
+  walletExecutionMode?: string;
 };
 
 function nowMs() {
@@ -87,9 +99,12 @@ export function createTransactionTimingRun(params: TransactionTimingRunParams) {
       callCount: params.callCount,
       callTypes: params.callTypes,
       chainId: params.chainId,
+      contentRegistryAddress: params.contentRegistryAddress,
       deltaMs,
+      deploymentKey: params.deploymentKey,
       elapsedMs,
       event,
+      feedbackRegistryAddress: params.feedbackRegistryAddress,
       metadata: params.metadata,
       parentRunId: params.parentRunId,
       route: params.route,
@@ -98,6 +113,7 @@ export function createTransactionTimingRun(params: TransactionTimingRunParams) {
       source: params.source,
       sponsorshipMode: params.sponsorshipMode,
       transport: params.transport,
+      walletExecutionMode: params.walletExecutionMode,
       ...extra,
     };
 

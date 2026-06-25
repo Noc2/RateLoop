@@ -16,10 +16,13 @@ type SanitizedTimingPayload = {
   callCount?: number;
   callTypes?: string[];
   chainId?: number;
+  contentRegistryAddress?: string;
   deltaMs?: number;
+  deploymentKey?: string;
   elapsedMs?: number;
   event: string;
   fallback?: string | boolean;
+  feedbackRegistryAddress?: string;
   message?: string;
   metadata?: Record<string, string | number | boolean | null>;
   parentRunId?: string;
@@ -28,12 +31,17 @@ type SanitizedTimingPayload = {
   route?: string;
   runId: string;
   segmentIndex?: number;
+  sendCallsDurationMs?: number;
+  sendCallsSlowThresholdMs?: number;
   source: string;
   sponsorshipMode?: string;
   status?: string;
   statusCode?: number;
+  statusToastSuppressed?: boolean;
+  thirdwebCallsId?: string;
   transactionHashCount?: number;
   transport?: string;
+  walletExecutionMode?: string;
   walletId?: string;
 };
 
@@ -105,10 +113,13 @@ function sanitizeTimingPayload(body: Record<string, unknown>): SanitizedTimingPa
     callCount: readFiniteNumber(body.callCount),
     callTypes: sanitizeCallTypes(body.callTypes),
     chainId,
+    contentRegistryAddress: readOptionalString(body.contentRegistryAddress),
     deltaMs: readFiniteNumber(body.deltaMs),
+    deploymentKey: readOptionalString(body.deploymentKey),
     elapsedMs: readFiniteNumber(body.elapsedMs),
     event,
     fallback: readOptionalFallback(body.fallback),
+    feedbackRegistryAddress: readOptionalString(body.feedbackRegistryAddress),
     message: readOptionalString(body.message),
     metadata: sanitizeMetadata(body.metadata),
     parentRunId: readOptionalString(body.parentRunId),
@@ -117,12 +128,17 @@ function sanitizeTimingPayload(body: Record<string, unknown>): SanitizedTimingPa
     route: readOptionalString(body.route),
     runId,
     segmentIndex: readFiniteNumber(body.segmentIndex),
+    sendCallsDurationMs: readFiniteNumber(body.sendCallsDurationMs),
+    sendCallsSlowThresholdMs: readFiniteNumber(body.sendCallsSlowThresholdMs),
     source,
     sponsorshipMode: readOptionalString(body.sponsorshipMode),
     status: readOptionalString(body.status),
     statusCode: readFiniteNumber(body.statusCode),
+    statusToastSuppressed: readOptionalBoolean(body.statusToastSuppressed),
+    thirdwebCallsId: readOptionalString(body.thirdwebCallsId),
     transactionHashCount: readFiniteNumber(body.transactionHashCount),
     transport: readOptionalString(body.transport),
+    walletExecutionMode: readOptionalString(body.walletExecutionMode),
     walletId: readOptionalString(body.walletId),
   };
 }
