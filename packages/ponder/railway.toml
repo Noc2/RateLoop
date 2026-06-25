@@ -3,3 +3,5 @@ builder = "NIXPACKS"
 
 [deploy]
 startCommand = "NODE_ENV=production yarn workspace @rateloop/ponder start:built-workspace-deps"
+healthcheckPath = "/ready"
+healthcheckTimeout = 900
