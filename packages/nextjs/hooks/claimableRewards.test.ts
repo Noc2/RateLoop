@@ -2,10 +2,13 @@ import {
   buildRoundClaimStateLookup,
   calculateLastClaimAwarePoolShare,
   claimItemMayWriteLrepCheckpoint,
+  getClaimableRewardItemKey,
   getClaimableRoundKey,
   getQuestionRewardClaimArgs,
   hasIndexedRefundClaim,
+  pollClaimableRewardsRefresh,
   sortClaimableRewardItems,
+  sumClaimableRewardTotals,
 } from "./claimableRewards";
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -292,6 +295,64 @@ test("getClaimableRoundKey namespaces question and bundle rewards", () => {
     }),
     null,
   );
+});
+
+test("getClaimableRewardItemKey includes claim type for round rewards", () => {
+  assert.equal(
+    getClaimableRewardItemKey({
+      contentId: 3n,
+      roundId: 4n,
+      reward: 1_000_000n,
+      claimType: "reward",
+    }),
+    "reward:3-4",
+  );
+  assert.equal(
+    getClaimableRewardItemKey({
+      contentId: 3n,
+      roundId: 4n,
+      reward: 1_000_000n,
+      claimType: "refund",
+    }),
+    "refund:3-4",
+  );
+});
+
+test("sumClaimableRewardTotals splits LREP and USDC question rewards", () => {
+  assert.deepEqual(
+    sumClaimableRewardTotals([
+      {
+        contentId: 3n,
+        roundId: 4n,
+        reward: 1_000_000n,
+        claimType: "reward",
+      },
+      {
+        rewardPoolId: 9n,
+        contentId: 5n,
+        roundId: 1n,
+        reward: 2_000_000n,
+        asset: "USDC",
+        title: "USDC bounty",
+        claimType: "question_reward",
+      },
+    ]),
+    {
+      totalLrepClaimable: 1_000_000n,
+      totalUsdcClaimable: 2_000_000n,
+    },
+  );
+});
+
+test("pollClaimableRewardsRefresh stops early when shouldStop returns true", async () => {
+  let refetchCount = 0;
+  await pollClaimableRewardsRefresh(
+    async () => {
+      refetchCount += 1;
+    },
+    { attempts: 8, intervalMs: 0, shouldStop: () => refetchCount >= 2 },
+  );
+  assert.equal(refetchCount, 2);
 });
 
 test("claimItemMayWriteLrepCheckpoint identifies LREP-paying claim paths", () => {

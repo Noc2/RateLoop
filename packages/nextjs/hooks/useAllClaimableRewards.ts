@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo } from "react";
 import { ROUND_STATE } from "@rateloop/contracts/protocol";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAccount, useReadContracts } from "wagmi";
 import {
   type ClaimableRewardItem,
@@ -14,6 +15,7 @@ import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import { useClaimableFrontendRewards } from "~~/hooks/useClaimableFrontendRewards";
 import { useClaimableQuestionRewards } from "~~/hooks/useClaimableQuestionRewards";
 import { useRecentUserVotes } from "~~/hooks/useRecentUserVotes";
+import { refreshActiveWalletReadQueries } from "~~/hooks/useRefreshWalletBalances";
 import type { PonderVoteItem } from "~~/services/ponder/client";
 
 const RBTS_REWARD_STATE_FIELDS = 3;
@@ -59,6 +61,7 @@ function isRefundRound(vote: PonderVoteItem) {
  * Uses Ponder API to find the user's recent votes, then checks on-chain state.
  */
 export function useAllClaimableRewards() {
+  const queryClient = useQueryClient();
   const { address } = useAccount();
   const { targetNetwork } = useTargetNetwork();
   const { votes, refetch: refetchVotes } = useRecentUserVotes(address);
@@ -138,11 +141,14 @@ export function useAllClaimableRewards() {
       if (isRefundRound(vote)) return !hasIndexedRefundClaim(vote);
       const lookup = claimLookups[i];
       if (!lookup) return true;
-      if (!claimedResults || claimedResults.length !== claimedContracts.length) return false;
+      if (!claimedResults || claimedResults.length !== claimedContracts.length) {
+        return claimedLoading ? false : true;
+      }
       const r = claimedResults[claimedIndex++];
-      return r?.status === "success" && r.result === false;
+      if (r?.status !== "success") return true;
+      return r.result === false;
     });
-  }, [terminalVotes, claimedContracts.length, claimedResults, claimLookups]);
+  }, [terminalVotes, claimedContracts.length, claimedLoading, claimedResults, claimLookups]);
 
   const { rewardVotes, refundVotes } = useMemo(() => {
     const rewards: typeof unclaimedVotes = [];
@@ -193,7 +199,11 @@ export function useAllClaimableRewards() {
       ]);
   }, [distributorInfo, engineInfo, settledRbtsVotes, targetNetwork.id]);
 
-  const { data: rbtsRewardStateResults, isLoading: rbtsRewardsLoading } = useReadContracts({
+  const {
+    data: rbtsRewardStateResults,
+    isLoading: rbtsRewardsLoading,
+    refetch: refetchRbtsRewardState,
+  } = useReadContracts({
     contracts: rbtsRewardStateContracts,
     query: { enabled: rbtsRewardStateContracts.length > 0 },
   });
@@ -217,6 +227,7 @@ export function useAllClaimableRewards() {
 
     // Add RBTS-scored rewards. Positive score spreads return stake and earn voter-pool share.
     if (
+      !rbtsRewardsLoading &&
       rbtsRewardStateResults &&
       rbtsRewardStateResults.length === settledRbtsVotes.length * RBTS_REWARD_STATE_FIELDS
     ) {
@@ -265,7 +276,7 @@ export function useAllClaimableRewards() {
     }
 
     return { claimableItems: items, activeStake: active };
-  }, [refundVotes, settledRbtsVotes, rbtsRewardStateResults, votes]);
+  }, [refundVotes, rbtsRewardsLoading, rbtsRewardStateResults, settledRbtsVotes, votes]);
 
   const combinedClaimableItems = useMemo(
     () => [...claimableItems, ...frontendClaimableItems, ...questionRewardPoolClaimableItems],
@@ -301,12 +312,23 @@ export function useAllClaimableRewards() {
   const isLoading =
     claimedLoading || rbtsRewardsLoading || frontendClaimableLoading || questionRewardPoolClaimableLoading;
 
-  const refetch = useCallback(() => {
-    refetchVotes();
-    refetchClaimed();
-    refetchFrontendClaimables();
-    refetchQuestionRewardPoolClaimables();
-  }, [refetchVotes, refetchClaimed, refetchFrontendClaimables, refetchQuestionRewardPoolClaimables]);
+  const refetch = useCallback(async () => {
+    await Promise.all([
+      refetchVotes(),
+      refetchClaimed(),
+      refetchRbtsRewardState(),
+      refetchFrontendClaimables(),
+      refetchQuestionRewardPoolClaimables(),
+      refreshActiveWalletReadQueries(queryClient),
+    ]);
+  }, [
+    queryClient,
+    refetchClaimed,
+    refetchFrontendClaimables,
+    refetchQuestionRewardPoolClaimables,
+    refetchRbtsRewardState,
+    refetchVotes,
+  ]);
 
   return {
     claimableItems: combinedClaimableItems,

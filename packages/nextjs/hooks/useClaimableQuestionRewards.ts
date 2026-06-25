@@ -126,7 +126,7 @@ export function useClaimableQuestionRewards() {
       if (!voterQuery) return [];
       const response = await ponderApi.getQuestionRewardClaimCandidates(
         voterQuery,
-        { limit: "200" },
+        { limit: "500" },
         { chainId: targetNetwork.id, deploymentKey: deployment?.deploymentKey },
       );
       return response.items;
@@ -147,7 +147,7 @@ export function useClaimableQuestionRewards() {
       if (!voterQuery) return [];
       const response = await ponderApi.getQuestionBundleRewardClaimCandidates(
         voterQuery,
-        { limit: "200" },
+        { limit: "500" },
         { chainId: targetNetwork.id, deploymentKey: deployment?.deploymentKey },
       );
       return response.items;
@@ -297,11 +297,13 @@ export function useClaimableQuestionRewards() {
     claimableItems: allClaimableItems,
     isLoading:
       candidatesLoading || claimablesLoading || bundleCandidatesLoading || bundleClaimablesLoading || delegationLoading,
-    refetch: () => {
-      refetchCandidates();
-      refetchClaimables();
-      refetchBundleCandidates();
-      refetchBundleClaimables();
+    refetch: async () => {
+      await Promise.all([
+        refetchCandidates(),
+        refetchClaimables(),
+        refetchBundleCandidates(),
+        refetchBundleClaimables(),
+      ]);
     },
   };
 }

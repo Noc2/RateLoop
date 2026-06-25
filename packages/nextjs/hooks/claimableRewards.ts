@@ -169,6 +169,62 @@ export function getClaimableRoundKey(item: ClaimableRewardItem) {
   return "roundId" in item ? `${item.contentId.toString()}-${item.roundId.toString()}` : null;
 }
 
+export function getClaimableRewardItemKey(item: ClaimableRewardItem) {
+  switch (item.claimType) {
+    case "question_reward":
+      return `question_reward:${item.rewardPoolId.toString()}-${item.roundId.toString()}`;
+    case "question_bundle_reward":
+      return `question_bundle_reward:${item.bundleId.toString()}-${item.roundSetIndex.toString()}`;
+    case "frontend_round_fee":
+      return `frontend_round_fee:${item.contentId.toString()}-${item.roundId.toString()}-${item.frontend}`;
+    case "frontend_registry_fee":
+      return `frontend_registry_fee:${item.frontend}`;
+    case "frontend_registry_withdrawal":
+      return `frontend_registry_withdrawal:${item.frontend}`;
+    case "reward":
+    case "refund":
+      return `${item.claimType}:${item.contentId.toString()}-${item.roundId.toString()}`;
+  }
+}
+
+export function sumClaimableRewardTotals(items: readonly ClaimableRewardItem[]) {
+  let totalLrepClaimable = 0n;
+  let totalUsdcClaimable = 0n;
+
+  for (const item of items) {
+    if (item.claimType === "question_reward" || item.claimType === "question_bundle_reward") {
+      if (item.asset === "LREP") {
+        totalLrepClaimable += item.reward;
+      } else {
+        totalUsdcClaimable += item.reward;
+      }
+      continue;
+    }
+
+    totalLrepClaimable += item.reward;
+  }
+
+  return { totalLrepClaimable, totalUsdcClaimable };
+}
+
+export async function pollClaimableRewardsRefresh(
+  refetch: () => Promise<unknown>,
+  options?: { attempts?: number; intervalMs?: number; shouldStop?: () => boolean },
+) {
+  const attempts = options?.attempts ?? 8;
+  const intervalMs = options?.intervalMs ?? 1_500;
+
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    await refetch();
+    if (options?.shouldStop?.()) {
+      break;
+    }
+    if (attempt + 1 < attempts) {
+      await new Promise(resolve => setTimeout(resolve, intervalMs));
+    }
+  }
+}
+
 function claimExecutionPriority(item: ClaimableRewardItem) {
   switch (item.claimType) {
     case "refund":

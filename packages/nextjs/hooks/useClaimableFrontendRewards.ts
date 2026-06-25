@@ -208,15 +208,15 @@ export function useClaimableFrontendRewards() {
 
   const totalClaimable = useMemo(() => claimableItems.reduce((sum, item) => sum + item.reward, 0n), [claimableItems]);
 
-  const refetch = useCallback(() => {
-    refetchFrontendInfo();
-    refetchExitAvailableAt();
-    refetchAccumulatedFees();
-    refetchPendingFeeWithdrawal();
-    refetchPendingFeeWithdrawalReleaseAt();
-    if (frontendAddress && canCreditRoundFees) {
-      void roundFeesQuery.refetch();
-    }
+  const refetch = useCallback(async () => {
+    await Promise.all([
+      refetchFrontendInfo(),
+      refetchExitAvailableAt(),
+      refetchAccumulatedFees(),
+      refetchPendingFeeWithdrawal(),
+      refetchPendingFeeWithdrawalReleaseAt(),
+      ...(frontendAddress && canCreditRoundFees ? [roundFeesQuery.refetch()] : []),
+    ]);
   }, [
     canCreditRoundFees,
     frontendAddress,

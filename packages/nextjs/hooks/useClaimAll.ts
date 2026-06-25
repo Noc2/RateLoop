@@ -410,11 +410,24 @@ export function useClaimAll() {
     await transaction();
   };
 
-  const claimAll = async (items: ClaimableRewardItem[], onComplete?: () => void) => {
+  const claimAll = async (
+    items: ClaimableRewardItem[],
+    onComplete?: (result: {
+      claimedItems: ClaimableRewardItem[];
+      failedItems: ClaimableRewardItem[];
+    }) => void | Promise<void>,
+  ) => {
     if (items.length === 0) return;
 
+    const notifyAborted = async () => {
+      await onComplete?.({ claimedItems: [], failedItems: items });
+    };
+
     const accepted = await requireAcceptance("claim");
-    if (!accepted) return;
+    if (!accepted) {
+      await notifyAborted();
+      return;
+    }
 
     if (walletTransactionReadiness.isBlocked) {
       const message = walletTransactionReadiness.message ?? "Wallet is unavailable.";
@@ -423,6 +436,7 @@ export function useClaimAll() {
       } else {
         notification.error(message);
       }
+      await notifyAborted();
       return;
     }
 
@@ -449,6 +463,7 @@ export function useClaimAll() {
       } else {
         notification.error(preflightError);
       }
+      await notifyAborted();
       return;
     }
 
@@ -459,6 +474,8 @@ export function useClaimAll() {
     setIsClaiming(true);
     const orderedItems = sortClaimableRewardItems(items);
     let creditedFrontendRoundCount = 0;
+    const claimedItems: ClaimableRewardItem[] = [];
+    const failedItems: ClaimableRewardItem[] = [];
     setProgress({ current: 0, total: orderedItems.length });
 
     try {
@@ -559,7 +576,9 @@ export function useClaimAll() {
               }
             });
           }
+          claimedItems.push(item);
         } catch (e: any) {
+          failedItems.push(item);
           console.error(`Claim failed for ${claimLabel}:`, e?.shortMessage || e?.message);
           if (isClaimGasShortageError(e, transactionFeedback)) {
             break;
@@ -571,7 +590,7 @@ export function useClaimAll() {
         }
       }
       await refreshWalletBalances(address);
-      onComplete?.();
+      await onComplete?.({ claimedItems, failedItems });
     } finally {
       setIsClaiming(false);
       setProgress({ current: 0, total: 0 });
