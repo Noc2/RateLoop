@@ -10,6 +10,30 @@ const ALT_MAX_LENGTH = 180;
 const ALLOWED_SHARE_IMAGE_HOSTS = new Set(["i.ytimg.com", "img.youtube.com"]);
 
 export type ContentShareRatingSource = "content_rating_bps" | "content_rating";
+export type ContentShareRewardCurrency = "LREP" | "USDC" | "MIXED";
+export type ContentShareRewardDisplayCurrency = "LREP" | "USD" | "MIXED";
+
+type ContentShareRewardAmountInput = bigint | number | string | null | undefined;
+
+interface ContentShareRewardSummaryInput {
+  asset?: ContentShareRewardAmountInput;
+  currency?: string | null;
+  displayCurrency?: string | null;
+  decimals?: number | null;
+}
+
+interface ContentShareRewardPoolSummaryInput extends ContentShareRewardSummaryInput {
+  activeUnallocated?: ContentShareRewardAmountInput;
+  activeUnallocatedAmount?: ContentShareRewardAmountInput;
+  currentRewardPoolAmount?: ContentShareRewardAmountInput;
+  totalAvailable?: ContentShareRewardAmountInput;
+}
+
+interface ContentShareFeedbackBonusSummaryInput extends ContentShareRewardSummaryInput {
+  activeRemainingAmount?: ContentShareRewardAmountInput;
+  totalRemaining?: ContentShareRewardAmountInput;
+  totalRemainingAmount?: ContentShareRewardAmountInput;
+}
 
 export interface ContentShareContentInput {
   id: string;
@@ -35,6 +59,8 @@ export interface ContentShareContentInput {
   openRound?: {
     voteCount?: number;
   } | null;
+  rewardPoolSummary?: ContentShareRewardPoolSummaryInput | null;
+  feedbackBonusSummary?: ContentShareFeedbackBonusSummaryInput | null;
 }
 
 export interface ContentShareRating {
@@ -42,6 +68,13 @@ export interface ContentShareRating {
   ratingBps: number;
   label: string;
   source: ContentShareRatingSource;
+}
+
+export interface ContentShareReward {
+  amount: string;
+  amountLabel: string;
+  currency: ContentShareRewardCurrency;
+  displayCurrency: ContentShareRewardDisplayCurrency;
 }
 
 export interface ContentShareData {
@@ -57,6 +90,9 @@ export interface ContentShareData {
   ratingVersion: string;
   totalVotes: number;
   openRoundVoteCount: number;
+  bountyReward: ContentShareReward | null;
+  feedbackBonusReward: ContentShareReward | null;
+  rewardSummary: string;
   shareUrl: string;
   imageUrl: string;
 }
@@ -75,6 +111,95 @@ function truncateText(value: string, maxLength: number): string {
 function normalizeFiniteInteger(value: number | undefined, fallback = 0): number {
   if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
   return Math.max(0, Math.round(value));
+}
+
+function normalizeNonNegativeBigInt(value: ContentShareRewardAmountInput): bigint | null {
+  if (typeof value === "bigint") return value >= 0n ? value : null;
+
+  if (typeof value === "number") {
+    return Number.isSafeInteger(value) && value >= 0 ? BigInt(value) : null;
+  }
+
+  const trimmed = value?.trim();
+  if (!trimmed || !/^\d+$/.test(trimmed)) return null;
+
+  return BigInt(trimmed);
+}
+
+function firstDefinedBigInt(...values: ContentShareRewardAmountInput[]): bigint {
+  for (const value of values) {
+    const normalized = normalizeNonNegativeBigInt(value);
+    if (normalized !== null) return normalized;
+  }
+
+  return 0n;
+}
+
+function normalizeRewardCurrency(
+  currency: string | null | undefined,
+  asset: ContentShareRewardAmountInput,
+): ContentShareRewardCurrency {
+  const normalizedCurrency = currency?.trim().toUpperCase();
+  if (normalizedCurrency === "LREP" || normalizedCurrency === "USDC" || normalizedCurrency === "MIXED") {
+    return normalizedCurrency;
+  }
+
+  const normalizedAsset = normalizeNonNegativeBigInt(asset);
+  if (normalizedAsset === 0n) return "LREP";
+  if (normalizedAsset === 1n) return "USDC";
+  return "USDC";
+}
+
+function normalizeRewardDisplayCurrency(
+  displayCurrency: string | null | undefined,
+  currency: ContentShareRewardCurrency,
+): ContentShareRewardDisplayCurrency {
+  const normalizedDisplayCurrency = displayCurrency?.trim().toUpperCase();
+  if (
+    normalizedDisplayCurrency === "LREP" ||
+    normalizedDisplayCurrency === "USD" ||
+    normalizedDisplayCurrency === "MIXED"
+  ) {
+    return normalizedDisplayCurrency;
+  }
+
+  if (currency === "LREP") return "LREP";
+  if (currency === "MIXED") return "MIXED";
+  return "USD";
+}
+
+function normalizeRewardDecimals(value: number | null | undefined): number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 && value <= 18 ? value : 6;
+}
+
+function formatAtomicTokenAmount(value: bigint, decimals: number): string {
+  const scale = 10n ** BigInt(decimals);
+  const whole = scale > 0n ? value / scale : value;
+  const fractional = scale > 0n ? value % scale : 0n;
+  const groupedWhole = whole.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  const fractionalText = decimals > 0 ? fractional.toString().padStart(decimals, "0").replace(/0+$/, "") : "";
+  return fractionalText ? `${groupedWhole}.${fractionalText}` : groupedWhole;
+}
+
+function formatUsdRewardAmount(value: bigint, decimals: number): string {
+  const scale = 10n ** BigInt(decimals);
+  const rawCents = scale > 0n ? (value * 100n + scale / 2n) / scale : value * 100n;
+  const wholeCents = rawCents / 100n;
+  const cents = rawCents % 100n;
+  const groupedWhole = wholeCents.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  const fractional = scale > 0n ? value % scale : 0n;
+  return fractional > 0n ? `$${groupedWhole}.${cents.toString().padStart(2, "0")}` : `$${groupedWhole}`;
+}
+
+function formatContentShareRewardAmount(
+  value: bigint,
+  decimals: number,
+  currency: ContentShareRewardCurrency,
+  displayCurrency: ContentShareRewardDisplayCurrency,
+): string {
+  if (currency === "MIXED" || displayCurrency === "MIXED") return "Mixed";
+  if (currency === "LREP" || displayCurrency === "LREP") return `${formatAtomicTokenAmount(value, decimals)} LREP`;
+  return formatUsdRewardAmount(value, decimals);
 }
 
 function normalizeRatingBps(value: number | undefined): number | null {
@@ -170,6 +295,73 @@ export function resolveContentShareRating(content: ContentShareContentInput): Co
   };
 }
 
+export function resolveContentShareBountyReward(content: ContentShareContentInput): ContentShareReward | null {
+  const summary = content.rewardPoolSummary;
+  if (!summary) return null;
+
+  const amount = firstDefinedBigInt(
+    summary.activeUnallocatedAmount,
+    summary.activeUnallocated,
+    summary.totalAvailable,
+    summary.currentRewardPoolAmount,
+  );
+  if (amount <= 0n) return null;
+
+  const decimals = normalizeRewardDecimals(summary.decimals);
+  const currency = normalizeRewardCurrency(summary.currency, summary.asset);
+  const displayCurrency = normalizeRewardDisplayCurrency(summary.displayCurrency, currency);
+
+  return {
+    amount: amount.toString(),
+    amountLabel: formatContentShareRewardAmount(amount, decimals, currency, displayCurrency),
+    currency,
+    displayCurrency,
+  };
+}
+
+export function resolveContentShareFeedbackBonusReward(content: ContentShareContentInput): ContentShareReward | null {
+  const summary = content.feedbackBonusSummary;
+  if (!summary) return null;
+
+  const amount = firstDefinedBigInt(
+    summary.totalRemaining,
+    summary.activeRemainingAmount,
+    summary.totalRemainingAmount,
+  );
+  if (amount <= 0n) return null;
+
+  const decimals = normalizeRewardDecimals(summary.decimals);
+  const currency = normalizeRewardCurrency(summary.currency, summary.asset);
+  const displayCurrency = normalizeRewardDisplayCurrency(summary.displayCurrency, currency);
+
+  return {
+    amount: amount.toString(),
+    amountLabel: formatContentShareRewardAmount(amount, decimals, currency, displayCurrency),
+    currency,
+    displayCurrency,
+  };
+}
+
+function buildRewardVersionPart(reward: ContentShareReward | null): string {
+  return reward ? `${reward.currency.toLowerCase()}-${reward.amount}` : "none";
+}
+
+function buildRewardSummary(bountyReward: ContentShareReward | null, feedbackBonusReward: ContentShareReward | null) {
+  if (bountyReward && feedbackBonusReward) {
+    return `Potential rewards: ${bountyReward.amountLabel} in bounties and ${feedbackBonusReward.amountLabel} in Feedback Bonuses.`;
+  }
+
+  if (bountyReward) {
+    return `Potential bounty: ${bountyReward.amountLabel} for eligible raters.`;
+  }
+
+  if (feedbackBonusReward) {
+    return `Potential Feedback Bonus: ${feedbackBonusReward.amountLabel} for useful rater feedback.`;
+  }
+
+  return "Potential bounties and Feedback Bonuses appear on RateLoop when available.";
+}
+
 export function buildContentShareRatingVersion(
   content: ContentShareContentInput,
   rating = resolveContentShareRating(content),
@@ -177,8 +369,12 @@ export function buildContentShareRatingVersion(
   const activitySeconds = normalizeActivitySeconds(content.lastActivityAt);
   const totalVotes = normalizeFiniteInteger(content.totalVotes);
   const openRoundVoteCount = normalizeFiniteInteger(content.openRound?.voteCount);
+  const bountyReward = resolveContentShareBountyReward(content);
+  const feedbackBonusReward = resolveContentShareFeedbackBonusReward(content);
 
-  return `r-${content.id}-${rating?.ratingBps ?? "na"}-${totalVotes}-${openRoundVoteCount}-${activitySeconds}`;
+  return `r-${content.id}-${rating?.ratingBps ?? "na"}-${totalVotes}-${openRoundVoteCount}-${activitySeconds}-${buildRewardVersionPart(
+    bountyReward,
+  )}-${buildRewardVersionPart(feedbackBonusReward)}`;
 }
 
 function setContentShareScopeParams(url: URL, content: ContentShareContentInput) {
@@ -217,15 +413,16 @@ export function buildContentShareData(content: ContentShareContentInput, origin:
   const ratingVersion = buildContentShareRatingVersion(content, rating);
   const totalVotes = normalizeFiniteInteger(content.totalVotes);
   const openRoundVoteCount = normalizeFiniteInteger(content.openRound?.voteCount);
+  const bountyReward = resolveContentShareBountyReward(content);
+  const feedbackBonusReward = resolveContentShareFeedbackBonusReward(content);
+  const rewardSummary = buildRewardSummary(bountyReward, feedbackBonusReward);
   const voteLabel = `${totalVotes} vote${totalVotes === 1 ? "" : "s"}`;
   const title = truncateText(
     rating ? `Rated ${rating.label}/10 on RateLoop: ${contentTitle}` : `Rate this on RateLoop: ${contentTitle}`,
     TITLE_MAX_LENGTH,
   );
   const description = truncateText(
-    rating
-      ? `Current rating ${rating.label}/10 from ${voteLabel}. Disagree? Stake LREP and vote.`
-      : `No community rating yet. Stake LREP and be among the first raters.`,
+    rating ? `Current rating ${rating.label}/10 from ${voteLabel}. Disagree? Stake LREP and vote.` : rewardSummary,
     DESCRIPTION_MAX_LENGTH,
   );
   const imageAlt = truncateText(
@@ -248,6 +445,9 @@ export function buildContentShareData(content: ContentShareContentInput, origin:
     ratingVersion,
     totalVotes,
     openRoundVoteCount,
+    bountyReward,
+    feedbackBonusReward,
+    rewardSummary,
     shareUrl: buildVoteShareUrl(origin, content, ratingVersion),
     imageUrl: buildVoteShareImageUrl(origin, content, ratingVersion),
   };

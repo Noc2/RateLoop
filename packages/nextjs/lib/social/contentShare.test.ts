@@ -70,7 +70,7 @@ test("buildContentShareRatingVersion accepts Ponder epoch-second timestamps", ()
       ...baseContent,
       lastActivityAt: "1776160800",
     }),
-    "r-88-6700-12-0-1776160800",
+    "r-88-6700-12-0-1776160800-none-none",
   );
 });
 
@@ -80,7 +80,7 @@ test("buildContentShareRatingVersion accepts Ponder epoch-millisecond timestamps
       ...baseContent,
       lastActivityAt: "1776160800000",
     }),
-    "r-88-6700-12-0-1776160800",
+    "r-88-6700-12-0-1776160800-none-none",
   );
 });
 
@@ -131,8 +131,39 @@ test("buildContentShareData omits the rating label for unrated content", () => {
 
   assert.equal(data.rating, null);
   assert.match(data.title, /Rate this on RateLoop/);
-  assert.match(data.description, /No community rating yet/);
+  assert.match(data.description, /Potential bounties and Feedback Bonuses/);
   assert.match(data.ratingVersion, /r-88-na-/);
+});
+
+test("buildContentShareData summarizes potential bounty and feedback bonus rewards", () => {
+  const data = buildContentShareData(
+    {
+      ...baseContent,
+      rating: 50,
+      ratingBps: 5_000,
+      ratingSettledRounds: 0,
+      rewardPoolSummary: {
+        asset: 1,
+        currency: "USDC",
+        displayCurrency: "USD",
+        decimals: 6,
+        currentRewardPoolAmount: "2500000",
+      },
+      feedbackBonusSummary: {
+        asset: 1,
+        currency: "USDC",
+        displayCurrency: "USD",
+        decimals: 6,
+        totalRemainingAmount: "1500000",
+      },
+    },
+    "https://www.rateloop.ai",
+  );
+
+  assert.equal(data.bountyReward?.amountLabel, "$2.50");
+  assert.equal(data.feedbackBonusReward?.amountLabel, "$1.50");
+  assert.match(data.description, /Potential rewards: \$2\.50 in bounties and \$1\.50 in Feedback Bonuses/);
+  assert.match(data.ratingVersion, /usdc-2500000-usdc-1500000/);
 });
 
 test("resolveContentShareImageUrl prefers explicit HTTPS image metadata", () => {

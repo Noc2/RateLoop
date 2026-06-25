@@ -287,18 +287,24 @@ function Metric({ label, value, valueFontSize = 38 }: { label: string; value: st
   );
 }
 
+function getRewardMetricFontSize(value: string): number {
+  return value.length > 14 ? 25 : 31;
+}
+
 function RatingShareImage({ shareData }: { shareData: ContentShareData }) {
   const ratingLabel = shareData.rating?.label ?? "N/A";
   const hasRating = shareData.rating !== null;
-  const openRoundLabel =
-    shareData.openRoundVoteCount > 0
-      ? `${shareData.openRoundVoteCount} hidden vote${shareData.openRoundVoteCount === 1 ? "" : "s"}`
-      : "Ready for your vote";
+  const bountyValue = shareData.bountyReward?.amountLabel ?? "When funded";
+  const feedbackBonusValue = shareData.feedbackBonusReward?.amountLabel ?? "When funded";
 
-  const ratingMetrics = (
+  const rewardMetrics = (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      <Metric label="Total votes" value={shareData.totalVotes.toLocaleString("en-US")} valueFontSize={34} />
-      <Metric label="Open round" value={openRoundLabel} valueFontSize={21} />
+      <Metric label="Bounties" value={bountyValue} valueFontSize={getRewardMetricFontSize(bountyValue)} />
+      <Metric
+        label="Feedback bonuses"
+        value={feedbackBonusValue}
+        valueFontSize={getRewardMetricFontSize(feedbackBonusValue)}
+      />
     </div>
   );
 
@@ -339,7 +345,7 @@ function RatingShareImage({ shareData }: { shareData: ContentShareData }) {
 
       <div style={{ display: "flex", flex: 1, gap: 44, alignItems: "center", paddingTop: 46 }}>
         <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
-          <BrandKicker>{hasRating ? "Current RateLoop rating" : "Community rating pending"}</BrandKicker>
+          <BrandKicker>{hasRating ? "Current RateLoop rating" : "RateLoop rating round"}</BrandKicker>
           <div
             style={{
               fontFamily: headingFontFamily,
@@ -361,7 +367,7 @@ function RatingShareImage({ shareData }: { shareData: ContentShareData }) {
               maxWidth: 700,
             }}
           >
-            {shareData.contentDescription || "Stake LREP, vote with conviction, and move the rating."}
+            {shareData.contentDescription || shareData.rewardSummary}
           </div>
         </div>
 
@@ -411,9 +417,9 @@ function RatingShareImage({ shareData }: { shareData: ContentShareData }) {
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: 18 }}>
                 <div style={{ fontSize: 23, fontWeight: 700, color: brandColors.warmWhite }}>
-                  {hasRating ? "Current rating" : "No rating yet"}
+                  {hasRating ? "Rating + rewards" : "Potential rewards"}
                 </div>
-                {ratingMetrics}
+                {rewardMetrics}
               </div>
             </div>
           </GradientFrame>
@@ -432,7 +438,7 @@ function RatingShareImage({ shareData }: { shareData: ContentShareData }) {
               }}
             >
               <div style={{ fontSize: 26, fontWeight: 700, color: brandColors.warmWhite }}>
-                {hasRating ? "Current rating" : "No rating yet"}
+                {hasRating ? "Rating + rewards" : "Potential rewards"}
               </div>
               <RatingBadge ratingLabel={ratingLabel} hasRating={hasRating} size={160} />
               <div
@@ -443,7 +449,7 @@ function RatingShareImage({ shareData }: { shareData: ContentShareData }) {
                   background: "rgba(245,245,245,0.1)",
                 }}
               />
-              {ratingMetrics}
+              {rewardMetrics}
             </div>
           </GradientFrame>
         )}
@@ -478,7 +484,7 @@ function FallbackShareImage() {
         Human reputation at stake
       </div>
       <div style={{ color: "rgba(245,245,245,0.76)", fontSize: 34, marginTop: 28 }}>
-        Get verified, stake LREP, and rate content.
+        Rate content, find bounties, and share useful feedback.
       </div>
     </div>
   );
