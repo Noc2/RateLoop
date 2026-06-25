@@ -1,4 +1,8 @@
-import { buildClaimRewardsButtonLabel, buildClaimRewardsButtonParts } from "./ClaimRewardsButton";
+import {
+  buildClaimRewardsButtonLabel,
+  buildClaimRewardsButtonParts,
+  shouldShowClaimPreparationLabel,
+} from "./ClaimRewardsButton";
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -62,5 +66,32 @@ test("buildClaimRewardsButtonParts returns compact sidebar amount parts", () => 
       totalUsdcClaimable: 1_670_000n,
     }),
     ["13.4", "$1.67"],
+  );
+});
+
+test("shouldShowClaimPreparationLabel only reflects an active claim attempt", () => {
+  assert.equal(
+    shouldShowClaimPreparationLabel({
+      isClaimAttemptInFlight: false,
+      isClaiming: false,
+      isPreparingClaim: true,
+    }),
+    false,
+  );
+  assert.equal(
+    shouldShowClaimPreparationLabel({
+      isClaimAttemptInFlight: true,
+      isClaiming: false,
+      isPreparingClaim: true,
+    }),
+    true,
+  );
+  assert.equal(
+    shouldShowClaimPreparationLabel({
+      isClaimAttemptInFlight: true,
+      isClaiming: true,
+      isPreparingClaim: true,
+    }),
+    false,
   );
 });

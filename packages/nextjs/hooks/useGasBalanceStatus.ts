@@ -4,7 +4,11 @@ import { useMemo } from "react";
 import { useActiveWalletChain } from "thirdweb/react";
 import { useAccount, useBalance } from "wagmi";
 import { useWalletRestore } from "~~/contexts/WalletRestoreContext";
-import { useFreeTransactionAllowance } from "~~/hooks/useFreeTransactionAllowance";
+import {
+  type SponsorshipSyncStatus,
+  isPendingSponsorshipSyncStatus,
+  useFreeTransactionAllowance,
+} from "~~/hooks/useFreeTransactionAllowance";
 import {
   type WalletExecutionMode,
   resolveWalletExecutionChainId,
@@ -51,12 +55,31 @@ export function shouldAwaitSelfFundedGasModeReconnect(params: {
   freeTransactionAllowanceResolved: boolean;
   includeExternalSendCalls: boolean;
   isThirdwebInApp: boolean;
+  sponsorshipSyncStatus?: SponsorshipSyncStatus;
 }) {
   return (
     shouldExpectThirdwebGasMode(params) &&
     params.freeTransactionAllowanceResolved &&
     !params.canUseFreeTransactions &&
-    params.executionMode === "sponsored_7702"
+    params.executionMode === "sponsored_7702" &&
+    (params.sponsorshipSyncStatus === undefined || isPendingSponsorshipSyncStatus(params.sponsorshipSyncStatus))
+  );
+}
+
+export function shouldAwaitSponsoredGasModeReconnect(params: {
+  canUseFreeTransactions: boolean;
+  chainId: number | undefined;
+  connectorId: string | undefined;
+  executionMode: WalletExecutionMode;
+  includeExternalSendCalls: boolean;
+  isThirdwebInApp: boolean;
+  sponsorshipSyncStatus?: SponsorshipSyncStatus;
+}) {
+  return (
+    shouldExpectThirdwebGasMode(params) &&
+    params.canUseFreeTransactions &&
+    params.executionMode !== "sponsored_7702" &&
+    (params.sponsorshipSyncStatus === undefined || isPendingSponsorshipSyncStatus(params.sponsorshipSyncStatus))
   );
 }
 
@@ -89,14 +112,21 @@ export function useGasBalanceStatus(options: GasBalanceStatusOptions = {}) {
       includeExternalSendCalls: includeExternalSendCalls && allowInAppSponsorshipSync,
       isThirdwebInApp,
     });
-    const hasExecutableSponsoredCalls = executionMode === "sponsored_7702";
     const supportsSponsoredCalls = expectsThirdwebGasMode;
     const canSponsorTransactions = supportsSponsoredCalls && freeTransactionAllowance.canUseFreeTransactions;
     const isAwaitingFreeTransactionAllowance =
       supportsSponsoredCalls && !isRestoringWallet && !freeTransactionAllowance.isResolved;
     const isAwaitingSponsoredWalletReconnect =
       (isRestoringWallet && expectsThirdwebGasMode) ||
-      (expectsThirdwebGasMode && freeTransactionAllowance.canUseFreeTransactions && !hasExecutableSponsoredCalls);
+      shouldAwaitSponsoredGasModeReconnect({
+        canUseFreeTransactions: freeTransactionAllowance.canUseFreeTransactions,
+        chainId: resolvedChainId,
+        connectorId: connector?.id,
+        executionMode,
+        includeExternalSendCalls: includeExternalSendCalls && allowInAppSponsorshipSync,
+        isThirdwebInApp,
+        sponsorshipSyncStatus: freeTransactionAllowance.sponsorshipSyncStatus,
+      });
     const isAwaitingSelfFundedWalletReconnect = shouldAwaitSelfFundedGasModeReconnect({
       canUseFreeTransactions: freeTransactionAllowance.canUseFreeTransactions,
       chainId: resolvedChainId,
@@ -105,6 +135,7 @@ export function useGasBalanceStatus(options: GasBalanceStatusOptions = {}) {
       freeTransactionAllowanceResolved: freeTransactionAllowance.isResolved,
       includeExternalSendCalls: includeExternalSendCalls && allowInAppSponsorshipSync,
       isThirdwebInApp,
+      sponsorshipSyncStatus: freeTransactionAllowance.sponsorshipSyncStatus,
     });
     const isMissingGasBalance =
       hasResolvedNativeBalance &&
@@ -151,6 +182,7 @@ export function useGasBalanceStatus(options: GasBalanceStatusOptions = {}) {
     freeTransactionAllowance.isResolved,
     freeTransactionAllowance.verified,
     freeTransactionAllowance.raterIdentityKey,
+    freeTransactionAllowance.sponsorshipSyncStatus,
     includeExternalSendCalls,
     isThirdwebInApp,
     isRestoringWallet,

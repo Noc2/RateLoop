@@ -1,5 +1,6 @@
 import {
   shouldAwaitSelfFundedGasModeReconnect,
+  shouldAwaitSponsoredGasModeReconnect,
   shouldExpectThirdwebGasMode,
   shouldShowFreeTransactionAllowance,
 } from "./useGasBalanceStatus";
@@ -142,6 +143,24 @@ test("stops awaiting self-funded reconnect after wallet switches to paid gas", (
   );
 });
 
+test("does not await self-funded reconnect forever after sponsorship sync fails", () => {
+  for (const sponsorshipSyncStatus of ["failed", "timed_out"] as const) {
+    assert.equal(
+      shouldAwaitSelfFundedGasModeReconnect({
+        canUseFreeTransactions: false,
+        chainId: 480,
+        connectorId: "in-app-wallet",
+        executionMode: "sponsored_7702",
+        freeTransactionAllowanceResolved: true,
+        includeExternalSendCalls: true,
+        isThirdwebInApp: true,
+        sponsorshipSyncStatus,
+      }),
+      false,
+    );
+  }
+});
+
 test("does not await self-funded reconnect after wallet falls back to direct transactions", () => {
   assert.equal(
     shouldAwaitSelfFundedGasModeReconnect({
@@ -155,4 +174,38 @@ test("does not await self-funded reconnect after wallet falls back to direct tra
     }),
     false,
   );
+});
+
+test("awaits sponsored reconnect only while sponsorship sync is active", () => {
+  for (const sponsorshipSyncStatus of ["pending", "syncing"] as const) {
+    assert.equal(
+      shouldAwaitSponsoredGasModeReconnect({
+        canUseFreeTransactions: true,
+        chainId: 480,
+        connectorId: "in-app-wallet",
+        executionMode: "self_funded_7702",
+        includeExternalSendCalls: true,
+        isThirdwebInApp: true,
+        sponsorshipSyncStatus,
+      }),
+      true,
+    );
+  }
+});
+
+test("does not await sponsored reconnect forever after sponsorship sync fails", () => {
+  for (const sponsorshipSyncStatus of ["failed", "timed_out"] as const) {
+    assert.equal(
+      shouldAwaitSponsoredGasModeReconnect({
+        canUseFreeTransactions: true,
+        chainId: 480,
+        connectorId: "in-app-wallet",
+        executionMode: "self_funded_7702",
+        includeExternalSendCalls: true,
+        isThirdwebInApp: true,
+        sponsorshipSyncStatus,
+      }),
+      false,
+    );
+  }
 });

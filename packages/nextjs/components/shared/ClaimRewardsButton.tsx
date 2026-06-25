@@ -57,6 +57,18 @@ export function buildClaimRewardsButtonLabel({
   return claimParts.length > 0 ? `Claim ${claimParts.join(" + ")}` : null;
 }
 
+export function shouldShowClaimPreparationLabel({
+  isClaimAttemptInFlight,
+  isClaiming,
+  isPreparingClaim,
+}: {
+  isClaimAttemptInFlight: boolean;
+  isClaiming: boolean;
+  isPreparingClaim: boolean;
+}) {
+  return isClaimAttemptInFlight && isPreparingClaim && !isClaiming;
+}
+
 export function ClaimRewardsButton({ className, layout = "default", showTokenSymbol = true }: ClaimRewardsButtonProps) {
   const { address } = useAccount();
   const {
@@ -69,10 +81,13 @@ export function ClaimRewardsButton({ className, layout = "default", showTokenSym
   } = useAllClaimableRewards();
   const { claimAll, isClaiming, isPreparingClaim, progress } = useClaimAll();
   const [optimisticallyClaimedKeys, setOptimisticallyClaimedKeys] = useState<Set<string>>(() => new Set());
+  const [isClaimAttemptInFlight, setIsClaimAttemptInFlight] = useState(false);
   const claimInFlightRef = useRef(false);
   const claimableItemsRef = useRef(claimableItems);
 
   useEffect(() => {
+    claimInFlightRef.current = false;
+    setIsClaimAttemptInFlight(false);
     setOptimisticallyClaimedKeys(new Set());
   }, [address]);
 
@@ -110,12 +125,13 @@ export function ClaimRewardsButton({ className, layout = "default", showTokenSym
   }, [claimableItems, optimisticallyClaimedKeys.size]);
 
   const handleClaimAll = useCallback(() => {
-    if (claimInFlightRef.current || isClaiming || isPreparingClaim) return;
+    if (claimInFlightRef.current || isClaiming) return;
 
     const itemsToClaim = visibleClaimableItems;
     if (itemsToClaim.length === 0) return;
 
     claimInFlightRef.current = true;
+    setIsClaimAttemptInFlight(true);
     const claimKeys = itemsToClaim.map(getClaimableRewardItemKey);
     setOptimisticallyClaimedKeys(previousKeys => new Set([...previousKeys, ...claimKeys]));
 
@@ -164,15 +180,22 @@ export function ClaimRewardsButton({ className, layout = "default", showTokenSym
       });
     }).finally(() => {
       claimInFlightRef.current = false;
+      setIsClaimAttemptInFlight(false);
     });
-  }, [claimAll, isClaiming, isPreparingClaim, refetchClaimable, visibleClaimableItems]);
+  }, [claimAll, isClaiming, refetchClaimable, visibleClaimableItems]);
+
+  const isPreparingActiveClaim = shouldShowClaimPreparationLabel({
+    isClaimAttemptInFlight,
+    isClaiming,
+    isPreparingClaim,
+  });
 
   if (
     visibleClaimableItems.length === 0 &&
     totalLrepClaimable <= 0n &&
     totalUsdcClaimable <= 0n &&
     !isClaiming &&
-    !isPreparingClaim &&
+    !isPreparingActiveClaim &&
     !ponderUnavailable
   ) {
     return null;
@@ -183,7 +206,7 @@ export function ClaimRewardsButton({ className, layout = "default", showTokenSym
     !claimablesLoading &&
     visibleClaimableItems.length === 0 &&
     !isClaiming &&
-    !isPreparingClaim
+    !isPreparingActiveClaim
   ) {
     return (
       <p className={`${className ?? ""} text-xs text-base-content/60`} role="status">
@@ -199,13 +222,13 @@ export function ClaimRewardsButton({ className, layout = "default", showTokenSym
   });
   const claimLabel = claimParts.length > 0 ? `Claim ${claimParts.join(" + ")}` : null;
 
-  if (!claimLabel && !isClaiming && !isPreparingClaim) {
+  if (!claimLabel && !isClaiming && !isPreparingActiveClaim) {
     return null;
   }
 
-  const isProcessing = isClaiming || isPreparingClaim;
+  const isProcessing = isClaiming || isPreparingActiveClaim;
   const useCompactMixedRewardLabel = layout === "compact" && claimParts.length > 1 && !isProcessing;
-  const label = isPreparingClaim ? (
+  const label = isPreparingActiveClaim ? (
     "Preparing..."
   ) : isClaiming ? (
     `Claim ${progress.current}/${progress.total}`
@@ -222,7 +245,7 @@ export function ClaimRewardsButton({ className, layout = "default", showTokenSym
     <div className={className}>
       <GradientActionButton
         onClick={handleClaimAll}
-        disabled={isClaiming || isPreparingClaim || visibleClaimableItems.length === 0}
+        disabled={isClaiming || isPreparingActiveClaim || visibleClaimableItems.length === 0}
         fullWidth
         size="sm"
         data-claim-layout={useCompactMixedRewardLabel ? "compact" : undefined}
