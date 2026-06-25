@@ -329,6 +329,22 @@ describe("ponder config", () => {
     ).rejects.toThrow("NODE_ENV=production is required when PONDER_NETWORK=base.");
   }, PONDER_CONFIG_TEST_TIMEOUT_MS);
 
+  it("rejects local E2E flags on live Ponder networks", async () => {
+    await expect(
+      loadPonderConfig(
+        {
+          PONDER_NETWORK: "baseSepolia",
+          PONDER_RPC_URL_84532: "https://sepolia.base.org",
+          RATELOOP_E2E_PRODUCTION_BUILD: "true",
+          NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD: "true",
+        },
+        LIVE_CONTRACT_ENV_REMOVALS,
+      ),
+    ).rejects.toThrow(
+      "RATELOOP_E2E_PRODUCTION_BUILD and NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD are local test flags and must not be set when PONDER_NETWORK=baseSepolia.",
+    );
+  }, PONDER_CONFIG_TEST_TIMEOUT_MS);
+
   it("treats blank live RPC placeholders as unset in non-production", async () => {
     const { default: config } = await loadPonderConfig(
       {

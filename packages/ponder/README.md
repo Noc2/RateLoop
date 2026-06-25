@@ -62,6 +62,8 @@ the Foundry deployment script refreshes `packages/ponder/.env.local` to match th
 `PONDER_NETWORK=hardhat`. Run production indexing with `PONDER_NETWORK=base` and `PONDER_RPC_URL_8453`; use
 `PONDER_NETWORK=baseSepolia` with `PONDER_RPC_URL_84532` for staging and validation before future production changes.
 World Chain live networks remain supported as `worldchainSepolia` and `worldchain`.
+Keep `RATELOOP_E2E_PRODUCTION_BUILD` and `NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD` unset for Ponder live-chain
+services. Those flags are for local Next.js/Playwright test behavior and Ponder rejects them outside `hardhat`.
 
 In production, `yarn ponder:start` launches Ponder with an explicit Postgres schema. On Railway, the
 launcher uses `RAILWAY_DEPLOYMENT_ID`, matching Ponder's zero-downtime deployment model and keeping new

@@ -206,11 +206,7 @@ function isAllowedLocalHttpArtifactUrl(value: string): boolean {
 }
 
 function shouldAllowLocalHttpArtifacts(): boolean {
-  return (
-    process.env.PONDER_NETWORK === "hardhat" ||
-    process.env.RATELOOP_E2E_PRODUCTION_BUILD === "true" ||
-    process.env.NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD === "true"
-  );
+  return process.env.PONDER_NETWORK === "hardhat";
 }
 
 function stripTrailingSlash(value: string): string {

@@ -253,7 +253,7 @@ describe("payout artifact proof resolution", () => {
     expect(fetchMock).toHaveBeenCalledOnce();
   });
 
-  it("fetches loopback HTTP artifacts only in hardhat or E2E environments", async () => {
+  it("fetches loopback HTTP artifacts only in hardhat", async () => {
     const fetchMock = mockArtifactFetch();
     let { resolveQuestionPayoutProof } = await loadResolver();
 
@@ -278,6 +278,22 @@ describe("payout artifact proof resolution", () => {
       "http://127.0.0.1:9091/correlation-artifacts/test.json",
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
+  });
+
+  it("rejects loopback HTTP artifacts on live networks even when E2E flags are set", async () => {
+    const fetchMock = mockArtifactFetch();
+    process.env.PONDER_NETWORK = "base";
+    process.env.RATELOOP_E2E_PRODUCTION_BUILD = "true";
+    process.env.NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD = "true";
+    const { resolveQuestionPayoutProof } = await loadResolver();
+
+    await expect(
+      resolveQuestionPayoutProof({
+        ...proofParams,
+        artifactUri: "http://127.0.0.1:9091/correlation-artifacts/test.json",
+      }),
+    ).resolves.toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("rejects non-loopback HTTP artifact URLs in hardhat", async () => {

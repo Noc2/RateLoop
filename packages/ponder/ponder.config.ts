@@ -107,6 +107,15 @@ const activeNetwork = getActiveNetwork();
 if (activeNetwork === "base" && !isProduction) {
   throw new Error("NODE_ENV=production is required when PONDER_NETWORK=base.");
 }
+if (
+  activeNetwork !== "hardhat" &&
+  (process.env.RATELOOP_E2E_PRODUCTION_BUILD === "true" ||
+    process.env.NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD === "true")
+) {
+  throw new Error(
+    `RATELOOP_E2E_PRODUCTION_BUILD and NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD are local test flags and must not be set when PONDER_NETWORK=${activeNetwork}.`,
+  );
+}
 const activeChainId = NETWORKS[activeNetwork].chainId;
 let warnedAboutHardhatStartBlocks = false;
 

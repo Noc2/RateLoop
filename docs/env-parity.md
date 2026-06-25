@@ -92,6 +92,9 @@ Local Playwright suites can opt into production-style behavior (localhost attach
 
 Either flag set to `"true"` enables the mode. CI E2E workflows set both. Core Next.js paths use `isLocalE2EProductionBuildEnabled()` and honor either flag; set both for local full-stack E2E and Playwright CI parity.
 
+Do not set these flags on Ponder live-chain services. Ponder local HTTP payout artifacts are limited to
+`PONDER_NETWORK=hardhat`; live networks must use data URIs or explicitly allowlisted HTTPS artifact origins.
+
 Related: `RATELOOP_E2E_WALLET_BRIDGE` and hostname checks in `isLocalE2EWalletBridgeEnabled()` for the local test wallet bridge component.
 
 ### Base Sepolia E2E wallet
