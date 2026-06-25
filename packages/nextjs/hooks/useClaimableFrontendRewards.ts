@@ -8,6 +8,7 @@ import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import { fetchClaimableFrontendFeePage } from "~~/hooks/useFrontendClaimableFees";
 import { usePageVisibility } from "~~/hooks/usePageVisibility";
+import { useUnixTime } from "~~/hooks/useUnixTime";
 
 const FRONTEND_CLAIMABLE_FEES_PAGE_SIZE = 50;
 
@@ -66,6 +67,7 @@ export function useClaimableFrontendRewards() {
   const isRegistered = frontendInfo ? frontendInfo[1] > 0n : false;
   const isSlashed = frontendInfo ? frontendInfo[3] : false;
   const canWithdrawFees = isRegistered && frontendInfo?.[2] === true;
+  const nowSeconds = useUnixTime(60_000);
 
   const {
     data: exitAvailableAt,
@@ -172,8 +174,7 @@ export function useClaimableFrontendRewards() {
     const items = [...roundFeeItems];
     const pendingAmount = pendingFeeWithdrawal ?? 0n;
     const pendingReleaseAt = pendingFeeWithdrawalReleaseAt ?? 0n;
-    const nowSeconds = BigInt(Math.floor(Date.now() / 1000));
-    const pendingMatured = pendingAmount > 0n && pendingReleaseAt <= nowSeconds;
+    const pendingMatured = pendingAmount > 0n && pendingReleaseAt <= BigInt(nowSeconds);
 
     if (canWithdrawFees && pendingMatured) {
       items.push({
@@ -204,6 +205,7 @@ export function useClaimableFrontendRewards() {
     pendingFeeWithdrawal,
     pendingFeeWithdrawalReleaseAt,
     roundFeeItems,
+    nowSeconds,
   ]);
 
   const totalClaimable = useMemo(() => claimableItems.reduce((sum, item) => sum + item.reward, 0n), [claimableItems]);
