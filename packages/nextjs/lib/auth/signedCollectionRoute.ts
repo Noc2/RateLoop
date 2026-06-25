@@ -25,8 +25,9 @@ export async function hasSignedCollectionReadSession(
   cookieName: string,
   walletAddress: `0x${string}`,
   scope: SignedReadSessionScope,
+  storageScope?: string,
 ) {
-  return verifySignedReadSession(request.cookies.get(cookieName)?.value, walletAddress, scope);
+  return verifySignedReadSession(request.cookies.get(cookieName)?.value, walletAddress, scope, storageScope);
 }
 
 async function hasSignedCollectionWriteSession(
@@ -34,8 +35,9 @@ async function hasSignedCollectionWriteSession(
   cookieName: string,
   walletAddress: `0x${string}`,
   scope: SignedWriteSessionScope,
+  storageScope?: string,
 ) {
-  return verifySignedWriteSession(request.cookies.get(cookieName)?.value, walletAddress, scope);
+  return verifySignedWriteSession(request.cookies.get(cookieName)?.value, walletAddress, scope, storageScope);
 }
 
 async function getSignedCollectionSessionStatus(
@@ -44,8 +46,10 @@ async function getSignedCollectionSessionStatus(
     walletAddress: `0x${string}`;
     readCookieName: string;
     readScope: SignedReadSessionScope;
+    readStorageScope?: string;
     writeCookieName: string;
     writeScope: SignedWriteSessionScope;
+    writeStorageScope?: string;
   },
 ) {
   const hasReadSession = await hasSignedCollectionReadSession(
@@ -53,12 +57,14 @@ async function getSignedCollectionSessionStatus(
     params.readCookieName,
     params.walletAddress,
     params.readScope,
+    params.readStorageScope,
   );
   const hasWriteSession = await hasSignedCollectionWriteSession(
     request,
     params.writeCookieName,
     params.walletAddress,
     params.writeScope,
+    params.writeStorageScope,
   );
 
   return { hasReadSession, hasWriteSession };
@@ -70,8 +76,10 @@ export async function createSignedCollectionSessionResponse(
     walletAddress: `0x${string}`;
     readCookieName: string;
     readScope: SignedReadSessionScope;
+    readStorageScope?: string;
     writeCookieName: string;
     writeScope: SignedWriteSessionScope;
+    writeStorageScope?: string;
   },
 ) {
   const { hasReadSession, hasWriteSession } = await getSignedCollectionSessionStatus(request, params);
@@ -136,11 +144,13 @@ export async function verifySignedCollectionWriteAccess(
     cookieName: string;
     walletAddress: `0x${string}`;
     scope: SignedWriteSessionScope;
+    storageScope?: string;
     signature?: `0x${string}`;
     challengeId?: string;
     action: string;
     payloadHash: string;
     buildMessage: (args: { nonce: string; expiresAt: Date }) => string;
+    chainId?: number;
   },
 ): Promise<{ ok: true; hasWriteSession: boolean } | { ok: false; response: NextResponse }> {
   const hasWriteSession = await hasSignedCollectionWriteSession(
@@ -148,6 +158,7 @@ export async function verifySignedCollectionWriteAccess(
     params.cookieName,
     params.walletAddress,
     params.scope,
+    params.storageScope,
   );
   if (hasWriteSession) {
     return { ok: true, hasWriteSession };
@@ -167,6 +178,7 @@ export async function verifySignedCollectionWriteAccess(
     payloadHash: params.payloadHash,
     signature: params.signature,
     buildMessage: params.buildMessage,
+    chainId: params.chainId,
   });
   if (challengeFailure) {
     return { ok: false, response: challengeFailure };
@@ -184,12 +196,13 @@ export async function maybeIssueSignedCollectionWriteSession(
     hasWriteSession: boolean;
     walletAddress: `0x${string}`;
     scope: SignedWriteSessionScope;
+    storageScope?: string;
   },
 ) {
-  await setSignedReadSessionCookie(response, params.walletAddress, params.scope);
+  await setSignedReadSessionCookie(response, params.walletAddress, params.scope, params.storageScope);
 
   if (!params.hasWriteSession) {
-    await setAllSignedWriteSessionCookies(response, params.walletAddress);
+    await setAllSignedWriteSessionCookies(response, params.walletAddress, { [params.scope]: params.storageScope });
   }
 
   return response;

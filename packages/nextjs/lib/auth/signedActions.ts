@@ -4,6 +4,7 @@ import "server-only";
 import { type Address, type Chain, type Hex, createPublicClient, http } from "viem";
 import { db } from "~~/lib/db";
 import { signedActionChallenges } from "~~/lib/db/schema";
+import { getPrimaryServerTargetNetwork, getServerRpcOverrides, getServerTargetNetworkById } from "~~/lib/env/server";
 
 const SIGNED_ACTION_CHALLENGE_TTL_MS = 5 * 60 * 1000;
 const STALE_USED_CHALLENGE_MS = 24 * 60 * 60 * 1000;
@@ -12,8 +13,18 @@ type SignedActionVerificationClient = {
   verifyMessage: (params: { address: Address; message: string; signature: Hex }) => Promise<boolean>;
 };
 
-let signedActionVerificationClient: SignedActionVerificationClient | null = null;
-let signedActionVerificationClientOverride: SignedActionVerificationClient | null = null;
+type SignedActionVerificationClientOptions = {
+  chainId?: number;
+};
+
+type SignedActionVerificationClientOverride =
+  | SignedActionVerificationClient
+  | ((
+      options: SignedActionVerificationClientOptions,
+    ) => SignedActionVerificationClient | Promise<SignedActionVerificationClient>);
+
+const signedActionVerificationClients = new Map<number, SignedActionVerificationClient>();
+let signedActionVerificationClientOverride: SignedActionVerificationClientOverride | null = null;
 
 export function hashSignedActionPayload(parts: string[]): string {
   return createHash("sha256").update(parts.join("\n")).digest("hex");
@@ -114,29 +125,42 @@ export async function ensureSignedActionChallengeTable() {
   // Schema is managed via Drizzle migrations.
 }
 
-async function getSignedActionVerificationClient(): Promise<SignedActionVerificationClient> {
+async function getSignedActionVerificationClient(
+  options: SignedActionVerificationClientOptions = {},
+): Promise<SignedActionVerificationClient> {
   if (signedActionVerificationClientOverride) {
+    if (typeof signedActionVerificationClientOverride === "function") {
+      return signedActionVerificationClientOverride(options);
+    }
+
     return signedActionVerificationClientOverride;
   }
 
-  if (signedActionVerificationClient) {
-    return signedActionVerificationClient;
+  const targetNetwork =
+    typeof options.chainId === "number" ? getServerTargetNetworkById(options.chainId) : getPrimaryServerTargetNetwork();
+  if (!targetNetwork) {
+    throw new Error("UNSUPPORTED_VERIFICATION_CHAIN");
   }
 
-  const { publicEnv } = await import("~~/utils/env/public");
-  const targetNetwork = publicEnv.targetNetworks[0];
-  const rpcUrl = publicEnv.rpcOverrides[targetNetwork.id] ?? targetNetwork.rpcUrls.default.http[0];
+  const existingClient = signedActionVerificationClients.get(targetNetwork.id);
+  if (existingClient) {
+    return existingClient;
+  }
 
-  signedActionVerificationClient = createPublicClient({
+  const rpcUrl = getServerRpcOverrides()[targetNetwork.id] ?? targetNetwork.rpcUrls.default.http[0];
+
+  const verificationClient = createPublicClient({
     chain: targetNetwork as Chain,
     transport: http(rpcUrl),
   });
 
-  return signedActionVerificationClient;
+  signedActionVerificationClients.set(targetNetwork.id, verificationClient);
+  return verificationClient;
 }
 
-export function __setSignedActionVerificationClientForTests(client: SignedActionVerificationClient | null) {
+export function __setSignedActionVerificationClientForTests(client: SignedActionVerificationClientOverride | null) {
   signedActionVerificationClientOverride = client;
+  signedActionVerificationClients.clear();
 }
 
 async function cleanupSignedActionChallenges(now = new Date()) {
@@ -201,6 +225,7 @@ export async function verifyAndConsumeSignedActionChallenge(
     payloadHash: string;
     signature: `0x${string}`;
     buildMessage: (args: { nonce: string; expiresAt: Date }) => string;
+    chainId?: number;
     now?: Date;
   },
 ) {
@@ -237,7 +262,7 @@ export async function verifyAndConsumeSignedActionChallenge(
   });
 
   try {
-    const verificationClient = await getSignedActionVerificationClient();
+    const verificationClient = await getSignedActionVerificationClient({ chainId: params.chainId });
     const isValid = await verificationClient.verifyMessage({
       address: params.walletAddress,
       message,

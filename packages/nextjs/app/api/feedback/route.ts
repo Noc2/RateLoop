@@ -179,6 +179,7 @@ export async function POST(request: NextRequest) {
           nonce,
           expiresAt,
         }),
+      chainId: preparedPayload.chainId,
     });
     if (challengeFailure) {
       return challengeFailure;

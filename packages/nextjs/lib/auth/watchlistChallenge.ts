@@ -114,6 +114,10 @@ export function hashWatchlistReadPayload(payload: NormalizedWatchlistReadPayload
   ]);
 }
 
+export function buildWatchlistSessionStorageScope(deployment: WatchlistDeploymentScope): string {
+  return `watchlist:${deployment.deploymentKey}`;
+}
+
 export function buildWatchlistChallengeMessage(params: {
   action: typeof WATCH_CONTENT_ACTION | typeof UNWATCH_CONTENT_ACTION;
   address: `0x${string}`;

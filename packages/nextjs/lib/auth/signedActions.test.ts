@@ -95,6 +95,48 @@ test("verifyAndConsumeSignedActionChallenge uses the chain-backed verification c
   assert.ok(rows.rows[0].used_at);
 });
 
+test("verifyAndConsumeSignedActionChallenge forwards the verification chain", async () => {
+  const challenge = await signedActions.issueSignedActionChallenge({
+    title: TITLE,
+    action: ACTION,
+    walletAddress: WALLET,
+    payloadHash: PAYLOAD_HASH,
+  });
+  const seenChainIds: Array<number | undefined> = [];
+
+  signedActions.__setSignedActionVerificationClientForTests(options => {
+    seenChainIds.push(options.chainId);
+    return {
+      async verifyMessage(params) {
+        assert.equal(params.message, challenge.message);
+        return true;
+      },
+    };
+  });
+
+  await dbModule.db.transaction(async tx => {
+    await signedActions.verifyAndConsumeSignedActionChallenge(tx, {
+      challengeId: challenge.challengeId,
+      action: ACTION,
+      walletAddress: WALLET,
+      payloadHash: PAYLOAD_HASH,
+      signature: "0x1234",
+      chainId: 84532,
+      buildMessage: ({ nonce, expiresAt }) =>
+        signedActions.buildSignedActionMessage({
+          title: TITLE,
+          action: ACTION,
+          address: WALLET,
+          payloadHash: PAYLOAD_HASH,
+          nonce,
+          expiresAt,
+        }),
+    });
+  });
+
+  assert.deepEqual(seenChainIds, [84532]);
+});
+
 test("verifyAndConsumeSignedActionChallenge rejects chain verifier failures", async () => {
   const challenge = await signedActions.issueSignedActionChallenge({
     title: TITLE,

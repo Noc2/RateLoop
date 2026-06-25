@@ -14,6 +14,7 @@ import {
   WATCH_CONTENT_ACTION,
   buildWatchlistChallengeMessage,
   buildWatchlistReadChallengeMessage,
+  buildWatchlistSessionStorageScope,
   hashWatchlistChallengePayload,
   hashWatchlistReadPayload,
   normalizeWatchlistChallengeInput,
@@ -67,10 +68,12 @@ async function handleWatchlistWrite(
 
     const payload = normalized.payload;
     const payloadHash = hashWatchlistChallengePayload(payload);
+    const sessionStorageScope = buildWatchlistSessionStorageScope(payload.deployment);
     const writeAccess = await verifySignedCollectionWriteAccess(request, {
       cookieName: WATCHLIST_SIGNED_WRITE_SESSION_COOKIE_NAME,
       walletAddress: payload.normalizedAddress,
       scope: "watchlist",
+      storageScope: sessionStorageScope,
       signature: writeBody.signature,
       challengeId: writeBody.challengeId,
       action: params.action,
@@ -83,6 +86,7 @@ async function handleWatchlistWrite(
           nonce,
           expiresAt,
         }),
+      chainId: payload.deployment.chainId,
     });
     if (!writeAccess.ok) {
       return writeAccess.response;
@@ -101,6 +105,7 @@ async function handleWatchlistWrite(
         hasWriteSession: writeAccess.hasWriteSession,
         walletAddress: payload.normalizedAddress,
         scope: "watchlist",
+        storageScope: sessionStorageScope,
       },
     );
   } catch (error) {
@@ -131,6 +136,7 @@ export async function GET(request: NextRequest) {
       WATCHLIST_SIGNED_READ_SESSION_COOKIE_NAME,
       normalized.payload.normalizedAddress,
       "watchlist",
+      buildWatchlistSessionStorageScope(normalized.payload.deployment),
     );
     if (!hasSession) {
       return NextResponse.json({ error: "Signed read required" }, { status: 401 });
@@ -169,6 +175,7 @@ export async function POST(request: NextRequest) {
 
     const payload = normalized.payload;
     const payloadHash = hashWatchlistReadPayload(payload);
+    const sessionStorageScope = buildWatchlistSessionStorageScope(payload.deployment);
     const challengeFailure = await verifySignedCollectionChallenge({
       challengeId: String(challengeId),
       action: READ_WATCHLIST_ACTION,
@@ -182,13 +189,19 @@ export async function POST(request: NextRequest) {
           nonce,
           expiresAt,
         }),
+      chainId: payload.deployment.chainId,
     });
     if (challengeFailure) {
       return challengeFailure;
     }
 
     const items = await listWatchedContent(payload.normalizedAddress, payload.deployment);
-    return createSignedCollectionReadResponse(payload.normalizedAddress, "watchlist", { items, count: items.length });
+    return createSignedCollectionReadResponse(
+      payload.normalizedAddress,
+      "watchlist",
+      { items, count: items.length },
+      sessionStorageScope,
+    );
   } catch (error) {
     console.error("Error fetching watched content:", error);
     return NextResponse.json({ error: "Failed to fetch watched content" }, { status: 500 });

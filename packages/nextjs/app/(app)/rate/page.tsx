@@ -4,13 +4,18 @@ import { getContentShareDataForParam } from "~~/lib/social/contentShare.server";
 
 interface RatePageProps {
   searchParams?: Promise<{
+    chainId?: string | string[];
     content?: string | string[];
+    deploymentKey?: string | string[];
   }>;
 }
 
 export async function generateMetadata({ searchParams }: RatePageProps): Promise<Metadata> {
   const params = await searchParams;
-  const shareData = await getContentShareDataForParam(params?.content);
+  const shareData = await getContentShareDataForParam(params?.content, {
+    chainId: Array.isArray(params?.chainId) ? params?.chainId[0] : params?.chainId,
+    deploymentKey: Array.isArray(params?.deploymentKey) ? params?.deploymentKey[0] : params?.deploymentKey,
+  });
   if (!shareData) return {};
 
   return {

@@ -13,6 +13,11 @@ export type ContentShareRatingSource = "content_rating_bps" | "content_rating";
 
 export interface ContentShareContentInput {
   id: string;
+  chainId?: number | null;
+  deploymentKey?: string | null;
+  contentRegistryAddress?: string | null;
+  contextAccess?: "public" | "gated" | string | null;
+  contextVisibility?: "public" | "gated" | string | null;
   url?: string | null;
   title: string;
   description: string;
@@ -176,18 +181,29 @@ export function buildContentShareRatingVersion(
   return `r-${content.id}-${rating?.ratingBps ?? "na"}-${totalVotes}-${openRoundVoteCount}-${activitySeconds}`;
 }
 
-function buildVoteShareUrl(origin: string, contentId: string, ratingVersion?: string): string {
+function setContentShareScopeParams(url: URL, content: ContentShareContentInput) {
+  if (typeof content.chainId === "number" && Number.isSafeInteger(content.chainId) && content.chainId > 0) {
+    url.searchParams.set("chainId", String(content.chainId));
+  }
+  if (content.deploymentKey?.trim()) {
+    url.searchParams.set("deploymentKey", content.deploymentKey.trim());
+  }
+}
+
+function buildVoteShareUrl(origin: string, content: ContentShareContentInput, ratingVersion?: string): string {
   const url = new URL(RATE_ROUTE, `${origin.replace(/\/+$/, "")}/`);
-  url.searchParams.set("content", contentId);
+  url.searchParams.set("content", content.id);
+  setContentShareScopeParams(url, content);
   if (ratingVersion) {
     url.searchParams.set(VOTE_SHARE_RATING_VERSION_PARAM, ratingVersion);
   }
   return url.toString();
 }
 
-function buildVoteShareImageUrl(origin: string, contentId: string, ratingVersion: string): string {
+function buildVoteShareImageUrl(origin: string, content: ContentShareContentInput, ratingVersion: string): string {
   const url = new URL("/api/og/vote", `${origin.replace(/\/+$/, "")}/`);
-  url.searchParams.set("content", contentId);
+  url.searchParams.set("content", content.id);
+  setContentShareScopeParams(url, content);
   url.searchParams.set(VOTE_SHARE_RATING_VERSION_PARAM, ratingVersion);
   return url.toString();
 }
@@ -232,7 +248,7 @@ export function buildContentShareData(content: ContentShareContentInput, origin:
     ratingVersion,
     totalVotes,
     openRoundVoteCount,
-    shareUrl: buildVoteShareUrl(origin, content.id, ratingVersion),
-    imageUrl: buildVoteShareImageUrl(origin, content.id, ratingVersion),
+    shareUrl: buildVoteShareUrl(origin, content, ratingVersion),
+    imageUrl: buildVoteShareImageUrl(origin, content, ratingVersion),
   };
 }

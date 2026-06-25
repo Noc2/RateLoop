@@ -14,6 +14,7 @@ import {
   hashConfidentialityTermsPayload,
   normalizeConfidentialityTermsInput,
   recordConfidentialityTermsAcceptance,
+  resolveConfidentialityDeploymentScope,
 } from "~~/lib/confidentiality/context";
 import { db } from "~~/lib/db";
 import { isJsonObjectBody, jsonBodyErrorResponse, parseJsonBody } from "~~/lib/http/jsonBody";
@@ -124,6 +125,7 @@ export async function POST(request: NextRequest) {
 
     const payload = serverPayload.payload;
     const payloadHash = hashConfidentialityTermsPayload(payload);
+    const verificationScope = resolveConfidentialityDeploymentScope({ deploymentKey: payload.deploymentKey });
     let nonce = "";
     await ensureSignedActionChallengeTable();
     try {
@@ -144,6 +146,7 @@ export async function POST(request: NextRequest) {
           payloadHash,
           signature: body.signature as `0x${string}`,
           walletAddress: payload.normalizedAddress,
+          chainId: verificationScope?.chainId ?? undefined,
         });
         nonce = challenge.nonce;
       });

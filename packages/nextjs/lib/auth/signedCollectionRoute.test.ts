@@ -74,3 +74,54 @@ test("existing write sessions still refresh read access", async () => {
   }
   assert.equal(await signedReadSessions.verifySignedReadSession(readCookie.value, WALLET, "watchlist"), true);
 });
+
+test("collection sessions can be scoped by deployment storage keys", async () => {
+  const response = await signedCollectionRoute.maybeIssueSignedCollectionWriteSession(NextResponse.json({ ok: true }), {
+    hasWriteSession: false,
+    walletAddress: WALLET,
+    scope: "watchlist",
+    storageScope: "watchlist:84532:0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  });
+
+  const readCookie = response.cookies.get(signedReadSessions.WATCHLIST_SIGNED_READ_SESSION_COOKIE_NAME);
+  const writeCookie = response.cookies.get(signedWriteSessions.WATCHLIST_SIGNED_WRITE_SESSION_COOKIE_NAME);
+
+  assert.ok(readCookie?.value, "read session cookie should be set");
+  assert.ok(writeCookie?.value, "write session cookie should be set");
+  assert.equal(
+    await signedReadSessions.verifySignedReadSession(
+      readCookie.value,
+      WALLET,
+      "watchlist",
+      "watchlist:84532:0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    ),
+    true,
+  );
+  assert.equal(
+    await signedReadSessions.verifySignedReadSession(
+      readCookie.value,
+      WALLET,
+      "watchlist",
+      "watchlist:8453:0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    ),
+    false,
+  );
+  assert.equal(
+    await signedWriteSessions.verifySignedWriteSession(
+      writeCookie.value,
+      WALLET,
+      "watchlist",
+      "watchlist:84532:0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    ),
+    true,
+  );
+  assert.equal(
+    await signedWriteSessions.verifySignedWriteSession(
+      writeCookie.value,
+      WALLET,
+      "watchlist",
+      "watchlist:8453:0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    ),
+    false,
+  );
+});

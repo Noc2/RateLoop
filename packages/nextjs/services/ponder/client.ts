@@ -1947,11 +1947,18 @@ export const ponderApi = {
     );
   },
 
-  getBalanceHistory(address: string, limit?: string) {
-    return ponderGet<{ transfers: PonderTokenTransfer[]; address: string }>("/balance-history", {
-      address,
-      limit,
-    });
+  getBalanceHistory(address: string, limit?: string, options?: PonderDeploymentOptions) {
+    const deployment = getExpectedPonderDeploymentScope(options);
+    return ponderGet<{ transfers: PonderTokenTransfer[]; address: string }>(
+      "/balance-history",
+      {
+        address,
+        limit,
+      },
+      {
+        expectedDeploymentKey: deployment?.deploymentKey,
+      },
+    );
   },
 
   getStats() {

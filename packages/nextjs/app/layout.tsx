@@ -1,4 +1,5 @@
 import { Inter, Space_Grotesk } from "next/font/google";
+import { headers } from "next/headers";
 import Script from "next/script";
 import "@scaffold-ui/components/styles.css";
 import "~~/styles/globals.css";
@@ -24,7 +25,9 @@ const inter = Inter({
   variable: "--font-hawig-body",
 });
 
-const RootLayout = ({ children }: { children: React.ReactNode }) => {
+const RootLayout = async ({ children }: { children: React.ReactNode }) => {
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
+
   return (
     <html
       lang="en"
@@ -34,7 +37,7 @@ const RootLayout = ({ children }: { children: React.ReactNode }) => {
     >
       <body suppressHydrationWarning>
         {children}
-        {isProduction ? <Script src="https://scripts.simpleanalyticscdn.com/latest.js" /> : null}
+        {isProduction ? <Script nonce={nonce} src="https://scripts.simpleanalyticscdn.com/latest.js" /> : null}
       </body>
     </html>
   );

@@ -44,8 +44,9 @@ export async function setSignedReadSessionCookie(
   response: NextResponse,
   walletAddress: `0x${string}`,
   scope: SignedReadSessionScope,
+  storageScope?: string,
 ) {
-  const session = await issueSignedReadSession(walletAddress, scope);
+  const session = await issueSignedReadSession(walletAddress, scope, storageScope);
   response.cookies.set(getSignedReadSessionCookie(scope, session));
   return response;
 }

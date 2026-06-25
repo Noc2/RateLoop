@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { test } from "node:test";
+import { buildContentSecurityPolicy, createContentSecurityPolicyNonce } from "../lib/security/contentSecurityPolicy";
 
 type HeaderEntry = {
   key: string;
@@ -20,12 +21,11 @@ const require = createRequire(import.meta.url);
 const nextConfig = require("../next.config") as TestableNextConfig;
 
 async function getContentSecurityPolicy() {
-  const headers = typeof nextConfig.headers === "function" ? await nextConfig.headers() : [];
-  const globalHeaders = headers.find(header => header.source === "/(.*)")?.headers ?? [];
-  const csp = globalHeaders.find(header => header.key === "Content-Security-Policy")?.value;
-
-  assert.equal(typeof csp, "string");
-  return csp as string;
+  return buildContentSecurityPolicy({
+    nonce: "testnonce",
+    ponderUrl: "https://ponder.example",
+    rpcOrigins: ["https://base.example"],
+  });
 }
 
 async function getGlobalHeaderValue(key: string) {
@@ -44,6 +44,30 @@ test("connect-src allows Vercel Blob browser upload API requests", async () => {
   assert.ok(connectSrc);
   assert.match(connectSrc, /(?:^|\s)https:\/\/vercel\.com(?:\s|$)/);
   assert.match(connectSrc, /(?:^|\s)https:\/\/\*\.blob\.vercel-storage\.com(?:\s|$)/);
+});
+
+test("script-src uses the middleware nonce without unsafe-inline", async () => {
+  const csp = await getContentSecurityPolicy();
+  const scriptSrc = csp
+    .split(";")
+    .map(directive => directive.trim())
+    .find(directive => directive.startsWith("script-src "));
+
+  assert.ok(scriptSrc);
+  assert.match(scriptSrc, /(?:^|\s)'nonce-testnonce'(?:\s|$)/);
+  assert.doesNotMatch(scriptSrc, /(?:^|\s)'unsafe-inline'(?:\s|$)/);
+});
+
+test("CSP nonce generation creates a compact random token", () => {
+  const nonce = createContentSecurityPolicyNonce();
+
+  assert.match(nonce, /^[a-f0-9]{32}$/);
+});
+
+test("next config leaves CSP to middleware", async () => {
+  const csp = await getGlobalHeaderValue("Content-Security-Policy");
+
+  assert.equal(csp, undefined);
 });
 
 test("permissions policy only advertises browser-recognized directives", async () => {

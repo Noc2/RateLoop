@@ -18,6 +18,7 @@ export async function verifySignedActionChallenge(params: {
   payloadHash: string;
   signature: `0x${string}`;
   buildMessage: (args: { nonce: string; expiresAt: Date }) => string;
+  chainId?: number;
 }) {
   await ensureSignedActionChallengeTable();
 
@@ -34,6 +35,7 @@ export async function verifySignedActionChallenge(params: {
             nonce,
             expiresAt,
           }),
+        chainId: params.chainId,
       });
     });
   } catch (error: unknown) {
@@ -60,9 +62,10 @@ export async function createSignedReadResponse<TBody>(
   walletAddress: `0x${string}`,
   scope: SignedReadSessionScope,
   body: TBody,
+  storageScope?: string,
 ) {
   const response = NextResponse.json(body);
-  const session = await issueSignedReadSession(walletAddress, scope);
+  const session = await issueSignedReadSession(walletAddress, scope, storageScope);
   response.cookies.set(getSignedReadSessionCookie(scope, session));
   return response;
 }

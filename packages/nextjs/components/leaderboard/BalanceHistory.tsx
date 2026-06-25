@@ -3,8 +3,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAccount } from "wagmi";
 import { surfaceSectionHeadingClassName } from "~~/components/shared/sectionHeading";
-import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
+import { useScaffoldReadContract, useTargetNetwork } from "~~/hooks/scaffold-eth";
 import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
+import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 import { PonderTokenTransfer, ponderApi } from "~~/services/ponder/client";
 
 const CHART_W = 640;
@@ -19,7 +20,9 @@ const LABEL_AREA = 48; // right side reserved for y-axis labels
  */
 export function BalanceHistory({ address: addressProp }: { address?: `0x${string}` }) {
   const { address: connectedAddress } = useAccount();
+  const { targetNetwork } = useTargetNetwork();
   const address = addressProp ?? connectedAddress;
+  const deployment = useMemo(() => resolveProtocolDeploymentScope(targetNetwork.id), [targetNetwork.id]);
   const [transfers, setTransfers] = useState<PonderTokenTransfer[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [fetchError, setFetchError] = useState(false);
@@ -41,7 +44,10 @@ export function BalanceHistory({ address: addressProp }: { address?: `0x${string
     setFetchError(false);
 
     ponderApi
-      .getBalanceHistory(address)
+      .getBalanceHistory(address, undefined, {
+        chainId: targetNetwork.id,
+        deploymentKey: deployment?.deploymentKey,
+      })
       .then(data => {
         if (!cancelled) setTransfers(data.transfers);
       })
@@ -58,7 +64,7 @@ export function BalanceHistory({ address: addressProp }: { address?: `0x${string
     return () => {
       cancelled = true;
     };
-  }, [address]);
+  }, [address, deployment?.deploymentKey, targetNetwork.id]);
 
   // Reconstruct balance timeline from Transfer events
   const dataPoints = useMemo(() => {

@@ -3,6 +3,8 @@ import { isAddress } from "viem";
 import type { ReputationAvatarPayload } from "~~/lib/avatar/avatarPayload";
 import { getOptionalPonderUrl } from "~~/lib/env/server";
 import { readLrepBalances, readProfileRegistryAvatarAccent } from "~~/lib/profileRegistry/server";
+import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
+import { getPonderAvailabilityStatus } from "~~/services/ponder/client";
 
 type ReputationAvatarApiResponse = Omit<ReputationAvatarPayload, "balance" | "avatarAccentHex"> & {
   avatarAccentHex?: string | null;
@@ -41,23 +43,34 @@ export async function getReputationAvatarPayload(
   const normalizedAddress = address.toLowerCase() as `0x${string}`;
   const fallbackPayload = createEmptyReputationAvatarPayload(normalizedAddress);
   const ponderUrl = getOptionalPonderUrl();
+  const expectedDeploymentKey =
+    typeof options.chainId === "number" ? resolveProtocolDeploymentScope(options.chainId)?.deploymentKey : null;
   const avatarPath = `${ponderUrl?.replace(/\/$/, "") ?? ""}/avatar/${normalizedAddress}`;
   const avatarUrl =
     ponderUrl && options.cacheKey ? `${avatarPath}?v=${encodeURIComponent(options.cacheKey)}` : avatarPath;
 
+  const apiPayloadPromise = (async () => {
+    if (!ponderUrl) return null;
+    if (typeof options.chainId === "number" && !expectedDeploymentKey) return null;
+    if (expectedDeploymentKey) {
+      const status = await getPonderAvailabilityStatus(expectedDeploymentKey);
+      if (!status.available) return null;
+    }
+
+    return fetch(avatarUrl, {
+      next: { revalidate: AVATAR_REVALIDATE_SECONDS },
+    })
+      .then(async response => {
+        if (!response.ok) {
+          return null;
+        }
+        return (await response.json()) as ReputationAvatarApiResponse;
+      })
+      .catch(() => null);
+  })();
+
   const [apiPayload, balances, avatarAccent] = await Promise.all([
-    ponderUrl
-      ? fetch(avatarUrl, {
-          next: { revalidate: AVATAR_REVALIDATE_SECONDS },
-        })
-          .then(async response => {
-            if (!response.ok) {
-              return null;
-            }
-            return (await response.json()) as ReputationAvatarApiResponse;
-          })
-          .catch(() => null)
-      : Promise.resolve<ReputationAvatarApiResponse | null>(null),
+    apiPayloadPromise,
     readLrepBalances([normalizedAddress], { chainId: options.chainId }).catch(
       () => ({ [normalizedAddress]: 0n }) as Record<string, bigint>,
     ),

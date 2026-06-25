@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createSignedCollectionSessionResponse } from "~~/lib/auth/signedCollectionRoute";
 import { WATCHLIST_SIGNED_READ_SESSION_COOKIE_NAME } from "~~/lib/auth/signedReadSessions";
 import { WATCHLIST_SIGNED_WRITE_SESSION_COOKIE_NAME } from "~~/lib/auth/signedWriteSessions";
-import { normalizeWatchlistReadInput } from "~~/lib/auth/watchlistChallenge";
+import { buildWatchlistSessionStorageScope, normalizeWatchlistReadInput } from "~~/lib/auth/watchlistChallenge";
 import { checkRateLimit } from "~~/utils/rateLimit";
 
 const READ_RATE_LIMIT = { limit: 60, windowMs: 60_000 };
@@ -24,12 +24,15 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    const sessionStorageScope = buildWatchlistSessionStorageScope(normalized.payload.deployment);
     return createSignedCollectionSessionResponse(request, {
       walletAddress: normalized.payload.normalizedAddress,
       readCookieName: WATCHLIST_SIGNED_READ_SESSION_COOKIE_NAME,
       readScope: "watchlist",
+      readStorageScope: sessionStorageScope,
       writeCookieName: WATCHLIST_SIGNED_WRITE_SESSION_COOKIE_NAME,
       writeScope: "watchlist",
+      writeStorageScope: sessionStorageScope,
     });
   } catch (error) {
     console.error("Error checking watchlist signed read session:", error);

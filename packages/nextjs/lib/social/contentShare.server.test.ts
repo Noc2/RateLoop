@@ -107,3 +107,46 @@ test("getContentShareDataForParam redacts gated private-context content", async 
     }
   }
 });
+
+test("getContentShareDataForParam fails closed when Ponder marks content gated", async () => {
+  const originalPonderUrl = process.env.NEXT_PUBLIC_PONDER_URL;
+  process.env.NEXT_PUBLIC_PONDER_URL = "https://ponder.example";
+
+  const fetchImpl: typeof fetch = async () =>
+    new Response(
+      JSON.stringify({
+        content: {
+          id: "100",
+          title: "Sensitive prompt",
+          description: "Private research details.",
+          url: "https://example.com/private",
+          imageUrl: "https://example.com/private.png",
+          contextAccess: "gated",
+          rating: 50,
+          ratingBps: 5_000,
+          totalVotes: 1,
+          lastActivityAt: "1776160800",
+          openRound: null,
+        },
+      }),
+    );
+
+  try {
+    const shareData = await getContentShareDataForParam("100", {
+      fetchImpl,
+      origin: "https://www.rateloop.ai",
+    });
+
+    assert.equal(shareData?.contentTitle, "Private RateLoop question");
+    assert.equal(shareData?.contentDescription, "This question uses private RateLoop-hosted context.");
+    assert.equal(shareData?.contentImageUrl, null);
+    assert.ok(!shareData?.title.includes("Sensitive prompt"));
+    assert.ok(!shareData?.description.includes("Private research details"));
+  } finally {
+    if (originalPonderUrl === undefined) {
+      delete process.env.NEXT_PUBLIC_PONDER_URL;
+    } else {
+      process.env.NEXT_PUBLIC_PONDER_URL = originalPonderUrl;
+    }
+  }
+});

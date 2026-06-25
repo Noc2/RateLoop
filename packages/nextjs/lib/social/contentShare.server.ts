@@ -15,8 +15,34 @@ interface PonderContentDetailResponse {
 }
 
 interface ContentShareDataOptions {
+  chainId?: number | string | null;
+  contentRegistryAddress?: string | null;
+  deploymentKey?: string | null;
   fetchImpl?: typeof fetch;
   origin?: string;
+}
+
+function normalizeShareChainId(value: ContentShareDataOptions["chainId"]): number | null {
+  const raw = typeof value === "number" ? String(value) : typeof value === "string" ? value.trim() : "";
+  if (!/^\d+$/.test(raw)) return null;
+  const chainId = Number(raw);
+  return Number.isSafeInteger(chainId) && chainId > 0 ? chainId : null;
+}
+
+function isPonderContentGated(content: ContentShareContentInput): boolean {
+  return content.contextAccess === "gated" || content.contextVisibility === "gated";
+}
+
+function redactGatedShareContent(content: ContentShareContentInput): ContentShareContentInput {
+  return {
+    ...content,
+    contentMetadata: null,
+    description: "This question uses private RateLoop-hosted context.",
+    imageUrl: null,
+    thumbnailUrl: null,
+    title: "Private RateLoop question",
+    url: null,
+  };
 }
 
 function toHttpsOrigin(value: string | undefined): string | null {
@@ -71,18 +97,15 @@ export async function getContentShareDataForParam(
   try {
     const content = await fetchContentForShare(ponderUrl, contentId, options.fetchImpl ?? fetch);
     if (!content) return null;
-    const confidentiality = await getQuestionConfidentiality(content.id).catch(() => null);
-    const shareContent = isConfidentialityCurrentlyGated(confidentiality)
-      ? {
-          ...content,
-          contentMetadata: null,
-          description: "This question uses private RateLoop-hosted context.",
-          imageUrl: null,
-          thumbnailUrl: null,
-          title: "Private RateLoop question",
-          url: null,
-        }
-      : content;
+    const confidentiality = await getQuestionConfidentiality(content.id, {
+      chainId: content.chainId ?? normalizeShareChainId(options.chainId),
+      contentRegistryAddress: content.contentRegistryAddress ?? options.contentRegistryAddress,
+      deploymentKey: content.deploymentKey ?? options.deploymentKey,
+    }).catch(() => null);
+    const shareContent =
+      isPonderContentGated(content) || isConfidentialityCurrentlyGated(confidentiality)
+        ? redactGatedShareContent(content)
+        : content;
     return buildContentShareData(shareContent, options.origin ?? getContentShareOrigin());
   } catch {
     return null;

@@ -24,10 +24,14 @@ export const issueSignedWriteSession = signedWriteSessionStore.issueSession;
 export const verifySignedWriteSession = signedWriteSessionStore.verifySession;
 export const getSignedWriteSessionCookie = signedWriteSessionStore.getSessionCookie;
 
-export async function setAllSignedWriteSessionCookies(response: NextResponse, walletAddress: `0x${string}`) {
+export async function setAllSignedWriteSessionCookies(
+  response: NextResponse,
+  walletAddress: `0x${string}`,
+  storageScopes: Partial<Record<SignedWriteSessionScope, string>> = {},
+) {
   await Promise.all(
     SIGNED_WRITE_SESSION_SCOPES.map(async scope => {
-      const session = await issueSignedWriteSession(walletAddress, scope);
+      const session = await issueSignedWriteSession(walletAddress, scope, storageScopes[scope]);
       response.cookies.set(getSignedWriteSessionCookie(scope, session));
     }),
   );

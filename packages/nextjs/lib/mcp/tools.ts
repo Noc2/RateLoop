@@ -1794,6 +1794,7 @@ async function acceptConfidentialityTerms(args: JsonObject, agent?: McpAgentAuth
         payloadHash,
         signature,
         walletAddress: payload.normalizedAddress,
+        chainId: confidentialityScope.chainId ?? undefined,
       });
       nonce = challenge.nonce;
     });
@@ -2391,6 +2392,7 @@ async function verifyPublicWebhookRegistration(params: {
     payloadHash,
     signature,
     walletAddress: normalized.payload.normalizedAddress,
+    chainId: normalized.payload.chainId,
   });
   if (challengeFailure) {
     const body = (await challengeFailure.json().catch(() => null)) as { error?: string } | null;

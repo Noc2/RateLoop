@@ -46,7 +46,11 @@ export function createSignedSessionStore<Scope extends string>(config: SignedSes
     });
   }
 
-  async function issueSession(walletAddress: `0x${string}`, scope: Scope): Promise<SessionValue> {
+  async function issueSession(
+    walletAddress: `0x${string}`,
+    scope: Scope,
+    storageScope: string = scope,
+  ): Promise<SessionValue> {
     await ensureTable();
 
     const now = Date.now();
@@ -60,7 +64,7 @@ export function createSignedSessionStore<Scope extends string>(config: SignedSes
         INSERT INTO ${config.tableName} (token_hash, wallet_address, scope, expires_at, created_at)
         VALUES (?, ?, ?, ?, ?)
       `,
-      args: [hashSessionToken(token), walletAddress, scope, expiresAt, now],
+      args: [hashSessionToken(token), walletAddress, storageScope, expiresAt, now],
     });
 
     return {
@@ -69,7 +73,12 @@ export function createSignedSessionStore<Scope extends string>(config: SignedSes
     };
   }
 
-  async function verifySession(token: string | undefined, walletAddress: `0x${string}`, scope: Scope) {
+  async function verifySession(
+    token: string | undefined,
+    walletAddress: `0x${string}`,
+    scope: Scope,
+    storageScope: string = scope,
+  ) {
     if (!token) return false;
 
     try {
@@ -86,7 +95,7 @@ export function createSignedSessionStore<Scope extends string>(config: SignedSes
             AND expires_at > ?
           LIMIT 1
         `,
-        args: [hashSessionToken(token), walletAddress, scope, now],
+        args: [hashSessionToken(token), walletAddress, storageScope, now],
       });
 
       return result.rows.length > 0;
