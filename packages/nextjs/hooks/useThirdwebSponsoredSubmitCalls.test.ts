@@ -1,4 +1,5 @@
 import {
+  getSlowThirdwebSubmitStatus,
   isSuccessfulCallsStatus,
   isThirdwebSelfFundedFallbackEligibleError,
   isThirdwebSponsorshipDeniedError,
@@ -29,6 +30,14 @@ test("waits for successful wallet call batches", () => {
   assert.equal(isSuccessfulCallsStatus({ status: "pending" } as never), false);
   assert.equal(isSuccessfulCallsStatus({ status: "failure" } as never), false);
   assert.equal(isSuccessfulCallsStatus({ status: undefined } as never), false);
+});
+
+test("builds slow thirdweb submit status copy", () => {
+  assert.deepEqual(getSlowThirdwebSubmitStatus("follow profile"), {
+    title: "Still submitting follow profile",
+    description:
+      "Your wallet is signing and relaying this transaction. In-app wallets can take up to a minute before confirmation returns.",
+  });
 });
 
 test("detects EIP-7702 delegations with missing implementations", () => {

@@ -40,6 +40,7 @@ import {
   isThirdwebSponsoredExecutionRejectedError,
 } from "~~/lib/transactionErrors";
 import { type TransactionTimingMetadataValue, createTransactionTimingRun } from "~~/lib/transactions/timing";
+import { TRANSACTION_CONFIRMING_STATUS } from "~~/lib/ui/transactionStatusCopy";
 import scaffoldConfig from "~~/scaffold.config";
 import {
   createThirdwebInAppWallet,
@@ -83,6 +84,15 @@ const THIRDWEB_BUNDLER_UNAVAILABLE_MESSAGE =
   "thirdweb transaction service is temporarily unavailable. Retry in a moment.";
 const THIRDWEB_CALLS_STATUS_TIMEOUT_MS = 120_000;
 const THIRDWEB_CALLS_STATUS_SLOW_MS = 8_000;
+const THIRDWEB_SEND_CALLS_SLOW_MS = 8_000;
+
+export function getSlowThirdwebSubmitStatus(action: string) {
+  return {
+    title: `Still submitting ${action}`,
+    description:
+      "Your wallet is signing and relaying this transaction. In-app wallets can take up to a minute before confirmation returns.",
+  };
+}
 
 function wait(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -757,16 +767,36 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
         timingLog.emit("thirdweb-sendCalls-start", {
           walletId: wallet.id,
         });
-        const sendResult = await retryThirdwebBundlerOperation(() =>
-          sendCalls({
-            atomicRequired: options.atomicRequired ?? false,
-            calls: preparedCalls,
-            wallet,
-          }),
-        );
+        const action = options.action ?? "transaction";
+        const slowSubmitTimeout =
+          options.suppressStatusToast === true
+            ? undefined
+            : setTimeout(() => {
+                timingLog.emit("thirdweb-sendCalls-slow", {
+                  walletId: wallet.id,
+                });
+                statusToast.showSubmitting(getSlowThirdwebSubmitStatus(action));
+              }, THIRDWEB_SEND_CALLS_SLOW_MS);
+        let sendResult: SendCallsResult;
+        try {
+          sendResult = await retryThirdwebBundlerOperation(() =>
+            sendCalls({
+              atomicRequired: options.atomicRequired ?? false,
+              calls: preparedCalls,
+              wallet,
+            }),
+          );
+        } finally {
+          if (slowSubmitTimeout) {
+            clearTimeout(slowSubmitTimeout);
+          }
+        }
         timingLog.emit("thirdweb-sendCalls-complete", {
           walletId: wallet.id,
         });
+        if (!options.suppressStatusToast) {
+          statusToast.showSubmitting(TRANSACTION_CONFIRMING_STATUS);
+        }
         return waitForThirdwebCallsStatus({
           pollingIntervalMs: getTransactionStatusPollingInterval(chainId),
           sendResult,

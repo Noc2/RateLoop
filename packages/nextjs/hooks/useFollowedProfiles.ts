@@ -287,7 +287,11 @@ export function useFollowedProfiles(address?: string, options?: UseFollowedProfi
             throw new Error("Follow transaction was not submitted");
           }
         }
-        await refreshFollowState(normalizedTargetAddress);
+        void refreshFollowState(normalizedTargetAddress).catch(error => {
+          if (process.env.NODE_ENV !== "production") {
+            console.warn("[followedProfiles] Failed to refresh follow state:", error);
+          }
+        });
         return {
           ok: true,
           following: nextFollowing,
