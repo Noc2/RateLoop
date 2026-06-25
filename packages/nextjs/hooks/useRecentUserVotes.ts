@@ -1,6 +1,8 @@
 "use client";
 
 import { useMemo } from "react";
+import { buildClaimableQuestionRewardCandidateVoters } from "./useClaimableQuestionRewards";
+import { useDelegation } from "./useDelegation";
 import { usePonderQuery } from "./usePonderQuery";
 import { ROUND_STATE } from "@rateloop/contracts/protocol";
 import { QueryClient } from "@tanstack/react-query";
@@ -11,6 +13,28 @@ import { type PonderVoteItem, ponderApi } from "~~/services/ponder/client";
 
 function normalizeVoter(voter?: string) {
   return voter?.toLowerCase() ?? null;
+}
+
+export function mergeRecentVotesForConnectedWallet(
+  pages: readonly PonderVoteItem[][],
+  connectedWallet: string,
+): PonderVoteItem[] {
+  const me = connectedWallet.toLowerCase();
+  const seen = new Set<string>();
+  const merged: PonderVoteItem[] = [];
+
+  for (const vote of pages.flat()) {
+    const voter = vote.voter?.toLowerCase();
+    const holder = (vote.identityHolder ?? vote.voter)?.toLowerCase();
+    if (holder !== me && voter !== me) continue;
+
+    const key = vote.id ?? `${vote.contentId}-${vote.roundId}-${voter}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(vote);
+  }
+
+  return merged;
 }
 
 export function getRecentUserVotesQueryKey(voter?: string, chainId?: number, deploymentKey?: string | null) {
@@ -31,22 +55,45 @@ export function useRecentUserVotes(voter?: string) {
   const isPageVisible = usePageVisibility();
   const normalizedVoter = normalizeVoter(voter) ?? undefined;
   const deployment = useMemo(() => resolveProtocolDeploymentScope(targetNetwork.id), [targetNetwork.id]);
+  const { delegateTo, delegateOf, isLoading: delegationLoading } = useDelegation(normalizedVoter);
+  const candidateVoters = useMemo(
+    () =>
+      buildClaimableQuestionRewardCandidateVoters({
+        address: normalizedVoter,
+        delegateTo,
+        delegateOf,
+      }),
+    [delegateOf, delegateTo, normalizedVoter],
+  );
+  const voterQuery = useMemo(() => candidateVoters.join(","), [candidateVoters]);
+
   const {
     data: result,
     isLoading,
+    isError,
     refetch,
   } = usePonderQuery({
-    queryKey: ["recentUserVotes", targetNetwork.id, deployment?.deploymentKey ?? null, normalizedVoter],
+    queryKey: ["recentUserVotes", targetNetwork.id, deployment?.deploymentKey ?? null, voterQuery],
     availabilityDeploymentKey: deployment?.deploymentKey,
     ponderFn: async () => {
-      if (!normalizedVoter) return [] as PonderVoteItem[];
-      return ponderApi.getAllVotes(
-        { voter: normalizedVoter },
-        { chainId: targetNetwork.id, deploymentKey: deployment?.deploymentKey },
+      if (!normalizedVoter || candidateVoters.length === 0) return [] as PonderVoteItem[];
+
+      const pages = await Promise.all(
+        candidateVoters.map(candidate =>
+          ponderApi.getAllVotes(
+            { voter: candidate },
+            { chainId: targetNetwork.id, deploymentKey: deployment?.deploymentKey },
+          ),
+        ),
       );
+
+      return mergeRecentVotesForConnectedWallet(pages, normalizedVoter);
     },
-    rpcFn: async () => [] as PonderVoteItem[],
-    enabled: !!normalizedVoter,
+    rpcFn: async () => {
+      throw new Error("Reward indexer unavailable");
+    },
+    rpcEnabled: false,
+    enabled: !!normalizedVoter && candidateVoters.length > 0 && !delegationLoading,
     staleTime: 30_000,
     refetchInterval: isPageVisible ? 60_000 : false,
   });
@@ -57,7 +104,8 @@ export function useRecentUserVotes(voter?: string) {
   return {
     votes,
     openVotes,
-    isLoading,
+    isLoading: isLoading || delegationLoading,
     refetch,
+    ponderUnavailable: isError,
   };
 }
