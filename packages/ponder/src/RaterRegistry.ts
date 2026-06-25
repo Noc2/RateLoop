@@ -419,7 +419,14 @@ ponder.on(
         updatedAt: event.block.timestamp,
       })
       .onConflictDoUpdate({
+        verified: false,
         revoked: true,
+        provider: Number(provider),
+        nullifierHash,
+        scope: ZERO_HASH,
+        verifiedAt: event.block.timestamp,
+        expiresAt: event.block.timestamp,
+        evidenceHash: ZERO_HASH,
         updatedAt: event.block.timestamp,
       });
   },

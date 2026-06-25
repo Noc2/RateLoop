@@ -5,6 +5,7 @@ import {
   questionBundleRound,
   questionBundleRoundSet,
   questionBundleReward,
+  questionBundleTerminalSkip,
   questionRewardPool,
   questionRewardPoolClaim,
   questionRewardPoolRound,
@@ -29,6 +30,17 @@ function bundleClaimRowId(
   identityKey: string,
 ) {
   return `${bundleId}-${roundSetIndex}-${claimant.toLowerCase()}-${identityKey}`;
+}
+
+function eventLogRowId(event: {
+  block: { number: bigint };
+  log?: { logIndex?: number | bigint | null };
+  transaction?: { hash?: string | null };
+}) {
+  const logIndex = Number(event.log?.logIndex ?? 0);
+  return event.transaction?.hash
+    ? `${event.transaction.hash}-${logIndex}`
+    : `${event.block.number.toString()}-${logIndex}`;
 }
 
 const ZERO_HASH =
@@ -681,6 +693,61 @@ ponder.on(
           updatedAt: event.block.timestamp,
         }));
     }
+  },
+);
+
+ponder.on(
+  "QuestionRewardPoolEscrow:RejectedSnapshotBundleRoundSetRecovered",
+  async ({ event, context }) => {
+    const { bundleId, roundSetIndex, allocationReturned } = event.args;
+    const id = bundleRoundSetRowId(bundleId, roundSetIndex);
+    const existingRoundSet = await context.db.find(questionBundleRoundSet, {
+      id,
+    });
+
+    if (existingRoundSet) {
+      await context.db.delete(questionBundleRoundSet, { id });
+
+      await context.db.update(questionBundleReward, { id: bundleId }).set((row) => ({
+        unallocatedAmount: row.unallocatedAmount + allocationReturned,
+        allocatedAmount: row.allocatedAmount - allocationReturned,
+        updatedAt: event.block.timestamp,
+      }));
+    }
+  },
+);
+
+ponder.on(
+  "QuestionRewardPoolEscrow:RecoveredSnapshotBundleRoundSetReopened",
+  async ({ event, context }) => {
+    const { bundleId } = event.args;
+
+    await context.db.update(questionBundleReward, { id: bundleId }).set({
+      updatedAt: event.block.timestamp,
+    });
+  },
+);
+
+ponder.on(
+  "QuestionRewardPoolEscrow:QuestionBundleTerminalSkipped",
+  async ({ event, context }) => {
+    const { bundleId, contentId, roundId, reasonCode } = event.args;
+    const logIndex = Number(event.log?.logIndex ?? 0);
+
+    await context.db
+      .insert(questionBundleTerminalSkip)
+      .values({
+        id: eventLogRowId(event),
+        bundleId,
+        contentId,
+        roundId,
+        reasonCode: Number(reasonCode),
+        blockNumber: event.block.number,
+        logIndex,
+        transactionHash: event.transaction?.hash ?? null,
+        skippedAt: event.block.timestamp,
+      })
+      .onConflictDoNothing();
   },
 );
 

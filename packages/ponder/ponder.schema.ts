@@ -677,6 +677,28 @@ export const questionBundleClaim = onchainTable(
   }),
 );
 
+export const questionBundleTerminalSkip = onchainTable(
+  "question_bundle_terminal_skip",
+  (t) => ({
+    id: t.text().primaryKey(), // `${txHash}-${logIndex}`
+    bundleId: t.bigint().notNull(),
+    contentId: t.bigint().notNull(),
+    roundId: t.bigint().notNull(),
+    reasonCode: t.integer().notNull(),
+    blockNumber: t.bigint().notNull(),
+    logIndex: t.integer().notNull(),
+    transactionHash: t.hex(),
+    skippedAt: t.bigint().notNull(),
+  }),
+  (table) => ({
+    bundleIdx: index().on(table.bundleId),
+    contentIdx: index().on(table.contentId),
+    roundIdx: index().on(table.contentId, table.roundId),
+    reasonIdx: index().on(table.reasonCode),
+    skippedAtIdx: index().on(table.skippedAt),
+  }),
+);
+
 // ============================================================
 // CONFIDENTIALITY
 // ============================================================

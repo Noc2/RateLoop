@@ -161,6 +161,24 @@ describe("ponder config", () => {
     );
   }, PONDER_CONFIG_TEST_TIMEOUT_MS);
 
+  itWithHardhatArtifacts("extends QuestionRewardPoolEscrow ABI with bundle recovery monitoring events", async () => {
+    const { default: config } = await loadPonderConfig({
+      PONDER_NETWORK: "hardhat",
+      PONDER_RPC_URL_31337: "http://127.0.0.1:8545",
+    });
+    const loadedConfig = config as any;
+    const escrowAbi = loadedConfig.contracts.QuestionRewardPoolEscrow.abi as readonly AbiEntry[];
+
+    expect(getDuplicateEventNames(escrowAbi)).toEqual([]);
+    expect(escrowAbi).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: "event", name: "QuestionBundleTerminalSkipped" }),
+        expect.objectContaining({ type: "event", name: "RejectedSnapshotBundleRoundSetRecovered" }),
+        expect.objectContaining({ type: "event", name: "RecoveredSnapshotBundleRoundSetReopened" }),
+      ]),
+    );
+  }, PONDER_CONFIG_TEST_TIMEOUT_MS);
+
   itWithSepoliaPonderArtifacts("derives supported-chain addresses and start blocks from shared deployment artifacts", async () => {
     const { default: config } = await loadPonderConfig(
       {},

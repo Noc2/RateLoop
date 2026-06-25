@@ -4,6 +4,8 @@ type RegisteredHandler = (args: {
   event: {
     args: Record<string, unknown>;
     block: { number: bigint; timestamp: bigint };
+    log?: { logIndex?: number | bigint | null };
+    transaction?: { hash?: string | null };
   };
   context: { db: ReturnType<typeof createDb>["db"] };
 }) => Promise<void>;
@@ -27,6 +29,7 @@ vi.mock("ponder:schema", () => ({
   questionBundleRound: "questionBundleRound",
   questionBundleRoundSet: "questionBundleRoundSet",
   questionBundleReward: "questionBundleReward",
+  questionBundleTerminalSkip: "questionBundleTerminalSkip",
   questionRewardPool: "questionRewardPool",
   questionRewardPoolClaim: "questionRewardPoolClaim",
   questionRewardPoolRound: "questionRewardPoolRound",
@@ -861,6 +864,139 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
         }),
       ]),
     );
+  });
+
+  it("removes recovered bundle round sets and reverses indexed allocation once", async () => {
+    const { db, deletes, updates } = createDb(
+      {
+        'questionBundleRoundSet:{"id":"9-1"}': { id: "9-1" },
+      },
+      {
+        unallocatedAmount: 40_000_000n,
+        allocatedAmount: 60_000_000n,
+        completedRoundSetCount: 1,
+      },
+    );
+    const registeredHandlers = await loadHandlers();
+
+    await registeredHandlers.get(
+      "QuestionRewardPoolEscrow:RejectedSnapshotBundleRoundSetRecovered",
+    )!({
+      event: {
+        args: {
+          bundleId: 9n,
+          roundSetIndex: 1n,
+          allocationReturned: 60_000_000n,
+        },
+        block: { number: 24n, timestamp: 2_100n },
+      },
+      context: { db },
+    });
+
+    expect(deletes).toContainEqual({
+      table: "questionBundleRoundSet",
+      key: { id: "9-1" },
+    });
+    expect(updates).toContainEqual({
+      table: "questionBundleReward",
+      key: { id: 9n },
+      values: {
+        unallocatedAmount: 100_000_000n,
+        allocatedAmount: 0n,
+        updatedAt: 2_100n,
+      },
+    });
+  });
+
+  it("does not double-apply bundle recovery accounting when the round set is absent", async () => {
+    const { db, deletes, updates } = createDb();
+    const registeredHandlers = await loadHandlers();
+
+    await registeredHandlers.get(
+      "QuestionRewardPoolEscrow:RejectedSnapshotBundleRoundSetRecovered",
+    )!({
+      event: {
+        args: {
+          bundleId: 9n,
+          roundSetIndex: 1n,
+          allocationReturned: 60_000_000n,
+        },
+        block: { number: 24n, timestamp: 2_100n },
+      },
+      context: { db },
+    });
+
+    expect(deletes).toEqual([]);
+    expect(updates).toEqual([]);
+  });
+
+  it("marks reopened recovered bundle round sets as bundle activity", async () => {
+    const { db, updates } = createDb();
+    const registeredHandlers = await loadHandlers();
+
+    await registeredHandlers.get(
+      "QuestionRewardPoolEscrow:RecoveredSnapshotBundleRoundSetReopened",
+    )!({
+      event: {
+        args: {
+          bundleId: 9n,
+          roundSetIndex: 1n,
+          newWeightRoot: `0x${"3".repeat(64)}`,
+        },
+        block: { number: 25n, timestamp: 2_200n },
+      },
+      context: { db },
+    });
+
+    expect(updates).toEqual([
+      {
+        table: "questionBundleReward",
+        key: { id: 9n },
+        values: {
+          updatedAt: 2_200n,
+        },
+      },
+    ]);
+  });
+
+  it("persists bundle terminal skip diagnostics by emitted log", async () => {
+    const { db, inserts } = createDb();
+    const registeredHandlers = await loadHandlers();
+
+    await registeredHandlers.get(
+      "QuestionRewardPoolEscrow:QuestionBundleTerminalSkipped",
+    )!({
+      event: {
+        args: {
+          bundleId: 9n,
+          contentId: 101n,
+          roundId: 4n,
+          reasonCode: 2n,
+        },
+        block: { number: 26n, timestamp: 2_300n },
+        log: { logIndex: 7 },
+        transaction: {
+          hash: "0x1234000000000000000000000000000000000000000000000000000000000000",
+        },
+      },
+      context: { db },
+    });
+
+    expect(inserts).toContainEqual({
+      table: "questionBundleTerminalSkip",
+      values: {
+        id: "0x1234000000000000000000000000000000000000000000000000000000000000-7",
+        bundleId: 9n,
+        contentId: 101n,
+        roundId: 4n,
+        reasonCode: 2,
+        blockNumber: 26n,
+        logIndex: 7,
+        transactionHash:
+          "0x1234000000000000000000000000000000000000000000000000000000000000",
+        skippedAt: 2_300n,
+      },
+    });
   });
 
   it("zeros allocated balance and marks pools refunded on complete residue sweeps", async () => {

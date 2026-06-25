@@ -13,7 +13,6 @@ import {
   FrontendRegistryAbi,
   LaunchDistributionPoolAbi,
   ProfileRegistryAbi,
-  QuestionRewardPoolEscrowAbi,
   RaterRegistryAbi,
   RoundRewardDistributorAbi,
   RoundVotingEngineAbi,
@@ -23,6 +22,7 @@ import {
   getSharedDeploymentStartBlock as getSharedArtifactStartBlock,
 } from "@rateloop/contracts/deployments";
 import { httpWithGetLogsBlockRange } from "./src/rpcTransport";
+import { QuestionRewardPoolEscrowIndexerAbi } from "./src/questionRewardPoolEscrowIndexerAbi";
 
 type PonderNetworkName =
   | "baseSepolia"
@@ -571,7 +571,7 @@ export default createConfig({
       ),
     },
     QuestionRewardPoolEscrow: {
-      abi: QuestionRewardPoolEscrowAbi,
+      abi: QuestionRewardPoolEscrowIndexerAbi,
       network: contractOnActiveNetwork(
         addresses.questionRewardPoolEscrow,
         startBlocks.questionRewardPoolEscrow,
