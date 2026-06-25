@@ -152,6 +152,7 @@ function createDb({
   if (voterStatsRow) {
     rowsByTable.voterStats = voterStatsRow;
   }
+  const insertedVotes: Record<string, Record<string, unknown>> = {};
   const resolveSetValues = (
     table: string,
     values:
@@ -163,17 +164,32 @@ function createDb({
   return {
     conflictUpdateCalls,
     db: {
-      find: vi.fn(async (table: string) => {
+      find: vi.fn(async (table: string, key?: Record<string, unknown>) => {
         if (table === "content") return contentRecord;
         if (table === "round") return roundRecord;
-        if (table === "vote") return existingVote;
+        if (table === "vote") {
+          if (
+            existingVote &&
+            (!key?.id || String(existingVote.id) === String(key.id))
+          ) {
+            return existingVote;
+          }
+          if (key?.id) {
+            return insertedVotes[String(key.id)] ?? null;
+          }
+          return existingVote;
+        }
         return null;
       }),
       insert: vi.fn((table: string) => ({
         values: vi.fn((values: Record<string, unknown>) => {
           insertCalls.push({ table, values });
           return {
-            onConflictDoNothing: vi.fn(async () => undefined),
+            onConflictDoNothing: vi.fn(async () => {
+              if (table === "vote" && values.id) {
+                insertedVotes[String(values.id)] = values;
+              }
+            }),
             // Resolve the conflict updater against a known row only when the
             // test provided one; otherwise stay a no-op like before.
             onConflictDoUpdate: vi.fn(

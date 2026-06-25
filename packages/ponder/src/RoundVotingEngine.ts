@@ -752,6 +752,51 @@ ponder.on("RoundVotingEngine:VoteCommitted", async ({ event, context }) => {
     indexedRound: existingRound,
   });
 
+  // Persist the vote row before mutating round counters so crash recovery cannot inflate quorum fields.
+  await context.db
+    .insert(vote)
+    .values({
+      id: voteKey,
+      contentId,
+      roundId,
+      voter: rawVoter,
+      identityKey,
+      identityHolder,
+      credentialMask,
+      freshCredentialMask,
+      commitKey,
+      commitHash,
+      ciphertextHash,
+      ciphertext,
+      ciphertextSource: "event",
+      targetRound,
+      drandChainHash,
+      isUp: null,
+      predictedUpBps: null,
+      rbtsWeight: null,
+      rbtsScoreBps: null,
+      rbtsRewardWeight: null,
+      rbtsStakeReturned: null,
+      rbtsForfeitedStake: null,
+      stake,
+      epochIndex,
+      revealed: false,
+      committedAt: event.block.timestamp,
+      commitTxHash: event.transaction.hash,
+      commitBlockNumber: event.block.number,
+      commitLogIndex: Number(event.log?.logIndex ?? 0),
+      revealedAt: null,
+    })
+    .onConflictDoNothing();
+
+  const persistedVote = await context.db.find(vote, { id: voteKey });
+  if (
+    !persistedVote ||
+    String(persistedVote.commitTxHash).toLowerCase() !== event.transaction.hash.toLowerCase()
+  ) {
+    return;
+  }
+
   if (!existingRound) {
     const humanVerifiedCommitCount = hasHumanCredential ? 1 : 0;
     await context.db.insert(round).values({
@@ -801,43 +846,6 @@ ponder.on("RoundVotingEngine:VoteCommitted", async ({ event, context }) => {
       };
     });
   }
-
-  // Create vote record (direction hidden until revealed)
-  await context.db
-    .insert(vote)
-    .values({
-      id: voteKey,
-      contentId,
-      roundId,
-      voter: rawVoter,
-      identityKey,
-      identityHolder,
-      credentialMask,
-      freshCredentialMask,
-      commitKey,
-      commitHash,
-      ciphertextHash,
-      ciphertext,
-      ciphertextSource: "event",
-      targetRound,
-      drandChainHash,
-      isUp: null,
-      predictedUpBps: null,
-      rbtsWeight: null,
-      rbtsScoreBps: null,
-      rbtsRewardWeight: null,
-      rbtsStakeReturned: null,
-      rbtsForfeitedStake: null,
-      stake,
-      epochIndex,
-      revealed: false,
-      committedAt: event.block.timestamp,
-      commitTxHash: event.transaction.hash,
-      commitBlockNumber: event.block.number,
-      commitLogIndex: Number(event.log?.logIndex ?? 0),
-      revealedAt: null,
-    })
-    .onConflictDoNothing();
 
   // Update content aggregate and lastActivityAt
   const contentRecord = await context.db.find(content, { id: contentId });
