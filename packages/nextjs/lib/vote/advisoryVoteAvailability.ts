@@ -10,6 +10,7 @@ export const ADVISORY_COMMIT_AVAILABILITY_STATUS = {
   InvalidConfig: 8,
   UnverifiedAdvisoryCapReached: 9,
   ConfidentialityGated: 10,
+  AlreadyCommitted: 11,
 } as const;
 
 export type AdvisoryCommitAvailabilityStatus =
@@ -79,6 +80,8 @@ export function getAdvisoryVoteUnavailableMessage(
       return "This round has reached the zero-LREP limit for unverified wallets. Verify a human credential or try another round.";
     case ADVISORY_COMMIT_AVAILABILITY_STATUS.ConfidentialityGated:
       return "Zero-LREP advisory voting is not available for private-context questions.";
+    case ADVISORY_COMMIT_AVAILABILITY_STATUS.AlreadyCommitted:
+      return "You already have a vote committed on this content in the current round.";
     case ADVISORY_COMMIT_AVAILABILITY_STATUS.RoundNotOpen:
       return "This round is not accepting votes right now.";
     case ADVISORY_COMMIT_AVAILABILITY_STATUS.InvalidConfig:

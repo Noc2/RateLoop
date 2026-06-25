@@ -54,7 +54,11 @@ import { extractQuestionReferenceIds } from "~~/lib/questionReferences";
 import { replaceUrlPreservingHistoryState } from "~~/lib/ui/browserHistory";
 import { getVisualViewportBottom, resolveMobileDockReservedSpace } from "~~/lib/ui/mobileDockReservedSpace";
 import { VOTE_MOBILE_LAYOUT_MEDIA_QUERY, VOTE_ROOT_SCROLL_LOCK_CLASS_NAME } from "~~/lib/ui/voteRootScrollLock";
-import { getAdvisoryVoteUnavailableMessage } from "~~/lib/vote/advisoryVoteAvailability";
+import {
+  ADVISORY_COMMIT_AVAILABILITY_STATUS,
+  type AdvisoryCommitAvailability,
+  getAdvisoryVoteUnavailableMessage,
+} from "~~/lib/vote/advisoryVoteAvailability";
 import { orderBundleMembersInFeed } from "~~/lib/vote/bundleFeedOrder";
 import { formatVoteCooldownRemaining, getVoteCooldownRemainingSeconds } from "~~/lib/vote/cooldown";
 import {
@@ -159,6 +163,17 @@ function getLrepRequiredVoteStatus(unavailableMessage?: string | null) {
       unavailableMessage ??
       "This wallet needs LREP to join this round. Zero-LREP advisory voting is only available after a staked rater opens the round.",
   };
+}
+
+function getAdvisoryUnavailableVoteStatus(availability?: AdvisoryCommitAvailability | null) {
+  const unavailableMessage = getAdvisoryVoteUnavailableMessage(availability);
+  if (availability?.status === ADVISORY_COMMIT_AVAILABILITY_STATUS.AlreadyCommitted) {
+    return {
+      label: "Submitted",
+      detail: unavailableMessage ?? "You already have a vote committed on this content in the current round.",
+    };
+  }
+  return getLrepRequiredVoteStatus(unavailableMessage);
 }
 
 function getPrivateContextVoteStatus(blocker: string) {
@@ -1381,7 +1396,7 @@ const HomeInner = () => {
     if (availability?.canCommit === true) return null;
     if (!availability && advisoryAvailabilityLoading) return null;
 
-    return getLrepRequiredVoteStatus(getAdvisoryVoteUnavailableMessage(availability));
+    return getAdvisoryUnavailableVoteStatus(availability);
   }, [
     advisoryAvailabilityByContentId,
     advisoryAvailabilityLoading,

@@ -1,7 +1,6 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { zeroHash } from "viem";
 import { useAccount } from "wagmi";
 import { ArrowTopRightOnSquareIcon, BanknotesIcon, ChatBubbleLeftEllipsisIcon } from "@heroicons/react/24/outline";
 import { AwardFeedbackBonusModal } from "~~/components/feedback/AwardFeedbackBonusModal";
@@ -22,6 +21,7 @@ import {
   type ContentFeedbackItem,
   type ContentFeedbackType,
 } from "~~/lib/feedback/types";
+import { hasNonZeroCommit } from "~~/lib/vote/commitState";
 import { notification } from "~~/utils/scaffold-eth";
 
 interface ContentFeedbackPanelProps {
@@ -46,11 +46,6 @@ function formatFeedbackDate(value: string) {
     month: "short",
     day: "numeric",
   });
-}
-
-function hasNonZeroCommit(value: unknown) {
-  if (Array.isArray(value)) return value.some(hasNonZeroCommit);
-  return typeof value === "string" && value !== zeroHash;
 }
 
 function readCommitHash(value: unknown): `0x${string}` | null {

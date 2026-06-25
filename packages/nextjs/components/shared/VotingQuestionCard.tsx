@@ -12,6 +12,7 @@ import { RoundRevealedBreakdown, RoundStats } from "~~/components/shared/RoundSt
 import { HoverTooltip, InfoTooltip, TooltipAnchor } from "~~/components/ui/InfoTooltip";
 import type { ContentOpenRoundSummary, RewardPoolCurrency } from "~~/hooks/contentFeed/shared";
 import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
+import { useRaterRegistryIdentity } from "~~/hooks/useRaterRegistryIdentity";
 import { useRoundSnapshot } from "~~/hooks/useRoundSnapshot";
 import type { ViewerRewardStatus } from "~~/hooks/useViewerRewardStatuses";
 import {
@@ -21,6 +22,7 @@ import {
   isRoundAcceptingVotes,
 } from "~~/lib/contracts/roundVotingEngine";
 import { formatSubmissionRewardAmount, formatUsdAmount } from "~~/lib/questionRewardPools";
+import { hasNonZeroCommit } from "~~/lib/vote/commitState";
 import { formatVoteCooldownRemaining } from "~~/lib/vote/cooldown";
 import { describeOpenRoundActivity, formatLrepAmount, getRoundProgressMessaging } from "~~/lib/vote/voteIncentives";
 import type { VoteUiConfig } from "~~/lib/vote/voteUiConfig";
@@ -543,6 +545,9 @@ export function VotingQuestionCard({
   // Check if user already voted on this content in the current round
   const roundSnapshot = useRoundSnapshot(contentId, openRound ?? undefined, roundConfig ?? undefined);
   const { roundId, isRoundFull } = roundSnapshot;
+  const { holder, identityKey } = useRaterRegistryIdentity(address);
+  const normalizedAddress = address?.toLowerCase() ?? null;
+  const holderAddress = holder && holder.toLowerCase() !== normalizedAddress ? holder : null;
   const roundAcceptsVotes = isRoundAcceptingVotes(roundSnapshot);
   const cooldownActive = cooldownSecondsRemaining > 0;
   const cooldownLabel = formatVoteCooldownRemaining(cooldownSecondsRemaining);
@@ -571,12 +576,48 @@ export function VotingQuestionCard({
     watch: true,
     query: { enabled: roundId > 0n && !!address },
   } as any);
-
-  const myCommitStateTuple = Array.isArray(myCommitState) ? myCommitState : [];
-  const hasMyVote = myCommitStateTuple.some(
-    value =>
-      typeof value === "string" && value !== "0x0000000000000000000000000000000000000000000000000000000000000000",
-  );
+  const { data: myHolderCommitState } = useScaffoldReadContract({
+    contractName: "RoundVotingEngine" as any,
+    functionName: "voterCommitKey" as any,
+    args: [contentId, roundId, holderAddress] as any,
+    watch: true,
+    query: { enabled: roundId > 0n && !!holderAddress },
+  } as any);
+  const { data: myIdentityCommitState } = useScaffoldReadContract({
+    contractName: "RoundVotingEngine" as any,
+    functionName: "identityCommitState" as any,
+    args: [contentId, roundId, identityKey, holder ?? address] as any,
+    watch: true,
+    query: { enabled: roundId > 0n && !!identityKey && !!(holder ?? address) },
+  } as any);
+  const { data: myAdvisoryCommitKey } = useScaffoldReadContract({
+    contractName: "AdvisoryVoteRecorder" as any,
+    functionName: "advisoryCommitKeyByRater" as any,
+    args: [contentId, roundId, address] as any,
+    watch: true,
+    query: { enabled: roundId > 0n && !!address },
+  } as any);
+  const { data: myHolderAdvisoryCommitKey } = useScaffoldReadContract({
+    contractName: "AdvisoryVoteRecorder" as any,
+    functionName: "advisoryCommitKeyByRater" as any,
+    args: [contentId, roundId, holderAddress] as any,
+    watch: true,
+    query: { enabled: roundId > 0n && !!holderAddress },
+  } as any);
+  const { data: myIdentityAdvisoryCommitKey } = useScaffoldReadContract({
+    contractName: "AdvisoryVoteRecorder" as any,
+    functionName: "advisoryCommitKeyByIdentity" as any,
+    args: [contentId, roundId, identityKey] as any,
+    watch: true,
+    query: { enabled: roundId > 0n && !!identityKey },
+  } as any);
+  const hasMyVote =
+    hasNonZeroCommit(myCommitState) ||
+    hasNonZeroCommit(myHolderCommitState) ||
+    hasNonZeroCommit(myIdentityCommitState) ||
+    hasNonZeroCommit(myAdvisoryCommitKey) ||
+    hasNonZeroCommit(myHolderAdvisoryCommitKey) ||
+    hasNonZeroCommit(myIdentityAdvisoryCommitKey);
   const usesDockStatusText = isDockVariant;
   const commitAvailabilityStatus = roundSnapshot.commitAvailability?.status;
   const isRoundFullStatus = isRoundFull || commitAvailabilityStatus === COMMIT_AVAILABILITY_STATUS.RoundFull;

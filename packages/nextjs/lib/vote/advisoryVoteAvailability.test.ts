@@ -56,3 +56,13 @@ test("getAdvisoryVoteUnavailableMessage explains private-context advisory blocks
     /not available for private-context questions/u,
   );
 });
+
+test("getAdvisoryVoteUnavailableMessage explains existing advisory commits", () => {
+  assert.match(
+    getAdvisoryVoteUnavailableMessage({
+      canCommit: false,
+      status: ADVISORY_COMMIT_AVAILABILITY_STATUS.AlreadyCommitted,
+    }) ?? "",
+    /already have a vote committed/u,
+  );
+});
