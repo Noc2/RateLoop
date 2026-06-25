@@ -11,6 +11,21 @@ type OpenableStakedRoundRuntime = {
   requiresOpenRound: boolean;
 };
 
+export type RoundVoteBatchPreflightResult = {
+  failedCallFunctionName?: string;
+  failedCallIndex?: number;
+  failedCallKind?: RoundVoteContractCall["kind"];
+  failureReason?: "per-call-simulation-error" | "simulate-calls-error" | "simulate-calls-result-failed";
+  includesOpenRound: boolean;
+  message?: string;
+  passed: boolean;
+  resultStatus?: string;
+  simulateCallsAvailable: boolean;
+  simulateCallsFailureMessage?: string;
+  simulateCallsFailureReason?: "simulate-calls-error";
+  strategy: "per-call" | "simulate-calls";
+};
+
 export type PostOpenPredictableRuntime = {
   baseTotalStake: bigint;
   baseVoteCount: bigint;
@@ -56,15 +71,33 @@ export function predictPostOpenRoundRuntime<Runtime extends PostOpenPredictableR
   };
 }
 
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function getSimulateCallsResultMessage(result: unknown) {
+  if (!result || typeof result !== "object") return undefined;
+  const record = result as Record<string, unknown>;
+  const error = record.error;
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === "object" && typeof (error as { message?: unknown }).message === "string") {
+    return (error as { message: string }).message;
+  }
+  if (typeof record.message === "string") return record.message;
+  return undefined;
+}
+
 export async function preflightRoundVoteBatchCalls(params: {
   account: Address;
   calls: RoundVoteContractCall[];
   publicClient: PublicClient;
   simulatePlannedCall: (call: RoundVoteContractCall) => Promise<void>;
-}): Promise<boolean> {
+}): Promise<RoundVoteBatchPreflightResult> {
   const includesOpenRound = params.calls.some(call => call.kind === "openRound");
+  const simulateCallsAvailable = typeof params.publicClient.simulateCalls === "function";
+  let simulateCallsFailureMessage: string | undefined;
 
-  if (includesOpenRound && typeof params.publicClient.simulateCalls === "function") {
+  if (includesOpenRound && simulateCallsAvailable) {
     try {
       const { results } = await params.publicClient.simulateCalls({
         account: params.account,
@@ -87,19 +120,73 @@ export async function preflightRoundVoteBatchCalls(params: {
         }),
       });
 
-      return results.every(result => result.status === "success");
-    } catch {
+      const failedCallIndex = results.findIndex(result => result.status !== "success");
+      if (failedCallIndex === -1) {
+        return {
+          includesOpenRound,
+          passed: true,
+          simulateCallsAvailable,
+          strategy: "simulate-calls",
+        };
+      }
+
+      const failedCall = params.calls[failedCallIndex];
+      const failedResult = results[failedCallIndex];
+      return {
+        failedCallFunctionName: failedCall?.functionName,
+        failedCallIndex,
+        failedCallKind: failedCall?.kind,
+        failureReason: "simulate-calls-result-failed",
+        includesOpenRound,
+        message: getSimulateCallsResultMessage(failedResult),
+        passed: false,
+        resultStatus: String(failedResult?.status ?? "unknown"),
+        simulateCallsAvailable,
+        strategy: "simulate-calls",
+      };
+    } catch (error) {
+      simulateCallsFailureMessage = getErrorMessage(error);
       // Fall through to per-call simulateContract checks.
     }
   }
 
+  let perCallIndex = 0;
   try {
-    for (const call of params.calls) {
+    for (; perCallIndex < params.calls.length; perCallIndex += 1) {
+      const call = params.calls[perCallIndex];
       await params.simulatePlannedCall(call);
     }
-    return true;
-  } catch {
-    return false;
+    return {
+      includesOpenRound,
+      passed: true,
+      simulateCallsAvailable,
+      ...(simulateCallsFailureMessage
+        ? {
+            simulateCallsFailureMessage,
+            simulateCallsFailureReason: "simulate-calls-error" as const,
+          }
+        : {}),
+      strategy: "per-call",
+    };
+  } catch (error) {
+    const failedCall = params.calls[perCallIndex];
+    return {
+      failedCallFunctionName: failedCall?.functionName,
+      failedCallIndex: perCallIndex,
+      failedCallKind: failedCall?.kind,
+      failureReason: "per-call-simulation-error",
+      includesOpenRound,
+      message: getErrorMessage(error),
+      passed: false,
+      simulateCallsAvailable,
+      ...(simulateCallsFailureMessage
+        ? {
+            simulateCallsFailureMessage,
+            simulateCallsFailureReason: "simulate-calls-error" as const,
+          }
+        : {}),
+      strategy: "per-call",
+    };
   }
 }
 

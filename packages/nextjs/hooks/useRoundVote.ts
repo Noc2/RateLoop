@@ -1011,15 +1011,18 @@ export function useRoundVote() {
 
         const combinedVote = await buildCombinedOpenRoundVotePlan();
         timingLog.emit("combined-open-vote-preflight-start");
-        const preflightPassed = await preflightRoundVoteBatchCalls({
+        const preflightResult = await preflightRoundVoteBatchCalls({
           account: address as Address,
           calls: combinedVote.plan.calls,
           publicClient,
           simulatePlannedCall,
         });
-        timingLog.emit("combined-open-vote-preflight-complete", { preflightPassed });
+        timingLog.emit("combined-open-vote-preflight-complete", {
+          ...preflightResult,
+          preflightPassed: preflightResult.passed,
+        });
 
-        if (preflightPassed) {
+        if (preflightResult.passed) {
           timingLog.emit("combined-open-vote-batch-submit-start", { sponsorshipMode });
           const confirmation = await executeVoteBatchWithPostcondition(combinedVote, sponsorshipMode);
           timingLog.emit("combined-open-vote-batch-submit-complete", { confirmation, sponsorshipMode });

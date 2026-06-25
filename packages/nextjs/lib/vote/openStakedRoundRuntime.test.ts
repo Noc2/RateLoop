@@ -144,7 +144,7 @@ test("preflightRoundVoteBatchCalls falls back to per-call simulation when atomic
     },
   ];
 
-  const passed = await preflightRoundVoteBatchCalls({
+  const result = await preflightRoundVoteBatchCalls({
     account: "0x0000000000000000000000000000000000000005",
     calls,
     publicClient: {} as never,
@@ -153,6 +153,95 @@ test("preflightRoundVoteBatchCalls falls back to per-call simulation when atomic
     },
   });
 
-  assert.equal(passed, true);
+  assert.equal(result.passed, true);
+  assert.equal(result.simulateCallsAvailable, false);
+  assert.equal(result.strategy, "per-call");
   assert.deepEqual(simulatedKinds, ["openRound", "approve"]);
+});
+
+test("preflightRoundVoteBatchCalls reports simulateCalls result failures", async () => {
+  const simulatedKinds: string[] = [];
+  const calls: RoundVoteContractCall[] = [
+    {
+      abi: RoundVotingEngineAbi as never,
+      address: "0x0000000000000000000000000000000000000002",
+      args: [42n],
+      functionName: "openRound",
+      kind: "openRound",
+    },
+    {
+      abi: RoundVotingEngineAbi as never,
+      address: "0x0000000000000000000000000000000000000002",
+      args: [42n, 1n, 100n, "0x1234", "0x5678", "0x90", 10n, "0x0000000000000000000000000000000000000005"],
+      functionName: "commitVote",
+      kind: "commitVote",
+    },
+  ];
+
+  const result = await preflightRoundVoteBatchCalls({
+    account: "0x0000000000000000000000000000000000000005",
+    calls,
+    publicClient: {
+      simulateCalls: async () => ({
+        results: [{ status: "success" }, { error: { message: "RoundNotOpen" }, status: "failure" }],
+      }),
+    } as never,
+    simulatePlannedCall: async call => {
+      simulatedKinds.push(call.kind);
+    },
+  });
+
+  assert.equal(result.passed, false);
+  assert.equal(result.strategy, "simulate-calls");
+  assert.equal(result.failureReason, "simulate-calls-result-failed");
+  assert.equal(result.failedCallIndex, 1);
+  assert.equal(result.failedCallKind, "commitVote");
+  assert.equal(result.message, "RoundNotOpen");
+  assert.deepEqual(simulatedKinds, []);
+});
+
+test("preflightRoundVoteBatchCalls reports per-call fallback failures after simulateCalls throws", async () => {
+  const simulatedKinds: string[] = [];
+  const calls: RoundVoteContractCall[] = [
+    {
+      abi: RoundVotingEngineAbi as never,
+      address: "0x0000000000000000000000000000000000000002",
+      args: [42n],
+      functionName: "openRound",
+      kind: "openRound",
+    },
+    {
+      abi: RoundVotingEngineAbi as never,
+      address: "0x0000000000000000000000000000000000000002",
+      args: [42n, 1n, 100n, "0x1234", "0x5678", "0x90", 10n, "0x0000000000000000000000000000000000000005"],
+      functionName: "commitVote",
+      kind: "commitVote",
+    },
+  ];
+
+  const result = await preflightRoundVoteBatchCalls({
+    account: "0x0000000000000000000000000000000000000005",
+    calls,
+    publicClient: {
+      simulateCalls: async () => {
+        throw new Error("eth_simulateV1 not available");
+      },
+    } as never,
+    simulatePlannedCall: async call => {
+      simulatedKinds.push(call.kind);
+      if (call.kind === "commitVote") {
+        throw new Error("RoundNotOpen");
+      }
+    },
+  });
+
+  assert.equal(result.passed, false);
+  assert.equal(result.strategy, "per-call");
+  assert.equal(result.failureReason, "per-call-simulation-error");
+  assert.equal(result.failedCallIndex, 1);
+  assert.equal(result.failedCallKind, "commitVote");
+  assert.equal(result.message, "RoundNotOpen");
+  assert.equal(result.simulateCallsFailureReason, "simulate-calls-error");
+  assert.equal(result.simulateCallsFailureMessage, "eth_simulateV1 not available");
+  assert.deepEqual(simulatedKinds, ["openRound", "commitVote"]);
 });
