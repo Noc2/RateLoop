@@ -2469,17 +2469,19 @@ function normalizeMcpQuestionBody(value: unknown) {
 
 function normalizeCallbackDeliveries(
   deliveries: Awaited<ReturnType<typeof listAgentCallbackEventsByEventIdPrefix>>,
+  options: { includeSensitiveDetails?: boolean } = {},
 ): Array<Record<string, unknown>> {
+  const includeSensitiveDetails = options.includeSensitiveDetails ?? true;
   return deliveries.map(delivery => ({
     attemptCount: delivery.attemptCount,
-    callbackUrl: delivery.callbackUrl,
+    ...(includeSensitiveDetails ? { callbackUrl: delivery.callbackUrl } : {}),
     deliveredAt: delivery.deliveredAt ? delivery.deliveredAt.toISOString() : null,
     eventId: delivery.eventId,
     eventType: delivery.eventType,
-    lastError: delivery.lastError,
+    ...(includeSensitiveDetails ? { lastError: delivery.lastError } : {}),
     nextAttemptAt: delivery.nextAttemptAt.toISOString(),
     status: delivery.status,
-    subscriptionId: delivery.subscriptionId,
+    ...(includeSensitiveDetails ? { subscriptionId: delivery.subscriptionId } : {}),
   }));
 }
 
@@ -2666,12 +2668,17 @@ async function assertPublicOperationRecord(
   }
 }
 
-async function loadCallbackDeliveryStatus(operationKey: `0x${string}`, agentId: string) {
+async function loadCallbackDeliveryStatus(
+  operationKey: `0x${string}`,
+  agentId: string,
+  options: { includeSensitiveDetails?: boolean } = {},
+) {
   return normalizeCallbackDeliveries(
     await listAgentCallbackEventsByEventIdPrefix({
       agentId,
       eventIdPrefix: `${operationKey}:`,
     }),
+    options,
   );
 }
 
@@ -3589,7 +3596,9 @@ export async function callPublicRateLoopMcpTool(params: {
       const body = {
         ...(normalizeMcpQuestionBody(x402QuestionSubmissionRecordBody(record)) as JsonObject),
         callbackDeliveries:
-          operationKey && callbackAgentId ? await loadCallbackDeliveryStatus(operationKey, callbackAgentId) : [],
+          operationKey && callbackAgentId
+            ? await loadCallbackDeliveryStatus(operationKey, callbackAgentId, { includeSensitiveDetails: false })
+            : [],
         liveAskGuidance,
         publicUrl: getAgentPublicQuestionUrl(record?.contentId ?? null),
       };

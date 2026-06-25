@@ -2143,16 +2143,18 @@ test("public rateloop_get_question_status surfaces wallet callback deliveries", 
     name: "rateloop_get_question_status",
   });
   const body = result as {
-    callbackDeliveries: Array<{ callbackUrl: string; eventId: string; eventType: string; status: string }>;
+    callbackDeliveries: Array<Record<string, unknown>>;
     status: string;
   };
 
   assert.equal(body.status, "submitted");
   assert.equal(body.callbackDeliveries.length, 1);
-  assert.equal(body.callbackDeliveries[0]?.callbackUrl, "https://agent.example/rateloop");
   assert.equal(body.callbackDeliveries[0]?.eventId, `${OPERATION_KEY}:question.submitted`);
   assert.equal(body.callbackDeliveries[0]?.eventType, "question.submitted");
   assert.equal(body.callbackDeliveries[0]?.status, "pending");
+  assert.equal("callbackUrl" in body.callbackDeliveries[0]!, false);
+  assert.equal("lastError" in body.callbackDeliveries[0]!, false);
+  assert.equal("subscriptionId" in body.callbackDeliveries[0]!, false);
 });
 
 test("rateloop_confirm_ask_transactions returns a pending feedback bonus transaction plan", async () => {
