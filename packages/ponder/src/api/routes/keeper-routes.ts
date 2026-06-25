@@ -83,7 +83,6 @@ export function registerKeeperRoutes(app: ApiApp) {
           when ${roundExpired} then 'cancel'
           when ${round.voteCount} >= ${revealQuorum}
             and ${round.revealedCount} < ${revealQuorum}
-            and ${round.humanVerifiedCommitCount} >= ${revealQuorum}
             and ${revealFailedDeadlinePassed}
             then 'reveal_failed'
           when ${round.voteCount} > ${round.revealedCount} then 'reveal'

@@ -4974,7 +4974,7 @@ describe("registerKeeperRoutes", () => {
     expect(serializedOrderBy).toContain("feedbackBonusPool.id");
   });
 
-  it("uses humanVerifiedCommitCount quorum for reveal_failed keeper hints", async () => {
+  it("uses voteCount quorum for reveal_failed keeper hints", async () => {
     const { db, queryBuilders } = mockPonderModules([], [[], [], []]);
     const { registerKeeperRoutes } = await import(
       "../src/api/routes/keeper-routes.js"
@@ -4988,7 +4988,9 @@ describe("registerKeeperRoutes", () => {
 
     expect(response.status).toBe(200);
     const serializedSelect = serializeExpression(db.select.mock.calls[0]?.[0]);
-    expect(serializedSelect).toContain("round.humanVerifiedCommitCount");
+    expect(serializedSelect).toContain("round.voteCount");
+    expect(serializedSelect).toContain("round.revealedCount");
+    expect(serializedSelect).not.toContain("round.humanVerifiedCommitCount");
     expect(serializedSelect).toContain("greatest");
     expect(queryBuilders[0]?.from).toHaveBeenCalled();
   });
