@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { get } from "@vercel/blob";
+import {
+  checkGatedAttachmentResourceRateLimit,
+  checkGatedAttachmentRouteRateLimit,
+} from "~~/lib/attachments/gatedAttachmentRateLimit";
 import { parseImageAttachmentVariant } from "~~/lib/attachments/imageAttachmentVariants";
 import {
   backfillImageAttachmentVariant,
@@ -51,6 +55,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     return new NextResponse("Not found", { status: 404 });
   }
 
+  const routeLimited = await checkGatedAttachmentRouteRateLimit(request, "/api/attachments/images/[attachmentId]");
+  if (routeLimited) return routeLimited;
+
   const attachment = await getImageAttachment(attachmentId);
   if (!attachment || attachment.status !== "approved" || !attachment.normalizedBlobPathname) {
     return new NextResponse("Not found", { status: 404 });
@@ -95,6 +102,16 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       { error: gatedAuth.error },
       { status: gatedAuth.status, headers: { "Cache-Control": "private, no-store" } },
     );
+  }
+  if (gated && gatedAuth?.ok && attachment.contentId) {
+    const resourceLimited = await checkGatedAttachmentResourceRateLimit(request, {
+      contentId: attachment.contentId,
+      deploymentKey: gatedAuth.deploymentKey,
+      resourceId: attachment.id,
+      resourceKind: "image",
+      walletAddress: gatedAuth.walletAddress,
+    });
+    if (resourceLimited) return resourceLimited;
   }
 
   const publicImageCacheControl = isUnlinkedPublic

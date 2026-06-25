@@ -20,6 +20,8 @@ export interface RateLimitConfig {
 export interface RateLimitOptions {
   /** Additional stable key parts, such as a normalized wallet address */
   extraKeyParts?: Array<string | number | bigint | null | undefined>;
+  /** Stable route scope for dynamic paths whose route params should not split the first-stage bucket */
+  routeKey?: string;
   /** Allow selected low-risk endpoints to keep serving if the backing store is temporarily offline */
   allowOnStoreUnavailable?: boolean;
 }
@@ -226,9 +228,8 @@ export async function checkRateLimit(
     trustedClientIp ? `ip:${trustedClientIp}` : buildFallbackFingerprint(request),
     ...(options.extraKeyParts ?? []).map(normalizeExtraKeyPart).filter((part): part is string => !!part),
   ].join("|");
-  const key = hashIdentifier(
-    `${request.nextUrl.pathname}:${request.method.toUpperCase()}:${windowStartedAt}:${subject}`,
-  );
+  const routeKey = options.routeKey?.trim() || request.nextUrl.pathname;
+  const key = hashIdentifier(`${routeKey}:${request.method.toUpperCase()}:${windowStartedAt}:${subject}`);
 
   try {
     await ensureRateLimitTable();

@@ -48,6 +48,7 @@ export { CONFIDENTIALITY_TERMS_TEXT, CONFIDENTIALITY_TERMS_URI, CONFIDENTIALITY_
 const BYTES32_HEX_PATTERN = /^0x[0-9a-fA-F]{64}$/;
 const CONTENT_ID_PATTERN = /^[0-9]{1,78}$/;
 const RESOURCE_ID_PATTERN = /^(att|det)_[A-Za-z0-9_-]{16,80}$/;
+const CONFIDENTIAL_CONTEXT_ACCESS_LOG_DEDUPE_MS = 60_000;
 
 export type DisclosurePolicy = "after_settlement" | "private_forever";
 export type ResourceKind = "image" | "details";
@@ -944,6 +945,27 @@ export async function logConfidentialContextAccess(params: {
   if (!RESOURCE_ID_PATTERN.test(params.resourceId)) return;
   const deploymentScope = resolveConfidentialityDeploymentScope(params);
   if (!deploymentScope) return;
+  const viewedAt = new Date();
+  const dedupeSince = new Date(viewedAt.getTime() - CONFIDENTIAL_CONTEXT_ACCESS_LOG_DEDUPE_MS);
+  const [recentAccess] = await db
+    .select({ id: confidentialContextAccessLogs.id })
+    .from(confidentialContextAccessLogs)
+    .where(
+      and(
+        eq(confidentialContextAccessLogs.deploymentKey, deploymentScope.deploymentKey),
+        eq(confidentialContextAccessLogs.contentId, params.contentId),
+        params.identityKey
+          ? eq(confidentialContextAccessLogs.identityKey, params.identityKey)
+          : isNull(confidentialContextAccessLogs.identityKey),
+        eq(confidentialContextAccessLogs.resourceId, params.resourceId),
+        eq(confidentialContextAccessLogs.resourceKind, params.resourceKind),
+        eq(confidentialContextAccessLogs.walletAddress, params.walletAddress),
+        gte(confidentialContextAccessLogs.viewedAt, dedupeSince),
+      ),
+    )
+    .limit(1);
+  if (recentAccess) return;
+
   await db.insert(confidentialContextAccessLogs).values({
     chainId: deploymentScope.chainId,
     contentId: params.contentId,
@@ -953,7 +975,7 @@ export async function logConfidentialContextAccess(params: {
     ipHash: hashIpAddress(params.request),
     resourceId: params.resourceId,
     resourceKind: params.resourceKind,
-    viewedAt: new Date(),
+    viewedAt,
     viewToken: params.viewToken,
     walletAddress: params.walletAddress,
   });

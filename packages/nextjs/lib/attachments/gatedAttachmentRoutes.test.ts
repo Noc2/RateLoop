@@ -256,6 +256,57 @@ test("gated details require a signed accepted wallet session and avoid public ca
   ]);
 });
 
+test("gated details route throttles guessed ids before lookup", async () => {
+  for (let index = 0; index < 121; index += 1) {
+    const detailsId = `det_routefloodcase${String(index).padStart(4, "0")}`;
+    const response = await getDetails(
+      new NextRequest(`https://www.rateloop.ai/api/attachments/details/${detailsId}`, {
+        headers: { "user-agent": "gated-details-route-flood" },
+      }),
+      { params: Promise.resolve({ detailsId }) },
+    );
+
+    if (index < 120) {
+      assert.equal(response.status, 404);
+    } else {
+      assert.equal(response.status, 429);
+      assert.ok(Number(response.headers.get("retry-after")) > 0);
+      assert.equal((await response.json()).code, "rate_limit_exceeded");
+    }
+  }
+});
+
+test("gated details throttle repeated authorized resource reads and dedupe access logs", async () => {
+  await seedGatedDetails();
+  const cookie = await acceptTermsAndBuildCookie("nonce-details-throttle");
+
+  for (let index = 0; index < 31; index += 1) {
+    const response = await getDetails(
+      new NextRequest(`https://www.rateloop.ai/api/attachments/details/${DETAILS_ID}?address=${RATER_WALLET}`, {
+        headers: {
+          cookie,
+          "user-agent": "gated-details-resource-flood",
+        },
+      }),
+      { params: Promise.resolve({ detailsId: DETAILS_ID }) },
+    );
+
+    if (index < 30) {
+      assert.equal(response.status, 200);
+      assert.equal(await response.text(), DETAILS_TEXT);
+    } else {
+      assert.equal(response.status, 429);
+      assert.equal((await response.json()).code, "rate_limit_exceeded");
+    }
+  }
+
+  const rows = await dbClient.execute({
+    sql: "SELECT COUNT(*) AS access_count FROM confidential_context_access_logs WHERE resource_id = ?",
+    args: [DETAILS_ID],
+  });
+  assert.equal(Number(rows.rows[0]?.access_count ?? 0), 1);
+});
+
 test("gated details allow the attachment owner with a signed wallet session without terms acceptance", async () => {
   await seedGatedDetails();
   const cookie = await buildSignedGatedContextCookie(WALLET);
@@ -537,6 +588,58 @@ test("gated images require accepted wallet sessions and return watermarked no-st
       resource_kind: "image",
     },
   ]);
+});
+
+test("gated image route throttles guessed ids before lookup", async () => {
+  for (let index = 0; index < 121; index += 1) {
+    const attachmentId = `att_imagefloodcase${String(index).padStart(4, "0")}`;
+    const response = await getImage(
+      new NextRequest(`https://www.rateloop.ai/api/attachments/images/${attachmentId}.webp`, {
+        headers: { "user-agent": "gated-image-route-flood" },
+      }),
+      { params: Promise.resolve({ attachmentId: `${attachmentId}.webp` }) },
+    );
+
+    if (index < 120) {
+      assert.equal(response.status, 404);
+    } else {
+      assert.equal(response.status, 429);
+      assert.ok(Number(response.headers.get("retry-after")) > 0);
+      assert.equal((await response.json()).code, "rate_limit_exceeded");
+    }
+  }
+});
+
+test("gated images throttle repeated authorized resource reads and dedupe access logs", async () => {
+  await seedGatedImage();
+  const cookie = await acceptTermsAndBuildCookie("nonce-image-throttle");
+
+  for (let index = 0; index < 31; index += 1) {
+    const response = await getImage(
+      new NextRequest(`https://www.rateloop.ai/api/attachments/images/${ATTACHMENT_ID}.webp?address=${RATER_WALLET}`, {
+        headers: {
+          cookie,
+          "user-agent": "gated-image-resource-flood",
+        },
+      }),
+      { params: Promise.resolve({ attachmentId: `${ATTACHMENT_ID}.webp` }) },
+    );
+
+    if (index < 30) {
+      assert.equal(response.status, 200);
+      assert.equal(response.headers.get("content-type"), "image/webp");
+      assert.ok((await response.arrayBuffer()).byteLength > 0);
+    } else {
+      assert.equal(response.status, 429);
+      assert.equal((await response.json()).code, "rate_limit_exceeded");
+    }
+  }
+
+  const rows = await dbClient.execute({
+    sql: "SELECT COUNT(*) AS access_count FROM confidential_context_access_logs WHERE resource_id = ?",
+    args: [ATTACHMENT_ID],
+  });
+  assert.equal(Number(rows.rows[0]?.access_count ?? 0), 1);
 });
 
 test("gated images allow the attachment owner with a signed wallet session without terms acceptance", async () => {

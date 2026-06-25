@@ -1,4 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import {
+  checkGatedAttachmentResourceRateLimit,
+  checkGatedAttachmentRouteRateLimit,
+} from "~~/lib/attachments/gatedAttachmentRateLimit";
 import { getQuestionDetails, isQuestionDetailsId } from "~~/lib/attachments/questionDetails";
 import {
   authorizeGatedContextRequest,
@@ -47,6 +51,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json({ error: "Invalid details id." }, { headers: DETAILS_RESPONSE_HEADERS, status: 400 });
   }
 
+  const routeLimited = await checkGatedAttachmentRouteRateLimit(request, "/api/attachments/details/[detailsId]");
+  if (routeLimited) return routeLimited;
+
   const details = await getQuestionDetails(detailsId);
   if (!details || details.status !== "approved" || !details.normalizedText) {
     return NextResponse.json(
@@ -86,6 +93,15 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         { headers: GATED_DETAILS_RESPONSE_HEADERS, status: authorization.status },
       );
     }
+
+    const resourceLimited = await checkGatedAttachmentResourceRateLimit(request, {
+      contentId: details.contentId,
+      deploymentKey: authorization.deploymentKey,
+      resourceId: details.id,
+      resourceKind: "details",
+      walletAddress: authorization.walletAddress,
+    });
+    if (resourceLimited) return resourceLimited;
 
     const viewToken = createConfidentialViewToken({
       contentId: details.contentId,
