@@ -54,12 +54,7 @@ import {
 } from "~~/lib/vote/confidentialContext";
 import { recordLocalVoteCooldown } from "~~/lib/vote/localCooldown";
 import { readEffectiveOnChainVoteCooldownRemainingSeconds } from "~~/lib/vote/onChainVoteCooldown";
-import {
-  PREPARING_ROUND_VOTE_MESSAGE,
-  ensureOpenStakedRoundRuntime,
-  predictPostOpenRoundRuntime,
-  preflightRoundVoteBatchCalls,
-} from "~~/lib/vote/openStakedRoundRuntime";
+import { PREPARING_ROUND_VOTE_MESSAGE, ensureOpenStakedRoundRuntime } from "~~/lib/vote/openStakedRoundRuntime";
 import { normalizeRoundVoteError } from "~~/lib/vote/roundVoteErrors";
 import {
   waitForRoundOpenPostcondition,
@@ -826,6 +821,12 @@ export function useRoundVote() {
               executeContractCallBatch([openRoundCall], {
                 action: "open round",
                 atomicRequired: true,
+                metadata: {
+                  contentId: contentId.toString(),
+                  isGatedContext,
+                  phase: "openRound",
+                  stakeAmount,
+                },
                 parentRunId: timingLog.runId,
                 sponsorshipMode: "sponsored",
                 suppressStatusToast: true,
@@ -859,6 +860,12 @@ export function useRoundVote() {
               executeContractCallBatch([openRoundCall], {
                 action: "open round",
                 atomicRequired: true,
+                metadata: {
+                  contentId: contentId.toString(),
+                  isGatedContext,
+                  phase: "openRound",
+                  stakeAmount,
+                },
                 parentRunId: timingLog.runId,
                 sponsorshipMode: "self-funded",
                 suppressStatusToast: true,
@@ -979,22 +986,6 @@ export function useRoundVote() {
         const permitSignature = isZeroStakeVote ? undefined : await signPermitForVote(requestedStakeWei);
         return buildFreshRoundVotePlan(currentAllowance, permitSignature);
       };
-      const buildCombinedOpenRoundVotePlan = async () => {
-        const latestBlock = await publicClient.getBlock({ blockTag: "latest" });
-        let predictedRuntime = predictPostOpenRoundRuntime({
-          latestBlockTimestampSeconds: Number(latestBlock.timestamp),
-          runtime,
-        });
-        if (localE2ETestWalletClient) {
-          predictedRuntime = withLocalE2ETlockRuntime(predictedRuntime);
-        }
-        await getVoteTlockChainInfo(predictedRuntime);
-        const permitSignature = isZeroStakeVote ? undefined : await signPermitForVote(requestedStakeWei);
-        return buildFreshRoundVotePlan(currentAllowance, permitSignature, {
-          includeOpenRound: true,
-          runtimeOverride: predictedRuntime,
-        });
-      };
       const executeSequentialOpenRoundVoteBatch = async (sponsorshipMode: "sponsored" | "self-funded") => {
         const freshVote = await buildBatchFreshVotePlan();
         await preflightAdvisoryBatchPlan(freshVote);
@@ -1003,33 +994,13 @@ export function useRoundVote() {
         timingLog.emit("vote-batch-submit-complete", { confirmation, sponsorshipMode });
         return freshVote;
       };
-      const executeBatchVoteWithCombinedOpenRoundFallback = async (sponsorshipMode: "sponsored" | "self-funded") => {
-        const needsCombinedOpenRound = !isRequestedAdvisoryVote && runtime.requiresOpenRound;
-        if (!needsCombinedOpenRound) {
-          return executeSequentialOpenRoundVoteBatch(sponsorshipMode);
+      const executeBatchVoteWithOpenRoundHandling = async (sponsorshipMode: "sponsored" | "self-funded") => {
+        if (!isRequestedAdvisoryVote && runtime.requiresOpenRound) {
+          timingLog.emit("combined-open-vote-skipped", {
+            reason: "requires_actual_round_start",
+            sponsorshipMode,
+          });
         }
-
-        const combinedVote = await buildCombinedOpenRoundVotePlan();
-        timingLog.emit("combined-open-vote-preflight-start");
-        const preflightResult = await preflightRoundVoteBatchCalls({
-          account: address as Address,
-          calls: combinedVote.plan.calls,
-          publicClient,
-          simulatePlannedCall,
-        });
-        timingLog.emit("combined-open-vote-preflight-complete", {
-          ...preflightResult,
-          preflightPassed: preflightResult.passed,
-        });
-
-        if (preflightResult.passed) {
-          timingLog.emit("combined-open-vote-batch-submit-start", { sponsorshipMode });
-          const confirmation = await executeVoteBatchWithPostcondition(combinedVote, sponsorshipMode);
-          timingLog.emit("combined-open-vote-batch-submit-complete", { confirmation, sponsorshipMode });
-          return combinedVote;
-        }
-
-        timingLog.emit("combined-open-vote-fallback-sequential", { sponsorshipMode });
         return executeSequentialOpenRoundVoteBatch(sponsorshipMode);
       };
       const preflightAdvisoryBatchPlan = async (vote: Awaited<ReturnType<typeof buildFreshRoundVotePlan>>) => {
@@ -1057,6 +1028,14 @@ export function useRoundVote() {
             executeContractCallBatch(vote.plan.calls, {
               action: "vote",
               atomicRequired: true,
+              metadata: {
+                contentId: contentId.toString(),
+                isAdvisoryVote: vote.plan.isAdvisoryVote,
+                isGatedContext,
+                initialRequiresOpenRound: runtime.requiresOpenRound,
+                roundId: vote.runtime.roundId.toString(),
+                stakeAmount,
+              },
               parentRunId: timingLog.runId,
               sponsorshipMode,
               suppressStatusToast: true,
@@ -1085,9 +1064,9 @@ export function useRoundVote() {
       let submittedVote: Awaited<ReturnType<typeof buildFreshRoundVotePlan>> | null = null;
 
       if (!useDirectLocalE2EWrites && canUseSponsoredBatchCalls) {
-        submittedVote = await executeBatchVoteWithCombinedOpenRoundFallback("sponsored");
+        submittedVote = await executeBatchVoteWithOpenRoundHandling("sponsored");
       } else if (!useDirectLocalE2EWrites && canUseSelfFundedBatchCalls) {
-        submittedVote = await executeBatchVoteWithCombinedOpenRoundFallback("self-funded");
+        submittedVote = await executeBatchVoteWithOpenRoundHandling("self-funded");
       } else {
         const needsApproval = !isZeroStakeVote && currentAllowance < requestedStakeWei;
 

@@ -57,8 +57,12 @@ test("transaction timing route logs sanitized timing payloads", async () => {
       event: "success",
       metadata: {
         authorization: "do-not-log",
+        contentId: "3",
+        initialRequiresOpenRound: true,
+        isGatedContext: true,
         ok: true,
         operation: "confirm",
+        roundId: "6",
         signature: "do-not-log",
       },
       route: "thirdweb",
@@ -74,7 +78,14 @@ test("transaction timing route logs sanitized timing payloads", async () => {
   assert.equal(logs[0]?.[0], "[transaction-timing]");
 
   const payload = logs[0]?.[1] as { callTypes: string[]; metadata: Record<string, unknown> };
-  assert.deepEqual(payload.metadata, { ok: true, operation: "confirm" });
+  assert.deepEqual(payload.metadata, {
+    contentId: "3",
+    initialRequiresOpenRound: true,
+    isGatedContext: true,
+    ok: true,
+    operation: "confirm",
+    roundId: "6",
+  });
   assert.equal(payload.callTypes[0], "approve");
   assert.equal(payload.callTypes[1], "commitVote");
   assert.equal(payload.callTypes[2]?.length, 120);

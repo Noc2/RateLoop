@@ -39,7 +39,7 @@ import {
   isThirdwebBundlerInfrastructureError,
   isThirdwebSponsoredExecutionRejectedError,
 } from "~~/lib/transactionErrors";
-import { createTransactionTimingRun } from "~~/lib/transactions/timing";
+import { type TransactionTimingMetadataValue, createTransactionTimingRun } from "~~/lib/transactions/timing";
 import scaffoldConfig from "~~/scaffold.config";
 import {
   createThirdwebInAppWallet,
@@ -67,6 +67,7 @@ type ExecuteContractCallBatchOptions = {
   allowUnmeteredSponsoredCalls?: boolean;
   atomicRequired?: boolean;
   action?: string;
+  metadata?: Record<string, TransactionTimingMetadataValue>;
   parentRunId?: string;
   segmentIndex?: number;
   sponsorshipMode?: ThirdwebBatchSponsorshipMode;
@@ -92,19 +93,28 @@ function createThirdwebBatchTimingLog(params: {
   callCount: number;
   callTypes?: readonly string[];
   chainId: number;
+  metadata?: Record<string, TransactionTimingMetadataValue>;
   operationKey: string | null;
   parentRunId?: string;
   route: "external-wallet" | "thirdweb";
   segmentIndex?: number;
   sponsorshipMode: ThirdwebBatchSponsorshipMode;
 }) {
+  const metadata =
+    params.metadata || params.operationKey
+      ? {
+          ...params.metadata,
+          ...(params.operationKey ? { operationKey: params.operationKey } : {}),
+        }
+      : undefined;
+
   return createTransactionTimingRun({
     action: params.action,
     callCount: params.callCount,
     callTypes: params.callTypes,
     chainId: params.chainId,
     consoleLabel: "thirdweb-batch-timing",
-    metadata: params.operationKey ? { operationKey: params.operationKey } : undefined,
+    metadata,
     parentRunId: params.parentRunId,
     route: params.route,
     segmentIndex: params.segmentIndex,
@@ -702,6 +712,7 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
         callCount: calls.length,
         callTypes: calls.map(call => call.functionName),
         chainId,
+        metadata: options.metadata,
         operationKey,
         parentRunId: options.parentRunId,
         route: canUseExternalWalletPath ? "external-wallet" : "thirdweb",
