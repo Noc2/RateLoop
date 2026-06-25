@@ -94,6 +94,7 @@ test("Railway service start commands pin production mode", () => {
     ponder,
     /startCommand = "NODE_ENV=production yarn workspace @rateloop\/ponder start:built-workspace-deps"/,
   );
+  assert.match(ponder, /builder = "RAILPACK"/);
   assert.match(ponder, /healthcheckPath = "\/ready"/);
   assert.match(ponder, /healthcheckTimeout = 900/);
 });
