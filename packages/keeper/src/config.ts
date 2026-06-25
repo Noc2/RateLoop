@@ -514,6 +514,9 @@ function loadConfig() {
   if (!readEnv("PONDER_BASE_URL")) {
     errors.push("PONDER_BASE_URL is required");
   }
+  if (isProduction && !readEnv("PONDER_KEEPER_WORK_TOKEN")?.trim()) {
+    errors.push("PONDER_KEEPER_WORK_TOKEN is required in production");
+  }
 
   const frontendFeeContracts =
     frontendFeeEnabled && chainId > 0

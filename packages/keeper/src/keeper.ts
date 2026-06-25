@@ -30,6 +30,7 @@ import {
   type Chain,
   type Account,
 } from "viem";
+import { REVEAL_FAILED_GRACE_MULTIPLIER } from "@rateloop/contracts/protocol";
 import { timelockDecrypt } from "tlock-js";
 import {
   isDrandUnavailableError,
@@ -129,10 +130,9 @@ interface PonderDeploymentMetadata {
 }
 
 const MAX_CLEANUP_BATCHES_PER_TICK = 4;
-// Keep in sync with RoundCleanupLib.REVEAL_FAILED_GRACE_MULTIPLIER (design review
-// 2026-06, finding 3): reveal-failed finalization waits out an extended recovery
-// window of 24x the round's snapshotted reveal grace period.
-const REVEAL_FAILED_GRACE_MULTIPLIER = 24n;
+// Reveal-failed finalization waits out an extended recovery window of
+// REVEAL_FAILED_GRACE_MULTIPLIER x the round's snapshotted reveal grace period.
+const REVEAL_FAILED_GRACE_MULTIPLIER_BI = BigInt(REVEAL_FAILED_GRACE_MULTIPLIER);
 const MAX_CLEANUP_COMPLETED = 5000;
 const MAX_CLEANUP_QUEUE = 2000;
 const PONDER_FETCH_TIMEOUT_MS = PONDER_HTTP_FETCH_TIMEOUT_MS;
@@ -1446,7 +1446,7 @@ export async function resolveRounds(
             // computing it with the base grace would submit finalization transactions
             // ~23 hours early and burn gas on RevealGraceActive reverts.
             const revealFailedGrace =
-              roundLifecycle.revealGracePeriod * REVEAL_FAILED_GRACE_MULTIPLIER;
+              roundLifecycle.revealGracePeriod * REVEAL_FAILED_GRACE_MULTIPLIER_BI;
 
             const revealFailedEligibleAt =
               lastCommitRevealableAfter >

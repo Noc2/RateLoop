@@ -40,6 +40,7 @@ const VALID_ENV = {
     chain31337?.FrontendRegistry?.address ??
     "0x4444444444444444444444444444444444444444",
   PONDER_BASE_URL: "https://ponder.example.com",
+  PONDER_KEEPER_WORK_TOKEN: "test-token",
   KEYSTORE_ACCOUNT: "keeper",
   KEYSTORE_PASSWORD: "secret",
   KEEPER_FRONTEND_FEE_ENABLED: "false",
@@ -155,6 +156,15 @@ describe("keeper config", () => {
     ).rejects.toThrow(
       "KEEPER_DATABASE_URL is required when KEEPER_MAIN_LOOP_LOCK_REQUIRED=true",
     );
+  });
+
+  it("requires PONDER_KEEPER_WORK_TOKEN in production", async () => {
+    await expect(
+      loadKeeperConfig({
+        NODE_ENV: "production",
+        PONDER_KEEPER_WORK_TOKEN: "",
+      }),
+    ).rejects.toThrow("PONDER_KEEPER_WORK_TOKEN is required in production");
   });
 
   it("allows production operators to explicitly opt out of main-loop locks", async () => {
