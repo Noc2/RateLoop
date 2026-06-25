@@ -1,10 +1,7 @@
 import { approveLREP, commitVoteDirect } from "../helpers/admin-helpers";
 import { ANVIL_ACCOUNTS } from "../helpers/anvil-accounts";
-import { newE2EContext } from "../helpers/browser-context";
 import { CONTRACT_ADDRESSES } from "../helpers/contracts";
 import { createFreshVoteableContent } from "../helpers/voteable-content";
-import { voteOnSpecificContent } from "../helpers/vote-helpers";
-import { setupWallet } from "../helpers/wallet-session";
 import { expect, test } from "@playwright/test";
 
 /**
@@ -60,7 +57,7 @@ test.describe("Contract boundary conditions", () => {
     expect(result.success, "Self-vote should revert with SelfVote").toBe(false);
   });
 
-  test("double commit in same round reverts", async ({ browser }) => {
+  test("double commit in same round reverts", async () => {
     test.setTimeout(180_000);
 
     const target = await createFreshVoteableContent("Boundary Double Commit", ANVIL_ACCOUNTS.account3.address);
@@ -71,18 +68,8 @@ test.describe("Contract boundary conditions", () => {
     const stake = BigInt(1e6); // 1 LREP
     await approveLREP(VOTING_ENGINE, stake * 2n, voter.address, LREP_TOKEN);
 
-    const context = await newE2EContext(browser);
-    const page = await context.newPage();
-    try {
-      await setupWallet(page, voter.privateKey);
-      const firstCommit = await voteOnSpecificContent(page, target!.contentId, "up", {
-        indexedTimeoutMs: 90_000,
-        voterAddress: voter.address,
-      });
-      expect(firstCommit, "First commit should succeed").toBe(true);
-    } finally {
-      await context.close();
-    }
+    const firstCommit = await commitVoteDirect(contentId, true, stake, ZERO_ADDRESS, voter.address, VOTING_ENGINE);
+    expect(firstCommit.success, "First commit should succeed").toBe(true);
 
     // Second commit on same content in same round should revert
     const secondCommit = await commitVoteDirect(contentId, false, stake, ZERO_ADDRESS, voter.address, VOTING_ENGINE);
