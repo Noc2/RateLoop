@@ -781,6 +781,20 @@ export interface WebhookVerifierOptions {
   toleranceSeconds?: number;
 }
 
+export type ReplayProtectedWebhookVerifierOptions = Omit<
+  WebhookVerifierOptions,
+  "replayProtection"
+> & {
+  replayProtection: WebhookReplayProtectionOptions;
+};
+
+export type SignatureOnlyWebhookVerifierOptions = Omit<
+  WebhookVerifierOptions,
+  "replayProtection"
+> & {
+  allowReplay: true;
+};
+
 export interface VerifyWebhookParams {
   body: string | Uint8Array | ArrayBuffer | JsonValue | JsonRecord;
   headers: Headers | Record<string, string | string[] | undefined | null>;
@@ -1344,9 +1358,7 @@ export function parseAgentResult(value: unknown): RateLoopAgentResult {
 }
 
 export function buildWebhookVerifier(
-  options: WebhookVerifierOptions & {
-    replayProtection: WebhookReplayProtectionOptions;
-  },
+  options: ReplayProtectedWebhookVerifierOptions,
 ): ReplayProtectedWebhookVerifier;
 export function buildWebhookVerifier(
   options: WebhookVerifierOptions,
@@ -1455,6 +1467,18 @@ export function buildWebhookVerifier(
       }
     },
   };
+}
+
+export function buildReplayProtectedWebhookVerifier(
+  options: ReplayProtectedWebhookVerifierOptions,
+): ReplayProtectedWebhookVerifier {
+  return buildWebhookVerifier(options);
+}
+
+export function buildSignatureOnlyWebhookVerifier(
+  options: SignatureOnlyWebhookVerifierOptions,
+): WebhookVerifier {
+  return buildWebhookVerifier(options);
 }
 
 async function callMcpTool<T>(

@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createHmac } from "node:crypto";
 import {
+  buildReplayProtectedWebhookVerifier,
+  buildSignatureOnlyWebhookVerifier,
   buildWebhookVerifier,
   createRateLoopAgentClient,
   parseAgentResult,
@@ -1455,6 +1457,25 @@ test("buildWebhookVerifier validates timestamped HMAC signatures", async () => {
   );
 });
 
+test("buildSignatureOnlyWebhookVerifier explicitly allows repeated signature checks", async () => {
+  const body = JSON.stringify({ operationKey: `0x${"44".repeat(32)}` });
+  const eventId = "event-signature-only";
+  const timestamp = "2026-04-23T12:00:00.000Z";
+  const verifier = buildSignatureOnlyWebhookVerifier({
+    allowReplay: true,
+    secret: "shared-secret",
+  });
+  const params = {
+    body,
+    headers: signedWebhookHeaders({ body, eventId, timestamp }),
+    now: new Date("2026-04-23T12:01:00.000Z"),
+  };
+
+  await verifier.assertValid(params);
+  await verifier.assertValid(params);
+  assert.equal(await verifier.verify(params), true);
+});
+
 test("buildWebhookVerifier canonicalizes parsed object bodies", async () => {
   const body = {
     z: 1,
@@ -1488,6 +1509,34 @@ test("buildWebhookVerifier canonicalizes parsed object bodies", async () => {
     assert.fail(`expected processed event, got ${result.status}`);
   }
   assert.equal(result.value, canonicalBody);
+});
+
+test("buildReplayProtectedWebhookVerifier handles each signed callback once", async () => {
+  const body = JSON.stringify({ operationKey: `0x${"44".repeat(32)}` });
+  const eventId = "event-replay-protected";
+  const timestamp = "2026-04-23T12:00:00.000Z";
+  const { calls, store } = memoryReplayStore();
+  const verifier = buildReplayProtectedWebhookVerifier({
+    replayProtection: { keyPrefix: "safe:", store, ttlSeconds: 60 },
+    secret: "shared-secret",
+  });
+  const params = {
+    body,
+    headers: signedWebhookHeaders({ body, eventId, timestamp }),
+    now: new Date("2026-04-23T12:01:00.000Z"),
+  };
+
+  const first = await verifier.handleOnce(params, async event => event.eventId);
+  const second = await verifier.handleOnce(params, async () => "duplicate");
+
+  assert.equal(first.status, "processed");
+  assert.equal(first.value, eventId);
+  assert.equal(second.status, "duplicate");
+  assert.deepEqual(calls, [
+    "claim:safe:event-replay-protected",
+    "complete:safe:event-replay-protected",
+    "claim:safe:event-replay-protected",
+  ]);
 });
 
 test("buildWebhookVerifier rejects negative toleranceSeconds", () => {

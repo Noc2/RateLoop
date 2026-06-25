@@ -79,7 +79,8 @@ The SDK stays wallet-agnostic on purpose. Host apps approve `stakeWei` of LREP t
 ```ts
 import {
   createRateLoopAgentClient,
-  buildWebhookVerifier,
+  buildReplayProtectedWebhookVerifier,
+  buildSignatureOnlyWebhookVerifier,
 } from "@rateloop/sdk/agent";
 import { buildCommitVoteParams } from "@rateloop/sdk/vote";
 
@@ -238,12 +239,7 @@ const preparedRating = await agent.prepareRatingTransactions({
 
 // Execute preparedRating.transactionPlan.calls, then call confirmRatingTransactions.
 
-const verifier = buildWebhookVerifier({
-  secret: process.env.RATELOOP_WEBHOOK_SECRET ?? "",
-});
-await verifier.assertValid({ body: webhookBody, headers: webhookHeaders });
-
-const replaySafeVerifier = buildWebhookVerifier({
+const replaySafeVerifier = buildReplayProtectedWebhookVerifier({
   secret: process.env.RATELOOP_WEBHOOK_SECRET ?? "",
   replayProtection: {
     store: webhookEventStore,
@@ -259,6 +255,17 @@ const handled = await replaySafeVerifier.handleOnce(
 if (handled.status === "duplicate") {
   return new Response("ok");
 }
+
+// Signature-only verification is for idempotent handlers or diagnostics where
+// replay inside the timestamp window is acceptable.
+const signatureOnlyVerifier = buildSignatureOnlyWebhookVerifier({
+  allowReplay: true,
+  secret: process.env.RATELOOP_WEBHOOK_SECRET ?? "",
+});
+await signatureOnlyVerifier.assertValid({
+  body: webhookBody,
+  headers: webhookHeaders,
+});
 ```
 
 Long public question context should be provided through `question.detailsUrl` plus its SHA-256 `question.detailsHash`, or through media/context URLs. Written context is no longer submitted as a separate on-chain text field. For confidential review material, use only RateLoop-hosted gated details/images with `question.confidentiality.visibility: "gated"`, omit external context URLs/videos, and choose `disclosurePolicy: "after_settlement"` or `"private_forever"`.
@@ -319,7 +326,7 @@ USDC `feedbackBonus`, the authorization value is bounty plus bonus and the submi
 escrow funding and Feedback Bonus pool creation; LREP Feedback Bonuses still require the separate wallet-call funding
 plan after the question is confirmed.
 
-Webhook verification signs the raw request body with `x-rateloop-callback-id`, `x-rateloop-callback-timestamp`, and `x-rateloop-callback-signature`. Use `handleOnce` with an atomic replay store for non-idempotent handlers. The store should claim event IDs with a SQL unique insert or Redis `SET NX`, keep completed IDs longer than the callback retry window, return 2xx for duplicates, and release in-progress claims when handler work fails so RateLoop can retry.
+Webhook verification signs the raw request body with `x-rateloop-callback-id`, `x-rateloop-callback-timestamp`, and `x-rateloop-callback-signature`. Use `buildReplayProtectedWebhookVerifier` and `handleOnce` with an atomic replay store for non-idempotent handlers. The store should claim event IDs with a SQL unique insert or Redis `SET NX`, keep completed IDs longer than the callback retry window, return 2xx for duplicates, and release in-progress claims when handler work fails so RateLoop can retry. `buildSignatureOnlyWebhookVerifier` only checks HMAC and timestamp freshness; it does not prevent replay during the tolerance window.
 
 ## Agent Examples
 
