@@ -1,7 +1,7 @@
 import { ANVIL_ACCOUNTS } from "../helpers/anvil-accounts";
 import { newE2EContext } from "../helpers/browser-context";
 import { setupWallet } from "../helpers/wallet-session";
-import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
+import { type APIRequestContext, type Page, expect, test } from "@playwright/test";
 
 type HandoffCreateResponse = {
   handoffId: string;
@@ -224,8 +224,8 @@ test.describe("Agent browser handoffs", () => {
       "Do you prefer A = Hermes Agent or B = OpenClaw?",
     );
     await expect(page.getByRole("button", { name: "A/B comparison" })).toHaveClass(/btn-primary/);
-    await expect(page.getByLabel("Option A")).toHaveValue("Hermes Agent");
-    await expect(page.getByLabel("Option B")).toHaveValue("OpenClaw");
+    await expect(page.getByRole("textbox", { name: "Option A" })).toHaveValue("Hermes Agent");
+    await expect(page.getByRole("textbox", { name: "Option B" })).toHaveValue("OpenClaw");
 
     await context.close();
   });
