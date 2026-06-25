@@ -1,8 +1,26 @@
 import config from "./playwright.config";
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { join } from "node:path";
 import test from "node:test";
+
+const require = createRequire(import.meta.url);
+const playwrightPackage = require("@playwright/test/package.json") as { version: string };
+
+function readNextPackageJson(): {
+  devDependencies?: Record<string, string>;
+  scripts?: Record<string, string>;
+} {
+  return JSON.parse(readFileSync("package.json", "utf8")) as {
+    devDependencies?: Record<string, string>;
+    scripts?: Record<string, string>;
+  };
+}
+
+function readE2EWorkflow(): string {
+  return readFileSync("../../.github/workflows/e2e.yaml", "utf8");
+}
 
 function getProjectTestMatch(name: string): RegExp {
   const project = (config.projects ?? []).find(candidate => candidate.name === name);
@@ -108,9 +126,7 @@ test("browser-scoped Playwright projects only match their intended spec files", 
 });
 
 test("CI lifecycle script does not expand Playwright project dependencies", () => {
-  const packageJson = JSON.parse(readFileSync("package.json", "utf8")) as {
-    scripts?: Record<string, string>;
-  };
+  const packageJson = readNextPackageJson();
   const lifecycleScript = packageJson.scripts?.["e2e:ci:lifecycle"] ?? "";
 
   assert.match(lifecycleScript, /--no-deps\b/, "lifecycle CI should not rerun dependency projects");
@@ -233,9 +249,7 @@ test("mobile specs avoid runtime project skips", () => {
 });
 
 test("mobile CI scripts can run each device profile independently", () => {
-  const packageJson = JSON.parse(readFileSync("package.json", "utf8")) as {
-    scripts?: Record<string, string>;
-  };
+  const packageJson = readNextPackageJson();
   const phoneShardScripts = [
     "e2e:mobile:phone:navigation",
     "e2e:mobile:phone:vote",
@@ -262,6 +276,51 @@ test("mobile CI scripts can run each device profile independently", () => {
   assert.match(
     packageJson.scripts?.["e2e:ci:confidential"] ?? "",
     /--project=ci-confidential-context\b/,
+  );
+});
+
+test("GitHub E2E workflow commands stay backed by package Playwright scripts", () => {
+  const packageJson = readNextPackageJson();
+  const workflow = readE2EWorkflow();
+  const commandMatches = [...workflow.matchAll(/command:\s*yarn workspace @rateloop\/nextjs ([^\s]+)/gu)].map(
+    match => match[1],
+  );
+
+  assert.ok(commandMatches.length > 0, "expected GitHub E2E workflow matrix commands");
+
+  for (const scriptName of commandMatches) {
+    const script = packageJson.scripts?.[scriptName];
+
+    assert.ok(script, `workflow command should reference an existing script: ${scriptName}`);
+    assert.match(
+      script,
+      /\bplaywright test\b/,
+      `${scriptName} should remain a Playwright test command`,
+    );
+  }
+});
+
+test("Playwright package versions stay aligned with the browser compatibility container", () => {
+  const packageJson = readNextPackageJson();
+  const workflow = readE2EWorkflow();
+  const installedVersion = playwrightPackage.version;
+  const escapedVersion = installedVersion.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const imageMatch = workflow.match(/mcr\.microsoft\.com\/playwright:v(?<version>\d+\.\d+\.\d+)-/u);
+
+  assert.equal(
+    imageMatch?.groups?.version,
+    installedVersion,
+    "scheduled browser/mobile CI container should match the installed Playwright version",
+  );
+  assert.match(
+    packageJson.devDependencies?.["@playwright/test"] ?? "",
+    new RegExp(`(^|[^0-9])${escapedVersion}($|[^0-9])`, "u"),
+    "@playwright/test devDependency should document the installed Playwright version",
+  );
+  assert.equal(
+    packageJson.devDependencies?.["playwright-core"],
+    installedVersion,
+    "direct playwright-core dependency should stay in lockstep with @playwright/test",
   );
 });
 
