@@ -701,6 +701,10 @@ async function updateQuestionMetadataRow(params: {
 }
 
 function authorizeMetadataSync(c: Context) {
+  if (process.env.NODE_ENV === "production" && process.env.PONDER_METADATA_SYNC_ALLOW_OPEN === "true") {
+    return "PONDER_METADATA_SYNC_ALLOW_OPEN cannot be enabled in production.";
+  }
+
   const token = metadataSyncToken();
   if (!token) {
     if (process.env.PONDER_METADATA_SYNC_ALLOW_OPEN === "true") {

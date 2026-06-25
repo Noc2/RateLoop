@@ -15,6 +15,22 @@ import { registerKeeperRoutes } from "./routes/keeper-routes.js";
 import { registerLeaderboardRoutes } from "./routes/leaderboard-routes.js";
 import { resolvePonderProtocolDeploymentMetadata } from "../protocol-deployment.js";
 
+const KEEPER_INTERNAL_PATH_PREFIXES = ["/keeper/work", "/votes", "/advisory-votes"] as const;
+
+function isKeeperInternalPath(pathname: string) {
+  return KEEPER_INTERNAL_PATH_PREFIXES.some(
+    prefix => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
+}
+
+function hasValidKeeperWorkAuthorization(c: { req: { header: (name: string) => string | undefined } }) {
+  const token = process.env.PONDER_KEEPER_WORK_TOKEN?.trim();
+  if (!token) {
+    return process.env.NODE_ENV !== "production";
+  }
+  return c.req.header("authorization") === `Bearer ${token}`;
+}
+
 const app = new Hono();
 
 // ============================================================
@@ -62,12 +78,13 @@ if (rateLimitMisconfigured) {
 app.use("/*", async (c, next) => {
   const requestPath = new URL(c.req.url).pathname;
   const isDeploymentProbe = requestPath === "/deployment";
+  const isAuthorizedKeeperRequest = isKeeperInternalPath(requestPath) && hasValidKeeperWorkAuthorization(c);
 
-  if (rateLimitMisconfigured && !isDeploymentProbe) {
+  if (rateLimitMisconfigured && !isDeploymentProbe && !isAuthorizedKeeperRequest) {
     return c.json({ error: "RATE_LIMIT_TRUSTED_IP_HEADERS not configured. Set the env var." }, 503);
   }
 
-  if (isDeploymentProbe) {
+  if (isDeploymentProbe || isAuthorizedKeeperRequest) {
     await next();
     return;
   }
@@ -112,9 +129,14 @@ if (!isProduction && !corsOrigin) {
   console.warn("[ponder] CORS_ORIGIN not set — allowing localhost only. Set CORS_ORIGIN for production domains.");
 }
 
-// Block all custom routes if CORS is misconfigured — Ponder's built-in /health still works
+// Block browser-facing routes if CORS is misconfigured — keeper work routes stay available with bearer auth.
 if (corsMisconfigured) {
-  app.use("/*", async (c) => {
+  app.use("/*", async (c, next) => {
+    const requestPath = new URL(c.req.url).pathname;
+    if (isKeeperInternalPath(requestPath) && hasValidKeeperWorkAuthorization(c)) {
+      await next();
+      return;
+    }
     return c.json({ error: "CORS_ORIGIN not configured. Set CORS_ORIGIN env var." }, 503);
   });
 }
