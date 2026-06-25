@@ -1,3 +1,4 @@
+import { assertNextConfigBuildGuards } from "./config/buildGuards";
 import withBundleAnalyzer from "@next/bundle-analyzer";
 import { loadEnvConfig } from "@next/env";
 import type { NextConfig } from "next";
@@ -5,12 +6,7 @@ import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 loadEnvConfig(dirname(fileURLToPath(import.meta.url)));
-
-if (process.env.NEXT_PUBLIC_IGNORE_BUILD_ERROR === "true") {
-  throw new Error(
-    "NEXT_PUBLIC_IGNORE_BUILD_ERROR is no longer supported. Fix TypeScript and ESLint errors before deploying.",
-  );
-}
+assertNextConfigBuildGuards();
 
 const securityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
