@@ -147,7 +147,10 @@ export function buildDefaultX402QuestionParserOptions(): X402QuestionParserOptio
     allowedRateLoopAttachmentOrigins: getDefaultRateLoopAttachmentOrigins(),
     allowLocalhostAttachmentOrigins:
       process.env.NODE_ENV !== "production" || isLocalE2EProductionBuildEnabled(),
-    questionMetadataBaseUrl: process.env.NEXT_PUBLIC_PONDER_URL ?? process.env.NEXT_PUBLIC_APP_URL,
+    questionMetadataBaseUrl:
+      process.env.RATELOOP_LOCAL_SIGNER_QUESTION_METADATA_BASE_URL ??
+      process.env.NEXT_PUBLIC_PONDER_URL ??
+      process.env.NEXT_PUBLIC_APP_URL,
   };
 }
 
