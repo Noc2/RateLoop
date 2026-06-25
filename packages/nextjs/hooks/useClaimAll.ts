@@ -233,7 +233,7 @@ export function useClaimAll() {
 
     if (item.claimType === "reward" && distributorInfo) {
       const commitKey = item.commitKey;
-      const voter = item.voter;
+      const voter = item.voter ?? address;
       const lookup =
         commitKey && /^0x[0-9a-fA-F]{64}$/.test(commitKey)
           ? {
@@ -581,10 +581,12 @@ export function useClaimAll() {
           failedItems.push(item);
           console.error(`Claim failed for ${claimLabel}:`, e?.shortMessage || e?.message);
           if (isClaimGasShortageError(e, transactionFeedback)) {
+            failedItems.push(...orderedItems.slice(i + 1));
             break;
           }
           if (isWalletRpcOverloadedError(e)) {
             showWalletRpcOverloadNotification();
+            failedItems.push(...orderedItems.slice(i + 1));
             break;
           }
         }
