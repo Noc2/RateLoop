@@ -55,9 +55,11 @@ async function cachePayoutArtifact(params: {
         lastFetchedAt: params.timestamp,
         updatedAt: params.timestamp,
       });
-  } catch {
-    // Artifact availability should improve when the host is reachable, but indexing
-    // must not fail just because a proposer-hosted artifact cannot be fetched now.
+  } catch (error) {
+    console.warn(
+      `[ClusterPayoutOracle] Failed to cache payout artifact ${params.artifactHash} from ${params.artifactURI}:`,
+      error,
+    );
   }
 }
 
