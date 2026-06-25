@@ -706,6 +706,10 @@ ponder.on("RoundVotingEngine:VoteCommitted", async ({ event, context }) => {
   const rawVoter = normalizeAddress(voter) ?? voter;
   const voteKey = `${contentId}-${roundId}-${rawVoter}`;
   const commitKey = buildCommitKey(rawVoter, commitHash);
+  const existingVote = await context.db.find(vote, { id: voteKey });
+  if (existingVote) {
+    return;
+  }
   const {
     identityKey,
     identityHolder,

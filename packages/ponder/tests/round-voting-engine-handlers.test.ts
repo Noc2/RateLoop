@@ -748,6 +748,74 @@ describe("RoundVotingEngine ponder handlers", () => {
     });
   });
 
+  it("skips VoteCommitted counter updates when the vote row already exists", async () => {
+    const voter = "0x0000000000000000000000000000000000000002";
+    const commitHash = `0x${"22".repeat(32)}` as `0x${string}`;
+    const ciphertext = "0x5678" as `0x${string}`;
+    const ciphertextHash = keccak256(ciphertext);
+    const readContract = vi.fn(async () => null);
+    const { db, insertCalls, updateCalls } = createDb({
+      existingRound: {
+        id: "7-2",
+        startTime: 1_000n,
+        epochDuration: 600,
+        voteCount: 2,
+        totalStake: 20n,
+        lastCommitRevealableAfter: 1_500n,
+      },
+      existingVote: {
+        id: `7-2-${voter}`,
+        contentId: 7n,
+        roundId: 2n,
+        voter,
+      },
+    });
+    const registeredHandlers = await loadHandlers();
+    const handler = registeredHandlers.get("RoundVotingEngine:VoteCommitted");
+
+    expect(handler).toBeDefined();
+
+    await handler!({
+      event: {
+        args: {
+          contentId: 7n,
+          roundId: 2n,
+          voter,
+          commitHash,
+          roundReferenceRatingBps: 7200,
+          targetRound: 123n,
+          drandChainHash: `0x${"22".repeat(32)}`,
+          stake: 10n,
+          ciphertextHash,
+          ciphertext,
+        },
+        transaction: {
+          hash: `0x${"44".repeat(32)}`,
+        },
+        block: {
+          number: 43n,
+          timestamp: 1_601n,
+        },
+        log: {
+          logIndex: 9,
+        },
+      },
+      context: {
+        db,
+        client: { readContract },
+        contracts: {
+          RoundVotingEngine: {
+            address: "0x0000000000000000000000000000000000000666",
+          },
+        },
+      },
+    });
+
+    expect(insertCalls).toEqual([]);
+    expect(updateCalls).toEqual([]);
+    expect(readContract).not.toHaveBeenCalled();
+  });
+
   it("accumulates humanVerifiedCommitCount toward quorum on human-credential commits", async () => {
     const voter = "0x0000000000000000000000000000000000000002";
     const commitHash = `0x${"22".repeat(32)}` as `0x${string}`;
