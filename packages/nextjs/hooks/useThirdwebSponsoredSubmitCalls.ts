@@ -22,6 +22,7 @@ import {
 } from "~~/hooks/useFreeTransactionAllowance";
 import type { SponsorshipSyncStatus } from "~~/hooks/useFreeTransactionAllowance";
 import { refreshActiveWalletReadQueries } from "~~/hooks/useRefreshWalletBalances";
+import { useSponsoredTransactionDelayNotice } from "~~/hooks/useSponsoredTransactionDelayNotice";
 import { useThirdwebWagmiSync } from "~~/hooks/useThirdwebWagmiSync";
 import { useTransactionStatusToast } from "~~/hooks/useTransactionStatusToast";
 import {
@@ -41,6 +42,10 @@ import {
   isThirdwebSponsoredExecutionRejectedError,
 } from "~~/lib/transactionErrors";
 import { type TransactionTimingMetadataValue, createTransactionTimingRun } from "~~/lib/transactions/timing";
+import {
+  getSlowSponsoredTransactionStatus,
+  shouldShowSponsoredTransactionDelayNotice,
+} from "~~/lib/ui/sponsoredTransactionNotice";
 import { TRANSACTION_CONFIRMING_STATUS } from "~~/lib/ui/transactionStatusCopy";
 import scaffoldConfig from "~~/scaffold.config";
 import {
@@ -87,7 +92,11 @@ const THIRDWEB_CALLS_STATUS_TIMEOUT_MS = 120_000;
 const THIRDWEB_CALLS_STATUS_SLOW_MS = 8_000;
 const THIRDWEB_SEND_CALLS_SLOW_MS = 8_000;
 
-export function getSlowThirdwebSubmitStatus(action: string) {
+export function getSlowThirdwebSubmitStatus(action: string, options?: { sponsored?: boolean }) {
+  if (options?.sponsored) {
+    return getSlowSponsoredTransactionStatus();
+  }
+
   return {
     title: `Still submitting ${action}`,
     description:
@@ -468,6 +477,7 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
   const setActiveWallet = useSetActiveWallet();
   const { syncWalletToWagmi } = useThirdwebWagmiSync();
   const statusToast = useTransactionStatusToast();
+  const showSponsoredTransactionDelayNotice = useSponsoredTransactionDelayNotice();
   const { isRestoringWallet } = useWalletRestore();
   const { address, chainId: wagmiChainId, connector } = useAccount();
   const { sendCallsSyncAsync } = useSendCallsSync();
@@ -671,6 +681,7 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
         canUseExternalWalletSelfFundedBatchCalls,
         sponsorshipMode,
       });
+      const transactionRoute = canUseExternalWalletPath ? "external-wallet" : "thirdweb";
       const canUseThirdwebPath =
         sponsorshipMode === "sponsored"
           ? allowUnmeteredSponsoredCalls
@@ -737,7 +748,7 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
         metadata: options.metadata,
         operationKey,
         parentRunId: options.parentRunId,
-        route: canUseExternalWalletPath ? "external-wallet" : "thirdweb",
+        route: transactionRoute,
         segmentIndex: options.segmentIndex,
         sponsorshipMode,
         executionMode,
@@ -780,9 +791,26 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
       const showStatusToast = (status: { action?: string; title?: string; description?: string }) => {
         activeStatusToastId = statusToast.showSubmitting(status);
       };
-      const sendCallsWithWallet = async (wallet: NonNullable<typeof activeWallet>) => {
+      const showSponsoredDelayNoticeIfNeeded = () => {
+        if (
+          !shouldShowSponsoredTransactionDelayNotice({
+            route: transactionRoute,
+            sponsorshipMode,
+          })
+        ) {
+          return;
+        }
+
+        timingLog.emit("sponsored-delay-notice-shown");
+        showSponsoredTransactionDelayNotice();
+      };
+      const sendCallsWithWallet = async (
+        wallet: NonNullable<typeof activeWallet>,
+        sendOptions?: { sponsoredRelay?: boolean },
+      ) => {
         const sendCallsStartedAt = Date.now();
         const action = options.action ?? "transaction";
+        const usesSponsoredRelay = sendOptions?.sponsoredRelay ?? sponsorshipMode === "sponsored";
         const baseSendCallsEvent = {
           sendCallsSlowThresholdMs: THIRDWEB_SEND_CALLS_SLOW_MS,
           statusToastSuppressed: options.suppressStatusToast === true,
@@ -797,7 +825,7 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
             sendCallsDurationMs: Date.now() - sendCallsStartedAt,
           });
           if (!options.suppressStatusToast) {
-            showStatusToast(getSlowThirdwebSubmitStatus(action));
+            showStatusToast(getSlowThirdwebSubmitStatus(action, { sponsored: usesSponsoredRelay }));
           }
         }, THIRDWEB_SEND_CALLS_SLOW_MS);
         let sendResult: SendCallsResult;
@@ -862,10 +890,13 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
           showStatusToast({ action: options.action ?? "transaction" });
           timingLog.emit("status-toast-shown");
         }
+        showSponsoredDelayNoticeIfNeeded();
 
         const result = canUseExternalWalletPath
           ? await sendCallsWithExternalWallet()
-          : await sendCallsWithWallet(await getSponsoredWalletForUnmeteredCall());
+          : await sendCallsWithWallet(await getSponsoredWalletForUnmeteredCall(), {
+              sponsoredRelay: sponsorshipMode === "sponsored",
+            });
         timingLog.emit("send-and-confirm-complete", {
           receiptCount: result.receipts?.length ?? 0,
           status: result.status,
@@ -941,7 +972,7 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
             });
             timingLog.emit("self-funded-fallback-autoconnect-complete");
 
-            const fallbackResult = await sendCallsWithWallet(fallbackWallet);
+            const fallbackResult = await sendCallsWithWallet(fallbackWallet, { sponsoredRelay: false });
             timingLog.emit("self-funded-fallback-complete", {
               receiptCount: fallbackResult.receipts?.length ?? 0,
               status: fallbackResult.status,
@@ -1007,6 +1038,7 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
       queryClient,
       sendCallsSyncAsync,
       setActiveWallet,
+      showSponsoredTransactionDelayNotice,
       statusToast,
       syncWalletToWagmi,
     ],

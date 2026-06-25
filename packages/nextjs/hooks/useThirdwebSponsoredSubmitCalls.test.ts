@@ -40,6 +40,14 @@ test("builds slow thirdweb submit status copy", () => {
   });
 });
 
+test("builds slow sponsored thirdweb submit status copy", () => {
+  assert.deepEqual(getSlowThirdwebSubmitStatus("follow profile", { sponsored: true }), {
+    title: "Still submitting sponsored transaction",
+    description:
+      "The sponsored relay is still working. This is expected sometimes; we'll update once the transaction is sent.",
+  });
+});
+
 test("detects EIP-7702 delegations with missing implementations", () => {
   const implementation = "0x3e515544f8d8293b0a353e10ff3b7ca03b52f35b";
   const walletCode = `0xef0100${implementation.slice(2)}` as const;

@@ -14,6 +14,7 @@ import {
 } from "~~/hooks/scaffold-eth";
 import { useGasBalanceStatus } from "~~/hooks/useGasBalanceStatus";
 import { useRefreshWalletBalances } from "~~/hooks/useRefreshWalletBalances";
+import { useSponsoredTransactionDelayNotice } from "~~/hooks/useSponsoredTransactionDelayNotice";
 import {
   isThirdwebSponsorshipDeniedError,
   useThirdwebSponsoredSubmitCalls,
@@ -243,6 +244,7 @@ export function useLegacyClaim() {
   const { address, chain, isConnected } = useAccount();
   const activeWallet = useActiveWallet();
   const refreshWalletBalances = useRefreshWalletBalances();
+  const showSponsoredTransactionDelayNotice = useSponsoredTransactionDelayNotice();
   const [isSponsoredClaiming, setIsSponsoredClaiming] = useState(false);
   const [isTemporaryLegacyClaiming, setIsTemporaryLegacyClaiming] = useState(false);
   const connectedAddress = address as `0x${string}` | undefined;
@@ -419,6 +421,10 @@ export function useLegacyClaim() {
             "function claimLegacyContributorAllocationTo(address recipient, uint256 allocation, bytes32[] proof) returns (uint256)",
           params: recipientClaimArgs,
         });
+
+        if (mode === "sponsored") {
+          showSponsoredTransactionDelayNotice();
+        }
 
         return sendAndConfirmTransaction({
           account,
