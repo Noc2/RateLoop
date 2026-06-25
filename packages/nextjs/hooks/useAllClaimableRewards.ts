@@ -64,10 +64,16 @@ export function useAllClaimableRewards() {
   const queryClient = useQueryClient();
   const { address } = useAccount();
   const { targetNetwork } = useTargetNetwork();
-  const { votes, refetch: refetchVotes, ponderUnavailable: votesPonderUnavailable } = useRecentUserVotes(address);
+  const {
+    votes,
+    refetch: refetchVotes,
+    ponderUnavailable: votesPonderUnavailable,
+    isLoading: votesLoading,
+  } = useRecentUserVotes(address);
   const {
     claimableItems: frontendClaimableItems,
     isLoading: frontendClaimableLoading,
+    feesUnavailable: frontendFeesUnavailable,
     refetch: refetchFrontendClaimables,
   } = useClaimableFrontendRewards();
   const {
@@ -137,19 +143,19 @@ export function useAllClaimableRewards() {
   // --- Step 4: Classify unclaimed votes into reward-path and refund-path claims ---
   const unclaimedVotes = useMemo(() => {
     if (terminalVotes.length === 0) return [];
+    if (claimedLoading || !claimedResults || claimedResults.length !== claimedContracts.length) {
+      return [];
+    }
     let claimedIndex = 0;
     return terminalVotes.filter((vote, i) => {
       if (isRefundRound(vote)) return !hasIndexedRefundClaim(vote);
       const lookup = claimLookups[i];
       if (!lookup) return true;
-      if (!claimedResults || claimedResults.length !== claimedContracts.length) {
-        return true;
-      }
       const r = claimedResults[claimedIndex++];
       if (r?.status !== "success") return true;
       return r.result === false;
     });
-  }, [terminalVotes, claimedContracts.length, claimedResults, claimLookups]);
+  }, [terminalVotes, claimedContracts.length, claimedLoading, claimedResults, claimLookups]);
 
   const { rewardVotes, refundVotes } = useMemo(() => {
     const rewards: typeof unclaimedVotes = [];
@@ -311,8 +317,12 @@ export function useAllClaimableRewards() {
   );
 
   const isLoading =
-    claimedLoading || rbtsRewardsLoading || frontendClaimableLoading || questionRewardPoolClaimableLoading;
-  const ponderUnavailable = votesPonderUnavailable || questionRewardsPonderUnavailable;
+    votesLoading ||
+    claimedLoading ||
+    rbtsRewardsLoading ||
+    frontendClaimableLoading ||
+    questionRewardPoolClaimableLoading;
+  const ponderUnavailable = votesPonderUnavailable || questionRewardsPonderUnavailable || frontendFeesUnavailable;
 
   const refetch = useCallback(async () => {
     await Promise.all([
