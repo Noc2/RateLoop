@@ -15,7 +15,13 @@ import { registerKeeperRoutes } from "./routes/keeper-routes.js";
 import { registerLeaderboardRoutes } from "./routes/leaderboard-routes.js";
 import { resolvePonderProtocolDeploymentMetadata } from "../protocol-deployment.js";
 
-const KEEPER_INTERNAL_PATH_PREFIXES = ["/keeper/work", "/votes", "/advisory-votes"] as const;
+const KEEPER_INTERNAL_PATH_PREFIXES = [
+  "/keeper/work",
+  "/votes",
+  "/advisory-votes",
+  "/correlation",
+  "/rounds",
+] as const;
 
 function isKeeperInternalPath(pathname: string) {
   return KEEPER_INTERNAL_PATH_PREFIXES.some(
