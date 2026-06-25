@@ -10,61 +10,89 @@ import {
   shouldNotifyAboutClaimableRewards,
   writeLastClaimRewardNotificationAt,
 } from "~~/lib/notifications/claimRewards";
+import { formatUsdAmount } from "~~/lib/questionRewardPools";
 import { notification } from "~~/utils/scaffold-eth";
 
-const CLAIMABLE_TOTAL_STORAGE_PREFIX = "rateloop_last_notified_claimable_total";
+const CLAIMABLE_LREP_TOTAL_STORAGE_PREFIX = "rateloop_last_notified_claimable_lrep_total";
+const CLAIMABLE_USDC_TOTAL_STORAGE_PREFIX = "rateloop_last_notified_claimable_usdc_total";
+const MIN_VISIBLE_USDC_AMOUNT = 5_000n;
 
-function getClaimableTotalStorageKey(address: string) {
-  return `${CLAIMABLE_TOTAL_STORAGE_PREFIX}:${address.toLowerCase()}`;
+function getClaimableLrepTotalStorageKey(address: string) {
+  return `${CLAIMABLE_LREP_TOTAL_STORAGE_PREFIX}:${address.toLowerCase()}`;
+}
+
+function getClaimableUsdcTotalStorageKey(address: string) {
+  return `${CLAIMABLE_USDC_TOTAL_STORAGE_PREFIX}:${address.toLowerCase()}`;
 }
 
 /**
- * Headless component that fires a toast when new claimable LREP appears.
+ * Headless component that fires a toast when new claimable LREP or USDC appears.
  * Uses storage to avoid repeat toasts on page refresh and a cooldown to avoid spam.
  */
 export function RewardNotifier() {
   const { address } = useAccount();
-  const { totalClaimable } = useAllClaimableRewards();
-  const prevRef = useRef<bigint | null>(null);
+  const { totalClaimable, totalUsdcClaimable } = useAllClaimableRewards();
+  const prevLrepRef = useRef<bigint | null>(null);
+  const prevUsdcRef = useRef<bigint | null>(null);
   const initialLoadRef = useRef(true);
 
   useEffect(() => {
     initialLoadRef.current = true;
-    prevRef.current = null;
+    prevLrepRef.current = null;
+    prevUsdcRef.current = null;
   }, [address]);
 
   useEffect(() => {
-    if (!address || totalClaimable === undefined) return;
+    if (!address || totalClaimable === undefined || totalUsdcClaimable === undefined) return;
     if (typeof window === "undefined") return;
 
-    const storageKey = getClaimableTotalStorageKey(address);
+    const lrepStorageKey = getClaimableLrepTotalStorageKey(address);
+    const usdcStorageKey = getClaimableUsdcTotalStorageKey(address);
 
-    // On first render, seed from sessionStorage
     if (initialLoadRef.current) {
       initialLoadRef.current = false;
-      const stored = window.sessionStorage.getItem(storageKey);
-      prevRef.current = stored ? BigInt(stored) : totalClaimable;
-      window.sessionStorage.setItem(storageKey, totalClaimable.toString());
+      const storedLrep = window.sessionStorage.getItem(lrepStorageKey);
+      const storedUsdc = window.sessionStorage.getItem(usdcStorageKey);
+      prevLrepRef.current = storedLrep ? BigInt(storedLrep) : totalClaimable;
+      prevUsdcRef.current = storedUsdc ? BigInt(storedUsdc) : totalUsdcClaimable;
+      window.sessionStorage.setItem(lrepStorageKey, totalClaimable.toString());
+      window.sessionStorage.setItem(usdcStorageKey, totalUsdcClaimable.toString());
       return;
     }
 
-    const prev = prevRef.current ?? 0n;
+    const prevLrep = prevLrepRef.current ?? 0n;
+    const prevUsdc = prevUsdcRef.current ?? 0n;
     const nowMs = Date.now();
     const lastNotifiedAtMs = readLastClaimRewardNotificationAt(address, window.localStorage);
-
-    if (
+    const lrepIncreased = shouldNotifyAboutClaimableRewards({
+      nowMs,
+      previousTotal: prevLrep,
+      nextTotal: totalClaimable,
+      lastNotifiedAtMs,
+    });
+    const usdcIncreased =
+      totalUsdcClaimable >= MIN_VISIBLE_USDC_AMOUNT &&
       shouldNotifyAboutClaimableRewards({
         nowMs,
-        previousTotal: prev,
-        nextTotal: totalClaimable,
+        previousTotal: prevUsdc,
+        nextTotal: totalUsdcClaimable,
         lastNotifiedAtMs,
-      })
-    ) {
-      const formatted = formatClaimableLrepNotificationAmount(totalClaimable);
-      if (formatted) {
+      });
+
+    if (lrepIncreased || usdcIncreased) {
+      const parts: string[] = [];
+      const formattedLrep = formatClaimableLrepNotificationAmount(totalClaimable);
+      if (lrepIncreased && formattedLrep) {
+        parts.push(`${formattedLrep} LREP`);
+      }
+      if (usdcIncreased) {
+        parts.push(formatUsdAmount(totalUsdcClaimable));
+      }
+
+      if (parts.length > 0) {
         notification.success(
           <Link href="/governance" className="font-medium underline">
-            {`You have ${formatted} LREP ready to claim.`}
+            {`You have ${parts.join(" + ")} ready to claim.`}
           </Link>,
           { duration: 8000 },
         );
@@ -72,9 +100,11 @@ export function RewardNotifier() {
       }
     }
 
-    prevRef.current = totalClaimable;
-    window.sessionStorage.setItem(storageKey, totalClaimable.toString());
-  }, [address, totalClaimable]);
+    prevLrepRef.current = totalClaimable;
+    prevUsdcRef.current = totalUsdcClaimable;
+    window.sessionStorage.setItem(lrepStorageKey, totalClaimable.toString());
+    window.sessionStorage.setItem(usdcStorageKey, totalUsdcClaimable.toString());
+  }, [address, totalClaimable, totalUsdcClaimable]);
 
   return null;
 }
