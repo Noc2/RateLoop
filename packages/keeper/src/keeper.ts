@@ -31,6 +31,7 @@ import {
   type Account,
 } from "viem";
 import { REVEAL_FAILED_GRACE_MULTIPLIER } from "@rateloop/contracts/protocol";
+import { buildPonderRequestHeaders } from "./ponder-headers.js";
 import { timelockDecrypt } from "tlock-js";
 import {
   isDrandUnavailableError,
@@ -608,7 +609,6 @@ async function assertPonderDeploymentMatchesKeeper(
   headers: Record<string, string>,
 ): Promise<void> {
   const cacheKey = expectedPonderDeploymentCacheKey(baseUrl);
-  if (verifiedPonderDeploymentCacheKey === cacheKey) return;
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), PONDER_FETCH_TIMEOUT_MS);
@@ -633,6 +633,9 @@ async function assertPonderDeploymentMatchesKeeper(
       typeof deployment.deploymentKey === "string" && deployment.deploymentKey.trim()
         ? deployment.deploymentKey.trim().toLowerCase()
         : null;
+    const verificationCacheKey = `${cacheKey}:${ponderDeploymentKey ?? "unknown"}`;
+    if (verifiedPonderDeploymentCacheKey === verificationCacheKey) return;
+
     const expectedContentRegistry = config.contracts.contentRegistry.toLowerCase();
     const expectedFeedbackRegistry = config.contracts.feedbackRegistry.toLowerCase();
     const expectedDeploymentKey = expectedPonderDeploymentKey();
@@ -662,7 +665,7 @@ async function assertPonderDeploymentMatchesKeeper(
       throw new Error(`Ponder deployment does not match keeper config${deploymentKey}: ${mismatches.join(", ")}`);
     }
 
-    verifiedPonderDeploymentCacheKey = cacheKey;
+    verifiedPonderDeploymentCacheKey = verificationCacheKey;
   } finally {
     clearTimeout(timeout);
   }
@@ -705,10 +708,7 @@ async function fetchKeeperWorkFromPonder(
   const timeout = setTimeout(() => controller.abort(), PONDER_FETCH_TIMEOUT_MS);
 
   try {
-    const headers: Record<string, string> = {};
-    if (keeperWorkToken) {
-      headers.authorization = `Bearer ${keeperWorkToken}`;
-    }
+    const headers = buildPonderRequestHeaders();
     await assertPonderDeploymentMatchesKeeper(baseUrl, headers);
     const response = await fetch(url, { headers, signal: controller.signal });
     if (!response.ok) {
@@ -994,7 +994,8 @@ async function fetchIndexedCiphertextsForRound(params: {
   }
 
   try {
-    await assertPonderDeploymentMatchesKeeper(config.ponderBaseUrl, {});
+    const headers = buildPonderRequestHeaders();
+    await assertPonderDeploymentMatchesKeeper(config.ponderBaseUrl, headers);
     const path = params.kind === "vote" ? "/votes" : "/advisory-votes";
     const indexedCiphertexts: IndexedCiphertextMap = new Map();
     for (let page = 0; page < MAX_INDEXED_CIPHERTEXT_PAGES; page++) {
@@ -1011,6 +1012,7 @@ async function fetchIndexedCiphertextsForRound(params: {
       // response could stall the whole reveal loop. 5s is well above Ponder's normal
       // p99; anything beyond is unhealthy and the keeper retries on the next tick.
       const response = await fetch(url, {
+        headers,
         signal: AbortSignal.timeout(PONDER_FETCH_TIMEOUT_MS),
       });
       if (!response.ok) {

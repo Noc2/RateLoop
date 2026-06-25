@@ -9,6 +9,7 @@ import {
 } from "@rateloop/node-utils/correlationScoring";
 import { ROUND_STATE } from "@rateloop/contracts/protocol";
 import { config } from "./config.js";
+import { buildPonderRequestHeaders } from "./ponder-headers.js";
 import { readRound } from "./contract-reads.js";
 import type { CorrelationRoundCandidate } from "./correlation-artifact-builder.js";
 import { readBoundedResponseText } from "./bounded-response.js";
@@ -96,9 +97,9 @@ function parseBigInt(value: unknown): bigint | null {
   return null;
 }
 
-async function fetchPonderJson<T>(url: URL): Promise<T> {
+async function fetchPonderJson<T>(url: URL, headers: Record<string, string> = buildPonderRequestHeaders()): Promise<T> {
   const response = await fetch(url, {
-    headers: { accept: "application/json" },
+    headers: { accept: "application/json", ...headers },
     signal: AbortSignal.timeout(PONDER_FETCH_TIMEOUT_MS),
   });
   const body = await readBoundedResponseText(response, PONDER_JSON_MAX_BYTES, "Ponder");
