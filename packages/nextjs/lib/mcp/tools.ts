@@ -3078,8 +3078,7 @@ function isRaterEligibleForBounty(
   if ((activeMask & credentialMask) === 0) return false;
 
   if ((normalizedMode & BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG) !== 0) {
-    const freshRecheckMask = Number(status.worldCredentials?.freshRecheckMask ?? 0);
-    return (activeMask & freshRecheckMask & credentialMask) !== 0;
+    return false;
   }
 
   return true;

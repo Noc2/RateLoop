@@ -11,14 +11,12 @@ Framework-agnostic frontend SDK foundations for integrating RateLoop into existi
 
 ## Planned Surface
 
-- `createRateLoopClient(...)` for shared configuration
-- typed read helpers for indexed/hosted data
-- rating vote/frontend helpers for building transaction parameters, including the redeployed tlock metadata bindings
-- small, wallet-agnostic write helpers
+The core client surface below is available today. Framework-specific hooks and UI components remain planned for a follow-up package rather than this core SDK.
+
+- additional typed read helpers as indexed routes expand
+- broader wallet-agnostic write helpers beyond current vote/frontend flows
 
 The exported helper names use the RateLoop namespace.
-
-Framework-specific hooks and UI components should live in a follow-up package rather than this core SDK.
 
 **Chain IDs:** `8453` = Base mainnet production; `84532` = Base Sepolia staging/testnet. Examples below use Base mainnet unless noted.
 

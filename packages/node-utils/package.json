@@ -23,7 +23,8 @@
   "module": "./dist/esm/index.js",
   "types": "./dist/esm/index.d.ts",
   "files": [
-    "dist"
+    "dist",
+    "README.md"
   ],
   "exports": {
     ".": {

@@ -149,7 +149,7 @@ export function useAllClaimableRewards() {
       if (r?.status !== "success") return true;
       return r.result === false;
     });
-  }, [terminalVotes, claimedContracts.length, claimedLoading, claimedResults, claimLookups]);
+  }, [terminalVotes, claimedContracts.length, claimedResults, claimLookups]);
 
   const { rewardVotes, refundVotes } = useMemo(() => {
     const rewards: typeof unclaimedVotes = [];
