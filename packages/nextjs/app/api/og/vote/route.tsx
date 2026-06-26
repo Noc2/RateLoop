@@ -3,6 +3,7 @@ import { ImageResponse } from "next/og";
 import type { NextRequest } from "next/server";
 import { fetchPreviewImageDataUrl } from "./previewImageDataUrl";
 import { readFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { type ContentShareData, VOTE_SHARE_RATING_VERSION_PARAM } from "~~/lib/social/contentShare";
 import { getContentShareDataForParam } from "~~/lib/social/contentShare.server";
@@ -60,12 +61,13 @@ interface ImageResponseFont {
 
 // ImageResponse's renderer accepts OpenType/TrueType bytes, so these static
 // instances mirror the Google font families configured through next/font in app/layout.tsx.
+const ogFontDirectory = join(dirname(fileURLToPath(import.meta.url)), "fonts");
 const ogFontSources = [
-  { name: bodyFontFamily, file: fileURLToPath(new URL("./fonts/inter-regular.ttf", import.meta.url)), weight: 400 },
-  { name: bodyFontFamily, file: fileURLToPath(new URL("./fonts/inter-semibold.ttf", import.meta.url)), weight: 600 },
-  { name: bodyFontFamily, file: fileURLToPath(new URL("./fonts/inter-bold.ttf", import.meta.url)), weight: 700 },
-  { name: headingFontFamily, file: fileURLToPath(new URL("./fonts/space-grotesk-regular.ttf", import.meta.url)), weight: 400 },
-  { name: headingFontFamily, file: fileURLToPath(new URL("./fonts/space-grotesk-bold.ttf", import.meta.url)), weight: 700 },
+  { name: bodyFontFamily, file: join(ogFontDirectory, "inter-regular.ttf"), weight: 400 },
+  { name: bodyFontFamily, file: join(ogFontDirectory, "inter-semibold.ttf"), weight: 600 },
+  { name: bodyFontFamily, file: join(ogFontDirectory, "inter-bold.ttf"), weight: 700 },
+  { name: headingFontFamily, file: join(ogFontDirectory, "space-grotesk-regular.ttf"), weight: 400 },
+  { name: headingFontFamily, file: join(ogFontDirectory, "space-grotesk-bold.ttf"), weight: 700 },
 ] as const;
 
 let ogFontsPromise: Promise<ImageResponseFont[]> | null = null;
