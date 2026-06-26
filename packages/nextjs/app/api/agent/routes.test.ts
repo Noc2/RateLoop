@@ -1296,6 +1296,43 @@ test("agent signing intent route accepts ttlMs on direct ask bodies without pers
   assert.equal(new Date(String(body.expiresAt)).getTime() - new Date(String(body.createdAt)).getTime(), 300000);
 });
 
+test("agent signing intent route redacts webhook secrets from browser responses", async () => {
+  installAskOverrides();
+
+  const response = await signingIntentsRoute.POST(
+    makePublicPost("https://rateloop.ai/api/agent/signing-intents", {
+      ...questionPayload("signing-intent-webhook-secret"),
+      maxPaymentAmount: "1500000",
+      signatureMode: "browser_link",
+      webhookSecret: "super-secret-callback-key",
+      webhookUrl: "https://agent.example/callback",
+    }),
+  );
+  const body = (await response.json()) as Record<string, unknown>;
+  const intentId = String(body.id);
+  const signingUrl = new URL(String(body.signingUrl));
+  const token = new URLSearchParams(signingUrl.hash.replace(/^#/, "")).get("token");
+  const requestBody = body.requestBody as Record<string, unknown>;
+
+  assert.equal(response.status, 200, JSON.stringify(body));
+  assert.ok(token);
+  assert.equal("webhookSecret" in requestBody, false);
+  assert.equal(requestBody.webhookUrl, "https://agent.example/callback");
+
+  const readResponse = await signingIntentRoute.GET(
+    makePublicGet(`https://rateloop.ai/api/agent/signing-intents/${intentId}`, {
+      "x-rateloop-signing-intent-token": token,
+    }),
+    { params: Promise.resolve({ intentId }) },
+  );
+  const readBody = (await readResponse.json()) as Record<string, unknown>;
+  const readRequestBody = readBody.requestBody as Record<string, unknown>;
+
+  assert.equal(readResponse.status, 200, JSON.stringify(readBody));
+  assert.equal("webhookSecret" in readRequestBody, false);
+  assert.equal(readRequestBody.webhookUrl, "https://agent.example/callback");
+});
+
 test("agent ask handoff route rejects chains unavailable on this server", async () => {
   const response = await handoffsRoute.POST(
     makePublicPost("https://rateloop.ai/api/agent/handoffs", {
@@ -1348,6 +1385,74 @@ test("agent ask handoff route uses configured production app URL for token links
     restoreEnv("VERCEL_PROJECT_PRODUCTION_URL", originalVercelProjectProductionUrl);
     restoreEnv("VERCEL_URL", originalVercelUrl);
   }
+});
+
+test("agent ask handoff route redacts webhook secrets from browser responses", async () => {
+  const originalRequest = {
+    ...handoffQuestionPayload("agent-handoff-webhook-secret"),
+    maxPaymentAmount: "1500000",
+    webhookSecret: "super-secret-callback-key",
+    webhookUrl: "https://agent.example/callback",
+  };
+  const editedRequest = {
+    ...originalRequest,
+    question: {
+      ...originalRequest.question,
+      title: "Edited pitch interest",
+    },
+    webhookSecret: "edited-secret-callback-key",
+  };
+
+  const createResponse = await handoffsRoute.POST(
+    makePublicPost("https://rateloop.ai/api/agent/handoffs", {
+      request: originalRequest,
+      ttlMs: 300000,
+    }),
+  );
+  const createBody = (await createResponse.json()) as Record<string, unknown>;
+  const handoffId = String(createBody.handoffId);
+  const handoffUrl = new URL(String(createBody.handoffUrl));
+  const token = new URLSearchParams(handoffUrl.hash.replace(/^#/, "")).get("token");
+  const createRequestBody = createBody.requestBody as Record<string, unknown>;
+  const createOriginalRequestBody = createBody.originalRequestBody as Record<string, unknown>;
+
+  assert.equal(createResponse.status, 200, JSON.stringify(createBody));
+  assert.ok(token);
+  assert.equal("webhookSecret" in createRequestBody, false);
+  assert.equal("webhookSecret" in createOriginalRequestBody, false);
+  assert.equal(createRequestBody.webhookUrl, "https://agent.example/callback");
+  assert.equal(createOriginalRequestBody.webhookUrl, "https://agent.example/callback");
+
+  const readResponse = await handoffRoute.GET(
+    makePublicGet(`https://rateloop.ai/api/agent/handoffs/${handoffId}`, {
+      "x-rateloop-handoff-token": token,
+    }),
+    { params: Promise.resolve({ handoffId }) },
+  );
+  const readBody = (await readResponse.json()) as Record<string, unknown>;
+  const readRequestBody = readBody.requestBody as Record<string, unknown>;
+  const readOriginalRequestBody = readBody.originalRequestBody as Record<string, unknown>;
+
+  assert.equal(readResponse.status, 200, JSON.stringify(readBody));
+  assert.equal("webhookSecret" in readRequestBody, false);
+  assert.equal("webhookSecret" in readOriginalRequestBody, false);
+
+  const patchResponse = await handoffRoute.PATCH(
+    makePublicPatch(`https://rateloop.ai/api/agent/handoffs/${handoffId}`, {
+      requestBody: editedRequest,
+      token,
+    }),
+    { params: Promise.resolve({ handoffId }) },
+  );
+  const patchBody = (await patchResponse.json()) as Record<string, unknown>;
+  const patchRequestBody = patchBody.requestBody as Record<string, unknown>;
+  const patchOriginalRequestBody = patchBody.originalRequestBody as Record<string, unknown>;
+
+  assert.equal(patchResponse.status, 200, JSON.stringify(patchBody));
+  assert.equal("webhookSecret" in patchRequestBody, false);
+  assert.equal("webhookSecret" in patchOriginalRequestBody, false);
+  assert.equal((patchRequestBody.question as Record<string, unknown>).title, "Edited pitch interest");
+  assert.equal((patchOriginalRequestBody.question as Record<string, unknown>).title, "Pitch interest");
 });
 
 test("agent ask handoff route stages generated image bytes behind a browser link", async () => {

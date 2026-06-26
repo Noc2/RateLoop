@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "crypto";
 import "server-only";
 import { type Address, type Hex, isAddress } from "viem";
+import { redactSensitiveAgentRequestFields } from "~~/lib/agent/requestRedaction";
 import { dbClient } from "~~/lib/db";
 import { McpToolError, callPublicRateLoopMcpTool } from "~~/lib/mcp/tools";
 import { buildAppRelativeUrl } from "~~/lib/url/appRelative";
@@ -239,6 +240,7 @@ function isAlreadyStoredHashRepeat(storedHashes: readonly Hex[], transactionHash
 }
 
 function signingIntentResponse(intent: AgentSigningIntentRecord, extras: JsonObject = {}) {
+  const requestBody = redactSensitiveAgentRequestFields(intent.requestBody);
   return {
     chainId: intent.chainId,
     clientRequestId: intent.clientRequestId,
@@ -250,7 +252,7 @@ function signingIntentResponse(intent: AgentSigningIntentRecord, extras: JsonObj
     operationKey: intent.operationKey,
     payloadHash: intent.payloadHash,
     paymentMode: intent.paymentMode,
-    requestBody: intent.requestBody,
+    requestBody,
     status: intent.status,
     transactionHashes: intent.transactionHashes,
     transactionPlan: intent.transactionPlan,

@@ -2,6 +2,7 @@ import { normalizeInferredHeadToHeadAbRequestBody } from "@rateloop/agents/voteU
 import { createHash, randomBytes } from "crypto";
 import "server-only";
 import { type Address, type Hex, isAddress } from "viem";
+import { redactSensitiveAgentRequestFields } from "~~/lib/agent/requestRedaction";
 import {
   assertProcessableImageBuffer,
   assertSupportedImageSignature,
@@ -807,6 +808,8 @@ export function buildAgentAskHandoffResponse(params: {
     }
     return "Share or open the handoffUrl, review the draft, connect the funding wallet, and submit.";
   })();
+  const originalRequestBody = redactSensitiveAgentRequestFields(params.handoff.originalRequestBody);
+  const requestBody = redactSensitiveAgentRequestFields(params.handoff.requestBody);
 
   return {
     assets: params.assets.map(asset => ({
@@ -833,7 +836,7 @@ export function buildAgentAskHandoffResponse(params: {
     id: params.handoff.id,
     nextAction,
     operationKey: params.handoff.operationKey,
-    originalRequestBody: params.handoff.originalRequestBody,
+    originalRequestBody,
     payloadHash: params.handoff.payloadHash,
     paymentMode: params.handoff.paymentMode,
     paymentModeDiagnostics: {
@@ -845,7 +848,7 @@ export function buildAgentAskHandoffResponse(params: {
       transactionCallCount: transactionPlanCallCount(params.handoff.transactionPlan),
     },
     preparedDraftRevision: params.handoff.preparedDraftRevision,
-    requestBody: params.handoff.requestBody,
+    requestBody,
     status: params.handoff.status,
     transactionHashes: params.handoff.transactionHashes,
     transactionPlan: params.handoff.transactionPlan,
