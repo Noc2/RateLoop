@@ -1,6 +1,6 @@
 import { contentModerationPolicy } from "@rateloop/node-utils/contentModeration";
+import { buildAsciiWordBoundaryPattern, buildSubdomainLikePattern } from "@rateloop/node-utils/moderationPatterns";
 import { or, sql } from "ponder";
-import { buildAsciiWordBoundaryPattern, buildSubdomainLikePattern } from "./moderationPatterns.js";
 
 function escapeLikeTerm(value: string): string {
   return value.replace(/[\\%_]/g, "\\$&");

@@ -8,6 +8,7 @@ Shared Node.js helpers used by RateLoop services, scripts, and public packages.
 - `@rateloop/node-utils/json` for JSON parsing and validation utilities.
 - `@rateloop/node-utils/submissionValidation` for shared submission guardrails.
 - `@rateloop/node-utils/contentModeration` for moderation helpers.
+- `@rateloop/node-utils/moderationPatterns` for shared moderation SQL/regex pattern helpers.
 - `@rateloop/node-utils/correlationScoring` for payout-root scoring utilities.
 - `@rateloop/node-utils/identityKeys` for identity-key derivation helpers.
 - `@rateloop/node-utils/profileSelfReport` for profile self-report normalization and audience helpers.

@@ -2,6 +2,7 @@ export * from "./contentModeration";
 export * from "./correlationScoring";
 export * from "./identityKeys";
 export * from "./json";
+export * from "./moderationPatterns";
 export * from "./keystore";
 export * from "./profileSelfReport";
 export * from "./submissionValidation";
