@@ -19,6 +19,8 @@ import {
   isThirdwebSponsorshipDeniedError,
   useThirdwebSponsoredSubmitCalls,
 } from "~~/hooks/useThirdwebSponsoredSubmitCalls";
+import { useTransactionFlowToast } from "~~/hooks/useTransactionFlowToast";
+import { addressesMatch, normalizeComparableAddress } from "~~/lib/address/normalization";
 import { getClaimPreflightErrorMessage } from "~~/lib/claimTransactionFeedback";
 import type { LegacyClaimLookupResult } from "~~/lib/legacy-claim/lookup";
 import {
@@ -26,7 +28,6 @@ import {
   isThirdwebSponsoredExecutionRejectedError,
   isUserRejectedTransactionError,
 } from "~~/lib/transactionErrors";
-import { addressesMatch, normalizeComparableAddress } from "~~/lib/address/normalization";
 import { createThirdwebInAppWallet, isThirdwebInAppWalletId, thirdwebClient } from "~~/services/thirdweb/client";
 import { notification } from "~~/utils/scaffold-eth";
 
@@ -346,6 +347,7 @@ export function useLegacyClaim() {
     executionAddress: activeExecutionAddress,
   });
   const legacyClaimBatchSponsorshipMode = canUseSponsoredSubmitCalls ? "sponsored" : "self-funded";
+  const flowToast = useTransactionFlowToast();
   const {
     canShowFreeTransactionAllowance,
     canSponsorTransactions,
@@ -521,6 +523,10 @@ export function useLegacyClaim() {
       };
 
       setIsSponsoredClaiming(true);
+      flowToast.beginFlow({
+        action: "legacy LREP",
+        sponsored: legacyClaimBatchSponsorshipMode === "sponsored",
+      });
       try {
         await publicClient.simulateContract({
           abi: launchDistributionPoolInfo.abi as Abi,
@@ -540,7 +546,10 @@ export function useLegacyClaim() {
                 functionName: "claimLegacyContributorAllocation",
               },
             ],
-            { action: "Claim legacy LREP", sponsorshipMode: legacyClaimBatchSponsorshipMode },
+            flowToast.getSponsoredBatchOptions({
+              action: "legacy LREP",
+              sponsorshipMode: legacyClaimBatchSponsorshipMode,
+            }),
           );
         } catch (error) {
           console.error("Batched legacy claim failed:", error);
@@ -554,6 +563,7 @@ export function useLegacyClaim() {
       } catch (error) {
         notification.error(getLegacyClaimTransactionErrorMessage(error));
       } finally {
+        flowToast.endFlow();
         setIsSponsoredClaiming(false);
       }
       return;

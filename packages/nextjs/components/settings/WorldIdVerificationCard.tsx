@@ -26,15 +26,17 @@ import { useRaterRegistryIdentity } from "~~/hooks/useRaterRegistryIdentity";
 import { useRefreshWalletBalances } from "~~/hooks/useRefreshWalletBalances";
 import { useThirdwebBatchedContractWrite } from "~~/hooks/useThirdwebBatchedContractWrite";
 import { useThirdwebRaterDelegationLink } from "~~/hooks/useThirdwebRaterDelegationLink";
+import { useThirdwebSponsoredSubmitCalls } from "~~/hooks/useThirdwebSponsoredSubmitCalls";
+import { useTransactionFlowToast } from "~~/hooks/useTransactionFlowToast";
 import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
 import { getLaunchReferralInputState, resolveLaunchClaimReferrer } from "~~/lib/referrals/launchReferral";
-import { formatLrepAmount } from "~~/lib/ui/tokenAmountDisplay";
 import {
   buildReferralLandingUrl,
   clearStoredReferralAttribution,
   getStoredReferralAddress,
   storeReferralAttributionFromValue,
 } from "~~/lib/referrals/referralAttribution";
+import { formatLrepAmount } from "~~/lib/ui/tokenAmountDisplay";
 import { type WorldIdProofMode, getWorldIdClientConfig } from "~~/lib/world-id/config";
 import {
   type WorldIdDiagnosticPhase,
@@ -132,7 +134,9 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
   const isConfigured = Boolean((appId && config.enabled) || localE2EWorldIdMock);
   const canVerify = Boolean(isConfigured && address);
   const resolvedIdentity = useRaterRegistryIdentity(walletAddress);
-  const { writeContractOrBatch } = useThirdwebBatchedContractWrite();
+  const { writeContractOrBatch, canUseBatchedContractWrites } = useThirdwebBatchedContractWrite();
+  const { canUseSponsoredSubmitCalls } = useThirdwebSponsoredSubmitCalls();
+  const flowToast = useTransactionFlowToast();
   const thirdwebCredentialLink = useThirdwebRaterDelegationLink({ enabled: Boolean(walletAddress) });
   const { data: hasActiveCredential, refetch: refetchHasActiveCredential } = useScaffoldReadContract({
     contractName: "RaterRegistry",
@@ -382,7 +386,7 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
         ) as Promise<Hex | undefined>,
       {
         action: "claim launch bonus",
-        suppressStatusToast: true,
+        ...flowToast.getFlowBatchOptions(),
       },
     );
     if (verifiedBonusReferrer !== zeroAddress) {
@@ -400,16 +404,34 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
     refetchVerifiedBonusClaimed,
     walletAddress,
     writeContractOrBatch,
+    flowToast,
   ]);
 
   const handleClaimVerifiedBonus = useCallback(async () => {
     let claimedVerifiedBonus: bigint | undefined;
+    let flowStarted = false;
+    if (canUseBatchedContractWrites) {
+      flowToast.beginFlow({
+        action: "claim launch bonus",
+        sponsored: canUseSponsoredSubmitCalls,
+      });
+      flowStarted = true;
+    }
     try {
       claimedVerifiedBonus = await claimVerifiedLaunchBonusIfAvailable();
     } finally {
+      if (flowStarted) {
+        flowToast.endFlow();
+      }
       await refreshLaunchReads({ lrepCreditMicro: claimedVerifiedBonus });
     }
-  }, [claimVerifiedLaunchBonusIfAvailable, refreshLaunchReads]);
+  }, [
+    canUseBatchedContractWrites,
+    canUseSponsoredSubmitCalls,
+    claimVerifiedLaunchBonusIfAvailable,
+    flowToast,
+    refreshLaunchReads,
+  ]);
 
   const handleReferralBlur = useCallback(() => {
     if (referralInputState.canUseReferrer) {
@@ -450,6 +472,14 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
       }
 
       let claimedVerifiedBonus: bigint | undefined;
+      let worldIdFlowStarted = false;
+      if (canUseBatchedContractWrites) {
+        flowToast.beginFlow({
+          action: "World ID verification",
+          sponsored: canUseSponsoredSubmitCalls,
+        });
+        worldIdFlowStarted = true;
+      }
       try {
         const parsedProof = parseWorldIdProof(idkitResponse, {
           expectedAction: requestContext.action,
@@ -498,7 +528,7 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
               ) as Promise<Hex | undefined>,
             {
               action: "attest World ID credential",
-              suppressStatusToast: true,
+              ...flowToast.getFlowBatchOptions(),
             },
           );
         } else {
@@ -527,7 +557,7 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
               ) as Promise<Hex | undefined>,
             {
               action: "attest World ID credential",
-              suppressStatusToast: true,
+              ...flowToast.getFlowBatchOptions(),
             },
           );
         }
@@ -574,7 +604,7 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
                 ) as Promise<Hex | undefined>,
               {
                 action: "unlock full earned-rater cap",
-                suppressStatusToast: true,
+                ...flowToast.getFlowBatchOptions(),
               },
             );
             notification.success("Full earned-rater launch cap unlocked.");
@@ -593,6 +623,10 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
         );
         setVerificationState({ status: "error", message });
         throw new Error(message);
+      } finally {
+        if (worldIdFlowStarted) {
+          flowToast.endFlow();
+        }
       }
 
       return claimedVerifiedBonus;
@@ -601,8 +635,11 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
       activeEarnedRaterCap,
       address,
       attestWorldIdCredential,
+      canUseBatchedContractWrites,
+      canUseSponsoredSubmitCalls,
       chain?.id,
       claimVerifiedLaunchBonusIfAvailable,
+      flowToast,
       fullEarnedRaterCap,
       hasWorldIdLegacyAttestFunction,
       hasWorldIdV4AttestFunction,
@@ -1045,7 +1082,9 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
                     disabled={isClaimingVerifiedBonus}
                     onClick={() => void handleClaimVerifiedBonus()}
                   >
-                    {isClaimingVerifiedBonus ? "Claiming..." : `Claim ${formatWorldIdLrepAmount(currentVerifiedBonus)} LREP`}
+                    {isClaimingVerifiedBonus
+                      ? "Claiming..."
+                      : `Claim ${formatWorldIdLrepAmount(currentVerifiedBonus)} LREP`}
                   </button>
                 </dd>
               </>

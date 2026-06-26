@@ -41,7 +41,7 @@ import { type Category, useCategoryRegistry } from "~~/hooks/useCategoryRegistry
 import { fetchThumbnailMetadataBatch, shouldFetchMetadataUrl } from "~~/hooks/useContentFeedMetadata";
 import { useGasBalanceStatus } from "~~/hooks/useGasBalanceStatus";
 import { useThirdwebSponsoredSubmitCalls } from "~~/hooks/useThirdwebSponsoredSubmitCalls";
-import { useTransactionStatusToast } from "~~/hooks/useTransactionStatusToast";
+import { useTransactionFlowToast } from "~~/hooks/useTransactionFlowToast";
 import { useWalletMessageSigner } from "~~/hooks/useWalletMessageSigner";
 import { useWalletRpcRecovery } from "~~/hooks/useWalletRpcRecovery";
 import { type AgentQuestionSpecInput, buildQuestionSpecHashes } from "~~/lib/agent/questionSpecs";
@@ -646,7 +646,7 @@ export function ContentSubmissionSection() {
     freeTransactionRemaining,
     freeTransactionVerified,
   });
-  const statusToast = useTransactionStatusToast();
+  const flowToast = useTransactionFlowToast();
   const {
     canUseSelfFundedBatchCalls,
     canUseSponsoredSubmitCalls,
@@ -2520,7 +2520,10 @@ export function ContentSubmissionSection() {
     if (!accepted) return;
 
     setIsSubmitting(true);
-    statusToast.showSubmitting({ action: "content" });
+    flowToast.beginFlow({
+      action: "content",
+      sponsored: submitCallSponsorshipMode === "sponsored",
+    });
     let reservedRevealCommitment: `0x${string}` | null = null;
     let cancelReservedSubmission: ((revealCommitment: `0x${string}`) => Promise<void>) | null = null;
     try {
@@ -2845,8 +2848,10 @@ export function ContentSubmissionSection() {
             ],
             {
               atomicRequired: true,
-              sponsorshipMode: submitCallSponsorshipMode,
-              suppressStatusToast: true,
+              ...flowToast.getSponsoredBatchOptions({
+                action: "content",
+                sponsorshipMode: submitCallSponsorshipMode,
+              }),
             },
           );
           return;
@@ -2878,8 +2883,10 @@ export function ContentSubmissionSection() {
             ],
             {
               atomicRequired: true,
-              sponsorshipMode: submitCallSponsorshipMode,
-              suppressStatusToast: true,
+              ...flowToast.getSponsoredBatchOptions({
+                action: "content",
+                sponsorshipMode: submitCallSponsorshipMode,
+              }),
             },
           );
           const receipts = callsResult.receipts ?? [];
@@ -2969,8 +2976,10 @@ export function ContentSubmissionSection() {
         const submitBatchCalls = [...submitCalls];
         const submitBatchOptions = {
           atomicRequired: true,
-          sponsorshipMode: submitCallSponsorshipMode,
-          suppressStatusToast: true,
+          ...flowToast.getSponsoredBatchOptions({
+            action: "content",
+            sponsorshipMode: submitCallSponsorshipMode,
+          }),
         } as const;
         const callsResult =
           publicClient && expectedNextContentId !== null
@@ -3145,8 +3154,10 @@ export function ContentSubmissionSection() {
           if (canUseBatchedSubmitCalls) {
             await executeSponsoredCalls([feedbackApproveWrite, feedbackPoolWrite], {
               atomicRequired: true,
-              sponsorshipMode: submitCallSponsorshipMode,
-              suppressStatusToast: true,
+              ...flowToast.getSponsoredBatchOptions({
+                action: "content",
+                sponsorshipMode: submitCallSponsorshipMode,
+              }),
             });
             feedbackBonusFunded = true;
           } else {
@@ -3191,7 +3202,6 @@ export function ContentSubmissionSection() {
 
       await refetchNextContentId();
 
-      statusToast.dismiss();
       notification.success(
         `${questionCount === 1 ? "Question" : "Question bundle"} submitted with a ${formatSubmissionRewardAmount(
           selectedRewardAmount,
@@ -3295,7 +3305,6 @@ export function ContentSubmissionSection() {
           }
         }
       }
-      statusToast.dismiss();
       if (isFreeTransactionExhaustedError(e) || isInsufficientFundsError(e)) {
         notification.error(getGasBalanceErrorMessage(nativeTokenSymbol, { canSponsorTransactions }));
       } else if (isWalletRpcOverloadedError(e)) {
@@ -3313,7 +3322,7 @@ export function ContentSubmissionSection() {
       }
     } finally {
       setIsSubmitting(false);
-      statusToast.dismiss();
+      flowToast.endFlow();
     }
   };
 

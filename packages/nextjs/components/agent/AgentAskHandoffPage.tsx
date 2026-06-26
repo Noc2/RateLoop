@@ -2650,15 +2650,6 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
             );
           }
 
-          showTransactionSubmittingToast(
-            isFundingFeedbackBonus
-              ? {
-                  description: "Approve the Feedback Bonus wallet calls so raters can see the bonus.",
-                  title: "Funding Feedback Bonus",
-                }
-              : { action: "ask" },
-          );
-
           if (currentHandoff.chainId && activeChainId !== currentHandoff.chainId) {
             await switchToChain(currentHandoff.chainId);
             activeChainId = currentHandoff.chainId;
@@ -2679,7 +2670,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
           }
 
           const hashes = await executeWalletTransactionPlan({
-            action: isFundingFeedbackBonus ? "agent handoff feedback bonus funding" : "agent handoff ask submission",
+            action: isFundingFeedbackBonus ? "Feedback Bonus funding" : "ask",
             calls,
             chainId: handoffChainId,
             getPostCallDelayMs,
@@ -2743,7 +2734,6 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
       dismissTransactionStatusToast,
       executeWalletTransactionPlan,
       handoffId,
-      showTransactionSubmittingToast,
       switchToChain,
       token,
       wagmiConfig,
