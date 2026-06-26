@@ -89,6 +89,11 @@ export function buildContentSecurityPolicy(options: ContentSecurityPolicyOptions
     ? ["https://vercel.live", "https://*.pusher.com", "wss://*.pusher.com"]
     : [];
   const vercelLiveFrameSources = options.isVercelLiveEnabled ? ["https://vercel.live"] : [];
+  const styleSources = compactUniqueSources([
+    "'self'",
+    options.nonce ? `'nonce-${options.nonce}'` : undefined,
+    ...vercelLiveStyleSources,
+  ]);
 
   const scriptSources = compactUniqueSources([
     "'self'",
@@ -102,8 +107,10 @@ export function buildContentSecurityPolicy(options: ContentSecurityPolicyOptions
   const directives = [
     "default-src 'self'",
     ["script-src", ...scriptSources].join(" "),
+    ["style-src", ...styleSources].join(" "),
+    ["style-src-elem", ...styleSources].join(" "),
     // React and component libraries still emit inline style attributes in the app shell.
-    ["style-src 'self' 'unsafe-inline'", ...vercelLiveStyleSources].join(" "),
+    "style-src-attr 'unsafe-inline'",
     ["font-src 'self'", "https://world-id-assets.com", ...vercelLiveFontSources].join(" "),
     "img-src 'self' data: blob: https:",
     compactUniqueSources([
