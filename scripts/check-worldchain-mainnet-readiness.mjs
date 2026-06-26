@@ -14,7 +14,7 @@ import {
   getSubmissionMediaValidatorAddress,
   getSubmissionMediaValidatorAuthorizedEmitter,
   parseGeneratedContractsForChain,
-} from "./check-worldchain-sepolia-readiness.mjs";
+} from "./readiness-core.mjs";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = dirname(scriptDir);
