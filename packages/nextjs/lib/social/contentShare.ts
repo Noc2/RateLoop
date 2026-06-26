@@ -4,6 +4,7 @@ import { detectPlatform, getThumbnailUrl } from "~~/utils/platforms";
 
 export const VOTE_SHARE_RATING_VERSION_PARAM = "rv";
 
+const VOTE_SHARE_CARD_VERSION = "og2";
 const TITLE_MAX_LENGTH = 96;
 const DESCRIPTION_MAX_LENGTH = 180;
 const ALT_MAX_LENGTH = 180;
@@ -372,7 +373,8 @@ export function buildContentShareRatingVersion(
   const bountyReward = resolveContentShareBountyReward(content);
   const feedbackBonusReward = resolveContentShareFeedbackBonusReward(content);
 
-  return `r-${content.id}-${rating?.ratingBps ?? "na"}-${totalVotes}-${openRoundVoteCount}-${activitySeconds}-${buildRewardVersionPart(
+  // Bump this renderer prefix when social-card visuals change and crawler caches need a fresh image URL.
+  return `${VOTE_SHARE_CARD_VERSION}-r-${content.id}-${rating?.ratingBps ?? "na"}-${totalVotes}-${openRoundVoteCount}-${activitySeconds}-${buildRewardVersionPart(
     bountyReward,
   )}-${buildRewardVersionPart(feedbackBonusReward)}`;
 }
