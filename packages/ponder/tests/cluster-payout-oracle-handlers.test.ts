@@ -192,6 +192,48 @@ describe("ClusterPayoutOracle ponder handlers", () => {
     });
   });
 
+  it("rejects oversized payout data URIs before base64 decoding", async () => {
+    const artifactHash = `0x${"f".repeat(64)}`;
+    const artifactURI = `data:application/json;base64,${"A".repeat(13_333_340)}`;
+    const { db, inserts } = createDb();
+    const registeredHandlers = await loadHandlers();
+    const bufferFromSpy = vi.spyOn(Buffer, "from");
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    await registeredHandlers.get("ClusterPayoutOracle:RoundPayoutSnapshotProposed")!({
+      event: {
+        args: {
+          snapshotKey: `0x${"f".repeat(64)}`,
+          domain: 1n,
+          rewardPoolId: 7n,
+          contentId: 9n,
+          roundId: 2n,
+          correlationEpochId: 1n,
+          proposer: "0x00000000000000000000000000000000000000f1",
+          rawEligibleVoters: 0n,
+          effectiveParticipantUnits: 0n,
+          totalClaimWeight: 0n,
+          weightRoot: `0x${"0".repeat(64)}`,
+          reasonRoot: `0x${"0".repeat(64)}`,
+          artifactHash,
+          artifactURI,
+        },
+        block: { number: 11n, timestamp: 1_800n },
+      },
+      context: { db },
+    });
+
+    expect(bufferFromSpy).not.toHaveBeenCalled();
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining(`(${artifactURI.length} chars)`),
+      expect.any(Error),
+    );
+    expect(inserts).not.toContainEqual({
+      table: "payoutArtifactCache",
+      values: expect.objectContaining({ artifactHash }),
+    });
+  });
+
   it("caches verified loopback HTTP payout artifacts in hardhat", async () => {
     const publicArtifact = {
       artifactVersion: "rateloop-correlation-artifact-v2",

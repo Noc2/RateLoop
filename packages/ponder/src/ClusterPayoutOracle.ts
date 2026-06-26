@@ -12,6 +12,9 @@ const SNAPSHOT_STATUS = {
 
 const ARTIFACT_FETCH_TIMEOUT_MS = 5_000;
 const ARTIFACT_MAX_BYTES = 10_000_000;
+const DATA_URI_PREFIX = "data:";
+const DATA_URI_BASE64_MAX_BYTES = Math.ceil(ARTIFACT_MAX_BYTES / 3) * 4;
+const DATA_URI_PERCENT_ENCODED_MAX_BYTES = ARTIFACT_MAX_BYTES * 3;
 const httpsArtifactAllowlist = parseHttpsArtifactAllowlist(
   process.env.PAYOUT_ARTIFACT_HTTPS_ALLOWLIST ?? process.env.KEEPER_ARTIFACT_HTTPS_ALLOWLIST ?? "",
 );
@@ -57,7 +60,7 @@ async function cachePayoutArtifact(params: {
       });
   } catch (error) {
     console.warn(
-      `[ClusterPayoutOracle] Failed to cache payout artifact ${params.artifactHash} from ${params.artifactURI}:`,
+      `[ClusterPayoutOracle] Failed to cache payout artifact ${params.artifactHash} from ${formatArtifactUriForLog(params.artifactURI)}:`,
       error,
     );
   }
@@ -79,7 +82,7 @@ async function readVerifiedArtifactCanonicalJson(
 async function readArtifactJson(uri: string): Promise<unknown | null> {
   const normalizedUri = normalizeArtifactUri(uri);
   if (!normalizedUri) return null;
-  if (normalizedUri.startsWith("data:")) {
+  if (normalizedUri.startsWith(DATA_URI_PREFIX)) {
     return JSON.parse(readDataUri(normalizedUri));
   }
 
@@ -120,7 +123,7 @@ async function readArtifactJson(uri: string): Promise<unknown | null> {
 function normalizeArtifactUri(uri: string): string | null {
   const value = uri.trim();
   if (!value) return null;
-  if (value.startsWith("data:")) return value;
+  if (value.startsWith(DATA_URI_PREFIX)) return value;
   if (value.startsWith("https://")) {
     return isAllowedHttpsArtifactUrl(value) ? value : null;
   }
@@ -140,18 +143,28 @@ function normalizeArtifactUri(uri: string): string | null {
 
 function readDataUri(uri: string): string {
   const commaIndex = uri.indexOf(",");
-  if (commaIndex < 0) return "";
-  const metadata = uri.slice("data:".length, commaIndex);
+  if (commaIndex < 0) {
+    throw new Error("Invalid data URI");
+  }
+  const metadata = uri.slice(DATA_URI_PREFIX.length, commaIndex);
   const payload = uri.slice(commaIndex + 1);
   const metadataParts = metadata.split(";").filter(Boolean);
   const mediaType = metadataParts[0]?.toLowerCase() ?? "";
   const isBase64 = metadataParts.some((part) => part.toLowerCase() === "base64");
   if (mediaType && mediaType !== "application/json" && !mediaType.endsWith("+json")) {
-    return "";
+    throw new Error("Payout artifact data URI must contain JSON");
   }
-  return isBase64
+  const encodedBytes = Buffer.byteLength(payload, "utf8");
+  if (encodedBytes > (isBase64 ? DATA_URI_BASE64_MAX_BYTES : DATA_URI_PERCENT_ENCODED_MAX_BYTES)) {
+    throw new Error(`Payout artifact data URI exceeds ${ARTIFACT_MAX_BYTES} decoded bytes`);
+  }
+  const decoded = isBase64
     ? Buffer.from(payload, "base64").toString("utf8")
     : decodeURIComponent(payload);
+  if (Buffer.byteLength(decoded, "utf8") > ARTIFACT_MAX_BYTES) {
+    throw new Error(`Payout artifact data URI exceeded ${ARTIFACT_MAX_BYTES} decoded bytes`);
+  }
+  return decoded;
 }
 
 function parseHttpsArtifactAllowlist(value: string): URL[] {
@@ -211,6 +224,10 @@ function shouldAllowLocalHttpArtifacts(): boolean {
 
 function stripTrailingSlash(value: string): string {
   return value === "/" ? "" : value.replace(/\/+$/u, "");
+}
+
+function formatArtifactUriForLog(value: string): string {
+  return value.length <= 240 ? value : `${value.slice(0, 240)}... (${value.length} chars)`;
 }
 
 ponder.on(
