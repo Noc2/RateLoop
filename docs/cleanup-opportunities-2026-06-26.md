@@ -77,9 +77,9 @@ Risk:
 
 - Low. This looks like a stranded copy after the helper was centralized.
 
-### 3. Remove unused `@scaffold-ui/hooks` dependency
+### 3. Retain `@scaffold-ui/hooks` as a peer dependency
 
-Priority: Low
+Priority: Closed after double-check
 
 Evidence:
 
@@ -88,16 +88,20 @@ Evidence:
   package entry and lockfile references.
 - `yarn why @scaffold-ui/hooks` showed it is only pulled by
   `@rateloop/nextjs@workspace:packages/nextjs`.
+- A follow-up `yarn explain peer-requirements pf412f` check showed
+  `@scaffold-ui/components@0.1.9` requires `@scaffold-ui/hooks@0.1.7` as a peer
+  dependency, and the installed package README documents installing both packages
+  together.
 
-Suggested cleanup:
+Resolution:
 
-- Remove `@scaffold-ui/hooks` from `packages/nextjs/package.json`.
-- Update `yarn.lock`.
-- Run `yarn workspace @rateloop/nextjs check-types` and the Next.js test script.
+- Do not remove `@scaffold-ui/hooks` while `@scaffold-ui/components` is still used.
+- Revisit only if the component package is removed or replaces that peer dependency.
 
 Risk:
 
-- Low. Keep `@scaffold-ui/components`; only the hooks package appears unused.
+- Removing it introduces a Yarn peer-dependency warning and could break components
+  that resolve the peer at runtime.
 
 ### 4. Confirm and remove unreferenced social profile assets
 
@@ -510,7 +514,7 @@ These surfaced during the audit, but I would not remove them as routine cleanup:
 
 1. Remove tracked `tmp/` artifacts and ignore `/tmp/`.
 2. Remove `packages/sdk/scripts/fix-esm-extensions.mjs`.
-3. Remove unused `@scaffold-ui/hooks`.
+3. Keep `@scaffold-ui/hooks` while `@scaffold-ui/components` requires it as a peer.
 4. Add a docs index plus superseded banner for the 2026-06-25 review.
 5. Extract readiness core helpers away from the World Chain Sepolia module name.
 6. Triage Knip unused exports package by package.
