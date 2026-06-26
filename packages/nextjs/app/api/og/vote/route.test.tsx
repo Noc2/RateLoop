@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { GET } from "./route";
+import { GET, fetchPreviewImageDataUrl } from "./route";
 import assert from "node:assert/strict";
 import { after, beforeEach, test } from "node:test";
 import { __setRateLimitStoreForTests } from "~~/utils/rateLimit";
@@ -97,10 +97,26 @@ test("caches versioned vote social cards for crawlers", async () => {
     "public, max-age=86400, stale-while-revalidate=604800, stale-if-error=604800",
   );
   assert.ok((await response.arrayBuffer()).byteLength > 0);
-  assert.deepEqual(requestedUrls, [
-    "https://ponder.example/api/content/88",
-    "https://img.youtube.com/vi/qRv7G7WpOoU/hqdefault.jpg",
-  ]);
+  assert.ok(requestedUrls.includes("https://ponder.example/api/content/88"));
+});
+
+test("loads trusted preview images into data URLs for social card rendering", async () => {
+  const requestedUrls: string[] = [];
+  const dataUrl = await fetchPreviewImageDataUrl("https://img.youtube.com/vi/qRv7G7WpOoU/hqdefault.jpg", (async (
+    input: RequestInfo | URL,
+  ) => {
+    const url = typeof input === "string" || input instanceof URL ? input.toString() : input.url;
+    requestedUrls.push(url);
+
+    return new Response(onePixelPng, {
+      headers: {
+        "content-type": "image/png",
+      },
+    });
+  }) as typeof fetch);
+
+  assert.equal(requestedUrls[0], "https://img.youtube.com/vi/qRv7G7WpOoU/hqdefault.jpg");
+  assert.match(dataUrl ?? "", /^data:image\/png;base64,/);
 });
 
 test("keeps content vote social cards uncached without the current rating version", async () => {

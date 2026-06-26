@@ -1,6 +1,7 @@
 import React from "react";
 import { ImageResponse } from "next/og";
 import type { NextRequest } from "next/server";
+import { Buffer } from "node:buffer";
 import { readFile } from "node:fs/promises";
 import { type ContentShareData, VOTE_SHARE_RATING_VERSION_PARAM } from "~~/lib/social/contentShare";
 import { getContentShareDataForParam } from "~~/lib/social/contentShare.server";
@@ -14,6 +15,8 @@ const bodyFontFamily = "Inter";
 const headingFontFamily = "Space Grotesk";
 
 const RATE_LIMIT = { limit: 60, windowMs: 60_000 };
+const PREVIEW_IMAGE_FETCH_TIMEOUT_MS = 2_500;
+const PREVIEW_IMAGE_MAX_BYTES = 2_000_000;
 
 const imageSize = {
   width: 1200,
@@ -490,6 +493,52 @@ function FallbackShareImage() {
   );
 }
 
+function EmergencyFallbackImage() {
+  return (
+    <div
+      style={{
+        width: "100%",
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "center",
+        background: surfaceGradient,
+        color: brandColors.warmWhite,
+        padding: 64,
+        fontFamily: "sans-serif",
+      }}
+    >
+      <div style={{ fontSize: 86, fontWeight: 700, lineHeight: 1.02, maxWidth: 880 }}>RateLoop</div>
+      <div style={{ color: "rgba(245,245,245,0.76)", fontSize: 34, marginTop: 28 }}>Human reputation at stake</div>
+    </div>
+  );
+}
+
+export async function fetchPreviewImageDataUrl(
+  imageUrl: string | null,
+  fetchImpl: typeof fetch = fetch,
+): Promise<string | null> {
+  if (!imageUrl) return null;
+
+  try {
+    const response = await fetchImpl(imageUrl, {
+      cache: "force-cache",
+      signal: AbortSignal.timeout(PREVIEW_IMAGE_FETCH_TIMEOUT_MS),
+    });
+    if (!response.ok) return null;
+
+    const contentType = response.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase();
+    if (!contentType?.startsWith("image/")) return null;
+
+    const bytes = await response.arrayBuffer();
+    if (bytes.byteLength === 0 || bytes.byteLength > PREVIEW_IMAGE_MAX_BYTES) return null;
+
+    return `data:${contentType};base64,${Buffer.from(bytes).toString("base64")}`;
+  } catch {
+    return null;
+  }
+}
+
 export async function GET(request: NextRequest) {
   const contentParam = request.nextUrl.searchParams.get("content");
   const chainIdParam = request.nextUrl.searchParams.get("chainId");
@@ -506,12 +555,37 @@ export async function GET(request: NextRequest) {
   });
   const requestedRatingVersion = request.nextUrl.searchParams.get(VOTE_SHARE_RATING_VERSION_PARAM);
   const hasCurrentRatingVersion = Boolean(shareData && requestedRatingVersion === shareData.ratingVersion);
+  const renderShareData = shareData
+    ? {
+        ...shareData,
+        contentImageUrl: await fetchPreviewImageDataUrl(shareData.contentImageUrl),
+      }
+    : null;
 
-  const fonts = await loadOgFonts();
+  let fonts: Awaited<ReturnType<typeof loadOgFonts>>;
+  try {
+    fonts = await loadOgFonts();
+  } catch (error) {
+    console.error("[og/vote] Failed to load social card fonts", error);
+    return new ImageResponse(<EmergencyFallbackImage />, {
+      ...imageSize,
+      headers: fallbackResponseHeaders,
+    });
+  }
 
-  return new ImageResponse(shareData ? <RatingShareImage shareData={shareData} /> : <FallbackShareImage />, {
-    ...imageSize,
-    fonts,
-    headers: hasCurrentRatingVersion ? versionedResponseHeaders : fallbackResponseHeaders,
-  });
+  const image = renderShareData ? <RatingShareImage shareData={renderShareData} /> : <FallbackShareImage />;
+
+  try {
+    return new ImageResponse(image, {
+      ...imageSize,
+      fonts,
+      headers: hasCurrentRatingVersion ? versionedResponseHeaders : fallbackResponseHeaders,
+    });
+  } catch (error) {
+    console.error("[og/vote] Failed to render social card", error);
+    return new ImageResponse(<EmergencyFallbackImage />, {
+      ...imageSize,
+      headers: fallbackResponseHeaders,
+    });
+  }
 }
