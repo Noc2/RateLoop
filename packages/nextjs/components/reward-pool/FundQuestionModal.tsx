@@ -11,6 +11,7 @@ import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import { getTransactionReceiptPollingInterval } from "~~/config/shared";
 import { useRateLoopSwitchNetwork } from "~~/hooks/useRateLoopSwitchNetwork";
 import { useThirdwebSponsoredSubmitCalls } from "~~/hooks/useThirdwebSponsoredSubmitCalls";
+import { useTransactionFlowToast } from "~~/hooks/useTransactionFlowToast";
 import { useWalletTransactionReadiness } from "~~/hooks/useWalletTransactionReadiness";
 import {
   BOUNTY_WINDOW_PRESETS,
@@ -127,6 +128,7 @@ export function FundQuestionModal({
     isAwaitingSelfFundedBatchCalls,
     isAwaitingSponsoredBatchCalls,
   } = useThirdwebSponsoredSubmitCalls();
+  const flowToast = useTransactionFlowToast();
   const [isMounted, setIsMounted] = useState(false);
   const amountInputId = useId();
   const requiredVotersInputId = useId();
@@ -275,6 +277,7 @@ export function FundQuestionModal({
     }
 
     setIsFunding(true);
+    let flowStarted = false;
     try {
       const usdcAddress = fallbackUsdcAddress;
       try {
@@ -325,13 +328,31 @@ export function FundQuestionModal({
         requiredVoters: BigInt(voterCount),
       } as const;
       const canUseBatchFunding = canUseSponsoredBatchCalls || canUseSelfFundedBatchCalls;
+      const fundBatchSponsorshipMode = canUseSponsoredBatchCalls ? "sponsored" : "self-funded";
+      if (canUseBatchFunding) {
+        flowToast.beginFlow({
+          action: "Fund Bounty",
+          sponsored: fundBatchSponsorshipMode === "sponsored",
+        });
+        flowStarted = true;
+      }
+      const flowBatchOptions = canUseBatchFunding
+        ? flowToast.getSponsoredBatchOptions({
+            action: "Fund Bounty",
+            sponsorshipMode: fundBatchSponsorshipMode,
+          })
+        : null;
       const startBlock = canUseBatchFunding && publicClient ? await readLatestBlockNumber(publicClient) : null;
       const executeRewardPoolFundingBatch = async (
         calls: Parameters<typeof executeContractCallBatch>[0],
         options: Parameters<typeof executeContractCallBatch>[1],
       ) => {
+        const batchOptions = {
+          ...options,
+          ...(flowBatchOptions ?? {}),
+        };
         if (!publicClient || startBlock === null || !address) {
-          return executeContractCallBatch(calls, options);
+          return executeContractCallBatch(calls, batchOptions);
         }
 
         return raceTransactionWithPostcondition({
@@ -341,11 +362,7 @@ export function FundQuestionModal({
               error,
             });
           },
-          transaction: () =>
-            executeContractCallBatch(calls, {
-              ...options,
-              suppressStatusToast: true,
-            }),
+          transaction: () => executeContractCallBatch(calls, batchOptions),
           waitForPostcondition: shouldStop =>
             waitForTransactionPostcondition(
               () =>
@@ -411,9 +428,7 @@ export function FundQuestionModal({
 
         if (canUseBatchFunding) {
           await executeRewardPoolFundingBatch([authorizationCall], {
-            action: "Fund Bounty",
             atomicRequired: false,
-            sponsorshipMode: canUseSponsoredBatchCalls ? "sponsored" : "self-funded",
           });
         } else {
           authorizationHash = await writeContractAsync({
@@ -481,9 +496,7 @@ export function FundQuestionModal({
             },
           ],
           {
-            action: "Fund Bounty",
             atomicRequired: true,
-            sponsorshipMode: canUseSponsoredBatchCalls ? "sponsored" : "self-funded",
           },
         );
       } else if (initialAllowance < parsedAmount) {
@@ -535,6 +548,9 @@ export function FundQuestionModal({
           "Failed to fund this question",
       );
     } finally {
+      if (flowStarted) {
+        flowToast.endFlow();
+      }
       setIsFunding(false);
     }
   };

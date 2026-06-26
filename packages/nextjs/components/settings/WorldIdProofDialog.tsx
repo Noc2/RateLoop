@@ -8,6 +8,8 @@ import { WorldIdQrCode } from "~~/components/settings/WorldIdQrCode";
 import { GradientActionButton, getGradientActionMotion } from "~~/components/shared/GradientAction";
 import { useDeployedContractInfo, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
 import { useThirdwebBatchedContractWrite } from "~~/hooks/useThirdwebBatchedContractWrite";
+import { useThirdwebSponsoredSubmitCalls } from "~~/hooks/useThirdwebSponsoredSubmitCalls";
+import { useTransactionFlowToast } from "~~/hooks/useTransactionFlowToast";
 import { type WorldIdProofMode, getWorldIdClientConfig } from "~~/lib/world-id/config";
 import {
   WORLD_CREDENTIAL_PROOF_OF_HUMAN,
@@ -82,7 +84,9 @@ export function WorldIdProofDialog({ address, kind, onClose, onSuccess, open, pu
   const { data: raterRegistryContractData } = useDeployedContractInfo({
     contractName: "RaterRegistry",
   });
-  const { writeContractOrBatch } = useThirdwebBatchedContractWrite();
+  const { writeContractOrBatch, canUseBatchedContractWrites } = useThirdwebBatchedContractWrite();
+  const { canUseSponsoredSubmitCalls } = useThirdwebSponsoredSubmitCalls();
+  const flowToast = useTransactionFlowToast();
 
   const option = getWorldCredentialOption(kind);
   const appId = config.appId?.startsWith("app_") ? (config.appId as `app_${string}`) : null;
@@ -166,30 +170,42 @@ export function WorldIdProofDialog({ address, kind, onClose, onSuccess, open, pu
       });
 
       const submitAttestation = async (functionName: string, args: readonly unknown[], action: string) => {
-        await writeContractOrBatch(
-          {
-            abi: registryAbi,
-            address: registryAddress,
-            args,
-            functionName,
-          },
-          () =>
-            (writeRaterRegistry as any)(
-              {
-                functionName,
-                args,
-              },
-              {
-                action,
-                getErrorMessage: getWorldIdCredentialAttestationErrorMessage,
-                suppressSuccessToast: true,
-              },
-            ) as Promise<Hex | undefined>,
-          {
+        if (canUseBatchedContractWrites) {
+          flowToast.beginFlow({
             action,
-            suppressStatusToast: true,
-          },
-        );
+            sponsored: canUseSponsoredSubmitCalls,
+          });
+        }
+        try {
+          await writeContractOrBatch(
+            {
+              abi: registryAbi,
+              address: registryAddress,
+              args,
+              functionName,
+            },
+            () =>
+              (writeRaterRegistry as any)(
+                {
+                  functionName,
+                  args,
+                },
+                {
+                  action,
+                  getErrorMessage: getWorldIdCredentialAttestationErrorMessage,
+                  suppressSuccessToast: true,
+                },
+              ) as Promise<Hex | undefined>,
+            {
+              action,
+              ...(canUseBatchedContractWrites ? flowToast.getFlowBatchOptions() : {}),
+            },
+          );
+        } finally {
+          if (canUseBatchedContractWrites) {
+            flowToast.endFlow();
+          }
+        }
       };
 
       if (parsedProof.protocolVersion === "4.0") {
@@ -223,6 +239,9 @@ export function WorldIdProofDialog({ address, kind, onClose, onSuccess, open, pu
       signal,
       writeContractOrBatch,
       writeRaterRegistry,
+      canUseBatchedContractWrites,
+      canUseSponsoredSubmitCalls,
+      flowToast,
     ],
   );
 

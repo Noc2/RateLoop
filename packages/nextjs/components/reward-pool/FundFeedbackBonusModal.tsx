@@ -11,6 +11,7 @@ import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import { getTransactionReceiptPollingInterval } from "~~/config/shared";
 import { useRateLoopSwitchNetwork } from "~~/hooks/useRateLoopSwitchNetwork";
 import { useThirdwebSponsoredSubmitCalls } from "~~/hooks/useThirdwebSponsoredSubmitCalls";
+import { useTransactionFlowToast } from "~~/hooks/useTransactionFlowToast";
 import { useWalletTransactionReadiness } from "~~/hooks/useWalletTransactionReadiness";
 import {
   BOUNTY_WINDOW_PRESETS,
@@ -110,6 +111,7 @@ export function FundFeedbackBonusModal({
     isAwaitingSelfFundedBatchCalls,
     isAwaitingSponsoredBatchCalls,
   } = useThirdwebSponsoredSubmitCalls();
+  const flowToast = useTransactionFlowToast();
   const [isMounted, setIsMounted] = useState(false);
   const amountInputId = useId();
   const awarderInputId = useId();
@@ -230,6 +232,7 @@ export function FundFeedbackBonusModal({
     }
 
     setIsFunding(true);
+    let flowStarted = false;
     try {
       const tokenAddress = selectedTokenAddress;
       if (!tokenAddress) {
@@ -251,6 +254,20 @@ export function FundFeedbackBonusModal({
       );
 
       const canUseBatchFunding = canUseSponsoredBatchCalls || canUseSelfFundedBatchCalls;
+      const fundBatchSponsorshipMode = canUseSponsoredBatchCalls ? "sponsored" : "self-funded";
+      if (canUseBatchFunding) {
+        flowToast.beginFlow({
+          action: "Fund Feedback Bonus",
+          sponsored: fundBatchSponsorshipMode === "sponsored",
+        });
+        flowStarted = true;
+      }
+      const flowBatchOptions = canUseBatchFunding
+        ? flowToast.getSponsoredBatchOptions({
+            action: "Fund Feedback Bonus",
+            sponsorshipMode: fundBatchSponsorshipMode,
+          })
+        : null;
       const startPoolId =
         canUseBatchFunding && publicClient
           ? await publicClient
@@ -266,8 +283,12 @@ export function FundFeedbackBonusModal({
         calls: Parameters<typeof executeContractCallBatch>[0],
         options: Parameters<typeof executeContractCallBatch>[1],
       ) => {
+        const batchOptions = {
+          ...options,
+          ...(flowBatchOptions ?? {}),
+        };
         if (!publicClient || startPoolId === null) {
-          return executeContractCallBatch(calls, options);
+          return executeContractCallBatch(calls, batchOptions);
         }
 
         return raceTransactionWithPostcondition({
@@ -278,11 +299,7 @@ export function FundFeedbackBonusModal({
               roundId: roundId.toString(),
             });
           },
-          transaction: () =>
-            executeContractCallBatch(calls, {
-              ...options,
-              suppressStatusToast: true,
-            }),
+          transaction: () => executeContractCallBatch(calls, batchOptions),
           waitForPostcondition: shouldStop =>
             waitForTransactionPostcondition(
               () =>
@@ -361,9 +378,7 @@ export function FundFeedbackBonusModal({
 
           if (canUseBatchFunding) {
             await executeFeedbackBonusFundingBatch([authorizationCall], {
-              action: "Fund Feedback Bonus",
               atomicRequired: false,
-              sponsorshipMode: canUseSponsoredBatchCalls ? "sponsored" : "self-funded",
             });
           } else {
             authorizationHash = await writeContractAsync({
@@ -423,9 +438,7 @@ export function FundFeedbackBonusModal({
             },
           ],
           {
-            action: "Fund Feedback Bonus",
             atomicRequired: true,
-            sponsorshipMode: canUseSponsoredBatchCalls ? "sponsored" : "self-funded",
           },
         );
       } else if (initialAllowance < parsedAmount) {
@@ -475,6 +488,9 @@ export function FundFeedbackBonusModal({
           "Failed to fund this Feedback Bonus",
       );
     } finally {
+      if (flowStarted) {
+        flowToast.endFlow();
+      }
       setIsFunding(false);
     }
   };

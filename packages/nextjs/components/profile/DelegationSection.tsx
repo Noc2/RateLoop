@@ -21,6 +21,7 @@ import { useGasBalanceStatus } from "~~/hooks/useGasBalanceStatus";
 import { useRaterRegistryIdentity } from "~~/hooks/useRaterRegistryIdentity";
 import { useRefreshWalletBalances } from "~~/hooks/useRefreshWalletBalances";
 import { useThirdwebSponsoredSubmitCalls } from "~~/hooks/useThirdwebSponsoredSubmitCalls";
+import { useTransactionFlowToast } from "~~/hooks/useTransactionFlowToast";
 import { useWalletTransactionReadiness } from "~~/hooks/useWalletTransactionReadiness";
 import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
 import { getLrepTransferErrorMessage } from "~~/lib/lrepTransferErrors";
@@ -94,6 +95,7 @@ export function DelegationSection() {
     isAwaitingSelfFundedBatchCalls,
     isAwaitingSponsoredSubmitCalls,
   } = useThirdwebSponsoredSubmitCalls();
+  const flowToast = useTransactionFlowToast();
   const { isMissingGasBalance, nativeTokenSymbol } = useGasBalanceStatus({
     allowInAppSponsorshipSync: false,
     includeExternalSendCalls: true,
@@ -154,6 +156,18 @@ export function DelegationSection() {
 
     if (canUseBatchedDelegationWrite && raterRegistryContract) {
       setIsSponsoredDelegationPending(true);
+      const delegationBatchSponsorshipMode = canUseSponsoredSubmitCalls ? "sponsored" : "self-funded";
+      flowToast.beginFlow({
+        action,
+        sponsored: delegationBatchSponsorshipMode === "sponsored",
+      });
+      const batchOptions = {
+        ...flowToast.getSponsoredBatchOptions({
+          action,
+          sponsorshipMode: delegationBatchSponsorshipMode,
+        }),
+        atomicRequired: true,
+      };
       try {
         const registryAddress = raterRegistryContract.address as `0x${string}`;
         const registryAbi = raterRegistryContract.abi as Abi;
@@ -208,12 +222,7 @@ export function DelegationSection() {
                     functionName,
                   },
                 ],
-                {
-                  action,
-                  atomicRequired: true,
-                  sponsorshipMode: canUseSponsoredSubmitCalls ? "sponsored" : "self-funded",
-                  suppressStatusToast: true,
-                },
+                batchOptions,
               ),
             waitForPostcondition: shouldStop =>
               waitForTransactionPostcondition(
@@ -271,14 +280,11 @@ export function DelegationSection() {
                 functionName,
               },
             ],
-            {
-              action,
-              atomicRequired: true,
-              sponsorshipMode: canUseSponsoredSubmitCalls ? "sponsored" : "self-funded",
-            },
+            batchOptions,
           );
         }
       } finally {
+        flowToast.endFlow();
         setIsSponsoredDelegationPending(false);
       }
       return;
@@ -383,6 +389,17 @@ export function DelegationSection() {
 
       if (canUseBatchedLrepTransferCalls && lrepContract) {
         setIsSponsoredTransferPending(true);
+        flowToast.beginFlow({
+          action: "LREP transfer",
+          sponsored: lrepTransferBatchSponsorshipMode === "sponsored",
+        });
+        const batchOptions = {
+          ...flowToast.getSponsoredBatchOptions({
+            action: "LREP transfer",
+            sponsorshipMode: lrepTransferBatchSponsorshipMode,
+          }),
+          allowSelfFundedFallback: true,
+        };
         try {
           const tokenAddress = lrepContract.address as `0x${string}`;
           const tokenAbi = lrepContract.abi as Abi;
@@ -414,12 +431,7 @@ export function DelegationSection() {
                       functionName: "transfer",
                     },
                   ],
-                  {
-                    action: "LREP transfer",
-                    allowSelfFundedFallback: true,
-                    sponsorshipMode: lrepTransferBatchSponsorshipMode,
-                    suppressStatusToast: true,
-                  },
+                  batchOptions,
                 ),
               waitForPostcondition: shouldStop =>
                 waitForTransactionPostcondition(
@@ -449,14 +461,11 @@ export function DelegationSection() {
                   functionName: "transfer",
                 },
               ],
-              {
-                action: "LREP transfer",
-                allowSelfFundedFallback: true,
-                sponsorshipMode: lrepTransferBatchSponsorshipMode,
-              },
+              batchOptions,
             );
           }
         } finally {
+          flowToast.endFlow();
           setIsSponsoredTransferPending(false);
         }
       } else {

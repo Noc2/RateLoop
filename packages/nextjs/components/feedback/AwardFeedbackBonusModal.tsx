@@ -8,6 +8,7 @@ import { GradientActionButton, getGradientActionMotion } from "~~/components/sha
 import { getTransactionReceiptPollingInterval } from "~~/config/shared";
 import { useTargetNetwork, useTransactor } from "~~/hooks/scaffold-eth";
 import { useThirdwebSponsoredSubmitCalls } from "~~/hooks/useThirdwebSponsoredSubmitCalls";
+import { useTransactionFlowToast } from "~~/hooks/useTransactionFlowToast";
 import { useWalletTransactionReadiness } from "~~/hooks/useWalletTransactionReadiness";
 import { hasFeedbackBonusAwardPostcondition } from "~~/lib/feedback/postconditions";
 import type { ContentFeedbackBonusPool, ContentFeedbackItem } from "~~/lib/feedback/types";
@@ -116,6 +117,7 @@ export function AwardFeedbackBonusModal({ item, pools, onAwarded, onClose }: Awa
     isAwaitingSelfFundedBatchCalls,
     isAwaitingSponsoredBatchCalls,
   } = useThirdwebSponsoredSubmitCalls();
+  const flowToast = useTransactionFlowToast();
   const { targetNetwork } = useTargetNetwork();
   const amountInputId = useId();
   const poolInputId = useId();
@@ -217,77 +219,83 @@ export function AwardFeedbackBonusModal({ item, pools, onAwarded, onClose }: Awa
       const canUseBatchAward = canUseSponsoredBatchCalls || canUseSelfFundedBatchCalls;
 
       if (canUseBatchAward) {
-        const poolId = BigInt(selectedPool.id);
-        const poolBefore = publicClient
-          ? await publicClient
-              .readContract({
-                address: escrowAddress,
-                abi: FEEDBACK_BONUS_ESCROW_ABI,
-                functionName: "feedbackBonusPools",
-                args: [poolId],
-              } as never)
-              .catch(() => null)
-          : null;
-        const remainingBefore = readPoolRemainingAmount(poolBefore);
-        const expectedRemainingAmount =
-          remainingBefore !== null && remainingBefore >= parsedAmount ? remainingBefore - parsedAmount : undefined;
+        const awardBatchSponsorshipMode = canUseSponsoredBatchCalls ? "sponsored" : "self-funded";
+        flowToast.beginFlow({
+          action: "Award Feedback Bonus",
+          sponsored: awardBatchSponsorshipMode === "sponsored",
+        });
+        const batchOptions = flowToast.getSponsoredBatchOptions({
+          action: "Award Feedback Bonus",
+          sponsorshipMode: awardBatchSponsorshipMode,
+        });
+        try {
+          const poolId = BigInt(selectedPool.id);
+          const poolBefore = publicClient
+            ? await publicClient
+                .readContract({
+                  address: escrowAddress,
+                  abi: FEEDBACK_BONUS_ESCROW_ABI,
+                  functionName: "feedbackBonusPools",
+                  args: [poolId],
+                } as never)
+                .catch(() => null)
+            : null;
+          const remainingBefore = readPoolRemainingAmount(poolBefore);
+          const expectedRemainingAmount =
+            remainingBefore !== null && remainingBefore >= parsedAmount ? remainingBefore - parsedAmount : undefined;
 
-        if (publicClient && typeof expectedRemainingAmount !== "undefined") {
-          await raceTransactionWithPostcondition({
-            onPostconditionSuccessThenTransactionError: error => {
-              console.warn("[feedback-bonus] award postcondition succeeded before thirdweb status settled.", {
-                error,
-                poolId: selectedPool.id,
-              });
-            },
-            transaction: () =>
-              executeContractCallBatch(
-                [
-                  {
-                    address: escrowAddress,
-                    abi: FEEDBACK_BONUS_ESCROW_ABI,
-                    functionName: "awardFeedbackBonus",
-                    args: awardArgs,
-                  },
-                ],
-                {
-                  action: "Award Feedback Bonus",
-                  sponsorshipMode: canUseSponsoredBatchCalls ? "sponsored" : "self-funded",
-                  suppressStatusToast: true,
-                },
-              ),
-            waitForPostcondition: shouldStop =>
-              waitForTransactionPostcondition(
-                () =>
-                  hasFeedbackBonusAwardPostcondition({
-                    client: publicClient,
-                    escrowAddress,
-                    expectedRemainingAmount,
-                    feedbackHash,
-                    poolId,
-                  }),
-                "feedback-bonus-award-postcondition",
-                {
-                  pollingIntervalMs: getFeedbackBonusAwardPollingInterval(chainId),
-                  shouldStop,
-                },
-              ),
-          });
-        } else {
-          await executeContractCallBatch(
-            [
-              {
-                address: escrowAddress,
-                abi: FEEDBACK_BONUS_ESCROW_ABI,
-                functionName: "awardFeedbackBonus",
-                args: awardArgs,
+          if (publicClient && typeof expectedRemainingAmount !== "undefined") {
+            await raceTransactionWithPostcondition({
+              onPostconditionSuccessThenTransactionError: error => {
+                console.warn("[feedback-bonus] award postcondition succeeded before thirdweb status settled.", {
+                  error,
+                  poolId: selectedPool.id,
+                });
               },
-            ],
-            {
-              action: "Award Feedback Bonus",
-              sponsorshipMode: canUseSponsoredBatchCalls ? "sponsored" : "self-funded",
-            },
-          );
+              transaction: () =>
+                executeContractCallBatch(
+                  [
+                    {
+                      address: escrowAddress,
+                      abi: FEEDBACK_BONUS_ESCROW_ABI,
+                      functionName: "awardFeedbackBonus",
+                      args: awardArgs,
+                    },
+                  ],
+                  batchOptions,
+                ),
+              waitForPostcondition: shouldStop =>
+                waitForTransactionPostcondition(
+                  () =>
+                    hasFeedbackBonusAwardPostcondition({
+                      client: publicClient,
+                      escrowAddress,
+                      expectedRemainingAmount,
+                      feedbackHash,
+                      poolId,
+                    }),
+                  "feedback-bonus-award-postcondition",
+                  {
+                    pollingIntervalMs: getFeedbackBonusAwardPollingInterval(chainId),
+                    shouldStop,
+                  },
+                ),
+            });
+          } else {
+            await executeContractCallBatch(
+              [
+                {
+                  address: escrowAddress,
+                  abi: FEEDBACK_BONUS_ESCROW_ABI,
+                  functionName: "awardFeedbackBonus",
+                  args: awardArgs,
+                },
+              ],
+              batchOptions,
+            );
+          }
+        } finally {
+          flowToast.endFlow();
         }
       } else {
         const poolId = BigInt(selectedPool.id);
