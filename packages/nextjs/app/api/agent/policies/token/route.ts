@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { AGENT_APP_BASE_URL_REQUIRED_MESSAGE, resolveAgentAppBaseUrl } from "~~/lib/agent/appBaseUrl";
 import { agentRouteErrorResponse, parseJsonBody } from "~~/lib/agent/http";
 import { AgentPolicyLifecycleError, revokeAgentPolicyToken, rotateAgentPolicyToken } from "~~/lib/agent/policies";
 import {
@@ -9,11 +10,13 @@ import {
   normalizeAgentPolicyManagementInput,
 } from "~~/lib/auth/agentPolicies";
 import { createSignedReadResponse, verifySignedActionChallenge } from "~~/lib/auth/signedRouteHelpers";
+import { buildAppRelativeUrl } from "~~/lib/url/appRelative";
 import { checkRateLimit } from "~~/utils/rateLimit";
 
 const WRITE_RATE_LIMIT = { limit: 20, windowMs: 60_000 };
+const POLICY_TOKEN_ROUTE_PATH = "/api/agent/policies/token";
 
-function buildMcpConfig(token: string, request: NextRequest, agentWalletAddress: string) {
+function buildMcpConfig(token: string, appBaseUrl: string, agentWalletAddress: string) {
   return {
     mcpServers: {
       rateloop: {
@@ -23,7 +26,7 @@ function buildMcpConfig(token: string, request: NextRequest, agentWalletAddress:
         },
         paymentModes: ["wallet_calls", "eip3009_usdc_authorization", "x402_authorization"],
         transport: "streamable-http",
-        url: new URL("/api/mcp", request.url).toString(),
+        url: buildAppRelativeUrl(appBaseUrl, "/api/mcp").toString(),
         walletAddress: agentWalletAddress,
       },
     },
@@ -77,6 +80,13 @@ export async function POST(request: NextRequest) {
     const verified = await verifyManagementAction(body, ROTATE_AGENT_POLICY_TOKEN_ACTION);
     if (!verified.ok) return verified.response;
 
+    const appBaseUrl = resolveAgentAppBaseUrl(request.url, POLICY_TOKEN_ROUTE_PATH);
+    if (!appBaseUrl) {
+      return agentRouteErrorResponse(AGENT_APP_BASE_URL_REQUIRED_MESSAGE, 503, {
+        recoverWith: "configure_app_url",
+      });
+    }
+
     const { policy, token } = await rotateAgentPolicyToken({
       ownerWalletAddress: verified.payload.normalizedAddress,
       policyId: verified.payload.policyId,
@@ -85,7 +95,7 @@ export async function POST(request: NextRequest) {
       ok: true,
       policy,
       token,
-      mcpConfig: buildMcpConfig(token, request, policy.agentWalletAddress),
+      mcpConfig: buildMcpConfig(token, appBaseUrl, policy.agentWalletAddress),
     });
   } catch (error) {
     if (error instanceof AgentPolicyLifecycleError) {
