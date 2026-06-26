@@ -27,13 +27,26 @@ export async function selectAskCategory(page: Page, categoryNames = SEEDED_CATEG
 
     await categoryTrigger.click();
 
+    let clickedCategoryOption = false;
     for (const categoryName of categoryNames) {
       const option = form.getByRole("button", { name: new RegExp(`^${escapeRegExp(categoryName)}$`, "i") }).first();
       if (await option.isVisible({ timeout: 2_000 }).catch(() => false)) {
+        clickedCategoryOption = true;
         await option.click();
-        await expect(form.locator("label", { hasText: /^Select Categories/ })).toBeVisible({ timeout: 5_000 });
-        return;
+        if (
+          await form
+            .locator("label", { hasText: /^Select Categories/ })
+            .isVisible({ timeout: 5_000 })
+            .catch(() => false)
+        ) {
+          return;
+        }
+        break;
       }
+    }
+
+    if (clickedCategoryOption) {
+      continue;
     }
 
     await expect(

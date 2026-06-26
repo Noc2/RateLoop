@@ -6,6 +6,7 @@ import {
 } from "../../services/thirdweb/testWalletStorage";
 import { WALLET_STATE_EXACT_KEYS, WALLET_STATE_PREFIXES } from "../../services/thirdweb/walletStateCleanup";
 import { E2E_RPC_URL } from "./service-urls";
+import { gotoWithRetry } from "./wait-helpers";
 import type { Page } from "@playwright/test";
 
 type WalletSessionStorageEntry = readonly [string, string];
@@ -95,7 +96,11 @@ export async function setupWallet(
   await page.addInitScript(seedWalletSessionScript(privateKey, rpcUrl, chainId));
 
   if (bootstrap && page.url() === "about:blank") {
-    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await gotoWithRetry(page, "/", {
+      skipInjectedWalletConnectionCheck: true,
+      timeout: 60_000,
+      waitUntil: "domcontentloaded",
+    });
   }
 }
 

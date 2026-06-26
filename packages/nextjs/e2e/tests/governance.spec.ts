@@ -57,10 +57,11 @@ test.describe("Governance page", () => {
   });
 
   test("leaderboard tab shows ranking filters", async ({ connectedPage: page }) => {
-    await gotoWithRetry(page, "/governance", { ensureWalletConnected: true });
-
     const leaderboardTab = page.getByRole("button", { name: "Leaderboard" });
-    await expect(leaderboardTab).toBeVisible({ timeout: 15_000 });
+    await expect(async () => {
+      await gotoWithRetry(page, "/governance", { ensureWalletConnected: true });
+      await expect(leaderboardTab).toBeVisible({ timeout: 15_000 });
+    }).toPass({ timeout: 60_000, intervals: [1_000, 2_000, 5_000] });
     await leaderboardTab.click();
 
     await expect(page.getByText("Leaderboard")).toBeVisible({ timeout: 10_000 });
@@ -260,17 +261,19 @@ test.describe("Governance page", () => {
     );
 
     await gotoWithRetry(page, "/governance#breaches", { ensureWalletConnected: true });
-    const reloadedContentIdInput = page.getByLabel("Content id");
-    await reloadedContentIdInput.fill(contentId);
-    await expect(reloadedContentIdInput).toHaveValue(contentId);
-    await page.getByRole("button", { name: "Load reports" }).click();
     const loadedReport = page
       .getByTestId("confidentiality-breach-report")
       .filter({ hasText: `evidence ${evidenceHash}` })
       .first();
-    await expect(loadedReport.getByText(`identity ${accused.identityKey}`)).toBeVisible({
-      timeout: 20_000,
-    });
+    await expect(async () => {
+      const reloadedContentIdInput = page.getByLabel("Content id");
+      await reloadedContentIdInput.fill(contentId);
+      await expect(reloadedContentIdInput).toHaveValue(contentId);
+      await page.getByRole("button", { name: "Load reports" }).click({ timeout: 5_000 });
+      await expect(loadedReport.getByText(`identity ${accused.identityKey}`)).toBeVisible({
+        timeout: 5_000,
+      });
+    }).toPass({ timeout: 60_000, intervals: [1_000, 2_000, 5_000] });
     await loadedReport.getByRole("button", { name: "Ban identity", exact: true }).click();
     await expect(page.getByRole("combobox", { name: "Governance action" })).toHaveValue(
       "rater-registry-ban-identity",

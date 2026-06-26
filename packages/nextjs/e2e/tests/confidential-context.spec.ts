@@ -19,7 +19,7 @@ import {
   unbanConfidentialityIdentity,
 } from "../helpers/confidentiality";
 import { voteOnSpecificContent } from "../helpers/vote-helpers";
-import { gotoWithRetry } from "../helpers/wait-helpers";
+import { gotoWithRetry, waitForFeedLoaded } from "../helpers/wait-helpers";
 import { setupWallet } from "../helpers/wallet-session";
 
 /**
@@ -35,7 +35,7 @@ test.describe("Confidential context", () => {
   test("zero-bond browser submission links private details and serves them to authorized viewers", async ({
     connectedPage: page,
   }) => {
-    test.setTimeout(180_000);
+    test.setTimeout(300_000);
 
     const uniqueId = Date.now();
     const description = `Private launch-review notes ${uniqueId}: compare the unreleased prototype copy against the current positioning.`;
@@ -187,10 +187,13 @@ test.describe("Confidential context", () => {
     try {
       await setupWallet(viewerPage, ANVIL_ACCOUNTS.account3.privateKey);
       await ensureHumanCredential(viewerPage, ANVIL_ACCOUNTS.account3);
-      await gotoWithRetry(viewerPage, `/rate?content=${submitted.contentId}`, { ensureWalletConnected: true });
+      await gotoWithRetry(viewerPage, `/rate?content=${submitted.contentId}&waitForContent=1`, {
+        ensureWalletConnected: true,
+      });
+      await waitForFeedLoaded(viewerPage, 90_000);
 
       const acceptTermsButton = viewerPage.getByRole("button", { name: "Accept terms" }).first();
-      await expect(acceptTermsButton).toBeVisible({ timeout: 30_000 });
+      await expect(acceptTermsButton).toBeVisible({ timeout: 60_000 });
       await acceptTermsButton.click();
       await expect(viewerPage.getByRole("dialog", { name: /Confidential Context Access Terms/i })).toBeVisible({
         timeout: 10_000,

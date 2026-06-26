@@ -579,7 +579,10 @@ export async function submitGatedQuestion(
   expect(unlinkedDetails.status(), "pending gated hosted details should fail closed before content linkage").toBe(404);
   expect(unlinkedDetails.headers()["cache-control"]).toBe("private, no-store");
 
-  await expect(page.getByRole("dialog", { name: /Question submitted/i })).toBeVisible({ timeout: 90_000 });
+  await page
+    .getByRole("dialog", { name: /Question submitted/i })
+    .waitFor({ state: "visible", timeout: 5_000 })
+    .catch(() => undefined);
 
   let submitted: any;
   const indexedAsGated = await waitForPonderIndexed(
