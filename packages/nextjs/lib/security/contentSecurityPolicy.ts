@@ -89,11 +89,9 @@ export function buildContentSecurityPolicy(options: ContentSecurityPolicyOptions
     ? ["https://vercel.live", "https://*.pusher.com", "wss://*.pusher.com"]
     : [];
   const vercelLiveFrameSources = options.isVercelLiveEnabled ? ["https://vercel.live"] : [];
-  const styleSources = compactUniqueSources([
-    "'self'",
-    options.nonce ? `'nonce-${options.nonce}'` : undefined,
-    ...vercelLiveStyleSources,
-  ]);
+  // Style nonces are intentionally omitted: CSP3 ignores 'unsafe-inline' when a nonce is
+  // present, and third-party UI libraries inject <style> tags without request nonces.
+  const styleSources = compactUniqueSources(["'self'", "'unsafe-inline'", ...vercelLiveStyleSources]);
 
   const scriptSources = compactUniqueSources([
     "'self'",
@@ -108,9 +106,6 @@ export function buildContentSecurityPolicy(options: ContentSecurityPolicyOptions
     "default-src 'self'",
     ["script-src", ...scriptSources].join(" "),
     ["style-src", ...styleSources].join(" "),
-    ["style-src-elem", ...styleSources].join(" "),
-    // React and component libraries still emit inline style attributes in the app shell.
-    "style-src-attr 'unsafe-inline'",
     ["font-src 'self'", "https://world-id-assets.com", ...vercelLiveFontSources].join(" "),
     "img-src 'self' data: blob: https:",
     compactUniqueSources([
