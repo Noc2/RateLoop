@@ -7,6 +7,7 @@ const { Pool } = pg;
 const CORRELATION_SNAPSHOT_LOCK_KEY = "773526208283402193";
 const MAIN_LOOP_LOCK_KEY = "773526208283402194";
 const CACHE_WRITE_RETRY_DELAY_MS = 60_000;
+const PERSISTENCE_POOL_MAX_CONNECTIONS = 3;
 
 type AdvisoryLockResult =
   | { status: "acquired"; client: pg.PoolClient }
@@ -49,7 +50,9 @@ function getPool(): pg.Pool | null {
 
   pool = new Pool({
     connectionString: databaseUrl,
-    max: 2,
+    // Production ticks can hold the main-loop and correlation-snapshot advisory
+    // lock clients while writing the correlation artifact cache.
+    max: PERSISTENCE_POOL_MAX_CONNECTIONS,
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 5_000,
     application_name: "rateloop-keeper",

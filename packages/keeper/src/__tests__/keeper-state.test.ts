@@ -108,6 +108,22 @@ const cacheWriteParams = {
 };
 
 describe("keeper advisory lock wrappers", () => {
+  it("reserves enough persistence connections for nested locks and cache writes", async () => {
+    const { runWithKeeperMainLoopLock, Pool } = await importKeeperState();
+    const logger = createLogger();
+
+    await expect(
+      runWithKeeperMainLoopLock(logger, "fallback", async () => "ran"),
+    ).resolves.toBe("ran");
+
+    expect(Pool).toHaveBeenCalledWith(
+      expect.objectContaining({
+        connectionString: "postgres://keeper:keeper@localhost/keeper",
+        max: 3,
+      }),
+    );
+  });
+
   it("holds the main-loop advisory lock client until the workload finishes", async () => {
     const { runWithKeeperMainLoopLock, pool, client } =
       await importKeeperState();
