@@ -2,9 +2,6 @@ import React from "react";
 import { ImageResponse } from "next/og";
 import type { NextRequest } from "next/server";
 import { fetchPreviewImageDataUrl } from "./previewImageDataUrl";
-import { readFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { type ContentShareData, VOTE_SHARE_RATING_VERSION_PARAM } from "~~/lib/social/contentShare";
 import { getContentShareDataForParam } from "~~/lib/social/contentShare.server";
 import { checkRateLimit } from "~~/utils/rateLimit";
@@ -13,8 +10,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-const bodyFontFamily = "Inter";
-const headingFontFamily = "Space Grotesk";
+const bodyFontFamily = "sans-serif";
+const headingFontFamily = "sans-serif";
 
 const RATE_LIMIT = { limit: 60, windowMs: 60_000 };
 const imageSize = {
@@ -49,45 +46,6 @@ const brandColors = {
 
 const spectrumGradient = `linear-gradient(90deg, ${brandColors.blue}, ${brandColors.green}, ${brandColors.yellow}, ${brandColors.pink})`;
 const surfaceGradient = `linear-gradient(135deg, ${brandColors.surface} 0%, ${brandColors.surfaceElevated} 52%, ${brandColors.surface} 100%)`;
-
-type ImageResponseFontWeight = 400 | 600 | 700;
-
-interface ImageResponseFont {
-  name: string;
-  data: ArrayBuffer;
-  weight: ImageResponseFontWeight;
-  style: "normal";
-}
-
-// ImageResponse's renderer accepts OpenType/TrueType bytes, so these static
-// instances mirror the Google font families configured through next/font in app/layout.tsx.
-const ogFontDirectory = join(dirname(fileURLToPath(import.meta.url)), "fonts");
-const ogFontSources = [
-  { name: bodyFontFamily, file: join(ogFontDirectory, "inter-regular.ttf"), weight: 400 },
-  { name: bodyFontFamily, file: join(ogFontDirectory, "inter-semibold.ttf"), weight: 600 },
-  { name: bodyFontFamily, file: join(ogFontDirectory, "inter-bold.ttf"), weight: 700 },
-  { name: headingFontFamily, file: join(ogFontDirectory, "space-grotesk-regular.ttf"), weight: 400 },
-  { name: headingFontFamily, file: join(ogFontDirectory, "space-grotesk-bold.ttf"), weight: 700 },
-] as const;
-
-let ogFontsPromise: Promise<ImageResponseFont[]> | null = null;
-
-function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
-  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
-}
-
-function loadOgFonts() {
-  ogFontsPromise ??= Promise.all(
-    ogFontSources.map(async font => ({
-      name: font.name,
-      data: toArrayBuffer(await readFile(font.file)),
-      weight: font.weight,
-      style: "normal" as const,
-    })),
-  );
-
-  return ogFontsPromise;
-}
 
 function RateLoopMark({ size = 46 }: { size?: number }) {
   return (
@@ -537,23 +495,11 @@ export async function GET(request: NextRequest) {
       }
     : null;
 
-  let fonts: Awaited<ReturnType<typeof loadOgFonts>>;
-  try {
-    fonts = await loadOgFonts();
-  } catch (error) {
-    console.error("[og/vote] Failed to load social card fonts", error);
-    return new ImageResponse(<EmergencyFallbackImage />, {
-      ...imageSize,
-      headers: fallbackResponseHeaders,
-    });
-  }
-
   const image = renderShareData ? <RatingShareImage shareData={renderShareData} /> : <FallbackShareImage />;
 
   try {
     return new ImageResponse(image, {
       ...imageSize,
-      fonts,
       headers: hasCurrentRatingVersion ? versionedResponseHeaders : fallbackResponseHeaders,
     });
   } catch (error) {
