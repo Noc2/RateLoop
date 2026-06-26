@@ -1,5 +1,13 @@
 # Security Review Findings - 2026-06-25
 
+> **Superseded historical snapshot.** This report records the first 2026-06-25
+> security review pass. Several findings were fixed or reclassified after this
+> snapshot. Use
+> [`repo-review-findings-2026-06-25-followup.md`](repo-review-findings-2026-06-25-followup.md)
+> for the same-day re-review and
+> [`repo-review-findings-2026-06-26.md`](repo-review-findings-2026-06-26.md)
+> for the latest non-contract review baseline.
+
 ## Scope
 
 This was a no-fix security review across the RateLoop monorepo. I reviewed the
