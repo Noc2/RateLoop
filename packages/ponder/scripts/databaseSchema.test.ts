@@ -309,7 +309,70 @@ describe("Ponder database schema launcher", () => {
     const result = buildPonderStartArgs(["--schema", "custom"], env);
 
     expect(result.args).toEqual(["start", "--schema", "custom"]);
-    expect(result.env).toBe(env);
-    expect(result.schemaInfo).toBeNull();
+    expect(result.env).toEqual({
+      ...env,
+      DATABASE_SCHEMA: "custom",
+    });
+    expect(result.schemaInfo).toMatchObject({
+      expectedSchema: "rateloop_ponder",
+      schema: "custom",
+      source: "--schema",
+    });
+  });
+
+  test("allows explicit live CLI schema arguments that match the protocol deployment schema", () => {
+    const deploymentKey =
+      "8453:0x1000000000000000000000000000000000000001:0x1000000000000000000000000000000000000002";
+    const schema = schemaFromProtocolDeploymentKey(deploymentKey);
+    const result = buildPonderStartArgs(["--schema", schema, "--port", "42069"], {
+      PONDER_NETWORK: "base",
+      RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY: deploymentKey,
+    });
+
+    expect(result.args).toEqual(["start", "--schema", schema, "--port", "42069"]);
+    expect(result.env.DATABASE_SCHEMA).toBe(schema);
+    expect(result.schemaInfo).toMatchObject({
+      expectedSchema: schema,
+      schema,
+      source: "--schema",
+    });
+  });
+
+  test("rejects stale explicit live CLI schema arguments", () => {
+    const deploymentKey =
+      "8453:0x1000000000000000000000000000000000000001:0x1000000000000000000000000000000000000002";
+
+    expect(() =>
+      buildPonderStartArgs(["--schema", "rateloop_ponder_worldchain"], {
+        PONDER_NETWORK: "base",
+        RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY: deploymentKey,
+      }),
+    ).toThrow("does not match live protocol deployment schema");
+  });
+
+  test("allows deliberate explicit live CLI schema overrides with the break-glass flag", () => {
+    const deploymentKey =
+      "8453:0x1000000000000000000000000000000000000001:0x1000000000000000000000000000000000000002";
+    const result = buildPonderStartArgs(["--schema=rateloop_ponder_worldchain"], {
+      [LIVE_SCHEMA_OVERRIDE_FLAG]: "true",
+      PONDER_NETWORK: "base",
+      RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY: deploymentKey,
+    });
+
+    expect(result.args).toEqual(["start", "--schema=rateloop_ponder_worldchain"]);
+    expect(result.env.DATABASE_SCHEMA).toBe("rateloop_ponder_worldchain");
+    expect(result.schemaInfo).toMatchObject({
+      schema: "rateloop_ponder_worldchain",
+      source: "--schema",
+    });
+  });
+
+  test("rejects invalid or ambiguous explicit CLI schema arguments", () => {
+    expect(() => buildPonderStartArgs(["--schema"], {})).toThrow("--schema requires a non-empty schema name");
+    expect(() => buildPonderStartArgs(["--schema="], {})).toThrow("--schema requires a non-empty schema name");
+    expect(() => buildPonderStartArgs(["--schema", "valid", "--schema=other"], {})).toThrow(
+      "Multiple --schema arguments are ambiguous",
+    );
+    expect(() => buildPonderStartArgs(["--schema", "rate-loop"], {})).toThrow("Invalid Ponder database schema");
   });
 });

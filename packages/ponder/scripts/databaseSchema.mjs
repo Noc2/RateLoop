@@ -150,6 +150,14 @@ function assertLiveSchemaOverrideSafe({ env, schema, source }) {
   }
 }
 
+function assertValidPonderSchemaName(schema) {
+  if (!SCHEMA_NAME_PATTERN.test(schema)) {
+    throw new Error(
+      `Invalid Ponder database schema "${schema}". Use letters, numbers, and underscores, starting with a letter or underscore.`,
+    );
+  }
+}
+
 export function resolvePonderDatabaseSchema(env = process.env) {
   const rateloopSchema = readEnv(env, "RATELOOP_PONDER_DATABASE_SCHEMA");
   const databaseSchema = readEnv(env, "DATABASE_SCHEMA");
@@ -198,11 +206,7 @@ export function resolvePonderDatabaseSchema(env = process.env) {
     railwaySchema ??
     defaultSchema;
 
-  if (!SCHEMA_NAME_PATTERN.test(schema)) {
-    throw new Error(
-      `Invalid Ponder database schema "${schema}". Use letters, numbers, and underscores, starting with a letter or underscore.`,
-    );
-  }
+  assertValidPonderSchemaName(schema);
 
   return {
     schema,
@@ -228,12 +232,71 @@ export function hasSchemaFlag(args) {
   return args.some((arg) => arg === "--schema" || arg.startsWith("--schema="));
 }
 
+function readExplicitSchemaFlag(args) {
+  const schemas = [];
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === "--schema") {
+      const schema = args[index + 1]?.trim();
+      if (!schema || schema.startsWith("--")) {
+        throw new Error("--schema requires a non-empty schema name.");
+      }
+      schemas.push(schema);
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith("--schema=")) {
+      const schema = arg.slice("--schema=".length).trim();
+      if (!schema) {
+        throw new Error("--schema requires a non-empty schema name.");
+      }
+      schemas.push(schema);
+    }
+  }
+
+  if (schemas.length > 1) {
+    throw new Error("Multiple --schema arguments are ambiguous. Pass exactly one schema.");
+  }
+
+  return schemas[0];
+}
+
+function shouldRequireProtocolSchemaForExplicitCli(env, resolvedSchemaInfo) {
+  const ponderNetwork = readEnv(env, "PONDER_NETWORK");
+  return (
+    LIVE_PONDER_NETWORKS.has(ponderNetwork) &&
+    resolvedSchemaInfo.source === "RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY" &&
+    !isTruthyEnv(readEnv(env, LIVE_SCHEMA_OVERRIDE_FLAG))
+  );
+}
+
 export function buildPonderStartArgs(args, env = process.env) {
-  if (hasSchemaFlag(args)) {
+  const explicitSchema = readExplicitSchemaFlag(args);
+  if (explicitSchema !== undefined) {
+    assertValidPonderSchemaName(explicitSchema);
+    const resolvedSchemaInfo = resolvePonderDatabaseSchema(env);
+    if (
+      shouldRequireProtocolSchemaForExplicitCli(env, resolvedSchemaInfo) &&
+      explicitSchema !== resolvedSchemaInfo.schema
+    ) {
+      throw new Error(
+        `--schema=${explicitSchema} does not match live protocol deployment schema ${resolvedSchemaInfo.schema}. ` +
+          `Remove the stale schema flag or set ${LIVE_SCHEMA_OVERRIDE_FLAG}=true only for a deliberate recovery override.`,
+      );
+    }
+
     return {
       args: ["start", ...args],
-      env,
-      schemaInfo: null,
+      env: {
+        ...env,
+        DATABASE_SCHEMA: explicitSchema,
+      },
+      schemaInfo: {
+        ...resolvedSchemaInfo,
+        expectedSchema: resolvedSchemaInfo.schema,
+        schema: explicitSchema,
+        source: "--schema",
+      },
     };
   }
 
