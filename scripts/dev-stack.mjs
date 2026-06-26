@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 
 import { MissingDockerComposeError, ensureLocalDatabase, formatDatabaseTarget, resolveNextDatabaseConfig } from "./dev-db.mjs";
 import { applyKeeperDevStackEnvDefaults, getMissingKeeperEnvVars } from "./dev-stack-keeper.mjs";
+import { resolvePonderDatabaseSchema } from "../packages/ponder/scripts/databaseSchema.mjs";
 
 const currentFile = fileURLToPath(import.meta.url);
 const repoRoot = path.resolve(path.dirname(currentFile), "..");
@@ -26,14 +27,14 @@ const baseServices = [
     label: "ponder",
     color: "\u001b[36m",
     command: yarnCommand,
-    args: ["ponder:dev"],
+    args: ["workspace", "@rateloop/ponder", "dev:built-contracts"],
   },
   {
     name: "Next",
     label: "next",
     color: "\u001b[33m",
     command: yarnCommand,
-    args: ["start"],
+    args: ["workspace", "@rateloop/nextjs", "dev:built-workspace-deps"],
   },
 ];
 const keeperService = {
@@ -41,7 +42,7 @@ const keeperService = {
   label: "keeper",
   color: "\u001b[35m",
   command: yarnCommand,
-  args: ["keeper:dev"],
+  args: ["workspace", "@rateloop/keeper", "dev:built-workspace-deps"],
 };
 const ponderNetworkChainIds = {
   hardhat: "31337",
@@ -390,6 +391,52 @@ function resolvePonderStartupEnv() {
   return { ...envFromFile, ...process.env };
 }
 
+function getPonderChainIdFromEnv(env = {}) {
+  return ponderNetworkChainIds[getPonderNetworkFromEnv(env)];
+}
+
+export function resolvePonderServiceEnv(env = {}) {
+  const schemaInfo = resolvePonderDatabaseSchema(env);
+
+  return {
+    ...env,
+    DATABASE_SCHEMA: schemaInfo.schema,
+  };
+}
+
+export function resolveNextServiceEnv({
+  databaseUrl,
+  ponderEnv = {},
+  baseEnv = process.env,
+} = {}) {
+  const env = {
+    DATABASE_URL: databaseUrl,
+  };
+  const ponderChainId = getPonderChainIdFromEnv(ponderEnv);
+
+  if (!ponderChainId) return env;
+
+  if (!baseEnv.NEXT_PUBLIC_TARGET_NETWORKS?.trim()) {
+    env.NEXT_PUBLIC_TARGET_NETWORKS = ponderChainId;
+  }
+
+  if (!baseEnv.RATELOOP_E2E_PRODUCTION_BUILD?.trim()) {
+    env.RATELOOP_E2E_PRODUCTION_BUILD = "true";
+  }
+
+  if (!baseEnv.NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD?.trim()) {
+    env.NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD = "true";
+  }
+
+  const rpcEnvKey = `NEXT_PUBLIC_RPC_URL_${ponderChainId}`;
+  const ponderRpcUrl = ponderEnv[`PONDER_RPC_URL_${ponderChainId}`]?.trim();
+  if (!baseEnv[rpcEnvKey]?.trim() && ponderRpcUrl) {
+    env[rpcEnvKey] = ponderRpcUrl;
+  }
+
+  return env;
+}
+
 function printMissingDockerHelp(databaseConfig) {
   console.error("[dev-stack] Docker is not available for the local Postgres helper.");
   console.error("[dev-stack] Choose one of these next steps:");
@@ -506,6 +553,27 @@ export function getUnexpectedServiceExitCode(code) {
   // A managed service exiting on its own is an abnormal teardown, so the
   // stack must report failure even when the service itself exited with 0.
   return typeof code === "number" && code !== 0 ? code : 1;
+}
+
+export function getDevStackServices({ keeperEnabled = false } = {}) {
+  return keeperEnabled ? [...baseServices, keeperService] : [...baseServices];
+}
+
+function buildWorkspaceDependencies() {
+  console.log("[dev-stack] Building shared workspace dependencies before starting services...");
+  const result = spawnSync(yarnCommand, ["build:workspace-deps"], {
+    cwd: repoRoot,
+    env: process.env,
+    stdio: "inherit",
+  });
+
+  if (result.error) {
+    throw result.error;
+  }
+
+  if (result.status !== 0) {
+    throw new Error("Failed to build shared workspace dependencies before starting the dev stack.");
+  }
 }
 
 function spawnService(service, extraEnv = {}) {
@@ -640,12 +708,14 @@ Environment:
     console.warn(`[dev-stack] ${alignmentWarning}`);
   }
 
-  const services = keeperStartup.enabled ? [...baseServices, keeperService] : baseServices;
+  const services = getDevStackServices({ keeperEnabled: keeperStartup.enabled });
   if (!keeperStartup.enabled) {
     console.log(
       `[dev-stack] Skipping Keeper because ${keeperStartup.missing.join(", ")} is not configured in the environment or ${path.relative(repoRoot, keeperStartup.keeperEnvPath)}.`,
     );
   }
+
+  buildWorkspaceDependencies();
 
   console.log(`[dev-stack] Starting ${services.map(service => service.name).join(", ")}...`);
   console.log("[dev-stack] Deployment stays separate. Point your env files at the chain you already deployed to.");
@@ -653,13 +723,22 @@ Environment:
   process.on("SIGINT", () => shutdown(0));
   process.on("SIGTERM", () => shutdown(0));
 
+  const ponderServiceEnv = resolvePonderServiceEnv(ponderStartupEnv);
+  const nextServiceEnv = resolveNextServiceEnv({
+    databaseUrl: databaseConfig.url,
+    ponderEnv: ponderStartupEnv,
+  });
   for (const service of services) {
-    const serviceEnv = service.label === "keeper" ? keeperStartup.env : {};
+    const serviceEnv =
+      service.label === "keeper"
+        ? keeperStartup.env
+        : service.label === "ponder"
+          ? ponderServiceEnv
+          : service.label === "next"
+            ? nextServiceEnv
+          : {};
 
-    spawnService(service, {
-      ...serviceEnv,
-      ...(service.label === "next" ? { DATABASE_URL: databaseConfig.url } : {}),
-    });
+    spawnService(service, serviceEnv);
   }
 }
 

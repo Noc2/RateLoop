@@ -70,6 +70,9 @@ export function getRecoveryReason(output, env = process.env) {
   if (isRecoverableLocalReset(output, env)) {
     return "stale local Ponder sync state after the hardhat/anvil chain was reset";
   }
+  if (output.includes("Cannot use a pool after calling end on the pool")) {
+    return "Ponder hot-reload shutdown race";
+  }
   return null;
 }
 

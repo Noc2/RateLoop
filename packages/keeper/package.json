@@ -11,6 +11,7 @@
     "start:built-workspace-deps": "yarn build && yarn start:built-dist",
     "start:built-dist": "node dist/index.js",
     "dev": "yarn build:workspace-deps && tsx watch src/index.ts",
+    "dev:built-workspace-deps": "tsx watch src/index.ts",
     "build:correlation-artifact": "tsx src/build-correlation-artifact.ts",
     "verify:correlation-artifact": "tsx src/correlation-artifact-verifier.ts",
     "test": "yarn build:workspace-deps && vitest run",

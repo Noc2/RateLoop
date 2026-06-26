@@ -94,8 +94,9 @@
   },
   "scripts": {
     "ask": "tsx src/cli.ts ask",
-    "build:workspace-deps": "yarn workspace @rateloop/node-utils build && yarn workspace @rateloop/contracts build && yarn workspace @rateloop/sdk build",
-    "build": "yarn build:workspace-deps && node ../../scripts/clean-package-dist.mjs && tsc -p tsconfig.json && node ../../scripts/fix-esm-extensions.mjs dist/esm && tsc -p tsconfig.cjs.json && node ../../scripts/write-cjs-package-json.mjs dist/cjs",
+    "build:workspace-deps": "yarn workspace @rateloop/node-utils build && yarn workspace @rateloop/contracts build && yarn workspace @rateloop/sdk build:built-workspace-deps",
+    "build:built-workspace-deps": "node ../../scripts/clean-package-dist.mjs && tsc -p tsconfig.json && node ../../scripts/fix-esm-extensions.mjs dist/esm && tsc -p tsconfig.cjs.json && node ../../scripts/write-cjs-package-json.mjs dist/cjs",
+    "build": "yarn build:workspace-deps && yarn build:built-workspace-deps",
     "check-types": "yarn build:workspace-deps && tsc --noEmit",
     "handoff": "tsx src/cli.ts handoff",
     "lint:questions": "tsx src/cli.ts lint",

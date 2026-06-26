@@ -2,12 +2,15 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   getDbPushPlan,
+  getDevStackServices,
   getDevStackNetworkAlignmentWarning,
   getPonderDataResetPlan,
   getPonderDeploymentFingerprint,
   getPonderRpcPreflightPlan,
   getPonderRpcReadinessError,
   getUnexpectedServiceExitCode,
+  resolveNextServiceEnv,
+  resolvePonderServiceEnv,
 } from "./dev-stack.mjs";
 
 const localDatabaseConfig = {
@@ -315,6 +318,57 @@ test("does not warn when Keeper uses a remote Ponder API", () => {
   );
 });
 
+test("passes an isolated Ponder schema to the dev Ponder service", () => {
+  assert.equal(
+    resolvePonderServiceEnv({
+      DATABASE_URL: "postgresql://postgres:postgres@127.0.0.1:5432/rateloop_app",
+      PONDER_NETWORK: "hardhat",
+    }).DATABASE_SCHEMA,
+    "rateloop_ponder_hardhat",
+  );
+});
+
+test("aligns the Next service target network with the dev Ponder network", () => {
+  assert.deepEqual(
+    resolveNextServiceEnv({
+      databaseUrl: localDatabaseConfig.url,
+      ponderEnv: {
+        PONDER_NETWORK: "hardhat",
+        PONDER_RPC_URL_31337: "http://127.0.0.1:8545",
+      },
+      baseEnv: {},
+    }),
+    {
+      DATABASE_URL: localDatabaseConfig.url,
+      NEXT_PUBLIC_TARGET_NETWORKS: "31337",
+      NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD: "true",
+      NEXT_PUBLIC_RPC_URL_31337: "http://127.0.0.1:8545",
+      RATELOOP_E2E_PRODUCTION_BUILD: "true",
+    },
+  );
+});
+
+test("preserves explicit Next target network overrides from the shell", () => {
+  assert.deepEqual(
+    resolveNextServiceEnv({
+      databaseUrl: localDatabaseConfig.url,
+      ponderEnv: {
+        PONDER_NETWORK: "hardhat",
+        PONDER_RPC_URL_31337: "http://127.0.0.1:8545",
+      },
+      baseEnv: {
+        NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD: "false",
+        NEXT_PUBLIC_TARGET_NETWORKS: "4801",
+        NEXT_PUBLIC_RPC_URL_31337: "http://localhost:9545",
+        RATELOOP_E2E_PRODUCTION_BUILD: "false",
+      },
+    }),
+    {
+      DATABASE_URL: localDatabaseConfig.url,
+    },
+  );
+});
+
 test("treats an unexpected clean service exit as a stack failure", () => {
   assert.equal(getUnexpectedServiceExitCode(0), 1);
   assert.equal(getUnexpectedServiceExitCode(null), 1);
@@ -324,4 +378,21 @@ test("treats an unexpected clean service exit as a stack failure", () => {
 test("preserves non-zero service exit codes for the stack exit", () => {
   assert.equal(getUnexpectedServiceExitCode(2), 2);
   assert.equal(getUnexpectedServiceExitCode(137), 137);
+});
+
+test("starts long-running services with prebuilt workspace dependencies", () => {
+  const services = getDevStackServices({ keeperEnabled: true });
+  const byName = new Map(services.map(service => [service.name, service]));
+
+  assert.deepEqual(byName.get("Ponder")?.args, ["workspace", "@rateloop/ponder", "dev:built-contracts"]);
+  assert.deepEqual(byName.get("Next")?.args, ["workspace", "@rateloop/nextjs", "dev:built-workspace-deps"]);
+  assert.deepEqual(byName.get("Keeper")?.args, ["workspace", "@rateloop/keeper", "dev:built-workspace-deps"]);
+
+  for (const service of services) {
+    assert.doesNotMatch(
+      service.args.join(" "),
+      /\bbuild:workspace-deps\b/,
+      `${service.name} should not rebuild shared dist folders after dev-stack prebuilds them`,
+    );
+  }
 });

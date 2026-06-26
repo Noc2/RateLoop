@@ -91,6 +91,18 @@ describe("devWithRecovery", () => {
     expect(shouldResetPglite(output)).toBe(true);
   });
 
+  test("retries without resetting PGlite after Ponder hot-reload closes the pool", () => {
+    const output = [
+      "ERROR process Caught unhandledRejection event",
+      "Error: Failed query: CREATE INDEX IF NOT EXISTS",
+      "Error: Cannot use a pool after calling end on the pool",
+    ].join("\n");
+
+    expect(shouldRecover(output)).toBe(true);
+    expect(getRecoveryReason(output)).toBe("Ponder hot-reload shutdown race");
+    expect(shouldResetPglite(output)).toBe(false);
+  });
+
   test("detects when Ponder moves off the configured port", () => {
     const output =
       "8:06:54 AM WARN  server     Port 42069 was in use, trying port 42070";
