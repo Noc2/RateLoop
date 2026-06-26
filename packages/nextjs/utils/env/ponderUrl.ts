@@ -1,7 +1,7 @@
 const DEV_PONDER_URL = "http://localhost:42069";
 
 function isLocalhostHostname(hostname: string): boolean {
-  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname === "[::1]";
 }
 
 export function resolvePonderUrlValue(
@@ -23,8 +23,16 @@ export function resolvePonderUrlValue(
     return { url: null, invalid: Boolean(normalizedRawValue) };
   }
 
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    return { url: null, invalid: true };
+  }
+
   if (production && !allowLocalhostInProduction && isLocalhostHostname(url.hostname)) {
     return { url: null, invalid: false };
+  }
+
+  if (production && url.protocol === "http:" && !(allowLocalhostInProduction && isLocalhostHostname(url.hostname))) {
+    return { url: null, invalid: true };
   }
 
   return {

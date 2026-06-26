@@ -58,6 +58,13 @@ test("resolvePonderUrl normalizes valid production URLs", () => {
   assert.equal(resolvePonderUrl("https://ponder.rateloop.ai/", true), "https://ponder.rateloop.ai");
 });
 
+test("resolvePonderUrl rejects remote plaintext HTTP in production", () => {
+  assert.throws(
+    () => resolvePonderUrl("http://ponder.rateloop.ai/", true),
+    /NEXT_PUBLIC_PONDER_URL must be a valid URL/,
+  );
+});
+
 test("resolvePonderUrl rejects invalid production URLs", () => {
   assert.throws(() => resolvePonderUrl("not-a-url", true), /NEXT_PUBLIC_PONDER_URL must be a valid URL/);
 });

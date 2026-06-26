@@ -95,6 +95,40 @@ test("resolveRpcOverrides normalizes configured per-chain RPC URLs", () => {
   );
 });
 
+test("resolveRpcOverrides rejects remote plaintext HTTP in production", () => {
+  assert.throws(
+    () =>
+      resolveRpcOverrides(
+        {
+          8453: "http://rpc.example.test/",
+        },
+        {
+          production: true,
+        },
+      ),
+    /RPC override for chain 8453 must use HTTPS in production/,
+  );
+});
+
+test("resolveRpcOverrides allows HTTPS and local production E2E HTTP exceptions", () => {
+  assert.deepEqual(
+    resolveRpcOverrides(
+      {
+        31337: "http://127.0.0.1:8545/",
+        8453: "https://rpc.example.test/",
+      },
+      {
+        allowLocalhostInProduction: true,
+        production: true,
+      },
+    ),
+    {
+      31337: "http://127.0.0.1:8545",
+      8453: "https://rpc.example.test",
+    },
+  );
+});
+
 test("mergeRpcOverrides lets env-defined RPC URLs override code defaults", () => {
   assert.deepEqual(
     mergeRpcOverrides(

@@ -15,7 +15,7 @@ function optionalEnv(value: string | undefined): string | undefined {
 
 function isLocalhostUrl(value: string): boolean {
   const hostname = new URL(value).hostname;
-  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname === "[::1]";
 }
 
 // Next only inlines NEXT_PUBLIC_* variables into client bundles when they are
@@ -39,15 +39,22 @@ const rawPublicEnv = {
   walletConnectProjectId: optionalEnv(process.env.NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID),
 } as const;
 
+const allowLocalE2EProductionBuild = rawPublicEnv.localE2EProductionBuild === "true";
 const rpcOverrides = mergeRpcOverrides(
   RPC_OVERRIDES,
-  resolveRpcOverrides({
-    31337: rawPublicEnv.rpcUrl31337,
-    84532: rawPublicEnv.rpcUrl84532,
-    8453: rawPublicEnv.rpcUrl8453,
-    4801: rawPublicEnv.rpcUrl4801,
-    480: rawPublicEnv.rpcUrl480,
-  }),
+  resolveRpcOverrides(
+    {
+      31337: rawPublicEnv.rpcUrl31337,
+      84532: rawPublicEnv.rpcUrl84532,
+      8453: rawPublicEnv.rpcUrl8453,
+      4801: rawPublicEnv.rpcUrl4801,
+      480: rawPublicEnv.rpcUrl480,
+    },
+    {
+      allowLocalhostInProduction: allowLocalE2EProductionBuild,
+      production: isProduction,
+    },
+  ),
 );
 const useBasePreconfRpc = rawPublicEnv.useBasePreconfRpc === "true";
 
@@ -58,22 +65,32 @@ function requireUrl(name: string, value: string | undefined, fallback?: string):
     throw new Error(`${name} is required${isProduction ? " in production" : ""}.`);
   }
 
+  let parsedUrl: URL;
   try {
-    if (isProduction && rawPublicEnv.localE2EProductionBuild !== "true" && isLocalhostUrl(resolvedValue)) {
-      throw new Error(`${name} must not point to localhost in production.`);
-    }
-  } catch (error) {
-    if (error instanceof Error) {
-      throw error;
-    }
-
+    parsedUrl = new URL(resolvedValue);
+  } catch {
     throw new Error(`${name} must be a valid URL.`);
+  }
+
+  if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
+    throw new Error(`${name} must be a valid http(s) URL.`);
+  }
+
+  if (isProduction && !allowLocalE2EProductionBuild && isLocalhostUrl(resolvedValue)) {
+    throw new Error(`${name} must not point to localhost in production.`);
+  }
+
+  if (
+    isProduction &&
+    parsedUrl.protocol === "http:" &&
+    !(allowLocalE2EProductionBuild && isLocalhostUrl(resolvedValue))
+  ) {
+    throw new Error(`${name} must use HTTPS in production; localhost HTTP is only allowed for local E2E builds.`);
   }
 
   return resolvedValue;
 }
 
-const allowLocalE2EProductionBuild = rawPublicEnv.localE2EProductionBuild === "true";
 const targetNetworks = resolveTargetNetworks(rawPublicEnv.targetNetworks, {
   alchemyApiKey: rawPublicEnv.alchemyApiKey,
   allowFoundryInProduction: allowLocalE2EProductionBuild,

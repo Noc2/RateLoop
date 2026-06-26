@@ -45,13 +45,19 @@ export function resolveRuntimeContentSecurityPolicyOptions(): ContentSecurityPol
   const targetNetworksFallback = isDev || allowLocalE2EProductionBuild ? DEFAULT_DEV_TARGET_NETWORKS : undefined;
   const rpcOverrides = mergeRpcOverrides(
     RPC_OVERRIDES,
-    resolveRpcOverrides({
-      31337: process.env.NEXT_PUBLIC_RPC_URL_31337,
-      84532: process.env.NEXT_PUBLIC_RPC_URL_84532,
-      8453: process.env.NEXT_PUBLIC_RPC_URL_8453,
-      4801: process.env.NEXT_PUBLIC_RPC_URL_4801,
-      480: process.env.NEXT_PUBLIC_RPC_URL_480,
-    }),
+    resolveRpcOverrides(
+      {
+        31337: process.env.NEXT_PUBLIC_RPC_URL_31337,
+        84532: process.env.NEXT_PUBLIC_RPC_URL_84532,
+        8453: process.env.NEXT_PUBLIC_RPC_URL_8453,
+        4801: process.env.NEXT_PUBLIC_RPC_URL_4801,
+        480: process.env.NEXT_PUBLIC_RPC_URL_480,
+      },
+      {
+        allowLocalhostInProduction: allowLocalE2EProductionBuild,
+        production: !isDev,
+      },
+    ),
   );
   const targetNetworks = resolveTargetNetworks(process.env.NEXT_PUBLIC_TARGET_NETWORKS, {
     alchemyApiKey: process.env.NEXT_PUBLIC_ALCHEMY_API_KEY,

@@ -1783,6 +1783,37 @@ describe("local signer", () => {
     expect(config.questionMetadataBaseUrlPinned).toBe(false);
   });
 
+  it("rejects remote plaintext local signer RPC URLs", () => {
+    expect(() =>
+      loadLocalSignerConfig({}, {
+        RATELOOP_RPC_URL: "http://rpc.example.test",
+      } as NodeJS.ProcessEnv),
+    ).toThrow(/RATELOOP_RPC_URL must use HTTPS/);
+
+    expect(() =>
+      loadLocalSignerConfig(
+        {
+          "rpc-url": "http://rpc.example.test",
+        },
+        {} as NodeJS.ProcessEnv,
+      ),
+    ).toThrow(/--rpc-url must use HTTPS/);
+  });
+
+  it("allows HTTPS and loopback HTTP local signer RPC URLs", () => {
+    expect(
+      loadLocalSignerConfig({}, {
+        RATELOOP_RPC_URL: "https://rpc.example.test/",
+      } as NodeJS.ProcessEnv).rpcUrl,
+    ).toBe("https://rpc.example.test");
+
+    expect(
+      loadLocalSignerConfig({}, {
+        RATELOOP_RPC_URL: "http://127.0.0.1:8545/",
+      } as NodeJS.ProcessEnv).rpcUrl,
+    ).toBe("http://127.0.0.1:8545");
+  });
+
   it("lets server metadata bases override inherited public env fallbacks", () => {
     const config = loadLocalSignerConfig({}, {
       NEXT_PUBLIC_APP_URL: "https://app.example",

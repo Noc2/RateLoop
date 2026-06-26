@@ -33,4 +33,21 @@ test("resolvePonderUrlValue rejects localhost in production unless explicitly al
     url: "http://127.0.0.1:42069",
     invalid: false,
   });
+
+  assert.deepEqual(resolvePonderUrlValue("http://[::1]:42069/", true, true), {
+    url: "http://[::1]:42069",
+    invalid: false,
+  });
+});
+
+test("resolvePonderUrlValue rejects remote plaintext HTTP in production", () => {
+  assert.deepEqual(resolvePonderUrlValue("http://ponder.example.test/", true), {
+    url: null,
+    invalid: true,
+  });
+
+  assert.deepEqual(resolvePonderUrlValue("https://ponder.example.test/", true), {
+    url: "https://ponder.example.test",
+    invalid: false,
+  });
 });

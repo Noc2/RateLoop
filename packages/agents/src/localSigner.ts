@@ -605,6 +605,42 @@ function normalizeInheritedQuestionMetadataBaseUrl(
   }
 }
 
+function isLoopbackHostname(hostname: string) {
+  const normalized = hostname.toLowerCase();
+  return (
+    normalized === "localhost" ||
+    normalized === "127.0.0.1" ||
+    normalized === "::1" ||
+    normalized === "[::1]"
+  );
+}
+
+function normalizeLocalSignerRpcUrl(
+  value: string | undefined,
+  name: string,
+): string | undefined {
+  if (!value) return undefined;
+  let parsed: URL;
+
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new Error(`${name} must be a valid http(s) URL.`);
+  }
+
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new Error(`${name} must be a valid http(s) URL.`);
+  }
+
+  if (parsed.protocol === "http:" && !isLoopbackHostname(parsed.hostname)) {
+    throw new Error(
+      `${name} must use HTTPS; localhost HTTP is only allowed for local development.`,
+    );
+  }
+
+  return parsed.toString().replace(/\/$/, "");
+}
+
 function resolveLocalSignerQuestionMetadataBaseUrlConfig(
   options: CliOptions,
   env: NodeJS.ProcessEnv,
@@ -3312,6 +3348,8 @@ export function loadLocalSignerConfig(
     (passwordEnvName ? envString(env, passwordEnvName) : undefined) ??
     envString(env, "RATELOOP_LOCAL_SIGNER_KEYSTORE_PASSWORD");
   const usdcAddressOption = optionString(options, "usdc-address");
+  const rpcUrlOption = optionString(options, "rpc-url");
+  const rpcUrlEnv = envString(env, "RATELOOP_RPC_URL");
 
   return {
     chainId: parsePositiveInteger(
@@ -3367,8 +3405,10 @@ export function loadLocalSignerConfig(
           envString(env, "RATELOOP_LOCAL_SIGNER_RECEIPT_TIMEOUT_MS"),
         "RATELOOP_LOCAL_SIGNER_RECEIPT_TIMEOUT_MS",
       ) ?? 120_000,
-    rpcUrl:
-      optionString(options, "rpc-url") ?? envString(env, "RATELOOP_RPC_URL"),
+    rpcUrl: normalizeLocalSignerRpcUrl(
+      rpcUrlOption ?? rpcUrlEnv,
+      rpcUrlOption === undefined ? "RATELOOP_RPC_URL" : "--rpc-url",
+    ),
     usdcAddress: usdcAddressOption
       ? parseOptionalAddress(usdcAddressOption, "usdc-address")
       : parseOptionalAddressAlias(

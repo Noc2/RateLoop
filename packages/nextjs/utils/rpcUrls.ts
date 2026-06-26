@@ -16,7 +16,17 @@ type RpcPreferenceOptions = {
 
 const BASE_PRECONF_CHAIN_IDS = new Set([8453, 84532]);
 
-function normalizeHttpUrl(value: string, name = "RPC URL") {
+type RpcOverrideOptions = {
+  allowLocalhostInProduction?: boolean;
+  production?: boolean;
+};
+
+function isLocalhostHostname(hostname: string): boolean {
+  const normalized = hostname.toLowerCase();
+  return normalized === "localhost" || normalized === "127.0.0.1" || normalized === "::1" || normalized === "[::1]";
+}
+
+function normalizeHttpUrl(value: string, name = "RPC URL", options: RpcOverrideOptions = {}) {
   const trimmedValue = value.trim();
   let parsedUrl: URL;
 
@@ -30,10 +40,21 @@ function normalizeHttpUrl(value: string, name = "RPC URL") {
     throw new Error(`${name} must be a valid http(s) URL.`);
   }
 
+  if (
+    options.production &&
+    parsedUrl.protocol === "http:" &&
+    !(options.allowLocalhostInProduction && isLocalhostHostname(parsedUrl.hostname))
+  ) {
+    throw new Error(`${name} must use HTTPS in production; localhost HTTP is only allowed for local E2E builds.`);
+  }
+
   return parsedUrl.toString().replace(/\/$/, "");
 }
 
-export function resolveRpcOverrides(values: Partial<Record<number, string | undefined>>) {
+export function resolveRpcOverrides(
+  values: Partial<Record<number, string | undefined>>,
+  options: RpcOverrideOptions = {},
+) {
   const overrides: Partial<Record<number, string>> = {};
 
   for (const [chainId, rawValue] of Object.entries(values)) {
@@ -41,7 +62,7 @@ export function resolveRpcOverrides(values: Partial<Record<number, string | unde
       continue;
     }
 
-    overrides[Number.parseInt(chainId, 10)] = normalizeHttpUrl(rawValue, `RPC override for chain ${chainId}`);
+    overrides[Number.parseInt(chainId, 10)] = normalizeHttpUrl(rawValue, `RPC override for chain ${chainId}`, options);
   }
 
   return overrides;
