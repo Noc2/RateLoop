@@ -11,6 +11,7 @@ Shared Node.js helpers used by RateLoop services, scripts, and public packages.
 - `@rateloop/node-utils/correlationScoring` for payout-root scoring utilities.
 - `@rateloop/node-utils/identityKeys` for identity-key derivation helpers.
 - `@rateloop/node-utils/profileSelfReport` for profile self-report normalization and audience helpers.
+- `@rateloop/node-utils/voteUi` for shared head-to-head vote UI metadata parsing.
 - `@rateloop/node-utils/x402QuestionFields` for x402 question payload helpers.
 
 Build with `yarn workspace @rateloop/node-utils build`. Run tests with

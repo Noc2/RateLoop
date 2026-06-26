@@ -1,4 +1,4 @@
-import { resolveVoteUiConfig } from "@rateloop/agents/voteUi";
+import { resolveVoteUiConfig } from "@rateloop/node-utils/voteUi";
 
 function parseStoredJson(value: string | null | undefined) {
   if (!value) return null;

@@ -3325,7 +3325,6 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@rateloop/ponder@workspace:packages/ponder"
   dependencies:
-    "@rateloop/agents": "workspace:*"
     "@rateloop/contracts": "workspace:*"
     "@rateloop/node-utils": "workspace:*"
     "@types/node": ^24.0.0

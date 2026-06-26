@@ -67,6 +67,11 @@
       "import": "./dist/esm/submissionValidation.js",
       "require": "./dist/cjs/submissionValidation.js"
     },
+    "./voteUi": {
+      "types": "./dist/esm/voteUi.d.ts",
+      "import": "./dist/esm/voteUi.js",
+      "require": "./dist/cjs/voteUi.js"
+    },
     "./x402QuestionFields": {
       "types": "./dist/esm/x402QuestionFields.d.ts",
       "import": "./dist/esm/x402QuestionFields.js",
@@ -95,6 +100,9 @@
       ],
       "submissionValidation": [
         "dist/esm/submissionValidation.d.ts"
+      ],
+      "voteUi": [
+        "dist/esm/voteUi.d.ts"
       ],
       "x402QuestionFields": [
         "dist/esm/x402QuestionFields.d.ts"

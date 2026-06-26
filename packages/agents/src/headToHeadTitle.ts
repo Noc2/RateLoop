@@ -1,4 +1,4 @@
-import { MAX_HEAD_TO_HEAD_OPTION_LABEL_LENGTH } from "./voteUi.js";
+import { MAX_HEAD_TO_HEAD_OPTION_LABEL_LENGTH } from "@rateloop/node-utils/voteUi";
 
 export const HEAD_TO_HEAD_AB_TITLE_MAX_LENGTH = 120;
 

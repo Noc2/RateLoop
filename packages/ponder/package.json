@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build:contracts": "yarn workspace @rateloop/contracts build",
-    "build:workspace-deps": "yarn workspace @rateloop/node-utils build:dist && yarn workspace @rateloop/contracts build && yarn workspace @rateloop/agents build",
+    "build:workspace-deps": "yarn workspace @rateloop/node-utils build:dist && yarn workspace @rateloop/contracts build",
     "ensure:contracts": "node ./scripts/ensureContractsArtifacts.mjs",
     "dev": "yarn build:workspace-deps && node ./scripts/devWithRecovery.mjs",
     "dev:built-contracts": "node ./scripts/devWithRecovery.mjs dev:raw:built-contracts",
@@ -22,7 +22,6 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@rateloop/agents": "workspace:*",
     "@rateloop/contracts": "workspace:*",
     "@rateloop/node-utils": "workspace:*",
     "hono": "4.12.25",

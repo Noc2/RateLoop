@@ -5,4 +5,5 @@ export * from "./json";
 export * from "./keystore";
 export * from "./profileSelfReport";
 export * from "./submissionValidation";
+export * from "./voteUi";
 export * from "./x402QuestionFields";

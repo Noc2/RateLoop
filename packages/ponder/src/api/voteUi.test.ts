@@ -1,16 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { buildQuestionSpecHashes } from "@rateloop/agents/question-specs";
-import { findAgentResultTemplate } from "@rateloop/agents/templates";
-import { HEAD_TO_HEAD_AB_TEMPLATE_ID } from "@rateloop/agents/voteUi";
+import { HEAD_TO_HEAD_AB_TEMPLATE_ID } from "@rateloop/node-utils/voteUi";
 import { attachVoteUiToContentResponse, extractVoteUiFromContentRecord } from "./voteUi.js";
 
 describe("voteUi api helpers", () => {
   it("extracts head-to-head vote UI from question metadata", () => {
-    const spec = buildQuestionSpecHashes({
-      categoryId: "6",
-      contextUrl: "https://example.com",
-      imageUrls: [],
-      tags: ["comparison"],
+    const questionMetadata = {
       templateId: HEAD_TO_HEAD_AB_TEMPLATE_ID,
       templateInputs: {
         optionAKey: "A",
@@ -18,12 +12,10 @@ describe("voteUi api helpers", () => {
         optionBKey: "B",
         optionBLabel: "Claude",
       },
-      title: "A vs B — which agent do you prefer?",
-      videoUrl: "",
-    });
+    };
 
     const record = {
-      questionMetadata: JSON.stringify(spec.questionMetadata),
+      questionMetadata: JSON.stringify(questionMetadata),
     };
 
     expect(extractVoteUiFromContentRecord(record)).toEqual({
@@ -45,11 +37,7 @@ describe("voteUi api helpers", () => {
   });
 
   it("keeps voteUi after questionMetadata is redacted from the response", () => {
-    const spec = buildQuestionSpecHashes({
-      categoryId: "6",
-      contextUrl: "https://example.com",
-      imageUrls: [],
-      tags: ["comparison"],
+    const questionMetadata = {
       templateId: HEAD_TO_HEAD_AB_TEMPLATE_ID,
       templateInputs: {
         optionAKey: "A",
@@ -57,13 +45,11 @@ describe("voteUi api helpers", () => {
         optionBKey: "B",
         optionBLabel: "Claude",
       },
-      title: "A vs B — which agent do you prefer?",
-      videoUrl: "",
-    });
+    };
 
     const withVoteUi = attachVoteUiToContentResponse({
       id: "1",
-      questionMetadata: JSON.stringify(spec.questionMetadata),
+      questionMetadata: JSON.stringify(questionMetadata),
     }) as Record<string, unknown>;
     delete withVoteUi.questionMetadata;
 
@@ -77,13 +63,9 @@ describe("voteUi api helpers", () => {
   });
 
   it("infers voteUi from title when metadata preimage is missing", () => {
-    const template = findAgentResultTemplate(HEAD_TO_HEAD_AB_TEMPLATE_ID);
-    expect(template).toBeTruthy();
-
     const response = attachVoteUiToContentResponse({
       id: "5",
       title: "Do you prefer A = Awesome or B = Bad?",
-      resultSpecHash: template!.resultSpecHash,
     }) as Record<string, unknown>;
 
     expect(response.voteUi).toEqual({
@@ -96,15 +78,12 @@ describe("voteUi api helpers", () => {
   });
 
   it("infers voteUi when question and title repeat the same text", () => {
-    const template = findAgentResultTemplate(HEAD_TO_HEAD_AB_TEMPLATE_ID);
-    expect(template).toBeTruthy();
     const title = "Do you prefer A = Awesome or B = Bad?";
 
     const response = attachVoteUiToContentResponse({
       id: "5",
       question: title,
       title,
-      resultSpecHash: template!.resultSpecHash,
     }) as Record<string, unknown>;
 
     expect(response.voteUi).toEqual({
