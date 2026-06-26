@@ -2,7 +2,7 @@
 
 ## Scope
 
-This pass reviewed the committed repository state at `0e003afb2` on `main`, before this report was added. Smart contracts and Solidity logic were out of scope. The review focused on Next.js/API routes, MCP and agent flows, Keeper/Ponder/runtime configuration, CI/CD, release automation, supply chain settings, secrets handling, and deployment scripts.
+This pass reviewed the committed code/config state at `0e003afb2` on `main`; a docs-only rereview report commit, `1e2b2b018`, was already present on `main` before this report was committed. Smart contracts and Solidity logic were out of scope. The review focused on Next.js/API routes, MCP and agent flows, Keeper/Ponder/runtime configuration, CI/CD, release automation, supply chain settings, secrets handling, and deployment scripts.
 
 The local working tree contained unrelated uncommitted changes during the review. I avoided them by reviewing a clean `git archive` snapshot and by using `git show HEAD:...` for targeted checks.
 
