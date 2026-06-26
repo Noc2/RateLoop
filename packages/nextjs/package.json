@@ -13,7 +13,7 @@
     "perf:pages": "node scripts/measure-pages-performance.mjs",
     "serve": "next start",
     "start": "yarn build:workspace-deps && node scripts/dev-preflight.mjs",
-    "vercel": "yarn dlx vercel@54.0.0 --build-env YARN_ENABLE_IMMUTABLE_INSTALLS=false --build-env ENABLE_EXPERIMENTAL_COREPACK=1 --build-env VERCEL_TELEMETRY_DISABLED=1",
+    "vercel": "yarn dlx vercel@54.0.0 --build-env YARN_ENABLE_IMMUTABLE_INSTALLS=true --build-env ENABLE_EXPERIMENTAL_COREPACK=1 --build-env VERCEL_TELEMETRY_DISABLED=1",
     "vercel:login": "yarn dlx vercel@54.0.0 login",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",

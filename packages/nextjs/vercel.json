@@ -1,5 +1,5 @@
 {
-  "installCommand": "yarn install",
+  "installCommand": "YARN_ENABLE_IMMUTABLE_INSTALLS=true yarn install --immutable",
   "crons": [
     {
       "path": "/api/confidentiality/disclosure/reconcile",
