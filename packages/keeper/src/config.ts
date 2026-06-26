@@ -52,7 +52,11 @@ function parseBooleanEnv(
   return fallback;
 }
 
-function requireUrlEnv(name: string, errors: string[]): string {
+function requireUrlEnv(
+  name: string,
+  errors: string[],
+  options: { requireHttps?: boolean } = {},
+): string {
   const value = readEnv(name);
   if (!value) {
     errors.push(`${name} is required`);
@@ -68,6 +72,9 @@ function requireUrlEnv(name: string, errors: string[]): string {
 
     if (isProduction && isLocalhost) {
       errors.push(`${name} must not point to localhost in production`);
+    }
+    if (options.requireHttps && url.protocol !== "https:") {
+      errors.push(`${name} must use HTTPS`);
     }
   } catch {
     errors.push(`${name} must be a valid URL`);
@@ -575,7 +582,9 @@ function loadConfig() {
 
   const loadedConfig = {
     // Network
-    rpcUrl: requireUrlEnv("RPC_URL", errors),
+    rpcUrl: requireUrlEnv("RPC_URL", errors, {
+      requireHttps: chainId !== LOCAL_HARDHAT_CHAIN_ID,
+    }),
     chainId,
     chainName:
       CHAIN_NAMES[chainId] || readEnv("CHAIN_NAME") || `Chain ${chainId}`,

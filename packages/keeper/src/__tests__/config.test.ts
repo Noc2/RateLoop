@@ -315,6 +315,15 @@ describe("keeper config", () => {
     ).rejects.toThrow("RPC_URL must not point to localhost in production");
   });
 
+  it("rejects plaintext RPC URLs for live chain ids", async () => {
+    await expect(
+      loadKeeperConfig({
+        CHAIN_ID: "84532",
+        RPC_URL: "http://sepolia.base.org",
+      }),
+    ).rejects.toThrow("RPC_URL must use HTTPS");
+  });
+
   it("validates cleanup batch size as a positive integer", async () => {
     await expect(
       loadKeeperConfig({

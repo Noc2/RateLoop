@@ -182,8 +182,14 @@ function getRpcUrl(network: PonderNetworkName): string {
     if (isProduction && isLocalhost) {
       throw new Error(`${key} must not point to localhost in production.`);
     }
+    if (network !== "hardhat" && url.protocol !== "https:") {
+      throw new Error(`${key} must use HTTPS for ${network}.`);
+    }
   } catch (error) {
     if (error instanceof Error && error.message.includes("localhost")) {
+      throw error;
+    }
+    if (error instanceof Error && error.message.includes("must use HTTPS")) {
       throw error;
     }
 

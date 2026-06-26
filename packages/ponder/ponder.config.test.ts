@@ -394,6 +394,18 @@ describe("ponder config", () => {
     ).rejects.toThrow("PONDER_RPC_URL_84532 must be a valid URL.");
   }, PONDER_CONFIG_TEST_TIMEOUT_MS);
 
+  it("rejects plaintext RPC env values for live networks", async () => {
+    await expect(
+      loadPonderConfig(
+        {
+          PONDER_NETWORK: "baseSepolia",
+          PONDER_RPC_URL_84532: "http://rpc.example.com",
+        },
+        LIVE_CONTRACT_ENV_REMOVALS,
+      ),
+    ).rejects.toThrow("PONDER_RPC_URL_84532 must use HTTPS for baseSepolia.");
+  }, PONDER_CONFIG_TEST_TIMEOUT_MS);
+
   it(
     "rejects missing optional live deployment artifacts",
     async () => {
