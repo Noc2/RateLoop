@@ -1,9 +1,24 @@
+import {
+  type X402QuestionPayload,
+  type X402QuestionPaymentNonceFeedbackBonus,
+  type X402QuestionPaymentNonceQuestion,
+  type X402QuestionPaymentNonceRewardTerms,
+  X402_SUBMISSION_REWARD_ASSET_LREP,
+  X402_SUBMISSION_REWARD_ASSET_USDC,
+  buildDeterministicX402QuestionSalt,
+  buildX402QuestionOneShotPaymentNonce,
+  buildX402QuestionOperation,
+  buildX402QuestionPaymentNonce,
+  buildX402QuestionSubmissionKey,
+  parseX402QuestionRequest,
+} from "@rateloop/agents/x402-question-payload";
 import { getUsdcEip712DomainName } from "@rateloop/contracts/protocol";
 import { type Address, type Hex, isAddress } from "viem";
 
 type JsonRecord = Record<string, unknown>;
 
 const X402_PRIMARY_TYPE = "ReceiveWithAuthorization";
+const MAX_X402_AUTHORIZATION_VALIDITY_SECONDS = 24n * 60n * 60n;
 const X402_AUTHORIZATION_FIELDS = [
   { name: "from", type: "address" },
   { name: "to", type: "address" },
@@ -212,13 +227,204 @@ export function readBrowserSigningExpectedX402Amount(requestBody: JsonRecord | n
   return (bountyAmount + BigInt(normalizeUintString(feedbackBonus.amount, "feedbackBonus.amount"))).toString();
 }
 
+function normalizeUintBigInt(value: unknown, fieldName: string): bigint {
+  return BigInt(normalizeUintString(value, fieldName));
+}
+
+function onChainQuestionForPaymentNonce(
+  question: X402QuestionPayload["questions"][number],
+): X402QuestionPayload["questions"][number] {
+  if (question.confidentiality?.visibility !== "gated") return question;
+  return {
+    ...question,
+    contextUrl: "",
+    detailsUrl: "",
+    imageUrls: [],
+    videoUrl: "",
+  };
+}
+
+function buildPaymentNonceQuestion(params: {
+  index: number;
+  operationKey: Hex;
+  payloadHash: string;
+  question: X402QuestionPayload["questions"][number];
+  walletAddress: Address;
+}): X402QuestionPaymentNonceQuestion {
+  const question = onChainQuestionForPaymentNonce(params.question);
+  const submissionKey = buildX402QuestionSubmissionKey({
+    categoryId: question.categoryId,
+    contextUrl: question.contextUrl,
+    detailsHash: question.detailsHash as Hex,
+    detailsUrl: question.detailsUrl,
+    imageUrls: question.imageUrls,
+    tags: question.tags,
+    title: question.title,
+    videoUrl: question.videoUrl,
+  });
+  return {
+    categoryId: question.categoryId,
+    confidentiality: params.question.confidentiality,
+    contextUrl: question.contextUrl,
+    detailsHash: question.detailsHash as Hex,
+    detailsUrl: question.detailsUrl,
+    imageUrls: question.imageUrls,
+    salt: buildDeterministicX402QuestionSalt({
+      index: params.index,
+      operationKey: params.operationKey,
+      payloadHash: params.payloadHash,
+      submissionKey,
+      walletAddress: params.walletAddress,
+    }),
+    spec: {
+      questionMetadataHash: params.question.questionMetadataHash as Hex,
+      resultSpecHash: params.question.resultSpecHash as Hex,
+    },
+    tags: question.tags,
+    title: question.title,
+    videoUrl: question.videoUrl,
+  };
+}
+
+function buildPaymentRewardTerms(payload: X402QuestionPayload): X402QuestionPaymentNonceRewardTerms {
+  return {
+    amount: payload.bounty.amount,
+    asset: payload.bounty.asset === "LREP" ? X402_SUBMISSION_REWARD_ASSET_LREP : X402_SUBMISSION_REWARD_ASSET_USDC,
+    bountyEligibility: payload.bounty.bountyEligibility,
+    bountyStartBy: payload.bounty.bountyStartBy,
+    bountyWindowSeconds: payload.bounty.bountyWindowSeconds,
+    feedbackWindowSeconds: payload.bounty.feedbackWindowSeconds,
+    requiredSettledRounds: payload.bounty.requiredSettledRounds,
+    requiredVoters: payload.bounty.requiredVoters,
+  };
+}
+
+function readBrowserSigningFeedbackBonus(params: {
+  payload: X402QuestionPayload;
+  requestBody: JsonRecord;
+  walletAddress: Address;
+}): X402QuestionPaymentNonceFeedbackBonus | null {
+  const raw = params.requestBody.feedbackBonus;
+  if (raw === undefined || raw === null || raw === false) return null;
+  if (!isRecord(raw)) {
+    throw new Error("feedbackBonus must be an object when provided.");
+  }
+
+  const asset = typeof raw.asset === "string" ? raw.asset.trim().toUpperCase() : "USDC";
+  if (asset === "LREP") return null;
+  if (asset !== "USDC") {
+    throw new Error("feedbackBonus.asset must be USDC for x402 authorization.");
+  }
+
+  const amount = normalizeUintBigInt(raw.amount, "feedbackBonus.amount");
+  if (amount <= 0n) {
+    throw new Error("feedbackBonus.amount must be greater than zero.");
+  }
+
+  const feedbackWindowClosesAt = params.payload.bounty.bountyStartBy + params.payload.bounty.feedbackWindowSeconds;
+  const feedbackClosesAt = normalizeUintBigInt(
+    raw.feedbackClosesAt ?? feedbackWindowClosesAt,
+    "feedbackBonus.feedbackClosesAt",
+  );
+  if (feedbackClosesAt <= 0n) {
+    throw new Error("feedbackBonus.feedbackClosesAt must be greater than zero.");
+  }
+  if (feedbackClosesAt > feedbackWindowClosesAt) {
+    throw new Error("feedbackBonus.feedbackClosesAt cannot be after the requested feedback window.");
+  }
+
+  const awarder = typeof raw.awarder === "string" && raw.awarder.trim() ? raw.awarder.trim() : params.walletAddress;
+  return {
+    amount,
+    awarder: normalizeAddressField(awarder, "feedbackBonus.awarder"),
+    feedbackClosesAt,
+  };
+}
+
+export function buildBrowserSigningExpectedX402Nonce(params: {
+  expectedChainId: number;
+  expectedContentRegistryAddress: Address;
+  expectedFeedbackBonusEscrowAddress?: Address;
+  expectedQuestionRewardPoolEscrowAddress: Address;
+  expectedSubmitterAddress: Address;
+  expectedWalletAddress: Address;
+  requestBody: JsonRecord | null | undefined;
+  x402Authorization: BrowserX402Authorization;
+}): Hex {
+  if (!isRecord(params.requestBody)) {
+    throw new Error("Signing intent request body is missing.");
+  }
+  const payload = parseX402QuestionRequest(params.requestBody, params.expectedChainId);
+  if (payload.chainId !== params.expectedChainId) {
+    throw new Error("Signing intent request body chainId does not match the connected chain.");
+  }
+  if (payload.questions.length !== 1) {
+    throw new Error("EIP-3009 USDC authorization currently supports single-question asks only.");
+  }
+  if (payload.bounty.asset !== "USDC") {
+    throw new Error("LREP bounties require wallet_calls funding mode.");
+  }
+
+  const operation = buildX402QuestionOperation(payload);
+  const primaryQuestion = payload.questions[0];
+  if (!primaryQuestion) {
+    throw new Error("Question payload is empty.");
+  }
+  const question = buildPaymentNonceQuestion({
+    index: 0,
+    operationKey: operation.operationKey as Hex,
+    payloadHash: operation.payloadHash,
+    question: primaryQuestion,
+    walletAddress: params.expectedWalletAddress,
+  });
+  const rewardTerms = buildPaymentRewardTerms(payload);
+  const feedbackBonus = readBrowserSigningFeedbackBonus({
+    payload,
+    requestBody: params.requestBody,
+    walletAddress: params.expectedWalletAddress,
+  });
+
+  if (feedbackBonus) {
+    if (!params.expectedFeedbackBonusEscrowAddress) {
+      throw new Error("Cannot validate x402 authorization without a configured Feedback Bonus escrow.");
+    }
+    return buildX402QuestionOneShotPaymentNonce({
+      chainId: payload.chainId,
+      contentRegistryAddress: params.expectedContentRegistryAddress,
+      feedbackBonus,
+      feedbackBonusEscrowAddress: params.expectedFeedbackBonusEscrowAddress,
+      question,
+      questionRewardPoolEscrowAddress: params.expectedQuestionRewardPoolEscrowAddress,
+      rewardTerms,
+      roundConfig: payload.roundConfig,
+      x402Authorization: params.x402Authorization,
+      x402QuestionSubmitterAddress: params.expectedSubmitterAddress,
+    });
+  }
+
+  return buildX402QuestionPaymentNonce({
+    chainId: payload.chainId,
+    contentRegistryAddress: params.expectedContentRegistryAddress,
+    question,
+    questionRewardPoolEscrowAddress: params.expectedQuestionRewardPoolEscrowAddress,
+    rewardTerms,
+    roundConfig: payload.roundConfig,
+    x402Authorization: params.x402Authorization,
+    x402QuestionSubmitterAddress: params.expectedSubmitterAddress,
+  });
+}
+
 export function validateBrowserX402AuthorizationRequest(params: {
   expectedAmount: string | bigint | number;
   expectedChainId: number;
+  expectedContentRegistryAddress: Address;
+  expectedFeedbackBonusEscrowAddress?: Address;
+  expectedQuestionRewardPoolEscrowAddress: Address;
   expectedSubmitterAddress: Address;
   expectedUsdcAddress: Address;
   expectedWalletAddress: Address;
   request: JsonRecord | null | undefined;
+  requestBody: JsonRecord | null | undefined;
 }): { authorization: BrowserX402Authorization; typedData: BrowserX402TypedData } {
   const typedData = readTypedData(params.request);
   const authorizationSource = isRecord(params.request?.authorization)
@@ -244,8 +450,29 @@ export function validateBrowserX402AuthorizationRequest(params: {
   if (authorization.value !== normalizeUintString(params.expectedAmount, "expected EIP-3009 amount")) {
     throw new Error("EIP-3009 authorization.value must equal the requested x402 payment amount.");
   }
-  if (BigInt(authorization.validBefore) <= BigInt(authorization.validAfter)) {
+  const validBefore = BigInt(authorization.validBefore);
+  if (validBefore <= BigInt(authorization.validAfter)) {
     throw new Error("EIP-3009 authorization.validBefore must be greater than validAfter.");
+  }
+  const maxValidBefore = BigInt(Math.floor(Date.now() / 1000)) + MAX_X402_AUTHORIZATION_VALIDITY_SECONDS;
+  if (validBefore > maxValidBefore) {
+    throw new Error(
+      `EIP-3009 authorization.validBefore must be within ${MAX_X402_AUTHORIZATION_VALIDITY_SECONDS.toString()} seconds (24 hours) of now.`,
+    );
+  }
+
+  const expectedNonce = buildBrowserSigningExpectedX402Nonce({
+    expectedChainId: params.expectedChainId,
+    expectedContentRegistryAddress: params.expectedContentRegistryAddress,
+    expectedFeedbackBonusEscrowAddress: params.expectedFeedbackBonusEscrowAddress,
+    expectedQuestionRewardPoolEscrowAddress: params.expectedQuestionRewardPoolEscrowAddress,
+    expectedSubmitterAddress: params.expectedSubmitterAddress,
+    expectedWalletAddress: params.expectedWalletAddress,
+    requestBody: params.requestBody,
+    x402Authorization: authorization,
+  });
+  if (authorization.nonce.toLowerCase() !== expectedNonce.toLowerCase()) {
+    throw new Error("EIP-3009 authorization.nonce does not match the RateLoop ask payload.");
   }
 
   return { authorization, typedData };

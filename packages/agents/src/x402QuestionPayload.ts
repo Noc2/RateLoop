@@ -1,5 +1,6 @@
 import {
   DEFAULT_ROUND_CONFIG,
+  CONFIDENTIALITY_FLAG_PRIVATE_FOREVER,
   MIN_NONZERO_CONFIDENTIALITY_BOND,
   USDC_BY_CHAIN_ID,
   requiredQuestionRewardParticipants,
@@ -10,7 +11,6 @@ import {
   getContentTitleValidationError,
 } from "@rateloop/node-utils/submissionValidation";
 import { X402_QUESTION_TOP_LEVEL_FIELDS } from "@rateloop/node-utils/x402QuestionFields";
-import { createHash } from "node:crypto";
 import {
   DEFAULT_AGENT_TEMPLATE_ID,
   DEFAULT_AGENT_TEMPLATE_VERSION,
@@ -22,6 +22,7 @@ import {
 import { findAgentResultTemplate } from "./templates";
 import { getHeadToHeadAbTitleValidationError } from "./headToHeadTitle.js";
 import { HEAD_TO_HEAD_AB_TEMPLATE_ID, readHeadToHeadTemplateInputs } from "./voteUi.js";
+import { encodeAbiParameters, keccak256, sha256, toBytes, type Address, type Hex } from "viem";
 
 export const X402_USDC_BY_CHAIN_ID = USDC_BY_CHAIN_ID;
 /** @deprecated Use `X402_USDC_BY_CHAIN_ID`. */
@@ -45,6 +46,9 @@ const IMAGE_ATTACHMENT_PATH_PATTERN = /^(?:\/.*)?\/api\/attachments\/images\/(at
 const IMAGE_ATTACHMENT_SHA256_FRAGMENT_PATTERN = /^#sha256=0x([a-fA-F0-9]{64})$/;
 const RATELOOP_PRODUCTION_ORIGINS = ["https://www.rateloop.ai", "https://rateloop.ai"] as const;
 const X402_BOUNTY_ELIGIBILITY_PROOF_OF_HUMAN = 8;
+const X402_QUESTION_PAYMENT_DOMAIN = keccak256(toBytes("rateloop-x402-question-payment-v3"));
+const X402_QUESTION_ONE_SHOT_PAYMENT_DOMAIN = keccak256(toBytes("rateloop-x402-question-one-shot-payment-v4"));
+const QUESTION_CONTEXT_DOMAIN = keccak256(toBytes("rateloop-question-context-v5"));
 
 export class X402QuestionInputError extends Error {
   readonly status = 400;
@@ -127,6 +131,48 @@ export type X402QuestionOperation = {
   operationKey: `0x${string}`;
   payloadHash: string;
   canonicalPayload: X402QuestionCanonicalPayload;
+};
+
+export type X402QuestionPaymentAuthorizationFields = {
+  from?: Address;
+  to?: Address;
+  validAfter?: bigint | number | string;
+  validBefore?: bigint | number | string;
+  value?: bigint | number | string;
+};
+
+export type X402QuestionPaymentNonceQuestion = {
+  categoryId: bigint;
+  confidentiality: X402QuestionConfidentiality;
+  contextUrl: string;
+  detailsHash: Hex;
+  detailsUrl: string;
+  imageUrls: readonly string[];
+  salt: Hex;
+  spec: {
+    questionMetadataHash: Hex;
+    resultSpecHash: Hex;
+  };
+  tags: string;
+  title: string;
+  videoUrl: string;
+};
+
+export type X402QuestionPaymentNonceRewardTerms = {
+  amount: bigint;
+  asset: typeof X402_SUBMISSION_REWARD_ASSET_LREP | typeof X402_SUBMISSION_REWARD_ASSET_USDC;
+  bountyStartBy: bigint;
+  bountyWindowSeconds: bigint;
+  bountyEligibility: number;
+  feedbackWindowSeconds: bigint;
+  requiredSettledRounds: bigint;
+  requiredVoters: bigint;
+};
+
+export type X402QuestionPaymentNonceFeedbackBonus = {
+  amount: bigint;
+  awarder: Address;
+  feedbackClosesAt: bigint;
 };
 
 export type X402QuestionParserOptions = {
@@ -230,6 +276,15 @@ function parseNonNegativeInteger(value: unknown, fieldName: string): bigint {
   }
 
   return BigInt(rawValue);
+}
+
+function normalizeNonceBigInt(value: unknown, fieldName: string): bigint {
+  const raw =
+    typeof value === "bigint" || typeof value === "number" || typeof value === "string" ? String(value).trim() : "";
+  if (!/^\d+$/.test(raw)) {
+    throw new X402QuestionInputError(`${fieldName} must be a non-negative integer.`);
+  }
+  return BigInt(raw);
 }
 
 function parsePositiveAtomicAmount(value: unknown, fieldName: string): bigint {
@@ -604,6 +659,25 @@ function normalizeQuestionConfidentiality(value: unknown, fieldName: string): X4
     disclosurePolicy,
     visibility,
   };
+}
+
+function questionConfidentialityFlags(confidentiality: X402QuestionConfidentiality) {
+  return confidentiality.visibility === "gated" && confidentiality.disclosurePolicy === "private_forever"
+    ? CONFIDENTIALITY_FLAG_PRIVATE_FOREVER
+    : 0;
+}
+
+function buildQuestionConfidentialityHash(confidentiality: X402QuestionConfidentiality): Hex {
+  const gated = confidentiality.visibility === "gated";
+  const asset = gated && confidentiality.bond?.asset === "USDC" ? 1 : 0;
+  const amount = gated ? BigInt(confidentiality.bond?.amount ?? "0") : 0n;
+  const flags = questionConfidentialityFlags(confidentiality);
+  return keccak256(
+    encodeAbiParameters(
+      [{ type: "bool" }, { type: "uint8" }, { type: "uint64" }, { type: "uint8" }],
+      [gated, asset, amount, flags],
+    ),
+  );
 }
 
 function normalizeTemplateSelection(
@@ -1112,15 +1186,278 @@ export function toCanonicalQuestionPayload(
   };
 }
 
+function buildSubmissionMediaHash(imageUrls: readonly string[], videoUrl: string): Hex {
+  return keccak256(
+    encodeAbiParameters([{ type: "string[]" }, { type: "string" }], [[...new Set(imageUrls)].sort(), videoUrl]),
+  );
+}
+
+function buildSubmissionDetailsHash(detailsUrl: string, detailsHash: Hex): Hex {
+  return keccak256(encodeAbiParameters([{ type: "string" }, { type: "bytes32" }], [detailsUrl, detailsHash]));
+}
+
+export function buildX402QuestionSubmissionKey(
+  question: Pick<
+    X402QuestionPaymentNonceQuestion,
+    "categoryId" | "contextUrl" | "detailsHash" | "detailsUrl" | "imageUrls" | "tags" | "title" | "videoUrl"
+  >,
+): Hex {
+  return keccak256(
+    encodeAbiParameters(
+      [
+        { type: "bytes32" },
+        { type: "uint256" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "string" },
+        { type: "string" },
+        { type: "string" },
+      ],
+      [
+        QUESTION_CONTEXT_DOMAIN,
+        question.categoryId,
+        buildSubmissionMediaHash(question.imageUrls, question.videoUrl),
+        buildSubmissionDetailsHash(question.detailsUrl, question.detailsHash),
+        question.contextUrl,
+        question.title,
+        question.tags,
+      ],
+    ),
+  );
+}
+
+export function buildDeterministicX402QuestionSalt(params: {
+  index: number;
+  operationKey: Hex;
+  payloadHash: string;
+  submissionKey: Hex;
+  walletAddress: Address;
+}): Hex {
+  return sha256(
+    toBytes(
+      [
+        "rateloop",
+        "agent-wallet-question-salt",
+        params.operationKey,
+        params.payloadHash,
+        params.walletAddress.toLowerCase(),
+        params.submissionKey,
+        params.index.toString(),
+      ].join(":"),
+    ),
+  );
+}
+
+function buildRewardTermsHash(rewardTerms: X402QuestionPaymentNonceRewardTerms): Hex {
+  return keccak256(
+    encodeAbiParameters(
+      [
+        { type: "uint8" },
+        { type: "uint256" },
+        { type: "uint256" },
+        { type: "uint256" },
+        { type: "uint256" },
+        { type: "uint256" },
+        { type: "uint256" },
+        { type: "uint8" },
+      ],
+      [
+        rewardTerms.asset,
+        rewardTerms.amount,
+        rewardTerms.requiredVoters,
+        rewardTerms.requiredSettledRounds,
+        rewardTerms.bountyStartBy,
+        rewardTerms.bountyWindowSeconds,
+        rewardTerms.feedbackWindowSeconds,
+        rewardTerms.bountyEligibility,
+      ],
+    ),
+  );
+}
+
+function buildRoundConfigHash(roundConfig: X402QuestionRoundConfig): Hex {
+  return keccak256(
+    encodeAbiParameters(
+      [{ type: "uint32" }, { type: "uint32" }, { type: "uint16" }, { type: "uint16" }],
+      [
+        Number(roundConfig.epochDuration),
+        Number(roundConfig.maxDuration),
+        Number(roundConfig.minVoters),
+        Number(roundConfig.maxVoters),
+      ],
+    ),
+  );
+}
+
+function buildFeedbackBonusTermsHash(feedbackBonus: X402QuestionPaymentNonceFeedbackBonus): Hex {
+  return keccak256(
+    encodeAbiParameters(
+      [{ type: "uint256" }, { type: "uint256" }, { type: "address" }],
+      [feedbackBonus.amount, feedbackBonus.feedbackClosesAt, feedbackBonus.awarder],
+    ),
+  );
+}
+
+function buildX402StringArrayHash(values: readonly string[]): Hex {
+  const packed = values
+    .map((value) => keccak256(toBytes(value)).slice(2))
+    .join("");
+  return keccak256(`0x${packed}` as Hex);
+}
+
+export function buildX402QuestionSubmissionPayloadHash(question: X402QuestionPaymentNonceQuestion): Hex {
+  return keccak256(
+    encodeAbiParameters(
+      [
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "uint256" },
+        { type: "bytes32" },
+      ],
+      [
+        keccak256(toBytes(question.contextUrl)),
+        buildX402StringArrayHash(question.imageUrls),
+        keccak256(toBytes(question.videoUrl)),
+        keccak256(toBytes(question.detailsUrl)),
+        question.detailsHash,
+        keccak256(toBytes(question.title)),
+        keccak256(toBytes(question.tags)),
+        question.categoryId,
+        question.salt,
+      ],
+    ),
+  );
+}
+
+export function buildX402QuestionPaymentNonce(params: {
+  chainId: number;
+  contentRegistryAddress: Address;
+  question: X402QuestionPaymentNonceQuestion;
+  questionRewardPoolEscrowAddress: Address;
+  rewardTerms: X402QuestionPaymentNonceRewardTerms;
+  roundConfig: X402QuestionRoundConfig;
+  x402Authorization: X402QuestionPaymentAuthorizationFields;
+  x402QuestionSubmitterAddress: Address;
+}): Hex {
+  if (!params.x402Authorization.from || !params.x402Authorization.to) {
+    throw new X402QuestionInputError("x402 authorization payer and payee are required.");
+  }
+  return keccak256(
+    encodeAbiParameters(
+      [
+        { type: "bytes32" },
+        { type: "uint256" },
+        { type: "address" },
+        { type: "address" },
+        { type: "address" },
+        { type: "address" },
+        { type: "address" },
+        { type: "uint256" },
+        { type: "uint256" },
+        { type: "uint256" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+      ],
+      [
+        X402_QUESTION_PAYMENT_DOMAIN,
+        BigInt(params.chainId),
+        params.contentRegistryAddress,
+        params.questionRewardPoolEscrowAddress,
+        params.x402QuestionSubmitterAddress,
+        params.x402Authorization.from,
+        params.x402Authorization.to,
+        normalizeNonceBigInt(params.x402Authorization.value, "paymentAuthorization.value"),
+        normalizeNonceBigInt(params.x402Authorization.validAfter, "paymentAuthorization.validAfter"),
+        normalizeNonceBigInt(params.x402Authorization.validBefore, "paymentAuthorization.validBefore"),
+        buildX402QuestionSubmissionPayloadHash(params.question),
+        buildRewardTermsHash(params.rewardTerms),
+        buildRoundConfigHash(params.roundConfig),
+        buildQuestionConfidentialityHash(params.question.confidentiality),
+        params.question.spec.questionMetadataHash,
+        params.question.spec.resultSpecHash,
+      ],
+    ),
+  );
+}
+
+export function buildX402QuestionOneShotPaymentNonce(params: {
+  chainId: number;
+  contentRegistryAddress: Address;
+  feedbackBonus: X402QuestionPaymentNonceFeedbackBonus;
+  feedbackBonusEscrowAddress: Address;
+  question: X402QuestionPaymentNonceQuestion;
+  questionRewardPoolEscrowAddress: Address;
+  rewardTerms: X402QuestionPaymentNonceRewardTerms;
+  roundConfig: X402QuestionRoundConfig;
+  x402Authorization: X402QuestionPaymentAuthorizationFields;
+  x402QuestionSubmitterAddress: Address;
+}): Hex {
+  if (!params.x402Authorization.from || !params.x402Authorization.to) {
+    throw new X402QuestionInputError("x402 authorization payer and payee are required.");
+  }
+  return keccak256(
+    encodeAbiParameters(
+      [
+        { type: "bytes32" },
+        { type: "uint256" },
+        { type: "address" },
+        { type: "address" },
+        { type: "address" },
+        { type: "address" },
+        { type: "address" },
+        { type: "address" },
+        { type: "uint256" },
+        { type: "uint256" },
+        { type: "uint256" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+      ],
+      [
+        X402_QUESTION_ONE_SHOT_PAYMENT_DOMAIN,
+        BigInt(params.chainId),
+        params.contentRegistryAddress,
+        params.questionRewardPoolEscrowAddress,
+        params.feedbackBonusEscrowAddress,
+        params.x402QuestionSubmitterAddress,
+        params.x402Authorization.from,
+        params.x402Authorization.to,
+        normalizeNonceBigInt(params.x402Authorization.value, "paymentAuthorization.value"),
+        normalizeNonceBigInt(params.x402Authorization.validAfter, "paymentAuthorization.validAfter"),
+        normalizeNonceBigInt(params.x402Authorization.validBefore, "paymentAuthorization.validBefore"),
+        buildX402QuestionSubmissionPayloadHash(params.question),
+        buildRewardTermsHash(params.rewardTerms),
+        buildRoundConfigHash(params.roundConfig),
+        buildQuestionConfidentialityHash(params.question.confidentiality),
+        buildFeedbackBonusTermsHash(params.feedbackBonus),
+        params.question.spec.questionMetadataHash,
+        params.question.spec.resultSpecHash,
+      ],
+    ),
+  );
+}
+
 export function buildX402QuestionOperation(
   payload: X402QuestionPayload,
   options: X402QuestionParserOptions = {},
 ): X402QuestionOperation {
   assertSupportedX402BundleBounty(payload.bounty);
   const canonicalPayload = toCanonicalQuestionPayload(payload, options);
-  const payloadHash = createHash("sha256").update(JSON.stringify(canonicalPayload)).digest("hex");
-  const operationKey =
-    `0x${createHash("sha256").update(`rateloop:x402-question:${payloadHash}`).digest("hex")}` as const;
+  const payloadHash = sha256(toBytes(JSON.stringify(canonicalPayload))).slice(2);
+  const operationKey = sha256(toBytes(`rateloop:x402-question:${payloadHash}`));
 
   return {
     canonicalPayload,

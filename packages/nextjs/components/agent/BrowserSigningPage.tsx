@@ -23,6 +23,9 @@ import {
 import {
   type SubmissionRewardAsset,
   formatSubmissionRewardAmount,
+  getConfiguredContentRegistryAddress,
+  getConfiguredFeedbackBonusEscrowAddress,
+  getConfiguredQuestionRewardPoolEscrowAddress,
   getConfiguredX402QuestionSubmitterAddress,
   getDefaultUsdcAddress,
 } from "~~/lib/questionRewardPools";
@@ -302,13 +305,25 @@ export function BrowserSigningPage({ intentId }: { intentId: string }) {
         if (!expectedSubmitterAddress) {
           throw new Error("Cannot validate x402 authorization without a configured RateLoop x402 submitter.");
         }
+        const expectedContentRegistryAddress = getConfiguredContentRegistryAddress(intent.chainId);
+        if (!expectedContentRegistryAddress) {
+          throw new Error("Cannot validate x402 authorization without a configured ContentRegistry.");
+        }
+        const expectedQuestionRewardPoolEscrowAddress = getConfiguredQuestionRewardPoolEscrowAddress(intent.chainId);
+        if (!expectedQuestionRewardPoolEscrowAddress) {
+          throw new Error("Cannot validate x402 authorization without a configured question reward escrow.");
+        }
         const { authorization, typedData } = validateBrowserX402AuthorizationRequest({
           expectedAmount: readBrowserSigningExpectedX402Amount(intent.requestBody),
           expectedChainId: intent.chainId,
+          expectedContentRegistryAddress,
+          expectedFeedbackBonusEscrowAddress: getConfiguredFeedbackBonusEscrowAddress(intent.chainId),
+          expectedQuestionRewardPoolEscrowAddress,
           expectedSubmitterAddress,
           expectedUsdcAddress,
           expectedWalletAddress: address,
           request: authorizationRequest,
+          requestBody: intent.requestBody,
         });
         const signature = await signTypedDataAsync({
           domain: typedData.domain,

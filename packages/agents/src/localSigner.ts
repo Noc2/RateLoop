@@ -1,7 +1,6 @@
 import {
   createCipheriv,
   createDecipheriv,
-  createHash,
   randomBytes,
   scrypt as scryptCallback,
   timingSafeEqual,
@@ -56,6 +55,9 @@ import {
 } from "./questionSpecs.js";
 import {
   buildX402QuestionOperation as buildSharedX402QuestionOperation,
+  buildDeterministicX402QuestionSalt,
+  buildX402QuestionOneShotPaymentNonce as buildSharedX402QuestionOneShotPaymentNonce,
+  buildX402QuestionPaymentNonce as buildSharedX402QuestionPaymentNonce,
   parseX402QuestionRequest as parseSharedX402QuestionRequest,
   buildDefaultX402QuestionParserOptions,
   toCanonicalQuestionPayload as toSharedCanonicalQuestionPayload,
@@ -212,12 +214,6 @@ const QUESTION_BUNDLE_DOMAIN = keccak256(
 );
 const QUESTION_BUNDLE_REVEAL_DOMAIN = keccak256(
   stringToHex("rateloop-question-bundle-reveal-v6"),
-);
-const X402_QUESTION_PAYMENT_DOMAIN = keccak256(
-  stringToHex("rateloop-x402-question-payment-v3"),
-);
-const X402_QUESTION_ONE_SHOT_PAYMENT_DOMAIN = keccak256(
-  stringToHex("rateloop-x402-question-one-shot-payment-v4"),
 );
 type LocalSignerConfig = {
   chainId?: number;
@@ -1463,19 +1459,7 @@ function buildDeterministicQuestionSalt(params: {
   submissionKey: Hex;
   walletAddress: Address;
 }): Hex {
-  return `0x${createHash("sha256")
-    .update(
-      [
-        "rateloop",
-        "agent-wallet-question-salt",
-        params.operationKey,
-        params.payloadHash,
-        params.walletAddress.toLowerCase(),
-        params.submissionKey,
-        params.index.toString(),
-      ].join(":"),
-    )
-    .digest("hex")}` as Hex;
+  return buildDeterministicX402QuestionSalt(params);
 }
 
 function buildSubmissionMediaHash(
@@ -1769,44 +1753,6 @@ function buildExpectedLocalSignerQuestionPlan(params: {
   };
 }
 
-function buildX402QuestionSubmissionPayloadHash(question: LocalQuestionSubmission): Hex {
-  return keccak256(
-    encodeAbiParameters(
-      [
-        { type: "bytes32" },
-        { type: "bytes32" },
-        { type: "bytes32" },
-        { type: "bytes32" },
-        { type: "bytes32" },
-        { type: "bytes32" },
-        { type: "bytes32" },
-        { type: "uint256" },
-        { type: "bytes32" },
-      ],
-      [
-        keccak256(stringToHex(question.contextUrl)),
-        buildX402StringArrayHash(question.imageUrls),
-        keccak256(stringToHex(question.videoUrl)),
-        keccak256(stringToHex(question.detailsUrl)),
-        question.detailsHash,
-        keccak256(stringToHex(question.title)),
-        keccak256(stringToHex(question.tags)),
-        question.categoryId,
-        question.salt,
-      ],
-    ),
-  );
-}
-
-function buildFeedbackBonusTermsHash(feedbackBonus: ExpectedLocalSignerFeedbackBonus): Hex {
-  return keccak256(
-    encodeAbiParameters(
-      [{ type: "uint256" }, { type: "uint256" }, { type: "address" }],
-      [feedbackBonus.amount, feedbackBonus.feedbackClosesAt, feedbackBonus.awarder],
-    ),
-  );
-}
-
 function buildX402QuestionPaymentNonce(params: {
   chainId: number;
   contentRegistryAddress: Address;
@@ -1820,58 +1766,7 @@ function buildX402QuestionPaymentNonce(params: {
   >;
   x402QuestionSubmitterAddress: Address;
 }): Hex {
-  if (!params.x402Authorization.from || !params.x402Authorization.to) {
-    throw new Error("x402 authorization payer and payee are required.");
-  }
-  return keccak256(
-    encodeAbiParameters(
-      [
-        { type: "bytes32" },
-        { type: "uint256" },
-        { type: "address" },
-        { type: "address" },
-        { type: "address" },
-        { type: "address" },
-        { type: "address" },
-        { type: "uint256" },
-        { type: "uint256" },
-        { type: "uint256" },
-        { type: "bytes32" },
-        { type: "bytes32" },
-        { type: "bytes32" },
-        { type: "bytes32" },
-        { type: "bytes32" },
-        { type: "bytes32" },
-      ],
-      [
-        X402_QUESTION_PAYMENT_DOMAIN,
-        BigInt(params.chainId),
-        params.contentRegistryAddress,
-        params.questionRewardPoolEscrowAddress,
-        params.x402QuestionSubmitterAddress,
-        params.x402Authorization.from,
-        params.x402Authorization.to,
-        normalizeBigInt(
-          params.x402Authorization.value,
-          "paymentAuthorization.value",
-        ),
-        normalizeBigInt(
-          params.x402Authorization.validAfter,
-          "paymentAuthorization.validAfter",
-        ),
-        normalizeBigInt(
-          params.x402Authorization.validBefore,
-          "paymentAuthorization.validBefore",
-        ),
-        buildX402QuestionSubmissionPayloadHash(params.question),
-        buildRewardTermsHash(params.rewardTerms),
-        buildRoundConfigHash(params.roundConfig),
-        buildQuestionConfidentialityHash(params.question.confidentiality),
-        params.question.spec.questionMetadataHash,
-        params.question.spec.resultSpecHash,
-      ],
-    ),
-  );
+  return buildSharedX402QuestionPaymentNonce(params);
 }
 
 function buildX402QuestionOneShotPaymentNonce(params: {
@@ -1889,69 +1784,7 @@ function buildX402QuestionOneShotPaymentNonce(params: {
   >;
   x402QuestionSubmitterAddress: Address;
 }): Hex {
-  if (!params.x402Authorization.from || !params.x402Authorization.to) {
-    throw new Error("x402 authorization payer and payee are required.");
-  }
-  return keccak256(
-    encodeAbiParameters(
-      [
-        { type: "bytes32" },
-        { type: "uint256" },
-        { type: "address" },
-        { type: "address" },
-        { type: "address" },
-        { type: "address" },
-        { type: "address" },
-        { type: "address" },
-        { type: "uint256" },
-        { type: "uint256" },
-        { type: "uint256" },
-        { type: "bytes32" },
-        { type: "bytes32" },
-        { type: "bytes32" },
-        { type: "bytes32" },
-        { type: "bytes32" },
-        { type: "bytes32" },
-        { type: "bytes32" },
-      ],
-      [
-        X402_QUESTION_ONE_SHOT_PAYMENT_DOMAIN,
-        BigInt(params.chainId),
-        params.contentRegistryAddress,
-        params.questionRewardPoolEscrowAddress,
-        params.feedbackBonusEscrowAddress,
-        params.x402QuestionSubmitterAddress,
-        params.x402Authorization.from,
-        params.x402Authorization.to,
-        normalizeBigInt(
-          params.x402Authorization.value,
-          "paymentAuthorization.value",
-        ),
-        normalizeBigInt(
-          params.x402Authorization.validAfter,
-          "paymentAuthorization.validAfter",
-        ),
-        normalizeBigInt(
-          params.x402Authorization.validBefore,
-          "paymentAuthorization.validBefore",
-        ),
-        buildX402QuestionSubmissionPayloadHash(params.question),
-        buildRewardTermsHash(params.rewardTerms),
-        buildRoundConfigHash(params.roundConfig),
-        buildQuestionConfidentialityHash(params.question.confidentiality),
-        buildFeedbackBonusTermsHash(params.feedbackBonus),
-        params.question.spec.questionMetadataHash,
-        params.question.spec.resultSpecHash,
-      ],
-    ),
-  );
-}
-
-function buildX402StringArrayHash(values: readonly string[]): Hex {
-  const packed = values
-    .map((value) => keccak256(stringToHex(value)).slice(2))
-    .join("");
-  return keccak256(`0x${packed}` as Hex);
+  return buildSharedX402QuestionOneShotPaymentNonce(params);
 }
 
 function normalizeCallEnvelope(params: {

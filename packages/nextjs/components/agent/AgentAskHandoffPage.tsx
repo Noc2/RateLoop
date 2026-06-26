@@ -76,6 +76,9 @@ import {
   type SubmissionRewardAsset,
   formatFeedbackBonusAmount,
   formatSubmissionRewardAmount,
+  getConfiguredContentRegistryAddress,
+  getConfiguredFeedbackBonusEscrowAddress,
+  getConfiguredQuestionRewardPoolEscrowAddress,
   getConfiguredX402QuestionSubmitterAddress,
   getDefaultLrepAddress,
   getDefaultUsdcAddress,
@@ -2544,14 +2547,26 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
           if (!expectedSubmitterAddress) {
             throw new Error("Cannot validate x402 authorization without a configured RateLoop x402 submitter.");
           }
+          const expectedContentRegistryAddress = getConfiguredContentRegistryAddress(expectedChainId);
+          if (!expectedContentRegistryAddress) {
+            throw new Error("Cannot validate x402 authorization without a configured ContentRegistry.");
+          }
+          const expectedQuestionRewardPoolEscrowAddress = getConfiguredQuestionRewardPoolEscrowAddress(expectedChainId);
+          if (!expectedQuestionRewardPoolEscrowAddress) {
+            throw new Error("Cannot validate x402 authorization without a configured question reward escrow.");
+          }
           const requestBody = prepared.requestBody ?? handoff?.requestBody ?? null;
           const { authorization, typedData } = validateBrowserX402AuthorizationRequest({
             expectedAmount: readBrowserSigningExpectedX402Amount(requestBody),
             expectedChainId,
+            expectedContentRegistryAddress,
+            expectedFeedbackBonusEscrowAddress: getConfiguredFeedbackBonusEscrowAddress(expectedChainId),
+            expectedQuestionRewardPoolEscrowAddress,
             expectedSubmitterAddress,
             expectedUsdcAddress,
             expectedWalletAddress: address,
             request: authorizationRequest,
+            requestBody,
           });
           const signature = await signTypedDataAsync({
             domain: typedData.domain,
