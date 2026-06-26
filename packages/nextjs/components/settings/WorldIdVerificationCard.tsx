@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { CredentialRequest, IDKit, type IDKitResult, type RpContext, orbLegacy } from "@worldcoin/idkit";
-import { type Abi, type Hex, formatUnits, zeroAddress } from "viem";
+import { type Abi, type Hex, zeroAddress } from "viem";
 import { useAccount } from "wagmi";
 import {
   ArrowTopRightOnSquareIcon,
@@ -28,6 +28,7 @@ import { useThirdwebBatchedContractWrite } from "~~/hooks/useThirdwebBatchedCont
 import { useThirdwebRaterDelegationLink } from "~~/hooks/useThirdwebRaterDelegationLink";
 import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
 import { getLaunchReferralInputState, resolveLaunchClaimReferrer } from "~~/lib/referrals/launchReferral";
+import { formatLrepAmount } from "~~/lib/ui/tokenAmountDisplay";
 import {
   buildReferralLandingUrl,
   clearStoredReferralAttribution,
@@ -60,7 +61,6 @@ import {
 } from "~~/lib/world-id/verificationUiState";
 import { notification } from "~~/utils/scaffold-eth";
 
-const LREP_DECIMALS = 6;
 const REFERRAL_BONUS_BPS = 5_000n;
 const WORLD_ID_LEGACY_ATTEST_FUNCTION_NAME = "attestHumanCredentialWithProof";
 const WORLD_ID_V4_ATTEST_FUNCTION_NAME = "attestHumanCredentialWithV4Proof";
@@ -86,15 +86,11 @@ function getWorldIdSignal(address: string | undefined) {
   return address?.toLowerCase() ?? "";
 }
 
-function formatLrepAmount(amount: bigint | undefined) {
-  if (amount === undefined) {
-    return "--";
-  }
-
-  const value = Number(formatUnits(amount, LREP_DECIMALS));
-  return new Intl.NumberFormat(undefined, {
-    maximumFractionDigits: value < 10 ? 2 : 0,
-  }).format(value);
+function formatWorldIdLrepAmount(amount: bigint | undefined) {
+  return formatLrepAmount(amount, {
+    fallback: "--",
+    maximumFractionDigits: amount !== undefined && amount < 10_000_000n ? 2 : 0,
+  });
 }
 
 function formatShortAddress(address: string | null | undefined) {
@@ -255,7 +251,7 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
       ? referrerHasActiveCredential === undefined
         ? "Checking referrer credential..."
         : referrerHasActiveCredential
-          ? `Referrer can earn ${formatLrepAmount(referralBonusPreview)} LREP when you claim.`
+          ? `Referrer can earn ${formatWorldIdLrepAmount(referralBonusPreview)} LREP when you claim.`
           : "This referrer is not verified yet, so no referral bonus will be paid."
       : undefined;
   const worldIdRequestPanelState = getWorldIdRequestPanelState({
@@ -1038,7 +1034,7 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
 
           <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm lg:block lg:space-y-2 lg:text-right">
             <dt className="text-base-content/55">Referral Earned</dt>
-            <dd className="font-semibold text-base-content">{formatLrepAmount(referralEarnings)} LREP</dd>
+            <dd className="font-semibold text-base-content">{formatWorldIdLrepAmount(referralEarnings)} LREP</dd>
             {canClaimVerifiedBonus ? (
               <>
                 <dt className="text-base-content/55">Launch Bonus</dt>
@@ -1049,7 +1045,7 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
                     disabled={isClaimingVerifiedBonus}
                     onClick={() => void handleClaimVerifiedBonus()}
                   >
-                    {isClaimingVerifiedBonus ? "Claiming..." : `Claim ${formatLrepAmount(currentVerifiedBonus)} LREP`}
+                    {isClaimingVerifiedBonus ? "Claiming..." : `Claim ${formatWorldIdLrepAmount(currentVerifiedBonus)} LREP`}
                   </button>
                 </dd>
               </>
@@ -1101,7 +1097,7 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
 
             <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm lg:block lg:space-y-2 lg:text-right">
               <dt className="text-base-content/55">Current Bonus</dt>
-              <dd className="font-semibold text-base-content">{formatLrepAmount(currentVerifiedBonus)} LREP</dd>
+              <dd className="font-semibold text-base-content">{formatWorldIdLrepAmount(currentVerifiedBonus)} LREP</dd>
             </dl>
           </div>
 

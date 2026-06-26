@@ -4,7 +4,7 @@ import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { ConfidentialityEscrowAbi, RaterRegistryConfidentialityAbi } from "@rateloop/contracts/abis";
 import { useQueryClient } from "@tanstack/react-query";
-import { Abi, Address, encodeFunctionData, formatUnits, isAddress, parseUnits } from "viem";
+import { Abi, Address, encodeFunctionData, isAddress, parseUnits } from "viem";
 import { useAccount, useReadContract } from "wagmi";
 import { ArrowsRightLeftIcon } from "@heroicons/react/24/outline";
 import { surfaceSectionHeadingClassName } from "~~/components/shared/sectionHeading";
@@ -17,6 +17,7 @@ import {
   useGovernanceWrite,
 } from "~~/hooks/useGovernance";
 import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
+import { formatLrepAmount } from "~~/lib/ui/tokenAmountDisplay";
 
 type ComposerFieldType = "address" | "uint" | "lrep" | "string" | "textarea" | "csv" | "bytes32" | "credentialProvider";
 
@@ -136,15 +137,13 @@ function parsePreviewLrepAmount(value: string | undefined) {
   }
 }
 
-function formatLrepAmount(value: bigint | undefined) {
-  if (value === undefined) return "—";
-
-  const formatted = formatUnits(value, 6);
-  const [whole, fraction = ""] = formatted.split(".");
-  const wholePart = Number(whole).toLocaleString();
-  const trimmedFraction = fraction.replace(/0+$/, "").slice(0, 2);
-
-  return trimmedFraction ? `${wholePart}.${trimmedFraction} LREP` : `${wholePart} LREP`;
+function formatGovernanceLrepAmount(value: bigint | undefined) {
+  return formatLrepAmount(value, {
+    fallback: "—",
+    includeSymbol: true,
+    maximumFractionDigits: 2,
+    roundingMode: "truncate",
+  });
 }
 
 function formatPercentOf(value: bigint | undefined, total: bigint | undefined) {
@@ -1092,7 +1091,7 @@ export function GovernanceActionComposer() {
           : undefined;
       const args = selectedTemplate.buildArgs(formValues, parser, proposalDescriptionHash);
       if (selectedTemplate.id === "governor-set-threshold" && thresholdUpdateExceedsMax) {
-        throw new Error(`Proposal threshold cannot exceed ${formatLrepAmount(maxProposalThreshold)}.`);
+        throw new Error(`Proposal threshold cannot exceed ${formatGovernanceLrepAmount(maxProposalThreshold)}.`);
       }
 
       if (selectedTemplate.mode === "proposal") {
@@ -1280,7 +1279,9 @@ export function GovernanceActionComposer() {
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                     <div>
                       <p className="text-base text-base-content/50">Timelock treasury balance</p>
-                      <p className="font-mono text-base text-base-content/80">{formatLrepAmount(treasuryBalance)}</p>
+                      <p className="font-mono text-base text-base-content/80">
+                        {formatGovernanceLrepAmount(treasuryBalance)}
+                      </p>
                     </div>
                     <div>
                       <p className="text-base text-base-content/50">Share of treasury</p>
@@ -1319,7 +1320,9 @@ export function GovernanceActionComposer() {
                 <div className="space-y-1 pt-2">
                   <p className="text-base text-base-content/50">
                     Maximum proposal threshold:{" "}
-                    <span className="font-mono text-base-content/80">{formatLrepAmount(maxProposalThreshold)}</span>
+                    <span className="font-mono text-base-content/80">
+                      {formatGovernanceLrepAmount(maxProposalThreshold)}
+                    </span>
                   </p>
                   {thresholdUpdateExceedsMax && (
                     <p className="text-base text-warning">

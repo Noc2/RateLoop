@@ -1,6 +1,7 @@
 import {
   formatEthTokenAmount,
   formatFixedTokenAmount,
+  formatLrepAmount,
   formatLrepTokenAmount,
   formatUsdcTokenAmount,
 } from "./tokenAmountDisplay";
@@ -20,4 +21,18 @@ test("wallet token formatters use RateLoop display precision", () => {
   assert.equal(formatUsdcTokenAmount(0n), "0.00");
   assert.equal(formatEthTokenAmount(19_974_000_000_000_000n), "0.0200");
   assert.equal(formatEthTokenAmount(1_234_567_890_000_000_000n), "1.2346");
+});
+
+test("shared LREP amount formatter preserves UI-specific display options", () => {
+  assert.equal(formatLrepAmount(1_234_560n, 4), "1.2346");
+  assert.equal(
+    formatLrepAmount(1_234_560n, {
+      includeSymbol: true,
+      maximumFractionDigits: 2,
+      roundingMode: "truncate",
+    }),
+    "1.23 LREP",
+  );
+  assert.equal(formatLrepAmount(undefined, { fallback: "Loading..." }), "Loading...");
+  assert.equal(formatLrepAmount(9_999_999n, { maximumFractionDigits: 0 }), "10");
 });

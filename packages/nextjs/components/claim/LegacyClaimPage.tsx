@@ -1,15 +1,17 @@
 "use client";
 
-import { formatUnits } from "viem";
 import { RateLoopConnectButton } from "~~/components/scaffold-eth";
 import { useWalletRestore } from "~~/contexts/WalletRestoreContext";
 import { useLegacyClaim } from "~~/hooks/useLegacyClaim";
 import { legacyContributorVestingRows } from "~~/lib/docs/tokenomics";
+import { formatLrepAmount } from "~~/lib/ui/tokenAmountDisplay";
 
-function formatLrepAmount(value: bigint | undefined) {
-  if (value === undefined) return "Loading...";
-  const amount = Number(formatUnits(value, 6));
-  return `${amount.toLocaleString(undefined, { maximumFractionDigits: 4 })} LREP`;
+function formatLegacyClaimLrepAmount(value: bigint | undefined) {
+  return formatLrepAmount(value, {
+    fallback: "Loading...",
+    includeSymbol: true,
+    maximumFractionDigits: 4,
+  });
 }
 
 function formatPercent(numerator: bigint, denominator: bigint | undefined) {
@@ -153,10 +155,10 @@ export function LegacyClaimPage() {
         <>
           <section className="rounded-lg border border-base-content/10 bg-base-200 p-4 sm:p-6">
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <StatTile label="Total allocation" value={formatLrepAmount(allocation)} />
-              <StatTile label="Vested" value={formatLrepAmount(vested)} />
-              <StatTile label="Claimable now" value={formatLrepAmount(claimable)} />
-              <StatTile label="Claimed" value={formatLrepAmount(claimed)} />
+              <StatTile label="Total allocation" value={formatLegacyClaimLrepAmount(allocation)} />
+              <StatTile label="Vested" value={formatLegacyClaimLrepAmount(vested)} />
+              <StatTile label="Claimable now" value={formatLegacyClaimLrepAmount(claimable)} />
+              <StatTile label="Claimed" value={formatLegacyClaimLrepAmount(claimed)} />
             </div>
 
             <div className="mt-6">
@@ -208,7 +210,7 @@ export function LegacyClaimPage() {
               {isClaiming
                 ? "Claiming..."
                 : claimable > 0n
-                  ? `Claim ${formatLrepAmount(claimable)}${isRecipientClaim ? " to wallet" : ""}`
+                  ? `Claim ${formatLegacyClaimLrepAmount(claimable)}${isRecipientClaim ? " to wallet" : ""}`
                   : "Nothing claimable yet"}
             </button>
           </section>
