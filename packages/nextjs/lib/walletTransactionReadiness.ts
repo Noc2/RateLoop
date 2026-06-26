@@ -6,7 +6,7 @@ export const WALLET_TRANSACTION_PREPARING_MESSAGE = "Preparing wallet. Try again
 export const WALLET_TRANSACTION_GAS_MODE_MESSAGE = "Checking wallet gas mode. Retry in a moment.";
 export const WALLET_TRANSACTION_SELF_FUNDED_MESSAGE = "Wallet switching to paid gas. Retry in a moment.";
 
-export type WalletTransactionReadinessStatus =
+type WalletTransactionReadinessStatus =
   | "ready"
   | "disconnected"
   | "wrong_network"
@@ -17,9 +17,9 @@ export type WalletTransactionReadinessStatus =
   | "missing_gas"
   | "unavailable";
 
-export type WalletTransactionReadinessSeverity = "none" | "info" | "warning" | "error";
+type WalletTransactionReadinessSeverity = "none" | "info" | "warning" | "error";
 
-export type WalletTransactionReadiness = {
+type WalletTransactionReadiness = {
   isBlocked: boolean;
   isPending: boolean;
   isReady: boolean;

@@ -96,12 +96,3 @@ export function isQuestionRoundMaxDurationValidForEpoch(
     epochDurationSeconds > 0 && Math.floor(maxDurationSeconds / epochDurationSeconds) <= QUESTION_ROUND_MAX_EPOCH_COUNT
   );
 }
-
-export function formatDurationLabel(seconds: bigint | number): string {
-  const value = Number(seconds);
-  if (!Number.isFinite(value) || value <= 0) return "0m";
-  if (value % 86_400 === 0) return `${value / 86_400}d`;
-  if (value % 3_600 === 0) return `${value / 3_600}h`;
-  if (value % 60 === 0) return `${value / 60}m`;
-  return `${value}s`;
-}

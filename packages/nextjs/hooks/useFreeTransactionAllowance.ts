@@ -44,7 +44,7 @@ type FreeTransactionAllowanceOptions = {
   allowInAppSponsorshipSync?: boolean;
   syncInAppSponsorship?: boolean;
 };
-export type SponsorshipSyncState = {
+type SponsorshipSyncState = {
   attemptKey: string | null;
   error: string | null;
   status: SponsorshipSyncStatus;

@@ -1,15 +1,9 @@
-import {
-  type HeadToHeadVoteUi,
-  type VoteUiConfig,
-  getHeadToHeadAbResultSpecHash,
-  resolveVoteUiConfig,
-} from "@rateloop/agents/voteUi";
+import { type VoteUiConfig, resolveVoteUiConfig } from "@rateloop/agents/voteUi";
 import type { ContentItem } from "~~/hooks/contentFeed/shared";
 
-export type { HeadToHeadVoteUi, VoteUiConfig };
-export { getHeadToHeadAbResultSpecHash, resolveVoteUiConfig };
+export type { VoteUiConfig };
 
-export type ContentVoteUiInput = Pick<ContentItem, "resultSpecHash" | "voteUi"> & {
+type ContentVoteUiInput = Pick<ContentItem, "resultSpecHash" | "voteUi"> & {
   title?: ContentItem["title"];
   question?: ContentItem["question"];
   description?: ContentItem["description"];
@@ -38,10 +32,6 @@ export function getRevealedDirectionLabels(config: VoteUiConfig) {
     return { up: config.optionAKey, down: config.optionBKey };
   }
   return { up: "Up", down: "Down" };
-}
-
-export function isHeadToHeadVoteUi(config: VoteUiConfig): config is HeadToHeadVoteUi {
-  return config.mode === "head_to_head";
 }
 
 export function getVoteButtonPresentation(config: VoteUiConfig, direction: "up" | "down") {

@@ -1,6 +1,6 @@
 export type TransactionTimingMetadataValue = string | number | boolean | null | undefined;
 
-export type TransactionTimingPayload = {
+type TransactionTimingPayload = {
   action?: string;
   attemptIndex?: number;
   bundlerInfrastructureError?: boolean;
@@ -63,7 +63,7 @@ function createRunId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-export function reportTransactionTiming(payload: TransactionTimingPayload) {
+function reportTransactionTiming(payload: TransactionTimingPayload) {
   if (typeof window === "undefined" || typeof fetch !== "function") {
     return;
   }

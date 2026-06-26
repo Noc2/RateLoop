@@ -26,7 +26,7 @@ export type WalletTransactionPlanExecutionSegment<TCall extends WalletTransactio
     calls: Array<NormalizedWalletTransactionPlanCall<TCall>>;
   };
 
-export const WALLET_TRANSACTION_PLAN_REQUEST_TIMEOUT_MS = 45_000;
+const WALLET_TRANSACTION_PLAN_REQUEST_TIMEOUT_MS = 45_000;
 export const WALLET_TRANSACTION_PLAN_RECEIPT_TIMEOUT_MS = 180_000;
 
 export function walletTransactionPlanAtomicBatchRequiredError() {
@@ -35,7 +35,7 @@ export function walletTransactionPlanAtomicBatchRequiredError() {
   );
 }
 
-export function walletTransactionPlanStepTimeoutError() {
+function walletTransactionPlanStepTimeoutError() {
   return new Error("Wallet request did not finish. Check your wallet for a pending or rejected request, then retry.");
 }
 

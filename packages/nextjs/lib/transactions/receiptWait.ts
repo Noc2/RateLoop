@@ -3,7 +3,7 @@ import type { PublicClient } from "viem";
 import type { Config } from "wagmi";
 import { waitForTransactionReceipt } from "wagmi/actions";
 
-export const BLOCK_NOT_FOUND_RECEIPT_RETRY_DELAYS_MS = [500, 1_000, 2_000, 4_000] as const;
+const BLOCK_NOT_FOUND_RECEIPT_RETRY_DELAYS_MS = [500, 1_000, 2_000, 4_000] as const;
 
 function wait(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));

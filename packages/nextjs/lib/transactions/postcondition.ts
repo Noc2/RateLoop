@@ -6,7 +6,7 @@ export type TransactionPostconditionWaitOptions = {
   timeoutMs?: number;
 };
 
-export type TransactionPostconditionRaceResult<T> =
+type TransactionPostconditionRaceResult<T> =
   | { confirmation: "transaction"; result: T }
   | { confirmation: "postcondition"; result: undefined }
   | { confirmation: "transaction-after-postcondition-timeout"; result: T };

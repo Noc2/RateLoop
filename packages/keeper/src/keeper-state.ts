@@ -7,16 +7,6 @@ const { Pool } = pg;
 const CORRELATION_SNAPSHOT_LOCK_KEY = "773526208283402193";
 const MAIN_LOOP_LOCK_KEY = "773526208283402194";
 
-interface CachedCorrelationArtifactRow {
-  artifact_hash: string;
-  canonical_json: string;
-}
-
-interface CachedCorrelationArtifact {
-  artifactHash: `0x${string}`;
-  canonicalJson: string;
-}
-
 type AdvisoryLockResult =
   | { status: "acquired"; client: pg.PoolClient }
   | { status: "busy" }
@@ -241,49 +231,6 @@ export async function runWithKeeperMainLoopLock<T>(
       warningKey: "main-loop-unlock",
       warningMessage: "Keeper main loop lock release failed",
     });
-  }
-}
-
-export async function readCachedCorrelationArtifact(
-  fingerprint: `0x${string}`,
-  logger: Logger,
-): Promise<CachedCorrelationArtifact | null> {
-  let activePool: pg.Pool | null = null;
-  try {
-    activePool = await ensureSchema(logger);
-  } catch {
-    return null;
-  }
-  if (!activePool) {
-    return null;
-  }
-
-  try {
-    const result = await activePool.query<CachedCorrelationArtifactRow>(
-      `
-        update keeper_correlation_artifacts
-        set last_used_at = now()
-        where fingerprint = $1
-        returning artifact_hash, canonical_json
-      `,
-      [fingerprint],
-    );
-    const row = result.rows[0];
-    if (!row) {
-      return null;
-    }
-    return {
-      artifactHash: row.artifact_hash as `0x${string}`,
-      canonicalJson: row.canonical_json,
-    };
-  } catch (error) {
-    warnPersistenceOnce(
-      logger,
-      "cache-read",
-      "Keeper persistence artifact cache read failed",
-      error,
-    );
-    return null;
   }
 }
 

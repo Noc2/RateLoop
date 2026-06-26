@@ -9,7 +9,7 @@ import {
 
 type ReadContractClient = Pick<PublicClient, "getBlock" | "readContract">;
 
-export type RoundVoteCommitPostconditionParams = {
+type RoundVoteCommitPostconditionParams = {
   advisoryVoteRecorderAddress?: Address;
   client: ReadContractClient;
   commitHash: Hex;

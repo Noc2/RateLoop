@@ -38,7 +38,7 @@ function normalizePrivateAccountReadScope(value: unknown): NormalizedResult<{ sc
   return { ok: true, payload: { scope: value as PrivateAccountReadScope } };
 }
 
-export function describePrivateAccountReadScope(scope: PrivateAccountReadScope) {
+function describePrivateAccountReadScope(scope: PrivateAccountReadScope) {
   return PRIVATE_ACCOUNT_READ_SCOPE_LABELS[scope];
 }
 

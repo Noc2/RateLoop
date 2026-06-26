@@ -9,8 +9,6 @@ import {
 import { getContentTitleValidationError } from "~~/lib/moderation/submissionValidation";
 
 export {
-  buildHeadToHeadAbTitle,
-  getHeadToHeadAbTitleValidationError,
   isHeadToHeadAbAutoTitle,
 } from "@rateloop/agents/voteUi";
 

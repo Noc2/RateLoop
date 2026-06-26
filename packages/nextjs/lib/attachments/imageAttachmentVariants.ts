@@ -12,10 +12,6 @@ export function parseImageAttachmentVariant(value: string | null | undefined): I
   return IMAGE_ATTACHMENT_VARIANT_SET.has(trimmed) ? (trimmed as ImageAttachmentVariant) : null;
 }
 
-export function isImageAttachmentVariant(value: string | null | undefined): value is ImageAttachmentVariant {
-  return Boolean(value && IMAGE_ATTACHMENT_VARIANT_SET.has(value));
-}
-
 export function withImageAttachmentVariantUrl(value: string, variant: ImageAttachmentVariant) {
   const relativePathUrl = value.startsWith("/") && !value.startsWith("//");
   const parsed = new URL(value, "https://www.rateloop.ai");

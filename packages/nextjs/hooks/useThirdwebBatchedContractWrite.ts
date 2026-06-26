@@ -5,7 +5,7 @@ import type { Abi, Hex } from "viem";
 import { useThirdwebSponsoredSubmitCalls } from "~~/hooks/useThirdwebSponsoredSubmitCalls";
 import { useWalletTransactionReadiness } from "~~/hooks/useWalletTransactionReadiness";
 
-export type ThirdwebBatchedContractCall = {
+type ThirdwebBatchedContractCall = {
   abi: Abi;
   address: `0x${string}`;
   functionName: string;

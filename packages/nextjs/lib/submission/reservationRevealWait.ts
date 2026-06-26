@@ -1,14 +1,14 @@
 import { getBlockWithRetry } from "../transactions/blockWait";
 
-export const RESERVED_SUBMISSION_MIN_AGE_SECONDS = 1n;
-export const RESERVATION_REVEAL_READY_TIMEOUT_MS = 30_000;
+const RESERVED_SUBMISSION_MIN_AGE_SECONDS = 1n;
+const RESERVATION_REVEAL_READY_TIMEOUT_MS = 30_000;
 export const RESERVATION_REVEAL_WALL_CLOCK_BUFFER_MS = 250;
 
-export type ReservationRevealWaitReceipt = {
+type ReservationRevealWaitReceipt = {
   blockNumber?: bigint | null;
 };
 
-export type ReservationRevealWaitClient = {
+type ReservationRevealWaitClient = {
   getBlock: (params: { blockNumber: bigint } | { blockTag: "latest" }) => Promise<{
     number?: bigint | null;
     timestamp: bigint;

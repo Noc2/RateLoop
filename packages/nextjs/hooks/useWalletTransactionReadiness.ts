@@ -32,7 +32,7 @@ type WalletTransactionReadinessOptions = {
   unavailableMessage?: string | null;
 };
 
-export function walletConnectorCanResolveChainId(connector: { getChainId?: unknown } | undefined) {
+function walletConnectorCanResolveChainId(connector: { getChainId?: unknown } | undefined) {
   return typeof connector?.getChainId === "function";
 }
 

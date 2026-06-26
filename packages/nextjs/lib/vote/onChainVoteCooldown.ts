@@ -3,13 +3,13 @@ import { AdvisoryVoteRecorderAbi, RoundVotingEngineAbi } from "@rateloop/contrac
 import { type Address, type Hex, zeroAddress } from "viem";
 import { type PublicClient } from "viem";
 
-export interface VoteCooldownTimestampSnapshot {
+interface VoteCooldownTimestampSnapshot {
   voterLastVote: bigint;
   identityHolderLastVote: bigint;
   identityLastVote: bigint;
 }
 
-export interface AdvisoryVoteCooldownTimestampSnapshot {
+interface AdvisoryVoteCooldownTimestampSnapshot {
   voterLastAdvisory: bigint;
   identityHolderLastAdvisory: bigint;
   identityLastAdvisory: bigint;
@@ -95,7 +95,7 @@ export function buildVoteCooldownTimestampReadArgs(params: {
   ] as const;
 }
 
-export async function readOnChainVoteCooldownRemainingSeconds(params: {
+async function readOnChainVoteCooldownRemainingSeconds(params: {
   contentId: bigint;
   identityHolder?: Address | null;
   identityKey?: Hex | null;
@@ -151,7 +151,7 @@ export async function readOnChainVoteCooldownsByContentId(params: {
   return cooldowns;
 }
 
-export async function readAdvisoryOnChainCooldownRemainingSeconds(params: {
+async function readAdvisoryOnChainCooldownRemainingSeconds(params: {
   advisoryVoteRecorderAddress: Address;
   contentId: bigint;
   identityHolder?: Address | null;
@@ -237,10 +237,6 @@ export async function readEffectiveOnChainVoteCooldownRemainingSeconds(params: {
   return getEffectiveVoteCooldownRemainingSeconds(engineRemaining, advisoryRemaining);
 }
 
-export function maxVoteCooldownRemainingSeconds(current: number, next: number) {
-  return Math.max(current, next);
-}
-
 export function mergeVoteCooldownRemainingByContentId(
   current: Map<string, number>,
   contentId: bigint,
@@ -256,5 +252,3 @@ export function mergeVoteCooldownRemainingByContentId(
   next.set(key, remainingSeconds);
   return next;
 }
-
-export { VOTE_COOLDOWN_SECONDS };

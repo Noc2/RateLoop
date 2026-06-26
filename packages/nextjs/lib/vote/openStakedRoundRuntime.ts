@@ -11,7 +11,7 @@ type OpenableStakedRoundRuntime = {
   requiresOpenRound: boolean;
 };
 
-export type RoundVoteBatchPreflightResult = {
+type RoundVoteBatchPreflightResult = {
   failedCallFunctionName?: string;
   failedCallIndex?: number;
   failedCallKind?: RoundVoteContractCall["kind"];

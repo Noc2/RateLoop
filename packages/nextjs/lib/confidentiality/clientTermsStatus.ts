@@ -3,7 +3,7 @@ type ConfidentialityTermsStatus = {
   hasSession: boolean;
 };
 
-export type ConfidentialityClientScope = {
+type ConfidentialityClientScope = {
   chainId?: number | null;
   contentRegistryAddress?: string | null;
   deploymentKey?: string | null;

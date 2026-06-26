@@ -27,10 +27,6 @@ function toFinitePositiveInteger(value: bigint | number | null | undefined): num
   return Math.floor(value);
 }
 
-export function getHumanDurationUnitMinutes(unit: HumanDurationUnit): number {
-  return UNIT_SECONDS[unit] / 60;
-}
-
 export function getHumanDurationUnitSeconds(unit: HumanDurationUnit): number {
   return UNIT_SECONDS[unit];
 }

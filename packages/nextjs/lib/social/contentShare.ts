@@ -295,7 +295,7 @@ export function resolveContentShareRating(content: ContentShareContentInput): Co
   };
 }
 
-export function resolveContentShareBountyReward(content: ContentShareContentInput): ContentShareReward | null {
+function resolveContentShareBountyReward(content: ContentShareContentInput): ContentShareReward | null {
   const summary = content.rewardPoolSummary;
   if (!summary) return null;
 
@@ -319,7 +319,7 @@ export function resolveContentShareBountyReward(content: ContentShareContentInpu
   };
 }
 
-export function resolveContentShareFeedbackBonusReward(content: ContentShareContentInput): ContentShareReward | null {
+function resolveContentShareFeedbackBonusReward(content: ContentShareContentInput): ContentShareReward | null {
   const summary = content.feedbackBonusSummary;
   if (!summary) return null;
 

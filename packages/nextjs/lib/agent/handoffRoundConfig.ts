@@ -1,6 +1,6 @@
 import { type QuestionRoundConfigBounds, getQuestionRoundMaxDurationForEpoch } from "~~/lib/questionRoundConfig";
 
-export type HandoffRoundDurationDraft = {
+type HandoffRoundDurationDraft = {
   roundBlindSeconds: string;
   roundMaxDurationSeconds: string;
   roundMaxDurationOverridden: boolean;
@@ -16,7 +16,7 @@ function parseWholeNumberInput(value: string): number {
   return Number.isSafeInteger(parsed) ? parsed : 0;
 }
 
-export function secondsToHandoffDurationInput(value: bigint): string {
+function secondsToHandoffDurationInput(value: bigint): string {
   return value > 0n ? value.toString() : "1";
 }
 
