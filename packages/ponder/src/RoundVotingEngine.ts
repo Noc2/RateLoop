@@ -28,7 +28,7 @@ import {
 } from "./streak-utils.js";
 import { extendFeedbackBonusAwardDeadlinesForTerminalRound } from "./feedback-bonus-deadlines.js";
 import { tryContractRead } from "./contract-read.js";
-import { addressIdentityKey } from "./identity-keys.js";
+import { addressIdentityKey } from "@rateloop/node-utils/identityKeys";
 
 const RBTS_SCORE_SCALE_BPS = 10_000;
 const RBTS_SCORE_SCALE = 10_000n;

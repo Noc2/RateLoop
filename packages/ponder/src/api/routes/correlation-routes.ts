@@ -35,7 +35,7 @@ import {
   isCorrelationVoteScanTruncated,
 } from "../correlation-vote-scan.js";
 import { safeBigInt, safeLimit, safeOffset } from "../utils.js";
-import { addressIdentityKey } from "../../identity-keys.js";
+import { addressIdentityKey } from "@rateloop/node-utils/identityKeys";
 
 const SNAPSHOT_STATUS_PROPOSED = 1;
 const SNAPSHOT_STATUS_FINALIZED = 3;
