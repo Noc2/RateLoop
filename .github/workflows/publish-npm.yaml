@@ -44,6 +44,33 @@ jobs:
           cache: yarn
           registry-url: "https://registry.npmjs.org"
 
+      - name: Validate publish inputs
+        shell: bash
+        run: |
+          allowed_tag=false
+          for tag in latest next canary; do
+            if [[ "$NPM_TAG" == "$tag" ]]; then
+              allowed_tag=true
+              break
+            fi
+          done
+
+          if [[ "$allowed_tag" != "true" ]]; then
+            echo "NPM_TAG must be one of: latest, next, canary."
+            exit 1
+          fi
+
+          if [[ "$PUBLISH_DRY_RUN" == "true" ]]; then
+            exit 0
+          fi
+
+          if [[ "$GITHUB_REF" == "refs/heads/main" || "$GITHUB_REF" =~ ^refs/tags/v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            exit 0
+          fi
+
+          echo "Real npm publishes must run from main or a versioned release tag such as v0.1.0."
+          exit 1
+
       - name: Install dependencies
         run: yarn install --immutable
 

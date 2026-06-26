@@ -106,6 +106,12 @@ test("npm publish workflow uses GitHub OIDC provenance and publishes in dependen
   assert.match(workflow, /publish_args=\(--provenance/);
   assert.match(workflow, /npm publish/);
   assert.match(workflow, /--dry-run/);
+  assert.match(workflow, /Validate publish inputs/);
+  assert.match(workflow, /for tag in latest next canary/);
+  assert.match(workflow, /NPM_TAG must be one of: latest, next, canary\./);
+  assert.match(workflow, /PUBLISH_DRY_RUN"\s*==\s*"true"/);
+  assert.match(workflow, /GITHUB_REF"\s*==\s*"refs\/heads\/main"/);
+  assert.match(workflow, /refs\/tags\/v\[0-9\]\+\\\.\[0-9\]\+\\\.\[0-9\]\+/);
 
   const contractsIndex = workflow.indexOf("npm publish \"$RUNNER_TEMP/rateloop-npm/rateloop-contracts.tgz\"");
   const nodeUtilsIndex = workflow.indexOf("npm publish \"$RUNNER_TEMP/rateloop-npm/rateloop-node-utils.tgz\"");
