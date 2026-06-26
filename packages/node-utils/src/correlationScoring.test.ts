@@ -466,6 +466,37 @@ test("public rating weights cap a correlated cluster at one strongest participan
   );
 });
 
+test("public rating weights require stake and epoch index evidence", () => {
+  const baseVote = vote({
+    account: address("aa"),
+    identityKey: hex("aa"),
+    commitKey: hex("aa"),
+    stake: 0n,
+    epochIndex: 0,
+  });
+  const score = (overrides: Partial<CorrelationVoteInput>) =>
+    scoreRoundRatingWeights({
+      chainId: CHAIN_ID,
+      oracleAddress: ORACLE,
+      contentId: 42n,
+      roundId: 3n,
+      votes: [{ ...baseVote, ...overrides }],
+    });
+
+  assert.throws(
+    () => score({ epochIndex: undefined }),
+    /requires a non-negative epochIndex/,
+  );
+  assert.throws(
+    () => score({ stake: undefined }),
+    /requires a non-negative stake/,
+  );
+  assert.throws(
+    () => score({ stake: -1n }),
+    /requires a non-negative stake/,
+  );
+});
+
 test("effectiveWeight never exceeds baseWeight", () => {
   const result = scoreQuestionRound({
     votes: [

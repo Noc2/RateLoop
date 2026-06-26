@@ -313,8 +313,8 @@ export function scoreRoundRatingWeights(args: {
     membersByCluster.set(root, members);
   }
 
-  const baseEvidenceByVote = args.votes.map((vote) =>
-    ratingEvidenceForVote(vote),
+  const baseEvidenceByVote = args.votes.map((vote, index) =>
+    ratingEvidenceForVote(vote, index),
   );
   const effectiveEvidenceByVote = Array<bigint>(args.votes.length).fill(0n);
   const independenceBpsByVote = Array<number>(args.votes.length).fill(0);
@@ -341,13 +341,14 @@ export function scoreRoundRatingWeights(args: {
           : 0;
       effectiveEvidenceByVote[index] = effectiveEvidence;
       independenceBpsByVote[index] = Math.min(10_000, independenceBps);
+      const vote = args.votes[index]!;
       reasonsByVote[index] = [
         `rating_domain=true`,
         `cluster_size=${memberIndexes.length}`,
         `cluster_base_evidence=${clusterBaseEvidence}`,
         `cluster_effective_cap=${clusterBudget}`,
-        `stake=${args.votes[index]?.stake ?? 0n}`,
-        `epoch_index=${args.votes[index]?.epochIndex ?? 0}`,
+        `stake=${vote.stake}`,
+        `epoch_index=${vote.epochIndex}`,
       ];
     }
   }
@@ -578,15 +579,29 @@ function isSurpriseWeightedBountyDomain(domain: number) {
   );
 }
 
-function ratingEvidenceForVote(vote: CorrelationVoteInput): bigint {
-  const stake =
-    typeof vote.stake === "bigint" && vote.stake > 0n ? vote.stake : 0n;
+function ratingEvidenceForVote(
+  vote: CorrelationVoteInput,
+  index: number,
+): bigint {
+  if (typeof vote.stake !== "bigint" || vote.stake < 0n) {
+    throw new Error(`Public rating vote ${index} requires a non-negative stake.`);
+  }
+  const epochIndex = vote.epochIndex;
+  if (
+    typeof epochIndex !== "number" ||
+    !Number.isSafeInteger(epochIndex) ||
+    epochIndex < 0
+  ) {
+    throw new Error(`Public rating vote ${index} requires a non-negative epochIndex.`);
+  }
+
+  const stake = vote.stake > 0n ? vote.stake : 0n;
   const stakeBonus =
     (minBigInt(stake, RATING_EVIDENCE_STAKE_BONUS_CAP) *
       RATING_EVIDENCE_MAX_STAKE_BONUS) /
     RATING_EVIDENCE_STAKE_BONUS_CAP;
   const rawEvidence = RATING_EVIDENCE_BASE_UNIT + stakeBonus;
-  return vote.epochIndex === 0 ? rawEvidence : rawEvidence / 4n;
+  return epochIndex === 0 ? rawEvidence : rawEvidence / 4n;
 }
 
 function minBigInt(left: bigint, right: bigint): bigint {
