@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
-import { GET, fetchPreviewImageDataUrl } from "./route";
+import { fetchPreviewImageDataUrl } from "./previewImageDataUrl";
+import { GET } from "./route";
 import assert from "node:assert/strict";
 import { after, beforeEach, test } from "node:test";
 import { __setRateLimitStoreForTests } from "~~/utils/rateLimit";

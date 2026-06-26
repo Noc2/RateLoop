@@ -1,7 +1,7 @@
 import React from "react";
 import { ImageResponse } from "next/og";
 import type { NextRequest } from "next/server";
-import { Buffer } from "node:buffer";
+import { fetchPreviewImageDataUrl } from "./previewImageDataUrl";
 import { readFile } from "node:fs/promises";
 import { type ContentShareData, VOTE_SHARE_RATING_VERSION_PARAM } from "~~/lib/social/contentShare";
 import { getContentShareDataForParam } from "~~/lib/social/contentShare.server";
@@ -15,9 +15,6 @@ const bodyFontFamily = "Inter";
 const headingFontFamily = "Space Grotesk";
 
 const RATE_LIMIT = { limit: 60, windowMs: 60_000 };
-const PREVIEW_IMAGE_FETCH_TIMEOUT_MS = 2_500;
-const PREVIEW_IMAGE_MAX_BYTES = 2_000_000;
-
 const imageSize = {
   width: 1200,
   height: 630,
@@ -512,31 +509,6 @@ function EmergencyFallbackImage() {
       <div style={{ color: "rgba(245,245,245,0.76)", fontSize: 34, marginTop: 28 }}>Human reputation at stake</div>
     </div>
   );
-}
-
-export async function fetchPreviewImageDataUrl(
-  imageUrl: string | null,
-  fetchImpl: typeof fetch = fetch,
-): Promise<string | null> {
-  if (!imageUrl) return null;
-
-  try {
-    const response = await fetchImpl(imageUrl, {
-      cache: "force-cache",
-      signal: AbortSignal.timeout(PREVIEW_IMAGE_FETCH_TIMEOUT_MS),
-    });
-    if (!response.ok) return null;
-
-    const contentType = response.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase();
-    if (!contentType?.startsWith("image/")) return null;
-
-    const bytes = await response.arrayBuffer();
-    if (bytes.byteLength === 0 || bytes.byteLength > PREVIEW_IMAGE_MAX_BYTES) return null;
-
-    return `data:${contentType};base64,${Buffer.from(bytes).toString("base64")}`;
-  } catch {
-    return null;
-  }
 }
 
 export async function GET(request: NextRequest) {
