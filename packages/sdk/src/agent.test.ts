@@ -692,6 +692,78 @@ test("quoteQuestion and askHumans pass dryRun through direct HTTP", async () => 
   assert.equal(ask.paymentRequired, false);
 });
 
+test("agent ask helpers reject unsafe numeric atomic fields before transport", async () => {
+  const unsafeInteger = Number.MAX_SAFE_INTEGER + 1;
+  let fetchCalls = 0;
+  const agent = createRateLoopAgentClient({
+    apiBaseUrl: API_BASE_URL,
+    fetchImpl: async () => {
+      fetchCalls += 1;
+      return jsonResponse({});
+    },
+  });
+  const request: AskHumansRequest = {
+    bounty: {
+      amount: "1000000",
+      bountyStartBy: "1893456000",
+      bountyWindowSeconds: "1200",
+      requiredVoters: "3",
+    },
+    chainId: 480,
+    clientRequestId: "ask-unsafe-number",
+    question: {
+      categoryId: "7",
+      contextUrl: "https://example.com/context",
+      tags: ["agent", "safety"],
+      title: "Unsafe number?",
+    },
+    walletAddress: "0x00000000000000000000000000000000000000aa",
+  };
+
+  assert.throws(
+    () =>
+      agent.quoteQuestion({
+        ...request,
+        bounty: { ...request.bounty, amount: unsafeInteger },
+      }),
+    /request\.bounty\.amount must be a safe non-negative integer/,
+  );
+  await assert.rejects(
+    () =>
+      agent.askHumans({
+        ...request,
+        maxPaymentAmount: unsafeInteger,
+      }),
+    /request\.maxPaymentAmount must be a safe non-negative integer/,
+  );
+  await assert.rejects(
+    () =>
+      agent.createAskHandoff({
+        request: {
+          ...request,
+          question: {
+            ...request.question!,
+            categoryId: unsafeInteger,
+          },
+        },
+      }),
+    /request\.question\.categoryId must be a safe non-negative integer/,
+  );
+  await assert.rejects(
+    () =>
+      agent.createSigningIntent({
+        request: {
+          ...request,
+          paymentAuthorization: {
+            value: unsafeInteger,
+          },
+        },
+      }),
+    /request\.paymentAuthorization\.value must be a safe non-negative integer/,
+  );
+  assert.equal(fetchCalls, 0);
+});
+
 test("signing intent helpers use direct browser-handoff routes", async () => {
   const requestedUrls: string[] = [];
   const requestedBodies: any[] = [];

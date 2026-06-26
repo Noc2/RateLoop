@@ -672,6 +672,9 @@ function resolveAskQuestionMetadataBaseUrl(params: {
 }
 
 function parseMaxPaymentAmount(value: unknown): bigint {
+  if (typeof value === "number" && (!Number.isSafeInteger(value) || value < 0)) {
+    throw new Error("maxPaymentAmount must be a safe non-negative integer.");
+  }
   const raw =
     typeof value === "number" || typeof value === "bigint" || typeof value === "string"
       ? String(value).trim()

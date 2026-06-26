@@ -268,9 +268,21 @@ function readOptionalBytes32Hex(value: unknown, fieldName: string): `0x${string}
   throw new X402QuestionInputError(`${fieldName} must be a bytes32 hex string.`);
 }
 
+function readIntegerString(value: unknown, fieldName: string): string {
+  if (typeof value === "number") {
+    if (!Number.isSafeInteger(value) || value < 0) {
+      throw new X402QuestionInputError(`${fieldName} must be a safe non-negative integer.`);
+    }
+    return String(value);
+  }
+  if (typeof value === "bigint" || typeof value === "string") {
+    return String(value).trim();
+  }
+  return "";
+}
+
 function parseNonNegativeInteger(value: unknown, fieldName: string): bigint {
-  const rawValue =
-    typeof value === "bigint" || typeof value === "number" || typeof value === "string" ? String(value).trim() : "";
+  const rawValue = readIntegerString(value, fieldName);
   if (!/^\d+$/.test(rawValue)) {
     throw new X402QuestionInputError(`${fieldName} must be a non-negative integer.`);
   }
@@ -279,8 +291,7 @@ function parseNonNegativeInteger(value: unknown, fieldName: string): bigint {
 }
 
 function normalizeNonceBigInt(value: unknown, fieldName: string): bigint {
-  const raw =
-    typeof value === "bigint" || typeof value === "number" || typeof value === "string" ? String(value).trim() : "";
+  const raw = readIntegerString(value, fieldName);
   if (!/^\d+$/.test(raw)) {
     throw new X402QuestionInputError(`${fieldName} must be a non-negative integer.`);
   }

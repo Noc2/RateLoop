@@ -63,6 +63,49 @@ describe("agent question linting", () => {
     );
   });
 
+  it("rejects unsafe numeric atomic fields", () => {
+    const unsafeInteger = Number.MAX_SAFE_INTEGER + 1;
+    const findings = lintAgentAskRequest({
+      ...VALID_REQUEST,
+      bounty: {
+        ...VALID_REQUEST.bounty,
+        amount: unsafeInteger,
+        bountyStartBy: unsafeInteger,
+      },
+      question: {
+        ...VALID_REQUEST.question,
+        confidentiality: {
+          bond: {
+            amount: unsafeInteger,
+            asset: "LREP",
+          },
+          visibility: "gated",
+        },
+        contextUrl: undefined,
+        detailsHash: DETAILS_HASH,
+        detailsUrl: DETAILS_URL,
+        imageUrls: [UPLOADED_IMAGE_URL],
+      },
+    });
+
+    expect(findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "error",
+          path: "bounty.amount",
+        }),
+        expect.objectContaining({
+          level: "error",
+          path: "bounty.bountyStartBy",
+        }),
+        expect.objectContaining({
+          level: "error",
+          path: "question.confidentiality.bond.amount",
+        }),
+      ]),
+    );
+  });
+
   it("accepts public image context without a context URL", () => {
     const findings = lintAgentAskRequest({
       ...VALID_REQUEST,

@@ -103,6 +103,16 @@ function looksLikeHostedDetailsUrl(value: unknown): boolean {
   return typeof value === "string" && isAllowedX402HostedDetailsUrl(value);
 }
 
+function readLintIntegerString(value: unknown): string | null {
+  if (typeof value === "number") {
+    return Number.isSafeInteger(value) && value >= 0 ? String(value) : null;
+  }
+  if (typeof value === "string" || typeof value === "bigint") {
+    return String(value).trim();
+  }
+  return null;
+}
+
 function readConfidentiality(value: unknown) {
   if (!isObject(value)) {
     return {
@@ -117,10 +127,11 @@ function readConfidentiality(value: unknown) {
   const disclosurePolicy = typeof value.disclosurePolicy === "string" ? value.disclosurePolicy.trim() : null;
   const rawBond = isObject(value.bond) ? value.bond : null;
   const rawBondAmount = rawBond?.amount;
+  const rawBondAmountString = readLintIntegerString(rawBondAmount);
   const bondAmount =
-    typeof rawBondAmount === "string" || typeof rawBondAmount === "number" || typeof rawBondAmount === "bigint"
-      ? /^\d+$/.test(String(rawBondAmount).trim())
-        ? BigInt(String(rawBondAmount).trim())
+    rawBondAmount !== undefined && rawBondAmount !== null
+      ? rawBondAmountString !== null && /^\d+$/.test(rawBondAmountString)
+        ? BigInt(rawBondAmountString)
         : -1n
       : 0n;
   return {
@@ -147,14 +158,14 @@ function templateInputText(templateInputs: JsonObject | null, key: string): stri
 }
 
 function parseLintVoterCount(value: unknown): bigint | null {
-  if (typeof value !== "string" && typeof value !== "number" && typeof value !== "bigint") return null;
-  const raw = String(value).trim();
+  const raw = readLintIntegerString(value);
+  if (raw === null) return null;
   return /^\d+$/.test(raw) ? BigInt(raw) : null;
 }
 
 function parseLintPositiveInteger(value: unknown): bigint | null {
-  if (typeof value !== "string" && typeof value !== "number" && typeof value !== "bigint") return null;
-  const raw = String(value).trim();
+  const raw = readLintIntegerString(value);
+  if (raw === null) return null;
   if (!/^\d+$/.test(raw)) return null;
   const parsed = BigInt(raw);
   return parsed > 0n ? parsed : null;
@@ -497,10 +508,10 @@ export function lintAgentAskRequest(input: unknown): QuestionLintFinding[] {
     lintRequiredPositiveBountyField(request.bounty, "bountyStartBy", findings);
     lintRequiredPositiveBountyField(request.bounty, "bountyWindowSeconds", findings);
 
-    if (!/^\d+$/.test(String(request.bounty.amount ?? "")) || BigInt(String(request.bounty.amount ?? "0")) <= 0n) {
+    const amount = parseLintPositiveInteger(request.bounty.amount);
+    if (amount === null) {
       pushFinding(findings, "error", "bounty.amount", "Bounty amount must be a positive atomic integer.");
     } else {
-      const amount = BigInt(String(request.bounty.amount));
       const requiredVoters = parseLintVoterCount(request.bounty.requiredVoters) ?? DEFAULT_REQUIRED_VOTERS;
       const requiredVoterFloor = requiredQuestionRewardParticipants(amount);
       if (requiredVoters < requiredVoterFloor) {

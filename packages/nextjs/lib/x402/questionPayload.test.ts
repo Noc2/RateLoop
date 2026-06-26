@@ -55,6 +55,66 @@ test("parseX402QuestionRequest normalizes a valid paid question payload", () => 
   assert.deepEqual(payload.questions[0].imageUrls, [UPLOADED_IMAGE_URL]);
 });
 
+test("parseX402QuestionRequest rejects unsafe numeric atomic fields", () => {
+  const unsafeInteger = Number.MAX_SAFE_INTEGER + 1;
+
+  assert.throws(
+    () =>
+      parseX402QuestionRequest({
+        ...VALID_REQUEST,
+        bounty: {
+          ...VALID_REQUEST.bounty,
+          amount: unsafeInteger,
+        },
+      }),
+    /bounty\.amount must be a safe non-negative integer/,
+  );
+  assert.throws(
+    () =>
+      parseX402QuestionRequest({
+        ...VALID_REQUEST,
+        bounty: {
+          ...VALID_REQUEST.bounty,
+          bountyStartBy: unsafeInteger,
+        },
+      }),
+    /bounty\.bountyStartBy must be a safe non-negative integer/,
+  );
+  assert.throws(
+    () =>
+      parseX402QuestionRequest({
+        ...VALID_REQUEST,
+        question: {
+          ...VALID_REQUEST.question,
+          categoryId: unsafeInteger,
+        },
+      }),
+    /questions\[0\]\.categoryId must be a safe non-negative integer/,
+  );
+  assert.throws(
+    () =>
+      parseX402QuestionRequest({
+        ...VALID_REQUEST,
+        question: {
+          ...VALID_REQUEST.question,
+          confidentiality: {
+            bond: {
+              amount: unsafeInteger,
+              asset: "LREP",
+            },
+            visibility: "gated",
+          },
+          contextUrl: undefined,
+          detailsHash: DETAILS_HASH,
+          detailsUrl: DETAILS_URL,
+          imageUrls: [UPLOADED_IMAGE_URL],
+          videoUrl: undefined,
+        },
+      }),
+    /questions\[0\]\.confidentiality\.bond\.amount must be a safe non-negative integer/,
+  );
+});
+
 test("parseX402QuestionRequest accepts dry-run control fields", () => {
   const payload = parseX402QuestionRequest({
     ...VALID_REQUEST,

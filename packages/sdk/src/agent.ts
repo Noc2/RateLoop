@@ -897,6 +897,7 @@ export function quoteQuestion(
   params: QuoteQuestionRequest,
   options: RateLoopAgentClientOptions = {},
 ): Promise<QuoteQuestionResponse> {
+  assertSafeAskIntegerFields(params);
   const config = normalizeAgentConfig(options);
   const requestConfig = quoteRequestConfig(config);
   if (hasDirectAgentHttp(config) && !hasFeedbackBonus(params)) {
@@ -918,6 +919,7 @@ export async function askHumans(
   params: AskHumansRequest,
   options: RateLoopAgentClientOptions = {},
 ): Promise<AskHumansResponse> {
+  assertSafeAskIntegerFields(params);
   const config = normalizeAgentConfig(options);
   const { transport, ...body } = params;
 
@@ -991,6 +993,7 @@ export async function createAskHandoff(
   params: CreateAskHandoffRequest,
   options: RateLoopAgentClientOptions = {},
 ): Promise<AskHandoffResponse> {
+  assertSafeAskHandoffIntegerFields(params);
   const config = normalizeAgentConfig(options);
   if (hasDirectAgentHttp(config)) {
     return requestJson<AskHandoffResponse>(config, agentHandoffsUrl(config), {
@@ -1042,6 +1045,7 @@ export async function createSigningIntent(
   params: CreateSigningIntentRequest,
   options: RateLoopAgentClientOptions = {},
 ): Promise<SigningIntentResponse> {
+  assertSafeAskIntegerFields(params.request);
   const config = normalizeAgentConfig(options);
   if (!hasDirectAgentHttp(config)) {
     throw new RateLoopSdkError(
@@ -1932,6 +1936,120 @@ function assertNoPlaintextRatingFields(params: JsonRecord) {
 
   throw new RateLoopSdkError(
     `Do not send plaintext rating fields to hosted MCP: ${present.join(", ")}. Build the encrypted commit locally with @rateloop/sdk/vote, then call prepareRatingTransactions.`,
+  );
+}
+
+function assertSafeAskIntegerFields(params: unknown, path = "request") {
+  if (!isJsonRecord(params)) return;
+
+  assertSafeNonNegativeNumber(
+    params.maxPaymentAmount,
+    `${path}.maxPaymentAmount`,
+  );
+  assertSafeConfidentialityIntegerFields(
+    params.confidentiality,
+    `${path}.confidentiality`,
+  );
+  assertSafeBountyIntegerFields(params.bounty, `${path}.bounty`);
+  assertSafeFeedbackBonusIntegerFields(
+    params.feedbackBonus,
+    `${path}.feedbackBonus`,
+  );
+  assertSafePaymentAuthorizationIntegerFields(
+    params.paymentAuthorization,
+    `${path}.paymentAuthorization`,
+  );
+  assertSafeRoundConfigIntegerFields(params.roundConfig, `${path}.roundConfig`);
+
+  if (isJsonRecord(params.question)) {
+    assertSafeQuestionIntegerFields(params.question, `${path}.question`);
+  }
+  if (Array.isArray(params.questions)) {
+    params.questions.forEach((question, index) => {
+      assertSafeQuestionIntegerFields(question, `${path}.questions.${index}`);
+    });
+  }
+}
+
+function assertSafeAskHandoffIntegerFields(params: CreateAskHandoffRequest) {
+  if (isJsonRecord(params) && isJsonRecord(params.request)) {
+    assertSafeAskIntegerFields(params.request, "request");
+    return;
+  }
+  assertSafeAskIntegerFields(params, "request");
+}
+
+function assertSafeBountyIntegerFields(value: unknown, path: string) {
+  if (!isJsonRecord(value)) return;
+  for (const field of [
+    "amount",
+    "requiredVoters",
+    "requiredSettledRounds",
+    "bountyStartBy",
+    "bountyWindowSeconds",
+    "feedbackWindowSeconds",
+    "bountyEligibility",
+  ]) {
+    assertSafeNonNegativeNumber(value[field], `${path}.${field}`);
+  }
+}
+
+function assertSafeConfidentialityIntegerFields(value: unknown, path: string) {
+  if (!isJsonRecord(value) || !isJsonRecord(value.bond)) return;
+  assertSafeNonNegativeNumber(value.bond.amount, `${path}.bond.amount`);
+}
+
+function assertSafeFeedbackBonusIntegerFields(value: unknown, path: string) {
+  if (!isJsonRecord(value)) return;
+  assertSafeNonNegativeNumber(value.amount, `${path}.amount`);
+  assertSafeNonNegativeNumber(
+    value.feedbackClosesAt,
+    `${path}.feedbackClosesAt`,
+  );
+}
+
+function assertSafePaymentAuthorizationIntegerFields(
+  value: unknown,
+  path: string,
+) {
+  if (!isJsonRecord(value)) return;
+  for (const field of ["value", "validAfter", "validBefore"]) {
+    assertSafeNonNegativeNumber(value[field], `${path}.${field}`);
+  }
+}
+
+function assertSafeQuestionIntegerFields(value: unknown, path: string) {
+  if (!isJsonRecord(value)) return;
+  assertSafeNonNegativeNumber(value.categoryId, `${path}.categoryId`);
+  assertSafeNonNegativeNumber(value.templateVersion, `${path}.templateVersion`);
+  assertSafeConfidentialityIntegerFields(
+    value.confidentiality,
+    `${path}.confidentiality`,
+  );
+  assertSafeRoundConfigIntegerFields(value.roundConfig, `${path}.roundConfig`);
+}
+
+function assertSafeRoundConfigIntegerFields(value: unknown, path: string) {
+  if (!isJsonRecord(value)) return;
+  for (const field of [
+    "epochDuration",
+    "blindPhaseSeconds",
+    "blindSeconds",
+    "maxDuration",
+    "maxDurationSeconds",
+    "deadlineSeconds",
+    "minVoters",
+    "maxVoters",
+  ]) {
+    assertSafeNonNegativeNumber(value[field], `${path}.${field}`);
+  }
+}
+
+function assertSafeNonNegativeNumber(value: unknown, path: string) {
+  if (typeof value !== "number") return;
+  if (Number.isSafeInteger(value) && value >= 0) return;
+  throw new RateLoopSdkError(
+    `${path} must be a safe non-negative integer. Pass a string or bigint for large atomic values.`,
   );
 }
 
