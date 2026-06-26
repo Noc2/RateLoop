@@ -5,7 +5,7 @@ import { __setUrlSafetyDnsResolversForTests } from "~~/utils/urlSafety";
 process.env.DATABASE_URL = "memory:";
 
 type DbModule = typeof import("../db");
-type DbTestMemoryModule = typeof import("../db/testMemory");
+type DbTestMemoryModule = typeof import("~~/lib/db/testing/testMemory");
 type RegistryModule = typeof import("./registry");
 
 let dbModule: DbModule;
@@ -14,7 +14,7 @@ let registry: RegistryModule;
 
 before(async () => {
   dbModule = await import("../db");
-  dbTestMemory = await import("../db/testMemory");
+  dbTestMemory = await import("~~/lib/db/testing/testMemory");
   dbModule.__setDatabaseResourcesForTests(dbTestMemory.createMemoryDatabaseResources());
   registry = await import("./registry");
 });

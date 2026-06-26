@@ -4,7 +4,7 @@ import { upsertAgentCallbackSubscription } from "./registry";
 import assert from "node:assert/strict";
 import test, { afterEach, beforeEach } from "node:test";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
-import { createMemoryDatabaseResources } from "~~/lib/db/testMemory";
+import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 import { __setUrlSafetyDnsResolversForTests } from "~~/utils/urlSafety";
 

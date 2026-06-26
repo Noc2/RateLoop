@@ -6,7 +6,7 @@ process.env.DATABASE_URL = "memory:";
 
 type BudgetModule = typeof import("./budget");
 type DbModule = typeof import("../db");
-type DbTestMemoryModule = typeof import("../db/testMemory");
+type DbTestMemoryModule = typeof import("~~/lib/db/testing/testMemory");
 
 let budget: BudgetModule;
 let dbModule: DbModule;
@@ -24,7 +24,7 @@ const AGENT: McpAgentAuth = {
 
 before(async () => {
   dbModule = await import("../db");
-  dbTestMemory = await import("../db/testMemory");
+  dbTestMemory = await import("~~/lib/db/testing/testMemory");
   dbModule.__setDatabaseResourcesForTests(dbTestMemory.createMemoryDatabaseResources());
   budget = await import("./budget");
 });

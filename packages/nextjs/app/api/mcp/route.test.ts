@@ -18,7 +18,7 @@ env.DATABASE_URL = "memory:";
 type RouteModule = typeof import("./route");
 type PublicRouteModule = typeof import("./public/route");
 type DbModule = typeof import("../../../lib/db");
-type DbTestMemoryModule = typeof import("../../../lib/db/testMemory");
+type DbTestMemoryModule = typeof import("~~/lib/db/testing/testMemory");
 type McpBudgetModule = typeof import("~~/lib/mcp/budget");
 type McpToolsModule = typeof import("~~/lib/mcp/tools");
 
@@ -106,7 +106,7 @@ before(async () => {
   env.NODE_ENV = "development";
   configureAgent();
   dbModule = await import("../../../lib/db");
-  dbTestMemory = await import("../../../lib/db/testMemory");
+  dbTestMemory = await import("~~/lib/db/testing/testMemory");
   dbModule.__setDatabaseResourcesForTests(dbTestMemory.createMemoryDatabaseResources());
   mcpBudgetModule = await import("~~/lib/mcp/budget");
   mcpToolsModule = await import("~~/lib/mcp/tools");

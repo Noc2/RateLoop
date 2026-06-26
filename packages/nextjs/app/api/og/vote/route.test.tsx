@@ -135,7 +135,7 @@ test("redacts gated vote social cards before fetching preview images", async () 
   const originalDatabaseUrl = process.env.DATABASE_URL;
   process.env.DATABASE_URL = "memory:";
   const dbModule = await import("~~/lib/db");
-  const dbTestMemory = await import("~~/lib/db/testMemory");
+  const dbTestMemory = await import("~~/lib/db/testing/testMemory");
   const confidentiality = await import("~~/lib/confidentiality/context");
   dbModule.__setDatabaseResourcesForTests(dbTestMemory.createMemoryDatabaseResources());
 

@@ -9,7 +9,7 @@ env.DATABASE_URL = "memory:";
 env.NODE_ENV = "test";
 
 type DbModule = typeof import("~~/lib/db");
-type DbTestMemoryModule = typeof import("~~/lib/db/testMemory");
+type DbTestMemoryModule = typeof import("~~/lib/db/testing/testMemory");
 type SignedActionsModule = typeof import("./signedActions");
 
 const WALLET = "0x1234567890abcdef1234567890abcdef12345678" as const;
@@ -23,7 +23,7 @@ let signedActions: SignedActionsModule;
 
 before(async () => {
   dbModule = await import("~~/lib/db");
-  dbTestMemory = await import("~~/lib/db/testMemory");
+  dbTestMemory = await import("~~/lib/db/testing/testMemory");
   dbModule.__setDatabaseResourcesForTests(dbTestMemory.createMemoryDatabaseResources());
   signedActions = await import("./signedActions");
 });

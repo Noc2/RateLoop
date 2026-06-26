@@ -8,7 +8,7 @@ const originalNodeEnv = env.NODE_ENV;
 const originalTrustedHeaders = env.RATE_LIMIT_TRUSTED_IP_HEADERS;
 
 type DbModule = typeof import("~~/lib/db");
-type DbTestMemoryModule = typeof import("~~/lib/db/testMemory");
+type DbTestMemoryModule = typeof import("~~/lib/db/testing/testMemory");
 type RateLimitModule = typeof import("~~/utils/rateLimit");
 type RouteModule = typeof import("../../app/api/attachments/images/[attachmentId]/status/route");
 
@@ -31,7 +31,7 @@ before(async () => {
   env.RATE_LIMIT_TRUSTED_IP_HEADERS = "x-forwarded-for";
 
   dbModule = await import("~~/lib/db");
-  dbTestMemory = await import("~~/lib/db/testMemory");
+  dbTestMemory = await import("~~/lib/db/testing/testMemory");
   rateLimit = await import("~~/utils/rateLimit");
   route = await import("../../app/api/attachments/images/[attachmentId]/status/route");
 });

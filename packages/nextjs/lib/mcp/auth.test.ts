@@ -20,7 +20,7 @@ const originalDailyBudget = env.RATELOOP_MCP_DAILY_BUDGET_USDC;
 const originalDatabaseUrl = env.DATABASE_URL;
 const originalPerAskLimit = env.RATELOOP_MCP_PER_ASK_LIMIT_USDC;
 let dbModule: typeof import("../db");
-let dbTestMemory: typeof import("../db/testMemory");
+let dbTestMemory: typeof import("~~/lib/db/testing/testMemory");
 
 function sha256(value: string) {
   return createHash("sha256").update(value).digest("hex");
@@ -35,7 +35,7 @@ function requestWithToken(token?: string) {
 before(async () => {
   env.DATABASE_URL = "memory:";
   dbModule = await import("../db");
-  dbTestMemory = await import("../db/testMemory");
+  dbTestMemory = await import("~~/lib/db/testing/testMemory");
   dbModule.__setDatabaseResourcesForTests(dbTestMemory.createMemoryDatabaseResources());
 });
 

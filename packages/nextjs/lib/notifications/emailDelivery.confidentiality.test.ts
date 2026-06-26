@@ -18,7 +18,7 @@ const SECRET_TITLE = "Secret launch concept";
 const SECRET_DESCRIPTION = "Confidential positioning details for the unreleased prototype.";
 
 type DbModule = typeof import("~~/lib/db");
-type DbTestMemoryModule = typeof import("~~/lib/db/testMemory");
+type DbTestMemoryModule = typeof import("~~/lib/db/testing/testMemory");
 type DbSchemaModule = typeof import("~~/lib/db/schema");
 type ConfidentialityContextModule = typeof import("~~/lib/confidentiality/context");
 type EmailDeliveryModule = typeof import("./emailDelivery");
@@ -134,7 +134,7 @@ before(async () => {
   env.RESEND_FROM_EMAIL = "RateLoop <notifications@rateloop.ai>";
 
   dbModule = await import("~~/lib/db");
-  dbTestMemory = await import("~~/lib/db/testMemory");
+  dbTestMemory = await import("~~/lib/db/testing/testMemory");
   dbSchema = await import("~~/lib/db/schema");
   confidentiality = await import("~~/lib/confidentiality/context");
   ponderClient = await import("~~/services/ponder/client");

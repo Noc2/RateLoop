@@ -12,7 +12,7 @@ env.NODE_ENV = "test";
 
 type DbModule = typeof import("~~/lib/db");
 type DbSchemaModule = typeof import("~~/lib/db/schema");
-type DbTestMemoryModule = typeof import("~~/lib/db/testMemory");
+type DbTestMemoryModule = typeof import("~~/lib/db/testing/testMemory");
 type RateLimitModule = typeof import("~~/utils/rateLimit");
 type SignedReadSessionsModule = typeof import("~~/lib/auth/signedReadSessions");
 type ConfidentialityContextModule = typeof import("~~/lib/confidentiality/context");
@@ -110,7 +110,7 @@ async function insertRootedAccess(params: { anchored?: boolean } = {}) {
 before(async () => {
   dbModule = await import("~~/lib/db");
   dbSchema = await import("~~/lib/db/schema");
-  dbTestMemory = await import("~~/lib/db/testMemory");
+  dbTestMemory = await import("~~/lib/db/testing/testMemory");
   rateLimit = await import("~~/utils/rateLimit");
   signedReadSessions = await import("~~/lib/auth/signedReadSessions");
   confidentiality = await import("~~/lib/confidentiality/context");

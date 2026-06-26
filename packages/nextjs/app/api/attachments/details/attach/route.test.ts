@@ -7,7 +7,7 @@ import { afterEach, beforeEach, test } from "node:test";
 import { type Address, type Hex, encodeAbiParameters, encodeEventTopics } from "viem";
 import { setDetailsAttachRouteTestOverrides } from "~~/lib/attachments/detailsAttachRouteTestOverrides";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
-import { createMemoryDatabaseResources } from "~~/lib/db/testMemory";
+import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 import { ponderApi } from "~~/services/ponder/client";
 import { __setRateLimitStoreForTests } from "~~/utils/rateLimit";

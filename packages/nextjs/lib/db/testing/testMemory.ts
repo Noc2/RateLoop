@@ -1,5 +1,5 @@
-import type { DatabaseClient, DatabaseResources, QueryInput } from "./index";
-import * as schema from "./schema";
+import type { DatabaseClient, DatabaseResources, QueryInput } from "../index";
+import * as schema from "../schema";
 import { drizzle as drizzlePgProxy } from "drizzle-orm/pg-proxy";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -23,7 +23,7 @@ function normalizeQuery(input: QueryInput) {
 }
 
 function getMigrationDirectory() {
-  return path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../drizzle");
+  return path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../drizzle");
 }
 
 function applySqlStatements(sqlText: string, execute: (statement: string) => void) {

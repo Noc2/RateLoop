@@ -9,7 +9,7 @@ env.DATABASE_URL = "memory:";
 env.NODE_ENV = "test";
 
 type DbModule = typeof import("~~/lib/db");
-type DbTestMemoryModule = typeof import("~~/lib/db/testMemory");
+type DbTestMemoryModule = typeof import("~~/lib/db/testing/testMemory");
 type PreferencesModule = typeof import("~~/lib/notifications/preferences");
 
 const WALLET = "0x1234567890abcdef1234567890abcdef12345678" as const;
@@ -28,7 +28,7 @@ function restoreEnv(name: keyof NodeJS.ProcessEnv, value: string | undefined) {
 
 before(async () => {
   dbModule = await import("~~/lib/db");
-  dbTestMemory = await import("~~/lib/db/testMemory");
+  dbTestMemory = await import("~~/lib/db/testing/testMemory");
   preferencesModule = await import("~~/lib/notifications/preferences");
 });
 

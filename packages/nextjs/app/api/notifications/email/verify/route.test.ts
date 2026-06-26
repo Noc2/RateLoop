@@ -13,7 +13,7 @@ const originalVercelProjectProductionUrl = env.VERCEL_PROJECT_PRODUCTION_URL;
 const originalVercelUrl = env.VERCEL_URL;
 
 type DbModule = typeof import("~~/lib/db");
-type DbTestMemoryModule = typeof import("~~/lib/db/testMemory");
+type DbTestMemoryModule = typeof import("~~/lib/db/testing/testMemory");
 type RateLimitModule = typeof import("~~/utils/rateLimit");
 type RouteModule = typeof import("./route");
 
@@ -49,7 +49,7 @@ before(async () => {
   delete env.VERCEL_URL;
 
   dbModule = await import("~~/lib/db");
-  dbTestMemory = await import("~~/lib/db/testMemory");
+  dbTestMemory = await import("~~/lib/db/testing/testMemory");
   rateLimit = await import("~~/utils/rateLimit");
   route = await import("./route");
 });

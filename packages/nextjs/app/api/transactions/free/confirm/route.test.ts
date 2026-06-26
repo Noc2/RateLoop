@@ -14,7 +14,7 @@ const TEST_OPERATION_KEY = `0x${"1".repeat(64)}`;
 const TEST_TX_HASH = `0x${"2".repeat(64)}`;
 
 type DbModule = typeof import("~~/lib/db");
-type DbTestMemoryModule = typeof import("~~/lib/db/testMemory");
+type DbTestMemoryModule = typeof import("~~/lib/db/testing/testMemory");
 type RateLimitModule = typeof import("~~/utils/rateLimit");
 type FreeTransactionsModule = typeof import("~~/lib/thirdweb/freeTransactions");
 type RouteModule = typeof import("./route");
@@ -71,7 +71,7 @@ before(async () => {
   env.RATE_LIMIT_TRUSTED_IP_HEADERS = "x-forwarded-for";
 
   dbModule = await import("~~/lib/db");
-  dbTestMemory = await import("~~/lib/db/testMemory");
+  dbTestMemory = await import("~~/lib/db/testing/testMemory");
   rateLimit = await import("~~/utils/rateLimit");
   freeTransactions = await import("~~/lib/thirdweb/freeTransactions");
   route = await import("./route");

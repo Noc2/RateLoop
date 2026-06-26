@@ -28,7 +28,7 @@ env.DATABASE_URL = "memory:";
 
 type RateLimitModule = typeof import("./rateLimit");
 type DbModule = typeof import("../lib/db");
-type DbTestMemoryModule = typeof import("../lib/db/testMemory");
+type DbTestMemoryModule = typeof import("~~/lib/db/testing/testMemory");
 
 let rateLimit: RateLimitModule;
 let dbModule: DbModule;
@@ -50,7 +50,7 @@ before(async () => {
   env.NODE_ENV = "production";
   env.RATE_LIMIT_TRUSTED_IP_HEADERS = "x-forwarded-for";
   dbModule = await import("../lib/db");
-  dbTestMemory = await import("../lib/db/testMemory");
+  dbTestMemory = await import("~~/lib/db/testing/testMemory");
   dbModule.__setDatabaseResourcesForTests(dbTestMemory.createMemoryDatabaseResources());
   rateLimit = await import("./rateLimit");
 

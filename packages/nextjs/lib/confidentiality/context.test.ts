@@ -17,7 +17,7 @@ env.RATELOOP_CONFIDENTIALITY_SECRET = "test-confidentiality-secret";
 env.APP_URL = "https://rateloop.ai";
 
 type DbModule = typeof import("~~/lib/db");
-type DbTestMemoryModule = typeof import("~~/lib/db/testMemory");
+type DbTestMemoryModule = typeof import("~~/lib/db/testing/testMemory");
 type ConfidentialityContextModule = typeof import("./context");
 type SignedReadSessionsModule = typeof import("~~/lib/auth/signedReadSessions");
 
@@ -136,7 +136,7 @@ async function createAcceptedRequest() {
 
 before(async () => {
   dbModule = await import("~~/lib/db");
-  dbTestMemory = await import("~~/lib/db/testMemory");
+  dbTestMemory = await import("~~/lib/db/testing/testMemory");
   dbModule.__setDatabaseResourcesForTests(dbTestMemory.createMemoryDatabaseResources());
   confidentiality = await import("./context");
   signedReadSessions = await import("~~/lib/auth/signedReadSessions");

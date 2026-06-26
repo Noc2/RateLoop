@@ -22,7 +22,7 @@ const OTHER_WALLET = "0x2234567890abcdef1234567890abcdef12345678" as const;
 const TAKEN_EMAIL = "taken@example.com";
 
 type DbModule = typeof import("~~/lib/db");
-type DbTestMemoryModule = typeof import("~~/lib/db/testMemory");
+type DbTestMemoryModule = typeof import("~~/lib/db/testing/testMemory");
 type SignedActionsModule = typeof import("~~/lib/auth/signedActions");
 type RouteModule = typeof import("./route");
 
@@ -80,7 +80,7 @@ async function buildSignedUpdateBody(params: { email: string }) {
 before(async () => {
   configureEnv();
   dbModule = await import("~~/lib/db");
-  dbTestMemory = await import("~~/lib/db/testMemory");
+  dbTestMemory = await import("~~/lib/db/testing/testMemory");
   signedActions = await import("~~/lib/auth/signedActions");
   route = await import("./route");
 });

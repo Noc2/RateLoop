@@ -5,7 +5,7 @@ process.env.DATABASE_URL = "memory:";
 
 type ContentWatchModule = typeof import("./contentWatch");
 type DbModule = typeof import("../db");
-type DbTestMemoryModule = typeof import("../db/testMemory");
+type DbTestMemoryModule = typeof import("~~/lib/db/testing/testMemory");
 
 let contentWatch: ContentWatchModule;
 let dbModule: DbModule;
@@ -25,7 +25,7 @@ const BASE_SCOPE = {
 
 before(async () => {
   dbModule = await import("../db");
-  dbTestMemory = await import("../db/testMemory");
+  dbTestMemory = await import("~~/lib/db/testing/testMemory");
   dbModule.__setDatabaseResourcesForTests(dbTestMemory.createMemoryDatabaseResources());
   contentWatch = await import("./contentWatch");
   await contentWatch.ensureWatchedContentTable();

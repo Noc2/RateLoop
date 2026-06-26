@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, beforeEach, test } from "node:test";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
-import { createMemoryDatabaseResources } from "~~/lib/db/testMemory";
+import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 
 const ONE_PIXEL_PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=",

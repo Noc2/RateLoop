@@ -11,7 +11,7 @@ env.DATABASE_URL = "memory:";
 env.NODE_ENV = "test";
 
 type DbModule = typeof import("~~/lib/db");
-type DbTestMemoryModule = typeof import("~~/lib/db/testMemory");
+type DbTestMemoryModule = typeof import("~~/lib/db/testing/testMemory");
 type RateLimitModule = typeof import("~~/utils/rateLimit");
 type SignedReadSessionsModule = typeof import("~~/lib/auth/signedReadSessions");
 type SignedWriteSessionsModule = typeof import("~~/lib/auth/signedWriteSessions");
@@ -48,7 +48,7 @@ function restoreEnv(name: keyof NodeJS.ProcessEnv, value: string | undefined) {
 
 before(async () => {
   dbModule = await import("~~/lib/db");
-  dbTestMemory = await import("~~/lib/db/testMemory");
+  dbTestMemory = await import("~~/lib/db/testing/testMemory");
   dbModule.__setDatabaseResourcesForTests(dbTestMemory.createMemoryDatabaseResources());
   rateLimit = await import("~~/utils/rateLimit");
   rateLimit.__setRateLimitStoreForTests(dbModule.dbClient);

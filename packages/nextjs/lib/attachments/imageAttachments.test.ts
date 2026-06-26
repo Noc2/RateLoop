@@ -27,7 +27,7 @@ import {
 } from "~~/lib/attachments/imageAttachments";
 import { __setDatabaseResourcesForTests, db, dbClient } from "~~/lib/db";
 import { questionImageAttachments } from "~~/lib/db/schema";
-import { createMemoryDatabaseResources } from "~~/lib/db/testMemory";
+import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 
 const ONE_PIXEL_PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=",

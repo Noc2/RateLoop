@@ -21,7 +21,7 @@ env.NEXT_PUBLIC_TARGET_NETWORKS = "31337";
 
 type DbModule = typeof import("../db");
 type DatabaseResources = import("../db").DatabaseResources;
-type DbTestMemoryModule = typeof import("../db/testMemory");
+type DbTestMemoryModule = typeof import("~~/lib/db/testing/testMemory");
 type FreeTransactionsModule = typeof import("./freeTransactions");
 type OperationModule = typeof import("./freeTransactionOperation");
 
@@ -510,7 +510,7 @@ function createStoreUnavailableResources(base: DatabaseResources): DatabaseResou
 
 before(async () => {
   dbModule = await import("../db");
-  dbTestMemory = await import("../db/testMemory");
+  dbTestMemory = await import("~~/lib/db/testing/testMemory");
   memoryResources = dbTestMemory.createMemoryDatabaseResources();
   dbModule.__setDatabaseResourcesForTests(memoryResources);
   freeTransactions = await import("./freeTransactions");

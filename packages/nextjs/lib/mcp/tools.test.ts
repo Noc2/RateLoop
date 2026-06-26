@@ -15,7 +15,7 @@ import {
 import { __setSignedActionVerificationClientForTests } from "~~/lib/auth/signedActions";
 import { CONFIDENTIALITY_TERMS_VERSION } from "~~/lib/confidentiality/context";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
-import { createMemoryDatabaseResources } from "~~/lib/db/testMemory";
+import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import { __setUrlSafetyDnsResolversForTests } from "~~/utils/urlSafety";
 
 const AGENT: McpAgentAuth = {

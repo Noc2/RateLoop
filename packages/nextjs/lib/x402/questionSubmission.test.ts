@@ -10,7 +10,7 @@ import {
   encodeEventTopics,
 } from "viem";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
-import { createMemoryDatabaseResources } from "~~/lib/db/testMemory";
+import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 import { CONFIDENTIALITY_FLAG_PRIVATE_FOREVER } from "~~/lib/questionSubmissionCommitment";
 import { X402QuestionInputError, type X402QuestionPayload } from "~~/lib/x402/questionPayload";

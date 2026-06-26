@@ -3,7 +3,7 @@ import { McpToolError, __setMcpToolTestOverridesForTests, callRateLoopMcpTool, n
 import assert from "node:assert/strict";
 import { after, before, beforeEach, test } from "node:test";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
-import { createMemoryDatabaseResources } from "~~/lib/db/testMemory";
+import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 
 const env = process.env as Record<string, string | undefined>;

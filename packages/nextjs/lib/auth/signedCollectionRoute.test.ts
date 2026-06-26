@@ -5,7 +5,7 @@ import { after, before, beforeEach, test } from "node:test";
 process.env.DATABASE_URL = "memory:";
 
 type DbModule = typeof import("~~/lib/db");
-type DbTestMemoryModule = typeof import("~~/lib/db/testMemory");
+type DbTestMemoryModule = typeof import("~~/lib/db/testing/testMemory");
 type SignedCollectionRouteModule = typeof import("./signedCollectionRoute");
 type SignedReadSessionsModule = typeof import("./signedReadSessions");
 type SignedWriteSessionsModule = typeof import("./signedWriteSessions");
@@ -20,7 +20,7 @@ let signedWriteSessions: SignedWriteSessionsModule;
 
 before(async () => {
   dbModule = await import("~~/lib/db");
-  dbTestMemory = await import("~~/lib/db/testMemory");
+  dbTestMemory = await import("~~/lib/db/testing/testMemory");
   dbModule.__setDatabaseResourcesForTests(dbTestMemory.createMemoryDatabaseResources());
   signedCollectionRoute = await import("./signedCollectionRoute");
   signedReadSessions = await import("./signedReadSessions");

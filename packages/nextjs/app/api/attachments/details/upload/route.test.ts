@@ -5,7 +5,7 @@ import { createHash } from "node:crypto";
 import { after, beforeEach, test } from "node:test";
 import { questionDetailsHashInput } from "~~/lib/attachments/questionDetails.shared";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
-import { createMemoryDatabaseResources } from "~~/lib/db/testMemory";
+import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 
 const env = process.env as Record<string, string | undefined>;
 const originalAgents = env.RATELOOP_MCP_AGENTS;

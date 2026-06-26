@@ -50,7 +50,7 @@ test("getContentShareDataForParam redacts gated private-context content", async 
   process.env.NEXT_PUBLIC_PONDER_URL = "https://ponder.example";
 
   const dbModule = await import("~~/lib/db");
-  const dbTestMemory = await import("~~/lib/db/testMemory");
+  const dbTestMemory = await import("~~/lib/db/testing/testMemory");
   const confidentiality = await import("~~/lib/confidentiality/context");
   dbModule.__setDatabaseResourcesForTests(dbTestMemory.createMemoryDatabaseResources());
 

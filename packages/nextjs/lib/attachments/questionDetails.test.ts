@@ -13,7 +13,7 @@ import {
 import { questionDetailsHashInput } from "~~/lib/attachments/questionDetails.shared";
 import { __setDatabaseResourcesForTests, db } from "~~/lib/db";
 import { questionDetails } from "~~/lib/db/schema";
-import { createMemoryDatabaseResources } from "~~/lib/db/testMemory";
+import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 
 const originalAppUrl = process.env.APP_URL;
 const originalModerationMode = process.env.RATELOOP_QUESTION_DETAILS_MODERATION_MODE;

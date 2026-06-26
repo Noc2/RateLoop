@@ -14,7 +14,7 @@ const TEST_CHAIN_ID = 4801;
 
 type RateLimitModule = typeof import("~~/utils/rateLimit");
 type DbModule = typeof import("~~/lib/db");
-type DbTestMemoryModule = typeof import("~~/lib/db/testMemory");
+type DbTestMemoryModule = typeof import("~~/lib/db/testing/testMemory");
 type RouteModule = typeof import("./route");
 
 let rateLimit: RateLimitModule;
@@ -38,7 +38,7 @@ before(async () => {
   env.NEXT_PUBLIC_TARGET_NETWORKS = String(TEST_CHAIN_ID);
 
   dbModule = await import("~~/lib/db");
-  dbTestMemory = await import("~~/lib/db/testMemory");
+  dbTestMemory = await import("~~/lib/db/testing/testMemory");
   rateLimit = await import("~~/utils/rateLimit");
   route = await import("./route");
 });

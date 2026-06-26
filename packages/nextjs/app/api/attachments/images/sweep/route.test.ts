@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { after, beforeEach, test } from "node:test";
 import { __setDatabaseResourcesForTests, db } from "~~/lib/db";
 import { questionImageAttachments } from "~~/lib/db/schema";
-import { createMemoryDatabaseResources } from "~~/lib/db/testMemory";
+import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 
 const env = process.env as Record<string, string | undefined>;
 const originalDatabaseUrl = env.DATABASE_URL;

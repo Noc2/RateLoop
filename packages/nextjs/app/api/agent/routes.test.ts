@@ -44,7 +44,7 @@ type CallbackEventsModule = typeof import("~~/lib/agent-callbacks/events");
 type CallbackLifecycleModule = typeof import("~~/lib/agent-callbacks/lifecycle");
 type CallbackRegistryModule = typeof import("~~/lib/agent-callbacks/registry");
 type DbModule = typeof import("../../../lib/db");
-type DbTestMemoryModule = typeof import("../../../lib/db/testMemory");
+type DbTestMemoryModule = typeof import("~~/lib/db/testing/testMemory");
 type McpBudgetModule = typeof import("~~/lib/mcp/budget");
 type McpToolsModule = typeof import("~~/lib/mcp/tools");
 type UrlSafetyModule = typeof import("~~/utils/urlSafety");
@@ -530,7 +530,7 @@ before(async () => {
   env.NODE_ENV = "development";
   configureAgent();
   dbModule = await import("../../../lib/db");
-  dbTestMemory = await import("../../../lib/db/testMemory");
+  dbTestMemory = await import("~~/lib/db/testing/testMemory");
   dbModule.__setDatabaseResourcesForTests(dbTestMemory.createMemoryDatabaseResources());
   mcpBudgetModule = await import("~~/lib/mcp/budget");
   mcpToolsModule = await import("~~/lib/mcp/tools");

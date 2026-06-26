@@ -16,7 +16,7 @@ type PonderVoteItem = import("~~/services/ponder/client").PonderVoteItem;
 type PonderVotesResponse = import("~~/services/ponder/client").PonderVotesResponse;
 type ProtocolDeploymentScope = import("~~/lib/protocolDeployment").ProtocolDeploymentScope;
 type DbModule = typeof import("../db");
-type DbTestMemoryModule = typeof import("../db/testMemory");
+type DbTestMemoryModule = typeof import("~~/lib/db/testing/testMemory");
 
 let contentFeedback: ContentFeedbackModule;
 let dbModule: DbModule;
@@ -195,7 +195,7 @@ function buildFeedbackBonusAward(params: Partial<PonderFeedbackBonusAward> = {})
 
 before(async () => {
   dbModule = await import("../db");
-  dbTestMemory = await import("../db/testMemory");
+  dbTestMemory = await import("~~/lib/db/testing/testMemory");
   dbModule.__setDatabaseResourcesForTests(dbTestMemory.createMemoryDatabaseResources());
   contentFeedback = await import("./contentFeedback");
 });
