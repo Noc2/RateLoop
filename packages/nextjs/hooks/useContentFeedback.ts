@@ -10,6 +10,7 @@ import { useTransactor } from "~~/hooks/scaffold-eth";
 import { useLocalE2ETestWalletClient } from "~~/hooks/scaffold-eth/useLocalE2ETestWalletClient";
 import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import { useThirdwebSponsoredSubmitCalls } from "~~/hooks/useThirdwebSponsoredSubmitCalls";
+import { useTransactionFlowToast } from "~~/hooks/useTransactionFlowToast";
 import { useWalletTransactionReadiness } from "~~/hooks/useWalletTransactionReadiness";
 import { hasPublishedFeedbackPostcondition } from "~~/lib/feedback/postconditions";
 import type { ContentFeedbackItem, ContentFeedbackListResult, ContentFeedbackType } from "~~/lib/feedback/types";
@@ -129,6 +130,7 @@ export function useContentFeedback(contentId: bigint | string | number | null | 
     isAwaitingSelfFundedSubmitCalls,
     isAwaitingSponsoredSubmitCalls,
   } = useThirdwebSponsoredSubmitCalls();
+  const flowToast = useTransactionFlowToast();
   const walletTransactionReadiness = useWalletTransactionReadiness({
     address,
     includeExternalSendCalls: true,
@@ -232,20 +234,71 @@ export function useContentFeedback(contentId: bigint | string | number | null | 
         } as const;
         const canUseBatchedFeedbackWrite =
           !localE2ETestWalletClient && (canUseSponsoredSubmitCalls || canUseSelfFundedBatchCalls);
-        const submittedHash = await (canUseBatchedFeedbackWrite && publicClient
-          ? (() => {
-              const contentIdValue = BigInt(normalizedContentId);
-              const roundIdValue = BigInt(params.roundId);
-              return raceTransactionWithPostcondition({
-                onPostconditionSuccessThenTransactionError: error => {
-                  console.warn("[content-feedback] publish postcondition succeeded before thirdweb status settled.", {
-                    contentId: normalizedContentId,
-                    error,
-                    roundId: params.roundId,
-                  });
-                },
-                transaction: () =>
-                  executeContractCallBatch(
+        const feedbackBatchSponsorshipMode = canUseSponsoredSubmitCalls ? "sponsored" : "self-funded";
+        const batchOptions = {
+          ...flowToast.getSponsoredBatchOptions({
+            action: "Publish feedback",
+            sponsorshipMode: feedbackBatchSponsorshipMode,
+          }),
+          atomicRequired: true,
+        };
+        const submittedHash = await (canUseBatchedFeedbackWrite
+          ? (async () => {
+              flowToast.beginFlow({
+                action: "Publish feedback",
+                sponsored: feedbackBatchSponsorshipMode === "sponsored",
+              });
+              try {
+                if (publicClient) {
+                  const contentIdValue = BigInt(normalizedContentId);
+                  const roundIdValue = BigInt(params.roundId);
+                  return await raceTransactionWithPostcondition({
+                    onPostconditionSuccessThenTransactionError: error => {
+                      console.warn(
+                        "[content-feedback] publish postcondition succeeded before thirdweb status settled.",
+                        {
+                          contentId: normalizedContentId,
+                          error,
+                          roundId: params.roundId,
+                        },
+                      );
+                    },
+                    transaction: () =>
+                      executeContractCallBatch(
+                        [
+                          {
+                            abi: request.abi,
+                            address: request.address,
+                            args: request.args,
+                            functionName: request.functionName,
+                          },
+                        ],
+                        batchOptions,
+                      ),
+                    waitForPostcondition: shouldStop =>
+                      waitForTransactionPostcondition(
+                        () =>
+                          hasPublishedFeedbackPostcondition({
+                            client: publicClient,
+                            commitKey,
+                            contentId: contentIdValue,
+                            expectedFeedbackHash: params.feedbackHash,
+                            feedbackRegistryAddress,
+                            roundId: roundIdValue,
+                          }),
+                        "feedback-publish-postcondition",
+                        {
+                          pollingIntervalMs: getFeedbackPostconditionPollingInterval(targetNetwork.id),
+                          shouldStop,
+                        },
+                      ),
+                  }).then(result =>
+                    result.confirmation === "postcondition" ? null : readBatchTransactionHash(result.result),
+                  );
+                }
+
+                return readBatchTransactionHash(
+                  await executeContractCallBatch(
                     [
                       {
                         abi: request.abi,
@@ -254,59 +307,20 @@ export function useContentFeedback(contentId: bigint | string | number | null | 
                         functionName: request.functionName,
                       },
                     ],
-                    {
-                      action: "Publish feedback",
-                      atomicRequired: true,
-                      sponsorshipMode: canUseSponsoredSubmitCalls ? "sponsored" : "self-funded",
-                      suppressStatusToast: true,
-                    },
+                    batchOptions,
                   ),
-                waitForPostcondition: shouldStop =>
-                  waitForTransactionPostcondition(
-                    () =>
-                      hasPublishedFeedbackPostcondition({
-                        client: publicClient,
-                        commitKey,
-                        contentId: contentIdValue,
-                        expectedFeedbackHash: params.feedbackHash,
-                        feedbackRegistryAddress,
-                        roundId: roundIdValue,
-                      }),
-                    "feedback-publish-postcondition",
-                    {
-                      pollingIntervalMs: getFeedbackPostconditionPollingInterval(targetNetwork.id),
-                      shouldStop,
-                    },
-                  ),
-              }).then(result =>
-                result.confirmation === "postcondition" ? null : readBatchTransactionHash(result.result),
-              );
+                );
+              } finally {
+                flowToast.endFlow();
+              }
             })()
-          : canUseBatchedFeedbackWrite
-            ? readBatchTransactionHash(
-                await executeContractCallBatch(
-                  [
-                    {
-                      abi: request.abi,
-                      address: request.address,
-                      args: request.args,
-                      functionName: request.functionName,
-                    },
-                  ],
-                  {
-                    action: "Publish feedback",
-                    atomicRequired: true,
-                    sponsorshipMode: canUseSponsoredSubmitCalls ? "sponsored" : "self-funded",
-                  },
-                ),
-              )
-            : writeTx(
-                () =>
-                  localE2ETestWalletClient
-                    ? localE2ETestWalletClient.writeContract(request as any)
-                    : writeContractAsync(request as any),
-                { action: "Publish feedback", suppressSuccessToast: true },
-              ));
+          : writeTx(
+              () =>
+                localE2ETestWalletClient
+                  ? localE2ETestWalletClient.writeContract(request as any)
+                  : writeContractAsync(request as any),
+              { action: "Publish feedback", suppressSuccessToast: true },
+            ));
         if (submittedHash === undefined) {
           throw new Error("Feedback publication transaction was not submitted.");
         }
@@ -332,6 +346,7 @@ export function useContentFeedback(contentId: bigint | string | number | null | 
       targetNetwork.name,
       writeContractAsync,
       writeTx,
+      flowToast,
     ],
   );
 

@@ -14,6 +14,7 @@ import { getTransactionReceiptPollingInterval } from "~~/config/shared";
 import { useDeployedContractInfo, useScaffoldReadContract, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
 import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import { useThirdwebSponsoredSubmitCalls } from "~~/hooks/useThirdwebSponsoredSubmitCalls";
+import { useTransactionFlowToast } from "~~/hooks/useTransactionFlowToast";
 import { useWalletTransactionReadiness } from "~~/hooks/useWalletTransactionReadiness";
 import { raceTransactionWithPostcondition, waitForTransactionPostcondition } from "~~/lib/transactions/postcondition";
 import scaffoldConfig from "~~/scaffold.config";
@@ -204,6 +205,7 @@ export function useSetRaterProfile() {
     isAwaitingSelfFundedSubmitCalls,
     isAwaitingSponsoredSubmitCalls,
   } = useThirdwebSponsoredSubmitCalls();
+  const flowToast = useTransactionFlowToast();
   const canUseBatchedRaterProfileCalls = canUseSponsoredSubmitCalls || canUseSelfFundedBatchCalls;
   const raterProfileBatchSponsorshipMode = canUseSponsoredSubmitCalls ? "sponsored" : "self-funded";
   const walletTransactionReadiness = useWalletTransactionReadiness({
@@ -222,6 +224,14 @@ export function useSetRaterProfile() {
       const args = [raterType, metadataHash] as const;
       if (canUseBatchedRaterProfileCalls && raterRegistryContract) {
         setIsSponsoredWritePending(true);
+        flowToast.beginFlow({
+          action: "rater profile update",
+          sponsored: raterProfileBatchSponsorshipMode === "sponsored",
+        });
+        const batchOptions = flowToast.getSponsoredBatchOptions({
+          action: "rater profile update",
+          sponsorshipMode: raterProfileBatchSponsorshipMode,
+        });
         try {
           const registryAddress = raterRegistryContract.address as `0x${string}`;
           const registryAbi = raterRegistryContract.abi as Abi;
@@ -253,11 +263,7 @@ export function useSetRaterProfile() {
                       functionName: "setProfile",
                     },
                   ],
-                  {
-                    action: "rater profile update",
-                    sponsorshipMode: raterProfileBatchSponsorshipMode,
-                    suppressStatusToast: true,
-                  },
+                  batchOptions,
                 ),
               waitForPostcondition: shouldStop =>
                 waitForTransactionPostcondition(
@@ -293,11 +299,12 @@ export function useSetRaterProfile() {
                   functionName: "setProfile",
                 },
               ],
-              { action: "rater profile update", sponsorshipMode: raterProfileBatchSponsorshipMode },
+              batchOptions,
             );
           }
           return;
         } finally {
+          flowToast.endFlow();
           setIsSponsoredWritePending(false);
         }
       }
@@ -314,6 +321,7 @@ export function useSetRaterProfile() {
       address,
       canUseBatchedRaterProfileCalls,
       executeSponsoredCalls,
+      flowToast,
       publicClient,
       raterProfileBatchSponsorshipMode,
       raterRegistryContract,

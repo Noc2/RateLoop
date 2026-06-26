@@ -8,6 +8,7 @@ import { getPublicClient, sendTransaction } from "wagmi/actions";
 import { getTransactionReceiptPollingInterval } from "~~/config/shared";
 import { refreshActiveWalletReadQueries } from "~~/hooks/useRefreshWalletBalances";
 import { useThirdwebSponsoredSubmitCalls } from "~~/hooks/useThirdwebSponsoredSubmitCalls";
+import { useTransactionFlowToast } from "~~/hooks/useTransactionFlowToast";
 import { useWalletExecutionCapabilities } from "~~/hooks/useWalletExecutionCapabilities";
 import { useWalletTransactionReadiness } from "~~/hooks/useWalletTransactionReadiness";
 import {
@@ -82,6 +83,7 @@ export function useWalletTransactionPlanExecutor() {
     isAwaitingSelfFundedBatchCalls,
     isAwaitingSponsoredBatchCalls,
   } = useThirdwebSponsoredSubmitCalls();
+  const flowToast = useTransactionFlowToast();
   const walletTransactionReadiness = useWalletTransactionReadiness({
     includeExternalSendCalls: true,
     isAwaitingSelfFundedWallet: isAwaitingSelfFundedBatchCalls,
@@ -179,6 +181,19 @@ export function useWalletTransactionPlanExecutor() {
         throw new Error(walletTransactionReadiness.message ?? "Wallet is unavailable.");
       }
 
+      const flowBatchOptions = canUseThirdwebPlanBatchCalls
+        ? flowToast.getSponsoredBatchOptions({
+            action,
+            sponsorshipMode: thirdwebPlanSponsorshipMode,
+          })
+        : null;
+      if (canUseThirdwebPlanBatchCalls) {
+        flowToast.beginFlow({
+          action,
+          sponsored: thirdwebPlanSponsorshipMode === "sponsored",
+        });
+      }
+
       const waitForReservationRevealIfNeeded = async (call: NormalizedWalletTransactionPlanCall<TCall>) => {
         if (!latestReservationReceipt || !isWalletTransactionPlanReservationRevealCall(call.call)) return;
         const publicClient =
@@ -239,7 +254,7 @@ export function useWalletTransactionPlanExecutor() {
                   parentRunId: timingLog.runId,
                   segmentIndex,
                   sponsorshipMode: thirdwebPlanSponsorshipMode,
-                  suppressStatusToast: true,
+                  ...flowBatchOptions,
                 },
               );
               const receiptHashes = collectReceiptHashes(callsStatus);
@@ -369,6 +384,10 @@ export function useWalletTransactionPlanExecutor() {
           transactionHashCount: hashes.length,
         });
         throw error;
+      } finally {
+        if (canUseThirdwebPlanBatchCalls) {
+          flowToast.endFlow();
+        }
       }
     },
     [
@@ -379,6 +398,7 @@ export function useWalletTransactionPlanExecutor() {
       connector,
       executeContractCallBatch,
       executeSequentialCall,
+      flowToast,
       queryClient,
       sendCallsSyncAsync,
       wagmiConfig,

@@ -11,6 +11,7 @@ import {
   useTargetNetwork,
 } from "~~/hooks/scaffold-eth";
 import { useThirdwebSponsoredSubmitCalls } from "~~/hooks/useThirdwebSponsoredSubmitCalls";
+import { useTransactionFlowToast } from "~~/hooks/useTransactionFlowToast";
 import { useWalletTransactionReadiness } from "~~/hooks/useWalletTransactionReadiness";
 import { avatarAccentRgbToHex } from "~~/lib/avatar/avatarAccent";
 import { raceTransactionWithPostcondition, waitForTransactionPostcondition } from "~~/lib/transactions/postcondition";
@@ -76,6 +77,7 @@ function useProfileRegistryWrite() {
     isAwaitingSelfFundedSubmitCalls,
     isAwaitingSponsoredSubmitCalls,
   } = useThirdwebSponsoredSubmitCalls();
+  const flowToast = useTransactionFlowToast();
   const canUseBatchedProfileRegistryCalls = canUseSponsoredSubmitCalls || canUseSelfFundedBatchCalls;
   const profileRegistryBatchSponsorshipMode = canUseSponsoredSubmitCalls ? "sponsored" : "self-funded";
   const walletTransactionReadiness = useWalletTransactionReadiness({
@@ -93,6 +95,14 @@ function useProfileRegistryWrite() {
 
       if (canUseBatchedProfileRegistryCalls && profileRegistryContract) {
         setIsSponsoredWritePending(true);
+        flowToast.beginFlow({
+          action,
+          sponsored: profileRegistryBatchSponsorshipMode === "sponsored",
+        });
+        const batchOptions = flowToast.getSponsoredBatchOptions({
+          action,
+          sponsorshipMode: profileRegistryBatchSponsorshipMode,
+        });
         try {
           const contractAddress = profileRegistryContract.address as `0x${string}`;
           const contractAbi = profileRegistryContract.abi as Abi;
@@ -115,7 +125,7 @@ function useProfileRegistryWrite() {
                       functionName,
                     },
                   ],
-                  { action, sponsorshipMode: profileRegistryBatchSponsorshipMode, suppressStatusToast: true },
+                  batchOptions,
                 ),
               waitForPostcondition: shouldStop =>
                 waitForTransactionPostcondition(
@@ -175,11 +185,12 @@ function useProfileRegistryWrite() {
                   functionName,
                 },
               ],
-              { action, sponsorshipMode: profileRegistryBatchSponsorshipMode },
+              batchOptions,
             );
           }
           return;
         } finally {
+          flowToast.endFlow();
           setIsSponsoredWritePending(false);
         }
       }
@@ -196,6 +207,7 @@ function useProfileRegistryWrite() {
       address,
       canUseBatchedProfileRegistryCalls,
       executeSponsoredCalls,
+      flowToast,
       profileRegistryContract,
       profileRegistryBatchSponsorshipMode,
       publicClient,

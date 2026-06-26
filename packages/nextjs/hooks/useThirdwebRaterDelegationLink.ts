@@ -9,6 +9,7 @@ import { getTransactionReceiptPollingInterval } from "~~/config/shared";
 import { useDeployedContractInfo, useScaffoldWriteContract, useTargetNetwork } from "~~/hooks/scaffold-eth";
 import { useRaterRegistryIdentity } from "~~/hooks/useRaterRegistryIdentity";
 import { useThirdwebSponsoredSubmitCalls } from "~~/hooks/useThirdwebSponsoredSubmitCalls";
+import { useTransactionFlowToast } from "~~/hooks/useTransactionFlowToast";
 import { getThirdwebRaterDelegationCandidate } from "~~/lib/thirdweb/raterDelegation";
 import { raceTransactionWithPostcondition, waitForTransactionPostcondition } from "~~/lib/transactions/postcondition";
 import { buildRaterDelegateAuthorizationTypedData, getDefaultSignatureDeadline } from "~~/lib/walletSignatures";
@@ -39,6 +40,7 @@ export function useThirdwebRaterDelegationLink({ enabled = true }: { enabled?: b
   });
   const { canUseSelfFundedBatchCalls, canUseSponsoredSubmitCalls, executeSponsoredCalls } =
     useThirdwebSponsoredSubmitCalls();
+  const flowToast = useTransactionFlowToast();
   const canUseBatchedDelegationLinkCalls = canUseSponsoredSubmitCalls || canUseSelfFundedBatchCalls;
   const delegationLinkBatchSponsorshipMode = canUseSponsoredSubmitCalls ? "sponsored" : "self-funded";
   const [isLinking, setIsLinking] = useState(false);
@@ -118,81 +120,89 @@ export function useThirdwebRaterDelegationLink({ enabled = true }: { enabled?: b
       const args = [candidate.holderAddress, deadline, signature] as const;
 
       if (canUseBatchedDelegationLinkCalls) {
-        const activeDelegateBefore = await publicClient
-          .readContract({
-            address: registryAddress,
-            abi,
-            functionName: "delegateTo",
-            args: [candidate.holderAddress],
-          } as never)
-          .then(value => (typeof value === "string" ? value : null))
-          .catch(() => null);
-        const canWaitForPostcondition =
-          activeDelegateBefore === null ||
-          normalizeAddress(activeDelegateBefore) !== normalizeAddress(candidate.delegateAddress);
+        flowToast.beginFlow({
+          action: "rater identity link",
+          sponsored: delegationLinkBatchSponsorshipMode === "sponsored",
+        });
+        const batchOptions = flowToast.getSponsoredBatchOptions({
+          action: "rater identity link",
+          sponsorshipMode: delegationLinkBatchSponsorshipMode,
+        });
+        try {
+          const activeDelegateBefore = await publicClient
+            .readContract({
+              address: registryAddress,
+              abi,
+              functionName: "delegateTo",
+              args: [candidate.holderAddress],
+            } as never)
+            .then(value => (typeof value === "string" ? value : null))
+            .catch(() => null);
+          const canWaitForPostcondition =
+            activeDelegateBefore === null ||
+            normalizeAddress(activeDelegateBefore) !== normalizeAddress(candidate.delegateAddress);
 
-        if (canWaitForPostcondition) {
-          await raceTransactionWithPostcondition({
-            onPostconditionSuccessThenTransactionError: error => {
-              console.warn("[rater-delegation-link] postcondition succeeded before thirdweb status settled.", error);
-            },
-            transaction: () =>
-              executeSponsoredCalls(
-                [
-                  {
-                    abi,
-                    address: registryAddress,
-                    args,
-                    functionName: "acceptDelegateWithSig",
-                  },
-                ],
-                {
-                  action: "rater identity link",
-                  sponsorshipMode: delegationLinkBatchSponsorshipMode,
-                  suppressStatusToast: true,
-                },
-              ),
-            waitForPostcondition: shouldStop =>
-              waitForTransactionPostcondition(
-                async () => {
-                  const [delegateTo, delegateOf] = await Promise.all([
-                    publicClient.readContract({
-                      address: registryAddress,
-                      abi,
-                      functionName: "delegateTo",
-                      args: [candidate.holderAddress],
-                    } as never),
-                    publicClient.readContract({
-                      address: registryAddress,
-                      abi,
-                      functionName: "delegateOf",
-                      args: [candidate.delegateAddress],
-                    } as never),
-                  ]);
-                  return (
-                    normalizeAddress(String(delegateTo)) === normalizeAddress(candidate.delegateAddress) &&
-                    normalizeAddress(String(delegateOf)) === normalizeAddress(candidate.holderAddress)
-                  );
-                },
-                "rater-delegation-link-postcondition",
-                {
-                  pollingIntervalMs: getRaterDelegationPostconditionPollingInterval(targetNetwork.id),
-                  shouldStop,
-                },
-              ),
-          });
-        } else {
-          await executeSponsoredCalls(
-            [
-              {
-                abi,
-                address: registryAddress,
-                args,
-                functionName: "acceptDelegateWithSig",
+          if (canWaitForPostcondition) {
+            await raceTransactionWithPostcondition({
+              onPostconditionSuccessThenTransactionError: error => {
+                console.warn("[rater-delegation-link] postcondition succeeded before thirdweb status settled.", error);
               },
-            ],
-            { action: "rater identity link", sponsorshipMode: delegationLinkBatchSponsorshipMode },
-          );
+              transaction: () =>
+                executeSponsoredCalls(
+                  [
+                    {
+                      abi,
+                      address: registryAddress,
+                      args,
+                      functionName: "acceptDelegateWithSig",
+                    },
+                  ],
+                  batchOptions,
+                ),
+              waitForPostcondition: shouldStop =>
+                waitForTransactionPostcondition(
+                  async () => {
+                    const [delegateTo, delegateOf] = await Promise.all([
+                      publicClient.readContract({
+                        address: registryAddress,
+                        abi,
+                        functionName: "delegateTo",
+                        args: [candidate.holderAddress],
+                      } as never),
+                      publicClient.readContract({
+                        address: registryAddress,
+                        abi,
+                        functionName: "delegateOf",
+                        args: [candidate.delegateAddress],
+                      } as never),
+                    ]);
+                    return (
+                      normalizeAddress(String(delegateTo)) === normalizeAddress(candidate.delegateAddress) &&
+                      normalizeAddress(String(delegateOf)) === normalizeAddress(candidate.holderAddress)
+                    );
+                  },
+                  "rater-delegation-link-postcondition",
+                  {
+                    pollingIntervalMs: getRaterDelegationPostconditionPollingInterval(targetNetwork.id),
+                    shouldStop,
+                  },
+                ),
+            });
+          } else {
+            await executeSponsoredCalls(
+              [
+                {
+                  abi,
+                  address: registryAddress,
+                  args,
+                  functionName: "acceptDelegateWithSig",
+                },
+              ],
+              batchOptions,
+            );
+          }
+        } finally {
+          flowToast.endFlow();
         }
       } else {
         await (writeContractAsync as any)(
@@ -222,6 +232,7 @@ export function useThirdwebRaterDelegationLink({ enabled = true }: { enabled?: b
     chain?.id,
     connectedIdentity,
     executeSponsoredCalls,
+    flowToast,
     holderIdentity,
     publicClient,
     raterRegistryContract,
