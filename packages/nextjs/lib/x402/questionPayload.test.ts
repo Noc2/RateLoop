@@ -655,6 +655,46 @@ test("parseX402QuestionRequest accepts explicit governed round config", () => {
   assert.equal(payload.roundConfig.maxVoters, 50n);
 });
 
+test("parseX402QuestionRequest rejects round config ABI-width overflows", () => {
+  assert.throws(
+    () =>
+      parseX402QuestionRequest({
+        ...VALID_REQUEST,
+        bounty: {
+          ...VALID_REQUEST.bounty,
+          requiredVoters: "65536",
+        },
+      }),
+    /bounty\.requiredVoters must be at most 65535/,
+  );
+  assert.throws(
+    () =>
+      parseX402QuestionRequest({
+        ...VALID_REQUEST,
+        roundConfig: {
+          epochDuration: "4294967296",
+          maxDuration: "1200",
+          maxVoters: "100",
+          minVoters: "3",
+        },
+      }),
+    /question\.roundConfig\.epochDuration must be at most 4294967295/,
+  );
+  assert.throws(
+    () =>
+      parseX402QuestionRequest({
+        ...VALID_REQUEST,
+        roundConfig: {
+          epochDuration: "1200",
+          maxDuration: "1200",
+          maxVoters: "65536",
+          minVoters: "3",
+        },
+      }),
+    /question\.roundConfig\.maxVoters must be at most 65535/,
+  );
+});
+
 test("parseX402QuestionRequest defaults settlement voters to bounty voters", () => {
   const payload = parseX402QuestionRequest({
     ...VALID_REQUEST,

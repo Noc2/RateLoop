@@ -36,6 +36,8 @@ const X402_DEFAULT_SUBMISSION_BOUNTY = 1_000_000n;
 const X402_MIN_REWARD_POOL_REQUIRED_VOTERS = 3n;
 const X402_MIN_REWARD_POOL_SETTLED_ROUNDS = 1n;
 const X402_MAX_QUESTION_BUNDLE_COUNT = 10;
+export const X402_ROUND_CONFIG_UINT32_MAX = 4_294_967_295n;
+export const X402_ROUND_CONFIG_UINT16_MAX = 65_535n;
 const EMPTY_DETAILS_HASH = `0x${"0".repeat(64)}` as const;
 const AFTER_SETTLEMENT_DISCLOSURE_POLICY = "after_settlement";
 const DEFAULT_CONFIDENTIALITY_DISCLOSURE_POLICY = "private_forever";
@@ -288,6 +290,11 @@ function parseNonNegativeInteger(value: unknown, fieldName: string): bigint {
   }
 
   return BigInt(rawValue);
+}
+
+function assertIntegerUpperBound(value: bigint, fieldName: string, maxValue: bigint) {
+  if (value <= maxValue) return;
+  throw new X402QuestionInputError(`${fieldName} must be at most ${maxValue}.`);
 }
 
 function normalizeNonceBigInt(value: unknown, fieldName: string): bigint {
@@ -795,6 +802,7 @@ function normalizeBounty(value: unknown): X402QuestionPayload["bounty"] {
   if (requiredVoters < X402_MIN_REWARD_POOL_REQUIRED_VOTERS) {
     throw new X402QuestionInputError(`bounty.requiredVoters must be at least ${X402_MIN_REWARD_POOL_REQUIRED_VOTERS}.`);
   }
+  assertIntegerUpperBound(requiredVoters, "bounty.requiredVoters", X402_ROUND_CONFIG_UINT16_MAX);
   const requiredVoterFloor = BigInt(requiredQuestionRewardParticipants(amount));
   if (requiredVoters < requiredVoterFloor) {
     throw new X402QuestionInputError(
@@ -916,6 +924,10 @@ function normalizeRoundConfig(
   if (minVoters <= 0n || maxVoters <= 0n || maxVoters < minVoters) {
     throw new X402QuestionInputError("question.roundConfig voter values are invalid.");
   }
+  assertIntegerUpperBound(epochDuration, "question.roundConfig.epochDuration", X402_ROUND_CONFIG_UINT32_MAX);
+  assertIntegerUpperBound(maxDuration, "question.roundConfig.maxDuration", X402_ROUND_CONFIG_UINT32_MAX);
+  assertIntegerUpperBound(minVoters, "question.roundConfig.minVoters", X402_ROUND_CONFIG_UINT16_MAX);
+  assertIntegerUpperBound(maxVoters, "question.roundConfig.maxVoters", X402_ROUND_CONFIG_UINT16_MAX);
   if (minVoters !== requiredVoters) {
     throw new X402QuestionInputError("question.roundConfig.minVoters must match bounty.requiredVoters.");
   }

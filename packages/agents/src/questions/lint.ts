@@ -12,6 +12,8 @@ const CLIENT_REQUEST_ID_PATTERN = /^[A-Za-z0-9._:-]{4,160}$/;
 // Contracts enforce rewardTerms.requiredVoters == roundConfig.minVoters
 // ("Voters mismatch"), and the server defaults requiredVoters to 3.
 const DEFAULT_REQUIRED_VOTERS = 3n;
+const ROUND_CONFIG_UINT32_MAX = 4_294_967_295n;
+const ROUND_CONFIG_UINT16_MAX = 65_535n;
 const RANK_BY_RATING_TEMPLATE_IDS = new Set(["ranked_option_member", "pairwise_output_preference"]);
 const HEAD_TO_HEAD_AB_REQUIRED_INPUTS = ["optionAKey", "optionALabel", "optionBKey", "optionBLabel"] as const;
 const FEATURE_ACCEPTANCE_TEMPLATE_ID = "feature_acceptance_test";
@@ -209,6 +211,57 @@ function lintRoundConfigVoterAlignment(request: Partial<AgentAskExample>, findin
       `roundConfig.minVoters (${minVoters}) must match bounty.requiredVoters (${requiredVoters}); contracts reject mismatched voter thresholds. Omit roundConfig to inherit bounty.requiredVoters.`,
     );
   }
+}
+
+function lintBoundedInteger(
+  value: unknown,
+  path: string,
+  maxValue: bigint,
+  findings: QuestionLintFinding[],
+) {
+  const parsed = parseLintVoterCount(value);
+  if (parsed === null || parsed <= maxValue) return;
+  pushFinding(findings, "error", path, `${path} must be at most ${maxValue}.`);
+}
+
+function lintRoundConfigAbiBounds(
+  request: Partial<AgentAskExample>,
+  findings: QuestionLintFinding[],
+) {
+  const firstQuestion = request.question ?? (Array.isArray(request.questions) ? request.questions[0] : undefined);
+  const usesTopLevelRoundConfig = isObject(request.roundConfig);
+  const roundConfig = usesTopLevelRoundConfig
+    ? (request.roundConfig as JsonObject)
+    : isObject(firstQuestion) && isObject((firstQuestion as JsonObject).roundConfig)
+      ? ((firstQuestion as JsonObject).roundConfig as JsonObject)
+      : null;
+  if (!roundConfig) return;
+
+  const pathPrefix = usesTopLevelRoundConfig ? "roundConfig" : "question.roundConfig";
+  lintBoundedInteger(
+    roundConfig.epochDuration ?? roundConfig.blindPhaseSeconds ?? roundConfig.blindSeconds,
+    `${pathPrefix}.epochDuration`,
+    ROUND_CONFIG_UINT32_MAX,
+    findings,
+  );
+  lintBoundedInteger(
+    roundConfig.maxDuration ?? roundConfig.maxDurationSeconds ?? roundConfig.deadlineSeconds,
+    `${pathPrefix}.maxDuration`,
+    ROUND_CONFIG_UINT32_MAX,
+    findings,
+  );
+  lintBoundedInteger(
+    roundConfig.minVoters,
+    `${pathPrefix}.minVoters`,
+    ROUND_CONFIG_UINT16_MAX,
+    findings,
+  );
+  lintBoundedInteger(
+    roundConfig.maxVoters,
+    `${pathPrefix}.maxVoters`,
+    ROUND_CONFIG_UINT16_MAX,
+    findings,
+  );
 }
 
 export function lintAgentQuestion(
@@ -513,6 +566,12 @@ export function lintAgentAskRequest(input: unknown): QuestionLintFinding[] {
       pushFinding(findings, "error", "bounty.amount", "Bounty amount must be a positive atomic integer.");
     } else {
       const requiredVoters = parseLintVoterCount(request.bounty.requiredVoters) ?? DEFAULT_REQUIRED_VOTERS;
+      lintBoundedInteger(
+        request.bounty.requiredVoters,
+        "bounty.requiredVoters",
+        ROUND_CONFIG_UINT16_MAX,
+        findings,
+      );
       const requiredVoterFloor = requiredQuestionRewardParticipants(amount);
       if (requiredVoters < requiredVoterFloor) {
         pushFinding(
@@ -529,6 +588,7 @@ export function lintAgentAskRequest(input: unknown): QuestionLintFinding[] {
     pushFinding(findings, "error", "templateId", `Unknown result template: ${request.templateId}.`);
   }
 
+  lintRoundConfigAbiBounds(request, findings);
   lintRoundConfigVoterAlignment(request, findings);
 
   const questions = asQuestionArray(request as AgentAskExample);

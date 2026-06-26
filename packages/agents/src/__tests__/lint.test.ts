@@ -623,6 +623,40 @@ describe("round config voter alignment linting", () => {
     expect(summarizeLintFindings(findings).ok).toBe(false);
   });
 
+  it("flags round config values that overflow ABI widths", () => {
+    const findings = lintAgentAskRequest({
+      ...VALID_REQUEST,
+      bounty: { ...VALID_REQUEST.bounty, requiredVoters: "65536" },
+      roundConfig: {
+        epochDuration: "4294967296",
+        maxDuration: "1200",
+        maxVoters: "65536",
+        minVoters: "65536",
+      },
+    });
+
+    expect(findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "error",
+          path: "bounty.requiredVoters",
+        }),
+        expect.objectContaining({
+          level: "error",
+          path: "roundConfig.epochDuration",
+        }),
+        expect.objectContaining({
+          level: "error",
+          path: "roundConfig.minVoters",
+        }),
+        expect.objectContaining({
+          level: "error",
+          path: "roundConfig.maxVoters",
+        }),
+      ]),
+    );
+  });
+
   it("flags a question-level roundConfig.minVoters mismatch against the default quorum", () => {
     const findings = lintAgentAskRequest({
       ...VALID_REQUEST,

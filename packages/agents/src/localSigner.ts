@@ -61,6 +61,8 @@ import {
   parseX402QuestionRequest as parseSharedX402QuestionRequest,
   buildDefaultX402QuestionParserOptions,
   toCanonicalQuestionPayload as toSharedCanonicalQuestionPayload,
+  X402_ROUND_CONFIG_UINT16_MAX,
+  X402_ROUND_CONFIG_UINT32_MAX,
   type X402QuestionItemPayload,
   type X402QuestionPayload,
   type X402QuestionParserOptions,
@@ -1513,7 +1515,42 @@ function buildRewardTermsHash(rewardTerms: LocalRewardTerms): Hex {
   );
 }
 
+function roundConfigAbiNumber(
+  value: bigint,
+  fieldName: string,
+  maxValue: bigint,
+): number {
+  if (value >= 0n && value <= maxValue) return Number(value);
+  throw new Error(`${fieldName} must be at most ${maxValue}.`);
+}
+
+function roundConfigAbiValues(roundConfig: LocalQuestionRoundConfig) {
+  return {
+    epochDuration: roundConfigAbiNumber(
+      roundConfig.epochDuration,
+      "question.roundConfig.epochDuration",
+      X402_ROUND_CONFIG_UINT32_MAX,
+    ),
+    maxDuration: roundConfigAbiNumber(
+      roundConfig.maxDuration,
+      "question.roundConfig.maxDuration",
+      X402_ROUND_CONFIG_UINT32_MAX,
+    ),
+    maxVoters: roundConfigAbiNumber(
+      roundConfig.maxVoters,
+      "question.roundConfig.maxVoters",
+      X402_ROUND_CONFIG_UINT16_MAX,
+    ),
+    minVoters: roundConfigAbiNumber(
+      roundConfig.minVoters,
+      "question.roundConfig.minVoters",
+      X402_ROUND_CONFIG_UINT16_MAX,
+    ),
+  };
+}
+
 function buildRoundConfigHash(roundConfig: LocalQuestionRoundConfig): Hex {
+  const abiValues = roundConfigAbiValues(roundConfig);
   return keccak256(
     encodeAbiParameters(
       [
@@ -1523,10 +1560,10 @@ function buildRoundConfigHash(roundConfig: LocalQuestionRoundConfig): Hex {
         { type: "uint16" },
       ],
       [
-        Number(roundConfig.epochDuration),
-        Number(roundConfig.maxDuration),
-        Number(roundConfig.minVoters),
-        Number(roundConfig.maxVoters),
+        abiValues.epochDuration,
+        abiValues.maxDuration,
+        abiValues.minVoters,
+        abiValues.maxVoters,
       ],
     ),
   );
@@ -1636,6 +1673,7 @@ function buildQuestionBundleRevealCommitment(params: {
   roundConfig: LocalQuestionRoundConfig;
   submitter: Address;
 }): Hex {
+  const abiRoundConfig = roundConfigAbiValues(params.roundConfig);
   return keccak256(
     encodeAbiParameters(
       [
@@ -1667,10 +1705,10 @@ function buildQuestionBundleRevealCommitment(params: {
         params.rewardTerms.bountyWindowSeconds,
         params.rewardTerms.feedbackWindowSeconds,
         params.rewardTerms.bountyEligibility,
-        Number(params.roundConfig.epochDuration),
-        Number(params.roundConfig.maxDuration),
-        Number(params.roundConfig.minVoters),
-        Number(params.roundConfig.maxVoters),
+        abiRoundConfig.epochDuration,
+        abiRoundConfig.maxDuration,
+        abiRoundConfig.minVoters,
+        abiRoundConfig.maxVoters,
       ],
     ),
   );

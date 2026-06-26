@@ -2380,6 +2380,29 @@ describe("local signer round config alignment", () => {
     });
   });
 
+  it("rejects round config values that overflow ABI widths", () => {
+    const tooManyRequiredVoters = fiveVoterAskPayload();
+    tooManyRequiredVoters.bounty.requiredVoters = "65536";
+
+    expect(() =>
+      buildLocalQuestionCanonicalPayload(tooManyRequiredVoters, 480),
+    ).toThrow(/bounty\.requiredVoters must be at most 65535/);
+
+    expect(() =>
+      buildLocalQuestionCanonicalPayload(
+        fiveVoterAskPayload({
+          roundConfig: {
+            epochDuration: "1200",
+            maxDuration: "4294967296",
+            maxVoters: "100",
+            minVoters: "5",
+          },
+        }),
+        480,
+      ),
+    ).toThrow(/question\.roundConfig\.maxDuration must be at most 4294967295/);
+  });
+
   it("expands the pure-agent fast round preset into a contract-safe round config", () => {
     const canonical = buildLocalQuestionCanonicalPayload(
       fiveVoterAskPayload({
