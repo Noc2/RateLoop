@@ -38,7 +38,14 @@ COPY packages/node-utils/src ./packages/node-utils/src
 
 WORKDIR /app/packages/keeper
 
-RUN yarn build:workspace-deps
+RUN yarn build:workspace-deps && yarn build
+
+WORKDIR /app
+
+RUN --mount=type=cache,id=rateloop-keeper-yarn-cache,target=/app/.yarn/cache \
+  YARN_ENABLE_IMMUTABLE_INSTALLS=true yarn workspaces focus @rateloop/keeper --production
+
+WORKDIR /app/packages/keeper
 
 EXPOSE 9090
 
@@ -46,4 +53,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
   CMD node -e "const http=require('node:http');const port=process.env.METRICS_PORT||process.env.PORT||'9090';const headers={};if(process.env.METRICS_AUTH_TOKEN)headers.Authorization='Bearer '+process.env.METRICS_AUTH_TOKEN;const req=http.get({host:'127.0.0.1',port,path:'/health',headers},res=>process.exit(res.statusCode===200?0:1));req.on('error',()=>process.exit(1));req.setTimeout(4000,()=>req.destroy());"
 
 USER node
-CMD ["yarn", "start:built-workspace-deps"]
+CMD ["yarn", "start:built-dist"]

@@ -92,7 +92,7 @@ test("Railway service start commands pin production mode", () => {
 
   assert.match(
     keeper,
-    /startCommand = "NODE_ENV=production yarn workspace @rateloop\/keeper start:built-workspace-deps"/,
+    /startCommand = "NODE_ENV=production yarn workspace @rateloop\/keeper start:built-dist"/,
   );
   assert.match(
     ponder,
@@ -101,4 +101,16 @@ test("Railway service start commands pin production mode", () => {
   assert.match(ponder, /builder = "RAILPACK"/);
   assert.match(ponder, /healthcheckPath = "\/ready"/);
   assert.match(ponder, /healthcheckTimeout = 900/);
+});
+
+test("Keeper Docker runtime uses built output and production dependencies", () => {
+  const dockerfile = readWorkflow("packages/keeper/Dockerfile");
+
+  assert.match(dockerfile, /RUN yarn build:workspace-deps && yarn build/);
+  assert.match(
+    dockerfile,
+    /yarn workspaces focus @rateloop\/keeper --production/,
+  );
+  assert.match(dockerfile, /CMD \["yarn", "start:built-dist"\]/);
+  assert.doesNotMatch(dockerfile, /CMD \["yarn", "start:built-workspace-deps"\]/);
 });
