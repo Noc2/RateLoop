@@ -24,7 +24,7 @@ const nextConfig: NextConfig = {
   devIndicators: false,
   transpilePackages: ["@rateloop/contracts", "@rateloop/node-utils", "thirdweb", "@thirdweb-dev/wagmi-adapter"],
   outputFileTracingIncludes: {
-    "/api/og/vote/route": ["./app/api/og/vote/fonts/**/*"],
+    "/api/og/vote": ["./app/api/og/vote/fonts/**/*"],
   },
   typescript: {
     ignoreBuildErrors: false,
