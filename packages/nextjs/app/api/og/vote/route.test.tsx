@@ -83,7 +83,7 @@ test("caches versioned vote social cards for crawlers", async () => {
   mockShareContentFetch(requestedUrls);
 
   const response = await GET(
-    new NextRequest("https://www.rateloop.ai/api/og/vote?content=88&rv=og2-r-88-5000-1-0-1776160800-none-none"),
+    new NextRequest("https://www.rateloop.ai/api/og/vote?content=88&rv=og3-r-88-5000-1-0-1776160800-none-none"),
   );
 
   assert.equal(response.status, 200);
@@ -123,7 +123,7 @@ test("loads trusted preview images into data URLs for social card rendering", as
 test("keeps content vote social cards uncached without the current rating version", async () => {
   for (const url of [
     "https://www.rateloop.ai/api/og/vote?content=88",
-    "https://www.rateloop.ai/api/og/vote?content=88&rv=og2-r-88-4900-1-0-1776160800-none-none",
+    "https://www.rateloop.ai/api/og/vote?content=88&rv=og3-r-88-4900-1-0-1776160800-none-none",
   ]) {
     mockShareContentFetch();
 

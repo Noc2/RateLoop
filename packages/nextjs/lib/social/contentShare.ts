@@ -4,7 +4,7 @@ import { detectPlatform, getThumbnailUrl } from "~~/utils/platforms";
 
 export const VOTE_SHARE_RATING_VERSION_PARAM = "rv";
 
-const VOTE_SHARE_CARD_VERSION = "og2";
+const VOTE_SHARE_CARD_VERSION = "og3";
 const TITLE_MAX_LENGTH = 96;
 const DESCRIPTION_MAX_LENGTH = 180;
 const ALT_MAX_LENGTH = 180;
@@ -349,18 +349,18 @@ function buildRewardVersionPart(reward: ContentShareReward | null): string {
 
 function buildRewardSummary(bountyReward: ContentShareReward | null, feedbackBonusReward: ContentShareReward | null) {
   if (bountyReward && feedbackBonusReward) {
-    return `Potential rewards: ${bountyReward.amountLabel} in bounties and ${feedbackBonusReward.amountLabel} in Feedback Bonuses.`;
+    return `${bountyReward.amountLabel} in bounties and ${feedbackBonusReward.amountLabel} in Feedback Bonuses.`;
   }
 
   if (bountyReward) {
-    return `Potential bounty: ${bountyReward.amountLabel} for eligible raters.`;
+    return `Bounty: ${bountyReward.amountLabel} for eligible raters.`;
   }
 
   if (feedbackBonusReward) {
-    return `Potential Feedback Bonus: ${feedbackBonusReward.amountLabel} for useful rater feedback.`;
+    return `Feedback Bonus: ${feedbackBonusReward.amountLabel} for useful rater feedback.`;
   }
 
-  return "Potential bounties and Feedback Bonuses appear on RateLoop when available.";
+  return "Bounties and Feedback Bonuses appear on RateLoop when available.";
 }
 
 export function buildContentShareRatingVersion(
@@ -424,7 +424,9 @@ export function buildContentShareData(content: ContentShareContentInput, origin:
     TITLE_MAX_LENGTH,
   );
   const description = truncateText(
-    rating ? `Current rating ${rating.label}/10 from ${voteLabel}. Disagree? Stake LREP and vote.` : rewardSummary,
+    rating
+      ? `Current rating ${rating.label}/10 from ${voteLabel}. Disagree? Stake LREP and vote.`
+      : contentDescription || "Stake LREP and rate this on RateLoop.",
     DESCRIPTION_MAX_LENGTH,
   );
   const imageAlt = truncateText(

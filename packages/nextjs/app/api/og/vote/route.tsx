@@ -118,25 +118,6 @@ function RateLoopMark({ size = 46 }: { size?: number }) {
   );
 }
 
-function BrandKicker({ children }: { children: React.ReactNode }) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", marginBottom: 18 }}>
-      <div style={{ color: brandColors.warmWhite, fontFamily: headingFontFamily, fontSize: 28, fontWeight: 700 }}>
-        {children}
-      </div>
-      <div
-        style={{
-          width: 250,
-          height: 5,
-          borderRadius: 999,
-          background: spectrumGradient,
-          marginTop: 12,
-        }}
-      />
-    </div>
-  );
-}
-
 function GradientFrame({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
   return (
     <div
@@ -249,7 +230,14 @@ function Metric({ label, value, valueFontSize = 38 }: { label: string; value: st
 }
 
 function getRewardMetricFontSize(value: string): number {
-  return value.length > 14 ? 25 : 31;
+  return value.length > 14 ? 28 : 35;
+}
+
+function getTitleFontSize(title: string): number {
+  if (title.length <= 42) return 86;
+  if (title.length <= 64) return 78;
+  if (title.length <= 84) return 68;
+  return 60;
 }
 
 function RatingShareImage({ shareData }: { shareData: ContentShareData }) {
@@ -304,31 +292,19 @@ function RatingShareImage({ shareData }: { shareData: ContentShareData }) {
         </GradientFrame>
       </div>
 
-      <div style={{ display: "flex", flex: 1, gap: 44, alignItems: "center", paddingTop: 46 }}>
+      <div style={{ display: "flex", flex: 1, gap: 42, alignItems: "center", paddingTop: 28 }}>
         <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
-          <BrandKicker>{hasRating ? "Current RateLoop rating" : "RateLoop rating round"}</BrandKicker>
           <div
             style={{
               fontFamily: headingFontFamily,
-              fontSize: 68,
+              fontSize: getTitleFontSize(shareData.contentTitle),
               fontWeight: 700,
-              lineHeight: 1.04,
+              lineHeight: 1.03,
               color: brandColors.warmWhite,
-              marginBottom: 24,
+              maxWidth: 790,
             }}
           >
             {shareData.contentTitle}
-          </div>
-          <div
-            style={{
-              display: "flex",
-              color: "rgba(245,245,245,0.76)",
-              fontSize: 28,
-              lineHeight: 1.28,
-              maxWidth: 700,
-            }}
-          >
-            {shareData.contentDescription || shareData.rewardSummary}
           </div>
         </div>
 
@@ -377,31 +353,26 @@ function RatingShareImage({ shareData }: { shareData: ContentShareData }) {
                 />
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: 18 }}>
-                <div style={{ fontSize: 23, fontWeight: 700, color: brandColors.warmWhite }}>
-                  {hasRating ? "Rating + rewards" : "Potential rewards"}
-                </div>
                 {rewardMetrics}
               </div>
             </div>
           </GradientFrame>
         ) : (
-          <GradientFrame style={{ width: 330 }}>
+          <GradientFrame style={{ width: 322 }}>
             <div
               style={{
                 display: "flex",
                 flexDirection: "column",
+                alignItems: "center",
                 width: "100%",
                 borderRadius: 7,
                 background: brandColors.surfaceElevated,
                 color: brandColors.warmWhite,
-                padding: 28,
-                gap: 20,
+                padding: 30,
+                gap: 24,
               }}
             >
-              <div style={{ fontSize: 26, fontWeight: 700, color: brandColors.warmWhite }}>
-                {hasRating ? "Rating + rewards" : "Potential rewards"}
-              </div>
-              <RatingBadge ratingLabel={ratingLabel} hasRating={hasRating} size={160} />
+              <RatingBadge ratingLabel={ratingLabel} hasRating={hasRating} size={188} />
               <div
                 style={{
                   display: "flex",
