@@ -56,6 +56,8 @@ test("Base Sepolia readiness remains an active push, PR, scheduled, and manual g
     workflow,
     /PONDER_KEEPER_WORK_TOKEN: \$\{\{ secrets\.PONDER_KEEPER_WORK_TOKEN \}\}/,
   );
+  assert.match(workflow, /BASE_SEPOLIA_KEEPER_URL: \$\{\{ vars\.BASE_SEPOLIA_KEEPER_URL \}\}/);
+  assert.match(workflow, /env\.BASE_SEPOLIA_KEEPER_URL != ''/);
   assert.match(workflow, /RATE_LIMIT_TRUSTED_IP_HEADERS:/);
 });
 
@@ -79,6 +81,8 @@ test("Base mainnet readiness remains an active push, PR, scheduled, and manual g
     workflow,
     /PONDER_KEEPER_WORK_TOKEN: \$\{\{ secrets\.PONDER_KEEPER_WORK_TOKEN \}\}/,
   );
+  assert.match(workflow, /BASE_KEEPER_URL: \$\{\{ vars\.BASE_KEEPER_URL \}\}/);
+  assert.match(workflow, /env\.BASE_KEEPER_URL != ''/);
   assert.match(workflow, /RATE_LIMIT_TRUSTED_IP_HEADERS:/);
 });
 

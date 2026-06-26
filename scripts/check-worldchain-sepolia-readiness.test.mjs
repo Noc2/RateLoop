@@ -706,6 +706,11 @@ test("validateLiveReadiness fails closed when required live targets are missing"
       message.includes("WORLDCHAIN_SEPOLIA_APP_URL"),
     ),
   );
+  assert(
+    result.failures.some((message) =>
+      message.includes("WORLDCHAIN_SEPOLIA_KEEPER_URL"),
+    ),
+  );
 });
 
 test("validateLiveReadiness reports Base Sepolia env names when required live targets are missing", async () => {
@@ -726,6 +731,11 @@ test("validateLiveReadiness reports Base Sepolia env names when required live ta
   );
   assert(
     result.failures.some((message) => message.includes("BASE_SEPOLIA_APP_URL")),
+  );
+  assert(
+    result.failures.some((message) =>
+      message.includes("BASE_SEPOLIA_KEEPER_URL"),
+    ),
   );
 });
 
@@ -1050,6 +1060,7 @@ test("validateLiveReadiness probes keeper work with the configured bearer token"
   const previousEnv = {
     CORS_ORIGIN: process.env.CORS_ORIGIN,
     KEEPER_DATABASE_URL: process.env.KEEPER_DATABASE_URL,
+    METRICS_AUTH_TOKEN: process.env.METRICS_AUTH_TOKEN,
     NODE_ENV: process.env.NODE_ENV,
     PONDER_KEEPER_WORK_TOKEN: process.env.PONDER_KEEPER_WORK_TOKEN,
     PONDER_METADATA_SYNC_TOKEN: process.env.PONDER_METADATA_SYNC_TOKEN,
@@ -1058,10 +1069,12 @@ test("validateLiveReadiness probes keeper work with the configured bearer token"
   const deploymentJson = makeDeploymentJson();
   const deploymentAddresses = buildDeploymentAddressMap(deploymentJson);
   let keeperAuthorization = null;
+  let keeperHealthAuthorization = null;
 
   Object.assign(process.env, {
     CORS_ORIGIN: "https://www.rateloop.ai",
     KEEPER_DATABASE_URL: "postgres://keeper.example/rateloop",
+    METRICS_AUTH_TOKEN: "metrics-secret",
     NODE_ENV: "production",
     PONDER_KEEPER_WORK_TOKEN: "keeper-secret",
     PONDER_METADATA_SYNC_TOKEN: "metadata-secret",
@@ -1106,17 +1119,36 @@ test("validateLiveReadiness probes keeper work with the configured bearer token"
         headers: { "content-type": "application/json" },
       });
     }
+    if (urlString.endsWith("/live")) {
+      return new Response(JSON.stringify({ status: "ok" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    if (urlString.endsWith("/health")) {
+      keeperHealthAuthorization = init?.headers?.authorization ?? null;
+      return new Response(
+        JSON.stringify({
+          status: "ok",
+          lastRun: new Date().toISOString(),
+          consecutiveErrors: 0,
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }
     throw new Error(`Unexpected fetch ${urlString}`);
   };
 
   try {
     const result = await validateLiveReadiness({
       deploymentJson,
+      keeperUrl: "https://keeper.example.test",
       ponderUrl: "https://ponder.example.test/indexer",
       requireTargets: true,
     });
 
     assert.equal(keeperAuthorization, "Bearer keeper-secret");
+    assert.equal(keeperHealthAuthorization, "Bearer metrics-secret");
     assert(
       result.checks.some(
         (check) =>
@@ -1124,6 +1156,18 @@ test("validateLiveReadiness probes keeper work with the configured bearer token"
           check.message.includes(
             "Ponder /keeper/work accepts Keeper bearer token",
           ),
+      ),
+    );
+    assert(
+      result.checks.some(
+        (check) =>
+          check.ok && check.message.includes("Keeper /live reports status ok"),
+      ),
+    );
+    assert(
+      result.checks.some(
+        (check) =>
+          check.ok && check.message.includes("Keeper /health reports status ok"),
       ),
     );
   } finally {

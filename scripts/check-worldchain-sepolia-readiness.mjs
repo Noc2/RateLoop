@@ -49,6 +49,7 @@ async function main() {
     liveResult = await validateLiveReadiness({
       appUrl: process.env.WORLDCHAIN_SEPOLIA_APP_URL,
       deploymentJson: offlineInputs.deploymentJson,
+      keeperUrl: process.env.WORLDCHAIN_SEPOLIA_KEEPER_URL,
       ponderUrl: process.env.WORLDCHAIN_SEPOLIA_PONDER_URL,
       readinessConfig: WORLDCHAIN_SEPOLIA_READINESS_CONFIG,
       requireTargets: args.requireLiveTargets,

@@ -79,7 +79,9 @@ The deployed Next.js app can use Base Flashblocks/preconfirmation metadata to ma
 Production Keeper/Ponder services must also boot with `NODE_ENV=production`. Base mainnet service readiness expects
 `KEEPER_DATABASE_URL` for the keeper advisory lock, Ponder `CORS_ORIGIN`, and
 `RATE_LIMIT_TRUSTED_IP_HEADERS`; if Keeper metrics bind to a non-loopback address, set a 16+ character
-`METRICS_AUTH_TOKEN`. Strict live readiness probes Ponder `/keeper/work` with `PONDER_KEEPER_WORK_TOKEN`.
+`METRICS_AUTH_TOKEN`. Strict live readiness probes Ponder `/keeper/work` with `PONDER_KEEPER_WORK_TOKEN`,
+Keeper `/live` with `BASE_KEEPER_URL` / `BASE_SEPOLIA_KEEPER_URL`, and Keeper `/health` when
+`METRICS_AUTH_TOKEN` is configured.
 
 ## E2E production-build flags
 

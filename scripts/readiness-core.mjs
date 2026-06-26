@@ -14,6 +14,7 @@ export const WORLDCHAIN_SEPOLIA_READINESS_CONFIG = {
   chainId: WORLDCHAIN_SEPOLIA_CHAIN_ID,
   chainIdHex: WORLDCHAIN_SEPOLIA_CHAIN_ID_HEX,
   deploymentPath: "packages/foundry/deployments/4801.json",
+  keeperEnvName: "WORLDCHAIN_SEPOLIA_KEEPER_URL",
   label: "World Chain Sepolia",
   networkName: "worldchainSepolia",
   ponderEnvName: "WORLDCHAIN_SEPOLIA_PONDER_URL",
@@ -68,6 +69,15 @@ function expectedPonderDatabaseSchema(readinessConfig, deploymentAddresses) {
 
   const hash = createHash("sha256").update(deploymentKey).digest("hex").slice(0, 16);
   return `rateloop_deployment_${hash}`;
+}
+
+function isRecentPastDate(value, maxAgeMs = 2 * 60 * 60 * 1000) {
+  if (typeof value !== "string") return false;
+  const time = Date.parse(value);
+  if (!Number.isFinite(time)) return false;
+
+  const ageMs = Date.now() - time;
+  return ageMs >= 0 && ageMs <= maxAgeMs;
 }
 
 export const REQUIRED_DEPLOYED_CONTRACTS = [
@@ -1031,6 +1041,7 @@ async function validateLiveClusterPayoutOracleConsumers({
 export async function validateLiveReadiness({
   appUrl,
   deploymentJson,
+  keeperUrl,
   ponderUrl,
   readinessConfig = WORLDCHAIN_SEPOLIA_READINESS_CONFIG,
   requireTargets = false,
@@ -1340,6 +1351,90 @@ export async function validateLiveReadiness({
       failures,
       !requireTargets,
       `live Ponder probe skipped because ${readinessConfig.ponderEnvName} is unset`,
+    );
+  }
+
+  if (keeperUrl) {
+    try {
+      const liveResponse = await fetchWithTimeout(
+        buildReadinessUrl(keeperUrl, "/live"),
+      );
+      addCheck(
+        checks,
+        failures,
+        liveResponse.ok,
+        `Keeper /live returns HTTP ${liveResponse.status}`,
+      );
+      if (liveResponse.ok) {
+        const liveBody = await liveResponse.json().catch(() => null);
+        addCheck(
+          checks,
+          failures,
+          liveBody?.status === "ok",
+          "Keeper /live reports status ok",
+        );
+      }
+
+      const metricsAuthToken = process.env.METRICS_AUTH_TOKEN?.trim();
+      if (metricsAuthToken) {
+        const healthResponse = await fetchWithTimeout(
+          buildReadinessUrl(keeperUrl, "/health"),
+          {
+            headers: {
+              authorization: `Bearer ${metricsAuthToken}`,
+            },
+          },
+        );
+        addCheck(
+          checks,
+          failures,
+          healthResponse.ok,
+          `Keeper /health returns HTTP ${healthResponse.status}`,
+        );
+        if (healthResponse.ok) {
+          const health = await healthResponse.json().catch(() => null);
+          addCheck(
+            checks,
+            failures,
+            health?.status === "ok",
+            "Keeper /health reports status ok",
+          );
+          addCheck(
+            checks,
+            failures,
+            isRecentPastDate(health?.lastRun),
+            "Keeper /health reports a recent lastRun",
+          );
+          addCheck(
+            checks,
+            failures,
+            Number(health?.consecutiveErrors) === 0,
+            "Keeper /health reports zero consecutiveErrors",
+          );
+        }
+      } else {
+        addCheck(
+          checks,
+          failures,
+          true,
+          "Keeper /health live probe skipped because METRICS_AUTH_TOKEN is unset",
+        );
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      addCheck(
+        checks,
+        failures,
+        false,
+        `Keeper readiness probe failed: ${message}`,
+      );
+    }
+  } else {
+    addCheck(
+      checks,
+      failures,
+      !requireTargets,
+      `live Keeper probe skipped because ${readinessConfig.keeperEnvName ?? "KEEPER_URL"} is unset`,
     );
   }
 

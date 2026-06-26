@@ -25,6 +25,7 @@ jobs:
     timeout-minutes: 10
     env:
       BASE_SEPOLIA_APP_URL: ${{ vars.BASE_SEPOLIA_APP_URL }}
+      BASE_SEPOLIA_KEEPER_URL: ${{ vars.BASE_SEPOLIA_KEEPER_URL }}
       BASE_SEPOLIA_NEXT_ENV_FILE: docs/testing/base-sepolia-next-env.fixture
       BASE_SEPOLIA_PONDER_URL: ${{ vars.BASE_SEPOLIA_PONDER_URL }}
       BASE_SEPOLIA_RPC_URL: ${{ secrets.BASE_SEPOLIA_RPC_URL }}
@@ -54,5 +55,5 @@ jobs:
         run: node scripts/check-base-sepolia-readiness.mjs
 
       - name: Live core readiness probes
-        if: (github.event_name == 'workflow_dispatch' && github.event.inputs.live == 'true') || (github.event_name == 'schedule' && env.BASE_SEPOLIA_RPC_URL != '' && env.BASE_SEPOLIA_PONDER_URL != '' && env.BASE_SEPOLIA_APP_URL != '')
+        if: (github.event_name == 'workflow_dispatch' && github.event.inputs.live == 'true') || (github.event_name == 'schedule' && env.BASE_SEPOLIA_RPC_URL != '' && env.BASE_SEPOLIA_PONDER_URL != '' && env.BASE_SEPOLIA_APP_URL != '' && env.BASE_SEPOLIA_KEEPER_URL != '')
         run: node scripts/check-base-sepolia-readiness.mjs --live --require-live-targets

@@ -19,6 +19,7 @@ export const BASE_SEPOLIA_READINESS_CONFIG = {
   chainId: 84532,
   chainIdHex: "0x14a34",
   deploymentPath: "packages/foundry/deployments/84532.json",
+  keeperEnvName: "BASE_SEPOLIA_KEEPER_URL",
   label: "Base Sepolia",
   networkName: "baseSepolia",
   ponderEnvName: "BASE_SEPOLIA_PONDER_URL",
@@ -161,6 +162,7 @@ async function main() {
     liveResult = await validateLiveReadiness({
       appUrl: process.env.BASE_SEPOLIA_APP_URL,
       deploymentJson: offlineInputs.deploymentJson,
+      keeperUrl: process.env.BASE_SEPOLIA_KEEPER_URL,
       ponderUrl: process.env.BASE_SEPOLIA_PONDER_URL,
       readinessConfig: BASE_SEPOLIA_READINESS_CONFIG,
       requireTargets: args.requireLiveTargets,

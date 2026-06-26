@@ -16,6 +16,7 @@ export const BASE_MAINNET_READINESS_CONFIG = {
   chainId: 8453,
   chainIdHex: "0x2105",
   deploymentPath: "packages/foundry/deployments/8453.json",
+  keeperEnvName: "BASE_KEEPER_URL",
   label: "Base mainnet",
   networkName: "base",
   ponderEnvName: "BASE_PONDER_URL",
@@ -151,6 +152,7 @@ async function main() {
     liveResult = await validateLiveReadiness({
       appUrl: process.env.BASE_APP_URL,
       deploymentJson: offlineInputs.deploymentJson,
+      keeperUrl: process.env.BASE_KEEPER_URL,
       ponderUrl: process.env.BASE_PONDER_URL,
       readinessConfig: BASE_MAINNET_READINESS_CONFIG,
       requireTargets: args.requireLiveTargets,

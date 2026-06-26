@@ -25,6 +25,7 @@ jobs:
     timeout-minutes: 10
     env:
       BASE_APP_URL: ${{ vars.BASE_APP_URL }}
+      BASE_KEEPER_URL: ${{ vars.BASE_KEEPER_URL }}
       BASE_PONDER_URL: ${{ vars.BASE_PONDER_URL }}
       BASE_RPC_URL: ${{ secrets.BASE_RPC_URL }}
       CORS_ORIGIN: ${{ vars.CORS_ORIGIN }}
@@ -53,5 +54,5 @@ jobs:
         run: node scripts/check-base-mainnet-readiness.mjs
 
       - name: Live readiness probes
-        if: (github.event_name == 'workflow_dispatch' && github.event.inputs.live == 'true') || (github.event_name == 'schedule' && env.BASE_RPC_URL != '' && env.BASE_PONDER_URL != '' && env.BASE_APP_URL != '')
+        if: (github.event_name == 'workflow_dispatch' && github.event.inputs.live == 'true') || (github.event_name == 'schedule' && env.BASE_RPC_URL != '' && env.BASE_PONDER_URL != '' && env.BASE_APP_URL != '' && env.BASE_KEEPER_URL != '')
         run: node scripts/check-base-mainnet-readiness.mjs --live --require-live-targets
