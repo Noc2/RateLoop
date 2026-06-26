@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { timingSafeEqual } from "crypto";
+import { timingSafeEqual } from "node:crypto";
 import { getNotificationDeliverySecret } from "~~/lib/env/server";
 import { deliverNotificationEmails, getNotificationEmailDeliveryStatus } from "~~/lib/notifications/emailDelivery";
+import { checkRateLimit } from "~~/utils/rateLimit";
+
+const DELIVERY_RATE_LIMIT = { limit: 30, windowMs: 60_000 };
 
 function constantTimeEquals(left: string, right: string): boolean {
   const leftBuffer = Buffer.from(left);
@@ -30,6 +33,9 @@ function isAuthorized(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const limited = await checkRateLimit(request, DELIVERY_RATE_LIMIT);
+  if (limited) return limited;
+
   const auth = isAuthorized(request);
   if (!auth.ok) {
     return NextResponse.json(
