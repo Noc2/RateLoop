@@ -1,3 +1,4 @@
+import { createRequire } from "node:module";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import {
@@ -14,6 +15,12 @@ import { registerDiscoveryRoutes } from "./routes/discovery-routes.js";
 import { registerKeeperRoutes } from "./routes/keeper-routes.js";
 import { registerLeaderboardRoutes } from "./routes/leaderboard-routes.js";
 import { resolvePonderProtocolDeploymentMetadata } from "../protocol-deployment.js";
+
+const require = createRequire(import.meta.url);
+const { resolvePonderDatabaseSchema, schemaFromProtocolDeploymentKey } = require("../../scripts/databaseSchema.mjs") as {
+  resolvePonderDatabaseSchema: (env?: NodeJS.ProcessEnv) => { schema: string; source: string };
+  schemaFromProtocolDeploymentKey: (deploymentKey?: string | null) => string | undefined;
+};
 
 const KEEPER_INTERNAL_PATH_PREFIXES = [
   "/keeper/work",
@@ -165,7 +172,14 @@ app.get("/deployment", (c) => {
     return c.json({ configured: false, error: "Protocol deployment is not configured" }, 503);
   }
 
-  return c.json(metadata);
+  const databaseSchema = resolvePonderDatabaseSchema(process.env);
+
+  return c.json({
+    ...metadata,
+    databaseSchema: databaseSchema.schema,
+    databaseSchemaSource: databaseSchema.source,
+    expectedDatabaseSchema: schemaFromProtocolDeploymentKey(metadata.deploymentKey) ?? null,
+  });
 });
 
 registerContentRoutes(app);

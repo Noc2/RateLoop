@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { schemaFromProtocolDeploymentKey } from "../scripts/databaseSchema.mjs";
 
 const ORIGINAL_ENV = { ...process.env };
 
@@ -75,6 +76,10 @@ describe("ponder api bootstrap", () => {
       chainId: 31337,
       deploymentKey:
         "31337:0x0000000000000000000000000000000000000001:0x0000000000000000000000000000000000000002",
+      databaseSchema: schemaFromProtocolDeploymentKey(
+        "31337:0x0000000000000000000000000000000000000001:0x0000000000000000000000000000000000000002",
+      ),
+      databaseSchemaSource: "RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY",
     });
   });
 

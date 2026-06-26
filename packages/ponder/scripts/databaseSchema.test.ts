@@ -1,5 +1,6 @@
 import {
   DEFAULT_PONDER_DATABASE_SCHEMA,
+  LIVE_SCHEMA_OVERRIDE_FLAG,
   buildPonderStartArgs,
   buildProtocolDeploymentKey,
   hasSchemaFlag,
@@ -70,6 +71,67 @@ describe("Ponder database schema launcher", () => {
 
     expect(result.schema).toBe(schemaFromProtocolDeploymentKey(deploymentKey));
     expect(result.source).toBe("RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY");
+  });
+
+  test("prefers live protocol deployment schemas over stale RateLoop schema overrides", () => {
+    const deploymentKey =
+      "8453:0x1000000000000000000000000000000000000001:0x1000000000000000000000000000000000000002";
+    const result = resolvePonderDatabaseSchema({
+      PONDER_NETWORK: "base",
+      RATELOOP_PONDER_DATABASE_SCHEMA: "rateloop_ponder_worldchain",
+      RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY: deploymentKey,
+    });
+
+    expect(result.schema).toBe(schemaFromProtocolDeploymentKey(deploymentKey));
+    expect(result.source).toBe("RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY");
+    expect(result.ignoredLiveSchemaOverride).toBe(true);
+  });
+
+  test("prefers live protocol deployment schemas over stale DATABASE_SCHEMA overrides", () => {
+    const deploymentKey =
+      "8453:0x1000000000000000000000000000000000000001:0x1000000000000000000000000000000000000002";
+    const result = resolvePonderDatabaseSchema({
+      DATABASE_SCHEMA: "rateloop_ponder_base_sepolia",
+      PONDER_NETWORK: "base",
+      RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY: deploymentKey,
+    });
+
+    expect(result.schema).toBe(schemaFromProtocolDeploymentKey(deploymentKey));
+    expect(result.source).toBe("RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY");
+    expect(result.ignoredLiveSchemaOverride).toBe(true);
+  });
+
+  test("rejects foreign static RateLoop schema overrides on live networks", () => {
+    expect(() =>
+      resolvePonderDatabaseSchema({
+        PONDER_NETWORK: "base",
+        RATELOOP_PONDER_DATABASE_SCHEMA: "rateloop_ponder_worldchain",
+      }),
+    ).toThrow("RATELOOP_PONDER_DATABASE_SCHEMA=rateloop_ponder_worldchain is a static worldchain Ponder schema");
+  });
+
+  test("rejects foreign static DATABASE_SCHEMA overrides on live networks", () => {
+    expect(() =>
+      resolvePonderDatabaseSchema({
+        DATABASE_SCHEMA: "rateloop_ponder_base_sepolia",
+        PONDER_NETWORK: "base",
+      }),
+    ).toThrow("DATABASE_SCHEMA=rateloop_ponder_base_sepolia is a static baseSepolia Ponder schema");
+  });
+
+  test("allows deliberate live schema overrides with the break-glass flag", () => {
+    const deploymentKey =
+      "8453:0x1000000000000000000000000000000000000001:0x1000000000000000000000000000000000000002";
+    const result = resolvePonderDatabaseSchema({
+      [LIVE_SCHEMA_OVERRIDE_FLAG]: "true",
+      PONDER_NETWORK: "base",
+      RATELOOP_PONDER_DATABASE_SCHEMA: "rateloop_ponder_worldchain",
+      RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY: deploymentKey,
+    });
+
+    expect(result.schema).toBe("rateloop_ponder_worldchain");
+    expect(result.source).toBe("RATELOOP_PONDER_DATABASE_SCHEMA");
+    expect(result.ignoredLiveSchemaOverride).toBe(false);
   });
 
   test("uses protocol deployment keys when Railway deployment IDs are unavailable", () => {

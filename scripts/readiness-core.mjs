@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -56,6 +57,17 @@ function expectedPonderDeploymentKey(readinessConfig, deploymentAddresses) {
     contentRegistryAddress.toLowerCase(),
     feedbackRegistryAddress.toLowerCase(),
   ].join(":");
+}
+
+function expectedPonderDatabaseSchema(readinessConfig, deploymentAddresses) {
+  const deploymentKey = expectedPonderDeploymentKey(
+    readinessConfig,
+    deploymentAddresses,
+  );
+  if (!deploymentKey) return null;
+
+  const hash = createHash("sha256").update(deploymentKey).digest("hex").slice(0, 16);
+  return `rateloop_deployment_${hash}`;
 }
 
 export const REQUIRED_DEPLOYED_CONTRACTS = [
@@ -1203,6 +1215,20 @@ export async function validateLiveReadiness({
           deployment.deploymentKey.trim()
             ? deployment.deploymentKey.trim().toLowerCase()
             : null;
+        const expectedDatabaseSchema = expectedPonderDatabaseSchema(
+          readinessConfig,
+          deploymentAddresses,
+        );
+        const ponderDatabaseSchema =
+          typeof deployment?.databaseSchema === "string" &&
+          deployment.databaseSchema.trim()
+            ? deployment.databaseSchema.trim()
+            : null;
+        const ponderDatabaseSchemaSource =
+          typeof deployment?.databaseSchemaSource === "string" &&
+          deployment.databaseSchemaSource.trim()
+            ? deployment.databaseSchemaSource.trim()
+            : null;
         addCheck(
           checks,
           failures,
@@ -1229,6 +1255,19 @@ export async function validateLiveReadiness({
           Boolean(expectedDeploymentKey) &&
             ponderDeploymentKey === expectedDeploymentKey,
           "Ponder deployment key matches deployment artifact",
+        );
+        addCheck(
+          checks,
+          failures,
+          Boolean(expectedDatabaseSchema) &&
+            ponderDatabaseSchema === expectedDatabaseSchema,
+          "Ponder database schema matches deployment artifact",
+        );
+        addCheck(
+          checks,
+          failures,
+          ponderDatabaseSchemaSource === "RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY",
+          "Ponder database schema source is protocol deployment key",
         );
       }
 

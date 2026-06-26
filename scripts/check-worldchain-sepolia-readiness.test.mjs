@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import test from "node:test";
 import {
   PONDER_INDEXED_CONTRACTS,
@@ -95,6 +96,10 @@ function expectedDeploymentKeyFor(deploymentJson, chainId = 4801) {
     deploymentAddresses.get("ContentRegistry").toLowerCase(),
     deploymentAddresses.get("FeedbackRegistry").toLowerCase(),
   ].join(":");
+}
+
+function expectedDatabaseSchemaFor(deploymentJson, chainId = 4801) {
+  return `rateloop_deployment_${createHash("sha256").update(expectedDeploymentKeyFor(deploymentJson, chainId)).digest("hex").slice(0, 16)}`;
 }
 
 function handleWiringCall(call, deploymentAddresses, overrides = {}) {
@@ -813,6 +818,8 @@ test("validateLiveReadiness rejects stale Ponder deployment metadata", async () 
           chainId: 4801,
           contentRegistryAddress: deploymentAddresses.get("ContentRegistry"),
           feedbackRegistryAddress: addressFor(900),
+          databaseSchema: expectedDatabaseSchemaFor(deploymentJson),
+          databaseSchemaSource: "RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY",
           deploymentKey: `${4801}:${deploymentAddresses.get("ContentRegistry").toLowerCase()}:${addressFor(900).toLowerCase()}`,
         }),
         { status: 200, headers: { "content-type": "application/json" } },
@@ -851,6 +858,66 @@ test("validateLiveReadiness rejects stale Ponder deployment metadata", async () 
   }
 });
 
+test("validateLiveReadiness rejects stale Ponder database schema metadata", async () => {
+  const previousFetch = globalThis.fetch;
+  const deploymentJson = makeDeploymentJson();
+  const deploymentAddresses = buildDeploymentAddressMap(deploymentJson);
+  globalThis.fetch = async (url) => {
+    const urlString = url.toString();
+    if (urlString.endsWith("/status")) {
+      return new Response(
+        JSON.stringify({
+          worldchainSepolia: {
+            block: { number: deploymentJson.deploymentBlockNumber },
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }
+    if (urlString.endsWith("/deployment")) {
+      return new Response(
+        JSON.stringify({
+          chainId: 4801,
+          contentRegistryAddress: deploymentAddresses.get("ContentRegistry"),
+          feedbackRegistryAddress: deploymentAddresses.get("FeedbackRegistry"),
+          databaseSchema: "rateloop_ponder_worldchain",
+          databaseSchemaSource: "DATABASE_SCHEMA",
+          deploymentKey: expectedDeploymentKeyFor(deploymentJson),
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }
+    if (urlString.endsWith("/question-metadata")) {
+      return new Response(JSON.stringify({ error: "Invalid JSON body." }), {
+        status: 400,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    throw new Error(`Unexpected fetch ${urlString}`);
+  };
+
+  try {
+    const result = await validateLiveReadiness({
+      deploymentJson,
+      ponderUrl: "https://ponder.example.test/indexer",
+    });
+
+    assert.equal(result.ok, false);
+    assert(
+      result.failures.some((message) =>
+        message.includes("Ponder database schema matches deployment artifact"),
+      ),
+    );
+    assert(
+      result.failures.some((message) =>
+        message.includes("Ponder database schema source is protocol deployment key"),
+      ),
+    );
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
 test("validateLiveReadiness sends metadata sync bearer token to Ponder", async () => {
   const previousFetch = globalThis.fetch;
   const previousToken = process.env.PONDER_METADATA_SYNC_TOKEN;
@@ -876,6 +943,8 @@ test("validateLiveReadiness sends metadata sync bearer token to Ponder", async (
           chainId: 4801,
           contentRegistryAddress: deploymentAddresses.get("ContentRegistry"),
           feedbackRegistryAddress: deploymentAddresses.get("FeedbackRegistry"),
+          databaseSchema: expectedDatabaseSchemaFor(deploymentJson),
+          databaseSchemaSource: "RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY",
           deploymentKey: expectedDeploymentKeyFor(deploymentJson),
         }),
         { status: 200, headers: { "content-type": "application/json" } },
@@ -933,6 +1002,8 @@ test("validateLiveReadiness rejects metadata sync auth failures", async () => {
           chainId: 4801,
           contentRegistryAddress: deploymentAddresses.get("ContentRegistry"),
           feedbackRegistryAddress: deploymentAddresses.get("FeedbackRegistry"),
+          databaseSchema: expectedDatabaseSchemaFor(deploymentJson),
+          databaseSchemaSource: "RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY",
           deploymentKey: expectedDeploymentKeyFor(deploymentJson),
         }),
         { status: 200, headers: { "content-type": "application/json" } },
@@ -1015,6 +1086,8 @@ test("validateLiveReadiness probes keeper work with the configured bearer token"
           chainId: 4801,
           contentRegistryAddress: deploymentAddresses.get("ContentRegistry"),
           feedbackRegistryAddress: deploymentAddresses.get("FeedbackRegistry"),
+          databaseSchema: expectedDatabaseSchemaFor(deploymentJson),
+          databaseSchemaSource: "RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY",
           deploymentKey: expectedDeploymentKeyFor(deploymentJson),
         }),
         { status: 200, headers: { "content-type": "application/json" } },

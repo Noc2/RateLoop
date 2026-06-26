@@ -261,6 +261,13 @@ export async function startPonder({
     console.warn(
       "[ponder:start] Remove RATELOOP_PONDER_DATABASE_SCHEMA=rateloop_ponder_worldchain_canary (or DATABASE_SCHEMA with the same value) from Railway env vars.",
     );
+  } else if (schemaInfo?.ignoredLiveSchemaOverride) {
+    console.warn(
+      `[ponder:start] Ignoring live Ponder schema override; using protocol deployment-scoped schema ${schemaInfo.schema}.`,
+    );
+    console.warn(
+      "[ponder:start] Remove stale RATELOOP_PONDER_DATABASE_SCHEMA or DATABASE_SCHEMA env vars, or set RATELOOP_PONDER_ALLOW_LIVE_SCHEMA_OVERRIDE=true only for deliberate recovery.",
+    );
   } else if (schemaInfo?.source === "RAILWAY_DEPLOYMENT_ID") {
     console.warn(
       `[ponder:start] Using Railway deployment-scoped Ponder schema ${schemaInfo.schema}.`,

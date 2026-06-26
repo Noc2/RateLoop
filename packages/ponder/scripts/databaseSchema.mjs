@@ -8,6 +8,7 @@ const SCHEMA_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const MAX_PONDER_DATABASE_SCHEMA_LENGTH = 45;
 const RAILWAY_DATABASE_SCHEMA_PREFIX = "railway_";
 const PROTOCOL_DEPLOYMENT_DATABASE_SCHEMA_PREFIX = "rateloop_deployment_";
+export const LIVE_SCHEMA_OVERRIDE_FLAG = "RATELOOP_PONDER_ALLOW_LIVE_SCHEMA_OVERRIDE";
 /** Shared static schemas that collide with Ponder app identity after upgrades. */
 const DEPRECATED_STATIC_RAILWAY_SCHEMAS = new Set([
   "rateloop_ponder_base_sepolia_canary",
@@ -20,9 +21,14 @@ const DEFAULT_PONDER_DATABASE_SCHEMA_BY_NETWORK = {
   worldchainSepolia: "rateloop_ponder_worldchain_sepolia",
   worldchain: "rateloop_ponder_worldchain",
 };
+const LIVE_PONDER_NETWORKS = new Set(["baseSepolia", "base", "worldchainSepolia", "worldchain"]);
 function readEnv(env, key) {
   const value = env[key]?.trim();
   return value ? value : undefined;
+}
+
+function isTruthyEnv(value) {
+  return value === "1" || value?.toLowerCase() === "true" || value?.toLowerCase() === "yes";
 }
 
 function resolveDefaultPonderDatabaseSchema(env) {
@@ -126,6 +132,24 @@ function isDeprecatedStaticRailwaySchema(schema) {
   return schema !== undefined && DEPRECATED_STATIC_RAILWAY_SCHEMAS.has(schema);
 }
 
+function staticSchemaNetwork(schema) {
+  if (schema === undefined) return undefined;
+  return Object.entries(DEFAULT_PONDER_DATABASE_SCHEMA_BY_NETWORK).find(([, value]) => value === schema)?.[0];
+}
+
+function assertLiveSchemaOverrideSafe({ env, schema, source }) {
+  const ponderNetwork = readEnv(env, "PONDER_NETWORK");
+  if (!LIVE_PONDER_NETWORKS.has(ponderNetwork) || isTruthyEnv(readEnv(env, LIVE_SCHEMA_OVERRIDE_FLAG))) return;
+
+  const schemaNetwork = staticSchemaNetwork(schema);
+  if (schemaNetwork !== undefined && schemaNetwork !== ponderNetwork) {
+    throw new Error(
+      `${source}=${schema} is a static ${schemaNetwork} Ponder schema, but PONDER_NETWORK=${ponderNetwork}. ` +
+        `Remove the stale schema override or set ${LIVE_SCHEMA_OVERRIDE_FLAG}=true only for a deliberate recovery override.`,
+    );
+  }
+}
+
 export function resolvePonderDatabaseSchema(env = process.env) {
   const rateloopSchema = readEnv(env, "RATELOOP_PONDER_DATABASE_SCHEMA");
   const databaseSchema = readEnv(env, "DATABASE_SCHEMA");
@@ -133,6 +157,11 @@ export function resolvePonderDatabaseSchema(env = process.env) {
   const protocolDeploymentSchema = schemaFromProtocolDeploymentKey(protocolDeploymentKey);
   const railwaySchema = schemaFromRailwayDeploymentId(readEnv(env, "RAILWAY_DEPLOYMENT_ID"));
   const defaultSchema = resolveDefaultPonderDatabaseSchema(env);
+  const ponderNetwork = readEnv(env, "PONDER_NETWORK");
+  const liveProtocolSchemaPreferred =
+    LIVE_PONDER_NETWORKS.has(ponderNetwork) &&
+    protocolDeploymentSchema !== undefined &&
+    !isTruthyEnv(readEnv(env, LIVE_SCHEMA_OVERRIDE_FLAG));
   const canReplaceDeprecatedStaticSchema = railwaySchema !== undefined || protocolDeploymentSchema !== undefined;
   const ignoredDeprecatedStaticSchema =
     canReplaceDeprecatedStaticSchema &&
@@ -143,9 +172,28 @@ export function resolvePonderDatabaseSchema(env = process.env) {
     canReplaceDeprecatedStaticSchema && isDeprecatedStaticRailwaySchema(databaseSchema) ? undefined : databaseSchema;
   const isLegacyDatabaseSchema =
     effectiveRateloopSchema === undefined && effectiveDatabaseSchema === LEGACY_PONDER_DATABASE_SCHEMA;
+  const ignoredLiveSchemaOverride =
+    liveProtocolSchemaPreferred &&
+    (effectiveRateloopSchema !== undefined || (effectiveDatabaseSchema !== undefined && !isLegacyDatabaseSchema));
+
+  if (!liveProtocolSchemaPreferred) {
+    assertLiveSchemaOverrideSafe({
+      env,
+      schema: effectiveRateloopSchema,
+      source: "RATELOOP_PONDER_DATABASE_SCHEMA",
+    });
+    if (!isLegacyDatabaseSchema) {
+      assertLiveSchemaOverrideSafe({
+        env,
+        schema: effectiveDatabaseSchema,
+        source: "DATABASE_SCHEMA",
+      });
+    }
+  }
+
   const schema =
-    effectiveRateloopSchema ??
-    (isLegacyDatabaseSchema ? undefined : effectiveDatabaseSchema) ??
+    (liveProtocolSchemaPreferred ? undefined : effectiveRateloopSchema) ??
+    (liveProtocolSchemaPreferred || isLegacyDatabaseSchema ? undefined : effectiveDatabaseSchema) ??
     protocolDeploymentSchema ??
     railwaySchema ??
     defaultSchema;
@@ -159,7 +207,9 @@ export function resolvePonderDatabaseSchema(env = process.env) {
   return {
     schema,
     source:
-      effectiveRateloopSchema !== undefined
+      liveProtocolSchemaPreferred
+        ? "RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY"
+        : effectiveRateloopSchema !== undefined
         ? "RATELOOP_PONDER_DATABASE_SCHEMA"
         : effectiveDatabaseSchema !== undefined && !isLegacyDatabaseSchema
           ? "DATABASE_SCHEMA"
@@ -170,6 +220,7 @@ export function resolvePonderDatabaseSchema(env = process.env) {
               : "default",
     ignoredLegacyDatabaseSchema: isLegacyDatabaseSchema,
     ignoredDeprecatedStaticSchema,
+    ignoredLiveSchemaOverride,
   };
 }
 
