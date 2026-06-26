@@ -46,10 +46,31 @@ export function useTransactionStatusToast() {
     [dismiss],
   );
 
+  const updateSubmitting = useCallback((options: ShowTransactionStatusToastOptions) => {
+    const status = options.title
+      ? { title: options.title, description: options.description }
+      : getSubmittingTransactionStatus(options.action ?? "transaction");
+
+    if (toastIdRef.current) {
+      notification.remove(toastIdRef.current);
+    }
+
+    toastIdRef.current = notification.loading(
+      <TransactionStatusCallout
+        variant="toast"
+        title={status.title}
+        description={options.description ?? status.description ?? ""}
+      />,
+    );
+
+    return toastIdRef.current;
+  }, []);
+
   useEffect(() => dismiss, [dismiss]);
 
   return {
     dismiss,
     showSubmitting,
+    updateSubmitting,
   };
 }

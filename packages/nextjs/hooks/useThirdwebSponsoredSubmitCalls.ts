@@ -67,7 +67,7 @@ type ThirdwebContractCall = {
   value?: bigint;
 };
 
-type ThirdwebBatchSponsorshipMode = "sponsored" | "self-funded";
+export type ThirdwebBatchSponsorshipMode = "sponsored" | "self-funded";
 
 type ExecuteContractCallBatchOptions = {
   allowSelfFundedFallback?: boolean;
@@ -75,6 +75,7 @@ type ExecuteContractCallBatchOptions = {
   atomicRequired?: boolean;
   action?: string;
   metadata?: Record<string, TransactionTimingMetadataValue>;
+  onSlowSubmit?: () => void;
   parentRunId?: string;
   segmentIndex?: number;
   sponsorshipMode?: ThirdwebBatchSponsorshipMode;
@@ -816,6 +817,8 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
           });
           if (!options.suppressStatusToast) {
             showStatusToast(getSlowThirdwebSubmitStatus(action, { sponsored: usesSponsoredRelay }));
+          } else if (options.onSlowSubmit) {
+            options.onSlowSubmit();
           }
         }, THIRDWEB_SEND_CALLS_SLOW_MS);
         let sendResult: SendCallsResult;

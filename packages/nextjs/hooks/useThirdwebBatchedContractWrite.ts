@@ -16,6 +16,7 @@ type ThirdwebBatchedContractCall = {
 type BatchedContractWriteOptions = {
   action: string;
   allowSelfFundedFallback?: boolean;
+  onSlowSubmit?: () => void;
   suppressStatusToast?: boolean;
 };
 
@@ -49,6 +50,7 @@ export function useThirdwebBatchedContractWrite() {
         const result = await executeSponsoredCalls([call], {
           action: options.action,
           allowSelfFundedFallback: options.allowSelfFundedFallback,
+          onSlowSubmit: options.onSlowSubmit,
           sponsorshipMode: batchSponsorshipMode,
           suppressStatusToast: options.suppressStatusToast,
         });
