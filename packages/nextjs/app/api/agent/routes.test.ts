@@ -1522,6 +1522,69 @@ test("agent ask handoff route stages generated image upload metadata before blob
   assert.equal(prepareBody.uploadChallenges?.[0]?.assetId, readBody.assets?.[0]?.id);
 });
 
+test("agent ask handoff route keeps multi-image upload order stable", async () => {
+  const response = await handoffsRoute.POST(
+    makePublicPost("https://rateloop.ai/api/agent/handoffs", {
+      generatedImageUploads: [
+        {
+          filename: "first.png",
+          mimeType: "image/png",
+          sha256: ONE_PIXEL_PNG_SHA256,
+          sizeBytes: ONE_PIXEL_PNG.length,
+        },
+        {
+          filename: "second.png",
+          mimeType: "image/png",
+          sha256: ONE_PIXEL_PNG_SHA256,
+          sizeBytes: ONE_PIXEL_PNG.length,
+        },
+      ],
+      request: {
+        ...handoffQuestionPayload("agent-handoff-image-upload-order"),
+        maxPaymentAmount: "1500000",
+      },
+      ttlMs: 300000,
+    }),
+  );
+  const body = (await response.json()) as {
+    assets?: Array<Record<string, unknown>>;
+    handoffId?: string;
+    handoffUrl?: string;
+  };
+  const handoffId = String(body.handoffId);
+  const token = new URLSearchParams(new URL(String(body.handoffUrl)).hash.replace(/^#/, "")).get("token");
+  const [firstAsset, secondAsset] = body.assets ?? [];
+
+  assert.equal(response.status, 200, JSON.stringify(body));
+  assert.ok(token);
+  assert.equal(firstAsset?.filename, "first.png");
+  assert.equal(secondAsset?.filename, "second.png");
+
+  const now = Date.now();
+  await dbModule.dbClient.execute({
+    args: [new Date(now + 60_000), String(firstAsset?.id)],
+    sql: "UPDATE agent_ask_handoff_assets SET created_at = ? WHERE id = ?",
+  });
+  await dbModule.dbClient.execute({
+    args: [new Date(now), String(secondAsset?.id)],
+    sql: "UPDATE agent_ask_handoff_assets SET created_at = ? WHERE id = ?",
+  });
+
+  const readResponse = await handoffRoute.GET(
+    makePublicGet(`https://rateloop.ai/api/agent/handoffs/${handoffId}`, {
+      "x-rateloop-handoff-token": token,
+    }),
+    { params: Promise.resolve({ handoffId }) },
+  );
+  const readBody = (await readResponse.json()) as { assets?: Array<Record<string, unknown>> };
+
+  assert.equal(readResponse.status, 200, JSON.stringify(readBody));
+  assert.deepEqual(
+    readBody.assets?.map(asset => asset.filename),
+    ["first.png", "second.png"],
+  );
+});
+
 test("agent ask handoff route rejects corrupt generated image bytes before staging", async () => {
   const response = await handoffsRoute.POST(
     makePublicPost("https://rateloop.ai/api/agent/handoffs", {

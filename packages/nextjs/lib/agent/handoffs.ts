@@ -62,6 +62,7 @@ export type AgentAskHandoffAssetRecord = {
   imageUrl: string | null;
   mimeType: string;
   originalFilename: string;
+  position: number;
   sha256: string;
   sizeBytes: number;
   status: "uploading" | "staged" | "uploaded" | "failed";
@@ -404,6 +405,7 @@ function rowToAsset(row: Record<string, unknown>): AgentAskHandoffAssetRecord {
     imageUrl: typeof row.image_url === "string" ? row.image_url : null,
     mimeType: imageData.mimeType,
     originalFilename: String(row.original_filename),
+    position: Number(row.position ?? 0),
     sha256: imageData.sha256,
     sizeBytes: imageData.sizeBytes,
     status: String(row.status) as AgentAskHandoffAssetRecord["status"],
@@ -752,7 +754,7 @@ export async function listAgentAskHandoffAssets(handoffId: string) {
       SELECT *
       FROM agent_ask_handoff_assets
       WHERE handoff_id = ?
-      ORDER BY created_at ASC
+      ORDER BY position ASC, created_at ASC, id ASC
     `,
     args: [handoffId],
   });
@@ -946,13 +948,14 @@ export async function createAgentAskHandoff(params: {
     ],
   });
 
-  for (const asset of assets) {
+  for (const [position, asset] of assets.entries()) {
     await dbClient.execute({
       sql: `
         INSERT INTO agent_ask_handoff_assets (
           id,
           handoff_id,
           attachment_id,
+          position,
           status,
           original_filename,
           mime_type,
@@ -962,12 +965,13 @@ export async function createAgentAskHandoff(params: {
           created_at,
           updated_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       args: [
         asset.id,
         id,
         asset.attachmentId,
+        position,
         asset.status,
         asset.filename,
         asset.mimeType,

@@ -99,6 +99,13 @@
       "when": 1781286906000,
       "tag": "0013_watchlist_notifications_deployment_scope",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1781290506000,
+      "tag": "0014_agent_handoff_asset_positions",
+      "breakpoints": true
     }
   ]
 }

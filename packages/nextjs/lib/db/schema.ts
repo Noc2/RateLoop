@@ -715,6 +715,7 @@ export const agentAskHandoffAssets = pgTable(
     id: text("id").primaryKey(),
     handoffId: text("handoff_id").notNull(),
     attachmentId: text("attachment_id").notNull(),
+    position: integer("position").notNull().default(0),
     status: text("status").notNull(),
     originalFilename: text("original_filename").notNull(),
     mimeType: text("mime_type").notNull(),
