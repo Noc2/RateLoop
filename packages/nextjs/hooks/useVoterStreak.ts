@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import { usePageVisibility } from "~~/hooks/usePageVisibility";
 import { usePonderQuery } from "~~/hooks/usePonderQuery";
+import { normalizeComparableAddress } from "~~/lib/address/normalization";
 import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 import { type PonderVoterStreak, ponderApi } from "~~/services/ponder/client";
 
@@ -18,12 +19,14 @@ const EMPTY_STREAK: PonderVoterStreak = {
   nextMilestoneBaseBonus: null,
 };
 
-function normalizeAddress(address?: string) {
-  return address?.toLowerCase() ?? null;
-}
-
 export function getVoterStreakQueryKey(address?: string, chainId?: number, deploymentKey?: string | null) {
-  return ["ponder-fallback", "voterStreak", chainId ?? null, deploymentKey ?? null, normalizeAddress(address)] as const;
+  return [
+    "ponder-fallback",
+    "voterStreak",
+    chainId ?? null,
+    deploymentKey ?? null,
+    normalizeComparableAddress(address),
+  ] as const;
 }
 
 /**
@@ -32,7 +35,7 @@ export function getVoterStreakQueryKey(address?: string, chainId?: number, deplo
 export function useVoterStreak(address?: string): PonderVoterStreak | null {
   const { targetNetwork } = useTargetNetwork();
   const isPageVisible = usePageVisibility();
-  const normalizedAddress = normalizeAddress(address) ?? undefined;
+  const normalizedAddress = normalizeComparableAddress(address) ?? undefined;
   const deployment = useMemo(() => resolveProtocolDeploymentScope(targetNetwork.id), [targetNetwork.id]);
 
   const { data } = usePonderQuery<PonderVoterStreak, PonderVoterStreak>({

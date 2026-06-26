@@ -26,6 +26,7 @@ import {
   isThirdwebSponsoredExecutionRejectedError,
   isUserRejectedTransactionError,
 } from "~~/lib/transactionErrors";
+import { addressesMatch, normalizeComparableAddress } from "~~/lib/address/normalization";
 import { createThirdwebInAppWallet, isThirdwebInAppWalletId, thirdwebClient } from "~~/services/thirdweb/client";
 import { notification } from "~~/utils/scaffold-eth";
 
@@ -35,16 +36,6 @@ async function fetchLegacyClaim(address: `0x${string}`): Promise<LegacyClaimLook
     throw new Error("Unable to load legacy claim allocation.");
   }
   return response.json() as Promise<LegacyClaimLookupResult>;
-}
-
-function normalizeComparableAddress(address: string | null | undefined) {
-  return address?.toLowerCase() ?? null;
-}
-
-function addressesMatch(left: string | null | undefined, right: string | null | undefined) {
-  const normalizedLeft = normalizeComparableAddress(left);
-  const normalizedRight = normalizeComparableAddress(right);
-  return Boolean(normalizedLeft && normalizedRight && normalizedLeft === normalizedRight);
 }
 
 export function shouldUseBatchedLegacyClaim(params: {

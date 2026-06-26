@@ -1,10 +1,5 @@
-import type { Address } from "viem";
-import { isAddress } from "viem";
+import { normalizeComparableAddress, toStrictAddress } from "~~/lib/address/normalization";
 import { isThirdwebInAppWalletCurrentForAddress } from "~~/services/thirdweb/client";
-
-function normalizeComparableAddress(address: string | null | undefined) {
-  return address?.toLowerCase() ?? null;
-}
 
 export function getThirdwebRaterDelegationCandidate(params: {
   activeWalletId?: string | null;
@@ -20,17 +15,19 @@ export function getThirdwebRaterDelegationCandidate(params: {
   });
   const connectedAddress = normalizeComparableAddress(params.connectedAddress);
   const adminAddress = normalizeComparableAddress(params.adminAddress);
+  const delegateAddress = toStrictAddress(params.connectedAddress);
+  const holderAddress = toStrictAddress(params.adminAddress);
 
   if (!isCurrentInAppWallet || !connectedAddress || !adminAddress || connectedAddress === adminAddress) {
     return null;
   }
 
-  if (!isAddress(params.connectedAddress ?? "") || !isAddress(params.adminAddress ?? "")) {
+  if (!delegateAddress || !holderAddress) {
     return null;
   }
 
   return {
-    delegateAddress: params.connectedAddress as Address,
-    holderAddress: params.adminAddress as Address,
+    delegateAddress,
+    holderAddress,
   };
 }

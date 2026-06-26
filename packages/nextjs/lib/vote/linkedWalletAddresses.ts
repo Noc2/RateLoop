@@ -1,15 +1,7 @@
-import { ZERO_ADDRESS } from "~~/utils/scaffold-eth/common";
+import { normalizeNonZeroComparableAddress } from "~~/lib/address/normalization";
 
 export function normalizeLinkedWalletAddress(address?: string | null): string | null {
-  const trimmed = address?.trim();
-  if (!trimmed) return null;
-
-  const normalized = trimmed.toLowerCase();
-  if (normalized === ZERO_ADDRESS.toLowerCase()) {
-    return null;
-  }
-
-  return normalized;
+  return normalizeNonZeroComparableAddress(address);
 }
 
 export function buildLinkedWalletAddresses(...addresses: Array<string | null | undefined>): string[] {

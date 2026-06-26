@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import { usePageVisibility } from "~~/hooks/usePageVisibility";
 import { usePonderQuery } from "~~/hooks/usePonderQuery";
+import { normalizeComparableAddress } from "~~/lib/address/normalization";
 import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 import { ponderApi } from "~~/services/ponder/client";
 
@@ -18,17 +19,13 @@ interface VotingStakes {
 
 const EMPTY: VotingStakes = { activeStaked: 0, activeCount: 0, totalVotingStake: 0 };
 
-function normalizeAddress(address?: string) {
-  return address?.toLowerCase() ?? null;
-}
-
 export function getVotingStakesQueryKey(address?: string, chainId?: number, deploymentKey?: string | null) {
   return [
     "ponder-fallback",
     "votingStakes",
     chainId ?? null,
     deploymentKey ?? null,
-    normalizeAddress(address),
+    normalizeComparableAddress(address),
   ] as const;
 }
 
@@ -39,7 +36,7 @@ export function getVotingStakesQueryKey(address?: string, chainId?: number, depl
 export function useVotingStakes(address?: string): VotingStakes {
   const { targetNetwork } = useTargetNetwork();
   const isPageVisible = usePageVisibility();
-  const normalizedAddress = normalizeAddress(address) ?? undefined;
+  const normalizedAddress = normalizeComparableAddress(address) ?? undefined;
   const deployment = useMemo(() => resolveProtocolDeploymentScope(targetNetwork.id), [targetNetwork.id]);
   const { data: result } = usePonderQuery({
     queryKey: ["votingStakes", targetNetwork.id, deployment?.deploymentKey ?? null, normalizedAddress],
