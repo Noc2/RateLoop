@@ -17,6 +17,7 @@ import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import { useGasBalanceStatus } from "~~/hooks/useGasBalanceStatus";
 import { useRefreshWalletBalances } from "~~/hooks/useRefreshWalletBalances";
 import { useThirdwebSponsoredSubmitCalls } from "~~/hooks/useThirdwebSponsoredSubmitCalls";
+import { useTransactionFlowToast } from "~~/hooks/useTransactionFlowToast";
 import { useWalletRpcRecovery } from "~~/hooks/useWalletRpcRecovery";
 import { useWalletTransactionReadiness } from "~~/hooks/useWalletTransactionReadiness";
 import {
@@ -83,6 +84,7 @@ export function useClaimAll() {
     isAwaitingSelfFundedSubmitCalls,
     isAwaitingSponsoredSubmitCalls,
   } = useThirdwebSponsoredSubmitCalls();
+  const flowToast = useTransactionFlowToast();
   const canUseBatchedClaimCalls = canUseSponsoredSubmitCalls || canUseSelfFundedBatchCalls;
   const claimCallSponsorshipMode = canUseSponsoredSubmitCalls ? "sponsored" : "self-funded";
   const { data: distributorInfo } = useDeployedContractInfo({ contractName: "RoundRewardDistributor" });
@@ -472,6 +474,18 @@ export function useClaimAll() {
       isClaimGasShortageError(error, transactionFeedback) ? gasErrorMessage : defaultMessage;
 
     setIsClaiming(true);
+    const flowBatchOptions = canUseBatchedClaimCalls
+      ? flowToast.getSponsoredBatchOptions({
+          action: "rewards",
+          sponsorshipMode: claimCallSponsorshipMode,
+        })
+      : null;
+    if (canUseBatchedClaimCalls) {
+      flowToast.beginFlow({
+        action: "rewards",
+        sponsored: claimCallSponsorshipMode === "sponsored",
+      });
+    }
     const orderedItems = sortClaimableRewardItems(items);
     let creditedFrontendRoundCount = 0;
     const claimedItems: ClaimableRewardItem[] = [];
@@ -498,13 +512,8 @@ export function useClaimAll() {
             const checkpointBaselineBlock = shouldWaitForCheckpointBlock
               ? await readLatestBlockNumber(publicClient)
               : null;
-            const executeClaim = (suppressStatusToast = false) =>
-              executeSponsoredCalls([getSponsoredClaimCall(item)], {
-                action: claimLabel,
-                sponsorshipMode: claimCallSponsorshipMode,
-                suppressStatusToast,
-              });
-            await raceClaimTransaction(item, () => executeClaim(canWaitForClaimPostcondition(item)));
+            const executeClaim = () => executeSponsoredCalls([getSponsoredClaimCall(item)], flowBatchOptions!);
+            await raceClaimTransaction(item, () => executeClaim());
             if (shouldWaitForCheckpointBlock) {
               await waitForNextObservedBlock(publicClient, { afterBlockNumber: checkpointBaselineBlock });
             }
@@ -599,6 +608,9 @@ export function useClaimAll() {
       }
       await onComplete?.({ claimedItems, failedItems });
     } finally {
+      if (canUseBatchedClaimCalls) {
+        flowToast.endFlow();
+      }
       setIsClaiming(false);
       setProgress({ current: 0, total: 0 });
     }

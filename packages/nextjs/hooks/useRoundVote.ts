@@ -25,7 +25,7 @@ import { useGasBalanceStatus } from "~~/hooks/useGasBalanceStatus";
 import { useRaterRegistryIdentity } from "~~/hooks/useRaterRegistryIdentity";
 import { getRecentUserVotesQueryKey } from "~~/hooks/useRecentUserVotes";
 import { useThirdwebSponsoredSubmitCalls } from "~~/hooks/useThirdwebSponsoredSubmitCalls";
-import { useTransactionStatusToast } from "~~/hooks/useTransactionStatusToast";
+import { useTransactionFlowToast } from "~~/hooks/useTransactionFlowToast";
 import { getVoteHistoryQueryKey } from "~~/hooks/useVoteHistoryQuery";
 import { getVotingStakesQueryKey } from "~~/hooks/useVotingStakes";
 import {
@@ -44,7 +44,6 @@ import {
   isInsufficientFundsError,
 } from "~~/lib/transactionErrors";
 import { raceTransactionWithPostcondition } from "~~/lib/transactions/postcondition";
-import { getSponsoredSubmittingTransactionStatus } from "~~/lib/ui/sponsoredTransactionNotice";
 import {
   getAdvisoryVoteUnavailableMessage,
   parseAdvisoryCommitAvailability,
@@ -245,7 +244,7 @@ export function useRoundVote() {
     isAwaitingSponsoredBatchCalls,
     sponsoredWalletSyncStatus,
   } = useThirdwebSponsoredSubmitCalls();
-  const statusToast = useTransactionStatusToast();
+  const flowToast = useTransactionFlowToast();
   const { canSponsorTransactions, nativeTokenSymbol } = useGasBalanceStatus({
     includeExternalSendCalls: true,
     syncInAppSponsorship: false,
@@ -450,11 +449,10 @@ export function useRoundVote() {
     setError(null);
     timingLog.emit("commit-lock-acquired");
     const usesSponsoredVotePath = !useDirectLocalE2EWrites && canUseSponsoredBatchCalls;
-    let activeVoteStatusToastId: string | null = null;
+    const sponsoredBatchOptions = usesSponsoredVotePath ? flowToast.getFlowBatchOptions() : {};
     if (usesSponsoredVotePath) {
-      activeVoteStatusToastId = statusToast.showSubmitting(getSponsoredSubmittingTransactionStatus("vote"));
+      flowToast.beginFlow({ action: "vote", sponsored: true });
     }
-    const sponsoredBatchOptions = usesSponsoredVotePath ? { suppressStatusToast: true as const } : {};
 
     try {
       if (publicClient) {
@@ -1210,7 +1208,9 @@ export function useRoundVote() {
       setError(normalizedError);
       return false;
     } finally {
-      statusToast.dismiss(activeVoteStatusToastId);
+      if (usesSponsoredVotePath) {
+        flowToast.endFlow();
+      }
       commitLock.current = false;
       setIsCommitting(false);
     }
