@@ -6,6 +6,14 @@ function readWorkflow(path) {
   return readFileSync(path, "utf8");
 }
 
+function workflowJobBlock(workflow, jobName) {
+  const lines = workflow.split(/\n/);
+  const start = lines.findIndex(line => line === `  ${jobName}:`);
+  assert.notEqual(start, -1, `Missing workflow job ${jobName}`);
+  const end = lines.findIndex((line, index) => index > start && /^  [A-Za-z0-9_-]+:$/.test(line));
+  return lines.slice(start, end === -1 ? undefined : end).join("\n");
+}
+
 test("legacy World Chain Sepolia readiness workflow is manual-only", () => {
   const workflow = readWorkflow(
     ".github/workflows/worldchain-sepolia-readiness.yaml",
@@ -45,21 +53,38 @@ test("Base Sepolia readiness remains an active push, PR, scheduled, and manual g
     workflow,
     /BASE_SEPOLIA_NEXT_ENV_FILE: docs\/testing\/base-sepolia-next-env\.fixture/,
   );
-  assert.match(
-    workflow,
-    /PONDER_METADATA_SYNC_TOKEN: \$\{\{ secrets\.PONDER_METADATA_SYNC_TOKEN \}\}/,
-  );
-  assert.match(workflow, /NODE_ENV: production/);
+  const offlineJob = workflowJobBlock(workflow, "readiness");
+  const liveJob = workflowJobBlock(workflow, "live-readiness");
+
+  assert.match(offlineJob, /NODE_ENV: production/);
+  assert.match(offlineJob, /Offline core readiness checks/);
+  assert.doesNotMatch(offlineJob, /secrets\./);
+  assert.doesNotMatch(offlineJob, /--live --require-live-targets/);
   assert.match(workflow, /Offline core readiness checks/);
   assert.match(workflow, /Live core readiness probes/);
   assert.match(
-    workflow,
+    liveJob,
+    /if: github\.ref == 'refs\/heads\/main' && \(github\.event_name == 'schedule' \|\| \(github\.event_name == 'workflow_dispatch' && github\.event\.inputs\.live == 'true'\)\)/,
+  );
+  assert.match(
+    liveJob,
+    /PONDER_METADATA_SYNC_TOKEN: \$\{\{ secrets\.PONDER_METADATA_SYNC_TOKEN \}\}/,
+  );
+  assert.match(
+    liveJob,
     /PONDER_KEEPER_WORK_TOKEN: \$\{\{ secrets\.PONDER_KEEPER_WORK_TOKEN \}\}/,
   );
+  assert.match(liveJob, /BASE_SEPOLIA_RPC_URL: \$\{\{ secrets\.BASE_SEPOLIA_RPC_URL \}\}/);
+  assert.match(liveJob, /KEEPER_DATABASE_URL: \$\{\{ secrets\.KEEPER_DATABASE_URL \}\}/);
+  assert.match(liveJob, /METRICS_AUTH_TOKEN: \$\{\{ secrets\.METRICS_AUTH_TOKEN \}\}/);
+  assert.match(liveJob, /node scripts\/check-base-sepolia-readiness\.mjs --live --require-live-targets/);
   assert.match(workflow, /BASE_SEPOLIA_KEEPER_URL: \$\{\{ vars\.BASE_SEPOLIA_KEEPER_URL \}\}/);
-  assert.match(workflow, /env\.BASE_SEPOLIA_KEEPER_URL != ''/);
   assert.match(
-    workflow,
+    offlineJob,
+    /KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL: https:\/\/artifacts\.rateloop\.ai\/rateloop/,
+  );
+  assert.match(
+    liveJob,
     /KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL: https:\/\/artifacts\.rateloop\.ai\/rateloop/,
   );
   assert.match(workflow, /RATE_LIMIT_TRUSTED_IP_HEADERS:/);
@@ -76,19 +101,36 @@ test("Base mainnet readiness remains an active push, PR, scheduled, and manual g
   assert.match(workflow, /^  schedule:/m);
   assert.match(workflow, /^  workflow_dispatch:/m);
   assert.match(workflow, /check-base-mainnet-readiness\.mjs/);
+  const offlineJob = workflowJobBlock(workflow, "readiness");
+  const liveJob = workflowJobBlock(workflow, "live-readiness");
+
+  assert.match(offlineJob, /NODE_ENV: production/);
+  assert.match(offlineJob, /Offline production readiness checks/);
+  assert.doesNotMatch(offlineJob, /secrets\./);
+  assert.doesNotMatch(offlineJob, /--live --require-live-targets/);
   assert.match(
-    workflow,
+    liveJob,
+    /if: github\.ref == 'refs\/heads\/main' && \(github\.event_name == 'schedule' \|\| \(github\.event_name == 'workflow_dispatch' && github\.event\.inputs\.live == 'true'\)\)/,
+  );
+  assert.match(
+    liveJob,
     /PONDER_METADATA_SYNC_TOKEN: \$\{\{ secrets\.PONDER_METADATA_SYNC_TOKEN \}\}/,
   );
-  assert.match(workflow, /NODE_ENV: production/);
   assert.match(
-    workflow,
+    liveJob,
     /PONDER_KEEPER_WORK_TOKEN: \$\{\{ secrets\.PONDER_KEEPER_WORK_TOKEN \}\}/,
   );
+  assert.match(liveJob, /BASE_RPC_URL: \$\{\{ secrets\.BASE_RPC_URL \}\}/);
+  assert.match(liveJob, /KEEPER_DATABASE_URL: \$\{\{ secrets\.KEEPER_DATABASE_URL \}\}/);
+  assert.match(liveJob, /METRICS_AUTH_TOKEN: \$\{\{ secrets\.METRICS_AUTH_TOKEN \}\}/);
+  assert.match(liveJob, /node scripts\/check-base-mainnet-readiness\.mjs --live --require-live-targets/);
   assert.match(workflow, /BASE_KEEPER_URL: \$\{\{ vars\.BASE_KEEPER_URL \}\}/);
-  assert.match(workflow, /env\.BASE_KEEPER_URL != ''/);
   assert.match(
-    workflow,
+    offlineJob,
+    /KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL: https:\/\/artifacts\.rateloop\.ai\/rateloop/,
+  );
+  assert.match(
+    liveJob,
     /KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL: https:\/\/artifacts\.rateloop\.ai\/rateloop/,
   );
   assert.match(workflow, /RATE_LIMIT_TRUSTED_IP_HEADERS:/);
