@@ -283,7 +283,7 @@ export function lintAgentQuestion(
   } else if (!detailsUrl && detailsHash) {
     pushFinding(findings, "error", `${path}.detailsUrl`, "Details URL is required when detailsHash is provided.");
   }
-  if (detailsUrl && !looksLikeHttpsUrl(detailsUrl)) {
+  if (detailsUrl && !looksLikeHttpsUrl(detailsUrl) && !looksLikeHostedDetailsUrl(detailsUrl)) {
     pushFinding(findings, "error", `${path}.detailsUrl`, "Details URL must be a public HTTPS URL.");
   }
   if (detailsHash && !/^0x[a-fA-F0-9]{64}$/.test(detailsHash)) {

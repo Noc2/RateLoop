@@ -67,6 +67,10 @@ const UPLOADED_IMAGE_URL_B =
   "https://www.rateloop.ai/api/attachments/images/att_bbbbbbbbbbbbbbbb.webp#sha256=0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 const UPLOADED_IMAGE_URL_PREFIXED =
   "https://www.rateloop.ai/rateloop/api/attachments/images/att_cccccccccccccccc.webp#sha256=0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
+const LOCALHOST_UPLOADED_IMAGE_URL =
+  "http://localhost:3000/api/attachments/images/att_localhostimage01.webp#sha256=0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
+const LOCALHOST_DETAILS_URL =
+  "http://localhost:3000/api/attachments/details/det_localhostdetails01";
 const QUESTION_METADATA_BASE_URL = "https://ponder.rateloop.ai";
 const BOUNTY_START_BY = 1_893_456_000n;
 const BOUNTY_WINDOW_SECONDS = 1_200n;
@@ -2562,6 +2566,64 @@ describe("local signer media canonicalization", () => {
     );
 
     expect(parsed.questions[0].imageUrls).toEqual([UPLOADED_IMAGE_URL_PREFIXED]);
+  });
+
+  it("accepts localhost HTTP RateLoop attachment URLs when localhost attachments are enabled", () => {
+    const base = askPayload();
+    const parsed = parseX402QuestionRequest(
+      {
+        ...base,
+        question: {
+          ...base.question,
+          contextUrl: undefined,
+          detailsHash: `0x${"4".repeat(64)}`,
+          detailsUrl: LOCALHOST_DETAILS_URL,
+          imageUrls: [LOCALHOST_UPLOADED_IMAGE_URL],
+        },
+      },
+      480,
+      {
+        allowLocalhostAttachmentOrigins: true,
+        questionMetadataBaseUrl: QUESTION_METADATA_BASE_URL,
+      },
+    );
+
+    expect(parsed.questions[0].detailsUrl).toBe(LOCALHOST_DETAILS_URL);
+    expect(parsed.questions[0].imageUrls).toEqual([LOCALHOST_UPLOADED_IMAGE_URL]);
+  });
+
+  it("rejects localhost HTTP RateLoop attachment URLs when localhost attachments are disabled", () => {
+    const base = askPayload();
+
+    expect(() =>
+      parseX402QuestionRequest(
+        {
+          ...base,
+          question: {
+            ...base.question,
+            contextUrl: undefined,
+            imageUrls: [LOCALHOST_UPLOADED_IMAGE_URL],
+          },
+        },
+        480,
+        { allowLocalhostAttachmentOrigins: false },
+      ),
+    ).toThrow(/imageUrls must come from RateLoop uploads/);
+
+    expect(() =>
+      parseX402QuestionRequest(
+        {
+          ...base,
+          question: {
+            ...base.question,
+            detailsHash: `0x${"4".repeat(64)}`,
+            detailsUrl: LOCALHOST_DETAILS_URL,
+          },
+        },
+        480,
+        { allowLocalhostAttachmentOrigins: false },
+      ),
+    ).toThrow(/detailsUrl must be an HTTPS URL/);
   });
 });
 

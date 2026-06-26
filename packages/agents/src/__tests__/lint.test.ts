@@ -3,7 +3,10 @@ import { lintAgentAskRequest, summarizeLintFindings } from "../questions/lint.js
 
 const UPLOADED_IMAGE_URL =
   "https://www.rateloop.ai/api/attachments/images/att_abcdefghijklmnop.webp#sha256=0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+const LOCALHOST_UPLOADED_IMAGE_URL =
+  "http://localhost:3000/api/attachments/images/att_localhostimage01.webp#sha256=0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
 const DETAILS_URL = "https://www.rateloop.ai/api/attachments/details/det_abcdefghijklmnop";
+const LOCALHOST_DETAILS_URL = "http://localhost:3000/api/attachments/details/det_localhostdetails01";
 const DETAILS_HASH = `0x${"4".repeat(64)}`;
 
 const VALID_REQUEST = {
@@ -209,6 +212,25 @@ describe("agent question linting", () => {
         ...VALID_REQUEST.question,
         detailsHash: DETAILS_HASH,
         detailsUrl: DETAILS_URL,
+      },
+    });
+
+    expect(summarizeLintFindings(findings)).toEqual({
+      errorCount: 0,
+      ok: true,
+      warningCount: 0,
+    });
+  });
+
+  it("accepts localhost HTTP RateLoop attachment URLs in local lint mode", () => {
+    const findings = lintAgentAskRequest({
+      ...VALID_REQUEST,
+      question: {
+        ...VALID_REQUEST.question,
+        contextUrl: undefined,
+        detailsHash: DETAILS_HASH,
+        detailsUrl: LOCALHOST_DETAILS_URL,
+        imageUrls: [LOCALHOST_UPLOADED_IMAGE_URL],
       },
     });
 

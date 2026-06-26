@@ -310,7 +310,51 @@ function normalizeQuestionContextUrl(value: string, fieldName: string): string {
   return canonicalizeUrl(normalized);
 }
 
-function normalizeQuestionDetails(value: Record<string, unknown>, fieldPrefix: string) {
+function hasAllowedAttachmentProtocol(parsed: URL, options: X402QuestionParserOptions) {
+  if (parsed.protocol === "https:") return true;
+  return (
+    parsed.protocol === "http:" &&
+    shouldAllowLocalhostAttachmentOrigins(options) &&
+    isLocalhostOrigin(parsed.origin)
+  );
+}
+
+function normalizeQuestionDetailsUrl(
+  value: string,
+  fieldName: string,
+  options: X402QuestionParserOptions,
+): string {
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol === "http:") {
+      if (
+        !shouldAllowLocalhostAttachmentOrigins(options) ||
+        !isLocalhostOrigin(parsed.origin) ||
+        parsed.search ||
+        parsed.hash ||
+        !QUESTION_DETAILS_PATH_PATTERN.test(parsed.pathname) ||
+        !isRateLoopAttachmentOrigin(parsed, options)
+      ) {
+        throw new X402QuestionInputError(`${fieldName} must be an HTTPS URL.`);
+      }
+    } else if (parsed.protocol !== "https:") {
+      throw new X402QuestionInputError(`${fieldName} must be an HTTPS URL.`);
+    }
+    if (parsed.username || parsed.password) {
+      throw new X402QuestionInputError(`${fieldName} must not include credentials.`);
+    }
+    return parsed.toString();
+  } catch (error) {
+    if (error instanceof X402QuestionInputError) throw error;
+    throw new X402QuestionInputError(`${fieldName} must be a valid HTTPS URL.`);
+  }
+}
+
+function normalizeQuestionDetails(
+  value: Record<string, unknown>,
+  fieldPrefix: string,
+  options: X402QuestionParserOptions,
+) {
   const detailsUrl = readOptionalString(value.detailsUrl);
   const detailsHash = readOptionalBytes32Hex(value.detailsHash, `${fieldPrefix}.detailsHash`);
 
@@ -320,7 +364,7 @@ function normalizeQuestionDetails(value: Record<string, unknown>, fieldPrefix: s
     }
     return {
       detailsHash,
-      detailsUrl: normalizeHttpsUrl(detailsUrl, `${fieldPrefix}.detailsUrl`),
+      detailsUrl: normalizeQuestionDetailsUrl(detailsUrl, `${fieldPrefix}.detailsUrl`, options),
     };
   }
 
@@ -387,7 +431,7 @@ function isRateLoopAttachmentOrigin(parsed: URL, options: X402QuestionParserOpti
 function isHostedQuestionDetailsUrl(value: string, options: X402QuestionParserOptions): boolean {
   try {
     const parsed = new URL(value);
-    if (parsed.protocol !== "https:" || parsed.username || parsed.password || parsed.search || parsed.hash) {
+    if (!hasAllowedAttachmentProtocol(parsed, options) || parsed.username || parsed.password || parsed.search || parsed.hash) {
       return false;
     }
     return QUESTION_DETAILS_PATH_PATTERN.test(parsed.pathname) && isRateLoopAttachmentOrigin(parsed, options);
@@ -399,7 +443,7 @@ function isHostedQuestionDetailsUrl(value: string, options: X402QuestionParserOp
 function normalizeUploadedImageAttachmentUrl(value: string, options: X402QuestionParserOptions): string | null {
   try {
     const parsed = new URL(value);
-    if (parsed.protocol !== "https:" || parsed.username || parsed.password || parsed.search) {
+    if (!hasAllowedAttachmentProtocol(parsed, options) || parsed.username || parsed.password || parsed.search) {
       return null;
     }
     if (!IMAGE_ATTACHMENT_PATH_PATTERN.test(parsed.pathname)) {
@@ -428,8 +472,7 @@ function normalizeImageUrls(value: unknown, options: X402QuestionParserOptions):
   }
 
   const imageUrls = value.map((entry, index) => {
-    const normalized = normalizeHttpsUrl(readString(entry, `imageUrls[${index}]`), `imageUrls[${index}]`);
-    const uploadedImageUrl = normalizeUploadedImageAttachmentUrl(normalized, options);
+    const uploadedImageUrl = normalizeUploadedImageAttachmentUrl(readString(entry, `imageUrls[${index}]`), options);
     if (!uploadedImageUrl) {
       throw new X402QuestionInputError(
         "imageUrls must come from RateLoop uploads. Upload bytes with rateloop_upload_image first.",
@@ -826,7 +869,7 @@ function normalizeQuestion(
   const contextUrl = rawContextUrl ? normalizeQuestionContextUrl(rawContextUrl, `${fieldPrefix}.contextUrl`) : "";
   const rawVideoUrl = readOptionalString(value.videoUrl);
   const videoUrl = rawVideoUrl ? normalizeHttpsUrl(rawVideoUrl, `${fieldPrefix}.videoUrl`) : "";
-  const details = normalizeQuestionDetails(value, fieldPrefix);
+  const details = normalizeQuestionDetails(value, fieldPrefix, options);
   const confidentiality = normalizeQuestionConfidentiality(
     value.confidentiality ?? defaults.confidentiality,
     `${fieldPrefix}.confidentiality`,
