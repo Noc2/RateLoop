@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
+  type PrivateAccountReadScope,
   READ_PRIVATE_ACCOUNT_ACTION,
   buildPrivateAccountReadChallengeMessage,
   hashPrivateAccountReadPayload,
@@ -7,8 +8,7 @@ import {
 } from "~~/lib/auth/privateAccountAccess";
 import {
   SIGNED_READ_SESSION_COOKIE_NAMES,
-  SIGNED_READ_SESSION_SCOPES,
-  setAllSignedReadSessionCookies,
+  setSignedReadSessionCookie,
   verifySignedReadSession,
 } from "~~/lib/auth/signedReadSessions";
 import { verifySignedActionChallenge } from "~~/lib/auth/signedRouteHelpers";
@@ -18,18 +18,16 @@ import { checkRateLimit } from "~~/utils/rateLimit";
 const READ_RATE_LIMIT = { limit: 60, windowMs: 60_000 };
 const WRITE_RATE_LIMIT = { limit: 20, windowMs: 60_000 };
 
-async function hasAllPrivateReadSessions(request: NextRequest, walletAddress: `0x${string}`) {
-  const readSessions = await Promise.all(
-    SIGNED_READ_SESSION_SCOPES.map(scope =>
-      verifySignedReadSession(
-        request.cookies.get(SIGNED_READ_SESSION_COOKIE_NAMES[scope])?.value,
-        walletAddress,
-        scope,
-      ),
-    ),
+async function hasPrivateReadSession(
+  request: NextRequest,
+  walletAddress: `0x${string}`,
+  scope: PrivateAccountReadScope,
+) {
+  return verifySignedReadSession(
+    request.cookies.get(SIGNED_READ_SESSION_COOKIE_NAMES[scope])?.value,
+    walletAddress,
+    scope,
   );
-
-  return readSessions.every(Boolean);
 }
 
 export async function GET(request: NextRequest) {
@@ -40,13 +38,21 @@ export async function GET(request: NextRequest) {
   });
   if (limited) return limited;
 
-  const normalized = normalizePrivateAccountReadInput({ address: typeof address === "string" ? address : undefined });
+  const scope = request.nextUrl.searchParams.get("scope");
+  const normalized = normalizePrivateAccountReadInput({
+    address: typeof address === "string" ? address : undefined,
+    scope: typeof scope === "string" ? scope : undefined,
+  });
   if (!normalized.ok) {
     return NextResponse.json({ error: normalized.error }, { status: 400 });
   }
 
   try {
-    const hasSession = await hasAllPrivateReadSessions(request, normalized.payload.normalizedAddress);
+    const hasSession = await hasPrivateReadSession(
+      request,
+      normalized.payload.normalizedAddress,
+      normalized.payload.scope,
+    );
     return NextResponse.json({ hasSession });
   } catch (error) {
     console.error("Error checking private account session:", error);
@@ -96,6 +102,7 @@ export async function POST(request: NextRequest) {
         buildPrivateAccountReadChallengeMessage({
           address: normalized.payload.normalizedAddress,
           payloadHash,
+          scope: normalized.payload.scope,
           nonce,
           expiresAt,
         }),
@@ -103,7 +110,7 @@ export async function POST(request: NextRequest) {
     if (challengeFailure) return challengeFailure;
 
     const response = NextResponse.json({ ok: true, hasSession: true });
-    await setAllSignedReadSessionCookies(response, normalized.payload.normalizedAddress);
+    await setSignedReadSessionCookie(response, normalized.payload.normalizedAddress, normalized.payload.scope);
     return response;
   } catch (error) {
     console.error("Error creating private account session:", error);

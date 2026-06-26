@@ -74,15 +74,18 @@ after(() => {
 
 test("private account read challenge creates only signed read sessions", async () => {
   const challengeResponse = await challengeRoute.POST(
-    jsonRequest("/api/account/private-session/challenge", { address: WALLET }),
+    jsonRequest("/api/account/private-session/challenge", { address: WALLET, scope: "agent_policies" }),
   );
   const challenge = (await challengeResponse.json()) as { challengeId: string; message: string };
+  assert.match(challenge.message, /Read Scope: agent policies/);
+  assert.match(challenge.message, /This signature does not grant gated rater context access/);
   const signature = await account.signMessage({ message: challenge.message });
 
   const response = await privateSessionRoute.POST(
     jsonRequest("/api/account/private-session", {
       address: WALLET,
       challengeId: challenge.challengeId,
+      scope: "agent_policies",
       signature,
     }),
   );
@@ -90,26 +93,86 @@ test("private account read challenge creates only signed read sessions", async (
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { ok: true, hasSession: true });
 
-  const readCookies = signedReadSessions.SIGNED_READ_SESSION_SCOPES.map(scope => {
-    const cookie = response.cookies.get(signedReadSessions.SIGNED_READ_SESSION_COOKIE_NAMES[scope]);
-    assert.ok(cookie?.value, `${scope} read cookie should be set`);
-    return { name: cookie.name, scope, value: cookie.value };
-  });
+  const agentPoliciesCookie = response.cookies.get(signedReadSessions.AGENT_POLICIES_SIGNED_READ_SESSION_COOKIE_NAME);
+  assert.ok(agentPoliciesCookie?.value, "agent policies read cookie should be set");
 
-  for (const cookie of readCookies) {
-    assert.equal(await signedReadSessions.verifySignedReadSession(cookie.value, NORMALIZED_WALLET, cookie.scope), true);
+  for (const scope of signedReadSessions.SIGNED_READ_SESSION_SCOPES) {
+    if (scope === "agent_policies") continue;
+    assert.equal(response.cookies.get(signedReadSessions.SIGNED_READ_SESSION_COOKIE_NAMES[scope]), undefined);
   }
 
+  assert.equal(
+    await signedReadSessions.verifySignedReadSession(agentPoliciesCookie.value, NORMALIZED_WALLET, "agent_policies"),
+    true,
+  );
+  assert.equal(
+    await signedReadSessions.verifySignedReadSession(agentPoliciesCookie.value, NORMALIZED_WALLET, "gated_context"),
+    false,
+  );
   assert.equal(response.cookies.get(signedWriteSessions.WATCHLIST_SIGNED_WRITE_SESSION_COOKIE_NAME), undefined);
 
   const sessionResponse = await privateSessionRoute.GET(
-    new NextRequest(`https://rateloop.ai/api/account/private-session?address=${encodeURIComponent(WALLET)}`, {
-      headers: new Headers({
-        cookie: readCookies.map(cookie => `${cookie.name}=${cookie.value}`).join("; "),
-      }),
-    }),
+    new NextRequest(
+      `https://rateloop.ai/api/account/private-session?address=${encodeURIComponent(WALLET)}&scope=agent_policies`,
+      {
+        headers: new Headers({
+          cookie: `${agentPoliciesCookie.name}=${agentPoliciesCookie.value}`,
+        }),
+      },
+    ),
   );
 
   assert.equal(sessionResponse.status, 200);
   assert.deepEqual(await sessionResponse.json(), { hasSession: true });
+});
+
+test("private account read challenge scope cannot be expanded on redeem", async () => {
+  const challengeResponse = await challengeRoute.POST(
+    jsonRequest("/api/account/private-session/challenge", { address: WALLET, scope: "watchlist" }),
+  );
+  const challenge = (await challengeResponse.json()) as { challengeId: string; message: string };
+  assert.match(challenge.message, /Read Scope: watchlist/);
+  assert.doesNotMatch(challenge.message, /notification email/);
+  const signature = await account.signMessage({ message: challenge.message });
+
+  const expandedResponse = await privateSessionRoute.POST(
+    jsonRequest("/api/account/private-session", {
+      address: WALLET,
+      challengeId: challenge.challengeId,
+      scope: "notification_email",
+      signature,
+    }),
+  );
+  assert.equal(expandedResponse.status, 401);
+
+  const response = await privateSessionRoute.POST(
+    jsonRequest("/api/account/private-session", {
+      address: WALLET,
+      challengeId: challenge.challengeId,
+      scope: "watchlist",
+      signature,
+    }),
+  );
+
+  assert.equal(response.status, 200);
+  const watchlistCookie = response.cookies.get(signedReadSessions.WATCHLIST_SIGNED_READ_SESSION_COOKIE_NAME);
+  assert.ok(watchlistCookie?.value);
+  assert.equal(
+    await signedReadSessions.verifySignedReadSession(watchlistCookie.value, NORMALIZED_WALLET, "watchlist"),
+    true,
+  );
+  assert.equal(response.cookies.get(signedReadSessions.NOTIFICATION_EMAIL_SIGNED_READ_SESSION_COOKIE_NAME), undefined);
+  assert.equal(response.cookies.get(signedReadSessions.GATED_CONTEXT_SIGNED_READ_SESSION_COOKIE_NAME), undefined);
+});
+
+test("private account read challenge rejects gated context scope", async () => {
+  const challengeResponse = await challengeRoute.POST(
+    jsonRequest("/api/account/private-session/challenge", {
+      address: WALLET,
+      scope: "gated_context",
+    }),
+  );
+
+  assert.equal(challengeResponse.status, 400);
+  assert.deepEqual(await challengeResponse.json(), { error: "Invalid read scope" });
 });

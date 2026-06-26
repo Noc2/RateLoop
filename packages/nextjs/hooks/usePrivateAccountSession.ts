@@ -1,5 +1,7 @@
 "use client";
 
+import type { PrivateAccountReadScope } from "~~/lib/auth/privateAccountAccess";
+
 type SignMessageAsync = (args: { message: string }) => Promise<`0x${string}`>;
 
 type PrivateSessionChallengeResponse = {
@@ -19,10 +21,15 @@ async function readJson<T>(response: Response, fallbackError: string): Promise<T
   return body as T;
 }
 
-export async function ensurePrivateAccountReadSession(address: string, signMessageAsync: SignMessageAsync) {
-  const normalizedAddress = address.toLowerCase();
+export async function ensurePrivateAccountReadSession(
+  address: string,
+  scope: PrivateAccountReadScope,
+  signMessageAsync: SignMessageAsync,
+) {
+  const normalizedAddress = `${address.toLowerCase()}:${scope}`;
+  const statusParams = new URLSearchParams({ address, scope });
   const status = await readJson<{ hasSession?: boolean }>(
-    await fetch(`/api/account/private-session?address=${encodeURIComponent(address)}`),
+    await fetch(`/api/account/private-session?${statusParams.toString()}`),
     "Failed to check account session",
   );
 
@@ -40,7 +47,7 @@ export async function ensurePrivateAccountReadSession(address: string, signMessa
       await fetch("/api/account/private-session/challenge", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ address }),
+        body: JSON.stringify({ address, scope }),
       }),
       "Failed to create account session challenge",
     );
@@ -54,7 +61,7 @@ export async function ensurePrivateAccountReadSession(address: string, signMessa
       await fetch("/api/account/private-session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ address, challengeId: challenge.challengeId, signature }),
+        body: JSON.stringify({ address, challengeId: challenge.challengeId, scope, signature }),
       }),
       "Failed to create account session",
     );

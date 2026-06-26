@@ -132,7 +132,7 @@ async function readAgentPolicies(
     return { items: [], count: 0, hasSession: false };
   }
 
-  await ensurePrivateAccountReadSession(address, signMessageAsync);
+  await ensurePrivateAccountReadSession(address, "agent_policies", signMessageAsync);
   const policies = await readJson<{ items?: AgentPolicyRecord[]; count?: number }>(
     await fetch(`/api/agent/policies?address=${encodeURIComponent(address)}`),
     "Failed to fetch managed agents",
@@ -170,7 +170,7 @@ export function useAgentPolicies(address?: string, options?: UseAgentPoliciesOpt
     if (!address) return { ok: false, reason: "not_connected" };
     setIsReadSessionBusy(true);
     try {
-      await ensurePrivateAccountReadSession(address, signMessageAsync);
+      await ensurePrivateAccountReadSession(address, "agent_policies", signMessageAsync);
       await refetch();
       return { ok: true };
     } catch (error) {

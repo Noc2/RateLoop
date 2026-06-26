@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   PRIVATE_ACCOUNT_ACCESS_CHALLENGE_TITLE,
   READ_PRIVATE_ACCOUNT_ACTION,
+  buildPrivateAccountReadChallengeMessageLines,
   hashPrivateAccountReadPayload,
   normalizePrivateAccountReadInput,
 } from "~~/lib/auth/privateAccountAccess";
@@ -38,6 +39,7 @@ export async function POST(request: NextRequest) {
       action: READ_PRIVATE_ACCOUNT_ACTION,
       walletAddress: normalized.payload.normalizedAddress,
       payloadHash: hashPrivateAccountReadPayload(normalized.payload),
+      messageLines: buildPrivateAccountReadChallengeMessageLines(normalized.payload.scope),
     });
     return NextResponse.json(challenge);
   } catch (error) {

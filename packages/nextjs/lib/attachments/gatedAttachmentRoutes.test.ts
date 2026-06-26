@@ -9,7 +9,11 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, beforeEach, test } from "node:test";
 import { getImageAttachmentVariantPathname, readLocalImageAttachment } from "~~/lib/attachments/imageAttachments";
-import { getSignedReadSessionCookie, issueSignedReadSession } from "~~/lib/auth/signedReadSessions";
+import {
+  OWNER_CONTEXT_SIGNED_READ_SESSION_COOKIE_NAME,
+  getSignedReadSessionCookie,
+  issueSignedReadSession,
+} from "~~/lib/auth/signedReadSessions";
 import {
   CONFIDENTIALITY_TERMS_DOC_HASH,
   CONFIDENTIALITY_TERMS_URI,
@@ -155,6 +159,13 @@ async function seedPublicImage() {
 async function buildSignedGatedContextCookie(walletAddress: `0x${string}` = WALLET) {
   const session = await issueSignedReadSession(walletAddress, "gated_context");
   const cookie = getSignedReadSessionCookie("gated_context", session);
+  return `${cookie.name}=${cookie.value}`;
+}
+
+async function buildSignedOwnerContextCookie(walletAddress: `0x${string}` = WALLET) {
+  const session = await issueSignedReadSession(walletAddress, "owner_context");
+  const cookie = getSignedReadSessionCookie("owner_context", session);
+  assert.equal(cookie.name, OWNER_CONTEXT_SIGNED_READ_SESSION_COOKIE_NAME);
   return `${cookie.name}=${cookie.value}`;
 }
 
@@ -309,7 +320,7 @@ test("gated details throttle repeated authorized resource reads and dedupe acces
 
 test("gated details allow the attachment owner with a signed wallet session without terms acceptance", async () => {
   await seedGatedDetails();
-  const cookie = await buildSignedGatedContextCookie(WALLET);
+  const cookie = await buildSignedOwnerContextCookie(WALLET);
 
   const allowed = await getDetails(
     new NextRequest(`https://www.rateloop.ai/api/attachments/details/${DETAILS_ID}?address=${WALLET}`, {
@@ -337,6 +348,22 @@ test("gated details allow the attachment owner with a signed wallet session with
       resource_kind: "details",
     },
   ]);
+});
+
+test("gated details do not allow owner bypass from a gated context cookie alone", async () => {
+  await seedGatedDetails();
+  const cookie = await buildSignedGatedContextCookie(WALLET);
+
+  const denied = await getDetails(
+    new NextRequest(`https://www.rateloop.ai/api/attachments/details/${DETAILS_ID}?address=${WALLET}`, {
+      headers: { cookie },
+    }),
+    { params: Promise.resolve({ detailsId: DETAILS_ID }) },
+  );
+
+  assert.equal(denied.status, 403);
+  assert.equal(await denied.text(), '{"error":"Confidentiality terms acceptance required"}');
+  assert.equal(denied.headers.get("cache-control"), "private, no-store");
 });
 
 test("gated details still require terms acceptance for signed non-owner sessions", async () => {
@@ -397,7 +424,7 @@ test("gated context manifest returns authorized private attachment fetch URLs", 
   assert.equal(denied.headers.get("cache-control"), "private, no-store");
   assert.deepEqual(await denied.json(), { error: "Signed wallet session required" });
 
-  const cookie = await buildSignedGatedContextCookie(WALLET);
+  const cookie = await buildSignedOwnerContextCookie(WALLET);
   const allowed = await getGatedContext(new NextRequest(requestUrl, { headers: { cookie } }));
   const body = (await allowed.json()) as {
     contentId: string;
@@ -644,7 +671,7 @@ test("gated images throttle repeated authorized resource reads and dedupe access
 
 test("gated images allow the attachment owner with a signed wallet session without terms acceptance", async () => {
   await seedGatedImage();
-  const cookie = await buildSignedGatedContextCookie(WALLET);
+  const cookie = await buildSignedOwnerContextCookie(WALLET);
 
   const allowed = await getImage(
     new NextRequest(`https://www.rateloop.ai/api/attachments/images/${ATTACHMENT_ID}.webp?address=${WALLET}`, {

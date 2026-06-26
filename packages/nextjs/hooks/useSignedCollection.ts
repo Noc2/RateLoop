@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ensurePrivateAccountReadSession } from "~~/hooks/usePrivateAccountSession";
 import { isSignatureRejected } from "~~/utils/signatureErrors";
 
 export interface SignedCollectionResponse<TItem> {
@@ -78,6 +77,37 @@ async function readResponseBody<T>(response: Response, fallbackError: string): P
   return body as T;
 }
 
+async function requestSignedCollectionReadSession<TItem>(
+  config: Pick<
+    UseSignedCollectionConfig<TItem, string>,
+    "buildReadChallengeRequest" | "buildSignedReadRequest" | "challengePath" | "collectionPath" | "signMessageAsync"
+  >,
+  address: string,
+) {
+  const challenge = await readResponseBody<SignedChallengeResponse>(
+    await fetch(config.challengePath, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(config.buildReadChallengeRequest(address)),
+    }),
+    "Failed to create read signature challenge",
+  );
+
+  if (!challenge.message || !challenge.challengeId) {
+    throw new Error(challenge.error || "Failed to create read signature challenge");
+  }
+
+  const signature = await config.signMessageAsync({ message: challenge.message });
+  await readResponseBody<unknown>(
+    await fetch(config.collectionPath, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(config.buildSignedReadRequest(address, challenge.challengeId, signature)),
+    }),
+    "Failed to create read session",
+  );
+}
+
 async function getSignedCollectionSessionStatus(
   sessionPath: string,
   address: string,
@@ -101,7 +131,15 @@ async function getSignedCollectionSessionStatus(
 async function readSignedCollection<TItem>(
   config: Pick<
     UseSignedCollectionConfig<TItem, string>,
-    "autoRead" | "collectionPath" | "emptyResponse" | "sessionPath" | "signMessageAsync" | "readSearchParams"
+    | "autoRead"
+    | "buildReadChallengeRequest"
+    | "buildSignedReadRequest"
+    | "challengePath"
+    | "collectionPath"
+    | "emptyResponse"
+    | "sessionPath"
+    | "signMessageAsync"
+    | "readSearchParams"
   >,
   address: string,
 ): Promise<{
@@ -135,7 +173,7 @@ async function readSignedCollection<TItem>(
     };
   }
 
-  await ensurePrivateAccountReadSession(address, config.signMessageAsync);
+  await requestSignedCollectionReadSession(config, address);
 
   const searchParams = new URLSearchParams(config.readSearchParams);
   searchParams.set("address", address);
@@ -150,7 +188,6 @@ async function readSignedCollection<TItem>(
     sessionStatus: {
       ...sessionStatus,
       hasReadSession: true,
-      hasWriteSession: true,
     },
   };
 }

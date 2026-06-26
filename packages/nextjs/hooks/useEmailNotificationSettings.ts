@@ -48,7 +48,7 @@ async function readEmailNotificationSettings(
     return { ...DEFAULT_EMAIL_NOTIFICATION_SETTINGS };
   }
 
-  await ensurePrivateAccountReadSession(address, signMessageAsync);
+  await ensurePrivateAccountReadSession(address, "notification_email", signMessageAsync);
 
   const res = await fetch(`/api/notifications/email?address=${encodeURIComponent(address)}`);
   const body = (await res.json().catch(() => null)) as

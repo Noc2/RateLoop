@@ -7,8 +7,10 @@ export const NOTIFICATION_PREFERENCES_SIGNED_READ_SESSION_COOKIE_NAME =
   "rateloop_notification_preferences_read_session";
 export const NOTIFICATION_EMAIL_SIGNED_READ_SESSION_COOKIE_NAME = "rateloop_notification_email_read_session";
 export const AGENT_POLICIES_SIGNED_READ_SESSION_COOKIE_NAME = "rateloop_agent_policies_read_session";
+export const OWNER_CONTEXT_SIGNED_READ_SESSION_COOKIE_NAME = "rateloop_owner_context_read_session";
 export const GATED_CONTEXT_SIGNED_READ_SESSION_COOKIE_NAME = "rateloop_gated_context_read_session";
 const SIGNED_READ_SESSION_TTL_MS = 365 * 24 * 60 * 60 * 1000;
+export const OWNER_CONTEXT_SIGNED_READ_SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 export const GATED_CONTEXT_SIGNED_READ_SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 
 export const SIGNED_READ_SESSION_SCOPES = [
@@ -16,6 +18,7 @@ export const SIGNED_READ_SESSION_SCOPES = [
   "notification_preferences",
   "notification_email",
   "agent_policies",
+  "owner_context",
   "gated_context",
 ] as const;
 
@@ -26,13 +29,19 @@ export const SIGNED_READ_SESSION_COOKIE_NAMES: Record<SignedReadSessionScope, st
   notification_preferences: NOTIFICATION_PREFERENCES_SIGNED_READ_SESSION_COOKIE_NAME,
   notification_email: NOTIFICATION_EMAIL_SIGNED_READ_SESSION_COOKIE_NAME,
   agent_policies: AGENT_POLICIES_SIGNED_READ_SESSION_COOKIE_NAME,
+  owner_context: OWNER_CONTEXT_SIGNED_READ_SESSION_COOKIE_NAME,
   gated_context: GATED_CONTEXT_SIGNED_READ_SESSION_COOKIE_NAME,
 };
 
 const signedReadSessionStore = createSignedSessionStore<SignedReadSessionScope>({
   tableName: "signed_read_sessions",
   indexName: "signed_read_sessions_wallet_scope_expires_idx",
-  ttlMs: scope => (scope === "gated_context" ? GATED_CONTEXT_SIGNED_READ_SESSION_TTL_MS : SIGNED_READ_SESSION_TTL_MS),
+  ttlMs: scope =>
+    scope === "gated_context"
+      ? GATED_CONTEXT_SIGNED_READ_SESSION_TTL_MS
+      : scope === "owner_context"
+        ? OWNER_CONTEXT_SIGNED_READ_SESSION_TTL_MS
+        : SIGNED_READ_SESSION_TTL_MS,
   cookieNames: SIGNED_READ_SESSION_COOKIE_NAMES,
 });
 
@@ -51,12 +60,20 @@ export async function setSignedReadSessionCookie(
   return response;
 }
 
-export async function setAllSignedReadSessionCookies(response: NextResponse, walletAddress: `0x${string}`) {
+export async function setSignedReadSessionCookies(
+  response: NextResponse,
+  walletAddress: `0x${string}`,
+  scopes: readonly SignedReadSessionScope[],
+) {
   await Promise.all(
-    SIGNED_READ_SESSION_SCOPES.map(async scope => {
+    scopes.map(async scope => {
       await setSignedReadSessionCookie(response, walletAddress, scope);
     }),
   );
 
   return response;
+}
+
+export async function setAllSignedReadSessionCookies(response: NextResponse, walletAddress: `0x${string}`) {
+  return setSignedReadSessionCookies(response, walletAddress, SIGNED_READ_SESSION_SCOPES);
 }

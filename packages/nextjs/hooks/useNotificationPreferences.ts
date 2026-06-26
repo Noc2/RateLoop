@@ -45,7 +45,7 @@ async function readNotificationPreferences(
     return { ...DEFAULT_NOTIFICATION_PREFERENCES };
   }
 
-  await ensurePrivateAccountReadSession(address, signMessageAsync);
+  await ensurePrivateAccountReadSession(address, "notification_preferences", signMessageAsync);
 
   const res = await fetch(`/api/notifications/preferences?address=${encodeURIComponent(address)}`);
   const body = (await res.json().catch(() => null)) as ({ error?: string } & Partial<NotificationPreferences>) | null;

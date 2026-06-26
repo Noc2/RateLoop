@@ -374,6 +374,60 @@ test("gated context signed read sessions are short lived", async () => {
   assert.ok(ttlMs > signedReadSessions.GATED_CONTEXT_SIGNED_READ_SESSION_TTL_MS - 2_000);
 });
 
+test("owner context signed read sessions are short lived", async () => {
+  const issuedAt = Date.now();
+  const session = await signedReadSessions.issueSignedReadSession(WALLET, "owner_context");
+  const ttlMs = session.expiresAt.getTime() - issuedAt;
+
+  assert.ok(ttlMs <= signedReadSessions.OWNER_CONTEXT_SIGNED_READ_SESSION_TTL_MS + 2_000);
+  assert.ok(ttlMs > signedReadSessions.OWNER_CONTEXT_SIGNED_READ_SESSION_TTL_MS - 2_000);
+});
+
+test("authorizes owners with owner context sessions without gated terms", async () => {
+  await ensureGatedConfidentiality();
+  const deploymentScope = confidentiality.resolveCurrentConfidentialityDeploymentScope();
+  assert.ok(deploymentScope);
+  const session = await signedReadSessions.issueSignedReadSession(WALLET, "owner_context");
+  const cookie = signedReadSessions.getSignedReadSessionCookie("owner_context", session);
+  const request = new NextRequest(
+    `https://rateloop.ai/api/attachments/details/det_contextaccess001?address=${WALLET}`,
+    {
+      headers: { cookie: `${cookie.name}=${cookie.value}` },
+    },
+  );
+
+  const authorization = await confidentiality.authorizeGatedContextRequest(request, CONTENT_ID, {
+    ownerWalletAddress: WALLET,
+  });
+  assert.deepEqual(authorization, {
+    ok: true,
+    deploymentKey: deploymentScope.deploymentKey,
+    identityKey: null,
+    walletAddress: WALLET,
+  });
+});
+
+test("does not authorize owner bypass from a gated context session without terms", async () => {
+  await ensureGatedConfidentiality();
+  const session = await signedReadSessions.issueSignedReadSession(WALLET, "gated_context");
+  const cookie = signedReadSessions.getSignedReadSessionCookie("gated_context", session);
+  const request = new NextRequest(
+    `https://rateloop.ai/api/attachments/details/det_contextaccess001?address=${WALLET}`,
+    {
+      headers: { cookie: `${cookie.name}=${cookie.value}` },
+    },
+  );
+
+  const authorization = await confidentiality.authorizeGatedContextRequest(request, CONTENT_ID, {
+    ownerWalletAddress: WALLET,
+  });
+  assert.deepEqual(authorization, {
+    ok: false,
+    status: 403,
+    error: "Confidentiality terms acceptance required",
+  });
+});
+
 test("rejects gated reads when an acceptance no longer matches current content commitments", async () => {
   installConfidentialityGate();
   await createAcceptedRequest();

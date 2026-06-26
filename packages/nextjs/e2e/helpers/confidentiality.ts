@@ -658,7 +658,7 @@ export async function createPrivateAccountReadSessionCookie(
   account: AnvilAccount,
 ): Promise<string> {
   const challengeResponse = await request.post("/api/account/private-session/challenge", {
-    data: { address: account.address },
+    data: { address: account.address, scope: "owner_context" },
   });
   expect(challengeResponse.ok(), await challengeResponse.text()).toBe(true);
   const challenge = await challengeResponse.json();
@@ -671,15 +671,16 @@ export async function createPrivateAccountReadSessionCookie(
     data: {
       address: account.address,
       challengeId: challenge.challengeId,
+      scope: "owner_context",
       signature,
     },
   });
   expect(sessionResponse.ok(), await sessionResponse.text()).toBe(true);
 
   const cookie =
-    getNamedSetCookie(sessionResponse.headersArray(), "rateloop_gated_context_read_session") ??
-    getNamedSetCookie(sessionResponse.headers(), "rateloop_gated_context_read_session");
-  expect(cookie, "private account session should return a gated context read-session cookie").toBeTruthy();
+    getNamedSetCookie(sessionResponse.headersArray(), "rateloop_owner_context_read_session") ??
+    getNamedSetCookie(sessionResponse.headers(), "rateloop_owner_context_read_session");
+  expect(cookie, "private account session should return an owner context read-session cookie").toBeTruthy();
   return cookie!;
 }
 

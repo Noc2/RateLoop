@@ -20,7 +20,11 @@ import {
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { buildSignedActionMessage, hashSignedActionPayload } from "~~/lib/auth/signedActions";
-import { GATED_CONTEXT_SIGNED_READ_SESSION_COOKIE_NAME, verifySignedReadSession } from "~~/lib/auth/signedReadSessions";
+import {
+  GATED_CONTEXT_SIGNED_READ_SESSION_COOKIE_NAME,
+  OWNER_CONTEXT_SIGNED_READ_SESSION_COOKIE_NAME,
+  verifySignedReadSession,
+} from "~~/lib/auth/signedReadSessions";
 import {
   CONFIDENTIALITY_TERMS_TEXT,
   CONFIDENTIALITY_TERMS_URI,
@@ -813,22 +817,30 @@ export async function authorizeGatedContextRequest(
   }
 
   const walletAddress = normalizeWalletAddress(address);
-  const hasSession = await verifySignedReadSession(
-    request.cookies.get(GATED_CONTEXT_SIGNED_READ_SESSION_COOKIE_NAME)?.value,
-    walletAddress,
-    "gated_context",
-  );
-  if (!hasSession) {
-    return { ok: false as const, status: 401, error: "Signed wallet session required" };
-  }
-
-  if (isOwnerWalletAddress(walletAddress, options.ownerWalletAddress)) {
+  const isOwner = isOwnerWalletAddress(walletAddress, options.ownerWalletAddress);
+  const hasOwnerContextSession = isOwner
+    ? await verifySignedReadSession(
+        request.cookies.get(OWNER_CONTEXT_SIGNED_READ_SESSION_COOKIE_NAME)?.value,
+        walletAddress,
+        "owner_context",
+      )
+    : false;
+  if (isOwner && hasOwnerContextSession) {
     return {
       ok: true as const,
       deploymentKey: deploymentScope.deploymentKey,
       identityKey: null,
       walletAddress,
     };
+  }
+
+  const hasGatedContextSession = await verifySignedReadSession(
+    request.cookies.get(GATED_CONTEXT_SIGNED_READ_SESSION_COOKIE_NAME)?.value,
+    walletAddress,
+    "gated_context",
+  );
+  if (!hasGatedContextSession) {
+    return { ok: false as const, status: 401, error: "Signed wallet session required" };
   }
 
   const serverPayload = await buildServerConfidentialityTermsPayload(

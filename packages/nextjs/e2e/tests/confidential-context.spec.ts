@@ -56,7 +56,7 @@ test.describe("Confidential context", () => {
     ).toBeVisible({ timeout: 20_000 });
     await expect(async () => {
       const sessionResponse = await page.request.get(
-        `/api/account/private-session?address=${ANVIL_ACCOUNTS.account2.address}`,
+        `/api/account/private-session?address=${ANVIL_ACCOUNTS.account2.address}&scope=owner_context`,
       );
       if (sessionResponse.ok()) {
         const session = await sessionResponse.json();
@@ -71,7 +71,7 @@ test.describe("Confidential context", () => {
       }
 
       const retryResponse = await page.request.get(
-        `/api/account/private-session?address=${ANVIL_ACCOUNTS.account2.address}`,
+        `/api/account/private-session?address=${ANVIL_ACCOUNTS.account2.address}&scope=owner_context`,
       );
       expect(retryResponse.ok()).toBe(true);
       const retrySession = await retryResponse.json();
@@ -124,9 +124,9 @@ test.describe("Confidential context", () => {
     const noTerms = await fetchGatedAttachment(page.request, submitted.detailsUrl!, {
       address: ANVIL_ACCOUNTS.account4.address,
       cookie: readSessionOnlyCookie,
-      expectedStatus: 403,
+      expectedStatus: 401,
     });
-    await expect(noTerms.json()).resolves.toEqual({ error: "Confidentiality terms acceptance required" });
+    await expect(noTerms.json()).resolves.toEqual({ error: "Signed wallet session required" });
 
     const noCredentialCookie = await acceptConfidentialityTerms(page.request, ANVIL_ACCOUNTS.account1, {
       contentId: submitted.contentId,

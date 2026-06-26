@@ -5,7 +5,6 @@ import {
   acceptConfidentialityTerms,
   attachHostedQuestionDetails,
   banConfidentialityIdentity,
-  createPrivateAccountReadSessionCookie,
   ensureHumanCredential,
   fetchGatedAttachment,
   resolveConfidentialRater,
@@ -199,7 +198,10 @@ test.describe("Governance page", () => {
     const viewToken = accusedDetails.headers()["x-rateloop-view-token"] ?? "";
     expect(viewToken).toMatch(/^[a-f0-9]{64}$/);
     await seedAnchoredLogRootForViewToken(viewToken);
-    const readSessionCookie = await createPrivateAccountReadSessionCookie(page.request, ANVIL_ACCOUNTS.account2);
+    const readSessionCookie = await acceptConfidentialityTerms(page.request, ANVIL_ACCOUNTS.account2, {
+      contentId,
+      detailsHash: submitted.detailsHash,
+    });
     const [cookieName, cookieValue] = readSessionCookie.split("=");
     await page.context().addCookies([{ name: cookieName, value: cookieValue, url: E2E_BASE_URL }]);
 

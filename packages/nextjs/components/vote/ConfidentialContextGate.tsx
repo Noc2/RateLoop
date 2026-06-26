@@ -276,7 +276,7 @@ export function ConfidentialContextGate({
     if (!gated || !isOwnContent || !address) return;
     let cancelled = false;
     setIsCheckingOwnerSession(true);
-    const params = new URLSearchParams({ address });
+    const params = new URLSearchParams({ address, scope: "owner_context" });
     fetch(`/api/account/private-session?${params.toString()}`, {
       credentials: "include",
     })
@@ -307,51 +307,59 @@ export function ConfidentialContextGate({
     };
   }, [gated, isOwnContent, item]);
 
-  const acceptTerms = async () => {
+  const buildConfidentialityTermsPayload = (walletAddress: string) => ({
+    address: walletAddress,
+    chainId: confidentialityScope.chainId,
+    contentHash: item.contentHash,
+    contentId: item.id.toString(),
+    contentRegistryAddress: confidentialityScope.contentRegistryAddress,
+    deploymentKey: confidentialityScope.deploymentKey,
+    detailsHash: item.detailsHash ?? undefined,
+    questionMetadataHash: item.questionMetadataHash ?? undefined,
+  });
+
+  const confirmConfidentialityTermsSession = async () => {
     if (!address) {
       notification.warning("Connect a wallet to view private context.");
-      return;
+      return false;
     }
+    const payload = buildConfidentialityTermsPayload(address);
+    const challengeResponse = await fetch("/api/confidentiality/terms/challenge", {
+      body: JSON.stringify(payload),
+      credentials: "include",
+      headers: { "content-type": "application/json" },
+      method: "POST",
+    });
+    const challenge = await challengeResponse.json();
+    if (!challengeResponse.ok || typeof challenge.message !== "string" || typeof challenge.challengeId !== "string") {
+      throw new Error(challenge.error || "Could not create confidentiality challenge.");
+    }
+    const signature = await signMessageAsync({ message: challenge.message });
+    const acceptResponse = await fetch("/api/confidentiality/terms", {
+      body: JSON.stringify({
+        ...payload,
+        challengeId: challenge.challengeId,
+        signature,
+        termsVersion: challenge.termsVersion,
+      }),
+      credentials: "include",
+      headers: { "content-type": "application/json" },
+      method: "POST",
+    });
+    const acceptedBody = await acceptResponse.json();
+    if (!acceptResponse.ok || acceptedBody.accepted !== true) {
+      throw new Error(acceptedBody.error || "Could not record confidentiality acceptance.");
+    }
+    setAccepted(true);
+    setHasReadSession(true);
+    return true;
+  };
+
+  const acceptTerms = async () => {
     setIsAccepting(true);
     try {
-      const payload = {
-        address,
-        chainId: confidentialityScope.chainId,
-        contentHash: item.contentHash,
-        contentId: item.id.toString(),
-        contentRegistryAddress: confidentialityScope.contentRegistryAddress,
-        deploymentKey: confidentialityScope.deploymentKey,
-        detailsHash: item.detailsHash ?? undefined,
-        questionMetadataHash: item.questionMetadataHash ?? undefined,
-      };
-      const challengeResponse = await fetch("/api/confidentiality/terms/challenge", {
-        body: JSON.stringify(payload),
-        credentials: "include",
-        headers: { "content-type": "application/json" },
-        method: "POST",
-      });
-      const challenge = await challengeResponse.json();
-      if (!challengeResponse.ok || typeof challenge.message !== "string" || typeof challenge.challengeId !== "string") {
-        throw new Error(challenge.error || "Could not create confidentiality challenge.");
-      }
-      const signature = await signMessageAsync({ message: challenge.message });
-      const acceptResponse = await fetch("/api/confidentiality/terms", {
-        body: JSON.stringify({
-          ...payload,
-          challengeId: challenge.challengeId,
-          signature,
-          termsVersion: challenge.termsVersion,
-        }),
-        credentials: "include",
-        headers: { "content-type": "application/json" },
-        method: "POST",
-      });
-      const acceptedBody = await acceptResponse.json();
-      if (!acceptResponse.ok || acceptedBody.accepted !== true) {
-        throw new Error(acceptedBody.error || "Could not record confidentiality acceptance.");
-      }
-      setAccepted(true);
-      setHasReadSession(true);
+      const confirmed = await confirmConfidentialityTermsSession();
+      if (!confirmed) return;
       setIsTermsDialogOpen(false);
       if (typeof window !== "undefined") {
         window.dispatchEvent(
@@ -378,7 +386,7 @@ export function ConfidentialContextGate({
     }
     setIsConfirmingOwnerSession(true);
     try {
-      await ensurePrivateAccountReadSession(address, signMessageAsync);
+      await ensurePrivateAccountReadSession(address, "owner_context", signMessageAsync);
       setOwnerSessionReady(true);
       if (typeof window !== "undefined") {
         window.dispatchEvent(
@@ -405,7 +413,8 @@ export function ConfidentialContextGate({
     }
     setIsConfirmingOwnerSession(true);
     try {
-      await ensurePrivateAccountReadSession(address, signMessageAsync);
+      const confirmed = await confirmConfidentialityTermsSession();
+      if (!confirmed) return;
       setHasReadSession(true);
       if (typeof window !== "undefined") {
         window.dispatchEvent(
