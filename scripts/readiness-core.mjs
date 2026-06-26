@@ -1416,7 +1416,7 @@ export async function validateLiveReadiness({
         addCheck(
           checks,
           failures,
-          true,
+          !requireTargets,
           "Keeper /health live probe skipped because METRICS_AUTH_TOKEN is unset",
         );
       }

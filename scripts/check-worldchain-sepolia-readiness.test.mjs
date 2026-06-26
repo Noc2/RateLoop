@@ -1182,6 +1182,85 @@ test("validateLiveReadiness probes keeper work with the configured bearer token"
   }
 });
 
+test("validateLiveReadiness fails strict Keeper health when METRICS_AUTH_TOKEN is unset", async () => {
+  const previousFetch = globalThis.fetch;
+  const previousToken = process.env.METRICS_AUTH_TOKEN;
+
+  delete process.env.METRICS_AUTH_TOKEN;
+  globalThis.fetch = async (url) => {
+    const urlString = url.toString();
+    if (urlString.endsWith("/live")) {
+      return new Response(JSON.stringify({ status: "ok" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    throw new Error(`Unexpected fetch ${urlString}`);
+  };
+
+  try {
+    const result = await validateLiveReadiness({
+      deploymentJson: makeDeploymentJson(),
+      keeperUrl: "https://keeper.example.test",
+      requireTargets: true,
+    });
+
+    assert.equal(result.ok, false);
+    assert(
+      result.failures.some((message) =>
+        message.includes("Keeper /health live probe skipped because METRICS_AUTH_TOKEN is unset"),
+      ),
+    );
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousToken === undefined) {
+      delete process.env.METRICS_AUTH_TOKEN;
+    } else {
+      process.env.METRICS_AUTH_TOKEN = previousToken;
+    }
+  }
+});
+
+test("validateLiveReadiness permits ad-hoc Keeper health skips when METRICS_AUTH_TOKEN is unset", async () => {
+  const previousFetch = globalThis.fetch;
+  const previousToken = process.env.METRICS_AUTH_TOKEN;
+
+  delete process.env.METRICS_AUTH_TOKEN;
+  globalThis.fetch = async (url) => {
+    const urlString = url.toString();
+    if (urlString.endsWith("/live")) {
+      return new Response(JSON.stringify({ status: "ok" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    throw new Error(`Unexpected fetch ${urlString}`);
+  };
+
+  try {
+    const result = await validateLiveReadiness({
+      deploymentJson: makeDeploymentJson(),
+      keeperUrl: "https://keeper.example.test",
+    });
+
+    assert.equal(result.ok, true);
+    assert(
+      result.checks.some(
+        (check) =>
+          check.ok &&
+          check.message.includes("Keeper /health live probe skipped because METRICS_AUTH_TOKEN is unset"),
+      ),
+    );
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousToken === undefined) {
+      delete process.env.METRICS_AUTH_TOKEN;
+    } else {
+      process.env.METRICS_AUTH_TOKEN = previousToken;
+    }
+  }
+});
+
 test("baseSepoliaNotDeployedMessage names the Base Sepolia deployment artifact", () => {
   assert.equal(
     baseSepoliaNotDeployedMessage(),
