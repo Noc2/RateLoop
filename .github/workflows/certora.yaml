@@ -29,9 +29,6 @@ permissions:
   contents: read
 
 env:
-  # Pinned to the version the specs were authored and verified against. Bump deliberately
-  # after re-running the matrix; a floating "latest" can silently break the lane.
-  CERTORA_CLI_VERSION: "==8.13.1"
   SOLC_VERSION: "0.8.35"
 
 jobs:
@@ -59,10 +56,23 @@ jobs:
       - name: Verify Java
         run: java --version
 
+      - name: Verify Python lock target
+        run: |
+          python3 - <<'PY'
+          import sys
+
+          expected = (3, 12)
+          actual = sys.version_info[:2]
+          if actual != expected:
+              raise SystemExit(
+                  f"Certora requirements are locked for Python {expected[0]}.{expected[1]}, "
+                  f"but runner has Python {actual[0]}.{actual[1]}. Refresh packages/foundry/certora/requirements.txt."
+              )
+          PY
+
       - name: Install Certora CLI and solc
         run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install "certora-cli${CERTORA_CLI_VERSION}" solc-select
+          python3 -m pip install --require-hashes -r packages/foundry/certora/requirements.txt
           solc-select install "$SOLC_VERSION"
           solc-select use "$SOLC_VERSION"
           certoraRun --version
@@ -159,14 +169,23 @@ jobs:
       - name: Verify Java
         run: java --version
 
+      - name: Verify Python lock target
+        run: |
+          python3 - <<'PY'
+          import sys
+
+          expected = (3, 12)
+          actual = sys.version_info[:2]
+          if actual != expected:
+              raise SystemExit(
+                  f"Certora requirements are locked for Python {expected[0]}.{expected[1]}, "
+                  f"but runner has Python {actual[0]}.{actual[1]}. Refresh packages/foundry/certora/requirements.txt."
+              )
+          PY
+
       - name: Install Certora CLI and solc
         run: |
-          python3 -m pip install --upgrade pip
-          if [ -n "$CERTORA_CLI_VERSION" ]; then
-            python3 -m pip install "certora-cli${CERTORA_CLI_VERSION}" solc-select
-          else
-            python3 -m pip install certora-cli solc-select
-          fi
+          python3 -m pip install --require-hashes -r packages/foundry/certora/requirements.txt
           solc-select install "$SOLC_VERSION"
           solc-select use "$SOLC_VERSION"
           certoraRun --version
