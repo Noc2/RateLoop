@@ -22,7 +22,6 @@ import {
 } from "~~/hooks/useFreeTransactionAllowance";
 import type { SponsorshipSyncStatus } from "~~/hooks/useFreeTransactionAllowance";
 import { refreshActiveWalletReadQueries } from "~~/hooks/useRefreshWalletBalances";
-import { useSponsoredTransactionDelayNotice } from "~~/hooks/useSponsoredTransactionDelayNotice";
 import { useThirdwebWagmiSync } from "~~/hooks/useThirdwebWagmiSync";
 import { useTransactionStatusToast } from "~~/hooks/useTransactionStatusToast";
 import {
@@ -44,6 +43,7 @@ import {
 import { type TransactionTimingMetadataValue, createTransactionTimingRun } from "~~/lib/transactions/timing";
 import {
   getSlowSponsoredTransactionStatus,
+  getSponsoredSubmittingTransactionStatus,
   shouldShowSponsoredTransactionDelayNotice,
 } from "~~/lib/ui/sponsoredTransactionNotice";
 import { TRANSACTION_CONFIRMING_STATUS } from "~~/lib/ui/transactionStatusCopy";
@@ -94,7 +94,7 @@ const THIRDWEB_SEND_CALLS_SLOW_MS = 8_000;
 
 export function getSlowThirdwebSubmitStatus(action: string, options?: { sponsored?: boolean }) {
   if (options?.sponsored) {
-    return getSlowSponsoredTransactionStatus();
+    return getSlowSponsoredTransactionStatus(action);
   }
 
   return {
@@ -477,7 +477,6 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
   const setActiveWallet = useSetActiveWallet();
   const { syncWalletToWagmi } = useThirdwebWagmiSync();
   const statusToast = useTransactionStatusToast();
-  const showSponsoredTransactionDelayNotice = useSponsoredTransactionDelayNotice();
   const { isRestoringWallet } = useWalletRestore();
   const { address, chainId: wagmiChainId, connector } = useAccount();
   const { sendCallsSyncAsync } = useSendCallsSync();
@@ -787,22 +786,13 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
               ...(typeof call.value !== "undefined" ? { value: call.value } : {}),
             }),
           );
+      const usesSponsoredThirdwebNotice = shouldShowSponsoredTransactionDelayNotice({
+        route: transactionRoute,
+        sponsorshipMode,
+      });
       let activeStatusToastId: string | null = null;
       const showStatusToast = (status: { action?: string; title?: string; description?: string }) => {
         activeStatusToastId = statusToast.showSubmitting(status);
-      };
-      const showSponsoredDelayNoticeIfNeeded = () => {
-        if (
-          !shouldShowSponsoredTransactionDelayNotice({
-            route: transactionRoute,
-            sponsorshipMode,
-          })
-        ) {
-          return;
-        }
-
-        timingLog.emit("sponsored-delay-notice-shown");
-        showSponsoredTransactionDelayNotice();
       };
       const sendCallsWithWallet = async (
         wallet: NonNullable<typeof activeWallet>,
@@ -887,10 +877,13 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
 
       try {
         if (!options.suppressStatusToast) {
-          showStatusToast({ action: options.action ?? "transaction" });
+          const action = options.action ?? "transaction";
+          showStatusToast(usesSponsoredThirdwebNotice ? getSponsoredSubmittingTransactionStatus(action) : { action });
+          if (usesSponsoredThirdwebNotice) {
+            timingLog.emit("sponsored-delay-notice-shown");
+          }
           timingLog.emit("status-toast-shown");
         }
-        showSponsoredDelayNoticeIfNeeded();
 
         const result = canUseExternalWalletPath
           ? await sendCallsWithExternalWallet()
@@ -1038,7 +1031,6 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
       queryClient,
       sendCallsSyncAsync,
       setActiveWallet,
-      showSponsoredTransactionDelayNotice,
       statusToast,
       syncWalletToWagmi,
     ],

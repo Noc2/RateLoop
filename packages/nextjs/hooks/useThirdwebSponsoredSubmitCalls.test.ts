@@ -42,9 +42,8 @@ test("builds slow thirdweb submit status copy", () => {
 
 test("builds slow sponsored thirdweb submit status copy", () => {
   assert.deepEqual(getSlowThirdwebSubmitStatus("follow profile", { sponsored: true }), {
-    title: "Still submitting sponsored transaction",
-    description:
-      "The sponsored relay is still working. This is expected sometimes; we'll update once the transaction is sent.",
+    title: "Still submitting follow profile",
+    description: "Sponsored transactions can take up to a minute.",
   });
 });
 

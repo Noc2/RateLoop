@@ -25,6 +25,7 @@ import { useGasBalanceStatus } from "~~/hooks/useGasBalanceStatus";
 import { useRaterRegistryIdentity } from "~~/hooks/useRaterRegistryIdentity";
 import { getRecentUserVotesQueryKey } from "~~/hooks/useRecentUserVotes";
 import { useThirdwebSponsoredSubmitCalls } from "~~/hooks/useThirdwebSponsoredSubmitCalls";
+import { useTransactionStatusToast } from "~~/hooks/useTransactionStatusToast";
 import { getVoteHistoryQueryKey } from "~~/hooks/useVoteHistoryQuery";
 import { getVotingStakesQueryKey } from "~~/hooks/useVotingStakes";
 import {
@@ -43,6 +44,7 @@ import {
   isInsufficientFundsError,
 } from "~~/lib/transactionErrors";
 import { raceTransactionWithPostcondition } from "~~/lib/transactions/postcondition";
+import { getSponsoredSubmittingTransactionStatus } from "~~/lib/ui/sponsoredTransactionNotice";
 import {
   getAdvisoryVoteUnavailableMessage,
   parseAdvisoryCommitAvailability,
@@ -243,6 +245,7 @@ export function useRoundVote() {
     isAwaitingSponsoredBatchCalls,
     sponsoredWalletSyncStatus,
   } = useThirdwebSponsoredSubmitCalls();
+  const statusToast = useTransactionStatusToast();
   const { canSponsorTransactions, nativeTokenSymbol } = useGasBalanceStatus({
     includeExternalSendCalls: true,
     syncInAppSponsorship: false,
@@ -446,6 +449,12 @@ export function useRoundVote() {
     setIsCommitting(true);
     setError(null);
     timingLog.emit("commit-lock-acquired");
+    const usesSponsoredVotePath = !useDirectLocalE2EWrites && canUseSponsoredBatchCalls;
+    let activeVoteStatusToastId: string | null = null;
+    if (usesSponsoredVotePath) {
+      activeVoteStatusToastId = statusToast.showSubmitting(getSponsoredSubmittingTransactionStatus("vote"));
+    }
+    const sponsoredBatchOptions = usesSponsoredVotePath ? { suppressStatusToast: true as const } : {};
 
     try {
       if (publicClient) {
@@ -829,6 +838,7 @@ export function useRoundVote() {
                 },
                 parentRunId: timingLog.runId,
                 sponsorshipMode: "sponsored",
+                ...sponsoredBatchOptions,
               }),
             waitForPostcondition: shouldStop =>
               waitForRoundOpenPostcondition(
@@ -1027,6 +1037,7 @@ export function useRoundVote() {
               },
               parentRunId: timingLog.runId,
               sponsorshipMode,
+              ...sponsoredBatchOptions,
             }),
           waitForPostcondition: shouldStop =>
             waitForRoundVoteCommitPostcondition(
@@ -1199,6 +1210,7 @@ export function useRoundVote() {
       setError(normalizedError);
       return false;
     } finally {
+      statusToast.dismiss(activeVoteStatusToastId);
       commitLock.current = false;
       setIsCommitting(false);
     }

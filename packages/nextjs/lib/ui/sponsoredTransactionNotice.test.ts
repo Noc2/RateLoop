@@ -1,5 +1,6 @@
 import {
   getSlowSponsoredTransactionStatus,
+  getSponsoredSubmittingTransactionStatus,
   getSponsoredTransactionDelayNotice,
   shouldShowSponsoredTransactionDelayNotice,
 } from "./sponsoredTransactionNotice";
@@ -8,17 +9,22 @@ import test from "node:test";
 
 test("builds sponsored transaction delay notice copy", () => {
   assert.deepEqual(getSponsoredTransactionDelayNotice(), {
-    title: "Free gas may take a little longer",
-    description:
-      "RateLoop is sponsoring this transaction. Sponsored transactions can take up to a minute to relay, so keep this tab open and avoid retrying while it submits.",
+    title: "Submitting transaction",
+    description: "Sponsored transactions can take up to a minute.",
+  });
+});
+
+test("builds combined sponsored submitting status copy", () => {
+  assert.deepEqual(getSponsoredSubmittingTransactionStatus("vote"), {
+    title: "Submitting vote",
+    description: "Sponsored transactions can take up to a minute.",
   });
 });
 
 test("builds slow sponsored transaction status copy", () => {
-  assert.deepEqual(getSlowSponsoredTransactionStatus(), {
-    title: "Still submitting sponsored transaction",
-    description:
-      "The sponsored relay is still working. This is expected sometimes; we'll update once the transaction is sent.",
+  assert.deepEqual(getSlowSponsoredTransactionStatus("vote"), {
+    title: "Still submitting vote",
+    description: "Sponsored transactions can take up to a minute.",
   });
 });
 

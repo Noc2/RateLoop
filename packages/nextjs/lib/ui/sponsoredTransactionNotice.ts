@@ -1,5 +1,7 @@
 export const SPONSORED_TRANSACTION_DELAY_NOTICE_ID = "sponsored-transaction-delay-notice";
 
+export const SPONSORED_TRANSACTION_DELAY_DESCRIPTION = "Sponsored transactions can take up to a minute.";
+
 type SponsoredTransactionDelayNoticeParams = {
   route: "external-wallet" | "thirdweb";
   sponsorshipMode: "self-funded" | "sponsored";
@@ -7,17 +9,22 @@ type SponsoredTransactionDelayNoticeParams = {
 
 export function getSponsoredTransactionDelayNotice() {
   return {
-    title: "Free gas may take a little longer",
-    description:
-      "RateLoop is sponsoring this transaction. Sponsored transactions can take up to a minute to relay, so keep this tab open and avoid retrying while it submits.",
+    title: "Submitting transaction",
+    description: SPONSORED_TRANSACTION_DELAY_DESCRIPTION,
   };
 }
 
-export function getSlowSponsoredTransactionStatus() {
+export function getSponsoredSubmittingTransactionStatus(action: string) {
   return {
-    title: "Still submitting sponsored transaction",
-    description:
-      "The sponsored relay is still working. This is expected sometimes; we'll update once the transaction is sent.",
+    title: `Submitting ${action}`,
+    description: SPONSORED_TRANSACTION_DELAY_DESCRIPTION,
+  };
+}
+
+export function getSlowSponsoredTransactionStatus(action: string) {
+  return {
+    title: `Still submitting ${action}`,
+    description: SPONSORED_TRANSACTION_DELAY_DESCRIPTION,
   };
 }
 
