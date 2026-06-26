@@ -37,7 +37,7 @@ export const Settle = () => {
             Settled on-chain
           </Chip>
           <Chip>
-            <span style={{ fontFamily: monoFont }}>World Chain · block 0x8f2…c41</span>
+            <span style={{ fontFamily: monoFont }}>Base mainnet · block 0x8f2…c41</span>
           </Chip>
         </div>
       </div>
