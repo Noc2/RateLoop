@@ -363,6 +363,7 @@ async function prepareAsk(params: {
       x402AuthorizationRequest && calls.length === 0
         ? "Sign the EIP-3009 USDC authorization in the connected wallet, then prepare the handoff again with paymentAuthorization."
         : "Execute transactionPlan.calls in the connected wallet, then confirm transaction hashes.",
+    requestBody: askBody,
     x402AuthorizationRequest,
   };
 }

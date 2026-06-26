@@ -1814,6 +1814,7 @@ test("agent ask handoff route uploads signed generated images before preparing a
   );
   const prepareBody = (await prepareResponse.json()) as {
     assets?: Array<Record<string, unknown>>;
+    requestBody?: { question?: { imageUrls?: string[] } };
     status?: string;
     transactionPlan?: { calls?: unknown[] };
   };
@@ -1833,6 +1834,7 @@ test("agent ask handoff route uploads signed generated images before preparing a
     String(payload.questions[0]?.imageUrls[0]),
     /^https:\/\/rateloop\.ai\/rateloop\/api\/attachments\/images\/att_/,
   );
+  assert.deepEqual(prepareBody.requestBody?.question?.imageUrls, payload.questions[0]?.imageUrls);
   assert.equal(payload.questions[0]?.videoUrl || undefined, undefined);
 });
 
