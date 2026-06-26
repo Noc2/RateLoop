@@ -322,6 +322,26 @@ test("Playwright package versions stay aligned with the browser compatibility co
     installedVersion,
     "direct playwright-core dependency should stay in lockstep with @playwright/test",
   );
+  assert.match(
+    workflow,
+    /mcr\.microsoft\.com\/playwright:v\d+\.\d+\.\d+-[^\s@]+@sha256:[a-f0-9]{64}/u,
+    "scheduled browser/mobile CI container should be pinned by digest",
+  );
+  assert.equal(
+    [...workflow.matchAll(/image:\s+postgres:16@sha256:[a-f0-9]{64}/gu)].length,
+    2,
+    "E2E Postgres service images should be pinned by digest",
+  );
+});
+
+test("Vercel deploy scripts use the locked workspace CLI", () => {
+  const packageJson = readNextPackageJson();
+
+  assert.equal(packageJson.devDependencies?.vercel, "54.0.0");
+  assert.match(packageJson.scripts?.vercel ?? "", /^vercel --build-env /);
+  assert.equal(packageJson.scripts?.["vercel:login"], "vercel login");
+  assert.doesNotMatch(packageJson.scripts?.vercel ?? "", /yarn dlx|vercel@/);
+  assert.doesNotMatch(packageJson.scripts?.["vercel:login"] ?? "", /yarn dlx|vercel@/);
 });
 
 test("CI smoke and API projects keep browser smoke separate from fetch-only specs", () => {

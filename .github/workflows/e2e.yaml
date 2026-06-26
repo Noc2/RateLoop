@@ -23,7 +23,7 @@ jobs:
     timeout-minutes: ${{ matrix.timeout }}
     services:
       postgres:
-        image: postgres:16
+        image: postgres:16@sha256:287eced1f33b59ed265ed13a60d3680dd7646d70c4dc0e785f59a470ebc03eeb
         env:
           POSTGRES_DB: rateloop_app
           POSTGRES_PASSWORD: postgres
@@ -249,14 +249,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: ${{ matrix.timeout }}
     container:
-      image: mcr.microsoft.com/playwright:v1.58.2-noble
+      image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
       options: --ipc=host
     env:
       HOME: /root
       PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
     services:
       postgres:
-        image: postgres:16
+        image: postgres:16@sha256:287eced1f33b59ed265ed13a60d3680dd7646d70c4dc0e785f59a470ebc03eeb
         env:
           POSTGRES_DB: rateloop_app
           POSTGRES_PASSWORD: postgres
