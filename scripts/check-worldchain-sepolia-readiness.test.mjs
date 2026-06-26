@@ -425,6 +425,7 @@ test("validateArtifactAllowlistParity requires matching keeper and ponder allowl
     checks: matchingChecks,
     env: {
       KEEPER_ARTIFACT_HTTPS_ALLOWLIST: "https://keeper.example.com/artifacts/",
+      KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL: "https://keeper.example.com/artifacts",
       PAYOUT_ARTIFACT_HTTPS_ALLOWLIST: "https://keeper.example.com/artifacts",
     },
     failures: matchingFailures,
@@ -439,12 +440,48 @@ test("validateArtifactAllowlistParity requires matching keeper and ponder allowl
     checks: mismatchChecks,
     env: {
       KEEPER_ARTIFACT_HTTPS_ALLOWLIST: "https://keeper.example.com/artifacts",
+      KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL: "https://keeper.example.com/artifacts",
       PAYOUT_ARTIFACT_HTTPS_ALLOWLIST: "https://other.example.com/artifacts",
     },
     failures: mismatchFailures,
   });
 
-  assert.equal(mismatchFailures.length, 1);
+  assert.equal(mismatchFailures.length, 2);
+  assert(
+    mismatchFailures.some((message) =>
+      message.includes("KEEPER_ARTIFACT_HTTPS_ALLOWLIST matches PAYOUT_ARTIFACT_HTTPS_ALLOWLIST"),
+    ),
+  );
+  assert(
+    mismatchFailures.some((message) =>
+      message.includes("PAYOUT_ARTIFACT_HTTPS_ALLOWLIST includes KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL"),
+    ),
+  );
+
+  const missingPublicBaseChecks = [];
+  const missingPublicBaseFailures = [];
+
+  validateArtifactAllowlistParity({
+    checks: missingPublicBaseChecks,
+    env: {
+      KEEPER_ARTIFACT_HTTPS_ALLOWLIST: "https://keeper.example.com/artifacts",
+      KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL: "https://keeper.example.com/published-artifacts/",
+      PAYOUT_ARTIFACT_HTTPS_ALLOWLIST: "https://keeper.example.com/artifacts/",
+    },
+    failures: missingPublicBaseFailures,
+  });
+
+  assert.equal(missingPublicBaseFailures.length, 2);
+  assert(
+    missingPublicBaseFailures.some((message) =>
+      message.includes("KEEPER_ARTIFACT_HTTPS_ALLOWLIST includes KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL"),
+    ),
+  );
+  assert(
+    missingPublicBaseFailures.some((message) =>
+      message.includes("PAYOUT_ARTIFACT_HTTPS_ALLOWLIST includes KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL"),
+    ),
+  );
 });
 
 test("validateOfflineReadiness flags a contract whose deployedOnBlock is missing", () => {

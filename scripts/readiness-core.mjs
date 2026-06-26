@@ -483,10 +483,32 @@ function usesAutomaticFileCorrelationArtifacts(env) {
   return snapshotMode === "auto" && artifactStorage === "file";
 }
 
+function normalizeArtifactUrlPrefix(value) {
+  const trimmed = value.trim().replace(/\/+$/, "");
+  if (!trimmed) return "";
+  try {
+    const parsed = new URL(trimmed);
+    parsed.hash = "";
+    parsed.search = "";
+    return parsed.toString().replace(/\/+$/, "");
+  } catch {
+    return trimmed;
+  }
+}
+
+function normalizedArtifactAllowlistPrefixSet(value) {
+  return new Set(
+    value
+      .split(",")
+      .map(normalizeArtifactUrlPrefix)
+      .filter(Boolean),
+  );
+}
+
 function normalizeArtifactAllowlistPrefixes(value) {
   return value
     .split(",")
-    .map((part) => part.trim().replace(/\/+$/, ""))
+    .map(normalizeArtifactUrlPrefix)
     .filter(Boolean)
     .sort()
     .join(",");
@@ -498,6 +520,11 @@ export function validateArtifactAllowlistParity({ checks, env = process.env, fai
   if (!keeperAllowlist || !payoutAllowlist) {
     return;
   }
+  const publicArtifactBaseUrl = readRuntimeEnv(
+    env,
+    "KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL",
+  );
+  const normalizedPublicArtifactBaseUrl = normalizeArtifactUrlPrefix(publicArtifactBaseUrl);
 
   addCheck(
     checks,
@@ -506,6 +533,21 @@ export function validateArtifactAllowlistParity({ checks, env = process.env, fai
       normalizeArtifactAllowlistPrefixes(payoutAllowlist),
     "KEEPER_ARTIFACT_HTTPS_ALLOWLIST matches PAYOUT_ARTIFACT_HTTPS_ALLOWLIST when both are set",
   );
+
+  if (normalizedPublicArtifactBaseUrl) {
+    addCheck(
+      checks,
+      failures,
+      normalizedArtifactAllowlistPrefixSet(keeperAllowlist).has(normalizedPublicArtifactBaseUrl),
+      "KEEPER_ARTIFACT_HTTPS_ALLOWLIST includes KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL",
+    );
+    addCheck(
+      checks,
+      failures,
+      normalizedArtifactAllowlistPrefixSet(payoutAllowlist).has(normalizedPublicArtifactBaseUrl),
+      "PAYOUT_ARTIFACT_HTTPS_ALLOWLIST includes KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL",
+    );
+  }
 }
 
 export function validateOffchainRuntimeEnv({

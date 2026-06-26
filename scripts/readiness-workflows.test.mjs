@@ -58,6 +58,10 @@ test("Base Sepolia readiness remains an active push, PR, scheduled, and manual g
   );
   assert.match(workflow, /BASE_SEPOLIA_KEEPER_URL: \$\{\{ vars\.BASE_SEPOLIA_KEEPER_URL \}\}/);
   assert.match(workflow, /env\.BASE_SEPOLIA_KEEPER_URL != ''/);
+  assert.match(
+    workflow,
+    /KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL: https:\/\/artifacts\.rateloop\.ai\/rateloop/,
+  );
   assert.match(workflow, /RATE_LIMIT_TRUSTED_IP_HEADERS:/);
 });
 
@@ -83,6 +87,10 @@ test("Base mainnet readiness remains an active push, PR, scheduled, and manual g
   );
   assert.match(workflow, /BASE_KEEPER_URL: \$\{\{ vars\.BASE_KEEPER_URL \}\}/);
   assert.match(workflow, /env\.BASE_KEEPER_URL != ''/);
+  assert.match(
+    workflow,
+    /KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL: https:\/\/artifacts\.rateloop\.ai\/rateloop/,
+  );
   assert.match(workflow, /RATE_LIMIT_TRUSTED_IP_HEADERS:/);
 });
 

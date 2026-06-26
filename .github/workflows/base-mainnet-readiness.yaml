@@ -30,6 +30,7 @@ jobs:
       BASE_RPC_URL: ${{ secrets.BASE_RPC_URL }}
       CORS_ORIGIN: ${{ vars.CORS_ORIGIN }}
       KEEPER_DATABASE_URL: ${{ secrets.KEEPER_DATABASE_URL }}
+      KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL: https://artifacts.rateloop.ai/rateloop
       METRICS_AUTH_TOKEN: ${{ secrets.METRICS_AUTH_TOKEN }}
       METRICS_BIND_ADDRESS: ${{ vars.METRICS_BIND_ADDRESS }}
       NODE_ENV: production
