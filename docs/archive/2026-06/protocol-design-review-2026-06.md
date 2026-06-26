@@ -39,7 +39,7 @@ not for the mainnet claim**, and given a severity by design impact. 39 strengths
 
 > Follow-up update (2026-06-15): this addendum was checked against local checkout
 > `2501e9f3` before the document edit. Several blockers from the repo's
-> `docs/repo-audit-2026-06-16.md` file are now resolved in source: deploy-profile
+> historical repo-audit snapshot for 2026-06-16 are now resolved in source: deploy-profile
 > contract-size checks pass (`LaunchDistributionPool` 24,458 bytes,
 > `QuestionRewardPoolEscrow` 24,506, `RaterRegistry` 24,487, all below the
 > 24,576-byte EIP-170 cap); Ponder voteability reads now route through
@@ -673,9 +673,9 @@ Repo: file:line references throughout at reviewed HEAD `3d58264b`, with the
 RobustBtsMath, RewardMath, TlockVoteLib, RatingMath, VotePreflightLib, QuestionRewardPoolEscrow\*,
 ConfidentialityEscrow, RaterRegistry, ClusterPayoutOracle, FrontendRegistry, LaunchDistributionPool,
 RateLoopGovernor, ProtocolConfig, Deploy.s.sol; public docs `how-it-works.md`, `ai.md`, `sdk.md`,
-whitepaper `sections.ts`; internal `private-context-plan-2026-06.md`, `use-cases-2026-06.md`,
-`agent-to-agent-acceptance-oracle-2026-06.md`, `repo-audit-2026-06-15.md`,
-`repo-audit-2026-06-16.md`).
+whitepaper `sections.ts`; internal `private-context-plan-2026-06.md`, `../../use-cases-2026-06.md`,
+`../../agent-to-agent-acceptance-oracle-2026-06.md`, and historical repo-audit snapshots for 2026-06-15 and
+2026-06-16 that are not present in this archive).
 
 External (selected): Witkowski & Parkes, _A Robust BTS for Small Populations_ (AAAI 2012);
 Radanovic & Faltings, _RBTS for Non-Binary Signals_ (AAAI 2013); Gao, Wright & Leyton-Brown,
