@@ -107,12 +107,14 @@ test("npm publish workflow uses GitHub OIDC provenance and publishes in dependen
   assert.match(workflow, /npm publish/);
   assert.match(workflow, /--dry-run/);
 
-  const contractsIndex = workflow.indexOf("rateloop-contracts.tgz");
-  const sdkIndex = workflow.indexOf("rateloop-sdk.tgz");
-  const agentsIndex = workflow.indexOf("rateloop-agents.tgz");
+  const contractsIndex = workflow.indexOf("npm publish \"$RUNNER_TEMP/rateloop-npm/rateloop-contracts.tgz\"");
+  const nodeUtilsIndex = workflow.indexOf("npm publish \"$RUNNER_TEMP/rateloop-npm/rateloop-node-utils.tgz\"");
+  const sdkIndex = workflow.indexOf("npm publish \"$RUNNER_TEMP/rateloop-npm/rateloop-sdk.tgz\"");
+  const agentsIndex = workflow.indexOf("npm publish \"$RUNNER_TEMP/rateloop-npm/rateloop-agents.tgz\"");
 
   assert.ok(contractsIndex > -1, "contracts tarball is published");
-  assert.ok(sdkIndex > contractsIndex, "sdk is published after contracts");
+  assert.ok(nodeUtilsIndex > contractsIndex, "node-utils is published after contracts");
+  assert.ok(sdkIndex > nodeUtilsIndex, "sdk is published after node-utils");
   assert.ok(agentsIndex > sdkIndex, "agents is published after sdk");
 });
 
