@@ -82,6 +82,7 @@ import {
   templateListOutputSchema,
 } from "~~/lib/agent/schemas";
 import { findAgentResultTemplate, listAgentResultTemplates } from "~~/lib/agent/templates";
+import { readAgentTransactionHashes } from "~~/lib/agent/transactionHashes";
 import {
   attachImagesToOperation,
   createImageAttachmentFromBuffer,
@@ -3506,8 +3507,10 @@ export async function callPublicRateLoopMcpTool(params: {
       if (!operationKey) {
         throw new McpToolError("Provide operationKey for the ask to confirm.");
       }
-      const rawHashes = Array.isArray(args.transactionHashes) ? args.transactionHashes : [];
-      const transactionHashes = rawHashes.filter((hash): hash is Hex => typeof hash === "string") as Hex[];
+      const transactionHashes = readAgentTransactionHashes(
+        args.transactionHashes,
+        message => new McpToolError(message),
+      );
       const result = await dependencies.confirmAgentWalletQuestionSubmissionRequest({
         operationKey,
         transactionHashes,
@@ -3558,8 +3561,10 @@ export async function callPublicRateLoopMcpTool(params: {
       if (!operationKey) {
         throw new McpToolError("Provide operationKey for the Feedback Bonus to confirm.");
       }
-      const rawHashes = Array.isArray(args.transactionHashes) ? args.transactionHashes : [];
-      const transactionHashes = rawHashes.filter((hash): hash is Hex => typeof hash === "string") as Hex[];
+      const transactionHashes = readAgentTransactionHashes(
+        args.transactionHashes,
+        message => new McpToolError(message),
+      );
       const result = await dependencies.confirmFeedbackBonusQuestionSubmissionRequest({
         operationKey,
         transactionHashes,
@@ -3836,8 +3841,10 @@ export async function callRateLoopMcpTool(params: {
       if (!operationKey) {
         throw new McpToolError("Provide operationKey for the ask to confirm.");
       }
-      const rawHashes = Array.isArray(args.transactionHashes) ? args.transactionHashes : [];
-      const transactionHashes = rawHashes.filter((hash): hash is Hex => typeof hash === "string") as Hex[];
+      const transactionHashes = readAgentTransactionHashes(
+        args.transactionHashes,
+        message => new McpToolError(message),
+      );
       const result = await dependencies.confirmAgentWalletQuestionSubmissionRequest({
         operationKey,
         transactionHashes,
@@ -3898,8 +3905,10 @@ export async function callRateLoopMcpTool(params: {
       if (!operationKey) {
         throw new McpToolError("Provide operationKey for the Feedback Bonus to confirm.");
       }
-      const rawHashes = Array.isArray(args.transactionHashes) ? args.transactionHashes : [];
-      const transactionHashes = rawHashes.filter((hash): hash is Hex => typeof hash === "string") as Hex[];
+      const transactionHashes = readAgentTransactionHashes(
+        args.transactionHashes,
+        message => new McpToolError(message),
+      );
       const result = await dependencies.confirmFeedbackBonusQuestionSubmissionRequest({
         operationKey,
         transactionHashes,

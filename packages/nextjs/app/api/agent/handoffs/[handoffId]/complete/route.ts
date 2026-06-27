@@ -14,6 +14,7 @@ import {
   jsonBodyErrorResponse,
   parseJsonBody,
 } from "~~/lib/agent/http";
+import { readAgentTransactionHashes } from "~~/lib/agent/transactionHashes";
 import { callPublicRateLoopMcpTool } from "~~/lib/mcp/tools";
 
 export const runtime = "nodejs";
@@ -25,24 +26,6 @@ type JsonObject = Record<string, unknown>;
 function readToken(value: unknown) {
   if (typeof value === "string" && value.trim()) return value.trim();
   throw new AgentAskHandoffError("token is required.");
-}
-
-const MAX_TRANSACTION_HASHES = 32;
-
-function readTransactionHashes(value: unknown): Hex[] {
-  if (!Array.isArray(value)) {
-    throw new AgentAskHandoffError("transactionHashes must be an array.");
-  }
-  if (value.length > MAX_TRANSACTION_HASHES) {
-    throw new AgentAskHandoffError(
-      `transactionHashes must contain at most ${MAX_TRANSACTION_HASHES} transaction hashes.`,
-    );
-  }
-  const hashes = value.filter((hash): hash is Hex => typeof hash === "string") as Hex[];
-  if (hashes.length === 0 || hashes.length !== value.length || hashes.some(hash => !/^0x[a-fA-F0-9]{64}$/.test(hash))) {
-    throw new AgentAskHandoffError("transactionHashes must contain at least one transaction hash.");
-  }
-  return hashes;
 }
 
 function readJsonObject(value: unknown): JsonObject | null {
@@ -69,7 +52,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ha
       if (!isJsonObjectBody(body)) return jsonBodyErrorResponse(body);
 
       const token = readToken((body as { token?: unknown }).token);
-      const transactionHashes = readTransactionHashes((body as { transactionHashes?: unknown }).transactionHashes);
+      const transactionHashes = readAgentTransactionHashes(
+        (body as { transactionHashes?: unknown }).transactionHashes,
+        message => new AgentAskHandoffError(message),
+      );
       const handoff = await loadAgentAskHandoffByToken({ handoffId, token });
       if (handoff.status === "submitted") {
         const assets = await listAgentAskHandoffAssets(handoff.id);

@@ -871,6 +871,39 @@ test("agent signing intent routes create and prepare browser handoff asks", asyn
   assert.equal(readAfterPrepare.status, 200);
   assert.equal(readAfterPrepareBody.status, "prepared");
   assert.equal((readAfterPrepareBody.transactionPlan as { calls: unknown[] }).calls.length, 1);
+
+  const malformedCompleteResponse = await signingIntentCompleteRoute.POST(
+    makePublicPost(`https://rateloop.ai/api/agent/signing-intents/${intentId}/complete`, {
+      token,
+      transactionHashes: ["not-a-transaction-hash"],
+    }),
+    { params: Promise.resolve({ intentId }) },
+  );
+  const malformedCompleteBody = (await malformedCompleteResponse.json()) as Record<string, unknown>;
+  assert.equal(malformedCompleteResponse.status, 400);
+  assert.equal(malformedCompleteBody.message, "transactionHashes must contain at least one transaction hash.");
+
+  const oversizedCompleteResponse = await signingIntentCompleteRoute.POST(
+    makePublicPost(`https://rateloop.ai/api/agent/signing-intents/${intentId}/complete`, {
+      token,
+      transactionHashes: Array.from({ length: 33 }, (_value, index) => `0x${index.toString(16).padStart(64, "0")}`),
+    }),
+    { params: Promise.resolve({ intentId }) },
+  );
+  const oversizedCompleteBody = (await oversizedCompleteResponse.json()) as Record<string, unknown>;
+  assert.equal(oversizedCompleteResponse.status, 400);
+  assert.equal(oversizedCompleteBody.message, "transactionHashes must contain at most 32 transaction hashes.");
+
+  const readAfterRejectedComplete = await signingIntentRoute.GET(
+    makePublicGet(`https://rateloop.ai/api/agent/signing-intents/${intentId}`, {
+      "x-rateloop-signing-intent-token": token,
+    }),
+    { params: Promise.resolve({ intentId }) },
+  );
+  const readAfterRejectedCompleteBody = (await readAfterRejectedComplete.json()) as Record<string, unknown>;
+  assert.equal(readAfterRejectedComplete.status, 200);
+  assert.equal(readAfterRejectedCompleteBody.status, "prepared");
+  assert.deepEqual(readAfterRejectedCompleteBody.transactionHashes, []);
 });
 
 test("agent signing intent route uses configured production app URL for token links", async () => {
@@ -2967,6 +3000,26 @@ test("agent confirm route accepts tokenless operation confirmations", async () =
   assert.equal(body.status, "submitted");
   assert.equal(body.contentId, "42");
   assert.deepEqual(body.warnings, []);
+});
+
+test("agent confirm route rejects malformed transaction hashes before MCP confirmation", async () => {
+  mcpToolsModule.__setMcpToolTestOverridesForTests({
+    confirmAgentWalletQuestionSubmissionRequest: async () => {
+      throw new Error("confirmation should not be called");
+    },
+  });
+
+  const response = await asksConfirmRoute.POST(
+    makePublicPost(`https://rateloop.ai/api/agent/asks/${OPERATION_KEY}/confirm`, {
+      transactionHashes: ["not-a-transaction-hash"],
+    }),
+    { params: Promise.resolve({ operationKey: OPERATION_KEY }) },
+  );
+  const body = (await response.json()) as Record<string, unknown>;
+
+  assert.equal(response.status, 400);
+  assert.equal(body.message, "transactionHashes must contain at least one transaction hash.");
+  assert.equal(body.code, "invalid_arguments");
 });
 
 test("agent status route returns not_found without treating it as a transport error", async () => {

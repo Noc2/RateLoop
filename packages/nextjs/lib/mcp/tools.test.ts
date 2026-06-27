@@ -2259,6 +2259,35 @@ test("rateloop_confirm_ask_transactions returns a pending feedback bonus transac
   assert.equal(body.feedbackBonus.transactionPlan.calls.length, 2);
 });
 
+test("rateloop_confirm_ask_transactions rejects malformed transaction hashes", async () => {
+  let confirmed = false;
+  __setMcpToolTestOverridesForTests({
+    confirmAgentWalletQuestionSubmissionRequest: async () => {
+      confirmed = true;
+      return {
+        body: {
+          operationKey: OPERATION_KEY,
+          status: "submitted",
+        },
+        status: 200,
+      };
+    },
+  });
+
+  await assert.rejects(
+    callRateLoopMcpTool({
+      agent: AGENT,
+      arguments: {
+        operationKey: OPERATION_KEY,
+        transactionHashes: ["not-a-transaction-hash"],
+      },
+      name: "rateloop_confirm_ask_transactions",
+    }),
+    /transactionHashes must contain at least one transaction hash/,
+  );
+  assert.equal(confirmed, false);
+});
+
 test("rateloop_confirm_feedback_bonus_transactions confirms the funded bonus", async () => {
   const confirmed: unknown[] = [];
   __setMcpToolTestOverridesForTests({

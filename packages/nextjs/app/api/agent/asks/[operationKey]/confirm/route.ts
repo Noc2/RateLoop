@@ -9,7 +9,8 @@ import {
   jsonBodyErrorResponse,
   parseJsonBody,
 } from "~~/lib/agent/http";
-import { callPublicRateLoopMcpTool, callRateLoopMcpTool } from "~~/lib/mcp/tools";
+import { readAgentTransactionHashes } from "~~/lib/agent/transactionHashes";
+import { McpToolError, callPublicRateLoopMcpTool, callRateLoopMcpTool } from "~~/lib/mcp/tools";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,9 +22,14 @@ export async function POST(request: NextRequest, context: { params: Promise<{ op
       handler: async () => {
         const body = await parseJsonBody(request);
         if (!isJsonObjectBody(body)) return jsonBodyErrorResponse(body);
+        const transactionHashes = readAgentTransactionHashes(
+          (body as { transactionHashes?: unknown }).transactionHashes,
+          message => new McpToolError(message),
+        );
         return callPublicRateLoopMcpTool({
           arguments: {
             ...body,
+            transactionHashes,
             operationKey,
           },
           name: "rateloop_confirm_ask_transactions",
@@ -38,10 +44,15 @@ export async function POST(request: NextRequest, context: { params: Promise<{ op
     handler: async ({ agent }) => {
       const body = await parseJsonBody(request);
       if (!isJsonObjectBody(body)) return jsonBodyErrorResponse(body);
+      const transactionHashes = readAgentTransactionHashes(
+        (body as { transactionHashes?: unknown }).transactionHashes,
+        message => new McpToolError(message),
+      );
       return callRateLoopMcpTool({
         agent,
         arguments: {
           ...body,
+          transactionHashes,
           operationKey,
         },
         name: "rateloop_confirm_ask_transactions",

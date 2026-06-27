@@ -6,6 +6,7 @@ import {
   sealSensitiveAgentRequestFields,
   unsealSensitiveAgentRequestFields,
 } from "~~/lib/agent/requestRedaction";
+import { readAgentTransactionHashes } from "~~/lib/agent/transactionHashes";
 import { dbClient } from "~~/lib/db";
 import { McpToolError, callPublicRateLoopMcpTool } from "~~/lib/mcp/tools";
 import { buildAppRelativeUrl } from "~~/lib/url/appRelative";
@@ -82,17 +83,6 @@ function parseOptionalAddress(value: unknown, fieldName: string): Address | null
   if (value === undefined || value === null || value === "") return null;
   if (typeof value === "string" && isAddress(value)) return value as Address;
   throw new McpToolError(`${fieldName} must be an EVM address.`);
-}
-
-function parseTransactionHashes(value: unknown): Hex[] {
-  if (!Array.isArray(value)) {
-    throw new McpToolError("transactionHashes must be an array.");
-  }
-  const hashes = value.filter((hash): hash is Hex => typeof hash === "string") as Hex[];
-  if (hashes.length === 0 || hashes.length !== value.length) {
-    throw new McpToolError("transactionHashes must contain at least one transaction hash.");
-  }
-  return hashes;
 }
 
 function parseStoredJson(value: string): JsonObject {
@@ -510,7 +500,7 @@ export async function completeAgentSigningIntent(params: {
   if (!intent.operationKey) {
     throw new McpToolError("Prepare this signing intent before completing it.");
   }
-  const transactionHashes = parseTransactionHashes(params.transactionHashes);
+  const transactionHashes = readAgentTransactionHashes(params.transactionHashes, message => new McpToolError(message));
   const confirmsFeedbackBonus = intent.status === "feedback_bonus_prepared";
 
   if (confirmsFeedbackBonus && isAlreadyStoredHashRepeat(intent.transactionHashes, transactionHashes)) {

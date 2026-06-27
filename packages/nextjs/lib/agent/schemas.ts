@@ -749,6 +749,7 @@ export const agentConfirmAskTransactionsInputSchema = {
     transactionHashes: {
       description: "Transaction hashes produced by executing the wallet transaction plan.",
       items: { pattern: "^0x[a-fA-F0-9]{64}$", type: "string" },
+      maxItems: 32,
       minItems: 1,
       type: "array",
     },
@@ -764,6 +765,7 @@ export const agentConfirmFeedbackBonusTransactionsInputSchema = {
     transactionHashes: {
       description: "Transaction hashes produced by executing the Feedback Bonus transaction plan.",
       items: { pattern: "^0x[a-fA-F0-9]{64}$", type: "string" },
+      maxItems: 32,
       minItems: 1,
       type: "array",
     },
