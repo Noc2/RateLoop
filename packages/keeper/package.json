@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build:workspace-deps": "yarn workspace @rateloop/node-utils build:dist && yarn workspace @rateloop/contracts build",
+    "build:workspace-deps": "node ../../scripts/with-workspace-dist-lock.mjs \"yarn workspace @rateloop/node-utils build:dist && yarn workspace @rateloop/contracts build\"",
     "build": "tsc -p tsconfig.json",
-    "check-types": "yarn build:workspace-deps && tsc --noEmit",
+    "check-types": "node ../../scripts/with-workspace-dist-lock.mjs \"yarn build:workspace-deps && tsc --noEmit\"",
     "start": "yarn build:workspace-deps && yarn build && yarn start:built-dist",
     "start:built-workspace-deps": "yarn build && yarn start:built-dist",
     "start:built-dist": "node dist/index.js",
@@ -14,7 +14,7 @@
     "dev:built-workspace-deps": "tsx watch src/index.ts",
     "build:correlation-artifact": "tsx src/build-correlation-artifact.ts",
     "verify:correlation-artifact": "tsx src/correlation-artifact-verifier.ts",
-    "test": "yarn build:workspace-deps && vitest run",
+    "test": "node ../../scripts/with-workspace-dist-lock.mjs \"yarn build:workspace-deps && vitest run\"",
     "test:watch": "vitest"
   },
   "dependencies": {

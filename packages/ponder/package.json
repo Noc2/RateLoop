@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build:contracts": "yarn workspace @rateloop/contracts build",
-    "build:workspace-deps": "yarn workspace @rateloop/node-utils build:dist && yarn workspace @rateloop/contracts build",
+    "build:contracts": "node ../../scripts/with-workspace-dist-lock.mjs \"yarn workspace @rateloop/contracts build\"",
+    "build:workspace-deps": "node ../../scripts/with-workspace-dist-lock.mjs \"yarn workspace @rateloop/node-utils build:dist && yarn workspace @rateloop/contracts build\"",
     "ensure:contracts": "node ./scripts/ensureContractsArtifacts.mjs",
     "dev": "yarn build:workspace-deps && node ./scripts/devWithRecovery.mjs",
     "dev:built-contracts": "node ./scripts/devWithRecovery.mjs dev:raw:built-contracts",
@@ -15,10 +15,10 @@
     "start": "yarn build:workspace-deps && node ./scripts/start.mjs",
     "start:built-contracts": "yarn start:built-workspace-deps",
     "start:built-workspace-deps": "node ./scripts/start.mjs",
-    "codegen": "yarn build:workspace-deps && ponder codegen",
+    "codegen": "node ../../scripts/with-workspace-dist-lock.mjs \"yarn build:workspace-deps && ponder codegen\"",
     "serve": "ponder serve",
-    "check-types": "yarn build:workspace-deps && tsc --noEmit",
-    "test": "yarn build:workspace-deps && vitest run",
+    "check-types": "node ../../scripts/with-workspace-dist-lock.mjs \"yarn build:workspace-deps && tsc --noEmit\"",
+    "test": "node ../../scripts/with-workspace-dist-lock.mjs \"yarn build:workspace-deps && vitest run\"",
     "test:watch": "vitest"
   },
   "dependencies": {

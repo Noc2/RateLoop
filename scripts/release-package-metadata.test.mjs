@@ -125,6 +125,8 @@ test("npm publish workflow uses GitHub OIDC provenance and publishes in dependen
 });
 
 test("package-local builds refresh public workspace dependencies before compiling", () => {
+  const workspaceDistLockPrefix = /^node \.\.\/\.\.\/scripts\/with-workspace-dist-lock\.mjs "/;
+
   for (const pkg of releasePackages) {
     const manifest = readJson(pkg.path);
     const workspaceDependencies = Object.entries(manifest.dependencies ?? {})
@@ -139,22 +141,44 @@ test("package-local builds refresh public workspace dependencies before compilin
       `${pkg.name} declares build:workspace-deps for public workspace dependencies`,
     );
     assert.match(
+      buildWorkspaceDepsScript,
+      workspaceDistLockPrefix,
+      `${pkg.name} locks workspace dist while refreshing workspace dependencies`,
+    );
+    assert.match(
       manifest.scripts?.build ?? "",
-      /^yarn build:workspace-deps && /,
-      `${pkg.name} build refreshes workspace dependencies first`,
+      /^node \.\.\/\.\.\/scripts\/with-workspace-dist-lock\.mjs "yarn build:workspace-deps && /,
+      `${pkg.name} build refreshes workspace dependencies under the workspace dist lock`,
     );
     assert.match(
       manifest.scripts?.["check-types"] ?? "",
-      /^yarn build:workspace-deps && /,
-      `${pkg.name} type-check refreshes workspace dependencies first`,
+      /^node \.\.\/\.\.\/scripts\/with-workspace-dist-lock\.mjs "yarn build:workspace-deps && /,
+      `${pkg.name} type-check refreshes workspace dependencies under the workspace dist lock`,
     );
 
     for (const dependencyName of workspaceDependencies) {
       assert.match(
         buildWorkspaceDepsScript,
-        new RegExp(`yarn workspace ${escapeRegExp(dependencyName)} build(?=\\s|$|:)`),
+        new RegExp(`yarn workspace ${escapeRegExp(dependencyName)} build(?=\\s|$|:|")`),
         `${pkg.name} builds ${dependencyName} before compiling`,
       );
     }
   }
+});
+
+test("root workspace test scripts lock shared dist and include non-contract suites by default", () => {
+  const manifest = readJson("package.json");
+
+  assert.equal(manifest.scripts?.test, "yarn test:ts");
+  assert.match(
+    manifest.scripts?.["build:workspace-deps"] ?? "",
+    /^node scripts\/with-workspace-dist-lock\.mjs "yarn workspace @rateloop\/node-utils build && /,
+  );
+  assert.match(
+    manifest.scripts?.["test:ts"] ?? "",
+    /^node scripts\/with-workspace-dist-lock\.mjs "yarn build:workspace-deps && /,
+  );
+  assert.match(manifest.scripts?.["test:ts"] ?? "", /yarn next:test/);
+  assert.match(manifest.scripts?.["test:ts"] ?? "", /yarn workspace @rateloop\/keeper test/);
+  assert.match(manifest.scripts?.["test:all"] ?? "", /yarn foundry:test && yarn test:ts/);
 });

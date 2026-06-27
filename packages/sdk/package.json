@@ -97,12 +97,12 @@
     }
   },
   "scripts": {
-    "build:workspace-deps": "yarn workspace @rateloop/contracts build",
-    "build:built-workspace-deps": "node ../../scripts/clean-package-dist.mjs && tsc -p tsconfig.json && node ../../scripts/fix-esm-extensions.mjs dist/esm && tsc -p tsconfig.cjs.json && node ../../scripts/write-cjs-package-json.mjs dist/cjs",
-    "build": "yarn build:workspace-deps && yarn build:built-workspace-deps",
-    "check-types": "yarn build:workspace-deps && tsc --noEmit",
+    "build:workspace-deps": "node ../../scripts/with-workspace-dist-lock.mjs \"yarn workspace @rateloop/contracts build\"",
+    "build:built-workspace-deps": "node ../../scripts/with-workspace-dist-lock.mjs \"node ../../scripts/clean-package-dist.mjs && tsc -p tsconfig.json && node ../../scripts/fix-esm-extensions.mjs dist/esm && tsc -p tsconfig.cjs.json && node ../../scripts/write-cjs-package-json.mjs dist/cjs\"",
+    "build": "node ../../scripts/with-workspace-dist-lock.mjs \"yarn build:workspace-deps && yarn build:built-workspace-deps\"",
+    "check-types": "node ../../scripts/with-workspace-dist-lock.mjs \"yarn build:workspace-deps && tsc --noEmit\"",
     "prepack": "yarn build",
-    "test": "yarn build:workspace-deps && node ../../scripts/run-node-tests.mjs src"
+    "test": "node ../../scripts/with-workspace-dist-lock.mjs \"yarn build:workspace-deps && node ../../scripts/run-node-tests.mjs src\""
   },
   "publishConfig": {
     "access": "public",

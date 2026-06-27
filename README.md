@@ -198,13 +198,16 @@ docker run --env-file packages/keeper/.env.local -e METRICS_BIND_ADDRESS=0.0.0.0
 
 ### Run Tests
 
-Root `yarn test` runs Foundry only. Use `yarn test:all` for Foundry plus TypeScript suites, or run them separately:
+Root `yarn test` runs the TypeScript / Node workspace suites. Use `yarn test:all` for Foundry plus TypeScript suites, or run them separately:
 
 ```bash
 # Foundry + TypeScript / Node test suites across app + services
 yarn test:all
 
 # TypeScript / Node test suites only
+yarn test
+
+# Same TypeScript / Node suite, explicit alias
 yarn test:ts
 
 # Solidity unit tests only
