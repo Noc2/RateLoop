@@ -136,6 +136,25 @@ function GradientFrame({ children, style }: { children: React.ReactNode; style?:
   );
 }
 
+function QuestionKicker() {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", marginBottom: 22 }}>
+      <div style={{ color: brandColors.warmWhite, fontFamily: headingFontFamily, fontSize: 28, fontWeight: 700 }}>
+        Question
+      </div>
+      <div
+        style={{
+          width: 170,
+          height: 5,
+          borderRadius: 999,
+          background: spectrumGradient,
+          marginTop: 12,
+        }}
+      />
+    </div>
+  );
+}
+
 function RatingBadge({
   ratingLabel,
   hasRating,
@@ -294,6 +313,7 @@ function RatingShareImage({ shareData }: { shareData: ContentShareData }) {
 
       <div style={{ display: "flex", flex: 1, gap: 42, alignItems: "center", paddingTop: 28 }}>
         <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
+          <QuestionKicker />
           <div
             style={{
               fontFamily: headingFontFamily,

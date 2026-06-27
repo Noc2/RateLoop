@@ -70,7 +70,7 @@ test("buildContentShareRatingVersion accepts Ponder epoch-second timestamps", ()
       ...baseContent,
       lastActivityAt: "1776160800",
     }),
-    "og3-r-88-6700-12-0-1776160800-none-none",
+    "og4-r-88-6700-12-0-1776160800-none-none",
   );
 });
 
@@ -80,7 +80,7 @@ test("buildContentShareRatingVersion accepts Ponder epoch-millisecond timestamps
       ...baseContent,
       lastActivityAt: "1776160800000",
     }),
-    "og3-r-88-6700-12-0-1776160800-none-none",
+    "og4-r-88-6700-12-0-1776160800-none-none",
   );
 });
 
@@ -132,7 +132,7 @@ test("buildContentShareData omits the rating label for unrated content", () => {
   assert.equal(data.rating, null);
   assert.match(data.title, /Rate this on RateLoop/);
   assert.match(data.description, /A compact summary for social previews/);
-  assert.match(data.ratingVersion, /og3-r-88-na-/);
+  assert.match(data.ratingVersion, /og4-r-88-na-/);
 });
 
 test("buildContentShareData summarizes potential bounty and feedback bonus rewards", () => {
@@ -162,7 +162,7 @@ test("buildContentShareData summarizes potential bounty and feedback bonus rewar
 
   assert.equal(data.bountyReward?.amountLabel, "$2.50");
   assert.equal(data.feedbackBonusReward?.amountLabel, "$1.50");
-  assert.match(data.description, /A compact summary for social previews/);
+  assert.match(data.description, /Start rating and earn up to \$2\.50 in bounties plus \$1\.50 in Feedback Bonuses/);
   assert.match(data.rewardSummary, /\$2\.50 in bounties and \$1\.50 in Feedback Bonuses/);
   assert.match(data.ratingVersion, /usdc-2500000-usdc-1500000/);
 });

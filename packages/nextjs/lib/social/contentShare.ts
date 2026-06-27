@@ -4,7 +4,7 @@ import { detectPlatform, getThumbnailUrl } from "~~/utils/platforms";
 
 export const VOTE_SHARE_RATING_VERSION_PARAM = "rv";
 
-const VOTE_SHARE_CARD_VERSION = "og3";
+const VOTE_SHARE_CARD_VERSION = "og4";
 const TITLE_MAX_LENGTH = 96;
 const DESCRIPTION_MAX_LENGTH = 180;
 const ALT_MAX_LENGTH = 180;
@@ -363,6 +363,26 @@ function buildRewardSummary(bountyReward: ContentShareReward | null, feedbackBon
   return "Bounties and Feedback Bonuses appear on RateLoop when available.";
 }
 
+function buildUnratedShareDescription(
+  contentDescription: string,
+  bountyReward: ContentShareReward | null,
+  feedbackBonusReward: ContentShareReward | null,
+): string {
+  if (bountyReward && feedbackBonusReward) {
+    return `Start rating and earn up to ${bountyReward.amountLabel} in bounties plus ${feedbackBonusReward.amountLabel} in Feedback Bonuses.`;
+  }
+
+  if (bountyReward) {
+    return `Start rating and earn up to ${bountyReward.amountLabel} in bounties.`;
+  }
+
+  if (feedbackBonusReward) {
+    return `Start rating and earn up to ${feedbackBonusReward.amountLabel} in Feedback Bonuses.`;
+  }
+
+  return contentDescription || "Stake LREP and rate this on RateLoop.";
+}
+
 export function buildContentShareRatingVersion(
   content: ContentShareContentInput,
   rating = resolveContentShareRating(content),
@@ -426,7 +446,7 @@ export function buildContentShareData(content: ContentShareContentInput, origin:
   const description = truncateText(
     rating
       ? `Current rating ${rating.label}/10 from ${voteLabel}. Disagree? Stake LREP and vote.`
-      : contentDescription || "Stake LREP and rate this on RateLoop.",
+      : buildUnratedShareDescription(contentDescription, bountyReward, feedbackBonusReward),
     DESCRIPTION_MAX_LENGTH,
   );
   const imageAlt = truncateText(
