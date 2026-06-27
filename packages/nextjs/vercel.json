@@ -6,7 +6,7 @@
       "schedule": "17 * * * *"
     },
     {
-      "path": "/api/confidentiality/log-roots/publish",
+      "path": "/api/confidentiality/log-roots/publish/cron",
       "schedule": "7 0 * * *"
     },
     {

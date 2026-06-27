@@ -14,49 +14,17 @@ function readEpoch(value: string | null) {
   return value && EPOCH_PATTERN.test(value) ? value : undefined;
 }
 
-function readArtifactUrl(value: string | null) {
-  return value?.trim() || undefined;
-}
-
-function readAnchor(value: string | null) {
-  return value === "false" ? false : undefined;
-}
-
-function readRequireAnchor(value: string | null, fallback: boolean) {
-  if (value === "true") return true;
-  if (value === "false") return false;
-  return fallback;
-}
-
 function readBodyRequireAnchor(value: unknown, fallback: boolean) {
   if (value === true) return true;
   if (value === false) return false;
   return fallback;
 }
 
-export async function GET(request: NextRequest) {
-  const unauthorized = requireConfidentialityJobAuth(request);
-  if (unauthorized) return unauthorized;
-
-  const limited = await checkRateLimit(request, RATE_LIMIT);
-  if (limited) return limited;
-
-  try {
-    const anchor = readAnchor(request.nextUrl.searchParams.get("anchor"));
-    return NextResponse.json({
-      ok: true,
-      ...(await publishConfidentialityLogRoot({
-        anchor,
-        artifactUrl: readArtifactUrl(request.nextUrl.searchParams.get("artifactUrl")),
-        epoch: readEpoch(request.nextUrl.searchParams.get("epoch")),
-        requireAnchor:
-          anchor === false ? false : readRequireAnchor(request.nextUrl.searchParams.get("requireAnchor"), true),
-      })),
-    });
-  } catch (error) {
-    console.error("Error publishing confidentiality log root:", error);
-    return NextResponse.json({ error: "Failed to publish confidentiality log root" }, { status: 500 });
-  }
+export function GET() {
+  return NextResponse.json(
+    { error: "Method not allowed. Use POST to publish confidentiality log roots." },
+    { headers: { Allow: "POST" }, status: 405 },
+  );
 }
 
 export async function POST(request: NextRequest) {
