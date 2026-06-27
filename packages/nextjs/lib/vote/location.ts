@@ -1,7 +1,10 @@
+import { RATE_CHAIN_ID_PARAM, RATE_DEPLOYMENT_KEY_PARAM } from "../../constants/routes";
 import { VOTE_SHARE_RATING_VERSION_PARAM } from "../social/contentShare";
 
 interface VoteLocationUpdate {
   contentId?: bigint | null;
+  chainId?: number | null;
+  deploymentKey?: string | null;
   categoryHash?: string | null;
 }
 
@@ -22,6 +25,21 @@ function normalizeSearchParams(searchParams: URLSearchParams) {
   return normalizedParams.toString();
 }
 
+function setContentScopeSearchParams(url: URL, update: VoteLocationUpdate) {
+  if (typeof update.chainId === "number" && Number.isSafeInteger(update.chainId) && update.chainId > 0) {
+    url.searchParams.set(RATE_CHAIN_ID_PARAM, update.chainId.toString());
+  } else {
+    url.searchParams.delete(RATE_CHAIN_ID_PARAM);
+  }
+
+  const deploymentKey = update.deploymentKey?.trim();
+  if (deploymentKey) {
+    url.searchParams.set(RATE_DEPLOYMENT_KEY_PARAM, deploymentKey);
+  } else {
+    url.searchParams.delete(RATE_DEPLOYMENT_KEY_PARAM);
+  }
+}
+
 export function buildVoteLocation(currentUrl: string, update: VoteLocationUpdate) {
   const url = new URL(currentUrl);
 
@@ -30,9 +48,14 @@ export function buildVoteLocation(currentUrl: string, update: VoteLocationUpdate
 
     if (update.contentId === null) {
       url.searchParams.delete("content");
+      url.searchParams.delete(RATE_CHAIN_ID_PARAM);
+      url.searchParams.delete(RATE_DEPLOYMENT_KEY_PARAM);
     } else {
       url.searchParams.set("content", update.contentId.toString());
+      setContentScopeSearchParams(url, update);
     }
+  } else if (update.chainId !== undefined || update.deploymentKey !== undefined) {
+    setContentScopeSearchParams(url, update);
   }
 
   if (update.categoryHash !== undefined) {

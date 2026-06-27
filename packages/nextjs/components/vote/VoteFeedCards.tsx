@@ -771,6 +771,8 @@ function FeedContentMetaCard({
       {showShare ? (
         <ShareContentModal
           contentId={item.id}
+          chainId={item.chainId}
+          deploymentKey={item.deploymentKey}
           title={item.title}
           description={item.description}
           rating={getVisibleContentRating(item)}

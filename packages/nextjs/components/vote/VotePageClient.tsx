@@ -1557,16 +1557,24 @@ const HomeInner = () => {
     return () => window.removeEventListener(E2E_OPEN_STAKE_SELECTOR_EVENT, handleOpenStakeSelector);
   }, [clearVoteError]);
 
-  const replaceVoteLocation = useCallback((update: { contentId?: bigint | null; categoryHash?: string | null }) => {
-    const nextUrl = buildVoteLocation(window.location.href, update);
-    replaceUrlPreservingHistoryState(nextUrl);
+  const replaceVoteLocation = useCallback(
+    (update: {
+      contentId?: bigint | null;
+      chainId?: number | null;
+      deploymentKey?: string | null;
+      categoryHash?: string | null;
+    }) => {
+      const nextUrl = buildVoteLocation(window.location.href, update);
+      replaceUrlPreservingHistoryState(nextUrl);
 
-    if (update.contentId !== undefined) {
-      const nextContentPinKey = update.contentId === null ? null : buildVoteContentPinKeyFromUrl(nextUrl);
-      writeInternalContentPinKey(nextContentPinKey);
-      setInternallySyncedContentPinKey(nextContentPinKey);
-    }
-  }, []);
+      if (update.contentId !== undefined) {
+        const nextContentPinKey = update.contentId === null ? null : buildVoteContentPinKeyFromUrl(nextUrl);
+        writeInternalContentPinKey(nextContentPinKey);
+        setInternallySyncedContentPinKey(nextContentPinKey);
+      }
+    },
+    [],
+  );
 
   const clearActiveContentPin = useCallback(() => {
     selectContent(null);
@@ -1614,7 +1622,11 @@ const HomeInner = () => {
 
       selectContent(targetItem.id);
       if (options?.syncLocation) {
-        replaceVoteLocation({ contentId: targetItem.id });
+        replaceVoteLocation({
+          contentId: targetItem.id,
+          chainId: targetItem.chainId,
+          deploymentKey: targetItem.deploymentKey,
+        });
       }
 
       return true;
@@ -1834,7 +1846,7 @@ const HomeInner = () => {
 
   const handleContentIntent = useCallback(
     (item: ContentItem) => {
-      replaceVoteLocation({ contentId: item.id });
+      replaceVoteLocation({ contentId: item.id, chainId: item.chainId, deploymentKey: item.deploymentKey });
       markPrimaryInteraction(item.id);
       recordRecommendationSignal(item, "card_open");
       triggerVoteAttention(item.id);
@@ -1844,7 +1856,7 @@ const HomeInner = () => {
 
   const handleSourceOpen = useCallback(
     (item: ContentItem) => {
-      replaceVoteLocation({ contentId: item.id });
+      replaceVoteLocation({ contentId: item.id, chainId: item.chainId, deploymentKey: item.deploymentKey });
       markPrimaryInteraction(item.id);
       recordRecommendationSignal(item, "external_open");
     },
@@ -1853,7 +1865,7 @@ const HomeInner = () => {
 
   const handleOpenFeedback = useCallback(
     (item: ContentItem) => {
-      replaceVoteLocation({ contentId: item.id });
+      replaceVoteLocation({ contentId: item.id, chainId: item.chainId, deploymentKey: item.deploymentKey });
       markPrimaryInteraction(item.id);
       setFeedbackSheetItem(item);
     },
@@ -1862,7 +1874,7 @@ const HomeInner = () => {
 
   const handleShareContent = useCallback(
     (item: ContentItem) => {
-      replaceVoteLocation({ contentId: item.id });
+      replaceVoteLocation({ contentId: item.id, chainId: item.chainId, deploymentKey: item.deploymentKey });
       markPrimaryInteraction(item.id);
       setShareSheetItem(item);
     },
@@ -2381,6 +2393,8 @@ const HomeInner = () => {
       {shareSheetItem ? (
         <ShareContentModal
           contentId={shareSheetItem.id}
+          chainId={shareSheetItem.chainId}
+          deploymentKey={shareSheetItem.deploymentKey}
           title={shareSheetItem.title}
           description={shareSheetItem.description}
           rating={getVisibleContentRating(shareSheetItem)}

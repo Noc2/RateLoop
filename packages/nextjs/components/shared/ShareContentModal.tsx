@@ -11,6 +11,8 @@ import { type ContentShareContentInput, buildContentShareData } from "~~/lib/soc
 
 interface ShareContentModalProps {
   contentId: bigint;
+  chainId?: number | null;
+  deploymentKey?: string | null;
   title: string;
   description: string;
   rating?: number | null;
@@ -24,6 +26,8 @@ interface ShareContentModalProps {
 
 export function ShareContentModal({
   contentId,
+  chainId,
+  deploymentKey,
   title,
   description,
   rating,
@@ -62,13 +66,18 @@ export function ShareContentModal({
   const shareDetails = useMemo(() => {
     if (typeof window === "undefined") return { ratingLabel: null, url: "" };
 
-    const fallbackUrl = `${window.location.origin}${buildRateContentHref(contentId)}`;
+    const fallbackUrl = `${window.location.origin}${buildRateContentHref(contentId, {
+      chainId,
+      deploymentKey,
+    })}`;
     const hasRatingSignal = rating !== null && (rating !== undefined || ratingBps !== undefined);
     if (!hasRatingSignal) return { ratingLabel: null, url: fallbackUrl };
 
     const shareData = buildContentShareData(
       {
         id: contentId.toString(),
+        chainId,
+        deploymentKey,
         title,
         description,
         rating,
@@ -82,7 +91,19 @@ export function ShareContentModal({
     );
 
     return { ratingLabel: shareData.rating?.label ?? null, url: shareData.shareUrl };
-  }, [contentId, description, lastActivityAt, openRound, rating, ratingBps, ratingSettledRounds, title, totalVotes]);
+  }, [
+    chainId,
+    contentId,
+    deploymentKey,
+    description,
+    lastActivityAt,
+    openRound,
+    rating,
+    ratingBps,
+    ratingSettledRounds,
+    title,
+    totalVotes,
+  ]);
   const shareUrl = shareDetails.url;
   const truncatedTitle = truncateContentTitle(title);
 
