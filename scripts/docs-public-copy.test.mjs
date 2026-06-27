@@ -54,6 +54,10 @@ const ponderReadme = readFileSync(
   new URL("../packages/ponder/README.md", import.meta.url),
   "utf8",
 );
+const ponderEnvExample = readFileSync(
+  new URL("../packages/ponder/.env.example", import.meta.url),
+  "utf8",
+);
 
 test("active public docs avoid stale World Chain and mandatory credential copy", () => {
   for (const [file, content] of Object.entries(activeDocs)) {
@@ -107,4 +111,12 @@ test("governance docs frame Base mainnet contracts as durable infrastructure", (
 test("Ponder README says live override conflicts fail closed", () => {
   assert.match(ponderReadme, /Conflicting live-chain overrides fail startup/);
   assert.doesNotMatch(ponderReadme, /ignores stale address\/start-block/i);
+});
+
+test("Ponder schema docs prefer deployment-scoped live schemas", () => {
+  assert.match(ponderReadme, /leave `RATELOOP_PONDER_DATABASE_SCHEMA` and `DATABASE_SCHEMA` unset/i);
+  assert.match(ponderReadme, /protocol deployment-scoped schema/i);
+  assert.match(ponderEnvExample, /Leave unset for normal live[\s#]+services/i);
+  assert.match(ponderEnvExample, /protocol deployment-scoped schemas/i);
+  assert.doesNotMatch(ponderEnvExample, /RATELOOP_PONDER_DATABASE_SCHEMA=rateloop_ponder_base_sepolia/);
 });

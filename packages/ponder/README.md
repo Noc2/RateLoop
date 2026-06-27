@@ -48,7 +48,7 @@ Within the package directory, additional scripts are available:
 | `PONDER_CLUSTER_PAYOUT_ORACLE_ADDRESS`     | Correlation payout oracle address; local-only fallback when the active chain has no shared deployment metadata                                                                                              |
 | `PONDER_CONFIDENTIALITY_ESCROW_ADDRESS`    | Confidentiality escrow address; local-only fallback when the active chain has no shared deployment metadata                                                                                                 |
 | `PONDER_CONTENT_REGISTRY_START_BLOCK` etc. | Local-only fallback start blocks when the active chain has no shared deployment metadata                                                                                                                    |
-| `RATELOOP_PONDER_DATABASE_SCHEMA`          | Optional production schema override for Ponder tables; `yarn ponder:start` defaults to a Railway deployment schema, then a protocol deployment schema, then a RateLoop-owned network schema                 |
+| `RATELOOP_PONDER_DATABASE_SCHEMA`          | Break-glass schema override for Ponder tables; leave unset for normal live services so `yarn ponder:start` can use Railway or protocol deployment-scoped schemas                                      |
 | `CORS_ORIGIN`                              | Allowed origins (comma-separated; required in production)                                                                                                                                                   |
 | `RATE_LIMIT_TRUSTED_IP_HEADERS`            | Comma-separated proxy IP headers to trust for API rate limiting in production                                                                                                                               |
 | `PAYOUT_ARTIFACT_HTTPS_ALLOWLIST`          | Comma-separated HTTPS URL prefixes Ponder may fetch for keeper-published payout artifacts                                                                                                                   |
@@ -65,15 +65,17 @@ World Chain live networks remain supported as `worldchainSepolia` and `worldchai
 Keep `RATELOOP_E2E_PRODUCTION_BUILD` and `NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD` unset for Ponder live-chain
 services. Those flags are for local Next.js/Playwright test behavior and Ponder rejects them outside `hardhat`.
 
-In production, `yarn ponder:start` launches Ponder with an explicit Postgres schema. On Railway, the
-launcher uses `RAILWAY_DEPLOYMENT_ID`, matching Ponder's zero-downtime deployment model and keeping new
-app builds from colliding with older Ponder app metadata. Outside Railway, the launcher derives a
-protocol deployment key from the active chain's `ContentRegistry` and `FeedbackRegistry` addresses, so a
-future incident/governance migration that changes contract addresses indexes into a fresh schema even if
-content IDs restart. If neither value is available and `DATABASE_SCHEMA` is unset or still set to the generic
-legacy `ponder` value, the launcher uses network-specific defaults such as `rateloop_ponder_base_sepolia`.
-To force a specific schema, set `RATELOOP_PONDER_DATABASE_SCHEMA` to a unique value such as
-`rateloop_ponder_base_sepolia_v2`.
+In production, leave `RATELOOP_PONDER_DATABASE_SCHEMA` and `DATABASE_SCHEMA` unset unless you are doing a
+deliberate recovery override. `yarn ponder:start` still launches Ponder with an explicit Postgres schema:
+on Railway it uses `RAILWAY_DEPLOYMENT_ID`, matching Ponder's zero-downtime deployment model and keeping
+new app builds from colliding with older Ponder app metadata. Outside Railway, the launcher derives a
+protocol deployment-scoped schema from the active chain's `ContentRegistry` and `FeedbackRegistry`
+addresses, so a future incident/governance migration that changes contract addresses indexes into a fresh
+schema even if content IDs restart. If neither value is available and `DATABASE_SCHEMA` is unset or still
+set to the generic legacy `ponder` value, the launcher uses RateLoop-owned network fallbacks such as
+`rateloop_ponder_base_sepolia`. To force a specific live schema, set
+`RATELOOP_PONDER_ALLOW_LIVE_SCHEMA_OVERRIDE=true` and choose a unique recovery value such as
+`rateloop_ponder_manual_recovery_202606`; remove the override after the recovery window.
 
 When the keeper publishes correlation payout artifacts with `KEEPER_CORRELATION_ARTIFACT_STORAGE=file`, set
 `PAYOUT_ARTIFACT_HTTPS_ALLOWLIST` to the same public HTTPS prefix as the keeper's
