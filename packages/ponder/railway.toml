@@ -3,5 +3,5 @@ builder = "RAILPACK"
 
 [deploy]
 startCommand = "NODE_ENV=production yarn workspace @rateloop/ponder start:built-workspace-deps"
-healthcheckPath = "/ready"
+healthcheckPath = "/health"
 healthcheckTimeout = 900
