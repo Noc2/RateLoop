@@ -8,6 +8,7 @@ const QUESTION_CONTEXT_DOMAIN = keccak256(toBytes("rateloop-question-context-v5"
 const QUESTION_BUNDLE_ITEM_DOMAIN = keccak256(toBytes("rateloop-question-bundle-item-v5"));
 const QUESTION_BUNDLE_DOMAIN = keccak256(toBytes("rateloop-question-bundle-v5"));
 const QUESTION_BUNDLE_REVEAL_DOMAIN = keccak256(toBytes("rateloop-question-bundle-reveal-v6"));
+const UINT64_MAX = (1n << 64n) - 1n;
 
 export { CONFIDENTIALITY_FLAG_PRIVATE_FOREVER };
 
@@ -110,10 +111,14 @@ function buildSubmissionDetailsHash(detailsUrl: string, detailsHash: Hex): Hex {
 }
 
 export function buildQuestionConfidentialityHash(params: QuestionConfidentialityHashParams = {}): Hex {
+  const bondAmount = params.bondAmount ?? 0n;
+  if (bondAmount > UINT64_MAX) {
+    throw new Error(`bondAmount must be at most ${UINT64_MAX}.`);
+  }
   return keccak256(
     encodeAbiParameters(
       [{ type: "bool" }, { type: "uint8" }, { type: "uint64" }, { type: "uint8" }],
-      [Boolean(params.gated), params.bondAsset ?? 0, params.bondAmount ?? 0n, params.flags ?? 0],
+      [Boolean(params.gated), params.bondAsset ?? 0, bondAmount, params.flags ?? 0],
     ),
   );
 }

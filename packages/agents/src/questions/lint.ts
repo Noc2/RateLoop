@@ -26,6 +26,7 @@ import {
   getContentTitleValidationError,
 } from "@rateloop/node-utils/submissionValidation";
 import {
+  X402_CONFIDENTIALITY_BOND_UINT64_MAX,
   isAllowedX402HostedDetailsUrl,
   isAllowedX402UploadedImageUrl,
 } from "../x402QuestionPayload.js";
@@ -377,6 +378,13 @@ export function lintAgentQuestion(
     }
     if (confidentiality.bondAmount < 0n) {
       pushFinding(findings, "error", `${path}.confidentiality.bond.amount`, "Bond amount must be a non-negative atomic integer.");
+    } else if (confidentiality.bondAmount > X402_CONFIDENTIALITY_BOND_UINT64_MAX) {
+      pushFinding(
+        findings,
+        "error",
+        `${path}.confidentiality.bond.amount`,
+        `Bond amount must be at most ${X402_CONFIDENTIALITY_BOND_UINT64_MAX} atomic units.`,
+      );
     } else if (confidentiality.bondAmount > 0n && confidentiality.bondAmount < MIN_NONZERO_CONFIDENTIALITY_BOND) {
       pushFinding(
         findings,

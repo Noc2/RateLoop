@@ -2551,6 +2551,33 @@ describe("local signer round config alignment", () => {
     );
   });
 
+  it("rejects oversized gated confidentiality bonds", () => {
+    expect(() =>
+      buildLocalQuestionCanonicalPayload(
+        fiveVoterAskPayload({
+          question: {
+            categoryId: "1",
+            confidentiality: {
+              bond: {
+                amount: "18446744073709551616",
+                asset: "LREP",
+              },
+              visibility: "gated",
+            },
+            detailsHash: `0x${"4".repeat(64)}`,
+            detailsUrl:
+              "https://www.rateloop.ai/api/attachments/details/det_abcdefghijklmnop",
+            tags: [QUESTION_TAG],
+            title: QUESTION_TITLE,
+          },
+        }),
+        480,
+      ),
+    ).toThrow(
+      /questions\[0\]\.confidentiality\.bond\.amount must be at most 18446744073709551615/,
+    );
+  });
+
   it("rejects an explicit roundConfig.minVoters that mismatches bounty.requiredVoters", () => {
     expect(() =>
       buildLocalQuestionCanonicalPayload(

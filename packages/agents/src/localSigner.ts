@@ -61,6 +61,7 @@ import {
   parseX402QuestionRequest as parseSharedX402QuestionRequest,
   buildDefaultX402QuestionParserOptions,
   toCanonicalQuestionPayload as toSharedCanonicalQuestionPayload,
+  X402_CONFIDENTIALITY_BOND_UINT64_MAX,
   X402_ROUND_CONFIG_UINT16_MAX,
   X402_ROUND_CONFIG_UINT32_MAX,
   type X402QuestionItemPayload,
@@ -432,6 +433,9 @@ function buildQuestionConfidentialityHash(
   const gated = confidentiality.visibility === "gated";
   const asset = gated && confidentiality.bond?.asset === "USDC" ? 1 : 0;
   const amount = gated ? BigInt(confidentiality.bond?.amount ?? "0") : 0n;
+  if (amount > X402_CONFIDENTIALITY_BOND_UINT64_MAX) {
+    throw new Error(`question.confidentiality.bond.amount must be at most ${X402_CONFIDENTIALITY_BOND_UINT64_MAX}.`);
+  }
   const flags = questionConfidentialityFlags(confidentiality);
   return keccak256(
     encodeAbiParameters(

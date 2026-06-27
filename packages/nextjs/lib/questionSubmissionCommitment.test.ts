@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  buildQuestionConfidentialityHash,
   buildQuestionSubmissionKey,
   buildQuestionSubmissionRevealCommitment,
   canonicalQuestionImageUrls,
@@ -18,6 +19,17 @@ const SUBMITTER = "0x0000000000000000000000000000000000000001" as const;
 
 test("canonicalQuestionImageUrls sorts and deduplicates image media", () => {
   assert.deepEqual(canonicalQuestionImageUrls([IMAGE_B, IMAGE_A, IMAGE_A]), [IMAGE_A, IMAGE_B]);
+});
+
+test("question confidentiality hashes reject oversized uint64 bond amounts", () => {
+  assert.throws(
+    () =>
+      buildQuestionConfidentialityHash({
+        bondAmount: 18446744073709551616n,
+        gated: true,
+      }),
+    /bondAmount must be at most 18446744073709551615/,
+  );
 });
 
 test("question submission commitments use canonical image media", () => {

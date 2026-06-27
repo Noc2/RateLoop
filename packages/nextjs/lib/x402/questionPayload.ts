@@ -3,6 +3,7 @@ import {
   type X402QuestionOperation,
   type X402QuestionParserOptions,
   type X402QuestionPayload,
+  X402_CONFIDENTIALITY_BOND_UINT64_MAX,
   X402_SUBMISSION_REWARD_ASSET_LREP,
   X402_SUBMISSION_REWARD_ASSET_USDC,
   X402_USDC_BY_CHAIN_ID,
@@ -15,6 +16,7 @@ import { getTrustedRateLoopAppUrl } from "~~/lib/env/server";
 import { isLocalE2EProductionBuildEnabled } from "~~/utils/env/e2eProduction";
 
 export {
+  X402_CONFIDENTIALITY_BOND_UINT64_MAX,
   X402_SUBMISSION_REWARD_ASSET_LREP,
   X402_SUBMISSION_REWARD_ASSET_USDC,
   X402_USDC_DECIMALS,

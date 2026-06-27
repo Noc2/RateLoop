@@ -374,6 +374,31 @@ test("parseX402QuestionRequest rejects dust confidentiality bonds", () => {
   );
 });
 
+test("parseX402QuestionRequest rejects oversized confidentiality bonds", () => {
+  assert.throws(
+    () =>
+      parseX402QuestionRequest({
+        ...VALID_REQUEST,
+        question: {
+          ...VALID_REQUEST.question,
+          confidentiality: {
+            bond: {
+              amount: "18446744073709551616",
+              asset: "LREP",
+            },
+            visibility: "gated",
+          },
+          contextUrl: undefined,
+          detailsHash: DETAILS_HASH,
+          detailsUrl: DETAILS_URL,
+          imageUrls: [UPLOADED_IMAGE_URL],
+          videoUrl: undefined,
+        },
+      }),
+    /bond\.amount must be at most 18446744073709551615/,
+  );
+});
+
 test("parseX402QuestionRequest rejects external context for gated questions", () => {
   assert.throws(
     () =>

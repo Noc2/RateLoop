@@ -31,6 +31,7 @@ export const X402_SUBMISSION_REWARD_ASSET_LREP = 0;
 export const X402_SUBMISSION_REWARD_ASSET_USDC = 1;
 export const X402_USDC_DECIMALS = 6;
 export const X402_MIN_NONZERO_CONFIDENTIALITY_BOND = MIN_NONZERO_CONFIDENTIALITY_BOND;
+export const X402_CONFIDENTIALITY_BOND_UINT64_MAX = (1n << 64n) - 1n;
 
 const X402_DEFAULT_SUBMISSION_BOUNTY = 1_000_000n;
 const X402_MIN_REWARD_POOL_REQUIRED_VOTERS = 3n;
@@ -706,6 +707,7 @@ function normalizeQuestionConfidentiality(value: unknown, fieldName: string): X4
       throw new X402QuestionInputError(`${fieldName}.bond must be an object when provided.`);
     }
     const amount = parseNonNegativeInteger(value.bond.amount ?? 0n, `${fieldName}.bond.amount`);
+    assertIntegerUpperBound(amount, `${fieldName}.bond.amount`, X402_CONFIDENTIALITY_BOND_UINT64_MAX);
     if (amount > 0n && amount < X402_MIN_NONZERO_CONFIDENTIALITY_BOND) {
       throw new X402QuestionInputError(
         `${fieldName}.bond.amount must be 0 or at least ${X402_MIN_NONZERO_CONFIDENTIALITY_BOND} atomic units.`,
@@ -741,6 +743,7 @@ function buildQuestionConfidentialityHash(confidentiality: X402QuestionConfident
   const gated = confidentiality.visibility === "gated";
   const asset = gated && confidentiality.bond?.asset === "USDC" ? 1 : 0;
   const amount = gated ? BigInt(confidentiality.bond?.amount ?? "0") : 0n;
+  assertIntegerUpperBound(amount, "question.confidentiality.bond.amount", X402_CONFIDENTIALITY_BOND_UINT64_MAX);
   const flags = questionConfidentialityFlags(confidentiality);
   return keccak256(
     encodeAbiParameters(
