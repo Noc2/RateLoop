@@ -37,6 +37,7 @@ const ANVIL_RPC = E2E_RPC_URL;
 const DEFAULT_TX_GAS_LIMIT = 10_000_000n;
 const ESTIMATED_TX_GAS_BUFFER = 300_000n;
 const DIRECT_VOTE_COMMIT_ATTEMPTS = 3;
+const DIRECT_CLEANUP_ATTEMPTS = 3;
 const DEFAULT_UP_PREDICTION_BPS = 8_000;
 const DEFAULT_DOWN_PREDICTION_BPS = 2_000;
 const SETTLE_ROUND_ABI = [
@@ -1914,6 +1915,10 @@ async function readUnprocessedUnrevealedStakeInRangeLatest(
   return unprocessedStake;
 }
 
+function wait(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 async function readRoundLifecycleStateLatest(
   contractAddress: string,
   contentId: bigint,
@@ -2087,13 +2092,6 @@ export async function processUnrevealedVotes(
   const { encodeFunctionData } = await import("viem");
   const contentIdBigInt = BigInt(contentId);
   const roundIdBigInt = BigInt(roundId);
-  const beforeUnprocessedStake = await readUnprocessedUnrevealedStakeInRangeLatest(
-    contractAddress,
-    contentIdBigInt,
-    roundIdBigInt,
-    startIndex,
-    count,
-  ).catch(() => null);
   const data = encodeFunctionData({
     abi: [
       {
@@ -2112,22 +2110,55 @@ export async function processUnrevealedVotes(
     functionName: "processUnrevealedVotes",
     args: [contentIdBigInt, roundIdBigInt, BigInt(startIndex), BigInt(count)],
   });
-  const result = await sendTxDetailed(fromAddress, contractAddress, data);
-  if (result.success) {
-    return true;
-  }
-  if (beforeUnprocessedStake === null || beforeUnprocessedStake === 0n) {
-    return false;
+  for (let attempt = 0; attempt < DIRECT_CLEANUP_ATTEMPTS; attempt++) {
+    const beforeUnprocessedStake = await readUnprocessedUnrevealedStakeInRangeLatest(
+      contractAddress,
+      contentIdBigInt,
+      roundIdBigInt,
+      startIndex,
+      count,
+    ).catch(() => null);
+    if (beforeUnprocessedStake === 0n) {
+      return false;
+    }
+
+    const result = await sendTxDetailed(fromAddress, contractAddress, data);
+    if (result.success) {
+      return true;
+    }
+
+    if (beforeUnprocessedStake !== null && beforeUnprocessedStake > 0n) {
+      const afterUnprocessedStake = await readUnprocessedUnrevealedStakeInRangeLatest(
+        contractAddress,
+        contentIdBigInt,
+        roundIdBigInt,
+        startIndex,
+        count,
+      ).catch(() => null);
+      if (afterUnprocessedStake !== null && afterUnprocessedStake < beforeUnprocessedStake) {
+        return true;
+      }
+      if (attempt < DIRECT_CLEANUP_ATTEMPTS - 1) {
+        console.warn(
+          `[processUnrevealedVotes] Cleanup attempt ${attempt + 1}/${DIRECT_CLEANUP_ATTEMPTS} did not process stake; retrying`,
+          {
+            afterUnprocessedStake: afterUnprocessedStake?.toString() ?? "unreadable",
+            beforeUnprocessedStake: beforeUnprocessedStake.toString(),
+            error: result.error,
+            reason: result.reason,
+          },
+        );
+        await wait(500);
+      }
+      continue;
+    }
+
+    if (attempt < DIRECT_CLEANUP_ATTEMPTS - 1) {
+      await wait(500);
+    }
   }
 
-  const afterUnprocessedStake = await readUnprocessedUnrevealedStakeInRangeLatest(
-    contractAddress,
-    contentIdBigInt,
-    roundIdBigInt,
-    startIndex,
-    count,
-  ).catch(() => null);
-  return afterUnprocessedStake !== null && afterUnprocessedStake < beforeUnprocessedStake;
+  return false;
 }
 
 /**
