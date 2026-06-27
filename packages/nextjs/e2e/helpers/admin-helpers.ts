@@ -1873,6 +1873,13 @@ export async function finalizeRevealFailedRound(
   contractAddress: string,
 ): Promise<boolean> {
   const { encodeFunctionData } = await import("viem");
+  const contentIdBigInt = BigInt(contentId);
+  const roundIdBigInt = BigInt(roundId);
+  const initialState = await readRoundStateLatest(contractAddress, contentIdBigInt, roundIdBigInt);
+  if (initialState === ROUND_STATE.RevealFailed) {
+    return true;
+  }
+
   const data = encodeFunctionData({
     abi: [
       {
@@ -1887,9 +1894,11 @@ export async function finalizeRevealFailedRound(
       },
     ],
     functionName: "finalizeRevealFailedRound",
-    args: [BigInt(contentId), BigInt(roundId)],
+    args: [contentIdBigInt, roundIdBigInt],
   });
-  return sendTx(fromAddress, contractAddress, data);
+  const ok = await sendTx(fromAddress, contractAddress, data);
+  const state = await readRoundStateLatest(contractAddress, contentIdBigInt, roundIdBigInt);
+  return ok || state === ROUND_STATE.RevealFailed;
 }
 
 export async function advanceToRevealFailedFinalizationWindow(
