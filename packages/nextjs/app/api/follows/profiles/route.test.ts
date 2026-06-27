@@ -30,6 +30,33 @@ function makeRequest(
   });
 }
 
+function createCountingRateLimitStore() {
+  const counts = new Map<string, number>();
+
+  return {
+    execute: async ({ sql, args }: { sql: unknown; args?: unknown[] }) => {
+      const statement = String(sql);
+      if (/DELETE FROM api_rate_limits/u.test(statement)) {
+        return { rows: [] } as any;
+      }
+      if (statement.includes("api_rate_limit_maintenance")) {
+        return { rows: [{ name: "cleanup" }] } as any;
+      }
+      if (statement.includes("api_rate_limits")) {
+        const key = String(args?.[0] ?? "");
+        const requestCount = (counts.get(key) ?? 0) + 1;
+        counts.set(key, requestCount);
+        return { rows: [{ request_count: requestCount }] } as any;
+      }
+      return { rows: [] } as any;
+    },
+  };
+}
+
+function validAddress(index: number) {
+  return `0x${index.toString(16).padStart(40, "0")}`;
+}
+
 before(async () => {
   rateLimit = await import("~~/utils/rateLimit");
   route = await import("./route");
@@ -96,4 +123,26 @@ test("public follow reads proxy normalized addresses to Ponder", async () => {
     chainId: 31337,
     deploymentKey: resolveProtocolDeploymentScope(31337)?.deploymentKey,
   });
+});
+
+test("public follow route-wide rate limit is shared across address params", async () => {
+  rateLimit.__setRateLimitStoreForTests(createCountingRateLimitStore());
+  ponderApi.getFollows = async () => ({
+    items: [],
+    count: 0,
+    followerCount: 0,
+    followingCount: 0,
+    limit: 200,
+    offset: 0,
+  });
+
+  let response: Response | null = null;
+  for (let index = 1; index <= 181; index++) {
+    response = await route.GET(makeRequest(`/api/follows/profiles?address=${validAddress(index)}&chainId=31337`));
+    if (index <= 180) {
+      assert.equal(response.status, 200);
+    }
+  }
+
+  assert.equal(response?.status, 429);
 });

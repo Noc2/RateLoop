@@ -6,7 +6,10 @@ import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 import { ponderApi } from "~~/services/ponder/client";
 import { checkRateLimit } from "~~/utils/rateLimit";
 
-const READ_RATE_LIMIT = { limit: 60, windowMs: 60_000 };
+const ROUTE_READ_RATE_LIMIT = { limit: 180, windowMs: 60_000 };
+const RESOURCE_READ_RATE_LIMIT = { limit: 60, windowMs: 60_000 };
+const ROUTE_RATE_LIMIT_KEY = "/api/follows/profiles";
+const RESOURCE_RATE_LIMIT_KEY = `${ROUTE_RATE_LIMIT_KEY}:resource`;
 
 function parseLimit(value: string | null, fallback: number, max: number) {
   const parsed = Number.parseInt(value ?? "", 10);
@@ -23,9 +26,16 @@ function parseOffset(value: string | null) {
 export async function GET(request: NextRequest) {
   const address = request.nextUrl.searchParams.get("address");
   const chainIdRaw = request.nextUrl.searchParams.get("chainId");
-  const limited = await checkRateLimit(request, READ_RATE_LIMIT, {
+  const routeLimited = await checkRateLimit(request, ROUTE_READ_RATE_LIMIT, {
+    allowOnStoreUnavailable: true,
+    routeKey: ROUTE_RATE_LIMIT_KEY,
+  });
+  if (routeLimited) return routeLimited;
+
+  const limited = await checkRateLimit(request, RESOURCE_READ_RATE_LIMIT, {
     allowOnStoreUnavailable: true,
     extraKeyParts: [typeof address === "string" ? address : undefined, chainIdRaw ?? undefined],
+    routeKey: RESOURCE_RATE_LIMIT_KEY,
   });
   if (limited) return limited;
 

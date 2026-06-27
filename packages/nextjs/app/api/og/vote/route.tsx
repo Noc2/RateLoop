@@ -13,7 +13,10 @@ export const revalidate = 0;
 const bodyFontFamily = "sans-serif";
 const headingFontFamily = "sans-serif";
 
-const RATE_LIMIT = { limit: 60, windowMs: 60_000 };
+const ROUTE_RATE_LIMIT = { limit: 180, windowMs: 60_000 };
+const RESOURCE_RATE_LIMIT = { limit: 60, windowMs: 60_000 };
+const ROUTE_RATE_LIMIT_KEY = "/api/og/vote";
+const RESOURCE_RATE_LIMIT_KEY = `${ROUTE_RATE_LIMIT_KEY}:resource`;
 const imageSize = {
   width: 1200,
   height: 630,
@@ -465,8 +468,14 @@ export async function GET(request: NextRequest) {
   const contentParam = request.nextUrl.searchParams.get("content");
   const chainIdParam = request.nextUrl.searchParams.get("chainId");
   const deploymentKeyParam = request.nextUrl.searchParams.get("deploymentKey");
-  const limited = await checkRateLimit(request, RATE_LIMIT, {
+  const routeLimited = await checkRateLimit(request, ROUTE_RATE_LIMIT, {
+    routeKey: ROUTE_RATE_LIMIT_KEY,
+  });
+  if (routeLimited) return routeLimited;
+
+  const limited = await checkRateLimit(request, RESOURCE_RATE_LIMIT, {
     extraKeyParts: [contentParam, chainIdParam ?? undefined, deploymentKeyParam ?? undefined],
+    routeKey: RESOURCE_RATE_LIMIT_KEY,
   });
   if (limited) return limited;
 

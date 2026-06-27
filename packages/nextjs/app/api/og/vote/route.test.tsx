@@ -56,6 +56,29 @@ function mockShareContentFetch(requestedUrls: string[] = []) {
   }) as typeof fetch;
 }
 
+function createCountingRateLimitStore() {
+  const counts = new Map<string, number>();
+
+  return {
+    execute: async ({ sql, args }: { sql: unknown; args?: unknown[] }) => {
+      const statement = String(sql);
+      if (/DELETE FROM api_rate_limits/u.test(statement)) {
+        return { rows: [] } as any;
+      }
+      if (statement.includes("api_rate_limit_maintenance")) {
+        return { rows: [{ name: "cleanup" }] } as any;
+      }
+      if (statement.includes("api_rate_limits")) {
+        const key = String(args?.[0] ?? "");
+        const requestCount = (counts.get(key) ?? 0) + 1;
+        counts.set(key, requestCount);
+        return { rows: [{ request_count: requestCount }] } as any;
+      }
+      return { rows: [] } as any;
+    },
+  };
+}
+
 beforeEach(() => {
   process.env.NEXT_PUBLIC_PONDER_URL = "https://ponder.example/api";
   globalThis.fetch = originalFetch;
@@ -218,4 +241,24 @@ test("rate-limits vote social cards before fetching share data", async () => {
 
   assert.equal(response.status, 429);
   assert.equal(fetched, false);
+});
+
+test("rate-limits vote social cards across varying content params before fetching share data", async () => {
+  let fetchCount = 0;
+  __setRateLimitStoreForTests(createCountingRateLimitStore());
+  globalThis.fetch = (async () => {
+    fetchCount++;
+    return new Response(null, { status: 404 });
+  }) as typeof fetch;
+
+  let response: Response | null = null;
+  for (let index = 1; index <= 181; index++) {
+    response = await GET(new NextRequest(`https://www.rateloop.ai/api/og/vote?content=${index}&chainId=31337`));
+    if (index <= 180) {
+      assert.equal(response.status, 200);
+    }
+  }
+
+  assert.equal(response?.status, 429);
+  assert.equal(fetchCount, 180);
 });

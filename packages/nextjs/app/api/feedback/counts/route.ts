@@ -8,14 +8,24 @@ import {
 } from "~~/lib/feedback/contentFeedback";
 import { checkRateLimit } from "~~/utils/rateLimit";
 
-const RATE_LIMIT = { limit: 60, windowMs: 60_000 };
+const ROUTE_RATE_LIMIT = { limit: 180, windowMs: 60_000 };
+const RESOURCE_RATE_LIMIT = { limit: 60, windowMs: 60_000 };
+const ROUTE_RATE_LIMIT_KEY = "/api/feedback/counts";
+const RESOURCE_RATE_LIMIT_KEY = `${ROUTE_RATE_LIMIT_KEY}:resource`;
 
 export async function GET(request: NextRequest) {
   const contentIdsParam = request.nextUrl.searchParams.get("contentIds");
   const chainIdParam = request.nextUrl.searchParams.get("chainId");
-  const limited = await checkRateLimit(request, RATE_LIMIT, {
+  const routeLimited = await checkRateLimit(request, ROUTE_RATE_LIMIT, {
+    allowOnStoreUnavailable: true,
+    routeKey: ROUTE_RATE_LIMIT_KEY,
+  });
+  if (routeLimited) return routeLimited;
+
+  const limited = await checkRateLimit(request, RESOURCE_RATE_LIMIT, {
     allowOnStoreUnavailable: true,
     extraKeyParts: [contentIdsParam ?? undefined, chainIdParam ?? undefined],
+    routeKey: RESOURCE_RATE_LIMIT_KEY,
   });
   if (limited) return limited;
 
