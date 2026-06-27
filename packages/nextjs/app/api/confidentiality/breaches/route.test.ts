@@ -284,6 +284,20 @@ test("breach listings only return reports for the current deployment", async () 
   );
 });
 
+test("breach listings are rate limited before database work", async () => {
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    const response = await breachesRoute.GET(
+      new NextRequest("https://rateloop.ai/api/confidentiality/breaches?contentId=invalid"),
+    );
+    assert.equal(response.status, 400);
+  }
+
+  const limited = await breachesRoute.GET(
+    new NextRequest("https://rateloop.ai/api/confidentiality/breaches?contentId=invalid"),
+  );
+  assert.equal(limited.status, 429);
+});
+
 test("breach reports require an anchored log root before publishing evidence", async () => {
   await insertRootedAccess({ anchored: false });
 

@@ -1,8 +1,11 @@
 import {
+  __getPonderAvailabilityCacheSizeForTests,
+  __setSupportedPonderDeploymentKeysForTests,
   fetchPonderJson,
   getPonderAvailabilityStatus,
   invalidatePonderCache,
   isPonderAvailable,
+  normalizeSupportedPonderDeploymentKey,
   ponderApi,
   resolvePonderUrl,
   shouldBypassPonderAvailabilityPreflightForConfig,
@@ -163,6 +166,8 @@ test("isPonderAvailable proxies browser health checks through Next", async () =>
 test("isPonderAvailable includes explicit deployment keys in browser health checks", async () => {
   const originalFetch = globalThis.fetch;
   const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+  assert.ok(BASE_SEPOLIA_PONDER_DEPLOYMENT);
+  const deploymentKey = BASE_SEPOLIA_PONDER_DEPLOYMENT.deploymentKey;
   let requestedUrl = "";
 
   Object.defineProperty(globalThis, "window", {
@@ -181,7 +186,7 @@ test("isPonderAvailable includes explicit deployment keys in browser health chec
   try {
     invalidatePonderCache();
 
-    assert.equal(await isPonderAvailable("84532:0xabc:0xdef"), true);
+    assert.equal(await isPonderAvailable(deploymentKey), true);
   } finally {
     globalThis.fetch = originalFetch;
     if (originalWindow) {
@@ -192,7 +197,86 @@ test("isPonderAvailable includes explicit deployment keys in browser health chec
     invalidatePonderCache();
   }
 
-  assert.equal(requestedUrl, "/api/ponder/availability?deploymentKey=84532%3A0xabc%3A0xdef");
+  assert.equal(requestedUrl, `/api/ponder/availability?deploymentKey=${encodeURIComponent(deploymentKey)}`);
+});
+
+test("normalizeSupportedPonderDeploymentKey only accepts known deployment keys", () => {
+  assert.ok(TEST_PONDER_DEPLOYMENT);
+  assert.equal(
+    normalizeSupportedPonderDeploymentKey(TEST_PONDER_DEPLOYMENT.deploymentKey.toUpperCase()),
+    TEST_PONDER_DEPLOYMENT.deploymentKey,
+  );
+  assert.equal(
+    normalizeSupportedPonderDeploymentKey(
+      "999999:0x0000000000000000000000000000000000000001:0x0000000000000000000000000000000000000002",
+    ),
+    null,
+  );
+});
+
+test("getPonderAvailabilityStatus rejects unsupported explicit deployment keys without probing", async () => {
+  const originalFetch = globalThis.fetch;
+  let fetchCalls = 0;
+  globalThis.fetch = (async () => {
+    fetchCalls += 1;
+    return new Response("unexpected", { status: 500 });
+  }) as typeof fetch;
+
+  try {
+    invalidatePonderCache({ clearLastKnownGood: true });
+
+    const status = await getPonderAvailabilityStatus(
+      "999999:0x0000000000000000000000000000000000000001:0x0000000000000000000000000000000000000002",
+    );
+
+    assert.equal(status.available, false);
+    assert.equal(status.reason, "deployment_unconfigured");
+    assert.equal(fetchCalls, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+    invalidatePonderCache({ clearLastKnownGood: true });
+  }
+});
+
+test("getPonderAvailabilityStatus bounds availability cache entries", async () => {
+  const originalFetch = globalThis.fetch;
+  const fakeDeploymentKeys = Array.from(
+    { length: 40 },
+    (_, index) =>
+      `31337:0x${(index + 1).toString(16).padStart(40, "0")}:0x${(index + 101).toString(16).padStart(40, "0")}`,
+  );
+  let currentDeploymentKey = fakeDeploymentKeys[0] ?? "";
+
+  __setSupportedPonderDeploymentKeysForTests(fakeDeploymentKeys);
+  globalThis.fetch = (async input => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    if (url.endsWith("/health")) {
+      return new Response("ok", { status: 200 });
+    }
+    if (url.endsWith("/deployment")) {
+      return new Response(JSON.stringify({ configured: true, deploymentKey: currentDeploymentKey }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    return new Response("unexpected", { status: 500 });
+  }) as typeof fetch;
+
+  try {
+    invalidatePonderCache({ clearLastKnownGood: true });
+
+    for (const deploymentKey of fakeDeploymentKeys) {
+      currentDeploymentKey = deploymentKey;
+      const status = await getPonderAvailabilityStatus(deploymentKey);
+      assert.equal(status.available, true);
+    }
+
+    assert.equal(__getPonderAvailabilityCacheSizeForTests(), 32);
+  } finally {
+    __setSupportedPonderDeploymentKeysForTests(null);
+    globalThis.fetch = originalFetch;
+    invalidatePonderCache({ clearLastKnownGood: true });
+  }
 });
 
 test("isPonderAvailable retries transient deployment probe failures", async () => {

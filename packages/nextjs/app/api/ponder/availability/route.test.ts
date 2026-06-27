@@ -1,11 +1,27 @@
 import { GET } from "./route";
+import { NextRequest } from "next/server";
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { afterEach, beforeEach, test } from "node:test";
+import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 import { invalidatePonderCache } from "~~/services/ponder/client";
+import { __setRateLimitStoreForTests } from "~~/utils/rateLimit";
+
+beforeEach(() => {
+  __setRateLimitStoreForTests(createMemoryDatabaseResources().client);
+});
+
+afterEach(() => {
+  __setRateLimitStoreForTests(null);
+  invalidatePonderCache();
+});
 
 function getFetchUrl(input: RequestInfo | URL): string {
   return typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+}
+
+function makeAvailabilityRequest(url: string) {
+  return new NextRequest(url);
 }
 
 test("ponder availability route reports a healthy indexer", async () => {
@@ -36,7 +52,7 @@ test("ponder availability route reports a healthy indexer", async () => {
   try {
     invalidatePonderCache();
 
-    const response = await GET(new Request("http://localhost/api/ponder/availability"));
+    const response = await GET(makeAvailabilityRequest("http://localhost/api/ponder/availability"));
     const body = await response.json();
 
     assert.equal(response.status, 200);
@@ -78,7 +94,7 @@ test("ponder availability route checks explicit deployment keys", async () => {
     invalidatePonderCache();
 
     const response = await GET(
-      new Request(
+      makeAvailabilityRequest(
         `http://localhost/api/ponder/availability?deploymentKey=${encodeURIComponent(deployment.deploymentKey)}`,
       ),
     );
@@ -104,7 +120,7 @@ test("ponder availability route reports an offline indexer", async () => {
   try {
     invalidatePonderCache();
 
-    const response = await GET(new Request("http://localhost/api/ponder/availability"));
+    const response = await GET(makeAvailabilityRequest("http://localhost/api/ponder/availability"));
     const body = await response.json();
 
     assert.equal(response.status, 200);
@@ -141,7 +157,7 @@ test("ponder availability route rejects deployment mismatches", async () => {
   try {
     invalidatePonderCache();
 
-    const response = await GET(new Request("http://localhost/api/ponder/availability"));
+    const response = await GET(makeAvailabilityRequest("http://localhost/api/ponder/availability"));
     const body = await response.json();
 
     assert.equal(response.status, 200);
@@ -153,4 +169,39 @@ test("ponder availability route rejects deployment mismatches", async () => {
     globalThis.fetch = originalFetch;
     invalidatePonderCache();
   }
+});
+
+test("ponder availability route rejects unsupported deployment keys before probing Ponder", async () => {
+  const originalFetch = globalThis.fetch;
+  let fetchCalls = 0;
+  globalThis.fetch = (async () => {
+    fetchCalls += 1;
+    return new Response("unexpected", { status: 500 });
+  }) as typeof fetch;
+
+  try {
+    const response = await GET(
+      makeAvailabilityRequest(
+        "http://localhost/api/ponder/availability?deploymentKey=999999:0x0000000000000000000000000000000000000001:0x0000000000000000000000000000000000000002",
+      ),
+    );
+
+    assert.equal(response.status, 400);
+    assert.deepEqual(await response.json(), { error: "Unsupported Ponder deployment key" });
+    assert.equal(fetchCalls, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("ponder availability route rate limits repeated probes", async () => {
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    const response = await GET(
+      makeAvailabilityRequest("http://localhost/api/ponder/availability?deploymentKey=unsupported"),
+    );
+    assert.equal(response.status, 400);
+  }
+
+  const limited = await GET(makeAvailabilityRequest("http://localhost/api/ponder/availability?deploymentKey=unsupported"));
+  assert.equal(limited.status, 429);
 });

@@ -15,7 +15,8 @@ import { checkRateLimit } from "~~/utils/rateLimit";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const RATE_LIMIT = { limit: 20, windowMs: 60_000 };
+const READ_RATE_LIMIT = { limit: 60, windowMs: 60_000 };
+const WRITE_RATE_LIMIT = { limit: 20, windowMs: 60_000 };
 const BYTES32_PATTERN = /^0x[0-9a-fA-F]{64}$/;
 const CONTENT_ID_PATTERN = /^[0-9]{1,78}$/;
 const VIEW_TOKEN_PATTERN = /^[0-9a-fA-F]{64}$/;
@@ -79,6 +80,12 @@ function breachEvidenceArtifactUrl(request: NextRequest, reportId: number) {
 }
 
 export async function GET(request: NextRequest) {
+  const limited = await checkRateLimit(request, READ_RATE_LIMIT, {
+    allowOnStoreUnavailable: true,
+    routeKey: "/api/confidentiality/breaches",
+  });
+  if (limited) return limited;
+
   const contentId = request.nextUrl.searchParams.get("contentId")?.trim();
   if (!contentId || !CONTENT_ID_PATTERN.test(contentId)) {
     return NextResponse.json({ error: "Invalid content id" }, { status: 400 });
@@ -122,7 +129,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const limited = await checkRateLimit(request, RATE_LIMIT);
+  const limited = await checkRateLimit(request, WRITE_RATE_LIMIT);
   if (limited) return limited;
 
   const body = await parseJsonBody(request);

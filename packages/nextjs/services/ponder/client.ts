@@ -1,6 +1,10 @@
 import type { RoundState } from "@rateloop/contracts/protocol";
 import type { ProfileSelfReportAudienceContext, TargetAudience } from "@rateloop/node-utils/profileSelfReport";
-import { resolveContentDeploymentScope, resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
+import {
+  listProtocolDeploymentScopes,
+  resolveContentDeploymentScope,
+  resolveProtocolDeploymentScope,
+} from "~~/lib/protocolDeployment";
 import scaffoldConfig from "~~/scaffold.config";
 import { isLocalE2EProductionBuildEnabled } from "~~/utils/env/e2eProduction";
 import { resolvePonderUrlValue } from "~~/utils/env/ponderUrl";
@@ -94,6 +98,7 @@ const availabilityCache = new Map<
 const HEALTH_CHECK_TIMEOUT = 2000;
 const PONDER_REQUEST_TIMEOUT = 10_000;
 const CACHE_DURATION = 30_000;
+const AVAILABILITY_CACHE_MAX_ENTRIES = 32;
 const PONDER_MAX_REQUEST_ATTEMPTS = 3;
 const PONDER_RETRY_BASE_DELAY_MS = 600;
 const PONDER_DEPLOYMENT_RETRY_BASE_DELAY_MS = 100;
@@ -307,6 +312,47 @@ function availabilityCacheKey(expectedDeploymentKey?: string | null) {
   return normalizeDeploymentKey(expectedDeploymentKey) ?? "__default__";
 }
 
+const SUPPORTED_PONDER_DEPLOYMENT_KEYS = new Set(
+  listProtocolDeploymentScopes().map(scope => scope.deploymentKey.toLowerCase()),
+);
+let supportedPonderDeploymentKeysForTests: Set<string> | null = null;
+
+function getSupportedPonderDeploymentKeys() {
+  return supportedPonderDeploymentKeysForTests ?? SUPPORTED_PONDER_DEPLOYMENT_KEYS;
+}
+
+export function normalizeSupportedPonderDeploymentKey(value: string | null | undefined) {
+  const deploymentKey = normalizeDeploymentKey(value);
+  return deploymentKey && getSupportedPonderDeploymentKeys().has(deploymentKey) ? deploymentKey : null;
+}
+
+export function __setSupportedPonderDeploymentKeysForTests(values: readonly string[] | null) {
+  supportedPonderDeploymentKeysForTests = values
+    ? new Set(values.map(value => normalizeDeploymentKey(value)).filter((value): value is string => Boolean(value)))
+    : null;
+}
+
+function setAvailabilityCacheEntry(
+  cacheKey: string,
+  entry: {
+    status: PonderAvailabilityStatus | null;
+    expiry: number;
+    promise: Promise<PonderAvailabilityStatus> | null;
+  },
+) {
+  if (!availabilityCache.has(cacheKey) && availabilityCache.size >= AVAILABILITY_CACHE_MAX_ENTRIES) {
+    const oldestKey = availabilityCache.keys().next().value as string | undefined;
+    if (oldestKey) {
+      availabilityCache.delete(oldestKey);
+    }
+  }
+  availabilityCache.set(cacheKey, entry);
+}
+
+export function __getPonderAvailabilityCacheSizeForTests() {
+  return availabilityCache.size;
+}
+
 function getDefaultExpectedPonderDeploymentScope(): ExpectedPonderDeploymentScope | null {
   const chainId = scaffoldConfig.targetNetworks[0]?.id;
   return typeof chainId === "number" ? resolveProtocolDeploymentScope(chainId) : null;
@@ -430,6 +476,13 @@ export async function getPonderAvailabilityStatus(
     return { available: false, reason: "not_configured" };
   }
   const explicitDeploymentKey = normalizeDeploymentKey(expectedDeploymentKey);
+  if (explicitDeploymentKey && !normalizeSupportedPonderDeploymentKey(explicitDeploymentKey)) {
+    return {
+      available: false,
+      reason: "deployment_unconfigured",
+      expectedDeploymentKey: explicitDeploymentKey,
+    };
+  }
   if (shouldBypassPonderAvailabilityPreflight()) {
     return getBypassedPonderAvailabilityStatus(explicitDeploymentKey);
   }
@@ -452,7 +505,7 @@ export async function getPonderAvailabilityStatus(
           )
         : await checkPonderAvailabilityThroughApi(explicitDeploymentKey);
 
-    availabilityCache.set(cacheKey, {
+    setAvailabilityCacheEntry(cacheKey, {
       status,
       expiry: Date.now() + CACHE_DURATION,
       promise: null,
@@ -461,7 +514,7 @@ export async function getPonderAvailabilityStatus(
     return status;
   })();
 
-  availabilityCache.set(cacheKey, {
+  setAvailabilityCacheEntry(cacheKey, {
     status: null,
     expiry: 0,
     promise,

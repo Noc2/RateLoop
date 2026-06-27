@@ -83,3 +83,11 @@ export function resolveProtocolDeploymentScope(chainId: number): ProtocolDeploym
     }),
   };
 }
+
+export function listProtocolDeploymentScopes(): ProtocolDeploymentScope[] {
+  return Object.keys(deployments)
+    .map(chainId => Number(chainId))
+    .filter(chainId => Number.isSafeInteger(chainId) && chainId > 0)
+    .map(chainId => resolveProtocolDeploymentScope(chainId))
+    .filter((scope): scope is ProtocolDeploymentScope => Boolean(scope));
+}
