@@ -20,6 +20,20 @@ function readBodyRequireAnchor(value: unknown, fallback: boolean) {
   return fallback;
 }
 
+function readOptionalString(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function readOptionalChainId(value: unknown) {
+  const parsed =
+    typeof value === "number"
+      ? value
+      : typeof value === "string" && /^\d+$/.test(value.trim())
+        ? Number(value.trim())
+        : Number.NaN;
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : undefined;
+}
+
 export function GET() {
   return NextResponse.json(
     { error: "Method not allowed. Use POST to publish confidentiality log roots." },
@@ -42,12 +56,23 @@ export async function POST(request: NextRequest) {
   const artifactUrl =
     typeof body.artifactUrl === "string" && body.artifactUrl.trim() ? body.artifactUrl.trim() : undefined;
   const anchor = body.anchor === false ? false : undefined;
+  const chainId = readOptionalChainId(body.chainId);
+  const contentRegistryAddress = readOptionalString(body.contentRegistryAddress);
+  const deploymentKey = readOptionalString(body.deploymentKey);
   const requireAnchor = anchor === false ? false : readBodyRequireAnchor(body.requireAnchor, true);
 
   try {
     return NextResponse.json({
       ok: true,
-      ...(await publishConfidentialityLogRoot({ anchor, artifactUrl, epoch, requireAnchor })),
+      ...(await publishConfidentialityLogRoot({
+        anchor,
+        artifactUrl,
+        chainId,
+        contentRegistryAddress,
+        deploymentKey,
+        epoch,
+        requireAnchor,
+      })),
     });
   } catch (error) {
     console.error("Error publishing confidentiality log root:", error);

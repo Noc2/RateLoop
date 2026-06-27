@@ -71,7 +71,14 @@ function currentDeploymentScope() {
   return scope;
 }
 
-async function insertRootedAccess(params: { anchored?: boolean } = {}) {
+async function insertRootedAccess(
+  params: {
+    anchored?: boolean;
+    rootChainId?: number | null;
+    rootContentRegistryAddress?: string | null;
+    rootDeploymentKey?: string;
+  } = {},
+) {
   const viewedAt = new Date("2026-06-11T14:30:00.000Z");
   const epoch = confidentiality.confidentialityEpochForDate(viewedAt);
   const scope = currentDeploymentScope();
@@ -90,6 +97,10 @@ async function insertRootedAccess(params: { anchored?: boolean } = {}) {
       walletAddress: ACCUSED_WALLET,
     })
     .returning({ id: dbSchema.confidentialContextAccessLogs.id });
+  const rootDeploymentKey = params.rootDeploymentKey ?? scope.deploymentKey;
+  const rootChainId = params.rootChainId === undefined ? scope.chainId : params.rootChainId;
+  const rootContentRegistryAddress =
+    params.rootContentRegistryAddress === undefined ? scope.contentRegistryAddress : params.rootContentRegistryAddress;
   await dbModule.db.insert(dbSchema.confidentialityLogRoots).values({
     accessCount: 1,
     acceptanceCount: 0,
@@ -98,13 +109,18 @@ async function insertRootedAccess(params: { anchored?: boolean } = {}) {
     anchorPublishedAt: params.anchored === false ? null : new Date("2026-06-12T00:02:00.000Z"),
     anchorTxHash: params.anchored === false ? null : `0x${"1".repeat(64)}`,
     artifactHash: `0x${"d".repeat(64)}`,
-    artifactUrl: "https://rateloop.ai/api/confidentiality/log-roots/2026-06-11/artifact",
+    artifactUrl: `https://rateloop.ai/api/confidentiality/log-roots/2026-06-11/artifact?deploymentKey=${encodeURIComponent(
+      rootDeploymentKey,
+    )}`,
+    chainId: rootChainId,
+    contentRegistryAddress: rootContentRegistryAddress,
     createdAt: new Date("2026-06-12T00:00:00.000Z"),
+    deploymentKey: rootDeploymentKey,
     epoch,
     merkleRoot: `0x${"e".repeat(64)}`,
     publishedAt: new Date("2026-06-12T00:01:00.000Z"),
   });
-  return { accessLog, epoch };
+  return { accessLog, epoch, scope };
 }
 
 before(async () => {
@@ -131,7 +147,7 @@ after(() => {
 });
 
 test("breach reports bind a matching view token to access-log and log-root evidence", async () => {
-  const { accessLog, epoch } = await insertRootedAccess();
+  const { accessLog, epoch, scope } = await insertRootedAccess();
 
   const response = await breachesRoute.POST(
     await breachRequest({
@@ -166,18 +182,39 @@ test("breach reports bind a matching view token to access-log and log-root evide
   assert.equal(rows.rows[0].evidence_hash, sha256Hash(String(rows.rows[0].proof)));
   assert.equal(rows.rows[0].status, "evidence_artifact_published");
   const proof = JSON.parse(String(rows.rows[0].proof)) as {
-    accessLog: { id: number; identityKey: string; leafHash: string; viewToken: string };
+    accessLog: {
+      chainId: number | null;
+      contentRegistryAddress: string | null;
+      deploymentKey: string;
+      id: number;
+      identityKey: string;
+      leafHash: string;
+      viewToken: string;
+    };
     externalEvidence: { hash: string | null; url: string | null };
-    logRoot: { anchor: { txHash: string }; epoch: string; artifactHash: string } | null;
+    logRoot: {
+      anchor: { txHash: string };
+      chainId: number | null;
+      contentRegistryAddress: string | null;
+      deploymentKey: string;
+      epoch: string;
+      artifactHash: string;
+    } | null;
     schemaVersion: string;
   };
   assert.equal(proof.schemaVersion, "rateloop.confidentiality-breach-evidence.v1");
   assert.equal(proof.externalEvidence.hash, EVIDENCE_HASH);
   assert.equal(proof.externalEvidence.url, "https://rateloop.ai/confidentiality/evidence/report-1");
   assert.equal(proof.accessLog.id, accessLog.id);
+  assert.equal(proof.accessLog.chainId, scope.chainId);
+  assert.equal(proof.accessLog.contentRegistryAddress, scope.contentRegistryAddress);
+  assert.equal(proof.accessLog.deploymentKey, scope.deploymentKey);
   assert.equal(proof.accessLog.identityKey, IDENTITY_KEY);
   assert.equal(proof.accessLog.viewToken, VIEW_TOKEN);
   assert.match(proof.accessLog.leafHash, /^0x[0-9a-f]{64}$/);
+  assert.equal(proof.logRoot?.chainId, scope.chainId);
+  assert.equal(proof.logRoot?.contentRegistryAddress, scope.contentRegistryAddress);
+  assert.equal(proof.logRoot?.deploymentKey, scope.deploymentKey);
   assert.equal(proof.logRoot?.epoch, epoch);
   assert.equal(proof.logRoot?.anchor.txHash, `0x${"1".repeat(64)}`);
 
@@ -300,6 +337,30 @@ test("breach listings are rate limited before database work", async () => {
 
 test("breach reports require an anchored log root before publishing evidence", async () => {
   await insertRootedAccess({ anchored: false });
+
+  const response = await breachesRoute.POST(
+    await breachRequest({
+      accusedIdentityKey: IDENTITY_KEY,
+      contentId: CONTENT_ID,
+      reporter: REPORTER,
+      viewToken: VIEW_TOKEN,
+    }),
+  );
+
+  assert.equal(response.status, 409);
+  assert.deepEqual(await response.json(), {
+    error: "An anchored confidentiality log root is required before filing breach evidence",
+  });
+});
+
+test("breach reports ignore anchored log roots from other deployments", async () => {
+  const scope = currentDeploymentScope();
+  const foreignRegistry = "0x2222222222222222222222222222222222222222";
+  await insertRootedAccess({
+    rootChainId: scope.chainId,
+    rootContentRegistryAddress: foreignRegistry,
+    rootDeploymentKey: `${scope.chainId}:0x2222222222222222222222222222222222222222`,
+  });
 
   const response = await breachesRoute.POST(
     await breachRequest({

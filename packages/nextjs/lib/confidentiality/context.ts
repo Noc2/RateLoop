@@ -1131,15 +1131,17 @@ function merkleRoot(leaves: string[]) {
   return `0x${level[0]!.toString("hex")}`;
 }
 
-function defaultConfidentialityLogRootArtifactUrl(epoch: string) {
+function defaultConfidentialityLogRootArtifactUrl(epoch: string, deploymentKey: string) {
   const configuredBase = process.env.RATELOOP_CONFIDENTIALITY_LOG_ROOT_ARTIFACT_BASE_URL?.trim();
   if (configuredBase) {
-    return `${configuredBase.replace(/\/+$/, "")}/${encodeURIComponent(epoch)}.json`;
+    return `${configuredBase.replace(/\/+$/, "")}/${encodeURIComponent(deploymentKey)}/${encodeURIComponent(epoch)}.json`;
   }
   const appUrl = process.env.APP_URL?.trim() || process.env.NEXT_PUBLIC_APP_URL?.trim();
   if (!appUrl) return null;
   try {
-    return new URL(`/api/confidentiality/log-roots/${encodeURIComponent(epoch)}/artifact`, appUrl).toString();
+    const url = new URL(`/api/confidentiality/log-roots/${encodeURIComponent(epoch)}/artifact`, appUrl);
+    url.searchParams.set("deploymentKey", deploymentKey);
+    return url.toString();
   } catch {
     return null;
   }
@@ -1148,6 +1150,9 @@ function defaultConfidentialityLogRootArtifactUrl(epoch: string) {
 function buildConfidentialityLogRootArtifact(params: {
   acceptanceCount: number;
   accessCount: number;
+  chainId: number | null;
+  contentRegistryAddress: string | null;
+  deploymentKey: string;
   end: Date;
   epoch: string;
   leaves: string[];
@@ -1155,8 +1160,11 @@ function buildConfidentialityLogRootArtifact(params: {
   start: Date;
 }) {
   return {
-    schemaVersion: "rateloop.confidentiality-log-root.v1",
+    schemaVersion: "rateloop.confidentiality-log-root.v2",
     epoch: params.epoch,
+    deploymentKey: params.deploymentKey,
+    chainId: params.chainId,
+    contentRegistryAddress: params.contentRegistryAddress,
     intervalStart: params.start.toISOString(),
     intervalEnd: params.end.toISOString(),
     merkleRoot: params.merkleRoot,
@@ -1244,27 +1252,50 @@ export function confidentialityEpochForDate(date: Date) {
 }
 
 export async function publishConfidentialityLogRoot(
-  params: { anchor?: boolean; artifactUrl?: string | null; epoch?: string; now?: Date; requireAnchor?: boolean } = {},
+  params: {
+    anchor?: boolean;
+    artifactUrl?: string | null;
+    epoch?: string;
+    now?: Date;
+    requireAnchor?: boolean;
+  } & ConfidentialityDeploymentScopeInput = {},
 ) {
   const now = params.now ?? new Date();
   const epoch = params.epoch ?? confidentialityEpochForDate(new Date(now.getTime() - 24 * 60 * 60 * 1000));
   const { start, end } = epochBounds(epoch);
+  const deploymentScope = resolveConfidentialityDeploymentScope(params);
+  if (!deploymentScope) {
+    throw new Error("Confidentiality deployment is not configured for log-root publishing.");
+  }
 
   const acceptances = await db
     .select()
     .from(confidentialityTermsAcceptances)
     .where(
-      and(gte(confidentialityTermsAcceptances.acceptedAt, start), lt(confidentialityTermsAcceptances.acceptedAt, end)),
+      and(
+        eq(confidentialityTermsAcceptances.deploymentKey, deploymentScope.deploymentKey),
+        gte(confidentialityTermsAcceptances.acceptedAt, start),
+        lt(confidentialityTermsAcceptances.acceptedAt, end),
+      ),
     );
   const accesses = await db
     .select()
     .from(confidentialContextAccessLogs)
-    .where(and(gte(confidentialContextAccessLogs.viewedAt, start), lt(confidentialContextAccessLogs.viewedAt, end)));
+    .where(
+      and(
+        eq(confidentialContextAccessLogs.deploymentKey, deploymentScope.deploymentKey),
+        gte(confidentialContextAccessLogs.viewedAt, start),
+        lt(confidentialContextAccessLogs.viewedAt, end),
+      ),
+    );
 
   const leaves = [
     ...acceptances.map(row =>
       leafHash([
         "acceptance",
+        row.deploymentKey,
+        row.chainId,
+        row.contentRegistryAddress,
         row.walletAddress,
         row.identityKey,
         row.contentId,
@@ -1282,6 +1313,9 @@ export async function publishConfidentialityLogRoot(
     ...accesses.map(row =>
       leafHash([
         "access",
+        row.deploymentKey,
+        row.chainId,
+        row.contentRegistryAddress,
         row.walletAddress,
         row.identityKey,
         row.contentId,
@@ -1296,6 +1330,9 @@ export async function publishConfidentialityLogRoot(
   const artifact = buildConfidentialityLogRootArtifact({
     acceptanceCount: acceptances.length,
     accessCount: accesses.length,
+    chainId: deploymentScope.chainId,
+    contentRegistryAddress: deploymentScope.contentRegistryAddress,
+    deploymentKey: deploymentScope.deploymentKey,
     end,
     epoch,
     leaves,
@@ -1305,7 +1342,9 @@ export async function publishConfidentialityLogRoot(
   const artifactJson = JSON.stringify(artifact);
   const artifactHash = hashArtifactJson(artifactJson);
   const artifactUrl =
-    params.artifactUrl === undefined ? defaultConfidentialityLogRootArtifactUrl(epoch) : params.artifactUrl;
+    params.artifactUrl === undefined
+      ? defaultConfidentialityLogRootArtifactUrl(epoch, deploymentScope.deploymentKey)
+      : params.artifactUrl;
 
   const selectExistingRoot = async () => {
     const [row] = await db
@@ -1319,11 +1358,19 @@ export async function publishConfidentialityLogRoot(
         artifactHash: confidentialityLogRoots.artifactHash,
         artifactJson: confidentialityLogRoots.artifactJson,
         artifactUrl: confidentialityLogRoots.artifactUrl,
+        chainId: confidentialityLogRoots.chainId,
+        contentRegistryAddress: confidentialityLogRoots.contentRegistryAddress,
+        deploymentKey: confidentialityLogRoots.deploymentKey,
         merkleRoot: confidentialityLogRoots.merkleRoot,
         publishedAt: confidentialityLogRoots.publishedAt,
       })
       .from(confidentialityLogRoots)
-      .where(eq(confidentialityLogRoots.epoch, epoch))
+      .where(
+        and(
+          eq(confidentialityLogRoots.deploymentKey, deploymentScope.deploymentKey),
+          eq(confidentialityLogRoots.epoch, epoch),
+        ),
+      )
       .limit(1);
     return row;
   };
@@ -1353,6 +1400,9 @@ export async function publishConfidentialityLogRoot(
         : { status: "already_published" as const, reason: "append_only_epoch" },
       artifactHash: existingRoot.artifactHash,
       artifactUrl: existingRoot.artifactUrl,
+      chainId: existingRoot.chainId,
+      contentRegistryAddress: existingRoot.contentRegistryAddress,
+      deploymentKey: existingRoot.deploymentKey,
       epoch,
       merkleRoot: existingRoot.merkleRoot,
     };
@@ -1389,12 +1439,15 @@ export async function publishConfidentialityLogRoot(
       artifactHash,
       artifactJson,
       artifactUrl,
+      chainId: deploymentScope.chainId,
+      contentRegistryAddress: deploymentScope.contentRegistryAddress,
       createdAt: now,
+      deploymentKey: deploymentScope.deploymentKey,
       epoch,
       merkleRoot: root,
       publishedAt: now,
     })
-    .onConflictDoNothing({ target: confidentialityLogRoots.epoch })
+    .onConflictDoNothing({ target: [confidentialityLogRoots.deploymentKey, confidentialityLogRoots.epoch] })
     .returning({ epoch: confidentialityLogRoots.epoch });
 
   if (inserted.length === 0) {
@@ -1409,6 +1462,9 @@ export async function publishConfidentialityLogRoot(
     anchor,
     artifactHash,
     artifactUrl,
+    chainId: deploymentScope.chainId,
+    contentRegistryAddress: deploymentScope.contentRegistryAddress,
+    deploymentKey: deploymentScope.deploymentKey,
     epoch,
     merkleRoot: root,
   };

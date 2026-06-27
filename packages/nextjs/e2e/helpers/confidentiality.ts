@@ -731,24 +731,48 @@ export async function fetchGatedAttachment(
 export async function seedAnchoredLogRootForViewToken(viewToken: string) {
   expect(viewToken).toMatch(/^[a-f0-9]{64}$/);
   const pool = await getE2EDbPool();
-  const accessResult = await pool.query<{ viewed_at: Date | string }>(
-    "select viewed_at from confidential_context_access_logs where view_token = $1 limit 1",
+  const accessResult = await pool.query<{
+    chain_id: number | null;
+    content_registry_address: string | null;
+    deployment_key: string;
+    viewed_at: Date | string;
+  }>(
+    `
+      select chain_id, content_registry_address, deployment_key, viewed_at
+        from confidential_context_access_logs
+       where view_token = $1
+       limit 1
+    `,
     [viewToken],
   );
   expect(accessResult.rowCount, "view token should have a matching access log").toBe(1);
 
-  const viewedAt = new Date(accessResult.rows[0]!.viewed_at);
+  const accessLog = accessResult.rows[0]!;
+  const deploymentKey = accessLog.deployment_key;
+  const viewedAt = new Date(accessLog.viewed_at);
   const epoch = viewedAt.toISOString().slice(0, 10);
   const intervalStart = new Date(`${epoch}T00:00:00.000Z`);
   const intervalEnd = new Date(intervalStart.getTime() + 24 * 60 * 60 * 1000);
   const countResult = await pool.query<{ count: string }>(
-    "select count(*)::text as count from confidential_context_access_logs where viewed_at >= $1 and viewed_at < $2",
-    [intervalStart, intervalEnd],
+    `
+      select count(*)::text as count
+        from confidential_context_access_logs
+       where deployment_key = $1
+         and viewed_at >= $2
+         and viewed_at < $3
+    `,
+    [deploymentKey, intervalStart, intervalEnd],
   );
-  const merkleRoot = sha256Hex(`e2e-confidentiality-log-root:${epoch}`);
+  const merkleRoot = sha256Hex(`e2e-confidentiality-log-root:${deploymentKey}:${epoch}`);
+  const artifactUrl = `https://rateloop.ai/api/confidentiality/log-roots/${epoch}/artifact?deploymentKey=${encodeURIComponent(
+    deploymentKey,
+  )}`;
   const artifact = {
-    schemaVersion: "rateloop.confidentiality-log-root.v1",
+    schemaVersion: "rateloop.confidentiality-log-root.v2",
     epoch,
+    deploymentKey,
+    chainId: accessLog.chain_id,
+    contentRegistryAddress: accessLog.content_registry_address,
     intervalStart: intervalStart.toISOString(),
     intervalEnd: intervalEnd.toISOString(),
     merkleRoot,
@@ -758,10 +782,13 @@ export async function seedAnchoredLogRootForViewToken(viewToken: string) {
   };
   const artifactJson = JSON.stringify(artifact);
   const artifactHash = sha256Hex(artifactJson);
-  const anchorTxHash = sha256Hex(`e2e-confidentiality-log-root-anchor:${epoch}`);
+  const anchorTxHash = sha256Hex(`e2e-confidentiality-log-root-anchor:${deploymentKey}:${epoch}`);
   await pool.query(
     `
       insert into confidentiality_log_roots (
+        deployment_key,
+        chain_id,
+        content_registry_address,
         epoch,
         merkle_root,
         acceptance_count,
@@ -776,8 +803,8 @@ export async function seedAnchoredLogRootForViewToken(viewToken: string) {
         published_at,
         created_at
       )
-      values ($1, $2, 0, $3, $4, $5, $6, 31337, $7, $8, now(), now(), now())
-      on conflict (epoch) do update set
+      values ($1, $2, $3, $4, $5, 0, $6, $7, $8, $9, 31337, $10, $11, now(), now(), now())
+      on conflict (deployment_key, epoch) do update set
         anchor_chain_id = excluded.anchor_chain_id,
         anchor_contract = excluded.anchor_contract,
         anchor_tx_hash = excluded.anchor_tx_hash,
@@ -788,10 +815,13 @@ export async function seedAnchoredLogRootForViewToken(viewToken: string) {
         merkle_root = excluded.merkle_root
     `,
     [
+      deploymentKey,
+      accessLog.chain_id,
+      accessLog.content_registry_address,
       epoch,
       merkleRoot,
       Number(countResult.rows[0]?.count ?? 1),
-      `https://rateloop.ai/api/confidentiality/log-roots/${epoch}/artifact`,
+      artifactUrl,
       artifactHash,
       artifactJson,
       CONTRACT_ADDRESSES.ConfidentialityEscrow,

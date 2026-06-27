@@ -500,6 +500,29 @@ test("authorizes accepted signed sessions and logs gated context access", async 
   assert.equal(accessRows.rows[0].resource_kind, "details");
   assert.ok(accessRows.rows[0].ip_hash);
 
+  const deploymentScope = confidentiality.resolveCurrentConfidentialityDeploymentScope();
+  assert.ok(deploymentScope);
+  await dbModule.dbClient.execute({
+    sql: `
+      INSERT INTO confidential_context_access_logs (
+        deployment_key, chain_id, content_registry_address,
+        identity_key, wallet_address, content_id, resource_id, resource_kind, view_token, viewed_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `,
+    args: [
+      "999:0x9999999999999999999999999999999999999999",
+      999,
+      "0x9999999999999999999999999999999999999999",
+      IDENTITY_KEY,
+      WALLET,
+      CONTENT_ID,
+      "det_foreign001",
+      "details",
+      "c".repeat(64),
+      new Date().toISOString(),
+    ],
+  });
+
   const root = await confidentiality.publishConfidentialityLogRoot({
     epoch: confidentiality.confidentialityEpochForDate(new Date()),
     now: new Date(),
@@ -507,20 +530,36 @@ test("authorizes accepted signed sessions and logs gated context access", async 
   assert.equal(root.accessCount, 1);
   assert.equal(root.acceptanceCount, 1);
   assert.equal(root.anchor.status, "skipped");
-  assert.equal(root.artifactUrl, `https://rateloop.ai/api/confidentiality/log-roots/${root.epoch}/artifact`);
+  assert.equal(root.chainId, deploymentScope.chainId);
+  assert.equal(root.contentRegistryAddress, deploymentScope.contentRegistryAddress);
+  assert.equal(root.deploymentKey, deploymentScope.deploymentKey);
+  assert.equal(
+    root.artifactUrl,
+    `https://rateloop.ai/api/confidentiality/log-roots/${root.epoch}/artifact?deploymentKey=${encodeURIComponent(
+      deploymentScope.deploymentKey,
+    )}`,
+  );
   assert.match(root.artifactHash, /^0x[0-9a-f]{64}$/);
   assert.match(root.merkleRoot, /^0x[0-9a-f]{64}$/);
 
   const rootRows = await dbModule.dbClient.execute({
-    sql: "SELECT artifact_hash, artifact_json, artifact_url, anchor_tx_hash FROM confidentiality_log_roots WHERE epoch = ?",
-    args: [root.epoch],
+    sql: `
+      SELECT artifact_hash, artifact_json, artifact_url, anchor_tx_hash, deployment_key
+        FROM confidentiality_log_roots
+       WHERE deployment_key = ? AND epoch = ?
+    `,
+    args: [deploymentScope.deploymentKey, root.epoch],
   });
   assert.equal(rootRows.rowCount, 1);
   assert.equal(rootRows.rows[0].artifact_hash, root.artifactHash);
   assert.equal(rootRows.rows[0].artifact_url, root.artifactUrl);
   assert.equal(rootRows.rows[0].anchor_tx_hash, null);
+  assert.equal(rootRows.rows[0].deployment_key, deploymentScope.deploymentKey);
   const artifact = JSON.parse(String(rootRows.rows[0].artifact_json));
-  assert.equal(artifact.schemaVersion, "rateloop.confidentiality-log-root.v1");
+  assert.equal(artifact.schemaVersion, "rateloop.confidentiality-log-root.v2");
+  assert.equal(artifact.deploymentKey, deploymentScope.deploymentKey);
+  assert.equal(artifact.chainId, deploymentScope.chainId);
+  assert.equal(artifact.contentRegistryAddress, deploymentScope.contentRegistryAddress);
   assert.equal(artifact.merkleRoot, root.merkleRoot);
   assert.equal(artifact.acceptanceCount, 1);
   assert.equal(artifact.accessCount, 1);
@@ -536,10 +575,14 @@ test("authorizes accepted signed sessions and logs gated context access", async 
   await dbModule.dbClient.execute({
     sql: `
       INSERT INTO confidential_context_access_logs (
+        deployment_key, chain_id, content_registry_address,
         identity_key, wallet_address, content_id, resource_id, resource_kind, view_token, viewed_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
     args: [
+      deploymentScope.deploymentKey,
+      deploymentScope.chainId,
+      deploymentScope.contentRegistryAddress,
       IDENTITY_KEY,
       WALLET,
       CONTENT_ID,

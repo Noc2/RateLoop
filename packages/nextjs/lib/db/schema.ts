@@ -6,6 +6,7 @@ import {
   integer,
   numeric,
   pgTable,
+  primaryKey,
   serial,
   text,
   timestamp,
@@ -595,7 +596,10 @@ export type NewConfidentialityBreachReport = typeof confidentialityBreachReports
 export const confidentialityLogRoots = pgTable(
   "confidentiality_log_roots",
   {
-    epoch: text("epoch").primaryKey(),
+    deploymentKey: text("deployment_key").notNull().default("legacy"),
+    chainId: integer("chain_id"),
+    contentRegistryAddress: text("content_registry_address"),
+    epoch: text("epoch").notNull(),
     merkleRoot: text("merkle_root").notNull(),
     acceptanceCount: integer("acceptance_count").notNull().default(0),
     accessCount: integer("access_count").notNull().default(0),
@@ -610,6 +614,14 @@ export const confidentialityLogRoots = pgTable(
     createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull(),
   },
   table => ({
+    deploymentEpochPk: primaryKey({
+      columns: [table.deploymentKey, table.epoch],
+      name: "confidentiality_log_roots_deployment_epoch_pk",
+    }),
+    deploymentPublishedIdx: index("confidentiality_log_roots_deployment_published_idx").on(
+      table.deploymentKey,
+      table.publishedAt,
+    ),
     publishedIdx: index("confidentiality_log_roots_published_idx").on(table.publishedAt),
     anchorTxIdx: index("confidentiality_log_roots_anchor_tx_idx").on(table.anchorTxHash),
   }),

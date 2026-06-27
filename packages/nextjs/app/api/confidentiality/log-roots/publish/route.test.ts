@@ -20,12 +20,14 @@ type DbTestMemoryModule = typeof import("~~/lib/db/testing/testMemory");
 type RateLimitModule = typeof import("~~/utils/rateLimit");
 type LogRootPublishRoute = typeof import("./route");
 type LogRootPublishCronRoute = typeof import("./cron/route");
+type LogRootArtifactRoute = typeof import("../[epoch]/artifact/route");
 
 let dbModule: DbModule;
 let dbTestMemory: DbTestMemoryModule;
 let rateLimit: RateLimitModule;
 let logRootPublishRoute: LogRootPublishRoute;
 let logRootPublishCronRoute: LogRootPublishCronRoute;
+let logRootArtifactRoute: LogRootArtifactRoute;
 
 function restoreEnv(name: keyof NodeJS.ProcessEnv, value: string | undefined) {
   if (value === undefined) {
@@ -41,6 +43,7 @@ before(async () => {
   rateLimit = await import("~~/utils/rateLimit");
   logRootPublishRoute = await import("./route");
   logRootPublishCronRoute = await import("./cron/route");
+  logRootArtifactRoute = await import("../[epoch]/artifact/route");
 });
 
 beforeEach(async () => {
@@ -123,6 +126,8 @@ test("POST publishes log-root artifacts with Vercel cron bearer auth", async () 
   const body = (await response.json()) as {
     anchor: { status: string };
     artifactHash: string;
+    artifactUrl: string;
+    deploymentKey: string;
     epoch: string;
     ok: boolean;
   };
@@ -130,14 +135,29 @@ test("POST publishes log-root artifacts with Vercel cron bearer auth", async () 
   assert.equal(body.ok, true);
   assert.equal(body.epoch, "2026-06-11");
   assert.equal(body.anchor.status, "skipped");
+  assert.match(body.deploymentKey, /^[0-9]+:0x[0-9a-f]{40}$/);
   assert.match(body.artifactHash, /^0x[0-9a-f]{64}$/);
+  assert.equal(
+    body.artifactUrl,
+    `https://rateloop.ai/api/confidentiality/log-roots/2026-06-11/artifact?deploymentKey=${encodeURIComponent(
+      body.deploymentKey,
+    )}`,
+  );
 
   const rows = await dbModule.dbClient.execute(
-    "SELECT artifact_hash, artifact_url FROM confidentiality_log_roots WHERE epoch = '2026-06-11'",
+    "SELECT artifact_hash, artifact_json, artifact_url, deployment_key FROM confidentiality_log_roots WHERE epoch = '2026-06-11'",
   );
   assert.equal(rows.rowCount, 1);
   assert.equal(rows.rows[0].artifact_hash, body.artifactHash);
-  assert.equal(rows.rows[0].artifact_url, "https://rateloop.ai/api/confidentiality/log-roots/2026-06-11/artifact");
+  assert.equal(rows.rows[0].artifact_url, body.artifactUrl);
+  assert.equal(rows.rows[0].deployment_key, body.deploymentKey);
+
+  const artifactResponse = await logRootArtifactRoute.GET(new NextRequest(body.artifactUrl), {
+    params: Promise.resolve({ epoch: body.epoch }),
+  });
+  assert.equal(artifactResponse.status, 200);
+  assert.equal(artifactResponse.headers.get("x-rateloop-deployment-key"), body.deploymentKey);
+  assert.deepEqual(await artifactResponse.json(), JSON.parse(String(rows.rows[0].artifact_json)));
 });
 
 test("POST requires an on-chain anchor by default before sealing an epoch", async () => {

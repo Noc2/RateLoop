@@ -51,7 +51,10 @@ function hashEvidenceArtifactJson(artifactJson: string) {
 }
 
 function accessLogLeafHash(params: {
+  chainId: number | null;
   contentId: string;
+  contentRegistryAddress: string | null;
+  deploymentKey: string;
   identityKey: string;
   resourceId: string;
   resourceKind: string;
@@ -63,6 +66,9 @@ function accessLogLeafHash(params: {
     .update(
       JSON.stringify([
         "access",
+        params.deploymentKey,
+        params.chainId,
+        params.contentRegistryAddress,
         params.walletAddress,
         params.identityKey,
         params.contentId,
@@ -182,6 +188,9 @@ export async function POST(request: NextRequest) {
   const [accessLog] = await db
     .select({
       contentId: confidentialContextAccessLogs.contentId,
+      chainId: confidentialContextAccessLogs.chainId,
+      contentRegistryAddress: confidentialContextAccessLogs.contentRegistryAddress,
+      deploymentKey: confidentialContextAccessLogs.deploymentKey,
       id: confidentialContextAccessLogs.id,
       identityKey: confidentialContextAccessLogs.identityKey,
       resourceId: confidentialContextAccessLogs.resourceId,
@@ -205,6 +214,7 @@ export async function POST(request: NextRequest) {
   }
 
   const accessIdentityKey = accessLog.identityKey ?? accusedIdentityKey;
+  const accessDeploymentKey = accessLog.deploymentKey ?? deploymentScope.deploymentKey;
   const epoch = confidentialityEpochForDate(accessLog.viewedAt);
   const [root] = await db
     .select({
@@ -214,11 +224,16 @@ export async function POST(request: NextRequest) {
       anchorTxHash: confidentialityLogRoots.anchorTxHash,
       artifactHash: confidentialityLogRoots.artifactHash,
       artifactUrl: confidentialityLogRoots.artifactUrl,
+      chainId: confidentialityLogRoots.chainId,
+      contentRegistryAddress: confidentialityLogRoots.contentRegistryAddress,
+      deploymentKey: confidentialityLogRoots.deploymentKey,
       merkleRoot: confidentialityLogRoots.merkleRoot,
       publishedAt: confidentialityLogRoots.publishedAt,
     })
     .from(confidentialityLogRoots)
-    .where(eq(confidentialityLogRoots.epoch, epoch))
+    .where(
+      and(eq(confidentialityLogRoots.deploymentKey, accessDeploymentKey), eq(confidentialityLogRoots.epoch, epoch)),
+    )
     .limit(1);
 
   if (!root?.anchorTxHash) {
@@ -232,7 +247,7 @@ export async function POST(request: NextRequest) {
   const evidenceArtifact = {
     schemaVersion: BREACH_EVIDENCE_SCHEMA_VERSION,
     contentId,
-    deploymentKey: deploymentScope.deploymentKey,
+    deploymentKey: accessDeploymentKey,
     accusedIdentityKey,
     reporter,
     createdAt: now.toISOString(),
@@ -241,7 +256,10 @@ export async function POST(request: NextRequest) {
       url: evidenceUrl,
     },
     accessLog: {
+      chainId: accessLog.chainId,
       contentId: accessLog.contentId,
+      contentRegistryAddress: accessLog.contentRegistryAddress,
+      deploymentKey: accessDeploymentKey,
       id: accessLog.id,
       identityKey: accessIdentityKey,
       resourceId: accessLog.resourceId,
@@ -250,7 +268,10 @@ export async function POST(request: NextRequest) {
       viewToken: viewTokenResult.viewToken,
       walletAddress: accessLog.walletAddress,
       leafHash: accessLogLeafHash({
+        chainId: accessLog.chainId,
         contentId: accessLog.contentId,
+        contentRegistryAddress: accessLog.contentRegistryAddress,
+        deploymentKey: accessDeploymentKey,
         identityKey: accessIdentityKey,
         resourceId: accessLog.resourceId,
         resourceKind: accessLog.resourceKind,
@@ -268,6 +289,9 @@ export async function POST(request: NextRequest) {
       },
       artifactHash: root.artifactHash,
       artifactUrl: root.artifactUrl,
+      chainId: root.chainId,
+      contentRegistryAddress: root.contentRegistryAddress,
+      deploymentKey: root.deploymentKey,
       epoch,
       merkleRoot: root.merkleRoot,
       publishedAt: root.publishedAt.toISOString(),
