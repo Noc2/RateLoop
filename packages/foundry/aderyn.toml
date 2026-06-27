@@ -3,8 +3,8 @@ version = 1
 
 root = "."
 
-# Exclude test mocks from analysis
-exclude = ["/mocks/"]
+# Exclude test mocks and a library that triggers an Aderyn 0.6.8 report-rendering panic.
+exclude = ["/mocks/", "contracts/libraries/ContentRegistryDormancyLib.sol"]
 
 [detectors]
 # Exclude detectors that produce false positives for this codebase:
