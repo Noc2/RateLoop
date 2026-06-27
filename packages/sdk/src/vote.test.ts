@@ -9,6 +9,7 @@ import {
 
 test("vote helpers normalize stake amounts and frontend defaults", () => {
   assert.equal(buildStakeAmountWei(2.5), 2_500_000n);
+  assert.equal(buildStakeAmountWei(0.000001), 1n);
   assert.equal(buildStakeAmountWei(0), 0n);
   assert.equal(
     resolveFrontendCode(
@@ -21,6 +22,15 @@ test("vote helpers normalize stake amounts and frontend defaults", () => {
     resolveFrontendCode(undefined, undefined),
     "0x0000000000000000000000000000000000000000",
   );
+});
+
+test("vote helpers reject invalid stake display amounts", () => {
+  assert.throws(() => buildStakeAmountWei(Number.NaN), /finite LREP display amount/);
+  assert.throws(() => buildStakeAmountWei(Number.POSITIVE_INFINITY), /finite LREP display amount/);
+  assert.throws(() => buildStakeAmountWei(-1), /non-negative/);
+  assert.throws(() => buildStakeAmountWei(0.0000004), /0 or at least 0\.000001 LREP/);
+  assert.throws(() => buildStakeAmountWei(1.0000004), /at most 6 decimal places/);
+  assert.throws(() => buildStakeAmountWei(Number.MAX_SAFE_INTEGER), /too large/);
 });
 
 test("generateVoteSalt accepts an injected random source", () => {
@@ -61,5 +71,7 @@ test("buildCommitVoteParams returns binary RBTS commit metadata", async () => {
   assert.equal(result.targetRound > 0n, true);
   assert.equal(result.roundId, 1n);
   assert.equal(result.drandChainHash, `0x${"ab".repeat(32)}`);
+  assert.equal(result.stakeAtomicUnits, 2_500_000n);
+  assert.equal(result.stakeWei, 2_500_000n);
   assert.equal(result.frontend, "0x0000000000000000000000000000000000000000");
 });

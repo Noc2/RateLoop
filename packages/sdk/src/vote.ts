@@ -9,6 +9,9 @@ import {
 } from "@rateloop/contracts/voting";
 import { type Address } from "viem";
 
+export const LREP_ATOMIC_UNITS_PER_DISPLAY_UNIT = 1_000_000;
+const STAKE_AMOUNT_PRECISION_EPSILON = 1e-9;
+
 export interface CommitVoteParams {
   commitHash: VoteCommitHash;
   ciphertext: VoteCiphertext;
@@ -18,6 +21,8 @@ export interface CommitVoteParams {
   targetRound: bigint;
   drandChainHash: VoteDrandChainHash;
   salt: `0x${string}`;
+  stakeAtomicUnits: bigint;
+  /** @deprecated Use stakeAtomicUnits. Kept for existing commitVote integrations. */
   stakeWei: bigint;
   frontend: `0x${string}`;
   isUp: boolean;
@@ -26,7 +31,26 @@ export interface CommitVoteParams {
 }
 
 export function buildStakeAmountWei(stakeAmount: number): bigint {
-  return BigInt(Math.round(stakeAmount * 1e6));
+  if (!Number.isFinite(stakeAmount)) {
+    throw new TypeError("stakeAmount must be a finite LREP display amount");
+  }
+  if (stakeAmount < 0) {
+    throw new RangeError("stakeAmount must be non-negative");
+  }
+
+  const scaledAmount = stakeAmount * LREP_ATOMIC_UNITS_PER_DISPLAY_UNIT;
+  const roundedAtomicUnits = Math.round(scaledAmount);
+  if (!Number.isSafeInteger(roundedAtomicUnits)) {
+    throw new RangeError("stakeAmount is too large to convert safely");
+  }
+  if (stakeAmount > 0 && roundedAtomicUnits === 0) {
+    throw new RangeError("stakeAmount must be 0 or at least 0.000001 LREP");
+  }
+  if (Math.abs(scaledAmount - roundedAtomicUnits) > STAKE_AMOUNT_PRECISION_EPSILON) {
+    throw new RangeError("stakeAmount supports at most 6 decimal places");
+  }
+
+  return BigInt(roundedAtomicUnits);
 }
 
 export function resolveFrontendCode(
@@ -109,6 +133,7 @@ export async function buildCommitVoteParams(params: {
     targetRound,
     drandChainHash,
     salt,
+    stakeAtomicUnits: stakeWei,
     stakeWei,
     frontend,
     isUp: params.isUp,

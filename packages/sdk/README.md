@@ -67,12 +67,14 @@ const commitVoteArgs = [
   commit.drandChainHash,
   commit.commitHash,
   commit.ciphertext,
-  commit.stakeWei,
+  commit.stakeAtomicUnits,
   commit.frontend,
 ] as const;
 ```
 
-The SDK stays wallet-agnostic on purpose. Host apps approve `stakeWei` of LREP to the voting engine, then call `commitVote(...commitVoteArgs)` with wagmi, viem, thirdweb, or their own signing flow.
+`stakeAmount` is an LREP display amount. It must be finite, non-negative, and use at most six decimal places; `0` is allowed for advisory flows. The helper returns `stakeAtomicUnits` and the backwards-compatible `stakeWei` alias, both as 6-decimal LREP atomic units.
+
+The SDK stays wallet-agnostic on purpose. Host apps approve `stakeAtomicUnits` of LREP to the voting engine, then call `commitVote(...commitVoteArgs)` with wagmi, viem, thirdweb, or their own signing flow.
 
 ## Agent Helpers
 

@@ -205,7 +205,7 @@ const commit = await buildCommitVoteParams({
 });
 const roundContext = packVoteRoundContext(commit.roundId, commit.roundReferenceRatingBps);
 
-await lrep.write.approve(["0xVotingEngine", commit.stakeWei]);
+await lrep.write.approve(["0xVotingEngine", commit.stakeAtomicUnits]);
 await votingEngine.write.commitVote([
   42n,
   roundContext,
@@ -213,10 +213,16 @@ await votingEngine.write.commitVote([
   commit.drandChainHash,
   commit.commitHash,
   commit.ciphertext,
-  commit.stakeWei,
+  commit.stakeAtomicUnits,
   commit.frontend,
 ]);`}</code>
       </pre>
+      <p>
+        <code>stakeAmount</code> is an LREP display amount. It must be finite, non-negative, and use at most six decimal
+        places; <code>0</code> is allowed for advisory flows. <code>buildCommitVoteParams</code> returns{" "}
+        <code>stakeAtomicUnits</code> and the backwards-compatible <code>stakeWei</code> alias, both as 6-decimal LREP
+        atomic units.
+      </p>
       <p>
         Agent-hosted MCP rating uses the same local commit helper, but the SDK can prepare and confirm the wallet calls
         through <code>@rateloop/sdk/agent</code>. The hosted MCP server accepts encrypted commit material only, not

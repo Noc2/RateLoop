@@ -280,6 +280,8 @@ await agent.confirmRatingTransactions({
 });
 ```
 
+`stakeAmount` is an LREP display amount. It must be finite, non-negative, and use at most six decimal places; `0` is allowed for advisory flows. `buildCommitVoteParams` returns `stakeAtomicUnits` and the backwards-compatible `stakeWei` alias, both as 6-decimal LREP atomic units.
+
 ## More
 
 - RateLoop page: https://www.rateloop.ai/docs/sdk
