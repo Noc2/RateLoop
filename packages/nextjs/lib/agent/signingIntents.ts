@@ -1,7 +1,11 @@
 import { createHash, randomBytes } from "crypto";
 import "server-only";
 import { type Address, type Hex, isAddress } from "viem";
-import { redactSensitiveAgentRequestFields } from "~~/lib/agent/requestRedaction";
+import {
+  redactSensitiveAgentRequestFields,
+  sealSensitiveAgentRequestFields,
+  unsealSensitiveAgentRequestFields,
+} from "~~/lib/agent/requestRedaction";
 import { dbClient } from "~~/lib/db";
 import { McpToolError, callPublicRateLoopMcpTool } from "~~/lib/mcp/tools";
 import { buildAppRelativeUrl } from "~~/lib/url/appRelative";
@@ -304,6 +308,7 @@ export async function createAgentSigningIntent(params: { appBaseUrl: string; req
   const now = nowDate();
   const ttlMs = Math.min(Math.max(params.ttlMs ?? DEFAULT_SIGNING_INTENT_TTL_MS, 60_000), MAX_SIGNING_INTENT_TTL_MS);
   const expiresAt = new Date(now.getTime() + ttlMs);
+  const storedRequestBody = sealSensitiveAgentRequestFields(requestBody, token);
 
   await dbClient.execute({
     sql: `
@@ -330,7 +335,7 @@ export async function createAgentSigningIntent(params: { appBaseUrl: string; req
       payload.clientRequestId,
       paymentMode,
       walletAddress,
-      JSON.stringify(requestBody),
+      JSON.stringify(storedRequestBody),
       expiresAt,
       now,
       now,
@@ -348,7 +353,7 @@ export async function createAgentSigningIntent(params: { appBaseUrl: string; req
     operationKey: null,
     payloadHash: null,
     paymentMode,
-    requestBody,
+    requestBody: storedRequestBody,
     status: "pending",
     tokenHash: hashToken(token),
     transactionHashes: [],
@@ -392,9 +397,10 @@ export async function prepareAgentSigningIntent(params: {
   }
 
   try {
+    const requestBody = unsealSensitiveAgentRequestFields(intent.requestBody, params.token);
     const body = (await callPublicRateLoopMcpTool({
       arguments: {
-        ...intent.requestBody,
+        ...requestBody,
         paymentAuthorization: params.paymentAuthorization,
         paymentMode: intent.paymentMode,
         walletAddress,

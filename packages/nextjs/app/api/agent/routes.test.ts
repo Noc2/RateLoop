@@ -164,6 +164,18 @@ function makePublicGet(url: string, headers: Record<string, string> = {}) {
   });
 }
 
+function parseStoredJson(value: unknown) {
+  return JSON.parse(String(value)) as Record<string, unknown>;
+}
+
+function assertStoredWebhookSecretSealed(value: Record<string, unknown>, ...plaintextSecrets: string[]) {
+  const storedText = JSON.stringify(value);
+  assert.equal("webhookSecret" in value, false);
+  for (const secret of plaintextSecrets) {
+    assert.equal(storedText.includes(secret), false);
+  }
+}
+
 function configureProductionAgentLinks(appUrl?: string) {
   env.NODE_ENV = "production";
   env.VERCEL = "1";
@@ -1331,6 +1343,13 @@ test("agent signing intent route redacts webhook secrets from browser responses"
   assert.equal(readResponse.status, 200, JSON.stringify(readBody));
   assert.equal("webhookSecret" in readRequestBody, false);
   assert.equal(readRequestBody.webhookUrl, "https://agent.example/callback");
+
+  const stored = await dbModule.dbClient.execute({
+    args: [intentId],
+    sql: "SELECT request_body FROM agent_signing_intents WHERE id = ?",
+  });
+  const storedRequestBody = parseStoredJson(stored.rows[0]?.request_body);
+  assertStoredWebhookSecretSealed(storedRequestBody, "super-secret-callback-key");
 });
 
 test("agent ask handoff route rejects chains unavailable on this server", async () => {
@@ -1423,6 +1442,15 @@ test("agent ask handoff route redacts webhook secrets from browser responses", a
   assert.equal(createRequestBody.webhookUrl, "https://agent.example/callback");
   assert.equal(createOriginalRequestBody.webhookUrl, "https://agent.example/callback");
 
+  const storedCreate = await dbModule.dbClient.execute({
+    args: [handoffId],
+    sql: "SELECT request_body, original_request_body FROM agent_ask_handoff_intents WHERE id = ?",
+  });
+  const storedCreateRequestBody = parseStoredJson(storedCreate.rows[0]?.request_body);
+  const storedCreateOriginalRequestBody = parseStoredJson(storedCreate.rows[0]?.original_request_body);
+  assertStoredWebhookSecretSealed(storedCreateRequestBody, "super-secret-callback-key");
+  assertStoredWebhookSecretSealed(storedCreateOriginalRequestBody, "super-secret-callback-key");
+
   const readResponse = await handoffRoute.GET(
     makePublicGet(`https://rateloop.ai/api/agent/handoffs/${handoffId}`, {
       "x-rateloop-handoff-token": token,
@@ -1453,6 +1481,15 @@ test("agent ask handoff route redacts webhook secrets from browser responses", a
   assert.equal("webhookSecret" in patchOriginalRequestBody, false);
   assert.equal((patchRequestBody.question as Record<string, unknown>).title, "Edited pitch interest");
   assert.equal((patchOriginalRequestBody.question as Record<string, unknown>).title, "Pitch interest");
+
+  const storedPatch = await dbModule.dbClient.execute({
+    args: [handoffId],
+    sql: "SELECT request_body, original_request_body FROM agent_ask_handoff_intents WHERE id = ?",
+  });
+  const storedPatchRequestBody = parseStoredJson(storedPatch.rows[0]?.request_body);
+  const storedPatchOriginalRequestBody = parseStoredJson(storedPatch.rows[0]?.original_request_body);
+  assertStoredWebhookSecretSealed(storedPatchRequestBody, "edited-secret-callback-key");
+  assertStoredWebhookSecretSealed(storedPatchOriginalRequestBody, "super-secret-callback-key");
 });
 
 test("agent ask handoff route stages generated image bytes behind a browser link", async () => {

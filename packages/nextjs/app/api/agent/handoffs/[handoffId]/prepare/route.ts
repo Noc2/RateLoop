@@ -19,6 +19,7 @@ import {
   jsonBodyErrorResponse,
   parseJsonBody,
 } from "~~/lib/agent/http";
+import { redactSensitiveAgentRequestFields } from "~~/lib/agent/requestRedaction";
 import {
   IMAGE_UPLOAD_CHALLENGE_TITLE,
   UPLOAD_IMAGE_ACTION,
@@ -296,7 +297,7 @@ async function prepareAsk(params: {
   const handoff = await loadAgentAskHandoffByToken({ handoffId: params.handoffId, token: params.token });
   const assets = await listAgentAskHandoffAssets(handoff.id);
   const askBody = {
-    ...buildAskBodyWithUploadedHandoffImages({ assets, handoff }),
+    ...buildAskBodyWithUploadedHandoffImages({ assets, handoff, token: params.token }),
     chainId: params.chainId,
   };
   const paymentMode = params.paymentAuthorization ? "x402_authorization" : handoff.paymentMode;
@@ -363,7 +364,7 @@ async function prepareAsk(params: {
       x402AuthorizationRequest && calls.length === 0
         ? "Sign the EIP-3009 USDC authorization in the connected wallet, then prepare the handoff again with paymentAuthorization."
         : "Execute transactionPlan.calls in the connected wallet, then confirm transaction hashes.",
-    requestBody: askBody,
+    requestBody: redactSensitiveAgentRequestFields(askBody),
     x402AuthorizationRequest,
   };
 }

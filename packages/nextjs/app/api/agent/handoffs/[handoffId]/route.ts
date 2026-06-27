@@ -78,6 +78,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ h
       await updateAgentAskHandoffDraft({
         handoff,
         requestBody,
+        token,
         validationImageUrls: buildAgentAskHandoffValidationImageUrls({
           appBaseUrl,
           assets,

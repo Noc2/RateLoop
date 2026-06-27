@@ -2,7 +2,11 @@ import { normalizeInferredHeadToHeadAbRequestBody } from "@rateloop/agents/voteU
 import { createHash, randomBytes } from "crypto";
 import "server-only";
 import { type Address, type Hex, isAddress } from "viem";
-import { redactSensitiveAgentRequestFields } from "~~/lib/agent/requestRedaction";
+import {
+  redactSensitiveAgentRequestFields,
+  sealSensitiveAgentRequestFields,
+  unsealSensitiveAgentRequestFields,
+} from "~~/lib/agent/requestRedaction";
 import {
   assertProcessableImageBuffer,
   assertSupportedImageSignature,
@@ -906,6 +910,8 @@ export async function createAgentAskHandoff(params: {
   ];
   const validationImageUrls = assets.map(asset => assetImageUrl(params.appBaseUrl, asset.attachmentId, asset.sha256));
   const normalized = normalizeAgentAskHandoffRequestBody({ requestBody, validationImageUrls });
+  const storedRequestBody = sealSensitiveAgentRequestFields(requestBody, token);
+  const storedOriginalRequestBody = sealSensitiveAgentRequestFields(originalRequestBody, token);
 
   await assertAgentAskHandoffDraftSchemaReady();
 
@@ -940,8 +946,8 @@ export async function createAgentAskHandoff(params: {
       normalized.parsed.clientRequestId,
       normalized.paymentMode,
       normalized.walletAddress,
-      JSON.stringify(requestBody),
-      JSON.stringify(originalRequestBody),
+      JSON.stringify(storedRequestBody),
+      JSON.stringify(storedOriginalRequestBody),
       0,
       null,
       false,
@@ -1167,6 +1173,7 @@ export function assertHandoffCanEditDraft(handoff: AgentAskHandoffRecord) {
 export async function updateAgentAskHandoffDraft(params: {
   handoff: AgentAskHandoffRecord;
   requestBody: unknown;
+  token: string;
   validationImageUrls?: string[];
 }) {
   assertHandoffCanEditDraft(params.handoff);
@@ -1176,6 +1183,10 @@ export async function updateAgentAskHandoffDraft(params: {
     fieldName: "requestBody",
     requestBody: params.requestBody,
     validationImageUrls: params.validationImageUrls,
+  });
+  const storedRequestBody = sealSensitiveAgentRequestFields(normalized.requestBody, params.token);
+  const storedOriginalRequestBody = sealSensitiveAgentRequestFields(params.handoff.originalRequestBody, params.token, {
+    preserveEncryptedFields: true,
   });
   const now = nowDate();
   const result = await dbClient.execute({
@@ -1187,6 +1198,7 @@ export async function updateAgentAskHandoffDraft(params: {
           payment_mode = ?,
           wallet_address = ?,
           request_body = ?,
+          original_request_body = ?,
           draft_revision = draft_revision + 1,
           edited_by_user = true,
           prepared_draft_revision = NULL,
@@ -1204,7 +1216,8 @@ export async function updateAgentAskHandoffDraft(params: {
       normalized.parsed.clientRequestId,
       normalized.paymentMode,
       normalized.walletAddress,
-      JSON.stringify(normalized.requestBody),
+      JSON.stringify(storedRequestBody),
+      JSON.stringify(storedOriginalRequestBody),
       now,
       params.handoff.id,
     ],
@@ -1237,12 +1250,13 @@ export async function updateAgentAskHandoffAsset(params: {
 export function buildAskBodyWithUploadedHandoffImages(params: {
   assets: AgentAskHandoffAssetRecord[];
   handoff: AgentAskHandoffRecord;
+  token: string;
 }) {
   const imageUrls = params.assets.map(asset => asset.imageUrl).filter((url): url is string => Boolean(url));
   if (params.assets.length > 0 && imageUrls.length !== params.assets.length) {
     throw new AgentAskHandoffError("All staged images must be uploaded before preparing the ask.");
   }
-  return cloneWithImageUrls(params.handoff.requestBody, imageUrls);
+  return cloneWithImageUrls(unsealSensitiveAgentRequestFields(params.handoff.requestBody, params.token), imageUrls);
 }
 
 export function assertHandoffCanPrepare(handoff: AgentAskHandoffRecord) {
