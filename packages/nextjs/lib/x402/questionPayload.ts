@@ -40,11 +40,9 @@ function normalizeOrigin(value: string | null | undefined) {
 function serverX402QuestionParserOptions(): X402QuestionParserOptions {
   const configuredAppOrigin = normalizeOrigin(getTrustedRateLoopAppUrl());
   return {
-    allowedRateLoopAttachmentOrigins: [
-      "https://rateloop.ai",
-      "https://www.rateloop.ai",
-      configuredAppOrigin,
-    ].filter((origin): origin is string => Boolean(origin)),
+    allowedRateLoopAttachmentOrigins: ["https://rateloop.ai", "https://www.rateloop.ai", configuredAppOrigin].filter(
+      (origin): origin is string => Boolean(origin),
+    ),
     allowLocalhostAttachmentOrigins: process.env.NODE_ENV !== "production" || isLocalE2EProductionBuildEnabled(),
     questionMetadataBaseUrl: process.env.NEXT_PUBLIC_PONDER_URL ?? process.env.NEXT_PUBLIC_APP_URL,
   };

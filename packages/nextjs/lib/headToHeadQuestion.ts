@@ -8,9 +8,7 @@ import {
 } from "@rateloop/agents/voteUi";
 import { getContentTitleValidationError } from "~~/lib/moderation/submissionValidation";
 
-export {
-  isHeadToHeadAbAutoTitle,
-} from "@rateloop/agents/voteUi";
+export { isHeadToHeadAbAutoTitle } from "@rateloop/agents/voteUi";
 
 export type HeadToHeadTitleMode = "auto" | "manual";
 

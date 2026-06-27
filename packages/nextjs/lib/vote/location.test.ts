@@ -14,9 +14,12 @@ test("switching categories clears the requested content query params", () => {
 
 test("switching feed views clears requested content scope without changing the active route filters", () => {
   assert.equal(
-    buildVoteLocation("https://www.rateloop.ai/rate?content=82&chainId=84532&deploymentKey=84532%3A0xabc&q=ed-sheeran#youtube", {
-      contentId: null,
-    }),
+    buildVoteLocation(
+      "https://www.rateloop.ai/rate?content=82&chainId=84532&deploymentKey=84532%3A0xabc&q=ed-sheeran#youtube",
+      {
+        contentId: null,
+      },
+    ),
     "https://www.rateloop.ai/rate?q=ed-sheeran#youtube",
   );
 });

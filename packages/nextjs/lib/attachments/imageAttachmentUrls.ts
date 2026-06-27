@@ -52,10 +52,7 @@ function shouldAllowLocalhostOrigins(options: UploadedImageAttachmentUrlOptions)
 function getDefaultImageAttachmentAllowedOrigins() {
   return [
     ...new Set(
-      [
-        ...DEFAULT_IMAGE_ATTACHMENT_ORIGINS,
-        getBrowserOrigin(),
-      ].filter((origin): origin is string => Boolean(origin)),
+      [...DEFAULT_IMAGE_ATTACHMENT_ORIGINS, getBrowserOrigin()].filter((origin): origin is string => Boolean(origin)),
     ),
   ];
 }

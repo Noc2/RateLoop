@@ -1,4 +1,4 @@
-import { VOTE_COOLDOWN_SECONDS, getVoteCooldownRemainingSeconds } from "./cooldown";
+import { getVoteCooldownRemainingSeconds } from "./cooldown";
 import { AdvisoryVoteRecorderAbi, RoundVotingEngineAbi } from "@rateloop/contracts/abis";
 import { type Address, type Hex, zeroAddress } from "viem";
 import { type PublicClient } from "viem";

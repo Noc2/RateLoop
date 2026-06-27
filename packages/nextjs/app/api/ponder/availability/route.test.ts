@@ -1,5 +1,5 @@
-import { GET } from "./route";
 import { NextRequest } from "next/server";
+import { GET } from "./route";
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
@@ -202,6 +202,8 @@ test("ponder availability route rate limits repeated probes", async () => {
     assert.equal(response.status, 400);
   }
 
-  const limited = await GET(makeAvailabilityRequest("http://localhost/api/ponder/availability?deploymentKey=unsupported"));
+  const limited = await GET(
+    makeAvailabilityRequest("http://localhost/api/ponder/availability?deploymentKey=unsupported"),
+  );
   assert.equal(limited.status, 429);
 });

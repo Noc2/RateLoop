@@ -66,10 +66,7 @@ function normalizeRateContentDeploymentKey(deploymentKey: RateContentHrefOptions
   return normalizedDeploymentKey ? normalizedDeploymentKey : undefined;
 }
 
-export function buildRateContentHref(
-  contentId: string | number | bigint,
-  options?: RateContentHrefOptions,
-) {
+export function buildRateContentHref(contentId: string | number | bigint, options?: RateContentHrefOptions) {
   return buildRouteWithSearchParams(RATE_ROUTE, {
     content: contentId.toString(),
     [RATE_CHAIN_ID_PARAM]: normalizeRateContentChainId(options?.chainId),

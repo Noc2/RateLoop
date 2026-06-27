@@ -145,7 +145,9 @@ test("parses local details ids only from exact public details URLs", () => {
     null,
   );
   assert.equal(
-    parseQuestionDetailsIdFromDetailsUrl("https://user:pass@www.rateloop.ai/api/attachments/details/det_questiondetails01"),
+    parseQuestionDetailsIdFromDetailsUrl(
+      "https://user:pass@www.rateloop.ai/api/attachments/details/det_questiondetails01",
+    ),
     null,
   );
   assert.equal(
