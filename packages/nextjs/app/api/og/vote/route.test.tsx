@@ -245,8 +245,9 @@ test("rate-limits vote social cards before fetching share data", async () => {
   assert.equal(fetched, false);
 });
 
-test("rate-limits vote social cards across varying content params before fetching share data", async () => {
+test("rate-limits vote social cards across varying content params before fetching share data", async t => {
   let fetchCount = 0;
+  t.mock.method(Date, "now", () => Date.UTC(2026, 5, 27, 12, 0, 0));
   __setRateLimitStoreForTests(createCountingRateLimitStore());
   globalThis.fetch = (async () => {
     fetchCount++;

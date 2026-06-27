@@ -20,8 +20,9 @@ async function makeTempDir() {
 }
 
 function lockEnv(lockDir, overrides = {}) {
+  const { RATELOOP_WORKSPACE_DIST_LOCK_HELD: _lockHeld, ...baseEnv } = process.env;
   return {
-    ...process.env,
+    ...baseEnv,
     RATELOOP_WORKSPACE_DIST_LOCK_DIR: lockDir,
     RATELOOP_WORKSPACE_DIST_LOCK_HEARTBEAT_MS: "25",
     RATELOOP_WORKSPACE_DIST_LOCK_RETRY_MS: "20",
