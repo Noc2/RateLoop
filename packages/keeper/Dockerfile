@@ -26,6 +26,7 @@ RUN --mount=type=cache,id=rateloop-keeper-yarn-cache,target=/app/.yarn/cache \
 
 COPY scripts/clean-package-dist.mjs ./scripts/clean-package-dist.mjs
 COPY scripts/fix-esm-extensions.mjs ./scripts/fix-esm-extensions.mjs
+COPY scripts/with-workspace-dist-lock.mjs ./scripts/with-workspace-dist-lock.mjs
 COPY scripts/write-cjs-package-json.mjs ./scripts/write-cjs-package-json.mjs
 COPY packages/contracts/tsconfig.json ./packages/contracts/tsconfig.json
 COPY packages/contracts/tsconfig.cjs.json ./packages/contracts/tsconfig.cjs.json

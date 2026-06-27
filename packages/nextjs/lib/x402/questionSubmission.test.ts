@@ -600,6 +600,7 @@ test("prepareAgentWalletQuestionSubmissionRequest plans LREP bounty wallet calls
     bounty: { ...basePayload.bounty, asset: "LREP" as const },
   };
   const walletAddress = "0x00000000000000000000000000000000000000aa" as const;
+  const transactionHash = `0x${"8".repeat(64)}` as const;
 
   const prepared = await prepareAgentWalletQuestionSubmissionRequest({
     agentId: "agent-wallet",
@@ -650,6 +651,54 @@ test("prepareAgentWalletQuestionSubmissionRequest plans LREP bounty wallet calls
   };
   assert.equal(statusBody.bounty.asset, "LREP");
   assert.equal(statusBody.payment.asset, TEST_CONFIG.lrepAddress);
+  const expectedContentHash = getExpectedContentHash(record);
+
+  setDefaultTestOverrides({
+    waitForSuccessfulReceipt: async (_publicClient, hash) =>
+      buildReceipt(hash, [
+        ...buildSubmittedQuestionLogs({
+          address: TEST_CONFIG.contentRegistryAddress,
+          contentHash: expectedContentHash,
+          contentId: 123n,
+          payload,
+          submitter: walletAddress,
+        }),
+      ]),
+  });
+
+  const confirmed = await confirmAgentWalletQuestionSubmissionRequest({
+    operationKey: record.operationKey,
+    transactionHashes: [transactionHash],
+  });
+  const confirmedBody = confirmed.body as {
+    bounty: { asset: string };
+    contentId: string;
+    payment: { asset: string };
+    rewardPoolId: string;
+    status: string;
+  };
+
+  assert.equal(confirmed.status, 200);
+  assert.equal(confirmedBody.status, "submitted");
+  assert.equal(confirmedBody.bounty.asset, "LREP");
+  assert.equal(confirmedBody.payment.asset, TEST_CONFIG.lrepAddress);
+  assert.equal(confirmedBody.contentId, "123");
+  assert.equal(confirmedBody.rewardPoolId, "77");
+
+  const repeated = await prepareAgentWalletQuestionSubmissionRequest({
+    agentId: "agent-wallet",
+    payload,
+    walletAddress,
+  });
+  const repeatedBody = repeated.body as {
+    bounty: { asset: string };
+    payment: { asset: string };
+    status: string;
+  };
+  assert.equal(repeated.status, 200);
+  assert.equal(repeatedBody.status, "submitted");
+  assert.equal(repeatedBody.bounty.asset, "LREP");
+  assert.equal(repeatedBody.payment.asset, TEST_CONFIG.lrepAddress);
 });
 
 test("prepareAgentWalletQuestionSubmissionRequest stores optional feedback bonus metadata", async () => {

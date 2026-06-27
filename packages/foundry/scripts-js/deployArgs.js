@@ -148,7 +148,10 @@ export function isDeployKeystoreAccountName(value) {
   return typeof value === "string" && DEPLOY_KEYSTORE_ACCOUNT_RE.test(value);
 }
 
-export function assertDeployKeystoreAccountName(value, label = "keystore name") {
+export function assertDeployKeystoreAccountName(
+  value,
+  label = "keystore name"
+) {
   if (!isDeployKeystoreAccountName(value)) {
     throw new Error(
       `${label} must be 1-128 characters, start with a letter or number, and use only letters, numbers, dots, underscores, or dashes.`

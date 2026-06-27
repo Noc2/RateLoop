@@ -137,8 +137,7 @@ test("parseDeployArgs rejects unsafe live keystore names", () => {
   ]) {
     assert.equal(isDeployKeystoreAccountName(value), false);
     assert.throws(
-      () =>
-        parseDeployArgs(["--network", "baseSepolia", "--keystore", value]),
+      () => parseDeployArgs(["--network", "baseSepolia", "--keystore", value]),
       /(--keystore must be 1-128 characters|Missing value for --keystore)/
     );
     assert.throws(
