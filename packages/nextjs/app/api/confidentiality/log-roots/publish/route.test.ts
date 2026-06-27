@@ -72,6 +72,45 @@ test("GET is method-not-allowed and does not publish log-root artifacts", async 
   assert.equal(rows.rowCount, 0);
 });
 
+test("POST rate-limits bad log-root job secrets before auth", async () => {
+  let response: Response | null = null;
+  for (let index = 1; index <= 21; index++) {
+    response = await logRootPublishRoute.POST(
+      new NextRequest("https://rateloop.ai/api/confidentiality/log-roots/publish", {
+        body: "{}",
+        headers: new Headers({
+          authorization: "Bearer bad-secret",
+          "content-type": "application/json",
+        }),
+        method: "POST",
+      }),
+    );
+    if (index <= 20) {
+      assert.equal(response.status, 401);
+    }
+  }
+
+  assert.equal(response?.status, 429);
+  assert.equal((await response?.json())?.code, "rate_limit_exceeded");
+});
+
+test("cron adapter rate-limits bad log-root job secrets before auth", async () => {
+  let response: Response | null = null;
+  for (let index = 1; index <= 21; index++) {
+    response = await logRootPublishCronRoute.GET(
+      new NextRequest("https://rateloop.ai/api/confidentiality/log-roots/publish/cron", {
+        headers: new Headers({ authorization: "Bearer bad-secret" }),
+      }),
+    );
+    if (index <= 20) {
+      assert.equal(response.status, 401);
+    }
+  }
+
+  assert.equal(response?.status, 429);
+  assert.equal((await response?.json())?.code, "rate_limit_exceeded");
+});
+
 test("POST publishes log-root artifacts with Vercel cron bearer auth", async () => {
   const response = await logRootPublishRoute.POST(
     new NextRequest("https://rateloop.ai/api/confidentiality/log-roots/publish", {
@@ -136,7 +175,7 @@ test("cron adapter delegates Vercel GET requests to POST publication auth", asyn
 });
 
 test("Vercel cron targets the log-root publish cron adapter", () => {
-  const vercelConfig = JSON.parse(readFileSync("packages/nextjs/vercel.json", "utf8")) as {
+  const vercelConfig = JSON.parse(readFileSync(new URL("../../../../../vercel.json", import.meta.url), "utf8")) as {
     crons?: Array<{ path?: string; schedule?: string }>;
   };
   const logRootCrons = (vercelConfig.crons ?? []).filter(cron => cron.path?.includes("log-roots/publish"));

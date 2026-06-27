@@ -54,6 +54,45 @@ after(() => {
   restoreEnv("NODE_ENV", originalNodeEnv);
 });
 
+test("GET rate-limits bad disclosure reconciliation secrets before auth", async () => {
+  let response: Response | null = null;
+  for (let index = 1; index <= 21; index++) {
+    response = await disclosureReconcileRoute.GET(
+      new NextRequest("https://rateloop.ai/api/confidentiality/disclosure/reconcile", {
+        headers: new Headers({ authorization: "Bearer bad-secret" }),
+      }),
+    );
+    if (index <= 20) {
+      assert.equal(response.status, 401);
+    }
+  }
+
+  assert.equal(response?.status, 429);
+  assert.equal((await response?.json())?.code, "rate_limit_exceeded");
+});
+
+test("POST rate-limits bad disclosure reconciliation secrets before auth", async () => {
+  let response: Response | null = null;
+  for (let index = 1; index <= 21; index++) {
+    response = await disclosureReconcileRoute.POST(
+      new NextRequest("https://rateloop.ai/api/confidentiality/disclosure/reconcile", {
+        body: JSON.stringify({ contentIds: ["42"] }),
+        headers: new Headers({
+          authorization: "Bearer bad-secret",
+          "content-type": "application/json",
+        }),
+        method: "POST",
+      }),
+    );
+    if (index <= 20) {
+      assert.equal(response.status, 401);
+    }
+  }
+
+  assert.equal(response?.status, 429);
+  assert.equal((await response?.json())?.code, "rate_limit_exceeded");
+});
+
 test("GET reconciles due disclosures with Vercel cron bearer auth", async () => {
   const settledAt = new Date("2026-06-11T12:34:56.000Z");
   await confidentiality.upsertQuestionConfidentialityFromMetadata({

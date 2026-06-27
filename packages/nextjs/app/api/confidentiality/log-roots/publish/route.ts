@@ -28,11 +28,13 @@ export function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  const limited = await checkRateLimit(request, RATE_LIMIT, {
+    extraKeyParts: ["preauth"],
+  });
+  if (limited) return limited;
+
   const unauthorized = requireConfidentialityJobAuth(request);
   if (unauthorized) return unauthorized;
-
-  const limited = await checkRateLimit(request, RATE_LIMIT);
-  if (limited) return limited;
 
   const body = await parseJsonBody(request).catch(() => ({}));
   if (!isJsonObjectBody(body)) return jsonBodyErrorResponse(body);
