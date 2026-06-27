@@ -670,12 +670,35 @@ test("prepareAgentWalletQuestionSubmissionRequest plans LREP bounty wallet calls
     operationKey: record.operationKey,
     transactionHashes: [transactionHash],
   });
-  const confirmedBody = confirmed.body as { contentId: string; rewardPoolId: string; status: string };
+  const confirmedBody = confirmed.body as {
+    bounty: { asset: string };
+    contentId: string;
+    payment: { asset: string };
+    rewardPoolId: string;
+    status: string;
+  };
 
   assert.equal(confirmed.status, 200);
   assert.equal(confirmedBody.status, "submitted");
+  assert.equal(confirmedBody.bounty.asset, "LREP");
+  assert.equal(confirmedBody.payment.asset, TEST_CONFIG.lrepAddress);
   assert.equal(confirmedBody.contentId, "123");
   assert.equal(confirmedBody.rewardPoolId, "77");
+
+  const repeated = await prepareAgentWalletQuestionSubmissionRequest({
+    agentId: "agent-wallet",
+    payload,
+    walletAddress,
+  });
+  const repeatedBody = repeated.body as {
+    bounty: { asset: string };
+    payment: { asset: string };
+    status: string;
+  };
+  assert.equal(repeated.status, 200);
+  assert.equal(repeatedBody.status, "submitted");
+  assert.equal(repeatedBody.bounty.asset, "LREP");
+  assert.equal(repeatedBody.payment.asset, TEST_CONFIG.lrepAddress);
 });
 
 test("prepareAgentWalletQuestionSubmissionRequest stores optional feedback bonus metadata", async () => {

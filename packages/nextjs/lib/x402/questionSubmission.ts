@@ -2773,6 +2773,10 @@ function x402QuestionSubmissionStatusBody(params: {
   record: X402QuestionSubmissionRecord | null;
 }) {
   const transactionHashes = parseStoredTransactionHashes(params.record?.transactionHashes ?? null);
+  const rewardTokenAddress =
+    params.record?.paymentAsset ??
+    submissionRewardTokenAddress(params.config, params.payload.bounty.asset) ??
+    params.config.usdcAddress;
   return {
     bounty: {
       amount: params.payload.bounty.amount.toString(),
@@ -2794,7 +2798,7 @@ function x402QuestionSubmissionStatusBody(params: {
     roundConfig: serializeQuestionRoundConfig(params.payload.roundConfig),
     payment: {
       amount: params.payload.bounty.amount.toString(),
-      asset: submissionRewardTokenAddress(params.config, params.payload.bounty.asset) ?? params.config.usdcAddress,
+      asset: rewardTokenAddress,
     },
     rewardPoolId: params.record?.rewardPoolId ?? null,
     status: params.record?.status ?? "not_found",
