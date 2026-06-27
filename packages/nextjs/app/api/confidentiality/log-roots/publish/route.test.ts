@@ -29,6 +29,13 @@ let logRootPublishRoute: LogRootPublishRoute;
 let logRootPublishCronRoute: LogRootPublishCronRoute;
 let logRootArtifactRoute: LogRootArtifactRoute;
 
+const BAD_SECRET_RATE_LIMIT_HEADERS = {
+  accept: "application/json",
+  "accept-language": "en-US",
+  authorization: "Bearer bad-secret",
+  "user-agent": "rateloop-log-root-test",
+};
+
 function restoreEnv(name: keyof NodeJS.ProcessEnv, value: string | undefined) {
   if (value === undefined) {
     delete env[name];
@@ -82,7 +89,7 @@ test("POST rate-limits bad log-root job secrets before auth", async () => {
       new NextRequest("https://rateloop.ai/api/confidentiality/log-roots/publish", {
         body: "{}",
         headers: new Headers({
-          authorization: "Bearer bad-secret",
+          ...BAD_SECRET_RATE_LIMIT_HEADERS,
           "content-type": "application/json",
         }),
         method: "POST",
@@ -102,7 +109,7 @@ test("cron adapter rate-limits bad log-root job secrets before auth", async () =
   for (let index = 1; index <= 21; index++) {
     response = await logRootPublishCronRoute.GET(
       new NextRequest("https://rateloop.ai/api/confidentiality/log-roots/publish/cron", {
-        headers: new Headers({ authorization: "Bearer bad-secret" }),
+        headers: new Headers(BAD_SECRET_RATE_LIMIT_HEADERS),
       }),
     );
     if (index <= 20) {
