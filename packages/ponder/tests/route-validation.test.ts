@@ -1231,6 +1231,52 @@ describe("registerContentRoutes", () => {
     }
   });
 
+  it("rejects oversized metadata sync bodies before JSON parsing", async () => {
+    const originalNodeEnv = process.env.NODE_ENV;
+    const originalPonderNetwork = process.env.PONDER_NETWORK;
+    const originalAllowOpen = process.env.PONDER_METADATA_SYNC_ALLOW_OPEN;
+    process.env.NODE_ENV = "test";
+    process.env.PONDER_NETWORK = "hardhat";
+    process.env.PONDER_METADATA_SYNC_ALLOW_OPEN = "true";
+
+    try {
+      mockPonderModules([]);
+      const { registerContentRoutes } = await import(
+        "../src/api/routes/content-routes.js"
+      );
+
+      const app = new Hono();
+      registerContentRoutes(app);
+      const response = await app.request("http://localhost/question-metadata", {
+        body: JSON.stringify({ padding: "x".repeat(1024 * 1024) }),
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      });
+
+      expect(response.status).toBe(413);
+      await expect(response.json()).resolves.toEqual({
+        error: "Request body is too large.",
+      });
+    } finally {
+      if (originalNodeEnv === undefined) {
+        delete process.env.NODE_ENV;
+      } else {
+        process.env.NODE_ENV = originalNodeEnv;
+      }
+      if (originalPonderNetwork === undefined) {
+        delete process.env.PONDER_NETWORK;
+      } else {
+        process.env.PONDER_NETWORK = originalPonderNetwork;
+      }
+      if (originalAllowOpen === undefined) {
+        delete process.env.PONDER_METADATA_SYNC_ALLOW_OPEN;
+      } else {
+        process.env.PONDER_METADATA_SYNC_ALLOW_OPEN = originalAllowOpen;
+      }
+      vi.resetModules();
+    }
+  });
+
   it("rejects metadata sync writes for a different deployment key", async () => {
     const originalDatabaseUrl = process.env.DATABASE_URL;
     const originalNodeEnv = process.env.NODE_ENV;

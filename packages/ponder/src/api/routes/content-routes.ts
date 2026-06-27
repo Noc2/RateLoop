@@ -75,6 +75,7 @@ type AudienceColumn = Parameters<typeof sql>[1];
 
 const CONTENT_STATUS_ACTIVE = 0;
 const MAX_TARGET_AUDIENCE_METADATA_ITEMS = 25;
+const METADATA_SYNC_JSON_BODY_MAX_BYTES = 1024 * 1024;
 const BYTES32_PATTERN = /^0x[a-fA-F0-9]{64}$/;
 let metadataUpdatePool: Pool | null = null;
 
@@ -710,6 +711,58 @@ function isJsonRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+const JSON_BODY_TOO_LARGE = Symbol("json_body_too_large");
+const JSON_BODY_INVALID = Symbol("json_body_invalid");
+
+function readContentLengthBytes(c: Context) {
+  const value = c.req.header("content-length");
+  if (!value) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+}
+
+async function readJsonBodyWithLimit(c: Context, maxBytes: number) {
+  const contentLengthBytes = readContentLengthBytes(c);
+  if (contentLengthBytes !== null && contentLengthBytes > maxBytes) {
+    return JSON_BODY_TOO_LARGE;
+  }
+
+  const body = c.req.raw.body;
+  if (!body) return JSON_BODY_INVALID;
+
+  const reader = body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      totalBytes += value.byteLength;
+      if (totalBytes > maxBytes) {
+        await reader.cancel().catch(() => {});
+        return JSON_BODY_TOO_LARGE;
+      }
+      chunks.push(value);
+    }
+  } catch {
+    return JSON_BODY_INVALID;
+  }
+
+  const bytes = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+
+  try {
+    return JSON.parse(new TextDecoder().decode(bytes));
+  } catch {
+    return JSON_BODY_INVALID;
+  }
+}
+
 function readDeploymentKey(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim().toLowerCase() : null;
 }
@@ -1047,10 +1100,11 @@ export function registerContentRoutes(app: ApiApp) {
       );
     }
 
-    let body: unknown;
-    try {
-      body = await c.req.json();
-    } catch {
+    const body = await readJsonBodyWithLimit(c, METADATA_SYNC_JSON_BODY_MAX_BYTES);
+    if (body === JSON_BODY_TOO_LARGE) {
+      return c.json({ error: "Request body is too large." }, 413);
+    }
+    if (body === JSON_BODY_INVALID) {
       return c.json({ error: "Invalid JSON body." }, 400);
     }
     const bodyRecord = isJsonRecord(body) ? body : null;
