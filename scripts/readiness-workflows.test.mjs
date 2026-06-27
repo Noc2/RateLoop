@@ -191,5 +191,7 @@ test("Keeper Docker runtime uses built output and production dependencies", () =
     /yarn workspaces focus @rateloop\/keeper --production/,
   );
   assert.match(dockerfile, /CMD \["yarn", "start:built-dist"\]/);
+  assert.match(dockerfile, /path:'\/live'/);
+  assert.doesNotMatch(dockerfile, /path:'\/health'/);
   assert.doesNotMatch(dockerfile, /CMD \["yarn", "start:built-workspace-deps"\]/);
 });

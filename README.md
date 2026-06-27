@@ -192,7 +192,8 @@ docker run --env-file packages/keeper/.env.local -e METRICS_BIND_ADDRESS=0.0.0.0
 **Monitoring:**
 
 - Prometheus metrics: `http://localhost:9090/metrics`
-- Health check: `http://localhost:9090/health`
+- Liveness check: `http://localhost:9090/live`
+- Readiness check: `http://localhost:9090/health`
 
 **Redundancy:** Run 2+ instances with different wallets and `KEEPER_STARTUP_JITTER_MS=15000` to stagger execution. Duplicate transactions revert harmlessly.
 
