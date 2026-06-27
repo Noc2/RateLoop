@@ -1,4 +1,3 @@
-import { ROUND_STATE } from "@rateloop/contracts/protocol";
 import {
   approveLREP,
   claimCancelledRoundRefund,
@@ -13,9 +12,11 @@ import {
   waitForPonderSync,
 } from "../helpers/admin-helpers";
 import { ANVIL_ACCOUNTS, DEPLOYER } from "../helpers/anvil-accounts";
+import { ensureLocalHumanCredentials } from "../helpers/baseline-seed";
 import { CONTRACT_ADDRESSES } from "../helpers/contracts";
 import { getContentById, getContentList, ponderGet } from "../helpers/ponder-api";
 import { expect, test } from "@playwright/test";
+import { ROUND_STATE } from "@rateloop/contracts/protocol";
 
 test.describe("RevealFailed lifecycle", () => {
   test.describe.configure({ mode: "serial" });
@@ -33,6 +34,7 @@ test.describe("RevealFailed lifecycle", () => {
   test.beforeAll(async () => {
     const ok = await setTestConfig(VOTING_ENGINE, DEPLOYER.address, EPOCH_DURATION);
     if (!ok) throw new Error("Failed to set test config");
+    await ensureLocalHumanCredentials();
   });
 
   test("reveal-failed rounds refund only revealed voters", async () => {
