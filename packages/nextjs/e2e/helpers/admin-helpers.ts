@@ -67,6 +67,41 @@ const ROUND_CORE_ABI = [
       { name: "totalStake", type: "uint64" },
       { name: "thresholdReachedAt", type: "uint48" },
       { name: "settledAt", type: "uint48" },
+      { name: "upWins", type: "uint8" },
+    ],
+    stateMutability: "view",
+  },
+] as const;
+const ROUND_COMMIT_KEY_ABI = [
+  {
+    name: "getRoundCommitKey",
+    type: "function",
+    inputs: [
+      { name: "contentId", type: "uint256" },
+      { name: "roundId", type: "uint256" },
+      { name: "index", type: "uint256" },
+    ],
+    outputs: [{ name: "", type: "bytes32" }],
+    stateMutability: "view",
+  },
+] as const;
+const COMMIT_CORE_ABI = [
+  {
+    name: "commitCore",
+    type: "function",
+    inputs: [
+      { name: "contentId", type: "uint256" },
+      { name: "roundId", type: "uint256" },
+      { name: "commitKey", type: "bytes32" },
+    ],
+    outputs: [
+      { name: "voter", type: "address" },
+      { name: "stakeAmount", type: "uint64" },
+      { name: "frontend", type: "address" },
+      { name: "revealableAfter", type: "uint48" },
+      { name: "revealed", type: "bool" },
+      { name: "isUp", type: "bool" },
+      { name: "epochIndex", type: "uint8" },
     ],
     stateMutability: "view",
   },
@@ -1785,6 +1820,100 @@ async function readRoundStateLatest(
   return Number(BigInt(`0x${result.slice(66, 130)}`));
 }
 
+async function readRoundVoteCountLatest(contractAddress: string, contentId: bigint, roundId: bigint): Promise<number> {
+  const { decodeFunctionResult, encodeFunctionData } = await import("viem");
+  const data = encodeFunctionData({
+    abi: ROUND_CORE_ABI,
+    functionName: "roundCore",
+    args: [contentId, roundId],
+  });
+  const result = await rpcRequest<`0x${string}`>("eth_call", [{ to: contractAddress, data }, "latest"]);
+  if (!result) {
+    throw new Error(`readRoundVoteCount failed for content=${contentId.toString()} round=${roundId.toString()}`);
+  }
+
+  const round = decodeFunctionResult({
+    abi: ROUND_CORE_ABI,
+    functionName: "roundCore",
+    data: result,
+  }) as unknown as readonly [bigint, number, bigint | number];
+  return Number(round[2]);
+}
+
+async function readRoundCommitKeyLatest(
+  contractAddress: string,
+  contentId: bigint,
+  roundId: bigint,
+  index: number,
+): Promise<`0x${string}`> {
+  const { decodeFunctionResult, encodeFunctionData } = await import("viem");
+  const data = encodeFunctionData({
+    abi: ROUND_COMMIT_KEY_ABI,
+    functionName: "getRoundCommitKey",
+    args: [contentId, roundId, BigInt(index)],
+  });
+  const result = await rpcRequest<`0x${string}`>("eth_call", [{ to: contractAddress, data }, "latest"]);
+  if (!result) {
+    throw new Error(
+      `readRoundCommitKey failed for content=${contentId.toString()} round=${roundId.toString()} index=${index}`,
+    );
+  }
+
+  return decodeFunctionResult({
+    abi: ROUND_COMMIT_KEY_ABI,
+    functionName: "getRoundCommitKey",
+    data: result,
+  }) as `0x${string}`;
+}
+
+async function readCommitCleanupStateLatest(
+  contractAddress: string,
+  contentId: bigint,
+  roundId: bigint,
+  commitKey: `0x${string}`,
+): Promise<{ stakeAmount: bigint; revealed: boolean }> {
+  const { decodeFunctionResult, encodeFunctionData } = await import("viem");
+  const data = encodeFunctionData({
+    abi: COMMIT_CORE_ABI,
+    functionName: "commitCore",
+    args: [contentId, roundId, commitKey],
+  });
+  const result = await rpcRequest<`0x${string}`>("eth_call", [{ to: contractAddress, data }, "latest"]);
+  if (!result) {
+    throw new Error(`readCommitCleanupState failed for content=${contentId.toString()} round=${roundId.toString()}`);
+  }
+
+  const commit = decodeFunctionResult({
+    abi: COMMIT_CORE_ABI,
+    functionName: "commitCore",
+    data: result,
+  }) as unknown as readonly [string, bigint | number, string, bigint | number, boolean];
+  return { stakeAmount: BigInt(commit[1]), revealed: commit[4] };
+}
+
+async function readUnprocessedUnrevealedStakeInRangeLatest(
+  contractAddress: string,
+  contentId: bigint,
+  roundId: bigint,
+  startIndex: number,
+  count: number,
+): Promise<bigint> {
+  const voteCount = await readRoundVoteCountLatest(contractAddress, contentId, roundId);
+  const start = Math.max(0, startIndex);
+  if (start >= voteCount) return 0n;
+
+  const end = count === 0 ? voteCount : Math.min(voteCount, start + Math.max(0, count));
+  let unprocessedStake = 0n;
+  for (let index = start; index < end; index++) {
+    const commitKey = await readRoundCommitKeyLatest(contractAddress, contentId, roundId, index);
+    const commit = await readCommitCleanupStateLatest(contractAddress, contentId, roundId, commitKey);
+    if (!commit.revealed) {
+      unprocessedStake += commit.stakeAmount;
+    }
+  }
+  return unprocessedStake;
+}
+
 async function readRoundLifecycleStateLatest(
   contractAddress: string,
   contentId: bigint,
@@ -1956,6 +2085,15 @@ export async function processUnrevealedVotes(
   contractAddress: string,
 ): Promise<boolean> {
   const { encodeFunctionData } = await import("viem");
+  const contentIdBigInt = BigInt(contentId);
+  const roundIdBigInt = BigInt(roundId);
+  const beforeUnprocessedStake = await readUnprocessedUnrevealedStakeInRangeLatest(
+    contractAddress,
+    contentIdBigInt,
+    roundIdBigInt,
+    startIndex,
+    count,
+  ).catch(() => null);
   const data = encodeFunctionData({
     abi: [
       {
@@ -1972,9 +2110,24 @@ export async function processUnrevealedVotes(
       },
     ],
     functionName: "processUnrevealedVotes",
-    args: [BigInt(contentId), BigInt(roundId), BigInt(startIndex), BigInt(count)],
+    args: [contentIdBigInt, roundIdBigInt, BigInt(startIndex), BigInt(count)],
   });
-  return sendTx(fromAddress, contractAddress, data);
+  const result = await sendTxDetailed(fromAddress, contractAddress, data);
+  if (result.success) {
+    return true;
+  }
+  if (beforeUnprocessedStake === null || beforeUnprocessedStake === 0n) {
+    return false;
+  }
+
+  const afterUnprocessedStake = await readUnprocessedUnrevealedStakeInRangeLatest(
+    contractAddress,
+    contentIdBigInt,
+    roundIdBigInt,
+    startIndex,
+    count,
+  ).catch(() => null);
+  return afterUnprocessedStake !== null && afterUnprocessedStake < beforeUnprocessedStake;
 }
 
 /**
