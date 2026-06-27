@@ -33,6 +33,11 @@ Reviewed surfaces included:
     suggestions.
   - `yarn npm audit --recursive --environment development` -> no audit
     suggestions.
+- After the initial report commit was pushed, GitHub's remote post-receive
+  warning reported 14 open Dependabot alerts on the default branch: 3 high, 7
+  moderate, and 4 low. The current `gh` token could view the public repository
+  metadata but received `404` from the Dependabot alerts API, so the individual
+  package/advisory details could not be verified from this environment.
 - Searched tracked content for likely production secrets and long private-key
   shaped values. The hits reviewed were placeholders, tests, deterministic local
   keys, generated example hashes, or runtime variable names; no high-confidence
@@ -42,9 +47,15 @@ Reviewed surfaces included:
 
 ## Executive Summary
 
-No critical or high-severity non-contract issue was found. One current medium
-issue and three low-severity hardening issues remain actionable. No finding in
-this report requires or suggests redeploying production smart contracts.
+No critical or high-severity source-level non-contract issue was found in the
+reviewed code paths. One current medium issue and three low-severity hardening
+issues remain actionable. No finding in this report requires or suggests
+redeploying production smart contracts.
+
+Separately, GitHub reported open Dependabot alerts on push (3 high, 7 moderate,
+4 low). Because the alert endpoint was not readable with the available token,
+those advisories are tracked below as an external repository-security signal
+rather than as line-level findings in this review.
 
 Current actionable items:
 
@@ -206,6 +217,34 @@ Recommended fix:
 - Move toward nonce/hash-based styles where practical.
 - Keep this as an accepted documented residual risk until inline style support
   can be removed.
+
+Contract redeploy required: No.
+
+## External Repository-Security Signal
+
+### DEPENDABOT-2026-06-27: GitHub reports open default-branch vulnerability alerts
+
+Severity: Unverified; GitHub reported 3 high, 7 moderate, and 4 low alerts.
+
+After the initial report commit was pushed, GitHub printed this remote warning:
+the default branch has 14 vulnerability alerts, including 3 high, 7 moderate,
+and 4 low. The exact package names and patched versions could not be retrieved
+from this environment because `gh api repos/Noc2/RateLoop/dependabot/alerts`
+returned `404` even though `gh repo view Noc2/RateLoop` succeeded.
+
+This does not contradict the local Yarn audit results by itself; Dependabot can
+track different manifests, ecosystems, withdrawn/stale alert states, or security
+metadata not surfaced through the local audit command. Treat the GitHub
+Dependabot dashboard as the source of truth for this signal.
+
+Recommended follow-up:
+
+- Open the repository's GitHub Security/Dependabot alerts view with an account
+  that has security-alert access.
+- Export or inspect the 14 open alerts, then reconcile them against the lockfile
+  and package-manager audit output.
+- Fix or dismiss each alert with a clear reason, prioritizing the 3 high-severity
+  alerts.
 
 Contract redeploy required: No.
 
