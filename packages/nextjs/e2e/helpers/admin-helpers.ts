@@ -192,7 +192,12 @@ function resolveSubmissionDetails(details?: SubmissionDetailsInput) {
 function assertSupportedContextUrl(url: string, media: SubmissionMedia, details: Required<SubmissionDetailsInput>) {
   const trimmedUrl = url.trim();
   if (!trimmedUrl) {
-    if (media.imageUrls.length > 0 || media.videoUrl.trim() || details.detailsHash !== ZERO_BYTES32 || details.detailsUrl) {
+    if (
+      media.imageUrls.length > 0 ||
+      media.videoUrl.trim() ||
+      details.detailsHash !== ZERO_BYTES32 ||
+      details.detailsUrl
+    ) {
       return;
     }
     throw new Error("E2E submissions require a context URL unless approved image URLs or a video URL are attached.");
@@ -1780,6 +1785,47 @@ async function readRoundStateLatest(
   return Number(BigInt(`0x${result.slice(66, 130)}`));
 }
 
+async function readRoundLifecycleStateLatest(
+  contractAddress: string,
+  contentId: bigint,
+  roundId: bigint,
+): Promise<{ revealGracePeriod: bigint; lastRevealableAfter: bigint }> {
+  const { decodeFunctionResult, encodeFunctionData } = await import("viem");
+  const abi = [
+    {
+      name: "roundLifecycleState",
+      type: "function",
+      inputs: [
+        { name: "contentId", type: "uint256" },
+        { name: "roundId", type: "uint256" },
+      ],
+      outputs: [
+        { name: "revealGracePeriod", type: "uint256" },
+        { name: "lastRevealableAfter", type: "uint256" },
+        { name: "cleanupRemaining", type: "uint256" },
+        { name: "clusterPayoutReadyAt", type: "uint48" },
+      ],
+      stateMutability: "view",
+    },
+  ] as const;
+  const data = encodeFunctionData({
+    abi,
+    functionName: "roundLifecycleState",
+    args: [contentId, roundId],
+  });
+  const result = await rpcRequest<`0x${string}`>("eth_call", [{ to: contractAddress, data }, "latest"]);
+  if (!result) {
+    throw new Error(`readRoundLifecycleState failed for content=${contentId.toString()} round=${roundId.toString()}`);
+  }
+
+  const [revealGracePeriod, lastRevealableAfter] = decodeFunctionResult({
+    abi,
+    functionName: "roundLifecycleState",
+    data: result,
+  });
+  return { revealGracePeriod, lastRevealableAfter };
+}
+
 /**
  * Settle a round via contract call.
  * Calls settleRound(contentId, roundId).
@@ -1844,6 +1890,46 @@ export async function finalizeRevealFailedRound(
     args: [BigInt(contentId), BigInt(roundId)],
   });
   return sendTx(fromAddress, contractAddress, data);
+}
+
+export async function advanceToRevealFailedFinalizationWindow(
+  contentId: number | bigint,
+  roundId: number | bigint,
+  contractAddress: string,
+  fallbackRevealGracePeriodSeconds = 3600,
+): Promise<void> {
+  const contentIdBigInt = BigInt(contentId);
+  const roundIdBigInt = BigInt(roundId);
+  const snapshot = await readLatestBlockSnapshot();
+  const round = await readRoundAtBlock(contractAddress, contentIdBigInt, roundIdBigInt, snapshot.blockTag);
+  const parsedRound = parseRound(round);
+  if (!parsedRound?.startTime) {
+    throw new Error(
+      `Unable to read round start time for content=${contentIdBigInt.toString()} round=${roundIdBigInt.toString()}`,
+    );
+  }
+
+  const [roundConfig, lifecycleState] = await Promise.all([
+    readRoundConfig(contractAddress),
+    readRoundLifecycleStateLatest(contractAddress, contentIdBigInt, roundIdBigInt),
+  ]);
+  const revealGracePeriod =
+    lifecycleState.revealGracePeriod > 0n
+      ? lifecycleState.revealGracePeriod
+      : BigInt(Math.max(1, Math.floor(fallbackRevealGracePeriodSeconds)));
+  const votingWindowEnd = parsedRound.startTime + roundConfig.maxDuration;
+  const revealBase =
+    lifecycleState.lastRevealableAfter > votingWindowEnd ? lifecycleState.lastRevealableAfter : votingWindowEnd;
+  const finalizationTime = revealBase + revealGracePeriod * 24n;
+  const latest = await readLatestBlockSnapshot();
+  const latestTimestamp = BigInt(latest.timestampSeconds);
+  if (latestTimestamp > finalizationTime) return;
+
+  const secondsToIncrease = finalizationTime - latestTimestamp + 1n;
+  if (secondsToIncrease > BigInt(Number.MAX_SAFE_INTEGER)) {
+    throw new Error(`RevealFailed finalization jump is too large: ${secondsToIncrease.toString()}s`);
+  }
+  await evmIncreaseTime(Number(secondsToIncrease));
 }
 
 /**
