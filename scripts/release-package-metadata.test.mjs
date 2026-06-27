@@ -182,3 +182,12 @@ test("root workspace test scripts lock shared dist and include non-contract suit
   assert.match(manifest.scripts?.["test:ts"] ?? "", /yarn workspace @rateloop\/keeper test/);
   assert.match(manifest.scripts?.["test:all"] ?? "", /yarn foundry:test && yarn test:ts/);
 });
+
+test("Next.js type generation pins the local target network for E2E production guards", () => {
+  const manifest = readJson("packages/nextjs/package.json");
+  const checkTypesScript = manifest.scripts?.["check-types"] ?? "";
+
+  assert.match(checkTypesScript, /RATELOOP_E2E_PRODUCTION_BUILD=true/);
+  assert.match(checkTypesScript, /NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD=true/);
+  assert.match(checkTypesScript, /NEXT_PUBLIC_TARGET_NETWORKS=31337 next typegen/);
+});
