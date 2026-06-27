@@ -12,6 +12,7 @@ This directory mixes current operator references, recent audit/review snapshots,
 ## Recent Reviews
 
 - [Cleanup opportunities, 2026-06-26](cleanup-opportunities-2026-06-26.md)
+- [Non-contract security re-review, 2026-06-27](non-contract-security-review-2026-06-27-rereview.md)
 - [Non-contract security review, 2026-06-26](non-contract-security-review-2026-06-26.md)
 - [Repo review findings, 2026-06-26](repo-review-findings-2026-06-26.md)
 - [Repo review findings follow-up, 2026-06-25](repo-review-findings-2026-06-25-followup.md)
