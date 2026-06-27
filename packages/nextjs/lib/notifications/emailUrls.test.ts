@@ -44,6 +44,26 @@ test("resolveNotificationEmailAppUrl rejects configured localhost in production 
   );
 });
 
+test("resolveNotificationEmailAppUrl rejects unsafe configured production app URLs", () => {
+  assert.equal(
+    resolveNotificationEmailAppUrl({
+      requestOrigin: "https://www.rateloop.ai",
+      fallbackAppUrl: "http://www.rateloop.ai",
+      production: true,
+    }),
+    null,
+  );
+
+  assert.equal(
+    resolveNotificationEmailAppUrl({
+      requestOrigin: "https://www.rateloop.ai",
+      fallbackAppUrl: "https://www.rateloop.ai@evil.example",
+      production: true,
+    }),
+    null,
+  );
+});
+
 test("resolveNotificationEmailAppUrl allows configured localhost for local E2E production builds", () => {
   assert.equal(
     resolveNotificationEmailAppUrl({

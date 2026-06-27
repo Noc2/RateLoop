@@ -1,3 +1,4 @@
+import { isIP } from "node:net";
 import "server-only";
 import { RPC_OVERRIDES } from "~~/config/shared";
 import { isLocalE2EProductionBuildEnabled } from "~~/utils/env/e2eProduction";
@@ -18,8 +19,30 @@ function readEnv(name: string): string | undefined {
   return value ? value : undefined;
 }
 
+function normalizeUrlHostname(hostname: string): string {
+  return hostname
+    .toLowerCase()
+    .replace(/^\[(.*)\]$/, "$1")
+    .replace(/\.+$/, "");
+}
+
 function isLocalhostHostname(hostname: string): boolean {
-  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+  const normalized = normalizeUrlHostname(hostname);
+  return normalized === "localhost" || normalized === "127.0.0.1" || normalized === "::1";
+}
+
+function isIpLiteralHostname(hostname: string): boolean {
+  return isIP(normalizeUrlHostname(hostname)) !== 0;
+}
+
+function isProductionInternalAppHostname(hostname: string): boolean {
+  const normalized = normalizeUrlHostname(hostname);
+  return (
+    !normalized.includes(".") ||
+    normalized.endsWith(".localhost") ||
+    normalized.endsWith(".local") ||
+    normalized.endsWith(".internal")
+  );
 }
 
 function resolveVercelHostUrl(rawValue: string | undefined): string | undefined {
@@ -73,8 +96,22 @@ export function resolveAppUrl(
     if (url.protocol !== "http:" && url.protocol !== "https:") {
       return null;
     }
-    if (production && !allowLocalhostInProduction && isLocalhostHostname(url.hostname)) {
-      return null;
+    if (production) {
+      const allowLocalhost = allowLocalhostInProduction && isLocalhostHostname(url.hostname);
+      if (url.username || url.password) {
+        return null;
+      }
+      if (url.protocol === "http:" && !allowLocalhost) {
+        return null;
+      }
+      if (!allowLocalhost) {
+        if (isLocalhostHostname(url.hostname) || isIpLiteralHostname(url.hostname)) {
+          return null;
+        }
+        if (isProductionInternalAppHostname(url.hostname)) {
+          return null;
+        }
+      }
     }
     return url.toString().replace(/\/$/, "");
   } catch {

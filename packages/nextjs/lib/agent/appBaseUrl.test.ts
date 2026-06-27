@@ -55,6 +55,17 @@ test("resolveAgentAppBaseUrl uses canonical app URLs in production", () => {
   );
 });
 
+test("resolveAgentAppBaseUrl rejects unsafe configured production app URLs", () => {
+  resetAgentUrlEnv();
+  env.NODE_ENV = "production";
+  env.APP_URL = "http://www.rateloop.ai";
+
+  assert.equal(resolveAgentAppBaseUrl("https://evil.example/api/agent/handoffs", "/api/agent/handoffs"), null);
+
+  env.APP_URL = "https://www.rateloop.ai@evil.example";
+  assert.equal(resolveAgentAppBaseUrl("https://evil.example/api/agent/handoffs", "/api/agent/handoffs"), null);
+});
+
 test("resolveAgentAppBaseUrl fails closed when production only has Vercel preview URL", () => {
   resetAgentUrlEnv();
   env.NODE_ENV = "production";

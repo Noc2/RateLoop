@@ -106,6 +106,30 @@ test("resolveAppUrl rejects localhost in production", () => {
   assert.equal(resolveAppUrl("http://localhost:3000", true), null);
 });
 
+test("resolveAppUrl allows localhost in explicit local E2E production builds", () => {
+  assert.equal(resolveAppUrl("http://localhost:3000", true, true), "http://localhost:3000");
+});
+
+test("resolveAppUrl rejects remote HTTP in production", () => {
+  assert.equal(resolveAppUrl("http://www.rateloop.ai", true), null);
+});
+
+test("resolveAppUrl rejects credentialed URLs in production", () => {
+  assert.equal(resolveAppUrl("https://user:pass@www.rateloop.ai", true), null);
+  assert.equal(resolveAppUrl("https://www.rateloop.ai@evil.example", true), null);
+});
+
+test("resolveAppUrl rejects internal production hostnames", () => {
+  assert.equal(resolveAppUrl("https://10.0.0.1", true), null);
+  assert.equal(resolveAppUrl("https://2130706433", true), null);
+  assert.equal(resolveAppUrl("https://[::1]", true), null);
+  assert.equal(resolveAppUrl("https://service", true), null);
+  assert.equal(resolveAppUrl("https://service.localhost", true), null);
+  assert.equal(resolveAppUrl("https://service.internal", true), null);
+  assert.equal(resolveAppUrl("https://service.internal.", true), null);
+  assert.equal(resolveAppUrl("https://service.local", true), null);
+});
+
 test("resolveAppUrl normalizes valid public app URLs", () => {
   assert.equal(resolveAppUrl("https://rateloop.ai/", true), "https://rateloop.ai");
 });
