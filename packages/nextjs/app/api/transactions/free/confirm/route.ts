@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isFreeTransactionStoreUnavailableError } from "../session/fallback";
 import { isJsonObjectBody, jsonBodyErrorResponse, parseJsonBody } from "~~/lib/http/jsonBody";
-import { confirmFreeTransactionReservation } from "~~/lib/thirdweb/freeTransactions";
+import {
+  type FreeTransactionConfirmationOutcome,
+  confirmFreeTransactionReservation,
+} from "~~/lib/thirdweb/freeTransactions";
 import { checkRateLimit } from "~~/utils/rateLimit";
 
 const WRITE_RATE_LIMIT = { limit: 60, windowMs: 60_000 };
@@ -12,6 +15,19 @@ type ConfirmFreeTransactionRequest = {
   operationKey?: string;
   transactionHashes?: string[];
 };
+
+function confirmationErrorMessage(outcome: FreeTransactionConfirmationOutcome) {
+  if (outcome === "missing_reservation") {
+    return "Free transaction reservation not found";
+  }
+  if (outcome === "update_skipped") {
+    return "Free transaction reservation could not be confirmed";
+  }
+  if (outcome.startsWith("ignored_")) {
+    return "Free transaction reservation is not pending";
+  }
+  return "Free transaction reservation was not confirmed";
+}
 
 export async function POST(request: NextRequest) {
   const preParseLimited = await checkRateLimit(request, WRITE_RATE_LIMIT, {
@@ -29,14 +45,26 @@ export async function POST(request: NextRequest) {
   if (limited) return limited;
 
   try {
-    await confirmFreeTransactionReservation({
+    const confirmation = await confirmFreeTransactionReservation({
       address: body?.address ?? "",
       chainId: typeof body?.chainId === "number" ? body.chainId : Number.NaN,
       operationKey: body?.operationKey ?? "",
       transactionHashes: Array.isArray(body?.transactionHashes) ? body.transactionHashes : [],
     });
 
-    return NextResponse.json({ ok: true });
+    if (!confirmation.confirmed) {
+      const status = confirmation.outcome === "missing_reservation" ? 404 : 409;
+      return NextResponse.json(
+        {
+          error: confirmationErrorMessage(confirmation.outcome),
+          ok: false,
+          outcome: confirmation.outcome,
+        },
+        { status },
+      );
+    }
+
+    return NextResponse.json({ ok: true, outcome: confirmation.outcome });
   } catch (error) {
     if (isFreeTransactionStoreUnavailableError(error)) {
       return NextResponse.json({ error: "Free transaction quota store unavailable" }, { status: 503 });

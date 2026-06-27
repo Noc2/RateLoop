@@ -174,3 +174,74 @@ test("free transaction confirm route fails closed when the quota store is unavai
     });
   }
 });
+
+test("free transaction confirm route reports a missing reservation", async () => {
+  rateLimit.__setRateLimitStoreForTests(null);
+
+  const response = await route.POST(
+    makeRequest({
+      address: TEST_ADDRESS,
+      chainId: 480,
+      operationKey: TEST_OPERATION_KEY,
+      transactionHashes: [TEST_TX_HASH],
+    }),
+  );
+
+  assert.equal(response.status, 404);
+  assert.deepEqual(await response.json(), {
+    error: "Free transaction reservation not found",
+    ok: false,
+    outcome: "missing_reservation",
+  });
+});
+
+test("free transaction confirm route reports non-pending reservations", async () => {
+  rateLimit.__setRateLimitStoreForTests(null);
+  const now = new Date();
+  await dbModule.dbClient.execute({
+    sql: `
+      INSERT INTO free_transaction_reservations (
+        operation_key,
+        identity_key,
+        rater_identity_key,
+        chain_id,
+        environment,
+        wallet_address,
+        status,
+        reserved_at,
+        expires_at,
+        released_at,
+        updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `,
+    args: [
+      TEST_OPERATION_KEY,
+      "480:production:identity",
+      `0x${"9".repeat(64)}`,
+      480,
+      "production",
+      TEST_ADDRESS.toLowerCase(),
+      "released",
+      now,
+      new Date(now.getTime() + 60_000),
+      now,
+      now,
+    ],
+  });
+
+  const response = await route.POST(
+    makeRequest({
+      address: TEST_ADDRESS,
+      chainId: 480,
+      operationKey: TEST_OPERATION_KEY,
+      transactionHashes: [TEST_TX_HASH],
+    }),
+  );
+
+  assert.equal(response.status, 409);
+  assert.deepEqual(await response.json(), {
+    error: "Free transaction reservation is not pending",
+    ok: false,
+    outcome: "ignored_released",
+  });
+});

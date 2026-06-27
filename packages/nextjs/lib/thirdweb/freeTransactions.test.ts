@@ -663,19 +663,21 @@ test("confirm finalizes a consumed reservation without double-counting quota", a
   if (!initialDecision.isAllowed) return;
   assert.equal(initialDecision.summary.used, 1);
 
-  await freeTransactions.confirmFreeTransactionReservation({
+  const confirmed = await freeTransactions.confirmFreeTransactionReservation({
     address: WALLET,
     chainId: CHAIN_ID,
     operationKey: buildOperationKey(calls),
     transactionHashes: [SUCCESS_HASH],
   });
+  assert.deepEqual(confirmed, { confirmed: true, outcome: "confirmed" });
 
-  await freeTransactions.confirmFreeTransactionReservation({
+  const replayed = await freeTransactions.confirmFreeTransactionReservation({
     address: WALLET,
     chainId: CHAIN_ID,
     operationKey: buildOperationKey(calls),
     transactionHashes: [SUCCESS_HASH],
   });
+  assert.deepEqual(replayed, { confirmed: true, outcome: "already_confirmed" });
 
   const quotaRows = await dbModule.dbClient.execute("SELECT free_tx_used FROM free_transaction_quotas");
   assert.equal(Number(quotaRows.rows[0]?.free_tx_used), 1);
@@ -688,6 +690,36 @@ test("confirm finalizes a consumed reservation without double-counting quota", a
   if (!repeatedDecision.isAllowed) return;
   assert.equal(repeatedDecision.summary.used, 1);
   assert.equal(repeatedDecision.summary.remaining, 1);
+});
+
+test("confirm reports a missing reservation without succeeding", async () => {
+  const missingConfirmation = await freeTransactions.confirmFreeTransactionReservation({
+    address: WALLET,
+    chainId: CHAIN_ID,
+    operationKey: buildOperationKey([voteCall("0x29")]),
+    transactionHashes: [SUCCESS_HASH],
+  });
+
+  assert.deepEqual(missingConfirmation, { confirmed: false, outcome: "missing_reservation" });
+});
+
+test("confirm reports non-pending reservations without succeeding", async () => {
+  const calls = [voteCall("0x2a")];
+  const initialDecision = await freeTransactions.evaluateFreeTransactionAllowance(buildRequest(calls) as never);
+  assert.equal(initialDecision.isAllowed, true);
+  await dbModule.dbClient.execute({
+    sql: "UPDATE free_transaction_reservations SET status = ?, released_at = ?, updated_at = ?",
+    args: ["released", new Date(), new Date()],
+  });
+
+  const releasedConfirmation = await freeTransactions.confirmFreeTransactionReservation({
+    address: WALLET,
+    chainId: CHAIN_ID,
+    operationKey: buildOperationKey(calls),
+    transactionHashes: [SUCCESS_HASH],
+  });
+
+  assert.deepEqual(releasedConfirmation, { confirmed: false, outcome: "ignored_released" });
 });
 
 test("confirm accepts relayed 7702 receipts when the executed event proves the wallet", async () => {

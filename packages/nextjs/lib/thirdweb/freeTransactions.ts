@@ -133,6 +133,20 @@ export type FreeTransactionAllowanceDecision =
         | "quota_store_unavailable";
     };
 
+export type FreeTransactionConfirmationOutcome =
+  | "confirmed"
+  | "already_confirmed"
+  | "missing_reservation"
+  | "reservation_mismatch"
+  | "unknown"
+  | "update_skipped"
+  | `ignored_${string}`;
+
+export type FreeTransactionConfirmationResult = {
+  confirmed: boolean;
+  outcome: FreeTransactionConfirmationOutcome;
+};
+
 const DEFAULT_DENY_REASON = "Transaction not sponsored.";
 const FREE_TX_EXHAUSTED_REASON = "Free transactions used up. Add ETH to continue.";
 const NO_RATER_IDENTITY_REASON = "Verify your ID to unlock free transactions.";
@@ -2251,7 +2265,7 @@ export async function confirmFreeTransactionReservation(params: {
   chainId: number;
   operationKey: string;
   transactionHashes: string[];
-}) {
+}): Promise<FreeTransactionConfirmationResult> {
   const timingLog = createFreeTransactionTimingLog({
     chainId: Number.isFinite(params.chainId) ? params.chainId : null,
     operation: "confirm_reservation",
@@ -2315,12 +2329,11 @@ export async function confirmFreeTransactionReservation(params: {
       walletAddress,
     });
 
-    let confirmationOutcome = "unknown";
     timingLog.emit("confirmation-transaction-start", {
       operationKey: params.operationKey,
       walletAddress,
     });
-    await db.transaction(async tx => {
+    const confirmationOutcome = await db.transaction(async (tx): Promise<FreeTransactionConfirmationOutcome> => {
       const [reservation] = await tx
         .select()
         .from(freeTransactionReservations)
@@ -2329,26 +2342,22 @@ export async function confirmFreeTransactionReservation(params: {
       const normalizedReservation = normalizeReservationRow(reservation);
 
       if (!normalizedReservation) {
-        confirmationOutcome = "missing_reservation";
-        return;
+        return "missing_reservation";
       }
 
       if (
         normalizedReservation.chainId !== params.chainId ||
         normalizedReservation.walletAddress.toLowerCase() !== walletAddress.toLowerCase()
       ) {
-        confirmationOutcome = "reservation_mismatch";
         throw new Error("Sponsored transaction reservation does not match the current wallet");
       }
 
       if (normalizedReservation.status === "confirmed") {
-        confirmationOutcome = "already_confirmed";
-        return;
+        return "already_confirmed";
       }
 
       if (normalizedReservation.status !== "pending") {
-        confirmationOutcome = `ignored_${normalizedReservation.status || "unknown"}`;
-        return;
+        return `ignored_${normalizedReservation.status || "unknown"}`;
       }
 
       const now = new Date();
@@ -2370,10 +2379,9 @@ export async function confirmFreeTransactionReservation(params: {
         .returning({ operationKey: freeTransactionReservations.operationKey });
 
       if (updatedReservations.length === 0) {
-        confirmationOutcome = "update_skipped";
-        return;
+        return "update_skipped";
       }
-      confirmationOutcome = "confirmed";
+      return "confirmed";
     });
     timingLog.emit("confirmation-transaction-complete", {
       confirmationOutcome,
@@ -2385,6 +2393,10 @@ export async function confirmFreeTransactionReservation(params: {
       operationKey: params.operationKey,
       walletAddress,
     });
+    return {
+      confirmed: confirmationOutcome === "confirmed" || confirmationOutcome === "already_confirmed",
+      outcome: confirmationOutcome,
+    };
   } catch (error) {
     if (isFreeTransactionStoreUnavailableError(error)) {
       console.warn("[thirdweb-free-tx] quota store unavailable during confirmation; failing closed.", {
