@@ -9,6 +9,7 @@ type KeeperIndexOptions = {
   databaseUrl?: string | null;
   failBalanceRead?: boolean;
   frontendFeeEnabled?: boolean;
+  mainLoopLockBusy?: boolean;
   mainLoopLockRequired?: boolean;
   resolveRoundsError?: Error;
   resolveRoundsResult?: Record<string, number | null>;
@@ -70,9 +71,20 @@ async function loadKeeperIndex(options: KeeperIndexOptions = {}) {
   const setGauge = vi.fn();
   const setWalletBalanceWei = vi.fn();
   const recordRun = vi.fn();
+  const recordMainLoopLockSkip = vi.fn();
   const recordError = vi.fn();
   const incrementCounter = vi.fn();
   const getConsecutiveErrors = vi.fn(() => 0);
+  const runWithKeeperMainLoopLock = vi.fn(async (_logger, fallback, run: () => Promise<unknown>) => {
+    if (options.mainLoopLockRequired && !options.databaseUrl) {
+      throw new Error("KEEPER_DATABASE_URL is required when KEEPER_MAIN_LOOP_LOCK_REQUIRED=true");
+    }
+    if (options.mainLoopLockBusy) {
+      return fallback;
+    }
+    return run();
+  });
+  const closeKeeperState = vi.fn().mockResolvedValue(undefined);
   const getWalletClient = vi.fn(() => ({ kind: "wallet" }));
   const getAccount = vi.fn(() => ({ address: ACCOUNT }));
   const claimConfiguredFrontendFees = vi.fn().mockResolvedValue({
@@ -169,11 +181,16 @@ async function loadKeeperIndex(options: KeeperIndexOptions = {}) {
     startMetricsServer: vi.fn(),
     setHealthThreshold: vi.fn(),
     recordRun,
+    recordMainLoopLockSkip,
     recordError,
     setGauge,
     incrementCounter,
     setWalletBalanceWei,
     getConsecutiveErrors,
+  }));
+  vi.doMock("../keeper-state.js", () => ({
+    closeKeeperState,
+    runWithKeeperMainLoopLock,
   }));
 
   await import("../index.js");
@@ -188,8 +205,11 @@ async function loadKeeperIndex(options: KeeperIndexOptions = {}) {
     setGauge,
     setWalletBalanceWei,
     recordRun,
+    recordMainLoopLockSkip,
     recordError,
     incrementCounter,
+    runWithKeeperMainLoopLock,
+    closeKeeperState,
     getWalletClient,
     getAccount,
     validateKeeperConnectivity,
@@ -320,6 +340,21 @@ describe("keeper index", () => {
         error:
           "KEEPER_DATABASE_URL is required when KEEPER_MAIN_LOOP_LOCK_REQUIRED=true",
       }),
+    );
+  });
+
+  it("records a lock skip instead of a successful run when another keeper holds the main-loop lock", async () => {
+    const keeper = await loadKeeperIndex({
+      databaseUrl: "postgres://keeper:test@localhost:5432/rateloop",
+      mainLoopLockBusy: true,
+    });
+
+    expect(keeper.resolveRounds).not.toHaveBeenCalled();
+    expect(keeper.recordMainLoopLockSkip).toHaveBeenCalledOnce();
+    expect(keeper.recordRun).not.toHaveBeenCalled();
+    expect(keeper.recordError).not.toHaveBeenCalled();
+    expect(keeper.incrementCounter).not.toHaveBeenCalledWith(
+      "keeper_main_loop_lock_skips_total",
     );
   });
 

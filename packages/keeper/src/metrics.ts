@@ -35,6 +35,8 @@ const counters: Record<string, number> = {
 const gauges: Record<string, number> = {
   keeper_last_run_duration_seconds: 0,
   keeper_last_successful_run_timestamp: 0,
+  keeper_last_main_loop_lock_skip_duration_seconds: 0,
+  keeper_last_main_loop_lock_skip_timestamp: 0,
   keeper_is_running: 0,
   keeper_wallet_balance_wei: 0,
   keeper_rounds_awaiting_reveal_quorum: 0,
@@ -52,6 +54,7 @@ const gauges: Record<string, number> = {
 const startTime = Date.now();
 let consecutiveErrors = 0;
 let lastRunTime: Date | null = null;
+let lastMainLoopLockSkipTime: Date | null = null;
 let healthThresholdMs = 90_000; // 3x default 30s interval
 // Exact wallet balance for /health. The Prometheus gauge is a float64, which loses wei
 // precision above 2^53 wei (~0.009 ETH); keep the bigint separately so /health does not
@@ -110,6 +113,14 @@ export function recordRun(result: KeeperResult, durationMs: number) {
   lastRunTime = new Date();
 }
 
+/** Record a skipped keeper tick when another replica held the main-loop lock. */
+export function recordMainLoopLockSkip(durationMs: number) {
+  counters.keeper_main_loop_lock_skips_total++;
+  gauges.keeper_last_main_loop_lock_skip_duration_seconds = durationMs / 1000;
+  gauges.keeper_last_main_loop_lock_skip_timestamp = Date.now() / 1000;
+  lastMainLoopLockSkipTime = new Date();
+}
+
 /** Record a keeper error. */
 export function recordError() {
   counters.keeper_errors_total++;
@@ -156,6 +167,10 @@ function renderMetrics(): string {
   const gaugeHelp: Record<string, string> = {
     keeper_last_run_duration_seconds: "Duration of the last keeper run in seconds",
     keeper_last_successful_run_timestamp: "Unix timestamp of last successful run",
+    keeper_last_main_loop_lock_skip_duration_seconds:
+      "Duration of the last keeper tick skipped because another keeper held the main loop lock",
+    keeper_last_main_loop_lock_skip_timestamp:
+      "Unix timestamp of the last keeper tick skipped because another keeper held the main loop lock",
     keeper_is_running: "Whether a keeper run is currently in progress",
     keeper_wallet_balance_wei:
       "Keeper wallet native balance in wei (float64-approximate above 2^53 wei; /health reports the exact value)",
@@ -200,8 +215,11 @@ function renderHealth(): { status: number; body: string } {
     uptime: Math.floor((Date.now() - startTime) / 1000),
     lastRun: lastRunTime?.toISOString() ?? null,
     lastRunDuration: gauges.keeper_last_run_duration_seconds,
+    lastMainLoopLockSkip: lastMainLoopLockSkipTime?.toISOString() ?? null,
+    lastMainLoopLockSkipDuration: gauges.keeper_last_main_loop_lock_skip_duration_seconds,
     consecutiveErrors,
     totalRuns: counters.keeper_runs_total,
+    mainLoopLockSkips: counters.keeper_main_loop_lock_skips_total,
     roundsOpened: counters.keeper_rounds_opened_total,
     roundsRevealFailedFinalized: counters.keeper_rounds_reveal_failed_finalized_total,
     cleanupBatchesProcessed: counters.keeper_unrevealed_cleanup_batches_total,

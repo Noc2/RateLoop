@@ -32,9 +32,9 @@ import {
   startMetricsServer,
   setHealthThreshold,
   recordRun,
+  recordMainLoopLockSkip,
   recordError,
   setGauge,
-  incrementCounter,
   setWalletBalanceWei,
   getConsecutiveErrors,
 } from "./metrics.js";
@@ -217,7 +217,8 @@ async function main() {
         { lockRequired: config.persistence.mainLoopLockRequired },
       );
       if (!mainLoopRan) {
-        incrementCounter("keeper_main_loop_lock_skips_total");
+        recordMainLoopLockSkip(Date.now() - start);
+        return;
       }
 
       const { result, frontendFeeResult, correlationSnapshotResult } = mainLoopResult;

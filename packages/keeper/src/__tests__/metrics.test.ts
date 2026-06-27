@@ -8,9 +8,11 @@ import {
   getHealthSnapshot,
   incrementCounter,
   getMetricsText,
+  setHealthThreshold,
   setGauge,
   setWalletBalanceWei,
   recordRun,
+  recordMainLoopLockSkip,
   recordError,
   getConsecutiveErrors,
   resolveCorrelationArtifactResponse,
@@ -53,6 +55,14 @@ function requestLocalhost(port: number, path: string): Promise<{ statusCode: num
   });
 }
 
+function metricValue(metricsBody: string, name: string): number {
+  const match = metricsBody.match(new RegExp(`^${name} ([^\\n]+)$`, "m"));
+  if (!match) {
+    throw new Error(`Metric not found: ${name}`);
+  }
+  return Number(match[1]);
+}
+
 describe("metrics", () => {
   it("incrementCounter increments known counters", () => {
     // This just verifies no throw — counters are internal
@@ -92,6 +102,30 @@ describe("metrics", () => {
     expect(getConsecutiveErrors()).toBe(1);
     recordError();
     expect(getConsecutiveErrors()).toBe(2);
+  });
+
+  it("records lock skips without refreshing successful health", () => {
+    const beforeMetrics = getMetricsText();
+    const beforeRuns = metricValue(beforeMetrics, "keeper_runs_total");
+    const beforeLockSkips = metricValue(beforeMetrics, "keeper_main_loop_lock_skips_total");
+
+    setHealthThreshold(0);
+    recordMainLoopLockSkip(25);
+
+    const metricsBody = getMetricsText();
+    expect(metricValue(metricsBody, "keeper_runs_total")).toBe(beforeRuns);
+    expect(metricValue(metricsBody, "keeper_main_loop_lock_skips_total")).toBe(beforeLockSkips + 1);
+    expect(metricsBody).toContain("keeper_last_main_loop_lock_skip_duration_seconds 0.025");
+    expect(metricsBody).toMatch(/^keeper_last_main_loop_lock_skip_timestamp \d+/m);
+
+    const health = getHealthSnapshot();
+    expect(health.status).toBe(503);
+    expect(JSON.parse(health.body)).toMatchObject({
+      status: "unhealthy",
+      mainLoopLockSkips: beforeLockSkips + 1,
+      lastMainLoopLockSkipDuration: 0.025,
+    });
+    setHealthThreshold(30_000);
   });
 
   it("renders operational gauges in metrics and health responses", async () => {
