@@ -713,9 +713,7 @@ export const Header = () => {
         const shouldShowNearTop = currentScrollY < MOBILE_HEADER_HIDE_OFFSET;
         const hasUserScrollIntent = scrollSource.getAttribute(MOBILE_HEADER_SCROLL_INTENT_ATTRIBUTE) === "true";
         const shouldHideForVoteScrollIntent =
-          hasUserScrollIntent &&
-          currentScrollY >= MOBILE_HEADER_SCROLL_DELTA &&
-          (scrollDelta > 0 || currentScrollY >= MOBILE_HEADER_HIDE_OFFSET || !isMobileHeaderVisibleRef.current);
+          hasUserScrollIntent && currentScrollY >= MOBILE_HEADER_SCROLL_DELTA && scrollDelta > 0;
 
         if (shouldHideForVoteScrollIntent) {
           clearDeferredVoteLayoutVisibility();

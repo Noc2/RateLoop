@@ -13,6 +13,7 @@ const CLAIM_REWARD_NOTIFICATION_STORAGE_PREFIX = "rateloop_last_claim_reward_not
 const CLAIMABLE_TOTAL_STORAGE_PREFIX = "rateloop_last_notified_claimable_total";
 const E2E_OPEN_STAKE_SELECTOR_EVENT = "rateloop:e2e-open-stake-selector";
 const CONNECTED_TEST_WALLET_ADDRESS = ANVIL_ACCOUNTS.account2.address.toLowerCase();
+const MOBILE_CHROME_RESTORE_STABILITY_MS = 850;
 
 function seedSuppressedClaimRewardNotification(address: string) {
   const normalizedAddress = address.toLowerCase();
@@ -721,6 +722,10 @@ test.describe("Mobile viewport (phone)", () => {
         return layout.activeTitleTop >= layout.topChromeBottom - 1;
       })
       .toBe(true);
+
+    await page.waitForTimeout(MOBILE_CHROME_RESTORE_STABILITY_MS);
+    await expect(mobileHeader).toHaveAttribute("data-visible", "true");
+    await expect(voteTopChrome).toHaveAttribute("data-visible", "true");
 
     const restoredLayout = await readLayout();
     const restoreChromeChanges = await stopMobileChromeChangeCapture();
