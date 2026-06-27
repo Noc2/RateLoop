@@ -13,6 +13,7 @@ import { mergeRpcOverrides, resolveRpcOverrides } from "~~/utils/rpcUrls";
 const isProduction = process.env.NODE_ENV === "production";
 const defaultDevDatabaseUrl = "postgresql://postgres:postgres@127.0.0.1:5432/rateloop_app";
 const allowLocalE2EProductionBuild = isLocalE2EProductionBuildEnabled();
+const RATELOOP_TRUSTED_APP_HOSTNAME_SUFFIX = ".rateloop.ai";
 
 function readEnv(name: string): string | undefined {
   const value = process.env[name]?.trim();
@@ -43,6 +44,11 @@ function isProductionInternalAppHostname(hostname: string): boolean {
     normalized.endsWith(".local") ||
     normalized.endsWith(".internal")
   );
+}
+
+function isTrustedRateLoopAppHostname(hostname: string): boolean {
+  const normalized = normalizeUrlHostname(hostname);
+  return normalized === "rateloop.ai" || normalized.endsWith(RATELOOP_TRUSTED_APP_HOSTNAME_SUFFIX);
 }
 
 function resolveVercelHostUrl(rawValue: string | undefined): string | undefined {
@@ -140,6 +146,37 @@ export function resolveOptionalAppUrl(options: {
     resolveAppUrl(resolveVercelHostUrl(options.rawVercelUrl), options.production, allowLocalhostInProduction) ??
     undefined
   );
+}
+
+export function resolveTrustedRateLoopAppUrl(options: {
+  rawAppUrl?: string;
+  rawPublicAppUrl?: string;
+  rawVercelEnv?: string;
+  rawVercelProjectProductionUrl?: string;
+  rawVercelUrl?: string;
+  production: boolean;
+  allowLocalhostInProduction?: boolean;
+}): string | undefined {
+  const allowLocalhostInProduction = options.allowLocalhostInProduction ?? false;
+  const candidates = [
+    options.rawAppUrl,
+    options.rawPublicAppUrl,
+    options.rawVercelEnv === "production" ? resolveVercelHostUrl(options.rawVercelProjectProductionUrl) : undefined,
+    resolveVercelHostUrl(options.rawVercelUrl),
+  ];
+
+  for (const candidate of candidates) {
+    const resolved = candidate ? resolveAppUrl(candidate, options.production, allowLocalhostInProduction) : null;
+    if (!resolved) continue;
+    if (options.production) {
+      const parsed = new URL(resolved);
+      const allowLocalhost = allowLocalhostInProduction && isLocalhostHostname(parsed.hostname);
+      if (!allowLocalhost && !isTrustedRateLoopAppHostname(parsed.hostname)) continue;
+    }
+    return resolved;
+  }
+
+  return undefined;
 }
 
 export function resolveServerPonderUrl(
@@ -245,6 +282,18 @@ export function getOptionalAppUrl(): string | undefined {
     rawVercelUrl: readEnv("VERCEL_URL"),
     production: isProduction,
     allowLocalhostInProduction: allowLocalE2EProductionBuild,
+  });
+}
+
+export function getTrustedRateLoopAppUrl(): string | undefined {
+  return resolveTrustedRateLoopAppUrl({
+    rawAppUrl: readEnv("APP_URL"),
+    rawPublicAppUrl: readEnv("NEXT_PUBLIC_APP_URL"),
+    rawVercelEnv: readEnv("VERCEL_ENV"),
+    rawVercelProjectProductionUrl: readEnv("VERCEL_PROJECT_PRODUCTION_URL"),
+    rawVercelUrl: readEnv("VERCEL_URL"),
+    production: process.env.NODE_ENV === "production",
+    allowLocalhostInProduction: isLocalE2EProductionBuildEnabled(),
   });
 }
 

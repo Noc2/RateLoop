@@ -16,11 +16,25 @@ const CHAIN_ID = 31337;
 const SUBMITTER = "0x00000000000000000000000000000000000000aa" as const;
 const TRANSACTION_HASH = `0x${"a".repeat(64)}` as const;
 const MEDIA_VALIDATOR = "0x00000000000000000000000000000000000000bb" as const;
+const env = process.env as Record<string, string | undefined>;
+const originalAppUrl = env.APP_URL;
+const originalNextPublicAppUrl = env.NEXT_PUBLIC_APP_URL;
+const originalNodeEnv = env.NODE_ENV;
+const originalRateLimitTrustedIpHeaders = env.RATE_LIMIT_TRUSTED_IP_HEADERS;
+const originalVercelUrl = env.VERCEL_URL;
+
+function restoreEnv(name: keyof NodeJS.ProcessEnv, value: string | undefined) {
+  if (value === undefined) {
+    delete env[name];
+  } else {
+    env[name] = value;
+  }
+}
 
 function makeRequest(body: Record<string, unknown>): NextRequest {
   return new NextRequest("https://rateloop.ai/api/attachments/details/attach", {
     body: JSON.stringify(body),
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", "x-real-ip": "203.0.113.9" },
     method: "POST",
   });
 }
@@ -183,6 +197,11 @@ afterEach(() => {
   setDetailsAttachRouteTestOverrides(null);
   __setRateLimitStoreForTests(null);
   __setDatabaseResourcesForTests(null);
+  restoreEnv("APP_URL", originalAppUrl);
+  restoreEnv("NEXT_PUBLIC_APP_URL", originalNextPublicAppUrl);
+  restoreEnv("NODE_ENV", originalNodeEnv);
+  restoreEnv("RATE_LIMIT_TRUSTED_IP_HEADERS", originalRateLimitTrustedIpHeaders);
+  restoreEnv("VERCEL_URL", originalVercelUrl);
 });
 
 test("attaches gated details and images with content submission proof", async () => {
@@ -254,6 +273,43 @@ test("attaches gated details and images with content submission proof", async ()
     args: [detailsId],
   });
   assert.equal(relinkedDetails.rows[0]?.content_id, "123");
+});
+
+test("does not attach gated images from hostile configured app origins", async () => {
+  env.NODE_ENV = "production";
+  env.APP_URL = "https://evil.example";
+  env.RATE_LIMIT_TRUSTED_IP_HEADERS = "x-real-ip";
+  delete env.NEXT_PUBLIC_APP_URL;
+
+  const contentRegistryAddress = getSharedDeploymentAddress(CHAIN_ID, "ContentRegistry");
+  assert.ok(contentRegistryAddress);
+  installReceipt([
+    buildContentSubmittedLog({
+      address: contentRegistryAddress,
+      contentId: 123n,
+      submitter: SUBMITTER,
+    }),
+  ]);
+
+  const imageId = "att_untrustedrouteimg1";
+  const imageSha256 = "c".repeat(64);
+  const imageUrl = `https://evil.example/api/attachments/images/${imageId}.webp#sha256=0x${imageSha256}`;
+  await insertImage({ imageId, sha256: imageSha256 });
+
+  const response = await POST(
+    makeRequest({
+      chainId: CHAIN_ID,
+      images: [{ contentId: "123", imageUrls: [imageUrl] }],
+      transactionHashes: [TRANSACTION_HASH],
+    }),
+  );
+
+  assert.equal(response.status, 400);
+  const image = await dbClient.execute({
+    sql: "SELECT content_id FROM question_image_attachments WHERE id = ?",
+    args: [imageId],
+  });
+  assert.equal(image.rows[0]?.content_id, null);
 });
 
 test("syncs verified question metadata with the protocol deployment key", async () => {

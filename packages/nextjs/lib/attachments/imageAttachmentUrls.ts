@@ -8,7 +8,7 @@ const WALLET_ADDRESS_PATTERN = /^0x[a-fA-F0-9]{40}$/;
 const DEFAULT_IMAGE_ATTACHMENT_ORIGINS = ["https://www.rateloop.ai", "https://rateloop.ai"] as const;
 const IMAGE_ATTACHMENT_FETCH_URL_BASE = "https://www.rateloop.ai";
 
-type UploadedImageAttachmentUrlOptions = {
+export type UploadedImageAttachmentUrlOptions = {
   allowedOrigins?: readonly string[];
   allowLocalhostOrigins?: boolean;
 };
@@ -54,9 +54,6 @@ function getDefaultImageAttachmentAllowedOrigins() {
     ...new Set(
       [
         ...DEFAULT_IMAGE_ATTACHMENT_ORIGINS,
-        normalizeOrigin(process.env.APP_URL),
-        normalizeOrigin(process.env.NEXT_PUBLIC_APP_URL),
-        normalizeOrigin(process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null),
         getBrowserOrigin(),
       ].filter((origin): origin is string => Boolean(origin)),
     ),

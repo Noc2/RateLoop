@@ -15,12 +15,24 @@ import { __setDatabaseResourcesForTests, db } from "~~/lib/db";
 import { questionDetails } from "~~/lib/db/schema";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 
-const originalAppUrl = process.env.APP_URL;
-const originalModerationMode = process.env.RATELOOP_QUESTION_DETAILS_MODERATION_MODE;
-const originalE2EProductionBuild = process.env.RATELOOP_E2E_PRODUCTION_BUILD;
-const originalPublicE2EProductionBuild = process.env.NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD;
-const originalOpenAiKey = process.env.OPENAI_API_KEY;
+const env = process.env as Record<string, string | undefined>;
+const originalAppUrl = env.APP_URL;
+const originalNextPublicAppUrl = env.NEXT_PUBLIC_APP_URL;
+const originalNodeEnv = env.NODE_ENV;
+const originalModerationMode = env.RATELOOP_QUESTION_DETAILS_MODERATION_MODE;
+const originalE2EProductionBuild = env.RATELOOP_E2E_PRODUCTION_BUILD;
+const originalPublicE2EProductionBuild = env.NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD;
+const originalOpenAiKey = env.OPENAI_API_KEY;
+const originalVercelUrl = env.VERCEL_URL;
 const WALLET = "0x00000000000000000000000000000000000000aa";
+
+function restoreEnv(name: keyof NodeJS.ProcessEnv, value: string | undefined) {
+  if (value === undefined) {
+    delete env[name];
+  } else {
+    env[name] = value;
+  }
+}
 
 beforeEach(() => {
   __setDatabaseResourcesForTests(createMemoryDatabaseResources());
@@ -31,11 +43,9 @@ beforeEach(() => {
 
 afterEach(() => {
   __setDatabaseResourcesForTests(null);
-  if (originalAppUrl === undefined) {
-    delete process.env.APP_URL;
-  } else {
-    process.env.APP_URL = originalAppUrl;
-  }
+  restoreEnv("APP_URL", originalAppUrl);
+  restoreEnv("NEXT_PUBLIC_APP_URL", originalNextPublicAppUrl);
+  restoreEnv("NODE_ENV", originalNodeEnv);
   if (originalModerationMode === undefined) {
     delete process.env.RATELOOP_QUESTION_DETAILS_MODERATION_MODE;
   } else {
@@ -56,6 +66,7 @@ afterEach(() => {
   } else {
     process.env.NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD = originalPublicE2EProductionBuild;
   }
+  restoreEnv("VERCEL_URL", originalVercelUrl);
 });
 
 function sha256Hex(value: string) {
@@ -103,6 +114,27 @@ test("builds public question details URLs from the configured app origin", () =>
   );
 });
 
+test("uses only hardened configured app origins for question details URLs in production", () => {
+  env.NODE_ENV = "production";
+  env.APP_URL = "https://evil.example";
+  delete env.NEXT_PUBLIC_APP_URL;
+
+  assert.equal(
+    getQuestionDetailsUrl("https://preview.example/api/attachments/details/upload", "det_questiondetails01"),
+    "https://www.rateloop.ai/api/attachments/details/det_questiondetails01",
+  );
+  assert.equal(
+    parseQuestionDetailsIdFromDetailsUrl("https://evil.example/api/attachments/details/det_questiondetails01"),
+    null,
+  );
+
+  env.NEXT_PUBLIC_APP_URL = "https://safe.rateloop.ai";
+  assert.equal(
+    parseQuestionDetailsIdFromDetailsUrl("https://safe.rateloop.ai/api/attachments/details/det_questiondetails01"),
+    "det_questiondetails01",
+  );
+});
+
 test("parses local details ids only from exact public details URLs", () => {
   assert.equal(
     parseQuestionDetailsIdFromDetailsUrl("https://www.rateloop.ai/api/attachments/details/det_questiondetails01"),
@@ -110,6 +142,10 @@ test("parses local details ids only from exact public details URLs", () => {
   );
   assert.equal(
     parseQuestionDetailsIdFromDetailsUrl("https://evil.example/api/attachments/details/det_questiondetails01"),
+    null,
+  );
+  assert.equal(
+    parseQuestionDetailsIdFromDetailsUrl("https://user:pass@www.rateloop.ai/api/attachments/details/det_questiondetails01"),
     null,
   );
   assert.equal(

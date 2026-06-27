@@ -6,6 +6,7 @@ import {
   resolveOptionalAppUrl,
   resolveServerPonderUrl,
   resolveServerTargetNetworks,
+  resolveTrustedRateLoopAppUrl,
 } from "./server";
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
@@ -23,6 +24,18 @@ const originalPublicX402Usdc = env.NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS;
 const originalPublicX402Usdc84532 = env.NEXT_PUBLIC_RATELOOP_X402_USDC_ADDRESS_84532;
 const originalServerX402Usdc = env.RATELOOP_X402_USDC_ADDRESS;
 const originalServerX402Usdc84532 = env.RATELOOP_X402_USDC_ADDRESS_84532;
+const originalAppUrl = env.APP_URL;
+const originalNextPublicAppUrl = env.NEXT_PUBLIC_APP_URL;
+const originalVercelProjectProductionUrl = env.VERCEL_PROJECT_PRODUCTION_URL;
+const originalVercelUrl = env.VERCEL_URL;
+
+function restoreEnv(name: keyof NodeJS.ProcessEnv, value: string | undefined) {
+  if (value === undefined) {
+    delete env[name];
+  } else {
+    env[name] = value;
+  }
+}
 
 afterEach(() => {
   if (originalDatabaseUrl === undefined) {
@@ -96,6 +109,11 @@ afterEach(() => {
   } else {
     env.RATELOOP_X402_USDC_ADDRESS_84532 = originalServerX402Usdc84532;
   }
+
+  restoreEnv("APP_URL", originalAppUrl);
+  restoreEnv("NEXT_PUBLIC_APP_URL", originalNextPublicAppUrl);
+  restoreEnv("VERCEL_PROJECT_PRODUCTION_URL", originalVercelProjectProductionUrl);
+  restoreEnv("VERCEL_URL", originalVercelUrl);
 });
 
 test("resolveAppUrl keeps the local default outside production", () => {
@@ -175,6 +193,34 @@ test("resolveOptionalAppUrl rejects localhost Vercel-style hosts in production",
     resolveOptionalAppUrl({
       rawVercelEnv: "production",
       rawVercelProjectProductionUrl: "localhost:3000",
+      production: true,
+    }),
+    undefined,
+  );
+});
+
+test("resolveTrustedRateLoopAppUrl omits hostile app origins and falls through to the next trusted origin", () => {
+  assert.equal(
+    resolveTrustedRateLoopAppUrl({
+      rawAppUrl: "https://evil.example",
+      rawPublicAppUrl: "https://safe.rateloop.ai",
+      rawVercelUrl: "preview.rateloop.ai",
+      production: true,
+    }),
+    "https://safe.rateloop.ai",
+  );
+  assert.equal(
+    resolveTrustedRateLoopAppUrl({
+      rawAppUrl: "http://remote.example",
+      rawPublicAppUrl: "https://service.internal",
+      rawVercelUrl: "localhost:3000",
+      production: true,
+    }),
+    undefined,
+  );
+  assert.equal(
+    resolveTrustedRateLoopAppUrl({
+      rawAppUrl: "https://evil.example",
       production: true,
     }),
     undefined,

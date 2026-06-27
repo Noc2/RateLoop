@@ -10,6 +10,7 @@ import {
 import { assertGatedAttachmentSchemaReady } from "~~/lib/attachments/uploadErrors";
 import { db, dbPool } from "~~/lib/db";
 import { type QuestionDetails, questionDetails } from "~~/lib/db/schema";
+import { getTrustedRateLoopAppUrl } from "~~/lib/env/server";
 import { isValidWalletAddress, normalizeWalletAddress } from "~~/lib/watchlist/contentWatch";
 import { isLocalE2EProductionBuildEnabled } from "~~/utils/env/e2eProduction";
 
@@ -119,18 +120,7 @@ function getQuestionDetailsPath(detailsId: string) {
 }
 
 function getConfiguredQuestionDetailsBaseUrl() {
-  const rawValue =
-    process.env.APP_URL?.trim() ||
-    process.env.NEXT_PUBLIC_APP_URL?.trim() ||
-    (process.env.VERCEL_URL?.trim() ? `https://${process.env.VERCEL_URL.trim()}` : "");
-  if (!rawValue) return null;
-
-  try {
-    const parsed = new URL(rawValue);
-    return parsed.protocol === "http:" || parsed.protocol === "https:" ? parsed.toString().replace(/\/$/, "") : null;
-  } catch {
-    return null;
-  }
+  return getTrustedRateLoopAppUrl() ?? (process.env.NODE_ENV === "production" ? "https://www.rateloop.ai" : null);
 }
 
 export function getQuestionDetailsUrl(requestUrl: string, detailsId: string) {
@@ -197,22 +187,9 @@ function isPublishableQuestionDetailsUrl(value: string) {
 
 function getAllowedQuestionDetailsOrigins() {
   const origins = new Set(PRODUCTION_QUESTION_DETAILS_ORIGINS);
-  const rawValues = [process.env.APP_URL, process.env.NEXT_PUBLIC_APP_URL, process.env.VERCEL_URL];
-
-  for (const rawValue of rawValues) {
-    const trimmed = rawValue?.trim();
-    if (!trimmed) continue;
-
-    const value =
-      rawValue === process.env.VERCEL_URL && !/^https?:\/\//i.test(trimmed) ? `https://${trimmed}` : trimmed;
-    try {
-      const parsed = new URL(value);
-      if (parsed.protocol === "http:" || parsed.protocol === "https:") {
-        origins.add(parsed.origin);
-      }
-    } catch {
-      // Ignore malformed deployment URL config and fall back to production origins.
-    }
+  const configuredAppUrl = getConfiguredQuestionDetailsBaseUrl();
+  if (configuredAppUrl) {
+    origins.add(new URL(configuredAppUrl).origin);
   }
 
   return origins;
@@ -233,6 +210,7 @@ function isAllowedQuestionDetailsOrigin(parsed: URL) {
 export function parseQuestionDetailsIdFromDetailsUrl(value: string): string | null {
   try {
     const parsed = new URL(value);
+    if (parsed.username || parsed.password) return null;
     if (!isAllowedQuestionDetailsOrigin(parsed)) return null;
     const match = parsed.pathname.match(/^\/api\/attachments\/details\/(det_[A-Za-z0-9_-]{16,80})$/);
     return match?.[1] ?? null;

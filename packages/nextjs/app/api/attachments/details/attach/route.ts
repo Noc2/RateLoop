@@ -5,7 +5,10 @@ import { canonicalJsonHash } from "@rateloop/node-utils/json";
 import { type TargetAudience, normalizeTargetAudience } from "@rateloop/node-utils/profileSelfReport";
 import { type Address, type Hex, createPublicClient, decodeEventLog, http, isAddress } from "viem";
 import { getDetailsAttachRouteTestOverrides } from "~~/lib/attachments/detailsAttachRouteTestOverrides";
-import { parseUploadedImageAttachmentUrlDigest } from "~~/lib/attachments/imageAttachmentUrls";
+import {
+  type UploadedImageAttachmentUrlOptions,
+  parseUploadedImageAttachmentUrlDigest,
+} from "~~/lib/attachments/imageAttachmentUrls";
 import { attachImagesToContent, getImageAttachment } from "~~/lib/attachments/imageAttachments";
 import {
   attachQuestionDetailsToContent,
@@ -14,11 +17,12 @@ import {
 } from "~~/lib/attachments/questionDetails";
 import { parsePositiveIntegerChainId } from "~~/lib/chainId";
 import { upsertQuestionConfidentialityFromMetadata } from "~~/lib/confidentiality/context";
-import { getServerRpcOverrides, getServerTargetNetworkById } from "~~/lib/env/server";
+import { getServerRpcOverrides, getServerTargetNetworkById, getTrustedRateLoopAppUrl } from "~~/lib/env/server";
 import { isJsonObjectBody, jsonBodyErrorResponse, parseJsonBody } from "~~/lib/http/jsonBody";
 import { resolveContentDeploymentScope, resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 import { normalizeContentId, normalizeWalletAddress } from "~~/lib/watchlist/contentWatch";
 import { ponderApi } from "~~/services/ponder/client";
+import { isLocalE2EProductionBuildEnabled } from "~~/utils/env/e2eProduction";
 import { checkRateLimit } from "~~/utils/rateLimit";
 
 type DetailsAttachRequest = {
@@ -159,6 +163,7 @@ function readQuestionMetadataAttachments(value: unknown): QuestionMetadataInput[
 
 function readImageAttachments(value: unknown): ImageAttachmentInput[] {
   if (!Array.isArray(value)) return [];
+  const parserOptions = getImageAttachmentParserOptions();
   const attachments: ImageAttachmentInput[] = [];
   for (const entry of value.slice(0, MAX_ATTACH_DETAILS)) {
     if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
@@ -166,7 +171,8 @@ function readImageAttachments(value: unknown): ImageAttachmentInput[] {
     const contentId = normalizeContentId(record.contentId);
     const imageUrls = Array.isArray(record.imageUrls)
       ? record.imageUrls.filter(
-          (url): url is string => typeof url === "string" && parseUploadedImageAttachmentUrlDigest(url) !== null,
+          (url): url is string =>
+            typeof url === "string" && parseUploadedImageAttachmentUrlDigest(url, parserOptions) !== null,
         )
       : [];
     if (!contentId || imageUrls.length === 0) continue;
@@ -176,6 +182,18 @@ function readImageAttachments(value: unknown): ImageAttachmentInput[] {
     });
   }
   return attachments;
+}
+
+function getImageAttachmentParserOptions(): UploadedImageAttachmentUrlOptions {
+  const trustedAppUrl = getTrustedRateLoopAppUrl();
+  const allowedOrigins = ["https://www.rateloop.ai", "https://rateloop.ai"];
+  if (trustedAppUrl) {
+    allowedOrigins.push(trustedAppUrl);
+  }
+  return {
+    allowedOrigins,
+    allowLocalhostOrigins: process.env.NODE_ENV !== "production" || isLocalE2EProductionBuildEnabled(),
+  };
 }
 
 function resolveDetailsAttachContext(chainId: number) {
@@ -328,8 +346,9 @@ async function isGatedDetailsAttachmentVerified(detail: DetailsAttachmentInput, 
 async function gatedImageUrlsVerifiedBySubmitter(imageUrls: readonly string[], proof: ContentSubmissionProof) {
   const submitter = normalizeWalletAddress(proof.submitter);
   const verifiedUrls: string[] = [];
+  const parserOptions = getImageAttachmentParserOptions();
   for (const imageUrl of imageUrls) {
-    const parsed = parseUploadedImageAttachmentUrlDigest(imageUrl);
+    const parsed = parseUploadedImageAttachmentUrlDigest(imageUrl, parserOptions);
     if (!parsed) continue;
     const attachment = await getImageAttachment(parsed.attachmentId);
     if (

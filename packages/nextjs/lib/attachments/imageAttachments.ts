@@ -6,6 +6,7 @@ import path from "path";
 import "server-only";
 import sharp from "sharp";
 import {
+  type UploadedImageAttachmentUrlOptions,
   parseAttachmentIdFromUploadedImageUrl,
   parseUploadedImageAttachmentUrlDigest,
 } from "~~/lib/attachments/imageAttachmentUrls";
@@ -18,7 +19,9 @@ import { assertGatedAttachmentSchemaReady } from "~~/lib/attachments/uploadError
 import { MAX_SUBMISSION_IMAGE_URLS } from "~~/lib/contentMedia";
 import { db, dbPool } from "~~/lib/db";
 import { type QuestionImageAttachment, questionImageAttachments } from "~~/lib/db/schema";
+import { getTrustedRateLoopAppUrl } from "~~/lib/env/server";
 import { buildAppRelativeUrl, resolveApiRequestAppBaseUrl } from "~~/lib/url/appRelative";
+import { isLocalE2EProductionBuildEnabled } from "~~/utils/env/e2eProduction";
 
 const IMAGE_ATTACHMENT_ROUTE_PREFIX = "/api/attachments/images";
 const IMAGE_ATTACHMENT_PUBLIC_EXTENSION = "webp";
@@ -374,18 +377,19 @@ function getImageAttachmentFilename(variant: ImageAttachmentVariant = DEFAULT_IM
 }
 
 function getConfiguredAttachmentBaseUrl() {
-  const rawValue =
-    process.env.APP_URL?.trim() ||
-    process.env.NEXT_PUBLIC_APP_URL?.trim() ||
-    (process.env.VERCEL_URL?.trim() ? `https://${process.env.VERCEL_URL.trim()}` : "");
-  if (!rawValue) return null;
+  return getTrustedRateLoopAppUrl() ?? (process.env.NODE_ENV === "production" ? "https://www.rateloop.ai" : null);
+}
 
-  try {
-    const parsed = new URL(rawValue);
-    return parsed.protocol === "http:" || parsed.protocol === "https:" ? parsed.toString().replace(/\/$/, "") : null;
-  } catch {
-    return null;
+function getImageAttachmentUrlParserOptions(): UploadedImageAttachmentUrlOptions {
+  const configuredAppUrl = getConfiguredAttachmentBaseUrl();
+  const allowedOrigins = ["https://www.rateloop.ai", "https://rateloop.ai"];
+  if (configuredAppUrl) {
+    allowedOrigins.push(configuredAppUrl);
   }
+  return {
+    allowedOrigins,
+    allowLocalhostOrigins: process.env.NODE_ENV !== "production" || isLocalE2EProductionBuildEnabled(),
+  };
 }
 
 const BLOB_STORAGE_MISSING_CONFIGURATION_ERROR =
@@ -481,7 +485,7 @@ export function getImageAttachmentUploadMode(env: ImageAttachmentUploadModeEnv =
 }
 
 export function parseAttachmentIdFromImageUrl(value: string): string | null {
-  return parseAttachmentIdFromUploadedImageUrl(value);
+  return parseAttachmentIdFromUploadedImageUrl(value, getImageAttachmentUrlParserOptions());
 }
 
 export function isLocalImageAttachmentPathname(pathname: string | null | undefined) {
@@ -1173,7 +1177,8 @@ export async function getImageAttachmentSubmissionValidationError(params: {
     return `imageUrls supports at most ${MAX_SUBMISSION_IMAGE_URLS} images.`;
   }
 
-  const parsedImages = params.imageUrls.map(url => parseUploadedImageAttachmentUrlDigest(url));
+  const parserOptions = getImageAttachmentUrlParserOptions();
+  const parsedImages = params.imageUrls.map(url => parseUploadedImageAttachmentUrlDigest(url, parserOptions));
   if (parsedImages.some(parsed => !parsed)) {
     return "imageUrls must come from RateLoop uploads. Upload bytes with rateloop_upload_image first.";
   }

@@ -194,7 +194,7 @@ Each service also accepts the other service's allowlist env name as an alias. Pr
 
 ### Agent attachment-origin fallbacks
 
-Agents and Next.js x402 parsers accept hosted attachment origins from `APP_URL`, `VERCEL_URL` (agents), and `NEXT_PUBLIC_APP_URL` in addition to `rateloop.ai` / `www.rateloop.ai`. Legacy `RATELOOP_QUESTION_METADATA_BASE_URL` is still read by `questionSpecs.ts` when newer pins are unset.
+Agents and Next.js x402 parsers accept hosted attachment origins from `rateloop.ai` / `www.rateloop.ai` and validated configured `*.rateloop.ai` app origins. They do not treat arbitrary public HTTPS `APP_URL`, `NEXT_PUBLIC_APP_URL`, or `VERCEL_URL` values as RateLoop-hosted attachment provenance. Legacy `RATELOOP_QUESTION_METADATA_BASE_URL` is still read by `questionSpecs.ts` when newer pins are unset.
 
 Agent x402 parsers also accept `RATELOOP_LOCAL_SIGNER_QUESTION_METADATA_BASE_URL` before `NEXT_PUBLIC_PONDER_URL` / `NEXT_PUBLIC_APP_URL` when building default metadata URLs outside Next.js.
 

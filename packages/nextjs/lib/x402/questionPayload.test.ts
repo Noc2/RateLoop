@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { afterEach, test } from "node:test";
 import {
   X402QuestionInputError,
   buildX402QuestionOperation,
@@ -13,6 +13,26 @@ const UPLOADED_IMAGE_URL_B =
 const DETAILS_URL = "https://www.rateloop.ai/api/attachments/details/det_questiondetails01";
 const DETAILS_HASH = `0x${"8".repeat(64)}`;
 const EMPTY_DETAILS_HASH = `0x${"0".repeat(64)}`;
+const env = process.env as Record<string, string | undefined>;
+const originalAppUrl = env.APP_URL;
+const originalNextPublicAppUrl = env.NEXT_PUBLIC_APP_URL;
+const originalNodeEnv = env.NODE_ENV;
+const originalVercelUrl = env.VERCEL_URL;
+
+function restoreEnv(name: keyof NodeJS.ProcessEnv, value: string | undefined) {
+  if (value === undefined) {
+    delete env[name];
+  } else {
+    env[name] = value;
+  }
+}
+
+afterEach(() => {
+  restoreEnv("APP_URL", originalAppUrl);
+  restoreEnv("NEXT_PUBLIC_APP_URL", originalNextPublicAppUrl);
+  restoreEnv("NODE_ENV", originalNodeEnv);
+  restoreEnv("VERCEL_URL", originalVercelUrl);
+});
 
 const VALID_REQUEST = {
   bounty: {
@@ -137,6 +157,60 @@ test("parseX402QuestionRequest canonicalizes image URL order and duplicates", ()
   });
 
   assert.deepEqual(payload.questions[0].imageUrls, [UPLOADED_IMAGE_URL, UPLOADED_IMAGE_URL_B]);
+});
+
+test("parseX402QuestionRequest ignores unsafe configured app origins for uploaded images in production", () => {
+  env.NODE_ENV = "production";
+  env.APP_URL = "https://evil.example";
+  delete env.NEXT_PUBLIC_APP_URL;
+
+  assert.throws(
+    () =>
+      parseX402QuestionRequest({
+        ...VALID_REQUEST,
+        question: {
+          ...VALID_REQUEST.question,
+          imageUrls: [
+            `https://evil.example/api/attachments/images/att_abcdefghijklmnop.webp#sha256=0x${"a".repeat(64)}`,
+          ],
+        },
+      }),
+    /imageUrls must come from RateLoop uploads/,
+  );
+  env.NEXT_PUBLIC_APP_URL = "https://safe.rateloop.ai";
+  assert.deepEqual(
+    parseX402QuestionRequest({
+      ...VALID_REQUEST,
+      question: {
+        ...VALID_REQUEST.question,
+        imageUrls: [
+          `https://safe.rateloop.ai/api/attachments/images/att_abcdefghijklmnop.webp#sha256=0x${"a".repeat(64)}`,
+        ],
+      },
+    }).questions[0].imageUrls,
+    [`https://safe.rateloop.ai/api/attachments/images/att_abcdefghijklmnop.webp#sha256=0x${"a".repeat(64)}`],
+  );
+  assert.throws(
+    () =>
+      parseX402QuestionRequest({
+        ...VALID_REQUEST,
+        question: {
+          ...VALID_REQUEST.question,
+          confidentiality: {
+            bond: {
+              amount: "1000000",
+              asset: "LREP",
+            },
+            visibility: "gated",
+          },
+          contextUrl: undefined,
+          detailsHash: DETAILS_HASH,
+          detailsUrl: "https://evil.example/api/attachments/details/det_questiondetails01",
+          imageUrls: [],
+        },
+      }),
+    /detailsUrl must be a RateLoop-hosted details attachment/,
+  );
 });
 
 test("parseX402QuestionRequest accepts off-chain details URL and hash", () => {

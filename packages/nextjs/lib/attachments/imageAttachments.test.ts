@@ -34,13 +34,34 @@ const ONE_PIXEL_PNG = Buffer.from(
   "base64",
 );
 
+const env = process.env as Record<string, string | undefined>;
+const originalAppUrl = env.APP_URL;
+const originalNextPublicAppUrl = env.NEXT_PUBLIC_APP_URL;
+const originalNodeEnv = env.NODE_ENV;
+const originalVercelUrl = env.VERCEL_URL;
+
+function restoreEnv(name: keyof NodeJS.ProcessEnv, value: string | undefined) {
+  if (value === undefined) {
+    delete env[name];
+  } else {
+    env[name] = value;
+  }
+}
+
 beforeEach(() => {
   __setDatabaseResourcesForTests(createMemoryDatabaseResources());
+  delete env.APP_URL;
+  delete env.NEXT_PUBLIC_APP_URL;
+  delete env.VERCEL_URL;
 });
 
 afterEach(() => {
   __setImageAttachmentBlobTestOverridesForTests(null);
   __setDatabaseResourcesForTests(null);
+  restoreEnv("APP_URL", originalAppUrl);
+  restoreEnv("NEXT_PUBLIC_APP_URL", originalNextPublicAppUrl);
+  restoreEnv("NODE_ENV", originalNodeEnv);
+  restoreEnv("VERCEL_URL", originalVercelUrl);
 });
 
 function blobGetResult(buffer: Buffer) {
@@ -67,6 +88,31 @@ test("builds RateLoop upload image URLs with a webp extension", () => {
   assert.equal(
     getAttachmentImageUrl("https://www.rateloop.ai/rateloop/api/mcp/public", "att_abcdefghijklmnop", "a".repeat(64)),
     `https://www.rateloop.ai/rateloop/api/attachments/images/att_abcdefghijklmnop.webp#sha256=0x${"a".repeat(64)}`,
+  );
+});
+
+test("uses only hardened configured app origins for image attachment URLs in production", () => {
+  env.NODE_ENV = "production";
+  env.APP_URL = "https://evil.example";
+  delete env.NEXT_PUBLIC_APP_URL;
+
+  assert.equal(
+    getAttachmentImageUrl("https://preview.example/ask", "att_abcdefghijklmnop", "a".repeat(64)),
+    `https://www.rateloop.ai/api/attachments/images/att_abcdefghijklmnop.webp#sha256=0x${"a".repeat(64)}`,
+  );
+  assert.equal(
+    parseAttachmentIdFromImageUrl(
+      `https://evil.example/api/attachments/images/att_abcdefghijklmnop.webp#sha256=0x${"a".repeat(64)}`,
+    ),
+    null,
+  );
+
+  env.NEXT_PUBLIC_APP_URL = "https://safe.rateloop.ai";
+  assert.equal(
+    parseAttachmentIdFromImageUrl(
+      `https://safe.rateloop.ai/api/attachments/images/att_abcdefghijklmnop.webp#sha256=0x${"a".repeat(64)}`,
+    ),
+    "att_abcdefghijklmnop",
   );
 });
 

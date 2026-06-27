@@ -470,12 +470,64 @@ function isLocalhostOrigin(origin: string) {
   }
 }
 
+function normalizeUrlHostname(hostname: string) {
+  return hostname
+    .toLowerCase()
+    .replace(/^\[(.*)\]$/, "$1")
+    .replace(/\.+$/, "");
+}
+
+function isIpLikeHostname(hostname: string) {
+  const normalized = normalizeUrlHostname(hostname);
+  return /^\d+$/.test(normalized) || /^\d{1,3}(?:\.\d{1,3}){3}$/.test(normalized) || normalized.includes(":");
+}
+
+function isInternalHostname(hostname: string) {
+  const normalized = normalizeUrlHostname(hostname);
+  return (
+    !normalized.includes(".") ||
+    normalized.endsWith(".localhost") ||
+    normalized.endsWith(".local") ||
+    normalized.endsWith(".internal")
+  );
+}
+
+function isTrustedRateLoopAttachmentHostname(hostname: string) {
+  const normalized = normalizeUrlHostname(hostname);
+  return normalized === "rateloop.ai" || normalized.endsWith(".rateloop.ai");
+}
+
+function normalizeConfiguredRateLoopAttachmentOrigin(value: string | null | undefined) {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
+    if (parsed.username || parsed.password) return null;
+
+    const localAllowed = process.env.NODE_ENV !== "production" || isLocalE2EProductionBuildEnabled();
+    const localhost = isLocalhostOrigin(parsed.origin);
+    if (process.env.NODE_ENV === "production") {
+      if (parsed.protocol === "http:" && !(localAllowed && localhost)) return null;
+      if (!localAllowed || !localhost) {
+        if (localhost || isIpLikeHostname(parsed.hostname) || isInternalHostname(parsed.hostname)) return null;
+        if (!isTrustedRateLoopAttachmentHostname(parsed.hostname)) return null;
+      }
+    }
+
+    return parsed.origin;
+  } catch {
+    return null;
+  }
+}
+
 function getDefaultRateLoopAttachmentOrigins() {
   return [
     ...RATELOOP_PRODUCTION_ORIGINS,
-    normalizeOrigin(process.env.APP_URL),
-    normalizeOrigin(process.env.NEXT_PUBLIC_APP_URL),
-    normalizeOrigin(process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null),
+    normalizeConfiguredRateLoopAttachmentOrigin(process.env.APP_URL),
+    normalizeConfiguredRateLoopAttachmentOrigin(process.env.NEXT_PUBLIC_APP_URL),
+    normalizeConfiguredRateLoopAttachmentOrigin(process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null),
   ].filter((origin): origin is string => Boolean(origin));
 }
 
