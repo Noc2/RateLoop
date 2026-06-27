@@ -14,15 +14,34 @@ function workflowJobBlock(workflow, jobName) {
   return lines.slice(start, end === -1 ? undefined : end).join("\n");
 }
 
+function workflowStepBlock(workflow, stepName) {
+  const lines = workflow.split(/\n/);
+  const start = lines.findIndex(line => line === `      - name: ${stepName}`);
+  assert.notEqual(start, -1, `Missing workflow step ${stepName}`);
+  const end = lines.findIndex((line, index) => index > start && /^      - name: /.test(line));
+  return lines.slice(start, end === -1 ? undefined : end).join("\n");
+}
+
 test("legacy World Chain Sepolia readiness workflow is manual-only", () => {
   const workflow = readWorkflow(
     ".github/workflows/worldchain-sepolia-readiness.yaml",
   );
+  const offlineStep = workflowStepBlock(workflow, "Offline readiness checks");
+  const liveStep = workflowStepBlock(workflow, "Live readiness probes");
 
   assert.match(workflow, /^on:\n  workflow_dispatch:/m);
   assert.doesNotMatch(workflow, /^  push:/m);
   assert.doesNotMatch(workflow, /^  pull_request:/m);
   assert.doesNotMatch(workflow, /^  schedule:/m);
+  assert.doesNotMatch(
+    workflow,
+    /^      WORLDCHAIN_SEPOLIA_RPC_URL: \$\{\{ secrets\.WORLDCHAIN_SEPOLIA_RPC_URL \}\}/m,
+  );
+  assert.doesNotMatch(offlineStep, /secrets\./);
+  assert.match(
+    liveStep,
+    /WORLDCHAIN_SEPOLIA_RPC_URL: \$\{\{ secrets\.WORLDCHAIN_SEPOLIA_RPC_URL \}\}/,
+  );
 });
 
 test("legacy World Chain mainnet readiness workflow is retired and manual-only", () => {
@@ -134,6 +153,16 @@ test("Base mainnet readiness remains an active push, PR, scheduled, and manual g
     /KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL: https:\/\/artifacts\.rateloop\.ai\/rateloop/,
   );
   assert.match(workflow, /RATE_LIMIT_TRUSTED_IP_HEADERS:/);
+});
+
+test("local Anvil deploy steps use dummy explorer keys instead of repository secrets", () => {
+  const lintWorkflow = readWorkflow(".github/workflows/lint.yaml");
+  const e2eWorkflow = readWorkflow(".github/workflows/e2e.yaml");
+
+  assert.doesNotMatch(lintWorkflow, /ETHERSCAN_API_KEY: \$\{\{ secrets\.ETHERSCAN_API_KEY \}\}/);
+  assert.doesNotMatch(e2eWorkflow, /ETHERSCAN_API_KEY: \$\{\{ secrets\.ETHERSCAN_API_KEY \}\}/);
+  assert.equal((lintWorkflow.match(/ETHERSCAN_API_KEY: local-anvil-dummy/g) ?? []).length, 1);
+  assert.equal((e2eWorkflow.match(/ETHERSCAN_API_KEY: local-anvil-dummy/g) ?? []).length, 2);
 });
 
 test("Railway service start commands pin production mode", () => {

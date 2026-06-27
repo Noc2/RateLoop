@@ -140,7 +140,7 @@ jobs:
 
       - name: Start Anvil and deploy contracts
         env:
-          ETHERSCAN_API_KEY: ${{ secrets.ETHERSCAN_API_KEY }}
+          ETHERSCAN_API_KEY: local-anvil-dummy
           LOCALHOST_KEYSTORE_ACCOUNT: scaffold-eth-default
         run: |
           yarn chain &
@@ -328,7 +328,7 @@ jobs:
 
       - name: Start Anvil and deploy contracts
         env:
-          ETHERSCAN_API_KEY: ${{ secrets.ETHERSCAN_API_KEY }}
+          ETHERSCAN_API_KEY: local-anvil-dummy
           LOCALHOST_KEYSTORE_ACCOUNT: scaffold-eth-default
         run: |
           yarn chain &
