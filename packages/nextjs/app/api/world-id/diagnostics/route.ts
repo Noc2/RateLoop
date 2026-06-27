@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { JSON_BODY_TOO_LARGE, jsonBodyErrorResponse, parseJsonBody } from "~~/lib/http/jsonBody";
 import {
   type WorldIdDiagnosticEvent,
   type WorldIdDiagnosticPayload,
@@ -7,6 +8,7 @@ import {
 } from "~~/lib/world-id/diagnostics";
 import { checkRateLimit } from "~~/utils/rateLimit";
 
+const JSON_BODY_MAX_BYTES = 4 * 1024;
 const RATE_LIMIT = { limit: 60, windowMs: 60_000 };
 const ALLOWED_EVENTS = new Set<WorldIdDiagnosticEvent>([
   "request_created",
@@ -83,7 +85,12 @@ export async function POST(request: NextRequest): Promise<Response> {
   const limited = await checkRateLimit(request, RATE_LIMIT);
   if (limited) return limited;
 
-  const payload = normalizeDiagnosticPayload(await request.json().catch(() => null));
+  const body = await parseJsonBody(request, { maxBytes: JSON_BODY_MAX_BYTES });
+  if (body === JSON_BODY_TOO_LARGE) {
+    return jsonBodyErrorResponse(body);
+  }
+
+  const payload = normalizeDiagnosticPayload(body);
   if (!payload) {
     return NextResponse.json({ error: "Invalid World ID diagnostic payload." }, { status: 400 });
   }

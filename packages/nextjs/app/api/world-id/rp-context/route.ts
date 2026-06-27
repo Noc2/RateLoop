@@ -1,18 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
 import { signRequest } from "@worldcoin/idkit/signing";
+import { JSON_BODY_TOO_LARGE, jsonBodyErrorResponse, parseJsonBody } from "~~/lib/http/jsonBody";
 import { type WorldIdActionPurpose, getWorldIdServerConfig } from "~~/lib/world-id/config";
 import { createWorldIdDiagnosticId } from "~~/lib/world-id/diagnostics";
 import { checkRateLimit } from "~~/utils/rateLimit";
 
+const JSON_BODY_MAX_BYTES = 4 * 1024;
 const RP_CONTEXT_TTL_SECONDS = 5 * 60;
 // H-9 (2026-05-22 audit): rp-context issues signed World ID requests; without a per-IP cap
 // it could be hammered to burn through the upstream World ID quota or be used as a free
 // signing oracle. 20/min/IP is well above any legitimate enrollment flow.
 const RATE_LIMIT = { limit: 20, windowMs: 60_000 };
 
-async function readPurpose(request: NextRequest): Promise<WorldIdActionPurpose> {
-  const body = (await request.json().catch(() => ({}))) as { purpose?: string };
-  return body.purpose === "presence" ? "presence" : "credential";
+async function readPurpose(request: NextRequest): Promise<WorldIdActionPurpose | typeof JSON_BODY_TOO_LARGE> {
+  const body = await parseJsonBody(request, { maxBytes: JSON_BODY_MAX_BYTES });
+  if (body === JSON_BODY_TOO_LARGE) {
+    return JSON_BODY_TOO_LARGE;
+  }
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return "credential";
+  }
+  return (body as { purpose?: unknown }).purpose === "presence" ? "presence" : "credential";
 }
 
 export async function POST(request: NextRequest): Promise<Response> {
@@ -20,6 +28,9 @@ export async function POST(request: NextRequest): Promise<Response> {
   if (limited) return limited;
 
   const purpose = await readPurpose(request);
+  if (purpose === JSON_BODY_TOO_LARGE) {
+    return jsonBodyErrorResponse(purpose);
+  }
   const config = getWorldIdServerConfig(purpose);
 
   if (purpose === "presence" && config.proofMode === "legacy") {

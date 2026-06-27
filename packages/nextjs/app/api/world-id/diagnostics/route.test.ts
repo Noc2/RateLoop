@@ -15,6 +15,17 @@ function makeRequest(body: unknown) {
   });
 }
 
+function makeRawRequest(body: string) {
+  return new NextRequest("https://rateloop.ai/api/world-id/diagnostics", {
+    method: "POST",
+    headers: new Headers({
+      "content-type": "application/json",
+      "x-forwarded-for": "203.0.113.77",
+    }),
+    body,
+  });
+}
+
 before(() => {
   __setRateLimitStoreForTests({
     execute: async () => ({ rows: [{ name: "cleanup", request_count: 1 }] }) as never,
@@ -81,4 +92,12 @@ test("World ID diagnostics route rejects unknown diagnostic events", async () =>
 
   assert.equal(response.status, 400);
   assert.equal(body.error, "Invalid World ID diagnostic payload.");
+});
+
+test("World ID diagnostics route rejects oversized JSON bodies", async () => {
+  const response = await POST(makeRawRequest(JSON.stringify({ event: "poll_failed", message: "x".repeat(4096) })));
+  const body = await response.json();
+
+  assert.equal(response.status, 413);
+  assert.equal(body.code, "request_entity_too_large");
 });

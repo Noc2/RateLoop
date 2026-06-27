@@ -28,6 +28,17 @@ function makeRequest(body?: unknown) {
   });
 }
 
+function makeRawRequest(body: string) {
+  return new NextRequest("https://rateloop.ai/api/world-id/rp-context", {
+    method: "POST",
+    headers: new Headers({
+      "content-type": "application/json",
+      "x-forwarded-for": "203.0.113.77",
+    }),
+    body,
+  });
+}
+
 before(() => {
   // Always-allow rate-limit store: the cleanup lease select returns one row so the
   // delete branch runs, and the main rate-limit INSERT returns request_count: 1 so
@@ -154,4 +165,12 @@ test("World ID RP context route rejects app IDs in the RP context field", async 
 
   assert.equal(response.status, 503);
   assert.equal(body.error, "World ID relying-party ID must use the rp_ value from the World Developer Portal.");
+});
+
+test("World ID RP context route rejects oversized JSON bodies", async () => {
+  const response = await POST(makeRawRequest(JSON.stringify({ padding: "x".repeat(4096), purpose: "presence" })));
+  const body = await response.json();
+
+  assert.equal(response.status, 413);
+  assert.equal(body.code, "request_entity_too_large");
 });
