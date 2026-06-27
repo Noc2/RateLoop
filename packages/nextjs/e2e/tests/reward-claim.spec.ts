@@ -43,6 +43,13 @@ test.describe("Reward claim lifecycle", () => {
   const STAKE = BigInt(10e6); // 10 LREP (above MIN_STAKE_FOR_RATING threshold)
   const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
   const EPOCH_DURATION = 300; // 5 min — contract minimum is 5 minutes
+  const CLEANUP_EPOCH_DURATION = 3600;
+  const CLEANUP_ROUND_CONFIG = {
+    epochDuration: CLEANUP_EPOCH_DURATION,
+    maxDuration: 86400,
+    minVoters: 3,
+    maxVoters: 100,
+  };
 
   test.beforeAll(async () => {
     const ok = await setTestConfig(VOTING_ENGINE, DEPLOYER.address, EPOCH_DURATION);
@@ -268,6 +275,9 @@ test.describe("Reward claim lifecycle", () => {
       1,
       submitter.address,
       CONTENT_REGISTRY,
+      undefined,
+      undefined,
+      CLEANUP_ROUND_CONFIG,
     );
     expect(submitted, "Content submission failed").toBe(true);
 
@@ -313,6 +323,7 @@ test.describe("Reward claim lifecycle", () => {
         ZERO_ADDRESS,
         voter.account.address,
         VOTING_ENGINE,
+        CLEANUP_EPOCH_DURATION,
       );
       expect(commit.success, `Vote commit failed for ${voter.account.address}`).toBe(true);
       commits.push({ account: voter.account, commitKey: commit.commitKey, isUp: commit.isUp, salt: commit.salt });
@@ -321,7 +332,7 @@ test.describe("Reward claim lifecycle", () => {
     const cleanupRoundId = await getActiveRoundId(BigInt(cleanupContentId!), VOTING_ENGINE);
     expect(cleanupRoundId).toBeGreaterThan(0n);
 
-    await evmIncreaseTime(EPOCH_DURATION + 1);
+    await evmIncreaseTime(CLEANUP_EPOCH_DURATION + 1);
 
     for (const voter of unrevealedVoters) {
       const approved = await approveLREP(VOTING_ENGINE, STAKE, voter.account.address, LREP_TOKEN);
@@ -334,6 +345,7 @@ test.describe("Reward claim lifecycle", () => {
         ZERO_ADDRESS,
         voter.account.address,
         VOTING_ENGINE,
+        CLEANUP_EPOCH_DURATION,
       );
       expect(commit.success, `Vote commit failed for ${voter.account.address}`).toBe(true);
       commits.push({ account: voter.account, commitKey: commit.commitKey, isUp: commit.isUp, salt: commit.salt });
