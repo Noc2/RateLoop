@@ -390,6 +390,10 @@ function submissionRewardAssetId(asset: SubmissionRewardAsset) {
   return asset === "LREP" ? X402_SUBMISSION_REWARD_ASSET_LREP : X402_SUBMISSION_REWARD_ASSET_USDC;
 }
 
+function submissionRewardAssetLabel(asset: unknown): SubmissionRewardAsset {
+  return toDecimalString(asset) === String(X402_SUBMISSION_REWARD_ASSET_LREP) ? "LREP" : "USDC";
+}
+
 function submissionRewardTokenAddress(
   config: X402QuestionSubmissionConfig,
   asset: SubmissionRewardAsset,
@@ -529,7 +533,7 @@ function buildExpectedQuestionContextUrls(payload: X402QuestionPayload): string[
 function serializeExpectedRewardTerms(payload: X402QuestionPayload): StoredQuestionRewardTerms {
   return {
     amount: payload.bounty.amount.toString(),
-    asset: X402_SUBMISSION_REWARD_ASSET_USDC.toString(),
+    asset: submissionRewardAssetId(payload.bounty.asset).toString(),
     bountyStartBy: payload.bounty.bountyStartBy.toString(),
     bountyWindowSeconds: payload.bounty.bountyWindowSeconds.toString(),
     feedbackWindowSeconds: payload.bounty.feedbackWindowSeconds.toString(),
@@ -2783,7 +2787,7 @@ function x402QuestionSubmissionStatusBody(params: {
     roundConfig: serializeQuestionRoundConfig(params.payload.roundConfig),
     payment: {
       amount: params.payload.bounty.amount.toString(),
-      asset: params.config.usdcAddress,
+      asset: submissionRewardTokenAddress(params.config, params.payload.bounty.asset) ?? params.config.usdcAddress,
     },
     rewardPoolId: params.record?.rewardPoolId ?? null,
     status: params.record?.status ?? "not_found",
@@ -2847,7 +2851,7 @@ async function recordAgentWalletSubmissionPlan(params: {
         params.operation.payloadHash,
         params.payload.chainId,
         params.plan.walletAddress,
-        params.config.usdcAddress,
+        params.plan.payment.tokenAddress,
         params.plan.payment.amount,
         params.payload.bounty.amount.toString(),
         params.payload.questions.length,
@@ -2879,7 +2883,7 @@ async function recordAgentWalletSubmissionPlan(params: {
       `,
       args: [
         params.plan.walletAddress,
-        params.config.usdcAddress,
+        params.plan.payment.tokenAddress,
         params.plan.payment.amount,
         params.payload.bounty.amount.toString(),
         params.payload.questions.length,
@@ -3854,7 +3858,7 @@ export function x402QuestionSubmissionRecordBody(record: X402QuestionSubmissionR
   return {
     bounty: {
       amount: record.bountyAmount,
-      asset: "USDC",
+      asset: submissionRewardAssetLabel(expectedRewardTerms?.asset),
       bountyEligibility: expectedRewardTerms?.bountyEligibility ?? "0",
     },
     bundleId: record.bundleId,

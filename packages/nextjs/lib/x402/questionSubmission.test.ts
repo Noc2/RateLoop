@@ -33,6 +33,10 @@ const env = process.env as Record<string, string | undefined>;
 const originalDatabaseUrl = env.DATABASE_URL;
 const EMPTY_BOUNTY_ELIGIBILITY_DATA_HASH = `0x${"0".repeat(64)}` as const;
 
+function submissionRewardAssetIdForTest(asset: X402QuestionPayload["bounty"]["asset"]) {
+  return asset === "LREP" ? 0 : 1;
+}
+
 function buildPayload(clientRequestId: string): X402QuestionPayload {
   return {
     bounty: {
@@ -356,7 +360,7 @@ function buildSubmissionRewardPoolAttachedLog(params: {
       eventName: "SubmissionRewardPoolAttached",
       args: {
         contentId: params.contentId,
-        rewardAsset: 1,
+        rewardAsset: submissionRewardAssetIdForTest(params.payload.bounty.asset),
         submitter: params.submitter,
       },
     }).filter((topic): topic is Hex => !!topic),
@@ -403,7 +407,7 @@ function buildQuestionBundleSubmittedLog(params: {
       eventName: "QuestionBundleSubmitted",
       args: {
         bundleId: params.bundleId,
-        rewardAsset: 1,
+        rewardAsset: submissionRewardAssetIdForTest(params.payload.bounty.asset),
         submitter: params.submitter,
       },
     }).filter((topic): topic is Hex => !!topic),
@@ -629,6 +633,23 @@ test("prepareAgentWalletQuestionSubmissionRequest plans LREP bounty wallet calls
   const submitArgs = decoded.args as readonly unknown[];
   const rewardTerms = submitArgs[8] as { 0?: bigint | number; asset?: bigint | number };
   assert.equal(Number(rewardTerms.asset ?? rewardTerms[0]), 0);
+
+  const record = await getX402QuestionSubmissionByClientRequest({
+    chainId: payload.chainId,
+    clientRequestId: payload.clientRequestId,
+  });
+  assert.ok(record);
+  assert.equal(record.paymentAsset, TEST_CONFIG.lrepAddress);
+  const receipt = JSON.parse(record?.paymentReceipt ?? "{}") as {
+    expectedRewardTerms?: { asset?: string };
+  };
+  assert.equal(receipt.expectedRewardTerms?.asset, "0");
+  const statusBody = x402QuestionSubmissionRecordBody(record) as {
+    bounty: { asset: string };
+    payment: { asset: string };
+  };
+  assert.equal(statusBody.bounty.asset, "LREP");
+  assert.equal(statusBody.payment.asset, TEST_CONFIG.lrepAddress);
 });
 
 test("prepareAgentWalletQuestionSubmissionRequest stores optional feedback bonus metadata", async () => {
@@ -827,6 +848,67 @@ test("confirmAgentWalletQuestionSubmissionRequest ignores spoofed submission log
   assert.equal(body.status, "submitted");
   assert.equal(body.contentId, "123");
   assert.deepEqual(body.contentIds, ["123"]);
+});
+
+test("confirmAgentWalletQuestionSubmissionRequest confirms LREP wallet-call reward plans", async () => {
+  setDefaultTestOverrides({
+    buildAgentWalletQuestionSubmissionPlan: undefined as never,
+    createPublicQuestionClient: () => createPlanningPublicClient(),
+  });
+  const basePayload = buildPayload("wallet-confirm-lrep-bounty");
+  const payload = {
+    ...basePayload,
+    bounty: { ...basePayload.bounty, asset: "LREP" as const },
+  };
+  const walletAddress = "0x00000000000000000000000000000000000000aa" as const;
+  const transactionHash = `0x${"c".repeat(64)}` as const;
+  await prepareAgentWalletQuestionSubmissionRequest({
+    agentId: "agent-wallet",
+    payload,
+    walletAddress,
+  });
+  const record = await getX402QuestionSubmissionByClientRequest({
+    chainId: payload.chainId,
+    clientRequestId: payload.clientRequestId,
+  });
+  assert.ok(record);
+  const receipt = JSON.parse(record.paymentReceipt ?? "{}") as {
+    expectedRewardTerms?: { asset?: string };
+  };
+  assert.equal(receipt.expectedRewardTerms?.asset, "0");
+  const expectedContentHash = getExpectedContentHash(record);
+
+  setDefaultTestOverrides({
+    waitForSuccessfulReceipt: async (_publicClient, hash) =>
+      buildReceipt(hash, [
+        ...buildSubmittedQuestionLogs({
+          address: TEST_CONFIG.contentRegistryAddress,
+          contentHash: expectedContentHash,
+          contentId: 456n,
+          payload,
+          submitter: walletAddress,
+        }),
+      ]),
+  });
+
+  const confirmed = await confirmAgentWalletQuestionSubmissionRequest({
+    operationKey: record.operationKey,
+    transactionHashes: [transactionHash],
+  });
+  const body = confirmed.body as {
+    bounty: { asset: string };
+    contentId: string;
+    payment: { asset: string };
+    rewardPoolId: string;
+    status: string;
+  };
+
+  assert.equal(confirmed.status, 200);
+  assert.equal(body.status, "submitted");
+  assert.equal(body.contentId, "456");
+  assert.equal(body.rewardPoolId, "77");
+  assert.equal(body.bounty.asset, "LREP");
+  assert.equal(body.payment.asset, TEST_CONFIG.lrepAddress);
 });
 
 test("confirmAgentWalletQuestionSubmissionRequest accepts multi-round bundle completer events", async () => {
