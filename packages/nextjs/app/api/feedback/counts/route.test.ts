@@ -8,11 +8,13 @@ function makeRequest(pathname: string): NextRequest {
   return new NextRequest(`https://rateloop.ai${pathname}`);
 }
 
-function createCountingRateLimitStore() {
+function createCountingRateLimitStore(): NonNullable<Parameters<typeof __setRateLimitStoreForTests>[0]> {
   const counts = new Map<string, number>();
 
   return {
-    execute: async ({ sql, args }: { sql: unknown; args?: unknown[] }) => {
+    execute: async input => {
+      const sql = typeof input === "string" ? input : input.sql;
+      const args = typeof input === "string" ? [] : input.args;
       const statement = String(sql);
       if (/DELETE FROM api_rate_limits/u.test(statement)) {
         return { rows: [] } as any;
