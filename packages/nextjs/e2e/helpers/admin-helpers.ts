@@ -1663,6 +1663,7 @@ export async function commitVoteDirect(
   isUp: boolean;
   predictedUpBps: number;
   salt: `0x${string}`;
+  roundId: bigint;
 }> {
   const { encodeFunctionData } = await import("viem");
   const resolvedEpochDurationSeconds = await resolveVoteCommitEpochDurationSeconds(
@@ -1752,6 +1753,7 @@ export async function commitVoteDirect(
         isUp,
         predictedUpBps,
         salt,
+        roundId,
       };
     },
     isSuccess: result => result.success,

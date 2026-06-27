@@ -43,13 +43,6 @@ test.describe("Reward claim lifecycle", () => {
   const STAKE = BigInt(10e6); // 10 LREP (above MIN_STAKE_FOR_RATING threshold)
   const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
   const EPOCH_DURATION = 300; // 5 min — contract minimum is 5 minutes
-  const CLEANUP_EPOCH_DURATION = 3600;
-  const CLEANUP_ROUND_CONFIG = {
-    epochDuration: CLEANUP_EPOCH_DURATION,
-    maxDuration: 86400,
-    minVoters: 3,
-    maxVoters: 100,
-  };
 
   test.beforeAll(async () => {
     const ok = await setTestConfig(VOTING_ENGINE, DEPLOYER.address, EPOCH_DURATION);
@@ -260,8 +253,7 @@ test.describe("Reward claim lifecycle", () => {
     // settlement epoch so the round can settle and cleanup can refund them.
     const submitter = ANVIL_ACCOUNTS.account10;
     const keeper = ANVIL_ACCOUNTS.account1;
-    const unrevealed1 = ANVIL_ACCOUNTS.account5;
-    const unrevealed2 = ANVIL_ACCOUNTS.account6;
+    const unrevealed = ANVIL_ACCOUNTS.account5;
     const uniqueId = Date.now();
 
     const submitApproved = await approveLREP(CONTENT_REGISTRY, BigInt(10e6), submitter.address, LREP_TOKEN);
@@ -275,9 +267,6 @@ test.describe("Reward claim lifecycle", () => {
       1,
       submitter.address,
       CONTENT_REGISTRY,
-      undefined,
-      undefined,
-      CLEANUP_ROUND_CONFIG,
     );
     expect(submitted, "Content submission failed").toBe(true);
 
@@ -299,17 +288,12 @@ test.describe("Reward claim lifecycle", () => {
       { account: ANVIL_ACCOUNTS.account4, isUp: true },
       { account: ANVIL_ACCOUNTS.account7, isUp: false },
     ];
-    const unrevealedVoters = [
-      { account: unrevealed1, isUp: true },
-      { account: unrevealed2, isUp: false },
-    ];
-    const voters = [...revealedVoters, ...unrevealedVoters];
-
     const commits: {
-      account: (typeof voters)[number]["account"];
+      account: (typeof revealedVoters)[number]["account"];
       commitKey: `0x${string}`;
       isUp: boolean;
       salt: `0x${string}`;
+      roundId: bigint;
     }[] = [];
 
     for (const voter of revealedVoters) {
@@ -323,35 +307,44 @@ test.describe("Reward claim lifecycle", () => {
         ZERO_ADDRESS,
         voter.account.address,
         VOTING_ENGINE,
-        CLEANUP_EPOCH_DURATION,
       );
       expect(commit.success, `Vote commit failed for ${voter.account.address}`).toBe(true);
-      commits.push({ account: voter.account, commitKey: commit.commitKey, isUp: commit.isUp, salt: commit.salt });
+      commits.push({
+        account: voter.account,
+        commitKey: commit.commitKey,
+        isUp: commit.isUp,
+        salt: commit.salt,
+        roundId: commit.roundId,
+      });
     }
 
     const cleanupRoundId = await getActiveRoundId(BigInt(cleanupContentId!), VOTING_ENGINE);
     expect(cleanupRoundId).toBeGreaterThan(0n);
-
-    await evmIncreaseTime(CLEANUP_EPOCH_DURATION + 1);
-
-    for (const voter of unrevealedVoters) {
-      const approved = await approveLREP(VOTING_ENGINE, STAKE, voter.account.address, LREP_TOKEN);
-      expect(approved, `Vote approval failed for ${voter.account.address}`).toBe(true);
-
-      const commit = await commitVoteDirect(
-        BigInt(cleanupContentId!),
-        voter.isUp,
-        STAKE,
-        ZERO_ADDRESS,
-        voter.account.address,
-        VOTING_ENGINE,
-        CLEANUP_EPOCH_DURATION,
+    for (const commit of commits) {
+      expect(commit.roundId, `Revealed commit should target cleanup round for ${commit.account.address}`).toBe(
+        cleanupRoundId,
       );
-      expect(commit.success, `Vote commit failed for ${voter.account.address}`).toBe(true);
-      commits.push({ account: voter.account, commitKey: commit.commitKey, isUp: commit.isUp, salt: commit.salt });
     }
 
-    for (const commit of commits.slice(0, 3)) {
+    await evmIncreaseTime(EPOCH_DURATION + 1);
+
+    const unrevealedApproved = await approveLREP(VOTING_ENGINE, STAKE, unrevealed.address, LREP_TOKEN);
+    expect(unrevealedApproved, `Vote approval failed for ${unrevealed.address}`).toBe(true);
+
+    const unrevealedCommit = await commitVoteDirect(
+      BigInt(cleanupContentId!),
+      true,
+      STAKE,
+      ZERO_ADDRESS,
+      unrevealed.address,
+      VOTING_ENGINE,
+    );
+    expect(unrevealedCommit.success, `Vote commit failed for ${unrevealed.address}`).toBe(true);
+    expect(unrevealedCommit.roundId, `Unrevealed commit should stay in cleanup round for ${unrevealed.address}`).toBe(
+      cleanupRoundId,
+    );
+
+    for (const commit of commits) {
       const revealed = await revealVoteDirect(
         BigInt(cleanupContentId!),
         cleanupRoundId,
@@ -364,8 +357,7 @@ test.describe("Reward claim lifecycle", () => {
       expect(revealed, `Reveal failed for ${commit.account.address}`).toBe(true);
     }
 
-    const unrevealed1Before = await readTokenBalance(unrevealed1.address, LREP_TOKEN);
-    const unrevealed2Before = await readTokenBalance(unrevealed2.address, LREP_TOKEN);
+    const unrevealedBefore = await readTokenBalance(unrevealed.address, LREP_TOKEN);
 
     await waitForPonderSync();
 
@@ -381,16 +373,13 @@ test.describe("Reward claim lifecycle", () => {
       VOTING_ENGINE,
     );
 
-    const unrevealed1After = await readTokenBalance(unrevealed1.address, LREP_TOKEN);
-    const unrevealed2After = await readTokenBalance(unrevealed2.address, LREP_TOKEN);
-    const unrevealed1Refund = unrevealed1After - unrevealed1Before;
-    const unrevealed2Refund = unrevealed2After - unrevealed2Before;
-    const cleanupRefunded = unrevealed1Refund === STAKE && unrevealed2Refund === STAKE;
+    const unrevealedAfter = await readTokenBalance(unrevealed.address, LREP_TOKEN);
+    const unrevealedRefund = unrevealedAfter - unrevealedBefore;
+    const cleanupRefunded = unrevealedRefund === STAKE;
 
     // Current-epoch unrevealed stakes had no chance to reveal before settlement, so they are refunded.
     expect(cleanupSuccess || cleanupRefunded, "Cleanup should process or observe unrevealed refunds").toBe(true);
-    expect(unrevealed1Refund).toBe(STAKE);
-    expect(unrevealed2Refund).toBe(STAKE);
+    expect(unrevealedRefund).toBe(STAKE);
 
     const secondCleanup = await processUnrevealedVotes(
       BigInt(cleanupContentId!),
