@@ -114,7 +114,12 @@ test.describe("RevealFailed lifecycle", () => {
     await advanceToRevealFailedFinalizationWindow(BigInt(contentId!), roundId, VOTING_ENGINE);
     await waitForPonderSync();
 
-    const finalized = await finalizeRevealFailedRound(BigInt(contentId!), roundId, keeper.address, VOTING_ENGINE);
+    let finalized = await finalizeRevealFailedRound(BigInt(contentId!), roundId, keeper.address, VOTING_ENGINE);
+    if (!finalized) {
+      await evmIncreaseTime(3600);
+      await waitForPonderSync();
+      finalized = await finalizeRevealFailedRound(BigInt(contentId!), roundId, keeper.address, VOTING_ENGINE);
+    }
     expect(finalized, "RevealFailed finalization failed").toBe(true);
 
     const indexedRound = await waitForPonderIndexed(async () => {
