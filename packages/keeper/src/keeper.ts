@@ -21,6 +21,9 @@
  * ends, the drand beacon makes the decryption key available and the keeper can decrypt.
  */
 import {
+  BaseError,
+  ContractFunctionRevertedError,
+  ExecutionRevertedError,
   getAbiItem,
   keccak256,
   zeroAddress,
@@ -1854,6 +1857,48 @@ async function _forfeitExpiredFeedbackBonuses(
 // inclusion (e.g. another keeper's reveal landing first) does not OOG the transaction.
 const GAS_ESTIMATE_BUFFER_NUMERATOR = 12n;
 const GAS_ESTIMATE_BUFFER_DENOMINATOR = 10n;
+const WRITE_CONTRACT_MAX_ATTEMPTS = 3;
+const WRITE_CONTRACT_RETRY_BACKOFF_MS = 200;
+
+function sleepMs(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isDeterministicWriteError(error: unknown): boolean {
+  if (error instanceof Error) {
+    if (/reverted on-chain/.test(error.message)) return true;
+    if (/exceeds MAX_GAS_PER_TX/.test(error.message)) return true;
+    if (isExpectedRevert(getRevertReason(error))) return true;
+  }
+  if (!(error instanceof BaseError)) return false;
+  return (
+    error.walk(
+      (cause) =>
+        cause instanceof ContractFunctionRevertedError ||
+        cause instanceof ExecutionRevertedError,
+    ) !== null
+  );
+}
+
+async function withTransientWriteRetry<T>(
+  operation: () => Promise<T>,
+): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < WRITE_CONTRACT_MAX_ATTEMPTS; attempt++) {
+    try {
+      return await operation();
+    } catch (error) {
+      if (isDeterministicWriteError(error)) {
+        throw error;
+      }
+      lastError = error;
+      if (attempt < WRITE_CONTRACT_MAX_ATTEMPTS - 1) {
+        await sleepMs(WRITE_CONTRACT_RETRY_BACKOFF_MS * 2 ** attempt);
+      }
+    }
+  }
+  throw lastError;
+}
 
 export async function writeContractAndConfirm(
   publicClient: Pick<PublicClient, "waitForTransactionReceipt">,
@@ -1881,14 +1926,16 @@ export async function writeContractAndConfirm(
         account?: unknown;
         value?: bigint;
       };
-      const estimate = await estimateContractGas.call(publicClient, {
-        address: req.address,
-        abi: req.abi,
-        functionName: req.functionName,
-        args: req.args,
-        account: req.account,
-        ...(req.value !== undefined ? { value: req.value } : {}),
-      } as Parameters<PublicClient["estimateContractGas"]>[0]);
+      const estimate = await withTransientWriteRetry(() =>
+        estimateContractGas.call(publicClient, {
+          address: req.address,
+          abi: req.abi,
+          functionName: req.functionName,
+          args: req.args,
+          account: req.account,
+          ...(req.value !== undefined ? { value: req.value } : {}),
+        } as Parameters<PublicClient["estimateContractGas"]>[0]),
+      );
 
       const cap = config.maxGasPerTx > 0 ? BigInt(config.maxGasPerTx) : null;
       if (cap !== null && estimate > cap) {
@@ -1908,7 +1955,9 @@ export async function writeContractAndConfirm(
     }
   }
 
-  const hash = await walletClient.writeContract(request);
+  const hash = await withTransientWriteRetry(() =>
+    walletClient.writeContract(request),
+  );
 
   const waitForReceipt = (
     publicClient as {
@@ -1918,7 +1967,9 @@ export async function writeContractAndConfirm(
     }
   ).waitForTransactionReceipt;
   if (waitForReceipt) {
-    const receipt = await waitForReceipt.call(publicClient, { hash });
+    const receipt = await withTransientWriteRetry(() =>
+      waitForReceipt.call(publicClient, { hash }),
+    );
     if (receipt && receipt.status === "reverted") {
       throw new Error(`Transaction ${hash} reverted on-chain`);
     }

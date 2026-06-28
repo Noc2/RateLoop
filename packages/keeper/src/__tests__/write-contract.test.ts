@@ -214,5 +214,63 @@ describe("writeContractAndConfirm", () => {
         makeRequest(),
       ),
     ).rejects.toThrow(/reverted on-chain/);
+    expect(walletClient.writeContract).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries transient RPC failures during gas estimation", async () => {
+    const transientError = new Error("HTTP request failed");
+    const { publicClient, walletClient, estimateContractGas } = makeClients({
+      estimate: 100_000n,
+    });
+    estimateContractGas
+      .mockRejectedValueOnce(transientError)
+      .mockRejectedValueOnce(transientError)
+      .mockResolvedValueOnce(100_000n);
+
+    const hash = await writeContractAndConfirm(
+      publicClient as never,
+      walletClient as never,
+      makeRequest(),
+    );
+
+    expect(hash).toBe("0xhash");
+    expect(estimateContractGas).toHaveBeenCalledTimes(3);
+    expect(walletClient.writeContract).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not retry deterministic estimation reverts", async () => {
+    const { publicClient, walletClient, estimateContractGas } = makeClients({
+      estimateError: new Error("AlreadyRevealed"),
+    });
+
+    await expect(
+      writeContractAndConfirm(
+        publicClient as never,
+        walletClient as never,
+        makeRequest(),
+      ),
+    ).rejects.toThrow("AlreadyRevealed");
+
+    expect(estimateContractGas).toHaveBeenCalledTimes(1);
+    expect(walletClient.writeContract).not.toHaveBeenCalled();
+  });
+
+  it("retries transient RPC failures while waiting for the receipt", async () => {
+    const transientError = new Error("request timeout");
+    const { publicClient, walletClient } = makeClients({ estimate: 100_000n });
+    publicClient.waitForTransactionReceipt
+      .mockRejectedValueOnce(transientError)
+      .mockRejectedValueOnce(transientError)
+      .mockResolvedValueOnce({ status: "success" });
+
+    const hash = await writeContractAndConfirm(
+      publicClient as never,
+      walletClient as never,
+      makeRequest(),
+    );
+
+    expect(hash).toBe("0xhash");
+    expect(walletClient.writeContract).toHaveBeenCalledTimes(1);
+    expect(publicClient.waitForTransactionReceipt).toHaveBeenCalledTimes(3);
   });
 });

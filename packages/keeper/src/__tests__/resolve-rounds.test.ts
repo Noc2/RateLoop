@@ -1436,6 +1436,172 @@ describe("resolveRounds", () => {
     );
   });
 
+  it("returns partial indexed ciphertexts when a later Ponder page fails", async () => {
+    timelockDecrypt.mockResolvedValueOnce(makePlaintext(true, 1));
+
+    const round = makeRound({
+      state: 0,
+      voteCount: 1n,
+      revealedCount: 0n,
+    });
+    const commit = makeCommit({ revealableAfter: 100n });
+    const { publicClient, walletClient, commits } = makeHarness({
+      activeRoundId: 1n,
+      latestRoundId: 1n,
+      round,
+      commitKeys: [COMMIT_KEY_1],
+      commits: {
+        [COMMIT_KEY_1]: commit,
+      },
+      now: 1_000n,
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(input.toString());
+      if (url.pathname === "/deployment") {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => matchingPonderDeployment(),
+        };
+      }
+      const offset = url.searchParams.get("offset");
+      if (offset === "0") {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            items: [
+              {
+                commitKey: COMMIT_KEY_1,
+                ciphertextHash: commit.ciphertextHash,
+                ciphertext: commit.ciphertext,
+              },
+              ...Array.from({ length: 199 }, (_, index) => ({
+                commitKey: `0x${(index + 1).toString(16).padStart(64, "0")}`,
+              })),
+            ],
+          }),
+        };
+      }
+      return {
+        ok: false,
+        status: 503,
+        json: async () => ({}),
+      };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const logger = makeLogger();
+
+    const result = await resolveRounds(
+      publicClient as any,
+      walletClient as any,
+      {} as any,
+      { address: ACCOUNT } as any,
+      logger as any,
+    );
+
+    expect(result.votesRevealed).toBe(1);
+    expect(commits[COMMIT_KEY_1].revealed).toBe(true);
+    expect(logger.warn).toHaveBeenCalledWith(
+      "Failed to fetch indexed vote ciphertext",
+      expect.objectContaining({ status: 503 }),
+    );
+    expect(walletClient.writeContract).toHaveBeenCalledWith(
+      expect.objectContaining({ functionName: "revealVoteByCommitKey" }),
+    );
+  });
+
+  it("re-verifies Ponder deployment after a cached match later mismatches", async () => {
+    mockConfig.keeperWorkDiscovery.enabled = true;
+
+    const round = makeRound({
+      state: 1,
+      voteCount: 0n,
+      revealedCount: 0n,
+    });
+    const { publicClient, walletClient } = makeHarness({
+      activeRoundId: 0n,
+      latestRoundId: 0n,
+      round,
+      now: 3_000_000n,
+    });
+    const stableDeployment = matchingPonderDeployment();
+    const mismatchedDeploymentKey = `${stableDeployment.deploymentKey}:repoint`;
+    let deploymentFetchCount = 0;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(input.toString());
+      if (url.pathname === "/deployment") {
+        deploymentFetchCount += 1;
+        if (deploymentFetchCount === 2) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({
+              ...stableDeployment,
+              deploymentKey: mismatchedDeploymentKey,
+              chainId: 84532,
+            }),
+          };
+        }
+        return {
+          ok: true,
+          status: 200,
+          json: async () => stableDeployment,
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          openRounds: [],
+          cleanupRounds: [],
+          dormantContent: [],
+        }),
+      };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const logger = makeLogger();
+    const originalNodeEnv = process.env.NODE_ENV;
+    const originalKeeperWorkToken = process.env.PONDER_KEEPER_WORK_TOKEN;
+    process.env.NODE_ENV = "production";
+    process.env.PONDER_KEEPER_WORK_TOKEN = "test-token";
+
+    try {
+      await resolveRounds(
+        publicClient as any,
+        walletClient as any,
+        {} as any,
+        { address: ACCOUNT } as any,
+        logger as any,
+      );
+      await expect(
+        resolveRounds(
+          publicClient as any,
+          walletClient as any,
+          {} as any,
+          { address: ACCOUNT } as any,
+          logger as any,
+        ),
+      ).rejects.toThrow(/Ponder deployment does not match keeper config/);
+      await resolveRounds(
+        publicClient as any,
+        walletClient as any,
+        {} as any,
+        { address: ACCOUNT } as any,
+        logger as any,
+      );
+    } finally {
+      process.env.NODE_ENV = originalNodeEnv;
+      if (originalKeeperWorkToken === undefined) {
+        delete process.env.PONDER_KEEPER_WORK_TOKEN;
+      } else {
+        process.env.PONDER_KEEPER_WORK_TOKEN = originalKeeperWorkToken;
+      }
+    }
+
+    expect(deploymentFetchCount).toBe(3);
+  });
+
   it("warns when the indexed ciphertext page limit truncates a round", async () => {
     const round = makeRound({
       state: 0,
