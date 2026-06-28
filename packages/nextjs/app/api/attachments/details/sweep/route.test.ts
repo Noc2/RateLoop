@@ -62,6 +62,15 @@ after(() => {
   restoreEnv("RATELOOP_QUESTION_DETAILS_SWEEP_SECRET", originalSweepSecret);
 });
 
+test("question details sweep returns 503 when secret is not configured", async () => {
+  delete env.RATELOOP_QUESTION_DETAILS_SWEEP_SECRET;
+
+  const response = await route.POST(sweepRequest("sweep-secret"));
+
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), { error: "Question details sweep is not configured." });
+});
+
 test("question details sweep uses bearer auth and rate limits unauthorized guesses", async () => {
   const allowed = await route.POST(sweepRequest("sweep-secret"));
   assert.equal(allowed.status, 200);
