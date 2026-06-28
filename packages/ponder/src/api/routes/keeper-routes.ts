@@ -3,6 +3,7 @@ import { REVEAL_FAILED_GRACE_MULTIPLIER, ROUND_STATE } from "@rateloop/contracts
 import { and, asc, desc, eq, inArray, or, sql } from "ponder";
 import { db } from "ponder:api";
 import { content, feedbackBonusPool, round } from "ponder:schema";
+import { inspectHumanVerifiedCommitCountHealth } from "../human-verified-commit-health.js";
 import type { ApiApp } from "../shared.js";
 import { jsonBig } from "../shared.js";
 import { safeBigInt, safeLimit } from "../utils.js";
@@ -221,10 +222,15 @@ export function registerKeeperRoutes(app: ApiApp) {
       .orderBy(asc(feedbackBonusPool.awardDeadline), asc(feedbackBonusPool.id))
       .limit(limit);
 
+    const humanVerifiedCommitCount = await inspectHumanVerifiedCommitCountHealth();
+
     return jsonBig(c, {
       now,
       limit,
       source: "ponder",
+      health: {
+        humanVerifiedCommitCount,
+      },
       roundOpenRequests,
       openRounds,
       cleanupRounds,
