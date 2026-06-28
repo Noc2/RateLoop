@@ -124,6 +124,7 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
     mapping(HumanCredentialProvider => mapping(bytes32 => address)) private _lastRevokedOwnerByProvider;
     mapping(uint8 => mapping(bytes32 => address)) private _worldCredentialNullifierOwner;
     mapping(uint8 => mapping(bytes32 => bool)) private _revokedWorldCredentialNullifier;
+    /// @dev Reserved for future World ID presence recheck wiring; storage retained for proxy-safe upgrades.
     mapping(uint8 => mapping(bytes32 => address)) private _worldPresenceNullifierOwner;
     mapping(uint8 => WorldIdV4Config) private _worldCredentialConfigs;
     mapping(uint8 => WorldIdV4Config) private _worldPresenceConfigs;
