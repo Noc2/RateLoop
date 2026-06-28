@@ -100,6 +100,11 @@ function mockConfig(
           publicBaseUrl: "https://ipfs.io/ipfs/",
         },
       },
+      persistence: {
+        databaseUrl: null,
+        mainLoopLockRequired: false,
+        correlationSnapshotLockRequired: false,
+      },
     },
   }));
 }

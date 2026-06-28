@@ -295,15 +295,31 @@ export async function runWithCorrelationSnapshotPublishLock<T>(
   logger: Logger,
   fallback: T,
   run: () => Promise<T>,
+  options: { lockRequired?: boolean } = {},
 ): Promise<T> {
+  const lockRequired = options.lockRequired === true;
   let activePool: pg.Pool | null = null;
   try {
     activePool = await ensureSchema(logger);
-  } catch {
+  } catch (error) {
+    if (lockRequired) {
+      throw error;
+    }
     return run();
   }
 
   if (!activePool) {
+    if (lockRequired) {
+      warnPersistenceOnce(
+        logger,
+        "correlation-lock-required-without-database",
+        "Keeper correlation snapshot lock required but KEEPER_DATABASE_URL is not configured; skipping publication",
+        "missing database",
+      );
+      throw new Error(
+        "KEEPER_DATABASE_URL is required when KEEPER_CORRELATION_SNAPSHOT_LOCK_REQUIRED=true",
+      );
+    }
     return run();
   }
 
@@ -312,10 +328,16 @@ export async function runWithCorrelationSnapshotPublishLock<T>(
     lockKey: CORRELATION_SNAPSHOT_LOCK_KEY,
     logger,
     warningKey: "lock",
-    warningMessage:
-      "Keeper persistence lock unavailable; running correlation snapshot publication without it",
+    warningMessage: lockRequired
+      ? "Keeper correlation snapshot lock unavailable; skipping publication because KEEPER_CORRELATION_SNAPSHOT_LOCK_REQUIRED=true"
+      : "Keeper persistence lock unavailable; running correlation snapshot publication without it",
   });
   if (lock.status === "unavailable") {
+    if (lockRequired) {
+      throw new Error(
+        "Keeper correlation snapshot lock unavailable while KEEPER_CORRELATION_SNAPSHOT_LOCK_REQUIRED=true",
+      );
+    }
     return run();
   }
   if (lock.status === "busy") {

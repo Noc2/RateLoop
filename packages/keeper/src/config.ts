@@ -516,6 +516,14 @@ function loadConfig() {
     "KEEPER_MAIN_LOOP_LOCK_REQUIRED",
     errors,
   );
+  const correlationSnapshotLockRequired = correlationSnapshotsEnabled
+    ? parseBooleanEnv(
+        readEnv("KEEPER_CORRELATION_SNAPSHOT_LOCK_REQUIRED"),
+        isProduction,
+        "KEEPER_CORRELATION_SNAPSHOT_LOCK_REQUIRED",
+        errors,
+      )
+    : false;
   const ponderBaseUrl = readOptionalUrlEnv("PONDER_BASE_URL", errors, {
     rejectLocalhostInProduction: true,
     requireHttpsInProduction: true,
@@ -716,6 +724,7 @@ function loadConfig() {
     persistence: {
       databaseUrl: keeperDatabaseUrl ?? null,
       mainLoopLockRequired,
+      correlationSnapshotLockRequired,
     },
     startupJitterMs: readNonNegativeIntEnv(
       "KEEPER_STARTUP_JITTER_MS",
@@ -883,6 +892,11 @@ function loadConfig() {
   if (mainLoopLockRequired && !keeperDatabaseUrl) {
     errors.push(
       "KEEPER_DATABASE_URL is required when KEEPER_MAIN_LOOP_LOCK_REQUIRED=true",
+    );
+  }
+  if (correlationSnapshotLockRequired && !keeperDatabaseUrl) {
+    errors.push(
+      "KEEPER_DATABASE_URL is required when KEEPER_CORRELATION_SNAPSHOT_LOCK_REQUIRED=true",
     );
   }
   if (

@@ -898,15 +898,19 @@ export async function publishConfiguredCorrelationSnapshots(
   logger: Logger,
   options: CorrelationSnapshotPublishOptions = {},
 ): Promise<CorrelationSnapshotPublisherResult> {
-  return runWithCorrelationSnapshotPublishLock(logger, emptyResult(), () =>
-    publishConfiguredCorrelationSnapshotsUnlocked(
-      publicClient,
-      walletClient,
-      chain,
-      account,
-      logger,
-      options,
-    ),
+  return runWithCorrelationSnapshotPublishLock(
+    logger,
+    emptyResult(),
+    () =>
+      publishConfiguredCorrelationSnapshotsUnlocked(
+        publicClient,
+        walletClient,
+        chain,
+        account,
+        logger,
+        options,
+      ),
+    { lockRequired: config.persistence?.correlationSnapshotLockRequired === true },
   );
 }
 

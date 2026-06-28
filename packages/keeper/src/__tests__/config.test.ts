@@ -119,6 +119,7 @@ describe("keeper config", () => {
     expect(config.persistence).toEqual({
       databaseUrl: null,
       mainLoopLockRequired: false,
+      correlationSnapshotLockRequired: false,
     });
   });
 
@@ -176,6 +177,7 @@ describe("keeper config", () => {
     expect(config.persistence).toEqual({
       databaseUrl: null,
       mainLoopLockRequired: false,
+      correlationSnapshotLockRequired: false,
     });
   });
 
@@ -190,7 +192,48 @@ describe("keeper config", () => {
       databaseUrl:
         "postgresql://postgres:postgres@postgres.railway.internal:5432/railway",
       mainLoopLockRequired: true,
+      correlationSnapshotLockRequired: false,
     });
+  });
+
+  it("enables required correlation snapshot locks in production when snapshots are enabled", async () => {
+    const { config } = await loadKeeperConfig({
+      NODE_ENV: "production",
+      KEEPER_DATABASE_URL:
+        "postgresql://postgres:postgres@postgres.railway.internal:5432/railway",
+      KEEPER_CORRELATION_SNAPSHOTS_ENABLED: "true",
+      KEEPER_CORRELATION_SNAPSHOTS_MODE: "auto",
+      KEEPER_CORRELATION_ARTIFACT_STORAGE: "file",
+      KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL:
+        "https://artifacts.example.com/rateloop/",
+      PONDER_BASE_URL: "https://ponder.example.com",
+      CLUSTER_PAYOUT_ORACLE_ADDRESS:
+        "0x6666666666666666666666666666666666666666",
+      PORT: "8080",
+      METRICS_AUTH_TOKEN: "0123456789abcdef",
+    });
+
+    expect(config.persistence.correlationSnapshotLockRequired).toBe(true);
+  });
+
+  it("requires keeper persistence for production correlation snapshot locks by default", async () => {
+    await expect(
+      loadKeeperConfig({
+        NODE_ENV: "production",
+        KEEPER_CORRELATION_SNAPSHOTS_ENABLED: "true",
+        KEEPER_CORRELATION_SNAPSHOTS_MODE: "auto",
+        KEEPER_CORRELATION_ARTIFACT_STORAGE: "file",
+        KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL:
+          "https://artifacts.example.com/rateloop/",
+        PONDER_BASE_URL: "https://ponder.example.com",
+        CLUSTER_PAYOUT_ORACLE_ADDRESS:
+          "0x6666666666666666666666666666666666666666",
+        PORT: "8080",
+        METRICS_AUTH_TOKEN: "0123456789abcdef",
+      }),
+    ).rejects.toThrow(
+      "KEEPER_DATABASE_URL is required when KEEPER_CORRELATION_SNAPSHOT_LOCK_REQUIRED=true",
+    );
   });
 
   it("requires production mode for Base mainnet keeper runtime", async () => {

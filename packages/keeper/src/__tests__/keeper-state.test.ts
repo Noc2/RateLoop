@@ -17,7 +17,11 @@ function mockConfig(
   vi.doMock("../config.js", () => ({
     config: {
       persistence: databaseUrl
-        ? { databaseUrl, mainLoopLockRequired: false }
+        ? {
+            databaseUrl,
+            mainLoopLockRequired: false,
+            correlationSnapshotLockRequired: false,
+          }
         : undefined,
     },
   }));
@@ -380,6 +384,89 @@ describe("keeper advisory lock wrappers", () => {
       "Keeper persistence lock unavailable; running correlation snapshot publication without it",
       { error: "too many clients" },
     );
+  });
+
+  it("returns the correlation fallback without running when a required lock is busy", async () => {
+    const { runWithCorrelationSnapshotPublishLock, client } =
+      await importKeeperState({
+        locked: false,
+      });
+    const logger = createLogger();
+    const run = vi.fn(async () => "ran");
+
+    await expect(
+      runWithCorrelationSnapshotPublishLock(logger, "fallback", run, {
+        lockRequired: true,
+      }),
+    ).resolves.toBe("fallback");
+
+    expect(run).not.toHaveBeenCalled();
+    expect(logger.debug).toHaveBeenCalledWith(
+      "Skipping correlation snapshot publication because another keeper holds the persistence lock",
+    );
+    expect(client.release).toHaveBeenCalledTimes(1);
+  });
+
+  it("propagates schema errors when a required correlation lock cannot initialize", async () => {
+    const { runWithCorrelationSnapshotPublishLock, pool } =
+      await importKeeperState({
+        schemaError: new Error("database down"),
+      });
+    const logger = createLogger();
+    const run = vi.fn(async () => "ran");
+
+    await expect(
+      runWithCorrelationSnapshotPublishLock(logger, "fallback", run, {
+        lockRequired: true,
+      }),
+    ).rejects.toThrow("database down");
+
+    expect(run).not.toHaveBeenCalled();
+    expect(pool.connect).not.toHaveBeenCalled();
+  });
+
+  it("propagates lock acquisition errors when a required correlation lock cannot be acquired", async () => {
+    const { runWithCorrelationSnapshotPublishLock, client } =
+      await importKeeperState({
+        connectError: new Error("too many clients"),
+      });
+    const logger = createLogger();
+    const run = vi.fn(async () => "ran");
+
+    await expect(
+      runWithCorrelationSnapshotPublishLock(logger, "fallback", run, {
+        lockRequired: true,
+      }),
+    ).rejects.toThrow(
+      "Keeper correlation snapshot lock unavailable while KEEPER_CORRELATION_SNAPSHOT_LOCK_REQUIRED=true",
+    );
+
+    expect(run).not.toHaveBeenCalled();
+    expect(client.query).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalledWith(
+      "Keeper correlation snapshot lock unavailable; skipping publication because KEEPER_CORRELATION_SNAPSHOT_LOCK_REQUIRED=true",
+      { error: "too many clients" },
+    );
+  });
+
+  it("propagates missing database configuration when a required correlation lock has no database", async () => {
+    const { runWithCorrelationSnapshotPublishLock, pool } =
+      await importKeeperState({
+        databaseUrl: null,
+      });
+    const logger = createLogger();
+    const run = vi.fn(async () => "ran");
+
+    await expect(
+      runWithCorrelationSnapshotPublishLock(logger, "fallback", run, {
+        lockRequired: true,
+      }),
+    ).rejects.toThrow(
+      "KEEPER_DATABASE_URL is required when KEEPER_CORRELATION_SNAPSHOT_LOCK_REQUIRED=true",
+    );
+
+    expect(run).not.toHaveBeenCalled();
+    expect(pool.connect).not.toHaveBeenCalled();
   });
 });
 
