@@ -52,6 +52,16 @@ Thank you for your interest in contributing to RateLoop, an open rating protocol
 - Follow existing patterns in the codebase
 - Smart contract changes should include corresponding tests
 
+### Advisory CI lanes
+
+Some static-analysis jobs are intentionally advisory and do not block merges:
+
+- **Knip dead-code scan** (`yarn dead-code:scan`, CI job `dead-code`) runs with `--no-exit-code` so unused-export findings surface without failing PRs.
+- **Forge coverage** (CI job `coverage`) runs with `continue-on-error: true` because instrumentation can hit Yul stack-depth limits even when normal builds pass.
+- **Slither SARIF upload** uses `continue-on-error: true` for CodeQL ingestion; high-severity Slither findings still fail the `slither` job itself.
+
+Treat these lanes as signal for cleanup work, not release gates.
+
 ## Questions?
 
 Open an issue and we'll help you get started.

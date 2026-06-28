@@ -58,7 +58,7 @@ Live protocol and product documentation is maintained in the Next.js docs routes
 
 ## Architecture
 
-RateLoop is a monorepo with eight packages:
+RateLoop is a monorepo with nine packages:
 
 | Package               | Description                                                                              |
 | --------------------- | ---------------------------------------------------------------------------------------- |
@@ -70,6 +70,7 @@ RateLoop is a monorepo with eight packages:
 | `packages/keeper`     | Standalone keeper service for keeper-assisted round settlement                           |
 | `packages/agents`     | Agent integration hub with runtime examples, question guidance, and operator utilities   |
 | `packages/node-utils` | Shared Node.js utilities used by services and scripts                                    |
+| `packages/promo-video` | Private Remotion package for promo renders (non-production)                             |
 
 ```
 foundry    (compile) → deployments + artifacts
@@ -234,7 +235,7 @@ yarn workspace @rateloop/nextjs e2e:full
 yarn e2e:ui
 ```
 
-CI runs smoke, app, responsive, accessibility, lifecycle, and keeper-backed E2E suites separately on pushes and PRs. The scheduled workflow also runs browser-compatibility and mobile suites, so `yarn e2e` alone does not match full CI browser coverage.
+CI runs smoke, API, app, submit, confidential-context, World ID mock, responsive, accessibility, lifecycle, and keeper-backed E2E suites separately on pushes and PRs. The scheduled workflow also runs browser-compatibility and mobile suites, so `yarn e2e` alone does not match full CI browser coverage.
 
 ### Run the Dead-Code Scan
 
