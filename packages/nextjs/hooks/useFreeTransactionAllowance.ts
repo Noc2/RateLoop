@@ -505,6 +505,8 @@ export function useFreeTransactionAllowance(options: FreeTransactionAllowanceOpt
       status: "syncing",
     });
 
+    let cancelled = false;
+
     void (async () => {
       try {
         const replacementWallet = createThirdwebInAppWallet(resolvedChainId, {
@@ -517,12 +519,16 @@ export function useFreeTransactionAllowance(options: FreeTransactionAllowanceOpt
             client,
           });
           await syncWalletToWagmi(replacementWallet, resolvedChainId, { reconnect: true });
+          if (cancelled || sponsorshipSyncAttemptRef.current !== attemptKey) {
+            return;
+          }
           await setActiveWallet(replacementWallet);
         }, desiredSponsorshipMode);
 
-        if (sponsorshipSyncAttemptRef.current === attemptKey) {
-          sponsorshipSyncAttemptRef.current = null;
+        if (cancelled || sponsorshipSyncAttemptRef.current !== attemptKey) {
+          return;
         }
+        sponsorshipSyncAttemptRef.current = null;
         setSponsorshipSyncState(currentState =>
           currentState.attemptKey === attemptKey
             ? {
@@ -533,6 +539,9 @@ export function useFreeTransactionAllowance(options: FreeTransactionAllowanceOpt
             : currentState,
         );
       } catch (error) {
+        if (cancelled || sponsorshipSyncAttemptRef.current !== attemptKey) {
+          return;
+        }
         const failedStatus: SponsorshipSyncStatus = isSponsorshipSyncTimeoutError(error) ? "timed_out" : "failed";
         sponsorshipSyncAttemptRef.current = clearSponsorshipSyncAttemptAfterFailure(
           sponsorshipSyncAttemptRef.current,
@@ -550,6 +559,14 @@ export function useFreeTransactionAllowance(options: FreeTransactionAllowanceOpt
         console.error("Failed to sync thirdweb sponsorship mode:", error);
       }
     })();
+
+    return () => {
+      cancelled = true;
+      sponsorshipSyncAttemptRef.current = clearSponsorshipSyncAttemptAfterFailure(
+        sponsorshipSyncAttemptRef.current,
+        attemptKey,
+      );
+    };
   }, [
     activeWallet,
     address,
@@ -594,6 +611,8 @@ export function useFreeTransactionAllowance(options: FreeTransactionAllowanceOpt
       status: "syncing",
     });
 
+    let cancelled = false;
+
     void (async () => {
       try {
         const replacementWallet = createThirdwebInAppWallet(resolvedChainId, {
@@ -606,12 +625,16 @@ export function useFreeTransactionAllowance(options: FreeTransactionAllowanceOpt
             client,
           });
           await syncWalletToWagmi(replacementWallet, resolvedChainId, { reconnect: true });
+          if (cancelled || sponsorshipSyncAttemptRef.current !== attemptKey) {
+            return;
+          }
           await setActiveWallet(replacementWallet);
         }, "eoa");
 
-        if (sponsorshipSyncAttemptRef.current === attemptKey) {
-          sponsorshipSyncAttemptRef.current = null;
+        if (cancelled || sponsorshipSyncAttemptRef.current !== attemptKey) {
+          return;
         }
+        sponsorshipSyncAttemptRef.current = null;
         setSponsorshipSyncState(currentState =>
           currentState.attemptKey === attemptKey
             ? {
@@ -622,6 +645,9 @@ export function useFreeTransactionAllowance(options: FreeTransactionAllowanceOpt
             : currentState,
         );
       } catch (error) {
+        if (cancelled || sponsorshipSyncAttemptRef.current !== attemptKey) {
+          return;
+        }
         const failedStatus: SponsorshipSyncStatus = isSponsorshipSyncTimeoutError(error) ? "timed_out" : "failed";
         sponsorshipSyncAttemptRef.current = clearSponsorshipSyncAttemptAfterFailure(
           sponsorshipSyncAttemptRef.current,
@@ -639,6 +665,14 @@ export function useFreeTransactionAllowance(options: FreeTransactionAllowanceOpt
         console.error("Failed to sync thirdweb EOA mode:", error);
       }
     })();
+
+    return () => {
+      cancelled = true;
+      sponsorshipSyncAttemptRef.current = clearSponsorshipSyncAttemptAfterFailure(
+        sponsorshipSyncAttemptRef.current,
+        attemptKey,
+      );
+    };
   }, [
     activeWallet,
     address,
