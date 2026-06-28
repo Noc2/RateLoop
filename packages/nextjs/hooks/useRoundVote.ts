@@ -67,6 +67,7 @@ import {
   type RoundVotePermitSignature,
   buildRoundVoteTransactionPlan,
 } from "~~/lib/vote/roundVoteTransactionPlan";
+import { assertVoteWalletContext } from "~~/lib/vote/walletContext";
 import { buildLrepPermitTypedData, getDefaultSignatureDeadline, getSignatureParts } from "~~/lib/walletSignatures";
 import { isWalletTransactionReadinessMessage } from "~~/lib/walletTransactionReadiness";
 import scaffoldConfig from "~~/scaffold.config";
@@ -448,6 +449,23 @@ export function useRoundVote() {
     setIsCommitting(true);
     setError(null);
     timingLog.emit("commit-lock-acquired");
+    const walletSnapshot = {
+      voterAddress: address as Address,
+      chainId: targetNetwork.id,
+    };
+    const guardWalletContext = (): boolean => {
+      const walletContext = assertVoteWalletContext(walletSnapshot, {
+        address,
+        chainId: chain?.id,
+        targetChainId: targetNetwork.id,
+      });
+      if (!walletContext.ok) {
+        timingLog.emit("blocked", { reason: "wallet_context_changed", message: walletContext.message });
+        setError(walletContext.message);
+        return false;
+      }
+      return true;
+    };
     const usesSponsoredVotePath = !useDirectLocalE2EWrites && canUseSponsoredBatchCalls;
     const sponsoredBatchOptions = usesSponsoredVotePath ? flowToast.getFlowBatchOptions() : {};
     if (usesSponsoredVotePath) {
@@ -638,6 +656,9 @@ export function useRoundVote() {
       });
       const signPermitForVote = async (stakeWei: bigint): Promise<RoundVotePermitSignature | undefined> => {
         if (useDirectLocalE2EWrites || stakeWei === 0n) return undefined;
+        if (!guardWalletContext()) {
+          throw new Error("Wallet changed during vote. Try again.");
+        }
         try {
           const nonce = (await publicClient.readContract({
             address: lrepAddress,
@@ -667,6 +688,9 @@ export function useRoundVote() {
         }
       };
       const writePlannedCall = async (call: RoundVoteContractCall, action: string) => {
+        if (!guardWalletContext()) {
+          return false;
+        }
         if (call.data) {
           const estimatedGas = await publicClient.estimateGas({
             account: address as Address,
@@ -730,8 +754,11 @@ export function useRoundVote() {
             });
           },
           transaction: () => writePlannedCall(call, "open round"),
-          waitForPostcondition: shouldStop =>
-            waitForRoundOpenPostcondition(
+          waitForPostcondition: shouldStop => {
+            if (!guardWalletContext()) {
+              return Promise.resolve(false);
+            }
+            return waitForRoundOpenPostcondition(
               {
                 client: publicClient,
                 contentId,
@@ -742,7 +769,8 @@ export function useRoundVote() {
                 pollingIntervalMs: getRoundVotePostconditionPollingInterval(targetNetwork.id),
                 shouldStop,
               },
-            ),
+            );
+          },
         });
         timingLog.emit("open-round-submit-complete", { confirmation, transport: "direct-wallet" });
       };
@@ -762,8 +790,11 @@ export function useRoundVote() {
               });
             },
             transaction: () => writePlannedCall(call, action),
-            waitForPostcondition: shouldStop =>
-              waitForRoundVoteCommitPostcondition(
+            waitForPostcondition: shouldStop => {
+              if (!guardWalletContext()) {
+                return Promise.resolve(false);
+              }
+              return waitForRoundVoteCommitPostcondition(
                 {
                   advisoryVoteRecorderAddress,
                   client: publicClient,
@@ -779,7 +810,8 @@ export function useRoundVote() {
                   pollingIntervalMs: getRoundVotePostconditionPollingInterval(targetNetwork.id),
                   shouldStop,
                 },
-              ),
+              );
+            },
           });
           timingLog.emit("direct-call-submit-complete", { callKind: call.kind, confirmation });
           return true;
@@ -824,8 +856,11 @@ export function useRoundVote() {
                 error: batchError,
               });
             },
-            transaction: () =>
-              executeContractCallBatch([openRoundCall], {
+            transaction: async () => {
+              if (!guardWalletContext()) {
+                throw new Error("Wallet or network changed during vote.");
+              }
+              return executeContractCallBatch([openRoundCall], {
                 action: "open round",
                 atomicRequired: true,
                 metadata: {
@@ -837,9 +872,13 @@ export function useRoundVote() {
                 parentRunId: timingLog.runId,
                 sponsorshipMode: "sponsored",
                 ...sponsoredBatchOptions,
-              }),
-            waitForPostcondition: shouldStop =>
-              waitForRoundOpenPostcondition(
+              });
+            },
+            waitForPostcondition: shouldStop => {
+              if (!guardWalletContext()) {
+                return Promise.resolve(false);
+              }
+              return waitForRoundOpenPostcondition(
                 {
                   client: publicClient,
                   contentId,
@@ -850,7 +889,8 @@ export function useRoundVote() {
                   pollingIntervalMs: getRoundVotePostconditionPollingInterval(targetNetwork.id),
                   shouldStop,
                 },
-              ),
+              );
+            },
           });
           timingLog.emit("open-round-submit-complete", { confirmation, transport: "sponsored-batch" });
           return;
@@ -863,8 +903,11 @@ export function useRoundVote() {
                 error: batchError,
               });
             },
-            transaction: () =>
-              executeContractCallBatch([openRoundCall], {
+            transaction: async () => {
+              if (!guardWalletContext()) {
+                throw new Error("Wallet or network changed during vote.");
+              }
+              return executeContractCallBatch([openRoundCall], {
                 action: "open round",
                 atomicRequired: true,
                 metadata: {
@@ -875,9 +918,13 @@ export function useRoundVote() {
                 },
                 parentRunId: timingLog.runId,
                 sponsorshipMode: "self-funded",
-              }),
-            waitForPostcondition: shouldStop =>
-              waitForRoundOpenPostcondition(
+              });
+            },
+            waitForPostcondition: shouldStop => {
+              if (!guardWalletContext()) {
+                return Promise.resolve(false);
+              }
+              return waitForRoundOpenPostcondition(
                 {
                   client: publicClient,
                   contentId,
@@ -888,7 +935,8 @@ export function useRoundVote() {
                   pollingIntervalMs: getRoundVotePostconditionPollingInterval(targetNetwork.id),
                   shouldStop,
                 },
-              ),
+              );
+            },
           });
           timingLog.emit("open-round-submit-complete", { confirmation, transport: "self-funded-batch" });
           return;
@@ -910,6 +958,9 @@ export function useRoundVote() {
           runtimeOverride?: RoundVoteCommitRuntime;
         },
       ) => {
+        if (!guardWalletContext()) {
+          throw new Error("Wallet changed during vote. Try again.");
+        }
         const freshRuntime =
           options?.runtimeOverride ?? (isRequestedAdvisoryVote ? runtime : await ensureOpenStakedRuntime());
         if (!freshRuntime) {
@@ -1021,8 +1072,11 @@ export function useRoundVote() {
               error: batchError,
             });
           },
-          transaction: () =>
-            executeContractCallBatch(vote.plan.calls, {
+          transaction: async () => {
+            if (!guardWalletContext()) {
+              throw new Error("Wallet or network changed during vote.");
+            }
+            return executeContractCallBatch(vote.plan.calls, {
               action: "vote",
               atomicRequired: true,
               metadata: {
@@ -1036,9 +1090,13 @@ export function useRoundVote() {
               parentRunId: timingLog.runId,
               sponsorshipMode,
               ...sponsoredBatchOptions,
-            }),
-          waitForPostcondition: shouldStop =>
-            waitForRoundVoteCommitPostcondition(
+            });
+          },
+          waitForPostcondition: shouldStop => {
+            if (!guardWalletContext()) {
+              return Promise.resolve(false);
+            }
+            return waitForRoundVoteCommitPostcondition(
               {
                 advisoryVoteRecorderAddress,
                 client: publicClient,
@@ -1054,7 +1112,8 @@ export function useRoundVote() {
                 pollingIntervalMs: getRoundVotePostconditionPollingInterval(targetNetwork.id),
                 shouldStop,
               },
-            ),
+            );
+          },
         });
         return confirmation;
       };
