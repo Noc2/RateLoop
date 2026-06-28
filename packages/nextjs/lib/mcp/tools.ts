@@ -129,7 +129,12 @@ import {
 import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
 import { db } from "~~/lib/db";
 import { questionDetails, questionImageAttachments } from "~~/lib/db/schema";
-import { getPrimaryServerTargetNetwork, getServerRpcOverrides, getServerTargetNetworkById } from "~~/lib/env/server";
+import {
+  getExplicitAppUrl,
+  getPrimaryServerTargetNetwork,
+  getServerRpcOverrides,
+  getServerTargetNetworkById,
+} from "~~/lib/env/server";
 import { buildContentFeedbackRoundContext, listContentFeedback } from "~~/lib/feedback/contentFeedback";
 import { MCP_SCOPES, type McpAgentAuth, type McpScope } from "~~/lib/mcp/auth";
 import {
@@ -908,10 +913,7 @@ function parsePublicWalletAddress(args: JsonObject): Address {
 
 function toolRequestUrl(requestUrl: string | undefined, publicEndpoint = false) {
   return (
-    requestUrl?.trim() ||
-    process.env.APP_URL?.trim() ||
-    process.env.NEXT_PUBLIC_APP_URL?.trim() ||
-    `https://www.rateloop.ai/api/mcp${publicEndpoint ? "/public" : ""}`
+    requestUrl?.trim() || getExplicitAppUrl() || `https://www.rateloop.ai/api/mcp${publicEndpoint ? "/public" : ""}`
   );
 }
 

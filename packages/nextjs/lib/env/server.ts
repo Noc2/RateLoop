@@ -285,6 +285,17 @@ export function getOptionalAppUrl(): string | undefined {
   });
 }
 
+export function getExplicitAppUrl(): string | undefined {
+  const hasConfiguredAppUrl = Boolean(
+    readEnv("APP_URL") ||
+      readEnv("NEXT_PUBLIC_APP_URL") ||
+      readEnv("VERCEL_URL") ||
+      (readEnv("VERCEL_ENV") === "production" && resolveVercelHostUrl(readEnv("VERCEL_PROJECT_PRODUCTION_URL"))),
+  );
+
+  return hasConfiguredAppUrl ? getOptionalAppUrl() : undefined;
+}
+
 export function getTrustedRateLoopAppUrl(): string | undefined {
   return resolveTrustedRateLoopAppUrl({
     rawAppUrl: readEnv("APP_URL"),

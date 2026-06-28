@@ -1,3 +1,5 @@
+import { publicEnv } from "~~/utils/env/public";
+
 const HOSTED_GATED_ATTACHMENT_PATH_PATTERN =
   /^\/api\/attachments\/(?:images\/att_[A-Za-z0-9_-]{16,80}\.webp|details\/det_[A-Za-z0-9_-]{16,80})$/;
 const RATELOOP_PRODUCTION_ORIGINS = new Set(["https://rateloop.ai", "https://www.rateloop.ai"]);
@@ -20,7 +22,7 @@ function getBrowserOrigin() {
 }
 
 function getConfiguredAppOrigin() {
-  return normalizeOrigin(process.env.NEXT_PUBLIC_APP_URL);
+  return publicEnv.configuredAppOrigin;
 }
 
 function isRelativePathUrl(value: string) {

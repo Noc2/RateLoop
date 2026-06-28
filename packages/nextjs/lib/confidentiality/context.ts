@@ -37,7 +37,7 @@ import {
   confidentialityTermsAcceptances,
   questionConfidentiality,
 } from "~~/lib/db/schema";
-import { getServerRpcOverrides, getServerTargetNetworkById } from "~~/lib/env/server";
+import { getOptionalAppUrl, getServerRpcOverrides, getServerTargetNetworkById } from "~~/lib/env/server";
 import { resolveContentDeploymentScope } from "~~/lib/protocolDeployment";
 import { isValidWalletAddress, normalizeWalletAddress } from "~~/lib/watchlist/contentWatch";
 import { ponderApi } from "~~/services/ponder/client";
@@ -1136,7 +1136,7 @@ function defaultConfidentialityLogRootArtifactUrl(epoch: string, deploymentKey: 
   if (configuredBase) {
     return `${configuredBase.replace(/\/+$/, "")}/${encodeURIComponent(deploymentKey)}/${encodeURIComponent(epoch)}.json`;
   }
-  const appUrl = process.env.APP_URL?.trim() || process.env.NEXT_PUBLIC_APP_URL?.trim();
+  const appUrl = getOptionalAppUrl();
   if (!appUrl) return null;
   try {
     const url = new URL(`/api/confidentiality/log-roots/${encodeURIComponent(epoch)}/artifact`, appUrl);

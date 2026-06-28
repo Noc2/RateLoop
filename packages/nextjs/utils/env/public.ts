@@ -18,6 +18,17 @@ function isLocalhostUrl(value: string): boolean {
   return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname === "[::1]";
 }
 
+function normalizeAppOrigin(value: string | undefined): string | null {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+
+  try {
+    return new URL(trimmed).origin;
+  } catch {
+    return null;
+  }
+}
+
 // Next only inlines NEXT_PUBLIC_* variables into client bundles when they are
 // accessed with static property reads.
 const rawPublicEnv = {
@@ -37,6 +48,7 @@ const rawPublicEnv = {
   thirdwebClientId: optionalEnv(process.env.NEXT_PUBLIC_THIRDWEB_CLIENT_ID),
   useBasePreconfRpc: optionalEnv(process.env.NEXT_PUBLIC_USE_BASE_PRECONF_RPC),
   walletConnectProjectId: optionalEnv(process.env.NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID),
+  appUrl: optionalEnv(process.env.NEXT_PUBLIC_APP_URL),
 } as const;
 
 const allowLocalE2EProductionBuild = rawPublicEnv.localE2EProductionBuild === "true";
@@ -160,4 +172,7 @@ export const publicEnv = {
   },
   frontendCode: frontendCode as `0x${string}` | undefined,
   rpcFallbackEnabled: !isProduction || rawPublicEnv.enableRpcFallback === "true",
+  get configuredAppOrigin() {
+    return normalizeAppOrigin(rawPublicEnv.appUrl);
+  },
 };

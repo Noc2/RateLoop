@@ -12,7 +12,7 @@ import {
   buildX402QuestionOperation as buildSharedX402QuestionOperation,
   parseX402QuestionRequest as parseSharedX402QuestionRequest,
 } from "@rateloop/agents/x402-question-payload";
-import { getTrustedRateLoopAppUrl } from "~~/lib/env/server";
+import { getOptionalAppUrl, getOptionalPonderUrl, getTrustedRateLoopAppUrl } from "~~/lib/env/server";
 import { isLocalE2EProductionBuildEnabled } from "~~/utils/env/e2eProduction";
 
 export {
@@ -44,7 +44,7 @@ function serverX402QuestionParserOptions(): X402QuestionParserOptions {
       (origin): origin is string => Boolean(origin),
     ),
     allowLocalhostAttachmentOrigins: process.env.NODE_ENV !== "production" || isLocalE2EProductionBuildEnabled(),
-    questionMetadataBaseUrl: process.env.NEXT_PUBLIC_PONDER_URL ?? process.env.NEXT_PUBLIC_APP_URL,
+    questionMetadataBaseUrl: getOptionalPonderUrl() ?? getOptionalAppUrl(),
   };
 }
 
