@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { assertSignedCollectionWalletContext } from "~~/hooks/signedCollectionWalletContext";
 import { isSignatureRejected } from "~~/utils/signatureErrors";
 
 export interface SignedCollectionResponse<TItem> {
@@ -17,13 +18,13 @@ interface SignedCollectionSessionStatus {
 export interface SignedCollectionToggleResult<TExtraReason extends string = never> {
   ok: boolean;
   selected?: boolean;
-  reason?: "not_connected" | "rejected" | "request_failed" | TExtraReason;
+  reason?: "not_connected" | "rejected" | "request_failed" | "wallet_changed" | TExtraReason;
   error?: string;
 }
 
 export interface SignedCollectionReadAccessResult {
   ok: boolean;
-  reason?: "not_connected" | "rejected" | "request_failed";
+  reason?: "not_connected" | "rejected" | "request_failed" | "wallet_changed";
   error?: string;
 }
 
@@ -285,8 +286,17 @@ export function useSignedCollection<TItem, TId, TExtraReason extends string = ne
         return { ok: false, reason: "not_connected" };
       }
 
+      const snapshottedAddress = config.address;
+      const guardWalletContext = (): SignedCollectionToggleResult<TExtraReason> | null => {
+        const walletContext = assertSignedCollectionWalletContext(snapshottedAddress, config.address);
+        if (!walletContext.ok) {
+          return { ok: false, reason: "wallet_changed" };
+        }
+        return null;
+      };
+
       const normalizedId = config.normalizeId(id);
-      const extraReason = config.validateToggle?.(normalizedId, config.address) ?? null;
+      const extraReason = config.validateToggle?.(normalizedId, snapshottedAddress) ?? null;
       if (extraReason) {
         return { ok: false, reason: extraReason };
       }
@@ -299,10 +309,17 @@ export function useSignedCollection<TItem, TId, TExtraReason extends string = ne
 
       try {
         const performSignedToggle = async () => {
+          const walletGuard = guardWalletContext();
+          if (walletGuard) {
+            return walletGuard;
+          }
+
           const challengeRes = await fetch(config.challengePath, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(config.buildWriteChallengeRequest(config.address!, normalizedId, currentlySelected)),
+            body: JSON.stringify(
+              config.buildWriteChallengeRequest(snapshottedAddress, normalizedId, currentlySelected),
+            ),
           });
           const challengeData = await readResponseBody<SignedChallengeResponse>(
             challengeRes,
@@ -313,46 +330,86 @@ export function useSignedCollection<TItem, TId, TExtraReason extends string = ne
             throw new Error("Failed to create signature challenge");
           }
 
+          const walletGuardBeforeSign = guardWalletContext();
+          if (walletGuardBeforeSign) {
+            return walletGuardBeforeSign;
+          }
+
           const signature = await config.signMessageAsync({ message: challengeData.message });
 
-          return fetch(config.collectionPath, {
-            method: currentlySelected ? "DELETE" : "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(
-              config.buildSignedWriteRequest(
-                config.address!,
-                normalizedId,
-                currentlySelected,
-                challengeData.challengeId,
-                signature,
+          const walletGuardBeforeFetch = guardWalletContext();
+          if (walletGuardBeforeFetch) {
+            return walletGuardBeforeFetch;
+          }
+
+          await readResponseBody(
+            await fetch(config.collectionPath, {
+              method: currentlySelected ? "DELETE" : "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(
+                config.buildSignedWriteRequest(
+                  snapshottedAddress,
+                  normalizedId,
+                  currentlySelected,
+                  challengeData.challengeId,
+                  signature,
+                ),
               ),
-            ),
-          });
+            }),
+            "Request failed",
+          );
+          return { ok: true as const, selected: !currentlySelected };
         };
 
         setOptimisticState(normalizedId, !currentlySelected);
         const canUseWriteSession =
           hasWriteSession ||
-          (await getSignedCollectionSessionStatus(config.sessionPath, config.address, config.readSearchParams))
+          (await getSignedCollectionSessionStatus(config.sessionPath, snapshottedAddress, config.readSearchParams))
             .hasWriteSession;
         if (canUseWriteSession && !hasWriteSession) {
           setHasWriteSession(true);
         }
 
-        let response = canUseWriteSession
+        const walletGuardBeforeWrite = guardWalletContext();
+        if (walletGuardBeforeWrite) {
+          queryClient.setQueryData(config.queryKey, previous);
+          return walletGuardBeforeWrite;
+        }
+
+        const response = canUseWriteSession
           ? await fetch(config.collectionPath, {
               method: currentlySelected ? "DELETE" : "PUT",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(config.buildSessionWriteRequest(config.address, normalizedId, currentlySelected)),
+              body: JSON.stringify(
+                config.buildSessionWriteRequest(snapshottedAddress, normalizedId, currentlySelected),
+              ),
             })
-          : await performSignedToggle();
+          : null;
 
-        if (canUseWriteSession && response.status === 401) {
-          setHasWriteSession(false);
-          response = await performSignedToggle();
+        if (!canUseWriteSession) {
+          const signedToggleResult = await performSignedToggle();
+          if (!signedToggleResult.ok) {
+            queryClient.setQueryData(config.queryKey, previous);
+            return signedToggleResult;
+          }
+          setHasWriteSession(true);
+          queryClient.setQueryData(sessionStatusQueryKey, { hasReadSession: true, hasWriteSession: true });
+          return signedToggleResult;
         }
 
-        await readResponseBody(response, "Request failed");
+        if (response && response.status === 401) {
+          setHasWriteSession(false);
+          const signedToggleResult = await performSignedToggle();
+          if (!signedToggleResult.ok) {
+            queryClient.setQueryData(config.queryKey, previous);
+            return signedToggleResult;
+          }
+          setHasWriteSession(true);
+          queryClient.setQueryData(sessionStatusQueryKey, { hasReadSession: true, hasWriteSession: true });
+          return signedToggleResult;
+        }
+
+        await readResponseBody(response!, "Request failed");
         setHasWriteSession(true);
         queryClient.setQueryData(sessionStatusQueryKey, { hasReadSession: true, hasWriteSession: true });
         return { ok: true, selected: !currentlySelected };
@@ -383,8 +440,21 @@ export function useSignedCollection<TItem, TId, TExtraReason extends string = ne
       return { ok: false, reason: "not_connected" };
     }
 
+    const snapshottedAddress = config.address;
+
     try {
-      const result = await readSignedCollection<TItem>({ ...config, autoRead: true }, config.address);
+      const walletContext = assertSignedCollectionWalletContext(snapshottedAddress, config.address);
+      if (!walletContext.ok) {
+        return { ok: false, reason: "wallet_changed" };
+      }
+
+      const result = await readSignedCollection<TItem>({ ...config, autoRead: true }, snapshottedAddress);
+
+      const walletContextAfterRead = assertSignedCollectionWalletContext(snapshottedAddress, config.address);
+      if (!walletContextAfterRead.ok) {
+        return { ok: false, reason: "wallet_changed" };
+      }
+
       queryClient.setQueryData(sessionStatusQueryKey, result.sessionStatus);
       queryClient.setQueryData(config.queryKey, result.response);
       return { ok: true };
