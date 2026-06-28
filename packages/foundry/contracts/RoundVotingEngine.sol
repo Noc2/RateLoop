@@ -42,13 +42,8 @@ import { IRoundVotingSettlement } from "./interfaces/IRoundVotingSettlement.sol"
 ///      and the final reveal grace deadline has passed.
 ///      Epoch-weighting: epoch-1 (blind) = 100% reward weight; epoch-2+ (informed) = 25%.
 ///      Win condition uses weighted pools, not raw stake, preventing late-voter herding.
-contract RoundVotingEngine is
-    IRoundVotingEngine,
-    IRoundVotingCommitReveal,
-    IRoundVotingSettlement,
-    Initializable,
-    ReentrancyGuardTransient
-{
+/// @dev Formally implements {IRoundVotingEngine} for compile-time interface coverage.
+contract RoundVotingEngine is IRoundVotingEngine, IRoundVotingCommitReveal, IRoundVotingSettlement, Initializable, ReentrancyGuardTransient {
     using SafeERC20 for IERC20;
     using SafeCast for uint256;
 
