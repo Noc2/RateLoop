@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Image attachment sweep is not configured." }, { status: 503 });
   }
 
-  const limited = await checkRateLimit(request, SWEEP_RATE_LIMIT, { allowOnStoreUnavailable: true });
+  const limited = await checkRateLimit(request, SWEEP_RATE_LIMIT, { allowOnStoreUnavailable: false });
   if (limited) return limited;
 
   const token = request.headers.get("x-rateloop-image-attachment-sweep-secret")?.trim() || readBearerToken(request);

@@ -88,7 +88,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const preParseLimited = await checkRateLimit(request, WRITE_RATE_LIMIT, {
-    allowOnStoreUnavailable: true,
+    allowOnStoreUnavailable: false,
     extraKeyParts: ["preparse"],
   });
   if (preParseLimited) return preParseLimited;
@@ -112,7 +112,7 @@ export async function POST(request: NextRequest) {
       challengeId?: string;
     };
     const limited = await checkRateLimit(request, WRITE_RATE_LIMIT, {
-      allowOnStoreUnavailable: true,
+      allowOnStoreUnavailable: false,
       extraKeyParts: [typeof body.address === "string" ? body.address : undefined],
     });
     if (limited) return limited;

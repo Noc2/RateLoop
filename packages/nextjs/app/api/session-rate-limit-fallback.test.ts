@@ -131,24 +131,29 @@ test("notification email session route fails open when the rate limit store is u
   assert.deepEqual(await response.json(), { hasSession: false });
 });
 
-test("free transaction session route keeps serving its fallback when the rate limit store is unavailable", async () => {
-  freeTransactions.__setFreeTransactionTestOverridesForTests({
-    resolveRaterIdentityKey: async () => null,
-  });
-
+test("free transaction session route fails closed when the rate limit store is unavailable", async () => {
   const response = await freeTransactionSessionRoute.GET(
     makeRequest(`/api/transactions/free/session?address=${encodeURIComponent(TEST_ADDRESS)}&chainId=${TEST_CHAIN_ID}`),
   );
-  const body = await response.json();
 
-  assert.equal(response.status, 200);
-  assert.equal(body.chainId, TEST_CHAIN_ID);
-  assert.equal(body.environment, "production");
-  assert.equal(body.verified, false);
-  assert.equal(body.exhausted, false);
-  assert.equal(body.remaining, 0);
-  assert.equal(body.walletAddress, "0x63cada40E8AcF7A1d47229af5Be35b78b16035fa");
-  assert.equal(body.raterIdentityKey, null);
+  assert.equal(response.status, 503);
+  assert.equal((await response.json()).code, "service_unavailable");
+});
+
+test("feedback submit route fails closed when the rate limit store is unavailable", async () => {
+  const response = await feedbackRoute.POST(
+    new NextRequest("https://rateloop.ai/api/feedback", {
+      method: "POST",
+      headers: new Headers({
+        "content-type": "application/json",
+        "x-forwarded-for": TEST_IP,
+      }),
+      body: JSON.stringify({ address: TEST_ADDRESS }),
+    }),
+  );
+
+  assert.equal(response.status, 503);
+  assert.equal((await response.json()).code, "service_unavailable");
 });
 
 test("feedback challenge route fails closed when rate limit store is unavailable (WS-6)", async () => {
@@ -170,21 +175,6 @@ test("feedback challenge route fails closed when rate limit store is unavailable
   );
 
   assert.equal(response.status, 503);
-});
-
-test("feedback submit route continues past rate limit store outages", async () => {
-  const response = await feedbackRoute.POST(
-    new NextRequest("https://rateloop.ai/api/feedback", {
-      method: "POST",
-      headers: new Headers({
-        "content-type": "application/json",
-        "x-forwarded-for": TEST_IP,
-      }),
-      body: JSON.stringify({ address: TEST_ADDRESS }),
-    }),
-  );
-
-  assert.equal(response.status, 400);
 });
 
 test("feedback counts route continues past rate limit store outages", async () => {

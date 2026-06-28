@@ -144,7 +144,7 @@ function sanitizeTimingPayload(body: Record<string, unknown>): SanitizedTimingPa
 }
 
 export async function POST(request: NextRequest) {
-  const limited = await checkRateLimit(request, RATE_LIMIT, { allowOnStoreUnavailable: true });
+  const limited = await checkRateLimit(request, RATE_LIMIT, { allowOnStoreUnavailable: false });
   if (limited) return limited;
 
   const parsedBody = await parseJsonBody(request);

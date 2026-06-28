@@ -22,7 +22,7 @@ export interface RateLimitOptions {
   extraKeyParts?: Array<string | number | bigint | null | undefined>;
   /** Stable route scope for dynamic paths whose route params should not split the first-stage bucket */
   routeKey?: string;
-  /** Allow selected low-risk endpoints to keep serving if the backing store is temporarily offline */
+  /** Allow low-risk read endpoints to keep serving if the backing store is temporarily offline. Write and abuse-prone routes should omit this (default fail-closed in production). */
   allowOnStoreUnavailable?: boolean;
 }
 
