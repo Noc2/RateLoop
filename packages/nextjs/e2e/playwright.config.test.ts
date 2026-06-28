@@ -248,6 +248,42 @@ test("mobile specs avoid runtime project skips", () => {
   assert.doesNotMatch(tabletSpec, /\btest\.skip\b/, "tablet mobile spec should be selected by project config");
 });
 
+test("ci-app and chromium specs document conditional runtime skips", () => {
+  const allowedConditionalSkipSpecs = new Set([
+    "content-moderation.spec.ts",
+    "frontend-lifecycle.spec.ts",
+    "profile.spec.ts",
+  ]);
+  const specs = readdirSync("e2e/tests")
+    .filter(fileName => /\.spec\.[cm]?[jt]sx?$/.test(fileName))
+    .map(fileName => ({
+      fileName,
+      specPath: join("/tmp/rateloop/packages/nextjs/e2e/tests", fileName),
+      source: readFileSync(join("e2e/tests", fileName), "utf8"),
+    }));
+  const projects = config.projects ?? [];
+
+  for (const { fileName, specPath, source } of specs) {
+    const runsInCiAppOrChromium = projects.some(
+      project =>
+        (project.name === "ci-app" || project.name === "chromium") && projectIncludesSpec(project, specPath),
+    );
+    if (!runsInCiAppOrChromium) continue;
+
+    if (/\btest\.skip\b/.test(source)) {
+      assert.ok(
+        allowedConditionalSkipSpecs.has(fileName),
+        `${fileName} uses test.skip in ci-app/chromium — add it to the allowlist or remove the skip`,
+      );
+    }
+  }
+
+  for (const fileName of allowedConditionalSkipSpecs) {
+    const source = readFileSync(join("e2e/tests", fileName), "utf8");
+    assert.match(source, /\btest\.skip\b/, `${fileName} should remain on the conditional skip allowlist`);
+  }
+});
+
 test("mobile CI scripts can run each device profile independently", () => {
   const packageJson = readNextPackageJson();
   const phoneShardScripts = [
