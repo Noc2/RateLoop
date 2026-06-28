@@ -14,6 +14,7 @@ import { registerDataRoutes } from "./routes/data-routes.js";
 import { registerDiscoveryRoutes } from "./routes/discovery-routes.js";
 import { registerKeeperRoutes } from "./routes/keeper-routes.js";
 import { registerLeaderboardRoutes } from "./routes/leaderboard-routes.js";
+import { inspectHumanVerifiedCommitCountHealth } from "./human-verified-commit-health.js";
 import { resolvePonderProtocolDeploymentMetadata } from "../protocol-deployment.js";
 
 const require = createRequire(import.meta.url);
@@ -22,18 +23,10 @@ const { resolvePonderDatabaseSchema, schemaFromProtocolDeploymentKey } = require
   schemaFromProtocolDeploymentKey: (deploymentKey?: string | null) => string | undefined;
 };
 
-const KEEPER_INTERNAL_PATH_PREFIXES = [
-  "/keeper/work",
-  "/votes",
-  "/advisory-votes",
-  "/correlation",
-  "/rounds",
-] as const;
+const KEEPER_WORK_PATH = "/keeper/work";
 
-function isKeeperInternalPath(pathname: string) {
-  return KEEPER_INTERNAL_PATH_PREFIXES.some(
-    prefix => pathname === prefix || pathname.startsWith(`${prefix}/`),
-  );
+function isKeeperWorkPath(pathname: string) {
+  return pathname === KEEPER_WORK_PATH;
 }
 
 function hasValidKeeperWorkAuthorization(c: { req: { header: (name: string) => string | undefined } }) {
@@ -91,7 +84,7 @@ if (rateLimitMisconfigured) {
 app.use("/*", async (c, next) => {
   const requestPath = new URL(c.req.url).pathname;
   const isDeploymentProbe = requestPath === "/deployment";
-  const isAuthorizedKeeperRequest = isKeeperInternalPath(requestPath) && hasValidKeeperWorkAuthorization(c);
+  const isAuthorizedKeeperRequest = isKeeperWorkPath(requestPath) && hasValidKeeperWorkAuthorization(c);
 
   if (rateLimitMisconfigured && !isDeploymentProbe && !isAuthorizedKeeperRequest) {
     return c.json({ error: "RATE_LIMIT_TRUSTED_IP_HEADERS not configured. Set the env var." }, 503);
@@ -142,7 +135,7 @@ if (!isProduction && !corsOrigin) {
   console.warn("[ponder] CORS_ORIGIN not set — allowing localhost only. Set CORS_ORIGIN for production domains.");
 }
 
-// Block browser-facing routes if CORS is misconfigured — keeper work routes stay available with bearer auth.
+// Block browser-facing routes if CORS is misconfigured — GET /keeper/work stays available with bearer auth.
 if (corsMisconfigured) {
   app.use("/*", async (c, next) => {
     const requestPath = new URL(c.req.url).pathname;
@@ -150,7 +143,7 @@ if (corsMisconfigured) {
       await next();
       return;
     }
-    if (isKeeperInternalPath(requestPath) && hasValidKeeperWorkAuthorization(c)) {
+    if (isKeeperWorkPath(requestPath) && hasValidKeeperWorkAuthorization(c)) {
       await next();
       return;
     }
@@ -165,7 +158,18 @@ app.use(
   }),
 );
 
-// Ponder provides /health and /status natively — no custom health check needed.
+// Ponder provides /health and /status natively. /health/indexer adds indexer-specific signals.
+app.get("/health/indexer", async (c) => {
+  const humanVerifiedCommitCount = await inspectHumanVerifiedCommitCountHealth();
+
+  return c.json({
+    status: humanVerifiedCommitCount.status === "warning" ? "degraded" : "ok",
+    checks: {
+      humanVerifiedCommitCount,
+    },
+  });
+});
+
 app.get("/deployment", (c) => {
   const metadata = resolvePonderProtocolDeploymentMetadata();
   if (!metadata) {

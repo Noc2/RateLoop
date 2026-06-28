@@ -16,6 +16,9 @@ async function loadApp(env: Record<string, string | undefined>) {
   vi.doMock("../src/api/routes/discovery-routes.js", () => ({ registerDiscoveryRoutes: vi.fn() }));
   vi.doMock("../src/api/routes/keeper-routes.js", () => ({ registerKeeperRoutes: vi.fn() }));
   vi.doMock("../src/api/routes/leaderboard-routes.js", () => ({ registerLeaderboardRoutes: vi.fn() }));
+  vi.doMock("../src/api/human-verified-commit-health.js", () => ({
+    inspectHumanVerifiedCommitCountHealth: vi.fn().mockResolvedValue({ status: "ok", staleRoundCount: 0 }),
+  }));
 
   return import("../src/api/index.js");
 }
@@ -98,5 +101,29 @@ describe("ponder api bootstrap", () => {
 
     expect(response.status).toBe(200);
     expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("CORS_ORIGIN is required"));
+  });
+
+  it("limits bearer-token bypass to GET /keeper/work only", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { default: app } = await loadApp({
+      NODE_ENV: "production",
+      CORS_ORIGIN: "https://app.rateloop.ai",
+      RATE_LIMIT_TRUSTED_IP_HEADERS: undefined,
+      PONDER_KEEPER_WORK_TOKEN: "keeper-token",
+    });
+
+    const keeperResponse = await app.request("https://ponder.rateloop.ai/keeper/work", {
+      headers: { authorization: "Bearer keeper-token" },
+    });
+    const votesResponse = await app.request("https://ponder.rateloop.ai/votes", {
+      headers: { authorization: "Bearer keeper-token" },
+    });
+
+    expect(keeperResponse.status).toBe(404);
+    expect(votesResponse.status).toBe(503);
+    expect(await votesResponse.json()).toEqual({
+      error: "RATE_LIMIT_TRUSTED_IP_HEADERS not configured. Set the env var.",
+    });
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("RATE_LIMIT_TRUSTED_IP_HEADERS is required"));
   });
 });
