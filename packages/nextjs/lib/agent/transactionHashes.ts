@@ -1,6 +1,6 @@
 import { type Hex } from "viem";
 
-export const MAX_AGENT_TRANSACTION_HASHES = 32;
+const MAX_AGENT_TRANSACTION_HASHES = 32;
 
 type ErrorFactory = (message: string) => Error;
 

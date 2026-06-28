@@ -16,7 +16,6 @@
     "compile": "yarn foundry:compile",
     "deploy": "yarn workspace @rateloop/foundry deploy",
     "build:workspace-deps": "node scripts/with-workspace-dist-lock.mjs \"yarn workspace @rateloop/node-utils build && yarn workspace @rateloop/contracts build && yarn workspace @rateloop/sdk build:built-workspace-deps && yarn workspace @rateloop/agents build:built-workspace-deps\"",
-    "dead-code": "yarn dead-code:scan",
     "dead-code:scan": "knip --no-progress --no-exit-code",
     "dev:db": "node scripts/dev-db.mjs up",
     "dev:db:down": "node scripts/dev-db.mjs down",

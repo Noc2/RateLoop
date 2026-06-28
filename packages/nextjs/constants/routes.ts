@@ -47,7 +47,7 @@ export const ASK_SUBMISSIONS_ROUTE = buildRouteWithSearchParams(ASK_ROUTE, {
   [ASK_ROUTE_TAB_PARAM]: ASK_SUBMISSIONS_ROUTE_TAB,
 });
 
-export interface RateContentHrefOptions {
+interface RateContentHrefOptions {
   waitForContent?: boolean;
   chainId?: number | string | null;
   deploymentKey?: string | null;
