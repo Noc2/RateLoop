@@ -661,6 +661,7 @@ async function assertPonderDeploymentMatchesKeeper(
     }
 
     if (mismatches.length > 0) {
+      verifiedPonderDeploymentCacheKey = null;
       const deploymentKey = ponderDeploymentKey ? ` (${ponderDeploymentKey})` : "";
       throw new Error(`Ponder deployment does not match keeper config${deploymentKey}: ${mismatches.join(", ")}`);
     }
