@@ -577,3 +577,20 @@ wallet-change races, keeper artifact URI allowlist).
 - Prior non-contract review: `docs/repo-review-findings-2026-06-27.md`
 - Prior contract audit: `packages/foundry/audit-report-2026-06-10.md`
 - Governance rotation runbook: `AGENTS.md`
+
+## Remediation (2026-06-28)
+
+All open findings above were addressed on `main` in separate commits after this
+report (`d691eccee` through `810e7b66c`). Highlights:
+
+- **Code fixes:** sweep auth, write-route rate-limit fail-closed, wallet-switch
+  guards in vote/collection/sponsorship hooks, free-tx confirm session binding,
+  keeper correlation lock / Ponder cache / write retry / partial ciphertext pages,
+  Ponder health signal and scoped bearer bypass, centralized app URL resolution,
+  `StaleEngine()` custom error, `IRoundVotingEngine` adoption.
+- **Docs/tooling:** keeper Ponder dependency runbook, README/CONTRIBUTING/AGENTS
+  drift, env examples, aderyn comment, E2E skip guard, dependency alignment.
+- **Intentionally unchanged:** production feedback hash encoding (string domain in
+  `abi.encode` preserved for compatibility; tests document constant vs string),
+  `_worldPresenceNullifierOwner` storage slot (natspec only), full Solidity error
+  migration (out of scope), production engine migration (ops runbook only).
