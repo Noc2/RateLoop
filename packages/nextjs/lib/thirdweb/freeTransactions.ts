@@ -1,5 +1,6 @@
 import deployedContracts from "@rateloop/contracts/deployedContracts";
 import { USDC_BY_CHAIN_ID } from "@rateloop/contracts/protocol";
+import { randomBytes, timingSafeEqual } from "crypto";
 import { and, eq, sql } from "drizzle-orm";
 import "server-only";
 import {
@@ -115,6 +116,7 @@ export type FreeTransactionAllowanceDecision =
   | {
       isAllowed: true;
       summary: FreeTransactionAllowanceSummary;
+      reservationSessionToken?: string;
       debugCode?: string;
     }
   | {
@@ -154,6 +156,7 @@ const FRONTEND_REGISTRATION_STAKE_AMOUNT = 1000_000_000n;
 const MAX_CONTENT_TAGS_LENGTH = 256;
 const FREE_TRANSACTION_RESERVATION_TTL_MS = 5 * 60_000;
 const FREE_TRANSACTION_IDEMPOTENCY_WINDOW_MS = 2 * 60_000;
+const FREE_TRANSACTION_RESERVATION_SESSION_TOKEN_BYTES = 32;
 const EMPTY_DETAILS_HASH = `0x${"0".repeat(64)}`;
 const ALLOWED_APPROVE_TOKEN_NAMES = new Set(["LoopReputation", "MockERC20", "USDC"]);
 const USER_OPERATION_RECEIPT_EVENT_ABI = parseAbi([
@@ -913,6 +916,9 @@ function normalizeReservationRow(
         walletAddress?: string | null;
         wallet_address?: string | null;
         walletaddress?: string | null;
+        reservationSessionToken?: string | null;
+        reservation_session_token?: string | null;
+        reservationsessiontoken?: string | null;
         status?: string | null;
         confirmedAt?: Date | string | null;
         confirmed_at?: Date | string | null;
@@ -931,6 +937,8 @@ function normalizeReservationRow(
   return {
     chainId: Number(row.chainId ?? row.chain_id ?? row.chainid),
     walletAddress: row.walletAddress ?? row.wallet_address ?? row.walletaddress ?? "",
+    reservationSessionToken:
+      row.reservationSessionToken ?? row.reservation_session_token ?? row.reservationsessiontoken ?? null,
     status: row.status ?? "",
     confirmedAt: row.confirmedAt ?? row.confirmed_at ?? row.confirmedat ?? null,
     expiresAt: row.expiresAt ?? row.expires_at ?? row.expiresat ?? null,
@@ -994,6 +1002,37 @@ function buildUnverifiedSummary(params: { chainId: number; walletAddress: `0x${s
     walletAddress: params.walletAddress,
     raterIdentityKey: null,
   } satisfies FreeTransactionAllowanceSummary;
+}
+
+function generateReservationSessionToken() {
+  return randomBytes(FREE_TRANSACTION_RESERVATION_SESSION_TOKEN_BYTES).toString("hex");
+}
+
+function isReservationSessionToken(value: unknown): value is string {
+  return typeof value === "string" && /^[0-9a-f]{64}$/.test(value);
+}
+
+function reservationSessionTokensMatch(expected: string, provided: string) {
+  const expectedBuffer = Buffer.from(expected, "hex");
+  const providedBuffer = Buffer.from(provided, "hex");
+  if (expectedBuffer.length !== providedBuffer.length) {
+    return false;
+  }
+
+  return timingSafeEqual(expectedBuffer, providedBuffer);
+}
+
+function buildAllowedDecision(params: {
+  summary: FreeTransactionAllowanceSummary;
+  reservationSessionToken?: string | null;
+  debugCode?: string;
+}): FreeTransactionAllowanceDecision {
+  return {
+    isAllowed: true,
+    summary: params.summary,
+    ...(params.reservationSessionToken ? { reservationSessionToken: params.reservationSessionToken } : {}),
+    ...(params.debugCode ? { debugCode: params.debugCode } : {}),
+  };
 }
 
 function buildIdentityBoundUnmeteredSummary(params: {
@@ -1836,6 +1875,14 @@ async function allTransactionHashesSucceeded(params: {
   return receipts.every(receipt => receipt.ok && receipt.matchesWallet);
 }
 
+export function readReservationSessionTokenFromAllowance(decision: FreeTransactionAllowanceDecision): string | null {
+  if (!decision.isAllowed) {
+    return null;
+  }
+
+  return decision.reservationSessionToken ?? null;
+}
+
 export async function ensureFreeTransactionQuotaTable() {
   if (!ensureFreeTransactionQuotaTablePromise) {
     ensureFreeTransactionQuotaTablePromise = Promise.resolve();
@@ -2078,13 +2125,24 @@ export async function evaluateFreeTransactionAllowance(
         normalizedReservation.expiresAt &&
         getTimestampMs(normalizedReservation.expiresAt) > now.getTime()
       ) {
+        let reservationSessionToken = normalizedReservation.reservationSessionToken;
+        if (!isReservationSessionToken(reservationSessionToken)) {
+          reservationSessionToken = generateReservationSessionToken();
+          await tx
+            .update(freeTransactionReservations)
+            .set({
+              reservationSessionToken,
+              updatedAt: now,
+            })
+            .where(eq(freeTransactionReservations.operationKey, operationKey));
+        }
+
         timingLog.emit("reservation-reused", {
           operationKey,
           reservationStatus: "pending",
           walletAddress,
         });
-        return {
-          isAllowed: true,
+        return buildAllowedDecision({
           summary: buildQuotaSummary({
             chainId: normalizedQuotaRow.chainId,
             environment: normalizedQuotaRow.environment,
@@ -2093,7 +2151,8 @@ export async function evaluateFreeTransactionAllowance(
             raterIdentityKey: normalizedQuotaRow.raterIdentityKey,
             walletAddress,
           }),
-        };
+          reservationSessionToken,
+        });
       }
 
       if (idempotentConfirmed) {
@@ -2148,6 +2207,8 @@ export async function evaluateFreeTransactionAllowance(
         };
       }
 
+      const reservationSessionToken = generateReservationSessionToken();
+
       if (existingReservation) {
         await tx
           .update(freeTransactionReservations)
@@ -2157,6 +2218,7 @@ export async function evaluateFreeTransactionAllowance(
             chainId,
             environment,
             walletAddress,
+            reservationSessionToken,
             status: "pending",
             txHashes: null,
             reservedAt: now,
@@ -2174,6 +2236,7 @@ export async function evaluateFreeTransactionAllowance(
           chainId,
           environment,
           walletAddress,
+          reservationSessionToken,
           status: "pending",
           txHashes: null,
           reservedAt: now,
@@ -2211,8 +2274,7 @@ export async function evaluateFreeTransactionAllowance(
         walletAddress,
       });
 
-      return {
-        isAllowed: true,
+      return buildAllowedDecision({
         summary: buildQuotaSummary({
           chainId: normalizedUpdatedQuotaRow.chainId,
           environment: normalizedUpdatedQuotaRow.environment,
@@ -2221,7 +2283,8 @@ export async function evaluateFreeTransactionAllowance(
           raterIdentityKey: normalizedUpdatedQuotaRow.raterIdentityKey,
           walletAddress,
         }),
-      };
+        reservationSessionToken,
+      });
     });
     timingLog.emit("quota-transaction-complete", {
       operationKey,
@@ -2264,6 +2327,7 @@ export async function confirmFreeTransactionReservation(params: {
   address: string;
   chainId: number;
   operationKey: string;
+  reservationSessionToken: string;
   transactionHashes: string[];
 }): Promise<FreeTransactionConfirmationResult> {
   const timingLog = createFreeTransactionTimingLog({
@@ -2274,7 +2338,12 @@ export async function confirmFreeTransactionReservation(params: {
     walletAddress: isAddress(params.address) ? normalizeAddress(params.address) : null,
   });
 
-  if (!isAddress(params.address) || !Number.isFinite(params.chainId) || !isHash(params.operationKey)) {
+  if (
+    !isAddress(params.address) ||
+    !Number.isFinite(params.chainId) ||
+    !isHash(params.operationKey) ||
+    !isReservationSessionToken(params.reservationSessionToken)
+  ) {
     timingLog.emit("failure", {
       reason: "invalid_confirmation_payload",
     });
@@ -2349,7 +2418,15 @@ export async function confirmFreeTransactionReservation(params: {
         normalizedReservation.chainId !== params.chainId ||
         normalizedReservation.walletAddress.toLowerCase() !== walletAddress.toLowerCase()
       ) {
-        throw new Error("Sponsored transaction reservation does not match the current wallet");
+        return "reservation_mismatch";
+      }
+
+      const storedSessionToken = normalizedReservation.reservationSessionToken;
+      if (
+        !isReservationSessionToken(storedSessionToken) ||
+        !reservationSessionTokensMatch(storedSessionToken, params.reservationSessionToken)
+      ) {
+        return "reservation_mismatch";
       }
 
       if (normalizedReservation.status === "confirmed") {

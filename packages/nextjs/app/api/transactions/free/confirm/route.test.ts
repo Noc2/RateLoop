@@ -12,6 +12,7 @@ const TEST_ADDRESS = "0x63cada40E8AcF7A1d47229af5Be35b78b16035fa";
 const TEST_IP = "203.0.113.77";
 const TEST_OPERATION_KEY = `0x${"1".repeat(64)}`;
 const TEST_TX_HASH = `0x${"2".repeat(64)}`;
+const TEST_RESERVATION_SESSION_TOKEN = "a".repeat(64);
 
 type DbModule = typeof import("~~/lib/db");
 type DbTestMemoryModule = typeof import("~~/lib/db/testing/testMemory");
@@ -135,6 +136,7 @@ test("free transaction confirm route fails closed when the rate limit store is u
       address: TEST_ADDRESS,
       chainId: 480,
       operationKey: TEST_OPERATION_KEY,
+      reservationSessionToken: TEST_RESERVATION_SESSION_TOKEN,
       transactionHashes: [TEST_TX_HASH],
     }),
   );
@@ -159,6 +161,7 @@ test("free transaction confirm route fails closed when the quota store is unavai
         address: TEST_ADDRESS,
         chainId: 480,
         operationKey: TEST_OPERATION_KEY,
+        reservationSessionToken: TEST_RESERVATION_SESSION_TOKEN,
         transactionHashes: [TEST_TX_HASH],
       }),
     );
@@ -183,6 +186,7 @@ test("free transaction confirm route reports a missing reservation", async () =>
       address: TEST_ADDRESS,
       chainId: 480,
       operationKey: TEST_OPERATION_KEY,
+      reservationSessionToken: TEST_RESERVATION_SESSION_TOKEN,
       transactionHashes: [TEST_TX_HASH],
     }),
   );
@@ -207,12 +211,13 @@ test("free transaction confirm route reports non-pending reservations", async ()
         chain_id,
         environment,
         wallet_address,
+        reservation_session_token,
         status,
         reserved_at,
         expires_at,
         released_at,
         updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
     args: [
       TEST_OPERATION_KEY,
@@ -221,6 +226,7 @@ test("free transaction confirm route reports non-pending reservations", async ()
       480,
       "production",
       TEST_ADDRESS.toLowerCase(),
+      TEST_RESERVATION_SESSION_TOKEN,
       "released",
       now,
       new Date(now.getTime() + 60_000),
@@ -234,6 +240,7 @@ test("free transaction confirm route reports non-pending reservations", async ()
       address: TEST_ADDRESS,
       chainId: 480,
       operationKey: TEST_OPERATION_KEY,
+      reservationSessionToken: TEST_RESERVATION_SESSION_TOKEN,
       transactionHashes: [TEST_TX_HASH],
     }),
   );

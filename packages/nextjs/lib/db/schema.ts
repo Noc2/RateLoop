@@ -279,6 +279,7 @@ export const freeTransactionReservations = pgTable(
     chainId: integer("chain_id").notNull(),
     environment: text("environment").notNull(),
     walletAddress: text("wallet_address").notNull(),
+    reservationSessionToken: text("reservation_session_token"),
     status: text("status").notNull(),
     txHashes: text("tx_hashes"),
     reservedAt: timestamp("reserved_at", { mode: "date", withTimezone: true }).notNull(),

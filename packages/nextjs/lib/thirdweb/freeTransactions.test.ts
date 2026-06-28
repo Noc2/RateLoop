@@ -212,6 +212,18 @@ function buildOperationKey(calls: readonly EncodedCall[]) {
   return operationKey;
 }
 
+async function reserveFreeTransaction(calls: readonly EncodedCall[]) {
+  const decision = await freeTransactions.evaluateFreeTransactionAllowance(buildRequest(calls) as never);
+  assert.equal(decision.isAllowed, true);
+  if (!decision.isAllowed) {
+    throw new Error("Expected free transaction reservation to succeed");
+  }
+
+  const reservationSessionToken = freeTransactions.readReservationSessionTokenFromAllowance(decision);
+  assert.ok(reservationSessionToken, "Expected reservation session token");
+  return { decision, reservationSessionToken };
+}
+
 function buildUserOperationEventLog(sender: `0x${string}`) {
   return {
     address: ENTRY_POINT,
@@ -615,6 +627,7 @@ test("pending reservations consume quota on verifier approval and stay idempoten
   if (!firstDecision.isAllowed) return;
   assert.equal(firstDecision.summary.used, 1);
   assert.equal(firstDecision.summary.remaining, 1);
+  assert.match(firstDecision.reservationSessionToken ?? "", /^[0-9a-f]{64}$/);
 
   const quotaAfterFirst = await dbModule.dbClient.execute("SELECT free_tx_used FROM free_transaction_quotas");
   assert.equal(Number(quotaAfterFirst.rows[0]?.free_tx_used), 1);
@@ -624,6 +637,7 @@ test("pending reservations consume quota on verifier approval and stay idempoten
   if (!repeatedDecision.isAllowed) return;
   assert.equal(repeatedDecision.summary.used, 1);
   assert.equal(repeatedDecision.summary.remaining, 1);
+  assert.equal(repeatedDecision.reservationSessionToken, firstDecision.reservationSessionToken);
 
   const secondDecision = await freeTransactions.evaluateFreeTransactionAllowance(buildRequest(secondCalls) as never);
   assert.equal(secondDecision.isAllowed, true);
@@ -658,15 +672,14 @@ test("legacy contributor claims are eligible for metered free transactions", asy
 
 test("confirm finalizes a consumed reservation without double-counting quota", async () => {
   const calls = [voteCall("0x04")];
-  const initialDecision = await freeTransactions.evaluateFreeTransactionAllowance(buildRequest(calls) as never);
-  assert.equal(initialDecision.isAllowed, true);
-  if (!initialDecision.isAllowed) return;
+  const { decision: initialDecision, reservationSessionToken } = await reserveFreeTransaction(calls);
   assert.equal(initialDecision.summary.used, 1);
 
   const confirmed = await freeTransactions.confirmFreeTransactionReservation({
     address: WALLET,
     chainId: CHAIN_ID,
     operationKey: buildOperationKey(calls),
+    reservationSessionToken,
     transactionHashes: [SUCCESS_HASH],
   });
   assert.deepEqual(confirmed, { confirmed: true, outcome: "confirmed" });
@@ -675,6 +688,7 @@ test("confirm finalizes a consumed reservation without double-counting quota", a
     address: WALLET,
     chainId: CHAIN_ID,
     operationKey: buildOperationKey(calls),
+    reservationSessionToken,
     transactionHashes: [SUCCESS_HASH],
   });
   assert.deepEqual(replayed, { confirmed: true, outcome: "already_confirmed" });
@@ -697,16 +711,31 @@ test("confirm reports a missing reservation without succeeding", async () => {
     address: WALLET,
     chainId: CHAIN_ID,
     operationKey: buildOperationKey([voteCall("0x29")]),
+    reservationSessionToken: "a".repeat(64),
     transactionHashes: [SUCCESS_HASH],
   });
 
   assert.deepEqual(missingConfirmation, { confirmed: false, outcome: "missing_reservation" });
 });
 
+test("confirm rejects a mismatched reservation session token", async () => {
+  const calls = [voteCall("0x2b")];
+  await reserveFreeTransaction(calls);
+
+  const mismatchConfirmation = await freeTransactions.confirmFreeTransactionReservation({
+    address: WALLET,
+    chainId: CHAIN_ID,
+    operationKey: buildOperationKey(calls),
+    reservationSessionToken: "b".repeat(64),
+    transactionHashes: [SUCCESS_HASH],
+  });
+
+  assert.deepEqual(mismatchConfirmation, { confirmed: false, outcome: "reservation_mismatch" });
+});
+
 test("confirm reports non-pending reservations without succeeding", async () => {
   const calls = [voteCall("0x2a")];
-  const initialDecision = await freeTransactions.evaluateFreeTransactionAllowance(buildRequest(calls) as never);
-  assert.equal(initialDecision.isAllowed, true);
+  const { reservationSessionToken } = await reserveFreeTransaction(calls);
   await dbModule.dbClient.execute({
     sql: "UPDATE free_transaction_reservations SET status = ?, released_at = ?, updated_at = ?",
     args: ["released", new Date(), new Date()],
@@ -716,6 +745,7 @@ test("confirm reports non-pending reservations without succeeding", async () => 
     address: WALLET,
     chainId: CHAIN_ID,
     operationKey: buildOperationKey(calls),
+    reservationSessionToken,
     transactionHashes: [SUCCESS_HASH],
   });
 
@@ -724,8 +754,7 @@ test("confirm reports non-pending reservations without succeeding", async () => 
 
 test("confirm accepts relayed 7702 receipts when the executed event proves the wallet", async () => {
   const calls = [voteCall("0x0a")];
-  const initialDecision = await freeTransactions.evaluateFreeTransactionAllowance(buildRequest(calls) as never);
-  assert.equal(initialDecision.isAllowed, true);
+  const { reservationSessionToken } = await reserveFreeTransaction(calls);
 
   freeTransactions.__setFreeTransactionTestOverridesForTests({
     getTransactionVerificationClient: async () => ({
@@ -745,6 +774,7 @@ test("confirm accepts relayed 7702 receipts when the executed event proves the w
     address: WALLET,
     chainId: CHAIN_ID,
     operationKey: buildOperationKey(calls),
+    reservationSessionToken,
     transactionHashes: [SUCCESS_HASH],
   });
 
@@ -779,8 +809,7 @@ test("verifier accepts thirdweb smart account senders controlled by verified adm
 
 test("confirm accepts relayed 4337 receipts when the user operation event proves the wallet", async () => {
   const calls = [voteCall("0x0b")];
-  const initialDecision = await freeTransactions.evaluateFreeTransactionAllowance(buildRequest(calls) as never);
-  assert.equal(initialDecision.isAllowed, true);
+  const { reservationSessionToken } = await reserveFreeTransaction(calls);
 
   freeTransactions.__setFreeTransactionTestOverridesForTests({
     getTransactionVerificationClient: async () => ({
@@ -800,6 +829,7 @@ test("confirm accepts relayed 4337 receipts when the user operation event proves
     address: WALLET,
     chainId: CHAIN_ID,
     operationKey: buildOperationKey(calls),
+    reservationSessionToken,
     transactionHashes: [SUCCESS_HASH],
   });
 
@@ -809,8 +839,7 @@ test("confirm accepts relayed 4337 receipts when the user operation event proves
 
 test("confirm still rejects relayed receipts without wallet execution proof", async () => {
   const calls = [voteCall("0x0c")];
-  const initialDecision = await freeTransactions.evaluateFreeTransactionAllowance(buildRequest(calls) as never);
-  assert.equal(initialDecision.isAllowed, true);
+  const { reservationSessionToken } = await reserveFreeTransaction(calls);
 
   freeTransactions.__setFreeTransactionTestOverridesForTests({
     getTransactionVerificationClient: async () => ({
@@ -831,6 +860,7 @@ test("confirm still rejects relayed receipts without wallet execution proof", as
       address: WALLET,
       chainId: CHAIN_ID,
       operationKey: buildOperationKey(calls),
+      reservationSessionToken,
       transactionHashes: [SUCCESS_HASH],
     }),
     /could not be verified/i,
@@ -1352,8 +1382,7 @@ test("rejects nonzero call values for sponsored operations", async () => {
 
 test("confirm leaves the reservation pending when receipt verification fails", async () => {
   const calls = [voteCall("0x08")];
-  const initialDecision = await freeTransactions.evaluateFreeTransactionAllowance(buildRequest(calls) as never);
-  assert.equal(initialDecision.isAllowed, true);
+  const { reservationSessionToken } = await reserveFreeTransaction(calls);
 
   freeTransactions.__setFreeTransactionTestOverridesForTests({
     allTransactionHashesSucceeded: async () => false,
@@ -1365,6 +1394,7 @@ test("confirm leaves the reservation pending when receipt verification fails", a
       address: WALLET,
       chainId: CHAIN_ID,
       operationKey: buildOperationKey(calls),
+      reservationSessionToken,
       transactionHashes: [SUCCESS_HASH],
     }),
     /could not be verified/i,
@@ -1379,8 +1409,7 @@ test("confirm leaves the reservation pending when receipt verification fails", a
 
 test("confirm fails closed when the quota store is unavailable after receipts verify", async () => {
   const calls = [voteCall("0x0d")];
-  const initialDecision = await freeTransactions.evaluateFreeTransactionAllowance(buildRequest(calls) as never);
-  assert.equal(initialDecision.isAllowed, true);
+  const { reservationSessionToken } = await reserveFreeTransaction(calls);
 
   dbModule.__setDatabaseResourcesForTests(createStoreUnavailableResources(memoryResources));
 
@@ -1390,6 +1419,7 @@ test("confirm fails closed when the quota store is unavailable after receipts ve
         address: WALLET,
         chainId: CHAIN_ID,
         operationKey: buildOperationKey(calls),
+        reservationSessionToken,
         transactionHashes: [SUCCESS_HASH],
       }),
       /database offline/i,

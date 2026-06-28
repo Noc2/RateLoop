@@ -13,12 +13,16 @@ type ConfirmFreeTransactionRequest = {
   address?: string;
   chainId?: number;
   operationKey?: string;
+  reservationSessionToken?: string;
   transactionHashes?: string[];
 };
 
 function confirmationErrorMessage(outcome: FreeTransactionConfirmationOutcome) {
   if (outcome === "missing_reservation") {
     return "Free transaction reservation not found";
+  }
+  if (outcome === "reservation_mismatch") {
+    return "Free transaction reservation session token is invalid";
   }
   if (outcome === "update_skipped") {
     return "Free transaction reservation could not be confirmed";
@@ -49,11 +53,17 @@ export async function POST(request: NextRequest) {
       address: body?.address ?? "",
       chainId: typeof body?.chainId === "number" ? body.chainId : Number.NaN,
       operationKey: body?.operationKey ?? "",
+      reservationSessionToken: body?.reservationSessionToken ?? "",
       transactionHashes: Array.isArray(body?.transactionHashes) ? body.transactionHashes : [],
     });
 
     if (!confirmation.confirmed) {
-      const status = confirmation.outcome === "missing_reservation" ? 404 : 409;
+      const status =
+        confirmation.outcome === "missing_reservation"
+          ? 404
+          : confirmation.outcome === "reservation_mismatch"
+            ? 403
+            : 409;
       return NextResponse.json(
         {
           error: confirmationErrorMessage(confirmation.outcome),

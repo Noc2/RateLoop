@@ -142,9 +142,16 @@ export async function POST(request: NextRequest) {
     logVerifierRequestCompleted(startedAt, {
       ...requestSummary,
       debugCode: decision.debugCode ?? null,
+      hasReservationSessionToken:
+        decision.isAllowed && "reservationSessionToken" in decision ? Boolean(decision.reservationSessionToken) : null,
       isAllowed: true,
     });
-    return NextResponse.json({ isAllowed: true });
+    return NextResponse.json({
+      isAllowed: true,
+      ...(decision.isAllowed && decision.reservationSessionToken
+        ? { reservationSessionToken: decision.reservationSessionToken }
+        : {}),
+    });
   } catch (error) {
     console.error("[thirdweb-verifier] request failed", {
       ...requestSummary,

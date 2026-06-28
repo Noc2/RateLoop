@@ -35,6 +35,7 @@ import {
   hasMissingEip7702DelegationImplementation,
 } from "~~/lib/thirdweb/eip7702Delegation";
 import { buildFreeTransactionOperationKey } from "~~/lib/thirdweb/freeTransactionOperation";
+import { readCachedFreeTransactionReservationSession } from "~~/lib/thirdweb/freeTransactionReservationSession";
 import {
   isFreeTransactionExhaustedError,
   isThirdwebBundlerInfrastructureError,
@@ -907,9 +908,10 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
         if (shouldConfirmSponsoredUsage && operationKey && address) {
           const transactionHashes = (result.receipts ?? [])
             .map(receipt => receipt.transactionHash)
-            .filter((hash): hash is Hex => typeof hash === "string");
+            .filter((hash): hash is Hex => typeof hash === "string" && hash.startsWith("0x"));
+          const reservationSessionToken = readCachedFreeTransactionReservationSession(operationKey);
 
-          if (transactionHashes.length > 0) {
+          if (transactionHashes.length > 0 && reservationSessionToken) {
             timingLog.emit("free-transaction-confirm-scheduled", {
               transactionHashCount: transactionHashes.length,
             });
@@ -917,6 +919,7 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
               address,
               chainId,
               operationKey,
+              reservationSessionToken,
               transactionHashes,
             })
               .then(() => {
@@ -933,6 +936,16 @@ export function useThirdwebSponsoredSubmitCalls(options: ThirdwebSponsoredSubmit
               .finally(() => {
                 void queryClient.invalidateQueries({ queryKey: FREE_TRANSACTION_ALLOWANCE_QUERY_KEY });
               });
+          } else if (transactionHashes.length > 0) {
+            timingLog.emit("free-transaction-confirm-skipped", {
+              reason: "missing_reservation_session_token",
+              transactionHashCount: transactionHashes.length,
+            });
+            console.warn("[thirdweb-free-tx] skipped confirmation without reservation session token", {
+              chainId,
+              operationKey,
+              walletAddress: address,
+            });
           }
         }
 
