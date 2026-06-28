@@ -63,7 +63,7 @@ jobs:
                 ;;
             esac
 
-            forge test -vvv --match-path "$suite"
+            forge test --offline -vvv --match-path "$suite"
           done
         working-directory: packages/foundry
 
@@ -94,7 +94,7 @@ jobs:
             packages/foundry/out
           key: forge-${{ hashFiles('packages/foundry/foundry.toml', 'packages/foundry/**/*.sol') }}
       - name: Run heavy Foundry suite
-        run: forge test -vvv --match-path "test/${{ matrix.suite }}"
+        run: forge test --offline -vvv --match-path "test/${{ matrix.suite }}"
         working-directory: packages/foundry
 
   typescript:
