@@ -999,6 +999,7 @@ async function fetchIndexedCiphertextsForRound(params: {
     await assertPonderDeploymentMatchesKeeper(config.ponderBaseUrl, headers);
     const path = params.kind === "vote" ? "/votes" : "/advisory-votes";
     const indexedCiphertexts: IndexedCiphertextMap = new Map();
+    let pageFetchFailed = false;
     for (let page = 0; page < MAX_INDEXED_CIPHERTEXT_PAGES; page++) {
       const url = buildPonderUrl(config.ponderBaseUrl, path);
       url.searchParams.set("contentId", params.contentId.toString());
@@ -1023,7 +1024,8 @@ async function fetchIndexedCiphertextsForRound(params: {
           status: response.status,
           url: url.toString(),
         });
-        return null;
+        pageFetchFailed = true;
+        break;
       }
 
       const body = (await response.json()) as {
@@ -1037,6 +1039,9 @@ async function fetchIndexedCiphertextsForRound(params: {
       }
       if (items.length < INDEXED_CIPHERTEXT_PAGE_SIZE)
         return indexedCiphertexts;
+    }
+    if (pageFetchFailed) {
+      return indexedCiphertexts.size > 0 ? indexedCiphertexts : null;
     }
     // Currently unreachable for protocol-capped rounds (max 200 voters), but a governance
     // cap raise past MAX_INDEXED_CIPHERTEXT_PAGES * INDEXED_CIPHERTEXT_PAGE_SIZE commits
