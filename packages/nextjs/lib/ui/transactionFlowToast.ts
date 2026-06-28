@@ -4,7 +4,7 @@ import {
 } from "~~/lib/ui/sponsoredTransactionNotice";
 import { getSubmittingTransactionStatus } from "~~/lib/ui/transactionStatusCopy";
 
-export type TransactionFlowStatusCopy = {
+type TransactionFlowStatusCopy = {
   title: string;
   description: string;
 };

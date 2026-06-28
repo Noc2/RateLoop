@@ -1,6 +1,6 @@
 export const SPONSORED_TRANSACTION_DELAY_NOTICE_ID = "sponsored-transaction-delay-notice";
 
-export const SPONSORED_TRANSACTION_DELAY_DESCRIPTION = "Sponsored transactions can take up to a minute.";
+const SPONSORED_TRANSACTION_DELAY_DESCRIPTION = "Sponsored transactions can take up to a minute.";
 
 type SponsoredTransactionDelayNoticeParams = {
   route: "external-wallet" | "thirdweb";

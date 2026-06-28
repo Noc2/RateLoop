@@ -9,12 +9,12 @@ import {
   resolveFlowSubmittingStatus,
 } from "~~/lib/ui/transactionFlowToast";
 
-export type TransactionFlowBatchOptions = {
+type TransactionFlowBatchOptions = {
   onSlowSubmit?: () => void;
   suppressStatusToast: true;
 };
 
-export type FlowSponsoredBatchOptions = TransactionFlowBatchOptions & {
+type FlowSponsoredBatchOptions = TransactionFlowBatchOptions & {
   action: string;
   sponsorshipMode: ThirdwebBatchSponsorshipMode;
 };
