@@ -735,8 +735,15 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
     expect(updates).toEqual([]);
   });
 
-  it("indexes multi-round bundle reward round sets and claims", async () => {
-    const { db, inserts, updates } = createDb();
+  it("indexes single-round bundle reward round sets and claims", async () => {
+    const { db, inserts, updates } = createDb(
+      {},
+      {
+        unallocatedAmount: 120_000_000n,
+        allocatedAmount: 0n,
+        completedRoundSetCount: 0,
+      },
+    );
     const registeredHandlers = await loadHandlers();
 
     await registeredHandlers.get(
@@ -750,7 +757,7 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
           amount: 120_000_000n,
           requiredCompleters: 3n,
           questionCount: 2n,
-          requiredSettledRounds: 2n,
+          requiredSettledRounds: 1n,
           bountyStartBy: 0n,
           bountyWindowSeconds: 600n,
           feedbackWindowSeconds: 600n,
@@ -773,7 +780,7 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
           contentId: 101n,
           roundId: 4n,
           bundleIndex: 0n,
-          roundSetIndex: 1n,
+          roundSetIndex: 0n,
         },
         block: { number: 21n, timestamp: 1_800n },
       },
@@ -786,9 +793,9 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
       event: {
         args: {
           bundleId: 9n,
-          roundSetIndex: 1n,
-          allocation: 60_000_000n,
-          frontendFeeAllocation: 1_800_000n,
+          roundSetIndex: 0n,
+          allocation: 120_000_000n,
+          frontendFeeAllocation: 3_600_000n,
         },
         block: { number: 22n, timestamp: 1_900n },
       },
@@ -801,15 +808,15 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
       event: {
         args: {
           bundleId: 9n,
-          roundSetIndex: 1n,
+          roundSetIndex: 0n,
           claimant: "0x00000000000000000000000000000000000000A2",
           identityKey:
             "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-          amount: 19_400_000n,
+          amount: 38_800_000n,
           frontend: "0x00000000000000000000000000000000000000f1",
           frontendRecipient: "0x00000000000000000000000000000000000000f1",
-          frontendFee: 600_000n,
-          grossAmount: 20_000_000n,
+          frontendFee: 1_200_000n,
+          grossAmount: 40_000_000n,
         },
         block: { number: 23n, timestamp: 2_000n },
       },
@@ -825,7 +832,7 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
             fundedAmount: 120_000_000n,
             unallocatedAmount: 120_000_000n,
             requiredCompleters: 3,
-            requiredSettledRounds: 2,
+            requiredSettledRounds: 1,
             questionCount: 2,
             bountyStartBy: 0n,
             bountyOpensAt: 1_700n,
@@ -839,29 +846,29 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
         expect.objectContaining({
           table: "questionBundleRound",
           values: expect.objectContaining({
-            id: "9-1-0",
+            id: "9-0-0",
             bundleId: 9n,
-            roundSetIndex: 1,
+            roundSetIndex: 0,
             roundId: 4n,
           }),
         }),
         expect.objectContaining({
           table: "questionBundleRoundSet",
           values: expect.objectContaining({
-            id: "9-1",
-            allocation: 60_000_000n,
-            frontendFeeAllocation: 1_800_000n,
+            id: "9-0",
+            allocation: 120_000_000n,
+            frontendFeeAllocation: 3_600_000n,
           }),
         }),
         expect.objectContaining({
           table: "questionBundleClaim",
           values: expect.objectContaining({
-            id: "9-1-0x00000000000000000000000000000000000000a2-0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            id: "9-0-0x00000000000000000000000000000000000000a2-0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
             identityKey:
               "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-            roundSetIndex: 1,
-            amount: 19_400_000n,
-            frontendFee: 600_000n,
+            roundSetIndex: 0,
+            amount: 38_800_000n,
+            frontendFee: 1_200_000n,
           }),
         }),
       ]),
@@ -875,17 +882,17 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
         expect.objectContaining({
           table: "questionBundleReward",
           values: expect.objectContaining({
-            unallocatedAmount: 40_000_000n,
-            allocatedAmount: 60_000_000n,
+            unallocatedAmount: 0n,
+            allocatedAmount: 120_000_000n,
             completedRoundSetCount: 1,
           }),
         }),
         expect.objectContaining({
           table: "questionBundleRoundSet",
           values: expect.objectContaining({
-            claimedAmount: 20_000_000n,
-            voterClaimedAmount: 19_400_000n,
-            frontendClaimedAmount: 600_000n,
+            claimedAmount: 40_000_000n,
+            voterClaimedAmount: 38_800_000n,
+            frontendClaimedAmount: 1_200_000n,
             claimedCount: 1,
           }),
         }),
