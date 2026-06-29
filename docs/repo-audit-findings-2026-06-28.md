@@ -587,7 +587,9 @@ report (`d691eccee` through `810e7b66c`). Highlights:
   guards in vote/collection/sponsorship hooks, free-tx confirm session binding,
   keeper correlation lock / Ponder cache / write retry / partial ciphertext pages,
   Ponder health signal and scoped bearer bypass, centralized app URL resolution,
-  `StaleEngine()` custom error, `IRoundVotingEngine` adoption.
+  `StaleEngine()` custom error in `QuestionRewardPoolEscrow` (June 28; extended to
+  `FeedbackBonusEscrow` and `StaleEscrow()` in June 29 follow-up), `IRoundVotingEngine`
+  comment cleanup (interface inheritance largely pre-existing).
 - **Docs/tooling:** keeper Ponder dependency runbook, README/CONTRIBUTING/AGENTS
   drift, env examples, aderyn comment, E2E skip guard, dependency alignment.
 - **Intentionally unchanged:** production feedback hash encoding (string domain in

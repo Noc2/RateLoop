@@ -313,6 +313,26 @@ registry tests).
 5. **RL-FU-2026-06-29-03/04** — Finish `StaleEngine` / `StaleEscrow` error migration.
 6. **RL-FU-2026-06-29-08/09/10** — Env URLs, vote guard tightening, Foundry test expansion.
 
+## Remediation (2026-06-29)
+
+All follow-up findings above were addressed on `main` in separate commits after this
+report. Highlights:
+
+- **RL-FU-01:** `GET /api/transactions/free/reservation-session` plus client fetch/cache
+  in `useThirdwebSponsoredSubmitCalls` so sponsored confirms receive the session token.
+- **RL-FU-02:** Registered migration `0016` in `drizzle/meta/_journal.json` and deploy checklist.
+- **RL-FU-03/04:** `StaleEngine()` in `FeedbackBonusEscrow`; `StaleEscrow()` in
+  `QuestionRewardPoolEscrow._requireCurrentRegistryEscrow()` with selector tests.
+- **RL-FU-05/06:** Keeper logs/metrics on Ponder HRC health warnings; deployment fields
+  re-validated on every `/deployment` fetch.
+- **RL-FU-07:** Root README keeper section aligned with `packages/keeper/README.md`.
+- **RL-FU-08:** Shared `lib/env/appUrl.ts`; metadata and content-share origins use
+  `resolveOptionalAppUrl`.
+- **RL-FU-09:** Vote wallet guards before early async RPC segments; allowance/cooldown
+  reads pin `walletSnapshot.voterAddress`.
+- **RL-FU-10:** Delegate `publishFeedback` regression test in `FeedbackBonusEscrow.t.sol`.
+- **RL-FU-11:** June 28 remediation doc corrected; this section added.
+
 ## References
 
 - Prior audit: `docs/repo-audit-findings-2026-06-28.md`
