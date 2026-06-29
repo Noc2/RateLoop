@@ -1,21 +1,21 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import { VotingTestBase } from "./helpers/VotingTestHelpers.sol";
-import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import { ContentRegistry } from "../contracts/ContentRegistry.sol";
-import { LaunchDistributionPool } from "../contracts/LaunchDistributionPool.sol";
-import { LoopReputation } from "../contracts/LoopReputation.sol";
-import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
-import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
-import { RaterRegistry } from "../contracts/RaterRegistry.sol";
-import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
-import { ILaunchDistributionPool } from "../contracts/interfaces/ILaunchDistributionPool.sol";
-import { RoundLib } from "../contracts/libraries/RoundLib.sol";
-import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
-import { TlockVoteLib } from "../contracts/libraries/TlockVoteLib.sol";
-import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
-import { MockWorldIDVerifier } from "../contracts/mocks/MockWorldIDVerifier.sol";
+import {VotingTestBase} from "./helpers/VotingTestHelpers.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {ContentRegistry} from "../contracts/ContentRegistry.sol";
+import {LaunchDistributionPool} from "../contracts/LaunchDistributionPool.sol";
+import {LoopReputation} from "../contracts/LoopReputation.sol";
+import {RoundVotingEngine} from "../contracts/RoundVotingEngine.sol";
+import {ProtocolConfig} from "../contracts/ProtocolConfig.sol";
+import {RaterRegistry} from "../contracts/RaterRegistry.sol";
+import {RoundRewardDistributor} from "../contracts/RoundRewardDistributor.sol";
+import {ILaunchDistributionPool} from "../contracts/interfaces/ILaunchDistributionPool.sol";
+import {RoundLib} from "../contracts/libraries/RoundLib.sol";
+import {RoundEngineReadHelpers} from "./helpers/RoundEngineReadHelpers.sol";
+import {TlockVoteLib} from "../contracts/libraries/TlockVoteLib.sol";
+import {MockCategoryRegistry} from "../contracts/mocks/MockCategoryRegistry.sol";
+import {MockWorldIDVerifier} from "../contracts/mocks/MockWorldIDVerifier.sol";
 
 contract MockRevertingLaunchDistributionPool {
     error LaunchCreditRejected();
@@ -114,8 +114,6 @@ contract ClaimingBundleObserver {
         uint256,
         uint256,
         uint256,
-        uint256,
-        uint256,
         uint8
     ) external returns (uint256 rewardPoolId) {
         rewardPoolId = nextRewardPoolId++;
@@ -126,8 +124,6 @@ contract ClaimingBundleObserver {
         uint256[] calldata,
         address,
         uint8,
-        uint256,
-        uint256,
         uint256,
         uint256,
         uint256,
@@ -242,7 +238,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         config.setCategoryRegistry(address(mockCategoryRegistry));
         config.setTreasury(treasury);
         // 4 params: epochDuration, maxDuration, minVoters, maxVoters
-        _setTlockRoundConfig(config, EPOCH_DURATION, 7 days, 3, 100);
+        _setTlockRoundConfig(config, EPOCH_DURATION, EPOCH_DURATION, 3, 100);
 
         worldIdRouter = new MockWorldIDVerifier();
         raterRegistry = new RaterRegistry(
@@ -362,7 +358,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
             if (!c.revealed && c.stakeAmount > 0) {
                 (bool isUp, bytes32 salt, bool exists) = _testRevealPayload(keys[i]);
                 if (exists) {
-                    try votingEngine.revealVoteByCommitKey(contentId, roundId, keys[i], isUp, 5_000, salt) { } catch { }
+                    try votingEngine.revealVoteByCommitKey(contentId, roundId, keys[i], isUp, 5_000, salt) {} catch {}
                 }
             }
         }
@@ -380,11 +376,11 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         if (r2.thresholdReachedAt > 0) {
             uint256 seedBlock = block.number + 1;
             vm.roll(seedBlock);
-            try votingEngine.settleRound(contentId, roundId) { } catch { }
+            try votingEngine.settleRound(contentId, roundId) {} catch {}
             RoundLib.Round memory r3 = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
             if (r3.state == RoundLib.RoundState.Open) {
                 vm.roll(seedBlock + 1);
-                try votingEngine.settleRound(contentId, roundId) { } catch { }
+                try votingEngine.settleRound(contentId, roundId) {} catch {}
             }
         }
     }
@@ -847,7 +843,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         );
         vm.stopPrank();
 
-        assertEq(RoundEngineReadHelpers.activeRoundId(votingEngine, contentId), 0);
+        assertEq(RoundEngineReadHelpers.activeRoundId(votingEngine, contentId), 1);
         assertEq(launchPool.qualifyingRatingCount(voter1), 0);
         assertEq(launchPool.raterDistinctVerifiedAnchorCount(voter1), 0);
         assertEq(launchPool.raterDistinctAnchorRoundCount(voter1), 0);

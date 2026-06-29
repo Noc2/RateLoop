@@ -1,28 +1,28 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import { Test } from "forge-std/Test.sol";
-import { Vm } from "forge-std/Vm.sol";
-import { Base64 } from "@openzeppelin/contracts/utils/Base64.sol";
-import { Strings } from "@openzeppelin/contracts/utils/Strings.sol";
-import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import { ContentRegistry } from "../contracts/ContentRegistry.sol";
-import { AdvisoryVoteRecorder } from "../contracts/AdvisoryVoteRecorder.sol";
-import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
-import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
-import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
-import { RoundLib } from "../contracts/libraries/RoundLib.sol";
-import { RewardMath } from "../contracts/libraries/RewardMath.sol";
-import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
-import { TlockVoteLib } from "../contracts/libraries/TlockVoteLib.sol";
-import { VotePreflightLib } from "../contracts/libraries/VotePreflightLib.sol";
-import { LoopReputation } from "../contracts/LoopReputation.sol";
-import { FrontendRegistry } from "../contracts/FrontendRegistry.sol";
-import { RaterRegistry } from "../contracts/RaterRegistry.sol";
-import { MockRaterIdentityRegistry } from "./mocks/MockRaterIdentityRegistry.sol";
-import { VotingTestBase } from "./helpers/VotingTestHelpers.sol";
-import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
-import { MockWorldIDVerifier } from "../contracts/mocks/MockWorldIDVerifier.sol";
+import {Test} from "forge-std/Test.sol";
+import {Vm} from "forge-std/Vm.sol";
+import {Base64} from "@openzeppelin/contracts/utils/Base64.sol";
+import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {ContentRegistry} from "../contracts/ContentRegistry.sol";
+import {AdvisoryVoteRecorder} from "../contracts/AdvisoryVoteRecorder.sol";
+import {RoundVotingEngine} from "../contracts/RoundVotingEngine.sol";
+import {ProtocolConfig} from "../contracts/ProtocolConfig.sol";
+import {RoundRewardDistributor} from "../contracts/RoundRewardDistributor.sol";
+import {RoundLib} from "../contracts/libraries/RoundLib.sol";
+import {RewardMath} from "../contracts/libraries/RewardMath.sol";
+import {RoundEngineReadHelpers} from "./helpers/RoundEngineReadHelpers.sol";
+import {TlockVoteLib} from "../contracts/libraries/TlockVoteLib.sol";
+import {VotePreflightLib} from "../contracts/libraries/VotePreflightLib.sol";
+import {LoopReputation} from "../contracts/LoopReputation.sol";
+import {FrontendRegistry} from "../contracts/FrontendRegistry.sol";
+import {RaterRegistry} from "../contracts/RaterRegistry.sol";
+import {MockRaterIdentityRegistry} from "./mocks/MockRaterIdentityRegistry.sol";
+import {VotingTestBase} from "./helpers/VotingTestHelpers.sol";
+import {MockCategoryRegistry} from "../contracts/mocks/MockCategoryRegistry.sol";
+import {MockWorldIDVerifier} from "../contracts/mocks/MockWorldIDVerifier.sol";
 
 contract MockAdvisoryLaunchDistributionPool {
     RaterRegistry public immutable raterRegistry;
@@ -981,8 +981,6 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         address rewardEscrow = _ensureDefaultQuestionRewardPoolEscrow(registry);
         uint256 rewardAmount = _defaultSubmissionRewardAmount(registry);
         ContentRegistry.SubmissionRewardTerms memory rewardTerms = _defaultSubmissionRewardTerms(registry);
-        rewardTerms.bountyWindowSeconds = roundConfig.maxDuration;
-        rewardTerms.feedbackWindowSeconds = roundConfig.maxDuration;
 
         vm.startPrank(submitter);
         lrepToken.approve(rewardEscrow, rewardAmount);
@@ -1231,7 +1229,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
     function test_PreviewCommitAvailability_RoundFull_BlocksCurrentRound() public {
         RoundLib.RoundConfig memory roundConfig =
-            RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 1 hours, minVoters: 3, maxVoters: 3 });
+            RoundLib.RoundConfig({epochDuration: 1 hours, maxDuration: 1 hours, minVoters: 3, maxVoters: 3});
         uint256 contentId = _submitContentWithRoundConfig("https://example.com/full-round", roundConfig);
 
         _commit(voter1, contentId, true, STAKE);
@@ -4052,7 +4050,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
     function test_AdvisoryPreRoundUsesShortCustomRoundConfig() public {
         RoundLib.RoundConfig memory roundConfig =
-            RoundLib.RoundConfig({ epochDuration: 2 minutes, maxDuration: 2 minutes, minVoters: 3, maxVoters: 200 });
+            RoundLib.RoundConfig({epochDuration: 2 minutes, maxDuration: 2 minutes, minVoters: 3, maxVoters: 200});
         uint256 contentId = _submitContentWithRoundConfig("https://example.com/advisory-short", roundConfig);
 
         uint256 recordedAt = block.timestamp;
@@ -4074,7 +4072,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
     function test_AdvisoryPreRoundUsesLongCustomRoundConfig() public {
         RoundLib.RoundConfig memory roundConfig =
-            RoundLib.RoundConfig({ epochDuration: 3 days, maxDuration: 3 days, minVoters: 3, maxVoters: 200 });
+            RoundLib.RoundConfig({epochDuration: 3 days, maxDuration: 3 days, minVoters: 3, maxVoters: 200});
         uint256 contentId = _submitContentWithRoundConfig("https://example.com/advisory-long", roundConfig);
 
         uint256 recordedAt = block.timestamp;

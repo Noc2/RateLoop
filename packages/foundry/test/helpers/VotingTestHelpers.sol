@@ -1,22 +1,22 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import { Test } from "forge-std/Test.sol";
-import { Vm, VmSafe } from "forge-std/Vm.sol";
-import { Base64 } from "@openzeppelin/contracts/utils/Base64.sol";
-import { Strings } from "@openzeppelin/contracts/utils/Strings.sol";
-import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { ContentRegistry } from "../../contracts/ContentRegistry.sol";
-import { ProtocolConfig } from "../../contracts/ProtocolConfig.sol";
-import { RaterRegistry } from "../../contracts/RaterRegistry.sol";
-import { RoundVotingEngine } from "../../contracts/RoundVotingEngine.sol";
-import { IConfidentialityEscrow } from "../../contracts/interfaces/IConfidentialityEscrow.sol";
-import { RatingLib } from "../../contracts/libraries/RatingLib.sol";
-import { RoundLib } from "../../contracts/libraries/RoundLib.sol";
-import { MockWorldIDVerifier } from "../../contracts/mocks/MockWorldIDVerifier.sol";
-import { MockQuestionRewardPoolEscrow } from "../mocks/MockQuestionRewardPoolEscrow.sol";
-import { RoundEngineReadHelpers } from "./RoundEngineReadHelpers.sol";
+import {Test} from "forge-std/Test.sol";
+import {Vm, VmSafe} from "forge-std/Vm.sol";
+import {Base64} from "@openzeppelin/contracts/utils/Base64.sol";
+import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {ContentRegistry} from "../../contracts/ContentRegistry.sol";
+import {ProtocolConfig} from "../../contracts/ProtocolConfig.sol";
+import {RaterRegistry} from "../../contracts/RaterRegistry.sol";
+import {RoundVotingEngine} from "../../contracts/RoundVotingEngine.sol";
+import {IConfidentialityEscrow} from "../../contracts/interfaces/IConfidentialityEscrow.sol";
+import {RatingLib} from "../../contracts/libraries/RatingLib.sol";
+import {RoundLib} from "../../contracts/libraries/RoundLib.sol";
+import {MockWorldIDVerifier} from "../../contracts/mocks/MockWorldIDVerifier.sol";
+import {MockQuestionRewardPoolEscrow} from "../mocks/MockQuestionRewardPoolEscrow.sol";
+import {RoundEngineReadHelpers} from "./RoundEngineReadHelpers.sol";
 
 bytes32 constant TEST_PROTOCOL_CONFIG_DRAND_CHAIN_HASH =
     0x52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971;
@@ -63,10 +63,10 @@ abstract contract ContentSubmissionTestBase {
     bytes32 internal constant DEFAULT_QUESTION_METADATA_HASH = keccak256("rateloop.generic.question.metadata.v1");
     bytes32 internal constant DEFAULT_RESULT_SPEC_HASH = keccak256("rateloop.generic.result.spec.v1");
     bytes32 internal constant QUESTION_CONTEXT_DOMAIN = keccak256("rateloop-question-context-v5");
-    bytes32 internal constant QUESTION_REVEAL_DOMAIN = keccak256("rateloop-question-reveal-v8");
+    bytes32 internal constant QUESTION_REVEAL_DOMAIN = keccak256("rateloop-question-reveal-v9");
     bytes32 internal constant QUESTION_BUNDLE_ITEM_DOMAIN = keccak256("rateloop-question-bundle-item-v5");
     bytes32 internal constant QUESTION_BUNDLE_DOMAIN = keccak256("rateloop-question-bundle-v5");
-    bytes32 internal constant QUESTION_BUNDLE_REVEAL_DOMAIN = keccak256("rateloop-question-bundle-reveal-v6");
+    bytes32 internal constant QUESTION_BUNDLE_REVEAL_DOMAIN = keccak256("rateloop-question-bundle-reveal-v7");
 
     struct NoMediaQuestionText {
         string url;
@@ -88,7 +88,7 @@ abstract contract ContentSubmissionTestBase {
     }
 
     function _emptySubmissionDetails() internal pure returns (ContentRegistry.SubmissionDetails memory) {
-        return ContentRegistry.SubmissionDetails({ detailsUrl: "", detailsHash: bytes32(0) });
+        return ContentRegistry.SubmissionDetails({detailsUrl: "", detailsHash: bytes32(0)});
     }
 
     function _defaultQuestionConfidentialityHash() internal pure returns (bytes32) {
@@ -572,7 +572,7 @@ abstract contract ContentSubmissionTestBase {
         internal
         pure
         returns (IConfidentialityEscrow.ConfidentialityConfig memory config)
-    { }
+    {}
 
     function _defaultSubmissionRewardAmount(ContentRegistry registry) internal view returns (uint256) {
         ProtocolConfig config = registry.protocolConfig();
@@ -593,15 +593,10 @@ abstract contract ContentSubmissionTestBase {
         returns (ContentRegistry.SubmissionRewardTerms memory)
     {
         uint256 rewardAmount = _defaultSubmissionRewardAmount(registry);
-        RoundLib.RoundConfig memory roundConfig = _defaultQuestionRoundConfig(registry);
         return ContentRegistry.SubmissionRewardTerms({
             asset: DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
             amount: rewardAmount,
-            requiredVoters: roundConfig.minVoters,
-            requiredSettledRounds: DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
-            bountyStartBy: DEFAULT_SUBMISSION_REWARD_BOUNTY_START_BY,
-            bountyWindowSeconds: roundConfig.maxDuration,
-            feedbackWindowSeconds: roundConfig.maxDuration,
+            requiredVoters: _defaultQuestionRoundConfig(registry).minVoters,
             bountyEligibility: 0
         });
     }
@@ -612,16 +607,7 @@ abstract contract ContentSubmissionTestBase {
         returns (bytes32)
     {
         return keccak256(
-            abi.encode(
-                rewardTerms.asset,
-                rewardTerms.amount,
-                rewardTerms.requiredVoters,
-                rewardTerms.requiredSettledRounds,
-                rewardTerms.bountyStartBy,
-                rewardTerms.bountyWindowSeconds,
-                rewardTerms.feedbackWindowSeconds,
-                rewardTerms.bountyEligibility
-            )
+            abi.encode(rewardTerms.asset, rewardTerms.amount, rewardTerms.requiredVoters, rewardTerms.bountyEligibility)
         );
     }
 
@@ -1191,7 +1177,7 @@ abstract contract VotingTestBase is Test, ContentSubmissionTestBase {
     }
 
     function _rememberTestReveal(bytes32 commitKey, bool isUp, bytes32 salt) internal {
-        testRevealPayloads[commitKey] = TestRevealPayload({ exists: true, isUp: isUp, salt: salt });
+        testRevealPayloads[commitKey] = TestRevealPayload({exists: true, isUp: isUp, salt: salt});
     }
 
     function _testRevealPayload(bytes32 commitKey) internal view returns (bool isUp, bytes32 salt, bool exists) {

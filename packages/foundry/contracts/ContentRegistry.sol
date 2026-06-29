@@ -1,26 +1,26 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
-import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
-import { ReentrancyGuardTransient } from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { ICategoryRegistry } from "./interfaces/ICategoryRegistry.sol";
-import { IClusterPayoutOracle } from "./interfaces/IClusterPayoutOracle.sol";
-import { IRoundVotingEngine } from "./interfaces/IRoundVotingEngine.sol";
-import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol";
-import { IConfidentialityEscrow } from "./interfaces/IConfidentialityEscrow.sol";
-import { RoundLib } from "./libraries/RoundLib.sol";
-import { RatingLib } from "./libraries/RatingLib.sol";
-import { ContentRegistryDormancyLib } from "./libraries/ContentRegistryDormancyLib.sol";
-import { ContentRegistryRewardLib } from "./libraries/ContentRegistryRewardLib.sol";
-import { ContentRegistryRatingSnapshotLib } from "./libraries/ContentRegistryRatingSnapshotLib.sol";
-import { ContentRegistryRoundGuardLib } from "./libraries/ContentRegistryRoundGuardLib.sol";
-import { ContentRegistryTypes } from "./libraries/ContentRegistryTypes.sol";
-import { ProtocolConfig } from "./ProtocolConfig.sol";
-import { SubmissionMediaValidator } from "./SubmissionMediaValidator.sol";
-import { SubmissionMediaValidatorFactory } from "./SubmissionMediaValidatorFactory.sol";
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
+import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {ICategoryRegistry} from "./interfaces/ICategoryRegistry.sol";
+import {IClusterPayoutOracle} from "./interfaces/IClusterPayoutOracle.sol";
+import {IRoundVotingEngine} from "./interfaces/IRoundVotingEngine.sol";
+import {IRaterIdentityRegistry} from "./interfaces/IRaterIdentityRegistry.sol";
+import {IConfidentialityEscrow} from "./interfaces/IConfidentialityEscrow.sol";
+import {RoundLib} from "./libraries/RoundLib.sol";
+import {RatingLib} from "./libraries/RatingLib.sol";
+import {ContentRegistryDormancyLib} from "./libraries/ContentRegistryDormancyLib.sol";
+import {ContentRegistryRewardLib} from "./libraries/ContentRegistryRewardLib.sol";
+import {ContentRegistryRatingSnapshotLib} from "./libraries/ContentRegistryRatingSnapshotLib.sol";
+import {ContentRegistryRoundGuardLib} from "./libraries/ContentRegistryRoundGuardLib.sol";
+import {ContentRegistryTypes} from "./libraries/ContentRegistryTypes.sol";
+import {ProtocolConfig} from "./ProtocolConfig.sol";
+import {SubmissionMediaValidator} from "./SubmissionMediaValidator.sol";
+import {SubmissionMediaValidatorFactory} from "./SubmissionMediaValidatorFactory.sol";
 
 interface IQuestionRewardPoolEscrow {
     function createSubmissionRewardPoolFromRegistry(
@@ -30,10 +30,8 @@ interface IQuestionRewardPoolEscrow {
         uint8 asset,
         uint256 amount,
         uint256 requiredVoters,
-        uint256 requiredSettledRounds,
-        uint256 bountyStartBy,
-        uint256 bountyWindowSeconds,
-        uint256 feedbackWindowSeconds,
+        uint256 rewardClosesAt,
+        uint256 questionDurationSeconds,
         uint8 bountyEligibility
     ) external returns (uint256 rewardPoolId);
 
@@ -44,10 +42,8 @@ interface IQuestionRewardPoolEscrow {
         uint8 asset,
         uint256 amount,
         uint256 requiredCompleters,
-        uint256 requiredSettledRounds,
-        uint256 bountyStartBy,
-        uint256 bountyWindowSeconds,
-        uint256 feedbackWindowSeconds,
+        uint256 rewardClosesAt,
+        uint256 questionDurationSeconds,
         uint8 bountyEligibility
     ) external returns (uint256 rewardPoolId);
 }
@@ -81,10 +77,10 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     uint256 internal constant MIN_SUBMISSION_REWARD_SETTLED_ROUNDS = 1;
     uint256 internal constant MAX_QUESTION_BUNDLE_COUNT = 10;
     bytes32 internal constant QUESTION_CONTEXT_DOMAIN = keccak256("rateloop-question-context-v5");
-    bytes32 internal constant QUESTION_REVEAL_DOMAIN = keccak256("rateloop-question-reveal-v8");
+    bytes32 internal constant QUESTION_REVEAL_DOMAIN = keccak256("rateloop-question-reveal-v9");
     bytes32 internal constant QUESTION_BUNDLE_ITEM_DOMAIN = keccak256("rateloop-question-bundle-item-v5");
     bytes32 internal constant QUESTION_BUNDLE_DOMAIN = keccak256("rateloop-question-bundle-v5");
-    bytes32 internal constant QUESTION_BUNDLE_REVEAL_DOMAIN = keccak256("rateloop-question-bundle-reveal-v6");
+    bytes32 internal constant QUESTION_BUNDLE_REVEAL_DOMAIN = keccak256("rateloop-question-bundle-reveal-v7");
     uint8 internal constant CONFIDENTIALITY_FLAG_PRIVATE_FOREVER = 1;
 
     uint16 internal constant DEFAULT_SLASH_THRESHOLD_BPS = 2500;
@@ -121,10 +117,6 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         uint8 asset;
         uint256 amount;
         uint256 requiredVoters;
-        uint256 requiredSettledRounds;
-        uint256 bountyStartBy;
-        uint256 bountyWindowSeconds;
-        uint256 feedbackWindowSeconds;
         uint8 bountyEligibility;
     }
 
@@ -615,7 +607,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         RoundLib.RoundConfig memory validatedRoundConfig = _validatedRoundConfig(roundConfig);
         require(validatedRoundConfig.maxVoters <= MAX_QUESTION_BUNDLE_ROUND_VOTERS);
         require(rewardTerms.requiredVoters == validatedRoundConfig.minVoters);
-        _validateSubmissionReward(rewardTerms, validatedRoundConfig);
+        _validateSubmissionReward(rewardTerms);
         (uint256 rewardClosesAt, uint256 rewardWindowSeconds) = _rewardTiming(validatedRoundConfig);
 
         SubmissionMetadata[] memory metadataList = new SubmissionMetadata[](questions.length);
@@ -712,9 +704,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
                 rewardTerms.asset,
                 rewardTerms.amount,
                 rewardTerms.requiredVoters,
-                rewardTerms.requiredSettledRounds,
                 rewardClosesAt,
-                rewardWindowSeconds,
                 rewardWindowSeconds,
                 rewardTerms.bountyEligibility
             );
@@ -761,10 +751,6 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             asset: SUBMISSION_REWARD_ASSET_LREP,
             amount: _minimumSubmissionReward(SUBMISSION_REWARD_ASSET_LREP),
             requiredVoters: defaultRoundConfig.minVoters,
-            requiredSettledRounds: MIN_SUBMISSION_REWARD_SETTLED_ROUNDS,
-            bountyStartBy: 0,
-            bountyWindowSeconds: defaultRoundConfig.maxDuration,
-            feedbackWindowSeconds: defaultRoundConfig.maxDuration,
             bountyEligibility: 0
         });
         return submitQuestionWithRewardAndRoundConfig(
@@ -874,7 +860,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         bool gated
     ) internal view returns (SubmissionMetadata memory metadata) {
         submissionMediaValidator.validateContextSubmission(contextUrl, imageUrls, videoUrl, title, tags, gated);
-        metadata = SubmissionMetadata({ url: contextUrl, title: title, tags: tags, categoryId: categoryId });
+        metadata = SubmissionMetadata({url: contextUrl, title: title, tags: tags, categoryId: categoryId});
         require(address(categoryRegistry) != address(0));
     }
 
@@ -946,7 +932,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         // pre-reserve the same (metadata, ..., salt=0) tuple. Force non-zero salt so every
         // reveal hash carries caller-supplied randomness.
         require(salt != bytes32(0));
-        _validateSubmissionReward(rewardTerms, roundConfig);
+        _validateSubmissionReward(rewardTerms);
 
         if (submitter == msg.sender) {
             bytes32 revealCommitment = _computeRevealCommitment(
@@ -1184,9 +1170,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
                 rewardTerms.asset,
                 rewardTerms.amount,
                 rewardTerms.requiredVoters,
-                rewardTerms.requiredSettledRounds,
                 rewardClosesAt,
-                rewardWindowSeconds,
                 rewardWindowSeconds,
                 rewardTerms.bountyEligibility
             );
@@ -1202,7 +1186,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             rewardTerms.asset,
             rewardTerms.amount,
             rewardTerms.requiredVoters,
-            rewardTerms.requiredSettledRounds,
+            MIN_SUBMISSION_REWARD_SETTLED_ROUNDS,
             rewardClosesAt,
             rewardWindowSeconds,
             rewardWindowSeconds,
@@ -1236,7 +1220,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         internal
         pure
         returns (IConfidentialityEscrow.ConfidentialityConfig memory confidentiality)
-    { }
+    {}
 
     function _emitContentMediaSubmitted(
         uint256 contentId,
@@ -1418,7 +1402,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             uint48, RoundLib.RoundState, uint16, uint16, uint64, uint48, uint48 settledAt, uint8
         ) {
             if (settledAt != 0) return uint256(settledAt);
-        } catch { }
+        } catch {}
         return block.timestamp;
     }
 
@@ -1610,10 +1594,6 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
                 rewardTerms.asset,
                 rewardTerms.amount,
                 rewardTerms.requiredVoters,
-                rewardTerms.requiredSettledRounds,
-                rewardTerms.bountyStartBy,
-                rewardTerms.bountyWindowSeconds,
-                rewardTerms.feedbackWindowSeconds,
                 rewardTerms.bountyEligibility,
                 roundConfig.epochDuration,
                 roundConfig.maxDuration,
@@ -1632,36 +1612,19 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         return (block.timestamp + duration, duration);
     }
 
-    function _validateSubmissionReward(
-        SubmissionRewardTerms memory rewardTerms,
-        RoundLib.RoundConfig memory roundConfig
-    ) internal view {
+    function _validateSubmissionReward(SubmissionRewardTerms memory rewardTerms) internal view {
         ContentRegistryRewardLib.validateSubmissionReward(
             rewardTerms.asset,
             rewardTerms.amount,
             rewardTerms.requiredVoters,
-            rewardTerms.requiredSettledRounds,
-            rewardTerms.bountyStartBy,
-            rewardTerms.bountyWindowSeconds,
-            rewardTerms.feedbackWindowSeconds,
             rewardTerms.bountyEligibility,
-            _minimumSubmissionReward(rewardTerms.asset),
-            roundConfig.maxDuration
+            _minimumSubmissionReward(rewardTerms.asset)
         );
     }
 
     function _hashRewardTerms(SubmissionRewardTerms memory rewardTerms) internal pure returns (bytes32) {
         return keccak256(
-            abi.encode(
-                rewardTerms.asset,
-                rewardTerms.amount,
-                rewardTerms.requiredVoters,
-                rewardTerms.requiredSettledRounds,
-                rewardTerms.bountyStartBy,
-                rewardTerms.bountyWindowSeconds,
-                rewardTerms.feedbackWindowSeconds,
-                rewardTerms.bountyEligibility
-            )
+            abi.encode(rewardTerms.asset, rewardTerms.amount, rewardTerms.requiredVoters, rewardTerms.bountyEligibility)
         );
     }
 

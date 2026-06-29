@@ -50,8 +50,8 @@ const IMAGE_ATTACHMENT_PATH_PATTERN = /^(?:\/.*)?\/api\/attachments\/images\/(at
 const IMAGE_ATTACHMENT_SHA256_FRAGMENT_PATTERN = /^#sha256=0x([a-fA-F0-9]{64})$/;
 const RATELOOP_PRODUCTION_ORIGINS = ["https://www.rateloop.ai", "https://rateloop.ai"] as const;
 const X402_BOUNTY_ELIGIBILITY_PROOF_OF_HUMAN = 8;
-const X402_QUESTION_PAYMENT_DOMAIN = keccak256(toBytes("rateloop-x402-question-payment-v3"));
-const X402_QUESTION_ONE_SHOT_PAYMENT_DOMAIN = keccak256(toBytes("rateloop-x402-question-one-shot-payment-v5"));
+const X402_QUESTION_PAYMENT_DOMAIN = keccak256(toBytes("rateloop-x402-question-payment-v4"));
+const X402_QUESTION_ONE_SHOT_PAYMENT_DOMAIN = keccak256(toBytes("rateloop-x402-question-one-shot-payment-v6"));
 const QUESTION_CONTEXT_DOMAIN = keccak256(toBytes("rateloop-question-context-v5"));
 
 export class X402QuestionInputError extends Error {
@@ -164,11 +164,7 @@ export type X402QuestionPaymentNonceQuestion = {
 export type X402QuestionPaymentNonceRewardTerms = {
   amount: bigint;
   asset: typeof X402_SUBMISSION_REWARD_ASSET_LREP | typeof X402_SUBMISSION_REWARD_ASSET_USDC;
-  bountyStartBy: bigint;
-  bountyWindowSeconds: bigint;
   bountyEligibility: number;
-  feedbackWindowSeconds: bigint;
-  requiredSettledRounds: bigint;
   requiredVoters: bigint;
 };
 
@@ -1372,20 +1368,12 @@ function buildRewardTermsHash(rewardTerms: X402QuestionPaymentNonceRewardTerms):
         { type: "uint8" },
         { type: "uint256" },
         { type: "uint256" },
-        { type: "uint256" },
-        { type: "uint256" },
-        { type: "uint256" },
-        { type: "uint256" },
         { type: "uint8" },
       ],
       [
         rewardTerms.asset,
         rewardTerms.amount,
         rewardTerms.requiredVoters,
-        rewardTerms.requiredSettledRounds,
-        rewardTerms.bountyStartBy,
-        rewardTerms.bountyWindowSeconds,
-        rewardTerms.feedbackWindowSeconds,
         rewardTerms.bountyEligibility,
       ],
     ),

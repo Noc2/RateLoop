@@ -292,10 +292,6 @@ function buildPaymentRewardTerms(payload: X402QuestionPayload): X402QuestionPaym
     amount: payload.bounty.amount,
     asset: payload.bounty.asset === "LREP" ? X402_SUBMISSION_REWARD_ASSET_LREP : X402_SUBMISSION_REWARD_ASSET_USDC,
     bountyEligibility: payload.bounty.bountyEligibility,
-    bountyStartBy: payload.bounty.bountyStartBy,
-    bountyWindowSeconds: payload.bounty.bountyWindowSeconds,
-    feedbackWindowSeconds: payload.bounty.feedbackWindowSeconds,
-    requiredSettledRounds: payload.bounty.requiredSettledRounds,
     requiredVoters: payload.bounty.requiredVoters,
   };
 }

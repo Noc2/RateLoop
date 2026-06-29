@@ -1,40 +1,40 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
-import { VotingTestBase } from "./helpers/VotingTestHelpers.sol";
-import { ContentRegistry } from "../contracts/ContentRegistry.sol";
-import { LoopReputation } from "../contracts/LoopReputation.sol";
-import { FrontendRegistry } from "../contracts/FrontendRegistry.sol";
-import { FeedbackBonusEscrow } from "../contracts/FeedbackBonusEscrow.sol";
-import { FeedbackRegistry } from "../contracts/FeedbackRegistry.sol";
-import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
-import { MockERC20 } from "../contracts/mocks/MockERC20.sol";
-import { ClusterPayoutOracle } from "../contracts/ClusterPayoutOracle.sol";
-import { IClusterPayoutOracle } from "../contracts/interfaces/IClusterPayoutOracle.sol";
-import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
-import { QuestionRewardPoolEscrow } from "../contracts/QuestionRewardPoolEscrow.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {VotingTestBase} from "./helpers/VotingTestHelpers.sol";
+import {ContentRegistry} from "../contracts/ContentRegistry.sol";
+import {LoopReputation} from "../contracts/LoopReputation.sol";
+import {FrontendRegistry} from "../contracts/FrontendRegistry.sol";
+import {FeedbackBonusEscrow} from "../contracts/FeedbackBonusEscrow.sol";
+import {FeedbackRegistry} from "../contracts/FeedbackRegistry.sol";
+import {MockCategoryRegistry} from "../contracts/mocks/MockCategoryRegistry.sol";
+import {MockERC20} from "../contracts/mocks/MockERC20.sol";
+import {ClusterPayoutOracle} from "../contracts/ClusterPayoutOracle.sol";
+import {IClusterPayoutOracle} from "../contracts/interfaces/IClusterPayoutOracle.sol";
+import {ProtocolConfig} from "../contracts/ProtocolConfig.sol";
+import {QuestionRewardPoolEscrow} from "../contracts/QuestionRewardPoolEscrow.sol";
 import {
     QuestionRewardPoolEscrowBundleActionsLib
 } from "../contracts/libraries/QuestionRewardPoolEscrowBundleActionsLib.sol";
-import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
-import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
-import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
-import { RoundLib } from "../contracts/libraries/RoundLib.sol";
+import {RoundRewardDistributor} from "../contracts/RoundRewardDistributor.sol";
+import {RoundVotingEngine} from "../contracts/RoundVotingEngine.sol";
+import {RoundEngineReadHelpers} from "./helpers/RoundEngineReadHelpers.sol";
+import {RoundLib} from "../contracts/libraries/RoundLib.sol";
 import {
     BOUNTY_ELIGIBILITY_PASSPORT,
     BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG,
     BOUNTY_ELIGIBILITY_VERIFIED_HUMAN,
     RoundSnapshot
 } from "../contracts/libraries/QuestionRewardPoolEscrowTypes.sol";
-import { TlockVoteLib } from "../contracts/libraries/TlockVoteLib.sol";
-import { Eip3009Authorization } from "../contracts/interfaces/IEip3009.sol";
-import { X402QuestionSubmitter } from "../contracts/X402QuestionSubmitter.sol";
-import { MockQuestionRewardPoolEscrow } from "./mocks/MockQuestionRewardPoolEscrow.sol";
-import { MockRaterIdentityRegistry } from "./mocks/MockRaterIdentityRegistry.sol";
+import {TlockVoteLib} from "../contracts/libraries/TlockVoteLib.sol";
+import {Eip3009Authorization} from "../contracts/interfaces/IEip3009.sol";
+import {X402QuestionSubmitter} from "../contracts/X402QuestionSubmitter.sol";
+import {MockQuestionRewardPoolEscrow} from "./mocks/MockQuestionRewardPoolEscrow.sol";
+import {MockRaterIdentityRegistry} from "./mocks/MockRaterIdentityRegistry.sol";
 
-contract InvalidFeedbackBonusEscrowForX402 { }
+contract InvalidFeedbackBonusEscrowForX402 {}
 
 contract MismatchedFeedbackBonusEscrowForX402 {
     ContentRegistry public registry;
@@ -266,7 +266,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
     function testMediaQuestionCanReceiveRewardPoolAndPayWeightedRevealedVoters() public {
         uint256 contentId = _submitQuestion("");
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
 
         address[] memory voters = _threeVoters();
         bool[] memory directions = _directions(true, true, false);
@@ -283,7 +283,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
     function testQuestionRewardsUseParticipationWeights() public {
         uint256 contentId = _submitQuestion("");
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
 
         address[] memory voters = _threeVoters();
         uint16[] memory predictions = new uint16[](3);
@@ -318,7 +318,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
         uint256 contentId = _submitQuestion("");
         uint256 rewardPoolId =
-            _createRewardPoolWithEligibility(contentId, REWARD_POOL_AMOUNT, 3, 1, BOUNTY_ELIGIBILITY_VERIFIED_HUMAN);
+            _createRewardPoolWithEligibility(contentId, REWARD_POOL_AMOUNT, 3, BOUNTY_ELIGIBILITY_VERIFIED_HUMAN);
 
         uint256 roundId = _settleRoundWith(_fourVoters(), contentId, _directions(true, true, false, true));
         rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
@@ -338,7 +338,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
         uint256 contentId = _submitQuestion("verified-after-qualification");
         uint256 rewardPoolId =
-            _createRewardPoolWithEligibility(contentId, REWARD_POOL_AMOUNT, 3, 1, BOUNTY_ELIGIBILITY_VERIFIED_HUMAN);
+            _createRewardPoolWithEligibility(contentId, REWARD_POOL_AMOUNT, 3, BOUNTY_ELIGIBILITY_VERIFIED_HUMAN);
 
         uint256 roundId = _settleRoundWith(_fourVoters(), contentId, _directions(true, true, false, true));
         rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
@@ -354,7 +354,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     function testVerifiedHumanBountyAllowsQualifiedVoterAfterCredentialRevoked() public {
         uint256 contentId = _submitQuestion("verified-revoked-after-qualification");
         uint256 rewardPoolId =
-            _createRewardPoolWithEligibility(contentId, REWARD_POOL_AMOUNT, 3, 1, BOUNTY_ELIGIBILITY_VERIFIED_HUMAN);
+            _createRewardPoolWithEligibility(contentId, REWARD_POOL_AMOUNT, 3, BOUNTY_ELIGIBILITY_VERIFIED_HUMAN);
 
         uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
         rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
@@ -374,7 +374,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
         uint256 contentId = _submitQuestion("passport-or-human-bounty");
         uint256 rewardPoolId =
-            _createRewardPoolWithEligibility(contentId, REWARD_POOL_AMOUNT, 3, 1, passportOrHumanEligibility);
+            _createRewardPoolWithEligibility(contentId, REWARD_POOL_AMOUNT, 3, passportOrHumanEligibility);
 
         uint256 roundId = _settleRoundWith(_fourVoters(), contentId, _directions(true, true, false, true));
         rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
@@ -402,7 +402,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
         uint256 contentId = _submitQuestion("recent-passport-or-human-bounty");
         uint256 rewardPoolId =
-            _createRewardPoolWithEligibility(contentId, REWARD_POOL_AMOUNT, 3, 1, recentPassportOrHumanEligibility);
+            _createRewardPoolWithEligibility(contentId, REWARD_POOL_AMOUNT, 3, recentPassportOrHumanEligibility);
 
         uint256 roundId = _settleRoundWith(_fourVoters(), contentId, _directions(true, true, false, true));
         rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
@@ -424,7 +424,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
         uint256 contentId = _submitQuestion("recent-recheck-snapshot");
         uint256 rewardPoolId =
-            _createRewardPoolWithEligibility(contentId, REWARD_POOL_AMOUNT, 3, 1, recentHumanEligibility);
+            _createRewardPoolWithEligibility(contentId, REWARD_POOL_AMOUNT, 3, recentHumanEligibility);
         uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
 
         raterIdentityRegistry.setCredentialStatusMasks(voter1, humanBit, 0);
@@ -448,7 +448,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
         uint256 contentId = _submitQuestion("recent-recheck-too-late");
         uint256 rewardPoolId =
-            _createRewardPoolWithEligibility(contentId, REWARD_POOL_AMOUNT, 3, 1, recentHumanEligibility);
+            _createRewardPoolWithEligibility(contentId, REWARD_POOL_AMOUNT, 3, recentHumanEligibility);
         uint256 roundId = _settleRoundWith(_fourVoters(), contentId, _directions(true, true, false, true));
 
         raterIdentityRegistry.setCredentialStatusMasks(voter4, humanBit, humanBit);
@@ -481,10 +481,8 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             REWARD_ASSET_USDC,
             REWARD_POOL_AMOUNT,
             3,
-            1,
             block.timestamp + 30 days,
             30 days,
-            0,
             BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG
         );
     }
@@ -504,9 +502,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             REWARD_ASSET_USDC,
             REWARD_POOL_AMOUNT,
             3,
-            1,
             block.timestamp + 30 days,
-            30 days,
             30 days,
             BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG
         );
@@ -525,20 +521,10 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.expectRevert("High-value floor");
         vm.prank(address(registry));
         rewardPoolEscrow.createSubmissionRewardPoolFromRegistry(
-            contentId,
-            funder,
-            address(0),
-            REWARD_ASSET_USDC,
-            highValueAmount,
-            3,
-            1,
-            bountyClosesAt,
-            EPOCH_DURATION,
-            EPOCH_DURATION,
-            0
+            contentId, funder, address(0), REWARD_ASSET_USDC, highValueAmount, 3, bountyClosesAt, EPOCH_DURATION, 0
         );
 
-        uint256 rewardPoolId = _createRewardPool(contentId, highValueAmount, MIN_HIGH_VALUE_PARTICIPANTS, 1);
+        uint256 rewardPoolId = _createRewardPool(contentId, highValueAmount, MIN_HIGH_VALUE_PARTICIPANTS);
 
         assertGt(rewardPoolId, 0);
     }
@@ -563,14 +549,12 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             REWARD_ASSET_USDC,
             veryHighValueAmount,
             MIN_HIGH_VALUE_PARTICIPANTS,
-            1,
             bountyClosesAt,
-            EPOCH_DURATION,
             EPOCH_DURATION,
             0
         );
 
-        uint256 rewardPoolId = _createRewardPool(contentId, veryHighValueAmount, MIN_VERY_HIGH_VALUE_PARTICIPANTS, 1);
+        uint256 rewardPoolId = _createRewardPool(contentId, veryHighValueAmount, MIN_VERY_HIGH_VALUE_PARTICIPANTS);
 
         assertGt(rewardPoolId, 0);
     }
@@ -586,7 +570,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.stopPrank();
 
         uint256 contentId = _submitQuestion("open-wallet-single");
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
 
         address[] memory voters = new address[](3);
         voters[0] = openVoter1;
@@ -614,23 +598,13 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.expectRevert(QuestionRewardPoolEscrow.StaleEscrow.selector);
         vm.prank(address(registry));
         rewardPoolEscrow.createSubmissionRewardPoolFromRegistry(
-            contentId,
-            funder,
-            address(0),
-            REWARD_ASSET_USDC,
-            REWARD_POOL_AMOUNT,
-            3,
-            1,
-            bountyClosesAt,
-            EPOCH_DURATION,
-            EPOCH_DURATION,
-            0
+            contentId, funder, address(0), REWARD_ASSET_USDC, REWARD_POOL_AMOUNT, 3, bountyClosesAt, EPOCH_DURATION, 0
         );
     }
 
     function testQuestionRewardCannotReplayAfterRaterIdentityRemintWithSameNullifier() public {
         uint256 contentId = _submitQuestion("");
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
         uint256 nullifier = 111_111;
         raterIdentityRegistry.mint(voter1, nullifier);
 
@@ -651,7 +625,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
     function testQuestionRewardClaimSucceedsWhileEscrowPaused() public {
         uint256 contentId = _submitQuestion("");
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
 
         address[] memory voters = _threeVoters();
         bool[] memory directions = _directions(true, true, false);
@@ -665,7 +639,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
     function testQuestionRewardClaimWaitsForUnrevealedCleanup() public {
         uint256 contentId = _submitQuestion("");
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
         uint256 roundId = _settleRoundWithOneUnrevealed(contentId);
 
         assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter1), 0);
@@ -682,7 +656,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
     function testQualifyRoundWaitsForUnrevealedCleanup() public {
         uint256 contentId = _submitQuestion("");
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
         uint256 roundId = _settleRoundWithOneUnrevealed(contentId);
 
         vm.expectRevert("Cleanup pending");
@@ -697,7 +671,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     function testCompletedPoolRefundGraceStartsAfterCleanupQualification() public {
         uint256 contentId = _submitQuestion("");
         uint256 expiresAt = block.timestamp + 30 days;
-        uint256 rewardPoolId = _createRewardPoolWithExpiry(contentId, REWARD_POOL_AMOUNT, 3, 1, expiresAt);
+        uint256 rewardPoolId = _createRewardPoolWithExpiry(contentId, REWARD_POOL_AMOUNT, 3, expiresAt);
         uint256 roundId = _settleRoundWithOneUnrevealed(contentId);
 
         vm.warp(expiresAt + BUNDLE_CLAIM_GRACE + 1);
@@ -722,7 +696,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         uint256 submittedAt = block.timestamp;
         uint256 contentId = _submitQuestionWithRoundConfig("synced-bounty-window", roundConfig);
         uint256 bountyClosesAt = submittedAt + EPOCH_DURATION;
-        uint256 rewardPoolId = _createRewardPoolWithExpiry(contentId, REWARD_POOL_AMOUNT, 3, 1, bountyClosesAt);
+        uint256 rewardPoolId = _createRewardPoolWithExpiry(contentId, REWARD_POOL_AMOUNT, 3, bountyClosesAt);
 
         vm.warp(submittedAt + 30 seconds);
         address[] memory voters = _threeVoters();
@@ -787,10 +761,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             5e6,
             /*requiredVoters=*/
             3,
-            /*requiredSettledRounds=*/
-            1,
             block.timestamp + 1 hours,
-            1 hours,
             1 hours,
             0
         );
@@ -814,10 +785,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             5e6,
             /*requiredVoters=*/
             5,
-            /*requiredSettledRounds=*/
-            1,
             block.timestamp + 1 hours,
-            1 hours,
             1 hours,
             0
         );
@@ -834,7 +802,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
         uint256 fundedAmount = 5e6;
         uint256 bountyClosesAt = block.timestamp + 1 hours;
-        uint256 rewardPoolId = _createRewardPoolWithExpiry(contentId, fundedAmount, 5, 1, bountyClosesAt);
+        uint256 rewardPoolId = _createRewardPoolWithExpiry(contentId, fundedAmount, 5, bountyClosesAt);
 
         address[5] memory voters = [voter1, voter2, voter3, voter4, voter5];
         bool[5] memory directions = [true, true, true, false, false];
@@ -893,7 +861,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.expectRevert("Voters mismatch");
         vm.prank(address(registry));
         rewardPoolEscrow.createSubmissionBundleFromRegistry(
-            1, contentIds, funder, REWARD_ASSET_USDC, 20e6, 3, 1, block.timestamp + 1 hours, 1 hours, 1 hours, 0
+            1, contentIds, funder, REWARD_ASSET_USDC, 20e6, 3, block.timestamp + 1 hours, 1 hours, 0
         );
     }
 
@@ -920,9 +888,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             REWARD_ASSET_USDC,
             VERY_HIGH_VALUE_REWARD_POOL_THRESHOLD,
             MIN_HIGH_VALUE_PARTICIPANTS,
-            1,
             block.timestamp + 1 hours,
-            1 hours,
             1 hours,
             0
         );
@@ -939,9 +905,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             REWARD_ASSET_USDC,
             VERY_HIGH_VALUE_REWARD_POOL_THRESHOLD,
             MIN_VERY_HIGH_VALUE_PARTICIPANTS,
-            1,
             block.timestamp + 1 hours,
-            1 hours,
             1 hours,
             0
         );
@@ -1000,11 +964,11 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
     function testRefundableRewardPoolAmountUsesQuestionSelectedVoterCap() public {
         RoundLib.RoundConfig memory roundConfig =
-            RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 1 hours, minVoters: 3, maxVoters: 4 });
+            RoundLib.RoundConfig({epochDuration: 1 hours, maxDuration: 1 hours, minVoters: 3, maxVoters: 4});
         uint256 contentId = _submitQuestionWithRoundConfig("small-cap", roundConfig);
 
         uint256 fundedAmount = 4 * 10_000;
-        uint256 rewardPoolId = _createRewardPool(contentId, fundedAmount, 3, 1);
+        uint256 rewardPoolId = _createRewardPool(contentId, fundedAmount, 3);
 
         assertEq(rewardPoolId, 2);
         assertEq(usdc.balanceOf(address(rewardPoolEscrow)), fundedAmount);
@@ -1012,7 +976,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
     function testRewardPoolRejectsRequiredVotersAboveSettlementVoters() public {
         RoundLib.RoundConfig memory roundConfig =
-            RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 1 hours, minVoters: 3, maxVoters: 4 });
+            RoundLib.RoundConfig({epochDuration: 1 hours, maxDuration: 1 hours, minVoters: 3, maxVoters: 4});
         uint256 contentId = _submitQuestionWithRoundConfig("impossible-cap", roundConfig);
         uint256 bountyClosesAt = _defaultBountyClosesAt(contentId);
 
@@ -1021,17 +985,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.expectRevert("Voters mismatch");
         vm.prank(address(registry));
         rewardPoolEscrow.createSubmissionRewardPoolFromRegistry(
-            contentId,
-            funder,
-            address(0),
-            REWARD_ASSET_USDC,
-            REWARD_POOL_AMOUNT,
-            5,
-            1,
-            bountyClosesAt,
-            1 hours,
-            1 hours,
-            0
+            contentId, funder, address(0), REWARD_ASSET_USDC, REWARD_POOL_AMOUNT, 5, bountyClosesAt, 1 hours, 0
         );
     }
 
@@ -1041,7 +995,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             address(registry),
             abi.encodeWithSelector(ContentRegistry.getContentRoundConfig.selector, contentId),
             abi.encode(
-                RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 1 hours, minVoters: 3, maxVoters: 201 })
+                RoundLib.RoundConfig({epochDuration: 1 hours, maxDuration: 1 hours, minVoters: 3, maxVoters: 201})
             )
         );
 
@@ -1051,17 +1005,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.expectRevert("Voters exceed max");
         vm.prank(address(registry));
         rewardPoolEscrow.createSubmissionRewardPoolFromRegistry(
-            contentId,
-            funder,
-            address(0),
-            REWARD_ASSET_USDC,
-            REWARD_POOL_AMOUNT,
-            3,
-            1,
-            bountyClosesAt,
-            1 hours,
-            1 hours,
-            0
+            contentId, funder, address(0), REWARD_ASSET_USDC, REWARD_POOL_AMOUNT, 3, bountyClosesAt, 1 hours, 0
         );
     }
 
@@ -1069,7 +1013,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         _registerFrontend(frontend1);
 
         uint256 contentId = _submitQuestion("");
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
 
         address[] memory voters = _threeVoters();
         bool[] memory directions = _directions(true, true, false);
@@ -1090,7 +1034,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         _registerFrontend(frontend1);
 
         uint256 contentId = _submitQuestion("");
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
 
         address[] memory voters = _threeVoters();
         bool[] memory directions = _directions(true, true, false);
@@ -1119,7 +1063,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         _registerFrontend(frontend1);
 
         uint256 contentId = _submitQuestion("");
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
 
         address[] memory voters = _threeVoters();
         bool[] memory directions = _directions(true, true, false);
@@ -1137,7 +1081,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
     function testUnregisteredFrontendFeeShareFallsBackToVoterReward() public {
         uint256 contentId = _submitQuestion("");
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
 
         address[] memory voters = _threeVoters();
         bool[] memory directions = _directions(true, true, false);
@@ -1275,17 +1219,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         usdc.approve(address(rewardPoolEscrow), REWARD_POOL_AMOUNT);
         vm.prank(address(registry));
         uint256 bundleId = rewardPoolEscrow.createSubmissionBundleFromRegistry(
-            1,
-            contentIds,
-            funder,
-            REWARD_ASSET_USDC,
-            REWARD_POOL_AMOUNT,
-            3,
-            1,
-            block.timestamp + 30 days,
-            30 days,
-            30 days,
-            0
+            1, contentIds, funder, REWARD_ASSET_USDC, REWARD_POOL_AMOUNT, 3, block.timestamp + 30 days, 30 days, 0
         );
         assertEq(bundleId, 1);
         assertEq(
@@ -1341,12 +1275,6 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             ),
             0
         );
-    }
-
-    function testRepointedQuestionBundleRejectsSnapshotProposedBeforePinForSecondRoundSet() public {
-        _enableClusterPayoutOracle();
-        uint256[] memory contentIds = _submitBundleQuestions();
-        _expectSubmissionBundleRejectsMultipleRoundSets(contentIds, REWARD_POOL_AMOUNT);
     }
 
     function testReplacementQuestionBundleOracleCannotPreSquatBeforeRepointAndCanProposeAfterPin() public {
@@ -1748,7 +1676,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
     function testDelegateCanClaimByUnderlyingRaterIdentityOnlyOnce() public {
         uint256 contentId = _submitQuestion("");
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
 
         vm.prank(voter1);
         raterIdentityRegistry.setDelegate(delegate1);
@@ -1769,7 +1697,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
     function testOpenRoundUsesRaterIdentitySnapshotAfterMigration() public {
         uint256 contentId = _submitQuestion("");
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
 
         bytes32 salt1 = keccak256("snapshot-voter-1");
         bytes32 commitKey1 = _commitTestVote(
@@ -1830,7 +1758,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
     function testFunderExclusionUsesRoundRaterIdentitySnapshotAfterMigration() public {
         uint256 contentId = _submitQuestion("");
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
 
         address[] memory voters = new address[](4);
         voters[0] = funder;
@@ -1853,7 +1781,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
     function testStoredFunderRaterIdentityDoesNotExcludeDifferentSnapshotHolder() public {
         uint256 contentId = _submitQuestion("");
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
         uint256 oldFunderRaterIdentity = raterIdentityRegistry.getCredentialId(funder);
 
         MockRaterIdentityRegistry migratedRaterIdentityRegistry = _migrateRaterIdentitiesWithVoter1AtOldFunderId();
@@ -1867,7 +1795,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
     function testQuestionRewardClaimChecksCurrentRaterRegistryBanAfterMigration() public {
         uint256 contentId = _submitQuestion("current-ban-after-qualification");
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
         uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
         rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
 
@@ -1882,7 +1810,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
     function testRewardPoolQualificationChecksCurrentRaterRegistryBanAfterMigration() public {
         uint256 contentId = _submitQuestion("current-ban-before-qualification");
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
         uint256 roundId = _settleRoundWith(_fourVoters(), contentId, _directions(true, true, false, true));
 
         MockRaterIdentityRegistry migratedRaterIdentityRegistry = _migrateRaterIdentitiesWithDifferentIds();
@@ -1899,7 +1827,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
     function testOpenQuestionRewardClaimRequiresQualificationSnapshotAfterBanClears() public {
         uint256 contentId = _submitQuestion("open-bounty-ban-cleared");
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
         uint256 roundId = _settleRoundWith(_fourVoters(), contentId, _directions(true, true, false, true));
 
         bytes32 voterKey = raterIdentityRegistry.addressIdentityKey(voter1);
@@ -1923,7 +1851,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
     function testRewardPoolQualificationChecksRawCommitVoterBan() public {
         uint256 contentId = _submitQuestion("raw-commit-voter-ban-before-qualification");
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
 
         vm.prank(owner);
         lrepToken.mint(delegate1, 10_000e6);
@@ -1941,7 +1869,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
     function testRewardPoolQualificationChecksCommitHolderAddressBan() public {
         uint256 contentId = _submitQuestion("commit-holder-ban-before-qualification");
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
 
         vm.prank(owner);
         lrepToken.mint(delegate1, 10_000e6);
@@ -1959,7 +1887,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
     function testQuestionRewardClaimableChecksRawCommitVoterBanAfterQualification() public {
         uint256 contentId = _submitQuestion("raw-commit-voter-ban-after-qualification");
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
 
         vm.prank(owner);
         lrepToken.mint(delegate1, 10_000e6);
@@ -1981,7 +1909,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
     function testQuestionRewardClaimableChecksCommitHolderAddressBanAfterQualification() public {
         uint256 contentId = _submitQuestion("commit-holder-ban-after-qualification");
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
 
         vm.prank(owner);
         lrepToken.mint(delegate1, 10_000e6);
@@ -2440,17 +2368,6 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertEq(rewardPoolEscrow.claimQuestionBundleReward(bundleId, 0), REWARD_POOL_AMOUNT / 4);
     }
 
-    function testBundleClaimSupportsMultipleRoundSets() public {
-        uint256[] memory contentIds = _submitBundleQuestions();
-        uint256 bundleAmount = 120e6;
-        _expectSubmissionBundleRejectsMultipleRoundSets(contentIds, bundleAmount);
-    }
-
-    function testSyncBundleQuestionTerminalDoesNotReplaySameRoundIntoLaterRoundSet() public {
-        uint256[] memory contentIds = _submitBundleQuestions();
-        _expectSubmissionBundleRejectsMultipleRoundSets(contentIds, 120e6);
-    }
-
     function testBundleRewardCannotReplayAfterRaterIdentityRemintWithSameNullifier() public {
         uint256[] memory contentIds = _submitBundleQuestions();
         uint256 bundleId = _createSubmissionBundle(contentIds, funder, REWARD_ASSET_USDC, REWARD_POOL_AMOUNT, 3);
@@ -2627,11 +2544,6 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertGt(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, voter2), 0);
     }
 
-    function testBundleClaimRecordsOutOfOrderFutureRoundSetTerminal() public {
-        uint256[] memory contentIds = _submitBundleQuestions();
-        _expectSubmissionBundleRejectsMultipleRoundSets(contentIds, 120e6);
-    }
-
     function testBundleRoundSetDoesNotQualifyWithoutRequiredCompleterIntersection() public {
         uint256[] memory contentIds = _submitBundleQuestions();
         uint256 bundleId = _createSubmissionBundle(contentIds, funder, REWARD_ASSET_USDC, REWARD_POOL_AMOUNT, 3);
@@ -2656,21 +2568,6 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         rewardPoolEscrow.claimQuestionBundleReward(bundleId, 0);
     }
 
-    function testBundleRoundSetRetriesAfterInsufficientCompleterIntersection() public {
-        uint256[] memory contentIds = _submitBundleQuestions();
-        _expectSubmissionBundleRejectsMultipleRoundSets(contentIds, 120e6);
-    }
-
-    function testSyncBundleQuestionTerminalDoesNotReplayFailedRoundIntoRetrySet() public {
-        uint256[] memory contentIds = _submitBundleQuestions();
-        _expectSubmissionBundleRejectsMultipleRoundSets(contentIds, 120e6);
-    }
-
-    function testBatchBundleSyncReplaysFutureRoundsAfterFailedSetReset() public {
-        uint256[] memory contentIds = _submitBundleQuestions();
-        _expectSubmissionBundleRejectsMultipleRoundSets(contentIds, 120e6);
-    }
-
     function testSubmissionBundleRequiresFundingForMaxCompleters() public {
         RoundLib.RoundConfig memory roundConfig = RoundLib.RoundConfig({
             epochDuration: uint32(EPOCH_DURATION), maxDuration: uint32(EPOCH_DURATION), minVoters: 3, maxVoters: 4
@@ -2691,7 +2588,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.expectRevert("Amount too small");
         vm.prank(address(registry));
         rewardPoolEscrow.createSubmissionBundleFromRegistry(
-            1, contentIds, funder, REWARD_ASSET_USDC, amount, 3, 1, bountyClosesAt, 30 days, 30 days, 0
+            1, contentIds, funder, REWARD_ASSET_USDC, amount, 3, bountyClosesAt, 30 days, 0
         );
     }
 
@@ -2714,16 +2611,6 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
         assertEq(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, voter1), 10_000);
         assertEq(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, voter4), 10_000);
-    }
-
-    function testBundleRoundSetRetryIgnoresFutureRoundsRecordedBeforeReset() public {
-        uint256[] memory contentIds = _submitBundleQuestions();
-        _expectSubmissionBundleRejectsMultipleRoundSets(contentIds, 120e6);
-    }
-
-    function testBundleRoundSetResetClearsPoisonedFutureFloor() public {
-        uint256[] memory contentIds = _submitBundleQuestions();
-        _expectSubmissionBundleRejectsMultipleRoundSets(contentIds, 120e6);
     }
 
     function testBundleRoundSetCountsDelegateCommitAfterDelegateRemoval() public {
@@ -2890,7 +2777,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
     function testFunderAndSubmitterRaterIdentitiesAreExcludedFromRewardPoolClaims() public {
         uint256 contentId = _submitQuestion("");
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
 
         address[] memory voters = new address[](4);
         voters[0] = funder;
@@ -2914,7 +2801,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     function testSubmitterSnapshotKeepsOldRaterIdentityExcludedAfterRemint() public {
         uint256 contentId = _submitQuestion("");
         uint256 submitterSnapshotRaterIdentity = raterIdentityRegistry.getCredentialId(submitter);
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
 
         raterIdentityRegistry.mint(submitter, 999);
         assertNotEq(raterIdentityRegistry.getCredentialId(submitter), submitterSnapshotRaterIdentity);
@@ -2935,7 +2822,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
         vm.prank(voter1);
         raterIdentityRegistry.setDelegate(delegate1);
-        uint256 rewardPoolId = _createRewardPoolAs(delegate1, contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPoolAs(delegate1, contentId, REWARD_POOL_AMOUNT, 3);
         vm.prank(voter1);
         raterIdentityRegistry.removeDelegate();
 
@@ -2957,7 +2844,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     function testFunderNullifierStaysExcludedAfterRemint() public {
         raterIdentityRegistry.mint(funder, 333_001);
         uint256 contentId = _submitQuestion("");
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
 
         raterIdentityRegistry.revokeHumanCredential(funder);
         raterIdentityRegistry.resetNullifier(333_001);
@@ -3010,7 +2897,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
         vm.prank(voter1);
         raterIdentityRegistry.setDelegate(delegate1);
-        uint256 rewardPoolId = _createRewardPoolAs(delegate1, contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPoolAs(delegate1, contentId, REWARD_POOL_AMOUNT, 3);
         vm.prank(voter1);
         raterIdentityRegistry.removeDelegate();
         vm.prank(voter3);
@@ -3052,7 +2939,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
         vm.prank(voter1);
         raterIdentityRegistry.setDelegate(delegate1);
-        uint256 rewardPoolId = _createRewardPoolAs(delegate1, contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPoolAs(delegate1, contentId, REWARD_POOL_AMOUNT, 3);
         vm.prank(voter1);
         raterIdentityRegistry.removeDelegate();
 
@@ -3074,7 +2961,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.prank(voter2);
         raterIdentityRegistry.setDelegate(delegate1);
         uint256 originalRaterIdentity = raterIdentityRegistry.getCredentialId(voter2);
-        uint256 rewardPoolId = _createRewardPoolAs(delegate1, contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPoolAs(delegate1, contentId, REWARD_POOL_AMOUNT, 3);
         vm.prank(voter2);
         raterIdentityRegistry.removeDelegate();
 
@@ -3105,7 +2992,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
         vm.prank(voter2);
         raterIdentityRegistry.setDelegate(delegate1);
-        uint256 rewardPoolId = _createRewardPoolAs(delegate1, contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPoolAs(delegate1, contentId, REWARD_POOL_AMOUNT, 3);
         vm.prank(voter2);
         raterIdentityRegistry.removeDelegate();
 
@@ -3130,7 +3017,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     function testQuestionRewardPaysRaterIdentityHolderWhenNewDelegateClaims() public {
         address newDelegate = address(0xD1E);
         uint256 contentId = _submitQuestion("");
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
 
         vm.prank(owner);
         lrepToken.mint(delegate1, 10_000e6);
@@ -3160,7 +3047,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     function testSettledRoundCanQualifyAfterPoolExpires() public {
         uint256 contentId = _submitQuestion("");
         uint256 expiresAt = block.timestamp + EPOCH_DURATION + 10;
-        uint256 rewardPoolId = _createRewardPoolWithExpiry(contentId, REWARD_POOL_AMOUNT, 3, 1, expiresAt);
+        uint256 rewardPoolId = _createRewardPoolWithExpiry(contentId, REWARD_POOL_AMOUNT, 3, expiresAt);
 
         address[] memory voters = _threeVoters();
         bool[] memory directions = _directions(true, true, false);
@@ -3179,7 +3066,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     function testRefundBlockedWhenEmptyLeadingRoundPrecedesQualifiableRound() public {
         uint256 contentId = _submitQuestion("");
         uint256 expiresAt = block.timestamp + 30 days;
-        uint256 rewardPoolId = _createRewardPoolWithExpiry(contentId, REWARD_POOL_AMOUNT, 3, 1, expiresAt);
+        uint256 rewardPoolId = _createRewardPoolWithExpiry(contentId, REWARD_POOL_AMOUNT, 3, expiresAt);
 
         // Leading round opens empty and is cancelled -> a finished, zero-commit round sits at the cursor,
         // so the bounty window never activates (bountyClosesAt stays 0).
@@ -3192,7 +3079,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         // A later round is staked, voted, and settles within the (still-unactivated) window.
         uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
 
-        // Past bountyStartBy the pool reports expired, but the finished empty cursor round must be advanced
+        // Past the creation-anchored close, the pool reports expired, but the finished empty cursor round must be advanced
         // first -- the refund must NOT skip the guard and drain the later round's voters' funds.
         vm.warp(expiresAt + 1);
         vm.expectRevert(QuestionRewardPoolEscrow.RewardPoolCursorNeedsAdvance.selector);
@@ -3208,7 +3095,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     function testOpenRoundThatReachedThresholdBeforeExpiryBlocksRefundAndCanQualify() public {
         uint256 contentId = _submitQuestion("");
         uint256 expiresAt = block.timestamp + EPOCH_DURATION + 10;
-        uint256 rewardPoolId = _createRewardPoolWithExpiry(contentId, REWARD_POOL_AMOUNT, 3, 1, expiresAt);
+        uint256 rewardPoolId = _createRewardPoolWithExpiry(contentId, REWARD_POOL_AMOUNT, 3, expiresAt);
 
         address[] memory voters = _threeVoters();
         uint256 roundId = _revealRoundWith(voters, contentId, _directions(true, true, false));
@@ -3230,7 +3117,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         });
         uint256 contentId = _submitQuestionWithRoundConfig("below-quorum-before-close", roundConfig);
         uint256 expiresAt = block.timestamp + EPOCH_DURATION + 10;
-        uint256 rewardPoolId = _createRewardPoolWithExpiry(contentId, REWARD_POOL_AMOUNT, 5, 1, expiresAt);
+        uint256 rewardPoolId = _createRewardPoolWithExpiry(contentId, REWARD_POOL_AMOUNT, 5, expiresAt);
 
         (uint256 roundId, bytes32[5] memory salts, bytes32[5] memory commitKeys) =
             _commitFiveVoterT1Round(contentId, voter5, "timely-below-quorum");
@@ -3258,7 +3145,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         });
         uint256 contentId = _submitQuestionWithRoundConfig("above-quorum-before-close", roundConfig);
         uint256 expiresAt = block.timestamp + EPOCH_DURATION + 10;
-        uint256 rewardPoolId = _createRewardPoolWithExpiry(contentId, REWARD_POOL_AMOUNT, 4, 1, expiresAt);
+        uint256 rewardPoolId = _createRewardPoolWithExpiry(contentId, REWARD_POOL_AMOUNT, 4, expiresAt);
 
         uint256 roundId = _revealRoundWith(_fourVoters(), contentId, _directions(true, true, false, true));
         _assertThresholdReachedAtLe(contentId, roundId, expiresAt);
@@ -3280,7 +3167,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         });
         uint256 contentId = _submitQuestionWithRoundConfig("above-quorum-after-close", roundConfig);
         uint256 expiresAt = block.timestamp + EPOCH_DURATION + 10;
-        uint256 rewardPoolId = _createRewardPoolWithExpiry(contentId, REWARD_POOL_AMOUNT, 4, 1, expiresAt);
+        uint256 rewardPoolId = _createRewardPoolWithExpiry(contentId, REWARD_POOL_AMOUNT, 4, expiresAt);
 
         (
             uint256 roundId,
@@ -3309,7 +3196,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         });
         uint256 contentId = _submitQuestionWithRoundConfig("min-quorum-late-extra", roundConfig);
         uint256 expiresAt = block.timestamp + EPOCH_DURATION + 10;
-        uint256 rewardPoolId = _createRewardPoolWithExpiry(contentId, REWARD_POOL_AMOUNT, 3, 1, expiresAt);
+        uint256 rewardPoolId = _createRewardPoolWithExpiry(contentId, REWARD_POOL_AMOUNT, 3, expiresAt);
 
         (
             uint256 roundId,
@@ -3344,7 +3231,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         });
         uint256 contentId = _submitQuestionWithRoundConfig("post-close-commit-direct", roundConfig);
         uint256 bountyClosesAt = block.timestamp + 1;
-        uint256 rewardPoolId = _createRewardPoolWithExpiry(contentId, REWARD_POOL_AMOUNT, 3, 1, bountyClosesAt);
+        uint256 rewardPoolId = _createRewardPoolWithExpiry(contentId, REWARD_POOL_AMOUNT, 3, bountyClosesAt);
 
         address[] memory timelyVoters = _threeVoters();
         bool[] memory timelyDirections = _directions(true, true, false);
@@ -3482,7 +3369,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     function testCompletedPoolRefundRequiresGraceAndSweepsUnclaimedRewards() public {
         uint256 contentId = _submitQuestion("");
         uint256 expiresAt = block.timestamp + EPOCH_DURATION + 10;
-        uint256 rewardPoolId = _createRewardPoolWithExpiry(contentId, REWARD_POOL_AMOUNT, 3, 1, expiresAt);
+        uint256 rewardPoolId = _createRewardPoolWithExpiry(contentId, REWARD_POOL_AMOUNT, 3, expiresAt);
 
         address[] memory voters = _threeVoters();
         uint256 roundId = _settleRoundWith(voters, contentId, _directions(true, true, false));
@@ -3529,7 +3416,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
     function testSettledRoundCanQualifyAfterContentDormant() public {
         uint256 contentId = _submitQuestion("");
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
 
         address[] memory voters = _threeVoters();
         bool[] memory directions = _directions(true, true, false);
@@ -3550,39 +3437,9 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         _claimQuestionRewardAndAssert(voter1, rewardPoolId, roundId);
     }
 
-    function testExpiredPoolBlocksNewQualificationButLeavesQualifiedClaimsPayable() public {
-        uint256 contentId = _submitQuestion("");
-        _expectRewardPoolRejectsMultipleRequiredRounds(contentId, REWARD_POOL_AMOUNT, 2);
-    }
-
-    function testPartialExpiredPoolCanSweepUnclaimedAllocatedRewardsAfterGrace() public {
-        uint256 contentId = _submitQuestion("");
-        uint256 expiresAt = block.timestamp + 1 days;
-
-        vm.startPrank(funder);
-        usdc.approve(address(rewardPoolEscrow), 120e6);
-        vm.stopPrank();
-
-        vm.expectRevert("One round only");
-        vm.prank(address(registry));
-        rewardPoolEscrow.createSubmissionRewardPoolFromRegistry(
-            contentId,
-            funder,
-            funder,
-            REWARD_ASSET_USDC,
-            120e6,
-            3,
-            2,
-            expiresAt,
-            expiresAt - block.timestamp,
-            expiresAt - block.timestamp,
-            0
-        );
-    }
-
     function testLaterEligibleRoundCannotSkipEarlierEligibleRound() public {
         uint256 contentId = _submitQuestion("");
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
 
         address[] memory voters = _threeVoters();
         bool[] memory directions = _directions(true, true, false);
@@ -3605,7 +3462,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     function testClusterRewardPoolDoesNotSkipSettledRoundWithoutFinalizedSnapshot() public {
         _enableClusterPayoutOracle();
         uint256 contentId = _submitQuestion("");
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
 
         uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
 
@@ -3699,7 +3556,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     function testClusterRewardPoolRejectsSnapshotProposedBeforeCleanupComplete() public {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
         uint256 contentId = _submitQuestion("");
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
 
         uint256 roundId = _settleRoundWithOneUnrevealed(contentId);
         assertEq(_roundClusterPayoutReadyAt(votingEngine, contentId, roundId), 0);
@@ -3732,7 +3589,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     function testClusterRewardPoolDoesNotSkipBelowFloorSnapshotProposedBeforeCleanupComplete() public {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
         uint256 contentId = _submitQuestion("");
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
 
         uint256 roundId = _settleRoundWithOneUnrevealed(contentId);
         assertEq(_roundClusterPayoutReadyAt(votingEngine, contentId, roundId), 0);
@@ -3758,7 +3615,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     function testClusterRewardPoolAcceptsSnapshotProposedAfterCleanupComplete() public {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
         uint256 contentId = _submitQuestion("");
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
 
         uint256 roundId = _settleRoundWithOneUnrevealed(contentId);
         votingEngine.processUnrevealedVotes(contentId, roundId, 0, 0);
@@ -3774,7 +3631,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     function testClusterRewardPoolCanSkipFinalizedBelowFloorSnapshot() public {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
         uint256 contentId = _submitQuestion("");
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
 
         uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
         _finalizeClusterPayoutSnapshot(oracle, rewardPoolId, contentId, roundId, 3, 20_000, 1);
@@ -3799,7 +3656,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     function testClusterRewardPoolCanSkipFinalizedEmptySnapshotAfterVetoWindow() public {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
         uint256 contentId = _submitQuestion("");
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
 
         uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
         _finalizeClusterPayoutSnapshotWithRoot(oracle, rewardPoolId, contentId, roundId, 3, 0, 0, bytes32(0));
@@ -3833,7 +3690,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
         uint256 contentId = _submitQuestion("");
         uint256 rewardPoolId =
-            _createRewardPoolWithEligibility(contentId, REWARD_POOL_AMOUNT, 3, 1, BOUNTY_ELIGIBILITY_VERIFIED_HUMAN);
+            _createRewardPoolWithEligibility(contentId, REWARD_POOL_AMOUNT, 3, BOUNTY_ELIGIBILITY_VERIFIED_HUMAN);
 
         address[] memory unverifiedVoters = _voters(address(20), address(21), address(22));
         vm.startPrank(owner);
@@ -3861,7 +3718,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     function testClusterRewardPoolDoesNotSkipEmptySnapshotWithRawMismatch() public {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
         uint256 contentId = _submitQuestion("");
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
 
         uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
         _finalizeClusterPayoutSnapshotWithRoot(oracle, rewardPoolId, contentId, roundId, 0, 0, 0, bytes32(0));
@@ -3874,7 +3731,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     function testGovernanceCanReplaceUnconsumedFinalizedClusterSnapshotMismatch() public {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
         uint256 contentId = _submitQuestion("");
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
 
         uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
         IClusterPayoutOracle.PayoutWeight memory payoutWeight =
@@ -3927,7 +3784,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     function testQualifiedClusterSnapshotRejectsReplacementRootClaims() public {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
         uint256 contentId = _submitQuestion("");
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
 
         uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
         IClusterPayoutOracle.PayoutWeight memory payoutWeight =
@@ -3978,7 +3835,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     function testQualifiedClusterSnapshotRejectsSameRootMetadataReplacementClaims() public {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
         uint256 contentId = _submitQuestion("");
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
 
         uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
         IClusterPayoutOracle.PayoutWeight memory payoutWeight =
@@ -4031,7 +3888,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     function testRecoveredClusterSnapshotCanReopenWithCorrectedSameRootMetadata() public {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
         uint256 contentId = _submitQuestion("");
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
 
         uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
         IClusterPayoutOracle.PayoutWeight memory payoutWeight =
@@ -4085,7 +3942,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     function testReopenRecoveredSnapshotRound_AllowsHonestRequalification() public {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
         uint256 contentId = _submitQuestion("");
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
 
         uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
         IClusterPayoutOracle.PayoutWeight memory payoutWeight =
@@ -4156,7 +4013,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     function testReopenRecoveredSnapshotRound_RemainsRecoverableIfReplacementRejectedBeforeClaim() public {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
         uint256 contentId = _submitQuestion("");
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
 
         uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
         IClusterPayoutOracle.PayoutWeight memory payoutWeight =
@@ -4218,26 +4075,11 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertEq(finalSnapshot.clusterWeightRoot, secondReplacementRoot);
     }
 
-    function testRecoveredSnapshotRoundBlocksLaterQualificationUntilRequalified() public {
-        uint256 contentId = _submitQuestion("");
-        _expectRewardPoolRejectsMultipleRequiredRounds(contentId, REWARD_POOL_AMOUNT, 2);
-    }
-
-    function testRecoveredSnapshotRoundBlocksUnallocatedRefund() public {
-        uint256 contentId = _submitQuestion("");
-        _expectRewardPoolRejectsMultipleRequiredRounds(contentId, REWARD_POOL_AMOUNT, 2);
-    }
-
-    function testRecoveredSnapshotRoundCanReopenAfterUnallocatedRefund() public {
-        uint256 contentId = _submitQuestion("");
-        _expectRewardPoolRejectsMultipleRequiredRounds(contentId, 120e6, 2);
-    }
-
     function testRecoveredSnapshotRoundRejectsAfterCompleteRefund() public {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
         uint256 contentId = _submitQuestion("");
         uint256 expiresAt = block.timestamp + EPOCH_DURATION + 10;
-        uint256 rewardPoolId = _createRewardPoolWithExpiry(contentId, REWARD_POOL_AMOUNT, 3, 1, expiresAt);
+        uint256 rewardPoolId = _createRewardPoolWithExpiry(contentId, REWARD_POOL_AMOUNT, 3, expiresAt);
 
         uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
         IClusterPayoutOracle.PayoutWeight memory payoutWeight =
@@ -4259,17 +4101,12 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         rewardPoolEscrow.recoverRejectedSnapshotRound(rewardPoolId, roundId);
     }
 
-    function testRecoveredSnapshotRoundsShareRecoveredAllocationAfterUnallocatedRefund() public {
-        uint256 contentId = _submitQuestion("");
-        _expectRewardPoolRejectsMultipleRequiredRounds(contentId, 180e6, 3);
-    }
-
     // FE-1 negative test: the admin entrypoint refuses to reopen a recovered round unless the
     // oracle has a new finalized snapshot for that round.
     function testReopenRecoveredSnapshotRound_RevertsWithoutNewOracleSnapshot() public {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
         uint256 contentId = _submitQuestion("");
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
 
         uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
         IClusterPayoutOracle.PayoutWeight memory payoutWeight =
@@ -4300,14 +4137,9 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         uint256 indexed rewardPoolId, uint256 indexed contentId, uint256 indexed roundId, bytes32 newWeightRoot
     );
 
-    function testClaimableClusterRewardReturnsZeroWhileRecoveredRoundPending() public {
-        uint256 contentId = _submitQuestion("");
-        _expectRewardPoolRejectsMultipleRequiredRounds(contentId, REWARD_POOL_AMOUNT, 2);
-    }
-
     function testRoundSnapshotStorageLayoutAppendsFirstClaimPaidClusterRootAndDigest() public {
         uint256 contentId = _submitQuestion("");
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
         uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
 
         rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
@@ -4331,7 +4163,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
     function testRewardPoolCreatedBeforeClusterOracleKeepsStandardClaims() public {
         uint256 contentId = _submitQuestion("");
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
         _enableClusterPayoutOracle();
 
         uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
@@ -4342,7 +4174,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     function testClusterRewardPoolUsesSnapshottedOracleAfterConfigRotation() public {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
         uint256 contentId = _submitQuestion("");
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
 
         uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
         IClusterPayoutOracle.PayoutWeight memory payoutWeight =
@@ -4381,7 +4213,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     function testGovernanceCanRepointUnqualifiedRewardPoolClusterOracle() public {
         _enableClusterPayoutOracle();
         uint256 contentId = _submitQuestion("");
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
         uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
 
         ClusterPayoutOracle replacementOracle = _newEligibleClusterPayoutOracle();
@@ -4414,7 +4246,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     function testReplacementRewardPoolOracleCannotPreSquatBeforeRepointAndSameBlockPostPinCanClaim() public {
         _enableClusterPayoutOracle();
         uint256 contentId = _submitQuestion("");
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
         uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
 
         ClusterPayoutOracle replacementOracle = _newEligibleClusterPayoutOracle();
@@ -4491,7 +4323,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     function testClusterClaimableQuestionRewardWithPayoutWeightPreviewsUnqualifiedRound() public {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
         uint256 contentId = _submitQuestion("");
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
 
         uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
         IClusterPayoutOracle.PayoutWeight memory payoutWeight =
@@ -4521,7 +4353,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     function testClusterClaimablePayoutWeightChecksCurrentRaterRegistryBanAfterMigration() public {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
         uint256 contentId = _submitQuestion("cluster-current-ban-preview");
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
 
         uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
         IClusterPayoutOracle.PayoutWeight memory payoutWeight =
@@ -4551,7 +4383,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     function testClusterClaimablePayoutWeightChecksRawCommitVoterBan() public {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
         uint256 contentId = _submitQuestion("cluster-raw-commit-voter-ban-preview");
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
 
         vm.prank(owner);
         lrepToken.mint(delegate1, 10_000e6);
@@ -4592,7 +4424,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     function testClusterClaimablePayoutWeightChecksCommitHolderAddressBan() public {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
         uint256 contentId = _submitQuestion("cluster-commit-holder-ban-preview");
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
 
         vm.prank(owner);
         lrepToken.mint(delegate1, 10_000e6);
@@ -4678,7 +4510,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     function testClusterClaimRejectsBaseWeightAboveSurpriseCap() public {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
         uint256 contentId = _submitQuestion("");
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
 
         uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
         IClusterPayoutOracle.PayoutWeight memory payoutWeight =
@@ -4705,7 +4537,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     function testClusterClaimRejectsBaseWeightBelowFloor() public {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
         uint256 contentId = _submitQuestion("");
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
 
         uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
         IClusterPayoutOracle.PayoutWeight memory payoutWeight =
@@ -4766,7 +4598,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     ) internal {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
         uint256 contentId = _submitQuestion("");
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
 
         address[] memory voters = baseWeights.length == 4 ? _fourVoters() : _threeVoters();
         uint256 roundId = _settleRoundWith(voters, contentId, directions);
@@ -4855,7 +4687,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     function testClusterRewardPoolSkipsRawIneligibleRoundWithoutOracleSnapshot() public {
         _enableClusterPayoutOracle();
         uint256 contentId = _submitQuestion("");
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
 
         uint256 roundId = _settleRoundWith(_ineligibleVoters(), contentId, _directions(true, true, false));
 
@@ -4868,7 +4700,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         _enableClusterPayoutOracle();
         uint256 contentId = _submitQuestion("");
         uint256 expiresAt = block.timestamp + EPOCH_DURATION + 10;
-        uint256 rewardPoolId = _createRewardPoolWithExpiry(contentId, REWARD_POOL_AMOUNT, 3, 1, expiresAt);
+        uint256 rewardPoolId = _createRewardPoolWithExpiry(contentId, REWARD_POOL_AMOUNT, 3, expiresAt);
 
         _settleRoundWith(_ineligibleVoters(), contentId, _directions(true, true, false));
 
@@ -4889,7 +4721,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
         uint256 contentId = _submitQuestion("");
         uint256 expiresAt = block.timestamp + EPOCH_DURATION + 10;
-        uint256 rewardPoolId = _createRewardPoolWithExpiry(contentId, REWARD_POOL_AMOUNT, 3, 1, expiresAt);
+        uint256 rewardPoolId = _createRewardPoolWithExpiry(contentId, REWARD_POOL_AMOUNT, 3, expiresAt);
 
         uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
 
@@ -4922,7 +4754,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
     function testLaterPostWindowRoundCannotQualifyAfterSkippingIneligibleRound() public {
         uint256 contentId = _submitQuestion("");
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
 
         address[] memory ineligibleVoters = new address[](3);
         ineligibleVoters[0] = funder;
@@ -4942,7 +4774,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
     function testAdvanceQualificationCursorSkipsIneligibleRoundsInChunks() public {
         uint256 contentId = _submitQuestion("");
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
 
         bool[] memory directions = _directions(true, true, false);
         uint256 ineligibleRoundId = _settleRoundWith(_ineligibleVoters(), contentId, directions);
@@ -4954,7 +4786,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
     function testInactiveUnexpiredPoolCanRefundUnallocatedFunds() public {
         uint256 contentId = _submitQuestion("");
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3);
 
         vm.prank(submitter);
         registry.cancelContent(contentId);
@@ -4987,7 +4819,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
         vm.prank(address(registry));
         rewardPoolEscrow.createSubmissionBundleFromRegistry(
-            bundleId, contentIds, submitter, rewardAsset, REWARD_POOL_AMOUNT, 3, 1, bountyClosesAt, 30 days, 30 days, 0
+            bundleId, contentIds, submitter, rewardAsset, REWARD_POOL_AMOUNT, 3, bountyClosesAt, 30 days, 0
         );
 
         vm.prank(address(votingEngine));
@@ -5005,46 +4837,8 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.expectRevert("Bounty window required");
         vm.prank(address(registry));
         rewardPoolEscrow.createSubmissionRewardPoolFromRegistry(
-            contentId, funder, address(0), REWARD_ASSET_USDC, REWARD_POOL_AMOUNT, 3, 1, 0, 0, 0, 0
+            contentId, funder, address(0), REWARD_ASSET_USDC, REWARD_POOL_AMOUNT, 3, 0, 0, 0
         );
-    }
-
-    function testRewardPoolRejectsMultipleRequiredRounds() public {
-        uint256 contentId = _submitQuestion("");
-        uint256 bountyClosesAt = _defaultBountyClosesAt(contentId);
-
-        vm.prank(funder);
-        usdc.approve(address(rewardPoolEscrow), 1);
-        vm.startPrank(address(registry));
-        vm.expectRevert("One round only");
-        rewardPoolEscrow.createSubmissionRewardPoolFromRegistry(
-            contentId, funder, address(0), REWARD_ASSET_USDC, 1, 3, 2, bountyClosesAt, 1 hours, 1 hours, 0
-        );
-        vm.stopPrank();
-    }
-
-    function testRewardPoolRejectsAnyExtraRequiredRounds() public {
-        uint256 contentId = _submitQuestion("");
-        uint256 bountyClosesAt = _defaultBountyClosesAt(contentId);
-
-        vm.prank(funder);
-        usdc.approve(address(rewardPoolEscrow), REWARD_POOL_AMOUNT);
-        vm.startPrank(address(registry));
-        vm.expectRevert("One round only");
-        rewardPoolEscrow.createSubmissionRewardPoolFromRegistry(
-            contentId,
-            funder,
-            address(0),
-            REWARD_ASSET_USDC,
-            REWARD_POOL_AMOUNT,
-            3,
-            17,
-            bountyClosesAt,
-            1 hours,
-            1 hours,
-            0
-        );
-        vm.stopPrank();
     }
 
     function testRewardPoolAmountMustCoverMaxVotersForEachRequiredRound() public {
@@ -5056,7 +4850,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.expectRevert("Amount too small");
         vm.prank(address(registry));
         rewardPoolEscrow.createSubmissionRewardPoolFromRegistry(
-            contentId, funder, address(0), REWARD_ASSET_USDC, 199, 3, 1, bountyClosesAt, 1 hours, 1 hours, 0
+            contentId, funder, address(0), REWARD_ASSET_USDC, 199, 3, bountyClosesAt, 1 hours, 0
         );
     }
 
@@ -5070,10 +4864,10 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.expectRevert("Amount too small");
         vm.prank(address(registry));
         rewardPoolEscrow.createSubmissionRewardPoolFromRegistry(
-            contentId, funder, address(0), REWARD_ASSET_USDC, exactAmount - 1, 3, 1, bountyClosesAt, 1 hours, 1 hours, 0
+            contentId, funder, address(0), REWARD_ASSET_USDC, exactAmount - 1, 3, bountyClosesAt, 1 hours, 0
         );
 
-        uint256 rewardPoolId = _createRewardPool(contentId, exactAmount, 3, 1);
+        uint256 rewardPoolId = _createRewardPool(contentId, exactAmount, 3);
 
         assertGt(rewardPoolId, 0);
     }
@@ -5083,7 +4877,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         address unverifiedFunder = address(0xB0B);
         usdc.mint(unverifiedFunder, REWARD_POOL_AMOUNT);
 
-        uint256 rewardPoolId = _createRewardPoolAs(unverifiedFunder, contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 rewardPoolId = _createRewardPoolAs(unverifiedFunder, contentId, REWARD_POOL_AMOUNT, 3);
         assertGt(rewardPoolId, 0);
         assertEq(usdc.balanceOf(address(rewardPoolEscrow)), REWARD_POOL_AMOUNT);
     }
@@ -5099,14 +4893,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             epochDuration: uint32(EPOCH_DURATION), maxDuration: uint32(EPOCH_DURATION), minVoters: 3, maxVoters: 200
         });
         ContentRegistry.SubmissionRewardTerms memory rewardTerms = ContentRegistry.SubmissionRewardTerms({
-            asset: REWARD_ASSET_USDC,
-            amount: REWARD_POOL_AMOUNT,
-            requiredVoters: 3,
-            requiredSettledRounds: 1,
-            bountyStartBy: 0,
-            bountyWindowSeconds: roundConfig.maxDuration,
-            feedbackWindowSeconds: roundConfig.maxDuration,
-            bountyEligibility: 0
+            asset: REWARD_ASSET_USDC, amount: REWARD_POOL_AMOUNT, requiredVoters: 3, bountyEligibility: 0
         });
         bytes32 salt = keccak256("agent-wallet-usdc-submission-bounty");
         activeTlockContentRegistry = registry;
@@ -5550,7 +5337,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         x402QuestionSubmitter.setFeedbackBonusEscrow(address(feedbackEscrow));
 
         X402QuestionSubmitter.FeedbackBonusTerms memory feedbackTerms =
-            X402QuestionSubmitter.FeedbackBonusTerms({ amount: 25e6, awarder: agentWallet });
+            X402QuestionSubmitter.FeedbackBonusTerms({amount: 25e6, awarder: agentWallet});
         Eip3009Authorization memory authorization = _x402OneShotAuthorization(agentWallet, question, feedbackTerms);
 
         usdc.mint(agentWallet, authorization.value);
@@ -5688,17 +5475,6 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         uint256 amount,
         uint256 requiredCompleters
     ) internal returns (uint256 bundleId) {
-        return _createSubmissionBundle(contentIds, bundleFunder, asset, amount, requiredCompleters, 1);
-    }
-
-    function _createSubmissionBundle(
-        uint256[] memory contentIds,
-        address bundleFunder,
-        uint8 asset,
-        uint256 amount,
-        uint256 requiredCompleters,
-        uint256 requiredSettledRounds
-    ) internal returns (uint256 bundleId) {
         bundleId = 1;
         vm.startPrank(bundleFunder);
         if (asset == REWARD_ASSET_LREP) {
@@ -5708,8 +5484,8 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         }
         vm.stopPrank();
 
-        uint256 bountyWindowSeconds = _defaultBundleWindowSeconds(contentIds);
-        uint256 bountyClosesAt = block.timestamp + bountyWindowSeconds;
+        uint256 questionDurationSeconds = _defaultBundleWindowSeconds(contentIds);
+        uint256 bountyClosesAt = block.timestamp + questionDurationSeconds;
         vm.prank(address(registry));
         rewardPoolEscrow.createSubmissionBundleFromRegistry(
             bundleId,
@@ -5718,56 +5494,8 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             asset,
             amount,
             requiredCompleters,
-            requiredSettledRounds,
             bountyClosesAt,
-            bountyWindowSeconds,
-            bountyWindowSeconds,
-            0
-        );
-    }
-
-    function _expectSubmissionBundleRejectsMultipleRoundSets(uint256[] memory contentIds, uint256 amount) internal {
-        vm.prank(funder);
-        usdc.approve(address(rewardPoolEscrow), amount);
-
-        uint256 bountyWindowSeconds = _defaultBundleWindowSeconds(contentIds);
-        vm.expectRevert("One round only");
-        vm.prank(address(registry));
-        rewardPoolEscrow.createSubmissionBundleFromRegistry(
-            1,
-            contentIds,
-            funder,
-            REWARD_ASSET_USDC,
-            amount,
-            3,
-            2,
-            block.timestamp + bountyWindowSeconds,
-            bountyWindowSeconds,
-            bountyWindowSeconds,
-            0
-        );
-    }
-
-    function _expectRewardPoolRejectsMultipleRequiredRounds(uint256 contentId, uint256 amount, uint256 requiredRounds)
-        internal
-    {
-        vm.prank(funder);
-        usdc.approve(address(rewardPoolEscrow), amount);
-
-        uint256 bountyClosesAt = _defaultBountyClosesAt(contentId);
-        vm.expectRevert("One round only");
-        vm.prank(address(registry));
-        rewardPoolEscrow.createSubmissionRewardPoolFromRegistry(
-            contentId,
-            funder,
-            address(0),
-            REWARD_ASSET_USDC,
-            amount,
-            3,
-            requiredRounds,
-            bountyClosesAt,
-            EPOCH_DURATION,
-            EPOCH_DURATION,
+            questionDurationSeconds,
             0
         );
     }
@@ -5789,8 +5517,8 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         }
         vm.stopPrank();
 
-        uint256 bountyWindowSeconds = _defaultBundleWindowSeconds(contentIds);
-        uint256 bountyClosesAt = block.timestamp + bountyWindowSeconds;
+        uint256 questionDurationSeconds = _defaultBundleWindowSeconds(contentIds);
+        uint256 bountyClosesAt = block.timestamp + questionDurationSeconds;
         vm.prank(address(registry));
         rewardPoolEscrow.createSubmissionBundleFromRegistry(
             bundleId,
@@ -5799,10 +5527,8 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             asset,
             amount,
             requiredCompleters,
-            1,
             bountyClosesAt,
-            bountyWindowSeconds,
-            bountyWindowSeconds,
+            questionDurationSeconds,
             bountyEligibility
         );
     }
@@ -5832,9 +5558,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             asset,
             amount,
             requiredCompleters,
-            1,
             bountyClosesAt,
-            bountyClosesAt - block.timestamp,
             bountyClosesAt - block.timestamp,
             0
         );
@@ -5954,10 +5678,6 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             asset: DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
             amount: rewardAmount,
             requiredVoters: roundConfig.minVoters,
-            requiredSettledRounds: DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
-            bountyStartBy: 0,
-            bountyWindowSeconds: roundConfig.maxDuration,
-            feedbackWindowSeconds: roundConfig.maxDuration,
             bountyEligibility: 0
         });
         bytes32 revealCommitment = _questionRevealCommitment(
@@ -6004,14 +5724,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             epochDuration: uint32(EPOCH_DURATION), maxDuration: uint32(EPOCH_DURATION), minVoters: 3, maxVoters: 200
         });
         question.rewardTerms = ContentRegistry.SubmissionRewardTerms({
-            asset: REWARD_ASSET_USDC,
-            amount: REWARD_POOL_AMOUNT,
-            requiredVoters: 3,
-            requiredSettledRounds: 1,
-            bountyStartBy: 0,
-            bountyWindowSeconds: question.roundConfig.maxDuration,
-            feedbackWindowSeconds: question.roundConfig.maxDuration,
-            bountyEligibility: 0
+            asset: REWARD_ASSET_USDC, amount: REWARD_POOL_AMOUNT, requiredVoters: 3, bountyEligibility: 0
         });
         question.spec = ContentRegistry.QuestionSpecCommitment({
             questionMetadataHash: keccak256("x402-question-metadata"), resultSpecHash: keccak256("x402-result-spec")
@@ -6210,14 +5923,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             epochDuration: uint32(EPOCH_DURATION), maxDuration: uint32(EPOCH_DURATION), minVoters: 3, maxVoters: 200
         });
         ContentRegistry.SubmissionRewardTerms memory rewardTerms = ContentRegistry.SubmissionRewardTerms({
-            asset: REWARD_ASSET_USDC,
-            amount: REWARD_POOL_AMOUNT,
-            requiredVoters: 3,
-            requiredSettledRounds: 1,
-            bountyStartBy: 0,
-            bountyWindowSeconds: roundConfig.maxDuration,
-            feedbackWindowSeconds: roundConfig.maxDuration,
-            bountyEligibility: 0
+            asset: REWARD_ASSET_USDC, amount: REWARD_POOL_AMOUNT, requiredVoters: 3, bountyEligibility: 0
         });
         bytes32 salt = keccak256(abi.encodePacked(path, agentWallet));
         activeTlockContentRegistry = registry;
@@ -6267,34 +5973,26 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         votingEngine.openRound(contentId);
     }
 
-    function _createRewardPool(uint256 contentId, uint256 amount, uint256 requiredVoters, uint256 requiredSettledRounds)
+    function _createRewardPool(uint256 contentId, uint256 amount, uint256 requiredVoters)
         internal
         returns (uint256 rewardPoolId)
     {
-        return _createRewardPoolWithExpiry(
-            contentId, amount, requiredVoters, requiredSettledRounds, _defaultBountyClosesAt(contentId)
-        );
+        return _createRewardPoolWithExpiry(contentId, amount, requiredVoters, _defaultBountyClosesAt(contentId));
     }
 
-    function _createRewardPoolWithExpiry(
-        uint256 contentId,
-        uint256 amount,
-        uint256 requiredVoters,
-        uint256 requiredSettledRounds,
-        uint256 expiresAt
-    ) internal returns (uint256 rewardPoolId) {
-        rewardPoolId = _createRewardPoolAs(funder, contentId, amount, requiredVoters, requiredSettledRounds, expiresAt);
+    function _createRewardPoolWithExpiry(uint256 contentId, uint256 amount, uint256 requiredVoters, uint256 expiresAt)
+        internal
+        returns (uint256 rewardPoolId)
+    {
+        rewardPoolId = _createRewardPoolAs(funder, contentId, amount, requiredVoters, expiresAt);
     }
 
-    function _createRewardPoolAs(
-        address poolFunder,
-        uint256 contentId,
-        uint256 amount,
-        uint256 requiredVoters,
-        uint256 requiredSettledRounds
-    ) internal returns (uint256 rewardPoolId) {
+    function _createRewardPoolAs(address poolFunder, uint256 contentId, uint256 amount, uint256 requiredVoters)
+        internal
+        returns (uint256 rewardPoolId)
+    {
         rewardPoolId = _createRewardPoolAs(
-            poolFunder, contentId, amount, requiredVoters, requiredSettledRounds, _defaultBountyClosesAt(contentId)
+            poolFunder, contentId, amount, requiredVoters, _defaultBountyClosesAt(contentId)
         );
     }
 
@@ -6303,7 +6001,6 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         uint256 contentId,
         uint256 amount,
         uint256 requiredVoters,
-        uint256 requiredSettledRounds,
         uint256 expiresAt
     ) internal returns (uint256 rewardPoolId) {
         vm.startPrank(poolFunder);
@@ -6312,17 +6009,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         uint256 windowSeconds = expiresAt == 0 ? 0 : expiresAt - block.timestamp;
         vm.prank(address(registry));
         rewardPoolId = rewardPoolEscrow.createSubmissionRewardPoolFromRegistry(
-            contentId,
-            poolFunder,
-            poolFunder,
-            REWARD_ASSET_USDC,
-            amount,
-            requiredVoters,
-            requiredSettledRounds,
-            expiresAt,
-            windowSeconds,
-            windowSeconds,
-            0
+            contentId, poolFunder, poolFunder, REWARD_ASSET_USDC, amount, requiredVoters, expiresAt, windowSeconds, 0
         );
     }
 
@@ -6777,7 +6464,6 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         uint256 contentId,
         uint256 amount,
         uint256 requiredVoters,
-        uint256 requiredSettledRounds,
         uint8 bountyEligibility
     ) internal returns (uint256 rewardPoolId) {
         vm.startPrank(funder);
@@ -6792,10 +6478,8 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             REWARD_ASSET_USDC,
             amount,
             requiredVoters,
-            requiredSettledRounds,
             block.timestamp + 30 days,
             30 days,
-            0,
             bountyEligibility
         );
     }
@@ -7785,16 +7469,6 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertEq(usdc.balanceOf(treasury), treasuryBalanceBefore + refundAmount);
     }
 
-    function testBundleRefund_LateSyncedRoundSetExtendsClaimGrace() public {
-        uint256[] memory contentIds = _submitBundleQuestions();
-        _expectSubmissionBundleRejectsMultipleRoundSets(contentIds, 120e6);
-    }
-
-    function testBundleRefund_LateSyncedRoundSetWaitsForCleanupBeforeClaimGrace() public {
-        uint256[] memory contentIds = _submitBundleQuestions();
-        _expectSubmissionBundleRejectsMultipleRoundSets(contentIds, 120e6);
-    }
-
     function testBundleRefund_LateQualificationStartsClaimGraceAfterRefundGrace() public {
         uint256[] memory contentIds = _submitBundleQuestions();
         uint256 bundleId = _createSubmissionBundle(contentIds, funder, REWARD_ASSET_USDC, REWARD_POOL_AMOUNT, 3);
@@ -7872,7 +7546,7 @@ contract MockBundleFrontendRegistry {
     mapping(address => FrontendInfo) public frontends;
 
     function setFrontend(address frontend, address operator, bool eligible, bool canClaim) external {
-        frontends[frontend] = FrontendInfo({ operator: operator, eligible: eligible, canClaim: canClaim });
+        frontends[frontend] = FrontendInfo({operator: operator, eligible: eligible, canClaim: canClaim});
     }
 
     function STAKE_AMOUNT() external pure returns (uint256) {

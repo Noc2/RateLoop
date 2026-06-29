@@ -136,10 +136,6 @@ type SubmissionRewardTerms = {
   asset: number;
   amount: bigint;
   requiredVoters: bigint;
-  requiredSettledRounds: bigint;
-  bountyStartBy: bigint;
-  bountyWindowSeconds: bigint;
-  feedbackWindowSeconds: bigint;
   bountyEligibility: number;
 };
 type DirectTransactionResult = { success: boolean; txHash?: `0x${string}`; error?: string; reason?: string };
@@ -147,8 +143,6 @@ const MAX_SUBMISSION_IMAGE_URLS = 4;
 export const DEFAULT_SUBMISSION_REWARD_ASSET_LREP = 0;
 export const SUBMISSION_REWARD_ASSET_USDC = 1;
 const DEFAULT_SUBMISSION_REWARD_AMOUNT = 1_000_000n;
-const DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS = 1n;
-const DEFAULT_SUBMISSION_BOUNTY_START_BY = 0n;
 const DEFAULT_QUESTION_METADATA_HASH = "0xed39b36e9ce5c1bfc657909c2f687347be2de998bc871eb8d33df17fdfa0d8cd" as const;
 const DEFAULT_RESULT_SPEC_HASH = "0x8e5f27bc3269c62c92754f76279bd83838462060fc6cd77411b7407027cfa11f" as const;
 const DEFAULT_SUBMISSION_ROUND_CONFIG: SubmissionRoundConfig = {
@@ -371,12 +365,8 @@ async function buildSubmissionReservation(
     questionMetadataHash: DEFAULT_QUESTION_METADATA_HASH,
     rewardAmount: rewardTerms.amount,
     rewardAsset: rewardTerms.asset,
-    requiredSettledRounds: rewardTerms.requiredSettledRounds,
     requiredVoters: rewardTerms.requiredVoters,
     resultSpecHash: DEFAULT_RESULT_SPEC_HASH,
-    bountyStartBy: rewardTerms.bountyStartBy,
-    bountyWindowSeconds: rewardTerms.bountyWindowSeconds,
-    feedbackWindowSeconds: rewardTerms.feedbackWindowSeconds,
     bountyEligibility: rewardTerms.bountyEligibility,
     confidentialityHash: buildQuestionConfidentialityHash(confidentiality),
     roundConfig,
@@ -995,10 +985,6 @@ export async function submitContentDirectWithResult(
     asset: rewardAsset,
     amount: rewardAmount,
     requiredVoters: BigInt(resolvedRoundConfig.minVoters),
-    requiredSettledRounds: DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
-    bountyStartBy: DEFAULT_SUBMISSION_BOUNTY_START_BY,
-    bountyWindowSeconds: BigInt(resolvedRoundConfig.maxDuration),
-    feedbackWindowSeconds: BigInt(resolvedRoundConfig.maxDuration),
     bountyEligibility: 0,
   };
   const reservation = await buildSubmissionReservation(
@@ -1075,10 +1061,6 @@ export async function submitContentDirectWithResult(
               { name: "asset", type: "uint8" },
               { name: "amount", type: "uint256" },
               { name: "requiredVoters", type: "uint256" },
-              { name: "requiredSettledRounds", type: "uint256" },
-              { name: "bountyStartBy", type: "uint256" },
-              { name: "bountyWindowSeconds", type: "uint256" },
-              { name: "feedbackWindowSeconds", type: "uint256" },
               { name: "bountyEligibility", type: "uint8" },
             ],
           },

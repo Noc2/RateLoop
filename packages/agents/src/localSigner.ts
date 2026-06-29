@@ -115,10 +115,6 @@ const X402QuestionSubmitterOneShotAbi = [
           { name: "asset", type: "uint8" },
           { name: "amount", type: "uint256" },
           { name: "requiredVoters", type: "uint256" },
-          { name: "requiredSettledRounds", type: "uint256" },
-          { name: "bountyStartBy", type: "uint256" },
-          { name: "bountyWindowSeconds", type: "uint256" },
-          { name: "feedbackWindowSeconds", type: "uint256" },
           { name: "bountyEligibility", type: "uint8" },
         ],
         name: "rewardTerms",
@@ -204,7 +200,7 @@ const QUESTION_CONTEXT_DOMAIN = keccak256(
   stringToHex("rateloop-question-context-v5"),
 );
 const QUESTION_REVEAL_DOMAIN = keccak256(
-  stringToHex("rateloop-question-reveal-v8"),
+  stringToHex("rateloop-question-reveal-v9"),
 );
 const QUESTION_BUNDLE_ITEM_DOMAIN = keccak256(
   stringToHex("rateloop-question-bundle-item-v5"),
@@ -213,7 +209,7 @@ const QUESTION_BUNDLE_DOMAIN = keccak256(
   stringToHex("rateloop-question-bundle-v5"),
 );
 const QUESTION_BUNDLE_REVEAL_DOMAIN = keccak256(
-  stringToHex("rateloop-question-bundle-reveal-v6"),
+  stringToHex("rateloop-question-bundle-reveal-v7"),
 );
 type LocalSignerConfig = {
   chainId?: number;
@@ -394,11 +390,7 @@ type LocalQuestionPayload = Omit<X402QuestionPayload, "questions"> & {
 type LocalRewardTerms = {
   amount: bigint;
   asset: typeof X402_SUBMISSION_REWARD_ASSET_LREP | typeof X402_SUBMISSION_REWARD_ASSET_USDC;
-  bountyStartBy: bigint;
-  bountyWindowSeconds: bigint;
   bountyEligibility: number;
-  feedbackWindowSeconds: bigint;
-  requiredSettledRounds: bigint;
   requiredVoters: bigint;
 };
 
@@ -1515,20 +1507,12 @@ function buildRewardTermsHash(rewardTerms: LocalRewardTerms): Hex {
         { type: "uint8" },
         { type: "uint256" },
         { type: "uint256" },
-        { type: "uint256" },
-        { type: "uint256" },
-        { type: "uint256" },
-        { type: "uint256" },
         { type: "uint8" },
       ],
       [
         rewardTerms.asset,
         rewardTerms.amount,
         rewardTerms.requiredVoters,
-        rewardTerms.requiredSettledRounds,
-        rewardTerms.bountyStartBy,
-        rewardTerms.bountyWindowSeconds,
-        rewardTerms.feedbackWindowSeconds,
         rewardTerms.bountyEligibility,
       ],
     ),
@@ -1703,10 +1687,6 @@ function buildQuestionBundleRevealCommitment(params: {
         { type: "uint8" },
         { type: "uint256" },
         { type: "uint256" },
-        { type: "uint256" },
-        { type: "uint256" },
-        { type: "uint256" },
-        { type: "uint256" },
         { type: "uint8" },
         { type: "uint32" },
         { type: "uint32" },
@@ -1720,10 +1700,6 @@ function buildQuestionBundleRevealCommitment(params: {
         params.rewardTerms.asset,
         params.rewardTerms.amount,
         params.rewardTerms.requiredVoters,
-        params.rewardTerms.requiredSettledRounds,
-        params.rewardTerms.bountyStartBy,
-        params.rewardTerms.bountyWindowSeconds,
-        params.rewardTerms.feedbackWindowSeconds,
         params.rewardTerms.bountyEligibility,
         abiRoundConfig.epochDuration,
         abiRoundConfig.maxDuration,
@@ -1749,11 +1725,7 @@ function buildExpectedLocalSignerQuestionPlan(params: {
   const rewardTerms = {
     amount: payload.bounty.amount,
     asset: submissionRewardAssetId(payload.bounty.asset),
-    bountyStartBy: payload.bounty.bountyStartBy,
-    bountyWindowSeconds: payload.bounty.bountyWindowSeconds,
     bountyEligibility: payload.bounty.bountyEligibility,
-    feedbackWindowSeconds: payload.bounty.feedbackWindowSeconds,
-    requiredSettledRounds: payload.bounty.requiredSettledRounds,
     requiredVoters: payload.bounty.requiredVoters,
   } as const;
   const questions = payload.questions.map((question, index) => {
@@ -2025,28 +1997,8 @@ function assertRewardTerms(
     expected.requiredVoters,
     `${fieldName}.requiredVoters`,
   );
-  assertEqualBigInt(
-    readStructField(value, "requiredSettledRounds", 3, fieldName),
-    expected.requiredSettledRounds,
-    `${fieldName}.requiredSettledRounds`,
-  );
-  assertEqualBigInt(
-    readStructField(value, "bountyStartBy", 4, fieldName),
-    expected.bountyStartBy,
-    `${fieldName}.bountyStartBy`,
-  );
-  assertEqualBigInt(
-    readStructField(value, "bountyWindowSeconds", 5, fieldName),
-    expected.bountyWindowSeconds,
-    `${fieldName}.bountyWindowSeconds`,
-  );
-  assertEqualBigInt(
-    readStructField(value, "feedbackWindowSeconds", 6, fieldName),
-    expected.feedbackWindowSeconds,
-    `${fieldName}.feedbackWindowSeconds`,
-  );
   assertEqualNumber(
-    readStructField(value, "bountyEligibility", 7, fieldName),
+    readStructField(value, "bountyEligibility", 3, fieldName),
     expected.bountyEligibility,
     `${fieldName}.bountyEligibility`,
   );

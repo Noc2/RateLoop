@@ -3,11 +3,11 @@ import { type Address, type Hex, encodeAbiParameters, keccak256, toBytes } from 
 
 export { buildQuestionMetadataUri } from "~~/lib/agent/questionSpecs";
 
-const QUESTION_REVEAL_DOMAIN = keccak256(toBytes("rateloop-question-reveal-v8"));
+const QUESTION_REVEAL_DOMAIN = keccak256(toBytes("rateloop-question-reveal-v9"));
 const QUESTION_CONTEXT_DOMAIN = keccak256(toBytes("rateloop-question-context-v5"));
 const QUESTION_BUNDLE_ITEM_DOMAIN = keccak256(toBytes("rateloop-question-bundle-item-v5"));
 const QUESTION_BUNDLE_DOMAIN = keccak256(toBytes("rateloop-question-bundle-v5"));
-const QUESTION_BUNDLE_REVEAL_DOMAIN = keccak256(toBytes("rateloop-question-bundle-reveal-v6"));
+const QUESTION_BUNDLE_REVEAL_DOMAIN = keccak256(toBytes("rateloop-question-bundle-reveal-v7"));
 const UINT64_MAX = (1n << 64n) - 1n;
 
 export { CONFIDENTIALITY_FLAG_PRIVATE_FOREVER };
@@ -27,13 +27,9 @@ type QuestionSubmissionRevealCommitmentParams = {
   questionMetadataHash: Hex;
   rewardAmount: bigint;
   rewardAsset: number;
-  requiredSettledRounds: bigint;
   requiredVoters: bigint;
   resultSpecHash: Hex;
   confidentialityHash?: Hex;
-  bountyStartBy: bigint;
-  bountyWindowSeconds: bigint;
-  feedbackWindowSeconds: bigint;
   bountyEligibility: number;
   roundConfig: QuestionSubmissionRoundConfig;
   salt: Hex;
@@ -82,11 +78,7 @@ type QuestionBundleRevealCommitmentParams = {
   bundleHash: Hex;
   rewardAmount: bigint;
   rewardAsset: number;
-  requiredSettledRounds: bigint;
   requiredVoters: bigint;
-  bountyStartBy: bigint;
-  bountyWindowSeconds: bigint;
-  feedbackWindowSeconds: bigint;
   bountyEligibility: number;
   roundConfig: QuestionSubmissionRoundConfig;
   submitter: Address;
@@ -155,26 +147,8 @@ export function buildQuestionSubmissionRevealCommitment(params: QuestionSubmissi
   );
   const rewardTermsHash = keccak256(
     encodeAbiParameters(
-      [
-        { type: "uint8" },
-        { type: "uint256" },
-        { type: "uint256" },
-        { type: "uint256" },
-        { type: "uint256" },
-        { type: "uint256" },
-        { type: "uint256" },
-        { type: "uint8" },
-      ],
-      [
-        params.rewardAsset,
-        params.rewardAmount,
-        params.requiredVoters,
-        params.requiredSettledRounds,
-        params.bountyStartBy,
-        params.bountyWindowSeconds,
-        params.feedbackWindowSeconds,
-        params.bountyEligibility,
-      ],
+      [{ type: "uint8" }, { type: "uint256" }, { type: "uint256" }, { type: "uint8" }],
+      [params.rewardAsset, params.rewardAmount, params.requiredVoters, params.bountyEligibility],
     ),
   );
   const roundConfigHash = keccak256(
@@ -274,10 +248,6 @@ function buildQuestionBundleRevealCommitment(params: QuestionBundleRevealCommitm
         { type: "uint8" },
         { type: "uint256" },
         { type: "uint256" },
-        { type: "uint256" },
-        { type: "uint256" },
-        { type: "uint256" },
-        { type: "uint256" },
         { type: "uint8" },
         { type: "uint32" },
         { type: "uint32" },
@@ -291,10 +261,6 @@ function buildQuestionBundleRevealCommitment(params: QuestionBundleRevealCommitm
         params.rewardAsset,
         params.rewardAmount,
         params.requiredVoters,
-        params.requiredSettledRounds,
-        params.bountyStartBy,
-        params.bountyWindowSeconds,
-        params.feedbackWindowSeconds,
         params.bountyEligibility,
         Number(params.roundConfig.epochDuration),
         Number(params.roundConfig.maxDuration),

@@ -309,10 +309,8 @@ contract QuestionRewardPoolEscrow is
         uint8 asset,
         uint256 amount,
         uint256 requiredVoters,
-        uint256 requiredSettledRounds,
-        uint256 bountyStartBy,
-        uint256 bountyWindowSeconds,
-        uint256 feedbackWindowSeconds,
+        uint256 rewardClosesAt,
+        uint256 questionDurationSeconds,
         uint8 bountyEligibility
     ) external nonReentrant whenNotPaused returns (uint256 rewardPoolId) {
         require(msg.sender == address(registry), "Only registry");
@@ -325,10 +323,10 @@ contract QuestionRewardPoolEscrow is
             asset,
             amount,
             requiredVoters,
-            requiredSettledRounds,
-            bountyStartBy,
-            bountyWindowSeconds,
-            feedbackWindowSeconds,
+            MIN_REQUIRED_SETTLED_ROUNDS,
+            rewardClosesAt,
+            questionDurationSeconds,
+            questionDurationSeconds,
             bountyEligibility,
             true
         );
@@ -341,10 +339,8 @@ contract QuestionRewardPoolEscrow is
         uint8 asset,
         uint256 amount,
         uint256 requiredCompleters,
-        uint256 requiredSettledRounds,
-        uint256 bountyStartBy,
-        uint256 bountyWindowSeconds,
-        uint256 feedbackWindowSeconds,
+        uint256 rewardClosesAt,
+        uint256 questionDurationSeconds,
         uint8 bountyEligibility
     ) external nonReentrant whenNotPaused returns (uint256 rewardPoolId) {
         require(msg.sender == address(registry), "Only registry");
@@ -358,10 +354,10 @@ contract QuestionRewardPoolEscrow is
             asset: asset,
             amount: amount,
             requiredCompleters: requiredCompleters,
-            requiredSettledRounds: requiredSettledRounds,
-            bountyStartBy: bountyStartBy,
-            bountyWindowSeconds: bountyWindowSeconds,
-            feedbackWindowSeconds: feedbackWindowSeconds,
+            requiredSettledRounds: MIN_REQUIRED_SETTLED_ROUNDS,
+            bountyStartBy: rewardClosesAt,
+            bountyWindowSeconds: questionDurationSeconds,
+            feedbackWindowSeconds: questionDurationSeconds,
             bountyEligibility: bountyEligibility
         });
 

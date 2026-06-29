@@ -561,22 +561,12 @@ export const QuestionRewardPoolEscrowAbi = [
         "internalType": "uint256"
       },
       {
-        "name": "requiredSettledRounds",
+        "name": "rewardClosesAt",
         "type": "uint256",
         "internalType": "uint256"
       },
       {
-        "name": "bountyStartBy",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "bountyWindowSeconds",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "feedbackWindowSeconds",
+        "name": "questionDurationSeconds",
         "type": "uint256",
         "internalType": "uint256"
       },
@@ -630,22 +620,12 @@ export const QuestionRewardPoolEscrowAbi = [
         "internalType": "uint256"
       },
       {
-        "name": "requiredSettledRounds",
+        "name": "rewardClosesAt",
         "type": "uint256",
         "internalType": "uint256"
       },
       {
-        "name": "bountyStartBy",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "bountyWindowSeconds",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "feedbackWindowSeconds",
+        "name": "questionDurationSeconds",
         "type": "uint256",
         "internalType": "uint256"
       },

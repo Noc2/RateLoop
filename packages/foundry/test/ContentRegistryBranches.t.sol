@@ -1,27 +1,27 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import { Test, stdStorage, StdStorage } from "forge-std/Test.sol";
-import { Vm } from "forge-std/Vm.sol";
-import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import { ContentRegistry } from "../contracts/ContentRegistry.sol";
-import { SubmissionMediaValidator } from "../contracts/SubmissionMediaValidator.sol";
-import { SubmissionMediaValidatorFactory } from "../contracts/SubmissionMediaValidatorFactory.sol";
-import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
-import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
-import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
-import { RaterRegistry } from "../contracts/RaterRegistry.sol";
-import { LoopReputation } from "../contracts/LoopReputation.sol";
-import { ContentRegistryTypes } from "../contracts/libraries/ContentRegistryTypes.sol";
-import { ContentRegistryRatingSnapshotLib } from "../contracts/libraries/ContentRegistryRatingSnapshotLib.sol";
-import { RoundLib } from "../contracts/libraries/RoundLib.sol";
-import { RatingLib } from "../contracts/libraries/RatingLib.sol";
-import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
-import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
-import { MockQuestionRewardPoolEscrow } from "./mocks/MockQuestionRewardPoolEscrow.sol";
-import { VotingTestBase } from "./helpers/VotingTestHelpers.sol";
+import {Test, stdStorage, StdStorage} from "forge-std/Test.sol";
+import {Vm} from "forge-std/Vm.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {ContentRegistry} from "../contracts/ContentRegistry.sol";
+import {SubmissionMediaValidator} from "../contracts/SubmissionMediaValidator.sol";
+import {SubmissionMediaValidatorFactory} from "../contracts/SubmissionMediaValidatorFactory.sol";
+import {RoundVotingEngine} from "../contracts/RoundVotingEngine.sol";
+import {ProtocolConfig} from "../contracts/ProtocolConfig.sol";
+import {RoundRewardDistributor} from "../contracts/RoundRewardDistributor.sol";
+import {RaterRegistry} from "../contracts/RaterRegistry.sol";
+import {LoopReputation} from "../contracts/LoopReputation.sol";
+import {ContentRegistryTypes} from "../contracts/libraries/ContentRegistryTypes.sol";
+import {ContentRegistryRatingSnapshotLib} from "../contracts/libraries/ContentRegistryRatingSnapshotLib.sol";
+import {RoundLib} from "../contracts/libraries/RoundLib.sol";
+import {RatingLib} from "../contracts/libraries/RatingLib.sol";
+import {RoundEngineReadHelpers} from "./helpers/RoundEngineReadHelpers.sol";
+import {MockCategoryRegistry} from "../contracts/mocks/MockCategoryRegistry.sol";
+import {MockQuestionRewardPoolEscrow} from "./mocks/MockQuestionRewardPoolEscrow.sol";
+import {VotingTestBase} from "./helpers/VotingTestHelpers.sol";
 
-contract InvalidQuestionRewardPoolEscrowForRegistry { }
+contract InvalidQuestionRewardPoolEscrowForRegistry {}
 
 contract ProtocolOnlyVotingEngineForRegistry {
     address public protocolConfig;
@@ -396,9 +396,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         address submitterAddress,
         uint8 rewardAsset,
         uint256 rewardAmount,
-        uint256 requiredVoters,
-        uint256 requiredSettledRounds,
-        uint256 rewardPoolExpiresAt
+        uint256 requiredVoters
     ) internal returns (bytes32 submissionKey) {
         QuestionReservation memory reservation;
         reservation.contextUrl = contextUrl;
@@ -411,17 +409,10 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         reservation.salt = salt;
         reservation.submitterAddress = submitterAddress;
         reservation.rewardTerms = ContentRegistry.SubmissionRewardTerms({
-            asset: rewardAsset,
-            amount: rewardAmount,
-            requiredVoters: requiredVoters,
-            requiredSettledRounds: requiredSettledRounds,
-            bountyStartBy: 0,
-            bountyWindowSeconds: _defaultContentRoundConfig().maxDuration,
-            feedbackWindowSeconds: _defaultContentRoundConfig().maxDuration,
-            bountyEligibility: 0
+            asset: rewardAsset, amount: rewardAmount, requiredVoters: requiredVoters, bountyEligibility: 0
         });
         reservation.roundConfig =
-            RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 1 hours, minVoters: 3, maxVoters: 100 });
+            RoundLib.RoundConfig({epochDuration: 1 hours, maxDuration: 1 hours, minVoters: 3, maxVoters: 100});
         return _reserveQuestionSubmission(reservation);
     }
 
@@ -453,31 +444,22 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         return _reserveQuestionSubmission(reservation);
     }
 
-    function _submissionRewardTerms(
-        uint8 rewardAsset,
-        uint256 rewardAmount,
-        uint256 requiredVoters,
-        uint256 requiredSettledRounds,
-        uint256 rewardPoolExpiresAt
-    ) internal view returns (ContentRegistry.SubmissionRewardTerms memory) {
+    function _submissionRewardTerms(uint8 rewardAsset, uint256 rewardAmount, uint256 requiredVoters)
+        internal
+        view
+        returns (ContentRegistry.SubmissionRewardTerms memory)
+    {
         return ContentRegistry.SubmissionRewardTerms({
-            asset: rewardAsset,
-            amount: rewardAmount,
-            requiredVoters: requiredVoters,
-            requiredSettledRounds: requiredSettledRounds,
-            bountyStartBy: 0,
-            bountyWindowSeconds: _defaultContentRoundConfig().maxDuration,
-            feedbackWindowSeconds: _defaultContentRoundConfig().maxDuration,
-            bountyEligibility: 0
+            asset: rewardAsset, amount: rewardAmount, requiredVoters: requiredVoters, bountyEligibility: 0
         });
     }
 
     function _defaultContentRoundConfig() internal pure returns (RoundLib.RoundConfig memory) {
-        return RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 1 hours, minVoters: 3, maxVoters: 100 });
+        return RoundLib.RoundConfig({epochDuration: 1 hours, maxDuration: 1 hours, minVoters: 3, maxVoters: 100});
     }
 
     function _bundleContentRoundConfig() internal pure returns (RoundLib.RoundConfig memory) {
-        return RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 1 hours, minVoters: 3, maxVoters: 100 });
+        return RoundLib.RoundConfig({epochDuration: 1 hours, maxDuration: 1 hours, minVoters: 3, maxVoters: 100});
     }
 
     function _submitReservedQuestionBundleForDormancyTest() internal returns (uint256[] memory contentIds) {
@@ -507,9 +489,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         ContentRegistry.SubmissionRewardTerms memory rewardTerms = _submissionRewardTerms(
             DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
             _defaultSubmissionRewardAmount(registry) * 2,
-            DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS,
-            DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
-            block.timestamp + 30 days
+            DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS
         );
         RoundLib.RoundConfig memory roundConfig = _bundleContentRoundConfig();
         bytes32 revealCommitment = _bundleRevealCommitment(questions, rewardTerms, roundConfig, submitter);
@@ -554,10 +534,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
                 rewardTerms.asset,
                 rewardTerms.amount,
                 rewardTerms.requiredVoters,
-                rewardTerms.requiredSettledRounds,
-                rewardTerms.bountyStartBy,
-                rewardTerms.bountyWindowSeconds,
-                rewardTerms.feedbackWindowSeconds,
                 rewardTerms.bountyEligibility,
                 roundConfig.epochDuration,
                 roundConfig.maxDuration,
@@ -656,9 +632,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             submitter,
             DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
             _defaultSubmissionRewardAmount(registry),
-            DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS,
-            DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
-            DEFAULT_SUBMISSION_REWARD_EXPIRES_AT
+            DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS
         );
         vm.warp(block.timestamp + 1);
         uint256 id = registry.submitQuestion(
@@ -689,17 +663,10 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         bytes32 salt = keccak256("ratcheted-default-submit-question");
         uint256 rewardAmount = _defaultSubmissionRewardAmount(registry);
         ContentRegistry.SubmissionRewardTerms memory rewardTerms = ContentRegistry.SubmissionRewardTerms({
-            asset: DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
-            amount: rewardAmount,
-            requiredVoters: 5,
-            requiredSettledRounds: DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
-            bountyStartBy: 0,
-            bountyWindowSeconds: 1 hours,
-            feedbackWindowSeconds: 1 hours,
-            bountyEligibility: 0
+            asset: DEFAULT_SUBMISSION_REWARD_ASSET_LREP, amount: rewardAmount, requiredVoters: 5, bountyEligibility: 0
         });
         RoundLib.RoundConfig memory roundConfig =
-            RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 1 hours, minVoters: 5, maxVoters: 100 });
+            RoundLib.RoundConfig({epochDuration: 1 hours, maxDuration: 1 hours, minVoters: 5, maxVoters: 100});
 
         vm.startPrank(submitter);
         lrepToken.approve(address(registry), rewardAmount);
@@ -807,7 +774,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             "Question?",
             "Products",
             1,
-            ContentRegistry.SubmissionDetails({ detailsUrl: "", detailsHash: keccak256(bytes("long-form details")) }),
+            ContentRegistry.SubmissionDetails({detailsUrl: "", detailsHash: keccak256(bytes("long-form details"))}),
             keccak256("details-hash-without-url"),
             _defaultQuestionSpec()
         );
@@ -831,9 +798,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             submitter,
             DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
             _defaultSubmissionRewardAmount(registry),
-            DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS,
-            DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
-            DEFAULT_SUBMISSION_REWARD_EXPIRES_AT
+            DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS
         );
         vm.warp(block.timestamp + 1);
         registry.submitQuestion(
@@ -1017,9 +982,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             submitter,
             DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
             _defaultSubmissionRewardAmount(registry),
-            DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS,
-            DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
-            DEFAULT_SUBMISSION_REWARD_EXPIRES_AT
+            DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS
         );
         vm.warp(block.timestamp + 1);
         uint256 id = registry.submitQuestion(
@@ -1100,9 +1063,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             submitter,
             DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
             _defaultSubmissionRewardAmount(registry),
-            DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS,
-            DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
-            DEFAULT_SUBMISSION_REWARD_EXPIRES_AT
+            DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS
         );
         vm.warp(block.timestamp + 1);
         vm.recordLogs();
@@ -1236,9 +1197,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             submitter,
             DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
             _defaultSubmissionRewardAmount(registry),
-            DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS,
-            DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
-            DEFAULT_SUBMISSION_REWARD_EXPIRES_AT
+            DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS
         );
         vm.warp(block.timestamp + 1);
         vm.expectRevert();
@@ -1266,17 +1225,10 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         string[] memory imageUrls = _emptyImageUrls();
         uint256 rewardAmount = _defaultSubmissionRewardAmount(registry);
         uint256 requiredVoters = 5;
-        uint256 requiredSettledRounds = 1;
-        uint256 rewardPoolExpiresAt = block.timestamp + 14 days;
         RoundLib.RoundConfig memory roundConfig =
-            RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 1 hours, minVoters: 5, maxVoters: 100 });
-        ContentRegistry.SubmissionRewardTerms memory rewardTerms = _submissionRewardTerms(
-            DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
-            rewardAmount,
-            requiredVoters,
-            requiredSettledRounds,
-            rewardPoolExpiresAt
-        );
+            RoundLib.RoundConfig({epochDuration: 1 hours, maxDuration: 1 hours, minVoters: 5, maxVoters: 100});
+        ContentRegistry.SubmissionRewardTerms memory rewardTerms =
+            _submissionRewardTerms(DEFAULT_SUBMISSION_REWARD_ASSET_LREP, rewardAmount, requiredVoters);
 
         vm.startPrank(submitter);
         lrepToken.approve(address(mockQuestionRewardPoolEscrow), rewardAmount);
@@ -1306,18 +1258,16 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         assertEq(mockQuestionRewardPoolEscrow.lastAsset(), DEFAULT_SUBMISSION_REWARD_ASSET_LREP);
         assertEq(mockQuestionRewardPoolEscrow.lastAmount(), rewardAmount);
         assertEq(mockQuestionRewardPoolEscrow.lastRequiredVoters(), requiredVoters);
-        assertEq(mockQuestionRewardPoolEscrow.lastRequiredSettledRounds(), requiredSettledRounds);
+        assertEq(
+            mockQuestionRewardPoolEscrow.lastRequiredSettledRounds(),
+            DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
+            "settled rounds"
+        );
         assertEq(
             mockQuestionRewardPoolEscrow.lastBountyStartBy(), submittedAt + roundConfig.maxDuration, "bounty start by"
         );
-        assertEq(
-            mockQuestionRewardPoolEscrow.lastBountyWindowSeconds(), rewardTerms.bountyWindowSeconds, "bounty window"
-        );
-        assertEq(
-            mockQuestionRewardPoolEscrow.lastFeedbackWindowSeconds(),
-            rewardTerms.feedbackWindowSeconds,
-            "feedback window"
-        );
+        assertEq(mockQuestionRewardPoolEscrow.lastBountyWindowSeconds(), roundConfig.maxDuration, "bounty window");
+        assertEq(mockQuestionRewardPoolEscrow.lastFeedbackWindowSeconds(), roundConfig.maxDuration, "feedback window");
     }
 
     function test_SubmitQuestionWithReward_UsesAgentWalletAsEscrowFunder() public {
@@ -1330,13 +1280,8 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         bytes32 salt = keccak256("agent-wallet-submission-bounty");
         string[] memory imageUrls = _emptyImageUrls();
         uint256 rewardAmount = _defaultSubmissionRewardAmount(registry);
-        uint256 rewardPoolExpiresAt = block.timestamp + 14 days;
         ContentRegistry.SubmissionRewardTerms memory rewardTerms = _submissionRewardTerms(
-            DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
-            rewardAmount,
-            DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS,
-            DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
-            rewardPoolExpiresAt
+            DEFAULT_SUBMISSION_REWARD_ASSET_LREP, rewardAmount, DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS
         );
 
         _setAcceptedDelegate(raterRegistry, submitter, agentWallet);
@@ -1355,9 +1300,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             agentWallet,
             DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
             rewardAmount,
-            DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS,
-            DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
-            rewardPoolExpiresAt
+            DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS
         );
         vm.warp(block.timestamp + 1);
         uint256 id = registry.submitQuestionWithRewardAndRoundConfig(
@@ -1396,14 +1339,10 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             asset: DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
             amount: _defaultSubmissionRewardAmount(registry),
             requiredVoters: 5,
-            requiredSettledRounds: 1,
-            bountyStartBy: 0,
-            bountyWindowSeconds: 1 hours,
-            feedbackWindowSeconds: 1 hours,
             bountyEligibility: 0
         });
         RoundLib.RoundConfig memory roundConfig =
-            RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 1 hours, minVoters: 5, maxVoters: 5 });
+            RoundLib.RoundConfig({epochDuration: 1 hours, maxDuration: 1 hours, minVoters: 5, maxVoters: 5});
 
         vm.startPrank(submitter);
         lrepToken.approve(address(mockQuestionRewardPoolEscrow), rewardTerms.amount);
@@ -1452,17 +1391,10 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         bytes32 salt = keccak256("impossible-round-config");
         string[] memory imageUrls = _emptyImageUrls();
         ContentRegistry.SubmissionRewardTerms memory rewardTerms = ContentRegistry.SubmissionRewardTerms({
-            asset: DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
-            amount: 100e6,
-            requiredVoters: 5,
-            requiredSettledRounds: 1,
-            bountyStartBy: 0,
-            bountyWindowSeconds: 2 hours,
-            feedbackWindowSeconds: 2 hours,
-            bountyEligibility: 0
+            asset: DEFAULT_SUBMISSION_REWARD_ASSET_LREP, amount: 100e6, requiredVoters: 5, bountyEligibility: 0
         });
         RoundLib.RoundConfig memory roundConfig =
-            RoundLib.RoundConfig({ epochDuration: 2 hours, maxDuration: 2 hours, minVoters: 3, maxVoters: 100 });
+            RoundLib.RoundConfig({epochDuration: 2 hours, maxDuration: 2 hours, minVoters: 3, maxVoters: 100});
 
         vm.startPrank(submitter);
         lrepToken.approve(address(mockQuestionRewardPoolEscrow), rewardTerms.amount);
@@ -1491,7 +1423,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         assertEq(storedConfig.maxVoters, roundConfig.maxVoters);
         assertEq(mockQuestionRewardPoolEscrow.lastContentId(), id);
         assertEq(mockQuestionRewardPoolEscrow.lastRequiredVoters(), rewardTerms.requiredVoters);
-        assertEq(mockQuestionRewardPoolEscrow.lastRequiredSettledRounds(), rewardTerms.requiredSettledRounds);
+        assertEq(mockQuestionRewardPoolEscrow.lastRequiredSettledRounds(), DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS);
     }
 
     function test_SubmitQuestionWithRewardAndRoundConfig_ForwardsRequiredVotersBelowSettlementVoters() public {
@@ -1503,17 +1435,10 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         bytes32 salt = keccak256("underpaid-round-config");
         string[] memory imageUrls = _emptyImageUrls();
         ContentRegistry.SubmissionRewardTerms memory rewardTerms = ContentRegistry.SubmissionRewardTerms({
-            asset: DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
-            amount: 100e6,
-            requiredVoters: 3,
-            requiredSettledRounds: 1,
-            bountyStartBy: 0,
-            bountyWindowSeconds: 2 hours,
-            feedbackWindowSeconds: 2 hours,
-            bountyEligibility: 0
+            asset: DEFAULT_SUBMISSION_REWARD_ASSET_LREP, amount: 100e6, requiredVoters: 3, bountyEligibility: 0
         });
         RoundLib.RoundConfig memory roundConfig =
-            RoundLib.RoundConfig({ epochDuration: 2 hours, maxDuration: 2 hours, minVoters: 5, maxVoters: 100 });
+            RoundLib.RoundConfig({epochDuration: 2 hours, maxDuration: 2 hours, minVoters: 5, maxVoters: 100});
 
         vm.startPrank(submitter);
         lrepToken.approve(address(mockQuestionRewardPoolEscrow), rewardTerms.amount);
@@ -1542,7 +1467,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         assertEq(storedConfig.maxVoters, roundConfig.maxVoters);
         assertEq(mockQuestionRewardPoolEscrow.lastContentId(), id);
         assertEq(mockQuestionRewardPoolEscrow.lastRequiredVoters(), rewardTerms.requiredVoters);
-        assertEq(mockQuestionRewardPoolEscrow.lastRequiredSettledRounds(), rewardTerms.requiredSettledRounds);
+        assertEq(mockQuestionRewardPoolEscrow.lastRequiredSettledRounds(), DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS);
     }
 
     function test_SubmitQuestionWithRoundConfig_BindsReservationToSelectedConfig() public {
@@ -1557,16 +1482,12 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             asset: DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
             amount: _defaultSubmissionRewardAmount(registry),
             requiredVoters: DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS,
-            requiredSettledRounds: DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
-            bountyStartBy: 0,
-            bountyWindowSeconds: 2 hours,
-            feedbackWindowSeconds: 2 hours,
             bountyEligibility: 0
         });
         RoundLib.RoundConfig memory reservedConfig =
-            RoundLib.RoundConfig({ epochDuration: 2 hours, maxDuration: 2 hours, minVoters: 3, maxVoters: 4 });
+            RoundLib.RoundConfig({epochDuration: 2 hours, maxDuration: 2 hours, minVoters: 3, maxVoters: 4});
         RoundLib.RoundConfig memory alteredConfig =
-            RoundLib.RoundConfig({ epochDuration: 3 hours, maxDuration: 3 hours, minVoters: 3, maxVoters: 4 });
+            RoundLib.RoundConfig({epochDuration: 3 hours, maxDuration: 3 hours, minVoters: 3, maxVoters: 4});
 
         vm.startPrank(submitter);
         lrepToken.approve(address(mockQuestionRewardPoolEscrow), rewardTerms.amount);
@@ -1635,42 +1556,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             1,
             _emptySubmissionDetails(),
             keccak256("too-few-voters"),
-            _submissionRewardTerms(
-                DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
-                rewardAmount,
-                2,
-                DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
-                DEFAULT_SUBMISSION_REWARD_EXPIRES_AT
-            ),
-            _defaultContentRoundConfig(),
-            _defaultQuestionSpec(),
-            _defaultConfidentialityConfig()
-        );
-        vm.stopPrank();
-    }
-
-    function test_SubmitQuestionWithReward_RejectsTooFewSubmissionBountyRounds() public {
-        string[] memory imageUrls = _emptyImageUrls();
-        uint256 rewardAmount = _defaultSubmissionRewardAmount(registry);
-
-        vm.startPrank(submitter);
-        vm.expectRevert("One round only");
-        registry.submitQuestionWithRewardAndRoundConfig(
-            "https://example.com/too-few-rounds",
-            imageUrls,
-            "",
-            "Question?",
-            "Products",
-            1,
-            _emptySubmissionDetails(),
-            keccak256("too-few-rounds"),
-            _submissionRewardTerms(
-                DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
-                rewardAmount,
-                DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS,
-                0,
-                DEFAULT_SUBMISSION_REWARD_EXPIRES_AT
-            ),
+            _submissionRewardTerms(DEFAULT_SUBMISSION_REWARD_ASSET_LREP, rewardAmount, 2),
             _defaultContentRoundConfig(),
             _defaultQuestionSpec(),
             _defaultConfidentialityConfig()
@@ -1693,46 +1579,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             1,
             _emptySubmissionDetails(),
             keccak256("reward-too-small"),
-            _submissionRewardTerms(
-                DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
-                rewardAmount,
-                rewardAmount + 1,
-                DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
-                DEFAULT_SUBMISSION_REWARD_EXPIRES_AT
-            ),
-            _defaultContentRoundConfig(),
-            _defaultQuestionSpec(),
-            _defaultConfidentialityConfig()
-        );
-        vm.stopPrank();
-    }
-
-    function test_SubmitQuestionWithReward_RejectsExpiredSubmissionBounty() public {
-        string[] memory imageUrls = _emptyImageUrls();
-        uint256 rewardAmount = _defaultSubmissionRewardAmount(registry);
-        ContentRegistry.SubmissionRewardTerms memory rewardTerms = ContentRegistry.SubmissionRewardTerms({
-            asset: DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
-            amount: rewardAmount,
-            requiredVoters: DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS,
-            requiredSettledRounds: DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
-            bountyStartBy: block.timestamp,
-            bountyWindowSeconds: _defaultContentRoundConfig().maxDuration,
-            feedbackWindowSeconds: _defaultContentRoundConfig().maxDuration,
-            bountyEligibility: 0
-        });
-
-        vm.startPrank(submitter);
-        vm.expectRevert("Bad start-by");
-        registry.submitQuestionWithRewardAndRoundConfig(
-            "https://example.com/expired-bounty",
-            imageUrls,
-            "",
-            "Question?",
-            "Products",
-            1,
-            _emptySubmissionDetails(),
-            keccak256("expired-bounty"),
-            rewardTerms,
+            _submissionRewardTerms(DEFAULT_SUBMISSION_REWARD_ASSET_LREP, rewardAmount, rewardAmount + 1),
             _defaultContentRoundConfig(),
             _defaultQuestionSpec(),
             _defaultConfidentialityConfig()
@@ -1756,9 +1603,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         ContentRegistry.SubmissionRewardTerms memory rewardTerms = _submissionRewardTerms(
             DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
             _defaultSubmissionRewardAmount(registry),
-            DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS,
-            DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
-            DEFAULT_SUBMISSION_REWARD_EXPIRES_AT
+            DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS
         );
 
         vm.startPrank(submitter);
@@ -1835,12 +1680,10 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         ContentRegistry.SubmissionRewardTerms memory rewardTerms = _submissionRewardTerms(
             DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
             _defaultSubmissionRewardAmount(registry),
-            DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS,
-            DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
-            block.timestamp + 30 days
+            DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS
         );
         RoundLib.RoundConfig memory roundConfig =
-            RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 1 hours, minVoters: 3, maxVoters: 101 });
+            RoundLib.RoundConfig({epochDuration: 1 hours, maxDuration: 1 hours, minVoters: 3, maxVoters: 101});
 
         vm.startPrank(submitter);
         vm.expectRevert();
@@ -1875,54 +1718,14 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         ContentRegistry.SubmissionRewardTerms memory rewardTerms = _submissionRewardTerms(
             DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
             _defaultSubmissionRewardAmount(registry),
-            DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS + 2,
-            DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
-            block.timestamp + 30 days
+            DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS + 2
         );
         RoundLib.RoundConfig memory roundConfig =
-            RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 1 hours, minVoters: 3, maxVoters: 100 });
+            RoundLib.RoundConfig({epochDuration: 1 hours, maxDuration: 1 hours, minVoters: 3, maxVoters: 100});
 
         vm.startPrank(submitter);
         vm.expectRevert();
         registry.submitQuestionBundleWithRewardAndRoundConfig(questions, rewardTerms, roundConfig);
-        vm.stopPrank();
-    }
-
-    function test_SubmitQuestionBundleWithReward_AllowsMultipleSettledRounds() public {
-        ContentRegistry.BundleQuestionInput[] memory questions = new ContentRegistry.BundleQuestionInput[](2);
-        questions[0] = ContentRegistry.BundleQuestionInput({
-            contextUrl: "https://example.com/bundle-rounds-a",
-            imageUrls: _emptyImageUrls(),
-            videoUrl: "",
-            title: "Question A?",
-            tags: "Products",
-            categoryId: 1,
-            details: _emptySubmissionDetails(),
-            salt: keccak256("bundle-rounds-a"),
-            spec: _defaultQuestionSpec()
-        });
-        questions[1] = ContentRegistry.BundleQuestionInput({
-            contextUrl: "https://example.com/bundle-rounds-b",
-            imageUrls: _emptyImageUrls(),
-            videoUrl: "",
-            title: "Question B?",
-            tags: "Products",
-            categoryId: 1,
-            details: _emptySubmissionDetails(),
-            salt: keccak256("bundle-rounds-b"),
-            spec: _defaultQuestionSpec()
-        });
-        ContentRegistry.SubmissionRewardTerms memory rewardTerms = _submissionRewardTerms(
-            DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
-            _defaultSubmissionRewardAmount(registry) * 2,
-            DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS,
-            DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS + 1,
-            block.timestamp + 30 days
-        );
-
-        vm.startPrank(submitter);
-        vm.expectRevert();
-        registry.submitQuestionBundleWithRewardAndRoundConfig(questions, rewardTerms, _bundleContentRoundConfig());
         vm.stopPrank();
     }
 
@@ -1953,9 +1756,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         ContentRegistry.SubmissionRewardTerms memory rewardTerms = _submissionRewardTerms(
             DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
             _defaultSubmissionRewardAmount(registry) * 2,
-            DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS,
-            DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
-            block.timestamp + 30 days
+            DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS
         );
         RoundLib.RoundConfig memory roundConfig = _bundleContentRoundConfig();
         bytes32 firstSubmissionKey = _questionSubmissionKey(
@@ -2017,9 +1818,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         ContentRegistry.SubmissionRewardTerms memory rewardTerms = _submissionRewardTerms(
             DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
             _defaultSubmissionRewardAmount(registry) * 2,
-            DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS,
-            DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
-            block.timestamp + 30 days
+            DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS
         );
         RoundLib.RoundConfig memory roundConfig = _bundleContentRoundConfig();
 
@@ -2064,52 +1863,12 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         ContentRegistry.SubmissionRewardTerms memory rewardTerms = _submissionRewardTerms(
             DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
             _defaultSubmissionRewardAmount(registry) * 2,
-            DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS,
-            DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
-            block.timestamp + 30 days
+            DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS
         );
 
         vm.prank(submitter);
         vm.expectRevert("Image URLs not sorted");
         registry.submitQuestionBundleWithRewardAndRoundConfig(questions, rewardTerms, _bundleContentRoundConfig());
-    }
-
-    function test_SubmitQuestionBundleWithReward_RequiresBountyClose() public {
-        ContentRegistry.BundleQuestionInput[] memory questions = new ContentRegistry.BundleQuestionInput[](2);
-        questions[0] = ContentRegistry.BundleQuestionInput({
-            contextUrl: "https://example.com/bundle-expiry-a",
-            imageUrls: _emptyImageUrls(),
-            videoUrl: "",
-            title: "Question A?",
-            tags: "Products",
-            categoryId: 1,
-            details: _emptySubmissionDetails(),
-            salt: keccak256("bundle-expiry-a"),
-            spec: _defaultQuestionSpec()
-        });
-        questions[1] = ContentRegistry.BundleQuestionInput({
-            contextUrl: "https://example.com/bundle-expiry-b",
-            imageUrls: _emptyImageUrls(),
-            videoUrl: "",
-            title: "Question B?",
-            tags: "Products",
-            categoryId: 1,
-            details: _emptySubmissionDetails(),
-            salt: keccak256("bundle-expiry-b"),
-            spec: _defaultQuestionSpec()
-        });
-        ContentRegistry.SubmissionRewardTerms memory rewardTerms = _submissionRewardTerms(
-            DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
-            _defaultSubmissionRewardAmount(registry) * 2,
-            DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS,
-            DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
-            0
-        );
-
-        vm.startPrank(submitter);
-        vm.expectRevert();
-        registry.submitQuestionBundleWithRewardAndRoundConfig(questions, rewardTerms, _bundleContentRoundConfig());
-        vm.stopPrank();
     }
 
     function test_SubmitQuestionWithReward_RequiresReservationForMatchingBountyTerms() public {
@@ -2135,9 +1894,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             submitter,
             DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
             rewardAmount,
-            DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS,
-            DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
-            DEFAULT_SUBMISSION_REWARD_EXPIRES_AT
+            DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS
         );
         vm.warp(block.timestamp + 1);
         vm.expectRevert();
@@ -2151,11 +1908,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             _emptySubmissionDetails(),
             salt,
             _submissionRewardTerms(
-                DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
-                rewardAmount,
-                DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS,
-                DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS + 1,
-                DEFAULT_SUBMISSION_REWARD_EXPIRES_AT
+                DEFAULT_SUBMISSION_REWARD_ASSET_LREP, rewardAmount, DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS + 1
             ),
             _defaultContentRoundConfig(),
             _defaultQuestionSpec(),
@@ -2210,7 +1963,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.startPrank(noIdSubmitter);
         lrepToken.approve(address(registry), 10e6);
         NoMediaQuestionText memory question =
-            NoMediaQuestionText({ url: "https://example.com/no-id", title: "goal", tags: "tags" });
+            NoMediaQuestionText({url: "https://example.com/no-id", title: "goal", tags: "tags"});
         bytes32 salt = _contentSubmissionSalt(question.url, noIdSubmitter);
         _reserveNoMediaQuestionSubmission(registry, question, 1, salt, noIdSubmitter);
         vm.warp(block.timestamp + 1);
@@ -2299,7 +2052,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.startPrank(submitter);
         lrepToken.approve(address(reg2), 10e6);
         NoMediaQuestionText memory question =
-            NoMediaQuestionText({ url: "https://example.com/no-config", title: "goal", tags: "tags" });
+            NoMediaQuestionText({url: "https://example.com/no-config", title: "goal", tags: "tags"});
         bytes32 salt = _contentSubmissionSalt(question.url, submitter);
         bytes32 submissionKey = _questionSubmissionKey(
             question.url, _emptyImageUrls(), "", question.title, question.tags, 1, _emptySubmissionDetails()
@@ -2589,9 +2342,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             submitter,
             DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
             _defaultSubmissionRewardAmount(registry),
-            DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS,
-            DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
-            DEFAULT_SUBMISSION_REWARD_EXPIRES_AT
+            DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS
         );
         vm.warp(block.timestamp + 1);
         vm.expectRevert();
@@ -2636,9 +2387,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             submitter,
             DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
             _defaultSubmissionRewardAmount(registry),
-            DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS,
-            DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
-            DEFAULT_SUBMISSION_REWARD_EXPIRES_AT
+            DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS
         );
         vm.warp(block.timestamp + 1);
         vm.expectRevert();
@@ -3367,7 +3116,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.startPrank(submitter);
         lrepToken.approve(address(reg2), 10e6);
         NoMediaQuestionText memory question =
-            NoMediaQuestionText({ url: "https://example.com/1", title: "goal", tags: "tags" });
+            NoMediaQuestionText({url: "https://example.com/1", title: "goal", tags: "tags"});
         bytes32 salt = _contentSubmissionSalt(question.url, submitter);
         _reserveNoMediaQuestionSubmission(reg2, question, 1, salt, submitter);
         vm.warp(block.timestamp + 1);
@@ -3522,7 +3271,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.startPrank(submitter);
         lrepToken.approve(address(reg2), 10e6);
         NoMediaQuestionText memory question =
-            NoMediaQuestionText({ url: "https://example.com/1", title: "goal", tags: "tags" });
+            NoMediaQuestionText({url: "https://example.com/1", title: "goal", tags: "tags"});
         bytes32 salt = _contentSubmissionSalt(question.url, submitter);
         _reserveNoMediaQuestionSubmission(reg2, question, 1, salt, submitter);
         vm.warp(block.timestamp + 1);

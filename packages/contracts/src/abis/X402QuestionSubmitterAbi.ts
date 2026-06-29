@@ -114,26 +114,6 @@ export const X402QuestionSubmitterAbi = [
             "internalType": "uint256"
           },
           {
-            "name": "requiredSettledRounds",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "bountyStartBy",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "bountyWindowSeconds",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "feedbackWindowSeconds",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
             "name": "bountyEligibility",
             "type": "uint8",
             "internalType": "uint8"
@@ -320,26 +300,6 @@ export const X402QuestionSubmitterAbi = [
             "internalType": "uint256"
           },
           {
-            "name": "requiredSettledRounds",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "bountyStartBy",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "bountyWindowSeconds",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "feedbackWindowSeconds",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
             "name": "bountyEligibility",
             "type": "uint8",
             "internalType": "uint8"
@@ -553,26 +513,6 @@ export const X402QuestionSubmitterAbi = [
             "internalType": "uint256"
           },
           {
-            "name": "requiredSettledRounds",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "bountyStartBy",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "bountyWindowSeconds",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "feedbackWindowSeconds",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
             "name": "bountyEligibility",
             "type": "uint8",
             "internalType": "uint8"
@@ -620,33 +560,6 @@ export const X402QuestionSubmitterAbi = [
             "name": "resultSpecHash",
             "type": "bytes32",
             "internalType": "bytes32"
-          }
-        ]
-      },
-      {
-        "name": "confidentiality",
-        "type": "tuple",
-        "internalType": "struct IConfidentialityEscrow.ConfidentialityConfig",
-        "components": [
-          {
-            "name": "gated",
-            "type": "bool",
-            "internalType": "bool"
-          },
-          {
-            "name": "bondAsset",
-            "type": "uint8",
-            "internalType": "uint8"
-          },
-          {
-            "name": "bondAmount",
-            "type": "uint64",
-            "internalType": "uint64"
-          },
-          {
-            "name": "flags",
-            "type": "uint8",
-            "internalType": "uint8"
           }
         ]
       },
@@ -769,26 +682,6 @@ export const X402QuestionSubmitterAbi = [
             "internalType": "uint256"
           },
           {
-            "name": "requiredSettledRounds",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "bountyStartBy",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "bountyWindowSeconds",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "feedbackWindowSeconds",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
             "name": "bountyEligibility",
             "type": "uint8",
             "internalType": "uint8"
@@ -836,6 +729,33 @@ export const X402QuestionSubmitterAbi = [
             "name": "resultSpecHash",
             "type": "bytes32",
             "internalType": "bytes32"
+          }
+        ]
+      },
+      {
+        "name": "confidentiality",
+        "type": "tuple",
+        "internalType": "struct IConfidentialityEscrow.ConfidentialityConfig",
+        "components": [
+          {
+            "name": "gated",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "bondAsset",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "bondAmount",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "flags",
+            "type": "uint8",
+            "internalType": "uint8"
           }
         ]
       },
@@ -1059,26 +979,6 @@ export const X402QuestionSubmitterAbi = [
             "internalType": "uint256"
           },
           {
-            "name": "requiredSettledRounds",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "bountyStartBy",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "bountyWindowSeconds",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "feedbackWindowSeconds",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
             "name": "bountyEligibility",
             "type": "uint8",
             "internalType": "uint8"
@@ -1317,26 +1217,6 @@ export const X402QuestionSubmitterAbi = [
             "internalType": "uint256"
           },
           {
-            "name": "requiredSettledRounds",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "bountyStartBy",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "bountyWindowSeconds",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "feedbackWindowSeconds",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
             "name": "bountyEligibility",
             "type": "uint8",
             "internalType": "uint8"
@@ -1548,26 +1428,6 @@ export const X402QuestionSubmitterAbi = [
             "internalType": "uint256"
           },
           {
-            "name": "requiredSettledRounds",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "bountyStartBy",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "bountyWindowSeconds",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "feedbackWindowSeconds",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
             "name": "bountyEligibility",
             "type": "uint8",
             "internalType": "uint8"
@@ -1615,33 +1475,6 @@ export const X402QuestionSubmitterAbi = [
             "name": "resultSpecHash",
             "type": "bytes32",
             "internalType": "bytes32"
-          }
-        ]
-      },
-      {
-        "name": "confidentiality",
-        "type": "tuple",
-        "internalType": "struct IConfidentialityEscrow.ConfidentialityConfig",
-        "components": [
-          {
-            "name": "gated",
-            "type": "bool",
-            "internalType": "bool"
-          },
-          {
-            "name": "bondAsset",
-            "type": "uint8",
-            "internalType": "uint8"
-          },
-          {
-            "name": "bondAmount",
-            "type": "uint64",
-            "internalType": "uint64"
-          },
-          {
-            "name": "flags",
-            "type": "uint8",
-            "internalType": "uint8"
           }
         ]
       },
@@ -1784,26 +1617,6 @@ export const X402QuestionSubmitterAbi = [
             "internalType": "uint256"
           },
           {
-            "name": "requiredSettledRounds",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "bountyStartBy",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "bountyWindowSeconds",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "feedbackWindowSeconds",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
             "name": "bountyEligibility",
             "type": "uint8",
             "internalType": "uint8"
@@ -1851,6 +1664,33 @@ export const X402QuestionSubmitterAbi = [
             "name": "resultSpecHash",
             "type": "bytes32",
             "internalType": "bytes32"
+          }
+        ]
+      },
+      {
+        "name": "confidentiality",
+        "type": "tuple",
+        "internalType": "struct IConfidentialityEscrow.ConfidentialityConfig",
+        "components": [
+          {
+            "name": "gated",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "bondAsset",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "bondAmount",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "flags",
+            "type": "uint8",
+            "internalType": "uint8"
           }
         ]
       },

@@ -83,7 +83,7 @@ const QUESTION_CONTEXT_DOMAIN = keccak256(
   stringToHex("rateloop-question-context-v5"),
 );
 const QUESTION_REVEAL_DOMAIN = keccak256(
-  stringToHex("rateloop-question-reveal-v8"),
+  stringToHex("rateloop-question-reveal-v9"),
 );
 const X402_SIGN_OPTIONS: NonNullable<
   Parameters<typeof signX402AuthorizationRequest>[2]
@@ -159,10 +159,6 @@ const X402QuestionSubmitterOneShotSubmitWithConfidentialityAbi = [
           { name: "asset", type: "uint8" },
           { name: "amount", type: "uint256" },
           { name: "requiredVoters", type: "uint256" },
-          { name: "requiredSettledRounds", type: "uint256" },
-          { name: "bountyStartBy", type: "uint256" },
-          { name: "bountyWindowSeconds", type: "uint256" },
-          { name: "feedbackWindowSeconds", type: "uint256" },
           { name: "bountyEligibility", type: "uint8" },
         ],
         name: "rewardTerms",
@@ -247,11 +243,7 @@ function rewardTerms(amount = BigInt(X402_AMOUNT), asset: TestSubmissionRewardAs
   return {
     amount,
     asset: asset === "LREP" ? 0 : 1,
-    bountyStartBy: BOUNTY_START_BY,
-    bountyWindowSeconds: BOUNTY_WINDOW_SECONDS,
     bountyEligibility: 0,
-    feedbackWindowSeconds: FEEDBACK_WINDOW_SECONDS,
-    requiredSettledRounds: 1n,
     requiredVoters: 3n,
   };
 }
@@ -450,20 +442,12 @@ function rewardTermsHash() {
         { type: "uint8" },
         { type: "uint256" },
         { type: "uint256" },
-        { type: "uint256" },
-        { type: "uint256" },
-        { type: "uint256" },
-        { type: "uint256" },
         { type: "uint8" },
       ],
       [
         terms.asset,
         terms.amount,
         terms.requiredVoters,
-        terms.requiredSettledRounds,
-        terms.bountyStartBy,
-        terms.bountyWindowSeconds,
-        terms.feedbackWindowSeconds,
         terms.bountyEligibility,
       ],
     ),
@@ -482,20 +466,12 @@ function rewardTermsHashForPayload(payload: AskHumansRequest) {
         { type: "uint8" },
         { type: "uint256" },
         { type: "uint256" },
-        { type: "uint256" },
-        { type: "uint256" },
-        { type: "uint256" },
-        { type: "uint256" },
         { type: "uint8" },
       ],
       [
         terms.asset,
         terms.amount,
         terms.requiredVoters,
-        terms.requiredSettledRounds,
-        terms.bountyStartBy,
-        terms.bountyWindowSeconds,
-        terms.feedbackWindowSeconds,
         terms.bountyEligibility,
       ],
     ),
@@ -676,7 +652,7 @@ function x402PaymentNonce(
         { type: "bytes32" },
       ],
       [
-        keccak256(stringToHex("rateloop-x402-question-payment-v3")),
+        keccak256(stringToHex("rateloop-x402-question-payment-v4")),
         480n,
         CONTENT_REGISTRY_ADDRESS,
         QUESTION_REWARD_ESCROW_ADDRESS,
@@ -749,7 +725,7 @@ function x402PaymentNonceForPayload(payload: AskHumansRequest, from = account.ad
         { type: "bytes32" },
       ],
       [
-        keccak256(stringToHex("rateloop-x402-question-payment-v3")),
+        keccak256(stringToHex("rateloop-x402-question-payment-v4")),
         480n,
         CONTENT_REGISTRY_ADDRESS,
         QUESTION_REWARD_ESCROW_ADDRESS,
@@ -831,7 +807,7 @@ function x402OneShotPaymentNonceForPayload(payload: AskHumansRequest, from = acc
         { type: "bytes32" },
       ],
       [
-        keccak256(stringToHex("rateloop-x402-question-one-shot-payment-v5")),
+        keccak256(stringToHex("rateloop-x402-question-one-shot-payment-v6")),
         480n,
         CONTENT_REGISTRY_ADDRESS,
         QUESTION_REWARD_ESCROW_ADDRESS,

@@ -1039,26 +1039,6 @@ export const ContentRegistryAbi = [
             "internalType": "uint256"
           },
           {
-            "name": "requiredSettledRounds",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "bountyStartBy",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "bountyWindowSeconds",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "feedbackWindowSeconds",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
             "name": "bountyEligibility",
             "type": "uint8",
             "internalType": "uint8"
@@ -1180,26 +1160,6 @@ export const ContentRegistryAbi = [
           },
           {
             "name": "requiredVoters",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "requiredSettledRounds",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "bountyStartBy",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "bountyWindowSeconds",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "feedbackWindowSeconds",
             "type": "uint256",
             "internalType": "uint256"
           },
@@ -1369,26 +1329,6 @@ export const ContentRegistryAbi = [
           },
           {
             "name": "requiredVoters",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "requiredSettledRounds",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "bountyStartBy",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "bountyWindowSeconds",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "feedbackWindowSeconds",
             "type": "uint256",
             "internalType": "uint256"
           },

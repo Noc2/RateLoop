@@ -62,10 +62,8 @@ contract MockQuestionRewardPoolEscrow {
         uint8 asset,
         uint256 amount,
         uint256 requiredVoters,
-        uint256 requiredSettledRounds,
-        uint256 bountyStartBy,
-        uint256 bountyWindowSeconds,
-        uint256 feedbackWindowSeconds,
+        uint256 rewardClosesAt,
+        uint256 questionDurationSeconds,
         uint8 bountyEligibility
     ) external returns (uint256 rewardPoolId) {
         rewardPoolId = nextRewardPoolId++;
@@ -74,20 +72,20 @@ contract MockQuestionRewardPoolEscrow {
         lastAsset = asset;
         lastAmount = amount;
         lastRequiredVoters = requiredVoters;
-        lastRequiredSettledRounds = requiredSettledRounds;
-        lastBountyStartBy = bountyStartBy;
-        lastBountyWindowSeconds = bountyWindowSeconds;
-        lastFeedbackWindowSeconds = feedbackWindowSeconds;
+        lastRequiredSettledRounds = 1;
+        lastBountyStartBy = rewardClosesAt;
+        lastBountyWindowSeconds = questionDurationSeconds;
+        lastFeedbackWindowSeconds = questionDurationSeconds;
         lastBountyEligibility = bountyEligibility;
         emit MockSubmissionRewardPoolCreated(
             rewardPoolId,
             contentId,
             funder,
             requiredVoters,
-            requiredSettledRounds,
-            bountyStartBy,
-            bountyWindowSeconds,
-            feedbackWindowSeconds
+            1,
+            rewardClosesAt,
+            questionDurationSeconds,
+            questionDurationSeconds
         );
     }
 
@@ -98,10 +96,8 @@ contract MockQuestionRewardPoolEscrow {
         uint8 asset,
         uint256 amount,
         uint256 requiredCompleters,
-        uint256 requiredSettledRounds,
-        uint256 bountyStartBy,
-        uint256 bountyWindowSeconds,
-        uint256 feedbackWindowSeconds,
+        uint256 rewardClosesAt,
+        uint256 questionDurationSeconds,
         uint8 bountyEligibility
     ) external returns (uint256 rewardPoolId) {
         rewardPoolId = nextRewardPoolId++;
@@ -110,20 +106,20 @@ contract MockQuestionRewardPoolEscrow {
         lastAsset = asset;
         lastAmount = amount;
         lastRequiredVoters = requiredCompleters;
-        lastRequiredSettledRounds = requiredSettledRounds;
-        lastBountyStartBy = bountyStartBy;
-        lastBountyWindowSeconds = bountyWindowSeconds;
-        lastFeedbackWindowSeconds = feedbackWindowSeconds;
+        lastRequiredSettledRounds = 1;
+        lastBountyStartBy = rewardClosesAt;
+        lastBountyWindowSeconds = questionDurationSeconds;
+        lastFeedbackWindowSeconds = questionDurationSeconds;
         lastBountyEligibility = bountyEligibility;
         emit MockSubmissionBundleCreated(
             rewardPoolId,
             bundleId,
             funder,
             requiredCompleters,
-            requiredSettledRounds,
-            bountyStartBy,
-            bountyWindowSeconds,
-            feedbackWindowSeconds
+            1,
+            rewardClosesAt,
+            questionDurationSeconds,
+            questionDurationSeconds
         );
     }
 }

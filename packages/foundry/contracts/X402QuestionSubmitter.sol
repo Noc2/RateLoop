@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
-import { ReentrancyGuardTransient } from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
 
-import { ContentRegistry } from "./ContentRegistry.sol";
-import { FeedbackBonusEscrow } from "./FeedbackBonusEscrow.sol";
-import { Eip3009Authorization, IReceiveWithAuthorizationToken } from "./interfaces/IEip3009.sol";
-import { IConfidentialityEscrow } from "./interfaces/IConfidentialityEscrow.sol";
-import { RoundLib } from "./libraries/RoundLib.sol";
+import {ContentRegistry} from "./ContentRegistry.sol";
+import {FeedbackBonusEscrow} from "./FeedbackBonusEscrow.sol";
+import {Eip3009Authorization, IReceiveWithAuthorizationToken} from "./interfaces/IEip3009.sol";
+import {IConfidentialityEscrow} from "./interfaces/IConfidentialityEscrow.sol";
+import {RoundLib} from "./libraries/RoundLib.sol";
 
 interface IFeedbackBonusEscrowConfigShape {
     function registry() external view returns (ContentRegistry);
@@ -22,9 +22,9 @@ contract X402QuestionSubmitter is Ownable, ReentrancyGuardTransient {
     using SafeERC20 for IERC20;
 
     uint8 internal constant REWARD_ASSET_USDC = 1;
-    bytes32 internal constant X402_QUESTION_PAYMENT_DOMAIN = keccak256("rateloop-x402-question-payment-v3");
+    bytes32 internal constant X402_QUESTION_PAYMENT_DOMAIN = keccak256("rateloop-x402-question-payment-v4");
     bytes32 internal constant X402_QUESTION_ONE_SHOT_PAYMENT_DOMAIN =
-        keccak256("rateloop-x402-question-one-shot-payment-v5");
+        keccak256("rateloop-x402-question-one-shot-payment-v6");
 
     struct FeedbackBonusTerms {
         uint256 amount;
@@ -112,7 +112,7 @@ contract X402QuestionSubmitter is Ownable, ReentrancyGuardTransient {
             rewardTerms,
             roundConfig,
             spec,
-            IConfidentialityEscrow.ConfidentialityConfig({ gated: false, bondAsset: 0, bondAmount: 0, flags: 0 }),
+            IConfidentialityEscrow.ConfidentialityConfig({gated: false, bondAsset: 0, bondAmount: 0, flags: 0}),
             paymentAuthorization
         );
     }
@@ -176,7 +176,7 @@ contract X402QuestionSubmitter is Ownable, ReentrancyGuardTransient {
             rewardTerms,
             roundConfig,
             spec,
-            IConfidentialityEscrow.ConfidentialityConfig({ gated: false, bondAsset: 0, bondAmount: 0, flags: 0 }),
+            IConfidentialityEscrow.ConfidentialityConfig({gated: false, bondAsset: 0, bondAmount: 0, flags: 0}),
             feedbackBonusTerms,
             paymentAuthorization
         );
@@ -444,7 +444,7 @@ contract X402QuestionSubmitter is Ownable, ReentrancyGuardTransient {
             rewardTerms,
             roundConfig,
             spec,
-            IConfidentialityEscrow.ConfidentialityConfig({ gated: false, bondAsset: 0, bondAmount: 0, flags: 0 }),
+            IConfidentialityEscrow.ConfidentialityConfig({gated: false, bondAsset: 0, bondAmount: 0, flags: 0}),
             payer,
             payee,
             value,
@@ -516,7 +516,7 @@ contract X402QuestionSubmitter is Ownable, ReentrancyGuardTransient {
             rewardTerms,
             roundConfig,
             spec,
-            IConfidentialityEscrow.ConfidentialityConfig({ gated: false, bondAsset: 0, bondAmount: 0, flags: 0 }),
+            IConfidentialityEscrow.ConfidentialityConfig({gated: false, bondAsset: 0, bondAmount: 0, flags: 0}),
             feedbackBonusTerms,
             payer,
             payee,
@@ -591,16 +591,7 @@ contract X402QuestionSubmitter is Ownable, ReentrancyGuardTransient {
 
     function _hashRewardTerms(ContentRegistry.SubmissionRewardTerms memory rewardTerms) private pure returns (bytes32) {
         return keccak256(
-            abi.encode(
-                rewardTerms.asset,
-                rewardTerms.amount,
-                rewardTerms.requiredVoters,
-                rewardTerms.requiredSettledRounds,
-                rewardTerms.bountyStartBy,
-                rewardTerms.bountyWindowSeconds,
-                rewardTerms.feedbackWindowSeconds,
-                rewardTerms.bountyEligibility
-            )
+            abi.encode(rewardTerms.asset, rewardTerms.amount, rewardTerms.requiredVoters, rewardTerms.bountyEligibility)
         );
     }
 

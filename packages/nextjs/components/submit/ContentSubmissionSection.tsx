@@ -2246,10 +2246,6 @@ export function ContentSubmissionSection() {
         notification.warning("Choose a question duration before submitting.");
         return;
       }
-      const bountyStartBy = 0n;
-      const bountyWindowSecondsValue = BigInt(questionDurationSeconds);
-      const feedbackWindowSeconds = bountyWindowSecondsValue;
-
       const submittedDetails = await Promise.all(
         validatedQuestions.map(question =>
           uploadQuestionDetailsForSubmission(
@@ -2345,10 +2341,6 @@ export function ContentSubmissionSection() {
         asset: selectedRewardAssetId,
         amount: selectedRewardAmount,
         requiredVoters: selectedRequiredVoters,
-        requiredSettledRounds: selectedRequiredSettledRounds,
-        bountyStartBy,
-        bountyWindowSeconds: bountyWindowSecondsValue,
-        feedbackWindowSeconds,
         bountyEligibility: selectedBountyEligibility.mode,
       } as const;
       const roundConfigAbi = questionRoundConfigToAbi(selectedRoundConfig);
@@ -2424,11 +2416,7 @@ export function ContentSubmissionSection() {
             questions: onChainBundleQuestions,
             rewardAmount: selectedRewardAmount,
             rewardAsset: selectedRewardAssetId,
-            requiredSettledRounds: selectedRequiredSettledRounds,
             requiredVoters: selectedRequiredVoters,
-            bountyStartBy,
-            bountyWindowSeconds: bountyWindowSecondsValue,
-            feedbackWindowSeconds,
             bountyEligibility: selectedBountyEligibility.mode,
             roundConfig: selectedRoundConfig,
             submitter: submitterAddress,
@@ -2441,12 +2429,8 @@ export function ContentSubmissionSection() {
             questionMetadataHash: onChainPrimaryQuestion.spec.questionMetadataHash,
             rewardAmount: selectedRewardAmount,
             rewardAsset: selectedRewardAssetId,
-            requiredSettledRounds: selectedRequiredSettledRounds,
             requiredVoters: selectedRequiredVoters,
             resultSpecHash: onChainPrimaryQuestion.spec.resultSpecHash,
-            bountyStartBy,
-            bountyWindowSeconds: bountyWindowSecondsValue,
-            feedbackWindowSeconds,
             bountyEligibility: selectedBountyEligibility.mode,
             roundConfig: selectedRoundConfig,
             salt: onChainPrimaryQuestion.salt,

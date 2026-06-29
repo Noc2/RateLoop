@@ -57,10 +57,6 @@ function buildQuestionSubmissionSelectorProbeData(kind: QuestionSubmissionSelect
           asset: 0,
           amount: 0n,
           requiredVoters: 0n,
-          requiredSettledRounds: 0n,
-          bountyStartBy: 0n,
-          bountyWindowSeconds: 0n,
-          feedbackWindowSeconds: 0n,
           bountyEligibility: 0,
         },
         {
@@ -89,10 +85,6 @@ function buildQuestionSubmissionSelectorProbeData(kind: QuestionSubmissionSelect
         asset: 0,
         amount: 0n,
         requiredVoters: 0n,
-        requiredSettledRounds: 0n,
-        bountyStartBy: 0n,
-        bountyWindowSeconds: 0n,
-        feedbackWindowSeconds: 0n,
         bountyEligibility: 0,
       },
       {

@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import { Test } from "forge-std/Test.sol";
-import { ContentRegistryRewardLib } from "../contracts/libraries/ContentRegistryRewardLib.sol";
-import { QuestionRewardParticipantFloorLib } from "../contracts/libraries/QuestionRewardParticipantFloorLib.sol";
+import {Test} from "forge-std/Test.sol";
+import {ContentRegistryRewardLib} from "../contracts/libraries/ContentRegistryRewardLib.sol";
+import {QuestionRewardParticipantFloorLib} from "../contracts/libraries/QuestionRewardParticipantFloorLib.sol";
 
 contract QuestionRewardParticipantFloorHarness {
     function requiredParticipantFloorForAmount(uint256 amount) external pure returns (uint256) {
@@ -11,7 +11,7 @@ contract QuestionRewardParticipantFloorHarness {
     }
 
     function validateSubmissionReward(uint256 amount, uint256 requiredVoters) external pure {
-        ContentRegistryRewardLib.validateSubmissionReward(1, amount, requiredVoters, 1, 0, 1_000, 1_000, 0, 1, 1_000);
+        ContentRegistryRewardLib.validateSubmissionReward(1, amount, requiredVoters, 0, 1_000);
     }
 }
 
