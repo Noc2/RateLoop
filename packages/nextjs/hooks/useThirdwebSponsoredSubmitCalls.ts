@@ -24,12 +24,12 @@ import type { SponsorshipSyncStatus } from "~~/hooks/useFreeTransactionAllowance
 import { refreshActiveWalletReadQueries } from "~~/hooks/useRefreshWalletBalances";
 import { useThirdwebWagmiSync } from "~~/hooks/useThirdwebWagmiSync";
 import { useTransactionStatusToast } from "~~/hooks/useTransactionStatusToast";
-import { useWalletMessageSigner } from "~~/hooks/useWalletMessageSigner";
 import {
   type WalletExecutionMode,
   resolveWalletExecutionChainId,
   useWalletExecutionCapabilities,
 } from "~~/hooks/useWalletExecutionCapabilities";
+import { useWalletMessageSigner } from "~~/hooks/useWalletMessageSigner";
 import { resolveProtocolDeploymentScope } from "~~/lib/protocolDeployment";
 import {
   getEip7702DelegationTarget,
