@@ -1339,11 +1339,7 @@ function readDraftTitle(form: DraftForm | null, handoff: Handoff | null) {
 
 function createDraftForm(handoff: Handoff): DraftForm {
   const roundSettings = readRoundSettings(handoff);
-  const roundDurationDraft = readHandoffRoundDurationDraft(
-    roundSettings.epochDuration,
-    roundSettings.maxDuration,
-    handoff.draftRevision ?? 0,
-  );
+  const roundDurationDraft = readHandoffRoundDurationDraft(roundSettings.epochDuration);
   const questions = readQuestionSummaries(handoff);
   const feedbackBonusSummary = readFeedbackBonusSummary(handoff);
   const bountyAsset = readBountyAsset(handoff);

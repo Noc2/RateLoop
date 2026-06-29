@@ -8,11 +8,7 @@ function secondsToHandoffDurationInput(value: bigint): string {
   return value > 0n ? value.toString() : "1";
 }
 
-export function readHandoffRoundDurationDraft(
-  epochDuration: bigint,
-  _maxDuration: bigint,
-  _draftRevision: number,
-): HandoffRoundDurationDraft {
+export function readHandoffRoundDurationDraft(epochDuration: bigint): HandoffRoundDurationDraft {
   const roundBlindSeconds = secondsToHandoffDurationInput(epochDuration);
 
   return {
@@ -22,19 +18,10 @@ export function readHandoffRoundDurationDraft(
   };
 }
 
-export function syncHandoffMaxDurationForBlindChange(
-  blindSeconds: number,
-  _currentMaxDurationSeconds: string,
-  _maxDurationOverridden: boolean,
-  _bounds: { min: number; max: number },
-): string {
+export function syncHandoffMaxDurationForBlindChange(blindSeconds: number): string {
   return String(Math.max(1, Math.floor(blindSeconds)));
 }
 
-export function resolveHandoffSubmittedMaxDurationSeconds(
-  blindSeconds: bigint,
-  _maxDurationSeconds: string,
-  _maxDurationOverridden: boolean,
-): bigint {
+export function resolveHandoffSubmittedMaxDurationSeconds(blindSeconds: bigint): bigint {
   return blindSeconds;
 }

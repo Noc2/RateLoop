@@ -535,7 +535,6 @@ export function VotingQuestionContextDetails({
  */
 export function VotingQuestionCard({
   contentId,
-  chainId,
   currentRating,
   ratingReviewStatus,
   onVote,

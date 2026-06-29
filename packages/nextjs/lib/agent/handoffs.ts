@@ -339,9 +339,7 @@ export function parseAgentAskHandoffPaymentMode(
 
 function defaultAgentAskHandoffPaymentMode(params: {
   parsed: ReturnType<typeof parseX402QuestionRequest>;
-  requestBody: JsonObject;
 }): AgentAskHandoffPaymentMode {
-  params.requestBody;
   return params.parsed.bounty.asset === "USDC" && params.parsed.questions.length === 1
     ? "x402_authorization"
     : "wallet_calls";
@@ -353,7 +351,7 @@ function resolveAgentAskHandoffPaymentMode(params: {
 }) {
   return parseAgentAskHandoffPaymentMode(
     params.requestBody.paymentMode ?? params.requestBody.fundingMode,
-    defaultAgentAskHandoffPaymentMode(params),
+    defaultAgentAskHandoffPaymentMode({ parsed: params.parsed }),
   );
 }
 

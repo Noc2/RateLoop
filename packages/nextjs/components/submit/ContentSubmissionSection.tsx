@@ -119,10 +119,7 @@ import {
   buildQuestionSubmissionRevealCommitment,
   canonicalQuestionImageUrls,
 } from "~~/lib/questionSubmissionCommitment";
-import {
-  assertContentRegistryQuestionSubmissionSelector,
-  getSubmissionErrorMessage,
-} from "~~/lib/questionSubmissionSelectorSupport";
+import { assertContentRegistryQuestionSubmissionSelector } from "~~/lib/questionSubmissionSelectorSupport";
 import { hasQuestionSubmittedPostcondition } from "~~/lib/submission/postconditions";
 import { waitForReservationRevealReady } from "~~/lib/submission/reservationRevealWait";
 import {
@@ -453,10 +450,6 @@ function formatFrontendFeePercent(frontendFeeBps: number): string {
 
 function formatSubmissionRewardInputAmount(value: bigint, asset: SubmissionRewardAsset): string {
   return formatSubmissionRewardAmount(value, asset).replace(/ (?:LREP|USDC)$/, "");
-}
-
-function formatShortAddress(address: string | undefined): string {
-  return address ? `${address.slice(0, 6)}...${address.slice(-4)}` : "Connect wallet";
 }
 
 function formatBountyExpiryDate(windowSeconds: number | null, referenceTimeMs: number | null): string {
@@ -1254,10 +1247,6 @@ export function ContentSubmissionSection() {
       : Number(requiredQuestionRewardVotersForAmount(selectedRewardAmount));
   const selectedRoundResponseWindowPreset =
     ROUND_RESPONSE_WINDOW_PRESETS.find(option => option.seconds === parsedRoundBlindSeconds)?.id ?? "custom";
-  const effectiveBlindSecondsForDurationCap =
-    parsedRoundBlindSeconds >= roundBlindSecondBounds.min && parsedRoundBlindSeconds <= roundBlindSecondBounds.max
-      ? parsedRoundBlindSeconds
-      : roundBlindSecondBounds.min;
   const roundMaxVoterBounds = useMemo(() => {
     const bundleAwareMaxVoters =
       questionCount > 1
