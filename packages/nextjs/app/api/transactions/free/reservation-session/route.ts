@@ -52,7 +52,7 @@ async function verifiesReservationSessionProof(params: {
 
   try {
     const publicClient = getSignatureVerificationClient(params.chainId);
-    return publicClient ? publicClient.verifyMessage({ address, message, signature: params.signature }) : false;
+    return publicClient ? await publicClient.verifyMessage({ address, message, signature: params.signature }) : false;
   } catch {
     return false;
   }

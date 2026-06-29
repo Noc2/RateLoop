@@ -132,6 +132,20 @@ test("reservation session route rejects unsigned token lookups", async () => {
   assert.deepEqual(await response.json(), { error: "Invalid reservation session signature" });
 });
 
+test("reservation session route rejects malformed hex signatures", async () => {
+  const response = await route.POST(
+    makeRequest({
+      address: TEST_ADDRESS,
+      chainId: TEST_CHAIN_ID,
+      operationKey: TEST_OPERATION_KEY,
+      signature: "0xdead",
+    }),
+  );
+
+  assert.equal(response.status, 401);
+  assert.deepEqual(await response.json(), { error: "Invalid reservation session signature" });
+});
+
 test("reservation session route returns pending token for matching signed wallet", async () => {
   const expiresAt = new Date(Date.now() + 60_000);
   await dbModule.dbClient.execute({
