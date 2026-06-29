@@ -2959,6 +2959,67 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     if (isFeedbackBonusStep) return isExecuting ? "Funding..." : "Fund Bonus";
     return isExecuting ? "Submitting..." : "Submit";
   })();
+  const handoffAssets = handoff?.assets ?? [];
+  const hasHandoffAssets = handoffAssets.length > 0;
+  const hasHandoffActionStatus = Boolean(isFeedbackBonusStep || (handoff?.publicUrl && !isFeedbackBonusStep));
+  const renderHandoffActionArea = (className = "mt-4") => (
+    <>
+      {isExpiredHandoff ? (
+        <div className="surface-card-nested mt-4 rounded-lg border border-error/20 bg-error/10 p-4 text-sm text-error">
+          <div className="flex items-start gap-2">
+            <ExclamationTriangleIcon className="mt-0.5 h-5 w-5 shrink-0" />
+            <div>
+              <p className="font-semibold">This handoff link expired.</p>
+              <p className="mt-1 text-error/80">Ask agent for a fresh link before editing or submitting this ask.</p>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      <div
+        className={`${className} flex flex-col gap-3 sm:flex-row sm:items-end ${
+          hasHandoffActionStatus ? "sm:justify-between" : "sm:justify-end"
+        }`}
+      >
+        {hasHandoffActionStatus ? (
+          <div className="min-w-0 flex-1">
+            {isFeedbackBonusStep ? (
+              <p className="max-w-2xl text-sm text-base-content/60">
+                The question is submitted, but raters will not see the Feedback Bonus until these wallet calls are
+                funded.
+              </p>
+            ) : null}
+            {handoff?.publicUrl && !isFeedbackBonusStep ? (
+              <Link className="btn btn-outline btn-sm" href={handoff.publicUrl}>
+                View public result
+              </Link>
+            ) : null}
+          </div>
+        ) : null}
+        <div className="flex flex-wrap justify-end gap-2">
+          <button className="btn btn-outline btn-sm" disabled={isBusy} type="button" onClick={() => void loadHandoff()}>
+            <ArrowPathIcon className="h-4 w-4" />
+            Refresh
+          </button>
+          <GradientActionButton
+            className="min-w-28"
+            disabled={!canSubmit}
+            motion={getGradientActionMotion(isBusy)}
+            size="sm"
+            onClick={() => void handleSubmitAsk()}
+          >
+            {isBusy ? (
+              <span className="flex items-center gap-2">
+                <span className="loading loading-spinner loading-xs" />
+                <span>{submitLabel}</span>
+              </span>
+            ) : (
+              submitLabel
+            )}
+          </GradientActionButton>
+        </div>
+      </div>
+    </>
+  );
 
   return (
     <AppPageShell contentClassName="space-y-5" paddingTopClassName="pt-6">
@@ -3662,9 +3723,10 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                 </div>
               </div>
             </div>
+            {!hasHandoffAssets ? renderHandoffActionArea("mt-6 border-t border-base-300 pt-4") : null}
           </section>
 
-          {handoff.assets?.length ? (
+          {hasHandoffAssets ? (
             <section className="surface-card rounded-lg p-5">
               <div className="flex items-center gap-2">
                 <PhotoIcon className="h-5 w-5 text-base-content/60" />
@@ -3672,7 +3734,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                 <InfoTooltip text={IMAGE_PREVIEW_FIT_HINT} />
               </div>
               <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {handoff.assets.map(asset => {
+                {handoffAssets.map(asset => {
                   const imageSrc = asset.dataUrl || asset.imageUrl || "";
                   const imageAlt = asset.filename ?? "RateLoop handoff image";
 
@@ -3720,69 +3782,9 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                   ))}
                 </div>
               ) : null}
+              {renderHandoffActionArea()}
             </section>
           ) : null}
-
-          <section className="surface-card rounded-lg p-5">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h2 className="text-lg font-semibold">{isFeedbackBonusStep ? "Fund Feedback Bonus" : "Submit Ask"}</h2>
-                {isFeedbackBonusStep ? (
-                  <p className="mt-1 text-sm text-base-content/60">
-                    The question is submitted, but raters will not see the Feedback Bonus until these wallet calls are
-                    funded.
-                  </p>
-                ) : null}
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  className="btn btn-outline btn-sm"
-                  disabled={isBusy}
-                  type="button"
-                  onClick={() => void loadHandoff()}
-                >
-                  <ArrowPathIcon className="h-4 w-4" />
-                  Refresh
-                </button>
-                <GradientActionButton
-                  className="min-w-28"
-                  disabled={!canSubmit}
-                  motion={getGradientActionMotion(isBusy)}
-                  size="sm"
-                  onClick={() => void handleSubmitAsk()}
-                >
-                  {isBusy ? (
-                    <span className="flex items-center gap-2">
-                      <span className="loading loading-spinner loading-xs" />
-                      <span>{submitLabel}</span>
-                    </span>
-                  ) : (
-                    submitLabel
-                  )}
-                </GradientActionButton>
-              </div>
-            </div>
-
-            {isExpiredHandoff ? (
-              <div className="surface-card-nested mt-4 rounded-lg border border-error/20 bg-error/10 p-4 text-sm text-error">
-                <div className="flex items-start gap-2">
-                  <ExclamationTriangleIcon className="mt-0.5 h-5 w-5 shrink-0" />
-                  <div>
-                    <p className="font-semibold">This handoff link expired.</p>
-                    <p className="mt-1 text-error/80">
-                      Ask agent for a fresh link before editing or submitting this ask.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            ) : null}
-
-            {handoff.publicUrl && !isFeedbackBonusStep ? (
-              <Link className="btn btn-outline btn-sm mt-4" href={handoff.publicUrl}>
-                View public result
-              </Link>
-            ) : null}
-          </section>
         </>
       ) : null}
 
