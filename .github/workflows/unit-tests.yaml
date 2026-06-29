@@ -54,6 +54,12 @@ jobs:
             packages/foundry/cache
             packages/foundry/out
           key: forge-${{ hashFiles('packages/foundry/foundry.toml', 'packages/foundry/**/*.sol') }}
+      - name: Warm Foundry solc cache
+        run: |
+          forge build --skip script --skip test --no-cache \
+            --out "$RUNNER_TEMP/forge-solc-warmup-out" \
+            --cache-path "$RUNNER_TEMP/forge-solc-warmup-cache"
+        working-directory: packages/foundry
       - name: Run Foundry tests
         run: |
           for suite in test/*.t.sol; do
@@ -93,6 +99,12 @@ jobs:
             packages/foundry/cache
             packages/foundry/out
           key: forge-${{ hashFiles('packages/foundry/foundry.toml', 'packages/foundry/**/*.sol') }}
+      - name: Warm Foundry solc cache
+        run: |
+          forge build --skip script --skip test --no-cache \
+            --out "$RUNNER_TEMP/forge-solc-warmup-out" \
+            --cache-path "$RUNNER_TEMP/forge-solc-warmup-cache"
+        working-directory: packages/foundry
       - name: Run heavy Foundry suite
         run: forge test --offline -vvv --match-path "test/${{ matrix.suite }}"
         working-directory: packages/foundry
