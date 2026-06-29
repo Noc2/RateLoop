@@ -40,36 +40,6 @@ function RoundStatItem({ label, value, tooltip }: RoundStatMetric) {
   );
 }
 
-function formatRoundCountdown(seconds: number): string {
-  const safeSeconds = Math.max(0, Math.floor(seconds));
-  const days = Math.floor(safeSeconds / 86_400);
-  const hours = Math.floor((safeSeconds % 86_400) / 3600);
-  const minutes = Math.floor((safeSeconds % 3600) / 60);
-  const remainingSeconds = safeSeconds % 60;
-
-  if (days > 0) {
-    return `${days}d ${hours}h ${minutes}m`;
-  }
-
-  if (hours > 0) {
-    return `${hours}h ${minutes}m`;
-  }
-
-  return `${minutes}m ${remainingSeconds}s`;
-}
-
-export function formatPrivateRoundHint(
-  snapshot: Pick<RoundSnapshot, "phase" | "currentEpochRemaining" | "roundTimeRemaining">,
-) {
-  if (snapshot.phase !== "voting") return null;
-  if (snapshot.roundTimeRemaining <= 0) return null;
-
-  const remaining = Math.min(snapshot.currentEpochRemaining, snapshot.roundTimeRemaining);
-  if (remaining <= 0) return null;
-
-  return `Private round ends in ${formatRoundCountdown(remaining)}`;
-}
-
 export function formatRaterProgress(voteCount: number, minimumRaters: number): string {
   return `${voteCount}/${minimumRaters}`;
 }
@@ -177,7 +147,6 @@ export function RoundStats({ categoryId, snapshot }: RoundStatsProps) {
 
   const voteCount = Number(round.voteCount);
   const minimumRaters = snapshot.minVoters;
-  const privateRoundHint = formatPrivateRoundHint(snapshot);
   const votesNeeded = Math.max(0, minimumRaters - voteCount);
   const raterTooltip =
     votesNeeded > 0
@@ -205,12 +174,6 @@ export function RoundStats({ categoryId, snapshot }: RoundStatsProps) {
             <RoundStatItem {...item} />
           </React.Fragment>
         ))}
-        {privateRoundHint ? (
-          <>
-            <RoundStatSeparator />
-            <span>{privateRoundHint}</span>
-          </>
-        ) : null}
       </div>
 
       {phase === "voting" && isRoundFull && (

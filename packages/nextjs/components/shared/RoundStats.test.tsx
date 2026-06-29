@@ -1,10 +1,5 @@
 import React from "react";
-import {
-  RoundRevealedBreakdown,
-  formatPrivateRoundHint,
-  formatRaterProgress,
-  shouldShowStartNewRoundHint,
-} from "./RoundStats";
+import { RoundRevealedBreakdown, formatRaterProgress, shouldShowStartNewRoundHint } from "./RoundStats";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import test from "node:test";
@@ -65,50 +60,6 @@ test("RoundRevealedBreakdown renders A/B labels for head-to-head content", () =>
   assert.match(html, />A</);
   assert.match(html, />B</);
   assert.ok(html.indexOf(">A<") < html.indexOf(">B<"));
-});
-
-test("formatPrivateRoundHint shows the next private round countdown", () => {
-  assert.equal(
-    formatPrivateRoundHint({
-      phase: "voting",
-      currentEpochRemaining: 9 * 60 + 5,
-      roundTimeRemaining: 20 * 60,
-    }),
-    "Private round ends in 9m 5s",
-  );
-});
-
-test("formatPrivateRoundHint shows days for long private rounds", () => {
-  assert.equal(
-    formatPrivateRoundHint({
-      phase: "voting",
-      currentEpochRemaining: 719 * 60 * 60 + 5 * 60 + 37,
-      roundTimeRemaining: 40 * 24 * 60 * 60,
-    }),
-    "Private round ends in 29d 23h 5m",
-  );
-});
-
-test("formatPrivateRoundHint respects the final round deadline", () => {
-  assert.equal(
-    formatPrivateRoundHint({
-      phase: "voting",
-      currentEpochRemaining: 20 * 60,
-      roundTimeRemaining: 4 * 60 + 3,
-    }),
-    "Private round ends in 4m 3s",
-  );
-});
-
-test("formatPrivateRoundHint hides after the round deadline", () => {
-  assert.equal(
-    formatPrivateRoundHint({
-      phase: "voting",
-      currentEpochRemaining: 20 * 60,
-      roundTimeRemaining: 0,
-    }),
-    null,
-  );
 });
 
 test("formatRaterProgress shows committed raters against the settlement minimum", () => {
