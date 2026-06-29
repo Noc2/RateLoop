@@ -1867,7 +1867,9 @@ function canPrepareHandoff(handoff: Handoff | null | undefined) {
     status === "awaiting_image_signatures" ||
     status === "uploading_images" ||
     status === "failed" ||
-    (status === "prepared" && !(handoff?.transactionPlan?.calls ?? []).length)
+    (status === "prepared" &&
+      handoff?.paymentMode === "x402_authorization" &&
+      !(handoff.transactionPlan?.calls ?? []).length)
   );
 }
 
