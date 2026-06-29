@@ -140,6 +140,11 @@ export async function continueToBountyStep(page: Page): Promise<void> {
 }
 
 export async function continueToFeedbackBonusStep(page: Page): Promise<void> {
+  const noBonusButton = page.getByRole("button", { name: /^No bonus$/i }).first();
+  if (await noBonusButton.isVisible({ timeout: 1_000 }).catch(() => false)) {
+    return;
+  }
+
   const continueButton = page.getByRole("button", { name: /^Continue$/i });
   await expect(continueButton).toBeVisible({ timeout: 5_000 });
   await expect(continueButton).toBeEnabled();
