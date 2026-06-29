@@ -189,7 +189,6 @@ export function useConfidentialityBond({ bondRequirement, contentId, enabled = t
       callCount: 1,
       callTypes: ["hasActiveBond"],
       chainId: targetNetwork.id,
-      consoleLabel: "confidentiality-bond-timing",
       metadata: {
         asset: bondRequirement.asset,
         contentId: contentId.toString(),

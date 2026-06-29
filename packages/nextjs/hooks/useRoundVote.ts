@@ -125,43 +125,18 @@ function encodeAsciiBase64(value: string): string {
   throw new Error("Base64 encoder unavailable");
 }
 
-function nowMs() {
-  return typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now();
-}
-
-function createRoundVoteTimingLog(params: {
+function createRoundVoteTimingLog(_params: {
   chainId: number;
   contentId: bigint;
   isGatedContext: boolean;
   stakeAmount: number;
 }) {
-  const startedAt = nowMs();
-  let lastMarkAt = startedAt;
+  void _params;
   const runId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-  const basePayload = {
-    chainId: params.chainId,
-    contentId: params.contentId.toString(),
-    isGatedContext: params.isGatedContext,
-    runId,
-    stakeAmount: params.stakeAmount,
+  const emit = (_event: string, _extra: Record<string, unknown> = {}) => {
+    void _event;
+    void _extra;
   };
-
-  const emit = (event: string, extra: Record<string, unknown> = {}) => {
-    const timestamp = nowMs();
-    const elapsedMs = Math.round(timestamp - startedAt);
-    const deltaMs = Math.round(timestamp - lastMarkAt);
-    lastMarkAt = timestamp;
-
-    console.info("[round-vote-timing]", {
-      ...basePayload,
-      ...extra,
-      deltaMs,
-      elapsedMs,
-      event,
-    });
-  };
-
-  emit("start");
 
   return { emit, runId };
 }

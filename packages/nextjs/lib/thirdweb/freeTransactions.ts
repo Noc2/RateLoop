@@ -1055,7 +1055,7 @@ function buildIdentityBoundUnmeteredSummary(params: {
   } satisfies FreeTransactionAllowanceSummary;
 }
 
-function createFreeTransactionTimingLog(params: {
+function createFreeTransactionTimingLog(_params: {
   chainId?: number | null;
   operation: "evaluate_allowance" | "confirm_reservation";
   operationKey?: string | null;
@@ -1063,27 +1063,11 @@ function createFreeTransactionTimingLog(params: {
   transactionHashCount?: number | null;
   walletAddress?: string | null;
 }) {
-  const startedAt = Date.now();
-  let lastMarkAt = startedAt;
-  const runId = `${startedAt.toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-
-  const emit = (event: string, extra: Record<string, unknown> = {}) => {
-    const timestamp = Date.now();
-    const elapsedMs = timestamp - startedAt;
-    const deltaMs = timestamp - lastMarkAt;
-    lastMarkAt = timestamp;
-
-    console.info("[thirdweb-free-tx-timing]", {
-      ...params,
-      ...extra,
-      deltaMs,
-      elapsedMs,
-      event,
-      runId,
-    });
+  void _params;
+  const emit = (_event: string, _extra: Record<string, unknown> = {}) => {
+    void _event;
+    void _extra;
   };
-
-  emit("start");
 
   return { emit };
 }

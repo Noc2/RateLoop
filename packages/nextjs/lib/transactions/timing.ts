@@ -41,7 +41,6 @@ type TransactionTimingRunParams = {
   callCount?: number;
   callTypes?: readonly string[];
   chainId?: number | null;
-  consoleLabel: string;
   contentRegistryAddress?: string;
   deploymentKey?: string;
   feedbackRegistryAddress?: string;
@@ -117,7 +116,6 @@ export function createTransactionTimingRun(params: TransactionTimingRunParams) {
       ...extra,
     };
 
-    console.info(`[${params.consoleLabel}]`, payload);
     reportTransactionTiming(payload);
   };
 

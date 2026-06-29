@@ -163,7 +163,6 @@ export function useWalletTransactionPlanExecutor() {
         callCount: normalizedCalls.length,
         callTypes: normalizedCalls.map(call => getWalletTransactionPlanCallType(call.call)),
         chainId: options.chainId,
-        consoleLabel: "wallet-transaction-plan-timing",
         route: canUseThirdwebPlanBatchCalls
           ? "thirdweb-plan"
           : canUseAtomicWalletSendCalls

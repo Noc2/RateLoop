@@ -137,7 +137,6 @@ function createThirdwebBatchTimingLog(params: {
     callCount: params.callCount,
     callTypes: params.callTypes,
     chainId: params.chainId,
-    consoleLabel: "thirdweb-batch-timing",
     contentRegistryAddress: deployment?.contentRegistryAddress,
     deploymentKey: deployment?.deploymentKey,
     feedbackRegistryAddress: deployment?.feedbackRegistryAddress,
