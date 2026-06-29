@@ -41,7 +41,7 @@ No new critical or high severity findings were identified in this pass.
 
 | ID | Severity | Status | Title |
 | --- | --- | --- | --- |
-| M-1 | Medium | Open | Rejected cluster snapshots can pin reward funds before escrow qualification |
+| M-1 | Medium | Fixed | Rejected cluster snapshots can pin reward funds before escrow qualification |
 
 ## Findings
 
@@ -49,7 +49,7 @@ No new critical or high severity findings were identified in this pass.
 
 Severity: Medium
 
-Status: Open
+Status: Fixed
 
 Affected areas:
 
@@ -123,6 +123,26 @@ Add regression tests for both variants of the affected surface:
 
 Each test should assert that the fixed path can advance, refund, or recover without waiting for a
 replacement finalized snapshot.
+
+#### Resolution
+
+Fixed on 2026-06-29 by adding pre-qualification rejected-snapshot skip paths for both affected
+surfaces:
+
+- `QuestionRewardPoolEscrow.skipPreQualificationRejectedSnapshotRound`
+- `QuestionRewardPoolEscrow.skipPreQualificationRejectedSnapshotBundleRoundSet`
+
+The question-pool skip verifies the rejected oracle snapshot, advances the qualification cursor
+without moving allocation into a snapshot, and still allows a corrected replacement snapshot to
+qualify the skipped round before the unallocated bounty is refunded. The bundle skip verifies the
+rejected bundle snapshot, rewinds the recorded round set, and unblocks refund/recovery without
+requiring a qualified escrow snapshot.
+
+Regression coverage was added in `QuestionRewardPoolEscrowTest` for:
+
+- pre-qualification rejected question snapshots that can be skipped and refunded;
+- pre-qualification rejected question snapshots that can later qualify a corrected replacement;
+- pre-qualification rejected bundle snapshots that can be skipped and refunded.
 
 ## Prior Finding Recheck
 
@@ -220,6 +240,23 @@ The failures appear to be stale test assumptions rather than the Medium finding 
 
 Recommended follow-up: fix the stale fixtures so `forge test --offline` returns to green, then add the
 M-1 regression tests described above.
+
+### Post-fix M-1 verification
+
+Command:
+
+```bash
+forge test --match-contract QuestionRewardPoolEscrowTest --offline
+```
+
+Result: pass. The focused escrow suite passed 192 tests, including regression coverage for
+pre-qualification rejected question snapshots, corrected replacement snapshots, and bundle snapshot
+round-set skips.
+
+Additional post-fix gates:
+
+- `make -C packages/foundry check-storage-layouts`: pass.
+- `make -C packages/foundry check-contract-sizes`: pass.
 
 ## Advisory Research Notes
 

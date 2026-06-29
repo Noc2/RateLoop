@@ -6,6 +6,8 @@ Scope: reviewed the fresh-redeploy simplification currently on `main` through
 `ae2be514e`, with focus on the single shared question duration, removal of
 post-creation bounty/bonus funding, creation-time Feedback Bonus paths,
 Ponder/indexer compatibility, public agent surfaces, and test coverage.
+Updated after the 2026-06-29 fix pass to mark resolved items and capture the
+new regression coverage.
 
 Review method:
 
@@ -14,13 +16,29 @@ Review method:
 - Targeted verification:
   - `node ../../scripts/run-node-tests.mjs lib/x402/questionSubmission.test.ts lib/mcp/tools.test.ts lib/agent/browserSigningValidation.test.ts lib/agent/handoffRoundConfig.test.ts`
     passed 82 tests from `packages/nextjs`.
+  - `node ../../scripts/run-node-tests.mjs lib/x402/questionSubmission.test.ts lib/mcp/tools.test.ts lib/agent/browserSigningValidation.test.ts lib/agent/handoffRoundConfig.test.ts app/api/agent/routes.test.ts`
+    passed 141 tests from `packages/nextjs` after the fix pass.
   - `yarn next:check-types` passed.
+  - `yarn workspace @rateloop/contracts check-types` passed.
+  - `yarn next:build` passed.
+  - `forge test --match-contract QuestionRewardPoolEscrowTest --offline` passed
+    192 tests from `packages/foundry`.
+  - `make -C packages/foundry check-storage-layouts` and
+    `make -C packages/foundry check-contract-sizes` passed.
 
-## Open Findings
+## Resolved Findings
 
 ### P1: Ponder reward-root eligibility can diverge from on-chain qualification for x402 payer identity
 
-Status: open
+Status: fixed
+
+Resolution:
+
+- `RewardPoolCreated` now emits the effective payer and submitter identity data
+  used by on-chain qualification.
+- Ponder stores those fields and filters reward-root candidates with the same
+  identity keys Solidity excludes.
+- Correlation tests cover gateway/payer/submitter divergence for x402 asks.
 
 The question-reward correlation path in Ponder excludes the emitted pool
 `funder`, emitted `funderIdentityKey`, and raw `content.submitter`:
@@ -63,7 +81,16 @@ Suggested fix:
 
 ### P2: Public agent surfaces still allow or advertise unsupported Feedback Bonus modes
 
-Status: open
+Status: fixed
+
+Resolution:
+
+- Public agent schemas, docs, SDK examples, and handoff copy now describe
+  Feedback Bonuses as USDC-only x402/EIP-3009 creation-time funding.
+- Handoff editing disables Feedback Bonus controls when an LREP bounty is
+  selected and clears an incompatible stored bonus before saving.
+- Browser signing rejects `agent_wallet` aliases with Feedback Bonuses early,
+  and route tests cover the EIP-3009 prepare path for eligible USDC asks.
 
 The live implementation currently supports creation-time Feedback Bonus funding
 only through the USDC x402/EIP-3009 authorization path:
@@ -123,7 +150,15 @@ Suggested fix:
 
 ### P2: Live ask guidance still recommends impossible post-creation top-ups
 
-Status: open
+Status: fixed
+
+Resolution:
+
+- Low-response guidance no longer emits `top_up`.
+- The replacement action is `create_replacement_ask`, with
+  `suggestedReplacementBountyAtomic` reserved for planning a new ask rather
+  than modifying an existing one.
+- Callback tests assert the replacement-ask guidance shape.
 
 `liveAskGuidance` still models and emits `top_up`:
 
@@ -155,7 +190,17 @@ Suggested fix:
 
 ### P2: Playwright coverage does not yet prove the positive creation-time Feedback Bonus path
 
-Status: open
+Status: fixed
+
+Resolution:
+
+- Added a focused browser handoff Playwright test for a USDC Feedback Bonus and
+  one shared duration.
+- The test verifies the restored draft values, edits the Feedback Bonus amount,
+  saves the draft, and asserts the persisted authorization amount and shared
+  `roundConfig` values remain coherent.
+- The existing API route tests continue to cover the prepare-time one-shot
+  EIP-3009 authorization path.
 
 The redeploy checklist explicitly calls for browser coverage that submits
 creation-time bounty plus Feedback Bonus handoffs with one shared duration:
@@ -185,7 +230,14 @@ Suggested fix:
 
 ### P3: Local seed no longer creates any Feedback Bonus pool
 
-Status: open
+Status: fixed
+
+Resolution:
+
+- `SeedContent.sh` now logs that local Feedback Bonus smoke tests should submit
+  a single-question USDC x402 ask after seeding.
+- The root README documents the same expectation so local smoke tests do not
+  mistake the absence of standalone seeded pools for missing support.
 
 `SeedContent.sh` now enters the Feedback Bonus section and skips it entirely:
 
@@ -214,7 +266,9 @@ Suggested fix:
 ## Remaining Verification Gaps
 
 - No live Base Sepolia or Base mainnet cutover smoke was run in this review.
-- No full Playwright suite was run during this review; the findings above
-  identify missing coverage to add before cutover.
+- No full Playwright suite was run during this review; the focused browser
+  coverage was added, but local E2E preflight failed because Anvil, Next.js,
+  and Ponder were not all reachable. Full-suite and cutover smoke should still
+  be run before mainnet redeployment.
 - No Ponder migration/index replay was run against a database containing
   gateway/payer/submitter identity divergence.
