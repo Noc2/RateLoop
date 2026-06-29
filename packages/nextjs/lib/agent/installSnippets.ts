@@ -84,7 +84,10 @@ export const RATELOOP_CLAUDE_USER_MCP_COMMAND = `claude mcp add --transport http
 
 export const RATELOOP_CODEX_MCP_COMMAND = `codex mcp add rateloop --url ${RATELOOP_PUBLIC_MCP_URL}`;
 
-export type AgentInstallSnippetKind = "prompt" | "mcp" | "rule" | "skill";
+export const RATELOOP_CODEX_PLUGIN_MARKETPLACE_COMMAND =
+  "codex plugin marketplace add Noc2/RateLoop --ref main --sparse .agents/plugins --sparse plugins/rateloop";
+
+export type AgentInstallSnippetKind = "prompt" | "plugin" | "mcp" | "rule" | "skill";
 
 export type AgentInstallSnippet = {
   readonly description: string;
@@ -154,9 +157,18 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`,
   {
     ariaLabel: "Install RateLoop in OpenAI Codex",
     name: "OpenAI Codex",
-    recommended: ["mcp", "rule", "skill"],
+    recommended: ["plugin", "mcp", "rule", "skill"],
     snippets: [
       oneTimePromptSnippet,
+      {
+        description:
+          "Add the repo marketplace, then install the RateLoop plugin from Codex. The plugin bundles the RateLoop skill and public MCP server.",
+        kind: "plugin",
+        label: "Install plugin",
+        text: `${RATELOOP_CODEX_PLUGIN_MARKETPLACE_COMMAND}
+
+# Then open Plugins in Codex and install RateLoop from the RateLoop marketplace.`,
+      },
       {
         description: "Run once in Codex CLI. The CLI and app share the configured MCP server.",
         kind: "mcp",

@@ -2,6 +2,7 @@ import {
   RATELOOP_AGENT_INSTALL_TARGETS,
   RATELOOP_AGENT_STANDING_RULE,
   RATELOOP_CODEX_MCP_COMMAND,
+  RATELOOP_CODEX_PLUGIN_MARKETPLACE_COMMAND,
   RATELOOP_CONTRACT_DEPLOYMENT_NOTE,
   RATELOOP_GENERIC_MCP_CONFIG,
   RATELOOP_ONE_TIME_AGENT_PROMPT,
@@ -53,7 +54,8 @@ test("Codex target exposes MCP command, AGENTS.md rule, and skill URL", () => {
   const codex = getAgentInstallTarget("OpenAI Codex");
   assert.ok(codex);
 
-  assert.deepEqual(codex.recommended, ["mcp", "rule", "skill"]);
+  assert.deepEqual(codex.recommended, ["plugin", "mcp", "rule", "skill"]);
+  assert.ok(codex.snippets.some(snippet => snippet.text.includes(RATELOOP_CODEX_PLUGIN_MARKETPLACE_COMMAND)));
   assert.ok(codex.snippets.some(snippet => snippet.text === RATELOOP_CODEX_MCP_COMMAND));
   assert.ok(codex.snippets.some(snippet => snippet.label === "Add AGENTS.md rule"));
   assert.ok(codex.snippets.some(snippet => snippet.text === RATELOOP_SKILL_URL));

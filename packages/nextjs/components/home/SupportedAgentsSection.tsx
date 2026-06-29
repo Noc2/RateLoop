@@ -83,6 +83,8 @@ function getSnippetKindLabel(kind: AgentInstallSnippetKind) {
   switch (kind) {
     case "prompt":
       return "Run demo";
+    case "plugin":
+      return "Plugin";
     case "mcp":
       return "MCP tools";
     case "rule":
