@@ -612,6 +612,7 @@ else
 
   echo "Skipping standalone feedback bonus pool setup."
   echo "Feedback Bonuses are now funded only at question creation through the x402 gateway path."
+  echo "For local Feedback Bonus smoke tests, submit a single-question USDC x402 ask after seeding."
   echo ""
 fi
 

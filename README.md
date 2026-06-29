@@ -160,6 +160,10 @@ Visit [http://localhost:3000](http://localhost:3000).
 
 If you only want the database helper, use `yarn dev:db`. It starts the local Postgres container without the other services.
 
+The local content seed script no longer creates standalone Feedback Bonus pools. Feedback Bonus smoke tests should create a
+single-question USDC ask through the x402/EIP-3009 creation path so the bounty, bonus, and shared question duration follow
+the same production flow.
+
 ### Run the Keeper
 
 The keeper is a standalone service that settles eligible rounds, cancels expired rounds, marks dormant content, and can publish correlation payout snapshots from deterministic artifacts. Snapshot publishing can use a separate keeper wallet that first approves the bonded frontend operator and is then delegated by that frontend. In production it depends on Ponder for work discovery and may use Postgres advisory locks for correlation snapshot publication — see [`packages/keeper/README.md`](packages/keeper/README.md) for persistence, lock, and multi-replica guidance.
