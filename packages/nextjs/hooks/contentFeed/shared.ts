@@ -125,6 +125,7 @@ export interface ContentItem {
     refundedAmount: bigint;
     bountyEligibility?: number | null;
     bountyEligibilityDataHash?: string | null;
+    questionDurationSeconds?: number;
     bountyStartBy?: bigint;
     bountyOpensAt?: bigint;
     bountyClosesAt?: bigint;
@@ -438,6 +439,7 @@ export function mapContentItem(
       feedbackClosesAt?: string | number | bigint | null;
       bountyWindowSeconds?: string | number | null;
       feedbackWindowSeconds?: string | number | null;
+      questionDurationSeconds?: string | number | null;
       expiresAt?: string | number | bigint | null;
       failed?: boolean | null;
       refunded?: boolean | null;
@@ -698,8 +700,18 @@ export function mapContentItem(
             bountyOpensAt: BigInt(item.bundle.bountyOpensAt ?? 0),
             bountyClosesAt: BigInt(item.bundle.bountyClosesAt ?? 0),
             feedbackClosesAt: BigInt(item.bundle.feedbackClosesAt ?? 0),
-            bountyWindowSeconds: numberOrDefault(item.bundle.bountyWindowSeconds, 0),
-            feedbackWindowSeconds: numberOrDefault(item.bundle.feedbackWindowSeconds, 0),
+            questionDurationSeconds: numberOrDefault(
+              item.bundle.questionDurationSeconds ?? item.bundle.bountyWindowSeconds,
+              0,
+            ),
+            bountyWindowSeconds: numberOrDefault(
+              item.bundle.bountyWindowSeconds ?? item.bundle.questionDurationSeconds,
+              0,
+            ),
+            feedbackWindowSeconds: numberOrDefault(
+              item.bundle.feedbackWindowSeconds ?? item.bundle.questionDurationSeconds,
+              0,
+            ),
             expiresAt: BigInt(item.bundle.expiresAt ?? 0),
             failed: item.bundle.failed ?? false,
             refunded: item.bundle.refunded ?? false,

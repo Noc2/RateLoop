@@ -994,6 +994,7 @@ async function attachQuestionBundleSummaries<
             bountyEligibility: bundle.bountyEligibility,
             bountyEligibilityDataHash: bundle.bountyEligibilityDataHash,
             questionDuration: bundle.bountyWindowSeconds,
+            questionDurationSeconds: bundle.bountyWindowSeconds,
             rewardOpensAt: bundle.bountyOpensAt,
             rewardClosesAt: bundle.bountyClosesAt,
             bountyStartBy: bundle.bountyStartBy,

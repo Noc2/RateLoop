@@ -692,6 +692,7 @@ describe("shared API helpers", () => {
     expect(closeExpression).not.toContain("vote.committedAt");
     expect(item?.rewardPoolSummary.hasActiveBounty).toBe(false);
     expect(item?.rewardPoolSummary.questionDuration).toBe(600);
+    expect(item?.rewardPoolSummary.questionDurationSeconds).toBe(600);
     expect(item?.rewardPoolSummary.rewardOpensAt).toBe(1_000n);
     expect(item?.rewardPoolSummary.rewardClosesAt).toBe(1_600n);
     expect(item?.rewardPoolSummary.activeUnallocatedAmount).toBe(0n);
