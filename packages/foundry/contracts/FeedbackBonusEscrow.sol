@@ -30,6 +30,8 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
     using SafeERC20 for IERC20;
     using SafeCast for uint256;
 
+    error StaleEngine();
+
     bytes32 public constant CONFIG_ROLE = keccak256("CONFIG_ROLE");
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
     bytes32 internal constant X402_GATEWAY_ROLE = keccak256("X402_GATEWAY_ROLE");
@@ -591,7 +593,7 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
     }
 
     function _requireCurrentRegistryVotingEngine() internal view {
-        require(registry.votingEngine() == address(votingEngine), "Stale engine");
+        if (registry.votingEngine() != address(votingEngine)) revert StaleEngine();
     }
 
     function _requireRevealedIndependentRater(FeedbackBonusPool storage pool, address recipient)

@@ -331,7 +331,7 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
 
         vm.startPrank(funder);
         usdc.approve(address(feedbackBonusEscrow), BONUS_AMOUNT);
-        vm.expectRevert("Stale engine");
+        vm.expectRevert(FeedbackBonusEscrow.StaleEngine.selector);
         feedbackBonusEscrow.createFeedbackBonusPool(contentId, 1, BONUS_AMOUNT, block.timestamp + 7 days, funder);
         vm.stopPrank();
     }
@@ -552,6 +552,21 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         assertEq(
             feedbackRegistry.awardableFeedbackPublishedAt(contentId, roundId, commitKey, feedbackHash), block.timestamp
         );
+    }
+
+    function testDelegateCanPublishFeedbackAfterDelegatedVote() public {
+        uint256 contentId = _submitQuestion("delegate-feedback-publish");
+        _setAcceptedDelegate(raterRegistry, voter1, delegate1);
+
+        (, bytes32 commitKey) = _commitFeedbackVote(delegate1, contentId, true, 0, address(0));
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(votingEngine, contentId);
+        bytes32 feedbackHash = _feedbackHash(contentId, roundId, delegate1);
+
+        vm.prank(delegate1);
+        feedbackRegistry.publishFeedback(
+            contentId, roundId, commitKey, FEEDBACK_TYPE, FEEDBACK_BODY, FEEDBACK_SOURCE_URL, FEEDBACK_NONCE
+        );
+        assertTrue(feedbackRegistry.isAwardableFeedback(contentId, roundId, commitKey, feedbackHash));
     }
 
     function testPublishedFeedbackCanReceiveAwardAfterSettlement() public {
