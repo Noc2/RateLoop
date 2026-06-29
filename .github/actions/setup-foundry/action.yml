@@ -19,7 +19,13 @@ runs:
         ARCHIVE_URL="https://github.com/foundry-rs/foundry/releases/download/${FOUNDRY_VERSION}/${FOUNDRY_ARCHIVE}"
         ARCHIVE_PATH="$RUNNER_TEMP/${FOUNDRY_ARCHIVE}"
 
-        curl --proto '=https' --tlsv1.2 -LsSf "$ARCHIVE_URL" -o "$ARCHIVE_PATH"
+        curl --proto '=https' --tlsv1.2 -LsSf \
+          --retry 5 \
+          --retry-all-errors \
+          --retry-delay 2 \
+          --retry-max-time 90 \
+          "$ARCHIVE_URL" \
+          -o "$ARCHIVE_PATH"
         echo "${FOUNDRY_SHA256}  ${ARCHIVE_PATH}" | sha256sum -c -
 
         mkdir -p "$HOME/.foundry/bin"
