@@ -283,3 +283,34 @@ test("question reward pool escrow ABI exposes snapshot consumer view", () => {
   );
   assert.equal(consumerView?.stateMutability, "view");
 });
+
+test("question reward pool escrow ABI exposes bundle recovery monitoring events", () => {
+  const bundleEvents = new Map(
+    generatedAbis.QuestionRewardPoolEscrowAbi.filter(
+      (item) =>
+        item.type === "event" &&
+        [
+          "RejectedSnapshotBundleRoundSetRecovered",
+          "RecoveredSnapshotBundleRoundSetReopened",
+          "QuestionBundleTerminalSkipped",
+        ].includes(item.name),
+    ).map((item) => [item.name, item.inputs.map((input) => input.type)]),
+  );
+
+  assert.deepEqual(bundleEvents.get("RejectedSnapshotBundleRoundSetRecovered"), [
+    "uint256",
+    "uint256",
+    "uint256",
+  ]);
+  assert.deepEqual(bundleEvents.get("RecoveredSnapshotBundleRoundSetReopened"), [
+    "uint256",
+    "uint256",
+    "bytes32",
+  ]);
+  assert.deepEqual(bundleEvents.get("QuestionBundleTerminalSkipped"), [
+    "uint256",
+    "uint256",
+    "uint256",
+    "uint8",
+  ]);
+});

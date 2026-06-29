@@ -1946,6 +1946,37 @@ export const QuestionRewardPoolEscrowAbi = [
   },
   {
     "type": "event",
+    "name": "QuestionBundleTerminalSkipped",
+    "inputs": [
+      {
+        "name": "bundleId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "contentId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "roundId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "reasonCode",
+        "type": "uint8",
+        "indexed": false,
+        "internalType": "uint8"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "QuestionBundleWindowActivated",
     "inputs": [
       {
@@ -2044,6 +2075,31 @@ export const QuestionRewardPoolEscrowAbi = [
   },
   {
     "type": "event",
+    "name": "RecoveredSnapshotBundleRoundSetReopened",
+    "inputs": [
+      {
+        "name": "bundleId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "roundSetIndex",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "newWeightRoot",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "RecoveredSnapshotRoundReopened",
     "inputs": [
       {
@@ -2069,6 +2125,31 @@ export const QuestionRewardPoolEscrowAbi = [
         "type": "bytes32",
         "indexed": false,
         "internalType": "bytes32"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "RejectedSnapshotBundleRoundSetRecovered",
+    "inputs": [
+      {
+        "name": "bundleId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "roundSetIndex",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "allocationReturned",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
       }
     ],
     "anonymous": false

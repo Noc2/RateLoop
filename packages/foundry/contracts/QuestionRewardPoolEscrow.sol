@@ -237,6 +237,15 @@ contract QuestionRewardPoolEscrow is
     event QuestionBundleRoundSetQualified(
         uint256 indexed bundleId, uint256 indexed roundSetIndex, uint256 allocation, uint256 frontendFeeAllocation
     );
+    event RejectedSnapshotBundleRoundSetRecovered(
+        uint256 indexed bundleId, uint256 indexed roundSetIndex, uint256 allocationReturned
+    );
+    event RecoveredSnapshotBundleRoundSetReopened(
+        uint256 indexed bundleId, uint256 indexed roundSetIndex, bytes32 newWeightRoot
+    );
+    event QuestionBundleTerminalSkipped(
+        uint256 indexed bundleId, uint256 indexed contentId, uint256 indexed roundId, uint8 reasonCode
+    );
     event QuestionBundleRoundSetCorrelationSnapshotApplied(
         uint256 indexed bundleId,
         uint256 indexed roundSetIndex,
