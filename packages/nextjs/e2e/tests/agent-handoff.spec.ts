@@ -18,11 +18,16 @@ type AgentQuestionRequest = {
   bounty: {
     amount: string;
     asset: "USDC";
+    requiredVoters?: string;
   };
   chainId: number;
   clientRequestId: string;
+  feedbackBonus?: {
+    amount: string;
+    asset: "USDC";
+  };
   maxPaymentAmount: string;
-  paymentMode: "wallet_calls";
+  paymentMode: "wallet_calls" | "x402_authorization";
   question: {
     categoryId: string;
     confidentiality?: {
@@ -41,6 +46,11 @@ type AgentQuestionRequest = {
     templateId?: string;
     templateInputs?: Record<string, string>;
     title: string;
+  };
+  roundConfig?: {
+    maxVoters?: string;
+    minVoters?: string;
+    questionDurationSeconds?: string;
   };
   walletAddress: string;
 };
@@ -220,6 +230,89 @@ test.describe("Agent browser handoffs", () => {
     await expect(page.getByRole("button", { name: "A/B comparison" })).toHaveClass(/btn-primary/);
     await expect(page.getByRole("textbox", { name: "Option A" })).toHaveValue("Hermes Agent");
     await expect(page.getByRole("textbox", { name: "Option B" })).toHaveValue("OpenClaw");
+
+    await context.close();
+  });
+
+  test("agent ask handoff preserves USDC Feedback Bonus and shared duration in edited drafts", async ({
+    browser,
+    request,
+  }) => {
+    test.setTimeout(120_000);
+
+    const originalTitle = `Agent feedback bonus handoff ${Date.now()}`;
+    const requestBody = baseAgentQuestionRequest(`agent-handoff-feedback-${Date.now()}`, originalTitle);
+    requestBody.bounty = {
+      amount: "1000000",
+      asset: "USDC",
+      requiredVoters: "5",
+    };
+    requestBody.feedbackBonus = {
+      amount: "500000",
+      asset: "USDC",
+    };
+    requestBody.maxPaymentAmount = "1500000";
+    requestBody.paymentMode = "x402_authorization";
+    requestBody.roundConfig = {
+      maxVoters: "50",
+      minVoters: "5",
+      questionDurationSeconds: "1200",
+    };
+
+    const createResponse = await request.post("/api/agent/handoffs", {
+      data: {
+        request: requestBody,
+        ttlMs: 300_000,
+      },
+    });
+    expect(createResponse.ok(), await createResponse.text()).toBe(true);
+    const created = (await createResponse.json()) as HandoffCreateResponse;
+    const token = tokenFromFragment(created.handoffUrl);
+    expect(token).toBeTruthy();
+
+    const context = await newE2EContext(browser);
+    const page = await context.newPage();
+    await setupWallet(page, ANVIL_ACCOUNTS.account2.privateKey);
+    await openPrivateTokenPage(
+      page,
+      created.handoffUrl,
+      new RegExp(`/agent/handoff/${created.handoffId}$`),
+      "Agent ask handoff",
+      originalTitle,
+    );
+
+    await expect(page.getByRole("button", { name: /^Add bonus$/i })).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator("#agent-ask-feedback-bonus-amount")).toHaveValue("0.5");
+    await expect(page.getByLabel("Question duration")).toHaveValue("20");
+    await expect(page.getByLabel("Question duration unit")).toHaveValue("minutes");
+    await expect(page.locator("#agent-ask-round-min-voters")).toHaveValue("5");
+    await expect(page.locator("#agent-ask-round-max-voters")).toHaveValue("50");
+
+    await page.locator("#agent-ask-feedback-bonus-amount").fill("0.75");
+    await page.getByRole("button", { name: "Save draft" }).click();
+    await expect(page.getByText("Draft saved.")).toBeVisible({ timeout: 30_000 });
+
+    const readResponse = await request.get(`/api/agent/handoffs/${created.handoffId}`, {
+      headers: {
+        "x-rateloop-handoff-token": token,
+      },
+    });
+    expect(readResponse.ok(), await readResponse.text()).toBe(true);
+    const saved = (await readResponse.json()) as {
+      requestBody: AgentQuestionRequest;
+    };
+
+    expect(saved.requestBody.feedbackBonus).toMatchObject({
+      amount: "750000",
+      asset: "USDC",
+    });
+    expect(saved.requestBody.maxPaymentAmount).toBe("1750000");
+    expect(saved.requestBody.roundConfig).toMatchObject({
+      maxVoters: "50",
+      minVoters: "5",
+      questionDurationSeconds: "1200",
+    });
+    expect(saved.requestBody.bounty.requiredVoters).toBe("5");
 
     await context.close();
   });
