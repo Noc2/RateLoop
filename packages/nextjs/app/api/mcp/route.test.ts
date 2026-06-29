@@ -303,6 +303,11 @@ test("tools/list accepts supported MCP-Protocol-Version and returns tool annotat
   const quoteSchema = toolByName.get("rateloop_quote_question")?.inputSchema as {
     properties?: Record<string, unknown>;
   };
+  const handoffSchema = toolByName.get("rateloop_create_ask_handoff_link")?.inputSchema as {
+    properties?: {
+      ttlMs?: { description?: string; maximum?: number; minimum?: number };
+    };
+  };
   const askSchema = toolByName.get("rateloop_ask_humans")?.inputSchema as {
     properties?: {
       feedbackBonus?: { properties?: { asset?: { enum?: string[] } } };
@@ -334,6 +339,9 @@ test("tools/list accepts supported MCP-Protocol-Version and returns tool annotat
     required?: string[];
   };
   assert.ok(quoteSchema.properties?.walletAddress);
+  assert.equal(handoffSchema.properties?.ttlMs?.minimum, 60_000);
+  assert.equal(handoffSchema.properties?.ttlMs?.maximum, 1_800_000);
+  assert.match(handoffSchema.properties?.ttlMs?.description ?? "", /maximum 1800000/);
   assert.deepEqual(askSchema.properties?.mode?.enum, ["dry_run"]);
   assert.deepEqual(askSchema.properties?.feedbackBonus?.properties?.asset?.enum, ["USDC", "usdc"]);
   assert.deepEqual(askOutputSchema.properties?.pollAfterMs?.type, ["integer", "null"]);
