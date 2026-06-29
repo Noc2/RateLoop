@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useEffect, useState } from "react";
+import React, { type ReactNode, useEffect, useState } from "react";
 import { ChatBubbleLeftRightIcon, ShareIcon } from "@heroicons/react/24/outline";
 import { FundFeedbackBonusModal } from "~~/components/reward-pool/FundFeedbackBonusModal";
 import { FundQuestionModal } from "~~/components/reward-pool/FundQuestionModal";
@@ -332,9 +332,9 @@ export function RewardPoolAmountDisplay({ amount, currency }: { amount: bigint; 
     <RewardAmountDisplay
       amount={amount}
       amountLabel={display.amountLabel}
-      label="bounty"
+      label="Bounty"
       tooltip={display.tooltip}
-      ariaLabel="bounty"
+      ariaLabel="Bounty"
       tone="blue"
     />
   );
@@ -354,13 +354,13 @@ export function FeedbackBonusAmountDisplay({ amount, currency }: { amount: bigin
   );
 }
 
-function getFeedbackBonusDisplay(amount: bigint, currency: RewardPoolCurrency | undefined) {
+export function getFeedbackBonusDisplay(amount: bigint, currency: RewardPoolCurrency | undefined) {
   const amountLabel =
     currency === "LREP"
       ? formatSubmissionRewardAmount(amount, "lrep")
       : currency === "MIXED"
         ? "Mixed"
-        : formatSubmissionRewardAmount(amount, "usdc");
+        : formatUsdAmount(amount);
   const tooltip =
     currency === "LREP"
       ? LREP_FEEDBACK_BONUS_TOOLTIP_TEXT
