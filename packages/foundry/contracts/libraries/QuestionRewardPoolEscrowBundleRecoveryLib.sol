@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import { IClusterPayoutOracle } from "../interfaces/IClusterPayoutOracle.sol";
-import { ContentRegistry } from "../ContentRegistry.sol";
-import { ProtocolConfig } from "../ProtocolConfig.sol";
-import { RoundVotingEngine } from "../RoundVotingEngine.sol";
-import { BundleReward, BundleQuestion, BundleRoundSetSnapshot } from "./QuestionRewardPoolEscrowTypes.sol";
-import { QuestionRewardPoolEscrowBundleActionsLib } from "./QuestionRewardPoolEscrowBundleActionsLib.sol";
+import {IClusterPayoutOracle} from "../interfaces/IClusterPayoutOracle.sol";
+import {ContentRegistry} from "../ContentRegistry.sol";
+import {ProtocolConfig} from "../ProtocolConfig.sol";
+import {RoundVotingEngine} from "../RoundVotingEngine.sol";
+import {BundleReward, BundleQuestion, BundleRoundSetSnapshot} from "./QuestionRewardPoolEscrowTypes.sol";
+import {QuestionRewardPoolEscrowBundleActionsLib} from "./QuestionRewardPoolEscrowBundleActionsLib.sol";
+import {QuestionRewardPoolEscrowBundleLib} from "./QuestionRewardPoolEscrowBundleLib.sol";
 
 library QuestionRewardPoolEscrowBundleRecoveryLib {
     event RejectedSnapshotBundleRoundSetRecovered(
@@ -15,6 +16,62 @@ library QuestionRewardPoolEscrowBundleRecoveryLib {
     event RecoveredSnapshotBundleRoundSetReopened(
         uint256 indexed bundleId, uint256 indexed roundSetIndex, bytes32 newWeightRoot
     );
+    event PreQualificationRejectedSnapshotBundleRoundSetSkipped(
+        uint256 indexed bundleId, uint256 indexed roundSetIndex, bytes32 snapshotDigest, bytes32 weightRoot
+    );
+
+    function skipPreQualificationRejectedSnapshotRoundSet(
+        mapping(uint256 => BundleReward) storage bundleRewards,
+        mapping(uint256 => BundleQuestion[]) storage bundleQuestions,
+        mapping(uint256 => mapping(uint256 => uint32)) storage bundleQuestionRecordedRounds,
+        mapping(uint256 => mapping(uint256 => mapping(uint256 => uint64))) storage bundleRoundIds,
+        mapping(uint256 => mapping(uint256 => BundleRoundSetSnapshot)) storage bundleRoundSetSnapshots,
+        mapping(uint256 => address) storage bundleRewardClusterPayoutOracle,
+        mapping(uint256 => uint64) storage bundleRewardClusterPayoutOraclePinnedAt,
+        mapping(uint256 => mapping(uint256 => uint256)) storage bundleQuestionTerminalSyncCursor,
+        RoundVotingEngine votingEngine,
+        uint256 bundleId,
+        uint256 roundSetIndex,
+        uint8 payoutDomain
+    ) external {
+        BundleReward storage bundle = bundleRewards[bundleId];
+        require(bundle.id != 0, "Bundle not found");
+        require(!bundle.refunded, "Bundle refunded");
+        require(_usesClusterPayoutSnapshot(bundleRewardClusterPayoutOracle, bundle), "Not cluster-snapshot bundle");
+        require(bundle.pendingRecoveredRoundSets == 0, "Recovered round set pending");
+        require(roundSetIndex == bundle.completedRoundSets, "Round set out of order");
+        require(roundSetIndex < bundle.requiredSettledRounds, "Invalid round set");
+        require(!bundleRoundSetSnapshots[bundleId][roundSetIndex].qualified, "Round set qualified");
+        require(
+            QuestionRewardPoolEscrowBundleLib.isRoundSetComplete(
+                bundleQuestions, bundleQuestionRecordedRounds, bundleId, roundSetIndex
+            ),
+            "Round set incomplete"
+        );
+
+        (bytes32 snapshotDigest, bytes32 weightRoot) = _requireRejectedPreQualificationBundleSnapshot(
+            bundleQuestions,
+            bundleRoundIds,
+            bundleRewardClusterPayoutOracle,
+            bundleRewardClusterPayoutOraclePinnedAt,
+            votingEngine,
+            bundleId,
+            roundSetIndex,
+            payoutDomain
+        );
+
+        QuestionRewardPoolEscrowBundleLib.resetRoundSet(
+            bundleQuestions,
+            bundleQuestionRecordedRounds,
+            bundleRoundIds,
+            bundleQuestionTerminalSyncCursor,
+            bundleId,
+            roundSetIndex
+        );
+        delete bundleRoundSetSnapshots[bundleId][roundSetIndex];
+
+        emit PreQualificationRejectedSnapshotBundleRoundSetSkipped(bundleId, roundSetIndex, snapshotDigest, weightRoot);
+    }
 
     function recoverOrReopenSnapshotRoundSet(
         mapping(uint256 => BundleReward) storage bundleRewards,
@@ -262,6 +319,44 @@ library QuestionRewardPoolEscrowBundleRecoveryLib {
                 ++i;
             }
         }
+    }
+
+    function _requireRejectedPreQualificationBundleSnapshot(
+        mapping(uint256 => BundleQuestion[]) storage bundleQuestions,
+        mapping(uint256 => mapping(uint256 => mapping(uint256 => uint64))) storage bundleRoundIds,
+        mapping(uint256 => address) storage bundleRewardClusterPayoutOracle,
+        mapping(uint256 => uint64) storage bundleRewardClusterPayoutOraclePinnedAt,
+        RoundVotingEngine votingEngine,
+        uint256 bundleId,
+        uint256 roundSetIndex,
+        uint8 payoutDomain
+    ) private view returns (bytes32 snapshotDigest, bytes32 weightRoot) {
+        address oracleAddr = bundleRewardClusterPayoutOracle[bundleId];
+        require(oracleAddr != address(0), "Oracle not pinned");
+        uint64 pinnedAt = bundleRewardClusterPayoutOraclePinnedAt[bundleId];
+        require(pinnedAt != 0, "Oracle not pinned");
+        uint64 sourceReadyAt =
+            _bundlePayoutSnapshotSourceReadyAt(bundleQuestions, bundleRoundIds, votingEngine, bundleId, roundSetIndex);
+        require(sourceReadyAt != 0, "Cluster source pending");
+
+        IClusterPayoutOracle oracle = IClusterPayoutOracle(oracleAddr);
+        uint256 snapshotRoundId = _bundleSnapshotRoundId(roundSetIndex);
+        IClusterPayoutOracle.RoundPayoutSnapshot memory oracleSnapshot =
+            oracle.getRoundPayoutSnapshot(payoutDomain, bundleId, bundleId, snapshotRoundId);
+        require(oracleSnapshot.status == IClusterPayoutOracle.SnapshotStatus.Rejected, "Snapshot not rejected");
+        require(
+            oracle.roundPayoutSnapshotConsumerFor(payoutDomain, bundleId, bundleId, snapshotRoundId) == address(this),
+            "Cluster consumer mismatch"
+        );
+        uint64 proposedAt = oracle.roundPayoutSnapshotProposedAt(payoutDomain, bundleId, bundleId, snapshotRoundId);
+        require(proposedAt >= sourceReadyAt && proposedAt >= pinnedAt, "Cluster source stale");
+
+        bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(payoutDomain, bundleId, bundleId, snapshotRoundId);
+        snapshotDigest = oracle.roundPayoutSnapshotProposalDigest(snapshotKey);
+        weightRoot = oracleSnapshot.weightRoot;
+        bool rejected = oracle.rejectedRoundPayoutSnapshotDigests(snapshotKey, snapshotDigest)
+            || oracle.rejectedRoundPayoutSnapshotRoots(snapshotKey, weightRoot);
+        require(rejected, "Snapshot rejection missing");
     }
 
     function _usesClusterPayoutSnapshot(

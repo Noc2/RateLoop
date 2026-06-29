@@ -165,29 +165,35 @@
     {
       "slot": 27,
       "offset": 0,
+      "label": "preQualificationRejectedRound",
+      "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_bool))"
+    },
+    {
+      "slot": 28,
+      "offset": 0,
       "label": "qualifiedQuestionRewardClaimants",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_mapping(t_bytes32,t_mapping(t_bytes32,t_bool))))"
     },
     {
-      "slot": 28,
+      "slot": 29,
       "offset": 0,
       "label": "qualifiedBundleRoundSetClaimants",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_mapping(t_bytes32,t_bool)))"
     },
     {
-      "slot": 29,
+      "slot": 30,
       "offset": 0,
       "label": "rejectedRecoveredBundleRoundSet",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_bool))"
     },
     {
-      "slot": 30,
+      "slot": 31,
       "offset": 0,
       "label": "reopenedRecoveredBundleRoundSet",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_bool))"
     },
     {
-      "slot": 31,
+      "slot": 32,
       "offset": 0,
       "label": "__gap",
       "type": "t_array(t_uint256)"
@@ -210,8 +216,8 @@
     {
       "id": "t_array(t_uint256)",
       "encoding": "inplace",
-      "label": "uint256[42]",
-      "numberOfBytes": "1344",
+      "label": "uint256[41]",
+      "numberOfBytes": "1312",
       "base": "t_uint256"
     },
     {

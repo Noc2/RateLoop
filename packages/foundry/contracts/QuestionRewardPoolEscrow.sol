@@ -1,38 +1,36 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
-import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
-import { ReentrancyGuardTransient } from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
+import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-import { ContentRegistry } from "./ContentRegistry.sol";
-import { RoundVotingEngine } from "./RoundVotingEngine.sol";
-import { ProtocolConfig } from "./ProtocolConfig.sol";
-import { IClusterPayoutOracle } from "./interfaces/IClusterPayoutOracle.sol";
-import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol";
-import { IRaterRegistryStatus } from "./interfaces/IRaterRegistryStatus.sol";
-import { IRoundPayoutSnapshotConsumer } from "./interfaces/IRoundPayoutSnapshotConsumer.sol";
-import { RoundLib } from "./libraries/RoundLib.sol";
-import { QuestionRewardPoolEscrowBundleActionsLib } from "./libraries/QuestionRewardPoolEscrowBundleActionsLib.sol";
-import { QuestionRewardPoolEscrowBundlePreviewLib } from "./libraries/QuestionRewardPoolEscrowBundlePreviewLib.sol";
+import {ContentRegistry} from "./ContentRegistry.sol";
+import {RoundVotingEngine} from "./RoundVotingEngine.sol";
+import {ProtocolConfig} from "./ProtocolConfig.sol";
+import {IClusterPayoutOracle} from "./interfaces/IClusterPayoutOracle.sol";
+import {IRaterIdentityRegistry} from "./interfaces/IRaterIdentityRegistry.sol";
+import {IRaterRegistryStatus} from "./interfaces/IRaterRegistryStatus.sol";
+import {IRoundPayoutSnapshotConsumer} from "./interfaces/IRoundPayoutSnapshotConsumer.sol";
+import {RoundLib} from "./libraries/RoundLib.sol";
+import {QuestionRewardPoolEscrowBundleActionsLib} from "./libraries/QuestionRewardPoolEscrowBundleActionsLib.sol";
+import {QuestionRewardPoolEscrowBundlePreviewLib} from "./libraries/QuestionRewardPoolEscrowBundlePreviewLib.sol";
 import {
     QuestionRewardPoolEscrowClaimLib,
     EqualShareInputs,
     WeightedShareInputs,
     ClaimableQuestionRewardParams
 } from "./libraries/QuestionRewardPoolEscrowClaimLib.sol";
-import { QuestionRewardPoolEscrowQualificationLib } from "./libraries/QuestionRewardPoolEscrowQualificationLib.sol";
-import { QuestionRewardPoolEscrowRecoveryLib } from "./libraries/QuestionRewardPoolEscrowRecoveryLib.sol";
-import { QuestionRewardPoolEscrowBundleRecoveryLib } from "./libraries/QuestionRewardPoolEscrowBundleRecoveryLib.sol";
-import { QuestionRewardPoolEscrowPoolActionsLib } from "./libraries/QuestionRewardPoolEscrowPoolActionsLib.sol";
-import {
-    QuestionRewardPoolEscrowSnapshotConsumerLib
-} from "./libraries/QuestionRewardPoolEscrowSnapshotConsumerLib.sol";
-import { QuestionRewardPoolEscrowTransferLib } from "./libraries/QuestionRewardPoolEscrowTransferLib.sol";
-import { QuestionRewardPoolEscrowWindowLib } from "./libraries/QuestionRewardPoolEscrowWindowLib.sol";
-import { TokenTransferLib } from "./libraries/TokenTransferLib.sol";
+import {QuestionRewardPoolEscrowQualificationLib} from "./libraries/QuestionRewardPoolEscrowQualificationLib.sol";
+import {QuestionRewardPoolEscrowRecoveryLib} from "./libraries/QuestionRewardPoolEscrowRecoveryLib.sol";
+import {QuestionRewardPoolEscrowBundleRecoveryLib} from "./libraries/QuestionRewardPoolEscrowBundleRecoveryLib.sol";
+import {QuestionRewardPoolEscrowPoolActionsLib} from "./libraries/QuestionRewardPoolEscrowPoolActionsLib.sol";
+import {QuestionRewardPoolEscrowSnapshotConsumerLib} from "./libraries/QuestionRewardPoolEscrowSnapshotConsumerLib.sol";
+import {QuestionRewardPoolEscrowTransferLib} from "./libraries/QuestionRewardPoolEscrowTransferLib.sol";
+import {QuestionRewardPoolEscrowWindowLib} from "./libraries/QuestionRewardPoolEscrowWindowLib.sol";
+import {TokenTransferLib} from "./libraries/TokenTransferLib.sol";
 import {
     RewardPool,
     RoundSnapshot,
@@ -43,7 +41,7 @@ import {
     CreateSubmissionBundleParams,
     BOUNTY_ELIGIBILITY_OPEN
 } from "./libraries/QuestionRewardPoolEscrowTypes.sol";
-import { QuestionRewardPoolEscrowVoterLib } from "./libraries/QuestionRewardPoolEscrowVoterLib.sol";
+import {QuestionRewardPoolEscrowVoterLib} from "./libraries/QuestionRewardPoolEscrowVoterLib.sol";
 
 /// @title QuestionRewardPoolEscrow
 /// @notice Holds per-question USDC bounties and pays equal per-round rewards to revealed voters.
@@ -108,6 +106,10 @@ contract QuestionRewardPoolEscrow is
     /// @notice Tracks recovered rounds reopened for requalification. The
     ///         qualification path honours this flag to admit `roundId != nextRoundToEvaluate`.
     mapping(uint256 => mapping(uint256 => bool)) public reopenedRecoveredRound;
+    /// @notice Tracks current-cursor rounds skipped after their pre-qualification cluster
+    ///         snapshot was rejected. These rounds did not move allocation into a snapshot, so
+    ///         replacement qualification uses normal allocation math instead of recovery debt.
+    mapping(uint256 => mapping(uint256 => bool)) private preQualificationRejectedRound;
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => mapping(bytes32 => bool)))) private
         qualifiedQuestionRewardClaimants;
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) private qualifiedBundleRoundSetClaimants;
@@ -189,6 +191,13 @@ contract QuestionRewardPoolEscrow is
     event RejectedSnapshotRoundRecovered(
         uint256 indexed rewardPoolId, uint256 indexed contentId, uint256 indexed roundId, uint256 allocationReturned
     );
+    event PreQualificationRejectedSnapshotRoundSkipped(
+        uint256 indexed rewardPoolId,
+        uint256 indexed contentId,
+        uint256 indexed roundId,
+        bytes32 snapshotDigest,
+        bytes32 weightRoot
+    );
     /// @notice Emitted by `reopenRecoveredSnapshotRound` when a recovered round can be
     ///         requalified against a NEW finalized oracle snapshot. (FE-1.)
     event RecoveredSnapshotRoundReopened(
@@ -236,6 +245,9 @@ contract QuestionRewardPoolEscrow is
         uint256 effectiveParticipantUnits,
         uint256 totalClaimWeight,
         bytes32 weightRoot
+    );
+    event PreQualificationRejectedSnapshotBundleRoundSetSkipped(
+        uint256 indexed bundleId, uint256 indexed roundSetIndex, bytes32 snapshotDigest, bytes32 weightRoot
     );
     event QuestionBundleClusterPayoutOracleSnapshotted(uint256 indexed bundleId, address indexed clusterPayoutOracle);
     event QuestionBundleClusterPayoutOracleRepointed(
@@ -768,6 +780,26 @@ contract QuestionRewardPoolEscrow is
         );
     }
 
+    /// @notice Advance past a current cursor round whose cluster payout snapshot was rejected
+    ///         before qualification, without mutating allocation or recovered-round accounting.
+    /// @dev A corrected snapshot can still qualify this exact round before unallocated funds are
+    ///      refunded; the qualification path treats this flag as a cursor bypass only.
+    function skipPreQualificationRejectedSnapshotRound(uint256 rewardPoolId, uint256 roundId) external nonReentrant {
+        QuestionRewardPoolEscrowRecoveryLib.skipPreQualificationRejectedSnapshotRound(
+            rewardPools,
+            roundSnapshots,
+            rewardPoolPayerIdentity,
+            rewardPoolPayerIdentityKey,
+            rewardPoolClusterPayoutOracle,
+            rewardPoolClusterPayoutOraclePinnedAt,
+            preQualificationRejectedRound,
+            votingEngine,
+            rewardPoolId,
+            roundId,
+            PAYOUT_DOMAIN_QUESTION_REWARD
+        );
+    }
+
     /// @notice Reopen a previously recovered round for requalification once the oracle has a
     ///         NEW finalized snapshot whose `weightRoot` is not on the rejected set.
     /// @dev FE-1 (audit 2026-05-20-followup). Without this entrypoint, honest voters of a
@@ -815,6 +847,26 @@ contract QuestionRewardPoolEscrow is
             PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD
         );
         _qualifyRecoveredSnapshotBundleRoundSetIfNeeded(bundleId, roundSetIndex);
+    }
+
+    function skipPreQualificationRejectedSnapshotBundleRoundSet(uint256 bundleId, uint256 roundSetIndex)
+        external
+        nonReentrant
+    {
+        QuestionRewardPoolEscrowBundleRecoveryLib.skipPreQualificationRejectedSnapshotRoundSet(
+            bundleRewards,
+            bundleQuestions,
+            bundleQuestionRecordedRounds,
+            bundleRoundIds,
+            bundleRoundSetSnapshots,
+            bundleRewardClusterPayoutOracle,
+            bundleRewardClusterPayoutOraclePinnedAt,
+            bundleQuestionTerminalSyncCursor,
+            votingEngine,
+            bundleId,
+            roundSetIndex,
+            PAYOUT_DOMAIN_QUESTION_BUNDLE_REWARD
+        );
     }
 
     function recordBundleQuestionTerminal(uint256 contentId, uint256 roundId, bool settled) external {
@@ -1102,7 +1154,9 @@ contract QuestionRewardPoolEscrow is
                 account: account,
                 bpsScale: BPS_SCALE,
                 payoutDomain: PAYOUT_DOMAIN_QUESTION_REWARD,
-                reopenedRecoveredRound: reopenedRecoveredRound[rewardPoolId][roundId]
+                bypassQualificationCursor: reopenedRecoveredRound[rewardPoolId][roundId]
+                    || preQualificationRejectedRound[rewardPoolId][roundId],
+                useRecoveredAllocation: reopenedRecoveredRound[rewardPoolId][roundId]
             })
         );
     }
@@ -1265,12 +1319,11 @@ contract QuestionRewardPoolEscrow is
     }
 
     function _qualifyRound(uint256 rewardPoolId, RewardPool storage rewardPool, uint256 roundId) internal {
-        // FE-1 (audit 2026-05-20-followup): the cluster-snapshot qualification path admits
-        // either (a) `roundId == nextRoundToEvaluate` (the normal sequential cursor) or
-        // (b) a previously recovered round that has been reopened against a NEW oracle
-        // snapshot. Clear recovery flags only after qualification succeeds so a replacement
-        // snapshot rejected between reopen and qualification cannot strand the round.
+        // FE-1 / 2026-06 follow-up: cluster qualification admits either the normal cursor,
+        // a recovered-and-reopened round, or a pre-qualification rejected round that was
+        // explicitly skipped. Only recovered rounds use parked allocation.
         bool reopened = reopenedRecoveredRound[rewardPoolId][roundId];
+        bool preQualificationSkipped = preQualificationRejectedRound[rewardPoolId][roundId];
         uint256 recoveredAllocation;
         if (reopened) {
             recoveredAllocation = roundSnapshots[rewardPoolId][roundId].allocation;
@@ -1290,11 +1343,14 @@ contract QuestionRewardPoolEscrow is
                 rewardPoolId,
                 roundId,
                 PAYOUT_DOMAIN_QUESTION_REWARD,
+                reopened || preQualificationSkipped,
                 reopened,
                 recoveredAllocation
             );
             if (reopened) {
                 _finishRecoveredRoundQualification(rewardPool, rewardPoolId, roundId);
+            } else if (preQualificationSkipped) {
+                _finishPreQualificationRejectedRoundQualification(rewardPoolId, roundId);
             }
             return;
         }
@@ -1318,6 +1374,8 @@ contract QuestionRewardPoolEscrow is
         );
         if (reopened) {
             _finishRecoveredRoundQualification(rewardPool, rewardPoolId, roundId);
+        } else if (preQualificationSkipped) {
+            _finishPreQualificationRejectedRoundQualification(rewardPoolId, roundId);
         }
 
         emit RewardPoolRoundQualified(
@@ -1443,5 +1501,9 @@ contract QuestionRewardPoolEscrow is
         rejectedRecoveredRound[rewardPoolId][roundId] = false;
     }
 
-    uint256[42] private __gap;
+    function _finishPreQualificationRejectedRoundQualification(uint256 rewardPoolId, uint256 roundId) private {
+        preQualificationRejectedRound[rewardPoolId][roundId] = false;
+    }
+
+    uint256[41] private __gap;
 }

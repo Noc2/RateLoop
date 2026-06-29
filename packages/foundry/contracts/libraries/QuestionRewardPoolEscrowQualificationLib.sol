@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
-import { ProtocolConfig } from "../ProtocolConfig.sol";
-import { RoundVotingEngine } from "../RoundVotingEngine.sol";
-import { IClusterPayoutOracle } from "../interfaces/IClusterPayoutOracle.sol";
-import { IRaterRegistryStatus } from "../interfaces/IRaterRegistryStatus.sol";
-import { RoundLib } from "./RoundLib.sol";
-import { RewardPool, RoundSnapshot } from "./QuestionRewardPoolEscrowTypes.sol";
-import { QuestionRewardPoolEscrowEligibilityLib } from "./QuestionRewardPoolEscrowEligibilityLib.sol";
-import { QuestionRewardPoolEscrowVoterLib } from "./QuestionRewardPoolEscrowVoterLib.sol";
-import { QuestionRewardPoolEscrowWindowLib } from "./QuestionRewardPoolEscrowWindowLib.sol";
+import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
+import {ProtocolConfig} from "../ProtocolConfig.sol";
+import {RoundVotingEngine} from "../RoundVotingEngine.sol";
+import {IClusterPayoutOracle} from "../interfaces/IClusterPayoutOracle.sol";
+import {IRaterRegistryStatus} from "../interfaces/IRaterRegistryStatus.sol";
+import {RoundLib} from "./RoundLib.sol";
+import {RewardPool, RoundSnapshot} from "./QuestionRewardPoolEscrowTypes.sol";
+import {QuestionRewardPoolEscrowEligibilityLib} from "./QuestionRewardPoolEscrowEligibilityLib.sol";
+import {QuestionRewardPoolEscrowVoterLib} from "./QuestionRewardPoolEscrowVoterLib.sol";
+import {QuestionRewardPoolEscrowWindowLib} from "./QuestionRewardPoolEscrowWindowLib.sol";
 
 library QuestionRewardPoolEscrowQualificationLib {
     using SafeCast for uint256;
@@ -287,16 +287,16 @@ library QuestionRewardPoolEscrowQualificationLib {
         uint256 rewardPoolId,
         uint256 roundId,
         uint8 payoutDomain,
-        bool reopened,
+        bool bypassCursor,
+        bool useRecoveredAllocation,
         uint256 recoveredAllocation
     ) external {
         require(roundId >= rewardPool.startRoundId, "Round too early");
         require(!roundSnapshots[rewardPoolId][roundId].qualified, "Round qualified");
-        // FE-1: admit either the normal sequential cursor OR a recovered-and-reopened round
-        // whose cursor has already advanced past it. The escrow caller sets `reopened` only
-        // when `reopenRecoveredSnapshotRound` verified a new finalized oracle snapshot with a
-        // non-rejected weight root.
-        require(reopened || roundId == rewardPool.nextRoundToEvaluate, "Round out of order");
+        // Admit either the normal sequential cursor or a round that was explicitly reopened /
+        // skipped after a rejected oracle snapshot. Recovered rounds use their parked allocation;
+        // pre-qualification skips bypass only the cursor and use normal allocation math.
+        require(bypassCursor || roundId == rewardPool.nextRoundToEvaluate, "Round out of order");
         require(
             QuestionRewardPoolEscrowWindowLib.activateRewardPoolWindowForRound(votingEngine, rewardPool, roundId),
             "Bounty not started"
@@ -343,7 +343,7 @@ library QuestionRewardPoolEscrowQualificationLib {
             "Too few eligible voters"
         );
 
-        uint256 allocation = _previewRoundAllocation(rewardPool, reopened, recoveredAllocation);
+        uint256 allocation = _previewRoundAllocation(rewardPool, useRecoveredAllocation, recoveredAllocation);
         require(allocation > 0 && allocation <= rewardPool.unallocatedAmount, "No allocation");
         require(allocation >= effectiveParticipantUnits, "Small allocation");
         uint256 frontendFeeAllocation = (allocation * rewardPool.frontendFeeBps) / BPS_SCALE;
