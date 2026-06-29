@@ -918,8 +918,10 @@ export function registerCorrelationRoutes(app: ApiApp) {
             sql`${vote.identityHolder} is not null`,
             sql`${vote.identityKey} != ${zeroHash}`,
             sql`${vote.identityHolder} != ${questionRewardPool.funder}`,
-            sql`${vote.identityKey} != ${questionRewardPool.funderIdentityKey}`,
-            sql`${vote.identityHolder} != ${content.submitter}`,
+            sql`${vote.identityHolder} != ${questionRewardPool.payerIdentity}`,
+            sql`${vote.identityHolder} != ${questionRewardPool.submitterIdentity}`,
+            sql`${vote.identityKey} != ${questionRewardPool.payerIdentityKey}`,
+            sql`${vote.identityKey} != ${questionRewardPool.submitterIdentityKey}`,
             questionRewardPoolVoteWithinBountyWindowExpression(
               sql`coalesce(${vote.committedAt}, ${vote.revealedAt}, 0)`,
             ),

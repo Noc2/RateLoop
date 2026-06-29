@@ -13,6 +13,10 @@ type RegisteredHandler = (args: {
 const handlers = new Map<string, RegisteredHandler>();
 const EMPTY_BOUNTY_ELIGIBILITY_DATA_HASH = `0x${"0".repeat(64)}`;
 const FUNDER_IDENTITY_KEY = `0x${"1".repeat(64)}`;
+const PAYER_IDENTITY = "0x00000000000000000000000000000000000000a1";
+const PAYER_IDENTITY_KEY = `0x${"2".repeat(64)}`;
+const SUBMITTER_IDENTITY = "0x00000000000000000000000000000000000000b1";
+const SUBMITTER_IDENTITY_KEY = `0x${"3".repeat(64)}`;
 
 vi.mock("ponder:registry", () => ({
   ponder: {
@@ -144,6 +148,10 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
           contentId: 1n,
           funder: "0x0000000000000000000000000000000000000001",
           funderIdentityKey: FUNDER_IDENTITY_KEY,
+          payerIdentity: PAYER_IDENTITY,
+          payerIdentityKey: PAYER_IDENTITY_KEY,
+          submitterIdentity: SUBMITTER_IDENTITY,
+          submitterIdentityKey: SUBMITTER_IDENTITY_KEY,
           amount: 100_000_000n,
           requiredVoters: 5n,
           requiredSettledRounds: 1n,
@@ -168,6 +176,10 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
         id: 7n,
         contentId: 1n,
         funderIdentityKey: FUNDER_IDENTITY_KEY,
+        payerIdentity: PAYER_IDENTITY,
+        payerIdentityKey: PAYER_IDENTITY_KEY,
+        submitterIdentity: SUBMITTER_IDENTITY,
+        submitterIdentityKey: SUBMITTER_IDENTITY_KEY,
         fundedAmount: 100_000_000n,
         unallocatedAmount: 100_000_000n,
         frontendFeeBps: 300,

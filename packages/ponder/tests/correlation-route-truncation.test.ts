@@ -89,6 +89,10 @@ function mockCorrelationVoteScan(results: unknown[]) {
       funder: "questionRewardPool.funder",
       funderIdentityKey: "questionRewardPool.funderIdentityKey",
       id: "questionRewardPool.id",
+      payerIdentity: "questionRewardPool.payerIdentity",
+      payerIdentityKey: "questionRewardPool.payerIdentityKey",
+      submitterIdentity: "questionRewardPool.submitterIdentity",
+      submitterIdentityKey: "questionRewardPool.submitterIdentityKey",
     },
     raterHumanCredential: {
       expiresAt: "raterHumanCredential.expiresAt",

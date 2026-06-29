@@ -2073,6 +2073,30 @@ export const QuestionRewardPoolEscrowAbi = [
         "internalType": "bytes32"
       },
       {
+        "name": "payerIdentity",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+      },
+      {
+        "name": "payerIdentityKey",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "submitterIdentity",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+      },
+      {
+        "name": "submitterIdentityKey",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
         "name": "amount",
         "type": "uint256",
         "indexed": false,

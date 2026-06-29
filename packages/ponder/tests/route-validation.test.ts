@@ -353,12 +353,16 @@ function mockPonderModules<T>(result: T, additionalResults: unknown[] = []) {
       funderIdentityKey: "questionRewardPool.funderIdentityKey",
       fundedAmount: "questionRewardPool.fundedAmount",
       id: "questionRewardPool.id",
+      payerIdentity: "questionRewardPool.payerIdentity",
+      payerIdentityKey: "questionRewardPool.payerIdentityKey",
       qualifiedRounds: "questionRewardPool.qualifiedRounds",
       refunded: "questionRewardPool.refunded",
       refundedAmount: "questionRewardPool.refundedAmount",
       requiredVoters: "questionRewardPool.requiredVoters",
       requiredSettledRounds: "questionRewardPool.requiredSettledRounds",
       startRoundId: "questionRewardPool.startRoundId",
+      submitterIdentity: "questionRewardPool.submitterIdentity",
+      submitterIdentityKey: "questionRewardPool.submitterIdentityKey",
       unallocatedAmount: "questionRewardPool.unallocatedAmount",
       voterClaimedAmount: "questionRewardPool.voterClaimedAmount",
     },
@@ -3686,6 +3690,13 @@ describe("registerCorrelationRoutes", () => {
     const serialized = serializeExpression(whereArg);
     expect(serialized).toContain("vote.revealed");
     expect(serialized).toContain("questionRewardPool.bountyEligibility");
+    expect(serialized).toContain("questionRewardPool.funder");
+    expect(serialized).toContain("questionRewardPool.payerIdentity");
+    expect(serialized).toContain("questionRewardPool.payerIdentityKey");
+    expect(serialized).toContain("questionRewardPool.submitterIdentity");
+    expect(serialized).toContain("questionRewardPool.submitterIdentityKey");
+    expect(serialized).not.toContain("questionRewardPool.funderIdentityKey");
+    expect(serialized).not.toContain("content.submitter");
     expect(serialized).toContain("raterHumanCredential.rater");
     const serializedJoins = queryBuilder.leftJoin.mock.calls.map((call) =>
       serializeExpression(call),
