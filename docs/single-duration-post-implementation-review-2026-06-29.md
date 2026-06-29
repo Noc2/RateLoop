@@ -19,12 +19,10 @@ Review method:
 
 Resolution update:
 
-- F-1, F-2, F-3, F-4, F-6, F-7, F-8, F-9, F-10, and F-11 have follow-up
-  fixes committed on `main`.
-- F-5 remains an open E2E depth gap: the browser test verifies draft restore,
-  Feedback Bonus editing, and shared-duration persistence, while a full
-  prepare/sign/submit Playwright happy path still needs a healthy local
-  transaction stack.
+- All findings now have follow-up fixes committed on `main`.
+- F-5 is covered by a Playwright browser test that restores the handoff draft,
+  edits the Feedback Bonus, submits through the wallet flow, and polls the
+  indexed USDC bounty, Feedback Bonus, and shared-duration state.
 
 Related report:
 
@@ -42,10 +40,9 @@ Ponder bundle requalification accounting, wallet-call Feedback Bonus rejection,
 readiness gating, Foundry fixture drift, missing docs, ABI event exports, TTL
 schema drift, impossible legacy test fixtures, and break-glass redeploy wording.
 
-The remaining gap is E2E depth: Playwright has browser handoff coverage for
-restoring and saving a creation-time USDC Feedback Bonus with one shared
-duration, but it still does not run the full wallet prepare/sign/submit happy
-path.
+The previous E2E depth gap is now covered by a browser handoff Playwright test
+for the creation-time USDC bounty plus Feedback Bonus flow. Local execution of
+that test still requires the documented Anvil, Next.js, and Ponder stack.
 
 | ID | Severity | Status | Area | Title |
 | --- | --- | --- | --- | --- |
@@ -53,7 +50,7 @@ path.
 | F-2 | P2 | Resolved | Ponder | Recovered bundle round-set requalification could overcount completion |
 | F-3 | P2 | Resolved | Handoff | Explicit wallet-call USDC handoffs could expose an unusable Feedback Bonus editor |
 | F-4 | P2 | Resolved | CI/Ops | Base Sepolia readiness treated stale one-shot Feedback Bonus x402 as warning-only |
-| F-5 | P2 | Open follow-up | Testing | Feedback Bonus Playwright coverage stops at draft save |
+| F-5 | P2 | Resolved | Testing | Feedback Bonus Playwright coverage stopped at draft save |
 | F-6 | P2 | Resolved | Testing | Full Foundry suite was still red |
 | F-7 | P2 | Resolved | Docs/Ops | Operator docs linked to a missing env-parity runbook |
 | F-8 | P2 | Resolved | Contracts/SDK | Public escrow ABI omitted library-emitted bundle monitoring events |
@@ -245,20 +242,22 @@ Make one-shot Feedback Bonus x402 a default failure for staging readiness, or
 add `--require-one-shot-feedback-bonus-x402` to the live workflow before the
 fresh cutover checklist is considered green.
 
-### F-5: Feedback Bonus Playwright coverage stops at draft save
+### F-5: Feedback Bonus Playwright coverage stopped at draft save
 
 Severity: P2
 
-Status: Open follow-up
+Status: Resolved
 
-Resolution status:
+Resolution:
 
 - Draft-level browser coverage exists at
   `packages/nextjs/e2e/tests/agent-handoff.spec.ts:237`: it restores a USDC
   Feedback Bonus handoff, verifies the shared duration, edits the bonus amount,
   saves, and asserts the saved API payload.
-- The remaining gap is the full wallet transaction path described in the
-  recommendation below.
+- `packages/nextjs/e2e/tests/agent-handoff.spec.ts` now continues through the
+  full browser submit path, waits for the handoff API to reach `submitted`, and
+  polls Ponder for the indexed USDC bounty, Feedback Bonus, and shared
+  1200-second round duration.
 
 Affected code:
 
@@ -526,9 +525,12 @@ Current passing signals from the follow-up fix pass:
 - `node scripts/readiness-workflows.test.mjs`
 - `node scripts/check-worldchain-sepolia-readiness.test.mjs`
 - `yarn next:check-types`
+- `yarn playwright test --config playwright.config.ts --project=chromium agent-handoff.spec.ts --grep "preserves USDC Feedback Bonus" --list --reporter=line`
 - `git diff --check`
 
-Current incomplete gate:
+Verification caveat:
 
-- Full Playwright browser handoff submission coverage for creation-time USDC
-  bounty plus Feedback Bonus has not been added.
+- The targeted Playwright browser run did not execute locally because global
+  setup found Anvil, Next.js, and Ponder unavailable on `8545`, `3000`, and
+  `42069`; `yarn dev:stack` was started but did not open those ports in this
+  session.
