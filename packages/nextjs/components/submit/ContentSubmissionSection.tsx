@@ -58,7 +58,6 @@ import {
   BOUNTY_ELIGIBILITY_OPEN,
   buildBountyEligibility,
 } from "~~/lib/bountyEligibility";
-import { formatBountyWindowDuration } from "~~/lib/bountyWindows";
 import {
   MAX_SUBMISSION_IMAGE_URLS,
   MAX_SUBMISSION_URL_LENGTH,
@@ -1397,7 +1396,7 @@ export function ContentSubmissionSection() {
     effectiveBountyStartByWindowSeconds,
     bountyExpiryReferenceTimeMs,
   );
-  const bountyEligibilityWindowLabel = formatBountyWindowDuration(effectiveBountyWindowSeconds);
+  const bountyEligibilityWindowLabel = formatHumanDuration(effectiveBountyWindowSeconds);
   const rewardDurationValidationError =
     effectiveBountyWindowSeconds === null || effectiveBountyStartByWindowSeconds === null
       ? "Choose a question duration."
