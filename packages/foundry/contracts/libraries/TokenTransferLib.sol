@@ -3,7 +3,6 @@ pragma solidity ^0.8.34;
 
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import { Eip3009Authorization, IReceiveWithAuthorizationToken } from "../interfaces/IEip3009.sol";
 
 /// @title TokenTransferLib
 /// @notice Isolates LREP transfer side effects so RoundVotingEngine can try/catch them without
@@ -26,24 +25,4 @@ library TokenTransferLib {
         return true;
     }
 
-    function receiveWithAuthorization(IERC20 token, Eip3009Authorization calldata authorization)
-        external
-        returns (uint256 receivedAmount)
-    {
-        uint256 balanceBefore = token.balanceOf(address(this));
-        IReceiveWithAuthorizationToken(address(token))
-            .receiveWithAuthorization(
-                authorization.from,
-                authorization.to,
-                authorization.value,
-                authorization.validAfter,
-                authorization.validBefore,
-                authorization.nonce,
-                authorization.v,
-                authorization.r,
-                authorization.s
-            );
-        receivedAmount = token.balanceOf(address(this)) - balanceBefore;
-        require(receivedAmount == authorization.value, "Bad token");
-    }
 }
