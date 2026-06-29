@@ -156,7 +156,7 @@ test.describe("Agent browser handoffs", () => {
     await expect(page.getByRole("checkbox", { name: "Private context" })).toBeChecked();
     await expect(page.locator("#agent-ask-confidentiality-bond-amount")).toHaveValue("1");
 
-    await page.getByLabel("Question").fill(editedTitle);
+    await page.getByRole("textbox", { name: "Question", exact: true }).fill(editedTitle);
     await expect(page.getByRole("button", { name: "Save draft" })).toBeEnabled();
     await page.getByRole("button", { name: "Save draft" }).click();
     await expect(page.getByText("Draft saved.")).toBeVisible({ timeout: 30_000 });
@@ -285,7 +285,7 @@ test.describe("Agent browser handoffs", () => {
 
     await expect(page.getByRole("button", { name: /^Add bonus$/i })).toHaveAttribute("aria-pressed", "true");
     await expect(page.locator("#agent-ask-feedback-bonus-amount")).toHaveValue("0.5");
-    await expect(page.getByLabel("Question duration")).toHaveValue("20");
+    await expect(page.locator("#agent-ask-round-blind-seconds")).toHaveValue("20");
     await expect(page.getByLabel("Question duration unit")).toHaveValue("minutes");
     await expect(page.locator("#agent-ask-round-min-voters")).toHaveValue("5");
     await expect(page.locator("#agent-ask-round-max-voters")).toHaveValue("50");
