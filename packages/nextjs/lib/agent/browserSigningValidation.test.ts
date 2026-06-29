@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import test from "node:test";
 import {
   buildBrowserSigningExpectedX402Nonce,
@@ -39,6 +40,13 @@ function askRequestBody(overrides: Record<string, unknown> = {}) {
     },
     ...overrides,
   };
+}
+
+function walletBoundClientRequestId(chainId: number, clientRequestId: string) {
+  return `wallet:${createHash("sha256")
+    .update(`${chainId}:${wallet.toLowerCase()}:${clientRequestId}`)
+    .digest("hex")
+    .slice(0, 48)}`;
 }
 
 function authorizationRequest(
@@ -166,6 +174,59 @@ test("validateBrowserX402AuthorizationRequest accepts USDC Feedback Bonus one-sh
   );
 
   assert.equal(result.authorization.value, "2000000");
+});
+
+test("validateBrowserX402AuthorizationRequest validates wallet-bound handoff client request ids", () => {
+  const requestBody = askRequestBody({
+    clientRequestId: "browser-signing-handoff-wallet-bound",
+    feedbackBonus: {
+      amount: "500000",
+      asset: "USDC",
+      awarder: wallet,
+    },
+  });
+  const chainId = Number(requestBody.chainId);
+  const preparedRequestBody = {
+    ...requestBody,
+    clientRequestId: walletBoundClientRequestId(chainId, requestBody.clientRequestId),
+  };
+  const input = authorizationRequest({
+    amount: "2000000",
+    requestBody: preparedRequestBody,
+  });
+
+  assert.throws(
+    () =>
+      validateBrowserX402AuthorizationRequest({
+        expectedAmount: readBrowserSigningExpectedX402Amount(requestBody),
+        expectedChainId: chainId,
+        expectedContentRegistryAddress: contentRegistry,
+        expectedFeedbackBonusEscrowAddress: feedbackBonusEscrow,
+        expectedQuestionRewardPoolEscrowAddress: rewardEscrow,
+        expectedSubmitterAddress: submitter,
+        expectedUsdcAddress: usdc,
+        expectedWalletAddress: wallet,
+        request: input.request,
+        requestBody,
+      }),
+    /authorization.nonce does not match the RateLoop ask payload/,
+  );
+
+  const result = validateBrowserX402AuthorizationRequest({
+    expectedAmount: readBrowserSigningExpectedX402Amount(requestBody),
+    expectedChainId: chainId,
+    expectedContentRegistryAddress: contentRegistry,
+    expectedFeedbackBonusEscrowAddress: feedbackBonusEscrow,
+    expectedQuestionRewardPoolEscrowAddress: rewardEscrow,
+    expectedSubmitterAddress: submitter,
+    expectedUsdcAddress: usdc,
+    expectedWalletAddress: wallet,
+    request: input.request,
+    requestBody,
+    walletBoundClientRequestId: true,
+  });
+
+  assert.equal(result.authorization.nonce, input.request.authorization.nonce);
 });
 
 test("validateBrowserX402AuthorizationRequest accepts Base mainnet USDC's USD Coin domain", () => {

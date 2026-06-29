@@ -14,7 +14,7 @@ import {
   parseX402QuestionRequest,
 } from "@rateloop/agents/x402-question-payload";
 import { getUsdcEip712DomainName } from "@rateloop/contracts/protocol";
-import { type Address, type Hex, isAddress } from "viem";
+import { type Address, type Hex, isAddress, sha256, toBytes } from "viem";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -109,6 +109,10 @@ function normalizeChainId(value: unknown, fieldName: string): number {
 
 function sameAddress(left: string | undefined | null, right: string | undefined | null) {
   return Boolean(left && right && left.toLowerCase() === right.toLowerCase());
+}
+
+function readOptionalString(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
 }
 
 function readTypedData(request: JsonRecord | null | undefined): BrowserX402TypedData {
@@ -331,6 +335,34 @@ function readBrowserSigningFeedbackBonus(params: {
   };
 }
 
+function buildWalletBoundClientRequestId(params: { chainId: number; clientRequestId: string; walletAddress: Address }) {
+  return `wallet:${sha256(toBytes(`${params.chainId}:${params.walletAddress.toLowerCase()}:${params.clientRequestId}`))
+    .slice(2)
+    .slice(0, 48)}`;
+}
+
+function browserSigningRequestBodyForNonce(params: {
+  expectedChainId: number;
+  expectedWalletAddress: Address;
+  requestBody: JsonRecord;
+  walletBoundClientRequestId?: boolean;
+}) {
+  if (!params.walletBoundClientRequestId) return params.requestBody;
+  const clientRequestId = readOptionalString(params.requestBody.clientRequestId);
+  if (!clientRequestId) {
+    throw new Error("Signing intent request body is missing clientRequestId.");
+  }
+
+  return {
+    ...params.requestBody,
+    clientRequestId: buildWalletBoundClientRequestId({
+      chainId: params.expectedChainId,
+      clientRequestId,
+      walletAddress: params.expectedWalletAddress,
+    }),
+  };
+}
+
 export function buildBrowserSigningExpectedX402Nonce(params: {
   expectedChainId: number;
   expectedContentRegistryAddress: Address;
@@ -340,6 +372,7 @@ export function buildBrowserSigningExpectedX402Nonce(params: {
   expectedWalletAddress: Address;
   questionMetadataBaseUrl?: string | null;
   requestBody: JsonRecord | null | undefined;
+  walletBoundClientRequestId?: boolean;
   x402Authorization: BrowserX402Authorization;
 }): Hex {
   if (!isRecord(params.requestBody)) {
@@ -348,7 +381,13 @@ export function buildBrowserSigningExpectedX402Nonce(params: {
   const parserOptions: X402QuestionParserOptions = {
     questionMetadataBaseUrl: params.questionMetadataBaseUrl,
   };
-  const payload = parseX402QuestionRequest(params.requestBody, params.expectedChainId, parserOptions);
+  const requestBody = browserSigningRequestBodyForNonce({
+    expectedChainId: params.expectedChainId,
+    expectedWalletAddress: params.expectedWalletAddress,
+    requestBody: params.requestBody,
+    walletBoundClientRequestId: params.walletBoundClientRequestId,
+  });
+  const payload = parseX402QuestionRequest(requestBody, params.expectedChainId, parserOptions);
   if (payload.chainId !== params.expectedChainId) {
     throw new Error("Signing intent request body chainId does not match the connected chain.");
   }
@@ -420,6 +459,7 @@ export function validateBrowserX402AuthorizationRequest(params: {
   questionMetadataBaseUrl?: string | null;
   request: JsonRecord | null | undefined;
   requestBody: JsonRecord | null | undefined;
+  walletBoundClientRequestId?: boolean;
 }): { authorization: BrowserX402Authorization; typedData: BrowserX402TypedData } {
   const typedData = readTypedData(params.request);
   const authorizationSource = isRecord(params.request?.authorization)
@@ -469,6 +509,7 @@ export function validateBrowserX402AuthorizationRequest(params: {
         ? params.request.questionMetadataBaseUrl
         : undefined),
     requestBody: params.requestBody,
+    walletBoundClientRequestId: params.walletBoundClientRequestId,
     x402Authorization: authorization,
   });
   if (authorization.nonce.toLowerCase() !== expectedNonce.toLowerCase()) {

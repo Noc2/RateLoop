@@ -2633,6 +2633,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
             expectedWalletAddress: address,
             request: authorizationRequest,
             requestBody,
+            walletBoundClientRequestId: true,
           });
           const signature = await signTypedDataAsync({
             domain: typedData.domain,
