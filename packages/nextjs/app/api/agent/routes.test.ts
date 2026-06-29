@@ -2187,6 +2187,22 @@ test("agent ask handoff route defaults eligible USDC asks to EIP-3009 authorizat
   assert.equal(statusResponse.status, 200);
   assert.match(String(statusBody.nextAction), /sign the EIP-3009 USDC authorization/);
 
+  const retryPrepareResponse = await handoffPrepareRoute.POST(
+    makePublicPost(`https://rateloop.ai/api/agent/handoffs/${handoffId}/prepare`, {
+      chainId: HANDOFF_CHAIN_ID,
+      token,
+      walletAddress: "0x00000000000000000000000000000000000000aa",
+    }),
+    { params: Promise.resolve({ handoffId }) },
+  );
+  const retryPrepareBody = (await retryPrepareResponse.json()) as Record<string, unknown>;
+  const retryAuthorizationRequest = retryPrepareBody.x402AuthorizationRequest as { authorization: { value: string } };
+
+  assert.equal(retryPrepareResponse.status, 200, JSON.stringify(retryPrepareBody));
+  assert.equal(retryPrepareBody.status, "prepared");
+  assert.equal(retryPrepareBody.transactionPlan, null);
+  assert.equal(retryAuthorizationRequest.authorization.value, "3000000");
+
   const paymentAuthorization = {
     from: "0x00000000000000000000000000000000000000aa",
     nonce: `0x${"3".repeat(64)}`,
@@ -2209,7 +2225,7 @@ test("agent ask handoff route defaults eligible USDC asks to EIP-3009 authorizat
   const transactionPlan = signedPrepareBody.transactionPlan as { calls: Array<Record<string, unknown>> };
 
   assert.equal(signedPrepareResponse.status, 200, JSON.stringify(signedPrepareBody));
-  assert.equal(prepareCalls, 2);
+  assert.equal(prepareCalls, 3);
   assert.deepEqual(forwardedAuthorization, paymentAuthorization);
   assert.equal(transactionPlan.calls.length, 1);
   assert.equal(transactionPlan.calls[0]?.functionName, "submitQuestionWithX402OneShotPayment");

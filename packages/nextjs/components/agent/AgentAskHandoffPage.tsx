@@ -1857,12 +1857,14 @@ function imageSignatureLabel(challenge: UploadChallenge, handoff: Handoff | null
   return asset?.filename || challenge.attachmentId || challenge.assetId;
 }
 
-function canPrepareHandoffStatus(status: string | undefined) {
+function canPrepareHandoff(handoff: Handoff | null | undefined) {
+  const status = handoff?.status;
   return (
     status === "pending" ||
     status === "awaiting_image_signatures" ||
     status === "uploading_images" ||
-    status === "failed"
+    status === "failed" ||
+    (status === "prepared" && !(handoff?.transactionPlan?.calls ?? []).length)
   );
 }
 
@@ -2043,7 +2045,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
       !failedImageUploadMessage &&
       !draftConfidentialityBondError &&
       (!hasUnsavedDraft || canSaveDraftBeforeSubmit) &&
-      (hasTransactionPlan || (connectedChainId && canPrepareHandoffStatus(handoff.status))),
+      (hasTransactionPlan || (connectedChainId && canPrepareHandoff(handoff))),
   );
   const questionSummaries = useMemo(() => readQuestionSummaries(handoff), [handoff]);
   const hasQuestionBundle = (draftForm?.questions.length ?? questionSummaries.length) > 1;
@@ -2144,7 +2146,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
   const webMcpState = useMemo<HandoffWebMcpState>(
     () => ({
       bountyLabel: readDraftBountyLabel(draftForm, handoff),
-      canPrepare: Boolean(connectedChainId && handoff && canPrepareHandoffStatus(handoff.status)),
+      canPrepare: Boolean(connectedChainId && canPrepareHandoff(handoff)),
       canSaveDraft,
       canSubmit,
       chainId: handoff?.chainId ?? null,
