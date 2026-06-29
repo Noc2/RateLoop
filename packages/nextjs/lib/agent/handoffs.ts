@@ -104,6 +104,11 @@ const HANDOFF_DRAFT_COLUMNS = [
 const HANDOFF_DRAFT_MIGRATION_MESSAGE =
   `Agent ask handoff database migration is pending. Apply ${HANDOFF_DRAFT_MIGRATION_PATH} ` +
   "to the handoff database before creating or preparing browser handoff links.";
+const HANDOFF_ASSET_POSITION_MIGRATION_PATH = "packages/nextjs/drizzle/0014_agent_handoff_asset_positions.sql";
+const HANDOFF_ASSET_POSITION_COLUMN = "position";
+const HANDOFF_ASSET_POSITION_MIGRATION_MESSAGE =
+  `Agent ask handoff asset database migration is pending. Apply ${HANDOFF_ASSET_POSITION_MIGRATION_PATH} ` +
+  "to the handoff database before creating or preparing browser handoff links.";
 const IMAGE_BASE64_TRANSPORT_HINT =
   "Read the image from disk or memory in the same process that sends the request; do not copy base64 from terminal output or downscale solely because a chat display capped the output.";
 
@@ -131,6 +136,7 @@ type ErrorWithCause = {
 
 let handoffDraftSchemaReadyPromise: Promise<void> | null = null;
 let handoffDraftSchemaReadyForTests: boolean | null = null;
+let handoffAssetPositionSchemaReadyPromise: Promise<void> | null = null;
 
 export class AgentAskHandoffError extends Error {
   readonly status: number;
@@ -144,6 +150,10 @@ export class AgentAskHandoffError extends Error {
 
 function pendingHandoffDraftMigrationError() {
   return new AgentAskHandoffError(HANDOFF_DRAFT_MIGRATION_MESSAGE, 503);
+}
+
+function pendingHandoffAssetPositionMigrationError() {
+  return new AgentAskHandoffError(HANDOFF_ASSET_POSITION_MIGRATION_MESSAGE, 503);
 }
 
 function isMissingHandoffDraftSchemaError(error: unknown, depth = 0): boolean {
@@ -170,6 +180,30 @@ function isMissingHandoffDraftSchemaError(error: unknown, depth = 0): boolean {
     : false;
 }
 
+function isMissingHandoffAssetPositionSchemaError(error: unknown, depth = 0): boolean {
+  if (!error || typeof error !== "object") return false;
+
+  const candidate = error as ErrorWithCause;
+  const code = typeof candidate.code === "string" ? candidate.code : "";
+  const message = typeof candidate.message === "string" ? candidate.message : "";
+  const mentionsHandoffAssetsTable = message.includes("agent_ask_handoff_assets");
+  const mentionsPositionColumn = message.includes(HANDOFF_ASSET_POSITION_COLUMN);
+
+  if ((code === "42703" || code === "42P01") && (mentionsHandoffAssetsTable || mentionsPositionColumn)) {
+    return true;
+  }
+  if (message.includes("column") && message.includes("does not exist") && mentionsPositionColumn) {
+    return true;
+  }
+  if (message.includes("relation") && message.includes("does not exist") && mentionsHandoffAssetsTable) {
+    return true;
+  }
+
+  return depth < 3 && candidate.cause !== undefined
+    ? isMissingHandoffAssetPositionSchemaError(candidate.cause, depth + 1)
+    : false;
+}
+
 async function checkHandoffDraftSchemaReady() {
   try {
     await dbClient.execute(`
@@ -183,6 +217,20 @@ async function checkHandoffDraftSchemaReady() {
     }
     throw error;
   }
+}
+
+async function checkHandoffAssetPositionSchemaReady() {
+  await dbClient.execute(`
+    SELECT ${HANDOFF_ASSET_POSITION_COLUMN}
+    FROM agent_ask_handoff_assets
+    LIMIT 0
+  `);
+}
+
+async function applyPendingHandoffAssetPositionMigration() {
+  await dbClient.execute(
+    `ALTER TABLE "agent_ask_handoff_assets" ADD COLUMN IF NOT EXISTS "${HANDOFF_ASSET_POSITION_COLUMN}" integer DEFAULT 0 NOT NULL`,
+  );
 }
 
 export async function assertAgentAskHandoffDraftSchemaReady() {
@@ -203,6 +251,33 @@ export async function assertAgentAskHandoffDraftSchemaReady() {
 export function __setAgentAskHandoffDraftSchemaReadyForTests(value: boolean | null) {
   handoffDraftSchemaReadyForTests = value;
   handoffDraftSchemaReadyPromise = null;
+}
+
+export function __resetAgentAskHandoffAssetPositionSchemaReadyForTests() {
+  handoffAssetPositionSchemaReadyPromise = null;
+}
+
+export async function assertAgentAskHandoffAssetPositionSchemaReady() {
+  handoffAssetPositionSchemaReadyPromise ??= (async () => {
+    try {
+      await checkHandoffAssetPositionSchemaReady();
+    } catch (error) {
+      if (!isMissingHandoffAssetPositionSchemaError(error)) {
+        throw error;
+      }
+      try {
+        await applyPendingHandoffAssetPositionMigration();
+        await checkHandoffAssetPositionSchemaReady();
+      } catch (migrationError) {
+        console.error("[agent-handoffs] Failed to apply pending handoff asset position migration", migrationError);
+        throw pendingHandoffAssetPositionMigrationError();
+      }
+    }
+  })().catch(error => {
+    handoffAssetPositionSchemaReadyPromise = null;
+    throw error;
+  });
+  await handoffAssetPositionSchemaReadyPromise;
 }
 
 function nowDate() {
@@ -754,6 +829,8 @@ export async function loadAgentAskHandoffByToken(params: {
 }
 
 export async function listAgentAskHandoffAssets(handoffId: string) {
+  await assertAgentAskHandoffAssetPositionSchemaReady();
+
   const result = await dbClient.execute({
     sql: `
       SELECT *
@@ -914,6 +991,7 @@ export async function createAgentAskHandoff(params: {
   const storedOriginalRequestBody = sealSensitiveAgentRequestFields(originalRequestBody, token);
 
   await assertAgentAskHandoffDraftSchemaReady();
+  await assertAgentAskHandoffAssetPositionSchemaReady();
 
   await dbClient.execute({
     sql: `

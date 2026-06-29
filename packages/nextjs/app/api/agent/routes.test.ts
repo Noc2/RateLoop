@@ -584,6 +584,7 @@ beforeEach(async () => {
   mcpToolsModule.__setMcpToolTestOverridesForTests(null);
   callbackLifecycleModule.__setAgentLifecycleTestOverridesForTests(null);
   handoffsModule.__setAgentAskHandoffDraftSchemaReadyForTests(null);
+  handoffsModule.__resetAgentAskHandoffAssetPositionSchemaReadyForTests();
   await dbModule.dbClient.execute("DELETE FROM agent_callback_events");
   await dbModule.dbClient.execute("DELETE FROM agent_callback_subscriptions");
   await dbModule.dbClient.execute("DELETE FROM api_rate_limits");
@@ -602,6 +603,7 @@ after(() => {
   urlSafetyModule.__setUrlSafetyDnsResolversForTests(null);
   mcpToolsModule.__setMcpToolTestOverridesForTests(null);
   handoffsModule.__setAgentAskHandoffDraftSchemaReadyForTests(null);
+  handoffsModule.__resetAgentAskHandoffAssetPositionSchemaReadyForTests();
   dbModule.__setDatabaseResourcesForTests(null);
   restoreEnv("RATELOOP_MCP_AGENTS", originalAgents);
   restoreEnv("APP_URL", originalAppUrl);
@@ -1695,6 +1697,41 @@ test("agent ask handoff route stages generated image upload metadata before blob
   assert.equal(prepareBody.status, "awaiting_image_signatures");
   assert.equal(prepareBody.uploadChallenges?.length, 1);
   assert.equal(prepareBody.uploadChallenges?.[0]?.assetId, readBody.assets?.[0]?.id);
+});
+
+test("agent ask handoff route applies the pending asset position migration before staging images", async () => {
+  await dbModule.dbClient.execute('ALTER TABLE "agent_ask_handoff_assets" DROP COLUMN "position"');
+
+  const response = await handoffsRoute.POST(
+    makePublicPost("https://rateloop.ai/api/agent/handoffs", {
+      generatedImageUploads: [
+        {
+          filename: "concept.png",
+          mimeType: "image/png",
+          sha256: ONE_PIXEL_PNG_SHA256,
+          sizeBytes: ONE_PIXEL_PNG.length,
+        },
+      ],
+      request: {
+        ...handoffQuestionPayload("agent-handoff-missing-position-migration"),
+        maxPaymentAmount: "1500000",
+      },
+      ttlMs: 300000,
+    }),
+  );
+  const body = (await response.json()) as {
+    assets?: Array<Record<string, unknown>>;
+    handoffId?: string;
+  };
+
+  assert.equal(response.status, 200, JSON.stringify(body));
+  assert.equal(body.assets?.[0]?.filename, "concept.png");
+
+  const rows = await dbModule.dbClient.execute({
+    args: [String(body.handoffId)],
+    sql: 'SELECT "position" FROM "agent_ask_handoff_assets" WHERE "handoff_id" = ?',
+  });
+  assert.equal(rows.rows[0]?.position, 0);
 });
 
 test("agent ask handoff route keeps multi-image upload order stable", async () => {
