@@ -670,18 +670,12 @@ function AdvancedQuestionSettingsControl({
 }) {
   const selectedCount = countTargetAudienceValues(targetAudience);
   const canUseVideoUrl = !hasImageContext;
-  const [isOpen, setIsOpen] = useState(() =>
-    Boolean(selectedCount || contextUrl.trim() || (canUseVideoUrl && videoUrl.trim())),
-  );
+  const [isOpen, setIsOpen] = useState(false);
   const [countryInput, setCountryInput] = useState("");
   const [countryError, setCountryError] = useState<string | null>(null);
   const [nationalityInput, setNationalityInput] = useState("");
   const [nationalityError, setNationalityError] = useState<string | null>(null);
   const settingsId = `agent-ask-advanced-question-settings-${questionIndex}`;
-
-  useEffect(() => {
-    if (selectedCount > 0) setIsOpen(true);
-  }, [selectedCount]);
 
   useEffect(() => {
     if (hasImageContext && videoUrl) onVideoUrlChange("");
