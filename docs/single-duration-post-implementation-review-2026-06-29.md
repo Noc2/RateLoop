@@ -3,9 +3,10 @@
 Date: 2026-06-29
 
 Scope: reviewed local `main` at `a463c107f` after the single-duration
-implementation and follow-up fix pass. This review focuses on bugs and
-operational gaps that remain after the resolved findings in
-`docs/single-duration-implementation-review-2026-06-29.md`.
+implementation and follow-up fix pass. This review originally focused on bugs
+and operational gaps that remained after the resolved findings in
+`docs/single-duration-implementation-review-2026-06-29.md`; the resolution
+update below records the subsequent fix pass.
 
 Review method:
 
@@ -14,7 +15,16 @@ Review method:
 - Line-level validation against the current worktree.
 - Verification command run during this pass:
   `forge test --offline --fail-fast` in `packages/foundry`.
-- No application or contract code was changed during this review.
+- No application or contract code was changed during the review itself.
+
+Resolution update:
+
+- F-1, F-2, F-3, F-4, F-6, F-7, F-8, F-9, F-10, and F-11 have follow-up
+  fixes committed on `main`.
+- F-5 remains an open E2E depth gap: the browser test verifies draft restore,
+  Feedback Bonus editing, and shared-duration persistence, while a full
+  prepare/sign/submit Playwright happy path still needs a healthy local
+  transaction stack.
 
 Related report:
 
@@ -26,39 +36,47 @@ Related report:
 
 ## Executive Summary
 
-The single-duration model is mostly wired through the primary happy paths, but
-the current implementation still has several follow-up risks before a fresh
-production cutover:
+The single-duration model is now wired through the primary happy paths found in
+this review. The follow-up fix pass addressed the browser handoff liveness bug,
+Ponder bundle requalification accounting, wallet-call Feedback Bonus rejection,
+readiness gating, Foundry fixture drift, missing docs, ABI event exports, TTL
+schema drift, impossible legacy test fixtures, and break-glass redeploy wording.
 
-- One browser handoff state-machine bug can leave x402 handoffs stuck after the
-  user rejects the EIP-3009 signature prompt.
-- Ponder can overcount recovered bundle round-set completion after a recovery
-  and requalification sequence.
-- A few public/ops surfaces still accept, advertise, or test states that do not
-  match the fresh-deploy product rules.
-- The full Foundry suite is still red under a current fail-fast run.
+The remaining gap is E2E depth: Playwright has browser handoff coverage for
+restoring and saving a creation-time USDC Feedback Bonus with one shared
+duration, but it still does not run the full wallet prepare/sign/submit happy
+path.
 
 | ID | Severity | Status | Area | Title |
 | --- | --- | --- | --- | --- |
-| F-1 | P1 | Open | Handoff | x402 browser handoffs can get stuck after signature rejection |
-| F-2 | P2 | Open | Ponder | Recovered bundle round-set requalification can overcount completion |
-| F-3 | P2 | Open | Handoff | Explicit wallet-call USDC handoffs can expose an unusable Feedback Bonus editor |
-| F-4 | P2 | Open | CI/Ops | Base Sepolia readiness treats stale one-shot Feedback Bonus x402 as warning-only |
-| F-5 | P2 | Open | Testing | Feedback Bonus Playwright coverage stops at draft save |
-| F-6 | P2 | Open | Testing | Full Foundry suite is still red |
-| F-7 | P2 | Open | Docs/Ops | Operator docs link to a missing env-parity runbook |
-| F-8 | P2 | Open | Contracts/SDK | Public escrow ABI omits library-emitted bundle monitoring events |
-| F-9 | P3 | Open | API | Public handoff TTL schema advertises 24h while implementation clamps to 30m |
-| F-10 | P3 | Open | Tests | Ponder bundle handler test models impossible fresh-deploy multi-round bundles |
-| F-11 | P3 | Open | Docs | Fresh mainnet redeploy wording needs break-glass context |
+| F-1 | P1 | Resolved | Handoff | x402 browser handoffs could get stuck after signature rejection |
+| F-2 | P2 | Resolved | Ponder | Recovered bundle round-set requalification could overcount completion |
+| F-3 | P2 | Resolved | Handoff | Explicit wallet-call USDC handoffs could expose an unusable Feedback Bonus editor |
+| F-4 | P2 | Resolved | CI/Ops | Base Sepolia readiness treated stale one-shot Feedback Bonus x402 as warning-only |
+| F-5 | P2 | Open follow-up | Testing | Feedback Bonus Playwright coverage stops at draft save |
+| F-6 | P2 | Resolved | Testing | Full Foundry suite was still red |
+| F-7 | P2 | Resolved | Docs/Ops | Operator docs linked to a missing env-parity runbook |
+| F-8 | P2 | Resolved | Contracts/SDK | Public escrow ABI omitted library-emitted bundle monitoring events |
+| F-9 | P3 | Resolved | API | Public handoff TTL schema advertised 24h while implementation clamped to 30m |
+| F-10 | P3 | Resolved | Tests | Ponder bundle handler test modeled impossible fresh-deploy multi-round bundles |
+| F-11 | P3 | Resolved | Docs | Fresh mainnet redeploy wording needed break-glass context |
 
 ## Findings
 
-### F-1: x402 browser handoffs can get stuck after signature rejection
+### F-1: x402 browser handoffs could get stuck after signature rejection
 
 Severity: P1
 
-Status: Open
+Status: Resolved
+
+Resolution:
+
+- `4315abdba` lets x402 handoffs restart the authorization-request leg after a
+  rejected wallet signature.
+- `34be26e63` keeps the retryable prepared-state path scoped to x402 handoffs
+  so wallet-call preparation semantics stay unchanged.
+- `packages/nextjs/app/api/agent/routes.test.ts` now covers first prepare,
+  retry prepare, and signed second-leg prepare for the x402 browser handoff.
 
 Affected code:
 
@@ -97,11 +115,19 @@ retryable. Add a route/UI regression test for: prepare returns authorization
 request, wallet signature is rejected, user clicks submit again, and the page
 successfully restarts the signature flow.
 
-### F-2: Recovered bundle round-set requalification can overcount completion
+### F-2: Recovered bundle round-set requalification could overcount completion
 
 Severity: P2
 
-Status: Open
+Status: Resolved
+
+Resolution:
+
+- `ba6585cb3` tracks recovered logical bundle round sets in Ponder and avoids a
+  second completion increment when the same recovered set requalifies.
+- `c65a8f7ea` updates the bundle handler fixture to the fresh one-round model.
+- `2fb5ac48b` exposes the related recovery and monitoring events in the public
+  contract ABI so downstream consumers can decode the same logs as the indexer.
 
 Affected code:
 
@@ -138,11 +164,18 @@ increment when a previously recovered logical round set is qualified again.
 Add an indexer regression test for qualify -> recover -> reopen -> requalify
 and assert the completed count matches the on-chain logical count.
 
-### F-3: Explicit wallet-call USDC handoffs can expose an unusable Feedback Bonus editor
+### F-3: Explicit wallet-call USDC handoffs could expose an unusable Feedback Bonus editor
 
 Severity: P2
 
-Status: Open
+Status: Resolved
+
+Resolution:
+
+- `81ba0f6af` rejects Feedback Bonus drafts when the request is explicitly in
+  wallet-call payment mode and keeps the handoff editor/server contract aligned.
+- The route coverage includes explicit wallet-call Feedback Bonus rejection for
+  browser handoffs and signing intents.
 
 Affected code:
 
@@ -175,11 +208,17 @@ Feedback Bonus. Add a handoff draft test for an explicit wallet-call USDC ask
 where clicking `Add bonus` is either blocked or converts the draft to the
 supported x402 mode.
 
-### F-4: Base Sepolia readiness treats stale one-shot Feedback Bonus x402 as warning-only
+### F-4: Base Sepolia readiness treated stale one-shot Feedback Bonus x402 as warning-only
 
 Severity: P2
 
-Status: Open
+Status: Resolved
+
+Resolution:
+
+- `79966f71e` makes the Base Sepolia readiness workflow require one-shot
+  Feedback Bonus x402 readiness instead of treating that path as warning-only.
+- The workflow readiness test now asserts the stricter flag is present.
 
 Affected code:
 
@@ -210,7 +249,16 @@ fresh cutover checklist is considered green.
 
 Severity: P2
 
-Status: Open
+Status: Open follow-up
+
+Resolution status:
+
+- Draft-level browser coverage exists at
+  `packages/nextjs/e2e/tests/agent-handoff.spec.ts:237`: it restores a USDC
+  Feedback Bonus handoff, verifies the shared duration, edits the bonus amount,
+  saves, and asserts the saved API payload.
+- The remaining gap is the full wallet transaction path described in the
+  recommendation below.
 
 Affected code:
 
@@ -239,13 +287,19 @@ USDC handoff with Feedback Bonus, prepare, sign typed data, prepare again with
 authorization, submit calls or confirm the transaction hashes, and assert the
 created ask contains the shared duration and both funding components.
 
-### F-6: Full Foundry suite is still red
+### F-6: Full Foundry suite was still red
 
 Severity: P2
 
-Status: Open
+Status: Resolved
 
-Verification:
+Resolution:
+
+- `12d0ae154` updates stale Foundry fixtures and timing assertions for the
+  single-duration rule.
+- `forge test --offline --fail-fast` now passes across the full Foundry suite.
+
+Original verification:
 
 - Command: `forge test --offline --fail-fast`
 - Result: failed after 44 passing tests and 1 failing test.
@@ -270,11 +324,16 @@ Fix or remove stale fixtures that configure invalid separate durations, rerun
 `forge test --offline`, and keep this gate required before Base Sepolia or Base
 mainnet cutover.
 
-### F-7: Operator docs link to a missing env-parity runbook
+### F-7: Operator docs linked to a missing env-parity runbook
 
 Severity: P2
 
-Status: Open
+Status: Resolved
+
+Resolution:
+
+- `e31f84e62` adds `docs/env-parity.md` and keeps the existing operator-facing
+  links pointed at a real runbook.
 
 Affected files:
 
@@ -299,11 +358,18 @@ Recommendation:
 Create `docs/env-parity.md` with the promised cross-package mapping, or replace
 the links with the current authoritative runbook.
 
-### F-8: Public escrow ABI omits library-emitted bundle monitoring events
+### F-8: Public escrow ABI omitted library-emitted bundle monitoring events
 
 Severity: P2
 
-Status: Open
+Status: Resolved
+
+Resolution:
+
+- `2fb5ac48b` declares the bundle recovery and monitoring events on the public
+  escrow contract surface and regenerates the exported ABI.
+- `packages/contracts/src/deployments.test.ts` now asserts the deployed package
+  ABI includes those events.
 
 Affected code:
 
@@ -333,11 +399,18 @@ Declare the monitoring events on the main escrow contract or publish an
 official augmented ABI from `@rateloop/contracts`. Add an ABI export test that
 asserts bundle recovery and monitoring events are present for public consumers.
 
-### F-9: Public handoff TTL schema advertises 24h while implementation clamps to 30m
+### F-9: Public handoff TTL schema advertised 24h while implementation clamped to 30m
 
 Severity: P3
 
-Status: Open
+Status: Resolved
+
+Resolution:
+
+- `a9b943d6f` updates the public handoff schema to advertise the implemented
+  30-minute maximum.
+- `697bfb06c` adds an MCP `tools/list` regression assertion for the 60-second
+  minimum and 30-minute maximum.
 
 Affected code:
 
@@ -347,7 +420,7 @@ Affected code:
 
 Description:
 
-The public schema describes `ttlMs` as defaulting to 30 minutes with a maximum
+The original public schema described `ttlMs` as defaulting to 30 minutes with a maximum
 of `86400000` milliseconds. The implementation sets
 `PUBLIC_HANDOFF_MAX_TTL_MS` to the 30-minute default and clamps longer requests
 down to 30 minutes.
@@ -363,11 +436,17 @@ Recommendation:
 Either update the schema/docs to say the maximum is 30 minutes, or intentionally
 raise the implementation cap to 24 hours and add tests for the chosen contract.
 
-### F-10: Ponder bundle handler test models impossible fresh-deploy multi-round bundles
+### F-10: Ponder bundle handler test modeled impossible fresh-deploy multi-round bundles
 
 Severity: P3
 
-Status: Open
+Status: Resolved
+
+Resolution:
+
+- `c65a8f7ea` updates the Ponder bundle handler test to model the fresh
+  one-round bundle event shape instead of an impossible fresh-deploy
+  multi-round bundle.
 
 Affected code:
 
@@ -393,11 +472,17 @@ Rename and isolate it as a legacy-indexing test, or update it to the
 fresh-deploy one-round bundle event shape and add a separate test for rejected
 legacy/multi-round assumptions.
 
-### F-11: Fresh mainnet redeploy wording needs break-glass context
+### F-11: Fresh mainnet redeploy wording needed break-glass context
 
 Severity: P3
 
-Status: Open
+Status: Resolved
+
+Resolution:
+
+- `1e38e8148` updates the fresh redeploy plan/review language to frame Base
+  mainnet replacement as an owner-directed break-glass migration and points
+  operators at the Foundry deployment safeguards.
 
 Affected docs:
 
@@ -427,16 +512,23 @@ fresh deploy" and link to the deploy wrapper safeguards in
 
 ## Verification Notes
 
-Current passing signals from the previous fix pass remain recorded in
-`docs/single-duration-implementation-review-2026-06-29.md`, including targeted
-Next.js tests, type checks, Next.js build, targeted Foundry escrow tests,
-storage-layout checks, and contract-size checks.
+Current passing signals from the follow-up fix pass:
 
-Current failing or incomplete gates from this review:
+- `forge test --offline --fail-fast`
+- `forge test --offline --match-contract RoundIntegrationTest -vv`
+- `forge test --offline --match-contract FormalVerification_RoundLifecycleTest -vv`
+- `forge test --offline --match-contract AdversarialTests -vv`
+- `forge test --offline --match-contract SelectiveRevelationTest -vv`
+- `forge test --offline --match-contract GasBudgetTest -vv`
+- `node ../../scripts/run-node-tests.mjs app/api/agent/routes.test.ts`
+- `node ../../scripts/run-node-tests.mjs app/api/mcp/route.test.ts`
+- `yarn workspace @rateloop/ponder test question-reward-pool-escrow-handlers.test.ts`
+- `node scripts/readiness-workflows.test.mjs`
+- `node scripts/check-worldchain-sepolia-readiness.test.mjs`
+- `yarn next:check-types`
+- `git diff --check`
 
-- `forge test --offline --fail-fast` is red at
-  `GameTheoryImprovementsTest.setUp()`.
+Current incomplete gate:
+
 - Full Playwright browser handoff submission coverage for creation-time USDC
   bounty plus Feedback Bonus has not been added.
-- Base Sepolia live readiness does not currently fail on stale one-shot
-  Feedback Bonus x402 unless the stricter flag is passed.
