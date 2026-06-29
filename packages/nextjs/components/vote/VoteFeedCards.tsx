@@ -25,10 +25,16 @@ import { getVisibleContentRating } from "~~/hooks/contentFeed/shared";
 import type { ContentItem } from "~~/hooks/useContentFeed";
 import { type GatedContextManifest, useGatedContextManifest } from "~~/hooks/useGatedContextManifest";
 import type { SubmitterProfile } from "~~/hooks/useSubmitterProfiles";
+import { useUnixTime } from "~~/hooks/useUnixTime";
 import { appendGatedContextAddress, appendOptionalGatedContextAddress } from "~~/lib/attachments/gatedContextFetchUrls";
 import { type ContentMediaItem, buildFallbackMediaItems, isUploadedImageUrl } from "~~/lib/contentMedia";
 import { isPrivateContextMetadata } from "~~/lib/vote/confidentialContext";
-import { getVisibleFeedbackBonusAmount, getVisibleRewardPoolAmount } from "~~/lib/vote/discoverFeedFilter";
+import {
+  getActiveBountyClosesAt,
+  getActiveFeedbackClosesAt,
+  getVisibleFeedbackBonusAmount,
+  getVisibleRewardPoolAmount,
+} from "~~/lib/vote/discoverFeedFilter";
 import { resolveContentVoteUi } from "~~/lib/vote/voteUiConfig";
 import { detectPlatform } from "~~/utils/platforms";
 
@@ -644,6 +650,7 @@ function FeedContentMetaCard({
   flushMediaEdges = false,
 }: FeedContentMetaCardProps) {
   const [showShare, setShowShare] = useState(false);
+  const nowSeconds = useUnixTime(60_000);
   const hasFollowButton = !(normalizedAddress && item.submitter.toLowerCase() === normalizedAddress);
   const description = item.description.trim();
   const contextUrl = item.url.trim();
@@ -651,10 +658,12 @@ function FeedContentMetaCard({
   const privateContext = isPrivateContextMetadata(item);
   const hasDescription = description.length > 0 || Boolean(item.detailsUrl) || privateContext;
   const hasContextLink = !privateContext && contextUrl.length > 0 && contextLabel.trim().length > 0;
-  const rewardPoolTotal = getVisibleRewardPoolAmount(item);
+  const rewardPoolTotal = getVisibleRewardPoolAmount(item, nowSeconds);
   const rewardPoolCurrency = item.rewardPoolSummary?.currency;
-  const feedbackBonusTotal = getVisibleFeedbackBonusAmount(item);
+  const rewardPoolDeadline = getActiveBountyClosesAt(item, nowSeconds);
+  const feedbackBonusTotal = getVisibleFeedbackBonusAmount(item, nowSeconds);
   const feedbackBonusCurrency = item.feedbackBonusSummary?.currency;
+  const feedbackBonusDeadline = getActiveFeedbackClosesAt(item, nowSeconds);
   const hasVisibleReward = rewardPoolTotal > 0n || feedbackBonusTotal > 0n;
   const hideDockedActionButtons = isMobileViewport;
   const actionRowClassName = `flex items-center justify-between gap-3 ${compact ? "mt-3" : "mt-4"}`;
@@ -698,9 +707,21 @@ function FeedContentMetaCard({
   );
   const rewardStatusChips = (
     <>
-      {rewardPoolTotal > 0n ? <RewardPoolAmountDisplay amount={rewardPoolTotal} currency={rewardPoolCurrency} /> : null}
+      {rewardPoolTotal > 0n ? (
+        <RewardPoolAmountDisplay
+          amount={rewardPoolTotal}
+          currency={rewardPoolCurrency}
+          deadlineSeconds={rewardPoolDeadline}
+          nowSeconds={nowSeconds}
+        />
+      ) : null}
       {feedbackBonusTotal > 0n ? (
-        <FeedbackBonusAmountDisplay amount={feedbackBonusTotal} currency={feedbackBonusCurrency} />
+        <FeedbackBonusAmountDisplay
+          amount={feedbackBonusTotal}
+          currency={feedbackBonusCurrency}
+          deadlineSeconds={feedbackBonusDeadline}
+          nowSeconds={nowSeconds}
+        />
       ) : null}
       {!hasVisibleReward ? <NoRewardChip /> : null}
     </>

@@ -279,31 +279,60 @@ function LiveRoundActivity({
 function RewardAmountDisplay({
   amount,
   amountLabel,
+  deadlineSeconds,
+  nowSeconds,
   label,
   tooltip,
   ariaLabel,
+  deadlineTooltipSubject,
   tone,
 }: {
   amount: bigint;
   amountLabel?: string;
+  deadlineSeconds?: bigint | null;
+  nowSeconds?: number;
   label: string;
   tooltip: string;
   ariaLabel: string;
+  deadlineTooltipSubject: string;
   tone: "blue" | "green";
 }) {
   const displayAmountLabel = amountLabel ?? formatUsdAmount(amount);
+  const deadlineLabel = formatCompactRewardTimeLeft(deadlineSeconds, nowSeconds);
+  const displayTooltip = deadlineLabel ? `${tooltip} ${deadlineTooltipSubject} closes in ${deadlineLabel}.` : tooltip;
 
   return (
     <div
       className={`reward-chip reward-chip-label reward-chip-brand-${tone}`}
-      aria-label={`${displayAmountLabel} ${ariaLabel}`}
+      aria-label={`${displayAmountLabel} ${ariaLabel}${deadlineLabel ? `, closes in ${deadlineLabel}` : ""}`}
     >
       <span>
         <span className="tabular-nums">{displayAmountLabel}</span> {label}
+        {deadlineLabel ? <span className="font-mono tabular-nums text-[#050505]/70"> · {deadlineLabel}</span> : null}
       </span>
-      <InfoTooltip text={tooltip} position="bottom" className={REWARD_CHIP_INFO_ICON_CLASS_NAME} />
+      <InfoTooltip text={displayTooltip} position="bottom" className={REWARD_CHIP_INFO_ICON_CLASS_NAME} />
     </div>
   );
+}
+
+export function formatCompactRewardTimeLeft(
+  deadlineSeconds: bigint | number | null | undefined,
+  nowSeconds = Math.floor(Date.now() / 1000),
+) {
+  if (deadlineSeconds === null || deadlineSeconds === undefined) return null;
+
+  const deadline =
+    typeof deadlineSeconds === "bigint" ? deadlineSeconds : BigInt(Math.max(0, Math.floor(deadlineSeconds)));
+  if (deadline <= 0n) return null;
+
+  const remainingSeconds = deadline - BigInt(Math.floor(nowSeconds));
+  if (remainingSeconds < 0n) return null;
+  if (remainingSeconds < 60n) return "<1m";
+  if (remainingSeconds < 3_600n) return `${remainingSeconds / 60n}m`;
+  if (remainingSeconds < 86_400n) return `${remainingSeconds / 3_600n}h`;
+
+  const days = remainingSeconds / 86_400n;
+  return days < 30n ? `${days}d` : "30d+";
 }
 
 export function getRewardPoolDisplay(amount: bigint, currency: RewardPoolCurrency | undefined) {
@@ -326,29 +355,55 @@ export function getRewardPoolDisplay(amount: bigint, currency: RewardPoolCurrenc
   };
 }
 
-export function RewardPoolAmountDisplay({ amount, currency }: { amount: bigint; currency?: RewardPoolCurrency }) {
+export function RewardPoolAmountDisplay({
+  amount,
+  currency,
+  deadlineSeconds,
+  nowSeconds,
+}: {
+  amount: bigint;
+  currency?: RewardPoolCurrency;
+  deadlineSeconds?: bigint | null;
+  nowSeconds?: number;
+}) {
   const display = getRewardPoolDisplay(amount, currency);
   return (
     <RewardAmountDisplay
       amount={amount}
       amountLabel={display.amountLabel}
+      deadlineSeconds={deadlineSeconds}
+      nowSeconds={nowSeconds}
       label="Bounty"
       tooltip={display.tooltip}
       ariaLabel="Bounty"
+      deadlineTooltipSubject="Bounty eligibility"
       tone="blue"
     />
   );
 }
 
-export function FeedbackBonusAmountDisplay({ amount, currency }: { amount: bigint; currency?: RewardPoolCurrency }) {
+export function FeedbackBonusAmountDisplay({
+  amount,
+  currency,
+  deadlineSeconds,
+  nowSeconds,
+}: {
+  amount: bigint;
+  currency?: RewardPoolCurrency;
+  deadlineSeconds?: bigint | null;
+  nowSeconds?: number;
+}) {
   const { amountLabel, tooltip } = getFeedbackBonusDisplay(amount, currency);
   return (
     <RewardAmountDisplay
       amount={amount}
       amountLabel={amountLabel}
+      deadlineSeconds={deadlineSeconds}
+      nowSeconds={nowSeconds}
       label="Feedback Bonus"
       tooltip={tooltip}
       ariaLabel="Feedback Bonus"
+      deadlineTooltipSubject="Feedback Bonus award window"
       tone="green"
     />
   );
