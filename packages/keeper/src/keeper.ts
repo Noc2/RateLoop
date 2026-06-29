@@ -637,7 +637,6 @@ async function assertPonderDeploymentMatchesKeeper(
         ? deployment.deploymentKey.trim().toLowerCase()
         : null;
     const verificationCacheKey = `${cacheKey}:${ponderDeploymentKey ?? "unknown"}`;
-    if (verifiedPonderDeploymentCacheKey === verificationCacheKey) return;
 
     const expectedContentRegistry = config.contracts.contentRegistry.toLowerCase();
     const expectedFeedbackRegistry = config.contracts.feedbackRegistry.toLowerCase();
@@ -720,6 +719,7 @@ async function fetchKeeperWorkFromPonder(
     }
 
     const payload = await response.json();
+    inspectKeeperWorkHealth(payload, logger);
     const discovery = parseKeeperWorkPayload(payload);
     if (!discovery) {
       throw new Error("Ponder keeper work response was malformed");
@@ -738,6 +738,23 @@ async function fetchKeeperWorkFromPonder(
   } finally {
     clearTimeout(timeout);
   }
+}
+
+function inspectKeeperWorkHealth(payload: unknown, logger: Logger): void {
+  if (!payload || typeof payload !== "object") return;
+  const health = (payload as Record<string, unknown>).health;
+  if (!health || typeof health !== "object") return;
+  const humanVerifiedCommitCount = (health as Record<string, unknown>).humanVerifiedCommitCount;
+  if (!humanVerifiedCommitCount || typeof humanVerifiedCommitCount !== "object") return;
+
+  const status = (humanVerifiedCommitCount as Record<string, unknown>).status;
+  if (status !== "warning") return;
+
+  incrementCounter("keeper_work_hrc_health_warning_total");
+  logger.warn("Ponder humanVerifiedCommitCount health is degraded", {
+    staleRoundCount: (humanVerifiedCommitCount as Record<string, unknown>).staleRoundCount,
+    message: (humanVerifiedCommitCount as Record<string, unknown>).message,
+  });
 }
 
 function parseKeeperWorkPayload(payload: unknown): KeeperWorkDiscovery | null {
