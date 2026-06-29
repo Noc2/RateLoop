@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { HEAD_TO_HEAD_AB_TEMPLATE_ID, readHeadToHeadTemplateInputs } from "@rateloop/agents/voteUi";
@@ -21,10 +21,12 @@ import {
   ClockIcon,
   ExclamationTriangleIcon,
   LockClosedIcon,
+  MagnifyingGlassIcon,
   PhotoIcon,
   ShieldCheckIcon,
   TagIcon,
   WalletIcon,
+  XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { RateLoopConnectButton } from "~~/components/scaffold-eth";
 import { AppPageShell } from "~~/components/shared/AppPageShell";
@@ -39,6 +41,7 @@ import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import { useTermsAcceptance } from "~~/contexts/TermsAcceptanceContext";
 import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
+import { type Category, useCategoryRegistry } from "~~/hooks/useCategoryRegistry";
 import { useGasBalanceStatus } from "~~/hooks/useGasBalanceStatus";
 import { useRateLoopSwitchNetwork } from "~~/hooks/useRateLoopSwitchNetwork";
 import { useTransactionStatusToast } from "~~/hooks/useTransactionStatusToast";
@@ -321,6 +324,170 @@ type UploadQuestionDetails = (
   text: string,
   options?: { requiresGatedAccess?: boolean },
 ) => Promise<QuestionDetailsReference>;
+
+function CategoryIcon({ name, className }: { name: string; className?: string }) {
+  const initial = name.trim().slice(0, 1).toUpperCase() || "?";
+  return (
+    <span
+      className={`${className || "h-5 w-5"} inline-flex shrink-0 items-center justify-center rounded-md bg-primary/10 text-xs font-semibold text-primary`}
+      aria-hidden="true"
+    >
+      {initial}
+    </span>
+  );
+}
+
+function HandoffCategorySelect({
+  categories,
+  disabled,
+  isLoading,
+  onChange,
+  value,
+}: {
+  categories: Category[];
+  disabled?: boolean;
+  isLoading: boolean;
+  onChange: (categoryId: string) => void;
+  value: string;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const normalizedValue = value.trim();
+  const selectedCategory = useMemo(
+    () => categories.find(category => category.id.toString() === normalizedValue) ?? null,
+    [categories, normalizedValue],
+  );
+  const filteredCategories = useMemo(() => {
+    if (!search.trim()) return categories;
+    const needle = search.toLowerCase();
+    return categories.filter(
+      category =>
+        category.name.toLowerCase().includes(needle) ||
+        category.slug.toLowerCase().includes(needle) ||
+        category.subcategories.some(subcategory => subcategory.toLowerCase().includes(needle)),
+    );
+  }, [categories, search]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    if (disabled) setIsOpen(false);
+  }, [disabled]);
+
+  if (isLoading && categories.length === 0) {
+    return (
+      <div className="input input-bordered mt-1 flex w-full items-center bg-base-100">
+        <span className="loading loading-spinner loading-sm" />
+      </div>
+    );
+  }
+
+  if (categories.length === 0) {
+    return (
+      <input
+        className="input input-bordered mt-1 w-full"
+        disabled={disabled}
+        value={value}
+        onChange={event => onChange(event.target.value)}
+      />
+    );
+  }
+
+  return (
+    <div ref={dropdownRef} className="relative mt-1">
+      <button
+        type="button"
+        aria-expanded={isOpen}
+        aria-haspopup="listbox"
+        className="input input-bordered flex w-full cursor-pointer items-center justify-between bg-base-100 text-left transition-colors hover:bg-base-200 disabled:cursor-not-allowed disabled:opacity-60"
+        disabled={disabled}
+        onClick={() => setIsOpen(current => !current)}
+      >
+        {selectedCategory ? (
+          <span className="flex min-w-0 items-center gap-2">
+            <CategoryIcon name={selectedCategory.name} />
+            <span className="truncate">{selectedCategory.name}</span>
+          </span>
+        ) : normalizedValue ? (
+          <span className="truncate text-base-content/70">Category {normalizedValue}</span>
+        ) : (
+          <span className="text-base-content/50">Select a category...</span>
+        )}
+        <ChevronDownIcon
+          className={`h-5 w-5 shrink-0 text-base-content/50 transition-transform ${isOpen ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      {isOpen ? (
+        <div className="absolute z-50 mt-1 w-full overflow-hidden rounded-lg border border-base-300 bg-base-100 shadow-lg">
+          <div className="border-b border-base-300 p-2">
+            <div className="relative">
+              <MagnifyingGlassIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-base-content/50" />
+              <input
+                type="text"
+                placeholder="Search categories..."
+                className="input input-sm w-full bg-base-200 pl-9 pr-8"
+                value={search}
+                onChange={event => setSearch(event.target.value)}
+                autoFocus
+              />
+              {search ? (
+                <button
+                  type="button"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-base-content/50 hover:text-base-content"
+                  onClick={() => setSearch("")}
+                >
+                  <XMarkIcon className="h-4 w-4" />
+                </button>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="max-h-60 space-y-1 overflow-y-auto p-1" role="listbox">
+            {filteredCategories.length > 0 ? (
+              filteredCategories.map(category => {
+                const isSelected = selectedCategory?.id === category.id;
+                return (
+                  <button
+                    key={category.id.toString()}
+                    type="button"
+                    role="option"
+                    aria-selected={isSelected}
+                    className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors ${
+                      isSelected ? "choice-row-active" : "choice-row-inactive"
+                    }`}
+                    onClick={() => {
+                      onChange(category.id.toString());
+                      setIsOpen(false);
+                      setSearch("");
+                    }}
+                  >
+                    <CategoryIcon name={category.name} />
+                    <span className="min-w-0 flex-1 truncate font-medium">{category.name}</span>
+                    {isSelected ? <CheckCircleIcon className="h-4 w-4 shrink-0 text-primary" /> : null}
+                  </button>
+                );
+              })
+            ) : (
+              <div className="px-4 py-3 text-base text-base-content/50">
+                No categories found for &quot;{search}&quot;
+              </div>
+            )}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 function DraftFieldLabel({ children, htmlFor, tooltip }: { children: ReactNode; htmlFor: string; tooltip: string }) {
   return (
@@ -1758,6 +1925,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     useTransactionStatusToast();
   const { executeWalletTransactionPlan } = useWalletTransactionPlanExecutor();
   const { requireAcceptance } = useTermsAcceptance();
+  const { categories, isLoading: categoriesLoading } = useCategoryRegistry();
   const [token] = useState(readToken);
   const [handoff, setHandoff] = useState<Handoff | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -3175,17 +3343,18 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                           </span>
                         </label>
 
-                        <label className="form-control mt-4">
+                        <div className="form-control mt-4">
                           <span className="label-text text-xs font-semibold uppercase tracking-wide text-base-content/45">
                             Category
                           </span>
-                          <input
-                            className="input input-bordered mt-1 w-full"
+                          <HandoffCategorySelect
+                            categories={categories}
                             disabled={!canEditDraft}
+                            isLoading={categoriesLoading}
                             value={question.categoryId}
-                            onChange={event => updateDraftQuestion(index, { categoryId: event.target.value })}
+                            onChange={categoryId => updateDraftQuestion(index, { categoryId })}
                           />
-                        </label>
+                        </div>
 
                         <label className="form-control mt-4">
                           <span className="label-text flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-base-content/45">
