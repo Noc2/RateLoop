@@ -162,7 +162,7 @@ If you only want the database helper, use `yarn dev:db`. It starts the local Pos
 
 ### Run the Keeper
 
-The keeper is a lightweight stateless service that calls settleRound() on eligible active rounds, cancels expired rounds, marks dormant content, and can publish correlation payout snapshots from deterministic artifacts. Snapshot publishing can use a separate keeper wallet that first approves the bonded frontend operator and is then delegated by that frontend. Anyone can run a keeper — all data is public, and multiple instances provide redundancy with no coordination.
+The keeper is a standalone service that settles eligible rounds, cancels expired rounds, marks dormant content, and can publish correlation payout snapshots from deterministic artifacts. Snapshot publishing can use a separate keeper wallet that first approves the bonded frontend operator and is then delegated by that frontend. In production it depends on Ponder for work discovery and may use Postgres advisory locks for correlation snapshot publication — see [`packages/keeper/README.md`](packages/keeper/README.md) for persistence, lock, and multi-replica guidance.
 
 **Configure** by copying `.env.example` and setting an RPC URL, `CHAIN_ID`, and keeper wallet:
 
@@ -196,7 +196,7 @@ docker run --env-file packages/keeper/.env.local -e METRICS_BIND_ADDRESS=0.0.0.0
 - Liveness check: `http://localhost:9090/live`
 - Readiness check: `http://localhost:9090/health`
 
-**Redundancy:** Run 2+ instances with different wallets and `KEEPER_STARTUP_JITTER_MS=15000` to stagger execution. Duplicate transactions revert harmlessly.
+**Redundancy:** Run multiple instances with different wallets and `KEEPER_STARTUP_JITTER_MS=15000` to stagger execution. Configure `KEEPER_DATABASE_URL` when correlation snapshot locks are required. Duplicate settlement attempts usually revert on-chain, but operators should follow `packages/keeper/README.md` rather than assuming fully stateless redundancy.
 
 ### Run Tests
 
