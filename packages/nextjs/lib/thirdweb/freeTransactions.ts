@@ -1646,40 +1646,12 @@ async function validateSponsoredCalls(
         }
         return { ok: false, debugCode: "unsupported_operation" };
       case "QuestionRewardPoolEscrow":
-        if (
-          functionName === "claimQuestionReward" ||
-          functionName === "claimQuestionBundleReward" ||
-          functionName === "createRewardPool"
-        ) {
-          continue;
-        }
-        if (
-          functionName === "createRewardPoolWithAuthorization" &&
-          rewardEscrow &&
-          validateEip3009Authorization({
-            amountArgIndex: 1,
-            args,
-            expectedPayee: rewardEscrow.address,
-            walletAddress,
-          })
-        ) {
+        if (functionName === "claimQuestionReward" || functionName === "claimQuestionBundleReward") {
           continue;
         }
         return { ok: false, debugCode: "unsupported_operation" };
       case "FeedbackBonusEscrow":
-        if (functionName === "createFeedbackBonusPoolWithAsset" || functionName === "awardFeedbackBonus") {
-          continue;
-        }
-        if (
-          functionName === "createFeedbackBonusPoolWithAuthorization" &&
-          feedbackBonusEscrow &&
-          validateEip3009Authorization({
-            amountArgIndex: 2,
-            args,
-            expectedPayee: feedbackBonusEscrow.address,
-            walletAddress,
-          })
-        ) {
+        if (functionName === "awardFeedbackBonus") {
           continue;
         }
         return { ok: false, debugCode: "unsupported_operation" };

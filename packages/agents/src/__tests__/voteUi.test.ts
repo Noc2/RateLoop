@@ -164,8 +164,6 @@ describe("voteUi", () => {
     const normalized = normalizeInferredHeadToHeadAbRequestBody({
       bounty: {
         amount: "1000000",
-        bountyStartBy: "1893456000",
-        bountyWindowSeconds: "1200",
       },
       clientRequestId: "hermes-vs-openclaw",
       question: {

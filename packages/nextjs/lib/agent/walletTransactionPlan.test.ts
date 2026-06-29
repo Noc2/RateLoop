@@ -68,10 +68,7 @@ test("wallet transaction plan call classifiers recognize reservation phases", ()
   assert.equal(isWalletTransactionPlanReserveSubmissionCall({ phase: "approve_usdc" }), false);
   assert.equal(isWalletTransactionPlanReservationRevealCall({ phase: "submit_question" }), true);
   assert.equal(isWalletTransactionPlanReservationRevealCall({ functionName: "submitQuestionBundleWithReward" }), true);
-  assert.equal(
-    isWalletTransactionPlanReservationRevealCall({ functionName: "createFeedbackBonusPoolWithAsset" }),
-    false,
-  );
+  assert.equal(isWalletTransactionPlanReservationRevealCall({ functionName: "awardFeedbackBonus" }), false);
 });
 
 test("normalizeWalletTransactionPlanCalls rejects nonzero value calls", () => {

@@ -23,7 +23,6 @@ export type HandoffWebMcpState = {
   hasConnectedWallet: boolean;
   hasTransactionPlan: boolean;
   hasUnsavedDraft: boolean;
-  isFeedbackBonusStep: boolean;
   isLoaded: boolean;
   isTerminalStatus: boolean;
   needsChainSwitch: boolean;
@@ -92,7 +91,6 @@ export function getHandoffWebMcpNextAction(state: HandoffWebMcpState) {
   if (state.connectedMismatch) return "Connect the wallet expected by this handoff.";
   if (state.needsChainSwitch) return `Switch the wallet to chain ${state.chainId}.`;
   if (state.hasUnsavedDraft) return "Save the draft before submitting.";
-  if (state.isFeedbackBonusStep) return "Approve the Feedback Bonus funding wallet calls in the browser.";
   if (state.hasTransactionPlan) return "Approve the prepared wallet calls in the browser.";
   if (state.canPrepare) return "Prepare the ask in the browser, then approve the wallet calls.";
   if (state.isTerminalStatus) return "No browser action is available for this terminal handoff.";

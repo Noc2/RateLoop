@@ -52,12 +52,7 @@ import {
   validateBrowserX402AuthorizationRequest,
 } from "~~/lib/agent/browserSigningValidation";
 import { buildCleanHandoffLocationPath, readHandoffTokenFromLocation } from "~~/lib/agent/handoffLocation";
-import {
-  getHandoffRoundMaxDurationSecondBoundsForBlind,
-  readHandoffRoundDurationDraft,
-  resolveHandoffSubmittedMaxDurationSeconds,
-  syncHandoffMaxDurationForBlindChange,
-} from "~~/lib/agent/handoffRoundConfig";
+import { readHandoffRoundDurationDraft } from "~~/lib/agent/handoffRoundConfig";
 import { createQuestionDetailsId, questionDetailsSha256Hex } from "~~/lib/attachments/browserQuestionDetails";
 import { IMAGE_PREVIEW_FIT_HINT } from "~~/lib/attachments/imageDisplayGuidance";
 import {
@@ -95,9 +90,7 @@ import {
   DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS,
   PURE_AGENT_FAST_QUESTION_ROUND_CONFIG,
   PURE_AGENT_FAST_ROUND_PRESET_ID,
-  QUESTION_ROUND_MAX_EPOCH_COUNT,
   type QuestionRoundConfigBounds,
-  isQuestionRoundMaxDurationValidForEpoch,
 } from "~~/lib/questionRoundConfig";
 import { assertContentRegistryQuestionSubmissionSelector } from "~~/lib/questionSubmissionSelectorSupport";
 import { isTransactionReceiptTimeoutError, isUserRejectedTransactionError } from "~~/lib/transactionErrors";
@@ -1305,18 +1298,26 @@ function readRoundSettings(handoff: Handoff | null): RoundSettings {
   const requiredVoters = readBountyRequiredVoters(handoff);
   const minVoters = requiredVoters ?? readFirstPositiveBigInt(source, ["minVoters"], presetConfig.minVoters);
   const maxVoters = readFirstPositiveBigInt(source, ["maxVoters"], presetConfig.maxVoters);
+  const questionDuration = readFirstPositiveBigInt(
+    source,
+    [
+      "questionDurationSeconds",
+      "questionDuration",
+      "durationSeconds",
+      "duration",
+      "epochDuration",
+      "blindPhaseSeconds",
+      "blindSeconds",
+      "maxDuration",
+      "maxDurationSeconds",
+      "deadlineSeconds",
+    ],
+    presetConfig.epochDuration,
+  );
 
   return {
-    epochDuration: readFirstPositiveBigInt(
-      source,
-      ["epochDuration", "blindPhaseSeconds", "blindSeconds"],
-      presetConfig.epochDuration,
-    ),
-    maxDuration: readFirstPositiveBigInt(
-      source,
-      ["maxDuration", "maxDurationSeconds", "deadlineSeconds"],
-      presetConfig.maxDuration,
-    ),
+    epochDuration: questionDuration,
+    maxDuration: questionDuration,
     maxVoters: maxVoters < minVoters ? minVoters : maxVoters,
     minVoters,
   };
@@ -1473,22 +1474,10 @@ function getRoundBlindSecondBounds(bounds: QuestionRoundConfigBounds) {
   return { min, max };
 }
 
-function getEffectiveBlindSeconds(value: string, bounds: QuestionRoundConfigBounds): number {
-  const blindSecondBounds = getRoundBlindSecondBounds(bounds);
-  const parsed = parseWholeNumberInput(value);
-  return parsed >= blindSecondBounds.min && parsed <= blindSecondBounds.max ? parsed : blindSecondBounds.min;
-}
-
 function getBlindSecondsTooltip(bounds: QuestionRoundConfigBounds): string {
-  return `Private response window before reveal/open voting. Must be ${formatHumanDuration(
+  return `Question duration. Private responses, bounty eligibility, and feedback bonus timing share this close. Must be ${formatHumanDuration(
     bounds.minEpochDuration,
   )}-${formatHumanDuration(bounds.maxEpochDuration)}.`;
-}
-
-function getMaxSecondsTooltip(bounds: QuestionRoundConfigBounds): string {
-  return `Total round duration. It must be at least the blind window, no more than ${formatHumanDuration(
-    bounds.maxRoundDuration,
-  )}, and can span at most ${QUESTION_ROUND_MAX_EPOCH_COUNT.toLocaleString()} blind phases.`;
 }
 
 function getMinVotersTooltip(bounds: QuestionRoundConfigBounds): string {
@@ -1639,42 +1628,21 @@ async function buildDraftRequestBody(
     throw new Error("Bounty must be a positive USDC amount with up to 6 decimals.");
   }
 
-  const blindSeconds = parseRoundSecondsInput(form.roundBlindSeconds, "Blind phase");
-  const maxDurationSeconds = resolveHandoffSubmittedMaxDurationSeconds(
-    blindSeconds,
-    form.roundMaxDurationSeconds,
-    form.roundMaxDurationOverridden,
-  );
+  const questionDurationSeconds = parseRoundSecondsInput(form.roundBlindSeconds, "Question duration");
   const minVoters = parsePositiveInteger(form.roundMinVoters, "Min voters");
   const maxVoters = parsePositiveInteger(form.roundMaxVoters, "Max voters");
-  if (maxDurationSeconds < blindSeconds) {
-    throw new Error("Max duration must be at least the blind phase.");
-  }
   if (minVoters > maxVoters) {
     throw new Error("Min voters cannot be greater than max voters.");
   }
   if (
-    Number(blindSeconds) < roundConfigBounds.minEpochDuration ||
-    Number(blindSeconds) > roundConfigBounds.maxEpochDuration
+    Number(questionDurationSeconds) < roundConfigBounds.minEpochDuration ||
+    Number(questionDurationSeconds) > roundConfigBounds.maxEpochDuration
   ) {
     throw new Error(
-      `Blind phase must be ${formatHumanDuration(roundConfigBounds.minEpochDuration)}-${formatHumanDuration(
+      `Question duration must be ${formatHumanDuration(roundConfigBounds.minEpochDuration)}-${formatHumanDuration(
         roundConfigBounds.maxEpochDuration,
       )}.`,
     );
-  }
-  if (
-    Number(maxDurationSeconds) < roundConfigBounds.minRoundDuration ||
-    Number(maxDurationSeconds) > roundConfigBounds.maxRoundDuration
-  ) {
-    throw new Error(
-      `Max duration must be ${formatHumanDuration(
-        roundConfigBounds.minRoundDuration,
-      )}-${formatHumanDuration(roundConfigBounds.maxRoundDuration)}.`,
-    );
-  }
-  if (!isQuestionRoundMaxDurationValidForEpoch(Number(blindSeconds), Number(maxDurationSeconds))) {
-    throw new Error("Max duration spans too many blind phases.");
   }
   if (minVoters < roundConfigBounds.minSettlementVoters || minVoters > roundConfigBounds.maxSettlementVoters) {
     throw new Error(
@@ -1691,6 +1659,10 @@ async function buildDraftRequestBody(
     asset: form.bountyAsset === "lrep" ? "LREP" : "USDC",
     requiredVoters: minVoters.toString(),
   };
+  const draftBounty = requestBody.bounty as JsonRecord;
+  delete draftBounty.bountyStartBy;
+  delete draftBounty.bountyWindowSeconds;
+  delete draftBounty.feedbackWindowSeconds;
   let feedbackBonusPaymentAmount = 0n;
   if (form.feedbackBonusAmount !== null) {
     const feedbackBonusAmount = parseFeedbackBonusAmount(form.feedbackBonusAmount);
@@ -1705,14 +1677,14 @@ async function buildDraftRequestBody(
       amount: feedbackBonusAmount.toString(),
       asset: feedbackBonusAsset === "lrep" ? "LREP" : "USDC",
     };
+    delete (requestBody.feedbackBonus as JsonRecord).feedbackClosesAt;
     feedbackBonusPaymentAmount = feedbackBonusAmount;
   } else {
     delete requestBody.feedbackBonus;
   }
   requestBody.maxPaymentAmount = (bountyAmount + feedbackBonusPaymentAmount).toString();
   requestBody.roundConfig = {
-    epochDuration: blindSeconds.toString(),
-    maxDuration: maxDurationSeconds.toString(),
+    questionDurationSeconds: questionDurationSeconds.toString(),
     maxVoters: maxVoters.toString(),
     minVoters: minVoters.toString(),
   };
@@ -1931,7 +1903,6 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
   const [draftForm, setDraftForm] = useState<DraftForm | null>(null);
   const [savedDraftJson, setSavedDraftJson] = useState("");
   const [draftSourceKey, setDraftSourceKey] = useState("");
-  const [showAdvancedRoundSettings, setShowAdvancedRoundSettings] = useState(false);
   const [imageSignatureSteps, setImageSignatureSteps] = useState<ImageSignatureStep[]>([]);
   const [submittedContent, setSubmittedContent] = useState<SubmittedContentModalState | null>(null);
   const boundsChainId = handoff?.chainId ?? chain?.id ?? chainId;
@@ -1964,7 +1935,6 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     [roundConfigBounds],
   );
   const blindSecondsTooltip = useMemo(() => getBlindSecondsTooltip(roundConfigBounds), [roundConfigBounds]);
-  const maxSecondsTooltip = useMemo(() => getMaxSecondsTooltip(roundConfigBounds), [roundConfigBounds]);
   const minVotersTooltip = useMemo(() => getMinVotersTooltip(roundConfigBounds), [roundConfigBounds]);
   const maxVotersTooltip = useMemo(() => getMaxVotersTooltip(roundConfigBounds), [roundConfigBounds]);
 
@@ -2009,7 +1979,6 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     const nextForm = createDraftForm(handoff);
     setDraftForm(nextForm);
     setSavedDraftJson(JSON.stringify(nextForm));
-    setShowAdvancedRoundSettings(nextForm.roundMaxDurationOverridden);
     setDraftSourceKey(currentDraftSourceKey);
     setDraftError(null);
   }, [currentDraftSourceKey, draftSourceKey, handoff]);
@@ -2024,7 +1993,6 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
   const hasUnsavedDraft = isDraftDirty || draftNeedsDescriptionUpload;
   const isExpiredHandoff = handoff?.status === "expired";
   const isTerminalStatus = handoff?.status === "expired" || handoff?.status === "submitted";
-  const isFeedbackBonusStep = handoff?.status === "feedback_bonus_prepared";
   const failedImageAsset = handoff?.assets?.find(asset => asset.status === "failed") ?? null;
   const failedImageUploadMessage =
     handoff?.status === "failed" && failedImageAsset ? handoff.error || failedImageAsset.error || null : null;
@@ -2069,16 +2037,6 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
   const canEditDraft = Boolean(isDraftEditable && !isBusy);
   const canSaveDraft = Boolean(handoff && draftForm && isDraftEditable && hasUnsavedDraft && !isBusy);
   const canSaveDraftBeforeSubmit = Boolean(draftForm && isDraftEditable);
-  const draftRoundMaxDurationSecondBounds = useMemo(
-    () =>
-      getHandoffRoundMaxDurationSecondBoundsForBlind(
-        getEffectiveBlindSeconds(draftForm?.roundBlindSeconds ?? "", roundConfigBounds),
-        roundConfigBounds,
-      ),
-    [draftForm?.roundBlindSeconds, roundConfigBounds],
-  );
-  const roundSettingsTooltipText =
-    "By default, total round duration matches the blind response window. Override it here only when you need a longer open-voting phase.";
   const canSubmit = Boolean(
     token &&
       address &&
@@ -2102,12 +2060,8 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     draftForm?.feedbackBonusAmount !== null && draftForm?.feedbackBonusAsset === "lrep"
       ? (parseFeedbackBonusAmount(draftForm.feedbackBonusAmount.trim()) ?? 0n)
       : 0n;
-  const requiredHandoffLrepAmount = isFeedbackBonusStep
-    ? draftFeedbackBonusLrepAmountAtomic
-    : draftBountyLrepAmountAtomic + draftFeedbackBonusLrepAmountAtomic;
-  const requiredHandoffUsdcAmount = isFeedbackBonusStep
-    ? draftFeedbackBonusUsdcAmountAtomic
-    : draftBountyUsdcAmountAtomic + draftFeedbackBonusUsdcAmountAtomic;
+  const requiredHandoffLrepAmount = draftBountyLrepAmountAtomic + draftFeedbackBonusLrepAmountAtomic;
+  const requiredHandoffUsdcAmount = draftBountyUsdcAmountAtomic + draftFeedbackBonusUsdcAmountAtomic;
   const hasResolvedHandoffLrepBalance =
     Boolean(fundingWalletAddress && lrepAddress) && !isLrepBalanceLoading && lrepBalanceRaw !== undefined;
   const handoffLrepBalance = typeof lrepBalanceRaw === "bigint" ? lrepBalanceRaw : 0n;
@@ -2211,7 +2165,6 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
       hasConnectedWallet: Boolean(address),
       hasTransactionPlan,
       hasUnsavedDraft,
-      isFeedbackBonusStep,
       isLoaded: Boolean(!isLoading && handoff),
       isTerminalStatus,
       needsChainSwitch,
@@ -2233,7 +2186,6 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
       handoffId,
       hasTransactionPlan,
       hasUnsavedDraft,
-      isFeedbackBonusStep,
       isLoading,
       isTerminalStatus,
       needsChainSwitch,
@@ -2381,38 +2333,17 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
           return next;
         }
 
-        const blindSeconds = parseWholeNumberInput(normalizedValue);
-        const maxDurationBounds = getHandoffRoundMaxDurationSecondBoundsForBlind(blindSeconds, roundConfigBounds);
-        next.roundMaxDurationSeconds = syncHandoffMaxDurationForBlindChange(
-          blindSeconds,
-          next.roundMaxDurationSeconds,
-          next.roundMaxDurationOverridden,
-          maxDurationBounds,
-        );
+        next.roundMaxDurationSeconds = normalizedValue;
+        next.roundMaxDurationOverridden = false;
         return next;
       });
       setDraftError(null);
     },
-    [roundConfigBounds],
+    [],
   );
 
-  const updateDraftMaxDurationSecondsInput = useCallback((value: string) => {
-    const normalizedValue = normalizeWholeNumberInput(value);
-    if (normalizedValue === null) return;
-
-    setDraftForm(current => {
-      if (!current) return current;
-      return {
-        ...current,
-        roundMaxDurationOverridden: true,
-        roundMaxDurationSeconds: normalizedValue,
-      };
-    });
-    setDraftError(null);
-  }, []);
-
   const clampDraftWholeNumberField = useCallback(
-    (field: "roundBlindSeconds" | "roundMaxDurationSeconds" | "roundMaxVoters" | "roundMinVoters") => {
+    (field: "roundBlindSeconds" | "roundMaxVoters" | "roundMinVoters") => {
       setDraftForm(current => {
         if (!current) return current;
 
@@ -2422,35 +2353,11 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
             roundBlindSecondBounds.min,
             roundBlindSecondBounds.max,
           );
-          const maxDurationBounds = getHandoffRoundMaxDurationSecondBoundsForBlind(
-            parseWholeNumberInput(roundBlindSeconds),
-            roundConfigBounds,
-          );
           return {
             ...current,
             roundBlindSeconds,
-            roundMaxDurationSeconds: syncHandoffMaxDurationForBlindChange(
-              parseWholeNumberInput(roundBlindSeconds),
-              current.roundMaxDurationSeconds,
-              current.roundMaxDurationOverridden,
-              maxDurationBounds,
-            ),
-          };
-        }
-
-        if (field === "roundMaxDurationSeconds") {
-          const maxDurationBounds = getHandoffRoundMaxDurationSecondBoundsForBlind(
-            getEffectiveBlindSeconds(current.roundBlindSeconds, roundConfigBounds),
-            roundConfigBounds,
-          );
-          return {
-            ...current,
-            roundMaxDurationOverridden: true,
-            roundMaxDurationSeconds: clampWholeNumberInput(
-              current.roundMaxDurationSeconds,
-              maxDurationBounds.min,
-              maxDurationBounds.max,
-            ),
+            roundMaxDurationOverridden: false,
+            roundMaxDurationSeconds: roundBlindSeconds,
           };
         }
 
@@ -2476,7 +2383,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
       });
       setDraftError(null);
     },
-    [roundBlindSecondBounds, roundConfigBounds, roundMaxVoterBounds, roundMinVoterBounds],
+    [roundBlindSecondBounds, roundMaxVoterBounds, roundMinVoterBounds],
   );
 
   const updateDraftQuestion = useCallback((index: number, patch: Partial<DraftQuestionForm>) => {
@@ -2775,13 +2682,8 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
 
   const executeHandoff = useCallback(
     async (targetHandoff: Handoff) => {
-      const isExecutingFeedbackBonus = targetHandoff.status === "feedback_bonus_prepared";
       if (!(targetHandoff.transactionPlan?.calls ?? []).length) {
-        notification.error(
-          isExecutingFeedbackBonus
-            ? "Feedback Bonus funding is not prepared yet."
-            : "This ask could not prepare wallet calls.",
-        );
+        notification.error("This ask could not prepare wallet calls.");
         return;
       }
       if (!address) {
@@ -2799,86 +2701,61 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
 
       try {
         let activeChainId = connectedChainId;
-        let currentHandoff = targetHandoff;
         let submittedContentForShare: SubmittedContentModalState | null = null;
 
-        while (true) {
-          const calls = currentHandoff.transactionPlan?.calls ?? [];
-          const isFundingFeedbackBonus = currentHandoff.status === "feedback_bonus_prepared";
-          if (!calls.length) {
-            throw new Error(
-              isFundingFeedbackBonus
-                ? "Feedback Bonus funding is not prepared yet."
-                : "This ask could not prepare wallet calls.",
-            );
-          }
+        const calls = targetHandoff.transactionPlan?.calls ?? [];
+        if (!calls.length) {
+          throw new Error("This ask could not prepare wallet calls.");
+        }
 
-          if (currentHandoff.chainId && activeChainId !== currentHandoff.chainId) {
-            await switchToChain(currentHandoff.chainId);
-            activeChainId = currentHandoff.chainId;
-          }
+        if (targetHandoff.chainId && activeChainId !== targetHandoff.chainId) {
+          await switchToChain(targetHandoff.chainId);
+          activeChainId = targetHandoff.chainId;
+        }
 
-          const handoffChainId = currentHandoff.chainId ?? undefined;
-          const questionSubmissionCall = findHandoffQuestionSubmissionCall(calls);
-          if (questionSubmissionCall) {
-            const publicClient = getPublicClient(
-              wagmiConfig,
-              handoffChainId === undefined ? undefined : { chainId: handoffChainId },
-            );
-            await assertContentRegistryQuestionSubmissionSelector(
-              publicClient,
-              questionSubmissionCall.to,
-              questionSubmissionCall.kind,
-            );
-          }
+        const handoffChainId = targetHandoff.chainId ?? undefined;
+        const questionSubmissionCall = findHandoffQuestionSubmissionCall(calls);
+        if (questionSubmissionCall) {
+          const publicClient = getPublicClient(
+            wagmiConfig,
+            handoffChainId === undefined ? undefined : { chainId: handoffChainId },
+          );
+          await assertContentRegistryQuestionSubmissionSelector(
+            publicClient,
+            questionSubmissionCall.to,
+            questionSubmissionCall.kind,
+          );
+        }
 
-          const hashes = await executeWalletTransactionPlan({
-            action: isFundingFeedbackBonus ? "Feedback Bonus funding" : "ask",
-            calls,
-            chainId: handoffChainId,
-            getPostCallDelayMs,
-            requiresAtomicExecution: currentHandoff.transactionPlan?.requiresAtomicExecution,
-            requiresOrderedExecution: currentHandoff.transactionPlan?.requiresOrderedExecution,
-          });
+        const hashes = await executeWalletTransactionPlan({
+          action: "ask",
+          calls,
+          chainId: handoffChainId,
+          getPostCallDelayMs,
+          requiresAtomicExecution: targetHandoff.transactionPlan?.requiresAtomicExecution,
+          requiresOrderedExecution: targetHandoff.transactionPlan?.requiresOrderedExecution,
+        });
 
-          const response = await fetch(`/api/agent/handoffs/${handoffId}/complete`, {
-            body: JSON.stringify({ token, transactionHashes: hashes }),
-            headers: { "content-type": "application/json" },
-            method: "POST",
-          });
-          const body = (await response.json()) as CompleteResponse | { error?: string; message?: string };
-          if (!response.ok) throw new Error(readResponseError(body, "Failed to confirm RateLoop ask."));
-          const nextHandoff = body as CompleteResponse;
-          const nextPublicUrl = nextHandoff.publicUrl ?? currentHandoff.publicUrl ?? null;
-          const nextHandoffWithPublicUrl = {
-            ...nextHandoff,
-            publicUrl: nextPublicUrl,
-          };
-          setHandoff(current => ({
-            ...nextHandoff,
-            publicUrl: nextHandoff.publicUrl ?? current?.publicUrl ?? currentHandoff.publicUrl ?? null,
-          }));
+        const response = await fetch(`/api/agent/handoffs/${handoffId}/complete`, {
+          body: JSON.stringify({ token, transactionHashes: hashes }),
+          headers: { "content-type": "application/json" },
+          method: "POST",
+        });
+        const body = (await response.json()) as CompleteResponse | { error?: string; message?: string };
+        if (!response.ok) throw new Error(readResponseError(body, "Failed to confirm RateLoop ask."));
+        const nextHandoff = body as CompleteResponse;
+        setHandoff(current => ({
+          ...nextHandoff,
+          publicUrl: nextHandoff.publicUrl ?? current?.publicUrl ?? targetHandoff.publicUrl ?? null,
+        }));
 
-          if (!isFundingFeedbackBonus) {
-            submittedContentForShare =
-              readSubmittedContentForShare(currentHandoff, nextHandoff.ask) ?? submittedContentForShare;
-          }
+        submittedContentForShare =
+          readSubmittedContentForShare(targetHandoff, nextHandoff.ask) ?? submittedContentForShare;
 
-          if (!isFundingFeedbackBonus && nextHandoff.status === "feedback_bonus_prepared") {
-            currentHandoff = nextHandoffWithPublicUrl;
-            continue;
-          }
-
-          dismissTransactionStatusToast();
-          if (isFundingFeedbackBonus) {
-            notification.success("Ask submitted and Feedback Bonus funded.");
-          } else {
-            notification.success("Ask submitted to RateLoop.");
-          }
-          if (nextHandoff.status === "submitted" && submittedContentForShare) {
-            setSubmittedContent(submittedContentForShare);
-          }
-          break;
+        dismissTransactionStatusToast();
+        notification.success("Ask submitted to RateLoop.");
+        if (nextHandoff.status === "submitted" && submittedContentForShare) {
+          setSubmittedContent(submittedContentForShare);
         }
       } catch (executeError) {
         dismissTransactionStatusToast();
@@ -2926,10 +2803,6 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     if (!accepted) return;
 
     if (!executableHandoff.transactionPlan?.calls?.length) {
-      if (isFeedbackBonusStep) {
-        notification.error("Feedback Bonus funding is waiting for a transaction plan.");
-        return;
-      }
       const prepared = await prepareHandoff({ skipUnsavedDraftCheck: shouldAutoSaveDraft });
       if (!prepared) return;
       executableHandoff = prepared;
@@ -2942,7 +2815,6 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     executeHandoff,
     handoff,
     hasUnsavedDraft,
-    isFeedbackBonusStep,
     prepareHandoff,
     requireAcceptance,
     saveDraft,
@@ -2956,12 +2828,11 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     if (isSavingDraft) return "Saving...";
     if (switchingChainId !== null) return "Switching...";
     if (isPreparing || isSigningMessage || isSigningTypedData) return "Preparing...";
-    if (isFeedbackBonusStep) return isExecuting ? "Funding..." : "Fund Bonus";
     return isExecuting ? "Submitting..." : "Submit";
   })();
   const handoffAssets = handoff?.assets ?? [];
   const hasHandoffAssets = handoffAssets.length > 0;
-  const hasHandoffActionStatus = Boolean(isFeedbackBonusStep || (handoff?.publicUrl && !isFeedbackBonusStep));
+  const hasHandoffActionStatus = Boolean(handoff?.publicUrl);
   const renderHandoffActionArea = (className = "mt-4") => (
     <>
       {isExpiredHandoff ? (
@@ -2982,13 +2853,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
       >
         {hasHandoffActionStatus ? (
           <div className="min-w-0 flex-1">
-            {isFeedbackBonusStep ? (
-              <p className="max-w-2xl text-sm text-base-content/60">
-                The question is submitted, but raters will not see the Feedback Bonus until these wallet calls are
-                funded.
-              </p>
-            ) : null}
-            {handoff?.publicUrl && !isFeedbackBonusStep ? (
+            {handoff?.publicUrl ? (
               <Link className="btn btn-outline btn-sm" href={handoff.publicUrl}>
                 View public result
               </Link>
@@ -3129,24 +2994,14 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
             {hasInsufficientHandoffLrep ? (
               <div className="mt-4">
                 <BountyFundingWarning
-                  title={isFeedbackBonusStep ? "Need LREP for funding" : "Need bounty funds"}
-                  message={
-                    isFeedbackBonusStep
-                      ? `This handoff needs ${formatSubmissionRewardAmount(
-                          requiredHandoffLrepAmount,
-                          "lrep",
-                        )} to fund the Feedback Bonus. Your wallet has ${formatSubmissionRewardAmount(
-                          handoffLrepBalance,
-                          "lrep",
-                        )}.`
-                      : `This handoff needs ${formatSubmissionRewardAmount(
-                          requiredHandoffLrepAmount,
-                          "lrep",
-                        )} before it can be submitted. Your wallet has ${formatSubmissionRewardAmount(
-                          handoffLrepBalance,
-                          "lrep",
-                        )}.`
-                  }
+                  title="Need bounty funds"
+                  message={`This handoff needs ${formatSubmissionRewardAmount(
+                    requiredHandoffLrepAmount,
+                    "lrep",
+                  )} before it can be submitted. Your wallet has ${formatSubmissionRewardAmount(
+                    handoffLrepBalance,
+                    "lrep",
+                  )}.`}
                 />
               </div>
             ) : null}
@@ -3155,24 +3010,14 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                 <BountyFundingWarning
                   actionDisabled={!fundingWalletAddress || !usdcAddress}
                   actionLabel="Add USDC"
-                  title={isFeedbackBonusStep ? `Need ${usdcDisplayName} for funding` : "Need bounty funds"}
-                  message={
-                    isFeedbackBonusStep
-                      ? `This handoff needs ${formatSubmissionRewardAmount(
-                          requiredHandoffUsdcAmount,
-                          "usdc",
-                        )} to fund the Feedback Bonus. Your wallet has ${formatSubmissionRewardAmount(
-                          handoffUsdcBalance,
-                          "usdc",
-                        )}.`
-                      : `This handoff needs ${formatSubmissionRewardAmount(
-                          requiredHandoffUsdcAmount,
-                          "usdc",
-                        )} before it can be submitted. Your wallet has ${formatSubmissionRewardAmount(
-                          handoffUsdcBalance,
-                          "usdc",
-                        )}.`
-                  }
+                  title="Need bounty funds"
+                  message={`This handoff needs ${formatSubmissionRewardAmount(
+                    requiredHandoffUsdcAmount,
+                    "usdc",
+                  )} before it can be submitted. Your wallet has ${formatSubmissionRewardAmount(
+                    handoffUsdcBalance,
+                    "usdc",
+                  )}.`}
                   onAction={handleOpenUsdcFunding}
                 />
               </div>
@@ -3627,7 +3472,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                   <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
                     <div className="form-control sm:col-span-2 lg:col-span-1 xl:col-span-2">
                       <DraftFieldLabel htmlFor="agent-ask-round-blind-seconds" tooltip={blindSecondsTooltip}>
-                        Blind response window
+                        Question duration
                       </DraftFieldLabel>
                       <DurationInput
                         id="agent-ask-round-blind-seconds"
@@ -3638,7 +3483,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                         maxSeconds={roundBlindSecondBounds.max}
                         onBlur={() => clampDraftWholeNumberField("roundBlindSeconds")}
                         onChangeSeconds={value => updateDraftWholeNumberField("roundBlindSeconds", value)}
-                        ariaLabel="Blind response window"
+                        ariaLabel="Question duration"
                       />
                     </div>
                     <div className="form-control">
@@ -3677,48 +3522,6 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                         onChange={event => updateDraftWholeNumberField("roundMaxVoters", event.target.value)}
                       />
                     </div>
-                  </div>
-
-                  <div className="mt-4 surface-card-nested rounded-lg p-3">
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        aria-expanded={showAdvancedRoundSettings}
-                        aria-controls="agent-ask-advanced-round-settings"
-                        disabled={!canEditDraft}
-                        onClick={() => setShowAdvancedRoundSettings(current => !current)}
-                        className="inline-flex items-center gap-2 text-left text-base font-medium text-base-content transition-colors hover:text-base-content/80 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        <ChevronDownIcon
-                          className={`h-4 w-4 shrink-0 transition-transform ${showAdvancedRoundSettings ? "rotate-180" : ""}`}
-                          aria-hidden="true"
-                        />
-                        Advanced round settings
-                      </button>
-                      <InfoTooltip text={roundSettingsTooltipText} />
-                    </div>
-
-                    {showAdvancedRoundSettings ? (
-                      <div id="agent-ask-advanced-round-settings" className="mt-4">
-                        <div className="form-control">
-                          <DraftFieldLabel htmlFor="agent-ask-round-max-seconds" tooltip={maxSecondsTooltip}>
-                            Max duration
-                          </DraftFieldLabel>
-                          <DurationInput
-                            id="agent-ask-round-max-seconds"
-                            className="mt-1"
-                            disabled={!canEditDraft}
-                            valueSeconds={draftForm?.roundMaxDurationSeconds ?? ""}
-                            minSeconds={draftRoundMaxDurationSecondBounds.min}
-                            maxSeconds={draftRoundMaxDurationSecondBounds.max}
-                            onBlur={() => clampDraftWholeNumberField("roundMaxDurationSeconds")}
-                            onChangeSeconds={updateDraftMaxDurationSecondsInput}
-                            ariaLabel="Max duration"
-                            summarySuffix="for selected blind window"
-                          />
-                        </div>
-                      </div>
-                    ) : null}
                   </div>
                 </div>
               </div>

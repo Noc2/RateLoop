@@ -10,7 +10,7 @@ import { expect, test } from "@playwright/test";
  * Round cancellation tests.
  * Triggers Ponder event: RoundCancelled.
  *
- * IMPORTANT: This test fast-forwards time by 7+ days (maxDuration).
+ * IMPORTANT: This test fast-forwards time by 7+ days (well past question duration).
  * All active rounds will expire. Run LAST in the suite via a separate
  * Playwright project with a dependency on the main chromium project.
  */
@@ -20,7 +20,7 @@ test.describe("Round cancellation", () => {
   const ENGINE_ADDRESS = CONTRACT_ADDRESSES.RoundVotingEngine;
   let cancelledCount = 0;
 
-  test("round cancels when maxDuration expires without quorum", async () => {
+  test("round cancels when question duration expires without quorum", async () => {
     test.setTimeout(180_000);
 
     // Step 1: Ask a new question via direct contract calls (avoids flaky UI submission)
@@ -38,7 +38,7 @@ test.describe("Round cancellation", () => {
     );
     expect(submitted, "Content submission via direct call").toBe(true);
 
-    // Step 2: Fast-forward past maxDuration (7 days + buffer)
+    // Step 2: Fast-forward well past question duration.
     await fastForwardTime(7 * 86400 + 60);
 
     // Step 3: Cancel expired rounds directly on-chain.

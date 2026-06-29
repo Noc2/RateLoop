@@ -14,7 +14,7 @@ import { parseX402QuestionRequest } from "~~/lib/x402/questionPayload";
 
 type JsonObject = Record<string, unknown>;
 
-type AgentSigningIntentStatus = "pending" | "prepared" | "feedback_bonus_prepared" | "submitted" | "failed" | "expired";
+type AgentSigningIntentStatus = "pending" | "prepared" | "submitted" | "failed" | "expired";
 
 type AgentSigningIntentRecord = {
   chainId: number | null;
@@ -214,18 +214,6 @@ function readTransactionPlanFromBody(body: JsonObject) {
 function readX402AuthorizationRequest(body: JsonObject): JsonObject | null {
   const request = body.x402AuthorizationRequest;
   return request && typeof request === "object" && !Array.isArray(request) ? (request as JsonObject) : null;
-}
-
-function readFeedbackBonusTransactionPlan(result: JsonObject): JsonObject | null {
-  const feedbackBonus =
-    result.feedbackBonus && typeof result.feedbackBonus === "object" && !Array.isArray(result.feedbackBonus)
-      ? (result.feedbackBonus as JsonObject)
-      : null;
-  if (!feedbackBonus || feedbackBonus.status !== "awaiting_wallet_signature") return null;
-  const transactionPlan = feedbackBonus.transactionPlan;
-  return transactionPlan && typeof transactionPlan === "object" && !Array.isArray(transactionPlan)
-    ? (transactionPlan as JsonObject)
-    : null;
 }
 
 function isAlreadyStoredHashRepeat(storedHashes: readonly Hex[], transactionHashes: readonly Hex[]) {
@@ -501,15 +489,8 @@ export async function completeAgentSigningIntent(params: {
     throw new McpToolError("Prepare this signing intent before completing it.");
   }
   const transactionHashes = readAgentTransactionHashes(params.transactionHashes, message => new McpToolError(message));
-  const confirmsFeedbackBonus = intent.status === "feedback_bonus_prepared";
 
-  if (confirmsFeedbackBonus && isAlreadyStoredHashRepeat(intent.transactionHashes, transactionHashes)) {
-    return signingIntentResponse(intent, {
-      nextAction:
-        "Execute the Feedback Bonus transactionPlan.calls in the connected wallet, then confirm transaction hashes.",
-      publicUrl: null,
-    });
-  }
+  if (isAlreadyStoredHashRepeat(intent.transactionHashes, transactionHashes)) return signingIntentResponse(intent);
 
   try {
     const body = (await callPublicRateLoopMcpTool({
@@ -517,20 +498,11 @@ export async function completeAgentSigningIntent(params: {
         operationKey: intent.operationKey,
         transactionHashes,
       },
-      name: confirmsFeedbackBonus
-        ? "rateloop_confirm_feedback_bonus_transactions"
-        : "rateloop_confirm_ask_transactions",
+      name: "rateloop_confirm_ask_transactions",
     })) as JsonObject;
-    const feedbackBonusTransactionPlan = confirmsFeedbackBonus ? null : readFeedbackBonusTransactionPlan(body);
-    const status: AgentSigningIntentStatus = feedbackBonusTransactionPlan
-      ? "feedback_bonus_prepared"
-      : body.status === "submitted"
-        ? "submitted"
-        : "prepared";
-    const storedTransactionHashes = confirmsFeedbackBonus
-      ? [...intent.transactionHashes, ...transactionHashes]
-      : transactionHashes;
-    const nextTransactionPlan = feedbackBonusTransactionPlan ?? (confirmsFeedbackBonus ? null : intent.transactionPlan);
+    const status: AgentSigningIntentStatus = body.status === "submitted" ? "submitted" : "prepared";
+    const storedTransactionHashes = transactionHashes;
+    const nextTransactionPlan = status === "submitted" ? null : intent.transactionPlan;
     const now = nowDate();
     await dbClient.execute({
       sql: `
@@ -565,12 +537,8 @@ export async function completeAgentSigningIntent(params: {
       },
       {
         ...body,
-        nextAction:
-          status === "feedback_bonus_prepared"
-            ? "Execute the Feedback Bonus transactionPlan.calls in the connected wallet, then confirm transaction hashes."
-            : undefined,
         status,
-        transactionPlan: confirmsFeedbackBonus ? null : (feedbackBonusTransactionPlan ?? body.transactionPlan),
+        transactionPlan: status === "submitted" ? null : (body.transactionPlan ?? intent.transactionPlan),
       },
     );
   } catch (error) {

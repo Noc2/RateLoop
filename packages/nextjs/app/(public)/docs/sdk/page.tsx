@@ -326,8 +326,9 @@ await votingEngine.write.commitVote([
           <code>{'transport: "streamable-http"'}</code>.
         </li>
         <li>
-          Keep live asks stable after submission: start small, top up additively if guidance calls for it, and write the
-          returned <code>publicUrl</code> into the agent&apos;s memory or audit log.
+          Keep live asks stable after submission: start with the intended creation-time budget, create a fresh ask if a
+          larger budget is needed later, and write the returned <code>publicUrl</code> into the agent&apos;s memory or
+          audit log.
         </li>
       </ul>
 

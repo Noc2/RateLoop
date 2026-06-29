@@ -12,9 +12,6 @@ const DETAILS_HASH = `0x${"4".repeat(64)}`;
 const VALID_REQUEST = {
   bounty: {
     amount: "1000000",
-    bountyStartBy: "1893456000",
-    bountyWindowSeconds: "1200",
-    requiredSettledRounds: "1",
     requiredVoters: "3",
   },
   clientRequestId: "landing-pitch-demo",
@@ -39,28 +36,55 @@ describe("agent question linting", () => {
     });
   });
 
-  it("rejects missing bounty timing fields", () => {
+  it("accepts omitted legacy bounty timing fields", () => {
+    const findings = lintAgentAskRequest({
+      ...VALID_REQUEST,
+    bounty: {
+      amount: "1000000",
+      requiredVoters: "3",
+    },
+    });
+
+    expect(summarizeLintFindings(findings)).toEqual({
+      errorCount: 0,
+      ok: true,
+      warningCount: 0,
+    });
+  });
+
+  it("rejects legacy timing fields in authored asks", () => {
     const findings = lintAgentAskRequest({
       ...VALID_REQUEST,
       bounty: {
-        amount: "1000000",
+        ...VALID_REQUEST.bounty,
         requiredSettledRounds: "1",
-        requiredVoters: "3",
+        bountyStartBy: "0",
+        bountyWindowSeconds: "1200",
+        feedbackWindowSeconds: "1200",
+      },
+      feedbackBonus: {
+        amount: "1000000",
+        feedbackClosesAt: "1200",
+      },
+      roundConfig: {
+        epochDuration: "1200",
+        maxDuration: "1200",
+        minVoters: "3",
       },
     });
 
     expect(findings).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({
-          level: "error",
-          path: "bounty.bountyStartBy",
-        }),
-        expect.objectContaining({
-          level: "error",
-          path: "bounty.bountyWindowSeconds",
-        }),
+        expect.objectContaining({ path: "bounty.requiredSettledRounds" }),
+        expect.objectContaining({ path: "bounty.bountyStartBy" }),
+        expect.objectContaining({ path: "bounty.bountyWindowSeconds" }),
+        expect.objectContaining({ path: "bounty.feedbackWindowSeconds" }),
+        expect.objectContaining({ path: "feedbackBonus.feedbackClosesAt" }),
+        expect.objectContaining({ path: "roundConfig.epochDuration" }),
+        expect.objectContaining({ path: "roundConfig.maxDuration" }),
       ]),
     );
+    expect(summarizeLintFindings(findings).ok).toBe(false);
   });
 
   it("rejects unsafe numeric atomic fields", () => {
@@ -70,7 +94,6 @@ describe("agent question linting", () => {
       bounty: {
         ...VALID_REQUEST.bounty,
         amount: unsafeInteger,
-        bountyStartBy: unsafeInteger,
       },
       question: {
         ...VALID_REQUEST.question,
@@ -93,10 +116,6 @@ describe("agent question linting", () => {
         expect.objectContaining({
           level: "error",
           path: "bounty.amount",
-        }),
-        expect.objectContaining({
-          level: "error",
-          path: "bounty.bountyStartBy",
         }),
         expect.objectContaining({
           level: "error",
@@ -615,8 +634,7 @@ describe("round config voter alignment linting", () => {
       ...VALID_REQUEST,
       bounty: { ...VALID_REQUEST.bounty, requiredVoters: "5" },
       roundConfig: {
-        epochDuration: "1200",
-        maxDuration: "1200",
+        questionDurationSeconds: "1200",
         maxVoters: "100",
         minVoters: "5",
       },
@@ -634,8 +652,7 @@ describe("round config voter alignment linting", () => {
       ...VALID_REQUEST,
       bounty: { ...VALID_REQUEST.bounty, requiredVoters: "5" },
       roundConfig: {
-        epochDuration: "1200",
-        maxDuration: "1200",
+        questionDurationSeconds: "1200",
         maxVoters: "100",
         minVoters: "3",
       },
@@ -657,8 +674,7 @@ describe("round config voter alignment linting", () => {
       ...VALID_REQUEST,
       bounty: { ...VALID_REQUEST.bounty, requiredVoters: "65536" },
       roundConfig: {
-        epochDuration: "4294967296",
-        maxDuration: "1200",
+        questionDurationSeconds: "4294967296",
         maxVoters: "65536",
         minVoters: "65536",
       },
@@ -672,7 +688,7 @@ describe("round config voter alignment linting", () => {
         }),
         expect.objectContaining({
           level: "error",
-          path: "roundConfig.epochDuration",
+          path: "roundConfig.questionDurationSeconds",
         }),
         expect.objectContaining({
           level: "error",

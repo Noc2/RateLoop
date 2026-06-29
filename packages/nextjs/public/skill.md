@@ -57,11 +57,8 @@ Image transport rule: do not print base64 to the terminal or copy base64 out of 
 - one inspectable context source: public `question.contextUrl`, public `question.videoUrl`, generated/local image bytes supplied as `generatedImages`, or RateLoop-hosted gated `detailsUrl` (required) with optional `imageUrls` when `question.confidentiality.visibility="gated"`
 - `bounty.amount`: USDC budget in atomic units, for example `2500000` for 2.5 USDC
 - `bounty.requiredVoters`: minimum eligible voters required by the bounty; when setting `roundConfig`, use the same value for `roundConfig.minVoters`. Under the launch policy, use at least 5 voters for bounties at or above 1000 USDC and at least 8 voters for bounties at or above 10000 USDC. Governance can raise these new-ask floors as usage grows.
-- `bounty.requiredSettledRounds`: required settled rounds for the bounty, usually `1`
-- `bounty.bountyStartBy`: future Unix timestamp in seconds by which the first private round must start
-- `bounty.bountyWindowSeconds`: bounty eligibility duration after the first private round starts
-- `bounty.feedbackWindowSeconds`: requested paid-feedback close window after the first private round starts
-- `feedbackBonus`: optional LREP or USDC pool for useful public rater feedback on single-question asks; awards stay open until at least 24 hours after settlement. Include one when written rationale, objections, bug details, or product reasoning matter.
+- `roundConfig.questionDurationSeconds`: shared duration for the blind response window, bounty eligibility, and Feedback Bonus feedback window.
+- `feedbackBonus`: optional USDC pool for useful public rater feedback on single-question asks; awards stay open until at least 24 hours after settlement. Include one when written rationale, objections, bug details, or product reasoning matter.
 - `maxPaymentAmount`: maximum USDC spend the user approves
 - `categoryId`: RateLoop category id
 - `clientRequestId`: stable idempotency key for the ask
@@ -119,7 +116,6 @@ Advanced low-level tools:
 - `rateloop_upload_image`
 - `rateloop_get_image_upload_status`
 - `rateloop_confirm_ask_transactions`
-- `rateloop_confirm_feedback_bonus_transactions`
 
 Browser handoff pages may expose read-only WebMCP helpers for status, draft validation, and next action. They do not sign, fund, submit, or replace visible wallet approval.
 
@@ -139,7 +135,7 @@ Use `paymentMode: "wallet_calls"` for LREP bounties, LREP Feedback Bonuses, bund
 
 ## Tier-0 Blinding Guidance
 
-Treat the default blind phase as suitable for ordinary feedback. For Tier-0, unusually sensitive, or high-value asks, prefer a longer `roundConfig.epochDuration`, a matching `maxDuration`, and at least 8 required voters instead of shortening the blind window for speed. Never send plaintext vote direction, predicted crowd share, or salt to hosted MCP; build encrypted rating commits locally and send only encrypted commit material.
+Treat the default blind phase as suitable for ordinary feedback. For Tier-0, unusually sensitive, or high-value asks, prefer a longer `roundConfig.questionDurationSeconds` and at least 8 required voters instead of shortening the blind window for speed. Never send plaintext vote direction, predicted crowd share, or salt to hosted MCP; build encrypted rating commits locally and send only encrypted commit material.
 
 ## Permanent Agent Setup
 

@@ -195,9 +195,6 @@ function questionPayload(clientRequestId: string, params: { chainId?: number } =
     bounty: {
       amount: "1000000",
       asset: "USDC",
-      bountyStartBy: "1762000000",
-      bountyWindowSeconds: "1200",
-      feedbackWindowSeconds: "1200",
     },
     chainId: params.chainId ?? 4801,
     clientRequestId,
@@ -977,12 +974,7 @@ test("agent signing intent route fails closed without production app URL", async
   }
 });
 
-test("agent signing intent completion continues into Feedback Bonus wallet calls", async () => {
-  const confirmedFeedbackBonus: unknown[] = [];
-  const feedbackBonusCalls = [
-    { id: "approve-feedback-usdc", to: "0x0000000000000000000000000000000000000001" },
-    { id: "fund-feedback-bonus", to: "0x0000000000000000000000000000000000000003" },
-  ];
+test("agent signing intent completion does not create post-creation Feedback Bonus wallet calls", async () => {
   installAskOverrides({
     confirmAgentWalletQuestionSubmissionRequest: async params => ({
       body: {
@@ -998,38 +990,6 @@ test("agent signing intent completion continues into Feedback Bonus wallet calls
         transactionHashes: params.transactionHashes,
       },
       status: 200,
-    }),
-    confirmFeedbackBonusQuestionSubmissionRequest: async params => {
-      confirmedFeedbackBonus.push(params);
-      return {
-        body: {
-          feedbackBonus: {
-            enabled: true,
-            poolId: "7",
-            status: "funded",
-          },
-          operationKey: params.operationKey,
-          status: "submitted",
-        },
-        status: 200,
-      };
-    },
-    prepareFeedbackBonusQuestionSubmissionRequest: async params => ({
-      body: {
-        feedbackBonus: {
-          amount: "2000000",
-          contentId: "content-123",
-          roundId: "1",
-          status: "awaiting_wallet_signature",
-          transactionPlan: {
-            calls: feedbackBonusCalls,
-            requiresAtomicExecution: true,
-            requiresOrderedExecution: true,
-          },
-        },
-        operationKey: params.operationKey,
-      },
-      status: 202,
     }),
     preparePermissionlessWalletQuestionSubmissionRequest: async params => ({
       body: {
@@ -1103,42 +1063,11 @@ test("agent signing intent completion continues into Feedback Bonus wallet calls
   );
   const completeAskBody = (await completeAskResponse.json()) as Record<string, unknown>;
   assert.equal(completeAskResponse.status, 200);
-  assert.equal(completeAskBody.status, "feedback_bonus_prepared");
+  assert.equal(completeAskBody.status, "submitted");
   assert.deepEqual(completeAskBody.transactionHashes, [askHash]);
-  assert.equal((completeAskBody.transactionPlan as { calls: unknown[] }).calls.length, 2);
-  assert.equal(
-    completeAskBody.nextAction,
-    "Execute the Feedback Bonus transactionPlan.calls in the connected wallet, then confirm transaction hashes.",
-  );
-
-  const retryAskResponse = await signingIntentCompleteRoute.POST(
-    makePublicPost(`https://rateloop.ai/api/agent/signing-intents/${intentId}/complete`, {
-      token,
-      transactionHashes: [askHash],
-    }),
-    { params: Promise.resolve({ intentId }) },
-  );
-  const retryAskBody = (await retryAskResponse.json()) as Record<string, unknown>;
-  assert.equal(retryAskResponse.status, 200);
-  assert.equal(retryAskBody.status, "feedback_bonus_prepared");
-  assert.deepEqual(retryAskBody.transactionHashes, [askHash]);
-  assert.deepEqual(confirmedFeedbackBonus, []);
-
-  const feedbackHash = `0x${"5".repeat(64)}` as const;
-  const completeBonusResponse = await signingIntentCompleteRoute.POST(
-    makePublicPost(`https://rateloop.ai/api/agent/signing-intents/${intentId}/complete`, {
-      token,
-      transactionHashes: [feedbackHash],
-    }),
-    { params: Promise.resolve({ intentId }) },
-  );
-  const completeBonusBody = (await completeBonusResponse.json()) as Record<string, unknown>;
-  assert.equal(completeBonusResponse.status, 200);
-  assert.equal(completeBonusBody.status, "submitted");
-  assert.deepEqual(completeBonusBody.transactionHashes, [askHash, feedbackHash]);
-  assert.equal(completeBonusBody.transactionPlan, null);
-  assert.equal((completeBonusBody.feedbackBonus as Record<string, unknown>).status, "funded");
-  assert.deepEqual(confirmedFeedbackBonus, [{ operationKey: OPERATION_KEY, transactionHashes: [feedbackHash] }]);
+  assert.equal(completeAskBody.transactionPlan, null);
+  assert.equal((completeAskBody.feedbackBonus as Record<string, unknown>).status, "creation_time_required");
+  assert.deepEqual(completeAskBody.warnings, ["feedback_bonus_creation_time_required"]);
 
   const readAfterBonusResponse = await signingIntentRoute.GET(
     makePublicGet(`https://rateloop.ai/api/agent/signing-intents/${intentId}`, {
@@ -1149,7 +1078,7 @@ test("agent signing intent completion continues into Feedback Bonus wallet calls
   const readAfterBonusBody = (await readAfterBonusResponse.json()) as Record<string, unknown>;
   assert.equal(readAfterBonusResponse.status, 200);
   assert.equal(readAfterBonusBody.status, "submitted");
-  assert.deepEqual(readAfterBonusBody.transactionHashes, [askHash, feedbackHash]);
+  assert.deepEqual(readAfterBonusBody.transactionHashes, [askHash]);
   assert.equal(readAfterBonusBody.transactionPlan, null);
 });
 
@@ -2500,8 +2429,7 @@ test("agent ask handoff route saves edited drafts before prepare", async () => {
       title: "Edited pitch interest",
     },
     roundConfig: {
-      epochDuration: "600",
-      maxDuration: "7200",
+      questionDurationSeconds: "600",
       maxVoters: "40",
       minVoters: "4",
     },
@@ -2577,7 +2505,7 @@ test("agent ask handoff route saves edited drafts before prepare", async () => {
   assert.equal(feedbackBonus.amount, 2_000_000n);
   assert.equal(feedbackBonus.asset, "USDC");
   assert.equal(payload.roundConfig.epochDuration, 600n);
-  assert.equal(payload.roundConfig.maxDuration, 7200n);
+  assert.equal(payload.roundConfig.maxDuration, 600n);
   assert.equal(payload.roundConfig.minVoters, 4n);
   assert.equal(payload.roundConfig.maxVoters, 40n);
 });
@@ -2633,12 +2561,7 @@ test("agent ask handoff route blocks draft edits after prepare", async () => {
   assert.match(String(patchBody.message), /cannot be edited after preparation has started/);
 });
 
-test("agent ask handoff route funds feedback bonus after submitting the ask", async () => {
-  const feedbackBonusCalls = [
-    { id: "approve-feedback-bonus-usdc", to: "0x0000000000000000000000000000000000000001" },
-    { id: "create-feedback-bonus-pool", to: "0x0000000000000000000000000000000000000003" },
-  ];
-  const confirmedFeedbackBonus: unknown[] = [];
+test("agent ask handoff route does not create post-creation Feedback Bonus wallet calls", async () => {
   mcpToolsModule.__setMcpToolTestOverridesForTests({
     confirmAgentWalletQuestionSubmissionRequest: async params => ({
       body: {
@@ -2655,37 +2578,6 @@ test("agent ask handoff route funds feedback bonus after submitting the ask", as
         transactionHashes: params.transactionHashes,
       },
       status: 200,
-    }),
-    confirmFeedbackBonusQuestionSubmissionRequest: async params => {
-      confirmedFeedbackBonus.push(params);
-      return {
-        body: {
-          feedbackBonus: {
-            enabled: true,
-            poolId: "7",
-            status: "funded",
-          },
-          operationKey: params.operationKey,
-          status: "submitted",
-        },
-        status: 200,
-      };
-    },
-    prepareFeedbackBonusQuestionSubmissionRequest: async params => ({
-      body: {
-        feedbackBonus: {
-          amount: "2000000",
-          contentId: "content-123",
-          roundId: "1",
-          status: "awaiting_wallet_signature",
-          transactionPlan: {
-            calls: feedbackBonusCalls,
-            requiresOrderedExecution: true,
-          },
-        },
-        operationKey: params.operationKey,
-      },
-      status: 202,
     }),
     preparePermissionlessWalletQuestionSubmissionRequest: async params => ({
       body: {
@@ -2782,46 +2674,16 @@ test("agent ask handoff route funds feedback bonus after submitting the ask", as
   const completeAskBody = (await completeAskResponse.json()) as Record<string, unknown>;
 
   assert.equal(completeAskResponse.status, 200);
-  assert.equal(completeAskBody.status, "feedback_bonus_prepared");
+  assert.equal(completeAskBody.status, "submitted");
   assert.deepEqual(completeAskBody.transactionHashes, [askHash]);
-  assert.equal((completeAskBody.transactionPlan as { calls: unknown[] }).calls.length, 2);
+  assert.equal(completeAskBody.transactionPlan, null);
   assert.equal(
-    completeAskBody.nextAction,
-    "Execute the Feedback Bonus transactionPlan.calls in the connected wallet, then confirm transaction hashes.",
+    ((completeAskBody.ask as Record<string, unknown>).feedbackBonus as Record<string, unknown>).status,
+    "creation_time_required",
   );
-
-  const retryAskResponse = await handoffCompleteRoute.POST(
-    makePublicPost(`https://rateloop.ai/api/agent/handoffs/${handoffId}/complete`, {
-      token,
-      transactionHashes: [askHash],
-    }),
-    { params: Promise.resolve({ handoffId }) },
-  );
-  const retryAskBody = (await retryAskResponse.json()) as Record<string, unknown>;
-
-  assert.equal(retryAskResponse.status, 200);
-  assert.equal(retryAskBody.status, "feedback_bonus_prepared");
-  assert.deepEqual(retryAskBody.transactionHashes, [askHash]);
-  assert.deepEqual(confirmedFeedbackBonus, []);
-
-  const feedbackHash = `0x${"5".repeat(64)}` as const;
-  const completeBonusResponse = await handoffCompleteRoute.POST(
-    makePublicPost(`https://rateloop.ai/api/agent/handoffs/${handoffId}/complete`, {
-      token,
-      transactionHashes: [feedbackHash],
-    }),
-    { params: Promise.resolve({ handoffId }) },
-  );
-  const completeBonusBody = (await completeBonusResponse.json()) as Record<string, unknown>;
-
-  assert.equal(completeBonusResponse.status, 200);
-  assert.equal(completeBonusBody.status, "submitted");
-  assert.deepEqual(completeBonusBody.transactionHashes, [askHash, feedbackHash]);
-  assert.equal(
-    ((completeBonusBody.ask as Record<string, unknown>).feedbackBonus as Record<string, unknown>).status,
-    "funded",
-  );
-  assert.deepEqual(confirmedFeedbackBonus, [{ operationKey: OPERATION_KEY, transactionHashes: [feedbackHash] }]);
+  assert.deepEqual((completeAskBody.ask as Record<string, unknown>).warnings, [
+    "feedback_bonus_creation_time_required",
+  ]);
 });
 
 test("agent signing intent read requires a private token outside the request URL", async () => {
@@ -3414,7 +3276,7 @@ test("agent status route includes live ask guidance for underfunded open markets
             epochDuration: 1200,
             estimatedSettlementTime: "4700000500",
             lowSince: "1700000100",
-            maxDuration: 7200,
+            maxDuration: 1200,
             maxVoters: 50,
             minVoters: 3,
             ratingBps: 5000,

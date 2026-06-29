@@ -28,7 +28,6 @@ export type AgentAskHandoffStatus =
   | "awaiting_image_signatures"
   | "uploading_images"
   | "prepared"
-  | "feedback_bonus_prepared"
   | "submitted"
   | "failed"
   | "expired";
@@ -317,10 +316,6 @@ function readOptionalString(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function readOptionalUppercaseString(value: unknown) {
-  return readOptionalString(value).toUpperCase();
-}
-
 export function parseAgentAskHandoffPaymentMode(
   value: unknown,
   defaultMode: AgentAskHandoffPaymentMode = "wallet_calls",
@@ -342,19 +337,12 @@ export function parseAgentAskHandoffPaymentMode(
   );
 }
 
-function feedbackBonusForcesWalletCalls(requestBody: JsonObject) {
-  const feedbackBonus = requestBody.feedbackBonus;
-  if (!feedbackBonus || typeof feedbackBonus !== "object" || Array.isArray(feedbackBonus)) return false;
-  return readOptionalUppercaseString((feedbackBonus as JsonObject).asset) === "LREP";
-}
-
 function defaultAgentAskHandoffPaymentMode(params: {
   parsed: ReturnType<typeof parseX402QuestionRequest>;
   requestBody: JsonObject;
 }): AgentAskHandoffPaymentMode {
-  return params.parsed.bounty.asset === "USDC" &&
-    params.parsed.questions.length === 1 &&
-    !feedbackBonusForcesWalletCalls(params.requestBody)
+  params.requestBody;
+  return params.parsed.bounty.asset === "USDC" && params.parsed.questions.length === 1
     ? "x402_authorization"
     : "wallet_calls";
 }
@@ -878,7 +866,7 @@ export function buildAgentAskHandoffResponse(params: {
     if (params.handoff.status === "prepared" && !params.handoff.transactionPlan) {
       return "Open the handoff page and continue preparation to sign the EIP-3009 USDC authorization.";
     }
-    if (params.handoff.status === "prepared" || params.handoff.status === "feedback_bonus_prepared") {
+    if (params.handoff.status === "prepared") {
       return "Execute the returned transactionPlan.calls in the connected wallet, then confirm the transaction hashes.";
     }
     if (params.handoff.status === "awaiting_image_signatures") {
@@ -1199,7 +1187,7 @@ export async function updateAgentAskHandoffStatus(params: {
           operation_key = COALESCE(?, operation_key),
           payload_hash = COALESCE(?, payload_hash),
           prepared_draft_revision = COALESCE(?, prepared_draft_revision),
-          transaction_plan = COALESCE(?, transaction_plan),
+          transaction_plan = CASE WHEN ? = 1 THEN NULL ELSE COALESCE(?, transaction_plan) END,
           transaction_hashes = COALESCE(?, transaction_hashes),
           error = ?,
           completed_at = CASE WHEN ? = 'submitted' THEN ? ELSE completed_at END,
@@ -1216,6 +1204,7 @@ export async function updateAgentAskHandoffStatus(params: {
       params.operationKey ?? null,
       params.payloadHash ?? null,
       params.preparedDraftRevision ?? null,
+      params.transactionPlan === null ? 1 : 0,
       params.transactionPlan === undefined
         ? null
         : params.transactionPlan

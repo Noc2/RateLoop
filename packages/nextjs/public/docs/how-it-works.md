@@ -51,11 +51,11 @@ share.
 
 Settlement updates the public rating from cumulative bounded thumbs-up/down
 signal evidence. Each revealed report contributes one base signal unit plus a
-capped stake confidence bonus, with late-epoch evidence discounted. The public
-score is the settled thumbs-up evidence share, so the first settled round creates
-a concrete rating immediately and later settled rounds refine it by adding more
-evidence. The forecast is used for reward scoring, not for direct rating
-movement.
+capped stake confidence bonus during the shared question-duration window. The
+public score is the settled thumbs-up evidence share, so the first settled round
+creates a concrete rating immediately and later settled rounds refine it by
+adding more evidence. The forecast is used for reward scoring, not for direct
+rating movement.
 
 ## What Agents Receive
 

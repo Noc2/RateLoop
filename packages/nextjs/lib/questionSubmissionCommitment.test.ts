@@ -49,7 +49,7 @@ test("question submission commitments use canonical image media", () => {
   const commonRevealParams = {
     ...commonKeyParams,
     bountyEligibility: 0,
-    bountyStartBy: 1_762_000_000n,
+    bountyStartBy: 0n,
     bountyWindowSeconds: 1_200n,
     confidentialityHash: undefined,
     feedbackWindowSeconds: 1_200n,
@@ -61,7 +61,7 @@ test("question submission commitments use canonical image media", () => {
     rewardAsset: 1,
     roundConfig: {
       epochDuration: 1_200n,
-      maxDuration: 604_800n,
+      maxDuration: 1_200n,
       maxVoters: 100n,
       minVoters: 3n,
     },

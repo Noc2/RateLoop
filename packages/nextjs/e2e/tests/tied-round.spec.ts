@@ -49,7 +49,7 @@ test.describe("Tied round lifecycle", () => {
   const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
   test.beforeAll(async () => {
-    const ok = await setTestConfig(VOTING_ENGINE, DEPLOYER.address, EPOCH_DURATION, 86400, MIN_TIE_VOTERS);
+    const ok = await setTestConfig(VOTING_ENGINE, DEPLOYER.address, EPOCH_DURATION, MIN_TIE_VOTERS);
     if (!ok) throw new Error("Failed to set test config");
   });
 

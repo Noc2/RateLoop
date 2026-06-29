@@ -6,11 +6,7 @@
   "bounty": {
     "asset": "USDC",
     "amount": "1000000",
-    "requiredVoters": "3",
-    "requiredSettledRounds": "1",
-    "bountyStartBy": "1893456000",
-    "bountyWindowSeconds": "1200",
-    "feedbackWindowSeconds": "1200"
+    "requiredVoters": "3"
   },
   "question": {
     "templateId": "generic_rating",

@@ -183,10 +183,7 @@ function readPaymentMode(options: CliOptions) {
 }
 
 function printLocalAskProgress(event: LocalAskProgress) {
-  const planLabel =
-    "plan" in event && event.plan === "feedback_bonus"
-      ? "feedbackBonus.transactionPlan"
-      : "transactionPlan";
+  const planLabel = "transactionPlan";
   switch (event.type) {
     case "ask_submitted":
       console.error(

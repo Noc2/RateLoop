@@ -54,6 +54,14 @@ const ROUND_CONFIG_BOUNDS = {
   minVoterCap: 3,
   maxVoterCap: 200,
 } as const;
+const MIN_QUESTION_DURATION_SECONDS = Math.max(
+  ROUND_CONFIG_BOUNDS.minEpochDurationSeconds,
+  ROUND_CONFIG_BOUNDS.minRoundDurationSeconds,
+);
+const MAX_QUESTION_DURATION_SECONDS = Math.min(
+  ROUND_CONFIG_BOUNDS.maxEpochDurationSeconds,
+  ROUND_CONFIG_BOUNDS.maxRoundDurationSeconds,
+);
 
 const CLUSTER_PAYOUT_CHALLENGE_WINDOW_SECONDS = 2 * 60 * 60;
 const USDC_BOUNTY_PAYOUT_MINIMUM_DELAY_SECONDS = CLUSTER_PAYOUT_CHALLENGE_WINDOW_SECONDS;
@@ -69,27 +77,22 @@ export const protocolDocFacts = {
   frontendOperatorStakeLabel: "1,000 LREP",
   submissionLrepMinimumLabel: "1 LREP hard floor",
   submissionUsdcMinimumLabel: "1 USDC hard floor",
-  blindPhaseDurationLabel: formatDurationLabel(DEFAULT_ROUND_CONFIG.epochDurationSeconds),
+  questionDurationLabel: formatDurationLabel(DEFAULT_ROUND_CONFIG.epochDurationSeconds),
   revealGracePeriodLabel: formatDurationLabel(DEFAULT_REVEAL_GRACE_PERIOD_SECONDS),
-  maxRoundDurationLabel: formatDurationLabel(DEFAULT_ROUND_CONFIG.maxDurationSeconds),
   minVotersLabel: String(DEFAULT_ROUND_CONFIG.minVoters),
   maxVotersLabel: DEFAULT_ROUND_CONFIG.maxVoters.toLocaleString(),
   launchFeedbackQuorumLabel: `${DEFAULT_ROUND_CONFIG.minVoters}-rater launch default`,
   quorumRatchetPolicyLabel:
     "Governance can raise the default settlement voter count and the allowed minimum for new rounds as rater supply, bounty value, and attack pressure grow; already-created questions and already-open rounds keep their snapshotted configuration.",
-  minBlindPhaseDurationLabel: formatDurationLabel(ROUND_CONFIG_BOUNDS.minEpochDurationSeconds),
-  maxBlindPhaseDurationLabel: formatDurationLabel(ROUND_CONFIG_BOUNDS.maxEpochDurationSeconds),
-  minRoundDurationLabel: formatDurationLabel(ROUND_CONFIG_BOUNDS.minRoundDurationSeconds),
-  maxAllowedRoundDurationLabel: formatDurationLabel(ROUND_CONFIG_BOUNDS.maxRoundDurationSeconds),
+  minQuestionDurationLabel: formatDurationLabel(MIN_QUESTION_DURATION_SECONDS),
+  maxQuestionDurationLabel: formatDurationLabel(MAX_QUESTION_DURATION_SECONDS),
   minSettlementVotersLabel: String(ROUND_CONFIG_BOUNDS.minSettlementVoters),
   maxSettlementVotersLabel: String(ROUND_CONFIG_BOUNDS.maxSettlementVoters),
   minVoterCapLabel: String(ROUND_CONFIG_BOUNDS.minVoterCap),
   maxVoterCapLabel: ROUND_CONFIG_BOUNDS.maxVoterCap.toLocaleString(),
-  roundConfigBoundsSummaryLabel: `${formatDurationLabel(
-    ROUND_CONFIG_BOUNDS.minEpochDurationSeconds,
-  )}-${formatDurationLabel(ROUND_CONFIG_BOUNDS.maxEpochDurationSeconds)} blind phase, ${formatDurationLabel(
-    ROUND_CONFIG_BOUNDS.minRoundDurationSeconds,
-  )}-${formatDurationLabel(ROUND_CONFIG_BOUNDS.maxRoundDurationSeconds)} max duration, ${
+  roundConfigBoundsSummaryLabel: `${formatDurationLabel(MIN_QUESTION_DURATION_SECONDS)}-${formatDurationLabel(
+    MAX_QUESTION_DURATION_SECONDS,
+  )} question duration, ${
     ROUND_CONFIG_BOUNDS.minSettlementVoters
   }-${ROUND_CONFIG_BOUNDS.maxSettlementVoters} settlement raters, ${ROUND_CONFIG_BOUNDS.minVoterCap}-${ROUND_CONFIG_BOUNDS.maxVoterCap.toLocaleString()} rater cap`,
   frontendNetSharePercentLabel: formatPercent(percentFromBps(PLATFORM_REWARD_SPLIT_BPS.frontend)),
@@ -129,19 +132,14 @@ export const protocolDocFacts = {
 
 export const whitepaperSettlementConfigRows: string[][] = [
   [
-    "epochDuration",
-    `${protocolDocFacts.blindPhaseDurationLabel} default`,
-    "Creator-selected blind/reward-tier duration within governance bounds",
+    "questionDurationSeconds",
+    `${protocolDocFacts.questionDurationLabel} default`,
+    "Creator-selected shared blind response, bounty eligibility, and feedback-bonus duration within governance bounds",
   ],
   [
     "minVoters",
     `${protocolDocFacts.minVotersLabel} default`,
     "Creator-selected minimum revealed predictions required for settlement; launch starts at 3 for feedback-tier liveness, and governance can raise defaults and new-round floors over time",
-  ],
-  [
-    "maxDuration",
-    `${protocolDocFacts.maxRoundDurationLabel} default`,
-    "Creator-selected maximum round lifetime  -- below commit quorum rounds cancel; commit-quorum rounds can end as RevealFailed",
   ],
   [
     "maxVoters",
@@ -156,8 +154,7 @@ export const whitepaperSettlementConfigRows: string[][] = [
 ];
 
 export const whitepaperRoundConfigBoundsRows: string[][] = [
-  ["blind phase", `${protocolDocFacts.minBlindPhaseDurationLabel} to ${protocolDocFacts.maxBlindPhaseDurationLabel}`],
-  ["max duration", `${protocolDocFacts.minRoundDurationLabel} to ${protocolDocFacts.maxAllowedRoundDurationLabel}`],
+  ["question duration", `${protocolDocFacts.minQuestionDurationLabel} to ${protocolDocFacts.maxQuestionDurationLabel}`],
   [
     "settlement raters",
     `${protocolDocFacts.minSettlementVotersLabel} to ${protocolDocFacts.maxSettlementVotersLabel}; governance-ratchetable for new rounds`,

@@ -24,7 +24,6 @@ function baseState(overrides: Partial<HandoffWebMcpState> = {}): HandoffWebMcpSt
     hasConnectedWallet: true,
     hasTransactionPlan: false,
     hasUnsavedDraft: false,
-    isFeedbackBonusStep: false,
     isLoaded: true,
     isTerminalStatus: false,
     needsChainSwitch: false,

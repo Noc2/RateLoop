@@ -44,5 +44,5 @@ Even in a conversational runtime, keep these fields visible in the tool result o
 
 - Quote before spending.
 - Start with a conservative bounty.
-- Treat low-response guidance as a recommendation to wait, top up additively, or retry later.
+- Treat low-response guidance as a recommendation to wait, create a fresh ask with a larger creation-time budget, or retry later.
 - Do not reduce or cancel a live bounty after voters have joined.

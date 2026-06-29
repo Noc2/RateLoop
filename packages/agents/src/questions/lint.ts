@@ -174,20 +174,6 @@ function parseLintPositiveInteger(value: unknown): bigint | null {
   return parsed > 0n ? parsed : null;
 }
 
-function lintRequiredPositiveBountyField(
-  bounty: Record<string, unknown>,
-  fieldName: "bountyStartBy" | "bountyWindowSeconds",
-  findings: QuestionLintFinding[],
-) {
-  if (bounty[fieldName] === undefined || bounty[fieldName] === null || String(bounty[fieldName]).trim() === "") {
-    pushFinding(findings, "error", `bounty.${fieldName}`, `bounty.${fieldName} is required.`);
-    return;
-  }
-  if (parseLintPositiveInteger(bounty[fieldName]) === null) {
-    pushFinding(findings, "error", `bounty.${fieldName}`, `bounty.${fieldName} must be a positive integer.`);
-  }
-}
-
 function lintRoundConfigVoterAlignment(request: Partial<AgentAskExample>, findings: QuestionLintFinding[]) {
   const firstQuestion = request.question ?? (Array.isArray(request.questions) ? request.questions[0] : undefined);
   const usesTopLevelRoundConfig = isObject(request.roundConfig);
@@ -214,6 +200,84 @@ function lintRoundConfigVoterAlignment(request: Partial<AgentAskExample>, findin
   }
 }
 
+function getRequestRoundConfig(request: Partial<AgentAskExample>): {
+  pathPrefix: "roundConfig" | "question.roundConfig";
+  roundConfig: JsonObject;
+} | null {
+  const firstQuestion = request.question ?? (Array.isArray(request.questions) ? request.questions[0] : undefined);
+  const usesTopLevelRoundConfig = isObject(request.roundConfig);
+  const roundConfig = usesTopLevelRoundConfig
+    ? (request.roundConfig as JsonObject)
+    : isObject(firstQuestion) && isObject((firstQuestion as JsonObject).roundConfig)
+      ? ((firstQuestion as JsonObject).roundConfig as JsonObject)
+      : null;
+  if (!roundConfig) return null;
+  return { pathPrefix: usesTopLevelRoundConfig ? "roundConfig" : "question.roundConfig", roundConfig };
+}
+
+function lintSingleDurationTiming(request: Partial<AgentAskExample>, findings: QuestionLintFinding[]) {
+  if (!isObject(request.bounty)) return;
+  const bounty = request.bounty as JsonObject;
+  if (bounty.requiredSettledRounds !== undefined) {
+    pushFinding(
+      findings,
+      "error",
+      "bounty.requiredSettledRounds",
+      "Remove bounty.requiredSettledRounds; reward eligibility uses one creation-anchored round.",
+    );
+  }
+  if (bounty.bountyStartBy !== undefined) {
+    pushFinding(
+      findings,
+      "error",
+      "bounty.bountyStartBy",
+      "Remove bounty.bountyStartBy; bounty timing starts when the question is created.",
+    );
+  }
+  if (bounty.bountyWindowSeconds !== undefined) {
+    pushFinding(
+      findings,
+      "error",
+      "bounty.bountyWindowSeconds",
+      "Remove bounty.bountyWindowSeconds; use roundConfig.questionDurationSeconds.",
+    );
+  }
+  if (bounty.feedbackWindowSeconds !== undefined) {
+    pushFinding(
+      findings,
+      "error",
+      "bounty.feedbackWindowSeconds",
+      "Remove bounty.feedbackWindowSeconds; use roundConfig.questionDurationSeconds.",
+    );
+  }
+}
+
+function lintRoundConfigSingleDuration(request: Partial<AgentAskExample>, findings: QuestionLintFinding[]) {
+  const roundConfigInfo = getRequestRoundConfig(request);
+  if (!roundConfigInfo) return;
+
+  const { pathPrefix, roundConfig } = roundConfigInfo;
+  for (const field of [
+    "questionDuration",
+    "durationSeconds",
+    "duration",
+    "epochDuration",
+    "blindPhaseSeconds",
+    "blindSeconds",
+    "maxDuration",
+    "maxDurationSeconds",
+    "deadlineSeconds",
+  ]) {
+    if (roundConfig[field] === undefined) continue;
+    pushFinding(
+      findings,
+      "error",
+      `${pathPrefix}.${field}`,
+      `Remove ${pathPrefix}.${field}; use ${pathPrefix}.questionDurationSeconds.`,
+    );
+  }
+}
+
 function lintBoundedInteger(
   value: unknown,
   path: string,
@@ -229,25 +293,13 @@ function lintRoundConfigAbiBounds(
   request: Partial<AgentAskExample>,
   findings: QuestionLintFinding[],
 ) {
-  const firstQuestion = request.question ?? (Array.isArray(request.questions) ? request.questions[0] : undefined);
-  const usesTopLevelRoundConfig = isObject(request.roundConfig);
-  const roundConfig = usesTopLevelRoundConfig
-    ? (request.roundConfig as JsonObject)
-    : isObject(firstQuestion) && isObject((firstQuestion as JsonObject).roundConfig)
-      ? ((firstQuestion as JsonObject).roundConfig as JsonObject)
-      : null;
-  if (!roundConfig) return;
+  const roundConfigInfo = getRequestRoundConfig(request);
+  if (!roundConfigInfo) return;
 
-  const pathPrefix = usesTopLevelRoundConfig ? "roundConfig" : "question.roundConfig";
+  const { pathPrefix, roundConfig } = roundConfigInfo;
   lintBoundedInteger(
-    roundConfig.epochDuration ?? roundConfig.blindPhaseSeconds ?? roundConfig.blindSeconds,
-    `${pathPrefix}.epochDuration`,
-    ROUND_CONFIG_UINT32_MAX,
-    findings,
-  );
-  lintBoundedInteger(
-    roundConfig.maxDuration ?? roundConfig.maxDurationSeconds ?? roundConfig.deadlineSeconds,
-    `${pathPrefix}.maxDuration`,
+    roundConfig.questionDurationSeconds,
+    `${pathPrefix}.questionDurationSeconds`,
     ROUND_CONFIG_UINT32_MAX,
     findings,
   );
@@ -566,8 +618,7 @@ export function lintAgentAskRequest(input: unknown): QuestionLintFinding[] {
   if (!isObject(request.bounty)) {
     pushFinding(findings, "error", "bounty", "A bounty object is required before an agent spends.");
   } else {
-    lintRequiredPositiveBountyField(request.bounty, "bountyStartBy", findings);
-    lintRequiredPositiveBountyField(request.bounty, "bountyWindowSeconds", findings);
+    lintSingleDurationTiming(request, findings);
 
     const amount = parseLintPositiveInteger(request.bounty.amount);
     if (amount === null) {
@@ -592,11 +643,21 @@ export function lintAgentAskRequest(input: unknown): QuestionLintFinding[] {
     }
   }
 
+  if (isObject(request.feedbackBonus) && (request.feedbackBonus as JsonObject).feedbackClosesAt !== undefined) {
+    pushFinding(
+      findings,
+      "error",
+      "feedbackBonus.feedbackClosesAt",
+      "Remove feedbackBonus.feedbackClosesAt; Feedback Bonus timing uses roundConfig.questionDurationSeconds.",
+    );
+  }
+
   if (request.templateId && !findAgentResultTemplate(request.templateId)) {
     pushFinding(findings, "error", "templateId", `Unknown result template: ${request.templateId}.`);
   }
 
   lintRoundConfigAbiBounds(request, findings);
+  lintRoundConfigSingleDuration(request, findings);
   lintRoundConfigVoterAlignment(request, findings);
 
   const questions = asQuestionArray(request as AgentAskExample);

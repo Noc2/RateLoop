@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { HEAD_TO_HEAD_AB_TEMPLATE_ID, MAX_HEAD_TO_HEAD_OPTION_LABEL_LENGTH } from "@rateloop/agents/voteUi";
-import { RoundVotingEngineAbi } from "@rateloop/contracts/abis";
 import {
   type TargetAudience,
   getProfileSelfReportTaxonomy,
@@ -12,7 +11,7 @@ import {
 } from "@rateloop/node-utils/profileSelfReport";
 import { useQuery } from "@tanstack/react-query";
 import { defineChain } from "thirdweb";
-import { decodeEventLog, isAddress, toHex } from "viem";
+import { decodeEventLog, toHex } from "viem";
 import { useAccount, useConfig, useReadContract } from "wagmi";
 import { getPublicClient, readContract, writeContract } from "wagmi/actions";
 import {
@@ -59,19 +58,7 @@ import {
   BOUNTY_ELIGIBILITY_OPEN,
   buildBountyEligibility,
 } from "~~/lib/bountyEligibility";
-import {
-  BOUNTY_WINDOW_PRESETS,
-  type BountyWindowPreset,
-  type BountyWindowUnit,
-  DEFAULT_BOUNTY_WINDOW_PRESET,
-  DEFAULT_CUSTOM_BOUNTY_WINDOW_AMOUNT,
-  DEFAULT_CUSTOM_BOUNTY_WINDOW_UNIT,
-  formatBountyWindowDuration,
-  getBountyStartByFromWindowSeconds,
-  getBountyWindowSeconds,
-  parseBountyWindowAmount,
-  resolveBountyReferenceNowSeconds,
-} from "~~/lib/bountyWindows";
+import { formatBountyWindowDuration } from "~~/lib/bountyWindows";
 import {
   MAX_SUBMISSION_IMAGE_URLS,
   MAX_SUBMISSION_URL_LENGTH,
@@ -107,33 +94,21 @@ import {
   DEFAULT_REWARD_POOL_FRONTEND_FEE_BPS,
   DEFAULT_SUBMISSION_REWARD_POOL,
   ERC20_APPROVAL_ABI,
-  FEEDBACK_BONUS_ASSET_LREP,
-  FEEDBACK_BONUS_ASSET_USDC,
-  FEEDBACK_BONUS_ESCROW_ABI,
-  type FeedbackBonusAsset,
-  MAX_REWARD_POOL_SETTLED_ROUNDS,
   MIN_REWARD_POOL_REQUIRED_VOTERS,
-  MIN_REWARD_POOL_SETTLED_ROUNDS,
   QUESTION_SUBMISSION_ABI,
   SUBMISSION_REWARD_ASSET_LREP,
   SUBMISSION_REWARD_ASSET_USDC,
   type SubmissionRewardAsset,
-  formatFeedbackBonusAmount,
   formatSubmissionRewardAmount,
-  getConfiguredFeedbackBonusEscrowAddress,
   getDefaultUsdcAddress,
   getDefaultUsdcDisplayName,
   parseConfidentialityBondAmount,
-  parseFeedbackBonusAmount,
   parseSubmissionRewardAmount,
 } from "~~/lib/questionRewardPools";
 import {
   DEFAULT_QUESTION_ROUND_CONFIG,
   DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS,
   MAX_QUESTION_BUNDLE_ROUND_VOTERS,
-  QUESTION_ROUND_MAX_EPOCH_COUNT,
-  getQuestionRoundMaxDurationForEpoch,
-  isQuestionRoundMaxDurationValidForEpoch,
   questionRoundConfigToAbi,
   requiredQuestionRewardVotersForAmount,
 } from "~~/lib/questionRoundConfig";
@@ -157,7 +132,6 @@ import {
   isInsufficientFundsError,
   isWalletRpcOverloadedError,
 } from "~~/lib/transactionErrors";
-import { getBlockWithRetry } from "~~/lib/transactions/blockWait";
 import { raceTransactionWithPostcondition, waitForTransactionPostcondition } from "~~/lib/transactions/postcondition";
 import { waitForTransactionReceiptWithRetry } from "~~/lib/transactions/receiptWait";
 import scaffoldConfig from "~~/scaffold.config";
@@ -179,8 +153,7 @@ const MEDIA_URL_CONFIG = {
   videoHint: "Add one YouTube link as public video context. Standard landscape videos fit the content area best.",
 };
 
-type SubmissionStep = "question" | "bounty" | "feedbackBonus";
-type FeedbackBonusSelection = "none" | "enabled";
+type SubmissionStep = "question" | "bounty";
 
 const MAX_QUESTION_BUNDLE_COUNT = 10;
 const MAX_CONTENT_TAGS_LENGTH = 256;
@@ -699,37 +672,14 @@ export function ContentSubmissionSection() {
   const [confidentialityBondAsset, setConfidentialityBondAsset] = useState<"LREP" | "USDC">("LREP");
   const [confidentialityBondAmount, setConfidentialityBondAmount] = useState("0");
   const [rewardRequiredVoters, setRewardRequiredVoters] = useState("3");
-  const [rewardRequiredRounds, setRewardRequiredRounds] = useState("1");
   const [bountyEligibility, setBountyEligibility] = useState(BOUNTY_ELIGIBILITY_OPEN);
-  const [bountyWindowPreset, setBountyWindowPreset] = useState<BountyWindowPreset>(DEFAULT_BOUNTY_WINDOW_PRESET);
-  const [customBountyWindowAmount, setCustomBountyWindowAmount] = useState(DEFAULT_CUSTOM_BOUNTY_WINDOW_AMOUNT);
-  const [customBountyWindowUnit, setCustomBountyWindowUnit] = useState<BountyWindowUnit>(
-    DEFAULT_CUSTOM_BOUNTY_WINDOW_UNIT,
-  );
-  const [bountyWindowOverridden, setBountyWindowOverridden] = useState(false);
-  const [bountyStartByPreset, setBountyStartByPreset] = useState<BountyWindowPreset>(DEFAULT_BOUNTY_WINDOW_PRESET);
-  const [customBountyStartByAmount, setCustomBountyStartByAmount] = useState(DEFAULT_CUSTOM_BOUNTY_WINDOW_AMOUNT);
-  const [customBountyStartByUnit, setCustomBountyStartByUnit] = useState<BountyWindowUnit>(
-    DEFAULT_CUSTOM_BOUNTY_WINDOW_UNIT,
-  );
-  const [bountyStartByOverridden, setBountyStartByOverridden] = useState(false);
   const [bountyExpiryReferenceTimeMs, setBountyExpiryReferenceTimeMs] = useState<number | null>(null);
-  const [feedbackBonusMode, setFeedbackBonusMode] = useState<FeedbackBonusSelection>("none");
-  const [feedbackBonusAmount, setFeedbackBonusAmount] = useState("2");
-  const [feedbackBonusAsset, setFeedbackBonusAsset] = useState<FeedbackBonusAsset>("usdc");
-  const [feedbackBonusAwarderAddress, setFeedbackBonusAwarderAddress] = useState("");
-  const [feedbackBonusAwarderTouched, setFeedbackBonusAwarderTouched] = useState(false);
-  const [feedbackBonusStepAttempted, setFeedbackBonusStepAttempted] = useState(false);
   const [roundBlindSeconds, setRoundBlindSeconds] = useState(
     String(Number(DEFAULT_QUESTION_ROUND_CONFIG.epochDuration)),
-  );
-  const [roundMaxDurationSeconds, setRoundMaxDurationSeconds] = useState(
-    String(Number(DEFAULT_QUESTION_ROUND_CONFIG.maxDuration)),
   );
   const [roundMinVoters, setRoundMinVoters] = useState(String(DEFAULT_QUESTION_ROUND_CONFIG.minVoters));
   const [roundMaxVoters, setRoundMaxVoters] = useState(String(DEFAULT_SUBMISSION_ROUND_MAX_VOTERS));
   const [roundConfigTouched, setRoundConfigTouched] = useState(false);
-  const [roundMaxDurationOverridden, setRoundMaxDurationOverridden] = useState(false);
   const [showAdvancedRoundSettings, setShowAdvancedRoundSettings] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [questionStepAttempted, setQuestionStepAttempted] = useState(false);
@@ -749,23 +699,7 @@ export function ContentSubmissionSection() {
 
   useEffect(() => {
     setBountyExpiryReferenceTimeMs(Date.now());
-  }, [
-    bountyStartByOverridden,
-    bountyStartByPreset,
-    bountyWindowOverridden,
-    bountyWindowPreset,
-    customBountyStartByAmount,
-    customBountyStartByUnit,
-    customBountyWindowAmount,
-    customBountyWindowUnit,
-    roundBlindSeconds,
-    roundMaxDurationSeconds,
-  ]);
-
-  useEffect(() => {
-    if (feedbackBonusAwarderTouched) return;
-    setFeedbackBonusAwarderAddress(connectedAddress ?? "");
-  }, [connectedAddress, feedbackBonusAwarderTouched]);
+  }, [roundBlindSeconds]);
 
   useEffect(() => {
     if (!selectedCategory) return;
@@ -1299,7 +1233,6 @@ export function ContentSubmissionSection() {
   useEffect(() => {
     if (roundConfigTouched || !protocolRoundConfig) return;
     setRoundBlindSeconds(String(Math.max(1, Math.round(roundConfigDefaults.epochDuration))));
-    setRoundMaxDurationSeconds(String(Math.max(1, Math.round(roundConfigDefaults.maxDuration))));
     setRoundMinVoters(syncedSettlementVoters);
     setRoundMaxVoters(defaultRoundMaxVoters);
   }, [defaultRoundMaxVoters, protocolRoundConfig, roundConfigDefaults, roundConfigTouched, syncedSettlementVoters]);
@@ -1311,13 +1244,11 @@ export function ContentSubmissionSection() {
   const selectedRewardAssetId = rewardAsset === "lrep" ? SUBMISSION_REWARD_ASSET_LREP : SUBMISSION_REWARD_ASSET_USDC;
   const selectedRewardAmount = useMemo(() => parseSubmissionRewardAmount(rewardAmount), [rewardAmount]);
   const parsedRoundBlindSeconds = parseWholeNumberInput(roundBlindSeconds);
-  const parsedRoundMaxDurationSeconds = parseWholeNumberInput(roundMaxDurationSeconds);
   const parsedRoundMinVoters = parseWholeNumberInput(roundMinVoters);
   const parsedRoundMaxVoters = parseWholeNumberInput(roundMaxVoters);
   const parsedRewardRequiredVoters = parseWholeNumberInput(rewardRequiredVoters);
-  const parsedRewardRequiredRounds = parseWholeNumberInput(rewardRequiredRounds);
   const selectedRequiredVoters = BigInt(Math.max(MIN_REWARD_POOL_REQUIRED_VOTERS, parsedRewardRequiredVoters));
-  const selectedRequiredSettledRounds = BigInt(Math.max(MIN_REWARD_POOL_SETTLED_ROUNDS, parsedRewardRequiredRounds));
+  const selectedRequiredSettledRounds = 1n;
   const selectedRequiredVoterFloor =
     selectedRewardAmount === null
       ? MIN_REWARD_POOL_REQUIRED_VOTERS
@@ -1328,17 +1259,6 @@ export function ContentSubmissionSection() {
     parsedRoundBlindSeconds >= roundBlindSecondBounds.min && parsedRoundBlindSeconds <= roundBlindSecondBounds.max
       ? parsedRoundBlindSeconds
       : roundBlindSecondBounds.min;
-  const getRoundMaxDurationSecondBoundsForBlind = (blindSeconds: number) => {
-    const normalizedBlindSeconds = Math.max(1, Math.floor(blindSeconds));
-    const maxDurationSeconds = getQuestionRoundMaxDurationForEpoch(
-      normalizedBlindSeconds,
-      roundConfigBounds.maxRoundDuration,
-    );
-    const min = Math.max(roundConfigBounds.minRoundDuration, normalizedBlindSeconds);
-    const max = Math.max(min, Math.floor(maxDurationSeconds));
-    return { min, max };
-  };
-  const roundMaxDurationSecondBounds = getRoundMaxDurationSecondBoundsForBlind(effectiveBlindSecondsForDurationCap);
   const roundMaxVoterBounds = useMemo(() => {
     const bundleAwareMaxVoters =
       questionCount > 1
@@ -1359,13 +1279,6 @@ export function ContentSubmissionSection() {
     setRoundConfigTouched(true);
     setValue(normalizedValue);
   };
-  const clampRoundMaxDurationForBlindSeconds = (blindSeconds: number) => {
-    const bounds = getRoundMaxDurationSecondBoundsForBlind(blindSeconds);
-    setRoundMaxDurationSeconds(current => {
-      const currentValue = !roundMaxDurationOverridden ? blindSeconds : parseWholeNumberInput(current);
-      return String(Math.min(Math.max(currentValue, bounds.min), bounds.max));
-    });
-  };
   const updateRoundBlindSecondsInput = (value: string) => {
     const normalizedValue = normalizeWholeNumberInput(value);
     if (normalizedValue === null) {
@@ -1374,19 +1287,6 @@ export function ContentSubmissionSection() {
 
     setRoundConfigTouched(true);
     setRoundBlindSeconds(normalizedValue);
-    if (normalizedValue !== "") {
-      clampRoundMaxDurationForBlindSeconds(parseWholeNumberInput(normalizedValue));
-    }
-  };
-  const updateRoundMaxDurationSecondsInput = (value: string) => {
-    const normalizedValue = normalizeWholeNumberInput(value);
-    if (normalizedValue === null) {
-      return;
-    }
-
-    setRoundConfigTouched(true);
-    setRoundMaxDurationOverridden(true);
-    setRoundMaxDurationSeconds(normalizedValue);
   };
   const clampRoundBlindSecondsInput = () => {
     const clampedBlindSeconds = clampWholeNumberInput(
@@ -1395,46 +1295,24 @@ export function ContentSubmissionSection() {
       roundBlindSecondBounds.max,
     );
     setRoundBlindSeconds(clampedBlindSeconds);
-    clampRoundMaxDurationForBlindSeconds(parseWholeNumberInput(clampedBlindSeconds));
-  };
-  const clampRoundMaxDurationSecondsInput = () => {
-    setRoundConfigTouched(true);
-    setRoundMaxDurationOverridden(true);
-    setRoundMaxDurationSeconds(current =>
-      clampWholeNumberInput(current, roundMaxDurationSecondBounds.min, roundMaxDurationSecondBounds.max),
-    );
   };
   const selectedRoundConfig = useMemo(
     () => ({
       epochDuration: BigInt(Math.max(0, parsedRoundBlindSeconds)),
-      maxDuration: BigInt(Math.max(0, parsedRoundMaxDurationSeconds)),
+      maxDuration: BigInt(Math.max(0, parsedRoundBlindSeconds)),
       minVoters: BigInt(Math.max(0, parsedRoundMinVoters)),
       maxVoters: BigInt(Math.max(0, parsedRoundMaxVoters)),
     }),
-    [parsedRoundBlindSeconds, parsedRoundMaxDurationSeconds, parsedRoundMinVoters, parsedRoundMaxVoters],
+    [parsedRoundBlindSeconds, parsedRoundMinVoters, parsedRoundMaxVoters],
   );
   const roundConfigValidationError = (() => {
     const epochDuration = Number(selectedRoundConfig.epochDuration);
-    const maxDuration = Number(selectedRoundConfig.maxDuration);
     const minVoters = Number(selectedRoundConfig.minVoters);
     const maxVoters = Number(selectedRoundConfig.maxVoters);
     if (epochDuration < roundConfigBounds.minEpochDuration || epochDuration > roundConfigBounds.maxEpochDuration) {
-      return `Blind phase must be ${formatHumanDuration(roundConfigBounds.minEpochDuration)}-${formatHumanDuration(
+      return `Question duration must be ${formatHumanDuration(roundConfigBounds.minEpochDuration)}-${formatHumanDuration(
         roundConfigBounds.maxEpochDuration,
       )}.`;
-    }
-    if (maxDuration < roundConfigBounds.minRoundDuration || maxDuration > roundConfigBounds.maxRoundDuration) {
-      return `Max duration must be ${formatHumanDuration(roundConfigBounds.minRoundDuration)}-${formatHumanDuration(
-        roundConfigBounds.maxRoundDuration,
-      )}.`;
-    }
-    if (maxDuration < epochDuration) {
-      return "Max duration must be at least the blind response window.";
-    }
-    if (!isQuestionRoundMaxDurationValidForEpoch(epochDuration, maxDuration)) {
-      return `Max duration can span at most ${QUESTION_ROUND_MAX_EPOCH_COUNT.toLocaleString()} blind phases; choose ${formatHumanDuration(
-        roundMaxDurationSecondBounds.max,
-      )} or less for this blind phase.`;
     }
     if (minVoters < roundConfigBounds.minSettlementVoters || minVoters > roundConfigBounds.maxSettlementVoters) {
       return `Settlement voters must be ${roundConfigBounds.minSettlementVoters}-${roundConfigBounds.maxSettlementVoters}.`;
@@ -1461,7 +1339,6 @@ export function ContentSubmissionSection() {
   };
   const bountyMinimumCoverageAmount = getSubmissionRewardCoverageMinimum({
     maxVoters: selectedRoundConfig.maxVoters,
-    requiredSettledRounds: selectedRequiredSettledRounds,
     requiredVoters: selectedRequiredVoters,
   });
   const configuredMinimumRewardAmount =
@@ -1506,113 +1383,31 @@ export function ContentSubmissionSection() {
           ? "Min voters per round cannot exceed max voters per round."
           : null;
   const rewardRequiredVotersError = bountyStepAttempted ? rewardRequiredVotersValidationError : null;
-  const rewardRequiredRoundsValidationError =
-    parsedRewardRequiredRounds < MIN_REWARD_POOL_SETTLED_ROUNDS
-      ? `Minimum is ${MIN_REWARD_POOL_SETTLED_ROUNDS} round.`
-      : parsedRewardRequiredRounds > MAX_REWARD_POOL_SETTLED_ROUNDS
-        ? `Maximum is ${MAX_REWARD_POOL_SETTLED_ROUNDS} rounds.`
-        : null;
-  const rewardRequiredRoundsError = bountyStepAttempted ? rewardRequiredRoundsValidationError : null;
-  const bountyWindowSeconds = getBountyWindowSeconds(
-    bountyWindowPreset,
-    customBountyWindowAmount,
-    customBountyWindowUnit,
-  );
   const syncedBountyWindowSeconds =
     parsedRoundBlindSeconds >= roundBlindSecondBounds.min && parsedRoundBlindSeconds <= roundBlindSecondBounds.max
       ? parsedRoundBlindSeconds
       : null;
-  const effectiveBountyWindowSeconds = bountyWindowOverridden ? bountyWindowSeconds : syncedBountyWindowSeconds;
-  const bountyStartByWindowSeconds = getBountyWindowSeconds(
-    bountyStartByPreset,
-    customBountyStartByAmount,
-    customBountyStartByUnit,
-  );
+  const effectiveBountyWindowSeconds = syncedBountyWindowSeconds;
   const syncedBountyStartByWindowSeconds =
-    parsedRoundMaxDurationSeconds >= roundMaxDurationSecondBounds.min &&
-    parsedRoundMaxDurationSeconds <= roundMaxDurationSecondBounds.max
-      ? parsedRoundMaxDurationSeconds
+    parsedRoundBlindSeconds >= roundBlindSecondBounds.min && parsedRoundBlindSeconds <= roundBlindSecondBounds.max
+      ? parsedRoundBlindSeconds
       : null;
-  const effectiveBountyStartByWindowSeconds = bountyStartByOverridden
-    ? bountyStartByWindowSeconds
-    : syncedBountyStartByWindowSeconds;
+  const effectiveBountyStartByWindowSeconds = syncedBountyStartByWindowSeconds;
   const estimatedBountyStartByLabel = formatBountyExpiryDate(
     effectiveBountyStartByWindowSeconds,
     bountyExpiryReferenceTimeMs,
   );
   const bountyEligibilityWindowLabel = formatBountyWindowDuration(effectiveBountyWindowSeconds);
-  const estimatedFeedbackBonusClosesAtLabel = formatBountyExpiryDate(
-    effectiveBountyStartByWindowSeconds !== null && effectiveBountyWindowSeconds !== null
-      ? effectiveBountyStartByWindowSeconds + effectiveBountyWindowSeconds
-      : null,
-    bountyExpiryReferenceTimeMs,
-  );
-  const parsedCustomBountyStartByAmount = parseBountyWindowAmount(customBountyStartByAmount);
-  const parsedCustomBountyWindowAmount = parseBountyWindowAmount(customBountyWindowAmount);
-  const customBountyStartByAmountMax =
-    customBountyStartByUnit === "hours"
-      ? Math.floor(Number.MAX_SAFE_INTEGER / SECONDS_PER_HOUR)
-      : Math.floor(Number.MAX_SAFE_INTEGER / (24 * SECONDS_PER_HOUR));
-  const customBountyWindowAmountMax =
-    customBountyWindowUnit === "hours"
-      ? Math.floor(Number.MAX_SAFE_INTEGER / SECONDS_PER_HOUR)
-      : Math.floor(Number.MAX_SAFE_INTEGER / (24 * SECONDS_PER_HOUR));
-  const rewardStartByValidationError =
-    bountyStartByOverridden && bountyStartByPreset === "custom" && parsedCustomBountyStartByAmount < 1
-      ? `Enter at least 1 ${customBountyStartByUnit === "hours" ? "hour" : "day"}.`
-      : bountyStartByOverridden &&
-          bountyStartByPreset === "custom" &&
-          parsedCustomBountyStartByAmount > customBountyStartByAmountMax
-        ? `Enter ${customBountyStartByAmountMax.toLocaleString()} ${customBountyStartByUnit} or fewer.`
-        : effectiveBountyStartByWindowSeconds === null
-          ? "Choose a start-by deadline."
-          : null;
-  const rewardExpiryValidationError =
-    bountyWindowOverridden && bountyWindowPreset === "custom" && parsedCustomBountyWindowAmount < 1
-      ? `Enter at least 1 ${customBountyWindowUnit === "hours" ? "hour" : "day"}.`
-      : bountyWindowOverridden &&
-          bountyWindowPreset === "custom" &&
-          parsedCustomBountyWindowAmount > customBountyWindowAmountMax
-        ? `Enter ${customBountyWindowAmountMax.toLocaleString()} ${customBountyWindowUnit} or fewer.`
-        : effectiveBountyWindowSeconds === null
-          ? "Choose a bounty window."
-          : null;
-  const rewardExpiryError = bountyStepAttempted ? rewardExpiryValidationError : null;
-  const rewardStartByError = bountyStepAttempted ? rewardStartByValidationError : null;
+  const rewardDurationValidationError =
+    effectiveBountyWindowSeconds === null || effectiveBountyStartByWindowSeconds === null
+      ? "Choose a question duration."
+      : null;
   const selectedBountyEligibility = {
     mode: buildBountyEligibility(bountyEligibility, false),
   };
-  const selectedFeedbackBonusAmount = parseFeedbackBonusAmount(feedbackBonusAmount);
-  const selectedFeedbackBonusAssetId =
-    feedbackBonusAsset === "lrep" ? FEEDBACK_BONUS_ASSET_LREP : FEEDBACK_BONUS_ASSET_USDC;
-  const selectedFeedbackBonusAssetLabel = feedbackBonusAsset === "lrep" ? "LREP" : "USDC";
-  const trimmedFeedbackBonusAwarderAddress = feedbackBonusAwarderAddress.trim();
-  const selectedFeedbackBonusAwarderAddress = trimmedFeedbackBonusAwarderAddress
-    ? isAddress(trimmedFeedbackBonusAwarderAddress)
-      ? (trimmedFeedbackBonusAwarderAddress as `0x${string}`)
-      : undefined
-    : connectedAddress;
-  const feedbackBonusUnavailableForBundle = questionCount > 1 && feedbackBonusMode === "enabled";
-  const feedbackBonusAmountError =
-    feedbackBonusStepAttempted && feedbackBonusMode === "enabled" && selectedFeedbackBonusAmount === null
-      ? `Enter a positive ${selectedFeedbackBonusAssetLabel} feedback bonus amount.`
-      : null;
-  const feedbackBonusAwarderError =
-    feedbackBonusStepAttempted && feedbackBonusMode === "enabled" && !selectedFeedbackBonusAwarderAddress
-      ? trimmedFeedbackBonusAwarderAddress
-        ? "Enter a valid EVM address for the awarder."
-        : "Connect a wallet or enter an awarder address."
-      : null;
-  const feedbackBonusSettingsValid =
-    feedbackBonusMode === "none" ||
-    (!feedbackBonusUnavailableForBundle &&
-      selectedFeedbackBonusAmount !== null &&
-      selectedFeedbackBonusAwarderAddress !== undefined);
   const bountySettingsValid =
     rewardRequiredVotersValidationError === null &&
-    rewardRequiredRoundsValidationError === null &&
-    rewardStartByValidationError === null &&
-    rewardExpiryValidationError === null &&
+    rewardDurationValidationError === null &&
     roundConfigValidationError === null &&
     rewardAmountError === null &&
     selectedRewardAmount !== null;
@@ -1653,8 +1448,6 @@ export function ContentSubmissionSection() {
   const usdcAddress = getDefaultUsdcAddress(targetNetwork.id);
   const usdcDisplayName = getDefaultUsdcDisplayName(targetNetwork.id);
   const rewardTokenAddress = rewardAsset === "lrep" ? lrepAddress : usdcAddress;
-  const feedbackBonusTokenAddress = feedbackBonusAsset === "lrep" ? lrepAddress : usdcAddress;
-  const feedbackBonusEscrowAddress = getConfiguredFeedbackBonusEscrowAddress(targetNetwork.id);
   const handleOpenEthFunding = useCallback(() => {
     if (!connectedAddress) return;
 
@@ -1711,37 +1504,13 @@ export function ContentSubmissionSection() {
     Boolean(connectedAddress && usdcAddress) && !isUsdcBalanceLoading && usdcBalance !== undefined;
   const selectedRewardBalance = rewardAsset === "lrep" ? lrepBalance : usdcBalance;
   const selectedRewardBalanceResolved = rewardAsset === "lrep" ? hasResolvedLrepBalance : hasResolvedUsdcBalance;
-  const estimatedFeedbackBonusRecipientAmount =
-    feedbackBonusMode === "enabled" && selectedFeedbackBonusAmount
-      ? applyEstimatedFrontendFee(selectedFeedbackBonusAmount, frontendFeeBps)
-      : 0n;
-  const feedbackBonusWindowLabel = estimatedFeedbackBonusClosesAtLabel;
   const hasNoSupportedBountyFunds =
     hasResolvedLrepBalance && hasResolvedUsdcBalance && lrepBalance === 0n && usdcBalance === 0n;
-  const requiredFeedbackBonusFundingAmount =
-    feedbackBonusMode === "enabled" && selectedFeedbackBonusAmount ? selectedFeedbackBonusAmount : 0n;
-  const selectedFeedbackBonusBalance = feedbackBonusAsset === "lrep" ? lrepBalance : usdcBalance;
-  const selectedFeedbackBonusBalanceResolved =
-    feedbackBonusAsset === "lrep" ? hasResolvedLrepBalance : hasResolvedUsdcBalance;
-  const requiredSelectedFeedbackBonusBalance =
-    feedbackBonusMode === "enabled" &&
-    selectedFeedbackBonusAmount &&
-    feedbackBonusAsset === rewardAsset &&
-    selectedRewardAmount
-      ? selectedRewardAmount + selectedFeedbackBonusAmount
-      : requiredFeedbackBonusFundingAmount;
   const hasInsufficientSelectedBountyFunds =
     selectedRewardAmount !== null &&
     selectedRewardBalanceResolved &&
     selectedRewardBalance !== undefined &&
     selectedRewardBalance < selectedRewardAmount;
-  const hasInsufficientFeedbackBonusFunds =
-    submissionStep === "feedbackBonus" &&
-    feedbackBonusMode === "enabled" &&
-    selectedFeedbackBonusAmount !== null &&
-    selectedFeedbackBonusBalanceResolved &&
-    selectedFeedbackBonusBalance !== undefined &&
-    selectedFeedbackBonusBalance < requiredSelectedFeedbackBonusBalance;
   const bountyFundingWarning = (() => {
     if (!connectedAddress || (!hasResolvedLrepBalance && !hasResolvedUsdcBalance)) {
       return null;
@@ -1764,19 +1533,6 @@ export function ContentSubmissionSection() {
           selectedRewardAmount,
           rewardAsset,
         )} to fund this bounty. Your wallet has ${formatSubmissionRewardAmount(selectedRewardBalance, rewardAsset)}.`,
-      };
-    }
-
-    if (hasInsufficientFeedbackBonusFunds) {
-      return {
-        actionAsset: feedbackBonusAsset === "usdc" ? ("USDC" as const) : null,
-        title: `Need ${selectedFeedbackBonusAssetLabel} for funding`,
-        message: `You need ${formatFeedbackBonusAmount(
-          requiredSelectedFeedbackBonusBalance,
-          feedbackBonusAsset,
-        )} to fund the selected Feedback Bonus${
-          feedbackBonusAsset === rewardAsset ? " and bounty" : ""
-        }. Your wallet has ${formatFeedbackBonusAmount(selectedFeedbackBonusBalance, feedbackBonusAsset)}.`,
       };
     }
 
@@ -2207,39 +1963,6 @@ export function ContentSubmissionSection() {
     setBountyStepAttempted(false);
   };
 
-  const handleGoToFeedbackBonusStep = () => {
-    const syncedDrafts = questionDrafts
-      .map((draft, index) => (index === activeQuestionIndex ? getActiveQuestionDraft() : draft))
-      .slice(0, questionCount);
-    const validatedQuestions = syncedDrafts.map(draft => validateQuestionSection(draft, false));
-    const firstInvalidQuestionIndex = validatedQuestions.findIndex(question => question.hasQuestionErrors);
-    if (firstInvalidQuestionIndex >= 0) {
-      const invalidDraft = syncedDrafts[firstInvalidQuestionIndex] ?? createEmptyQuestionDraft();
-      setQuestionDrafts(syncedDrafts);
-      setActiveQuestionIndex(firstInvalidQuestionIndex);
-      loadQuestionDraft(invalidDraft);
-      setQuestionStepAttempted(true);
-      validateQuestionSection(invalidDraft, true);
-      setSubmissionStep("question");
-      notification.warning("Fill in every question page before opening feedback bonus details.");
-      return;
-    }
-
-    setQuestionDrafts(syncedDrafts);
-    setBountyStepAttempted(true);
-    if (!bountySettingsValid) {
-      setSubmissionStep("bounty");
-      if (roundConfigValidationError) {
-        setShowAdvancedRoundSettings(true);
-      }
-      notification.warning("Please fix the bounty details before continuing.");
-      return;
-    }
-
-    setSubmissionStep("feedbackBonus");
-    setFeedbackBonusStepAttempted(false);
-  };
-
   const handleQuestionCountChange = (value: string) => {
     const activeDraft = getActiveQuestionDraft();
     if (activeDraft.questionFormat === "head_to_head_ab") {
@@ -2284,28 +2007,10 @@ export function ContentSubmissionSection() {
     syncSettlementVotersToPaidCompleters(clampedPaidCompleters);
     setSubmissionStep("question");
     setBountyStepAttempted(false);
-    if (nextCount > 1) {
-      setFeedbackBonusMode("none");
-    }
-    setFeedbackBonusStepAttempted(false);
-  };
-
-  const handleFormSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (submissionStep === "question") {
-      handleContinueToBounty();
-      return;
-    }
-
-    if (submissionStep === "bounty") {
-      handleGoToFeedbackBonusStep();
-      return;
-    }
   };
 
   const handleFinalSubmit = async () => {
-    if (submissionStep !== "feedbackBonus") {
+    if (submissionStep !== "bounty") {
       return;
     }
 
@@ -2361,7 +2066,6 @@ export function ContentSubmissionSection() {
 
     setQuestionDrafts(syncedDrafts);
     setBountyStepAttempted(true);
-    setFeedbackBonusStepAttempted(true);
     if (!selectedRewardAmount) {
       notification.warning("Please fix the highlighted fields before submitting.");
       return;
@@ -2376,16 +2080,9 @@ export function ContentSubmissionSection() {
       return;
     }
 
-    if (!feedbackBonusSettingsValid) {
-      setSubmissionStep("feedbackBonus");
-      notification.warning("Please fix the feedback bonus details before submitting.");
-      return;
-    }
-
     let verifiedRewardTokenAddress = rewardTokenAddress;
-    let verifiedVotingEngineAddress: `0x${string}` | null = null;
     try {
-      const [activeRewardEscrowAddress, registryLrepAddress, registryVotingEngineAddress] = (await Promise.all([
+      const [activeRewardEscrowAddress, registryLrepAddress] = (await Promise.all([
         readContract(wagmiConfig, {
           address: registryAddress,
           abi: QUESTION_SUBMISSION_ABI,
@@ -2398,13 +2095,7 @@ export function ContentSubmissionSection() {
           chainId: targetNetwork.id,
           functionName: "lrepToken",
         }) as Promise<`0x${string}`>,
-        readContract(wagmiConfig, {
-          address: registryAddress,
-          abi: QUESTION_SUBMISSION_ABI,
-          chainId: targetNetwork.id,
-          functionName: "votingEngine",
-        }) as Promise<`0x${string}`>,
-      ])) as readonly [`0x${string}`, `0x${string}`, `0x${string}`];
+      ])) as readonly [`0x${string}`, `0x${string}`];
 
       if (activeRewardEscrowAddress.toLowerCase() !== rewardEscrowAddress.toLowerCase()) {
         notification.error("Bounty escrow is not active for this registry.");
@@ -2414,12 +2105,6 @@ export function ContentSubmissionSection() {
         notification.error("Configured LREP token does not match this registry.");
         return;
       }
-      if (!registryVotingEngineAddress) {
-        notification.error("Bounty registry wiring is incomplete for this network.");
-        return;
-      }
-
-      verifiedVotingEngineAddress = registryVotingEngineAddress;
       verifiedRewardTokenAddress = rewardAsset === "lrep" ? lrepAddress : rewardTokenAddress;
     } catch {
       notification.error("Could not verify bounty escrow wiring.");
@@ -2429,30 +2114,6 @@ export function ContentSubmissionSection() {
     if (!verifiedRewardTokenAddress) {
       notification.error(`${rewardAsset === "lrep" ? "LREP" : "USDC"} funding is unavailable right now.`);
       return;
-    }
-
-    const shouldFundFeedbackBonus = feedbackBonusMode === "enabled";
-    if (shouldFundFeedbackBonus) {
-      if (!feedbackBonusEscrowAddress) {
-        notification.error("Feedback Bonus escrow is not deployed on this network yet.");
-        return;
-      }
-      if (!feedbackBonusTokenAddress) {
-        notification.error(
-          `${selectedFeedbackBonusAssetLabel} is not configured for Feedback Bonuses on this network.`,
-        );
-        return;
-      }
-      if (!selectedFeedbackBonusAmount) {
-        setSubmissionStep("feedbackBonus");
-        notification.warning("Enter a feedback bonus amount before submitting.");
-        return;
-      }
-      if (!selectedFeedbackBonusAwarderAddress) {
-        setSubmissionStep("feedbackBonus");
-        notification.warning("Enter a valid awarder address before submitting.");
-        return;
-      }
     }
 
     const submitterAddress = connectedAddress as `0x${string}` | undefined;
@@ -2483,37 +2144,6 @@ export function ContentSubmissionSection() {
     } catch {
       notification.error(`Could not verify your ${rewardAsset === "lrep" ? "LREP" : "USDC"} balance.`);
       return;
-    }
-
-    if (shouldFundFeedbackBonus && selectedFeedbackBonusAmount && feedbackBonusTokenAddress) {
-      try {
-        const feedbackBonusBalance = (await readContract(wagmiConfig, {
-          address: feedbackBonusTokenAddress,
-          abi: ERC20_APPROVAL_ABI,
-          chainId: targetNetwork.id,
-          functionName: "balanceOf",
-          args: [submitterAddress],
-        })) as bigint;
-        const requiredFeedbackBonusBalance =
-          rewardAsset === feedbackBonusAsset &&
-          verifiedRewardTokenAddress.toLowerCase() === feedbackBonusTokenAddress.toLowerCase()
-            ? selectedRewardAmount + selectedFeedbackBonusAmount
-            : selectedFeedbackBonusAmount;
-
-        if (feedbackBonusBalance < requiredFeedbackBonusBalance) {
-          setSubmissionStep("feedbackBonus");
-          notification.error(
-            `You need ${formatFeedbackBonusAmount(
-              requiredFeedbackBonusBalance,
-              feedbackBonusAsset,
-            )} to fund the selected Feedback Bonus${feedbackBonusAsset === rewardAsset ? " and bounty" : ""}.`,
-          );
-          return;
-        }
-      } catch {
-        notification.error(`Could not verify your ${selectedFeedbackBonusAssetLabel} balance for the Feedback Bonus.`);
-        return;
-      }
     }
 
     const accepted = await requireAcceptance("submit");
@@ -2606,29 +2236,20 @@ export function ContentSubmissionSection() {
 
         return preparedWrite as TWrite;
       };
-      const latestBlockTimestamp = publicClient
-        ? await getBlockWithRetry(publicClient, { blockTag: "latest" })
-            .then(block => block.timestamp)
-            .catch(() => undefined)
-        : undefined;
-      const bountyReferenceNowSeconds = resolveBountyReferenceNowSeconds(latestBlockTimestamp);
-      const bountyStartBy = getBountyStartByFromWindowSeconds(
-        effectiveBountyStartByWindowSeconds,
-        bountyReferenceNowSeconds,
-      );
-      if (bountyStartBy <= BigInt(bountyReferenceNowSeconds)) {
+      const questionDurationSeconds = effectiveBountyStartByWindowSeconds;
+      if (questionDurationSeconds === null || questionDurationSeconds <= 0) {
         setSubmissionStep("bounty");
-        notification.warning("Choose a start-by deadline before submitting.");
+        notification.warning("Choose a question duration before submitting.");
         return;
       }
       if (effectiveBountyWindowSeconds === null || effectiveBountyWindowSeconds <= 0) {
         setSubmissionStep("bounty");
-        notification.warning("Choose a bounty window before submitting.");
+        notification.warning("Choose a question duration before submitting.");
         return;
       }
-      const bountyWindowSecondsValue = BigInt(effectiveBountyWindowSeconds);
+      const bountyStartBy = 0n;
+      const bountyWindowSecondsValue = BigInt(questionDurationSeconds);
       const feedbackWindowSeconds = bountyWindowSecondsValue;
-      const feedbackBonusClosesAt = bountyStartBy + bountyWindowSecondsValue;
 
       const submittedDetails = await Promise.all(
         validatedQuestions.map(question =>
@@ -2663,7 +2284,6 @@ export function ContentSubmissionSection() {
             amount: selectedRewardAmount,
             asset: rewardAsset === "lrep" ? "LREP" : "USDC",
             bountyEligibility: selectedBountyEligibility.mode,
-            requiredSettledRounds: selectedRequiredSettledRounds,
             requiredVoters: selectedRequiredVoters,
           },
           categoryId: question.selectedCategory.id,
@@ -2680,7 +2300,11 @@ export function ContentSubmissionSection() {
           },
           contextUrl: question.submittedContextUrl,
           imageUrls: submittedImageUrls,
-          roundConfig: selectedRoundConfig,
+          roundConfig: {
+            questionDurationSeconds: selectedRoundConfig.maxDuration,
+            minVoters: selectedRoundConfig.minVoters,
+            maxVoters: selectedRoundConfig.maxVoters,
+          },
           study: {
             bundleIndex: index,
           },
@@ -3098,8 +2722,6 @@ export function ContentSubmissionSection() {
       }
 
       reservedRevealCommitment = null;
-      let feedbackBonusFunded = false;
-      let feedbackBonusFundingError: string | null = null;
       const primarySubmittedContentId = submittedContentIds[0] ?? null;
 
       await attachQuestionDetailsAfterSubmission({
@@ -3110,111 +2732,14 @@ export function ContentSubmissionSection() {
         console.warn("Unable to attach question details to submitted content.", error);
       });
 
-      if (
-        shouldFundFeedbackBonus &&
-        selectedFeedbackBonusAmount &&
-        selectedFeedbackBonusAwarderAddress &&
-        feedbackBonusEscrowAddress &&
-        feedbackBonusTokenAddress &&
-        verifiedVotingEngineAddress &&
-        primarySubmittedContentId !== null
-      ) {
-        try {
-          const currentFeedbackRoundId = (await readContract(wagmiConfig, {
-            address: verifiedVotingEngineAddress,
-            abi: RoundVotingEngineAbi,
-            chainId: targetNetwork.id,
-            functionName: "currentRoundId",
-            args: [primarySubmittedContentId],
-          })) as bigint;
-          const feedbackRoundId = currentFeedbackRoundId > 0n ? currentFeedbackRoundId : 1n;
-
-          const feedbackApproveWrite = {
-            address: feedbackBonusTokenAddress,
-            abi: ERC20_APPROVAL_ABI,
-            chainId: targetNetwork.id,
-            functionName: "approve",
-            args: [feedbackBonusEscrowAddress, selectedFeedbackBonusAmount],
-          } as const;
-          const feedbackPoolWrite = {
-            address: feedbackBonusEscrowAddress,
-            abi: FEEDBACK_BONUS_ESCROW_ABI,
-            chainId: targetNetwork.id,
-            functionName: "createFeedbackBonusPoolWithAsset",
-            args: [
-              primarySubmittedContentId,
-              feedbackRoundId,
-              selectedFeedbackBonusAssetId,
-              selectedFeedbackBonusAmount,
-              feedbackBonusClosesAt,
-              selectedFeedbackBonusAwarderAddress,
-            ],
-          } as const;
-
-          if (canUseBatchedSubmitCalls) {
-            await executeSponsoredCalls([feedbackApproveWrite, feedbackPoolWrite], {
-              atomicRequired: true,
-              ...flowToast.getSponsoredBatchOptions({
-                action: "content",
-                sponsorshipMode: submitCallSponsorshipMode,
-              }),
-            });
-            feedbackBonusFunded = true;
-          } else {
-            const feedbackApproveTxHash = localE2ETestWalletClient
-              ? await localE2ETestWalletClient.writeContract(feedbackApproveWrite as any)
-              : await writeContract(wagmiConfig, await prepareDirectWalletWrite(feedbackApproveWrite));
-
-            if (feedbackApproveTxHash) {
-              await waitForTransactionReceiptWithRetry(wagmiConfig, {
-                chainId: targetNetwork.id,
-                hash: feedbackApproveTxHash,
-                pollingInterval: getSubmitReceiptPollingInterval(targetNetwork.id),
-              });
-            }
-            const feedbackApproveNonce = await getSubmittedTransactionNonce(feedbackApproveTxHash);
-
-            const feedbackPoolTxHash = localE2ETestWalletClient
-              ? await localE2ETestWalletClient.writeContract(feedbackPoolWrite as any)
-              : await writeContract(
-                  wagmiConfig,
-                  (await prepareDirectWalletWrite(feedbackPoolWrite, {
-                    minimumNonce: feedbackApproveNonce === undefined ? undefined : feedbackApproveNonce + 1,
-                  })) as any,
-                );
-
-            if (feedbackPoolTxHash) {
-              await waitForTransactionReceiptWithRetry(wagmiConfig, {
-                chainId: targetNetwork.id,
-                hash: feedbackPoolTxHash,
-                pollingInterval: getSubmitReceiptPollingInterval(targetNetwork.id),
-              });
-            }
-            feedbackBonusFunded = true;
-          }
-        } catch (feedbackBonusError) {
-          feedbackBonusFundingError =
-            getSubmissionErrorMessage(feedbackBonusError) || "Feedback Bonus funding transaction failed.";
-        }
-      } else if (shouldFundFeedbackBonus) {
-        feedbackBonusFundingError = "Question submitted, but the Feedback Bonus could not be prepared.";
-      }
-
       await refetchNextContentId();
 
       notification.success(
         `${questionCount === 1 ? "Question" : "Question bundle"} submitted with a ${formatSubmissionRewardAmount(
           selectedRewardAmount,
           rewardAsset,
-        )} voter bounty${
-          feedbackBonusFunded
-            ? ` and a ${formatFeedbackBonusAmount(selectedFeedbackBonusAmount, feedbackBonusAsset)} Feedback Bonus`
-            : ""
-        }.`,
+        )} voter bounty.`,
       );
-      if (feedbackBonusFundingError) {
-        notification.error(`Question submitted, but Feedback Bonus funding failed: ${feedbackBonusFundingError}`);
-      }
       const primarySubmittedQuestion = validatedQuestions[0];
       const primaryContentId = primarySubmittedContentId;
       const submittedQuestion =
@@ -3263,22 +2788,8 @@ export function ContentSubmissionSection() {
       setConfidentialityBondAsset("LREP");
       setConfidentialityBondAmount("0");
       setRewardRequiredVoters("3");
-      setRewardRequiredRounds("1");
       setBountyEligibility(BOUNTY_ELIGIBILITY_OPEN);
-      setBountyWindowPreset(DEFAULT_BOUNTY_WINDOW_PRESET);
-      setCustomBountyWindowAmount(DEFAULT_CUSTOM_BOUNTY_WINDOW_AMOUNT);
-      setCustomBountyWindowUnit(DEFAULT_CUSTOM_BOUNTY_WINDOW_UNIT);
-      setBountyWindowOverridden(false);
-      setBountyStartByPreset(DEFAULT_BOUNTY_WINDOW_PRESET);
-      setCustomBountyStartByAmount(DEFAULT_CUSTOM_BOUNTY_WINDOW_AMOUNT);
-      setCustomBountyStartByUnit(DEFAULT_CUSTOM_BOUNTY_WINDOW_UNIT);
-      setBountyStartByOverridden(false);
-      setFeedbackBonusMode("none");
-      setFeedbackBonusAmount("2");
-      setFeedbackBonusAwarderAddress(connectedAddress ?? "");
-      setFeedbackBonusAwarderTouched(false);
       setRoundBlindSeconds(String(Math.max(1, Math.round(roundConfigDefaults.epochDuration))));
-      setRoundMaxDurationSeconds(String(Math.max(1, Math.round(roundConfigDefaults.maxDuration))));
       setRoundMinVoters(
         getSyncedSettlementVotersForPaidCompleters(
           "3",
@@ -3288,11 +2799,9 @@ export function ContentSubmissionSection() {
       );
       setRoundMaxVoters(defaultRoundMaxVoters);
       setRoundConfigTouched(false);
-      setRoundMaxDurationOverridden(false);
       setShowAdvancedRoundSettings(false);
       setQuestionStepAttempted(false);
       setBountyStepAttempted(false);
-      setFeedbackBonusStepAttempted(false);
       setSubmissionStep("question");
     } catch (e: unknown) {
       console.error("Submit failed:", e);
@@ -3326,6 +2835,17 @@ export function ContentSubmissionSection() {
     }
   };
 
+  const handleFormSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (submissionStep === "question") {
+      handleContinueToBounty();
+      return;
+    }
+
+    void handleFinalSubmit();
+  };
+
   const handleCloseShareModal = () => {
     setSubmittedContent(null);
   };
@@ -3348,18 +2868,13 @@ export function ContentSubmissionSection() {
     !hasVideoInput;
   const imageMediaMissing = contextOrMediaMissing && visibleMediaMode === "images";
   const videoMediaMissing = !privateContextEnabled && contextOrMediaMissing && mediaMode === "video";
-  const pageHeading =
-    submissionStep === "question" ? "Submit Question" : submissionStep === "bounty" ? "Bounty" : "Feedback Bonus";
+  const pageHeading = submissionStep === "question" ? "Submit Question" : "Bounty";
   const pageContext =
     submissionStep === "question"
       ? `Question ${activeQuestionIndex + 1} of ${questionCount}`
-      : submissionStep === "bounty"
-        ? questionCount > 1
-          ? `${questionCount} question bundle`
-          : "Single question bounty"
-        : questionCount > 1
-          ? "Optional feedback bonus unavailable for bundles"
-          : "Optional feedback bonus";
+      : questionCount > 1
+        ? `${questionCount} question bundle`
+        : "Single question bounty";
   const targetAudienceSelectedCount = countTargetAudienceValues(targetAudience);
 
   const submissionStepIndicator = (
@@ -3395,21 +2910,6 @@ export function ContentSubmissionSection() {
         }`}
       >
         Bounty
-      </button>
-      <span aria-hidden="true">→</span>
-      <button
-        type="button"
-        aria-current={submissionStep === "feedbackBonus" ? "step" : undefined}
-        aria-label="Go to optional feedback bonus details"
-        onClick={handleGoToFeedbackBonusStep}
-        title="Go to optional feedback bonus details"
-        className={`cursor-pointer rounded-md border px-2 py-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/80 ${
-          submissionStep === "feedbackBonus"
-            ? "border-primary bg-primary text-primary-content hover:bg-primary/90"
-            : "step-control-inactive"
-        }`}
-      >
-        Feedback Bonus
       </button>
     </div>
   );
@@ -3619,19 +3119,12 @@ export function ContentSubmissionSection() {
     questionCount === 1
       ? `Minimum eligible revealed voters required in a round before that round can receive the bounty payout. Counts do not roll over across rounds. Current min for this amount: ${selectedRequiredVoterFloor}. Bounty floors: ${protocolDocFacts.bountyParticipantFloorsLabel}.`
       : `Minimum eligible completers required in a round set before that set can receive the bounty payout. Each completer must answer every question in the bundle. Current min for this amount: ${selectedRequiredVoterFloor}. Bounty floors: ${protocolDocFacts.bountyParticipantFloorsLabel}.`;
-  const requiredRoundsTooltipText =
-    "Each settlement round set requires every bundled question to settle once. Eligible completers can claim a reward for each completed set they fully answered.";
   const roundSettingsTooltipText =
-    "Governance sets the allowed range. Bounty timing defaults follow the selected round duration.";
+    "Governance sets the allowed range. Bounty eligibility and feedback bonus timing follow the selected question duration.";
   const blindPhaseTooltipText = [
-    "How long answers stay hidden before the result can be revealed and settled.",
+    "How long the question stays open. Answers stay hidden for this duration, and bounty eligibility plus feedback bonus timing use the same close.",
     `Current min: ${formatHumanDuration(roundBlindSecondBounds.min)}.`,
     `Current max: ${formatHumanDuration(roundBlindSecondBounds.max)}.`,
-  ].join(" ");
-  const maxDurationTooltipText = [
-    "How long the round can stay open before it expires without settlement.",
-    `Current min: ${formatHumanDuration(roundMaxDurationSecondBounds.min)}.`,
-    `Current max: ${formatHumanDuration(roundMaxDurationSecondBounds.max)} for the selected blind phase.`,
   ].join(" ");
   const settlementVotersTooltipText = [
     "How many revealed voters are required before a round can settle and count for payout.",
@@ -3650,7 +3143,6 @@ export function ContentSubmissionSection() {
           `Current min: ${roundMaxVoterBounds.min.toLocaleString()}.`,
           `Current max: ${roundMaxVoterBounds.max.toLocaleString()}.`,
         ].join(" ");
-  const bountyExpiryTooltipText = `Bounty eligibility opens with the first private round and matches the blind response window by default. The start-by deadline defaults to the round max duration. ${protocolDocFacts.usdcBountyPayoutTimingTooltip}`;
   const bountyEstimateTooltipText =
     selectedRewardAmount === null
       ? `Using the current minimum until the bounty amount is valid. ${formatFrontendFeePercent(frontendFeeBps)} may be reserved for an eligible frontend operator. ${protocolDocFacts.usdcBountyPayoutTimingTooltip}`
@@ -3888,7 +3380,7 @@ export function ContentSubmissionSection() {
 
         <div className="form-control">
           <div className="flex items-center gap-1.5">
-            <span className="label-text">Blind response window</span>
+            <span className="label-text">Question duration</span>
             <InfoTooltip text={blindPhaseTooltipText} />
           </div>
           <div className="grid grid-cols-3 gap-2">
@@ -3907,14 +3399,14 @@ export function ContentSubmissionSection() {
             ))}
           </div>
           <DurationInput
-            id="round-blind-response-window"
+            id="question-duration-seconds"
             valueSeconds={roundBlindSeconds}
             minSeconds={roundBlindSecondBounds.min}
             maxSeconds={roundBlindSecondBounds.max}
             onChangeSeconds={updateRoundBlindSecondsInput}
             onBlur={clampRoundBlindSecondsInput}
             invalid={bountyStepAttempted && Boolean(roundConfigValidationError)}
-            ariaLabel="Custom blind response window"
+            ariaLabel="Custom question duration"
             className="mt-2"
           />
         </div>
@@ -3941,7 +3433,7 @@ export function ContentSubmissionSection() {
                   className={`h-4 w-4 shrink-0 transition-transform ${showAdvancedRoundSettings ? "rotate-180" : ""}`}
                   aria-hidden="true"
                 />
-                Advanced bounty settings
+                Advanced round settings
               </button>
               <InfoTooltip text={roundSettingsTooltipText} />
             </div>
@@ -3949,297 +3441,6 @@ export function ContentSubmissionSection() {
 
           {showAdvancedRoundSettings ? (
             <div id="advanced-round-settings" className="mt-4 grid gap-3 sm:grid-cols-2">
-              <div className="form-control">
-                <div className="flex items-center gap-1.5">
-                  <label htmlFor="reward-required-rounds" className="label-text">
-                    Settlement rounds
-                  </label>
-                  <InfoTooltip text={requiredRoundsTooltipText} />
-                </div>
-                <input
-                  id="reward-required-rounds"
-                  type="number"
-                  min={MIN_REWARD_POOL_SETTLED_ROUNDS}
-                  max={MAX_REWARD_POOL_SETTLED_ROUNDS}
-                  step={1}
-                  inputMode="numeric"
-                  value={rewardRequiredRounds}
-                  onChange={e => {
-                    const normalizedValue = normalizeWholeNumberInput(e.target.value);
-                    if (normalizedValue !== null) {
-                      setRewardRequiredRounds(normalizedValue);
-                    }
-                  }}
-                  onBlur={() => {
-                    setRewardRequiredRounds(current =>
-                      clampWholeNumberInput(current, MIN_REWARD_POOL_SETTLED_ROUNDS, MAX_REWARD_POOL_SETTLED_ROUNDS),
-                    );
-                  }}
-                  className={`input input-bordered bg-base-100 ${
-                    bountyStepAttempted && rewardRequiredRoundsError ? "input-error" : ""
-                  }`}
-                />
-              </div>
-
-              <div className="form-control">
-                <div className="flex items-center gap-1.5">
-                  <label htmlFor="round-max-duration-seconds" className="label-text">
-                    Max duration
-                  </label>
-                  <InfoTooltip text={maxDurationTooltipText} />
-                </div>
-                <DurationInput
-                  id="round-max-duration-seconds"
-                  valueSeconds={roundMaxDurationSeconds}
-                  minSeconds={roundMaxDurationSecondBounds.min}
-                  maxSeconds={roundMaxDurationSecondBounds.max}
-                  onChangeSeconds={updateRoundMaxDurationSecondsInput}
-                  onBlur={clampRoundMaxDurationSecondsInput}
-                  invalid={bountyStepAttempted && Boolean(roundConfigValidationError)}
-                  ariaLabel="Max duration"
-                  summarySuffix="for selected blind window"
-                />
-              </div>
-
-              <div className="space-y-2 sm:col-span-2">
-                <p className="flex items-center gap-1.5 text-sm font-medium text-base-content/80">
-                  Start-by deadline
-                  <InfoTooltip text={bountyExpiryTooltipText} />
-                </p>
-                <div className="grid grid-cols-2 gap-2 sm:max-w-md">
-                  <button
-                    type="button"
-                    aria-pressed={!bountyStartByOverridden}
-                    onClick={() => setBountyStartByOverridden(false)}
-                    className={`btn btn-sm ${!bountyStartByOverridden ? "btn-primary" : "btn-outline"}`}
-                  >
-                    Match max duration
-                  </button>
-                  <button
-                    type="button"
-                    aria-pressed={bountyStartByOverridden}
-                    onClick={() => setBountyStartByOverridden(true)}
-                    className={`btn btn-sm ${bountyStartByOverridden ? "btn-primary" : "btn-outline"}`}
-                  >
-                    Override
-                  </button>
-                </div>
-                {!bountyStartByOverridden ? (
-                  <p className="text-sm text-base-content/60">
-                    Current deadline: {formatHumanDuration((effectiveBountyStartByWindowSeconds ?? 0) || 0)} (
-                    {estimatedBountyStartByLabel})
-                  </p>
-                ) : (
-                  <div className="space-y-2">
-                    <div className="grid grid-cols-3 gap-2">
-                      {BOUNTY_WINDOW_PRESETS.map(option => (
-                        <button
-                          key={option.id}
-                          type="button"
-                          aria-pressed={bountyStartByPreset === option.id}
-                          onClick={() => {
-                            setBountyStartByOverridden(true);
-                            setBountyStartByPreset(option.id);
-                          }}
-                          className={`btn btn-sm ${bountyStartByPreset === option.id ? "btn-primary" : "btn-outline"}`}
-                        >
-                          {option.label}
-                        </button>
-                      ))}
-                      <button
-                        type="button"
-                        aria-pressed={bountyStartByPreset === "custom"}
-                        onClick={() => {
-                          setBountyStartByOverridden(true);
-                          setBountyStartByPreset("custom");
-                        }}
-                        className={`btn btn-sm ${bountyStartByPreset === "custom" ? "btn-primary" : "btn-outline"}`}
-                      >
-                        Custom
-                      </button>
-                    </div>
-                    {bountyStartByPreset === "custom" ? (
-                      <div className="grid gap-3 sm:grid-cols-[max-content_8rem] sm:items-end sm:gap-x-6">
-                        <label
-                          htmlFor="custom-bounty-start-by-amount"
-                          className="grid gap-2 sm:grid-cols-[max-content_12rem] sm:items-center sm:gap-x-6"
-                        >
-                          <span className="label-text">Deadline length</span>
-                          <input
-                            id="custom-bounty-start-by-amount"
-                            type="number"
-                            min={1}
-                            max={customBountyStartByAmountMax}
-                            step={1}
-                            inputMode="numeric"
-                            value={customBountyStartByAmount}
-                            onChange={e => {
-                              const normalizedValue = normalizeWholeNumberInput(e.target.value);
-                              if (normalizedValue !== null) {
-                                setBountyStartByOverridden(true);
-                                setCustomBountyStartByAmount(normalizedValue);
-                              }
-                            }}
-                            onBlur={() => {
-                              setBountyStartByOverridden(true);
-                              setCustomBountyStartByAmount(current =>
-                                clampWholeNumberInput(current, 1, customBountyStartByAmountMax),
-                              );
-                            }}
-                            className={`input input-bordered bg-base-100 ${
-                              bountyStepAttempted && rewardStartByError ? "input-error" : ""
-                            }`}
-                          />
-                        </label>
-                        <label className="form-control">
-                          <span className="label-text">Unit</span>
-                          <select
-                            value={customBountyStartByUnit}
-                            onChange={e => {
-                              const nextUnit = e.target.value as BountyWindowUnit;
-                              const nextMax =
-                                nextUnit === "hours"
-                                  ? Math.floor(Number.MAX_SAFE_INTEGER / SECONDS_PER_HOUR)
-                                  : Math.floor(Number.MAX_SAFE_INTEGER / (24 * SECONDS_PER_HOUR));
-
-                              setBountyStartByOverridden(true);
-                              setCustomBountyStartByUnit(nextUnit);
-                              setCustomBountyStartByAmount(current => clampWholeNumberInput(current, 1, nextMax));
-                            }}
-                            className="select select-bordered bg-base-100"
-                          >
-                            <option value="hours">Hours</option>
-                            <option value="days">Days</option>
-                          </select>
-                        </label>
-                      </div>
-                    ) : null}
-                  </div>
-                )}
-                {bountyStepAttempted && rewardStartByError ? (
-                  <p className="text-base text-error">{rewardStartByError}</p>
-                ) : null}
-              </div>
-
-              <div className="space-y-2 sm:col-span-2">
-                <p className="flex items-center gap-1.5 text-sm font-medium text-base-content/80">
-                  Eligibility window
-                  <InfoTooltip text={bountyExpiryTooltipText} />
-                </p>
-                <div className="grid grid-cols-2 gap-2 sm:max-w-md">
-                  <button
-                    type="button"
-                    aria-pressed={!bountyWindowOverridden}
-                    onClick={() => setBountyWindowOverridden(false)}
-                    className={`btn btn-sm ${!bountyWindowOverridden ? "btn-primary" : "btn-outline"}`}
-                  >
-                    Match response window
-                  </button>
-                  <button
-                    type="button"
-                    aria-pressed={bountyWindowOverridden}
-                    onClick={() => setBountyWindowOverridden(true)}
-                    className={`btn btn-sm ${bountyWindowOverridden ? "btn-primary" : "btn-outline"}`}
-                  >
-                    Override
-                  </button>
-                </div>
-                {!bountyWindowOverridden ? (
-                  <p className="text-sm text-base-content/60">
-                    Current window: {formatHumanDuration((effectiveBountyWindowSeconds ?? 0) || 0)}
-                  </p>
-                ) : (
-                  <div className="space-y-2">
-                    <div className="grid grid-cols-3 gap-2">
-                      {BOUNTY_WINDOW_PRESETS.map(option => (
-                        <button
-                          key={option.id}
-                          type="button"
-                          aria-pressed={bountyWindowPreset === option.id}
-                          onClick={() => {
-                            setBountyWindowOverridden(true);
-                            setBountyWindowPreset(option.id);
-                          }}
-                          className={`btn btn-sm ${bountyWindowPreset === option.id ? "btn-primary" : "btn-outline"}`}
-                        >
-                          {option.label}
-                        </button>
-                      ))}
-                      <button
-                        type="button"
-                        aria-pressed={bountyWindowPreset === "custom"}
-                        onClick={() => {
-                          setBountyWindowOverridden(true);
-                          setBountyWindowPreset("custom");
-                        }}
-                        className={`btn btn-sm ${bountyWindowPreset === "custom" ? "btn-primary" : "btn-outline"}`}
-                      >
-                        Custom
-                      </button>
-                    </div>
-                    {bountyWindowPreset === "custom" ? (
-                      <div className="grid gap-3 sm:grid-cols-[max-content_8rem] sm:items-end sm:gap-x-6">
-                        <label
-                          htmlFor="custom-bounty-window-amount"
-                          className="grid gap-2 sm:grid-cols-[max-content_12rem] sm:items-center sm:gap-x-6"
-                        >
-                          <span className="label-text">Window length</span>
-                          <input
-                            id="custom-bounty-window-amount"
-                            type="number"
-                            min={1}
-                            max={customBountyWindowAmountMax}
-                            step={1}
-                            inputMode="numeric"
-                            value={customBountyWindowAmount}
-                            onChange={e => {
-                              const normalizedValue = normalizeWholeNumberInput(e.target.value);
-                              if (normalizedValue !== null) {
-                                setBountyWindowOverridden(true);
-                                setCustomBountyWindowAmount(normalizedValue);
-                              }
-                            }}
-                            onBlur={() => {
-                              setBountyWindowOverridden(true);
-                              setCustomBountyWindowAmount(current =>
-                                clampWholeNumberInput(current, 1, customBountyWindowAmountMax),
-                              );
-                            }}
-                            className={`input input-bordered bg-base-100 ${
-                              bountyStepAttempted && rewardExpiryError ? "input-error" : ""
-                            }`}
-                          />
-                        </label>
-                        <label className="form-control">
-                          <span className="label-text">Unit</span>
-                          <select
-                            value={customBountyWindowUnit}
-                            onChange={e => {
-                              const nextUnit = e.target.value as BountyWindowUnit;
-                              const nextMax =
-                                nextUnit === "hours"
-                                  ? Math.floor(Number.MAX_SAFE_INTEGER / SECONDS_PER_HOUR)
-                                  : Math.floor(Number.MAX_SAFE_INTEGER / (24 * SECONDS_PER_HOUR));
-
-                              setBountyWindowOverridden(true);
-                              setCustomBountyWindowUnit(nextUnit);
-                              setCustomBountyWindowAmount(current => clampWholeNumberInput(current, 1, nextMax));
-                            }}
-                            className="select select-bordered bg-base-100"
-                          >
-                            <option value="hours">Hours</option>
-                            <option value="days">Days</option>
-                          </select>
-                        </label>
-                      </div>
-                    ) : null}
-                  </div>
-                )}
-                {bountyStepAttempted && rewardExpiryError ? (
-                  <p className="text-base text-error">{rewardExpiryError}</p>
-                ) : null}
-              </div>
-
               <div className="form-control">
                 <div className="flex items-center gap-1.5">
                   <label htmlFor="round-settlement-voters" className="label-text">
@@ -4294,9 +3495,6 @@ export function ContentSubmissionSection() {
           {showAdvancedRoundSettings && bountyStepAttempted && roundConfigValidationError ? (
             <p className="mt-3 text-base text-error">{roundConfigValidationError}</p>
           ) : null}
-          {showAdvancedRoundSettings && bountyStepAttempted && rewardRequiredRoundsError ? (
-            <p className="mt-3 text-base text-error">{rewardRequiredRoundsError}</p>
-          ) : null}
         </div>
       </div>
     </div>
@@ -4333,16 +3531,16 @@ export function ContentSubmissionSection() {
 
           <div>
             <p className="flex items-center gap-1.5 text-base text-base-content/70">
-              Start-by deadline
-              <InfoTooltip text="The first private round must start by this deadline or the bounty can no longer activate." />
+              Question closes
+              <InfoTooltip text="The first round opens when the question is created. Bounty eligibility and feedback bonus timing use this same close." />
             </p>
             <p className="mt-1 text-base font-medium text-base-content">{estimatedBountyStartByLabel}</p>
           </div>
 
           <div>
             <p className="flex items-center gap-1.5 text-base text-base-content/70">
-              Eligibility window
-              <InfoTooltip text="This duration starts when the first private round starts, so the exact close time depends on the first vote." />
+              Eligibility duration
+              <InfoTooltip text="Eligible bounty responses and feedback bonus submissions share the question duration." />
             </p>
             <p className="mt-1 text-base font-medium text-base-content">{bountyEligibilityWindowLabel}</p>
           </div>
@@ -4363,234 +3561,6 @@ export function ContentSubmissionSection() {
         onClick={() => {
           setSubmissionStep("question");
           setBountyStepAttempted(false);
-        }}
-        className="btn btn-ghost w-full gap-2 sm:w-auto"
-      >
-        <ChevronLeftIcon className="h-4 w-4" />
-        Back
-      </button>
-      <GradientActionButton onClick={handleGoToFeedbackBonusStep} className="w-full sm:flex-1" disabled={isSubmitting}>
-        Continue
-      </GradientActionButton>
-    </div>
-  );
-
-  const feedbackBonusDetailsCard = (
-    <div className="space-y-5">
-      <div>
-        <p className="flex items-center gap-1.5 text-base font-medium text-base-content">
-          Feedback Bonus <span className="text-base-content/55">(optional)</span>
-          <InfoTooltip text="Optional LREP or USDC pool for useful public feedback from revealed raters. The awarder pays selected feedback after settlement, with the default frontend fee reserved when eligible." />
-        </p>
-      </div>
-
-      <div className="grid grid-cols-2 gap-2 sm:max-w-md">
-        <button
-          type="button"
-          aria-pressed={feedbackBonusMode === "none"}
-          onClick={() => {
-            setFeedbackBonusMode("none");
-            setFeedbackBonusStepAttempted(false);
-          }}
-          className={`btn btn-sm ${feedbackBonusMode === "none" ? "btn-primary" : "btn-outline"}`}
-        >
-          No bonus
-        </button>
-        <button
-          type="button"
-          aria-pressed={feedbackBonusMode === "enabled"}
-          onClick={() => {
-            if (questionCount > 1) {
-              notification.info("Feedback Bonuses can be added to single-question submissions in this flow.");
-              return;
-            }
-            setFeedbackBonusMode("enabled");
-          }}
-          className={`btn btn-sm ${feedbackBonusMode === "enabled" ? "btn-primary" : "btn-outline"}`}
-          disabled={questionCount > 1}
-        >
-          Add bonus
-        </button>
-      </div>
-
-      {questionCount > 1 ? (
-        <p className="rounded-lg bg-warning/10 p-3 text-sm text-warning">
-          Feedback Bonuses are per question and round. This submit flow supports them for single-question bounties
-          first.
-        </p>
-      ) : null}
-
-      {feedbackBonusMode === "enabled" ? (
-        <div className="space-y-4">
-          <div>
-            <div className={MONEY_FIELD_LABEL_ROW_CLASS}>
-              <label htmlFor="submission-feedback-bonus-asset" className={MONEY_FIELD_LABEL_CLASS}>
-                Asset
-              </label>
-              <div className={MONEY_FIELD_LABEL_CLASS}>
-                <label htmlFor="submission-feedback-bonus-amount">Amount</label>
-                <InfoTooltip
-                  text="Feedback Bonuses can use LREP or USDC. The selected awarder later chooses which eligible feedback to pay."
-                  className="text-base-content/45"
-                />
-              </div>
-            </div>
-            <div className={MONEY_FIELD_CONTROL_ROW_CLASS}>
-              <select
-                id="submission-feedback-bonus-asset"
-                className={`select select-bordered ${MONEY_FIELD_CONTROL_CLASS} bg-base-100`}
-                value={feedbackBonusAsset}
-                onChange={e => setFeedbackBonusAsset(e.target.value as FeedbackBonusAsset)}
-              >
-                <option value="lrep">LREP</option>
-                <option value="usdc">USDC</option>
-              </select>
-              <input
-                id="submission-feedback-bonus-amount"
-                type="text"
-                inputMode="decimal"
-                value={feedbackBonusAmount}
-                onChange={e => setFeedbackBonusAmount(e.target.value)}
-                className={`input input-bordered ${MONEY_FIELD_CONTROL_CLASS} bg-base-100 ${feedbackBonusAmountError ? "input-error" : ""}`}
-                aria-label="Feedback Bonus amount"
-              />
-            </div>
-          </div>
-          {feedbackBonusAmountError ? <p className="text-base text-error">{feedbackBonusAmountError}</p> : null}
-
-          <div className="surface-card-nested rounded-lg p-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <p className="flex items-center gap-1.5 text-base text-base-content/70">
-                  Feedback window
-                  <InfoTooltip text="Sets the requested feedback close. Awarders still get at least 24 hours after settlement to decide payouts." />
-                </p>
-                <p className="mt-1 text-base font-medium text-base-content">{feedbackBonusWindowLabel}</p>
-              </div>
-              <div>
-                <p className="flex items-center gap-1.5 text-base text-base-content/70">
-                  Awarder
-                  <InfoTooltip text="This address can award selected revealed feedback after settlement. It can be different from the funding wallet." />
-                </p>
-                <p className="mt-1 break-all text-base font-medium text-base-content">
-                  {formatShortAddress(selectedFeedbackBonusAwarderAddress)}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <label className="form-control">
-            <span className="label">
-              <span className="label-text flex items-center gap-1.5">
-                Awarder address
-                <InfoTooltip text="Defaults to your connected wallet. Paste another wallet if someone else should decide feedback awards." />
-              </span>
-            </span>
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <input
-                type="text"
-                value={feedbackBonusAwarderAddress}
-                onChange={e => {
-                  setFeedbackBonusAwarderTouched(true);
-                  setFeedbackBonusAwarderAddress(e.target.value);
-                }}
-                placeholder={connectedAddress ?? "0x..."}
-                className={`input input-bordered min-w-0 flex-1 bg-base-100 ${
-                  feedbackBonusAwarderError ? "input-error" : ""
-                }`}
-                aria-label="Feedback Bonus awarder address"
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  setFeedbackBonusAwarderTouched(false);
-                  setFeedbackBonusAwarderAddress(connectedAddress ?? "");
-                }}
-                className="btn btn-outline btn-sm h-12 sm:h-auto"
-              >
-                Use connected
-              </button>
-            </div>
-            {feedbackBonusAwarderError ? (
-              <span className="label pt-1">
-                <span className="label-text-alt text-error">{feedbackBonusAwarderError}</span>
-              </span>
-            ) : null}
-          </label>
-
-          {!feedbackBonusEscrowAddress ? (
-            <p className="rounded-lg bg-warning/10 p-3 text-sm text-warning">
-              Feedback Bonus funding is not available on this network yet.
-            </p>
-          ) : null}
-        </div>
-      ) : null}
-    </div>
-  );
-
-  const feedbackBonusInsightsCard = (
-    <div className="space-y-4">
-      <div className="surface-card-nested rounded-lg p-4">
-        <p className="mb-4 flex items-center gap-1.5 text-base font-medium text-primary">
-          Feedback Bonus estimate
-          <InfoTooltip
-            text={`${formatFrontendFeePercent(frontendFeeBps)} may be reserved for an eligible frontend operator on each award.`}
-          />
-        </p>
-
-        <div className="space-y-4">
-          <div>
-            <p className="flex items-center gap-1.5 text-base text-base-content/70">
-              Available to award
-              <InfoTooltip text="The gross amount funded into the optional feedback pool." />
-            </p>
-            <p className="mt-1 text-base font-medium text-base-content">
-              {feedbackBonusMode === "enabled" && selectedFeedbackBonusAmount
-                ? formatFeedbackBonusAmount(selectedFeedbackBonusAmount, feedbackBonusAsset)
-                : formatFeedbackBonusAmount(0n, feedbackBonusAsset)}
-            </p>
-          </div>
-
-          <div>
-            <p className="flex items-center gap-1.5 text-base text-base-content/70">
-              After frontend fee
-              <InfoTooltip text="Estimated recipient amount if the whole bonus is paid in one award and the default frontend fee applies." />
-            </p>
-            <p className="mt-1 text-base font-medium text-base-content">
-              {feedbackBonusMode === "enabled"
-                ? formatFeedbackBonusAmount(estimatedFeedbackBonusRecipientAmount, feedbackBonusAsset)
-                : formatFeedbackBonusAmount(0n, feedbackBonusAsset)}
-            </p>
-          </div>
-
-          <div>
-            <p className="flex items-center gap-1.5 text-base text-base-content/70">
-              Requested feedback close
-              <InfoTooltip text="The effective award deadline is at least 24 hours after the round settles, even when this requested close is earlier." />
-            </p>
-            <p className="mt-1 text-base font-medium text-base-content">{feedbackBonusWindowLabel}</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="surface-card-nested rounded-lg p-4">
-        <p className="mb-2 text-base font-medium text-primary">Recommendation</p>
-        <p className="text-base text-base-content/70">
-          {feedbackBonusMode === "enabled"
-            ? "Use a Feedback Bonus when written rationale matters. The bounty still pays revealed votes; this pool is for notes worth calling out after settlement."
-            : "Skip this for simple rating asks. Add a Feedback Bonus when you want raters to spend extra effort on useful written feedback."}
-        </p>
-      </div>
-    </div>
-  );
-
-  const feedbackBonusActions = (
-    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
-      <button
-        type="button"
-        onClick={() => {
-          setSubmissionStep("bounty");
-          setFeedbackBonusStepAttempted(false);
         }}
         className="btn btn-ghost w-full gap-2 sm:w-auto"
       >
@@ -5145,7 +4115,7 @@ export function ContentSubmissionSection() {
                 </div>
               </div>
             </div>
-          ) : submissionStep === "bounty" ? (
+          ) : (
             <div className="grid gap-6 xl:grid-cols-[minmax(0,1.5fr)_minmax(18rem,0.9fr)] xl:items-start">
               <div className="space-y-4">{bountyDetailsCard}</div>
               <div className="space-y-4 xl:sticky xl:top-24">
@@ -5167,30 +4137,6 @@ export function ContentSubmissionSection() {
                   />
                 ) : null}
                 {bountyActions}
-              </div>
-            </div>
-          ) : (
-            <div className="grid gap-6 xl:grid-cols-[minmax(0,1.5fr)_minmax(18rem,0.9fr)] xl:items-start">
-              <div className="space-y-4">{feedbackBonusDetailsCard}</div>
-              <div className="space-y-4 xl:sticky xl:top-24">
-                {feedbackBonusInsightsCard}
-                {isMissingGasBalance ? (
-                  <GasBalanceWarning
-                    actionDisabled={!connectedAddress}
-                    actionLabel={`Add ${nativeTokenSymbol}`}
-                    nativeTokenSymbol={nativeTokenSymbol}
-                    onAction={handleOpenEthFunding}
-                    showTransactionCostsLink={showGasWarningTransactionCostsLink}
-                  />
-                ) : null}
-                {bountyFundingWarning ? (
-                  <BountyFundingWarning
-                    title={bountyFundingWarning.title}
-                    message={bountyFundingWarning.message}
-                    {...bountyFundingWarningAction}
-                  />
-                ) : null}
-                {feedbackBonusActions}
               </div>
             </div>
           )}

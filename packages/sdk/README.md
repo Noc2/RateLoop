@@ -100,12 +100,10 @@ const quote = await agent.quoteQuestion({
   bounty: {
     amount: "1000000",
     requiredVoters: "3",
-    requiredSettledRounds: "1",
     bountyEligibility: "0",
   },
   roundConfig: {
-    epochDuration: "1200",
-    maxDuration: "7200",
+    questionDurationSeconds: "1200",
     minVoters: "3",
     maxVoters: "50",
   },
@@ -127,12 +125,10 @@ const dryRun = await agent.askHumans({
   bounty: {
     amount: "1000000",
     requiredVoters: "3",
-    requiredSettledRounds: "1",
     bountyEligibility: "0",
   },
   roundConfig: {
-    epochDuration: "1200",
-    maxDuration: "7200",
+    questionDurationSeconds: "1200",
     minVoters: "3",
     maxVoters: "50",
   },
@@ -152,12 +148,10 @@ const ask = await agent.askHumans({
   bounty: {
     amount: "1000000",
     requiredVoters: "3",
-    requiredSettledRounds: "1",
     bountyEligibility: "0",
   },
   roundConfig: {
-    epochDuration: "1200",
-    maxDuration: "7200",
+    questionDurationSeconds: "1200",
     minVoters: "3",
     maxVoters: "50",
   },
@@ -278,7 +272,7 @@ ask. Public wallet-mode agents use `prepareImageUpload -> wallet signature -> up
 can call `uploadImage` directly. Use the returned `imageUrl` in `question.imageUrls`. Uploaded images are public ask
 context unless the ask explicitly uses RateLoop-hosted gated context.
 
-For ranked-option bundles, `requiredSettledRounds` is the number of completed bundle round sets to fund. Each round set requires every question in the bundle to settle once, and eligible voters claim each completed set separately.
+For ranked-option bundles, the bounty funds the creation-anchored round set. Every sibling question must settle once for bundle completion.
 
 `bountyEligibility` defaults to `0` for everyone. Everyone can still answer; the field only scopes which revealed answers can qualify for the bounty payout. For the World ID v3 launch, use `8` for Proof of Human. Agent results expose both `answerScopes.allAnswers` and `answerScopes.bountyEligibleAnswers`.
 
@@ -294,22 +288,22 @@ A hosted direct HTTP client only needs the Next.js app's `apiBaseUrl` plus a fun
 `walletAddress`; `mcpAccessToken` is optional and adds managed policy enforcement, balance tooling, and audit surfaces.
 Direct `askHumans({ transport: "http" })` is bounty-only today and rejects `feedbackBonus`. Raw `POST /api/agent/asks`
 is a lower-level wallet-call-compatible route; advanced callers that include `feedbackBonus` must handle every returned
-transaction plan, including any follow-up `feedbackBonus.transactionPlan`. SDK users should prefer MCP or browser
-handoff for asks that include a Feedback Bonus. Direct `createAskHandoff` can still carry the full handoff payload
+transaction plan. SDK users should prefer MCP or browser handoff for asks that include a Feedback Bonus. Direct
+`createAskHandoff` can still carry the full handoff payload
 because the browser completes the funded flow. Paid asks and prepared ratings return wallet-call plans from a
 user-controlled smart wallet or scoped agent wallet. If a returned plan has `requiresAtomicExecution: true`, execute the
 whole plan as an atomic wallet batch or refuse to continue; do not degrade it into separate transactions. Plans without
 that flag can be executed in the returned order.
 The SDK stays wallet-agnostic and does not import a signing implementation.
 
-For Tier-0, unusually sensitive, or high-value asks, prefer a longer `roundConfig.epochDuration`, a matching
-`maxDuration`, and at least 8 required voters instead of shortening the blind phase for speed. Hosted MCP must receive
+For Tier-0, unusually sensitive, or high-value asks, prefer a longer `roundConfig.questionDurationSeconds`
+and at least 8 required voters instead of shortening the shared question duration for speed. Hosted MCP must receive
 only encrypted commit material for ratings, never plaintext `isUp`, predicted crowd share, or salt.
 
 Ask confirmations can wait for on-chain receipts. The SDK uses a longer `confirmTimeoutMs` for
-`confirmAskTransactions`, `confirmFeedbackBonusTransactions`, and `confirmRatingTransactions` while ordinary reads and
-writes use `timeoutMs`. If a confirm call times out locally, retry it with the same `operationKey` and transaction
-hashes, or poll status by `operationKey`; RateLoop treats the operation key as the idempotent recovery handle.
+`confirmAskTransactions` and `confirmRatingTransactions` while ordinary reads and writes use `timeoutMs`. If a confirm
+call times out locally, retry it with the same `operationKey` and transaction hashes, or poll status by `operationKey`;
+RateLoop treats the operation key as the idempotent recovery handle.
 
 `quoteFetchImpl` can route quote-only calls through separate infrastructure from mutating calls. Structured API errors
 are exposed on `RateLoopApiError` as `code`, `retryable`, `recoverWith`, `originalCode`, and `details` so agents can
@@ -326,8 +320,7 @@ compatibility alias, but RateLoop does not expose an HTTP 402 `PaymentRequiremen
 Native EIP-3009 asks are USDC-only and return one submit transaction after the authorization is signed. Use wallet-call
 payment mode for LREP bounties. If a single-question ask includes a
 USDC `feedbackBonus`, the authorization value is bounty plus bonus and the submit transaction one-shots both protocol
-escrow funding and Feedback Bonus pool creation; LREP Feedback Bonuses still require the separate wallet-call funding
-plan after the question is confirmed.
+escrow funding and Feedback Bonus pool creation; LREP Feedback Bonuses use the creation-time wallet-call path.
 
 Webhook verification signs the raw request body with `x-rateloop-callback-id`, `x-rateloop-callback-timestamp`, and `x-rateloop-callback-signature`. Use `buildReplayProtectedWebhookVerifier` and `handleOnce` with an atomic replay store for non-idempotent handlers. The generic `buildWebhookVerifier` also requires `replayProtection`; replay-prone signature-only use must go through `buildSignatureOnlyWebhookVerifier({ allowReplay: true, ... })`. The store should claim event IDs with a SQL unique insert or Redis `SET NX`, keep completed IDs longer than the callback retry window, return 2xx for duplicates, and release in-progress claims when handler work fails so RateLoop can retry. `buildSignatureOnlyWebhookVerifier` only checks HMAC and timestamp freshness; it does not prevent replay during the tolerance window.
 

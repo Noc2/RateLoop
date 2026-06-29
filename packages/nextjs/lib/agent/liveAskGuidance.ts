@@ -48,6 +48,10 @@ export function buildAgentLiveAskGuidance(params: {
   const currentBounty = toBigIntValue(rewardPoolSummary.currentRewardPoolAmount);
   const minVoters = toBigIntValue(openRound.minVoters ?? params.content.roundMinVoters ?? 3, 3n);
   const maxVoters = toBigIntValue(openRound.maxVoters ?? params.content.roundMaxVoters ?? minVoters, minVoters);
+  const questionDuration = toBigIntValue(
+    openRound.maxDuration ?? openRound.epochDuration ?? params.content.roundMaxDuration ?? 0,
+    0n,
+  );
   const questionCount = Math.max(1, params.content.bundle?.questionCount ?? 1);
   const guidanceTarget = buildAgentFastLaneGuidance({
     bounty: {
@@ -55,16 +59,16 @@ export function buildAgentLiveAskGuidance(params: {
       asset: "USDC",
       bountyEligibility: 0,
       bountyStartBy: 0n,
-      bountyWindowSeconds: 0n,
-      feedbackWindowSeconds: 0n,
+      bountyWindowSeconds: questionDuration,
+      feedbackWindowSeconds: questionDuration,
       requiredSettledRounds: 1n,
       requiredVoters: minVoters,
     },
     nowSeconds: params.nowSeconds,
     questionCount,
     roundConfig: {
-      epochDuration: toBigIntValue(openRound.epochDuration ?? params.content.roundEpochDuration ?? 0, 0n),
-      maxDuration: toBigIntValue(openRound.maxDuration ?? params.content.roundMaxDuration ?? 0, 0n),
+      epochDuration: questionDuration,
+      maxDuration: questionDuration,
       maxVoters,
       minVoters,
     },

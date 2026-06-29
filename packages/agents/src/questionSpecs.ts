@@ -30,8 +30,7 @@ export type AgentQuestionConfidentialityInput = {
 } | null;
 
 export type AgentQuestionRoundConfig = {
-  epochDuration: bigint | number | string;
-  maxDuration: bigint | number | string;
+  questionDurationSeconds: bigint | number | string;
   minVoters: bigint | number | string;
   maxVoters: bigint | number | string;
 };
@@ -41,7 +40,6 @@ export type AgentQuestionSpecInput = {
     amount: bigint | string;
     asset: string;
     bountyEligibility?: bigint | number | string;
-    requiredSettledRounds?: bigint | string;
     requiredVoters?: bigint | string;
   };
   categoryId: bigint | string;
@@ -68,8 +66,7 @@ export type AgentQuestionSpecInput = {
 
 function serializeRoundConfig(config: AgentQuestionRoundConfig) {
   return {
-    epochDuration: config.epochDuration.toString(),
-    maxDuration: config.maxDuration.toString(),
+    questionDurationSeconds: config.questionDurationSeconds.toString(),
     minVoters: config.minVoters.toString(),
     maxVoters: config.maxVoters.toString(),
   };
@@ -139,8 +136,6 @@ export function buildQuestionMetadata(
           amount: input.bounty.amount.toString(),
           asset: input.bounty.asset,
           bountyEligibility: input.bounty.bountyEligibility?.toString() ?? "0",
-          requiredSettledRounds:
-            input.bounty.requiredSettledRounds?.toString() ?? null,
           requiredVoters: input.bounty.requiredVoters?.toString() ?? null,
         }
       : null,
@@ -151,7 +146,7 @@ export function buildQuestionMetadata(
     roundConfig: input.roundConfig
       ? serializeRoundConfig(input.roundConfig)
       : null,
-    schemaVersion: "rateloop.question.v3",
+    schemaVersion: "rateloop.question.v4",
     study: input.study ?? null,
     targetAudience,
     tags: [...input.tags],

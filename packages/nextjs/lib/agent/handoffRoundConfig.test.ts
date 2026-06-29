@@ -14,12 +14,12 @@ test("fresh handoffs normalize max duration to the blind window", () => {
   assert.equal(draft.roundMaxDurationOverridden, false);
 });
 
-test("saved drafts preserve an explicit max duration override", () => {
+test("saved drafts also normalize max duration to the blind window", () => {
   const draft = readHandoffRoundDurationDraft(3_600n, 86_400n, 1);
 
   assert.equal(draft.roundBlindSeconds, "3600");
-  assert.equal(draft.roundMaxDurationSeconds, "86400");
-  assert.equal(draft.roundMaxDurationOverridden, true);
+  assert.equal(draft.roundMaxDurationSeconds, "3600");
+  assert.equal(draft.roundMaxDurationOverridden, false);
 });
 
 test("saved drafts without override keep max duration matched to blind", () => {
@@ -35,16 +35,16 @@ test("syncHandoffMaxDurationForBlindChange mirrors blind when not overridden", (
   assert.equal(next, "7200");
 });
 
-test("syncHandoffMaxDurationForBlindChange keeps override value within bounds", () => {
+test("syncHandoffMaxDurationForBlindChange ignores override state", () => {
   const next = syncHandoffMaxDurationForBlindChange(3_600, "86400", true, { min: 3600, max: 86400 });
 
-  assert.equal(next, "86400");
+  assert.equal(next, "3600");
 });
 
 test("resolveHandoffSubmittedMaxDurationSeconds uses blind when not overridden", () => {
   assert.equal(resolveHandoffSubmittedMaxDurationSeconds(3_600n, "86400", false), 3_600n);
 });
 
-test("resolveHandoffSubmittedMaxDurationSeconds uses override when set", () => {
-  assert.equal(resolveHandoffSubmittedMaxDurationSeconds(3_600n, "86400", true), 86_400n);
+test("resolveHandoffSubmittedMaxDurationSeconds ignores override state", () => {
+  assert.equal(resolveHandoffSubmittedMaxDurationSeconds(3_600n, "86400", true), 3_600n);
 });

@@ -39,11 +39,8 @@ export async function main() {
   const pitchUrl =
     process.env.RATELOOP_PITCH_URL ?? "https://example.com/landing-page";
   const bountyAmount = process.env.RATELOOP_BOUNTY_AMOUNT ?? "1000000";
-  const bountyStartBy = process.env.RATELOOP_BOUNTY_START_BY ?? "1893456000";
-  const bountyWindowSeconds =
-    process.env.RATELOOP_BOUNTY_WINDOW_SECONDS ?? "1200";
-  const feedbackWindowSeconds =
-    process.env.RATELOOP_FEEDBACK_WINDOW_SECONDS ?? bountyWindowSeconds;
+  const questionDurationSeconds =
+    process.env.RATELOOP_QUESTION_DURATION_SECONDS ?? "1200";
 
   const question = {
     templateId: "generic_rating",
@@ -63,16 +60,13 @@ export async function main() {
   const bounty = {
     amount: bountyAmount,
     requiredVoters: "3",
-    requiredSettledRounds: "1",
-    bountyStartBy,
-    bountyWindowSeconds,
-    feedbackWindowSeconds,
   };
 
   const quote = await agent.quoteQuestion({
     clientRequestId,
     chainId: 84532,
     bounty,
+    roundConfig: { questionDurationSeconds },
     question,
     walletAddress,
   });

@@ -3,7 +3,6 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import {
   ContentRegistryAbi,
-  FeedbackBonusEscrowAbi,
   X402QuestionSubmitterAbi,
 } from "@rateloop/contracts/abis";
 import {
@@ -24,7 +23,6 @@ import {
   buildLocalQuestionCanonicalPayload,
   loadLocalSignerConfig,
   signX402AuthorizationRequest,
-  validateLocalSignerFeedbackBonusTransactionPlan,
   validateLocalSignerTransactionPlan,
   withLocalSignerWallet,
 } from "../localSigner.js";
@@ -35,7 +33,6 @@ import {
 import type {
   AskHumansRequest,
   AskHumansResponse,
-  QuestionStatusResponse,
   RateLoopAgentClient,
   RateLoopAgentWalletTransactionCall,
 } from "@rateloop/sdk/agent";
@@ -55,8 +52,6 @@ const FEEDBACK_BONUS_ESCROW_ADDRESS =
 const LREP_ADDRESS = "0x00000000000000000000000000000000000000aa" as const;
 const X402_AMOUNT = "1500000";
 const FEEDBACK_BONUS_AMOUNT = "2000000";
-const FEEDBACK_BONUS_CONTENT_ID = "123";
-const FEEDBACK_BONUS_ROUND_ID = "1";
 const CLIENT_REQUEST_ID = "local-signer-test";
 const QUESTION_CONTEXT_URL = "https://example.com/context";
 const QUESTION_TITLE = "Should this agent proceed?";
@@ -72,7 +67,7 @@ const LOCALHOST_UPLOADED_IMAGE_URL =
 const LOCALHOST_DETAILS_URL =
   "http://localhost:3000/api/attachments/details/det_localhostdetails01";
 const QUESTION_METADATA_BASE_URL = "https://ponder.rateloop.ai";
-const BOUNTY_START_BY = 1_893_456_000n;
+const BOUNTY_START_BY = 0n;
 const BOUNTY_WINDOW_SECONDS = 1_200n;
 const FEEDBACK_WINDOW_SECONDS = 1_200n;
 const X402_VALID_AFTER = "0";
@@ -204,7 +199,6 @@ const X402QuestionSubmitterOneShotSubmitWithConfidentialityAbi = [
       {
         components: [
           { name: "amount", type: "uint256" },
-          { name: "feedbackClosesAt", type: "uint256" },
           { name: "awarder", type: "address" },
         ],
         name: "feedbackBonusTerms",
@@ -264,8 +258,7 @@ function rewardTerms(amount = BigInt(X402_AMOUNT), asset: TestSubmissionRewardAs
 
 function roundConfigBigInt() {
   return {
-    epochDuration: 1_200n,
-    maxDuration: 1_200n,
+    questionDurationSeconds: 1_200n,
     maxVoters: 100n,
     minVoters: 3n,
   };
@@ -289,7 +282,6 @@ function questionSpec(questionMetadataBaseUrl?: string) {
         amount: BigInt(X402_AMOUNT),
         asset: "USDC",
         bountyEligibility: 0,
-        requiredSettledRounds: 1n,
         requiredVoters: 3n,
       },
       categoryId: 1n,
@@ -311,51 +303,9 @@ function questionSpec(questionMetadataBaseUrl?: string) {
 }
 
 function canonicalPayload(questionMetadataBaseUrl?: string) {
-  const spec = questionSpec(questionMetadataBaseUrl);
-  return {
-    bounty: {
-      amount: X402_AMOUNT,
-      asset: "USDC",
-      requiredSettledRounds: "1",
-      requiredVoters: "3",
-      bountyStartBy: BOUNTY_START_BY.toString(),
-      bountyWindowSeconds: BOUNTY_WINDOW_SECONDS.toString(),
-      feedbackWindowSeconds: FEEDBACK_WINDOW_SECONDS.toString(),
-      bountyEligibility: "0",
-    },
-    chainId: 480,
-    clientRequestId: CLIENT_REQUEST_ID,
-    questions: [
-      {
-        categoryId: "1",
-        confidentiality: {
-          bond: null,
-          disclosurePolicy: null,
-          visibility: "public",
-        },
-        contextUrl: QUESTION_CONTEXT_URL,
-        detailsHash: EMPTY_DETAILS_HASH,
-        detailsUrl: "",
-        imageUrls: [],
-        questionMetadataHash: spec.questionMetadataHash,
-        questionMetadataUri: spec.questionMetadataUri,
-        resultSpecHash: spec.resultSpecHash,
-        tags: [QUESTION_TAG],
-        targetAudience: null,
-        templateId: "generic_rating",
-        templateInputs: null,
-        templateVersion: 1,
-        title: QUESTION_TITLE,
-        videoUrl: "",
-      },
-    ],
-    roundConfig: {
-      epochDuration: "1200",
-      maxDuration: "1200",
-      minVoters: "3",
-      maxVoters: "100",
-    },
-  };
+  return buildLocalQuestionCanonicalPayload(askPayload(), 480, {
+    questionMetadataBaseUrl,
+  });
 }
 
 function expectedPayloadHash(questionMetadataBaseUrl?: string) {
@@ -854,12 +804,8 @@ function x402OneShotPaymentNonceForPayload(payload: AskHumansRequest, from = acc
   );
   const feedbackBonusTermsHash = keccak256(
     encodeAbiParameters(
-      [{ type: "uint256" }, { type: "uint256" }, { type: "address" }],
-      [
-        BigInt(String(feedbackBonus.amount)),
-        BigInt(String(feedbackBonus.feedbackClosesAt)),
-        String(feedbackBonus.awarder) as `0x${string}`,
-      ],
+      [{ type: "uint256" }, { type: "address" }],
+      [BigInt(String(feedbackBonus.amount)), String(feedbackBonus.awarder) as `0x${string}`],
     ),
   );
   return keccak256(
@@ -885,7 +831,7 @@ function x402OneShotPaymentNonceForPayload(payload: AskHumansRequest, from = acc
         { type: "bytes32" },
       ],
       [
-        keccak256(stringToHex("rateloop-x402-question-one-shot-payment-v4")),
+        keccak256(stringToHex("rateloop-x402-question-one-shot-payment-v5")),
         480n,
         CONTENT_REGISTRY_ADDRESS,
         QUESTION_REWARD_ESCROW_ADDRESS,
@@ -945,6 +891,7 @@ function submitQuestionDataForPayload(payload: AskHumansRequest) {
   const question = canonical.questions[0];
   if (!question) throw new Error("Missing canonical question.");
   const asset = canonical.bounty.asset === "LREP" ? "LREP" : "USDC";
+  const questionDurationSeconds = Number(canonical.roundConfig.questionDurationSeconds);
   return encodeFunctionData({
     abi: ContentRegistrySubmitQuestionWithConfidentialityAbi,
     args: [
@@ -961,8 +908,8 @@ function submitQuestionDataForPayload(payload: AskHumansRequest) {
       saltForPayload(payload),
       rewardTerms(BigInt(canonical.bounty.amount), asset),
       {
-        epochDuration: Number(canonical.roundConfig.epochDuration),
-        maxDuration: Number(canonical.roundConfig.maxDuration),
+        epochDuration: questionDurationSeconds,
+        maxDuration: questionDurationSeconds,
         maxVoters: Number(canonical.roundConfig.maxVoters),
         minVoters: Number(canonical.roundConfig.minVoters),
       },
@@ -1033,7 +980,6 @@ function submitX402OneShotQuestionData(payload = feedbackBonusAskPayload()) {
       {
         amount: BigInt(FEEDBACK_BONUS_AMOUNT),
         awarder: account.address,
-        feedbackClosesAt: BigInt(feedbackBonusClosesAt()),
       },
       {
         from: account.address,
@@ -1192,81 +1138,9 @@ function feedbackBonusAskPayload(
     amount: FEEDBACK_BONUS_AMOUNT,
     asset: "USDC",
     awarder: account.address,
-    feedbackClosesAt: feedbackBonusClosesAt(),
     ...overrides,
   };
   return payload;
-}
-
-function feedbackBonusQuestionStatus(params: {
-  asset?: "USDC" | "LREP";
-  calls?: RateLoopAgentWalletTransactionCall[];
-  state?: Record<string, unknown>;
-} = {}): QuestionStatusResponse {
-  const asset = params.asset ?? "USDC";
-  const tokenAddress = asset === "LREP" ? LREP_ADDRESS : X402_USDC_ADDRESS;
-  const assetId = asset === "LREP" ? 0 : 1;
-  const amount = String(params.state?.amount ?? FEEDBACK_BONUS_AMOUNT);
-  const awarder = String(params.state?.awarder ?? account.address);
-  const feedbackClosesAt = String(
-    params.state?.feedbackClosesAt ?? feedbackBonusClosesAt(),
-  );
-  const calls =
-    params.calls ??
-    [
-      {
-        data: encodeFunctionData({
-          abi: erc20Abi,
-          args: [FEEDBACK_BONUS_ESCROW_ADDRESS, BigInt(amount)],
-          functionName: "approve",
-        }),
-        phase:
-          asset === "LREP"
-            ? "approve_feedback_bonus_lrep"
-            : "approve_feedback_bonus_usdc",
-        to: tokenAddress,
-        value: "0",
-      },
-      {
-        data: encodeFunctionData({
-          abi: FeedbackBonusEscrowAbi,
-          args: [
-            BigInt(FEEDBACK_BONUS_CONTENT_ID),
-            BigInt(FEEDBACK_BONUS_ROUND_ID),
-            assetId,
-            BigInt(amount),
-            BigInt(feedbackClosesAt),
-            awarder,
-          ],
-          functionName: "createFeedbackBonusPoolWithAsset",
-        }),
-        phase: "create_feedback_bonus_pool",
-        to: FEEDBACK_BONUS_ESCROW_ADDRESS,
-        value: "0",
-      },
-    ];
-
-  return {
-    chainId: 480,
-    contentId: FEEDBACK_BONUS_CONTENT_ID,
-    feedbackBonus: {
-      amount,
-      asset,
-      awarder,
-      contentId: FEEDBACK_BONUS_CONTENT_ID,
-      feedbackClosesAt,
-      roundId: FEEDBACK_BONUS_ROUND_ID,
-      status: "awaiting_wallet_signature",
-      transactionPlan: {
-        calls,
-        requiresOrderedExecution: true,
-      },
-      ...params.state,
-    },
-    operationKey: expectedOperationKey(),
-    payerAddress: account.address,
-    status: "submitted",
-  };
 }
 
 function x402CallsResponse(
@@ -1394,10 +1268,6 @@ function askPayload(walletAddress?: string): AskHumansRequest {
     bounty: {
       amount: X402_AMOUNT,
       bountyEligibility: "0",
-      bountyStartBy: BOUNTY_START_BY.toString(),
-      bountyWindowSeconds: BOUNTY_WINDOW_SECONDS.toString(),
-      feedbackWindowSeconds: FEEDBACK_WINDOW_SECONDS.toString(),
-      requiredSettledRounds: "1",
       requiredVoters: "3",
     },
     clientRequestId: CLIENT_REQUEST_ID,
@@ -1409,8 +1279,7 @@ function askPayload(walletAddress?: string): AskHumansRequest {
       title: QUESTION_TITLE,
     },
     roundConfig: {
-      epochDuration: "1200",
-      maxDuration: "1200",
+      questionDurationSeconds: "1200",
       maxVoters: "100",
       minVoters: "3",
     },
@@ -1914,126 +1783,6 @@ describe("local signer", () => {
     expect(calls).toHaveLength(1);
   });
 
-  it("validates USDC Feedback Bonus transaction plans before execution", () => {
-    const calls = validateLocalSignerFeedbackBonusTransactionPlan({
-      accountAddress: account.address,
-      confirmed: feedbackBonusQuestionStatus(),
-      config: validationConfig(),
-      expectedChainId: 480,
-      expectedPayload: feedbackBonusAskPayload(),
-      operationKey: expectedOperationKey(),
-    });
-
-    expect(calls).toHaveLength(2);
-  });
-
-  it("validates LREP Feedback Bonus transaction plans before execution", () => {
-    const calls = validateLocalSignerFeedbackBonusTransactionPlan({
-      accountAddress: account.address,
-      confirmed: feedbackBonusQuestionStatus({ asset: "LREP" }),
-      config: validationConfig(),
-      expectedChainId: 480,
-      expectedPayload: feedbackBonusAskPayload({ asset: "LREP" }),
-      operationKey: expectedOperationKey(),
-    });
-
-    expect(calls).toHaveLength(2);
-  });
-
-  it("rejects Feedback Bonus plans whose approve spender is not the escrow", () => {
-    const status = feedbackBonusQuestionStatus();
-    const calls = status.feedbackBonus!.transactionPlan!.calls!;
-    const tamperedCalls = [
-      {
-        ...calls[0]!,
-        data: encodeFunctionData({
-          abi: erc20Abi,
-          args: [QUESTION_REWARD_ESCROW_ADDRESS, BigInt(FEEDBACK_BONUS_AMOUNT)],
-          functionName: "approve",
-        }),
-      },
-      calls[1]!,
-    ];
-
-    expect(() =>
-      validateLocalSignerFeedbackBonusTransactionPlan({
-        accountAddress: account.address,
-        confirmed: feedbackBonusQuestionStatus({ calls: tamperedCalls }),
-        config: validationConfig(),
-        expectedChainId: 480,
-        expectedPayload: feedbackBonusAskPayload(),
-        operationKey: expectedOperationKey(),
-      }),
-    ).toThrow(/approve spender must be the configured RateLoop escrow/);
-  });
-
-  it("rejects Feedback Bonus plans whose create call targets another contract", () => {
-    const status = feedbackBonusQuestionStatus();
-    const calls = status.feedbackBonus!.transactionPlan!.calls!;
-
-    expect(() =>
-      validateLocalSignerFeedbackBonusTransactionPlan({
-        accountAddress: account.address,
-        confirmed: feedbackBonusQuestionStatus({
-          calls: [
-            calls[0]!,
-            { ...calls[1]!, to: QUESTION_REWARD_ESCROW_ADDRESS },
-          ],
-        }),
-        config: validationConfig(),
-        expectedChainId: 480,
-        expectedPayload: feedbackBonusAskPayload(),
-        operationKey: expectedOperationKey(),
-      }),
-    ).toThrow(/to must be/);
-  });
-
-  it("rejects Feedback Bonus plans whose asset, awarder, or phase differs from the ask", () => {
-    expect(() =>
-      validateLocalSignerFeedbackBonusTransactionPlan({
-        accountAddress: account.address,
-        confirmed: feedbackBonusQuestionStatus({ asset: "LREP" }),
-        config: validationConfig(),
-        expectedChainId: 480,
-        expectedPayload: feedbackBonusAskPayload(),
-        operationKey: expectedOperationKey(),
-      }),
-    ).toThrow(/asset does not match/);
-
-    expect(() =>
-      validateLocalSignerFeedbackBonusTransactionPlan({
-        accountAddress: account.address,
-        confirmed: feedbackBonusQuestionStatus({
-          state: {
-            awarder: "0x00000000000000000000000000000000000000b0",
-          },
-        }),
-        config: validationConfig(),
-        expectedChainId: 480,
-        expectedPayload: feedbackBonusAskPayload(),
-        operationKey: expectedOperationKey(),
-      }),
-    ).toThrow(/feedbackBonus.awarder/);
-
-    const status = feedbackBonusQuestionStatus();
-    const calls = status.feedbackBonus!.transactionPlan!.calls!;
-    expect(() =>
-      validateLocalSignerFeedbackBonusTransactionPlan({
-        accountAddress: account.address,
-        confirmed: feedbackBonusQuestionStatus({
-          calls: [
-            { ...calls[0]!, phase: "approve_usdc" },
-            calls[1]!,
-          ],
-        }),
-        config: validationConfig(),
-        expectedChainId: 480,
-        expectedPayload: feedbackBonusAskPayload(),
-        operationKey: expectedOperationKey(),
-      }),
-    ).toThrow(/phase must be approve_feedback_bonus_usdc/);
-  });
-
   it("rejects transaction plans whose submission calldata differs from the ask payload", () => {
     const changedTitleData = encodeFunctionData({
       abi: ContentRegistrySubmitQuestionWithConfidentialityAbi,
@@ -2352,11 +2101,12 @@ function fiveVoterAskPayload(
   overrides: Partial<AskHumansRequest> = {},
 ): AskHumansRequest {
   const base = askPayload();
+  const { bounty, ...restOverrides } = overrides;
   return {
     ...base,
-    bounty: { ...base.bounty, requiredVoters: "5" },
+    bounty: { ...base.bounty, requiredVoters: "5", ...bounty },
     roundConfig: undefined,
-    ...overrides,
+    ...restOverrides,
   };
 }
 
@@ -2368,8 +2118,7 @@ describe("local signer round config alignment", () => {
     );
 
     expect(canonical.roundConfig).toEqual({
-      epochDuration: "1200",
-      maxDuration: "1200",
+      questionDurationSeconds: "1200",
       minVoters: "5",
       maxVoters: "100",
     });
@@ -2383,8 +2132,7 @@ describe("local signer round config alignment", () => {
     const canonical = buildLocalQuestionCanonicalPayload(payload, 480);
 
     expect(canonical.roundConfig).toEqual({
-      epochDuration: "1200",
-      maxDuration: "1200",
+      questionDurationSeconds: "1200",
       minVoters: "150",
       maxVoters: "150",
     });
@@ -2394,8 +2142,7 @@ describe("local signer round config alignment", () => {
     const canonical = buildLocalQuestionCanonicalPayload(
       fiveVoterAskPayload({
         roundConfig: {
-          epochDuration: "1200",
-          maxDuration: "1200",
+          questionDurationSeconds: "1200",
           maxVoters: "100",
           minVoters: "5",
         },
@@ -2404,8 +2151,7 @@ describe("local signer round config alignment", () => {
     );
 
     expect(canonical.roundConfig).toEqual({
-      epochDuration: "1200",
-      maxDuration: "1200",
+      questionDurationSeconds: "1200",
       minVoters: "5",
       maxVoters: "100",
     });
@@ -2423,15 +2169,14 @@ describe("local signer round config alignment", () => {
       buildLocalQuestionCanonicalPayload(
         fiveVoterAskPayload({
           roundConfig: {
-            epochDuration: "1200",
-            maxDuration: "4294967296",
+            questionDurationSeconds: "4294967296",
             maxVoters: "100",
             minVoters: "5",
           },
         }),
         480,
       ),
-    ).toThrow(/question\.roundConfig\.maxDuration must be at most 4294967295/);
+    ).toThrow(/question\.roundConfig\.questionDurationSeconds must be at most 4294967295/);
   });
 
   it("expands the pure-agent fast round preset into a contract-safe round config", () => {
@@ -2443,8 +2188,7 @@ describe("local signer round config alignment", () => {
     );
 
     expect(canonical.roundConfig).toEqual({
-      epochDuration: "60",
-      maxDuration: "60",
+      questionDurationSeconds: "60",
       minVoters: "5",
       maxVoters: "5",
     });
@@ -2455,8 +2199,7 @@ describe("local signer round config alignment", () => {
       buildLocalQuestionCanonicalPayload(
         fiveVoterAskPayload({
           roundConfig: {
-            epochDuration: "1200",
-            maxDuration: "1200",
+            questionDurationSeconds: "1200",
             maxVoters: "100",
             minVoters: "5",
           },
@@ -2583,8 +2326,7 @@ describe("local signer round config alignment", () => {
       buildLocalQuestionCanonicalPayload(
         fiveVoterAskPayload({
           roundConfig: {
-            epochDuration: "1200",
-            maxDuration: "1200",
+            questionDurationSeconds: "1200",
             maxVoters: "100",
             minVoters: "3",
           },

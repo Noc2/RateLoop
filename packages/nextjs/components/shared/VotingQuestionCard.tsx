@@ -2,8 +2,6 @@
 
 import React, { type ReactNode, useEffect, useState } from "react";
 import { ChatBubbleLeftRightIcon, ShareIcon } from "@heroicons/react/24/outline";
-import { FundFeedbackBonusModal } from "~~/components/reward-pool/FundFeedbackBonusModal";
-import { FundQuestionModal } from "~~/components/reward-pool/FundQuestionModal";
 import { MoreToggleButton } from "~~/components/shared/MoreToggleButton";
 import { RateLoopVoteButton } from "~~/components/shared/RateLoopVoteButton";
 import { RatingOrb } from "~~/components/shared/RatingOrb";
@@ -477,37 +475,6 @@ function RatingPendingNotice({ compact = false }: { compact?: boolean }) {
   );
 }
 
-function AddRewardActionLinks({
-  onFundQuestion,
-  onFundFeedbackBonus,
-  canFundFeedbackBonus,
-}: {
-  onFundQuestion: () => void;
-  onFundFeedbackBonus: () => void;
-  canFundFeedbackBonus: boolean;
-}) {
-  return (
-    <div className="flex flex-wrap justify-start gap-x-3 gap-y-1">
-      <button
-        type="button"
-        onClick={onFundQuestion}
-        className="font-semibold text-primary underline-offset-4 transition-colors hover:text-primary-focus hover:underline"
-      >
-        Add bounty
-      </button>
-      <button
-        type="button"
-        onClick={onFundFeedbackBonus}
-        disabled={!canFundFeedbackBonus}
-        title={canFundFeedbackBonus ? "Add Feedback Bonus" : "Feedback Bonuses need an active round"}
-        className="font-semibold text-primary underline-offset-4 transition-colors hover:text-primary-focus hover:underline disabled:cursor-not-allowed disabled:text-base-content/35 disabled:hover:text-base-content/35 disabled:hover:no-underline"
-      >
-        Add feedback bonus
-      </button>
-    </div>
-  );
-}
-
 export function VotingQuestionContextDetails({
   contentId,
   categoryId,
@@ -569,7 +536,6 @@ export function VotingQuestionContextDetails({
 export function VotingQuestionCard({
   contentId,
   chainId,
-  questionTitle,
   currentRating,
   ratingReviewStatus,
   onVote,
@@ -619,8 +585,6 @@ export function VotingQuestionCard({
     isCommitting || isVoteEligibilityPending || Boolean(voteUnavailableStatus) || contentInactive || !roundAcceptsVotes;
   const [isDetailsOpen, setIsDetailsOpen] = useState(isSignalVariant);
   const [isAttentionActive, setIsAttentionActive] = useState(false);
-  const [showFundQuestionModal, setShowFundQuestionModal] = useState(false);
-  const [showFundFeedbackBonusModal, setShowFundFeedbackBonusModal] = useState(false);
   const detailsId = `voting-card-details-${contentId.toString()}`;
 
   // Check if user has committed to this round (direction hidden until reveal).
@@ -818,28 +782,19 @@ export function VotingQuestionCard({
   const shellClassName = compact ? "p-3 space-y-2.5" : "p-4 space-y-3 xl:p-3 xl:space-y-2.5 2xl:p-4 2xl:space-y-3";
   const actionStackClassName = compact ? "mt-2.5 gap-1.5" : "mt-3 gap-2";
   const footerStackClassName = compact ? "mt-2.5 gap-2" : "mt-3 gap-3 xl:mt-2.5 xl:gap-2.5 2xl:mt-3 2xl:gap-3";
-  const showExpandedDetails = isSignalVariant || (isDetailsOpen && !isDockVariant);
+  const hasExpandableDetails = false;
+  const showExpandedDetails = hasExpandableDetails && (isSignalVariant || (isDetailsOpen && !isDockVariant));
   const showVoteAttentionHint = isAttentionActive && !centerStatusContent;
-  const fundQuestionTitle = questionTitle?.trim() || `Question #${contentId.toString()}`;
-  const canFundFeedbackBonus = !contentInactive && roundId > 0n;
   const ratingGuidanceText = getRatingGuidanceText(voteUiConfig);
   const ratingOrb = (
     <TooltipAnchor text={ratingGuidanceText} position="bottom" className="pointer-events-auto cursor-help rounded-full">
       <RatingOrb rating={currentRating} size={orbSize} />
     </TooltipAnchor>
   );
-  const rewardActionLinks = (
-    <AddRewardActionLinks
-      onFundQuestion={() => setShowFundQuestionModal(true)}
-      onFundFeedbackBonus={() => setShowFundFeedbackBonusModal(true)}
-      canFundFeedbackBonus={canFundFeedbackBonus}
-    />
-  );
-  const renderRewardPoolDetailsRow = () => <div className="flex min-w-0 flex-col gap-3">{rewardActionLinks}</div>;
 
   useEffect(() => {
-    setIsDetailsOpen(isSignalVariant);
-  }, [contentId, isSignalVariant]);
+    setIsDetailsOpen(hasExpandableDetails && isSignalVariant);
+  }, [contentId, hasExpandableDetails, isSignalVariant]);
 
   useEffect(() => {
     if (!attentionToken) return;
@@ -1069,12 +1024,12 @@ export function VotingQuestionCard({
 
                 {displayError ? <p className="px-4 pb-1 text-center text-sm text-error">{displayError}</p> : null}
 
-                {isDetailsOpen ? (
+                {showExpandedDetails ? (
                   <div id={detailsId} className="relative z-10 pb-3 pt-1">
                     <div aria-hidden="true" className="mx-4 mb-3 h-px bg-[color:var(--rateloop-shell-border-strong)]" />
                     <div className="px-4">
                       <div className="max-h-[34svh] overflow-y-auto [scrollbar-gutter:stable]">
-                        <div className="flex flex-col gap-2.5 pb-1">{renderRewardPoolDetailsRow()}</div>
+                        <div className="flex flex-col gap-2.5 pb-1" />
                       </div>
                     </div>
                   </div>
@@ -1083,25 +1038,6 @@ export function VotingQuestionCard({
             </div>
           </div>
         </div>
-
-        {showFundQuestionModal ? (
-          <FundQuestionModal
-            contentChainId={chainId}
-            contentId={contentId}
-            roundConfig={roundConfig}
-            title={fundQuestionTitle}
-            onClose={() => setShowFundQuestionModal(false)}
-          />
-        ) : null}
-        {showFundFeedbackBonusModal ? (
-          <FundFeedbackBonusModal
-            contentChainId={chainId}
-            contentId={contentId}
-            roundId={roundId}
-            title={fundQuestionTitle}
-            onClose={() => setShowFundFeedbackBonusModal(false)}
-          />
-        ) : null}
       </>
     );
   }
@@ -1182,7 +1118,7 @@ export function VotingQuestionCard({
           </div>
 
           <div className={`flex shrink-0 flex-col ${footerStackClassName}`}>
-            {!isSignalVariant ? (
+            {hasExpandableDetails && !isSignalVariant ? (
               <div className={compact ? "pt-0.5" : "pt-1"}>
                 <MoreToggleButton
                   expanded={isDetailsOpen}
@@ -1192,32 +1128,11 @@ export function VotingQuestionCard({
               </div>
             ) : null}
             {showExpandedDetails ? (
-              <div id={detailsId} className={`flex flex-col ${compact ? "gap-2.5" : "gap-3"}`}>
-                {renderRewardPoolDetailsRow()}
-              </div>
+              <div id={detailsId} className={`flex flex-col ${compact ? "gap-2.5" : "gap-3"}`} />
             ) : null}
           </div>
         </div>
       </div>
-
-      {showFundQuestionModal ? (
-        <FundQuestionModal
-          contentChainId={chainId}
-          contentId={contentId}
-          roundConfig={roundConfig}
-          title={fundQuestionTitle}
-          onClose={() => setShowFundQuestionModal(false)}
-        />
-      ) : null}
-      {showFundFeedbackBonusModal ? (
-        <FundFeedbackBonusModal
-          contentChainId={chainId}
-          contentId={contentId}
-          roundId={roundId}
-          title={fundQuestionTitle}
-          onClose={() => setShowFundFeedbackBonusModal(false)}
-        />
-      ) : null}
     </>
   );
 }

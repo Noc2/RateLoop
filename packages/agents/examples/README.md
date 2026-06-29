@@ -102,15 +102,13 @@ rateloop_create_ask_handoff_link
 
 Share the returned `/agent/handoff/{handoffId}#token=...` URL. Use `local-ask` when the agent controls a funded encrypted
 wallet. Use raw MCP `transactionPlan.calls` only when the host can execute or present wallet calls cleanly. Example
-bounty amounts are atomic USDC units. Set `bountyStartBy` to the latest acceptable first-round start timestamp, then set
-`bountyWindowSeconds` and `feedbackWindowSeconds` to the active windows after that first round starts.
+bounty amounts are atomic USDC units. Omit custom bounty windows; the bounty, blind response window, and Feedback Bonus
+window all use `roundConfig.questionDurationSeconds` from question creation.
 
 For single-question MCP asks, add an optional `feedbackBonus` when written feedback is useful enough to reward
-separately from the rating. Feedback Bonuses can use USDC or LREP with `paymentMode: "wallet_calls"`; the EIP-3009
-authorization path is USDC-only and accepts `paymentMode: "x402_authorization"` as a legacy alias. The requested
-feedback close is not the final payout cutoff; awards remain open until at least 24 hours after settlement. Set
-`maxPaymentAmount` to cover the USDC bounty plus any USDC bonus. After the ask is confirmed, execute any returned
-`feedbackBonus.transactionPlan.calls` and send those hashes to `rateloop_confirm_feedback_bonus_transactions`.
+separately from the rating. Feedback Bonuses are USDC-only and funded in the same creation-time x402 authorization as
+the bounty. Awards remain open until at least 24 hours after settlement. Set `maxPaymentAmount` to cover the USDC bounty
+plus any USDC bonus.
 
 ## Rating Existing Content
 
@@ -160,4 +158,4 @@ exports.
 - Start from `landing-pitch-review.ts`.
 - Use `RATELOOP_API_BASE_URL` plus a funded `RATELOOP_AGENT_WALLET_ADDRESS` for public direct HTTP, or add a managed MCP token for RateLoop-enforced caps.
 - Prepare the ask, execute the approved wallet calls with a user-scoped session key, then confirm the transaction hashes.
-- Keep live asks stable after submission. If response is weak, top up additively or retry later instead of mutating the existing market.
+- Keep live asks stable after submission. If response is weak, wait for the round to finish or create a fresh ask with a larger creation-time budget.

@@ -65,9 +65,8 @@ const HowItWorks: NextPage = () => {
 
       <h3 id="blind-voting">Blind Voting</h3>
       <p>
-        The default blind phase is <strong>{protocolDocFacts.blindPhaseDurationLabel}</strong>. Votes made in the first
-        epoch earn full reward weight. Later reports can see revealed information and receive{" "}
-        <strong>{protocolDocFacts.openPhaseWeightLabel}</strong> reward weight.
+        The default question duration is <strong>{protocolDocFacts.questionDurationLabel}</strong>. Votes stay blind for
+        that full window, and accepted reports use full reward weight before the round moves to reveal and settlement.
       </p>
       <p>
         Vote choices stay hidden through the commit-reveal flow until the blind phase ends. Optional written feedback is

@@ -32,11 +32,10 @@ function askRequestBody(overrides: Record<string, unknown> = {}) {
     bounty: {
       amount,
       bountyEligibility: "0",
-      bountyStartBy: "1900000000",
-      bountyWindowSeconds: "7200",
-      feedbackWindowSeconds: "3600",
-      requiredSettledRounds: "1",
       requiredVoters: "3",
+    },
+    roundConfig: {
+      questionDurationSeconds: "1200",
     },
     ...overrides,
   };
@@ -147,7 +146,7 @@ test("validateBrowserX402AuthorizationRequest accepts exact RateLoop EIP-3009 ty
         bounty: { amount },
         feedbackBonus: { amount: "500000", asset: "LREP" },
       }),
-    /LREP Feedback Bonuses require wallet_calls/,
+    /Feedback Bonus funding currently supports USDC x402 authorization only/,
   );
 });
 
@@ -157,7 +156,6 @@ test("validateBrowserX402AuthorizationRequest accepts USDC Feedback Bonus one-sh
       amount: "500000",
       asset: "USDC",
       awarder: wallet,
-      feedbackClosesAt: "1900001800",
     },
   });
   const result = validate(

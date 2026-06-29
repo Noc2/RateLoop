@@ -83,6 +83,10 @@ const arbitraryTokenContract = {
   address: "0x9999999999999999999999999999999999999999" as const,
   abi: parseAbi(["function approve(address spender, uint256 amount) returns (bool)"]),
 };
+const legacyRewardEscrowPostCreationAbi = parseAbi([
+  "function createRewardPool(uint256 contentId,uint256 amount,uint256 requiredVoters,uint256 requiredSettledRounds,uint256 bountyStartBy,uint256 bountyWindowSeconds,uint256 feedbackWindowSeconds) returns (uint256)",
+  "function createRewardPoolWithAuthorization((uint256 contentId,uint256 amount,uint256 requiredVoters,uint256 requiredSettledRounds,uint256 bountyStartBy,uint256 bountyWindowSeconds,uint256 feedbackWindowSeconds,uint8 bountyEligibility,uint8 bountyKind,uint256 relatedRoundId,bytes32 reasonHash) params,(address from,address to,uint256 value,uint256 validAfter,uint256 validBefore,bytes32 nonce,uint8 v,bytes32 r,bytes32 s) authorization) returns (uint256)",
+]);
 const configuredUsdcContract = {
   address: "0x7777777777777777777777777777777777777777" as const,
   abi: parseAbi(["function approve(address spender, uint256 amount) returns (bool)"]),
@@ -334,41 +338,29 @@ function rewardPoolAuthorizationCall(
   }> = {},
 ) {
   const amount = overrides.amount ?? 1_000_000n;
-  return encodeCall(rewardEscrowContract, "createRewardPoolWithAuthorization", [
-    {
-      contentId: 1n,
-      amount,
-      requiredVoters: 3n,
-      requiredSettledRounds: 1n,
-      bountyStartBy: 1_234n,
-      bountyWindowSeconds: 86_400n,
-      feedbackWindowSeconds: 86_400n,
-      bountyEligibility: 0,
-      bountyKind: 0,
-      relatedRoundId: 0n,
-      reasonHash: EMPTY_DETAILS_HASH,
-    },
-    overrides.authorization ?? eip3009Authorization(rewardEscrowContract.address, { amount }),
-  ]);
-}
-
-function feedbackBonusAuthorizationCall(
-  overrides: Partial<{
-    amount: bigint;
-    authorization: ReturnType<typeof eip3009Authorization>;
-  }> = {},
-) {
-  const amount = overrides.amount ?? 1_000_000n;
-  return encodeCall(feedbackBonusEscrowContract, "createFeedbackBonusPoolWithAuthorization", [
-    {
-      contentId: 1n,
-      roundId: 1n,
-      amount,
-      feedbackClosesAt: 1_234n,
-      awarder: WALLET,
-    },
-    overrides.authorization ?? eip3009Authorization(feedbackBonusEscrowContract.address, { amount }),
-  ]);
+  return {
+    data: encodeFunctionData({
+      abi: legacyRewardEscrowPostCreationAbi,
+      functionName: "createRewardPoolWithAuthorization",
+      args: [
+        {
+          contentId: 1n,
+          amount,
+          requiredVoters: 3n,
+          requiredSettledRounds: 1n,
+          bountyStartBy: 0n,
+          bountyWindowSeconds: 1_200n,
+          feedbackWindowSeconds: 1_200n,
+          bountyEligibility: 0,
+          bountyKind: 0,
+          relatedRoundId: 0n,
+          reasonHash: EMPTY_DETAILS_HASH,
+        },
+        overrides.authorization ?? eip3009Authorization(rewardEscrowContract.address, { amount }),
+      ],
+    }),
+    to: rewardEscrowContract.address,
+  };
 }
 
 function submitQuestionWithRewardCall(
@@ -418,11 +410,11 @@ function submitQuestionWithRewardCall(
         requiredVoters: 3n,
         requiredSettledRounds: 1n,
         bountyStartBy: 0n,
-        bountyWindowSeconds: 0n,
-        feedbackWindowSeconds: 0n,
+        bountyWindowSeconds: 1_200n,
+        feedbackWindowSeconds: 1_200n,
         bountyEligibility: 0,
       },
-      { epochDuration: 1200, maxDuration: 604800, minVoters: 3, maxVoters: 100 },
+      { epochDuration: 1200, maxDuration: 1200, minVoters: 3, maxVoters: 100 },
       {
         questionMetadataHash: `0x${"6".repeat(64)}`,
         resultSpecHash: `0x${"7".repeat(64)}`,
@@ -459,11 +451,11 @@ function x402QuestionPaymentCall(
       requiredVoters: 3n,
       requiredSettledRounds: 1n,
       bountyStartBy: 0n,
-      bountyWindowSeconds: 0n,
-      feedbackWindowSeconds: 0n,
+      bountyWindowSeconds: 1_200n,
+      feedbackWindowSeconds: 1_200n,
       bountyEligibility: 0,
     },
-    { epochDuration: 1200, maxDuration: 604800, minVoters: 3, maxVoters: 100 },
+    { epochDuration: 1200, maxDuration: 1200, minVoters: 3, maxVoters: 100 },
     {
       questionMetadataHash: `0x${"6".repeat(64)}`,
       resultSpecHash: `0x${"7".repeat(64)}`,
@@ -951,17 +943,6 @@ test("supported sponsored operation families are allowlisted", async () => {
       encodeCall(lrepContract, "approve", [rewardEscrowContract.address, 1_000_000n]),
       encodeCall(contentRegistryContract, "reserveSubmission", [`0x${"1".repeat(64)}`]),
     ],
-    [
-      encodeCall(lrepContract, "approve", [feedbackBonusEscrowContract.address, 1_000_000n]),
-      encodeCall(feedbackBonusEscrowContract, "createFeedbackBonusPoolWithAsset", [
-        1n,
-        1n,
-        0,
-        1_000_000n,
-        1_234n,
-        WALLET,
-      ]),
-    ],
     [encodeCall(feedbackBonusEscrowContract, "awardFeedbackBonus", [1n, WALLET, `0x${"7".repeat(64)}`, 1_000_000n])],
     [encodeCall(lrepContract, "approve", [votingEngineContract.address, 1_000_000n]), voteCall("0x08")],
     [encodeCall(contentRegistryContract, "cancelReservedSubmission", [`0x${"2".repeat(64)}`])],
@@ -1004,12 +985,9 @@ test("supported sponsored operation families are allowlisted", async () => {
     ],
     [encodeCall(rewardDistributorContract, "claimFrontendFee", [1n, 1n, WALLET])],
     [encodeCall(rewardDistributorContract, "claimReward", [1n, 1n])],
-    [encodeCall(rewardEscrowContract, "createRewardPool", [1n, 1_000_000n, 3n, 0n, 1_234n, 86_400n, 86_400n])],
-    [rewardPoolAuthorizationCall()],
     [encodeCall(rewardEscrowContract, "claimQuestionReward", [1n, 1n])],
     [encodeCall(rewardEscrowContract, "claimQuestionReward", [1n, 1n, payoutWeight, []])],
     [encodeCall(rewardEscrowContract, "claimQuestionBundleReward", [1n, 0n])],
-    [feedbackBonusAuthorizationCall()],
     [x402QuestionPaymentCall()],
   ] as const;
 
@@ -1080,7 +1058,7 @@ test("keeps non-registration frontend approvals behind identity verification", a
   assert.equal(decision.debugCode, "missing_rater_identity");
 });
 
-test("allows sponsorship for the configured chain-scoped USDC address", async () => {
+test("rejects post-creation reward pools even for the configured chain-scoped USDC address", async () => {
   const previousUsdcOverride = env.NEXT_PUBLIC_USDC_ADDRESS_31337;
   env.NEXT_PUBLIC_USDC_ADDRESS_31337 = configuredUsdcContract.address;
 
@@ -1088,11 +1066,20 @@ test("allows sponsorship for the configured chain-scoped USDC address", async ()
     const decision = await freeTransactions.evaluateFreeTransactionAllowance(
       buildRequest([
         encodeCall(configuredUsdcContract, "approve", [rewardEscrowContract.address, 10n]),
-        encodeCall(rewardEscrowContract, "createRewardPool", [1n, 10n, 3n, 0n, 1_234n, 86_400n, 86_400n]),
+        {
+          data: encodeFunctionData({
+            abi: legacyRewardEscrowPostCreationAbi,
+            functionName: "createRewardPool",
+            args: [1n, 10n, 3n, 0n, 1_234n, 86_400n, 86_400n],
+          }),
+          to: rewardEscrowContract.address,
+        },
       ]) as never,
     );
 
-    assert.equal(decision.isAllowed, true);
+    assert.equal(decision.isAllowed, false);
+    if (decision.isAllowed) return;
+    assert.equal(decision.debugCode, "unsupported_operation");
   } finally {
     if (previousUsdcOverride === undefined) {
       delete env.NEXT_PUBLIC_USDC_ADDRESS_31337;
@@ -1116,7 +1103,7 @@ test("rejects malformed sponsored EIP-3009 authorization calls", async () => {
 
   const wrongPayeeDecision = await freeTransactions.evaluateFreeTransactionAllowance(
     buildRequest([
-      feedbackBonusAuthorizationCall({
+      x402QuestionPaymentCall({
         authorization: eip3009Authorization(rewardEscrowContract.address),
       }),
     ]) as never,

@@ -18,9 +18,6 @@ type AgentQuestionRequest = {
   bounty: {
     amount: string;
     asset: "USDC";
-    bountyStartBy: string;
-    bountyWindowSeconds: string;
-    feedbackWindowSeconds: string;
   };
   chainId: number;
   clientRequestId: string;
@@ -53,9 +50,6 @@ function baseAgentQuestionRequest(clientRequestId: string, title: string): Agent
     bounty: {
       amount: "1000000",
       asset: "USDC",
-      bountyStartBy: "1762000000",
-      bountyWindowSeconds: "1200",
-      feedbackWindowSeconds: "1200",
     },
     chainId: 31337,
     clientRequestId,

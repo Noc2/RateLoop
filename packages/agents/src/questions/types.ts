@@ -27,7 +27,7 @@ export type AgentQuestionExample = {
   detailsUrl?: string;
   tags: string[] | string;
   imageUrls?: string[];
-  roundConfig?: Record<string, string | number | bigint>;
+  roundConfig?: AgentRoundConfigExample;
   roundPreset?: "pure_agent_fast" | "default" | string;
   videoUrl?: string;
   templateId?: string;
@@ -35,15 +35,17 @@ export type AgentQuestionExample = {
   targetAudience?: JsonValue;
 };
 
+export type AgentRoundConfigExample = {
+  questionDurationSeconds?: string | number | bigint;
+  minVoters?: string | number | bigint;
+  maxVoters?: string | number | bigint;
+};
+
 export type AgentAskExample = {
   bounty: {
     amount: string | number | bigint;
     asset?: "USDC" | "usdc" | string;
     bountyEligibility?: 0 | 8 | string | number;
-    bountyStartBy: string | number | bigint;
-    bountyWindowSeconds: string | number | bigint;
-    feedbackWindowSeconds?: string | number | bigint;
-    requiredSettledRounds?: string | number | bigint;
     requiredVoters?: string | number | bigint;
   };
   chainId?: number;
@@ -52,12 +54,11 @@ export type AgentAskExample = {
     amount: string | number | bigint;
     asset?: "USDC" | "usdc" | "LREP" | "lrep" | string;
     awarder?: string;
-    feedbackClosesAt?: string | number | bigint;
   };
   maxPaymentAmount?: string | number | bigint;
   question?: AgentQuestionExample;
   questions?: AgentQuestionExample[];
-  roundConfig?: Record<string, string | number | bigint>;
+  roundConfig?: AgentRoundConfigExample;
   roundPreset?: "pure_agent_fast" | "default" | string;
   templateId?: string;
   templateInputs?: JsonValue;

@@ -219,7 +219,7 @@ export function readBrowserSigningExpectedX402Amount(requestBody: JsonRecord | n
 
   const rawAsset = typeof feedbackBonus.asset === "string" ? feedbackBonus.asset.trim().toUpperCase() : "USDC";
   if (rawAsset === "LREP") {
-    throw new Error("LREP Feedback Bonuses require wallet_calls funding mode.");
+    throw new Error("Feedback Bonus funding currently supports USDC x402 authorization only.");
   }
   if (rawAsset !== "USDC") {
     throw new Error("feedbackBonus.asset must be USDC for x402 authorization.");
@@ -322,23 +322,16 @@ function readBrowserSigningFeedbackBonus(params: {
     throw new Error("feedbackBonus.amount must be greater than zero.");
   }
 
-  const feedbackWindowClosesAt = params.payload.bounty.bountyStartBy + params.payload.bounty.feedbackWindowSeconds;
-  const feedbackClosesAt = normalizeUintBigInt(
-    raw.feedbackClosesAt ?? feedbackWindowClosesAt,
-    "feedbackBonus.feedbackClosesAt",
-  );
-  if (feedbackClosesAt <= 0n) {
-    throw new Error("feedbackBonus.feedbackClosesAt must be greater than zero.");
-  }
-  if (feedbackClosesAt > feedbackWindowClosesAt) {
-    throw new Error("feedbackBonus.feedbackClosesAt cannot be after the requested feedback window.");
+  if (raw.feedbackClosesAt !== undefined) {
+    throw new Error(
+      "feedbackBonus.feedbackClosesAt is no longer accepted; Feedback Bonus timing uses the question duration.",
+    );
   }
 
   const awarder = typeof raw.awarder === "string" && raw.awarder.trim() ? raw.awarder.trim() : params.walletAddress;
   return {
     amount,
     awarder: normalizeAddressField(awarder, "feedbackBonus.awarder"),
-    feedbackClosesAt,
   };
 }
 

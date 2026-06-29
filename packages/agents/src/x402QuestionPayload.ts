@@ -17,6 +17,7 @@ import {
   buildQuestionMetadataUri,
   buildQuestionSpecHashes,
   normalizeQuestionMetadataBaseUrl,
+  type AgentQuestionRoundConfig,
   type AgentQuestionSpecInput,
 } from "./questionSpecs";
 import { findAgentResultTemplate } from "./templates";
@@ -50,7 +51,7 @@ const IMAGE_ATTACHMENT_SHA256_FRAGMENT_PATTERN = /^#sha256=0x([a-fA-F0-9]{64})$/
 const RATELOOP_PRODUCTION_ORIGINS = ["https://www.rateloop.ai", "https://rateloop.ai"] as const;
 const X402_BOUNTY_ELIGIBILITY_PROOF_OF_HUMAN = 8;
 const X402_QUESTION_PAYMENT_DOMAIN = keccak256(toBytes("rateloop-x402-question-payment-v3"));
-const X402_QUESTION_ONE_SHOT_PAYMENT_DOMAIN = keccak256(toBytes("rateloop-x402-question-one-shot-payment-v4"));
+const X402_QUESTION_ONE_SHOT_PAYMENT_DOMAIN = keccak256(toBytes("rateloop-x402-question-one-shot-payment-v5"));
 const QUESTION_CONTEXT_DOMAIN = keccak256(toBytes("rateloop-question-context-v5"));
 
 export class X402QuestionInputError extends Error {
@@ -81,8 +82,7 @@ export const X402_PURE_AGENT_FAST_ROUND_CONFIG = {
 } satisfies X402QuestionRoundConfig;
 
 export type SerializedX402QuestionRoundConfig = {
-  epochDuration: string;
-  maxDuration: string;
+  questionDurationSeconds: string;
   minVoters: string;
   maxVoters: string;
 };
@@ -175,7 +175,6 @@ export type X402QuestionPaymentNonceRewardTerms = {
 export type X402QuestionPaymentNonceFeedbackBonus = {
   amount: bigint;
   awarder: Address;
-  feedbackClosesAt: bigint;
 };
 
 export type X402QuestionParserOptions = {
@@ -221,18 +220,27 @@ export function serializeX402QuestionRoundConfig(
   config: X402QuestionRoundConfig,
 ): SerializedX402QuestionRoundConfig {
   return {
-    epochDuration: config.epochDuration.toString(),
-    maxDuration: config.maxDuration.toString(),
+    questionDurationSeconds: config.maxDuration.toString(),
     minVoters: config.minVoters.toString(),
     maxVoters: config.maxVoters.toString(),
+  };
+}
+
+function roundConfigToQuestionMetadataInput(config: X402QuestionRoundConfig): AgentQuestionRoundConfig {
+  return {
+    questionDurationSeconds: config.maxDuration,
+    minVoters: config.minVoters,
+    maxVoters: config.maxVoters,
   };
 }
 
 export function assertSupportedX402BundleBounty(
   bounty: Pick<X402QuestionPayload["bounty"], "bountyStartBy" | "bountyWindowSeconds">,
 ) {
-  if (bounty.bountyStartBy <= 0n) {
-    throw new X402QuestionInputError("bounty.bountyStartBy must be greater than zero for bundle submissions.");
+  if (bounty.bountyStartBy !== 0n) {
+    throw new X402QuestionInputError(
+      "bounty.bountyStartBy must be 0 for creation-anchored bundle submissions.",
+    );
   }
   if (bounty.bountyWindowSeconds <= 0n) {
     throw new X402QuestionInputError("bounty.bountyWindowSeconds must be greater than zero for bundle submissions.");
@@ -810,18 +818,9 @@ function isSupportedBountyEligibility(value: number): boolean {
   return value === 0 || value === X402_BOUNTY_ELIGIBILITY_PROOF_OF_HUMAN;
 }
 
-function parseRequiredPositiveBountyInteger(
-  value: unknown,
-  fieldName: "bounty.bountyStartBy" | "bounty.bountyWindowSeconds",
-): bigint {
-  if (value === undefined || value === null || String(value).trim() === "") {
-    throw new X402QuestionInputError(`${fieldName} is required for bundle submissions.`);
-  }
-  const parsed = parseNonNegativeInteger(value, fieldName);
-  if (parsed <= 0n) {
-    throw new X402QuestionInputError(`${fieldName} must be greater than zero for bundle submissions.`);
-  }
-  return parsed;
+function parseOptionalNonNegativeBountyInteger(value: unknown, fieldName: string, fallback: bigint): bigint {
+  if (value === undefined || value === null || String(value).trim() === "") return fallback;
+  return parseNonNegativeInteger(value, fieldName);
 }
 
 function normalizeBounty(value: unknown): X402QuestionPayload["bounty"] {
@@ -839,19 +838,30 @@ function normalizeBounty(value: unknown): X402QuestionPayload["bounty"] {
     value.requiredVoters ?? X402_MIN_REWARD_POOL_REQUIRED_VOTERS,
     "bounty.requiredVoters",
   );
-  const requiredSettledRounds = parseNonNegativeInteger(
-    value.requiredSettledRounds ?? X402_MIN_REWARD_POOL_SETTLED_ROUNDS,
-    "bounty.requiredSettledRounds",
-  );
-  const bountyStartBy = parseRequiredPositiveBountyInteger(value.bountyStartBy, "bounty.bountyStartBy");
-  const bountyWindowSeconds = parseRequiredPositiveBountyInteger(
-    value.bountyWindowSeconds,
-    "bounty.bountyWindowSeconds",
-  );
-  const feedbackWindowSeconds = parseNonNegativeInteger(
-    value.feedbackWindowSeconds ?? bountyWindowSeconds,
-    "bounty.feedbackWindowSeconds",
-  );
+  if (value.requiredSettledRounds !== undefined) {
+    throw new X402QuestionInputError(
+      "bounty.requiredSettledRounds is no longer accepted; reward eligibility uses one creation-anchored round.",
+    );
+  }
+  if (value.bountyStartBy !== undefined) {
+    throw new X402QuestionInputError(
+      "bounty.bountyStartBy is no longer accepted; bounty timing starts when the question is created.",
+    );
+  }
+  if (value.bountyWindowSeconds !== undefined) {
+    throw new X402QuestionInputError(
+      "bounty.bountyWindowSeconds is no longer accepted; use question.roundConfig.questionDurationSeconds.",
+    );
+  }
+  if (value.feedbackWindowSeconds !== undefined) {
+    throw new X402QuestionInputError(
+      "bounty.feedbackWindowSeconds is no longer accepted; use question.roundConfig.questionDurationSeconds.",
+    );
+  }
+  const requiredSettledRounds = X402_MIN_REWARD_POOL_SETTLED_ROUNDS;
+  const bountyStartBy = 0n;
+  const bountyWindowSeconds = 0n;
+  const feedbackWindowSeconds = 0n;
   const bountyEligibility = Number(parseNonNegativeInteger(value.bountyEligibility ?? 0n, "bounty.bountyEligibility"));
 
   if (requiredVoters < X402_MIN_REWARD_POOL_REQUIRED_VOTERS) {
@@ -864,19 +874,11 @@ function normalizeBounty(value: unknown): X402QuestionPayload["bounty"] {
       `bounty.requiredVoters must be at least ${requiredVoterFloor} for this bounty amount.`,
     );
   }
-  if (requiredSettledRounds < X402_MIN_REWARD_POOL_SETTLED_ROUNDS) {
-    throw new X402QuestionInputError(
-      `bounty.requiredSettledRounds must be at least ${X402_MIN_REWARD_POOL_SETTLED_ROUNDS}.`,
-    );
-  }
   if (amount < X402_DEFAULT_SUBMISSION_BOUNTY) {
     throw new X402QuestionInputError("bounty.amount must be at least 1000000 atomic units.");
   }
   if (amount < requiredVoters * requiredSettledRounds) {
     throw new X402QuestionInputError("bounty.amount is too small for the selected voter requirements.");
-  }
-  if (feedbackWindowSeconds > bountyWindowSeconds) {
-    throw new X402QuestionInputError("bounty.feedbackWindowSeconds cannot exceed bounty.bountyWindowSeconds.");
   }
   if (!isSupportedBountyEligibility(bountyEligibility)) {
     throw new X402QuestionInputError(
@@ -895,11 +897,42 @@ function normalizeBounty(value: unknown): X402QuestionPayload["bounty"] {
   };
 }
 
+function normalizeBountyForQuestionDuration(
+  bounty: X402QuestionPayload["bounty"],
+  questionDuration: bigint,
+): X402QuestionPayload["bounty"] {
+  if (bounty.requiredSettledRounds !== 1n) {
+    throw new X402QuestionInputError(
+      "bounty.requiredSettledRounds must be 1; reward eligibility now uses the creation-anchored question round.",
+    );
+  }
+  if (bounty.bountyStartBy !== 0n) {
+    throw new X402QuestionInputError("bounty.bountyStartBy must be 0; bounty timing now starts at question creation.");
+  }
+  if (bounty.bountyWindowSeconds !== 0n && bounty.bountyWindowSeconds !== questionDuration) {
+    throw new X402QuestionInputError(
+      "bounty.bountyWindowSeconds must match question.roundConfig.questionDurationSeconds.",
+    );
+  }
+  if (bounty.feedbackWindowSeconds !== 0n && bounty.feedbackWindowSeconds !== questionDuration) {
+    throw new X402QuestionInputError(
+      "bounty.feedbackWindowSeconds must match question.roundConfig.questionDurationSeconds.",
+    );
+  }
+  return {
+    ...bounty,
+    bountyStartBy: 0n,
+    bountyWindowSeconds: questionDuration,
+    feedbackWindowSeconds: questionDuration,
+  };
+}
+
 function defaultRoundConfig(requiredVoters: bigint): X402QuestionRoundConfig {
   const defaultMaxVoters = BigInt(DEFAULT_ROUND_CONFIG.maxVoters);
+  const questionDuration = BigInt(DEFAULT_ROUND_CONFIG.epochDurationSeconds);
   return {
-    epochDuration: BigInt(DEFAULT_ROUND_CONFIG.epochDurationSeconds),
-    maxDuration: BigInt(DEFAULT_ROUND_CONFIG.maxDurationSeconds),
+    epochDuration: questionDuration,
+    maxDuration: questionDuration,
     minVoters: requiredVoters,
     maxVoters: defaultMaxVoters < requiredVoters ? requiredVoters : defaultMaxVoters,
   };
@@ -959,35 +992,45 @@ function normalizeRoundConfig(
     throw new X402QuestionInputError("question.roundConfig must be an object.");
   }
 
-  const epochDuration = parseNonNegativeInteger(
-    value.epochDuration ?? value.blindPhaseSeconds ?? value.blindSeconds,
-    "question.roundConfig.epochDuration",
-  );
-  const maxDuration = parseNonNegativeInteger(
-    value.maxDuration ?? value.maxDurationSeconds ?? value.deadlineSeconds,
-    "question.roundConfig.maxDuration",
-  );
-  const minVoters = parseNonNegativeInteger(value.minVoters, "question.roundConfig.minVoters");
-  const maxVoters = parseNonNegativeInteger(value.maxVoters, "question.roundConfig.maxVoters");
-
-  if (epochDuration <= 0n) {
-    throw new X402QuestionInputError("question.roundConfig.epochDuration must be greater than zero.");
+  const explicitQuestionDuration =
+    value.questionDurationSeconds ?? value.questionDuration ?? value.durationSeconds ?? value.duration;
+  const legacyEpochDuration = value.epochDuration ?? value.blindPhaseSeconds ?? value.blindSeconds;
+  const legacyMaxDuration = value.maxDuration ?? value.maxDurationSeconds ?? value.deadlineSeconds;
+  const hasExplicitQuestionDuration = explicitQuestionDuration !== undefined && explicitQuestionDuration !== null;
+  const hasLegacyEpochDuration = legacyEpochDuration !== undefined && legacyEpochDuration !== null;
+  const hasLegacyMaxDuration = legacyMaxDuration !== undefined && legacyMaxDuration !== null;
+  if (hasLegacyEpochDuration || hasLegacyMaxDuration) {
+    throw new X402QuestionInputError(
+      "question.roundConfig.epochDuration and question.roundConfig.maxDuration are no longer accepted; use questionDurationSeconds.",
+    );
   }
-  if (maxDuration <= 0n) {
-    throw new X402QuestionInputError("question.roundConfig.maxDuration must be greater than zero.");
+  const questionDuration = hasExplicitQuestionDuration
+    ? parseNonNegativeInteger(explicitQuestionDuration, "question.roundConfig.questionDurationSeconds")
+    : BigInt(DEFAULT_ROUND_CONFIG.epochDurationSeconds);
+  const minVoters = parseNonNegativeInteger(value.minVoters ?? requiredVoters, "question.roundConfig.minVoters");
+  const maxVoters = parseNonNegativeInteger(
+    value.maxVoters ?? BigInt(DEFAULT_ROUND_CONFIG.maxVoters),
+    "question.roundConfig.maxVoters",
+  );
+
+  if (questionDuration <= 0n) {
+    throw new X402QuestionInputError("question.roundConfig.questionDurationSeconds must be greater than zero.");
   }
   if (minVoters <= 0n || maxVoters <= 0n || maxVoters < minVoters) {
     throw new X402QuestionInputError("question.roundConfig voter values are invalid.");
   }
-  assertIntegerUpperBound(epochDuration, "question.roundConfig.epochDuration", X402_ROUND_CONFIG_UINT32_MAX);
-  assertIntegerUpperBound(maxDuration, "question.roundConfig.maxDuration", X402_ROUND_CONFIG_UINT32_MAX);
+  assertIntegerUpperBound(
+    questionDuration,
+    "question.roundConfig.questionDurationSeconds",
+    X402_ROUND_CONFIG_UINT32_MAX,
+  );
   assertIntegerUpperBound(minVoters, "question.roundConfig.minVoters", X402_ROUND_CONFIG_UINT16_MAX);
   assertIntegerUpperBound(maxVoters, "question.roundConfig.maxVoters", X402_ROUND_CONFIG_UINT16_MAX);
   if (minVoters !== requiredVoters) {
     throw new X402QuestionInputError("question.roundConfig.minVoters must match bounty.requiredVoters.");
   }
 
-  return { epochDuration, maxDuration, minVoters, maxVoters };
+  return { epochDuration: questionDuration, maxDuration: questionDuration, minVoters, maxVoters };
 }
 
 type NormalizedQuestionInput = Omit<X402QuestionItemPayload, "questionMetadataHash" | "resultSpecHash"> & {
@@ -1133,12 +1176,13 @@ export function parseX402QuestionRequest(
   }
 
   const firstQuestion = isObject(rawQuestions[0]) ? rawQuestions[0] : {};
-  const bounty = normalizeBounty(value.bounty);
+  const rawBounty = normalizeBounty(value.bounty);
   const roundConfig = normalizeRoundConfig(
     value.roundConfig ?? firstQuestion.roundConfig,
-    bounty.requiredVoters,
+    rawBounty.requiredVoters,
     value.roundPreset ?? firstQuestion.roundPreset,
   );
+  const bounty = normalizeBountyForQuestionDuration(rawBounty, roundConfig.maxDuration);
   const topLevelTemplateInputs = normalizeTemplateInputs(value.templateInputs, "templateInputs");
   const topLevelTemplateVersion =
     value.templateVersion === undefined || value.templateVersion === null
@@ -1160,14 +1204,13 @@ export function parseX402QuestionRequest(
           amount: bounty.amount,
           asset: bounty.asset,
           bountyEligibility: bounty.bountyEligibility,
-          requiredSettledRounds: bounty.requiredSettledRounds,
           requiredVoters: bounty.requiredVoters,
         },
         categoryId: normalizedQuestion.categoryId,
         confidentiality: normalizedQuestion.confidentiality,
         contextUrl: normalizedQuestion.contextUrl,
         imageUrls: normalizedQuestion.imageUrls,
-        roundConfig,
+        roundConfig: roundConfigToQuestionMetadataInput(roundConfig),
         study: {
           bundleIndex: index,
         },
@@ -1233,11 +1276,7 @@ export function toCanonicalQuestionPayload(
     bounty: {
       amount: payload.bounty.amount.toString(),
       asset: payload.bounty.asset,
-      requiredSettledRounds: payload.bounty.requiredSettledRounds.toString(),
       requiredVoters: payload.bounty.requiredVoters.toString(),
-      bountyStartBy: payload.bounty.bountyStartBy.toString(),
-      bountyWindowSeconds: payload.bounty.bountyWindowSeconds.toString(),
-      feedbackWindowSeconds: payload.bounty.feedbackWindowSeconds.toString(),
       bountyEligibility: String(payload.bounty.bountyEligibility),
     },
     chainId: payload.chainId,
@@ -1370,8 +1409,8 @@ function buildRoundConfigHash(roundConfig: X402QuestionRoundConfig): Hex {
 function buildFeedbackBonusTermsHash(feedbackBonus: X402QuestionPaymentNonceFeedbackBonus): Hex {
   return keccak256(
     encodeAbiParameters(
-      [{ type: "uint256" }, { type: "uint256" }, { type: "address" }],
-      [feedbackBonus.amount, feedbackBonus.feedbackClosesAt, feedbackBonus.awarder],
+      [{ type: "uint256" }, { type: "address" }],
+      [feedbackBonus.amount, feedbackBonus.awarder],
     ),
   );
 }

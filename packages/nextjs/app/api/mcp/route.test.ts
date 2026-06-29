@@ -471,9 +471,6 @@ test("public MCP ask returns a tokenless wallet-call plan", async () => {
           bounty: {
             amount: "1000000",
             asset: "USDC",
-            bountyStartBy: "1762000000",
-            bountyWindowSeconds: "1200",
-            feedbackWindowSeconds: "1200",
           },
           chainId: 480,
           clientRequestId: "public-ask",
@@ -558,9 +555,6 @@ test("invalid media returns a stable MCP tool error code", async () => {
           bounty: {
             amount: "1000000",
             asset: "USDC",
-            bountyStartBy: "1762000000",
-            bountyWindowSeconds: "1200",
-            feedbackWindowSeconds: "1200",
           },
           chainId: 480,
           clientRequestId: "invalid-media-check",
@@ -628,9 +622,6 @@ test("category disallowed returns a stable MCP tool error code", async () => {
           bounty: {
             amount: "1000000",
             asset: "USDC",
-            bountyStartBy: "1762000000",
-            bountyWindowSeconds: "1200",
-            feedbackWindowSeconds: "1200",
           },
           chainId: 480,
           clientRequestId: "category-check",

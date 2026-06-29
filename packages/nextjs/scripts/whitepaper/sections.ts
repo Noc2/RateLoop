@@ -145,7 +145,7 @@ export const SECTIONS: Section[] = [
             type: "ordered",
             items: [
               "Ask: submit one question-first ask with a public context URL, image context, YouTube video context, or RateLoop-hosted gated context.",
-              "Fund: attach a non-refundable bounty in LREP or USDC on a configured supported network; agent asks spend from user-authorized wallets, scoped agent wallets, EIP-3009 USDC authorization, or ordered wallet calls. Native EIP-3009 asks submit bounty-only payments in one transaction and can one-shot bounty plus USDC Feedback Bonus funding for single-question asks.",
+              "Fund: attach a non-refundable bounty in LREP or USDC, and optionally a Feedback Bonus, during question creation on a configured supported network; agent asks spend from user-authorized wallets, scoped agent wallets, EIP-3009 USDC authorization, or ordered wallet calls. Native EIP-3009 asks submit bounty-only payments in one transaction and can one-shot bounty plus USDC Feedback Bonus funding for single-question asks.",
               "Vote: raters submit an up/down signal, predict the crowd's up-vote share, can add LREP stake, and may add public written feedback.",
               "Settle: the round resolves once the configured reveal and participation conditions are met.",
               "Reuse: any later agent can inspect the same settled result instead of paying to rediscover the same judgment.",
@@ -158,7 +158,7 @@ export const SECTIONS: Section[] = [
         blocks: [
           {
             type: "paragraph",
-            text: "Submission starts from the question rather than from a passive content object. Every ask requires inspectable evidence through a public source URL, image context, YouTube video context, or RateLoop-hosted gated context, and chooses blind phase, maximum duration, settlement raters, and rater cap inside governance bounds. Agents can submit through public MCP tools, direct JSON routes, browser signing intents, a local signer CLI, or optional managed policies, but the resulting protocol record is the same.",
+            text: "Submission starts from the question rather than from a passive content object. Every ask requires inspectable evidence through a public source URL, image context, YouTube video context, or RateLoop-hosted gated context, and chooses one question duration, settlement raters, and rater cap inside governance bounds. The fresh redeploy uses that same duration for the blind window, bounty eligibility, and Feedback Bonus close. Agents can submit through public MCP tools, direct JSON routes, browser signing intents, a local signer CLI, or optional managed policies, but the resulting protocol record is the same.",
           },
         ],
       },
@@ -174,7 +174,7 @@ export const SECTIONS: Section[] = [
                 [
                   "Blind rating vote",
                   "Open raters commit encrypted up/down signals and predicted-up percentages with optional 0-10 LREP stake",
-                  `First ${protocolDocFacts.blindPhaseDurationLabel} epoch by default`,
+                  `${protocolDocFacts.questionDurationLabel} question duration by default`,
                 ],
                 [
                   "Reveal",
@@ -259,7 +259,7 @@ export const SECTIONS: Section[] = [
               "Public agent access works without a RateLoop account, bearer token, or saved policy when the agent supplies a funded `walletAddress` and the user approves the spend path.",
               "Browser signing creates an `/agent/sign/{intentId}` handoff for MetaMask, Ledger, and other injected-wallet approval flows.",
               "Local signer tooling lets a Codex-like local agent use an encrypted keystore, sign EIP-3009 USDC authorization when required, execute returned calls, and confirm hashes; USDC Feedback Bonuses on native asks are funded by the same one-shot submit call.",
-              'Low-stakes pure-agent asks can use `roundPreset: "pure_agent_fast"` for a 60 second blind phase and small quorum, while sensitive or high-value asks should keep longer phases and larger voter floors.',
+              'Low-stakes pure-agent asks can use `roundPreset: "pure_agent_fast"` for a 60 second question duration and small quorum, while sensitive or high-value asks should keep longer durations and larger voter floors.',
               "Wallet settings cover ETH for gas, while the agent setup screen can help fund USDC for bounties.",
             ],
           },

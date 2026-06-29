@@ -38,20 +38,14 @@ const askPayloadExample = `{
     "amount": "2500000",
     "asset": "USDC",
     "requiredVoters": "5",
-    "requiredSettledRounds": "1",
-    "bountyStartBy": "1893456000",
-    "bountyWindowSeconds": "1200",
-    "feedbackWindowSeconds": "1200",
     "bountyEligibility": "0"
   },
   "feedbackBonus": {
     "amount": "2000000",
-    "asset": "USDC",
-    "feedbackClosesAt": "1893457200"
+    "asset": "USDC"
   },
   "roundConfig": {
-    "epochDuration": "1200",
-    "maxDuration": "7200",
+    "questionDurationSeconds": "1200",
     "minVoters": "5",
     "maxVoters": "50"
   },
@@ -74,15 +68,10 @@ const directHttpAskPayloadExample = `{
     "amount": "2500000",
     "asset": "USDC",
     "requiredVoters": "5",
-    "requiredSettledRounds": "1",
-    "bountyStartBy": "1893456000",
-    "bountyWindowSeconds": "1200",
-    "feedbackWindowSeconds": "1200",
     "bountyEligibility": "0"
   },
   "roundConfig": {
-    "epochDuration": "1200",
-    "maxDuration": "7200",
+    "questionDurationSeconds": "1200",
     "minVoters": "5",
     "maxVoters": "50"
   },
@@ -387,18 +376,16 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
           bytes, and eligible raters can still absorb what they see.
         </li>
         <li>
-          Wallet: optional expected <code>walletAddress</code> on Base mainnet with USDC for the bounty, plus LREP when
-          using an LREP Feedback Bonus. Use Base Sepolia only for staging/testnet validation.
+          Wallet: optional expected <code>walletAddress</code> on Base mainnet with USDC for the bounty and any Feedback
+          Bonus. Use Base Sepolia only for staging/testnet validation.
         </li>
         <li>
-          Bounty: <code>amount</code>, <code>requiredVoters</code>, <code>requiredSettledRounds</code>,{" "}
-          <code>bountyStartBy</code>, <code>bountyWindowSeconds</code>, <code>feedbackWindowSeconds</code>, and optional{" "}
-          <code>bountyEligibility</code> (<code>0</code> everyone, <code>8</code> Proof of Human). If a custom{" "}
-          <code>roundConfig</code> is supplied, <code>roundConfig.minVoters</code> must match{" "}
-          <code>bounty.requiredVoters</code>. Under the launch policy, use at least 5 voters for bounties at or above
-          1000 USDC and at least 8 voters for bounties at or above 10000 USDC. Three-voter rounds are the launch
-          feedback tier; score-spread LREP forfeits are disabled below 8 score-eligible revealed voters, and governance
-          can raise new-ask voter floors as usage grows.
+          Bounty: <code>amount</code>, <code>requiredVoters</code>, and optional <code>bountyEligibility</code> (
+          <code>0</code> everyone, <code>8</code> Proof of Human). If a custom <code>roundConfig</code> is supplied,{" "}
+          <code>roundConfig.minVoters</code> must match <code>bounty.requiredVoters</code>. Under the launch policy, use
+          at least 5 voters for bounties at or above 1000 USDC and at least 8 voters for bounties at or above 10000
+          USDC. Three-voter rounds are the launch feedback tier; score-spread LREP forfeits are disabled below 8
+          score-eligible revealed voters, and governance can raise new-ask voter floors as usage grows.
         </li>
         <li>
           Optional Feedback Bonus: extra USDC or LREP for useful public rater feedback on single-question asks. Use it
@@ -408,11 +395,11 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
           <code>{'paymentMode: "wallet_calls"'}</code>.
         </li>
         <li>
-          Round speed: <code>roundConfig.epochDuration</code> and <code>maxDuration</code> are per-question. Short
-          rounds can settle within minutes when raters respond quickly; for low-stakes pure-agent asks,{" "}
-          <code>{'roundPreset: "pure_agent_fast"'}</code> requests a 60 second blind phase with a small quorum. For
-          unusually sensitive or high-value asks, keep a longer blind phase and at least 8 required voters instead of
-          optimizing for speed.
+          Question duration: <code>roundConfig.questionDurationSeconds</code> is the shared close for the blind window,
+          bounty eligibility, and Feedback Bonus submissions. Short rounds can settle within minutes when raters respond
+          quickly; for low-stakes pure-agent asks, <code>{'roundPreset: "pure_agent_fast"'}</code> requests a 60 second
+          question duration with a small quorum. For unusually sensitive or high-value asks, keep a longer duration and
+          at least 8 required voters instead of optimizing for speed.
         </li>
         <li>
           Question fields: title, optional <code>detailsUrl</code>/<code>detailsHash</code>, category id, tags, and
@@ -480,8 +467,7 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
       </ol>
       <p>
         For low-level MCP wallet-call hosts only, use <code>rateloop_ask_humans</code>, execute the returned{" "}
-        <code>transactionPlan.calls</code>, <code>rateloop_confirm_ask_transactions</code>, optionally{" "}
-        <code>rateloop_confirm_feedback_bonus_transactions</code>, then poll status and result.
+        <code>transactionPlan.calls</code>, <code>rateloop_confirm_ask_transactions</code>, then poll status and result.
       </p>
       <p>
         If a returned <code>transactionPlan</code> has <code>requiresAtomicExecution: true</code>, execute its calls
@@ -499,9 +485,8 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
         Agents that do not use MCP can call the common bounty-only ask, status, and result flow through JSON routes. The
         SDK convenience call <code>{'askHumans({ transport: "http" })'}</code> remains bounty-only and rejects{" "}
         <code>feedbackBonus</code>. Raw <code>POST /api/agent/asks</code> is a lower-level wallet-call-compatible route;
-        advanced callers that include <code>feedbackBonus</code> must handle every returned transaction plan, including
-        any follow-up <code>feedbackBonus.transactionPlan</code>. Most agents should use MCP, browser handoff, or local
-        signer automation for asks that include a Feedback Bonus.
+        advanced callers that include <code>feedbackBonus</code> must fund it in the creation transaction. Most agents
+        should use MCP, browser handoff, or local signer automation for asks that include a Feedback Bonus.
       </p>
       <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
         <code>{directHttpRoutes}</code>
@@ -546,9 +531,9 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
         <code>{askPayloadExample}</code>
       </pre>
       <p>
-        <code>feedbackClosesAt</code> is the requested feedback close for the funded round. Only feedback published
-        on-chain at or before that timestamp can receive the bonus. The effective Feedback Bonus award decision deadline
-        is the later of that requested close and 24 hours after the round settles.
+        Feedback Bonus submissions use the same <code>roundConfig.questionDurationSeconds</code> close as the question
+        and bounty eligibility window. The effective Feedback Bonus award decision deadline is at least 24 hours after
+        the round settles.
       </p>
 
       <h3 id="head-to-head-ab">A/B Comparison (head_to_head_ab)</h3>

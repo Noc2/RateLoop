@@ -1,5 +1,10 @@
 # RateLoop Use Cases — June 2026 (revised 2026-06-11)
 
+> Status note: this is a pre-single-duration redeploy research snapshot. Timing
+> and config examples that mention separate epochs, maxDuration, or one-minute
+> floors are historical and should be re-verified against the fresh deployment
+> before being used as current product guidance.
+
 A multi-agent research pass on concrete use cases for RateLoop and their product-market fit.
 This is the second revision: the original pass (2026-06-07) was governed by three constraints —
 public-only context, no enforced targeting, ~40-minute-plus latency — that have since materially

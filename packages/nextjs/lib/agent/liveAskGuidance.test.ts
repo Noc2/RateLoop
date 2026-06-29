@@ -21,7 +21,7 @@ function content(overrides: Partial<PonderContentItem> = {}): PonderContentItem 
       epochDuration: 1200,
       estimatedSettlementTime: "1700002400",
       lowSince: undefined,
-      maxDuration: 7200,
+      maxDuration: 1200,
       maxVoters: 50,
       minVoters: 3,
       ratingBps: 5000,

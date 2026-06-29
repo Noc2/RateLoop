@@ -65,10 +65,6 @@ export interface RateLoopAgentBounty {
   amount: string | number | bigint;
   /** Must match roundConfig.minVoters when a custom roundConfig is supplied. */
   requiredVoters?: string | number | bigint;
-  requiredSettledRounds?: string | number | bigint;
-  bountyStartBy: string | number | bigint;
-  bountyWindowSeconds: string | number | bigint;
-  feedbackWindowSeconds?: string | number | bigint;
   bountyEligibility?: string | number;
   [key: string]: unknown;
 }
@@ -77,18 +73,12 @@ export interface RateLoopAgentFeedbackBonus {
   amount: string | number | bigint;
   asset?: "LREP" | "USDC" | "lrep" | "usdc" | string;
   awarder?: `0x${string}` | string;
-  /** Requested feedback close. Awards remain payable until at least 24h after settlement. */
-  feedbackClosesAt?: string | number | bigint;
   [key: string]: unknown;
 }
 
 export interface RateLoopAgentRoundConfig {
-  epochDuration?: string | number | bigint;
-  blindPhaseSeconds?: string | number | bigint;
-  blindSeconds?: string | number | bigint;
-  maxDuration?: string | number | bigint;
-  maxDurationSeconds?: string | number | bigint;
-  deadlineSeconds?: string | number | bigint;
+  /** Shared duration for the blind window, bounty eligibility, and Feedback Bonus close. */
+  questionDurationSeconds?: string | number | bigint;
   /** Must match bounty.requiredVoters. */
   minVoters?: string | number | bigint;
   maxVoters?: string | number | bigint;
@@ -205,9 +195,6 @@ export interface ConfirmAskTransactionsRequest {
   transactionHashes: (`0x${string}` | string)[];
 }
 
-export interface ConfirmFeedbackBonusTransactionsRequest
-  extends ConfirmAskTransactionsRequest {}
-
 export interface RatingContentLookup {
   chainId?: number;
   contentId: string | number | bigint;
@@ -318,10 +305,7 @@ export interface RateLoopAgentWalletTransactionCall {
   phase?:
     | "approve_usdc"
     | "approve_lrep"
-    | "approve_feedback_bonus_lrep"
-    | "approve_feedback_bonus_usdc"
     | "commit_rating"
-    | "create_feedback_bonus_pool"
     | "open_round"
     | "record_advisory_vote"
     | "reserve_submission"
@@ -352,19 +336,15 @@ export interface RateLoopAgentFeedbackBonusState {
   amount?: string;
   asset?: string;
   awarder?: string;
-  confirmTool?: string;
-  /** Requested feedback close; the effective award deadline is at least 24h after settlement. */
+  /** Escrow feedback close once the creation-time bonus is funded. */
   feedbackClosesAt?: string;
   awardDeadline?: string;
   poolId?: string | null;
   status?:
     | "pending_question_confirmation"
-    | "awaiting_wallet_signature"
     | "funded"
     | "failed"
     | string;
-  transactionHashes?: string[];
-  transactionPlan?: RateLoopAgentWalletTransactionPlan;
   [key: string]: unknown;
 }
 
@@ -747,9 +727,6 @@ export interface RateLoopAgentClient {
   confirmAskTransactions(
     params: ConfirmAskTransactionsRequest,
   ): Promise<QuestionStatusResponse>;
-  confirmFeedbackBonusTransactions(
-    params: ConfirmFeedbackBonusTransactionsRequest,
-  ): Promise<QuestionStatusResponse>;
   getRatingContext(
     params: GetRatingContextRequest,
   ): Promise<RatingContextResponse>;
@@ -877,8 +854,6 @@ export function createRateLoopAgentClient(
     prepareSigningIntent: (params) => prepareSigningIntent(params, config),
     completeSigningIntent: (params) => completeSigningIntent(params, config),
     confirmAskTransactions: (params) => confirmAskTransactions(params, config),
-    confirmFeedbackBonusTransactions: (params) =>
-      confirmFeedbackBonusTransactions(params, config),
     getRatingContext: (params) => getRatingContext(params, config),
     acceptConfidentialityTerms: (params) =>
       acceptConfidentialityTerms(params, config),
@@ -1163,25 +1138,6 @@ export async function confirmAskTransactions(
   }
 
   throw new RateLoopSdkError(AGENT_AUTH_REQUIRED_MESSAGE);
-}
-
-export async function confirmFeedbackBonusTransactions(
-  params: ConfirmFeedbackBonusTransactionsRequest,
-  options: RateLoopAgentClientOptions = {},
-): Promise<QuestionStatusResponse> {
-  const config = normalizeAgentConfig(options);
-  const requestConfig = confirmRequestConfig(config);
-  if (config.mcpApiUrl) {
-    return callMcpTool<QuestionStatusResponse>(
-      requestConfig,
-      "rateloop_confirm_feedback_bonus_transactions",
-      { ...params },
-    );
-  }
-
-  throw new RateLoopSdkError(
-    "mcpApiUrl is required to confirm feedback bonus transactions",
-  );
 }
 
 export async function getRatingContext(
@@ -1982,12 +1938,20 @@ function assertSafeAskHandoffIntegerFields(params: CreateAskHandoffRequest) {
 function assertSafeBountyIntegerFields(value: unknown, path: string) {
   if (!isJsonRecord(value)) return;
   for (const field of [
-    "amount",
-    "requiredVoters",
     "requiredSettledRounds",
     "bountyStartBy",
     "bountyWindowSeconds",
     "feedbackWindowSeconds",
+  ]) {
+    if (value[field] !== undefined) {
+      throw new RateLoopSdkError(
+        `${path}.${field} is no longer accepted; use roundConfig.questionDurationSeconds for the shared question duration.`,
+      );
+    }
+  }
+  for (const field of [
+    "amount",
+    "requiredVoters",
     "bountyEligibility",
   ]) {
     assertSafeNonNegativeNumber(value[field], `${path}.${field}`);
@@ -2002,10 +1966,6 @@ function assertSafeConfidentialityIntegerFields(value: unknown, path: string) {
 function assertSafeFeedbackBonusIntegerFields(value: unknown, path: string) {
   if (!isJsonRecord(value)) return;
   assertSafeNonNegativeNumber(value.amount, `${path}.amount`);
-  assertSafeNonNegativeNumber(
-    value.feedbackClosesAt,
-    `${path}.feedbackClosesAt`,
-  );
 }
 
 function assertSafePaymentAuthorizationIntegerFields(
@@ -2038,6 +1998,18 @@ function assertSafeRoundConfigIntegerFields(value: unknown, path: string) {
     "maxDuration",
     "maxDurationSeconds",
     "deadlineSeconds",
+  ]) {
+    if (value[field] !== undefined) {
+      throw new RateLoopSdkError(
+        `${path}.${field} is no longer accepted; use roundConfig.questionDurationSeconds for the shared question duration.`,
+      );
+    }
+  }
+  for (const field of [
+    "questionDurationSeconds",
+    "questionDuration",
+    "durationSeconds",
+    "duration",
     "minVoters",
     "maxVoters",
   ]) {

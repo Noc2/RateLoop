@@ -124,10 +124,10 @@ Backup: if the agent controls a funded encrypted wallet, use the local signer CL
 
 - Public context: use `question.contextUrl` for a public page, `question.videoUrl` for YouTube, or pass generated/local/user image bytes as `generatedImages` to the browser handoff. Longer written details belong in `question.detailsUrl` plus `question.detailsHash` when the agent hosts them, or in the browser Ask form Description field when the user reviews the ask. Do not ask the user to host generated images elsewhere.
 - Gated context: set `question.confidentiality.visibility` to `gated`, use only RateLoop-hosted images or details, omit `question.contextUrl` and `question.videoUrl`, choose `disclosurePolicy: "private_forever"` or `"after_settlement"`, and keep any confidentiality bond in atomic LREP or USDC units. Use `0` for no bond; nonzero bonds must be at least `1000000` atomic units. Omitted disclosure policy defaults to `private_forever`. `after_settlement` discloses hosted context after settlement; `private_forever` keeps submitter-authored hosted context gated and redacted from public result surfaces. Gated context is deterrence and redaction, not cryptographic secrecy: the RateLoop operator can serve/read hosted bytes, and eligible raters can still absorb what they see.
-- Wallet: optional expected `walletAddress` on Base mainnet with USDC for the bounty, plus LREP when using an LREP Feedback Bonus; use Base Sepolia only for staging/testnet validation.
-- Bounty: `amount`, `requiredVoters`, `requiredSettledRounds`, `bountyStartBy`, `bountyWindowSeconds`, `feedbackWindowSeconds`, and optional `bountyEligibility` (`0` everyone, `8` Proof of Human). If a custom `roundConfig` is supplied, `roundConfig.minVoters` must match `bounty.requiredVoters`. Under the launch policy, use at least 5 voters for bounties at or above 1000 USDC and at least 8 voters for bounties at or above 10000 USDC. Three-voter rounds are the launch feedback tier; score-spread LREP forfeits are disabled below 8 score-eligible revealed voters, and governance can raise new-ask voter floors as usage grows.
-- Optional Feedback Bonus: extra USDC or LREP for useful public rater feedback on single-question asks. Use it by default for user testing, product-concept checks, bug reproduction, source-quality review, and go/no-go decisions where the human wants to know why. On Base mainnet, USDC bonuses can be included in native EIP-3009/x402 authorization so bounty and bonus funding land in one submit transaction; LREP bonuses require `paymentMode: "wallet_calls"`. On Base Sepolia, use bounty-only x402 or `paymentMode: "wallet_calls"` for Feedback Bonus staging until strict one-shot readiness passes.
-- Round speed: `roundConfig.epochDuration` and `maxDuration` are per-question. Short rounds can settle within minutes when raters respond quickly; for low-stakes pure-agent asks, `roundPreset: "pure_agent_fast"` requests a 60 second blind phase with a small quorum. For unusually sensitive or high-value asks, keep a longer blind phase and at least 8 required voters instead of optimizing for speed.
+- Wallet: optional expected `walletAddress` on Base mainnet with USDC for the bounty and any Feedback Bonus; use Base Sepolia only for staging/testnet validation.
+- Bounty: `amount`, `requiredVoters`, and optional `bountyEligibility` (`0` everyone, `8` Proof of Human). If a custom `roundConfig` is supplied, `roundConfig.minVoters` must match `bounty.requiredVoters`. Under the launch policy, use at least 5 voters for bounties at or above 1000 USDC and at least 8 voters for bounties at or above 10000 USDC. Three-voter rounds are the launch feedback tier; score-spread LREP forfeits are disabled below 8 score-eligible revealed voters, and governance can raise new-ask voter floors as usage grows.
+- Optional Feedback Bonus: extra USDC for useful public rater feedback on single-question asks. Use it by default for user testing, product-concept checks, bug reproduction, source-quality review, and go/no-go decisions where the human wants to know why. Feedback Bonus funding is included in the same creation-time x402 authorization as the bounty.
+- Round speed: use `roundConfig.questionDurationSeconds` or a preset. The bounty eligibility window, blind response window, and Feedback Bonus feedback window all use that same duration from question creation.
 - Question fields: title, optional `detailsUrl`/`detailsHash`, category id, tags, optional template id, optional `templateInputs`, and optional `targetAudience`. If the question names exactly two alternatives, use `head_to_head_ab` and fill `templateInputs.optionAKey="A"`, `optionALabel`, `optionBKey="B"`, and `optionBLabel` so the browser handoff opens in A/B mode.
 - Audience fields: use `question.templateInputs.audience` for a free-text audience or rubric note that helps interpret the result package. Use `question.targetAudience` only for structured self-reported targeting from `rateloop_list_audience_options`; invalid aliases such as `developer` are rejected with canonical suggestions such as `engineer`. Target criteria are hidden from the normal rating UI but are part of the public question metadata preimage; do not put secrets there.
 
@@ -137,7 +137,7 @@ Do not move image bytes through visible terminal output. If base64 output is too
 
 ### Tier-0 Blinding
 
-Treat the default blind phase as suitable for ordinary feedback. For Tier-0, unusually sensitive, or high-value asks, prefer a longer `roundConfig.epochDuration`, a matching `maxDuration`, and at least 8 required voters instead of shortening the blind window for speed. The hosted MCP server must never receive plaintext vote direction, predicted crowd share, or salt; use the SDK vote helper to build encrypted commits locally and send only encrypted commit material.
+Treat the default question duration as suitable for ordinary feedback. For Tier-0, unusually sensitive, or high-value asks, prefer a longer `roundConfig.questionDurationSeconds` and at least 8 required voters instead of shortening the blind response window for speed. The hosted MCP server must never receive plaintext vote direction, predicted crowd share, or salt; use the SDK vote helper to build encrypted commits locally and send only encrypted commit material.
 
 If the category, template, or structured audience vocabulary is unknown, call `rateloop_list_categories`, `rateloop_list_result_templates`, or `rateloop_list_audience_options`. For an A/B ask, verify the draft payload uses `head_to_head_ab` before creating the handoff link. Otherwise skip reference-tool calls. More examples are in `packages/agents/examples/questions`.
 
@@ -176,9 +176,8 @@ For low-level MCP wallet-call hosts only, use raw ask tools in order:
 2. `rateloop_ask_humans`
 3. execute the returned `transactionPlan.calls`
 4. `rateloop_confirm_ask_transactions`
-5. optionally `rateloop_confirm_feedback_bonus_transactions`
-6. `rateloop_get_question_status`
-7. `rateloop_get_result`
+5. `rateloop_get_question_status`
+6. `rateloop_get_result`
 
 If a returned `transactionPlan` has `requiresAtomicExecution: true`, execute its calls through an atomic wallet batch
 or stop with a clear unsupported-wallet error. Do not split that plan into separate transactions. Plans without that flag
@@ -186,9 +185,9 @@ can still be executed in the returned order.
 
 Direct JSON alternative for the common bounty-only ask, status, and result flow. The SDK convenience call
 `askHumans({ transport: "http" })` remains bounty-only and rejects `feedbackBonus`. Raw `POST /api/agent/asks` is a
-lower-level wallet-call-compatible route; advanced callers that include `feedbackBonus` must handle every returned
-transaction plan, including any follow-up `feedbackBonus.transactionPlan`. Most agents should use MCP, browser handoff,
-or local signer automation for asks that include a Feedback Bonus.
+lower-level wallet-call-compatible route; advanced callers that include `feedbackBonus` must fund it in the creation
+transaction. Most agents should use MCP, browser handoff, or local signer automation for asks that include a Feedback
+Bonus.
 
 ```text
 GET  https://www.rateloop.ai/api/agent/templates
@@ -212,15 +211,10 @@ Direct ask JSON payload without Feedback Bonus:
     "amount": "2500000",
     "asset": "USDC",
     "requiredVoters": "5",
-    "requiredSettledRounds": "1",
-    "bountyStartBy": "1893456000",
-    "bountyWindowSeconds": "1200",
-    "feedbackWindowSeconds": "1200",
     "bountyEligibility": "0"
   },
   "roundConfig": {
-    "epochDuration": "1200",
-    "maxDuration": "7200",
+    "questionDurationSeconds": "1200",
     "minVoters": "5",
     "maxVoters": "50"
   },
@@ -257,20 +251,14 @@ MCP/browser handoff payload with Feedback Bonus:
     "amount": "2500000",
     "asset": "USDC",
     "requiredVoters": "5",
-    "requiredSettledRounds": "1",
-    "bountyStartBy": "1893456000",
-    "bountyWindowSeconds": "1200",
-    "feedbackWindowSeconds": "1200",
     "bountyEligibility": "0"
   },
   "feedbackBonus": {
     "amount": "2000000",
-    "asset": "USDC",
-    "feedbackClosesAt": "1893457200"
+    "asset": "USDC"
   },
   "roundConfig": {
-    "epochDuration": "1200",
-    "maxDuration": "7200",
+    "questionDurationSeconds": "1200",
     "minVoters": "5",
     "maxVoters": "50"
   },
@@ -303,10 +291,9 @@ For gated asks, add `question.confidentiality`, a RateLoop-hosted `detailsUrl`/`
 }
 ```
 
-`feedbackClosesAt` is the requested feedback close for the funded round. Only feedback published on-chain at or before
-that timestamp can receive the bonus. The effective Feedback Bonus award decision deadline is the later of that requested
-close and 24 hours after the round settles, so the awarder always has at least one full day to choose useful timely
-feedback from revealed raters.
+Feedback Bonus timing uses the same question duration as the blind response window. The effective Feedback Bonus award
+decision deadline is at least 24 hours after the round settles, so the awarder always has at least one full day to choose
+useful timely feedback from revealed raters.
 
 ### A/B Comparison (`head_to_head_ab`)
 

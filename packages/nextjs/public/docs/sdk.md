@@ -78,8 +78,7 @@ GET  /api/agent/results/{operationKey}
 
 The SDK convenience call `askHumans({ transport: "http" })` is bounty-only and rejects `feedbackBonus`. Raw
 `POST /api/agent/asks` is a lower-level wallet-call-compatible route; advanced callers that include `feedbackBonus`
-must handle every returned transaction plan, including any follow-up `feedbackBonus.transactionPlan`. SDK users should
-prefer MCP or browser handoff for Feedback Bonus asks; direct `createAskHandoff` can still carry the full handoff
+must fund it in the creation transaction. SDK users should prefer MCP or browser handoff for Feedback Bonus asks; direct `createAskHandoff` can still carry the full handoff
 payload because the browser completes the funded flow.
 
 ## Generated Images And Mockups
@@ -134,7 +133,7 @@ For confidential written context, use RateLoop-hosted gated details/images only:
 
 ## Minimal MCP/Handoff Ask Shape
 
-Use this shape after a successful MCP or browser handoff quote. USDC amounts are atomic units, so `2500000` means 2.5 USDC. LREP amounts use LREP atomic units. Replace the wallet, set `bountyStartBy` to the latest acceptable first-round start timestamp, and set the bounty and feedback windows in seconds. When you provide a custom `roundConfig`, `roundConfig.minVoters` must match `bounty.requiredVoters`. Under the launch policy, use at least 5 voters for bounties at or above 1000 USDC and at least 8 voters for bounties at or above 10000 USDC; governance can raise these new-ask floors as rater supply and protocol usage grow. For SDK direct HTTP `askHumans({ transport: "http" })`, omit `feedbackBonus` and set `maxPaymentAmount` to the bounty amount.
+Use this shape after a successful MCP or browser handoff quote. USDC amounts are atomic units, so `2500000` means 2.5 USDC. LREP amounts use LREP atomic units. Replace the wallet and set one shared `roundConfig.questionDurationSeconds`; the bounty eligibility window, blind response window, and Feedback Bonus feedback window all use that duration from question creation. When you provide a custom `roundConfig`, `roundConfig.minVoters` must match `bounty.requiredVoters`. Under the launch policy, use at least 5 voters for bounties at or above 1000 USDC and at least 8 voters for bounties at or above 10000 USDC; governance can raise these new-ask floors as rater supply and protocol usage grow. For SDK direct HTTP `askHumans({ transport: "http" })`, omit `feedbackBonus` and set `maxPaymentAmount` to the bounty amount.
 
 ```json
 {
@@ -145,19 +144,14 @@ Use this shape after a successful MCP or browser handoff quote. USDC amounts are
   "bounty": {
     "amount": "2500000",
     "asset": "USDC",
-    "requiredVoters": "5",
-    "requiredSettledRounds": "1",
-    "bountyStartBy": "1893456000",
-    "bountyWindowSeconds": "1200",
-    "feedbackWindowSeconds": "1200"
+    "requiredVoters": "5"
   },
   "feedbackBonus": {
     "amount": "2000000",
     "asset": "USDC"
   },
   "roundConfig": {
-    "epochDuration": "1200",
-    "maxDuration": "7200",
+    "questionDurationSeconds": "1200",
     "minVoters": "5",
     "maxVoters": "50"
   },
@@ -190,9 +184,9 @@ before RateLoop prepares the transaction plan.
 
 Three-voter rounds are the launch feedback tier: they can still settle as feedback signals, but score-spread LREP forfeits are disabled below 8 score-eligible revealed voters and capped at 50% of stake once active. Settled scores are public feedback signals and must not settle external financial contracts.
 
-`feedbackBonus` is optional on MCP, browser handoff, and advanced raw wallet-call asks. The SDK direct HTTP convenience transport still rejects it. Use a Feedback Bonus when public written feedback is useful in addition to the rating result. Feedback is published on-chain by the rater when submitted. The bonus can use `asset: "USDC"` or `asset: "LREP"` when `paymentMode` is `"wallet_calls"`; `x402_authorization` remains USDC-only. The requested feedback close comes from `feedbackWindowSeconds` or `feedbackBonus.feedbackClosesAt`; only feedback published on-chain at or before that timestamp can receive the bonus. The effective award decision deadline is the later of that requested close and 24 hours after settlement. After `confirmAskTransactions`, the response can include `feedbackBonus.transactionPlan`; execute that plan with the same atomic-batch rule, then call `confirmFeedbackBonusTransactions` or the MCP tool `rateloop_confirm_feedback_bonus_transactions`. The approved `maxPaymentAmount` should cover the USDC bounty plus any USDC Feedback Bonus; LREP Feedback Bonuses are approved by the returned wallet calls.
+`feedbackBonus` is optional on MCP, browser handoff, and advanced raw asks. Use a Feedback Bonus when public written feedback is useful in addition to the rating result. Feedback is published on-chain by the rater when submitted. The bonus is USDC-only and funded in the same creation-time x402 authorization as the bounty. The feedback window uses the same question duration as the blind response window; only feedback published on-chain during that window can receive the bonus. The effective award decision deadline is at least 24 hours after settlement. The approved `maxPaymentAmount` should cover the USDC bounty plus any USDC Feedback Bonus.
 
-For Tier-0, unusually sensitive, or high-value asks, prefer a longer `roundConfig.epochDuration`, a matching `maxDuration`, and at least 8 required voters instead of shortening the blind phase for speed.
+For Tier-0, unusually sensitive, or high-value asks, prefer a longer `roundConfig.questionDurationSeconds` and at least 8 required voters instead of shortening the blind response window for speed.
 
 ## Rating Existing Content Through MCP
 

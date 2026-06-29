@@ -168,7 +168,7 @@ const agentQuestionConfidentialityInputSchema = {
 
 const agentRoundPresetInputSchema = {
   description:
-    "Optional named timing preset. Use pure_agent_fast for low-stakes agent-only review rounds: 60s epoch, 60s max duration, and the bounty's required voter count.",
+    "Optional named timing preset. Use pure_agent_fast for low-stakes agent-only review rounds: 60s question duration and the bounty's required voter count.",
   enum: ["pure_agent_fast", "default"],
   type: "string",
 } satisfies JsonSchema;
@@ -230,28 +230,11 @@ const agentBountyInputSchema = {
       enum: ["USDC", "usdc", "LREP", "lrep"],
       type: "string",
     },
-    bountyStartBy: {
-      description: "Unix timestamp in seconds by which the first private round must start.",
-      type: ["integer", "string"],
-    },
-    bountyWindowSeconds: {
-      description: "Bounty eligibility window duration after the first private round starts.",
-      type: ["integer", "string"],
-    },
-    feedbackWindowSeconds: {
-      description:
-        "Requested paid-feedback close window after the first private round starts. Feedback Bonus awards remain payable for at least 24 hours after settlement.",
-      type: ["integer", "string"],
-    },
     bountyEligibility: {
       default: 0,
       description:
         "Bounty payout scope bitmask: 0 everyone or 8 Proof of Human. Everyone can still answer; this only scopes bounty payouts.",
       enum: [0, 8, "0", "8"],
-      type: ["integer", "string"],
-    },
-    requiredSettledRounds: {
-      description: "Required settled rounds for the bounty.",
       type: ["integer", "string"],
     },
     requiredVoters: {
@@ -260,7 +243,7 @@ const agentBountyInputSchema = {
       type: ["integer", "string"],
     },
   },
-  required: ["amount", "bountyStartBy", "bountyWindowSeconds"],
+  required: ["amount"],
   type: "object",
 } satisfies JsonSchema;
 
@@ -278,11 +261,6 @@ const agentFeedbackBonusInputSchema = {
       description:
         "Wallet allowed to award useful public rater feedback after settlement. Defaults to the asking wallet.",
     },
-    feedbackClosesAt: {
-      description:
-        "Requested Unix timestamp in seconds for the feedback bonus close. The effective award deadline is at least 24 hours after settlement.",
-      type: ["integer", "string"],
-    },
   },
   required: ["amount"],
   type: "object",
@@ -291,28 +269,9 @@ const agentFeedbackBonusInputSchema = {
 const agentRoundConfigInputSchema = {
   additionalProperties: false,
   properties: {
-    epochDuration: {
-      description: "Blind/private vote phase duration in seconds. Aliases: blindPhaseSeconds, blindSeconds.",
-      type: ["integer", "string"],
-    },
-    blindPhaseSeconds: {
-      description: "Alias for epochDuration.",
-      type: ["integer", "string"],
-    },
-    blindSeconds: {
-      description: "Alias for epochDuration.",
-      type: ["integer", "string"],
-    },
-    maxDuration: {
-      description: "Maximum round duration in seconds. Aliases: maxDurationSeconds, deadlineSeconds.",
-      type: ["integer", "string"],
-    },
-    maxDurationSeconds: {
-      description: "Alias for maxDuration.",
-      type: ["integer", "string"],
-    },
-    deadlineSeconds: {
-      description: "Alias for maxDuration.",
+    questionDurationSeconds: {
+      description:
+        "Single question duration in seconds. The blind response window, max round duration, bounty eligibility window, and feedback bonus close all use this value.",
       type: ["integer", "string"],
     },
     maxVoters: { description: "Maximum voters accepted by the private round.", type: ["integer", "string"] },
@@ -748,22 +707,6 @@ export const agentConfirmAskTransactionsInputSchema = {
     operationKey: { description: "RateLoop operation key returned by rateloop_ask_humans.", type: "string" },
     transactionHashes: {
       description: "Transaction hashes produced by executing the wallet transaction plan.",
-      items: { pattern: "^0x[a-fA-F0-9]{64}$", type: "string" },
-      maxItems: 32,
-      minItems: 1,
-      type: "array",
-    },
-  },
-  required: ["operationKey", "transactionHashes"],
-  type: "object",
-} satisfies JsonSchema;
-
-export const agentConfirmFeedbackBonusTransactionsInputSchema = {
-  additionalProperties: false,
-  properties: {
-    operationKey: { description: "RateLoop operation key returned by rateloop_ask_humans.", type: "string" },
-    transactionHashes: {
-      description: "Transaction hashes produced by executing the Feedback Bonus transaction plan.",
       items: { pattern: "^0x[a-fA-F0-9]{64}$", type: "string" },
       maxItems: 32,
       minItems: 1,

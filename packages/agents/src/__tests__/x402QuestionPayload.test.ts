@@ -25,10 +25,6 @@ const VALID_REQUEST = {
   bounty: {
     amount: "1000000",
     asset: "USDC",
-    bountyStartBy: "1762000000",
-    bountyWindowSeconds: "1200",
-    feedbackWindowSeconds: "1200",
-    requiredSettledRounds: "1",
     requiredVoters: "3",
   },
   chainId: 480,
@@ -39,6 +35,11 @@ const VALID_REQUEST = {
     imageUrls: [],
     tags: ["Media"],
     title: "Is this mockup ready?",
+  },
+  roundConfig: {
+    maxVoters: "50",
+    minVoters: "3",
+    questionDurationSeconds: "1200",
   },
 };
 

@@ -12,6 +12,8 @@ question creation starts the first rewardable round immediately, and the product
 - `round.epochDuration == round.maxDuration == questionDuration`.
 - Bounty eligibility opens at question creation and closes at `createdAt + questionDuration`.
 - Feedback must be published by `createdAt + questionDuration` to be bonus-eligible.
+- Creation-time bounties and feedback bonuses settle against one required settled round; multi-round bounty knobs are
+  removed from the product surface and rejected by new funding entrypoints.
 - Bounties and feedback bonuses can only be attached during question creation.
 - Later organic rating rounds may still exist, but they do not accept new bounty or feedback bonus funding.
 - Reveal grace, settlement, claim grace, feedback award decision grace, oracle challenge windows, and refund windows remain
@@ -61,7 +63,7 @@ question creation starts the first rewardable round immediately, and the product
    - `yarn foundry:test`
    - `yarn workspace @rateloop/foundry check:sizes`
    - `yarn test:ts`
-   - targeted Playwright submit, handoff, vote, funding-removal, and docs smoke tests
+   - targeted Playwright submit, browser handoff/social ask, vote, funding-removal, and docs smoke tests
    - `yarn next:build`
    - Base Sepolia fresh deploy plus `yarn base-sepolia:check -- --live`
    - Base mainnet fresh deploy plus `yarn base-mainnet:check -- --live`
@@ -77,3 +79,4 @@ question creation starts the first rewardable round immediately, and the product
 - The keeper can reveal, settle, forfeit expired feedback bonus residue, and process cleanup.
 - Whitepaper and public docs describe the single-duration model.
 - Playwright verifies the removed funding modals/buttons stay removed.
+- Playwright verifies creation-time bounty and Feedback Bonus handoffs still submit with one shared question duration.

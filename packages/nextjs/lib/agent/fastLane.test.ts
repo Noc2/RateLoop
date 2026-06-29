@@ -17,7 +17,7 @@ test("buildAgentFastLaneGuidance estimates bounty and speed from round terms", (
     questionCount: 1,
     roundConfig: {
       epochDuration: 1_200n,
-      maxDuration: 7_200n,
+      maxDuration: 1_200n,
       maxVoters: 50n,
       minVoters: 3n,
     },
@@ -36,7 +36,7 @@ test("buildAgentFastLaneGuidance estimates bounty and speed from round terms", (
   assert.equal(guidance.recommendedAction, "start_small");
   assert.equal(guidance.suggestedBountyAmountAtomic, "1500000");
   assert.equal(guidance.stretchBountyAmountAtomic, "2250000");
-  assert.deepEqual(guidance.guidance, ["quote_first", "start_small_then_top_up"]);
+  assert.deepEqual(guidance.guidance, ["quote_first", "set_budget_before_submit"]);
   assert.deepEqual(guidance.warnings, []);
 });
 
@@ -77,12 +77,12 @@ test("buildAgentFastLaneGuidance warns on slow underfunded asks", () => {
       bountyWindowSeconds: 0n,
       bountyEligibility: 0,
       feedbackWindowSeconds: 0n,
-      requiredSettledRounds: 2n,
+      requiredSettledRounds: 1n,
       requiredVoters: 5n,
     },
     questionCount: 2,
     roundConfig: {
-      epochDuration: 86_400n,
+      epochDuration: 604_800n,
       maxDuration: 604_800n,
       maxVoters: 100n,
       minVoters: 5n,
@@ -92,18 +92,18 @@ test("buildAgentFastLaneGuidance warns on slow underfunded asks", () => {
 
   assert.equal(guidance.speed, "slow");
   assert.equal(guidance.pricingConfidence, "low");
-  assert.equal(guidance.requiredSignalUnits, "20");
-  assert.equal(guidance.conservativeStartingBountyAtomic, "6666660");
-  assert.equal(guidance.estimatedResultAt, 1_700_087_900);
+  assert.equal(guidance.requiredSignalUnits, "10");
+  assert.equal(guidance.conservativeStartingBountyAtomic, "3333330");
+  assert.equal(guidance.estimatedResultAt, 1_700_606_300);
   assert.equal(guidance.expectedResponse.minimumExpectedVoters, "5");
   assert.equal(guidance.expectedResponse.healthyTargetVoters, "7");
   assert.equal(guidance.expectedResponse.likelyOutcome, "thin");
   assert.equal(guidance.recommendedAction, "raise_before_submit");
-  assert.equal(guidance.suggestedBountyAmountAtomic, "10000000");
-  assert.equal(guidance.stretchBountyAmountAtomic, "15000000");
+  assert.equal(guidance.suggestedBountyAmountAtomic, "5000000");
+  assert.equal(guidance.stretchBountyAmountAtomic, "7500000");
   assert.deepEqual(guidance.guidance, [
     "quote_first",
-    "start_small_then_top_up",
+    "set_budget_before_submit",
     "increase_bounty_before_submit",
     "expect_slow_result",
   ]);

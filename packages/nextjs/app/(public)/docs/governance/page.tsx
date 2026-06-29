@@ -159,17 +159,10 @@ const GovernanceDocs: NextPage = () => {
           </thead>
           <tbody>
             <tr>
-              <td>Blind phase</td>
-              <td>{protocolDocFacts.blindPhaseDurationLabel}</td>
+              <td>Question duration</td>
+              <td>{protocolDocFacts.questionDurationLabel}</td>
               <td>
-                {protocolDocFacts.minBlindPhaseDurationLabel} to {protocolDocFacts.maxBlindPhaseDurationLabel}
-              </td>
-            </tr>
-            <tr>
-              <td>Max duration</td>
-              <td>{protocolDocFacts.maxRoundDurationLabel}</td>
-              <td>
-                {protocolDocFacts.minRoundDurationLabel} to {protocolDocFacts.maxAllowedRoundDurationLabel}
+                {protocolDocFacts.minQuestionDurationLabel} to {protocolDocFacts.maxQuestionDurationLabel}
               </td>
             </tr>
             <tr>

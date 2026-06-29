@@ -323,15 +323,15 @@ const SmartContracts: NextPage = () => {
         </li>
         <li>
           <code>submitQuestionBundleWithRewardAndRoundConfig(..., rewardTerms, roundConfig)</code> &mdash; Submit a
-          ranked-option bundle with one bounty shared across sibling questions. <code>requiredSettledRounds</code> now
-          applies to bundle round sets, where each set is complete only after every bundled question has one settled
-          round. Private context bundles are not accepted yet; submit gated questions individually until the uniform
-          bundle-confidentiality path is added.
+          ranked-option bundle with one bounty shared across sibling questions. The bounty funds the creation-anchored
+          bundle round set, which is complete only after every bundled question has one settled round. Private context
+          bundles are not accepted yet; submit gated questions individually until the uniform bundle-confidentiality
+          path is added.
         </li>
         <li>
-          <code>getContentRoundConfig(contentId)</code> &mdash; Returns the blind phase, maximum duration, settlement
-          voters, and voter cap selected for that question. Existing submit functions without an explicit round config
-          still use the governed default.
+          <code>getContentRoundConfig(contentId)</code> &mdash; Returns the shared question duration, settlement voters,
+          and voter cap selected for that question. Existing submit functions without an explicit round config still use
+          the governed default.
         </li>
         <li>
           <code>cancelContent(contentId)</code> &mdash; Cancel own content before votes. Attached submission bounties
@@ -392,14 +392,12 @@ const SmartContracts: NextPage = () => {
               <td>Maximum counted vote stake per rater identity per round when identity stake caps are active</td>
             </tr>
             <tr>
-              <td className="font-mono">epochDuration</td>
-              <td>{protocolDocFacts.blindPhaseDurationLabel}</td>
-              <td>Default duration of each reward tier; question creators can select within governance bounds.</td>
-            </tr>
-            <tr>
-              <td className="font-mono">maxDuration</td>
-              <td>{protocolDocFacts.maxRoundDurationLabel}</td>
-              <td>Default maximum round lifetime; question creators can select within governance bounds.</td>
+              <td className="font-mono">questionDurationSeconds</td>
+              <td>{protocolDocFacts.questionDurationLabel}</td>
+              <td>
+                Shared blind response, bounty eligibility, and Feedback Bonus duration; creators can select within
+                governance bounds.
+              </td>
             </tr>
             <tr>
               <td className="font-mono">minVoters</td>
@@ -517,8 +515,8 @@ const SmartContracts: NextPage = () => {
           funds to treasury only after the effective award deadline has elapsed.
         </li>
         <li>
-          <code>cancelExpiredRound(contentId, roundId)</code> &mdash; Cancel a round that exceeded maxDuration (
-          {protocolDocFacts.maxRoundDurationLabel}) without reaching commit quorum (<code>minVoters</code> total
+          <code>cancelExpiredRound(contentId, roundId)</code> &mdash; Cancel a round that exceeded question duration (
+          {protocolDocFacts.questionDurationLabel}) without reaching commit quorum (<code>minVoters</code> total
           commits). Refundable to participants.
         </li>
         <li>
@@ -543,12 +541,12 @@ const SmartContracts: NextPage = () => {
       </p>
       <ul>
         <li>
-          <code>setConfig(epochDuration, maxDuration, minVoters, maxVoters)</code> &mdash; Update round parameters for
-          future questions that use the default config.
+          <code>setConfig(questionDurationSeconds, questionDurationSeconds, minVoters, maxVoters)</code> &mdash; Update
+          round parameters for future questions that use the default config.
         </li>
         <li>
           <code>setRoundConfigBounds(...)</code> and <code>validateRoundConfig(...)</code> &mdash; Define and enforce
-          the allowed creator-selected range for blind phase, max duration, settlement voters, and voter cap.
+          the allowed creator-selected range for question duration, settlement voters, and voter cap.
         </li>
         <li>
           <code>setRevealGracePeriod(seconds)</code> &mdash; Update the grace period used for future round snapshots.

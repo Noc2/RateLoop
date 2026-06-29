@@ -21,7 +21,7 @@ export function buildAgentFastLaneGuidance(params: {
 }) {
   const requiredVoters =
     params.bounty.requiredVoters > 0n ? params.bounty.requiredVoters : params.roundConfig.minVoters;
-  const requiredSettledRounds = params.bounty.requiredSettledRounds > 0n ? params.bounty.requiredSettledRounds : 1n;
+  const requiredSettledRounds = 1n;
   const questionCount = BigInt(Math.max(1, params.questionCount));
   const requiredSignalUnits = requiredVoters * requiredSettledRounds * questionCount;
   const perSignalUnit = params.bounty.amount / (requiredSignalUnits > 0n ? requiredSignalUnits : 1n);
@@ -38,7 +38,7 @@ export function buildAgentFastLaneGuidance(params: {
     requiredVoters + healthyTargetVoterBuffer,
   );
   const warnings: string[] = [];
-  const guidance = ["quote_first", "start_small_then_top_up"];
+  const guidance = ["quote_first", "set_budget_before_submit"];
 
   if (perSignalUnit < MIN_FAST_LANE_PER_VOTER_ATOMIC) {
     warnings.push("bounty_per_required_vote_is_low");

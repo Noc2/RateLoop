@@ -38,11 +38,7 @@ const VALID_REQUEST = {
   bounty: {
     amount: "1000000",
     asset: "USDC",
-    requiredSettledRounds: "1",
     requiredVoters: "3",
-    bountyStartBy: "1762000000",
-    bountyWindowSeconds: "1200",
-    feedbackWindowSeconds: "1200",
   },
   chainId: 480,
   clientRequestId: "youtube:abc123",
@@ -54,6 +50,11 @@ const VALID_REQUEST = {
     tags: ["Media", "Video"],
     title: "Is this clip worth watching?",
   },
+  roundConfig: {
+    maxVoters: "50",
+    minVoters: "3",
+    questionDurationSeconds: "1200",
+  },
 };
 
 test("parseX402QuestionRequest normalizes a valid paid question payload", () => {
@@ -63,7 +64,7 @@ test("parseX402QuestionRequest normalizes a valid paid question payload", () => 
   assert.equal(payload.questions.length, 1);
   assert.equal(payload.questions[0].contextUrl, "https://example.com/watch?v=abc123");
   assert.equal(payload.bounty.amount, 1_000_000n);
-  assert.equal(payload.bounty.bountyStartBy, 1_762_000_000n);
+  assert.equal(payload.bounty.bountyStartBy, 0n);
   assert.equal(payload.bounty.bountyWindowSeconds, 1_200n);
   assert.equal(payload.bounty.feedbackWindowSeconds, 1_200n);
   assert.equal(payload.bounty.requiredVoters, 3n);
@@ -95,10 +96,10 @@ test("parseX402QuestionRequest rejects unsafe numeric atomic fields", () => {
         ...VALID_REQUEST,
         bounty: {
           ...VALID_REQUEST.bounty,
-          bountyStartBy: unsafeInteger,
+          bountyEligibility: unsafeInteger,
         },
       }),
-    /bounty\.bountyStartBy must be a safe non-negative integer/,
+    /bounty\.bountyEligibility must be a safe non-negative integer/,
   );
   assert.throws(
     () =>
@@ -543,8 +544,7 @@ test("parseX402QuestionRequest accepts ordered question bundles", () => {
       },
     ],
     roundConfig: {
-      epochDuration: "600",
-      maxDuration: "7200",
+      questionDurationSeconds: "600",
       minVoters: "5",
       maxVoters: "50",
     },
@@ -737,19 +737,15 @@ test("parseX402QuestionRequest accepts explicit governed round config", () => {
       ...VALID_REQUEST.bounty,
       requiredVoters: "5",
     },
-    question: {
-      ...VALID_REQUEST.question,
-      roundConfig: {
-        epochDuration: "600",
-        maxDuration: "7200",
-        minVoters: "5",
-        maxVoters: "50",
-      },
+    roundConfig: {
+      questionDurationSeconds: "600",
+      minVoters: "5",
+      maxVoters: "50",
     },
   });
 
   assert.equal(payload.roundConfig.epochDuration, 600n);
-  assert.equal(payload.roundConfig.maxDuration, 7200n);
+  assert.equal(payload.roundConfig.maxDuration, 600n);
   assert.equal(payload.roundConfig.minVoters, 5n);
   assert.equal(payload.roundConfig.maxVoters, 50n);
 });
@@ -771,21 +767,19 @@ test("parseX402QuestionRequest rejects round config ABI-width overflows", () => 
       parseX402QuestionRequest({
         ...VALID_REQUEST,
         roundConfig: {
-          epochDuration: "4294967296",
-          maxDuration: "1200",
+          questionDurationSeconds: "4294967296",
           maxVoters: "100",
           minVoters: "3",
         },
       }),
-    /question\.roundConfig\.epochDuration must be at most 4294967295/,
+    /question\.roundConfig\.questionDurationSeconds must be at most 4294967295/,
   );
   assert.throws(
     () =>
       parseX402QuestionRequest({
         ...VALID_REQUEST,
         roundConfig: {
-          epochDuration: "1200",
-          maxDuration: "1200",
+          questionDurationSeconds: "1200",
           maxVoters: "65536",
           minVoters: "3",
         },
@@ -801,11 +795,15 @@ test("parseX402QuestionRequest defaults settlement voters to bounty voters", () 
       ...VALID_REQUEST.bounty,
       requiredVoters: "5",
     },
+    roundConfig: {
+      ...VALID_REQUEST.roundConfig,
+      minVoters: "5",
+    },
   });
 
   assert.equal(payload.bounty.requiredVoters, 5n);
   assert.equal(payload.roundConfig.minVoters, 5n);
-  assert.equal(payload.roundConfig.maxVoters, 100n);
+  assert.equal(payload.roundConfig.maxVoters, 50n);
 });
 
 test("parseX402QuestionRequest enforces bounty-size voter floors", () => {
@@ -831,6 +829,10 @@ test("parseX402QuestionRequest enforces bounty-size voter floors", () => {
           amount: "10000000000",
           requiredVoters: "5",
         },
+        roundConfig: {
+          ...VALID_REQUEST.roundConfig,
+          minVoters: "5",
+        },
       }),
     /requiredVoters must be at least 8/,
   );
@@ -841,6 +843,10 @@ test("parseX402QuestionRequest enforces bounty-size voter floors", () => {
       ...VALID_REQUEST.bounty,
       amount: "10000000000",
       requiredVoters: "8",
+    },
+    roundConfig: {
+      ...VALID_REQUEST.roundConfig,
+      minVoters: "8",
     },
   });
   assert.equal(payload.bounty.requiredVoters, 8n);
@@ -857,8 +863,7 @@ test("parseX402QuestionRequest rejects bounty and round voter mismatches", () =>
           requiredVoters: "5",
         },
         roundConfig: {
-          epochDuration: "600",
-          maxDuration: "7200",
+          questionDurationSeconds: "600",
           minVoters: "3",
           maxVoters: "50",
         },
@@ -876,14 +881,10 @@ test("buildX402QuestionOperation binds round config into the payload hash", () =
         ...VALID_REQUEST.bounty,
         requiredVoters: "5",
       },
-      question: {
-        ...VALID_REQUEST.question,
-        roundConfig: {
-          epochDuration: "600",
-          maxDuration: "7200",
-          minVoters: "5",
-          maxVoters: "50",
-        },
+      roundConfig: {
+        questionDurationSeconds: "600",
+        minVoters: "5",
+        maxVoters: "50",
       },
     }),
   );
@@ -977,13 +978,15 @@ test("parseX402QuestionRequest accepts LREP agent bounties for wallet-call submi
   assert.equal(payload.bounty.asset, "LREP");
 });
 
-test("parseX402QuestionRequest accepts bundle payouts with multiple settled rounds", () => {
-  const payload = parseX402QuestionRequest({
-    ...VALID_REQUEST,
-    bounty: { ...VALID_REQUEST.bounty, requiredSettledRounds: "2" },
-  });
-
-  assert.equal(payload.bounty.requiredSettledRounds, 2n);
+test("parseX402QuestionRequest rejects user-supplied settled-round bounty requests", () => {
+  assert.throws(
+    () =>
+      parseX402QuestionRequest({
+        ...VALID_REQUEST,
+        bounty: { ...VALID_REQUEST.bounty, requiredSettledRounds: "2" },
+      }),
+    /bounty\.requiredSettledRounds is no longer accepted/,
+  );
 });
 
 test("parseX402QuestionRequest accepts Proof of Human bounty scope", () => {
@@ -1014,30 +1017,36 @@ test("parseX402QuestionRequest rejects unsupported bounty scopes", () => {
   }
 });
 
-test("parseX402QuestionRequest rejects bundle payouts without a start-by deadline", () => {
+test("parseX402QuestionRequest normalizes omitted bounty timing to the question duration", () => {
+  const payload = parseX402QuestionRequest(VALID_REQUEST);
+
+  assert.equal(payload.bounty.bountyStartBy, 0n);
+  assert.equal(payload.bounty.bountyWindowSeconds, payload.roundConfig.maxDuration);
+  assert.equal(payload.bounty.feedbackWindowSeconds, payload.roundConfig.maxDuration);
+
   assert.throws(
     () =>
       parseX402QuestionRequest({
         ...VALID_REQUEST,
-        bounty: { ...VALID_REQUEST.bounty, bountyStartBy: "0" },
+        bounty: { ...VALID_REQUEST.bounty, bountyStartBy: "1" },
       }),
-    /bounty\.bountyStartBy must be greater than zero/,
+    /bounty\.bountyStartBy is no longer accepted/,
   );
   assert.throws(
     () =>
       parseX402QuestionRequest({
         ...VALID_REQUEST,
-        bounty: { ...VALID_REQUEST.bounty, bountyStartBy: undefined },
+        bounty: { ...VALID_REQUEST.bounty, bountyWindowSeconds: "600" },
       }),
-    /bounty\.bountyStartBy is required/,
+    /bounty\.bountyWindowSeconds is no longer accepted/,
   );
   assert.throws(
     () =>
       parseX402QuestionRequest({
         ...VALID_REQUEST,
-        bounty: { ...VALID_REQUEST.bounty, bountyWindowSeconds: undefined },
+        bounty: { ...VALID_REQUEST.bounty, feedbackWindowSeconds: "600" },
       }),
-    /bounty\.bountyWindowSeconds is required/,
+    /bounty\.feedbackWindowSeconds is no longer accepted/,
   );
 });
 

@@ -1,5 +1,10 @@
 # Agent-to-Agent Work Acceptance Oracle — Deep Dive (2026-06)
 
+> Status note: this is a pre-single-duration redeploy research snapshot. Timing and
+> config examples that mention separate epochs, maxDuration, or 20-second fast
+> floors are historical and should be re-verified against the fresh deployment
+> before being used as current product guidance.
+
 Expansion of use case 6 from `use-cases-2026-06.md` (PMF 6, speculative). Three
 research passes inform this doc: a code-level trace of the actual round latency
 budget and integration surfaces at HEAD, a trace of the x402 ask flow and results

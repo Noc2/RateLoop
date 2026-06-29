@@ -24,7 +24,7 @@ Store at least:
 - `cohortSummary`
 - `liveAskGuidance`
 
-That is enough for the agent to avoid duplicate asks, cite the result later, and learn when a market needs a small additive top-up instead of a rewrite.
+That is enough for the agent to avoid duplicate asks, cite the result later, and learn when the next ask needs a larger budget instead of a rewrite.
 
 ## Recovery Rules
 

@@ -22,8 +22,8 @@ remote MCP is the default headless path:
 - funded Base mainnet `walletAddress` for production browser signing, or Base Sepolia funding when practicing on staging
 - public context URL, YouTube video context, or image context you can upload to RateLoop
 - optional extra image bytes for local mockups, screenshots, and generated images
-- LREP or USDC bounty, `maxPaymentAmount`, `requiredVoters`, `requiredSettledRounds`, `bountyStartBy`, `bountyWindowSeconds`, `feedbackWindowSeconds`, and optional payout-only `bountyEligibility`; choose `paymentMode: "wallet_calls"` for LREP bounties because native EIP-3009/x402 authorizations are USDC-only
-- optional MCP `feedbackBonus` in USDC or LREP for single-question asks where written analysis is valuable; include the bonus in `maxPaymentAmount` so Base mainnet native EIP-3009/x402 asks can one-shot USDC bounty plus USDC bonus funding, approve LREP bonuses through wallet calls, and remember awards remain open for at least 24 hours after settlement. Base Sepolia currently requires bounty-only x402 or `wallet_calls` for Feedback Bonus staging until strict one-shot readiness passes.
+- LREP or USDC bounty, `maxPaymentAmount`, `requiredVoters`, optional payout-only `bountyEligibility`, and one `roundConfig.questionDurationSeconds` shared by the blind window, bounty eligibility, and Feedback Bonus close; choose `paymentMode: "wallet_calls"` for LREP bounties because native EIP-3009/x402 authorizations are USDC-only
+- optional MCP `feedbackBonus` in USDC or LREP for single-question asks where written analysis is valuable; include the bonus in `maxPaymentAmount` so Base mainnet native EIP-3009/x402 asks can one-shot USDC bounty plus USDC bonus funding, while LREP bonuses use creation-time wallet calls. Awards remain open for at least 24 hours after settlement. Base Sepolia currently requires bounty-only x402 or `wallet_calls` for Feedback Bonus staging until strict one-shot readiness passes.
 - existing content rating, when the user gives a RateLoop content id or URL and wants the agent to participate as a rater
 - execution path: browser handoff link first, local signer second, raw MCP wallet calls only when the host can execute or present them cleanly
 
@@ -152,15 +152,14 @@ must come from the RateLoop upload flow. Do not put direct image file links such
 `local-ask` is the narrow signer path for local agents. It loads the local wallet, sets `walletAddress`, calls
 `askHumans`, signs a returned EIP-3009 USDC authorization request when needed, re-calls `askHumans` with
 `paymentAuthorization`, sends every validated `transactionPlan.calls` item in order through viem, waits for receipts,
-and confirms the hashes with RateLoop. Wallet-call bounty plans may approve either LREP or USDC. On Base mainnet, USDC Feedback Bonuses on native x402 asks are funded in the same one-shot submit
-transaction when the returned plan uses `submitQuestionWithX402OneShotPayment`; if a confirmed ask still includes a
-separate `feedbackBonus.transactionPlan` (for example LREP funding), `local-ask` sends that second validated plan and then
-calls `confirmFeedbackBonusTransactions`.
+and confirms the hashes with RateLoop. Wallet-call bounty plans may approve either LREP or USDC. Feedback Bonuses are
+funded only in the creation-time USDC x402 one-shot submit transaction; separate post-creation Feedback Bonus plans are
+legacy responses and `local-ask` rejects them for the fresh redeploy flow.
 
 `local-ask` is a trusted automation exception to the browser wallet rule: browser and low-level wallet hosts must honor
 `requiresAtomicExecution: true` with an atomic batch or stop. The local signer may submit validated calls sequentially
-because it controls the wallet and recovery loop. If the second call of an `approve + createFeedbackBonusPoolWithAsset`
-plan fails, retry the same operation or revoke the exact escrow allowance before abandoning it.
+because it controls the wallet and recovery loop. Feedback Bonus funding no longer has a separate approve/create retry
+loop.
 
 Use an encrypted keystore for persistent wallets:
 
@@ -295,8 +294,8 @@ For comparisons, pick the shape that matches what you need:
   and confidence later.
 - **One-sided statement polls** such as "Would X be your default?" stay on `generic_rating` with normal thumbs up/down.
 
-When a bundle needs repeated samples, set `requiredSettledRounds` above 1. Each required round is a bundle round set:
-every bundled question must settle once before that set can pay.
+When a bundle needs repeated samples, submit fresh bundled asks with the intended creation-time budget. Each bundled ask
+uses one creation-anchored rewardable round set: every bundled question must settle once before that set can pay.
 
 For feature acceptance tests, include concrete `expectedBehavior`, `testSteps`, and `acceptanceCriteria` in
 `templateInputs`. Voters should be able to open one public preview or generated mockup, follow the steps, vote up only

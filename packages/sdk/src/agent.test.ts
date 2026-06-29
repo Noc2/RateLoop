@@ -705,8 +705,6 @@ test("agent ask helpers reject unsafe numeric atomic fields before transport", a
   const request: AskHumansRequest = {
     bounty: {
       amount: "1000000",
-      bountyStartBy: "1893456000",
-      bountyWindowSeconds: "1200",
       requiredVoters: "3",
     },
     chainId: 480,
@@ -1012,7 +1010,7 @@ test("askHumans routes feedback bonus asks through MCP", async () => {
   });
 
   const response = await agent.askHumans({
-    bounty: { amount: 1_000_000n, bountyStartBy: 1_762_000_000n },
+    bounty: { amount: 1_000_000n },
     chainId: 480,
     clientRequestId: "ask-feedback-bonus",
     feedbackBonus: { amount: 2_000_000n },
@@ -1098,14 +1096,6 @@ test("confirm helpers use confirmTimeoutMs instead of the default request timeou
       }),
     )
   ).observedTimeoutMs;
-  observed.feedbackBonus = (
-    await captureNextRequestTimeout(() =>
-      agent.confirmFeedbackBonusTransactions({
-        operationKey: `0x${"77".repeat(32)}`,
-        transactionHashes: [`0x${"89".repeat(32)}`],
-      }),
-    )
-  ).observedTimeoutMs;
   observed.rating = (
     await captureNextRequestTimeout(() =>
       agent.confirmRatingTransactions({
@@ -1119,7 +1109,6 @@ test("confirm helpers use confirmTimeoutMs instead of the default request timeou
 
   assert.deepEqual(observed, {
     ask: 123_456,
-    feedbackBonus: 123_456,
     rating: 123_456,
   });
 });
@@ -1151,43 +1140,6 @@ test("confirmAskTransactions can use MCP framing", async () => {
     `0x${"aa".repeat(32)}`,
   ]);
   assert.equal(response.status, "submitted");
-});
-
-test("confirmFeedbackBonusTransactions uses MCP framing", async () => {
-  let requestedBody: any;
-  const operationKey = `0x${"89".repeat(32)}`;
-  const agent = createRateLoopAgentClient({
-    mcpApiUrl: "https://rateloop.example/api/mcp",
-    fetchImpl: async (_input: URL | RequestInfo, init?: RequestInit) => {
-      requestedBody = JSON.parse(String(init?.body));
-      return jsonResponse({
-        result: {
-          structuredContent: {
-            feedbackBonus: { poolId: "7", status: "funded" },
-            operationKey,
-            status: "submitted",
-          },
-        },
-      });
-    },
-    mcpAccessToken: "agent-token",
-  });
-
-  const response = await agent.confirmFeedbackBonusTransactions({
-    operationKey,
-    transactionHashes: [`0x${"ab".repeat(32)}`],
-  });
-
-  assert.equal(
-    requestedBody.params.name,
-    "rateloop_confirm_feedback_bonus_transactions",
-  );
-  assert.equal(requestedBody.params.arguments.operationKey, operationKey);
-  assert.deepEqual(requestedBody.params.arguments.transactionHashes, [
-    `0x${"ab".repeat(32)}`,
-  ]);
-  assert.equal(response.feedbackBonus?.status, "funded");
-  assert.equal(response.feedbackBonus?.poolId, "7");
 });
 
 test("direct HTTP errors preserve structured recovery details", async () => {

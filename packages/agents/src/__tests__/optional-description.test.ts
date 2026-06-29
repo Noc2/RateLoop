@@ -6,9 +6,6 @@ describe("agent ask optional descriptions", () => {
     const findings = lintAgentAskRequest({
       bounty: {
         amount: "1000000",
-        bountyStartBy: "1893456000",
-        bountyWindowSeconds: "1200",
-        requiredSettledRounds: "1",
         requiredVoters: "3",
       },
       clientRequestId: "optional-description-demo",

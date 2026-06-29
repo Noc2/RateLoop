@@ -67,9 +67,6 @@ function askArguments(overrides: Record<string, unknown> = {}) {
     bounty: {
       amount: "1000000",
       asset: "USDC",
-      bountyStartBy: "1762000000",
-      bountyWindowSeconds: "1200",
-      feedbackWindowSeconds: "1200",
     },
     chainId: 480,
     clientRequestId: "ask-bookkeeping-failure",
@@ -1438,61 +1435,24 @@ test("rateloop_ask_humans carries optional feedback bonus and reserves total spe
   assert.equal((reserved[0] as { amount: bigint }).amount, 3_000_000n);
 });
 
-test("rateloop_ask_humans keeps mixed-asset feedback bonuses out of the scalar payment cap", async () => {
-  const prepared: unknown[] = [];
-  const reserved: unknown[] = [];
-
+test("rateloop_ask_humans rejects mixed-asset feedback bonuses", async () => {
   __setMcpToolTestOverridesForTests({
     ...quoteOverrides(),
     getMcpAgentBudgetSummary: async () => managedBudgetSummary(),
-    prepareAgentWalletQuestionSubmissionRequest: async params => {
-      prepared.push(params);
-      return {
-        body: {
-          operationKey: OPERATION_KEY,
-          payment: {
-            amount: "1000000",
-            asset: "USDC",
-            bountyAmount: "1000000",
-            decimals: 6,
-            spender: "0x0000000000000000000000000000000000000002",
-            tokenAddress: "0x0000000000000000000000000000000000000001",
-          },
-          status: "awaiting_wallet_signature",
-        },
-        status: 202,
-      };
-    },
-    reserveMcpAgentBudget: async params => {
-      reserved.push(params);
-      return budgetReservation();
-    },
   });
 
-  const result = await callRateLoopMcpTool({
-    agent: AGENT,
-    arguments: askArguments({
-      feedbackBonus: { amount: "2000000", asset: "LREP" },
-      maxPaymentAmount: "1000000",
-    }),
-    name: "rateloop_ask_humans",
-  });
-  const body = result as unknown as {
-    feedbackBonus: { amount: string; asset: string };
-    payment: { feedbackBonusAmount: string; feedbackBonusAsset: string; totalAmount: string };
-  };
-
-  assert.equal(body.feedbackBonus.amount, "2000000");
-  assert.equal(body.feedbackBonus.asset, "LREP");
-  assert.equal(body.payment.feedbackBonusAmount, "2000000");
-  assert.equal(body.payment.feedbackBonusAsset, "LREP");
-  assert.equal(body.payment.totalAmount, "1000000");
-  assert.equal(
-    (prepared[0] as { feedbackBonus?: { amount: bigint; asset: string } }).feedbackBonus?.amount,
-    2_000_000n,
+  await assert.rejects(
+    () =>
+      callRateLoopMcpTool({
+        agent: AGENT,
+        arguments: askArguments({
+          feedbackBonus: { amount: "2000000", asset: "LREP" },
+          maxPaymentAmount: "1000000",
+        }),
+        name: "rateloop_ask_humans",
+      }),
+    /Feedback Bonus creation-time funding currently requires USDC x402 authorization/,
   );
-  assert.equal((prepared[0] as { feedbackBonus?: { asset: string } }).feedbackBonus?.asset, "LREP");
-  assert.equal((reserved[0] as { amount: bigint }).amount, 1_000_000n);
 });
 
 test("rateloop_ask_humans still requires cap room for same-asset feedback bonuses", async () => {
@@ -1515,27 +1475,24 @@ test("rateloop_ask_humans still requires cap room for same-asset feedback bonuse
   );
 });
 
-test("public rateloop_ask_humans dry-run reports mixed-asset bonus outside totalAmount", async () => {
+test("public rateloop_ask_humans dry-run rejects mixed-asset feedback bonuses", async () => {
   __setMcpToolTestOverridesForTests({
     ...quoteOverrides(),
   });
 
-  const result = await callPublicRateLoopMcpTool({
-    arguments: askArguments({
-      dryRun: true,
-      feedbackBonus: { amount: "2000000", asset: "LREP" },
-      maxPaymentAmount: "1000000",
-      walletAddress: AGENT.walletAddress,
-    }),
-    name: "rateloop_ask_humans",
-  });
-  const body = result as unknown as {
-    payment: { feedbackBonusAmount: string; feedbackBonusAsset: string; totalAmount: string };
-  };
-
-  assert.equal(body.payment.feedbackBonusAmount, "2000000");
-  assert.equal(body.payment.feedbackBonusAsset, "LREP");
-  assert.equal(body.payment.totalAmount, "1000000");
+  await assert.rejects(
+    () =>
+      callPublicRateLoopMcpTool({
+        arguments: askArguments({
+          dryRun: true,
+          feedbackBonus: { amount: "2000000", asset: "LREP" },
+          maxPaymentAmount: "1000000",
+          walletAddress: AGENT.walletAddress,
+        }),
+        name: "rateloop_ask_humans",
+      }),
+    /Feedback Bonus creation-time funding currently requires USDC x402 authorization/,
+  );
 });
 
 test("rateloop_ask_humans defaults eligible USDC asks to an EIP-3009 authorization request", async () => {
@@ -2205,7 +2162,7 @@ test("public rateloop_get_question_status surfaces wallet callback deliveries", 
   assert.equal("subscriptionId" in body.callbackDeliveries[0]!, false);
 });
 
-test("rateloop_confirm_ask_transactions returns a pending feedback bonus transaction plan", async () => {
+test("rateloop_confirm_ask_transactions reports feedback bonuses must be creation-time funded", async () => {
   __setMcpToolTestOverridesForTests({
     confirmAgentWalletQuestionSubmissionRequest: async () => ({
       body: {
@@ -2224,22 +2181,6 @@ test("rateloop_confirm_ask_transactions returns a pending feedback bonus transac
       status: 200,
     }),
     enqueueAgentCallbackEvent: async () => [],
-    prepareFeedbackBonusQuestionSubmissionRequest: async () => ({
-      body: {
-        feedbackBonus: {
-          amount: "2000000",
-          contentId: "123",
-          roundId: "1",
-          status: "awaiting_wallet_signature",
-          transactionPlan: {
-            calls: [{ id: "approve-feedback-bonus-usdc" }, { id: "create-feedback-bonus-pool" }],
-            requiresOrderedExecution: true,
-          },
-        },
-        operationKey: OPERATION_KEY,
-      },
-      status: 202,
-    }),
     updateMcpBudgetReservation: async () => null,
   });
 
@@ -2252,11 +2193,12 @@ test("rateloop_confirm_ask_transactions returns a pending feedback bonus transac
     name: "rateloop_confirm_ask_transactions",
   });
   const body = result as unknown as {
-    feedbackBonus: { confirmTool: string; transactionPlan: { calls: unknown[] } };
+    feedbackBonus: { status: string };
+    warnings: string[];
   };
 
-  assert.equal(body.feedbackBonus.confirmTool, "rateloop_confirm_feedback_bonus_transactions");
-  assert.equal(body.feedbackBonus.transactionPlan.calls.length, 2);
+  assert.equal(body.feedbackBonus.status, "creation_time_required");
+  assert.deepEqual(body.warnings, ["feedback_bonus_creation_time_required"]);
 });
 
 test("rateloop_confirm_ask_transactions rejects malformed transaction hashes", async () => {
@@ -2286,41 +2228,6 @@ test("rateloop_confirm_ask_transactions rejects malformed transaction hashes", a
     /transactionHashes must contain at least one transaction hash/,
   );
   assert.equal(confirmed, false);
-});
-
-test("rateloop_confirm_feedback_bonus_transactions confirms the funded bonus", async () => {
-  const confirmed: unknown[] = [];
-  __setMcpToolTestOverridesForTests({
-    confirmFeedbackBonusQuestionSubmissionRequest: async params => {
-      confirmed.push(params);
-      return {
-        body: {
-          feedbackBonus: {
-            enabled: true,
-            poolId: "55",
-            status: "funded",
-          },
-          operationKey: params.operationKey,
-          status: "submitted",
-        },
-        status: 200,
-      };
-    },
-  });
-
-  const result = await callRateLoopMcpTool({
-    agent: AGENT,
-    arguments: {
-      operationKey: OPERATION_KEY,
-      transactionHashes: [`0x${"5".repeat(64)}`],
-    },
-    name: "rateloop_confirm_feedback_bonus_transactions",
-  });
-  const body = result as unknown as { feedbackBonus: { poolId: string; status: string } };
-
-  assert.equal(body.feedbackBonus.status, "funded");
-  assert.equal(body.feedbackBonus.poolId, "55");
-  assert.deepEqual(confirmed, [{ operationKey: OPERATION_KEY, transactionHashes: [`0x${"5".repeat(64)}`] }]);
 });
 
 test("rateloop_ask_humans rejects unsafe webhook URLs before reservation or wallet planning", async () => {

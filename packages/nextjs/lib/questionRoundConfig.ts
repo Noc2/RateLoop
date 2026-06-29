@@ -8,8 +8,7 @@ export type QuestionRoundConfig = {
 };
 
 type SerializedQuestionRoundConfig = {
-  epochDuration: string;
-  maxDuration: string;
+  questionDurationSeconds: string;
   minVoters: string;
   maxVoters: string;
 };
@@ -25,12 +24,11 @@ export type QuestionRoundConfigBounds = {
   maxVoterCap: number;
 };
 
-export const QUESTION_ROUND_MAX_EPOCH_COUNT = 2016;
 export const MAX_QUESTION_BUNDLE_ROUND_VOTERS = 100;
 
 export const DEFAULT_QUESTION_ROUND_CONFIG: QuestionRoundConfig = {
   epochDuration: BigInt(DEFAULT_ROUND_CONFIG.epochDurationSeconds),
-  maxDuration: BigInt(DEFAULT_ROUND_CONFIG.maxDurationSeconds),
+  maxDuration: BigInt(DEFAULT_ROUND_CONFIG.epochDurationSeconds),
   minVoters: BigInt(DEFAULT_ROUND_CONFIG.minVoters),
   maxVoters: BigInt(DEFAULT_ROUND_CONFIG.maxVoters),
 };
@@ -57,17 +55,17 @@ export const DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS: QuestionRoundConfigBounds = {
 
 export function serializeQuestionRoundConfig(config: QuestionRoundConfig): SerializedQuestionRoundConfig {
   return {
-    epochDuration: config.epochDuration.toString(),
-    maxDuration: config.maxDuration.toString(),
+    questionDurationSeconds: config.maxDuration.toString(),
     minVoters: config.minVoters.toString(),
     maxVoters: config.maxVoters.toString(),
   };
 }
 
 export function questionRoundConfigToAbi(config: QuestionRoundConfig) {
+  const questionDuration = config.epochDuration;
   return {
-    epochDuration: Number(config.epochDuration),
-    maxDuration: Number(config.maxDuration),
+    epochDuration: Number(questionDuration),
+    maxDuration: Number(questionDuration),
     minVoters: Number(config.minVoters),
     maxVoters: Number(config.maxVoters),
   };
@@ -75,24 +73,4 @@ export function questionRoundConfigToAbi(config: QuestionRoundConfig) {
 
 export function requiredQuestionRewardVotersForAmount(amountAtomic: bigint | number): bigint {
   return BigInt(requiredQuestionRewardParticipants(amountAtomic));
-}
-
-export function getQuestionRoundMaxDurationForEpoch(
-  epochDurationSeconds: number,
-  configuredMaxDurationSeconds: number,
-): number {
-  const normalizedEpochDuration = Math.max(1, Math.floor(epochDurationSeconds));
-  const normalizedMaxDuration = Math.max(0, Math.floor(configuredMaxDurationSeconds));
-  const epochLimitedMaxDuration = normalizedEpochDuration * (QUESTION_ROUND_MAX_EPOCH_COUNT + 1) - 1;
-
-  return Math.min(normalizedMaxDuration, epochLimitedMaxDuration);
-}
-
-export function isQuestionRoundMaxDurationValidForEpoch(
-  epochDurationSeconds: number,
-  maxDurationSeconds: number,
-): boolean {
-  return (
-    epochDurationSeconds > 0 && Math.floor(maxDurationSeconds / epochDurationSeconds) <= QUESTION_ROUND_MAX_EPOCH_COUNT
-  );
 }
