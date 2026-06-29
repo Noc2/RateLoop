@@ -30,6 +30,7 @@ vi.mock("ponder:schema", () => ({
   content: "content",
   questionBundleClaim: "questionBundleClaim",
   questionBundleQuestion: "questionBundleQuestion",
+  questionBundleRecoveredRoundSet: "questionBundleRecoveredRoundSet",
   questionBundleRound: "questionBundleRound",
   questionBundleRoundSet: "questionBundleRoundSet",
   questionBundleReward: "questionBundleReward",
@@ -892,8 +893,8 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
     );
   });
 
-  it("removes recovered bundle round sets and reverses indexed allocation once", async () => {
-    const { db, deletes, updates } = createDb(
+  it("removes recovered bundle round sets, marks recovery, and reverses indexed allocation once", async () => {
+    const { db, deletes, inserts, updates } = createDb(
       {
         'questionBundleRoundSet:{"id":"9-1"}': { id: "9-1" },
       },
@@ -919,6 +920,20 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
       context: { db },
     });
 
+    expect(inserts).toContainEqual({
+      table: "questionBundleRecoveredRoundSet",
+      values: {
+        id: "9-1",
+        bundleId: 9n,
+        roundSetIndex: 1,
+        allocationReturned: 60_000_000n,
+        newWeightRoot: null,
+        recoveredAt: 2_100n,
+        reopenedAt: null,
+        requalifiedAt: null,
+        updatedAt: 2_100n,
+      },
+    });
     expect(deletes).toContainEqual({
       table: "questionBundleRoundSet",
       key: { id: "9-1" },
@@ -934,8 +949,66 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
     });
   });
 
+  it("reapplies allocation without recounting completed recovered bundle round sets", async () => {
+    const { db, inserts, updates } = createDb(
+      {
+        'questionBundleRecoveredRoundSet:{"id":"9-1"}': {
+          id: "9-1",
+          requalifiedAt: null,
+        },
+      },
+      {
+        unallocatedAmount: 100_000_000n,
+        allocatedAmount: 0n,
+        completedRoundSetCount: 1,
+      },
+    );
+    const registeredHandlers = await loadHandlers();
+
+    await registeredHandlers.get(
+      "QuestionRewardPoolEscrow:QuestionBundleRoundSetQualified",
+    )!({
+      event: {
+        args: {
+          bundleId: 9n,
+          roundSetIndex: 1n,
+          allocation: 60_000_000n,
+          frontendFeeAllocation: 0n,
+        },
+        block: { number: 25n, timestamp: 2_200n },
+      },
+      context: { db },
+    });
+
+    expect(inserts).toContainEqual({
+      table: "questionBundleRoundSet",
+      values: expect.objectContaining({
+        id: "9-1",
+        allocation: 60_000_000n,
+      }),
+    });
+    expect(updates).toContainEqual({
+      table: "questionBundleReward",
+      key: { id: 9n },
+      values: {
+        unallocatedAmount: 40_000_000n,
+        allocatedAmount: 60_000_000n,
+        completedRoundSetCount: 1,
+        updatedAt: 2_200n,
+      },
+    });
+    expect(updates).toContainEqual({
+      table: "questionBundleRecoveredRoundSet",
+      key: { id: "9-1" },
+      values: {
+        requalifiedAt: 2_200n,
+        updatedAt: 2_200n,
+      },
+    });
+  });
+
   it("does not double-apply bundle recovery accounting when the round set is absent", async () => {
-    const { db, deletes, updates } = createDb();
+    const { db, deletes, inserts, updates } = createDb();
     const registeredHandlers = await loadHandlers();
 
     await registeredHandlers.get(
@@ -952,6 +1025,14 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
       context: { db },
     });
 
+    expect(inserts).toContainEqual({
+      table: "questionBundleRecoveredRoundSet",
+      values: expect.objectContaining({
+        id: "9-1",
+        allocationReturned: 60_000_000n,
+        recoveredAt: 2_100n,
+      }),
+    });
     expect(deletes).toEqual([]);
     expect(updates).toEqual([]);
   });
@@ -975,6 +1056,15 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
     });
 
     expect(updates).toEqual([
+      {
+        table: "questionBundleRecoveredRoundSet",
+        key: { id: "9-1" },
+        values: {
+          newWeightRoot: `0x${"3".repeat(64)}`,
+          reopenedAt: 2_200n,
+          updatedAt: 2_200n,
+        },
+      },
       {
         table: "questionBundleReward",
         key: { id: 9n },

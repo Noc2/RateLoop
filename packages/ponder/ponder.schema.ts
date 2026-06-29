@@ -662,6 +662,25 @@ export const questionBundleRoundSet = onchainTable(
   }),
 );
 
+export const questionBundleRecoveredRoundSet = onchainTable(
+  "question_bundle_recovered_round_set",
+  (t) => ({
+    id: t.text().primaryKey(), // `${bundleId}-${roundSetIndex}`
+    bundleId: t.bigint().notNull(),
+    roundSetIndex: t.integer().notNull(),
+    allocationReturned: t.bigint(),
+    newWeightRoot: t.hex(),
+    recoveredAt: t.bigint(),
+    reopenedAt: t.bigint(),
+    requalifiedAt: t.bigint(),
+    updatedAt: t.bigint().notNull(),
+  }),
+  (table) => ({
+    bundleIdx: index().on(table.bundleId),
+    roundSetIdx: index().on(table.bundleId, table.roundSetIndex),
+  }),
+);
+
 export const questionBundleClaim = onchainTable(
   "question_bundle_claim",
   (t) => ({

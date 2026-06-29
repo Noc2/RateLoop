@@ -2,6 +2,7 @@ import { ponder } from "ponder:registry";
 import {
   content,
   questionBundleClaim,
+  questionBundleRecoveredRoundSet,
   questionBundleRound,
   questionBundleRoundSet,
   questionBundleReward,
@@ -713,6 +714,12 @@ ponder.on(
     const existingRoundSet = await context.db.find(questionBundleRoundSet, {
       id,
     });
+    const recoveredRoundSet = await context.db.find(questionBundleRecoveredRoundSet, {
+      id,
+    });
+    const isRecoveredRequalification = Boolean(
+      recoveredRoundSet && (recoveredRoundSet as { requalifiedAt?: unknown }).requalifiedAt == null,
+    );
 
     await context.db
       .insert(questionBundleRoundSet)
@@ -742,9 +749,17 @@ ponder.on(
         .set((row) => ({
           unallocatedAmount: row.unallocatedAmount - allocation,
           allocatedAmount: row.allocatedAmount + allocation,
-          completedRoundSetCount: row.completedRoundSetCount + 1,
+          completedRoundSetCount: isRecoveredRequalification
+            ? row.completedRoundSetCount
+            : row.completedRoundSetCount + 1,
           updatedAt: event.block.timestamp,
         }));
+    }
+    if (isRecoveredRequalification) {
+      await context.db.update(questionBundleRecoveredRoundSet, { id }).set({
+        requalifiedAt: event.block.timestamp,
+        updatedAt: event.block.timestamp,
+      });
     }
   },
 );
@@ -757,6 +772,28 @@ ponder.on(
     const existingRoundSet = await context.db.find(questionBundleRoundSet, {
       id,
     });
+
+    await context.db
+      .insert(questionBundleRecoveredRoundSet)
+      .values({
+        id,
+        bundleId,
+        roundSetIndex: Number(roundSetIndex),
+        allocationReturned,
+        newWeightRoot: null,
+        recoveredAt: event.block.timestamp,
+        reopenedAt: null,
+        requalifiedAt: null,
+        updatedAt: event.block.timestamp,
+      })
+      .onConflictDoUpdate(() => ({
+        allocationReturned,
+        newWeightRoot: null,
+        recoveredAt: event.block.timestamp,
+        reopenedAt: null,
+        requalifiedAt: null,
+        updatedAt: event.block.timestamp,
+      }));
 
     if (existingRoundSet) {
       await context.db.delete(questionBundleRoundSet, { id });
@@ -773,7 +810,14 @@ ponder.on(
 ponder.on(
   "QuestionRewardPoolEscrow:RecoveredSnapshotBundleRoundSetReopened",
   async ({ event, context }) => {
-    const { bundleId } = event.args;
+    const { bundleId, roundSetIndex, newWeightRoot } = event.args;
+    const id = bundleRoundSetRowId(bundleId, roundSetIndex);
+
+    await context.db.update(questionBundleRecoveredRoundSet, { id }).set({
+      newWeightRoot,
+      reopenedAt: event.block.timestamp,
+      updatedAt: event.block.timestamp,
+    });
 
     await context.db.update(questionBundleReward, { id: bundleId }).set({
       updatedAt: event.block.timestamp,
