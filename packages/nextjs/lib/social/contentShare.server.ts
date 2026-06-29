@@ -45,24 +45,8 @@ function redactGatedShareContent(content: ContentShareContentInput): ContentShar
   };
 }
 
-function toHttpsOrigin(value: string | undefined): string | null {
-  const trimmed = value?.trim();
-  if (!trimmed) return null;
-
-  try {
-    return new URL(/^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`).origin;
-  } catch {
-    return null;
-  }
-}
-
 function getContentShareOrigin(): string {
-  return (
-    getOptionalAppUrl() ??
-    toHttpsOrigin(process.env.VERCEL_PROJECT_PRODUCTION_URL) ??
-    toHttpsOrigin(process.env.VERCEL_URL) ??
-    `http://localhost:${process.env.PORT || 3000}`
-  );
+  return getOptionalAppUrl() ?? `http://localhost:${process.env.PORT || 3000}`;
 }
 
 async function fetchContentForShare(

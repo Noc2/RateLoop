@@ -1,6 +1,6 @@
-import { isIP } from "node:net";
 import "server-only";
 import { RPC_OVERRIDES } from "~~/config/shared";
+import { resolveOptionalAppUrl, resolveTrustedRateLoopAppUrl } from "~~/lib/env/appUrl";
 import { isLocalE2EProductionBuildEnabled } from "~~/utils/env/e2eProduction";
 import { resolvePonderUrlValue } from "~~/utils/env/ponderUrl";
 import {
@@ -13,52 +13,13 @@ import { mergeRpcOverrides, resolveRpcOverrides } from "~~/utils/rpcUrls";
 const isProduction = process.env.NODE_ENV === "production";
 const defaultDevDatabaseUrl = "postgresql://postgres:postgres@127.0.0.1:5432/rateloop_app";
 const allowLocalE2EProductionBuild = isLocalE2EProductionBuildEnabled();
-const RATELOOP_TRUSTED_APP_HOSTNAME_SUFFIX = ".rateloop.ai";
 
 function readEnv(name: string): string | undefined {
   const value = process.env[name]?.trim();
   return value ? value : undefined;
 }
 
-function normalizeUrlHostname(hostname: string): string {
-  return hostname
-    .toLowerCase()
-    .replace(/^\[(.*)\]$/, "$1")
-    .replace(/\.+$/, "");
-}
-
-function isLocalhostHostname(hostname: string): boolean {
-  const normalized = normalizeUrlHostname(hostname);
-  return normalized === "localhost" || normalized === "127.0.0.1" || normalized === "::1";
-}
-
-function isIpLiteralHostname(hostname: string): boolean {
-  return isIP(normalizeUrlHostname(hostname)) !== 0;
-}
-
-function isProductionInternalAppHostname(hostname: string): boolean {
-  const normalized = normalizeUrlHostname(hostname);
-  return (
-    !normalized.includes(".") ||
-    normalized.endsWith(".localhost") ||
-    normalized.endsWith(".local") ||
-    normalized.endsWith(".internal")
-  );
-}
-
-function isTrustedRateLoopAppHostname(hostname: string): boolean {
-  const normalized = normalizeUrlHostname(hostname);
-  return normalized === "rateloop.ai" || normalized.endsWith(RATELOOP_TRUSTED_APP_HOSTNAME_SUFFIX);
-}
-
-function resolveVercelHostUrl(rawValue: string | undefined): string | undefined {
-  const trimmed = rawValue?.trim();
-  if (!trimmed) {
-    return undefined;
-  }
-
-  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
-}
+export { resolveAppUrl, resolveOptionalAppUrl, resolveTrustedRateLoopAppUrl } from "~~/lib/env/appUrl";
 
 function normalizeDatabaseUrl(rawUrl: string): string {
   try {
@@ -84,99 +45,6 @@ function normalizeDatabaseUrl(rawUrl: string): string {
   } catch {
     return rawUrl;
   }
-}
-
-export function resolveAppUrl(
-  rawValue: string | undefined,
-  production: boolean,
-  allowLocalhostInProduction = false,
-): string | null {
-  const resolvedValue = rawValue?.trim() || (!production ? "http://localhost:3000" : undefined);
-
-  if (!resolvedValue) {
-    return null;
-  }
-
-  try {
-    const url = new URL(resolvedValue);
-    if (url.protocol !== "http:" && url.protocol !== "https:") {
-      return null;
-    }
-    if (production) {
-      const allowLocalhost = allowLocalhostInProduction && isLocalhostHostname(url.hostname);
-      if (url.username || url.password) {
-        return null;
-      }
-      if (url.protocol === "http:" && !allowLocalhost) {
-        return null;
-      }
-      if (!allowLocalhost) {
-        if (isLocalhostHostname(url.hostname) || isIpLiteralHostname(url.hostname)) {
-          return null;
-        }
-        if (isProductionInternalAppHostname(url.hostname)) {
-          return null;
-        }
-      }
-    }
-    return url.toString().replace(/\/$/, "");
-  } catch {
-    return null;
-  }
-}
-
-export function resolveOptionalAppUrl(options: {
-  rawAppUrl?: string;
-  rawPublicAppUrl?: string;
-  rawVercelEnv?: string;
-  rawVercelProjectProductionUrl?: string;
-  rawVercelUrl?: string;
-  production: boolean;
-  allowLocalhostInProduction?: boolean;
-}): string | undefined {
-  const allowLocalhostInProduction = options.allowLocalhostInProduction ?? false;
-
-  return (
-    resolveAppUrl(options.rawAppUrl ?? options.rawPublicAppUrl, options.production, allowLocalhostInProduction) ??
-    resolveAppUrl(
-      options.rawVercelEnv === "production" ? resolveVercelHostUrl(options.rawVercelProjectProductionUrl) : undefined,
-      options.production,
-      allowLocalhostInProduction,
-    ) ??
-    resolveAppUrl(resolveVercelHostUrl(options.rawVercelUrl), options.production, allowLocalhostInProduction) ??
-    undefined
-  );
-}
-
-export function resolveTrustedRateLoopAppUrl(options: {
-  rawAppUrl?: string;
-  rawPublicAppUrl?: string;
-  rawVercelEnv?: string;
-  rawVercelProjectProductionUrl?: string;
-  rawVercelUrl?: string;
-  production: boolean;
-  allowLocalhostInProduction?: boolean;
-}): string | undefined {
-  const allowLocalhostInProduction = options.allowLocalhostInProduction ?? false;
-  const candidates = [
-    options.rawAppUrl,
-    options.rawPublicAppUrl,
-    options.rawVercelEnv === "production" ? resolveVercelHostUrl(options.rawVercelProjectProductionUrl) : undefined,
-    resolveVercelHostUrl(options.rawVercelUrl),
-  ];
-
-  for (const candidate of candidates) {
-    const resolved = candidate ? resolveAppUrl(candidate, options.production, allowLocalhostInProduction) : null;
-    if (!resolved) continue;
-    if (options.production) {
-      const parsed = new URL(resolved);
-      const allowLocalhost = allowLocalhostInProduction && isLocalhostHostname(parsed.hostname);
-      if (!allowLocalhost && !isTrustedRateLoopAppHostname(parsed.hostname)) continue;
-    }
-    return resolved;
-  }
-
-  return undefined;
 }
 
 export function resolveServerPonderUrl(
@@ -290,7 +158,7 @@ export function getExplicitAppUrl(): string | undefined {
     readEnv("APP_URL") ||
       readEnv("NEXT_PUBLIC_APP_URL") ||
       readEnv("VERCEL_URL") ||
-      (readEnv("VERCEL_ENV") === "production" && resolveVercelHostUrl(readEnv("VERCEL_PROJECT_PRODUCTION_URL"))),
+      (readEnv("VERCEL_ENV") === "production" && readEnv("VERCEL_PROJECT_PRODUCTION_URL")),
   );
 
   return hasConfiguredAppUrl ? getOptionalAppUrl() : undefined;

@@ -5,17 +5,11 @@ import test from "node:test";
 const socialImageAlt =
   "RateLoop social image with the RateLoop wordmark, the subtitle Level Up Your Agent, and the orbital loop mark";
 
-type IconSnapshot = {
-  sizes?: string | null;
-  type?: string | null;
-  url?: string | null;
-};
-
 type MetadataSnapshot = {
   description?: string | null;
   icons?: {
-    apple?: IconSnapshot[] | null;
-    icon?: IconSnapshot[] | null;
+    apple?: Array<{ sizes?: string | null; type?: string | null; url?: string | null }> | null;
+    icon?: Array<{ sizes?: string | null; type?: string | null; url?: string | null }> | null;
   } | null;
   manifest?: string | null;
   metadataBase?: string | null;
@@ -36,27 +30,23 @@ type MetadataSnapshot = {
 };
 
 function loadMetadataWithEnv(
-  env: { PORT?: string; VERCEL_PROJECT_PRODUCTION_URL?: string; VERCEL_URL?: string },
+  env: {
+    NODE_ENV?: string;
+    PORT?: string;
+    VERCEL_ENV?: string;
+    VERCEL_PROJECT_PRODUCTION_URL?: string;
+    VERCEL_URL?: string;
+  },
   input: { description: string; title: string },
 ): MetadataSnapshot {
   const childEnv = { ...process.env };
 
-  if (env.PORT === undefined) {
-    delete childEnv.PORT;
-  } else {
-    childEnv.PORT = env.PORT;
-  }
-
-  if (env.VERCEL_PROJECT_PRODUCTION_URL === undefined) {
-    delete childEnv.VERCEL_PROJECT_PRODUCTION_URL;
-  } else {
-    childEnv.VERCEL_PROJECT_PRODUCTION_URL = env.VERCEL_PROJECT_PRODUCTION_URL;
-  }
-
-  if (env.VERCEL_URL === undefined) {
-    delete childEnv.VERCEL_URL;
-  } else {
-    childEnv.VERCEL_URL = env.VERCEL_URL;
+  for (const [key, value] of Object.entries(env)) {
+    if (value === undefined) {
+      delete childEnv[key];
+    } else {
+      childEnv[key] = value;
+    }
   }
 
   const script = `
@@ -156,6 +146,7 @@ test("getMetadata uses localhost URLs and the updated brand copy when no product
   const metadata = loadMetadataWithEnv(
     {
       PORT: "4321",
+      VERCEL_ENV: undefined,
       VERCEL_PROJECT_PRODUCTION_URL: undefined,
       VERCEL_URL: undefined,
     },
@@ -188,7 +179,9 @@ test("getMetadata uses localhost URLs and the updated brand copy when no product
 test("getMetadata prefers the production hostname for social metadata", () => {
   const metadata = loadMetadataWithEnv(
     {
+      NODE_ENV: "production",
       PORT: "4321",
+      VERCEL_ENV: "production",
       VERCEL_PROJECT_PRODUCTION_URL: "rateloop.app",
       VERCEL_URL: "rateloop-preview.vercel.app",
     },
@@ -210,7 +203,9 @@ test("getMetadata prefers the production hostname for social metadata", () => {
 test("getMetadata uses the preview hostname when production metadata is unavailable", () => {
   const metadata = loadMetadataWithEnv(
     {
+      NODE_ENV: "production",
       PORT: "4321",
+      VERCEL_ENV: "preview",
       VERCEL_PROJECT_PRODUCTION_URL: undefined,
       VERCEL_URL: "rateloop-preview.vercel.app",
     },

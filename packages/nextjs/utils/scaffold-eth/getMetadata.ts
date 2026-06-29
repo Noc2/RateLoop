@@ -1,17 +1,34 @@
 import type { Metadata } from "next";
+import { resolveOptionalAppUrl } from "~~/lib/env/appUrl";
+import { isLocalE2EProductionBuildEnabled } from "~~/utils/env/e2eProduction";
 
 function resolveMetadataBaseUrl() {
-  const productionHost = process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim();
-  if (productionHost) {
-    return `https://${productionHost}`;
+  const production = process.env.NODE_ENV === "production";
+  const localhostFallback = `http://localhost:${process.env.PORT || 3000}`;
+  const resolved = resolveOptionalAppUrl({
+    rawAppUrl: process.env.APP_URL,
+    rawPublicAppUrl: process.env.NEXT_PUBLIC_APP_URL,
+    rawVercelEnv: process.env.VERCEL_ENV,
+    rawVercelProjectProductionUrl: process.env.VERCEL_PROJECT_PRODUCTION_URL,
+    rawVercelUrl: process.env.VERCEL_URL,
+    production,
+    allowLocalhostInProduction: isLocalE2EProductionBuildEnabled(),
+  });
+
+  if (!resolved) {
+    return localhostFallback;
   }
 
-  const previewHost = process.env.VERCEL_URL?.trim();
-  if (previewHost) {
-    return `https://${previewHost}`;
+  if (
+    !production &&
+    resolved === "http://localhost:3000" &&
+    !process.env.APP_URL?.trim() &&
+    !process.env.NEXT_PUBLIC_APP_URL?.trim()
+  ) {
+    return localhostFallback;
   }
 
-  return `http://localhost:${process.env.PORT || 3000}`;
+  return resolved;
 }
 
 const titleTemplate = "%s | RateLoop";

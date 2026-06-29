@@ -1,12 +1,10 @@
+import { resolveAppUrl, resolveOptionalAppUrl, resolveTrustedRateLoopAppUrl } from "./appUrl";
 import {
   getDatabaseConfig,
   getServerRpcOverrides,
   getX402UsdcAddressOverride,
-  resolveAppUrl,
-  resolveOptionalAppUrl,
   resolveServerPonderUrl,
   resolveServerTargetNetworks,
-  resolveTrustedRateLoopAppUrl,
 } from "./server";
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
